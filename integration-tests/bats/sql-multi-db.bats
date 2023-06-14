@@ -109,9 +109,7 @@ seed_repos_with_tables_with_use_statements() {
     dolt clone file://../remote1 repo2
 
     cd ..
-    run dolt --data-dir ./subremotes sql -b -q "
+    dolt --data-dir ./subremotes sql -b -q "
         USE repo2;
         call dolt_fetch();" -r csv
-    [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "Rows inserted: 0 Rows updated: 0 Rows deleted: 0" ]] || false
 }

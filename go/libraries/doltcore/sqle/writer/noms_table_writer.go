@@ -54,7 +54,6 @@ type nomsTableWriter struct {
 	kvToSQLRow  *index.KVToSqlRowConverter
 	tableEditor editor.TableEditor
 	flusher     WriteSessionFlusher
-	batched     bool
 
 	autoInc globalstate.AutoIncrementTracker
 
@@ -159,11 +158,6 @@ func (te *nomsTableWriter) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 
 // Close implements Closer
 func (te *nomsTableWriter) Close(ctx *sql.Context) error {
-	// If we're running in batched mode, don't flush the edits until explicitly told to do so
-	if te.batched {
-		return nil
-	}
-
 	return te.flush(ctx)
 }
 

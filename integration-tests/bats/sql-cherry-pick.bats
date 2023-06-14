@@ -169,26 +169,11 @@ SQL
     [[ ! "$output" =~ "branch1table" ]] || false
 }
 
-@test "sql-cherry-pick: row data conflict, leave working set clean" {
-    dolt sql -q "CREATE TABLE other (pk int primary key, v int)"
-    dolt add .
-    dolt sql -q "INSERT INTO other VALUES (1, 2)"
-    dolt sql -q "INSERT INTO test VALUES (4,'f')"
-    dolt commit -am "add other table"
-
-    dolt checkout main
-    dolt sql -q "CREATE TABLE other (pk int primary key, v int)"
-    dolt add .
-    dolt sql -q "INSERT INTO other VALUES (1, 3)"
-    dolt sql -q "INSERT INTO test VALUES (4,'k')"
-    dolt commit -am "add other table with conflict and test with conflict"
-
-    run dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "conflicts in table" ]] || false
-
-    run dolt status
-    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+@test "sql-cherry-pick: error when using `--abort` with no in-progress cherry-pick" {
+    run dolt sql -q "call DOLT_CHERRY_PICK('--abort');"
+    [ $status -eq 1 ]
+    [[ $output =~ "error: There is no cherry-pick merge to abort" ]] || false
+    [[ ! $output =~ "usage: dolt cherry-pick" ]] || false
 }
 
 @test "sql-cherry-pick: commit with CREATE TABLE" {
@@ -237,14 +222,22 @@ SQL
 }
 
 @test "sql-cherry-pick: commit with ALTER TABLE rename table name" {
+    # get main and branch1 in sync, so that the data on branch1 doesn't
+    # cause a conflict when we cherry pick the table rename statement
+    dolt checkout main
+    dolt merge branch1
+
+    dolt checkout branch1
     dolt sql -q "ALTER TABLE test RENAME TO new_name"
-    dolt add .
-    dolt commit -am "rename table name"
+    dolt commit -Am "rename table name"
 
     dolt checkout main
-    run dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "table was renamed or dropped" ]] || false
+    dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
+
+    run dolt sql -q "show tables;"
+    [ $status -eq 0 ]
+    [[ ! $output =~ "test" ]] || false
+    [[ $output =~ "new_name" ]] || false
 }
 
 @test "sql-cherry-pick: cherry-pick commit is a merge commit" {
@@ -259,8 +252,8 @@ SQL
 
     dolt checkout main
     run dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "cherry-picking a merge commit is not supported" ]] || false
+    [ $status -eq 1 ]
+    [[ $output =~ "cherry-picking a merge commit is not supported" ]] || false
 }
 
 @test "sql-cherry-pick: cherry-pick commit is a cherry-picked commit" {
@@ -367,9 +360,11 @@ SQL
     dolt commit -am "alter table test add column c"
 
     dolt checkout main
-    run dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
+    dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
+
+    run dolt sql -q "SHOW CREATE TABLE test;"
+    [ $status -eq 0 ]
+    [[ $output =~ '`c` int' ]] || false
 }
 
 @test "sql-cherry-pick: commit with ALTER TABLE change column" {
@@ -377,9 +372,12 @@ SQL
     dolt commit -am "alter table test change column v"
 
     dolt checkout main
-    run dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
+    dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
+
+    run dolt sql -q "SHOW CREATE TABLE test;"
+    [ $status -eq 0 ]
+    [[ $output =~ '`c` varchar(100)' ]] || false
+    [[ ! $output =~ '`v` varchar(10)' ]] || false
 }
 
 @test "sql-cherry-pick: commit with ALTER TABLE modify column" {
@@ -387,20 +385,33 @@ SQL
     dolt sql -q "ALTER TABLE test MODIFY COLUMN v int"
     dolt commit -am "alter table test modify column v"
 
+    # TODO: Incompatible type changes currently trigger an error response, instead of
+    #       being tracked as a schema conflict artifact. Once we fix that, update this test.
     dolt checkout main
     run dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
+    [ $status -eq 1 ]
+    [[ $output =~ "merge aborted: schema conflict found for table test" ]] || false
 }
 
 @test "sql-cherry-pick: commit with ALTER TABLE drop column" {
+    # get main and branch1 in sync, so that the data on branch1 doesn't
+    # cause a conflict when we cherry pick the alter table statement
+    dolt checkout main
+    dolt merge branch1
+
+    # Drop column v on branch1
+    dolt checkout branch1
     dolt sql -q "ALTER TABLE test DROP COLUMN v"
     dolt commit -am "alter table test drop column v"
 
+    # Cherry pick the drop column change to main
     dolt checkout main
-    run dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
+    dolt sql -q "CALL DOLT_CHERRY_PICK('branch1');"
+
+    # Assert that column v is gone
+    run dolt sql -q "SHOW CREATE TABLE test;"
+    [ $status -eq 0 ]
+    [[ ! $output =~ '`v` varchar(10)' ]] || false
 }
 
 @test "sql-cherry-pick: commit with ALTER TABLE rename column" {
@@ -408,9 +419,12 @@ SQL
     dolt commit -am "alter table test rename column v"
 
     dolt checkout main
-    run dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
+    dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
+
+    run dolt sql -q "SHOW CREATE TABLE test;"
+    [ $status -eq 0 ]
+    [[ ! $output =~ '`v` varchar(10)' ]] || false
+    [[ $output =~ '`c` varchar(10)' ]] || false
 }
 
 @test "sql-cherry-pick: commit with ALTER TABLE drop and add primary key" {
@@ -419,6 +433,6 @@ SQL
 
     dolt checkout main
     run dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
+    [ $status -eq 1 ]
+    [[ $output =~ "error: cannot merge two tables with different primary keys" ]] || false
 }

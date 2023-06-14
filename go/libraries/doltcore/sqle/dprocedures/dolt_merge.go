@@ -185,7 +185,7 @@ func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots,
 
 				return ws, hasConflictsOrViolations, threeWayMerge, nil
 			}
-			return ws, noConflictsOrViolations, fastForwardMerge, err
+			return ws, noConflictsOrViolations, threeWayMerge, err
 		}
 
 		ws, err = executeFFMerge(ctx, dbName, spec.Squash, ws, dbData, spec.MergeC)
@@ -376,8 +376,8 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 			return nil, err
 		}
 	} else {
-		name = sess.Username()
-		email = sess.Email()
+		name = ctx.Client().User
+		email = fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
 	}
 
 	t := ctx.QueryTime()
@@ -396,12 +396,7 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 	if apr.Contains(cli.NoCommitFlag) && apr.Contains(cli.CommitFlag) {
 		return nil, errors.New("cannot define both 'commit' and 'no-commit' flags at the same time")
 	}
-	mergeSpec, err := merge.NewMergeSpec(ctx, dbData.Rsr, ddb, roots, name, email, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), apr.Contains(cli.NoCommitFlag), apr.Contains(cli.NoEditFlag), t)
-	if err != nil {
-		return nil, err
-	}
-
-	return mergeSpec, nil
+	return merge.NewMergeSpec(ctx, dbData.Rsr, ddb, roots, name, email, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), apr.Contains(cli.NoCommitFlag), apr.Contains(cli.NoEditFlag), t)
 }
 
 // TODO: this copied from commands/merge.go because the latter isn't reusable. Fix that.

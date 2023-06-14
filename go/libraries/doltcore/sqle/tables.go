@@ -510,28 +510,16 @@ func (t *WritableDoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
 func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWriter, err error) {
 	ds := dsess.DSessFromSess(ctx.Session)
 
-	var batched = ds.BatchMode() == dsess.Batched
-
-	// In batched mode, reuse the same table editor. Otherwise, hand out a new one
-	if batched {
-		if t.ed != nil {
-			return t.ed, nil
-		}
-	}
-
 	state, _, err := ds.LookupDbState(ctx, t.db.RevisionQualifiedName())
 	if err != nil {
 		return nil, err
 	}
 
 	setter := ds.SetRoot
-	ed, err = state.WriteSession().GetTableWriter(ctx, t.tableName, t.db.RevisionQualifiedName(), setter, batched)
+	ed, err = state.WriteSession().GetTableWriter(ctx, t.tableName, t.db.RevisionQualifiedName(), setter)
 
 	if err != nil {
 		return nil, err
-	}
-	if batched {
-		t.ed = ed
 	}
 
 	return ed, nil
@@ -1390,7 +1378,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 	}
 
 	writeSession := writer.NewWriteSession(dt.Format(), newWs, ait, opts)
-	ed, err := writeSession.GetTableWriter(ctx, t.Name(), t.db.RevisionQualifiedName(), sess.SetRoot, false)
+	ed, err := writeSession.GetTableWriter(ctx, t.Name(), t.db.RevisionQualifiedName(), sess.SetRoot)
 	if err != nil {
 		return nil, err
 	}

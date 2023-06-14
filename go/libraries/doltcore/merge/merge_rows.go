@@ -16,8 +16,6 @@ package merge
 
 import (
 	"context"
-	"errors"
-	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -125,10 +123,6 @@ func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts edito
 	finished, stats, err := rm.maybeShortCircuit(ctx, tm, mergeOpts)
 	if finished != nil || stats != nil || err != nil {
 		return &MergedTable{table: finished}, stats, err
-	}
-
-	if mergeOpts.IsCherryPick && !schema.SchemasAreEqual(tm.leftSch, tm.rightSch) {
-		return nil, nil, errors.New(fmt.Sprintf("schema changes not supported: %s table schema does not match in current HEAD and cherry-pick commit.", tblName))
 	}
 
 	// Calculate a merge of the schemas, but don't apply it yet
@@ -259,15 +253,6 @@ func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm *TableMerger, op
 
 	// Deleted in root or in merge, either a conflict (if any changes in other root) or else a fast-forward
 	if ancExists && (!leftExists || !rightExists) {
-		if opts.IsCherryPick && leftExists && !rightExists {
-			// TODO : this is either drop table or rename table case
-			// We can delete only if the table in current HEAD and parent commit contents are exact the same (same schema and same data);
-			// otherwise, return ErrTableDeletedAndModified
-			// We need to track renaming of a table --> the renamed table could be added as new table
-			err = fmt.Errorf("schema changes not supported: %s table was renamed or dropped in cherry-pick commit", tm.name)
-			return nil, &MergeStats{Operation: TableModified}, err
-		}
-
 		if (rightExists && mergeHash != ancHash) ||
 			(leftExists && rootHash != ancHash) {
 			return nil, nil, ErrTableDeletedAndModified

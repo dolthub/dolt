@@ -27,11 +27,6 @@ import (
 
 	"github.com/abiosoft/readline"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression"
-	"github.com/dolthub/go-mysql-server/sql/parse"
-	"github.com/dolthub/go-mysql-server/sql/plan"
-	"github.com/dolthub/go-mysql-server/sql/transform"
-	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/ishell"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/dolthub/vitess/go/vt/vterrors"
@@ -46,19 +41,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
-)
-
-type batchMode int64
-
-const (
-	invalidBatchMode batchMode = iota
-	insertBatchMode
-	deleteBatchMode
 )
 
 var sqlDocs = cli.CommandDocumentationContent{
@@ -152,7 +138,7 @@ func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(executeFlag, "x", "saved query name", "Executes a saved query with the given name.")
 	ap.SupportsFlag(listSavedFlag, "l", "List all saved queries.")
 	ap.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also `--name`.")
-	ap.SupportsFlag(BatchFlag, "b", "Use to enable more efficient batch processing for large SQL import scripts consisting of only INSERT statements. Other statements types are not guaranteed to work in this mode.")
+	ap.SupportsFlag(BatchFlag, "b", "Use to enable more efficient batch processing for large SQL import scripts. This mode is no longer supported and this flag is a no-op. To speed up your SQL imports, use either LOAD DATA, or structure your SQL import script to insert many rows per statement.")
 	ap.SupportsFlag(continueFlag, "c", "Continue running queries on an error. Used for batch mode only.")
 	ap.SupportsString(fileInputFlag, "f", "input file", "Execute statements from the file given.")
 	return ap
@@ -229,7 +215,6 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	} else {
 		// Run in either batch mode for piped input, or shell mode for interactive
 		isTty := false
-		runInBatchMode := apr.Contains(BatchFlag)
 
 		fi, err := os.Stdin.Stat()
 		if err != nil {
@@ -264,19 +249,8 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			if err != nil {
 				return sqlHandleVErrAndExitCode(queryist, errhand.VerboseErrorFromError(err), usage)
 			}
-		} else if runInBatchMode {
-			se, ok := queryist.(*engine.SqlEngine)
-			if !ok {
-				misuse := fmt.Errorf("Using batch with non-local access pattern. Stop server if it is running")
-				return sqlHandleVErrAndExitCode(queryist, errhand.VerboseErrorFromError(misuse), usage)
-			}
-
-			verr := execBatch(sqlCtx, se, input, continueOnError, format)
-			if verr != nil {
-				return sqlHandleVErrAndExitCode(queryist, verr, usage)
-			}
 		} else {
-			err := execMultiStatements(sqlCtx, queryist, input, continueOnError, format)
+			err := execBatchMode(sqlCtx, queryist, input, continueOnError, format)
 			if err != nil {
 				return sqlHandleVErrAndExitCode(queryist, errhand.VerboseErrorFromError(err), usage)
 			}
@@ -328,7 +302,7 @@ func (cmd SqlCmd) handleLegacyArguments(ap *argparser.ArgParser, commandStr stri
 		legacyParser.SupportsString(executeFlag, "x", "saved query name", "Executes a saved query with the given name.")
 		legacyParser.SupportsFlag(listSavedFlag, "l", "List all saved queries.")
 		legacyParser.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also `--name`.")
-		legacyParser.SupportsFlag(BatchFlag, "b", "Use to enable more efficient batch processing for large SQL import scripts consisting of only INSERT statements. Other statements types are not guaranteed to work in this mode.")
+		legacyParser.SupportsFlag(BatchFlag, "b", "Use to enable more efficient batch processing for large SQL import scripts. This mode is no longer supported and this flag is a no-op. To speed up your SQL imports, use either LOAD DATA, or structure your SQL import script to insert many rows per statement.")
 		legacyParser.SupportsString(DataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory.")
 		legacyParser.SupportsString(MultiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory. This is deprecated, you should use `--data-dir` instead")
 		legacyParser.SupportsString(CfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to `$data-dir/.doltcfg`. Will only be created if there is a change that affect configuration settings.")
@@ -408,30 +382,12 @@ func queryMode(
 	usage cli.UsagePrinter,
 ) int {
 
-	// query mode has 2 sub modes:
-	// If --batch is provided, run with batch optimizations
-	// Otherwise, attempt to parse and execute multiple queries separated by ';'
-	batchMode := apr.Contains(BatchFlag)
 	_, continueOnError := apr.GetValue(continueFlag)
 
-	if batchMode {
-		se, ok := qryist.(*engine.SqlEngine)
-		if !ok {
-			misuse := fmt.Errorf("Using batch with non-local access pattern. Stop server if it is running")
-			return sqlHandleVErrAndExitCode(se, errhand.VerboseErrorFromError(misuse), usage)
-		}
-
-		batchInput := strings.NewReader(query)
-		verr := execBatch(ctx, se, batchInput, continueOnError, format)
-		if verr != nil {
-			return sqlHandleVErrAndExitCode(qryist, verr, usage)
-		}
-	} else {
-		input := strings.NewReader(query)
-		err := execMultiStatements(ctx, qryist, input, continueOnError, format)
-		if err != nil {
-			return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
-		}
+	input := strings.NewReader(query)
+	err := execBatchMode(ctx, qryist, input, continueOnError, format)
+	if err != nil {
+		return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
 	}
 
 	return 0
@@ -468,29 +424,6 @@ func execSaveQuery(ctx *sql.Context, dEnv *env.DoltEnv, qryist cli.Queryist, apr
 	return 0
 }
 
-func execBatch(
-	sqlCtx *sql.Context,
-	se *engine.SqlEngine,
-	batchInput io.Reader,
-	continueOnErr bool,
-	format engine.PrintResultFormat,
-) errhand.VerboseError {
-	// In batch mode, we need to set a couple flags on the session to prevent constant flushes to disk
-	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
-	err := runBatchMode(sqlCtx, se, batchInput, continueOnErr, format)
-	if err != nil {
-		// If we encounter an error, attempt to flush what we have so far to disk before exiting
-		flushErr := flushBatchedEdits(sqlCtx, se)
-		if flushErr != nil {
-			cli.PrintErrf("Could not flush batch: %s", err.Error())
-		}
-
-		return errhand.BuildDError("Error processing batch").AddCause(err).Build()
-	}
-
-	return nil
-}
-
 func execQuery(
 	sqlCtx *sql.Context,
 	qryist cli.Queryist,
@@ -520,7 +453,8 @@ func formatQueryError(message string, err error) errhand.VerboseError {
 	)
 
 	if se, ok := vterrors.AsSyntaxError(err); ok {
-		verrBuilder := errhand.BuildDError("Error parsing SQL")
+		verrBuilder := errhand.BuildDError(message)
+		verrBuilder.AddDetails("Error parsing SQL: ")
 		verrBuilder.AddDetails(se.Message)
 
 		statement := se.Statement
@@ -595,7 +529,6 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 	_, query := apr.GetValue(QueryFlag)
 	_, save := apr.GetValue(saveFlag)
 	_, msg := apr.GetValue(messageFlag)
-	_, batch := apr.GetValue(BatchFlag)
 	_, list := apr.GetValue(listSavedFlag)
 	_, execute := apr.GetValue(executeFlag)
 	_, dataDir := apr.GetValue(DataDirFlag)
@@ -641,12 +574,6 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 		return errhand.BuildDError("Invalid Argument: --data-dir queries cannot be saved").Build()
 	}
 
-	if batch {
-		if save || msg {
-			return errhand.BuildDError("Invalid Argument: --batch|-b is not compatible with --save|-s or --message|-m").Build()
-		}
-	}
-
 	if query {
 		if !save && msg {
 			return errhand.BuildDError("Invalid Argument: --message|-m is only used with --query|-q and --save|-s").Build()
@@ -677,8 +604,8 @@ func saveQuery(ctx *sql.Context, root *doltdb.RootValue, query string, name stri
 	return newRoot, nil
 }
 
-// execMultiStatements runs all the queries in the input reader without any batch optimizations
-func execMultiStatements(ctx *sql.Context, qryist cli.Queryist, input io.Reader, continueOnErr bool, format engine.PrintResultFormat) error {
+// execBatchMode runs all the queries in the input reader
+func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, continueOnErr bool, format engine.PrintResultFormat) error {
 	scanner := NewSqlStatementScanner(input)
 	var query string
 	for scanner.Scan() {
@@ -694,10 +621,11 @@ func execMultiStatements(ctx *sql.Context, qryist cli.Queryist, input io.Reader,
 		if err == sqlparser.ErrEmpty {
 			continue
 		} else if err != nil {
-			handleError(scanner.statementStartLine, query, err)
-			// If continueOnErr is set keep executing the remaining queries but print the error out anyway.
+			err = buildBatchSqlErr(scanner.statementStartLine, query, err)
 			if !continueOnErr {
 				return err
+			} else {
+				cli.PrintErrln(err.Error())
 			}
 		}
 
@@ -705,10 +633,11 @@ func execMultiStatements(ctx *sql.Context, qryist cli.Queryist, input io.Reader,
 		ctx.SetQueryTime(time.Now())
 		sqlSch, rowIter, err := processParsedQuery(ctx, query, qryist, sqlStatement)
 		if err != nil {
-			handleError(scanner.statementStartLine, query, err)
-			// If continueOnErr is set keep executing the remaining queries but print the error out anyway.
+			err = buildBatchSqlErr(scanner.statementStartLine, query, err)
 			if !continueOnErr {
 				return err
+			} else {
+				cli.PrintErrln(err.Error())
 			}
 		}
 
@@ -723,60 +652,26 @@ func execMultiStatements(ctx *sql.Context, qryist cli.Queryist, input io.Reader,
 			}
 			err = engine.PrettyPrintResults(ctx, format, sqlSch, rowIter)
 			if err != nil {
-				handleError(scanner.statementStartLine, query, err)
-				return err
+				err = buildBatchSqlErr(scanner.statementStartLine, query, err)
+				if !continueOnErr {
+					return err
+				} else {
+					cli.PrintErrln(err.Error())
+				}
 			}
 		}
 		query = ""
 	}
 
 	if err := scanner.Err(); err != nil {
-		cli.Println(err.Error())
+		return buildBatchSqlErr(scanner.statementStartLine, query, err)
 	}
 
 	return nil
 }
 
-func handleError(stmtStartLine int, query string, err error) {
-	verr := formatQueryError(fmt.Sprintf("error on line %d for query %s", stmtStartLine, query), err)
-	cli.PrintErrln(verr.Verbose())
-}
-
-// runBatchMode processes queries until EOF. The Root of the sqlEngine may be updated.
-func runBatchMode(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, continueOnErr bool, format engine.PrintResultFormat) error {
-	scanner := NewSqlStatementScanner(input)
-
-	var query string
-	for scanner.Scan() {
-		if fileReadProg != nil {
-			updateFileReadProgressOutput()
-			fileReadProg.setReadBytes(int64(len(scanner.Bytes())))
-		}
-		query += scanner.Text()
-		if len(query) == 0 || query == "\n" {
-			continue
-		}
-		if err := processBatchQuery(ctx, query, se, format); err != nil {
-			// TODO: this line number will not be accurate for errors that occur when flushing a batch of inserts (as opposed
-			//  to processing the query)
-			verr := formatQueryError(fmt.Sprintf("error on line %d for query %s", scanner.statementStartLine, query), err)
-			cli.PrintErrln(verr.Verbose())
-			// If continueOnErr is set keep executing the remaining queries but print the error out anyway.
-			if !continueOnErr {
-				return err
-			}
-		}
-		query = ""
-	}
-
-	updateBatchEditOutput()
-	cli.Println() // need a newline after all updates are executed
-
-	if err := scanner.Err(); err != nil {
-		cli.Println(err.Error())
-	}
-
-	return flushBatchedEdits(ctx, se)
+func buildBatchSqlErr(stmtStartLine int, query string, err error) error {
+	return formatQueryError(fmt.Sprintf("error on line %d for query %s", stmtStartLine, query), err)
 }
 
 // execShell starts a SQL shell. Returns when the user exits the shell. The Root of the sqlEngine may
@@ -1144,257 +1039,6 @@ func (f *fileReadProgress) printNewLineIfNeeded() {
 	}
 }
 
-func flushBatchedEdits(ctx *sql.Context, se *engine.SqlEngine) error {
-	for i := range se.Databases(ctx) {
-		if err := se.Databases(ctx)[i].Flush(ctx); err != nil {
-			return err
-		}
-	}
-
-	batchEditStats.unflushedEdits = 0
-	return nil
-}
-
-// Processes a single query in batch mode. The Root of the sqlEngine may or may not be changed.
-func processBatchQuery(ctx *sql.Context, query string, se *engine.SqlEngine, format engine.PrintResultFormat) error {
-	sqlStatement, err := sqlparser.Parse(query)
-	if err == sqlparser.ErrEmpty {
-		// silently skip empty statements
-		return nil
-	} else if err != nil {
-		return fmt.Errorf("Error parsing SQL: %v.", err.Error())
-	}
-
-	currentBatchMode := invalidBatchMode
-	if v, err := ctx.GetSessionVariable(ctx, dsess.CurrentBatchModeKey); err == nil {
-		currentBatchMode = batchMode(v.(int64))
-	} else {
-		return err
-	}
-
-	newBatchMode, err := canProcessAsBatchEdit(ctx, sqlStatement, se, query)
-	if err != nil {
-		cli.PrintErrln(err)
-		return err
-	}
-
-	if currentBatchMode != invalidBatchMode && currentBatchMode != newBatchMode {
-		// We need to commit whatever batch edits we've accumulated so far before executing the query
-		err := flushBatchedEdits(ctx, se)
-		if err != nil {
-			return err
-		}
-	}
-
-	err = ctx.SetSessionVariable(ctx, dsess.CurrentBatchModeKey, int64(newBatchMode))
-	if err != nil {
-		return err
-	}
-
-	if newBatchMode != invalidBatchMode {
-		err = processBatchableEditQuery(ctx, se, query, sqlStatement)
-		if err != nil {
-			return err
-		}
-	} else {
-		err := processNonBatchableQuery(ctx, se, query, sqlStatement, format)
-		if err != nil {
-			return err
-		}
-	}
-
-	if batchEditStats.shouldUpdateBatchModeOutput() {
-		updateBatchEditOutput()
-	}
-
-	return nil
-}
-
-func processNonBatchableQuery(ctx *sql.Context, se *engine.SqlEngine, query string, sqlStatement sqlparser.Statement, format engine.PrintResultFormat) (returnErr error) {
-	sqlSch, rowIter, err := processParsedQuery(ctx, query, se, sqlStatement)
-	if err != nil {
-		return err
-	}
-
-	if rowIter != nil {
-		err = mergeResultIntoStats(ctx, sqlStatement, rowIter, batchEditStats)
-		if err != nil {
-			return err
-		}
-
-		// Some statement types should print results, even in batch mode.
-		switch sqlStatement.(type) {
-		case *sqlparser.Select, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
-			// For any statement that prints out result, print a newline to put the regular output on its own line
-			batchEditStats.printNewLineIfNeeded()
-			if fileReadProg != nil {
-				fileReadProg.printNewLineIfNeeded()
-			}
-			err = engine.PrettyPrintResults(ctx, format, sqlSch, rowIter)
-			if err != nil {
-				return err
-			}
-		default:
-			err = rowIter.Close(ctx)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	// And flush again afterwards, to make sure any following insert statements have the latest data
-	return flushBatchedEdits(ctx, se)
-}
-
-func processBatchableEditQuery(ctx *sql.Context, se *engine.SqlEngine, query string, sqlStatement sqlparser.Statement) (returnErr error) {
-	_, rowIter, err := se.Query(ctx, query)
-	if err != nil {
-		return err
-	}
-
-	if rowIter != nil {
-		defer func() {
-			err := rowIter.Close(ctx)
-			if returnErr == nil {
-				returnErr = err
-			}
-		}()
-		err = mergeResultIntoStats(ctx, sqlStatement, rowIter, batchEditStats)
-		if err != nil {
-			return err
-		}
-	}
-
-	if batchEditStats.shouldFlush() {
-		return flushBatchedEdits(ctx, se)
-	}
-
-	return nil
-}
-
-// canProcessBatchEdit returns whether the given statement can be processed as a batch insert. Only simple inserts
-// (inserting a list of values) and deletes can be processed in this way. Other kinds of insert (notably INSERT INTO
-// SELECT AS and AUTO_INCREMENT) need a flushed root and can't benefit from batch optimizations.
-func canProcessAsBatchEdit(ctx *sql.Context, sqlStatement sqlparser.Statement, se *engine.SqlEngine, query string) (batchMode, error) {
-	switch s := sqlStatement.(type) {
-	case *sqlparser.Delete:
-		foundSubquery, err := checkForSubqueries(query)
-		if err != nil {
-			return invalidBatchMode, err
-		}
-		if foundSubquery {
-			return invalidBatchMode, nil
-		}
-
-		return deleteBatchMode, nil
-
-	case *sqlparser.Insert:
-		if _, ok := s.Rows.(sqlparser.Values); !ok {
-			return invalidBatchMode, nil
-		}
-		foundSubquery, err := checkForSubqueries(query)
-		if err != nil {
-			return invalidBatchMode, err
-		}
-
-		if foundSubquery {
-			return invalidBatchMode, nil
-		}
-
-		// TODO: This check coming first seems to cause problems with ctx.Session. Perhaps in the analyzer.
-		hasAutoInc, err := insertsIntoAutoIncrementCol(ctx, se, query)
-		if err != nil {
-			return invalidBatchMode, err
-		}
-
-		if hasAutoInc {
-			return invalidBatchMode, nil
-		}
-
-		return insertBatchMode, nil
-
-	case *sqlparser.Load:
-		return insertBatchMode, nil
-
-	default:
-		return invalidBatchMode, nil
-	}
-}
-
-// checkForSubqueries parses the insert query to check for a subquery.
-func checkForSubqueries(query string) (bool, error) {
-	p, err := sqlparser.Parse(query)
-
-	if err != nil {
-		return false, nil
-	}
-
-	return foundSubquery(p), nil
-}
-
-func foundSubquery(node sqlparser.SQLNode) bool {
-	has := false
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (keepGoing bool, err error) {
-		if _, ok := node.(*sqlparser.Subquery); ok {
-			has = true
-			return false, nil
-		}
-		return true, nil
-	}, node)
-	return has
-}
-
-// parses the query to check if it inserts into a table with AUTO_INCREMENT
-func insertsIntoAutoIncrementCol(ctx *sql.Context, se *engine.SqlEngine, query string) (bool, error) {
-	p, err := parse.Parse(ctx, query)
-	if err != nil {
-		return false, err
-	}
-
-	if _, ok := p.(*plan.InsertInto); !ok {
-		return false, nil
-	}
-
-	a, err := se.Analyze(ctx, p)
-	if err != nil {
-		return false, err
-	}
-
-	isAutoInc := false
-	transform.Inspect(a, func(n sql.Node) bool {
-		switch n := n.(type) {
-		case *plan.InsertInto:
-			_, _, err = transform.NodeExprs(n.Source, func(exp sql.Expression) (sql.Expression, transform.TreeIdentity, error) {
-				if _, ok := exp.(*expression.AutoIncrement); ok {
-					isAutoInc = true
-				}
-				return exp, transform.SameTree, nil
-			})
-			return false
-		default:
-			return true
-		}
-	})
-
-	if err != nil {
-		return false, err
-	}
-	return isAutoInc, nil
-}
-
-// updateBatchEditOutput will delete the line it printed before, and print the updated line.
-// If there were other functions printed result, it will print update line on a new line.
-// This function is used for only batch reads into dolt sql.
-func updateBatchEditOutput() {
-	if fileReadProg != nil {
-		fileReadProg.printNewLineIfNeeded()
-	}
-	displayStr := fmt.Sprintf("Rows inserted: %d Rows updated: %d Rows deleted: %d",
-		batchEditStats.rowsInserted, batchEditStats.rowsUpdated, batchEditStats.rowsDeleted)
-	batchEditStats.displayStrLen = cli.DeleteAndPrint(batchEditStats.displayStrLen, displayStr)
-	batchEditStats.unprintedEdits = 0
-}
-
 // updateFileReadProgressOutput will delete the line it printed before, and print the updated line.
 // If there were other functions printed result, it will print update line on a new line.
 // This function is used for only file reads for dolt sql when `--file` flag is used.
@@ -1441,35 +1085,4 @@ func dbddl(ctx *sql.Context, queryist cli.Queryist, dbddl *sqlparser.DBDDL, quer
 	}
 
 	return sch, nil, nil
-}
-
-// Updates the batch insert stats with the results of an INSERT, UPDATE, or DELETE statement.
-func mergeResultIntoStats(ctx *sql.Context, statement sqlparser.Statement, rowIter sql.RowIter, s *stats) error {
-	switch statement.(type) {
-	case *sqlparser.Insert, *sqlparser.Delete, *sqlparser.Update, *sqlparser.Load:
-		break
-	default:
-		return nil
-	}
-
-	for {
-		row, err := rowIter.Next(ctx)
-		if err == io.EOF {
-			return nil
-		} else if err != nil {
-			return err
-		} else {
-			okResult := row[0].(types.OkResult)
-			s.unflushedEdits += int(okResult.RowsAffected)
-			s.unprintedEdits += int(okResult.RowsAffected)
-			switch statement.(type) {
-			case *sqlparser.Insert:
-				s.rowsInserted += int(okResult.RowsAffected)
-			case *sqlparser.Delete:
-				s.rowsDeleted += int(okResult.RowsAffected)
-			case *sqlparser.Update:
-				s.rowsUpdated += int(okResult.RowsAffected)
-			}
-		}
-	}
 }

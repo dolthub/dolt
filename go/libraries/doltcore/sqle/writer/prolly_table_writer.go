@@ -49,7 +49,6 @@ type prollyTableWriter struct {
 
 	flusher WriteSessionFlusher
 	setter  SessionRootSetter
-	batched bool
 }
 
 var _ TableWriter = &prollyTableWriter{}
@@ -210,10 +209,6 @@ func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) 
 
 // Close implements Closer
 func (w *prollyTableWriter) Close(ctx *sql.Context) error {
-	// If we're running in batched mode, don't flush the edits until explicitly told to do so
-	if w.batched {
-		return nil
-	}
 	return w.flush(ctx)
 }
 

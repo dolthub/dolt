@@ -25,7 +25,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
-	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -41,25 +40,15 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-type batchMode int8
-
-const (
-	single batchMode = iota
-	Batched
-)
-
 const (
 	DbRevisionDelimiter = "/"
 )
 
-var ErrWorkingSetChanges = goerrors.NewKind("Cannot switch working set, session state is dirty. " +
-	"Rollback or commit changes before changing working sets.")
 var ErrSessionNotPeristable = errors.New("session is not persistable")
 
 // DoltSession is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type DoltSession struct {
 	sql.Session
-	batchMode        batchMode
 	username         string
 	email            string
 	dbStates         map[string]*DatabaseSessionState
@@ -126,13 +115,6 @@ func NewDoltSession(
 // Provider returns the RevisionDatabaseProvider for this session.
 func (d *DoltSession) Provider() DoltDatabaseProvider {
 	return d.provider
-}
-
-// EnableBatchedMode enables batched mode for this session. This is only safe to do during initialization.
-// Sessions operating in batched mode don't flush any edit buffers except when told to do so explicitly, or when a
-// transaction commits. Disable @@autocommit to prevent edit buffers from being flushed prematurely in this mode.
-func (d *DoltSession) EnableBatchedMode() {
-	d.batchMode = Batched
 }
 
 // DSessFromSess retrieves a dolt session from a standard sql.Session
@@ -238,23 +220,6 @@ func (d *DoltSession) RemoveDbState(_ *sql.Context, dbName string) error {
 	// also clear out any db-level caches for this db
 	d.dbCache.Clear()
 	return nil
-}
-
-// Flush flushes all changes sitting in edit sessions to the session root for the database named. This normally
-// happens automatically as part of statement execution, and is only necessary when the session is manually batched (as
-// for bulk SQL import)
-func (d *DoltSession) Flush(ctx *sql.Context, dbName string) error {
-	branchState, _, err := d.lookupDbState(ctx, dbName)
-	if err != nil {
-		return err
-	}
-
-	ws, err := branchState.WriteSession().Flush(ctx)
-	if err != nil {
-		return err
-	}
-
-	return d.SetRoot(ctx, dbName, ws.WorkingRoot())
 }
 
 // SetValidateErr sets an error on this session to be returned from every call
@@ -391,15 +356,6 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 			ctx.SetTransaction(nil)
 		}
 	}()
-
-	if d.BatchMode() == Batched {
-		for _, db := range d.provider.DoltDatabases() {
-			err = d.Flush(ctx, db.Name())
-			if err != nil {
-				return err
-			}
-		}
-	}
 
 	if TransactionsDisabled(ctx) {
 		return nil
@@ -821,7 +777,9 @@ func (d *DoltSession) ResolveRootForRef(ctx *sql.Context, dbName, refStr string)
 	}
 
 	headRef, err := d.CWBHeadRef(ctx, dbName)
-	if err != nil {
+	if err == doltdb.ErrOperationNotSupportedInDetachedHead {
+		// leave head ref nil, we may not need it (commit hash)
+	} else if err != nil {
 		return nil, nil, "", err
 	}
 
@@ -1307,10 +1265,6 @@ func (d *DoltSession) Username() string {
 
 func (d *DoltSession) Email() string {
 	return d.email
-}
-
-func (d *DoltSession) BatchMode() batchMode {
-	return d.batchMode
 }
 
 // setDbSessionVars updates the three session vars that track the value of the session root hashes

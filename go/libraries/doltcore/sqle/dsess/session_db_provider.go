@@ -118,5 +118,4 @@ type SqlDatabase interface {
 	DbData() env.DbData
 	// DoltDatabases returns all underlying DoltDBs for this database.
 	DoltDatabases() []*doltdb.DoltDB
-	Flush(*sql.Context) error
 }
