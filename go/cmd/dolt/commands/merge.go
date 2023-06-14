@@ -321,8 +321,12 @@ func printConflictsAndViolations(tblToStats map[string]*merge.MergeStats) (confl
 	for tblName, stats := range tblToStats {
 		if stats.HasArtifacts() {
 			cli.Println("Auto-merging", tblName)
-			if stats.HasConflicts() {
+			if stats.HasDataConflicts() {
 				cli.Println("CONFLICT (content): Merge conflict in", tblName)
+				hasConflicts = true
+			}
+			if stats.HasSchemaConflicts() {
+				cli.Println("CONFLICT (schema): Merge conflict in", tblName)
 				hasConflicts = true
 			}
 			if stats.HasConstraintViolations() {

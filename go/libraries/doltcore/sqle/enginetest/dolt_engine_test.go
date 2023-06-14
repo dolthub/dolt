@@ -2215,6 +2215,22 @@ func TestTypesOverWire(t *testing.T) {
 	enginetest.TestTypesOverWire(t, harness, newSessionBuilder(harness))
 }
 
+func TestDoltCherryPick(t *testing.T) {
+	for _, script := range DoltCherryPickTests {
+		harness := newDoltHarness(t)
+		enginetest.TestScript(t, harness, script)
+		harness.Close()
+	}
+}
+
+func TestDoltCherryPickPrepared(t *testing.T) {
+	for _, script := range DoltCherryPickTests {
+		harness := newDoltHarness(t)
+		enginetest.TestScriptPrepared(t, harness, script)
+		harness.Close()
+	}
+}
+
 func TestDoltCommit(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
