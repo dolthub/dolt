@@ -18,8 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
-	"strings"
 	"unicode"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -34,43 +32,33 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-const (
-	// TableNameRegexStr is the regular expression that valid tables must match.
-	TableNameRegexStr = `^[a-zA-Z]{1}$|^[a-zA-Z_]+[-_0-9a-zA-Z]*[0-9a-zA-Z]+$`
-	// ForeignKeyNameRegexStr is the regular expression that valid foreign keys must match.
-	// From the unquoted identifiers: https://dev.mysql.com/doc/refman/8.0/en/identifiers.html
-	// We also allow the '-' character from quoted identifiers.
-	ForeignKeyNameRegexStr = `^[-$_0-9a-zA-Z]+$`
-	// IndexNameRegexStr is the regular expression that valid indexes must match.
-	// From the unquoted identifiers: https://dev.mysql.com/doc/refman/8.0/en/identifiers.html
-	// We also allow the '-' character from quoted identifiers.
-	IndexNameRegexStr = "^[-`$_0-9a-zA-Z]+$"
-)
-
-var (
-	tableNameRegex      = regexp.MustCompile(TableNameRegexStr)
-	foreignKeyNameRegex = regexp.MustCompile(ForeignKeyNameRegexStr)
-	indexNameRegex      = regexp.MustCompile(IndexNameRegexStr)
-
-	ErrNoConflictsResolved = errors.New("no conflicts resolved")
-)
+var ErrNoConflictsResolved = errors.New("no conflicts resolved")
 
 // IsValidTableName returns true if the name matches the regular expression TableNameRegexStr.
 // Table names must be composed of 1 or more letters and non-initial numerals, as well as the characters _ and -
 func IsValidTableName(name string) bool {
+	// Table names can't end with space characters
+	if unicode.IsSpace(rune(name[len(name)-1])) {
+		return false
+	}
+	return IsValidIdentifier(name)
+}
+
+// IsValidIdentifier returns true according to MySQL's quoted identifier rules.
+// Docs here: https://dev.mysql.com/doc/refman/8.0/en/identifiers.html
+func IsValidIdentifier(name string) bool {
 	// Ignore all leading digits
-	name = strings.TrimLeftFunc(name, unicode.IsDigit)
-	return tableNameRegex.MatchString(name)
-}
-
-// IsValidForeignKeyName returns true if the name matches the regular expression ForeignKeyNameRegexStr.
-func IsValidForeignKeyName(name string) bool {
-	return foreignKeyNameRegex.MatchString(name)
-}
-
-// IsValidIndexName returns true if the name matches the regular expression IndexNameRegexStr.
-func IsValidIndexName(name string) bool {
-	return indexNameRegex.MatchString(name)
+	// TODO: MySQL docs claim to disallow only digit, but it seems to work in practice
+	// name = strings.TrimLeftFunc(name, unicode.IsDigit)
+	if len(name) == 0 {
+		return false
+	}
+	for _, c := range name {
+		if c == 0x0000 || c > 0xFFFF {
+			return false
+		}
+	}
+	return true
 }
 
 // Table is a struct which holds row data, as well as a reference to its schema.

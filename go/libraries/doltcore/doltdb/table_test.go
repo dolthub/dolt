@@ -72,7 +72,7 @@ var isValidIndexNameTests = []isValidIndexNameTest{
 func TestIsValidIndexName(t *testing.T) {
 	for _, test := range isValidIndexNameTests {
 		t.Run(test.name, func(t *testing.T) {
-			valid := IsValidIndexName(test.indexName)
+			valid := IsValidIdentifier(test.indexName)
 			require.Equal(t, test.valid, valid)
 		})
 	}
