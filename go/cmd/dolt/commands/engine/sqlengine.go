@@ -290,19 +290,38 @@ func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engin
 func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, sessFactory sessionFactory, pro dsqle.DoltDatabaseProvider) error {
 	// need to give correct user, use the definer as user to run the event definition queries
 	ctxFactory := sqlContextFactory()
-	// get new session each time query executes?
-	getCtxFunc := func() (*sql.Context, error) {
+
+	// getCtxFunc is used to create new session context for event scheduler.
+	// It starts a transaction that needs to be committed using the function returned.
+	getCtxFunc := func() (*sql.Context, func() error, error) {
 		sess, err := sessFactory(sql.NewBaseSession(), pro)
 		if err != nil {
-			return nil, err
+			return nil, func() error {return nil}, err
 		}
 
 		newCtx, err := ctxFactory(context.Background(), sess)
 		if err != nil {
-			return nil, err
+			return nil, func() error {return nil}, err
 		}
 
-		return newCtx, nil
+		err = sess.SetSessionVariable(newCtx, sql.AutoCommitSessionVar, true)
+		if err != nil {
+			return nil, func() error {return nil}, err
+		}
+
+		tr, err := sess.StartTransaction(newCtx, sql.ReadWrite)
+		if err != nil {
+			return nil, func() error {return nil}, err
+		}
+
+		ts, ok := newCtx.Session.(sql.TransactionSession)
+		if !ok {
+			return nil, func() error {return nil}, nil
+		}
+
+		return newCtx, func() error {
+			return ts.CommitTransaction(newCtx, tr)
+		}, nil
 	}
 
 	return engine.InitializeEventScheduler(getCtxFunc, config.EventSchedulerStatus)

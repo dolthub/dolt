@@ -1288,6 +1288,7 @@ func (db Database) GetEvents(ctx *sql.Context) ([]sql.EventDefinition, error) {
 
 // SaveEvent implements sql.EventDatabase.
 func (db Database) SaveEvent(ctx *sql.Context, ed sql.EventDetails) error {
+	// TODO: check if the db revision name is default branch name, if not always DISABLE the event.
 	evDef := ed.GetEventStorageDefinition()
 	// TODO: store LastAltered, LastExecuted and TimezoneOffset in appropriate place
 	return db.addFragToSchemasTable(ctx,
@@ -1306,7 +1307,8 @@ func (db Database) DropEvent(ctx *sql.Context, name string) error {
 
 // UpdateEvent implements sql.EventDatabase.
 func (db Database) UpdateEvent(ctx *sql.Context, originalName string, ed sql.EventDetails) error {
-	// TODO: only in Dolt, any EVENT STATUS change should also update the branch-specific event scheduling
+	// TODO: check if the db revision name is default branch name, if not always DISABLE the event.
+	// TODO: any EVENT STATUS change should also update the branch-specific event scheduling
 	err := db.DropEvent(ctx, originalName)
 	if err != nil {
 		return err
