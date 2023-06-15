@@ -296,27 +296,27 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, sessFa
 	getCtxFunc := func() (*sql.Context, func() error, error) {
 		sess, err := sessFactory(sql.NewBaseSession(), pro)
 		if err != nil {
-			return nil, func() error {return nil}, err
+			return nil, func() error { return nil }, err
 		}
 
 		newCtx, err := ctxFactory(context.Background(), sess)
 		if err != nil {
-			return nil, func() error {return nil}, err
+			return nil, func() error { return nil }, err
 		}
 
 		err = sess.SetSessionVariable(newCtx, sql.AutoCommitSessionVar, true)
 		if err != nil {
-			return nil, func() error {return nil}, err
+			return nil, func() error { return nil }, err
 		}
 
 		tr, err := sess.StartTransaction(newCtx, sql.ReadWrite)
 		if err != nil {
-			return nil, func() error {return nil}, err
+			return nil, func() error { return nil }, err
 		}
 
 		ts, ok := newCtx.Session.(sql.TransactionSession)
 		if !ok {
-			return nil, func() error {return nil}, nil
+			return nil, func() error { return nil }, nil
 		}
 
 		return newCtx, func() error {
