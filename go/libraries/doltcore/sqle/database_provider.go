@@ -1196,10 +1196,7 @@ func (p DoltDatabaseProvider) ensureReplicaHeadExists(ctx *sql.Context, branch s
 
 // isBranch returns whether a branch with the given name is in scope for the database given
 func isBranch(ctx context.Context, db dsess.SqlDatabase, branchName string) (string, bool, error) {
-	ddbs, err := doltDbs(db)
-	if err != nil {
-		return "", false, err
-	}
+	ddbs := db.DoltDatabases()
 
 	brName, branchExists, err := isLocalBranch(ctx, ddbs, branchName)
 	if err != nil {
@@ -1218,21 +1215,6 @@ func isBranch(ctx context.Context, db dsess.SqlDatabase, branchName string) (str
 	}
 
 	return "", false, nil
-}
-
-func doltDbs(db dsess.SqlDatabase) ([]*doltdb.DoltDB, error) {
-	var ddbs []*doltdb.DoltDB
-	switch db := db.(type) {
-	case ReadReplicaDatabase:
-		ddbs = append(ddbs, db.ddb, db.srcDB)
-	case Database:
-		ddbs = append(ddbs, db.ddb)
-	case ReadOnlyDatabase:
-		ddbs = append(ddbs, db.ddb)
-	default:
-		return nil, fmt.Errorf("unrecognized type of database %T", db)
-	}
-	return ddbs, nil
 }
 
 func isLocalBranch(ctx context.Context, ddbs []*doltdb.DoltDB, branchName string) (string, bool, error) {
@@ -1268,10 +1250,7 @@ func isRemoteBranch(ctx context.Context, ddbs []*doltdb.DoltDB, branchName strin
 
 // isTag returns whether a tag with the given name is in scope for the database given
 func isTag(ctx context.Context, db dsess.SqlDatabase, tagName string) (bool, error) {
-	ddbs, err := doltDbs(db)
-	if err != nil {
-		return false, err
-	}
+	ddbs := db.DoltDatabases()
 
 	for _, ddb := range ddbs {
 		tagExists, err := ddb.HasTag(ctx, tagName)
@@ -1289,64 +1268,16 @@ func isTag(ctx context.Context, db dsess.SqlDatabase, tagName string) (bool, err
 
 // revisionDbForBranch returns a new database that is tied to the branch named by revSpec
 func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec string, requestedName string) (dsess.SqlDatabase, error) {
-	branch := ref.NewBranchRef(revSpec)
-
 	static := staticRepoState{
-		branch:          branch,
+		branch:          ref.NewBranchRef(revSpec),
 		RepoStateWriter: srcDb.DbData().Rsw,
 		RepoStateReader: srcDb.DbData().Rsr,
 	}
 
-	baseName, _ := dsess.SplitRevisionDbName(srcDb.Name())
-
-	// TODO: we need a base name method here
-	switch v := srcDb.(type) {
-	case ReadOnlyDatabase:
-		db := Database{
-			baseName:      baseName,
-			requestedName: requestedName,
-			ddb:           v.ddb,
-			rsw:           static,
-			rsr:           static,
-			gs:            v.gs,
-			editOpts:      v.editOpts,
-			revision:      revSpec,
-			revType:       dsess.RevisionTypeBranch,
-		}
-		return ReadOnlyDatabase{db}, nil
-	case Database:
-		return Database{
-			baseName:      baseName,
-			requestedName: requestedName,
-			ddb:           v.ddb,
-			rsw:           static,
-			rsr:           static,
-			gs:            v.gs,
-			editOpts:      v.editOpts,
-			revision:      revSpec,
-			revType:       dsess.RevisionTypeBranch,
-		}, nil
-	case ReadReplicaDatabase:
-		return ReadReplicaDatabase{
-			Database: Database{
-				baseName:      baseName,
-				requestedName: requestedName,
-				ddb:           v.ddb,
-				rsw:           static,
-				rsr:           static,
-				gs:            v.gs,
-				editOpts:      v.editOpts,
-				revision:      revSpec,
-				revType:       dsess.RevisionTypeBranch,
-			},
-			remote:  v.remote,
-			srcDB:   v.srcDB,
-			tmpDir:  v.tmpDir,
-			limiter: newLimiter(),
-		}, nil
-	default:
-		panic(fmt.Sprintf("unrecognized type of database %T", srcDb))
-	}
+	return srcDb.WithBranchRevision(requestedName, dsess.SessionDatabaseBranchSpec{
+		RepoState: static,
+		Branch:    revSpec,
+	})
 }
 
 func initialStateForBranchDb(ctx *sql.Context, srcDb dsess.SqlDatabase) (dsess.InitialDbState, error) {

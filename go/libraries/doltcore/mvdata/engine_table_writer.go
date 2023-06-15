@@ -20,7 +20,6 @@ import (
 	"io"
 	"sync/atomic"
 
-	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
@@ -30,11 +29,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/transform"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
@@ -104,8 +100,6 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 	}
 	sqlCtx.SetCurrentDatabase(dbName)
 
-	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
-
 	doltCreateTableSchema, err := sqlutil.FromDoltSchema(options.TableToWriteTo, createTableSchema)
 	if err != nil {
 		return nil, err
@@ -127,45 +121,6 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 		tableName: options.TableToWriteTo,
 
 		statsCB: statsCB,
-
-		importOption:       options.Operation,
-		tableSchema:        doltCreateTableSchema,
-		rowOperationSchema: doltRowOperationSchema,
-	}, nil
-}
-
-// Used by Dolthub API
-func NewSqlEngineTableWriterWithEngine(ctx *sql.Context, eng *sqle.Engine, db dsqle.Database, createTableSchema, rowOperationSchema schema.Schema, options *MoverOptions, statsCB noms.StatsCB) (*SqlEngineTableWriter, error) {
-	dsess.DSessFromSess(ctx.Session).EnableBatchedMode()
-
-	err := ctx.Session.SetSessionVariable(ctx, sql.AutoCommitSessionVar, false)
-	if err != nil {
-		return nil, errhand.VerboseErrorFromError(err)
-	}
-
-	var doltCreateTableSchema sql.PrimaryKeySchema
-	if options.Operation == CreateOp {
-		doltCreateTableSchema, err = sqlutil.FromDoltSchema(options.TableToWriteTo, createTableSchema)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	doltRowOperationSchema, err := sqlutil.FromDoltSchema(options.TableToWriteTo, rowOperationSchema)
-	if err != nil {
-		return nil, err
-	}
-
-	return &SqlEngineTableWriter{
-		se:         engine.NewRebasedSqlEngine(eng, map[string]dsess.SqlDatabase{db.Name(): db}),
-		sqlCtx:     ctx,
-		contOnErr:  options.ContinueOnErr,
-		force:      options.Force,
-		disableFks: options.DisableFks,
-
-		database:  db.Name(),
-		tableName: options.TableToWriteTo,
-		statsCB:   statsCB,
 
 		importOption:       options.Operation,
 		tableSchema:        doltCreateTableSchema,

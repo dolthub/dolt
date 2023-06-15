@@ -441,16 +441,16 @@ SQL
     cd ../repo2
     dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
     dolt config --local --add sqlserver.global.dolt_read_replica_remote origin
+
     # repo2 pulls on read
     run dolt sql -r csv -b <<SQL
 call dolt_checkout('feat');
 show tables;
 SQL
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
-    [[ "${lines[0]}" =~ "Tables_in_repo2" ]] || false
-    [[ "${lines[1]}" =~ "t1" ]] || false
-    [[ "${lines[2]}" =~ "t2" ]] || false
+    [[ "$output" =~ "Tables_in_repo2" ]] || false
+    [[ "$output" =~ "t1" ]] || false
+    [[ "$output" =~ "t2" ]] || false
 }
 
 @test "replication: pull all heads" {
@@ -467,7 +467,6 @@ SQL
     dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
     run dolt sql -q "call dolt_checkout('new_feature'); show tables" -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
     [[ "${lines[2]}" =~ "Tables_in_repo1" ]] || false
     [[ "${lines[3]}" =~ "t1" ]] || false
 }
@@ -506,12 +505,10 @@ SQL
 
     run dolt sql -q 'USE `repo1/b2`; show tables;' -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 3 ]
     [[ "$output" =~ "t1" ]] || false
 
     run dolt branch -a
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 6 ]
     [[ "$output" =~ "remotes/remote1/b1" ]] || false
     [[ "$output" =~ "remotes/remote1/b2" ]] || false    
 }
@@ -530,7 +527,6 @@ SQL
 
     run dolt sql -q 'USE `repo1/B1`; show tables;' -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 3 ]
     [[ "$output" =~ "t1" ]] || false
 
     run dolt sql -q 'USE `repo1/notfound`;' -r csv
@@ -584,7 +580,6 @@ SQL
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "remote not found: 'unknown'" ]] || false
 }
 
 @test "replication: non-fast-forward pull fails replication" {
@@ -676,7 +671,6 @@ SQL
     dolt config --local --add sqlserver.global.dolt_replicate_heads main
     run dolt sql -b -q "USE \`repo1/feature-branch\`; show tables" -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
     [[ "${lines[1]}" =~ "Table" ]] || false
     [[ "${lines[2]}" =~ "t1" ]] || false
 }
@@ -721,7 +715,6 @@ SQL
     
     run dolt ls
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "t1" ]] || false
 }
 

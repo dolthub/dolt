@@ -1,6 +1,9 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
 
+# Batch mode no longer does much but these tests are preserved as additional
+# coverage of general sql command functionality
+
 setup() {
     setup_common
     dolt sql <<SQL
@@ -24,7 +27,7 @@ teardown() {
 @test "sql-batch: dolt sql -b and -batch are a valid commands" {
     run dolt sql -b -q "insert into test values (0,0,0,0,0,0)"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Rows inserted: 1" ]] || false
+
     dolt sql -batch -q "insert into test values (1,0,0,0,0,0)"
     run dolt sql -b -q "select * from test" 
     [ "$status" -eq 0 ]
@@ -40,12 +43,10 @@ teardown() {
 }
 
 @test "sql-batch: Piped SQL files interpreted in batch mode" {
-    run dolt sql -b <<SQL
+    dolt sql -b <<SQL
 insert into test values (0,0,0,0,0,0);
 insert into test values (1,0,0,0,0,0);
 SQL
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Rows inserted: 2" ]] || false
 }
 
 @test "sql-batch: script commits up until error" {
@@ -70,7 +71,6 @@ insert into test values (1,0,0,0,0,0);
 insert into test values poop;
 SQL
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "Error processing batch" ]] || false
     [[ "$output" =~ "error on line 3 for query" ]] || false
     [[ "$output" =~ "insert into test values poop" ]] || false
 
@@ -91,7 +91,6 @@ poop;
 insert into test values (3,0,0,0,0,0);
 SQL
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "Error processing batch" ]] || false
     [[ "$output" =~ "error on line 10 for query" ]] || false
     [[ "$output" =~ "poop" ]] || false
 }
@@ -156,7 +155,6 @@ INSERT INTO TEST2 VALUES (1, (SELECT c1 FROM TEST WHERE c1=1));
 SQL
 
   [ "$status" -eq 0 ]
-  [[ "$output" =~ "Rows inserted: 3" ]] || false
 
   run dolt sql -r csv -q "select * from test2 ORDER BY pk"
   [[ "$output" =~ "pk,c1" ]] || false

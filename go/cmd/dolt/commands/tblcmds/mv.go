@@ -92,7 +92,6 @@ func (cmd MvCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	queryStr = fmt.Sprintf("%sRENAME TABLE `%s` TO `%s`;", queryStr, oldName, newName)
 
 	return commands.SqlCmd{}.Exec(ctx, "", []string{
-		fmt.Sprintf("--%s", commands.BatchFlag),
 		fmt.Sprintf(`--%s`, commands.QueryFlag),
 		queryStr,
 	}, dEnv, cliCtx)

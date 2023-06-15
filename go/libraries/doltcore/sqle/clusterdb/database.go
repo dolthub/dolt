@@ -112,16 +112,21 @@ func (db database) InitialDBState(ctx *sql.Context) (dsess.InitialDbState, error
 	}, nil
 }
 
+func (db database) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
+	// Nothing to do here, we don't support changing branch revisions
+	return db, nil
+}
+
+func (db database) DoltDatabases() []*doltdb.DoltDB {
+	return nil
+}
+
 func (db database) GetRoot(context *sql.Context) (*doltdb.RootValue, error) {
 	return nil, errors.New("unimplemented")
 }
 
 func (db database) DbData() env.DbData {
 	return env.DbData{}
-}
-
-func (db database) Flush(context *sql.Context) error {
-	return errors.New("unimplemented")
 }
 
 func (db database) EditOptions() editor.Options {

@@ -98,14 +98,24 @@ type DoltDatabaseProvider interface {
 	DoltDatabases() []SqlDatabase
 }
 
+type SessionDatabaseBranchSpec struct {
+	RepoState env.RepoStateReadWriter
+	Branch    string
+}
+
 type SqlDatabase interface {
 	sql.Database
 	SessionDatabase
 	RevisionDatabase
 
+	// WithBranchRevision returns a copy of this database with the revision set to the given branch revision, and the
+	// database name set to the given name.
+	WithBranchRevision(requestedName string, branchSpec SessionDatabaseBranchSpec) (SqlDatabase, error)
+
 	// TODO: get rid of this, it's managed by the session, not the DB
 	GetRoot(*sql.Context) (*doltdb.RootValue, error)
 	// TODO: remove ddb from the below, it's separable and is 95% of the uses of this method
 	DbData() env.DbData
-	Flush(*sql.Context) error
+	// DoltDatabases returns all underlying DoltDBs for this database.
+	DoltDatabases() []*doltdb.DoltDB
 }

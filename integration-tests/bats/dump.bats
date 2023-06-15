@@ -61,9 +61,20 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Successfully exported data." ]] || false
 
-    run dolt sql -b < doltdump.sql
+    dolt sql -b < doltdump.sql
+
+    run dolt sql -q "show tables"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Rows inserted: 6 Rows updated: 0 Rows deleted: 0" ]] || false
+    [[ "$output" =~ "warehouse" ]] || false
+    [[ "$output" =~ "enums" ]] || false
+    [[ "$output" =~ "new_table" ]] || false
+
+    run dolt sql -q "select * from warehouse" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ "$output" =~ "1,UPS" ]] || false
+    [[ "$output" =~ "2,TV" ]] || false
+    [[ "$output" =~ "3,Table" ]] || false
 }
 
 @test "dump: SQL type - no-create-db flag" {
@@ -102,9 +113,20 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
 
-    run dolt sql -b < doltdump.sql
+    dolt sql -b < doltdump.sql
+
+    run dolt sql -q "show tables"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Rows inserted: 6 Rows updated: 0 Rows deleted: 0" ]] || false
+    [[ "$output" =~ "warehouse" ]] || false
+    [[ "$output" =~ "enums" ]] || false
+    [[ "$output" =~ "new_table" ]] || false
+
+    run dolt sql -q "select * from warehouse" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ "$output" =~ "1,UPS" ]] || false
+    [[ "$output" =~ "2,TV" ]] || false
+    [[ "$output" =~ "3,Table" ]] || false
 }
 
 @test "dump: SQL type - compare tables in database with tables imported file " {

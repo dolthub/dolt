@@ -92,6 +92,25 @@ func (r ReadOnlyDatabase) InitialDBState(ctx *sql.Context) (dsess.InitialDbState
 	return initialDBState(ctx, r, r.revision)
 }
 
+func (r ReadOnlyDatabase) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
+	revDb, err := r.Database.WithBranchRevision(requestedName, branchSpec)
+	if err != nil {
+		return nil, err
+	}
+
+	r.Database = revDb.(Database)
+	return r, nil
+}
+
+func (db Database) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
+	db.rsr, db.rsw = branchSpec.RepoState, branchSpec.RepoState
+	db.revision = branchSpec.Branch
+	db.revType = dsess.RevisionTypeBranch
+	db.requestedName = requestedName
+
+	return db, nil
+}
+
 // Revision implements dsess.RevisionDatabase
 func (db Database) Revision() string {
 	return db.revision
@@ -107,6 +126,10 @@ func (db Database) RevisionType() dsess.RevisionType {
 
 func (db Database) EditOptions() editor.Options {
 	return db.editOpts
+}
+
+func (db Database) DoltDatabases() []*doltdb.DoltDB {
+	return []*doltdb.DoltDB{db.ddb}
 }
 
 // NewDatabase returns a new dolt database to use in queries.
@@ -1035,22 +1058,6 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 	}
 
 	return db.SetRoot(ctx, newRoot)
-}
-
-// Flush flushes the current batch of outstanding changes and returns any errors.
-func (db Database) Flush(ctx *sql.Context) error {
-	sess := dsess.DSessFromSess(ctx.Session)
-	dbState, _, err := sess.LookupDbState(ctx, db.RevisionQualifiedName())
-	if err != nil {
-		return err
-	}
-	editSession := dbState.WriteSession()
-
-	ws, err := editSession.Flush(ctx)
-	if err != nil {
-		return err
-	}
-	return db.SetRoot(ctx, ws.WorkingRoot())
 }
 
 // GetViewDefinition implements sql.ViewDatabase

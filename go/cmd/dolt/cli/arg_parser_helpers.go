@@ -238,6 +238,7 @@ func CreateCheckoutArgParser() *argparser.ArgParser {
 
 func CreateCherryPickArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("cherrypick", 1)
+	ap.SupportsFlag(AbortParam, "", "Abort the current conflict resolution process, and revert all changes from the in-process cherry-pick operation.")
 	ap.TooManyArgsErrorFunc = func(receivedArgs []string) error {
 		return fmt.Errorf("cherry-picking multiple commits is not supported yet.")
 	}
@@ -331,6 +332,13 @@ func CreateLogArgParser() *argparser.ArgParser {
 func CreateGCArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("gc", 0)
 	ap.SupportsFlag(ShallowFlag, "s", "perform a fast, but incomplete garbage collection pass")
+	return ap
+}
+
+func CreateCountCommitsArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParserWithMaxArgs("gc", 0)
+	ap.SupportsString("from", "f", "commit id", "commit to start counting from")
+	ap.SupportsString("to", "t", "commit id", "commit to stop counting at")
 	return ap
 }
 

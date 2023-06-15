@@ -52,7 +52,6 @@ var _ sql.StoredProcedureDatabase = ReadReplicaDatabase{}
 var _ dsess.RemoteReadReplicaDatabase = ReadReplicaDatabase{}
 
 var ErrFailedToLoadReplicaDB = errors.New("failed to load replica database")
-var ErrInvalidReplicateHeadsSetting = errors.New("invalid replicate heads setting")
 
 var EmptyReadReplica = ReadReplicaDatabase{}
 
@@ -86,6 +85,15 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 	}, nil
 }
 
+func (rrd ReadReplicaDatabase) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
+	rrd.rsr, rrd.rsw = branchSpec.RepoState, branchSpec.RepoState
+	rrd.revision = branchSpec.Branch
+	rrd.revType = dsess.RevisionTypeBranch
+	rrd.requestedName = requestedName
+
+	return rrd, nil
+}
+
 func (rrd ReadReplicaDatabase) ValidReplicaState(ctx *sql.Context) bool {
 	// srcDB will be nil in the case the remote was specified incorrectly and startup errors are suppressed
 	return rrd.srcDB != nil
@@ -96,6 +104,10 @@ func (rrd ReadReplicaDatabase) ValidReplicaState(ctx *sql.Context) bool {
 // correct pointer type to the session initializer.
 func (rrd ReadReplicaDatabase) InitialDBState(ctx *sql.Context) (dsess.InitialDbState, error) {
 	return initialDBState(ctx, rrd, rrd.revision)
+}
+
+func (rrd ReadReplicaDatabase) DoltDatabases() []*doltdb.DoltDB {
+	return []*doltdb.DoltDB{rrd.ddb, rrd.srcDB}
 }
 
 func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {

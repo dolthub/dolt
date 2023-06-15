@@ -59,7 +59,7 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 	if err != nil {
 		return nil, err
 	}
-	dsess.DSessFromSess(ctx.Session).EnableBatchedMode()
+
 	err = ctx.Session.SetSessionVariable(ctx, sql.AutoCommitSessionVar, false)
 	if err != nil {
 		return nil, err
@@ -92,9 +92,6 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 			_, rowIter, execErr = engine.Query(ctx, query)
 			if execErr == nil {
 				execErr = drainIter(ctx, rowIter)
-			}
-			if err = db.Flush(ctx); err != nil {
-				return nil, err
 			}
 		default:
 			return nil, fmt.Errorf("Unsupported SQL statement: '%v'.", query)

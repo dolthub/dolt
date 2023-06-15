@@ -16,9 +16,8 @@ package commands
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"strings"
+
+	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -43,6 +42,12 @@ If applying the row data changes from the cherry-picked commit results in a data
 		`{{.LessThan}}commit{{.GreaterThan}}`,
 	},
 }
+
+var ErrCherryPickConflictsOrViolations = errors.NewKind("error: Unable to apply commit cleanly due to conflicts " +
+	"or constraint violations. Please resolve the conflicts and/or constraint violations, then use `dolt add` " +
+	"to add the tables to the staged set, and `dolt commit` to commit the changes and finish cherry-picking. \n" +
+	"To undo all changes from this cherry-pick operation, use `dolt cherry-pick --abort`.\n" +
+	"For more information on handling conflicts, see: https://docs.dolthub.com/concepts/dolt/git/conflicts")
 
 type CherryPickCmd struct{}
 
@@ -81,6 +86,19 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 	// This command creates a commit, so we need user identity
 	if !cli.CheckUserNameAndEmail(dEnv) {
 		return 1
+	}
+
+	if apr.Contains(cli.AbortParam) {
+		ws, err := dEnv.WorkingSet(ctx)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.BuildDError("fatal: unable to load working set: %v", err).Build(), nil)
+		}
+
+		if !ws.MergeActive() {
+			return HandleVErrAndExitCode(errhand.BuildDError("error: There is no cherry-pick merge to abort").Build(), nil)
+		}
+
+		return HandleVErrAndExitCode(abortMerge(ctx, dEnv), usage)
 	}
 
 	// TODO : support single commit cherry-pick only for now
@@ -137,10 +155,12 @@ func cherryPick(ctx context.Context, dEnv *env.DoltEnv, cliCtx cli.CliContext, c
 		return errhand.BuildDError("error: your local changes would be overwritten by cherry-pick.\nhint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt reset --hard) to proceed.").Build()
 	}
 
-	newWorkingRoot, commitMsg, err := getCherryPickedRootValue(ctx, dEnv, workingRoot, cherryStr)
+	mergeResult, commitMsg, err := mergeCherryPickedCommit(ctx, dEnv, workingRoot, cherryStr)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+	newWorkingRoot := mergeResult.Root
+	mapOfMergeStats := mergeResult.Stats
 
 	workingHash, err = newWorkingRoot.HashOf()
 	if err != nil {
@@ -156,23 +176,36 @@ func cherryPick(ctx context.Context, dEnv *env.DoltEnv, cliCtx cli.CliContext, c
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-	res := AddCmd{}.Exec(ctx, "add", []string{"-A"}, dEnv, cliCtx)
-	if res != 0 {
-		return errhand.BuildDError("dolt add failed").AddCause(err).Build()
+
+	// Stage all tables that don't have merge conflicts or constraint violations
+	for tableName, mergeStats := range mapOfMergeStats {
+		if !mergeStats.HasArtifacts() {
+			res := AddCmd{}.Exec(ctx, "add", []string{tableName}, dEnv, cliCtx)
+			if res != 0 {
+				return errhand.BuildDError("dolt add failed").AddCause(err).Build()
+			}
+		}
 	}
 
-	commitParams := []string{"-m", commitMsg}
-	res = CommitCmd{}.Exec(ctx, "commit", commitParams, dEnv, cliCtx)
-	if res != 0 {
-		return errhand.BuildDError("dolt commit failed").AddCause(err).Build()
+	printSuccessStats(mapOfMergeStats)
+
+	if mergeResult.HasMergeArtifacts() {
+		return errhand.VerboseErrorFromError(ErrCherryPickConflictsOrViolations.New())
+	} else {
+		commitParams := []string{"-m", commitMsg}
+		res := CommitCmd{}.Exec(ctx, "commit", commitParams, dEnv, cliCtx)
+		if res != 0 {
+			return errhand.BuildDError("dolt commit failed").AddCause(err).Build()
+		}
 	}
 
 	return nil
 }
 
-// getCherryPickedRootValue returns updated RootValue for current HEAD after cherry-pick commit is merged successfully and
-// commit message of cherry-picked commit.
-func getCherryPickedRootValue(ctx context.Context, dEnv *env.DoltEnv, workingRoot *doltdb.RootValue, cherryStr string) (*doltdb.RootValue, string, error) {
+// mergeCherryPickedCommit executes a merge to cherry-pick the specified ref specification from
+// |cherryStr| and apply it to the specified |workingRoot| in this |dEnv|. The MergeResult is
+// returned, along with the commit message for the specified |cherryStr|, and any error encountered.
+func mergeCherryPickedCommit(ctx context.Context, dEnv *env.DoltEnv, workingRoot *doltdb.RootValue, cherryStr string) (*merge.Result, string, error) {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
 		return nil, "", err
@@ -226,17 +259,23 @@ func getCherryPickedRootValue(ctx context.Context, dEnv *env.DoltEnv, workingRoo
 		return nil, "", err
 	}
 
-	var tablesWithConflict []string
-	for tbl, stats := range result.Stats {
-		if stats.HasConflicts() {
-			tablesWithConflict = append(tablesWithConflict, tbl)
+	// If any of the merge stats show a data or schema conflict or a constraint
+	// violation, record that a merge is in progress.
+	for _, stats := range result.Stats {
+		if stats.HasArtifacts() {
+			ws, err := dEnv.WorkingSet(ctx)
+			if err != nil {
+				return nil, "", err
+			}
+			newWorkingSet := ws.StartMerge(cherryCm, cherryStr)
+			err = dEnv.UpdateWorkingSet(ctx, newWorkingSet)
+			if err != nil {
+				return nil, "", err
+			}
+
+			break
 		}
 	}
 
-	if len(tablesWithConflict) > 0 {
-		tblNames := strings.Join(tablesWithConflict, "', '")
-		return nil, "", errors.New(fmt.Sprintf("conflicts in table {'%s'}", tblNames))
-	}
-
-	return result.Root, commitMsg, nil
+	return result, commitMsg, nil
 }
