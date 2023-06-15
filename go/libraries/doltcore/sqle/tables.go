@@ -2013,7 +2013,7 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 		return err
 	}
 	if sqlFk.Name != "" && !doltdb.IsValidIdentifier(sqlFk.Name) {
-		return fmt.Errorf("invalid foreign key name `%s` as it must match the regular expression %s", sqlFk.Name, doltdb.IdentifierRegexStr)
+		return fmt.Errorf("invalid foreign key name `%s`", sqlFk.Name)
 	}
 	if strings.ToLower(sqlFk.Database) != strings.ToLower(sqlFk.ParentDatabase) || strings.ToLower(sqlFk.Database) != strings.ToLower(t.db.Name()) {
 		return fmt.Errorf("only foreign keys on the same database are currently supported")

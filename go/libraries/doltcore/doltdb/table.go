@@ -33,6 +33,7 @@ import (
 )
 
 var ErrNoConflictsResolved = errors.New("no conflicts resolved")
+var IdentifierRegexStr = "asdf"
 
 // IsValidTableName returns true if the name matches the regular expression TableNameRegexStr.
 // Table names must be composed of 1 or more letters and non-initial numerals, as well as the characters _ and -
