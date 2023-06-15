@@ -113,6 +113,17 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 		defer closeFunc()
 	}
 
+	if len(apr.ContainsMany(cli.MoveFlag, cli.CopyFlag, cli.DeleteFlag, cli.DeleteForceFlag, cli.ListFlag)) > 1 {
+		cli.PrintErrln("Must specify exactly one of --move/-m, --copy/-c, --delete/-d, -D, or --list.")
+		return 1
+	}
+
+	for _, arg := range apr.Args {
+		if !doltdb.IsValidUserBranchName(arg) {
+			cli.PrintErrf("%s is an invalid branch name", arg)
+		}
+	}
+
 	switch {
 	case apr.Contains(cli.MoveFlag):
 		return moveBranch(ctx, dEnv, apr, usage)
@@ -314,28 +325,29 @@ func moveBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 		return 1
 	}
 
-	force := apr.Contains(cli.ForceFlag)
-	src := apr.Arg(0)
-	dest := apr.Arg(1)
-	err := actions.RenameBranch(ctx, dEnv.DbData(), src, apr.Arg(1), dEnv, force, nil)
-
-	var verr errhand.VerboseError
-	if err != nil {
-		if err == doltdb.ErrBranchNotFound {
-			verr = errhand.BuildDError("fatal: branch '%s' not found", src).Build()
-		} else if err == actions.ErrAlreadyExists {
-			verr = errhand.BuildDError("fatal: A branch named '%s' already exists.", dest).Build()
-		} else if err == doltdb.ErrInvBranchName {
-			verr = errhand.BuildDError("fatal: '%s' is not a valid branch name.", dest).Build()
-		} else if err == actions.ErrCOBranchDelete {
-			verr = errhand.BuildDError("error: Cannot delete checked out branch '%s'", src).Build()
-		} else {
-			bdr := errhand.BuildDError("fatal: Unexpected error moving branch from '%s' to '%s'", src, dest)
-			verr = bdr.AddCause(err).Build()
-		}
+	if apr.Contains(cli.AllFlag) {
+		cli.PrintErrln("--all/-a can only be supplied when listing branches, not when creating branches")
+		return 1
 	}
 
-	return HandleVErrAndExitCode(verr, usage)
+	if apr.Contains(cli.VerboseFlag) {
+		cli.PrintErrln("--verbose/-v can only be supplied when listing branches, not when creating branches")
+		return 1
+	}
+
+	if apr.Contains(cli.RemoteParam) {
+		cli.PrintErrln("--remote/-r can only be supplied when listing or deleting branches, not when creating branches")
+		return 1
+	}
+
+	query := generateSql(args)
+	schema, rowIter, err := queryEngine.Query(sqlCtx, query)
+	_, err = sql.RowIterToRows(sqlCtx, schema, rowIter)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to run query %s", query).AddCause(err).Build(), nil)
+	}
+
+	return 0
 }
 
 func copyBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
