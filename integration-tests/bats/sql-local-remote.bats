@@ -29,6 +29,7 @@ setup() {
     fi
     setup_no_dolt_init
     unset DOLT_CLI_PASSWORD
+    unset DOLT_SILENCE_USER_REQ_FOR_TESTING
     make_repo defaultDB
     make_repo altDB
 }
