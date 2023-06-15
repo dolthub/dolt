@@ -392,7 +392,17 @@ func createBranch(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.
 		return 1
 	}
 
-	return callStoredProcedure(sqlCtx, queryEngine, args)
+	result := callStoredProcedure(sqlCtx, queryEngine, args)
+
+	if result != 0 {
+		return result
+	}
+
+	if apr.Contains(cli.TrackFlag) {
+		cli.Printf("branch '%s' set up to track '%s'\n", apr.Arg(0), apr.Arg(1))
+	}
+
+	return 0
 }
 
 func moveBranch(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.ArgParseResults, args []string, usage cli.UsagePrinter) int {
