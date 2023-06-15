@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -29,35 +30,56 @@ import (
 
 var ErrEmptyCherryPick = errors.New("cannot cherry-pick empty string")
 var ErrCherryPickUncommittedChanges = errors.New("cannot cherry-pick with uncommitted changes")
-var ErrCherryPickConflictsOrViolations = errors.New("error: Unable to apply commit cleanly due to conflicts " +
-	"or constraint violations. Please resolve the conflicts and/or constraint violations, then call `dolt_add()` " +
-	"to add the tables to the staged set, then call `dolt_commit()` to commit the changes and finish cherry-picking. \n" +
-	"To undo all changes from this cherry-pick operation, call `dolt_cherry_pick('--abort')`.\n" +
-	"For more information on handling conflicts, see: https://docs.dolthub.com/concepts/dolt/git/conflicts")
+
+var cherryPickSchema = []*sql.Column{
+	{
+		Name:     "hash",
+		Type:     gmstypes.LongText,
+		Nullable: true,
+	},
+	{
+		Name:     "data_conflicts",
+		Type:     gmstypes.Int64,
+		Nullable: false,
+	},
+	{
+		Name:     "schema_conflicts",
+		Type:     gmstypes.Int64,
+		Nullable: false,
+	},
+	{
+		Name:     "constraint_violations",
+		Type:     gmstypes.Int64,
+		Nullable: false,
+	},
+}
 
 // doltCherryPick is the stored procedure version for the CLI command `dolt cherry-pick`.
 func doltCherryPick(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	newCommitHash, err := doDoltCherryPick(ctx, args)
+	newCommitHash, dataConflicts, schemaConflicts, constraintViolations, err := doDoltCherryPick(ctx, args)
 	if err != nil {
 		return nil, err
 	}
-	return rowToIter(newCommitHash), nil
+	return rowToIter(newCommitHash, dataConflicts, schemaConflicts, constraintViolations), nil
 }
 
-func doDoltCherryPick(ctx *sql.Context, args []string) (string, error) {
+// doDoltCherryPick attempts to perform a cherry-pick merge based on the arguments specified in |args| and returns
+// the new, created commit hash (if it was successful created), a count of the number of tables with data conflicts,
+// a count of the number of tables with schema conflicts, and a count of the number of tables with constraint violations.
+func doDoltCherryPick(ctx *sql.Context, args []string) (string, int, int, int, error) {
 	// Get the information for the sql context.
 	dbName := ctx.GetCurrentDatabase()
 	if len(dbName) == 0 {
-		return "", fmt.Errorf("error: empty database name")
+		return "", 0, 0, 0, fmt.Errorf("error: empty database name")
 	}
 
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
-		return "", err
+		return "", 0, 0, 0, err
 	}
 
 	apr, err := cli.CreateCherryPickArgParser().Parse(args)
 	if err != nil {
-		return "", err
+		return "", 0, 0, 0, err
 	}
 
 	dSess := dsess.DSessFromSess(ctx.Session)
@@ -65,64 +87,65 @@ func doDoltCherryPick(ctx *sql.Context, args []string) (string, error) {
 	if apr.Contains(cli.AbortParam) {
 		ws, err := dSess.WorkingSet(ctx, dbName)
 		if err != nil {
-			return "", fmt.Errorf("fatal: unable to load working set: %v", err)
+			return "", 0, 0, 0, fmt.Errorf("fatal: unable to load working set: %v", err)
 		}
 
 		if !ws.MergeActive() {
-			return "", fmt.Errorf("error: There is no cherry-pick merge to abort")
+			return "", 0, 0, 0, fmt.Errorf("error: There is no cherry-pick merge to abort")
 		}
 
 		roots, ok := dSess.GetRoots(ctx, dbName)
 		if !ok {
-			return "", fmt.Errorf("fatal: unable to load roots for %s", dbName)
+			return "", 0, 0, 0, fmt.Errorf("fatal: unable to load roots for %s", dbName)
 		}
 
 		newWs, err := abortMerge(ctx, ws, roots)
 		if err != nil {
-			return "", fmt.Errorf("fatal: unable to abort merge: %v", err)
+			return "", 0, 0, 0, fmt.Errorf("fatal: unable to abort merge: %v", err)
 		}
 
-		return "", dSess.SetWorkingSet(ctx, dbName, newWs)
+		return "", 0, 0, 0, dSess.SetWorkingSet(ctx, dbName, newWs)
 	}
 
 	// we only support cherry-picking a single commit for now.
 	if apr.NArg() == 0 {
-		return "", ErrEmptyCherryPick
+		return "", 0, 0, 0, ErrEmptyCherryPick
 	} else if apr.NArg() > 1 {
-		return "", fmt.Errorf("cherry-picking multiple commits is not supported yet")
+		return "", 0, 0, 0, fmt.Errorf("cherry-picking multiple commits is not supported yet")
 	}
 
 	cherryStr := apr.Arg(0)
 	if len(cherryStr) == 0 {
-		return "", ErrEmptyCherryPick
+		return "", 0, 0, 0, ErrEmptyCherryPick
 	}
 
 	roots, ok := dSess.GetRoots(ctx, dbName)
 	if !ok {
-		return "", sql.ErrDatabaseNotFound.New(dbName)
+		return "", 0, 0, 0, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
 	mergeResult, commitMsg, err := cherryPick(ctx, dSess, roots, dbName, cherryStr)
 	if err != nil {
-		return "", err
+		return "", 0, 0, 0, err
 	}
 
 	newWorkingRoot := mergeResult.Root
 	err = dSess.SetRoot(ctx, dbName, newWorkingRoot)
 	if err != nil {
-		return "", err
+		return "", 0, 0, 0, err
 	}
 
 	err = stageCherryPickedTables(ctx, mergeResult.Stats)
 	if err != nil {
-		return "", err
+		return "", 0, 0, 0, err
 	}
 
 	if mergeResult.HasMergeArtifacts() {
-		return "", ErrCherryPickConflictsOrViolations
+		return "", mergeResult.CountOfTablesWithDataConflicts(),
+			mergeResult.CountOfTablesWithSchemaConflicts(), mergeResult.CountOfTablesWithConstraintViolations(), nil
 	} else {
 		commitHash, _, err := doDoltCommit(ctx, []string{"-m", commitMsg})
-		return commitHash, err
+		return commitHash, 0, 0, 0, err
 	}
 }
 
@@ -217,6 +240,8 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 		return nil, "", err
 	}
 
+	// When cherry-picking, we need to use the parent of the cherry-picked commit as the ancestor. This
+	// ensures that only the delta from the cherry-pick commit is applied.
 	parentCommit, err := doltDB.ResolveParent(ctx, cherryCommit, 0)
 	if err != nil {
 		return nil, "", err
@@ -232,8 +257,6 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 	} else if !ok {
 		return nil, "", sql.ErrDatabaseNotFound.New(dbName)
 	}
-
-	// use parent of cherry-pick as ancestor root to merge
 
 	mo := merge.MergeOpts{
 		IsCherryPick:        true,
