@@ -256,3 +256,31 @@ get_staged_tables() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "committing locally" ]] || false
 }
+
+
+@test "sql-local-remote: verify simple dolt branch behavior." {
+    start_sql_server altDB
+    cd altDB
+
+    run dolt --verbose-engine-setup --user dolt branch b1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+
+    run dolt --verbose-engine-setup --user dolt branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+    [[ "$output" =~ "main" ]] || false
+    [[ "$output" =~ "b1" ]] || false
+
+    stop_sql_server 1
+
+    run dolt --verbose-engine-setup --user dolt branch b2
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting local mode" ]] || false
+
+    run dolt --verbose-engine-setup --user dolt branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting local mode" ]] || false
+    [[ "$output" =~ "main" ]] || false
+    [[ "$output" =~ "b2" ]] || false
+}
