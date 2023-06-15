@@ -27,6 +27,7 @@ type UserPassword struct {
 }
 
 const DOLT_ENV_PWD = "DOLT_CLI_PASSWORD"
+const DOLT_SILENCE_USER_REQ_FOR_TESTING = "DOLT_SILENCE_USER_REQ_FOR_TESTING"
 
 // BuildUserPasswordPrompt builds a UserPassword struct from the parsed args. The user is prompted for a password if one
 // is not provided. If a username is not provided, the default is "root" (which will not be allowed is a password is
@@ -79,6 +80,13 @@ func BuildUserPasswordPrompt(parsedArgs *argparser.ArgParseResults) (newParsedAr
 			Println()
 		}
 		return newParsedArgs, &UserPassword{Username: userId, Password: password}, nil
+	}
+
+	testOverride, hasTestOverride := os.LookupEnv(DOLT_SILENCE_USER_REQ_FOR_TESTING)
+	if hasTestOverride && testOverride == "Y" {
+		// Used for BATS testing only. Typical usage will not hit this path, but we have many legacy tests which
+		// do not provide a user, and the DOLT_ENV_PWD is set to avoid the prompt.
+		return newParsedArgs, &UserPassword{Username: "root", Password: password}, nil
 	}
 
 	return nil, nil, fmt.Errorf("When a password is provided, a user must also be provided. Use the --user flag to provide a username")

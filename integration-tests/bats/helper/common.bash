@@ -60,7 +60,16 @@ setup_no_dolt_init() {
         export BATS_TEST_RETRIES="$DOLT_TEST_RETRIES"
     fi
 
+    # Our tests use a mix of root and dolt users, and the CLI
+    # commands which authenticate will block for user input if we don't
+    # set DOLT_CLI_PASSWORD - so we set it to the empty string by default.
+    # The DOLT_SILENCE_USER_REQ_FOR_TESTING environment variable is to skip
+    # a check which errors out if a password is presented but no user is specified.
+    # The combination of these two flags allows us to avoid altering hundreds
+    # of existing tests which predate the authentication restrictions added
+    # during the cli -> sql migration.
     export DOLT_CLI_PASSWORD=""
+    export DOLT_SILENCE_USER_REQ_FOR_TESTING="Y"
 }
 
 assert_feature_version() {
