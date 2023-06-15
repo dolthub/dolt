@@ -283,12 +283,12 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"main"}},
 			},
 			{
-				Query:    "/* client a */ select name from dolt_branches;",
+				Query:          "/* client a */ select name from dolt_branches;",
 				ExpectedErrStr: "Error 1105: database not found: dolt/branch1",
 			},
 			{
 				// TODO: this could be handled better, not the best experience. Maybe kill the session?
-				Query:    "/* client a */ CALL DOLT_CHECKOUT('main');",
+				Query:          "/* client a */ CALL DOLT_CHECKOUT('main');",
 				ExpectedErrStr: "Error 1105: database not found: dolt/branch1",
 			},
 			{
