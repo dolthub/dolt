@@ -345,6 +345,33 @@ func generateBranchSql(args []string) (string, error) {
 }
 
 func createBranch(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.ArgParseResults, args []string, usage cli.UsagePrinter) int {
+	trackVal, setTrackUpstream := apr.GetValue(cli.TrackFlag)
+	if setTrackUpstream {
+		if trackVal == "inherit" {
+			return HandleVErrAndExitCode(errhand.BuildDError("--track='inherit' is not supported yet").Build(), usage)
+		}
+
+		if trackVal == "direct" {
+			if apr.NArg() != 2 {
+				return HandleVErrAndExitCode(errhand.BuildDError("invalid arguments").Build(), usage)
+			}
+		} else {
+			// --track did not have an associated parameter; we parsed a positional arg as its value.
+			// There is no way to determine what position that arg was supposed to be in.
+
+			// --track accepts a parameter but can also be passed in on its own.
+			// We can determine which based on the number of arguments.
+			// We initially parsed args assuming that --track accepted a parameter,
+			// but now we have to parse the args again with it as a flag instead.
+
+			var err error
+			apr, err = cli.CreateBranchArgParserWithNoTrackValue().Parse(args)
+			if err != nil {
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+			}
+		}
+	}
+
 	if apr.NArg() != 1 && apr.NArg() != 2 {
 		usage()
 		return 1

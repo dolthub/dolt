@@ -274,14 +274,27 @@ func CreatePullArgParser() *argparser.ArgParser {
 	return ap
 }
 
-func CreateBranchArgParser() *argparser.ArgParser {
+func createTracklessBranchArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("branch")
 	ap.SupportsFlag(ForceFlag, "f", branchForceFlagDesc)
 	ap.SupportsFlag(CopyFlag, "c", "Create a copy of a branch.")
 	ap.SupportsFlag(MoveFlag, "m", "Move/rename a branch")
 	ap.SupportsFlag(DeleteFlag, "d", "Delete a branch. The branch must be fully merged in its upstream branch.")
 	ap.SupportsFlag(DeleteForceFlag, "", "Shortcut for {{.EmphasisLeft}}--delete --force{{.EmphasisRight}}.")
+
+	return ap
+}
+
+func CreateBranchArgParser() *argparser.ArgParser {
+	ap := createTracklessBranchArgParser()
 	ap.SupportsString(TrackFlag, "t", "", "When creating a new branch, set up 'upstream' configuration.")
+
+	return ap
+}
+
+func CreateBranchArgParserWithNoTrackValue() *argparser.ArgParser {
+	ap := createTracklessBranchArgParser()
+	ap.SupportsFlag(TrackFlag, "t", "When creating a new branch, set up 'upstream' configuration.")
 
 	return ap
 }
