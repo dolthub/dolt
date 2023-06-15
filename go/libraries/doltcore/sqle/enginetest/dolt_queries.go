@@ -3539,7 +3539,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "CALL dolt_merge('--no-ff', 'branch1');",
+				Query:            "CALL dolt_merge('--no-ff', 'branch1');",
 				SkipResultsCheck: true, // TODO: how do i predict the hash
 			},
 			{

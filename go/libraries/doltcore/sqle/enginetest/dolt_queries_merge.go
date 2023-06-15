@@ -144,7 +144,7 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// No-FF-Merge
-				Query:    "CALL DOLT_MERGE('feature-branch', '--no-ff', '-m', 'this is a no-ff')",
+				Query:            "CALL DOLT_MERGE('feature-branch', '--no-ff', '-m', 'this is a no-ff')",
 				SkipResultsCheck: true,
 			},
 			{
@@ -187,7 +187,7 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// No-FF-Merge
-				Query:    "CALL DOLT_MERGE('feature-branch', '--no-ff', '-m', 'this is a no-ff')",
+				Query:            "CALL DOLT_MERGE('feature-branch', '--no-ff', '-m', 'this is a no-ff')",
 				SkipResultsCheck: true,
 			},
 			{
@@ -565,7 +565,7 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// No-FF-Merge
-				Query:    "CALL DOLT_MERGE('feature-branch', '-no-ff', '-m', 'this is a no-ff')",
+				Query:            "CALL DOLT_MERGE('feature-branch', '-no-ff', '-m', 'this is a no-ff')",
 				SkipResultsCheck: true,
 			},
 			{
