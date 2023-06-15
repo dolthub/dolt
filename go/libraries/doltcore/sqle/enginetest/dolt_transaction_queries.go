@@ -2945,3 +2945,352 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 		},
 	},
 }
+
+var MultiDbSavepointTests = []queries.TransactionTest{
+	{
+		Name: "rollback to savepoint with multiple databases edited",
+		SetUpScript: []string{
+			"create database db1",
+			"create database db2",
+			"create table db1.t (x int primary key, y int)",
+			"insert into db1.t values (1, 1)",
+			"create table db2.t (x int primary key, y int)",
+			"insert into db2.t values (2, 2)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ set autocommit = off",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client b */ set autocommit = off",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into db1.t values (3, 3)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ insert into db2.t values (4, 4)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ insert into db1.t values (5, 5)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ insert into db2.t values (6, 6)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ savepoint spa1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ savepoint spb1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into db1.t values (5, 5)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ insert into db2.t values (6, 6)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ insert into db1.t values (7, 7)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ insert into db2.t values (8, 8)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ savepoint spa2",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ savepoint spb2",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into db1.t values (7, 7)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ insert into db2.t values (8, 8)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ insert into db1.t values (9, 9)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ insert into db2.t values (10, 10)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}, {3, 3}, {5, 5}, {7, 7}},
+			},
+			{
+				Query:    "/* client a */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}, {4, 4}, {6, 6}, {8, 8}},
+			},
+			{
+				Query:    "/* client b */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}, {5, 5}, {7, 7}, {9, 9}},
+			},
+			{
+				Query:    "/* client b */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}, {6, 6}, {8, 8}, {10, 10}},
+			},
+			{
+				Query:    "/* client a */ rollback to SPA2",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ rollback to spB2",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}, {3, 3}, {5, 5}},
+			},
+			{
+				Query:    "/* client a */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}, {4, 4}, {6, 6}},
+			},
+			{
+				Query:    "/* client b */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}, {5, 5}, {7, 7}},
+			},
+			{
+				Query:    "/* client b */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}, {6, 6}, {8, 8}},
+			},
+			{
+				Query:    "/* client a */ rollback to sPa2",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ rollback to Spb2",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}, {3, 3}, {5, 5}},
+			},
+			{
+				Query:    "/* client a */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}, {4, 4}, {6, 6}},
+			},
+			{
+				Query:    "/* client b */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}, {5, 5}, {7, 7}},
+			},
+			{
+				Query:    "/* client b */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}, {6, 6}, {8, 8}},
+			},
+			{
+				Query:    "/* client a */ rollback to spA1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ rollback to SPb1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}, {3, 3}},
+			},
+			{
+				Query:    "/* client a */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}, {4, 4}},
+			},
+			{
+				Query:    "/* client b */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}, {5, 5}},
+			},
+			{
+				Query:    "/* client b */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}, {6, 6}},
+			},
+			{
+				Query:       "/* client a */ rollback to spa2",
+				ExpectedErr: sql.ErrSavepointDoesNotExist,
+			},
+			{
+				Query:       "/* client b */ rollback to spb2",
+				ExpectedErr: sql.ErrSavepointDoesNotExist,
+			},
+			{
+				Query:    "/* client a */ rollback to Spa1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ rollback to spB1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}, {3, 3}},
+			},
+			{
+				Query:    "/* client a */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}, {4, 4}},
+			},
+			{
+				Query:    "/* client b */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}, {5, 5}},
+			},
+			{
+				Query:    "/* client b */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}, {6, 6}},
+			},
+			{
+				Query:    "/* client a */ rollback",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ rollback",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:    "/* client a */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}},
+			},
+			{
+				Query:    "/* client b */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:    "/* client b */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}},
+			},
+			{
+				Query:       "/* client a */ rollback to spa1",
+				ExpectedErr: sql.ErrSavepointDoesNotExist,
+			},
+			{
+				Query:       "/* client b */ rollback to spb1",
+				ExpectedErr: sql.ErrSavepointDoesNotExist,
+			},
+		},
+	},
+	{
+		Name: "overwrite savepoint with multiple dbs edited",
+		SetUpScript: []string{
+			"create database db1",
+			"create database db2",
+			"create table db1.t (x int primary key, y int)",
+			"insert into db1.t values (1, 1)",
+			"create table db2.t (x int primary key, y int)",
+			"insert into db2.t values (2, 2)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into db1.t values (3, 3)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ insert into db2.t values (4, 4)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ savepoint spa1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into db1.t values (5, 5)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ insert into db2.t values (6, 6)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ savepoint spa2",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into db1.t values (7, 7)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ insert into db2.t values (8, 8)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ savepoint SPA1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into db1.t values (9, 9)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ insert into db2.t values (10, 10)",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}, {3, 3}, {5, 5}, {7, 7}, {9, 9}},
+			},
+			{
+				Query:    "/* client a */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}, {4, 4}, {6, 6}, {8, 8}, {10, 10}},
+			},
+			{
+				Query:    "/* client a */ rollback to Spa1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}, {3, 3}, {5, 5}, {7, 7}},
+			},
+			{
+				Query:    "/* client a */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}, {4, 4}, {6, 6}, {8, 8}},
+			},
+			{
+				Query:    "/* client a */ rollback to spa2",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from db1.t order by x",
+				Expected: []sql.Row{{1, 1}, {3, 3}, {5, 5}},
+			},
+			{
+				Query:    "/* client a */ select * from db2.t order by x",
+				Expected: []sql.Row{{2, 2}, {4, 4}, {6, 6}},
+			},
+			{
+				Query:       "/* client a */ rollback to spa1",
+				ExpectedErr: sql.ErrSavepointDoesNotExist,
+			},
+			{
+				Query:       "/* client a */ release savepoint spa1",
+				ExpectedErr: sql.ErrSavepointDoesNotExist,
+			},
+		},
+	},
+}
