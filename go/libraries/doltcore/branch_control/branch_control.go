@@ -18,7 +18,6 @@ import (
 	"context"
 	goerrors "errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"os"
 
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
@@ -26,6 +25,7 @@ import (
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var (
