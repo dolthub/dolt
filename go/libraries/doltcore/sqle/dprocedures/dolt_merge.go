@@ -48,94 +48,94 @@ var ErrUncommittedChanges = goerrors.NewKind("cannot merge with uncommitted chan
 
 // doltMerge is the stored procedure version for the CLI command `dolt merge`.
 func doltMerge(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	hasConflicts, ff, err := doDoltMerge(ctx, args)
+	commitHash, hasConflicts, ff, err := doDoltMerge(ctx, args)
 	if err != nil {
 		return nil, err
 	}
-	return rowToIter(int64(ff), int64(hasConflicts)), nil
+	return rowToIter(commitHash, int64(ff), int64(hasConflicts)), nil
 }
 
 // doDoltMerge returns has_conflicts and fast_forward status
-func doDoltMerge(ctx *sql.Context, args []string) (int, int, error) {
+func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
-		return noConflictsOrViolations, threeWayMerge, fmt.Errorf("Empty database name.")
+		return "", noConflictsOrViolations, threeWayMerge, fmt.Errorf("Empty database name.")
 	}
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
-		return noConflictsOrViolations, threeWayMerge, err
+		return "", noConflictsOrViolations, threeWayMerge, err
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
 
 	apr, err := cli.CreateMergeArgParser().Parse(args)
 	if err != nil {
-		return noConflictsOrViolations, threeWayMerge, err
+		return "", noConflictsOrViolations, threeWayMerge, err
 	}
 
 	if apr.ContainsAll(cli.SquashParam, cli.NoFFParam) {
-		return noConflictsOrViolations, threeWayMerge, fmt.Errorf("error: Flags '--%s' and '--%s' cannot be used together.\n", cli.SquashParam, cli.NoFFParam)
+		return "", noConflictsOrViolations, threeWayMerge, fmt.Errorf("error: Flags '--%s' and '--%s' cannot be used together.\n", cli.SquashParam, cli.NoFFParam)
 	}
 
 	ws, err := sess.WorkingSet(ctx, dbName)
 	if err != nil {
-		return noConflictsOrViolations, threeWayMerge, err
+		return "", noConflictsOrViolations, threeWayMerge, err
 	}
 	roots, ok := sess.GetRoots(ctx, dbName)
 	if !ok {
-		return noConflictsOrViolations, threeWayMerge, sql.ErrDatabaseNotFound.New(dbName)
+		return "", noConflictsOrViolations, threeWayMerge, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
 	if apr.Contains(cli.AbortParam) {
 		if !ws.MergeActive() {
-			return noConflictsOrViolations, threeWayMerge, fmt.Errorf("fatal: There is no merge to abort")
+			return "", noConflictsOrViolations, threeWayMerge, fmt.Errorf("fatal: There is no merge to abort")
 		}
 
 		ws, err = abortMerge(ctx, ws, roots)
 		if err != nil {
-			return noConflictsOrViolations, threeWayMerge, err
+			return "", noConflictsOrViolations, threeWayMerge, err
 		}
 
 		err := sess.SetWorkingSet(ctx, dbName, ws)
 		if err != nil {
-			return noConflictsOrViolations, threeWayMerge, err
+			return "", noConflictsOrViolations, threeWayMerge, err
 		}
 
 		err = sess.CommitWorkingSet(ctx, dbName, sess.GetTransaction())
 		if err != nil {
-			return noConflictsOrViolations, threeWayMerge, err
+			return "", noConflictsOrViolations, threeWayMerge, err
 		}
 
-		return noConflictsOrViolations, threeWayMerge, nil
+		return "", noConflictsOrViolations, threeWayMerge, nil
 	}
 
 	branchName := apr.Arg(0)
 
 	mergeSpec, err := createMergeSpec(ctx, sess, dbName, apr, branchName)
 	if err != nil {
-		return noConflictsOrViolations, threeWayMerge, err
+		return "", noConflictsOrViolations, threeWayMerge, err
 	}
 
 	dbData, ok := sess.GetDbData(ctx, dbName)
 	if !ok {
-		return noConflictsOrViolations, threeWayMerge, fmt.Errorf("Could not load database %s", dbName)
+		return "", noConflictsOrViolations, threeWayMerge, fmt.Errorf("Could not load database %s", dbName)
 	}
 
 	headRef, err := dbData.Rsr.CWBHeadRef()
 	if err != nil {
-		return noConflictsOrViolations, threeWayMerge, err
+		return "", noConflictsOrViolations, threeWayMerge, err
 	}
 	msg := fmt.Sprintf("Merge branch '%s' into %s", branchName, headRef.GetPath())
 	if userMsg, mOk := apr.GetValue(cli.MessageArg); mOk {
 		msg = userMsg
 	}
 
-	ws, conflicts, fastForward, err := performMerge(ctx, sess, roots, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
+	ws, commit, conflicts, fastForward, err := performMerge(ctx, sess, roots, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
 	if err != nil || conflicts != 0 || fastForward != 0 {
-		return conflicts, fastForward, err
+		return "", conflicts, fastForward, err
 	}
 
-	return conflicts, fastForward, nil
+	return commit, conflicts, fastForward, nil
 }
 
 // performMerge encapsulates server merge logic, switching between
@@ -144,20 +144,20 @@ func doDoltMerge(ctx *sql.Context, args []string) (int, int, error) {
 // fast-forward was performed. This commits the working set if merge is successful and
 // 'no-commit' flag is not defined.
 // TODO FF merging commit with constraint violations requires `constraint verify`
-func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots, ws *doltdb.WorkingSet, dbName string, spec *merge.MergeSpec, noCommit bool, msg string) (*doltdb.WorkingSet, int, int, error) {
+func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots, ws *doltdb.WorkingSet, dbName string, spec *merge.MergeSpec, noCommit bool, msg string) (*doltdb.WorkingSet, string, int, int, error) {
 	// todo: allow merges even when an existing merge is uncommitted
 	if ws.MergeActive() {
-		return ws, noConflictsOrViolations, threeWayMerge, doltdb.ErrMergeActive
+		return ws, "", noConflictsOrViolations, threeWayMerge, doltdb.ErrMergeActive
 	}
 
 	err := checkForUncommittedChanges(ctx, roots.Working, roots.Head)
 	if err != nil {
-		return ws, noConflictsOrViolations, threeWayMerge, err
+		return ws, "", noConflictsOrViolations, threeWayMerge, err
 	}
 
 	dbData, ok := sess.GetDbData(ctx, dbName)
 	if !ok {
-		return ws, noConflictsOrViolations, threeWayMerge, fmt.Errorf("failed to get dbData")
+		return ws, "", noConflictsOrViolations, threeWayMerge, fmt.Errorf("failed to get dbData")
 	}
 
 	canFF, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC)
@@ -166,37 +166,43 @@ func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots,
 		case doltdb.ErrIsAhead, doltdb.ErrUpToDate:
 			ctx.Warn(DoltMergeWarningCode, err.Error())
 		default:
-			return ws, noConflictsOrViolations, threeWayMerge, err
+			return ws, "", noConflictsOrViolations, threeWayMerge, err
 		}
 	}
 
 	if canFF {
 		if spec.Noff {
-			ws, err = executeNoFFMerge(ctx, sess, spec, dbName, ws, dbData)
+			var commit *doltdb.Commit
+			ws, commit, err = executeNoFFMerge(ctx, sess, spec, dbName, ws, dbData)
 			if err == doltdb.ErrUnresolvedConflictsOrViolations {
 				// if there are unresolved conflicts, write the resulting working set back to the session and return an
 				// error message
 				wsErr := sess.SetWorkingSet(ctx, dbName, ws)
 				if wsErr != nil {
-					return ws, hasConflictsOrViolations, threeWayMerge, wsErr
+					return ws, "", hasConflictsOrViolations, threeWayMerge, wsErr
 				}
 
 				ctx.Warn(DoltMergeWarningCode, err.Error())
 
-				return ws, hasConflictsOrViolations, threeWayMerge, nil
+				return ws, "", hasConflictsOrViolations, threeWayMerge, nil
 			}
-			return ws, noConflictsOrViolations, threeWayMerge, err
+			if commit != nil {
+				if h, cerr := commit.HashOf(); cerr == nil {
+					return ws, h.String(), noConflictsOrViolations, threeWayMerge, err
+				}
+			}
+			return ws, "", noConflictsOrViolations, threeWayMerge, err
 		}
 
 		ws, err = executeFFMerge(ctx, dbName, spec.Squash, ws, dbData, spec.MergeC)
-		return ws, noConflictsOrViolations, fastForwardMerge, err
+		return ws, "", noConflictsOrViolations, fastForwardMerge, err
 	}
 
 	dbState, ok, err := sess.LookupDbState(ctx, dbName)
 	if err != nil {
-		return ws, noConflictsOrViolations, threeWayMerge, err
+		return ws, "", noConflictsOrViolations, threeWayMerge, err
 	} else if !ok {
-		return ws, noConflictsOrViolations, threeWayMerge, sql.ErrDatabaseNotFound.New(dbName)
+		return ws, "", noConflictsOrViolations, threeWayMerge, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
 	ws, err = executeMerge(ctx, spec.Squash, spec.HeadC, spec.MergeC, spec.MergeCSpecStr, ws, dbState.EditOpts())
@@ -205,30 +211,30 @@ func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots,
 		// error message
 		wsErr := sess.SetWorkingSet(ctx, dbName, ws)
 		if wsErr != nil {
-			return ws, hasConflictsOrViolations, threeWayMerge, wsErr
+			return ws, "", hasConflictsOrViolations, threeWayMerge, wsErr
 		}
 
 		ctx.Warn(DoltMergeWarningCode, err.Error())
 
-		return ws, hasConflictsOrViolations, threeWayMerge, nil
+		return ws, "", hasConflictsOrViolations, threeWayMerge, nil
 	} else if err != nil {
-		return ws, noConflictsOrViolations, threeWayMerge, err
+		return ws, "", noConflictsOrViolations, threeWayMerge, err
 	}
 
 	err = sess.SetWorkingSet(ctx, dbName, ws)
 	if err != nil {
-		return ws, noConflictsOrViolations, threeWayMerge, err
+		return ws, "", noConflictsOrViolations, threeWayMerge, err
 	}
 
 	if !noCommit {
 		author := fmt.Sprintf("%s <%s>", spec.Name, spec.Email)
-		_, _, err = doDoltCommit(ctx, []string{"-m", msg, "--author", author})
+		commit, _, err := doDoltCommit(ctx, []string{"-m", msg, "--author", author})
 		if err != nil {
-			return ws, noConflictsOrViolations, threeWayMerge, fmt.Errorf("dolt_commit failed")
+			return ws, commit, noConflictsOrViolations, threeWayMerge, fmt.Errorf("dolt_commit failed")
 		}
 	}
 
-	return ws, noConflictsOrViolations, threeWayMerge, nil
+	return ws, "", noConflictsOrViolations, threeWayMerge, nil
 }
 
 func abortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Roots) (*doltdb.WorkingSet, error) {
@@ -310,24 +316,24 @@ func executeNoFFMerge(
 	dbName string,
 	ws *doltdb.WorkingSet,
 	dbData env.DbData,
-) (*doltdb.WorkingSet, error) {
+) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 	mergeRoot, err := spec.MergeC.GetRootValue(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	result := &merge.Result{Root: mergeRoot, Stats: make(map[string]*merge.MergeStats)}
 
 	ws, err = mergeRootToWorking(false, ws, result, spec.MergeC, spec.MergeCSpecStr)
 	if err != nil {
 		// This error is recoverable, so we return a working set value along with the error
-		return ws, err
+		return ws, nil, err
 	}
 
 	// Save our work so far in the session, as it will be referenced by the commit call below (badly in need of a
 	// refactoring)
 	err = dSess.SetWorkingSet(ctx, dbName, ws)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// The roots need refreshing after the above
@@ -342,19 +348,19 @@ func executeNoFFMerge(
 		Email:      spec.Email,
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if pendingCommit == nil {
-		return nil, errors.New("nothing to commit")
+		return nil, nil, errors.New("nothing to commit")
 	}
 
-	_, err = dSess.DoltCommit(ctx, dbName, dSess.GetTransaction(), pendingCommit)
+	commit, err := dSess.DoltCommit(ctx, dbName, dSess.GetTransaction(), pendingCommit)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return ws, nil
+	return ws, commit, nil
 }
 
 func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, apr *argparser.ArgParseResults, commitSpecStr string) (*merge.MergeSpec, error) {
