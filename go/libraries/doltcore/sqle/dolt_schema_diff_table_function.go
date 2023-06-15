@@ -252,15 +252,6 @@ func (ds *SchemaDiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.R
 		return nil, err
 	}
 
-	//fromRoot, ok := diff.MaybeResolveRoot(ctx, sqledb.DbData().Rsr, sqledb.DbData().Ddb, fromCommitStr)
-	//if !ok {
-	//	return nil, fmt.Errorf("failed to resolve from commit: %s", fromCommitStr)
-	//}
-	//toRoot, ok := diff.MaybeResolveRoot(ctx, sqledb.DbData().Rsr, sqledb.DbData().Ddb, toCommitStr)
-	//if !ok {
-	//	return nil, fmt.Errorf("failed to resolve to commit: %s", toCommitStr)
-	//}
-
 	deltas, err := diff.GetTableDeltas(ctx, fromRoot, toRoot)
 	if err != nil {
 		return nil, err
@@ -314,18 +305,6 @@ func (ds *SchemaDiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.R
 	}
 
 	return iter, nil
-
-	//summ, err := getSummaryForDelta(ctx, delta, sqledb, fromDetails, toDetails, true)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//summs := []*diff.TableDeltaSummary{}
-	//if summ != nil {
-	//	summs = []*diff.TableDeltaSummary{summ}
-	//}
-	//
-	//return NewDiffSummaryTableFunctionRowIter(summs), nil
 }
 
 // evaluateArguments returns fromCommitVal, toCommitVal, dotCommitVal, and tableName.

@@ -16,8 +16,6 @@ package diff
 
 import (
 	"context"
-	"crypto/sha512"
-	"encoding/binary"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
@@ -25,7 +23,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
-	"math/rand"
 	"sort"
 	"strings"
 
@@ -56,28 +53,16 @@ type schemaDiffInfo struct {
 	ToCreateTableStmt   string
 }
 
-type diffInfo struct {
-	FromTableHash string
-	ToTableHash   string
-	DiffType      string
+type columnStats struct {
+	Name          string
+	Tag           uint64
+	IsPartOfPK    bool
+	Default       string
+	AutoIncrement bool
+	Comment       string
 }
 
-// GetStagedUnstagedTableDeltas represents staged and unstaged changes as TableDelta slices.
-func GetStagedUnstagedTableDeltasFromSql(queryist queries.Queryist, sqlCtx *sql.Context) (staged, unstaged []TableDeltaSql, err error) {
-	staged, err = GetTableDeltasFromSql(queryist, sqlCtx, "HEAD", "STAGED")
-	if err != nil {
-		return nil, nil, err
-	}
-
-	unstaged, err = GetTableDeltasFromSql(queryist, sqlCtx, "STAGED", "WORKING")
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return staged, unstaged, nil
-}
-
-func getTableSchemaAtRef(queryist queries.Queryist, sqlCtx *sql.Context, tableName string, ref string, tc *tagCreator) (schema.Schema, error) {
+func getTableSchemaAtRef(queryist queries.Queryist, sqlCtx *sql.Context, tableName string, ref string) (schema.Schema, error) {
 	q := fmt.Sprintf("show create table %s as of '%s'", tableName, ref)
 	rows, err := queries.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
@@ -88,7 +73,13 @@ func getTableSchemaAtRef(queryist queries.Queryist, sqlCtx *sql.Context, tableNa
 		return nil, fmt.Errorf("creating schema, expected 1 row, got %d", len(rows))
 	}
 	createStmt := rows[0][1].(string)
-	sch, err := schemaFromCreateTableStmt(sqlCtx, createStmt, tc)
+
+	nameToColumnStats, err := getNameToColumnStatsMap(queryist, sqlCtx, tableName, ref)
+	if err != nil {
+		return nil, fmt.Errorf("error getting column stats for table %s: %s", tableName, err.Error())
+	}
+
+	sch, err := schemaFromCreateTableStmtAndColsStats(sqlCtx, createStmt, nameToColumnStats)
 	if err != nil {
 		return nil, err
 	}
@@ -96,86 +87,71 @@ func getTableSchemaAtRef(queryist queries.Queryist, sqlCtx *sql.Context, tableNa
 	return sch, nil
 }
 
-type tagCreator struct {
-	existingColTypes []string
-	existingTags     schema.TagMapping
-}
-
-func (tc *tagCreator) CreateTagForCol(tableName, colName, colType string) (uint64, error) {
-	seedBuffer := []byte{}
-	for _, existingColType := range tc.existingColTypes {
-		seedBuffer = append(seedBuffer, []byte(existingColType)...)
+func getNameToColumnStatsMap(queryist queries.Queryist, sqlCtx *sql.Context, tableName string, ref string) (map[string]columnStats, error) {
+	q := fmt.Sprintf("select * from dolt_columns_status('%s', '%s');", tableName, ref)
+	columnsStatsRows, err := queries.GetRowsForSql(queryist, sqlCtx, q)
+	if err != nil {
+		return nil, fmt.Errorf("error getting column stats for table %s: %s", tableName, err.Error())
 	}
-	seedBuffer = append(seedBuffer, []byte(colType)...)
-	seedBuffer = append(seedBuffer, []byte(tableName)...)
-	seedBuffer = append(seedBuffer, []byte(colName)...)
-	h := sha512.Sum512(seedBuffer)
-	r := rand.New(rand.NewSource(int64(binary.LittleEndian.Uint64(h[:]))))
-
-	var randTag uint64
-	for {
-		randTag = r.Uint64()
-		if !tc.existingTags.Contains(randTag) {
-			break
+	nameToColumnStats := make(map[string]columnStats)
+	for _, row := range columnsStatsRows {
+		name := row[0].(string)
+		tag := row[1].(uint64)
+		isPartOfPK, err := queries.GetTinyIntColAsBool(row[2])
+		if err != nil {
+			return nil, fmt.Errorf("error parsing is_part_of_pk for column %s: %s", name, err.Error())
+		}
+		defaultVal := row[3].(string)
+		autoIncrement, err := queries.GetTinyIntColAsBool(row[4])
+		if err != nil {
+			return nil, fmt.Errorf("error parsing auto_increment for column %s: %s", name, err.Error())
+		}
+		comment := row[5].(string)
+		nameToColumnStats[name] = columnStats{
+			Name:          name,
+			Tag:           tag,
+			IsPartOfPK:    isPartOfPK,
+			Default:       defaultVal,
+			AutoIncrement: autoIncrement,
+			Comment:       comment,
 		}
 	}
-
-	tc.existingTags.Add(randTag, tableName)
-	tc.existingColTypes = append(tc.existingColTypes, colType)
-
-	return randTag, nil
+	return nameToColumnStats, nil
 }
 
-func NewTagCreator() *tagCreator {
-	return &tagCreator{
-		existingColTypes: []string{},
-		existingTags:     schema.TagMapping{},
-	}
-}
-
-func schemaFromCreateTableStmt(sqlCtx *sql.Context, createTableStmt string, tc *tagCreator) (schema.Schema, error) {
+func schemaFromCreateTableStmtAndColsStats(sqlCtx *sql.Context, createTableStmt string, nameToColumnStats map[string]columnStats) (schema.Schema, error) {
 	p, err := sqlparser.Parse(createTableStmt)
 	if err != nil {
 		return nil, err
 	}
 	ddl := p.(*sqlparser.DDL)
 
-	sctx := sql.NewContext(sqlCtx)
-	s, _, err := parse.TableSpecToSchema(sctx, ddl.TableSpec, false)
+	s, _, err := parse.TableSpecToSchema(sqlCtx, ddl.TableSpec, false)
 	if err != nil {
 		return nil, err
 	}
-	tableName := ddl.Table.Name.String()
 
 	cols := []schema.Column{}
-
 	for _, col := range s.Schema {
-		// TODO: is this necessary?
-		if collatedType, ok := col.Type.(sql.TypeWithCollation); ok {
-			col.Type, err = collatedType.WithNewCollation(sql.Collation_Default)
-			if err != nil {
-				return nil, err
-			}
-		}
-
 		colName := col.Name
 		colType := col.Type
+		colStats, ok := nameToColumnStats[colName]
+		if !ok {
+			return nil, fmt.Errorf("column %s not found in column stats", colName)
+		}
+
 		typeInfo, err := typeinfo.FromSqlType(colType)
 		if err != nil {
 			return nil, err
 		}
 
-		tag, err := tc.CreateTagForCol(tableName, colName, colType.String())
-		if err != nil {
-			return nil, err
-		}
 		sCol, err := schema.NewColumnWithTypeInfo(
 			col.Name,
-			tag,
+			colStats.Tag,
 			typeInfo,
 			col.PrimaryKey,
-			"",
-			false,
+			colStats.Default,
+			colStats.AutoIncrement,
 			col.Comment,
 		)
 		cols = append(cols, sCol)
@@ -187,44 +163,6 @@ func schemaFromCreateTableStmt(sqlCtx *sql.Context, createTableStmt string, tc *
 	}
 
 	return sch, err
-}
-
-func getDiffChangeBetweenRefs(queryist queries.Queryist, sqlCtx *sql.Context, fromRef, toRef string) ([]TableDeltaSummary, error) {
-	q := fmt.Sprintf("select * from dolt_diff_summary('%s', '%s')", fromRef, toRef)
-	rows, err := queries.GetRowsForSql(queryist, sqlCtx, q)
-	if err != nil {
-		return nil, err
-	}
-
-	summaries := []TableDeltaSummary{}
-	for _, row := range rows {
-		fromTableName := row[0].(string)
-		toTableName := row[1].(string)
-		diffType := row[2].(string)
-		dataChangeVal := row[3]
-		schemaChangeVal := row[4]
-
-		dataChange, err := queries.GetTinyIntColAsBool(dataChangeVal)
-		if err != nil {
-			return nil, err
-		}
-		schemaChange, err := queries.GetTinyIntColAsBool(schemaChangeVal)
-		if err != nil {
-			return nil, err
-		}
-
-		summary := TableDeltaSummary{
-			DiffType:      diffType,
-			DataChange:    dataChange,
-			SchemaChange:  schemaChange,
-			TableName:     toTableName, // TODO: should this be fromTableName?
-			FromTableName: fromTableName,
-			ToTableName:   toTableName,
-		}
-		summaries = append(summaries, summary)
-	}
-
-	return summaries, nil
 }
 
 func isTableEmpty(queryist queries.Queryist, sqlCtx *sql.Context, ref, tableName string) (bool, error) {
@@ -241,36 +179,6 @@ func isTableEmpty(queryist queries.Queryist, sqlCtx *sql.Context, ref, tableName
 		return true, nil
 	}
 	return false, nil
-}
-
-func tableDataDiffsBetweenRefsExist(queryist queries.Queryist, sqlCtx *sql.Context, fromRef, toRef, tableName string) (bool, error) {
-	q := fmt.Sprintf("select count(*) from dolt_diff('%s', '%s', '%s') limit 1", fromRef, toRef, tableName)
-	rows, err := queries.GetRowsForSql(queryist, sqlCtx, q)
-	if err != nil {
-		return false, err
-	}
-	if len(rows) == 0 {
-		return false, nil
-	}
-	return true, nil
-}
-
-func getTableDataDiffsBetweenRefs(queryist queries.Queryist, sqlCtx *sql.Context, fromRef, toRef, tableName string) ([]diffInfo, error) {
-	diffs := []diffInfo{}
-	q := fmt.Sprintf("select to_table_hash, from_table_hash, diff_type from dolt_diff('%s', '%s', '%s')", fromRef, toRef, tableName)
-	rows, err := queries.GetRowsForSql(queryist, sqlCtx, q)
-	if err != nil {
-		return diffs, err
-	}
-
-	for _, row := range rows {
-		toTableHash := row[0].(string)
-		fromTableHash := row[1].(string)
-		diffType := row[2].(string)
-		d := diffInfo{ToTableHash: toTableHash, FromTableHash: fromTableHash, DiffType: diffType}
-		diffs = append(diffs, d)
-	}
-	return diffs, nil
 }
 
 func getTableSchemaDiffBetweenRefs(queryist queries.Queryist, sqlCtx *sql.Context, fromRef, toRef, tableName string) (schemaDiffInfo, error) {
@@ -442,16 +350,15 @@ func getAllTablesAtRef(queryist queries.Queryist, sqlCtx *sql.Context, ref strin
 
 	tables := []sqlTable{}
 	for tableName := range tableNames {
-		tagCreator := NewTagCreator()
-		sch, err := cache.GetTableSchema(queryist, sqlCtx, tableName, tagCreator)
+		sch, err := cache.GetTableSchema(queryist, sqlCtx, tableName)
 		if err != nil {
 			return nil, err
 		}
-		fks, err := getForeignKeysForTableSql(queryist, sqlCtx, tableName, tagCreator, cache)
+		fks, err := getForeignKeysForTableSql(queryist, sqlCtx, tableName, cache)
 		if err != nil {
 			return nil, err
 		}
-		fkParentSch, err := getFkParentSchsSql(queryist, sqlCtx, fks, tagCreator, cache)
+		fkParentSch, err := getFkParentSchsSql(queryist, sqlCtx, fks, cache)
 		if err != nil {
 			return nil, err
 		}
@@ -546,11 +453,11 @@ func matchTableDeltasSql(fromDeltas, toDeltas []TableDeltaSql) (deltas []TableDe
 	return deltas, nil
 }
 
-func getFkParentSchsSql(queryist queries.Queryist, sqlCtx *sql.Context, fks []doltdb.ForeignKey, tc *tagCreator, cache *tableSchemaCache) (map[string]schema.Schema, error) {
+func getFkParentSchsSql(queryist queries.Queryist, sqlCtx *sql.Context, fks []doltdb.ForeignKey, cache *tableSchemaCache) (map[string]schema.Schema, error) {
 	parentSchs := map[string]schema.Schema{}
 	for _, fk := range fks {
 		tableName := fk.ReferencedTableName
-		sch, err := cache.GetTableSchema(queryist, sqlCtx, tableName, tc)
+		sch, err := cache.GetTableSchema(queryist, sqlCtx, tableName)
 		if err != nil {
 			return nil, err
 		}
@@ -559,7 +466,7 @@ func getFkParentSchsSql(queryist queries.Queryist, sqlCtx *sql.Context, fks []do
 	return parentSchs, nil
 }
 
-func getForeignKeysForTableSql(queryist queries.Queryist, sqlCtx *sql.Context, tableName string, tc *tagCreator, cache *tableSchemaCache) ([]doltdb.ForeignKey, error) {
+func getForeignKeysForTableSql(queryist queries.Queryist, sqlCtx *sql.Context, tableName string, cache *tableSchemaCache) ([]doltdb.ForeignKey, error) {
 	refConstrQuery := fmt.Sprintf("select constraint_name, table_name, referenced_table_name, update_rule, delete_rule from INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS where table_name = '%s';", tableName)
 	refConstrRows, err := queries.GetRowsForSql(queryist, sqlCtx, refConstrQuery)
 	if err != nil {
@@ -568,7 +475,7 @@ func getForeignKeysForTableSql(queryist queries.Queryist, sqlCtx *sql.Context, t
 
 	var foreignKeys []doltdb.ForeignKey
 	for _, row := range refConstrRows {
-		name := row[0].(string)
+		fkName := row[0].(string)
 		tableName := row[1].(string)
 		referencedTableName := row[2].(string)
 		updateRule := row[3].(string)
@@ -583,23 +490,23 @@ func getForeignKeysForTableSql(queryist queries.Queryist, sqlCtx *sql.Context, t
 			return nil, err
 		}
 		fk := doltdb.ForeignKey{
-			Name:                name,
+			Name:                fkName,
 			TableName:           tableName,
 			ReferencedTableName: referencedTableName,
 			OnUpdate:            onUpdate,
 			OnDelete:            onDelete,
 		}
 
-		tableSchema, err := cache.GetTableSchema(queryist, sqlCtx, tableName, tc)
+		tableSchema, err := cache.GetTableSchema(queryist, sqlCtx, tableName)
 		if err != nil {
 			return nil, err
 		}
-		referenceTableSchema, err := cache.GetTableSchema(queryist, sqlCtx, referencedTableName, tc)
+		referenceTableSchema, err := cache.GetTableSchema(queryist, sqlCtx, referencedTableName)
 		if err != nil {
 			return nil, err
 		}
 
-		keyUsageQuery := fmt.Sprintf("select column_name, referenced_column_name from INFORMATION_SCHEMA.KEY_COLUMN_USAGE where table_name = '%s' and constraint_name = '%s';", tableName, name)
+		keyUsageQuery := fmt.Sprintf("select column_name, referenced_column_name from INFORMATION_SCHEMA.KEY_COLUMN_USAGE where table_name = '%s' and constraint_name = '%s';", tableName, fkName)
 		keyUsageRows, err := queries.GetRowsForSql(queryist, sqlCtx, keyUsageQuery)
 		if err != nil {
 			return nil, err
@@ -670,12 +577,12 @@ type tableSchemaCache struct {
 	ref          string
 }
 
-func (t *tableSchemaCache) GetTableSchema(queryist queries.Queryist, sqlCtx *sql.Context, tableName string, tc *tagCreator) (schema.Schema, error) {
+func (t *tableSchemaCache) GetTableSchema(queryist queries.Queryist, sqlCtx *sql.Context, tableName string) (schema.Schema, error) {
 	if t.tableSchemas == nil {
 		t.tableSchemas = map[string]schema.Schema{}
 	}
 	if _, ok := t.tableSchemas[tableName]; !ok {
-		tableSchema, err := getTableSchemaAtRef(queryist, sqlCtx, tableName, t.ref, tc)
+		tableSchema, err := getTableSchemaAtRef(queryist, sqlCtx, tableName, t.ref)
 		if err != nil {
 			return nil, err
 		}

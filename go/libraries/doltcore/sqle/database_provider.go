@@ -1168,6 +1168,9 @@ func (p DoltDatabaseProvider) ExternalStoredProcedures(_ *sql.Context, name stri
 func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.TableFunction, error) {
 	// TODO: Clean this up and store table functions in a map, similar to regular functions.
 	switch strings.ToLower(name) {
+	case "dolt_columns_status":
+		dtf := &ColumnsStatusTableFunction{}
+		return dtf, nil
 	case "dolt_diff":
 		dtf := &DiffTableFunction{}
 		return dtf, nil
