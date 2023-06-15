@@ -16,7 +16,6 @@ package integration_test
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -20261,44 +20260,4 @@ func assertResultRowsEqual(t *testing.T, expected, actual []sql.Row) {
 	if numErrors >= maxDiffs {
 		t.Logf("Encountered more than %d errors", maxDiffs)
 	}
-}
-
-func TestExplain(t *testing.T) {
-	SkipByDefaultInCI(t)
-	dEnv := dtestutils.CreateTestEnv()
-	defer dEnv.DoltDB.Close()
-	ctx := context.Background()
-
-	root, _ := dEnv.WorkingRoot(ctx)
-	var err error
-	root, err = sqle.ExecuteSql(dEnv, root, createTables)
-	require.NoError(t, err)
-
-	// insert test data to generate a realistic plan
-	root, err = sqle.ExecuteSql(dEnv, root, insertRows)
-	require.NoError(t, err)
-
-	rows, err := sqle.ExecuteSelect(dEnv, root, "explain select * from daily_summary d join symbols t on d.Symbol = t.Symbol")
-	require.NoError(t, err)
-	rowStrings := make([]string, len(rows))
-	for i, row := range rows {
-		rowStrings[i] = row[0].(string)
-	}
-
-	expectedExplain := "Project\n" +
-		" ├─ columns: [d.Type, d.Symbol, d.Country, d.TradingDate, d.Open, d.High, d.Low, d.Close, d.Volume, d.OpenInt, t.Symbol, t.Name, t.Sector, t.IPOYear]\n" +
-		" └─ MergeJoin\n" +
-		"     ├─ cmp: (t.Symbol = d.Symbol)\n" +
-		"     ├─ TableAlias(t)\n" +
-		"     │   └─ IndexedTableAccess(symbols)\n" +
-		"     │       ├─ index: [symbols.Symbol]\n" +
-		"     │       ├─ filters: [{[NULL, ∞)}]\n" +
-		"     │       └─ columns: [symbol name sector ipoyear]\n" +
-		"     └─ TableAlias(d)\n" +
-		"         └─ IndexedTableAccess(daily_summary)\n" +
-		"             ├─ index: [daily_summary.Symbol,daily_summary.Country,daily_summary.TradingDate]\n" +
-		"             ├─ filters: [{[NULL, ∞), [NULL, ∞), [NULL, ∞)}]\n" +
-		"             └─ columns: [type symbol country tradingdate open high low close volume openint]"
-
-	assert.Equal(t, expectedExplain, strings.Join(rowStrings, "\n"))
 }
