@@ -33,13 +33,11 @@ import (
 )
 
 var ErrNoConflictsResolved = errors.New("no conflicts resolved")
-var IdentifierRegexStr = "asdf"
 
 // IsValidTableName returns true if the name matches the regular expression TableNameRegexStr.
-// Table names must be composed of 1 or more letters and non-initial numerals, as well as the characters _ and -
+// Table names can't end with space characters
 func IsValidTableName(name string) bool {
-	// Table names can't end with space characters
-	if unicode.IsSpace(rune(name[len(name)-1])) {
+	if len(name) == 0 || unicode.IsSpace(rune(name[len(name)-1])) {
 		return false
 	}
 	return IsValidIdentifier(name)
@@ -49,8 +47,6 @@ func IsValidTableName(name string) bool {
 // Docs here: https://dev.mysql.com/doc/refman/8.0/en/identifiers.html
 func IsValidIdentifier(name string) bool {
 	// Ignore all leading digits
-	// TODO: MySQL docs claim to disallow only digit, but it seems to work in practice
-	// name = strings.TrimLeftFunc(name, unicode.IsDigit)
 	if len(name) == 0 {
 		return false
 	}

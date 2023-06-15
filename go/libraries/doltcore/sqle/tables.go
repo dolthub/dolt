@@ -2012,7 +2012,7 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
-	if sqlFk.Name != "" && !doltdb.IsValidIdentifier(sqlFk.Name) {
+	if !doltdb.IsValidIdentifier(sqlFk.Name) {
 		return fmt.Errorf("invalid foreign key name `%s`", sqlFk.Name)
 	}
 	if strings.ToLower(sqlFk.Database) != strings.ToLower(sqlFk.ParentDatabase) || strings.ToLower(sqlFk.Database) != strings.ToLower(t.db.Name()) {
