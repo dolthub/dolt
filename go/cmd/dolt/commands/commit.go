@@ -36,8 +36,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -134,7 +132,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 	if !msgOk {
 		amendStr := ""
 		if apr.Contains(cli.AmendFlag) {
-			_, rowIter, err := queryist.Query(sqlCtx, "select message from dolt_commits limit 1")
+			_, rowIter, err := queryist.Query(sqlCtx, "select message from dolt_log() limit 1")
 			if err != nil {
 				cli.Println(err.Error())
 				return 1, false
@@ -146,9 +144,9 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 			}
 			amendStr = row[0].(string)
 		}
-		msg, err = getCommitMessageFromEditor(ctx, sqlCtx, "", amendStr, false, cliCtx)
+		msg, err = getCommitMessageFromEditor(ctx, sqlCtx, queryist, "", amendStr, false, cliCtx)
 		if err != nil {
-			return handleCommitErr(ctx, sqlCtx, err, usage), false
+			return handleCommitErr(sqlCtx, queryist, err, usage), false
 		}
 	}
 
@@ -258,7 +256,7 @@ func callDoltCommitStoredProc(msg string, apr *argparser.ArgParseResults) (strin
 	return buffer.String(), params
 }
 
-func handleCommitErr(ctx context.Context, sqlCtx *sql.Context, err error, usage cli.UsagePrinter) int {
+func handleCommitErr(sqlCtx *sql.Context, queryist cli.Queryist, err error, usage cli.UsagePrinter) int {
 	if err == nil {
 		return 0
 	}
@@ -286,7 +284,11 @@ func handleCommitErr(ctx context.Context, sqlCtx *sql.Context, err error, usage 
 
 	if actions.IsNothingStaged(err) {
 		notStagedTbls := actions.NothingStagedTblDiffs(err)
-		n, newErr := PrintDiffsNotStaged(ctx, sqlCtx, cli.CliOut, notStagedTbls, false, false, 0, merge.ArtifactStatus{})
+		var notStagedRows []sql.Row
+		for _, td := range notStagedTbls {
+			notStagedRows = append(notStagedRows, sql.Row{td.CurName()})
+		}
+		n, newErr := PrintDiffsNotStaged(sqlCtx, queryist, cli.CliOut, notStagedRows, false, false, 0)
 		if newErr != nil {
 			bdr := errhand.BuildDError(`No changes added to commit (use "dolt add")\nCould not print diff because of additional error`)
 			bdr.AddCause(newErr)
@@ -311,7 +313,7 @@ func handleCommitErr(ctx context.Context, sqlCtx *sql.Context, err error, usage 
 
 // getCommitMessageFromEditor opens editor to ask user for commit message if none defined from command line.
 // suggestedMsg will be returned if no-edit flag is defined or if this function was called from sql dolt_merge command.
-func getCommitMessageFromEditor(ctx context.Context, sqlCtx *sql.Context, suggestedMsg, amendString string, noEdit bool, cliCtx cli.CliContext) (string, error) {
+func getCommitMessageFromEditor(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist, suggestedMsg, amendString string, noEdit bool, cliCtx cli.CliContext) (string, error) {
 	if cli.ExecuteWithStdioRestored == nil || noEdit {
 		return suggestedMsg, nil
 	}
@@ -321,7 +323,7 @@ func getCommitMessageFromEditor(ctx context.Context, sqlCtx *sql.Context, sugges
 	}
 
 	var finalMsg string
-	initialMsg, err := buildInitalCommitMsg(ctx, sqlCtx, suggestedMsg)
+	initialMsg, err := buildInitalCommitMsg(ctx, sqlCtx, queryist, suggestedMsg)
 	if err != nil {
 		return "", err
 	}
@@ -362,44 +364,46 @@ func checkIsTerminal() bool {
 	return isTerminal
 }
 
-func buildInitalCommitMsg(ctx context.Context, sqlCtx *sql.Context, suggestedMsg string) (string, error) {
+func buildInitalCommitMsg(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist, suggestedMsg string) (string, error) {
 	initialNoColor := color.NoColor
 	color.NoColor = true
 
-	dSess := dsess.DSessFromSess(sqlCtx.Session)
-	dbName := sqlCtx.GetCurrentDatabase()
-	roots, ok := dSess.GetRoots(sqlCtx, dbName)
-	if !ok {
-		panic(fmt.Errorf("Could not load database %s", dbName))
+	schema, ri, err := queryist.Query(sqlCtx, "select table_name, status from dolt_status where staged == true")
+	if err != nil {
+		return "", err
 	}
-
-	stagedTblDiffs, notStagedTblDiffs, _ := diff.GetStagedUnstagedTableDeltas(ctx, roots)
-
-	ws, err := dSess.WorkingSet(sqlCtx, dbName)
+	stagedRows, err := sql.RowIterToRows(sqlCtx, schema, ri)
 	if err != nil {
 		return "", err
 	}
 
-	as, err := merge.GetMergeArtifactStatus(ctx, ws)
+	schema, ri, err = queryist.Query(sqlCtx, "select table_name, status from dolt_status where staged == false")
 	if err != nil {
-		return "", nil
+		return "", err
+	}
+	notStagedRows, err := sql.RowIterToRows(sqlCtx, schema, ri)
+	if err != nil {
+		return "", err
 	}
 
 	buf := bytes.NewBuffer([]byte{})
-	n := printStagedDiffs(buf, stagedTblDiffs, true)
-	n, err = PrintDiffsNotStaged(ctx, sqlCtx, buf, notStagedTblDiffs, true, false, n, as)
+	n := printStagedDiffs(buf, stagedRows, true)
+	n, err = PrintDiffsNotStaged(sqlCtx, queryist, buf, notStagedRows, true, false, n)
 	if err != nil {
 		return "", err
 	}
 
-	dbData, ok := dSess.GetDbData(sqlCtx, sqlCtx.GetCurrentDatabase())
-	if !ok {
-		return "", fmt.Errorf("Could not load database %s", dbName)
-	}
-	currBranch, err := dbData.Rsr.CWBHeadRef()
+	// get current branch
+	schema, ri, err = queryist.Query(sqlCtx, "select active_branch()")
 	if err != nil {
 		return "", err
 	}
+	row, err := sql.RowIterToRows(sqlCtx, schema, ri)
+	if err != nil {
+		return "", err
+	}
+	currBranch := row[0]
+
 	initialCommitMessage := fmt.Sprintf("%s\n# Please enter the commit message for your changes. Lines starting"+
 		"\n# with '#' will be ignored, and an empty message aborts the commit."+
 		"\n# On branch %s\n#\n", suggestedMsg, currBranch)
@@ -427,26 +431,60 @@ func parseCommitMessage(cm string) string {
 }
 
 func PrintDiffsNotStaged(
-	ctx context.Context,
 	sqlCtx *sql.Context,
+	queryist cli.Queryist,
 	wr io.Writer,
-	notStagedTbls []diff.TableDelta,
+	notStagedRows []sql.Row,
 	printHelp bool,
 	printIgnored bool,
 	linesPrinted int,
-	as merge.ArtifactStatus,
 ) (int, error) {
-	dSess := dsess.DSessFromSess(sqlCtx.Session)
-	roots, ok := dSess.GetRoots(sqlCtx, sqlCtx.GetCurrentDatabase())
-	if !ok {
-		return 0, fmt.Errorf("Could not load database %s", sqlCtx.GetCurrentDatabase())
+	// get data conflict tables
+	schema, ri, err := queryist.Query(sqlCtx, "select table from dolt_conflicts")
+	if err != nil {
+		return 0, err
 	}
+	conflictRows, err := sql.RowIterToRows(sqlCtx, schema, ri)
+	if err != nil {
+		return 0, err
+	}
+	var conflictTables []string
+	for i, _ := range conflictRows {
+		conflictTables = append(conflictTables, conflictRows[i][0].(string))
+	}
+	inCnfSet := set.NewStrSet(conflictTables)
 
-	inCnfSet := set.NewStrSet(as.DataConflictTables)
-	inCnfSet.Add(as.SchemaConflictsTables...)
-	violationSet := set.NewStrSet(as.ConstraintViolationsTables)
+	// get schema conflict tables
+	schema, ri, err = queryist.Query(sqlCtx, "select table_name from dolt_status where status == 'schema conflict'")
+	if err != nil {
+		return 0, err
+	}
+	schemaConflictRows, err := sql.RowIterToRows(sqlCtx, schema, ri)
+	if err != nil {
+		return 0, err
+	}
+	var schemaConflictTables []string
+	for i, _ := range schemaConflictRows {
+		schemaConflictTables = append(schemaConflictTables, schemaConflictRows[i][0].(string))
+	}
+	inCnfSet.Add(schemaConflictTables...)
 
-	if as.HasConflicts() || as.HasConstraintViolations() {
+	// get constraint violation tables
+	schema, ri, err = queryist.Query(sqlCtx, "select table from dolt_constraint_violations")
+	if err != nil {
+		return 0, err
+	}
+	constraintViolationRows, err := sql.RowIterToRows(sqlCtx, schema, ri)
+	if err != nil {
+		return 0, err
+	}
+	var constraintViolationTables []string
+	for i, _ := range constraintViolationRows {
+		constraintViolationTables = append(constraintViolationTables, constraintViolationRows[i][0].(string))
+	}
+	violationSet := set.NewStrSet(constraintViolationTables)
+
+	if len(conflictTables) > 0 || len(constraintViolationTables) > 0 {
 		if linesPrinted > 0 {
 			cli.Println()
 		}
@@ -455,21 +493,21 @@ func PrintDiffsNotStaged(
 			iohelp.WriteLine(wr, mergedTableHelp)
 		}
 
-		if as.HasConflicts() {
-			lines := make([]string, 0, len(notStagedTbls))
-			for _, tblName := range as.SchemaConflictsTables {
+		if len(conflictTables) > 0 || len(schemaConflictTables) > 0 {
+			lines := make([]string, 0, len(notStagedRows))
+			for _, tblName := range schemaConflictTables {
 				lines = append(lines, fmt.Sprintf(statusFmt, schemaConflictLabel, tblName))
 			}
-			for _, tblName := range as.DataConflictTables {
+			for _, tblName := range conflictTables {
 				lines = append(lines, fmt.Sprintf(statusFmt, bothModifiedLabel, tblName))
 			}
 			iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
 			linesPrinted += len(lines)
 		}
 
-		if as.HasConstraintViolations() {
+		if len(constraintViolationTables) > 0 {
 			violationOnly, _, _ := violationSet.LeftIntersectionRight(inCnfSet)
-			lines := make([]string, 0, len(notStagedTbls))
+			lines := make([]string, 0, len(notStagedRows))
 			for _, tblName := range violationOnly.AsSortedSlice() {
 				lines = append(lines, fmt.Sprintf(statusFmt, "modified", tblName))
 			}
@@ -480,10 +518,10 @@ func PrintDiffsNotStaged(
 
 	added := 0
 	removeModified := 0
-	for _, td := range notStagedTbls {
-		if td.IsAdd() {
+	for _, row := range notStagedRows {
+		if row[1] == "new table" {
 			added++
-		} else if td.IsRename() {
+		} else if row[1] == "renamed" {
 			added++
 			removeModified++
 		} else {
@@ -504,7 +542,7 @@ func PrintDiffsNotStaged(
 			iohelp.WriteLine(wr, workingHeaderHelp)
 		}
 
-		lines := getModifiedAndRemovedNotStaged(notStagedTbls, inCnfSet, violationSet)
+		lines := getModifiedAndRemovedNotStaged(notStagedRows, inCnfSet, violationSet)
 
 		iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
 		linesPrinted += len(lines)
@@ -521,8 +559,8 @@ func PrintDiffsNotStaged(
 			iohelp.WriteLine(wr, untrackedHeaderHelp)
 		}
 
-		addedNotStagedTables := getAddedNotStagedTables(notStagedTbls)
-		filteredTables, err := doltdb.FilterIgnoredTables(ctx, addedNotStagedTables, roots)
+		addedNotStagedTables := getAddedNotStagedTables(notStagedRows)
+		filteredTables, err := filterIgnoredTables(sqlCtx, queryist, addedNotStagedTables)
 		if err != nil && doltdb.AsDoltIgnoreInConflict(err) == nil {
 			return 0, err
 		}
@@ -579,29 +617,31 @@ func PrintDiffsNotStaged(
 	return linesPrinted, nil
 }
 
-func getModifiedAndRemovedNotStaged(notStagedTbls []diff.TableDelta, inCnfSet, violationSet *set.StrSet) (lines []string) {
-	lines = make([]string, 0, len(notStagedTbls))
-	for _, td := range notStagedTbls {
-		if td.IsAdd() || inCnfSet.Contains(td.CurName()) || violationSet.Contains(td.CurName()) {
+func getModifiedAndRemovedNotStaged(notStagedRows []sql.Row, inCnfSet, violationSet *set.StrSet) (lines []string) {
+	lines = make([]string, 0, len(notStagedRows))
+	for _, row := range notStagedRows {
+		if row[1] == "added" || inCnfSet.Contains(row[0].(string)) || violationSet.Contains(row[0].(string)) {
 			continue
 		}
-		if td.IsDrop() {
-			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.RemovedTable], td.CurName()))
-		} else if td.IsRename() {
+		if row[1] == "deleted" {
+			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.RemovedTable], row[0].(string)))
+		} else if row[1] == "renamed" {
 			// per Git, unstaged renames are shown as drop + add
-			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.RemovedTable], td.FromName))
+			names := strings.Split(row[0].(string), " -> ")
+			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.RemovedTable], names[0]))
 		} else {
-			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.ModifiedTable], td.CurName()))
+			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.ModifiedTable], row[0].(string)))
 		}
 	}
 	return lines
 }
 
-func getAddedNotStagedTables(notStagedTbls []diff.TableDelta) (tables []string) {
-	tables = make([]string, 0, len(notStagedTbls))
-	for _, td := range notStagedTbls {
-		if td.IsAdd() || td.IsRename() {
-			tables = append(tables, td.CurName())
+func getAddedNotStagedTables(notStagedRows []sql.Row) (tables []string) {
+	tables = make([]string, 0, len(notStagedRows))
+	for _, row := range notStagedRows {
+		if row[1] == "added" || row[1] == "renamed" {
+			names := strings.Split(row[0].(string), " -> ")
+			tables = append(tables, names[0])
 		}
 	}
 	return tables
@@ -649,32 +689,57 @@ var tblDiffTypeToLabel = map[diff.TableDiffType]string{
 	diff.AddedTable:    "new table:",
 }
 
-func printStagedDiffs(wr io.Writer, stagedTbls []diff.TableDelta, printHelp bool) int {
-	if len(stagedTbls) > 0 {
+func printStagedDiffs(wr io.Writer, stagedRows []sql.Row, printHelp bool) int {
+	if len(stagedRows) > 0 {
 		iohelp.WriteLine(wr, stagedHeader)
 
 		if printHelp {
 			iohelp.WriteLine(wr, stagedHeaderHelp)
 		}
 
-		lines := make([]string, 0, len(stagedTbls))
-		for _, td := range stagedTbls {
-			if !doltdb.IsReadOnlySystemTable(td.CurName()) {
-				if td.IsAdd() {
-					lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.AddedTable], td.CurName()))
-				} else if td.IsDrop() {
-					lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.RemovedTable], td.CurName()))
-				} else if td.IsRename() {
-					lines = append(lines, fmt.Sprintf(statusRenameFmt, tblDiffTypeToLabel[diff.RenamedTable], td.FromName, td.ToName))
-				} else {
-					lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.ModifiedTable], td.CurName()))
+		lines := make([]string, 0, len(stagedRows))
+		for _, row := range stagedRows {
+			if !doltdb.IsReadOnlySystemTable(row[0].(string)) {
+				switch row[1].(string) {
+				case "new table":
+					lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.AddedTable], row[0].(string)))
+				case "deleted":
+					lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.RemovedTable], row[0].(string)))
+				case "renamed":
+					names := strings.Split(row[0].(string), " -> ")
+					lines = append(lines, fmt.Sprintf(statusRenameFmt, tblDiffTypeToLabel[diff.RenamedTable], names[0], names[1]))
+				default:
+					lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[diff.ModifiedTable], row[0].(string)))
 				}
-
 			}
 		}
 		iohelp.WriteLine(wr, color.GreenString(strings.Join(lines, "\n")))
-		return len(stagedTbls)
+		return len(stagedRows)
 	}
 
 	return 0
+}
+
+// filterIgnoredTables takes a slice of table names and divides it into new slices based on whether the table is ignored, not ignored, or matches conflicting ignore patterns.
+func filterIgnoredTables(sqlCtx *sql.Context, queryist cli.Queryist, addedNotStagedTables []string) (ignoredTables doltdb.IgnoredTables, err error) {
+	ignorePatterns, err := getIgnoredTablePatternsFromSql(queryist, sqlCtx)
+	if err != nil {
+		return ignoredTables, err
+	}
+	for _, tableName := range addedNotStagedTables {
+		ignored, err := ignorePatterns.IsTableNameIgnored(tableName)
+		if conflict := doltdb.AsDoltIgnoreInConflict(err); conflict != nil {
+			ignoredTables.Conflicts = append(ignoredTables.Conflicts, *conflict)
+		} else if err != nil {
+			return ignoredTables, err
+		} else if ignored == doltdb.DontIgnore {
+			ignoredTables.DontIgnore = append(ignoredTables.DontIgnore, tableName)
+		} else if ignored == doltdb.Ignore {
+			ignoredTables.Ignore = append(ignoredTables.Ignore, tableName)
+		} else {
+			return ignoredTables, fmt.Errorf("IsTableNameIgnored returned ErrorOccurred but no error!")
+		}
+	}
+
+	return ignoredTables, nil
 }

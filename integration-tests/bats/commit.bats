@@ -142,6 +142,26 @@ SQL
     [[ "$output" =~ "Commit1" ]] || false
 }
 
+@test "commit: --amend works correctly" {
+    dolt sql -q "CREATE table t (pk int primary key);"
+    dolt add t
+
+    run dolt commit -m "adding table t"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "adding table t" ]] || false
+
+    dolt sql -q "INSERT INTO t VALUES (1)"
+    dolt add t
+
+    run dolt commit --amend
+    [ $status -eq 0 ]
+    [[ "$output" =~ "adding table t" ]] || false
+
+    run dolt log
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 8 ]
+}
+
 @test "commit: dolt commit with unstaged tables leaves them in the working set" {
     dolt sql -q "CREATE table t1 (pk int primary key);"
     dolt sql -q "CREATE table t2 (pk int primary key);"

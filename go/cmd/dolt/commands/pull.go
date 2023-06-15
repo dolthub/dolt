@@ -71,7 +71,7 @@ func (cmd PullCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-	_, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
@@ -113,7 +113,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	err = pullHelper(ctx, sqlCtx, dEnv, pullSpec, cliCtx)
+	err = pullHelper(ctx, sqlCtx, queryist, dEnv, pullSpec, cliCtx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -121,7 +121,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 }
 
 // pullHelper splits pull into fetch, prepare merge, and merge to interleave printing
-func pullHelper(ctx context.Context, sqlCtx *sql.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec, cliCtx cli.CliContext) error {
+func pullHelper(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist, dEnv *env.DoltEnv, pullSpec *env.PullSpec, cliCtx cli.CliContext) error {
 	srcDB, err := pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB.ValueReadWriter().Format(), dEnv)
 	if err != nil {
 		return fmt.Errorf("failed to get remote db; %w", err)
@@ -219,7 +219,7 @@ func pullHelper(ctx context.Context, sqlCtx *sql.Context, dEnv *env.DoltEnv, pul
 			}
 
 			suggestedMsg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, headRef.GetPath())
-			tblStats, err := performMerge(ctx, sqlCtx, dEnv, mergeSpec, suggestedMsg, cliCtx)
+			tblStats, err := performMerge(ctx, sqlCtx, queryist, dEnv, mergeSpec, suggestedMsg, cliCtx)
 			printSuccessStats(tblStats)
 			if err != nil {
 				return err
