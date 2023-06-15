@@ -354,7 +354,7 @@ func getAllTablesAtRef(queryist queries.Queryist, sqlCtx *sql.Context, ref strin
 		if err != nil {
 			return nil, err
 		}
-		fks, err := getForeignKeysForTableSql(queryist, sqlCtx, tableName, cache)
+		fks, err := getForeignKeysForTableSql(queryist, sqlCtx, tableName, ref)
 		if err != nil {
 			return nil, err
 		}
@@ -466,86 +466,87 @@ func getFkParentSchsSql(queryist queries.Queryist, sqlCtx *sql.Context, fks []do
 	return parentSchs, nil
 }
 
-func getForeignKeysForTableSql(queryist queries.Queryist, sqlCtx *sql.Context, tableName string, cache *tableSchemaCache) ([]doltdb.ForeignKey, error) {
-	refConstrQuery := fmt.Sprintf("select constraint_name, table_name, referenced_table_name, update_rule, delete_rule from INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS where table_name = '%s';", tableName)
-	refConstrRows, err := queries.GetRowsForSql(queryist, sqlCtx, refConstrQuery)
+func getForeignKeysForTableSql(queryist queries.Queryist, sqlCtx *sql.Context, fkTableName, ref string) ([]doltdb.ForeignKey, error) {
+	q := fmt.Sprintf("select * from dolt_foreign_key_status('%s')", ref)
+	fkRows, err := queries.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, err
 	}
 
-	var foreignKeys []doltdb.ForeignKey
-	for _, row := range refConstrRows {
+	foreignKeys := map[string]doltdb.ForeignKey{}
+	for _, row := range fkRows {
+		tableName := row[2].(string)
+		if tableName != fkTableName {
+			continue
+		}
+
 		fkName := row[0].(string)
-		tableName := row[1].(string)
-		referencedTableName := row[2].(string)
-		updateRule := row[3].(string)
-		deleteRule := row[4].(string)
+		isResolved, err := queries.GetTinyIntColAsBool(row[1])
+		if err != nil {
+			return nil, fmt.Errorf("error parsing is_resolved column: %w", err)
+		}
+		tableIndex := row[3].(string)
+		tableColumnValue := row[4]
+		referencedTableName := row[5].(string)
+		referencedTableIndex := row[6].(string)
+		referencedTableColumnValue := row[7]
+		onUpdate, err := parseFkReferentialAction(row[8].(string))
+		if err != nil {
+			return nil, fmt.Errorf("error parsing on_update column: %w", err)
+		}
+		onDelete, err := parseFkReferentialAction(row[9].(string))
+		if err != nil {
+			return nil, fmt.Errorf("error parsing on_delete column: %w", err)
+		}
+		unresolvedTableColumn := row[10].(string)
+		unresolvedReferenceTableColumn := row[11].(string)
 
-		onUpdate, err := parseFkReferentialAction(sql.ForeignKeyReferentialAction(updateRule))
-		if err != nil {
-			return nil, err
-		}
-		onDelete, err := parseFkReferentialAction(sql.ForeignKeyReferentialAction(deleteRule))
-		if err != nil {
-			return nil, err
-		}
-		fk := doltdb.ForeignKey{
-			Name:                fkName,
-			TableName:           tableName,
-			ReferencedTableName: referencedTableName,
-			OnUpdate:            onUpdate,
-			OnDelete:            onDelete,
-		}
-
-		tableSchema, err := cache.GetTableSchema(queryist, sqlCtx, tableName)
-		if err != nil {
-			return nil, err
-		}
-		referenceTableSchema, err := cache.GetTableSchema(queryist, sqlCtx, referencedTableName)
-		if err != nil {
-			return nil, err
-		}
-
-		keyUsageQuery := fmt.Sprintf("select column_name, referenced_column_name from INFORMATION_SCHEMA.KEY_COLUMN_USAGE where table_name = '%s' and constraint_name = '%s';", tableName, fkName)
-		keyUsageRows, err := queries.GetRowsForSql(queryist, sqlCtx, keyUsageQuery)
-		if err != nil {
-			return nil, err
-		}
-		for _, keyUsageRow := range keyUsageRows {
-			columnName := keyUsageRow[0].(string)
-			referencedColumnName := keyUsageRow[1].(string)
-
-			column, ok := tableSchema.GetAllCols().GetByName(columnName)
-			if !ok {
-				return nil, fmt.Errorf("column %s not found in table %s", columnName, tableName)
+		fk, ok := foreignKeys[fkName]
+		if !ok {
+			fk = doltdb.ForeignKey{
+				Name:                   fkName,
+				TableName:              tableName,
+				TableIndex:             tableIndex,
+				TableColumns:           []uint64{},
+				ReferencedTableName:    referencedTableName,
+				ReferencedTableIndex:   referencedTableIndex,
+				ReferencedTableColumns: []uint64{},
+				OnUpdate:               onUpdate,
+				OnDelete:               onDelete,
+				UnresolvedFKDetails:    doltdb.UnresolvedFKDetails{},
 			}
-			fk.TableColumns = append(fk.TableColumns, column.Tag)
-
-			refColumn, ok := referenceTableSchema.GetAllCols().GetByName(referencedColumnName)
-			if !ok {
-				return nil, fmt.Errorf("column %s not found in table %s", referencedColumnName, referencedTableName)
-			}
-			fk.ReferencedTableColumns = append(fk.ReferencedTableColumns, refColumn.Tag)
 		}
 
-		foreignKeys = append(foreignKeys, fk)
+		if isResolved {
+			fk.TableColumns = append(fk.TableColumns, tableColumnValue.(uint64))
+			fk.ReferencedTableColumns = append(fk.ReferencedTableColumns, referencedTableColumnValue.(uint64))
+		} else {
+			fk.UnresolvedFKDetails.TableColumns = append(fk.UnresolvedFKDetails.TableColumns, unresolvedTableColumn)
+			fk.UnresolvedFKDetails.ReferencedTableColumns = append(fk.UnresolvedFKDetails.ReferencedTableColumns, unresolvedReferenceTableColumn)
+		}
+		foreignKeys[fkName] = fk
 	}
-	return foreignKeys, nil
+
+	fkList := []doltdb.ForeignKey{}
+	for _, fk := range foreignKeys {
+		fkList = append(fkList, fk)
+	}
+	return fkList, nil
 }
 
-func parseFkReferentialAction(refOp sql.ForeignKeyReferentialAction) (doltdb.ForeignKeyReferentialAction, error) {
+func parseFkReferentialAction(refOp string) (doltdb.ForeignKeyReferentialAction, error) {
 	switch refOp {
-	case sql.ForeignKeyReferentialAction_DefaultAction:
+	case "NONE SPECIFIED":
 		return doltdb.ForeignKeyReferentialAction_DefaultAction, nil
-	case sql.ForeignKeyReferentialAction_Restrict:
+	case "RESTRICT":
 		return doltdb.ForeignKeyReferentialAction_Restrict, nil
-	case sql.ForeignKeyReferentialAction_Cascade:
+	case "CASCADE":
 		return doltdb.ForeignKeyReferentialAction_Cascade, nil
-	case sql.ForeignKeyReferentialAction_NoAction:
+	case "NO ACTION":
 		return doltdb.ForeignKeyReferentialAction_NoAction, nil
-	case sql.ForeignKeyReferentialAction_SetNull:
+	case "SET NULL":
 		return doltdb.ForeignKeyReferentialAction_SetNull, nil
-	case sql.ForeignKeyReferentialAction_SetDefault:
+	case "SET DEFAULT":
 		return doltdb.ForeignKeyReferentialAction_DefaultAction, sql.ErrForeignKeySetDefault.New()
 	default:
 		return doltdb.ForeignKeyReferentialAction_DefaultAction, fmt.Errorf("unknown foreign key referential action: %v", refOp)
@@ -642,22 +643,6 @@ func (td TableDeltaSql) HasSchemaChanged(ctx context.Context) (bool, error) {
 	}
 
 	return td.Summary.SchemaChange, nil
-
-	//if td.HasFKChanges() {
-	//	return true, nil
-	//}
-	//
-	//fromSchemaHash, err := td.FromTable.GetSchemaHash(ctx)
-	//if err != nil {
-	//	return false, err
-	//}
-	//
-	//toSchemaHash, err := td.ToTable.GetSchemaHash(ctx)
-	//if err != nil {
-	//	return false, err
-	//}
-	//
-	//return !fromSchemaHash.Equal(toSchemaHash), nil
 }
 
 func (td TableDeltaSql) HasDataChanged(ctx context.Context) (bool, error) {

@@ -1180,6 +1180,9 @@ func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.Ta
 	case "dolt_diff_summary":
 		dtf := &DiffSummaryTableFunction{}
 		return dtf, nil
+	case "dolt_foreign_key_status":
+		dtf := &ForeignKeyStatusTableFunction{}
+		return dtf, nil
 	case "dolt_log":
 		dtf := &LogTableFunction{}
 		return dtf, nil
