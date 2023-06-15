@@ -28,9 +28,9 @@ setup() {
       skip "This test tests remote connections directly, SQL_ENGINE is not needed."
     fi
     setup_no_dolt_init
+    unset DOLT_CLI_PASSWORD
     make_repo defaultDB
     make_repo altDB
-    unset DOLT_CLI_PASSWORD
 }
 
 teardown() {
@@ -350,4 +350,29 @@ get_staged_tables() {
     [[ "$output" =~ "Access denied for user 'dolt'" ]] || false
 
     unset DOLT_CLI_PASSWORD
+}
+
+@test "sql-local-remote: ensure passing only a password results in an error" {
+    export SQL_USER="root"
+    start_sql_server altDb
+
+    run dolt --password "anything" sql -q "show tables"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "When a password is provided, a user must also be provided" ]] || false
+
+    export DOLT_CLI_PASSWORD="anything"
+    run dolt sql -q "show tables"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "When a password is provided, a user must also be provided" ]] || false
+
+    stop_sql_server 1 
+
+    run dolt --password "anything" sql -q "show tables"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "When a password is provided, a user must also be provided" ]] || false
+
+    export DOLT_CLI_PASSWORD="anything"
+    run dolt sql -q "show tables"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "When a password is provided, a user must also be provided" ]] || false
 }
