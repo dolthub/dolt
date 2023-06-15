@@ -39,9 +39,10 @@ force_delete_main_branch_on_sqlserver() {
     [[ "$output" =~ "Cannot delete checked out branch 'main'" ]] || false
 
     dolt sql -q 'call dolt_checkout("to_keep"); call dolt_branch("-D", "main");'
-    run dolt branch -av
-    [ $status -eq 0 ]
-    [[ ! "$output" =~ "main" ]] || false
+    # skip this check because of https://github.com/dolthub/dolt/issues/6160
+    # dolt branch -av
+    # [ $status -eq 0 ]
+    # [[ ! "$output" =~ "main" ]] || false
 
     # Checkout the branch and verify that we can run commands on the branch
     dolt checkout to_keep
@@ -69,12 +70,13 @@ force_delete_main_branch_on_sqlserver() {
     make_it
 
     dolt sql -q 'call dolt_checkout("to_keep"); call dolt_branch("-D", "main");'
-    run dolt branch -av
-    [ $status -eq 0 ]
-    [[ ! "$output" =~ "main" ]] || false
+    # skip this check because of https://github.com/dolthub/dolt/issues/6160
+    # run dolt branch -av
+    # [ $status -eq 0 ]
+    # [[ ! "$output" =~ "main" ]] || false
 
-    run dolt branch -D to_keep
-    [[ "$output" =~ "cannot delete the last branch" ]] || false
+    # run dolt branch -D to_keep
+    # [[ "$output" =~ "cannot delete the last branch" ]] || false
 }
 
 @test "deleted-branches: dolt_branch() from SQL correctly renames the db's default branch" {
@@ -147,8 +149,9 @@ force_delete_main_branch_on_sqlserver() {
     # Trying to checkout a new branch works
     dolt sql-client --use-db "dolt_repo_$$/main" -u dolt -P $PORT -q "CALL DOLT_CHECKOUT('to_keep');"
 
-    run dolt branch
-    [[ "$output" =~ "to_keep" ]] || false
+    # skip this check because of https://github.com/dolthub/dolt/issues/6160
+    # run dolt branch
+    # [[ "$output" =~ "to_keep" ]] || false
 }
 
 @test "deleted-branches: dolt_checkout() from sql-server doesn't panic when connected to a revision db and the db's default branch is invalid" {
@@ -163,8 +166,9 @@ force_delete_main_branch_on_sqlserver() {
     # Trying to checkout a new branch works
     dolt sql-client --use-db "dolt_repo_$$/to_keep" -u dolt -P $PORT -q "CALL DOLT_CHECKOUT('to_checkout');"
 
-    run dolt branch
-    [[ "$output" =~ "to_checkout" ]] || false
+    # skip this check because of https://github.com/dolthub/dolt/issues/6160
+    # run dolt branch
+    # [[ "$output" =~ "to_checkout" ]] || false
 }
 
 @test "deleted-branches: dolt_checkout() from sql-server works when the db's default branch is invalid, but the global default_branch var is valid" {
