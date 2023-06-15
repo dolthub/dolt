@@ -18,6 +18,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -66,8 +69,11 @@ func TestInit(t *testing.T) {
 			dEnv := createUninitializedEnv()
 			gCfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
 			gCfg.SetStrings(test.GlobalConfig)
+			apr := argparser.ArgParseResults{}
+			latebind := func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) { return nil, nil, func() {}, nil }
+			cliCtx, _ := cli.NewCliContext(&apr, dEnv.Config, latebind)
 
-			result := InitCmd{}.Exec(context.Background(), "dolt init", test.Args, dEnv, nil)
+			result := InitCmd{}.Exec(context.Background(), "dolt init", test.Args, dEnv, cliCtx)
 			defer dEnv.DoltDB.Close()
 
 			require.Equalf(t, test.ExpectSuccess, result == 0, "- Expected success: %t; result: %t;", test.ExpectSuccess, result == 0)
