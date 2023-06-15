@@ -684,9 +684,7 @@ func (d *DoltSession) Rollback(ctx *sql.Context, tx sql.Transaction) error {
 // CreateSavepoint creates a new savepoint for this transaction with the name given. A previously created savepoint
 // with the same name will be overwritten.
 func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, savepointName string) error {
-	dbName := ctx.GetTransactionDatabase()
-
-	if TransactionsDisabled(ctx) || dbName == "" {
+	if TransactionsDisabled(ctx) {
 		return nil
 	}
 
@@ -695,21 +693,27 @@ func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, save
 		return fmt.Errorf("expected a DoltTransaction")
 	}
 
-	branchState, ok, err := d.lookupDbState(ctx, dbName)
-	if err != nil {
-		return err
+	roots := make(map[string]*doltdb.RootValue)
+	for _, db := range d.provider.DoltDatabases() {
+		branchState, ok, err := d.lookupDbState(ctx, db.Name())
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("session state for database %s not found", db.Name())
+		}
+		baseName, _ := SplitRevisionDbName(db.Name())
+		roots[strings.ToLower(baseName)] = branchState.WorkingSet().WorkingRoot()
 	}
 
-	dtx.CreateSavepoint(savepointName, branchState.roots().Working)
+	dtx.CreateSavepoint(savepointName, roots)
 	return nil
 }
 
 // RollbackToSavepoint sets this session's root to the one saved in the savepoint name. It's an error if no savepoint
 // with that name exists.
 func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, savepointName string) error {
-	dbName := ctx.GetTransactionDatabase()
-
-	if TransactionsDisabled(ctx) || dbName == "" {
+	if TransactionsDisabled(ctx) {
 		return nil
 	}
 
@@ -718,14 +722,16 @@ func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, 
 		return fmt.Errorf("expected a DoltTransaction")
 	}
 
-	root := dtx.RollbackToSavepoint(savepointName)
-	if root == nil {
+	roots := dtx.RollbackToSavepoint(savepointName)
+	if roots == nil {
 		return sql.ErrSavepointDoesNotExist.New(savepointName)
 	}
 
-	err := d.SetRoot(ctx, dbName, root)
-	if err != nil {
-		return err
+	for dbName, root := range roots {
+		err := d.SetRoot(ctx, dbName, root)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -734,9 +740,7 @@ func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, 
 // ReleaseSavepoint removes the savepoint name from the transaction. It's an error if no savepoint with that name
 // exists.
 func (d *DoltSession) ReleaseSavepoint(ctx *sql.Context, tx sql.Transaction, savepointName string) error {
-	dbName := ctx.GetTransactionDatabase()
-
-	if TransactionsDisabled(ctx) || dbName == "" {
+	if TransactionsDisabled(ctx) {
 		return nil
 	}
 
@@ -745,8 +749,8 @@ func (d *DoltSession) ReleaseSavepoint(ctx *sql.Context, tx sql.Transaction, sav
 		return fmt.Errorf("expected a DoltTransaction")
 	}
 
-	root := dtx.ClearSavepoint(savepointName)
-	if root == nil {
+	existed := dtx.ClearSavepoint(savepointName)
+	if !existed {
 		return sql.ErrSavepointDoesNotExist.New(savepointName)
 	}
 

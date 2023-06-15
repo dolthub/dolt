@@ -90,7 +90,7 @@ type dbRoot struct {
 type savepoint struct {
 	name string
 	// TODO: we need a root value per DB here
-	root *doltdb.RootValue
+	roots map[string]*doltdb.RootValue
 }
 
 func NewDoltTransaction(
@@ -702,12 +702,12 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 
 // CreateSavepoint creates a new savepoint with the name and root value given. If a savepoint with the name given
 // already exists, it's overwritten.
-func (tx *DoltTransaction) CreateSavepoint(name string, root *doltdb.RootValue) {
+func (tx *DoltTransaction) CreateSavepoint(name string, roots map[string]*doltdb.RootValue) {
 	existing := tx.findSavepoint(name)
 	if existing >= 0 {
 		tx.savepoints = append(tx.savepoints[:existing], tx.savepoints[existing+1:]...)
 	}
-	tx.savepoints = append(tx.savepoints, savepoint{name, root})
+	tx.savepoints = append(tx.savepoints, savepoint{name, roots})
 }
 
 // findSavepoint returns the index of the savepoint with the name given, or -1 if it doesn't exist
@@ -722,26 +722,24 @@ func (tx *DoltTransaction) findSavepoint(name string) int {
 
 // RollbackToSavepoint returns the root value associated with the savepoint name given, or nil if no such savepoint can
 // be found. All savepoints created after the one being rolled back to are no longer accessible.
-func (tx *DoltTransaction) RollbackToSavepoint(name string) *doltdb.RootValue {
+func (tx *DoltTransaction) RollbackToSavepoint(name string) map[string]*doltdb.RootValue {
 	existing := tx.findSavepoint(name)
 	if existing >= 0 {
 		// Clear out any savepoints past this one
 		tx.savepoints = tx.savepoints[:existing+1]
-		return tx.savepoints[existing].root
+		return tx.savepoints[existing].roots
 	}
 	return nil
 }
 
-// ClearSavepoint removes the savepoint with the name given and returns the root value recorded there, or nil if no
-// savepoint exists with that name.
-func (tx *DoltTransaction) ClearSavepoint(name string) *doltdb.RootValue {
+// ClearSavepoint removes the savepoint with the name given and returns whether a savepoint had that name
+func (tx *DoltTransaction) ClearSavepoint(name string) bool {
 	existing := tx.findSavepoint(name)
-	var existingRoot *doltdb.RootValue
 	if existing >= 0 {
-		existingRoot = tx.savepoints[existing].root
 		tx.savepoints = append(tx.savepoints[:existing], tx.savepoints[existing+1:]...)
+		return true
 	}
-	return existingRoot
+	return false
 }
 
 func (tx DoltTransaction) getWorkingSetMeta(ctx *sql.Context) *datas.WorkingSetMeta {
