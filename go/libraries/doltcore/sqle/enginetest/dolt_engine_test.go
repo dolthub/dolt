@@ -376,11 +376,23 @@ func TestDoltDiffQueryPlans(t *testing.T) {
 
 func TestBranchPlans(t *testing.T) {
 	for _, script := range BranchPlanTests {
-		func() {
+		t.Run(script.Name, func(t *testing.T) {
 			harness := newDoltHarness(t).WithParallelism(1)
 			defer harness.Close()
-			enginetest.TestScript(t, harness, script)
-		}()
+
+			e := mustNewEngine(t, harness)
+			defer e.Close()
+
+			for _, statement := range script.SetUpScript {
+				ctx := enginetest.NewContext(harness).WithQuery(statement)
+				enginetest.RunQueryWithContext(t, e, harness, ctx, statement)
+			}
+			for _, tt := range script.Queries {
+				t.Run(tt.Query, func(t *testing.T) {
+					TestIndexedAccess(t, e, harness, tt.Query, tt.Index)
+				})
+			}
+		})
 	}
 }
 
@@ -2221,6 +2233,22 @@ func TestTypesOverWire(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
 	enginetest.TestTypesOverWire(t, harness, newSessionBuilder(harness))
+}
+
+func TestDoltCherryPick(t *testing.T) {
+	for _, script := range DoltCherryPickTests {
+		harness := newDoltHarness(t)
+		enginetest.TestScript(t, harness, script)
+		harness.Close()
+	}
+}
+
+func TestDoltCherryPickPrepared(t *testing.T) {
+	for _, script := range DoltCherryPickTests {
+		harness := newDoltHarness(t)
+		enginetest.TestScriptPrepared(t, harness, script)
+		harness.Close()
+	}
 }
 
 func TestDoltCommit(t *testing.T) {

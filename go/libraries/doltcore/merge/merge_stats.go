@@ -33,15 +33,22 @@ type MergeStats struct {
 	ConstraintViolations int
 }
 
+func (ms *MergeStats) HasArtifacts() bool {
+	return ms.HasConflicts() || ms.HasConstraintViolations()
+}
+
 func (ms *MergeStats) HasConflicts() bool {
-	return ms.DataConflicts > 0 ||
-		ms.SchemaConflicts > 0
+	return ms.HasDataConflicts() || ms.HasSchemaConflicts()
+}
+
+func (ms *MergeStats) HasDataConflicts() bool {
+	return ms.DataConflicts > 0
+}
+
+func (ms *MergeStats) HasSchemaConflicts() bool {
+	return ms.SchemaConflicts > 0
 }
 
 func (ms *MergeStats) HasConstraintViolations() bool {
 	return ms.ConstraintViolations > 0
-}
-
-func (ms *MergeStats) HasArtifacts() bool {
-	return ms.HasConflicts() || ms.HasConstraintViolations()
 }

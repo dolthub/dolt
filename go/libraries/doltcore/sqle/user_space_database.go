@@ -87,6 +87,11 @@ func (db *UserSpaceDatabase) InitialDBState(ctx *sql.Context) (dsess.InitialDbSt
 	}, nil
 }
 
+func (db *UserSpaceDatabase) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
+	// Nothing to do here, we don't support changing branch revisions
+	return db, nil
+}
+
 func (db *UserSpaceDatabase) DoltDatabases() []*doltdb.DoltDB {
 	return nil
 }
@@ -101,10 +106,6 @@ func (db *UserSpaceDatabase) GetTemporaryTablesRoot(*sql.Context) (*doltdb.RootV
 
 func (db *UserSpaceDatabase) DbData() env.DbData {
 	return env.DbData{}
-}
-
-func (db *UserSpaceDatabase) Flush(ctx *sql.Context) error {
-	panic("UserSpaceDatabase cannot flush")
 }
 
 func (db *UserSpaceDatabase) EditOptions() editor.Options {

@@ -52,7 +52,6 @@ var _ sql.StoredProcedureDatabase = ReadReplicaDatabase{}
 var _ dsess.RemoteReadReplicaDatabase = ReadReplicaDatabase{}
 
 var ErrFailedToLoadReplicaDB = errors.New("failed to load replica database")
-var ErrInvalidReplicateHeadsSetting = errors.New("invalid replicate heads setting")
 
 var EmptyReadReplica = ReadReplicaDatabase{}
 
@@ -84,6 +83,15 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 		srcDB:    srcDB,
 		limiter:  newLimiter(),
 	}, nil
+}
+
+func (rrd ReadReplicaDatabase) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
+	rrd.rsr, rrd.rsw = branchSpec.RepoState, branchSpec.RepoState
+	rrd.revision = branchSpec.Branch
+	rrd.revType = dsess.RevisionTypeBranch
+	rrd.requestedName = requestedName
+
+	return rrd, nil
 }
 
 func (rrd ReadReplicaDatabase) ValidReplicaState(ctx *sql.Context) bool {

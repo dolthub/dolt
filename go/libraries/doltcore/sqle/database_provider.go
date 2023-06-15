@@ -1268,64 +1268,16 @@ func isTag(ctx context.Context, db dsess.SqlDatabase, tagName string) (bool, err
 
 // revisionDbForBranch returns a new database that is tied to the branch named by revSpec
 func revisionDbForBranch(ctx context.Context, srcDb dsess.SqlDatabase, revSpec string, requestedName string) (dsess.SqlDatabase, error) {
-	branch := ref.NewBranchRef(revSpec)
-
 	static := staticRepoState{
-		branch:          branch,
+		branch:          ref.NewBranchRef(revSpec),
 		RepoStateWriter: srcDb.DbData().Rsw,
 		RepoStateReader: srcDb.DbData().Rsr,
 	}
 
-	baseName, _ := dsess.SplitRevisionDbName(srcDb.Name())
-
-	// TODO: we need a base name method here
-	switch v := srcDb.(type) {
-	case ReadOnlyDatabase:
-		db := Database{
-			baseName:      baseName,
-			requestedName: requestedName,
-			ddb:           v.ddb,
-			rsw:           static,
-			rsr:           static,
-			gs:            v.gs,
-			editOpts:      v.editOpts,
-			revision:      revSpec,
-			revType:       dsess.RevisionTypeBranch,
-		}
-		return ReadOnlyDatabase{db}, nil
-	case Database:
-		return Database{
-			baseName:      baseName,
-			requestedName: requestedName,
-			ddb:           v.ddb,
-			rsw:           static,
-			rsr:           static,
-			gs:            v.gs,
-			editOpts:      v.editOpts,
-			revision:      revSpec,
-			revType:       dsess.RevisionTypeBranch,
-		}, nil
-	case ReadReplicaDatabase:
-		return ReadReplicaDatabase{
-			Database: Database{
-				baseName:      baseName,
-				requestedName: requestedName,
-				ddb:           v.ddb,
-				rsw:           static,
-				rsr:           static,
-				gs:            v.gs,
-				editOpts:      v.editOpts,
-				revision:      revSpec,
-				revType:       dsess.RevisionTypeBranch,
-			},
-			remote:  v.remote,
-			srcDB:   v.srcDB,
-			tmpDir:  v.tmpDir,
-			limiter: newLimiter(),
-		}, nil
-	default:
-		panic(fmt.Sprintf("unrecognized type of database %T", srcDb))
-	}
+	return srcDb.WithBranchRevision(requestedName, dsess.SessionDatabaseBranchSpec{
+		RepoState: static,
+		Branch:    revSpec,
+	})
 }
 
 func initialStateForBranchDb(ctx *sql.Context, srcDb dsess.SqlDatabase) (dsess.InitialDbState, error) {
