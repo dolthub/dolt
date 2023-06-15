@@ -304,12 +304,15 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, sessFa
 			return nil, func() error { return nil }, err
 		}
 
-		err = sess.SetSessionVariable(newCtx, sql.AutoCommitSessionVar, true)
+		// Starting transaction at the start of the server to load all events to
+		// the event scheduler is causing read replica test to fail as it tries
+		// pulling from remotes for branches that its remoteRef does not exist yet.
+		err = sql.SystemVariables.SetGlobal(dsess.SkipReplicationErrors, true)
 		if err != nil {
 			return nil, func() error { return nil }, err
 		}
 
-		tr, err := sess.StartTransaction(newCtx, sql.ReadWrite)
+		err = sess.SetSessionVariable(newCtx, sql.AutoCommitSessionVar, true)
 		if err != nil {
 			return nil, func() error { return nil }, err
 		}
@@ -318,6 +321,13 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, sessFa
 		if !ok {
 			return nil, func() error { return nil }, nil
 		}
+
+		tr, err := sess.StartTransaction(newCtx, sql.ReadWrite)
+		if err != nil {
+			return nil, func() error { return nil }, err
+		}
+
+		ts.SetTransaction(tr)
 
 		return newCtx, func() error {
 			return ts.CommitTransaction(newCtx, tr)
