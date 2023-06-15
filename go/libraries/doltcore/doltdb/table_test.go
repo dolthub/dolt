@@ -28,8 +28,8 @@ type isValidIndexNameTest struct {
 
 var isValidIndexNameTests = []isValidIndexNameTest{
 	{
-		name:      "all valid char classes",
-		indexName: "-01_abc`X$YZ",
+		name:      "all valid ASCII characters",
+		indexName: " ~!@#$%^&*()_+`-=[]{}|;':\",./<>?abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
 		valid:     true,
 	},
 	{
@@ -53,14 +53,19 @@ var isValidIndexNameTests = []isValidIndexNameTest{
 		valid:     true,
 	},
 	{
-		name:      "invalid @ char",
+		name:      "valid @ char",
 		indexName: "as@df",
-		valid:     false,
+		valid:     true,
 	},
 	{
-		name:      "invalid [] chars",
+		name:      "valid [] chars",
 		indexName: "[asdf]",
-		valid:     false,
+		valid:     true,
+	},
+	{
+		name:      "spaces allowed",
+		indexName: "    s p a c e s    ",
+		valid:     true,
 	},
 	{
 		name:      "empty string",

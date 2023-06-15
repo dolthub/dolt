@@ -128,7 +128,11 @@ func TestIsValidTableName(t *testing.T) {
 	assert.True(t, IsValidTableName("           space"))
 	assert.True(t, IsValidTableName("this     is     ok"))
 	assert.True(t, IsValidTableName(" ~!@#$%^&*()_+`-=[]{}|;':\",./<>?"))
+	assert.True(t, IsValidTableName("あえいおう"))
+	assert.True(t, IsValidTableName("might/be/problematic"))
 	assert.False(t, IsValidTableName(""))
+	assert.False(t, IsValidTableName(string(rune(0))))
+	assert.False(t, IsValidTableName("𐌃𐌏𐌋𐌕"))
 	assert.False(t, IsValidTableName("space            "))
 }
 
