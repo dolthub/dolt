@@ -175,3 +175,27 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "new table:        t2" ]] || false
 }
+
+@test "commit: dolt commit works correctly with multiple branches" {
+    dolt branch branch2
+    dolt checkout -b branch1
+    dolt sql -q "CREATE table t1 (pk int primary key);"
+    dolt add t1
+
+    run dolt commit -m "adding table t1 on branch1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "adding table t1 on branch1" ]] || false
+
+    dolt checkout branch2
+    dolt sql -q "CREATE table t2 (pk int primary key);"
+    dolt add t2
+
+    run dolt commit -m "adding table t2 on branch2"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "adding table t2 on branch2" ]] || false
+
+    run dolt log
+    [ $status -eq 0 ]
+    [[ "$output" =~ "adding table t2 on branch2" ]] || false
+    [[ ! "$output" =~ "adding table t1 on branch1" ]] || false
+}
