@@ -246,3 +246,37 @@ func newLateBindingEngine(
 
 	return lateBinder, nil
 }
+
+func getRowsForSql(queryist cli.Queryist, sqlCtx *sql.Context, query string) ([]sql.Row, error) {
+	schema, rowIter, err := queryist.Query(sqlCtx, query)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := sql.RowIterToRows(sqlCtx, schema, rowIter)
+	if err != nil {
+		return nil, err
+	}
+
+	return rows, nil
+}
+
+func getActiveBranchName(sqlCtx *sql.Context, queryEngine cli.Queryist) (string, error) {
+	query := "SELECT active_branch()"
+	rows, err := getRowsForSql(queryEngine, sqlCtx, query)
+	if err != nil {
+		return "", err
+	}
+
+	if len(rows) != 1 {
+		return "", fmt.Errorf("unexpectedly received multiple rows in '%s': %s", query, rows)
+	}
+	row := rows[0]
+	if len(row) != 1 {
+		return "", fmt.Errorf("unexpectedly received multiple columns in '%s': %s", query, row)
+	}
+	branchName, ok := row[0].(string)
+	if !ok {
+		return "", fmt.Errorf("unexpectedly received non-string column in '%s': %s", query, row[0])
+	}
+	return branchName, nil
+}
