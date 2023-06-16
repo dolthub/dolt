@@ -17,8 +17,8 @@ package dprocedures
 import (
 	"errors"
 	"fmt"
-
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -45,6 +45,24 @@ const (
 )
 
 var ErrUncommittedChanges = goerrors.NewKind("cannot merge with uncommitted changes")
+
+var doltMergeSchema = []*sql.Column{
+	{
+		Name:     "hash",
+		Type:     gmstypes.LongText,
+		Nullable: true,
+	},
+	{
+		Name:     "fast_forward",
+		Type:     gmstypes.Int64,
+		Nullable: false,
+	},
+	{
+		Name:     "conflicts",
+		Type:     gmstypes.Int64,
+		Nullable: false,
+	},
+}
 
 // doltMerge is the stored procedure version for the CLI command `dolt merge`.
 func doltMerge(ctx *sql.Context, args ...string) (sql.RowIter, error) {

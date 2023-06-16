@@ -36,7 +36,7 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	// dolt_gc is enabled behind a feature flag for now, see dolt_gc.go
 	{Name: "dolt_gc", Schema: int64Schema("success"), Function: doltGC},
 
-	{Name: "dolt_merge", Schema: stringSchema("hash", "fast_forward", "conflicts"), Function: doltMerge},
+	{Name: "dolt_merge", Schema: doltMergeSchema, Function: doltMerge},
 	{Name: "dolt_pull", Schema: int64Schema("fast_forward", "conflicts"), Function: doltPull},
 	{Name: "dolt_push", Schema: int64Schema("success"), Function: doltPush},
 	{Name: "dolt_remote", Schema: int64Schema("status"), Function: doltRemote},
@@ -58,7 +58,7 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 
 	//	{Name: "dgc", Schema: int64Schema("status"), Function: doltGC},
 
-	{Name: "dmerge", Schema: stringSchema("hash", "fast_forward", "conflicts"), Function: doltMerge},
+	{Name: "dmerge", Schema: doltMergeSchema, Function: doltMerge},
 	{Name: "dpull", Schema: int64Schema("fast_forward", "conflicts"), Function: doltPull},
 	{Name: "dpush", Schema: int64Schema("success"), Function: doltPush},
 	{Name: "dremote", Schema: int64Schema("status"), Function: doltRemote},
