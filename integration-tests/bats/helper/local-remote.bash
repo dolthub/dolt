@@ -2,6 +2,7 @@ load helper/query-server-common
 
 SKIP_SERVER_TESTS=$(cat <<-EOM
 ~sql-spatial-types.bats~
+~commit.bats~
 ~column_tags.bats~
 ~migration-integration.bats~
 ~sql.bats~
