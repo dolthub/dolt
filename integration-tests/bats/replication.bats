@@ -694,7 +694,7 @@ SQL
     dolt push origin feature-branch
 
     cd ../repo1
-    dolt sql -b -q "show tables" -r csv
+    run dolt sql -b -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [[ ! "output" =~ "t1" ]] || false
 }
