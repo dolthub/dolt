@@ -61,8 +61,6 @@ const (
 	showCurrentFlag = "show-current"
 )
 
-var ErrUnmergedBranchDelete = errors.New("The branch '%s' is not fully merged.\nIf you are sure you want to delete it, run 'dolt branch -D %s'.")
-
 type BranchCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
