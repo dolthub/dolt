@@ -562,6 +562,8 @@ func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 	defer dEnv.DoltDB.Close()
 	ctx := context.Background()
 
+	cliCtx, _ := commands.NewArgFreeCliContext(ctx, dEnv)
+
 	for _, c := range setupCommon {
 		exit := c.exec(t, ctx, dEnv)
 		require.Equal(t, 0, exit)
@@ -576,7 +578,7 @@ func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 	require.Equal(t, 0, exitCode)
 
 	// merge branches
-	exitCode = commands.MergeCmd{}.Exec(ctx, "merge", []string{"other"}, dEnv, nil)
+	exitCode = commands.MergeCmd{}.Exec(ctx, "merge", []string{"other"}, dEnv, cliCtx)
 	assert.Equal(t, 0, exitCode)
 
 	wr, err := dEnv.WorkingRoot(ctx)
