@@ -983,9 +983,9 @@ func (p DoltDatabaseProvider) databaseForClone(ctx *sql.Context, revDB string) (
 		ctx.GetLogger().Warnf("couldn't clone database %s: %s", dbName, err.Error())
 		return nil, nil
 	}
-	
+
 	// This database needs to be added to the transaction
-	// TODO: we should probably do all this pulling on transaction start, rather than pulling automatically when the 
+	// TODO: we should probably do all this pulling on transaction start, rather than pulling automatically when the
 	//  DB is first referenced
 	tx, ok := ctx.GetTransaction().(*dsess.DoltTransaction)
 	if ok {
