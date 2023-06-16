@@ -134,9 +134,7 @@ func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) 
 	tableName := apr.Arg(0)
 	if !doltdb.IsValidTableName(tableName) {
 		usage()
-		cli.PrintErrln(
-			color.RedString("'%s' is not a valid table name\n", tableName),
-			"table names must match the regular expression:", doltdb.TableNameRegexStr)
+		cli.PrintErrln(color.RedString("'%s' is not a valid table name", tableName))
 		return nil, errhand.BuildDError("invalid table name").Build()
 	}
 
