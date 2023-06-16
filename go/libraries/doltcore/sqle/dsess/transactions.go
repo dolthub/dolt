@@ -717,7 +717,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 	return nil
 }
 
-// CreateSavepoint creates a new savepoint with the name and root value given. If a savepoint with the name given
+// CreateSavepoint creates a new savepoint with the name and roots given. If a savepoint with the name given
 // already exists, it's overwritten.
 func (tx *DoltTransaction) CreateSavepoint(name string, roots map[string]*doltdb.RootValue) {
 	existing := tx.findSavepoint(name)
