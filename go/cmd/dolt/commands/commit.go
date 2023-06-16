@@ -151,14 +151,14 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 	}
 
 	// process query through prepared statement to prevent sql injection
-	query, params := callDoltCommitStoredProc(msg, apr)
-	q, err := dbr.InterpolateForDialect(query, params, dialect.MySQL)
+	query, params := constructParametrizedDoltCommitQuery(msg, apr)
+	interpolatedQuery, err := dbr.InterpolateForDialect(query, params, dialect.MySQL)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1, false
 	}
 
-	schema, rowIter, err := queryist.Query(sqlCtx, q)
+	schema, rowIter, err := queryist.Query(sqlCtx, interpolatedQuery)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1, false
@@ -186,9 +186,9 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 	return 0, false
 }
 
-// callDoltCommitStoredProc generates the sql query necessary to call the DOLT_COMMIT() stored procedure with placeholders
+// constructParametrizedDoltCommitQuery generates the sql query necessary to call the DOLT_COMMIT() stored procedure with placeholders
 // for arg input. Also returns a list of the inputs in the order in which they appear in the query.
-func callDoltCommitStoredProc(msg string, apr *argparser.ArgParseResults) (string, []interface{}) {
+func constructParametrizedDoltCommitQuery(msg string, apr *argparser.ArgParseResults) (string, []interface{}) {
 	var params []interface{}
 	var param bool
 
@@ -401,15 +401,10 @@ func buildInitalCommitMsg(ctx context.Context, sqlCtx *sql.Context, queryist cli
 	}
 
 	// get current branch
-	schema, ri, err = queryist.Query(sqlCtx, "select active_branch()")
+	currBranch, err := getBranchName(queryist, sqlCtx)
 	if err != nil {
 		return "", err
 	}
-	row, err := sql.RowIterToRows(sqlCtx, schema, ri)
-	if err != nil {
-		return "", err
-	}
-	currBranch := row[0]
 
 	initialCommitMessage := fmt.Sprintf("%s\n# Please enter the commit message for your changes. Lines starting"+
 		"\n# with '#' will be ignored, and an empty message aborts the commit."+
