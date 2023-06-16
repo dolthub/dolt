@@ -302,7 +302,7 @@ func GetClientConfig(cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argpar
 	yamlCfg = cfg.(YAMLConfig)
 
 	// if command line user argument was given, replace yaml's user and password
-	if creds.Username != defaultUser || creds.Password != defaultPass {
+	if !creds.Unspecified {
 		yamlCfg.UserConfig.Name = &creds.Username
 		yamlCfg.UserConfig.Password = &creds.Password
 	}

@@ -608,6 +608,11 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 			if verbose {
 				cli.Println("verbose: starting remote mode")
 			}
+
+			if creds.Unspecified {
+				creds = &cli.UserPassword{Username: sqlserver.LocalConnectionUser, Password: lock.Secret, Unspecified: true}
+			}
+
 			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, lock.Port, useDb)
 		}
 	}
