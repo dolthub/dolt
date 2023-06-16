@@ -163,8 +163,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 
 	schema, rowIter, err := queryist.Query(sqlCtx, interpolatedQuery)
 	if err != nil {
-		cli.Println(err.Error())
-		return 1, false
+		return handleCommitErr(sqlCtx, queryist, err, usage), false
 	}
 	resultRow, err := sql.RowIterToRows(sqlCtx, schema, rowIter)
 	if err != nil {
@@ -299,11 +298,16 @@ func handleCommitErr(sqlCtx *sql.Context, queryist cli.Queryist, err error, usag
 		return HandleVErrAndExitCode(bdr.Build(), usage)
 	}
 
-	if actions.IsNothingStaged(err) {
-		notStagedTbls := actions.NothingStagedTblDiffs(err)
-		var notStagedRows []sql.Row
-		for _, td := range notStagedTbls {
-			notStagedRows = append(notStagedRows, sql.Row{td.CurName()})
+	if err.Error() == "nothing to commit" {
+		schema, ri, err := queryist.Query(sqlCtx, "select table_name, status from dolt_status where staged = false")
+		if err != nil {
+			cli.Println(err)
+			return 1
+		}
+		notStagedRows, err := sql.RowIterToRows(sqlCtx, schema, ri)
+		if err != nil {
+			cli.Println(err)
+			return 1
 		}
 		n, newErr := PrintDiffsNotStaged(sqlCtx, queryist, cli.CliOut, notStagedRows, false, false, 0)
 		if newErr != nil {
@@ -385,7 +389,7 @@ func buildInitalCommitMsg(sqlCtx *sql.Context, queryist cli.Queryist, suggestedM
 	initialNoColor := color.NoColor
 	color.NoColor = true
 
-	schema, ri, err := queryist.Query(sqlCtx, "select table_name, status from dolt_status where staged == true")
+	schema, ri, err := queryist.Query(sqlCtx, "select table_name, status from dolt_status where staged = true")
 	if err != nil {
 		return "", err
 	}
@@ -394,7 +398,7 @@ func buildInitalCommitMsg(sqlCtx *sql.Context, queryist cli.Queryist, suggestedM
 		return "", err
 	}
 
-	schema, ri, err = queryist.Query(sqlCtx, "select table_name, status from dolt_status where staged == false")
+	schema, ri, err = queryist.Query(sqlCtx, "select table_name, status from dolt_status where staged = false")
 	if err != nil {
 		return "", err
 	}
@@ -452,7 +456,7 @@ func PrintDiffsNotStaged(
 	linesPrinted int,
 ) (int, error) {
 	// get data conflict tables
-	schema, ri, err := queryist.Query(sqlCtx, "select table from dolt_conflicts")
+	schema, ri, err := queryist.Query(sqlCtx, "select `table` from dolt_conflicts")
 	if err != nil {
 		return 0, err
 	}
@@ -467,7 +471,7 @@ func PrintDiffsNotStaged(
 	inCnfSet := set.NewStrSet(conflictTables)
 
 	// get schema conflict tables
-	schema, ri, err = queryist.Query(sqlCtx, "select table_name from dolt_status where status == 'schema conflict'")
+	schema, ri, err = queryist.Query(sqlCtx, "select table_name from dolt_status where status = 'schema conflict'")
 	if err != nil {
 		return 0, err
 	}
@@ -482,7 +486,7 @@ func PrintDiffsNotStaged(
 	inCnfSet.Add(schemaConflictTables...)
 
 	// get constraint violation tables
-	schema, ri, err = queryist.Query(sqlCtx, "select table from dolt_constraint_violations")
+	schema, ri, err = queryist.Query(sqlCtx, "select `table` from dolt_constraint_violations")
 	if err != nil {
 		return 0, err
 	}

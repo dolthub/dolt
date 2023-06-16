@@ -71,6 +71,15 @@ func (cmd PullCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+	ap := cli.CreatePullArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, pullDocs, ap))
+	apr := cli.ParseArgsOrDie(ap, args, help)
+
+	if apr.NArg() > 2 {
+		verr := errhand.VerboseErrorFromError(actions.ErrInvalidPullArgs)
+		return HandleVErrAndExitCode(verr, usage)
+	}
+
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.Println(err.Error())
@@ -78,16 +87,6 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 	if closeFunc != nil {
 		defer closeFunc()
-	}
-
-	ap := cli.CreatePullArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, pullDocs, ap))
-
-	apr := cli.ParseArgsOrDie(ap, args, help)
-
-	if apr.NArg() > 2 {
-		verr := errhand.VerboseErrorFromError(actions.ErrInvalidPullArgs)
-		return HandleVErrAndExitCode(verr, usage)
 	}
 
 	var remoteName, remoteRefName string

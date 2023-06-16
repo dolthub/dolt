@@ -80,6 +80,10 @@ func (cmd MergeCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+	ap := cli.CreateMergeArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, mergeDocs, ap))
+	apr := cli.ParseArgsOrDie(ap, args, help)
+
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.Println(err.Error())
@@ -88,10 +92,6 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	if closeFunc != nil {
 		defer closeFunc()
 	}
-
-	ap := cli.CreateMergeArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, mergeDocs, ap))
-	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.ContainsAll(cli.SquashParam, cli.NoFFParam) {
 		cli.PrintErrf("error: Flags '--%s' and '--%s' cannot be used together.\n", cli.SquashParam, cli.NoFFParam)
@@ -608,7 +608,7 @@ func getCommitMsgForMerge(ctx context.Context, sqlCtx *sql.Context, queryist cli
 		return userDefinedMsg, nil
 	}
 
-	msg, err := getCommitMessageFromEditor(ctx, sqlCtx, queryist, suggestedMsg, "", noEdit, cliCtx)
+	msg, err := getCommitMessageFromEditor(sqlCtx, queryist, suggestedMsg, "", noEdit, cliCtx)
 	if err != nil {
 		return msg, err
 	}

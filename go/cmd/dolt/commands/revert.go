@@ -156,5 +156,5 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 		commitParams = append(commitParams, "--author", authorStr)
 	}
 
-	return CommitCmd{}.Exec(ctx, "commit", commitParams, dEnv, nil)
+	return CommitCmd{}.Exec(ctx, "commit", commitParams, dEnv, cliCtx)
 }
