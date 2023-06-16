@@ -144,14 +144,17 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 			}
 			amendStr = row[0].(string)
 		}
-		msg, err = getCommitMessageFromEditor(ctx, sqlCtx, queryist, "", amendStr, false, cliCtx)
+		msg, err = getCommitMessageFromEditor(sqlCtx, queryist, "", amendStr, false, cliCtx)
 		if err != nil {
 			return handleCommitErr(sqlCtx, queryist, err, usage), false
 		}
 	}
 
 	// process query through prepared statement to prevent sql injection
-	query, params := constructParametrizedDoltCommitQuery(msg, apr)
+	query, params, err := constructParametrizedDoltCommitQuery(msg, apr, cliCtx)
+	if err != nil {
+		return 1, false
+	}
 	interpolatedQuery, err := dbr.InterpolateForDialect(query, params, dialect.MySQL)
 	if err != nil {
 		cli.Println(err.Error())
@@ -188,7 +191,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 
 // constructParametrizedDoltCommitQuery generates the sql query necessary to call the DOLT_COMMIT() stored procedure with placeholders
 // for arg input. Also returns a list of the inputs in the order in which they appear in the query.
-func constructParametrizedDoltCommitQuery(msg string, apr *argparser.ArgParseResults) (string, []interface{}) {
+func constructParametrizedDoltCommitQuery(msg string, apr *argparser.ArgParseResults, cliCtx cli.CliContext) (string, []interface{}, error) {
 	var params []interface{}
 	var param bool
 
@@ -235,13 +238,20 @@ func constructParametrizedDoltCommitQuery(msg string, apr *argparser.ArgParseRes
 		writeToBuffer("-f")
 	}
 
+	writeToBuffer("--author")
+	param = true
+	writeToBuffer("?")
+	var author string
 	if apr.Contains(cli.AuthorParam) {
-		writeToBuffer("--author")
-		author, _ := apr.GetValue(cli.AuthorParam)
-		param = true
-		writeToBuffer("?")
-		params = append(params, author)
+		author, _ = apr.GetValue(cli.AuthorParam)
+	} else {
+		name, email, err := env.GetNameAndEmail(cliCtx.Config())
+		if err != nil {
+			return "", nil, err
+		}
+		author = name + " <" + email + ">"
 	}
+	params = append(params, author)
 
 	if apr.Contains(cli.AllFlag) {
 		writeToBuffer("-a")
@@ -260,7 +270,7 @@ func constructParametrizedDoltCommitQuery(msg string, apr *argparser.ArgParseRes
 	}
 
 	buffer.WriteString(")")
-	return buffer.String(), params
+	return buffer.String(), params, nil
 }
 
 func handleCommitErr(sqlCtx *sql.Context, queryist cli.Queryist, err error, usage cli.UsagePrinter) int {
@@ -320,7 +330,7 @@ func handleCommitErr(sqlCtx *sql.Context, queryist cli.Queryist, err error, usag
 
 // getCommitMessageFromEditor opens editor to ask user for commit message if none defined from command line.
 // suggestedMsg will be returned if no-edit flag is defined or if this function was called from sql dolt_merge command.
-func getCommitMessageFromEditor(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist, suggestedMsg, amendString string, noEdit bool, cliCtx cli.CliContext) (string, error) {
+func getCommitMessageFromEditor(sqlCtx *sql.Context, queryist cli.Queryist, suggestedMsg, amendString string, noEdit bool, cliCtx cli.CliContext) (string, error) {
 	if cli.ExecuteWithStdioRestored == nil || noEdit {
 		return suggestedMsg, nil
 	}
@@ -330,7 +340,7 @@ func getCommitMessageFromEditor(ctx context.Context, sqlCtx *sql.Context, queryi
 	}
 
 	var finalMsg string
-	initialMsg, err := buildInitalCommitMsg(ctx, sqlCtx, queryist, suggestedMsg)
+	initialMsg, err := buildInitalCommitMsg(sqlCtx, queryist, suggestedMsg)
 	if err != nil {
 		return "", err
 	}
@@ -371,7 +381,7 @@ func checkIsTerminal() bool {
 	return isTerminal
 }
 
-func buildInitalCommitMsg(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist, suggestedMsg string) (string, error) {
+func buildInitalCommitMsg(sqlCtx *sql.Context, queryist cli.Queryist, suggestedMsg string) (string, error) {
 	initialNoColor := color.NoColor
 	color.NoColor = true
 
