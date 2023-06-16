@@ -95,12 +95,36 @@ func (r Result) HasMergeArtifacts() bool {
 	return false
 }
 
-// CountOfTablesWithConflicts returns the number of tables in this merge result that have either
-// a data conflict or schema conflict.
-func (r Result) CountOfTablesWithConflicts() int {
+// CountOfTablesWithDataConflicts returns the number of tables in this merge result that have
+// a data conflict.
+func (r Result) CountOfTablesWithDataConflicts() int {
 	count := 0
 	for _, mergeStats := range r.Stats {
-		if mergeStats.HasConflicts() {
+		if mergeStats.HasDataConflicts() {
+			count++
+		}
+	}
+	return count
+}
+
+// CountOfTablesWithSchemaConflicts returns the number of tables in this merge result that have
+// a schema conflict.
+func (r Result) CountOfTablesWithSchemaConflicts() int {
+	count := 0
+	for _, mergeStats := range r.Stats {
+		if mergeStats.HasSchemaConflicts() {
+			count++
+		}
+	}
+	return count
+}
+
+// CountOfTablesWithConstraintViolations returns the number of tables in this merge result that have
+// a constraint violation.
+func (r Result) CountOfTablesWithConstraintViolations() int {
+	count := 0
+	for _, mergeStats := range r.Stats {
+		if mergeStats.HasConstraintViolations() {
 			count++
 		}
 	}

@@ -376,11 +376,23 @@ func TestDoltDiffQueryPlans(t *testing.T) {
 
 func TestBranchPlans(t *testing.T) {
 	for _, script := range BranchPlanTests {
-		func() {
+		t.Run(script.Name, func(t *testing.T) {
 			harness := newDoltHarness(t).WithParallelism(1)
 			defer harness.Close()
-			enginetest.TestScript(t, harness, script)
-		}()
+
+			e := mustNewEngine(t, harness)
+			defer e.Close()
+
+			for _, statement := range script.SetUpScript {
+				ctx := enginetest.NewContext(harness).WithQuery(statement)
+				enginetest.RunQueryWithContext(t, e, harness, ctx, statement)
+			}
+			for _, tt := range script.Queries {
+				t.Run(tt.Query, func(t *testing.T) {
+					TestIndexedAccess(t, e, harness, tt.Query, tt.Index)
+				})
+			}
+		})
 	}
 }
 

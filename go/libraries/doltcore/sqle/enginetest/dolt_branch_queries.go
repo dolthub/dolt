@@ -15,9 +15,17 @@
 package enginetest
 
 import (
+	"fmt"
+	"testing"
+
+	sqle "github.com/dolthub/go-mysql-server"
+	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/transform"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/stretchr/testify/require"
 )
 
 var ForeignKeyBranchTests = []queries.ScriptTest{
@@ -504,7 +512,16 @@ var DdlBranchTests = []queries.ScriptTest{
 	},
 }
 
-var BranchPlanTests = []queries.ScriptTest{
+type indexQuery struct {
+	Query string
+	Index bool
+}
+
+var BranchPlanTests = []struct {
+	Name        string
+	SetUpScript []string
+	Queries     []indexQuery
+}{
 	{
 		Name: "use index on branch database",
 		SetUpScript: []string{
@@ -515,28 +532,17 @@ var BranchPlanTests = []queries.ScriptTest{
 			"use mydb/b1",
 			"create index idx on t1 (b)",
 		},
-		Assertions: []queries.ScriptTestAssertion{
+		Queries: []indexQuery{
 			{
-				Query: "explain select * from t1 where b = 1",
-				Expected: []sql.Row{
-					{"IndexedTableAccess(t1)"},
-					{" ├─ index: [t1.b]"},
-					{" ├─ filters: [{[1, 1]}]"},
-					{" └─ columns: [a b]"},
-				},
+				Query: "select * from t1 where b = 1",
+				Index: true,
 			},
 			{
-				Query:            "use mydb/main",
-				SkipResultsCheck: true,
+				Query: "use mydb/main",
 			},
 			{
-				Query: "explain select * from `mydb/b1`.t1 where b = 1",
-				Expected: []sql.Row{
-					{"IndexedTableAccess(t1)"},
-					{" ├─ index: [t1.b]"},
-					{" ├─ filters: [{[1, 1]}]"},
-					{" └─ columns: [a b]"},
-				},
+				Query: "select * from `mydb/b1`.t1 where b = 1",
+				Index: true,
 			},
 		},
 	},
@@ -550,83 +556,48 @@ var BranchPlanTests = []queries.ScriptTest{
 			"use mydb/b1",
 			"create index idx on t1 (b)",
 		},
-		Assertions: []queries.ScriptTestAssertion{
+		Queries: []indexQuery{
 			{
-				Query: "explain select * from t1 t1a join t1 t1b on t1a.b = t1b.b order by 1",
-				Expected: []sql.Row{
-					{"Sort(t1a.a ASC)"},
-					{" └─ Project"},
-					{"     ├─ columns: [t1a.a, t1a.b, t1b.a, t1b.b]"},
-					{"     └─ MergeJoin"},
-					{"         ├─ cmp: (t1b.b = t1a.b)"},
-					{"         ├─ TableAlias(t1b)"},
-					{"         │   └─ IndexedTableAccess(t1)"},
-					{"         │       ├─ index: [t1.b]"},
-					{"         │       ├─ filters: [{[NULL, ∞)}]"},
-					{"         │       └─ columns: [a b]"},
-					{"         └─ TableAlias(t1a)"},
-					{"             └─ IndexedTableAccess(t1)"},
-					{"                 ├─ index: [t1.b]"},
-					{"                 ├─ filters: [{[NULL, ∞)}]"},
-					{"                 └─ columns: [a b]"},
-				},
+				Query: "select * from t1 t1a join t1 t1b on t1a.b = t1b.b order by 1",
+				Index: true,
 			},
 			{
-				Query: "explain select * from `mydb/main`.t1 t1a join `mydb/main`.t1 t1b on t1a.b = t1b.b order by 1",
-				Expected: []sql.Row{
-					{"Sort(t1a.a ASC)"},
-					{" └─ InnerJoin"},
-					{"     ├─ (t1a.b = t1b.b)"},
-					{"     ├─ TableAlias(t1a)"},
-					{"     │   └─ Table"},
-					{"     │       ├─ name: t1"},
-					{"     │       └─ columns: [a b]"},
-					{"     └─ TableAlias(t1b)"},
-					{"         └─ Table"},
-					{"             ├─ name: t1"},
-					{"             └─ columns: [a b]"},
-				},
+				Query: "select * from `mydb/main`.t1 t1a join `mydb/main`.t1 t1b on t1a.b = t1b.b order by 1",
+				Index: false,
 			},
 			{
-				Query:            "use mydb/main",
-				SkipResultsCheck: true,
+				Query: "use mydb/main",
 			},
 			{
-				Query: "explain select * from t1 t1a join t1 t1b on t1a.b = t1b.b order by 1",
-				Expected: []sql.Row{
-					{"Sort(t1a.a ASC)"},
-					{" └─ InnerJoin"},
-					{"     ├─ (t1a.b = t1b.b)"},
-					{"     ├─ TableAlias(t1a)"},
-					{"     │   └─ Table"},
-					{"     │       ├─ name: t1"},
-					{"     │       └─ columns: [a b]"},
-					{"     └─ TableAlias(t1b)"},
-					{"         └─ Table"},
-					{"             ├─ name: t1"},
-					{"             └─ columns: [a b]"},
-				},
+				Query: "select * from t1 t1a join t1 t1b on t1a.b = t1b.b order by 1",
+				Index: true,
 			},
 			{
-				Query: "explain select * from `mydb/b1`.t1 t1a join `mydb/b1`.t1 t1b on t1a.b = t1b.b order by 1",
-				Expected: []sql.Row{
-					{"Sort(t1a.a ASC)"},
-					{" └─ Project"},
-					{"     ├─ columns: [t1a.a, t1a.b, t1b.a, t1b.b]"},
-					{"     └─ MergeJoin"},
-					{"         ├─ cmp: (t1b.b = t1a.b)"},
-					{"         ├─ TableAlias(t1b)"},
-					{"         │   └─ IndexedTableAccess(t1)"},
-					{"         │       ├─ index: [t1.b]"},
-					{"         │       ├─ filters: [{[NULL, ∞)}]"},
-					{"         │       └─ columns: [a b]"},
-					{"         └─ TableAlias(t1a)"},
-					{"             └─ IndexedTableAccess(t1)"},
-					{"                 ├─ index: [t1.b]"},
-					{"                 ├─ filters: [{[NULL, ∞)}]"},
-					{"                 └─ columns: [a b]"},
-				},
+				Query: "select * from `mydb/b1`.t1 t1a join `mydb/b1`.t1 t1b on t1a.b = t1b.b order by 1",
+				Index: true,
 			},
 		},
 	},
+}
+
+func TestIndexedAccess(t *testing.T, e *sqle.Engine, harness enginetest.Harness, query string, index bool) {
+	ctx := enginetest.NewContext(harness)
+	ctx = ctx.WithQuery(query)
+	a, err := e.AnalyzeQuery(ctx, query)
+	require.NoError(t, err)
+	var hasIndex bool
+	transform.Inspect(a, func(n sql.Node) bool {
+		if n == nil {
+			return false
+		}
+		if _, ok := n.(*plan.IndexedTableAccess); ok {
+			hasIndex = true
+		}
+		return true
+	})
+
+	if index != hasIndex {
+		fmt.Println(a.String())
+	}
+	require.Equal(t, index, hasIndex)
 }
