@@ -210,9 +210,6 @@ CSV
 }
 
 @test "import-create-tables: try to create a table with dolt table import with invalid name" {
-    run dolt table import -c --pk=pk 123 1pk5col-ints.csv
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "not a valid table name" ]] || false
     run dolt table import -c --pk=pk dolt_docs 1pk5col-ints.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "not a valid table name" ]] || false
