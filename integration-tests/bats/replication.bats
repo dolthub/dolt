@@ -668,7 +668,7 @@ SQL
 
     cd ../repo1
     dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
-    dolt config --local --add sqlserver.global.dolt_replicate_heads main
+    dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
     run dolt sql -b -q "USE \`repo1/feature-branch\`; show tables" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "Table" ]] || false
