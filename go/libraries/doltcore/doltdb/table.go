@@ -34,8 +34,7 @@ import (
 
 var ErrNoConflictsResolved = errors.New("no conflicts resolved")
 
-// IsValidTableName returns true if the name matches the regular expression TableNameRegexStr.
-// Table names can't end with space characters
+// IsValidTableName checks if name is a valid identifer, and doesn't end with space characters
 func IsValidTableName(name string) bool {
 	if len(name) == 0 || unicode.IsSpace(rune(name[len(name)-1])) {
 		return false
