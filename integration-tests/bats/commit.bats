@@ -110,8 +110,9 @@ teardown() {
   [ $original_head != $new_head ]
 
   # When no changes are staged, --skip-empty skips creating the commit
-  dolt commit --skip-empty -m "commit message"
+  run dolt commit --skip-empty -m "commit message"
   [ $new_head = $(get_head_commit) ]
+  [[ "$output" =~ "Skipping empty commit" ]] || false
 }
 
 @test "commit: -f works correctly" {

@@ -158,14 +158,21 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 		return 1, false
 	}
 
-	_, _, err = queryist.Query(sqlCtx, q)
+	schema, rowIter, err := queryist.Query(sqlCtx, q)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1, false
 	}
+	resultRow, err := sql.RowIterToRows(sqlCtx, schema, rowIter)
+	if err != nil {
+		return 0, false
+	}
+	if resultRow == nil {
+		return 0, true
+	}
 
 	// TODO: when dolt log is migrated, remove this block printing out the commit and print with a dolt log call in Exec()
-	schema, rowIter, err := queryist.Query(sqlCtx, "select * from dolt_log() limit 1")
+	schema, rowIter, err = queryist.Query(sqlCtx, "select * from dolt_log() limit 1")
 	if err != nil {
 		cli.Println(err.Error())
 		return 1, false
