@@ -49,12 +49,6 @@ listener:
     read_timeout_millis: 28800000
     write_timeout_millis: 28800000
     
-databases:
-    - name: irs_soi
-      path: ./datasets/irs-soi
-    - name: noaa
-      path: /Users/brian/datasets/noaa
-
 data_dir: some nonsense
 
 metrics:
@@ -77,6 +71,10 @@ user_session_vars:
           var2: val1_2
           var4: val1_4
 
+privilege_file: some other nonsense
+
+branch_control_file: third nonsense
+
 jwks:
   - name: jwks_name
     location_url: https://website.com
@@ -91,17 +89,12 @@ jwks:
     fields_to_log:
 `
 	expected := serverConfigAsYAMLConfig(DefaultServerConfig())
+
 	expected.BehaviorConfig.DoltTransactionCommit = &trueValue
-	expected.DatabaseConfig = []DatabaseYAMLConfig{
-		{
-			Name: "irs_soi",
-			Path: "./datasets/irs-soi",
-		},
-		{
-			Name: "noaa",
-			Path: "/Users/brian/datasets/noaa",
-		},
-	}
+	expected.CfgDirStr = nillableStrPtr("")
+	expected.PrivilegeFile = strPtr("some other nonsense")
+	expected.BranchControlFile = strPtr("third nonsense")
+
 	expected.MetricsConfig = MetricsYAMLConfig{
 		Host: strPtr("123.45.67.89"),
 		Port: intPtr(9091),
@@ -152,7 +145,7 @@ jwks:
 
 	config, err := NewYamlConfig([]byte(testStr))
 	require.NoError(t, err)
-	assert.Equal(t, expected, config)
+	assert.Equal(t, expected, config, "Expected:\n%v\nActual:\n%v", expected, config)
 }
 
 func TestUnmarshallRemotesapiPort(t *testing.T) {

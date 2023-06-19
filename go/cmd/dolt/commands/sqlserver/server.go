@@ -121,40 +121,16 @@ func Serve(
 	var err error
 	fs := dEnv.FS
 
-	dbNamesAndPaths := serverConfig.DatabaseNamesAndPaths()
-	if len(dbNamesAndPaths) == 0 {
-		if len(serverConfig.DataDir()) > 0 && serverConfig.DataDir() != "." {
-			fs, err = dEnv.FS.WithWorkingDir(serverConfig.DataDir())
-			if err != nil {
-				return err, nil
-			}
-		}
-
-		mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+	if len(serverConfig.DataDir()) > 0 && serverConfig.DataDir() != "." {
+		fs, err = dEnv.FS.WithWorkingDir(serverConfig.DataDir())
 		if err != nil {
 			return err, nil
 		}
-	} else {
-		if len(serverConfig.DataDir()) > 0 {
-			fs, err = fs.WithWorkingDir(serverConfig.DataDir())
-			if err != nil {
-				return err, nil
-			}
-		}
+	}
 
-		mrEnv, err = env.MultiEnvForPaths(
-			ctx,
-			env.GetCurrentUserHomeDir,
-			dEnv.Config.WriteableConfig(),
-			fs,
-			version,
-			dEnv.IgnoreLockFile,
-			dbNamesAndPaths...,
-		)
-
-		if err != nil {
-			return err, nil
-		}
+	mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+	if err != nil {
+		return err, nil
 	}
 
 	clusterController, err := cluster.NewController(lgr, serverConfig.ClusterConfig(), mrEnv.Config())

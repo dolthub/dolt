@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 
@@ -94,7 +95,7 @@ func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root *do
 	switch apr.NArg() {
 	case 0: // write all tables to stdout
 	case 1:
-		if doltdb.IsValidTableName(apr.Arg(0)) {
+		if !strings.Contains(apr.Arg(0), ".") {
 			tblName = apr.Arg(0)
 		} else {
 			fileName = apr.Arg(0)
