@@ -279,7 +279,7 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 	}
 	p.mu.RUnlock()
 
-	// If there's a revision database in use, include it in the list 
+	// If there's a revision database in use, include it in the list
 	if currRev != "" {
 		rdb, ok, err := p.databaseForRevision(ctx, currentDb, currentDb)
 		if err != nil || !ok {

@@ -481,7 +481,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				// TODO: the behavior here is a bit odd: when we call dolt_checkout, we change the current database to the 
+				// TODO: the behavior here is a bit odd: when we call dolt_checkout, we change the current database to the
 				//  base database name. But we should also consider the connection string: if you connect to a revision
 				//  database, that database should always be visible.
 				Query:    "show databases;",

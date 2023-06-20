@@ -157,7 +157,7 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParse
 	if apr.NArg() == 0 {
 		return InvalidArgErr
 	}
-	
+
 	currBase, currBranch := dsess.SplitRevisionDbName(ctx.GetCurrentDatabase())
 
 	// The current branch on CLI can be deleted as user can be on different branch on SQL and delete it from SQL session.
@@ -190,7 +190,7 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParse
 				return err
 			}
 		}
-		
+
 		// If we deleted the branch this client is connected to, change the current branch to the default
 		if strings.ToLower(currBranch) == strings.ToLower(branchName) {
 			ctx.SetCurrentDatabase(currBase)
