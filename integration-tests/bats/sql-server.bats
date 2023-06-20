@@ -1930,7 +1930,7 @@ behavior:
     dolt branch other
     start_sql_server
     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_checkout('other'); call dolt_branch('-m', 'other', 'newOther')"
-    run dolt branch
+    run dolt --user dolt branch
     [ $status -eq 0 ]
     [[ "$output" =~ "newOther" ]] || false
     [[ "$output" =~ "main" ]] || false
