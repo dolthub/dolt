@@ -279,8 +279,8 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 	}
 	p.mu.RUnlock()
 
-	// If there's a revision database in use, include it in the list
-	if currRev != "" {
+	// If there's a revision database in use, include it in the list (but don't double-count)
+	if currRev != "" && !showBranches {
 		rdb, ok, err := p.databaseForRevision(ctx, currentDb, currentDb)
 		if err != nil || !ok {
 			// TODO: this interface is wrong, needs to return errors
