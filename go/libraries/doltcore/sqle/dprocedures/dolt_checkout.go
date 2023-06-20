@@ -48,7 +48,9 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 		return 1, fmt.Errorf("Empty database name.")
 	}
 
-	apr, err := cli.CreateCheckoutArgParser().Parse(args)
+	argParser := cli.CreateCheckoutArgParser()
+	argParser.SupportsFlag(cli.GlobalFlag, "g", "persist the checked-out branch into future sessions")
+	apr, err := argParser.Parse(args)
 	if err != nil {
 		return 1, err
 	}
@@ -85,7 +87,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 	if isBranch, err := actions.IsBranch(ctx, dbData.Ddb, branchName); err != nil {
 		return 1, err
 	} else if isBranch {
-		err = checkoutBranch(ctx, currentDbName, branchName)
+		err = checkoutBranch(ctx, currentDbName, branchName, apr.Contains(cli.GlobalFlag))
 		if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
 			// If there is a branch but there is no working set,
 			// somehow the local branch ref was created without a
@@ -110,7 +112,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 				return 1, err
 			}
 
-			err = checkoutBranch(ctx, currentDbName, branchName)
+			err = checkoutBranch(ctx, currentDbName, branchName, apr.Contains(cli.GlobalFlag))
 		}
 		if err != nil {
 			return 1, err
@@ -202,7 +204,7 @@ func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, br
 			return err
 		}
 
-		err = checkoutBranch(ctx, dbName, branchName)
+		err = checkoutBranch(ctx, dbName, branchName, apr.Contains(cli.GlobalFlag))
 		if err != nil {
 			return err
 		}
@@ -293,7 +295,7 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 	return sess.SwitchWorkingSet(ctx, dbName, wsRef)
 }
 
-func checkoutBranch(ctx *sql.Context, dbName string, branchName string) error {
+func checkoutBranch(ctx *sql.Context, dbName string, branchName string, global bool) error {
 	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(branchName))
 	if err != nil {
 		return err
@@ -304,7 +306,23 @@ func checkoutBranch(ctx *sql.Context, dbName string, branchName string) error {
 	}
 
 	dSess := dsess.DSessFromSess(ctx.Session)
-	return dSess.SwitchWorkingSet(ctx, dbName, wsRef)
+	err = dSess.SwitchWorkingSet(ctx, dbName, wsRef)
+	if err != nil {
+		return err
+	}
+
+	if global {
+		// If both the old and new branches are clean, change the default branch for future sessions.
+		// Otherwise, return an error.
+		if fs, err := dSess.Provider().FileSystemForDatabase(dbName); err == nil {
+			if repoState, err := env.LoadRepoState(fs); err == nil {
+				repoState.Head.Ref = ref.NewBranchRef(branchName)
+				repoState.Save(fs)
+			}
+		}
+	}
+
+	return nil
 }
 
 func checkoutTables(ctx *sql.Context, roots doltdb.Roots, name string, tables []string) error {

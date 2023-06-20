@@ -119,6 +119,7 @@ const (
 	UserParam        = "user"
 	NoPrettyFlag     = "no-pretty"
 	ShowIgnoredFlag  = "ignored"
+	GlobalFlag       = "global"
 )
 
 const (
