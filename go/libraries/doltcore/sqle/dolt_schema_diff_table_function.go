@@ -301,7 +301,6 @@ func (ds *SchemaDiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.R
 			fromCreate, // 2
 			toCreate,   // 3
 			"",         // 4
-			false,      // 5
 		}
 
 		schemaDiffsFound := false
