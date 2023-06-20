@@ -57,7 +57,7 @@ teardown() {
     [ ! -d "../bac1/.dolt" ] || false
 }
 
-@test "replication: no push on cli commit" {
+@test "replication: push on cli commit" {
 
     cd repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
@@ -67,7 +67,13 @@ teardown() {
 
     cd ..
     run dolt clone file://./bac1 repo2
-    [ "$status" -eq 1 ]
+    [ "$status" -eq 0 ]
+
+    cd repo2
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "t1" ]] || false
 }
 
 @test "replication: push on cli engine commit" {
@@ -668,7 +674,7 @@ SQL
 
     cd ../repo1
     dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
-    dolt config --local --add sqlserver.global.dolt_replicate_heads main
+    dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
     run dolt sql -b -q "USE \`repo1/feature-branch\`; show tables" -r csv
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "Table" ]] || false
@@ -694,7 +700,7 @@ SQL
     dolt push origin feature-branch
 
     cd ../repo1
-    dolt sql -b -q "show tables" -r csv
+    run dolt sql -b -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [[ ! "output" =~ "t1" ]] || false
 }

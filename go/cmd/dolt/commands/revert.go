@@ -70,7 +70,7 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	// This command creates a commit, so we need user identity
-	if !cli.CheckUserNameAndEmail(dEnv) {
+	if !cli.CheckUserNameAndEmail(cliCtx.Config()) {
 		return 1
 	}
 
@@ -156,5 +156,5 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 		commitParams = append(commitParams, "--author", authorStr)
 	}
 
-	return CommitCmd{}.Exec(ctx, "commit", commitParams, dEnv, nil)
+	return CommitCmd{}.Exec(ctx, "commit", commitParams, dEnv, cliCtx)
 }
