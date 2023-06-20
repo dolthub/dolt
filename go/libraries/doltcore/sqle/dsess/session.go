@@ -183,7 +183,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	return dbState.heads[strings.ToLower(database.Revision())], true, nil
 }
 
-// RevisionDbName returns the name of the revision db for the base name and revision string given 
+// RevisionDbName returns the name of the revision db for the base name and revision string given
 func RevisionDbName(baseName string, rev string) string {
 	return baseName + DbRevisionDelimiter + rev
 }
