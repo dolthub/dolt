@@ -1268,9 +1268,11 @@ func WriteLockfile(fs filesys.Filesys, lock DBLock) error {
 	return nil
 }
 
-// FsIsLocked returns true if a lockFile exists with the same pid as
-// any live process.
-func fsIsLocked(fs filesys.Filesys) (bool, *DBLock, error) {
+// fsIsLocked returns true if the database in qeustion is locked. Two additional return values are lock and err. In the
+// event that the DB is locked (locked == true), then either the lock or an error is returned. In either case,
+// the caller should not attempt to use the DB. If lock is returned, in some cases you can use it to connect to the
+// server that has locked the DB. If an error is returned, then no further processing should be done.
+func fsIsLocked(fs filesys.Filesys) (locked bool, lock *DBLock, err error) {
 	lockFile, _ := fs.Abs(filepath.Join(dbfactory.DoltDir, ServerLockFile))
 
 	ok, _ := fs.Exists(lockFile)
@@ -1283,14 +1285,20 @@ func fsIsLocked(fs filesys.Filesys) (bool, *DBLock, error) {
 		return true, nil, err
 	}
 
-	// Check whether the pid that spawned the lock file is still running. Ignore it if not.
-	p, err := ps.FindProcess(loadedLock.Pid)
-	if err != nil {
+	// If the PID is for this process, then ignore the lock file. This happens frequently with docker containers
+	// https://github.com/dolthub/dolt/issues/6183.
+	if os.Getpid() == loadedLock.Pid {
 		return false, nil, nil
 	}
 
-	if p != nil {
-		return true, loadedLock, nil
+	// Check whether the pid that spawned the lock file is still running. Ignore it if not.
+	proc, err := ps.FindProcess(loadedLock.Pid)
+	if err != nil {
+		return true, nil, err // This will happen if we can't load the OS processes. Assume locked.
 	}
+	if proc != nil {
+		return true, loadedLock, nil // The process is still running. Return the lock details so the caller can connect to it if appropriate.
+	}
+
 	return false, nil, nil
 }
