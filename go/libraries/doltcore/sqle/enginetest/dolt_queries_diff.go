@@ -4891,7 +4891,6 @@ var SchemaDiffSystemTableScriptTests = []queries.ScriptTest{
 						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",         // from create statement
 						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", // to create statement
 						"ALTER TABLE `test` DROP `c2`;", // alter statement 1
-						false,                           // pk_changed
 					},
 					{
 						"test", // from table
@@ -4899,7 +4898,6 @@ var SchemaDiffSystemTableScriptTests = []queries.ScriptTest{
 						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",         // from create statement
 						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", // to create statement
 						"ALTER TABLE `test` ADD `c3` varchar(10);", // alter statement 2
-						false, // pk_changed
 					},
 				},
 			},
