@@ -18,8 +18,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"golang.org/x/term"
+
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
 type UserPassword struct {
