@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -83,13 +84,22 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, mergeDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		cli.Println(err.Error())
+		return 1
+	}
+	if closeFunc != nil {
+		defer closeFunc()
+	}
+
 	if apr.ContainsAll(cli.SquashParam, cli.NoFFParam) {
 		cli.PrintErrf("error: Flags '--%s' and '--%s' cannot be used together.\n", cli.SquashParam, cli.NoFFParam)
 		return 1
 	}
 
 	// This command may create a commit, so we need user identity
-	if !cli.CheckUserNameAndEmail(dEnv) {
+	if !cli.CheckUserNameAndEmail(cliCtx.Config()) {
 		return 1
 	}
 
@@ -126,7 +136,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 			if err != nil {
 				verr = errhand.BuildDError("error: invalid date").AddCause(err).Build()
-				return handleCommitErr(ctx, dEnv, verr, usage)
+				return handleCommitErr(sqlCtx, queryist, verr, usage)
 			}
 		}
 
@@ -146,7 +156,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 			roots, err := dEnv.Roots(ctx)
 			if err != nil {
-				return handleCommitErr(ctx, dEnv, err, usage)
+				return handleCommitErr(sqlCtx, queryist, err, usage)
 			}
 
 			var name, email string
@@ -156,12 +166,12 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				name, email, err = env.GetNameAndEmail(dEnv.Config)
 			}
 			if err != nil {
-				return handleCommitErr(ctx, dEnv, err, usage)
+				return handleCommitErr(sqlCtx, queryist, err, usage)
 			}
 
 			headRef, err := dEnv.RepoStateReader().CWBHeadRef()
 			if err != nil {
-				return handleCommitErr(ctx, dEnv, err, usage)
+				return handleCommitErr(sqlCtx, queryist, err, usage)
 			}
 
 			suggestedMsg := fmt.Sprintf("Merge branch '%s' into %s", commitSpecStr, headRef.GetPath())
@@ -175,25 +185,25 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			}
 			spec, err := merge.NewMergeSpec(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, roots, name, email, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), apr.Contains(cli.NoCommitFlag), apr.Contains(cli.NoEditFlag), t)
 			if err != nil {
-				return handleCommitErr(ctx, dEnv, errhand.VerboseErrorFromError(err), usage)
+				return handleCommitErr(sqlCtx, queryist, errhand.VerboseErrorFromError(err), usage)
 			}
 			if spec == nil {
 				cli.Println("Everything up-to-date")
-				return handleCommitErr(ctx, dEnv, nil, usage)
+				return handleCommitErr(sqlCtx, queryist, nil, usage)
 			}
 
 			err = validateMergeSpec(ctx, spec)
 			if err != nil {
-				return handleCommitErr(ctx, dEnv, err, usage)
+				return handleCommitErr(sqlCtx, queryist, err, usage)
 			}
 
-			tblToStats, mergeErr := performMerge(ctx, dEnv, spec, suggestedMsg)
+			tblToStats, mergeErr := performMerge(ctx, sqlCtx, queryist, dEnv, spec, suggestedMsg, cliCtx)
 			hasConflicts, hasConstraintViolations := printSuccessStats(tblToStats)
-			return handleMergeErr(ctx, dEnv, mergeErr, hasConflicts, hasConstraintViolations, usage)
+			return handleMergeErr(ctx, sqlCtx, queryist, dEnv, mergeErr, hasConflicts, hasConstraintViolations, usage)
 		}
 	}
 
-	return handleCommitErr(ctx, dEnv, verr, usage)
+	return handleCommitErr(sqlCtx, queryist, verr, usage)
 }
 
 func isMergeActive(ctx context.Context, denv *env.DoltEnv) (bool, error) {
@@ -436,7 +446,7 @@ func fillStringWithChar(ch rune, strLen int) string {
 	return string(runes)
 }
 
-func handleMergeErr(ctx context.Context, dEnv *env.DoltEnv, mergeErr error, hasConflicts, hasConstraintViolations bool, usage cli.UsagePrinter) int {
+func handleMergeErr(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist, dEnv *env.DoltEnv, mergeErr error, hasConflicts, hasConstraintViolations bool, usage cli.UsagePrinter) int {
 	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
 		cli.PrintErrln(err.Error())
@@ -470,7 +480,7 @@ func handleMergeErr(ctx context.Context, dEnv *env.DoltEnv, mergeErr error, hasC
 			verr = errhand.VerboseErrorFromError(mergeErr)
 			cli.Println("Unable to stage changes: add and commit to finish merge")
 		}
-		return handleCommitErr(ctx, dEnv, verr, usage)
+		return handleCommitErr(sqlCtx, queryist, verr, usage)
 	}
 
 	return 0
@@ -485,19 +495,19 @@ func handleMergeErr(ctx context.Context, dEnv *env.DoltEnv, mergeErr error, hasC
 //
 //	FF merges will not surface constraint violations on their own; constraint verify --all
 //	is required to reify violations.
-func performMerge(ctx context.Context, dEnv *env.DoltEnv, spec *merge.MergeSpec, suggestedMsg string) (map[string]*merge.MergeStats, error) {
+func performMerge(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist, dEnv *env.DoltEnv, spec *merge.MergeSpec, suggestedMsg string, cliCtx cli.CliContext) (map[string]*merge.MergeStats, error) {
 	if ok, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
 		return nil, err
 	} else if ok {
 		if spec.Noff {
-			return executeNoFFMergeAndCommit(ctx, dEnv, spec, suggestedMsg)
+			return executeNoFFMergeAndCommit(ctx, sqlCtx, queryist, dEnv, spec, suggestedMsg, cliCtx)
 		}
 		return nil, merge.ExecuteFFMerge(ctx, dEnv, spec)
 	}
-	return executeMergeAndCommit(ctx, dEnv, spec, suggestedMsg)
+	return executeMergeAndCommit(ctx, sqlCtx, queryist, dEnv, spec, suggestedMsg, cliCtx)
 }
 
-func executeNoFFMergeAndCommit(ctx context.Context, dEnv *env.DoltEnv, spec *merge.MergeSpec, suggestedMsg string) (map[string]*merge.MergeStats, error) {
+func executeNoFFMergeAndCommit(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist, dEnv *env.DoltEnv, spec *merge.MergeSpec, suggestedMsg string, cliCtx cli.CliContext) (map[string]*merge.MergeStats, error) {
 	tblToStats, err := merge.ExecNoFFMerge(ctx, dEnv, spec)
 	if err != nil {
 		return tblToStats, err
@@ -524,7 +534,7 @@ func executeNoFFMergeAndCommit(ctx context.Context, dEnv *env.DoltEnv, spec *mer
 		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
 	}
 
-	msg, err := getCommitMsgForMerge(ctx, dEnv, spec.Msg, suggestedMsg, spec.NoEdit)
+	msg, err := getCommitMsgForMerge(ctx, sqlCtx, queryist, spec.Msg, suggestedMsg, spec.NoEdit, cliCtx)
 	if err != nil {
 		return tblToStats, err
 	}
@@ -562,7 +572,7 @@ func executeNoFFMergeAndCommit(ctx context.Context, dEnv *env.DoltEnv, spec *mer
 	return tblToStats, err
 }
 
-func executeMergeAndCommit(ctx context.Context, dEnv *env.DoltEnv, spec *merge.MergeSpec, suggestedMsg string) (map[string]*merge.MergeStats, error) {
+func executeMergeAndCommit(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist, dEnv *env.DoltEnv, spec *merge.MergeSpec, suggestedMsg string, cliCtx cli.CliContext) (map[string]*merge.MergeStats, error) {
 	tblToStats, err := merge.ExecuteMerge(ctx, dEnv, spec)
 	if err != nil {
 		return tblToStats, err
@@ -577,14 +587,14 @@ func executeMergeAndCommit(ctx context.Context, dEnv *env.DoltEnv, spec *merge.M
 		return tblToStats, nil
 	}
 
-	msg, err := getCommitMsgForMerge(ctx, dEnv, spec.Msg, suggestedMsg, spec.NoEdit)
+	msg, err := getCommitMsgForMerge(ctx, sqlCtx, queryist, spec.Msg, suggestedMsg, spec.NoEdit, cliCtx)
 	if err != nil {
 		return tblToStats, err
 	}
 
 	author := fmt.Sprintf("%s <%s>", spec.Name, spec.Email)
 
-	res, skipped := performCommit(ctx, "commit", []string{"-m", msg, "--author", author}, dEnv)
+	res, skipped := performCommit(ctx, "commit", []string{"-m", msg, "--author", author}, cliCtx)
 	if res != 0 || skipped {
 		return nil, fmt.Errorf("dolt commit failed after merging")
 	}
@@ -593,12 +603,12 @@ func executeMergeAndCommit(ctx context.Context, dEnv *env.DoltEnv, spec *merge.M
 }
 
 // getCommitMsgForMerge returns user defined message if exists; otherwise, get the commit message from editor.
-func getCommitMsgForMerge(ctx context.Context, dEnv *env.DoltEnv, userDefinedMsg, suggestedMsg string, noEdit bool) (string, error) {
+func getCommitMsgForMerge(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist, userDefinedMsg, suggestedMsg string, noEdit bool, cliCtx cli.CliContext) (string, error) {
 	if userDefinedMsg != "" {
 		return userDefinedMsg, nil
 	}
 
-	msg, err := getCommitMessageFromEditor(ctx, dEnv, suggestedMsg, "", noEdit)
+	msg, err := getCommitMessageFromEditor(sqlCtx, queryist, suggestedMsg, "", noEdit, cliCtx)
 	if err != nil {
 		return msg, err
 	}

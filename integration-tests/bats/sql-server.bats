@@ -1400,24 +1400,23 @@ END""")
 
     cd ..
     rm -rf repo1
-    dolt clone file://./remote1 repo1
+    mkdir -p dbs/repo1 && cd dbs
+    dolt clone file://./../remote1 repo1
     cd repo1
     dolt remote add remote1 file://../remote1
 
-    cd ../repo2
+    cd ../../repo2
     dolt sql -q "create table test (a int)"
     dolt add .
     dolt commit -am "new commit"
     dolt push -u remote1 main
 
-    cd ../repo1
-    REPO_PATH=$(pwd)
+    cd ../dbs
+    DATA_DIR=$(pwd)
     cd ..
 
     echo "
-databases:
-  - name: repo1
-    path: $REPO_PATH
+data_dir: $DATA_DIR
 " > server.yaml
 
     start_sql_server_with_config repo1 server.yaml
@@ -1667,10 +1666,6 @@ behavior:
     start_sql_server
 
     cd repo1
-    run dolt commit --allow-empty --am "adasdasd"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
-
     run dolt gc
     [ "$status" -eq 1 ]
     [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false

@@ -88,7 +88,7 @@ func NewArgFreeCliContext(ctx context.Context, dEnv *env.DoltEnv) (cli.CliContex
 	if err != nil {
 		return nil, verr
 	}
-	return cli.NewCliContext(argparser.NewEmptyResults(), lateBind)
+	return cli.NewCliContext(argparser.NewEmptyResults(), dEnv.Config, lateBind)
 }
 
 // BuildSqlEngineQueryist Utility function to build a local SQLEngine for use interacting with data on disk using

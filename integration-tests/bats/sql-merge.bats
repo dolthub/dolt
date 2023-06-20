@@ -19,6 +19,18 @@ teardown() {
     teardown_common
 }
 
+@test "sql-merge: DOLT_MERGE with no-ff displays hash." {
+    dolt add .
+    dolt commit -m "dummy commit"
+    oldHead=$(dolt sql -r csv -q "select hashof('HEAD')" | sed -n '2 p')
+    mergeHead=$(dolt sql -r csv -q "call dolt_merge('--no-ff', 'main')" | sed -n '2 p' | head -c 32)
+    newHead=$(dolt sql -r csv -q "select hashof('HEAD')" | sed -n '2 p')
+    echo $mergeHead
+    echo $newHead
+    [ ! "$mergeHead" = "$oldHead" ]
+    [ "$mergeHead" = "$newHead" ]
+}
+
 @test "sql-merge: DOLT_MERGE with unknown branch name throws an error" {
     dolt sql -q "call dolt_commit('-a', '-m', 'Step 1');"
 

@@ -112,9 +112,6 @@ DELIM
 }
 
 @test "schema-import: with invalid names" {
-    run dolt schema import -c --pks=pk 123 1pk5col-ints.csv
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "not a valid table name" ]] || false
     run dolt schema import -c --pks=pk dolt_docs 1pk5col-ints.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "not a valid table name" ]] || false

@@ -23,7 +23,6 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 )
 
@@ -50,6 +49,13 @@ func boolPtr(b bool) *bool {
 }
 
 func uint64Ptr(n uint64) *uint64 {
+	return &n
+}
+
+func nillableIntPtr(n int) *int {
+	if n == 0 {
+		return nil
+	}
 	return &n
 }
 
@@ -138,7 +144,6 @@ type YAMLConfig struct {
 	BehaviorConfig    BehaviorYAMLConfig    `yaml:"behavior"`
 	UserConfig        UserYAMLConfig        `yaml:"user"`
 	ListenerConfig    ListenerYAMLConfig    `yaml:"listener"`
-	DatabaseConfig    []DatabaseYAMLConfig  `yaml:"databases"`
 	PerformanceConfig PerformanceYAMLConfig `yaml:"performance"`
 	DataDirStr        *string               `yaml:"data_dir,omitempty"`
 	CfgDirStr         *string               `yaml:"cfg_dir,omitempty"`
@@ -167,7 +172,9 @@ func NewYamlConfig(configFileData []byte) (YAMLConfig, error) {
 
 func serverConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
 	return YAMLConfig{
-		LogLevelStr: strPtr(string(cfg.LogLevel())),
+		LogLevelStr:       strPtr(string(cfg.LogLevel())),
+		MaxQueryLenInLogs: nillableIntPtr(cfg.MaxLoggedQueryLen()),
+		EncodeLoggedQuery: nillableBoolPtr(cfg.ShouldEncodeLoggedQuery()),
 		BehaviorConfig: BehaviorYAMLConfig{
 			boolPtr(cfg.ReadOnly()),
 			boolPtr(cfg.AutoCommit()),
@@ -175,7 +182,10 @@ func serverConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
 			boolPtr(cfg.DisableClientMultiStatements()),
 			boolPtr(cfg.DoltTransactionCommit()),
 		},
-		UserConfig: UserYAMLConfig{strPtr(cfg.User()), strPtr(cfg.Password())},
+		UserConfig: UserYAMLConfig{
+			Name:     strPtr(cfg.User()),
+			Password: strPtr(cfg.Password()),
+		},
 		ListenerConfig: ListenerYAMLConfig{
 			strPtr(cfg.Host()),
 			intPtr(cfg.Port()),
@@ -188,7 +198,45 @@ func serverConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
 			nillableBoolPtr(cfg.AllowCleartextPasswords()),
 			nillableStrPtr(cfg.Socket()),
 		},
-		DatabaseConfig: nil,
+		PerformanceConfig: PerformanceYAMLConfig{
+			QueryParallelism: nillableIntPtr(cfg.QueryParallelism()),
+		},
+		DataDirStr: strPtr(cfg.DataDir()),
+		CfgDirStr:  strPtr(cfg.CfgDir()),
+		MetricsConfig: MetricsYAMLConfig{
+			Labels: cfg.MetricsLabels(),
+			Host:   nillableStrPtr(cfg.MetricsHost()),
+			Port:   intPtr(cfg.MetricsPort()),
+		},
+		RemotesapiConfig: RemotesapiYAMLConfig{
+			Port_: cfg.RemotesapiPort(),
+		},
+		ClusterCfg:        clusterConfigAsYAMLConfig(cfg.ClusterConfig()),
+		PrivilegeFile:     strPtr(cfg.PrivilegeFilePath()),
+		BranchControlFile: strPtr(cfg.BranchControlFilePath()),
+		Vars:              cfg.UserVars(),
+		Jwks:              cfg.JwksConfig(),
+	}
+}
+
+func clusterConfigAsYAMLConfig(config cluster.Config) *ClusterYAMLConfig {
+	if config == nil {
+		return nil
+	}
+
+	return &ClusterYAMLConfig{
+		StandbyRemotes_: nil,
+		BootstrapRole_:  config.BootstrapRole(),
+		BootstrapEpoch_: config.BootstrapEpoch(),
+		RemotesAPI: ClusterRemotesAPIYAMLConfig{
+			Addr_:      config.RemotesAPIConfig().Address(),
+			Port_:      config.RemotesAPIConfig().Port(),
+			TLSKey_:    config.RemotesAPIConfig().TLSKey(),
+			TLSCert_:   config.RemotesAPIConfig().TLSCert(),
+			TLSCA_:     config.RemotesAPIConfig().TLSCA(),
+			URLMatches: config.RemotesAPIConfig().ServerNameURLMatches(),
+			DNSMatches: config.RemotesAPIConfig().ServerNameDNSMatches(),
+		},
 	}
 }
 
@@ -313,18 +361,6 @@ func (cfg YAMLConfig) LogLevel() LogLevel {
 	}
 
 	return LogLevel(*cfg.LogLevelStr)
-}
-
-// DatabaseNamesAndPaths returns an array of env.EnvNameAndPathObjects corresponding to the databases to be loaded in
-// a multiple db configuration. If nil is returned the server will look for a database in the current directory and
-// give it a name automatically.
-func (cfg YAMLConfig) DatabaseNamesAndPaths() []env.EnvNameAndPath {
-	var dbNamesAndPaths []env.EnvNameAndPath
-	for _, dbConfig := range cfg.DatabaseConfig {
-		dbNamesAndPaths = append(dbNamesAndPaths, env.EnvNameAndPath{Name: dbConfig.Name, Path: dbConfig.Path})
-	}
-
-	return dbNamesAndPaths
 }
 
 // MaxConnections returns the maximum number of simultaneous connections the server will allow.  The default is 1

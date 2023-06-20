@@ -729,7 +729,7 @@ func TestRenameTableStatements(t *testing.T) {
 		},
 		{
 			name:        "invalid table name",
-			query:       "rename table people to `123`",
+			query:       "rename table people to `a!trailing^space*is%the(worst) `",
 			expectedErr: "Invalid table name",
 		},
 		{
