@@ -2119,6 +2119,135 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_checkout and base name resolution",
+		SetUpScript: []string{
+			"create table t (a int primary key, b int);",
+			"call dolt_commit('-Am', 'creating table t');",
+			"call dolt_branch('b2');",
+			"call dolt_branch('b3');",
+			"insert into t values (1, 1);",
+			"call dolt_commit('-Am', 'added values on main');",
+			"call dolt_checkout('b2');",
+			"insert into t values (2, 2);",
+			"call dolt_commit('-am', 'added values on b2');",
+			"call dolt_checkout('b3');",
+			"insert into t values (3, 3);",
+			"call dolt_commit('-am', 'added values on b3');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:            "use `mydb/b2`;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"b2"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{2, 2}},
+			},
+			{
+				Query:    "select * from mydb.t;",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:            "use `mydb/b3`;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"b3"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{3, 3}},
+			},
+			{
+				Query:    "select * from mydb.t;",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:    "select * from `mydb/b2`.t;",
+				Expected: []sql.Row{{2, 2}},
+			},
+			{
+				Query:            "use `mydb/main`",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:    "select * from mydb.t;",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:    "select * from `mydb/b3`.t;",
+				Expected: []sql.Row{{3, 3}},
+			},
+			{
+				Query:            "use `mydb`",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:    "select * from `mydb/main`.t;",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:            "call dolt_checkout('b2');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "use `mydb/b3`",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"b3"}},
+			},
+			// Since b2 was the last branch checked out with dolt_checkout, it's what mydb resolves to
+			{
+				Query:    "select * from `mydb`.t;",
+				Expected: []sql.Row{{2, 2}},
+			},
+			{
+				Query:            "use `mydb`",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"b2"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{2, 2}},
+			},
+		},
+	},
 }
 
 var DoltInfoSchemaScripts = []queries.ScriptTest{

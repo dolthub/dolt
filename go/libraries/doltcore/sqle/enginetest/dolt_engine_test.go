@@ -115,36 +115,135 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	// t.Skip()
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "ALTER TABLE RENAME COLUMN",
+			Name: "dolt_checkout and base name resolution",
 			SetUpScript: []string{
-				"ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1);",
-				"ALTER TABLE parent RENAME COLUMN v1 TO v1_new;",
-				"ALTER TABLE child RENAME COLUMN v1 TO v1_new;",
+				"create table t (a int primary key, b int);",
+				"call dolt_commit('-Am', 'creating table t');",
+				"call dolt_branch('b2');",
+				"call dolt_branch('b3');",
+				"insert into t values (1, 1);",
+				"call dolt_commit('-Am', 'added values on main');",
+				"call dolt_checkout('b2');",
+				"insert into t values (2, 2);",
+				"call dolt_commit('-am', 'added values on b2');",
+				"call dolt_checkout('b3');",
+				"insert into t values (3, 3);",
+				"call dolt_commit('-am', 'added values on b3');",
+				"call dolt_checkout('main');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "SHOW CREATE TABLE child;",
-					Expected: []sql.Row{{"child", "CREATE TABLE `child` (\n  `id` int NOT NULL,\n  `v1_new` int,\n  `v2` int,\n  PRIMARY KEY (`id`),\n  KEY `v1` (`v1_new`),\n  CONSTRAINT `fk1` FOREIGN KEY (`v1_new`) REFERENCES `parent` (`v1_new`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
-				},
-			},
-		},
-		{
-			Name: "ALTER TABLE MODIFY COLUMN type change not allowed",
-			SetUpScript: []string{
-				"ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1);",
-			},
-			Assertions: []queries.ScriptTestAssertion{
-				{
-					Query:       "ALTER TABLE parent MODIFY v1 MEDIUMINT;",
-					ExpectedErr: sql.ErrForeignKeyTypeChange,
+					Query:    "select active_branch();",
+					Expected: []sql.Row{{"main"}},
 				},
 				{
-					Query:       "ALTER TABLE child MODIFY v1 MEDIUMINT;",
-					ExpectedErr: sql.ErrForeignKeyTypeChange,
+					Query:    "select * from t;",
+					Expected: []sql.Row{{1, 1}},
+				},
+				{
+					Query:            "use `mydb/b2`;",
+					SkipResultsCheck: true,
+				},
+				{
+					Query:    "select active_branch();",
+					Expected: []sql.Row{{"b2"}},
+				},
+				{
+					Query:    "select * from t;",
+					Expected: []sql.Row{{2, 2}},
+				},
+				{
+					Query:    "select * from mydb.t;",
+					Expected: []sql.Row{{1, 1}},
+				},
+				{
+					Query:            "use `mydb/b3`;",
+					SkipResultsCheck: true,
+				},
+				{
+					Query:    "select active_branch();",
+					Expected: []sql.Row{{"b3"}},
+				},
+				{
+					Query:    "select * from t;",
+					Expected: []sql.Row{{3, 3}},
+				},
+				{
+					Query:    "select * from mydb.t;",
+					Expected: []sql.Row{{1, 1}},
+				},
+				{
+					Query:    "select * from `mydb/b2`.t;",
+					Expected: []sql.Row{{2, 2}},
+				},
+				{
+					Query:            "use `mydb/main`",
+					SkipResultsCheck: true,
+				},
+				{
+					Query:    "select active_branch();",
+					Expected: []sql.Row{{"main"}},
+				},
+				{
+					Query:    "select * from t;",
+					Expected: []sql.Row{{1, 1}},
+				},
+				{
+					Query:    "select * from mydb.t;",
+					Expected: []sql.Row{{1, 1}},
+				},
+				{
+					Query:    "select * from `mydb/b3`.t;",
+					Expected: []sql.Row{{3, 3}},
+				},
+				{
+					Query:            "use `mydb`",
+					SkipResultsCheck: true,
+				},
+				{
+					Query:    "select active_branch();",
+					Expected: []sql.Row{{"main"}},
+				},
+				{
+					Query:    "select * from t;",
+					Expected: []sql.Row{{1, 1}},
+				},
+				{
+					Query:    "select * from `mydb/main`.t;",
+					Expected: []sql.Row{{1, 1}},
+				},
+				{
+					Query:            "call dolt_checkout('b2');",
+					SkipResultsCheck: true,
+				},
+				{
+					Query:            "use `mydb/b3`",
+					SkipResultsCheck: true,
+				},
+				{
+					Query:    "select active_branch();",
+					Expected: []sql.Row{{"b3"}},
+				},
+				// Since b2 was the last branch checked out with dolt_checkout, it's what mydb resolves to
+				{
+					Query:    "select * from `mydb`.t;",
+					Expected: []sql.Row{{2, 2}},
+				},
+				{
+					Query:            "use `mydb`",
+					SkipResultsCheck: true,
+				},
+				{
+					Query:    "select active_branch();",
+					Expected: []sql.Row{{"b2"}},
+				},
+				{
+					Query:    "select * from t;",
+					Expected: []sql.Row{{2, 2}},
 				},
 			},
 		},
