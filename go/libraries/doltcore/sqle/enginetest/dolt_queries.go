@@ -4906,3 +4906,100 @@ END`,
 		},
 	},
 }
+
+var DoltForeignKeyStatus = []queries.ScriptTest{
+	{
+		Name: "Show unresolved foreign key status",
+		SetUpScript: []string{
+			"set foreign_key_checks=0;",
+			"create table parent (i int primary key);",
+			"create table child (j int primary key, constraint fk foreign key (j) references parent (i));",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from dolt_foreign_key_status('WORKING');",
+				Expected: []sql.Row{{
+					"fk",             // fk name
+					false,            // is resolved
+					"child",          // table name
+					"",               // table index
+					"",               // table column (if resolved)
+					"parent",         // referenced table name
+					"",               // referenced table index
+					"",               // referenced table column (if resolved)
+					"NONE SPECIFIED", // on update
+					"NONE SPECIFIED", // on delete
+					"j",              // unresolved table column
+					"i",              // unresolved referenced table column
+				}},
+			},
+		},
+	},
+	{
+		Name: "Show resolved foreign key status",
+		SetUpScript: []string{
+			"create table parent (i int primary key);",
+			"create table child (j int primary key, constraint fk foreign key (j) references parent (i));",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from dolt_foreign_key_status('WORKING');",
+				Expected: []sql.Row{{
+					"fk",             // fk name
+					true,             // is resolved
+					"child",          // table name
+					"",               // table index
+					"j",              // table column (if resolved)
+					"parent",         // referenced table name
+					"",               // referenced table index
+					"i",              // referenced table column (if resolved)
+					"NONE SPECIFIED", // on update
+					"NONE SPECIFIED", // on delete
+					"",               // unresolved table column
+					"",               // unresolved referenced table column
+				}},
+			},
+		},
+	},
+	{
+		Name: "Multi-field foreign key",
+		SetUpScript: []string{
+			`      CREATE TABLE colors (
+          id INT NOT NULL,
+          color VARCHAR(32) NOT NULL,
+
+          PRIMARY KEY (id),
+          INDEX color_index(color)
+      );`,
+			`CREATE TABLE materials (
+          id INT NOT NULL,
+          material VARCHAR(32) NOT NULL,
+          color VARCHAR(32),
+
+          PRIMARY KEY(id),
+          FOREIGN KEY (color) REFERENCES colors(color),
+          INDEX color_mat_index(color, material)
+      );`,
+			`CREATE TABLE objects (
+          id INT NOT NULL,
+          name VARCHAR(64) NOT NULL,
+          color VARCHAR(32),
+          material VARCHAR(32),
+
+          PRIMARY KEY(id),
+          FOREIGN KEY (color,material) REFERENCES materials(color,material)
+      );`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from dolt_foreign_key_status('WORKING');",
+				Expected: []sql.Row{
+					{"i5lsjmoo", true, "objects", "colormaterial", "color", "materials", "color_mat_index", "color", "NONE SPECIFIED", "NONE SPECIFIED", "", ""},
+					{"i5lsjmoo", true, "objects", "colormaterial", "material", "materials", "color_mat_index", "color", "NONE SPECIFIED", "NONE SPECIFIED", "", ""},
+					{"i5lsjmoo", true, "objects", "colormaterial", "color", "materials", "color_mat_index", "material", "NONE SPECIFIED", "NONE SPECIFIED", "", ""},
+					{"i5lsjmoo", true, "objects", "colormaterial", "material", "materials", "color_mat_index", "material", "NONE SPECIFIED", "NONE SPECIFIED", "", ""},
+				},
+			},
+		},
+	},
+}
