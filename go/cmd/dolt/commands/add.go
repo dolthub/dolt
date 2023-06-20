@@ -68,9 +68,9 @@ func (cmd AddCmd) ArgParser() *argparser.ArgParser {
 	return cli.CreateAddArgParser()
 }
 
-// generateSql returns the query that will call the `DOLT_ADD` stored proceudre.
+// generateAddSql returns the query that will call the `DOLT_ADD` stored proceudre.
 // This function assumes that the inputs are validated table names, which cannot contain quotes.
-func generateSql(apr *argparser.ArgParseResults) string {
+func generateAddSql(apr *argparser.ArgParseResults) string {
 	var buffer bytes.Buffer
 	var first bool
 	first = true
@@ -127,7 +127,7 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
-	schema, rowIter, err := queryist.Query(sqlCtx, generateSql(apr))
+	schema, rowIter, err := queryist.Query(sqlCtx, generateAddSql(apr))
 	if err != nil {
 		cli.PrintErrln(errhand.VerboseErrorFromError(err))
 		return 1

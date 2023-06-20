@@ -144,3 +144,77 @@ teardown() {
     [ "$status" -ne 0 ]
     [[ "$output" =~ "Cannot delete checked out branch 'main'" ]] || false
 }
+
+@test "branch: supplying multiple directives results in an error" {
+    run dolt branch -m -c main main2
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Must specify exactly one of --move/-m, --copy/-c, --delete/-d, -D, --show-current, or --list." ]] || false
+}
+
+@test "branch: -a can only be supplied when listing branches" {
+    dolt branch -a
+
+    dolt branch -a --list main
+
+    dolt branch test
+
+    run dolt branch -a -d test
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "--all/-a can only be supplied when listing branches, not when deleting branches" ]] || false
+
+    run dolt branch -a -c copy
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "--all/-a can only be supplied when listing branches, not when copying branches" ]] || false
+
+    run dolt branch -a -m main new
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "--all/-a can only be supplied when listing branches, not when moving branches" ]] || false
+
+    run dolt branch -a new
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "--all/-a can only be supplied when listing branches, not when creating branches" ]] || false
+}
+
+@test "branch: -v can only be supplied when listing branches" {
+    dolt branch -v
+
+    dolt branch -v --list main
+
+    dolt branch test
+
+    run dolt branch -v -d test
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "--verbose/-v can only be supplied when listing branches, not when deleting branches" ]] || false
+
+    run dolt branch -v -c copy
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "--verbose/-v can only be supplied when listing branches, not when copying branches" ]] || false
+
+    run dolt branch -v -m main new
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "--verbose/-v can only be supplied when listing branches, not when moving branches" ]] || false
+
+    run dolt branch -v new
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "--verbose/-v can only be supplied when listing branches, not when creating branches" ]] || false
+}
+
+@test "branch: -r can only be supplied when listing or deleting branches" {
+    dolt branch -r
+
+    dolt branch -r --list main
+
+    dolt branch test
+
+    run dolt branch -r -c copy
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "--remote/-r can only be supplied when listing or deleting branches, not when copying branches" ]] || false
+
+    run dolt branch -r -m main new
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "--remote/-r can only be supplied when listing or deleting branches, not when moving branches" ]] || false
+
+    run dolt branch -r new
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "--remote/-r can only be supplied when listing or deleting branches, not when creating branches" ]] || false
+}

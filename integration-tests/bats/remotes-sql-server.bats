@@ -435,7 +435,7 @@ teardown() {
     [[ "$output" =~ "Tables_in_repo2/feature" ]] || false
     [[ "$output" =~ "test" ]] || false
 
-    run dolt branch
+    run dolt -u dolt branch
     [[ "$output" =~ "feature" ]] || false
 }
 
