@@ -4862,6 +4862,93 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 	},
 }
 
+var SchemaDiffSystemTableScriptTests = []queries.ScriptTest{
+	{
+		Name: "basic schema changes",
+		SetUpScript: []string{
+			"create table test (pk int primary key, c1 int, c2 int);",
+			"call dolt_add('.')",
+			"call dolt_commit('-m', 'commit 1');",
+			"alter table test drop column c2, add column c3 varchar(10);",
+			"call dolt_add('.')",
+			"call dolt_commit('-m', 'commit 2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "select * from dolt_schema_diff();",
+				ExpectedErrStr: "function 'dolt_schema_diff' expected 1 to 3 arguments, 0 received",
+			},
+			{
+				Query:          "select * from dolt_schema_diff('HEAD');",
+				ExpectedErrStr: "function 'dolt_schema_diff' expected 1 to 3 arguments, 1 received",
+			},
+			{
+				Query: "select * from dolt_schema_diff('HEAD^..HEAD');",
+				Expected: []sql.Row{
+					{
+						"test", // from table
+						"test", // to table
+						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",         // from create statement
+						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", // to create statement
+						"ALTER TABLE `test` DROP `c2`;", // alter statement 1
+						false,                           // pk_changed
+					},
+					{
+						"test", // from table
+						"test", // to table
+						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",         // from create statement
+						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", // to create statement
+						"ALTER TABLE `test` ADD `c3` varchar(10);", // alter statement 2
+						false, // pk_changed
+					},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff('HEAD^', 'HEAD');",
+				Expected: []sql.Row{
+					{
+						"test",
+						"test",
+						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",         // from create statement
+						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", // to create statement
+						"ALTER TABLE `test` DROP `c2`;",
+						false,
+					},
+					{
+						"test",
+						"test",
+						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",         // from create statement
+						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", // to create statement
+						"ALTER TABLE `test` ADD `c3` varchar(10);",
+						false,
+					},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff('HEAD^', 'HEAD', 'test');",
+				Expected: []sql.Row{
+					{
+						"test",
+						"test",
+						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"ALTER TABLE `test` DROP `c2`;",
+						false,
+					},
+					{
+						"test",
+						"test",
+						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"ALTER TABLE `test` ADD `c3` varchar(10);",
+						false,
+					},
+				},
+			},
+		},
+	},
+}
+
 type systabScript struct {
 	name    string
 	setup   []string
