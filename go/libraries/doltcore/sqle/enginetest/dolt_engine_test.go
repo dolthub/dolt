@@ -1373,7 +1373,7 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"mydb/" + commithash}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:    "select * from t01",

@@ -318,6 +318,10 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"mydb/tag1~"}},
 			},
 			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"mydb"}, {"mydb/tag1~"}, {"information_schema"}, {"mysql"}},
+			},
+			{
 				// The branch is nil in the case of a non-branch revision DB
 				Query:    "select active_branch()",
 				Expected: []sql.Row{{nil}},
@@ -402,7 +406,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"mydb/tag1"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:    "select * from t01;",
@@ -457,7 +461,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"mydb/branch1"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				// The database name is always the base name, never the revision specifier
@@ -477,6 +481,9 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
+				// TODO: the behavior here is a bit odd: when we call dolt_checkout, we change the current database to the 
+				//  base database name. But we should also consider the connection string: if you connect to a revision
+				//  database, that database should always be visible.
 				Query:    "show databases;",
 				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
 			},
@@ -498,7 +505,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"mydb/branch1"}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				// Create a table in the working set to verify the main db
