@@ -17,6 +17,7 @@ package dprocedures
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -156,6 +157,8 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParse
 	if apr.NArg() == 0 {
 		return InvalidArgErr
 	}
+	
+	currBase, currBranch := dsess.SplitRevisionDbName(ctx.GetCurrentDatabase())
 
 	// The current branch on CLI can be deleted as user can be on different branch on SQL and delete it from SQL session.
 	// To update current head info on RepoState, we need DoltEnv to load CLI environment.
@@ -186,6 +189,11 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParse
 			if err != nil {
 				return err
 			}
+		}
+		
+		// If we deleted the branch this client is connected to, change the current branch to the default
+		if strings.ToLower(currBranch) == strings.ToLower(branchName) {
+			ctx.SetCurrentDatabase(currBase)
 		}
 
 		if headOnCLI == branchName && sqlserver.RunningInServerMode() && !shouldAllowDefaultBranchDeletion(ctx) {
