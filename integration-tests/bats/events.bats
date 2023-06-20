@@ -27,11 +27,12 @@ teardown() {
     dolt sql -q "CREATE TABLE totals (id int PRIMARY KEY AUTO_INCREMENT, int_col int)"
 
     start_sql_server
-    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CREATE EVENT insert1 ON SCHEDULE EVERY 3 SECOND DO INSERT INTO totals (int_col) VALUES (1); SELECT SLEEP(7); DROP EVENT insert1;"
-    sleep 2
+    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CREATE EVENT insert1 ON SCHEDULE EVERY 5 SECOND DO INSERT INTO totals (int_col) VALUES (1);"
+    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT SLEEP(7);"
+    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "DROP EVENT insert1;"
     run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT COUNT(*) FROM totals;"
     [ $status -eq 0 ]
-    [[ $output =~ "| 3        |" ]] || false
+    [[ $output =~ "| 2        |" ]] || false
 }
 
 @test "events: disabling recurring event with ends not defined should not be dropped" {
@@ -86,7 +87,7 @@ teardown() {
     [ $status -eq 0 ]
     [[ $output =~ "ON COMPLETION PRESERVE ENABLE" ]] || false
 
-    sleep 4
+    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT SLEEP(4);"
     run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT COUNT(*) FROM totals;"
     [ $status -eq 0 ]
     [[ $output =~ "| 1        |" ]] || false
@@ -105,8 +106,8 @@ teardown() {
     dolt sql -q "CREATE TABLE totals (id int PRIMARY KEY AUTO_INCREMENT, int_col int)"
 
     start_sql_server
-    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CREATE EVENT insert1 ON SCHEDULE EVERY 2 SECOND STARTS CURRENT_TIMESTAMP + INTERVAL 2 SECOND ENDS CURRENT_TIMESTAMP + INTERVAL 5 SECOND DO INSERT INTO totals (int_col) VALUES (1); SELECT SLEEP(7);"
-    sleep 2
+    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CREATE EVENT insert1 ON SCHEDULE EVERY 2 SECOND STARTS CURRENT_TIMESTAMP + INTERVAL 2 SECOND ENDS CURRENT_TIMESTAMP + INTERVAL 5 SECOND DO INSERT INTO totals (int_col) VALUES (1);"
+    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT SLEEP(7);"
     run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT COUNT(*) FROM totals;"
     [ $status -eq 0 ]
     [[ $output =~ "| 2        |" ]] || false
