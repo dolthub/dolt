@@ -313,7 +313,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				// The database name is always the base name, never the revision specifier
+				// The database name is always the requested name
 				Query:    "select database()",
 				Expected: []sql.Row{{"mydb/tag1~"}},
 			},
@@ -395,7 +395,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				// The database name is always the base name, never the revision specifier
+				// The database name is always the requested name
 				Query:    "select database()",
 				Expected: []sql.Row{{"mydb/tag1"}},
 			},
@@ -464,7 +464,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"mydb"}, {"mydb/branch1"}, {"information_schema"}, {"mysql"}},
 			},
 			{
-				// The database name is always the base name, never the revision specifier
+				// The database name is always the requested name
 				Query:    "select database()",
 				Expected: []sql.Row{{"mydb/branch1"}},
 			},

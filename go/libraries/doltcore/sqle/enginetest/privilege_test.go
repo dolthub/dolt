@@ -27,26 +27,30 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var revisionDatabasePrivsSetupPrefix = []string{
+var revisionDatabasePrivsSetupPostfix = []string{
+	"call dolt_commit('-Am', 'first commit')",
 	"call dolt_branch('b1')",
 	"use mydb/b1",
 }
 
 // The subset of tests in priv_auth_queries.go to run with alternate branch logic. Not all of them are suitable
-// because they use non-qualified database names in their queries
+// because they are too difficult to adapt with simple additions to setup
 var revisionDatabasePrivilegeScriptNames = []string{
-	"Binlog replication privileges",
-	"Valid users without privileges may use the dual table",
+	"Basic database and table name visibility",
 	"Basic SELECT and INSERT privilege checking",
+	"Table-level privileges exist",
 	"Basic revoke SELECT privilege",
 	"Basic revoke all global static privileges",
 	"Grant Role with SELECT Privilege",
 	"Revoke role currently granted to a user",
 	"Drop role currently granted to a user",
-	"Show grants on a user from the root account",
+	"Anonymous User",
+	"IPv4 Loopback == localhost",
 	"information_schema.columns table 'privileges' column gets correct values",
 	"information_schema.column_statistics shows columns with privileges only",
 	"information_schema.statistics shows tables with privileges only",
+	"basic tests on information_schema.SCHEMA_PRIVILEGES table",
+	"basic tests on information_schema.TABLE_PRIVILEGES table",
 }
 
 // TestRevisionDatabasePrivileges is a spot-check of privilege checking on the original privilege test scripts,
@@ -83,7 +87,7 @@ func TestRevisionDatabasePrivileges(t *testing.T) {
 			engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
 			engine.Analyzer.Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
 
-			for _, statement := range append(revisionDatabasePrivsSetupPrefix, script.SetUpScript...) {
+			for _, statement := range append(script.SetUpScript, revisionDatabasePrivsSetupPostfix...) {
 				if harness.SkipQueryTest(statement) {
 					t.Skip()
 				}
