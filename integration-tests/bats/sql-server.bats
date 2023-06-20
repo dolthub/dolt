@@ -1666,10 +1666,6 @@ behavior:
     start_sql_server
 
     cd repo1
-    run dolt commit --allow-empty --am "adasdasd"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
-
     run dolt gc
     [ "$status" -eq 1 ]
     [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false

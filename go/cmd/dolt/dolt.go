@@ -121,11 +121,9 @@ var doltSubCommands = []cli.Command{
 }
 
 var commandsWithoutCliCtx = []cli.Command{
-	commands.InitCmd{},
 	commands.DiffCmd{},
 	commands.ResetCmd{},
 	commands.CleanCmd{},
-	commands.CommitCmd{},
 	admin.Commands,
 	sqlserver.SqlServerCmd{VersionStr: Version},
 	sqlserver.SqlClientCmd{VersionStr: Version},
@@ -133,13 +131,10 @@ var commandsWithoutCliCtx = []cli.Command{
 	commands.ShowCmd{},
 	commands.BranchCmd{},
 	commands.CheckoutCmd{},
-	commands.MergeCmd{},
 	cnfcmds.Commands,
 	commands.CloneCmd{},
 	commands.FetchCmd{},
-	commands.PullCmd{},
 	commands.PushCmd{},
-	commands.ConfigCmd{},
 	commands.RemoteCmd{},
 	commands.BackupCmd{},
 	commands.LoginCmd{},
@@ -533,7 +528,7 @@ The sql subcommand is currently the only command that uses these flags. All othe
 			return 1
 		}
 
-		cliCtx, err = cli.NewCliContext(apr, lateBind)
+		cliCtx, err = cli.NewCliContext(apr, dEnv.Config, lateBind)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Unexpected Error: %v", err))
 			return 1

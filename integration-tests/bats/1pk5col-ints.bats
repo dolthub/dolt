@@ -746,8 +746,8 @@ DELIM
     dolt checkout test-branch-m
     run dolt merge test-branch -m "merge"
     [ "$status" -eq 0 ]
-    [ "${lines[1]}" = "test | 1 +" ]
-    [ "${lines[2]}" = "1 tables changed, 1 rows added(+), 0 rows modified(*), 0 rows deleted(-)" ]
+    [ "${lines[6]}" = "test | 1 +" ]
+    [ "${lines[7]}" = "1 tables changed, 1 rows added(+), 0 rows modified(*), 0 rows deleted(-)" ]
 }
 
 @test "1pk5col-ints: checkout table with branch of same name" {
