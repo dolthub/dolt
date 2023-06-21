@@ -420,7 +420,7 @@ func (d *DoltSession) validateDoltCommit(ctx *sql.Context, dirtyBranchState *bra
 		return fmt.Errorf("cannot dolt_commit with no database selected")
 	}
 	currDbBaseName, _ := SplitRevisionDbName(currDb)
-	dirtyDbBaseName, _ := SplitRevisionDbName(dirtyBranchState.dbState.dbName)
+	dirtyDbBaseName := dirtyBranchState.dbState.dbName
 
 	if strings.ToLower(currDbBaseName) != strings.ToLower(dirtyDbBaseName) {
 		return fmt.Errorf("no changes to dolt_commit on database %s", currDbBaseName)
@@ -607,7 +607,7 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, branchState *branchStat
 			return nil, err
 		}
 
-		err = d.SetWorkingSet(ctx, branchState.dbState.dbName, branchState.WorkingSet().WithStagedRoot(newRoots.Staged))
+		err = d.SetWorkingSet(ctx, ctx.GetCurrentDatabase(), branchState.WorkingSet().WithStagedRoot(newRoots.Staged))
 		if err != nil {
 			return nil, err
 		}
