@@ -4880,7 +4880,7 @@ var SchemaDiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "select * from dolt_schema_diff('HEAD');",
-				ExpectedErrStr: "function 'dolt_schema_diff' expected 1 to 3 arguments, 1 received",
+				ExpectedErrStr: "Invalid argument to dolt_schema_diff: There are less than 2 arguments present, and the first does not contain '..'",
 			},
 			{
 				Query: "select * from dolt_schema_diff('HEAD^..HEAD');",

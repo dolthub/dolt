@@ -152,19 +152,28 @@ func (ds *SchemaDiffTableFunction) WithChildren(children ...sql.Node) (sql.Node,
 
 // CheckPrivileges implements the interface sql.Node.
 func (ds *SchemaDiffTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	if ds.tableNameExpr == nil || !types.IsText(ds.tableNameExpr.Type()) {
-		return false
+	if ds.tableNameExpr != nil {
+		_, _, _, tableName, err := ds.evaluateArguments()
+		if err != nil {
+			return false
+		}
+
+		result := opChecker.UserHasPrivileges(ctx,
+			sql.NewPrivilegedOperation(ds.database.Name(), tableName, "", sql.PrivilegeType_Select))
+		return result
 	}
 
-	_, _, _, tableName, err := ds.evaluateArguments()
+	tblNames, err := ds.database.GetTableNames(ctx)
 	if err != nil {
 		return false
 	}
 
-	// TODO: Add tests for privilege checking
-	result := opChecker.UserHasPrivileges(ctx,
-		sql.NewPrivilegedOperation(ds.database.Name(), tableName, "", sql.PrivilegeType_Select))
-	return result
+	var operations []sql.PrivilegedOperation
+	for _, tblName := range tblNames {
+		operations = append(operations, sql.NewPrivilegedOperation(ds.database.Name(), tblName, "", sql.PrivilegeType_Select))
+	}
+
+	return opChecker.UserHasPrivileges(ctx, operations...)
 }
 
 // Expressions implements the sql.Expressioner interface.
