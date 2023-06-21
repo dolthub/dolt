@@ -38,6 +38,7 @@ type commithook struct {
 	rootLgr              *logrus.Entry
 	lgr                  atomic.Value // *logrus.Entry
 	remotename           string
+	remoteurl            string
 	dbname               string
 	mu                   sync.Mutex
 	wg                   sync.WaitGroup
@@ -87,7 +88,7 @@ var errDestDBRootHashMoved error = errors.New("cluster/commithook: standby repli
 const logFieldThread = "thread"
 const logFieldRole = "role"
 
-func newCommitHook(lgr *logrus.Logger, remotename, dbname string, role Role, destDBF func(context.Context) (*doltdb.DoltDB, error), srcDB *doltdb.DoltDB, tempDir string) *commithook {
+func newCommitHook(lgr *logrus.Logger, remotename, remoteurl, dbname string, role Role, destDBF func(context.Context) (*doltdb.DoltDB, error), srcDB *doltdb.DoltDB, tempDir string) *commithook {
 	var ret commithook
 	ret.rootLgr = lgr.WithField(logFieldThread, "Standby Replication - "+dbname+" to "+remotename)
 	ret.lgr.Store(ret.rootLgr.WithField(logFieldRole, string(role)))

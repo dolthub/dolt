@@ -118,7 +118,9 @@ func NewController(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) 
 		lgr:           lgr,
 	}
 	roleSetter := func(role string, epoch int) {
-		ret.setRoleAndEpoch(role, epoch, false /* graceful */, -1 /* saveConnID */)
+		ret.setRoleAndEpoch(role, epoch, roleTransitionOptions{
+			graceful: false,
+		})
 	}
 	ret.sinterceptor.lgr = lgr.WithFields(logrus.Fields{})
 	ret.sinterceptor.setRole(role, epoch)
@@ -239,7 +241,7 @@ func (c *Controller) applyCommitHooks(ctx context.Context, name string, bt *sql.
 		if !ok {
 			return nil, fmt.Errorf("sqle: cluster: standby replication: destination remote %s does not exist on database %s", r.Name(), name)
 		}
-		commitHook := newCommitHook(c.lgr, r.Name(), name, c.role, func(ctx context.Context) (*doltdb.DoltDB, error) {
+		commitHook := newCommitHook(c.lgr, r.Name(), remote.Url, name, c.role, func(ctx context.Context) (*doltdb.DoltDB, error) {
 			return remote.GetRemoteDB(ctx, types.Format_Default, dialprovider)
 		}, denv.DoltDB, ttfdir)
 		denv.DoltDB.PrependCommitHook(ctx, commitHook)
@@ -352,37 +354,63 @@ func applyBootstrapClusterConfig(lgr *logrus.Logger, cfg Config, pCfg config.Rea
 	return Role(persistentRole), epochi, nil
 }
 
-func (c *Controller) setRoleAndEpoch(role string, epoch int, graceful bool, saveConnID int) (bool, error) {
+type roleTransitionOptions struct {
+	// If true, all standby replicas must be caught up in order to
+	// transition from primary to standby.
+	graceful bool
+
+	// If non-nil, this connection will be saved if and when the connection
+	// process needs to terminate existing connections.
+	saveConnID *int
+}
+
+type roleTransitionResult struct {
+	// true if the role changed as a result of this call.
+	changedRole bool
+
+	// filled in with graceful transition results if this was a graceful
+	// transition and it was successful.
+	gracefulTransitionResults []graceTransitionResult
+}
+
+func (c *Controller) setRoleAndEpoch(role string, epoch int, opts roleTransitionOptions) (roleTransitionResult, error) {
+	graceful := opts.graceful
+	saveConnID := -1
+	if opts.saveConnID != nil {
+		saveConnID = *opts.saveConnID
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if epoch == c.epoch && role == string(c.role) {
-		return false, nil
+		return roleTransitionResult{false, nil}, nil
 	}
 
 	if role != string(RolePrimary) && role != string(RoleStandby) && role != string(RoleDetectedBrokenConfig) {
-		return false, fmt.Errorf("error assuming role '%s'; valid roles are 'primary' and 'standby'", role)
+		return roleTransitionResult{false, nil}, fmt.Errorf("error assuming role '%s'; valid roles are 'primary' and 'standby'", role)
 	}
 
 	if epoch < c.epoch {
-		return false, fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d", role, epoch, c.epoch)
+		return roleTransitionResult{false, nil}, fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d", role, epoch, c.epoch)
 	}
 	if epoch == c.epoch {
 		// This is allowed for non-graceful transitions to 'standby', which only occur from interceptors and
 		// other signals that the cluster is misconfigured.
 		isallowed := !graceful && (role == string(RoleStandby) || role == string(RoleDetectedBrokenConfig))
 		if !isallowed {
-			return false, fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d with different role, '%s'", role, epoch, c.epoch, c.role)
+			return roleTransitionResult{false, nil}, fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d with different role, '%s'", role, epoch, c.epoch, c.role)
 		}
 	}
 
 	changedrole := role != string(c.role)
+	var gracefulResults []graceTransitionResult
 
 	if changedrole {
 		var err error
 		if role == string(RoleStandby) {
 			if graceful {
 				beforeRole, beforeEpoch := c.role, c.epoch
-				err = c.gracefulTransitionToStandby(saveConnID)
+				gracefulResults, err = c.gracefulTransitionToStandby(saveConnID)
 				if err == nil && (beforeRole != c.role || beforeEpoch != c.epoch) {
 					// The role or epoch moved out from under us while we were unlocked and transitioning to standby.
 					err = fmt.Errorf("error assuming role '%s' at epoch %d: the role configuration changed while we were replicating to our standbys. Please try again", role, epoch)
@@ -390,7 +418,7 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, graceful bool, save
 				if err != nil {
 					c.setProviderIsStandby(c.role != RolePrimary)
 					c.killRunningQueries(saveConnID)
-					return false, err
+					return roleTransitionResult{false, nil}, err
 				}
 			} else {
 				c.immediateTransitionToStandby()
@@ -413,7 +441,11 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, graceful bool, save
 			h.setRole(c.role)
 		}
 	}
-	return changedrole, c.persistVariables()
+	_ = c.persistVariables()
+	return roleTransitionResult{
+		changedRole:               changedrole,
+		gracefulTransitionResults: gracefulResults,
+	}, nil
 }
 
 func (c *Controller) roleAndEpoch() (Role, int) {
@@ -484,6 +516,13 @@ func (c *Controller) RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.Server
 // TODO: make the deadline here configurable or something.
 const waitForHooksToReplicateTimeout = 10 * time.Second
 
+type graceTransitionResult struct {
+	caughtUp  bool
+	database  string
+	remote    string
+	remoteUrl string
+}
+
 // The order of operations is:
 // * Set all databases in database_provider to read-only.
 // * Kill all running queries in GMS.
@@ -497,7 +536,7 @@ const waitForHooksToReplicateTimeout = 10 * time.Second
 // after returning the results of dolt_assume_cluster_role().
 //
 // called with c.mu held
-func (c *Controller) gracefulTransitionToStandby(saveConnID int) error {
+func (c *Controller) gracefulTransitionToStandby(saveConnID int) ([]graceTransitionResult, error) {
 	c.setProviderIsStandby(true)
 	c.killRunningQueries(saveConnID)
 
@@ -505,23 +544,34 @@ func (c *Controller) gracefulTransitionToStandby(saveConnID int) error {
 	// blocks, but will return with the lock held.
 	states, err := c.waitForHooksToReplicate(waitForHooksToReplicateTimeout)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if len(states) != len(c.commithooks) {
 		c.lgr.Warnf("cluster/controller: failed to transition to standby; the set of replicated databases changed during the transition.")
-		return errors.New("cluster/controller: failed to transition to standby; the set of replicated databases changed during the transition.")
+		return nil, errors.New("cluster/controller: failed to transition to standby; the set of replicated databases changed during the transition.")
+	}
+
+	res := make([]graceTransitionResult, len(states))
+	for i := range states {
+		hook := c.commithooks[i]
+		res[i] = graceTransitionResult{
+			caughtUp:  states[i],
+			database:  hook.dbname,
+			remote:    hook.remotename,
+			remoteUrl: hook.remoteurl,
+		}
 	}
 
 	for _, caughtUp := range states {
 		if !caughtUp {
 			c.lgr.Warnf("cluster/controller: failed to replicate all databases to all standbys; not transitioning to standby.")
-			return errors.New("cluster/controller: failed to transition from primary to standby gracefully; could not replicate databases to standby in a timely manner.")
+			return nil, errors.New("cluster/controller: failed to transition from primary to standby gracefully; could not replicate databases to standby in a timely manner.")
 		}
 	}
 
 	c.lgr.Tracef("cluster/controller: successfully replicated all databases to all standbys; transitioning to standby.")
-	return nil
+	return res, nil
 }
 
 // The order of operations is:
