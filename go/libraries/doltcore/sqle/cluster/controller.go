@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -360,6 +361,12 @@ type roleTransitionOptions struct {
 	// transition from primary to standby.
 	graceful bool
 
+	// If non-zero and |graceful| is true, will allow a transition from
+	// primary to standby to succeed only if this many standby replicas
+	// are known to be caught up at the finalization of the replication
+	// hooks.
+	minCaughtUpStandbys int
+
 	// If non-nil, this connection will be saved if and when the connection
 	// process needs to terminate existing connections.
 	saveConnID *int
@@ -411,7 +418,7 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, opts roleTransition
 		if role == string(RoleStandby) {
 			if graceful {
 				beforeRole, beforeEpoch := c.role, c.epoch
-				gracefulResults, err = c.gracefulTransitionToStandby(saveConnID)
+				gracefulResults, err = c.gracefulTransitionToStandby(saveConnID, opts.minCaughtUpStandbys)
 				if err == nil && (beforeRole != c.role || beforeEpoch != c.epoch) {
 					// The role or epoch moved out from under us while we were unlocked and transitioning to standby.
 					err = fmt.Errorf("error assuming role '%s' at epoch %d: the role configuration changed while we were replicating to our standbys. Please try again", role, epoch)
@@ -537,7 +544,7 @@ type graceTransitionResult struct {
 // after returning the results of dolt_assume_cluster_role().
 //
 // called with c.mu held
-func (c *Controller) gracefulTransitionToStandby(saveConnID int) ([]graceTransitionResult, error) {
+func (c *Controller) gracefulTransitionToStandby(saveConnID, minCaughtUpStandbys int) ([]graceTransitionResult, error) {
 	c.setProviderIsStandby(true)
 	c.killRunningQueries(saveConnID)
 
@@ -564,14 +571,42 @@ func (c *Controller) gracefulTransitionToStandby(saveConnID int) ([]graceTransit
 		}
 	}
 
-	for _, caughtUp := range states {
-		if !caughtUp {
-			c.lgr.Warnf("cluster/controller: failed to replicate all databases to all standbys; not transitioning to standby.")
-			return nil, errors.New("cluster/controller: failed to transition from primary to standby gracefully; could not replicate databases to standby in a timely manner.")
+	if minCaughtUpStandbys == 0 {
+		for _, caughtUp := range states {
+			if !caughtUp {
+				c.lgr.Warnf("cluster/controller: failed to replicate all databases to all standbys; not transitioning to standby.")
+				return nil, errors.New("cluster/controller: failed to transition from primary to standby gracefully; could not replicate databases to standby in a timely manner.")
+			}
 		}
+		c.lgr.Tracef("cluster/controller: successfully replicated all databases to all standbys; transitioning to standby.")
+	} else {
+		databases := make(map[string]struct{})
+		replicas := make(map[string]int)
+		for _, r := range res {
+			databases[r.database] = struct{}{}
+			url, err := url.Parse(r.remoteUrl)
+			if err != nil {
+				return nil, fmt.Errorf("cluster/controller: could not parse remote_url (%s) for remote %s on database %s: %w", r.remoteUrl, r.remote, r.database, err)
+			}
+			if _, ok := replicas[url.Host]; !ok {
+				replicas[url.Host] = 0
+			}
+			if r.caughtUp {
+				replicas[url.Host] = replicas[url.Host] + 1
+			}
+		}
+		numCaughtUp := 0
+		for _, v := range replicas {
+			if v == len(databases) {
+				numCaughtUp += 1
+			}
+		}
+		if numCaughtUp < minCaughtUpStandbys {
+			return nil, fmt.Errorf("cluster/controller: failed to transition from primary to standby gracefully; could not ensure %d replicas were caught up on all %d databases. Only caught up %d standbys fully.", minCaughtUpStandbys, len(databases), numCaughtUp)
+		}
+		c.lgr.Tracef("cluster/controller: successfully replicated all databases to %d out of %d standbys; transitioning to standby.", numCaughtUp, len(replicas))
 	}
 
-	c.lgr.Tracef("cluster/controller: successfully replicated all databases to all standbys; transitioning to standby.")
 	return res, nil
 }
 

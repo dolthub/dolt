@@ -84,11 +84,12 @@ func newTransitionToStandbyProcedure(controller *Controller) sql.ExternalStoredP
 				Nullable: false,
 			},
 		},
-		Function: func(ctx *sql.Context, epoch, minStandbysHealthy int) (sql.RowIter, error) {
+		Function: func(ctx *sql.Context, epoch, minCaughtUpStandbys int) (sql.RowIter, error) {
 			saveConnID := int(ctx.Session.ID())
 			res, err := controller.setRoleAndEpoch("standby", epoch, roleTransitionOptions{
-				graceful:   true,
-				saveConnID: &saveConnID,
+				graceful:            true,
+				minCaughtUpStandbys: minCaughtUpStandbys,
+				saveConnID:          &saveConnID,
 			})
 			if err != nil {
 				// We did not transition, no need to set our session to read-only, etc.
