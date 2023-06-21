@@ -67,11 +67,13 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 		return 1, fmt.Errorf("Could not load database %s", currentDbName)
 	}
 
+	updateHead := apr.Contains(cli.GlobalFlag)
+
 	var rsc doltdb.ReplicationStatusController
 
 	// Checking out new branch.
 	if branchOrTrack {
-		err = checkoutNewBranch(ctx, currentDbName, dbData, apr, &rsc)
+		err = checkoutNewBranch(ctx, currentDbName, dbData, apr, &rsc, updateHead)
 		if err != nil {
 			return 1, err
 		} else {
@@ -88,7 +90,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 	if isBranch, err := actions.IsBranch(ctx, dbData.Ddb, branchName); err != nil {
 		return 1, err
 	} else if isBranch {
-		err = checkoutBranch(ctx, currentDbName, branchName, apr.Contains(cli.GlobalFlag))
+		err = checkoutBranch(ctx, currentDbName, branchName, updateHead)
 		if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
 			// If there is a branch but there is no working set,
 			// somehow the local branch ref was created without a
@@ -113,7 +115,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 				return 1, err
 			}
 
-			err = checkoutBranch(ctx, currentDbName, branchName, apr.Contains(cli.GlobalFlag))
+			err = checkoutBranch(ctx, currentDbName, branchName, updateHead)
 		}
 		if err != nil {
 			return 1, err
@@ -128,7 +130,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 
 	err = checkoutTables(ctx, roots, currentDbName, args)
 	if err != nil && apr.NArg() == 1 {
-		err = checkoutRemoteBranch(ctx, currentDbName, dbData, branchName, apr, &rsc)
+		err = checkoutRemoteBranch(ctx, currentDbName, dbData, branchName, apr, &rsc, updateHead)
 	}
 
 	if err != nil {
@@ -182,7 +184,7 @@ func createWorkingSetForLocalBranch(ctx *sql.Context, ddb *doltdb.DoltDB, branch
 
 // checkoutRemoteBranch checks out a remote branch creating a new local branch with the same name as the remote branch
 // and set its upstream. The upstream persists out of sql session.
-func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, branchName string, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) error {
+func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, branchName string, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController, updateHead bool) error {
 	remoteRefs, err := actions.GetRemoteBranchRef(ctx, dbData.Ddb, branchName)
 	if err != nil {
 		return errors.New("fatal: unable to read from data repository")
@@ -220,13 +222,21 @@ func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, br
 			return err
 		}
 
-		return env.SetRemoteUpstreamForRefSpec(dbData.Rsw, refSpec, remoteRef.GetRemote(), headRef)
+		err = env.SetRemoteUpstreamForRefSpec(dbData.Rsw, refSpec, remoteRef.GetRemote(), headRef)
+		if err != nil {
+			return err
+		}
+
+		if updateHead {
+			return doUpdateHead(sess, dbName, branchName)
+		}
+		return nil
 	} else {
 		return fmt.Errorf("'%s' matched multiple (%v) remote tracking branches", branchName, len(remoteRefs))
 	}
 }
 
-func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) error {
+func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController, updateHead bool) error {
 	var newBranchName string
 	var remoteName, remoteBranchName string
 	var startPt = "head"
@@ -293,10 +303,18 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 		return err
 	}
 
-	return sess.SwitchWorkingSet(ctx, dbName, wsRef)
+	err = sess.SwitchWorkingSet(ctx, dbName, wsRef)
+	if err != nil {
+		return err
+	}
+
+	if updateHead {
+		return doUpdateHead(sess, dbName, newBranchName)
+	}
+	return nil
 }
 
-func checkoutBranch(ctx *sql.Context, dbName string, branchName string, global bool) error {
+func checkoutBranch(ctx *sql.Context, dbName string, branchName string, updateHead bool) error {
 	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(branchName))
 	if err != nil {
 		return err
@@ -312,22 +330,26 @@ func checkoutBranch(ctx *sql.Context, dbName string, branchName string, global b
 		return err
 	}
 
-	if global {
-		if sqlserver.RunningInServerMode() {
-			return fmt.Errorf("unable to change the default branch while the server is running; " +
-				"this can by changed on the command line, by stopping the sql-server, " +
-				"running `dolt checkout <another_branch> and restarting the sql-server")
-		}
-		// If both the old and new branches are clean, change the default branch for future sessions.
-		// Otherwise, return an error.
-		if fs, err := dSess.Provider().FileSystemForDatabase(dbName); err == nil {
-			if repoState, err := env.LoadRepoState(fs); err == nil {
-				repoState.Head.Ref = ref.NewBranchRef(branchName)
-				repoState.Save(fs)
-			}
+	if updateHead {
+		return doUpdateHead(dSess, dbName, branchName)
+	}
+	return nil
+}
+
+func doUpdateHead(dSess *dsess.DoltSession, dbName, branchName string) error {
+	if sqlserver.RunningInServerMode() {
+		return fmt.Errorf("unable to change the default branch while the server is running; " +
+			"this can by changed on the command line, by stopping the sql-server, " +
+			"running `dolt checkout <another_branch> and restarting the sql-server")
+	}
+	// If both the old and new branches are clean, change the default branch for future sessions.
+	// Otherwise, return an error.
+	if fs, err := dSess.Provider().FileSystemForDatabase(dbName); err == nil {
+		if repoState, err := env.LoadRepoState(fs); err == nil {
+			repoState.Head.Ref = ref.NewBranchRef(branchName)
+			repoState.Save(fs)
 		}
 	}
-
 	return nil
 }
 
