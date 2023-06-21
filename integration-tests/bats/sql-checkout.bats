@@ -584,6 +584,14 @@ SQL
   [[ "$output" =~ "0" ]] || false
 }
 
+@test "sql-server: CALL DOLT_CHECKOUT --global" {
+    dolt branch other
+    dolt sql -q "call dolt_checkout('other', '--global');"
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "On branch other" ]] || false
+}
+
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | awk '{print $2}'
 }
