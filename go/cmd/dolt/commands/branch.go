@@ -467,7 +467,6 @@ func callStoredProcedure(sqlCtx *sql.Context, queryEngine cli.Queryist, args []s
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), nil)
 	}
-	fmt.Println(query)
 	schema, rowIter, err := queryEngine.Query(sqlCtx, query)
 	if err != nil {
 		if strings.Contains(err.Error(), "is not fully merged") {
