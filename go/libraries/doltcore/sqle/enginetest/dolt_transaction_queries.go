@@ -2466,7 +2466,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 				ExpectedErrStr: "no changes to dolt_commit on branch main",
 			},
 			{
-				Query: "select * from `mydb/main`.t1 order by a",
+				Query:    "select * from `mydb/main`.t1 order by a",
 				Expected: []sql.Row{},
 			},
 			{
@@ -2484,7 +2484,7 @@ var MultiDbTransactionTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "select * from `mydb/main`.t1 order by a",
+				Query:    "select * from `mydb/main`.t1 order by a",
 				Expected: []sql.Row{},
 			},
 			{
