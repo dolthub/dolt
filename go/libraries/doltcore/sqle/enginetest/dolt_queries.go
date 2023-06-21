@@ -299,6 +299,59 @@ var DescribeTableAsOfScriptTest = queries.ScriptTest{
 	},
 }
 
+var DescribeTableAsOfWithFkScriptTest = queries.ScriptTest{
+	Name: "Describe table as of with foreign key constraints",
+	SetUpScript: []string{
+		"set @Commit0 = '';",
+		"set @Commit1 = '';",
+		"set @Commit2 = '';",
+		"set @Commit3 = '';",
+		"call dolt_commit_hash_out(@Commit0, '--allow-empty', '-m', 'before creating table a');",
+		"create table a (pk int primary key, c1 int);",
+		"call dolt_add('.');",
+		"call dolt_commit_hash_out(@Commit1, '-am', 'creating table a');",
+		"alter table a add column c2 varchar(20);",
+		"call dolt_commit_hash_out(@Commit2, '-am', 'adding column c2');",
+		"alter table a drop column c1;",
+		"call dolt_commit_hash_out(@Commit3, '-am', 'dropping column c1');",
+	},
+	Assertions: []queries.ScriptTestAssertion{
+		{
+			Query:       "describe a as of @Commit0;",
+			ExpectedErr: sql.ErrTableNotFound,
+		},
+		{
+			Query: "describe a as of @Commit1;",
+			Expected: []sql.Row{
+				{"pk", "int", "NO", "PRI", "NULL", ""},
+				{"c1", "int", "YES", "", "NULL", ""},
+			},
+		},
+		{
+			Query: "describe a as of @Commit2;",
+			Expected: []sql.Row{
+				{"pk", "int", "NO", "PRI", "NULL", ""},
+				{"c1", "int", "YES", "", "NULL", ""},
+				{"c2", "varchar(20)", "YES", "", "NULL", ""},
+			},
+		},
+		{
+			Query: "describe a as of @Commit3;",
+			Expected: []sql.Row{
+				{"pk", "int", "NO", "PRI", "NULL", ""},
+				{"c2", "varchar(20)", "YES", "", "NULL", ""},
+			},
+		},
+		{
+			Query: "describe a as of HEAD;",
+			Expected: []sql.Row{
+				{"pk", "int", "NO", "PRI", "NULL", ""},
+				{"c2", "varchar(20)", "YES", "", "NULL", ""},
+			},
+		},
+	},
+}
+
 var DoltRevisionDbScripts = []queries.ScriptTest{
 	{
 		Name: "database revision specs: Ancestor references",

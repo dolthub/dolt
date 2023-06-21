@@ -1474,6 +1474,24 @@ func TestDescribeTableAsOf(t *testing.T) {
 	enginetest.TestScript(t, h, DescribeTableAsOfScriptTest)
 }
 
+func TestDescribeTableAsOfPrepared(t *testing.T) {
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestScriptPrepared(t, h, DescribeTableAsOfScriptTest)
+}
+
+func TestDescribeTableAsOfWithFk(t *testing.T) {
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestScript(t, h, DescribeTableAsOfWithFkScriptTest)
+}
+
+func TestDescribeTableAsOfWithFkPrepared(t *testing.T) {
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestScriptPrepared(t, h, DescribeTableAsOfWithFkScriptTest)
+}
+
 func TestShowCreateTable(t *testing.T) {
 	for _, script := range ShowCreateTableScriptTests {
 		func() {
