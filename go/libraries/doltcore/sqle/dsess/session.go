@@ -1258,7 +1258,7 @@ func (d *DoltSession) CurrentHead(ctx *sql.Context, dbName string) (string, bool
 	d.mu.Unlock()
 
 	if ok {
-		return dbState.currRevSpec, true, nil
+		return dbState.checkedOutRevSpec, true, nil
 	}
 
 	return "", false, nil
