@@ -262,6 +262,7 @@ func (c *Controller) RegisterStoredProcedures(store procedurestore) {
 		return
 	}
 	store.Register(newAssumeRoleProcedure(c))
+	store.Register(newTransitionToStandbyProcedure(c))
 }
 
 func (c *Controller) ClusterDatabase() sql.Database {

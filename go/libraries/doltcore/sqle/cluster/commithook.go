@@ -93,6 +93,7 @@ func newCommitHook(lgr *logrus.Logger, remotename, remoteurl, dbname string, rol
 	ret.rootLgr = lgr.WithField(logFieldThread, "Standby Replication - "+dbname+" to "+remotename)
 	ret.lgr.Store(ret.rootLgr.WithField(logFieldRole, string(role)))
 	ret.remotename = remotename
+	ret.remoteurl = remoteurl
 	ret.dbname = dbname
 	ret.role = role
 	ret.destDBF = destDBF
