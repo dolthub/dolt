@@ -2302,18 +2302,14 @@ var DoltInfoSchemaScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "info_schema changes with USE",
+		Name: "info_schema does not change with USE",
 		SetUpScript: []string{
 			"create table t (a int primary key, b int);",
 			"call dolt_commit('-Am', 'creating table t');",
 			"call dolt_branch('b2');",
 			"call dolt_branch('b3');",
-			"call dolt_checkout('b2');",
-			"alter table t add column c int;",
-			"call dolt_commit('-am', 'added column c on branch b2');",
-			"call dolt_checkout('b3');",
-			"alter table t add column d int;",
-			"call dolt_commit('-am', 'added column d on branch b3');",
+			"alter table `mydb/b2`.t add column c int;",
+			"alter table `mydb/b3`.t add column d int;",
 			"use mydb/main;",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -2322,7 +2318,7 @@ var DoltInfoSchemaScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"main"}},
 			},
 			{
-				Query:    "select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
+				Query:    "/* main */ select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
 				Expected: []sql.Row{{"a"}, {"b"}},
 			},
 			{
@@ -2334,7 +2330,11 @@ var DoltInfoSchemaScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"b2"}},
 			},
 			{
-				Query:    "select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
+				Query:    "/* b2 */ select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
+				Expected: []sql.Row{{"a"}, {"b"}},
+			},
+			{
+				Query:    "select column_name from information_schema.columns where table_schema = 'mydb/b2' and table_name = 't' order by 1;",
 				Expected: []sql.Row{{"a"}, {"b"}, {"c"}},
 			},
 			{
@@ -2346,7 +2346,11 @@ var DoltInfoSchemaScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"b3"}},
 			},
 			{
-				Query:    "select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
+				Query:    "/* b3 */ select column_name from information_schema.columns where table_schema = 'mydb' and table_name = 't' order by 1;",
+				Expected: []sql.Row{{"a"}, {"b"}},
+			},
+			{
+				Query:    "select column_name from information_schema.columns where table_schema = 'mydb/b3' and table_name = 't' order by 1;",
 				Expected: []sql.Row{{"a"}, {"b"}, {"d"}},
 			},
 		},

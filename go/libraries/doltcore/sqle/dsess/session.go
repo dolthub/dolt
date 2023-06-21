@@ -137,7 +137,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	if dbStateFound {
 		// If we got an unqualified name, use the current working set head
 		if rev == "" {
-			rev = dbState.currRevSpec
+			rev = dbState.checkedOutRevSpec
 		}
 
 		branchState, ok := dbState.heads[strings.ToLower(rev)]
