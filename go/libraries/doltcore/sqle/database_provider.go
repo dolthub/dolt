@@ -258,26 +258,13 @@ func (p DoltDatabaseProvider) HasDatabase(ctx *sql.Context, name string) bool {
 
 func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database) {
 	currentDb := ctx.GetCurrentDatabase()
-	currBase, currRev := dsess.SplitRevisionDbName(currentDb)
+	_, currRev := dsess.SplitRevisionDbName(currentDb)
 
 	p.mu.RLock()
 	showBranches, _ := dsess.GetBooleanSystemVar(ctx, dsess.ShowBranchDatabases)
 
 	all = make([]sql.Database, 0, len(p.databases))
 	for _, db := range p.databases {
-		base, _ := dsess.SplitRevisionDbName(db.Name())
-
-		// If there's a revision database in use, swap that one in for its base db, but keep the same name
-		if currRev != "" && strings.ToLower(currBase) == strings.ToLower(base) {
-			rdb, ok, err := p.databaseForRevision(ctx, currentDb, currBase)
-			if err != nil || !ok {
-				// TODO: this interface is wrong, needs to return errors
-				ctx.GetLogger().Warnf("error fetching revision databases: %s", err.Error())
-			} else {
-				db = rdb
-			}
-		}
-
 		all = append(all, db)
 
 		if showBranches {
@@ -291,6 +278,17 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 		}
 	}
 	p.mu.RUnlock()
+
+	// If there's a revision database in use, include it in the list (but don't double-count)
+	if currRev != "" && !showBranches {
+		rdb, ok, err := p.databaseForRevision(ctx, currentDb, currentDb)
+		if err != nil || !ok {
+			// TODO: this interface is wrong, needs to return errors
+			ctx.GetLogger().Warnf("error fetching revision databases: %s", err.Error())
+		} else {
+			all = append(all, rdb)
+		}
+	}
 
 	// Because we store databases in a map, sort to get a consistent ordering
 	sort.Slice(all, func(i, j int) bool {
