@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
@@ -167,7 +166,6 @@ func (ds *SchemaDiffTableFunction) CheckPrivileges(ctx *sql.Context, opChecker s
 	if err != nil {
 		return false
 	}
-
 	var operations []sql.PrivilegedOperation
 	for _, tblName := range tblNames {
 		operations = append(operations, sql.NewPrivilegedOperation(ds.database.Name(), tblName, "", sql.PrivilegeType_Select))
@@ -273,6 +271,10 @@ func (ds *SchemaDiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.R
 	if err != nil {
 		return nil, err
 	}
+	toSchemas, err := toRoot.GetAllSchemas(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	deltas, err := diff.GetTableDeltas(ctx, fromRoot, toRoot)
 	if err != nil {
@@ -331,46 +333,15 @@ func (ds *SchemaDiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.R
 		}
 
 		schemaDiffsFound := false
-		if fromSchema != nil && toSchema != nil {
-			colDiffs, unionTags := diff.DiffSchColumns(fromSchema, toSchema)
-			if len(colDiffs) > 0 {
-				schemaDiffsFound = true
-				addRow := func(alterStmt string) {
-					row := baseRow.Copy()
-					row[4] = alterStmt
-					dataRows = append(dataRows, row)
-				}
-				for _, tag := range unionTags {
-					cd := colDiffs[tag]
-					switch cd.DiffType {
-					case diff.SchDiffNone:
-					case diff.SchDiffAdded:
-						alterStmt := sqlfmt.AlterTableAddColStmt(toName, sqlfmt.GenerateCreateTableColumnDefinition(*cd.New))
-						addRow(alterStmt)
-					case diff.SchDiffRemoved:
-						alterStmt := sqlfmt.AlterTableDropColStmt(toName, cd.Old.Name)
-						addRow(alterStmt)
-					case diff.SchDiffModified:
-						pkChanged := cd.Old.IsPartOfPK != cd.New.IsPartOfPK
-						if pkChanged {
-							alterStmt := sqlfmt.AlterTableDropPks(toName)
-							addRow(alterStmt)
-							alterStmt = sqlfmt.AlterTableAddPrimaryKeys(toName, schema.NewColCollection(*cd.New))
-							addRow(alterStmt)
-						} else {
-							if cd.Old.Name != cd.New.Name {
-								// column is renamed
-								alterStmt := sqlfmt.AlterTableRenameColStmt(toName, cd.Old.Name, cd.New.Name)
-								addRow(alterStmt)
-							} else {
-								// column is modified, but its name is the same
-								alterStmt := sqlfmt.AlterTableModifyColStmt(toName, sqlfmt.GenerateCreateTableColumnDefinition(*cd.New))
-								addRow(alterStmt)
-							}
-						}
-					}
-				}
-			}
+		statements, err := diff.GetNonCreateNonDropTableSqlSchemaDiff(delta, toSchemas, fromSchema, toSchema)
+		if err != nil {
+			return nil, err
+		}
+		for _, stmt := range statements {
+			row := baseRow.Copy()
+			row[4] = stmt
+			dataRows = append(dataRows, row)
+			schemaDiffsFound = true
 		}
 
 		if !schemaDiffsFound {
