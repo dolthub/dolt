@@ -96,10 +96,6 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return 1
 	}
 
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usagePrt)
-	}
-
 	sqlQuery, err := generateCheckoutSql(args)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usagePrt)
