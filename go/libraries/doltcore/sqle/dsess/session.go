@@ -1243,16 +1243,9 @@ func (d *DoltSession) CWBHeadRef(ctx *sql.Context, dbName string) (ref.DoltRef, 
 
 // CurrentHead returns the current head for the db named, which must be unqualifed. Used for bootstrap resolving the
 // correct session head when a database name from the client is unqualified.
-// TODO: audit uses, see if basename can be removed
 func (d *DoltSession) CurrentHead(ctx *sql.Context, dbName string) (string, bool, error) {
-	dbName = strings.ToLower(dbName)
-
-	var baseName, rev string
-	baseName, rev = SplitRevisionDbName(dbName)
-	if rev != "" {
-		return "", false, fmt.Errorf("invalid database name: %s", dbName)
-	}
-
+	baseName := strings.ToLower(dbName)
+	
 	d.mu.Lock()
 	dbState, ok := d.dbStates[baseName]
 	d.mu.Unlock()
