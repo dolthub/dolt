@@ -407,7 +407,7 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 			return d.commitWorkingSet(ctx, dirtyBranchState, tx)
 		}
 
-		_, err = d.DoltCommit(ctx, dirtyBranchState.dbState.dbName, tx, pendingCommit)
+		_, err = d.DoltCommit(ctx, ctx.GetCurrentDatabase(), tx, pendingCommit)
 		return err
 	} else {
 		return d.commitWorkingSet(ctx, dirtyBranchState, tx)
