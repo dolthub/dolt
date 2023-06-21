@@ -17,6 +17,7 @@ package dprocedures
 import (
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -312,6 +313,11 @@ func checkoutBranch(ctx *sql.Context, dbName string, branchName string, global b
 	}
 
 	if global {
+		if sqlserver.RunningInServerMode() {
+			return fmt.Errorf("unable to change the default branch while the server is running; " +
+				"this can by changed on the command line, by stopping the sql-server, " +
+				"running `dolt checkout <another_branch> and restarting the sql-server")
+		}
 		// If both the old and new branches are clean, change the default branch for future sessions.
 		// Otherwise, return an error.
 		if fs, err := dSess.Provider().FileSystemForDatabase(dbName); err == nil {
