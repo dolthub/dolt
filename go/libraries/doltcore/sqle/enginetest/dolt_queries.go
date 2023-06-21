@@ -99,11 +99,15 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 			"set @Commit2 = '';",
 			"set @Commit3 = '';",
 			"set @Commit0 = hashof('main');",
-			"create table a (pk int primary key, c1 int);",
+			"create table parent(id int primary key,  pv1 int,  pv2 varchar(20), index v1 (pv1),  index v2 (pv2));",
+			"create table a (pk int primary key, c1 int, c3 int);",
+			"alter table a add constraint fk1 foreign key (c1) references parent(pv1);",
 			"call dolt_add('.');",
 			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table a');",
 			"alter table a add column c2 varchar(20);",
-			"call dolt_commit_hash_out(@Commit2, '-am', 'adding column c2');",
+			"alter table a drop foreign key fk1;",
+			"alter table a add constraint fk2 foreign key (c2) references parent(pv2);",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'adding column c2 and constraint');",
 			"alter table a drop column c1;",
 			"alter table a add constraint unique_c2 unique(c2);",
 			"call dolt_commit_hash_out(@Commit3, '-am', 'dropping column c1');",
@@ -119,7 +123,10 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 					{"a", "CREATE TABLE `a` (\n" +
 						"  `pk` int NOT NULL,\n" +
 						"  `c1` int,\n" +
-						"  PRIMARY KEY (`pk`)\n" +
+						"  `c3` int,\n" +
+						"  PRIMARY KEY (`pk`),\n" +
+						"  KEY `c1` (`c1`),\n" +
+						"  CONSTRAINT `fk1` FOREIGN KEY (`c1`) REFERENCES `parent` (`pv1`)\n" +
 						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 					},
 				},
@@ -130,8 +137,12 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 					{"a", "CREATE TABLE `a` (\n" +
 						"  `pk` int NOT NULL,\n" +
 						"  `c1` int,\n" +
+						"  `c3` int,\n" +
 						"  `c2` varchar(20),\n" +
-						"  PRIMARY KEY (`pk`)\n" +
+						"  PRIMARY KEY (`pk`),\n" +
+						"  KEY `c1` (`c1`),\n" +
+						"  KEY `c2` (`c2`),\n" +
+						"  CONSTRAINT `fk2` FOREIGN KEY (`c2`) REFERENCES `parent` (`pv2`)\n" +
 						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 					},
 				},
@@ -141,9 +152,11 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"a", "CREATE TABLE `a` (\n" +
 						"  `pk` int NOT NULL,\n" +
+						"  `c3` int,\n" +
 						"  `c2` varchar(20),\n" +
 						"  PRIMARY KEY (`pk`),\n" +
-						"  UNIQUE KEY `unique_c2` (`c2`)\n" +
+						"  UNIQUE KEY `unique_c2` (`c2`),\n" +
+						"  CONSTRAINT `fk2` FOREIGN KEY (`c2`) REFERENCES `parent` (`pv2`)\n" +
 						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 					},
 				},
@@ -153,9 +166,11 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"a", "CREATE TABLE `a` (\n" +
 						"  `pk` int NOT NULL,\n" +
+						"  `c3` int,\n" +
 						"  `c2` varchar(20),\n" +
 						"  PRIMARY KEY (`pk`),\n" +
-						"  UNIQUE KEY `unique_c2` (`c2`)\n" +
+						"  UNIQUE KEY `unique_c2` (`c2`),\n" +
+						"  CONSTRAINT `fk2` FOREIGN KEY (`c2`) REFERENCES `parent` (`pv2`)\n" +
 						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 					},
 				},
