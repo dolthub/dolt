@@ -145,7 +145,7 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "CALL DOLT_MERGE('feature-branch')",
+				Query:          "CALL DOLT_MERGE('feature-branch')",
 				ExpectedErrStr: "this operation is not supported while in a detached head state",
 			},
 		},

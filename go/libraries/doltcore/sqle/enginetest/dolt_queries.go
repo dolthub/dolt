@@ -2611,7 +2611,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "CALL DOLT_BRANCH('myNewBranch1')",
+				Query:          "CALL DOLT_BRANCH('myNewBranch1')",
 				ExpectedErrStr: "fatal: Unexpected error creating branch 'myNewBranch1' : this operation is not supported while in a detached head state",
 			},
 		},
