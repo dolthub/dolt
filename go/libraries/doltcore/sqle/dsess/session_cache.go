@@ -321,7 +321,7 @@ func (c *DatabaseCache) CacheSessionVars(branchState *branchState, transaction *
 
 	newKey := sessionVarCacheKey{
 		root: doltdb.DataCacheKey{Hash: root},
-		head: branchState.head,
+		head: strings.ToLower(branchState.head),
 	}
 
 	c.sessionVars[dbBaseName] = newKey

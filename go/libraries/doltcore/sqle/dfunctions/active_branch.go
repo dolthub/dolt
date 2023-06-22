@@ -61,7 +61,7 @@ func (ab *ActiveBranchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, er
 	}
 
 	for _, br := range branches {
-		if ref.Equals(br, currentBranchRef) {
+		if ref.EqualsCaseInsensitive(br, currentBranchRef) {
 			return br.GetPath(), nil
 		}
 	}

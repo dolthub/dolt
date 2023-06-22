@@ -475,7 +475,7 @@ func (d *DoltSession) validateDoltCommit(ctx *sql.Context, dirtyBranchState *bra
 		rev = dbState.checkedOutRevSpec
 	}
 
-	if rev != dirtyBranchState.head {
+	if strings.ToLower(rev) != strings.ToLower(dirtyBranchState.head) {
 		return fmt.Errorf("no changes to dolt_commit on branch %s", rev)
 	}
 
@@ -1078,7 +1078,7 @@ func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string
 // other state tracking metadata.
 func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	revisionQualifiedName := strings.ToLower(db.RevisionQualifiedName())
-	baseName, rev := SplitRevisionDbName(revisionQualifiedName)
+	baseName, _ := SplitRevisionDbName(revisionQualifiedName)
 
 	DefineSystemVariablesForDB(baseName)
 
@@ -1141,7 +1141,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		}
 	}
 
-	branchState := sessionState.NewEmptyBranchState(rev, db.RevisionType())
+	branchState := sessionState.NewEmptyBranchState(db.Revision(), db.RevisionType())
 
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
 	//  the writer with one that errors out
@@ -1246,7 +1246,7 @@ func (d *DoltSession) CWBHeadRef(ctx *sql.Context, dbName string) (ref.DoltRef, 
 	return ref.NewBranchRef(branchState.head), nil
 }
 
-// CurrentHead returns the current head for the db named, which must be unqualifed. Used for bootstrap resolving the
+// CurrentHead returns the current head for the db named, which must be unqualified. Used for bootstrap resolving the
 // correct session head when a database name from the client is unqualified.
 func (d *DoltSession) CurrentHead(ctx *sql.Context, dbName string) (string, bool, error) {
 	baseName := strings.ToLower(dbName)

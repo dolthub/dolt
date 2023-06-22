@@ -15,6 +15,8 @@
 package dsess
 
 import (
+	"strings"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -133,10 +135,11 @@ func (dbState *DatabaseSessionState) NewEmptyBranchState(head string, revisionTy
 		revisionType: revisionType,
 	}
 
-	dbState.heads[head] = b
-	_, ok := dbState.headCache[head]
+	lowerHead := strings.ToLower(head)
+	dbState.heads[lowerHead] = b
+	_, ok := dbState.headCache[lowerHead]
 	if !ok {
-		dbState.headCache[head] = newSessionCache()
+		dbState.headCache[lowerHead] = newSessionCache()
 	}
 
 	return b
@@ -162,7 +165,7 @@ func (bs *branchState) WriteSession() writer.WriteSession {
 }
 
 func (bs *branchState) SessionCache() *SessionCache {
-	return bs.dbState.headCache[bs.head]
+	return bs.dbState.headCache[strings.ToLower(bs.head)]
 }
 
 func (bs branchState) EditOpts() editor.Options {
