@@ -332,7 +332,6 @@ func (ds *SchemaDiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.R
 			"",         // 4
 		}
 
-		schemaDiffsFound := false
 		statements, err := diff.GetNonCreateNonDropTableSqlSchemaDiff(delta, toSchemas, fromSchema, toSchema)
 		if err != nil {
 			return nil, err
@@ -341,11 +340,6 @@ func (ds *SchemaDiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.R
 			row := baseRow.Copy()
 			row[4] = stmt
 			dataRows = append(dataRows, row)
-			schemaDiffsFound = true
-		}
-
-		if !schemaDiffsFound {
-			dataRows = append(dataRows, baseRow)
 		}
 	}
 
