@@ -2339,7 +2339,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:          "select * from `mydb/b2`.t order by 1;",
-				ExpectedErrStr: "branch not found",
+				ExpectedErrStr: "database not found: mydb/b2",
 			},
 		},
 	},
