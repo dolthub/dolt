@@ -124,9 +124,7 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return 1
 	}
 
-	if !apr.Contains(HardResetParam) {
-		printNotStaged(sqlCtx, queryist)
-	}
+	printNotStaged(sqlCtx, queryist)
 
 	return 0
 }

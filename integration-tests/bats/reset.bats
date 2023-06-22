@@ -98,3 +98,175 @@ merge_with_conflicts() {
     run dolt sql -q "SELECT * from dolt_merge_status;"
     [[ "$output" =~ "false" ]]
 }
+
+@test "reset: dolt reset head works" {
+    setup_ancestor
+
+    dolt sql -q "insert into test1 values (1, 1, 1)"
+    dolt add test1
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+
+    run dolt reset head
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" =~ "Unstaged changes after reset:" ]] || false
+    [[ "${lines[1]}" =~ "M	test1" ]] || false
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+}
+
+@test "reset: --hard works on unstaged and staged table changes" {
+    setup_ancestor
+
+    dolt sql -q "insert into test1 values (1, 1, 1)"
+
+    run dolt reset --hard
+    [ $status -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    dolt sql -q "insert into test1 values (1, 1, 1)"
+    dolt add .
+
+    run dolt reset --hard
+    [ $status -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    dolt sql -q "insert into test1 values (1, 1, 1)"
+
+    # Reset to head results in clean main.
+    run dolt reset --hard head
+    [ "$status" -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "reset: --soft works on unstaged and staged table changes" {
+    setup_ancestor
+
+    dolt sql -q "INSERT INTO test1 VALUES (1, 1, 1)"
+
+    # Table should still be unstaged
+    run dolt reset --soft
+    [ $status -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
+
+    dolt add .
+
+    run dolt reset --soft
+    [ $status -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
+}
+
+@test "reset: reset works on specific tables" {
+    setup_ancestor
+
+    dolt sql -q "INSERT INTO test1 VALUES (1,1,1)"
+
+    # Table should still be unstaged
+    run dolt reset test1
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
+
+    dolt sql -q "CREATE TABLE test2 (pk int primary key);"
+
+    dolt add .
+    run dolt reset test1 test2
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
+    [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test2) ]] || false
+}
+
+@test "reset: --soft and --hard on the same table" {
+    setup_ancestor
+
+    # Make a change to the table and do a soft reset
+    dolt sql -q "INSERT INTO test1 VALUES (1, 1, 1)"
+    run dolt reset test1
+    [ "$status" -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
+
+    # Add and unstage the table with a soft reset. Make sure the same data exists.
+    dolt add .
+
+    run dolt reset test1
+    [ "$status" -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
+
+    run dolt sql -r csv -q "select * from test1"
+    [[ "$output" =~ pk ]] || false
+    [[ "$output" =~ 1  ]] || false
+
+    # Do a hard reset and validate the insert was wiped properly
+    run dolt reset --hard
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    run dolt sql -r csv -q "select * from test1"
+    [[ "$output" =~ pk ]] || false
+    [[ "$output" != 1  ]] || false
+}
+
+@test "reset: --hard doesn't remove newly created table." {
+    setup_ancestor
+
+    dolt sql << SQL
+CREATE TABLE test2 (
+    pk int primary key
+);
+SQL
+    run dolt reset --hard
+    [ "$status" -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Untracked tables:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test2) ]] || false
+
+    dolt add .
+    dolt reset --hard
+    run dolt status
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
