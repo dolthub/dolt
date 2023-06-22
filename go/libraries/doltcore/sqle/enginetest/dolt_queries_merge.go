@@ -128,6 +128,29 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "CALL DOLT_MERGE fails on non-branch revision",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key)",
+			"call DOLT_ADD('.')",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"SET autocommit = 0",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"CALL DOLT_BRANCH('feature-branch')",
+			"use `mydb/feature-branch`",
+			"INSERT INTO test VALUES (3);",
+			"UPDATE test SET pk=1000 WHERE pk=0;",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a ff');",
+			"use `mydb/main~`",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature-branch')",
+				ExpectedErrStr: "this operation is not supported while in a detached head state",
+			},
+		},
+	},
+	{
 		Name: "CALL DOLT_MERGE no-ff correctly works with autocommit off",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
