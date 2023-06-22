@@ -574,7 +574,7 @@ func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 	}
 
 	// assert that we're on main
-	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv, nil)
+	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv, cliCtx)
 	require.Equal(t, 0, exitCode)
 
 	// merge branches
