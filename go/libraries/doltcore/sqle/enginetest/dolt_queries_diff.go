@@ -4880,7 +4880,7 @@ var SchemaDiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "select * from dolt_schema_diff('HEAD');",
-				ExpectedErrStr: "function 'dolt_schema_diff' expected 1 to 3 arguments, 1 received",
+				ExpectedErrStr: "Invalid argument to dolt_schema_diff: There are less than 2 arguments present, and the first does not contain '..'",
 			},
 			{
 				Query: "select * from dolt_schema_diff('HEAD^..HEAD');",
@@ -4910,7 +4910,6 @@ var SchemaDiffSystemTableScriptTests = []queries.ScriptTest{
 						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",         // from create statement
 						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", // to create statement
 						"ALTER TABLE `test` DROP `c2`;",
-						false,
 					},
 					{
 						"test",
@@ -4918,7 +4917,6 @@ var SchemaDiffSystemTableScriptTests = []queries.ScriptTest{
 						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",         // from create statement
 						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", // to create statement
 						"ALTER TABLE `test` ADD `c3` varchar(10);",
-						false,
 					},
 				},
 			},
@@ -4931,7 +4929,6 @@ var SchemaDiffSystemTableScriptTests = []queries.ScriptTest{
 						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 						"ALTER TABLE `test` DROP `c2`;",
-						false,
 					},
 					{
 						"test",
@@ -4939,7 +4936,6 @@ var SchemaDiffSystemTableScriptTests = []queries.ScriptTest{
 						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 						"ALTER TABLE `test` ADD `c3` varchar(10);",
-						false,
 					},
 				},
 			},

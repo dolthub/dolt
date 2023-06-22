@@ -36,11 +36,29 @@ var _ sql.ExecSourceRel = (*SchemaDiffTableFunction)(nil)
 type SchemaDiffTableFunction struct {
 	ctx *sql.Context
 
+	// the below expressions are set when the function is invoked in a particular way
+
+	// fromCommitExpr is the first expression, provided there are 2 or 3 expressions
+	// dolt_schema_diff('from_commit', 'to_commit') -> dolt_schema_diff('123', '456')
+	// dolt_schema_diff('from_commit', 'to_commit', 'table') -> dolt_schema_diff('123', '456', 'foo')
 	fromCommitExpr sql.Expression
-	toCommitExpr   sql.Expression
-	dotCommitExpr  sql.Expression
-	tableNameExpr  sql.Expression
-	database       sql.Database
+
+	// toCommitExpr is the second expression, provided there are 2 or 3 expressions
+	// dolt_schema_diff('from_commit', 'to_commit') -> dolt_schema_diff('123', '456')
+	// dolt_schema_diff('from_commit', 'to_commit', 'table_name') -> dolt_schema_diff('123', '456', 'foo')
+	toCommitExpr sql.Expression
+
+	// dotCommitExpr is the first expression, provided there are 1 or 2 expressions
+	// dolt_schema_diff('dot_commit') -> dolt_schema_diff('HEAD^..HEAD')
+	// dolt_schema_diff('dot_commit', 'table_name') -> dolt_schema_diff('HEAD^..HEAD', 'foo')
+	dotCommitExpr sql.Expression
+
+	// tableNameExpr is the expression that follows the commit expressions
+	// dolt_schema_diff('from_commit', 'to_commit', 'table_name') -> dolt_schema_diff('123', '456', 'my_table')
+	// dolt_schema_diff('dot_commit', 'table_name') -> dolt_schema_diff('123..456', 'my_table')
+	tableNameExpr sql.Expression
+
+	database sql.Database
 }
 
 var schemaDiffTableSchema = sql.Schema{
@@ -134,19 +152,28 @@ func (ds *SchemaDiffTableFunction) WithChildren(children ...sql.Node) (sql.Node,
 
 // CheckPrivileges implements the interface sql.Node.
 func (ds *SchemaDiffTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	if ds.tableNameExpr == nil || !types.IsText(ds.tableNameExpr.Type()) {
-		return true
+	if ds.tableNameExpr != nil {
+		_, _, _, tableName, err := ds.evaluateArguments()
+		if err != nil {
+			return false
+		}
+
+		result := opChecker.UserHasPrivileges(ctx,
+			sql.NewPrivilegedOperation(ds.database.Name(), tableName, "", sql.PrivilegeType_Select))
+		return result
 	}
 
-	_, _, _, tableName, err := ds.evaluateArguments()
+	tblNames, err := ds.database.GetTableNames(ctx)
 	if err != nil {
 		return false
 	}
 
-	// TODO: Add tests for privilege checking
-	result := opChecker.UserHasPrivileges(ctx,
-		sql.NewPrivilegedOperation(ds.database.Name(), tableName, "", sql.PrivilegeType_Select))
-	return result
+	var operations []sql.PrivilegedOperation
+	for _, tblName := range tblNames {
+		operations = append(operations, sql.NewPrivilegedOperation(ds.database.Name(), tblName, "", sql.PrivilegeType_Select))
+	}
+
+	return opChecker.UserHasPrivileges(ctx, operations...)
 }
 
 // Expressions implements the sql.Expressioner interface.
@@ -187,7 +214,7 @@ func (ds *SchemaDiffTableFunction) WithExpressions(expression ...sql.Expression)
 		}
 	} else {
 		if len(expression) < 2 {
-			return nil, sql.ErrInvalidArgumentNumber.New(newDstf.Name(), "1 to 3", len(expression))
+			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), "There are less than 2 arguments present, and the first does not contain '..'")
 		}
 		newDstf.fromCommitExpr = expression[0]
 		newDstf.toCommitExpr = expression[1]
