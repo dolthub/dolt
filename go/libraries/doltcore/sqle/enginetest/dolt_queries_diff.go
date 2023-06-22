@@ -4883,6 +4883,18 @@ var SchemaDiffSystemTableScriptTests = []queries.ScriptTest{
 				ExpectedErrStr: "Invalid argument to dolt_schema_diff: There are less than 2 arguments present, and the first does not contain '..'",
 			},
 			{
+				Query:          "select * from dolt_schema_diff('HEAD', '');",
+				ExpectedErrStr: "expected strings for from and to revisions, got: HEAD, ",
+			},
+			{
+				Query:          "select * from dolt_schema_diff('HEAD', 'test');",
+				ExpectedErrStr: "branch not found: test",
+			},
+			{
+				Query:          "select * from dolt_schema_diff('test');",
+				ExpectedErrStr: "Invalid argument to dolt_schema_diff: There are less than 2 arguments present, and the first does not contain '..'",
+			},
+			{
 				Query: "select * from dolt_schema_diff('HEAD^..HEAD');",
 				Expected: []sql.Row{
 					{
