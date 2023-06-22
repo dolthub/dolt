@@ -90,7 +90,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 	if isBranch, err := actions.IsBranch(ctx, dbData.Ddb, branchName); err != nil {
 		return 1, err
 	} else if isBranch {
-		err = checkoutBranch(ctx, currentDbName, branchName, updateHead)
+		err = checkoutBranch(ctx, currentDbName, branchName, apr)
 		if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
 			// If there is a branch but there is no working set,
 			// somehow the local branch ref was created without a
@@ -115,7 +115,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 				return 1, err
 			}
 
-			err = checkoutBranch(ctx, currentDbName, branchName, updateHead)
+			err = checkoutBranch(ctx, currentDbName, branchName, apr)
 		}
 		if err != nil {
 			return 1, err
@@ -207,7 +207,7 @@ func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, br
 			return err
 		}
 
-		err = checkoutBranch(ctx, dbName, branchName, apr.Contains(cli.GlobalFlag))
+		err = checkoutBranch(ctx, dbName, branchName, apr)
 		if err != nil {
 			return err
 		}
@@ -228,7 +228,7 @@ func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, br
 		}
 
 		if updateHead {
-			return doUpdateHead(sess, dbName, branchName)
+			return doUpdateHead(ctx, sess, dbName, branchName, apr.Contains(cli.ForceFlag))
 		}
 		return nil
 	} else {
@@ -309,12 +309,12 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 	}
 
 	if updateHead {
-		return doUpdateHead(sess, dbName, newBranchName)
+		return doUpdateHead(ctx, sess, dbName, newBranchName, apr.Contains(cli.ForceFlag))
 	}
 	return nil
 }
 
-func checkoutBranch(ctx *sql.Context, dbName string, branchName string, updateHead bool) error {
+func checkoutBranch(ctx *sql.Context, dbName string, branchName string, apr *argparser.ArgParseResults) error {
 	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(branchName))
 	if err != nil {
 		return err
@@ -330,13 +330,13 @@ func checkoutBranch(ctx *sql.Context, dbName string, branchName string, updateHe
 		return err
 	}
 
-	if updateHead {
-		return doUpdateHead(dSess, dbName, branchName)
+	if apr.Contains(cli.GlobalFlag) {
+		return doUpdateHead(ctx, dSess, dbName, branchName, apr.Contains(cli.ForceFlag))
 	}
 	return nil
 }
 
-func doUpdateHead(dSess *dsess.DoltSession, dbName, branchName string) error {
+func doUpdateHead(ctx *sql.Context, dSess *dsess.DoltSession, dbName, branchName string, isForce bool) error {
 	if sqlserver.RunningInServerMode() {
 		return fmt.Errorf("unable to change the default branch while the server is running; " +
 			"this can by changed on the command line, by stopping the sql-server, " +
@@ -344,6 +344,13 @@ func doUpdateHead(dSess *dsess.DoltSession, dbName, branchName string) error {
 	}
 	// If both the old and new branches are clean, change the default branch for future sessions.
 	// Otherwise, return an error.
+
+	if !isForce {
+		err := AssertNoWorkingSetChanges(ctx, ref.NewBranchRef(branchName))
+		if err != nil {
+			return err
+		}
+	}
 	if fs, err := dSess.Provider().FileSystemForDatabase(dbName); err == nil {
 		if repoState, err := env.LoadRepoState(fs); err == nil {
 			repoState.Head.Ref = ref.NewBranchRef(branchName)
@@ -369,4 +376,46 @@ func checkoutTables(ctx *sql.Context, roots doltdb.Roots, name string, tables []
 
 	dSess := dsess.DSessFromSess(ctx.Session)
 	return dSess.SetRoots(ctx, name, roots)
+}
+
+// AssertNoWorkingSetChanges checks whether either the old or new branch has changes during a checkout.
+// If so, this means that the behavior of the checkout will be different when doing the checkout from a SQL session.
+func AssertNoWorkingSetChanges(sqlCtx *sql.Context, newBranchRef ref.BranchRef) error {
+	currentDbName := sqlCtx.GetCurrentDatabase()
+	dSess := dsess.DSessFromSess(sqlCtx.Session)
+
+	currentRoots, hasRoots := dSess.GetRoots(sqlCtx, currentDbName)
+	if !hasRoots {
+		return fmt.Errorf("unable to resolve roots for %s", currentDbName)
+	}
+
+	sourceHasChanges, _, _, err := actions.RootHasUncommittedChanges(currentRoots)
+	if err != nil {
+		return err
+	}
+
+	if sourceHasChanges {
+		return fmt.Errorf("cannot checkout while a server is running if the source branch has uncommitted changes")
+	}
+
+	db, foundDb := dSess.GetDoltDB(sqlCtx, currentDbName)
+	if !foundDb {
+		return fmt.Errorf("unable to load database %s", currentDbName)
+	}
+
+	newBranchRoots, err := db.ResolveBranchRoots(sqlCtx, newBranchRef)
+	if err != nil {
+		return err
+	}
+
+	destinationHasChanges, _, _, err := actions.RootHasUncommittedChanges(newBranchRoots)
+	if err != nil {
+		return err
+	}
+
+	if destinationHasChanges {
+		return fmt.Errorf("cannot checkout while a server is running if the destination branch has uncommitted changes")
+	}
+
+	return nil
 }

@@ -212,7 +212,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force
 
 	hasChanges := false
 	if workingSetExists {
-		hasChanges, _, _, err = rootHasUncommittedChanges(initialRoots)
+		hasChanges, _, _, err = RootHasUncommittedChanges(initialRoots)
 		if err != nil {
 			return err
 		}
@@ -600,12 +600,12 @@ func checkoutWouldStompWorkingSetChanges(ctx context.Context, dEnv *env.DoltEnv,
 		return false
 	}
 
-	sourceHasChanges, sourceWorkingHash, sourceStagedHash, err := rootHasUncommittedChanges(sourceRoots)
+	sourceHasChanges, sourceWorkingHash, sourceStagedHash, err := RootHasUncommittedChanges(sourceRoots)
 	if err != nil {
 		return false
 	}
 
-	destHasChanges, destWorkingHash, destStagedHash, err := rootHasUncommittedChanges(destRoots)
+	destHasChanges, destWorkingHash, destStagedHash, err := RootHasUncommittedChanges(destRoots)
 	if err != nil {
 		return false
 	}
@@ -615,8 +615,8 @@ func checkoutWouldStompWorkingSetChanges(ctx context.Context, dEnv *env.DoltEnv,
 	return sourceHasChanges && destHasChanges && (sourceWorkingHash != destWorkingHash || sourceStagedHash != destStagedHash)
 }
 
-// rootHasUncommittedChanges returns whether the roots given have uncommitted changes, and the hashes of the working and staged roots
-func rootHasUncommittedChanges(roots doltdb.Roots) (hasChanges bool, workingHash hash.Hash, stagedHash hash.Hash, err error) {
+// RootHasUncommittedChanges returns whether the roots given have uncommitted changes, and the hashes of the working and staged roots
+func RootHasUncommittedChanges(roots doltdb.Roots) (hasChanges bool, workingHash hash.Hash, stagedHash hash.Hash, err error) {
 	headHash, err := roots.Head.HashOf()
 	if err != nil {
 		return false, hash.Hash{}, hash.Hash{}, err
