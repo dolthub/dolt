@@ -419,7 +419,7 @@ func (d *DoltSession) validateDoltCommit(ctx *sql.Context, dirtyBranchState *bra
 	if currDb == "" {
 		return fmt.Errorf("cannot dolt_commit with no database selected")
 	}
-	currDbBaseName, _ := SplitRevisionDbName(currDb)
+	currDbBaseName, rev := SplitRevisionDbName(currDb)
 	dirtyDbBaseName := dirtyBranchState.dbState.dbName
 
 	if strings.ToLower(currDbBaseName) != strings.ToLower(dirtyDbBaseName) {
@@ -434,12 +434,12 @@ func (d *DoltSession) validateDoltCommit(ctx *sql.Context, dirtyBranchState *bra
 		return fmt.Errorf("no database state found for %s", currDbBaseName)
 	}
 
-	dirtyBranch, err := dirtyBranchState.workingSet.Ref().ToHeadRef()
-	if err != nil {
-		return err
+	if rev == "" {
+		rev = dbState.checkedOutRevSpec
 	}
-	if dbState.currRevSpec != dirtyBranch.GetPath() {
-		return fmt.Errorf("no changes to dolt_commit on branch %s", dbState.currRevSpec)
+
+	if rev != dirtyBranchState.head {
+		return fmt.Errorf("no changes to dolt_commit on branch %s", rev)
 	}
 
 	return nil
@@ -912,8 +912,7 @@ func (d *DoltSession) SwitchWorkingSet(
 		return sql.ErrDatabaseNotFound.New(dbName)
 	}
 	dbState.checkedOutRevSpec = headRef.GetPath()
-	dbState.currRevSpec = headRef.GetPath()
-	dbState.currRevType = RevisionTypeBranch
+	dbState.checkedOutRevType = RevisionTypeBranch
 
 	d.mu.Unlock()
 
@@ -930,41 +929,6 @@ func (d *DoltSession) SwitchWorkingSet(
 	ctx.SetCurrentDatabase(baseName)
 
 	return d.setDbSessionVars(ctx, branchState, false)
-}
-
-func (d *DoltSession) UseDatabase(ctx *sql.Context, db sql.Database) error {
-	sdb, ok := db.(SqlDatabase)
-	if !ok {
-		// Could be an externally provided db such as `mysql` or `information_schema`, in which case there's nothing for
-		// this hook to do
-		return nil
-	}
-
-	branchState, ok, err := d.lookupDbState(ctx, sdb.RevisionQualifiedName())
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return sql.ErrDatabaseNotFound.New(db.Name())
-	}
-
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	// Set the session state for this database according to what database name was USEd
-	// In the case of a revision qualified name, that will be the revision specified
-	// In the case of an unqualified name (USE mydb), this will be the last checked out head in this session.
-	_, rev := SplitRevisionDbName(sdb.RequestedName())
-	dbState := branchState.dbState
-	if rev == "" {
-		dbState.currRevSpec = dbState.checkedOutRevSpec
-		dbState.currRevType = RevisionTypeBranch
-	} else {
-		dbState.currRevSpec = sdb.Revision()
-		dbState.currRevType = sdb.RevisionType()
-	}
-
-	return nil
 }
 
 func (d *DoltSession) WorkingSet(ctx *sql.Context, dbName string) (*doltdb.WorkingSet, error) {
@@ -1125,8 +1089,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 			return err
 		}
 
-		sessionState.currRevType = db.RevisionType()
-		sessionState.currRevSpec = db.Revision()
+		sessionState.checkedOutRevType = db.RevisionType()
 	}
 
 	if !dbStateCached && usingDoltTransaction {
@@ -1234,11 +1197,11 @@ func (d *DoltSession) CWBHeadRef(ctx *sql.Context, dbName string) (ref.DoltRef, 
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	if branchState.dbState.currRevType != RevisionTypeBranch {
+	if branchState.dbState.checkedOutRevType != RevisionTypeBranch {
 		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
 	}
 
-	return ref.NewBranchRef(branchState.dbState.currRevSpec), nil
+	return ref.NewBranchRef(branchState.head), nil
 }
 
 // CurrentHead returns the current head for the db named, which must be unqualifed. Used for bootstrap resolving the

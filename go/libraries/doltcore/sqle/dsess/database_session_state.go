@@ -61,15 +61,12 @@ type DatabaseSessionState struct {
 	// dbName is the name of the database this state applies to. This is always the base name of the database, without
 	// a revision qualifier.
 	dbName string
-	// currRevSpec is the current revision spec of the database when referred to by its base name. Changes when a
-	// `dolt_checkout` or `use` statement is executed.
-	currRevSpec string
-	// currRevType is the current revision type of the database when referred to by its base name. Changes when a
-	// `dolt_checkout` or `use` statement is executed.
-	currRevType RevisionType
-	// checkedOutRevSpec is the checked out revision specifier of the database. Changes only when a `dolt_checkout`
-	// occurs. `USE mydb` without a revision qualifier will get this revision.
+	// checkedOutRevSpec is the revision of the database when referred to by its base name. Changes only when a 
+	// `dolt_checkout` occurs.
 	checkedOutRevSpec string
+	// checkedOutRevType is the current revision type of the database when referred to by its base name. Changes only 
+	// when a `dolt_checkout` occurs.
+	checkedOutRevType RevisionType
 	// heads records the in-memory DB state for every branch head accessed by the session
 	heads map[string]*branchState
 	// headCache records the session-caches for every branch head accessed by the session
@@ -145,6 +142,7 @@ func (dbState *DatabaseSessionState) NewEmptyBranchState(head string) *branchSta
 	return b
 }
 
+// RevisionDbName returns the revision-qualified database name for this branch state
 func (bs *branchState) RevisionDbName() string {
 	return RevisionDbName(bs.dbState.dbName, bs.head)
 }

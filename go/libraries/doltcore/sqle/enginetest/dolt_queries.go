@@ -18,13 +18,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
 var ViewsWithAsOfScriptTest = queries.ScriptTest{
@@ -2245,6 +2244,102 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			{
 				Query:    "select * from t;",
 				Expected: []sql.Row{{2, 2}},
+			},
+		},
+	},
+	{
+		Name: "dolt_checkout and base name resolution for commit",
+		SetUpScript: []string{
+			"create table t (a int primary key, b int);",
+			"call dolt_commit('-Am', 'creating table t');",
+			"call dolt_branch('b2');",
+			"call dolt_branch('b3');",
+			"insert into t values (1, 1);",
+			"call dolt_commit('-Am', 'added values on main');",
+			"call dolt_checkout('b2');",
+			"insert into t values (2, 2);",
+			"call dolt_commit('-am', 'added values on b2');",
+			"call dolt_checkout('b3');",
+			"insert into t values (3, 3);",
+			"call dolt_commit('-am', 'added values on b3');",
+			"call dolt_checkout('b2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "call dolt_checkout('b2');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"b2"}},
+			},
+
+			{
+				Query:            "use `mydb/main`",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "insert into t values (4, 4);",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:    "select * from t order by 1;",
+				Expected: []sql.Row{{1, 1}, {4, 4}},
+			},
+			{
+				Query: "select * from `mydb/main`.t order by 1;",
+				Expected: []sql.Row{{1, 1}, {4, 4}},
+			},
+			{
+				Query: "select * from `mydb/b2`.t order by 1;",
+				Expected: []sql.Row{{2, 2},
+				},
+			},
+		},
+	},
+	{
+		Name: "branch last checked out is deleted",
+		SetUpScript: []string{
+			"create table t (a int primary key, b int);",
+			"call dolt_commit('-Am', 'creating table t');",
+			"call dolt_branch('b2');",
+			"call dolt_branch('b3');",
+			"insert into t values (1, 1);",
+			"call dolt_commit('-Am', 'added values on main');",
+			"call dolt_checkout('b2');",
+			"insert into t values (2, 2);",
+			"call dolt_commit('-am', 'added values on b2');",
+			"call dolt_checkout('b3');",
+			"insert into t values (3, 3);",
+			"call dolt_commit('-am', 'added values on b3');",
+			"call dolt_checkout('b2');",
+			"use mydb/main",
+			"call dolt_branch('-df', 'b2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "insert into t values (4, 4);",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:    "select * from t order by 1;",
+				Expected: []sql.Row{{1, 1}, {4, 4}},
+			},
+			{
+				Query: "select * from `mydb/main`.t order by 1;",
+				Expected: []sql.Row{{1, 1}, {4, 4}},
+			},
+			{
+				Query: "select * from `mydb/b2`.t order by 1;",
+				ExpectedErrStr: "branch not found",
 			},
 		},
 	},
