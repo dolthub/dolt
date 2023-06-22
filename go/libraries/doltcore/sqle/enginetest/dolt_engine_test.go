@@ -2114,6 +2114,30 @@ func TestDiffSystemTablePrepared(t *testing.T) {
 	}
 }
 
+func TestSchemaDiffSystemTable(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	harness.Setup(setup.MydbData)
+	for _, test := range SchemaDiffSystemTableScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScript(t, harness, test)
+		})
+	}
+}
+
+func TestSchemaDiffSystemTablePrepared(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	harness.Setup(setup.MydbData)
+	for _, test := range SchemaDiffSystemTableScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
+		})
+	}
+}
+
 func mustNewEngine(t *testing.T, h enginetest.Harness) *gms.Engine {
 	e, err := h.NewEngine(t)
 	if err != nil {
