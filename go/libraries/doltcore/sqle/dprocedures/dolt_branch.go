@@ -209,13 +209,13 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParse
 		if err != nil {
 			return err
 		}
-		
+
 		// If the session has this branch checked out, we need to change that to the default head
 		headRef, err := dSess.CWBHeadRef(ctx, currBase)
 		if err != nil {
 			return err
 		}
-		
+
 		if headRef == ref.NewBranchRef(branchName) {
 			err = dSess.RemoveBranchState(ctx, currBase, branchName)
 			if err != nil {

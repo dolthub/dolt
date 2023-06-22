@@ -61,7 +61,7 @@ type DatabaseSessionState struct {
 	// dbName is the name of the database this state applies to. This is always the base name of the database, without
 	// a revision qualifier.
 	dbName string
-	// checkedOutRevSpec is the revision of the database when referred to by its base name. Changes only when a 
+	// checkedOutRevSpec is the revision of the database when referred to by its base name. Changes only when a
 	// `dolt_checkout` occurs.
 	checkedOutRevSpec string
 	// heads records the in-memory DB state for every branch head accessed by the session
@@ -128,8 +128,8 @@ type branchState struct {
 // state, and returns it. The state returned is empty except for its identifiers and must be filled in by the caller.
 func (dbState *DatabaseSessionState) NewEmptyBranchState(head string, revisionType RevisionType) *branchState {
 	b := &branchState{
-		dbState: dbState,
-		head:    head,
+		dbState:      dbState,
+		head:         head,
 		revisionType: revisionType,
 	}
 

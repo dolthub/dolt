@@ -226,7 +226,7 @@ func (d *DoltSession) RemoveDbState(_ *sql.Context, dbName string) error {
 // RemoveBranchState removes the session state for a branch, for example, if a branch is deleted.
 func (d *DoltSession) RemoveBranchState(ctx *sql.Context, dbName string, branchName string) error {
 	baseName, _ := SplitRevisionDbName(dbName)
-	
+
 	checkedOutState, ok, err := d.lookupDbState(ctx, baseName)
 	if err != nil {
 		return err
@@ -248,9 +248,9 @@ func (d *DoltSession) RemoveBranchState(ctx *sql.Context, dbName string, branchN
 	if err != nil {
 		return err
 	}
-	
+
 	checkedOutState.dbState.checkedOutRevSpec = defaultHead
-	
+
 	// also clear out any db-level caches for this db
 	d.dbCache.Clear()
 	return nil
@@ -1238,7 +1238,7 @@ func (d *DoltSession) CWBHeadRef(ctx *sql.Context, dbName string) (ref.DoltRef, 
 // correct session head when a database name from the client is unqualified.
 func (d *DoltSession) CurrentHead(ctx *sql.Context, dbName string) (string, bool, error) {
 	baseName := strings.ToLower(dbName)
-	
+
 	d.mu.Lock()
 	dbState, ok := d.dbStates[baseName]
 	d.mu.Unlock()

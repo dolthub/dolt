@@ -18,12 +18,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
 var ViewsWithAsOfScriptTest = queries.ScriptTest{
@@ -2266,7 +2267,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "call dolt_checkout('b2');",
+				Query:            "call dolt_checkout('b2');",
 				SkipResultsCheck: true,
 			},
 			{
@@ -2291,13 +2292,12 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{1, 1}, {4, 4}},
 			},
 			{
-				Query: "select * from `mydb/main`.t order by 1;",
+				Query:    "select * from `mydb/main`.t order by 1;",
 				Expected: []sql.Row{{1, 1}, {4, 4}},
 			},
 			{
-				Query: "select * from `mydb/b2`.t order by 1;",
-				Expected: []sql.Row{{2, 2},
-				},
+				Query:    "select * from `mydb/b2`.t order by 1;",
+				Expected: []sql.Row{{2, 2}},
 			},
 		},
 	},
@@ -2334,11 +2334,11 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{1, 1}, {4, 4}},
 			},
 			{
-				Query: "select * from `mydb/main`.t order by 1;",
+				Query:    "select * from `mydb/main`.t order by 1;",
 				Expected: []sql.Row{{1, 1}, {4, 4}},
 			},
 			{
-				Query: "select * from `mydb/b2`.t order by 1;",
+				Query:          "select * from `mydb/b2`.t order by 1;",
 				ExpectedErrStr: "branch not found",
 			},
 		},
