@@ -40,6 +40,7 @@ func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads, orig
 
 		dialprovider := controller.gRPCDialProvider(denv)
 		var remoteDBs []func(context.Context) (*doltdb.DoltDB, error)
+		var remoteUrls []string
 		for _, r := range controller.cfg.StandbyRemotes() {
 			// TODO: url sanitize name
 			remoteUrl := strings.Replace(r.RemoteURLTemplate(), dsess.URLTemplateDatabasePlaceholder, name, -1)
@@ -55,6 +56,7 @@ func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads, orig
 			remoteDBs = append(remoteDBs, func(ctx context.Context) (*doltdb.DoltDB, error) {
 				return r.GetRemoteDB(ctx, types.Format_Default, dialprovider)
 			})
+			remoteUrls = append(remoteUrls, remoteUrl)
 		}
 
 		role, _ := controller.roleAndEpoch()
@@ -63,7 +65,7 @@ func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads, orig
 			if err != nil {
 				return err
 			}
-			commitHook := newCommitHook(controller.lgr, r.Name(), name, role, remoteDBs[i], denv.DoltDB, ttfdir)
+			commitHook := newCommitHook(controller.lgr, r.Name(), remoteUrls[i], name, role, remoteDBs[i], denv.DoltDB, ttfdir)
 			denv.DoltDB.PrependCommitHook(ctx, commitHook)
 			controller.registerCommitHook(commitHook)
 			if err := commitHook.Run(bt); err != nil {
