@@ -192,6 +192,7 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParse
 		}
 
 		// If we deleted the branch this client is connected to, change the current branch to the default
+		// TODO: this would be nice to do for every other session (or maybe invalidate sessions on this branch)
 		if strings.ToLower(currBranch) == strings.ToLower(branchName) {
 			ctx.SetCurrentDatabase(currBase)
 		}
@@ -207,6 +208,19 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParse
 		}, dSess.Provider(), rsc)
 		if err != nil {
 			return err
+		}
+		
+		// If the session has this branch checked out, we need to change that to the default head
+		headRef, err := dSess.CWBHeadRef(ctx, currBase)
+		if err != nil {
+			return err
+		}
+		
+		if headRef == ref.NewBranchRef(branchName) {
+			err = dSess.RemoveBranchState(ctx, currBase, branchName)
+			if err != nil {
+				return err
+			}
 		}
 	}
 

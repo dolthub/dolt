@@ -223,6 +223,39 @@ func (d *DoltSession) RemoveDbState(_ *sql.Context, dbName string) error {
 	return nil
 }
 
+// RemoveBranchState removes the session state for a branch, for example, if a branch is deleted.
+func (d *DoltSession) RemoveBranchState(ctx *sql.Context, dbName string, branchName string) error {
+	baseName, _ := SplitRevisionDbName(dbName)
+	
+	checkedOutState, ok, err := d.lookupDbState(ctx, baseName)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return sql.ErrDatabaseNotFound.New(baseName)
+	}
+
+	d.mu.Lock()
+	delete(checkedOutState.dbState.heads, strings.ToLower(branchName))
+	d.mu.Unlock()
+
+	db, ok := d.provider.BaseDatabase(ctx, baseName)
+	if !ok {
+		return sql.ErrDatabaseNotFound.New(baseName)
+	}
+
+	defaultHead, err := DefaultHead(baseName, db)
+	if err != nil {
+		return err
+	}
+	
+	checkedOutState.dbState.checkedOutRevSpec = defaultHead
+	
+	// also clear out any db-level caches for this db
+	d.dbCache.Clear()
+	return nil
+}
+
 // SetValidateErr sets an error on this session to be returned from every call
 // to ValidateSession. This is effectively a way to disable a session.
 //
