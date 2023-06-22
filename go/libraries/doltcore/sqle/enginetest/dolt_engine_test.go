@@ -49,7 +49,7 @@ var skipPrepared bool
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
 // as a reminder to consider prepareds when adding a new
 // enginetest suite.
-const SkipPreparedsCount = 82
+const SkipPreparedsCount = 83
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
@@ -1474,24 +1474,6 @@ func TestDescribeTableAsOf(t *testing.T) {
 	enginetest.TestScript(t, h, DescribeTableAsOfScriptTest)
 }
 
-func TestDescribeTableAsOfPrepared(t *testing.T) {
-	h := newDoltHarness(t)
-	defer h.Close()
-	enginetest.TestScriptPrepared(t, h, DescribeTableAsOfScriptTest)
-}
-
-func TestDescribeTableAsOfWithFk(t *testing.T) {
-	h := newDoltHarness(t)
-	defer h.Close()
-	enginetest.TestScript(t, h, DescribeTableAsOfWithFkScriptTest)
-}
-
-func TestDescribeTableAsOfWithFkPrepared(t *testing.T) {
-	h := newDoltHarness(t)
-	defer h.Close()
-	enginetest.TestScriptPrepared(t, h, DescribeTableAsOfWithFkScriptTest)
-}
-
 func TestShowCreateTable(t *testing.T) {
 	for _, script := range ShowCreateTableScriptTests {
 		func() {
@@ -1500,6 +1482,19 @@ func TestShowCreateTable(t *testing.T) {
 			enginetest.TestScript(t, h, script)
 		}()
 	}
+}
+
+func TestShowCreateTableWithFksAsOf(t *testing.T) {
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestScript(t, h, ShowCreateTableWithFksAsOfScriptTests)
+
+}
+
+func TestShowCreateTableWithFksAsOfPrepared(t *testing.T) {
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestScriptPrepared(t, h, ShowCreateTableWithFksAsOfScriptTests)
 }
 
 func TestViewsWithAsOf(t *testing.T) {
