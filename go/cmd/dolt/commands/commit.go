@@ -415,7 +415,7 @@ func buildInitalCommitMsg(sqlCtx *sql.Context, queryist cli.Queryist, suggestedM
 	}
 
 	// get current branch
-	currBranch, err := getBranchName(queryist, sqlCtx)
+	currBranch, err := getActiveBranchName(sqlCtx, queryist)
 	if err != nil {
 		return "", err
 	}

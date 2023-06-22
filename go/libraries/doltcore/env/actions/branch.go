@@ -19,6 +19,8 @@ import (
 	"errors"
 	"fmt"
 
+	errorKinds "gopkg.in/src-d/go-errors.v1"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -27,8 +29,8 @@ import (
 )
 
 var ErrAlreadyExists = errors.New("already exists")
-var ErrCOBranchDelete = errors.New("attempted to delete checked out branch")
-var ErrUnmergedBranch = errors.New("branch is not fully merged")
+var ErrCOBranchDelete = errorKinds.NewKind("Cannot delete checked out branch '%s'")
+var ErrUnmergedBranch = errorKinds.NewKind("branch '%s' is not fully merged")
 var ErrWorkingSetsOnBothBranches = errors.New("checkout would overwrite uncommitted changes on target branch")
 
 func RenameBranch(ctx context.Context, dbData env.DbData, oldBranch, newBranch string, remoteDbPro env.RemoteDbProvider, force bool, rsc *doltdb.ReplicationStatusController) error {
@@ -72,7 +74,7 @@ func RenameBranch(ctx context.Context, dbData env.DbData, oldBranch, newBranch s
 		}
 	}
 
-	return DeleteBranch(ctx, dbData, oldBranch, DeleteOptions{Force: true}, remoteDbPro, rsc)
+	return DeleteBranch(ctx, dbData, oldBranch, DeleteOptions{Force: true, AllowDeletingCurrentBranch: true}, remoteDbPro, rsc)
 }
 
 func CopyBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
@@ -114,8 +116,9 @@ func CopyBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, oldBranch, newBranc
 }
 
 type DeleteOptions struct {
-	Force  bool
-	Remote bool
+	Force                      bool
+	Remote                     bool
+	AllowDeletingCurrentBranch bool
 }
 
 func DeleteBranch(ctx context.Context, dbData env.DbData, brName string, opts DeleteOptions, remoteDbPro env.RemoteDbProvider, rsc *doltdb.ReplicationStatusController) error {
@@ -132,8 +135,8 @@ func DeleteBranch(ctx context.Context, dbData env.DbData, brName string, opts De
 		if err != nil {
 			return err
 		}
-		if ref.Equals(headRef, branchRef) {
-			return ErrCOBranchDelete
+		if !opts.AllowDeletingCurrentBranch && ref.Equals(headRef, branchRef) {
+			return ErrCOBranchDelete.New(brName)
 		}
 	}
 
@@ -218,14 +221,14 @@ func validateBranchMergedIntoCurrentWorkingBranch(ctx context.Context, dbdata en
 			return nil
 		}
 		if errors.Is(err, doltdb.ErrIsAhead) {
-			return ErrUnmergedBranch
+			return ErrUnmergedBranch.New(branch.GetPath())
 		}
 
 		return err
 	}
 
 	if !isMerged {
-		return ErrUnmergedBranch
+		return ErrUnmergedBranch.New(branch.GetPath())
 	}
 
 	return nil
@@ -269,13 +272,13 @@ func validateBranchMergedIntoUpstream(ctx context.Context, dbdata env.DbData, br
 			return nil
 		}
 		if errors.Is(err, doltdb.ErrIsAhead) {
-			return ErrUnmergedBranch
+			return ErrUnmergedBranch.New(branch.GetPath())
 		}
 		return err
 	}
 
 	if !canFF {
-		return ErrUnmergedBranch
+		return ErrUnmergedBranch.New(branch.GetPath())
 	}
 
 	return nil

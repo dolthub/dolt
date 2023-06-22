@@ -128,7 +128,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 }
 
 func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, showIgnoredTables bool) (*printData, error) {
-	branchName, err := getBranchName(queryist, sqlCtx)
+	branchName, err := getActiveBranchName(sqlCtx, queryist)
 	if err != nil {
 		return nil, err
 	}
@@ -438,31 +438,6 @@ func getWorkingStagedTables(queryist cli.Queryist, sqlCtx *sql.Context) (map[str
 		}
 	}
 	return stagedTableNames, workingTableNames, nil
-}
-
-func getBranchName(queryist cli.Queryist, sqlCtx *sql.Context) (string, error) {
-	rows, err := getRowsForSql(queryist, sqlCtx, "select active_branch()")
-	if err != nil {
-		return "", err
-	}
-	if len(rows) != 1 {
-		return "", errors.New("expected one row in dolt_branches")
-	}
-	branchName := rows[0][0].(string)
-	return branchName, nil
-}
-
-func getRowsForSql(queryist cli.Queryist, sqlCtx *sql.Context, q string) ([]sql.Row, error) {
-	schema, ri, err := queryist.Query(sqlCtx, q)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := sql.RowIterToRows(sqlCtx, schema, ri)
-	if err != nil {
-		return nil, err
-	}
-
-	return rows, nil
 }
 
 func getIgnoredTablePatternsFromSql(queryist cli.Queryist, sqlCtx *sql.Context) (doltdb.IgnorePatterns, error) {

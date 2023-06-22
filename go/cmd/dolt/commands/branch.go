@@ -15,21 +15,26 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
@@ -61,8 +66,6 @@ const (
 	showCurrentFlag = "show-current"
 )
 
-var ErrUnmergedBranchDelete = errors.New("The branch '%s' is not fully merged.\nIf you are sure you want to delete it, run 'dolt branch -D %s'.")
-
 type BranchCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -81,6 +84,8 @@ func (cmd BranchCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd BranchCmd) ArgParser() *argparser.ArgParser {
+	// CreateBranchArgParser has the common flags for the command line and the stored procedure.
+	// But only the command line has flags for printing branches. We define those here.
 	ap := cli.CreateBranchArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"start-point", "A commit that a new branch should point at."})
 	ap.SupportsFlag(cli.ListFlag, "", "List branches")
@@ -103,91 +108,142 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, branchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
+	queryEngine, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to create query engine").AddCause(err).Build(), nil)
+	}
+
+	if closeFunc != nil {
+		defer closeFunc()
+	}
+
+	if len(apr.ContainsMany(cli.MoveFlag, cli.CopyFlag, cli.DeleteFlag, cli.DeleteForceFlag, cli.ListFlag, showCurrentFlag)) > 1 {
+		cli.PrintErrln("Must specify exactly one of --move/-m, --copy/-c, --delete/-d, -D, --show-current, or --list.")
+		return 1
+	}
+
+	for _, arg := range apr.Args {
+		if !doltdb.IsValidUserBranchName(arg) {
+			cli.PrintErrf("%s is an invalid branch name", arg)
+		}
+	}
+
 	switch {
 	case apr.Contains(cli.MoveFlag):
-		return moveBranch(ctx, dEnv, apr, usage)
+		return moveBranch(sqlCtx, queryEngine, apr, args, usage)
 	case apr.Contains(cli.CopyFlag):
-		return copyBranch(ctx, dEnv, apr, usage)
+		return copyBranch(sqlCtx, queryEngine, apr, args, usage)
 	case apr.Contains(cli.DeleteFlag):
-		return deleteBranches(ctx, dEnv, apr, usage, apr.Contains(cli.ForceFlag))
+		return deleteBranches(sqlCtx, queryEngine, apr, args, usage)
 	case apr.Contains(cli.DeleteForceFlag):
-		return deleteBranches(ctx, dEnv, apr, usage, true)
+		return deleteBranches(sqlCtx, queryEngine, apr, args, usage)
 	case apr.Contains(cli.ListFlag):
-		return printBranches(ctx, dEnv, apr, usage)
+		return printBranches(sqlCtx, queryEngine, apr, usage)
 	case apr.Contains(showCurrentFlag):
-		return printCurrentBranch(dEnv)
+		return printCurrentBranch(sqlCtx, queryEngine)
 	case apr.Contains(datasetsFlag):
 		return printAllDatasets(ctx, dEnv)
 	case apr.NArg() > 0:
-		return createBranch(ctx, dEnv, apr, usage)
+		return createBranch(sqlCtx, queryEngine, apr, args, usage)
 	default:
-		return printBranches(ctx, dEnv, apr, usage)
+		return printBranches(sqlCtx, queryEngine, apr, usage)
 	}
 }
 
-func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, _ cli.UsagePrinter) int {
+type branchMeta struct {
+	name   string
+	hash   string
+	remote bool
+}
+
+func getBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, remote bool) ([]branchMeta, error) {
+	var command string
+	if remote {
+		command = "SELECT name, hash from dolt_remote_branches"
+	} else {
+		command = "SELECT name, hash from dolt_branches"
+	}
+
+	schema, rowIter, err := queryEngine.Query(sqlCtx, command)
+	if err != nil {
+		return nil, err
+	}
+
+	var branches []branchMeta
+
+	for {
+		row, err := rowIter.Next(sqlCtx)
+		if err == io.EOF {
+			return branches, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		if len(row) != 2 {
+			return nil, fmt.Errorf("unexpectedly received multiple columns in '%s': %s", command, row)
+		}
+
+		rowStrings, err := sqlfmt.SqlRowAsStrings(row, schema)
+		if err != nil {
+			return nil, err
+		}
+
+		branches = append(branches, branchMeta{name: rowStrings[0], hash: rowStrings[1], remote: remote})
+	}
+}
+
+func printBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.ArgParseResults, _ cli.UsagePrinter) int {
 	branchSet := set.NewStrSet(apr.Args)
 
 	verbose := apr.Contains(cli.VerboseFlag)
 	printRemote := apr.Contains(cli.RemoteParam)
 	printAll := apr.Contains(cli.AllFlag)
 
-	branches, err := dEnv.DoltDB.GetHeadRefs(ctx)
-
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to read refs from db").AddCause(err).Build(), nil)
+	var branches []branchMeta
+	if printAll || printRemote {
+		remoteBranches, err := getBranches(sqlCtx, queryEngine, true)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.BuildDError("error: failed to read remote branches from db").AddCause(err).Build(), nil)
+		}
+		branches = append(branches, remoteBranches...)
 	}
 
-	currentBranch, err := dEnv.RepoStateReader().CWBHeadRef()
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to read refs from db").AddCause(err).Build(), nil)
+	if printAll || !printRemote {
+		localBranches, err := getBranches(sqlCtx, queryEngine, false)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.BuildDError("error: failed to read local branches from db").AddCause(err).Build(), nil)
+		}
+		branches = append(branches, localBranches...)
 	}
+
+	currentBranch, err := getActiveBranchName(sqlCtx, queryEngine)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to read current branch from db").AddCause(err).Build(), nil)
+	}
+
 	sort.Slice(branches, func(i, j int) bool {
-		return branches[i].String() < branches[j].String()
+		return branches[i].name < branches[j].name
 	})
 
 	for _, branch := range branches {
-		if branchSet.Size() > 0 && !branchSet.Contains(branch.GetPath()) {
-			continue
-		}
-
-		cs, _ := doltdb.NewCommitSpec(branch.String())
-
-		shouldPrint := false
-		switch branch.GetType() {
-		case ref.BranchRefType:
-			shouldPrint = printAll || !printRemote
-		case ref.RemoteRefType:
-			shouldPrint = printAll || printRemote
-		}
-		if !shouldPrint {
+		if branchSet.Size() > 0 && !branchSet.Contains(branch.name) {
 			continue
 		}
 
 		commitStr := ""
-		branchName := "  " + branch.GetPath()
+		branchName := "  " + branch.name
 		branchLen := len(branchName)
-		if ref.Equals(branch, currentBranch) {
-			branchName = "* " + color.GreenString(branch.GetPath())
-		} else if branch.GetType() == ref.RemoteRefType {
-			branchName = "  " + color.RedString("remotes/"+branch.GetPath())
-			branchLen += len("remotes/")
+		if branch.name == currentBranch {
+			branchName = "* " + color.GreenString(branch.name)
+		} else if branch.remote {
+			branchName = "  " + color.RedString(branch.name)
 		}
 
 		if verbose {
-			cm, err := dEnv.DoltDB.Resolve(ctx, cs, currentBranch)
-
-			if err == nil {
-				h, err := cm.HashOf()
-
-				if err != nil {
-					return HandleVErrAndExitCode(errhand.BuildDError("error: failed to hash commit").AddCause(err).Build(), nil)
-				}
-
-				commitStr = h.String()
-			}
+			commitStr = branch.hash
 		}
 
+		// This silliness is requires to properly support color characters in branch names.
 		fmtStr := fmt.Sprintf("%%s%%%ds\t%%s", 48-branchLen)
 		line := fmt.Sprintf(fmtStr, branchName, "", commitStr)
 
@@ -197,12 +253,12 @@ func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	return 0
 }
 
-func printCurrentBranch(dEnv *env.DoltEnv) int {
-	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+func printCurrentBranch(sqlCtx *sql.Context, queryEngine cli.Queryist) int {
+	currentBranchName, err := getActiveBranchName(sqlCtx, queryEngine)
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), nil)
+		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to read current branch from db").AddCause(err).Build(), nil)
 	}
-	cli.Println(headRef.GetPath())
+	cli.Println(currentBranchName)
 	return 0
 }
 
@@ -243,159 +299,185 @@ func printAllDatasets(ctx context.Context, dEnv *env.DoltEnv) int {
 	return 0
 }
 
-func moveBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
-	if apr.NArg() != 2 {
+// generateBranchSql returns the query that will call the `DOLT_BRANCH` stored procedure.
+func generateBranchSql(args []string) (string, error) {
+	var buffer bytes.Buffer
+	var first bool
+	queryValues := make([]interface{}, 0, len(args))
+	first = true
+	buffer.WriteString("CALL DOLT_BRANCH(")
+
+	for _, arg := range args {
+		if !first {
+			buffer.WriteString(", ")
+		}
+		first = false
+		buffer.WriteString("?")
+		queryValues = append(queryValues, arg)
+	}
+	buffer.WriteString(")")
+
+	return dbr.InterpolateForDialect(buffer.String(), queryValues, dialect.MySQL)
+}
+
+func createBranch(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.ArgParseResults, args []string, usage cli.UsagePrinter) int {
+	trackVal, setTrackUpstream := apr.GetValue(cli.TrackFlag)
+	if setTrackUpstream {
+		if trackVal == "inherit" {
+			return HandleVErrAndExitCode(errhand.BuildDError("--track='inherit' is not supported yet").Build(), usage)
+		}
+
+		if trackVal == "direct" {
+			if apr.NArg() != 2 {
+				return HandleVErrAndExitCode(errhand.BuildDError("invalid arguments").Build(), usage)
+			}
+		} else {
+			// --track did not have an associated parameter; we parsed a positional arg as its value.
+			// There is no way to determine what position that arg was supposed to be in.
+
+			// --track accepts a parameter but can also be passed in on its own.
+			// We can determine which based on the number of arguments.
+			// We initially parsed args assuming that --track accepted a parameter,
+			// but now we have to parse the args again with it as a flag instead.
+
+			var err error
+			apr, err = cli.CreateBranchArgParserWithNoTrackValue().Parse(args)
+			if err != nil {
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+			}
+		}
+	}
+
+	if apr.NArg() != 1 && apr.NArg() != 2 {
 		usage()
 		return 1
 	}
 
-	force := apr.Contains(cli.ForceFlag)
-	src := apr.Arg(0)
-	dest := apr.Arg(1)
-	err := actions.RenameBranch(ctx, dEnv.DbData(), src, apr.Arg(1), dEnv, force, nil)
-
-	var verr errhand.VerboseError
-	if err != nil {
-		if err == doltdb.ErrBranchNotFound {
-			verr = errhand.BuildDError("fatal: branch '%s' not found", src).Build()
-		} else if err == actions.ErrAlreadyExists {
-			verr = errhand.BuildDError("fatal: A branch named '%s' already exists.", dest).Build()
-		} else if err == doltdb.ErrInvBranchName {
-			verr = errhand.BuildDError("fatal: '%s' is not a valid branch name.", dest).Build()
-		} else if err == actions.ErrCOBranchDelete {
-			verr = errhand.BuildDError("error: Cannot delete checked out branch '%s'", src).Build()
-		} else {
-			bdr := errhand.BuildDError("fatal: Unexpected error moving branch from '%s' to '%s'", src, dest)
-			verr = bdr.AddCause(err).Build()
-		}
+	if apr.Contains(cli.AllFlag) {
+		cli.PrintErrln("--all/-a can only be supplied when listing branches, not when creating branches")
+		return 1
 	}
 
-	return HandleVErrAndExitCode(verr, usage)
+	if apr.Contains(cli.VerboseFlag) {
+		cli.PrintErrln("--verbose/-v can only be supplied when listing branches, not when creating branches")
+		return 1
+	}
+
+	if apr.Contains(cli.RemoteParam) {
+		cli.PrintErrln("--remote/-r can only be supplied when listing or deleting branches, not when creating branches")
+		return 1
+	}
+
+	result := callStoredProcedure(sqlCtx, queryEngine, args)
+
+	if result != 0 {
+		return result
+	}
+
+	if apr.Contains(cli.TrackFlag) {
+		cli.Printf("branch '%s' set up to track '%s'\n", apr.Arg(0), apr.Arg(1))
+	}
+
+	return 0
 }
 
-func copyBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
-	if apr.NArg() != 2 {
+func moveBranch(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.ArgParseResults, args []string, usage cli.UsagePrinter) int {
+	if apr.NArg() != 1 && apr.NArg() != 2 {
 		usage()
 		return 1
 	}
 
-	force := apr.Contains(cli.ForceFlag)
-	src := apr.Arg(0)
-	dest := apr.Arg(1)
-	err := actions.CopyBranch(ctx, dEnv, src, dest, force)
-
-	var verr errhand.VerboseError
-	if err != nil {
-		if err == doltdb.ErrBranchNotFound {
-			verr = errhand.BuildDError("fatal: branch '%s' not found", src).Build()
-		} else if err == actions.ErrAlreadyExists {
-			verr = errhand.BuildDError("fatal: A branch named '%s' already exists.", dest).Build()
-		} else if err == doltdb.ErrInvBranchName {
-			verr = errhand.BuildDError("fatal: '%s' is not a valid branch name.", dest).Build()
-		} else {
-			bdr := errhand.BuildDError("fatal: Unexpected error copying branch from '%s' to '%s'", src, dest)
-			verr = bdr.AddCause(err).Build()
-		}
+	if apr.Contains(cli.AllFlag) {
+		cli.PrintErrln("--all/-a can only be supplied when listing branches, not when moving branches")
+		return 1
 	}
 
-	return HandleVErrAndExitCode(verr, usage)
+	if apr.Contains(cli.VerboseFlag) {
+		cli.PrintErrln("--verbose/-v can only be supplied when listing branches, not when moving branches")
+		return 1
+	}
+
+	if apr.Contains(cli.RemoteParam) {
+		cli.PrintErrln("--remote/-r can only be supplied when listing or deleting branches, not when moving branches")
+		return 1
+	}
+
+	return callStoredProcedure(sqlCtx, queryEngine, args)
 }
 
-func deleteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter, force bool) int {
+func copyBranch(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.ArgParseResults, args []string, usage cli.UsagePrinter) int {
+	if apr.NArg() != 1 && apr.NArg() != 2 {
+		usage()
+		return 1
+	}
+
+	if apr.Contains(cli.AllFlag) {
+		cli.PrintErrln("--all/-a can only be supplied when listing branches, not when copying branches")
+		return 1
+	}
+
+	if apr.Contains(cli.VerboseFlag) {
+		cli.PrintErrln("--verbose/-v can only be supplied when listing branches, not when copying branches")
+		return 1
+	}
+
+	if apr.Contains(cli.RemoteParam) {
+		cli.PrintErrln("--remote/-r can only be supplied when listing or deleting branches, not when copying branches")
+		return 1
+	}
+
+	return callStoredProcedure(sqlCtx, queryEngine, args)
+}
+
+func deleteBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.ArgParseResults, args []string, usage cli.UsagePrinter) int {
 	if apr.NArg() == 0 {
 		usage()
 		return 1
 	}
 
-	for i := 0; i < apr.NArg(); i++ {
-		brName := apr.Arg(i)
-
-		err := actions.DeleteBranch(ctx, dEnv.DbData(), brName, actions.DeleteOptions{
-			Force:  force,
-			Remote: apr.Contains(cli.RemoteParam),
-		}, dEnv, nil)
-
-		if err != nil {
-			var verr errhand.VerboseError
-			if err == doltdb.ErrBranchNotFound {
-				verr = errhand.BuildDError("fatal: branch '%s' not found", brName).Build()
-			} else if err == actions.ErrUnmergedBranch {
-				verr = errhand.BuildDError(ErrUnmergedBranchDelete.Error(), brName, brName).Build()
-			} else if err == actions.ErrCOBranchDelete {
-				verr = errhand.BuildDError("error: Cannot delete checked out branch '%s'", brName).Build()
-			} else {
-				bdr := errhand.BuildDError("fatal: Unexpected error deleting '%s'", brName)
-				verr = bdr.AddCause(err).Build()
-			}
-			return HandleVErrAndExitCode(verr, usage)
-		}
-	}
-
-	return HandleVErrAndExitCode(nil, usage)
-}
-
-func createBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
-	if apr.NArg() == 0 || apr.NArg() > 2 {
-		usage()
+	if apr.Contains(cli.AllFlag) {
+		cli.PrintErrln("--all/-a can only be supplied when listing branches, not when deleting branches")
 		return 1
 	}
 
-	var remote string
-	var remoteBranch string
-	newBranch := apr.Arg(0)
-	startPt := "head"
-	if apr.NArg() == 2 {
-		startPt = apr.Arg(1)
+	if apr.Contains(cli.VerboseFlag) {
+		cli.PrintErrln("--verbose/-v can only be supplied when listing branches, not when deleting branches")
+		return 1
 	}
 
-	trackVal, setTrackUpstream := apr.GetValue(cli.TrackFlag)
-	if setTrackUpstream {
-		if trackVal == "inherit" {
-			return HandleVErrAndExitCode(errhand.BuildDError("--track='inherit' is not supported yet").Build(), usage)
-		} else if trackVal == "direct" && apr.NArg() != 2 {
-			return HandleVErrAndExitCode(errhand.BuildDError("invalid arguments").Build(), usage)
-		}
+	return callStoredProcedure(sqlCtx, queryEngine, args)
+}
 
-		remotes, err := dEnv.RepoStateReader().GetRemotes()
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), usage)
-		}
-
-		if apr.NArg() == 2 {
-			// branchName and startPt are already set
-			remote, remoteBranch = actions.ParseRemoteBranchName(startPt)
-			_, remoteOk := remotes[remote]
-			if !remoteOk {
-				return HandleVErrAndExitCode(errhand.BuildDError("'%s' is not a valid remote ref and a branch '%s' cannot be created from it", startPt, newBranch).Build(), usage)
-			}
-		} else {
-			// if track option is defined with no value,
-			// the track value can either be starting point name OR branch name
-			startPt = trackVal
-			remote, remoteBranch = actions.ParseRemoteBranchName(startPt)
-			_, remoteOk := remotes[remote]
-			if !remoteOk {
-				newBranch = trackVal
-				startPt = apr.Arg(0)
-				remote, remoteBranch = actions.ParseRemoteBranchName(startPt)
-				_, remoteOk = remotes[remote]
-				if !remoteOk {
-					return HandleVErrAndExitCode(errhand.BuildDError("'%s' is not a valid remote ref and a branch '%s' cannot be created from it", startPt, newBranch).Build(), usage)
-				}
-			}
+func generateForceDeleteMessage(args []string) string {
+	newArgs := ""
+	for _, arg := range args {
+		if arg != "--force" && arg != "-f" && arg != "-D" && arg != "-d" {
+			newArgs = newArgs + " " + arg
 		}
 	}
+	return newArgs
+}
 
-	err := actions.CreateBranchWithStartPt(ctx, dEnv.DbData(), newBranch, startPt, apr.Contains(cli.ForceFlag), nil)
+// callStoredProcedure generates and exectures the SQL query for calling the DOLT_BRANCH stored procedure.
+// All actions that modify branches delegate to this after they validate their arguments.
+// Actions that don't modify branches, such as `dolt branch --list` and `dolt branch --show-current`, don't call
+// this method.
+func callStoredProcedure(sqlCtx *sql.Context, queryEngine cli.Queryist, args []string) int {
+	query, err := generateBranchSql(args)
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), usage)
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), nil)
 	}
-
-	if setTrackUpstream {
-		// at this point new branch is created
-		branchRef := ref.NewBranchRef(newBranch)
-		verr := SetRemoteUpstreamForBranchRef(dEnv, remote, remoteBranch, branchRef)
-		return HandleVErrAndExitCode(verr, usage)
+	schema, rowIter, err := queryEngine.Query(sqlCtx, query)
+	if err != nil {
+		if strings.Contains(err.Error(), "is not fully merged") {
+			newErrorMessage := fmt.Sprintf("%s. If you are sure you want to delete it, run 'dolt branch -D%s'", err.Error(), generateForceDeleteMessage(args))
+			return HandleVErrAndExitCode(errhand.BuildDError(newErrorMessage).Build(), nil)
+		}
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("error: %s", err.Error())), nil)
+	}
+	_, err = sql.RowIterToRows(sqlCtx, schema, rowIter)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to get result rows for query %s", query).AddCause(err).Build(), nil)
 	}
 
 	return 0
