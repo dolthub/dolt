@@ -229,6 +229,92 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "Show create table as of with FKs",
+		SetUpScript: []string{
+			"set @Commit0 = '';",
+			"set @Commit1 = '';",
+			"set @Commit2 = '';",
+			"set @Commit3 = '';",
+			"set @Commit0 = hashof('main');",
+			"create table parent(id int primary key,  pv1 int,  pv2 varchar(20), index v1 (pv1),  index v2 (pv2));",
+			"create table child (pk int primary key, c1 int, c3 int);",
+			"alter table child add constraint fk1 foreign key (c1) references parent(pv1);",
+			"call dolt_add('.');",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'creating tables parent and child');",
+			"alter table child add column c2 varchar(20);",
+			"alter table child drop foreign key fk1;",
+			"alter table child add constraint fk2 foreign key (c2) references parent(pv2);",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'adding column c2 and constraint');",
+			"alter table child drop column c1;",
+			"alter table child add constraint unique_c2 unique(c2);",
+			"call dolt_commit_hash_out(@Commit3, '-am', 'dropping column c1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "show create table child as of @Commit0;",
+				ExpectedErr: sql.ErrTableNotFound,
+			},
+			{
+				Query: "show create table child as of @Commit1;",
+				Expected: []sql.Row{
+					{"child", "CREATE TABLE `child` (\n" +
+						"  `pk` int NOT NULL,\n" +
+						"  `c1` int,\n" +
+						"  `c3` int,\n" +
+						"  PRIMARY KEY (`pk`),\n" +
+						"  KEY `c1` (`c1`),\n" +
+						"  CONSTRAINT `fk1` FOREIGN KEY (`c1`) REFERENCES `parent` (`pv1`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
+					},
+				},
+			},
+			{
+				Query: "show create table child as of @Commit2;",
+				Expected: []sql.Row{
+					{"child", "CREATE TABLE `child` (\n" +
+						"  `pk` int NOT NULL,\n" +
+						"  `c1` int,\n" +
+						"  `c3` int,\n" +
+						"  `c2` varchar(20),\n" +
+						"  PRIMARY KEY (`pk`),\n" +
+						"  KEY `c1` (`c1`),\n" +
+						"  KEY `c2` (`c2`),\n" +
+						"  CONSTRAINT `fk2` FOREIGN KEY (`c2`) REFERENCES `parent` (`pv2`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
+					},
+				},
+			},
+			{
+				Query: "show create table child as of @Commit3;",
+				Expected: []sql.Row{
+					{"child", "CREATE TABLE `child` (\n" +
+						"  `pk` int NOT NULL,\n" +
+						"  `c3` int,\n" +
+						"  `c2` varchar(20),\n" +
+						"  PRIMARY KEY (`pk`),\n" +
+						"  UNIQUE KEY `unique_c2` (`c2`),\n" +
+						"  CONSTRAINT `fk2` FOREIGN KEY (`c2`) REFERENCES `parent` (`pv2`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
+					},
+				},
+			},
+			{
+				Query: "show create table child as of HEAD;",
+				Expected: []sql.Row{
+					{"child", "CREATE TABLE `child` (\n" +
+						"  `pk` int NOT NULL,\n" +
+						"  `c3` int,\n" +
+						"  `c2` varchar(20),\n" +
+						"  PRIMARY KEY (`pk`),\n" +
+						"  UNIQUE KEY `unique_c2` (`c2`),\n" +
+						"  CONSTRAINT `fk2` FOREIGN KEY (`c2`) REFERENCES `parent` (`pv2`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
+					},
+				},
+			},
+		},
+	},
 }
 
 var DescribeTableAsOfScriptTest = queries.ScriptTest{

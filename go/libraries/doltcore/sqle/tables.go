@@ -765,7 +765,7 @@ func checksInSchema(sch schema.Schema) []sql.CheckDefinition {
 
 // GetDeclaredForeignKeys implements sql.ForeignKeyTable
 func (t *DoltTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
-	root, err := t.getRoot(ctx)
+	root, err := t.workingRoot(ctx)
 	if err != nil {
 		return nil, err
 	}
