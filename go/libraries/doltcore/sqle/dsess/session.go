@@ -141,7 +141,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	if dbStateFound {
 		// If we got an unqualified name, use the current working set head
 		if rev == "" {
-			rev = dbState.currRevSpec
+			rev = dbState.checkedOutRevSpec
 		}
 
 		branchState, ok := dbState.heads[strings.ToLower(rev)]
@@ -222,6 +222,39 @@ func (d *DoltSession) RemoveDbState(_ *sql.Context, dbName string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	delete(d.dbStates, strings.ToLower(dbName))
+	// also clear out any db-level caches for this db
+	d.dbCache.Clear()
+	return nil
+}
+
+// RemoveBranchState removes the session state for a branch, for example, if a branch is deleted.
+func (d *DoltSession) RemoveBranchState(ctx *sql.Context, dbName string, branchName string) error {
+	baseName, _ := SplitRevisionDbName(dbName)
+
+	checkedOutState, ok, err := d.lookupDbState(ctx, baseName)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return sql.ErrDatabaseNotFound.New(baseName)
+	}
+
+	d.mu.Lock()
+	delete(checkedOutState.dbState.heads, strings.ToLower(branchName))
+	d.mu.Unlock()
+
+	db, ok := d.provider.BaseDatabase(ctx, baseName)
+	if !ok {
+		return sql.ErrDatabaseNotFound.New(baseName)
+	}
+
+	defaultHead, err := DefaultHead(baseName, db)
+	if err != nil {
+		return err
+	}
+
+	checkedOutState.dbState.checkedOutRevSpec = defaultHead
+
 	// also clear out any db-level caches for this db
 	d.dbCache.Clear()
 	return nil
@@ -411,7 +444,7 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 			return d.commitWorkingSet(ctx, dirtyBranchState, tx)
 		}
 
-		_, err = d.DoltCommit(ctx, dirtyBranchState.dbState.dbName, tx, pendingCommit)
+		_, err = d.DoltCommit(ctx, ctx.GetCurrentDatabase(), tx, pendingCommit)
 		return err
 	} else {
 		return d.commitWorkingSet(ctx, dirtyBranchState, tx)
@@ -423,8 +456,8 @@ func (d *DoltSession) validateDoltCommit(ctx *sql.Context, dirtyBranchState *bra
 	if currDb == "" {
 		return fmt.Errorf("cannot dolt_commit with no database selected")
 	}
-	currDbBaseName, _ := SplitRevisionDbName(currDb)
-	dirtyDbBaseName, _ := SplitRevisionDbName(dirtyBranchState.dbState.dbName)
+	currDbBaseName, rev := SplitRevisionDbName(currDb)
+	dirtyDbBaseName := dirtyBranchState.dbState.dbName
 
 	if strings.ToLower(currDbBaseName) != strings.ToLower(dirtyDbBaseName) {
 		return fmt.Errorf("no changes to dolt_commit on database %s", currDbBaseName)
@@ -438,12 +471,12 @@ func (d *DoltSession) validateDoltCommit(ctx *sql.Context, dirtyBranchState *bra
 		return fmt.Errorf("no database state found for %s", currDbBaseName)
 	}
 
-	dirtyBranch, err := dirtyBranchState.workingSet.Ref().ToHeadRef()
-	if err != nil {
-		return err
+	if rev == "" {
+		rev = dbState.checkedOutRevSpec
 	}
-	if dbState.currRevSpec != dirtyBranch.GetPath() {
-		return fmt.Errorf("no changes to dolt_commit on branch %s", dbState.currRevSpec)
+
+	if strings.ToLower(rev) != strings.ToLower(dirtyBranchState.head) {
+		return fmt.Errorf("no changes to dolt_commit on branch %s", rev)
 	}
 
 	return nil
@@ -480,7 +513,7 @@ func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.T
 // commitWorkingSet commits the working set for the branch state given, without creating a new dolt commit.
 func (d *DoltSession) commitWorkingSet(ctx *sql.Context, branchState *branchState, tx sql.Transaction) error {
 	commitFunc := func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error) {
-		ws, err := dtx.Commit(ctx, workingSet, branchState.dbState.dbName)
+		ws, err := dtx.Commit(ctx, workingSet, branchState.RevisionDbName())
 		return ws, nil, err
 	}
 
@@ -611,7 +644,7 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, branchState *branchStat
 			return nil, err
 		}
 
-		err = d.SetWorkingSet(ctx, branchState.dbState.dbName, branchState.WorkingSet().WithStagedRoot(newRoots.Staged))
+		err = d.SetWorkingSet(ctx, ctx.GetCurrentDatabase(), branchState.WorkingSet().WithStagedRoot(newRoots.Staged))
 		if err != nil {
 			return nil, err
 		}
@@ -924,8 +957,6 @@ func (d *DoltSession) SwitchWorkingSet(
 		return sql.ErrDatabaseNotFound.New(dbName)
 	}
 	dbState.checkedOutRevSpec = headRef.GetPath()
-	dbState.currRevSpec = headRef.GetPath()
-	dbState.currRevType = RevisionTypeBranch
 
 	d.mu.Unlock()
 
@@ -942,41 +973,6 @@ func (d *DoltSession) SwitchWorkingSet(
 	ctx.SetCurrentDatabase(baseName)
 
 	return d.setDbSessionVars(ctx, branchState, false)
-}
-
-func (d *DoltSession) UseDatabase(ctx *sql.Context, db sql.Database) error {
-	sdb, ok := db.(SqlDatabase)
-	if !ok {
-		// Could be an externally provided db such as `mysql` or `information_schema`, in which case there's nothing for
-		// this hook to do
-		return nil
-	}
-
-	branchState, ok, err := d.lookupDbState(ctx, sdb.RevisionQualifiedName())
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return sql.ErrDatabaseNotFound.New(db.Name())
-	}
-
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	// Set the session state for this database according to what database name was USEd
-	// In the case of a revision qualified name, that will be the revision specified
-	// In the case of an unqualified name (USE mydb), this will be the last checked out head in this session.
-	_, rev := SplitRevisionDbName(sdb.RequestedName())
-	dbState := branchState.dbState
-	if rev == "" {
-		dbState.currRevSpec = dbState.checkedOutRevSpec
-		dbState.currRevType = RevisionTypeBranch
-	} else {
-		dbState.currRevSpec = sdb.Revision()
-		dbState.currRevType = sdb.RevisionType()
-	}
-
-	return nil
 }
 
 func (d *DoltSession) WorkingSet(ctx *sql.Context, dbName string) (*doltdb.WorkingSet, error) {
@@ -1082,7 +1078,7 @@ func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string
 // other state tracking metadata.
 func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	revisionQualifiedName := strings.ToLower(db.RevisionQualifiedName())
-	baseName, rev := SplitRevisionDbName(revisionQualifiedName)
+	baseName, _ := SplitRevisionDbName(revisionQualifiedName)
 
 	DefineSystemVariablesForDB(baseName)
 
@@ -1136,9 +1132,6 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		if err != nil {
 			return err
 		}
-
-		sessionState.currRevType = db.RevisionType()
-		sessionState.currRevSpec = db.Revision()
 	}
 
 	if !dbStateCached && usingDoltTransaction {
@@ -1148,7 +1141,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		}
 	}
 
-	branchState := sessionState.NewEmptyBranchState(rev)
+	branchState := sessionState.NewEmptyBranchState(db.Revision(), db.RevisionType())
 
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
 	//  the writer with one that errors out
@@ -1246,31 +1239,24 @@ func (d *DoltSession) CWBHeadRef(ctx *sql.Context, dbName string) (ref.DoltRef, 
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	if branchState.dbState.currRevType != RevisionTypeBranch {
+	if branchState.revisionType != RevisionTypeBranch {
 		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
 	}
 
-	return ref.NewBranchRef(branchState.dbState.currRevSpec), nil
+	return ref.NewBranchRef(branchState.head), nil
 }
 
-// CurrentHead returns the current head for the db named, which must be unqualifed. Used for bootstrap resolving the
+// CurrentHead returns the current head for the db named, which must be unqualified. Used for bootstrap resolving the
 // correct session head when a database name from the client is unqualified.
-// TODO: audit uses, see if basename can be removed
 func (d *DoltSession) CurrentHead(ctx *sql.Context, dbName string) (string, bool, error) {
-	dbName = strings.ToLower(dbName)
-
-	var baseName, rev string
-	baseName, rev = SplitRevisionDbName(dbName)
-	if rev != "" {
-		return "", false, fmt.Errorf("invalid database name: %s", dbName)
-	}
+	baseName := strings.ToLower(dbName)
 
 	d.mu.Lock()
 	dbState, ok := d.dbStates[baseName]
 	d.mu.Unlock()
 
 	if ok {
-		return dbState.currRevSpec, true, nil
+		return dbState.checkedOutRevSpec, true, nil
 	}
 
 	return "", false, nil

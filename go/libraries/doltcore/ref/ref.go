@@ -105,6 +105,17 @@ func Equals(dr, other DoltRef) bool {
 	return dr.GetType() == other.GetType() && dr.GetPath() == other.GetPath()
 }
 
+// EqualsCaseInsensitive returns true if two DoltRefs have the same Type and Path, comparing the path case-insensitive
+func EqualsCaseInsensitive(dr, other DoltRef) bool {
+	if dr == nil && other == nil {
+		return true
+	} else if dr == nil || other == nil {
+		return false
+	}
+
+	return dr.GetType() == other.GetType() && strings.ToLower(dr.GetPath()) == strings.ToLower(other.GetPath())
+}
+
 // EqualsStr compares a DoltRef to a reference string to see if they are referring to the same thing
 func EqualsStr(dr DoltRef, str string) bool {
 	other, err := Parse(str)
