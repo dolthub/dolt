@@ -2573,6 +2573,10 @@ var DoltInfoSchemaScripts = []queries.ScriptTest{
 				Query:    "select column_name from information_schema.columns where table_schema = 'mydb/b2' and table_name = 't' order by 1;",
 				Expected: []sql.Row{{"a"}, {"b"}, {"c"}},
 			},
+			{
+				Query:    "select count(*) from information_schema.columns where table_schema = 'mydb/b3' and table_name = 't' order by 1;",
+				Expected: []sql.Row{{0}},
+			},
 		},
 	},
 }
