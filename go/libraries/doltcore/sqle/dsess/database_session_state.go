@@ -64,9 +64,6 @@ type DatabaseSessionState struct {
 	// checkedOutRevSpec is the revision of the database when referred to by its base name. Changes only when a 
 	// `dolt_checkout` occurs.
 	checkedOutRevSpec string
-	// checkedOutRevType is the current revision type of the database when referred to by its base name. Changes only 
-	// when a `dolt_checkout` occurs.
-	checkedOutRevType RevisionType
 	// heads records the in-memory DB state for every branch head accessed by the session
 	heads map[string]*branchState
 	// headCache records the session-caches for every branch head accessed by the session
@@ -107,6 +104,8 @@ type branchState struct {
 	dbState *DatabaseSessionState
 	// head is the name of the branch head for this state
 	head string
+	// revisionType is the type of revision this branchState tracks
+	revisionType RevisionType
 	// headCommit is the head commit for this database. May be nil for databases tied to a detached root value, in which
 	// case headRoot must be set.
 	headCommit *doltdb.Commit
@@ -127,10 +126,11 @@ type branchState struct {
 
 // NewEmptyBranchState creates a new branch state for the given head name with the head provided, adds it to the db
 // state, and returns it. The state returned is empty except for its identifiers and must be filled in by the caller.
-func (dbState *DatabaseSessionState) NewEmptyBranchState(head string) *branchState {
+func (dbState *DatabaseSessionState) NewEmptyBranchState(head string, revisionType RevisionType) *branchState {
 	b := &branchState{
 		dbState: dbState,
 		head:    head,
+		revisionType: revisionType,
 	}
 
 	dbState.heads[head] = b

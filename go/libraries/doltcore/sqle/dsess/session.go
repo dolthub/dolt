@@ -912,7 +912,6 @@ func (d *DoltSession) SwitchWorkingSet(
 		return sql.ErrDatabaseNotFound.New(dbName)
 	}
 	dbState.checkedOutRevSpec = headRef.GetPath()
-	dbState.checkedOutRevType = RevisionTypeBranch
 
 	d.mu.Unlock()
 
@@ -1088,8 +1087,6 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		if err != nil {
 			return err
 		}
-
-		sessionState.checkedOutRevType = db.RevisionType()
 	}
 
 	if !dbStateCached && usingDoltTransaction {
@@ -1099,7 +1096,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 		}
 	}
 
-	branchState := sessionState.NewEmptyBranchState(rev)
+	branchState := sessionState.NewEmptyBranchState(rev, db.RevisionType())
 
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
 	//  the writer with one that errors out
@@ -1197,7 +1194,7 @@ func (d *DoltSession) CWBHeadRef(ctx *sql.Context, dbName string) (ref.DoltRef, 
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	if branchState.dbState.checkedOutRevType != RevisionTypeBranch {
+	if branchState.revisionType != RevisionTypeBranch {
 		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
 	}
 
