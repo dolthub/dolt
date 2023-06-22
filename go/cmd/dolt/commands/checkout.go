@@ -84,11 +84,11 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	helpPrt, usagePrt := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, checkoutDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, helpPrt)
 
-	queryEngine, sqlCtx, close, err := cliCtx.QueryEngine(ctx)
+	queryEngine, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usagePrt)
 	}
-	defer close()
+	defer closeFunc()
 
 	branchOrTrack := apr.Contains(cli.CheckoutCoBranch) || apr.Contains(cli.TrackFlag)
 	if (branchOrTrack && apr.NArg() > 1) || (!branchOrTrack && apr.NArg() == 0) {
