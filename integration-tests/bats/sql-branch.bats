@@ -170,5 +170,35 @@ SQL
     # Attempting to delete the db's default branch results in an error
     run dolt sql -q "CALL DOLT_BRANCH('-D', 'main');"
     [ $status -eq 1 ]
-    [[ "$output" =~ "attempted to delete checked out branch" ]] || false
+    [[ "$output" =~ "Cannot delete checked out branch 'main'" ]] || false
+}
+
+@test "sql-branch: CALL DOLT_BRANCH -d -r to remove remote branch" {
+    mkdir -p remotes/origin
+    dolt remote add origin file://./remotes/origin
+    dolt sql -q "create table t1 (id int primary key);"
+    dolt commit -Am "initial commit"
+    dolt sql -q "CALL DOLT_BRANCH('b1')"
+
+    dolt push --set-upstream origin b1
+
+    run dolt branch -r
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "origin/b1" ]] || false
+
+    dolt sql -q "CALL DOLT_BRANCH('-D', '-r', 'origin/b1')"
+
+    run dolt branch -r
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "origin/b1" ]] || false
+}
+
+@test "sql-branch: CALL DOLT_BRANCH -m on session active branch (dolt sql)" {
+    dolt branch other
+    echo "call dolt_checkout('other'); call dolt_branch('-m', 'other', 'newOther')" | dolt sql
+    run dolt branch
+    [ $status -eq 0 ]
+    [[ "$output" =~ "newOther" ]] || false
+    [[ "$output" =~ "main" ]] || false
+    [[ ! "$output" =~ "other" ]] || false
 }

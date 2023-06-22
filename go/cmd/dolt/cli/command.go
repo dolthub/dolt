@@ -293,14 +293,14 @@ fatal: empty ident name not allowed
 
 // CheckUserNameAndEmail returns true if the user name and email are set for this environment, or prints an error and
 // returns false if not.
-func CheckUserNameAndEmail(dEnv *env.DoltEnv) bool {
-	_, err := dEnv.Config.GetString(env.UserEmailKey)
+func CheckUserNameAndEmail(config *env.DoltCliConfig) bool {
+	_, err := config.GetString(env.UserEmailKey)
 	if err != nil {
 		PrintErr(userNameRequiredError)
 		return false
 	}
 
-	_, err = dEnv.Config.GetString(env.UserNameKey)
+	_, err = config.GetString(env.UserNameKey)
 	if err != nil {
 		PrintErr(userNameRequiredError)
 		return false

@@ -1279,6 +1279,14 @@ func TestMultiDbTransactions(t *testing.T) {
 			enginetest.TestScript(t, h, script)
 		}()
 	}
+
+	for _, script := range MultiDbSavepointTests {
+		func() {
+			h := newDoltHarness(t)
+			defer h.Close()
+			enginetest.TestTransactionScript(t, h, script)
+		}()
+	}
 }
 
 func TestMultiDbTransactionsPrepared(t *testing.T) {
@@ -1365,7 +1373,7 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 			},
 			{
 				Query:    "show databases;",
-				Expected: []sql.Row{{"mydb"}, {"information_schema"}, {"mysql"}},
+				Expected: []sql.Row{{"mydb"}, {"mydb/" + commithash}, {"information_schema"}, {"mysql"}},
 			},
 			{
 				Query:    "select * from t01",

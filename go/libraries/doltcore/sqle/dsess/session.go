@@ -36,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -58,6 +59,7 @@ type DoltSession struct {
 	globalsConf      config.ReadWriteConfig
 	branchController *branch_control.Controller
 	mu               *sync.Mutex
+	fs               filesys.Filesys
 
 	// If non-nil, this will be returned from ValidateSession.
 	// Used by sqle/cluster to put a session into a terminal err state.
@@ -82,6 +84,7 @@ func DefaultSession(pro DoltDatabaseProvider) *DoltSession {
 		globalsConf:      config.NewMapConfig(make(map[string]string)),
 		branchController: branch_control.CreateDefaultController(), // Default sessions are fine with the default controller
 		mu:               &sync.Mutex{},
+		fs:               pro.FileSystem(),
 	}
 }
 
@@ -107,6 +110,7 @@ func NewDoltSession(
 		globalsConf:      globals,
 		branchController: branchController,
 		mu:               &sync.Mutex{},
+		fs:               pro.FileSystem(),
 	}
 
 	return sess, nil
@@ -156,7 +160,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	// in that case.
 	revisionQualifiedName := dbName
 	if rev != "" {
-		revisionQualifiedName = revisionDbName(baseName, rev)
+		revisionQualifiedName = RevisionDbName(baseName, rev)
 	}
 
 	database, ok, err := d.provider.SessionDatabase(ctx, revisionQualifiedName)
@@ -183,7 +187,8 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	return dbState.heads[strings.ToLower(database.Revision())], true, nil
 }
 
-func revisionDbName(baseName string, rev string) string {
+// RevisionDbName returns the name of the revision db for the base name and revision string given
+func RevisionDbName(baseName string, rev string) string {
 	return baseName + DbRevisionDelimiter + rev
 }
 
@@ -234,7 +239,7 @@ func (d *DoltSession) SetValidateErr(err error) {
 // ValidateSession validates a working set if there are a valid sessionState with non-nil working set.
 // If there is no sessionState or its current working set not defined, then no need for validation,
 // so no error is returned.
-func (d *DoltSession) ValidateSession(ctx *sql.Context, dbName string) error {
+func (d *DoltSession) ValidateSession(ctx *sql.Context) error {
 	return d.validateErr
 }
 
@@ -640,9 +645,7 @@ func (d *DoltSession) Rollback(ctx *sql.Context, tx sql.Transaction) error {
 // CreateSavepoint creates a new savepoint for this transaction with the name given. A previously created savepoint
 // with the same name will be overwritten.
 func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, savepointName string) error {
-	dbName := ctx.GetTransactionDatabase()
-
-	if TransactionsDisabled(ctx) || dbName == "" {
+	if TransactionsDisabled(ctx) {
 		return nil
 	}
 
@@ -651,21 +654,27 @@ func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, save
 		return fmt.Errorf("expected a DoltTransaction")
 	}
 
-	branchState, ok, err := d.lookupDbState(ctx, dbName)
-	if err != nil {
-		return err
+	roots := make(map[string]*doltdb.RootValue)
+	for _, db := range d.provider.DoltDatabases() {
+		branchState, ok, err := d.lookupDbState(ctx, db.Name())
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("session state for database %s not found", db.Name())
+		}
+		baseName, _ := SplitRevisionDbName(db.Name())
+		roots[strings.ToLower(baseName)] = branchState.WorkingSet().WorkingRoot()
 	}
 
-	dtx.CreateSavepoint(savepointName, branchState.roots().Working)
+	dtx.CreateSavepoint(savepointName, roots)
 	return nil
 }
 
 // RollbackToSavepoint sets this session's root to the one saved in the savepoint name. It's an error if no savepoint
 // with that name exists.
 func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, savepointName string) error {
-	dbName := ctx.GetTransactionDatabase()
-
-	if TransactionsDisabled(ctx) || dbName == "" {
+	if TransactionsDisabled(ctx) {
 		return nil
 	}
 
@@ -674,14 +683,16 @@ func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, 
 		return fmt.Errorf("expected a DoltTransaction")
 	}
 
-	root := dtx.RollbackToSavepoint(savepointName)
-	if root == nil {
+	roots := dtx.RollbackToSavepoint(savepointName)
+	if roots == nil {
 		return sql.ErrSavepointDoesNotExist.New(savepointName)
 	}
 
-	err := d.SetRoot(ctx, dbName, root)
-	if err != nil {
-		return err
+	for dbName, root := range roots {
+		err := d.SetRoot(ctx, dbName, root)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -690,9 +701,7 @@ func (d *DoltSession) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, 
 // ReleaseSavepoint removes the savepoint name from the transaction. It's an error if no savepoint with that name
 // exists.
 func (d *DoltSession) ReleaseSavepoint(ctx *sql.Context, tx sql.Transaction, savepointName string) error {
-	dbName := ctx.GetTransactionDatabase()
-
-	if TransactionsDisabled(ctx) || dbName == "" {
+	if TransactionsDisabled(ctx) {
 		return nil
 	}
 
@@ -701,8 +710,8 @@ func (d *DoltSession) ReleaseSavepoint(ctx *sql.Context, tx sql.Transaction, sav
 		return fmt.Errorf("expected a DoltTransaction")
 	}
 
-	root := dtx.ClearSavepoint(savepointName)
-	if root == nil {
+	existed := dtx.ClearSavepoint(savepointName)
+	if !existed {
 		return sql.ErrSavepointDoesNotExist.New(savepointName)
 	}
 
@@ -852,6 +861,14 @@ func (d *DoltSession) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roo
 
 	workingSet := sessionState.WorkingSet().WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged)
 	return d.SetWorkingSet(ctx, dbName, workingSet)
+}
+
+func (d *DoltSession) SetFileSystem(fs filesys.Filesys) {
+	d.fs = fs
+}
+
+func (d *DoltSession) GetFileSystem() filesys.Filesys {
+	return d.fs
 }
 
 // SetWorkingSet sets the working set for this session.

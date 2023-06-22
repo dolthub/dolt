@@ -17,6 +17,7 @@ package dprocedures
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -53,7 +54,11 @@ func doDoltBranch(ctx *sql.Context, args []string) (int, error) {
 		return 1, fmt.Errorf("Empty database name.")
 	}
 
-	apr, err := cli.CreateBranchArgParser().Parse(args)
+	// CreateBranchArgParser has the common flags for the command line and the stored procedure.
+	// The stored procedure doesn't support all actions, so we have a shorter description for -r.
+	ap := cli.CreateBranchArgParser()
+	ap.SupportsFlag(cli.RemoteParam, "r", "Delete a remote tracking branch.")
+	apr, err := ap.Parse(args)
 	if err != nil {
 		return 1, err
 	}
@@ -120,6 +125,19 @@ func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseRe
 		if err != nil {
 			return err
 		}
+		var headOnCLI string
+		fs, err := sess.Provider().FileSystemForDatabase(dbName)
+		if err == nil {
+			if repoState, err := env.LoadRepoState(fs); err == nil {
+				headOnCLI = repoState.Head.Ref.GetPath()
+			}
+		}
+		if headOnCLI == oldBranchName && sqlserver.RunningInServerMode() && !shouldAllowDefaultBranchDeletion(ctx) {
+			return fmt.Errorf("unable to rename branch '%s', because it is the default branch for "+
+				"database '%s'; this can by changed on the command line, by stopping the sql-server, "+
+				"running `dolt checkout <another_branch> and restarting the sql-server", oldBranchName, dbName)
+		}
+
 	} else if err := branch_control.CanDeleteBranch(ctx, newBranchName); err != nil {
 		// If force is enabled, we can overwrite the destination branch, so we require a permission check here, even if the
 		// destination branch doesn't exist. An unauthorized user could simply rerun the command without the force flag.
@@ -157,6 +175,8 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParse
 		return InvalidArgErr
 	}
 
+	currBase, currBranch := dsess.SplitRevisionDbName(ctx.GetCurrentDatabase())
+
 	// The current branch on CLI can be deleted as user can be on different branch on SQL and delete it from SQL session.
 	// To update current head info on RepoState, we need DoltEnv to load CLI environment.
 	var headOnCLI string
@@ -188,14 +208,22 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParse
 			}
 		}
 
+		// If we deleted the branch this client is connected to, change the current branch to the default
+		if strings.ToLower(currBranch) == strings.ToLower(branchName) {
+			ctx.SetCurrentDatabase(currBase)
+		}
+
 		if headOnCLI == branchName && sqlserver.RunningInServerMode() && !shouldAllowDefaultBranchDeletion(ctx) {
 			return fmt.Errorf("unable to delete branch '%s', because it is the default branch for "+
 				"database '%s'; this can by changed on the command line, by stopping the sql-server, "+
 				"running `dolt checkout <another_branch> and restarting the sql-server", branchName, dbName)
 		}
 
+		remote := apr.Contains(cli.RemoteParam)
+
 		err = actions.DeleteBranch(ctx, dbData, branchName, actions.DeleteOptions{
-			Force: force,
+			Force:  force,
+			Remote: remote,
 		}, dSess.Provider(), rsc)
 		if err != nil {
 			return err
@@ -235,6 +263,10 @@ func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) er
 	branchRef := ref.NewBranchRef(branchName)
 
 	return sessionManager.Iter(func(session sql.Session) (bool, error) {
+		if session.ID() == ctx.Session.ID() {
+			return false, nil
+		}
+
 		sess, ok := session.(*dsess.DoltSession)
 		if !ok {
 			return false, fmt.Errorf("unexpected session type: %T", session)

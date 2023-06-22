@@ -136,6 +136,13 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		}
 	}
 
+	if apr.Contains(cli.ForceFlag) {
+		err = ctx.SetSessionVariable(ctx, "dolt_force_transaction_commit", 1)
+		if err != nil {
+			return "", false, fmt.Errorf(err.Error())
+		}
+	}
+
 	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{
 		Message:    msg,
 		Date:       t,
