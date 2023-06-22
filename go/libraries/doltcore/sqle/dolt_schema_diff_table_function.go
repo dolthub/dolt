@@ -16,9 +16,6 @@ package sqle
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"io"
 	"sort"
 	"strings"
@@ -27,7 +24,10 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 var _ sql.TableFunction = (*SchemaDiffTableFunction)(nil)
@@ -301,7 +301,6 @@ func (ds *SchemaDiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.R
 			fromCreate, // 2
 			toCreate,   // 3
 			"",         // 4
-			false,      // 5
 		}
 
 		schemaDiffsFound := false
