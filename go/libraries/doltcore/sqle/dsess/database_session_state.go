@@ -15,6 +15,8 @@
 package dsess
 
 import (
+	"strings"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -61,14 +63,8 @@ type DatabaseSessionState struct {
 	// dbName is the name of the database this state applies to. This is always the base name of the database, without
 	// a revision qualifier.
 	dbName string
-	// currRevSpec is the current revision spec of the database when referred to by its base name. Changes when a
-	// `dolt_checkout` or `use` statement is executed.
-	currRevSpec string
-	// currRevType is the current revision type of the database when referred to by its base name. Changes when a
-	// `dolt_checkout` or `use` statement is executed.
-	currRevType RevisionType
-	// checkedOutRevSpec is the checked out revision specifier of the database. Changes only when a `dolt_checkout`
-	// occurs. `USE mydb` without a revision qualifier will get this revision.
+	// checkedOutRevSpec is the revision of the database when referred to by its base name. Changes only when a
+	// `dolt_checkout` occurs.
 	checkedOutRevSpec string
 	// heads records the in-memory DB state for every branch head accessed by the session
 	heads map[string]*branchState
@@ -110,6 +106,8 @@ type branchState struct {
 	dbState *DatabaseSessionState
 	// head is the name of the branch head for this state
 	head string
+	// revisionType is the type of revision this branchState tracks
+	revisionType RevisionType
 	// headCommit is the head commit for this database. May be nil for databases tied to a detached root value, in which
 	// case headRoot must be set.
 	headCommit *doltdb.Commit
@@ -130,19 +128,26 @@ type branchState struct {
 
 // NewEmptyBranchState creates a new branch state for the given head name with the head provided, adds it to the db
 // state, and returns it. The state returned is empty except for its identifiers and must be filled in by the caller.
-func (dbState *DatabaseSessionState) NewEmptyBranchState(head string) *branchState {
+func (dbState *DatabaseSessionState) NewEmptyBranchState(head string, revisionType RevisionType) *branchState {
 	b := &branchState{
-		dbState: dbState,
-		head:    head,
+		dbState:      dbState,
+		head:         head,
+		revisionType: revisionType,
 	}
 
-	dbState.heads[head] = b
-	_, ok := dbState.headCache[head]
+	lowerHead := strings.ToLower(head)
+	dbState.heads[lowerHead] = b
+	_, ok := dbState.headCache[lowerHead]
 	if !ok {
-		dbState.headCache[head] = newSessionCache()
+		dbState.headCache[lowerHead] = newSessionCache()
 	}
 
 	return b
+}
+
+// RevisionDbName returns the revision-qualified database name for this branch state
+func (bs *branchState) RevisionDbName() string {
+	return RevisionDbName(bs.dbState.dbName, bs.head)
 }
 
 func (bs *branchState) WorkingRoot() *doltdb.RootValue {
@@ -160,7 +165,7 @@ func (bs *branchState) WriteSession() writer.WriteSession {
 }
 
 func (bs *branchState) SessionCache() *SessionCache {
-	return bs.dbState.headCache[bs.head]
+	return bs.dbState.headCache[strings.ToLower(bs.head)]
 }
 
 func (bs branchState) EditOpts() editor.Options {
