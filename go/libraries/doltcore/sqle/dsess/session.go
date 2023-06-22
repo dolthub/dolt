@@ -476,7 +476,7 @@ func (d *DoltSession) CommitWorkingSet(ctx *sql.Context, dbName string, tx sql.T
 // commitWorkingSet commits the working set for the branch state given, without creating a new dolt commit.
 func (d *DoltSession) commitWorkingSet(ctx *sql.Context, branchState *branchState, tx sql.Transaction) error {
 	commitFunc := func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error) {
-		ws, err := dtx.Commit(ctx, workingSet, branchState.dbState.dbName)
+		ws, err := dtx.Commit(ctx, workingSet, branchState.RevisionDbName())
 		return ws, nil, err
 	}
 

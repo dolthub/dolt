@@ -145,6 +145,10 @@ func (dbState *DatabaseSessionState) NewEmptyBranchState(head string) *branchSta
 	return b
 }
 
+func (bs *branchState) RevisionDbName() string {
+	return RevisionDbName(bs.dbState.dbName, bs.head)
+}
+
 func (bs *branchState) WorkingRoot() *doltdb.RootValue {
 	return bs.roots().Working
 }
