@@ -61,6 +61,14 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 		return 1, errors.New("Improper usage.")
 	}
 
+	// If we're going to change the default branch, check to make sure it's clean.
+	if apr.Contains(cli.GlobalFlag) && !apr.Contains(cli.ForceFlag) {
+		err := assertCurrentBranchClean(ctx)
+		if err != nil {
+			return 1, err
+		}
+	}
+
 	dSess := dsess.DSessFromSess(ctx.Session)
 	dbData, ok := dSess.GetDbData(ctx, currentDbName)
 	if !ok {
@@ -227,9 +235,6 @@ func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, br
 			return err
 		}
 
-		if updateHead {
-			return doUpdateHead(ctx, sess, dbName, branchName, apr.Contains(cli.ForceFlag))
-		}
 		return nil
 	} else {
 		return fmt.Errorf("'%s' matched multiple (%v) remote tracking branches", branchName, len(remoteRefs))
@@ -342,15 +347,14 @@ func doUpdateHead(ctx *sql.Context, dSess *dsess.DoltSession, dbName, branchName
 			"this can by changed on the command line, by stopping the sql-server, " +
 			"running `dolt checkout <another_branch> and restarting the sql-server")
 	}
-	// If both the old and new branches are clean, change the default branch for future sessions.
-	// Otherwise, return an error.
 
 	if !isForce {
-		err := AssertNoWorkingSetChanges(ctx, ref.NewBranchRef(branchName))
+		err := assertTargetBranchClean(ctx, ref.NewBranchRef(branchName))
 		if err != nil {
 			return err
 		}
 	}
+
 	if fs, err := dSess.Provider().FileSystemForDatabase(dbName); err == nil {
 		if repoState, err := env.LoadRepoState(fs); err == nil {
 			repoState.Head.Ref = ref.NewBranchRef(branchName)
@@ -380,7 +384,7 @@ func checkoutTables(ctx *sql.Context, roots doltdb.Roots, name string, tables []
 
 // AssertNoWorkingSetChanges checks whether either the old or new branch has changes during a checkout.
 // If so, this means that the behavior of the checkout will be different when doing the checkout from a SQL session.
-func AssertNoWorkingSetChanges(sqlCtx *sql.Context, newBranchRef ref.BranchRef) error {
+func assertCurrentBranchClean(sqlCtx *sql.Context) error {
 	currentDbName := sqlCtx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(sqlCtx.Session)
 
@@ -395,8 +399,15 @@ func AssertNoWorkingSetChanges(sqlCtx *sql.Context, newBranchRef ref.BranchRef) 
 	}
 
 	if sourceHasChanges {
-		return fmt.Errorf("cannot checkout while a server is running if the source branch has uncommitted changes")
+		return fmt.Errorf("cannot checkout if the current branch has uncommitted changes")
 	}
+
+	return nil
+}
+
+func assertTargetBranchClean(sqlCtx *sql.Context, newBranchRef ref.BranchRef) error {
+	currentDbName := sqlCtx.GetCurrentDatabase()
+	dSess := dsess.DSessFromSess(sqlCtx.Session)
 
 	db, foundDb := dSess.GetDoltDB(sqlCtx, currentDbName)
 	if !foundDb {
@@ -414,7 +425,7 @@ func AssertNoWorkingSetChanges(sqlCtx *sql.Context, newBranchRef ref.BranchRef) 
 	}
 
 	if destinationHasChanges {
-		return fmt.Errorf("cannot checkout while a server is running if the destination branch has uncommitted changes")
+		return fmt.Errorf("cannot checkout if the destination branch has uncommitted changes")
 	}
 
 	return nil
