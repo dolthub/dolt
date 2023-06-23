@@ -791,7 +791,7 @@ func getTableInfoAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName str
 		return diff.TableInfo{}, fmt.Errorf("error: unable to get foreign keys for table '%s': %w", tableName, err)
 	}
 
-	sch, createStmt, err := getTableSchemaAtRef(queryist, sqlCtx, tableName, ref, fks)
+	sch, createStmt, err := getTableSchemaAtRef(queryist, sqlCtx, tableName, ref)
 	if err != nil {
 		return diff.TableInfo{}, fmt.Errorf("error: unable to get schema for table '%s': %w", tableName, err)
 	}
@@ -813,7 +813,7 @@ func getTableInfoAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName str
 
 
 
-func getTableSchemaAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName string, ref string, fks []diff.ForeignKeyInfo) (sch schema.Schema, createStmt string, err error) {
+func getTableSchemaAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName string, ref string) (sch schema.Schema, createStmt string, err error) {
 	var rows []sql.Row
 	q := fmt.Sprintf("show create table %s as of '%s'", tableName, ref)
 	rows, err = getRowsForSql(queryist, sqlCtx, q)
@@ -981,12 +981,6 @@ func diffUserTable(
 	}
 
 	if dArgs.diffParts&SchemaOnlyDiff != 0 {
-		//schemaDiffSummary, err := getSchemaDiffSummaryBetweenRefs(queryist, sqlCtx, dArgs.fromRef, dArgs.toRef, tableName)
-		//if err != nil {
-		//	return errhand.BuildDError("cannot retrieve schema diff between '%s' and '%s'", dArgs.fromRef, dArgs.toRef).AddCause(err).Build()
-		//}
-		//if schemaDiffSummary != nil {
-		//}
 		err = dw.WriteTableSchemaDiff(fromTableInfo, toTableInfo, tableSummary)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
@@ -995,8 +989,6 @@ func diffUserTable(
 
 	if tableSummary.IsDrop() && dArgs.diffOutput == SQLDiffOutput {
 		return nil // don't output DELETE FROM statements after DROP TABLE
-	} else if tableSummary.IsAdd() {
-		//fromSch = toSch
 	}
 
 	verr := diffRows(queryist, sqlCtx, tableSummary, fromTableInfo, toTableInfo, dArgs, dw)
