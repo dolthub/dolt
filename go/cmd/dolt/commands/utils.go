@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 )
 
 var fwtStageName = "fwt"
@@ -234,37 +235,35 @@ func newLateBindingEngine(
 		// database set when you begin using them.
 		sqlCtx.SetCurrentDatabase(database)
 
+		rawDb := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
+		salt, err := rawDb.Salt()
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
 		var dbUser string
-		if creds.Username != "" {
-			rawDb := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
+		if !creds.Unspecified {
+			dbUser = creds.Username
+
 			// When running in local mode, we want to attempt respect the user/pwd they provided. If they didn't provide
 			// one, we'll give then super user privs. Respecting the user/pwd is not a security stance - it's there
 			// to enable testing of application settings.
 
-			salt, err := rawDb.Salt()
-			if err != nil {
-				return nil, nil, nil, err
-			}
-
 			authResponse := buildAuthResponse(salt, config.ServerPass)
-			// The port is meaningless here. It's going to be stripped in the ValidateHash function
-			addr, _ := net.ResolveTCPAddr("tcp", "localhost:3306")
 
-			authenticated, err := rawDb.ValidateHash(salt, creds.Username, authResponse, addr)
+			err := passwordValidate(rawDb, salt, dbUser, authResponse)
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			if authenticated == nil {
-				// Shouldn't happen - err above should happen instead. But just in case...
-				return nil, nil, nil, fmt.Errorf("unable to authenticate user %s", config.ServerUser)
-			}
 
-			// A legit user/pwd was provided. We'll retrieve the user below, and skip the super user promotion.
-			dbUser = creds.Username
-		}
-		if dbUser == "" {
+		} else {
 			dbUser = DefaultUser
-			se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(dbUser, config.ServerHost, config.ServerPass)
+			// No cred presented. Use "root" but ensure that root has an empty password.
+			err := passwordValidate(rawDb, salt, dbUser, nil)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			rawDb.AddSuperUser(dbUser, config.ServerHost, "")
 		}
 
 		// Set client to specified user
@@ -273,6 +272,23 @@ func newLateBindingEngine(
 	}
 
 	return lateBinder, nil
+}
+
+// passwordValidate validates the password for the given user. This is a helper function around ValidateHash. Returns
+// nil if the user is authenticated, an error otherwise.
+func passwordValidate(rawDb *mysql_db.MySQLDb, salt []byte, user string, authResponse []byte) error {
+	// The port is meaningless here. It's going to be stripped in the ValidateHash function
+	addr, _ := net.ResolveTCPAddr("tcp", "localhost:3306")
+
+	authenticated, err := rawDb.ValidateHash(salt, user, authResponse, addr)
+	if err != nil {
+		return err
+	}
+	if authenticated == nil {
+		// Shouldn't happen - err above should happen instead. But just in case...
+		return fmt.Errorf("unable to authenticate user %s", user)
+	}
+	return nil
 }
 
 // buildAuthResponse takes the user password and server salt to construct an authResponse. This is the client
