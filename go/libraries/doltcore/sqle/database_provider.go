@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/clusterdb"
 	"sort"
 	"strings"
 	"sync"
@@ -267,7 +268,7 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 	for _, db := range p.databases {
 		all = append(all, db)
 
-		if showBranches {
+		if showBranches && db.Name() != clusterdb.DoltClusterDbName {
 			revisionDbs, err := p.allRevisionDbs(ctx, db)
 			if err != nil {
 				// TODO: this interface is wrong, needs to return errors

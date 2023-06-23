@@ -28,6 +28,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
+const DoltClusterDbName = "dolt_cluster"
+
 type database struct {
 	statusProvider ClusterStatusProvider
 }
@@ -38,7 +40,7 @@ var _ dsess.SqlDatabase = database{}
 const StatusTableName = "dolt_cluster_status"
 
 func (database) Name() string {
-	return "dolt_cluster"
+	return DoltClusterDbName
 }
 
 func (db database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Table, bool, error) {
