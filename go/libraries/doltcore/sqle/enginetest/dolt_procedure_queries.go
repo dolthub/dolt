@@ -58,4 +58,155 @@ end
 			},
 		},
 	},
+	{
+		Name: "dolt_branch in a loop",
+		SetUpScript: []string{
+			"create table t(a int primary key auto_increment, b int);",
+			"call dolt_commit('-Am', 'new table');",
+			`create procedure branches()
+begin
+  declare i int default 1;
+	commits: loop
+		insert into t(b) values (i);
+		call dolt_branch(concat('branch', i));
+		if i >= 4 then
+			leave commits;
+		end if;
+		set i = i + 1;
+	end loop commits;
+end
+`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "call branches();",
+				SkipResultsCheck: true, // return value is a bit odd, needs investigation
+			},
+			{
+				Query: "select name from dolt_branches order by 1",
+				Expected: []sql.Row{{"branch1"}, {"branch2"}, {"branch3"}, {"branch4"}, {"main"}},
+			},
+			{
+				Query: "select * from t order by 1",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
+			},
+		},
+	},
+	{
+		Name: "dolt_branch in a loop, insert after branch",
+		SetUpScript: []string{
+			"create table t(a int primary key auto_increment, b int);",
+			"call dolt_commit('-Am', 'new table');",
+			`create procedure branches()
+begin
+  declare i int default 1;
+	commits: loop
+		call dolt_branch(concat('branch', i));
+		insert into t(b) values (i);
+		if i >= 4 then
+			leave commits;
+		end if;
+		set i = i + 1;
+	end loop commits;
+end
+`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "call branches();",
+				SkipResultsCheck: true, // return value is a bit odd, needs investigation
+			},
+			{
+				Query: "select name from dolt_branches order by 1",
+				Expected: []sql.Row{{"branch1"}, {"branch2"}, {"branch3"}, {"branch4"}, {"main"}},
+			},
+			{
+				Query: "select * from t order by 1",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
+			},
+		},
+	},
+	{
+		Name: "dolt_branch in conditional chain",
+		SetUpScript: []string{
+			"create table t(a int primary key auto_increment, b int);",
+			"call dolt_commit('-Am', 'new table');",
+			`create procedure branches()
+begin
+  declare i int default 1;
+	commits: loop
+		if i = 1 then
+			insert into t(b) values (i);
+			call dolt_branch('branch1');
+		elseif i = 2 then
+			call dolt_branch('branch2');
+			insert into t(b) values (i);
+		elseif i = 3 then
+			insert into t(b) values (i);
+			call dolt_branch('branch3');
+		else 
+			call dolt_branch('branch4');
+			insert into t(b) values (i);
+		end if;
+		if i >= 4 then
+			leave commits;
+		end if;
+		set i = i + 1;
+	end loop commits;
+end
+`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "call branches();",
+				SkipResultsCheck: true, // return value is a bit odd, needs investigation
+			},
+			{
+				Query: "select name from dolt_branches order by 1",
+				Expected: []sql.Row{{"branch1"}, {"branch2"}, {"branch3"}, {"branch4"}, {"main"}},
+			},
+			{
+				Query: "select * from t order by 1",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
+			},
+		},
+	},
+	{
+		Name: "checkout new branch, insert, and commit in procedure",
+		SetUpScript: []string{
+			"create table t(a int primary key auto_increment, b int);",
+			"call dolt_commit('-Am', 'new table');",
+			`create procedure edit_on_branch()
+begin
+	call dolt_checkout('-b', 'branch1');
+	insert into t(b) values (100);
+  call dolt_add('.');
+	call dolt_commit('-m', 'new row');
+	call dolt_checkout('main');
+end
+`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "call edit_on_branch();",
+				SkipResultsCheck: true, // return value is a bit odd, needs investigation
+			},
+			{
+				Query: "select active_branch()",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query: "select * from t order by 1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select name from dolt_branches order by 1",
+				Expected: []sql.Row{{"branch1"}, {"main"}},
+			},
+			{
+				Query: "select * from `mydb/branch1`.t order by 1",
+				Expected: []sql.Row{{1, 100}},
+			},
+		},
+	},
 }

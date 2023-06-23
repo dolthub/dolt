@@ -1301,6 +1301,16 @@ func TestDoltStoredProcedures(t *testing.T) {
 	}
 }
 
+func TestDoltStoredProceduresPrepared(t *testing.T) {
+	for _, script := range DoltProcedureTests {
+		func() {
+			h := newDoltHarness(t)
+			defer h.Close()
+			enginetest.TestScriptPrepared(t, h, script)
+		}()
+	}
+}
+
 func TestEvents(t *testing.T) {
 	doltHarness := newDoltHarness(t)
 	defer doltHarness.Close()
