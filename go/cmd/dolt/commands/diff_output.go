@@ -200,26 +200,6 @@ func (t tabularDiffWriter) WriteTableSchemaDiff(fromTableInfo, toTableInfo *diff
 		cli.Println(textdiff.LineDiff(fromCreateStmt, toCreateStmt))
 	}
 
-	resolvedFromFks := map[string]struct{}{}
-	if fromTableInfo != nil {
-		for _, fk := range fromTableInfo.Fks {
-			if len(fk.ReferencedTableColumns) > 0 {
-				resolvedFromFks[fk.Name] = struct{}{}
-			}
-		}
-	}
-
-	if toTableInfo != nil {
-		for _, fk := range toTableInfo.Fks {
-			if _, ok := resolvedFromFks[fk.Name]; ok {
-				continue
-			}
-			if len(fk.ReferencedTableColumns) > 0 {
-				cli.Println(fmt.Sprintf("resolved foreign key `%s` on table `%s`", fk.Name, fk.TableName))
-			}
-		}
-	}
-
 	return nil
 }
 

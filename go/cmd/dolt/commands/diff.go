@@ -786,27 +786,15 @@ func isDoltSchemasTable(toTableName, fromTableName string) bool {
 }
 
 func getTableInfoAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName string, ref string) (diff.TableInfo, error) {
-	fks, err := getForeignKeysForTable(queryist, sqlCtx, tableName, ref)
-	if err != nil {
-		return diff.TableInfo{}, fmt.Errorf("error: unable to get foreign keys for table '%s': %w", tableName, err)
-	}
-
 	sch, createStmt, err := getTableSchemaAtRef(queryist, sqlCtx, tableName, ref)
 	if err != nil {
 		return diff.TableInfo{}, fmt.Errorf("error: unable to get schema for table '%s': %w", tableName, err)
 	}
 
-	fksParentSch, err := getFkParentSchemas(queryist, sqlCtx, fks, ref)
-	if err != nil {
-		return diff.TableInfo{}, fmt.Errorf("error: unable to get parent schemas for foreign keys for table '%s': %w", tableName, err)
-	}
-
 	tableInfo := diff.TableInfo{
-		Name:         tableName,
-		Sch:          sch,
-		CreateStmt:   createStmt,
-		Fks:          fks,
-		FksParentSch: fksParentSch,
+		Name:       tableName,
+		Sch:        sch,
+		CreateStmt: createStmt,
 	}
 	return tableInfo, nil
 }

@@ -40,9 +40,9 @@ const (
 )
 
 type TableInfo struct {
-	Name         string
-	Sch          schema.Schema
-	CreateStmt   string
+	Name       string
+	Sch        schema.Schema
+	CreateStmt string
 }
 // TableDelta represents the change of a single table between two roots.
 // FromFKs and ToFKs contain Foreign Keys that constrain columns in this table,

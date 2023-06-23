@@ -668,7 +668,7 @@ EOF
     [[ ! "$output" =~ "+ | 0" ]] || false
 }
 
-@test "diff: new foreign key added and resolved" {
+@test "diff: new foreign key added and resolves" {
     dolt sql <<SQL
 create table parent (i int primary key);
 create table child (j int primary key, foreign key (j) references parent (i));
@@ -676,10 +676,10 @@ SQL
 
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'resolved foreign key' ]] || false
+    [[ "$output" =~ "+  CONSTRAINT \`npsbmr30\` FOREIGN KEY (\`j\`) REFERENCES \`parent\` (\`i\`)" ]] || false
 }
 
-@test "diff: new foreign key added and not resolved" {
+@test "diff: new foreign key added without foreign key check, and does not resolve" {
     dolt sql <<SQL
 set foreign_key_checks=0;
 create table parent (i int primary key);
@@ -690,7 +690,7 @@ SQL
 
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ 'resolved foreign key' ]] || false
+    [[ ! "$output" =~ "+  CONSTRAINT \`npsbmr30\` FOREIGN KEY (\`j\`) REFERENCES \`parent\` (\`i\`)" ]] || false
 }
 
 @test "diff: existing foreign key that was resolved is deleted" {
@@ -700,7 +700,7 @@ create table child (j int primary key, constraint fk foreign key (j) references 
 SQL
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'resolved foreign key' ]] || false
+    [[ "$output" =~ "+  CONSTRAINT \`fk\` FOREIGN KEY (\`j\`) REFERENCES \`parent\` (\`i\`)" ]] || false
 
     dolt add -A
     dolt commit -m "init commit"
@@ -708,7 +708,7 @@ SQL
 
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ 'resolved foreign key' ]] || false
+    [[ "$output" =~ "-  CONSTRAINT \`fk\` FOREIGN KEY (\`j\`) REFERENCES \`parent\` (\`i\`)" ]] || false
 }
 
 @test "diff: existing foreign key that was not resolved is deleted" {
@@ -719,7 +719,7 @@ create table child (j int primary key, constraint fk foreign key (j) references 
 SQL
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ 'resolved foreign key' ]] || false
+    [[ "$output" =~ "+  CONSTRAINT \`fk\` FOREIGN KEY (\`j\`) REFERENCES \`parent\` (\`i\`)" ]] || false
 
     dolt add -A
     dolt commit -m "init commit"
@@ -727,7 +727,7 @@ SQL
 
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ 'resolved foreign key' ]] || false
+    [[ "$output" =~ "-  CONSTRAINT \`fk\` FOREIGN KEY (\`j\`) REFERENCES \`parent\` (\`i\`)" ]] || false
 }
 
 @test "diff: existing foreign key that was resolved is modified" {
@@ -737,7 +737,7 @@ create table child (j int primary key, constraint fk foreign key (j) references 
 SQL
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'resolved foreign key' ]] || false
+    [[ "$output" =~ "+  CONSTRAINT \`fk\` FOREIGN KEY (\`j\`) REFERENCES \`parent\` (\`i\`)" ]] || false
 
     dolt add -A
     dolt commit -m "init commit"
@@ -747,7 +747,8 @@ SQL
 
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ 'resolved foreign key' ]] || false
+    [[ "$output" =~ "-  CONSTRAINT \`fk\` FOREIGN KEY (\`j\`) REFERENCES \`parent\` (\`i\`)" ]] || false
+    [[ "$output" =~ "+  CONSTRAINT \`fk\` FOREIGN KEY (\`k\`) REFERENCES \`parent\` (\`i\`)" ]] || false
 }
 
 @test "diff: existing foreign key that was not resolved is modified" {
@@ -758,7 +759,7 @@ create table child (j int primary key, constraint fk foreign key (j) references 
 SQL
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ 'resolved foreign key' ]] || false
+    [[ "$output" =~ "+  CONSTRAINT \`fk\` FOREIGN KEY (\`j\`) REFERENCES \`parent\` (\`i\`)" ]] || false
 
     dolt add -A
     dolt commit -m "init commit"
@@ -768,7 +769,9 @@ SQL
 
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'resolved foreign key' ]] || false
+    [[ "$output" =~ "-  CONSTRAINT \`fk\` FOREIGN KEY (\`j\`) REFERENCES \`parent\` (\`i\`)" ]] || false
+    [[ "$output" =~ "+  CONSTRAINT \`fk\` FOREIGN KEY (\`k\`) REFERENCES \`parent\` (\`i\`)" ]] || false
+
 }
 
 @test "diff: resolved FKs don't show up in diff results" {
@@ -799,7 +802,7 @@ SQL
     run dolt diff HEAD~ HEAD
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "dept_emp" ]] || false
-    ! [[ "$output" =~ "resolved foreign key" ]] || false
+    ! [[ "$output" =~ "FOREIGN KEY" ]] || false
 }
 
 @test "diff: with index and foreign key changes" {
