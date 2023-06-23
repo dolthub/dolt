@@ -36,12 +36,14 @@ import (
 var hashRegex = regexp.MustCompile(`^#?[0-9a-v]{32}$`)
 
 type commitInfo struct {
-	commitMeta   *datas.CommitMeta
-	commitHash   string
-	isHead       bool
-	parentHashes []string
-	height       uint64
-	branchNames  []string
+	commitMeta        *datas.CommitMeta
+	commitHash        string
+	isHead            bool
+	parentHashes      []string
+	height            uint64
+	localBranchNames  []string
+	remoteBranchNames []string
+	tagNames          []string
 }
 
 type showOpts struct {
@@ -397,15 +399,33 @@ func showCommitInfo(pager *outputpager.Pager, minParents int, showParents bool, 
 
 func showRefs(pager *outputpager.Pager, comm *commitInfo) {
 	// Do nothing if no associate branchNames
-	if len(comm.branchNames) == 0 {
+	if len(comm.localBranchNames) == 0 && len(comm.remoteBranchNames) == 0 && len(comm.tagNames) == 0 {
 		return
+	}
+
+	references := []string{}
+
+	for _, b := range comm.localBranchNames {
+		// branch names are bright green (32;1m)
+		branchName := fmt.Sprintf("\033[32;1m%s\033[0m", b)
+		references = append(references, branchName)
+	}
+	for _, b := range comm.remoteBranchNames {
+		// remote names are bright red (31;1m)
+		branchName := fmt.Sprintf("\033[31;1m%s\033[0m", b)
+		references = append(references, branchName)
+	}
+	for _, t := range comm.tagNames {
+		// tags names are bright yellow (33;1m)
+		tagName := fmt.Sprintf("\033[33;1mtag: %s\033[0m", t)
+		references = append(references, tagName)
 	}
 
 	pager.Writer.Write([]byte("\033[33m(\033[0m"))
 	if comm.isHead {
 		pager.Writer.Write([]byte("\033[36;1mHEAD -> \033[0m"))
 	}
-	pager.Writer.Write([]byte(strings.Join(comm.branchNames, "\033[33m, \033[0m"))) // Separate with Dim Yellow comma
+	pager.Writer.Write([]byte(strings.Join(references, "\033[33m, \033[0m"))) // Separate with Dim Yellow comma
 	pager.Writer.Write([]byte("\033[33m) \033[0m"))
 }
 
@@ -439,15 +459,16 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*com
 
 	localBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHash, true)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error getting branches for hash '%s': %v", commitHash, err)
 	}
 	remoteBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHash, false)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error getting remote branches for hash '%s': %v", commitHash, err)
 	}
-	branches := []string{}
-	branches = append(branches, localBranchesForHash...)
-	branches = append(branches, remoteBranchesForHash...)
+	tagsForHash, err := getTagsForHash(queryist, sqlCtx, commitHash)
+	if err != nil {
+		return nil, fmt.Errorf("error getting tags for hash '%s': %v", commitHash, err)
+	}
 
 	ci := &commitInfo{
 		commitMeta: &datas.CommitMeta{
@@ -457,10 +478,12 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*com
 			Description:   message,
 			UserTimestamp: int64(timestamp),
 		},
-		commitHash:  commitHash,
-		height:      height,
-		isHead:      isHead,
-		branchNames: branches,
+		commitHash:        commitHash,
+		height:            height,
+		isHead:            isHead,
+		localBranchNames:  localBranchesForHash,
+		remoteBranchNames: remoteBranchesForHash,
+		tagNames:          tagsForHash,
 	}
 
 	if parent != "" {
@@ -468,6 +491,21 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*com
 	}
 
 	return ci, nil
+}
+
+func getTagsForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash string) ([]string, error) {
+	q := fmt.Sprintf("select tag_name from dolt_tags where tag_hash = '%s'", targetHash)
+	rows, err := GetRowsForSql(queryist, sqlCtx, q)
+	if err != nil {
+		return nil, err
+	}
+
+	tags := []string{}
+	for _, row := range rows {
+		name := row[0].(string)
+		tags = append(tags, name)
+	}
+	return tags, nil
 }
 
 func getBranchesForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash string, getLocalBranches bool) ([]string, error) {
