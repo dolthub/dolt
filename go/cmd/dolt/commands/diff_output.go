@@ -257,8 +257,13 @@ func (s sqlDiffWriter) BeginTable(fromTableName, toTableName string, isAdd, isDr
 
 func (s sqlDiffWriter) WriteTableSchemaDiff(fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary) error {
 	stmts := tds.AlterStmts
-
+	if tds.IsAdd() {
+		stmts = []string{toTableInfo.CreateStmt}
+	}
 	for _, stmt := range stmts {
+		if len(stmt) == 0 {
+			continue
+		}
 		cli.Println(stmt)
 	}
 
@@ -386,8 +391,14 @@ func (j *jsonDiffWriter) BeginTable(fromTableName, toTableName string, isAdd, is
 
 func (j *jsonDiffWriter) WriteTableSchemaDiff(fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary) error {
 	stmts := tds.AlterStmts
+	if tds.IsAdd() {
+		stmts = []string{toTableInfo.CreateStmt}
+	}
 
 	for _, stmt := range stmts {
+		if len(stmt) == 0 {
+			continue
+		}
 		err := j.schemaDiffWriter.WriteSchemaDiff(stmt)
 		if err != nil {
 			return err
