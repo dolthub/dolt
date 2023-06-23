@@ -17,15 +17,14 @@ package commands
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/go-mysql-server/sql/parse"
-	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"io"
 	"strconv"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -34,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -799,8 +799,6 @@ func getTableInfoAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName str
 	return tableInfo, nil
 }
 
-
-
 func getTableSchemaAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName string, ref string) (sch schema.Schema, createStmt string, err error) {
 	var rows []sql.Row
 	q := fmt.Sprintf("show create table %s as of '%s'", tableName, ref)
@@ -818,7 +816,6 @@ func getTableSchemaAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName s
 	if createStmt[len(createStmt)-1] != ';' {
 		createStmt += ";"
 	}
-
 
 	sch, err = schemaFromCreateTableStmt(sqlCtx, createStmt)
 	if err != nil {

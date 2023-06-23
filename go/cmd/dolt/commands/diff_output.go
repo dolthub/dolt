@@ -18,7 +18,6 @@ import (
 	"context"
 	ejson "encoding/json"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"io"
 
 	textdiff "github.com/andreyvit/diff"
@@ -31,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/json"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/sqlexport"

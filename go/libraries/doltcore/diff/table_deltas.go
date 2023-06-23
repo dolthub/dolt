@@ -44,6 +44,7 @@ type TableInfo struct {
 	Sch        schema.Schema
 	CreateStmt string
 }
+
 // TableDelta represents the change of a single table between two roots.
 // FromFKs and ToFKs contain Foreign Keys that constrain columns in this table,
 // they do not contain Foreign Keys that reference this table.
@@ -73,6 +74,7 @@ type TableDeltaSummary struct {
 	ToTableName   string
 	AlterStmts    []string
 }
+
 // IsAdd returns true if the table was added between the fromRoot and toRoot.
 func (tds TableDeltaSummary) IsAdd() bool {
 	return tds.FromTableName == "" && tds.ToTableName != ""
