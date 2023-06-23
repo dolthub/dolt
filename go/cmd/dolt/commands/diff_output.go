@@ -256,16 +256,9 @@ func (s sqlDiffWriter) BeginTable(fromTableName, toTableName string, isAdd, isDr
 }
 
 func (s sqlDiffWriter) WriteTableSchemaDiff(fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary) error {
-	//for _, stmt := range tds.AlterStmts {
-	//	cli.Println(stmt)
-	//}
+	stmts := tds.AlterStmts
 
-	ddlStatements, err := diff.SqlSchemaDiff(fromTableInfo, toTableInfo, tds)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	for _, stmt := range ddlStatements {
+	for _, stmt := range stmts {
 		cli.Println(stmt)
 	}
 
@@ -392,17 +385,7 @@ func (j *jsonDiffWriter) BeginTable(fromTableName, toTableName string, isAdd, is
 }
 
 func (j *jsonDiffWriter) WriteTableSchemaDiff(fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary) error {
-	//for _, stmt := range tds.AlterStmts {
-	//	err := j.schemaDiffWriter.WriteSchemaDiff(stmt)
-	//	if err != nil {
-	//		return err
-	//	}
-	//}
-
-	stmts, err := diff.SqlSchemaDiff(fromTableInfo, toTableInfo, tds)
-	if err != nil {
-		return err
-	}
+	stmts := tds.AlterStmts
 
 	for _, stmt := range stmts {
 		err := j.schemaDiffWriter.WriteSchemaDiff(stmt)

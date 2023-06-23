@@ -621,8 +621,6 @@ func GetNonCreateNonDropTableSqlSchemaDiff(tds TableDeltaSummary, fromTableInfo,
 		return ddlStatements, nil
 	}
 
-	ddlStatements = append(ddlStatements, tds.AlterStmts...)
-
 	// Print changes between a primary key set change. It contains an ALTER TABLE DROP and an ALTER TABLE ADD
 	if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
 		ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropPks(tds.ToTableName))

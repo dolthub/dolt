@@ -332,7 +332,7 @@ func (ds *SchemaDiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.R
 			"",         // 4
 		}
 
-		statements, err := diff.GetNonCreateNonDropTableSqlSchemaDiff(delta, toSchemas, fromSchema, toSchema)
+		statements, err := GetNonCreateNonDropTableSqlSchemaDiff(delta, toSchemas, fromSchema, toSchema)
 		if err != nil {
 			return nil, err
 		}
