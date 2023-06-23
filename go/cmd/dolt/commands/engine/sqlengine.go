@@ -317,6 +317,16 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, sessFa
 			return nil, func() error { return nil }, err
 		}
 
+		// set dolt_show_branch_databases to 'true' to get all revision databases
+		// when accessing all databases. When retrieving events from each database,
+		// only the default branch database will return events that have 'ENABLE' status.
+		// All other databases will return events with 'DISABLE' status regardless of the
+		// stored status.
+		err = sess.SetSessionVariable(newCtx, dsess.ShowBranchDatabases, true)
+		if err != nil {
+			return nil, func() error { return nil }, err
+		}
+
 		ts, ok := newCtx.Session.(sql.TransactionSession)
 		if !ok {
 			return nil, func() error { return nil }, nil

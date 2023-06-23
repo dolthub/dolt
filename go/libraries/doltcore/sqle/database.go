@@ -1245,7 +1245,7 @@ func (db Database) GetEvent(ctx *sql.Context, name string) (sql.EventDefinition,
 		if strings.ToLower(frag.name) == strings.ToLower(name) {
 			return sql.EventDefinition{
 				Name:            frag.name,
-				CreateStatement: frag.fragment,
+				CreateStatement: updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment),
 				CreatedAt:       frag.created,
 				// TODO: fill LastAltered, it cannot be nil/zero value
 				LastAltered: frag.created,
@@ -1275,7 +1275,7 @@ func (db Database) GetEvents(ctx *sql.Context) ([]sql.EventDefinition, error) {
 	for _, frag := range frags {
 		events = append(events, sql.EventDefinition{
 			Name:            frag.name,
-			CreateStatement: frag.fragment,
+			CreateStatement: updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment),
 			CreatedAt:       frag.created,
 			// TODO: fill LastAltered, it cannot be nil/zero value
 			LastAltered: frag.created,
@@ -1287,11 +1287,22 @@ func (db Database) GetEvents(ctx *sql.Context) ([]sql.EventDefinition, error) {
 }
 
 // SaveEvent implements sql.EventDatabase.
-func (db Database) SaveEvent(ctx *sql.Context, ed sql.EventDetails) error {
-	// TODO: check if the db revision name is default branch name, if not always DISABLE the event.
+func (db Database) SaveEvent(ctx *sql.Context, ed sql.EventDetails) (bool, error) {
+	// If the database is not the default branch database, then the event is disabled.
+	// TODO: need better way to determine the default branch; currently it checks only 'main'
+	if db.revision != env.DefaultInitBranch && ed.Status == sql.EventStatus_Enable.String() {
+		// using revision database name
+		ed.Status = sql.EventStatus_Disable.String()
+		ctx.Session.Warn(&sql.Warning{
+			Level:   "Warning",
+			Code:    1105,
+			Message: fmt.Sprintf("Event status cannot be enabled for revision database."),
+		})
+	}
+
 	evDef := ed.GetEventStorageDefinition()
 	// TODO: store LastAltered, LastExecuted and TimezoneOffset in appropriate place
-	return db.addFragToSchemasTable(ctx,
+	return ed.Status == sql.EventStatus_Enable.String(), db.addFragToSchemasTable(ctx,
 		eventFragment,
 		evDef.Name,
 		evDef.CreateStatement,
@@ -1306,12 +1317,11 @@ func (db Database) DropEvent(ctx *sql.Context, name string) error {
 }
 
 // UpdateEvent implements sql.EventDatabase.
-func (db Database) UpdateEvent(ctx *sql.Context, originalName string, ed sql.EventDetails) error {
-	// TODO: check if the db revision name is default branch name, if not always DISABLE the event.
+func (db Database) UpdateEvent(ctx *sql.Context, originalName string, ed sql.EventDetails) (bool, error) {
 	// TODO: any EVENT STATUS change should also update the branch-specific event scheduling
 	err := db.DropEvent(ctx, originalName)
 	if err != nil {
-		return err
+		return false, err
 	}
 	return db.SaveEvent(ctx, ed)
 }
@@ -1320,6 +1330,17 @@ func (db Database) UpdateEvent(ctx *sql.Context, originalName string, ed sql.Eve
 func (db Database) UpdateLastExecuted(ctx *sql.Context, eventName string, lastExecuted time.Time) error {
 	// TODO: update LastExecuted in appropriate place
 	return nil
+}
+
+// updateEventStatusTemporarilyForNonDefaultBranch updates the event status from ENABLE to DISABLE if it's not default branch.
+// The event status metadata is not updated in storage, but only for display purposes we return event status as 'DISABLE'.
+// This function is used temporarily to implement logic of only allowing enabled events to be executed on default branch.
+func updateEventStatusTemporarilyForNonDefaultBranch(defaultBranch, createStmt string) string {
+	// TODO: need better way to determine the default branch; currently it checks only 'main'
+	if defaultBranch == env.DefaultInitBranch {
+		return createStmt
+	}
+	return strings.Replace(createStmt, "ENABLE", "DISABLE", 1)
 }
 
 // GetStoredProcedure implements sql.StoredProcedureDatabase.

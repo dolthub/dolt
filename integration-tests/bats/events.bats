@@ -13,7 +13,6 @@ setup() {
     skiponwindows "tests are flaky on Windows"
     setup_no_dolt_init
     make_repo repo1
-    make_repo repo2
 }
 
 teardown() {
@@ -27,15 +26,13 @@ teardown() {
     dolt sql -q "CREATE TABLE totals (id int PRIMARY KEY AUTO_INCREMENT, int_col int)"
 
     start_sql_server
-    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CREATE EVENT insert1 ON SCHEDULE EVERY 5 SECOND DO INSERT INTO totals (int_col) VALUES (1);"
-    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT SLEEP(7);"
-    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "DROP EVENT insert1;"
-    run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT COUNT(*) FROM totals;"
+    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CREATE EVENT insert1 ON SCHEDULE EVERY 1 DAY DO INSERT INTO totals (int_col) VALUES (1);"
+    run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "ALTER EVENT insert1 DISABLE; SELECT * FROM information_schema.events;"
     [ $status -eq 0 ]
-    [[ $output =~ "| 2        |" ]] || false
+    [[ $output =~ "DISABLED" ]] || false
 }
 
-@test "events: disabling recurring event with ends not defined should not be dropped" {
+@test "events: disabling recurring event should not be dropped" {
     cd repo1
     dolt sql -q "CREATE TABLE totals (id int PRIMARY KEY AUTO_INCREMENT, int_col int)"
 
@@ -133,4 +130,44 @@ teardown() {
     run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT * FROM information_schema.events;"
     [ $status -eq 0 ]
     [[ $output =~ "DISABLED" ]] || false
+}
+
+@test "events: checking out a branch should disable all events leaving the working set dirty" {
+    cd repo1
+    dolt sql -q "CREATE TABLE totals (id int PRIMARY KEY AUTO_INCREMENT, int_col int)"
+    dolt add .
+    dolt commit -m "create table"
+
+    start_sql_server
+    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CREATE EVENT insert1 ON SCHEDULE EVERY 2 SECOND ENDS CURRENT_TIMESTAMP + INTERVAL 3 SECOND ON COMPLETION PRESERVE DO INSERT INTO totals (int_col) VALUES (1); SELECT SLEEP(5);"
+    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CALL DOLT_COMMIT('-am','commit with an event')"
+
+    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CALL DOLT_CHECKOUT('-b','newbranch')"
+    # should be disabled
+    run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT * FROM information_schema.events;"
+    [ $status -eq 0 ]
+    [[ $output =~ "DISABLED" ]] || false
+}
+
+@test "events: events on default branch still runs after switching to non default branch" {
+    cd repo1
+    dolt sql -q "CREATE TABLE totals (id int PRIMARY KEY AUTO_INCREMENT, int_col int)"
+    dolt add .
+    dolt commit -m "create table"
+
+    start_sql_server
+    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CREATE EVENT insert1 ON SCHEDULE EVERY 5 SECOND ENDS CURRENT_TIMESTAMP + INTERVAL 1 MINUTE DO INSERT INTO totals (int_col) VALUES (1);"
+    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CALL DOLT_COMMIT('-am','commit with an event')"
+
+    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CALL DOLT_CHECKOUT('-b','newbranch')"
+    # should be disabled
+    run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT COUNT(*) FROM totals;"
+    [ $status -eq 0 ]
+    [[ $output =~ "| 1        |" ]] || false
+
+    sleep 5
+    # should not be 1
+    run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CALL DOLT_CHECKOUT('main'); SELECT COUNT(*) FROM totals;"
+    [ $status -eq 0 ]
+    [[ ! $output =~ "| 1        |" ]] || false
 }
