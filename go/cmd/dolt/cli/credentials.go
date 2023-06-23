@@ -24,9 +24,9 @@ import (
 )
 
 type UserPassword struct {
-	Username    string
-	Password    string
-	Unspecified bool // If true, the user and password were not provided by the user.
+	Username  string
+	Password  string
+	Specified bool // If true, the user and password were provided by the user.
 }
 
 const DOLT_ENV_PWD = "DOLT_CLI_PASSWORD"
@@ -52,11 +52,11 @@ func BuildUserPasswordPrompt(parsedArgs *argparser.ArgParseResults) (newParsedAr
 
 	if !hasUserId && !hasPassword {
 		// Common "out of box" behavior.
-		return newParsedArgs, &UserPassword{Username: "root", Password: "", Unspecified: true}, nil
+		return newParsedArgs, &UserPassword{Username: "root", Password: "", Specified: false}, nil
 	}
 
 	if hasUserId && hasPassword {
-		return newParsedArgs, &UserPassword{Username: userId, Password: password, Unspecified: false}, nil
+		return newParsedArgs, &UserPassword{Username: userId, Password: password, Specified: true}, nil
 	}
 
 	if hasUserId && !hasPassword {
@@ -82,14 +82,14 @@ func BuildUserPasswordPrompt(parsedArgs *argparser.ArgParseResults) (newParsedAr
 			}
 			Println()
 		}
-		return newParsedArgs, &UserPassword{Username: userId, Password: password, Unspecified: false}, nil
+		return newParsedArgs, &UserPassword{Username: userId, Password: password, Specified: true}, nil
 	}
 
 	testOverride, hasTestOverride := os.LookupEnv(DOLT_SILENCE_USER_REQ_FOR_TESTING)
 	if hasTestOverride && testOverride == "Y" {
 		// Used for BATS testing only. Typical usage will not hit this path, but we have many legacy tests which
 		// do not provide a user, and the DOLT_ENV_PWD is set to avoid the prompt.
-		return newParsedArgs, &UserPassword{Unspecified: false}, nil
+		return newParsedArgs, &UserPassword{Specified: true}, nil
 	}
 
 	return nil, nil, fmt.Errorf("When a password is provided, a user must also be provided. Use the --user flag to provide a username")

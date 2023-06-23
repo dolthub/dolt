@@ -14,7 +14,7 @@
 
 package cli
 
-// Constants for command line flags names. These tend to be used in multiple places, so definding
+// Constants for command line flags names. These tend to be used in multiple places, so defining
 // them low in the package dependency tree makes sense.
 const (
 	AbortParam       = "abort"

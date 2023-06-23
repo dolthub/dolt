@@ -242,7 +242,7 @@ func newLateBindingEngine(
 		}
 
 		var dbUser string
-		if !creds.Unspecified {
+		if creds.Specified {
 			dbUser = creds.Username
 
 			// When running in local mode, we want to attempt respect the user/pwd they provided. If they didn't provide

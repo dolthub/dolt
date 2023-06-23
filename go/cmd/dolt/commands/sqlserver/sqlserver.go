@@ -302,7 +302,7 @@ func GetClientConfig(cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argpar
 	yamlCfg = cfg.(YAMLConfig)
 
 	// if command line user argument was given, replace yaml's user and password
-	if !creds.Unspecified {
+	if creds.Specified {
 		yamlCfg.UserConfig.Name = &creds.Username
 		yamlCfg.UserConfig.Password = &creds.Password
 	}
@@ -392,7 +392,7 @@ func SetupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config S
 
 // getCommandLineConfig sets server config variables and persisted global variables with values defined on command line.
 // If not defined, it sets variables to default values. The creds option is available when building a client config, which
-// is used for most commands. `dolt sql-server` is special, and it's user/pwd is passed in vie apr, so creds must be nil
+// is used for most commands. `dolt sql-server` is special, and its user/pwd is pa`ssed in via apr, so creds must be nil
 // to indicate that the user/pwd should be taken from the apr.
 func getCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResults) (ServerConfig, error) {
 	config := DefaultServerConfig()

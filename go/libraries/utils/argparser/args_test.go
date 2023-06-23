@@ -293,9 +293,8 @@ func TestDropValue(t *testing.T) {
 	}
 
 	newApr1 := apr.DropValue("string")
-	if apr.Equals(newApr1) {
-		t.Error("Original value and new value are equal")
-	}
+	require.NotEqualf(t, apr, newApr1, "Original value and new value are equal")
+
 	_, hasVal := newApr1.GetValue("string")
 	if hasVal {
 		t.Error("DropValue failed to drop string")
@@ -309,9 +308,8 @@ func TestDropValue(t *testing.T) {
 	}
 
 	newApr2 := apr.DropValue("flag")
-	if apr.Equals(newApr2) {
-		t.Error("DropValue failed to drop flag")
-	}
+	require.NotEqualf(t, apr, newApr2, "DropValue failes to drop flag")
+
 	_, hasVal = newApr2.GetValue("string")
 	if !hasVal {
 		t.Error("DropValue dropped the wrong value")
