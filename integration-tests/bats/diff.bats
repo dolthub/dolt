@@ -1501,11 +1501,11 @@ EOF
     run dolt diff --limit 0
 
     [[ "$output" =~ "diff --dolt a/test b/test" ]] || false
-    [[ "$output" =~ "--- a/test @" ]] || false
-    [[ "$output" =~ "+++ b/test @" ]] || false
+    [[ "$output" =~ "--- a/test" ]] || false
+    [[ "$output" =~ "+++ b/test" ]] || false
     [[ "$output" =~ "diff --dolt a/test2 b/test2" ]] || false
-    [[ "$output" =~ "--- a/test2 @" ]] || false
-    [[ "$output" =~ "+++ b/test2 @" ]] || false
+    [[ "$output" =~ "--- a/test2" ]] || false
+    [[ "$output" =~ "+++ b/test2" ]] || false
 
     run dolt diff --limit
     [ "$status" -ne 0 ]
