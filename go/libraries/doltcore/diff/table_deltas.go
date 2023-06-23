@@ -21,12 +21,10 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -41,6 +39,11 @@ const (
 	RemovedTable
 )
 
+type TableInfo struct {
+	Name         string
+	Sch          schema.Schema
+	CreateStmt   string
+}
 // TableDelta represents the change of a single table between two roots.
 // FromFKs and ToFKs contain Foreign Keys that constrain columns in this table,
 // they do not contain Foreign Keys that reference this table.
@@ -68,6 +71,24 @@ type TableDeltaSummary struct {
 	TableName     string
 	FromTableName string
 	ToTableName   string
+	AlterStmts    []string
+}
+// IsAdd returns true if the table was added between the fromRoot and toRoot.
+func (tds TableDeltaSummary) IsAdd() bool {
+	return tds.FromTableName == "" && tds.ToTableName != ""
+}
+
+// IsDrop returns true if the table was dropped between the fromRoot and toRoot.
+func (tds TableDeltaSummary) IsDrop() bool {
+	return tds.FromTableName != "" && tds.ToTableName == ""
+}
+
+// IsRename return true if the table was renamed between the fromRoot and toRoot.
+func (tds TableDeltaSummary) IsRename() bool {
+	if tds.IsAdd() || tds.IsDrop() {
+		return false
+	}
+	return tds.FromTableName != tds.ToTableName
 }
 
 // GetStagedUnstagedTableDeltas represents staged and unstaged changes as TableDelta slices.
@@ -562,27 +583,15 @@ func (td TableDelta) GetRowData(ctx context.Context) (from, to durable.Index, er
 
 // SqlSchemaDiff returns a slice of DDL statements that will transform the schema in the from delta to the schema in
 // the to delta.
-func SqlSchemaDiff(ctx context.Context, td TableDelta, toSchemas map[string]schema.Schema) ([]string, error) {
-	fromSch, toSch, err := td.GetSchemas(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("cannot retrieve schema for table %s, cause: %s", td.ToName, err.Error())
-	}
+func SqlSchemaDiff(fromTableInfo, toTableInfo *TableInfo, tds TableDeltaSummary) ([]string, error) {
 
 	var ddlStatements []string
-	if td.IsDrop() {
-		ddlStatements = append(ddlStatements, sqlfmt.DropTableStmt(td.FromName))
-	} else if td.IsAdd() {
-		toPkSch, err := sqlutil.FromDoltSchema(td.ToName, td.ToSch)
-		if err != nil {
-			return nil, err
-		}
-		stmt, err := GenerateCreateTableStatement(td.ToName, td.ToSch, toPkSch, td.ToFks, td.ToFksParentSch)
-		if err != nil {
-			return nil, errhand.VerboseErrorFromError(err)
-		}
-		ddlStatements = append(ddlStatements, stmt)
+	if tds.IsDrop() {
+		ddlStatements = append(ddlStatements, sqlfmt.DropTableStmt(tds.FromTableName))
+	} else if tds.IsAdd() {
+		ddlStatements = append(ddlStatements, toTableInfo.CreateStmt)
 	} else {
-		stmts, err := GetNonCreateNonDropTableSqlSchemaDiff(td, toSchemas, fromSch, toSch)
+		stmts, err := GetNonCreateNonDropTableSqlSchemaDiff(tds, fromTableInfo, toTableInfo)
 		if err != nil {
 			return nil, err
 		}
@@ -593,47 +602,32 @@ func SqlSchemaDiff(ctx context.Context, td TableDelta, toSchemas map[string]sche
 }
 
 // GetNonCreateNonDropTableSqlSchemaDiff returns any schema diff in SQL statements that is NEITHER 'CREATE TABLE' NOR 'DROP TABLE' statements.
-func GetNonCreateNonDropTableSqlSchemaDiff(td TableDelta, toSchemas map[string]schema.Schema, fromSch, toSch schema.Schema) ([]string, error) {
-	if td.IsAdd() || td.IsDrop() {
+func GetNonCreateNonDropTableSqlSchemaDiff(tds TableDeltaSummary, fromTableInfo, toTableInfo *TableInfo) ([]string, error) {
+	if tds.IsAdd() || tds.IsDrop() {
 		// use add and drop specific methods
 		return nil, nil
 	}
 
 	var ddlStatements []string
-	if td.FromName != td.ToName {
-		ddlStatements = append(ddlStatements, sqlfmt.RenameTableStmt(td.FromName, td.ToName))
+	if tds.FromTableName != tds.ToTableName {
+		ddlStatements = append(ddlStatements, sqlfmt.RenameTableStmt(tds.FromTableName, tds.ToTableName))
 	}
 
+	fromSch := fromTableInfo.Sch
+	toSch := toTableInfo.Sch
+
 	eq := schema.SchemasAreEqual(fromSch, toSch)
-	if eq && !td.HasFKChanges() {
+	if eq && !hasFkChanges(fromTableInfo, toTableInfo) {
 		return ddlStatements, nil
 	}
 
-	colDiffs, unionTags := DiffSchColumns(fromSch, toSch)
-	for _, tag := range unionTags {
-		cd := colDiffs[tag]
-		switch cd.DiffType {
-		case SchDiffNone:
-		case SchDiffAdded:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddColStmt(td.ToName, sqlfmt.GenerateCreateTableColumnDefinition(*cd.New)))
-		case SchDiffRemoved:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropColStmt(td.ToName, cd.Old.Name))
-		case SchDiffModified:
-			// Ignore any primary key set changes here
-			if cd.Old.IsPartOfPK != cd.New.IsPartOfPK {
-				continue
-			}
-			if cd.Old.Name != cd.New.Name {
-				ddlStatements = append(ddlStatements, sqlfmt.AlterTableRenameColStmt(td.ToName, cd.Old.Name, cd.New.Name))
-			}
-		}
-	}
+	ddlStatements = append(ddlStatements, tds.AlterStmts...)
 
 	// Print changes between a primary key set change. It contains an ALTER TABLE DROP and an ALTER TABLE ADD
 	if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
-		ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropPks(td.ToName))
+		ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropPks(tds.ToTableName))
 		if toSch.GetPKCols().Size() > 0 {
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddPrimaryKeys(td.ToName, toSch.GetPKCols()))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddPrimaryKeys(tds.ToTableName, toSch.GetPKCols().GetColumnNames()))
 		}
 	}
 
@@ -641,28 +635,27 @@ func GetNonCreateNonDropTableSqlSchemaDiff(td TableDelta, toSchemas map[string]s
 		switch idxDiff.DiffType {
 		case SchDiffNone:
 		case SchDiffAdded:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(tds.ToTableName, idxDiff.To))
 		case SchDiffRemoved:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(tds.FromTableName, idxDiff.From))
 		case SchDiffModified:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(tds.FromTableName, idxDiff.From))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(tds.ToTableName, idxDiff.To))
 		}
 	}
 
-	for _, fkDiff := range DiffForeignKeys(td.FromFks, td.ToFks) {
+	for _, fkDiff := range DiffForeignKeyInfos(fromTableInfo.Fks, toTableInfo.Fks) {
 		switch fkDiff.DiffType {
 		case SchDiffNone:
 		case SchDiffAdded:
-			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
+			to := fkDiff.To
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddForeignKeyStmtSimple(to.TableName, to.Name, to.ReferencedTableName, to.TableColumns, to.ReferencedTableColumns))
 		case SchDiffRemoved:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From.TableName, fkDiff.From.Name))
 		case SchDiffModified:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From))
-
-			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From.TableName, fkDiff.From.Name))
+			to := fkDiff.To
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddForeignKeyStmtSimple(to.TableName, to.Name, to.ReferencedTableName, to.TableColumns, to.ReferencedTableColumns))
 		}
 	}
 

@@ -17,8 +17,10 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/go-mysql-server/sql/parse"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"io"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -26,7 +28,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -109,16 +110,29 @@ type diffDisplaySettings struct {
 }
 
 type diffDatasets struct {
-	fromRoot *doltdb.RootValue
-	toRoot   *doltdb.RootValue
-	fromRef  string
-	toRef    string
+	fromRef string
+	toRef   string
 }
 
 type diffArgs struct {
 	*diffDisplaySettings
 	*diffDatasets
 	tableSet *set.StrSet
+}
+
+type diffStatistics struct {
+	TableName      string
+	RowsUnmodified uint64
+	RowsAdded      uint64
+	RowsDeleted    uint64
+	RowsModified   uint64
+	CellsAdded     uint64
+	CellsDeleted   uint64
+	CellsModified  uint64
+	OldRowCount    uint64
+	NewRowCount    uint64
+	OldCellCount   uint64
+	NewCellCount   uint64
 }
 
 type DiffCmd struct{}
@@ -171,12 +185,20 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	dArgs, err := parseDiffArgs(ctx, dEnv, apr)
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	if closeFunc != nil {
+		defer closeFunc()
+	}
+
+	dArgs, err := parseDiffArgs(queryist, sqlCtx, ctx, apr)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	verr = diffUserTables(ctx, dEnv, dArgs)
+	verr = diffUserTables(queryist, sqlCtx, ctx, dArgs)
 	return HandleVErrAndExitCode(verr, usage)
 }
 
@@ -197,7 +219,7 @@ func (cmd DiffCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseE
 	return nil
 }
 
-func parseDiffDisplaySettings(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) *diffDisplaySettings {
+func parseDiffDisplaySettings(apr *argparser.ArgParseResults) *diffDisplaySettings {
 	displaySettings := &diffDisplaySettings{}
 
 	displaySettings.diffParts = SchemaAndDataDiff
@@ -239,26 +261,24 @@ func parseDiffDisplaySettings(ctx context.Context, dEnv *env.DoltEnv, apr *argpa
 	return displaySettings
 }
 
-func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*diffArgs, error) {
+func parseDiffArgs(queryist cli.Queryist, sqlCtx *sql.Context, ctx context.Context, apr *argparser.ArgParseResults) (*diffArgs, error) {
 	dArgs := &diffArgs{
-		diffDisplaySettings: parseDiffDisplaySettings(ctx, dEnv, apr),
+		diffDisplaySettings: parseDiffDisplaySettings(apr),
 	}
 
-	tableNames, err := dArgs.applyDiffRoots(ctx, dEnv, apr.Args, apr.Contains(cli.CachedFlag), apr.Contains(MergeBase))
+	tableNames, err := dArgs.applyDiffRoots(queryist, sqlCtx, ctx, apr.Args, apr.Contains(cli.CachedFlag), apr.Contains(MergeBase))
 	if err != nil {
 		return nil, err
 	}
 
 	if apr.Contains(ReverseFlag) {
 		dArgs.diffDatasets = &diffDatasets{
-			fromRoot: dArgs.toRoot,
-			fromRef:  dArgs.toRef,
-			toRoot:   dArgs.fromRoot,
-			toRef:    dArgs.fromRef,
+			fromRef: dArgs.toRef,
+			toRef:   dArgs.fromRef,
 		}
 	}
 
-	tableSet, err := parseDiffTableSet(ctx, dEnv, dArgs.diffDatasets, tableNames)
+	tableSet, err := parseDiffTableSetSql(queryist, sqlCtx, ctx, dArgs.diffDatasets, tableNames)
 	if err != nil {
 		return nil, err
 	}
@@ -268,75 +288,96 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	return dArgs, nil
 }
 
-func parseDiffTableSet(ctx context.Context, dEnv *env.DoltEnv, datasets *diffDatasets, tableNames []string) (*set.StrSet, error) {
+func parseDiffTableSetSql(queryist cli.Queryist, sqlCtx *sql.Context, ctx context.Context, datasets *diffDatasets, tableNames []string) (*set.StrSet, error) {
 
+	tablesAtFromRef, err := getTableNamesAtRef(queryist, sqlCtx, datasets.fromRef)
+	if err != nil {
+		return nil, err
+	}
+	tablesAtToRef, err := getTableNamesAtRef(queryist, sqlCtx, datasets.toRef)
+	if err != nil {
+		return nil, err
+	}
 	tableSet := set.NewStrSet(nil)
 
 	for _, tableName := range tableNames {
 		// verify table args exist in at least one root
-		_, ok, err := datasets.fromRoot.GetTable(ctx, tableName)
-		if err != nil {
-			return nil, err
-		}
+		_, ok := tablesAtFromRef[tableName]
 		if ok {
 			tableSet.Add(tableName)
 			continue
 		}
 
-		_, ok, err = datasets.toRoot.GetTable(ctx, tableName)
-		if err != nil {
-			return nil, err
-		}
+		_, ok = tablesAtToRef[tableName]
 		if ok {
 			tableSet.Add(tableName)
 			continue
 		}
-		if !ok {
-			return nil, fmt.Errorf("table %s does not exist in either revision", tableName)
-		}
+
+		return nil, fmt.Errorf("table %s does not exist in either revision", tableName)
 	}
 
 	// if no tables or docs were specified as args, diff all tables and docs
 	if len(tableNames) == 0 {
-		utn, err := doltdb.UnionTableNames(ctx, datasets.fromRoot, datasets.toRoot)
-		if err != nil {
-			return nil, err
+		seenTableNames := make(map[string]bool)
+		for _, tables := range []map[string]bool{tablesAtFromRef, tablesAtToRef} {
+			for tableName := range tables {
+				if _, ok := seenTableNames[tableName]; !ok {
+					seenTableNames[tableName] = true
+					tableSet.Add(tableName)
+				}
+			}
 		}
-		tableSet.Add(utn...)
 	}
 
 	return tableSet, nil
 }
 
+var doltSystemTables = []string{
+	"dolt_procedures",
+	"dolt_schemas",
+}
+
+func getTableNamesAtRef(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (map[string]bool, error) {
+	// query for user-created tables
+	q := fmt.Sprintf("SHOW FULL TABLES AS OF '%s'", ref)
+	rows, err := getRowsForSql(queryist, sqlCtx, q)
+	if err != nil {
+		return nil, err
+	}
+
+	tableNames := make(map[string]bool)
+	for _, row := range rows {
+		tableName := row[0].(string)
+		tableType := row[1].(string)
+		isTable := tableType == "BASE TABLE"
+		if isTable {
+			tableNames[tableName] = true
+		}
+	}
+
+	// add system tables, if they exist at this ref
+	for _, sysTable := range doltSystemTables {
+		q = fmt.Sprintf("show create table %s as of '%s'", sysTable, ref)
+		_, err = getRowsForSql(queryist, sqlCtx, q)
+		if err == nil {
+			tableNames[sysTable] = true
+		}
+	}
+
+	return tableNames, nil
+}
+
 // applyDiffRoots applies the appropriate |from| and |to| root values to the receiver and returns the table names
 // (if any) given to the command.
-func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string, isCached, useMergeBase bool) ([]string, error) {
-	headRoot, err := dEnv.HeadRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	stagedRoot, err := dEnv.StagedRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	workingRoot, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-
+func (dArgs *diffArgs) applyDiffRoots(queryist cli.Queryist, sqlCtx *sql.Context, ctx context.Context, args []string, isCached, useMergeBase bool) ([]string, error) {
 	dArgs.diffDatasets = &diffDatasets{
-		fromRoot: stagedRoot,
-		fromRef:  doltdb.Staged,
-		toRoot:   workingRoot,
-		toRef:    doltdb.Working,
+		fromRef: doltdb.Staged,
+		toRef:   doltdb.Working,
 	}
 
 	if isCached {
-		dArgs.fromRoot = headRoot
 		dArgs.fromRef = "HEAD"
-		dArgs.toRoot = stagedRoot
 		dArgs.toRef = doltdb.Staged
 	}
 
@@ -352,31 +393,30 @@ func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, ar
 		if useMergeBase {
 			return nil, fmt.Errorf("Cannot use `..` or `...` with --merge-base flag")
 		}
-		err = dArgs.applyDotRevisions(ctx, dEnv, args)
+		err := dArgs.applyDotRevisions(queryist, sqlCtx, ctx, args)
 		if err != nil {
 			return nil, err
 		}
 		return args[1:], err
 	}
 
+	fromRef := args[0]
 	// treat the first arg as a ref spec
-	fromRoot, ok := diff.MaybeResolveRoot(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, args[0])
+	_, err := getTableNamesAtRef(queryist, sqlCtx, fromRef)
 	// if it doesn't resolve, treat it as a table name
-	if !ok {
+	if err != nil {
 		// `dolt diff table`
 		if useMergeBase {
 			return nil, fmt.Errorf("Must supply at least one revision when using --merge-base flag")
 		}
 		return args, nil
 	}
-
-	dArgs.fromRoot = fromRoot
-	dArgs.fromRef = args[0]
+	dArgs.fromRef = fromRef
 
 	if len(args) == 1 {
 		// `dolt diff from_commit`
 		if useMergeBase {
-			err := dArgs.applyMergeBase(ctx, dEnv, args[0], "HEAD")
+			err := dArgs.applyMergeBase(queryist, sqlCtx, args[0], "HEAD")
 			if err != nil {
 				return nil, err
 			}
@@ -384,23 +424,24 @@ func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, ar
 		return nil, nil
 	}
 
-	toRoot, ok := diff.MaybeResolveRoot(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, args[1])
-	if !ok {
+	toRef := args[1]
+	// treat the first arg as a ref spec
+	_, err = getTableNamesAtRef(queryist, sqlCtx, toRef)
+	// if it doesn't resolve, treat it as a table name
+	if err != nil {
 		// `dolt diff from_commit [...tables]`
 		if useMergeBase {
-			err := dArgs.applyMergeBase(ctx, dEnv, args[0], "HEAD")
+			err := dArgs.applyMergeBase(queryist, sqlCtx, args[0], "HEAD")
 			if err != nil {
 				return nil, err
 			}
 		}
 		return args[1:], nil
 	}
-
-	dArgs.toRoot = toRoot
-	dArgs.toRef = args[1]
+	dArgs.toRef = toRef
 
 	if useMergeBase {
-		err := dArgs.applyMergeBase(ctx, dEnv, args[0], args[1])
+		err := dArgs.applyMergeBase(queryist, sqlCtx, args[0], args[1])
 		if err != nil {
 			return nil, err
 		}
@@ -412,31 +453,37 @@ func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, ar
 
 // applyMergeBase applies the merge base of two revisions to the |from| root
 // values.
-func (dArgs *diffArgs) applyMergeBase(ctx context.Context, dEnv *env.DoltEnv, leftStr, rightStr string) error {
-	mergeBaseStr, err := getMergeBaseFromStrings(ctx, dEnv, leftStr, rightStr)
+func (dArgs *diffArgs) applyMergeBase(queryist cli.Queryist, sqlCtx *sql.Context, leftStr, rightStr string) error {
+	//mergeBaseStr, err := getMergeBaseFromStrings(ctx, dEnv, leftStr, rightStr)
+	mergeBaseStr, err := getCommonAncestor(queryist, sqlCtx, leftStr, rightStr)
 	if err != nil {
 		return err
 	}
 
-	fromRoot, ok := diff.MaybeResolveRoot(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, mergeBaseStr)
-	if !ok {
-		return fmt.Errorf("merge base invalid %s", mergeBaseStr)
-	}
-
-	dArgs.fromRoot = fromRoot
 	dArgs.fromRef = mergeBaseStr
 
 	return nil
 }
 
+func getCommonAncestor(queryist cli.Queryist, sqlCtx *sql.Context, c1, c2 string) (string, error) {
+	q := fmt.Sprintf("select dolt_merge_base('%s', '%s')", c1, c2)
+	rows, err := getRowsForSql(queryist, sqlCtx, q)
+	if err != nil {
+		return "", err
+	}
+	if len(rows) != 1 {
+		return "", fmt.Errorf("unexpected number of rows returned from dolt_merge_base")
+	}
+	ancestor := rows[0][0].(string)
+	return ancestor, nil
+}
+
 // applyDotRevisions applies the appropriate |from| and |to| root values to the
 // receiver for arguments containing `..` or `...`
-func (dArgs *diffArgs) applyDotRevisions(ctx context.Context, dEnv *env.DoltEnv, args []string) error {
+func (dArgs *diffArgs) applyDotRevisions(queryist cli.Queryist, sqlCtx *sql.Context, ctx context.Context, args []string) error {
 	// `dolt diff from_commit...to_commit [...tables]`
 	if strings.Contains(args[0], "...") {
 		refs := strings.Split(args[0], "...")
-		var toRoot *doltdb.RootValue
-		ok := true
 
 		if len(refs[0]) > 0 {
 			right := refs[1]
@@ -445,17 +492,13 @@ func (dArgs *diffArgs) applyDotRevisions(ctx context.Context, dEnv *env.DoltEnv,
 				right = "HEAD"
 			}
 
-			err := dArgs.applyMergeBase(ctx, dEnv, refs[0], right)
+			err := dArgs.applyMergeBase(queryist, sqlCtx, refs[0], right)
 			if err != nil {
 				return err
 			}
 		}
 
 		if len(refs[1]) > 0 {
-			if toRoot, ok = diff.MaybeResolveRoot(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, refs[1]); !ok {
-				return fmt.Errorf("to ref in three dot diff must be valid ref: %s", refs[1])
-			}
-			dArgs.toRoot = toRoot
 			dArgs.toRef = refs[1]
 		}
 
@@ -465,23 +508,12 @@ func (dArgs *diffArgs) applyDotRevisions(ctx context.Context, dEnv *env.DoltEnv,
 	// `dolt diff from_commit..to_commit [...tables]`
 	if strings.Contains(args[0], "..") {
 		refs := strings.Split(args[0], "..")
-		var fromRoot *doltdb.RootValue
-		var toRoot *doltdb.RootValue
-		ok := true
 
 		if len(refs[0]) > 0 {
-			if fromRoot, ok = diff.MaybeResolveRoot(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, refs[0]); !ok {
-				return fmt.Errorf("from ref in two dot diff must be valid ref: %s", refs[0])
-			}
-			dArgs.fromRoot = fromRoot
 			dArgs.fromRef = refs[0]
 		}
 
 		if len(refs[1]) > 0 {
-			if toRoot, ok = diff.MaybeResolveRoot(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, refs[1]); !ok {
-				return fmt.Errorf("to ref in two dot diff must be valid ref: %s", refs[1])
-			}
-			dArgs.toRoot = toRoot
 			dArgs.toRef = refs[1]
 		}
 
@@ -498,63 +530,168 @@ var diffSummarySchema = sql.Schema{
 	&sql.Column{Name: "Schema change", Type: types.Boolean, Nullable: false},
 }
 
-func printDiffSummary(ctx context.Context, tds []diff.TableDelta, dArgs *diffArgs) errhand.VerboseError {
+func printDiffSummary(ctx context.Context, diffSummaries []diff.TableDeltaSummary, dArgs *diffArgs) errhand.VerboseError {
 	cliWR := iohelp.NopWrCloser(cli.OutStream)
 	wr := tabular.NewFixedWidthTableWriter(diffSummarySchema, cliWR, 100)
 	defer wr.Close(ctx)
 
-	for _, td := range tds {
-		if !dArgs.tableSet.Contains(td.FromName) && !dArgs.tableSet.Contains(td.ToName) {
-			continue
+	for _, diffSummary := range diffSummaries {
+
+		shouldPrintTables := dArgs.tableSet.Contains(diffSummary.FromTableName) || dArgs.tableSet.Contains(diffSummary.ToTableName)
+		if !shouldPrintTables {
+			return nil
 		}
 
-		if td.FromTable == nil && td.ToTable == nil {
-			return errhand.BuildDError("error: both tables in tableDelta are nil").Build()
+		tableName := diffSummary.TableName
+		if diffSummary.DiffType == "renamed" {
+			tableName = fmt.Sprintf("%s -> %s", diffSummary.FromTableName, diffSummary.ToTableName)
 		}
-
-		summ, err := td.GetSummary(ctx)
-		if err != nil {
-			return errhand.BuildDError("could not get table delta summary").AddCause(err).Build()
-		}
-		tableName := summ.TableName
-		if summ.DiffType == "renamed" {
-			tableName = fmt.Sprintf("%s -> %s", summ.FromTableName, summ.ToTableName)
-		}
-
-		err = wr.WriteSqlRow(ctx, sql.Row{tableName, summ.DiffType, summ.DataChange, summ.SchemaChange})
+		err := wr.WriteSqlRow(ctx, sql.Row{tableName, diffSummary.DiffType, diffSummary.DataChange, diffSummary.SchemaChange})
 		if err != nil {
 			return errhand.BuildDError("could not write table delta summary").AddCause(err).Build()
 		}
+
 	}
 
 	return nil
 }
 
-func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) errhand.VerboseError {
+func getDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Context, fromRef, toRef string) ([]diff.TableDeltaSummary, error) {
+	q := fmt.Sprintf("select * from dolt_diff_summary('%s', '%s')", fromRef, toRef)
+	dataDiffRows, err := getRowsForSql(queryist, sqlCtx, q)
+	if err != nil {
+		return nil, fmt.Errorf("error: unable to get diff summary from %s to %s: %w", fromRef, toRef, err)
+	}
+
+	q = fmt.Sprintf("select * from dolt_schema_diff('%s', '%s')", fromRef, toRef)
+	schemaDiffRows, err := getRowsForSql(queryist, sqlCtx, q)
+	if err != nil {
+		return nil, fmt.Errorf("error: unable to get schema diff from %s to %s: %w", fromRef, toRef, err)
+	}
+
+	summaries := []diff.TableDeltaSummary{}
+
+	for _, row := range dataDiffRows {
+		summary := diff.TableDeltaSummary{}
+		summary.FromTableName = row[0].(string)
+		summary.ToTableName = row[1].(string)
+		summary.DiffType = row[2].(string)
+		summary.DataChange, err = getTinyIntColAsBool(row[3])
+		if err != nil {
+			return nil, fmt.Errorf("error: unable to parse data change value '%s': %w", row[3], err)
+		}
+		summary.SchemaChange, err = getTinyIntColAsBool(row[4])
+		if err != nil {
+			return nil, fmt.Errorf("error: unable to parse schema change value '%s': %w", row[4], err)
+		}
+
+		switch summary.DiffType {
+		case "dropped":
+			summary.TableName = summary.FromTableName
+		case "added":
+			summary.TableName = summary.ToTableName
+		case "renamed":
+			summary.TableName = summary.ToTableName
+		case "modified":
+			summary.TableName = summary.FromTableName
+		default:
+			return nil, fmt.Errorf("error: unexpected diff type '%s'", summary.DiffType)
+		}
+
+		summaries = append(summaries, summary)
+	}
+
+	//schemaSummaries := []diff.TableDeltaSummary{}
+	for _, row := range schemaDiffRows {
+		fromTable := row[0].(string)
+		toTable := row[1].(string)
+		fromCreateStmt := row[2].(string)
+		toCreateStmt := row[3].(string)
+		alterStmt := row[4].(string)
+		pkChanged, err := getTinyIntColAsBool(row[5])
+		if err != nil {
+			return nil, fmt.Errorf("error: unable to parse pk changed value '%s': %w", row[5], err)
+		}
+
+		var schemaChanged = alterStmt != "" || pkChanged
+		var diffType = ""
+		var tableName = ""
+		switch {
+		case fromTable == toTable:
+			if fromCreateStmt != toCreateStmt {
+				diffType = "modified"
+				tableName = fromTable
+				schemaChanged = true
+			}
+		case fromTable == "":
+			diffType = "added"
+			tableName = toTable
+			schemaChanged = true
+		case toTable == "":
+			diffType = "dropped"
+			tableName = fromTable
+			schemaChanged = true
+		case fromTable != "" && toTable != "" && fromTable != toTable:
+			diffType = "renamed"
+			tableName = toTable
+			schemaChanged = true
+		default:
+			return nil, fmt.Errorf("error: unexpected schema diff case: fromTable='%s', toTable='%s'", fromTable, toTable)
+		}
+
+		if !schemaChanged {
+			continue
+		}
+
+		var existingSummaryIndex = -1
+		for i, summary := range summaries {
+			isSameSummary :=
+				summary.TableName == tableName &&
+					summary.FromTableName == fromTable &&
+					summary.ToTableName == toTable &&
+					summary.DiffType == diffType
+			if isSameSummary {
+				existingSummaryIndex = i
+				break
+			}
+		}
+		if existingSummaryIndex == -1 {
+			summary := diff.TableDeltaSummary{
+				TableName:     tableName,
+				FromTableName: fromTable,
+				ToTableName:   toTable,
+				DiffType:      diffType,
+				DataChange:    false,
+				SchemaChange:  true,
+				PkChanged:     pkChanged,
+			}
+			if alterStmt != "" {
+				summary.AlterStmts = []string{alterStmt}
+			}
+
+			summaries = append(summaries, summary)
+		} else {
+			summary := summaries[existingSummaryIndex]
+			summary.SchemaChange = true
+			summary.AlterStmts = append(summary.AlterStmts, alterStmt)
+			summary.PkChanged = summary.PkChanged || pkChanged
+			summaries[existingSummaryIndex] = summary
+		}
+	}
+
+	return summaries, nil
+}
+
+func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, ctx context.Context, dArgs *diffArgs) errhand.VerboseError {
 	var err error
 
-	tableDeltas, err := diff.GetTableDeltas(ctx, dArgs.fromRoot, dArgs.toRoot)
+	diffSummaries, err := getDiffSummariesBetweenRefs(queryist, sqlCtx, dArgs.fromRef, dArgs.toRef)
 	if err != nil {
-		return errhand.BuildDError("error: unable to diff tables").AddCause(err).Build()
+		return errhand.BuildDError("error: unable to get diff summary").AddCause(err).Build()
 	}
-
-	sqlEng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	sqlCtx, err := sqlEng.NewLocalContext(ctx)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-	sqlCtx.SetCurrentDatabase(dbName)
-
-	sort.Slice(tableDeltas, func(i, j int) bool {
-		return strings.Compare(tableDeltas[i].ToName, tableDeltas[j].ToName) < 0
-	})
 
 	if dArgs.diffParts&Summary != 0 {
-		return printDiffSummary(ctx, tableDeltas, dArgs)
+		return printDiffSummary(ctx, diffSummaries, dArgs)
 	}
 
 	dw, err := newDiffWriter(dArgs.diffOutput)
@@ -562,36 +699,17 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	roots, err := dEnv.Roots(ctx)
-	if err != nil {
-		return errhand.VerboseErrorFromError(fmt.Errorf("couldn't get working root, cause: %w", err))
-	}
-
-	ignoredTablePatterns, err := doltdb.GetIgnoredTablePatterns(ctx, roots)
+	ignoredTablePatterns, err := getIgnoredTablePatternsFromSql(queryist, sqlCtx)
 	if err != nil {
 		return errhand.VerboseErrorFromError(fmt.Errorf("couldn't get ignored table patterns, cause: %w", err))
 	}
 
-	toRootHash, err := dArgs.diffDatasets.toRoot.HashOf()
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	fromRootHash, err := dArgs.diffDatasets.fromRoot.HashOf()
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	workingSetHash, err := roots.Working.HashOf()
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
 	doltSchemasChanged := false
-	for _, td := range tableDeltas {
+	for _, diffSummary := range diffSummaries {
+
 		// Don't print tables if one side of the diff is an ignored table in the working set being added.
-		if toRootHash == workingSetHash && td.FromTable == nil {
-			ignoreResult, err := ignoredTablePatterns.IsTableNameIgnored(td.ToName)
+		if len(diffSummary.FromTableName) == 0 {
+			ignoreResult, err := ignoredTablePatterns.IsTableNameIgnored(diffSummary.ToTableName)
 			if err != nil {
 				return errhand.VerboseErrorFromError(err)
 			}
@@ -600,8 +718,8 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 			}
 		}
 
-		if fromRootHash == workingSetHash && td.ToTable == nil {
-			ignoreResult, err := ignoredTablePatterns.IsTableNameIgnored(td.FromName)
+		if len(diffSummary.ToTableName) == 0 {
+			ignoreResult, err := ignoredTablePatterns.IsTableNameIgnored(diffSummary.FromTableName)
 			if err != nil {
 				return errhand.VerboseErrorFromError(err)
 			}
@@ -610,15 +728,15 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 			}
 		}
 
-		if !shouldPrintTableDelta(dArgs.tableSet, td) {
+		if !shouldPrintTableDelta(dArgs.tableSet, diffSummary.ToTableName, diffSummary.FromTableName) {
 			continue
 		}
 
-		if isDoltSchemasTable(td) {
+		if isDoltSchemasTable(diffSummary.ToTableName, diffSummary.FromTableName) {
 			// save dolt_schemas table diff for last in diff output
 			doltSchemasChanged = true
 		} else {
-			verr := diffUserTable(sqlCtx, td, sqlEng, dArgs, dw)
+			verr := diffUserTable(queryist, sqlCtx, diffSummary, dArgs, dw)
 			if verr != nil {
 				return verr
 			}
@@ -626,7 +744,7 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 	}
 
 	if doltSchemasChanged {
-		verr := diffDoltSchemasTable(sqlCtx, sqlEng, dArgs, dw)
+		verr := diffDoltSchemasTable(queryist, sqlCtx, dArgs, dw)
 		if verr != nil {
 			return verr
 		}
@@ -640,57 +758,224 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) err
 	return nil
 }
 
-func shouldPrintTableDelta(tablesToPrint *set.StrSet, td diff.TableDelta) bool {
+func shouldPrintTableDelta(tablesToPrint *set.StrSet, toTableName, fromTableName string) bool {
 	// TODO: this should be case insensitive
-	return tablesToPrint.Contains(td.FromName) || tablesToPrint.Contains(td.ToName)
+	return tablesToPrint.Contains(fromTableName) || tablesToPrint.Contains(toTableName)
 }
 
-func isDoltSchemasTable(td diff.TableDelta) bool {
-	return td.FromName == doltdb.SchemasTableName || td.ToName == doltdb.SchemasTableName
+func isDoltSchemasTable(toTableName, fromTableName string) bool {
+	return fromTableName == doltdb.SchemasTableName || toTableName == doltdb.SchemasTableName
+}
+
+func getTableInfoAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName string, ref string) (diff.TableInfo, error) {
+	fks, err := getForeignKeysForTable(queryist, sqlCtx, tableName, ref)
+	if err != nil {
+		return diff.TableInfo{}, fmt.Errorf("error: unable to get foreign keys for table '%s': %w", tableName, err)
+	}
+
+	sch, createStmt, err := getTableSchemaAtRef(queryist, sqlCtx, tableName, ref, fks)
+	if err != nil {
+		return diff.TableInfo{}, fmt.Errorf("error: unable to get schema for table '%s': %w", tableName, err)
+	}
+
+	fksParentSch, err := getFkParentSchemas(queryist, sqlCtx, fks, ref)
+	if err != nil {
+		return diff.TableInfo{}, fmt.Errorf("error: unable to get parent schemas for foreign keys for table '%s': %w", tableName, err)
+	}
+
+	tableInfo := diff.TableInfo{
+		Name:         tableName,
+		Sch:          sch,
+		CreateStmt:   createStmt,
+		Fks:          fks,
+		FksParentSch: fksParentSch,
+	}
+	return tableInfo, nil
+}
+
+
+
+func getTableSchemaAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName string, ref string, fks []diff.ForeignKeyInfo) (sch schema.Schema, createStmt string, err error) {
+	var rows []sql.Row
+	q := fmt.Sprintf("show create table %s as of '%s'", tableName, ref)
+	rows, err = getRowsForSql(queryist, sqlCtx, q)
+	if err != nil {
+		return sch, createStmt, err
+	}
+
+	if len(rows) != 1 {
+		return sch, createStmt, fmt.Errorf("creating schema, expected 1 row, got %d", len(rows))
+	}
+	createStmt = rows[0][1].(string)
+
+	// append ; at the end, if one isn't there yet
+	if createStmt[len(createStmt)-1] != ';' {
+		createStmt += ";"
+	}
+
+
+	sch, err = schemaFromCreateTableStmt(sqlCtx, createStmt)
+	if err != nil {
+		return sch, createStmt, err
+	}
+
+	return sch, createStmt, nil
+}
+
+func schemaFromCreateTableStmt(sqlCtx *sql.Context, createTableStmt string) (schema.Schema, error) {
+	p, err := sqlparser.Parse(createTableStmt)
+	if err != nil {
+		return nil, err
+	}
+	ddl := p.(*sqlparser.DDL)
+
+	s, _, err := parse.TableSpecToSchema(sqlCtx, ddl.TableSpec, false)
+	if err != nil {
+		return nil, err
+	}
+
+	cols := []schema.Column{}
+	for _, col := range s.Schema {
+		typeInfo, err := typeinfo.FromSqlType(col.Type)
+		if err != nil {
+			return nil, err
+		}
+
+		sCol, err := schema.NewColumnWithTypeInfo(
+			col.Name,
+			0,
+			typeInfo,
+			col.PrimaryKey,
+			col.Default.String(),
+			col.AutoIncrement,
+			col.Comment,
+		)
+		cols = append(cols, sCol)
+	}
+
+	sch, err := schema.NewSchema(schema.NewColCollection(cols...), nil, schema.Collation_Default, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return sch, err
+}
+
+func getTableDiffStats(queryist cli.Queryist, sqlCtx *sql.Context, tableName, fromRef, toRef string) ([]diffStatistics, error) {
+	q := fmt.Sprintf("select * from dolt_diff_stat('%s', '%s', '%s')", fromRef, toRef, tableName)
+	rows, err := getRowsForSql(queryist, sqlCtx, q)
+	if err != nil {
+		return nil, fmt.Errorf("error running diff stats query: %w", err)
+	}
+
+	allStats := []diffStatistics{}
+	for _, row := range rows {
+		stats := diffStatistics{
+			TableName:      row[0].(string),
+			RowsUnmodified: coallesceNilToUint64(row[1]),
+			RowsAdded:      coallesceNilToUint64(row[2]),
+			RowsDeleted:    coallesceNilToUint64(row[3]),
+			RowsModified:   coallesceNilToUint64(row[4]),
+			CellsAdded:     coallesceNilToUint64(row[5]),
+			CellsDeleted:   coallesceNilToUint64(row[6]),
+			CellsModified:  coallesceNilToUint64(row[7]),
+			OldRowCount:    coallesceNilToUint64(row[8]),
+			NewRowCount:    coallesceNilToUint64(row[9]),
+			OldCellCount:   coallesceNilToUint64(row[10]),
+			NewCellCount:   coallesceNilToUint64(row[11]),
+		}
+		allStats = append(allStats, stats)
+	}
+	return allStats, nil
+}
+
+func coallesceNilToUint64(val interface{}) uint64 {
+	if val == nil {
+		return 0
+	}
+	return uint64(val.(int64))
 }
 
 func diffUserTable(
-	ctx *sql.Context,
-	td diff.TableDelta,
-	sqlEng *engine.SqlEngine,
+	queryist cli.Queryist,
+	sqlCtx *sql.Context,
+	tableSummary diff.TableDeltaSummary,
 	dArgs *diffArgs,
 	dw diffWriter,
 ) errhand.VerboseError {
-	fromTable := td.FromTable
-	toTable := td.ToTable
+	fromTable := tableSummary.FromTableName
+	toTable := tableSummary.ToTableName
 
-	if fromTable == nil && toTable == nil {
-		return errhand.BuildDError("error: both tables in tableDelta are nil").Build()
-	}
-
-	err := dw.BeginTable(ctx, td)
+	err := dw.BeginTable(tableSummary.FromTableName, tableSummary.ToTableName, tableSummary.IsAdd(), tableSummary.IsDrop())
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	fromSch, toSch, err := td.GetSchemas(ctx)
-	if err != nil {
-		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
+	var fromTableInfo, toTableInfo *diff.TableInfo
+
+	from, err := getTableInfoAtRef(queryist, sqlCtx, fromTable, dArgs.fromRef)
+	if err == nil {
+		fromTableInfo = &from
+	}
+	to, err := getTableInfoAtRef(queryist, sqlCtx, toTable, dArgs.toRef)
+	if err == nil {
+		toTableInfo = &to
+	}
+
+	tableName := fromTable
+	if tableName == "" {
+		tableName = toTable
 	}
 
 	if dArgs.diffParts&Stat != 0 {
-		return printDiffStat(ctx, td, fromSch.GetAllCols().Size(), toSch.GetAllCols().Size())
+		var areTablesKeyless = false
+
+		var fromKeyless = false
+		if fromTableInfo != nil {
+			fromKeyless = schema.IsKeyless(fromTableInfo.Sch)
+		}
+		var toKeyless = false
+		if toTableInfo != nil {
+			toKeyless = schema.IsKeyless(toTableInfo.Sch)
+		}
+
+		// nil table is neither keyless nor keyed
+		if fromTableInfo == nil {
+			areTablesKeyless = toKeyless
+		} else if toTableInfo == nil {
+			areTablesKeyless = fromKeyless
+		} else {
+			if fromKeyless && toKeyless {
+				areTablesKeyless = true
+			} else if !fromKeyless && !toKeyless {
+				areTablesKeyless = false
+			} else {
+				return errhand.BuildDError("mismatched keyless and keyed schemas for table %s", tableName).Build()
+			}
+		}
+
+		diffStats, err := getTableDiffStats(queryist, sqlCtx, tableName, dArgs.fromRef, dArgs.toRef)
+		if err != nil {
+			return errhand.BuildDError("cannot retrieve diff stats between '%s' and '%s'", dArgs.fromRef, dArgs.toRef).AddCause(err).Build()
+		}
+
+		return printDiffStat(diffStats, fromTableInfo.Sch.GetAllCols().Size(), toTableInfo.Sch.GetAllCols().Size(), areTablesKeyless)
 	}
 
 	if dArgs.diffParts&SchemaOnlyDiff != 0 {
-		err := dw.WriteTableSchemaDiff(ctx, dArgs.fromRoot, dArgs.toRoot, td)
+		err := dw.WriteTableSchemaDiff(fromTableInfo, toTableInfo, tableSummary)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
 	}
 
-	if td.IsDrop() && dArgs.diffOutput == SQLDiffOutput {
+	if tableSummary.IsDrop() && dArgs.diffOutput == SQLDiffOutput {
 		return nil // don't output DELETE FROM statements after DROP TABLE
-	} else if td.IsAdd() {
-		fromSch = toSch
+	} else if tableSummary.IsAdd() {
+		//fromSch = toSch
 	}
 
-	verr := diffRows(ctx, sqlEng, td, dArgs, dw)
+	verr := diffRows(queryist, sqlCtx, tableSummary, fromTableInfo, toTableInfo, dArgs, dw)
 	if verr != nil {
 		return verr
 	}
@@ -699,8 +984,8 @@ func diffUserTable(
 }
 
 func diffDoltSchemasTable(
+	queryist cli.Queryist,
 	sqlCtx *sql.Context,
-	sqlEng *engine.SqlEngine,
 	dArgs *diffArgs,
 	dw diffWriter,
 ) errhand.VerboseError {
@@ -709,7 +994,8 @@ func diffDoltSchemasTable(
 		"order by coalesce(from_type, to_type), coalesce(from_name, to_name)",
 		dArgs.fromRef, dArgs.toRef, doltdb.SchemasTableName)
 
-	_, rowIter, err := sqlEng.Query(sqlCtx, query)
+	//_, rowIter, err := sqlEng.Query(sqlCtx, query)
+	_, rowIter, err := queryist.Query(sqlCtx, query)
 	if err != nil {
 		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 	}
@@ -779,26 +1065,74 @@ func diffDoltSchemasTable(
 	return nil
 }
 
+// ArePrimaryKeySetsDiffable checks if two schemas are diffable. Assumes the
+// passed in schema are from the same table between commits. If __DOLT__, then
+// it also checks if the underlying SQL types of the columns are equal.
+func arePrimaryKeySetsDiffable(fromTableInfo, toTableInfo *diff.TableInfo) bool {
+	var fromSch schema.Schema = nil
+	var toSch schema.Schema = nil
+	if fromTableInfo != nil {
+		fromSch = fromTableInfo.Sch
+	}
+	if toTableInfo != nil {
+		toSch = toTableInfo.Sch
+	}
+
+	if fromSch == nil && toSch == nil {
+		return false
+		// Empty case
+	} else if fromSch == nil || fromSch.GetAllCols().Size() == 0 ||
+		toSch == nil || toSch.GetAllCols().Size() == 0 {
+		return true
+	}
+
+	// Keyless case for comparing
+	if schema.IsKeyless(fromSch) && schema.IsKeyless(toSch) {
+		return true
+	}
+
+	cc1 := fromSch.GetPKCols()
+	cc2 := toSch.GetPKCols()
+
+	if cc1.Size() != cc2.Size() {
+		return false
+	}
+
+	for i := 0; i < cc1.Size(); i++ {
+		c1 := cc1.GetByIndex(i)
+		c2 := cc2.GetByIndex(i)
+		if c1.IsPartOfPK != c2.IsPartOfPK {
+			return false
+		}
+		if !c1.TypeInfo.ToSqlType().Equals(c2.TypeInfo.ToSqlType()) {
+			return false
+		}
+	}
+
+	return true
+}
+
 func diffRows(
-	ctx *sql.Context,
-	sqlEng *engine.SqlEngine,
-	td diff.TableDelta,
+	queryist cli.Queryist,
+	sqlCtx *sql.Context,
+	tableSummary diff.TableDeltaSummary,
+	fromTableInfo, toTableInfo *diff.TableInfo,
 	dArgs *diffArgs,
 	dw diffWriter,
 ) errhand.VerboseError {
-	diffable := schema.ArePrimaryKeySetsDiffable(td.Format(), td.FromSch, td.ToSch)
-	canSqlDiff := !(td.ToSch == nil || (td.FromSch != nil && !schema.SchemasAreEqual(td.FromSch, td.ToSch)))
+	diffable := arePrimaryKeySetsDiffable(fromTableInfo, toTableInfo)
+	canSqlDiff := !(toTableInfo == nil || (fromTableInfo != nil && !schema.SchemasAreEqual(fromTableInfo.Sch, toTableInfo.Sch)))
 
 	var toSch, fromSch sql.Schema
-	if td.FromSch != nil {
-		pkSch, err := sqlutil.FromDoltSchema(td.FromName, td.FromSch)
+	if fromTableInfo != nil {
+		pkSch, err := sqlutil.FromDoltSchema(fromTableInfo.Name, fromTableInfo.Sch)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
 		fromSch = pkSch.Schema
 	}
-	if td.ToSch != nil {
-		pkSch, err := sqlutil.FromDoltSchema(td.ToName, td.ToSch)
+	if toTableInfo != nil {
+		pkSch, err := sqlutil.FromDoltSchema(toTableInfo.Name, toTableInfo.Sch)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -808,7 +1142,7 @@ func diffRows(
 	unionSch := unionSchemas(fromSch, toSch)
 
 	// We always instantiate a RowWriter in case the diffWriter needs it to close off any work from schema output
-	rowWriter, err := dw.RowWriter(ctx, td, unionSch)
+	rowWriter, err := dw.RowWriter(fromTableInfo, toTableInfo, tableSummary, unionSch)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -816,16 +1150,16 @@ func diffRows(
 	// can't diff
 	if !diffable {
 		// TODO: this messes up some structured output if the user didn't redirect it
-		cli.PrintErrf("Primary key sets differ between revisions for table '%s', skipping data diff\n", td.ToName)
-		err := rowWriter.Close(ctx)
+		cli.PrintErrf("Primary key sets differ between revisions for table '%s', skipping data diff\n", tableSummary.ToTableName)
+		err := rowWriter.Close(sqlCtx)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
 		return nil
 	} else if dArgs.diffOutput == SQLDiffOutput && !canSqlDiff {
 		// TODO: this is overly broad, we can absolutely do better
-		_, _ = fmt.Fprintf(cli.CliErr, "Incompatible schema change, skipping data diff for table '%s'\n", td.ToName)
-		err := rowWriter.Close(ctx)
+		_, _ = fmt.Fprintf(cli.CliErr, "Incompatible schema change, skipping data diff for table '%s'\n", tableSummary.ToTableName)
+		err := rowWriter.Close(sqlCtx)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -834,7 +1168,7 @@ func diffRows(
 
 	// no data diff requested
 	if dArgs.diffParts&DataOnlyDiff == 0 {
-		err := rowWriter.Close(ctx)
+		err := rowWriter.Close(sqlCtx)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -842,12 +1176,12 @@ func diffRows(
 	}
 
 	// do the data diff
-	tableName := td.ToName
+	tableName := tableSummary.ToTableName
 	if len(tableName) == 0 {
-		tableName = td.FromName
+		tableName = tableSummary.FromTableName
 	}
 
-	columns := getColumnNamesString(td.FromSch, td.ToSch)
+	columns := getColumnNamesString(fromTableInfo, toTableInfo)
 	query := fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columns, "diff_type", dArgs.fromRef, dArgs.toRef, tableName)
 
 	if len(dArgs.where) > 0 {
@@ -858,19 +1192,19 @@ func diffRows(
 		query += " limit " + strconv.Itoa(dArgs.limit)
 	}
 
-	sch, rowIter, err := sqlEng.Query(ctx, query)
+	sch, rowIter, err := queryist.Query(sqlCtx, query)
 	if sql.ErrSyntaxError.Is(err) {
 		return errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", query).AddCause(err).Build()
 	} else if err != nil {
 		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 	}
 
-	defer rowIter.Close(ctx)
-	defer rowWriter.Close(ctx)
+	defer rowIter.Close(sqlCtx)
+	defer rowWriter.Close(sqlCtx)
 
 	var modifiedColNames map[string]bool
 	if dArgs.skinny {
-		modifiedColNames, err = getModifiedCols(ctx, rowIter, unionSch, sch)
+		modifiedColNames, err = getModifiedCols(sqlCtx, rowIter, unionSch, sch)
 		if err != nil {
 			return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 		}
@@ -886,19 +1220,20 @@ func diffRows(
 		}
 
 		// instantiate a new RowWriter with the new schema that only contains the columns with changes
-		rowWriter, err = dw.RowWriter(ctx, td, filteredUnionSch)
+		rowWriter, err = dw.RowWriter(fromTableInfo, toTableInfo, tableSummary, filteredUnionSch)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
-		defer rowWriter.Close(ctx)
+		defer rowWriter.Close(sqlCtx)
 
 		// reset the row iterator
-		err = rowIter.Close(ctx)
+		err = rowIter.Close(sqlCtx)
 		if err != nil {
 			return errhand.BuildDError("Error closing row iterator:\n%s", query).AddCause(err).Build()
 		}
-		_, rowIter, err = sqlEng.Query(ctx, query)
-		defer rowIter.Close(ctx)
+		//_, rowIter, err = sqlEng.Query(ctx, query)
+		_, rowIter, err = queryist.Query(sqlCtx, query)
+		defer rowIter.Close(sqlCtx)
 		if sql.ErrSyntaxError.Is(err) {
 			return errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", query).AddCause(err).Build()
 		} else if err != nil {
@@ -906,7 +1241,7 @@ func diffRows(
 		}
 	}
 
-	err = writeDiffResults(ctx, sch, unionSch, rowIter, rowWriter, modifiedColNames, dArgs)
+	err = writeDiffResults(sqlCtx, sch, unionSch, rowIter, rowWriter, modifiedColNames, dArgs)
 	if err != nil {
 		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 	}
@@ -927,7 +1262,15 @@ func unionSchemas(s1 sql.Schema, s2 sql.Schema) sql.Schema {
 	return union
 }
 
-func getColumnNamesString(fromSch, toSch schema.Schema) string {
+func getColumnNamesString(fromTableInfo, toTableInfo *diff.TableInfo) string {
+	var fromSch, toSch schema.Schema
+	if fromTableInfo != nil {
+		fromSch = fromTableInfo.Sch
+	}
+	if toTableInfo != nil {
+		toSch = toTableInfo.Sch
+	}
+
 	var cols []string
 	if fromSch != nil {
 		fromSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
