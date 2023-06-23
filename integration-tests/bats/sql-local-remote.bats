@@ -218,7 +218,7 @@ get_staged_tables() {
   [ "$status" -eq 0 ] || false
   localOutput=$output
 
-  run dolt --user dolt status --ignored
+  run dolt --user dolt --password "" status --ignored
   [ "$status" -eq 0 ] || false
   localIgnoredOutput=$output
 
@@ -235,7 +235,7 @@ get_staged_tables() {
 
     start_sql_server altDB
 
-    run dolt --verbose-engine-setup --user dolt commit -m "committing remotely"
+    run dolt --verbose-engine-setup commit -m "committing remotely"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "committing remotely" ]] || false
 
