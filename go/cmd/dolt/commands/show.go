@@ -267,18 +267,18 @@ func parseHashString(hashStr string) (hash.Hash, error) {
 //}
 
 func showCommitSpec(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, commitRef string) error {
+	commit, err := getCommitInfo(queryist, sqlCtx, commitRef)
+	if err != nil {
+		cli.PrintErrln("error: failed to get commit metadata for ref:", commitRef)
+		return err
+	}
 
 	if opts.pretty {
-		err := showCommit(queryist, sqlCtx, opts, commitRef)
+		err := showCommit(queryist, sqlCtx, opts, commit)
 		if err != nil {
 			return err
 		}
 	} else {
-		commit, err := getCommitInfo(queryist, sqlCtx, commitRef)
-		if err != nil {
-			cli.PrintErrln("error: failed to get commit metadata for ref:", commitRef)
-			return err
-		}
 		meta := commit.commitMeta
 		cmHash := commit.commitHash
 		parents := commit.parentHashes
@@ -289,7 +289,7 @@ func showCommitSpec(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, 
 		sb.WriteString(fmt.Sprintf("\tName: %s\n", meta.Name))
 		sb.WriteString(fmt.Sprintf("\tDesc: %s\n", meta.Description))
 		sb.WriteString(fmt.Sprintf("\tEmail: %s\n", meta.Email))
-		sb.WriteString(fmt.Sprintf("\tDate: %s\n", commitDate.String()))
+		sb.WriteString(fmt.Sprintf("\tTime: %s\n", commitDate.String()))
 		sb.WriteString(fmt.Sprintf("\tHeight: %d\n", commit.height))
 		sb.WriteString(fmt.Sprintf("\tRootValue: {\n"))
 		sb.WriteString(fmt.Sprintf("\t\t#%s\n", cmHash))
@@ -307,18 +307,13 @@ func showCommitSpec(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, 
 	return nil
 }
 
-func showCommit(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, ref string) error {
+func showCommit(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, commit *commitInfo) error {
 
 	//cHashToRefs, err := getHashToRefs(ctx, dEnv, opts.decoration)
 	//if err != nil {
 	//	return err
 	//}
 
-	commit, err := getCommitInfo(queryist, sqlCtx, ref)
-	if err != nil {
-		cli.PrintErrln("error: failed to get commit metadata for ref:", ref)
-		return err
-	}
 	cmHash := commit.commitHash
 	parents := commit.parentHashes
 
