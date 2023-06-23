@@ -470,7 +470,7 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*com
 	email := row[2].(string)
 	timestamp, err := getTimestampColAsUint64(row[3])
 	if err != nil {
-		return nil, fmt.Errorf("error parsing timestamp '%s': %v", err)
+		return nil, fmt.Errorf("error parsing timestamp '%s': %v", row[3], err)
 	}
 	message := row[4].(string)
 	parent := row[5].(string)
