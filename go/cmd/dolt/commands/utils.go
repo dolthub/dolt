@@ -16,7 +16,9 @@ package commands
 
 import (
 	"context"
+	"crypto/sha1"
 	"fmt"
+	"net"
 	"path/filepath"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -29,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 )
 
 var fwtStageName = "fwt"
@@ -84,7 +87,10 @@ func NewArgFreeCliContext(ctx context.Context, dEnv *env.DoltEnv) (cli.CliContex
 		return nil, errhand.VerboseErrorFromError(err)
 	}
 
-	lateBind, verr := BuildSqlEngineQueryist(ctx, dEnv.FS, mrEnv, argparser.NewEmptyResults())
+	emptyArgs := argparser.NewEmptyResults()
+	emptyArgs, creds, _ := cli.BuildUserPasswordPrompt(emptyArgs)
+	lateBind, verr := BuildSqlEngineQueryist(ctx, dEnv.FS, mrEnv, creds, emptyArgs)
+
 	if err != nil {
 		return nil, verr
 	}
@@ -93,15 +99,9 @@ func NewArgFreeCliContext(ctx context.Context, dEnv *env.DoltEnv) (cli.CliContex
 
 // BuildSqlEngineQueryist Utility function to build a local SQLEngine for use interacting with data on disk using
 // SQL queries. ctx, cwdFS, mrEnv, and apr must all be non-nil.
-func BuildSqlEngineQueryist(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, apr *argparser.ArgParseResults) (cli.LateBindQueryist, errhand.VerboseError) {
-	if ctx == nil || cwdFS == nil || mrEnv == nil || apr == nil {
+func BuildSqlEngineQueryist(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, creds *cli.UserPassword, apr *argparser.ArgParseResults) (cli.LateBindQueryist, errhand.VerboseError) {
+	if ctx == nil || cwdFS == nil || mrEnv == nil || creds == nil || apr == nil {
 		errhand.VerboseErrorFromError(fmt.Errorf("Invariant violated. Nil argument provided to BuildSqlEngineQueryist"))
-	}
-
-	// Retrieve username and password from command line, if provided
-	username := DefaultUser
-	if user, ok := apr.GetValue(UserFlag); ok {
-		username = user
 	}
 
 	// We want to know if the user provided us the data-dir flag, but we want to use the abs value used to
@@ -189,7 +189,7 @@ func BuildSqlEngineQueryist(ctx context.Context, cwdFS filesys.Filesys, mrEnv *e
 		database = mrEnv.GetFirstDatabase()
 	}
 
-	binder, err := newLateBindingEngine(cfgDirPath, privsFp, branchControlFilePath, username, database, mrEnv)
+	binder, err := newLateBindingEngine(cfgDirPath, privsFp, branchControlFilePath, creds, database, mrEnv)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
 	}
@@ -201,7 +201,7 @@ func newLateBindingEngine(
 	cfgDirPath string,
 	privsFp string,
 	branchControlFilePath string,
-	username string,
+	creds *cli.UserPassword,
 	database string,
 	mrEnv *env.MultiRepoEnv,
 ) (cli.LateBindQueryist, error) {
@@ -210,7 +210,8 @@ func newLateBindingEngine(
 		DoltCfgDirPath:     cfgDirPath,
 		PrivFilePath:       privsFp,
 		BranchCtrlFilePath: branchControlFilePath,
-		ServerUser:         username,
+		ServerUser:         creds.Username,
+		ServerPass:         creds.Password,
 		ServerHost:         "localhost",
 		Autocommit:         true,
 	}
@@ -224,6 +225,7 @@ func newLateBindingEngine(
 		if err != nil {
 			return nil, nil, nil, err
 		}
+
 		sqlCtx, err := se.NewDefaultContext(ctx2)
 		if err != nil {
 			return nil, nil, nil, err
@@ -233,15 +235,40 @@ func newLateBindingEngine(
 		// database set when you begin using them.
 		sqlCtx.SetCurrentDatabase(database)
 
-		// Add specified user as new superuser, if it doesn't already exist
-		if user := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, config.ServerHost, false); user == nil {
-			se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, config.ServerHost, config.ServerPass)
+		rawDb := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
+		salt, err := rawDb.Salt()
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		var dbUser string
+		if creds.Specified {
+			dbUser = creds.Username
+
+			// When running in local mode, we want to attempt respect the user/pwd they provided. If they didn't provide
+			// one, we'll give then super user privs. Respecting the user/pwd is not a security stance - it's there
+			// to enable testing of application settings.
+
+			authResponse := buildAuthResponse(salt, config.ServerPass)
+
+			err := passwordValidate(rawDb, salt, dbUser, authResponse)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+
+		} else {
+			dbUser = DefaultUser
+			// No cred presented. Use "root" but ensure that root has an empty password.
+			err := passwordValidate(rawDb, salt, dbUser, nil)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			rawDb.AddSuperUser(dbUser, config.ServerHost, "")
 		}
 
 		// Set client to specified user
-		sqlCtx.Session.SetClient(sql.Client{User: config.ServerUser, Address: config.ServerHost, Capabilities: 0})
+		sqlCtx.Session.SetClient(sql.Client{User: dbUser, Address: config.ServerHost, Capabilities: 0})
 		return se, sqlCtx, func() { se.Close() }, nil
-
 	}
 
 	return lateBinder, nil
@@ -279,4 +306,55 @@ func getActiveBranchName(sqlCtx *sql.Context, queryEngine cli.Queryist) (string,
 		return "", fmt.Errorf("unexpectedly received non-string column in '%s': %s", query, row[0])
 	}
 	return branchName, nil
+}
+
+// passwordValidate validates the password for the given user. This is a helper function around ValidateHash. Returns
+// nil if the user is authenticated, an error otherwise.
+func passwordValidate(rawDb *mysql_db.MySQLDb, salt []byte, user string, authResponse []byte) error {
+	// The port is meaningless here. It's going to be stripped in the ValidateHash function
+	addr, _ := net.ResolveTCPAddr("tcp", "localhost:3306")
+
+	authenticated, err := rawDb.ValidateHash(salt, user, authResponse, addr)
+	if err != nil {
+		return err
+	}
+	if authenticated == nil {
+		// Shouldn't happen - err above should happen instead. But just in case...
+		return fmt.Errorf("unable to authenticate user %s", user)
+	}
+	return nil
+}
+
+// buildAuthResponse takes the user password and server salt to construct an authResponse. This is the client
+// side logic of the mysql_native_password authentication protocol.
+func buildAuthResponse(salt []byte, password string) []byte {
+	if len(password) == 0 {
+		return nil
+	}
+
+	// Final goal is to get to this:
+	// XOR(SHA(password), SHA(salt, SHA(SHA(password))))
+
+	crypt := sha1.New()
+	crypt.Write([]byte(password))
+	shaPwd := crypt.Sum(nil)
+
+	crypt.Reset()
+	crypt.Write(shaPwd)
+	// This is the value stored in the Database in the mysql.user table in the authentication_string column when
+	// the plugin is set to mysql_native_password.
+	shaShaPwd := crypt.Sum(nil)
+
+	// Using salt and shaShaPwd (both of which the server knows) we execute an XOR with shaPwd. This means the server
+	// can XOR the result of this with shaShaPwd to get shaPwd. Then the server takes the sha of that value and validates
+	// it's what it has stored in the database.
+	crypt.Reset()
+	crypt.Write(salt)
+	crypt.Write(shaShaPwd)
+	scramble := crypt.Sum(nil)
+	for i := range shaPwd {
+		shaPwd[i] ^= scramble[i]
+	}
+
+	return shaPwd
 }
