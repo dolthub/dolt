@@ -17,10 +17,10 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/util/outputpager"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/pkg/errors"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -34,6 +34,15 @@ import (
 )
 
 var hashRegex = regexp.MustCompile(`^#?[0-9a-v]{32}$`)
+
+type commitInfo struct {
+	commitMeta   *datas.CommitMeta
+	commitHash   string
+	isHead       bool
+	parentHashes []string
+	height       uint64
+	branchNames  []string
+}
 
 type showOpts struct {
 	showParents bool
@@ -258,15 +267,14 @@ func parseHashString(hashStr string) (hash.Hash, error) {
 func showCommitSpec(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, commitRef string) error {
 
 	if opts.pretty {
-		cli.Println("Not implemented yet")
-		//err := showCommit(queryist, sqlCtx, opts, commitRef)
-		//if err != nil {
-		//	return err
-		//}
+		err := showCommit(queryist, sqlCtx, opts, commitRef)
+		if err != nil {
+			return err
+		}
 	} else {
 		commit, err := getCommitInfo(queryist, sqlCtx, commitRef)
 		if err != nil {
-			cli.PrintErrln("error: failed to get commit metadata")
+			cli.PrintErrln("error: failed to get commit metadata for ref:", commitRef)
 			return err
 		}
 		meta := commit.commitMeta
@@ -297,103 +305,126 @@ func showCommitSpec(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, 
 	return nil
 }
 
-//func showCommit(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, ref string) error {
-//
-//	//cHashToRefs, err := getHashToRefs(ctx, dEnv, opts.decoration)
-//	//if err != nil {
-//	//	return err
-//	//}
-//
-//	commit, err := getCommitInfo(queryist, sqlCtx, ref)
-//	if err != nil {
-//		cli.PrintErrln("error: failed to get commit metadata")
-//		return err
-//	}
-//	meta := commit.commitMeta
-//	cmHash := commit.commitHash
-//	parents := commit.parentHashes
-//
-//	//pHashes, pErr := comm.ParentHashes(ctx)
-//	//if pErr != nil {
-//	//	cli.PrintErrln("error: failed to get parent hashes")
-//	//	return err
-//	//}
-//	//cmHash, cErr := comm.HashOf()
-//	//if cErr != nil {
-//	//	cli.PrintErrln("error: failed to get commit hash")
-//	//	return err
-//	//}
-//
-//	//headRef, err := dEnv.RepoStateReader().CWBHeadRef()
-//	//if err != nil {
-//	//	return err
-//	//}
-//	//cwbHash, err := dEnv.DoltDB.GetHashForRefStr(ctx, headRef.String())
-//	//if err != nil {
-//	//	return err
-//	//}
-//
-//	cli.ExecuteWithStdioRestored(func() {
-//		pager := outputpager.Start()
-//		defer pager.Stop()
-//
-//		PrintCommit(pager, 0, opts.showParents, opts.decoration, logNode{
-//			commitMeta:   meta,
-//			commitHash:   cmHash,
-//			parentHashes: pHashes,
-//			branchNames:  cHashToRefs[cmHash],
-//			isHead:       cmHash == *cwbHash})
-//	})
-//
-//	if len(parents) == 0 {
-//		return nil
-//	}
-//	if len(parents) > 1 {
-//		return fmt.Errorf("requested commit is a merge commit. 'dolt show' currently only supports viewing non-merge commits")
-//	}
-//
-//	parentHash := parents[0]
-//	datasets := &diffDatasets{
-//		fromRef: parentHash,
-//		toRef:   cmHash,
-//	}
-//
-//	// An empty string will cause all tables to be printed.
-//	var tableNames []string
-//
-//	tableSet, err := parseDiffTableSetSql(queryist, sqlCtx, datasets, tableNames)
-//	if err != nil {
-//		return err
-//	}
-//
-//	dArgs := &diffArgs{
-//		diffDisplaySettings: opts.diffDisplaySettings,
-//		diffDatasets:        datasets,
-//		tableSet:            tableSet,
-//	}
-//
-//	return diffUserTables(queryist, sqlCtx, dArgs)
-//}
+func showCommit(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, ref string) error {
 
-type commitInfo struct {
-	commitMeta   *datas.CommitMeta
-	commitHash   string
-	parentHashes []string
-	height       uint64
+	//cHashToRefs, err := getHashToRefs(ctx, dEnv, opts.decoration)
+	//if err != nil {
+	//	return err
+	//}
+
+	commit, err := getCommitInfo(queryist, sqlCtx, ref)
+	if err != nil {
+		cli.PrintErrln("error: failed to get commit metadata for ref:", ref)
+		return err
+	}
+	cmHash := commit.commitHash
+	parents := commit.parentHashes
+
+	cli.ExecuteWithStdioRestored(func() {
+		pager := outputpager.Start()
+		defer pager.Stop()
+
+		showCommitInfo(pager, 0, opts.showParents, opts.decoration, commit)
+	})
+
+	if len(parents) == 0 {
+		return nil
+	}
+	if len(parents) > 1 {
+		return fmt.Errorf("requested commit is a merge commit. 'dolt show' currently only supports viewing non-merge commits")
+	}
+
+	parentHash := parents[0]
+	datasets := &diffDatasets{
+		fromRef: parentHash,
+		toRef:   cmHash,
+	}
+
+	// An empty string will cause all tables to be printed.
+	var tableNames []string
+
+	tableSet, err := parseDiffTableSetSql(queryist, sqlCtx, datasets, tableNames)
+	if err != nil {
+		return err
+	}
+
+	dArgs := &diffArgs{
+		diffDisplaySettings: opts.diffDisplaySettings,
+		diffDatasets:        datasets,
+		tableSet:            tableSet,
+	}
+
+	return diffUserTables(queryist, sqlCtx, dArgs)
+}
+
+func showCommitInfo(pager *outputpager.Pager, minParents int, showParents bool, decoration string, comm *commitInfo) {
+
+	if len(comm.parentHashes) < minParents {
+		return
+	}
+
+	chStr := comm.commitHash
+	if showParents {
+		for _, h := range comm.parentHashes {
+			chStr += " " + h
+		}
+	}
+
+	// Write commit hash
+	pager.Writer.Write([]byte(fmt.Sprintf("\033[33mcommit %s \033[0m", chStr))) // Use Dim Yellow (33m)
+
+	// Show decoration
+	if decoration != "no" {
+		showRefs(pager, comm)
+	}
+
+	if len(comm.parentHashes) > 1 {
+		pager.Writer.Write([]byte(fmt.Sprintf("\nMerge:")))
+		for _, h := range comm.parentHashes {
+			pager.Writer.Write([]byte(fmt.Sprintf(" " + h)))
+		}
+	}
+
+	pager.Writer.Write([]byte(fmt.Sprintf("\nAuthor: %s <%s>", comm.commitMeta.Name, comm.commitMeta.Email)))
+
+	timeStr := comm.commitMeta.FormatTS()
+	pager.Writer.Write([]byte(fmt.Sprintf("\nDate:  %s", timeStr)))
+
+	formattedDesc := "\n\n\t" + strings.Replace(comm.commitMeta.Description, "\n", "\n\t", -1) + "\n\n"
+	pager.Writer.Write([]byte(fmt.Sprintf("%s", formattedDesc)))
+
+}
+
+func showRefs(pager *outputpager.Pager, comm *commitInfo) {
+	// Do nothing if no associate branchNames
+	if len(comm.branchNames) == 0 {
+		return
+	}
+
+	pager.Writer.Write([]byte("\033[33m(\033[0m"))
+	if comm.isHead {
+		pager.Writer.Write([]byte("\033[36;1mHEAD -> \033[0m"))
+	}
+	pager.Writer.Write([]byte(strings.Join(comm.branchNames, "\033[33m, \033[0m"))) // Separate with Dim Yellow comma
+	pager.Writer.Write([]byte("\033[33m) \033[0m"))
 }
 
 func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*commitInfo, error) {
+	hashOfHead, err := getHashOf(queryist, sqlCtx, "HEAD")
+	if err != nil {
+		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
+	}
+
 	q := fmt.Sprintf("select * from dolt_log('%s', '--parents', '--decorate=full')", ref)
 	rows, err := GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error getting logs for ref '%s': %v", ref, err)
 	}
 	if len(rows) == 0 {
 		return nil, fmt.Errorf("no commits found for ref %s", ref)
 	}
 
 	row := rows[0]
-
 	commitHash := row[0].(string)
 	name := row[1].(string)
 	email := row[2].(string)
@@ -404,16 +435,32 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*com
 	message := row[4].(string)
 	parent := row[5].(string)
 	height := uint64(len(rows))
+	isHead := commitHash == hashOfHead
+
+	localBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHash, true)
+	if err != nil {
+		return nil, err
+	}
+	remoteBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHash, false)
+	if err != nil {
+		return nil, err
+	}
+	branches := []string{}
+	branches = append(branches, localBranchesForHash...)
+	branches = append(branches, remoteBranchesForHash...)
 
 	ci := &commitInfo{
 		commitMeta: &datas.CommitMeta{
-			Name:        name,
-			Email:       email,
-			Timestamp:   timestamp,
-			Description: message,
+			Name:          name,
+			Email:         email,
+			Timestamp:     timestamp,
+			Description:   message,
+			UserTimestamp: int64(timestamp),
 		},
-		commitHash: commitHash,
-		height:     height,
+		commitHash:  commitHash,
+		height:      height,
+		isHead:      isHead,
+		branchNames: branches,
 	}
 
 	if parent != "" {
@@ -423,6 +470,38 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*com
 	return ci, nil
 }
 
+func getBranchesForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash string, getLocalBranches bool) ([]string, error) {
+	var q string
+	if getLocalBranches {
+		q = fmt.Sprintf("select name, hash from dolt_branches where hash = '%s'", targetHash)
+	} else {
+		q = fmt.Sprintf("select name, hash from dolt_remote_branches where hash = '%s'", targetHash)
+	}
+	rows, err := GetRowsForSql(queryist, sqlCtx, q)
+	if err != nil {
+		return nil, err
+	}
+
+	branches := []string{}
+	for _, row := range rows {
+		name := row[0].(string)
+		branches = append(branches, name)
+	}
+	return branches, nil
+}
+
+func getHashOf(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (string, error) {
+	q := fmt.Sprintf("select hashof('%s')", ref)
+	rows, err := GetRowsForSql(queryist, sqlCtx, q)
+	if err != nil {
+		return "", err
+	}
+	if len(rows) == 0 {
+		return "", fmt.Errorf("no commits found for ref %s", ref)
+	}
+	return rows[0][0].(string), nil
+}
+
 func getTimestampColAsUint64(col interface{}) (uint64, error) {
 	switch v := col.(type) {
 	case uint64:
@@ -430,28 +509,8 @@ func getTimestampColAsUint64(col interface{}) (uint64, error) {
 	case int64:
 		return uint64(v), nil
 	case time.Time:
-		return uint64(v.Unix()), nil
+		return uint64(v.UnixMilli()), nil
 	default:
 		return 0, fmt.Errorf("unexpected type %T, was expecting int64, uint64 or time.Time", v)
-	}
-}
-
-// getInt64ColAsInt64 returns the value of an int64 column as a string
-// This is necessary because Queryist may return an int64 column as an int64 (when using SQLEngine)
-// or as a string (when using ConnectionQueryist).
-func getUint64ColAsUnt64(col interface{}) (uint64, error) {
-	switch v := col.(type) {
-	case uint64:
-		return v, nil
-	case int64:
-		return uint64(v), nil
-	case string:
-		iv, err := strconv.ParseUint(v, 10, 64)
-		if err != nil {
-			return 0, err
-		}
-		return iv, nil
-	default:
-		return 0, fmt.Errorf("unexpected type %T, was expecting int64, uint64 or string", v)
 	}
 }
