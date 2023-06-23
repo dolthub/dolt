@@ -105,7 +105,7 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
-	if verr := printConflicts(ctx, dEnv, ws, tblNames); verr != nil {
+	if err := printConflicts(ctx, dEnv, ws, tblNames); err != nil {
 		return exitWithVerr(errhand.VerboseErrorFromError(err))
 	}
 	return 0
