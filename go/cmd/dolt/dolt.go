@@ -80,7 +80,7 @@ var doltSubCommands = []cli.Command{
 	sqlserver.SqlServerCmd{VersionStr: Version},
 	sqlserver.SqlClientCmd{VersionStr: Version},
 	commands.LogCmd{},
-	//commands.ShowCmd{},
+	commands.ShowCmd{},
 	commands.BranchCmd{},
 	commands.CheckoutCmd{},
 	commands.MergeCmd{},

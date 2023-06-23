@@ -14,179 +14,189 @@
 
 package commands
 
-//import (
-//	"context"
-//	"fmt"
-//	"regexp"
-//	"strings"
-//
-//	"github.com/pkg/errors"
-//
-//	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-//	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-//	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-//	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-//	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-//	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-//	"github.com/dolthub/dolt/go/store/datas"
-//	"github.com/dolthub/dolt/go/store/hash"
-//	"github.com/dolthub/dolt/go/store/util/outputpager"
-//)
-//
-//var hashRegex = regexp.MustCompile(`^#?[0-9a-v]{32}$`)
-//
-//type showOpts struct {
-//	showParents bool
-//	pretty      bool
-//	decoration  string
-//	specRefs    []string
-//
-//	*diffDisplaySettings
-//}
-//
-//var showDocs = cli.CommandDocumentationContent{
-//	ShortDesc: `Show information about a specific commit`,
-//	LongDesc:  `Show information about a specific commit`,
-//	Synopsis: []string{
-//		`[{{.LessThan}}revision{{.GreaterThan}}]`,
-//	},
-//}
-//
-//type ShowCmd struct{}
-//
-//// Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
-//func (cmd ShowCmd) Name() string {
-//	return "show"
-//}
-//
-//// Description returns a description of the command
-//func (cmd ShowCmd) Description() string {
-//	return "Show information about a specific commit."
-//}
-//
-//// EventType returns the type of the event to log
-//func (cmd ShowCmd) EventType() eventsapi.ClientEventType {
-//	return eventsapi.ClientEventType_SHOW
-//}
-//
-//func (cmd ShowCmd) Docs() *cli.CommandDocumentation {
-//	ap := cmd.ArgParser()
-//	return cli.NewCommandDocumentation(showDocs, ap)
-//}
-//
-//func (cmd ShowCmd) ArgParser() *argparser.ArgParser {
-//	ap := argparser.NewArgParserWithVariableArgs(cmd.Name())
-//	// Flags inherited from Log
-//	ap.SupportsFlag(cli.ParentsFlag, "", "Shows all parents of each commit in the log.")
-//	ap.SupportsString(cli.DecorateFlag, "", "decorate_fmt", "Shows refs next to commits. Valid options are short, full, no, and auto")
-//	ap.SupportsFlag(cli.NoPrettyFlag, "", "Show the object without making it pretty.")
-//
-//	// Flags inherited from Diff
-//	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
-//	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
-//	ap.SupportsFlag(StatFlag, "", "Show stats of data changes")
-//	ap.SupportsFlag(SummaryFlag, "", "Show summary of data and schema changes")
-//	ap.SupportsString(FormatFlag, "r", "result output format", "How to format diff output. Valid values are tabular, sql, json. Defaults to tabular.")
-//	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
-//	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
-//	ap.SupportsFlag(cli.CachedFlag, "c", "Show only the staged data changes.")
-//	ap.SupportsFlag(SkinnyFlag, "sk", "Shows only primary key columns and any columns with data changes.")
-//	ap.SupportsFlag(MergeBase, "", "Uses merge base of the first commit and second commit (or HEAD if not supplied) as the first commit")
-//	ap.SupportsString(DiffMode, "", "diff mode", "Determines how to display modified rows with tabular output. Valid values are row, line, in-place, context. Defaults to context.")
-//	return ap
-//}
-//
-//// Exec executes the command
-//func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-//	ap := cmd.ArgParser()
-//	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, showDocs, ap))
-//	apr := cli.ParseArgsOrDie(ap, args, help)
-//
-//	opts, err := parseShowArgs(ctx, dEnv, apr)
-//	if err != nil {
-//		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-//	}
-//
-//	if err := cmd.validateArgs(apr); err != nil {
-//		return handleErrAndExit(err)
-//	}
-//
-//	if !opts.pretty && !dEnv.DoltDB.Format().UsesFlatbuffers() {
-//		cli.PrintErrln("dolt show --no-pretty is not supported when using old LD_1 storage format.")
-//		return 1
-//	}
-//
-//	opts.diffDisplaySettings = parseDiffDisplaySettings(ctx, dEnv, apr)
-//
-//	err = showObjects(ctx, dEnv, opts)
-//
-//	return handleErrAndExit(err)
-//}
-//
-//func (cmd ShowCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
-//	if apr.Contains(StatFlag) || apr.Contains(SummaryFlag) {
-//		if apr.Contains(SchemaFlag) || apr.Contains(DataFlag) {
-//			return errhand.BuildDError("invalid Arguments: --stat and --summary cannot be combined with --schema or --data").Build()
-//		}
-//	}
-//
-//	f, _ := apr.GetValue(FormatFlag)
-//	switch strings.ToLower(f) {
-//	case "tabular", "sql", "json", "":
-//	default:
-//		return errhand.BuildDError("invalid output format: %s", f).Build()
-//	}
-//
-//	return nil
-//}
-//
-//func parseShowArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*showOpts, error) {
-//
-//	decorateOption := apr.GetValueOrDefault(cli.DecorateFlag, "auto")
-//	switch decorateOption {
-//	case "short", "full", "auto", "no":
-//	default:
-//		return nil, fmt.Errorf("fatal: invalid --decorate option: %s", decorateOption)
-//	}
-//
-//	return &showOpts{
-//		showParents: apr.Contains(cli.ParentsFlag),
-//		pretty:      !apr.Contains(cli.NoPrettyFlag),
-//		decoration:  decorateOption,
-//		specRefs:    apr.Args,
-//	}, nil
-//}
-//
-//func showObjects(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts) error {
-//	if len(opts.specRefs) == 0 {
-//		headRef, err := dEnv.RepoStateReader().CWBHeadSpec()
-//		if err != nil {
-//			return err
-//		}
-//		return showCommitSpec(ctx, dEnv, opts, headRef)
-//	}
-//
-//	for _, specRef := range opts.specRefs {
-//		err := showSpecRef(ctx, dEnv, opts, specRef)
-//		if err != nil {
-//			return err
-//		}
-//	}
-//
-//	return nil
-//}
-//
-//// parseHashString converts a string representing a hash into a hash.Hash.
-//func parseHashString(hashStr string) (hash.Hash, error) {
-//	unprefixed := strings.TrimPrefix(hashStr, "#")
-//	parsedHash, ok := hash.MaybeParse(unprefixed)
-//	if !ok {
-//		return hash.Hash{}, errors.New("invalid hash: " + hashStr)
-//	}
-//	return parsedHash, nil
-//}
-//
-//func showSpecRef(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, specRef string) error {
+import (
+	"context"
+	"fmt"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/pkg/errors"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
+)
+
+var hashRegex = regexp.MustCompile(`^#?[0-9a-v]{32}$`)
+
+type showOpts struct {
+	showParents bool
+	pretty      bool
+	decoration  string
+	specRefs    []string
+
+	*diffDisplaySettings
+}
+
+var showDocs = cli.CommandDocumentationContent{
+	ShortDesc: `Show information about a specific commit`,
+	LongDesc:  `Show information about a specific commit`,
+	Synopsis: []string{
+		`[{{.LessThan}}revision{{.GreaterThan}}]`,
+	},
+}
+
+type ShowCmd struct{}
+
+// Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd ShowCmd) Name() string {
+	return "show"
+}
+
+// Description returns a description of the command
+func (cmd ShowCmd) Description() string {
+	return "Show information about a specific commit."
+}
+
+// EventType returns the type of the event to log
+func (cmd ShowCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_SHOW
+}
+
+func (cmd ShowCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(showDocs, ap)
+}
+
+func (cmd ShowCmd) ArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParserWithVariableArgs(cmd.Name())
+	// Flags inherited from Log
+	ap.SupportsFlag(cli.ParentsFlag, "", "Shows all parents of each commit in the log.")
+	ap.SupportsString(cli.DecorateFlag, "", "decorate_fmt", "Shows refs next to commits. Valid options are short, full, no, and auto")
+	ap.SupportsFlag(cli.NoPrettyFlag, "", "Show the object without making it pretty.")
+
+	// Flags inherited from Diff
+	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
+	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
+	ap.SupportsFlag(StatFlag, "", "Show stats of data changes")
+	ap.SupportsFlag(SummaryFlag, "", "Show summary of data and schema changes")
+	ap.SupportsString(FormatFlag, "r", "result output format", "How to format diff output. Valid values are tabular, sql, json. Defaults to tabular.")
+	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
+	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
+	ap.SupportsFlag(cli.CachedFlag, "c", "Show only the staged data changes.")
+	ap.SupportsFlag(SkinnyFlag, "sk", "Shows only primary key columns and any columns with data changes.")
+	ap.SupportsFlag(MergeBase, "", "Uses merge base of the first commit and second commit (or HEAD if not supplied) as the first commit")
+	ap.SupportsString(DiffMode, "", "diff mode", "Determines how to display modified rows with tabular output. Valid values are row, line, in-place, context. Defaults to context.")
+	return ap
+}
+
+// Exec executes the command
+func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, showDocs, ap))
+	apr := cli.ParseArgsOrDie(ap, args, help)
+
+	opts, err := parseShowArgs(ctx, dEnv, apr)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	if err := cmd.validateArgs(apr); err != nil {
+		return handleErrAndExit(err)
+	}
+
+	// TODO: pavel - is this check still needed in a SQL-only world?
+	//if !opts.pretty && !dEnv.DoltDB.Format().UsesFlatbuffers() {
+	//	cli.PrintErrln("dolt show --no-pretty is not supported when using old LD_1 storage format.")
+	//	return 1
+	//}
+
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	if closeFunc != nil {
+		defer closeFunc()
+	}
+
+	opts.diffDisplaySettings = parseDiffDisplaySettings(apr)
+
+	err = showObjects(queryist, sqlCtx, opts)
+
+	return handleErrAndExit(err)
+}
+
+func (cmd ShowCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
+	if apr.Contains(StatFlag) || apr.Contains(SummaryFlag) {
+		if apr.Contains(SchemaFlag) || apr.Contains(DataFlag) {
+			return errhand.BuildDError("invalid Arguments: --stat and --summary cannot be combined with --schema or --data").Build()
+		}
+	}
+
+	f, _ := apr.GetValue(FormatFlag)
+	switch strings.ToLower(f) {
+	case "tabular", "sql", "json", "":
+	default:
+		return errhand.BuildDError("invalid output format: %s", f).Build()
+	}
+
+	return nil
+}
+
+func parseShowArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*showOpts, error) {
+
+	decorateOption := apr.GetValueOrDefault(cli.DecorateFlag, "auto")
+	switch decorateOption {
+	case "short", "full", "auto", "no":
+	default:
+		return nil, fmt.Errorf("fatal: invalid --decorate option: %s", decorateOption)
+	}
+
+	return &showOpts{
+		showParents: apr.Contains(cli.ParentsFlag),
+		pretty:      !apr.Contains(cli.NoPrettyFlag),
+		decoration:  decorateOption,
+		specRefs:    apr.Args,
+	}, nil
+}
+
+func showObjects(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts) error {
+	if len(opts.specRefs) == 0 {
+		//headRef, err := dEnv.RepoStateReader().CWBHeadSpec()
+		//if err != nil {
+		//	return err
+		//}
+		return showCommitSpec(queryist, sqlCtx, opts, "HEAD")
+	}
+
+	for _, specRef := range opts.specRefs {
+		//err := showSpecRef(queryist, sqlCtx, opts, specRef)
+		err := showCommitSpec(queryist, sqlCtx, opts, specRef)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// parseHashString converts a string representing a hash into a hash.Hash.
+func parseHashString(hashStr string) (hash.Hash, error) {
+	unprefixed := strings.TrimPrefix(hashStr, "#")
+	parsedHash, ok := hash.MaybeParse(unprefixed)
+	if !ok {
+		return hash.Hash{}, errors.New("invalid hash: " + hashStr)
+	}
+	return parsedHash, nil
+}
+
+//func showSpecRef(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, specRef string) error {
 //	roots, err := dEnv.Roots(ctx)
 //	if err != nil {
 //		return err
@@ -244,62 +254,84 @@ package commands
 //	}
 //	return nil
 //}
+
+func showCommitSpec(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, commitRef string) error {
+
+	if opts.pretty {
+		cli.Println("Not implemented yet")
+		//err := showCommit(queryist, sqlCtx, opts, commitRef)
+		//if err != nil {
+		//	return err
+		//}
+	} else {
+		commit, err := getCommitInfo(queryist, sqlCtx, commitRef)
+		if err != nil {
+			cli.PrintErrln("error: failed to get commit metadata")
+			return err
+		}
+		meta := commit.commitMeta
+		cmHash := commit.commitHash
+		parents := commit.parentHashes
+		commitDate := time.UnixMilli(int64(meta.Timestamp))
+
+		sb := strings.Builder{}
+		sb.WriteString("{\n")
+		sb.WriteString(fmt.Sprintf("\tName: %s\n", meta.Name))
+		sb.WriteString(fmt.Sprintf("\tDesc: %s\n", meta.Description))
+		sb.WriteString(fmt.Sprintf("\tEmail: %s\n", meta.Email))
+		sb.WriteString(fmt.Sprintf("\tDate: %s\n", commitDate.String()))
+		sb.WriteString(fmt.Sprintf("\tHeight: %d\n", commit.height))
+		sb.WriteString(fmt.Sprintf("\tRootValue: {\n"))
+		sb.WriteString(fmt.Sprintf("\t\t#%s\n", cmHash))
+		sb.WriteString(fmt.Sprintf("\t}\n"))
+		if len(parents) > 0 {
+			sb.WriteString(fmt.Sprintf("\tParents: {\n"))
+			for _, p := range parents {
+				sb.WriteString(fmt.Sprintf("\t\t#%s\n", p))
+			}
+			sb.WriteString(fmt.Sprintf("\t}\n"))
+		}
+		sb.WriteString("}")
+		cli.Println(sb.String())
+	}
+	return nil
+}
+
+//func showCommit(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, ref string) error {
 //
-//func showCommitSpec(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, commitSpec *doltdb.CommitSpec) error {
+//	//cHashToRefs, err := getHashToRefs(ctx, dEnv, opts.decoration)
+//	//if err != nil {
+//	//	return err
+//	//}
 //
-//	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+//	commit, err := getCommitInfo(queryist, sqlCtx, ref)
 //	if err != nil {
-//		return err
-//	}
-//
-//	commit, err := dEnv.DoltDB.Resolve(ctx, commitSpec, headRef)
-//	if err != nil {
-//		return err
-//	}
-//
-//	if opts.pretty {
-//		err = showCommit(ctx, dEnv, opts, commit)
-//		if err != nil {
-//			return err
-//		}
-//	} else {
-//		value := commit.Value()
-//		cli.Println(value.Kind(), value.HumanReadableString())
-//	}
-//	return nil
-//}
-//
-//func showCommit(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts, comm *doltdb.Commit) error {
-//
-//	cHashToRefs, err := getHashToRefs(ctx, dEnv, opts.decoration)
-//	if err != nil {
-//		return err
-//	}
-//
-//	meta, mErr := comm.GetCommitMeta(ctx)
-//	if mErr != nil {
 //		cli.PrintErrln("error: failed to get commit metadata")
 //		return err
 //	}
-//	pHashes, pErr := comm.ParentHashes(ctx)
-//	if pErr != nil {
-//		cli.PrintErrln("error: failed to get parent hashes")
-//		return err
-//	}
-//	cmHash, cErr := comm.HashOf()
-//	if cErr != nil {
-//		cli.PrintErrln("error: failed to get commit hash")
-//		return err
-//	}
+//	meta := commit.commitMeta
+//	cmHash := commit.commitHash
+//	parents := commit.parentHashes
 //
-//	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
-//	if err != nil {
-//		return err
-//	}
-//	cwbHash, err := dEnv.DoltDB.GetHashForRefStr(ctx, headRef.String())
-//	if err != nil {
-//		return err
-//	}
+//	//pHashes, pErr := comm.ParentHashes(ctx)
+//	//if pErr != nil {
+//	//	cli.PrintErrln("error: failed to get parent hashes")
+//	//	return err
+//	//}
+//	//cmHash, cErr := comm.HashOf()
+//	//if cErr != nil {
+//	//	cli.PrintErrln("error: failed to get commit hash")
+//	//	return err
+//	//}
+//
+//	//headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+//	//if err != nil {
+//	//	return err
+//	//}
+//	//cwbHash, err := dEnv.DoltDB.GetHashForRefStr(ctx, headRef.String())
+//	//if err != nil {
+//	//	return err
+//	//}
 //
 //	cli.ExecuteWithStdioRestored(func() {
 //		pager := outputpager.Start()
@@ -313,45 +345,23 @@ package commands
 //			isHead:       cmHash == *cwbHash})
 //	})
 //
-//	if comm.NumParents() == 0 {
+//	if len(parents) == 0 {
 //		return nil
 //	}
-//
-//	if comm.NumParents() > 1 {
+//	if len(parents) > 1 {
 //		return fmt.Errorf("requested commit is a merge commit. 'dolt show' currently only supports viewing non-merge commits")
 //	}
 //
-//	commitRoot, err := comm.GetRootValue(ctx)
-//	if err != nil {
-//		return err
-//	}
-//
-//	parent, err := comm.GetParent(ctx, 0)
-//	if err != nil {
-//		return err
-//	}
-//
-//	parentRoot, err := parent.GetRootValue(ctx)
-//	if err != nil {
-//		return err
-//	}
-//
-//	parentHash, err := parent.HashOf()
-//	if err != nil {
-//		return err
-//	}
-//
+//	parentHash := parents[0]
 //	datasets := &diffDatasets{
-//		fromRoot: parentRoot,
-//		toRoot:   commitRoot,
-//		fromRef:  parentHash.String(),
-//		toRef:    cmHash.String(),
+//		fromRef: parentHash,
+//		toRef:   cmHash,
 //	}
 //
 //	// An empty string will cause all tables to be printed.
 //	var tableNames []string
 //
-//	tableSet, err := parseDiffTableSet(ctx, dEnv, datasets, tableNames)
+//	tableSet, err := parseDiffTableSetSql(queryist, sqlCtx, datasets, tableNames)
 //	if err != nil {
 //		return err
 //	}
@@ -362,5 +372,86 @@ package commands
 //		tableSet:            tableSet,
 //	}
 //
-//	return diffUserTables(ctx, dEnv, dArgs)
+//	return diffUserTables(queryist, sqlCtx, dArgs)
 //}
+
+type commitInfo struct {
+	commitMeta   *datas.CommitMeta
+	commitHash   string
+	parentHashes []string
+	height       uint64
+}
+
+func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*commitInfo, error) {
+	q := fmt.Sprintf("select * from dolt_log('%s', '--parents', '--decorate=full')", ref)
+	rows, err := GetRowsForSql(queryist, sqlCtx, q)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, fmt.Errorf("no commits found for ref %s", ref)
+	}
+
+	row := rows[0]
+
+	commitHash := row[0].(string)
+	name := row[1].(string)
+	email := row[2].(string)
+	timestamp, err := getTimestampColAsUint64(row[3])
+	if err != nil {
+		return nil, fmt.Errorf("error parsing timestamp '%s': %v", err)
+	}
+	message := row[4].(string)
+	parent := row[5].(string)
+	height := uint64(len(rows))
+
+	ci := &commitInfo{
+		commitMeta: &datas.CommitMeta{
+			Name:        name,
+			Email:       email,
+			Timestamp:   timestamp,
+			Description: message,
+		},
+		commitHash: commitHash,
+		height:     height,
+	}
+
+	if parent != "" {
+		ci.parentHashes = []string{parent}
+	}
+
+	return ci, nil
+}
+
+func getTimestampColAsUint64(col interface{}) (uint64, error) {
+	switch v := col.(type) {
+	case uint64:
+		return v, nil
+	case int64:
+		return uint64(v), nil
+	case time.Time:
+		return uint64(v.Unix()), nil
+	default:
+		return 0, fmt.Errorf("unexpected type %T, was expecting int64, uint64 or time.Time", v)
+	}
+}
+
+// getInt64ColAsInt64 returns the value of an int64 column as a string
+// This is necessary because Queryist may return an int64 column as an int64 (when using SQLEngine)
+// or as a string (when using ConnectionQueryist).
+func getUint64ColAsUnt64(col interface{}) (uint64, error) {
+	switch v := col.(type) {
+	case uint64:
+		return v, nil
+	case int64:
+		return uint64(v), nil
+	case string:
+		iv, err := strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		return iv, nil
+	default:
+		return 0, fmt.Errorf("unexpected type %T, was expecting int64, uint64 or string", v)
+	}
+}
