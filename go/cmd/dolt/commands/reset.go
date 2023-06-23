@@ -113,13 +113,8 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	}
 
 	// process query through prepared statement to prevent sql injection
-	query, params := constructParametrizedDoltResetQuery(apr)
-	interpolatedQuery, err := dbr.InterpolateForDialect(query, params, dialect.MySQL)
-	if err != nil {
-		cli.Println(err.Error())
-		return 1
-	}
-	_, _, err = queryist.Query(sqlCtx, interpolatedQuery)
+	query, err := constructInterpolatedDoltResetQuery(apr)
+	_, _, err = queryist.Query(sqlCtx, query)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
@@ -130,9 +125,9 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	return 0
 }
 
-// constructParametrizedDoltResetQuery generates the sql query necessary to call the DOLT_RESET() stored procedure with placeholders
-// for arg input. Also returns a list of the inputs in the order in which they appear in the query.
-func constructParametrizedDoltResetQuery(apr *argparser.ArgParseResults) (string, []interface{}) {
+// constructInterpolatedDoltResetQuery generates the sql query necessary to call the DOLT_RESET() stored procedure.
+// Also runs interpolates this query to prevent sql injection.
+func constructInterpolatedDoltResetQuery(apr *argparser.ArgParseResults) (string, error) {
 	var params []interface{}
 	var param bool
 
@@ -186,7 +181,13 @@ func constructParametrizedDoltResetQuery(apr *argparser.ArgParseResults) (string
 	}
 
 	buffer.WriteString(")")
-	return buffer.String(), params
+
+	interpolatedQuery, err := dbr.InterpolateForDialect(buffer.String(), params, dialect.MySQL)
+	if err != nil {
+		return "", err
+	}
+
+	return interpolatedQuery, nil
 }
 
 var tblDiffTypeToShortLabel = map[diff.TableDiffType]string{

@@ -441,12 +441,23 @@ get_staged_tables() {
 
 @test "sql-local-remote: verify simple dolt reset behavior" {
     start_sql_server altDB
-    dolt --verbose-engine-setup --user dolt sql -q "create table test1 (pk int primary key)"
-    dolt --verbose-engine-setup --user dolt add test1
-    dolt --verbose-engine-setup --user dolt commit -m "create table test1"
+    dolt --user dolt sql -q "create table test1 (pk int primary key)"
+    dolt --user dolt add test1
+    dolt --user dolt commit -m "create table test1"
 
-    dolt --verbose-engine-setup --user dolt sql -q "insert into test1 values (1)"
-    dolt --verbose-engine-setup --user dolt add test1
+    dolt --user dolt sql -q "insert into test1 values (1)"
+    dolt --user dolt add test1
+    run dolt --verbose-engine-setup --user dolt reset
+    [ "$status" -eq 0 ]
+
+    run dolt --verbose-engine-setup --user dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
+
+    stop_sql_server 1
+
+    dolt --user dolt add test1
     run dolt --verbose-engine-setup --user dolt reset
     [ "$status" -eq 0 ]
 
