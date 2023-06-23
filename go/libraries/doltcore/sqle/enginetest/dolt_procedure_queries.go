@@ -21,7 +21,7 @@ import (
 
 var DoltProcedureTests = []queries.ScriptTest{
 	{
-		Name: "user defined script to create commits",
+		Name: "dolt_commit in a loop",
 		SetUpScript: []string{
 			"create table t(a int primary key auto_increment, b int);",
 			"call dolt_commit('-Am', 'new table');",
@@ -45,12 +45,16 @@ end
 				SkipResultsCheck: true, // return value is a bit odd, needs investigation
 			},
 			{
-				Query: "select count(*) from t",
-				Expected: []sql.Row{{10}},
+				Query: "select * from t",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 6}, {7, 7}, {8, 8}, {9, 9}, {10, 10}},
 			},
 			{
 				Query: "select count(*) from dolt_log;",
 				Expected: []sql.Row{{13}}, // init, setup for test harness, initial commit in setup script, 10 commits in procedure
+			},
+			{
+				Query: "select * from t as of `HEAD~5`",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}},
 			},
 		},
 	},
