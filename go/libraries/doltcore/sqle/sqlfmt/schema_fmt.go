@@ -225,20 +225,6 @@ func AlterTableAddForeignKeyStmt(fk doltdb.ForeignKey, sch, parentSch schema.Sch
 	return b.String()
 }
 
-func AlterTableAddForeignKeyStmtSimple(tableName, fkName, fkReferencedTableName string, fkTableColumns, fkReferencedTableColumns []string) string {
-	var b strings.Builder
-	b.WriteString("ALTER TABLE ")
-	b.WriteString(QuoteIdentifier(tableName))
-	b.WriteString(" ADD CONSTRAINT ")
-	b.WriteString(QuoteIdentifier(fkName))
-	b.WriteString(" FOREIGN KEY ")
-	b.WriteString("(" + strings.Join(fkTableColumns, ",") + ")")
-	b.WriteString(" REFERENCES ")
-	b.WriteString(QuoteIdentifier(fkReferencedTableName))
-	b.WriteString(" (" + strings.Join(fkReferencedTableColumns, ",") + ");")
-	return b.String()
-}
-
 func AlterTableDropForeignKeyStmt(tableName, fkName string) string {
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")
