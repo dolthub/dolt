@@ -936,13 +936,17 @@ func diffUserTable(
 	if dArgs.diffParts&Stat != 0 {
 		var areTablesKeyless = false
 
+		var fromColLen = 0
 		var fromKeyless = false
 		if fromTableInfo != nil {
 			fromKeyless = schema.IsKeyless(fromTableInfo.Sch)
+			fromColLen = fromTableInfo.Sch.GetAllCols().Size()
 		}
+		var toColLen = 0
 		var toKeyless = false
 		if toTableInfo != nil {
 			toKeyless = schema.IsKeyless(toTableInfo.Sch)
+			toColLen = toTableInfo.Sch.GetAllCols().Size()
 		}
 
 		// nil table is neither keyless nor keyed
@@ -965,7 +969,7 @@ func diffUserTable(
 			return errhand.BuildDError("cannot retrieve diff stats between '%s' and '%s'", dArgs.fromRef, dArgs.toRef).AddCause(err).Build()
 		}
 
-		return printDiffStat(diffStats, fromTableInfo.Sch.GetAllCols().Size(), toTableInfo.Sch.GetAllCols().Size(), areTablesKeyless)
+		return printDiffStat(diffStats, fromColLen, toColLen, areTablesKeyless)
 	}
 
 	if dArgs.diffParts&SchemaOnlyDiff != 0 {
