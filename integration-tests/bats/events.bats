@@ -104,7 +104,7 @@ teardown() {
 
     start_sql_server
     dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CREATE EVENT insert1 ON SCHEDULE EVERY 2 SECOND STARTS CURRENT_TIMESTAMP + INTERVAL 2 SECOND ENDS CURRENT_TIMESTAMP + INTERVAL 5 SECOND DO INSERT INTO totals (int_col) VALUES (1);"
-    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT SLEEP(7);"
+    sleep 10
     run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT COUNT(*) FROM totals;"
     [ $status -eq 0 ]
     [[ $output =~ "| 2        |" ]] || false
