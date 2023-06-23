@@ -456,7 +456,7 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*com
 	}
 
 	q := fmt.Sprintf("select * from dolt_log('%s', '--parents', '--decorate=full')", ref)
-	rows, err := GetRowsForSql(queryist, sqlCtx, q)
+	rows, err := getRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, fmt.Errorf("error getting logs for ref '%s': %v", ref, err)
 	}
@@ -515,7 +515,7 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*com
 
 func getTagsForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash string) ([]string, error) {
 	q := fmt.Sprintf("select tag_name from dolt_tags where tag_hash = '%s'", targetHash)
-	rows, err := GetRowsForSql(queryist, sqlCtx, q)
+	rows, err := getRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, err
 	}
@@ -535,7 +535,7 @@ func getBranchesForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash s
 	} else {
 		q = fmt.Sprintf("select name, hash from dolt_remote_branches where hash = '%s'", targetHash)
 	}
-	rows, err := GetRowsForSql(queryist, sqlCtx, q)
+	rows, err := getRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, err
 	}
@@ -550,7 +550,7 @@ func getBranchesForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash s
 
 func getHashOf(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (string, error) {
 	q := fmt.Sprintf("select hashof('%s')", ref)
-	rows, err := GetRowsForSql(queryist, sqlCtx, q)
+	rows, err := getRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return "", err
 	}
