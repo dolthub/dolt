@@ -18,6 +18,7 @@ import (
 	"context"
 	ejson "encoding/json"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"io"
 
 	textdiff "github.com/andreyvit/diff"
@@ -239,6 +240,8 @@ func (s sqlDiffWriter) WriteTableSchemaDiff(fromTableInfo, toTableInfo *diff.Tab
 	stmts := tds.AlterStmts
 	if tds.IsAdd() {
 		stmts = []string{toTableInfo.CreateStmt}
+	} else if tds.IsDrop() {
+		stmts = []string{sqlfmt.DropTableStmt(fromTableInfo.Name)}
 	}
 	for _, stmt := range stmts {
 		if len(stmt) == 0 {
@@ -373,6 +376,8 @@ func (j *jsonDiffWriter) WriteTableSchemaDiff(fromTableInfo, toTableInfo *diff.T
 	stmts := tds.AlterStmts
 	if tds.IsAdd() {
 		stmts = []string{toTableInfo.CreateStmt}
+	} else if tds.IsDrop() {
+		stmts = []string{sqlfmt.DropTableStmt(fromTableInfo.Name)}
 	}
 
 	for _, stmt := range stmts {
