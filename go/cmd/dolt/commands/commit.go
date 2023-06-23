@@ -167,7 +167,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 	}
 	resultRow, err := sql.RowIterToRows(sqlCtx, schema, rowIter)
 	if err != nil {
-		return 0, false
+		return 1, false
 	}
 	if resultRow == nil {
 		return 0, true

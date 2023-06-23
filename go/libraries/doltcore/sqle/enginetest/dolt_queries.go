@@ -1429,6 +1429,20 @@ var DoltUserPrivTests = []queries.UserPrivilegeTest{
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
+				// After revoking access, dolt_schema_diff should fail against table 'test'
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_schema_diff('HEAD^','HEAD','test');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				// After revoking access, dolt_schema_diff should fail against the entire db
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_schema_diff('HEAD^','HEAD');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
 				// Grant global access to *.*
 				User:     "root",
 				Host:     "localhost",
