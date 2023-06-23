@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/pkg/errors"
@@ -47,10 +48,11 @@ type commitInfo struct {
 }
 
 type showOpts struct {
-	showParents bool
-	pretty      bool
-	decoration  string
-	specRefs    []string
+	showParents            bool
+	pretty                 bool
+	decoration             string
+	specRefs               []string
+	resolvedNonCommitSpecs map[string]string
 
 	*diffDisplaySettings
 }
@@ -113,7 +115,7 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, showDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	opts, err := parseShowArgs(ctx, dEnv, apr)
+	opts, err := parseShowArgs(apr)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -122,25 +124,109 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return handleErrAndExit(err)
 	}
 
-	// TODO: pavel - is this check still needed in a SQL-only world?
-	//if !opts.pretty && !dEnv.DoltDB.Format().UsesFlatbuffers() {
-	//	cli.PrintErrln("dolt show --no-pretty is not supported when using old LD_1 storage format.")
-	//	return 1
-	//}
-
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-	if closeFunc != nil {
-		defer closeFunc()
-	}
-
 	opts.diffDisplaySettings = parseDiffDisplaySettings(apr)
 
-	err = showObjects(queryist, sqlCtx, opts)
+	// Decide if we're going to use dolt or sql for this execution.
+	// We can use SQL in the following cases:
+	// 1. `--no-pretty` is not set, so we will be producing "pretty" output.
+	// 2. opts.specRefs contains values that are NOT commit hashes.
+	// In all other cases, we should use DoltEnv
+	allSpecRefsAreCommits := true
+	allSpecRefsAreNonCommits := true
+	resolvedNonCommitSpecs := map[string]string{}
+	for _, specRef := range opts.specRefs {
+		isNonCommitSpec, resolvedValue, err := resolveNonCommitSpec(ctx, dEnv, specRef)
+		if err != nil {
+			err = fmt.Errorf("error resolving spec ref '%s': %w", specRef, err)
+			return handleErrAndExit(err)
+		}
+		allSpecRefsAreNonCommits = allSpecRefsAreNonCommits && isNonCommitSpec
+		allSpecRefsAreCommits = allSpecRefsAreCommits && !isNonCommitSpec
 
-	return handleErrAndExit(err)
+		if isNonCommitSpec {
+			resolvedNonCommitSpecs[specRef] = resolvedValue
+		}
+	}
+
+	if !allSpecRefsAreCommits && !allSpecRefsAreNonCommits {
+		err = fmt.Errorf("cannot mix commit hashes and non-commit spec refs")
+		return handleErrAndExit(err)
+	}
+
+	useDoltEnv := !opts.pretty || (len(opts.specRefs) > 0 && allSpecRefsAreNonCommits)
+
+	if useDoltEnv {
+		if !opts.pretty && !dEnv.DoltDB.Format().UsesFlatbuffers() {
+			cli.PrintErrln("dolt show --no-pretty is not supported when using old LD_1 storage format.")
+			return 1
+		}
+		opts.resolvedNonCommitSpecs = resolvedNonCommitSpecs
+		err = showObjects(ctx, dEnv, opts)
+		return handleErrAndExit(err)
+	} else {
+		queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
+		if closeFunc != nil {
+			defer closeFunc()
+		}
+		err = showObjectsPretty(queryist, sqlCtx, opts)
+		return handleErrAndExit(err)
+	}
+}
+
+func resolveNonCommitSpec(ctx context.Context, dEnv *env.DoltEnv, specRef string) (isNonCommitSpec bool, resolvedValue string, err error) {
+	isNonCommitSpec = false
+	resolvedValue = ""
+
+	roots, err := dEnv.Roots(ctx)
+	if err != nil {
+		return isNonCommitSpec, resolvedValue, err
+	}
+
+	upperCaseSpecRef := strings.ToUpper(specRef)
+	if upperCaseSpecRef == doltdb.Working || upperCaseSpecRef == doltdb.Staged || hashRegex.MatchString(specRef) {
+		var refHash hash.Hash
+		var err error
+		if upperCaseSpecRef == doltdb.Working {
+			refHash, err = roots.Working.HashOf()
+		} else if upperCaseSpecRef == doltdb.Staged {
+			refHash, err = roots.Staged.HashOf()
+		} else {
+			refHash, err = parseHashString(specRef)
+		}
+		if err != nil {
+			return isNonCommitSpec, resolvedValue, err
+		}
+		value, err := dEnv.DoltDB.ValueReadWriter().ReadValue(ctx, refHash)
+		if err != nil {
+			return isNonCommitSpec, resolvedValue, err
+		}
+		if value == nil {
+			return isNonCommitSpec, resolvedValue, fmt.Errorf("Unable to resolve object ref %s", specRef)
+		}
+
+		// If this is a commit, use the pretty printer. To determine whether it's a commit, try calling NewCommitFromValue.
+		_, err = doltdb.NewCommitFromValue(ctx, dEnv.DoltDB.ValueReadWriter(), dEnv.DoltDB.NodeStore(), value)
+
+		if err == datas.ErrNotACommit {
+			if !dEnv.DoltDB.Format().UsesFlatbuffers() {
+				return isNonCommitSpec, resolvedValue, fmt.Errorf("dolt show cannot show non-commit objects when using the old LD_1 storage format: %s is not a commit", specRef)
+			}
+			isNonCommitSpec = true
+			resolvedValue = fmt.Sprintln(value.Kind(), value.HumanReadableString())
+			return isNonCommitSpec, resolvedValue, nil
+		} else if err == nil {
+			isNonCommitSpec = false
+			return isNonCommitSpec, resolvedValue, nil
+		} else {
+			return isNonCommitSpec, resolvedValue, err
+		}
+	} else { // specRef is a CommitSpec, which must resolve to a Commit.
+		isNonCommitSpec = false
+		return isNonCommitSpec, resolvedValue, nil
+	}
 }
 
 func (cmd ShowCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
@@ -160,7 +246,7 @@ func (cmd ShowCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseE
 	return nil
 }
 
-func parseShowArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*showOpts, error) {
+func parseShowArgs(apr *argparser.ArgParseResults) (*showOpts, error) {
 
 	decorateOption := apr.GetValueOrDefault(cli.DecorateFlag, "auto")
 	switch decorateOption {
@@ -177,18 +263,45 @@ func parseShowArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	}, nil
 }
 
-func showObjects(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts) error {
+func showObjects(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts) error {
 	if len(opts.specRefs) == 0 {
-		//headRef, err := dEnv.RepoStateReader().CWBHeadSpec()
-		//if err != nil {
-		//	return err
-		//}
-		return showCommitSpec(queryist, sqlCtx, opts, "HEAD")
+		headSpec, err := dEnv.RepoStateReader().CWBHeadSpec()
+		if err != nil {
+			return err
+		}
+
+		headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+		if err != nil {
+			return err
+		}
+
+		commit, err := dEnv.DoltDB.Resolve(ctx, headSpec, headRef)
+		if err != nil {
+			return err
+		}
+
+		value := commit.Value()
+		cli.Println(value.Kind(), value.HumanReadableString())
 	}
 
 	for _, specRef := range opts.specRefs {
-		//err := showSpecRef(queryist, sqlCtx, opts, specRef)
-		err := showCommitSpec(queryist, sqlCtx, opts, specRef)
+		resolvedValue, ok := opts.resolvedNonCommitSpecs[specRef]
+		if !ok {
+			return fmt.Errorf("fatal: unable to resolve object ref %s", specRef)
+		}
+		cli.Println(resolvedValue)
+	}
+
+	return nil
+}
+
+func showObjectsPretty(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts) error {
+	if len(opts.specRefs) == 0 {
+		return showCommitSpecPretty(queryist, sqlCtx, opts, "HEAD")
+	}
+
+	for _, specRef := range opts.specRefs {
+		err := showCommitSpecPretty(queryist, sqlCtx, opts, specRef)
 		if err != nil {
 			return err
 		}
@@ -207,112 +320,24 @@ func parseHashString(hashStr string) (hash.Hash, error) {
 	return parsedHash, nil
 }
 
-//func showSpecRef(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, specRef string) error {
-//	roots, err := dEnv.Roots(ctx)
-//	if err != nil {
-//		return err
-//	}
-//
-//	upperCaseSpecRef := strings.ToUpper(specRef)
-//	if upperCaseSpecRef == doltdb.Working || upperCaseSpecRef == doltdb.Staged || hashRegex.MatchString(specRef) {
-//		var refHash hash.Hash
-//		var err error
-//		if upperCaseSpecRef == doltdb.Working {
-//			refHash, err = roots.Working.HashOf()
-//		} else if upperCaseSpecRef == doltdb.Staged {
-//			refHash, err = roots.Staged.HashOf()
-//		} else {
-//			refHash, err = parseHashString(specRef)
-//		}
-//		if err != nil {
-//			return err
-//		}
-//		value, err := dEnv.DoltDB.ValueReadWriter().ReadValue(ctx, refHash)
-//		if err != nil {
-//			return err
-//		}
-//		if value == nil {
-//			return fmt.Errorf("Unable to resolve object ref %s", specRef)
-//		}
-//
-//		if !opts.pretty {
-//			cli.Println(value.Kind(), value.HumanReadableString())
-//		}
-//
-//		// If this is a commit, use the pretty printer. To determine whether it's a commit, try calling NewCommitFromValue.
-//		commit, err := doltdb.NewCommitFromValue(ctx, dEnv.DoltDB.ValueReadWriter(), dEnv.DoltDB.NodeStore(), value)
-//
-//		if err == datas.ErrNotACommit {
-//			if !dEnv.DoltDB.Format().UsesFlatbuffers() {
-//				return fmt.Errorf("dolt show cannot show non-commit objects when using the old LD_1 storage format: %s is not a commit", specRef)
-//			}
-//			cli.Println(value.Kind(), value.HumanReadableString())
-//		} else if err == nil {
-//			showCommit(ctx, dEnv, opts, commit)
-//		} else {
-//			return err
-//		}
-//	} else { // specRef is a CommitSpec, which must resolve to a Commit.
-//		commitSpec, err := getCommitSpec(specRef)
-//		if err != nil {
-//			return err
-//		}
-//
-//		err = showCommitSpec(ctx, dEnv, opts, commitSpec)
-//		if err != nil {
-//			return err
-//		}
-//	}
-//	return nil
-//}
-
-func showCommitSpec(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, commitRef string) error {
-	commit, err := getCommitInfo(queryist, sqlCtx, commitRef)
-	if err != nil {
-		cli.PrintErrln("error: failed to get commit metadata for ref:", commitRef)
-		return err
+func showCommitSpecPretty(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, commitRef string) error {
+	if strings.HasPrefix(commitRef, "#") {
+		commitRef = strings.TrimPrefix(commitRef, "#")
 	}
 
-	if opts.pretty {
-		err := showCommit(queryist, sqlCtx, opts, commit)
-		if err != nil {
-			return err
-		}
-	} else {
-		meta := commit.commitMeta
-		cmHash := commit.commitHash
-		parents := commit.parentHashes
-		commitDate := time.UnixMilli(int64(meta.Timestamp))
+	commit, err := getCommitInfo(queryist, sqlCtx, commitRef)
+	if err != nil {
+		return fmt.Errorf("error: failed to get commit metadata for ref '%s': %v", commitRef, err)
+	}
 
-		sb := strings.Builder{}
-		sb.WriteString("{\n")
-		sb.WriteString(fmt.Sprintf("\tName: %s\n", meta.Name))
-		sb.WriteString(fmt.Sprintf("\tDesc: %s\n", meta.Description))
-		sb.WriteString(fmt.Sprintf("\tEmail: %s\n", meta.Email))
-		sb.WriteString(fmt.Sprintf("\tTime: %s\n", commitDate.String()))
-		sb.WriteString(fmt.Sprintf("\tHeight: %d\n", commit.height))
-		sb.WriteString(fmt.Sprintf("\tRootValue: {\n"))
-		sb.WriteString(fmt.Sprintf("\t\t#%s\n", cmHash))
-		sb.WriteString(fmt.Sprintf("\t}\n"))
-		if len(parents) > 0 {
-			sb.WriteString(fmt.Sprintf("\tParents: {\n"))
-			for _, p := range parents {
-				sb.WriteString(fmt.Sprintf("\t\t#%s\n", p))
-			}
-			sb.WriteString(fmt.Sprintf("\t}\n"))
-		}
-		sb.WriteString("}")
-		cli.Println(sb.String())
+	err = showCommit(queryist, sqlCtx, opts, commit)
+	if err != nil {
+		return err
 	}
 	return nil
 }
 
 func showCommit(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, commit *commitInfo) error {
-
-	//cHashToRefs, err := getHashToRefs(ctx, dEnv, opts.decoration)
-	//if err != nil {
-	//	return err
-	//}
 
 	cmHash := commit.commitHash
 	parents := commit.parentHashes
@@ -411,7 +436,7 @@ func showRefs(pager *outputpager.Pager, comm *commitInfo) {
 		references = append(references, branchName)
 	}
 	for _, t := range comm.tagNames {
-		// tags names are bright yellow (33;1m)
+		// tag names are bright yellow (33;1m)
 		tagName := fmt.Sprintf("\033[33;1mtag: %s\033[0m", t)
 		references = append(references, tagName)
 	}
