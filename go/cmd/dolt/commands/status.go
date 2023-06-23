@@ -168,7 +168,7 @@ func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, show
 		return nil, err
 	}
 
-	statusRows, err := getRowsForSql(queryist, sqlCtx, "select * from dolt_status;")
+	statusRows, err := GetRowsForSql(queryist, sqlCtx, "select * from dolt_status;")
 	if err != nil {
 		return nil, err
 	}
@@ -321,7 +321,7 @@ func getRemoteInfo(queryist cli.Queryist, sqlCtx *sql.Context, branchName string
 		// get remote branch
 		remoteBranchRef := fmt.Sprintf("remotes/%s/%s", remoteName, remoteBranchName)
 		q := fmt.Sprintf("select name, hash from dolt_remote_branches where name = '%s';", remoteBranchRef)
-		remoteBranches, err := getRowsForSql(queryist, sqlCtx, q)
+		remoteBranches, err := GetRowsForSql(queryist, sqlCtx, q)
 		if err != nil {
 			return ahead, behind, err
 		}
@@ -331,7 +331,7 @@ func getRemoteInfo(queryist cli.Queryist, sqlCtx *sql.Context, branchName string
 		remoteBranchCommit := remoteBranches[0][1].(string)
 
 		q = fmt.Sprintf("call dolt_count_commits('--from', '%s', '--to', '%s')", currentBranchCommit, remoteBranchCommit)
-		rows, err := getRowsForSql(queryist, sqlCtx, q)
+		rows, err := GetRowsForSql(queryist, sqlCtx, q)
 		if err != nil {
 			return ahead, behind, err
 		}
@@ -358,7 +358,7 @@ func getLocalBranchInfo(queryist cli.Queryist, sqlCtx *sql.Context, branchName s
 	currentBranchCommit = ""
 	remoteBranchName = ""
 
-	localBranches, err := getRowsForSql(queryist, sqlCtx, "select name, hash, remote, branch from dolt_branches;")
+	localBranches, err := GetRowsForSql(queryist, sqlCtx, "select name, hash, remote, branch from dolt_branches;")
 	if err != nil {
 		return remoteName, remoteBranchName, currentBranchCommit, err
 	}
@@ -377,7 +377,7 @@ func getLocalBranchInfo(queryist cli.Queryist, sqlCtx *sql.Context, branchName s
 }
 
 func getMergeStatus(queryist cli.Queryist, sqlCtx *sql.Context) (bool, error) {
-	mergeRows, err := getRowsForSql(queryist, sqlCtx, "select is_merging from dolt_merge_status;")
+	mergeRows, err := GetRowsForSql(queryist, sqlCtx, "select is_merging from dolt_merge_status;")
 	if err != nil {
 		return false, err
 	}
@@ -397,7 +397,7 @@ func getMergeStatus(queryist cli.Queryist, sqlCtx *sql.Context) (bool, error) {
 
 func getDataConflictsTables(queryist cli.Queryist, sqlCtx *sql.Context) (map[string]bool, error) {
 	dataConflictTables := make(map[string]bool)
-	dataConflicts, err := getRowsForSql(queryist, sqlCtx, "select * from dolt_conflicts;")
+	dataConflicts, err := GetRowsForSql(queryist, sqlCtx, "select * from dolt_conflicts;")
 	if err != nil {
 		return nil, err
 	}
@@ -410,7 +410,7 @@ func getDataConflictsTables(queryist cli.Queryist, sqlCtx *sql.Context) (map[str
 
 func getConstraintViolationTables(queryist cli.Queryist, sqlCtx *sql.Context) (map[string]bool, error) {
 	constraintViolationTables := make(map[string]bool)
-	constraintViolations, err := getRowsForSql(queryist, sqlCtx, "select * from dolt_constraint_violations;")
+	constraintViolations, err := GetRowsForSql(queryist, sqlCtx, "select * from dolt_constraint_violations;")
 	if err != nil {
 		return nil, err
 	}
@@ -424,7 +424,7 @@ func getConstraintViolationTables(queryist cli.Queryist, sqlCtx *sql.Context) (m
 func getWorkingStagedTables(queryist cli.Queryist, sqlCtx *sql.Context) (map[string]bool, map[string]bool, error) {
 	stagedTableNames := make(map[string]bool)
 	workingTableNames := make(map[string]bool)
-	diffs, err := getRowsForSql(queryist, sqlCtx, "select * from dolt_diff where commit_hash='WORKING' OR commit_hash='STAGED';")
+	diffs, err := GetRowsForSql(queryist, sqlCtx, "select * from dolt_diff where commit_hash='WORKING' OR commit_hash='STAGED';")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -442,7 +442,7 @@ func getWorkingStagedTables(queryist cli.Queryist, sqlCtx *sql.Context) (map[str
 
 func getIgnoredTablePatternsFromSql(queryist cli.Queryist, sqlCtx *sql.Context) (doltdb.IgnorePatterns, error) {
 	var ignorePatterns []doltdb.IgnorePattern
-	ignoreRows, err := getRowsForSql(queryist, sqlCtx, fmt.Sprintf("select * from %s", doltdb.IgnoreTableName))
+	ignoreRows, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("select * from %s", doltdb.IgnoreTableName))
 	if err != nil {
 		return nil, err
 	}
