@@ -223,7 +223,7 @@ func Serve(
 	lck := env.NewDBLock(serverConfig.Port())
 	sqlserver.SetRunningServer(mySQLServer, &lck)
 
-	sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(LocalConnectionUser, "localhost", lck.Secret)
+	sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(LocalConnectionUser, "%", lck.Secret)
 
 	var metSrv *http.Server
 	if serverConfig.MetricsHost() != "" && serverConfig.MetricsPort() > 0 {
