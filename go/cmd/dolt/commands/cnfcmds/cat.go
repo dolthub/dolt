@@ -19,6 +19,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 	"strings"
@@ -39,6 +41,13 @@ type mergeStatus struct {
 	sourceCommit   string
 	target         string
 	unmergedTables []string
+}
+
+var conflictColsToIgnore = map[string]bool{
+	"from_root_ish":    true,
+	"our_diff_type":    true,
+	"their_diff_type":  true,
+	"dolt_conflict_id": true,
 }
 
 var catDocs = cli.CommandDocumentationContent{
@@ -147,55 +156,111 @@ func printConflicts(queryist cli.Queryist, sqlCtx *sql.Context, tblNames []strin
 		}
 	}
 
-	//// next print data conflicts
-	//for _, tblName := range tblNames {
-	//	_, tableExists := allTableNames[tblName]
-	//	if !tableExists {
-	//		return fmt.Errorf("error: unknown table '%s'", tblName)
-	//	}
-	//
-	//	dataConflictsExist, err := getTableDataConflictsExist(queryist, sqlCtx, tblName)
-	//	if err != nil {
-	//		return err
-	//	} else if !dataConflictsExist {
-	//		continue
-	//	}
-	//
-	//	base, sch, mergeSch, err := tbl.GetConflictSchemas(ctx, tblName)
-	//	if err != nil {
-	//		return err
-	//	}
-	//
-	//	sqlCtx, err := eng.NewLocalContext(ctx)
-	//	if err != nil {
-	//		return errhand.BuildDError("failed to fetch conflicts").AddCause(err).Build()
-	//	}
-	//	sqlCtx.SetCurrentDatabase(dbName)
-	//
-	//	confSqlSch, rowItr, err := eng.Query(sqlCtx, buildDataConflictQuery(base, sch, mergeSch, tblName))
-	//	if err != nil {
-	//		return err
-	//	}
-	//
-	//	unionSch, err := untyped.UntypedSchemaUnion(base, sch, mergeSch)
-	//	if err != nil {
-	//		return err
-	//	}
-	//
-	//	sqlUnionSch, err := sqlutil.FromDoltSchema(tblName, unionSch)
-	//	if err != nil {
-	//		return err
-	//	}
-	//
-	//	tw := tabular.NewFixedWidthConflictTableWriter(sqlUnionSch.Schema, stdOut, 100)
-	//
-	//	err = writeConflictResults(sqlCtx, confSqlSch, sqlUnionSch.Schema, rowItr, tw)
-	//	if err != nil {
-	//		return err
-	//	}
-	//}
+	// next print data conflicts
+	for _, tblName := range tblNames {
+		_, tableExists := allTableNames[tblName]
+		if !tableExists {
+			return fmt.Errorf("error: unknown table '%s'", tblName)
+		}
+
+		dataConflictsExist, err := getTableDataConflictsExist(queryist, sqlCtx, tblName)
+		if err != nil {
+			return fmt.Errorf("error: failed to determine if data conflicts exist for table '%s': %w", tblName, err)
+		} else if !dataConflictsExist {
+			continue
+		}
+
+		q := fmt.Sprintf("SELECT * from dolt_conflicts_%s", tblName)
+		confSqlSch, rowItr, err := queryist.Query(sqlCtx, q)
+		if err != nil {
+			return fmt.Errorf("error: failed to get conflict rows for table '%s': %w", tblName, err)
+		}
+
+		//targetSch, _, err := getTableSchemaAtRef(queryist, sqlCtx, tblName, mergeStatus.target)
+		//if err != nil {
+		//	return fmt.Errorf("error: failed to get sch schema for table '%s' at ref '%s': %w", tblName, mergeStatus.target, err)
+		//}
+
+		targetSch, err := getUnionSchemaFromConflictsSchema(confSqlSch)
+		if err != nil {
+			return fmt.Errorf("error: failed to get union schema for table '%s': %w", tblName, err)
+		}
+
+		sqlTargetSch, err := sqlutil.FromDoltSchema(tblName, targetSch)
+		if err != nil {
+			return fmt.Errorf("error: failed to convert dolt schema to sql schema for table '%s': %w", tblName, err)
+		}
+
+		tw := tabular.NewFixedWidthConflictTableWriter(sqlTargetSch.Schema, stdOut, 100)
+
+		err = writeConflictResults(sqlCtx, confSqlSch, sqlTargetSch.Schema, rowItr, tw)
+		if err != nil {
+			return fmt.Errorf("error: failed to write conflict results for table '%s': %w", tblName, err)
+		}
+	}
 
 	return nil
+}
+
+func isInArray(val string, arr []string) bool {
+	for _, v := range arr {
+		if val == v {
+			return true
+		}
+	}
+	return false
+}
+
+func getUnionSchemaFromConflictsSchema(conflictsSch sql.Schema) (schema.Schema, error) {
+	baseColNames, theirColNames, ourColNames := []string{}, []string{}, []string{}
+
+	for _, col := range conflictsSch {
+		conflictColName := col.Name
+		_, shouldIgnore := conflictColsToIgnore[conflictColName]
+		if shouldIgnore {
+			continue
+		}
+
+		if strings.HasPrefix(conflictColName, basePrefix) {
+			colName := conflictColName[len(basePrefix):]
+			baseColNames = append(baseColNames, colName)
+		} else if strings.HasPrefix(conflictColName, theirPrefix) {
+			colName := conflictColName[len(theirPrefix):]
+			theirColNames = append(theirColNames, colName)
+		} else if strings.HasPrefix(conflictColName, ourPrefix) {
+			colName := conflictColName[len(ourPrefix):]
+			ourColNames = append(ourColNames, colName)
+		}
+	}
+
+	unionColNames := []string{}
+	for _, colName := range baseColNames {
+		if !isInArray(colName, unionColNames) {
+			unionColNames = append(unionColNames, colName)
+		}
+	}
+	for _, colName := range theirColNames {
+		if !isInArray(colName, unionColNames) {
+			unionColNames = append(unionColNames, colName)
+		}
+	}
+	for _, colName := range ourColNames {
+		if !isInArray(colName, unionColNames) {
+			unionColNames = append(unionColNames, colName)
+		}
+	}
+
+	unionCols := []schema.Column{}
+	for _, colName := range unionColNames {
+		col := schema.NewColumn(colName, 0, types.StringKind, false)
+		unionCols = append(unionCols, col)
+	}
+	unionColl := schema.NewColCollection(unionCols...)
+	unionSchema, err := schema.SchemaFromCols(unionColl)
+	if err != nil {
+		return nil, fmt.Errorf("error: failed to create union schema: %w", err)
+	}
+	return unionSchema, nil
 }
 
 func printSchemaConflicts(queryist cli.Queryist, sqlCtx *sql.Context, wrCloser io.WriteCloser, table string) error {
@@ -268,15 +333,6 @@ func writeConflictResults(
 func buildSchemaConflictQuery(table string) string {
 	return fmt.Sprintf("select our_schema, their_schema, base_schema, description "+
 		"from dolt_schema_conflicts where table_name = '%s'", table)
-}
-
-func buildDataConflictQuery(base, sch, mergeSch schema.Schema, tblName string) string {
-	cols := quoteWithPrefix(base.GetAllCols().GetColumnNames(), "base_")
-	cols = append(cols, quoteWithPrefix(sch.GetAllCols().GetColumnNames(), "our_")...)
-	cols = append(cols, quoteWithPrefix(mergeSch.GetAllCols().GetColumnNames(), "their_")...)
-	colNames := strings.Join(cols, ", ")
-	query := fmt.Sprintf("SELECT %s, our_diff_type, their_diff_type from `dolt_conflicts_%s`", colNames, tblName)
-	return query
 }
 
 func getTableNames(queryist cli.Queryist, sqlCtx *sql.Context) (map[string]bool, error) {
