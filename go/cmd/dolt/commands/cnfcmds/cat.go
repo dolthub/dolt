@@ -134,17 +134,10 @@ func printConflicts(queryist cli.Queryist, sqlCtx *sql.Context, tblNames []strin
 	if err != nil {
 		return fmt.Errorf("error: failed to determine if schema conflicts exist: %w", err)
 	}
-	allTableNames, err := getTableNames(queryist, sqlCtx)
-	if err != nil {
-		return fmt.Errorf("error: failed to get all table names: %w", err)
-	}
 
-	// if no tables were specified, set tblNames to all table names
+	// if no tables were specified, set tblNames to all the unmerged tables
 	if len(tblNames) == 1 && tblNames[0] == "." {
-		tblNames = []string{}
-		for tableName := range allTableNames {
-			tblNames = append(tblNames, tableName)
-		}
+		tblNames = mergeStatus.unmergedTables
 	}
 
 	// first print schema conflicts
@@ -158,10 +151,10 @@ func printConflicts(queryist cli.Queryist, sqlCtx *sql.Context, tblNames []strin
 	}
 
 	// next print data conflicts
-	for _, tblName := range tblNames {
-		_, tableExists := allTableNames[tblName]
-		if !tableExists {
-			return fmt.Errorf("error: unknown table '%s'", tblName)
+	for _, tblName := range mergeStatus.unmergedTables {
+		shouldShowTable := isStringInArray(tblName, tblNames)
+		if !shouldShowTable {
+			continue
 		}
 
 		dataConflictsExist, err := getTableDataConflictsExist(queryist, sqlCtx, tblName)
@@ -176,11 +169,6 @@ func printConflicts(queryist cli.Queryist, sqlCtx *sql.Context, tblNames []strin
 		if err != nil {
 			return fmt.Errorf("error: failed to get conflict rows for table '%s': %w", tblName, err)
 		}
-
-		//targetSch, _, err := getTableSchemaAtRef(queryist, sqlCtx, tblName, mergeStatus.target)
-		//if err != nil {
-		//	return fmt.Errorf("error: failed to get sch schema for table '%s' at ref '%s': %w", tblName, mergeStatus.target, err)
-		//}
 
 		targetSch, err := getUnionSchemaFromConflictsSchema(confSqlSch)
 		if err != nil {
@@ -203,16 +191,8 @@ func printConflicts(queryist cli.Queryist, sqlCtx *sql.Context, tblNames []strin
 	return nil
 }
 
-func isInArray(val string, arr []string) bool {
-	for _, v := range arr {
-		if val == v {
-			return true
-		}
-	}
-	return false
-}
-
 func getUnionSchemaFromConflictsSchema(conflictsSch sql.Schema) (schema.Schema, error) {
+	// using array to preserve column order
 	baseColNames, theirColNames, ourColNames := []string{}, []string{}, []string{}
 
 	for _, col := range conflictsSch {
@@ -236,17 +216,17 @@ func getUnionSchemaFromConflictsSchema(conflictsSch sql.Schema) (schema.Schema, 
 
 	unionColNames := []string{}
 	for _, colName := range baseColNames {
-		if !isInArray(colName, unionColNames) {
+		if !isStringInArray(colName, unionColNames) {
 			unionColNames = append(unionColNames, colName)
 		}
 	}
 	for _, colName := range theirColNames {
-		if !isInArray(colName, unionColNames) {
+		if !isStringInArray(colName, unionColNames) {
 			unionColNames = append(unionColNames, colName)
 		}
 	}
 	for _, colName := range ourColNames {
-		if !isInArray(colName, unionColNames) {
+		if !isStringInArray(colName, unionColNames) {
 			unionColNames = append(unionColNames, colName)
 		}
 	}
@@ -336,26 +316,6 @@ func buildSchemaConflictQuery(table string) string {
 		"from dolt_schema_conflicts where table_name = '%s'", table)
 }
 
-func getTableNames(queryist cli.Queryist, sqlCtx *sql.Context) (map[string]bool, error) {
-	q := "show full tables"
-	rows, err := commands.GetRowsForSql(queryist, sqlCtx, q)
-	if err != nil {
-		return nil, err
-	}
-
-	tableNames := make(map[string]bool)
-	for _, row := range rows {
-		tableName := row[0].(string)
-		tableType := row[1].(string)
-		isTable := tableType == "BASE TABLE"
-		if isTable {
-			tableNames[tableName] = true
-		}
-	}
-
-	return tableNames, nil
-}
-
 func getMergeStatus(queryist cli.Queryist, sqlCtx *sql.Context) (mergeStatus, error) {
 	ms := mergeStatus{}
 	q := "select * from dolt_merge_status;"
@@ -374,11 +334,11 @@ func getMergeStatus(queryist cli.Queryist, sqlCtx *sql.Context) (mergeStatus, er
 		return ms, fmt.Errorf("error: failed to parse is_merging: %w", err)
 	}
 	if ms.isMerging {
-	ms.source = row[1].(string)
-	ms.sourceCommit = row[2].(string)
-	ms.target = row[3].(string)
-	unmergedTables := row[4].(string)
-	ms.unmergedTables = strings.Split(unmergedTables, ", ")
+		ms.source = row[1].(string)
+		ms.sourceCommit = row[2].(string)
+		ms.target = row[3].(string)
+		unmergedTables := row[4].(string)
+		ms.unmergedTables = strings.Split(unmergedTables, ", ")
 	}
 
 	return ms, nil
@@ -408,4 +368,13 @@ func getTableDataConflictsExist(queryist cli.Queryist, sqlCtx *sql.Context, tabl
 	count := row[0].(int64)
 	conflictsExist := count > 0
 	return conflictsExist, nil
+}
+
+func isStringInArray(val string, arr []string) bool {
+	for _, v := range arr {
+		if val == v {
+			return true
+		}
+	}
+	return false
 }
