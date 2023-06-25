@@ -96,6 +96,23 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return 1
 	}
 
+	var branchName string
+	if apr.Contains(cli.CheckoutCoBranch) {
+		branchName, _ = apr.GetValue(cli.CheckoutCoBranch)
+	} else if apr.NArg() > 0 {
+		branchName = apr.Arg(0)
+	}
+
+	currentBranch, err := getActiveBranchName(sqlCtx, queryEngine)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usagePrt)
+	}
+
+	if branchName == currentBranch {
+		cli.Printf("Already on branch '%s'\n", branchName)
+		return 0
+	}
+
 	sqlQuery, err := generateCheckoutSql(args)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usagePrt)
@@ -103,10 +120,6 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 
 	_, err = getRowsForSql(queryEngine, sqlCtx, sqlQuery)
 
-	var branchName string
-	if apr.NArg() > 0 {
-		branchName = apr.Arg(0)
-	}
 	return HandleVErrAndExitCode(handleErrors(branchName, err), usagePrt)
 }
 
@@ -134,10 +147,6 @@ func handleErrors(name string, err error) errhand.VerboseError {
 			return errhand.VerboseErrorFromError(err)
 		} else if actions.IsCheckoutWouldOverwrite(err) {
 			return errhand.VerboseErrorFromError(err)
-		} else if err.Error() == doltdb.ErrAlreadyOnBranch.Error() {
-			// Being on the same branch shouldn't be an error
-			cli.Printf("Already on branch '%s'\n", name)
-			return nil
 		} else if err.Error() == actions.ErrWorkingSetsOnBothBranches.Error() {
 			str := fmt.Sprintf("error: There are uncommitted changes already on branch '%s'.", name) +
 				"This can happen when someone modifies that branch in a SQL session." +
