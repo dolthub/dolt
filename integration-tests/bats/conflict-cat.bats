@@ -115,9 +115,6 @@ SQL
     dolt merge right -m "merge right"
 
     run dolt conflicts cat .
-    echo ">>>>>"
-    echo "$output"
-    echo "<<<<<"
     [[ "$output" =~ "| a" ]]
     [[ "$output" =~ "| b" ]]
     [[ "$output" =~ "| c" ]]
