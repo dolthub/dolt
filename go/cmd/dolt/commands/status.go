@@ -190,7 +190,7 @@ func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, show
 			staged := row[1]
 			status := row[2].(string)
 
-			isStaged, err := getTinyIntColAsBool(staged)
+			isStaged, err := GetTinyIntColAsBool(staged)
 			if err != nil {
 				return nil, err
 			}
@@ -385,7 +385,7 @@ func getMergeStatus(queryist cli.Queryist, sqlCtx *sql.Context) (bool, error) {
 	mergeActive := false
 	if len(mergeRows) == 1 {
 		isMerging := mergeRows[0][0]
-		mergeActive, err = getTinyIntColAsBool(isMerging)
+		mergeActive, err = GetTinyIntColAsBool(isMerging)
 		if err != nil {
 			return false, err
 		}
@@ -649,22 +649,6 @@ and have %v and %v different commits each, respectively.
 func handleStatusVErr(err error) int {
 	cli.PrintErrln(errhand.VerboseErrorFromError(err).Verbose())
 	return 1
-}
-
-// getTinyIntColAsBool returns the value of a tinyint column as a bool
-// This is necessary because Queryist may return a tinyint column as a bool (when using SQLEngine)
-// or as a string (when using ConnectionQueryist).
-func getTinyIntColAsBool(col interface{}) (bool, error) {
-	switch v := col.(type) {
-	case bool:
-		return v, nil
-	case int:
-		return v == 1, nil
-	case string:
-		return v == "1", nil
-	default:
-		return false, fmt.Errorf("unexpected type %T, was expecting bool, int, or string", v)
-	}
 }
 
 // getJsonDocumentColAsString returns the value of a JSONDocument column as a string

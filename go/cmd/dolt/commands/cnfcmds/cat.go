@@ -368,18 +368,18 @@ func getMergeStatus(queryist cli.Queryist, sqlCtx *sql.Context) (mergeStatus, er
 		return ms, fmt.Errorf("error: multiple rows in dolt_merge_status")
 	}
 
-	if len(rows) == 0 {
-		ms.isMerging = false
-		return ms, nil
-	}
-
 	row := rows[0]
-	ms.isMerging = true
+	ms.isMerging, err = commands.GetTinyIntColAsBool(row[0])
+	if err != nil {
+		return ms, fmt.Errorf("error: failed to parse is_merging: %w", err)
+	}
+	if ms.isMerging {
 	ms.source = row[1].(string)
 	ms.sourceCommit = row[2].(string)
 	ms.target = row[3].(string)
 	unmergedTables := row[4].(string)
 	ms.unmergedTables = strings.Split(unmergedTables, ", ")
+	}
 
 	return ms, nil
 }
