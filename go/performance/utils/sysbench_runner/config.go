@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -448,7 +447,7 @@ func GetTests(config *Config, serverConfig *ServerConfig, testIdFunc func() stri
 
 // FromFileConfig returns a validated Config based on the config file at the configPath
 func FromFileConfig(configPath string) (*Config, error) {
-	data, err := ioutil.ReadFile(configPath)
+	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
 	}

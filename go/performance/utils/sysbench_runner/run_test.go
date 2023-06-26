@@ -15,7 +15,6 @@
 package sysbench_runner
 
 import (
-	"io/ioutil"
 	"log"
 	"os"
 	"testing"
@@ -23,12 +22,9 @@ import (
 
 func TestRunner(t *testing.T) {
 	t.Skip()
-	dir, err := ioutil.TempDir("", "prefix")
-	if err != nil {
-		log.Fatal(err)
-	}
+	dir := t.TempDir()
 	log.Println(dir)
-	err = os.Chdir(dir)
+	err := os.Chdir(dir)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -17,8 +17,7 @@ package parquet
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
-	"os"
+	"path"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -83,12 +82,7 @@ John Johnson,21,
 Andy Anderson,27,
 `
 
-	file, err := ioutil.TempFile("", "parquet")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(file.Name())
-	path := file.Name()
+	path := path.Join(t.TempDir(), "parquet")
 
 	rows := getSampleRows()
 
