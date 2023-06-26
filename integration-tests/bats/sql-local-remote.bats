@@ -45,10 +45,47 @@ get_staged_tables() {
     '
 }
 
+extract_value() {
+    key="$1"
+    input="$2"
+    echo "$input" | awk "
+        BEGIN { in_value = 0 }
+        /$key: {/ { in_value = 1; next }
+        match("'$0'", /$key: /) { print substr("'$0'", RSTART+RLENGTH) }
+        /}/ { if (in_value) { in_value = 0 } }
+        in_value { gsub(/^[ \t]+/, \"\"); print }
+    "
+}
+
+assert_has_key() {
+    key="$1"
+    input="$2"
+    extracted=$(extract_value "$key" "$input")
+    if [[ -z $extracted ]]; then
+        echo "Expected to find key $key"
+        return 1
+    else
+        return 0
+    fi
+}
+
+assert_has_key_value() {
+    key="$1"
+    value="$2"
+    input="$3"
+    extracted=$(extract_value "$key" "$input")
+    if [[ "$extracted" != "$value" ]]; then
+        echo "Expected key $key to have value $value, instead found $extracted"
+        return 1
+    else
+        return 0
+    fi
+}
+
 @test "sql-local-remote: test switch between server/no server" {
     start_sql_server defaultDB
 
-    run dolt --verbose-engine-setup --user dolt sql -q "show databases" 
+    run dolt --verbose-engine-setup --user dolt sql -q "show databases"
     [ "$status" -eq 0 ] || false
     [[ "$output" =~ "starting remote mode" ]] || false
     [[ "$output" =~ "defaultDB" ]] || false
@@ -56,7 +93,7 @@ get_staged_tables() {
 
     stop_sql_server 1
 
-    run dolt --verbose-engine-setup sql -q "show databases" 
+    run dolt --verbose-engine-setup sql -q "show databases"
     [ "$status" -eq 0 ] || false
     [[ "$output" =~ "starting local mode" ]] || false
     [[ "$output" =~ "defaultDB" ]] || false
@@ -337,4 +374,54 @@ EOF
   localOutput=$output
 
   [[ "$remoteOutput" == "$localOutput" ]] || false
+}
+
+@test "sql-local-remote: verify dolt show behavior" {
+  cd defaultDB
+
+  dolt --user dolt commit --allow-empty -m "commit: initialize table1"
+
+  run dolt --user dolt show --no-pretty
+  [ "$status" -eq 0 ] || false
+  [[ "$output" =~ "SerialMessage" ]] || false
+  assert_has_key "Name" "$output"
+  assert_has_key_value "Name" "Bats Tests" "$output"
+  assert_has_key_value "Desc" "commit: initialize table1" "$output"
+  assert_has_key_value "Name" "Bats Tests" "$output"
+  assert_has_key_value "Email" "bats@email.fake" "$output"
+  assert_has_key "Time" "$output"
+  assert_has_key_value "Height" "3" "$output"
+  assert_has_key "RootValue" "$output"
+  assert_has_key "Parents" "$output"
+  assert_has_key "ParentClosure" "$output"
+
+  parentHash=$(extract_value Parents "$output")
+  parentClosureHash=$(extract_value ParentClosure "$output")
+  rootValue=$(extract_value RootValue "$output")
+
+  run dolt --user dolt show "$parentHash"
+  [ "$status" -eq 0 ] || false
+  [[ "$output" =~ "tables table1, table2" ]] || false
+  run dolt --user dolt show "$rootValue"
+  [ "$status" -eq 0 ] || false
+  run dolt --user dolt show "$parentClosureHash"
+  [ "$status" -eq 0 ] || false
+
+  start_sql_server defaultDB
+
+  run dolt --user dolt show --no-pretty
+  [ $status -eq 1 ] || false
+  [[ "$output" =~ "\`dolt show --no-pretty\` or \`dolt show NON_COMMIT_REF\` only supported in local mode." ]] || false
+
+  run dolt --user dolt show "$parentHash"
+  [ $status -eq 0 ] || false
+  [[ "$output" =~ "tables table1, table2" ]] || false
+  run dolt --user dolt show "$parentClosureHash"
+  [ $status -eq 1 ] || false
+  [[ "$output" =~ "\`dolt show --no-pretty\` or \`dolt show NON_COMMIT_REF\` only supported in local mode." ]] || false
+  run dolt --user dolt show "$rootValue"
+  [ $status -eq 1 ] || false
+  [[ "$output" =~ "\`dolt show --no-pretty\` or \`dolt show NON_COMMIT_REF\` only supported in local mode." ]] || false
+
+  stop_sql_server 1
 }
