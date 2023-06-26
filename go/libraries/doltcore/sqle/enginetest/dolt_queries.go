@@ -2134,7 +2134,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"b2"}},
 			},
 			{
-				Query: "call dolt_checkout('main');",
+				Query:            "call dolt_checkout('main');",
 				SkipResultsCheck: true,
 			},
 			{

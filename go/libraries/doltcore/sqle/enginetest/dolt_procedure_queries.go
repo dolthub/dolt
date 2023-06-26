@@ -41,19 +41,19 @@ end
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "call commit_many();",
+				Query:            "call commit_many();",
 				SkipResultsCheck: true, // return value is a bit odd, needs investigation
 			},
 			{
-				Query: "select * from t",
+				Query:    "select * from t",
 				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 6}, {7, 7}, {8, 8}, {9, 9}, {10, 10}},
 			},
 			{
-				Query: "select count(*) from dolt_log;",
+				Query:    "select count(*) from dolt_log;",
 				Expected: []sql.Row{{13}}, // init, setup for test harness, initial commit in setup script, 10 commits in procedure
 			},
 			{
-				Query: "select * from t as of `HEAD~5`",
+				Query:    "select * from t as of `HEAD~5`",
 				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}},
 			},
 		},
@@ -79,15 +79,15 @@ end
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "call branches();",
+				Query:            "call branches();",
 				SkipResultsCheck: true, // return value is a bit odd, needs investigation
 			},
 			{
-				Query: "select name from dolt_branches order by 1",
+				Query:    "select name from dolt_branches order by 1",
 				Expected: []sql.Row{{"branch1"}, {"branch2"}, {"branch3"}, {"branch4"}, {"main"}},
 			},
 			{
-				Query: "select * from t order by 1",
+				Query:    "select * from t order by 1",
 				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
 			},
 		},
@@ -113,15 +113,15 @@ end
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "call branches();",
+				Query:            "call branches();",
 				SkipResultsCheck: true, // return value is a bit odd, needs investigation
 			},
 			{
-				Query: "select name from dolt_branches order by 1",
+				Query:    "select name from dolt_branches order by 1",
 				Expected: []sql.Row{{"branch1"}, {"branch2"}, {"branch3"}, {"branch4"}, {"main"}},
 			},
 			{
-				Query: "select * from t order by 1",
+				Query:    "select * from t order by 1",
 				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
 			},
 		},
@@ -158,15 +158,15 @@ end
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "call branches();",
+				Query:            "call branches();",
 				SkipResultsCheck: true, // return value is a bit odd, needs investigation
 			},
 			{
-				Query: "select name from dolt_branches order by 1",
+				Query:    "select name from dolt_branches order by 1",
 				Expected: []sql.Row{{"branch1"}, {"branch2"}, {"branch3"}, {"branch4"}, {"main"}},
 			},
 			{
-				Query: "select * from t order by 1",
+				Query:    "select * from t order by 1",
 				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
 			},
 		},
@@ -187,28 +187,28 @@ end
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "call edit_on_branch();",
-				Skip: true,
+				Query:            "call edit_on_branch();",
+				Skip:             true,
 				SkipResultsCheck: true, // return value is a bit odd, needs investigation
 			},
 			{
-				Query: "select active_branch()",
-				Skip: true,
+				Query:    "select active_branch()",
+				Skip:     true,
 				Expected: []sql.Row{{"main"}},
 			},
 			{
-				Query: "select * from t order by 1",
-				Skip: true,
+				Query:    "select * from t order by 1",
+				Skip:     true,
 				Expected: []sql.Row{},
 			},
 			{
-				Query: "select name from dolt_branches order by 1",
-				Skip: true,
+				Query:    "select name from dolt_branches order by 1",
+				Skip:     true,
 				Expected: []sql.Row{{"branch1"}, {"main"}},
 			},
 			{
-				Query: "select * from `mydb/branch1`.t order by 1",
-				Skip: true,
+				Query:    "select * from `mydb/branch1`.t order by 1",
+				Skip:     true,
 				Expected: []sql.Row{{1, 100}},
 			},
 		},
@@ -230,28 +230,28 @@ end
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "call edit_on_branch();",
-				Skip: true,
+				Query:            "call edit_on_branch();",
+				Skip:             true,
 				SkipResultsCheck: true, // return value is a bit odd, needs investigation
 			},
 			{
-				Query: "select active_branch()",
-				Skip: true,
+				Query:    "select active_branch()",
+				Skip:     true,
 				Expected: []sql.Row{{"main"}},
 			},
 			{
-				Query: "select * from t order by 1",
-				Skip: true,
+				Query:    "select * from t order by 1",
+				Skip:     true,
 				Expected: []sql.Row{},
 			},
 			{
-				Query: "select name from dolt_branches order by 1",
-				Skip: true,
+				Query:    "select name from dolt_branches order by 1",
+				Skip:     true,
 				Expected: []sql.Row{{"branch1"}, {"main"}},
 			},
 			{
-				Query: "select * from `mydb/branch1`.t order by 1",
-				Skip: true,
+				Query:    "select * from `mydb/branch1`.t order by 1",
+				Skip:     true,
 				Expected: []sql.Row{{1, 100}},
 			},
 		},
@@ -278,23 +278,23 @@ end
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "call merge_branch('branch1');",
+				Query:            "call merge_branch('branch1');",
 				SkipResultsCheck: true, // return value is a bit odd, needs investigation
 			},
 			{
-				Query: "select active_branch()",
+				Query:    "select active_branch()",
 				Expected: []sql.Row{{"main"}},
 			},
 			{
-				Query: "select * from t order by 1",
+				Query:    "select * from t order by 1",
 				Expected: []sql.Row{{1, 100}},
 			},
 			{
-				Query: "select name from dolt_branches order by 1",
+				Query:    "select name from dolt_branches order by 1",
 				Expected: []sql.Row{{"branch1"}, {"main"}},
 			},
 			{
-				Query: "select * from `mydb/branch1`.t order by 1",
+				Query:    "select * from `mydb/branch1`.t order by 1",
 				Expected: []sql.Row{{1, 100}, {2, 200}},
 			},
 		},
