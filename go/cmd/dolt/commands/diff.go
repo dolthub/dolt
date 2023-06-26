@@ -1109,8 +1109,7 @@ func diffDoltSchemasTable(
 }
 
 // arePrimaryKeySetsDiffable checks if two schemas are diffable. Assumes the
-// passed in schema are from the same table between commits. If __DOLT__, then
-// it also checks if the underlying SQL types of the columns are equal.
+// passed in schema are from the same table between commits.
 func arePrimaryKeySetsDiffable(fromTableInfo, toTableInfo *diff.TableInfo) bool {
 	var fromSch schema.Schema = nil
 	var toSch schema.Schema = nil
