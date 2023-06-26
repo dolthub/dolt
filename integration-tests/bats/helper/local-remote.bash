@@ -85,7 +85,6 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~large-update.bats~
 ~remotes.bats~
 ~create-views.bats~
-~diff.bats~
 ~sql-reset.bats~
 ~sql-clean.bats~
 ~blame.bats~
@@ -106,7 +105,6 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~default-values.bats~
 ~sql-shell.bats~
 ~types.bats~
-~json-diff.bats~
 ~config-home.bats~
 ~cherry-pick.bats~
 ~triggers.bats~
@@ -128,7 +126,6 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~auto_increment.bats~
 ~creds.bats~
 ~schema-conflicts.bats~
-~sql-diff.bats~
 ~index-on-writes.bats~
 ~migrate.bats~
 ~sql-load-data.bats~

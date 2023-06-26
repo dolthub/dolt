@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/go-sql-driver/mysql"
 	"io"
 	"strconv"
 	"strings"
@@ -362,10 +363,28 @@ func getTableNamesAtRef(queryist cli.Queryist, sqlCtx *sql.Context, ref string) 
 		_, err = getRowsForSql(queryist, sqlCtx, q)
 		if err == nil {
 			tableNames[sysTable] = true
+		} else if isTableNotFoundError(err) {
+				continue
+		} else {
+			return nil, fmt.Errorf("error getting system table %s: %w", sysTable, err)
 		}
 	}
 
 	return tableNames, nil
+}
+
+func isTableNotFoundError(err error) bool {
+	if sql.ErrTableNotFound.Is(err) {
+		return true
+	}
+	mse, ok := err.(*mysql.MySQLError)
+	if ok {
+		if strings.HasPrefix(mse.Message, "table not found:") {
+			return true
+		}
+	}
+
+	return false
 }
 
 // applyDiffRoots applies the appropriate |from| and |to| root values to the receiver and returns the table names
@@ -1267,7 +1286,7 @@ func unionSchemas(s1 sql.Schema, s2 sql.Schema) sql.Schema {
 	return union
 }
 
-func getColumnNamesString(fromTableInfo, toTableInfo *diff.TableInfo) string {
+func getColumnNames(fromTableInfo, toTableInfo *diff.TableInfo) (colNames []string, formatText string) {
 	var fromSch, toSch schema.Schema
 	if fromTableInfo != nil {
 		fromSch = fromTableInfo.Sch
@@ -1279,17 +1298,20 @@ func getColumnNamesString(fromTableInfo, toTableInfo *diff.TableInfo) string {
 	var cols []string
 	if fromSch != nil {
 		fromSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			cols = append(cols, fmt.Sprintf("`from_%s`", col.Name))
+			cols = append(cols, fmt.Sprintf("from_%s", col.Name))
 			return false, nil
 		})
 	}
 	if toSch != nil {
 		toSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			cols = append(cols, fmt.Sprintf("`to_%s`", col.Name))
+			cols = append(cols, fmt.Sprintf("to_%s", col.Name))
 			return false, nil
 		})
 	}
-	return strings.Join(cols, ",")
+
+	colNames = cols
+	formatText = strings.Repeat("?, ", len(cols))
+	return colNames, formatText
 }
 
 func writeDiffResults(

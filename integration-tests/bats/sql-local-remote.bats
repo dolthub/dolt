@@ -257,7 +257,6 @@ get_staged_tables() {
     [[ "$output" =~ "committing locally" ]] || false
 }
 
-
 @test "sql-local-remote: verify simple dolt branch behavior." {
     start_sql_server altDB
     cd altDB
@@ -283,4 +282,59 @@ get_staged_tables() {
     [[ "$output" =~ "starting local mode" ]] || false
     [[ "$output" =~ "main" ]] || false
     [[ "$output" =~ "b2" ]] || false
+}
+
+@test "sql-local-remote: verify dolt diff behavior with data and schema changes" {
+  start_sql_server defaultDB
+
+  cd defaultDB
+  dolt --user dolt sql <<SQL
+create table test (pk int primary key, c1 int, c2 int);
+insert into test values (1,2,3);
+insert into test values (4,5,6);
+SQL
+  dolt --user dolt add .
+  dolt --user dolt commit -am "First commit"
+
+  dolt --user dolt sql <<SQL
+alter table test
+drop column c2,
+add column c3 varchar(10);
+insert into test values (7,8,9);
+delete from test where pk = 1;
+update test set c1 = 100 where pk = 4;
+SQL
+
+    EXPECTED=$(cat <<'EOF'
+ CREATE TABLE `test` (
+   `pk` int NOT NULL,
+   `c1` int,
+-  `c2` int,
++  `c3` varchar(10),
+   PRIMARY KEY (`pk`)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
++---+----+-----+------+------+
+|   | pk | c1  | c2   | c3   |
++---+----+-----+------+------+
+| - | 1  | 2   | 3    | NULL |
+| < | 4  | 5   | 6    | NULL |
+| > | 4  | 100 | NULL | NULL |
+| + | 7  | 8   | NULL | 9    |
++---+----+-----+------+------+
+EOF
+)
+
+  dolt --user dolt diff
+  run dolt --user dolt diff
+  [ "$status" -eq 0 ] || false
+  [[ "$output" =~ "$EXPECTED" ]] || false
+  remoteOutput=$output
+
+  stop_sql_server 1
+
+  run dolt --user dolt diff
+  [ "$status" -eq 0 ] || false
+  localOutput=$output
+
+  [[ "$remoteOutput" == "$localOutput" ]] || false
 }
