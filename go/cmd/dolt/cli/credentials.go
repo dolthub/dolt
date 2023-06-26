@@ -89,7 +89,7 @@ func BuildUserPasswordPrompt(parsedArgs *argparser.ArgParseResults) (newParsedAr
 	if hasTestOverride && testOverride == "Y" {
 		// Used for BATS testing only. Typical usage will not hit this path, but we have many legacy tests which
 		// do not provide a user, and the DOLT_ENV_PWD is set to avoid the prompt.
-		return newParsedArgs, &UserPassword{Specified: true}, nil
+		return newParsedArgs, &UserPassword{Specified: false}, nil
 	}
 
 	return nil, nil, fmt.Errorf("When a password is provided, a user must also be provided. Use the --user flag to provide a username")

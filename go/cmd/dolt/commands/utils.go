@@ -258,11 +258,16 @@ func newLateBindingEngine(
 
 		} else {
 			dbUser = DefaultUser
-			// No cred presented. Use "root" but ensure that root has an empty password.
-			err := passwordValidate(rawDb, salt, dbUser, nil)
-			if err != nil {
-				return nil, nil, nil, err
+			user := rawDb.GetUser(dbUser, config.ServerHost, false)
+			if user != nil {
+				// Want to ensure that the user has an empty password. If it has a password, we'll error
+				err := passwordValidate(rawDb, salt, dbUser, nil)
+				if err != nil {
+					return nil, nil, nil, err
+				}
 			}
+
+			// If the user doesn't exist, we'll create it with superuser privs.
 			rawDb.AddSuperUser(dbUser, config.ServerHost, "")
 		}
 
