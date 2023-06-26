@@ -17,14 +17,13 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
+	"github.com/pkg/errors"
 	"regexp"
 	"strings"
-	"time"
-
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/pkg/errors"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -156,25 +155,31 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return handleErrAndExit(err)
 	}
 
-	useDoltEnv := !opts.pretty || (len(opts.specRefs) > 0 && allSpecRefsAreNonCommits)
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	if closeFunc != nil {
+		defer closeFunc()
+	}
 
+	useDoltEnv := !opts.pretty || (len(opts.specRefs) > 0 && allSpecRefsAreNonCommits)
 	if useDoltEnv {
+		_, ok := queryist.(*engine.SqlEngine)
+		if !ok {
+			cli.PrintErrln("`dolt show --no-pretty` or `dolt show NON_COMMIT_REF` only supported in local mode.")
+			return 1
+		}
+
 		if !opts.pretty && !dEnv.DoltDB.Format().UsesFlatbuffers() {
 			cli.PrintErrln("dolt show --no-pretty is not supported when using old LD_1 storage format.")
 			return 1
 		}
 		opts.resolvedNonCommitSpecs = resolvedNonCommitSpecs
-		err = showObjects(ctx, dEnv, opts)
+		err = printObjects(ctx, dEnv, opts)
 		return handleErrAndExit(err)
 	} else {
-		queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
-		if closeFunc != nil {
-			defer closeFunc()
-		}
-		err = showObjectsPretty(queryist, sqlCtx, opts)
+		err = printObjectsPretty(queryist, sqlCtx, opts)
 		return handleErrAndExit(err)
 	}
 }
@@ -269,7 +274,7 @@ func parseShowArgs(apr *argparser.ArgParseResults) (*showOpts, error) {
 	}, nil
 }
 
-func showObjects(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts) error {
+func printObjects(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts) error {
 	if len(opts.specRefs) == 0 {
 		headSpec, err := dEnv.RepoStateReader().CWBHeadSpec()
 		if err != nil {
@@ -301,13 +306,13 @@ func showObjects(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts) error {
 	return nil
 }
 
-func showObjectsPretty(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts) error {
+func printObjectsPretty(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts) error {
 	if len(opts.specRefs) == 0 {
-		return showCommitSpecPretty(queryist, sqlCtx, opts, "HEAD")
+		return printCommitSpecPretty(queryist, sqlCtx, opts, "HEAD")
 	}
 
 	for _, specRef := range opts.specRefs {
-		err := showCommitSpecPretty(queryist, sqlCtx, opts, specRef)
+		err := printCommitSpecPretty(queryist, sqlCtx, opts, specRef)
 		if err != nil {
 			return err
 		}
@@ -326,7 +331,7 @@ func parseHashString(hashStr string) (hash.Hash, error) {
 	return parsedHash, nil
 }
 
-func showCommitSpecPretty(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, commitRef string) error {
+func printCommitSpecPretty(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, commitRef string) error {
 	if strings.HasPrefix(commitRef, "#") {
 		commitRef = strings.TrimPrefix(commitRef, "#")
 	}
@@ -336,14 +341,14 @@ func showCommitSpecPretty(queryist cli.Queryist, sqlCtx *sql.Context, opts *show
 		return fmt.Errorf("error: failed to get commit metadata for ref '%s': %v", commitRef, err)
 	}
 
-	err = showCommit(queryist, sqlCtx, opts, commit)
+	err = printCommit(queryist, sqlCtx, opts, commit)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func showCommit(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, commit *commitInfo) error {
+func printCommit(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, commit *commitInfo) error {
 
 	cmHash := commit.commitHash
 	parents := commit.parentHashes
@@ -352,7 +357,7 @@ func showCommit(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, comm
 		pager := outputpager.Start()
 		defer pager.Stop()
 
-		showCommitInfo(pager, 0, opts.showParents, opts.decoration, commit)
+		printCommitInfo(pager, 0, opts.showParents, opts.decoration, commit)
 	})
 
 	if len(parents) == 0 {
@@ -385,7 +390,7 @@ func showCommit(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, comm
 	return diffUserTables(queryist, sqlCtx, dArgs)
 }
 
-func showCommitInfo(pager *outputpager.Pager, minParents int, showParents bool, decoration string, comm *commitInfo) {
+func printCommitInfo(pager *outputpager.Pager, minParents int, showParents bool, decoration string, comm *commitInfo) {
 
 	if len(comm.parentHashes) < minParents {
 		return
@@ -403,7 +408,7 @@ func showCommitInfo(pager *outputpager.Pager, minParents int, showParents bool, 
 
 	// Show decoration
 	if decoration != "no" {
-		showRefs(pager, comm)
+		printRefs(pager, comm)
 	}
 
 	if len(comm.parentHashes) > 1 {
@@ -423,7 +428,7 @@ func showCommitInfo(pager *outputpager.Pager, minParents int, showParents bool, 
 
 }
 
-func showRefs(pager *outputpager.Pager, comm *commitInfo) {
+func printRefs(pager *outputpager.Pager, comm *commitInfo) {
 	// Do nothing if no associate branchNames
 	if len(comm.localBranchNames) == 0 && len(comm.remoteBranchNames) == 0 && len(comm.tagNames) == 0 {
 		return
@@ -574,17 +579,4 @@ func getHashOf(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (string, 
 		return "", fmt.Errorf("no commits found for ref %s", ref)
 	}
 	return rows[0][0].(string), nil
-}
-
-func getTimestampColAsUint64(col interface{}) (uint64, error) {
-	switch v := col.(type) {
-	case uint64:
-		return v, nil
-	case int64:
-		return uint64(v), nil
-	case time.Time:
-		return uint64(v.UnixMilli()), nil
-	default:
-		return 0, fmt.Errorf("unexpected type %T, was expecting int64, uint64 or time.Time", v)
-	}
 }
