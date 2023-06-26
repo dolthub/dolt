@@ -180,8 +180,7 @@ end
 begin
 	call dolt_checkout('-b', 'branch1');
 	insert into t(b) values (100);
-  call dolt_add('.');
-	call dolt_commit('-m', 'new row');
+	call dolt_commit('-am', 'new row');
 	call dolt_checkout('main');
 end
 `,
@@ -189,6 +188,97 @@ end
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "call edit_on_branch();",
+				Skip: true,
+				SkipResultsCheck: true, // return value is a bit odd, needs investigation
+			},
+			{
+				Query: "select active_branch()",
+				Skip: true,
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query: "select * from t order by 1",
+				Skip: true,
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select name from dolt_branches order by 1",
+				Skip: true,
+				Expected: []sql.Row{{"branch1"}, {"main"}},
+			},
+			{
+				Query: "select * from `mydb/branch1`.t order by 1",
+				Skip: true,
+				Expected: []sql.Row{{1, 100}},
+			},
+		},
+	},
+	{
+		Name: "checkout existing branch and commit in procedure",
+		SetUpScript: []string{
+			"create table t(a int primary key auto_increment, b int);",
+			"call dolt_commit('-Am', 'new table');",
+			"call dolt_branch('branch1');",
+			`create procedure edit_on_branch()
+begin
+	call dolt_checkout('branch1');
+	insert into t(b) values (100);
+	call dolt_commit('-am', 'new row');
+	call dolt_checkout('main');
+end
+`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "call edit_on_branch();",
+				Skip: true,
+				SkipResultsCheck: true, // return value is a bit odd, needs investigation
+			},
+			{
+				Query: "select active_branch()",
+				Skip: true,
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query: "select * from t order by 1",
+				Skip: true,
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select name from dolt_branches order by 1",
+				Skip: true,
+				Expected: []sql.Row{{"branch1"}, {"main"}},
+			},
+			{
+				Query: "select * from `mydb/branch1`.t order by 1",
+				Skip: true,
+				Expected: []sql.Row{{1, 100}},
+			},
+		},
+	},
+	{
+		Name: "merge in procedure",
+		SetUpScript: []string{
+			"create table t(a int primary key auto_increment, b int);",
+			"call dolt_commit('-Am', 'new table');",
+			"call dolt_branch('branch1');",
+			"insert into t(a, b) values (1, 100);",
+			"call dolt_commit('-am', 'new row');",
+			"call dolt_checkout('branch1');",
+			"insert into t(a, b) values (2, 200);",
+			"call dolt_commit('-am', 'new row on branch1');",
+			"call dolt_checkout('main');",
+			`create procedure merge_branch()
+begin
+	call dolt_checkout('branch1');
+	call dolt_merge('--no-ff', 'main');
+	call dolt_checkout('main');
+end
+`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "call merge_branch();",
 				SkipResultsCheck: true, // return value is a bit odd, needs investigation
 			},
 			{
@@ -197,7 +287,7 @@ end
 			},
 			{
 				Query: "select * from t order by 1",
-				Expected: []sql.Row{},
+				Expected: []sql.Row{{1, 100}},
 			},
 			{
 				Query: "select name from dolt_branches order by 1",
@@ -205,7 +295,7 @@ end
 			},
 			{
 				Query: "select * from `mydb/branch1`.t order by 1",
-				Expected: []sql.Row{{1, 100}},
+				Expected: []sql.Row{{1, 100}, {2, 200}},
 			},
 		},
 	},

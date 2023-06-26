@@ -2105,6 +2105,43 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dolt_checkout with new branch",
+		SetUpScript: []string{
+			"create table t (a int primary key, b int);",
+			"insert into t values (1, 1);",
+			"call dolt_commit('-Am', 'creating table t');",
+			"call dolt_checkout('-b', 'b2');",
+			"insert into t values (2, 2);",
+			"call dolt_commit('-am', 'added values on b2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"b2"}},
+			},
+			{
+				Query: "call dolt_checkout('main');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:            "call dolt_checkout('b2');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"b2"}},
+			},
+			{
+				Query:    "select * from t order by 1;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+		},
+	},
+	{
 		Name: "dolt_checkout mixed with USE statements",
 		SetUpScript: []string{
 			"create table t (a int primary key, b int);",
