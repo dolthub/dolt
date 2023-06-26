@@ -17,6 +17,8 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 	"regexp"
 	"strings"
 	"time"
@@ -177,6 +179,9 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 }
 
+// resolveNonCommitSpec resolves a non-commit spec ref.
+// A non-commit spec ref in this context is a ref that is returned by `dolt show --no-pretty` but is NOT a commit hash.
+// These refs need env.DoltEnv in order to be resolved to a human-readable value.
 func resolveNonCommitSpec(ctx context.Context, dEnv *env.DoltEnv, specRef string) (isNonCommitSpec bool, resolvedValue string, err error) {
 	isNonCommitSpec = false
 	resolvedValue = ""
@@ -515,7 +520,10 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*com
 }
 
 func getTagsForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash string) ([]string, error) {
-	q := fmt.Sprintf("select tag_name from dolt_tags where tag_hash = '%s'", targetHash)
+	q, err := dbr.InterpolateForDialect("select tag_name from dolt_tags where tag_hash = ?", []interface{}{targetHash}, dialect.MySQL)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := getRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, err
@@ -532,9 +540,13 @@ func getTagsForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash strin
 func getBranchesForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash string, getLocalBranches bool) ([]string, error) {
 	var q string
 	if getLocalBranches {
-		q = fmt.Sprintf("select name, hash from dolt_branches where hash = '%s'", targetHash)
+		q = "select name, hash from dolt_branches where hash = ?"
 	} else {
-		q = fmt.Sprintf("select name, hash from dolt_remote_branches where hash = '%s'", targetHash)
+		q = "select name, hash from dolt_remote_branches where hash = '%s'"
+	}
+	q, err := dbr.InterpolateForDialect(q, []interface{}{targetHash}, dialect.MySQL)
+	if err != nil {
+		return nil, err
 	}
 	rows, err := getRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
@@ -550,10 +562,13 @@ func getBranchesForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash s
 }
 
 func getHashOf(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (string, error) {
-	q := fmt.Sprintf("select hashof('%s')", ref)
+	q, err := dbr.InterpolateForDialect("select hashof('%s')", []interface{}{ref}, dialect.MySQL)
+	if err != nil {
+		return "", fmt.Errorf("error interpolating hashof query: %v", err)
+	}
 	rows, err := getRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("error getting hash of ref '%s': %v", ref, err)
 	}
 	if len(rows) == 0 {
 		return "", fmt.Errorf("no commits found for ref %s", ref)

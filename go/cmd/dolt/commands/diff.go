@@ -18,6 +18,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/go-sql-driver/mysql"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 	"io"
 	"strconv"
 	"strings"
@@ -341,7 +343,10 @@ var doltSystemTables = []string{
 
 func getTableNamesAtRef(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (map[string]bool, error) {
 	// query for user-created tables
-	q := fmt.Sprintf("SHOW FULL TABLES AS OF '%s'", ref)
+	q, err := dbr.InterpolateForDialect("SHOW FULL TABLES AS OF ?", []interface{}{ref}, dialect.MySQL)
+	if err != nil {
+		return nil, fmt.Errorf("error interpolating query: %w", err)
+	}
 	rows, err := getRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, err
@@ -359,12 +364,15 @@ func getTableNamesAtRef(queryist cli.Queryist, sqlCtx *sql.Context, ref string) 
 
 	// add system tables, if they exist at this ref
 	for _, sysTable := range doltSystemTables {
-		q = fmt.Sprintf("show create table %s as of '%s'", sysTable, ref)
-		_, err = getRowsForSql(queryist, sqlCtx, q)
+		interpolatedQuery, err := dbr.InterpolateForDialect("SHOW CREATE TABLE ? AS OF ?", []interface{}{dbr.I(sysTable), ref}, dialect.MySQL)
+		if err != nil {
+			return nil, fmt.Errorf("error interpolating query: %w", err)
+		}
+		_, err = getRowsForSql(queryist, sqlCtx, interpolatedQuery)
 		if err == nil {
 			tableNames[sysTable] = true
 		} else if isTableNotFoundError(err) {
-				continue
+			continue
 		} else {
 			return nil, fmt.Errorf("error getting system table %s: %w", sysTable, err)
 		}
@@ -473,7 +481,6 @@ func (dArgs *diffArgs) applyDiffRoots(queryist cli.Queryist, sqlCtx *sql.Context
 // applyMergeBase applies the merge base of two revisions to the |from| root
 // values.
 func (dArgs *diffArgs) applyMergeBase(queryist cli.Queryist, sqlCtx *sql.Context, leftStr, rightStr string) error {
-	//mergeBaseStr, err := getMergeBaseFromStrings(ctx, dEnv, leftStr, rightStr)
 	mergeBaseStr, err := getCommonAncestor(queryist, sqlCtx, leftStr, rightStr)
 	if err != nil {
 		return err
@@ -485,7 +492,10 @@ func (dArgs *diffArgs) applyMergeBase(queryist cli.Queryist, sqlCtx *sql.Context
 }
 
 func getCommonAncestor(queryist cli.Queryist, sqlCtx *sql.Context, c1, c2 string) (string, error) {
-	q := fmt.Sprintf("select dolt_merge_base('%s', '%s')", c1, c2)
+	q, err := dbr.InterpolateForDialect("select dolt_merge_base(?, ?)", []interface{}{c1, c2}, dialect.MySQL)
+	if err != nil {
+		return "", fmt.Errorf("error interpolating query: %w", err)
+	}
 	rows, err := getRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return "", err
@@ -610,8 +620,10 @@ func getDeltasBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Context, fromRef, t
 }
 
 func getSchemaDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Context, fromRef, toRef string) ([]diff.TableDeltaSummary, error) {
-
-	q := fmt.Sprintf("select * from dolt_schema_diff('%s', '%s')", fromRef, toRef)
+	q, err := dbr.InterpolateForDialect("select * from dolt_schema_diff(?, ?)", []interface{}{fromRef, toRef}, dialect.MySQL)
+	if err != nil {
+		return nil, fmt.Errorf("error: unable to interpolate query: %w", err)
+	}
 	schemaDiffRows, err := getRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, fmt.Errorf("error: unable to get schema diff from %s to %s: %w", fromRef, toRef, err)
@@ -677,7 +689,7 @@ func getSchemaDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Contex
 }
 
 func getDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Context, fromRef, toRef string) ([]diff.TableDeltaSummary, error) {
-	q := fmt.Sprintf("select * from dolt_diff_summary('%s', '%s')", fromRef, toRef)
+	q, err := dbr.InterpolateForDialect("select * from dolt_diff_summary(?, ?)", []interface{}{fromRef, toRef}, dialect.MySQL)
 	dataDiffRows, err := getRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, fmt.Errorf("error: unable to get diff summary from %s to %s: %w", fromRef, toRef, err)
@@ -721,7 +733,6 @@ func getDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Context, fro
 func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs) errhand.VerboseError {
 	var err error
 
-	//diffSummaries, err := getDiffSummariesBetweenRefs(queryist, sqlCtx, dArgs.fromRef, dArgs.toRef)
 	deltas, err := getDeltasBetweenRefs(queryist, sqlCtx, dArgs.fromRef, dArgs.toRef)
 	if err != nil {
 		return errhand.BuildDError("error: unable to get diff summary").AddCause(err).Build()
@@ -820,10 +831,13 @@ func getTableInfoAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName str
 
 func getTableSchemaAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName string, ref string) (sch schema.Schema, createStmt string, err error) {
 	var rows []sql.Row
-	q := fmt.Sprintf("show create table %s as of '%s'", tableName, ref)
-	rows, err = getRowsForSql(queryist, sqlCtx, q)
+	interpolatedQuery, err := dbr.InterpolateForDialect("SHOW CREATE TABLE ? AS OF ?", []interface{}{dbr.I(tableName), ref}, dialect.MySQL)
 	if err != nil {
-		return sch, createStmt, err
+		return sch, createStmt, fmt.Errorf("error interpolating query: %w", err)
+	}
+	rows, err = getRowsForSql(queryist, sqlCtx, interpolatedQuery)
+	if err != nil {
+		return sch, createStmt, fmt.Errorf("error: unable to get create table statement for table '%s': %w", tableName, err)
 	}
 
 	if len(rows) != 1 {
@@ -884,7 +898,10 @@ func schemaFromCreateTableStmt(sqlCtx *sql.Context, createTableStmt string) (sch
 }
 
 func getTableDiffStats(queryist cli.Queryist, sqlCtx *sql.Context, tableName, fromRef, toRef string) ([]diffStatistics, error) {
-	q := fmt.Sprintf("select * from dolt_diff_stat('%s', '%s', '%s')", fromRef, toRef, tableName)
+	q, err := dbr.InterpolateForDialect("select * from dolt_diff_stat(?, ?, ?)", []interface{}{fromRef, toRef, tableName}, dialect.MySQL)
+	if err != nil {
+		return nil, fmt.Errorf("error interpolating query: %w", err)
+	}
 	rows, err := getRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, fmt.Errorf("error running diff stats query: %w", err)
@@ -1013,12 +1030,14 @@ func diffDoltSchemasTable(
 	dArgs *diffArgs,
 	dw diffWriter,
 ) errhand.VerboseError {
-	query := fmt.Sprintf("select from_name,to_name,from_type,to_type,from_fragment,to_fragment "+
-		"from dolt_diff('%s','%s','%s') "+
+	query, err := dbr.InterpolateForDialect("select from_name,to_name,from_type,to_type,from_fragment,to_fragment "+
+		"from dolt_diff(?, ?, ?) "+
 		"order by coalesce(from_type, to_type), coalesce(from_name, to_name)",
-		dArgs.fromRef, dArgs.toRef, doltdb.SchemasTableName)
+		[]interface{}{dArgs.fromRef, dArgs.toRef, doltdb.SchemasTableName}, dialect.MySQL)
+	if err != nil {
+		return errhand.BuildDError("Error building diff query").AddCause(err).Build()
+	}
 
-	//_, rowIter, err := sqlEng.Query(sqlCtx, query)
 	_, rowIter, err := queryist.Query(sqlCtx, query)
 	if err != nil {
 		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
@@ -1089,7 +1108,7 @@ func diffDoltSchemasTable(
 	return nil
 }
 
-// ArePrimaryKeySetsDiffable checks if two schemas are diffable. Assumes the
+// arePrimaryKeySetsDiffable checks if two schemas are diffable. Assumes the
 // passed in schema are from the same table between commits. If __DOLT__, then
 // it also checks if the underlying SQL types of the columns are equal.
 func arePrimaryKeySetsDiffable(fromTableInfo, toTableInfo *diff.TableInfo) bool {
@@ -1205,8 +1224,13 @@ func diffRows(
 		tableName = tableSummary.FromTableName
 	}
 
-	columns := getColumnNamesString(fromTableInfo, toTableInfo)
-	query := fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columns, "diff_type", dArgs.fromRef, dArgs.toRef, tableName)
+	columnNames, format := getColumnNames(fromTableInfo, toTableInfo)
+	query := fmt.Sprintf("select %s ? from dolt_diff(?, ?, ?)", format)
+	var params []interface{}
+	for _, col := range columnNames {
+		params = append(params, dbr.I(col))
+	}
+	params = append(params, dbr.I("diff_type"), dArgs.fromRef, dArgs.toRef, tableName)
 
 	if len(dArgs.where) > 0 {
 		query += " where " + dArgs.where
@@ -1216,11 +1240,16 @@ func diffRows(
 		query += " limit " + strconv.Itoa(dArgs.limit)
 	}
 
-	sch, rowIter, err := queryist.Query(sqlCtx, query)
+	interpolatedQuery, err := dbr.InterpolateForDialect(query, params, dialect.MySQL)
+	if err != nil {
+		return errhand.BuildDError("Error building diff query:\n%s", interpolatedQuery).AddCause(err).Build()
+	}
+
+	sch, rowIter, err := queryist.Query(sqlCtx, interpolatedQuery)
 	if sql.ErrSyntaxError.Is(err) {
-		return errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", query).AddCause(err).Build()
+		return errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", interpolatedQuery).AddCause(err).Build()
 	} else if err != nil {
-		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
+		return errhand.BuildDError("Error running diff query:\n%s", interpolatedQuery).AddCause(err).Build()
 	}
 
 	defer rowIter.Close(sqlCtx)
@@ -1230,7 +1259,7 @@ func diffRows(
 	if dArgs.skinny {
 		modifiedColNames, err = getModifiedCols(sqlCtx, rowIter, unionSch, sch)
 		if err != nil {
-			return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
+			return errhand.BuildDError("Error running diff query:\n%s", interpolatedQuery).AddCause(err).Build()
 		}
 
 		// instantiate a new schema that only contains the columns with changes
@@ -1253,21 +1282,20 @@ func diffRows(
 		// reset the row iterator
 		err = rowIter.Close(sqlCtx)
 		if err != nil {
-			return errhand.BuildDError("Error closing row iterator:\n%s", query).AddCause(err).Build()
+			return errhand.BuildDError("Error closing row iterator:\n%s", interpolatedQuery).AddCause(err).Build()
 		}
-		//_, rowIter, err = sqlEng.Query(ctx, query)
-		_, rowIter, err = queryist.Query(sqlCtx, query)
+		_, rowIter, err = queryist.Query(sqlCtx, interpolatedQuery)
 		defer rowIter.Close(sqlCtx)
 		if sql.ErrSyntaxError.Is(err) {
-			return errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", query).AddCause(err).Build()
+			return errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", interpolatedQuery).AddCause(err).Build()
 		} else if err != nil {
-			return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
+			return errhand.BuildDError("Error running diff query:\n%s", interpolatedQuery).AddCause(err).Build()
 		}
 	}
 
 	err = writeDiffResults(sqlCtx, sch, unionSch, rowIter, rowWriter, modifiedColNames, dArgs)
 	if err != nil {
-		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
+		return errhand.BuildDError("Error running diff query:\n%s", interpolatedQuery).AddCause(err).Build()
 	}
 
 	return nil
