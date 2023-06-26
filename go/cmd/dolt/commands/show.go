@@ -466,7 +466,10 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*com
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
 	}
 
-	q := fmt.Sprintf("select * from dolt_log('%s', '--parents', '--decorate=full')", ref)
+	q, err := dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full')", []interface{}{ref}, dialect.MySQL)
+	if err != nil {
+		return nil, fmt.Errorf("error interpolating query: %v", err)
+	}
 	rows, err := getRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, fmt.Errorf("error getting logs for ref '%s': %v", ref, err)
@@ -547,7 +550,7 @@ func getBranchesForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash s
 	if getLocalBranches {
 		q = "select name, hash from dolt_branches where hash = ?"
 	} else {
-		q = "select name, hash from dolt_remote_branches where hash = '%s'"
+		q = "select name, hash from dolt_remote_branches where hash = ?"
 	}
 	q, err := dbr.InterpolateForDialect(q, []interface{}{targetHash}, dialect.MySQL)
 	if err != nil {
@@ -567,7 +570,7 @@ func getBranchesForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash s
 }
 
 func getHashOf(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (string, error) {
-	q, err := dbr.InterpolateForDialect("select hashof('%s')", []interface{}{ref}, dialect.MySQL)
+	q, err := dbr.InterpolateForDialect("select hashof(?)", []interface{}{ref}, dialect.MySQL)
 	if err != nil {
 		return "", fmt.Errorf("error interpolating hashof query: %v", err)
 	}
