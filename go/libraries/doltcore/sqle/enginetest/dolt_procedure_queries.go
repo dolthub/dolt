@@ -268,9 +268,9 @@ end
 			"insert into t(a, b) values (2, 200);",
 			"call dolt_commit('-am', 'new row on branch1');",
 			"call dolt_checkout('main');",
-			`create procedure merge_branch()
+			`create procedure merge_branch(branchName varchar(255))
 begin
-	call dolt_checkout('branch1');
+	call dolt_checkout(branchName);
 	call dolt_merge('--no-ff', 'main');
 	call dolt_checkout('main');
 end
@@ -278,7 +278,7 @@ end
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "call merge_branch();",
+				Query: "call merge_branch('branch1');",
 				SkipResultsCheck: true, // return value is a bit odd, needs investigation
 			},
 			{
