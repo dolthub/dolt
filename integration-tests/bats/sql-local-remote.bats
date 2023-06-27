@@ -47,6 +47,18 @@ get_staged_tables() {
     '
 }
 
+basic_conflict() {
+    dolt --user dolt sql -q "create table t (i int primary key, t text)"
+    dolt --user dolt add .
+    dolt --user dolt commit -am "init commit"
+    dolt --user dolt checkout -b other
+    dolt --user dolt sql -q "insert into t values (1,'other')"
+    dolt --user dolt commit -am "other commit"
+    dolt --user dolt checkout main
+    dolt --user dolt sql -q "insert into t values (1,'main')"
+    dolt --user dolt commit -am "main commit"
+}
+
 @test "sql-local-remote: test switch between server/no server" {
     start_sql_server defaultDB
 
@@ -438,4 +450,47 @@ get_staged_tables() {
     run dolt sql -q "show tables"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "When a password is provided, a user must also be provided" ]] || false
+}
+
+@test "sql-local-remote: verify dolt conflicts resolve behavior" {
+    start_sql_server defaultDB
+    cd defaultDB
+
+    basic_conflict
+    dolt --user dolt checkout main
+    run dolt --user dolt sql -q "select * from t"
+    [ $status -eq 0 ]
+    [[ $output =~ "main" ]] || false
+
+    run dolt --user dolt merge other
+    [ $status -eq 0 ]
+    [[ $output =~ "Automatic merge failed" ]] || false
+
+    run dolt --user dolt conflicts resolve --ours .
+    [ $status -eq 0 ]
+    remoteOutput=$output
+    run dolt --user dolt sql -q "select * from t"
+    [ $status -eq 0 ]
+    [[ $output =~ "main" ]] || false
+
+    stop_sql_server 1
+
+    basic_conflict
+    dolt --user dolt checkout main
+    run dolt --user dolt sql -q "select * from t"
+    [ $status -eq 0 ]
+    [[ $output =~ "main" ]] || false
+
+    run dolt --user dolt merge other
+    [ $status -eq 0 ]
+    [[ $output =~ "Automatic merge failed" ]] || false
+
+    run dolt --user dolt conflicts resolve --ours .
+    [ $status -eq 0 ]
+    localOutput=$output
+    run dolt --user dolt sql -q "select * from t"
+    [ $status -eq 0 ]
+    [[ $output =~ "main" ]] || false
+
+    [[ "$remoteOutput" == "$localOutput" ]] || false
 }

@@ -279,7 +279,7 @@ func newLateBindingEngine(
 	return lateBinder, nil
 }
 
-func getRowsForSql(queryist cli.Queryist, sqlCtx *sql.Context, query string) ([]sql.Row, error) {
+func GetRowsForSql(queryist cli.Queryist, sqlCtx *sql.Context, query string) ([]sql.Row, error) {
 	schema, rowIter, err := queryist.Query(sqlCtx, query)
 	if err != nil {
 		return nil, err
@@ -294,7 +294,7 @@ func getRowsForSql(queryist cli.Queryist, sqlCtx *sql.Context, query string) ([]
 
 func getActiveBranchName(sqlCtx *sql.Context, queryEngine cli.Queryist) (string, error) {
 	query := "SELECT active_branch()"
-	rows, err := getRowsForSql(queryEngine, sqlCtx, query)
+	rows, err := GetRowsForSql(queryEngine, sqlCtx, query)
 	if err != nil {
 		return "", err
 	}
