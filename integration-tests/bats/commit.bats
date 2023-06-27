@@ -210,5 +210,8 @@ SQL
 
     run dolt commit -m "adding table t"
     [ $status -eq 1 ]
-    [[ "$output" =~ "Aborting commit due to empty committer name. Is your config set?" ]] || false
+    echo "$output"
+    [[ "$output" =~ "Could not determine user.name" ]] || false
+    [[ "$output" =~ "Log into DoltHub: dolt login" ]] || false
+    [[ "$output" =~ "OR add name to config: dolt config [--global|--local] --add user.name \"FIRST LAST\"" ]] || false
 }
