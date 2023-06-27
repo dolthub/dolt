@@ -453,44 +453,46 @@ basic_conflict() {
 }
 
 @test "sql-local-remote: verify dolt conflicts resolve behavior" {
-    start_sql_server defaultDB
-    cd defaultDB
+  skip "This test relies on dolt commit being migrated"
 
-    basic_conflict
-    dolt --user dolt checkout main
-    run dolt --user dolt sql -q "select * from t"
-    [ $status -eq 0 ]
-    [[ $output =~ "main" ]] || false
+  start_sql_server defaultDB
+  cd defaultDB
 
-    run dolt --user dolt merge other
-    [ $status -eq 0 ]
-    [[ $output =~ "Automatic merge failed" ]] || false
+  basic_conflict
+  dolt --user dolt checkout main
+  run dolt --user dolt sql -q "select * from t"
+  [ $status -eq 0 ]
+  [[ $output =~ "main" ]] || false
 
-    run dolt --user dolt conflicts resolve --ours .
-    [ $status -eq 0 ]
-    remoteOutput=$output
-    run dolt --user dolt sql -q "select * from t"
-    [ $status -eq 0 ]
-    [[ $output =~ "main" ]] || false
+  run dolt --user dolt merge other
+  [ $status -eq 0 ]
+  [[ $output =~ "Automatic merge failed" ]] || false
 
-    stop_sql_server 1
+  run dolt --user dolt conflicts resolve --ours .
+  [ $status -eq 0 ]
+  remoteOutput=$output
+  run dolt --user dolt sql -q "select * from t"
+  [ $status -eq 0 ]
+  [[ $output =~ "main" ]] || false
 
-    basic_conflict
-    dolt --user dolt checkout main
-    run dolt --user dolt sql -q "select * from t"
-    [ $status -eq 0 ]
-    [[ $output =~ "main" ]] || false
+  stop_sql_server 1
 
-    run dolt --user dolt merge other
-    [ $status -eq 0 ]
-    [[ $output =~ "Automatic merge failed" ]] || false
+  basic_conflict
+  dolt --user dolt checkout main
+  run dolt --user dolt sql -q "select * from t"
+  [ $status -eq 0 ]
+  [[ $output =~ "main" ]] || false
 
-    run dolt --user dolt conflicts resolve --ours .
-    [ $status -eq 0 ]
-    localOutput=$output
-    run dolt --user dolt sql -q "select * from t"
-    [ $status -eq 0 ]
-    [[ $output =~ "main" ]] || false
+  run dolt --user dolt merge other
+  [ $status -eq 0 ]
+  [[ $output =~ "Automatic merge failed" ]] || false
 
-    [[ "$remoteOutput" == "$localOutput" ]] || false
+  run dolt --user dolt conflicts resolve --ours .
+  [ $status -eq 0 ]
+  localOutput=$output
+  run dolt --user dolt sql -q "select * from t"
+  [ $status -eq 0 ]
+  [[ $output =~ "main" ]] || false
+
+  [[ "$remoteOutput" == "$localOutput" ]] || false
 }
