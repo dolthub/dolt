@@ -17,6 +17,8 @@ package actions
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/datas"
+	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -145,20 +147,21 @@ func ResetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, ro
 // Returns an error if the reset fails.
 func ResetHard(
 	ctx context.Context,
-	dEnv *env.DoltEnv,
+	dbData env.DbData,
+	doltDb *doltdb.DoltDB,
+	username, email string,
 	cSpecStr string,
 	roots doltdb.Roots,
 	headRef ref.DoltRef,
 	ws *doltdb.WorkingSet,
 ) error {
-	dbData := dEnv.DbData()
 
 	newHead, roots, err := resetHardTables(ctx, dbData, cSpecStr, roots)
 	if err != nil {
 		return err
 	}
 
-	currentWs, err := dEnv.DoltDB.ResolveWorkingSet(ctx, ws.Ref())
+	currentWs, err := doltDb.ResolveWorkingSet(ctx, ws.Ref())
 	if err != nil {
 		return err
 	}
@@ -168,13 +171,18 @@ func ResetHard(
 		return err
 	}
 
-	err = dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged).ClearMerge(), h, dEnv.NewWorkingSetMeta("reset hard"), nil)
+	err = doltDb.UpdateWorkingSet(ctx, ws.Ref(), ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged).ClearMerge(), h, &datas.WorkingSetMeta{
+		Name:        username,
+		Email:       email,
+		Timestamp:   uint64(time.Now().Unix()),
+		Description: "reset hard",
+	}, nil)
 	if err != nil {
 		return err
 	}
 
 	if newHead != nil {
-		err = dEnv.DoltDB.SetHeadToCommit(ctx, headRef, newHead)
+		err = doltDb.SetHeadToCommit(ctx, headRef, newHead)
 		if err != nil {
 			return err
 		}

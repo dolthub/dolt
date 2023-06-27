@@ -158,7 +158,9 @@ func handleResetHard(ctx context.Context, apr *argparser.ArgParseResults, usage 
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	err = actions.ResetHard(ctx, dEnv, arg, roots, headRef, ws)
+	username := dEnv.Config.GetStringOrDefault(env.UserNameKey, "")
+	email := dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
+	err = actions.ResetHard(ctx, dEnv.DbData(), dEnv.DoltDB, username, email, arg, roots, headRef, ws)
 	if err != nil {
 		return handleResetError(err, usage)
 	}

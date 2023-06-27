@@ -16,7 +16,8 @@ package actions
 
 import (
 	"context"
-	"errors"
+	"github.com/dolthub/dolt/go/store/datas"
+	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -98,9 +99,9 @@ func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls [
 	return roots, nil
 }
 
-// rootsForBranch returns the roots needed for a branch checkout. |roots.Head| should be the pre-checkout head. The
+// RootsForBranch returns the roots needed for a branch checkout. |roots.Head| should be the pre-checkout head. The
 // returned roots struct has |Head| set to |branchRoot|.
-func rootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.RootValue, force bool) (doltdb.Roots, error) {
+func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.RootValue, force bool) (doltdb.Roots, error) {
 	conflicts := set.NewStrSet([]string{})
 	if roots.Head == nil {
 		roots.Working = branchRoot
@@ -157,150 +158,24 @@ func rootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.
 	return roots, nil
 }
 
-func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force bool) error {
-	branchRef := ref.NewBranchRef(brName)
-	initialHeadRef, err := dEnv.RepoStateReader().CWBHeadRef()
-	if err != nil {
-		return err
-	}
-
-	db := dEnv.DoltDB
-	hasRef, err := db.HasRef(ctx, branchRef)
-	if err != nil {
-		return err
-	}
-	if !hasRef {
-		return doltdb.ErrBranchNotFound
-	}
-
-	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
-	if err != nil {
-		return err
-	}
-	if ref.Equals(headRef, branchRef) {
-		return doltdb.ErrAlreadyOnBranch
-	}
-
-	branchHead, err := branchHeadRoot(ctx, db, brName)
-	if err != nil {
-		return err
-	}
-
-	workingSetExists := true
-	initialWs, err := dEnv.WorkingSet(ctx)
-	if err == doltdb.ErrWorkingSetNotFound {
-		// ignore, but don't reset the working set
-		workingSetExists = false
-	} else if err != nil {
-		return err
-	}
-
-	if !force {
-		if checkoutWouldStompWorkingSetChanges(ctx, dEnv, branchRef) {
-			return ErrWorkingSetsOnBothBranches
-		}
-	}
-
-	initialRoots, err := dEnv.Roots(ctx)
-
-	// roots will be empty/nil if the working set is not set (working set is not set if the current branch was deleted)
-	if errors.Is(err, doltdb.ErrBranchNotFound) || errors.Is(err, doltdb.ErrWorkingSetNotFound) {
-		workingSetExists = false
-	} else if err != nil {
-		return err
-	}
-
-	hasChanges := false
-	if workingSetExists {
-		hasChanges, _, _, err = RootHasUncommittedChanges(initialRoots)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Only if the current working set has uncommitted changes do we carry them forward to the branch being checked out.
-	// If this is the case, then the destination branch must *not* have any uncommitted changes, as checked by
-	// checkoutWouldStompWorkingSetChanges
-	if hasChanges {
-		err = transferWorkingChanges(ctx, dEnv, initialRoots, branchHead, branchRef, force)
-		if err != nil {
-			return err
-		}
-	} else {
-		err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
-		if err != nil {
-			return err
-		}
-	}
-
-	if workingSetExists && hasChanges {
-		err = cleanOldWorkingSet(ctx, dEnv, initialRoots, initialHeadRef, initialWs)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func transferWorkingChanges(
+// CleanOldWorkingSet resets the source branch's working set to the branch head, leaving the source branch unchanged
+func CleanOldWorkingSet(
 	ctx context.Context,
-	dEnv *env.DoltEnv,
-	initialRoots doltdb.Roots,
-	branchHead *doltdb.RootValue,
-	branchRef ref.BranchRef,
-	force bool,
-) error {
-	newRoots, err := rootsForBranch(ctx, initialRoots, branchHead, force)
-	if err != nil {
-		return err
-	}
-
-	// important to not update the checked out branch until after we have done the error checking above, otherwise we
-	// potentially leave the client in a bad state
-	err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
-	if err != nil {
-		return err
-	}
-
-	ws, err := dEnv.WorkingSet(ctx)
-
-	// For backwards compatibility we support the branch not having a working set, but generally speaking it already
-	// should have one
-	if err == doltdb.ErrWorkingSetNotFound {
-		wsRef, err := ref.WorkingSetRefForHead(branchRef)
-		if err != nil {
-			return err
-		}
-		ws = doltdb.EmptyWorkingSet(wsRef)
-	} else if err != nil {
-		return err
-	}
-
-	err = dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(newRoots.Working).WithStagedRoot(newRoots.Staged))
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// cleanOldWorkingSet resets the source branch's working set to the branch head, leaving the source branch unchanged
-func cleanOldWorkingSet(
-	ctx context.Context,
-	dEnv *env.DoltEnv,
+	dbData env.DbData,
+	doltDb *doltdb.DoltDB,
+	username, email string,
 	initialRoots doltdb.Roots,
 	initialHeadRef ref.DoltRef,
 	initialWs *doltdb.WorkingSet,
 ) error {
 	// reset the source branch's working set to the branch head, leaving the source branch unchanged
-	err := ResetHard(ctx, dEnv, "", initialRoots, initialHeadRef, initialWs)
+	err := ResetHard(ctx, dbData, doltDb, username, email, "", initialRoots, initialHeadRef, initialWs)
 	if err != nil {
 		return err
 	}
 
 	// Annoyingly, after the ResetHard above we need to get all the roots again, because the working set has changed
-	cm, err := dEnv.DoltDB.ResolveCommitRef(ctx, initialHeadRef)
+	cm, err := doltDb.ResolveCommitRef(ctx, initialHeadRef)
 	if err != nil {
 		return err
 	}
@@ -310,7 +185,7 @@ func cleanOldWorkingSet(
 		return err
 	}
 
-	workingSet, err := dEnv.DoltDB.ResolveWorkingSet(ctx, initialWs.Ref())
+	workingSet, err := doltDb.ResolveWorkingSet(ctx, initialWs.Ref())
 	if err != nil {
 		return err
 	}
@@ -332,12 +207,18 @@ func cleanOldWorkingSet(
 		return err
 	}
 
-	err = dEnv.DoltDB.UpdateWorkingSet(
+	err = doltDb.UpdateWorkingSet(
 		ctx,
 		initialWs.Ref(),
 		initialWs.WithWorkingRoot(newRoots.Working).WithStagedRoot(newRoots.Staged).ClearMerge(),
 		h,
-		dEnv.NewWorkingSetMeta("reset hard"),
+
+		&datas.WorkingSetMeta{
+			Name:        username,
+			Email:       email,
+			Timestamp:   uint64(time.Now().Unix()),
+			Description: "reset hard",
+		},
 		nil,
 	)
 	if err != nil {
@@ -346,8 +227,8 @@ func cleanOldWorkingSet(
 	return nil
 }
 
-// branchHeadRoot returns the root value at the branch head with the name given
-func branchHeadRoot(ctx context.Context, db *doltdb.DoltDB, brName string) (*doltdb.RootValue, error) {
+// BranchHeadRoot returns the root value at the branch head with the name given
+func BranchHeadRoot(ctx context.Context, db *doltdb.DoltDB, brName string) (*doltdb.RootValue, error) {
 	cs, err := doltdb.NewCommitSpec(brName)
 	if err != nil {
 		return nil, doltdb.RootValueUnreadable{RootType: doltdb.HeadRoot, Cause: err}
@@ -585,21 +466,11 @@ func writeTableHashes(ctx context.Context, head *doltdb.RootValue, tblHashes map
 	return head, nil
 }
 
-// checkoutWouldStompWorkingSetChanges checks that the current working set is "compatible" with the dest working set.
+// CheckoutWouldStompWorkingSetChanges checks that the current working set is "compatible" with the dest working set.
 // This means that if both working sets are present (ie there are changes on both source and dest branches),
 // we check if the changes are identical before allowing a clobbering checkout.
 // Working set errors are ignored by this function, because they are properly handled elsewhere.
-func checkoutWouldStompWorkingSetChanges(ctx context.Context, dEnv *env.DoltEnv, branchRef ref.BranchRef) bool {
-	sourceRoots, err := dEnv.Roots(ctx)
-	if err != nil {
-		return false
-	}
-
-	destRoots, err := dEnv.DoltDB.ResolveBranchRoots(ctx, branchRef)
-	if err != nil {
-		return false
-	}
-
+func CheckoutWouldStompWorkingSetChanges(sourceRoots, destRoots doltdb.Roots) bool {
 	sourceHasChanges, sourceWorkingHash, sourceStagedHash, err := RootHasUncommittedChanges(sourceRoots)
 	if err != nil {
 		return false
