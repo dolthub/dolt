@@ -18,6 +18,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 	"io"
 	"strings"
 
@@ -164,7 +166,11 @@ func printConflicts(queryist cli.Queryist, sqlCtx *sql.Context, tblNames []strin
 			continue
 		}
 
-		q := fmt.Sprintf("SELECT * from dolt_conflicts_%s", tblName)
+		q, err := dbr.InterpolateForDialect("SELECT * from ?", []interface{}{dbr.I("dolt_conflicts_" + tblName)}, dialect.MySQL)
+		if err != nil {
+			return fmt.Errorf("error: failed to interpolate query for table '%s': %w", tblName, err)
+		}
+
 		confSqlSch, rowItr, err := queryist.Query(sqlCtx, q)
 		if err != nil {
 			return fmt.Errorf("error: failed to get conflict rows for table '%s': %w", tblName, err)
@@ -245,7 +251,11 @@ func getUnionSchemaFromConflictsSchema(conflictsSch sql.Schema) (schema.Schema, 
 }
 
 func printSchemaConflicts(queryist cli.Queryist, sqlCtx *sql.Context, wrCloser io.WriteCloser, table string) error {
-	q := buildSchemaConflictQuery(table)
+	q, err := dbr.InterpolateForDialect("select our_schema, their_schema, base_schema, description "+
+		"from dolt_schema_conflicts where table_name = ?", []interface{}{table}, dialect.MySQL)
+	if err != nil {
+		return err
+	}
 	sqlSch, rowItr, err := queryist.Query(sqlCtx, q)
 	if err != nil {
 		return err
@@ -311,11 +321,6 @@ func writeConflictResults(
 	}
 }
 
-func buildSchemaConflictQuery(table string) string {
-	return fmt.Sprintf("select our_schema, their_schema, base_schema, description "+
-		"from dolt_schema_conflicts where table_name = '%s'", table)
-}
-
 func getMergeStatus(queryist cli.Queryist, sqlCtx *sql.Context) (mergeStatus, error) {
 	ms := mergeStatus{}
 	q := "select * from dolt_merge_status;"
@@ -345,29 +350,34 @@ func getMergeStatus(queryist cli.Queryist, sqlCtx *sql.Context) (mergeStatus, er
 }
 
 func getSchemaConflictsExist(queryist cli.Queryist, sqlCtx *sql.Context) (bool, error) {
-	q := "select count(*) from dolt_schema_conflicts;"
+	q := "select * from dolt_schema_conflicts limit 1;"
 	rows, err := commands.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return false, err
 	}
 
-	row := rows[0]
-	count := row[0].(int64)
-	conflictsExist := count > 0
-	return conflictsExist, nil
+	if len(rows) == 0 {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 func getTableDataConflictsExist(queryist cli.Queryist, sqlCtx *sql.Context, tableName string) (bool, error) {
-	q := fmt.Sprintf("select count(*) from dolt_conflicts_%s;", tableName)
+	q, err := dbr.InterpolateForDialect("select * from ? limit 1;", []interface{}{dbr.I("dolt_conflicts_" + tableName)}, dialect.MySQL)
+	if err != nil {
+		return false, err
+	}
 	rows, err := commands.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return false, err
 	}
 
-	row := rows[0]
-	count := row[0].(int64)
-	conflictsExist := count > 0
-	return conflictsExist, nil
+	if len(rows) == 0 {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 func isStringInArray(val string, arr []string) bool {
