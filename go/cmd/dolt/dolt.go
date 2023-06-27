@@ -172,9 +172,9 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", doltSubC
 var globalArgParser = buildGlobalArgs()
 var globalDocs = cli.CommandDocsForCommandString("dolt", doc, globalArgParser)
 
-const globalSpecialMsg = `
+var globalSpecialMsg = `
 Dolt subcommands are in transition to using the flags listed below as global flags.
-The sql subcommand is currently the only command that uses these flags. All other commands will ignore them.
+Not all subcommands use these flags. If your command accepts these flags without error, then they are supported.
 `
 
 func init() {
