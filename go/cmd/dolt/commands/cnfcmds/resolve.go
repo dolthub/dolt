@@ -16,8 +16,9 @@ package cnfcmds
 
 import (
 	"context"
-	"github.com/dolthub/go-mysql-server/sql"
 	"strings"
+
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
