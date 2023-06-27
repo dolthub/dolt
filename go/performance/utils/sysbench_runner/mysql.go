@@ -170,7 +170,7 @@ func SetupDB(ctx context.Context, mConfig MysqlConfig, databaseName string) (err
 	if err != nil {
 		return err
 	}
-	_, err = db.ExecContext(ctx, fmt.Sprintf("SET GLOBAL local_infile = 'ON'"))
+	_, err = db.ExecContext(ctx, "SET GLOBAL local_infile = 'ON'")
 	if err != nil {
 		return err
 	}

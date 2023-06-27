@@ -57,7 +57,7 @@ func Run(config *TpccBenchmarkConfig) error {
 			return err
 		}
 
-		fmt.Println(fmt.Sprintf("Successfuly wrote results for %s", serverConfig.Server))
+		fmt.Printf("Successfuly wrote results for %s\n", serverConfig.Server)
 	}
 
 	return nil

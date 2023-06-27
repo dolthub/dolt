@@ -72,7 +72,7 @@ func TestKeySplitterDistribution(t *testing.T) {
 	})
 	t.Run("summarize node distribution for item sizes (8,54)", func(t *testing.T) {
 		for sz := 8; sz <= 54; sz++ {
-			fmt.Println(fmt.Sprintf("Summary for map Size %d", sz))
+			fmt.Printf("Summary for map Size %d\n", sz)
 			nd, ns := makeProllyTreeWithSizes(t, factory, 100_000, sz, sz)
 			PrintTreeSummaryByLevel(t, nd, ns)
 			fmt.Println()
