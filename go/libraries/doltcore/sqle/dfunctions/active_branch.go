@@ -15,8 +15,6 @@
 package dfunctions
 
 import (
-	"fmt"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
@@ -71,7 +69,7 @@ func (ab *ActiveBranchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, er
 
 // String implements the Stringer interface.
 func (ab *ActiveBranchFunc) String() string {
-	return fmt.Sprint("ACTIVE_BRANCH()")
+	return "ACTIVE_BRANCH()"
 }
 
 // IsNullable implements the Expression interface.
