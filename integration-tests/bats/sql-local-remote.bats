@@ -257,7 +257,6 @@ get_staged_tables() {
     [[ "$output" =~ "committing locally" ]] || false
 }
 
-
 @test "sql-local-remote: verify simple dolt branch behavior." {
     start_sql_server altDB
     cd altDB
@@ -283,4 +282,62 @@ get_staged_tables() {
     [[ "$output" =~ "starting local mode" ]] || false
     [[ "$output" =~ "main" ]] || false
     [[ "$output" =~ "b2" ]] || false
+}
+
+@test "sql-local-remote: verify dolt conflicts cat behavior" {
+  cd defaultDB
+
+  dolt --user dolt sql << SQL
+CREATE TABLE people (
+  id INT NOT NULL,
+  last_name VARCHAR(120),
+  first_name VARCHAR(120),
+  birthday DATETIME(6),
+  age INT DEFAULT '0',
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+SQL
+  dolt --user dolt add .
+  dolt --user dolt commit -am "base"
+
+  dolt --user dolt checkout -b right
+  dolt --user dolt sql <<SQL
+ALTER TABLE people
+MODIFY COLUMN age FLOAT;
+SQL
+  dolt --user dolt commit -am "right"
+
+  dolt --user dolt checkout main
+  dolt --user dolt sql <<SQL
+ALTER TABLE people
+MODIFY COLUMN age BIGINT;
+SQL
+  dolt --user dolt commit -am "left"
+
+  dolt --user dolt merge right -m "merge right"
+
+  run dolt --user dolt conflicts cat .
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "| our_schema" ]] || false
+  [[ "$output" =~ "| their_schema" ]] || false
+  [[ "$output" =~ "| base_schema" ]] || false
+  [[ "$output" =~ "| description" ]] || false
+  [[ "$output" =~ "different column definitions for our column age and their column age" ]] || false
+  [[ "$output" =~ "\`age\` bigint," ]] || false
+  [[ "$output" =~ "\`age\` float," ]] || false
+  [[ "$output" =~ "\`age\` int DEFAULT '0'," ]] || false
+  localOutput=$output
+
+  start_sql_server defaultDB
+
+  run dolt --user dolt conflicts cat .
+  echo ">>>>>>>"
+  echo "$output"
+  echo "<<<<<<<"
+  [ "$status" -eq 0 ]
+  remoteOutput=$output
+
+  [[ "$remoteOutput" == "$localOutput" ]] || false
+
+  stop_sql_server 1
 }
