@@ -18,9 +18,8 @@ import (
 	"fmt"
 	"os"
 
-	"golang.org/x/term"
-
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 type UserPassword struct {
@@ -66,21 +65,11 @@ func BuildUserPasswordPrompt(parsedArgs *argparser.ArgParseResults) (newParsedAr
 			password = val
 		} else {
 			Printf("Enter password: ")
-
-			// Disable terminal echo
-			oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+			passwordBytes, err := terminal.ReadPassword(int(os.Stdin.Fd()))
 			if err != nil {
 				return nil, nil, err
 			}
-			// ensure we restore terminal to original state
-			defer term.Restore(int(os.Stdin.Fd()), oldState)
-
-			// Read the password
-			_, err = fmt.Scan(&password)
-			if err != nil {
-				return nil, nil, err
-			}
-			Println()
+			password = string(passwordBytes) // Assuming UTF-8 for time being. This may not work forever.
 		}
 		return newParsedArgs, &UserPassword{Username: userId, Password: password, Specified: true}, nil
 	}
