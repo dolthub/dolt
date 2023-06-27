@@ -181,7 +181,7 @@ func historyTableTests() []historyTableTest {
 		},
 		{
 			name:  "commit is not null",
-			query: fmt.Sprintf("select pk, c0, commit_hash from dolt_history_test where commit_hash is not null;"),
+			query: "select pk, c0, commit_hash from dolt_history_test where commit_hash is not null;",
 			rows: []sql.Row{
 				{int32(0), int32(10), HEAD},
 				{int32(1), int32(1), HEAD},

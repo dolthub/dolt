@@ -48,7 +48,7 @@ func TestAbsolutePathToAndFromString(t *testing.T) {
 
 	h, err := types.Float(42).Hash(types.Format_Default) // arbitrary hash
 	assert.NoError(err)
-	test(fmt.Sprintf("/refs/heads/main"))
+	test("/refs/heads/main")
 	test(fmt.Sprintf("#%s", h.String()))
 }
 

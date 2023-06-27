@@ -2,11 +2,7 @@
 load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
-    REPO_NAME="dolt_repo_$$"
-    mkdir $REPO_NAME
-    cd $REPO_NAME
-
-    dolt init
+    setup_common
 }
 
 teardown() {

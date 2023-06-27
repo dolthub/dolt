@@ -592,7 +592,7 @@ func logCompact(pager *outputpager.Pager, opts *logOpts, commits []logNode) {
 		}
 
 		formattedDesc := strings.Replace(comm.commitMeta.Description, "\n", " ", -1) + "\n"
-		pager.Writer.Write([]byte(fmt.Sprintf("%s", formattedDesc)))
+		pager.Writer.Write([]byte(formattedDesc))
 	}
 }
 
@@ -617,7 +617,7 @@ func PrintCommit(pager *outputpager.Pager, minParents int, showParents bool, dec
 	}
 
 	if len(comm.parentHashes) > 1 {
-		pager.Writer.Write([]byte(fmt.Sprintf("\nMerge:")))
+		pager.Writer.Write([]byte("\nMerge:"))
 		for _, h := range comm.parentHashes {
 			pager.Writer.Write([]byte(fmt.Sprintf(" " + h.String())))
 		}
@@ -629,7 +629,7 @@ func PrintCommit(pager *outputpager.Pager, minParents int, showParents bool, dec
 	pager.Writer.Write([]byte(fmt.Sprintf("\nDate:  %s", timeStr)))
 
 	formattedDesc := "\n\n\t" + strings.Replace(comm.commitMeta.Description, "\n", "\n\t", -1) + "\n\n"
-	pager.Writer.Write([]byte(fmt.Sprintf("%s", formattedDesc)))
+	pager.Writer.Write([]byte(formattedDesc))
 }
 
 func logDefault(pager *outputpager.Pager, opts *logOpts, commits []logNode) {

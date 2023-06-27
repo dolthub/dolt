@@ -424,13 +424,13 @@ func copyABranch(ctx *sql.Context, dbData env.DbData, srcBr string, destBr strin
 	err := actions.CopyBranchOnDB(ctx, dbData.Ddb, srcBr, destBr, force, rsc)
 	if err != nil {
 		if err == doltdb.ErrBranchNotFound {
-			return errors.New(fmt.Sprintf("fatal: A branch named '%s' not found", srcBr))
+			return fmt.Errorf("fatal: A branch named '%s' not found", srcBr)
 		} else if err == actions.ErrAlreadyExists {
-			return errors.New(fmt.Sprintf("fatal: A branch named '%s' already exists.", destBr))
+			return fmt.Errorf("fatal: A branch named '%s' already exists.", destBr)
 		} else if err == doltdb.ErrInvBranchName {
-			return errors.New(fmt.Sprintf("fatal: '%s' is not a valid branch name.", destBr))
+			return fmt.Errorf("fatal: '%s' is not a valid branch name.", destBr)
 		} else {
-			return errors.New(fmt.Sprintf("fatal: Unexpected error copying branch from '%s' to '%s'", srcBr, destBr))
+			return fmt.Errorf("fatal: Unexpected error copying branch from '%s' to '%s'", srcBr, destBr)
 		}
 	}
 	err = branch_control.AddAdminForContext(ctx, destBr)
