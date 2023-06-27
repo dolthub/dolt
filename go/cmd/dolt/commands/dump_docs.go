@@ -176,7 +176,8 @@ func CreateMarkdown(wr io.Writer, cmdDoc *cli.CommandDocumentation) error {
 }
 
 func (cmd *DumpDocsCmd) writeGlobalArgumentsSection(wr io.Writer) error {
-	markdownDoc, err := cmd.GlobalDocs.GlobalCmdDocToMd(cmd.GlobalSpecialMsg)
+	cmd.GlobalDocs.ShortDesc = cmd.GlobalSpecialMsg
+	markdownDoc, err := cmd.GlobalDocs.GlobalCmdDocToMd()
 	if err != nil {
 		return err
 	}

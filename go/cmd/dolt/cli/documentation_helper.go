@@ -41,6 +41,20 @@ var cmdMdDocTempl = "## `{{.Command}}`\n\n" +
 	"{{.Options}}\n\n"
 
 func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
+	return cmdDoc.executeTemplate(cmdMdDocTempl, false)
+}
+
+var globalCmdMdDocTempl = "## Global Arguments\n" +
+	"{{.ShortDesc}}\n" +
+	"{{.Synopsis}}\n\n" +
+	"Specific dolt options:\n\n" +
+	"{{.Options}}\n"
+
+func (cmdDoc CommandDocumentation) GlobalCmdDocToMd() (string, error) {
+	return cmdDoc.executeTemplate(globalCmdMdDocTempl, true)
+}
+
+func (cmdDoc CommandDocumentation) executeTemplate(cmdTempl string, includeValDesc bool) (string, error) {
 	// Accumulate the options and args in a string
 	options := ""
 	if len(cmdDoc.ArgParser.Supported) > 0 || len(cmdDoc.ArgParser.ArgListHelp) > 0 {
@@ -66,6 +80,9 @@ func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
 				return "", err
 			}
 			argStruct := supported{supOpt.Abbrev, supOpt.Name, "", templatedDesc}
+			if includeValDesc {
+				argStruct.ValDesc = supOpt.ValDesc
+			}
 			outputStr, err := templateSupported(argStruct)
 			if err != nil {
 				return "", err
@@ -80,67 +97,7 @@ func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
 	if cmdMdDocErr != nil {
 		return "", cmdMdDocErr
 	}
-	templ, templErr := template.New("shortDesc").Parse(cmdMdDocTempl)
-	if templErr != nil {
-		return "", templErr
-	}
-	var templBuffer bytes.Buffer
-	if err := templ.Execute(&templBuffer, cmdMdDoc); err != nil {
-		return "", err
-	}
-	ret := strings.Replace(templBuffer.String(), "HEAD~", "HEAD\\~", -1)
-	return ret, nil
-}
-
-var globalCmdMdDocTempl = "## Global Arguments\n" +
-	"{{.ShortDesc}}\n" +
-	"{{.Synopsis}}\n\n" +
-	"Specific dolt options:\n\n" +
-	"{{.Options}}\n"
-
-func (cmdDoc CommandDocumentation) GlobalCmdDocToMd(msg string) (string, error) {
-	// Accumulate the options and args in a string
-	options := ""
-	if len(cmdDoc.ArgParser.Supported) > 0 || len(cmdDoc.ArgParser.ArgListHelp) > 0 {
-		// Iterate across arguments and template them
-		for _, kvTuple := range cmdDoc.ArgParser.ArgListHelp {
-			arg, desc := kvTuple[0], kvTuple[1]
-			templatedDesc, err := templateDocStringHelper(desc, MarkdownFormat)
-			if err != nil {
-				return "", err
-			}
-			argStruct := argument{arg, templatedDesc}
-			outputStr, err := templateArgument(argStruct)
-			if err != nil {
-				return "", err
-			}
-			options += outputStr
-		}
-
-		// Iterate across supported options, templating each one of them
-		for _, supOpt := range cmdDoc.ArgParser.Supported {
-			templatedDesc, err := templateDocStringHelper(supOpt.Desc, MarkdownFormat)
-			if err != nil {
-				return "", err
-			}
-			argStruct := supported{supOpt.Abbrev, supOpt.Name, supOpt.ValDesc, templatedDesc}
-			outputStr, err := templateSupported(argStruct)
-			if err != nil {
-				return "", err
-			}
-			options += outputStr
-		}
-	} else {
-		options = `No options for this command.`
-	}
-
-	cmdMdDoc, cmdMdDocErr := cmdDoc.cmdDocToCmdDocMd(options)
-	if cmdMdDocErr != nil {
-		return "", cmdMdDocErr
-	}
-	cmdMdDoc.ShortDesc = msg
-
-	templ, templErr := template.New("shortDesc").Parse(globalCmdMdDocTempl)
+	templ, templErr := template.New("shortDesc").Parse(cmdTempl)
 	if templErr != nil {
 		return "", templErr
 	}
