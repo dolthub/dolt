@@ -328,8 +328,10 @@ assert_has_key_value() {
 
 @test "sql-local-remote: verify dolt diff behavior with data and schema changes" {
   start_sql_server defaultDB
-
   cd defaultDB
+
+  export DOLT_CLI_PASSWORD=""
+
   dolt --user dolt sql <<SQL
 create table test (pk int primary key, c1 int, c2 int);
 insert into test values (1,2,3);
@@ -383,6 +385,8 @@ EOF
 
 @test "sql-local-remote: verify dolt show behavior" {
   cd defaultDB
+
+  export DOLT_CLI_PASSWORD=""
 
   dolt --user dolt commit --allow-empty -m "commit: initialize table1"
 
