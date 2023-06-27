@@ -330,17 +330,15 @@ assert_has_key_value() {
   start_sql_server defaultDB
   cd defaultDB
 
-  export DOLT_CLI_PASSWORD=""
-
-  dolt --user dolt sql <<SQL
+  dolt sql <<SQL
 create table test (pk int primary key, c1 int, c2 int);
 insert into test values (1,2,3);
 insert into test values (4,5,6);
 SQL
-  dolt --user dolt add .
-  dolt --user dolt commit -am "First commit"
+  dolt add .
+  dolt commit -am "First commit"
 
-  dolt --user dolt sql <<SQL
+  dolt sql <<SQL
 alter table test
 drop column c2,
 add column c3 varchar(10);
@@ -368,15 +366,15 @@ SQL
 EOF
 )
 
-  dolt --user dolt diff
-  run dolt --user dolt diff
+  dolt diff
+  run dolt diff
   [ "$status" -eq 0 ] || false
   [[ "$output" =~ "$EXPECTED" ]] || false
   remoteOutput=$output
 
   stop_sql_server 1
 
-  run dolt --user dolt diff
+  run dolt diff
   [ "$status" -eq 0 ] || false
   localOutput=$output
 
@@ -386,11 +384,9 @@ EOF
 @test "sql-local-remote: verify dolt show behavior" {
   cd defaultDB
 
-  export DOLT_CLI_PASSWORD=""
+  dolt commit --allow-empty -m "commit: initialize table1"
 
-  dolt --user dolt commit --allow-empty -m "commit: initialize table1"
-
-  run dolt --user dolt show --no-pretty
+  run dolt show --no-pretty
   [ "$status" -eq 0 ] || false
   [[ "$output" =~ "SerialMessage" ]] || false
   assert_has_key "Name" "$output"
@@ -408,27 +404,27 @@ EOF
   parentClosureHash=$(extract_value ParentClosure "$output")
   rootValue=$(extract_value RootValue "$output")
 
-  run dolt --user dolt show "$parentHash"
+  run dolt show "$parentHash"
   [ "$status" -eq 0 ] || false
   [[ "$output" =~ "tables table1, table2" ]] || false
-  run dolt --user dolt show "$rootValue"
+  run dolt show "$rootValue"
   [ "$status" -eq 0 ] || false
-  run dolt --user dolt show "$parentClosureHash"
+  run dolt show "$parentClosureHash"
   [ "$status" -eq 0 ] || false
 
   start_sql_server defaultDB
 
-  run dolt --user dolt show --no-pretty
+  run dolt show --no-pretty
   [ $status -eq 1 ] || false
   [[ "$output" =~ "\`dolt show --no-pretty\` or \`dolt show NON_COMMIT_REF\` only supported in local mode." ]] || false
 
-  run dolt --user dolt show "$parentHash"
+  run dolt show "$parentHash"
   [ $status -eq 0 ] || false
   [[ "$output" =~ "tables table1, table2" ]] || false
-  run dolt --user dolt show "$parentClosureHash"
+  run dolt show "$parentClosureHash"
   [ $status -eq 1 ] || false
   [[ "$output" =~ "\`dolt show --no-pretty\` or \`dolt show NON_COMMIT_REF\` only supported in local mode." ]] || false
-  run dolt --user dolt show "$rootValue"
+  run dolt show "$rootValue"
   [ $status -eq 1 ] || false
   [[ "$output" =~ "\`dolt show --no-pretty\` or \`dolt show NON_COMMIT_REF\` only supported in local mode." ]] || false
 
