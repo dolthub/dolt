@@ -594,7 +594,7 @@ func executeMergeAndCommit(ctx context.Context, sqlCtx *sql.Context, queryist cl
 
 	author := fmt.Sprintf("%s <%s>", spec.Name, spec.Email)
 
-	res, skipped := performCommit(ctx, "commit", []string{"-m", msg, "--author", author}, cliCtx)
+	res, skipped := performCommit(ctx, "commit", []string{"-m", msg, "--author", author}, cliCtx, dEnv)
 	if res != 0 || skipped {
 		return nil, fmt.Errorf("dolt commit failed after merging")
 	}
