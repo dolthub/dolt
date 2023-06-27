@@ -295,19 +295,21 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 		return err
 	}
 
-	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(newBranchName))
-	if err != nil {
-		return err
-	}
-
-	err = sess.SwitchWorkingSet(ctx, dbName, wsRef)
-	if err != nil {
-		return err
-	}
-
 	if updateHead {
 		return doUpdateHead(ctx, sess, dbName, newBranchName, apr.Contains(cli.ForceFlag))
+	} else {
+
+		wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(newBranchName))
+		if err != nil {
+			return err
+		}
+
+		err = sess.SwitchWorkingSet(ctx, dbName, wsRef)
+		if err != nil {
+			return err
+		}
 	}
+
 	return nil
 }
 
@@ -322,14 +324,17 @@ func checkoutBranch(ctx *sql.Context, dbName string, branchName string, apr *arg
 	}
 
 	dSess := dsess.DSessFromSess(ctx.Session)
-	err = dSess.SwitchWorkingSet(ctx, dbName, wsRef)
-	if err != nil {
-		return err
-	}
 
 	if apr.Contains(cli.GlobalFlag) {
 		return doUpdateHead(ctx, dSess, dbName, branchName, apr.Contains(cli.ForceFlag))
+	} else {
+
+		err = dSess.SwitchWorkingSet(ctx, dbName, wsRef)
+		if err != nil {
+			return err
+		}
 	}
+
 	return nil
 }
 
