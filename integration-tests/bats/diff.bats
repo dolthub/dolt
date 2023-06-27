@@ -335,6 +335,11 @@ SQL
 }
 
 @test "diff: two and three dot diff" {
+    # TODO: remove this once dolt checkout is migrated
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "This test relies on dolt checkout, which has not been migrated yet."
+    fi
+
     dolt checkout main
     dolt sql -q 'insert into test values (0,0,0,0,0,0)'
     dolt add .
@@ -839,6 +844,11 @@ SQL
 }
 
 @test "diff: with where clause" {
+    # TODO: remove this once dolt checkout is migrated
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "This test relies on dolt checkout, which has not been migrated yet."
+    fi
+
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
@@ -929,6 +939,11 @@ SQL
 }
 
 @test "diff: with where clause errors" {
+    # TODO: remove this once dolt checkout is migrated
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "This test relies on dolt checkout, which has not been migrated yet."
+    fi
+
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
@@ -985,6 +1000,12 @@ SQL
 }
 
 @test "diff: with invalid ref does not panic" {
+    # TODO: remove this once dolt checkout is migrated
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "This test relies on dolt checkout, which has not been migrated yet."
+    fi
+
+
     dolt add .
     dolt commit -m table
     dolt checkout -b test-branch
@@ -1059,6 +1080,11 @@ SQL
 }
 
 @test "diff: table with same name on different branches with different primary key sets" {
+    # TODO: remove this once dolt checkout is migrated
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "This test relies on dolt checkout, which has not been migrated yet."
+    fi
+
     dolt branch another-branch
     dolt sql <<SQL
 CREATE TABLE a (
@@ -1626,6 +1652,11 @@ SQL
 }
 
 @test "diff: get diff on dolt_schemas table with different result output formats" {
+    # TODO: remove this once dolt checkout is migrated
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "This test relies on dolt checkout, which has not been migrated yet."
+    fi
+
     dolt add .
     dolt commit -am "commit 1"
     dolt sql <<SQL
