@@ -292,6 +292,8 @@ get_staged_tables() {
 @test "sql-local-remote: verify dolt conflicts cat behavior" {
   cd defaultDB
 
+  export DOLT_CLI_PASSWORD=""
+
   dolt --user dolt sql << SQL
 CREATE TABLE people (
   id INT NOT NULL,
