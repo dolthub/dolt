@@ -118,15 +118,39 @@ func doDoltReset(ctx *sql.Context, args []string) (int, error) {
 			return 1, err
 		}
 	} else {
-		roots, err = actions.ResetSoftTables(ctx, dbData, apr, roots)
-		if err != nil {
-			return 1, err
+		if apr.NArg() < 1 || apr.NArg() == 0 {
+			roots, err = actions.ResetSoftTables(ctx, dbData, apr, roots)
+			if err != nil {
+				return 1, err
+			}
+		} else {
+			// check if the input is a table name or commit ref
+			_, ok, _ := roots.Head.ResolveTableName(ctx, apr.Arg(0))
+			if ok {
+				roots, err = actions.ResetSoftTables(ctx, dbData, apr, roots)
+				if err != nil {
+					return 1, err
+				}
+				err = dSess.SetRoots(ctx, dbName, roots)
+				if err != nil {
+					return 1, err
+				}
+			} else {
+				roots, err = actions.ResetSoftToRef(ctx, dbData, apr.Arg(0))
+				if err != nil {
+					return 1, err
+				}
+				ws, err := dSess.WorkingSet(ctx, dbName)
+				if err != nil {
+					return 1, err
+				}
+				err = dSess.SetWorkingSet(ctx, dbName, ws.WithStagedRoot(roots.Staged).ClearMerge())
+				if err != nil {
+					return 1, err
+				}
+			}
 		}
 
-		err = dSess.SetRoots(ctx, dbName, roots)
-		if err != nil {
-			return 1, err
-		}
 	}
 
 	return 0, nil

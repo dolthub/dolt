@@ -426,17 +426,17 @@ SQL
     run dolt status
 
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Changes not staged for commit:" ]] || false
-    [[ "$output" =~ "  (use \"dolt add <table>\" to update what will be committed)" ]] || false
-    [[ "$output" =~ "  (use \"dolt checkout <table>\" to discard changes in working directory)" ]] || false
+    echo "$output"
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ "  (use \"dolt reset <table>...\" to unstage)" ]] || false
     [[ "$output" =~ "	modified:         tbl" ]] || false
 }
 
 @test "status: dolt reset throws errors for unknown ref/table" {
     run dolt reset test
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Invalid Ref or Table" ]] || false
-    [[ "$output" =~ "test" ]] || false
+    [[ "$output" =~ "Failed to reset changes." ]] || false
+    [[ "$output" =~ "branch not found" ]] || false
 }
 
 @test "status: roots runs even if status fails" {

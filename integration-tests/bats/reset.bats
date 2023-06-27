@@ -61,7 +61,6 @@ merge_with_conflicts() {
     merge_without_conflicts
 
     run dolt sql -q "SELECT * from dolt_merge_status;"
-    echo $output
     [[ "$output" =~ "false" ]] || false
 
     run dolt reset --hard
@@ -111,12 +110,10 @@ merge_with_conflicts() {
 
     run dolt reset head
     [ $status -eq 0 ]
-    [[ "${lines[0]}" =~ "Unstaged changes after reset:" ]] || false
-    [[ "${lines[1]}" =~ "M	test1" ]] || false
 
     run dolt status
     [ $status -eq 0 ]
-    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ "Changes to be committed:" ]] || false
 }
 
 @test "reset: --hard works on unstaged and staged table changes" {
@@ -176,7 +173,7 @@ merge_with_conflicts() {
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
 }
 
@@ -269,4 +266,45 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "On branch main" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "reset: dolt reset soft with ~ works" {
+    dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY);"
+    dolt add .
+    dolt commit -am "cm1"
+
+    dolt sql -q "INSERT INTO test values (1);"
+    dolt commit -am "cm2"
+
+    # Make a dirty change
+    dolt sql -q "INSERT INTO test values (2)"
+    run dolt reset HEAD~
+    [ "$status" -eq 0 ]
+
+    # Verify that the changes are still there
+    run dolt sql -q "SELECT sum(pk) FROM test;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]] || false
+
+    # Now verify that commit log has changes
+    run dolt sql -q "SELECT count(*) from dolt_log"
+    [[ "$output" =~ "2" ]] || false
+
+    run dolt reset HEAD~1
+    [ "$status" -eq 0 ]
+
+    # Verify that the changes are still there
+    run dolt sql -q "SELECT sum(pk) FROM test;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]] || false
+
+    dolt status
+    run dolt status
+    [[ "$output" =~ "Untracked tables:" ]] || false
+    [[ "$output" =~ "  (use \"dolt add <table>\" to include in what will be committed)" ]] || false
+    [[ "$output" =~ "	new table:        test" ]] || false
+
+    # Now verify that commit log has changes
+    run dolt sql -q "SELECT count(*) from dolt_log"
+    [[ "$output" =~ "1" ]] || false
 }

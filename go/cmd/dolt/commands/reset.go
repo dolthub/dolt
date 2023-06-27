@@ -116,8 +116,7 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	query, err := constructInterpolatedDoltResetQuery(apr)
 	_, _, err = queryist.Query(sqlCtx, query)
 	if err != nil {
-		cli.Println(err.Error())
-		return 1
+		return handleResetError(err, usage)
 	}
 
 	printNotStaged(sqlCtx, queryist)
