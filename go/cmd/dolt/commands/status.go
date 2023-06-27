@@ -16,7 +16,6 @@ package commands
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -456,7 +455,7 @@ func getIgnoredTablePatternsFromSql(queryist cli.Queryist, sqlCtx *sql.Context) 
 		} else if ignoreInt, ok := ignoreVal.(int8); ok {
 			ignore = ignoreInt == 1
 		} else {
-			return nil, errors.New(fmt.Sprintf("unexpected type for ignore column, value = %s", ignoreVal))
+			return nil, fmt.Errorf("unexpected type for ignore column, value = %s", ignoreVal)
 		}
 
 		ip := doltdb.NewIgnorePattern(pattern, ignore)

@@ -152,7 +152,7 @@ func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	}
 
 	if !ok {
-		return nil, errors.New(fmt.Sprintf("table: %s does not exist", dt.name))
+		return nil, fmt.Errorf("table: %s does not exist", dt.name)
 	}
 
 	wrTblHash, _, err := dt.workingRoot.GetTableHash(ctx, exactName)
@@ -268,7 +268,7 @@ func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.
 	if err != nil {
 		return nil, err
 	} else if !ok {
-		return nil, errors.New(fmt.Sprintf("table: %s does not exist", dt.name))
+		return nil, fmt.Errorf("table: %s does not exist", dt.name)
 	}
 
 	var parentHashes []hash.Hash
@@ -434,7 +434,7 @@ func (dt *DiffTable) toCommitLookupPartitions(ctx *sql.Context, hashes []hash.Ha
 	if err != nil {
 		return nil, err
 	} else if !ok {
-		return nil, errors.New(fmt.Sprintf("table: %s does not exist", dt.name))
+		return nil, fmt.Errorf("table: %s does not exist", dt.name)
 	}
 
 	working, err := dt.head.HashOf()

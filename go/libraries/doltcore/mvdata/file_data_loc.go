@@ -127,14 +127,14 @@ func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue
 			}
 			tbl, exists, err := root.GetTable(context.TODO(), jsonOpts.TableName)
 			if !exists {
-				return nil, false, errors.New(fmt.Sprintf("The following table could not be found:\n%v", jsonOpts.TableName))
+				return nil, false, fmt.Errorf("The following table could not be found:\n%v", jsonOpts.TableName)
 			}
 			if err != nil {
-				return nil, false, errors.New(fmt.Sprintf("An error occurred attempting to read the table:\n%v", err.Error()))
+				return nil, false, fmt.Errorf("An error occurred attempting to read the table:\n%v", err.Error())
 			}
 			sch, err = tbl.GetSchema(context.TODO())
 			if err != nil {
-				return nil, false, errors.New(fmt.Sprintf("An error occurred attempting to read the table schema:\n%v", err.Error()))
+				return nil, false, fmt.Errorf("An error occurred attempting to read the table schema:\n%v", err.Error())
 			}
 		}
 
@@ -159,14 +159,14 @@ func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue
 			}
 			tbl, tableExists, tErr := root.GetTable(context.TODO(), parquetOpts.TableName)
 			if !tableExists {
-				return nil, false, errors.New(fmt.Sprintf("The following table could not be found:\n%v", parquetOpts.TableName))
+				return nil, false, fmt.Errorf("The following table could not be found:\n%v", parquetOpts.TableName)
 			}
 			if tErr != nil {
-				return nil, false, errors.New(fmt.Sprintf("An error occurred attempting to read the table:\n%v", err.Error()))
+				return nil, false, fmt.Errorf("An error occurred attempting to read the table:\n%v", err.Error())
 			}
 			tableSch, err = tbl.GetSchema(context.TODO())
 			if err != nil {
-				return nil, false, errors.New(fmt.Sprintf("An error occurred attempting to read the table schema:\n%v", err.Error()))
+				return nil, false, fmt.Errorf("An error occurred attempting to read the table schema:\n%v", err.Error())
 			}
 		}
 		rd, rErr := parquet.OpenParquetReader(root.VRW(), dl.Path, tableSch)
