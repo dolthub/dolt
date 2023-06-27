@@ -120,6 +120,11 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 
 	_, err = getRowsForSql(queryEngine, sqlCtx, sqlQuery)
 
+	// This command doesn't modify `dEnv` which could break tests that call multiple commands in sequence.
+	// We must reload it so that it includes changes to the repo state.
+	if dEnv != nil {
+		dEnv.ReloadRepoState()
+	}
 	return HandleVErrAndExitCode(handleErrors(branchName, err), usagePrt)
 }
 
