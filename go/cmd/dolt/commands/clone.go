@@ -237,7 +237,7 @@ func validateAndParseDolthubUrl(urlStr string) (string, bool) {
 }
 
 func getRemoteUserAndPassConfig(apr *argparser.ArgParseResults) (*creds.DoltCredsForPass, errhand.VerboseError) {
-	if !apr.Contains(cli.UserParam) {
+	if !apr.Contains(cli.UserFlag) {
 		return nil, nil
 	}
 	pass, found := os.LookupEnv("DOLT_REMOTE_PASSWORD")
@@ -245,7 +245,7 @@ func getRemoteUserAndPassConfig(apr *argparser.ArgParseResults) (*creds.DoltCred
 		return nil, errhand.BuildDError("error: must set DOLT_REMOTE_PASSWORD environment variable to use --user param").Build()
 	}
 	return &creds.DoltCredsForPass{
-		Username: apr.GetValueOrDefault(cli.UserParam, ""),
+		Username: apr.GetValueOrDefault(cli.UserFlag, ""),
 		Password: pass,
 	}, nil
 }

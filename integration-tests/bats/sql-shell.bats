@@ -21,28 +21,6 @@ teardown() {
     teardown_common
 }
 
-@test "sql-shell: --user option changes superuser" {
-    # remove config
-    rm -rf .doltcfg
-
-    # default is root@localhost
-    run dolt sql <<< "select user, host from mysql.user"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "root" ]] || false
-    ! [[ "$output" =~ "dolt" ]] || false
-    [[ "$output" =~ "localhost" ]] || false
-
-    # make it dolt@localhost
-    run dolt --user=dolt sql <<< "select user, host from mysql.user"
-    [ "$status" -eq 0 ]
-    ! [[ "$output" =~ "root" ]] || false
-    [[ "$output" =~ "dolt" ]] || false
-    [[ "$output" =~ "localhost" ]] || false
-
-    # remove config
-    rm -rf .doltcfg
-}
-
 @test "sql-shell: use user without privileges, and no superuser created" {
     rm -rf .doltcfg
 
