@@ -67,6 +67,7 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~tableplus.bats~
 ~multidb.bats~
 ~sql-conflicts-resolve.bats~
+~conflicts-resolve.bats~
 ~export-tables.bats~
 ~filter-branch.bats~
 ~arg-parsing.bats~
