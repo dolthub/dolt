@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"runtime"
 	"strconv"
 	"time"
@@ -43,6 +44,10 @@ import (
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
+)
+
+const (
+	LocalConnectionUser = "__dolt_local_user__"
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -218,6 +223,12 @@ func Serve(
 
 	lck := env.NewDBLock(serverConfig.Port())
 	sqlserver.SetRunningServer(mySQLServer, &lck)
+
+	localConnectionHost := "localhost"
+	if isDoltTestEnvSet() {
+		localConnectionHost = "%"
+	}
+	sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(LocalConnectionUser, localConnectionHost, lck.Secret)
 
 	var metSrv *http.Server
 	if serverConfig.MetricsHost() != "" && serverConfig.MetricsPort() > 0 {
@@ -507,4 +518,9 @@ func checkForUnixSocket(config ServerConfig) (string, bool, error) {
 	}
 
 	return "", false, nil
+}
+
+// isDoltTestEnvSet Temporary function to enable __dolt_local_user__ to be used until https://github.com/dolthub/dolt/issues/6239 is resolved
+func isDoltTestEnvSet() bool {
+	return os.Getenv("DOLT_ENABLE_LOCAL_USER_FOR_ALL_HOSTS") != ""
 }
