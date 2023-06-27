@@ -172,6 +172,102 @@ end
 		},
 	},
 	{
+		Name: "dolt_branch in case statement",
+		SetUpScript: []string{
+			"create table t(a int primary key auto_increment, b int);",
+			"call dolt_commit('-Am', 'new table');",
+			`create procedure branches()
+begin
+  declare i int default 1;
+	commits: loop
+		case i
+	  when 1 then
+			insert into t(b) values (i);
+			call dolt_branch('branch1');
+		when 2 then
+			call dolt_branch('branch2');
+			insert into t(b) values (i);
+		when 3 then
+			insert into t(b) values (i);
+			call dolt_branch('branch3');
+		else 
+			call dolt_branch('branch4');
+			insert into t(b) values (i);
+		end case;
+		if i >= 4 then
+			leave commits;
+		end if;
+		set i = i + 1;
+	end loop commits;
+end
+`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "call branches();",
+				SkipResultsCheck: true, // return value is a bit odd, needs investigation
+			},
+			{
+				Query:    "select name from dolt_branches order by 1",
+				Expected: []sql.Row{{"branch1"}, {"branch2"}, {"branch3"}, {"branch4"}, {"main"}},
+			},
+			{
+				Query:    "select * from t order by 1",
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
+			},
+		},
+	},
+	{
+		Name: "dolt_branch in trigger",
+		SetUpScript: []string{
+			"create table t(a int primary key auto_increment, b int);",
+			"create table t2(a int primary key auto_increment, b int);",
+			"call dolt_commit('-Am', 'new table');",
+			`create trigger branch_trigger after insert on t for each row
+begin
+  declare i int default 1;
+	commits: loop
+		case i
+	  when 1 then
+			insert into t2(b) values (i);
+			call dolt_branch('branch1');
+		when 2 then
+			call dolt_branch('branch2');
+			insert into t2(b) values (i);
+		when 3 then
+			insert into t2(b) values (i);
+			call dolt_branch('branch3');
+		else 
+			call dolt_branch('branch4');
+			insert into t2(b) values (i);
+		end case;
+		if i >= 4 then
+			leave commits;
+		end if;
+		set i = i + 1;
+	end loop commits;
+end
+`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "insert into t values (1, 1);",
+				Skip: true,
+				SkipResultsCheck: true, // return value is a bit odd, needs investigation
+			},
+			{
+				Query:    "select name from dolt_branches order by 1",
+				Skip: true,
+				Expected: []sql.Row{{"branch1"}, {"branch2"}, {"branch3"}, {"branch4"}, {"main"}},
+			},
+			{
+				Query:    "select * from t2 order by 1",
+				Skip: true,
+				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
+			},
+		},
+	},
+	{
 		Name: "checkout new branch, insert, and commit in procedure",
 		SetUpScript: []string{
 			"create table t(a int primary key auto_increment, b int);",
