@@ -34,6 +34,33 @@ const (
 		"title: CLI\n" +
 		"---\n\n" +
 		"# CLI\n\n"
+
+	globalArgumentsSection = `
+## Global Arguments
+
+Dolt subcommands are in transition to using the flags listed below as global flags.
+The sql subcommand is currently the only command that uses these flags. All other commands will ignore them.
+
+%s
+
+Specific dolt options:
+
+{{.EmphasisLeft}}-u <user>{{.EmphasisRight}}, {{.EmphasisLeft}}--user=<user>{{.EmphasisRight}}: 
+Defines the local superuser (defaults to {{.EmphasisLeft}}root{{.EmphasisRight}}). If the specified user exists, will take on permissions of that user.
+
+{{.EmphasisLeft}}--data-dir=<directory>{{.EmphasisRight}}:
+Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory.
+
+{{.EmphasisLeft}}--doltcfg-dir=<directory>{{.EmphasisRight}}:
+Defines a directory that contains configuration files for dolt. Defaults to {{.EmphasisLeft}}$data-dir/.doltcfg{{.EmphasisRight}}. Will only be created if there is a change to configuration settings.
+
+{{.EmphasisLeft}}--privilege-file=<privilege file>{{.EmphasisRight}}:
+ Path to a file to load and store users and grants. Defaults to {{.EmphasisLeft}}$doltcfg-dir/privileges.db{{.EmphasisRight}}. Will only be created if there is a change to privileges.
+
+{{.EmphasisLeft}}--branch-control-file=<branch control file>{{.EmphasisRight}}:
+Path to a file to load and store branch control permissions. Defaults to {{.EmphasisLeft}}$doltcfg-dir/branch_control.db{{.EmphasisRight}}. Will only be created if there is a change to branch control permissions.
+
+`
 )
 
 type DumpDocsCmd struct {
@@ -99,6 +126,20 @@ func (cmd *DumpDocsCmd) Exec(ctx context.Context, commandStr string, args []stri
 		return 1
 	}
 
+	doltUsage := cmd.DoltCommand.GetUsage("dolt")
+	doltUsageMarkdown := fmt.Sprintf("```\n$ dolt\n%s```\n", doltUsage)
+	_, err = wr.Write([]byte(doltUsageMarkdown))
+	if err != nil {
+		cli.PrintErrln(err.Error())
+		return 1
+	}
+
+	err = writeGlobalArgumentsSection(wr)
+	if err != nil {
+		cli.PrintErrln(err.Error())
+		return 1
+	}
+
 	verr := cmd.dumpDocs(wr, cmd.DoltCommand.Name(), cmd.DoltCommand.Subcommands)
 
 	if verr != nil {
@@ -157,4 +198,18 @@ func CreateMarkdown(wr io.Writer, cmdDoc *cli.CommandDocumentation) error {
 	}
 	_, err = wr.Write([]byte(markdownDoc))
 	return err
+}
+
+func writeGlobalArgumentsSection(wr io.Writer) error {
+	bashMarkdown := "```bash\ndolt <--data-dir=<path>> subcommand <subcommand arguments>\n```"
+	gaCmd := cli.CommandDocumentation{LongDesc: fmt.Sprintf(globalArgumentsSection, bashMarkdown)}
+	globalArgumentsMarkdown, err := gaCmd.GetLongDesc(cli.MarkdownFormat)
+	if err != nil {
+		return err
+	}
+	_, err = wr.Write([]byte(globalArgumentsMarkdown))
+	if err != nil {
+		return err
+	}
+	return nil
 }
