@@ -200,3 +200,15 @@ SQL
     [[ "$output" =~ "adding table t2 on branch2" ]] || false
     [[ ! "$output" =~ "adding table t1 on branch1" ]] || false
 }
+
+@test "commit: no config set" {
+    dolt config --global --unset user.email
+    dolt config --global --unset user.name
+
+    dolt sql -q "CREATE table t (pk int primary key);"
+    dolt add t
+
+    run dolt commit -m "adding table t"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "Aborting commit due to empty committer name. Is your config set?" ]] || false
+}

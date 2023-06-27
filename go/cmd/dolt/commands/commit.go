@@ -149,6 +149,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 	// process query through prepared statement to prevent sql injection
 	query, params, err := constructParametrizedDoltCommitQuery(msg, apr, cliCtx)
 	if err != nil {
+		cli.Println(err.Error())
 		return 1, false
 	}
 	interpolatedQuery, err := dbr.InterpolateForDialect(query, params, dialect.MySQL)
@@ -163,6 +164,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 	}
 	resultRow, err := sql.RowIterToRows(sqlCtx, schema, rowIter)
 	if err != nil {
+		cli.Println(err.Error())
 		return 1, false
 	}
 	if resultRow == nil {
