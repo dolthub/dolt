@@ -1232,11 +1232,13 @@ func diffRows(
 	params = append(params, dbr.I("diff_type"), dArgs.fromRef, dArgs.toRef, tableName)
 
 	if len(dArgs.where) > 0 {
-		query += " where " + dArgs.where
+		query += " where ?"
+		params = append(params, dbr.Expr(dArgs.where))
 	}
 
 	if dArgs.limit >= 0 {
-		query += " limit " + strconv.Itoa(dArgs.limit)
+		query += " limit ?"
+		params = append(params, dbr.Expr(strconv.Itoa(dArgs.limit)))
 	}
 
 	interpolatedQuery, err := dbr.InterpolateForDialect(query, params, dialect.MySQL)
