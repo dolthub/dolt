@@ -50,7 +50,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 	}
 
 	argParser := cli.CreateCheckoutArgParser()
-	argParser.SupportsFlag(cli.GlobalFlag, "g", "persist the checked-out branch into future sessions")
+	argParser.SupportsFlag(cli.GlobalFlag, "g", "mimic the behavior of the `dolt checkout` command line, moving the working set into the new branch and persisting the checked-out branch into future sessions")
 	apr, err := argParser.Parse(args)
 	if err != nil {
 		return 1, err
