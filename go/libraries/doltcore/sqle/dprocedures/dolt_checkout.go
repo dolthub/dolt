@@ -130,7 +130,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 
 	err = checkoutTables(ctx, roots, currentDbName, apr.Args)
 	if err != nil && apr.NArg() == 1 {
-		err = checkoutRemoteBranch(ctx, currentDbName, dbData, branchName, apr, &rsc, updateHead)
+		err = checkoutRemoteBranch(ctx, currentDbName, dbData, branchName, apr, &rsc)
 	}
 
 	if err != nil {
@@ -184,13 +184,21 @@ func createWorkingSetForLocalBranch(ctx *sql.Context, ddb *doltdb.DoltDB, branch
 
 // checkoutRemoteBranch checks out a remote branch creating a new local branch with the same name as the remote branch
 // and set its upstream. The upstream persists out of sql session.
-func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, branchName string, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController, updateHead bool) error {
+func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, branchName string, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) error {
 	remoteRefs, err := actions.GetRemoteBranchRef(ctx, dbData.Ddb, branchName)
 	if err != nil {
 		return errors.New("fatal: unable to read from data repository")
 	}
 
 	if len(remoteRefs) == 0 {
+		if doltdb.IsValidCommitHash(branchName) && apr.Contains(cli.GlobalFlag) {
+
+			// User tried to enter a detached head state, which we don't support.
+			// Inform and suggest that they check-out a new branch at this commit instead.
+
+			return fmt.Errorf("dolt does not support a detached head state. To create a branch at this commit instead, run:\n\n"+
+				"\tdolt checkout %s -b {new_branch_name}\n", branchName)
+		}
 		return fmt.Errorf("error: could not find %s", branchName)
 	} else if len(remoteRefs) == 1 {
 		remoteRef := remoteRefs[0]
@@ -346,7 +354,7 @@ func doUpdateHead(ctx *sql.Context, dSess *dsess.DoltSession, dbName, branchName
 	}
 
 	// This copies over the working set.
-	err := CheckoutBranch(ctx, branchName, false)
+	err := CheckoutBranch(ctx, branchName, isForce)
 	if err != nil {
 		return err
 	}

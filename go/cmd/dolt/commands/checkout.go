@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
+	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -148,6 +149,8 @@ func handleErrors(name string, err error) errhand.VerboseError {
 	if err != nil {
 		if err.Error() == doltdb.ErrBranchNotFound.Error() {
 			return errhand.BuildDError("fatal: Branch '%s' not found.", name).Build()
+		} else if strings.Contains(err.Error(), "dolt does not support a detached head state.") {
+			return errhand.VerboseErrorFromError(err)
 		} else if doltdb.IsRootValUnreachable(err) {
 			return errhand.VerboseErrorFromError(err)
 		} else if actions.IsCheckoutWouldOverwrite(err) {
