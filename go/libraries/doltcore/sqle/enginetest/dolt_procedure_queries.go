@@ -252,17 +252,17 @@ end
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "insert into t values (1, 1);",
-				Skip: true,
+				Skip:             true,
 				SkipResultsCheck: true, // return value is a bit odd, needs investigation
 			},
 			{
 				Query:    "select name from dolt_branches order by 1",
-				Skip: true,
+				Skip:     true,
 				Expected: []sql.Row{{"branch1"}, {"branch2"}, {"branch3"}, {"branch4"}, {"main"}},
 			},
 			{
 				Query:    "select * from t2 order by 1",
-				Skip: true,
+				Skip:     true,
 				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
 			},
 		},
