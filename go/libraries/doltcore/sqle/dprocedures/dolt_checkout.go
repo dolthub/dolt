@@ -345,6 +345,12 @@ func doUpdateHead(ctx *sql.Context, dSess *dsess.DoltSession, dbName, branchName
 			"running `dolt checkout <another_branch> and restarting the sql-server")
 	}
 
+	// This copies over the working set.
+	err := CheckoutBranch(ctx, branchName, false)
+	if err != nil {
+		return err
+	}
+
 	if fs, err := dSess.Provider().FileSystemForDatabase(dbName); err == nil {
 		if repoState, err := env.LoadRepoState(fs); err == nil {
 			repoState.Head.Ref = ref.NewBranchRef(branchName)
