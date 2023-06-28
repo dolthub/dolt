@@ -28,6 +28,9 @@ type TableFile interface {
 	// FileID gets the id of the file
 	FileID() string
 
+	// LocationPrefix
+	LocationPrefix() string
+
 	// NumChunks returns the number of chunks in a table file
 	NumChunks() int
 
