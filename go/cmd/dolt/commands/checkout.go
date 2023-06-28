@@ -151,6 +151,8 @@ func handleErrors(name string, err error) errhand.VerboseError {
 			return errhand.BuildDError("fatal: Branch '%s' not found.", name).Build()
 		} else if strings.Contains(err.Error(), "dolt does not support a detached head state.") {
 			return errhand.VerboseErrorFromError(err)
+		} else if strings.Contains(err.Error(), "error: could not find") {
+			return errhand.VerboseErrorFromError(err)
 		} else if doltdb.IsRootValUnreachable(err) {
 			return errhand.VerboseErrorFromError(err)
 		} else if actions.IsCheckoutWouldOverwrite(err) {
