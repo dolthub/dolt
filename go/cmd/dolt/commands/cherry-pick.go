@@ -34,9 +34,9 @@ var cherryPickDocs = cli.CommandDocumentationContent{
 	LongDesc: `
 Applies the changes from an existing commit and creates a new commit from the current HEAD. This requires your working tree to be clean (no modifications from the HEAD commit).
 
-Cherry-picking merge commits or commits with schema changes or rename or drop tables is not currently supported. Row data changes are allowed as long as the two table schemas are exactly identical.
+Cherry-picking merge commits or commits with table drops/renames is not currently supported. 
 
-If applying the row data changes from the cherry-picked commit results in a data conflict, the cherry-pick operation is aborted and no changes are made to the working tree or committed.
+If any data conflicts, schema conflicts, or constraint violations are detected during cherry-picking, you can use Dolt's conflict resolution features to resolve them. For more information on resolving conflicts, see: https://docs.dolthub.com/concepts/dolt/git/conflicts.
 `,
 	Synopsis: []string{
 		`{{.LessThan}}commit{{.GreaterThan}}`,
