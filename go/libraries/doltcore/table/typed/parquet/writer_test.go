@@ -17,17 +17,18 @@ package parquet
 import (
 	"context"
 	"fmt"
+	"os"
 	"path"
 	"testing"
-
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/stretchr/testify/assert"
-	"github.com/xitongsys/parquet-go-source/local"
-	"github.com/xitongsys/parquet-go/reader"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/xitongsys/parquet-go-source/local"
+	"github.com/xitongsys/parquet-go/reader"
 )
 
 const (
@@ -64,7 +65,10 @@ func getSampleRows() []sql.Row {
 
 func writeToParquet(pWr *ParquetRowWriter, rows []sql.Row, t *testing.T) {
 	func() {
-		defer pWr.Close(context.Background())
+		defer func() {
+			err := pWr.Close(context.Background())
+			require.NoError(t, err)
+		}()
 
 		for _, row := range rows {
 			err := pWr.WriteSqlRow(context.Background(), row)
@@ -83,34 +87,37 @@ Andy Anderson,27,
 `
 
 	path := path.Join(t.TempDir(), "parquet")
-
+	f, err := os.Create(path)
+	require.NoError(t, err)
+	defer f.Close()
+	
 	rows := getSampleRows()
-
+	
 	pWr, err := NewParquetRowWriterForFile(rowSch, path)
 	if err != nil {
-		t.Fatal("Could not open CSVWriter", err)
+		require.NoError(t, err)
 	}
-
+	
 	writeToParquet(pWr, rows, t)
 
 	pRd, err := local.NewLocalFileReader(path)
 	if err != nil {
-		t.Fatal("Cannot open file", err)
+		require.NoError(t, err)
 	}
-
+	
 	pr, err := reader.NewParquetReader(pRd, new(Person), 4)
 	if err != nil {
 		t.Fatal("Cannot create parquet reader", err)
 	}
-
+	
 	num := int(pr.GetNumRows())
 	assert.Equal(t, num, 4)
-
+	
 	res, err := pr.ReadByNumber(num)
 	if err != nil {
 		t.Fatal("Cannot read", err)
 	}
-
+	
 	var result string
 	for _, person := range res {
 		p, ok := person.(Person)
@@ -119,6 +126,13 @@ Andy Anderson,27,
 		}
 		result += fmt.Sprintf("%s,%d,%s\n", p.Name, p.Age, p.Title)
 	}
-
+	
 	assert.Equal(t, expected, result)
+	
+	defer func() {
+		err = pRd.Close()
+		require.NoError(t, err)
+	}()
+	
+	pr.ReadStop()
 }
