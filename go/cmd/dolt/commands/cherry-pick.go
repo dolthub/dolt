@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/util/outputpager"
 	"gopkg.in/src-d/go-errors.v1"
 	"strings"
 
@@ -141,7 +142,7 @@ func cherryPick(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgPa
 	if err != nil {
 		return fmt.Errorf("error: failed to interpolate query: %w", err)
 	}
-	_, err = getRowsForSql(queryist, sqlCtx, q)
+	rows, err := getRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		errorText := err.Error()
 		switch {
@@ -158,7 +159,53 @@ func cherryPick(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgPa
 			return err
 		}
 	}
-	return nil
+
+	if len(rows) != 1 {
+		return fmt.Errorf("error: unexpected number of rows returned from dolt_cherry_pick: %d", len(rows))
+	}
+
+	succeeded := false
+	commitHash := ""
+	for _, row := range rows {
+		commitHash = row[0].(string)
+		dataConflicts, err := getInt64ColAsInt64(row[1])
+		if err != nil {
+			return fmt.Errorf("Unable to parse data_conflicts column: %w", err)
+		}
+		schemaConflicts, err := getInt64ColAsInt64(row[2])
+		if err != nil {
+			return fmt.Errorf("Unable to parse schema_conflicts column: %w", err)
+		}
+		constraintViolations, err := getInt64ColAsInt64(row[3])
+		if err != nil {
+			return fmt.Errorf("Unable to parse constraint_violations column: %w", err)
+		}
+
+		// if we have a hash and all 0s, then the cherry-pick succeeded
+		if len(commitHash) > 0 && dataConflicts == 0 && schemaConflicts == 0 && constraintViolations == 0 {
+			succeeded = true
+		}
+	}
+
+	if succeeded {
+		// on success, print the commit info
+		commit, err := getCommitInfo(queryist, sqlCtx, commitHash)
+		if err != nil {
+			return fmt.Errorf("error: failed to get commit metadata for ref '%s': %v", commitHash, err)
+		}
+
+		cli.ExecuteWithStdioRestored(func() {
+			pager := outputpager.Start()
+			defer pager.Stop()
+
+			printCommitInfo(pager, 0, false, "auto", commit)
+		})
+
+		return nil
+	} else {
+		// this failure could only have been caused by constraint violations or conflicts during cherry-pick
+		return ErrCherryPickConflictsOrViolations.New()
+	}
 }
 
 func cherryPickAbort(queryist cli.Queryist, sqlCtx *sql.Context) error {
