@@ -1340,6 +1340,11 @@ type tableFile struct {
 	open func(ctx context.Context) (io.ReadCloser, uint64, error)
 }
 
+// LocationPrefix
+func (tf tableFile) LocationPrefix() string {
+	return ""
+}
+
 // FileID gets the id of the file
 func (tf tableFile) FileID() string {
 	return tf.info.GetName()
