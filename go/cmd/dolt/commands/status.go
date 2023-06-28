@@ -665,6 +665,8 @@ func getTinyIntColAsBool(col interface{}) (bool, error) {
 		return v == 1, nil
 	case string:
 		return v == "1", nil
+	case int8:
+		return v == 1, nil
 	default:
 		return false, fmt.Errorf("unexpected type %T, was expecting bool, int, or string", v)
 	}
@@ -693,6 +695,8 @@ func getJsonDocumentColAsString(sqlCtx *sql.Context, col interface{}) (string, e
 // or as a string (when using ConnectionQueryist).
 func getInt64ColAsInt64(col interface{}) (int64, error) {
 	switch v := col.(type) {
+	case int:
+		return int64(v), nil
 	case uint64:
 		return int64(v), nil
 	case int64:
