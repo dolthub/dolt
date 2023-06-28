@@ -138,6 +138,11 @@ func cherryPick(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgPa
 		return fmt.Errorf("error: failed to set @@dolt_allow_commit_conflicts: %w", err)
 	}
 
+	_, err = getRowsForSql(queryist, sqlCtx, "set @@dolt_force_transaction_commit = 1")
+	if err != nil {
+		return fmt.Errorf("error: failed to set @@dolt_force_transaction_commit: %w", err)
+	}
+
 	q, err := dbr.InterpolateForDialect("call dolt_cherry_pick(?)", []interface{}{cherryStr}, dialect.MySQL)
 	if err != nil {
 		return fmt.Errorf("error: failed to interpolate query: %w", err)
