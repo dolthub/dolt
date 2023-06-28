@@ -120,6 +120,22 @@ func cherryPick(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgPa
 		return fmt.Errorf("error: cannot cherry-pick empty string")
 	}
 
+	hasStagedChanges, hasUnstagedChanges, err := getDoltStatus(queryist, sqlCtx)
+	if err != nil {
+		return fmt.Errorf("error: failed to get dolt status: %w", err)
+	}
+	if hasStagedChanges {
+		return fmt.Errorf("Please commit your staged changes before using cherry-pick.")
+	}
+	if hasUnstagedChanges {
+		return fmt.Errorf("error: your local changes would be overwritten by cherry-pick.\nhint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt reset --hard) to proceed.")
+	}
+
+	_, err = getRowsForSql(queryist, sqlCtx, "set @@dolt_allow_commit_conflicts = 1")
+	if err != nil {
+		return fmt.Errorf("error: failed to set @@dolt_allow_commit_conflicts: %w", err)
+	}
+
 	q, err := dbr.InterpolateForDialect("call dolt_cherry_pick(?)", []interface{}{cherryStr}, dialect.MySQL)
 	if err != nil {
 		return fmt.Errorf("error: failed to interpolate query: %w", err)
@@ -146,3 +162,33 @@ func cherryPickAbort(queryist cli.Queryist, sqlCtx *sql.Context) error {
 	return nil
 }
 
+func getDoltStatus(queryist cli.Queryist, sqlCtx *sql.Context) (hasStagedChanges bool, hasUnstagedChanges bool, err error) {
+	hasStagedChanges = false
+	hasUnstagedChanges = false
+	err = nil
+
+	var statusRows []sql.Row
+	statusRows, err = getRowsForSql(queryist, sqlCtx, "select * from dolt_status;")
+	if err != nil {
+		return
+	}
+	if len(statusRows) == 0 {
+		return
+	}
+
+	for _, row := range statusRows {
+		staged := row[1]
+		var isStaged bool
+		isStaged, err = getTinyIntColAsBool(staged)
+		if err != nil {
+			return
+		}
+		if isStaged {
+			hasStagedChanges = true
+		} else {
+			hasUnstagedChanges = true
+		}
+	}
+
+	return
+}
