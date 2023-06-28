@@ -113,7 +113,7 @@ merge_with_conflicts() {
 
     run dolt status
     [ $status -eq 0 ]
-    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
 }
 
 @test "reset: --hard works on unstaged and staged table changes" {

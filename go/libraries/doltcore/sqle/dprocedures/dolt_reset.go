@@ -117,9 +117,35 @@ func doDoltReset(ctx *sql.Context, args []string) (int, error) {
 		if err != nil {
 			return 1, err
 		}
+	} else if apr.Contains(cli.SoftResetParam) {
+		arg := ""
+		if apr.NArg() > 1 {
+			return 1, fmt.Errorf("--soft supports at most one additional param")
+		} else if apr.NArg() == 1 {
+			arg = apr.Arg(0)
+		}
+
+		if arg != "" {
+			roots, err = actions.ResetSoftToRef(ctx, dbData, arg)
+			if err != nil {
+				return 1, err
+			}
+			ws, err := dSess.WorkingSet(ctx, dbName)
+			if err != nil {
+				return 1, err
+			}
+			err = dSess.SetWorkingSet(ctx, dbName, ws.WithStagedRoot(roots.Staged).ClearMerge())
+			if err != nil {
+				return 1, err
+			}
+		}
 	} else {
-		if apr.NArg() < 1 || apr.NArg() == 0 {
+		if apr.NArg() != 1 || (apr.NArg() == 1 && apr.Arg(0) == ".") {
 			roots, err = actions.ResetSoftTables(ctx, dbData, apr, roots)
+			if err != nil {
+				return 1, err
+			}
+			err = dSess.SetRoots(ctx, dbName, roots)
 			if err != nil {
 				return 1, err
 			}

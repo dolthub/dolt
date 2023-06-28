@@ -426,9 +426,9 @@ SQL
     run dolt status
 
     [ "$status" -eq 0 ]
-    echo "$output"
-    [[ "$output" =~ "Changes to be committed:" ]] || false
-    [[ "$output" =~ "  (use \"dolt reset <table>...\" to unstage)" ]] || false
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ "  (use \"dolt add <table>\" to update what will be committed)" ]] || false
+    [[ "$output" =~ "  (use \"dolt checkout <table>\" to discard changes in working directory)" ]] || false
     [[ "$output" =~ "	modified:         tbl" ]] || false
 }
 

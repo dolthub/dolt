@@ -106,10 +106,10 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	if apr.ContainsAll(HardResetParam, SoftResetParam) {
 		verr := errhand.BuildDError("error: --%s and --%s are mutually exclusive options.", HardResetParam, SoftResetParam).Build()
 		return HandleVErrAndExitCode(verr, usage)
-	} else if apr.Contains(HardResetParam) {
-		if apr.NArg() > 1 {
-			return handleResetError(fmt.Errorf("--hard supports at most one additional param"), usage)
-		}
+	} else if apr.Contains(HardResetParam) && apr.NArg() > 1 {
+		return handleResetError(fmt.Errorf("--hard supports at most one additional param"), usage)
+	} else if apr.Contains(SoftResetParam) && apr.NArg() > 1 {
+		return handleResetError(fmt.Errorf("--soft supports at most one additional param"), usage)
 	}
 
 	// process query through prepared statement to prevent sql injection
@@ -159,20 +159,13 @@ func constructInterpolatedDoltResetQuery(apr *argparser.ArgParseResults) (string
 		}
 	} else if apr.Contains(SoftResetParam) {
 		writeToBuffer("--soft")
-		if apr.NArg() > 0 {
-			for _, input := range apr.Args {
-				param = true
-				writeToBuffer("?")
-				params = append(params, input)
-			}
+		if apr.NArg() == 1 {
+			param = true
+			writeToBuffer("?")
+			params = append(params, apr.Arg(0))
 		}
 	} else {
 		for _, input := range apr.Args {
-			if strings.ToLower(input) == "head" && apr.NArg() == 1 {
-				buffer.Reset()
-				buffer.WriteString("CALL DOLT_RESET(")
-				break
-			}
 			param = true
 			writeToBuffer("?")
 			params = append(params, input)
