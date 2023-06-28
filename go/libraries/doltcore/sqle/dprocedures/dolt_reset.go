@@ -151,8 +151,10 @@ func doDoltReset(ctx *sql.Context, args []string) (int, error) {
 			}
 		} else {
 			// check if the input is a table name or commit ref
-			_, ok, _ := roots.Head.ResolveTableName(ctx, apr.Arg(0))
-			if ok {
+			_, okHead, _ := roots.Head.ResolveTableName(ctx, apr.Arg(0))
+			_, okStaged, _ := roots.Staged.ResolveTableName(ctx, apr.Arg(0))
+			_, okWorking, _ := roots.Working.ResolveTableName(ctx, apr.Arg(0))
+			if okHead || okStaged || okWorking {
 				roots, err = actions.ResetSoftTables(ctx, dbData, apr, roots)
 				if err != nil {
 					return 1, err
