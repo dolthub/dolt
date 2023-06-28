@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"gopkg.in/src-d/go-errors.v1"
+	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -142,7 +143,20 @@ func cherryPick(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgPa
 	}
 	_, err = getRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
-		return err
+		errorText := err.Error()
+		switch {
+		case "no changes were made, nothing to commit" == errorText:
+			cli.Println("No changes were made.")
+			return nil
+		case
+			strings.HasPrefix(errorText, "Merge conflict detected, transaction rolled back."),
+			strings.HasPrefix(errorText, "Committing this transaction resulted in a working set with constraint violations"):
+			return ErrCherryPickConflictsOrViolations.New()
+		case "cherry-picking a merge commit is not supported" == errorText:
+			return fmt.Errorf("cherry-picking a merge commit is not supported.")
+		default:
+			return err
+		}
 	}
 	return nil
 }
