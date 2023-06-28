@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
@@ -311,6 +312,25 @@ func getActiveBranchName(sqlCtx *sql.Context, queryEngine cli.Queryist) (string,
 		return "", fmt.Errorf("unexpectedly received non-string column in '%s': %s", query, row[0])
 	}
 	return branchName, nil
+}
+
+func getTimestampColAsUint64(col interface{}) (uint64, error) {
+	switch v := col.(type) {
+	case string:
+		t, err := time.Parse("2006-01-02 15:04:05.999", v)
+		if err != nil {
+			return 0, fmt.Errorf("error parsing timestamp %s: %w", v, err)
+		}
+		return uint64(t.UnixMilli()), nil
+	case uint64:
+		return v, nil
+	case int64:
+		return uint64(v), nil
+	case time.Time:
+		return uint64(v.UnixMilli()), nil
+	default:
+		return 0, fmt.Errorf("unexpected type %T, was expecting int64, uint64 or time.Time", v)
+	}
 }
 
 // passwordValidate validates the password for the given user. This is a helper function around ValidateHash. Returns

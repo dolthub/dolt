@@ -41,6 +41,20 @@ var cmdMdDocTempl = "## `{{.Command}}`\n\n" +
 	"{{.Options}}\n\n"
 
 func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
+	return cmdDoc.executeTemplate(cmdMdDocTempl, false)
+}
+
+var globalCmdMdDocTempl = "## Global Arguments\n" +
+	"{{.ShortDesc}}\n" +
+	"{{.Synopsis}}\n\n" +
+	"Specific dolt options:\n\n" +
+	"{{.Options}}\n"
+
+func (cmdDoc CommandDocumentation) GlobalCmdDocToMd() (string, error) {
+	return cmdDoc.executeTemplate(globalCmdMdDocTempl, true)
+}
+
+func (cmdDoc CommandDocumentation) executeTemplate(cmdTempl string, includeValDesc bool) (string, error) {
 	// Accumulate the options and args in a string
 	options := ""
 	if len(cmdDoc.ArgParser.Supported) > 0 || len(cmdDoc.ArgParser.ArgListHelp) > 0 {
@@ -65,7 +79,10 @@ func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
 			if err != nil {
 				return "", err
 			}
-			argStruct := supported{supOpt.Abbrev, supOpt.Name, templatedDesc}
+			argStruct := supported{supOpt.Abbrev, supOpt.Name, "", templatedDesc}
+			if includeValDesc {
+				argStruct.ValDesc = supOpt.ValDesc
+			}
 			outputStr, err := templateSupported(argStruct)
 			if err != nil {
 				return "", err
@@ -80,7 +97,7 @@ func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
 	if cmdMdDocErr != nil {
 		return "", cmdMdDocErr
 	}
-	templ, templErr := template.New("shortDesc").Parse(cmdMdDocTempl)
+	templ, templErr := template.New("shortDesc").Parse(cmdTempl)
 	if templErr != nil {
 		return "", templErr
 	}
@@ -245,20 +262,34 @@ func templateArgument(supportedArg argument) (string, error) {
 type supported struct {
 	Abbreviation string
 	Name         string
+	ValDesc      string
 	Description  string
 }
 
 func templateSupported(supported supported) (string, error) {
-	var formatString string
-	if supported.Abbreviation == "" && supported.Description == "" {
-		formatString = "`--{{.Name}}`\n\n"
-	} else if supported.Abbreviation == "" && supported.Description != "" {
-		formatString = "`--{{.Name}}`:\n{{.Description}}\n\n"
-	} else if supported.Abbreviation != "" && supported.Description == "" {
-		formatString = "`-{{.Abbreviation}}`, `--{{.Name}}`\n\n"
-	} else {
-		formatString = "`-{{.Abbreviation}}`, `--{{.Name}}`:\n{{.Description}}\n\n"
+	abbr := ""
+	if supported.Abbreviation != "" {
+		abbr = "-{{.Abbreviation}}"
+
+		if supported.ValDesc != "" {
+			abbr += " <{{.ValDesc}}>"
+		}
+
+		abbr = "`" + abbr + "`, "
 	}
+
+	name := "--{{.Name}}"
+	if supported.ValDesc != "" {
+		name += "=<{{.ValDesc}}>"
+	}
+	name = "`" + name + "`"
+
+	desc := ""
+	if supported.Description != "" {
+		desc = ":\n{{.Description}}"
+	}
+
+	formatString := fmt.Sprintf("%s%s%s\n\n", abbr, name, desc)
 
 	templ, err := template.New("argString").Parse(formatString)
 	if err != nil {

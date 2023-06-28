@@ -210,7 +210,10 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 		}
 	}
 
-	sinkTS.AddTableFilesToManifest(ctx, fileIDToNumChunks)
+	err = sinkTS.AddTableFilesToManifest(ctx, fileIDToNumChunks)
+	if err != nil {
+		return err
+	}
 
 	// AddTableFilesToManifest can set the root chunk if there is a chunk
 	// journal which we downloaded in the clone. If that happened, the
