@@ -156,7 +156,7 @@ teardown() {
     [[ ! "$output" =~ "branch1table" ]] || false
 }
 
-@test "cherry-pick: error when using `--abort` with no in-progress cherry-pick" {
+@test "cherry-pick: error when using --abort with no in-progress cherry-pick" {
     run dolt cherry-pick --abort
     [ $status -eq 1 ]
     [[ $output =~ "error: There is no cherry-pick merge to abort" ]] || false
