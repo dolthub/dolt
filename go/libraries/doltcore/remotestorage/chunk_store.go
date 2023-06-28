@@ -1390,7 +1390,7 @@ func (drtf DoltRemoteTableFile) FileID() string {
 
 	// Early versions of |dolt| could return GenerationalChunkStore
 	// TableFile implementations where FileID included an `oldgen/` prefix.
-	// If we are communicating with a removesrv from one of those versions,
+	// If we are communicating with a remotesrv from one of those versions,
 	// we may see this prefix. This is not relevant to how we want to
 	// address the table file locally, so we prune it here.
 	if strings.HasPrefix(id, "oldgen/") {
