@@ -17,7 +17,6 @@ package parquet
 import (
 	"context"
 	"fmt"
-	"os"
 	"path"
 	"testing"
 
@@ -88,9 +87,6 @@ Andy Anderson,27,
 `
 
 	path := path.Join(t.TempDir(), "parquet")
-	f, err := os.Create(path)
-	require.NoError(t, err)
-	defer f.Close()
 
 	rows := getSampleRows()
 
@@ -105,12 +101,16 @@ Andy Anderson,27,
 	if err != nil {
 		require.NoError(t, err)
 	}
+defer func() {
+		err = pRd.Close()
+		require.NoError(t, err)
+	}()
 
 	pr, err := reader.NewParquetReader(pRd, new(Person), 4)
 	if err != nil {
 		t.Fatal("Cannot create parquet reader", err)
 	}
-
+defer pr.ReadStop()
 	num := int(pr.GetNumRows())
 	assert.Equal(t, num, 4)
 
@@ -129,11 +129,4 @@ Andy Anderson,27,
 	}
 
 	assert.Equal(t, expected, result)
-
-	defer func() {
-		err = pRd.Close()
-		require.NoError(t, err)
-	}()
-
-	pr.ReadStop()
 }
