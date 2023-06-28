@@ -100,6 +100,9 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	var branchName string
 	if apr.Contains(cli.CheckoutCoBranch) {
 		branchName, _ = apr.GetValue(cli.CheckoutCoBranch)
+	} else if apr.Contains(cli.TrackFlag) {
+		remoteAndBranchName, _ := apr.GetValue(cli.TrackFlag)
+		_, branchName = actions.ParseRemoteBranchName(remoteAndBranchName)
 	} else if apr.NArg() > 0 {
 		branchName = apr.Arg(0)
 	}
@@ -119,7 +122,28 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usagePrt)
 	}
 
-	_, err = getRowsForSql(queryEngine, sqlCtx, sqlQuery)
+	rows, err := getRowsForSql(queryEngine, sqlCtx, sqlQuery)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usagePrt)
+	}
+
+	if len(rows) != 1 {
+		return HandleVErrAndExitCode(errhand.BuildDError("expected 1 row response from %s, got %s", sqlQuery, len(rows)).Build(), usagePrt)
+	}
+
+	if len(rows[0]) < 2 {
+		return HandleVErrAndExitCode(errhand.BuildDError("no 'upstream' field in response from %s", sqlQuery).Build(), usagePrt)
+	}
+
+	var upstream string
+	var ok bool
+	if upstream, ok = rows[0][1].(string); !ok {
+		return HandleVErrAndExitCode(errhand.BuildDError("expected string value for 'upstream' field in response from %s ", sqlQuery).Build(), usagePrt)
+	}
+
+	if upstream != "" {
+		cli.Printf("branch '%s' set up to track '%s'.\n", branchName, upstream)
+	}
 
 	// This command doesn't modify `dEnv` which could break tests that call multiple commands in sequence.
 	// We must reload it so that it includes changes to the repo state.

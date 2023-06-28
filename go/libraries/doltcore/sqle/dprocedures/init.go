@@ -23,7 +23,18 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dolt_add", Schema: int64Schema("status"), Function: doltAdd},
 	{Name: "dolt_backup", Schema: int64Schema("success"), Function: doltBackup},
 	{Name: "dolt_branch", Schema: int64Schema("status"), Function: doltBranch},
-	{Name: "dolt_checkout", Schema: int64Schema("status"), Function: doltCheckout},
+	{Name: "dolt_checkout", Schema: []*sql.Column{
+		{
+			Name:     "status",
+			Type:     types.Int64,
+			Nullable: false,
+		},
+		{
+			Name:     "upstream",
+			Type:     types.LongText,
+			Nullable: true,
+		},
+	}, Function: doltCheckout},
 	{Name: "dolt_cherry_pick", Schema: cherryPickSchema, Function: doltCherryPick},
 	{Name: "dolt_clean", Schema: int64Schema("status"), Function: doltClean},
 	{Name: "dolt_clone", Schema: int64Schema("status"), Function: doltClone},
