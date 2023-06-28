@@ -101,7 +101,7 @@ Andy Anderson,27,
 	if err != nil {
 		require.NoError(t, err)
 	}
-defer func() {
+	defer func() {
 		err = pRd.Close()
 		require.NoError(t, err)
 	}()
@@ -110,7 +110,7 @@ defer func() {
 	if err != nil {
 		t.Fatal("Cannot create parquet reader", err)
 	}
-defer pr.ReadStop()
+	defer pr.ReadStop()
 	num := int(pr.GetNumRows())
 	assert.Equal(t, num, 4)
 
