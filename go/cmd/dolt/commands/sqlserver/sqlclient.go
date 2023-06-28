@@ -498,7 +498,9 @@ func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, c
 	queryist := ConnectionQueryist{connection: conn}
 
 	var lateBind cli.LateBindQueryist = func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) {
-		return queryist, sql.NewContext(ctx), func() { conn.Conn(ctx) }, nil
+		sqlCtx := sql.NewContext(ctx)
+		sqlCtx.SetCurrentDatabase(database)
+		return queryist, sqlCtx, func() { conn.Conn(ctx) }, nil
 	}
 
 	return lateBind, nil
