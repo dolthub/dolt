@@ -380,7 +380,13 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 			return nil, err
 		}
 
-		commit, err = sqledb.DbData().Ddb.Resolve(ctx, cs, nil)
+		dbName := sess.Session.GetCurrentDatabase()
+		headRef, err := sess.CWBHeadRef(ctx, dbName)
+		if err != nil {
+			return nil, err
+		}
+
+		commit, err = sqledb.DbData().Ddb.Resolve(ctx, cs, headRef)
 		if err != nil {
 			return nil, err
 		}

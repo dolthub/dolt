@@ -41,8 +41,8 @@ SQL
     run dolt diff
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "diff --dolt a/test b/quiz" ]] || false
-    [[ "${lines[1]}" =~ "--- a/test @" ]] || false
-    [[ "${lines[2]}" =~ "+++ b/quiz @" ]] || false
+    [[ "${lines[1]}" =~ "--- a/test" ]] || false
+    [[ "${lines[2]}" =~ "+++ b/quiz" ]] || false
 }
 
 @test "rename-tables: sql diff a renamed table" {

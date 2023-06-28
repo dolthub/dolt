@@ -309,8 +309,8 @@ func CheckUserNameAndEmail(config *env.DoltCliConfig) bool {
 	return true
 }
 
-func (hc SubCommandHandler) PrintUsage(commandStr string) {
-	Println("Valid commands for", commandStr, "are")
+func (hc SubCommandHandler) GetUsage(commandStr string) string {
+	str := "Valid commands for " + commandStr + " are\n"
 
 	for _, cmd := range hc.Subcommands {
 		if hiddenCmd, ok := cmd.(HiddenCommand); ok {
@@ -319,6 +319,13 @@ func (hc SubCommandHandler) PrintUsage(commandStr string) {
 			}
 		}
 
-		Printf("    %16s - %s\n", cmd.Name(), cmd.Description())
+		str += fmt.Sprintf("    %16s - %s\n", cmd.Name(), cmd.Description())
 	}
+
+	return str
+}
+
+func (hc SubCommandHandler) PrintUsage(commandStr string) {
+	usage := hc.GetUsage(commandStr)
+	Println(usage)
 }

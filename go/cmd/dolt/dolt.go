@@ -121,14 +121,12 @@ var doltSubCommands = []cli.Command{
 }
 
 var commandsWithoutCliCtx = []cli.Command{
-	commands.DiffCmd{},
 	commands.ResetCmd{},
 	commands.CleanCmd{},
 	admin.Commands,
 	sqlserver.SqlServerCmd{VersionStr: Version},
 	sqlserver.SqlClientCmd{VersionStr: Version},
 	commands.LogCmd{},
-	commands.ShowCmd{},
 	commands.CheckoutCmd{},
 	commands.CloneCmd{},
 	commands.FetchCmd{},
@@ -168,11 +166,18 @@ func initCliContext(commandName string) bool {
 }
 
 var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", doltSubCommands)
-
 var globalArgParser = buildGlobalArgs()
+var globalDocs = cli.CommandDocsForCommandString("dolt", doc, globalArgParser)
+
+var globalSpecialMsg = `
+Dolt subcommands are in transition to using the flags listed below as global flags.
+Not all subcommands use these flags. If your command accepts these flags without error, then they are supported.
+`
 
 func init() {
 	dumpDocsCommand.DoltCommand = doltCommand
+	dumpDocsCommand.GlobalDocs = globalDocs
+	dumpDocsCommand.GlobalSpecialMsg = globalSpecialMsg
 	dumpZshCommand.DoltCommand = doltCommand
 	dfunctions.VersionString = Version
 }
@@ -394,18 +399,13 @@ func runMain() int {
 		return exit
 	}
 
-	_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString("dolt", doc, globalArgParser))
+	_, usage := cli.HelpAndUsagePrinters(globalDocs)
 
 	apr, remainingArgs, err := globalArgParser.ParseGlobalArgs(args)
 
 	if err == argparser.ErrHelp {
 		doltCommand.PrintUsage("dolt")
-
-		specialMsg := `
-Dolt subcommands are in transition to using the flags listed below as global flags.
-The sql subcommand is currently the only command that uses these flags. All other commands will ignore them.
-`
-		cli.Println(specialMsg)
+		cli.Println(globalSpecialMsg)
 		usage()
 
 		return 0

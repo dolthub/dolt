@@ -37,7 +37,9 @@ const (
 )
 
 type DumpDocsCmd struct {
-	DoltCommand cli.SubCommandHandler
+	DoltCommand      cli.SubCommandHandler
+	GlobalDocs       *cli.CommandDocumentation
+	GlobalSpecialMsg string
 }
 
 // Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -99,6 +101,20 @@ func (cmd *DumpDocsCmd) Exec(ctx context.Context, commandStr string, args []stri
 		return 1
 	}
 
+	doltUsage := cmd.DoltCommand.GetUsage("dolt")
+	doltUsageMarkdown := fmt.Sprintf("```\n$ dolt\n%s```\n\n", doltUsage)
+	_, err = wr.Write([]byte(doltUsageMarkdown))
+	if err != nil {
+		cli.PrintErrln(err.Error())
+		return 1
+	}
+
+	err = cmd.writeGlobalArgumentsSection(wr)
+	if err != nil {
+		cli.PrintErrln(err.Error())
+		return 1
+	}
+
 	verr := cmd.dumpDocs(wr, cmd.DoltCommand.Name(), cmd.DoltCommand.Subcommands)
 
 	if verr != nil {
@@ -155,6 +171,17 @@ func CreateMarkdown(wr io.Writer, cmdDoc *cli.CommandDocumentation) error {
 	if err != nil {
 		return err
 	}
+	_, err = wr.Write([]byte(markdownDoc))
+	return err
+}
+
+func (cmd *DumpDocsCmd) writeGlobalArgumentsSection(wr io.Writer) error {
+	cmd.GlobalDocs.ShortDesc = cmd.GlobalSpecialMsg
+	markdownDoc, err := cmd.GlobalDocs.GlobalCmdDocToMd()
+	if err != nil {
+		return err
+	}
+
 	_, err = wr.Write([]byte(markdownDoc))
 	return err
 }

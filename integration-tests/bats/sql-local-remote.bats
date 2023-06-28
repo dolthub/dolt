@@ -59,6 +59,43 @@ basic_conflict() {
     dolt --user dolt commit -am "main commit"
 }
 
+extract_value() {
+    key="$1"
+    input="$2"
+    echo "$input" | awk "
+        BEGIN { in_value = 0 }
+        /$key: {/ { in_value = 1; next }
+        match("'$0'", /$key: /) { print substr("'$0'", RSTART+RLENGTH) }
+        /}/ { if (in_value) { in_value = 0 } }
+        in_value { gsub(/^[ \t]+/, \"\"); print }
+    "
+}
+
+assert_has_key() {
+    key="$1"
+    input="$2"
+    extracted=$(extract_value "$key" "$input")
+    if [[ -z $extracted ]]; then
+        echo "Expected to find key $key"
+        return 1
+    else
+        return 0
+    fi
+}
+
+assert_has_key_value() {
+    key="$1"
+    value="$2"
+    input="$3"
+    extracted=$(extract_value "$key" "$input")
+    if [[ "$extracted" != "$value" ]]; then
+        echo "Expected key $key to have value $value, instead found $extracted"
+        return 1
+    else
+        return 0
+    fi
+}
+
 @test "sql-local-remote: test switch between server/no server" {
     start_sql_server defaultDB
 
@@ -299,6 +336,111 @@ basic_conflict() {
     [[ "$output" =~ "starting local mode" ]] || false
     [[ "$output" =~ "main" ]] || false
     [[ "$output" =~ "b2" ]] || false
+}
+
+@test "sql-local-remote: verify dolt diff behavior with data and schema changes" {
+  start_sql_server defaultDB
+  cd defaultDB
+
+  dolt sql <<SQL
+create table test (pk int primary key, c1 int, c2 int);
+insert into test values (1,2,3);
+insert into test values (4,5,6);
+SQL
+  dolt add .
+  dolt commit -am "First commit"
+
+  dolt sql <<SQL
+alter table test
+drop column c2,
+add column c3 varchar(10);
+insert into test values (7,8,9);
+delete from test where pk = 1;
+update test set c1 = 100 where pk = 4;
+SQL
+
+    EXPECTED=$(cat <<'EOF'
+ CREATE TABLE `test` (
+   `pk` int NOT NULL,
+   `c1` int,
+-  `c2` int,
++  `c3` varchar(10),
+   PRIMARY KEY (`pk`)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
++---+----+-----+------+------+
+|   | pk | c1  | c2   | c3   |
++---+----+-----+------+------+
+| - | 1  | 2   | 3    | NULL |
+| < | 4  | 5   | 6    | NULL |
+| > | 4  | 100 | NULL | NULL |
+| + | 7  | 8   | NULL | 9    |
++---+----+-----+------+------+
+EOF
+)
+
+  dolt diff
+  run dolt diff
+  [ "$status" -eq 0 ] || false
+  [[ "$output" =~ "$EXPECTED" ]] || false
+  remoteOutput=$output
+
+  stop_sql_server 1
+
+  run dolt diff
+  [ "$status" -eq 0 ] || false
+  localOutput=$output
+
+  [[ "$remoteOutput" == "$localOutput" ]] || false
+}
+
+@test "sql-local-remote: verify dolt show behavior" {
+  cd defaultDB
+
+  dolt commit --allow-empty -m "commit: initialize table1"
+
+  run dolt show --no-pretty
+  [ "$status" -eq 0 ] || false
+  [[ "$output" =~ "SerialMessage" ]] || false
+  assert_has_key "Name" "$output"
+  assert_has_key_value "Name" "Bats Tests" "$output"
+  assert_has_key_value "Desc" "commit: initialize table1" "$output"
+  assert_has_key_value "Name" "Bats Tests" "$output"
+  assert_has_key_value "Email" "bats@email.fake" "$output"
+  assert_has_key "Time" "$output"
+  assert_has_key_value "Height" "3" "$output"
+  assert_has_key "RootValue" "$output"
+  assert_has_key "Parents" "$output"
+  assert_has_key "ParentClosure" "$output"
+
+  parentHash=$(extract_value Parents "$output")
+  parentClosureHash=$(extract_value ParentClosure "$output")
+  rootValue=$(extract_value RootValue "$output")
+
+  run dolt show "$parentHash"
+  [ "$status" -eq 0 ] || false
+  [[ "$output" =~ "tables table1, table2" ]] || false
+  run dolt show "$rootValue"
+  [ "$status" -eq 0 ] || false
+  run dolt show "$parentClosureHash"
+  [ "$status" -eq 0 ] || false
+
+  start_sql_server defaultDB
+
+  run dolt show --no-pretty
+  [ $status -eq 1 ] || false
+  [[ "$output" =~ "\`dolt show --no-pretty\` or \`dolt show NON_COMMIT_REF\` only supported in local mode." ]] || false
+
+  run dolt show "$parentHash"
+  [ $status -eq 0 ] || false
+  [[ "$output" =~ "tables table1, table2" ]] || false
+  run dolt show "$parentClosureHash"
+  [ $status -eq 1 ] || false
+  [[ "$output" =~ "\`dolt show --no-pretty\` or \`dolt show NON_COMMIT_REF\` only supported in local mode." ]] || false
+  run dolt show "$rootValue"
+  [ $status -eq 1 ] || false
+  [[ "$output" =~ "\`dolt show --no-pretty\` or \`dolt show NON_COMMIT_REF\` only supported in local mode." ]] || false
+
+  stop_sql_server 1
 }
 
 @test "sql-local-remote: check that the --password argument is used when talking to a server and ignored with local" {
