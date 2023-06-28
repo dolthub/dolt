@@ -48,15 +48,15 @@ get_staged_tables() {
 }
 
 basic_conflict() {
-    dolt --user dolt sql -q "create table t (i int primary key, t text)"
-    dolt --user dolt add .
-    dolt --user dolt commit -am "init commit"
-    dolt --user dolt checkout -b other
-    dolt --user dolt sql -q "insert into t values (1,'other')"
-    dolt --user dolt commit -am "other commit"
-    dolt --user dolt checkout main
-    dolt --user dolt sql -q "insert into t values (1,'main')"
-    dolt --user dolt commit -am "main commit"
+    dolt dolt sql -q "create table t (i int primary key, t text)"
+    dolt dolt add .
+    dolt dolt commit -am "init commit"
+    dolt dolt checkout -b other
+    dolt dolt sql -q "insert into t values (1,'other')"
+    dolt dolt commit -am "other commit"
+    dolt dolt checkout main
+    dolt dolt sql -q "insert into t values (1,'main')"
+    dolt dolt commit -am "main commit"
 }
 
 extract_value() {
@@ -601,38 +601,38 @@ EOF
   cd defaultDB
 
   basic_conflict
-  dolt --user dolt checkout main
-  run dolt --user dolt sql -q "select * from t"
+  dolt dolt checkout main
+  run dolt dolt sql -q "select * from t"
   [ $status -eq 0 ]
   [[ $output =~ "main" ]] || false
 
-  run dolt --user dolt merge other
+  run dolt dolt merge other
   [ $status -eq 0 ]
   [[ $output =~ "Automatic merge failed" ]] || false
 
-  run dolt --user dolt conflicts resolve --ours .
+  run dolt dolt conflicts resolve --ours .
   [ $status -eq 0 ]
   remoteOutput=$output
-  run dolt --user dolt sql -q "select * from t"
+  run dolt dolt sql -q "select * from t"
   [ $status -eq 0 ]
   [[ $output =~ "main" ]] || false
 
   stop_sql_server 1
 
   basic_conflict
-  dolt --user dolt checkout main
-  run dolt --user dolt sql -q "select * from t"
+  dolt dolt checkout main
+  run dolt dolt sql -q "select * from t"
   [ $status -eq 0 ]
   [[ $output =~ "main" ]] || false
 
-  run dolt --user dolt merge other
+  run dolt dolt merge other
   [ $status -eq 0 ]
   [[ $output =~ "Automatic merge failed" ]] || false
 
-  run dolt --user dolt conflicts resolve --ours .
+  run dolt dolt conflicts resolve --ours .
   [ $status -eq 0 ]
   localOutput=$output
-  run dolt --user dolt sql -q "select * from t"
+  run dolt dolt sql -q "select * from t"
   [ $status -eq 0 ]
   [[ $output =~ "main" ]] || false
 
