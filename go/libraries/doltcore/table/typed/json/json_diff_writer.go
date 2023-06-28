@@ -166,7 +166,7 @@ func NewSchemaDiffWriter(wr io.WriteCloser) (*SchemaDiffWriter, error) {
 	}, nil
 }
 
-func (j *SchemaDiffWriter) WriteSchemaDiff(ctx context.Context, schemaDiffStatement string) error {
+func (j *SchemaDiffWriter) WriteSchemaDiff(schemaDiffStatement string) error {
 	if j.schemaStmtsWritten > 0 {
 		err := iohelp.WriteAll(j.wr, []byte(","))
 		if err != nil {
