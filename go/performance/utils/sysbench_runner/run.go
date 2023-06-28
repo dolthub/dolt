@@ -51,14 +51,14 @@ func Run(config *Config) error {
 			return err
 		}
 
-		fmt.Println(fmt.Sprintf("Successfuly finished %s", serverConfig.Server))
+		fmt.Printf("Successfuly finished %s\n", serverConfig.Server)
 
 		err = WriteResults(serverConfig, results)
 		if err != nil {
 			return err
 		}
 
-		fmt.Println(fmt.Sprintf("Successfuly wrote results for %s", serverConfig.Server))
+		fmt.Printf("Successfuly wrote results for %s\n", serverConfig.Server)
 	}
 	return nil
 }

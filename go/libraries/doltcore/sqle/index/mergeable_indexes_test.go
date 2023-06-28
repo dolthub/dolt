@@ -1351,7 +1351,7 @@ func TestMergeableIndexes(t *testing.T) {
 					}
 				}
 			} else {
-				t.Log(fmt.Sprintf("%v != %v", test.finalRanges, finalRanges))
+				t.Logf("%v != %v", test.finalRanges, finalRanges)
 			}
 		})
 	}
@@ -1557,7 +1557,7 @@ func TestMergeableIndexesNulls(t *testing.T) {
 					}
 				}
 			} else {
-				t.Log(fmt.Sprintf("%v != %v", test.finalRanges, finalRanges))
+				t.Logf("%v != %v", test.finalRanges, finalRanges)
 			}
 		})
 	}

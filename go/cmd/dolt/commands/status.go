@@ -16,7 +16,6 @@ package commands
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -456,7 +455,7 @@ func getIgnoredTablePatternsFromSql(queryist cli.Queryist, sqlCtx *sql.Context) 
 		} else if ignoreInt, ok := ignoreVal.(int8); ok {
 			ignore = ignoreInt == 1
 		} else {
-			return nil, errors.New(fmt.Sprintf("unexpected type for ignore column, value = %s", ignoreVal))
+			return nil, fmt.Errorf("unexpected type for ignore column, value = %s", ignoreVal)
 		}
 
 		ip := doltdb.NewIgnorePattern(pattern, ignore)
@@ -482,7 +481,8 @@ func printEverything(data *printData) error {
 		if ahead > 0 && behind > 0 {
 			cli.Printf(`Your branch and '%s' have diverged,
 and have %v and %v different commits each, respectively.
-  (use "dolt pull" to update your local branch)`, remoteBranchRef, ahead, behind)
+  (use "dolt pull" to update your local branch)
+	`, remoteBranchRef, ahead, behind)
 			changesPresent = true
 		} else if ahead > 0 {
 			s := ""
@@ -490,7 +490,8 @@ and have %v and %v different commits each, respectively.
 				s = "s"
 			}
 			cli.Printf(`Your branch is ahead of '%s' by %v commit%s.
-  (use "dolt push" to publish your local commits)`, remoteBranchRef, ahead, s)
+  (use "dolt push" to publish your local commits)
+	`, remoteBranchRef, ahead, s)
 			changesPresent = true
 		} else if behind > 0 {
 			s := ""
@@ -498,7 +499,8 @@ and have %v and %v different commits each, respectively.
 				s = "s"
 			}
 			cli.Printf(`Your branch is behind '%s' by %v commit%s, and can be fast-forwarded.
-  (use "dolt pull" to update your local branch)`, remoteBranchRef, behind, s)
+  (use "dolt pull" to update your local branch)
+	`, remoteBranchRef, behind, s)
 			changesPresent = true
 		} else {
 			cli.Printf("Your branch is up to date with '%s'.", remoteBranchRef)
@@ -583,6 +585,7 @@ and have %v and %v different commits each, respectively.
 		}
 
 		if len(filteredUnstagedTables) > 0 {
+			cli.Println()
 			cli.Println(workingHeader)
 			cli.Println(workingHeaderHelp)
 			for tableName, status := range filteredUnstagedTables {

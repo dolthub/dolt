@@ -266,8 +266,8 @@ type prefixedTableFile struct {
 	prefix string
 }
 
-func (p prefixedTableFile) FileID() string {
-	return filepath.ToSlash(filepath.Join(p.prefix, p.TableFile.FileID()))
+func (p prefixedTableFile) LocationPrefix() string {
+	return p.prefix + "/"
 }
 
 // Sources retrieves the current root hash, a list of all the table files (which may include appendix table files),

@@ -134,13 +134,13 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 		return err
 	}
 
-	_, _, err = s.se.Query(s.sqlCtx, fmt.Sprintf("START TRANSACTION"))
+	_, _, err = s.se.Query(s.sqlCtx, "START TRANSACTION")
 	if err != nil {
 		return err
 	}
 
 	if s.disableFks {
-		_, _, err = s.se.Query(s.sqlCtx, fmt.Sprintf("SET FOREIGN_KEY_CHECKS = 0"))
+		_, _, err = s.se.Query(s.sqlCtx, "SET FOREIGN_KEY_CHECKS = 0")
 		if err != nil {
 			return err
 		}

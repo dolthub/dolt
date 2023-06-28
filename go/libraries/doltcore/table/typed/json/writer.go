@@ -167,6 +167,13 @@ func (j *RowWriter) jsonDataForSchema(row sql.Row) ([]byte, error) {
 			if err != nil {
 				return false, err
 			}
+		default:
+			sqlType := col.TypeInfo.ToSqlType()
+			converted, _, err := sqlType.Convert(val)
+			if err != nil {
+				return true, err
+			}
+			val = converted
 		}
 
 		colValMap[col.Name] = val

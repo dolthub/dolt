@@ -258,11 +258,11 @@ SQL
     run dolt diff --stat
     [ "$status" -eq 0 ]
     [[ "$output" =~ "diff --dolt a/test b/test" ]] || false
-    [[ "$output" =~ "--- a/test @" ]] || false
-    [[ "$output" =~ "+++ b/test @" ]] || false
+    [[ "$output" =~ "--- a/test" ]] || false
+    [[ "$output" =~ "+++ b/test" ]] || false
     [[ "$output" =~ "diff --dolt a/employees b/employees" ]] || false
-    [[ "$output" =~ "--- a/employees @" ]] || false
-    [[ "$output" =~ "+++ b/employees @" ]] || false
+    [[ "$output" =~ "--- a/employees" ]] || false
+    [[ "$output" =~ "+++ b/employees" ]] || false
 
     run dolt diff --summary 
     [ "$status" -eq 0 ]
@@ -273,8 +273,8 @@ SQL
     run dolt diff --stat employees
     [ "$status" -eq 0 ]
     [[ "$output" =~ "diff --dolt a/employees b/employees" ]] || false
-    [[ "$output" =~ "--- a/employees @" ]] || false
-    [[ "$output" =~ "+++ b/employees @" ]] || false
+    [[ "$output" =~ "--- a/employees" ]] || false
+    [[ "$output" =~ "+++ b/employees" ]] || false
 
     run dolt diff --summary employees
     [ "$status" -eq 0 ]

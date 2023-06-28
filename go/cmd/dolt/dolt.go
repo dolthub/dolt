@@ -61,7 +61,7 @@ import (
 )
 
 const (
-	Version = "1.6.1"
+	Version = "1.7.0"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -121,14 +121,12 @@ var doltSubCommands = []cli.Command{
 }
 
 var commandsWithoutCliCtx = []cli.Command{
-	commands.DiffCmd{},
 	commands.ResetCmd{},
 	commands.CleanCmd{},
 	admin.Commands,
 	sqlserver.SqlServerCmd{VersionStr: Version},
 	sqlserver.SqlClientCmd{VersionStr: Version},
 	commands.LogCmd{},
-	commands.ShowCmd{},
 	commands.CheckoutCmd{},
 	cnfcmds.Commands,
 	commands.CloneCmd{},
@@ -169,11 +167,18 @@ func initCliContext(commandName string) bool {
 }
 
 var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", doltSubCommands)
-
 var globalArgParser = buildGlobalArgs()
+var globalDocs = cli.CommandDocsForCommandString("dolt", doc, globalArgParser)
+
+var globalSpecialMsg = `
+Dolt subcommands are in transition to using the flags listed below as global flags.
+Not all subcommands use these flags. If your command accepts these flags without error, then they are supported.
+`
 
 func init() {
 	dumpDocsCommand.DoltCommand = doltCommand
+	dumpDocsCommand.GlobalDocs = globalDocs
+	dumpDocsCommand.GlobalSpecialMsg = globalSpecialMsg
 	dumpZshCommand.DoltCommand = doltCommand
 	dfunctions.VersionString = Version
 }
@@ -395,18 +400,13 @@ func runMain() int {
 		return exit
 	}
 
-	_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString("dolt", doc, globalArgParser))
+	_, usage := cli.HelpAndUsagePrinters(globalDocs)
 
 	apr, remainingArgs, err := globalArgParser.ParseGlobalArgs(args)
 
 	if err == argparser.ErrHelp {
 		doltCommand.PrintUsage("dolt")
-
-		specialMsg := `
-Dolt subcommands are in transition to using the flags listed below as global flags.
-The sql subcommand is currently the only command that uses these flags. All other commands will ignore them.
-`
-		cli.Println(specialMsg)
+		cli.Println(globalSpecialMsg)
 		usage()
 
 		return 0
@@ -521,7 +521,16 @@ The sql subcommand is currently the only command that uses these flags. All othe
 
 	var cliCtx cli.CliContext = nil
 	if initCliContext(subcommandName) {
-		lateBind, err := buildLateBinder(ctx, dEnv.FS, mrEnv, apr, subcommandName, verboseEngineSetup)
+		// validate that --user and --password are set appropriately.
+		aprAlt, creds, err := cli.BuildUserPasswordPrompt(apr)
+		apr = aprAlt
+		if err != nil {
+			cli.PrintErrln(color.RedString("Failed to parse credentials: %v", err))
+			return 1
+		}
+
+		lateBind, err := buildLateBinder(ctx, dEnv.FS, mrEnv, creds, apr, subcommandName, verboseEngineSetup)
+
 		if err != nil {
 			cli.PrintErrln(color.RedString("Failure to Load SQL Engine: %v", err))
 			return 1
@@ -554,7 +563,7 @@ The sql subcommand is currently the only command that uses these flags. All othe
 	return res
 }
 
-func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, apr *argparser.ArgParseResults, subcommandName string, verbose bool) (cli.LateBindQueryist, error) {
+func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, creds *cli.UserPassword, apr *argparser.ArgParseResults, subcommandName string, verbose bool) (cli.LateBindQueryist, error) {
 
 	var targetEnv *env.DoltEnv = nil
 
@@ -572,7 +581,7 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 		targetEnv = mrEnv.GetEnv(useDb)
 	}
 
-	// There is no target environment detected. This is allowed for a small number of command.
+	// There is no target environment detected. This is allowed for a small number of commands.
 	// We don't expect that number to grow, so we list them here.
 	// It's also allowed when --help is passed.
 	// So we defer the error until the caller tries to use the cli.LateBindQueryist
@@ -593,14 +602,20 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 			if verbose {
 				cli.Println("verbose: starting remote mode")
 			}
-			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, apr, lock.Port, useDb)
+
+			if !creds.Specified {
+				creds = &cli.UserPassword{Username: sqlserver.LocalConnectionUser, Password: lock.Secret, Specified: false}
+			}
+
+			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, lock.Port, useDb)
 		}
 	}
 
 	if verbose {
 		cli.Println("verbose: starting local mode")
 	}
-	return commands.BuildSqlEngineQueryist(ctx, cwdFS, mrEnv, apr)
+
+	return commands.BuildSqlEngineQueryist(ctx, cwdFS, mrEnv, creds, apr)
 }
 
 // doc is currently used only when a `initCliContext` command is specified. This will include all commands in time,
@@ -662,7 +677,8 @@ func interceptSendMetrics(ctx context.Context, args []string) (bool, int) {
 func buildGlobalArgs() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("dolt")
 
-	ap.SupportsString(commands.UserFlag, "u", "user", fmt.Sprintf("Defines the local superuser (defaults to `%v`). If the specified user exists, will take on permissions of that user.", commands.DefaultUser))
+	ap.SupportsString(cli.UserFlag, "u", "user", fmt.Sprintf("Defines the local superuser (defaults to `%v`). If the specified user exists, will take on permissions of that user.", commands.DefaultUser))
+	ap.SupportsString(cli.PasswordFlag, "p", "password", "Defines the password for the user. Defaults to empty string.")
 	ap.SupportsString(commands.DataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory.")
 	ap.SupportsString(commands.CfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to `$data-dir/.doltcfg`. Will only be created if there is a change to configuration settings.")
 	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")

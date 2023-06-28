@@ -157,7 +157,7 @@ func (cmd SqlServerCmd) ArgParserWithName(name string) *argparser.ArgParser {
 	ap.SupportsString(commands.MultiDBDirFlag, "", "directory", "Deprecated, use `--data-dir` instead.")
 	ap.SupportsString(commands.CfgDirFlag, "", "directory", "Defines a directory that contains non-database storage for dolt. Defaults to `$data-dir/.doltcfg`. Will be created automatically as needed.")
 	ap.SupportsFlag(noAutoCommitFlag, "", "Set @@autocommit = off for the server.")
-	ap.SupportsInt(queryParallelismFlag, "", "num-go-routines", fmt.Sprintf("Deprecated, no effect in current versions of Dolt"))
+	ap.SupportsInt(queryParallelismFlag, "", "num-go-routines", "Deprecated, no effect in current versions of Dolt")
 	ap.SupportsInt(maxConnectionsFlag, "", "max-connections", fmt.Sprintf("Set the number of connections handled by the server. Defaults to `%d`.", serverConfig.MaxConnections()))
 	ap.SupportsString(persistenceBehaviorFlag, "", "persistence-behavior", fmt.Sprintf("Indicate whether to `load` or `ignore` persisted global variables. Defaults to `%s`.", serverConfig.PersistenceBehavior()))
 	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will be created as needed.")
@@ -265,7 +265,7 @@ func GetServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults) (Ser
 		}
 		yamlCfg = cfg.(YAMLConfig)
 	} else {
-		return getCommandLineServerConfig(apr)
+		return getCommandLineConfig(nil, apr)
 	}
 
 	// if command line user argument was given, replace yaml's user and password
@@ -273,6 +273,38 @@ func GetServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults) (Ser
 		pass, _ := apr.GetValue(passwordFlag)
 		yamlCfg.UserConfig.Name = &user
 		yamlCfg.UserConfig.Password = &pass
+	}
+
+	if connStr, ok := apr.GetValue(goldenMysqlConn); ok {
+		cli.Println(connStr)
+		yamlCfg.GoldenMysqlConn = &connStr
+	}
+
+	return yamlCfg, nil
+}
+
+// GetClientConfig returns configuration which is sutable for a client to use. The fact that it returns a ServerConfig
+// is a little confusing, but it is because the client and server use the same configuration struct. The main difference
+// between this method and GetServerConfig is that this method required a cli.UserPassword argument. It is created by
+// prompting the user, and we don't want the server to follow that code path.
+func GetClientConfig(cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argparser.ArgParseResults) (ServerConfig, error) {
+	cfgFile, hasCfgFile := apr.GetValue(configFileFlag)
+
+	if !hasCfgFile {
+		return getCommandLineConfig(creds, apr)
+	}
+
+	var yamlCfg YAMLConfig
+	cfg, err := getYAMLServerConfig(cwdFS, cfgFile)
+	if err != nil {
+		return nil, err
+	}
+	yamlCfg = cfg.(YAMLConfig)
+
+	// if command line user argument was given, replace yaml's user and password
+	if creds.Specified {
+		yamlCfg.UserConfig.Name = &creds.Username
+		yamlCfg.UserConfig.Password = &creds.Password
 	}
 
 	if connStr, ok := apr.GetValue(goldenMysqlConn); ok {
@@ -358,41 +390,47 @@ func SetupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config S
 	return nil
 }
 
-// getCommandLineServerConfig sets server config variables and persisted global variables with values defined on command line.
-// If not defined, it sets variables to default values.
-func getCommandLineServerConfig(apr *argparser.ArgParseResults) (ServerConfig, error) {
-	serverConfig := DefaultServerConfig()
+// getCommandLineConfig sets server config variables and persisted global variables with values defined on command line.
+// If not defined, it sets variables to default values. The creds option is available when building a client config, which
+// is used for most commands. `dolt sql-server` is special, and its user/pwd is pa`ssed in via apr, so creds must be nil
+// to indicate that the user/pwd should be taken from the apr.
+func getCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResults) (ServerConfig, error) {
+	config := DefaultServerConfig()
 
 	if sock, ok := apr.GetValue(socketFlag); ok {
 		// defined without value gets default
 		if sock == "" {
 			sock = defaultUnixSocketFilePath
 		}
-		serverConfig.WithSocket(sock)
+		config.WithSocket(sock)
 	}
 
 	if host, ok := apr.GetValue(hostFlag); ok {
-		serverConfig.WithHost(host)
+		config.WithHost(host)
 	}
 
 	if port, ok := apr.GetInt(portFlag); ok {
-		serverConfig.WithPort(port)
+		config.WithPort(port)
 	}
 
-	if user, ok := apr.GetValue(commands.UserFlag); ok {
-		serverConfig.withUser(user)
-	}
-
-	if password, ok := apr.GetValue(passwordFlag); ok {
-		serverConfig.withPassword(password)
+	if creds == nil {
+		if user, ok := apr.GetValue(cli.UserFlag); ok {
+			config.withUser(user)
+		}
+		if password, ok := apr.GetValue(cli.PasswordFlag); ok {
+			config.withPassword(password)
+		}
+	} else {
+		config.withUser(creds.Username)
+		config.withPassword(creds.Password)
 	}
 
 	if port, ok := apr.GetInt(remotesapiPortFlag); ok {
-		serverConfig.WithRemotesapiPort(&port)
+		config.WithRemotesapiPort(&port)
 	}
 
 	if persistenceBehavior, ok := apr.GetValue(persistenceBehaviorFlag); ok {
-		serverConfig.withPersistenceBehavior(persistenceBehavior)
+		config.withPersistenceBehavior(persistenceBehavior)
 	}
 
 	if timeoutStr, ok := apr.GetValue(timeoutFlag); ok {
@@ -402,7 +440,7 @@ func getCommandLineServerConfig(apr *argparser.ArgParseResults) (ServerConfig, e
 			return nil, fmt.Errorf("invalid value for --timeout '%s'", timeoutStr)
 		}
 
-		serverConfig.withTimeout(timeout * 1000)
+		config.withTimeout(timeout * 1000)
 
 		err = sql.SystemVariables.SetGlobal("net_read_timeout", timeout*1000)
 		if err != nil {
@@ -415,42 +453,42 @@ func getCommandLineServerConfig(apr *argparser.ArgParseResults) (ServerConfig, e
 	}
 
 	if _, ok := apr.GetValue(readonlyFlag); ok {
-		serverConfig.withReadOnly(true)
+		config.withReadOnly(true)
 	}
 
 	if logLevel, ok := apr.GetValue(logLevelFlag); ok {
-		serverConfig.withLogLevel(LogLevel(strings.ToLower(logLevel)))
+		config.withLogLevel(LogLevel(strings.ToLower(logLevel)))
 	}
 
 	if dataDir, ok := apr.GetValue(commands.MultiDBDirFlag); ok {
-		serverConfig.withDataDir(dataDir)
+		config.withDataDir(dataDir)
 	}
 
 	if dataDir, ok := apr.GetValue(commands.DataDirFlag); ok {
-		serverConfig.withDataDir(dataDir)
+		config.withDataDir(dataDir)
 	}
 
 	if queryParallelism, ok := apr.GetInt(queryParallelismFlag); ok {
-		serverConfig.withQueryParallelism(queryParallelism)
+		config.withQueryParallelism(queryParallelism)
 	}
 
 	if maxConnections, ok := apr.GetInt(maxConnectionsFlag); ok {
-		serverConfig.withMaxConnections(uint64(maxConnections))
+		config.withMaxConnections(uint64(maxConnections))
 		err := sql.SystemVariables.SetGlobal("max_connections", uint64(maxConnections))
 		if err != nil {
 			return nil, fmt.Errorf("failed to set max_connections. Error: %s", err.Error())
 		}
 	}
 
-	serverConfig.autoCommit = !apr.Contains(noAutoCommitFlag)
-	serverConfig.allowCleartextPasswords = apr.Contains(allowCleartextPasswordsFlag)
+	config.autoCommit = !apr.Contains(noAutoCommitFlag)
+	config.allowCleartextPasswords = apr.Contains(allowCleartextPasswordsFlag)
 
 	if connStr, ok := apr.GetValue(goldenMysqlConn); ok {
 		cli.Println(connStr)
-		serverConfig.withGoldenMysqlConnectionString(connStr)
+		config.withGoldenMysqlConnectionString(connStr)
 	}
 
-	return serverConfig, nil
+	return config, nil
 }
 
 // getYAMLServerConfig returns server config variables with values defined in yaml file.

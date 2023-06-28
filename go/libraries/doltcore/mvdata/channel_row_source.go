@@ -15,7 +15,6 @@
 package mvdata
 
 import (
-	"fmt"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -43,7 +42,7 @@ func (c *ChannelRowSource) Resolved() bool {
 
 // String implements the sql.Node interface.
 func (c *ChannelRowSource) String() string {
-	return fmt.Sprintf("ChannelRowSource()")
+	return "ChannelRowSource()"
 }
 
 // Schema implements the sql.Node interface.

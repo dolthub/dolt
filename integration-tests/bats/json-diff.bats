@@ -339,6 +339,11 @@ EOF
 }
 
 @test "json-diff: table with same name on different branches with different primary key sets" {
+    # TODO: remove this once dolt checkout is migrated
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "This test relies on dolt checkout, which has not been migrated yet."
+    fi
+
     dolt branch another-branch
     dolt sql <<SQL
 CREATE TABLE a (
