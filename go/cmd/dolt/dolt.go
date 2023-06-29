@@ -121,7 +121,6 @@ var doltSubCommands = []cli.Command{
 }
 
 var commandsWithoutCliCtx = []cli.Command{
-	commands.ResetCmd{},
 	commands.CleanCmd{},
 	admin.Commands,
 	sqlserver.SqlServerCmd{VersionStr: Version},

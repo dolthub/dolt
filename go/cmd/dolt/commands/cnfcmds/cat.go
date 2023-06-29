@@ -22,20 +22,36 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/dolt/go/store/types"
 )
+
+type mergeStatus struct {
+	isMerging      bool
+	source         string
+	sourceCommit   string
+	target         string
+	unmergedTables []string
+}
+
+var conflictColsToIgnore = map[string]bool{
+	"from_root_ish":    true,
+	"our_diff_type":    true,
+	"their_diff_type":  true,
+	"dolt_conflict_id": true,
+}
 
 var catDocs = cli.CommandDocumentationContent{
 	ShortDesc: "print conflicts",
@@ -88,9 +104,12 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return 1
 	}
 
-	ws, err := dEnv.WorkingSet(ctx)
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
-		return exitWithVerr(errhand.VerboseErrorFromError(err))
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	if closeFunc != nil {
+		defer closeFunc()
 	}
 
 	tblNames := args
@@ -98,107 +117,146 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		cli.Println("No tables specified")
 		usage()
 		return 1
-	} else if len(tblNames) == 1 && tblNames[0] == "." {
-		tblNames, err = ws.WorkingRoot().GetTableNames(ctx)
-		if err != nil {
-			return exitWithVerr(errhand.VerboseErrorFromError(err))
-		}
 	}
 
-	if verr := printConflicts(ctx, dEnv, ws, tblNames); verr != nil {
-		return exitWithVerr(errhand.VerboseErrorFromError(err))
+	if err := printConflicts(queryist, sqlCtx, tblNames); err != nil {
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 	return 0
 }
 
-func exitWithVerr(verr errhand.VerboseError) int {
-	cli.PrintErrln(verr.Verbose())
-	return 1
-}
-
-func printConflicts(ctx context.Context, dEnv *env.DoltEnv, ws *doltdb.WorkingSet, tblNames []string) error {
-	eng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
-	if err != nil {
-		return err
-	}
+func printConflicts(queryist cli.Queryist, sqlCtx *sql.Context, tblNames []string) error {
 	stdOut := iohelp.NopWrCloser(cli.CliOut)
 
-	// first print schema conflicts
-	if ws.MergeActive() && ws.MergeState().HasSchemaConflicts() {
-		sqlCtx, err := eng.NewLocalContext(ctx)
-		if err != nil {
-			return err
-		}
-		sqlCtx.SetCurrentDatabase(dbName)
+	mergeStatus, err := getMergeStatus(queryist, sqlCtx)
+	if err != nil {
+		return fmt.Errorf("error: failed to get merge status: %w", err)
+	}
+	schemaConflictsExist, err := getSchemaConflictsExist(queryist, sqlCtx)
+	if err != nil {
+		return fmt.Errorf("error: failed to determine if schema conflicts exist: %w", err)
+	}
 
+	// if no tables were specified, set tblNames to all the unmerged tables
+	if len(tblNames) == 1 && tblNames[0] == "." {
+		tblNames = mergeStatus.unmergedTables
+	}
+
+	// first print schema conflicts
+	if mergeStatus.isMerging && schemaConflictsExist {
 		for _, table := range tblNames {
-			if err = printSchemaConflicts(sqlCtx, stdOut, eng, table); err != nil {
-				return err
+			err = printSchemaConflicts(queryist, sqlCtx, stdOut, table)
+			if err != nil {
+				return fmt.Errorf("error: failed to print schema conflicts for table '%s': %w", table, err)
 			}
 		}
 	}
 
 	// next print data conflicts
-	root := ws.WorkingRoot()
-	for _, tblName := range tblNames {
-		if has, err := root.HasTable(ctx, tblName); err != nil {
-			return err
-		} else if !has {
-			return fmt.Errorf("error: unknown table '%s'", tblName)
-		}
-
-		tbl, _, err := root.GetTable(ctx, tblName)
-		if err != nil {
-			return err
-		}
-
-		has, err := tbl.HasConflicts(ctx)
-		if err != nil {
-			return err
-		} else if !has {
+	for _, tblName := range mergeStatus.unmergedTables {
+		shouldShowTable := isStringInArray(tblName, tblNames)
+		if !shouldShowTable {
 			continue
 		}
 
-		base, sch, mergeSch, err := tbl.GetConflictSchemas(ctx, tblName)
+		dataConflictsExist, err := getTableDataConflictsExist(queryist, sqlCtx, tblName)
 		if err != nil {
-			return err
+			return fmt.Errorf("error: failed to determine if data conflicts exist for table '%s': %w", tblName, err)
+		} else if !dataConflictsExist {
+			continue
 		}
 
-		sqlCtx, err := eng.NewLocalContext(ctx)
+		q, err := dbr.InterpolateForDialect("SELECT * from ?", []interface{}{dbr.I("dolt_conflicts_" + tblName)}, dialect.MySQL)
 		if err != nil {
-			return errhand.BuildDError("failed to fetch conflicts").AddCause(err).Build()
-		}
-		sqlCtx.SetCurrentDatabase(dbName)
-
-		confSqlSch, rowItr, err := eng.Query(sqlCtx, buildDataConflictQuery(base, sch, mergeSch, tblName))
-		if err != nil {
-			return err
+			return fmt.Errorf("error: failed to interpolate query for table '%s': %w", tblName, err)
 		}
 
-		unionSch, err := untyped.UntypedSchemaUnion(base, sch, mergeSch)
+		confSqlSch, rowItr, err := queryist.Query(sqlCtx, q)
 		if err != nil {
-			return err
+			return fmt.Errorf("error: failed to get conflict rows for table '%s': %w", tblName, err)
 		}
 
-		sqlUnionSch, err := sqlutil.FromDoltSchema(tblName, unionSch)
+		targetSch, err := getUnionSchemaFromConflictsSchema(confSqlSch)
 		if err != nil {
-			return err
+			return fmt.Errorf("error: failed to get union schema for table '%s': %w", tblName, err)
 		}
 
-		tw := tabular.NewFixedWidthConflictTableWriter(sqlUnionSch.Schema, stdOut, 100)
-
-		err = writeConflictResults(sqlCtx, confSqlSch, sqlUnionSch.Schema, rowItr, tw)
+		sqlTargetSch, err := sqlutil.FromDoltSchema(tblName, targetSch)
 		if err != nil {
-			return err
+			return fmt.Errorf("error: failed to convert dolt schema to sql schema for table '%s': %w", tblName, err)
+		}
+
+		tw := tabular.NewFixedWidthConflictTableWriter(sqlTargetSch.Schema, stdOut, 100)
+
+		err = writeConflictResults(sqlCtx, confSqlSch, sqlTargetSch.Schema, rowItr, tw)
+		if err != nil {
+			return fmt.Errorf("error: failed to write conflict results for table '%s': %w", tblName, err)
 		}
 	}
 
 	return nil
 }
 
-func printSchemaConflicts(sqlCtx *sql.Context, wrCloser io.WriteCloser, eng *engine.SqlEngine, table string) error {
+func getUnionSchemaFromConflictsSchema(conflictsSch sql.Schema) (schema.Schema, error) {
+	// using array to preserve column order
+	baseColNames, theirColNames, ourColNames := []string{}, []string{}, []string{}
 
-	sqlSch, rowItr, err := eng.Query(sqlCtx, buildSchemaConflictQuery(table))
+	for _, col := range conflictsSch {
+		conflictColName := col.Name
+		_, shouldIgnore := conflictColsToIgnore[conflictColName]
+		if shouldIgnore {
+			continue
+		}
+
+		if strings.HasPrefix(conflictColName, basePrefix) {
+			colName := conflictColName[len(basePrefix):]
+			baseColNames = append(baseColNames, colName)
+		} else if strings.HasPrefix(conflictColName, theirPrefix) {
+			colName := conflictColName[len(theirPrefix):]
+			theirColNames = append(theirColNames, colName)
+		} else if strings.HasPrefix(conflictColName, ourPrefix) {
+			colName := conflictColName[len(ourPrefix):]
+			ourColNames = append(ourColNames, colName)
+		}
+	}
+
+	unionColNames := []string{}
+	for _, colName := range baseColNames {
+		if !isStringInArray(colName, unionColNames) {
+			unionColNames = append(unionColNames, colName)
+		}
+	}
+	for _, colName := range theirColNames {
+		if !isStringInArray(colName, unionColNames) {
+			unionColNames = append(unionColNames, colName)
+		}
+	}
+	for _, colName := range ourColNames {
+		if !isStringInArray(colName, unionColNames) {
+			unionColNames = append(unionColNames, colName)
+		}
+	}
+
+	unionCols := []schema.Column{}
+	for _, colName := range unionColNames {
+		col := schema.NewColumn(colName, 0, types.StringKind, false)
+		unionCols = append(unionCols, col)
+	}
+	unionColl := schema.NewColCollection(unionCols...)
+	unionSchema, err := schema.SchemaFromCols(unionColl)
+	if err != nil {
+		return nil, fmt.Errorf("error: failed to create union schema: %w", err)
+	}
+	return unionSchema, nil
+}
+
+func printSchemaConflicts(queryist cli.Queryist, sqlCtx *sql.Context, wrCloser io.WriteCloser, table string) error {
+	q, err := dbr.InterpolateForDialect("select our_schema, their_schema, base_schema, description "+
+		"from dolt_schema_conflicts where table_name = ?", []interface{}{table}, dialect.MySQL)
+	if err != nil {
+		return err
+	}
+	sqlSch, rowItr, err := queryist.Query(sqlCtx, q)
 	if err != nil {
 		return err
 	}
@@ -263,16 +321,70 @@ func writeConflictResults(
 	}
 }
 
-func buildSchemaConflictQuery(table string) string {
-	return fmt.Sprintf("select our_schema, their_schema, base_schema, description "+
-		"from dolt_schema_conflicts where table_name = '%s'", table)
+func getMergeStatus(queryist cli.Queryist, sqlCtx *sql.Context) (mergeStatus, error) {
+	ms := mergeStatus{}
+	q := "select * from dolt_merge_status;"
+	rows, err := commands.GetRowsForSql(queryist, sqlCtx, q)
+	if err != nil {
+		return ms, err
+	}
+
+	if len(rows) > 1 {
+		return ms, fmt.Errorf("error: multiple rows in dolt_merge_status")
+	}
+
+	row := rows[0]
+	ms.isMerging, err = commands.GetTinyIntColAsBool(row[0])
+	if err != nil {
+		return ms, fmt.Errorf("error: failed to parse is_merging: %w", err)
+	}
+	if ms.isMerging {
+		ms.source = row[1].(string)
+		ms.sourceCommit = row[2].(string)
+		ms.target = row[3].(string)
+		unmergedTables := row[4].(string)
+		ms.unmergedTables = strings.Split(unmergedTables, ", ")
+	}
+
+	return ms, nil
 }
 
-func buildDataConflictQuery(base, sch, mergeSch schema.Schema, tblName string) string {
-	cols := quoteWithPrefix(base.GetAllCols().GetColumnNames(), "base_")
-	cols = append(cols, quoteWithPrefix(sch.GetAllCols().GetColumnNames(), "our_")...)
-	cols = append(cols, quoteWithPrefix(mergeSch.GetAllCols().GetColumnNames(), "their_")...)
-	colNames := strings.Join(cols, ", ")
-	query := fmt.Sprintf("SELECT %s, our_diff_type, their_diff_type from `dolt_conflicts_%s`", colNames, tblName)
-	return query
+func getSchemaConflictsExist(queryist cli.Queryist, sqlCtx *sql.Context) (bool, error) {
+	q := "select * from dolt_schema_conflicts limit 1;"
+	rows, err := commands.GetRowsForSql(queryist, sqlCtx, q)
+	if err != nil {
+		return false, err
+	}
+
+	if len(rows) == 0 {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func getTableDataConflictsExist(queryist cli.Queryist, sqlCtx *sql.Context, tableName string) (bool, error) {
+	q, err := dbr.InterpolateForDialect("select * from ? limit 1;", []interface{}{dbr.I("dolt_conflicts_" + tableName)}, dialect.MySQL)
+	if err != nil {
+		return false, err
+	}
+	rows, err := commands.GetRowsForSql(queryist, sqlCtx, q)
+	if err != nil {
+		return false, err
+	}
+
+	if len(rows) == 0 {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func isStringInArray(val string, arr []string) bool {
+	for _, v := range arr {
+		if val == v {
+			return true
+		}
+	}
+	return false
 }

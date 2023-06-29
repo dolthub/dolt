@@ -246,7 +246,7 @@ func getDoltStatus(queryist cli.Queryist, sqlCtx *sql.Context) (hasStagedChanges
 	for _, row := range statusRows {
 		staged := row[1]
 		var isStaged bool
-		isStaged, err = getTinyIntColAsBool(staged)
+		isStaged, err = GetTinyIntColAsBool(staged)
 		if err != nil {
 			return
 		}
