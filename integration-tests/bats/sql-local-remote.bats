@@ -434,9 +434,7 @@ EOF
 @test "sql-local-remote: verify dolt conflicts cat behavior" {
   cd defaultDB
 
-  export DOLT_CLI_PASSWORD=""
-
-  dolt --user dolt sql << SQL
+  dolt sql << SQL
 CREATE TABLE people (
   id INT NOT NULL,
   last_name VARCHAR(120),
@@ -446,26 +444,26 @@ CREATE TABLE people (
   PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
 SQL
-  dolt --user dolt add .
-  dolt --user dolt commit -am "base"
+  dolt add .
+  dolt commit -am "base"
 
-  dolt --user dolt checkout -b right
-  dolt --user dolt sql <<SQL
+  dolt checkout -b right
+  dolt sql <<SQL
 ALTER TABLE people
 MODIFY COLUMN age FLOAT;
 SQL
-  dolt --user dolt commit -am "right"
+  dolt commit -am "right"
 
-  dolt --user dolt checkout main
-  dolt --user dolt sql <<SQL
+  dolt checkout main
+  dolt sql <<SQL
 ALTER TABLE people
 MODIFY COLUMN age BIGINT;
 SQL
-  dolt --user dolt commit -am "left"
+  dolt commit -am "left"
 
-  dolt --user dolt merge right -m "merge right"
+  dolt merge right -m "merge right"
 
-  run dolt --user dolt conflicts cat .
+  run dolt conflicts cat .
   [ "$status" -eq 0 ]
   [[ "$output" =~ "| our_schema" ]] || false
   [[ "$output" =~ "| their_schema" ]] || false
@@ -479,7 +477,7 @@ SQL
 
   start_sql_server defaultDB
 
-  run dolt --user dolt conflicts cat .
+  run dolt conflicts cat .
   [ "$status" -eq 0 ]
   remoteOutput=$output
 
