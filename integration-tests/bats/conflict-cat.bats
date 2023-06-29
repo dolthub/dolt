@@ -9,7 +9,49 @@ teardown() {
     teardown_common
 }
 
-@test "conflict-cat: smoke test print output" {
+@test "conflict-cat: smoke test print schema output" {
+    dolt sql << SQL
+CREATE TABLE people (
+  id INT NOT NULL,
+  last_name VARCHAR(120),
+  first_name VARCHAR(120),
+  birthday DATETIME(6),
+  age INT DEFAULT '0',
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+SQL
+    dolt add .
+    dolt commit -am "base"
+
+    dolt checkout -b right
+    dolt sql <<SQL
+ALTER TABLE people
+MODIFY COLUMN age FLOAT;
+SQL
+    dolt commit -am "right"
+
+    dolt checkout main
+    dolt sql <<SQL
+ALTER TABLE people
+MODIFY COLUMN age BIGINT;
+SQL
+    dolt commit -am "left"
+
+    dolt merge right -m "merge right"
+
+    run dolt conflicts cat .
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| our_schema" ]] || false
+    [[ "$output" =~ "| their_schema" ]] || false
+    [[ "$output" =~ "| base_schema" ]] || false
+    [[ "$output" =~ "| description" ]] || false
+    [[ "$output" =~ "different column definitions for our column age and their column age" ]] || false
+    [[ "$output" =~ "\`age\` bigint," ]] || false
+    [[ "$output" =~ "\`age\` float," ]] || false
+    [[ "$output" =~ "\`age\` int DEFAULT '0'," ]] || false
+}
+
+@test "conflict-cat: smoke test print data output" {
     dolt sql <<SQL
 CREATE table t (pk int PRIMARY KEY, col1 int);
 INSERT INTO t VALUES (1, 1);
