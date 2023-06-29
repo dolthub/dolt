@@ -35,6 +35,8 @@ type AutoIncrementTracker struct {
 	mu        *sync.Mutex
 }
 
+var _ dsess.AutoIncrementTracker = AutoIncrementTracker{}
+
 // NewAutoIncrementTracker returns a new autoincrement tracker for the roots given. All roots sets must be
 // considered because the auto increment value for a table is tracked globally, across all branches.
 // Roots provided should be the working sets when available, or the branches when they are not (e.g. for remote
@@ -116,6 +118,10 @@ func (a AutoIncrementTracker) Next(tbl string, insertVal interface{}) (uint64, e
 
 	// |given| < curr
 	return given, nil
+}
+
+func (a AutoIncrementTracker) CoerceAutoIncrementValue(val interface{}) (uint64, error) {
+	return CoerceAutoIncrementValue(val)
 }
 
 // CoerceAutoIncrementValue converts |val| into an AUTO_INCREMENT sequence value
@@ -273,12 +279,14 @@ func (a AutoIncrementTracker) AddNewTable(tableName string) {
 // DropTable drops the table with the name given.
 // To establish the new auto increment value, callers must also pass all other working sets in scope that may include
 // a table with the same name, omitting the working set that just deleted the table named.
-func (a AutoIncrementTracker) DropTable(ctx context.Context, tableName string, wses ...*doltdb.WorkingSet) error {
+func (a AutoIncrementTracker) DropTable(ctx *sql.Context, tableName string, wses ...*doltdb.WorkingSet) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
+	tableName = strings.ToLower(tableName)
+	
 	// reset sequence to the minimum value
-	a.sequences[strings.ToLower(tableName)] = 1
+	a.sequences[tableName] = 1
 
 	// Get the new highest value from all tables in the working sets given
 	for _, ws := range wses {
