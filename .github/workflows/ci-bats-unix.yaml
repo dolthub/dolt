@@ -25,6 +25,8 @@ jobs:
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
     steps:
+      - name: Show all ports in use
+        run: netstat -lntu
       - name: Conditionally Set ENV VARS for AWS tests
         run: |
           if [[ $use_credentials == true ]]; then
