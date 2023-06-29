@@ -131,7 +131,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, string, error) {
 	var upstream string
 	err = checkoutTables(ctx, roots, currentDbName, apr.Args)
 	if err != nil && apr.NArg() == 1 {
-		upstream, err = checkoutRemoteBranch(ctx, currentDbName, dbData, branchName, apr, &rsc)
+		upstream, err = checkoutRemoteBranch(ctx, dSess, currentDbName, dbData, branchName, apr, &rsc)
 	}
 
 	if err != nil {
@@ -185,7 +185,7 @@ func createWorkingSetForLocalBranch(ctx *sql.Context, ddb *doltdb.DoltDB, branch
 
 // checkoutRemoteBranch checks out a remote branch creating a new local branch with the same name as the remote branch
 // and set its upstream. The upstream persists out of sql session.
-func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, branchName string, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) (string, error) {
+func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName string, dbData env.DbData, branchName string, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) (string, error) {
 	remoteRefs, err := actions.GetRemoteBranchRef(ctx, dbData.Ddb, branchName)
 	if err != nil {
 		return "", errors.New("fatal: unable to read from data repository")
@@ -219,6 +219,12 @@ func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, br
 		err = checkoutBranch(ctx, dbName, branchName, apr)
 		if err != nil {
 			return "", err
+		}
+
+		// After checking out a new branch, we need to reload the database.
+		dbData, ok := dSess.GetDbData(ctx, dbName)
+		if !ok {
+			return "", fmt.Errorf("Could not reload database %s", dbName)
 		}
 
 		refSpec, err := ref.ParseRefSpecForRemote(remoteRef.GetRemote(), remoteRef.GetBranch())
