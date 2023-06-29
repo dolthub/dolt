@@ -15,15 +15,16 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/util/outputpager"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 )
 
 var revertDocs = cli.CommandDocumentationContent{
@@ -47,6 +48,10 @@ var _ cli.Command = RevertCmd{}
 // Name implements the interface cli.Command.
 func (cmd RevertCmd) Name() string {
 	return "revert"
+}
+
+func (cmd RevertCmd) RequiresRepo() bool {
+	return false
 }
 
 // Description implements the interface cli.Command.
@@ -79,82 +84,66 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
-	if dEnv.IsLocked() {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		cli.Println(err.Error())
+		return 1
+	}
+	if closeFunc != nil {
+		defer closeFunc()
 	}
 
-	headCommit, err := dEnv.HeadCommit(ctx)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	var author string
+	if apr.Contains(cli.AuthorParam) {
+		author, _ = apr.GetValue(cli.AuthorParam)
+	} else {
+		name, email, err := env.GetNameAndEmail(cliCtx.Config())
+		if err != nil {
+			cli.Println(err.Error())
+			return 1
+		}
+		author = name + " <" + email + ">"
 	}
-	headRoot, err := headCommit.GetRootValue(ctx)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+
+	var params []interface{}
+	params = append(params, author)
+
+	var buffer bytes.Buffer
+	buffer.WriteString("CALL DOLT_REVERT('--author', ?")
+	// Loop over args and add them to the query
+	for _, input := range apr.Args {
+		buffer.WriteString(", ?")
+		params = append(params, input)
 	}
-	workingRoot, err := dEnv.WorkingRoot(ctx)
+	buffer.WriteString(")")
+	query, err := dbr.InterpolateForDialect(buffer.String(), params, dialect.MySQL)
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-	headHash, err := headRoot.HashOf()
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-	workingHash, err := workingRoot.HashOf()
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-	if !headHash.Equal(workingHash) {
-		cli.PrintErrln("You must commit any changes before using revert.")
+		cli.Println(err.Error())
 		return 1
 	}
 
-	headRef := dEnv.RepoState.CWBHeadRef()
-	commits := make([]*doltdb.Commit, apr.NArg())
-	for i, arg := range apr.Args {
-		commitSpec, err := doltdb.NewCommitSpec(arg)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
-		commit, err := dEnv.DoltDB.Resolve(ctx, commitSpec, headRef)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
-		commits[i] = commit
-	}
-	tmpDir, err := dEnv.TempTableFilesDir()
+	schema, rowIter, err := queryist.Query(sqlCtx, query)
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		cli.Println(err.Error())
+		return 1
 	}
-	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
-	workingRoot, revertMessage, err := merge.Revert(ctx, dEnv.DoltDB, workingRoot, headCommit, commits, opts)
+	_, err = sql.RowIterToRows(sqlCtx, schema, rowIter)
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		cli.Println(err.Error())
+		return 1
 	}
 
-	workingHash, err = workingRoot.HashOf()
+	commit, err := getCommitInfo(queryist, sqlCtx, "HEAD")
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		cli.Printf("Revert completed, but failure to get commit details occurred: %s\n", err.Error())
+		return 1
 	}
-	if headHash.Equal(workingHash) {
-		cli.Println("No changes were made.")
-		return 0
-	}
+	cli.ExecuteWithStdioRestored(func() {
+		pager := outputpager.Start()
+		defer pager.Stop()
 
-	err = dEnv.UpdateWorkingRoot(ctx, workingRoot)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-	res := AddCmd{}.Exec(ctx, "add", []string{"-A"}, dEnv, cliCtx)
-	if res != 0 {
-		return res
-	}
+		printCommitInfo(pager, 0, false, "auto", commit)
+	})
 
-	// Pass in the final parameters for the author string.
-	commitParams := []string{"-m", revertMessage}
-	authorStr, ok := apr.GetValue(cli.AuthorParam)
-	if ok {
-		commitParams = append(commitParams, "--author", authorStr)
-	}
-
-	return CommitCmd{}.Exec(ctx, "commit", commitParams, dEnv, cliCtx)
+	return 0
 }
