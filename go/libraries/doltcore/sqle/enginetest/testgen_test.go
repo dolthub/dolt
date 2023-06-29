@@ -17,7 +17,6 @@ package enginetest
 import (
 	"bufio"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,12 +38,7 @@ func TestGenNewFormatQueryPlans(t *testing.T) {
 	engine, err := harness.NewEngine(t)
 	require.NoError(t, err)
 
-	tmp, err := ioutil.TempDir("", "*")
-	if err != nil {
-		return
-	}
-
-	outputPath := filepath.Join(tmp, "queryPlans.txt")
+	outputPath := filepath.Join(t.TempDir(), "queryPlans.txt")
 	f, err := os.Create(outputPath)
 	require.NoError(t, err)
 

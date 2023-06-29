@@ -17,7 +17,7 @@ package jwtauth
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"sync"
@@ -89,7 +89,7 @@ func (f *fetchedJWKS) GetJWKS() (*jose.JSONWebKeySet, error) {
 			return nil, errors.New("FetchedJWKS: Non-2xx status code from JWKS fetch")
 		} else {
 			defer response.Body.Close()
-			contents, err := ioutil.ReadAll(response.Body)
+			contents, err := io.ReadAll(response.Body)
 			if err != nil {
 				return nil, err
 			}
@@ -229,7 +229,7 @@ func (t *MultiJWKS) fetch(i int) error {
 	if response.StatusCode/100 != 2 {
 		return fmt.Errorf("http request failed: StatusCode: %d", response.StatusCode)
 	}
-	contents, err := ioutil.ReadAll(response.Body)
+	contents, err := io.ReadAll(response.Body)
 	if err != nil {
 		return err
 	}

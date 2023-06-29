@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -167,7 +166,7 @@ func main() {
 	}
 
 	// Get a list of all files in this directory which end in ".bats"
-	files, err := ioutil.ReadDir(cwd)
+	files, err := os.ReadDir(cwd)
 	if err != nil {
 		cli.Println("Error reading directory:", err)
 		os.Exit(1)
