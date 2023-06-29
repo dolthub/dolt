@@ -128,8 +128,9 @@ func (pwr *ParquetRowWriter) Close(_ context.Context) error {
 	}
 
 	if pwr.closer != nil {
-		pwr.closer.Close()
+		return pwr.closer.Close()
 	}
+
 	return nil
 }
 

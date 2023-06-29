@@ -47,6 +47,18 @@ get_staged_tables() {
     '
 }
 
+basic_conflict() {
+    dolt sql -q "create table t (i int primary key, t text)"
+    dolt add .
+    dolt commit -am "init commit"
+    dolt checkout -b other
+    dolt sql -q "insert into t values (1,'other')"
+    dolt commit -am "other commit"
+    dolt checkout main
+    dolt sql -q "insert into t values (1,'main')"
+    dolt commit -am "main commit"
+}
+
 extract_value() {
     key="$1"
     input="$2"
@@ -570,7 +582,7 @@ EOF
     [ "$status" -eq 1 ]
     [[ "$output" =~ "When a password is provided, a user must also be provided" ]] || false
 
-    stop_sql_server 1 
+    stop_sql_server 1
 
     run dolt --password "anything" sql -q "show tables"
     [ "$status" -eq 1 ]
@@ -610,4 +622,57 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Changes not staged for commit:" ]] || false
     [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
+}
+
+@test "sql-local-remote: verify dolt conflicts resolve behavior" {
+  cd altDB
+  dolt tag v0
+
+  # setup
+  basic_conflict
+  dolt checkout main
+  run dolt sql -q "select * from t"
+  [ $status -eq 0 ]
+  [[ $output =~ "main" ]] || false
+  run dolt merge other
+  [ $status -eq 0 ]
+  [[ $output =~ "Automatic merge failed" ]] || false
+
+  # start server
+  start_sql_server altDB
+
+  # test remote
+  run dolt conflicts resolve --ours .
+  [ $status -eq 0 ]
+  remoteOutput=$output
+  run dolt sql -q "select * from t"
+  [ $status -eq 0 ]
+  [[ $output =~ "main" ]] || false
+
+  # stop server
+  stop_sql_server 1
+
+  # reset
+  dolt reset --hard v0
+  dolt branch -D other
+
+  # test local
+  basic_conflict
+  dolt checkout main
+  run dolt sql -q "select * from t"
+  [ $status -eq 0 ]
+  [[ $output =~ "main" ]] || false
+
+  run dolt merge other
+  [ $status -eq 0 ]
+  [[ $output =~ "Automatic merge failed" ]] || false
+
+  run dolt conflicts resolve --ours .
+  [ $status -eq 0 ]
+  localOutput=$output
+  run dolt sql -q "select * from t"
+  [ $status -eq 0 ]
+  [[ $output =~ "main" ]] || false
+
+  [[ "$remoteOutput" == "$localOutput" ]] || false
 }

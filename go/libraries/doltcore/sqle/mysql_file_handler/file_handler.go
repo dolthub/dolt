@@ -16,7 +16,6 @@ package mysql_file_handler
 
 import (
 	"errors"
-	"io/ioutil"
 	"os"
 	"sync"
 
@@ -53,7 +52,7 @@ func (p *Persister) Persist(ctx *sql.Context, data []byte) error {
 		}
 	}
 
-	return ioutil.WriteFile(p.privsFilePath, data, 0777)
+	return os.WriteFile(p.privsFilePath, data, 0777)
 }
 
 // LoadData reads the mysql.db file, returns nil if empty or not found
@@ -67,7 +66,7 @@ func (p Persister) LoadData() ([]byte, error) {
 	defer p.fileMutex.Unlock()
 
 	// read from mysqldbFilePath, error if something other than not-exists
-	buf, err := ioutil.ReadFile(p.privsFilePath)
+	buf, err := os.ReadFile(p.privsFilePath)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}

@@ -18,6 +18,8 @@ import (
 	"context"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -93,13 +95,17 @@ func (cmd ResolveCmd) Exec(ctx context.Context, commandStr string, args []string
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, resDocumentation, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if dEnv.IsLocked() {
-		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), usage)
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	if closeFunc != nil {
+		defer closeFunc()
 	}
 
 	var verr errhand.VerboseError
 	if apr.ContainsAny(autoResolverParams...) {
-		verr = autoResolve(ctx, apr, dEnv)
+		verr = autoResolve(queryist, sqlCtx, apr)
 	} else {
 		verr = errhand.BuildDError("--ours or --theirs must be supplied").SetPrintUsage().Build()
 	}
@@ -107,7 +113,7 @@ func (cmd ResolveCmd) Exec(ctx context.Context, commandStr string, args []string
 	return commands.HandleVErrAndExitCode(verr, usage)
 }
 
-func autoResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.VerboseError {
+func autoResolve(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseResults) errhand.VerboseError {
 	funcFlags := apr.FlagsEqualTo(autoResolverParams, true)
 
 	if funcFlags.Size() > 1 {
@@ -121,12 +127,9 @@ func autoResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.
 	autoResolveStrategy := autoResolveStrategies[autoResolveFlag]
 
 	var err error
+
 	tbls := apr.Args
-	if len(tbls) == 1 && tbls[0] == "." {
-		err = AutoResolveAll(ctx, dEnv, autoResolveStrategy)
-	} else {
-		err = AutoResolveTables(ctx, dEnv, autoResolveStrategy, tbls)
-	}
+	err = AutoResolveTables(queryist, sqlCtx, autoResolveStrategy, tbls)
 	if err != nil {
 		return errhand.BuildDError("error: failed to resolve").AddCause(err).Build()
 	}
