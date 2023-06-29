@@ -588,7 +588,7 @@ EOF
     dolt add test1
     dolt commit -m "create table test1"
 
-    dolt dolt sql -q "insert into test1 values (1)"
+    dolt sql -q "insert into test1 values (1)"
     dolt add test1
     run dolt --verbose-engine-setup reset
     [ "$status" -eq 0 ]
@@ -601,7 +601,7 @@ EOF
 
     stop_sql_server 1
 
-    dolt --user dolt add test1
+    dolt add test1
     run dolt --verbose-engine-setup reset
     [ "$status" -eq 0 ]
     [[ "$output" =~ "starting local mode" ]] || false
