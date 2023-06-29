@@ -69,7 +69,7 @@ func doDoltRevert(ctx *sql.Context, args []string) (int, error) {
 		return 1, err
 	}
 	if !headHash.Equal(workingHash) {
-		return 1, fmt.Errorf("you must commit any changes before using revert")
+		return 1, fmt.Errorf("You must commit any changes before using revert")
 	}
 
 	headRef, err := dSess.CWBHeadRef(ctx, dbName)
