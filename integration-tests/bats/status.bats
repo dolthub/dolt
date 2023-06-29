@@ -435,8 +435,8 @@ SQL
 @test "status: dolt reset throws errors for unknown ref/table" {
     run dolt reset test
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Invalid Ref or Table" ]] || false
-    [[ "$output" =~ "test" ]] || false
+    [[ "$output" =~ "Failed to reset changes." ]] || false
+    [[ "$output" =~ "branch not found" ]] || false
 }
 
 @test "status: roots runs even if status fails" {

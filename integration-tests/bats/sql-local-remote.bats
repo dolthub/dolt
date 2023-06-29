@@ -648,6 +648,36 @@ SQL
     [[ "$output" =~ "When a password is provided, a user must also be provided" ]] || false
 }
 
+@test "sql-local-remote: verify simple dolt reset behavior" {
+    start_sql_server altDB
+    dolt sql -q "create table test1 (pk int primary key)"
+    dolt add test1
+    dolt commit -m "create table test1"
+
+    dolt sql -q "insert into test1 values (1)"
+    dolt add test1
+    run dolt --verbose-engine-setup reset
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
+
+    stop_sql_server 1
+
+    dolt add test1
+    run dolt --verbose-engine-setup reset
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting local mode" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
+}
+
 @test "sql-local-remote: verify dolt conflicts resolve behavior" {
   cd altDB
   dolt tag v0
