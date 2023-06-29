@@ -37,3 +37,16 @@ type AutoIncrementTracker interface {
 	// below the current value.
 	Set(ctx *sql.Context, tableName string, newAutoIncVal uint64) error
 }
+
+// GlobalState is just a holding interface for pieces of global state, of which the auto increment tracking info is 
+// the only example at the moment.
+type GlobalState interface {
+	// AutoIncrementTracker returns the auto increment tracker for this global state.
+	AutoIncrementTracker(ctx *sql.Context) (AutoIncrementTracker, error)
+}
+
+// GlobalStateProvider is an optional interface for databases that provide global state tracking
+type GlobalStateProvider interface {
+	GetGlobalState() GlobalState
+}
+

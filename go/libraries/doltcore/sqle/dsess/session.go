@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -1168,13 +1167,13 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 
 		// TODO: this is pretty clunky, there is a silly dependency between InitialDbState and globalstate.StateProvider
 		//  that's hard to express with the current types
-		stateProvider, ok := db.(globalstate.StateProvider)
+		stateProvider, ok := db.(GlobalStateProvider)
 		if !ok {
 			return fmt.Errorf("database does not contain global state store")
 		}
 		sessionState.globalState = stateProvider.GetGlobalState()
 
-		tracker, err := sessionState.globalState.GetAutoIncrementTracker(ctx)
+		tracker, err := sessionState.globalState.AutoIncrementTracker(ctx)
 		if err != nil {
 			return err
 		}

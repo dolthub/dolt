@@ -61,7 +61,7 @@ type Database struct {
 
 var _ dsess.SqlDatabase = Database{}
 var _ dsess.RevisionDatabase = Database{}
-var _ globalstate.StateProvider = Database{}
+var _ dsess.GlobalStateProvider = Database{}
 var _ sql.CollatedDatabase = Database{}
 var _ sql.Database = Database{}
 var _ sql.StoredProcedureDatabase = Database{}
@@ -826,7 +826,7 @@ func (db Database) removeTableFromAutoIncrementTracker(
 		wses = append(wses, ws)
 	}
 
-	ait, err := db.gs.GetAutoIncrementTracker(ctx)
+	ait, err := db.gs.AutoIncrementTracker(ctx)
 	if err != nil {
 		return err
 	}
@@ -913,7 +913,7 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Pr
 	// Prevent any tables that use BINARY, CHAR, VARBINARY, VARCHAR prefixes
 
 	if schema.HasAutoIncrement(doltSch) {
-		ait, err := db.gs.GetAutoIncrementTracker(ctx)
+		ait, err := db.gs.AutoIncrementTracker(ctx)
 		if err != nil {
 			return err
 		}
@@ -961,7 +961,7 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, sch
 	}
 
 	if schema.HasAutoIncrement(doltSch) {
-		ait, err := db.gs.GetAutoIncrementTracker(ctx)
+		ait, err := db.gs.AutoIncrementTracker(ctx)
 		if err != nil {
 			return err
 		}

@@ -18,15 +18,12 @@ import (
 	"context"
 	"sync"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 )
-
-type StateProvider interface {
-	GetGlobalState() GlobalState
-}
 
 func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.DoltDB) (GlobalState, error) {
 	branches, err := db.GetBranches(ctx)
@@ -90,6 +87,8 @@ type GlobalState struct {
 	mu        *sync.Mutex
 }
 
-func (g GlobalState) GetAutoIncrementTracker(ctx *sql.Context) (AutoIncrementTracker, error) {
+var _ dsess.GlobalState = GlobalState{} 
+
+func (g GlobalState) AutoIncrementTracker(ctx *sql.Context) (dsess.AutoIncrementTracker, error) {
 	return g.aiTracker, nil
 }
