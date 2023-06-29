@@ -136,7 +136,7 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~stash.bats~
 ~commit.bats~
 ~sql-commit.bats~
-~reset.bats
+~reset.bats~
 ~sql-reset.bats~
 EOM
 )
