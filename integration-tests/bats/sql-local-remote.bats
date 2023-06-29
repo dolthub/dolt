@@ -580,6 +580,7 @@ EOF
     run dolt sql -q "show tables"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "When a password is provided, a user must also be provided" ]] || false
+}
 
 @test "sql-local-remote: verify simple dolt reset behavior" {
     start_sql_server altDB
