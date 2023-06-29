@@ -17,8 +17,12 @@ package commands
 import (
 	"context"
 	"fmt"
-	"gopkg.in/src-d/go-errors.v1"
 	"strings"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
+	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -27,9 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/gocraft/dbr/v2"
-	"github.com/gocraft/dbr/v2/dialect"
 )
 
 var cherryPickDocs = cli.CommandDocumentationContent{
