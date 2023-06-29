@@ -48,15 +48,15 @@ get_staged_tables() {
 }
 
 basic_conflict() {
-    dolt dolt sql -q "create table t (i int primary key, t text)"
-    dolt dolt add .
-    dolt dolt commit -am "init commit"
-    dolt dolt checkout -b other
-    dolt dolt sql -q "insert into t values (1,'other')"
-    dolt dolt commit -am "other commit"
-    dolt dolt checkout main
-    dolt dolt sql -q "insert into t values (1,'main')"
-    dolt dolt commit -am "main commit"
+    dolt sql -q "create table t (i int primary key, t text)"
+    dolt add .
+    dolt commit -am "init commit"
+    dolt checkout -b other
+    dolt sql -q "insert into t values (1,'other')"
+    dolt commit -am "other commit"
+    dolt checkout main
+    dolt sql -q "insert into t values (1,'main')"
+    dolt commit -am "main commit"
 }
 
 extract_value() {
@@ -582,7 +582,7 @@ EOF
     [ "$status" -eq 1 ]
     [[ "$output" =~ "When a password is provided, a user must also be provided" ]] || false
 
-    stop_sql_server 1 
+    stop_sql_server 1
 
     run dolt --password "anything" sql -q "show tables"
     [ "$status" -eq 1 ]
@@ -595,44 +595,52 @@ EOF
 }
 
 @test "sql-local-remote: verify dolt conflicts resolve behavior" {
-  skip "This test relies on dolt commit being migrated"
+  cd altDB
+  dolt tag v0
 
-  start_sql_server defaultDB
-  cd defaultDB
-
+  # setup
   basic_conflict
-  dolt dolt checkout main
-  run dolt dolt sql -q "select * from t"
+  dolt checkout main
+  run dolt sql -q "select * from t"
   [ $status -eq 0 ]
   [[ $output =~ "main" ]] || false
-
-  run dolt dolt merge other
+  run dolt merge other
   [ $status -eq 0 ]
   [[ $output =~ "Automatic merge failed" ]] || false
 
-  run dolt dolt conflicts resolve --ours .
+  # start server
+  start_sql_server altDB
+
+  # test remote
+  run dolt conflicts resolve --ours .
   [ $status -eq 0 ]
   remoteOutput=$output
-  run dolt dolt sql -q "select * from t"
+  run dolt sql -q "select * from t"
   [ $status -eq 0 ]
   [[ $output =~ "main" ]] || false
 
+  # stop server
   stop_sql_server 1
 
+  # reset
+  dolt reset --hard v0
+  dolt branch -D other
+
+  # test local
   basic_conflict
-  dolt dolt checkout main
-  run dolt dolt sql -q "select * from t"
+  dolt checkout main
+  run dolt sql -q "select * from t"
   [ $status -eq 0 ]
   [[ $output =~ "main" ]] || false
 
-  run dolt dolt merge other
+  run dolt merge other
   [ $status -eq 0 ]
   [[ $output =~ "Automatic merge failed" ]] || false
 
-  run dolt dolt conflicts resolve --ours .
+  run dolt conflicts resolve --ours .
   [ $status -eq 0 ]
   localOutput=$output
-  run dolt dolt sql -q "select * from t"
+  run dolt sql -q "select * from t"
   [ $status -eq 0 ]
   [[ $output =~ "main" ]] || false
 
