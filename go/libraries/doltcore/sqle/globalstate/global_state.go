@@ -28,7 +28,7 @@ type StateProvider interface {
 	GetGlobalState() GlobalState
 }
 
-func NewGlobalStateStoreForDb(ctx context.Context, db *doltdb.DoltDB) (GlobalState, error) {
+func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.DoltDB) (GlobalState, error) {
 	branches, err := db.GetBranches(ctx)
 	if err != nil {
 		return GlobalState{}, err
@@ -74,7 +74,7 @@ func NewGlobalStateStoreForDb(ctx context.Context, db *doltdb.DoltDB) (GlobalSta
 		}
 	}
 
-	tracker, err := NewAutoIncrementTracker(ctx, roots...)
+	tracker, err := NewAutoIncrementTracker(ctx, dbName, roots...)
 	if err != nil {
 		return GlobalState{}, err
 	}

@@ -132,7 +132,7 @@ func (te *nomsTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) e
 	if err != nil {
 		return err
 	}
-	te.autoInc.Set(te.tableName, seq)
+	te.autoInc.Set(ctx, te.tableName, seq)
 	te.tableEditor.MarkDirty()
 
 	return te.flush(ctx)

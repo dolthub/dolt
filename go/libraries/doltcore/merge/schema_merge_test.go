@@ -623,7 +623,7 @@ func makeRootWithTable(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options, tbl 
 	require.NoError(t, err)
 	ws = ws.WithWorkingRoot(root)
 
-	gst, err := globalstate.NewAutoIncrementTracker(ctx, ws)
+	gst, err := globalstate.NewAutoIncrementTracker(ws, ctx)
 	require.NoError(t, err)
 	noop := func(ctx *sql.Context, dbName string, root *doltdb.RootValue) (err error) { return }
 	sess := writer.NewWriteSession(ddb.Format(), ws, gst, eo)

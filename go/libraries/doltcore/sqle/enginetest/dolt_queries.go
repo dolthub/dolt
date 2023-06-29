@@ -3838,6 +3838,54 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "delete all rows from table in all branches",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'empty table')",
+			"call dolt_branch('branch1')",
+			"call dolt_branch('branch2')",
+			"insert into t (b) values (1), (2)",
+			"call dolt_commit('-am', 'two values on main')",
+			"call dolt_checkout('branch1')",
+			"insert into t (b) values (3), (4)",
+			"call dolt_commit('-am', 'two values on branch1')",
+			"call dolt_checkout('branch2')",
+			"insert into t (b) values (5), (6)",
+			"call dolt_checkout('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "delete from t",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "delete from `mydb/branch1`.t",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "delete from `mydb/branch2`.t",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "alter table t auto_increment = 1",
+				SkipResultsCheck: true,
+			},
+			{
+				// empty tables, start at 1
+				Query:    "insert into t (b) values (7), (8)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 7},
+					{2, 8},
+				},
+			},
+		},
+	},
 }
 
 var BrokenAutoIncrementTests = []queries.ScriptTest{

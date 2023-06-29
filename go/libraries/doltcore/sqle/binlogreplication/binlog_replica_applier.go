@@ -747,7 +747,7 @@ func getTableWriter(ctx *sql.Context, engine *gms.Engine, tableName, databaseNam
 		return nil, nil, err
 	}
 
-	tracker, err := globalstate.NewAutoIncrementTracker(ctx, ws)
+	tracker, err := globalstate.NewAutoIncrementTracker(ctx, sqlDatabase.Name(), ws)
 	if err != nil {
 		return nil, nil, err
 	}

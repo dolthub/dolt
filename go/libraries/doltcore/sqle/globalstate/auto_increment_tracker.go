@@ -20,6 +20,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -27,6 +30,7 @@ import (
 )
 
 type AutoIncrementTracker struct {
+	dbName string
 	sequences map[string]uint64
 	mu        *sync.Mutex
 }
@@ -35,14 +39,15 @@ type AutoIncrementTracker struct {
 // considered because the auto increment value for a table is tracked globally, across all branches.
 // Roots provided should be the working sets when available, or the branches when they are not (e.g. for remote
 // branches that don't have a local working set)
-func NewAutoIncrementTracker(ctx context.Context, roots ...doltdb.Rootish) (AutoIncrementTracker, error) {
+func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb.Rootish) (AutoIncrementTracker, error) {
 	ait := AutoIncrementTracker{
+		dbName:    dbName,
 		sequences: make(map[string]uint64),
 		mu:        &sync.Mutex{},
 	}
 
-	for _, ws := range roots {
-		root, err := ws.ResolveRootValue(ctx)
+	for _, root := range roots {
+		root, err := root.ResolveRootValue(ctx)
 		if err != nil {
 			return AutoIncrementTracker{}, err
 		}
@@ -136,16 +141,121 @@ func CoerceAutoIncrementValue(val interface{}) (uint64, error) {
 // Set sets the auto increment value for the table named, if it's greater than the one already registered for this
 // table. Otherwise, the update is silently disregarded. So far this matches the MySQL behavior, but Dolt uses the
 // maximum value for this table across all branches.
-func (a AutoIncrementTracker) Set(tableName string, val uint64) {
+func (a AutoIncrementTracker) Set(ctx *sql.Context, tableName string, newAutoIncVal uint64) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
 	tableName = strings.ToLower(tableName)
 
 	existing := a.sequences[tableName]
-	if val > existing {
-		a.sequences[strings.ToLower(tableName)] = val
+	if newAutoIncVal > existing {
+		a.sequences[strings.ToLower(tableName)] = newAutoIncVal
+	} else {
+		// re-establish our baseline for this table on all branches before making our decision 
+		return a.deepSet(ctx, tableName, newAutoIncVal)
 	}
+
+	return nil
+}
+
+// deepSet sets the auto increment value for the table named, if it's greater than the one on any branch head for this 
+// database, ignoring the current in-memory tracker value
+func (a AutoIncrementTracker) deepSet(ctx *sql.Context, tableName string, newAutoIncVal uint64) error {
+	sess := dsess.DSessFromSess(ctx.Session)
+	db, ok := sess.Provider().BaseDatabase(ctx, a.dbName)
+
+	// just give up if we can't find this db for any reason, or it's a non-versioned DB
+	if !ok || !db.Versioned() {
+		return nil
+	}
+
+	doltdbs := db.DoltDatabases()
+	for _, db := range doltdbs {
+		branches, err := db.GetBranches(ctx)
+		if err != nil {
+			return err
+		}
+
+		remotes, err := db.GetRemoteRefs(ctx)
+		if err != nil {
+			return err
+		}
+
+		rootRefs := make([]ref.DoltRef, 0, len(branches)+len(remotes))
+		rootRefs = append(rootRefs, branches...)
+		rootRefs = append(rootRefs, remotes...)
+
+		var roots []doltdb.Rootish
+		for _, b := range rootRefs {
+			switch b.GetType() {
+			case ref.BranchRefType:
+				wsRef, err := ref.WorkingSetRefForHead(b)
+				if err != nil {
+					return err
+				}
+
+				ws, err := db.ResolveWorkingSet(ctx, wsRef)
+				if err == doltdb.ErrWorkingSetNotFound {
+					// use the branch head if there isn't a working set for it
+					cm, err := db.ResolveCommitRef(ctx, b)
+					if err != nil {
+						return err
+					}
+					roots = append(roots, cm)
+				} else if err != nil {
+					return err
+				} else {
+					roots = append(roots, ws)
+				}
+			case ref.RemoteRefType:
+				cm, err := db.ResolveCommitRef(ctx, b)
+				if err != nil {
+					return err
+				}
+				roots = append(roots, cm)
+			}
+		}
+
+		for _, root := range roots {
+			root, err := root.ResolveRootValue(ctx)
+			if err != nil {
+				return err
+			}
+
+			table, _, ok, err := root.GetTableInsensitive(ctx, tableName)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				continue
+			}
+
+			sch, err := table.GetSchema(ctx)
+			if err != nil {
+				return err
+			}
+
+			if !schema.HasAutoIncrement(sch) {
+				continue
+			}
+
+			tableName = strings.ToLower(tableName)
+			seq, err := table.GetAutoIncrementValue(ctx)
+			if err != nil {
+				return err
+			}
+
+			// There's a value on this branch higher than the one given, so we can't use it
+			if seq >= newAutoIncVal {
+				return nil
+			}
+		}
+	}
+
+	// If we made it through the above loop, that means there is no value on any branch higher than the one given, 
+	// so we can set it
+	a.sequences[tableName] = newAutoIncVal
+	return nil
 }
 
 // AddNewTable initializes a new table with an auto increment column to the tracker, as necessary

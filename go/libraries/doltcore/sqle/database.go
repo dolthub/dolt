@@ -134,7 +134,7 @@ func (db Database) DoltDatabases() []*doltdb.DoltDB {
 
 // NewDatabase returns a new dolt database to use in queries.
 func NewDatabase(ctx context.Context, name string, dbData env.DbData, editOpts editor.Options) (Database, error) {
-	globalState, err := globalstate.NewGlobalStateStoreForDb(ctx, dbData.Ddb)
+	globalState, err := globalstate.NewGlobalStateStoreForDb(ctx, name, dbData.Ddb)
 	if err != nil {
 		return Database{}, err
 	}

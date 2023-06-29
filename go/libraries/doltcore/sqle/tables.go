@@ -1661,7 +1661,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 
 		// TODO: this isn't transactional, and it should be
 		ait.AddNewTable(t.tableName)
-		ait.Set(t.tableName, seq)
+		ait.Set(ctx, t.tableName, seq)
 	}
 
 	// If we're removing an auto inc property, we just need to update global auto increment tracking

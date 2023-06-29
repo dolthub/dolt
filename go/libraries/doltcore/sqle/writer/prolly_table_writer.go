@@ -202,7 +202,7 @@ func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) 
 	if err != nil {
 		return err
 	}
-	w.aiTracker.Set(w.tableName, seq)
+	w.aiTracker.Set(ctx, w.tableName, seq)
 
 	return w.flush(ctx)
 }
