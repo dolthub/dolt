@@ -17,12 +17,12 @@ package parquet
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
-	"os"
+	"path"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/xitongsys/parquet-go-source/local"
 	"github.com/xitongsys/parquet-go/reader"
 
@@ -65,7 +65,10 @@ func getSampleRows() []sql.Row {
 
 func writeToParquet(pWr *ParquetRowWriter, rows []sql.Row, t *testing.T) {
 	func() {
-		defer pWr.Close(context.Background())
+		defer func() {
+			err := pWr.Close(context.Background())
+			require.NoError(t, err)
+		}()
 
 		for _, row := range rows {
 			err := pWr.WriteSqlRow(context.Background(), row)
@@ -83,32 +86,31 @@ John Johnson,21,
 Andy Anderson,27,
 `
 
-	file, err := ioutil.TempFile("", "parquet")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(file.Name())
-	path := file.Name()
+	path := path.Join(t.TempDir(), "parquet")
 
 	rows := getSampleRows()
 
 	pWr, err := NewParquetRowWriterForFile(rowSch, path)
 	if err != nil {
-		t.Fatal("Could not open CSVWriter", err)
+		require.NoError(t, err)
 	}
 
 	writeToParquet(pWr, rows, t)
 
 	pRd, err := local.NewLocalFileReader(path)
 	if err != nil {
-		t.Fatal("Cannot open file", err)
+		require.NoError(t, err)
 	}
+	defer func() {
+		err = pRd.Close()
+		require.NoError(t, err)
+	}()
 
 	pr, err := reader.NewParquetReader(pRd, new(Person), 4)
 	if err != nil {
 		t.Fatal("Cannot create parquet reader", err)
 	}
-
+	defer pr.ReadStop()
 	num := int(pr.GetNumRows())
 	assert.Equal(t, num, 4)
 

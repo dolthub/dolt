@@ -16,7 +16,6 @@ package sysbench_runner
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -26,8 +25,7 @@ import (
 )
 
 func TestWriteReadResultsJson(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "TestWriteResultsJson")
-	require.NoError(t, err)
+	tmpDir := t.TempDir()
 	defer os.RemoveAll(tmpDir)
 
 	expected := &Result{
@@ -36,7 +34,7 @@ func TestWriteReadResultsJson(t *testing.T) {
 	}
 
 	filename := filepath.Join(tmpDir, fmt.Sprintf("test-results%s", JsonExt))
-	err = WriteResultsJson(filename, []*Result{expected})
+	err := WriteResultsJson(filename, []*Result{expected})
 	require.NoError(t, err)
 
 	actual, err := ReadResultsJson(filename)
