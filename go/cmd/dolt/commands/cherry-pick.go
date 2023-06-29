@@ -134,12 +134,12 @@ func cherryPick(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgPa
 		return fmt.Errorf("error: your local changes would be overwritten by cherry-pick.\nhint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt reset --hard) to proceed.")
 	}
 
-	_, err = getRowsForSql(queryist, sqlCtx, "set @@dolt_allow_commit_conflicts = 1")
+	_, err = GetRowsForSql(queryist, sqlCtx, "set @@dolt_allow_commit_conflicts = 1")
 	if err != nil {
 		return fmt.Errorf("error: failed to set @@dolt_allow_commit_conflicts: %w", err)
 	}
 
-	_, err = getRowsForSql(queryist, sqlCtx, "set @@dolt_force_transaction_commit = 1")
+	_, err = GetRowsForSql(queryist, sqlCtx, "set @@dolt_force_transaction_commit = 1")
 	if err != nil {
 		return fmt.Errorf("error: failed to set @@dolt_force_transaction_commit: %w", err)
 	}
@@ -148,7 +148,7 @@ func cherryPick(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgPa
 	if err != nil {
 		return fmt.Errorf("error: failed to interpolate query: %w", err)
 	}
-	rows, err := getRowsForSql(queryist, sqlCtx, q)
+	rows, err := GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		errorText := err.Error()
 		switch {
@@ -216,7 +216,7 @@ func cherryPick(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgPa
 
 func cherryPickAbort(queryist cli.Queryist, sqlCtx *sql.Context) error {
 	q := "call dolt_merge('--abort')"
-	_, err := getRowsForSql(queryist, sqlCtx, q)
+	_, err := GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		errorText := err.Error()
 		switch errorText {
@@ -235,7 +235,7 @@ func getDoltStatus(queryist cli.Queryist, sqlCtx *sql.Context) (hasStagedChanges
 	err = nil
 
 	var statusRows []sql.Row
-	statusRows, err = getRowsForSql(queryist, sqlCtx, "select * from dolt_status;")
+	statusRows, err = GetRowsForSql(queryist, sqlCtx, "select * from dolt_status;")
 	if err != nil {
 		return
 	}
