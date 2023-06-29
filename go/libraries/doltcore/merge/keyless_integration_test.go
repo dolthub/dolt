@@ -282,10 +282,12 @@ func TestKeylessMergeConflicts(t *testing.T) {
 			defer dEnv.DoltDB.Close()
 
 			setupTest(t, ctx, dEnv, test.setup)
+			cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv)
+			require.NoError(t, verr)
 
 			resolve := cnfcmds.ResolveCmd{}
 			args := []string{"--ours", tblName}
-			exitCode := resolve.Exec(ctx, resolve.Name(), args, dEnv, nil)
+			exitCode := resolve.Exec(ctx, resolve.Name(), args, dEnv, cliCtx)
 			require.Equal(t, 0, exitCode)
 
 			root, err := dEnv.WorkingRoot(ctx)
@@ -300,10 +302,12 @@ func TestKeylessMergeConflicts(t *testing.T) {
 			defer dEnv.DoltDB.Close()
 
 			setupTest(t, ctx, dEnv, test.setup)
+			cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv)
+			require.NoError(t, verr)
 
 			resolve := cnfcmds.ResolveCmd{}
 			args := []string{"--theirs", tblName}
-			exitCode := resolve.Exec(ctx, resolve.Name(), args, dEnv, nil)
+			exitCode := resolve.Exec(ctx, resolve.Name(), args, dEnv, cliCtx)
 			require.Equal(t, 0, exitCode)
 
 			root, err := dEnv.WorkingRoot(ctx)
