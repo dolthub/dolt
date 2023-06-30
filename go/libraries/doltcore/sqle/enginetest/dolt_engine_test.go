@@ -1484,7 +1484,7 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 			},
 			{
 				Query:    "call dolt_checkout('main');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, ""}},
 			},
 			{
 				Query:    "select database();",

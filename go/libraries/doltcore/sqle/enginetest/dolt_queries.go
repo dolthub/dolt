@@ -504,7 +504,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_checkout('main');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, ""}},
 			},
 			{
 				Query:    "select database();",
@@ -564,7 +564,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_checkout('main');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, ""}},
 			},
 			{
 				// TODO: the behavior here is a bit odd: when we call dolt_checkout, we change the current database to the
@@ -612,7 +612,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_checkout('branch1');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, ""}},
 			},
 			{
 				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
@@ -633,7 +633,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_checkout('-b', 'branch-to-delete');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, ""}},
 			},
 			{
 				Query:    "select active_branch();",
@@ -657,7 +657,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_checkout('-b', 'another-branch');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, ""}},
 			},
 			{
 				Query:    "select active_branch();",
@@ -690,7 +690,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_checkout('t01')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, ""}},
 			},
 			{
 				Query: "select * from dolt_status",
@@ -2744,7 +2744,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'newBranch', 'head~1')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, ""}},
 			},
 			{
 				Query:    "show tables",
@@ -2752,7 +2752,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'newBranch2', @commit1)",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, ""}},
 			},
 			{
 				Query:    "show tables",
@@ -3541,7 +3541,7 @@ var DoltTagTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b','other','HEAD^')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, ""}},
 			},
 			{
 				Query:    "INSERT INTO test VALUES (8), (9)",
