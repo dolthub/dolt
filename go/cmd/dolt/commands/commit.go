@@ -29,7 +29,6 @@ import (
 	goisatty "github.com/mattn/go-isatty"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -41,6 +40,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/util/outputpager"
 )
 
 var commitDocs = cli.CommandDocumentationContent{
@@ -170,21 +170,14 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 		return 0, true
 	}
 
-	if _, ok := queryist.(*engine.SqlEngine); ok {
-		// We have a local context, so we can call the classic (unmigrated) log command.
-		return LogCmd{}.Exec(ctx, "log", []string{"-n=1"}, temporacyDEnv, nil), false
-	} else {
-		// TODO: when dolt log is migrated, remove this block printing out the commit and print with a dolt log call in Exec()
-		schema, rowIter, err = queryist.Query(sqlCtx, "select * from dolt_log() limit 1")
-		if err != nil {
-			cli.Println(err.Error())
-			return 1, false
-		}
-		err = engine.PrettyPrintResults(sqlCtx, engine.FormatTabular, schema, rowIter)
-		if err != nil {
-			cli.Println(err.Error())
-			return 1, false
-		}
+	commit, err := getCommitInfo(queryist, sqlCtx, "HEAD")
+	if cli.ExecuteWithStdioRestored != nil {
+		cli.ExecuteWithStdioRestored(func() {
+			pager := outputpager.Start()
+			defer pager.Stop()
+
+			printCommitInfo(pager, 0, false, "auto", commit)
+		})
 	}
 
 	return 0, false

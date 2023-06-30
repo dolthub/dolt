@@ -522,7 +522,7 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*com
 	}
 
 	if parent != "" {
-		ci.parentHashes = []string{parent}
+		ci.parentHashes = strings.Split(parent, ", ")
 	}
 
 	return ci, nil
