@@ -639,7 +639,7 @@ func (t *WritableDoltTable) truncate(
 	if err != nil {
 		return nil, err
 	}
-
+	
 	newEmptyTable, err = copyConstraintViolationsAndConflicts(ctx, table, newEmptyTable)
 	if err != nil {
 		return nil, err

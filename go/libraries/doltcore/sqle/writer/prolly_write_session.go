@@ -109,7 +109,13 @@ func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table, db strin
 func (s *prollyWriteSession) Flush(ctx context.Context) (*doltdb.WorkingSet, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
-	return s.flush(ctx)
+	return s.flush(ctx, nil)
+}
+
+func (s *prollyWriteSession) FlushWithAutoIncrementOverrides(ctx context.Context, autoIncrements map[string]uint64) (*doltdb.WorkingSet, error) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	return s.flush(ctx, autoIncrements)
 }
 
 // SetWorkingSet implements WriteSession.
@@ -130,7 +136,7 @@ func (s *prollyWriteSession) SetOptions(opts editor.Options) {
 }
 
 // flush is the inner implementation for Flush that does not acquire any locks
-func (s *prollyWriteSession) flush(ctx context.Context) (*doltdb.WorkingSet, error) {
+func (s *prollyWriteSession) flush(ctx context.Context, autoIncrements map[string]uint64) (*doltdb.WorkingSet, error) {
 	tables := make(map[string]*doltdb.Table, len(s.tables))
 	mu := &sync.Mutex{}
 
@@ -144,8 +150,14 @@ func (s *prollyWriteSession) flush(ctx context.Context) (*doltdb.WorkingSet, err
 				return err
 			}
 
+			// Update this table's auto increment value if it has one. This value comes from the global state unless an
+			// override was specified (e.g. if the next value was set explicitly)
 			if schema.HasAutoIncrement(wr.sch) {
-				t, err = t.SetAutoIncrementValue(ctx2, s.aiTracker.Current(name))
+				autoIncVal := s.aiTracker.Current(name)
+				if override, ok := autoIncrements[name]; ok {
+					autoIncVal = override
+				}
+				t, err = t.SetAutoIncrementValue(ctx2, autoIncVal)
 				if err != nil {
 					return err
 				}

@@ -155,12 +155,11 @@ func (a AutoIncrementTrackerImpl) Set(ctx *sql.Context, tableName string, newAut
 	existing := a.sequences[tableName]
 	if newAutoIncVal > existing {
 		a.sequences[strings.ToLower(tableName)] = newAutoIncVal
+		return nil
 	} else {
 		// re-establish our baseline for this table on all branches before making our decision 
 		return a.deepSet(ctx, tableName, newAutoIncVal)
 	}
-
-	return nil
 }
 
 // deepSet sets the auto increment value for the table named, if it's greater than the one on any branch head for this 
@@ -190,8 +189,8 @@ func (a AutoIncrementTrackerImpl) deepSet(ctx *sql.Context, tableName string, ne
 		rootRefs = append(rootRefs, branches...)
 		rootRefs = append(rootRefs, remotes...)
 
-		var roots []doltdb.Rootish
 		for _, b := range rootRefs {
+			var rootish doltdb.Rootish
 			switch b.GetType() {
 			case ref.BranchRefType:
 				wsRef, err := ref.WorkingSetRefForHead(b)
@@ -206,23 +205,21 @@ func (a AutoIncrementTrackerImpl) deepSet(ctx *sql.Context, tableName string, ne
 					if err != nil {
 						return err
 					}
-					roots = append(roots, cm)
+					rootish = cm
 				} else if err != nil {
 					return err
 				} else {
-					roots = append(roots, ws)
+					rootish = ws
 				}
 			case ref.RemoteRefType:
 				cm, err := db.ResolveCommitRef(ctx, b)
 				if err != nil {
 					return err
 				}
-				roots = append(roots, cm)
+				rootish = cm
 			}
-		}
 
-		for _, root := range roots {
-			root, err := root.ResolveRootValue(ctx)
+			root, err := rootish.ResolveRootValue(ctx)
 			if err != nil {
 				return err
 			}
@@ -251,7 +248,7 @@ func (a AutoIncrementTrackerImpl) deepSet(ctx *sql.Context, tableName string, ne
 			}
 
 			// There's a value on this branch higher than the one given, so we can't use it
-			if seq >= newAutoIncVal {
+			if seq > newAutoIncVal {
 				return nil
 			}
 		}

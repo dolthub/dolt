@@ -52,6 +52,9 @@ type WriteSession interface {
 type WriteSessionFlusher interface {
 	// Flush flushes the pending writes in the session.
 	Flush(ctx context.Context) (*doltdb.WorkingSet, error)
+	// FlushWithAutoIncrementOverrides flushes the pending writes in the session, overriding the auto increment values 
+	// for any tables provided in the map
+	FlushWithAutoIncrementOverrides(ctx context.Context, autoIncrements map[string]uint64) (*doltdb.WorkingSet, error)
 }
 
 // nomsWriteSession handles all edit operations on a table that may also update other tables.
@@ -136,6 +139,11 @@ func (s *nomsWriteSession) Flush(ctx context.Context) (*doltdb.WorkingSet, error
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	return s.flush(ctx)
+}
+
+func (s *nomsWriteSession) FlushWithAutoIncrementOverrides(ctx context.Context, autoIncrements map[string]uint64) (*doltdb.WorkingSet, error) {
+	// auto increment overrides not implemented
+	return s.Flush(ctx)
 }
 
 // SetWorkingSet implements WriteSession.

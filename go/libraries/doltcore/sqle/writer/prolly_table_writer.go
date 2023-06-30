@@ -46,6 +46,7 @@ type prollyTableWriter struct {
 
 	aiCol     schema.Column
 	aiTracker globalstate.AutoIncrementTracker
+	nextAutoIncrementValue map[string]uint64
 
 	flusher WriteSessionFlusher
 	setter  SessionRootSetter
@@ -197,12 +198,12 @@ func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) 
 		return err
 	}
 
-	// todo(andy) set here or in flush?
-	w.tbl, err = w.tbl.SetAutoIncrementValue(ctx, seq)
+	w.nextAutoIncrementValue = make(map[string]uint64)
+	w.nextAutoIncrementValue[w.tableName] = seq
+	err = w.aiTracker.Set(ctx, w.tableName, seq)
 	if err != nil {
 		return err
 	}
-	w.aiTracker.Set(ctx, w.tableName, seq)
 
 	return w.flush(ctx)
 }
@@ -349,7 +350,7 @@ func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err err
 }
 
 func (w *prollyTableWriter) flush(ctx *sql.Context) error {
-	ws, err := w.flusher.Flush(ctx)
+	ws, err := w.flusher.FlushWithAutoIncrementOverrides(ctx, w.nextAutoIncrementValue)
 	if err != nil {
 		return err
 	}
