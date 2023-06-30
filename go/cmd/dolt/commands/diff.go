@@ -635,7 +635,6 @@ func getSchemaDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Contex
 		toTable := row[1].(string)
 		fromCreateStmt := row[2].(string)
 		toCreateStmt := row[3].(string)
-		alterStmt := row[4].(string)
 		var diffType = ""
 		var tableName = ""
 		switch {
@@ -657,32 +656,33 @@ func getSchemaDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Contex
 			return nil, fmt.Errorf("error: unexpected schema diff case: fromTable='%s', toTable='%s'", fromTable, toTable)
 		}
 
-		existingSummaryIndex := -1
-		for i, summary := range summaries {
-			if summary.FromTableName == fromTable &&
-				summary.ToTableName == toTable &&
-				summary.DiffType == diffType {
-				existingSummaryIndex = i
-				break
-			}
+		q, err := dbr.InterpolateForDialect(
+			"select statement_order, statement from dolt_patch(?, ?) where diff_type='schema' and (table_name=? or table_name=?) order by statement_order asc",
+			[]interface{}{fromRef, toRef, fromTable, toTable},
+			dialect.MySQL)
+		if err != nil {
+			return nil, fmt.Errorf("error: unable to interpolate dolt_patch query: %w", err)
 		}
-		if existingSummaryIndex == -1 {
-			summary := diff.TableDeltaSummary{
-				TableName:     tableName,
-				FromTableName: fromTable,
-				ToTableName:   toTable,
-				DiffType:      diffType,
-				DataChange:    false,
-				SchemaChange:  true,
-				AlterStmts:    []string{alterStmt},
-			}
-			summaries = append(summaries, summary)
-		} else {
-			summary := summaries[existingSummaryIndex]
-			summary.AlterStmts = append(summary.AlterStmts, alterStmt)
-			summaries[existingSummaryIndex] = summary
+		patchRows, err := GetRowsForSql(queryist, sqlCtx, q)
+		if err != nil {
+			return nil, fmt.Errorf("error: unable to get dolt_patch rows from %s to %s: %w", fromRef, toRef, err)
+		}
+		alterStmts := []string{}
+		for _, row := range patchRows {
+			alterStmts = append(alterStmts, row[1].(string))
 		}
 
+		summary := diff.TableDeltaSummary{
+			TableName:     tableName,
+			FromTableName: fromTable,
+			ToTableName:   toTable,
+			DiffType:      diffType,
+			DataChange:    false,
+			SchemaChange:  true,
+			AlterStmts:    alterStmts,
+		}
+
+		summaries = append(summaries, summary)
 	}
 
 	return summaries, nil
