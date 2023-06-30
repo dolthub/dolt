@@ -22,7 +22,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/dolthub/dolt/go/store/util/outputpager"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 	"github.com/gocraft/dbr/v2"
@@ -41,6 +40,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/util/outputpager"
 )
 
 var commitDocs = cli.CommandDocumentationContent{
