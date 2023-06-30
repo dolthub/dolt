@@ -347,7 +347,7 @@ func getTableNamesAtRef(queryist cli.Queryist, sqlCtx *sql.Context, ref string) 
 	if err != nil {
 		return nil, fmt.Errorf("error interpolating query: %w", err)
 	}
-	rows, err := getRowsForSql(queryist, sqlCtx, q)
+	rows, err := GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, err
 	}
@@ -368,7 +368,7 @@ func getTableNamesAtRef(queryist cli.Queryist, sqlCtx *sql.Context, ref string) 
 		if err != nil {
 			return nil, fmt.Errorf("error interpolating query: %w", err)
 		}
-		_, err = getRowsForSql(queryist, sqlCtx, interpolatedQuery)
+		_, err = GetRowsForSql(queryist, sqlCtx, interpolatedQuery)
 		if err == nil {
 			tableNames[sysTable] = true
 		} else if isTableNotFoundError(err) {
@@ -496,7 +496,7 @@ func getCommonAncestor(queryist cli.Queryist, sqlCtx *sql.Context, c1, c2 string
 	if err != nil {
 		return "", fmt.Errorf("error interpolating query: %w", err)
 	}
-	rows, err := getRowsForSql(queryist, sqlCtx, q)
+	rows, err := GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return "", err
 	}
@@ -624,7 +624,7 @@ func getSchemaDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Contex
 	if err != nil {
 		return nil, fmt.Errorf("error: unable to interpolate query: %w", err)
 	}
-	schemaDiffRows, err := getRowsForSql(queryist, sqlCtx, q)
+	schemaDiffRows, err := GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, fmt.Errorf("error: unable to get schema diff from %s to %s: %w", fromRef, toRef, err)
 	}
@@ -690,7 +690,7 @@ func getSchemaDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Contex
 
 func getDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Context, fromRef, toRef string) ([]diff.TableDeltaSummary, error) {
 	q, err := dbr.InterpolateForDialect("select * from dolt_diff_summary(?, ?)", []interface{}{fromRef, toRef}, dialect.MySQL)
-	dataDiffRows, err := getRowsForSql(queryist, sqlCtx, q)
+	dataDiffRows, err := GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, fmt.Errorf("error: unable to get diff summary from %s to %s: %w", fromRef, toRef, err)
 	}
@@ -702,11 +702,11 @@ func getDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Context, fro
 		summary.FromTableName = row[0].(string)
 		summary.ToTableName = row[1].(string)
 		summary.DiffType = row[2].(string)
-		summary.DataChange, err = getTinyIntColAsBool(row[3])
+		summary.DataChange, err = GetTinyIntColAsBool(row[3])
 		if err != nil {
 			return nil, fmt.Errorf("error: unable to parse data change value '%s': %w", row[3], err)
 		}
-		summary.SchemaChange, err = getTinyIntColAsBool(row[4])
+		summary.SchemaChange, err = GetTinyIntColAsBool(row[4])
 		if err != nil {
 			return nil, fmt.Errorf("error: unable to parse schema change value '%s': %w", row[4], err)
 		}
@@ -835,7 +835,7 @@ func getTableSchemaAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName s
 	if err != nil {
 		return sch, createStmt, fmt.Errorf("error interpolating query: %w", err)
 	}
-	rows, err = getRowsForSql(queryist, sqlCtx, interpolatedQuery)
+	rows, err = GetRowsForSql(queryist, sqlCtx, interpolatedQuery)
 	if err != nil {
 		return sch, createStmt, fmt.Errorf("error: unable to get create table statement for table '%s': %w", tableName, err)
 	}
@@ -902,7 +902,7 @@ func getTableDiffStats(queryist cli.Queryist, sqlCtx *sql.Context, tableName, fr
 	if err != nil {
 		return nil, fmt.Errorf("error interpolating query: %w", err)
 	}
-	rows, err := getRowsForSql(queryist, sqlCtx, q)
+	rows, err := GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, fmt.Errorf("error running diff stats query: %w", err)
 	}

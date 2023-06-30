@@ -186,7 +186,7 @@ teardown() {
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
 }
 
@@ -209,7 +209,7 @@ teardown() {
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
 }
 

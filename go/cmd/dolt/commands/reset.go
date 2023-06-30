@@ -15,14 +15,18 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -80,90 +84,102 @@ func (cmd ResetCmd) ArgParser() *argparser.ArgParser {
 	return cli.CreateResetArgParser()
 }
 
+func (cmd ResetCmd) RequiresRepo() bool {
+	return false
+}
+
 // Exec executes the command
 func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cli.CreateResetArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, resetDocContent, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if dEnv.IsLocked() {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
-	}
-
-	roots, err := dEnv.Roots(ctx)
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		cli.Println(err.Error())
+		return 1
+	}
+	if closeFunc != nil {
+		defer closeFunc()
 	}
 
 	if apr.ContainsAll(HardResetParam, SoftResetParam) {
 		verr := errhand.BuildDError("error: --%s and --%s are mutually exclusive options.", HardResetParam, SoftResetParam).Build()
 		return HandleVErrAndExitCode(verr, usage)
-	} else if apr.Contains(HardResetParam) {
-		return handleResetHard(ctx, apr, usage, dEnv, roots)
-	} else {
-		if apr.NArg() == 1 {
-			ref := apr.Arg(0)
-			isValidRef, err := actions.IsValidRef(ctx, ref, dEnv.DoltDB, dEnv.RepoStateReader())
-			if err != nil {
-				return handleErrAndExit(err)
-			}
-			if isValidRef {
-				return handleResetSoftToRef(ctx, dEnv, ref, usage)
-			}
-		}
-
-		return handleResetSoftTables(ctx, apr.Args, roots, dEnv, usage)
-	}
-}
-
-func handleResetSoftTables(ctx context.Context, tables []string, roots doltdb.Roots, dEnv *env.DoltEnv, usage cli.UsagePrinter) int {
-	roots, err := actions.ResetSoft(ctx, dEnv.DbData(), tables, roots)
-	if err != nil {
-		return handleResetError(err, usage)
-	}
-
-	err = dEnv.UpdateRoots(ctx, roots)
-	if err != nil {
-		return handleResetError(err, usage)
-	}
-
-	printNotStaged(ctx, dEnv, roots.Staged)
-	return 0
-}
-
-func handleResetSoftToRef(ctx context.Context, dEnv *env.DoltEnv, ref string, usage cli.UsagePrinter) int {
-	newRoots, err := actions.ResetSoftToRef(ctx, dEnv.DbData(), ref)
-	if err != nil {
-		return handleResetError(err, usage)
-	}
-
-	err = dEnv.UpdateStagedRoot(ctx, newRoots.Staged)
-	return handleResetError(err, usage)
-}
-
-func handleResetHard(ctx context.Context, apr *argparser.ArgParseResults, usage cli.UsagePrinter, dEnv *env.DoltEnv, roots doltdb.Roots) int {
-	arg := ""
-	if apr.NArg() > 1 {
+	} else if apr.Contains(HardResetParam) && apr.NArg() > 1 {
 		return handleResetError(fmt.Errorf("--hard supports at most one additional param"), usage)
-	} else if apr.NArg() == 1 {
-		arg = apr.Arg(0)
+	} else if apr.Contains(SoftResetParam) && apr.NArg() > 1 {
+		return handleResetError(fmt.Errorf("--soft supports at most one additional param"), usage)
 	}
 
-	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-	ws, err := dEnv.WorkingSet(ctx)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-
-	err = actions.ResetHard(ctx, dEnv, arg, roots, headRef, ws)
+	// process query through prepared statement to prevent sql injection
+	query, err := constructInterpolatedDoltResetQuery(apr)
+	_, _, err = queryist.Query(sqlCtx, query)
 	if err != nil {
 		return handleResetError(err, usage)
 	}
 
+	printNotStaged(sqlCtx, queryist)
+
 	return 0
+}
+
+// constructInterpolatedDoltResetQuery generates the sql query necessary to call the DOLT_RESET() stored procedure.
+// Also runs interpolates this query to prevent sql injection.
+func constructInterpolatedDoltResetQuery(apr *argparser.ArgParseResults) (string, error) {
+	var params []interface{}
+	var param bool
+
+	var buffer bytes.Buffer
+	var first bool
+	first = true
+	buffer.WriteString("CALL DOLT_RESET(")
+
+	writeToBuffer := func(s string) {
+		if !first {
+			buffer.WriteString(", ")
+		}
+		if !param {
+			buffer.WriteString("'")
+		}
+		buffer.WriteString(s)
+		if !param {
+			buffer.WriteString("'")
+		}
+		first = false
+		param = false
+	}
+
+	if apr.Contains(HardResetParam) {
+		writeToBuffer("--hard")
+		if apr.NArg() == 1 {
+			param = true
+			writeToBuffer("?")
+			params = append(params, apr.Arg(0))
+		}
+	} else if apr.Contains(SoftResetParam) {
+		writeToBuffer("--soft")
+		if apr.NArg() == 1 {
+			param = true
+			writeToBuffer("?")
+			params = append(params, apr.Arg(0))
+		}
+	} else {
+		for _, input := range apr.Args {
+			param = true
+			writeToBuffer("?")
+			params = append(params, input)
+		}
+	}
+
+	buffer.WriteString(")")
+
+	interpolatedQuery, err := dbr.InterpolateForDialect(buffer.String(), params, dialect.MySQL)
+	if err != nil {
+		return "", err
+	}
+
+	return interpolatedQuery, nil
 }
 
 var tblDiffTypeToShortLabel = map[diff.TableDiffType]string{
@@ -172,22 +188,23 @@ var tblDiffTypeToShortLabel = map[diff.TableDiffType]string{
 	diff.AddedTable:    "N",
 }
 
-func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootValue) {
+func printNotStaged(sqlCtx *sql.Context, queryist cli.Queryist) {
 	// Printing here is best effort.  Fail silently
-	working, err := dEnv.WorkingRoot(ctx)
-
+	schema, rowIter, err := queryist.Query(sqlCtx, "select * from dolt_status where staged = false")
 	if err != nil {
 		return
 	}
-
-	notStagedTbls, err := diff.GetTableDeltas(ctx, staged, working)
+	rows, err := sql.RowIterToRows(sqlCtx, schema, rowIter)
 	if err != nil {
+		return
+	}
+	if rows == nil {
 		return
 	}
 
 	removeModified := 0
-	for _, td := range notStagedTbls {
-		if !td.IsAdd() {
+	for _, row := range rows {
+		if row[2] != "new table" {
 			removeModified++
 		}
 	}
@@ -196,17 +213,17 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 		cli.Println("Unstaged changes after reset:")
 
 		var lines []string
-		for _, td := range notStagedTbls {
-			if td.IsAdd() {
+		for _, row := range rows {
+			if row[2] == "new table" {
 				//  per Git, unstaged new tables are untracked
 				continue
-			} else if td.IsDrop() {
-				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[diff.RemovedTable], td.CurName()))
-			} else if td.IsRename() {
+			} else if row[2] == "deleted" {
+				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[diff.RemovedTable], row[0]))
+			} else if row[2] == "renamed" {
 				// per Git, unstaged renames are shown as drop + add
-				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[diff.RemovedTable], td.FromName))
+				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[diff.RemovedTable], row[0]))
 			} else {
-				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[diff.ModifiedTable], td.CurName()))
+				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[diff.ModifiedTable], row[0]))
 			}
 		}
 		cli.Println(strings.Join(lines, "\n"))

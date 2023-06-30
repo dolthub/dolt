@@ -282,8 +282,8 @@ func MapSchemaBasedOnTagAndName(inSch, outSch Schema) ([]int, []int, error) {
 
 	err := inSch.GetPKCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
 		i := inSch.GetPKCols().TagToIdx[tag]
-		if col, ok := outSch.GetPKCols().GetByTag(tag); ok {
-			j := outSch.GetPKCols().TagToIdx[col.Tag]
+		if foundCol, ok := outSch.GetPKCols().GetByTag(tag); ok {
+			j := outSch.GetPKCols().TagToIdx[foundCol.Tag]
 			keyMapping[i] = j
 		} else {
 			return true, fmt.Errorf("could not map primary key column %s", col.Name)

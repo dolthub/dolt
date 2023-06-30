@@ -280,7 +280,7 @@ func newLateBindingEngine(
 	return lateBinder, nil
 }
 
-func getRowsForSql(queryist cli.Queryist, sqlCtx *sql.Context, query string) ([]sql.Row, error) {
+func GetRowsForSql(queryist cli.Queryist, sqlCtx *sql.Context, query string) ([]sql.Row, error) {
 	schema, rowIter, err := queryist.Query(sqlCtx, query)
 	if err != nil {
 		return nil, err
@@ -293,9 +293,25 @@ func getRowsForSql(queryist cli.Queryist, sqlCtx *sql.Context, query string) ([]
 	return rows, nil
 }
 
+// GetTinyIntColAsBool returns the value of a tinyint column as a bool
+// This is necessary because Queryist may return a tinyint column as a bool (when using SQLEngine)
+// or as a string (when using ConnectionQueryist).
+func GetTinyIntColAsBool(col interface{}) (bool, error) {
+	switch v := col.(type) {
+	case bool:
+		return v, nil
+	case int:
+		return v == 1, nil
+	case string:
+		return v == "1", nil
+	default:
+		return false, fmt.Errorf("unexpected type %T, was expecting bool, int, or string", v)
+	}
+}
+
 func getActiveBranchName(sqlCtx *sql.Context, queryEngine cli.Queryist) (string, error) {
 	query := "SELECT active_branch()"
-	rows, err := getRowsForSql(queryEngine, sqlCtx, query)
+	rows, err := GetRowsForSql(queryEngine, sqlCtx, query)
 	if err != nil {
 		return "", err
 	}

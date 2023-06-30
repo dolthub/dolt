@@ -471,7 +471,7 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*com
 	if err != nil {
 		return nil, fmt.Errorf("error interpolating query: %v", err)
 	}
-	rows, err := getRowsForSql(queryist, sqlCtx, q)
+	rows, err := GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, fmt.Errorf("error getting logs for ref '%s': %v", ref, err)
 	}
@@ -533,7 +533,7 @@ func getTagsForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash strin
 	if err != nil {
 		return nil, err
 	}
-	rows, err := getRowsForSql(queryist, sqlCtx, q)
+	rows, err := GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, err
 	}
@@ -557,7 +557,7 @@ func getBranchesForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash s
 	if err != nil {
 		return nil, err
 	}
-	rows, err := getRowsForSql(queryist, sqlCtx, q)
+	rows, err := GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, err
 	}
@@ -575,7 +575,7 @@ func getHashOf(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (string, 
 	if err != nil {
 		return "", fmt.Errorf("error interpolating hashof query: %v", err)
 	}
-	rows, err := getRowsForSql(queryist, sqlCtx, q)
+	rows, err := GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return "", fmt.Errorf("error getting hash of ref '%s': %v", ref, err)
 	}

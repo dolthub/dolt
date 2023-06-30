@@ -47,6 +47,18 @@ get_staged_tables() {
     '
 }
 
+basic_conflict() {
+    dolt sql -q "create table t (i int primary key, t text)"
+    dolt add .
+    dolt commit -am "init commit"
+    dolt checkout -b other
+    dolt sql -q "insert into t values (1,'other')"
+    dolt commit -am "other commit"
+    dolt checkout main
+    dolt sql -q "insert into t values (1,'main')"
+    dolt commit -am "main commit"
+}
+
 extract_value() {
     key="$1"
     input="$2"
@@ -431,6 +443,60 @@ EOF
   stop_sql_server 1
 }
 
+@test "sql-local-remote: verify dolt conflicts cat behavior" {
+  cd defaultDB
+
+  dolt sql << SQL
+CREATE TABLE people (
+  id INT NOT NULL,
+  last_name VARCHAR(120),
+  first_name VARCHAR(120),
+  birthday DATETIME(6),
+  age INT DEFAULT '0',
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+SQL
+  dolt add .
+  dolt commit -am "base"
+
+  dolt checkout -b right
+  dolt sql <<SQL
+ALTER TABLE people
+MODIFY COLUMN age FLOAT;
+SQL
+  dolt commit -am "right"
+
+  dolt checkout main
+  dolt sql <<SQL
+ALTER TABLE people
+MODIFY COLUMN age BIGINT;
+SQL
+  dolt commit -am "left"
+
+  dolt merge right -m "merge right"
+
+  run dolt conflicts cat .
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "| our_schema" ]] || false
+  [[ "$output" =~ "| their_schema" ]] || false
+  [[ "$output" =~ "| base_schema" ]] || false
+  [[ "$output" =~ "| description" ]] || false
+  [[ "$output" =~ "different column definitions for our column age and their column age" ]] || false
+  [[ "$output" =~ "\`age\` bigint," ]] || false
+  [[ "$output" =~ "\`age\` float," ]] || false
+  [[ "$output" =~ "\`age\` int DEFAULT '0'," ]] || false
+  localOutput=$output
+
+  start_sql_server defaultDB
+
+  run dolt conflicts cat .
+  [ "$status" -eq 0 ]
+  remoteOutput=$output
+
+  [[ "$remoteOutput" == "$localOutput" ]] || false
+  stop_sql_server 1
+}
+
 @test "sql-local-remote: check that the --password argument is used when talking to a server and ignored with local" {
     start_sql_server altDb
 
@@ -570,7 +636,7 @@ EOF
     [ "$status" -eq 1 ]
     [[ "$output" =~ "When a password is provided, a user must also be provided" ]] || false
 
-    stop_sql_server 1 
+    stop_sql_server 1
 
     run dolt --password "anything" sql -q "show tables"
     [ "$status" -eq 1 ]
@@ -580,4 +646,87 @@ EOF
     run dolt sql -q "show tables"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "When a password is provided, a user must also be provided" ]] || false
+}
+
+@test "sql-local-remote: verify simple dolt reset behavior" {
+    start_sql_server altDB
+    dolt sql -q "create table test1 (pk int primary key)"
+    dolt add test1
+    dolt commit -m "create table test1"
+
+    dolt sql -q "insert into test1 values (1)"
+    dolt add test1
+    run dolt --verbose-engine-setup reset
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
+
+    stop_sql_server 1
+
+    dolt add test1
+    run dolt --verbose-engine-setup reset
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting local mode" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
+}
+
+@test "sql-local-remote: verify dolt conflicts resolve behavior" {
+  cd altDB
+  dolt tag v0
+
+  # setup
+  basic_conflict
+  dolt checkout main
+  run dolt sql -q "select * from t"
+  [ $status -eq 0 ]
+  [[ $output =~ "main" ]] || false
+  run dolt merge other
+  [ $status -eq 0 ]
+  [[ $output =~ "Automatic merge failed" ]] || false
+
+  # start server
+  start_sql_server altDB
+
+  # test remote
+  run dolt conflicts resolve --ours .
+  [ $status -eq 0 ]
+  remoteOutput=$output
+  run dolt sql -q "select * from t"
+  [ $status -eq 0 ]
+  [[ $output =~ "main" ]] || false
+
+  # stop server
+  stop_sql_server 1
+
+  # reset
+  dolt reset --hard v0
+  dolt branch -D other
+
+  # test local
+  basic_conflict
+  dolt checkout main
+  run dolt sql -q "select * from t"
+  [ $status -eq 0 ]
+  [[ $output =~ "main" ]] || false
+
+  run dolt merge other
+  [ $status -eq 0 ]
+  [[ $output =~ "Automatic merge failed" ]] || false
+
+  run dolt conflicts resolve --ours .
+  [ $status -eq 0 ]
+  localOutput=$output
+  run dolt sql -q "select * from t"
+  [ $status -eq 0 ]
+  [[ $output =~ "main" ]] || false
+
+  [[ "$remoteOutput" == "$localOutput" ]] || false
 }
