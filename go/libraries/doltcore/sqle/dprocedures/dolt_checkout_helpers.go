@@ -98,10 +98,16 @@ func CheckoutBranch(ctx *sql.Context, brName string, force bool) error {
 			return err
 		}
 	} else {
-		err = dbData.Rsw.SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
+		wsRef, err := ref.WorkingSetRefForHead(branchRef)
 		if err != nil {
 			return err
 		}
+
+		err = dSess.SwitchWorkingSet(ctx, dbName, wsRef)
+		if err != nil {
+			return err
+		}
+
 	}
 
 	if workingSetExists && hasChanges {
@@ -130,7 +136,12 @@ func transferWorkingChanges(
 
 	// important to not update the checked out branch until after we have done the error checking above, otherwise we
 	// potentially leave the client in a bad state
-	err = dbData.Rsw.SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: branchRef})
+	wsRef, err := ref.WorkingSetRefForHead(branchRef)
+	if err != nil {
+		return err
+	}
+
+	err = dSess.SwitchWorkingSet(ctx, dbName, wsRef)
 	if err != nil {
 		return err
 	}
