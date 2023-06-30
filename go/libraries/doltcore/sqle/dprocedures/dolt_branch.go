@@ -90,9 +90,17 @@ func doDoltBranch(ctx *sql.Context, args []string) (int, error) {
 }
 
 func commitTransaction(ctx *sql.Context, dSess *dsess.DoltSession, rsc *doltdb.ReplicationStatusController) error {
-	err := dSess.CommitTransaction(ctx, ctx.GetTransaction())
-	if err != nil {
-		return err
+	currentTx := ctx.GetTransaction()
+	if currentTx != nil {
+		err := dSess.CommitTransaction(ctx, currentTx)
+		if err != nil {
+			return err
+		}
+		newTx, err := dSess.StartTransaction(ctx, sql.ReadWrite)
+		if err != nil {
+			return err
+		}
+		ctx.SetTransaction(newTx)
 	}
 
 	if rsc != nil {
