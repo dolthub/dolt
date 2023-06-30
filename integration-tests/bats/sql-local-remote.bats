@@ -309,6 +309,14 @@ assert_has_key_value() {
     [[ "$output" =~ "committing locally" ]] || false
 }
 
+@test "sql-local-remote: verify dolt commit print" {
+    run dolt --use-db altDB commit -A -m "Wonderful Commit"
+    [[ "${lines[0]}" =~ "commit " ]] || false
+    [[ "${lines[1]}" =~ "Author: Bats Tests <bats@email.fake>" ]] || false
+    [[ "${lines[2]}" =~ "Date: " ]] || false
+    [[ "${lines[3]}" =~ "	Wonderful Commit" ]] || false
+}
+
 @test "sql-local-remote: verify simple dolt branch behavior." {
     start_sql_server altDB
     cd altDB
