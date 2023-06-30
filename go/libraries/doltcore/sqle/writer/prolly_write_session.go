@@ -18,11 +18,11 @@ import (
 	"context"
 	"sync"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
@@ -31,9 +31,9 @@ import (
 // Serves as coordination for SessionedTableEditors.
 type prollyWriteSession struct {
 	workingSet *doltdb.WorkingSet
-	tables     map[string]*prollyTableWriter
-	aiTracker  globalstate.AutoIncrementTracker
-	mut        *sync.RWMutex
+	tables    map[string]*prollyTableWriter
+	aiTracker dsess.AutoIncrementTrackerImpl
+	mut       *sync.RWMutex
 }
 
 var _ WriteSession = &prollyWriteSession{}

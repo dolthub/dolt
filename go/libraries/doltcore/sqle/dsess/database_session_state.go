@@ -17,6 +17,7 @@ package dsess
 import (
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -72,7 +73,7 @@ type DatabaseSessionState struct {
 	// safe because it's keyed by immutable hashes)
 	headCache map[string]*SessionCache
 	// globalState is the global state of this session (shared by all sessions for a particular db)
-	globalState GlobalState
+	globalState globalstate.GlobalState
 	// tmpFileDir is the directory to use for temporary files for this database
 	tmpFileDir string
 

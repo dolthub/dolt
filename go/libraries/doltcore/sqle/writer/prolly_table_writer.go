@@ -17,7 +17,7 @@ package writer
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -45,7 +45,7 @@ type prollyTableWriter struct {
 	sqlSch sql.Schema
 
 	aiCol     schema.Column
-	aiTracker dsess.AutoIncrementTracker
+	aiTracker globalstate.AutoIncrementTracker
 
 	flusher WriteSessionFlusher
 	setter  SessionRootSetter

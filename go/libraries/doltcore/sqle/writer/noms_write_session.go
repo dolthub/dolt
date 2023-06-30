@@ -19,11 +19,11 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -58,9 +58,9 @@ type WriteSessionFlusher interface {
 // Serves as coordination for SessionedTableEditors.
 type nomsWriteSession struct {
 	workingSet *doltdb.WorkingSet
-	tables     map[string]*sessionedTableEditor
-	aiTracker  globalstate.AutoIncrementTracker
-	mut        *sync.RWMutex // This mutex is specifically for changes that affect the TES or all STEs
+	tables    map[string]*sessionedTableEditor
+	aiTracker dsess.AutoIncrementTrackerImpl
+	mut       *sync.RWMutex // This mutex is specifically for changes that affect the TES or all STEs
 	opts       editor.Options
 }
 
@@ -69,7 +69,7 @@ var _ WriteSession = &nomsWriteSession{}
 // NewWriteSession creates and returns a WriteSession. Inserting a nil root is not an error, as there are
 // locations that do not have a root at the time of this call. However, a root must be set through SetRoot before any
 // table editors are returned.
-func NewWriteSession(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, aiTracker globalstate.AutoIncrementTracker, opts editor.Options) WriteSession {
+func NewWriteSession(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, aiTracker dsess.AutoIncrementTrackerImpl, opts editor.Options) WriteSession {
 	if types.IsFormat_DOLT(nbf) {
 		return &prollyWriteSession{
 			workingSet: ws,

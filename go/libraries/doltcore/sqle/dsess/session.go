@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 
@@ -1167,7 +1168,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 
 		// TODO: this is pretty clunky, there is a silly dependency between InitialDbState and globalstate.StateProvider
 		//  that's hard to express with the current types
-		stateProvider, ok := db.(GlobalStateProvider)
+		stateProvider, ok := db.(globalstate.GlobalStateProvider)
 		if !ok {
 			return fmt.Errorf("database does not contain global state store")
 		}

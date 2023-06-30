@@ -15,7 +15,7 @@
 package writer
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -55,7 +55,7 @@ type nomsTableWriter struct {
 	tableEditor editor.TableEditor
 	flusher     WriteSessionFlusher
 
-	autoInc dsess.AutoIncrementTracker
+	autoInc globalstate.AutoIncrementTracker
 
 	setter SessionRootSetter
 }
