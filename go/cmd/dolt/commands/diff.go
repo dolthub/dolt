@@ -1304,9 +1304,7 @@ func diffRows(
 
 func unionSchemas(s1 sql.Schema, s2 sql.Schema) sql.Schema {
 	var union sql.Schema
-	for i := range s1 {
-		union = append(union, s1[i])
-	}
+	union = append(union, s1...)
 	for i := range s2 {
 		if union.IndexOfColName(s2[i].Name) < 0 {
 			union = append(union, s2[i])
