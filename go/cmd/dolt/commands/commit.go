@@ -170,7 +170,6 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 		return 0, true
 	}
 
-	// TODO: when dolt log is migrated, remove this block printing out the commit and print with a dolt log call in Exec()
 	commit, err := getCommitInfo(queryist, sqlCtx, "HEAD")
 	cli.ExecuteWithStdioRestored(func() {
 		pager := outputpager.Start()
