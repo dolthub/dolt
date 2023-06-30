@@ -635,11 +635,29 @@ SQL
 
       run dolt sql -q "select * from dolt_schema_diff('branch1', 'branch2');"
       [ "$status" -eq 0 ]
-      [[ "$output" =~ "ALTER TABLE \`test\` DROP \`c2\`;" ]] || false
-      [[ "$output" =~ "ALTER TABLE \`test\` ADD \`c3\` varchar(10);" ]] || false
+      [[ "$output" =~ "| test            | test          | CREATE TABLE \`test\` (                                             | CREATE TABLE \`test\` (                                             |" ]] || false
+      [[ "$output" =~ "|                 |               |   \`c2\` int,                                                       |   \`c3\` varchar(10),                                               |" ]] || false
+
+      run dolt sql -q "select * from dolt_schema_diff('branch2', 'branch1');"
+      [ "$status" -eq 0 ]
+      [[ "$output" =~ "| test            | test          | CREATE TABLE \`test\` (                                             | CREATE TABLE \`test\` (                                             |" ]] || false
+      [[ "$output" =~ "|                 |               |   \`c3\` varchar(10),                                               |   \`c2\` int,                                                       |" ]] || false
+
+      run dolt sql -q "select * from dolt_schema_diff('tag1', 'tag2');"
+      [ "$status" -eq 0 ]
+      [[ "$output" =~ "| test            | test          | CREATE TABLE \`test\` (                                             | CREATE TABLE \`test\` (                                             |" ]] || false
+      [[ "$output" =~ "|                 |               |   \`c2\` int,                                                       |   \`c3\` varchar(10),                                               |" ]] || false
 
       run dolt sql -q "select * from dolt_schema_diff('tag2', 'tag1');"
       [ "$status" -eq 0 ]
-      [[ "$output" =~ "ALTER TABLE \`test\` DROP \`c3\`;" ]] || false
-      [[ "$output" =~ "ALTER TABLE \`test\` ADD \`c2\` int;" ]] || false
+      [[ "$output" =~ "| test            | test          | CREATE TABLE \`test\` (                                             | CREATE TABLE \`test\` (                                             |" ]] || false
+      [[ "$output" =~ "|                 |               |   \`c3\` varchar(10),                                               |   \`c2\` int,                                                       |" ]] || false
+
+      run dolt sql -q "select * from dolt_schema_diff('branch1', 'branch1');"
+      [ "$status" -eq 0 ]
+      [ "$output" = "" ]
+
+      run dolt sql -q "select * from dolt_schema_diff('tag2', 'tag2');"
+      [ "$status" -eq 0 ]
+      [ "$output" = "" ]
 }
