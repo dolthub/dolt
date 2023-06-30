@@ -171,12 +171,14 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 	}
 
 	commit, err := getCommitInfo(queryist, sqlCtx, "HEAD")
-	cli.ExecuteWithStdioRestored(func() {
-		pager := outputpager.Start()
-		defer pager.Stop()
+	if cli.ExecuteWithStdioRestored != nil {
+		cli.ExecuteWithStdioRestored(func() {
+			pager := outputpager.Start()
+			defer pager.Stop()
 
-		printCommitInfo(pager, 0, false, "auto", commit)
-	})
+			printCommitInfo(pager, 0, false, "auto", commit)
+		})
+	}
 
 	return 0, false
 }
