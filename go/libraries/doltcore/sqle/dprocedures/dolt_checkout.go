@@ -248,7 +248,7 @@ func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName str
 	}
 }
 
-func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController, updateHead bool) (string, error) {
+func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController, isGlobal bool) (string, error) {
 	var newBranchName string
 	var remoteName, remoteBranchName string
 	var startPt = "head"
@@ -315,8 +315,8 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 		remoteAndBranch = fmt.Sprintf("%s/%s", remoteName, remoteBranchName)
 	}
 
-	if updateHead {
-		return remoteAndBranch, doUpdateHead(ctx, sess, dbName, newBranchName, apr.Contains(cli.ForceFlag))
+	if isGlobal {
+		return remoteAndBranch, doGlobalCheckout(ctx, sess, dbName, newBranchName, apr.Contains(cli.ForceFlag))
 	} else {
 
 		wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(newBranchName))
@@ -346,7 +346,7 @@ func checkoutBranch(ctx *sql.Context, dbName string, branchName string, apr *arg
 	dSess := dsess.DSessFromSess(ctx.Session)
 
 	if apr.Contains(cli.GlobalFlag) {
-		return doUpdateHead(ctx, dSess, dbName, branchName, apr.Contains(cli.ForceFlag))
+		return doGlobalCheckout(ctx, dSess, dbName, branchName, apr.Contains(cli.ForceFlag))
 	} else {
 
 		err = dSess.SwitchWorkingSet(ctx, dbName, wsRef)
@@ -358,7 +358,9 @@ func checkoutBranch(ctx *sql.Context, dbName string, branchName string, apr *arg
 	return nil
 }
 
-func doUpdateHead(ctx *sql.Context, dSess *dsess.DoltSession, dbName, branchName string, isForce bool) error {
+// doGlobalCheckout implements the behavior of the `dolt checkout` command line, moving the working set into
+// the new branch and persisting the checked-out branch into future sessions
+func doGlobalCheckout(ctx *sql.Context, dSess *dsess.DoltSession, dbName, branchName string, isForce bool) error {
 	if sqlserver.RunningInServerMode() {
 		return fmt.Errorf("unable to change the default branch while the server is running; " +
 			"this can by changed on the command line, by stopping the sql-server, " +
@@ -366,7 +368,7 @@ func doUpdateHead(ctx *sql.Context, dSess *dsess.DoltSession, dbName, branchName
 	}
 
 	// This copies over the working set.
-	err := CheckoutBranch(ctx, branchName, isForce)
+	err := MoveWorkingSetToBranch(ctx, branchName, isForce)
 	if err != nil {
 		return err
 	}

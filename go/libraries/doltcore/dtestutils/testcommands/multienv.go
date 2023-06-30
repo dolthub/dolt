@@ -172,7 +172,7 @@ func (mr *MultiRepoTestSetup) CheckoutBranch(dbName, branchName string) {
 		mr.Errhand(err)
 	}
 	defer closeFunc()
-	err = dprocedures.CheckoutBranch(sqlCtx, branchName, false)
+	err = dprocedures.MoveWorkingSetToBranch(sqlCtx, branchName, false)
 	if err != nil {
 		mr.Errhand(err)
 	}

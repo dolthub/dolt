@@ -10,7 +10,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
-func CheckoutBranch(ctx *sql.Context, brName string, force bool) error {
+func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool) error {
 	branchRef := ref.NewBranchRef(brName)
 	dSess := dsess.DSessFromSess(ctx.Session)
 	dbName := dSess.GetCurrentDatabase()
