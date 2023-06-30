@@ -211,7 +211,7 @@ func (db Database) DbData() env.DbData {
 	}
 }
 
-func (db Database) GetGlobalState() dsess.GlobalStateImpl {
+func (db Database) GetGlobalState() globalstate.GlobalState {
 	return db.gs
 }
 

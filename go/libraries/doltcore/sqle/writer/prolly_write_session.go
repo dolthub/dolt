@@ -18,7 +18,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -32,7 +32,7 @@ import (
 type prollyWriteSession struct {
 	workingSet *doltdb.WorkingSet
 	tables    map[string]*prollyTableWriter
-	aiTracker dsess.AutoIncrementTrackerImpl
+	aiTracker globalstate.AutoIncrementTracker
 	mut       *sync.RWMutex
 }
 
