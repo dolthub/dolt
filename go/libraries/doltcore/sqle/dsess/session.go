@@ -260,6 +260,37 @@ func (d *DoltSession) RemoveBranchState(ctx *sql.Context, dbName string, branchN
 	return nil
 }
 
+// RenameBranchState replaces all references to a renamed branch with its new name
+func (d *DoltSession) RenameBranchState(ctx *sql.Context, dbName string, oldBranchName, newBranchName string) error {
+	baseName, _ := SplitRevisionDbName(dbName)
+
+	checkedOutState, ok, err := d.lookupDbState(ctx, baseName)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return sql.ErrDatabaseNotFound.New(baseName)
+	}
+
+	d.mu.Lock()
+	branch, ok := checkedOutState.dbState.heads[strings.ToLower(oldBranchName)]
+
+	if !ok {
+		// nothing to rename
+		return nil
+	}
+
+	delete(checkedOutState.dbState.heads, strings.ToLower(oldBranchName))
+	branch.head = strings.ToLower(newBranchName)
+	checkedOutState.dbState.heads[strings.ToLower(newBranchName)] = branch
+
+	d.mu.Unlock()
+
+	// also clear out any db-level caches for this db
+	d.dbCache.Clear()
+	return nil
+}
+
 // SetValidateErr sets an error on this session to be returned from every call
 // to ValidateSession. This is effectively a way to disable a session.
 //

@@ -172,14 +172,9 @@ func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseRe
 
 	// If the active branch of the SQL session was renamed, switch to the new branch.
 	if oldBranchName == activeSessionBranch {
-		currentTx := ctx.GetTransaction()
-		if currentTx != nil {
-			err := sess.CommitTransaction(ctx, currentTx)
-			if err != nil {
-				return err
-			}
-			newTx, err := sess.StartTransaction(ctx, sql.ReadWrite)
-			ctx.SetTransaction(newTx)
+		err = sess.RenameBranchState(ctx, dbName, oldBranchName, newBranchName)
+		if err != nil {
+			return err
 		}
 
 		wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(newBranchName))
