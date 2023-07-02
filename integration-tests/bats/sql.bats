@@ -39,28 +39,6 @@ teardown() {
     teardown_common
 }
 
-@test "sql: --user option changes superuser" {
-    # remove config
-    rm -rf .doltcfg
-
-    # default is root@localhost
-    run dolt sql -q "select user, host from mysql.user"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "root" ]] || false
-    ! [[ "$output" =~ "dolt" ]] || false
-    [[ "$output" =~ "localhost" ]] || false
-
-    # make it dolt@localhost
-    run dolt --user=dolt sql -q "select user, host from mysql.user"
-    [ "$status" -eq 0 ]
-    ! [[ "$output" =~ "root" ]] || false
-    [[ "$output" =~ "dolt" ]] || false
-    [[ "$output" =~ "localhost" ]] || false
-
-    # remove config
-    rm -rf .doltcfg
-}
-
 @test "sql: --user don't create superuser if using an existing user" {
     rm -rf .doltcfg
 

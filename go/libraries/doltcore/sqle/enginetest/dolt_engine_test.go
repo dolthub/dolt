@@ -1291,6 +1291,26 @@ func TestStoredProcedures(t *testing.T) {
 	enginetest.TestStoredProcedures(t, h)
 }
 
+func TestDoltStoredProcedures(t *testing.T) {
+	for _, script := range DoltProcedureTests {
+		func() {
+			h := newDoltHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func TestDoltStoredProceduresPrepared(t *testing.T) {
+	for _, script := range DoltProcedureTests {
+		func() {
+			h := newDoltHarness(t)
+			defer h.Close()
+			enginetest.TestScriptPrepared(t, h, script)
+		}()
+	}
+}
+
 func TestEvents(t *testing.T) {
 	doltHarness := newDoltHarness(t)
 	defer doltHarness.Close()
@@ -2210,6 +2230,30 @@ func TestDiffSystemTablePrepared(t *testing.T) {
 				enginetest.TestScriptPrepared(t, h, test)
 			}()
 		}
+	}
+}
+
+func TestSchemaDiffSystemTable(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	harness.Setup(setup.MydbData)
+	for _, test := range SchemaDiffSystemTableScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScript(t, harness, test)
+		})
+	}
+}
+
+func TestSchemaDiffSystemTablePrepared(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	harness.Setup(setup.MydbData)
+	for _, test := range SchemaDiffSystemTableScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
+		})
 	}
 }
 

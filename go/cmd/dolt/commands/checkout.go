@@ -122,7 +122,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usagePrt)
 	}
 
-	rows, err := getRowsForSql(queryEngine, sqlCtx, sqlQuery)
+	rows, err := GetRowsForSql(queryEngine, sqlCtx, sqlQuery)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usagePrt)
 	}

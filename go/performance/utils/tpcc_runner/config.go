@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -132,7 +131,7 @@ func (c *TpccBenchmarkConfig) validateServerConfigs() error {
 
 // FromFileConfig returns a validated Config based on the config file at the configPath
 func FromFileConfig(configPath string) (*TpccBenchmarkConfig, error) {
-	data, err := ioutil.ReadFile(configPath)
+	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
 	}

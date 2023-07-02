@@ -4862,6 +4862,388 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 	},
 }
 
+var SchemaDiffSystemTableScriptTests = []queries.ScriptTest{
+	{
+		Name: "basic schema changes",
+		SetUpScript: []string{
+			"create table employees (pk int primary key, name varchar(50));",
+			"create table vacations (pk int primary key, name varchar(50));",
+			"call dolt_add('.');",
+			"set @Commit0 = '';",
+			"call dolt_commit_hash_out(@Commit0, '-am', 'commit 0');",
+
+			"call dolt_checkout('-b', 'branch1');",
+			"create table inventory (pk int primary key, name varchar(50), quantity int);",
+			"drop table employees;",
+			"rename table vacations to trips;",
+			"call dolt_add('.');",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'commit 1');",
+			"call dolt_tag('tag1');",
+
+			"call dolt_checkout('-b', 'branch2');",
+			"alter table inventory drop column quantity, add column color varchar(10);",
+			"call dolt_add('.');",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-m', 'commit 2');",
+			"call dolt_tag('tag2');",
+
+			"call dolt_checkout('-b', 'branch3');",
+			"insert into inventory values (1, 2, 3);",
+			"call dolt_add('.');",
+			"set @Commit3 = '';",
+			"call dolt_commit_hash_out(@Commit3, '-m', 'commit 3');",
+			"call dolt_tag('tag3');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			// Error cases
+			{
+				Query:          "select * from dolt_schema_diff();",
+				ExpectedErrStr: "function 'dolt_schema_diff' expected 1 to 3 arguments, 0 received",
+			},
+			{
+				Query:          "select * from dolt_schema_diff('HEAD');",
+				ExpectedErrStr: "Invalid argument to dolt_schema_diff: There are less than 2 arguments present, and the first does not contain '..'",
+			},
+			{
+				Query:          "select * from dolt_schema_diff(@Commit1);",
+				ExpectedErrStr: "Invalid argument to dolt_schema_diff: There are less than 2 arguments present, and the first does not contain '..'",
+			},
+			{
+				Query:          "select * from dolt_schema_diff('branc1');",
+				ExpectedErrStr: "Invalid argument to dolt_schema_diff: There are less than 2 arguments present, and the first does not contain '..'",
+			},
+			{
+				Query:          "select * from dolt_schema_diff('tag1');",
+				ExpectedErrStr: "Invalid argument to dolt_schema_diff: There are less than 2 arguments present, and the first does not contain '..'",
+			},
+			{
+				Query:          "select * from dolt_schema_diff('HEAD', '');",
+				ExpectedErrStr: "expected strings for from and to revisions, got: HEAD, ",
+			},
+			{
+				Query:          "select * from dolt_schema_diff('tag1', '');",
+				ExpectedErrStr: "expected strings for from and to revisions, got: tag1, ",
+			},
+			{
+				Query:          "select * from dolt_schema_diff('HEAD', 'inventory');",
+				ExpectedErrStr: "branch not found: inventory",
+			},
+			{
+				Query:          "select * from dolt_schema_diff('inventory');",
+				ExpectedErrStr: "Invalid argument to dolt_schema_diff: There are less than 2 arguments present, and the first does not contain '..'",
+			},
+			{
+				Query:          "select * from dolt_schema_diff('tag3', 'tag4');",
+				ExpectedErrStr: "branch not found: tag4",
+			},
+			{
+				Query:          "select * from dolt_schema_diff('tag3', 'tag4', 'inventory');",
+				ExpectedErrStr: "branch not found: tag4",
+			},
+			// Empty diffs due to same refs
+			{
+				Query:    "select * from dolt_schema_diff('HEAD', 'HEAD');",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from dolt_schema_diff(@Commit1, @Commit1);",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from dolt_schema_diff('branch1', 'branch1');",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from dolt_schema_diff('tag1', 'tag1');",
+				Expected: []sql.Row{},
+			},
+			// Empty diffs due to fake table
+			{
+				Query:    "select * from dolt_schema_diff(@Commit1, @Commit2, 'fake-table');",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from dolt_schema_diff('tag1', 'tag2', 'fake-table');",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from dolt_schema_diff('branch1', 'branch2', 'fake-table');",
+				Expected: []sql.Row{},
+			},
+			// Empty diffs due to no changes between different commits
+			{
+				Query:    "select * from dolt_schema_diff(@Commit2, @Commit3);",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from dolt_schema_diff(@Commit2, @Commit3, 'inventory');",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from dolt_schema_diff('tag2', 'tag3');",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from dolt_schema_diff('tag2', 'tag3', 'inventory');",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from dolt_schema_diff('branch2', 'branch3');",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from dolt_schema_diff('branch2', 'branch3', 'inventory');",
+				Expected: []sql.Row{},
+			},
+			// Compare diffs where between from and to where: tables are added, tables are dropped, tables are renamed
+			{
+				Query: "select * from dolt_schema_diff(@Commit0, @Commit1);",
+				Expected: []sql.Row{
+					{"employees", "", "CREATE TABLE `employees` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", ""},
+					{"", "inventory", "", "CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+					{"vacations", "trips", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff(@Commit1, @Commit0);",
+				Expected: []sql.Row{
+					{"inventory", "", "CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", ""},
+					{"", "employees", "", "CREATE TABLE `employees` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+					{"trips", "vacations", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+				},
+			},
+			// Compare diffs with explicit table names
+			{
+				Query: "select * from dolt_schema_diff(@Commit0, @Commit1, 'employees');",
+				Expected: []sql.Row{
+					{"employees", "", "CREATE TABLE `employees` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", ""},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff(@Commit1, @Commit0, 'employees');",
+				Expected: []sql.Row{
+					{"", "employees", "", "CREATE TABLE `employees` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff(@Commit0, @Commit1, 'inventory');",
+				Expected: []sql.Row{
+					{"", "inventory", "", "CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff(@Commit1, @Commit0, 'inventory');",
+				Expected: []sql.Row{
+					{"inventory", "", "CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", ""},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff(@Commit0, @Commit1, 'trips');",
+				Expected: []sql.Row{
+					{"vacations", "trips", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff(@Commit1, @Commit0, 'trips');",
+				Expected: []sql.Row{
+					{"trips", "vacations", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff(@Commit0, @Commit1, 'vacations');",
+				Expected: []sql.Row{
+					{"vacations", "trips", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff(@Commit1, @Commit0, 'vacations');",
+				Expected: []sql.Row{
+					{"trips", "vacations", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+				},
+			},
+			// Compare two different commits, get expected results
+			{
+				Query: "select * from dolt_schema_diff(@Commit1, @Commit2);",
+				Expected: []sql.Row{
+					{
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff(@Commit1, @Commit2, 'inventory');",
+				Expected: []sql.Row{
+					{
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff('branch1', 'branch2');",
+				Expected: []sql.Row{
+					{
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff('branch1..branch2');",
+				Expected: []sql.Row{
+					{
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff('branch1...branch2');",
+				Expected: []sql.Row{
+					{
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff('branch1', 'branch2', 'inventory');",
+				Expected: []sql.Row{
+					{
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff('tag1', 'tag2');",
+				Expected: []sql.Row{
+					{
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff('tag1..tag2');",
+				Expected: []sql.Row{
+					{
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff('tag1...tag2');",
+				Expected: []sql.Row{
+					{
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff('tag1', 'tag2', 'inventory');",
+				Expected: []sql.Row{
+					{
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					},
+				},
+			},
+			// Swap the order of the refs, get opposite diff
+			{
+				Query: "select * from dolt_schema_diff(@Commit2, @Commit1);",
+				Expected: []sql.Row{
+					{
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff(@Commit2, @Commit1, 'inventory');",
+				Expected: []sql.Row{
+					{
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff('branch2', 'branch1');",
+				Expected: []sql.Row{
+					{
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff('branch2', 'branch1', 'inventory');",
+				Expected: []sql.Row{
+					{
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff('tag2', 'tag1');",
+				Expected: []sql.Row{
+					{
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff('tag2', 'tag1', 'inventory');",
+				Expected: []sql.Row{
+					{
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					},
+				},
+			},
+		},
+	},
+}
+
 type systabScript struct {
 	name    string
 	setup   []string

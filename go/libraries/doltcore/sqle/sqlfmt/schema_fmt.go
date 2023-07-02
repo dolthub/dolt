@@ -48,9 +48,7 @@ func GenerateCreateTableForeignKeyDefinition(fk doltdb.ForeignKey, sch, parentSc
 			fkCols = append(fkCols, c.Name)
 		}
 	} else {
-		for _, col := range fk.UnresolvedFKDetails.TableColumns {
-			fkCols = append(fkCols, col)
-		}
+		fkCols = append(fkCols, fk.UnresolvedFKDetails.TableColumns...)
 	}
 
 	var parentCols []string
@@ -60,9 +58,7 @@ func GenerateCreateTableForeignKeyDefinition(fk doltdb.ForeignKey, sch, parentSc
 			parentCols = append(parentCols, c.Name)
 		}
 	} else {
-		for _, col := range fk.UnresolvedFKDetails.ReferencedTableColumns {
-			parentCols = append(parentCols, col)
-		}
+		parentCols = append(parentCols, fk.UnresolvedFKDetails.ReferencedTableColumns...)
 	}
 
 	onDelete := ""
@@ -148,17 +144,17 @@ func AlterTableDropPks(tableName string) string {
 	return b.String()
 }
 
-func AlterTableAddPrimaryKeys(tableName string, pks *schema.ColCollection) string {
+func AlterTableAddPrimaryKeys(tableName string, pkColNames []string) string {
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")
 	b.WriteString(QuoteIdentifier(tableName))
 	b.WriteString(" ADD PRIMARY KEY (")
 
-	for i := 0; i < pks.Size(); i++ {
+	for i := 0; i < len(pkColNames); i++ {
 		if i == 0 {
-			b.WriteString(pks.GetByIndex(i).Name)
+			b.WriteString(pkColNames[i])
 		} else {
-			b.WriteString("," + pks.GetByIndex(i).Name)
+			b.WriteString("," + pkColNames[i])
 		}
 	}
 	b.WriteRune(')')
@@ -225,12 +221,12 @@ func AlterTableAddForeignKeyStmt(fk doltdb.ForeignKey, sch, parentSch schema.Sch
 	return b.String()
 }
 
-func AlterTableDropForeignKeyStmt(fk doltdb.ForeignKey) string {
+func AlterTableDropForeignKeyStmt(tableName, fkName string) string {
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")
-	b.WriteString(QuoteIdentifier(fk.TableName))
+	b.WriteString(QuoteIdentifier(tableName))
 	b.WriteString(" DROP FOREIGN KEY ")
-	b.WriteString(QuoteIdentifier(fk.Name))
+	b.WriteString(QuoteIdentifier(fkName))
 	b.WriteRune(';')
 	return b.String()
 }

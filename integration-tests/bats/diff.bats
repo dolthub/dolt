@@ -335,6 +335,11 @@ SQL
 }
 
 @test "diff: two and three dot diff" {
+    # TODO: remove this once dolt checkout is migrated
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "This test relies on dolt checkout, which has not been migrated yet."
+    fi
+
     dolt checkout main
     dolt sql -q 'insert into test values (0,0,0,0,0,0)'
     dolt add .
@@ -668,7 +673,7 @@ EOF
     [[ ! "$output" =~ "+ | 0" ]] || false
 }
 
-@test "diff: new foreign key added and resolved" {
+@test "diff: new foreign key added and resolves" {
     dolt sql <<SQL
 create table parent (i int primary key);
 create table child (j int primary key, foreign key (j) references parent (i));
@@ -676,10 +681,10 @@ SQL
 
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'resolved foreign key' ]] || false
+    [[ "$output" =~ "+  CONSTRAINT \`npsbmr30\` FOREIGN KEY (\`j\`) REFERENCES \`parent\` (\`i\`)" ]] || false
 }
 
-@test "diff: new foreign key added and not resolved" {
+@test "diff: new foreign key added without foreign key check, and does not resolve" {
     dolt sql <<SQL
 set foreign_key_checks=0;
 create table parent (i int primary key);
@@ -690,7 +695,7 @@ SQL
 
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ 'resolved foreign key' ]] || false
+    [[ ! "$output" =~ "+  CONSTRAINT \`npsbmr30\` FOREIGN KEY (\`j\`) REFERENCES \`parent\` (\`i\`)" ]] || false
 }
 
 @test "diff: existing foreign key that was resolved is deleted" {
@@ -700,7 +705,7 @@ create table child (j int primary key, constraint fk foreign key (j) references 
 SQL
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'resolved foreign key' ]] || false
+    [[ "$output" =~ "+  CONSTRAINT \`fk\` FOREIGN KEY (\`j\`) REFERENCES \`parent\` (\`i\`)" ]] || false
 
     dolt add -A
     dolt commit -m "init commit"
@@ -708,7 +713,7 @@ SQL
 
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ 'resolved foreign key' ]] || false
+    [[ "$output" =~ "-  CONSTRAINT \`fk\` FOREIGN KEY (\`j\`) REFERENCES \`parent\` (\`i\`)" ]] || false
 }
 
 @test "diff: existing foreign key that was not resolved is deleted" {
@@ -719,7 +724,7 @@ create table child (j int primary key, constraint fk foreign key (j) references 
 SQL
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ 'resolved foreign key' ]] || false
+    [[ "$output" =~ "+  CONSTRAINT \`fk\` FOREIGN KEY (\`j\`) REFERENCES \`parent\` (\`i\`)" ]] || false
 
     dolt add -A
     dolt commit -m "init commit"
@@ -727,7 +732,7 @@ SQL
 
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ 'resolved foreign key' ]] || false
+    [[ "$output" =~ "-  CONSTRAINT \`fk\` FOREIGN KEY (\`j\`) REFERENCES \`parent\` (\`i\`)" ]] || false
 }
 
 @test "diff: existing foreign key that was resolved is modified" {
@@ -737,7 +742,7 @@ create table child (j int primary key, constraint fk foreign key (j) references 
 SQL
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'resolved foreign key' ]] || false
+    [[ "$output" =~ "+  CONSTRAINT \`fk\` FOREIGN KEY (\`j\`) REFERENCES \`parent\` (\`i\`)" ]] || false
 
     dolt add -A
     dolt commit -m "init commit"
@@ -747,7 +752,8 @@ SQL
 
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ 'resolved foreign key' ]] || false
+    [[ "$output" =~ "-  CONSTRAINT \`fk\` FOREIGN KEY (\`j\`) REFERENCES \`parent\` (\`i\`)" ]] || false
+    [[ "$output" =~ "+  CONSTRAINT \`fk\` FOREIGN KEY (\`k\`) REFERENCES \`parent\` (\`i\`)" ]] || false
 }
 
 @test "diff: existing foreign key that was not resolved is modified" {
@@ -758,7 +764,7 @@ create table child (j int primary key, constraint fk foreign key (j) references 
 SQL
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ 'resolved foreign key' ]] || false
+    [[ "$output" =~ "+  CONSTRAINT \`fk\` FOREIGN KEY (\`j\`) REFERENCES \`parent\` (\`i\`)" ]] || false
 
     dolt add -A
     dolt commit -m "init commit"
@@ -768,7 +774,9 @@ SQL
 
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'resolved foreign key' ]] || false
+    [[ "$output" =~ "-  CONSTRAINT \`fk\` FOREIGN KEY (\`j\`) REFERENCES \`parent\` (\`i\`)" ]] || false
+    [[ "$output" =~ "+  CONSTRAINT \`fk\` FOREIGN KEY (\`k\`) REFERENCES \`parent\` (\`i\`)" ]] || false
+
 }
 
 @test "diff: resolved FKs don't show up in diff results" {
@@ -799,7 +807,7 @@ SQL
     run dolt diff HEAD~ HEAD
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "dept_emp" ]] || false
-    ! [[ "$output" =~ "resolved foreign key" ]] || false
+    ! [[ "$output" =~ "FOREIGN KEY" ]] || false
 }
 
 @test "diff: with index and foreign key changes" {
@@ -836,6 +844,11 @@ SQL
 }
 
 @test "diff: with where clause" {
+    # TODO: remove this once dolt checkout is migrated
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "This test relies on dolt checkout, which has not been migrated yet."
+    fi
+
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
@@ -926,6 +939,11 @@ SQL
 }
 
 @test "diff: with where clause errors" {
+    # TODO: remove this once dolt checkout is migrated
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "This test relies on dolt checkout, which has not been migrated yet."
+    fi
+
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
@@ -982,6 +1000,12 @@ SQL
 }
 
 @test "diff: with invalid ref does not panic" {
+    # TODO: remove this once dolt checkout is migrated
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "This test relies on dolt checkout, which has not been migrated yet."
+    fi
+
+
     dolt add .
     dolt commit -m table
     dolt checkout -b test-branch
@@ -1056,6 +1080,11 @@ SQL
 }
 
 @test "diff: table with same name on different branches with different primary key sets" {
+    # TODO: remove this once dolt checkout is migrated
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "This test relies on dolt checkout, which has not been migrated yet."
+    fi
+
     dolt branch another-branch
     dolt sql <<SQL
 CREATE TABLE a (
@@ -1498,11 +1527,11 @@ EOF
     run dolt diff --limit 0
 
     [[ "$output" =~ "diff --dolt a/test b/test" ]] || false
-    [[ "$output" =~ "--- a/test @" ]] || false
-    [[ "$output" =~ "+++ b/test @" ]] || false
+    [[ "$output" =~ "--- a/test" ]] || false
+    [[ "$output" =~ "+++ b/test" ]] || false
     [[ "$output" =~ "diff --dolt a/test2 b/test2" ]] || false
-    [[ "$output" =~ "--- a/test2 @" ]] || false
-    [[ "$output" =~ "+++ b/test2 @" ]] || false
+    [[ "$output" =~ "--- a/test2" ]] || false
+    [[ "$output" =~ "+++ b/test2" ]] || false
 
     run dolt diff --limit
     [ "$status" -ne 0 ]
@@ -1623,6 +1652,11 @@ SQL
 }
 
 @test "diff: get diff on dolt_schemas table with different result output formats" {
+    # TODO: remove this once dolt checkout is migrated
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "This test relies on dolt checkout, which has not been migrated yet."
+    fi
+
     dolt add .
     dolt commit -am "commit 1"
     dolt sql <<SQL

@@ -76,7 +76,7 @@ func (s *StashList) RemoveStashAtIdx(ctx context.Context, vw types.ValueWriter, 
 		return hash.Hash{}, err
 	}
 	if amCount <= idx {
-		return hash.Hash{}, errors.New(fmt.Sprintf("fatal: log for 'stash' only has %v entries", amCount))
+		return hash.Hash{}, fmt.Errorf("fatal: log for 'stash' only has %v entries", amCount)
 	}
 
 	stash, err := getNthStash(ctx, s.am, amCount, idx)
@@ -131,7 +131,7 @@ func (s *StashList) getStashAtIdx(ctx context.Context, idx int) (hash.Hash, erro
 		return hash.Hash{}, err
 	}
 	if amCount <= idx {
-		return hash.Hash{}, errors.New(fmt.Sprintf("fatal: log for 'stash' only has %v entries", amCount))
+		return hash.Hash{}, fmt.Errorf("fatal: log for 'stash' only has %v entries", amCount)
 	}
 
 	stash, err := getNthStash(ctx, s.am, amCount, idx)

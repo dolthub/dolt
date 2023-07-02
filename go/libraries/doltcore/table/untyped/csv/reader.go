@@ -75,10 +75,10 @@ func OpenCSVReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS,
 // NewCSVReader creates a CSVReader from a given ReadCloser.  The CSVFileInfo should describe the csv file being read.
 func NewCSVReader(nbf *types.NomsBinFormat, r io.ReadCloser, info *CSVFileInfo) (*CSVReader, error) {
 	if len(info.Delim) < 1 {
-		return nil, errors.New(fmt.Sprintf("delimiter '%s' has invalid length", info.Delim))
+		return nil, fmt.Errorf("delimiter '%s' has invalid length", info.Delim)
 	}
 	if !validDelim(info.Delim) {
-		return nil, errors.New(fmt.Sprintf("invalid delimiter: %s", string(info.Delim)))
+		return nil, fmt.Errorf("invalid delimiter: %s", string(info.Delim))
 	}
 
 	br := bufio.NewReaderSize(r, ReadBufSize)

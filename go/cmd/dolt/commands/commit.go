@@ -29,7 +29,6 @@ import (
 	goisatty "github.com/mattn/go-isatty"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -41,6 +40,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/util/outputpager"
 )
 
 var commitDocs = cli.CommandDocumentationContent{
@@ -85,26 +85,22 @@ func (cmd CommitCmd) RequiresRepo() bool {
 
 // Exec executes the command
 func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-	res, skipped := performCommit(ctx, commandStr, args, cliCtx)
-	if res == 1 {
+	res, skipped := performCommit(ctx, commandStr, args, cliCtx, dEnv)
+	if res != 0 {
 		return res
 	}
 
 	if skipped {
 		iohelp.WriteLine(cli.CliOut, "Skipping empty commit")
-		return res
 	}
 
-	// TODO: switch to using the log command once dolt log is migrated to use sql queries
-	// if the commit was successful, print it out using the log command
-	// return LogCmd{}.Exec(ctx, "log", []string{"-n=1"}, dEnv, nil)
 	return 0
 }
 
 // performCommit creates a new Dolt commit using the specified |commandStr| and |args|. The response is an integer
 // status code indicating success or failure, as well as a boolean that indicates if the commit was skipped
 // (e.g. because --skip-empty was specified as an argument).
-func performCommit(ctx context.Context, commandStr string, args []string, cliCtx cli.CliContext) (int, bool) {
+func performCommit(ctx context.Context, commandStr string, args []string, cliCtx cli.CliContext, temporacyDEnv *env.DoltEnv) (int, bool) {
 	ap := cli.CreateCommitArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, commitDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -153,7 +149,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 	// process query through prepared statement to prevent sql injection
 	query, params, err := constructParametrizedDoltCommitQuery(msg, apr, cliCtx)
 	if err != nil {
-		return 1, false
+		return handleCommitErr(sqlCtx, queryist, err, usage), false
 	}
 	interpolatedQuery, err := dbr.InterpolateForDialect(query, params, dialect.MySQL)
 	if err != nil {
@@ -167,22 +163,21 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 	}
 	resultRow, err := sql.RowIterToRows(sqlCtx, schema, rowIter)
 	if err != nil {
-		return 0, false
+		cli.Println(err.Error())
+		return 1, false
 	}
 	if resultRow == nil {
 		return 0, true
 	}
 
-	// TODO: when dolt log is migrated, remove this block printing out the commit and print with a dolt log call in Exec()
-	schema, rowIter, err = queryist.Query(sqlCtx, "select * from dolt_log() limit 1")
-	if err != nil {
-		cli.Println(err.Error())
-		return 1, false
-	}
-	err = engine.PrettyPrintResults(sqlCtx, engine.FormatTabular, schema, rowIter)
-	if err != nil {
-		cli.Println(err.Error())
-		return 1, false
+	commit, err := getCommitInfo(queryist, sqlCtx, "HEAD")
+	if cli.ExecuteWithStdioRestored != nil {
+		cli.ExecuteWithStdioRestored(func() {
+			pager := outputpager.Start()
+			defer pager.Stop()
+
+			printCommitInfo(pager, 0, false, "auto", commit)
+		})
 	}
 
 	return 0, false

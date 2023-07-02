@@ -466,7 +466,7 @@ func getInitialPrompt(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEnv *env.D
 		"Let's try a few more. You ask me some questions and I'll give you some responses in JSON. We'll just keep doing"+
 		" that. Go ahead when you're ready."))
 
-	messages = mustAppendJson(messages, "user", fmt.Sprintf("who wrote the most recent commit?"))
+	messages = mustAppendJson(messages, "user", "who wrote the most recent commit?")
 
 	responseJson, err := json.Marshal(map[string]string{"action": "DOLT_QUERY", "content": "dolt log -n 1"})
 	if err != nil {

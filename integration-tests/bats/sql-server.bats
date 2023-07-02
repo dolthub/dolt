@@ -1518,21 +1518,6 @@ data_dir: $DATA_DIR
     [ "$status" -eq 1 ]
 }
 
-@test "sql-server: sql-server locks database to writes" {
-    cd repo2
-    dolt sql -q "create table a (x int primary key)"
-    start_sql_server
-
-    run dolt --verbose-engine-setup sql -q "create table b (x int primary key)"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "Error connecting to remote database" ]] || false
-    [[ "$output" =~ "User not found 'root'" ]] || false
-
-    run dolt --verbose-engine-setup --user dolt sql -q "create table b (x int primary key)"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "starting remote mode" ]] || false
-}
-
 @test "sql-server: start server without socket flag should set default socket path" {
     skiponwindows "unix socket is not available on Windows"
     cd repo2

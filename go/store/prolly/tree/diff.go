@@ -139,6 +139,16 @@ func (td Differ[K, O]) Next(ctx context.Context) (diff Diff, err error) {
 				return sendModified(ctx, td.from, td.to)
 			}
 
+			// advance both cursors since we have already determined that they are equal. This needs to be done because
+			// skipCommon will not advance the cursors if they are equal in a collation sensitive comparison but differ
+			// in a byte comparison.
+			if err = td.from.advance(ctx); err != nil {
+				return Diff{}, err
+			}
+			if err = td.to.advance(ctx); err != nil {
+				return Diff{}, err
+			}
+
 			// seek ahead to the next diff and loop again
 			if err = skipCommon(ctx, td.from, td.to); err != nil {
 				return Diff{}, err

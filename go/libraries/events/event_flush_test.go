@@ -41,9 +41,7 @@ type TestClient struct {
 }
 
 func (tc *TestClient) LogEvents(ctx context.Context, in *eventsapi.LogEventsRequest, opts ...grpc.CallOption) (*eventsapi.LogEventsResponse, error) {
-	for _, evt := range in.Events {
-		tc.CES = append(tc.CES, evt)
-	}
+	tc.CES = append(tc.CES, in.Events...)
 	return &eventsapi.LogEventsResponse{}, nil
 }
 

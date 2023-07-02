@@ -152,7 +152,7 @@ teardown() {
     dolt remote add rem1 file://./remote1
     dolt push rem1 b1
     dolt branch -d b1
-    
+
     run dolt sql -q "select name, latest_commit_message from dolt_branches"
     [ $status -eq 0 ]
     [[ "$output" =~ main.*Initialize\ data\ repository ]] || false
@@ -164,13 +164,13 @@ teardown() {
     [[ ! "$output" =~ main.*Initialize\ data\ repository ]] || false
     [[ ! "$output" =~ create-table-branch.*Added\ test\ table ]] || false
     [[ "$output" =~ "remotes/rem1/b1" ]] || false
-    
+
     run dolt sql -q "select name from dolt_remote_branches where latest_commit_message ='Initialize data repository'"
     [ $status -eq 0 ]
     [[ ! "$output" =~ "main" ]] || false
     [[ ! "$output" =~ "create-table-branch" ]] || false
     [[ ! "$output" =~ "remotes/rem1/b1" ]] || false
-    
+
     run dolt sql -q "select name from dolt_remote_branches where latest_commit_message ='Added test table'"
     [ $status -eq 0 ]
     [[ ! "$output" =~ "main" ]] || false
@@ -612,4 +612,52 @@ SQL
     [[ "$output" =~ "tag v1 from main" ]] || false
     [[ "$output" =~ "tag v2 from branch1" ]] || false
     [[ "$output" =~ "tag v3 from branch1" ]] || false
+}
+
+@test "system-tables: query dolt_schema_diff" {
+			dolt sql <<SQL
+call dolt_checkout('-b', 'branch1');
+create table test (pk int primary key, c1 int, c2 int);
+call dolt_add('.');
+call dolt_commit('-am', 'commit 1');
+call dolt_tag('tag1');
+call dolt_checkout('-b', 'branch2');
+alter table test drop column c2, add column c3 varchar(10);
+call dolt_add('.');
+call dolt_commit('-m', 'commit 2');
+call dolt_tag('tag2');
+call dolt_checkout('-b', 'branch3');
+insert into test values (1, 2, 3);
+call dolt_add('.');
+call dolt_commit('-m', 'commit 3');
+call dolt_tag('tag3');
+SQL
+
+      run dolt sql -q "select * from dolt_schema_diff('branch1', 'branch2');"
+      [ "$status" -eq 0 ]
+      [[ "$output" =~ "| test            | test          | CREATE TABLE \`test\` (                                             | CREATE TABLE \`test\` (                                             |" ]] || false
+      [[ "$output" =~ "|                 |               |   \`c2\` int,                                                       |   \`c3\` varchar(10),                                               |" ]] || false
+
+      run dolt sql -q "select * from dolt_schema_diff('branch2', 'branch1');"
+      [ "$status" -eq 0 ]
+      [[ "$output" =~ "| test            | test          | CREATE TABLE \`test\` (                                             | CREATE TABLE \`test\` (                                             |" ]] || false
+      [[ "$output" =~ "|                 |               |   \`c3\` varchar(10),                                               |   \`c2\` int,                                                       |" ]] || false
+
+      run dolt sql -q "select * from dolt_schema_diff('tag1', 'tag2');"
+      [ "$status" -eq 0 ]
+      [[ "$output" =~ "| test            | test          | CREATE TABLE \`test\` (                                             | CREATE TABLE \`test\` (                                             |" ]] || false
+      [[ "$output" =~ "|                 |               |   \`c2\` int,                                                       |   \`c3\` varchar(10),                                               |" ]] || false
+
+      run dolt sql -q "select * from dolt_schema_diff('tag2', 'tag1');"
+      [ "$status" -eq 0 ]
+      [[ "$output" =~ "| test            | test          | CREATE TABLE \`test\` (                                             | CREATE TABLE \`test\` (                                             |" ]] || false
+      [[ "$output" =~ "|                 |               |   \`c3\` varchar(10),                                               |   \`c2\` int,                                                       |" ]] || false
+
+      run dolt sql -q "select * from dolt_schema_diff('branch1', 'branch1');"
+      [ "$status" -eq 0 ]
+      [ "$output" = "" ]
+
+      run dolt sql -q "select * from dolt_schema_diff('tag2', 'tag2');"
+      [ "$status" -eq 0 ]
+      [ "$output" = "" ]
 }

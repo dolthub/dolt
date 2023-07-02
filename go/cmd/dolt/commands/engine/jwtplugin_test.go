@@ -33,7 +33,7 @@ func TestJWTAuth(t *testing.T) {
 	jwksConfig := []JwksConfig{
 		{
 			Name:        jwksName,
-			LocationUrl: fmt.Sprintf("file:///testdata/test_jwks.json"),
+			LocationUrl: "file:///testdata/test_jwks.json",
 			Claims: map[string]string{
 				"alg": "RS256",
 				"aud": aud,

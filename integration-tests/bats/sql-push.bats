@@ -62,6 +62,49 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
+@test "sql-push: CALL dolt_push origin in stored procedure" {
+    cd repo1
+    dolt sql <<SQL
+delimiter //
+create procedure merge_push_branch(branchName varchar(255))
+begin
+	call dolt_checkout(branchName);
+	call dolt_merge('--no-ff', 'main');
+  call dolt_push('origin', branchName);
+end;
+//
+SQL
+
+    dolt sql <<SQL
+call dolt_checkout('-b', 'branch1');
+insert into t1 values (5,500);
+call dolt_commit('-am', 'new row on branch1');
+SQL
+
+    dolt sql <<SQL
+insert into t1 values (10,100);
+call dolt_commit('-am', 'new row on main');
+SQL
+    
+    dolt sql -q "CALL merge_push_branch('branch1')"
+
+    cd ../repo2
+    dolt fetch origin
+    dolt checkout branch1
+
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "Table" ]] || false
+    [[ "$output" =~ "t1" ]] || false
+
+    run dolt sql -q "select * from t1 order by 1" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ "$output" =~ "10,100" ]] || false
+    [[ "$output" =~ "5,500" ]] || false
+}
+
 @test "sql-push: CALL dpush origin" {
     cd repo1
     dolt sql -q "CALL dpush('origin', 'main')"

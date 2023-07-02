@@ -1379,9 +1379,25 @@ type DoltRemoteTableFile struct {
 	info *remotesapi.TableFileInfo
 }
 
+// LocationPrefix
+func (drtf DoltRemoteTableFile) LocationPrefix() string {
+	return ""
+}
+
 // FileID gets the id of the file
 func (drtf DoltRemoteTableFile) FileID() string {
-	return drtf.info.FileId
+	id := drtf.info.FileId
+
+	// Early versions of |dolt| could return GenerationalChunkStore
+	// TableFile implementations where FileID included an `oldgen/` prefix.
+	// If we are communicating with a remotesrv from one of those versions,
+	// we may see this prefix. This is not relevant to how we want to
+	// address the table file locally, so we prune it here.
+	if strings.HasPrefix(id, "oldgen/") {
+		id = strings.TrimPrefix(id, "oldgen/")
+	}
+
+	return id
 }
 
 // NumChunks returns the number of chunks in a table file

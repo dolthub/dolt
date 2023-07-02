@@ -79,7 +79,7 @@ func TestBinlogReplicationAutoReconnect(t *testing.T) {
 // connection retry interval. This is used for testing connection retry logic without waiting the full default period.
 func configureFastConnectionRetry(_ *testing.T) {
 	replicaDatabase.MustExec(
-		fmt.Sprintf("change replication source to SOURCE_CONNECT_RETRY=5;"))
+		"change replication source to SOURCE_CONNECT_RETRY=5;")
 }
 
 // testInitialReplicaStatus tests the data returned by SHOW REPLICA STATUS and errors
