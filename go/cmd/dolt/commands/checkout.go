@@ -132,17 +132,17 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	}
 
 	if len(rows[0]) < 2 {
-		return HandleVErrAndExitCode(errhand.BuildDError("no 'upstream' field in response from %s", sqlQuery).Build(), usagePrt)
+		return HandleVErrAndExitCode(errhand.BuildDError("no 'message' field in response from %s", sqlQuery).Build(), usagePrt)
 	}
 
-	var upstream string
+	var message string
 	var ok bool
-	if upstream, ok = rows[0][1].(string); !ok {
-		return HandleVErrAndExitCode(errhand.BuildDError("expected string value for 'upstream' field in response from %s ", sqlQuery).Build(), usagePrt)
+	if message, ok = rows[0][1].(string); !ok {
+		return HandleVErrAndExitCode(errhand.BuildDError("expected string value for 'message' field in response from %s ", sqlQuery).Build(), usagePrt)
 	}
 
-	if upstream != "" {
-		cli.Printf("branch '%s' set up to track '%s'.\n", branchName, upstream)
+	if message != "" {
+		cli.Printf(message)
 	}
 
 	// This command doesn't modify `dEnv` which could break tests that call multiple commands in sequence.
@@ -196,8 +196,6 @@ func handleErrors(name string, err error) errhand.VerboseError {
 			return bdr.Build()
 		}
 	}
-
-	cli.Printf("Switched to branch '%s'\n", name)
 
 	return nil
 }

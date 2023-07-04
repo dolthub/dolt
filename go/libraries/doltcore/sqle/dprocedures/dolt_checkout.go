@@ -36,11 +36,19 @@ var ErrEmptyBranchName = errors.New("error: cannot checkout empty string")
 
 // doltCheckout is the stored procedure version for the CLI command `dolt checkout`.
 func doltCheckout(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	res, upstream, err := doDoltCheckout(ctx, args)
+	res, message, err := doDoltCheckout(ctx, args)
 	if err != nil {
 		return nil, err
 	}
-	return rowToIter(int64(res), upstream), nil
+	return rowToIter(int64(res), message), nil
+}
+
+func generateSuccessMessage(newBranch, upstream string) string {
+	result := fmt.Sprintf("Switched to branch '%s'\n", newBranch)
+	if upstream != "" {
+		result += fmt.Sprintf("\nbranch '%s' set up to track '%s'.\n", newBranch, upstream)
+	}
+	return result
 }
 
 func doDoltCheckout(ctx *sql.Context, args []string) (int, string, error) {
@@ -73,11 +81,11 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, string, error) {
 
 	// Checking out new branch.
 	if branchOrTrack {
-		upstream, err := checkoutNewBranch(ctx, currentDbName, dbData, apr, &rsc, updateHead)
+		newBranch, upstream, err := checkoutNewBranch(ctx, currentDbName, dbData, apr, &rsc, updateHead)
 		if err != nil {
 			return 1, "", err
 		} else {
-			return 0, upstream, nil
+			return 0, generateSuccessMessage(newBranch, upstream), nil
 		}
 	}
 
@@ -128,10 +136,14 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, string, error) {
 		return 1, "", fmt.Errorf("Could not load database %s", currentDbName)
 	}
 
-	var upstream string
+	var successMessage string
 	err = checkoutTables(ctx, roots, currentDbName, apr.Args)
 	if err != nil && apr.NArg() == 1 {
-		upstream, err = checkoutRemoteBranch(ctx, dSess, currentDbName, dbData, branchName, apr, &rsc)
+		upstream, err := checkoutRemoteBranch(ctx, dSess, currentDbName, dbData, branchName, apr, &rsc)
+		if err != nil {
+			return 1, "", err
+		}
+		successMessage = generateSuccessMessage(branchName, upstream)
 	}
 
 	if err != nil {
@@ -140,7 +152,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, string, error) {
 
 	dsess.WaitForReplicationController(ctx, rsc)
 
-	return 0, upstream, nil
+	return 0, successMessage, nil
 }
 
 // createWorkingSetForLocalBranch will make a new working set for a local
@@ -248,7 +260,7 @@ func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName str
 	}
 }
 
-func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController, isGlobal bool) (string, error) {
+func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController, isGlobal bool) (string, string, error) {
 	var newBranchName string
 	var remoteName, remoteBranchName string
 	var startPt = "head"
@@ -262,34 +274,34 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 	trackVal, setTrackUpstream := apr.GetValue(cli.TrackFlag)
 	if setTrackUpstream {
 		if trackVal == "inherit" {
-			return "", fmt.Errorf("--track='inherit' is not supported yet")
+			return "", "", fmt.Errorf("--track='inherit' is not supported yet")
 		} else if trackVal != "direct" {
 			startPt = trackVal
 		}
 		remoteName, remoteBranchName = actions.ParseRemoteBranchName(startPt)
 		refSpec, err = ref.ParseRefSpecForRemote(remoteName, remoteBranchName)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 		newBranchName = remoteBranchName
 	}
 
 	if newBranch, ok := apr.GetValue(cli.CheckoutCoBranch); ok {
 		if len(newBranch) == 0 {
-			return "", ErrEmptyBranchName
+			return "", "", ErrEmptyBranchName
 		}
 		newBranchName = newBranch
 	}
 
 	err = actions.CreateBranchWithStartPt(ctx, dbData, newBranchName, startPt, false, rsc)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	if setTrackUpstream {
 		err = env.SetRemoteUpstreamForRefSpec(dbData.Rsw, refSpec, remoteName, ref.NewBranchRef(remoteBranchName))
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 	} else if autoSetupMerge, err := loadConfig(ctx).GetString("branch.autosetupmerge"); err != nil || autoSetupMerge != "false" {
 		remoteName, remoteBranchName = actions.ParseRemoteBranchName(startPt)
@@ -297,7 +309,7 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 		if err == nil {
 			err = env.SetRemoteUpstreamForRefSpec(dbData.Rsw, refSpec, remoteName, ref.NewBranchRef(remoteBranchName))
 			if err != nil {
-				return "", err
+				return "", "", err
 			}
 		}
 	}
@@ -307,7 +319,7 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 	sess := dsess.DSessFromSess(ctx.Session)
 	err = commitTransaction(ctx, sess, rsc)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	var remoteAndBranch string
@@ -316,21 +328,21 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 	}
 
 	if isGlobal {
-		return remoteAndBranch, doGlobalCheckout(ctx, sess, dbName, newBranchName, apr.Contains(cli.ForceFlag))
+		return newBranchName, remoteAndBranch, doGlobalCheckout(ctx, sess, dbName, newBranchName, apr.Contains(cli.ForceFlag))
 	} else {
 
 		wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(newBranchName))
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 
 		err = sess.SwitchWorkingSet(ctx, dbName, wsRef)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 	}
 
-	return remoteAndBranch, nil
+	return newBranchName, remoteAndBranch, nil
 }
 
 func checkoutBranch(ctx *sql.Context, dbName string, branchName string, apr *argparser.ArgParseResults) error {
