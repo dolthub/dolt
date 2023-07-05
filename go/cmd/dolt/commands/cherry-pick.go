@@ -131,7 +131,8 @@ func cherryPick(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgPa
 		return fmt.Errorf("Please commit your staged changes before using cherry-pick.")
 	}
 	if hasUnstagedChanges {
-		return fmt.Errorf("error: your local changes would be overwritten by cherry-pick.\nhint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt reset --hard) to proceed.")
+		return fmt.Errorf(`error: your local changes would be overwritten by cherry-pick.
+hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt reset --hard) to proceed.`)
 	}
 
 	_, err = GetRowsForSql(queryist, sqlCtx, "set @@dolt_allow_commit_conflicts = 1")
