@@ -60,7 +60,18 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	// TODO: Add new procedure aliases in doltProcedureAliasSet in go-mysql-server/sql/information_schema/routines.go file
 	{Name: "dadd", Schema: int64Schema("status"), Function: doltAdd},
 	{Name: "dbranch", Schema: int64Schema("status"), Function: doltBranch},
-	{Name: "dcheckout", Schema: int64Schema("status"), Function: doltCheckout},
+	{Name: "dcheckout", Schema: []*sql.Column{
+		{
+			Name:     "status",
+			Type:     types.Int64,
+			Nullable: false,
+		},
+		{
+			Name:     "upstream",
+			Type:     types.LongText,
+			Nullable: true,
+		},
+	}, Function: doltCheckout},
 	{Name: "dcherry_pick", Schema: cherryPickSchema, Function: doltCherryPick},
 	{Name: "dclean", Schema: int64Schema("status"), Function: doltClean},
 	{Name: "dclone", Schema: int64Schema("status"), Function: doltClone},
