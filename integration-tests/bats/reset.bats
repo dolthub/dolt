@@ -330,7 +330,9 @@ SQL
 
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "nothing to commit, working tree clean" ]]
+    [[ "$output" =~ "Untracked tables:" ]] || false
+    [[ "$output" =~ "  (use \"dolt add <table>\" to include in what will be committed)" ]] || false
+    [[ "$output" =~ "	new table:        dolt_ignore" ]] || false
 
     run dolt sql -q "select * from test2"
     [ "$status" -eq 0 ]

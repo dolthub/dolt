@@ -576,7 +576,8 @@ SQL
 
     run dolt sql -q "select * from dolt_status"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "" ]]
+    [[ "$output" =~ "| dolt_ignore | false  | new table |" ]] || false
+    [ "${#lines[@]}" -eq 6 ]
 
     run dolt sql -q "select * from test2"
     [ "$status" -eq 0 ]
