@@ -141,12 +141,14 @@ func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncrements map[string]u
 	tables := make(map[string]*doltdb.Table, len(s.tables))
 	mu := &sync.Mutex{}
 
-	eg, ctx2 := errgroup.WithContext(ctx)
+	eg, egCtx := errgroup.WithContext(ctx)
+	sqlEgCtx := ctx.WithContext(egCtx)
+	
 	for n := range s.tables {
 		name := n // make a copy
 		eg.Go(func() error {
 			wr := s.tables[name]
-			t, err := wr.table(ctx2)
+			t, err := wr.table(sqlEgCtx)
 			if err != nil {
 				return err
 			}
@@ -160,14 +162,17 @@ func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncrements map[string]u
 					autoIncVal = override
 				}
 				
-				t, err = t.SetAutoIncrementValue(ctx2, autoIncVal)
+				t, err = t.SetAutoIncrementValue(sqlEgCtx, autoIncVal)
 				if err != nil {
 					return err
 				}
 				
-				// Re-initialize the auto increment tracker with the new value as necessary
+				// Re-initialize the auto increment tracker with the new global value if one was specified
 				if hasAiOverride {
-					s.aiTracker.Set(ctx, name, override)
+					err := s.aiTracker.Set(sqlEgCtx, s.workingSet.Ref(), name, override)
+					if err != nil {
+						return err
+					}
 				}
 			}
 

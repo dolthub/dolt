@@ -28,6 +28,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 
@@ -1658,9 +1659,11 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 			return err
 		}
 
-		// TODO: this isn't transactional, and it should be
+		// TODO: this isn't transactional, and it should be (but none of the auto increment tracking is)
 		ait.AddNewTable(t.tableName)
-		ait.Set(ctx, t.tableName, seq)
+		// Since this is a new auto increment table, we don't need to exclude the current working set from consideration 
+		// when computing its new sequence value, hence the empty ref
+		ait.Set(ctx, ref.WorkingSetRef{}, t.tableName, seq)
 	}
 
 	// If we're removing an auto inc property, we just need to update global auto increment tracking

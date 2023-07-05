@@ -28,21 +28,20 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
-type AutoIncrementTrackerImpl struct {
+type AutoIncrementTracker struct {
 	dbName    string
 	sequences map[string]uint64
 	mu        *sync.Mutex
 }
 
-var _ globalstate.AutoIncrementTracker = AutoIncrementTrackerImpl{}
+var _ globalstate.AutoIncrementTracker = AutoIncrementTracker{}
 
 // NewAutoIncrementTracker returns a new autoincrement tracker for the roots given. All roots sets must be
 // considered because the auto increment value for a table is tracked globally, across all branches.
 // Roots provided should be the working sets when available, or the branches when they are not (e.g. for remote
 // branches that don't have a local working set)
-// TODO (next): set these values less discriminately but override them as necessary with an index read on startup
-func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb.Rootish) (AutoIncrementTrackerImpl, error) {
-	ait := AutoIncrementTrackerImpl{
+func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb.Rootish) (AutoIncrementTracker, error) {
+	ait := AutoIncrementTracker{
 		dbName:    dbName,
 		sequences: make(map[string]uint64),
 		mu:        &sync.Mutex{},
@@ -51,7 +50,7 @@ func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb
 	for _, root := range roots {
 		root, err := root.ResolveRootValue(ctx)
 		if err != nil {
-			return AutoIncrementTrackerImpl{}, err
+			return AutoIncrementTracker{}, err
 		}
 
 		err = root.IterTables(ctx, func(tableName string, table *doltdb.Table, sch schema.Schema) (bool, error) {
@@ -75,7 +74,7 @@ func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb
 		})
 
 		if err != nil {
-			return AutoIncrementTrackerImpl{}, err
+			return AutoIncrementTracker{}, err
 		}
 	}
 
@@ -83,7 +82,7 @@ func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb
 }
 
 // Current returns the next value to be generated in the auto increment sequence for the table named
-func (a AutoIncrementTrackerImpl) Current(tableName string) uint64 {
+func (a AutoIncrementTracker) Current(tableName string) uint64 {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.sequences[strings.ToLower(tableName)]
@@ -91,7 +90,7 @@ func (a AutoIncrementTrackerImpl) Current(tableName string) uint64 {
 
 // Next returns the next auto increment value for the table named using the provided value from an insert (which may
 // be null or 0, in which case it will be generated from the sequence).
-func (a AutoIncrementTrackerImpl) Next(tbl string, insertVal interface{}) (uint64, error) {
+func (a AutoIncrementTracker) Next(tbl string, insertVal interface{}) (uint64, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -120,7 +119,7 @@ func (a AutoIncrementTrackerImpl) Next(tbl string, insertVal interface{}) (uint6
 	return given, nil
 }
 
-func (a AutoIncrementTrackerImpl) CoerceAutoIncrementValue(val interface{}) (uint64, error) {
+func (a AutoIncrementTracker) CoerceAutoIncrementValue(val interface{}) (uint64, error) {
 	return CoerceAutoIncrementValue(val)
 }
 
@@ -147,7 +146,7 @@ func CoerceAutoIncrementValue(val interface{}) (uint64, error) {
 // Set sets the auto increment value for the table named, if it's greater than the one already registered for this
 // table. Otherwise, the update is silently disregarded. So far this matches the MySQL behavior, but Dolt uses the
 // maximum value for this table across all branches.
-func (a AutoIncrementTrackerImpl) Set(ctx *sql.Context, tableName string, newAutoIncVal uint64) error {
+func (a AutoIncrementTracker) Set(ctx *sql.Context, ws ref.WorkingSetRef, tableName string, newAutoIncVal uint64) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -159,13 +158,13 @@ func (a AutoIncrementTrackerImpl) Set(ctx *sql.Context, tableName string, newAut
 		return nil
 	} else {
 		// re-establish our baseline for this table on all branches before making our decision 
-		return a.deepSet(ctx, tableName, newAutoIncVal)
+		return a.deepSet(ctx, ws, tableName, newAutoIncVal)
 	}
 }
 
 // deepSet sets the auto increment value for the table named, if it's greater than the one on any branch head for this 
 // database, ignoring the current in-memory tracker value
-func (a AutoIncrementTrackerImpl) deepSet(ctx *sql.Context, tableName string, newAutoIncVal uint64) error {
+func (a AutoIncrementTracker) deepSet(ctx *sql.Context, ws ref.WorkingSetRef, tableName string, newAutoIncVal uint64) error {
 	sess := DSessFromSess(ctx.Session)
 	db, ok := sess.Provider().BaseDatabase(ctx, a.dbName)
 
@@ -189,7 +188,7 @@ func (a AutoIncrementTrackerImpl) deepSet(ctx *sql.Context, tableName string, ne
 		rootRefs := make([]ref.DoltRef, 0, len(branches)+len(remotes))
 		rootRefs = append(rootRefs, branches...)
 		rootRefs = append(rootRefs, remotes...)
-
+		
 		for _, b := range rootRefs {
 			var rootish doltdb.Rootish
 			switch b.GetType() {
@@ -197,6 +196,11 @@ func (a AutoIncrementTrackerImpl) deepSet(ctx *sql.Context, tableName string, ne
 				wsRef, err := ref.WorkingSetRefForHead(b)
 				if err != nil {
 					return err
+				}
+				
+				if wsRef == ws {
+					// we don't need to check the working set we're updating
+					continue
 				}
 
 				ws, err := db.ResolveWorkingSet(ctx, wsRef)
@@ -262,7 +266,7 @@ func (a AutoIncrementTrackerImpl) deepSet(ctx *sql.Context, tableName string, ne
 }
 
 // AddNewTable initializes a new table with an auto increment column to the tracker, as necessary
-func (a AutoIncrementTrackerImpl) AddNewTable(tableName string) {
+func (a AutoIncrementTracker) AddNewTable(tableName string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -276,7 +280,7 @@ func (a AutoIncrementTrackerImpl) AddNewTable(tableName string) {
 // DropTable drops the table with the name given.
 // To establish the new auto increment value, callers must also pass all other working sets in scope that may include
 // a table with the same name, omitting the working set that just deleted the table named.
-func (a AutoIncrementTrackerImpl) DropTable(ctx *sql.Context, tableName string, wses ...*doltdb.WorkingSet) error {
+func (a AutoIncrementTracker) DropTable(ctx *sql.Context, tableName string, wses ...*doltdb.WorkingSet) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 

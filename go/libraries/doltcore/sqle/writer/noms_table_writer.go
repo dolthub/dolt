@@ -56,6 +56,7 @@ type nomsTableWriter struct {
 	flusher     WriteSessionFlusher
 
 	autoInc globalstate.AutoIncrementTracker
+	nextAutoIncrementValue map[string]uint64
 
 	setter SessionRootSetter
 }
@@ -132,8 +133,9 @@ func (te *nomsTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) e
 	if err != nil {
 		return err
 	}
-	te.autoInc.Set(ctx, te.tableName, seq)
-	te.tableEditor.MarkDirty()
+
+	te.nextAutoIncrementValue = make(map[string]uint64)
+	te.nextAutoIncrementValue[te.tableName] = seq
 
 	return te.flush(ctx)
 }
