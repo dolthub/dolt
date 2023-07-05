@@ -159,6 +159,24 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, string, error) {
 		return 1, "", fmt.Errorf("Could not load database %s", currentDbName)
 	}
 
+	// Check if the user executed `dolt checkout .`
+	if apr.NArg() == 1 && apr.Arg(0) == "." {
+
+		ws, err := dSess.WorkingSet(ctx, currentDbName)
+		if err != nil {
+			return 1, "", err
+		}
+		doltDb, hasDb := dSess.GetDoltDB(ctx, currentDbName)
+		if !hasDb {
+			return 1, "", errors.New("Unable to load database")
+		}
+		err = actions.ResetHard(ctx, dbData, doltDb, dSess.Username(), dSess.Email(), "", roots, headRef, ws)
+		if err != nil {
+			return 1, "", err
+		}
+		return 0, "", err
+	}
+
 	var successMessage string
 	err = checkoutTables(ctx, roots, currentDbName, apr.Args)
 	if err != nil && apr.NArg() == 1 {
