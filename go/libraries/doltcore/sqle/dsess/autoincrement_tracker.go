@@ -40,6 +40,7 @@ var _ globalstate.AutoIncrementTracker = AutoIncrementTrackerImpl{}
 // considered because the auto increment value for a table is tracked globally, across all branches.
 // Roots provided should be the working sets when available, or the branches when they are not (e.g. for remote
 // branches that don't have a local working set)
+// TODO (next): set these values less discriminately but override them as necessary with an index read on startup
 func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb.Rootish) (AutoIncrementTrackerImpl, error) {
 	ait := AutoIncrementTrackerImpl{
 		dbName:    dbName,
