@@ -1582,15 +1582,6 @@ func TestDoltAutoIncrement(t *testing.T) {
 			enginetest.TestScript(t, h, script)
 		}()
 	}
-
-	for _, script := range BrokenAutoIncrementTests {
-		t.Run(script.Name, func(t *testing.T) {
-			t.Skip()
-			h := newDoltHarness(t)
-			defer h.Close()
-			enginetest.TestScript(t, h, script)
-		})
-	}
 }
 
 func TestDoltAutoIncrementPrepared(t *testing.T) {
@@ -1601,15 +1592,6 @@ func TestDoltAutoIncrementPrepared(t *testing.T) {
 			defer h.Close()
 			enginetest.TestScriptPrepared(t, h, script)
 		}()
-	}
-
-	for _, script := range BrokenAutoIncrementTests {
-		t.Run(script.Name, func(t *testing.T) {
-			t.Skip()
-			h := newDoltHarness(t)
-			defer h.Close()
-			enginetest.TestScriptPrepared(t, h, script)
-		})
 	}
 }
 
