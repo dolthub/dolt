@@ -308,3 +308,31 @@ SQL
     run dolt sql -q "SELECT count(*) from dolt_log"
     [[ "$output" =~ "1" ]] || false
 }
+
+@test "reset: reset handles ignored tables" {
+    setup_ancestor
+
+    dolt sql << SQL
+CREATE TABLE test2 (
+    pk int primary key
+);
+INSERT INTO test2 VALUES (1);
+INSERT INTO test1 VALUES (1, 1, 1);
+SQL
+    dolt sql -q "insert into dolt_ignore values ('test2', true)"
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" != "test2" ]] || false
+
+    run dolt reset --hard
+    [ "$status" -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "nothing to commit, working tree clean" ]]
+
+    run dolt sql -q "select * from test2"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+}

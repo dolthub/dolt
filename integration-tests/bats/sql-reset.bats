@@ -557,3 +557,28 @@ get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 13-44
 }
 
+@test "sql-reset: reset handles ignored tables" {
+    dolt sql << SQL
+CREATE TABLE test2 (
+    pk int primary key
+);
+INSERT INTO test2 VALUES (1);
+INSERT INTO test VALUES (1);
+SQL
+    dolt sql -q "insert into dolt_ignore values ('test2', true)"
+
+    run dolt sql -q "select * from dolt_status"
+    [ "$status" -eq 0 ]
+    [[ "$output" != "test2" ]] || false
+
+    run dolt sql -q "call dolt_reset('--hard')"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "select * from dolt_status"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "" ]]
+
+    run dolt sql -q "select * from test2"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+}
