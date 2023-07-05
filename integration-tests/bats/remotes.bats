@@ -2075,6 +2075,51 @@ SQL
     [[ "$output" =~ "Everything up-to-date." ]] || false
 }
 
+@test "remotes: dolt sql -q 'call dolt_checkout("-b", "newbranch", "--track", "origin/feature")'' checks out new local branch 'newbranch' with upstream set" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push --set-upstream origin main
+    dolt checkout -b feature
+    dolt push --set-upstream origin feature
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    run dolt branch
+    [[ ! "$output" =~ "feature" ]] || false
+
+    dolt sql -q 'call dolt_checkout("-b", "newbranch", "--track", "origin/feature");'
+
+    run dolt sql -q 'select * from dolt_branches;'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| origin | feature" ]] || false
+
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
+
+    dolt checkout main
+    dolt branch -D newbranch
+
+    # branch.autosetupmerge configuration defaults to --track, so the upstream is set
+    run dolt sql -q 'call dolt_checkout("-b", "newbranch2", "origin/feature");'
+    echo "$output"
+    [ "$status" -eq 0 ]
+    run dolt sql -q 'select * from dolt_branches;'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| origin | feature" ]] || false
+
+
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
+}
+
 @test "remotes: dolt branch track flag sets upstream" {
     mkdir remote
     mkdir repo1
