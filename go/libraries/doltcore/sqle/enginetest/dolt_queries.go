@@ -3600,12 +3600,11 @@ var DoltTagTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-am','made changes in other')",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:            "CALL DOLT_MERGE('v1')",
-				SkipResultsCheck: true,
-				Expected:         []sql.Row{{"", 0, 0}},
+				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
 				Query:    "SELECT * FROM test",
@@ -3717,7 +3716,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 			{
 				Query:            "call dolt_commit('-am', 'two values on main')",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:            "call dolt_checkout('branch1')",
@@ -3736,7 +3735,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 			{
 				Query:            "call dolt_commit('-am', 'two values on branch1')",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:            "call dolt_checkout('branch2')",
@@ -3968,7 +3967,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "CALL dolt_merge('--no-ff', 'branch1');",
-				SkipResultsCheck: true, // TODO: how do i predict the hash
+				Expected: []sql.Row{{doltCommit}}, // TODO: how do i predict the hash
 			},
 			{
 				Query:          "CALL dolt_cherry_pick('HEAD');",
@@ -4042,7 +4041,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:            "call dolt_cherry_pick(@commit2);",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "SELECT * FROM t;",
@@ -4050,7 +4049,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:            "call dolt_cherry_pick(@commit1);",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "SELECT * FROM t order by pk;",
@@ -4076,7 +4075,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:            "CALL DOLT_CHERRY_PICK('branch1');",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "SELECT * FROM keyless;",
@@ -4101,7 +4100,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:            "call dolt_cherry_pick(@commit1);",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "SHOW TABLES;",
@@ -4132,7 +4131,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:            "call dolt_cherry_pick(@commit1);",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "SHOW TABLES;",
@@ -4154,7 +4153,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_cherry_pick(@commit1);",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "SHOW CREATE TABLE test;",
@@ -4176,7 +4175,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_cherry_pick(@commit1);",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "SHOW CREATE TABLE test;",
@@ -4198,7 +4197,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_cherry_pick(@commit1);",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "SHOW CREATE TABLE test;",
@@ -4429,7 +4428,7 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-ALL', '-m', 'update table terminator');",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit}},
 			},
 			// check last commit
 			{
@@ -4439,7 +4438,7 @@ var DoltCommitTests = []queries.ScriptTest{
 			// amend last commit
 			{
 				Query:            "CALL DOLT_COMMIT('-amend', '-m', 'update table t');",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit}},
 			},
 			// check amended commit
 			{
@@ -4465,7 +4464,7 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-Am', 'drop table t');",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_RESET('--hard');",
@@ -4482,12 +4481,12 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-Am', 'add table 21');",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit}},
 			},
 			// amend last commit
 			{
 				Query:            "CALL DOLT_COMMIT('-amend', '-m', 'add table 2');",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit}},
 			},
 			// check amended commit
 			{
@@ -4550,7 +4549,7 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('--amend', '-m', 'amended commit message');",
-				SkipResultsCheck: true, // commit hash is being returned, skip check
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query: "SELECT  message FROM dolt_log;",
@@ -4619,7 +4618,7 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('--amend');",
-				SkipResultsCheck: true, // commit hash is being returned, skip check
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query: "SELECT message FROM dolt_log;",
@@ -4657,7 +4656,7 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('--amend', '-m', 'amended commit with added changes');",
-				SkipResultsCheck: true, // commit hash is being returned, skip check
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_status;",
@@ -4723,7 +4722,7 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('--amend', '-m', 'amended commit with removed changes');",
-				SkipResultsCheck: true, // commit hash is being returned, skip check
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "SELECT * FROM test;",
@@ -4782,7 +4781,7 @@ var DoltCommitTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "CALL DOLT_COMMIT('--amend', '-m', 'new merge');",
-				SkipResultsCheck: true, // commit hash is being returned, skip check
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query: "SELECT message FROM dolt_log;",
