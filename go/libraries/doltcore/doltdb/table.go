@@ -18,11 +18,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"unicode"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
@@ -643,40 +641,40 @@ func (t *Table) GetAutoIncrementValue(ctx context.Context) (uint64, error) {
 // SetAutoIncrementValue sets the current AUTO_INCREMENT value for this table. If the value is less than the current
 // maximum value for the auto_increment column in this table, this operation is a no-op.
 func (t *Table) SetAutoIncrementValue(ctx context.Context, val uint64) (*Table, error) {
-	sch, err := t.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	aiCol, ok := schema.GetAutoIncrementColumn(sch)
-	if !ok {
-		return nil, nil
-	}
-
-	aiIndex, ok := sch.Indexes().GetIndexByColumnNames(aiCol.Name)
-	if !ok {
-		// TODO: error handling
-		return nil, nil
-	}
-
-	indexes, err := t.GetIndexSet(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	indexData, err := indexes.GetIndex(ctx, sch, aiIndex.Name())
-	if err != nil {
-		return nil, err
-	}
-	
-	currentMax, err := getMaxIndexValue(ctx, indexData)
-	if err != nil {
-		return nil, err
-	}
-
-	if val <= currentMax {
-		return t, nil
-	}
+	// sch, err := t.GetSchema(ctx)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// 
+	// aiCol, ok := schema.GetAutoIncrementColumn(sch)
+	// if !ok {
+	// 	return nil, nil
+	// }
+	// 
+	// aiIndex, ok := sch.Indexes().GetIndexByColumnNames(aiCol.Name)
+	// if !ok {
+	// 	// TODO: error handling
+	// 	return nil, nil
+	// }
+	// 
+	// indexes, err := t.GetIndexSet(ctx)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// 
+	// indexData, err := indexes.GetIndex(ctx, sch, aiIndex.Name())
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// 
+	// currentMax, err := getMaxIndexValue(ctx, indexData)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// 
+	// if val <= currentMax {
+	// 	return t, nil
+	// }
 	
 	table, err := t.table.SetAutoIncrement(ctx, val)
 	if err != nil {
@@ -685,40 +683,40 @@ func (t *Table) SetAutoIncrementValue(ctx context.Context, val uint64) (*Table, 
 	return &Table{table: table}, nil
 }
 
-func getMaxIndexValue(ctx context.Context, indexData durable.Index) (uint64, error) {
-	if types.IsFormat_DOLT(indexData.Format()) {
-		idx := durable.ProllyMapFromIndex(indexData)
-		
-		iter, err := idx.IterAllReverse(ctx)
-		if err != nil {
-			return 0, err
-		}
-
-		kd, _ := idx.Descriptors()
-		k, _, err := iter.Next(ctx)
-		if err == io.EOF {
-			return 0, nil
-		} else if err != nil {
-			return 0, err
-		}
-
-		// TODO: is the auto-inc column always the first column in the index?
-		field, err := index.GetField(ctx, kd, 0, k, idx.NodeStore())
-		if err != nil {
-			return 0, err
-		}
-		
-		maxVal, err := coerceAutoIncrementValue(field)
-		if err != nil {
-			return 0, err
-		}
-		
-		return maxVal, nil
-	}
-	
-	// For an LD format table, this operation won't succeed
-	return math.MaxUint64, nil
-}
+// func getMaxIndexValue(ctx context.Context, indexData durable.Index) (uint64, error) {
+// 	if types.IsFormat_DOLT(indexData.Format()) {
+// 		idx := durable.ProllyMapFromIndex(indexData)
+// 		
+// 		iter, err := idx.IterAllReverse(ctx)
+// 		if err != nil {
+// 			return 0, err
+// 		}
+// 
+// 		kd, _ := idx.Descriptors()
+// 		k, _, err := iter.Next(ctx)
+// 		if err == io.EOF {
+// 			return 0, nil
+// 		} else if err != nil {
+// 			return 0, err
+// 		}
+// 
+// 		// TODO: is the auto-inc column always the first column in the index?
+// 		field, err := index.GetField(ctx, kd, 0, k, idx.NodeStore())
+// 		if err != nil {
+// 			return 0, err
+// 		}
+// 		
+// 		maxVal, err := coerceAutoIncrementValue(field)
+// 		if err != nil {
+// 			return 0, err
+// 		}
+// 		
+// 		return maxVal, nil
+// 	}
+// 	
+// 	// For an LD format table, this operation won't succeed
+// 	return math.MaxUint64, nil
+// }
 
 func coerceAutoIncrementValue(val interface{}) (uint64, error) {
 	switch typ := val.(type) {

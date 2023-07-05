@@ -338,6 +338,7 @@ func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err err
 		return nil, err
 	}
 
+	// TODO: does this duplicate work done in flush?
 	if w.aiCol.AutoIncrement {
 		seq := w.aiTracker.Current(w.tableName)
 		t, err = t.SetAutoIncrementValue(ctx, seq)

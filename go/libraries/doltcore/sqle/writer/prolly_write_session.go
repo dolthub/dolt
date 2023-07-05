@@ -154,12 +154,19 @@ func (s *prollyWriteSession) flush(ctx context.Context, autoIncrements map[strin
 			// override was specified (e.g. if the next value was set explicitly)
 			if schema.HasAutoIncrement(wr.sch) {
 				autoIncVal := s.aiTracker.Current(name)
-				if override, ok := autoIncrements[name]; ok {
+				override, hasAiOverride := autoIncrements[name]
+				if hasAiOverride{
 					autoIncVal = override
 				}
+				
 				t, err = t.SetAutoIncrementValue(ctx2, autoIncVal)
 				if err != nil {
 					return err
+				}
+				
+				// Re-initialize the auto increment tracker with the new value as necessary
+				if hasAiOverride {
+					s.aiTracker.Set(ctx2, name, override)
 				}
 			}
 
