@@ -17,8 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"strings"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
@@ -156,10 +154,6 @@ hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt re
 		case "no changes were made, nothing to commit" == errorText:
 			cli.Println("No changes were made.")
 			return nil
-		case
-			strings.HasPrefix(errorText, "Merge conflict detected, transaction rolled back."),
-			strings.HasPrefix(errorText, "Committing this transaction resulted in a working set with constraint violations"):
-			return ErrCherryPickConflictsOrViolations.New()
 		case "cherry-picking a merge commit is not supported" == errorText:
 			return fmt.Errorf("cherry-picking a merge commit is not supported.")
 		default:
