@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -306,6 +307,28 @@ func GetTinyIntColAsBool(col interface{}) (bool, error) {
 		return v == "1", nil
 	default:
 		return false, fmt.Errorf("unexpected type %T, was expecting bool, int, or string", v)
+	}
+}
+
+// getInt64ColAsInt64 returns the value of an int64 column as a string
+// This is necessary because Queryist may return an int64 column as an int64 (when using SQLEngine)
+// or as a string (when using ConnectionQueryist).
+func getInt64ColAsInt64(col interface{}) (int64, error) {
+	switch v := col.(type) {
+	case int:
+		return int64(v), nil
+	case uint64:
+		return int64(v), nil
+	case int64:
+		return v, nil
+	case string:
+		iv, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		return iv, nil
+	default:
+		return 0, fmt.Errorf("unexpected type %T, was expecting int64, uint64 or string", v)
 	}
 }
 
