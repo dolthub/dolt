@@ -17,7 +17,7 @@ package dprocedures
 import (
 	"errors"
 	"fmt"
-
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
@@ -184,6 +184,14 @@ func stageCherryPickedTables(ctx *sql.Context, mergeStats map[string]*merge.Merg
 // the commit message of cherry-picked commit as the commit message of the new commit created during this command.
 func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, dbName, cherryStr string) (*merge.Result, string, error) {
 	// check for clean working set
+	wsOnlyHasIgnoredTables, err := diff.WorkingSetContainsOnlyIgnoredTables(ctx, roots)
+	if err != nil {
+		return nil, "", err
+	}
+	if !wsOnlyHasIgnoredTables {
+		return nil, "", ErrCherryPickUncommittedChanges
+	}
+
 	headRootHash, err := roots.Head.HashOf()
 	if err != nil {
 		return nil, "", err
@@ -192,17 +200,6 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 	workingRootHash, err := roots.Working.HashOf()
 	if err != nil {
 		return nil, "", err
-	}
-	if workingRootHash != headRootHash {
-		return nil, "", ErrCherryPickUncommittedChanges
-	}
-
-	stagedRootHash, err := roots.Staged.HashOf()
-	if err != nil {
-		return nil, "", err
-	}
-	if stagedRootHash != headRootHash {
-		return nil, "", ErrCherryPickUncommittedChanges
 	}
 
 	doltDB, ok := dSess.GetDoltDB(ctx, dbName)
