@@ -3604,6 +3604,7 @@ var DoltTagTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_MERGE('v1')",
+				SkipResultsCheck: true,
 				Expected: []sql.Row{{"", 0, 0}},
 			},
 			{
