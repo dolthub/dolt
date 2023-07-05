@@ -140,7 +140,12 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	if dEnv != nil {
 		dEnv.ReloadRepoState()
 	}
-	return HandleVErrAndExitCode(handleErrors(branchName, err), usagePrt)
+
+	if err != nil {
+		return HandleVErrAndExitCode(handleErrors(branchName, err), usagePrt)
+	}
+
+	return 0
 }
 
 // generateCheckoutSql returns the query that will call the `DOLT_CHECKOUT` stored procedure.
@@ -159,33 +164,29 @@ func generateCheckoutSql(args []string) (string, error) {
 	return dbr.InterpolateForDialect(buffer.String(), queryValues, dialect.MySQL)
 }
 
-func handleErrors(name string, err error) errhand.VerboseError {
-	if err != nil {
-		if err.Error() == doltdb.ErrBranchNotFound.Error() {
-			return errhand.BuildDError("fatal: Branch '%s' not found.", name).Build()
-		} else if strings.Contains(err.Error(), "dolt does not support a detached head state.") {
-			return errhand.VerboseErrorFromError(err)
-		} else if strings.Contains(err.Error(), "error: could not find") {
-			return errhand.VerboseErrorFromError(err)
-		} else if doltdb.IsRootValUnreachable(err) {
-			return errhand.VerboseErrorFromError(err)
-		} else if actions.IsCheckoutWouldOverwrite(err) {
-			return errhand.VerboseErrorFromError(err)
-		} else if err.Error() == actions.ErrWorkingSetsOnBothBranches.Error() {
-			str := fmt.Sprintf("error: There are uncommitted changes already on branch '%s'.", name) +
-				"This can happen when someone modifies that branch in a SQL session." +
-				fmt.Sprintf("You have uncommitted changes on this branch, and they would overwrite the uncommitted changes on branch %s on checkout.", name) +
-				"To solve this problem, you can " +
-				"1) commit or reset your changes on this branch, using `dolt commit` or `dolt reset`, before checking out the other branch, " +
-				"2) use the `-f` flag with `dolt checkout` to force an overwrite, or " +
-				"3) connect to branch '%s' with the SQL server and revert or commit changes there before proceeding."
-			return errhand.BuildDError(str).AddCause(err).Build()
-		} else {
-			bdr := errhand.BuildDError("fatal: Unexpected error checking out branch '%s'", name)
-			bdr.AddCause(err)
-			return bdr.Build()
-		}
+func handleErrors(branchName string, err error) errhand.VerboseError {
+	if err.Error() == doltdb.ErrBranchNotFound.Error() {
+		return errhand.BuildDError("fatal: Branch '%s' not found.", branchName).Build()
+	} else if strings.Contains(err.Error(), "dolt does not support a detached head state.") {
+		return errhand.VerboseErrorFromError(err)
+	} else if strings.Contains(err.Error(), "error: could not find") {
+		return errhand.VerboseErrorFromError(err)
+	} else if doltdb.IsRootValUnreachable(err) {
+		return errhand.VerboseErrorFromError(err)
+	} else if actions.IsCheckoutWouldOverwrite(err) {
+		return errhand.VerboseErrorFromError(err)
+	} else if err.Error() == actions.ErrWorkingSetsOnBothBranches.Error() {
+		str := fmt.Sprintf("error: There are uncommitted changes already on branch '%s'.", branchName) +
+			"This can happen when someone modifies that branch in a SQL session." +
+			fmt.Sprintf("You have uncommitted changes on this branch, and they would overwrite the uncommitted changes on branch %s on checkout.", branchName) +
+			"To solve this problem, you can " +
+			"1) commit or reset your changes on this branch, using `dolt commit` or `dolt reset`, before checking out the other branch, " +
+			"2) use the `-f` flag with `dolt checkout` to force an overwrite, or " +
+			"3) connect to branch '%s' with the SQL server and revert or commit changes there before proceeding."
+		return errhand.BuildDError(str).AddCause(err).Build()
+	} else {
+		bdr := errhand.BuildDError("fatal: Unexpected error checking out branch '%s'", branchName)
+		bdr.AddCause(err)
+		return bdr.Build()
 	}
-
-	return nil
 }
