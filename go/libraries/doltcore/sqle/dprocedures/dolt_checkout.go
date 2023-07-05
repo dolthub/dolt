@@ -397,14 +397,22 @@ func checkoutBranch(ctx *sql.Context, dbName string, branchName string, apr *arg
 // the new branch and persisting the checked-out branch into future sessions
 func doGlobalCheckout(ctx *sql.Context, dSess *dsess.DoltSession, dbName, branchName string, isForce bool) error {
 	if sqlserver.RunningInServerMode() {
-		return fmt.Errorf("unable to change the default branch while the server is running; " +
+		/*
+			// Ordinarily we don't want to change the default branch while the server is running.
+			// However, until https://github.com/dolthub/dolt/issues/6273 is fixed,
+			// connecting to a running server via `dolt sql-client` is the only way to
+			// checkout a new branch if the current default branch is broken. So we can't
+			// error here.
+
+			return fmt.Errorf("unable to change the default branch while the server is running; " +
 			"this can by changed on the command line, by stopping the sql-server, " +
 			"running `dolt checkout <another_branch> and restarting the sql-server")
+		*/
 	}
 
 	// This copies over the working set.
 	err := MoveWorkingSetToBranch(ctx, branchName, isForce)
-	if err != nil {
+	if err != nil && err != doltdb.ErrAlreadyOnBranch {
 		return err
 	}
 
