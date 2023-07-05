@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
+	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -39,7 +40,7 @@ type prollyWriteSession struct {
 var _ WriteSession = &prollyWriteSession{}
 
 // GetTableWriter implemented WriteSession.
-func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table, db string, setter SessionRootSetter) (TableWriter, error) {
+func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, table, db string, setter SessionRootSetter) (TableWriter, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
@@ -106,20 +107,20 @@ func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table, db strin
 }
 
 // Flush implemented WriteSession.
-func (s *prollyWriteSession) Flush(ctx context.Context) (*doltdb.WorkingSet, error) {
+func (s *prollyWriteSession) Flush(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	return s.flush(ctx, nil)
 }
 
-func (s *prollyWriteSession) FlushWithAutoIncrementOverrides(ctx context.Context, autoIncrements map[string]uint64) (*doltdb.WorkingSet, error) {
+func (s *prollyWriteSession) FlushWithAutoIncrementOverrides(ctx *sql.Context, autoIncrements map[string]uint64) (*doltdb.WorkingSet, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	return s.flush(ctx, autoIncrements)
 }
 
 // SetWorkingSet implements WriteSession.
-func (s *prollyWriteSession) SetWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error {
+func (s *prollyWriteSession) SetWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	return s.setWorkingSet(ctx, ws)
@@ -136,7 +137,7 @@ func (s *prollyWriteSession) SetOptions(opts editor.Options) {
 }
 
 // flush is the inner implementation for Flush that does not acquire any locks
-func (s *prollyWriteSession) flush(ctx context.Context, autoIncrements map[string]uint64) (*doltdb.WorkingSet, error) {
+func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncrements map[string]uint64) (*doltdb.WorkingSet, error) {
 	tables := make(map[string]*doltdb.Table, len(s.tables))
 	mu := &sync.Mutex{}
 
@@ -166,7 +167,7 @@ func (s *prollyWriteSession) flush(ctx context.Context, autoIncrements map[strin
 				
 				// Re-initialize the auto increment tracker with the new value as necessary
 				if hasAiOverride {
-					s.aiTracker.Set(ctx2, name, override)
+					s.aiTracker.Set(ctx, name, override)
 				}
 			}
 

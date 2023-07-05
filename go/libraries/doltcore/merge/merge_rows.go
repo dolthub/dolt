@@ -113,7 +113,7 @@ type MergedTable struct {
 
 // MergeTable merges schema and table data for the table tblName.
 // TODO: this code will loop infinitely when merging certain schema changes
-func (rm *RootMerger) MergeTable(ctx context.Context, tblName string, opts editor.Options, mergeOpts MergeOpts) (*MergedTable, *MergeStats, error) {
+func (rm *RootMerger) MergeTable(ctx *sql.Context, tblName string, opts editor.Options, mergeOpts MergeOpts) (*MergedTable, *MergeStats, error) {
 	tm, err := rm.makeTableMerger(ctx, tblName)
 	if err != nil {
 		return nil, nil, err

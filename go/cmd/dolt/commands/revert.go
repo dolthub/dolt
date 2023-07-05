@@ -69,6 +69,11 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, revertDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
+	_, sqlCtx, _, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		return 1
+	}
+
 	// This command creates a commit, so we need user identity
 	if !cli.CheckUserNameAndEmail(cliCtx.Config()) {
 		return 1
@@ -126,7 +131,7 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
-	workingRoot, revertMessage, err := merge.Revert(ctx, dEnv.DoltDB, workingRoot, headCommit, commits, opts)
+	workingRoot, revertMessage, err := merge.Revert(sqlCtx, dEnv.DoltDB, workingRoot, headCommit, commits, opts)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}

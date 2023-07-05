@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -115,12 +116,14 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	verr := cherryPick(ctx, dEnv, cliCtx, cherryStr)
-	return HandleVErrAndExitCode(verr, usage)
+	return 0
+	// TODO
+	// verr := cherryPick(ctx, dEnv, cliCtx, cherryStr)
+	// return HandleVErrAndExitCode(verr, usage)
 }
 
 // cherryPick returns error if any step of cherry-picking fails. It receives cherry-picked commit and performs cherry-picking and commits.
-func cherryPick(ctx context.Context, dEnv *env.DoltEnv, cliCtx cli.CliContext, cherryStr string) errhand.VerboseError {
+func cherryPick(ctx *sql.Context, dEnv *env.DoltEnv, cliCtx cli.CliContext, cherryStr string) errhand.VerboseError {
 	// check for clean working state
 	headRoot, err := dEnv.HeadRoot(ctx)
 	if err != nil {
@@ -205,7 +208,7 @@ func cherryPick(ctx context.Context, dEnv *env.DoltEnv, cliCtx cli.CliContext, c
 // mergeCherryPickedCommit executes a merge to cherry-pick the specified ref specification from
 // |cherryStr| and apply it to the specified |workingRoot| in this |dEnv|. The MergeResult is
 // returned, along with the commit message for the specified |cherryStr|, and any error encountered.
-func mergeCherryPickedCommit(ctx context.Context, dEnv *env.DoltEnv, workingRoot *doltdb.RootValue, cherryStr string) (*merge.Result, string, error) {
+func mergeCherryPickedCommit(ctx *sql.Context, dEnv *env.DoltEnv, workingRoot *doltdb.RootValue, cherryStr string) (*merge.Result, string, error) {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
 		return nil, "", err

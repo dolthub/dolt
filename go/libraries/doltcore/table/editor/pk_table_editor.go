@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 const tfApproxCapacity = 64
@@ -61,13 +62,13 @@ type TableEditor interface {
 
 	// GetIndexedRows returns all matching rows for the given key on the index. The key is assumed to be in the format
 	// expected of the index, similar to searching on the index map itself.
-	GetIndexedRows(ctx context.Context, key types.Tuple, indexName string, idxSch schema.Schema) ([]row.Row, error)
+	GetIndexedRows(ctx *sql.Context, key types.Tuple, indexName string, idxSch schema.Schema) ([]row.Row, error)
 	HasEdits() bool
 	MarkDirty()
 
 	SetConstraintViolation(ctx context.Context, k types.LesserValuable, v types.Valuable) error
 
-	Table(ctx context.Context) (*doltdb.Table, error)
+	Table(ctx *sql.Context) (*doltdb.Table, error)
 	Schema() schema.Schema
 	Name() string
 	Format() *types.NomsBinFormat
@@ -214,7 +215,7 @@ func indexKeyToTableKey(nbf *types.NomsBinFormat, indexKey types.Tuple, lookupTa
 
 // GetIndexedRows returns all matching rows for the given key on the index. The key is assumed to be in the format
 // expected of the index, similar to searching on the index map itself.
-func (te *pkTableEditor) GetIndexedRows(ctx context.Context, key types.Tuple, indexName string, idxSch schema.Schema) ([]row.Row, error) {
+func (te *pkTableEditor) GetIndexedRows(ctx *sql.Context, key types.Tuple, indexName string, idxSch schema.Schema) ([]row.Row, error) {
 	for _, indexEd := range te.indexEds {
 		if indexEd.idx.Name() == indexName {
 			keyHash, err := key.Hash(key.Format())
@@ -613,7 +614,7 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 }
 
 // Table returns a Table based on the edits given, if any. If Flush() was not called prior, it will be called here.
-func (te *pkTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
+func (te *pkTableEditor) Table(ctx *sql.Context) (*doltdb.Table, error) {
 	if !te.HasEdits() {
 		return te.t, nil
 	}
