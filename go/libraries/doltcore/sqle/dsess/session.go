@@ -277,6 +277,7 @@ func (d *DoltSession) RenameBranchState(ctx *sql.Context, dbName string, oldBran
 
 	if !ok {
 		// nothing to rename
+		d.mu.Unlock()
 		return nil
 	}
 
