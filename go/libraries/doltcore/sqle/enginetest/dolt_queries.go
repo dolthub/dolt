@@ -3927,7 +3927,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "delete all rows in table in all branches, one not reset",
+		Name: "delete all rows in table in all but one branch",
 		SetUpScript: []string{
 			"create table t (a int primary key auto_increment, b int)",
 			"call dolt_add('.')",

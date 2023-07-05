@@ -201,6 +201,7 @@ func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) 
 	w.nextAutoIncrementValue = make(map[string]uint64)
 	w.nextAutoIncrementValue[w.tableName] = seq
 
+	// The work above is persisted in flush
 	return w.flush(ctx)
 }
 
@@ -332,15 +333,6 @@ func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err err
 	t, err = t.SetIndexSet(ctx, s)
 	if err != nil {
 		return nil, err
-	}
-
-	// TODO: does this duplicate work done in flush?
-	if w.aiCol.AutoIncrement {
-		seq := w.aiTracker.Current(w.tableName)
-		t, err = t.SetAutoIncrementValue(ctx, seq)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	return t, nil

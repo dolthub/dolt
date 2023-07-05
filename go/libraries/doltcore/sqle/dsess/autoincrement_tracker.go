@@ -173,6 +173,7 @@ func (a AutoIncrementTracker) deepSet(ctx *sql.Context, ws ref.WorkingSetRef, ta
 		return nil
 	}
 
+	maxAutoInc := newAutoIncVal
 	doltdbs := db.DoltDatabases()
 	for _, db := range doltdbs {
 		branches, err := db.GetBranches(ctx)
@@ -251,17 +252,16 @@ func (a AutoIncrementTracker) deepSet(ctx *sql.Context, ws ref.WorkingSetRef, ta
 			if err != nil {
 				return err
 			}
-
-			// There's a value on this branch higher than the one given, so we can't use it
-			if seq > newAutoIncVal {
-				return nil
+			
+			if seq > maxAutoInc {
+				maxAutoInc = seq
 			}
 		}
 	}
 
 	// If we made it through the above loop, that means there is no value on any branch higher than the one given, 
 	// so we can set it
-	a.sequences[tableName] = newAutoIncVal
+	a.sequences[tableName] = maxAutoInc
 	return nil
 }
 
