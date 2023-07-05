@@ -4120,7 +4120,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('right');",
-				SkipResultsCheck: true,
 				Expected:         []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
@@ -4149,7 +4148,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('right');",
-				SkipResultsCheck: true,
 				Expected:         []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
@@ -4185,7 +4183,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('right');",
-				SkipResultsCheck: true,
 				Expected:         []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
@@ -4220,7 +4217,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('right');",
-				SkipResultsCheck: true,
 				Expected:         []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
@@ -4251,7 +4247,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('right');",
-				SkipResultsCheck: true,
 				Expected:         []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
@@ -4277,7 +4272,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('right');",
-				SkipResultsCheck: true,
 				Expected:         []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
@@ -4303,7 +4297,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('right');",
-				SkipResultsCheck: true,
 				Expected:         []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
@@ -4329,7 +4322,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('right');",
-				SkipResultsCheck: true,
 				Expected:         []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
@@ -4358,7 +4350,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('right');",
-				SkipResultsCheck: true,
 				Expected:         []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
@@ -4385,7 +4376,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('right');",
-				SkipResultsCheck: true,
 				Expected:         []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
@@ -4422,7 +4412,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('right');",
-				SkipResultsCheck: true,
 				Expected:         []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
@@ -4460,7 +4449,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('right');",
-				SkipResultsCheck: true,
 				Expected:         []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
@@ -4530,7 +4518,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('right');",
-				SkipResultsCheck: true,
 				Expected:         []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
@@ -4637,7 +4624,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('right');",
-				SkipResultsCheck: true,
 				Expected:         []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
@@ -4666,7 +4652,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('right');",
-				SkipResultsCheck: true,
 				Expected:         []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
@@ -4757,7 +4742,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('right');",
-				SkipResultsCheck: true,
 				Expected:         []sql.Row{{doltCommit, 0, 0}},
 			},
 		},
@@ -4800,7 +4784,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('right');",
-				SkipResultsCheck: true,
 				Expected:         []sql.Row{{doltCommit, 0, 0}},
 			},
 		},
@@ -4905,7 +4888,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('right');",
-				SkipResultsCheck: true,
 				Expected:         []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
@@ -5190,7 +5172,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 				// See the comment above about why this should NOT report a conflict and why this is skipped
 				Skip:             true,
 				Query:            "call dolt_merge('right');",
-				SkipResultsCheck: true,
 				Expected:         []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
@@ -5218,7 +5199,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('right');",
-				SkipResultsCheck: true,
 				Expected:         []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
