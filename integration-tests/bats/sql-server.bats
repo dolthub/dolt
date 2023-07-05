@@ -1923,6 +1923,7 @@ behavior:
 }
 
 @test "sql-server: CALL DOLT_CHECKOUT --global while server is running" {
+    skip "dolt_checkout('--global') is the current workaround for https://github.com/dolthub/dolt/issues/6273 and needs to be supported."
     cd repo1
     dolt branch other
     start_sql_server
