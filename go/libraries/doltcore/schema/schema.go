@@ -137,6 +137,22 @@ func HasAutoIncrement(sch Schema) (ok bool) {
 	return
 }
 
+// GetAutoIncrementColumn returns the auto increment column if one exists, with an existence boolean
+func GetAutoIncrementColumn(sch Schema) (col Column, ok bool) {
+	var aiCol Column
+	var found bool
+	_ = sch.GetAllCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
+		if col.AutoIncrement {
+			aiCol = col
+			found = true
+			stop = true
+		}
+		return
+	})
+	
+	return aiCol, found
+}
+
 // SchemasAreEqual tests equality of two schemas.
 func SchemasAreEqual(sch1, sch2 Schema) bool {
 	if sch1 == nil && sch2 == nil {
