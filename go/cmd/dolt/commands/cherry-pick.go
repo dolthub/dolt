@@ -216,8 +216,8 @@ hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt re
 }
 
 func cherryPickAbort(queryist cli.Queryist, sqlCtx *sql.Context) error {
-	q := "call dolt_merge('--abort')"
-	_, err := GetRowsForSql(queryist, sqlCtx, q)
+	query := "call dolt_merge('--abort')"
+	_, err := GetRowsForSql(queryist, sqlCtx, query)
 	if err != nil {
 		errorText := err.Error()
 		switch errorText {
