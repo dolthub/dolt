@@ -151,7 +151,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, string, error) {
 		if err != nil {
 			return 1, "", err
 		}
-		return 0, "", nil
+		return 0, generateSuccessMessage(branchName, ""), nil
 	}
 
 	roots, ok := dSess.GetRoots(ctx, currentDbName)

@@ -47,7 +47,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ CALL DOLT_CHECKOUT('branch1');",
-				Expected: []sql.Row{{0, ""}},
+				Expected: []sql.Row{{0, "Switched to branch 'branch1'\n"}},
 			},
 			{
 				Query:    "/* client a */ select active_branch();",
@@ -59,7 +59,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ CALL DOLT_CHECKOUT('branch2');",
-				Expected: []sql.Row{{0, ""}},
+				Expected: []sql.Row{{0, "Switched to branch 'branch2'\n"}},
 			},
 			{
 				Query:    "/* client b */ CALL DOLT_BRANCH('-d', 'branch1');",
@@ -88,7 +88,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ CALL DOLT_CHECKOUT('branch1');",
-				Expected: []sql.Row{{0, ""}},
+				Expected: []sql.Row{{0, "Switched to branch 'branch1'\n"}},
 			},
 			{
 				Query:    "/* client a */ select active_branch();",
@@ -215,7 +215,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ CALL DOLT_CHECKOUT('-b', 'branch1');",
-				Expected: []sql.Row{{0, ""}},
+				Expected: []sql.Row{{0, "Switched to branch 'branch1'\n"}},
 			},
 			{
 				Query:    "/* client a */ select active_branch();",
@@ -264,7 +264,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "/* client a */ CALL DOLT_CHECKOUT('-b', 'branch1');",
-				Expected: []sql.Row{{0, ""}},
+				Expected: []sql.Row{{0, "Switched to branch 'branch1'\n"}},
 			},
 			{
 				Query:    "/* client a */ select active_branch();",

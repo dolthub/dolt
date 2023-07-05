@@ -1203,7 +1203,7 @@ var BranchControlTests = []BranchControlTest{
 				User:     "testuser",
 				Host:     "localhost",
 				Query:    "CALL DOLT_CHECKOUT('other');",
-				Expected: []sql.Row{{0, ""}},
+				Expected: []sql.Row{{0, "Switched to branch 'other'\n"}},
 			},
 			{ // On "dba"."other", which we do not have permissions for
 				User:        "testuser",
@@ -1227,7 +1227,7 @@ var BranchControlTests = []BranchControlTest{
 				User:     "testuser",
 				Host:     "localhost",
 				Query:    "CALL DOLT_CHECKOUT('other');",
-				Expected: []sql.Row{{0, ""}},
+				Expected: []sql.Row{{0, "Switched to branch 'other'\n"}},
 			},
 			{ // On "dbb"."other", which we do not have permissions for
 				User:  "testuser",
