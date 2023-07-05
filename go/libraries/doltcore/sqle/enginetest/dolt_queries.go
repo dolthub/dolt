@@ -3599,11 +3599,11 @@ var DoltTagTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 2}}},
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('-am','made changes in other')",
+				Query:    "CALL DOLT_COMMIT('-am','made changes in other')",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
-				Query:            "CALL DOLT_MERGE('v1')",
+				Query:    "CALL DOLT_MERGE('v1')",
 				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
@@ -3715,7 +3715,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
 			},
 			{
-				Query:            "call dolt_commit('-am', 'two values on main')",
+				Query:    "call dolt_commit('-am', 'two values on main')",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
@@ -3734,7 +3734,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:            "call dolt_commit('-am', 'two values on branch1')",
+				Query:    "call dolt_commit('-am', 'two values on branch1')",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
@@ -3966,7 +3966,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:            "CALL dolt_merge('--no-ff', 'branch1');",
+				Query:    "CALL dolt_merge('--no-ff', 'branch1');",
 				Expected: []sql.Row{{doltCommit}}, // TODO: how do i predict the hash
 			},
 			{
@@ -4040,7 +4040,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:            "call dolt_cherry_pick(@commit2);",
+				Query:    "call dolt_cherry_pick(@commit2);",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
@@ -4048,7 +4048,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				Expected: []sql.Row{{2, "two"}},
 			},
 			{
-				Query:            "call dolt_cherry_pick(@commit1);",
+				Query:    "call dolt_cherry_pick(@commit1);",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
@@ -4074,7 +4074,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:            "CALL DOLT_CHERRY_PICK('branch1');",
+				Query:    "CALL DOLT_CHERRY_PICK('branch1');",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
@@ -4099,7 +4099,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"myview"}},
 			},
 			{
-				Query:            "call dolt_cherry_pick(@commit1);",
+				Query:    "call dolt_cherry_pick(@commit1);",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
@@ -4130,7 +4130,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"myview"}, {"dropme"}},
 			},
 			{
-				Query:            "call dolt_cherry_pick(@commit1);",
+				Query:    "call dolt_cherry_pick(@commit1);",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
@@ -4152,7 +4152,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:            "call dolt_cherry_pick(@commit1);",
+				Query:    "call dolt_cherry_pick(@commit1);",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
@@ -4174,7 +4174,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:            "call dolt_cherry_pick(@commit1);",
+				Query:    "call dolt_cherry_pick(@commit1);",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
@@ -4196,7 +4196,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:            "call dolt_cherry_pick(@commit1);",
+				Query:    "call dolt_cherry_pick(@commit1);",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
@@ -4427,7 +4427,7 @@ var DoltCommitTests = []queries.ScriptTest{
 				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('-ALL', '-m', 'update table terminator');",
+				Query:    "CALL DOLT_COMMIT('-ALL', '-m', 'update table terminator');",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			// check last commit
@@ -4437,7 +4437,7 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 			// amend last commit
 			{
-				Query:            "CALL DOLT_COMMIT('-amend', '-m', 'update table t');",
+				Query:    "CALL DOLT_COMMIT('-amend', '-m', 'update table t');",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			// check amended commit
@@ -4463,7 +4463,7 @@ var DoltCommitTests = []queries.ScriptTest{
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('-Am', 'drop table t');",
+				Query:    "CALL DOLT_COMMIT('-Am', 'drop table t');",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
@@ -4480,12 +4480,12 @@ var DoltCommitTests = []queries.ScriptTest{
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('-Am', 'add table 21');",
+				Query:    "CALL DOLT_COMMIT('-Am', 'add table 21');",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			// amend last commit
 			{
-				Query:            "CALL DOLT_COMMIT('-amend', '-m', 'add table 2');",
+				Query:    "CALL DOLT_COMMIT('-amend', '-m', 'add table 2');",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			// check amended commit
@@ -4548,7 +4548,7 @@ var DoltCommitTests = []queries.ScriptTest{
 				Expected: []sql.Row{{2, nil, "added"}},
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('--amend', '-m', 'amended commit message');",
+				Query:    "CALL DOLT_COMMIT('--amend', '-m', 'amended commit message');",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
@@ -4617,7 +4617,7 @@ var DoltCommitTests = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('--amend');",
+				Query:    "CALL DOLT_COMMIT('--amend');",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
@@ -4655,7 +4655,7 @@ var DoltCommitTests = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('--amend', '-m', 'amended commit with added changes');",
+				Query:    "CALL DOLT_COMMIT('--amend', '-m', 'amended commit with added changes');",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
@@ -4721,7 +4721,7 @@ var DoltCommitTests = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('--amend', '-m', 'amended commit with removed changes');",
+				Query:    "CALL DOLT_COMMIT('--amend', '-m', 'amended commit with removed changes');",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
@@ -4780,7 +4780,7 @@ var DoltCommitTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:            "CALL DOLT_COMMIT('--amend', '-m', 'new merge');",
+				Query:    "CALL DOLT_COMMIT('--amend', '-m', 'new merge');",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
