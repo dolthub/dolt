@@ -245,15 +245,16 @@ func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots,
 		return ws, "", noConflictsOrViolations, threeWayMerge, err
 	}
 
+	var commit string
 	if !noCommit {
 		author := fmt.Sprintf("%s <%s>", spec.Name, spec.Email)
-		commit, _, err := doDoltCommit(ctx, []string{"-m", msg, "--author", author})
+		commit, _, err = doDoltCommit(ctx, []string{"-m", msg, "--author", author})
 		if err != nil {
 			return ws, commit, noConflictsOrViolations, threeWayMerge, fmt.Errorf("dolt_commit failed")
 		}
 	}
 
-	return ws, "", noConflictsOrViolations, threeWayMerge, nil
+	return ws, commit, noConflictsOrViolations, threeWayMerge, nil
 }
 
 func abortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Roots) (*doltdb.WorkingSet, error) {
