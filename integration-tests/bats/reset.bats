@@ -316,8 +316,8 @@ SQL
 CREATE TABLE test2 (
     pk int primary key
 );
-INSERT INTO test2 VALUES (1);
-INSERT INTO test1 VALUES (1, 1, 1);
+INSERT INTO test2 VALUES (9);
+INSERT INTO test1 VALUES (1, 2, 3);
 SQL
     dolt sql -q "insert into dolt_ignore values ('test2', true)"
 
@@ -334,5 +334,5 @@ SQL
 
     run dolt sql -q "select * from test2"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "9" ]] || false
 }
