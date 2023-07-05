@@ -107,16 +107,6 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		branchName = apr.Arg(0)
 	}
 
-	currentBranch, err := getActiveBranchName(sqlCtx, queryEngine)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usagePrt)
-	}
-
-	if branchName == currentBranch {
-		cli.Printf("Already on branch '%s'\n", branchName)
-		return 0
-	}
-
 	sqlQuery, err := generateCheckoutSql(args)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usagePrt)

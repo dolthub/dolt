@@ -94,6 +94,29 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, string, error) {
 		return 1, "", ErrEmptyBranchName
 	}
 
+	headRef, err := dbData.Rsr.CWBHeadRef()
+	if err != nil {
+		return 1, "", err
+	}
+
+	// If the operation won't modify either the active session or the default session, return early.
+	isModification := headRef.GetPath() != branchName
+	if updateHead {
+		fs, err := dSess.Provider().FileSystemForDatabase(currentDbName)
+		if err != nil {
+			return 1, "", err
+		}
+		repoState, err := env.LoadRepoState(fs)
+		if err != nil {
+			return 1, "", err
+		}
+		defaultBranch := repoState.CWBHeadRef().GetPath()
+		isModification = isModification || (defaultBranch != branchName)
+	}
+	if !isModification {
+		return 0, fmt.Sprintf("Already on branch '%s'\n", branchName), nil
+	}
+
 	// Check if user wants to checkout branch.
 	if isBranch, err := actions.IsBranch(ctx, dbData.Ddb, branchName); err != nil {
 		return 1, "", err
