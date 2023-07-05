@@ -93,7 +93,7 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 
 	dbLocations := make(map[string]filesys.Filesys, len(locations))
 	for i, dbLocation := range locations {
-		dbLocations[databases[i].Name()] = dbLocation
+		dbLocations[strings.ToLower(databases[i].Name())] = dbLocation
 	}
 
 	funcs := make(map[string]sql.Function, len(dfunctions.DoltFunctions))
