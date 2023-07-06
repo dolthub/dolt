@@ -30,7 +30,7 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 			Nullable: false,
 		},
 		{
-			Name:     "upstream",
+			Name:     "message",
 			Type:     types.LongText,
 			Nullable: true,
 		},
@@ -67,7 +67,7 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 			Nullable: false,
 		},
 		{
-			Name:     "upstream",
+			Name:     "message",
 			Type:     types.LongText,
 			Nullable: true,
 		},
