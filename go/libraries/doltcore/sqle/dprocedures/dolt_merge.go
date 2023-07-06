@@ -92,6 +92,10 @@ func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, error) {
 		return "", noConflictsOrViolations, threeWayMerge, err
 	}
 
+	if apr.NArg() < 1 {
+		return "", noConflictsOrViolations, threeWayMerge, errors.New("error: Please specify a branch to merge")
+	}
+
 	if apr.ContainsAll(cli.SquashParam, cli.NoFFParam) {
 		return "", noConflictsOrViolations, threeWayMerge, fmt.Errorf("error: Flags '--%s' and '--%s' cannot be used together.\n", cli.SquashParam, cli.NoFFParam)
 	}
