@@ -114,7 +114,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 
 	rows, err := GetRowsForSql(queryEngine, sqlCtx, sqlQuery)
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usagePrt)
+		return HandleVErrAndExitCode(handleErrors(branchName, err), usagePrt)
 	}
 
 	if len(rows) != 1 {
@@ -139,10 +139,6 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	// We must reload it so that it includes changes to the repo state.
 	if dEnv != nil {
 		dEnv.ReloadRepoState()
-	}
-
-	if err != nil {
-		return HandleVErrAndExitCode(handleErrors(branchName, err), usagePrt)
 	}
 
 	return 0
@@ -183,7 +179,7 @@ func handleErrors(branchName string, err error) errhand.VerboseError {
 			"1) commit or reset your changes on this branch, using `dolt commit` or `dolt reset`, before checking out the other branch, " +
 			"2) use the `-f` flag with `dolt checkout` to force an overwrite, or " +
 			"3) connect to branch '%s' with the SQL server and revert or commit changes there before proceeding."
-		return errhand.BuildDError(str).AddCause(err).Build()
+		return errhand.BuildDError(str).Build()
 	} else {
 		bdr := errhand.BuildDError("fatal: Unexpected error checking out branch '%s'", branchName)
 		bdr.AddCause(err)
