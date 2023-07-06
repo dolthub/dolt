@@ -1,4 +1,4 @@
-// Copyright 2022 Dolthub, Inc.
+// Copyright 2023 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -83,6 +83,56 @@ var RevertScripts = []queries.ScriptTest{
 			{
 				Query:          "call dolt_revert('HEAD~1');",
 				ExpectedErrStr: "revert currently does not handle conflicts",
+			},
+		},
+	},
+	{
+		Name: "dolt_revert() fails with untracked tables",
+		SetUpScript: []string{
+			"create table test (pk int primary key, c0 int)",
+			"insert into test values (1,1),(2,2),(3,3)",
+			"call dolt_commit('-Am', 'seed table')",
+			"update test set c0 = 42 where pk = 2",
+			"call dolt_commit('-am', 'answer of the universe: 42')",
+			"create table dont_track (pk int primary key)",
+			"insert into dont_track values (1)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_revert('HEAD')",
+				ExpectedErrStr: "You must commit any changes before using revert",
+			},
+		},
+	},
+	{
+		Name: "dolt_revert() respects dolt_ignore",
+		SetUpScript: []string{
+			"create table test (pk int primary key, c0 int)",
+			"insert into test values (1,1),(2,2),(3,3)",
+			"insert into dolt_ignore values ('dont_*', 1)",
+			"call dolt_commit('-Am', 'seed table')",
+			"update test set c0 = 42 where pk = 2",
+			"call dolt_commit('-am', 'answer of the universe: 42')",
+			"create table dont_track (id int primary key)",
+			"insert into dont_track values (1)",
+			"call dolt_revert('HEAD')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from test as of 'HEAD' where pk = 2;",
+				Expected: []sql.Row{{2, 2}},
+			},
+			{
+				Query:    "select * from test as of 'HEAD~1' where pk = 2;",
+				Expected: []sql.Row{{2, 42}},
+			},
+			{
+				Query:          "select * from dont_track as of 'HEAD'",
+				ExpectedErrStr: "table not found: dont_track",
+			},
+			{
+				Query:    "select * from dolt_status",
+				Expected: []sql.Row{{"dont_track", false, "new table"}},
 			},
 		},
 	},
