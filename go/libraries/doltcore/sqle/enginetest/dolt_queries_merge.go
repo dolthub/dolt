@@ -4077,7 +4077,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{"", 0, 1}},
+				Expected: []sql.Row{{doltCommit, 0, 1}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
