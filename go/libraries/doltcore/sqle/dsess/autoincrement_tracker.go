@@ -217,6 +217,7 @@ func (a AutoIncrementTracker) deepSet(ctx *sql.Context, tableName string, table 
 		return table, nil
 	}
 
+	// Now that we have established the current max for this table, reset the global max accordingly
 	maxAutoInc := newAutoIncVal
 	doltdbs := db.DoltDatabases()
 	for _, db := range doltdbs {

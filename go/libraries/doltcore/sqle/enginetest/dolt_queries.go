@@ -3885,9 +3885,9 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 				SkipResultsCheck: true,
 			},
 			{
-				// empty tables, start at 1
+				// previous update was ignored
 				Query:    "insert into t (b) values (5), (6)",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 5}}},
 			},
 			{
 				Query: "select * from t order by a",
@@ -3899,6 +3899,23 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 					{5, 5},
 					{6, 6},
 				},
+			},
+			{
+				Query:    "insert into t (a, b) values (100, 100)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 100}}},
+			},
+			{
+				Query:    "alter table t auto_increment = 50",
+				SkipResultsCheck: true,
+			},
+			{
+				// previous update was ignored, value still below max on that table
+				Query:    "insert into t (b) values (101)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 101}}},
+			},
+			{
+				Query: "select * from t where a >= 100 order by a",
+				Expected: []sql.Row{{100, 100}, {101, 101}},
 			},
 		},
 	},
