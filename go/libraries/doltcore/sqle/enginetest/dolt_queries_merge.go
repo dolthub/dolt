@@ -859,7 +859,7 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "DOLT_MERGE(--abort) clears index state",
+		Name: "DOLT_MERGE(--abort) clears staged",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key);",
 			"INSERT INTO test VALUES (0),(1),(2);",
