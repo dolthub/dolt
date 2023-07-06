@@ -89,8 +89,15 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 		return 1
 	}
 
+	_, sqlCtx, closer, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		cli.PrintErrln(err.Error())
+		return 1
+	}
+	defer closer()
+	
 	if apr.Contains(cli.AbortParam) {
-		ws, err := dEnv.WorkingSet(ctx)
+		ws, err := dEnv.WorkingSet(sqlCtx)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError("fatal: unable to load working set: %v", err).Build(), nil)
 		}
@@ -99,7 +106,7 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 			return HandleVErrAndExitCode(errhand.BuildDError("error: There is no cherry-pick merge to abort").Build(), nil)
 		}
 
-		return HandleVErrAndExitCode(abortMerge(ctx, dEnv), usage)
+		return HandleVErrAndExitCode(abortMerge(sqlCtx, dEnv), usage)
 	}
 
 	// TODO : support single commit cherry-pick only for now
@@ -116,10 +123,8 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	return 0
-	// TODO
-	// verr := cherryPick(ctx, dEnv, cliCtx, cherryStr)
-	// return HandleVErrAndExitCode(verr, usage)
+	verr := cherryPick(sqlCtx, dEnv, cliCtx, cherryStr)
+	return HandleVErrAndExitCode(verr, usage)
 }
 
 // cherryPick returns error if any step of cherry-picking fails. It receives cherry-picked commit and performs cherry-picking and commits.

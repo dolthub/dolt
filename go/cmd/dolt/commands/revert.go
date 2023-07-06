@@ -68,12 +68,7 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 	ap := cli.CreateRevertArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, revertDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
-
-	_, sqlCtx, _, err := cliCtx.QueryEngine(ctx)
-	if err != nil {
-		return 1
-	}
-
+	
 	// This command creates a commit, so we need user identity
 	if !cli.CheckUserNameAndEmail(cliCtx.Config()) {
 		return 1
@@ -88,15 +83,22 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
 	}
 
-	headCommit, err := dEnv.HeadCommit(ctx)
+	_, sqlCtx, closer, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		cli.PrintErrln(err.Error())
+		return 1
+	}
+	defer closer()
+
+	headCommit, err := dEnv.HeadCommit(sqlCtx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	headRoot, err := headCommit.GetRootValue(ctx)
+	headRoot, err := headCommit.GetRootValue(sqlCtx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	workingRoot, err := dEnv.WorkingRoot(ctx)
+	workingRoot, err := dEnv.WorkingRoot(sqlCtx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -120,7 +122,7 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
-		commit, err := dEnv.DoltDB.Resolve(ctx, commitSpec, headRef)
+		commit, err := dEnv.DoltDB.Resolve(sqlCtx, commitSpec, headRef)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
@@ -145,11 +147,11 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 0
 	}
 
-	err = dEnv.UpdateWorkingRoot(ctx, workingRoot)
+	err = dEnv.UpdateWorkingRoot(sqlCtx, workingRoot)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	res := AddCmd{}.Exec(ctx, "add", []string{"-A"}, dEnv, cliCtx)
+	res := AddCmd{}.Exec(sqlCtx, "add", []string{"-A"}, dEnv, cliCtx)
 	if res != 0 {
 		return res
 	}
@@ -161,5 +163,5 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 		commitParams = append(commitParams, "--author", authorStr)
 	}
 
-	return CommitCmd{}.Exec(ctx, "commit", commitParams, dEnv, cliCtx)
+	return CommitCmd{}.Exec(sqlCtx, "commit", commitParams, dEnv, cliCtx)
 }
