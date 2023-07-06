@@ -17,12 +17,12 @@ package writer
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -44,10 +44,10 @@ type prollyTableWriter struct {
 	sch    schema.Schema
 	sqlSch sql.Schema
 
-	aiCol     schema.Column
-	aiTracker globalstate.AutoIncrementTracker
+	aiCol                  schema.Column
+	aiTracker              globalstate.AutoIncrementTracker
 	nextAutoIncrementValue map[string]uint64
-	setAutoIncrement bool
+	setAutoIncrement       bool
 
 	flusher WriteSessionFlusher
 	setter  SessionRootSetter
@@ -155,7 +155,7 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 	if err = w.primary.Insert(ctx, sqlRow); err != nil {
 		return err
 	}
-	
+
 	w.setAutoIncrement = true
 	return nil
 }

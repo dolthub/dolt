@@ -17,9 +17,10 @@ package merge
 import (
 	"fmt"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // Revert is a convenience function for a three-way merge. In particular, given some root and a collection of commits

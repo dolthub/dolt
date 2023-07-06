@@ -21,6 +21,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -28,8 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/go-mysql-server/sql"
-	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 )
 
 type AutoIncrementTracker struct {
@@ -166,7 +167,7 @@ func (a AutoIncrementTracker) Set(ctx *sql.Context, tableName string, table *dol
 	}
 }
 
-// deepSet sets the auto increment value for the table named, if it's greater than the one on any branch head for this 
+// deepSet sets the auto increment value for the table named, if it's greater than the one on any branch head for this
 // database, ignoring the current in-memory tracker value
 func (a AutoIncrementTracker) deepSet(ctx *sql.Context, tableName string, table *doltdb.Table, ws ref.WorkingSetRef, newAutoIncVal uint64) (*doltdb.Table, error) {
 	sess := DSessFromSess(ctx.Session)
@@ -182,13 +183,13 @@ func (a AutoIncrementTracker) deepSet(ctx *sql.Context, tableName string, table 
 	if err != nil {
 		return nil, err
 	}
-	
+
 	aiCol, ok := schema.GetAutoIncrementColumn(sch)
 	if !ok {
 		return nil, nil
 	}
 
-	var indexData durable.Index 
+	var indexData durable.Index
 	aiIndex, ok := sch.Indexes().GetIndexByColumnNames(aiCol.Name)
 	if ok {
 		indexes, err := table.GetIndexSet(ctx)
@@ -206,17 +207,17 @@ func (a AutoIncrementTracker) deepSet(ctx *sql.Context, tableName string, table 
 			return nil, err
 		}
 	}
-	
+
 	currentMax, err := getMaxIndexValue(ctx, indexData)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// If the given value is less than the current one, the operation is a no-op, bail out early
 	if newAutoIncVal <= currentMax {
 		return table, nil
 	}
-	
+
 	table, err = table.SetAutoIncrementValue(ctx, newAutoIncVal)
 	if err != nil {
 		return nil, err
@@ -239,7 +240,7 @@ func (a AutoIncrementTracker) deepSet(ctx *sql.Context, tableName string, table 
 		rootRefs := make([]ref.DoltRef, 0, len(branches)+len(remotes))
 		rootRefs = append(rootRefs, branches...)
 		rootRefs = append(rootRefs, remotes...)
-		
+
 		for _, b := range rootRefs {
 			var rootish doltdb.Rootish
 			switch b.GetType() {
@@ -248,7 +249,7 @@ func (a AutoIncrementTracker) deepSet(ctx *sql.Context, tableName string, table 
 				if err != nil {
 					return nil, err
 				}
-				
+
 				if wsRef == ws {
 					// we don't need to check the working set we're updating
 					continue
@@ -302,13 +303,13 @@ func (a AutoIncrementTracker) deepSet(ctx *sql.Context, tableName string, table 
 			if err != nil {
 				return nil, err
 			}
-			
+
 			if seq > maxAutoInc {
 				maxAutoInc = seq
 			}
 		}
 	}
-	
+
 	a.sequences[tableName] = maxAutoInc
 	return table, nil
 }

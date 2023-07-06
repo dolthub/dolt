@@ -68,7 +68,7 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 	ap := cli.CreateRevertArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, revertDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
-	
+
 	// This command creates a commit, so we need user identity
 	if !cli.CheckUserNameAndEmail(cliCtx.Config()) {
 		return 1

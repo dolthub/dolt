@@ -3853,7 +3853,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 				Expected: []sql.Row{{types.NewOkResult(2)}},
 			},
 			{
-				Query:    "alter table t auto_increment = 1",
+				Query:            "alter table t auto_increment = 1",
 				SkipResultsCheck: true,
 			},
 			{
@@ -3881,7 +3881,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "alter table t auto_increment = 2",
+				Query:            "alter table t auto_increment = 2",
 				SkipResultsCheck: true,
 			},
 			{
@@ -3905,7 +3905,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 100}}},
 			},
 			{
-				Query:    "alter table t auto_increment = 50",
+				Query:            "alter table t auto_increment = 50",
 				SkipResultsCheck: true,
 			},
 			{
@@ -3914,7 +3914,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 101}}},
 			},
 			{
-				Query: "select * from t where a >= 100 order by a",
+				Query:    "select * from t where a >= 100 order by a",
 				Expected: []sql.Row{{100, 100}, {101, 101}},
 			},
 		},
@@ -3931,7 +3931,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "alter table t auto_increment = 20",
+				Query:            "alter table t auto_increment = 20",
 				SkipResultsCheck: true,
 			},
 			{
@@ -3986,15 +3986,15 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 				Expected: []sql.Row{{types.NewOkResult(2)}},
 			},
 			{
-				Query:    "alter table `mydb/branch1`.t auto_increment = 1",
+				Query:            "alter table `mydb/branch1`.t auto_increment = 1",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "alter table `mydb/branch2`.t auto_increment = 1",
+				Query:            "alter table `mydb/branch2`.t auto_increment = 1",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "alter table t auto_increment = 1",
+				Query:            "alter table t auto_increment = 1",
 				SkipResultsCheck: true,
 			},
 			{
@@ -4042,11 +4042,11 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 				Expected: []sql.Row{{types.NewOkResult(2)}},
 			},
 			{
-				Query:    "alter table t auto_increment = 1",
+				Query:            "alter table t auto_increment = 1",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "alter table `mydb/branch2`.t auto_increment = 1",
+				Query:            "alter table `mydb/branch2`.t auto_increment = 1",
 				SkipResultsCheck: true,
 			},
 			{
@@ -4094,7 +4094,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 				Expected: []sql.Row{{types.NewOkResult(2)}},
 			},
 			{
-				Query:    "alter table t auto_increment = 1",
+				Query:            "alter table t auto_increment = 1",
 				SkipResultsCheck: true,
 			},
 			{
