@@ -18,14 +18,14 @@ import (
 	"context"
 	"crypto/sha1"
 	"fmt"
-	"github.com/gocraft/dbr/v2"
-	"github.com/gocraft/dbr/v2/dialect"
 	"net"
 	"path/filepath"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
