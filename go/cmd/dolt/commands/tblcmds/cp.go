@@ -17,13 +17,14 @@ package tblcmds
 import (
 	"context"
 	"fmt"
-	"io"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/gocraft/dbr/v2"
 )
 
 var tblCpDocs = cli.CommandDocumentationContent{
@@ -81,17 +82,50 @@ func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	}
 
 	oldTbl, newTbl := apr.Arg(0), apr.Arg(1)
+	force := apr.Contains(forceParam)
 
-	queryStr := ""
-	if force := apr.Contains(forceParam); force {
-		queryStr = fmt.Sprintf("DROP TABLE IF EXISTS `%s`;", newTbl)
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		return handleStatusVErr(err)
 	}
-	queryStr = fmt.Sprintf("%sCREATE TABLE `%s` LIKE `%s`;", queryStr, newTbl, oldTbl)
-	queryStr = fmt.Sprintf("%sINSERT INTO `%s` SELECT * FROM `%s`;", queryStr, newTbl, oldTbl)
+	if closeFunc != nil {
+		defer closeFunc()
+	}
 
-	cli.CliOut = io.Discard // display nothing on success
-	return commands.SqlCmd{}.Exec(ctx, "", []string{
-		fmt.Sprintf(`--%s`, commands.QueryFlag),
-		queryStr,
-	}, dEnv, cliCtx)
+	err = copyTable(queryist, sqlCtx, oldTbl, newTbl, force)
+	if err != nil {
+		return handleStatusVErr(err)
+	}
+
+	return 0
+}
+
+func handleStatusVErr(err error) int {
+	cli.PrintErrln(errhand.VerboseErrorFromError(err).Verbose())
+	return 1
+}
+
+func copyTable(queryist cli.Queryist, sqlCtx *sql.Context, old, new string, force bool) error {
+	oldTable := dbr.I(old)
+	newTable := dbr.I(new)
+
+	var err error
+	if force {
+		_, err = commands.InterpolateAndRunQuery(queryist, sqlCtx, "DROP TABLE IF EXISTS ?", newTable)
+		if err != nil {
+			return fmt.Errorf("error dropping table %s: %w", newTable, err)
+		}
+	}
+
+	_, err = commands.InterpolateAndRunQuery(queryist, sqlCtx, "CREATE TABLE ? LIKE ?", newTable, oldTable)
+	if err != nil {
+		return fmt.Errorf("error creating table %s: %w", newTable, err)
+	}
+
+	_, err = commands.InterpolateAndRunQuery(queryist, sqlCtx, "INSERT INTO ? SELECT * FROM ?", newTable, oldTable)
+	if err != nil {
+		return fmt.Errorf("error copying table %s to %s: %w", oldTable, newTable, err)
+	}
+
+	return nil
 }

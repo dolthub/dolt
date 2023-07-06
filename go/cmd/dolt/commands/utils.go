@@ -18,6 +18,8 @@ import (
 	"context"
 	"crypto/sha1"
 	"fmt"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 	"net"
 	"path/filepath"
 	"time"
@@ -398,4 +400,12 @@ func buildAuthResponse(salt []byte, password string) []byte {
 	}
 
 	return shaPwd
+}
+
+func InterpolateAndRunQuery(queryist cli.Queryist, sqlCtx *sql.Context, queryTemplate string, params ...interface{}) ([]sql.Row, error) {
+	query, err := dbr.InterpolateForDialect(queryTemplate, params, dialect.MySQL)
+	if err != nil {
+		return nil, fmt.Errorf("error interpolating query: %w", err)
+	}
+	return GetRowsForSql(queryist, sqlCtx, query)
 }
