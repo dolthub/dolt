@@ -109,6 +109,9 @@ func GetIgnoredTablePatterns(ctx context.Context, roots Roots) (IgnorePatterns, 
 	return ignorePatterns, nil
 }
 
+// ExcludeIgnoredTables takes a list of table names and removes any tables that should be ignored,
+// as determined by the patterns in the dolt_ignore table.
+// The ignore patterns are read from the dolt_ignore table in the working set.
 func ExcludeIgnoredTables(ctx context.Context, roots Roots, tables []string) ([]string, error) {
 	ignorePatterns, err := GetIgnoredTablePatterns(ctx, roots)
 	if err != nil {
