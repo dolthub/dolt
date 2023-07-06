@@ -357,7 +357,7 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 	}
 
 	if setTrackUpstream {
-		err = env.SetRemoteUpstreamForRefSpec(dbData.Rsw, refSpec, remoteName, ref.NewBranchRef(remoteBranchName))
+		err = env.SetRemoteUpstreamForRefSpec(dbData.Rsw, refSpec, remoteName, ref.NewBranchRef(newBranchName))
 		if err != nil {
 			return "", "", err
 		}
@@ -365,7 +365,7 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 		remoteName, remoteBranchName = actions.ParseRemoteBranchName(startPt)
 		refSpec, err = ref.ParseRefSpecForRemote(remoteName, remoteBranchName)
 		if err == nil {
-			err = env.SetRemoteUpstreamForRefSpec(dbData.Rsw, refSpec, remoteName, ref.NewBranchRef(remoteBranchName))
+			err = env.SetRemoteUpstreamForRefSpec(dbData.Rsw, refSpec, remoteName, ref.NewBranchRef(newBranchName))
 			if err != nil {
 				return "", "", err
 			}

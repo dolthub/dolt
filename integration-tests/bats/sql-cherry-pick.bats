@@ -4,7 +4,10 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 setup() {
     setup_common
 
-    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))"
+    dolt sql <<SQL
+CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10));
+INSERT INTO dolt_ignore VALUES ('generated_*', 1);
+SQL
     dolt add .
     dolt commit -am "Created table"
     dolt checkout -b branch1
@@ -14,6 +17,8 @@ setup() {
     dolt commit -am "Inserted 2"
     dolt sql -q "INSERT INTO test VALUES (3, 'c')"
     dolt commit -am "Inserted 3"
+
+    dolt sql -q "CREATE TABLE generated_foo (pk int PRIMARY KEY);"
 
     run dolt sql -q "SELECT * FROM test" -r csv
     [[ "$output" =~ "1,a" ]] || false

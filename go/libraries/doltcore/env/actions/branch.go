@@ -44,17 +44,6 @@ func RenameBranch(ctx context.Context, dbData env.DbData, oldBranch, newBranch s
 		return err
 	}
 
-	headRef, err := dbData.Rsr.CWBHeadRef()
-	if err != nil {
-		return err
-	}
-	if ref.Equals(headRef, oldRef) {
-		err = dbData.Rsw.SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: newRef})
-		if err != nil {
-			return err
-		}
-	}
-
 	fromWSRef, err := ref.WorkingSetRefForHead(oldRef)
 	if err != nil {
 		if !errors.Is(err, ref.ErrWorkingSetUnsupported) {

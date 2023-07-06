@@ -152,7 +152,13 @@ func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseRe
 		return err
 	}
 
-	err := actions.RenameBranch(ctx, dbData, oldBranchName, newBranchName, sess.Provider(), force, rsc)
+	headRef, err := dbData.Rsr.CWBHeadRef()
+	if err != nil {
+		return err
+	}
+	activeSessionBranch := headRef.GetPath()
+
+	err = actions.RenameBranch(ctx, dbData, oldBranchName, newBranchName, sess.Provider(), force, rsc)
 	if err != nil {
 		return err
 	}
@@ -169,6 +175,24 @@ func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseRe
 				repoState.Head.Ref = ref.NewBranchRef(newBranchName)
 				repoState.Save(fs)
 			}
+		}
+	}
+
+	err = sess.RenameBranchState(ctx, dbName, oldBranchName, newBranchName)
+	if err != nil {
+		return err
+	}
+
+	// If the active branch of the SQL session was renamed, switch to the new branch.
+	if oldBranchName == activeSessionBranch {
+		wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(newBranchName))
+		if err != nil {
+			return err
+		}
+
+		err = sess.SwitchWorkingSet(ctx, dbName, wsRef)
+		if err != nil {
+			return err
 		}
 	}
 
