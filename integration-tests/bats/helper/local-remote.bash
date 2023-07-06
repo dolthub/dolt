@@ -100,7 +100,6 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~import-append-tables.bats~
 ~backup.bats~
 ~default-values.bats~
-~sql-shell.bats~
 ~types.bats~
 ~config-home.bats~
 ~cherry-pick.bats~
