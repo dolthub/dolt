@@ -214,7 +214,10 @@ func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots,
 		}
 
 		ws, err = executeFFMerge(ctx, dbName, spec.Squash, ws, dbData, spec.MergeC)
-		return ws, "", noConflictsOrViolations, fastForwardMerge, err
+		if h, cerr := spec.MergeC.HashOf(); cerr != nil {
+			return ws, h.String(), noConflictsOrViolations, fastForwardMerge, err
+		}
+		return ws, "" , noConflictsOrViolations, fastForwardMerge, err
 	}
 
 	dbState, ok, err := sess.LookupDbState(ctx, dbName)
