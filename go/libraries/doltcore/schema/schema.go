@@ -149,7 +149,7 @@ func GetAutoIncrementColumn(sch Schema) (col Column, ok bool) {
 		}
 		return
 	})
-	
+
 	return aiCol, found
 }
 

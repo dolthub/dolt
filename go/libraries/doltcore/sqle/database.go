@@ -52,9 +52,9 @@ type Database struct {
 	requestedName string
 	ddb           *doltdb.DoltDB
 	rsr           env.RepoStateReader
-	rsw      env.RepoStateWriter
-	gs       dsess.GlobalStateImpl
-	editOpts editor.Options
+	rsw           env.RepoStateWriter
+	gs            dsess.GlobalStateImpl
+	editOpts      editor.Options
 	revision      string
 	revType       dsess.RevisionType
 }

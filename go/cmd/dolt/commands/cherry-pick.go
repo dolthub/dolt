@@ -95,7 +95,7 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 		return 1
 	}
 	defer closer()
-	
+
 	if apr.Contains(cli.AbortParam) {
 		ws, err := dEnv.WorkingSet(sqlCtx)
 		if err != nil {

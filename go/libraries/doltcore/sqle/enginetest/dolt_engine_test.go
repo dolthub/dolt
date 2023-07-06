@@ -149,15 +149,15 @@ func TestSingleScript(t *testing.T) {
 					Expected: []sql.Row{{gmstypes.NewOkResult(2)}},
 				},
 				{
-					Query:    "alter table `mydb/branch1`.t auto_increment = 1",
+					Query:            "alter table `mydb/branch1`.t auto_increment = 1",
 					SkipResultsCheck: true,
 				},
 				{
-					Query:    "alter table `mydb/branch2`.t auto_increment = 1",
+					Query:            "alter table `mydb/branch2`.t auto_increment = 1",
 					SkipResultsCheck: true,
 				},
 				{
-					Query:    "alter table t auto_increment = 1",
+					Query:            "alter table t auto_increment = 1",
 					SkipResultsCheck: true,
 				},
 				{

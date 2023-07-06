@@ -28,13 +28,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -640,7 +640,7 @@ func (t *WritableDoltTable) truncate(
 	if err != nil {
 		return nil, err
 	}
-	
+
 	newEmptyTable, err = copyConstraintViolationsAndConflicts(ctx, table, newEmptyTable)
 	if err != nil {
 		return nil, err
@@ -1662,7 +1662,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 
 		// TODO: this isn't transactional, and it should be (but none of the auto increment tracking is)
 		ait.AddNewTable(t.tableName)
-		// Since this is a new auto increment table, we don't need to exclude the current working set from consideration 
+		// Since this is a new auto increment table, we don't need to exclude the current working set from consideration
 		// when computing its new sequence value, hence the empty ref
 		_, err = ait.Set(ctx, t.tableName, updatedTable, ref.WorkingSetRef{}, seq)
 		if err != nil {

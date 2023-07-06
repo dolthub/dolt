@@ -15,9 +15,10 @@
 package globalstate
 
 import (
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // AutoIncrementTracker knows how to get and set the current auto increment value for a table. It's defined as an
@@ -35,7 +36,7 @@ type AutoIncrementTracker interface {
 	// CoerceAutoIncrementValue coerces the given value to a uint64, returning an error if it can't be done.
 	CoerceAutoIncrementValue(val interface{}) (uint64, error)
 	// Set sets the auto increment value for the given table. This operation may silently do nothing if this value is
-	// below the current value for this table. The table in the provided working set is assumed to already have the value 
+	// below the current value for this table. The table in the provided working set is assumed to already have the value
 	// given, so the new global maximum is computed without regard for its value in that working set.
 	Set(ctx *sql.Context, tableName string, table *doltdb.Table, ws ref.WorkingSetRef, newAutoIncVal uint64) (*doltdb.Table, error)
 }

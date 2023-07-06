@@ -19,12 +19,12 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -53,7 +53,7 @@ type WriteSession interface {
 type WriteSessionFlusher interface {
 	// Flush flushes the pending writes in the session.
 	Flush(ctx *sql.Context) (*doltdb.WorkingSet, error)
-	// FlushWithAutoIncrementOverrides flushes the pending writes in the session, overriding the auto increment values 
+	// FlushWithAutoIncrementOverrides flushes the pending writes in the session, overriding the auto increment values
 	// for any tables provided in the map
 	FlushWithAutoIncrementOverrides(ctx *sql.Context, increment bool, autoIncrements map[string]uint64) (*doltdb.WorkingSet, error)
 }
@@ -62,9 +62,9 @@ type WriteSessionFlusher interface {
 // Serves as coordination for SessionedTableEditors.
 type nomsWriteSession struct {
 	workingSet *doltdb.WorkingSet
-	tables    map[string]*sessionedTableEditor
-	aiTracker globalstate.AutoIncrementTracker
-	mut       *sync.RWMutex // This mutex is specifically for changes that affect the TES or all STEs
+	tables     map[string]*sessionedTableEditor
+	aiTracker  globalstate.AutoIncrementTracker
+	mut        *sync.RWMutex // This mutex is specifically for changes that affect the TES or all STEs
 	opts       editor.Options
 }
 

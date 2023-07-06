@@ -18,12 +18,12 @@ import (
 	"context"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
@@ -32,9 +32,9 @@ import (
 // Serves as coordination for SessionedTableEditors.
 type prollyWriteSession struct {
 	workingSet *doltdb.WorkingSet
-	tables    map[string]*prollyTableWriter
-	aiTracker globalstate.AutoIncrementTracker
-	mut       *sync.RWMutex
+	tables     map[string]*prollyTableWriter
+	aiTracker  globalstate.AutoIncrementTracker
+	mut        *sync.RWMutex
 }
 
 var _ WriteSession = &prollyWriteSession{}
@@ -143,7 +143,7 @@ func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, manualAuto
 
 	eg, egCtx := errgroup.WithContext(ctx)
 	sqlEgCtx := ctx.WithContext(egCtx)
-	
+
 	for n := range s.tables {
 		name := n // make a copy
 		eg.Go(func() error {
@@ -161,8 +161,8 @@ func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, manualAuto
 				if hasManuallySetAi {
 					autoIncVal = override
 				}
-				
-				// Update the table with the new auto-inc value if necessary. If it was set manually via an ALTER TABLE 
+
+				// Update the table with the new auto-inc value if necessary. If it was set manually via an ALTER TABLE
 				// statement, we defer to the tracker to update the value itself, since this impacts the global state.
 				if hasManuallySetAi {
 					t, err = s.aiTracker.Set(sqlEgCtx, name, t, s.workingSet.Ref(), autoIncVal)
