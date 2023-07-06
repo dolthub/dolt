@@ -3967,7 +3967,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL dolt_merge('--no-ff', 'branch1');",
-				Expected: []sql.Row{{doltCommit}}, // TODO: how do i predict the hash
+				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
 				Query:          "CALL dolt_cherry_pick('HEAD');",
@@ -4041,7 +4041,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_cherry_pick(@commit2);",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SELECT * FROM t;",
@@ -4049,7 +4049,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SELECT * FROM t order by pk;",
@@ -4075,7 +4075,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHERRY_PICK('branch1');",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SELECT * FROM keyless;",
@@ -4100,7 +4100,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SHOW TABLES;",
@@ -4131,7 +4131,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SHOW TABLES;",
@@ -4153,7 +4153,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SHOW CREATE TABLE test;",
@@ -4175,7 +4175,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SHOW CREATE TABLE test;",
@@ -4197,7 +4197,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
-				Expected: []sql.Row{{doltCommit}},
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SHOW CREATE TABLE test;",
