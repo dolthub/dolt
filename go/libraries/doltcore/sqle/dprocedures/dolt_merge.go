@@ -92,7 +92,7 @@ func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, error) {
 		return "", noConflictsOrViolations, threeWayMerge, err
 	}
 
-	if apr.NArg() < 1 {
+	if len(args) == 0 {
 		return "", noConflictsOrViolations, threeWayMerge, errors.New("error: Please specify a branch to merge")
 	}
 
