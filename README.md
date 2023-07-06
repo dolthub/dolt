@@ -89,7 +89,7 @@ Dolt is a single ~103 megabyte program.
 
 ```bash
 dolt $ du -h /Users/timsehn/go/bin/dolt
- 103M	/Users/timsehn/go/bin/dolt
+103M	/Users/timsehn/go/bin/dolt
 ```
 
 It's really easy to install. Download it and put it on your `PATH`. 
