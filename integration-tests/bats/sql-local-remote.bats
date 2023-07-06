@@ -736,3 +736,125 @@ SQL
 
   [[ "$remoteOutput" == "$localOutput" ]] || false
 }
+
+@test "sql-local-remote: test dolt table cp" {
+  start_sql_server altDB
+  cd altDB
+
+  run dolt status
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "modified:         table2" ]] || false
+
+  run dolt sql -q "select count(*) from table2"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "3" ]] || false
+
+  run dolt table cp table2 copy_of_table_2
+  [ "$status" -eq 0 ]
+
+  run dolt status
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "modified:         table2" ]] || false
+  [[ "$output" =~ "new table:        copy_of_table_2" ]] || false
+
+  run dolt sql -q "select count(*) from table2"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "3" ]] || false
+
+  run dolt sql -q "select count(*) from copy_of_table_2"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "3" ]] || false
+
+  stop_sql_server 1
+
+  run dolt table cp copy_of_table_2 second_copy_of_second_table
+  [ "$status" -eq 0 ]
+
+  run dolt status
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "modified:         table2" ]] || false
+  [[ "$output" =~ "new table:        copy_of_table_2" ]] || false
+  [[ "$output" =~ "new table:        second_copy_of_second_table" ]] || false
+
+  run dolt sql -q "select count(*) from second_copy_of_second_table"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "3" ]] || false
+}
+
+@test "sql-local-remote: test dolt table mv" {
+  start_sql_server altDB
+  cd altDB
+
+  run dolt status
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "modified:         table2" ]] || false
+
+  run dolt sql -q "select count(*) from table2"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "3" ]] || false
+
+  run dolt table mv table2 moved_table_2
+  [ "$status" -eq 0 ]
+
+  run dolt status
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "deleted:          table2" ]] || false
+  [[ "$output" =~ "new table:        moved_table_2" ]] || false
+
+  run dolt sql -q "select count(*) from table2"
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "table not found: table2" ]] || false
+
+  run dolt sql -q "select count(*) from moved_table_2"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "3" ]] || false
+
+  stop_sql_server 1
+
+  run dolt table mv moved_table_2 second_moved_table
+  [ "$status" -eq 0 ]
+
+  run dolt status
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "deleted:          table2" ]] || false
+  [[ "$output" =~ "new table:        second_moved_table" ]] || false
+  [[ ! "$output" =~ "moved_table_2" ]] || false
+
+  run dolt sql -q "select count(*) from second_moved_table"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "3" ]] || false
+}
+
+@test "sql-local-remote: test dolt table rm" {
+  start_sql_server altDB
+  cd altDB
+
+  run dolt status
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "modified:         table2" ]] || false
+
+  run dolt sql -q "select count(*) from table2"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "3" ]] || false
+
+  run dolt table cp table2 copy_of_table_2
+  [ "$status" -eq 0 ]
+
+  run dolt table rm table2
+  [ "$status" -eq 0 ]
+
+  run dolt status
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "deleted:          table2" ]] || false
+  [[ "$output" =~ "new table:        copy_of_table_2" ]] || false
+
+  stop_sql_server 1
+
+  run dolt table rm copy_of_table_2
+  [ "$status" -eq 0 ]
+
+  run dolt status
+  [ "$status" -eq 0 ]
+  [[ ! "$output" =~ "moved_table_2" ]] || false
+  [[ ! "$output" =~ "copy_of_table_2" ]] || false
+}
