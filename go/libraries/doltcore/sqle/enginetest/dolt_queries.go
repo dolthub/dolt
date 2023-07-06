@@ -3972,8 +3972,8 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			{
 				Query: "select * from t order by a",
 				Expected: []sql.Row{
-					{5, 7},
-					{6, 8},
+					{5, 5},
+					{6, 6},
 				},
 			},
 		},
@@ -4027,9 +4027,6 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 		},
 	},
 	{
-		// truncate table doesn't reset the persisted auto increment counter of tables on other branches, which leads to
-		// the value not resetting to 1 after a truncate if the table exists on other branches, even if truncated on every
-		// branch
 		Name: "truncate table",
 		SetUpScript: []string{
 			"create table t (a int primary key auto_increment, b int)",

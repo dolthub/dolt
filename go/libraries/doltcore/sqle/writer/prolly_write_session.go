@@ -110,13 +110,13 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, table, db string, 
 func (s *prollyWriteSession) Flush(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
-	return s.flush(ctx, nil)
+	return s.flush(ctx, false, nil)
 }
 
-func (s *prollyWriteSession) FlushWithAutoIncrementOverrides(ctx *sql.Context, autoIncrements map[string]uint64) (*doltdb.WorkingSet, error) {
+func (s *prollyWriteSession) FlushWithAutoIncrementOverrides(ctx *sql.Context, autoIncSet bool, autoIncrements map[string]uint64) (*doltdb.WorkingSet, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
-	return s.flush(ctx, autoIncrements)
+	return s.flush(ctx, autoIncSet, autoIncrements)
 }
 
 // SetWorkingSet implements WriteSession.
@@ -137,7 +137,7 @@ func (s *prollyWriteSession) SetOptions(opts editor.Options) {
 }
 
 // flush is the inner implementation for Flush that does not acquire any locks
-func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncrements map[string]uint64) (*doltdb.WorkingSet, error) {
+func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, autoIncrements map[string]uint64) (*doltdb.WorkingSet, error) {
 	tables := make(map[string]*doltdb.Table, len(s.tables))
 	mu := &sync.Mutex{}
 
@@ -162,12 +162,14 @@ func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncrements map[string]u
 					autoIncVal = override
 				}
 				
-				t, err = t.SetAutoIncrementValue(sqlEgCtx, autoIncVal)
-				if err != nil {
-					return err
-				}
+				if autoIncSet || hasAiOverride {
+					t, err = t.SetAutoIncrementValue(sqlEgCtx, autoIncVal)
+					if err != nil {
+						return err
+					}
+				}	
 				
-				// Re-initialize the auto increment tracker with the new global value if one was specified
+				// Re-initialize the auto increment tracker with the new highest global value
 				if hasAiOverride {
 					err := s.aiTracker.Set(sqlEgCtx, s.workingSet.Ref(), name, override)
 					if err != nil {
