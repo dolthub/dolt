@@ -216,6 +216,11 @@ func (a AutoIncrementTracker) deepSet(ctx *sql.Context, tableName string, table 
 	if newAutoIncVal <= currentMax {
 		return table, nil
 	}
+	
+	table, err = table.SetAutoIncrementValue(ctx, newAutoIncVal)
+	if err != nil {
+		return nil, err
+	}
 
 	// Now that we have established the current max for this table, reset the global max accordingly
 	maxAutoInc := newAutoIncVal
@@ -304,10 +309,7 @@ func (a AutoIncrementTracker) deepSet(ctx *sql.Context, tableName string, table 
 		}
 	}
 	
-	// If we made it through the above loop, that means there is no value on any branch higher than the one given, 
-	// so we can set it
 	a.sequences[tableName] = maxAutoInc
-	// TODO: update table iff the max value on the table is at least this value
 	return table, nil
 }
 

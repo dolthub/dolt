@@ -119,18 +119,42 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "delete all rows in table",
+			Name: "delete all rows in table in all branches",
 			SetUpScript: []string{
 				"create table t (a int primary key auto_increment, b int)",
 				"call dolt_add('.')",
 				"call dolt_commit('-am', 'empty table')",
+				"call dolt_branch('branch1')",
+				"call dolt_branch('branch2')",
 				"insert into t (b) values (1), (2)",
 				"call dolt_commit('-am', 'two values on main')",
+				"call dolt_checkout('branch1')",
+				"insert into t (b) values (3), (4)",
+				"call dolt_commit('-am', 'two values on branch1')",
+				"call dolt_checkout('branch2')",
+				"insert into t (b) values (5), (6)",
+				"call dolt_checkout('main')",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
 					Query:    "delete from t",
 					Expected: []sql.Row{{gmstypes.NewOkResult(2)}},
+				},
+				{
+					Query:    "delete from `mydb/branch1`.t",
+					Expected: []sql.Row{{gmstypes.NewOkResult(2)}},
+				},
+				{
+					Query:    "delete from `mydb/branch2`.t",
+					Expected: []sql.Row{{gmstypes.NewOkResult(2)}},
+				},
+				{
+					Query:    "alter table `mydb/branch1`.t auto_increment = 1",
+					SkipResultsCheck: true,
+				},
+				{
+					Query:    "alter table `mydb/branch2`.t auto_increment = 1",
+					SkipResultsCheck: true,
 				},
 				{
 					Query:    "alter table t auto_increment = 1",
