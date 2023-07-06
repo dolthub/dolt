@@ -3920,6 +3920,42 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "set auto-increment above current max value",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'empty table')",
+			"insert into t (b) values (1), (2), (3), (4)",
+			"call dolt_commit('-am', 'two values on main')",
+			"call dolt_branch('branch1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table t auto_increment = 20",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "insert into `mydb/branch1`.t (b) values (5), (6)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 20}}},
+			},
+			{
+				Query:    "insert into t (b) values (5), (6)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 22}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{3, 3},
+					{4, 4},
+					{22, 5},
+					{23, 6},
+				},
+			},
+		},
+	},
+	{
 		Name: "delete all rows in table in all branches",
 		SetUpScript: []string{
 			"create table t (a int primary key auto_increment, b int)",
@@ -4014,7 +4050,7 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 				SkipResultsCheck: true,
 			},
 			{
-				// empty tables, start at 5 (highest remaining value)
+				// empty tables, start at 5 (highest remaining value, update above ignored)
 				Query:    "insert into t (b) values (5), (6)",
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 5}}},
 			},
