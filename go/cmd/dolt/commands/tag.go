@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
@@ -129,54 +128,62 @@ func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	//// create tag
-	//var verr errhand.VerboseError
-	//if apr.Contains(cli.VerboseFlag) {
-	//	verr = errhand.BuildDError("verbose flag can only be used with tag listing").Build()
-	//} else if len(apr.Args) > 2 {
-	//	verr = errhand.BuildDError("create tag takes at most two args").Build()
-	//} else {
-	//	props, err := getTagProps(dEnv, apr)
-	//	if err != nil {
-	//		verr = errhand.BuildDError("failed to get tag props").AddCause(err).Build()
-	//		return HandleVErrAndExitCode(verr, usage)
-	//	}
-	//	tagName := apr.Arg(0)
-	//	startPoint := "head"
-	//	if len(apr.Args) > 1 {
-	//		startPoint = apr.Arg(1)
-	//	}
-	//	err = actions.CreateTag(ctx, dEnv, tagName, startPoint, props)
-	//	if err != nil {
-	//		verr = errhand.BuildDError("failed to create tag").AddCause(err).Build()
-	//	}
-	//}
+	// create tag
+	var verr errhand.VerboseError
+	if apr.Contains(cli.VerboseFlag) {
+		verr = errhand.BuildDError("verbose flag can only be used with tag listing").Build()
+	} else if len(apr.Args) > 2 {
+		verr = errhand.BuildDError("create tag takes at most two args").Build()
+	} else {
+		tagName := apr.Arg(0)
+		startPoint := "head"
+		if len(apr.Args) > 1 {
+			startPoint = apr.Arg(1)
+		}
+		msg, _ := apr.GetValue(cli.MessageArg)
+		author, _ := apr.GetValue(cli.AuthorParam)
 
-	//return HandleVErrAndExitCode(verr, usage)
+		var name, email string
+		if len(author) > 0 {
+			name, email, err = cli.ParseAuthor(author)
+			if err != nil {
+				verr = errhand.BuildDError(fmt.Sprintf("unable to parse author '%s'", author)).AddCause(err).Build()
+			}
+		} else {
+			name, email, err = env.GetNameAndEmail(cliCtx.Config())
+			if err != nil {
+				verr = errhand.BuildDError("unable to get user name and email").AddCause(err).Build()
+			}
+		}
+		if verr != nil {
+			return HandleVErrAndExitCode(verr, usage)
+		}
 
-	return 0
+		err = createTag(queryist, sqlCtx, tagName, startPoint, msg, name, email)
+
+		if err != nil {
+			verr = errhand.BuildDError("failed to create tag").AddCause(err).Build()
+		}
+	}
+	return HandleVErrAndExitCode(verr, usage)
 }
 
-func getTagProps(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (props actions.TagProps, err error) {
-	var name, email string
-	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParseAuthor(authorStr)
+func createTag(queryist cli.Queryist, sqlCtx *sql.Context, tagName, startPoint, message, author, email string) error {
+	var query string
+	var params []interface{}
+	if len(message) == 0 {
+		query = "call dolt_tag(?, ?, '--author', ?, ?)"
+		params = []interface{}{tagName, startPoint, author, email}
 	} else {
-		name, email, err = env.GetNameAndEmail(dEnv.Config)
+		query = "call dolt_tag('-m', ?, ?, ?, '--author', ?, ?)"
+		params = []interface{}{message, tagName, startPoint, author, email}
 	}
+
+	_, err := InterpolateAndRunQuery(queryist, sqlCtx, query, params...)
 	if err != nil {
-		return props, err
+		return fmt.Errorf("error: failed to create tag %s: %w", tagName, err)
 	}
-
-	msg, _ := apr.GetValue(cli.MessageArg)
-
-	props = actions.TagProps{
-		TaggerName:  name,
-		TaggerEmail: email,
-		Description: msg,
-	}
-
-	return props, nil
+	return nil
 }
 
 func deleteTag(queryist cli.Queryist, sqlCtx *sql.Context, tagName string) error {
