@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 var stashPopDocs = cli.CommandDocumentationContent{
@@ -82,8 +83,14 @@ func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
 	}
 
+	_, sqlCtx, closer, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		cli.PrintErrln(err.Error())
+		return 1
+	}
+	defer closer()
+
 	var idx = 0
-	var err error
 	if apr.NArg() == 1 {
 		stashName := apr.Args[0]
 		stashName = strings.TrimSuffix(strings.TrimPrefix(stashName, "stash@{"), "}")
@@ -94,24 +101,24 @@ func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []strin
 		}
 	}
 
-	workingRoot, err := dEnv.WorkingRoot(ctx)
+	workingRoot, err := dEnv.WorkingRoot(sqlCtx)
 	if err != nil {
 		return handleStashPopErr(usage, err)
 	}
 
-	success, err := applyStashAtIdx(ctx, dEnv, workingRoot, idx)
+	success, err := applyStashAtIdx(sqlCtx, dEnv, workingRoot, idx)
 	if err != nil {
 		return handleStashPopErr(usage, err)
 	}
 
-	ret := commands.StatusCmd{}.Exec(ctx, "status", []string{}, dEnv, cliCtx)
+	ret := commands.StatusCmd{}.Exec(sqlCtx, "status", []string{}, dEnv, cliCtx)
 	if ret != 0 || !success {
 		cli.Println("The stash entry is kept in case you need it again.")
 		return 1
 	}
 
 	cli.Println()
-	err = dropStashAtIdx(ctx, dEnv, idx)
+	err = dropStashAtIdx(sqlCtx, dEnv, idx)
 	if err != nil {
 		return handleStashPopErr(usage, err)
 	}
@@ -119,7 +126,7 @@ func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []strin
 	return 0
 }
 
-func applyStashAtIdx(ctx context.Context, dEnv *env.DoltEnv, curWorkingRoot *doltdb.RootValue, idx int) (bool, error) {
+func applyStashAtIdx(ctx *sql.Context, dEnv *env.DoltEnv, curWorkingRoot *doltdb.RootValue, idx int) (bool, error) {
 	stashRoot, headCommit, meta, err := dEnv.DoltDB.GetStashRootAndHeadCommitAtIdx(ctx, idx)
 	if err != nil {
 		return false, err

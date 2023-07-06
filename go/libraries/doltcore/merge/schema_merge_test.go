@@ -529,7 +529,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 			var eo editor.Options
 			eo = eo.WithDeaf(editor.NewInMemDeaf(a.VRW()))
 			// attempt merge before skipping to assert no panics
-			result, err := merge.MergeRoots(ctx, l, r, a, rootish{r}, rootish{a}, eo, mo)
+			result, err := merge.MergeRoots(sql.NewContext(ctx), l, r, a, rootish{r}, rootish{a}, eo, mo)
 			maybeSkip(t, a.VRW().Format(), test, flipSides)
 
 			if test.conflict {
@@ -627,7 +627,7 @@ func makeRootWithTable(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options, tbl 
 	require.NoError(t, err)
 	noop := func(ctx *sql.Context, dbName string, root *doltdb.RootValue) (err error) { return }
 	sess := writer.NewWriteSession(ddb.Format(), ws, gst, eo)
-	wr, err := sess.GetTableWriter(ctx, tbl.ns.name, "test", noop)
+	wr, err := sess.GetTableWriter(sql.NewContext(ctx), tbl.ns.name, "test", noop)
 	require.NoError(t, err)
 
 	sctx := sql.NewEmptyContext()
@@ -635,7 +635,7 @@ func makeRootWithTable(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options, tbl 
 		err = wr.Insert(sctx, r)
 		assert.NoError(t, err)
 	}
-	ws, err = sess.Flush(ctx)
+	ws, err = sess.Flush(sql.NewContext(ctx))
 	require.NoError(t, err)
 	return ws.WorkingRoot()
 }
