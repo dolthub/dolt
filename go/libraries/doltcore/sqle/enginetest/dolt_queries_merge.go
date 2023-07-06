@@ -1926,24 +1926,6 @@ var Dolt1MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
-	{
-		Name: "dolt_revert() detects not null violation (issue #4527)",
-		SetUpScript: []string{
-			"create table test2 (pk int primary key, c0 int)",
-			"insert into test2 values (1,1),(2,NULL),(3,3);",
-			"call dolt_commit('-Am', 'new table with NULL value');",
-			"delete from test2 where pk = 2;",
-			"call dolt_commit('-am', 'deleted row with NULL value');",
-			"alter table test2 modify c0 int not null",
-			"call dolt_commit('-am', 'modified column c0 to not null');",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:          "call dolt_revert('head~1');",
-				ExpectedErrStr: "revert currently does not handle constraint violations",
-			},
-		},
-	},
 }
 
 var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{

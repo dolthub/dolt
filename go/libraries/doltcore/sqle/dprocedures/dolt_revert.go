@@ -47,6 +47,7 @@ func doDoltRevert(ctx *sql.Context, args []string) (int, error) {
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
 		return 1, err
 	}
+
 	workingSet, err := dSess.WorkingSet(ctx, dbName)
 	if err != nil {
 		return 1, err
