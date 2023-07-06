@@ -3871,6 +3871,38 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "set auto-increment below current max value",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'empty table')",
+			"insert into t (b) values (1), (2), (3), (4)",
+			"call dolt_commit('-am', 'two values on main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table t auto_increment = 2",
+				SkipResultsCheck: true,
+			},
+			{
+				// empty tables, start at 1
+				Query:    "insert into t (b) values (5), (6)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{3, 3},
+					{4, 4},
+					{5, 5},
+					{6, 6},
+				},
+			},
+		},
+	},
+	{
 		Name: "delete all rows in table in all branches",
 		SetUpScript: []string{
 			"create table t (a int primary key auto_increment, b int)",
