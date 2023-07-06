@@ -276,12 +276,18 @@ func abortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Ro
 	if err != nil {
 		return nil, err
 	}
+	someTablesAreIgnored := len(nonIgnoredTables) != len(preMergeWorkingTables)
 
-	newWorking, err := actions.MoveTablesBetweenRoots(ctx, nonIgnoredTables, preMergeWorkingRoot, roots.Working)
-	if err != nil {
-		return nil, err
+	if someTablesAreIgnored {
+		newWorking, err := actions.MoveTablesBetweenRoots(ctx, nonIgnoredTables, preMergeWorkingRoot, roots.Working)
+		if err != nil {
+			return nil, err
+		}
+		workingSet = workingSet.WithWorkingRoot(newWorking)
+	} else {
+		workingSet = workingSet.WithWorkingRoot(preMergeWorkingRoot)
 	}
-	workingSet = workingSet.WithWorkingRoot(newWorking)
+	workingSet = workingSet.WithStagedRoot(workingSet.WorkingRoot())
 	workingSet = workingSet.ClearMerge()
 
 	return workingSet, nil
