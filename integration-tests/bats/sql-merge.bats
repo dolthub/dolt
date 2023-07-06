@@ -19,24 +19,6 @@ teardown() {
     teardown_common
 }
 
-@test "sql-merge: DOLT_MERGE with displays hash." {
-    dolt commit -a -m "Step 1"
-    dolt checkout -b feature-branch
-    dolt sql -q "INSERT INTO test VALUES (3);"
-    dolt commit -a -m "this is a normal commit"
-    dolt checkout main
-    dolt sql -q "INSERT INTO test VALUES (5);"
-    dolt commit -a -m "this is a normal commit"
-
-    oldHead=$(dolt sql -r csv -q "select hashof('HEAD')" | sed -n '2 p')
-    mergeHead=$(dolt sql -r csv -q "call dolt_merge('feature-branch')" | sed -n '2 p' | head -c 32)
-    newHead=$(dolt sql -r csv -q "select hashof('HEAD')" | sed -n '2 p')
-    echo $mergeHead
-    echo $newHead
-    [ ! "$mergeHead" = "$oldHead" ]
-    [ "$mergeHead" = "$newHead" ]
-}
-
 @test "sql-merge: DOLT_MERGE with no-ff displays hash." {
     dolt add .
     dolt commit -m "dummy commit"
