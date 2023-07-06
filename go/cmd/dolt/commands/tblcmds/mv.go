@@ -17,6 +17,9 @@ package tblcmds
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/gocraft/dbr/v2"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -84,15 +87,42 @@ func (cmd MvCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 
 	oldName := apr.Arg(0)
 	newName := apr.Arg(1)
+	force := apr.Contains(forceParam)
 
-	queryStr := ""
-	if force := apr.Contains(forceParam); force {
-		queryStr = fmt.Sprintf("DROP TABLE IF EXISTS `%s`;", newName)
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(
+			errhand.BuildDError("error: failed to get query engine").AddCause(err).Build(), usage)
 	}
-	queryStr = fmt.Sprintf("%sRENAME TABLE `%s` TO `%s`;", queryStr, oldName, newName)
+	if closeFunc != nil {
+		defer closeFunc()
+	}
 
-	return commands.SqlCmd{}.Exec(ctx, "", []string{
-		fmt.Sprintf(`--%s`, commands.QueryFlag),
-		queryStr,
-	}, dEnv, cliCtx)
+	err = moveTable(queryist, sqlCtx, oldName, newName, force)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(
+			errhand.BuildDError("error: failed to move table").AddCause(err).Build(), usage)
+	}
+
+	return 0
+}
+
+func moveTable(queryist cli.Queryist, sqlCtx *sql.Context, old, new string, force bool) error {
+	oldTable := dbr.I(old)
+	newTable := dbr.I(new)
+
+	var err error
+	if force {
+		_, err = commands.InterpolateAndRunQuery(queryist, sqlCtx, "DROP TABLE IF EXISTS ?", newTable)
+		if err != nil {
+			return fmt.Errorf("error dropping table %s: %w", newTable, err)
+		}
+	}
+
+	_, err = commands.InterpolateAndRunQuery(queryist, sqlCtx, "RENAME TABLE ? TO ?", oldTable, newTable)
+	if err != nil {
+		return fmt.Errorf("error renaming table %s to %s: %w", oldTable, newTable, err)
+	}
+
+	return nil
 }

@@ -17,7 +17,8 @@ package tblcmds
 import (
 	"context"
 	"fmt"
-	"io"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/gocraft/dbr/v2"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 
@@ -83,14 +84,31 @@ func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 		}
 	}
 
-	queryStr := ""
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		//return handleStatusVErr(err)
+		return commands.HandleVErrAndExitCode(
+			errhand.BuildDError("error: failed to get query engine").AddCause(err).Build(), usage)
+	}
+	if closeFunc != nil {
+		defer closeFunc()
+	}
 	for _, tableName := range apr.Args {
-		queryStr = fmt.Sprintf("%sDROP TABLE `%s`;", queryStr, tableName)
+		err = dropTable(queryist, sqlCtx, tableName)
+		if err != nil {
+			return commands.HandleVErrAndExitCode(
+				errhand.BuildDError("error removing table %s", tableName).AddCause(err).Build(), usage)
+		}
 	}
 
-	cli.CliOut = io.Discard // display nothing on success
-	return commands.SqlCmd{}.Exec(ctx, "", []string{
-		fmt.Sprintf(`--%s`, commands.QueryFlag),
-		queryStr,
-	}, dEnv, cliCtx)
+	return 0
+}
+
+func dropTable(queryist cli.Queryist, sqlCtx *sql.Context, tableName string) error {
+	table := dbr.I(tableName)
+	_, err := commands.InterpolateAndRunQuery(queryist, sqlCtx, "DROP TABLE ?", table)
+	if err != nil {
+		return fmt.Errorf("error dropping table %s: %w", tableName, err)
+	}
+	return nil
 }

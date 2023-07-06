@@ -17,13 +17,13 @@ package tblcmds
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/gocraft/dbr/v2"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -88,7 +88,8 @@ func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
-		return handleStatusVErr(err)
+		return commands.HandleVErrAndExitCode(
+			errhand.BuildDError("error: failed to get query engine").AddCause(err).Build(), usage)
 	}
 	if closeFunc != nil {
 		defer closeFunc()
@@ -96,15 +97,11 @@ func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 
 	err = copyTable(queryist, sqlCtx, oldTbl, newTbl, force)
 	if err != nil {
-		return handleStatusVErr(err)
+		return commands.HandleVErrAndExitCode(
+			errhand.BuildDError("error: failed to copy table").AddCause(err).Build(), usage)
 	}
 
 	return 0
-}
-
-func handleStatusVErr(err error) int {
-	cli.PrintErrln(errhand.VerboseErrorFromError(err).Verbose())
-	return 1
 }
 
 func copyTable(queryist cli.Queryist, sqlCtx *sql.Context, old, new string, force bool) error {
