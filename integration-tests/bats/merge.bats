@@ -1008,6 +1008,9 @@ SQL
     [[ "$output" =~ "added tables" ]] || false
     [[ ! "$output" =~ "add (1,2,3) to test1" ]] || false
 
+    run dolt status
+    echo "$output"
+
     run dolt commit -m "merge main"
     log_status_eq 0
 }
