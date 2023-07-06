@@ -5230,8 +5230,8 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				SkipResultsCheck: true,
-				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{"", 0, 0}}, // non-symmetric result
+				Query:            "call dolt_merge('right');",
+				Expected:         []sql.Row{{"", 0, 0}}, // non-symmetric result
 			},
 			{
 				Skip:     true,
