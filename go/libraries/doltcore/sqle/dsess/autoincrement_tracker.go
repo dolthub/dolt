@@ -16,16 +16,20 @@ package dsess
 
 import (
 	"context"
+	"io"
 	"math"
 	"strings"
 	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 )
 
 type AutoIncrementTracker struct {
@@ -133,7 +137,7 @@ func CoerceAutoIncrementValue(val interface{}) (uint64, error) {
 	}
 
 	var err error
-	val, _, err = types.Uint64.Convert(val)
+	val, _, err = gmstypes.Uint64.Convert(val)
 	if err != nil {
 		return 0, err
 	}
@@ -146,7 +150,7 @@ func CoerceAutoIncrementValue(val interface{}) (uint64, error) {
 // Set sets the auto increment value for the table named, if it's greater than the one already registered for this
 // table. Otherwise, the update is silently disregarded. So far this matches the MySQL behavior, but Dolt uses the
 // maximum value for this table across all branches.
-func (a AutoIncrementTracker) Set(ctx *sql.Context, ws ref.WorkingSetRef, tableName string, newAutoIncVal uint64) error {
+func (a AutoIncrementTracker) Set(ctx *sql.Context, tableName string, table *doltdb.Table, ws ref.WorkingSetRef, newAutoIncVal uint64) (*doltdb.Table, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -155,22 +159,62 @@ func (a AutoIncrementTracker) Set(ctx *sql.Context, ws ref.WorkingSetRef, tableN
 	existing := a.sequences[tableName]
 	if newAutoIncVal > existing {
 		a.sequences[strings.ToLower(tableName)] = newAutoIncVal
-		return nil
+		return table.SetAutoIncrementValue(ctx, newAutoIncVal)
 	} else {
-		// re-establish our baseline for this table on all branches before making our decision 
-		return a.deepSet(ctx, ws, tableName, newAutoIncVal)
+		// If the value is not greater than the current tracker, we have more work to do
+		return a.deepSet(ctx, tableName, table, ws, newAutoIncVal)
 	}
 }
 
 // deepSet sets the auto increment value for the table named, if it's greater than the one on any branch head for this 
 // database, ignoring the current in-memory tracker value
-func (a AutoIncrementTracker) deepSet(ctx *sql.Context, ws ref.WorkingSetRef, tableName string, newAutoIncVal uint64) error {
+func (a AutoIncrementTracker) deepSet(ctx *sql.Context, tableName string, table *doltdb.Table, ws ref.WorkingSetRef, newAutoIncVal uint64) (*doltdb.Table, error) {
 	sess := DSessFromSess(ctx.Session)
 	db, ok := sess.Provider().BaseDatabase(ctx, a.dbName)
 
 	// just give up if we can't find this db for any reason, or it's a non-versioned DB
 	if !ok || !db.Versioned() {
-		return nil
+		return table, nil
+	}
+
+	// First, establish whether to update this table based on the given value and its current max value.
+	sch, err := table.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+	
+	aiCol, ok := schema.GetAutoIncrementColumn(sch)
+	if !ok {
+		return nil, nil
+	}
+
+	var indexData durable.Index 
+	aiIndex, ok := sch.Indexes().GetIndexByColumnNames(aiCol.Name)
+	if ok {
+		indexes, err := table.GetIndexSet(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		indexData, err = indexes.GetIndex(ctx, sch, aiIndex.Name())
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		indexData, err = table.GetRowData(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+	
+	currentMax, err := getMaxIndexValue(ctx, indexData)
+	if err != nil {
+		return nil, err
+	}
+	
+	// If the given value is less than the current one, the operation is a no-op, bail out early
+	if newAutoIncVal <= currentMax {
+		return table, nil
 	}
 
 	maxAutoInc := newAutoIncVal
@@ -178,12 +222,12 @@ func (a AutoIncrementTracker) deepSet(ctx *sql.Context, ws ref.WorkingSetRef, ta
 	for _, db := range doltdbs {
 		branches, err := db.GetBranches(ctx)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		remotes, err := db.GetRemoteRefs(ctx)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		rootRefs := make([]ref.DoltRef, 0, len(branches)+len(remotes))
@@ -196,7 +240,7 @@ func (a AutoIncrementTracker) deepSet(ctx *sql.Context, ws ref.WorkingSetRef, ta
 			case ref.BranchRefType:
 				wsRef, err := ref.WorkingSetRefForHead(b)
 				if err != nil {
-					return err
+					return nil, err
 				}
 				
 				if wsRef == ws {
@@ -209,30 +253,30 @@ func (a AutoIncrementTracker) deepSet(ctx *sql.Context, ws ref.WorkingSetRef, ta
 					// use the branch head if there isn't a working set for it
 					cm, err := db.ResolveCommitRef(ctx, b)
 					if err != nil {
-						return err
+						return nil, err
 					}
 					rootish = cm
 				} else if err != nil {
-					return err
+					return nil, err
 				} else {
 					rootish = ws
 				}
 			case ref.RemoteRefType:
 				cm, err := db.ResolveCommitRef(ctx, b)
 				if err != nil {
-					return err
+					return nil, err
 				}
 				rootish = cm
 			}
 
 			root, err := rootish.ResolveRootValue(ctx)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			table, _, ok, err := root.GetTableInsensitive(ctx, tableName)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			if !ok {
 				continue
@@ -240,7 +284,7 @@ func (a AutoIncrementTracker) deepSet(ctx *sql.Context, ws ref.WorkingSetRef, ta
 
 			sch, err := table.GetSchema(ctx)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			if !schema.HasAutoIncrement(sch) {
@@ -250,7 +294,7 @@ func (a AutoIncrementTracker) deepSet(ctx *sql.Context, ws ref.WorkingSetRef, ta
 			tableName = strings.ToLower(tableName)
 			seq, err := table.GetAutoIncrementValue(ctx)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			
 			if seq > maxAutoInc {
@@ -258,11 +302,47 @@ func (a AutoIncrementTracker) deepSet(ctx *sql.Context, ws ref.WorkingSetRef, ta
 			}
 		}
 	}
-
+	
 	// If we made it through the above loop, that means there is no value on any branch higher than the one given, 
 	// so we can set it
 	a.sequences[tableName] = maxAutoInc
-	return nil
+	// TODO: update table iff the max value on the table is at least this value
+	return table, nil
+}
+
+func getMaxIndexValue(ctx context.Context, indexData durable.Index) (uint64, error) {
+	if types.IsFormat_DOLT(indexData.Format()) {
+		idx := durable.ProllyMapFromIndex(indexData)
+
+		iter, err := idx.IterAllReverse(ctx)
+		if err != nil {
+			return 0, err
+		}
+
+		kd, _ := idx.Descriptors()
+		k, _, err := iter.Next(ctx)
+		if err == io.EOF {
+			return 0, nil
+		} else if err != nil {
+			return 0, err
+		}
+
+		// TODO: is the auto-inc column always the first column in the index?
+		field, err := index.GetField(ctx, kd, 0, k, idx.NodeStore())
+		if err != nil {
+			return 0, err
+		}
+
+		maxVal, err := CoerceAutoIncrementValue(field)
+		if err != nil {
+			return 0, err
+		}
+
+		return maxVal, nil
+	}
+
+	// For an LD format table, this operation won't succeed
+	return math.MaxUint64, nil
 }
 
 // AddNewTable initializes a new table with an auto increment column to the tracker, as necessary

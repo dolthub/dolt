@@ -137,7 +137,7 @@ func (s *prollyWriteSession) SetOptions(opts editor.Options) {
 }
 
 // flush is the inner implementation for Flush that does not acquire any locks
-func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, autoIncrements map[string]uint64) (*doltdb.WorkingSet, error) {
+func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, manualAutoIncrementsSettings map[string]uint64) (*doltdb.WorkingSet, error) {
 	tables := make(map[string]*doltdb.Table, len(s.tables))
 	mu := &sync.Mutex{}
 
@@ -157,21 +157,20 @@ func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, autoIncrem
 			// override was specified (e.g. if the next value was set explicitly)
 			if schema.HasAutoIncrement(wr.sch) {
 				autoIncVal := s.aiTracker.Current(name)
-				override, hasAiOverride := autoIncrements[name]
-				if hasAiOverride{
+				override, hasManuallySetAi := manualAutoIncrementsSettings[name]
+				if hasManuallySetAi {
 					autoIncVal = override
 				}
 				
-				if autoIncSet || hasAiOverride {
-					t, err = t.SetAutoIncrementValue(sqlEgCtx, autoIncVal)
+				// Update the table with the new auto-inc value if necessary. If it was set manually via an ALTER TABLE 
+				// statement, we defer to the tracker to update the value itself, since this impacts the global state.
+				if hasManuallySetAi {
+					t, err = s.aiTracker.Set(sqlEgCtx, name, t, s.workingSet.Ref(), autoIncVal)
 					if err != nil {
 						return err
 					}
-				}	
-				
-				// Re-initialize the auto increment tracker with the new highest global value
-				if hasAiOverride {
-					err := s.aiTracker.Set(sqlEgCtx, s.workingSet.Ref(), name, override)
+				} else if autoIncSet {
+					t, err = t.SetAutoIncrementValue(sqlEgCtx, autoIncVal)
 					if err != nil {
 						return err
 					}

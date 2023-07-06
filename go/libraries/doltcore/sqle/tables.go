@@ -1644,6 +1644,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 
 	// For auto columns modified to be auto increment, we have more work to do
 	if !existingCol.AutoIncrement && col.AutoIncrement {
+		// TODO: delegate this to tracker?
 		seq, err := t.getFirstAutoIncrementValue(ctx, columnName, column.Type, updatedTable)
 		if err != nil {
 			return err
@@ -1663,7 +1664,10 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		ait.AddNewTable(t.tableName)
 		// Since this is a new auto increment table, we don't need to exclude the current working set from consideration 
 		// when computing its new sequence value, hence the empty ref
-		ait.Set(ctx, ref.WorkingSetRef{}, t.tableName, seq)
+		_, err = ait.Set(ctx, t.tableName, updatedTable, ref.WorkingSetRef{}, seq)
+		if err != nil {
+			return err
+		}
 	}
 
 	// If we're removing an auto inc property, we just need to update global auto increment tracking
