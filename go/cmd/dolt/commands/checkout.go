@@ -135,7 +135,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	}
 
 	if len(rows) != 1 {
-		return HandleVErrAndExitCode(errhand.BuildDError("expected 1 row response from %s, got %s", sqlQuery, len(rows)).Build(), usagePrt)
+		return HandleVErrAndExitCode(errhand.BuildDError("expected 1 row response from %s, got %d", sqlQuery, len(rows)).Build(), usagePrt)
 	}
 
 	if len(rows[0]) < 2 {
