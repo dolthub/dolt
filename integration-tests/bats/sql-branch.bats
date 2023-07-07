@@ -195,7 +195,9 @@ SQL
 
 @test "sql-branch: CALL DOLT_BRANCH -m on session active branch (dolt sql)" {
     dolt branch other
-    echo "call dolt_checkout('other'); call dolt_branch('-m', 'other', 'newOther')" | dolt sql
+    run dolt sql -q "call dolt_checkout('other'); call dolt_branch('-m', 'other', 'newOther'); select active_branch();"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "newOther" ]] || false
     run dolt branch
     [ $status -eq 0 ]
     [[ "$output" =~ "newOther" ]] || false

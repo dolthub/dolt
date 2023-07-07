@@ -276,8 +276,6 @@ assert_has_key_value() {
 }
 
 @test "sql-local-remote: verify dolt commit behavior is identical in switch between server/no server" {
-    skip # TODO - Enable after log command is used for results in remote contexts in commit.go
-
     cd altDB
     dolt sql -q "create table test1 (pk int primary key)"
     dolt sql -q "create table test2 (pk int primary key)"
@@ -309,6 +307,14 @@ assert_has_key_value() {
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "committing locally" ]] || false
+}
+
+@test "sql-local-remote: verify dolt commit print" {
+    run dolt --use-db altDB commit -A -m "Wonderful Commit"
+    [[ "${lines[0]}" =~ "commit " ]] || false
+    [[ "${lines[1]}" =~ "Author: Bats Tests <bats@email.fake>" ]] || false
+    [[ "${lines[2]}" =~ "Date: " ]] || false
+    [[ "${lines[3]}" =~ "	Wonderful Commit" ]] || false
 }
 
 @test "sql-local-remote: verify simple dolt branch behavior." {

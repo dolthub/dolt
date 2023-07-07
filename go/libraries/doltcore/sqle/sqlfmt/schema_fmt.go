@@ -48,9 +48,7 @@ func GenerateCreateTableForeignKeyDefinition(fk doltdb.ForeignKey, sch, parentSc
 			fkCols = append(fkCols, c.Name)
 		}
 	} else {
-		for _, col := range fk.UnresolvedFKDetails.TableColumns {
-			fkCols = append(fkCols, col)
-		}
+		fkCols = append(fkCols, fk.UnresolvedFKDetails.TableColumns...)
 	}
 
 	var parentCols []string
@@ -60,9 +58,7 @@ func GenerateCreateTableForeignKeyDefinition(fk doltdb.ForeignKey, sch, parentSc
 			parentCols = append(parentCols, c.Name)
 		}
 	} else {
-		for _, col := range fk.UnresolvedFKDetails.ReferencedTableColumns {
-			parentCols = append(parentCols, col)
-		}
+		parentCols = append(parentCols, fk.UnresolvedFKDetails.ReferencedTableColumns...)
 	}
 
 	onDelete := ""
