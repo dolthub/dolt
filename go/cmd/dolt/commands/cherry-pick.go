@@ -22,6 +22,7 @@ import (
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
 	"gopkg.in/src-d/go-errors.v1"
+	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -122,9 +123,9 @@ func cherryPick(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgPa
 		return fmt.Errorf("error: cannot cherry-pick empty string")
 	}
 
-	hasStagedChanges, hasUnstagedChanges, err := getDoltStatus(queryist, sqlCtx)
+	hasStagedChanges, hasUnstagedChanges, err := hasStagedAndUnstagedChanged(queryist, sqlCtx)
 	if err != nil {
-		return fmt.Errorf("error: failed to get dolt status: %w", err)
+		return fmt.Errorf("error: failed to check for staged and unstaged changes: %w", err)
 	}
 	if hasStagedChanges {
 		return fmt.Errorf("Please commit your staged changes before using cherry-pick.")
@@ -152,11 +153,9 @@ hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt re
 	if err != nil {
 		errorText := err.Error()
 		switch {
-		case "no changes were made, nothing to commit" == errorText:
+		case strings.Contains("nothing to commit", errorText):
 			cli.Println("No changes were made.")
 			return nil
-		case "cherry-picking a merge commit is not supported" == errorText:
-			return fmt.Errorf("cherry-picking a merge commit is not supported.")
 		default:
 			return err
 		}
@@ -211,8 +210,8 @@ hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt re
 }
 
 func cherryPickAbort(queryist cli.Queryist, sqlCtx *sql.Context) error {
-	query := "call dolt_merge('--abort')"
-	_, err := GetRowsForSql(queryist, sqlCtx, query)
+	query := "call dolt_cherry_pick('--abort')"
+	rows, err := GetRowsForSql(queryist, sqlCtx, query)
 	if err != nil {
 		errorText := err.Error()
 		switch errorText {
@@ -222,36 +221,17 @@ func cherryPickAbort(queryist cli.Queryist, sqlCtx *sql.Context) error {
 			return err
 		}
 	}
+	cli.Printf("rows: %s\n", rows)
 	return nil
 }
 
-func getDoltStatus(queryist cli.Queryist, sqlCtx *sql.Context) (hasStagedChanges bool, hasUnstagedChanges bool, err error) {
-	hasStagedChanges = false
-	hasUnstagedChanges = false
-	err = nil
-
-	var statusRows []sql.Row
-	statusRows, err = GetRowsForSql(queryist, sqlCtx, "select * from dolt_status;")
+func hasStagedAndUnstagedChanged(queryist cli.Queryist, sqlCtx *sql.Context) (hasStagedChanges bool, hasUnstagedChanges bool, err error) {
+	stagedTables, unstagedTables, err := GetDoltStatus(queryist, sqlCtx)
 	if err != nil {
-		return
-	}
-	if len(statusRows) == 0 {
-		return
+		return false, false, fmt.Errorf("error: failed to get dolt status: %w", err)
 	}
 
-	for _, row := range statusRows {
-		staged := row[1]
-		var isStaged bool
-		isStaged, err = GetTinyIntColAsBool(staged)
-		if err != nil {
-			return
-		}
-		if isStaged {
-			hasStagedChanges = true
-		} else {
-			hasUnstagedChanges = true
-		}
-	}
-
-	return
+	hasStagedChanges = len(stagedTables) > 0
+	hasUnstagedChanges = len(unstagedTables) > 0
+	return hasStagedChanges, hasUnstagedChanges, nil
 }

@@ -422,3 +422,54 @@ func buildAuthResponse(salt []byte, password string) []byte {
 
 	return shaPwd
 }
+
+// GetDoltStatus retrieves the status of the current working set of changes in the working set, and returns two
+// lists of modified tables: staged and unstaged. If both lists are empty, there are no changes in the working set.
+// The list of unstaged tables does not include tables that are ignored, as configured by the dolt_ignore table.
+func GetDoltStatus(queryist cli.Queryist, sqlCtx *sql.Context) (stagedChangedTables map[string]bool, unstagedChangedTables map[string]bool, err error) {
+	stagedChangedTables = make(map[string]bool)
+	unstagedChangedTables = make(map[string]bool)
+	err = nil
+
+	ignoredPatterns, err := getIgnoredTablePatternsFromSql(queryist, sqlCtx)
+	if err != nil {
+		return stagedChangedTables, unstagedChangedTables, fmt.Errorf("error: failed to get ignored table patterns: %w", err)
+	}
+
+	var statusRows []sql.Row
+	statusRows, err = GetRowsForSql(queryist, sqlCtx, "select * from dolt_status;")
+	if err != nil {
+		return stagedChangedTables, unstagedChangedTables, fmt.Errorf("error: failed to get dolt status: %w", err)
+	}
+
+	for _, row := range statusRows {
+		tableName := row[0].(string)
+		staged := row[1]
+		var isStaged bool
+		isStaged, err = GetTinyIntColAsBool(staged)
+		if err != nil {
+			return
+		}
+		if isStaged {
+			stagedChangedTables[tableName] = true
+		} else {
+			// filter out ignored tables from untracked tables
+			ignored, err := ignoredPatterns.IsTableNameIgnored(tableName)
+			if conflict := doltdb.AsDoltIgnoreInConflict(err); conflict != nil {
+				continue
+			} else if err != nil {
+				return stagedChangedTables, unstagedChangedTables, fmt.Errorf("error: failed to check if table '%s' is ignored: %w", tableName, err)
+			} else if ignored == doltdb.DontIgnore {
+				// no-op
+			} else if ignored == doltdb.Ignore {
+				continue
+			} else {
+				return stagedChangedTables, unstagedChangedTables, fmt.Errorf("unrecognized ignore result value: %v", ignored)
+			}
+
+			unstagedChangedTables[tableName] = true
+		}
+	}
+
+	return stagedChangedTables, unstagedChangedTables, nil
+}
