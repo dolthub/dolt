@@ -187,7 +187,7 @@ func (s *nomsWriteSession) flush(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 		name, ed := tblName, tblEditor
 
 		eg.Go(func() error {
-			tbl, err := ed.tableEditor.Table(sqlCtx2)
+			tbl, err := ed.tableEditor.Table(ctx)
 			if err != nil {
 				return err
 			}
@@ -196,7 +196,7 @@ func (s *nomsWriteSession) flush(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 			// TODO: the table probably needs an autoincrement tracker no matter what
 			if schema.HasAutoIncrement(ed.Schema()) {
 				v := s.aiTracker.Current(name)
-				tbl, err = tbl.SetAutoIncrementValue(sqlCtx2, v)
+				tbl, err = tbl.SetAutoIncrementValue(ctx, v)
 				if err != nil {
 					return err
 				}
