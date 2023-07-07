@@ -169,7 +169,7 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// No-FF-Merge
-				Query:            "CALL DOLT_MERGE('feature-branch', '--no-ff', '-m', 'this is a no-ff')",
+				Query:    "CALL DOLT_MERGE('feature-branch', '--no-ff', '-m', 'this is a no-ff')",
 				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
@@ -212,7 +212,7 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// No-FF-Merge
-				Query:            "CALL DOLT_MERGE('feature-branch', '--no-ff', '-m', 'this is a no-ff')",
+				Query:    "CALL DOLT_MERGE('feature-branch', '--no-ff', '-m', 'this is a no-ff')",
 				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
@@ -2779,7 +2779,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query: "CALL DOLT_COMMIT('-afm', 'commit active merge');",
+				Query:    "CALL DOLT_COMMIT('-afm', 'commit active merge');",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
@@ -2791,7 +2791,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 0, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
 			},
 			{
-				Query: "CALL DOLT_COMMIT('-afm', 'update children to new value');",
+				Query:    "CALL DOLT_COMMIT('-afm', 'update children to new value');",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
@@ -2848,7 +2848,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{uint64(merge.CvType_UniqueIndex), 1, 1}, {uint64(merge.CvType_UniqueIndex), 2, 1}},
 			},
 			{
-				Query: "CALL DOLT_COMMIT('-afm', 'commit unique key viol');",
+				Query:    "CALL DOLT_COMMIT('-afm', 'commit unique key viol');",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
@@ -2868,7 +2868,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{uint64(merge.CvType_UniqueIndex), 3, 1}, {uint64(merge.CvType_UniqueIndex), 4, 1}},
 			},
 			{
-				Query: "CALL DOLT_COMMIT('-afm', 'commit unique key viol');",
+				Query:    "CALL DOLT_COMMIT('-afm', 'commit unique key viol');",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
@@ -3288,7 +3288,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('-am', 'delete parent 1');",
+				Query:    "CALL DOLT_COMMIT('-am', 'delete parent 1');",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
@@ -3300,7 +3300,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('-am', 'insert child of parent 1');",
+				Query:    "CALL DOLT_COMMIT('-am', 'insert child of parent 1');",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
@@ -3524,7 +3524,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			// commit so we can merge again
 			{
-				Query:            "CALL DOLT_COMMIT('-afm', 'committing merge conflicts');",
+				Query:    "CALL DOLT_COMMIT('-afm', 'committing merge conflicts');",
 				Expected: []sql.Row{{doltCommit}},
 			},
 			{
