@@ -51,9 +51,11 @@ type MergeScriptTest struct {
 	SkipPrepared bool
 }
 
-type doltCommitValidator struct {}
+type doltCommitValidator struct{}
+
 var _ enginetest.CustomValueValidator = &doltCommitValidator{}
 var hashRegex = regexp.MustCompile(`^[0-9a-v]{32}$`)
+
 func (dcv *doltCommitValidator) Validate(val interface{}) (bool, error) {
 	hash, ok := val.(string)
 	if !ok {
@@ -61,6 +63,7 @@ func (dcv *doltCommitValidator) Validate(val interface{}) (bool, error) {
 	}
 	return hashRegex.MatchString(hash), nil
 }
+
 var doltCommit = &doltCommitValidator{}
 
 var MergeScripts = []queries.ScriptTest{
