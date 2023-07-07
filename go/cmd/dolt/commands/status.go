@@ -21,7 +21,6 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -652,24 +651,6 @@ and have %v and %v different commits each, respectively.
 func handleStatusVErr(err error) int {
 	cli.PrintErrln(errhand.VerboseErrorFromError(err).Verbose())
 	return 1
-}
-
-// getJsonDocumentColAsString returns the value of a JSONDocument column as a string
-// This is necessary because Queryist may return a tinyint column as a bool (when using SQLEngine)
-// or as a string (when using ConnectionQueryist).
-func getJsonDocumentColAsString(sqlCtx *sql.Context, col interface{}) (string, error) {
-	switch v := col.(type) {
-	case string:
-		return v, nil
-	case types.JSONDocument:
-		text, err := v.ToString(sqlCtx)
-		if err != nil {
-			return "", err
-		}
-		return text, nil
-	default:
-		return "", fmt.Errorf("unexpected type %T, was expecting JSONDocument or string", v)
-	}
 }
 
 // getInt64ColAsInt64 returns the value of an int64 column as a string
