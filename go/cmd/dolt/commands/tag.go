@@ -143,23 +143,7 @@ func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		msg, _ := apr.GetValue(cli.MessageArg)
 		author, _ := apr.GetValue(cli.AuthorParam)
 
-		var name, email string
-		if len(author) > 0 {
-			name, email, err = cli.ParseAuthor(author)
-			if err != nil {
-				verr = errhand.BuildDError(fmt.Sprintf("unable to parse author '%s'", author)).AddCause(err).Build()
-			}
-		} else {
-			name, email, err = env.GetNameAndEmail(cliCtx.Config())
-			if err != nil {
-				verr = errhand.BuildDError("unable to get user name and email").AddCause(err).Build()
-			}
-		}
-		if verr != nil {
-			return HandleVErrAndExitCode(verr, usage)
-		}
-
-		err = createTag(queryist, sqlCtx, tagName, startPoint, msg, name, email)
+		err = createTag(queryist, sqlCtx, tagName, startPoint, msg, author)
 
 		if err != nil {
 			verr = errhand.BuildDError("failed to create tag").AddCause(err).Build()
@@ -168,15 +152,25 @@ func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func createTag(queryist cli.Queryist, sqlCtx *sql.Context, tagName, startPoint, message, author, email string) error {
+func createTag(queryist cli.Queryist, sqlCtx *sql.Context, tagName, startPoint, message, author string) error {
 	var query string
 	var params []interface{}
 	if len(message) == 0 {
-		query = "call dolt_tag(?, ?, '--author', ?, ?)"
-		params = []interface{}{tagName, startPoint, author, email}
+		if len(author) == 0 {
+			query = "call dolt_tag(?, ?)"
+			params = []interface{}{tagName, startPoint}
+		} else {
+			query = "call dolt_tag(?, ?, '--author', ?)"
+			params = []interface{}{tagName, startPoint, author}
+		}
 	} else {
-		query = "call dolt_tag('-m', ?, ?, ?, '--author', ?, ?)"
-		params = []interface{}{message, tagName, startPoint, author, email}
+		if len(author) == 0 {
+			query = "call dolt_tag('-m', ?, ?, ?)"
+			params = []interface{}{message, tagName, startPoint}
+		} else {
+			query = "call dolt_tag('-m', ?, ?, ?, '--author', ?)"
+			params = []interface{}{message, tagName, startPoint, author}
+		}
 	}
 
 	_, err := InterpolateAndRunQuery(queryist, sqlCtx, query, params...)
