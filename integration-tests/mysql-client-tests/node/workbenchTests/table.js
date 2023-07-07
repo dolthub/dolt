@@ -145,4 +145,61 @@ export const tableTests = [
     p: { tableName: "test_info", col0: "id", limit: 10, offset: 0 },
     res: [{ id: 1, info: "info about test pk 0", test_pk: 0 }],
   },
+  {
+    q: `USE ::dbName`,
+    p: { dbName: `${dbName}/main` },
+    res: {
+      fieldCount: 0,
+      affectedRows: 0,
+      insertId: 0,
+      info: "",
+      serverStatus: 2,
+      warningStatus: 0,
+    },
+  },
+
+  // Make a change and revert it
+  {
+    q: `SELECT * FROM dolt_status`,
+    res: [],
+  },
+  {
+    q: "INSERT INTO test_info VALUES (4, 'info about test pk 4', 0)",
+    res: {
+      fieldCount: 0,
+      affectedRows: 1,
+      insertId: 0,
+      info: "",
+      serverStatus: 2,
+      warningStatus: 0,
+    },
+  },
+  {
+    q: `SELECT * FROM dolt_status`,
+    res: [{ table_name: "test_info", staged: 0, status: "modified" }],
+  },
+  {
+    q: "CALL DOLT_ADD('.')",
+    res: [{ status: 0 }],
+  },
+  {
+    q: `SELECT * FROM dolt_status`,
+    res: [{ table_name: "test_info", staged: 1, status: "modified" }],
+  },
+  {
+    q: "CALL DOLT_RESET('test_info')",
+    res: [{ status: 0 }],
+  },
+  {
+    q: `SELECT * FROM dolt_status`,
+    res: [{ table_name: "test_info", staged: 0, status: "modified" }],
+  },
+  {
+    q: "CALL DOLT_CHECKOUT('test_info')",
+    res: [{ status: 0 }],
+  },
+  {
+    q: `SELECT * FROM dolt_status`,
+    res: [],
+  },
 ];

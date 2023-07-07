@@ -256,6 +256,59 @@ export const diffTests = [
     matcher: patchRowsMatcher,
   },
   {
+    q: "SELECT * FROM DOLT_SCHEMA_DIFF(:fromRefName, :toRefName)",
+    p: { fromRefName: "HEAD", toRefName: "WORKING" },
+    res: [
+      {
+        from_table_name: "test_info",
+        to_table_name: "",
+        from_create_statement:
+          "CREATE TABLE `test_info` (\n" +
+          "  `id` int NOT NULL,\n" +
+          "  `info` varchar(255),\n" +
+          "  `test_pk` int,\n" +
+          "  PRIMARY KEY (`id`),\n" +
+          "  KEY `test_pk` (`test_pk`),\n" +
+          "  CONSTRAINT `s7utamh8` FOREIGN KEY (`test_pk`) REFERENCES `test` (`pk`)\n" +
+          ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+        to_create_statement: "",
+      },
+      {
+        from_table_name: "",
+        to_table_name: "dolt_schemas",
+        from_create_statement: "",
+        to_create_statement:
+          "CREATE TABLE `dolt_schemas` (\n" +
+          "  `type` varchar(64) COLLATE utf8mb4_0900_ai_ci NOT NULL,\n" +
+          "  `name` varchar(64) COLLATE utf8mb4_0900_ai_ci NOT NULL,\n" +
+          "  `fragment` longtext,\n" +
+          "  `extra` json,\n" +
+          "  PRIMARY KEY (`type`,`name`)\n" +
+          ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+      },
+    ],
+  },
+  {
+    q: "SELECT * FROM DOLT_SCHEMA_DIFF(:fromRefName, :toRefName, :tableName)",
+    p: { fromRefName: "HEAD", toRefName: "WORKING", tableName: "test_info" },
+    res: [
+      {
+        from_table_name: "test_info",
+        to_table_name: "",
+        from_create_statement:
+          "CREATE TABLE `test_info` (\n" +
+          "  `id` int NOT NULL,\n" +
+          "  `info` varchar(255),\n" +
+          "  `test_pk` int,\n" +
+          "  PRIMARY KEY (`id`),\n" +
+          "  KEY `test_pk` (`test_pk`),\n" +
+          "  CONSTRAINT `s7utamh8` FOREIGN KEY (`test_pk`) REFERENCES `test` (`pk`)\n" +
+          ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+        to_create_statement: "",
+      },
+    ],
+  },
+  {
     q: `CALL DOLT_COMMIT("-A", "-m", :commitMsg)`,
     p: { commitMsg: "Make some changes on branch" },
     res: [{ hash: "" }],
