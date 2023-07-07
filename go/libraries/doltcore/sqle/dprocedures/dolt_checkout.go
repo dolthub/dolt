@@ -204,10 +204,6 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, string, error) {
 		successMessage = generateSuccessMessage(branchName, upstream)
 	}
 
-	if err != nil {
-		return 1, "", err
-	}
-
 	dsess.WaitForReplicationController(ctx, rsc)
 
 	return 0, successMessage, nil
