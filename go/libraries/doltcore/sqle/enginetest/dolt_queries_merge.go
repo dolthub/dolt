@@ -170,7 +170,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				// No-FF-Merge
 				Query:            "CALL DOLT_MERGE('feature-branch', '--no-ff', '-m', 'this is a no-ff')",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
@@ -213,7 +213,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				// No-FF-Merge
 				Query:            "CALL DOLT_MERGE('feature-branch', '--no-ff', '-m', 'this is a no-ff')",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
@@ -2780,6 +2780,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "CALL DOLT_COMMIT('-afm', 'commit active merge');",
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "SET FOREIGN_KEY_CHECKS=0;",
@@ -2791,6 +2792,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "CALL DOLT_COMMIT('-afm', 'update children to new value');",
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('other3');",
@@ -2847,6 +2849,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "CALL DOLT_COMMIT('-afm', 'commit unique key viol');",
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('right');",
@@ -2866,6 +2869,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "CALL DOLT_COMMIT('-afm', 'commit unique key viol');",
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('main');",
@@ -3285,7 +3289,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-am', 'delete parent 1');",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('branch1');",
@@ -3297,7 +3301,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-am', 'insert child of parent 1');",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('main');",
@@ -3320,8 +3324,8 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 				ExpectedErrStr: "error: the table(s) child have constraint violations",
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('-afm', 'commit constraint violations');",
-				SkipResultsCheck: true,
+				Query:    "CALL DOLT_COMMIT('-afm', 'commit constraint violations');",
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_BRANCH('branch3');",
@@ -3332,8 +3336,8 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('-afm', 'remove parent 2');",
-				SkipResultsCheck: true,
+				Query:    "CALL DOLT_COMMIT('-afm', 'remove parent 2');",
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('branch2');",
@@ -3344,8 +3348,8 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('-am', 'non-fk insert');",
-				SkipResultsCheck: true,
+				Query:    "CALL DOLT_COMMIT('-am', 'non-fk insert');",
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('main');",
@@ -3368,8 +3372,8 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 				ExpectedErrStr: "error: the table(s) child have constraint violations",
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('-afm', 'commit non-conflicting merge');",
-				SkipResultsCheck: true,
+				Query:    "CALL DOLT_COMMIT('-afm', 'commit non-conflicting merge');",
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('branch3');",
@@ -3380,8 +3384,8 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('-afm', 'add child of parent 2');",
-				SkipResultsCheck: true,
+				Query:    "CALL DOLT_COMMIT('-afm', 'add child of parent 2');",
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('main');",
@@ -3446,8 +3450,8 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			// commit so we can merge again
 			{
-				Query:            "CALL DOLT_COMMIT('-afm', 'committing merge conflicts');",
-				SkipResultsCheck: true,
+				Query:    "CALL DOLT_COMMIT('-afm', 'committing merge conflicts');",
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:          "CALL DOLT_MERGE('other2');",
@@ -3521,7 +3525,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			// commit so we can merge again
 			{
 				Query:            "CALL DOLT_COMMIT('-afm', 'committing merge conflicts');",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('other2');",
