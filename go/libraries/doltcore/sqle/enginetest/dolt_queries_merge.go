@@ -15,6 +15,7 @@
 package enginetest
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/enginetest"
@@ -50,7 +51,18 @@ type MergeScriptTest struct {
 	SkipPrepared bool
 }
 
-var doltCommit = enginetest.DoltCommit
+type doltCommitValidator struct {}
+var _ enginetest.CustomValueValidator = &doltCommitValidator{}
+var hashRegex = regexp.MustCompile(`^[0-9a-v]{32}$`)
+func (dcv *doltCommitValidator) Validate(val interface{}) (bool, error) {
+	hash, ok := val.(string)
+	if !ok {
+		return false, nil
+	}
+	return hashRegex.MatchString(hash), nil
+}
+var doltCommit = &doltCommitValidator{}
+
 var MergeScripts = []queries.ScriptTest{
 	{
 		Name: "CALL DOLT_MERGE ff correctly works with autocommit off",
