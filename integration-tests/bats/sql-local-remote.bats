@@ -224,6 +224,22 @@ assert_has_key_value() {
     [[ ! -z $(echo "$staged" | grep "testtable") ]] || false
 }
 
+@test "sql-local-remote: verify simple dolt checkout behavior." {
+    start_sql_server altDB
+    cd altDB
+
+    run dolt --verbose-engine-setup --user dolt --password "" checkout -b other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+
+    # Due to a current limitation, subsequent commands won't use the new branch until the server is stopped
+    stop_sql_server 1
+
+    run dolt branch --show-current
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "other" ]] || false
+}
+
 @test "sql-local-remote: test 'status' and switch between server/no server" {
   start_sql_server defaultDB
 
