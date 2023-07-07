@@ -155,7 +155,7 @@ func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, error) {
 
 	ws, commit, conflicts, fastForward, err := performMerge(ctx, sess, roots, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
 	if err != nil || conflicts != 0 || fastForward != 0 {
-		return "", conflicts, fastForward, err
+		return commit, conflicts, fastForward, err
 	}
 
 	return commit, conflicts, fastForward, nil
