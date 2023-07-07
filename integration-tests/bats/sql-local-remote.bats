@@ -232,12 +232,30 @@ assert_has_key_value() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "starting remote mode" ]] || false
 
+    run dolt --verbose-engine-setup --user dolt --password "" branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+    [[ "$output" =~ "main" ]] || false
+    [[ "$output" =~ "other" ]] || false
+
     # Due to a current limitation, subsequent commands won't use the new branch until the server is stopped
     stop_sql_server 1
 
     run dolt branch --show-current
     [ "$status" -eq 0 ]
     [[ "$output" =~ "other" ]] || false
+
+    start_sql_server altDB
+
+    run dolt --verbose-engine-setup --user dolt --password "" checkout main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+
+    stop_sql_server 1
+
+    run dolt branch --show-current
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "main" ]] || false
 }
 
 @test "sql-local-remote: test 'status' and switch between server/no server" {
