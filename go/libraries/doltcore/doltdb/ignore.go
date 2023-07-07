@@ -109,6 +109,36 @@ func GetIgnoredTablePatterns(ctx context.Context, roots Roots) (IgnorePatterns, 
 	return ignorePatterns, nil
 }
 
+// ExcludeIgnoredTables takes a list of table names and removes any tables that should be ignored,
+// as determined by the patterns in the dolt_ignore table.
+// The ignore patterns are read from the dolt_ignore table in the working set.
+func ExcludeIgnoredTables(ctx context.Context, roots Roots, tables []string) ([]string, error) {
+	ignorePatterns, err := GetIgnoredTablePatterns(ctx, roots)
+	if err != nil {
+		return nil, err
+	}
+	filteredTables := []string{}
+	for _, tbl := range tables {
+		ignored, err := ignorePatterns.IsTableNameIgnored(tbl)
+		if err != nil {
+			return nil, err
+		}
+		if conflict := AsDoltIgnoreInConflict(err); conflict != nil {
+			// no-op
+		} else if err != nil {
+			return nil, err
+		} else if ignored == DontIgnore {
+			// no-op
+		} else if ignored == Ignore {
+			continue
+		} else {
+			return nil, fmt.Errorf("IsTableNameIgnored returned ErrorOccurred but no error!")
+		}
+		filteredTables = append(filteredTables, tbl)
+	}
+	return filteredTables, nil
+}
+
 // compilePattern takes a dolt_ignore pattern and generate a Regexp that matches against the same table names as the pattern.
 func compilePattern(pattern string) (*regexp.Regexp, error) {
 	pattern = "^" + regexp.QuoteMeta(pattern) + "$"
