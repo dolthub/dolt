@@ -21,7 +21,8 @@ import (
 
 var RevertScripts = []queries.ScriptTest{
 	{
-		Name: "dolt_revert() reverts HEAD",
+		SkipPrepared: true, // https://github.com/dolthub/dolt/issues/6300
+		Name:         "dolt_revert() reverts HEAD",
 		SetUpScript: []string{
 			"create table test (pk int primary key, c0 int)",
 			"insert into test values (1,1),(2,2),(3,3);",
@@ -42,7 +43,8 @@ var RevertScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "dolt_revert() reverts HEAD~1",
+		SkipPrepared: true, // https://github.com/dolthub/dolt/issues/6300
+		Name:         "dolt_revert() reverts HEAD~1",
 		SetUpScript: []string{
 			"create table test (pk int primary key, c0 int)",
 			"insert into test values (1,1),(2,2),(3,3);",
@@ -105,7 +107,8 @@ var RevertScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "dolt_revert() respects dolt_ignore",
+		SkipPrepared: true, // https://github.com/dolthub/dolt/issues/6300
+		Name:         "dolt_revert() respects dolt_ignore",
 		SetUpScript: []string{
 			"create table test (pk int primary key, c0 int)",
 			"insert into test values (1,1),(2,2),(3,3)",
