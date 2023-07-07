@@ -175,8 +175,8 @@ func (s *nomsWriteSession) flush(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 		return err
 	}
 
-	eg, ctx2 := errgroup.WithContext(ctx)
-	sqlCtx2 := ctx.WithContext(ctx2)
+	eg, egCtx := errgroup.WithContext(ctx)
+	ctx = ctx.WithContext(egCtx)
 
 	for tblName, tblEditor := range s.tables {
 		if !tblEditor.HasEdits() {
