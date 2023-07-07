@@ -119,7 +119,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	if err != nil {
 		// In fringe cases the server can't start because the default branch doesn't exist, `dolt checkout <existing branch>`
 		// offers an escape hatch.
-		if dEnv.FS == filesys.LocalFS && !branchOrTrack && strings.Contains(err.Error(), "cannot resolve default branch head for database") {
+		if dEnv != nil && dEnv.FS == filesys.LocalFS && !branchOrTrack && strings.Contains(err.Error(), "cannot resolve default branch head for database") {
 			err := saveHeadBranch(dEnv.FS, branchName)
 			if err != nil {
 				cli.PrintErr(err)
@@ -148,7 +148,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		cli.Println(message)
 	}
 
-	if dEnv.FS == filesys.LocalFS {
+	if dEnv != nil && dEnv.FS == filesys.LocalFS {
 		err := saveHeadBranch(dEnv.FS, branchName)
 		if err != nil {
 			cli.PrintErr(err)
@@ -214,6 +214,5 @@ func saveHeadBranch(fs filesys.ReadWriteFS, headBranch string) error {
 		return err
 	}
 	repoState.Head.Ref = ref.NewBranchRef(headBranch)
-	repoState.Save(fs)
-	return nil
+	return repoState.Save(fs)
 }
