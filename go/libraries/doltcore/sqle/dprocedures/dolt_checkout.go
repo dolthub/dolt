@@ -44,9 +44,9 @@ func doltCheckout(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 }
 
 func generateSuccessMessage(newBranch, upstream string) string {
-	result := fmt.Sprintf("Switched to branch '%s'\n", newBranch)
+	result := fmt.Sprintf("Switched to branch '%s'", newBranch)
 	if upstream != "" {
-		result += fmt.Sprintf("\nbranch '%s' set up to track '%s'.\n", newBranch, upstream)
+		result += fmt.Sprintf("\nbranch '%s' set up to track '%s'.", newBranch, upstream)
 	}
 	return result
 }

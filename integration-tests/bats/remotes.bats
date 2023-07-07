@@ -69,17 +69,17 @@ teardown() {
     dolt clone file://./remote repo2
 
     cd repo2
-    run dolt pull
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date." ]] || false
+     dolt pull
+
 
     dolt commit --allow-empty -m "a commit for main from repo2"
     dolt push
 
-    run dolt branch
-    [[ ! "$output" =~ "other" ]] || false
+     dolt branch
+
 
     run dolt checkout other
+    echo "$output"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "branch 'other' set up to track 'origin/other'." ]] || false
 

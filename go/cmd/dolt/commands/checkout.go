@@ -145,7 +145,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	}
 
 	if message != "" {
-		cli.Printf(message)
+		cli.Println(message)
 	}
 
 	if dEnv.FS == filesys.LocalFS {
