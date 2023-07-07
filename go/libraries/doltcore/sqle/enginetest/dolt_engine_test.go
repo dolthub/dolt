@@ -1648,18 +1648,6 @@ func TestDoltMerge(t *testing.T) {
 	}
 }
 
-func TestDoltRevert(t *testing.T) {
-	for _, script := range RevertScripts {
-		// harness can't reset effectively when there are new commits / branches created, so use a new harness for
-		// each script
-		func() {
-			h := newDoltHarness(t).WithParallelism(1)
-			defer h.Close()
-			enginetest.TestScript(t, h, script)
-		}()
-	}
-}
-
 func TestDoltMergePrepared(t *testing.T) {
 	for _, script := range MergeScripts {
 		// harness can't reset effectively when there are new commits / branches created, so use a new harness for
@@ -1679,6 +1667,28 @@ func TestDoltMergePrepared(t *testing.T) {
 				enginetest.TestScriptPrepared(t, h, script)
 			}()
 		}
+	}
+}
+
+func TestDoltRevert(t *testing.T) {
+	for _, script := range RevertScripts {
+		// harness can't reset effectively. Use a new harness for each script
+		func() {
+			h := newDoltHarness(t).WithParallelism(1)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func TestDoltRevertPrepared(t *testing.T) {
+	for _, script := range RevertScripts {
+		// harness can't reset effectively. Use a new harness for each script
+		func() {
+			h := newDoltHarness(t).WithParallelism(1)
+			defer h.Close()
+			enginetest.TestScriptPrepared(t, h, script)
+		}()
 	}
 }
 
