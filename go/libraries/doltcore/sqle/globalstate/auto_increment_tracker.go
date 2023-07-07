@@ -23,7 +23,6 @@ import (
 
 // AutoIncrementTracker knows how to get and set the current auto increment value for a table. It's defined as an
 // interface here because implementations need to reach into session state, requiring a dependency on this package.
-// Therefore
 type AutoIncrementTracker interface {
 	// Current returns the current auto increment value for the given table.
 	Current(tableName string) uint64
