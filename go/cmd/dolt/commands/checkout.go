@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
 	"strings"
@@ -113,7 +115,18 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	}
 
 	rows, err := GetRowsForSql(queryEngine, sqlCtx, sqlQuery)
+
 	if err != nil {
+		// In fringe cases the server can't start because the default branch doesn't exist, `dolt checkout <existing branch>`
+		// offers an escape hatch.
+		if dEnv.FS == filesys.LocalFS && !branchOrTrack && strings.Contains(err.Error(), "cannot resolve default branch head for database") {
+			err := saveHeadBranch(dEnv.FS, branchName)
+			if err != nil {
+				cli.PrintErr(err)
+				return 1
+			}
+			return 0
+		}
 		return HandleVErrAndExitCode(handleErrors(branchName, err), usagePrt)
 	}
 
@@ -133,6 +146,14 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 
 	if message != "" {
 		cli.Printf(message)
+	}
+
+	if dEnv.FS == filesys.LocalFS {
+		err := saveHeadBranch(dEnv.FS, branchName)
+		if err != nil {
+			cli.PrintErr(err)
+			return 1
+		}
 	}
 
 	// This command doesn't modify `dEnv` which could break tests that call multiple commands in sequence.
@@ -185,4 +206,14 @@ func handleErrors(branchName string, err error) errhand.VerboseError {
 		bdr.AddCause(err)
 		return bdr.Build()
 	}
+}
+
+func saveHeadBranch(fs filesys.ReadWriteFS, headBranch string) error {
+	repoState, err := env.LoadRepoState(fs)
+	if err != nil {
+		return err
+	}
+	repoState.Head.Ref = ref.NewBranchRef(headBranch)
+	repoState.Save(fs)
+	return nil
 }

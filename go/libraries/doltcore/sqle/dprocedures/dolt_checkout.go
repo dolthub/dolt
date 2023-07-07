@@ -451,12 +451,6 @@ func doGlobalCheckout(ctx *sql.Context, dSess *dsess.DoltSession, dbName, branch
 		return err
 	}
 
-	if fs, err := dSess.Provider().FileSystemForDatabase(dbName); err == nil {
-		if repoState, err := env.LoadRepoState(fs); err == nil {
-			repoState.Head.Ref = ref.NewBranchRef(branchName)
-			repoState.Save(fs)
-		}
-	}
 	return nil
 }
 
