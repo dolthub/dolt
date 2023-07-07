@@ -96,6 +96,11 @@ assert_has_key_value() {
     fi
 }
 
+get_commit_hash_at() {
+    local ref="$1"
+    dolt log "$ref" --oneline | head -n 1 | cut -d ' ' -f 1 | sed 's/\x1b\[[0-9;]*m//g' | tr -d ' '
+}
+
 @test "sql-local-remote: test switch between server/no server" {
     start_sql_server defaultDB
 
@@ -735,4 +740,169 @@ SQL
   [[ $output =~ "main" ]] || false
 
   [[ "$remoteOutput" == "$localOutput" ]] || false
+}
+
+@test "sql-local-remote: verify dolt tag behavior" {
+  cd altDB
+
+  # get commit hashes
+  headCommit=$(get_commit_hash_at HEAD)
+  secondCommit=$(get_commit_hash_at HEAD~1)
+
+  # show tags
+  run dolt tag
+  [ $status -eq 0 ]
+
+  # add tag without message
+  run dolt tag v1
+  [ $status -eq 0 ]
+
+  # list tags and check new tag is present
+  run dolt tag
+  [ $status -eq 0 ]
+  [[ $output =~ "v1" ]] || false
+
+  # list tags with verbose flag and check new tag is present
+  run dolt tag --verbose
+  [ $status -eq 0 ]
+  [[ $output =~ "v1"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "Tagger: Bats Tests <bats@email.fake>" ]] || false
+
+  # add tag with commit
+  run dolt tag v2 $secondCommit
+  [ $status -eq 0 ]
+
+  # list tags and check new tag is present
+  run dolt tag --verbose
+  [ $status -eq 0 ]
+  [[ $output =~ "v1"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "v2"$'\t'"$secondCommit" ]] || false
+
+  # add tag with message
+  run dolt tag v3 -m "tag message"
+  [ $status -eq 0 ]
+
+  # list tags and check new tag is present
+  run dolt tag --verbose
+  [ $status -eq 0 ]
+  [[ $output =~ "v3"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "tag message" ]] || false
+
+  # add tag with message and commit
+  run dolt tag v4 $secondCommit -m "second message"
+  [ $status -eq 0 ]
+
+  # list tags and check new tag is present
+  run dolt tag --verbose
+  [ $status -eq 0 ]
+  [[ $output =~ "v4"$'\t'"$secondCommit" ]] || false
+  [[ $output =~ "second message" ]] || false
+
+  # add tag with author
+  run dolt tag v5 --author "John Doe <john@doe.com>"
+  [ $status -eq 0 ]
+
+  # list tags and check new tag is present
+  run dolt tag --verbose
+  echo "pavel >>> $output"
+  [ $status -eq 0 ]
+  [[ $output =~ "v5"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "Tagger: John Doe <john@doe.com>" ]] || false
+
+  # delete tag
+  run dolt tag -d v2
+  [ $status -eq 0 ]
+
+  # list tags and check deleted tag is not present
+  run dolt tag --verbose
+  [ $status -eq 0 ]
+  [[ $output =~ "v1"$'\t'"$headCommit" ]] || false
+  [[ ! $output =~ "v2" ]] || false
+  [[ $output =~ "v3"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "v4"$'\t'"$secondCommit" ]] || false
+  [[ $output =~ "tag message" ]] || false
+  [[ $output =~ "second message" ]] || false
+  [[ $output =~ "Tagger: John Doe <john@doe.com>" ]] || false
+
+  cd ../defaultDB
+  start_sql_server defaultDB
+
+  # get commit hashes
+  headCommit=$(get_commit_hash_at HEAD)
+  secondCommit=$(get_commit_hash_at HEAD~1)
+
+  # show tags
+  run dolt tag
+  [ $status -eq 0 ]
+
+  # add tag without message
+  run dolt tag v1
+  [ $status -eq 0 ]
+
+  # list tags and check new tag is present
+  run dolt tag
+  [ $status -eq 0 ]
+  [[ $output =~ "v1" ]] || false
+
+  # list tags with verbose flag and check new tag is present
+  run dolt tag --verbose
+  [ $status -eq 0 ]
+  [[ $output =~ "v1"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "Tagger: Bats Tests <bats@email.fake>" ]] || false
+
+  # add tag with commit
+  run dolt tag v2 $secondCommit
+  [ $status -eq 0 ]
+
+  # list tags and check new tag is present
+  run dolt tag --verbose
+  [ $status -eq 0 ]
+  [[ $output =~ "v1"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "v2"$'\t'"$secondCommit" ]] || false
+
+  # add tag with message
+  run dolt tag v3 -m "tag message"
+  [ $status -eq 0 ]
+
+  # list tags and check new tag is present
+  run dolt tag --verbose
+  [ $status -eq 0 ]
+  [[ $output =~ "v3"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "tag message" ]] || false
+
+  # add tag with message and commit
+  run dolt tag v4 $secondCommit -m "second message"
+  [ $status -eq 0 ]
+
+  # list tags and check new tag is present
+  run dolt tag --verbose
+  [ $status -eq 0 ]
+  [[ $output =~ "v4"$'\t'"$secondCommit" ]] || false
+  [[ $output =~ "second message" ]] || false
+
+  # add tag with author
+  run dolt tag v5 --author "John Doe <john@doe.com>"
+  [ $status -eq 0 ]
+
+  # list tags and check new tag is present
+  run dolt tag --verbose
+  echo "pavel >>> $output"
+  [ $status -eq 0 ]
+  [[ $output =~ "v5"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "Tagger: John Doe <john@doe.com>" ]] || false
+
+  # delete tag
+  run dolt tag -d v2
+  [ $status -eq 0 ]
+
+  # list tags and check deleted tag is not present
+  run dolt tag --verbose
+  [ $status -eq 0 ]
+  [[ $output =~ "v1"$'\t'"$headCommit" ]] || false
+  [[ ! $output =~ "v2" ]] || false
+  [[ $output =~ "v3"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "v4"$'\t'"$secondCommit" ]] || false
+  [[ $output =~ "tag message" ]] || false
+  [[ $output =~ "second message" ]] || false
+  [[ $output =~ "Tagger: John Doe <john@doe.com>" ]] || false
 }
