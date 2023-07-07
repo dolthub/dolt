@@ -160,7 +160,10 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		}
 		// This command doesn't modify `dEnv` which could break tests that call multiple commands in sequence.
 		// We must reload it so that it includes changes to the repo state.
-		dEnv.ReloadRepoState()
+		err = dEnv.ReloadRepoState()
+		if err != nil {
+			return 1
+		}
 	}
 
 	return 0
