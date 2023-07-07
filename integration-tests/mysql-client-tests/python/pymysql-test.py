@@ -15,7 +15,7 @@ QUERY_RESPONSE = [
     {"call dolt_checkout('-b', 'mybranch')": ((0, "Switched to branch 'mybranch'\n"))}
     {"insert into test (pk, `value`) values (1,1)": ()},
     {"call dolt_commit('-a', '-m', 'my commit2')": (('',),)},
-    {"call dolt_checkout('main')": ((0, "Switched to branch 'main'\n"),)},
+    {"call dolt_checkout('main')": ((0, "Switched to branch 'main'"),)},
     {"call dolt_merge('mybranch')": (('',1,0,),)},
     {"select COUNT(*) FROM dolt_log": ((3,),)},
 ]

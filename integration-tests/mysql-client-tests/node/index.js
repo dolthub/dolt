@@ -63,7 +63,7 @@ const tests = [
     },
   },
   { q: "call dolt_commit('-a', '-m', 'my commit2')", res: [] },
-  { q: "call dolt_checkout('main')", res: [{ status: 0, message: "Switched to branch 'main'\n"  }] },
+  { q: "call dolt_checkout('main')", res: [{ status: 0, message: "Switched to branch 'main'"  }] },
   {
     q: "call dolt_merge('mybranch')",
     res: [{ fast_forward: 1, conflicts: 0 }],
