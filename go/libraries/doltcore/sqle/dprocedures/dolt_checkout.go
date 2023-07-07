@@ -17,8 +17,6 @@ package dprocedures
 import (
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -382,7 +380,7 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 	}
 
 	if isGlobal {
-		return newBranchName, remoteAndBranch, doGlobalCheckout(ctx, sess, dbName, newBranchName, apr.Contains(cli.ForceFlag))
+		return newBranchName, remoteAndBranch, doGlobalCheckout(ctx, newBranchName, apr.Contains(cli.ForceFlag))
 	} else {
 
 		wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(newBranchName))
@@ -412,7 +410,7 @@ func checkoutBranch(ctx *sql.Context, dbName string, branchName string, apr *arg
 	dSess := dsess.DSessFromSess(ctx.Session)
 
 	if apr.Contains(cli.GlobalFlag) {
-		return doGlobalCheckout(ctx, dSess, dbName, branchName, apr.Contains(cli.ForceFlag))
+		return doGlobalCheckout(ctx, branchName, apr.Contains(cli.ForceFlag))
 	} else {
 
 		err = dSess.SwitchWorkingSet(ctx, dbName, wsRef)
@@ -426,22 +424,8 @@ func checkoutBranch(ctx *sql.Context, dbName string, branchName string, apr *arg
 
 // doGlobalCheckout implements the behavior of the `dolt checkout` command line, moving the working set into
 // the new branch and persisting the checked-out branch into future sessions
-func doGlobalCheckout(ctx *sql.Context, dSess *dsess.DoltSession, dbName, branchName string, isForce bool) error {
-	if sqlserver.RunningInServerMode() {
-		/*
-			// Ordinarily we don't want to change the default branch while the server is running.
-			// However, until https://github.com/dolthub/dolt/issues/6273 is fixed,
-			// connecting to a running server via `dolt sql-client` is the only way to
-			// checkout a new branch if the current default branch is broken. So we can't
-			// error here.
+func doGlobalCheckout(ctx *sql.Context, branchName string, isForce bool) error {
 
-			return fmt.Errorf("unable to change the default branch while the server is running; " +
-			"this can by changed on the command line, by stopping the sql-server, " +
-			"running `dolt checkout <another_branch> and restarting the sql-server")
-		*/
-	}
-
-	// This copies over the working set.
 	err := MoveWorkingSetToBranch(ctx, branchName, isForce)
 	if err != nil && err != doltdb.ErrAlreadyOnBranch {
 		return err
