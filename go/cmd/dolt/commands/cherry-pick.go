@@ -93,7 +93,7 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 		defer closeFunc()
 	}
 
-	// This command creates a commit, so we need user identity
+	// dolt_cherry_pick performs this check as well. Check performed early here to short circuit the operation.
 	err = branch_control.CheckAccess(sqlCtx, branch_control.Permissions_Write)
 	if err != nil {
 		cli.Println(err.Error())
@@ -211,7 +211,7 @@ hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt re
 
 func cherryPickAbort(queryist cli.Queryist, sqlCtx *sql.Context) error {
 	query := "call dolt_cherry_pick('--abort')"
-	rows, err := GetRowsForSql(queryist, sqlCtx, query)
+	_, err := GetRowsForSql(queryist, sqlCtx, query)
 	if err != nil {
 		errorText := err.Error()
 		switch errorText {
@@ -221,7 +221,6 @@ func cherryPickAbort(queryist cli.Queryist, sqlCtx *sql.Context) error {
 			return err
 		}
 	}
-	cli.Printf("rows: %s\n", rows)
 	return nil
 }
 
