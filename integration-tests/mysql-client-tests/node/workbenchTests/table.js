@@ -158,13 +158,13 @@ export const tableTests = [
     },
   },
 
-  // Make a change and revert it
+  // Load file
   {
     q: `SELECT * FROM dolt_status`,
     res: [],
   },
   {
-    q: "INSERT INTO test_info VALUES (4, 'info about test pk 4', 0)",
+    q: "SET GLOBAL local_infile=ON;",
     res: {
       fieldCount: 0,
       affectedRows: 1,
@@ -174,6 +174,80 @@ export const tableTests = [
       warningStatus: 0,
     },
   },
+  {
+    q: `LOAD DATA LOCAL INFILE './testData/update_test_info.csv'
+    INTO TABLE \`test_info\` 
+    FIELDS TERMINATED BY ',' ENCLOSED BY '' 
+    LINES TERMINATED BY '\n' 
+    IGNORE 1 ROWS;`,
+    file: "./workbenchTests/testData/update_test_info.csv",
+    res: {
+      fieldCount: 0,
+      affectedRows: 3,
+      insertId: 0,
+      info: "",
+      serverStatus: 2,
+      warningStatus: 0,
+    },
+  },
+  {
+    q: "SELECT * FROM dolt_diff_stat(:fromRefName, :toRefName)",
+    p: { fromRefName: "HEAD", toRefName: "WORKING" },
+    res: [
+      {
+        table_name: "test_info",
+        rows_unmodified: 1,
+        rows_added: 3,
+        rows_deleted: 0,
+        rows_modified: 0,
+        cells_added: 9,
+        cells_deleted: 0,
+        cells_modified: 0,
+        old_row_count: 1,
+        new_row_count: 4,
+        old_cell_count: 3,
+        new_cell_count: 12,
+      },
+    ],
+  },
+  {
+    q: `LOAD DATA LOCAL INFILE './testData/replace_test_info.psv'
+    REPLACE INTO TABLE \`test_info\` 
+    FIELDS TERMINATED BY '|' ENCLOSED BY '' 
+    LINES TERMINATED BY '\n' 
+    IGNORE 1 ROWS;`,
+    file: "./workbenchTests/testData/replace_test_info.psv",
+    res: {
+      fieldCount: 0,
+      affectedRows: 6,
+      insertId: 0,
+      info: "",
+      serverStatus: 2,
+      warningStatus: 0,
+    },
+  },
+  {
+    q: "SELECT * FROM dolt_diff_stat(:fromRefName, :toRefName)",
+    p: { fromRefName: "HEAD", toRefName: "WORKING" },
+    res: [
+      {
+        table_name: "test_info",
+        rows_unmodified: 0,
+        rows_added: 3,
+        rows_deleted: 0,
+        rows_modified: 1,
+        cells_added: 9,
+        cells_deleted: 0,
+        cells_modified: 1,
+        old_row_count: 1,
+        new_row_count: 4,
+        old_cell_count: 3,
+        new_cell_count: 12,
+      },
+    ],
+  },
+
+  // Add and revert load data changes
   {
     q: `SELECT * FROM dolt_status`,
     res: [{ table_name: "test_info", staged: 0, status: "modified" }],
