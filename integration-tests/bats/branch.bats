@@ -44,6 +44,8 @@ teardown() {
 @test "branch: moving current working branch takes its working set" {
     dolt sql -q 'create table test (id int primary key);'
     dolt branch -m main new_main
+    run dolt branch --show-current
+    [[ "$output" =~ "new_main" ]] || false
     run dolt sql -q 'show tables'
     [[ "$output" =~ "test" ]] || false
 }

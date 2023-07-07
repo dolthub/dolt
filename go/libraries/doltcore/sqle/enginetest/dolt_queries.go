@@ -4671,6 +4671,59 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "abort (@@autocommit=1) with ignored table",
+		SetUpScript: []string{
+			"INSERT INTO dolt_ignore VALUES ('generated_*', 1);",
+			"CREATE TABLE generated_foo (pk int PRIMARY KEY);",
+			"SET @@autocommit=1;",
+			"SET @@dolt_allow_commit_conflicts=1;",
+			"create table t (pk int primary key, v varchar(100));",
+			"insert into t values (0, 'zero');",
+			"call dolt_commit('-Am', 'create table t');",
+			"call dolt_checkout('-b', 'branch1');",
+			"insert into t values (1, \"one\");",
+			"call dolt_commit('-am', 'adding row 1');",
+			"insert into t values (2, \"two\");",
+			"call dolt_commit('-am', 'adding row 2');",
+			"alter table t drop column v;",
+			"call dolt_commit('-am', 'drop column v');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_cherry_pick(hashof('branch1'));",
+				Expected: []sql.Row{{"", 1, 0, 0}},
+			},
+			{
+				Query:    "select * from dolt_conflicts;",
+				Expected: []sql.Row{{"t", uint64(2)}},
+			},
+			{
+				Query: "select base_pk, base_v, our_pk, our_diff_type, their_pk, their_diff_type from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{1, "one", nil, "removed", 1, "modified"},
+					{2, "two", nil, "removed", 2, "modified"},
+				},
+			},
+			{
+				Query:    "call dolt_cherry_pick('--abort');",
+				Expected: []sql.Row{{"", 0, 0, 0}},
+			},
+			{
+				Query:    "select * from dolt_conflicts;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{0, "zero"}},
+			},
+			{
+				Query:    "select * from dolt_status;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
 }
 
 var DoltCommitTests = []queries.ScriptTest{

@@ -267,8 +267,29 @@ func abortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Ro
 		return nil, err
 	}
 
-	// TODO: this doesn't seem right, it sets the root that we already edited above
-	workingSet = workingSet.AbortMerge()
+	preMergeWorkingRoot := workingSet.MergeState().PreMergeWorkingRoot()
+	preMergeWorkingTables, err := preMergeWorkingRoot.GetTableNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nonIgnoredTables, err := doltdb.ExcludeIgnoredTables(ctx, roots, preMergeWorkingTables)
+	if err != nil {
+		return nil, err
+	}
+	someTablesAreIgnored := len(nonIgnoredTables) != len(preMergeWorkingTables)
+
+	if someTablesAreIgnored {
+		newWorking, err := actions.MoveTablesBetweenRoots(ctx, nonIgnoredTables, preMergeWorkingRoot, roots.Working)
+		if err != nil {
+			return nil, err
+		}
+		workingSet = workingSet.WithWorkingRoot(newWorking)
+	} else {
+		workingSet = workingSet.WithWorkingRoot(preMergeWorkingRoot)
+	}
+	workingSet = workingSet.WithStagedRoot(workingSet.WorkingRoot())
+	workingSet = workingSet.ClearMerge()
+
 	return workingSet, nil
 }
 

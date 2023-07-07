@@ -276,8 +276,6 @@ assert_has_key_value() {
 }
 
 @test "sql-local-remote: verify dolt commit behavior is identical in switch between server/no server" {
-    skip # TODO - Enable after log command is used for results in remote contexts in commit.go
-
     cd altDB
     dolt sql -q "create table test1 (pk int primary key)"
     dolt sql -q "create table test2 (pk int primary key)"
@@ -309,6 +307,14 @@ assert_has_key_value() {
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "committing locally" ]] || false
+}
+
+@test "sql-local-remote: verify dolt commit print" {
+    run dolt --use-db altDB commit -A -m "Wonderful Commit"
+    [[ "${lines[0]}" =~ "commit " ]] || false
+    [[ "${lines[1]}" =~ "Author: Bats Tests <bats@email.fake>" ]] || false
+    [[ "${lines[2]}" =~ "Date: " ]] || false
+    [[ "${lines[3]}" =~ "	Wonderful Commit" ]] || false
 }
 
 @test "sql-local-remote: verify simple dolt branch behavior." {
@@ -729,4 +735,74 @@ SQL
   [[ $output =~ "main" ]] || false
 
   [[ "$remoteOutput" == "$localOutput" ]] || false
+}
+
+@test "sql-local-remote: verify dolt cherry-pick behavior" {
+  cd altDB
+
+  # setup for cherry-pick.bats
+  dolt clean
+  dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10), index(v))"
+  dolt add .
+  dolt commit -am "Created table"
+  dolt checkout -b branch1
+  dolt sql -q "INSERT INTO test VALUES (1, 'a')"
+  dolt commit -am "Inserted 1"
+  dolt sql -q "INSERT INTO test VALUES (2, 'b')"
+  dolt commit -am "Inserted 2"
+  dolt sql -q "INSERT INTO test VALUES (3, 'c')"
+  dolt commit -am "Inserted 3"
+  run dolt sql -q "SELECT * FROM test" -r csv
+  [[ "$output" =~ "1,a" ]] || false
+  [[ "$output" =~ "2,b" ]] || false
+  [[ "$output" =~ "3,c" ]] || false
+
+  # setup for "cherry-pick: schema change, with data conflict" test
+  dolt checkout main
+  dolt sql -q "CREATE TABLE other (pk int primary key, c1 int, c2 int)"
+  dolt sql -q "INSERT INTO other VALUES (1, 2, 3)"
+  dolt commit -Am "add other table (on main)"
+  # Create two commits on branch2: one to assert does NOT get included, and one to cherry pick
+  dolt checkout -b branch2
+  dolt sql -q "INSERT INTO other VALUES (100, 200, 300);"
+  dolt commit -am "add row 100 to other (on branch2)"
+  # This ALTER TABLE statement modifies other rows that aren't included in the cherry-picked
+  # commit – row (100, 200, 300) is modified to (100, 300). This shows up as a conflict
+  # in the cherry-pick (modified row on one side, row doesn't exist on the other side).
+  dolt sql -q "ALTER TABLE other DROP COLUMN c1;"
+  dolt sql -q "INSERT INTO other VALUES (10, 30);"
+  dolt sql -q "INSERT INTO test VALUES (100, 'q');"
+  dolt commit -am "alter table, add row 10 to other, add row 100 to test (on branch2)"
+
+  # actual cherry-pick test
+  dolt checkout main
+  run dolt cherry-pick branch2
+  [ $status -eq 1 ]
+  [[ $output =~ "Unable to apply commit cleanly due to conflicts or constraint violations" ]] || false
+  localCherryPickOutput=$output
+
+  # Assert that table 'test' is staged, but table 'other' is not staged, since it had conflicts
+  run dolt sql -q "SELECT table_name, case when staged = 0 then 'staged' else 'working' end as location, status from dolt_status;"
+  [ $status -eq 0 ]
+  [[ $output =~ "| test       | working  | modified |" ]] || false
+  [[ $output =~ "| other      | staged   | modified |" ]] || false
+
+  # setup for remote test
+  dolt checkout main
+  dolt reset --hard main
+
+  # start server
+  start_sql_server altDB
+
+  run dolt cherry-pick branch2
+  [ $status -eq 1 ]
+  [[ $output =~ "Unable to apply commit cleanly due to conflicts or constraint violations" ]] || false
+  remoteCherryPickOutput=$output
+  # Assert that table 'test' is staged, but table 'other' is not staged, since it had conflicts
+  run dolt sql -q "SELECT table_name, case when staged = 0 then 'staged' else 'working' end as location, status from dolt_status;"
+  [ $status -eq 0 ]
+  [[ $output =~ "| test       | working  | modified |" ]] || false
+  [[ $output =~ "| other      | staged   | modified |" ]] || false
+
+  [[ "$localCherryPickOutput" == "$remoteCherryPickOutput" ]] || false
 }
