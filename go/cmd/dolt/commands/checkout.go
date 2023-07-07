@@ -152,7 +152,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		cli.Println(message)
 	}
 
-	if dEnv != nil {
+	if dEnv != nil && strings.Contains(message, "Switched to branch") {
 		err := saveHeadBranch(dEnv.FS, branchName)
 		if err != nil {
 			cli.PrintErr(err)
