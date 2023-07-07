@@ -91,6 +91,9 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, string, error) {
 	}
 
 	branchOrTrack := apr.Contains(cli.CheckoutCoBranch) || apr.Contains(cli.TrackFlag)
+	if apr.Contains(cli.TrackFlag) && apr.NArg() > 0 {
+		return 1, "", errors.New("Improper usage.")
+	}
 	if (branchOrTrack && apr.NArg() > 1) || (!branchOrTrack && apr.NArg() == 0) {
 		return 1, "", errors.New("Improper usage.")
 	}

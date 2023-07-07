@@ -103,6 +103,10 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	if apr.Contains(cli.CheckoutCoBranch) {
 		branchName, _ = apr.GetValue(cli.CheckoutCoBranch)
 	} else if apr.Contains(cli.TrackFlag) {
+		if apr.NArg() > 0 {
+			usagePrt()
+			return 1
+		}
 		remoteAndBranchName, _ := apr.GetValue(cli.TrackFlag)
 		_, branchName = actions.ParseRemoteBranchName(remoteAndBranchName)
 	} else if apr.NArg() > 0 {
@@ -119,7 +123,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	if err != nil {
 		// In fringe cases the server can't start because the default branch doesn't exist, `dolt checkout <existing branch>`
 		// offers an escape hatch.
-		if dEnv != nil && dEnv.FS == filesys.LocalFS && !branchOrTrack && strings.Contains(err.Error(), "cannot resolve default branch head for database") {
+		if dEnv != nil && !branchOrTrack && strings.Contains(err.Error(), "cannot resolve default branch head for database") {
 			err := saveHeadBranch(dEnv.FS, branchName)
 			if err != nil {
 				cli.PrintErr(err)
@@ -148,17 +152,14 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		cli.Println(message)
 	}
 
-	if dEnv != nil && dEnv.FS == filesys.LocalFS {
+	if dEnv != nil {
 		err := saveHeadBranch(dEnv.FS, branchName)
 		if err != nil {
 			cli.PrintErr(err)
 			return 1
 		}
-	}
-
-	// This command doesn't modify `dEnv` which could break tests that call multiple commands in sequence.
-	// We must reload it so that it includes changes to the repo state.
-	if dEnv != nil {
+		// This command doesn't modify `dEnv` which could break tests that call multiple commands in sequence.
+		// We must reload it so that it includes changes to the repo state.
 		dEnv.ReloadRepoState()
 	}
 
