@@ -17,6 +17,7 @@ package dprocedures
 import (
 	"fmt"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
@@ -48,6 +49,17 @@ func doDoltRevert(ctx *sql.Context, args []string) (int, error) {
 		return 1, err
 	}
 
+	roots, ok := dSess.GetRoots(ctx, dbName)
+	if !ok {
+		return 1, fmt.Errorf("Could not load session roots")
+	}
+	wsOnlyHasIgnoredTables, err := diff.WorkingSetContainsOnlyIgnoredTables(ctx, roots)
+	if err != nil {
+		return 1, err
+	} else if !wsOnlyHasIgnoredTables {
+		return 1, fmt.Errorf("You must commit any changes before using revert")
+	}
+
 	workingSet, err := dSess.WorkingSet(ctx, dbName)
 	if err != nil {
 		return 1, err
@@ -68,9 +80,6 @@ func doDoltRevert(ctx *sql.Context, args []string) (int, error) {
 	workingHash, err := workingRoot.HashOf()
 	if err != nil {
 		return 1, err
-	}
-	if !headHash.Equal(workingHash) {
-		return 1, fmt.Errorf("You must commit any changes before using revert")
 	}
 
 	headRef, err := dSess.CWBHeadRef(ctx, dbName)
@@ -103,7 +112,7 @@ func doDoltRevert(ctx *sql.Context, args []string) (int, error) {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	workingRoot, revertMessage, err := merge.Revert(ctx, ddb, workingRoot, headCommit, commits, dbState.EditOpts())
+	workingRoot, revertMessage, err := merge.Revert(ctx, ddb, workingRoot, commits, dbState.EditOpts())
 	if err != nil {
 		return 1, err
 	}
