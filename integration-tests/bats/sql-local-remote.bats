@@ -736,3 +736,21 @@ SQL
 
   [[ "$remoteOutput" == "$localOutput" ]] || false
 }
+
+@test "sql-local-remote: ensure revert produces similar output for each mode" {
+    dolt --use-db altDB commit -A -m "Commit ABCDEF"
+
+    start_sql_server altDb
+
+    run dolt --use-db altDB revert HEAD
+    [ $status -eq 0 ]
+    [[ "$output" =~ 'Revert "Commit ABCDEF"' ]] || false
+
+    dolt reset --hard HEAD~1
+
+    stop_sql_server 1
+    
+    run dolt revert HEAD
+    [ $status -eq 0 ]
+    [[ $output =~ 'Revert "Commit ABCDEF"' ]] || false
+}
