@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
@@ -111,7 +110,7 @@ func NewTempTable(
 
 	newWs := ws.WithWorkingRoot(newRoot)
 
-	ait, err := globalstate.NewAutoIncrementTracker(ctx, newWs)
+	ait, err := dsess.NewAutoIncrementTracker(ctx, db, newWs)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +160,7 @@ func setTempTableRoot(t *TempTable) func(ctx *sql.Context, dbName string, newRoo
 		}
 		newWs := ws.WithWorkingRoot(newRoot)
 
-		ait, err := globalstate.NewAutoIncrementTracker(ctx, newWs)
+		ait, err := dsess.NewAutoIncrementTracker(ctx, t.dbName, newWs)
 		if err != nil {
 			return err
 		}
