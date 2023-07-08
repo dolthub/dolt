@@ -3838,13 +3838,280 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 		},
 	},
-}
-
-var BrokenAutoIncrementTests = []queries.ScriptTest{
 	{
-		// truncate table doesn't reset the persisted auto increment counter of tables on other branches, which leads to
-		// the value not resetting to 1 after a truncate if the table exists on other branches, even if truncated on every
-		// branch
+		Name: "delete all rows in table",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'empty table')",
+			"insert into t (b) values (1), (2)",
+			"call dolt_commit('-am', 'two values on main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "delete from t",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:            "alter table t auto_increment = 1",
+				SkipResultsCheck: true,
+			},
+			{
+				// empty tables, start at 1
+				Query:    "insert into t (b) values (7), (8)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 7},
+					{2, 8},
+				},
+			},
+		},
+	},
+	{
+		Name: "set auto-increment below current max value",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'empty table')",
+			"insert into t (b) values (1), (2), (3), (4)",
+			"call dolt_commit('-am', 'two values on main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "alter table t auto_increment = 2",
+				SkipResultsCheck: true,
+			},
+			{
+				// previous update was ignored
+				Query:    "insert into t (b) values (5), (6)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 5}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{3, 3},
+					{4, 4},
+					{5, 5},
+					{6, 6},
+				},
+			},
+			{
+				Query:    "insert into t (a, b) values (100, 100)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 100}}},
+			},
+			{
+				Query:            "alter table t auto_increment = 50",
+				SkipResultsCheck: true,
+			},
+			{
+				// previous update was ignored, value still below max on that table
+				Query:    "insert into t (b) values (101)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 101}}},
+			},
+			{
+				Query:    "select * from t where a >= 100 order by a",
+				Expected: []sql.Row{{100, 100}, {101, 101}},
+			},
+		},
+	},
+	{
+		Name: "set auto-increment above current max value",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'empty table')",
+			"insert into t (b) values (1), (2), (3), (4)",
+			"call dolt_commit('-am', 'two values on main')",
+			"call dolt_branch('branch1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "alter table t auto_increment = 20",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "insert into `mydb/branch1`.t (b) values (5), (6)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 20}}},
+			},
+			{
+				Query:    "insert into t (b) values (5), (6)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 22}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{3, 3},
+					{4, 4},
+					{22, 5},
+					{23, 6},
+				},
+			},
+		},
+	},
+	{
+		Name: "delete all rows in table in all branches",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'empty table')",
+			"call dolt_branch('branch1')",
+			"call dolt_branch('branch2')",
+			"insert into t (b) values (1), (2)",
+			"call dolt_commit('-am', 'two values on main')",
+			"call dolt_checkout('branch1')",
+			"insert into t (b) values (3), (4)",
+			"call dolt_commit('-am', 'two values on branch1')",
+			"call dolt_checkout('branch2')",
+			"insert into t (b) values (5), (6)",
+			"call dolt_checkout('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "delete from t",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "delete from `mydb/branch1`.t",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "delete from `mydb/branch2`.t",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:            "alter table `mydb/branch1`.t auto_increment = 1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "alter table `mydb/branch2`.t auto_increment = 1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "alter table t auto_increment = 1",
+				SkipResultsCheck: true,
+			},
+			{
+				// empty tables, start at 1
+				Query:    "insert into t (b) values (7), (8)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 7},
+					{2, 8},
+				},
+			},
+		},
+	},
+	{
+		Name: "delete all rows in table in all but one branch",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'empty table')",
+			"call dolt_branch('branch1')",
+			"call dolt_branch('branch2')",
+			"insert into t (b) values (1), (2)",
+			"call dolt_commit('-am', 'two values on main')",
+			"call dolt_checkout('branch1')",
+			"insert into t (b) values (3), (4)",
+			"call dolt_commit('-am', 'two values on branch1')",
+			"call dolt_checkout('branch2')",
+			"insert into t (b) values (5), (6)",
+			"call dolt_checkout('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "delete from t",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "delete from `mydb/branch1`.t",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "delete from `mydb/branch2`.t",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:            "alter table t auto_increment = 1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "alter table `mydb/branch2`.t auto_increment = 1",
+				SkipResultsCheck: true,
+			},
+			{
+				// empty tables, start at 5 (highest remaining value, update above ignored)
+				Query:    "insert into t (b) values (5), (6)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 5}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{5, 5},
+					{6, 6},
+				},
+			},
+		},
+	},
+	{
+		Name: "truncate table in all branches",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'empty table')",
+			"call dolt_branch('branch1')",
+			"call dolt_branch('branch2')",
+			"insert into t (b) values (1), (2)",
+			"call dolt_commit('-am', 'two values on main')",
+			"call dolt_checkout('branch1')",
+			"insert into t (b) values (3), (4)",
+			"call dolt_commit('-am', 'two values on branch1')",
+			"call dolt_checkout('branch2')",
+			"insert into t (b) values (5), (6)",
+			"call dolt_checkout('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "truncate t",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "truncate `mydb/branch1`.t",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "truncate `mydb/branch2`.t",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:            "alter table t auto_increment = 1",
+				SkipResultsCheck: true,
+			},
+			{
+				// empty tables, start at 1
+				Query:    "insert into t (b) values (7), (8)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 7},
+					{2, 8},
+				},
+			},
+		},
+	},
+	{
 		Name: "truncate table",
 		SetUpScript: []string{
 			"create table t (a int primary key auto_increment, b int)",

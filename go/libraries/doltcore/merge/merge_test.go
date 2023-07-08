@@ -20,6 +20,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -305,7 +306,7 @@ func TestMergeCommits(t *testing.T) {
 	}
 	opts := editor.TestEditorOptions(vrw)
 	// TODO: stats
-	merged, _, err := merger.MergeTable(context.Background(), tableName, opts, MergeOpts{IsCherryPick: false})
+	merged, _, err := merger.MergeTable(sql.NewContext(context.Background()), tableName, opts, MergeOpts{IsCherryPick: false})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -358,7 +359,7 @@ func TestNomsMergeCommits(t *testing.T) {
 		t.Fatal(err)
 	}
 	opts := editor.TestEditorOptions(vrw)
-	merged, stats, err := merger.MergeTable(context.Background(), tableName, opts, MergeOpts{IsCherryPick: false})
+	merged, stats, err := merger.MergeTable(sql.NewContext(context.Background()), tableName, opts, MergeOpts{IsCherryPick: false})
 	if err != nil {
 		t.Fatal(err)
 	}

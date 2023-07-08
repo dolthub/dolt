@@ -20,6 +20,7 @@ import (
 	"io"
 	"sync"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -145,7 +146,7 @@ func newKeylessTableEditor(ctx context.Context, tbl *doltdb.Table, sch schema.Sc
 	return te, nil
 }
 
-func (kte *keylessTableEditor) GetIndexedRows(ctx context.Context, key types.Tuple, indexName string, idxSch schema.Schema) ([]row.Row, error) {
+func (kte *keylessTableEditor) GetIndexedRows(ctx *sql.Context, key types.Tuple, indexName string, idxSch schema.Schema) ([]row.Row, error) {
 	//TODO: This probably fails on some cases due to the edit materialization via the Table call.
 	// For example, for the REPLACE statement, if the deletion succeeds but the insertion fails,
 	// the deletion will not be rolled back due to Table(). This needs to be able to query rows
@@ -332,7 +333,7 @@ func (kte *keylessTableEditor) SetAutoIncrementValue(v types.Value) (err error) 
 }
 
 // Table returns a Table based on the edits given, if any. If Flush() was not called prior, it will be called here.
-func (kte *keylessTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
+func (kte *keylessTableEditor) Table(ctx *sql.Context) (*doltdb.Table, error) {
 	kte.mu.Lock()
 	defer kte.mu.Unlock()
 
