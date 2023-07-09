@@ -1923,13 +1923,3 @@ behavior:
     [[ "$output" =~ "main" ]] || false
     [[ ! "$output" =~ "other" ]] || false
 }
-
-@test "sql-server: CALL DOLT_CHECKOUT --global while server is running" {
-    skip "dolt_checkout('--global') is the current workaround for https://github.com/dolthub/dolt/issues/6273 and needs to be supported."
-    cd repo1
-    dolt branch other
-    start_sql_server
-    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_checkout('other', '--global');"
-    [ $status -eq 1 ]
-    [[ "$output" =~ "unable to change the default branch while the server is running" ]] || false
-}
