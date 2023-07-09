@@ -6,7 +6,7 @@ export const viewsTests = [
   {
     q: "CALL DOLT_CHECKOUT('-b', :branchName)",
     p: { branchName: "more-updates" },
-    res: [{ status: 0 }],
+    res: [{ status: 0, message: "Switched to branch 'more-updates'" }],
   },
   {
     q: "SELECT * FROM ::tableName ::col0 LIMIT :limit OFFSET :offset",
