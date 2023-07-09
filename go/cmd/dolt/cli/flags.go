@@ -61,5 +61,4 @@ const (
 	TrackFlag        = "track"
 	UpperCaseAllFlag = "ALL"
 	UserFlag         = "user"
-	GlobalFlag       = "global"
 )

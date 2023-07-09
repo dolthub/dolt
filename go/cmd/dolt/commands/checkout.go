@@ -174,7 +174,7 @@ func generateCheckoutSql(args []string) (string, error) {
 	var buffer bytes.Buffer
 	queryValues := make([]interface{}, 0, len(args))
 
-	buffer.WriteString("CALL DOLT_CHECKOUT('--global'")
+	buffer.WriteString("CALL DOLT_CHECKOUT('--move'")
 
 	for _, arg := range args {
 		buffer.WriteString(", ?")

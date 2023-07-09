@@ -84,7 +84,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, string, error) {
 	}
 
 	argParser := cli.CreateCheckoutArgParser()
-	argParser.SupportsFlag(cli.GlobalFlag, "g", "mimic the behavior of the `dolt checkout` command line, moving the working set into the new branch and persisting the checked-out branch into future sessions")
+	argParser.SupportsFlag(cli.MoveFlag, "m", "mimic the behavior of the `dolt checkout` command line, moving the working set into the new branch.")
 	apr, err := argParser.Parse(args)
 	if err != nil {
 		return 1, "", err
@@ -104,7 +104,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, string, error) {
 		return 1, "", fmt.Errorf("Could not load database %s", currentDbName)
 	}
 
-	updateHead := apr.Contains(cli.GlobalFlag)
+	updateHead := apr.Contains(cli.MoveFlag)
 
 	var rsc doltdb.ReplicationStatusController
 
@@ -259,7 +259,7 @@ func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName str
 	}
 
 	if len(remoteRefs) == 0 {
-		if doltdb.IsValidCommitHash(branchName) && apr.Contains(cli.GlobalFlag) {
+		if doltdb.IsValidCommitHash(branchName) && apr.Contains(cli.MoveFlag) {
 
 			// User tried to enter a detached head state, which we don't support.
 			// Inform and suggest that they check-out a new branch at this commit instead.
@@ -412,7 +412,7 @@ func checkoutBranch(ctx *sql.Context, dbName string, branchName string, apr *arg
 
 	dSess := dsess.DSessFromSess(ctx.Session)
 
-	if apr.Contains(cli.GlobalFlag) {
+	if apr.Contains(cli.MoveFlag) {
 		return doGlobalCheckout(ctx, branchName, apr.Contains(cli.ForceFlag))
 	} else {
 

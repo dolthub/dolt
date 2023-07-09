@@ -584,10 +584,10 @@ SQL
   [[ "$output" =~ "0" ]] || false
 }
 
-@test "sql-checkout: 'CALL DOLT_CHECKOUT --global' moves the working set" {
+@test "sql-checkout: 'CALL DOLT_CHECKOUT --move' moves the working set" {
     dolt branch other
     run dolt sql -r csv << SQL
-call dolt_checkout('other', '--global');
+call dolt_checkout('other', '--move');
 select active_branch();
 select * from dolt_status;
 SQL
