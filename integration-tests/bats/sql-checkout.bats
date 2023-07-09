@@ -584,12 +584,16 @@ SQL
   [[ "$output" =~ "0" ]] || false
 }
 
-@test "sql-server: CALL DOLT_CHECKOUT --global" {
+@test "sql-checkout: 'CALL DOLT_CHECKOUT --global' moves the working set" {
     dolt branch other
-    dolt sql -q "call dolt_checkout('other', '--global');"
-    run dolt status
+    run dolt sql -r csv << SQL
+call dolt_checkout('other', '--global');
+select active_branch();
+select * from dolt_status;
+SQL
     [ $status -eq 0 ]
-    [[ "$output" =~ "On branch other" ]] || false
+    [[ "${lines[3]}" =~ "other" ]] || false
+    [[ "${lines[5]}" =~ "test,false,new table" ]] || false
 }
 
 get_head_commit() {
