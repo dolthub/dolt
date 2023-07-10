@@ -153,7 +153,7 @@ func hasLocalChanges(ctx context.Context, dEnv *env.DoltEnv, roots doltdb.Roots,
 	}
 
 	// --all was not set, so we can ignore tables. Is every table ignored?
-	allIgnored, err := workingSetContainsOnlyIgnoredTables(ctx, roots)
+	allIgnored, err := diff.WorkingSetContainsOnlyIgnoredTables(ctx, roots)
 	if err != nil {
 		return false, err
 	}
@@ -279,35 +279,6 @@ func workingSetContainsOnlyUntrackedTables(ctx context.Context, roots doltdb.Roo
 	// All ignored files are also untracked files
 	for _, tableDelta := range unstaged {
 		if !tableDelta.IsAdd() {
-			return false, nil
-		}
-	}
-
-	return true, nil
-}
-
-// workingSetContainsOnlyIgnoredTables returns true if all changes in working set are ignored tables.
-// Note that only unstaged tables are subject to dolt_ignore (this is consistent with what git does.)
-func workingSetContainsOnlyIgnoredTables(ctx context.Context, roots doltdb.Roots) (bool, error) {
-	_, unstaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
-	if err != nil {
-		return false, err
-	}
-
-	ignorePatterns, err := doltdb.GetIgnoredTablePatterns(ctx, roots)
-	if err != nil {
-		return false, err
-	}
-
-	for _, tableDelta := range unstaged {
-		if !(tableDelta.IsAdd()) {
-			return false, nil
-		}
-		isIgnored, err := ignorePatterns.IsTableNameIgnored(tableDelta.ToName)
-		if err != nil {
-			return false, err
-		}
-		if isIgnored != doltdb.Ignore {
 			return false, nil
 		}
 	}

@@ -18,6 +18,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -36,7 +38,7 @@ type sessionedTableEditor struct {
 
 var _ editor.TableEditor = &sessionedTableEditor{}
 
-func (ste *sessionedTableEditor) GetIndexedRows(ctx context.Context, key types.Tuple, indexName string, idxSch schema.Schema) ([]row.Row, error) {
+func (ste *sessionedTableEditor) GetIndexedRows(ctx *sql.Context, key types.Tuple, indexName string, idxSch schema.Schema) ([]row.Row, error) {
 	return ste.tableEditor.GetIndexedRows(ctx, key, indexName, idxSch)
 }
 
@@ -100,7 +102,7 @@ func (ste *sessionedTableEditor) MarkDirty() {
 }
 
 // Table implements TableEditor.
-func (ste *sessionedTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
+func (ste *sessionedTableEditor) Table(ctx *sql.Context) (*doltdb.Table, error) {
 	ws, err := ste.tableEditSession.Flush(ctx)
 	if err != nil {
 		return nil, err

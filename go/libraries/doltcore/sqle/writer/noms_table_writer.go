@@ -17,9 +17,10 @@ package writer
 import (
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -55,7 +56,8 @@ type nomsTableWriter struct {
 	tableEditor editor.TableEditor
 	flusher     WriteSessionFlusher
 
-	autoInc globalstate.AutoIncrementTracker
+	autoInc                globalstate.AutoIncrementTracker
+	nextAutoIncrementValue map[string]uint64
 
 	setter SessionRootSetter
 }
@@ -128,12 +130,13 @@ func (te *nomsTableWriter) GetNextAutoIncrementValue(ctx *sql.Context, insertVal
 }
 
 func (te *nomsTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) error {
-	seq, err := globalstate.CoerceAutoIncrementValue(val)
+	seq, err := te.autoInc.CoerceAutoIncrementValue(val)
 	if err != nil {
 		return err
 	}
-	te.autoInc.Set(te.tableName, seq)
-	te.tableEditor.MarkDirty()
+
+	te.nextAutoIncrementValue = make(map[string]uint64)
+	te.nextAutoIncrementValue[te.tableName] = seq
 
 	return te.flush(ctx)
 }

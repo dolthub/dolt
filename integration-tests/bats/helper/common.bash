@@ -70,8 +70,6 @@ setup_no_dolt_init() {
     # during the cli -> sql migration.
     export DOLT_CLI_PASSWORD=""
     export DOLT_SILENCE_USER_REQ_FOR_TESTING="Y"
-    # Temporary Flag: https://github.com/dolthub/dolt/issues/6239
-    export DOLT_ENABLE_LOCAL_USER_FOR_ALL_HOSTS="Y"
 }
 
 assert_feature_version() {

@@ -4,7 +4,10 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 setup() {
     setup_common
 
-    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))"
+    dolt sql <<SQL
+CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10));
+INSERT INTO dolt_ignore VALUES ('generated_*', 1);
+SQL
     dolt add .
     dolt commit -am "Created table"
     dolt checkout -b branch1
@@ -14,6 +17,8 @@ setup() {
     dolt commit -am "Inserted 2"
     dolt sql -q "INSERT INTO test VALUES (3, 'c')"
     dolt commit -am "Inserted 3"
+
+    dolt sql -q "CREATE TABLE generated_foo (pk int PRIMARY KEY);"
 
     run dolt sql -q "SELECT * FROM test" -r csv
     [[ "$output" =~ "1,a" ]] || false
@@ -169,12 +174,78 @@ SQL
     [[ ! "$output" =~ "branch1table" ]] || false
 }
 
-@test "sql-cherry-pick: error when using `--abort` with no in-progress cherry-pick" {
+@test "sql-cherry-pick: error when using --abort with no in-progress cherry-pick" {
     run dolt sql -q "call DOLT_CHERRY_PICK('--abort');"
     [ $status -eq 1 ]
     [[ $output =~ "error: There is no cherry-pick merge to abort" ]] || false
     [[ ! $output =~ "usage: dolt cherry-pick" ]] || false
 }
+
+@test "sql-cherry-pick: conflict resolution" {
+    dolt sql -q "CREATE TABLE other (pk int primary key, v int)"
+    dolt add .
+    dolt sql -q "INSERT INTO other VALUES (1, 2)"
+    dolt sql -q "INSERT INTO test VALUES (4,'f')"
+    dolt commit -am "add other table"
+
+    dolt checkout main
+    dolt sql -q "CREATE TABLE other (pk int primary key, v int)"
+    dolt add .
+    dolt sql -q "INSERT INTO other VALUES (1, 3)"
+    dolt sql -q "INSERT INTO test VALUES (4,'k')"
+    dolt commit -am "add other table with conflict and test with conflict"
+
+    run dolt sql <<SQL
+set @@dolt_allow_commit_conflicts = 1;
+set @@dolt_force_transaction_commit = 1;
+call DOLT_CHERRY_PICK('branch1')
+SQL
+    [ $status -eq 0 ]
+    [[ $output =~ "|      | 2              | 0                | 0                     |" ]] || false
+
+    run dolt conflicts cat .
+    [ $status -eq 0 ]
+    [[ $output =~ "|  +  | ours   | 1  | 3 |" ]] || false
+    [[ $output =~ "|  +  | theirs | 1  | 2 |" ]] || false
+    [[ $output =~ "|  +  | ours   | 4  | k |" ]] || false
+    [[ $output =~ "|  +  | theirs | 4  | f |" ]] || false
+
+    dolt sql -q "call DOLT_CHERRY_PICK('--abort');"
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ ! $output =~ "Unmerged paths" ]] || false
+    [[ ! $output =~ "generated_foo" ]] || false
+
+    run dolt sql <<SQL
+set @@dolt_allow_commit_conflicts = 1;
+set @@dolt_force_transaction_commit = 1;
+call DOLT_CHERRY_PICK('branch1');
+SQL
+    [ $status -eq 0 ]
+    [[ $output =~ "|      | 2              | 0                | 0                     |" ]] || false
+
+    run dolt status
+    echo "pavel 2 >>> $output"
+    [ $status -eq 0 ]
+    [[ ! $output =~ "Changes to be committed" ]] || false
+    [[ $output =~ "Unmerged paths" ]] || false
+    [[ $output =~ "both modified:    other" ]] || false
+    [[ $output =~ "both modified:    test" ]] || false
+
+    dolt conflicts resolve --theirs .
+
+    run dolt sql -q "select * from other"
+    [ $status -eq 0 ]
+    [[ $output =~ "1  | 2" ]] || false
+
+    run dolt sql -q "select * from test"
+    [ $status -eq 0 ]
+    [[ $output =~ "4  | f" ]] || false
+
+    dolt commit -m "committing cherry-picked change"
+}
+
 
 @test "sql-cherry-pick: commit with CREATE TABLE" {
     dolt sql -q "CREATE TABLE table_a (pk BIGINT PRIMARY KEY, v varchar(10))"

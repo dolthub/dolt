@@ -47,7 +47,7 @@ def main():
 
             try:
                 results = result_proxy.fetchall()
-                if (results != exp_results) and ("dolt_commit" not in query):
+                if (results != exp_results) and ("dolt_commit" not in query) and ("dolt_merge" not in query):
                     print("Query:")
                     print(query)
                     print("Expected:")

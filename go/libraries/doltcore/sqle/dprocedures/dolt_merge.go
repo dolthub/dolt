@@ -92,6 +92,10 @@ func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, error) {
 		return "", noConflictsOrViolations, threeWayMerge, err
 	}
 
+	if len(args) == 0 {
+		return "", noConflictsOrViolations, threeWayMerge, errors.New("error: Please specify a branch to merge")
+	}
+
 	if apr.ContainsAll(cli.SquashParam, cli.NoFFParam) {
 		return "", noConflictsOrViolations, threeWayMerge, fmt.Errorf("error: Flags '--%s' and '--%s' cannot be used together.\n", cli.SquashParam, cli.NoFFParam)
 	}
@@ -151,7 +155,7 @@ func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, error) {
 
 	ws, commit, conflicts, fastForward, err := performMerge(ctx, sess, roots, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
 	if err != nil || conflicts != 0 || fastForward != 0 {
-		return "", conflicts, fastForward, err
+		return commit, conflicts, fastForward, err
 	}
 
 	return commit, conflicts, fastForward, nil
@@ -214,6 +218,9 @@ func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots,
 		}
 
 		ws, err = executeFFMerge(ctx, dbName, spec.Squash, ws, dbData, spec.MergeC)
+		if h, cerr := spec.MergeC.HashOf(); cerr == nil {
+			return ws, h.String(), noConflictsOrViolations, fastForwardMerge, err
+		}
 		return ws, "", noConflictsOrViolations, fastForwardMerge, err
 	}
 
@@ -245,15 +252,16 @@ func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots,
 		return ws, "", noConflictsOrViolations, threeWayMerge, err
 	}
 
+	var commit string
 	if !noCommit {
 		author := fmt.Sprintf("%s <%s>", spec.Name, spec.Email)
-		commit, _, err := doDoltCommit(ctx, []string{"-m", msg, "--author", author})
+		commit, _, err = doDoltCommit(ctx, []string{"-m", msg, "--author", author})
 		if err != nil {
 			return ws, commit, noConflictsOrViolations, threeWayMerge, fmt.Errorf("dolt_commit failed")
 		}
 	}
 
-	return ws, "", noConflictsOrViolations, threeWayMerge, nil
+	return ws, commit, noConflictsOrViolations, threeWayMerge, nil
 }
 
 func abortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Roots) (*doltdb.WorkingSet, error) {
@@ -267,8 +275,29 @@ func abortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Ro
 		return nil, err
 	}
 
-	// TODO: this doesn't seem right, it sets the root that we already edited above
-	workingSet = workingSet.AbortMerge()
+	preMergeWorkingRoot := workingSet.MergeState().PreMergeWorkingRoot()
+	preMergeWorkingTables, err := preMergeWorkingRoot.GetTableNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nonIgnoredTables, err := doltdb.ExcludeIgnoredTables(ctx, roots, preMergeWorkingTables)
+	if err != nil {
+		return nil, err
+	}
+	someTablesAreIgnored := len(nonIgnoredTables) != len(preMergeWorkingTables)
+
+	if someTablesAreIgnored {
+		newWorking, err := actions.MoveTablesBetweenRoots(ctx, nonIgnoredTables, preMergeWorkingRoot, roots.Working)
+		if err != nil {
+			return nil, err
+		}
+		workingSet = workingSet.WithWorkingRoot(newWorking)
+	} else {
+		workingSet = workingSet.WithWorkingRoot(preMergeWorkingRoot)
+	}
+	workingSet = workingSet.WithStagedRoot(workingSet.WorkingRoot())
+	workingSet = workingSet.ClearMerge()
+
 	return workingSet, nil
 }
 
