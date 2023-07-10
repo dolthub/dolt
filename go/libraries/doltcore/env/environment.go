@@ -663,14 +663,14 @@ type repoStateReader struct {
 }
 
 func (r *repoStateReader) CWBHeadRef() (ref.DoltRef, error) {
-	if r.RSLoadErr != nil {
+	if r.RepoState == nil && r.RSLoadErr != nil {
 		return nil, r.RSLoadErr
 	}
 	return r.RepoState.CWBHeadRef(), nil
 }
 
 func (r *repoStateReader) CWBHeadSpec() (*doltdb.CommitSpec, error) {
-	if r.RSLoadErr != nil {
+	if r.RepoState == nil && r.RSLoadErr != nil {
 		return nil, r.RSLoadErr
 	}
 	return r.RepoState.CWBHeadSpec(), nil
@@ -685,7 +685,7 @@ type repoStateWriter struct {
 }
 
 func (r *repoStateWriter) SetCWBHeadRef(ctx context.Context, marshalableRef ref.MarshalableRef) error {
-	if r.RSLoadErr != nil {
+	if r.RepoState == nil && r.RSLoadErr != nil {
 		return r.RSLoadErr
 	}
 
