@@ -81,7 +81,6 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~large-update.bats~
 ~remotes.bats~
 ~create-views.bats~
-~sql-clean.bats~
 ~blame.bats~
 ~multiple-tables.bats~
 ~json-new-fmt.bats~
