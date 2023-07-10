@@ -265,8 +265,8 @@ func createWorkingSetForLocalBranch(ctx *sql.Context, ddb *doltdb.DoltDB, branch
 }
 
 // checkoutRemoteBranch checks out a remote branch creating a new local branch with the same name as the remote branch
-// and set its upstream. The upstream persists out of sql session.
-func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName string, dbData env.DbData, branchName string, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) (string, error) {
+// and set its upstream. The upstream persists out of sql session. Returns the name of the upstream remote and branch.
+func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName string, dbData env.DbData, branchName string, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) (upstream string, err error) {
 	remoteRefs, err := actions.GetRemoteBranchRef(ctx, dbData.Ddb, branchName)
 	if err != nil {
 		return "", errors.New("fatal: unable to read from data repository")
@@ -278,8 +278,10 @@ func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName str
 			// User tried to enter a detached head state, which we don't support.
 			// Inform and suggest that they check-out a new branch at this commit instead.
 
-			return "", fmt.Errorf("dolt does not support a detached head state. To create a branch at this commit instead, run:\n\n"+
-				"\tdolt checkout %s -b {new_branch_name}\n", branchName)
+			return "", fmt.Errorf(`dolt does not support a detached head state. To create a branch at this commit instead, run:
+
+	dolt checkout %s -b {new_branch_name}
+`, branchName)
 		}
 		return "", fmt.Errorf("error: could not find %s", branchName)
 	} else if len(remoteRefs) == 1 {
