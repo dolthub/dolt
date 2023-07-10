@@ -1,4 +1,5 @@
 import fs from "fs";
+import path from "path";
 import { branchTests } from "./branches.js";
 import { databaseTests } from "./databases.js";
 import { logTests } from "./logs.js";
@@ -36,7 +37,10 @@ async function runTests(database, tests) {
           values,
           // For LOAD DATA
           infileStreamFactory: test.file
-            ? () => fs.createReadStream(`${process.cwd()}/${test.file}`)
+            ? () =>
+                fs.createReadStream(
+                  path.resolve(process.cwd(), "..", test.file)
+                )
             : undefined,
         })
         .then((rows) => {
