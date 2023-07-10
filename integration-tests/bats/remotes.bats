@@ -351,7 +351,6 @@ SQL
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     run dolt push test-remote main
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Uploaded" ]] || false
 
     run dolt push test-remote main
     [ "$status" -eq 0 ]

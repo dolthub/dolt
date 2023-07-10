@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
 	"strings"
 	"sync"
 
@@ -42,8 +41,13 @@ import (
 type remoteInfo struct {
 	Name       string
 	Url        string
-	FetchSpecs types.JSONDocument
-	Params     types.JSONDocument
+	FetchSpecs []string
+	Params     map[string]string
+}
+
+type remoteBranchInfo struct {
+	Name string
+	Hash string
 }
 
 var pushDocs = cli.CommandDocumentationContent{
@@ -109,10 +113,16 @@ func push(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseRes
 	force := apr.Contains(cli.ForceFlag)
 	setUpstream := apr.Contains(cli.SetUpstreamFlag)
 
+	branchName, err := getActiveBranchName(sqlCtx, queryist)
+
 	remoteName := "origin"
 	remotes, err := getRemotes(queryist, sqlCtx)
 	if err != nil {
 		return fmt.Errorf("failed to get remotes: %w", err)
+	}
+	remoteBranches, err := getRemoteBranches(queryist, sqlCtx)
+	if err != nil {
+		return fmt.Errorf("failed to get remote branches: %w", err)
 	}
 
 	args := apr.Args
@@ -122,7 +132,7 @@ func push(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseRes
 			args = []string{}
 		}
 	}
-	_, remoteOK := remotes[remoteName]
+	targetRemote, remoteOK := remotes[remoteName]
 	var refSpec string
 	if remoteOK && len(args) == 1 {
 		refSpec = args[0]
@@ -132,7 +142,6 @@ func push(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseRes
 	}
 
 	params := []interface{}{}
-
 	sb := strings.Builder{}
 	sb.WriteString("call dolt_push(")
 	if force {
@@ -150,13 +159,67 @@ func push(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseRes
 	sb.WriteString(");")
 	query := sb.String()
 
-	rows, err := InterpolateAndRunQuery(queryist, sqlCtx, query, params...)
-	cli.Printf("pavel >>> rows: %v\n", rows)
+	_, err = InterpolateAndRunQuery(queryist, sqlCtx, query, params...)
 	if err != nil {
-		cli.Printf("pavel >>> error: %v\n", err)
+		text := err.Error()
+		if strings.Contains(text, "the current branch has no upstream branch") {
+			return fmt.Errorf("fatal: The current branch " + branchName + " has no upstream branch.\n" +
+				"To push the current branch and set the remote as upstream, use\n" +
+				"\tdolt push --set-upstream " + remoteName + " " + branchName + "\n" +
+				"To have this happen automatically for branches without a tracking\n" +
+				"upstream, see 'push.autoSetupRemote' in 'dolt config --help'.")
+		}
+		if strings.Contains(text, "upstream branch already set for") {
+			// success
+			return nil
+		}
+		if strings.Contains(text, doltdb.ErrIsAhead.Error()) {
+			srcRef, destRef, err := getTrackingRefs(branchName, targetRemote)
+			if err != nil {
+				return fmt.Errorf("failed to get tracking ref info: %w", err)
+			}
+
+			cli.Printf("To %s\n", targetRemote.Url)
+			cli.Printf("! [rejected]          %s -> %s (non-fast-forward)\n", srcRef, destRef)
+			cli.Printf("error: failed to push some refs to '%s'\n", targetRemote.Url)
+			cli.Println("hint: Updates were rejected because the tip of your current branch is behind")
+			cli.Println("hint: its remote counterpart. Integrate the remote changes (e.g.")
+			cli.Println("hint: 'dolt pull ...') before pushing again.")
+		}
 		return err
 	}
-	return err
+
+	postPushRemoteBranches, err := getRemoteBranches(queryist, sqlCtx)
+	if err != nil {
+		return fmt.Errorf("failed to get post-push remote branches: %w", err)
+	}
+
+	changesMade := getChangesMade(remoteBranches, postPushRemoteBranches)
+	if !changesMade {
+		cli.Println("Everything up-to-date")
+	}
+
+	return nil
+}
+
+func getChangesMade(remoteBranches map[string]remoteBranchInfo, postPushRemoteBranches map[string]remoteBranchInfo) bool {
+	changesMade := false
+	if len(remoteBranches) != len(postPushRemoteBranches) {
+		changesMade = true
+	} else {
+		for name, remoteBranch := range remoteBranches {
+			updatedRemoteBranch, ok := postPushRemoteBranches[name]
+			if !ok {
+				changesMade = true
+				break
+			}
+			if remoteBranch.Hash != updatedRemoteBranch.Hash {
+				changesMade = true
+				break
+			}
+		}
+	}
+	return changesMade
 }
 
 func printInfoForPushError(err error, remote env.Remote, destRef, remoteRef ref.DoltRef) errhand.VerboseError {
@@ -256,13 +319,39 @@ func getRemotes(queryist cli.Queryist, sqlCtx *sql.Context) (map[string]remoteIn
 	for _, row := range rows {
 		name := row[0].(string)
 		url := row[1].(string)
-		fetchSpecs, err := getJsonDocumentCol(sqlCtx, row[2])
+
+		fetchSpecsJson, err := getJsonDocumentCol(sqlCtx, row[2])
 		if err != nil {
 			return nil, fmt.Errorf("failed to read fetch specs for remote %s: %w", name, err)
 		}
-		params, err := getJsonDocumentCol(sqlCtx, row[3])
+		fetchSpecsArray, ok := fetchSpecsJson.Val.([]interface{})
+		if !ok {
+			return nil, fmt.Errorf("failed to read fetch specs for remote %s: %w", name, err)
+		}
+		fetchSpecs := make([]string, len(fetchSpecsArray))
+		for i, spec := range fetchSpecsArray {
+			text, ok := spec.(string)
+			if !ok {
+				return nil, fmt.Errorf("failed to read fetch specs for remote %s: %w", name, err)
+			}
+			fetchSpecs[i] = text
+		}
+
+		paramsJson, err := getJsonDocumentCol(sqlCtx, row[3])
 		if err != nil {
 			return nil, fmt.Errorf("failed to read params for remote %s: %w", name, err)
+		}
+		paramsMap, ok := paramsJson.Val.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("failed to read params for remote %s: %w", name, err)
+		}
+		params := map[string]string{}
+		for k, v := range paramsMap {
+			text, ok := v.(string)
+			if !ok {
+				return nil, fmt.Errorf("failed to read params for remote %s: %w", name, err)
+			}
+			params[k] = text
 		}
 
 		remote := remoteInfo{
@@ -274,4 +363,40 @@ func getRemotes(queryist cli.Queryist, sqlCtx *sql.Context) (map[string]remoteIn
 		remotes[name] = remote
 	}
 	return remotes, nil
+}
+
+func getRemoteBranches(queryist cli.Queryist, sqlCtx *sql.Context) (map[string]remoteBranchInfo, error) {
+	rows, err := GetRowsForSql(queryist, sqlCtx, "select name, hash from dolt_remote_branches")
+	if err != nil {
+		return nil, fmt.Errorf("failed to read dolt remote branchess: %w", err)
+	}
+
+	rbs := map[string]remoteBranchInfo{}
+	for _, row := range rows {
+		name := row[0].(string)
+		hash := row[1].(string)
+		branch := remoteBranchInfo{
+			Name: name,
+			Hash: hash,
+		}
+		rbs[name] = branch
+	}
+	return rbs, nil
+}
+
+func getTrackingRefs(branchName string, info remoteInfo) (fromRef, toRef string, err error) {
+	branchRef := ref.NewBranchRef(branchName)
+
+	for _, spec := range info.FetchSpecs {
+		fs, err := ref.ParseRefSpecForRemote(info.Name, spec)
+		if err != nil {
+			return "", "", err
+		}
+		destRef := fs.DestRef(branchRef)
+		if destRef != nil {
+			srcRef := fs.SrcRef(branchRef)
+			return srcRef.String(), destRef.String(), nil
+		}
+	}
+	return "", "", nil
 }
