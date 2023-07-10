@@ -816,3 +816,37 @@ SQL
     [[ "$output" =~ "8,8" ]] || false
 }
 
+@test "auto_increment: manually set auto increment to original value" {
+    dolt sql  <<SQL
+drop table test;
+create table test (id int auto_increment primary key);
+insert into test values ();
+insert into test values ();
+SQL
+
+    run dolt sql -q "select * from test order by 1" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+
+    dolt sql -q "delete from test"
+    dolt sql  <<SQL
+alter table test auto_increment=1;
+insert into test values ();
+insert into test values ();
+SQL
+
+    run dolt sql -q "select * from test order by 1" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+
+    dolt sql  <<SQL
+alter table test auto_increment=1;
+insert into test values ();
+insert into test values ();
+SQL
+
+    # auto_increment update ignored because it's lower than current table max
+    run dolt sql -q "select * from test where id > 2 order by 1" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "4" ]] || false
+}
