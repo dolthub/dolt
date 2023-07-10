@@ -56,42 +56,6 @@ func doltCheckout(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	return rowToIter(int64(res), message), nil
 }
 
-func generateSuccessMessage(newBranch, upstream string) string {
-	result := fmt.Sprintf("Switched to branch '%s'", newBranch)
-	if upstream != "" {
-		result += fmt.Sprintf("\nbranch '%s' set up to track '%s'.", newBranch, upstream)
-	}
-	return result
-}
-
-// willModifyDb determines whether or not this operation is a no-op and can return early with a helpful message.
-func willModifyDb(dSess *dsess.DoltSession, data env.DbData, dbName, branchName string, updateHead bool) (bool, error) {
-	headRef, err := data.Rsr.CWBHeadRef()
-	// If we're in a detached head state, allow checking out a new branch.
-	if err == doltdb.ErrOperationNotSupportedInDetachedHead {
-		return true, nil
-	}
-	if err != nil {
-		return false, err
-	}
-
-	// If the operation won't modify either the active session or the default session, return early.
-	isModification := headRef.GetPath() != branchName
-	if updateHead {
-		fs, err := dSess.Provider().FileSystemForDatabase(dbName)
-		if err != nil {
-			return false, err
-		}
-		repoState, err := env.LoadRepoState(fs)
-		if err != nil {
-			return false, err
-		}
-		defaultBranch := repoState.CWBHeadRef().GetPath()
-		isModification = isModification || (defaultBranch != branchName)
-	}
-	return isModification, nil
-}
-
 func doDoltCheckout(ctx *sql.Context, args []string) (int, string, error) {
 	currentDbName := ctx.GetCurrentDatabase()
 	if len(currentDbName) == 0 {
