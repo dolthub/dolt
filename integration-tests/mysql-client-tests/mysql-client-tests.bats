@@ -53,7 +53,7 @@ teardown() {
 }
 
 @test "node mysql client, hosted workbench stability" {
-    node $BATS_TEST_DIRNAME/node/workbench.js $USER $PORT $REPO_NAME
+    node $BATS_TEST_DIRNAME/node/workbench.js $USER $PORT $REPO_NAME $BATS_TEST_DIRNAME/node/testdata
 }
 
 @test "c mysql connector" {

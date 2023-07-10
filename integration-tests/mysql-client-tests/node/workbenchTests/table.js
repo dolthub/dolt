@@ -175,12 +175,12 @@ export const tableTests = [
     },
   },
   {
-    q: `LOAD DATA LOCAL INFILE '../../testdata/update_test_info.csv'
+    q: `LOAD DATA LOCAL INFILE '../testdata/update_test_info.csv'
     INTO TABLE \`test_info\` 
     FIELDS TERMINATED BY ',' ENCLOSED BY '' 
     LINES TERMINATED BY '\n' 
     IGNORE 1 ROWS;`,
-    file: "testdata/update_test_info.csv",
+    file: "update_test_info.csv",
     res: {
       fieldCount: 0,
       affectedRows: 3,
@@ -211,12 +211,12 @@ export const tableTests = [
     ],
   },
   {
-    q: `LOAD DATA LOCAL INFILE '../../testdata/replace_test_info.psv'
+    q: `LOAD DATA LOCAL INFILE '../testdata/replace_test_info.psv'
     REPLACE INTO TABLE \`test_info\` 
     FIELDS TERMINATED BY '|' ENCLOSED BY '' 
     LINES TERMINATED BY '\n' 
     IGNORE 1 ROWS;`,
-    file: "testdata/replace_test_info.psv",
+    file: "replace_test_info.psv",
     res: {
       fieldCount: 0,
       affectedRows: 6,

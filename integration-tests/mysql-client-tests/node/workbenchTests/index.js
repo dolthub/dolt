@@ -14,6 +14,9 @@ import { tagsTests } from "./tags.js";
 import { viewsTests } from "./views.js";
 import { diffTests } from "./diffs.js";
 
+const args = process.argv.slice(2);
+const testDataPath = args[3];
+
 export default async function runWorkbenchTests(database) {
   await runTests(database, databaseTests);
   await runTests(database, branchTests);
@@ -37,10 +40,7 @@ async function runTests(database, tests) {
           values,
           // For LOAD DATA
           infileStreamFactory: test.file
-            ? () =>
-                fs.createReadStream(
-                  path.resolve(process.cwd(), "..", test.file)
-                )
+            ? () => fs.createReadStream(path.resolve(testDataPath, test.file))
             : undefined,
         })
         .then((rows) => {
