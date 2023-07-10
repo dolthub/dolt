@@ -79,7 +79,6 @@ teardown() {
 
 
     run dolt checkout other
-    echo "$output"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "branch 'other' set up to track 'origin/other'." ]] || false
 
