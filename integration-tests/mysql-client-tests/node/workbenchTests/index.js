@@ -36,7 +36,7 @@ async function runTests(database, tests) {
           values,
           // For LOAD DATA
           infileStreamFactory: test.file
-            ? () => fs.createReadStream(test.file)
+            ? () => fs.createReadStream(`${process.cwd()}/${test.file}`)
             : undefined,
         })
         .then((rows) => {

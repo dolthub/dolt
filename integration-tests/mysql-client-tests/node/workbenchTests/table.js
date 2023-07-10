@@ -180,7 +180,7 @@ export const tableTests = [
     FIELDS TERMINATED BY ',' ENCLOSED BY '' 
     LINES TERMINATED BY '\n' 
     IGNORE 1 ROWS;`,
-    file: "./workbenchTests/testData/update_test_info.csv",
+    file: "workbenchTests/testData/update_test_info.csv",
     res: {
       fieldCount: 0,
       affectedRows: 3,
@@ -216,7 +216,7 @@ export const tableTests = [
     FIELDS TERMINATED BY '|' ENCLOSED BY '' 
     LINES TERMINATED BY '\n' 
     IGNORE 1 ROWS;`,
-    file: "./workbenchTests/testData/replace_test_info.psv",
+    file: "workbenchTests/testData/replace_test_info.psv",
     res: {
       fieldCount: 0,
       affectedRows: 6,
