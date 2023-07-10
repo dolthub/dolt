@@ -329,12 +329,13 @@ func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName str
 	}
 }
 
-func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController, isGlobal bool) (string, string, error) {
-	var newBranchName string
+// checkoutNewBranch creates a new branch and makes it the active branch for the session.
+// If isMove is true, this function also moves the working set from the current branch into the new branch.
+// Returns the name of the new branch and the remote upstream branch (empty string if not applicable.)
+func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController, isMove bool) (newBranchName string, remoteAndBranch string, err error) {
 	var remoteName, remoteBranchName string
 	var startPt = "head"
 	var refSpec ref.RefSpec
-	var err error
 
 	if apr.NArg() == 1 {
 		startPt = apr.Arg(0)
@@ -391,12 +392,11 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 		return "", "", err
 	}
 
-	var remoteAndBranch string
 	if remoteName != "" {
 		remoteAndBranch = fmt.Sprintf("%s/%s", remoteName, remoteBranchName)
 	}
 
-	if isGlobal {
+	if isMove {
 		return newBranchName, remoteAndBranch, doGlobalCheckout(ctx, newBranchName, apr.Contains(cli.ForceFlag))
 	} else {
 
