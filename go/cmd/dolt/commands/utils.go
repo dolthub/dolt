@@ -25,6 +25,8 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -292,6 +294,16 @@ func GetRowsForSql(queryist cli.Queryist, sqlCtx *sql.Context, query string) ([]
 	}
 
 	return rows, nil
+}
+
+// InterpolateAndRunQuery interpolates a query, executes it, and returns the result rows.
+// Since this method does not return a schema, this method should be used only for fire-and-forget types of queries.
+func InterpolateAndRunQuery(queryist cli.Queryist, sqlCtx *sql.Context, queryTemplate string, params ...interface{}) ([]sql.Row, error) {
+	query, err := dbr.InterpolateForDialect(queryTemplate, params, dialect.MySQL)
+	if err != nil {
+		return nil, fmt.Errorf("error interpolating query: %w", err)
+	}
+	return GetRowsForSql(queryist, sqlCtx, query)
 }
 
 // GetTinyIntColAsBool returns the value of a tinyint column as a bool
