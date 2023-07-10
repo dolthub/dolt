@@ -150,7 +150,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, string, error) {
 	if isBranch, err := actions.IsBranch(ctx, dbData.Ddb, branchName); err != nil {
 		return 1, "", err
 	} else if isBranch {
-		err = checkoutBranch(ctx, currentDbName, branchName, apr)
+		err = checkoutExistingBranch(ctx, currentDbName, branchName, apr)
 		if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
 			// If there is a branch but there is no working set,
 			// somehow the local branch ref was created without a
@@ -175,7 +175,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, string, error) {
 				return 1, "", err
 			}
 
-			err = checkoutBranch(ctx, currentDbName, branchName, apr)
+			err = checkoutExistingBranch(ctx, currentDbName, branchName, apr)
 		}
 		if err != nil {
 			return 1, "", err
@@ -300,7 +300,7 @@ func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName str
 			return "", err
 		}
 
-		err = checkoutBranch(ctx, dbName, branchName, apr)
+		err = checkoutExistingBranch(ctx, dbName, branchName, apr)
 		if err != nil {
 			return "", err
 		}
@@ -417,7 +417,8 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 	return newBranchName, remoteAndBranch, nil
 }
 
-func checkoutBranch(ctx *sql.Context, dbName string, branchName string, apr *argparser.ArgParseResults) error {
+// checkoutExistingBranch updates the active branch reference to point to an already existing branch.
+func checkoutExistingBranch(ctx *sql.Context, dbName string, branchName string, apr *argparser.ArgParseResults) error {
 	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(branchName))
 	if err != nil {
 		return err
