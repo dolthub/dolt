@@ -750,12 +750,14 @@ SQL
   secondCommit=$(get_commit_hash_at HEAD~1)
 
   # show tags
-  run dolt tag
+  run dolt --verbose-engine-setup tag
   [ $status -eq 0 ]
+  [[ $output =~ "verbose: starting local mode" ]] || false
 
   # add tag without message
-  run dolt tag v1
+  run dolt --verbose-engine-setup tag v1
   [ $status -eq 0 ]
+  [[ $output =~ "verbose: starting local mode" ]] || false
 
   # list tags and check new tag is present
   run dolt tag
@@ -763,10 +765,11 @@ SQL
   [[ $output =~ "v1" ]] || false
 
   # list tags with verbose flag and check new tag is present
-  run dolt tag --verbose
+  run dolt --verbose-engine-setup tag --verbose
   [ $status -eq 0 ]
   [[ $output =~ "v1"$'\t'"$headCommit" ]] || false
   [[ $output =~ "Tagger: Bats Tests <bats@email.fake>" ]] || false
+  [[ $output =~ "verbose: starting local mode" ]] || false
 
   # add tag with commit
   run dolt tag v2 $secondCommit
@@ -804,7 +807,6 @@ SQL
 
   # list tags and check new tag is present
   run dolt tag --verbose
-  echo "pavel >>> $output"
   [ $status -eq 0 ]
   [[ $output =~ "v5"$'\t'"$headCommit" ]] || false
   [[ $output =~ "Tagger: John Doe <john@doe.com>" ]] || false
@@ -832,12 +834,14 @@ SQL
   secondCommit=$(get_commit_hash_at HEAD~1)
 
   # show tags
-  run dolt tag
+  run dolt --verbose-engine-setup tag
   [ $status -eq 0 ]
+  [[ $output =~ "verbose: starting remote mode" ]] || false
 
   # add tag without message
-  run dolt tag v1
+  run dolt --verbose-engine-setup tag v1
   [ $status -eq 0 ]
+  [[ $output =~ "verbose: starting remote mode" ]] || false
 
   # list tags and check new tag is present
   run dolt tag
@@ -845,10 +849,11 @@ SQL
   [[ $output =~ "v1" ]] || false
 
   # list tags with verbose flag and check new tag is present
-  run dolt tag --verbose
+  run dolt --verbose-engine-setup tag --verbose
   [ $status -eq 0 ]
   [[ $output =~ "v1"$'\t'"$headCommit" ]] || false
   [[ $output =~ "Tagger: Bats Tests <bats@email.fake>" ]] || false
+  [[ $output =~ "verbose: starting remote mode" ]] || false
 
   # add tag with commit
   run dolt tag v2 $secondCommit
@@ -886,7 +891,6 @@ SQL
 
   # list tags and check new tag is present
   run dolt tag --verbose
-  echo "pavel >>> $output"
   [ $status -eq 0 ]
   [[ $output =~ "v5"$'\t'"$headCommit" ]] || false
   [[ $output =~ "Tagger: John Doe <john@doe.com>" ]] || false
