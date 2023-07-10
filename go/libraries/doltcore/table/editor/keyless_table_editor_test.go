@@ -19,6 +19,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -101,7 +102,7 @@ func TestKeylessTableEditorConcurrency(t *testing.T) {
 		}
 		wg.Wait()
 
-		newTable, err := tableEditor.Table(context.Background())
+		newTable, err := tableEditor.Table(sql.NewEmptyContext())
 		require.NoError(t, err)
 		newTableData, err := newTable.GetNomsRowData(context.Background())
 		require.NoError(t, err)
@@ -164,7 +165,7 @@ func TestKeylessTableEditorConcurrencyPostInsert(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow, nil))
 	}
-	table, err = tableEditor.Table(context.Background())
+	table, err = tableEditor.Table(sql.NewEmptyContext())
 	require.NoError(t, err)
 
 	for i := 0; i < tableEditorConcurrencyIterations; i++ {
@@ -207,7 +208,7 @@ func TestKeylessTableEditorConcurrencyPostInsert(t *testing.T) {
 		}
 		wg.Wait()
 
-		newTable, err := tableEditor.Table(context.Background())
+		newTable, err := tableEditor.Table(sql.NewEmptyContext())
 		require.NoError(t, err)
 		newTableData, err := newTable.GetNomsRowData(context.Background())
 		require.NoError(t, err)
@@ -273,7 +274,7 @@ func TestKeylessTableEditorWriteAfterFlush(t *testing.T) {
 		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow, nil))
 	}
 
-	_, err = tableEditor.Table(context.Background())
+	_, err = tableEditor.Table(sql.NewEmptyContext())
 	require.NoError(t, err)
 
 	for i := 10; i < 20; i++ {
@@ -286,7 +287,7 @@ func TestKeylessTableEditorWriteAfterFlush(t *testing.T) {
 		require.NoError(t, tableEditor.DeleteRow(context.Background(), dRow))
 	}
 
-	newTable, err := tableEditor.Table(context.Background())
+	newTable, err := tableEditor.Table(sql.NewEmptyContext())
 	require.NoError(t, err)
 	newTableData, err := newTable.GetNomsRowData(context.Background())
 	require.NoError(t, err)
@@ -318,7 +319,7 @@ func TestKeylessTableEditorWriteAfterFlush(t *testing.T) {
 		}
 	}
 
-	sameTable, err := tableEditor.Table(context.Background())
+	sameTable, err := tableEditor.Table(sql.NewEmptyContext())
 	require.NoError(t, err)
 	sameTableData, err := sameTable.GetNomsRowData(context.Background())
 	require.NoError(t, err)
@@ -354,7 +355,7 @@ func TestKeylessTableEditorDuplicateKeyHandling(t *testing.T) {
 		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow, nil))
 	}
 
-	_, err = tableEditor.Table(context.Background())
+	_, err = tableEditor.Table(sql.NewEmptyContext())
 	require.NoError(t, err)
 
 	for i := 0; i < 3; i++ {
@@ -368,7 +369,7 @@ func TestKeylessTableEditorDuplicateKeyHandling(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	_, err = tableEditor.Table(context.Background())
+	_, err = tableEditor.Table(sql.NewEmptyContext())
 	require.NoError(t, err)
 
 	for i := 3; i < 10; i++ {
@@ -381,7 +382,7 @@ func TestKeylessTableEditorDuplicateKeyHandling(t *testing.T) {
 		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow, nil))
 	}
 
-	newTable, err := tableEditor.Table(context.Background())
+	newTable, err := tableEditor.Table(sql.NewEmptyContext())
 	require.NoError(t, err)
 	newTableData, err := newTable.GetNomsRowData(context.Background())
 	require.NoError(t, err)
@@ -453,7 +454,7 @@ func TestKeylessTableEditorMultipleIndexErrorHandling(t *testing.T) {
 		require.NoError(t, tableEditor.InsertRow(ctx, dRow, nil))
 	}
 
-	_, err = tableEditor.Table(ctx)
+	_, err = tableEditor.Table(sql.NewContext(ctx))
 	require.NoError(t, err)
 
 	for i := 0; i < 3; i++ {
@@ -463,7 +464,7 @@ func TestKeylessTableEditorMultipleIndexErrorHandling(t *testing.T) {
 			2: types.Int(i + 10),
 		})
 		require.NoError(t, err)
-		err = tableEditor.InsertRow(ctx, dRow, nil)
+		err = tableEditor.InsertRow(sql.NewContext(ctx), dRow, nil)
 		require.NoError(t, err)
 		dRow, err = row.New(format, tableSch, row.TaggedValues{
 			0: types.Int(i + 10),
@@ -471,11 +472,11 @@ func TestKeylessTableEditorMultipleIndexErrorHandling(t *testing.T) {
 			2: types.Int(i),
 		})
 		require.NoError(t, err)
-		err = tableEditor.InsertRow(ctx, dRow, nil)
+		err = tableEditor.InsertRow(sql.NewContext(ctx), dRow, nil)
 		require.NoError(t, err)
 	}
 
-	table, err = tableEditor.Table(ctx)
+	table, err = tableEditor.Table(sql.NewContext(ctx))
 	require.NoError(t, err)
 	tableData, err := table.GetNomsRowData(ctx)
 	require.NoError(t, err)
@@ -610,7 +611,7 @@ func TestKeylessTableEditorIndexCardinality(t *testing.T) {
 		}
 	}
 
-	table, err = tableEditor.Table(ctx)
+	table, err = tableEditor.Table(sql.NewContext(ctx))
 	require.NoError(t, err)
 
 	idxv1Data, err := table.GetNomsIndexRowData(ctx, "idx_v1")

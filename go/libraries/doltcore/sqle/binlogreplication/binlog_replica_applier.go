@@ -37,7 +37,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 )
@@ -747,7 +746,7 @@ func getTableWriter(ctx *sql.Context, engine *gms.Engine, tableName, databaseNam
 		return nil, nil, err
 	}
 
-	tracker, err := globalstate.NewAutoIncrementTracker(ctx, ws)
+	tracker, err := dsess.NewAutoIncrementTracker(ctx, sqlDatabase.Name(), ws)
 	if err != nil {
 		return nil, nil, err
 	}

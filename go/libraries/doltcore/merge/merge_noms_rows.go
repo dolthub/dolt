@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
@@ -43,7 +44,7 @@ type rowMerger func(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Sc
 type applicator func(ctx context.Context, sch schema.Schema, tableEditor editor.TableEditor, rowData types.Map, stats *MergeStats, change types.ValueChanged) error
 
 // mergeNomsTable merges a Noms table, which includes updating row data, secondary index data, and applying the specified |mergedSch|.
-func mergeNomsTable(ctx context.Context, tm *TableMerger, mergedSch schema.Schema, vrw types.ValueReadWriter, opts editor.Options) (*doltdb.Table, *MergeStats, error) {
+func mergeNomsTable(ctx *sql.Context, tm *TableMerger, mergedSch schema.Schema, vrw types.ValueReadWriter, opts editor.Options) (*doltdb.Table, *MergeStats, error) {
 	// For schema changes on Nom data, we don't need to migrate the existing data, because each column is mapped by
 	// a hash key, and isn't a direct []byte lookup, like with Prolly storage, so it's safe to immediately update
 	// the table to the merged schema.
@@ -113,7 +114,7 @@ func mergeNomsTable(ctx context.Context, tm *TableMerger, mergedSch schema.Schem
 }
 
 func mergeNomsTableData(
-	ctx context.Context,
+	ctx *sql.Context,
 	vrw types.ValueReadWriter,
 	tblName string,
 	sch schema.Schema,
@@ -133,7 +134,8 @@ func mergeNomsTableData(
 	changeChan, mergeChangeChan := make(chan types.ValueChanged, 32), make(chan types.ValueChanged, 32)
 
 	originalCtx := ctx
-	eg, ctx := errgroup.WithContext(ctx)
+	eg, errGrCtx := errgroup.WithContext(ctx)
+	ctx = originalCtx.WithContext(errGrCtx)
 
 	eg.Go(func() error {
 		defer close(changeChan)

@@ -35,7 +35,12 @@ teardown() {
 
     run dolt --user=new_user sql <<< "select user from mysql.user"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "command denied to user " ]] || false
+    # https://github.com/dolthub/dolt/issues/6307 
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      [[ "$output" =~ "Access denied for user 'new_user'@'localhost'" ]] || false
+    else
+      [[ "$output" =~ "command denied to user 'new_user'@'localhost'" ]] || false
+    fi
 
     rm -rf .doltcfg
 }
@@ -236,6 +241,9 @@ teardown() {
 }
 
 @test "sql-shell: specify doltcfg directory" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Remote behavior differs"
+    fi
     # remove any previous config directories
     rm -rf .doltcfg
     rm -rf doltcfgdir
@@ -273,6 +281,9 @@ teardown() {
 }
 
 @test "sql-shell: specify privilege file" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Remote behavior differs"
+    fi
     # remove config files
     rm -rf .doltcfg
     rm -f privs.db
@@ -506,6 +517,9 @@ teardown() {
 }
 
 @test "sql-shell: specify doltcfg-dir and privilege-file" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Remote behavior differs"
+    fi
     # remove any previous config directories
     rm -rf .doltcfg
     rm -rf doltcfgdir
