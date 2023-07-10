@@ -17,10 +17,11 @@ package testcommands
 import (
 	"context"
 	"fmt"
-	cmd "github.com/dolthub/dolt/go/cmd/dolt/commands"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"os"
 	"path/filepath"
+
+	cmd "github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"

@@ -17,8 +17,9 @@ package actions
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/datas"
 	"time"
+
+	"github.com/dolthub/dolt/go/store/datas"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
