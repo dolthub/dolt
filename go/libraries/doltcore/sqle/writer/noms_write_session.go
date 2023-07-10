@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -34,10 +35,10 @@ import (
 // It's responsible for creating and managing the lifecycle of TableWriter's.
 type WriteSession interface {
 	// GetTableWriter creates a TableWriter and adds it to the WriteSession.
-	GetTableWriter(ctx context.Context, table, db string, setter SessionRootSetter) (TableWriter, error)
+	GetTableWriter(ctx *sql.Context, table, db string, setter SessionRootSetter) (TableWriter, error)
 
 	// SetWorkingSet modifies the state of the WriteSession. The WorkingSetRef of |ws| must match the existing Ref.
-	SetWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error
+	SetWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error
 
 	// GetOptions returns the editor.Options for this session.
 	GetOptions() editor.Options
@@ -51,7 +52,10 @@ type WriteSession interface {
 // WriteSessionFlusher is responsible for flushing any pending edits to the session
 type WriteSessionFlusher interface {
 	// Flush flushes the pending writes in the session.
-	Flush(ctx context.Context) (*doltdb.WorkingSet, error)
+	Flush(ctx *sql.Context) (*doltdb.WorkingSet, error)
+	// FlushWithAutoIncrementOverrides flushes the pending writes in the session, overriding the auto increment values
+	// for any tables provided in the map
+	FlushWithAutoIncrementOverrides(ctx *sql.Context, increment bool, autoIncrements map[string]uint64) (*doltdb.WorkingSet, error)
 }
 
 // nomsWriteSession handles all edit operations on a table that may also update other tables.
@@ -88,7 +92,7 @@ func NewWriteSession(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, aiTracker 
 	}
 }
 
-func (s *nomsWriteSession) GetTableWriter(ctx context.Context, table, db string, setter SessionRootSetter) (TableWriter, error) {
+func (s *nomsWriteSession) GetTableWriter(ctx *sql.Context, table, db string, setter SessionRootSetter) (TableWriter, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
@@ -132,14 +136,19 @@ func (s *nomsWriteSession) GetTableWriter(ctx context.Context, table, db string,
 }
 
 // Flush returns an updated root with all of the changed tables.
-func (s *nomsWriteSession) Flush(ctx context.Context) (*doltdb.WorkingSet, error) {
+func (s *nomsWriteSession) Flush(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	return s.flush(ctx)
 }
 
+func (s *nomsWriteSession) FlushWithAutoIncrementOverrides(ctx *sql.Context, increment bool, autoIncrements map[string]uint64) (*doltdb.WorkingSet, error) {
+	// auto increment overrides not implemented
+	return s.Flush(ctx)
+}
+
 // SetWorkingSet implements WriteSession.
-func (s *nomsWriteSession) SetWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error {
+func (s *nomsWriteSession) SetWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	return s.setWorkingSet(ctx, ws)
@@ -154,7 +163,7 @@ func (s *nomsWriteSession) SetOptions(opts editor.Options) {
 }
 
 // flush is the inner implementation for Flush that does not acquire any locks
-func (s *nomsWriteSession) flush(ctx context.Context) (*doltdb.WorkingSet, error) {
+func (s *nomsWriteSession) flush(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 	newRoot := s.workingSet.WorkingRoot()
 	mu := &sync.Mutex{}
 	rootUpdate := func(name string, table *doltdb.Table) (err error) {
@@ -166,7 +175,8 @@ func (s *nomsWriteSession) flush(ctx context.Context) (*doltdb.WorkingSet, error
 		return err
 	}
 
-	eg, ctx := errgroup.WithContext(ctx)
+	eg, egCtx := errgroup.WithContext(ctx)
+	ctx = ctx.WithContext(egCtx)
 
 	for tblName, tblEditor := range s.tables {
 		if !tblEditor.HasEdits() {

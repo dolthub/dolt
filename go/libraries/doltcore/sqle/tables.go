@@ -34,10 +34,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
@@ -1129,7 +1129,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 	}
 
 	if column.AutoIncrement {
-		ait, err := t.db.gs.GetAutoIncrementTracker(ctx)
+		ait, err := t.db.gs.AutoIncrementTracker(ctx)
 		if err != nil {
 			return err
 		}
@@ -1372,7 +1372,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 
 	// TODO: figure out locking. Other DBs automatically lock a table during this kind of operation, we should probably
 	//  do the same. We're messing with global auto-increment values here and it's not safe.
-	ait, err := t.db.gs.GetAutoIncrementTracker(ctx)
+	ait, err := t.db.gs.AutoIncrementTracker(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1644,6 +1644,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 
 	// For auto columns modified to be auto increment, we have more work to do
 	if !existingCol.AutoIncrement && col.AutoIncrement {
+		// TODO: delegate this to tracker?
 		seq, err := t.getFirstAutoIncrementValue(ctx, columnName, column.Type, updatedTable)
 		if err != nil {
 			return err
@@ -1654,14 +1655,19 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 			return err
 		}
 
-		ait, err := t.db.gs.GetAutoIncrementTracker(ctx)
+		ait, err := t.db.gs.AutoIncrementTracker(ctx)
 		if err != nil {
 			return err
 		}
 
-		// TODO: this isn't transactional, and it should be
+		// TODO: this isn't transactional, and it should be (but none of the auto increment tracking is)
 		ait.AddNewTable(t.tableName)
-		ait.Set(t.tableName, seq)
+		// Since this is a new auto increment table, we don't need to exclude the current working set from consideration
+		// when computing its new sequence value, hence the empty ref
+		_, err = ait.Set(ctx, t.tableName, updatedTable, ref.WorkingSetRef{}, seq)
+		if err != nil {
+			return err
+		}
 	}
 
 	// If we're removing an auto inc property, we just need to update global auto increment tracking
@@ -1734,7 +1740,7 @@ func (t *AlterableDoltTable) getFirstAutoIncrementValue(
 		}
 	}
 
-	seq, err := globalstate.CoerceAutoIncrementValue(initialValue)
+	seq, err := dsess.CoerceAutoIncrementValue(initialValue)
 	if err != nil {
 		return 0, err
 	}

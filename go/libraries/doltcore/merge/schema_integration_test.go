@@ -19,6 +19,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -700,7 +701,7 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 
 	opts := editor.TestEditorOptions(dEnv.DoltDB.ValueReadWriter())
 	mo := merge.MergeOpts{IsCherryPick: false}
-	result, err := merge.MergeRoots(ctx, mainRoot, otherRoot, ancRoot, mainWS, otherWS, opts, mo)
+	result, err := merge.MergeRoots(sql.NewContext(ctx), mainRoot, otherRoot, ancRoot, mainWS, otherWS, opts, mo)
 	assert.NoError(t, err)
 
 	fkc, err := result.Root.GetForeignKeyCollection(ctx)

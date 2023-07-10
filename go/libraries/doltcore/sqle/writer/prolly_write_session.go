@@ -18,6 +18,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -39,7 +40,7 @@ type prollyWriteSession struct {
 var _ WriteSession = &prollyWriteSession{}
 
 // GetTableWriter implemented WriteSession.
-func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table, db string, setter SessionRootSetter) (TableWriter, error) {
+func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, table, db string, setter SessionRootSetter) (TableWriter, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
@@ -106,14 +107,20 @@ func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table, db strin
 }
 
 // Flush implemented WriteSession.
-func (s *prollyWriteSession) Flush(ctx context.Context) (*doltdb.WorkingSet, error) {
+func (s *prollyWriteSession) Flush(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
-	return s.flush(ctx)
+	return s.flush(ctx, false, nil)
+}
+
+func (s *prollyWriteSession) FlushWithAutoIncrementOverrides(ctx *sql.Context, autoIncSet bool, autoIncrements map[string]uint64) (*doltdb.WorkingSet, error) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	return s.flush(ctx, autoIncSet, autoIncrements)
 }
 
 // SetWorkingSet implements WriteSession.
-func (s *prollyWriteSession) SetWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error {
+func (s *prollyWriteSession) SetWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	return s.setWorkingSet(ctx, ws)
@@ -130,24 +137,43 @@ func (s *prollyWriteSession) SetOptions(opts editor.Options) {
 }
 
 // flush is the inner implementation for Flush that does not acquire any locks
-func (s *prollyWriteSession) flush(ctx context.Context) (*doltdb.WorkingSet, error) {
+func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, manualAutoIncrementsSettings map[string]uint64) (*doltdb.WorkingSet, error) {
 	tables := make(map[string]*doltdb.Table, len(s.tables))
 	mu := &sync.Mutex{}
 
-	eg, ctx2 := errgroup.WithContext(ctx)
+	eg, egCtx := errgroup.WithContext(ctx)
+	sqlEgCtx := ctx.WithContext(egCtx)
+
 	for n := range s.tables {
 		name := n // make a copy
 		eg.Go(func() error {
 			wr := s.tables[name]
-			t, err := wr.table(ctx2)
+			t, err := wr.table(sqlEgCtx)
 			if err != nil {
 				return err
 			}
 
+			// Update this table's auto increment value if it has one. This value comes from the global state unless an
+			// override was specified (e.g. if the next value was set explicitly)
 			if schema.HasAutoIncrement(wr.sch) {
-				t, err = t.SetAutoIncrementValue(ctx2, s.aiTracker.Current(name))
-				if err != nil {
-					return err
+				autoIncVal := s.aiTracker.Current(name)
+				override, hasManuallySetAi := manualAutoIncrementsSettings[name]
+				if hasManuallySetAi {
+					autoIncVal = override
+				}
+
+				// Update the table with the new auto-inc value if necessary. If it was set manually via an ALTER TABLE
+				// statement, we defer to the tracker to update the value itself, since this impacts the global state.
+				if hasManuallySetAi {
+					t, err = s.aiTracker.Set(sqlEgCtx, name, t, s.workingSet.Ref(), autoIncVal)
+					if err != nil {
+						return err
+					}
+				} else if autoIncSet {
+					t, err = t.SetAutoIncrementValue(sqlEgCtx, autoIncVal)
+					if err != nil {
+						return err
+					}
 				}
 			}
 

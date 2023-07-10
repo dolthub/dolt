@@ -886,6 +886,33 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "DOLT_MERGE(--abort) clears staged",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key);",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"set autocommit = off;",
+			"CREATE TABLE one_pk (pk1 BIGINT NOT NULL, c1 BIGINT, c2 BIGINT, PRIMARY KEY (pk1));",
+			"CALL DOLT_ADD('.');",
+			"call dolt_commit('-a', '-m', 'add tables');",
+			"call dolt_checkout('-b', 'feature-branch');",
+			"call dolt_checkout('main');",
+			"INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0);",
+			"call dolt_commit('-a', '-m', 'changed main');",
+			"call dolt_checkout('feature-branch');",
+			"INSERT INTO one_pk (pk1,c1,c2) VALUES (0,1,1);",
+			"call dolt_commit('-a', '-m', 'changed feature branch');",
+			"call dolt_checkout('main');",
+			"call dolt_merge('feature-branch');",
+			"call dolt_merge('--abort');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from dolt_status;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
 		Name: "CALL DOLT_MERGE complains when a merge overrides local changes",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
