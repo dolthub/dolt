@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -31,6 +32,19 @@ import (
 )
 
 var ErrEmptyBranchName = errors.New("error: cannot checkout empty string")
+
+var doltCheckoutSchema = []*sql.Column{
+	{
+		Name:     "status",
+		Type:     types.Int64,
+		Nullable: false,
+	},
+	{
+		Name:     "message",
+		Type:     types.LongText,
+		Nullable: true,
+	},
+}
 
 // doltCheckout is the stored procedure version for the CLI command `dolt checkout`.
 func doltCheckout(ctx *sql.Context, args ...string) (sql.RowIter, error) {
