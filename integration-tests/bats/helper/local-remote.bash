@@ -45,7 +45,6 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~1pksupportedtypes.bats~
 ~init.bats~
 ~index.bats~
-~revert.bats~
 ~merge.bats~
 ~1pk5col-ints.bats~
 ~sql-client.bats~

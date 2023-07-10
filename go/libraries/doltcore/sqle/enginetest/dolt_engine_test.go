@@ -1597,6 +1597,28 @@ func TestDoltMergePrepared(t *testing.T) {
 	}
 }
 
+func TestDoltRevert(t *testing.T) {
+	for _, script := range RevertScripts {
+		// harness can't reset effectively. Use a new harness for each script
+		func() {
+			h := newDoltHarness(t).WithParallelism(1)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func TestDoltRevertPrepared(t *testing.T) {
+	for _, script := range RevertScripts {
+		// harness can't reset effectively. Use a new harness for each script
+		func() {
+			h := newDoltHarness(t).WithParallelism(1)
+			defer h.Close()
+			enginetest.TestScriptPrepared(t, h, script)
+		}()
+	}
+}
+
 func TestDoltAutoIncrement(t *testing.T) {
 	for _, script := range DoltAutoIncrementTests {
 		// doing commits on different branches is antagonistic to engine reuse, use a new engine on each script
