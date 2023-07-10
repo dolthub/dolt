@@ -17,6 +17,7 @@ package commands
 import (
 	"bytes"
 	"context"
+	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/gocraft/dbr/v2"
@@ -103,7 +104,7 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 			cli.Println(err.Error())
 			return 1
 		}
-		author = name + " <" + email + ">"
+		author = fmt.Sprintf("%s <%s>", name, email)
 	}
 
 	var params []interface{}
@@ -125,7 +126,7 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	schema, rowIter, err := queryist.Query(sqlCtx, query)
 	if err != nil {
-		cli.Println(err.Error())
+		cli.Printf("Failure to execute '%s': %s\n", query, err.Error())
 		return 1
 	}
 	_, err = sql.RowIterToRows(sqlCtx, schema, rowIter)
