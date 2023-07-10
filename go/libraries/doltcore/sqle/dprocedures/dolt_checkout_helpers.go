@@ -17,11 +17,11 @@ package dprocedures
 import (
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
