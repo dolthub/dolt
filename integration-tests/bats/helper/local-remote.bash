@@ -99,7 +99,6 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~import-append-tables.bats~
 ~backup.bats~
 ~default-values.bats~
-~sql-shell.bats~
 ~types.bats~
 ~config-home.bats~
 ~cherry-pick.bats~
@@ -108,7 +107,6 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~sql-branch.bats~
 ~sql-check-constraints.bats~
 ~keyless.bats~
-~commit_tags.bats~
 ~regression-tests.bats~
 ~sql-privs.bats~
 ~keyless-foreign-keys.bats~

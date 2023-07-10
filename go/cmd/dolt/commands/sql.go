@@ -785,7 +785,12 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 				}
 			}
 
+			db, ok := getDBFromSession(sqlCtx, qryist)
+			if ok {
+				sqlCtx.SetCurrentDatabase(db)
+			}
 			nextPrompt = fmt.Sprintf("%s> ", sqlCtx.GetCurrentDatabase())
+
 			return true
 		}()
 
@@ -801,6 +806,33 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 	_ = iohelp.WriteLine(cli.CliOut, "Bye")
 
 	return nil
+}
+
+// getDBFromSession returns the current database name for the session, handling all the errors along the way by printing
+// red error messages to the CLI. If there was an issue getting the db name, the second return value is false.
+func getDBFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string, ok bool) {
+	db = "unknown"
+	_, resp, err := qryist.Query(sqlCtx, "select database()")
+	if err != nil {
+		cli.Println(color.RedString("Failure to get DB Name for session" + err.Error()))
+		return db, false
+	}
+	// Expect single row/single column result with the db name.
+	row, err := resp.Next(sqlCtx)
+	if err != nil {
+		cli.Println(color.RedString("Failure to get DB Name for session" + err.Error()))
+		return db, false
+	}
+	if len(row) != 1 {
+		cli.Println(color.RedString("Failure to get DB Name for session" + err.Error()))
+		return db, false
+	}
+	if row[0] == nil || row[0].(string) == "" {
+		cli.Println(color.RedString("Empty Database name obtained" + err.Error()))
+		return db, false
+	}
+	db = row[0].(string)
+	return db, true
 }
 
 // Returns a new auto completer with table names, column names, and SQL keywords.
