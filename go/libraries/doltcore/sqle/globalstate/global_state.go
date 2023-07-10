@@ -14,82 +14,16 @@
 
 package globalstate
 
-import (
-	"context"
-	"sync"
+import "github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/go-mysql-server/sql"
+// GlobalState is just a holding interface for pieces of global state, of which the auto increment tracking info is
+// the only example at the moment.
+type GlobalState interface {
+	// AutoIncrementTracker returns the auto increment tracker for this global state.
+	AutoIncrementTracker(ctx *sql.Context) (AutoIncrementTracker, error)
+}
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-)
-
-type StateProvider interface {
+// GlobalStateProvider is an optional interface for databases that provide global state tracking
+type GlobalStateProvider interface {
 	GetGlobalState() GlobalState
-}
-
-func NewGlobalStateStoreForDb(ctx context.Context, db *doltdb.DoltDB) (GlobalState, error) {
-	branches, err := db.GetBranches(ctx)
-	if err != nil {
-		return GlobalState{}, err
-	}
-
-	remotes, err := db.GetRemoteRefs(ctx)
-	if err != nil {
-		return GlobalState{}, err
-	}
-
-	rootRefs := make([]ref.DoltRef, 0, len(branches)+len(remotes))
-	rootRefs = append(rootRefs, branches...)
-	rootRefs = append(rootRefs, remotes...)
-
-	var roots []doltdb.Rootish
-	for _, b := range rootRefs {
-		switch b.GetType() {
-		case ref.BranchRefType:
-			wsRef, err := ref.WorkingSetRefForHead(b)
-			if err != nil {
-				return GlobalState{}, err
-			}
-
-			ws, err := db.ResolveWorkingSet(ctx, wsRef)
-			if err == doltdb.ErrWorkingSetNotFound {
-				// use the branch head if there isn't a working set for it
-				cm, err := db.ResolveCommitRef(ctx, b)
-				if err != nil {
-					return GlobalState{}, err
-				}
-				roots = append(roots, cm)
-			} else if err != nil {
-				return GlobalState{}, err
-			} else {
-				roots = append(roots, ws)
-			}
-		case ref.RemoteRefType:
-			cm, err := db.ResolveCommitRef(ctx, b)
-			if err != nil {
-				return GlobalState{}, err
-			}
-			roots = append(roots, cm)
-		}
-	}
-
-	tracker, err := NewAutoIncrementTracker(ctx, roots...)
-	if err != nil {
-		return GlobalState{}, err
-	}
-
-	return GlobalState{
-		aiTracker: tracker,
-		mu:        &sync.Mutex{},
-	}, nil
-}
-
-type GlobalState struct {
-	aiTracker AutoIncrementTracker
-	mu        *sync.Mutex
-}
-
-func (g GlobalState) GetAutoIncrementTracker(ctx *sql.Context) (AutoIncrementTracker, error) {
-	return g.aiTracker, nil
 }

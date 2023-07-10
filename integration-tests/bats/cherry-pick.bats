@@ -4,7 +4,10 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 setup() {
     setup_common
 
-    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10), index(v))"
+    dolt sql <<SQL
+CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10), index(v));
+INSERT INTO dolt_ignore VALUES ('generated_*', 1);
+SQL
     dolt add .
     dolt commit -am "Created table"
     dolt checkout -b branch1
@@ -14,6 +17,7 @@ setup() {
     dolt commit -am "Inserted 2"
     dolt sql -q "INSERT INTO test VALUES (3, 'c')"
     dolt commit -am "Inserted 3"
+    dolt sql -q "CREATE TABLE generated_foo (pk int PRIMARY KEY);"
 
     run dolt sql -q "SELECT * FROM test" -r csv
     [[ "$output" =~ "1,a" ]] || false
@@ -156,7 +160,7 @@ teardown() {
     [[ ! "$output" =~ "branch1table" ]] || false
 }
 
-@test "cherry-pick: error when using `--abort` with no in-progress cherry-pick" {
+@test "cherry-pick: error when using --abort with no in-progress cherry-pick" {
     run dolt cherry-pick --abort
     [ $status -eq 1 ]
     [[ $output =~ "error: There is no cherry-pick merge to abort" ]] || false
@@ -190,8 +194,10 @@ teardown() {
     # Assert that table 'test' is staged, but table 'other' is not staged, since it had conflicts
     run dolt sql -q "SELECT * from dolt_status;"
     [ $status -eq 0 ]
-    [[ $output =~ "| test       | true   | modified |" ]] || false
-    [[ $output =~ "| other      | false  | modified |" ]] || false
+    [[ $output =~ "| test          | true   | modified  |" ]] || false
+    [[ $output =~ "| other         | false  | modified  |" ]] || false
+    [[ $output =~ "| other         | false  | conflict  |" ]] || false
+    [[ $output =~ "| generated_foo | false  | new table |" ]] || false
 
     # Make sure the data conflict shows up correctly
     run dolt conflicts cat .
@@ -234,8 +240,9 @@ teardown() {
     # Assert that only 'test' is staged for commit ('other' has a constraint violation)
     run dolt sql -q "SELECT * from dolt_status;"
     [ $status -eq 0 ]
-    [[ $output =~ "| other      | false  | modified |" ]] || false
-    [[ $output =~ "| test       | true   | modified |" ]] || false
+    [[ $output =~ "| other         | false  | modified  |" ]] || false
+    [[ $output =~ "| test          | true   | modified  |" ]] || false
+    [[ $output =~ "| generated_foo | false  | new table |" ]] || false
 
     # Assert the expected constraint violations
     run dolt sql -q "SELECT * FROM dolt_constraint_violations;"
@@ -394,7 +401,7 @@ teardown() {
     dolt checkout main
     run dolt cherry-pick branch1
     [ $status -eq 1 ]
-    [[ $output =~ "cherry-picking a merge commit is not supported." ]] || false
+    [[ $output =~ "cherry-picking a merge commit is not supported" ]] || false
 }
 
 @test "cherry-pick: cherry-pick commit is a cherry-picked commit" {
