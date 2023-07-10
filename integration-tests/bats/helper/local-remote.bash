@@ -108,7 +108,6 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~sql-branch.bats~
 ~sql-check-constraints.bats~
 ~keyless.bats~
-~commit_tags.bats~
 ~regression-tests.bats~
 ~sql-privs.bats~
 ~keyless-foreign-keys.bats~
