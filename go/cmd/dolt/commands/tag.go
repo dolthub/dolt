@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -96,64 +97,36 @@ func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	// list tags
 	if len(apr.Args) == 0 {
-		var verr errhand.VerboseError
-		if apr.Contains(cli.DeleteFlag) {
-			verr = errhand.BuildDError("must specify a tag name to delete").Build()
-		} else if apr.Contains(cli.MessageArg) {
-			verr = errhand.BuildDError("must specify a tag name to create").Build()
-		} else {
-			err = listTags(queryist, sqlCtx, apr)
-			if err != nil {
-				verr = errhand.BuildDError("failed to list tags").AddCause(err).Build()
-			}
-		}
-		return HandleVErrAndExitCode(verr, usage)
+		err = listTags(queryist, sqlCtx, apr)
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
 	// delete tag
 	if apr.Contains(cli.DeleteFlag) {
-		var verr errhand.VerboseError
-		if apr.Contains(cli.MessageArg) {
-			verr = errhand.BuildDError("delete and tag message options are incompatible").Build()
-		} else if apr.Contains(cli.VerboseFlag) {
-			verr = errhand.BuildDError("delete and verbose options are incompatible").Build()
-		} else {
-			for _, tagName := range apr.Args {
-				err = deleteTag(queryist, sqlCtx, tagName)
-				if err != nil {
-					verr = errhand.BuildDError("failed to delete tag").AddCause(err).Build()
-					break
-				}
-			}
-		}
-		return HandleVErrAndExitCode(verr, usage)
+		err = deleteTags(queryist, sqlCtx, apr)
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
 	// create tag
-	var verr errhand.VerboseError
-	if apr.Contains(cli.VerboseFlag) {
-		verr = errhand.BuildDError("verbose flag can only be used with tag listing").Build()
-	} else if len(apr.Args) > 2 {
-		verr = errhand.BuildDError("create tag takes at most two args").Build()
-	} else {
-		tagName := apr.Arg(0)
-		startPoint := "head"
-		if len(apr.Args) > 1 {
-			startPoint = apr.Arg(1)
-		}
-		msg, _ := apr.GetValue(cli.MessageArg)
-		author, _ := apr.GetValue(cli.AuthorParam)
-
-		err = createTag(queryist, sqlCtx, tagName, startPoint, msg, author)
-
-		if err != nil {
-			verr = errhand.BuildDError("failed to create tag").AddCause(err).Build()
-		}
-	}
-	return HandleVErrAndExitCode(verr, usage)
+	err = createTag(queryist, sqlCtx, apr)
+	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }
 
-func createTag(queryist cli.Queryist, sqlCtx *sql.Context, tagName, startPoint, message, author string) error {
+func createTag(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseResults) error {
+	if apr.Contains(cli.VerboseFlag) {
+		return errors.New("verbose flag can only be used with tag listing")
+	} else if len(apr.Args) > 2 {
+		return errors.New("create tag takes at most two args")
+	}
+
+	tagName := apr.Arg(0)
+	startPoint := "head"
+	if len(apr.Args) > 1 {
+		startPoint = apr.Arg(1)
+	}
+	message, _ := apr.GetValue(cli.MessageArg)
+	author, _ := apr.GetValue(cli.AuthorParam)
+
 	var query string
 	var params []interface{}
 	if len(message) == 0 {
@@ -181,15 +154,29 @@ func createTag(queryist cli.Queryist, sqlCtx *sql.Context, tagName, startPoint, 
 	return nil
 }
 
-func deleteTag(queryist cli.Queryist, sqlCtx *sql.Context, tagName string) error {
-	_, err := InterpolateAndRunQuery(queryist, sqlCtx, "call dolt_tag('-d', ?)", tagName)
-	if err != nil {
-		return fmt.Errorf("error: failed to delete tag %s: %w", tagName, err)
+func deleteTags(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseResults) error {
+	if apr.Contains(cli.MessageArg) {
+		return errors.New("delete and tag message options are incompatible")
+	} else if apr.Contains(cli.VerboseFlag) {
+		return errors.New("delete and verbose options are incompatible")
+	} else {
+		for _, tagName := range apr.Args {
+			_, err := InterpolateAndRunQuery(queryist, sqlCtx, "call dolt_tag('-d', ?)", tagName)
+			if err != nil {
+				return fmt.Errorf("error: failed to delete tag %s: %w", tagName, err)
+			}
+		}
 	}
 	return nil
 }
 
 func listTags(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseResults) error {
+	if apr.Contains(cli.DeleteFlag) {
+		return errors.New("must specify a tag name to delete")
+	} else if apr.Contains(cli.MessageArg) {
+		return errors.New("must specify a tag name to create")
+	}
+
 	tagInfos, err := getTagInfos(queryist, sqlCtx)
 	if err != nil {
 		return fmt.Errorf("error: failed to list tags: %w", err)
