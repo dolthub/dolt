@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 
@@ -35,6 +36,8 @@ import (
 	"github.com/dolthub/dolt/go/store/datas/pull"
 )
 
+// remoteInfo contains information about a remote.
+// This information is read from the dolt_remotes table.
 type remoteInfo struct {
 	Name       string
 	Url        string
@@ -42,6 +45,8 @@ type remoteInfo struct {
 	Params     map[string]string
 }
 
+// remoteBranchInfo contains information about a remote branch.
+// This information is read from the dolt_remote_branches table. We are only surfacing name and hash columns so far.
 type remoteBranchInfo struct {
 	Name string
 	Hash string
@@ -198,7 +203,7 @@ func push(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseRes
 		return fmt.Errorf("failed to get post-push remote branches: %w", err)
 	}
 
-	changesMade := getChangesMade(remoteBranches, postPushRemoteBranches)
+	changesMade := !reflect.DeepEqual(remoteBranches, postPushRemoteBranches)
 	if !changesMade {
 		cli.Println("Everything up-to-date")
 	}
@@ -206,26 +211,7 @@ func push(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseRes
 	return nil
 }
 
-func getChangesMade(remoteBranches map[string]remoteBranchInfo, postPushRemoteBranches map[string]remoteBranchInfo) bool {
-	changesMade := false
-	if len(remoteBranches) != len(postPushRemoteBranches) {
-		changesMade = true
-	} else {
-		for name, remoteBranch := range remoteBranches {
-			updatedRemoteBranch, ok := postPushRemoteBranches[name]
-			if !ok {
-				changesMade = true
-				break
-			}
-			if remoteBranch.Hash != updatedRemoteBranch.Hash {
-				changesMade = true
-				break
-			}
-		}
-	}
-	return changesMade
-}
-
+// getRemotes returns a map of remotes keyed by name.
 func getRemotes(queryist cli.Queryist, sqlCtx *sql.Context) (map[string]remoteInfo, error) {
 	rows, err := GetRowsForSql(queryist, sqlCtx, "select * from dolt_remotes")
 	if err != nil {
@@ -234,13 +220,19 @@ func getRemotes(queryist cli.Queryist, sqlCtx *sql.Context) (map[string]remoteIn
 
 	remotes := map[string]remoteInfo{}
 	for _, row := range rows {
+		// read row data
 		name := row[0].(string)
 		url := row[1].(string)
-
 		fetchSpecsJson, err := getJsonDocumentCol(sqlCtx, row[2])
 		if err != nil {
 			return nil, fmt.Errorf("failed to read fetch specs for remote %s: %w", name, err)
 		}
+		paramsJson, err := getJsonDocumentCol(sqlCtx, row[3])
+		if err != nil {
+			return nil, fmt.Errorf("failed to read params for remote %s: %w", name, err)
+		}
+
+		// parse fetch specs
 		fetchSpecsArray, ok := fetchSpecsJson.Val.([]interface{})
 		if !ok {
 			return nil, fmt.Errorf("failed to read fetch specs for remote %s", name)
@@ -254,10 +246,7 @@ func getRemotes(queryist cli.Queryist, sqlCtx *sql.Context) (map[string]remoteIn
 			fetchSpecs = append(fetchSpecs, text)
 		}
 
-		paramsJson, err := getJsonDocumentCol(sqlCtx, row[3])
-		if err != nil {
-			return nil, fmt.Errorf("failed to read params for remote %s: %w", name, err)
-		}
+		// parse params
 		var paramsMap map[string]interface{}
 		if paramsJson.Val == nil {
 			paramsMap = map[string]interface{}{}
@@ -276,6 +265,7 @@ func getRemotes(queryist cli.Queryist, sqlCtx *sql.Context) (map[string]remoteIn
 			params[k] = text
 		}
 
+		// create remote info
 		remote := remoteInfo{
 			Name:       name,
 			Url:        url,
@@ -287,6 +277,7 @@ func getRemotes(queryist cli.Queryist, sqlCtx *sql.Context) (map[string]remoteIn
 	return remotes, nil
 }
 
+// getRemoteBranches returns a map of remote branches keyed by name.
 func getRemoteBranches(queryist cli.Queryist, sqlCtx *sql.Context) (map[string]remoteBranchInfo, error) {
 	rows, err := GetRowsForSql(queryist, sqlCtx, "select name, hash from dolt_remote_branches")
 	if err != nil {
@@ -306,6 +297,10 @@ func getRemoteBranches(queryist cli.Queryist, sqlCtx *sql.Context) (map[string]r
 	return rbs, nil
 }
 
+// getTrackingRefs returns the source and destination tracking refs for a given branch and remote.
+// The source ref is the ref of the local branch, and the destination ref is the ref of the remote branch.
+// Given a remote with fetch specs `"refs/heads/*:refs/remotes/test-remote/*"`, and a branch named `feature`,
+// the source ref would be `refs/heads/feature` and the destination ref would be `refs/remotes/test-remote/feature`.
 func getTrackingRefs(branchName string, info remoteInfo) (fromRef, toRef string, err error) {
 	branchRef := ref.NewBranchRef(branchName)
 
