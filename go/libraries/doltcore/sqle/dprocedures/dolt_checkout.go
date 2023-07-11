@@ -56,14 +56,16 @@ func doltCheckout(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	return rowToIter(int64(res), message), nil
 }
 
-func doDoltCheckout(ctx *sql.Context, args []string) (int, string, error) {
+func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMessage string, err error) {
 	currentDbName := ctx.GetCurrentDatabase()
 	if len(currentDbName) == 0 {
 		return 1, "", fmt.Errorf("Empty database name.")
 	}
 
 	argParser := cli.CreateCheckoutArgParser()
-	argParser.SupportsFlag(cli.MoveFlag, "m", "mimic the behavior of the `dolt checkout` command line, moving the working set into the new branch.")
+	// The --move flag is used internally by the `dolt checkout` CLI command. It is not intended for external use.
+	// It mimics the behavior of the `dolt checkout` command line, moving the working set into the new branch.
+	argParser.SupportsFlag(cli.MoveFlag, "m", "")
 	apr, err := argParser.Parse(args)
 	if err != nil {
 		return 1, "", err
@@ -174,7 +176,6 @@ func doDoltCheckout(ctx *sql.Context, args []string) (int, string, error) {
 		return 0, "", err
 	}
 
-	var successMessage string
 	err = checkoutTables(ctx, roots, currentDbName, apr.Args)
 	if err != nil && apr.NArg() == 1 {
 		upstream, err := checkoutRemoteBranch(ctx, dSess, currentDbName, dbData, branchName, apr, &rsc)

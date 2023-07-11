@@ -146,13 +146,14 @@ func transferWorkingChanges(
 	force bool,
 ) error {
 	dSess := dsess.DSessFromSess(ctx.Session)
+
+	// Compute the new roots before switching the working set.
+	// This way, we don't leave the branch in a bad state in the event of an error.
 	newRoots, err := actions.RootsForBranch(ctx, initialRoots, branchHead, force)
 	if err != nil {
 		return err
 	}
 
-	// important to not update the checked out branch until after we have done the error checking above, otherwise we
-	// potentially leave the client in a bad state
 	wsRef, err := ref.WorkingSetRefForHead(branchRef)
 	if err != nil {
 		return err
