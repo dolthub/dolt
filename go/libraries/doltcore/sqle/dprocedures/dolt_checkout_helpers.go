@@ -27,6 +27,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
+// MoveWorkingSetToBranch moves the working set from the currently checked out branch onto the branch specified
+// by `brName`. This is a POTENTIALLY DESTRUCTIVE ACTION used during command line checkout
 func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool) error {
 	branchRef := ref.NewBranchRef(brName)
 	dSess := dsess.DSessFromSess(ctx.Session)
@@ -137,6 +139,9 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool) error {
 	return nil
 }
 
+// transferWorkingChanges computes new roots for `branchRef` by applying the changes from the staged and working sets
+// of `initialRoots` onto the branch head specified by `branchHead`. This is a DESTRUCTIVE ACTION used during command
+// line checkout, to move the working set changes onto a new branch.
 func transferWorkingChanges(
 	ctx *sql.Context,
 	dbName string,
