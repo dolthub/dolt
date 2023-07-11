@@ -26,6 +26,13 @@ export function assertQueryResult(q, resultStr, expected, rows, matcher) {
   if (q.toLowerCase().includes("dolt_commit")) {
     return rows.length === 1 && rows[0].hash.length === 32;
   }
+  if (q.toLowerCase().includes("dolt_merge")) {
+    const result = JSON.parse(resultStr);
+    return (
+      expected.fast_forward === result.fast_forward &&
+      expected.conflicts === result.conflicts
+    );
+  }
   return resultStr === JSON.stringify(expected);
 }
 

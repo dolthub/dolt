@@ -47,7 +47,14 @@ async function runTests(database, tests) {
           assertEqualRows(test, rows);
         })
         .catch((err) => {
-          handleError(test, err);
+          if (test.expectedErr) {
+            if (err.message.includes(test.expectedErr)) {
+              return;
+            } else {
+              console.log("Query error did not match expected:", test.q);
+            }
+          }
+          console.error(err);
           process.exit(1);
         });
     })
@@ -63,15 +70,4 @@ function assertEqualRows(test, rows) {
     console.log("Expected:", expected);
     throw new Error(`Query failed: ${test.q}`);
   }
-}
-
-function handleError(test, err) {
-  if (test.expectedErr) {
-    if (err.message.includes(test.expectedErr)) {
-      return;
-    } else {
-      console.log("Query error did not match expected:", test.q);
-    }
-  }
-  console.error(err);
 }
