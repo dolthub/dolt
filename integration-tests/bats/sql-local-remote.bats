@@ -32,6 +32,17 @@ setup() {
     unset DOLT_SILENCE_USER_REQ_FOR_TESTING
     make_repo defaultDB
     make_repo altDB
+
+    # setup remotes
+    cd defaultDB
+    mkdir ../remote1
+    dolt remote add remote1 file://../remote1
+
+    cd ../altDB
+    mkdir ../remote2
+    dolt remote add remote2 file://../remote2
+
+    cd ..
 }
 
 teardown() {
@@ -158,7 +169,6 @@ get_commit_hash_at() {
     [[ "$output" =~ "starting local mode" ]] || false
     [[ "$output" =~ "altDB_tbl" ]] || false
 }
-
 
 @test "sql-local-remote: check --data-dir pointing to a database root can be used when in different directory." {
     start_sql_server altDb
@@ -994,4 +1004,67 @@ SQL
   [[ $output =~ "| other      | staged   | modified |" ]] || false
 
   [[ "$localCherryPickOutput" == "$remoteCherryPickOutput" ]] || false
+}
+
+@test "sql-local-remote: verify dolt push behavior" {
+    EXPECTED='+---+---+
+| a | b |
++---+---+
+| 1 | 2 |
+| 3 | 4 |
+| 5 | 6 |
++---+---+'
+
+    cd defaultDB
+
+    dolt sql -q "create table t1 (a int primary key, b int)"
+    dolt sql -q "insert into t1 values (1, 2), (3, 4), (5, 6)"
+    dolt sql -q "select * from t1"
+    dolt add .
+    dolt commit -m "first commit"
+    run dolt sql -q "select * from t1"
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    headHash=$(get_commit_hash_at "HEAD")
+    run dolt --verbose-engine-setup push remote1 main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting local mode" ]] || false
+
+    cd ..
+    dolt clone file://./remote1 local-clone
+    cd local-clone
+
+    run dolt sql -q "select * from t1"
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    remoteHeadHash=$(get_commit_hash_at "HEAD")
+    [[ "$headHash" == "$remoteHeadHash" ]] || false
+
+    cd ../altDB
+    start_sql_server altDB
+
+    dolt sql -q "create table t1 (a int primary key, b int)"
+    dolt sql -q "insert into t1 values (1, 2), (3, 4), (5, 6)"
+    dolt sql -q "select * from t1"
+    dolt add .
+    dolt commit -m "first commit"
+    run dolt sql -q "select * from t1"
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    headHash=$(get_commit_hash_at "HEAD")
+    run dolt --verbose-engine-setup push remote2 main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+
+    cd ..
+    dolt clone file://./remote2 remote-clone
+    cd remote-clone
+
+    run dolt sql -q "select * from t1"
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    remoteHeadHash=$(get_commit_hash_at "HEAD")
+    [[ "$headHash" == "$remoteHeadHash" ]] || false
 }
