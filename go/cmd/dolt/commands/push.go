@@ -225,35 +225,6 @@ func getChangesMade(remoteBranches map[string]remoteBranchInfo, postPushRemoteBr
 	return changesMade
 }
 
-func printInfoForPushError(err error, remote env.Remote, destRef, remoteRef ref.DoltRef) errhand.VerboseError {
-	switch err {
-	case doltdb.ErrUpToDate:
-		cli.Println("Everything up-to-date")
-	case doltdb.ErrIsAhead, actions.ErrCantFF, datas.ErrMergeNeeded:
-		cli.Printf("To %s\n", remote.Url)
-		cli.Printf("! [rejected]          %s -> %s (non-fast-forward)\n", destRef.String(), remoteRef.String())
-		cli.Printf("error: failed to push some refs to '%s'\n", remote.Url)
-		cli.Println("hint: Updates were rejected because the tip of your current branch is behind")
-		cli.Println("hint: its remote counterpart. Integrate the remote changes (e.g.")
-		cli.Println("hint: 'dolt pull ...') before pushing again.")
-		return errhand.BuildDError("").Build()
-	case actions.ErrUnknownPushErr:
-		status, ok := status.FromError(err)
-		if ok && status.Code() == codes.PermissionDenied {
-			cli.Println("hint: have you logged into DoltHub using 'dolt login'?")
-			cli.Println("hint: check that user.email in 'dolt config --list' has write perms to DoltHub repo")
-		}
-		if rpcErr, ok := err.(*remotestorage.RpcError); ok {
-			return errhand.BuildDError("error: push failed").AddCause(err).AddDetails(rpcErr.FullDetails()).Build()
-		} else {
-			return errhand.BuildDError("error: push failed").AddCause(err).Build()
-		}
-	default:
-		return errhand.BuildDError("error: push failed").AddCause(err).Build()
-	}
-	return nil
-}
-
 func pullerProgFunc(ctx context.Context, statsCh chan pull.Stats, language progLanguage) {
 	p := cli.NewEphemeralPrinter()
 
