@@ -575,7 +575,7 @@ func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 	}
 
 	// assert that we're on main
-	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv, nil)
+	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv, cliCtx)
 	require.Equal(t, 0, exitCode)
 
 	// merge branches
@@ -622,13 +622,15 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 		require.Equal(t, 0, exit)
 	}
 
+	cliCtx, _ := commands.NewArgFreeCliContext(ctx, dEnv)
+
 	// assert that we're on main
-	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv, nil)
+	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv, cliCtx)
 	require.Equal(t, 0, exitCode)
 
 	mainSch := getSchema(t, dEnv)
 
-	exitCode = commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"other"}, dEnv, nil)
+	exitCode = commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"other"}, dEnv, cliCtx)
 	require.Equal(t, 0, exitCode)
 
 	otherSch := getSchema(t, dEnv)
@@ -680,15 +682,17 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 		require.Equal(t, 0, exit)
 	}
 
+	cliCtx, _ := commands.NewArgFreeCliContext(ctx, dEnv)
+
 	// assert that we're on main
-	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv, nil)
+	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv, cliCtx)
 	require.Equal(t, 0, exitCode)
 
 	mainWS, err := dEnv.WorkingSet(ctx)
 	require.NoError(t, err)
 	mainRoot := mainWS.WorkingRoot()
 
-	exitCode = commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"other"}, dEnv, nil)
+	exitCode = commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"other"}, dEnv, cliCtx)
 	require.Equal(t, 0, exitCode)
 
 	otherWS, err := dEnv.WorkingSet(ctx)

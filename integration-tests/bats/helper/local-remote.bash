@@ -45,12 +45,10 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~1pksupportedtypes.bats~
 ~init.bats~
 ~index.bats~
-~revert.bats~
 ~merge.bats~
 ~1pk5col-ints.bats~
 ~sql-client.bats~
 ~sql-status.bats~
-~sql-checkout.bats~
 ~window.bats~
 ~import-create-tables.bats~
 ~status.bats~
@@ -136,6 +134,7 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~sql-commit.bats~
 ~reset.bats~
 ~sql-reset.bats~
+~sql-checkout.bats~
 EOM
 )
 

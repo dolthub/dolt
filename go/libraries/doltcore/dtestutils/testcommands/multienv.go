@@ -20,6 +20,9 @@ import (
 	"os"
 	"path/filepath"
 
+	cmd "github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -164,7 +167,13 @@ func (mr *MultiRepoTestSetup) NewBranch(dbName, branchName string) {
 
 func (mr *MultiRepoTestSetup) CheckoutBranch(dbName, branchName string) {
 	dEnv := mr.envs[dbName]
-	err := actions.CheckoutBranch(context.Background(), dEnv, branchName, false)
+	cliCtx, _ := cmd.NewArgFreeCliContext(context.Background(), dEnv)
+	_, sqlCtx, closeFunc, err := cliCtx.QueryEngine(context.Background())
+	if err != nil {
+		mr.Errhand(err)
+	}
+	defer closeFunc()
+	err = dprocedures.MoveWorkingSetToBranch(sqlCtx, branchName, false)
 	if err != nil {
 		mr.Errhand(err)
 	}

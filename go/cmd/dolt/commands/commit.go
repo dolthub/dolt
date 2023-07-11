@@ -100,7 +100,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 // performCommit creates a new Dolt commit using the specified |commandStr| and |args|. The response is an integer
 // status code indicating success or failure, as well as a boolean that indicates if the commit was skipped
 // (e.g. because --skip-empty was specified as an argument).
-func performCommit(ctx context.Context, commandStr string, args []string, cliCtx cli.CliContext, temporacyDEnv *env.DoltEnv) (int, bool) {
+func performCommit(ctx context.Context, commandStr string, args []string, cliCtx cli.CliContext, temporaryDEnv *env.DoltEnv) (int, bool) {
 	ap := cli.CreateCommitArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, commitDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
@@ -118,6 +118,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 		defer closeFunc()
 	}
 
+	// dolt_commit performs this check as well. This nips the problem in the bud early, but is not required.
 	err = branch_control.CheckAccess(sqlCtx, branch_control.Permissions_Write)
 	if err != nil {
 		cli.Println(err.Error())

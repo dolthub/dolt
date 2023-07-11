@@ -16,10 +16,10 @@ QUERY_RESPONSE = [
     {"call dolt_add('-A');": [(0,)]},
     {"call dolt_commit('-m', 'my commit')": [('',)]},
     {"select COUNT(*) FROM dolt_log": [(2,)]},
-    {"call dolt_checkout('-b', 'mybranch')": [(0,)]},
+    {"call dolt_checkout('-b', 'mybranch')": [(0, "Switched to branch 'mybranch'")]},
     {"insert into test (pk, `value`) values (1,1)": []},
     {"call dolt_commit('-a', '-m', 'my commit2')": [('',)]},
-    {"call dolt_checkout('main')": [(0,)]},
+    {"call dolt_checkout('main')": [(0, "Switched to branch 'main'")]},
     {"call dolt_merge('mybranch')": [('',1,0,)]},
     {"select COUNT(*) FROM dolt_log": [(3,)]},
 ]

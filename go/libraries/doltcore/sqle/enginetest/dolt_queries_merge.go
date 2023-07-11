@@ -98,7 +98,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'new-branch')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'new-branch'"}},
 			},
 			{
 				Query:    "INSERT INTO test VALUES (4)",
@@ -205,7 +205,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'other-branch')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'other-branch'"}},
 			},
 		},
 	},
@@ -333,11 +333,11 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'other')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('main')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
 			},
 		},
 	},
@@ -482,11 +482,11 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'other')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('main')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
 			},
 			{
 				Query:    "SELECT * FROM test order by pk",
@@ -523,7 +523,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'new-branch')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'new-branch'"}},
 			},
 			{
 				Query:    "INSERT INTO test VALUES (4)",
@@ -561,7 +561,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'new-branch')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'new-branch'"}},
 			},
 			{
 				Query:    "select active_branch()",
@@ -626,7 +626,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'other-branch')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'other-branch'"}},
 			},
 		},
 	},
@@ -757,7 +757,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'other-branch')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'other-branch'"}},
 			},
 		},
 	},
@@ -871,7 +871,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'other-branch')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'other-branch'"}},
 			},
 		},
 	},
@@ -1970,24 +1970,6 @@ var Dolt1MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
-	{
-		Name: "dolt_revert() detects not null violation (issue #4527)",
-		SetUpScript: []string{
-			"create table test2 (pk int primary key, c0 int)",
-			"insert into test2 values (1,1),(2,NULL),(3,3);",
-			"call dolt_commit('-Am', 'new table with NULL value');",
-			"delete from test2 where pk = 2;",
-			"call dolt_commit('-am', 'deleted row with NULL value');",
-			"alter table test2 modify c0 int not null",
-			"call dolt_commit('-am', 'modified column c0 to not null');",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:          "call dolt_revert('head~1');",
-				ExpectedErrStr: "revert currently does not handle constraint violations",
-			},
-		},
-	},
 }
 
 var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
@@ -2638,7 +2620,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('conflicts2');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'conflicts2'"}},
 			},
 			{
 				Query:    "SELECT base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
@@ -2789,7 +2771,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('viol2');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'viol2'"}},
 			},
 			{
 				Query:    "SELECT violation_type, pk, fk from dolt_constraint_violations_child;",
@@ -2895,7 +2877,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('right');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'right'"}},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('right2');",
@@ -2915,7 +2897,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('main');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('right');",
@@ -3335,7 +3317,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('branch1');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'branch1'"}},
 			},
 			{
 				Query:    "INSERT INTO CHILD VALUES (1, 1);",
@@ -3347,7 +3329,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('main');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('branch1');",
@@ -3383,7 +3365,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('branch2');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'branch2'"}},
 			},
 			{
 				Query:    "INSERT INTO OTHER VALUES (1);",
@@ -3395,7 +3377,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('main');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('branch2');",
@@ -3419,7 +3401,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('branch3');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'branch3'"}},
 			},
 			{
 				Query:    "INSERT INTO CHILD VALUES (2, 2);",
@@ -3431,7 +3413,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('main');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('branch3');",

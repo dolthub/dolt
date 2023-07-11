@@ -1431,7 +1431,7 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 			},
 			{
 				Query:    "call dolt_checkout('main');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
 			},
 			{
 				Query:    "select database();",
@@ -1594,6 +1594,28 @@ func TestDoltMergePrepared(t *testing.T) {
 				enginetest.TestScriptPrepared(t, h, script)
 			}()
 		}
+	}
+}
+
+func TestDoltRevert(t *testing.T) {
+	for _, script := range RevertScripts {
+		// harness can't reset effectively. Use a new harness for each script
+		func() {
+			h := newDoltHarness(t).WithParallelism(1)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func TestDoltRevertPrepared(t *testing.T) {
+	for _, script := range RevertScripts {
+		// harness can't reset effectively. Use a new harness for each script
+		func() {
+			h := newDoltHarness(t).WithParallelism(1)
+			defer h.Close()
+			enginetest.TestScriptPrepared(t, h, script)
+		}()
 	}
 }
 

@@ -50,7 +50,7 @@ const tests = [
   { q: "call dolt_add('-A');", res: [{ status: 0 }] },
   { q: "call dolt_commit('-m', 'my commit')", res: [] },
   { q: "select COUNT(*) FROM dolt_log", res: [{ "COUNT(*)": 2 }] },
-  { q: "call dolt_checkout('-b', 'mybranch')", res: [{ status: 0 }] },
+  { q: "call dolt_checkout('-b', 'mybranch')", res: [{ status: 0, message: "Switched to branch 'mybranch'"  }] },
   {
     q: "insert into test (pk, `value`) values (1,1)",
     res: {
@@ -63,7 +63,7 @@ const tests = [
     },
   },
   { q: "call dolt_commit('-a', '-m', 'my commit2')", res: [] },
-  { q: "call dolt_checkout('main')", res: [{ status: 0 }] },
+  { q: "call dolt_checkout('main')", res: [{ status: 0, message: "Switched to branch 'main'"  }] },
   {
     q: "call dolt_merge('mybranch')",
     res: [{ fast_forward: 1, conflicts: 0 }],
