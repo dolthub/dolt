@@ -225,64 +225,6 @@ func getChangesMade(remoteBranches map[string]remoteBranchInfo, postPushRemoteBr
 	return changesMade
 }
 
-func pullerProgFunc(ctx context.Context, statsCh chan pull.Stats, language progLanguage) {
-	p := cli.NewEphemeralPrinter()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case stats, ok := <-statsCh:
-			if !ok {
-				return
-			}
-			if language == downloadLanguage {
-				p.Printf("Downloaded %s chunks, %s @ %s/s.",
-					humanize.Comma(int64(stats.FetchedSourceChunks)),
-					humanize.Bytes(stats.FetchedSourceBytes),
-					humanize.SIWithDigits(stats.FetchedSourceBytesPerSec, 2, "B"),
-				)
-			} else {
-				p.Printf("Uploaded %s of %s @ %s/s.",
-					humanize.Bytes(stats.FinishedSendBytes),
-					humanize.Bytes(stats.BufferedSendBytes),
-					humanize.SIWithDigits(stats.SendBytesPerSec, 2, "B"),
-				)
-			}
-			p.Display()
-		}
-	}
-}
-
-// progLanguage is the language to use when displaying progress for a pull from a src db to a sink db.
-type progLanguage int
-
-const (
-	defaultLanguage progLanguage = iota
-	downloadLanguage
-)
-
-func buildProgStarter(language progLanguage) actions.ProgStarter {
-	return func(ctx context.Context) (*sync.WaitGroup, chan pull.Stats) {
-		statsCh := make(chan pull.Stats, 128)
-		wg := &sync.WaitGroup{}
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			pullerProgFunc(ctx, statsCh, language)
-		}()
-
-		return wg, statsCh
-	}
-}
-
-func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, statsCh chan pull.Stats) {
-	cancel()
-	close(statsCh)
-	wg.Wait()
-}
-
 func getRemotes(queryist cli.Queryist, sqlCtx *sql.Context) (map[string]remoteInfo, error) {
 	rows, err := GetRowsForSql(queryist, sqlCtx, "select * from dolt_remotes")
 	if err != nil {
@@ -378,4 +320,64 @@ func getTrackingRefs(branchName string, info remoteInfo) (fromRef, toRef string,
 		}
 	}
 	return "", "", nil
+}
+
+// Below functions are not used in the current implementation, but are used by other codepaths
+
+func pullerProgFunc(ctx context.Context, statsCh chan pull.Stats, language progLanguage) {
+	p := cli.NewEphemeralPrinter()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case stats, ok := <-statsCh:
+			if !ok {
+				return
+			}
+			if language == downloadLanguage {
+				p.Printf("Downloaded %s chunks, %s @ %s/s.",
+					humanize.Comma(int64(stats.FetchedSourceChunks)),
+					humanize.Bytes(stats.FetchedSourceBytes),
+					humanize.SIWithDigits(stats.FetchedSourceBytesPerSec, 2, "B"),
+				)
+			} else {
+				p.Printf("Uploaded %s of %s @ %s/s.",
+					humanize.Bytes(stats.FinishedSendBytes),
+					humanize.Bytes(stats.BufferedSendBytes),
+					humanize.SIWithDigits(stats.SendBytesPerSec, 2, "B"),
+				)
+			}
+			p.Display()
+		}
+	}
+}
+
+// progLanguage is the language to use when displaying progress for a pull from a src db to a sink db.
+type progLanguage int
+
+const (
+	defaultLanguage progLanguage = iota
+	downloadLanguage
+)
+
+func buildProgStarter(language progLanguage) actions.ProgStarter {
+	return func(ctx context.Context) (*sync.WaitGroup, chan pull.Stats) {
+		statsCh := make(chan pull.Stats, 128)
+		wg := &sync.WaitGroup{}
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			pullerProgFunc(ctx, statsCh, language)
+		}()
+
+		return wg, statsCh
+	}
+}
+
+func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, statsCh chan pull.Stats) {
+	cancel()
+	close(statsCh)
+	wg.Wait()
 }
