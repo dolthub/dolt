@@ -370,8 +370,7 @@ delete from test where pk = 1;
 update test set c1 = 100 where pk = 4;
 SQL
 
-    EXPECTED=$(cat <<'EOF'
- CREATE TABLE `test` (
+    EXPECTED=' CREATE TABLE `test` (
    `pk` int NOT NULL,
    `c1` int,
 -  `c2` int,
@@ -386,9 +385,7 @@ SQL
 | > | 4  | 100 | NULL | NULL |
 | + | 7  | 8   | NULL | 9    |
 +---+----+-----+------+------+
-EOF
-)
-
+'
   dolt diff
   run dolt diff
   [ "$status" -eq 0 ] || false
