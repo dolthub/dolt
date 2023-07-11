@@ -95,6 +95,22 @@ export function mergeBaseMatcher(rows, exp) {
   return true;
 }
 
+export function mergeMatcher(rows, exp) {
+  const exceptionKeys = ["hash"];
+
+  function getExceptionIsValid(row, key) {
+    const val = row[key];
+    switch (key) {
+      case "hash":
+        return commitHashIsValid(val);
+      default:
+        return false;
+    }
+  }
+
+  return matcher(rows, exp, exceptionKeys, getExceptionIsValid);
+}
+
 export function tagsMatcher(rows, exp) {
   const exceptionKeys = ["tag_hash", "date"];
 
