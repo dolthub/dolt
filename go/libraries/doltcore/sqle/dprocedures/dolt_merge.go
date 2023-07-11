@@ -360,7 +360,18 @@ func executeNoFFMerge(
 	roots, _ := dSess.GetRoots(ctx, dbName)
 
 	if noCommit {
-		return ws, nil, nil
+		// stage all changes
+		roots, err = actions.StageAllTables(ctx, roots, true)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		err = dSess.SetRoots(ctx, dbName, roots)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		return ws.WithStagedRoot(roots.Staged), nil, nil
 	}
 
 	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{

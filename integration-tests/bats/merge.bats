@@ -809,7 +809,7 @@ SQL
     dolt checkout main
     # Create a conflicted state by merging other into main
     run dolt merge other
-    [[ "$output" =~ "CONFLICT" ]]
+    [[ "$output" =~ "CONFLICT" ]] || false
 
     run dolt sql -r csv -q "SELECT * FROM parent;"
     [[ "${lines[1]}" = "1,2" ]]
@@ -1000,6 +1000,7 @@ SQL
     run dolt sql -q "select * from test1;" -r csv
     [[ ! "$output" =~ "1,2,3" ]] || false
 
+    # todo merging self?
     run dolt merge other --no-ff --no-commit
     log_status_eq 0
     [[ "$output" =~ "Automatic merge went well; stopped before committing as requested" ]] || false
@@ -1007,9 +1008,6 @@ SQL
     run dolt log --oneline -n 1
     [[ "$output" =~ "added tables" ]] || false
     [[ ! "$output" =~ "add (1,2,3) to test1" ]] || false
-
-    run dolt status
-    echo "$output"
 
     run dolt commit -m "merge main"
     log_status_eq 0

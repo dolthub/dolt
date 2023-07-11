@@ -104,12 +104,23 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return 1
 	}
 
+	_, _, err = queryist.Query(sqlCtx, "set @@dolt_force_transaction_commit = 1")
+	if err != nil {
+		cli.Println(err.Error())
+		return 1
+	}
+
 	query, err := constructInterpolatedDoltMergeQuery(apr)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
 	}
 	_, _, err = queryist.Query(sqlCtx, query)
+	if err != nil {
+		cli.Println(err.Error())
+		return 1
+	}
+	_, _, err = queryist.Query(sqlCtx, "COMMIT")
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
@@ -123,39 +134,80 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		diffStats := make(map[string][]diffStatistics)
 		mergeStats := make(map[string]*merge.MergeStats)
 
-		diffSummaries, err := getDiffSummariesBetweenRefs(queryist, sqlCtx, "head^1", "head")
+		cli.Println("getting data conflicts")
+		dataConflicts, err := GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_conflicts")
 		if err != nil {
 			cli.Println(err.Error())
 			return 1
 		}
+		for _, conflict := range dataConflicts {
+			tableName := conflict[0].(string)
+			if ok := mergeStats[tableName]; ok != nil {
+				mergeStats[tableName].DataConflicts = int(conflict[1].(uint64))
+			} else {
+				mergeStats[tableName] = &merge.MergeStats{DataConflicts: int(conflict[1].(uint64))}
+			}
+		}
 
-		//rows, err := GetRowsForSql(queryist, sqlCtx, "show tables")
-		/*if err != nil {
+		schemaConflicts, err := GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_schema_conflicts")
+		if err != nil {
 			cli.Println(err.Error())
 			return 1
-		}*/
-		for _, summary := range diffSummaries {
-			if summary.DiffType == "added" {
-				mergeStats[summary.TableName] = &merge.MergeStats{
-					Operation: merge.TableAdded,
-				}
-			} else if summary.DiffType == "dropped" {
-				mergeStats[summary.TableName] = &merge.MergeStats{
-					Operation: merge.TableRemoved,
-				}
-			} else if summary.DiffType == "modified" || summary.DiffType == "renamed" {
-				mergeStats[summary.TableName] = &merge.MergeStats{
-					Operation: merge.TableModified,
-				}
-				tableStats, err := getTableDiffStats(queryist, sqlCtx, summary.TableName, "head^1", "head")
-				if err != nil {
-					cli.Println(err.Error())
-					return 1
-				}
-				diffStats[tableStats[0].TableName] = append(diffStats[tableStats[0].TableName], tableStats[0])
+		}
+		for _, conflict := range schemaConflicts {
+			tableName := conflict[0].(string)
+			if ok := mergeStats[tableName]; ok != nil {
+				mergeStats[tableName].SchemaConflicts = 1
 			} else {
-				mergeStats[summary.TableName] = &merge.MergeStats{
-					Operation: merge.TableUnmodified,
+				mergeStats[tableName] = &merge.MergeStats{SchemaConflicts: 1}
+			}
+		}
+
+		constraintViolations, err := GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_constraint_violations")
+		if err != nil {
+			cli.Println(err.Error())
+			return 1
+		}
+		for _, conflict := range constraintViolations {
+			tableName := conflict[0].(string)
+			if ok := mergeStats[tableName]; ok != nil {
+				mergeStats[tableName].ConstraintViolations = int(conflict[1].(uint64))
+			} else {
+				mergeStats[tableName] = &merge.MergeStats{ConstraintViolations: int(conflict[1].(uint64))}
+			}
+		}
+
+		if dataConflicts == nil && schemaConflicts == nil && constraintViolations == nil {
+			cli.Println("calculating diff summaries")
+			diffSummaries, err := getDiffSummariesBetweenRefs(queryist, sqlCtx, "head^1", "head")
+			if err != nil {
+				cli.Println(err.Error())
+				return 1
+			}
+
+			for _, summary := range diffSummaries {
+				if summary.DiffType == "added" {
+					mergeStats[summary.TableName] = &merge.MergeStats{
+						Operation: merge.TableAdded,
+					}
+				} else if summary.DiffType == "dropped" {
+					mergeStats[summary.TableName] = &merge.MergeStats{
+						Operation: merge.TableRemoved,
+					}
+				} else if summary.DiffType == "modified" || summary.DiffType == "renamed" {
+					mergeStats[summary.TableName] = &merge.MergeStats{
+						Operation: merge.TableModified,
+					}
+					tableStats, err := getTableDiffStats(queryist, sqlCtx, summary.TableName, "head^1", "head")
+					if err != nil {
+						cli.Println(err.Error())
+						return 1
+					}
+					diffStats[tableStats[0].TableName] = append(diffStats[tableStats[0].TableName], tableStats[0])
+				} else {
+					mergeStats[summary.TableName] = &merge.MergeStats{
+						Operation: merge.TableUnmodified,
+					}
 				}
 			}
 		}
@@ -561,7 +613,7 @@ func convertDiffStatsToMergeStats(diffStats map[string][]diffStatistics, mergeSt
 		}
 	}
 
-	conflicts, err := GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_conflicts")
+	/*conflicts, err := GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_conflicts")
 	if err != nil {
 		return nil, err
 	}
@@ -591,7 +643,7 @@ func convertDiffStatsToMergeStats(diffStats map[string][]diffStatistics, mergeSt
 		if constraintViolations[0][0].(int) > 0 {
 			mergeStats[tableName].ConstraintViolations = constraintViolations[0][0].(int)
 		}
-	}
+	}*/
 
 	return mergeStats, nil
 }
