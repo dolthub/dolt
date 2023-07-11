@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
 
@@ -92,7 +93,18 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usagePrt)
 	}
-	defer closeFunc()
+	if closeFunc != nil {
+		defer closeFunc()
+	}
+
+	_, ok := queryEngine.(*engine.SqlEngine)
+	if !ok {
+		// Currently checkout does not fully support remote connections. Prevent them from being used until we have better
+		// CLI session support.
+		msg := "dolt checkout can not currently be used when there is a local server running. Please stop your dolt sql-server and try again."
+		cli.Println(msg)
+		return 1
+	}
 
 	branchOrTrack := apr.Contains(cli.CheckoutCoBranch) || apr.Contains(cli.TrackFlag)
 	if (branchOrTrack && apr.NArg() > 1) || (!branchOrTrack && apr.NArg() == 0) {
@@ -144,7 +156,6 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	}
 
 	var message string
-	var ok bool
 	if message, ok = rows[0][1].(string); !ok {
 		return HandleVErrAndExitCode(errhand.BuildDError("expected string value for 'message' field in response from %s ", sqlQuery).Build(), usagePrt)
 	}
