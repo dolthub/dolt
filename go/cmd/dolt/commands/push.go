@@ -16,14 +16,11 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/dolthub/go-mysql-server/sql"
 	"strings"
 	"sync"
-
-	"github.com/dustin/go-humanize"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -32,10 +29,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
+	"github.com/dustin/go-humanize"
 )
 
 type remoteInfo struct {
@@ -112,6 +108,9 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 func push(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseResults) error {
 	force := apr.Contains(cli.ForceFlag)
 	setUpstream := apr.Contains(cli.SetUpstreamFlag)
+	if setUpstream && apr.NArg() < 2 {
+		return errors.New("error: --set-upstream requires <remote> and <refspec> params.")
+	}
 
 	branchName, err := getActiveBranchName(sqlCtx, queryist)
 
@@ -139,6 +138,9 @@ func push(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseRes
 	} else if len(args) == 2 {
 		remoteName = args[0]
 		refSpec = args[1]
+		if len(refSpec) == 0 {
+			return fmt.Errorf("%w: '%s'", ref.ErrInvalidRefSpec, refSpec)
+		}
 	}
 
 	params := []interface{}{}
@@ -327,24 +329,29 @@ func getRemotes(queryist cli.Queryist, sqlCtx *sql.Context) (map[string]remoteIn
 		}
 		fetchSpecsArray, ok := fetchSpecsJson.Val.([]interface{})
 		if !ok {
-			return nil, fmt.Errorf("failed to read fetch specs for remote %s: %w", name, err)
+			return nil, fmt.Errorf("failed to read fetch specs for remote %s", name)
 		}
-		fetchSpecs := make([]string, len(fetchSpecsArray))
-		for i, spec := range fetchSpecsArray {
+		fetchSpecs := []string{}
+		for _, spec := range fetchSpecsArray {
 			text, ok := spec.(string)
 			if !ok {
 				return nil, fmt.Errorf("failed to read fetch specs for remote %s: %w", name, err)
 			}
-			fetchSpecs[i] = text
+			fetchSpecs = append(fetchSpecs, text)
 		}
 
 		paramsJson, err := getJsonDocumentCol(sqlCtx, row[3])
 		if err != nil {
 			return nil, fmt.Errorf("failed to read params for remote %s: %w", name, err)
 		}
-		paramsMap, ok := paramsJson.Val.(map[string]interface{})
-		if !ok {
-			return nil, fmt.Errorf("failed to read params for remote %s: %w", name, err)
+		var paramsMap map[string]interface{}
+		if paramsJson.Val == nil {
+			paramsMap = map[string]interface{}{}
+		} else {
+			paramsMap, ok = paramsJson.Val.(map[string]interface{})
+			if !ok {
+				return nil, fmt.Errorf("failed to read params for remote %s: %v", name, paramsJson.Val)
+			}
 		}
 		params := map[string]string{}
 		for k, v := range paramsMap {
