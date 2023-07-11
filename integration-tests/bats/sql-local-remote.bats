@@ -239,6 +239,7 @@ assert_has_key_value() {
     [[ "$output" =~ "other" ]] || false
 
     # Due to a current limitation, subsequent commands won't use the new branch until the server is stopped
+    # See https://github.com/dolthub/dolt/issues/6315 for more information.
     stop_sql_server 1
 
     run dolt branch --show-current
