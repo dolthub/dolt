@@ -169,18 +169,6 @@ func transferWorkingChanges(
 		return err
 	}
 
-	// For backwards compatibility we support the branch not having a working set, but generally speaking it already
-	// should have one
-	if err == doltdb.ErrWorkingSetNotFound {
-		wsRef, err := ref.WorkingSetRefForHead(branchRef)
-		if err != nil {
-			return err
-		}
-		ws = doltdb.EmptyWorkingSet(wsRef)
-	} else if err != nil {
-		return err
-	}
-
 	newWs := ws.WithWorkingRoot(newRoots.Working).WithStagedRoot(newRoots.Staged)
 
 	err = dSess.SetWorkingSet(ctx, dbName, newWs)
