@@ -229,6 +229,41 @@ get_commit_hash_at() {
     [[ ! -z $(echo "$staged" | grep "testtable") ]] || false
 }
 
+@test "sql-local-remote: verify simple dolt checkout behavior." {
+    start_sql_server altDB
+    cd altDB
+
+    run dolt --verbose-engine-setup --user dolt --password "" checkout -b other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+
+    run dolt --verbose-engine-setup --user dolt --password "" branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+    [[ "$output" =~ "main" ]] || false
+    [[ "$output" =~ "other" ]] || false
+
+    # Due to a current limitation, subsequent commands won't use the new branch until the server is stopped
+    # See https://github.com/dolthub/dolt/issues/6315 for more information.
+    stop_sql_server 1
+
+    run dolt branch --show-current
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "other" ]] || false
+
+    start_sql_server altDB
+
+    run dolt --verbose-engine-setup --user dolt --password "" checkout main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+
+    stop_sql_server 1
+
+    run dolt branch --show-current
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "main" ]] || false
+}
+
 @test "sql-local-remote: test 'status' and switch between server/no server" {
   start_sql_server defaultDB
 

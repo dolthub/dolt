@@ -108,8 +108,7 @@ func (dEnv *DoltEnv) GetRemoteDB(ctx context.Context, format *types.NomsBinForma
 	}
 }
 
-func LoadWithoutDB(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, version string) *DoltEnv {
-	cfg, cfgErr := LoadDoltCliConfig(hdp, fs)
+func createRepoState(fs filesys.Filesys) (*RepoState, error) {
 	repoState, rsErr := LoadRepoState(fs)
 
 	// deep copy remotes and backups ¯\_(ツ)_/¯ (see commit c59cbead)
@@ -126,6 +125,23 @@ func LoadWithoutDB(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys,
 		}
 		repoState.Backups = backups
 	}
+
+	return repoState, rsErr
+}
+
+func (dEnv *DoltEnv) ReloadRepoState() error {
+	rs, err := createRepoState(dEnv.FS)
+	if err != nil {
+		return err
+	}
+	dEnv.RepoState = rs
+	return nil
+}
+
+func LoadWithoutDB(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, version string) *DoltEnv {
+	cfg, cfgErr := LoadDoltCliConfig(hdp, fs)
+
+	repoState, rsErr := createRepoState(fs)
 
 	return &DoltEnv{
 		Version:    version,

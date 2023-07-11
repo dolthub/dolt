@@ -584,6 +584,18 @@ SQL
   [[ "$output" =~ "0" ]] || false
 }
 
+@test "sql-checkout: 'CALL DOLT_CHECKOUT --move' moves the working set" {
+    dolt branch other
+    run dolt sql -r csv << SQL
+call dolt_checkout('other', '--move');
+select active_branch();
+select * from dolt_status;
+SQL
+    [ $status -eq 0 ]
+    [[ "${lines[3]}" =~ "other" ]] || false
+    [[ "${lines[5]}" =~ "test,false,new table" ]] || false
+}
+
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | awk '{print $2}'
 }

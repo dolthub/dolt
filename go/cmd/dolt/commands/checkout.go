@@ -15,10 +15,13 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -26,7 +29,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var checkoutDocs = cli.CommandDocumentationContent{
@@ -82,9 +87,12 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	ap := cli.CreateCheckoutArgParser()
 	helpPrt, usagePrt := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, checkoutDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, helpPrt)
-	if dEnv.IsLocked() {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), helpPrt)
+
+	queryEngine, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usagePrt)
 	}
+	defer closeFunc()
 
 	branchOrTrack := apr.Contains(cli.CheckoutCoBranch) || apr.Contains(cli.TrackFlag)
 	if (branchOrTrack && apr.NArg() > 1) || (!branchOrTrack && apr.NArg() == 0) {
@@ -92,266 +100,124 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return 1
 	}
 
-	if branchOrTrack {
-		verr := checkoutNewBranch(ctx, dEnv, apr)
-		return HandleVErrAndExitCode(verr, usagePrt)
-	}
-
-	name := apr.Arg(0)
-	force := apr.Contains(cli.ForceFlag)
-
-	if len(name) == 0 {
-		verr := errhand.BuildDError("error: cannot checkout empty string").Build()
-		return HandleVErrAndExitCode(verr, usagePrt)
-	}
-
-	if isBranch, err := actions.IsBranch(ctx, dEnv.DoltDB, name); err != nil {
-		verr := errhand.BuildDError("error: unable to determine type of checkout").AddCause(err).Build()
-		return HandleVErrAndExitCode(verr, usagePrt)
-	} else if isBranch {
-		verr := checkoutBranch(ctx, dEnv, name, force)
-		return HandleVErrAndExitCode(verr, usagePrt)
-	}
-
-	// Check if the user executed `dolt checkout .`
-	if apr.NArg() == 1 && name == "." {
-		roots, err := dEnv.Roots(ctx)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), usagePrt)
+	var branchName string
+	if apr.Contains(cli.CheckoutCoBranch) {
+		branchName, _ = apr.GetValue(cli.CheckoutCoBranch)
+	} else if apr.Contains(cli.TrackFlag) {
+		if apr.NArg() > 0 {
+			usagePrt()
+			return 1
 		}
-		headRef, err := dEnv.RepoStateReader().CWBHeadRef()
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), nil)
-		}
-		ws, err := dEnv.WorkingSet(ctx)
-		if err != nil {
-			HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), usagePrt)
-		}
-		verr := actions.ResetHard(ctx, dEnv, "HEAD", roots, headRef, ws)
-		return handleResetError(verr, usagePrt)
+		remoteAndBranchName, _ := apr.GetValue(cli.TrackFlag)
+		_, branchName = actions.ParseRemoteBranchName(remoteAndBranchName)
+	} else if apr.NArg() > 0 {
+		branchName = apr.Arg(0)
 	}
 
-	verr := checkoutTables(ctx, dEnv, args)
-	if verr != nil && apr.NArg() == 1 {
-		verr = checkoutRemoteBranchOrSuggestNew(ctx, dEnv, name)
+	sqlQuery, err := generateCheckoutSql(args)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usagePrt)
 	}
 
-	return HandleVErrAndExitCode(verr, usagePrt)
+	rows, err := GetRowsForSql(queryEngine, sqlCtx, sqlQuery)
+
+	if err != nil {
+		// In fringe cases the server can't start because the default branch doesn't exist, `dolt checkout <existing branch>`
+		// offers an escape hatch.
+		if !branchOrTrack && strings.Contains(err.Error(), "cannot resolve default branch head for database") {
+			err := saveHeadBranch(dEnv.FS, branchName)
+			if err != nil {
+				cli.PrintErr(err)
+				return 1
+			}
+			return 0
+		}
+		return HandleVErrAndExitCode(handleErrors(branchName, err), usagePrt)
+	}
+
+	if len(rows) != 1 {
+		return HandleVErrAndExitCode(errhand.BuildDError("expected 1 row response from %s, got %d", sqlQuery, len(rows)).Build(), usagePrt)
+	}
+
+	if len(rows[0]) < 2 {
+		return HandleVErrAndExitCode(errhand.BuildDError("no 'message' field in response from %s", sqlQuery).Build(), usagePrt)
+	}
+
+	var message string
+	var ok bool
+	if message, ok = rows[0][1].(string); !ok {
+		return HandleVErrAndExitCode(errhand.BuildDError("expected string value for 'message' field in response from %s ", sqlQuery).Build(), usagePrt)
+	}
+
+	if message != "" {
+		cli.Println(message)
+	}
+
+	if strings.Contains(message, "Switched to branch") {
+		err := saveHeadBranch(dEnv.FS, branchName)
+		if err != nil {
+			cli.PrintErr(err)
+			return 1
+		}
+		// This command doesn't modify `dEnv` which could break tests that call multiple commands in sequence.
+		// We must reload it so that it includes changes to the repo state.
+		err = dEnv.ReloadRepoState()
+		if err != nil {
+			return 1
+		}
+	}
+
+	return 0
 }
 
-func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
-	var newBranchName string
-	var remoteName string
-	var remoteBranchName string
-	var startPt = "head"
+// generateCheckoutSql returns the query that will call the `DOLT_CHECKOUT` stored procedure.
+func generateCheckoutSql(args []string) (string, error) {
+	var buffer bytes.Buffer
+	queryValues := make([]interface{}, 0, len(args))
 
-	if apr.NArg() == 1 {
-		startPt = apr.Arg(0)
+	buffer.WriteString("CALL DOLT_CHECKOUT('--move'")
+
+	for _, arg := range args {
+		buffer.WriteString(", ?")
+		queryValues = append(queryValues, arg)
 	}
+	buffer.WriteString(")")
 
-	trackVal, setTrackUpstream := apr.GetValue(cli.TrackFlag)
-	if setTrackUpstream {
-		if trackVal != "direct" && trackVal != "inherit" {
-			startPt = trackVal
-		} else if trackVal == "inherit" {
-			return errhand.VerboseErrorFromError(fmt.Errorf("--track='inherit' is not supported yet"))
-		}
-		remoteName, remoteBranchName = actions.ParseRemoteBranchName(startPt)
-		remotes, err := dEnv.RepoStateReader().GetRemotes()
-		if err != nil {
-			return errhand.BuildDError(err.Error()).Build()
-		}
-		_, remoteOk := remotes[remoteName]
-		if !remoteOk {
-			return errhand.BuildDError(fmt.Errorf("'%s' is not a valid remote ref and a branch '%s' cannot be created from it", startPt, remoteBranchName).Error()).Build()
-		}
-		newBranchName = remoteBranchName
-	}
-
-	if newBranch, ok := apr.GetValue(cli.CheckoutCoBranch); ok {
-		if len(newBranch) == 0 {
-			return errhand.BuildDError("error: cannot checkout empty string").Build()
-		}
-		newBranchName = newBranch
-	}
-
-	verr := checkoutNewBranchFromStartPt(ctx, dEnv, newBranchName, startPt)
-	if verr != nil {
-		return verr
-	}
-
-	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
-	if err != nil {
-		return errhand.BuildDError(err.Error()).Build()
-	}
-
-	// the new branch is checked out at this point
-	if setTrackUpstream {
-		verr = SetRemoteUpstreamForBranchRef(dEnv, remoteName, remoteBranchName, headRef)
-		if verr != nil {
-			return verr
-		}
-	} else if autoSetupMerge, err := dEnv.Config.GetString("branch.autosetupmerge"); err != nil || autoSetupMerge != "false" {
-		// do guess remote branch if branch.autosetupmerge is not 'false', or if it is not set, it should default to 'true'.
-		// if no remote, it should not return an error
-		remotes, err := dEnv.RepoStateReader().GetRemotes()
-		if err != nil {
-			return nil
-		}
-		remoteName, remoteBranchName = actions.ParseRemoteBranchName(startPt)
-		_, remoteOk := remotes[remoteName]
-		if !remoteOk {
-			return nil
-		}
-		verr = SetRemoteUpstreamForBranchRef(dEnv, remoteName, remoteBranchName, headRef)
-		if verr != nil {
-			return verr
-		}
-	}
-
-	return nil
+	return dbr.InterpolateForDialect(buffer.String(), queryValues, dialect.MySQL)
 }
 
-// checkoutRemoteBranchOrSuggestNew checks out a new branch guessing the remote branch,
-// if there is a branch with matching name from exactly one remote.
-func checkoutRemoteBranchOrSuggestNew(ctx context.Context, dEnv *env.DoltEnv, name string) errhand.VerboseError {
-	remoteRefs, err := actions.GetRemoteBranchRef(ctx, dEnv.DoltDB, name)
-	if err != nil {
-		return errhand.BuildDError("fatal: unable to read from data repository.").AddCause(err).Build()
-	}
-
-	if len(remoteRefs) == 0 {
-		// Check if the user is trying to enter a detached head state
-		commit, _ := actions.MaybeGetCommit(ctx, dEnv, name)
-		if commit != nil {
-			// User tried to enter a detached head state, which we don't support.
-			// Inform and suggest that they check-out a new branch at this commit instead.
-
-			str := "dolt does not support a detached head state. To create a branch at this commit instead, run:\n\n" +
-				"\tdolt checkout %s -b {new_branch_name}\n"
-
-			return errhand.BuildDError(str, name).Build()
-		}
-		return errhand.BuildDError("error: could not find %s", name).Build()
-	} else if len(remoteRefs) == 1 {
-		verr := checkoutNewBranchFromStartPt(ctx, dEnv, name, remoteRefs[0].String())
-		if verr != nil {
-			return verr
-		}
-		headRef, err := dEnv.RepoStateReader().CWBHeadRef()
-		if err != nil {
-			return errhand.BuildDError(err.Error()).Build()
-		}
-		return SetRemoteUpstreamForBranchRef(dEnv, remoteRefs[0].GetRemote(), remoteRefs[0].GetBranch(), headRef)
+func handleErrors(branchName string, err error) errhand.VerboseError {
+	if err.Error() == doltdb.ErrBranchNotFound.Error() {
+		return errhand.BuildDError("fatal: Branch '%s' not found.", branchName).Build()
+	} else if strings.Contains(err.Error(), "dolt does not support a detached head state.") {
+		return errhand.VerboseErrorFromError(err)
+	} else if strings.Contains(err.Error(), "error: could not find") {
+		return errhand.VerboseErrorFromError(err)
+	} else if doltdb.IsRootValUnreachable(err) {
+		return errhand.VerboseErrorFromError(err)
+	} else if actions.IsCheckoutWouldOverwrite(err) {
+		return errhand.VerboseErrorFromError(err)
+	} else if err.Error() == actions.ErrWorkingSetsOnBothBranches.Error() {
+		str := fmt.Sprintf("error: There are uncommitted changes already on branch '%s'.", branchName) +
+			"This can happen when someone modifies that branch in a SQL session." +
+			fmt.Sprintf("You have uncommitted changes on this branch, and they would overwrite the uncommitted changes on branch %s on checkout.", branchName) +
+			"To solve this problem, you can " +
+			"1) commit or reset your changes on this branch, using `dolt commit` or `dolt reset`, before checking out the other branch, " +
+			"2) use the `-f` flag with `dolt checkout` to force an overwrite, or " +
+			"3) connect to branch '%s' with the SQL server and revert or commit changes there before proceeding."
+		return errhand.BuildDError(str).AddCause(err).Build()
 	} else {
-		// TODO : add hint of using `dolt checkout --track <remote>/<branch>` when --track flag is supported
-		return errhand.BuildDError("'%s' matched multiple (%v) remote tracking branches", name, len(remoteRefs)).Build()
+		bdr := errhand.BuildDError("fatal: Unexpected error checking out branch '%s'", branchName)
+		bdr.AddCause(err)
+		return bdr.Build()
 	}
 }
 
-func checkoutNewBranchFromStartPt(ctx context.Context, dEnv *env.DoltEnv, newBranch, startPt string) errhand.VerboseError {
-	err := actions.CreateBranchWithStartPt(ctx, dEnv.DbData(), newBranch, startPt, false, nil)
+func saveHeadBranch(fs filesys.ReadWriteFS, headBranch string) error {
+	repoState, err := env.LoadRepoState(fs)
 	if err != nil {
-		return errhand.BuildDError(err.Error()).Build()
+		return err
 	}
-
-	return checkoutBranch(ctx, dEnv, newBranch, false)
-}
-
-func checkoutTables(ctx context.Context, dEnv *env.DoltEnv, tables []string) errhand.VerboseError {
-	roots, err := dEnv.Roots(ctx)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	roots, err = actions.CheckoutTables(ctx, roots, tables)
-	if err != nil {
-		if doltdb.IsRootValUnreachable(err) {
-			return unreadableRootToVErr(err)
-		} else if actions.IsTblNotExist(err) {
-			badTbls := actions.GetTablesForError(err)
-			bdr := errhand.BuildDError("")
-			for _, tbl := range badTbls {
-				bdr.AddDetails("error: table '%s' did not match any table(s) known to dolt.", tbl)
-			}
-			return bdr.Build()
-		} else {
-			bdr := errhand.BuildDError("fatal: Unexpected error checking out tables")
-			bdr.AddCause(err)
-			return bdr.Build()
-		}
-	}
-
-	err = dEnv.UpdateWorkingRoot(ctx, roots.Working)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	return nil
-}
-
-func checkoutBranch(ctx context.Context, dEnv *env.DoltEnv, name string, force bool) errhand.VerboseError {
-	err := actions.CheckoutBranch(ctx, dEnv, name, force)
-
-	if err != nil {
-		if err == doltdb.ErrBranchNotFound {
-			return errhand.BuildDError("fatal: Branch '%s' not found.", name).Build()
-		} else if doltdb.IsRootValUnreachable(err) {
-			return unreadableRootToVErr(err)
-		} else if actions.IsCheckoutWouldOverwrite(err) {
-			tbls := actions.CheckoutWouldOverwriteTables(err)
-			bdr := errhand.BuildDError("error: Your local changes to the following tables would be overwritten by checkout:")
-			for _, tbl := range tbls {
-				bdr.AddDetails("\t" + tbl)
-			}
-
-			bdr.AddDetails("Please commit your changes or stash them before you switch branches.")
-			bdr.AddDetails("Aborting")
-			return bdr.Build()
-		} else if err == doltdb.ErrAlreadyOnBranch {
-			// Being on the same branch shouldn't be an error
-			cli.Printf("Already on branch '%s'\n", name)
-			return nil
-		} else if err == actions.ErrWorkingSetsOnBothBranches {
-			str := fmt.Sprintf("error: There are uncommitted changes already on branch '%s'.", name) +
-				"This can happen when someone modifies that branch in a SQL session." +
-				fmt.Sprintf("You have uncommitted changes on this branch, and they would overwrite the uncommitted changes on branch %s on checkout.", name) +
-				"To solve this problem, you can " +
-				"1) commit or reset your changes on this branch, using `dolt commit` or `dolt reset`, before checking out the other branch, " +
-				"2) use the `-f` flag with `dolt checkout` to force an overwrite, or " +
-				"3) connect to branch '%s' with the SQL server and revert or commit changes there before proceeding."
-			return errhand.BuildDError(str).AddCause(err).Build()
-		} else {
-			bdr := errhand.BuildDError("fatal: Unexpected error checking out branch '%s'", name)
-			bdr.AddCause(err)
-			return bdr.Build()
-		}
-	}
-
-	cli.Printf("Switched to branch '%s'\n", name)
-
-	return nil
-}
-
-// SetRemoteUpstreamForBranchRef sets upstream for checked out branch. This applies `dolt checkout <bn>`,
-// if <bn> matches any remote branch name. This should not happen for `dolt checkout -b <bn>` case.
-func SetRemoteUpstreamForBranchRef(dEnv *env.DoltEnv, remote, remoteBranch string, branchRef ref.DoltRef) errhand.VerboseError {
-	refSpec, err := ref.ParseRefSpecForRemote(remote, remoteBranch)
-	if err != nil {
-		return errhand.BuildDError(fmt.Errorf("%w: '%s'", err, remote).Error()).Build()
-	}
-
-	err = env.SetRemoteUpstreamForRefSpec(dEnv.RepoStateWriter(), refSpec, remote, branchRef)
-	if err != nil {
-		return errhand.BuildDError(err.Error()).Build()
-	}
-	cli.Printf("branch '%s' set up to track '%s/%s'.\n", branchRef.GetPath(), remote, remoteBranch)
-
-	return nil
-}
-
-func unreadableRootToVErr(err error) errhand.VerboseError {
-	rt := doltdb.GetUnreachableRootType(err)
-	bdr := errhand.BuildDError("error: unable to read the %s", rt.String())
-	return bdr.AddCause(doltdb.GetUnreachableRootCause(err)).Build()
+	repoState.Head.Ref = ref.NewBranchRef(headBranch)
+	return repoState.Save(fs)
 }

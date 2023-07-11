@@ -1431,7 +1431,7 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 			},
 			{
 				Query:    "call dolt_checkout('main');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
 			},
 			{
 				Query:    "select database();",
