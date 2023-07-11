@@ -173,7 +173,8 @@ func push(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseRes
 			// success
 			return nil
 		}
-		if strings.Contains(text, doltdb.ErrIsAhead.Error()) {
+		if strings.Contains(text, doltdb.ErrIsAhead.Error()) ||
+			strings.Contains(text, actions.ErrCantFF.Error()) {
 			srcRef, destRef, err := getTrackingRefs(branchName, targetRemote)
 			if err != nil {
 				return fmt.Errorf("failed to get tracking ref info: %w", err)
