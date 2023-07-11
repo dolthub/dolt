@@ -946,14 +946,14 @@ SQL
     dolt sql -q "alter table t drop constraint c"
     run dolt sql -q "show create table t"
     log_status_eq 0
-    [[ !("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
+    [[ ! ("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
     dolt commit -am "changes to other"
 
     dolt checkout main
     dolt sql -q "alter table t drop constraint c"
     run dolt sql -q "show create table t"
     log_status_eq 0
-    [[ !("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
+    [[ ! ("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
     dolt commit -am "changes to main"
 
     run dolt merge other -m "merge other"
@@ -961,7 +961,7 @@ SQL
 
     run dolt sql -q "show create table t"
     log_status_eq 0
-    [[ !("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
+    [[ ! ("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
 }
 
 @test "sql-merge: dropping constraint in one branch and modifying same in other results in conflict" {
@@ -974,7 +974,7 @@ SQL
     dolt sql -q "alter table t drop constraint c"
     run dolt sql -q "show create table t"
     log_status_eq 0
-    [[ !("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
+    [[ ! ("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
     dolt commit -am "changes to other"
 
     dolt checkout main
@@ -995,7 +995,7 @@ SQL
     dolt sql -q "call dolt_conflicts_resolve('--ours', 't')"
     run dolt sql -q "show create table t"
     log_status_eq 0
-    [[ !("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
+    [[ ! ("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
 }
 
 @test "sql-merge: merging with not null and check constraints preserves both constraints" {

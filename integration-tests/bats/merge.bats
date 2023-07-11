@@ -84,7 +84,7 @@ SQL
         
     run dolt merge b2
     log_status_eq 1
-    [[ "$output" =~ "cause: error: cannot merge table t1 because its different primary keys differ" ]]
+    [[ "$output" =~ "cause: error: cannot merge table t1 because its different primary keys differ" ]] || false
 }
 
 
@@ -347,11 +347,14 @@ SQL
     [[ "$output" =~ "test2" ]] || false
     [[ ! "$output" =~ "test1" ]] || false
 
-    run dolt merge merge_branch --no-ff -m "no-ff merge"
+    run dolt sql -q "call dolt_merge('merge_branch', '--no-ff', '-m', 'no-ff merge')"
+    #run dolt merge merge_branch --no-ff -m "no-ff merge"
+    echo "$output"
     log_status_eq 0
     [[ ! "$output" =~ "Fast-forward" ]] || false
 
     run dolt status
+    echo "$output"
     log_status_eq 0
     [[ "$output" =~ "test2" ]] || false
     [[ ! "$output" =~ "test1" ]] || false
@@ -566,16 +569,16 @@ SQL
     # left composite index left-over
     run dolt sql -r csv -q "SELECT count(*) from test WHERE c0 = 1 AND c1 = 0;"
     log_status_eq 0
-    [ ${lines[1]} -eq 0 ]
+    [[ ${lines[1]} -eq 0 ]] || false
 
     # right composite index left-over
     run dolt sql -r csv -q "SELECT count(*) from test WHERE c0 = 0 AND c1 = 1;"
     log_status_eq 0
-    [ ${lines[1]} -eq 0 ]
+    [[ ${lines[1]} -eq 0 ]] || false
 
     run dolt sql -r csv -q "SELECT count(*) from test WHERE c0 = 1 AND c1 = 1;"
     log_status_eq 0
-    [ ${lines[1]} -eq 1 ]
+    [[ ${lines[1]} -eq 1 ]] || false
 }
 
 @test "merge: merge a branch with a new table" {
@@ -779,7 +782,7 @@ SQL
     dolt merge other --no-commit
 
     run dolt sql -r csv -q "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;";
-    [[ "${lines[1]}" = "foreign key,1,1" ]]
+    [[ "${lines[1]}" = "foreign key,1,1" ]] || false
 }
 
 @test "merge: non-conflicting / non-violating merge succeeds when conflicts and violations already exist" {
@@ -812,16 +815,16 @@ SQL
     [[ "$output" =~ "CONFLICT" ]] || false
 
     run dolt sql -r csv -q "SELECT * FROM parent;"
-    [[ "${lines[1]}" = "1,2" ]]
+    [[ "${lines[1]}" = "1,2" ]] || false
 
     run dolt sql -r csv -q "SELECT * from child;"
-    [[ "${lines[1]}" = "1,2" ]]
+    [[ "${lines[1]}" = "1,2" ]] || false
 
     run dolt sql -r csv -q "SELECT base_col1, base_pk, our_col1, our_pk, their_col1, their_pk from dolt_conflicts_parent;"
-    [[ "$output" =~ "1,1,2,1,3,1" ]]
+    [[ "$output" =~ "1,1,2,1,3,1" ]] || false
 
     run dolt sql -r csv -q "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;"
-    [[ "$output" =~ "foreign key,1,2" ]]
+    [[ "$output" =~ "foreign key,1,2" ]] || false
 
     # commit it so we can merge again
     dolt commit -afm "committing merge conflicts"
@@ -829,17 +832,17 @@ SQL
     # merge should be allowed and previous conflicts and violations should be retained
     dolt merge other2 --no-commit
     run dolt sql -r csv -q "SELECT * FROM parent;"
-    [[ "${lines[1]}" = "1,2" ]]
-    [[ "${lines[2]}" = "3,1" ]]
+    [[ "${lines[1]}" = "1,2" ]] || false
+    [[ "${lines[2]}" = "3,1" ]] || false
 
     run dolt sql -r csv -q "SELECT * from child;"
-    [[ "${lines[1]}" = "1,2" ]]
+    [[ "${lines[1]}" = "1,2" ]] || false
 
     run dolt sql -r csv -q "SELECT base_col1, base_pk, our_col1, our_pk, their_col1, their_pk from dolt_conflicts_parent;"
-    [[ "${lines[1]}" =~ "1,1,2,1,3,1" ]]
+    [[ "${lines[1]}" =~ "1,1,2,1,3,1" ]] || false
 
     run dolt sql -r csv -q "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;"
-    [[ "${lines[1]}" =~ "foreign key,1,2" ]]
+    [[ "${lines[1]}" =~ "foreign key,1,2" ]] || false
 }
 
 @test "merge: conflicting merge should retain previous conflicts and constraint violations" {
@@ -870,19 +873,19 @@ SQL
     # Create a conflicted state by merging other into main
     run dolt merge other
     log_status_eq 0
-    [[ "$output" =~ "CONFLICT" ]]
+    [[ "$output" =~ "CONFLICT" ]] || false
 
     run dolt sql -r csv -q "SELECT * FROM parent;"
-    [[ "${lines[1]}" = "1,2" ]]
+    [[ "${lines[1]}" = "1,2" ]] || false
 
     run dolt sql -r csv -q "SELECT * from child;"
-    [[ "${lines[1]}" = "1,2" ]]
+    [[ "${lines[1]}" = "1,2" ]] || false
 
     run dolt sql -r csv -q "SELECT base_col1, base_pk, our_col1, our_pk, their_col1, their_pk from dolt_conflicts_parent;"
-    [[ "${lines[1]}" = "1,1,2,1,3,1" ]]
+    [[ "${lines[1]}" = "1,1,2,1,3,1" ]] || false
 
     run dolt sql -r csv -q "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;"
-    [[ "${lines[1]}" = "foreign key,1,2" ]]
+    [[ "${lines[1]}" = "foreign key,1,2" ]] || false
 
     # commit it so we can merge again
     dolt commit -afm "committing merge conflicts"
@@ -891,19 +894,19 @@ SQL
 
     # Merge should fail due to conflict and previous conflict and violation state should be retained
     run dolt merge other2
-    [[ "$output" =~ "existing unresolved conflicts would be overridden by new conflicts produced by merge" ]]
+    [[ "$output" =~ "existing unresolved conflicts would be overridden by new conflicts produced by merge" ]] || false
 
     run dolt sql -r csv -q "SELECT * FROM parent;"
-    [[ "${lines[1]}" = "1,2" ]]
+    [[ "${lines[1]}" = "1,2" ]] || false
 
     run dolt sql -r csv -q "SELECT * from child;"
-    [[ "${lines[1]}" = "1,2" ]]
+    [[ "${lines[1]}" = "1,2" ]] || false
 
     run dolt sql -r csv -q "SELECT base_col1, base_pk, our_col1, our_pk, their_col1, their_pk from dolt_conflicts_parent;"
-    [[ "${lines[1]}" = "1,1,2,1,3,1" ]]
+    [[ "${lines[1]}" = "1,1,2,1,3,1" ]] || false
 
     run dolt sql -r csv -q "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;"
-    [[ "${lines[1]}" = "foreign key,1,2" ]]
+    [[ "${lines[1]}" = "foreign key,1,2" ]] || false
 }
 
 @test "merge: violated check constraint" {
@@ -923,10 +926,10 @@ SQL
 
     dolt merge other
     run dolt sql -r csv -q "SELECT * from dolt_constraint_violations";
-    [[ "$output" =~ "t,1" ]]
+    [[ "$output" =~ "t,1" ]] || false
 
     run dolt status
-    [[ ! "$output" =~ "nothing to commit, working tree clean" ]]
+    [[ ! "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
 @test "merge: ourRoot renames, theirRoot modifies" {
@@ -1000,10 +1003,15 @@ SQL
     run dolt sql -q "select * from test1;" -r csv
     [[ ! "$output" =~ "1,2,3" ]] || false
 
-    # todo merging self?
-    run dolt merge other --no-ff --no-commit
+    run dolt merge main --no-ff --no-commit
     log_status_eq 0
     [[ "$output" =~ "Automatic merge went well; stopped before committing as requested" ]] || false
+
+    run dolt status
+    echo "$output"
+    [[ "$output" =~ "All conflicts and constraint violations fixed but you are still merging." ]] || false
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ "modified:         test1" ]] || false
 
     run dolt log --oneline -n 1
     [[ "$output" =~ "added tables" ]] || false
@@ -1011,6 +1019,8 @@ SQL
 
     run dolt commit -m "merge main"
     log_status_eq 0
+    [[ "$output" =~ "Merge: " ]] || false
+    [[ "$output" =~ "merge main" ]] || false
 }
 
 @test "merge: specify ---author for merge that's used for creating commit" {
