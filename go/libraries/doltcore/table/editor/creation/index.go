@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -172,7 +171,7 @@ func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, n
 	if idx.IsUnique() {
 		kd := idx.Schema().GetKeyDescriptor()
 		return BuildUniqueProllyIndex(ctx, vrw, ns, sch, idx, primary, func(ctx context.Context, existingKey, newKey val.Tuple) error {
-			msg := writer.FormatKeyForUniqKeyErr(newKey, kd)
+			msg := FormatKeyForUniqKeyErr(newKey, kd)
 			return sql.NewUniqueKeyErr(msg, false, nil)
 		})
 	}
@@ -216,6 +215,24 @@ func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, n
 		return nil, err
 	}
 	return durable.IndexFromProllyMap(secondary), nil
+}
+
+// FormatKeyForUniqKeyErr formats the given tuple |key| using |d|. The resulting
+// string is suitable for use in a sql.UniqueKeyError
+// This is copied from the writer package to avoid pulling in that dependency and prevent cycles
+func FormatKeyForUniqKeyErr(key val.Tuple, d val.TupleDesc) string {
+	var sb strings.Builder
+	sb.WriteString("[")
+	seenOne := false
+	for i := range d.Types {
+		if seenOne {
+			sb.WriteString(",")
+		}
+		seenOne = true
+		sb.WriteString(d.FormatValue(i, key.GetField(i)))
+	}
+	sb.WriteString("]")
+	return sb.String()
 }
 
 // DupEntryCb receives duplicate unique index entries.

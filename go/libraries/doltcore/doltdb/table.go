@@ -637,7 +637,9 @@ func (t *Table) GetAutoIncrementValue(ctx context.Context) (uint64, error) {
 	return t.table.GetAutoIncrement(ctx)
 }
 
-// SetAutoIncrementValue sets the current AUTO_INCREMENT value for this table.
+// SetAutoIncrementValue sets the current AUTO_INCREMENT value for this table. This method does not verify that the
+// value given is greater than current table values. Setting it lower than current table values will result in
+// incorrect key generation on future inserts, causing duplicate key errors.
 func (t *Table) SetAutoIncrementValue(ctx context.Context, val uint64) (*Table, error) {
 	table, err := t.table.SetAutoIncrement(ctx, val)
 	if err != nil {

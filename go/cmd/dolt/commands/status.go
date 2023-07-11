@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -651,24 +650,4 @@ and have %v and %v different commits each, respectively.
 func handleStatusVErr(err error) int {
 	cli.PrintErrln(errhand.VerboseErrorFromError(err).Verbose())
 	return 1
-}
-
-// getInt64ColAsInt64 returns the value of an int64 column as a string
-// This is necessary because Queryist may return an int64 column as an int64 (when using SQLEngine)
-// or as a string (when using ConnectionQueryist).
-func getInt64ColAsInt64(col interface{}) (int64, error) {
-	switch v := col.(type) {
-	case uint64:
-		return int64(v), nil
-	case int64:
-		return v, nil
-	case string:
-		iv, err := strconv.ParseInt(v, 10, 64)
-		if err != nil {
-			return 0, err
-		}
-		return iv, nil
-	default:
-		return 0, fmt.Errorf("unexpected type %T, was expecting int64, uint64 or string", v)
-	}
 }

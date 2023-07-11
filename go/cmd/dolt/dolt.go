@@ -61,7 +61,7 @@ import (
 )
 
 const (
-	Version = "1.7.3"
+	Version = "1.7.4"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -135,7 +135,6 @@ var commandsWithoutCliCtx = []cli.Command{
 	credcmds.Commands,
 	commands.LsCmd{},
 	schcmds.Commands,
-	commands.TagCmd{},
 	cvcmds.Commands,
 	commands.SendMetricsCmd{},
 	commands.MigrateCmd{},
