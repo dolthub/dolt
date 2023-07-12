@@ -20,6 +20,8 @@ CREATE TABLE table3 (pk int PRIMARY KEY);
 CREATE TABLE generated_foo (pk int PRIMARY KEY);
 SQL
   dolt add table1
+  # Note that we leave the table in a dirty state, which is useful to several tests, and harmless to others. For
+  # some, you need to ensure the repo is clean, and you should run `dolt reset --hard` at the beginning of the test.
   cd ..
 }
 
@@ -1036,7 +1038,7 @@ SQL
 
 @test "sql-local-remote: verify checkout will fail early when a server is running" {
   cd altDB
-  dolt reset --hard
+  dolt reset --hard # Ensure database is clean to start.
   start_sql_server altDB
 
   dolt branch br
