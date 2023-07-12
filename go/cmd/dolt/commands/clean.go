@@ -18,11 +18,12 @@ import (
 	"bytes"
 	"context"
 
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/gocraft/dbr/v2"
-	"github.com/gocraft/dbr/v2/dialect"
 )
 
 const (
