@@ -4457,6 +4457,43 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 			},
 		},
 	},
+	{
+		Name: "convergent schema changes",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE TABLE parent(id int primary key);",
+			"insert into parent values (1), (2), (3);",
+			"CREATE table t (pk int primary key, col1 int);",
+			"INSERT into t values (1, 10);",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 int not null;",
+			"alter table t add column col3 int ;",
+			"alter table t add index idx1 (col3, col1);",
+			"alter table t add constraint fk1 foreign key (col3) references parent(id);",
+		},
+		LeftSetUpScript: []string{
+			"alter table t modify column col1 int not null;",
+			"alter table t add column col3 int;",
+			"alter table t add index idx1 (col3, col1);",
+			"update t set col1=-1000 where t.pk = 1;",
+			"alter table t add constraint fk1 foreign key (col3) references parent(id);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query:    "show create table t;",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` int,\n  `col3` int,\n  PRIMARY KEY (`pk`),\n  KEY `idx1` (`col3`,`col1`),\n  CONSTRAINT `fk1` FOREIGN KEY (`col3`) REFERENCES `parent` (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, -1000, nil}},
+			},
+		},
+	},
 
 	// Constraints: Not Null
 	{

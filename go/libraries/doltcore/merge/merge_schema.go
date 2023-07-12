@@ -288,6 +288,12 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 	})
 
 	err = ourNewFKs.Iter(func(ourFK doltdb.ForeignKey) (stop bool, err error) {
+		// The common set of FKs may already have this FK, if it was added on both branches
+		if commonFK, ok := common.GetByNameCaseInsensitive(ourFK.Name); ok && commonFK.EqualDefs(ourFK) {
+			// Skip this one if it's identical to the one in the common set
+			return false, nil
+		}
+
 		return false, common.AddKeys(ourFK)
 	})
 	if err != nil {
@@ -295,6 +301,12 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 	}
 
 	err = theirNewFKs.Iter(func(theirFK doltdb.ForeignKey) (stop bool, err error) {
+		// The common set of FKs may already have this FK, if it was added on both branches
+		if commonFK, ok := common.GetByNameCaseInsensitive(theirFK.Name); ok && commonFK.EqualDefs(theirFK) {
+			// Skip this one if it's identical to the one in the common set
+			return false, nil
+		}
+
 		return false, common.AddKeys(theirFK)
 	})
 	if err != nil {
@@ -355,7 +367,15 @@ func mergeColumns(format *storetypes.NomsBinFormat, ourCC, theirCC, ancCC *schem
 				oursChanged := !anc.Equals(*ours)
 				theirsChanged := !anc.Equals(*theirs)
 				if oursChanged && theirsChanged {
-					// This is a schema change conflict and has already been handled by checkSchemaConflicts
+					if ours.Equals(*theirs) {
+						mergedColumns = append(mergedColumns, *theirs)
+					} else {
+						conflicts = append(conflicts, ColConflict{
+							Kind:   NameCollision,
+							Ours:   *ours,
+							Theirs: *theirs,
+						})
+					}
 				} else if theirsChanged {
 					// In this case, only theirsChanged, so we need to check if moving from ours->theirs
 					// is valid, otherwise it's a conflict
@@ -384,9 +404,17 @@ func mergeColumns(format *storetypes.NomsBinFormat, ourCC, theirCC, ancCC *schem
 					// if neither side changed, just use ours
 					mergedColumns = append(mergedColumns, *ours)
 				}
-			} else if ours.Equals(*theirs) {
-				// if the columns are identical, just use ours
-				mergedColumns = append(mergedColumns, *ours)
+			} else {
+				if ours.Equals(*theirs) {
+					// if the columns are identical, just use ours
+					mergedColumns = append(mergedColumns, *ours)
+				} else {
+					conflicts = append(conflicts, ColConflict{
+						Kind:   NameCollision,
+						Ours:   *ours,
+						Theirs: *theirs,
+					})
+				}
 			}
 		}
 	}
