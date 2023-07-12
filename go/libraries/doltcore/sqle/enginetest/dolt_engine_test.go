@@ -119,58 +119,33 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "delete all rows in table in all branches",
+			// Unique checks should not be confused by a row being deleted
+			// TODO: Do we sort delete diff events so that they always appear first?
+			// TODO: Could we reproduce this
+			// TODO: If we use a different PK ordering, does this still work?
+			//       (i.e. delete 2 and insert 1, instead of the other way around)
+			// https://github.com/dolthub/dolt/issues/6319
+			Name: "RicardoReiter merge issue",
 			SetUpScript: []string{
-				"create table t (a int primary key auto_increment, b int)",
-				"call dolt_add('.')",
-				"call dolt_commit('-am', 'empty table')",
-				"call dolt_branch('branch1')",
-				"call dolt_branch('branch2')",
-				"insert into t (b) values (1), (2)",
-				"call dolt_commit('-am', 'two values on main')",
-				"call dolt_checkout('branch1')",
-				"insert into t (b) values (3), (4)",
-				"call dolt_commit('-am', 'two values on branch1')",
-				"call dolt_checkout('branch2')",
-				"insert into t (b) values (5), (6)",
-				"call dolt_checkout('main')",
+				"set @@autocommit=0;",
+				"create table tableA (keyC varchar(255) not null, col1 varchar(255), col2 varchar(255), col3 varchar(255), dataA varchar(255), PRIMARY KEY (keyC), UNIQUE KEY col1_col2_col3_unique (col1, col2, col3))",
+				"insert into tableA (keyC, col1, col2, col3, dataA) values ('key-a', '1', '2', '3', 'test1')",
+				"call dolt_commit('-Am', 'creating table');",
+				"call dolt_branch('feature');",
+				"update tableA set keyC = 'key-b';",
+				"call dolt_commit('-am', 'update row');",
+				"call dolt_checkout('feature');",
+				"insert into tableA (keyC, col1, col2, col3, dataA) values ('key-c', '2', '2', '3', 'test3');",
+				"call dolt_commit('-am', 'added row on branch feature');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "delete from t",
-					Expected: []sql.Row{{gmstypes.NewOkResult(2)}},
+					Query:    "call dolt_merge('main');",
+					Expected: []sql.Row{{1, 7}, {2, 8}},
 				},
 				{
-					Query:    "delete from `mydb/branch1`.t",
-					Expected: []sql.Row{{gmstypes.NewOkResult(2)}},
-				},
-				{
-					Query:    "delete from `mydb/branch2`.t",
-					Expected: []sql.Row{{gmstypes.NewOkResult(2)}},
-				},
-				{
-					Query:            "alter table `mydb/branch1`.t auto_increment = 1",
-					SkipResultsCheck: true,
-				},
-				{
-					Query:            "alter table `mydb/branch2`.t auto_increment = 1",
-					SkipResultsCheck: true,
-				},
-				{
-					Query:            "alter table t auto_increment = 1",
-					SkipResultsCheck: true,
-				},
-				{
-					// empty tables, start at 1
-					Query:    "insert into t (b) values (7), (8)",
-					Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: 2, InsertID: 1}}},
-				},
-				{
-					Query: "select * from t order by a",
-					Expected: []sql.Row{
-						{1, 7},
-						{2, 8},
-					},
+					Query:    "select * from dolt_constraint_violations;",
+					Expected: []sql.Row{{1, 7}, {2, 8}},
 				},
 			},
 		},

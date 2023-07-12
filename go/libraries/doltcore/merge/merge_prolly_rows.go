@@ -186,7 +186,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		} else if err != nil {
 			return nil, nil, err
 		}
-
+		// TODO: when a delete comes in, we don't seem to update the indexes that we are checking for unique constraint violations, so they still have the old data and can report spurious constraint violations.
 		cnt, err := uniq.validateDiff(ctx, diff)
 		if err != nil {
 			return nil, nil, err
@@ -590,6 +590,13 @@ func (uv uniqValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff
 	switch diff.Op {
 	case tree.DiffOpRightAdd, tree.DiffOpRightModify:
 		value = diff.Right
+	case tree.DiffOpRightDelete:
+		// TODO: in this case, just delete the row from the index, so we don't consider this row for uniqueness checks anymore
+		//       we don't need to save that back, since other parts of the merge code will update those indexes, but we do
+		//       need to do it here for our own tracking.
+		value = diff.Right
+
+		return
 	case tree.DiffOpDivergentModifyResolved:
 		value = diff.Merged
 	default:
@@ -624,16 +631,18 @@ func (uv uniqValidator) insertArtifact(ctx context.Context, key, value val.Tuple
 }
 
 type uniqIndex struct {
-	def          schema.Index
-	secondary    prolly.Map
-	clustered    prolly.Map
-	meta         UniqCVMeta
-	prefixDesc   val.TupleDesc
-	secondaryBld index.SecondaryKeyBuilder
-	clusteredBld index.ClusteredKeyBuilder
+	def              schema.Index
+	secondary        *prolly.MutableMap
+	clustered        *prolly.MutableMap
+	meta             UniqCVMeta
+	prefixDesc       val.TupleDesc
+	secondaryBld     index.SecondaryKeyBuilder
+	clusteredBld     index.ClusteredKeyBuilder
+	secondaryKeyDesc val.TupleDesc
+	clusteredKeyDesc val.TupleDesc
 }
 
-func newUniqIndex(sch schema.Schema, def schema.Index, clusterd, secondary prolly.Map) (uniqIndex, error) {
+func newUniqIndex(sch schema.Schema, def schema.Index, clustered, secondary prolly.Map) (uniqIndex, error) {
 	meta, err := makeUniqViolMeta(sch, def)
 	if err != nil {
 		return uniqIndex{}, err
@@ -642,24 +651,43 @@ func newUniqIndex(sch schema.Schema, def schema.Index, clusterd, secondary proll
 	if schema.IsKeyless(sch) { // todo(andy): sad panda
 		secondary = prolly.ConvertToSecondaryKeylessIndex(secondary)
 	}
-	p := clusterd.Pool()
+	p := clustered.Pool()
 
 	prefixDesc := secondary.KeyDesc().PrefixDesc(def.Count())
 	secondaryBld := index.NewSecondaryKeyBuilder(sch, def, secondary.KeyDesc(), p)
-	clusteredBld := index.NewClusteredKeyBuilder(def, sch, clusterd.KeyDesc(), p)
+	clusteredBld := index.NewClusteredKeyBuilder(def, sch, clustered.KeyDesc(), p)
 
+	// TODO: What is the clustered index?
 	return uniqIndex{
-		def:          def,
-		secondary:    secondary,
-		clustered:    clusterd,
-		meta:         meta,
-		prefixDesc:   prefixDesc,
-		secondaryBld: secondaryBld,
-		clusteredBld: clusteredBld,
+		def:              def,
+		secondary:        secondary.Mutate(),
+		secondaryKeyDesc: secondary.KeyDesc(), // TODO: May not actually need this?
+		clustered:        clustered.Mutate(),
+		clusteredKeyDesc: clustered.KeyDesc(),
+		meta:             meta,
+		prefixDesc:       prefixDesc,
+		secondaryBld:     secondaryBld,
+		clusteredBld:     clusteredBld,
 	}, nil
 }
 
 type collisionFn func(key, value val.Tuple) error
+
+func (idx uniqIndex) removeRow(ctx context.Context, key, value val.Tuple) error {
+	secondaryIndexKey := idx.secondaryBld.SecondaryKeyFromRow(key, value)
+	err := idx.secondary.Delete(ctx, secondaryIndexKey)
+	if err != nil {
+		return err
+	}
+
+	clusteredIndexKey := idx.clusteredBld.ClusteredKeyFromIndexKey(key)
+	err = idx.clustered.Delete(ctx, clusteredIndexKey)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
 
 func (idx uniqIndex) findCollisions(ctx context.Context, key, value val.Tuple, cb collisionFn) error {
 	indexKey := idx.secondaryBld.SecondaryKeyFromRow(key, value)
@@ -685,7 +713,7 @@ func (idx uniqIndex) findCollisions(ctx context.Context, key, value val.Tuple, c
 	// collided with row(|key|, |value|) and pass both to |cb|
 	err = idx.clustered.Get(ctx, clusteredKey, func(k val.Tuple, v val.Tuple) error {
 		if k == nil {
-			s := idx.clustered.KeyDesc().Format(clusteredKey)
+			s := idx.clusteredKeyDesc.Format(clusteredKey)
 			return errors.New("failed to find key: " + s)
 		}
 		return cb(k, v)
