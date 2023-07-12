@@ -795,6 +795,44 @@ SQL
     [[ $output =~ 'Revert "Commit ABCDEF"' ]] || false
 }
 
+@test "sql-local-remote: Ensure the dolt clean works for each mode" {
+    dolt reset --hard
+    dolt sql -q "create table tbl (pk int primary key)"
+
+    start_sql_server altDB
+
+    run dolt --verbose-engine-setup clean --dry-run
+    [ $status -eq 0 ]
+    [[ $output =~ "starting remote mode" ]] || false
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ $output =~ "Untracked tables" ]] || false
+
+    dolt clean
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ $output =~ "nothing to commit, working tree clean" ]] || false
+
+    stop_sql_server 1
+
+    dolt sql -q "create table tbl (pk int primary key)"
+    run dolt --verbose-engine-setup clean --dry-run
+    [ $status -eq 0 ]
+    [[ $output =~ "starting local mode" ]] || false
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ $output =~ "Untracked tables" ]] || false
+
+    dolt clean
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ $output =~ "nothing to commit, working tree clean" ]] || false
+}
+
 @test "sql-local-remote: verify dolt tag behavior" {
   cd altDB
 
