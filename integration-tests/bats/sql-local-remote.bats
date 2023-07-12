@@ -795,7 +795,7 @@ SQL
     [[ $output =~ 'Revert "Commit ABCDEF"' ]] || false
 }
 
-@test "sql-local-remote: Ensure the dolt clean works for each mode" {
+@test "sql-local-remote: Ensure that dolt clean works for each mode" {
     dolt reset --hard
     dolt sql -q "create table tbl (pk int primary key)"
 

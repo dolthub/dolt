@@ -105,7 +105,7 @@ func (cmd CleanCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			firstParamDone = true
 		}
 	}
-	buffer.WriteString((")"))
+	buffer.WriteString(")")
 	query := buffer.String()
 
 	if len(params) > 0 {
