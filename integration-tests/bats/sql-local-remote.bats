@@ -1033,3 +1033,16 @@ SQL
 
   [[ "$localCherryPickOutput" == "$remoteCherryPickOutput" ]] || false
 }
+
+@test "sql-local-remote: verify checkout will fail early when a server is running" {
+  cd altDB
+  dolt reset --hard
+  start_sql_server altDB
+
+  dolt branch br
+
+  run dolt checkout br
+  [ $status -eq 1 ]
+
+  [[ $output =~ "dolt checkout can not currently be used when there is a local server running. Please stop your dolt sql-server and try again." ]] || false
+}
