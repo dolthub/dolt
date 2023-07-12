@@ -808,73 +808,73 @@ SQL
   [[ $output =~ "verbose: starting local mode" ]] || false
 
   # add tag without message
-  run dolt --verbose-engine-setup tag v1
+  run dolt --verbose-engine-setup tag v1_tag
   [ $status -eq 0 ]
   [[ $output =~ "verbose: starting local mode" ]] || false
 
   # list tags and check new tag is present
   run dolt tag
   [ $status -eq 0 ]
-  [[ $output =~ "v1" ]] || false
+  [[ $output =~ "v1_tag" ]] || false
 
   # list tags with verbose flag and check new tag is present
   run dolt --verbose-engine-setup tag --verbose
   [ $status -eq 0 ]
-  [[ $output =~ "v1"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "v1_tag"$'\t'"$headCommit" ]] || false
   [[ $output =~ "Tagger: Bats Tests <bats@email.fake>" ]] || false
   [[ $output =~ "verbose: starting local mode" ]] || false
 
   # add tag with commit
-  run dolt tag v2 $secondCommit
+  run dolt tag v2_tag $secondCommit
   [ $status -eq 0 ]
 
   # list tags and check new tag is present
   run dolt tag --verbose
   [ $status -eq 0 ]
-  [[ $output =~ "v1"$'\t'"$headCommit" ]] || false
-  [[ $output =~ "v2"$'\t'"$secondCommit" ]] || false
+  [[ $output =~ "v1_tag"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "v2_tag"$'\t'"$secondCommit" ]] || false
 
   # add tag with message
-  run dolt tag v3 -m "tag message"
+  run dolt tag v3_tag -m "tag message"
   [ $status -eq 0 ]
 
   # list tags and check new tag is present
   run dolt tag --verbose
   [ $status -eq 0 ]
-  [[ $output =~ "v3"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "v3_tag"$'\t'"$headCommit" ]] || false
   [[ $output =~ "tag message" ]] || false
 
   # add tag with message and commit
-  run dolt tag v4 $secondCommit -m "second message"
+  run dolt tag v4_tag $secondCommit -m "second message"
   [ $status -eq 0 ]
 
   # list tags and check new tag is present
   run dolt tag --verbose
   [ $status -eq 0 ]
-  [[ $output =~ "v4"$'\t'"$secondCommit" ]] || false
+  [[ $output =~ "v4_tag"$'\t'"$secondCommit" ]] || false
   [[ $output =~ "second message" ]] || false
 
   # add tag with author
-  run dolt tag v5 --author "John Doe <john@doe.com>"
+  run dolt tag v5_tag --author "John Doe <john@doe.com>"
   [ $status -eq 0 ]
 
   # list tags and check new tag is present
   run dolt tag --verbose
   [ $status -eq 0 ]
-  [[ $output =~ "v5"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "v5_tag"$'\t'"$headCommit" ]] || false
   [[ $output =~ "Tagger: John Doe <john@doe.com>" ]] || false
 
   # delete tag
-  run dolt tag -d v2
+  run dolt tag -d v2_tag
   [ $status -eq 0 ]
 
   # list tags and check deleted tag is not present
   run dolt tag --verbose
   [ $status -eq 0 ]
-  [[ $output =~ "v1"$'\t'"$headCommit" ]] || false
-  [[ ! $output =~ "v2" ]] || false
-  [[ $output =~ "v3"$'\t'"$headCommit" ]] || false
-  [[ $output =~ "v4"$'\t'"$secondCommit" ]] || false
+  [[ $output =~ "v1_tag"$'\t'"$headCommit" ]] || false
+  [[ ! $output =~ "v2_tag" ]] || false
+  [[ $output =~ "v3_tag"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "v4_tag"$'\t'"$secondCommit" ]] || false
   [[ $output =~ "tag message" ]] || false
   [[ $output =~ "second message" ]] || false
   [[ $output =~ "Tagger: John Doe <john@doe.com>" ]] || false
@@ -892,73 +892,73 @@ SQL
   [[ $output =~ "verbose: starting remote mode" ]] || false
 
   # add tag without message
-  run dolt --verbose-engine-setup tag v1
+  run dolt --verbose-engine-setup tag v1_tag
   [ $status -eq 0 ]
   [[ $output =~ "verbose: starting remote mode" ]] || false
 
   # list tags and check new tag is present
   run dolt tag
   [ $status -eq 0 ]
-  [[ $output =~ "v1" ]] || false
+  [[ $output =~ "v1_tag" ]] || false
 
   # list tags with verbose flag and check new tag is present
   run dolt --verbose-engine-setup tag --verbose
   [ $status -eq 0 ]
-  [[ $output =~ "v1"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "v1_tag"$'\t'"$headCommit" ]] || false
   [[ $output =~ "Tagger: Bats Tests <bats@email.fake>" ]] || false
   [[ $output =~ "verbose: starting remote mode" ]] || false
 
   # add tag with commit
-  run dolt tag v2 $secondCommit
+  run dolt tag v2_tag $secondCommit
   [ $status -eq 0 ]
 
   # list tags and check new tag is present
   run dolt tag --verbose
   [ $status -eq 0 ]
-  [[ $output =~ "v1"$'\t'"$headCommit" ]] || false
-  [[ $output =~ "v2"$'\t'"$secondCommit" ]] || false
+  [[ $output =~ "v1_tag"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "v2_tag"$'\t'"$secondCommit" ]] || false
 
   # add tag with message
-  run dolt tag v3 -m "tag message"
+  run dolt tag v3_tag -m "tag message"
   [ $status -eq 0 ]
 
   # list tags and check new tag is present
   run dolt tag --verbose
   [ $status -eq 0 ]
-  [[ $output =~ "v3"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "v3_tag"$'\t'"$headCommit" ]] || false
   [[ $output =~ "tag message" ]] || false
 
   # add tag with message and commit
-  run dolt tag v4 $secondCommit -m "second message"
+  run dolt tag v4_tag $secondCommit -m "second message"
   [ $status -eq 0 ]
 
   # list tags and check new tag is present
   run dolt tag --verbose
   [ $status -eq 0 ]
-  [[ $output =~ "v4"$'\t'"$secondCommit" ]] || false
+  [[ $output =~ "v4_tag"$'\t'"$secondCommit" ]] || false
   [[ $output =~ "second message" ]] || false
 
   # add tag with author
-  run dolt tag v5 --author "John Doe <john@doe.com>"
+  run dolt tag v5_tag --author "John Doe <john@doe.com>"
   [ $status -eq 0 ]
 
   # list tags and check new tag is present
   run dolt tag --verbose
   [ $status -eq 0 ]
-  [[ $output =~ "v5"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "v5_tag"$'\t'"$headCommit" ]] || false
   [[ $output =~ "Tagger: John Doe <john@doe.com>" ]] || false
 
   # delete tag
-  run dolt tag -d v2
+  run dolt tag -d v2_tag
   [ $status -eq 0 ]
 
   # list tags and check deleted tag is not present
   run dolt tag --verbose
   [ $status -eq 0 ]
-  [[ $output =~ "v1"$'\t'"$headCommit" ]] || false
-  [[ ! $output =~ "v2" ]] || false
-  [[ $output =~ "v3"$'\t'"$headCommit" ]] || false
-  [[ $output =~ "v4"$'\t'"$secondCommit" ]] || false
+  [[ $output =~ "v1_tag"$'\t'"$headCommit" ]] || false
+  [[ ! $output =~ "v2_tag" ]] || false
+  [[ $output =~ "v3_tag"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "v4_tag"$'\t'"$secondCommit" ]] || false
   [[ $output =~ "tag message" ]] || false
   [[ $output =~ "second message" ]] || false
   [[ $output =~ "Tagger: John Doe <john@doe.com>" ]] || false
