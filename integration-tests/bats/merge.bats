@@ -234,7 +234,7 @@ SQL
 
     dolt checkout main
 
-    run dolt merge merge_branch~ --no-commit
+    run dolt merge merge_branch~
     log_status_eq 0
     [[ "$output" =~ "Fast-forward" ]] || false
     run dolt sql -q 'select count(*) from test1 where pk = 1'
@@ -347,14 +347,11 @@ SQL
     [[ "$output" =~ "test2" ]] || false
     [[ ! "$output" =~ "test1" ]] || false
 
-    run dolt sql -q "call dolt_merge('merge_branch', '--no-ff', '-m', 'no-ff merge')"
-    #run dolt merge merge_branch --no-ff -m "no-ff merge"
-    echo "$output"
+    run dolt merge merge_branch --no-ff -m "no-ff merge"
     log_status_eq 0
     [[ ! "$output" =~ "Fast-forward" ]] || false
 
     run dolt status
-    echo "$output"
     log_status_eq 0
     [[ "$output" =~ "test2" ]] || false
     [[ ! "$output" =~ "test1" ]] || false
@@ -1008,7 +1005,6 @@ SQL
     [[ "$output" =~ "Automatic merge went well; stopped before committing as requested" ]] || false
 
     run dolt status
-    echo "$output"
     [[ "$output" =~ "All conflicts and constraint violations fixed but you are still merging." ]] || false
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ "modified:         test1" ]] || false

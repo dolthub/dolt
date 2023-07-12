@@ -169,6 +169,11 @@ func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots,
 		return ws, "", noConflictsOrViolations, threeWayMerge, doltdb.ErrMergeActive
 	}
 
+	err := checkForUncommittedChanges(ctx, roots.Working, roots.Head)
+	if err != nil {
+		return ws, "", noConflictsOrViolations, threeWayMerge, err
+	}
+
 	dbData, ok := sess.GetDbData(ctx, dbName)
 	if !ok {
 		return ws, "", noConflictsOrViolations, threeWayMerge, fmt.Errorf("failed to get dbData")
@@ -182,11 +187,6 @@ func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots,
 		default:
 			return ws, "", noConflictsOrViolations, threeWayMerge, err
 		}
-	}
-
-	err = checkForUncommittedChanges(ctx, roots.Working, roots.Head)
-	if err != nil && !canFF {
-		return ws, "", noConflictsOrViolations, threeWayMerge, err
 	}
 
 	if canFF {

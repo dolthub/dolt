@@ -274,12 +274,7 @@ func newLateBindingEngine(
 
 		// Set client to specified user
 		sqlCtx.Session.SetClient(sql.Client{User: dbUser, Address: config.ServerHost, Capabilities: 0})
-		return se, sqlCtx, func() {
-			se.Close()
-			/*if sess, ok := sqlCtx.Session.(sql.TransactionSession); ok {
-				sess.CommitTransaction(sqlCtx, sess.GetTransaction())
-			}*/
-		}, nil
+		return se, sqlCtx, func() { se.Close() }, nil
 	}
 
 	return lateBinder, nil

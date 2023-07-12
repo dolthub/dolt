@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 	"github.com/gocraft/dbr/v2"
@@ -99,6 +100,10 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		defer closeFunc()
 	}
 
+	if _, ok := queryist.(*engine.SqlEngine); !ok {
+		cli.PrintErrln("`dolt merge` is only supported in local mode.")
+		return 1
+	}
 	ok := validateDoltMergeArgs(apr, usage, cliCtx)
 	if ok != 0 {
 		return 1
@@ -116,116 +121,50 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		cli.Println(err.Error())
 		return 1
 	}
-	_, _, err = queryist.Query(sqlCtx, query)
+	schema, rowIter, err := queryist.Query(sqlCtx, query)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
 	}
+	// if merge is called with '--no-commit', we need to commit the sql transaction or the staged changes will be lost
 	_, _, err = queryist.Query(sqlCtx, "COMMIT")
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
 	}
 
-	_, _, err = queryist.Query(sqlCtx, "set @@dolt_force_transaction_commit = 0")
+	// check for fast-forward merge
+	rows, err := sql.RowIterToRows(sqlCtx, schema, rowIter)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
 	}
+	if rows != nil && rows[0][1].(int64) == 1 {
+		cli.Println("Fast-forward")
+	}
 
 	// calculate merge stats
-	if !apr.Contains(cli.AbortParam) && !apr.Contains(cli.NoCommitFlag) {
-		diffStats := make(map[string]diffStatistics)
+	if !apr.Contains(cli.AbortParam) {
+		if apr.Contains(cli.NoCommitFlag) && apr.Contains(cli.NoFFParam) {
+			cli.Println("Automatic merge went well; stopped before committing as requested")
+		}
+
 		mergeStats := make(map[string]*merge.MergeStats)
 
-		dataConflicts, err := GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_conflicts")
-		if err != nil {
-			cli.Println(err.Error())
+		mergeStats, noConflicts, err := calculateMergeConflicts(queryist, sqlCtx, mergeStats)
+		if err != 0 {
 			return 1
 		}
-		for _, conflict := range dataConflicts {
-			tableName := conflict[0].(string)
-			if ok := mergeStats[tableName]; ok != nil {
-				mergeStats[tableName].DataConflicts = int(conflict[1].(uint64))
-			} else {
-				mergeStats[tableName] = &merge.MergeStats{DataConflicts: int(conflict[1].(uint64))}
-			}
-		}
 
-		schemaConflicts, err := GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_schema_conflicts")
-		if err != nil {
-			cli.Println(err.Error())
-			return 1
-		}
-		for _, conflict := range schemaConflicts {
-			tableName := conflict[0].(string)
-			if ok := mergeStats[tableName]; ok != nil {
-				mergeStats[tableName].SchemaConflicts = 1
-			} else {
-				mergeStats[tableName] = &merge.MergeStats{SchemaConflicts: 1}
-			}
-		}
-
-		constraintViolations, err := GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_constraint_violations")
-		if err != nil {
-			cli.Println(err.Error())
-			return 1
-		}
-		for _, conflict := range constraintViolations {
-			tableName := conflict[0].(string)
-			if ok := mergeStats[tableName]; ok != nil {
-				mergeStats[tableName].ConstraintViolations = int(conflict[1].(uint64))
-			} else {
-				mergeStats[tableName] = &merge.MergeStats{ConstraintViolations: int(conflict[1].(uint64))}
-			}
-		}
-
-		if dataConflicts == nil && schemaConflicts == nil && constraintViolations == nil {
-			diffSummaries, err := getDiffSummariesBetweenRefs(queryist, sqlCtx, "head^1", "head")
-			if err != nil {
-				cli.Println(err.Error())
+		if noConflicts && !apr.Contains(cli.NoCommitFlag) {
+			mergeStats, err = calculateMergeStats(queryist, sqlCtx, mergeStats)
+			if err != 0 {
 				return 1
-			}
-
-			// get table operations
-			for _, summary := range diffSummaries {
-				if summary.DiffType == "added" {
-					mergeStats[summary.TableName] = &merge.MergeStats{
-						Operation: merge.TableAdded,
-					}
-				} else if summary.DiffType == "dropped" {
-					mergeStats[summary.TableName] = &merge.MergeStats{
-						Operation: merge.TableRemoved,
-					}
-				} else if summary.DiffType == "modified" || summary.DiffType == "renamed" {
-					mergeStats[summary.TableName] = &merge.MergeStats{
-						Operation: merge.TableModified,
-					}
-					tableStats, err := getTableDiffStats(queryist, sqlCtx, summary.TableName, "head^1", "head")
-					if err != nil {
-						cli.Println(err.Error())
-						return 1
-					}
-					diffStats[tableStats[0].TableName] = tableStats[0]
-				} else {
-					mergeStats[summary.TableName] = &merge.MergeStats{
-						Operation: merge.TableUnmodified,
-					}
-				}
-			}
-
-			// get row stats
-			for tableName, diffStat := range diffStats {
-				mergeStats[tableName].Adds = int(diffStat.RowsAdded)
-				mergeStats[tableName].Deletes = int(diffStat.RowsDeleted)
-				mergeStats[tableName].Modifications = int(diffStat.RowsModified)
 			}
 		}
 
 		hasConflicts, hasConstraintViolations := printSuccessStats(mergeStats)
-		return handleMergeErr(ctx, sqlCtx, queryist, dEnv, nil, hasConflicts, hasConstraintViolations, usage)
-	} else if apr.Contains(cli.NoCommitFlag) && apr.Contains(cli.NoFFParam) {
-		cli.Println("Automatic merge went well; stopped before committing as requested")
+		return handleMergeErr(sqlCtx, queryist, nil, hasConflicts, hasConstraintViolations, usage)
 	}
 
 	return 0
@@ -280,14 +219,13 @@ func validateDoltMergeArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinte
 // Also interpolates this query to prevent sql injection.
 func constructInterpolatedDoltMergeQuery(apr *argparser.ArgParseResults) (string, error) {
 	var params []interface{}
-	var param bool
 
 	var buffer bytes.Buffer
 	var first bool
 	first = true
 	buffer.WriteString("CALL DOLT_MERGE(")
 
-	writeToBuffer := func(s string) {
+	writeToBuffer := func(s string, param bool) {
 		if !first {
 			buffer.WriteString(", ")
 		}
@@ -299,33 +237,30 @@ func constructInterpolatedDoltMergeQuery(apr *argparser.ArgParseResults) (string
 			buffer.WriteString("'")
 		}
 		first = false
-		param = false
 	}
 
 	if apr.Contains(cli.SquashParam) {
-		writeToBuffer("--squash")
-		param = true
-		writeToBuffer("?")
+		writeToBuffer("--squash", false)
+		writeToBuffer("?", true)
 		params = append(params, apr.Arg(0))
 	} else if apr.Contains(cli.NoFFParam) {
-		writeToBuffer("--no-ff")
+		writeToBuffer("--no-ff", false)
 	} else if apr.Contains(cli.AbortParam) {
-		writeToBuffer("--abort")
+		writeToBuffer("--abort", false)
 	}
 
 	if apr.Contains(cli.CommitFlag) {
-		writeToBuffer("--commit")
+		writeToBuffer("--commit", false)
 	}
 	if apr.Contains(cli.NoCommitFlag) {
-		writeToBuffer("--no-commit")
+		writeToBuffer("--no-commit", false)
 	}
 	if apr.Contains(cli.NoEditFlag) {
-		writeToBuffer("--no-edit")
+		writeToBuffer("--no-edit", false)
 	}
 	if apr.Contains(cli.AuthorParam) {
-		writeToBuffer("--author")
-		param = true
-		writeToBuffer("?")
+		writeToBuffer("--author", false)
+		writeToBuffer("?", true)
 		author, ok := apr.GetValue(cli.AuthorParam)
 		if !ok {
 			return "", errors.New("Could not retrieve author")
@@ -333,9 +268,8 @@ func constructInterpolatedDoltMergeQuery(apr *argparser.ArgParseResults) (string
 		params = append(params, author)
 	}
 	if apr.Contains(cli.DateParam) {
-		writeToBuffer("--date")
-		param = true
-		writeToBuffer("?")
+		writeToBuffer("--date", false)
+		writeToBuffer("?", true)
 		date, ok := apr.GetValue(cli.DateParam)
 		if !ok {
 			return "", errors.New("Could not retrieve date")
@@ -343,9 +277,8 @@ func constructInterpolatedDoltMergeQuery(apr *argparser.ArgParseResults) (string
 		params = append(params, date)
 	}
 	if apr.Contains(cli.MessageArg) {
-		writeToBuffer("-m")
-		param = true
-		writeToBuffer("?")
+		writeToBuffer("-m", false)
+		writeToBuffer("?", true)
 		msg, ok := apr.GetValue(cli.MessageArg)
 		if !ok {
 			return "", errors.New("Could not retrieve message")
@@ -354,8 +287,7 @@ func constructInterpolatedDoltMergeQuery(apr *argparser.ArgParseResults) (string
 	}
 
 	if !apr.Contains(cli.AbortParam) {
-		param = true
-		writeToBuffer("?")
+		writeToBuffer("?", true)
 		params = append(params, apr.Arg(0))
 	}
 
@@ -367,6 +299,100 @@ func constructInterpolatedDoltMergeQuery(apr *argparser.ArgParseResults) (string
 	}
 
 	return interpolatedQuery, nil
+}
+
+// calculateMergeConflicts calculates the count of conflicts that occurred during the merge.
+func calculateMergeConflicts(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats map[string]*merge.MergeStats) (map[string]*merge.MergeStats, bool, int) {
+	dataConflicts, err := GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_conflicts")
+	if err != nil {
+		cli.Println(err.Error())
+		return nil, false, 1
+	}
+	for _, conflict := range dataConflicts {
+		tableName := conflict[0].(string)
+		if ok := mergeStats[tableName]; ok != nil {
+			mergeStats[tableName].DataConflicts = int(conflict[1].(uint64))
+		} else {
+			mergeStats[tableName] = &merge.MergeStats{DataConflicts: int(conflict[1].(uint64))}
+		}
+	}
+
+	schemaConflicts, err := GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_schema_conflicts")
+	if err != nil {
+		cli.Println(err.Error())
+		return nil, false, 1
+	}
+	for _, conflict := range schemaConflicts {
+		tableName := conflict[0].(string)
+		if ok := mergeStats[tableName]; ok != nil {
+			mergeStats[tableName].SchemaConflicts = 1
+		} else {
+			mergeStats[tableName] = &merge.MergeStats{SchemaConflicts: 1}
+		}
+	}
+
+	constraintViolations, err := GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_constraint_violations")
+	if err != nil {
+		cli.Println(err.Error())
+		return nil, false, 1
+	}
+	for _, conflict := range constraintViolations {
+		tableName := conflict[0].(string)
+		if ok := mergeStats[tableName]; ok != nil {
+			mergeStats[tableName].ConstraintViolations = int(conflict[1].(uint64))
+		} else {
+			mergeStats[tableName] = &merge.MergeStats{ConstraintViolations: int(conflict[1].(uint64))}
+		}
+	}
+
+	return mergeStats, dataConflicts == nil && schemaConflicts == nil && constraintViolations == nil, 0
+}
+
+// calculateMergeStats calculates the table operations and row operations that occurred during the merge.
+func calculateMergeStats(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats map[string]*merge.MergeStats) (map[string]*merge.MergeStats, int) {
+	diffSummaries, err := getDiffSummariesBetweenRefs(queryist, sqlCtx, "head^1", "head")
+	if err != nil {
+		cli.Println(err.Error())
+		return nil, 1
+	}
+
+	diffStats := make(map[string]diffStatistics)
+
+	// get table operations
+	for _, summary := range diffSummaries {
+		if summary.DiffType == "added" {
+			mergeStats[summary.TableName] = &merge.MergeStats{
+				Operation: merge.TableAdded,
+			}
+		} else if summary.DiffType == "dropped" {
+			mergeStats[summary.TableName] = &merge.MergeStats{
+				Operation: merge.TableRemoved,
+			}
+		} else if summary.DiffType == "modified" || summary.DiffType == "renamed" {
+			mergeStats[summary.TableName] = &merge.MergeStats{
+				Operation: merge.TableModified,
+			}
+			tableStats, err := getTableDiffStats(queryist, sqlCtx, summary.TableName, "head^1", "head")
+			if err != nil {
+				cli.Println(err.Error())
+				return nil, 1
+			}
+			diffStats[tableStats[0].TableName] = tableStats[0]
+		} else {
+			mergeStats[summary.TableName] = &merge.MergeStats{
+				Operation: merge.TableUnmodified,
+			}
+		}
+	}
+
+	// get row stats
+	for tableName, diffStat := range diffStats {
+		mergeStats[tableName].Adds = int(diffStat.RowsAdded)
+		mergeStats[tableName].Deletes = int(diffStat.RowsDeleted)
+		mergeStats[tableName].Modifications = int(diffStat.RowsModified)
+	}
+
+	return mergeStats, 0
 }
 
 func validateMergeSpec(ctx context.Context, spec *merge.MergeSpec) errhand.VerboseError {
@@ -580,14 +606,17 @@ func fillStringWithChar(ch rune, strLen int) string {
 	return string(runes)
 }
 
-func handleMergeErr(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist, dEnv *env.DoltEnv, mergeErr error, hasConflicts, hasConstraintViolations bool, usage cli.UsagePrinter) int {
+func handleMergeErr(sqlCtx *sql.Context, queryist cli.Queryist, mergeErr error, hasConflicts, hasConstraintViolations bool, usage cli.UsagePrinter) int {
 	unmergedTables, err := GetRowsForSql(queryist, sqlCtx, "select unmerged_tables from dolt_merge_status")
 	if err != nil {
 		cli.PrintErrln(err.Error())
 		return 1
 	}
-	tableNames := unmergedTables[0][0].(string)
-	unmergedCnt := len(strings.Split(tableNames, ", "))
+	unmergedCnt := 0
+	if unmergedTables[0][0] != nil {
+		tableNames := unmergedTables[0][0].(string)
+		unmergedCnt = len(strings.Split(tableNames, ", "))
+	}
 
 	if hasConflicts && hasConstraintViolations {
 		cli.Printf("Automatic merge failed; %d table(s) are unmerged.\n"+
