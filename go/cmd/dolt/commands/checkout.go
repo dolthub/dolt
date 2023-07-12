@@ -101,7 +101,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	if !ok {
 		// Currently checkout does not fully support remote connections. Prevent them from being used until we have better
 		// CLI session support.
-		msg := "dolt checkout can not currently be used when there is a local server running. Please stop your dolt sql-server and try again."
+		msg := fmt.Sprintf(cli.RemoteUnsupportedMsg, commandStr)
 		cli.Println(msg)
 		return 1
 	}
