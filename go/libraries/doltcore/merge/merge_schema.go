@@ -367,14 +367,10 @@ func mergeColumns(format *storetypes.NomsBinFormat, ourCC, theirCC, ancCC *schem
 				oursChanged := !anc.Equals(*ours)
 				theirsChanged := !anc.Equals(*theirs)
 				if oursChanged && theirsChanged {
+					// If both columns changed in the same way, the modifications converge, so accept the column.
+					// If not, don't report a conflict, since this case is already handled in checkForColumnConflicts.
 					if ours.Equals(*theirs) {
 						mergedColumns = append(mergedColumns, *theirs)
-					} else {
-						conflicts = append(conflicts, ColConflict{
-							Kind:   NameCollision,
-							Ours:   *ours,
-							Theirs: *theirs,
-						})
 					}
 				} else if theirsChanged {
 					// In this case, only theirsChanged, so we need to check if moving from ours->theirs
@@ -405,15 +401,10 @@ func mergeColumns(format *storetypes.NomsBinFormat, ourCC, theirCC, ancCC *schem
 					mergedColumns = append(mergedColumns, *ours)
 				}
 			} else {
+				// If both columns changed in the same way, the modifications converge, so accept the column.
+				// If not, don't report a conflict, since this case is already handled in checkForColumnConflicts.
 				if ours.Equals(*theirs) {
-					// if the columns are identical, just use ours
 					mergedColumns = append(mergedColumns, *ours)
-				} else {
-					conflicts = append(conflicts, ColConflict{
-						Kind:   NameCollision,
-						Ours:   *ours,
-						Theirs: *theirs,
-					})
 				}
 			}
 		}
