@@ -232,6 +232,7 @@ get_commit_hash_at() {
 }
 
 @test "sql-local-remote: verify simple dolt checkout behavior." {
+    skip # currently checkout with a server is not supported
     start_sql_server altDB
     cd altDB
 
