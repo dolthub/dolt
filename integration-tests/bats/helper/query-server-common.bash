@@ -37,7 +37,7 @@ start_sql_server() {
         dolt sql-server --host 0.0.0.0 --port=$PORT --user "${SQL_USER:-dolt}" --socket "dolt.$PORT.sock" &
     fi
     SERVER_PID=$!
-    wait_for_connection $PORT 7500
+    wait_for_connection $PORT 5000
 }
 
 # like start_sql_server, but the second argument is a string with all
@@ -48,7 +48,7 @@ start_sql_server_with_args() {
     PORT=$( definePORT )
     dolt sql-server "$@" --port=$PORT --socket "dolt.$PORT.sock" &
     SERVER_PID=$!
-    wait_for_connection $PORT 7500
+    wait_for_connection $PORT 5000
 }
 
 start_sql_server_with_config() {
@@ -71,7 +71,7 @@ behavior:
     cat "$2" >> .cliconfig.yaml
     dolt sql-server --config .cliconfig.yaml --socket "dolt.$PORT.sock" &
     SERVER_PID=$!
-    wait_for_connection $PORT 7500
+    wait_for_connection $PORT 5000
 }
 
 start_sql_multi_user_server() {
@@ -93,7 +93,7 @@ behavior:
 " > .cliconfig.yaml
     dolt sql-server --config .cliconfig.yaml --socket "dolt.$PORT.sock" &
     SERVER_PID=$!
-    wait_for_connection $PORT 7500
+    wait_for_connection $PORT 5000
 }
 
 start_multi_db_server() {
@@ -101,7 +101,7 @@ start_multi_db_server() {
     PORT=$( definePORT )
     dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --data-dir ./ --socket "dolt.$PORT.sock" &
     SERVER_PID=$!
-    wait_for_connection $PORT 7500
+    wait_for_connection $PORT 5000
 }
 
 # stop_sql_server stops the SQL server. For cases where it's important
@@ -127,13 +127,13 @@ stop_sql_server() {
 }
 
 definePORT() {
-  for i in {0..99} # Try more numbers. This probably isn't the issue because we know the server starts with a 0 status.
+  getPORT=""
+  for i in {0..9}
   do
-    port=$((RANDOM % 4096 + 2048))
-    # nc (netcat) returns 0 when it _can_ connect to a port (therefore in use), 1 otherwise.
-    run nc -z localhost $port
-    if [ "$status" -eq 1 ]; then
-      echo $port
+    let getPORT="($$ + $i) % (65536-1024) + 1024"
+    portinuse=$(lsof -i -P -n | grep LISTEN | grep $getPORT | wc -l)
+    if [ $portinuse -eq 0 ]; then
+      echo "$getPORT"
       break
     fi
   done
