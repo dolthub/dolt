@@ -104,6 +104,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		cli.PrintErrln("`dolt merge` is only supported in local mode.")
 		return 1
 	}
+
 	ok := validateDoltMergeArgs(apr, usage, cliCtx)
 	if ok != 0 {
 		return 1
@@ -136,8 +137,9 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	// check for fast-forward merge
 	rows, err := sql.RowIterToRows(sqlCtx, schema, rowIter)
 	if err != nil {
+		cli.Println("merge successful, but failed to check for fast-forward")
 		cli.Println(err.Error())
-		return 1
+		return 0
 	}
 	if rows != nil && rows[0][1].(int64) == 1 {
 		cli.Println("Fast-forward")
@@ -151,15 +153,15 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 		mergeStats := make(map[string]*merge.MergeStats)
 
-		mergeStats, noConflicts, err := calculateMergeConflicts(queryist, sqlCtx, mergeStats)
-		if err != 0 {
-			return 1
+		mergeStats, noConflicts, ok := calculateMergeConflicts(queryist, sqlCtx, mergeStats)
+		if !ok {
+			return 0
 		}
 
 		if noConflicts && !apr.Contains(cli.NoCommitFlag) {
-			mergeStats, err = calculateMergeStats(queryist, sqlCtx, mergeStats)
-			if err != 0 {
-				return 1
+			mergeStats, ok = calculateMergeStats(queryist, sqlCtx, mergeStats)
+			if !ok {
+				return 0
 			}
 		}
 
@@ -301,12 +303,14 @@ func constructInterpolatedDoltMergeQuery(apr *argparser.ArgParseResults) (string
 	return interpolatedQuery, nil
 }
 
-// calculateMergeConflicts calculates the count of conflicts that occurred during the merge.
-func calculateMergeConflicts(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats map[string]*merge.MergeStats) (map[string]*merge.MergeStats, bool, int) {
+// calculateMergeConflicts calculates the count of conflicts that occurred during the merge. Returns a map of table name to MergeStats,
+// a bool indicating whether there were any conflicts, and a bool indicating whether calculation was successful.
+func calculateMergeConflicts(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats map[string]*merge.MergeStats) (map[string]*merge.MergeStats, bool, bool) {
 	dataConflicts, err := GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_conflicts")
 	if err != nil {
+		cli.Println("merge successful, but could not calculate conflicts")
 		cli.Println(err.Error())
-		return nil, false, 1
+		return nil, false, false
 	}
 	for _, conflict := range dataConflicts {
 		tableName := conflict[0].(string)
@@ -319,8 +323,9 @@ func calculateMergeConflicts(queryist cli.Queryist, sqlCtx *sql.Context, mergeSt
 
 	schemaConflicts, err := GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_schema_conflicts")
 	if err != nil {
+		cli.Println("merge successful, but could not calculate conflicts")
 		cli.Println(err.Error())
-		return nil, false, 1
+		return nil, false, false
 	}
 	for _, conflict := range schemaConflicts {
 		tableName := conflict[0].(string)
@@ -333,8 +338,9 @@ func calculateMergeConflicts(queryist cli.Queryist, sqlCtx *sql.Context, mergeSt
 
 	constraintViolations, err := GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_constraint_violations")
 	if err != nil {
+		cli.Println("merge successful, but could not calculate conflicts")
 		cli.Println(err.Error())
-		return nil, false, 1
+		return nil, false, false
 	}
 	for _, conflict := range constraintViolations {
 		tableName := conflict[0].(string)
@@ -345,15 +351,17 @@ func calculateMergeConflicts(queryist cli.Queryist, sqlCtx *sql.Context, mergeSt
 		}
 	}
 
-	return mergeStats, dataConflicts == nil && schemaConflicts == nil && constraintViolations == nil, 0
+	return mergeStats, dataConflicts == nil && schemaConflicts == nil && constraintViolations == nil, true
 }
 
-// calculateMergeStats calculates the table operations and row operations that occurred during the merge.
-func calculateMergeStats(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats map[string]*merge.MergeStats) (map[string]*merge.MergeStats, int) {
+// calculateMergeStats calculates the table operations and row operations that occurred during the merge. Retyrns a map of
+// table name to MergeStats, and a bool indicating whether calculation was successful.
+func calculateMergeStats(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats map[string]*merge.MergeStats) (map[string]*merge.MergeStats, bool) {
 	diffSummaries, err := getDiffSummariesBetweenRefs(queryist, sqlCtx, "head^1", "head")
 	if err != nil {
+		cli.Println("merge successful, but could not calculate stats")
 		cli.Println(err.Error())
-		return nil, 1
+		return nil, false
 	}
 
 	diffStats := make(map[string]diffStatistics)
@@ -374,8 +382,9 @@ func calculateMergeStats(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats 
 			}
 			tableStats, err := getTableDiffStats(queryist, sqlCtx, summary.TableName, "head^1", "head")
 			if err != nil {
+				cli.Println("merge successful, but could not calculate stats")
 				cli.Println(err.Error())
-				return nil, 1
+				return nil, false
 			}
 			diffStats[tableStats[0].TableName] = tableStats[0]
 		} else {
@@ -392,7 +401,7 @@ func calculateMergeStats(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats 
 		mergeStats[tableName].Modifications = int(diffStat.RowsModified)
 	}
 
-	return mergeStats, 0
+	return mergeStats, true
 }
 
 func validateMergeSpec(ctx context.Context, spec *merge.MergeSpec) errhand.VerboseError {
