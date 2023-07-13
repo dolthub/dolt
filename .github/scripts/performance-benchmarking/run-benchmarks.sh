@@ -32,11 +32,8 @@ if [ -z "$MODE" ]; then
     exit 1
 fi
 
-nomsFormat="ldnbf"
-
 if [ "$NOMS_BIN_FORMAT" = "__DOLT__" ]; then
   INIT_BIG_REPO="false"
-  nomsFormat="doltnbf"
 fi
 
 echo "Setting from $FROM_SERVER: $FROM_VERSION"
@@ -46,7 +43,7 @@ echo "Setting to $TO_SERVER: $TO_VERSION"
 # jobs
 short=${TO_VERSION:0:8}
 lowered=$(echo "$ACTOR" | tr '[:upper:]' '[:lower:]')
-actorShort="$lowered-$nomsFormat-$short"
+actorShort="$lowered-$short"
 
 # random sleep
 sleep 0.$[ ( $RANDOM % 10 )  + 1 ]s

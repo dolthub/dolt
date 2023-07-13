@@ -38,11 +38,6 @@ if [ -z "$MODE" ]; then
     exit 1
 fi
 
-nomsFormat="ldnbf"
-if [ "$NOMS_BIN_FORMAT" == "__DOLT__" ]; then
-  nomsFormat="doltnbf"
-fi
-
 # use first 8 characters of TO_VERSION to differentiate
 # jobs
 short=${TO_VERSION:0:8}
@@ -54,7 +49,7 @@ sleep 0.$[ ( $RANDOM % 10 )  + 1 ]s
 
 timesuffix=`date +%s%N`
 
-jobname="$actorShort-$nomsFormat-$timesuffix"
+jobname="$actorShort-$timesuffix"
 
 timeprefix=$(date +%Y/%m/%d)
 
