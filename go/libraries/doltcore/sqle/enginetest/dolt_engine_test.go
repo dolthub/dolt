@@ -120,12 +120,40 @@ func TestSingleScript(t *testing.T) {
 	var scripts = []queries.ScriptTest{
 		{
 			// Unique checks should not be confused by a row being deleted
-			// TODO: Do we sort delete diff events so that they always appear first?
-			// TODO: Could we reproduce this
-			// TODO: If we use a different PK ordering, does this still work?
-			//       (i.e. delete 2 and insert 1, instead of the other way around)
+			// TODO: Could we reproduce this with a delete and an insert? (sure seems like it!)
 			// https://github.com/dolthub/dolt/issues/6319
-			Name: "RicardoReiter merge issue",
+			Name: "false unique constraint violations (1 of 3)",
+			SetUpScript: []string{
+				"set @@autocommit=0;",
+				"create table tableA (keyC varchar(255) not null, col1 varchar(255), col2 varchar(255), col3 varchar(255), dataA varchar(255), PRIMARY KEY (keyC), UNIQUE KEY col1_col2_col3_unique (col1, col2, col3))",
+				"insert into tableA (keyC, col1, col2, col3, dataA) values ('key-b', '1', '2', '3', 'test1')",
+				"call dolt_commit('-Am', 'creating table');",
+				"call dolt_branch('feature');",
+				"update tableA set keyC = 'key-a';",
+				"call dolt_commit('-am', 'update row');",
+				"call dolt_checkout('feature');",
+				"insert into tableA (keyC, col1, col2, col3, dataA) values ('key-c', '2', '2', '3', 'test3');",
+				"call dolt_commit('-am', 'added row on branch feature');",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query:    "call dolt_merge('main');",
+					Expected: []sql.Row{{doltCommit, 0, 0}},
+				},
+				{
+					Query:    "select * from dolt_constraint_violations;",
+					Expected: []sql.Row{},
+				},
+				{
+					Query:    "select * from dolt_constraint_violations_tableA;",
+					Expected: []sql.Row{},
+				},
+			},
+		},
+		{
+			// Unique checks should not be confused by a row being deleted
+			// https://github.com/dolthub/dolt/issues/6319
+			Name: "false unique constraint violations (2 of 3)",
 			SetUpScript: []string{
 				"set @@autocommit=0;",
 				"create table tableA (keyC varchar(255) not null, col1 varchar(255), col2 varchar(255), col3 varchar(255), dataA varchar(255), PRIMARY KEY (keyC), UNIQUE KEY col1_col2_col3_unique (col1, col2, col3))",
@@ -141,11 +169,46 @@ func TestSingleScript(t *testing.T) {
 			Assertions: []queries.ScriptTestAssertion{
 				{
 					Query:    "call dolt_merge('main');",
-					Expected: []sql.Row{{1, 7}, {2, 8}},
+					Expected: []sql.Row{{doltCommit, 0, 0}},
 				},
 				{
 					Query:    "select * from dolt_constraint_violations;",
-					Expected: []sql.Row{{1, 7}, {2, 8}},
+					Expected: []sql.Row{},
+				},
+				{
+					Query:    "select * from dolt_constraint_violations_tableA;",
+					Expected: []sql.Row{},
+				},
+			},
+		},
+		{
+			// Use multiple indexes and multiple violations in this test; looks like
+			// https://github.com/dolthub/dolt/issues/6319
+			Name: "false unique constraint violations (3 of 3)",
+			SetUpScript: []string{
+				"set @@autocommit=0;",
+				"create table tableA (keyC varchar(255) not null, col1 varchar(255), col2 varchar(255), col3 varchar(255), dataA varchar(255), PRIMARY KEY (keyC), UNIQUE KEY col1_col2_col3_unique (col1, col2, col3), UNIQUE KEY col1_col2_unique (col1, col2))",
+				"insert into tableA (keyC, col1, col2, col3, dataA) values ('key-b', '1', '2', '3', 'test1')",
+				"call dolt_commit('-Am', 'creating table');",
+				"call dolt_branch('feature');",
+				"update tableA set keyC = 'key-a';",
+				"call dolt_commit('-am', 'update row');",
+				"call dolt_checkout('feature');",
+				"insert into tableA (keyC, col1, col2, col3, dataA) values ('key-c', '2', '2', '3', 'test3');",
+				"call dolt_commit('-am', 'added row on branch feature');",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query:    "call dolt_merge('main');",
+					Expected: []sql.Row{{doltCommit, 0, 0}},
+				},
+				{
+					Query:    "select * from dolt_constraint_violations;",
+					Expected: []sql.Row{},
+				},
+				{
+					Query:    "select * from dolt_constraint_violations_tableA;",
+					Expected: []sql.Row{},
 				},
 			},
 		},
@@ -155,9 +218,9 @@ func TestSingleScript(t *testing.T) {
 	cleanup := installTestCommitClock(tcc)
 	defer cleanup()
 
-	harness := newDoltHarness(t)
-	harness.Setup(setup.MydbData, setup.Parent_childData)
 	for _, script := range scripts {
+		harness := newDoltHarness(t)
+		harness.Setup(setup.MydbData, setup.Parent_childData)
 		sql.RunWithNowFunc(tcc.Now, func() error {
 			enginetest.TestScript(t, harness, script)
 			return nil

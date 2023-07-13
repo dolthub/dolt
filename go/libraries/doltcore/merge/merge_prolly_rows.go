@@ -585,18 +585,18 @@ func newUniqValidator(ctx context.Context, sch schema.Schema, tm *TableMerger, v
 	return uv, nil
 }
 
+// validateDiff processes |diff| and checks for any unique constraint violations that need to be updated. The number
+// of violations recorded along with any error encountered is returned. Processing |diff| may resolve existing unique
+// constraint violations, in which case the violations returned may be a negative number.
 func (uv uniqValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff) (violations int, err error) {
 	var value val.Tuple
 	switch diff.Op {
 	case tree.DiffOpRightAdd, tree.DiffOpRightModify:
 		value = diff.Right
 	case tree.DiffOpRightDelete:
-		// TODO: in this case, just delete the row from the index, so we don't consider this row for uniqueness checks anymore
-		//       we don't need to save that back, since other parts of the merge code will update those indexes, but we do
-		//       need to do it here for our own tracking.
-		value = diff.Right
-
-		return
+		// If we see a row deletion event from the right side, we grab the original/base value so that we can update our
+		// local copy of the secondary index.
+		value = diff.Base
 	case tree.DiffOpDivergentModifyResolved:
 		value = diff.Merged
 	default:
@@ -609,6 +609,23 @@ func (uv uniqValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff
 		value = val.NewTuple(uv.valueMerger.syncPool, modifiedValue...)
 	}
 
+	// For a row deletion... we need to remove any unique constraint violations that were previously recorded for
+	// this row.
+	if diff.Op == tree.DiffOpRightDelete {
+		// First update the unique indexes to remove this row.
+		for _, idx := range uv.indexes {
+			err := idx.removeRow(ctx, diff.Key, value)
+			if err != nil {
+				return violations, err
+			}
+		}
+
+		// Then clear any unique constraint violations for this row. If there is only one unique constraint violation
+		// artifact left, it will also be cleared by this function (since unique constraint violations must always
+		// occur with at least two rows reported).
+		return uv.clearArtifact(ctx, diff.Key, diff.Base)
+	}
+
 	for _, idx := range uv.indexes {
 		err = idx.findCollisions(ctx, diff.Key, value, func(k, v val.Tuple) error {
 			violations++
@@ -618,7 +635,66 @@ func (uv uniqValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff
 			break
 		}
 	}
-	return
+
+	// After detecting any unique constraint violations, we need to update our indexes with the added row.
+	if diff.Op == tree.DiffOpRightAdd {
+		for _, idx := range uv.indexes {
+			err := idx.insertRow(ctx, diff.Key, value)
+			if err != nil {
+				return violations, err
+			}
+
+			err = idx.clustered.Put(ctx, diff.Key, value)
+			if err != nil {
+				return violations, err
+			}
+		}
+	}
+
+	return violations, err
+}
+
+// removeArtifact removes the unique constraint violation artifact for the row identified by |key|. If there is no
+// artifact recorded for |key|, then no error is returned. If an artifact does exist, but cannot be deleted, an error
+// will be returned.
+func (uv uniqValidator) removeArtifact(ctx context.Context, key val.Tuple) error {
+	artifactKey := uv.edits.BuildArtifactKey(ctx, key, uv.srcHash, prolly.ArtifactTypeUniqueKeyViol)
+
+	has, err := uv.edits.Has(ctx, artifactKey)
+	if err != nil || !has {
+		return err
+	}
+
+	return uv.edits.Delete(ctx, artifactKey)
+}
+
+func (uv uniqValidator) clearArtifact(ctx context.Context, key val.Tuple, prevValue val.Tuple) (int, error) {
+	// TODO: Could there be issues with adding and then subtracting violations getting out of sync?
+	err := uv.removeArtifact(ctx, key)
+	if err != nil {
+		return 0, err
+	}
+
+	// Start the violation count at -1 to represent the artifact above that we just removed
+	violationCount := -1
+
+	for _, idx := range uv.indexes {
+		// TODO: Test with multiple unique indexes and constraint violations on different values
+		//       Multiple unique indexes won't work yet: https://github.com/dolthub/dolt/issues/6329
+		err := idx.findCollisions(ctx, key, prevValue, func(k, v val.Tuple) error {
+			err := uv.removeArtifact(ctx, k)
+			if err != nil {
+				return err
+			}
+			violationCount = violationCount - 1
+			return nil
+		})
+		if err != nil {
+			break
+		}
+	}
+
+	return violationCount, nil
 }
 
 func (uv uniqValidator) insertArtifact(ctx context.Context, key, value val.Tuple, meta UniqCVMeta) error {
@@ -673,6 +749,12 @@ func newUniqIndex(sch schema.Schema, def schema.Index, clustered, secondary prol
 
 type collisionFn func(key, value val.Tuple) error
 
+func (idx uniqIndex) insertRow(ctx context.Context, key, value val.Tuple) error {
+	secondaryIndexKey := idx.secondaryBld.SecondaryKeyFromRow(key, value)
+	newValue := val.NewTuple(idx.secondary.NodeStore().Pool(), nil)
+	return idx.secondary.Put(ctx, secondaryIndexKey, newValue)
+}
+
 func (idx uniqIndex) removeRow(ctx context.Context, key, value val.Tuple) error {
 	secondaryIndexKey := idx.secondaryBld.SecondaryKeyFromRow(key, value)
 	err := idx.secondary.Delete(ctx, secondaryIndexKey)
@@ -680,21 +762,19 @@ func (idx uniqIndex) removeRow(ctx context.Context, key, value val.Tuple) error 
 		return err
 	}
 
-	clusteredIndexKey := idx.clusteredBld.ClusteredKeyFromIndexKey(key)
-	err = idx.clustered.Delete(ctx, clusteredIndexKey)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	clusteredIndexKey := idx.clusteredBld.ClusteredKeyFromIndexKey(secondaryIndexKey)
+	return idx.clustered.Delete(ctx, clusteredIndexKey)
 }
 
+// TODO: Godocs!
 func (idx uniqIndex) findCollisions(ctx context.Context, key, value val.Tuple, cb collisionFn) error {
 	indexKey := idx.secondaryBld.SecondaryKeyFromRow(key, value)
 	if idx.prefixDesc.HasNulls(indexKey) {
 		return nil // NULLs cannot cause unique violations
 	}
 
+	// This code uses the secondary index to iterate over all rows (key/value pairs) that have the same prefix.
+	// The prefix here is all the value columns this index is set up to track
 	var collision val.Tuple
 	err := idx.secondary.GetPrefix(ctx, indexKey, idx.prefixDesc, func(k, _ val.Tuple) (err error) {
 		collision = k
@@ -704,6 +784,7 @@ func (idx uniqIndex) findCollisions(ctx context.Context, key, value val.Tuple, c
 		return err
 	}
 
+	// Next find the key in the primary (aka clustered) index
 	clusteredKey := idx.clusteredBld.ClusteredKeyFromIndexKey(collision)
 	if bytes.Equal(key, clusteredKey) {
 		return nil // collided with ourselves

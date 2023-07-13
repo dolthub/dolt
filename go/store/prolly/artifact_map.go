@@ -149,14 +149,6 @@ func (m ArtifactMap) WalkNodes(ctx context.Context, cb tree.NodeCb) error {
 	return m.tuples.WalkNodes(ctx, cb)
 }
 
-func (m ArtifactMap) Get(ctx context.Context, key val.Tuple, cb tree.KeyValueFn[val.Tuple, val.Tuple]) (err error) {
-	return m.tuples.Get(ctx, key, cb)
-}
-
-func (m ArtifactMap) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
-	return m.tuples.Has(ctx, key)
-}
-
 func (m ArtifactMap) Pool() pool.BuffPool {
 	return m.tuples.NodeStore.Pool()
 }
@@ -323,13 +315,22 @@ type ArtifactsEditor struct {
 	pool         pool.BuffPool
 }
 
-func (wr *ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, srcRootish hash.Hash, artType ArtifactType, meta []byte) error {
+// BuildArtifactKey builds a val.Tuple to be used to look up a value in this ArtifactsEditor. The key is composed
+// of |srcKey, the primary key fields from the original table, followed by the hash of the source root, |srcRootish|,
+// and then the artifact type, |artType|.
+func (wr *ArtifactsEditor) BuildArtifactKey(_ context.Context, srcKey val.Tuple, srcRootish hash.Hash, artType ArtifactType) val.Tuple {
 	for i := 0; i < srcKey.Count(); i++ {
 		wr.artKB.PutRaw(i, srcKey.GetField(i))
 	}
 	wr.artKB.PutCommitAddr(srcKey.Count(), srcRootish)
 	wr.artKB.PutUint8(srcKey.Count()+1, uint8(artType))
-	key := wr.artKB.Build(wr.pool)
+	return wr.artKB.Build(wr.pool)
+}
+
+// Add adds an artifact entry to this editor. The key for the entry includes all the primary key fields from the
+// underlying table (|srcKey|), the hash of the source root (|srcRootish|), and the artifact type (|artType|).
+func (wr *ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, srcRootish hash.Hash, artType ArtifactType, meta []byte) error {
+	key := wr.BuildArtifactKey(ctx, srcKey, srcRootish, artType)
 
 	wr.artVB.PutJSON(0, meta)
 	value := wr.artVB.Build(wr.pool)
@@ -406,6 +407,10 @@ func artifactCollisionErr(key val.Tuple, desc val.TupleDesc, old, new []byte) er
 
 func (wr *ArtifactsEditor) Delete(ctx context.Context, key val.Tuple) error {
 	return wr.mut.Delete(ctx, key)
+}
+
+func (wr *ArtifactsEditor) Has(ctx context.Context, key val.Tuple) (bool, error) {
+	return wr.mut.Has(ctx, key)
 }
 
 func (wr *ArtifactsEditor) Flush(ctx context.Context) (ArtifactMap, error) {
