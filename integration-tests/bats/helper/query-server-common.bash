@@ -127,13 +127,13 @@ stop_sql_server() {
 }
 
 definePORT() {
-  getPORT=""
   for i in {0..99} # Try more numbers. This probably isn't the issue because we know the server starts with a 0 status.
   do
-    let getPORT="($$ + $i) % (65536-1024) + 1024"
-    portinuse=$(lsof -i -P -n | grep LISTEN | grep $getPORT | wc -l)
-    if [ $portinuse -eq 0 ]; then
-      echo "$getPORT"
+    port=$((RANDOM % 4096 + 2048))
+    # nc (netcat) returns 0 when it _can_ connect to a port (therefore in use), 1 otherwise.
+    run nc -z localhost $port
+    if [ "$status" -eq 1 ]; then
+      echo $port
       break
     fi
   done
