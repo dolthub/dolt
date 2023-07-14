@@ -818,7 +818,7 @@ SQL
     dolt sql -q "alter table test_null add primary key(i)"
     dolt commit -am "main primary key changes"
 
-    run dolt merge b1 -m "merge"
+    run dolt sql -q "call dolt_merge('b1', '-m', 'merge')"
     log_status_eq 0
 }
 
@@ -837,9 +837,9 @@ SQL
     dolt sql -q "insert into t values (2, 2)"
     dolt commit -am "changes to b2"
     dolt checkout main
-    run dolt merge b1 -m "merge b1"
+    run dolt sql -q "call dolt_merge('b1', '-m', 'merge b1')"
     log_status_eq 0
-    run dolt merge b2 -m "merge b2"
+    run dolt sql -q "call dolt_merge('b2', '-m', 'merge b2')"
     log_status_eq 0
 }
 
@@ -863,7 +863,7 @@ SQL
     [[ "$output" =~ "(\`i\` < 10)" ]] || false
     dolt commit -am "changes to main"
 
-    run dolt merge other -m "merge other"
+    run dolt sql -q "call dolt_merge('other', '-m', 'merge other')"
     log_status_eq 0
 
     run dolt sql -q "select * from t"
@@ -893,7 +893,7 @@ SQL
     [[ "$output" =~ "CONSTRAINT \`c1\` CHECK ((\`j\` < 0))" ]] || false
     dolt commit -am "changes to main"
 
-    run dolt merge other -m "merge other"
+    run dolt sql -q "call dolt_merge('other', '-m', 'merge other')"
     log_status_eq 0
 
     run dolt sql -q "show create table t"
@@ -921,7 +921,7 @@ SQL
     [[ "$output" =~ "CONSTRAINT \`c1\` CHECK ((\`i\` < 0))" ]] || false
     dolt commit -am "changes to main"
 
-    dolt merge other -m "merge other"
+    dolt sql -q "call dolt_merge('other', '-m', 'merge other')"
 
     run dolt status
     log_status_eq 0
@@ -953,15 +953,15 @@ SQL
     dolt sql -q "alter table t drop constraint c"
     run dolt sql -q "show create table t"
     log_status_eq 0
-    [[ !("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
+    [[ ! ("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
     dolt commit -am "changes to main"
 
-    run dolt merge other -m "merge other"
+    run dolt sql -q "call dolt_merge('other', '-m', 'merge other')"
     log_status_eq 0
 
     run dolt sql -q "show create table t"
     log_status_eq 0
-    [[ !("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
+    [[ ! ("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
 }
 
 @test "sql-merge: dropping constraint in one branch and modifying same in other results in conflict" {
@@ -974,7 +974,7 @@ SQL
     dolt sql -q "alter table t drop constraint c"
     run dolt sql -q "show create table t"
     log_status_eq 0
-    [[ !("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
+    [[ ! ("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
     dolt commit -am "changes to other"
 
     dolt checkout main
@@ -985,7 +985,7 @@ SQL
     [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` < 10))" ]] || false
     dolt commit -am "changes to main"
 
-    dolt merge other -m "merge other"
+    run dolt sql -q "call dolt_merge('other', '-m', 'merge other')"
     run dolt status
     log_status_eq 0
     [[ "$output" =~ "schema conflict:" ]]
@@ -995,7 +995,7 @@ SQL
     dolt sql -q "call dolt_conflicts_resolve('--ours', 't')"
     run dolt sql -q "show create table t"
     log_status_eq 0
-    [[ !("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
+    [[ ! ("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
 }
 
 @test "sql-merge: merging with not null and check constraints preserves both constraints" {
@@ -1021,9 +1021,9 @@ SQL
     dolt commit -am "changes to b2"
 
     dolt checkout main
-    run dolt merge b1 -m "merge b1"
+    run dolt sql -q "call dolt_merge('b1', '-m', 'merge b1')"
     log_status_eq 0
-    run dolt merge b2 -m "merge b2"
+    run dolt sql -q "call dolt_merge('b2', '-m', 'merge b2')"
     log_status_eq 0
 
     run dolt sql -q "show create table t"
@@ -1057,7 +1057,7 @@ SQL
     dolt checkout main
     run dolt merge b1 -m "merge b1" --commit
     log_status_eq 0
-    dolt merge b2 -m "merge b2"
+    dolt sql -q "call dolt_merge('b2', '-m', 'merge b2')"
     run dolt status
     log_status_eq 0
     [[ "$output" =~ "schema conflict:" ]]
@@ -1090,9 +1090,9 @@ SQL
     dolt commit -am "changes to b2"
 
     dolt checkout main
-    run dolt merge b1 -m "merge b1"
+    run dolt sql -q "call dolt_merge('b1', '-m', 'merge b1')"
     log_status_eq 0
-    dolt merge b2 -m "merge b2"
+    dolt sql -q "call dolt_merge('b2', '-m', 'merge b2')"
     run dolt status
     log_status_eq 0
     [[ "$output" =~ "schema conflict:" ]]
