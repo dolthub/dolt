@@ -809,9 +809,8 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 }
 
 // getDBFromSession returns the current database name for the session, handling all the errors along the way by printing
-// red error messages to the CLI. If there was an issue getting the db name, the second return value is false.
+// red error messages to the CLI, If there was an issue getting the db name, the second return value is false.
 func getDBFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string, ok bool) {
-	db = "unknown"
 	_, resp, err := qryist.Query(sqlCtx, "select database()")
 	if err != nil {
 		cli.Println(color.RedString("Failure to get DB Name for session" + err.Error()))
@@ -827,11 +826,11 @@ func getDBFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string, ok b
 		cli.Println(color.RedString("Failure to get DB Name for session" + err.Error()))
 		return db, false
 	}
-	if row[0] == nil || row[0].(string) == "" {
-		cli.Println(color.RedString("Empty Database name obtained" + err.Error()))
-		return db, false
+	if row[0] == nil {
+		db = ""
+	} else {
+		db = row[0].(string)
 	}
-	db = row[0].(string)
 	return db, true
 }
 
