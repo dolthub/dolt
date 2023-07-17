@@ -115,25 +115,61 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	// t.Skip()
+	t.Skip()
 
 	var scripts = []queries.ScriptTest{
 		{
-			// TODO: Move these to the dolt_patch enginetests
-			Name: "https://github.com/dolthub/dolt/issues/6350",
+			Name: "delete all rows in table in all branches",
 			SetUpScript: []string{
-				"create table t (pk varbinary(16) primary key, c1  binary(16));",
-				"insert into t values (0x012345, NULL), (0x054321, binary 'efg_!4');",
-				"call dolt_commit('-Am', 'new table with binary pk')",
+				"create table t (a int primary key auto_increment, b int)",
+				"call dolt_add('.')",
+				"call dolt_commit('-am', 'empty table')",
+				"call dolt_branch('branch1')",
+				"call dolt_branch('branch2')",
+				"insert into t (b) values (1), (2)",
+				"call dolt_commit('-am', 'two values on main')",
+				"call dolt_checkout('branch1')",
+				"insert into t (b) values (3), (4)",
+				"call dolt_commit('-am', 'two values on branch1')",
+				"call dolt_checkout('branch2')",
+				"insert into t (b) values (5), (6)",
+				"call dolt_checkout('main')",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					// TODO: Dolt diff will have a similar issue; add BATS tests for sql diff patch output through the CLI
-					Query: "select statement from dolt_patch('HEAD~', 'HEAD', 't');",
+					Query:    "delete from t",
+					Expected: []sql.Row{{gmstypes.NewOkResult(2)}},
+				},
+				{
+					Query:    "delete from `mydb/branch1`.t",
+					Expected: []sql.Row{{gmstypes.NewOkResult(2)}},
+				},
+				{
+					Query:    "delete from `mydb/branch2`.t",
+					Expected: []sql.Row{{gmstypes.NewOkResult(2)}},
+				},
+				{
+					Query:            "alter table `mydb/branch1`.t auto_increment = 1",
+					SkipResultsCheck: true,
+				},
+				{
+					Query:            "alter table `mydb/branch2`.t auto_increment = 1",
+					SkipResultsCheck: true,
+				},
+				{
+					Query:            "alter table t auto_increment = 1",
+					SkipResultsCheck: true,
+				},
+				{
+					// empty tables, start at 1
+					Query:    "insert into t (b) values (7), (8)",
+					Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: 2, InsertID: 1}}},
+				},
+				{
+					Query: "select * from t order by a",
 					Expected: []sql.Row{
-						{"CREATE TABLE `t` (\n  `pk` varbinary(16) NOT NULL,\n  `c1` binary(16),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
-						{"INSERT INTO `t` (`pk`,`c1`) VALUES (0x012345,NULL);"},
-						{"INSERT INTO `t` (`pk`,`c1`) VALUES (0x054321,0x6566675f213400000000000000000000);"},
+						{1, 7},
+						{2, 8},
 					},
 				},
 			},
