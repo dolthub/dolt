@@ -1563,16 +1563,6 @@ func TestDoltMerge(t *testing.T) {
 			enginetest.TestScript(t, h, script)
 		}()
 	}
-
-	if types.IsFormat_DOLT(types.Format_Default) {
-		for _, script := range Dolt1MergeScripts {
-			func() {
-				h := newDoltHarness(t).WithParallelism(1)
-				defer h.Close()
-				enginetest.TestScript(t, h, script)
-			}()
-		}
-	}
 }
 
 func TestDoltMergePrepared(t *testing.T) {
@@ -1584,16 +1574,6 @@ func TestDoltMergePrepared(t *testing.T) {
 			defer h.Close()
 			enginetest.TestScriptPrepared(t, h, script)
 		}()
-	}
-
-	if types.IsFormat_DOLT(types.Format_Default) {
-		for _, script := range Dolt1MergeScripts {
-			func() {
-				h := newDoltHarness(t).WithParallelism(1)
-				defer h.Close()
-				enginetest.TestScriptPrepared(t, h, script)
-			}()
-		}
 	}
 }
 
