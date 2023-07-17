@@ -1064,3 +1064,25 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "2 tables changed, 3 rows added(+), 1 rows modified(*), 1 rows deleted(-)" ]] || false
 }
+
+@test "merge: merge with --no-commit prints correct merge stats" {
+    dolt sql -q "CREATE table t (pk int primary key, col1 int);"
+    dolt sql -q "CREATE table t2 (pk int primary key);"
+    dolt sql -q "INSERT INTO t VALUES (1, 1), (2, 2);"
+    dolt commit -Am "add table t"
+
+    dolt checkout -b right
+    dolt sql -q "insert into t values (3, 3), (4, 4);"
+    dolt sql -q "delete from t where pk = 1;"
+    dolt sql -q "update t set col1 = 200 where pk = 2;"
+    dolt sql -q "insert into t2 values (1);"
+    dolt commit -Am "right"
+
+    dolt checkout main
+    dolt sql -q "insert into t values (5, 5);"
+    dolt commit -Am "left"
+
+    run dolt merge right -m "merge right into main" --no-commit
+    [ $status -eq 0 ]
+    [[ "$output" =~ "2 tables changed, 3 rows added(+), 1 rows modified(*), 1 rows deleted(-)" ]] || false
+}
