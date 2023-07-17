@@ -461,7 +461,6 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 	return merge.NewMergeSpec(ctx, dbData.Rsr, ddb, roots, name, email, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), apr.Contains(cli.NoCommitFlag), apr.Contains(cli.NoEditFlag), t)
 }
 
-// TODO: this copied from commands/merge.go because the latter isn't reusable. Fix that.
 func mergeRootToWorking(
 	ctx *sql.Context,
 	dSess *dsess.DoltSession,

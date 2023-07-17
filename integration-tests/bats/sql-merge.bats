@@ -1189,17 +1189,17 @@ SQL
 @test "sql-merge: squash merge" {
     dolt commit -m "initial commit"
     dolt checkout -b merge_branch
-    dolt SQL -q "INSERT INTO test values (3)"
+    dolt sql -q "INSERT INTO test values (3)"
     dolt add test
     dolt commit -m "add pk 3 to test"
 
     dolt checkout main
-    dolt SQL -q "INSERT INTO test values (4)"
+    dolt sql -q "INSERT INTO test values (4)"
     dolt add test
     dolt commit -m "add pk 4 to test1"
 
-    dolt SQL -q "CREATE TABLE t2 (pk int)"
-    dolt SQL -q "INSERT INTO t2 values (9)"
+    dolt sql -q "CREATE TABLE t2 (pk int)"
+    dolt sql -q "INSERT INTO t2 values (9)"
     run dolt status
     log_status_eq 0
     [[ "$output" =~ "t2" ]] || false
@@ -1207,6 +1207,7 @@ SQL
 
     run dolt sql -q "CALL DOLT_MERGE('--squash', 'merge_branch', '--no-commit');"
     log_status_eq 0
+    [[ "$output" =~ "| hash | fast_forward | conflicts |" ]] || false
     [[ "$output" =~ "| 0            | 0         |" ]] || false
 
     run dolt status
@@ -1214,10 +1215,10 @@ SQL
     [[ "$output" =~ "t2" ]] || false
     [[ "$output" =~ "test" ]] || false
 
-    # make sure the squashed commit is not in the log.
     dolt add .
     dolt commit -m "squash merge"
 
+    # make sure the squashed commit is not in the log.
     run dolt log
     log_status_eq 0
     [[ "$output" =~ "add pk 4 to test" ]] || false
@@ -1244,7 +1245,8 @@ SQL
     dolt sql -q "call dolt_merge('--abort');"
 
     run dolt sql -q "SELECT * from dolt_merge_status"
-    [[ "$output" =~ "false" ]] || false
+    [[ "$output" =~ "| is_merging | source | source_commit | target | unmerged_tables |" ]] || false
+    [[ "$output" =~ "| false      | NULL   | NULL          | NULL   | NULL            |" ]] || false
 
     # per Git, working set changes to test2 should remain
     dolt sql -q "SELECT * FROM t2" -r csv
