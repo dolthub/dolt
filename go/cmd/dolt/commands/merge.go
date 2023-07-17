@@ -795,7 +795,7 @@ func executeNoFFMergeAndCommit(ctx context.Context, sqlCtx *sql.Context, queryis
 }
 
 func executeMergeAndCommit(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist, dEnv *env.DoltEnv, spec *merge.MergeSpec, suggestedMsg string, cliCtx cli.CliContext) (map[string]*merge.MergeStats, error) {
-	tblToStats, err := merge.ExecuteMerge(ctx, dEnv, spec)
+	tblToStats, err := merge.ExecuteMerge(sqlCtx, dEnv, spec)
 	if err != nil {
 		return tblToStats, err
 	}

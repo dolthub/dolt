@@ -23,8 +23,7 @@ teardown() {
     # call proc
     dolt sql -q "create table test2 (pk int primary key)"
 
-    run dolt sql -q "call dolt_clean()"
-    [ $status -eq 0 ]
+    dolt sql -q "call dolt_clean()"
 
     run dolt status
     [ "$status" -eq 0 ]
@@ -33,8 +32,7 @@ teardown() {
 
     # call dproc
     dolt sql -q "create table test2 (pk int primary key)"
-    run dolt sql -q "call dclean('--dry-run')"
-    [ $status -eq 0 ]
+    dolt sql -q "call dclean('--dry-run')"
 
     run dolt status
     [ "$status" -eq 0 ]

@@ -61,7 +61,7 @@ import (
 )
 
 const (
-	Version = "1.7.2"
+	Version = "1.7.5"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -121,12 +121,10 @@ var doltSubCommands = []cli.Command{
 }
 
 var commandsWithoutCliCtx = []cli.Command{
-	commands.CleanCmd{},
 	admin.Commands,
 	sqlserver.SqlServerCmd{VersionStr: Version},
 	sqlserver.SqlClientCmd{VersionStr: Version},
 	commands.LogCmd{},
-	commands.CheckoutCmd{},
 	commands.CloneCmd{},
 	commands.FetchCmd{},
 	commands.PushCmd{},
@@ -136,7 +134,6 @@ var commandsWithoutCliCtx = []cli.Command{
 	credcmds.Commands,
 	commands.LsCmd{},
 	schcmds.Commands,
-	commands.TagCmd{},
 	cvcmds.Commands,
 	commands.SendMetricsCmd{},
 	commands.MigrateCmd{},

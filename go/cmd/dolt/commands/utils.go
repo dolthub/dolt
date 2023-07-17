@@ -20,10 +20,13 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -293,6 +296,16 @@ func GetRowsForSql(queryist cli.Queryist, sqlCtx *sql.Context, query string) ([]
 	return rows, nil
 }
 
+// InterpolateAndRunQuery interpolates a query, executes it, and returns the result rows.
+// Since this method does not return a schema, this method should be used only for fire-and-forget types of queries.
+func InterpolateAndRunQuery(queryist cli.Queryist, sqlCtx *sql.Context, queryTemplate string, params ...interface{}) ([]sql.Row, error) {
+	query, err := dbr.InterpolateForDialect(queryTemplate, params, dialect.MySQL)
+	if err != nil {
+		return nil, fmt.Errorf("error interpolating query: %w", err)
+	}
+	return GetRowsForSql(queryist, sqlCtx, query)
+}
+
 // GetTinyIntColAsBool returns the value of a tinyint column as a bool
 // This is necessary because Queryist may return a tinyint column as a bool (when using SQLEngine)
 // or as a string (when using ConnectionQueryist).
@@ -306,6 +319,28 @@ func GetTinyIntColAsBool(col interface{}) (bool, error) {
 		return v == "1", nil
 	default:
 		return false, fmt.Errorf("unexpected type %T, was expecting bool, int, or string", v)
+	}
+}
+
+// getInt64ColAsInt64 returns the value of an int64 column as a string
+// This is necessary because Queryist may return an int64 column as an int64 (when using SQLEngine)
+// or as a string (when using ConnectionQueryist).
+func getInt64ColAsInt64(col interface{}) (int64, error) {
+	switch v := col.(type) {
+	case int:
+		return int64(v), nil
+	case uint64:
+		return int64(v), nil
+	case int64:
+		return v, nil
+	case string:
+		iv, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		return iv, nil
+	default:
+		return 0, fmt.Errorf("unexpected type %T, was expecting int64, uint64 or string", v)
 	}
 }
 
@@ -398,4 +433,55 @@ func buildAuthResponse(salt []byte, password string) []byte {
 	}
 
 	return shaPwd
+}
+
+// GetDoltStatus retrieves the status of the current working set of changes in the working set, and returns two
+// lists of modified tables: staged and unstaged. If both lists are empty, there are no changes in the working set.
+// The list of unstaged tables does not include tables that are ignored, as configured by the dolt_ignore table.
+func GetDoltStatus(queryist cli.Queryist, sqlCtx *sql.Context) (stagedChangedTables map[string]bool, unstagedChangedTables map[string]bool, err error) {
+	stagedChangedTables = make(map[string]bool)
+	unstagedChangedTables = make(map[string]bool)
+	err = nil
+
+	ignoredPatterns, err := getIgnoredTablePatternsFromSql(queryist, sqlCtx)
+	if err != nil {
+		return stagedChangedTables, unstagedChangedTables, fmt.Errorf("error: failed to get ignored table patterns: %w", err)
+	}
+
+	var statusRows []sql.Row
+	statusRows, err = GetRowsForSql(queryist, sqlCtx, "select * from dolt_status;")
+	if err != nil {
+		return stagedChangedTables, unstagedChangedTables, fmt.Errorf("error: failed to get dolt status: %w", err)
+	}
+
+	for _, row := range statusRows {
+		tableName := row[0].(string)
+		staged := row[1]
+		var isStaged bool
+		isStaged, err = GetTinyIntColAsBool(staged)
+		if err != nil {
+			return
+		}
+		if isStaged {
+			stagedChangedTables[tableName] = true
+		} else {
+			// filter out ignored tables from untracked tables
+			ignored, err := ignoredPatterns.IsTableNameIgnored(tableName)
+			if conflict := doltdb.AsDoltIgnoreInConflict(err); conflict != nil {
+				continue
+			} else if err != nil {
+				return stagedChangedTables, unstagedChangedTables, fmt.Errorf("error: failed to check if table '%s' is ignored: %w", tableName, err)
+			} else if ignored == doltdb.DontIgnore {
+				// no-op
+			} else if ignored == doltdb.Ignore {
+				continue
+			} else {
+				return stagedChangedTables, unstagedChangedTables, fmt.Errorf("unrecognized ignore result value: %v", ignored)
+			}
+
+			unstagedChangedTables[tableName] = true
+		}
+	}
+
+	return stagedChangedTables, unstagedChangedTables, nil
 }

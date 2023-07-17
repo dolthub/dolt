@@ -119,131 +119,58 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "dolt_checkout and base name resolution",
+			Name: "delete all rows in table in all branches",
 			SetUpScript: []string{
-				"create table t (a int primary key, b int);",
-				"call dolt_commit('-Am', 'creating table t');",
-				"call dolt_branch('b2');",
-				"call dolt_branch('b3');",
-				"insert into t values (1, 1);",
-				"call dolt_commit('-Am', 'added values on main');",
-				"call dolt_checkout('b2');",
-				"insert into t values (2, 2);",
-				"call dolt_commit('-am', 'added values on b2');",
-				"call dolt_checkout('b3');",
-				"insert into t values (3, 3);",
-				"call dolt_commit('-am', 'added values on b3');",
-				"call dolt_checkout('main');",
+				"create table t (a int primary key auto_increment, b int)",
+				"call dolt_add('.')",
+				"call dolt_commit('-am', 'empty table')",
+				"call dolt_branch('branch1')",
+				"call dolt_branch('branch2')",
+				"insert into t (b) values (1), (2)",
+				"call dolt_commit('-am', 'two values on main')",
+				"call dolt_checkout('branch1')",
+				"insert into t (b) values (3), (4)",
+				"call dolt_commit('-am', 'two values on branch1')",
+				"call dolt_checkout('branch2')",
+				"insert into t (b) values (5), (6)",
+				"call dolt_checkout('main')",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "select active_branch();",
-					Expected: []sql.Row{{"main"}},
+					Query:    "delete from t",
+					Expected: []sql.Row{{gmstypes.NewOkResult(2)}},
 				},
 				{
-					Query:    "select * from t;",
-					Expected: []sql.Row{{1, 1}},
+					Query:    "delete from `mydb/branch1`.t",
+					Expected: []sql.Row{{gmstypes.NewOkResult(2)}},
 				},
 				{
-					Query:            "use `mydb/b2`;",
+					Query:    "delete from `mydb/branch2`.t",
+					Expected: []sql.Row{{gmstypes.NewOkResult(2)}},
+				},
+				{
+					Query:            "alter table `mydb/branch1`.t auto_increment = 1",
 					SkipResultsCheck: true,
 				},
 				{
-					Query:    "select active_branch();",
-					Expected: []sql.Row{{"b2"}},
-				},
-				{
-					Query:    "select * from t;",
-					Expected: []sql.Row{{2, 2}},
-				},
-				{
-					Query:    "select * from mydb.t;",
-					Expected: []sql.Row{{1, 1}},
-				},
-				{
-					Query:            "use `mydb/b3`;",
+					Query:            "alter table `mydb/branch2`.t auto_increment = 1",
 					SkipResultsCheck: true,
 				},
 				{
-					Query:    "select active_branch();",
-					Expected: []sql.Row{{"b3"}},
-				},
-				{
-					Query:    "select * from t;",
-					Expected: []sql.Row{{3, 3}},
-				},
-				{
-					Query:    "select * from mydb.t;",
-					Expected: []sql.Row{{1, 1}},
-				},
-				{
-					Query:    "select * from `mydb/b2`.t;",
-					Expected: []sql.Row{{2, 2}},
-				},
-				{
-					Query:            "use `mydb/main`",
+					Query:            "alter table t auto_increment = 1",
 					SkipResultsCheck: true,
 				},
 				{
-					Query:    "select active_branch();",
-					Expected: []sql.Row{{"main"}},
+					// empty tables, start at 1
+					Query:    "insert into t (b) values (7), (8)",
+					Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: 2, InsertID: 1}}},
 				},
 				{
-					Query:    "select * from t;",
-					Expected: []sql.Row{{1, 1}},
-				},
-				{
-					Query:    "select * from mydb.t;",
-					Expected: []sql.Row{{1, 1}},
-				},
-				{
-					Query:    "select * from `mydb/b3`.t;",
-					Expected: []sql.Row{{3, 3}},
-				},
-				{
-					Query:            "use `mydb`",
-					SkipResultsCheck: true,
-				},
-				{
-					Query:    "select active_branch();",
-					Expected: []sql.Row{{"main"}},
-				},
-				{
-					Query:    "select * from t;",
-					Expected: []sql.Row{{1, 1}},
-				},
-				{
-					Query:    "select * from `mydb/main`.t;",
-					Expected: []sql.Row{{1, 1}},
-				},
-				{
-					Query:            "call dolt_checkout('b2');",
-					SkipResultsCheck: true,
-				},
-				{
-					Query:            "use `mydb/b3`",
-					SkipResultsCheck: true,
-				},
-				{
-					Query:    "select active_branch();",
-					Expected: []sql.Row{{"b3"}},
-				},
-				// Since b2 was the last branch checked out with dolt_checkout, it's what mydb resolves to
-				{
-					Query:    "select * from `mydb`.t;",
-					Expected: []sql.Row{{2, 2}},
-				},
-				{
-					Query:            "use `mydb`",
-					SkipResultsCheck: true,
-				},
-				{
-					Query:    "select active_branch();",
-					Expected: []sql.Row{{"b2"}},
-				},
-				{
-					Query:    "select * from t;",
-					Expected: []sql.Row{{2, 2}},
+					Query: "select * from t order by a",
+					Expected: []sql.Row{
+						{1, 7},
+						{2, 8},
+					},
 				},
 			},
 		},
@@ -1504,7 +1431,7 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 			},
 			{
 				Query:    "call dolt_checkout('main');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
 			},
 			{
 				Query:    "select database();",
@@ -1636,16 +1563,6 @@ func TestDoltMerge(t *testing.T) {
 			enginetest.TestScript(t, h, script)
 		}()
 	}
-
-	if types.IsFormat_DOLT(types.Format_Default) {
-		for _, script := range Dolt1MergeScripts {
-			func() {
-				h := newDoltHarness(t).WithParallelism(1)
-				defer h.Close()
-				enginetest.TestScript(t, h, script)
-			}()
-		}
-	}
 }
 
 func TestDoltMergePrepared(t *testing.T) {
@@ -1658,15 +1575,27 @@ func TestDoltMergePrepared(t *testing.T) {
 			enginetest.TestScriptPrepared(t, h, script)
 		}()
 	}
+}
 
-	if types.IsFormat_DOLT(types.Format_Default) {
-		for _, script := range Dolt1MergeScripts {
-			func() {
-				h := newDoltHarness(t).WithParallelism(1)
-				defer h.Close()
-				enginetest.TestScriptPrepared(t, h, script)
-			}()
-		}
+func TestDoltRevert(t *testing.T) {
+	for _, script := range RevertScripts {
+		// harness can't reset effectively. Use a new harness for each script
+		func() {
+			h := newDoltHarness(t).WithParallelism(1)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func TestDoltRevertPrepared(t *testing.T) {
+	for _, script := range RevertScripts {
+		// harness can't reset effectively. Use a new harness for each script
+		func() {
+			h := newDoltHarness(t).WithParallelism(1)
+			defer h.Close()
+			enginetest.TestScriptPrepared(t, h, script)
+		}()
 	}
 }
 
@@ -1679,15 +1608,6 @@ func TestDoltAutoIncrement(t *testing.T) {
 			enginetest.TestScript(t, h, script)
 		}()
 	}
-
-	for _, script := range BrokenAutoIncrementTests {
-		t.Run(script.Name, func(t *testing.T) {
-			t.Skip()
-			h := newDoltHarness(t)
-			defer h.Close()
-			enginetest.TestScript(t, h, script)
-		})
-	}
 }
 
 func TestDoltAutoIncrementPrepared(t *testing.T) {
@@ -1698,15 +1618,6 @@ func TestDoltAutoIncrementPrepared(t *testing.T) {
 			defer h.Close()
 			enginetest.TestScriptPrepared(t, h, script)
 		}()
-	}
-
-	for _, script := range BrokenAutoIncrementTests {
-		t.Run(script.Name, func(t *testing.T) {
-			t.Skip()
-			h := newDoltHarness(t)
-			defer h.Close()
-			enginetest.TestScriptPrepared(t, h, script)
-		})
 	}
 }
 

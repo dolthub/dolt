@@ -19,6 +19,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -574,7 +575,7 @@ func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 	}
 
 	// assert that we're on main
-	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv, nil)
+	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv, cliCtx)
 	require.Equal(t, 0, exitCode)
 
 	// merge branches
@@ -621,13 +622,15 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 		require.Equal(t, 0, exit)
 	}
 
+	cliCtx, _ := commands.NewArgFreeCliContext(ctx, dEnv)
+
 	// assert that we're on main
-	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv, nil)
+	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv, cliCtx)
 	require.Equal(t, 0, exitCode)
 
 	mainSch := getSchema(t, dEnv)
 
-	exitCode = commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"other"}, dEnv, nil)
+	exitCode = commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"other"}, dEnv, cliCtx)
 	require.Equal(t, 0, exitCode)
 
 	otherSch := getSchema(t, dEnv)
@@ -679,15 +682,17 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 		require.Equal(t, 0, exit)
 	}
 
+	cliCtx, _ := commands.NewArgFreeCliContext(ctx, dEnv)
+
 	// assert that we're on main
-	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv, nil)
+	exitCode := commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{env.DefaultInitBranch}, dEnv, cliCtx)
 	require.Equal(t, 0, exitCode)
 
 	mainWS, err := dEnv.WorkingSet(ctx)
 	require.NoError(t, err)
 	mainRoot := mainWS.WorkingRoot()
 
-	exitCode = commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"other"}, dEnv, nil)
+	exitCode = commands.CheckoutCmd{}.Exec(ctx, "checkout", []string{"other"}, dEnv, cliCtx)
 	require.Equal(t, 0, exitCode)
 
 	otherWS, err := dEnv.WorkingSet(ctx)
@@ -696,7 +701,7 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 
 	opts := editor.TestEditorOptions(dEnv.DoltDB.ValueReadWriter())
 	mo := merge.MergeOpts{IsCherryPick: false}
-	result, err := merge.MergeRoots(ctx, mainRoot, otherRoot, ancRoot, mainWS, otherWS, opts, mo)
+	result, err := merge.MergeRoots(sql.NewContext(ctx), mainRoot, otherRoot, ancRoot, mainWS, otherWS, opts, mo)
 	assert.NoError(t, err)
 
 	fkc, err := result.Root.GetForeignKeyCollection(ctx)

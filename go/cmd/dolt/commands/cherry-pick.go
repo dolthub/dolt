@@ -16,17 +16,21 @@ package commands
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/util/outputpager"
 )
 
 var cherryPickDocs = cli.CommandDocumentationContent{
@@ -80,25 +84,25 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 	ap := cli.CreateCherryPickArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cherryPickDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
-	if dEnv.IsLocked() {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
+
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	// This command creates a commit, so we need user identity
-	if !cli.CheckUserNameAndEmail(cliCtx.Config()) {
+	if closeFunc != nil {
+		defer closeFunc()
+	}
+
+	// dolt_cherry_pick performs this check as well. Check performed early here to short circuit the operation.
+	err = branch_control.CheckAccess(sqlCtx, branch_control.Permissions_Write)
+	if err != nil {
+		cli.Println(err.Error())
 		return 1
 	}
 
 	if apr.Contains(cli.AbortParam) {
-		ws, err := dEnv.WorkingSet(ctx)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.BuildDError("fatal: unable to load working set: %v", err).Build(), nil)
-		}
-
-		if !ws.MergeActive() {
-			return HandleVErrAndExitCode(errhand.BuildDError("error: There is no cherry-pick merge to abort").Build(), nil)
-		}
-
-		return HandleVErrAndExitCode(abortMerge(ctx, dEnv), usage)
+		err = cherryPickAbort(queryist, sqlCtx)
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
 	// TODO : support single commit cherry-pick only for now
@@ -109,173 +113,124 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 		return HandleVErrAndExitCode(errhand.BuildDError("cherry-picking multiple commits is not supported yet").SetPrintUsage().Build(), usage)
 	}
 
-	cherryStr := apr.Arg(0)
-	if len(cherryStr) == 0 {
-		verr := errhand.BuildDError("error: cannot cherry-pick empty string").Build()
-		return HandleVErrAndExitCode(verr, usage)
-	}
-
-	verr := cherryPick(ctx, dEnv, cliCtx, cherryStr)
-	return HandleVErrAndExitCode(verr, usage)
+	err = cherryPick(queryist, sqlCtx, apr)
+	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }
 
-// cherryPick returns error if any step of cherry-picking fails. It receives cherry-picked commit and performs cherry-picking and commits.
-func cherryPick(ctx context.Context, dEnv *env.DoltEnv, cliCtx cli.CliContext, cherryStr string) errhand.VerboseError {
-	// check for clean working state
-	headRoot, err := dEnv.HeadRoot(ctx)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-	workingRoot, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-	stagedRoot, err := dEnv.StagedRoot(ctx)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-	headHash, err := headRoot.HashOf()
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-	workingHash, err := workingRoot.HashOf()
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-	stagedHash, err := stagedRoot.HashOf()
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+func cherryPick(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseResults) error {
+	cherryStr := apr.Arg(0)
+	if len(cherryStr) == 0 {
+		return fmt.Errorf("error: cannot cherry-pick empty string")
 	}
 
-	if !headHash.Equal(stagedHash) {
-		return errhand.BuildDError("Please commit your staged changes before using cherry-pick.").Build()
-	}
-
-	if !headHash.Equal(workingHash) {
-		return errhand.BuildDError("error: your local changes would be overwritten by cherry-pick.\nhint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt reset --hard) to proceed.").Build()
-	}
-
-	mergeResult, commitMsg, err := mergeCherryPickedCommit(ctx, dEnv, workingRoot, cherryStr)
+	hasStagedChanges, hasUnstagedChanges, err := hasStagedAndUnstagedChanged(queryist, sqlCtx)
 	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+		return fmt.Errorf("error: failed to check for staged and unstaged changes: %w", err)
 	}
-	newWorkingRoot := mergeResult.Root
-	mapOfMergeStats := mergeResult.Stats
+	if hasStagedChanges {
+		return fmt.Errorf("Please commit your staged changes before using cherry-pick.")
+	}
+	if hasUnstagedChanges {
+		return fmt.Errorf(`error: your local changes would be overwritten by cherry-pick.
+hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt reset --hard) to proceed.`)
+	}
 
-	workingHash, err = newWorkingRoot.HashOf()
+	_, err = GetRowsForSql(queryist, sqlCtx, "set @@dolt_allow_commit_conflicts = 1")
 	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+		return fmt.Errorf("error: failed to set @@dolt_allow_commit_conflicts: %w", err)
 	}
 
-	if headHash.Equal(workingHash) {
-		cli.Println("No changes were made.")
+	_, err = GetRowsForSql(queryist, sqlCtx, "set @@dolt_force_transaction_commit = 1")
+	if err != nil {
+		return fmt.Errorf("error: failed to set @@dolt_force_transaction_commit: %w", err)
+	}
+
+	q, err := dbr.InterpolateForDialect("call dolt_cherry_pick(?)", []interface{}{cherryStr}, dialect.MySQL)
+	if err != nil {
+		return fmt.Errorf("error: failed to interpolate query: %w", err)
+	}
+	rows, err := GetRowsForSql(queryist, sqlCtx, q)
+	if err != nil {
+		errorText := err.Error()
+		switch {
+		case strings.Contains("nothing to commit", errorText):
+			cli.Println("No changes were made.")
+			return nil
+		default:
+			return err
+		}
+	}
+
+	if len(rows) != 1 {
+		return fmt.Errorf("error: unexpected number of rows returned from dolt_cherry_pick: %d", len(rows))
+	}
+
+	succeeded := false
+	commitHash := ""
+	for _, row := range rows {
+		commitHash = row[0].(string)
+		dataConflicts, err := getInt64ColAsInt64(row[1])
+		if err != nil {
+			return fmt.Errorf("Unable to parse data_conflicts column: %w", err)
+		}
+		schemaConflicts, err := getInt64ColAsInt64(row[2])
+		if err != nil {
+			return fmt.Errorf("Unable to parse schema_conflicts column: %w", err)
+		}
+		constraintViolations, err := getInt64ColAsInt64(row[3])
+		if err != nil {
+			return fmt.Errorf("Unable to parse constraint_violations column: %w", err)
+		}
+
+		// if we have a hash and all 0s, then the cherry-pick succeeded
+		if len(commitHash) > 0 && dataConflicts == 0 && schemaConflicts == 0 && constraintViolations == 0 {
+			succeeded = true
+		}
+	}
+
+	if succeeded {
+		// on success, print the commit info
+		commit, err := getCommitInfo(queryist, sqlCtx, commitHash)
+		if err != nil {
+			return fmt.Errorf("error: failed to get commit metadata for ref '%s': %v", commitHash, err)
+		}
+
+		cli.ExecuteWithStdioRestored(func() {
+			pager := outputpager.Start()
+			defer pager.Stop()
+
+			printCommitInfo(pager, 0, false, "auto", commit)
+		})
+
 		return nil
-	}
-
-	err = dEnv.UpdateWorkingRoot(ctx, newWorkingRoot)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	// Stage all tables that don't have merge conflicts or constraint violations
-	for tableName, mergeStats := range mapOfMergeStats {
-		if !mergeStats.HasArtifacts() {
-			res := AddCmd{}.Exec(ctx, "add", []string{tableName}, dEnv, cliCtx)
-			if res != 0 {
-				return errhand.BuildDError("dolt add failed").AddCause(err).Build()
-			}
-		}
-	}
-
-	printSuccessStats(mapOfMergeStats)
-
-	if mergeResult.HasMergeArtifacts() {
-		return errhand.VerboseErrorFromError(ErrCherryPickConflictsOrViolations.New())
 	} else {
-		commitParams := []string{"-m", commitMsg}
-		res := CommitCmd{}.Exec(ctx, "commit", commitParams, dEnv, cliCtx)
-		if res != 0 {
-			return errhand.BuildDError("dolt commit failed").AddCause(err).Build()
+		// this failure could only have been caused by constraint violations or conflicts during cherry-pick
+		return ErrCherryPickConflictsOrViolations.New()
+	}
+}
+
+func cherryPickAbort(queryist cli.Queryist, sqlCtx *sql.Context) error {
+	query := "call dolt_cherry_pick('--abort')"
+	_, err := GetRowsForSql(queryist, sqlCtx, query)
+	if err != nil {
+		errorText := err.Error()
+		switch errorText {
+		case "fatal: There is no merge to abort":
+			return fmt.Errorf("error: There is no cherry-pick merge to abort")
+		default:
+			return err
 		}
 	}
-
 	return nil
 }
 
-// mergeCherryPickedCommit executes a merge to cherry-pick the specified ref specification from
-// |cherryStr| and apply it to the specified |workingRoot| in this |dEnv|. The MergeResult is
-// returned, along with the commit message for the specified |cherryStr|, and any error encountered.
-func mergeCherryPickedCommit(ctx context.Context, dEnv *env.DoltEnv, workingRoot *doltdb.RootValue, cherryStr string) (*merge.Result, string, error) {
-	tmpDir, err := dEnv.TempTableFilesDir()
+func hasStagedAndUnstagedChanged(queryist cli.Queryist, sqlCtx *sql.Context) (hasStagedChanges bool, hasUnstagedChanges bool, err error) {
+	stagedTables, unstagedTables, err := GetDoltStatus(queryist, sqlCtx)
 	if err != nil {
-		return nil, "", err
-	}
-	opts := editor.Options{Deaf: dEnv.BulkDbEaFactory(), Tempdir: tmpDir}
-
-	cherrySpec, err := doltdb.NewCommitSpec(cherryStr)
-	if err != nil {
-		return nil, "", err
-	}
-	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
-	if err != nil {
-		return nil, "", err
-	}
-	cherryCm, err := dEnv.DoltDB.Resolve(ctx, cherrySpec, headRef)
-	if err != nil {
-		return nil, "", err
+		return false, false, fmt.Errorf("error: failed to get dolt status: %w", err)
 	}
 
-	if len(cherryCm.DatasParents()) > 1 {
-		return nil, "", errhand.BuildDError("cherry-picking a merge commit is not supported.").Build()
-	}
-	if len(cherryCm.DatasParents()) == 0 {
-		return nil, "", errhand.BuildDError("cherry-picking a commit without parents is not supported.").Build()
-	}
-
-	cherryCM, err := cherryCm.GetCommitMeta(ctx)
-	if err != nil {
-		return nil, "", err
-	}
-	commitMsg := cherryCM.Description
-
-	cherryRoot, err := cherryCm.GetRootValue(ctx)
-	if err != nil {
-		return nil, "", err
-	}
-
-	parentCm, err := dEnv.DoltDB.ResolveParent(ctx, cherryCm, 0)
-	if err != nil {
-		return nil, "", err
-	}
-	parentRoot, err := parentCm.GetRootValue(ctx)
-	if err != nil {
-		return nil, "", err
-	}
-
-	// use parent of cherry-pick as ancestor to merge
-	mo := merge.MergeOpts{IsCherryPick: true}
-	result, err := merge.MergeRoots(ctx, workingRoot, cherryRoot, parentRoot, cherryCm, parentCm, opts, mo)
-	if err != nil {
-		return nil, "", err
-	}
-
-	// If any of the merge stats show a data or schema conflict or a constraint
-	// violation, record that a merge is in progress.
-	for _, stats := range result.Stats {
-		if stats.HasArtifacts() {
-			ws, err := dEnv.WorkingSet(ctx)
-			if err != nil {
-				return nil, "", err
-			}
-			newWorkingSet := ws.StartMerge(cherryCm, cherryStr)
-			err = dEnv.UpdateWorkingSet(ctx, newWorkingSet)
-			if err != nil {
-				return nil, "", err
-			}
-
-			break
-		}
-	}
-
-	return result, commitMsg, nil
+	hasStagedChanges = len(stagedTables) > 0
+	hasUnstagedChanges = len(unstagedTables) > 0
+	return hasStagedChanges, hasUnstagedChanges, nil
 }

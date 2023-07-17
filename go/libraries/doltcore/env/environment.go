@@ -108,8 +108,7 @@ func (dEnv *DoltEnv) GetRemoteDB(ctx context.Context, format *types.NomsBinForma
 	}
 }
 
-func LoadWithoutDB(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, version string) *DoltEnv {
-	cfg, cfgErr := LoadDoltCliConfig(hdp, fs)
+func createRepoState(fs filesys.Filesys) (*RepoState, error) {
 	repoState, rsErr := LoadRepoState(fs)
 
 	// deep copy remotes and backups ¯\_(ツ)_/¯ (see commit c59cbead)
@@ -126,6 +125,23 @@ func LoadWithoutDB(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys,
 		}
 		repoState.Backups = backups
 	}
+
+	return repoState, rsErr
+}
+
+func (dEnv *DoltEnv) ReloadRepoState() error {
+	rs, err := createRepoState(dEnv.FS)
+	if err != nil {
+		return err
+	}
+	dEnv.RepoState = rs
+	return nil
+}
+
+func LoadWithoutDB(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, version string) *DoltEnv {
+	cfg, cfgErr := LoadDoltCliConfig(hdp, fs)
+
+	repoState, rsErr := createRepoState(fs)
 
 	return &DoltEnv{
 		Version:    version,
@@ -663,10 +679,16 @@ type repoStateReader struct {
 }
 
 func (r *repoStateReader) CWBHeadRef() (ref.DoltRef, error) {
+	if r.RepoState == nil && r.RSLoadErr != nil {
+		return nil, r.RSLoadErr
+	}
 	return r.RepoState.CWBHeadRef(), nil
 }
 
 func (r *repoStateReader) CWBHeadSpec() (*doltdb.CommitSpec, error) {
+	if r.RepoState == nil && r.RSLoadErr != nil {
+		return nil, r.RSLoadErr
+	}
 	return r.RepoState.CWBHeadSpec(), nil
 }
 
@@ -679,6 +701,10 @@ type repoStateWriter struct {
 }
 
 func (r *repoStateWriter) SetCWBHeadRef(ctx context.Context, marshalableRef ref.MarshalableRef) error {
+	if r.RepoState == nil && r.RSLoadErr != nil {
+		return r.RSLoadErr
+	}
+
 	r.RepoState.Head = marshalableRef
 	err := r.RepoState.Save(r.FS)
 

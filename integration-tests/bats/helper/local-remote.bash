@@ -45,12 +45,10 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~1pksupportedtypes.bats~
 ~init.bats~
 ~index.bats~
-~revert.bats~
 ~merge.bats~
 ~1pk5col-ints.bats~
 ~sql-client.bats~
 ~sql-status.bats~
-~sql-checkout.bats~
 ~window.bats~
 ~import-create-tables.bats~
 ~status.bats~
@@ -83,7 +81,6 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~large-update.bats~
 ~remotes.bats~
 ~create-views.bats~
-~sql-clean.bats~
 ~blame.bats~
 ~multiple-tables.bats~
 ~json-new-fmt.bats~
@@ -100,7 +97,6 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~import-append-tables.bats~
 ~backup.bats~
 ~default-values.bats~
-~sql-shell.bats~
 ~types.bats~
 ~config-home.bats~
 ~cherry-pick.bats~
@@ -109,7 +105,6 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~sql-branch.bats~
 ~sql-check-constraints.bats~
 ~keyless.bats~
-~commit_tags.bats~
 ~regression-tests.bats~
 ~sql-privs.bats~
 ~keyless-foreign-keys.bats~
@@ -138,6 +133,7 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~sql-commit.bats~
 ~reset.bats~
 ~sql-reset.bats~
+~sql-checkout.bats~
 EOM
 )
 

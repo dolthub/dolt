@@ -504,7 +504,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_checkout('main');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
 			},
 			{
 				Query:    "select database();",
@@ -564,7 +564,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_checkout('main');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
 			},
 			{
 				// TODO: the behavior here is a bit odd: when we call dolt_checkout, we change the current database to the
@@ -612,7 +612,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_checkout('branch1');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'branch1'"}},
 			},
 			{
 				Query:    "select table_name from dolt_diff where commit_hash='WORKING';",
@@ -633,7 +633,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_checkout('-b', 'branch-to-delete');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'branch-to-delete'"}},
 			},
 			{
 				Query:    "select active_branch();",
@@ -657,7 +657,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_checkout('-b', 'another-branch');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'another-branch'"}},
 			},
 			{
 				Query:    "select active_branch();",
@@ -690,7 +690,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_checkout('t01')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, ""}},
 			},
 			{
 				Query: "select * from dolt_status",
@@ -2795,7 +2795,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'newBranch', 'head~1')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'newBranch'"}},
 			},
 			{
 				Query:    "show tables",
@@ -2803,7 +2803,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'newBranch2', @commit1)",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'newBranch2'"}},
 			},
 			{
 				Query:    "show tables",
@@ -3592,19 +3592,19 @@ var DoltTagTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b','other','HEAD^')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'other'"}},
 			},
 			{
 				Query:    "INSERT INTO test VALUES (8), (9)",
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 2}}},
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('-am','made changes in other')",
-				SkipResultsCheck: true,
+				Query:    "CALL DOLT_COMMIT('-am','made changes in other')",
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('v1')",
-				Expected: []sql.Row{{"", 0, 0}},
+				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
 				Query:    "SELECT * FROM test",
@@ -3715,8 +3715,8 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
 			},
 			{
-				Query:            "call dolt_commit('-am', 'two values on main')",
-				SkipResultsCheck: true,
+				Query:    "call dolt_commit('-am', 'two values on main')",
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:            "call dolt_checkout('branch1')",
@@ -3734,8 +3734,8 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:            "call dolt_commit('-am', 'two values on branch1')",
-				SkipResultsCheck: true,
+				Query:    "call dolt_commit('-am', 'two values on branch1')",
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:            "call dolt_checkout('branch2')",
@@ -3838,13 +3838,280 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 		},
 	},
-}
-
-var BrokenAutoIncrementTests = []queries.ScriptTest{
 	{
-		// truncate table doesn't reset the persisted auto increment counter of tables on other branches, which leads to
-		// the value not resetting to 1 after a truncate if the table exists on other branches, even if truncated on every
-		// branch
+		Name: "delete all rows in table",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'empty table')",
+			"insert into t (b) values (1), (2)",
+			"call dolt_commit('-am', 'two values on main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "delete from t",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:            "alter table t auto_increment = 1",
+				SkipResultsCheck: true,
+			},
+			{
+				// empty tables, start at 1
+				Query:    "insert into t (b) values (7), (8)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 7},
+					{2, 8},
+				},
+			},
+		},
+	},
+	{
+		Name: "set auto-increment below current max value",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'empty table')",
+			"insert into t (b) values (1), (2), (3), (4)",
+			"call dolt_commit('-am', 'two values on main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "alter table t auto_increment = 2",
+				SkipResultsCheck: true,
+			},
+			{
+				// previous update was ignored
+				Query:    "insert into t (b) values (5), (6)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 5}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{3, 3},
+					{4, 4},
+					{5, 5},
+					{6, 6},
+				},
+			},
+			{
+				Query:    "insert into t (a, b) values (100, 100)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 100}}},
+			},
+			{
+				Query:            "alter table t auto_increment = 50",
+				SkipResultsCheck: true,
+			},
+			{
+				// previous update was ignored, value still below max on that table
+				Query:    "insert into t (b) values (101)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1, InsertID: 101}}},
+			},
+			{
+				Query:    "select * from t where a >= 100 order by a",
+				Expected: []sql.Row{{100, 100}, {101, 101}},
+			},
+		},
+	},
+	{
+		Name: "set auto-increment above current max value",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'empty table')",
+			"insert into t (b) values (1), (2), (3), (4)",
+			"call dolt_commit('-am', 'two values on main')",
+			"call dolt_branch('branch1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "alter table t auto_increment = 20",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "insert into `mydb/branch1`.t (b) values (5), (6)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 20}}},
+			},
+			{
+				Query:    "insert into t (b) values (5), (6)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 22}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{3, 3},
+					{4, 4},
+					{22, 5},
+					{23, 6},
+				},
+			},
+		},
+	},
+	{
+		Name: "delete all rows in table in all branches",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'empty table')",
+			"call dolt_branch('branch1')",
+			"call dolt_branch('branch2')",
+			"insert into t (b) values (1), (2)",
+			"call dolt_commit('-am', 'two values on main')",
+			"call dolt_checkout('branch1')",
+			"insert into t (b) values (3), (4)",
+			"call dolt_commit('-am', 'two values on branch1')",
+			"call dolt_checkout('branch2')",
+			"insert into t (b) values (5), (6)",
+			"call dolt_checkout('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "delete from t",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "delete from `mydb/branch1`.t",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "delete from `mydb/branch2`.t",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:            "alter table `mydb/branch1`.t auto_increment = 1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "alter table `mydb/branch2`.t auto_increment = 1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "alter table t auto_increment = 1",
+				SkipResultsCheck: true,
+			},
+			{
+				// empty tables, start at 1
+				Query:    "insert into t (b) values (7), (8)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 7},
+					{2, 8},
+				},
+			},
+		},
+	},
+	{
+		Name: "delete all rows in table in all but one branch",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'empty table')",
+			"call dolt_branch('branch1')",
+			"call dolt_branch('branch2')",
+			"insert into t (b) values (1), (2)",
+			"call dolt_commit('-am', 'two values on main')",
+			"call dolt_checkout('branch1')",
+			"insert into t (b) values (3), (4)",
+			"call dolt_commit('-am', 'two values on branch1')",
+			"call dolt_checkout('branch2')",
+			"insert into t (b) values (5), (6)",
+			"call dolt_checkout('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "delete from t",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "delete from `mydb/branch1`.t",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "delete from `mydb/branch2`.t",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:            "alter table t auto_increment = 1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "alter table `mydb/branch2`.t auto_increment = 1",
+				SkipResultsCheck: true,
+			},
+			{
+				// empty tables, start at 5 (highest remaining value, update above ignored)
+				Query:    "insert into t (b) values (5), (6)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 5}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{5, 5},
+					{6, 6},
+				},
+			},
+		},
+	},
+	{
+		Name: "truncate table in all branches",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int)",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'empty table')",
+			"call dolt_branch('branch1')",
+			"call dolt_branch('branch2')",
+			"insert into t (b) values (1), (2)",
+			"call dolt_commit('-am', 'two values on main')",
+			"call dolt_checkout('branch1')",
+			"insert into t (b) values (3), (4)",
+			"call dolt_commit('-am', 'two values on branch1')",
+			"call dolt_checkout('branch2')",
+			"insert into t (b) values (5), (6)",
+			"call dolt_checkout('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "truncate t",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "truncate `mydb/branch1`.t",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "truncate `mydb/branch2`.t",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:            "alter table t auto_increment = 1",
+				SkipResultsCheck: true,
+			},
+			{
+				// empty tables, start at 1
+				Query:    "insert into t (b) values (7), (8)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 1}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 7},
+					{2, 8},
+				},
+			},
+		},
+	},
+	{
 		Name: "truncate table",
 		SetUpScript: []string{
 			"create table t (a int primary key auto_increment, b int)",
@@ -3966,8 +4233,8 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:            "CALL dolt_merge('--no-ff', 'branch1');",
-				SkipResultsCheck: true, // TODO: how do i predict the hash
+				Query:    "CALL dolt_merge('--no-ff', 'branch1');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
 				Query:          "CALL dolt_cherry_pick('HEAD');",
@@ -4040,16 +4307,16 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:            "call dolt_cherry_pick(@commit2);",
-				SkipResultsCheck: true,
+				Query:    "call dolt_cherry_pick(@commit2);",
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SELECT * FROM t;",
 				Expected: []sql.Row{{2, "two"}},
 			},
 			{
-				Query:            "call dolt_cherry_pick(@commit1);",
-				SkipResultsCheck: true,
+				Query:    "call dolt_cherry_pick(@commit1);",
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SELECT * FROM t order by pk;",
@@ -4074,8 +4341,8 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:            "CALL DOLT_CHERRY_PICK('branch1');",
-				SkipResultsCheck: true,
+				Query:    "CALL DOLT_CHERRY_PICK('branch1');",
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SELECT * FROM keyless;",
@@ -4099,8 +4366,8 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"myview"}},
 			},
 			{
-				Query:            "call dolt_cherry_pick(@commit1);",
-				SkipResultsCheck: true,
+				Query:    "call dolt_cherry_pick(@commit1);",
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SHOW TABLES;",
@@ -4130,8 +4397,8 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"myview"}, {"dropme"}},
 			},
 			{
-				Query:            "call dolt_cherry_pick(@commit1);",
-				SkipResultsCheck: true,
+				Query:    "call dolt_cherry_pick(@commit1);",
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SHOW TABLES;",
@@ -4152,8 +4419,8 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:            "call dolt_cherry_pick(@commit1);",
-				SkipResultsCheck: true,
+				Query:    "call dolt_cherry_pick(@commit1);",
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SHOW CREATE TABLE test;",
@@ -4174,8 +4441,8 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:            "call dolt_cherry_pick(@commit1);",
-				SkipResultsCheck: true,
+				Query:    "call dolt_cherry_pick(@commit1);",
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SHOW CREATE TABLE test;",
@@ -4196,8 +4463,8 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:            "call dolt_cherry_pick(@commit1);",
-				SkipResultsCheck: true,
+				Query:    "call dolt_cherry_pick(@commit1);",
+				Expected: []sql.Row{{doltCommit, 0, 0, 0}},
 			},
 			{
 				Query:    "SHOW CREATE TABLE test;",
@@ -4404,6 +4671,59 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "abort (@@autocommit=1) with ignored table",
+		SetUpScript: []string{
+			"INSERT INTO dolt_ignore VALUES ('generated_*', 1);",
+			"CREATE TABLE generated_foo (pk int PRIMARY KEY);",
+			"SET @@autocommit=1;",
+			"SET @@dolt_allow_commit_conflicts=1;",
+			"create table t (pk int primary key, v varchar(100));",
+			"insert into t values (0, 'zero');",
+			"call dolt_commit('-Am', 'create table t');",
+			"call dolt_checkout('-b', 'branch1');",
+			"insert into t values (1, \"one\");",
+			"call dolt_commit('-am', 'adding row 1');",
+			"insert into t values (2, \"two\");",
+			"call dolt_commit('-am', 'adding row 2');",
+			"alter table t drop column v;",
+			"call dolt_commit('-am', 'drop column v');",
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_cherry_pick(hashof('branch1'));",
+				Expected: []sql.Row{{"", 1, 0, 0}},
+			},
+			{
+				Query:    "select * from dolt_conflicts;",
+				Expected: []sql.Row{{"t", uint64(2)}},
+			},
+			{
+				Query: "select base_pk, base_v, our_pk, our_diff_type, their_pk, their_diff_type from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{1, "one", nil, "removed", 1, "modified"},
+					{2, "two", nil, "removed", 2, "modified"},
+				},
+			},
+			{
+				Query:    "call dolt_cherry_pick('--abort');",
+				Expected: []sql.Row{{"", 0, 0, 0}},
+			},
+			{
+				Query:    "select * from dolt_conflicts;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{0, "zero"}},
+			},
+			{
+				Query:    "select * from dolt_status;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
 }
 
 var DoltCommitTests = []queries.ScriptTest{
@@ -4427,8 +4747,8 @@ var DoltCommitTests = []queries.ScriptTest{
 				Expected: []sql.Row{{types.NewOkResult(1)}},
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('-ALL', '-m', 'update table terminator');",
-				SkipResultsCheck: true,
+				Query:    "CALL DOLT_COMMIT('-ALL', '-m', 'update table terminator');",
+				Expected: []sql.Row{{doltCommit}},
 			},
 			// check last commit
 			{
@@ -4437,8 +4757,8 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 			// amend last commit
 			{
-				Query:            "CALL DOLT_COMMIT('-amend', '-m', 'update table t');",
-				SkipResultsCheck: true,
+				Query:    "CALL DOLT_COMMIT('-amend', '-m', 'update table t');",
+				Expected: []sql.Row{{doltCommit}},
 			},
 			// check amended commit
 			{
@@ -4463,8 +4783,8 @@ var DoltCommitTests = []queries.ScriptTest{
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('-Am', 'drop table t');",
-				SkipResultsCheck: true,
+				Query:    "CALL DOLT_COMMIT('-Am', 'drop table t');",
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "CALL DOLT_RESET('--hard');",
@@ -4480,13 +4800,13 @@ var DoltCommitTests = []queries.ScriptTest{
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('-Am', 'add table 21');",
-				SkipResultsCheck: true,
+				Query:    "CALL DOLT_COMMIT('-Am', 'add table 21');",
+				Expected: []sql.Row{{doltCommit}},
 			},
 			// amend last commit
 			{
-				Query:            "CALL DOLT_COMMIT('-amend', '-m', 'add table 2');",
-				SkipResultsCheck: true,
+				Query:    "CALL DOLT_COMMIT('-amend', '-m', 'add table 2');",
+				Expected: []sql.Row{{doltCommit}},
 			},
 			// check amended commit
 			{
@@ -4548,8 +4868,8 @@ var DoltCommitTests = []queries.ScriptTest{
 				Expected: []sql.Row{{2, nil, "added"}},
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('--amend', '-m', 'amended commit message');",
-				SkipResultsCheck: true, // commit hash is being returned, skip check
+				Query:    "CALL DOLT_COMMIT('--amend', '-m', 'amended commit message');",
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query: "SELECT  message FROM dolt_log;",
@@ -4617,8 +4937,8 @@ var DoltCommitTests = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('--amend');",
-				SkipResultsCheck: true, // commit hash is being returned, skip check
+				Query:    "CALL DOLT_COMMIT('--amend');",
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query: "SELECT message FROM dolt_log;",
@@ -4655,8 +4975,8 @@ var DoltCommitTests = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('--amend', '-m', 'amended commit with added changes');",
-				SkipResultsCheck: true, // commit hash is being returned, skip check
+				Query:    "CALL DOLT_COMMIT('--amend', '-m', 'amended commit with added changes');",
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_status;",
@@ -4721,8 +5041,8 @@ var DoltCommitTests = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:            "CALL DOLT_COMMIT('--amend', '-m', 'amended commit with removed changes');",
-				SkipResultsCheck: true, // commit hash is being returned, skip check
+				Query:    "CALL DOLT_COMMIT('--amend', '-m', 'amended commit with removed changes');",
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query:    "SELECT * FROM test;",
@@ -4780,8 +5100,8 @@ var DoltCommitTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:            "CALL DOLT_COMMIT('--amend', '-m', 'new merge');",
-				SkipResultsCheck: true, // commit hash is being returned, skip check
+				Query:    "CALL DOLT_COMMIT('--amend', '-m', 'new merge');",
+				Expected: []sql.Row{{doltCommit}},
 			},
 			{
 				Query: "SELECT message FROM dolt_log;",

@@ -673,3 +673,37 @@ func isPrimaryKeyIndex(index schema.Index, sch schema.Schema) bool {
 
 	return true
 }
+
+// WorkingSetContainsOnlyIgnoredTables returns true if all changes in working set are ignored tables.
+// Otherwise, if there are any non-ignored changes, returns false.
+// Note that only unstaged tables are subject to dolt_ignore (this is consistent with what git does.)
+func WorkingSetContainsOnlyIgnoredTables(ctx context.Context, roots doltdb.Roots) (bool, error) {
+	staged, unstaged, err := GetStagedUnstagedTableDeltas(ctx, roots)
+	if err != nil {
+		return false, err
+	}
+
+	if len(staged) > 0 {
+		return false, nil
+	}
+
+	ignorePatterns, err := doltdb.GetIgnoredTablePatterns(ctx, roots)
+	if err != nil {
+		return false, err
+	}
+
+	for _, tableDelta := range unstaged {
+		if !(tableDelta.IsAdd()) {
+			return false, nil
+		}
+		isIgnored, err := ignorePatterns.IsTableNameIgnored(tableDelta.ToName)
+		if err != nil {
+			return false, err
+		}
+		if isIgnored != doltdb.Ignore {
+			return false, nil
+		}
+	}
+
+	return true, nil
+}

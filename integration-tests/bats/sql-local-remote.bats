@@ -20,6 +20,8 @@ CREATE TABLE table3 (pk int PRIMARY KEY);
 CREATE TABLE generated_foo (pk int PRIMARY KEY);
 SQL
   dolt add table1
+  # Note that we leave the table in a dirty state, which is useful to several tests, and harmless to others. For
+  # some, you need to ensure the repo is clean, and you should run `dolt reset --hard` at the beginning of the test.
   cd ..
 }
 
@@ -94,6 +96,11 @@ assert_has_key_value() {
     else
         return 0
     fi
+}
+
+get_commit_hash_at() {
+    local ref="$1"
+    dolt log "$ref" --oneline | head -n 1 | cut -d ' ' -f 1 | sed 's/\x1b\[[0-9;]*m//g' | tr -d ' '
 }
 
 @test "sql-local-remote: test switch between server/no server" {
@@ -222,6 +229,42 @@ assert_has_key_value() {
     staged=$(get_staged_tables)
 
     [[ ! -z $(echo "$staged" | grep "testtable") ]] || false
+}
+
+@test "sql-local-remote: verify simple dolt checkout behavior." {
+    skip # currently checkout with a server is not supported
+    start_sql_server altDB
+    cd altDB
+
+    run dolt --verbose-engine-setup --user dolt --password "" checkout -b other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+
+    run dolt --verbose-engine-setup --user dolt --password "" branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+    [[ "$output" =~ "main" ]] || false
+    [[ "$output" =~ "other" ]] || false
+
+    # Due to a current limitation, subsequent commands won't use the new branch until the server is stopped
+    # See https://github.com/dolthub/dolt/issues/6315 for more information.
+    stop_sql_server 1
+
+    run dolt branch --show-current
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "other" ]] || false
+
+    start_sql_server altDB
+
+    run dolt --verbose-engine-setup --user dolt --password "" checkout main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+
+    stop_sql_server 1
+
+    run dolt branch --show-current
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "main" ]] || false
 }
 
 @test "sql-local-remote: test 'status' and switch between server/no server" {
@@ -735,4 +778,312 @@ SQL
   [[ $output =~ "main" ]] || false
 
   [[ "$remoteOutput" == "$localOutput" ]] || false
+}
+
+@test "sql-local-remote: ensure revert produces similar output for each mode" {
+    dolt --use-db altDB commit -A -m "Commit ABCDEF"
+
+    start_sql_server altDb
+
+    run dolt --use-db altDB revert HEAD
+    [ $status -eq 0 ]
+    [[ "$output" =~ 'Revert "Commit ABCDEF"' ]] || false
+
+    dolt reset --hard HEAD~1
+
+    stop_sql_server 1
+    
+    run dolt revert HEAD
+    [ $status -eq 0 ]
+    [[ $output =~ 'Revert "Commit ABCDEF"' ]] || false
+}
+
+@test "sql-local-remote: Ensure that dolt clean works for each mode" {
+    dolt reset --hard
+    dolt sql -q "create table tbl (pk int primary key)"
+
+    start_sql_server altDB
+
+    run dolt --verbose-engine-setup clean --dry-run
+    [ $status -eq 0 ]
+    [[ $output =~ "starting remote mode" ]] || false
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ $output =~ "Untracked tables" ]] || false
+
+    dolt clean
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ $output =~ "nothing to commit, working tree clean" ]] || false
+
+    stop_sql_server 1
+
+    dolt sql -q "create table tbl (pk int primary key)"
+    run dolt --verbose-engine-setup clean --dry-run
+    [ $status -eq 0 ]
+    [[ $output =~ "starting local mode" ]] || false
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ $output =~ "Untracked tables" ]] || false
+
+    dolt clean
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ $output =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "sql-local-remote: verify dolt tag behavior" {
+  cd altDB
+
+  # get commit hashes
+  headCommit=$(get_commit_hash_at HEAD)
+  secondCommit=$(get_commit_hash_at HEAD~1)
+
+  # show tags
+  run dolt --verbose-engine-setup tag
+  [ $status -eq 0 ]
+  [[ $output =~ "verbose: starting local mode" ]] || false
+
+  # add tag without message
+  run dolt --verbose-engine-setup tag v1_tag
+  [ $status -eq 0 ]
+  [[ $output =~ "verbose: starting local mode" ]] || false
+
+  # list tags and check new tag is present
+  run dolt tag
+  [ $status -eq 0 ]
+  [[ $output =~ "v1_tag" ]] || false
+
+  # list tags with verbose flag and check new tag is present
+  run dolt --verbose-engine-setup tag --verbose
+  [ $status -eq 0 ]
+  [[ $output =~ "v1_tag"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "Tagger: Bats Tests <bats@email.fake>" ]] || false
+  [[ $output =~ "verbose: starting local mode" ]] || false
+
+  # add tag with commit
+  run dolt tag v2_tag $secondCommit
+  [ $status -eq 0 ]
+
+  # list tags and check new tag is present
+  run dolt tag --verbose
+  [ $status -eq 0 ]
+  [[ $output =~ "v1_tag"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "v2_tag"$'\t'"$secondCommit" ]] || false
+
+  # add tag with message
+  run dolt tag v3_tag -m "tag message"
+  [ $status -eq 0 ]
+
+  # list tags and check new tag is present
+  run dolt tag --verbose
+  [ $status -eq 0 ]
+  [[ $output =~ "v3_tag"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "tag message" ]] || false
+
+  # add tag with message and commit
+  run dolt tag v4_tag $secondCommit -m "second message"
+  [ $status -eq 0 ]
+
+  # list tags and check new tag is present
+  run dolt tag --verbose
+  [ $status -eq 0 ]
+  [[ $output =~ "v4_tag"$'\t'"$secondCommit" ]] || false
+  [[ $output =~ "second message" ]] || false
+
+  # add tag with author
+  run dolt tag v5_tag --author "John Doe <john@doe.com>"
+  [ $status -eq 0 ]
+
+  # list tags and check new tag is present
+  run dolt tag --verbose
+  [ $status -eq 0 ]
+  [[ $output =~ "v5_tag"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "Tagger: John Doe <john@doe.com>" ]] || false
+
+  # delete tag
+  run dolt tag -d v2_tag
+  [ $status -eq 0 ]
+
+  # list tags and check deleted tag is not present
+  run dolt tag --verbose
+  [ $status -eq 0 ]
+  [[ $output =~ "v1_tag"$'\t'"$headCommit" ]] || false
+  [[ ! $output =~ "v2_tag" ]] || false
+  [[ $output =~ "v3_tag"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "v4_tag"$'\t'"$secondCommit" ]] || false
+  [[ $output =~ "tag message" ]] || false
+  [[ $output =~ "second message" ]] || false
+  [[ $output =~ "Tagger: John Doe <john@doe.com>" ]] || false
+
+  cd ../defaultDB
+  start_sql_server defaultDB
+
+  # get commit hashes
+  headCommit=$(get_commit_hash_at HEAD)
+  secondCommit=$(get_commit_hash_at HEAD~1)
+
+  # show tags
+  run dolt --verbose-engine-setup tag
+  [ $status -eq 0 ]
+  [[ $output =~ "verbose: starting remote mode" ]] || false
+
+  # add tag without message
+  run dolt --verbose-engine-setup tag v1_tag
+  [ $status -eq 0 ]
+  [[ $output =~ "verbose: starting remote mode" ]] || false
+
+  # list tags and check new tag is present
+  run dolt tag
+  [ $status -eq 0 ]
+  [[ $output =~ "v1_tag" ]] || false
+
+  # list tags with verbose flag and check new tag is present
+  run dolt --verbose-engine-setup tag --verbose
+  [ $status -eq 0 ]
+  [[ $output =~ "v1_tag"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "Tagger: Bats Tests <bats@email.fake>" ]] || false
+  [[ $output =~ "verbose: starting remote mode" ]] || false
+
+  # add tag with commit
+  run dolt tag v2_tag $secondCommit
+  [ $status -eq 0 ]
+
+  # list tags and check new tag is present
+  run dolt tag --verbose
+  [ $status -eq 0 ]
+  [[ $output =~ "v1_tag"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "v2_tag"$'\t'"$secondCommit" ]] || false
+
+  # add tag with message
+  run dolt tag v3_tag -m "tag message"
+  [ $status -eq 0 ]
+
+  # list tags and check new tag is present
+  run dolt tag --verbose
+  [ $status -eq 0 ]
+  [[ $output =~ "v3_tag"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "tag message" ]] || false
+
+  # add tag with message and commit
+  run dolt tag v4_tag $secondCommit -m "second message"
+  [ $status -eq 0 ]
+
+  # list tags and check new tag is present
+  run dolt tag --verbose
+  [ $status -eq 0 ]
+  [[ $output =~ "v4_tag"$'\t'"$secondCommit" ]] || false
+  [[ $output =~ "second message" ]] || false
+
+  # add tag with author
+  run dolt tag v5_tag --author "John Doe <john@doe.com>"
+  [ $status -eq 0 ]
+
+  # list tags and check new tag is present
+  run dolt tag --verbose
+  [ $status -eq 0 ]
+  [[ $output =~ "v5_tag"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "Tagger: John Doe <john@doe.com>" ]] || false
+
+  # delete tag
+  run dolt tag -d v2_tag
+  [ $status -eq 0 ]
+
+  # list tags and check deleted tag is not present
+  run dolt tag --verbose
+  [ $status -eq 0 ]
+  [[ $output =~ "v1_tag"$'\t'"$headCommit" ]] || false
+  [[ ! $output =~ "v2_tag" ]] || false
+  [[ $output =~ "v3_tag"$'\t'"$headCommit" ]] || false
+  [[ $output =~ "v4_tag"$'\t'"$secondCommit" ]] || false
+  [[ $output =~ "tag message" ]] || false
+  [[ $output =~ "second message" ]] || false
+  [[ $output =~ "Tagger: John Doe <john@doe.com>" ]] || false
+}
+
+@test "sql-local-remote: verify dolt cherry-pick behavior" {
+  cd altDB
+
+  # setup for cherry-pick.bats
+  dolt clean
+  dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10), index(v))"
+  dolt add .
+  dolt commit -am "Created table"
+  dolt checkout -b branch1
+  dolt sql -q "INSERT INTO test VALUES (1, 'a')"
+  dolt commit -am "Inserted 1"
+  dolt sql -q "INSERT INTO test VALUES (2, 'b')"
+  dolt commit -am "Inserted 2"
+  dolt sql -q "INSERT INTO test VALUES (3, 'c')"
+  dolt commit -am "Inserted 3"
+  run dolt sql -q "SELECT * FROM test" -r csv
+  [[ "$output" =~ "1,a" ]] || false
+  [[ "$output" =~ "2,b" ]] || false
+  [[ "$output" =~ "3,c" ]] || false
+
+  # setup for "cherry-pick: schema change, with data conflict" test
+  dolt checkout main
+  dolt sql -q "CREATE TABLE other (pk int primary key, c1 int, c2 int)"
+  dolt sql -q "INSERT INTO other VALUES (1, 2, 3)"
+  dolt commit -Am "add other table (on main)"
+  # Create two commits on branch2: one to assert does NOT get included, and one to cherry pick
+  dolt checkout -b branch2
+  dolt sql -q "INSERT INTO other VALUES (100, 200, 300);"
+  dolt commit -am "add row 100 to other (on branch2)"
+  # This ALTER TABLE statement modifies other rows that aren't included in the cherry-picked
+  # commit – row (100, 200, 300) is modified to (100, 300). This shows up as a conflict
+  # in the cherry-pick (modified row on one side, row doesn't exist on the other side).
+  dolt sql -q "ALTER TABLE other DROP COLUMN c1;"
+  dolt sql -q "INSERT INTO other VALUES (10, 30);"
+  dolt sql -q "INSERT INTO test VALUES (100, 'q');"
+  dolt commit -am "alter table, add row 10 to other, add row 100 to test (on branch2)"
+
+  # actual cherry-pick test
+  dolt checkout main
+  run dolt cherry-pick branch2
+  [ $status -eq 1 ]
+  [[ $output =~ "Unable to apply commit cleanly due to conflicts or constraint violations" ]] || false
+  localCherryPickOutput=$output
+
+  # Assert that table 'test' is staged, but table 'other' is not staged, since it had conflicts
+  run dolt sql -q "SELECT table_name, case when staged = 0 then 'staged' else 'working' end as location, status from dolt_status;"
+  [ $status -eq 0 ]
+  [[ $output =~ "| test       | working  | modified |" ]] || false
+  [[ $output =~ "| other      | staged   | modified |" ]] || false
+
+  # setup for remote test
+  dolt checkout main
+  dolt reset --hard main
+
+  # start server
+  start_sql_server altDB
+
+  run dolt cherry-pick branch2
+  [ $status -eq 1 ]
+  [[ $output =~ "Unable to apply commit cleanly due to conflicts or constraint violations" ]] || false
+  remoteCherryPickOutput=$output
+  # Assert that table 'test' is staged, but table 'other' is not staged, since it had conflicts
+  run dolt sql -q "SELECT table_name, case when staged = 0 then 'staged' else 'working' end as location, status from dolt_status;"
+  [ $status -eq 0 ]
+  [[ $output =~ "| test       | working  | modified |" ]] || false
+  [[ $output =~ "| other      | staged   | modified |" ]] || false
+
+  [[ "$localCherryPickOutput" == "$remoteCherryPickOutput" ]] || false
+}
+
+@test "sql-local-remote: verify checkout will fail early when a server is running" {
+  cd altDB
+  dolt reset --hard # Ensure database is clean to start.
+  start_sql_server altDB
+
+  dolt branch br
+
+  run dolt checkout br
+  [ $status -eq 1 ]
+
+  [[ $output =~ "dolt checkout can not currently be used when there is a local server running. Please stop your dolt sql-server and try again." ]] || false
 }
