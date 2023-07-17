@@ -70,19 +70,19 @@ var MergeScripts = []queries.ScriptTest{
 	{
 		// Unique checks should not include the content of deleted rows in checks. Tests two updates: one triggers
 		// going from a smaller key to a higher key, and one going from a higher key to a smaller key (in order to test
-		// delete/insert events coming in in either order). https://github.com/dolthub/dolt/issues/6319
-		Name: "false unique constraint violations",
+		// delete/insert events in either order). https://github.com/dolthub/dolt/issues/6319
+		Name: "unique constraint checks do not consider deleted rows",
 		SetUpScript: []string{
 			"set @@autocommit=0;",
 			"create table tableA (pk varchar(255) primary key, col1 varchar(255),UNIQUE KEY unique1 (col1))",
-			"insert into tableA values ('B', '1'), ('Y', '100')",
+			"insert into tableA values ('B', '1'), ('C', 2), ('Y', '100')",
 			"call dolt_commit('-Am', 'creating table');",
 			"call dolt_branch('feature');",
 			"update tableA set pk = 'A' where pk='B';",
 			"update tableA set pk = 'Z' where pk='Y';",
 			"call dolt_commit('-am', 'update two rows');",
 			"call dolt_checkout('feature');",
-			"insert into tableA values ('C', '2');",
+			"update tableA set col1='C' where pk='C';",
 			"call dolt_commit('-am', 'added row on branch feature');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -100,7 +100,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from tableA;",
-				Expected: []sql.Row{{"A", "1"}, {"C", "2"}, {"Z", "100"}},
+				Expected: []sql.Row{{"A", "1"}, {"C", "C"}, {"Z", "100"}},
 			},
 		},
 	},

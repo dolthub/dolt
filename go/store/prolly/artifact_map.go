@@ -409,6 +409,7 @@ func (wr *ArtifactsEditor) Delete(ctx context.Context, key val.Tuple) error {
 	return wr.mut.Delete(ctx, key)
 }
 
+// Has returns true if |key| is present in the underlying map being edited, including any in-flight edits.
 func (wr *ArtifactsEditor) Has(ctx context.Context, key val.Tuple) (bool, error) {
 	return wr.mut.Has(ctx, key)
 }
