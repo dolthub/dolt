@@ -152,6 +152,10 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 			if err != nil {
 				return noConflictsOrViolations, threeWayMerge, err
 			}
+			err = checkForUncommittedChanges(ctx, roots.Working, roots.Head)
+			if err != nil {
+				return noConflictsOrViolations, threeWayMerge, err
+			}
 			msg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, headRef.GetPath())
 			ws, _, conflicts, fastForward, err = performMerge(ctx, sess, roots, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
 			if err != nil && !errors.Is(doltdb.ErrUpToDate, err) {
@@ -214,4 +218,23 @@ func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, statsCh chan p
 	cancel()
 	close(statsCh)
 	wg.Wait()
+}
+
+func checkForUncommittedChanges(ctx *sql.Context, root *doltdb.RootValue, headRoot *doltdb.RootValue) error {
+	rh, err := root.HashOf()
+
+	if err != nil {
+		return err
+	}
+
+	hrh, err := headRoot.HashOf()
+
+	if err != nil {
+		return err
+	}
+
+	if rh != hrh {
+		return ErrUncommittedChanges.New()
+	}
+	return nil
 }

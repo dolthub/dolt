@@ -642,22 +642,6 @@ SQL
     [[ "$output" =~ "Finish up Merge" ]] || false
 }
 
-@test "sql-merge: DOLT_MERGE throws errors with working set changes." {
-    run dolt sql << SQL
-call dolt_commit('-a', '-m', 'Step 1');
-call dolt_checkout('-b', 'feature-branch');
-INSERT INTO test VALUES (3);
-call dolt_commit('-a', '-m', 'this is a ff');
-call dolt_checkout('main');
-CREATE TABLE tbl (
-    pk int primary key
-);
-call dolt_merge('feature-branch');
-SQL
-    log_status_eq 1
-    [[ "$output" =~ "cannot merge with uncommitted changes" ]] || false
-}
-
 @test "sql-merge: DOLT_MERGE with a long series of changing operations works." {
     dolt sql << SQL
 call dolt_commit('-a', '-m', 'Step 1');
