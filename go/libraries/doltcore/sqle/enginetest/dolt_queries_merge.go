@@ -4082,8 +4082,6 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 	},
 }
 
-var errTmplNoAutomaticMerge = "table %s can't be automatically merged.\nTo merge this table, make the schema on the source and target branch equal."
-
 var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 	// Data conflicts during a merge with schema changes
 	{
