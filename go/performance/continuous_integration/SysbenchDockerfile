@@ -14,6 +14,7 @@ RUN \
   build-essential \
   tcl \
   lsb-release \
+  gnupg \
   && wget \
     -O sqlite.tar.gz \
     https://www.sqlite.org/src/tarball/sqlite.tar.gz?r=release \
