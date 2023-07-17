@@ -119,96 +119,58 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			// Unique checks should not be confused by a row being deleted
-			// TODO: Could we reproduce this with a delete and an insert? (sure seems like it!)
-			// https://github.com/dolthub/dolt/issues/6319
-			Name: "false unique constraint violations (1 of 3)",
+			Name: "delete all rows in table in all branches",
 			SetUpScript: []string{
-				"set @@autocommit=0;",
-				"create table tableA (keyC varchar(255) not null, col1 varchar(255), col2 varchar(255), col3 varchar(255), dataA varchar(255), PRIMARY KEY (keyC), UNIQUE KEY col1_col2_col3_unique (col1, col2, col3))",
-				"insert into tableA (keyC, col1, col2, col3, dataA) values ('key-b', '1', '2', '3', 'test1')",
-				"call dolt_commit('-Am', 'creating table');",
-				"call dolt_branch('feature');",
-				"update tableA set keyC = 'key-a';",
-				"call dolt_commit('-am', 'update row');",
-				"call dolt_checkout('feature');",
-				"insert into tableA (keyC, col1, col2, col3, dataA) values ('key-c', '2', '2', '3', 'test3');",
-				"call dolt_commit('-am', 'added row on branch feature');",
+				"create table t (a int primary key auto_increment, b int)",
+				"call dolt_add('.')",
+				"call dolt_commit('-am', 'empty table')",
+				"call dolt_branch('branch1')",
+				"call dolt_branch('branch2')",
+				"insert into t (b) values (1), (2)",
+				"call dolt_commit('-am', 'two values on main')",
+				"call dolt_checkout('branch1')",
+				"insert into t (b) values (3), (4)",
+				"call dolt_commit('-am', 'two values on branch1')",
+				"call dolt_checkout('branch2')",
+				"insert into t (b) values (5), (6)",
+				"call dolt_checkout('main')",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "call dolt_merge('main');",
-					Expected: []sql.Row{{doltCommit, 0, 0}},
+					Query:    "delete from t",
+					Expected: []sql.Row{{gmstypes.NewOkResult(2)}},
 				},
 				{
-					Query:    "select * from dolt_constraint_violations;",
-					Expected: []sql.Row{},
+					Query:    "delete from `mydb/branch1`.t",
+					Expected: []sql.Row{{gmstypes.NewOkResult(2)}},
 				},
 				{
-					Query:    "select * from dolt_constraint_violations_tableA;",
-					Expected: []sql.Row{},
-				},
-			},
-		},
-		{
-			// Unique checks should not be confused by a row being deleted
-			// https://github.com/dolthub/dolt/issues/6319
-			Name: "false unique constraint violations (2 of 3)",
-			SetUpScript: []string{
-				"set @@autocommit=0;",
-				"create table tableA (keyC varchar(255) not null, col1 varchar(255), col2 varchar(255), col3 varchar(255), dataA varchar(255), PRIMARY KEY (keyC), UNIQUE KEY col1_col2_col3_unique (col1, col2, col3))",
-				"insert into tableA (keyC, col1, col2, col3, dataA) values ('key-a', '1', '2', '3', 'test1')",
-				"call dolt_commit('-Am', 'creating table');",
-				"call dolt_branch('feature');",
-				"update tableA set keyC = 'key-b';",
-				"call dolt_commit('-am', 'update row');",
-				"call dolt_checkout('feature');",
-				"insert into tableA (keyC, col1, col2, col3, dataA) values ('key-c', '2', '2', '3', 'test3');",
-				"call dolt_commit('-am', 'added row on branch feature');",
-			},
-			Assertions: []queries.ScriptTestAssertion{
-				{
-					Query:    "call dolt_merge('main');",
-					Expected: []sql.Row{{doltCommit, 0, 0}},
+					Query:    "delete from `mydb/branch2`.t",
+					Expected: []sql.Row{{gmstypes.NewOkResult(2)}},
 				},
 				{
-					Query:    "select * from dolt_constraint_violations;",
-					Expected: []sql.Row{},
+					Query:            "alter table `mydb/branch1`.t auto_increment = 1",
+					SkipResultsCheck: true,
 				},
 				{
-					Query:    "select * from dolt_constraint_violations_tableA;",
-					Expected: []sql.Row{},
-				},
-			},
-		},
-		{
-			// Use multiple indexes and multiple violations in this test; looks like
-			// https://github.com/dolthub/dolt/issues/6319
-			Name: "false unique constraint violations (3 of 3)",
-			SetUpScript: []string{
-				"set @@autocommit=0;",
-				"create table tableA (keyC varchar(255) not null, col1 varchar(255), col2 varchar(255), col3 varchar(255), dataA varchar(255), PRIMARY KEY (keyC), UNIQUE KEY col1_col2_col3_unique (col1, col2, col3), UNIQUE KEY col1_col2_unique (col1, col2))",
-				"insert into tableA (keyC, col1, col2, col3, dataA) values ('key-b', '1', '2', '3', 'test1')",
-				"call dolt_commit('-Am', 'creating table');",
-				"call dolt_branch('feature');",
-				"update tableA set keyC = 'key-a';",
-				"call dolt_commit('-am', 'update row');",
-				"call dolt_checkout('feature');",
-				"insert into tableA (keyC, col1, col2, col3, dataA) values ('key-c', '2', '2', '3', 'test3');",
-				"call dolt_commit('-am', 'added row on branch feature');",
-			},
-			Assertions: []queries.ScriptTestAssertion{
-				{
-					Query:    "call dolt_merge('main');",
-					Expected: []sql.Row{{doltCommit, 0, 0}},
+					Query:            "alter table `mydb/branch2`.t auto_increment = 1",
+					SkipResultsCheck: true,
 				},
 				{
-					Query:    "select * from dolt_constraint_violations;",
-					Expected: []sql.Row{},
+					Query:            "alter table t auto_increment = 1",
+					SkipResultsCheck: true,
 				},
 				{
-					Query:    "select * from dolt_constraint_violations_tableA;",
-					Expected: []sql.Row{},
+					// empty tables, start at 1
+					Query:    "insert into t (b) values (7), (8)",
+					Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: 2, InsertID: 1}}},
+				},
+				{
+					Query: "select * from t order by a",
+					Expected: []sql.Row{
+						{1, 7},
+						{2, 8},
+					},
 				},
 			},
 		},
@@ -218,9 +180,9 @@ func TestSingleScript(t *testing.T) {
 	cleanup := installTestCommitClock(tcc)
 	defer cleanup()
 
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData, setup.Parent_childData)
 	for _, script := range scripts {
-		harness := newDoltHarness(t)
-		harness.Setup(setup.MydbData, setup.Parent_childData)
 		sql.RunWithNowFunc(tcc.Now, func() error {
 			enginetest.TestScript(t, harness, script)
 			return nil
@@ -1601,16 +1563,6 @@ func TestDoltMerge(t *testing.T) {
 			enginetest.TestScript(t, h, script)
 		}()
 	}
-
-	if types.IsFormat_DOLT(types.Format_Default) {
-		for _, script := range Dolt1MergeScripts {
-			func() {
-				h := newDoltHarness(t).WithParallelism(1)
-				defer h.Close()
-				enginetest.TestScript(t, h, script)
-			}()
-		}
-	}
 }
 
 func TestDoltMergePrepared(t *testing.T) {
@@ -1622,16 +1574,6 @@ func TestDoltMergePrepared(t *testing.T) {
 			defer h.Close()
 			enginetest.TestScriptPrepared(t, h, script)
 		}()
-	}
-
-	if types.IsFormat_DOLT(types.Format_Default) {
-		for _, script := range Dolt1MergeScripts {
-			func() {
-				h := newDoltHarness(t).WithParallelism(1)
-				defer h.Close()
-				enginetest.TestScriptPrepared(t, h, script)
-			}()
-		}
 	}
 }
 
