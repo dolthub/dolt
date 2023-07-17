@@ -177,6 +177,10 @@ func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
 	return ap
 }
 
+func (cmd DiffCmd) RequiresRepo() bool {
+	return false
+}
+
 // Exec executes the command
 func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
