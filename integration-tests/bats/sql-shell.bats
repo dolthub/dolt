@@ -73,10 +73,9 @@ teardown() {
 
 @test "sql-shell: empty DB in prompt is OK" {
     skiponwindows "Need to install expect and make this script work on windows."
-integration-tests/bats/sql-shell.bats
     if [ "$SQL_ENGINE" = "remote-engine" ]; then
       skip "Presently sql command will not connect to remote server due to lack of lock file where there are not DBs."
-    else
+    fi
     # ignore common setup. Use an empty db with no server.
     rm -rf .dolt
     mkdir emptyDb
