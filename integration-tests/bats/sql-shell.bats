@@ -71,7 +71,20 @@ teardown() {
     $BATS_TEST_DIRNAME/sql-works-after-failing-query.expect
 }
 
+@test "sql-shell: empty DB in prompt is OK" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Presently sql command will not connect to remote server due to lack of lock file where there are not DBs."
+    fi
+    # ignore common setup. Use an empty db with no server.
+    rm -rf .dolt
+    mkdir emptyDb
+    cd emptyDb
+    $BATS_TEST_DIRNAME/sql-shell-empty-prompt.expect
+}
+
 @test "sql-shell: delimiter" {
+
     skiponwindows "Need to install expect and make this script work on windows."
     mkdir doltsql
     cd doltsql
