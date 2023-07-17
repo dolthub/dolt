@@ -316,7 +316,7 @@ type ArtifactsEditor struct {
 }
 
 // BuildArtifactKey builds a val.Tuple to be used to look up a value in this ArtifactsEditor. The key is composed
-// of |srcKey, the primary key fields from the original table, followed by the hash of the source root, |srcRootish|,
+// of |srcKey|, the primary key fields from the original table, followed by the hash of the source root, |srcRootish|,
 // and then the artifact type, |artType|.
 func (wr *ArtifactsEditor) BuildArtifactKey(_ context.Context, srcKey val.Tuple, srcRootish hash.Hash, artType ArtifactType) val.Tuple {
 	for i := 0; i < srcKey.Count(); i++ {
