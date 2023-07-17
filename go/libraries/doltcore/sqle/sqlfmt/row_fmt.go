@@ -534,13 +534,13 @@ func interfaceValueAsSqlString(ti typeinfo.TypeInfo, value interface{}) (string,
 		return singleQuote + str + singleQuote, nil
 	case typeinfo.DatetimeTypeIdentifier:
 		return singleQuote + str + singleQuote, nil
-	case typeinfo.InlineBlobTypeIdentifier, typeinfo.BlobStringTypeIdentifier, typeinfo.VarBinaryTypeIdentifier:
+	case typeinfo.InlineBlobTypeIdentifier, typeinfo.VarBinaryTypeIdentifier:
 		bytes, ok := value.([]byte)
 		if !ok {
 			return "", fmt.Errorf("unexpected type for binary value: %T", value)
 		}
 		return hexEncodeBytes(bytes), nil
-	case typeinfo.JSONTypeIdentifier, typeinfo.EnumTypeIdentifier, typeinfo.SetTypeIdentifier:
+	case typeinfo.JSONTypeIdentifier, typeinfo.EnumTypeIdentifier, typeinfo.SetTypeIdentifier, typeinfo.BlobStringTypeIdentifier:
 		return quoteAndEscapeString(str), nil
 	case typeinfo.VarStringTypeIdentifier:
 		s, ok := value.(string)
