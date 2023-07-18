@@ -3011,6 +3011,28 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
+		// https://github.com/dolthub/dolt/issues/6350
+		Name: "binary data in patch statements is hex encoded",
+		SetUpScript: []string{
+			"create table t (pk varbinary(16) primary key, c1  binary(16));",
+			"insert into t values (0x42, NULL);",
+			"call dolt_commit('-Am', 'new table with binary pk');",
+			"update t set c1 = 0xeeee where pk = 0x42;",
+			"insert into t values (0x012345, NULL), (0x054321, binary 'efg_!4');",
+			"call dolt_commit('-am', 'more rows');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select statement from dolt_patch('HEAD~', 'HEAD', 't');",
+				Expected: []sql.Row{
+					{"INSERT INTO `t` (`pk`,`c1`) VALUES (0x012345,NULL);"},
+					{"INSERT INTO `t` (`pk`,`c1`) VALUES (0x054321,0x6566675f213400000000000000000000);"},
+					{"UPDATE `t` SET `c1`=0xeeee0000000000000000000000000000 WHERE `pk`=0x42;"},
+				},
+			},
+		},
+	},
+	{
 		Name: "basic case with multiple tables",
 		SetUpScript: []string{
 			"set @Commit0 = HashOf('HEAD');",
