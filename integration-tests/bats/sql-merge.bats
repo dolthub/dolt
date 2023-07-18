@@ -642,22 +642,6 @@ SQL
     [[ "$output" =~ "Finish up Merge" ]] || false
 }
 
-@test "sql-merge: DOLT_MERGE throws errors with working set changes." {
-    run dolt sql << SQL
-call dolt_commit('-a', '-m', 'Step 1');
-call dolt_checkout('-b', 'feature-branch');
-INSERT INTO test VALUES (3);
-call dolt_commit('-a', '-m', 'this is a ff');
-call dolt_checkout('main');
-CREATE TABLE tbl (
-    pk int primary key
-);
-call dolt_merge('feature-branch');
-SQL
-    log_status_eq 1
-    [[ "$output" =~ "cannot merge with uncommitted changes" ]] || false
-}
-
 @test "sql-merge: DOLT_MERGE with a long series of changing operations works." {
     dolt sql << SQL
 call dolt_commit('-a', '-m', 'Step 1');
@@ -818,7 +802,7 @@ SQL
     dolt sql -q "alter table test_null add primary key(i)"
     dolt commit -am "main primary key changes"
 
-    run dolt merge b1 -m "merge"
+    run dolt sql -q "call dolt_merge('b1', '-m', 'merge')"
     log_status_eq 0
 }
 
@@ -837,9 +821,9 @@ SQL
     dolt sql -q "insert into t values (2, 2)"
     dolt commit -am "changes to b2"
     dolt checkout main
-    run dolt merge b1 -m "merge b1"
+    run dolt sql -q "call dolt_merge('b1', '-m', 'merge b1')"
     log_status_eq 0
-    run dolt merge b2 -m "merge b2"
+    run dolt sql -q "call dolt_merge('b2', '-m', 'merge b2')"
     log_status_eq 0
 }
 
@@ -863,7 +847,7 @@ SQL
     [[ "$output" =~ "(\`i\` < 10)" ]] || false
     dolt commit -am "changes to main"
 
-    run dolt merge other -m "merge other"
+    run dolt sql -q "call dolt_merge('other', '-m', 'merge other')"
     log_status_eq 0
 
     run dolt sql -q "select * from t"
@@ -893,7 +877,7 @@ SQL
     [[ "$output" =~ "CONSTRAINT \`c1\` CHECK ((\`j\` < 0))" ]] || false
     dolt commit -am "changes to main"
 
-    run dolt merge other -m "merge other"
+    run dolt sql -q "call dolt_merge('other', '-m', 'merge other')"
     log_status_eq 0
 
     run dolt sql -q "show create table t"
@@ -921,7 +905,7 @@ SQL
     [[ "$output" =~ "CONSTRAINT \`c1\` CHECK ((\`i\` < 0))" ]] || false
     dolt commit -am "changes to main"
 
-    dolt merge other -m "merge other"
+    dolt sql -q "call dolt_merge('other', '-m', 'merge other')"
 
     run dolt status
     log_status_eq 0
@@ -956,7 +940,7 @@ SQL
     [[ ! ("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
     dolt commit -am "changes to main"
 
-    run dolt merge other -m "merge other"
+    run dolt sql -q "call dolt_merge('other', '-m', 'merge other')"
     log_status_eq 0
 
     run dolt sql -q "show create table t"
@@ -985,7 +969,7 @@ SQL
     [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` < 10))" ]] || false
     dolt commit -am "changes to main"
 
-    dolt merge other -m "merge other"
+    run dolt sql -q "call dolt_merge('other', '-m', 'merge other')"
     run dolt status
     log_status_eq 0
     [[ "$output" =~ "schema conflict:" ]]
@@ -1021,9 +1005,9 @@ SQL
     dolt commit -am "changes to b2"
 
     dolt checkout main
-    run dolt merge b1 -m "merge b1"
+    run dolt sql -q "call dolt_merge('b1', '-m', 'merge b1')"
     log_status_eq 0
-    run dolt merge b2 -m "merge b2"
+    run dolt sql -q "call dolt_merge('b2', '-m', 'merge b2')"
     log_status_eq 0
 
     run dolt sql -q "show create table t"
@@ -1057,7 +1041,7 @@ SQL
     dolt checkout main
     run dolt merge b1 -m "merge b1" --commit
     log_status_eq 0
-    dolt merge b2 -m "merge b2"
+    dolt sql -q "call dolt_merge('b2', '-m', 'merge b2')"
     run dolt status
     log_status_eq 0
     [[ "$output" =~ "schema conflict:" ]]
@@ -1090,9 +1074,9 @@ SQL
     dolt commit -am "changes to b2"
 
     dolt checkout main
-    run dolt merge b1 -m "merge b1"
+    run dolt sql -q "call dolt_merge('b1', '-m', 'merge b1')"
     log_status_eq 0
-    dolt merge b2 -m "merge b2"
+    dolt sql -q "call dolt_merge('b2', '-m', 'merge b2')"
     run dolt status
     log_status_eq 0
     [[ "$output" =~ "schema conflict:" ]]
@@ -1128,6 +1112,175 @@ SQL
     [ "$status" -eq 0 ]
     regex='John Doe <john@doe.com>'
     [[ "$output" =~ "$regex" ]] || false
+}
+
+@test "sql-merge: ff merge doesn't stomp working changes" {
+  dolt sql <<SQL
+CREATE TABLE test2 (pk int);
+CALL DOLT_COMMIT('-m', 'initial commit');
+CALL DOLT_CHECKOUT('-b', 'merge_branch');
+INSERT INTO test VALUES (9);
+CALL DOLT_COMMIT('-a', '-m', 'modify test');
+CALL DOLT_CHECKOUT('main');
+INSERT INTO test2 VALUES (8);
+SQL
+    run dolt status
+    log_status_eq 0
+    [[ "$output" =~ "test2" ]] || false
+    [[ ! "$output" =~ "test1" ]] || false
+
+    run dolt sql -q "CALL DOLT_MERGE('merge_branch');"
+    log_status_eq 0
+
+    run dolt sql -q "select COUNT(*) from test"
+    [[ "$output" =~ 4 ]] || false
+
+    run dolt status
+    log_status_eq 0
+    [[ "$output" =~ "test2" ]] || false
+    [[ ! "$output" =~ "test1" ]] || false
+}
+
+@test "sql-merge: no-ff merge doesn't stomp working changes and doesn't fast forward" {
+    dolt commit -m "initial commit"
+    dolt checkout -b merge_branch
+    dolt SQL -q "INSERT INTO test values (9)"
+    dolt add test
+    dolt commit -m "modify test"
+
+    dolt checkout main
+    dolt SQL -q "CREATE TABLE t2 (pk int)"
+    dolt SQL -q "INSERT INTO t2 values (0)"
+    run dolt status
+    log_status_eq 0
+    [[ "$output" =~ "t2" ]] || false
+    [[ ! "$output" =~ "test" ]] || false
+
+    run dolt sql -q "CALL DOLT_MERGE('merge_branch', '--no-ff', '-m', 'no-ff merge');"
+    log_status_eq 0
+    [[ ! "$output" =~ "| 1            |" ]] || false
+
+    run dolt status
+    log_status_eq 0
+    [[ "$output" =~ "t2" ]] || false
+    [[ ! "$output" =~ "test" ]] || false
+
+    run dolt log
+    log_status_eq 0
+    [[ "$output" =~ "no-ff merge" ]] || false
+}
+
+@test "sql-merge: squash merge" {
+    dolt commit -m "initial commit"
+    dolt checkout -b merge_branch
+    dolt sql -q "INSERT INTO test values (3)"
+    dolt add test
+    dolt commit -m "add pk 3 to test"
+
+    dolt checkout main
+    dolt sql -q "INSERT INTO test values (4)"
+    dolt add test
+    dolt commit -m "add pk 4 to test1"
+
+    dolt sql -q "CREATE TABLE t2 (pk int)"
+    dolt sql -q "INSERT INTO t2 values (9)"
+    run dolt status
+    log_status_eq 0
+    [[ "$output" =~ "t2" ]] || false
+    [[ ! "$output" =~ "test1" ]] || false
+
+    run dolt sql -q "CALL DOLT_MERGE('--squash', 'merge_branch', '--no-commit');"
+    log_status_eq 0
+    [[ "$output" =~ "| hash | fast_forward | conflicts |" ]] || false
+    [[ "$output" =~ "| 0            | 0         |" ]] || false
+
+    run dolt status
+    log_status_eq 0
+    [[ "$output" =~ "t2" ]] || false
+    [[ "$output" =~ "test" ]] || false
+
+    dolt add .
+    dolt commit -m "squash merge"
+
+    # make sure the squashed commit is not in the log.
+    run dolt log
+    log_status_eq 0
+    [[ "$output" =~ "add pk 4 to test" ]] || false
+    [[ ! "$output" =~ "add pk 3 to test" ]] || false
+}
+
+@test "sql-merge: --abort restores working changes" {
+    dolt commit -m "initial commit"
+    dolt branch other
+
+    dolt sql -q "INSERT INTO test VALUES (9),(8);"
+    dolt commit -am "added rows to test on main"
+
+    dolt checkout other
+    dolt sql -q "INSERT INTO test VALUES (7),(6);"
+    dolt commit -am "added rows to test on other"
+
+    dolt checkout main
+    # dirty the working set with changes to test2
+    dolt SQL -q "CREATE TABLE t2 (pk int)"
+    dolt sql -q "INSERT INTO t2 VALUES (5);"
+
+    dolt merge other --no-commit
+    dolt sql -q "call dolt_merge('--abort');"
+
+    run dolt sql -q "SELECT * from dolt_merge_status"
+    [[ "$output" =~ "| is_merging | source | source_commit | target | unmerged_tables |" ]] || false
+    [[ "$output" =~ "| false      | NULL   | NULL          | NULL   | NULL            |" ]] || false
+
+    # per Git, working set changes to test2 should remain
+    dolt sql -q "SELECT * FROM t2" -r csv
+    run dolt sql -q "SELECT * FROM t2" -r csv
+    log_status_eq 0
+    [[ "${lines[1]}" =~ "5" ]] || false
+}
+
+@test "sql-merge: 3way merge doesn't stomp working changes" {
+    dolt commit -m "initial commit"
+    dolt checkout -b merge_branch
+    dolt SQL -q "INSERT INTO test values (9)"
+    dolt add test
+    dolt commit -m "add pk 9 to test1"
+
+    dolt checkout main
+    dolt SQL -q "INSERT INTO test values (8)"
+    dolt add test
+    dolt commit -m "add pk 8 to test1"
+
+    dolt SQL -q "CREATE TABLE t2 (pk int)"
+    dolt SQL -q "INSERT INTO t2 values (7)"
+    run dolt status
+    log_status_eq 0
+    [[ "$output" =~ "t2" ]] || false
+    [[ ! "$output" =~ "test" ]] || false
+
+    run dolt sql -q "CALL DOLT_MERGE('merge_branch', '--no-commit');"
+    log_status_eq 0
+    [[ ! "$output" =~ "| 1            |" ]] || false
+
+    run dolt status
+    echo -e "\n\noutput: " $output "\n\n"
+    log_status_eq 0
+    [[ "$output" =~ "t2" ]] || false
+    [[ "$output" =~ "test" ]] || false
+
+   run dolt sql -q "SELECT * from dolt_merge_status"
+   [[ "$output" =~ "true" ]] || false
+   [[ "$output" =~ "merge_branch" ]] || false
+   [[ "$output" =~ "refs/heads/main" ]] || false
+
+    # make sure all the commits make it into the log
+    dolt add .
+    dolt commit -m "squash merge"
+
+    run dolt log
+    log_status_eq 0
+    [[ "$output" =~ "add pk 9 to test" ]] || false
+    [[ "$output" =~ "add pk 8 to test" ]] || false
 }
 
 get_head_commit() {
