@@ -221,19 +221,19 @@ func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, statsCh chan p
 }
 
 func checkForUncommittedChanges(ctx *sql.Context, root *doltdb.RootValue, headRoot *doltdb.RootValue) error {
-	rh, err := root.HashOf()
+	rootHash, err := root.HashOf()
 
 	if err != nil {
 		return err
 	}
 
-	hrh, err := headRoot.HashOf()
+	headHash, err := headRoot.HashOf()
 
 	if err != nil {
 		return err
 	}
 
-	if rh != hrh {
+	if rootHash != headHash {
 		return ErrUncommittedChanges.New()
 	}
 	return nil
