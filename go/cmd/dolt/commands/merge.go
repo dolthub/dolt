@@ -102,7 +102,8 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	}
 
 	if _, ok := queryist.(*engine.SqlEngine); !ok {
-		cli.Println(cli.RemoteUnsupportedMsg)
+		msg := fmt.Sprintf(cli.RemoteUnsupportedMsg, commandStr)
+		cli.Println(msg)
 		return 1
 	}
 
