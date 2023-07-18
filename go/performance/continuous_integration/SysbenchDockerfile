@@ -5,8 +5,24 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Get sysbench installed
 RUN apt update
 RUN apt install -y curl
-RUN curl -s https://packagecloud.io/install/repositories/akopytov/sysbench/script.deb.sh | bash
-RUN apt -y install sysbench
+
+# Install sysbench deps
+RUN apt update -y && apt install -y \
+  automake \
+  libtool \
+  pkg-config \
+  libaio-dev \
+  default-libmysqlclient-dev \
+  libssl-dev
+
+# Build sysbench from source
+RUN git clone https://github.com/akopytov/sysbench.git && \
+  cd sysbench && \
+  git checkout -b 1.0.20 tags/1.0.20 && \
+  ./autogen.sh && \
+  ./configure && \
+  make -j && \
+  make install
 
 # Install sqlite3 from source
 RUN \
