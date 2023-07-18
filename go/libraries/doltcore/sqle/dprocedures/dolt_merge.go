@@ -17,6 +17,7 @@ package dprocedures
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -31,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const DoltMergeWarningCode int = 1105 // Since this our own custom warning we'll use 1105, the code for an unknown error
@@ -173,9 +175,8 @@ func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots,
 		return ws, "", noConflictsOrViolations, threeWayMerge, doltdb.ErrMergeActive
 	}
 
-	err := checkForUncommittedChanges(ctx, roots.Working, roots.Head)
-	if err != nil {
-		return ws, "", noConflictsOrViolations, threeWayMerge, err
+	if len(spec.StompedTblNames) != 0 {
+		return ws, "", noConflictsOrViolations, threeWayMerge, fmt.Errorf("error: local changes would be stomped by merge:\n\t%s\n", strings.Join(spec.StompedTblNames, "\n\t"))
 	}
 
 	dbData, ok := sess.GetDbData(ctx, dbName)
@@ -217,7 +218,7 @@ func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots,
 			return ws, "", noConflictsOrViolations, threeWayMerge, err
 		}
 
-		ws, err = executeFFMerge(ctx, dbName, spec.Squash, ws, dbData, spec.MergeC)
+		ws, err = executeFFMerge(ctx, dbName, spec.Squash, ws, dbData, spec.MergeC, spec)
 		if h, cerr := spec.MergeC.HashOf(); cerr == nil {
 			return ws, h.String(), noConflictsOrViolations, fastForwardMerge, err
 		}
@@ -231,7 +232,7 @@ func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots,
 		return ws, "", noConflictsOrViolations, threeWayMerge, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	ws, err = executeMerge(ctx, spec.Squash, spec.HeadC, spec.MergeC, spec.MergeCSpecStr, ws, dbState.EditOpts())
+	ws, err = executeMerge(ctx, sess, dbName, spec.Squash, spec.HeadC, spec.MergeC, spec.MergeCSpecStr, ws, dbState.EditOpts(), spec.WorkingDiffs)
 	if err == doltdb.ErrUnresolvedConflictsOrViolations {
 		// if there are unresolved conflicts, write the resulting working set back to the session and return an
 		// error message
@@ -301,7 +302,7 @@ func abortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Ro
 	return workingSet, nil
 }
 
-func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, cmSpec string, ws *doltdb.WorkingSet, opts editor.Options) (*doltdb.WorkingSet, error) {
+func executeMerge(ctx *sql.Context, sess *dsess.DoltSession, dbName string, squash bool, head, cm *doltdb.Commit, cmSpec string, ws *doltdb.WorkingSet, opts editor.Options, workingDiffs map[string]hash.Hash) (*doltdb.WorkingSet, error) {
 	result, err := merge.MergeCommits(ctx, head, cm, opts)
 	if err != nil {
 		switch err {
@@ -313,13 +314,20 @@ func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, cmSpec
 			return nil, err
 		}
 	}
-	return mergeRootToWorking(squash, ws, result, cm, cmSpec)
+	return mergeRootToWorking(ctx, sess, dbName, squash, ws, result, workingDiffs, cm, cmSpec)
 }
 
-func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.WorkingSet, dbData env.DbData, cm2 *doltdb.Commit) (*doltdb.WorkingSet, error) {
-	rv, err := cm2.GetRootValue(ctx)
+func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.WorkingSet, dbData env.DbData, cm2 *doltdb.Commit, spec *merge.MergeSpec) (*doltdb.WorkingSet, error) {
+	stagedRoot, err := cm2.GetRootValue(ctx)
 	if err != nil {
 		return ws, err
+	}
+	workingRoot := stagedRoot
+	if len(spec.WorkingDiffs) > 0 {
+		workingRoot, err = applyChanges(ctx, stagedRoot, spec.WorkingDiffs)
+		if err != nil {
+			return ws, err
+		}
 	}
 
 	// TODO: This is all incredibly suspect, needs to be replaced with library code that is functional instead of
@@ -335,7 +343,7 @@ func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.Wor
 		}
 	}
 
-	ws = ws.WithWorkingRoot(rv).WithStagedRoot(rv)
+	ws = ws.WithWorkingRoot(workingRoot).WithStagedRoot(stagedRoot)
 
 	// We need to assign the working set to the session but ensure that its state is not labeled as dirty (ffs are clean
 	// merges). Hence, we go ahead and commit the working set to the transaction.
@@ -371,7 +379,7 @@ func executeNoFFMerge(
 	}
 	result := &merge.Result{Root: mergeRoot, Stats: make(map[string]*merge.MergeStats)}
 
-	ws, err = mergeRootToWorking(false, ws, result, spec.MergeC, spec.MergeCSpecStr)
+	ws, err = mergeRootToWorking(ctx, dSess, dbName, false, ws, result, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr)
 	if err != nil {
 		// This error is recoverable, so we return a working set value along with the error
 		return ws, nil, err
@@ -453,43 +461,59 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 	return merge.NewMergeSpec(ctx, dbData.Rsr, ddb, roots, name, email, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), apr.Contains(cli.NoCommitFlag), apr.Contains(cli.NoEditFlag), t)
 }
 
-// TODO: this copied from commands/merge.go because the latter isn't reusable. Fix that.
 func mergeRootToWorking(
+	ctx *sql.Context,
+	dSess *dsess.DoltSession,
+	dbName string,
 	squash bool,
 	ws *doltdb.WorkingSet,
 	merged *merge.Result,
+	workingDiffs map[string]hash.Hash,
 	cm2 *doltdb.Commit,
 	cm2Spec string,
 ) (*doltdb.WorkingSet, error) {
+	var err error
+	staged, working := merged.Root, merged.Root
+	if len(workingDiffs) > 0 {
+		working, err = applyChanges(ctx, working, workingDiffs)
+		if err != nil {
+			return ws, err
+		}
+	}
+
 	if !squash || merged.HasSchemaConflicts() {
 		ws = ws.StartMerge(cm2, cm2Spec)
 		tt := merge.SchemaConflictTableNames(merged.SchemaConflicts)
 		ws = ws.WithUnmergableTables(tt)
 	}
 
-	ws = ws.WithWorkingRoot(merged.Root).WithStagedRoot(merged.Root)
+	ws = ws.WithWorkingRoot(working)
+	if !merged.HasMergeArtifacts() {
+		ws = ws.WithStagedRoot(staged)
+	}
+
+	err = dSess.SetWorkingSet(ctx, dbName, ws)
+	if err != nil {
+		return nil, err
+	}
+
 	if merged.HasMergeArtifacts() {
 		// this error is recoverable in-session, so we return the new ws along with the error
 		return ws, doltdb.ErrUnresolvedConflictsOrViolations
 	}
+
 	return ws, nil
 }
 
-func checkForUncommittedChanges(ctx *sql.Context, root *doltdb.RootValue, headRoot *doltdb.RootValue) error {
-	rh, err := root.HashOf()
+func applyChanges(ctx *sql.Context, root *doltdb.RootValue, workingDiffs map[string]hash.Hash) (*doltdb.RootValue, error) {
+	var err error
+	for tblName, h := range workingDiffs {
+		root, err = root.SetTableHash(ctx, tblName, h)
 
-	if err != nil {
-		return err
+		if err != nil {
+			return nil, fmt.Errorf("failed to update table; %w", err)
+		}
 	}
 
-	hrh, err := headRoot.HashOf()
-
-	if err != nil {
-		return err
-	}
-
-	if rh != hrh {
-		return ErrUncommittedChanges.New()
-	}
-	return nil
+	return root, nil
 }

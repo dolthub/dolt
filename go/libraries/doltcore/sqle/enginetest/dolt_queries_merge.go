@@ -26,7 +26,6 @@ import (
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
@@ -405,7 +404,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"test", true, "modified"}, {"test", false, "conflict"}},
+				Expected: []sql.Row{{"test", false, "modified"}, {"test", false, "conflict"}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
@@ -880,7 +879,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"test", true, "modified"}, {"test", false, "conflict"}},
+				Expected: []sql.Row{{"test", false, "modified"}, {"test", false, "conflict"}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_conflicts",
@@ -956,8 +955,8 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
-				ExpectedErr: dprocedures.ErrUncommittedChanges,
+				Query:          "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				ExpectedErrStr: "error: local changes would be stomped by merge:\n\ttest\n",
 			},
 			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",

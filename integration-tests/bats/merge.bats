@@ -187,16 +187,16 @@ SQL
 
 @test "merge: squash merge" {
     dolt checkout -b merge_branch
-    dolt SQL -q "INSERT INTO test1 values (0,1,2)"
+    dolt sql -q "INSERT INTO test1 values (0,1,2)"
     dolt add test1
     dolt commit -m "add pk 0 to test1"
 
     dolt checkout main
-    dolt SQL -q "INSERT INTO test1 values (1,2,3)"
+    dolt sql -q "INSERT INTO test1 values (1,2,3)"
     dolt add test1
     dolt commit -m "add pk 1 to test1"
 
-    dolt SQL -q "INSERT INTO test2 values (0,1,2)"
+    dolt sql -q "INSERT INTO test2 values (0,1,2)"
     run dolt status
     log_status_eq 0
     [[ "$output" =~ "test2" ]] || false
@@ -212,10 +212,10 @@ SQL
     [[ "$output" =~ "test2" ]] || false
     [[ "$output" =~ "test1" ]] || false
 
-    # make sure the squashed commit is not in the log.
     dolt add .
     dolt commit -m "squash merge"
 
+    # make sure the squashed commit is not in the log.
     run dolt log
     log_status_eq 0
     [[ "$output" =~ "add pk 1 to test1" ]] || false
