@@ -35,6 +35,8 @@ RUN git clone https://github.com/dolthub/sysbench-lua-scripts.git
 RUN git clone https://github.com/Percona-Lab/sysbench-tpcc.git
 
 WORKDIR /mysql
+RUN lsb_release -a
+RUN apt-cache search mysql-server
 RUN echo "mysql-apt-config mysql-apt-config/select-server select mysql-8.0" | debconf-set-selections
 RUN echo "mysql-apt-config mysql-apt-config/select-product select Ok" | debconf-set-selections
 RUN echo "mysql-apt-config mysql-apt-config/select-tools select Enabled" | debconf-set-selections
@@ -44,6 +46,7 @@ RUN debconf-show mysql-apt-config
 RUN curl -L -O https://dev.mysql.com/get/mysql-apt-config_0.8.26-1_all.deb
 RUN DEBIAN_FRONTEND=noninteractive dpkg -i --debug=3 mysql-apt-config_0.8.26-1_all.deb
 RUN apt -oDebug::pkgAcquire::Worker=1 update
+RUN apt-cache search mysql-server
 RUN apt-get -oDebug::pkgAcquire::Worker=1 install -y mysql-server
 RUN mysql --version
 
