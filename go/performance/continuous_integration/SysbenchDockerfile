@@ -41,8 +41,9 @@ RUN echo "mysql-apt-config mysql-apt-config/select-tools select Enabled" | debco
 RUN echo "mysql-apt-config mysql-apt-config/tools-component select mysql-tools" | debconf-set-selections
 RUN echo "mysql-apt-config mysql-apt-config/select-preview select Disabled" | debconf-set-selections
 RUN debconf-show mysql-apt-config
-RUN curl -L -O https://dev.mysql.com/get/mysql-apt-config_0.8.25-1_all.deb
-RUN DEBIAN_FRONTEND=noninteractive dpkg -i mysql-apt-config_0.8.25-1_all.deb
+RUN curl -L -O https://dev.mysql.com/get/mysql-apt-config_0.8.26-1_all.deb
+RUN DEBIAN_FRONTEND=noninteractive dpkg -i --debug=3 mysql-apt-config_0.8.26-1_all.deb
+RUN apt update
 RUN apt-get install -y mysql-server
 RUN mysql --version
 
