@@ -16,6 +16,7 @@ package sqlfmt
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -533,14 +534,23 @@ func interfaceValueAsSqlString(ti typeinfo.TypeInfo, value interface{}) (string,
 		return singleQuote + str + singleQuote, nil
 	case typeinfo.DatetimeTypeIdentifier:
 		return singleQuote + str + singleQuote, nil
-	case typeinfo.BlobStringTypeIdentifier, typeinfo.VarBinaryTypeIdentifier, typeinfo.InlineBlobTypeIdentifier, typeinfo.JSONTypeIdentifier, typeinfo.EnumTypeIdentifier, typeinfo.SetTypeIdentifier:
+	case typeinfo.InlineBlobTypeIdentifier, typeinfo.VarBinaryTypeIdentifier:
+		switch v := value.(type) {
+		case []byte:
+			return hexEncodeBytes(v), nil
+		case string:
+			return hexEncodeBytes([]byte(v)), nil
+		default:
+			return "", fmt.Errorf("unexpected type for binary value: %T (SQL type info: %v)", value, ti)
+		}
+	case typeinfo.JSONTypeIdentifier, typeinfo.EnumTypeIdentifier, typeinfo.SetTypeIdentifier, typeinfo.BlobStringTypeIdentifier:
 		return quoteAndEscapeString(str), nil
 	case typeinfo.VarStringTypeIdentifier:
 		s, ok := value.(string)
 		if !ok {
 			return "", fmt.Errorf("typeinfo.VarStringTypeIdentifier is not types.String")
 		}
-		return quoteAndEscapeString(string(s)), nil
+		return quoteAndEscapeString(s), nil
 	case typeinfo.GeometryTypeIdentifier,
 		typeinfo.PointTypeIdentifier,
 		typeinfo.LineStringTypeIdentifier,
@@ -563,4 +573,8 @@ func quoteAndEscapeString(s string) string {
 	}
 	v.EncodeSQL(buf)
 	return buf.String()
+}
+
+func hexEncodeBytes(bytes []byte) string {
+	return "0x" + hex.EncodeToString(bytes)
 }

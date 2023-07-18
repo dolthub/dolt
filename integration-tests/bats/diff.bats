@@ -1054,6 +1054,20 @@ SQL
     [[ ! $output =~ "panic" ]]
 }
 
+@test "diff: binary data in sql output is hex encoded" {
+    dolt sql <<SQL
+DROP TABLE test;
+CREATE TABLE t (PK VARBINARY(100) PRIMARY KEY, c1 BINARY(3));
+INSERT INTO t VALUES (0xead543, 0x1EE4), (0x0e, NULL);
+SQL
+    dolt commit -Am "creating table t"
+
+    run dolt diff -r=sql HEAD~ HEAD
+    [ $status -eq 0 ]
+    [[ $output =~ 'INSERT INTO `t` (`PK`,`c1`) VALUES (0x0e,NULL);' ]] || false
+    [[ $output =~ 'INSERT INTO `t` (`PK`,`c1`) VALUES (0xead543,0x1ee400);' ]] || false
+}
+
 @test "diff: with foreign key and sql output" {
     dolt sql <<SQL
 CREATE TABLE parent (
@@ -1257,7 +1271,6 @@ SQL
 }
 
 @test "diff: keyless sql diffs" {
-
     dolt sql -q "create table t(pk int, val int)"
     dolt add .
     dolt commit -am "cm1"
@@ -1648,7 +1661,6 @@ SQL
     [[ "$output" =~ "-        update average_age set average = (SELECT AVG(age) FROM people);" ]] || false
     [[ "$output" =~ "-CREATE VIEW adults AS SELECT name FROM people WHERE age >= 18;"          ]] || false
     [[ "$output" =~ "+CREATE VIEW adults AS SELECT nickname FROM people WHERE age >= 18;"      ]] || false
-
 }
 
 @test "diff: get diff on dolt_schemas table with different result output formats" {

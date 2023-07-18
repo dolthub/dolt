@@ -20,6 +20,8 @@ CREATE TABLE table3 (pk int PRIMARY KEY);
 CREATE TABLE generated_foo (pk int PRIMARY KEY);
 SQL
   dolt add table1
+  # Note that we leave the table in a dirty state, which is useful to several tests, and harmless to others. For
+  # some, you need to ensure the repo is clean, and you should run `dolt reset --hard` at the beginning of the test.
   cd ..
 }
 
@@ -230,6 +232,7 @@ get_commit_hash_at() {
 }
 
 @test "sql-local-remote: verify simple dolt checkout behavior." {
+    skip # currently checkout with a server is not supported
     start_sql_server altDB
     cd altDB
 
@@ -1070,4 +1073,17 @@ SQL
   [[ $output =~ "| other      | staged   | modified |" ]] || false
 
   [[ "$localCherryPickOutput" == "$remoteCherryPickOutput" ]] || false
+}
+
+@test "sql-local-remote: verify checkout will fail early when a server is running" {
+  cd altDB
+  dolt reset --hard # Ensure database is clean to start.
+  start_sql_server altDB
+
+  dolt branch br
+
+  run dolt checkout br
+  [ $status -eq 1 ]
+
+  [[ $output =~ "dolt checkout can not currently be used when there is a local server running. Please stop your dolt sql-server and try again." ]] || false
 }

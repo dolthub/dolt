@@ -24,6 +24,7 @@ import (
 	"github.com/gocraft/dbr/v2/dialect"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -92,7 +93,18 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usagePrt)
 	}
-	defer closeFunc()
+	if closeFunc != nil {
+		defer closeFunc()
+	}
+
+	_, ok := queryEngine.(*engine.SqlEngine)
+	if !ok {
+		// Currently checkout does not fully support remote connections. Prevent them from being used until we have better
+		// CLI session support.
+		msg := fmt.Sprintf(cli.RemoteUnsupportedMsg, commandStr)
+		cli.Println(msg)
+		return 1
+	}
 
 	branchOrTrack := apr.Contains(cli.CheckoutCoBranch) || apr.Contains(cli.TrackFlag)
 	if (branchOrTrack && apr.NArg() > 1) || (!branchOrTrack && apr.NArg() == 0) {
@@ -144,7 +156,6 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	}
 
 	var message string
-	var ok bool
 	if message, ok = rows[0][1].(string); !ok {
 		return HandleVErrAndExitCode(errhand.BuildDError("expected string value for 'message' field in response from %s ", sqlQuery).Build(), usagePrt)
 	}
