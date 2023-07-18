@@ -269,11 +269,9 @@ func sqlHandleVErrAndExitCode(queryist cli.Queryist, verr errhand.VerboseError, 
 			if _, ok := queryist.(*engine.SqlEngine); !ok {
 				// We are in a context where we are attempting to connect to a remote database. These errors
 				// are unstructured, so we add some additional context around them.
-				tmpMsg := `You've encountered a new behavior in dolt which is not fully documented yet.
-A local dolt server is using your dolt data directory, and in an attempt to service your request, we are attempting to 
-connect to it. That has failed. You should stop the server, or reach out to @macneale on https://discord.gg/gqr7K4VNKe
-for help.`
-				cli.PrintErrln(tmpMsg)
+				remoteUnsupportedMsg := `This command has not yet been migrated to function in a remote context. Please shut down your 
+server and try again. Or, reach out to us on discord (https://discord.gg/gqr7K4VNKe) if you need help.`
+				cli.PrintErrln(remoteUnsupportedMsg)
 				msg = fmt.Sprintf("A local server is running, and dolt is failing to connect. Error connecting to remote database: \"%s\".\n", msg)
 			}
 			cli.PrintErrln(msg)
