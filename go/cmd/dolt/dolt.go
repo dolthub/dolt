@@ -527,7 +527,7 @@ func runMain() int {
 		lateBind, err := buildLateBinder(ctx, dEnv.FS, mrEnv, creds, apr, subcommandName, verboseEngineSetup)
 
 		if err != nil {
-			cli.PrintErrln(color.RedString("Failure to Load SQL Engine: %v", err))
+			cli.PrintErrln(color.RedString("%v", err))
 			return 1
 		}
 
@@ -569,7 +569,7 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 	host, hasHost := apr.GetValue(cli.HostFlag)
 	if hasHost {
 		if !hasUseDb && subcommandName != "sql" {
-			return nil, fmt.Errorf("The --host flag requires the additional --use-db flag.")
+			return nil, fmt.Errorf("The --%s flag requires the additional --%s flag.", cli.HostFlag, commands.UseDbFlag)
 		}
 
 		port, hasPort := apr.GetInt(cli.PortFlag)
@@ -579,6 +579,11 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 		useTLS := !apr.Contains(cli.NoTLSFlag)
 
 		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, host, port, useTLS, useDb)
+	} else {
+		_, hasPort := apr.GetInt(cli.PortFlag)
+		if hasPort {
+			return nil, fmt.Errorf("The --%s flag is only meaningful with the --%s flag.", cli.PortFlag, cli.HostFlag)
+		}
 	}
 
 	if hasUseDb {
