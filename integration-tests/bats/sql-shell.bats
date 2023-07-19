@@ -84,7 +84,6 @@ teardown() {
 }
 
 @test "sql-shell: delimiter" {
-
     skiponwindows "Need to install expect and make this script work on windows."
     mkdir doltsql
     cd doltsql
