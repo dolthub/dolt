@@ -558,7 +558,7 @@ func runMain() int {
 	return res
 }
 
-// buildLateBinder builds a LateBindQueryist for which is used to obtain the Querist used for the length of the
+// buildLateBinder builds a LateBindQueryist for which is used to obtain the Queryist used for the length of the
 // command execution.
 func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, creds *cli.UserPassword, apr *argparser.ArgParseResults, subcommandName string, verbose bool) (cli.LateBindQueryist, error) {
 
