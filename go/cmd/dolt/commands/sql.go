@@ -266,14 +266,6 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 func sqlHandleVErrAndExitCode(queryist cli.Queryist, verr errhand.VerboseError, usage cli.UsagePrinter) int {
 	if verr != nil {
 		if msg := verr.Verbose(); strings.TrimSpace(msg) != "" {
-			if _, ok := queryist.(*engine.SqlEngine); !ok {
-				// We are in a context where we are attempting to connect to a remote database. These errors
-				// are unstructured, so we add some additional context around them.
-				remoteUnsupportedMsg := `This command has not yet been migrated to function in a remote context. Please shut down your 
-server and try again. Or, reach out to us on discord (https://discord.gg/gqr7K4VNKe) if you need help.`
-				cli.PrintErrln(remoteUnsupportedMsg)
-				msg = fmt.Sprintf("A local server is running, and dolt is failing to connect. Error connecting to remote database: \"%s\".\n", msg)
-			}
 			cli.PrintErrln(msg)
 		}
 
