@@ -537,7 +537,7 @@ func runMain() int {
 			return 1
 		}
 	} else {
-		if apr.NArg() > 0 {
+		if args[0] != subcommandName {
 			cli.PrintErrln(color.RedString(`Global arguments are not supported for this command as it has not yet 
 been migrated to function in a remote context. Please shut down your server and try again. Or, reach out to us on discord 
 (https://discord.gg/gqr7K4VNKe) if you need help.`))
