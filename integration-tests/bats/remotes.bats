@@ -940,12 +940,12 @@ SQL
     [[ ! "$output" =~ "test commit" ]] || false
     run dolt merge origin/main
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "up-to-date" ]]
+    [[ "$output" =~ "Already up to date." ]] || false
     run dolt fetch
     [ "$status" -eq 0 ]
     run dolt merge origin/main
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Fast-forward" ]]
+    [[ "$output" =~ "Fast-forward" ]] || false
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test commit" ]] || false
@@ -974,12 +974,12 @@ SQL
     cd "dolt-repo-clones/test-repo"
     run dolt merge remotes/origin/main
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date" ]]
+    [[ "$output" =~ "Already up to date." ]] || false
     run dolt fetch origin main
     [ "$status" -eq 0 ]
     run dolt merge remotes/origin/main
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Fast-forward" ]]
+    [[ "$output" =~ "Fast-forward" ]] || false
 }
 
 @test "remotes: try to push a remote that is behind tip" {

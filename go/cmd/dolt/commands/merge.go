@@ -149,19 +149,21 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 	// calculate merge stats
 	if !apr.Contains(cli.AbortParam) {
-		mergeHash, err := getHashOf(queryist, sqlCtx, apr.Arg(0))
-		if err != nil {
+		//todo: refs with the `remotes/` prefix will fail to get a hash
+		mergeHash, mergeHashErr := getHashOf(queryist, sqlCtx, apr.Arg(0))
+		if mergeHashErr != nil {
 			cli.Println("merge finished, but failed to get hash of merge ref")
-			cli.Println(err.Error())
-			return 0
+			cli.Println(mergeHashErr.Error())
 		}
-		headHash, err := getHashOf(queryist, sqlCtx, "HEAD")
-		if err != nil {
+		headHash, headhHashErr := getHashOf(queryist, sqlCtx, "HEAD")
+		if headhHashErr != nil {
 			cli.Println("merge finished, but failed to get hash of HEAD")
-			cli.Println(err.Error())
-			return 0
+			cli.Println(headhHashErr.Error())
 		}
-		cli.Println("Updating", headHash+".."+mergeHash)
+		if mergeHashErr == nil && headhHashErr == nil {
+			cli.Println("Updating", headHash+".."+mergeHash)
+		}
+
 		if apr.Contains(cli.SquashParam) {
 			cli.Println("Squash commit -- not updating HEAD")
 		}
