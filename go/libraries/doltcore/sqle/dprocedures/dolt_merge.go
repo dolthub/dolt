@@ -176,7 +176,7 @@ func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots,
 	}
 
 	if len(spec.StompedTblNames) != 0 {
-		return ws, "", noConflictsOrViolations, threeWayMerge, fmt.Errorf("error: local changes would be stomped by merge:\n\t%s\n", strings.Join(spec.StompedTblNames, "\n\t"))
+		return ws, "", noConflictsOrViolations, threeWayMerge, fmt.Errorf("error: local changes would be stomped by merge:\n\t%s\n Please commit your changes before you merge.", strings.Join(spec.StompedTblNames, "\n\t"))
 	}
 
 	dbData, ok := sess.GetDbData(ctx, dbName)

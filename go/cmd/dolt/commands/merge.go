@@ -162,6 +162,9 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			return 0
 		}
 		cli.Println("Updating", headHash+".."+mergeHash)
+		if apr.Contains(cli.SquashParam) {
+			cli.Println("Squash commit -- not updating HEAD")
+		}
 
 		if apr.Contains(cli.NoCommitFlag) {
 			cli.Println("Automatic merge went well; stopped before committing as requested")
@@ -182,8 +185,8 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				mergeStats, err = calculateMergeStats(queryist, sqlCtx, mergeStats, "HEAD^1", "HEAD")
 			}
 			if err != nil {
-				if err.Error() == "Already up to date." {
-					cli.Println(err.Error())
+				if err.Error() == "Already up to date." || err.Error() == "error: unable to get diff summary from HEAD^1 to HEAD: invalid ancestor spec" {
+					cli.Println("Already up to date.")
 					return 0
 				}
 				cli.Println("merge successful, but could not calculate stats")
