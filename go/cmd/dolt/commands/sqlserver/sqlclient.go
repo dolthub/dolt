@@ -475,7 +475,7 @@ func (c ConnectionQueryist) Query(ctx *sql.Context, query string) (sql.Schema, s
 
 // BuildConnectionStringQueryist returns a Queryist that connects to the server specified by the given server config. Presence in this
 // module isn't ideal, but it's the only way to get the server config into the queryist.
-func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argparser.ArgParseResults, port int, database string) (cli.LateBindQueryist, error) {
+func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argparser.ArgParseResults, host string, port int, useTLS bool, database string) (cli.LateBindQueryist, error) {
 	clientConfig, err := GetClientConfig(cwdFS, creds, apr)
 	if err != nil {
 		return nil, err
@@ -486,7 +486,11 @@ func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, c
 		return nil, err
 	}
 
-	parsedMySQLConfig.Addr = fmt.Sprintf("localhost:%d", port)
+	parsedMySQLConfig.Addr = fmt.Sprintf("%s:%d", host, port)
+
+	if useTLS {
+		parsedMySQLConfig.TLSConfig = "true"
+	}
 
 	mysqlConnector, err := mysqlDriver.NewConnector(parsedMySQLConfig)
 	if err != nil {
