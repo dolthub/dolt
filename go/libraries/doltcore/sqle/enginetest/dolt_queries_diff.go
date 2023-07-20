@@ -3124,29 +3124,21 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		SetUpScript: []string{
 			"set @Commit0 = HashOf('HEAD');",
 			"create table t (pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int comment 'tag:5');",
-			"call dolt_add('.')",
 			"insert into t values (0,1,2,3,4,5), (1,1,2,3,4,5);",
-			"set @Commit1 = '';",
-			"call dolt_commit_hash_out(@Commit1, '-am', 'inserting two rows into table t');",
+			"call dolt_commit('-Am', 'inserting two rows into table t');",
 			"alter table t rename column c1 to c0",
 			"alter table t drop column c4",
 			"alter table t add c6 bigint",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch(@Commit1, 'WORKING', 't')",
+				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('HEAD', 'WORKING', 't')",
 				Expected: []sql.Row{
 					{1, "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c1` TO `c0`;"},
 					{2, "t", "schema", "ALTER TABLE `t` DROP `c4`;"},
 					{3, "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
-				},
-				ExpectedWarning:       1235,
-				ExpectedWarningsCount: 1,
-			},
-			{
-				Query: "SHOW WARNINGS;",
-				Expected: []sql.Row{
-					{"Warning", 1235, "Incompatible schema change, skipping data diff for table 't'"},
+					{4, "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=0;"},
+					{5, "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=1;"},
 				},
 			},
 			{
@@ -3155,6 +3147,8 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 					{1, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c1` TO `c0`;"},
 					{2, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` DROP `c4`;"},
 					{3, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
+					{4, "STAGED", "WORKING", "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=0;"},
+					{5, "STAGED", "WORKING", "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=1;"},
 				},
 			},
 			{
@@ -3163,6 +3157,8 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 					{1, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c1` TO `c0`;"},
 					{2, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` DROP `c4`;"},
 					{3, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
+					{4, "STAGED", "WORKING", "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=0;"},
+					{5, "STAGED", "WORKING", "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=1;"},
 				},
 			},
 			{
@@ -3171,6 +3167,8 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 					{1, "WORKING", "STAGED", "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c0` TO `c1`;"},
 					{2, "WORKING", "STAGED", "t", "schema", "ALTER TABLE `t` DROP `c6`;"},
 					{3, "WORKING", "STAGED", "t", "schema", "ALTER TABLE `t` ADD `c4` int;"},
+					{4, "WORKING", "STAGED", "t", "data", "UPDATE `t` SET `c1`=1,`c4`=4 WHERE `pk`=0;"},
+					{5, "WORKING", "STAGED", "t", "data", "UPDATE `t` SET `c1`=1,`c4`=4 WHERE `pk`=1;"},
 				},
 			},
 			{
@@ -3199,6 +3197,8 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 					{1, "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c1` TO `c0`;"},
 					{2, "t", "schema", "ALTER TABLE `t` DROP `c4`;"},
 					{3, "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
+					{4, "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=0;"},
+					{5, "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=1;"},
 				},
 			},
 		},
@@ -3208,54 +3208,60 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
 			"call dolt_add('.')",
-			"set @Commit1 = '';",
-			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
+			"call dolt_commit('-am', 'creating table t');",
+			"set @Commit1 = hashof('HEAD');",
 
 			"insert into t values(1, 'one', 'two');",
-			"set @Commit2 = '';",
-			"call dolt_commit_hash_out(@Commit2, '-am', 'inserting row 1 into t in main');",
+			"call dolt_commit('-am', 'inserting row 1 into t in main');",
+			"set @Commit2 = hashof('HEAD');",
 
 			"CALL DOLT_checkout('-b', 'branch1');",
 			"alter table t drop column c2;",
-			"set @Commit3 = '';",
-			"call dolt_commit_hash_out(@Commit3, '-am', 'dropping column c2 in branch1');",
+			"call dolt_commit('-am', 'dropping column c2 in branch1');",
+			"set @Commit3 = hashof('HEAD');",
 
 			"delete from t where pk=1;",
-			"set @Commit4 = '';",
-			"call dolt_commit_hash_out(@Commit4, '-am', 'deleting row 1 in branch1');",
+			"call dolt_commit('-am', 'deleting row 1 in branch1');",
+			"set @Commit4 = hashof('HEAD');",
 
 			"insert into t values (2, 'two');",
-			"set @Commit5 = '';",
-			"call dolt_commit_hash_out(@Commit5, '-am', 'inserting row 2 in branch1');",
+			"call dolt_commit('-am', 'inserting row 2 in branch1');",
+			"set @Commit5 = hashof('HEAD');",
 
 			"CALL DOLT_checkout('main');",
 			"insert into t values (2, 'two', 'three');",
-			"set @Commit6 = '';",
-			"call dolt_commit_hash_out(@Commit6, '-am', 'inserting row 2 in main');",
+			"call dolt_commit('-am', 'inserting row 2 in main');",
+			"set @Commit6 = hashof('HEAD');",
 
 			"create table newtable (pk int primary key);",
 			"insert into newtable values (1), (2);",
-			"set @Commit7 = '';",
-			"call dolt_commit_hash_out(@Commit7, '-Am', 'new table newtable');",
+			"call dolt_commit('-Am', 'new table newtable');",
+			"set @Commit7 = hashof('HEAD');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main', 'branch1', 't');",
-				Expected: []sql.Row{{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"}},
+				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main', 'branch1', 't');",
+				Expected: []sql.Row{
+					{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
+					{2, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
+					{3, "t", "data", "UPDATE `t` SET  WHERE `pk`=2;"},
+				},
 			},
 			{
-				Query:    "SHOW WARNINGS",
-				Expected: []sql.Row{{"Warning", 1235, "Incompatible schema change, skipping data diff for table 't'"}},
-			},
-			{
-				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main..branch1', 't');",
-				Expected: []sql.Row{{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"}},
+				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main..branch1', 't');",
+				Expected: []sql.Row{
+					{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
+					{2, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
+					{3, "t", "data", "UPDATE `t` SET  WHERE `pk`=2;"},
+				},
 			},
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main', 'branch1');",
 				Expected: []sql.Row{
 					{1, "newtable", "schema", "DROP TABLE `newtable`;"},
 					{2, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
+					{3, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
+					{4, "t", "data", "UPDATE `t` SET  WHERE `pk`=2;"},
 				},
 			},
 			{
@@ -3263,32 +3269,58 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{1, "newtable", "schema", "DROP TABLE `newtable`;"},
 					{2, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
+					{3, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
+					{4, "t", "data", "UPDATE `t` SET  WHERE `pk`=2;"},
 				},
 			},
 			{
-				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('branch1', 'main', 't');",
-				Expected: []sql.Row{{1, "t", "schema", "ALTER TABLE `t` ADD `c2` varchar(20);"}},
+				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('branch1', 'main', 't');",
+				Expected: []sql.Row{
+					{1, "t", "schema", "ALTER TABLE `t` ADD `c2` varchar(20);"},
+					{2, "t", "data", "INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (1,'one','two');"},
+					{3, "t", "data", "UPDATE `t` SET `c2`='three' WHERE `pk`=2;"},
+				},
 			},
 			{
-				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('branch1..main', 't');",
-				Expected: []sql.Row{{1, "t", "schema", "ALTER TABLE `t` ADD `c2` varchar(20);"}},
+				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('branch1..main', 't');",
+				Expected: []sql.Row{
+					{1, "t", "schema", "ALTER TABLE `t` ADD `c2` varchar(20);"},
+					{2, "t", "data", "INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (1,'one','two');"},
+					{3, "t", "data", "UPDATE `t` SET `c2`='three' WHERE `pk`=2;"},
+				},
 			},
 			{
-				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main~2', 'branch1', 't');",
-				Expected: []sql.Row{{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"}},
+				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main~2', 'branch1', 't');",
+				Expected: []sql.Row{
+					{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
+					{2, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
+					{3, "t", "data", "INSERT INTO `t` (`pk`,`c1`) VALUES (2,'two');"},
+				},
 			},
 			{
-				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main~2..branch1', 't');",
-				Expected: []sql.Row{{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"}},
+				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main~2..branch1', 't');",
+				Expected: []sql.Row{
+					{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
+					{2, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
+					{3, "t", "data", "INSERT INTO `t` (`pk`,`c1`) VALUES (2,'two');"},
+				},
 			},
 			// Three dot
 			{
-				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main...branch1', 't');",
-				Expected: []sql.Row{{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"}},
+				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main...branch1', 't');",
+				Expected: []sql.Row{
+					{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
+					{2, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
+					{3, "t", "data", "INSERT INTO `t` (`pk`,`c1`) VALUES (2,'two');"},
+				},
 			},
 			{
-				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main...branch1');",
-				Expected: []sql.Row{{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"}},
+				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main...branch1');",
+				Expected: []sql.Row{
+					{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
+					{2, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
+					{3, "t", "data", "INSERT INTO `t` (`pk`,`c1`) VALUES (2,'two');"},
+				},
 			},
 			{
 				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('branch1...main', 't');",
@@ -3371,8 +3403,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		SetUpScript: []string{
 			"CREATE TABLE parent (id int PRIMARY KEY, id_ext int, v1 int, v2 text COMMENT 'tag:1', INDEX v1 (v1));",
 			"CREATE TABLE child (id int primary key, v1 int);",
-			"call dolt_add('.')",
-			"call dolt_commit('-am', 'new tables')",
+			"call dolt_commit('-Am', 'new tables')",
 			"ALTER TABLE child ADD CONSTRAINT fk_named FOREIGN KEY (v1) REFERENCES parent(v1);",
 			"insert into parent values (0, 1, 2, NULL);",
 			"ALTER TABLE parent DROP PRIMARY KEY;",
@@ -3396,12 +3427,11 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 					{3, "STAGED", "parent", "schema", "ALTER TABLE `parent` DROP PRIMARY KEY;"},
 					{4, "STAGED", "parent", "schema", "ALTER TABLE `parent` ADD PRIMARY KEY (id,id_ext);"},
 				},
-				ExpectedWarningsCount: 2,
+				ExpectedWarningsCount: 1,
 			},
 			{
 				Query: "SHOW WARNINGS;",
 				Expected: []sql.Row{
-					{"Warning", 1235, "Incompatible schema change, skipping data diff for table 'child'"},
 					{"Warning", 1235, "Primary key sets differ between revisions for table 'parent', skipping data diff"},
 				},
 			},
@@ -3416,6 +3446,38 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('HEAD', 'WORKING')",
 				Expected: []sql.Row{{1, "foo", "schema", "CREATE TABLE `foo` (\n  `pk` int NOT NULL,\n  `c1` int,\n  PRIMARY KEY (`pk`),\n  CONSTRAINT `foo_chk_eq3jn5ra` CHECK ((c1 > 3))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"}},
+			},
+		},
+	},
+	{
+		Name: "charset and collation changes",
+		SetUpScript: []string{
+			"create table t (pk int primary key) collate='utf8mb4_0900_bin';",
+			"call dolt_commit('-Am', 'empty table')",
+			"set @commit0=hashof('HEAD');",
+			"insert into t values (1)",
+			"alter table t collate='utf8mb4_0900_ai_ci';",
+			"call dolt_commit('-am', 'inserting a row and altering the collation')",
+			"set @commit1=hashof('HEAD');",
+			"alter table t CHARACTER SET='utf8mb3';",
+			"insert into t values (2)",
+			"call dolt_commit('-am', 'inserting a row and altering the collation')",
+			"set @commit2=hashof('HEAD');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from dolt_patch(@commit1, @commit0);",
+				Expected: []sql.Row{
+					{1, doltCommit, doltCommit, "t", "schema", "ALTER TABLE `t` COLLATE='utf8mb4_0900_bin';"},
+					{2, doltCommit, doltCommit, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
+				},
+			},
+			{
+				Query: "select * from dolt_patch(@commit1, @commit2);",
+				Expected: []sql.Row{
+					{1, doltCommit, doltCommit, "t", "schema", "ALTER TABLE `t` COLLATE='utf8mb3_general_ci';"},
+					{2, doltCommit, doltCommit, "t", "data", "INSERT INTO `t` (`pk`) VALUES (2);"},
+				},
 			},
 		},
 	},
@@ -3439,6 +3501,10 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"ALTER TABLE `t` DROP `b`;"},
 					{"ALTER TABLE `t` ADD `d` int;"},
+					{"UPDATE `t` SET  WHERE `pk`=1;"},
+					{"UPDATE `t` SET  WHERE `pk`=2;"},
+					{"DELETE FROM `t` WHERE `pk`=3;"},
+					{"INSERT INTO `t` (`pk`,`a`,`c`,`d`) VALUES (7,7,7,7);"},
 				},
 			},
 		},
