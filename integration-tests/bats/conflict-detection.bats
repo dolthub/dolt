@@ -43,7 +43,7 @@ SQL
 
     run dolt merge other -m "merge"
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "error: Your local changes to the following tables would be overwritten by merge:" ]] || false
+    [[ "$output" =~ "error: local changes would be stomped by merge:" ]] || false
     [[ "$output" =~ "test" ]] || false
     [[ "$output" =~ "Please commit your changes before you merge." ]] || false
 

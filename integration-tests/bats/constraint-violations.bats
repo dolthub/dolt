@@ -42,7 +42,7 @@ SQL
     [[ "$output" =~ "test" ]] || false
     run dolt merge other
     log_status_eq "1"
-    [[ "$output" =~ "Merging is not possible because you have not committed an active merge" ]] || false
+    [[ "$output" =~ "merging is not possible because you have not committed an active merge" ]] || false
 
     # we can stage conflicts, but not commit them
     dolt add test

@@ -176,7 +176,7 @@ func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots,
 	}
 
 	if len(spec.StompedTblNames) != 0 {
-		return ws, "", noConflictsOrViolations, threeWayMerge, fmt.Errorf("error: local changes would be stomped by merge:\n\t%s\n", strings.Join(spec.StompedTblNames, "\n\t"))
+		return ws, "", noConflictsOrViolations, threeWayMerge, fmt.Errorf("error: local changes would be stomped by merge:\n\t%s\n Please commit your changes before you merge.", strings.Join(spec.StompedTblNames, "\n\t"))
 	}
 
 	dbData, ok := sess.GetDbData(ctx, dbName)
@@ -197,7 +197,7 @@ func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots,
 	if canFF {
 		if spec.Noff {
 			var commit *doltdb.Commit
-			ws, commit, err = executeNoFFMerge(ctx, sess, spec, dbName, ws, dbData)
+			ws, commit, err = executeNoFFMerge(ctx, sess, spec, dbName, ws, dbData, noCommit)
 			if err == doltdb.ErrUnresolvedConflictsOrViolations {
 				// if there are unresolved conflicts, write the resulting working set back to the session and return an
 				// error message
@@ -372,6 +372,7 @@ func executeNoFFMerge(
 	dbName string,
 	ws *doltdb.WorkingSet,
 	dbData env.DbData,
+	noCommit bool,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 	mergeRoot, err := spec.MergeC.GetRootValue(ctx)
 	if err != nil {
@@ -394,6 +395,21 @@ func executeNoFFMerge(
 
 	// The roots need refreshing after the above
 	roots, _ := dSess.GetRoots(ctx, dbName)
+
+	if noCommit {
+		// stage all changes
+		roots, err = actions.StageAllTables(ctx, roots, true)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		err = dSess.SetRoots(ctx, dbName, roots)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		return ws.WithStagedRoot(roots.Staged), nil, nil
+	}
 
 	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{
 		Message:    spec.Msg,

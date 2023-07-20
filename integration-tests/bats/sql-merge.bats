@@ -930,7 +930,7 @@ SQL
     dolt sql -q "alter table t drop constraint c"
     run dolt sql -q "show create table t"
     log_status_eq 0
-    [[ !("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
+    [[ ! ("$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))") ]] || false
     dolt commit -am "changes to other"
 
     dolt checkout main
