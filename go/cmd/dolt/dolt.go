@@ -562,12 +562,13 @@ func runMain() int {
 	} else {
 		if args[0] != subcommandName {
 			if supportsGlobalArgs(subcommandName) {
-				cli.PrintErrln(color.RedString(`Global arguments are not supported for this command as it has not yet 
-been migrated to function in a remote context. Please shut down your server and try again. Or, reach out to us on discord 
-(https://discord.gg/gqr7K4VNKe) if you need help.`))
+				cli.PrintErrln(
+					`Global arguments are not supported for this command as it has not yet been migrated to function in a remote context. 
+If you're interested in running this command against a remote host, hit us up on discord (https://discord.gg/gqr7K4VNKe).`)
 			} else {
-				cli.PrintErrln(color.RedString(`This command does not support global arguments. Please try again without
-the global arguments or check the docs for questions about usage.`))
+				cli.PrintErrln(
+					`This command does not support global arguments. Please try again without the global arguments 
+or check the docs for questions about usage.`)
 			}
 			return 1
 		}
