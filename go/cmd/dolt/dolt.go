@@ -152,8 +152,31 @@ var commandsWithoutCliCtx = []cli.Command{
 	&commands.Assist{},
 }
 
+var commandsWithoutGlobalArgSupport = []cli.Command{
+	commands.InitCmd{},
+	commands.CloneCmd{},
+	docscmds.Commands,
+	commands.MigrateCmd{},
+	commands.ReadTablesCmd{},
+	commands.LoginCmd{},
+	credcmds.Commands,
+	sqlserver.SqlServerCmd{VersionStr: Version},
+	sqlserver.SqlClientCmd{VersionStr: Version},
+	commands.VersionCmd{VersionStr: Version},
+	commands.ConfigCmd{},
+}
+
 func initCliContext(commandName string) bool {
 	for _, command := range commandsWithoutCliCtx {
+		if command.Name() == commandName {
+			return false
+		}
+	}
+	return true
+}
+
+func supportsGlobalArgs(commandName string) bool {
+	for _, command := range commandsWithoutGlobalArgSupport {
 		if command.Name() == commandName {
 			return false
 		}
@@ -534,6 +557,19 @@ func runMain() int {
 		cliCtx, err = cli.NewCliContext(apr, dEnv.Config, lateBind)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Unexpected Error: %v", err))
+			return 1
+		}
+	} else {
+		if args[0] != subcommandName {
+			if supportsGlobalArgs(subcommandName) {
+				cli.PrintErrln(
+					`Global arguments are not supported for this command as it has not yet been migrated to function in a remote context. 
+If you're interested in running this command against a remote host, hit us up on discord (https://discord.gg/gqr7K4VNKe).`)
+			} else {
+				cli.PrintErrln(
+					`This command does not support global arguments. Please try again without the global arguments 
+or check the docs for questions about usage.`)
+			}
 			return 1
 		}
 	}

@@ -358,10 +358,10 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
 }
 
 @test "no-repo: check that we correctly parse args when connecting with a username that matches a subcommand" {
-    run dolt --user ls version
+    run dolt --user ls sql -q "select 1"
 
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "version" ]] || false
+    [[ "$output" =~ "1" ]] || false
 }
 
 @test "no-repo: check that we error on commands with no subcommand" {
