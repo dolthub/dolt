@@ -3503,7 +3503,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			"alter table t drop column b",
 			"alter table t add column d int",
 			"delete from t where pk = 3",
-			"update t set a = 9 where a = NULL",
+			"update t set a = 9 where a is NULL",
 			"insert into t values (7,7,7,7)",
 			"CALL dolt_commit('-am', 'modified table t')",
 		},
@@ -3513,6 +3513,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"ALTER TABLE `t` DROP `b`;"},
 					{"ALTER TABLE `t` ADD `d` int;"},
+					{"UPDATE `t` SET `a`=9 WHERE `pk`=1;"},
 					{"DELETE FROM `t` WHERE `pk`=3;"},
 					{"INSERT INTO `t` (`pk`,`a`,`c`,`d`) VALUES (7,7,7,7);"},
 				},
