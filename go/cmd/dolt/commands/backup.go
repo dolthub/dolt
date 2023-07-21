@@ -87,7 +87,7 @@ func (cmd BackupCmd) Description() string {
 }
 
 func (cmd BackupCmd) RequiresRepo() bool {
-	return false
+	return true
 }
 
 func (cmd BackupCmd) Docs() *cli.CommandDocumentation {
