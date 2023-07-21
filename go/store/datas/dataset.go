@@ -165,6 +165,7 @@ type MergeState struct {
 	fromCommitAddr      *hash.Hash
 	fromCommitSpec      string
 	unmergableTables    []string
+	IsCherryPick        bool
 
 	nomsMergeStateRef *types.Ref
 	nomsMergeState    *types.Struct

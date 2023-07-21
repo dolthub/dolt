@@ -35,6 +35,7 @@ type MergeState struct {
 	commitSpecStr    string
 	preMergeWorking  *RootValue
 	unmergableTables []string
+	IsCherryPick     bool
 }
 
 // todo(andy): this might make more sense in pkg merge
@@ -193,6 +194,18 @@ func (ws WorkingSet) StartMerge(commit *Commit, commitSpecStr string) *WorkingSe
 	return &ws
 }
 
+// TODO: godocs!
+func (ws WorkingSet) StartCherryPick(commit *Commit, commitSpecStr string) *WorkingSet {
+	ws.mergeState = &MergeState{
+		commit:          commit,
+		commitSpecStr:   commitSpecStr,
+		preMergeWorking: ws.workingRoot,
+		IsCherryPick:    true,
+	}
+
+	return &ws
+}
+
 func (ws WorkingSet) AbortMerge() *WorkingSet {
 	ws.workingRoot = ws.mergeState.PreMergeWorkingRoot()
 	ws.stagedRoot = ws.workingRoot
@@ -345,7 +358,6 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB) (
 	mergeState *datas.MergeState,
 	err error,
 ) {
-
 	if ws.stagedRoot == nil || ws.workingRoot == nil {
 		return types.Ref{}, types.Ref{}, nil, fmt.Errorf("StagedRoot and workingRoot must be set. This is a bug.")
 	}

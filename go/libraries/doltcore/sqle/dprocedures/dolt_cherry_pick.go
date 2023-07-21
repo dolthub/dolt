@@ -287,7 +287,7 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 			if err != nil {
 				return nil, "", err
 			}
-			newWorkingSet := ws.StartMerge(cherryCommit, cherryStr)
+			newWorkingSet := ws.StartCherryPick(cherryCommit, cherryStr)
 			err = dSess.SetWorkingSet(ctx, dbName, newWorkingSet)
 			if err != nil {
 				return nil, "", err

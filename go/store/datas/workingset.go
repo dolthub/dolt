@@ -202,6 +202,7 @@ func NewMergeState(
 	commit *Commit,
 	commitSpecStr string,
 	unmergableTables []string,
+	isCherryPick bool,
 ) (*MergeState, error) {
 	if vrw.Format().UsesFlatbuffers() {
 		ms := &MergeState{
@@ -209,6 +210,7 @@ func NewMergeState(
 			fromCommitAddr:      new(hash.Hash),
 			fromCommitSpec:      commitSpecStr,
 			unmergableTables:    unmergableTables,
+			IsCherryPick:        isCherryPick,
 		}
 		*ms.preMergeWorkingAddr = preMergeWorking.TargetHash()
 		*ms.fromCommitAddr = commit.Addr()
@@ -223,6 +225,7 @@ func NewMergeState(
 			return nil, err
 		}
 		return &MergeState{
+			IsCherryPick:      isCherryPick,
 			nomsMergeStateRef: &ref,
 			nomsMergeState:    &v,
 		}, nil
