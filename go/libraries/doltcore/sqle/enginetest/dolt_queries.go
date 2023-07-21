@@ -2815,6 +2815,32 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// https://github.com/dolthub/dolt/issues/6001
+		Name: "-- allows escaping arg parsing to create/delete branch names that look like flags",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from dolt_branches where name='-b';",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "call dolt_branch('--', '-b');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select count(*) from dolt_branches where name='-b';",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "call dolt_branch('-d', '-f', '--', '-b');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select count(*) from dolt_branches where name='-b';",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
 }
 
 var DoltReset = []queries.ScriptTest{
