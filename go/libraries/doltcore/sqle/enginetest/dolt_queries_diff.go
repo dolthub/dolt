@@ -3126,9 +3126,9 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			"create table t (pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int comment 'tag:5');",
 			"insert into t values (0,1,2,3,4,5), (1,1,2,3,4,5);",
 			"call dolt_commit('-Am', 'inserting two rows into table t');",
-			"alter table t rename column c1 to c0",
-			"alter table t drop column c4",
-			"alter table t add c6 bigint",
+			"alter table t rename column c1 to c0;",
+			"alter table t drop column c4;",
+			"alter table t add c6 bigint;",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -3137,6 +3137,10 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 					{1, "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c1` TO `c0`;"},
 					{2, "t", "schema", "ALTER TABLE `t` DROP `c4`;"},
 					{3, "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
+					// NOTE: These two update statements aren't technically needed, but we can't tell that from the diff.
+					//       Because the rows were altered on disk due to the `drop column` statement above, these rows
+					//       really did change on disk and we can't currently safely tell that it was ONLY the column
+					//       rename and that there weren't other updates to that column.
 					{4, "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=0;"},
 					{5, "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=1;"},
 				},
@@ -3147,6 +3151,10 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 					{1, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c1` TO `c0`;"},
 					{2, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` DROP `c4`;"},
 					{3, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
+					// NOTE: These two update statements aren't technically needed, but we can't tell that from the diff.
+					//       Because the rows were altered on disk due to the `drop column` statement above, these rows
+					//       really did change on disk and we can't currently safely tell that it was ONLY the column
+					//       rename and that there weren't other updates to that column.
 					{4, "STAGED", "WORKING", "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=0;"},
 					{5, "STAGED", "WORKING", "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=1;"},
 				},
@@ -3157,6 +3165,10 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 					{1, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c1` TO `c0`;"},
 					{2, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` DROP `c4`;"},
 					{3, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
+					// NOTE: These two update statements aren't technically needed, but we can't tell that from the diff.
+					//       Because the rows were altered on disk due to the `drop column` statement above, these rows
+					//       really did change on disk and we can't currently safely tell that it was ONLY the column
+					//       rename and that there weren't other updates to that column.
 					{4, "STAGED", "WORKING", "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=0;"},
 					{5, "STAGED", "WORKING", "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=1;"},
 				},
@@ -3167,6 +3179,10 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 					{1, "WORKING", "STAGED", "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c0` TO `c1`;"},
 					{2, "WORKING", "STAGED", "t", "schema", "ALTER TABLE `t` DROP `c6`;"},
 					{3, "WORKING", "STAGED", "t", "schema", "ALTER TABLE `t` ADD `c4` int;"},
+					// NOTE: Setting c1 in these two update statements isn't technically needed, but we can't tell that
+					//       from the diff. Because the rows were altered on disk due to the `drop column` statement above,
+					//       these rows really did change on disk and we can't currently safely tell that it was ONLY the
+					//       column rename and that there weren't other updates to that column.
 					{4, "WORKING", "STAGED", "t", "data", "UPDATE `t` SET `c1`=1,`c4`=4 WHERE `pk`=0;"},
 					{5, "WORKING", "STAGED", "t", "data", "UPDATE `t` SET `c1`=1,`c4`=4 WHERE `pk`=1;"},
 				},
@@ -3244,7 +3260,6 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
 					{2, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
-					{3, "t", "data", "UPDATE `t` SET  WHERE `pk`=2;"},
 				},
 			},
 			{
@@ -3252,7 +3267,6 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
 					{2, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
-					{3, "t", "data", "UPDATE `t` SET  WHERE `pk`=2;"},
 				},
 			},
 			{
@@ -3261,7 +3275,6 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 					{1, "newtable", "schema", "DROP TABLE `newtable`;"},
 					{2, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
 					{3, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
-					{4, "t", "data", "UPDATE `t` SET  WHERE `pk`=2;"},
 				},
 			},
 			{
@@ -3270,7 +3283,6 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 					{1, "newtable", "schema", "DROP TABLE `newtable`;"},
 					{2, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
 					{3, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
-					{4, "t", "data", "UPDATE `t` SET  WHERE `pk`=2;"},
 				},
 			},
 			{
@@ -3501,8 +3513,6 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"ALTER TABLE `t` DROP `b`;"},
 					{"ALTER TABLE `t` ADD `d` int;"},
-					{"UPDATE `t` SET  WHERE `pk`=1;"},
-					{"UPDATE `t` SET  WHERE `pk`=2;"},
 					{"DELETE FROM `t` WHERE `pk`=3;"},
 					{"INSERT INTO `t` (`pk`,`a`,`c`,`d`) VALUES (7,7,7,7);"},
 				},
