@@ -168,6 +168,7 @@ func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *Mer
 		serial.MergeStateAddFromCommitAddr(builder, fromaddroff)
 		serial.MergeStateAddFromCommitSpecStr(builder, fromspecoff)
 		serial.MergeStateAddUnmergableTables(builder, unmergableoff)
+		serial.MergeStateAddIsCherryPick(builder, mergeState.IsCherryPick)
 		mergeStateOff = serial.MergeStateEnd(builder)
 	}
 

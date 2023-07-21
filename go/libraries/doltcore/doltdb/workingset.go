@@ -317,6 +317,7 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 			commitSpecStr:    commitSpec,
 			preMergeWorking:  preMergeWorkingRoot,
 			unmergableTables: unmergableTables,
+			IsCherryPick:     dsws.MergeState.IsCherryPick,
 		}
 	}
 
@@ -391,7 +392,7 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB) (
 			return types.Ref{}, types.Ref{}, nil, err
 		}
 
-		mergeState, err = datas.NewMergeState(ctx, db.vrw, preMergeWorking, dCommit, ws.mergeState.commitSpecStr, ws.mergeState.unmergableTables)
+		mergeState, err = datas.NewMergeState(ctx, db.vrw, preMergeWorking, dCommit, ws.mergeState.commitSpecStr, ws.mergeState.unmergableTables, ws.mergeState.IsCherryPick)
 		if err != nil {
 			return types.Ref{}, types.Ref{}, nil, err
 		}

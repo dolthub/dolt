@@ -382,6 +382,7 @@ func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
 		for i := range ret.MergeState.unmergableTables {
 			ret.MergeState.unmergableTables[i] = string(mergeState.UnmergableTables(i))
 		}
+		ret.MergeState.IsCherryPick = mergeState.IsCherryPick()
 	}
 	return &ret, nil
 }
