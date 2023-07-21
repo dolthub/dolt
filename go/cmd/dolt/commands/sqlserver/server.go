@@ -27,6 +27,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -242,6 +243,7 @@ func Serve(
 
 	var remoteSrv *remotesrv.Server
 	if serverConfig.RemotesapiPort() != nil {
+
 		port := *serverConfig.RemotesapiPort()
 		if remoteSrvSqlCtx, err := sqlEngine.NewDefaultContext(ctx); err == nil {
 			listenaddr := fmt.Sprintf(":%d", port)
@@ -251,7 +253,11 @@ func Serve(
 				HttpListenAddr: listenaddr,
 				GrpcListenAddr: listenaddr,
 			})
-			args = sqle.WithUserPasswordAuth(args, remotesrv.UserAuth{User: serverConfig.User(), Password: serverConfig.Password()})
+
+			authen := newAuthenticator(remoteSrvSqlCtx, serverConfig, sqlEngine)
+			shouldAuth := len(serverConfig.User()) > 0 || len(serverConfig.Password()) > 0
+			args = sqle.WithUserPasswordAuth(args, &authen, shouldAuth)
+
 			args.TLSConfig = serverConf.TLSConfig
 			remoteSrv, err = remotesrv.NewServer(args)
 			if err != nil {
@@ -355,6 +361,30 @@ func Serve(
 	}
 
 	return
+}
+
+type remotesapiAuth struct {
+	ctx          *sql.Context
+	serverConfig ServerConfig
+	sqlEngine    *engine.SqlEngine
+}
+
+func newAuthenticator(ctx *sql.Context, serverConfig ServerConfig, sqlEngine *engine.SqlEngine) remotesrv.Authenticator {
+	return &remotesapiAuth{ctx, serverConfig, sqlEngine}
+}
+
+func (r *remotesapiAuth) Authenticate(ctx context.Context, creds *remotesrv.RequestCredentials) bool {
+	if creds == nil {
+		return true
+	}
+	if r.serverConfig.User() == creds.Username {
+		return r.serverConfig.Password() == creds.Password
+	}
+
+	r.ctx.Session.SetClient(sql.Client{User: creds.Username, Address: "localhost", Capabilities: 0})
+
+	privOp := sql.NewDynamicPrivilegedOperation(plan.DynamicPrivilege_CloneAdmin)
+	return r.sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.UserHasPrivileges(r.ctx, privOp)
 }
 
 func LoadClusterTLSConfig(cfg cluster.Config) (*tls.Config, error) {

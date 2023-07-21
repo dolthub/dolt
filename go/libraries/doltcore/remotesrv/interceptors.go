@@ -16,9 +16,7 @@ package remotesrv
 
 import (
 	"context"
-	"crypto/subtle"
 	"encoding/base64"
-	"fmt"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -28,14 +26,19 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type UserAuth struct {
-	User     string
+type RequestCredentials struct {
+	Username string
 	Password string
 }
 
 type ServerInterceptor struct {
-	Lgr              *logrus.Entry
-	ExpectedUserAuth UserAuth
+	Lgr           *logrus.Entry
+	Authenticator *Authenticator
+	ShouldAuth    bool
+}
+
+type Authenticator interface {
+	Authenticate(ctx context.Context, creds *RequestCredentials) bool
 }
 
 func (si *ServerInterceptor) Stream() grpc.StreamServerInterceptor {
@@ -66,9 +69,10 @@ func (si *ServerInterceptor) Options() []grpc.ServerOption {
 }
 
 func (si *ServerInterceptor) authenticate(ctx context.Context) error {
-	if len(si.ExpectedUserAuth.User) == 0 && len(si.ExpectedUserAuth.Password) == 0 {
+	if !si.ShouldAuth || si.Authenticator == nil {
 		return nil
 	}
+
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		auths := md.Get("authorization")
 		if len(auths) != 1 {
@@ -86,14 +90,13 @@ func (si *ServerInterceptor) authenticate(ctx context.Context) error {
 			si.Lgr.Infof("incoming request authorization header failed to decode: %v", err)
 			return status.Error(codes.Unauthenticated, "unauthenticated")
 		}
-		uExp := []byte(fmt.Sprintf("%s:%s", si.ExpectedUserAuth.User, si.ExpectedUserAuth.Password))
-		compare := subtle.ConstantTimeCompare(uDec, uExp)
-		if compare == 0 {
-
-			si.Lgr.Infof("incoming request authorization header failed to match")
+		userPass := strings.Split(string(uDec), ":")
+		authen := *si.Authenticator
+		if authed := authen.Authenticate(ctx, &RequestCredentials{Username: userPass[0], Password: userPass[1]}); !authed {
 			return status.Error(codes.Unauthenticated, "unauthenticated")
 		}
 		return nil
 	}
+
 	return status.Error(codes.Unauthenticated, "unauthenticated")
 }

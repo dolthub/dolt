@@ -161,11 +161,10 @@ SQL
     [[ "$output" =~ "| 5 " ]] || false
 }
 
-@test "sql-server-remotesrv: can read from sql-server with --remotesapi-port with clone/fetch/pull authentication" {
+@test "sql-server-remotesrv: clone/fetch/pull from remotesapi port with authentication" {
     mkdir remote
     cd remote
     dolt init
-    dolt --privilege-file=privs.json sql -q "CREATE USER user IDENTIFIED BY 'pass0'"
     dolt sql -q 'create table vals (i int);'
     dolt sql -q 'insert into vals (i) values (1), (2), (3), (4), (5);'
     dolt add vals
@@ -233,7 +232,86 @@ SQL
     [[ "$output" =~ "11" ]] || false
 }
 
-@test "sql-server-remotesrv: dolt clone without authentication errors" {
+@test "sql-server-remotesrv: clone/fetch/pull from remotesapi port with clone_admin authentication" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q 'create table vals (i int);'
+    dolt sql -q 'insert into vals (i) values (1), (2), (3), (4), (5);'
+    dolt add vals
+    dolt commit -m 'initial vals.'
+
+    dolt sql-server --port 3307 -u user0  -p pass0 --remotesapi-port 50051 &
+    srv_pid=$!
+    sleep 2 # wait for server to start so we don't lock it out
+
+    run dolt sql-client --port 3307 -u user0  -p pass0 <<SQL
+CREATE USER clone_admin_user@'%' IDENTIFIED BY 'pass1';
+GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'%';
+select user from mysql.user;
+SQL
+    [ $status -eq 0 ]
+    [[ $output =~ user0 ]] || false
+    [[ $output =~ clone_admin_user ]] || false
+
+    export DOLT_REMOTE_PASSWORD="pass1"
+    cd ../
+    dolt clone http://localhost:50051/remote repo1 -u clone_admin_user
+    cd repo1
+    run dolt ls
+    [[ "$output" =~ "vals" ]] || false
+    run dolt sql -q 'select count(*) from vals'
+    [[ "$output" =~ "5" ]] || false
+
+    dolt sql-client --port 3307 -u user0  -p pass0 <<SQL
+use remote;
+call dolt_checkout('-b', 'new_branch');
+insert into vals (i) values (6), (7), (8), (9), (10);
+call dolt_commit('-am', 'add some vals');
+SQL
+
+    run dolt branch -v -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "remotes/origin/main" ]] || false
+    [[ ! "$output" =~ "remotes/origin/new_branch" ]] || false
+
+    # No auth fetch
+    run dolt fetch
+    [[ "$status" != 0 ]] || false
+    [[ "$output" =~ "Unauthenticated" ]] || false
+
+    # # With auth fetch
+    run dolt fetch -u clone_admin_user
+    [[ "$status" -eq 0 ]] || false
+
+    run dolt branch -v -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "remotes/origin/main" ]] || false
+    [[ "$output" =~ "remotes/origin/new_branch" ]] || false
+
+    run dolt checkout new_branch
+    [[ "$status" -eq 0 ]] || false
+
+    dolt sql-client --port 3307 -u user0  -p pass0 <<SQL
+use remote;
+call dolt_checkout('new_branch');
+insert into vals (i) values (11);
+call dolt_commit('-am', 'add one val');
+SQL
+
+    # No auth pull
+    run dolt pull
+    [[ "$status" != 0 ]] || false
+    [[ "$output" =~ "Unauthenticated" ]] || false
+
+    # With auth pull
+    run dolt pull -u clone_admin_user
+    [[ "$status" -eq 0 ]] || false
+    run dolt sql -q 'select count(*) from vals;'
+    [[ "$output" =~ "11" ]] || false
+}
+
+@test "sql-server-remotesrv: dolt clone without authentication returns error" {
     mkdir remote
     cd remote
     dolt init
@@ -254,7 +332,7 @@ SQL
     [[ "$output" =~ "Unauthenticated" ]] || false
 }
 
-@test "sql-server-remotesrv: dolt clone with incorrect authentication errors" {
+@test "sql-server-remotesrv: dolt clone with incorrect authentication returns error" {
     mkdir remote
     cd remote
     dolt init

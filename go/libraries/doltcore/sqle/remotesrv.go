@@ -47,6 +47,7 @@ func (s remotesrvStore) Get(path, nbfVerStr string) (remotesrv.RemoteSrvStore, e
 			return nil, err
 		}
 	}
+
 	sdb, ok := db.(dsess.SqlDatabase)
 	if !ok {
 		return nil, remotesrv.ErrUnimplemented
@@ -67,10 +68,11 @@ func RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.ServerArgs) remotesrv.
 	return args
 }
 
-func WithUserPasswordAuth(args remotesrv.ServerArgs, userAuth remotesrv.UserAuth) remotesrv.ServerArgs {
+func WithUserPasswordAuth(args remotesrv.ServerArgs, auth *remotesrv.Authenticator, shouldAuth bool) remotesrv.ServerArgs {
 	si := remotesrv.ServerInterceptor{
-		Lgr:              args.Logger,
-		ExpectedUserAuth: userAuth,
+		Lgr:           args.Logger,
+		Authenticator: auth,
+		ShouldAuth:    shouldAuth,
 	}
 	args.Options = append(args.Options, si.Options()...)
 	return args
