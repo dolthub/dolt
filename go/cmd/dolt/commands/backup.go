@@ -87,7 +87,7 @@ func (cmd BackupCmd) Description() string {
 }
 
 func (cmd BackupCmd) RequiresRepo() bool {
-	return true
+	return false
 }
 
 func (cmd BackupCmd) Docs() *cli.CommandDocumentation {
@@ -111,6 +111,13 @@ func (cmd BackupCmd) Exec(ctx context.Context, commandStr string, args []string,
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	var verr errhand.VerboseError
+
+	// All the sub commands except `restore` require a valid environment
+	if apr.NArg() == 0 || apr.Arg(0) != cli.RestoreBackupId {
+		if !cli.CheckEnvIsValid(dEnv) {
+			return 2
+		}
+	}
 
 	switch {
 	case apr.NArg() == 0:
