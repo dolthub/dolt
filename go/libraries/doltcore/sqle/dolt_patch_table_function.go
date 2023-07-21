@@ -424,16 +424,7 @@ func canGetDataDiff(ctx *sql.Context, td diff.TableDelta) bool {
 		})
 		return false
 	}
-	// cannot sql diff
-	if td.ToSch == nil || (td.FromSch != nil && !schema.SchemasAreEqual(td.FromSch, td.ToSch)) {
-		// TODO(8/24/22 Zach): this is overly broad, we can absolutely do better
-		ctx.Session.Warn(&sql.Warning{
-			Level:   "Warning",
-			Code:    mysql.ERNotSupportedYet,
-			Message: fmt.Sprintf("Incompatible schema change, skipping data diff for table '%s'", td.ToName),
-		})
-		return false
-	}
+
 	return true
 }
 
@@ -572,6 +563,13 @@ func GetNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas map[str
 			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
 			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
 		}
+	}
+
+	// Handle charset/collation changes
+	toCollation := toSch.GetCollation()
+	fromCollation := fromSch.GetCollation()
+	if toCollation != fromCollation {
+		ddlStatements = append(ddlStatements, sqlfmt.AlterTableCollateStmt(td.ToName, fromCollation, toCollation))
 	}
 
 	return ddlStatements, nil
