@@ -168,7 +168,7 @@ func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *Mer
 		serial.MergeStateAddFromCommitAddr(builder, fromaddroff)
 		serial.MergeStateAddFromCommitSpecStr(builder, fromspecoff)
 		serial.MergeStateAddUnmergableTables(builder, unmergableoff)
-		serial.MergeStateAddIsCherryPick(builder, mergeState.IsCherryPick)
+		serial.MergeStateAddIsCherryPick(builder, mergeState.isCherryPick)
 		mergeStateOff = serial.MergeStateEnd(builder)
 	}
 
@@ -211,7 +211,7 @@ func NewMergeState(
 			fromCommitAddr:      new(hash.Hash),
 			fromCommitSpec:      commitSpecStr,
 			unmergableTables:    unmergableTables,
-			IsCherryPick:        isCherryPick,
+			isCherryPick:        isCherryPick,
 		}
 		*ms.preMergeWorkingAddr = preMergeWorking.TargetHash()
 		*ms.fromCommitAddr = commit.Addr()
@@ -226,7 +226,7 @@ func NewMergeState(
 			return nil, err
 		}
 		return &MergeState{
-			IsCherryPick:      isCherryPick,
+			isCherryPick:      isCherryPick,
 			nomsMergeStateRef: &ref,
 			nomsMergeState:    &v,
 		}, nil

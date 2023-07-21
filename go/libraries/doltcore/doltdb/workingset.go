@@ -35,7 +35,9 @@ type MergeState struct {
 	commitSpecStr    string
 	preMergeWorking  *RootValue
 	unmergableTables []string
-	IsCherryPick     bool
+	// isCherryPick is set to true when the in-progress merge is a cherry-pick. This is needed so that
+	// commit knows to NOT create a commit with multiple parents when creating a commit for a cherry-pick.
+	isCherryPick bool
 }
 
 // todo(andy): this might make more sense in pkg merge
@@ -74,6 +76,12 @@ func (m MergeState) Commit() *Commit {
 
 func (m MergeState) CommitSpecStr() string {
 	return m.commitSpecStr
+}
+
+// IsCherryPick returns true if the current merge state is for a cherry-pick operation. Cherry-picks use the same
+// code as merge, but need slightly different behavior (e.g. only recording one commit parent, instead of two).
+func (m MergeState) IsCherryPick() bool {
+	return m.isCherryPick
 }
 
 func (m MergeState) PreMergeWorkingRoot() *RootValue {
@@ -194,15 +202,17 @@ func (ws WorkingSet) StartMerge(commit *Commit, commitSpecStr string) *WorkingSe
 	return &ws
 }
 
-// TODO: godocs!
+// StartCherryPick creates and returns a new working set based off of the current |ws| with the specified |commit|
+// and |commitSpecStr| referring to the commit being cherry-picked. The returned WorkingSet records that a cherry-pick
+// operation is in progress (i.e. conflicts being resolved). Note that this function does not update the current
+// session – the returned WorkingSet must still be set using DoltSession.SetWorkingSet().
 func (ws WorkingSet) StartCherryPick(commit *Commit, commitSpecStr string) *WorkingSet {
 	ws.mergeState = &MergeState{
 		commit:          commit,
 		commitSpecStr:   commitSpecStr,
 		preMergeWorking: ws.workingRoot,
-		IsCherryPick:    true,
+		isCherryPick:    true,
 	}
-
 	return &ws
 }
 
@@ -312,12 +322,17 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 			return nil, err
 		}
 
+		isCherryPick, err := dsws.MergeState.IsCherryPick(ctx, vrw)
+		if err != nil {
+			return nil, err
+		}
+
 		mergeState = &MergeState{
 			commit:           commit,
 			commitSpecStr:    commitSpec,
 			preMergeWorking:  preMergeWorkingRoot,
 			unmergableTables: unmergableTables,
-			IsCherryPick:     dsws.MergeState.IsCherryPick,
+			isCherryPick:     isCherryPick,
 		}
 	}
 
@@ -392,7 +407,7 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB) (
 			return types.Ref{}, types.Ref{}, nil, err
 		}
 
-		mergeState, err = datas.NewMergeState(ctx, db.vrw, preMergeWorking, dCommit, ws.mergeState.commitSpecStr, ws.mergeState.unmergableTables, ws.mergeState.IsCherryPick)
+		mergeState, err = datas.NewMergeState(ctx, db.vrw, preMergeWorking, dCommit, ws.mergeState.commitSpecStr, ws.mergeState.unmergableTables, ws.mergeState.isCherryPick)
 		if err != nil {
 			return types.Ref{}, types.Ref{}, nil, err
 		}
