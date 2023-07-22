@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/abiosoft/readline"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/ishell"
@@ -38,6 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
