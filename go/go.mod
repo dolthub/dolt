@@ -19,7 +19,7 @@ require (
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.13.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
-	github.com/go-sql-driver/mysql v1.6.0
+	github.com/go-sql-driver/mysql v1.7.2-0.20230713085235-0b18dac46f7f
 	github.com/gocraft/dbr/v2 v2.7.2
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/golang/snappy v0.0.4

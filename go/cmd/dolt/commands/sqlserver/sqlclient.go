@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/abiosoft/readline"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/ishell"
@@ -481,11 +482,14 @@ func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, c
 		return nil, err
 	}
 
-	parsedMySQLConfig, err := mysqlDriver.ParseDSN(ConnectionString(clientConfig, database))
+	dbName, _ := dsess.SplitRevisionDbName(database)
+	parsedMySQLConfig, err := mysqlDriver.ParseDSN(ConnectionString(clientConfig, dbName))
 	if err != nil {
 		return nil, err
 	}
 
+	// ParseDSN currently doesn't support `/` in the db name
+	parsedMySQLConfig.DBName = database
 	parsedMySQLConfig.Addr = fmt.Sprintf("%s:%d", host, port)
 
 	if useTLS {
