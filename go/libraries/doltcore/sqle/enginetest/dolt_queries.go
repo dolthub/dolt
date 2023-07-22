@@ -4645,6 +4645,15 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				Query:    "select * from t;",
 				Expected: []sql.Row{{0}},
 			},
+			{
+				Query:    "call dolt_commit('-am', 'committing cherry-pick');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				// Assert that our new commit only has one parent (i.e. not a merge commit)
+				Query:    "select count(*) from dolt_commit_ancestors where commit_hash = hashof('HEAD');",
+				Expected: []sql.Row{{1}},
+			},
 		},
 	},
 	{
