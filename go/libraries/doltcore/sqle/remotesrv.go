@@ -68,11 +68,10 @@ func RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.ServerArgs) remotesrv.
 	return args
 }
 
-func WithUserPasswordAuth(args remotesrv.ServerArgs, auth *remotesrv.Authenticator, shouldAuth bool) remotesrv.ServerArgs {
+func WithUserPasswordAuth(args remotesrv.ServerArgs, auth remotesrv.Authenticator) remotesrv.ServerArgs {
 	si := remotesrv.ServerInterceptor{
 		Lgr:           args.Logger,
 		Authenticator: auth,
-		ShouldAuth:    shouldAuth,
 	}
 	args.Options = append(args.Options, si.Options()...)
 	return args

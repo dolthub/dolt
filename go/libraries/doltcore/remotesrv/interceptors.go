@@ -33,8 +33,7 @@ type RequestCredentials struct {
 
 type ServerInterceptor struct {
 	Lgr           *logrus.Entry
-	Authenticator *Authenticator
-	ShouldAuth    bool
+	Authenticator Authenticator
 }
 
 type Authenticator interface {
@@ -69,10 +68,6 @@ func (si *ServerInterceptor) Options() []grpc.ServerOption {
 }
 
 func (si *ServerInterceptor) authenticate(ctx context.Context) error {
-	if !si.ShouldAuth || si.Authenticator == nil {
-		return nil
-	}
-
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		auths := md.Get("authorization")
 		if len(auths) != 1 {
@@ -91,8 +86,7 @@ func (si *ServerInterceptor) authenticate(ctx context.Context) error {
 			return status.Error(codes.Unauthenticated, "unauthenticated")
 		}
 		userPass := strings.Split(string(uDec), ":")
-		authen := *si.Authenticator
-		if authed := authen.Authenticate(ctx, &RequestCredentials{Username: userPass[0], Password: userPass[1]}); !authed {
+		if authed := si.Authenticator.Authenticate(ctx, &RequestCredentials{Username: userPass[0], Password: userPass[1]}); !authed {
 			return status.Error(codes.Unauthenticated, "unauthenticated")
 		}
 		return nil

@@ -16,13 +16,17 @@ package sqlserver
 
 import (
 	"context"
+	"crypto/sha1"
+	"crypto/subtle"
 	"crypto/tls"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/server"
@@ -256,7 +260,9 @@ func Serve(
 
 			authen := newAuthenticator(remoteSrvSqlCtx, serverConfig, sqlEngine)
 			shouldAuth := len(serverConfig.User()) > 0 || len(serverConfig.Password()) > 0
-			args = sqle.WithUserPasswordAuth(args, &authen, shouldAuth)
+			if shouldAuth {
+				args = sqle.WithUserPasswordAuth(args, authen)
+			}
 
 			args.TLSConfig = serverConf.TLSConfig
 			remoteSrv, err = remotesrv.NewServer(args)
@@ -378,13 +384,31 @@ func (r *remotesapiAuth) Authenticate(ctx context.Context, creds *remotesrv.Requ
 		return true
 	}
 	if r.serverConfig.User() == creds.Username {
-		return r.serverConfig.Password() == creds.Password
+		compare := subtle.ConstantTimeCompare([]byte(r.serverConfig.Password()), []byte(creds.Password))
+		return compare != 0
 	}
 
-	r.ctx.Session.SetClient(sql.Client{User: creds.Username, Address: "localhost", Capabilities: 0})
+	user := r.sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(creds.Username, "%", false)
+	if user == nil {
+		return false
+	}
+	pass := getPassword(creds.Password)
+	if compare := subtle.ConstantTimeCompare([]byte(user.Password), []byte(pass)); compare == 0 {
+		return false
+	}
 
-	privOp := sql.NewDynamicPrivilegedOperation(plan.DynamicPrivilege_CloneAdmin)
-	return r.sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.UserHasPrivileges(r.ctx, privOp)
+	return user.PrivilegeSet.HasDynamic(plan.DynamicPrivilege_CloneAdmin)
+}
+
+func getPassword(password string) string {
+	hash := sha1.New()
+	hash.Write([]byte(password))
+	s1 := hash.Sum(nil)
+	hash.Reset()
+	hash.Write(s1)
+	s2 := hash.Sum(nil)
+	password = "*" + strings.ToUpper(hex.EncodeToString(s2))
+	return password
 }
 
 func LoadClusterTLSConfig(cfg cluster.Config) (*tls.Config, error) {
