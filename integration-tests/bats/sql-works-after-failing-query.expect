@@ -1,4 +1,4 @@
-#!/usr/bin/expect
+#!/usr/bin/expect -f
 
 set timeout 1
 spawn dolt sql
@@ -15,3 +15,4 @@ expect {
   "pid 0 is already in use" { exit 1 }
   " 1 " { exit 0 }
 }
+

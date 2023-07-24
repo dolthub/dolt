@@ -305,13 +305,20 @@ func (ap *ArgParser) ParseGlobalArgs(args []string) (apr *ArgParseResults, remai
 func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 	positionalArgs := make([]string, 0, 16)
 	namedArgs := make(map[string]string)
+	onlyPositionalArgsLeft := false
 
 	index := 0
 	for ; index < len(args); index++ {
 		arg := args[index]
 
-		if len(arg) == 0 || arg[0] != '-' || arg == "--" { // empty strings should get passed through like other naked words
+		// empty strings should get passed through like other naked words
+		if len(arg) == 0 || arg[0] != '-' || onlyPositionalArgsLeft {
 			positionalArgs = append(positionalArgs, arg)
+			continue
+		}
+
+		if arg == "--" {
+			onlyPositionalArgsLeft = true
 			continue
 		}
 

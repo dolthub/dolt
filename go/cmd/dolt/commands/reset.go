@@ -125,7 +125,7 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 }
 
 // constructInterpolatedDoltResetQuery generates the sql query necessary to call the DOLT_RESET() stored procedure.
-// Also runs interpolates this query to prevent sql injection.
+// Also interpolates this query to prevent sql injection.
 func constructInterpolatedDoltResetQuery(apr *argparser.ArgParseResults) (string, error) {
 	var params []interface{}
 	var param bool

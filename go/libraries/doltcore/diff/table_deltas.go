@@ -601,6 +601,9 @@ func GetDataDiffStatement(tableName string, sch schema.Schema, row sql.Row, rowD
 				updatedCols.Add(sch.GetAllCols().GetByIndex(i).Name)
 			}
 		}
+		if updatedCols.Size() == 0 {
+			return "", nil
+		}
 		return sqlfmt.SqlRowAsUpdateStmt(row, tableName, sch, updatedCols)
 	case ModifiedOld:
 		// do nothing, we only issue UPDATE for ModifiedNew

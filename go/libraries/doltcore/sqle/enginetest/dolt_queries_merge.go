@@ -26,7 +26,6 @@ import (
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
@@ -67,6 +66,43 @@ func (dcv *doltCommitValidator) Validate(val interface{}) (bool, error) {
 var doltCommit = &doltCommitValidator{}
 
 var MergeScripts = []queries.ScriptTest{
+	{
+		// Unique checks should not include the content of deleted rows in checks. Tests two updates: one triggers
+		// going from a smaller key to a higher key, and one going from a higher key to a smaller key (in order to test
+		// delete/insert events in either order). https://github.com/dolthub/dolt/issues/6319
+		Name: "unique constraint checks do not consider deleted rows",
+		SetUpScript: []string{
+			"set @@autocommit=0;",
+			"create table tableA (pk varchar(255) primary key, col1 varchar(255),UNIQUE KEY unique1 (col1))",
+			"insert into tableA values ('B', '1'), ('C', 2), ('Y', '100')",
+			"call dolt_commit('-Am', 'creating table');",
+			"call dolt_branch('feature');",
+			"update tableA set pk = 'A' where pk='B';",
+			"update tableA set pk = 'Z' where pk='Y';",
+			"call dolt_commit('-am', 'update two rows');",
+			"call dolt_checkout('feature');",
+			"update tableA set col1='C' where pk='C';",
+			"call dolt_commit('-am', 'added row on branch feature');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('main');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations_tableA;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from tableA;",
+				Expected: []sql.Row{{"A", "1"}, {"C", "C"}, {"Z", "100"}},
+			},
+		},
+	},
 	{
 		Name: "CALL DOLT_MERGE ff correctly works with autocommit off",
 		SetUpScript: []string{
@@ -368,7 +404,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"test", true, "modified"}, {"test", false, "conflict"}},
+				Expected: []sql.Row{{"test", false, "modified"}, {"test", false, "conflict"}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
@@ -843,7 +879,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"test", true, "modified"}, {"test", false, "conflict"}},
+				Expected: []sql.Row{{"test", false, "modified"}, {"test", false, "conflict"}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_conflicts",
@@ -919,8 +955,8 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
-				ExpectedErr: dprocedures.ErrUncommittedChanges,
+				Query:          "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				ExpectedErrStr: "error: local changes would be stomped by merge:\n\ttest\n Please commit your changes before you merge.",
 			},
 			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
@@ -1478,9 +1514,6 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
-}
-
-var Dolt1MergeScripts = []queries.ScriptTest{
 	{
 		Name: "dropping constraint from one branch drops from both",
 		SetUpScript: []string{

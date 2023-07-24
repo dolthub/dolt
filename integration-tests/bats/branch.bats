@@ -220,3 +220,21 @@ teardown() {
     [ "$status" -ne 0 ]
     [[ "$output" =~ "--remote/-r can only be supplied when listing or deleting branches, not when creating branches" ]] || false
 }
+
+@test "branch: -- escapes arg parsing" {
+    # use -- to turn off arg parsing for the remaining arguments and treat
+    # them all as position arguments
+    dolt branch -- -b
+
+    # verify that the '-b' branch was created successfully
+    run dolt sql -r csv -q "select count(*) from dolt_branches where name='-b';"
+    [ $status -eq 0 ]
+    [[ $output =~ "1" ]] || false
+
+    # verify that we can use -- to delete the -b branch
+    dolt branch -d -f  -- -b
+    run dolt sql -r csv -q "select count(*) from dolt_branches where name='-b';"
+    [ $status -eq 0 ]
+    [[ $output =~ "0" ]] || false
+}
+

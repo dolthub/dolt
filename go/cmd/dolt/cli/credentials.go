@@ -30,6 +30,7 @@ type UserPassword struct {
 }
 
 const DOLT_ENV_PWD = "DOLT_CLI_PASSWORD"
+const DOLT_ENV_USER = "DOLT_CLI_USER"
 const DOLT_SILENCE_USER_REQ_FOR_TESTING = "DOLT_SILENCE_USER_REQ_FOR_TESTING"
 
 // BuildUserPasswordPrompt builds a UserPassword struct from the parsed args. The user is prompted for a password if one
@@ -37,8 +38,15 @@ const DOLT_SILENCE_USER_REQ_FOR_TESTING = "DOLT_SILENCE_USER_REQ_FOR_TESTING"
 // provided). A new instances of ArgParseResults is returned which does not contain the user or password flags.
 func BuildUserPasswordPrompt(parsedArgs *argparser.ArgParseResults) (newParsedArgs *argparser.ArgParseResults, credentials *UserPassword, err error) {
 	userId, hasUserId := parsedArgs.GetValue(UserFlag)
-	password, hasPassword := parsedArgs.GetValue(PasswordFlag)
+	if !hasUserId {
+		envUser, hasEnvUser := os.LookupEnv(DOLT_ENV_USER)
+		if hasEnvUser {
+			userId = envUser
+			hasUserId = true
+		}
+	}
 
+	password, hasPassword := parsedArgs.GetValue(PasswordFlag)
 	if !hasPassword {
 		envPassword, hasEnvPassword := os.LookupEnv(DOLT_ENV_PWD)
 		if hasEnvPassword {
