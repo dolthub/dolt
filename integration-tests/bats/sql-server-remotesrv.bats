@@ -358,4 +358,9 @@ SQL
     run dolt clone http://localhost:50051/remote repo1 -u $DOLT_REMOTE_USER
     [[ "$status" != 0 ]] || false
     [[ "$output" =~ "Unauthenticated" ]] || false
+
+    export DOLT_REMOTE_PASSWORD="pass0"
+    run dolt clone http://localhost:50051/remote repo1 -u doesnt_exist
+    [[ "$status" != 0 ]] || false
+    [[ "$output" =~ "Unauthenticated" ]] || false
 }

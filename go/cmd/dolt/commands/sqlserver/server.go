@@ -375,11 +375,6 @@ func newAuthenticator(ctxFactory func() (*sql.Context, error), rawDb *mysql_db.M
 }
 
 func (r *remotesapiAuth) Authenticate(creds *remotesrv.RequestCredentials) bool {
-	user := r.rawDb.GetUser(creds.Username, "%", false)
-	if user == nil {
-		return false
-	}
-
 	err := commands.ValidatePasswordWithAuthResponse(r.rawDb, creds.Username, creds.Password)
 	if err != nil {
 		return false
