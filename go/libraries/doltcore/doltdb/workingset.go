@@ -244,6 +244,18 @@ func (ws *WorkingSet) MergeActive() bool {
 	return ws.mergeState != nil
 }
 
+// MergeCommitParents returns true if there is an active merge in progress and
+// the recorded commit being merged into the active branch should be included as
+// a second parent of the created commit. This is the expected behavior for a
+// normal merge, but not for other pseudo-merges, like cherry-picks or reverts,
+// where the created commit should only have one parent.
+func (ws *WorkingSet) MergeCommitParents() bool {
+	if !ws.MergeActive() {
+		return false
+	}
+	return ws.MergeState().IsCherryPick() == false
+}
+
 func (ws WorkingSet) Meta() *datas.WorkingSetMeta {
 	return ws.meta
 }
