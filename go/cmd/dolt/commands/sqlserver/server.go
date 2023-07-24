@@ -16,7 +16,6 @@ package sqlserver
 
 import (
 	"context"
-	"crypto/subtle"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -258,7 +257,7 @@ func Serve(
 			})
 
 			ctxFactory := func() (*sql.Context, error) { return sqlEngine.NewDefaultContext(ctx) }
-			authenticator := newAuthenticator(ctxFactory, serverConfig, sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb)
+			authenticator := newAuthenticator(ctxFactory, sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb)
 			args = sqle.WithUserPasswordAuth(args, authenticator)
 
 			args.TLSConfig = serverConf.TLSConfig
@@ -367,21 +366,15 @@ func Serve(
 }
 
 type remotesapiAuth struct {
-	ctxFactory   func() (*sql.Context, error)
-	serverConfig ServerConfig
-	rawDb        *mysql_db.MySQLDb
+	ctxFactory func() (*sql.Context, error)
+	rawDb      *mysql_db.MySQLDb
 }
 
-func newAuthenticator(ctxFactory func() (*sql.Context, error), serverConfig ServerConfig, rawDb *mysql_db.MySQLDb) remotesrv.Authenticator {
-	return &remotesapiAuth{ctxFactory, serverConfig, rawDb}
+func newAuthenticator(ctxFactory func() (*sql.Context, error), rawDb *mysql_db.MySQLDb) remotesrv.Authenticator {
+	return &remotesapiAuth{ctxFactory, rawDb}
 }
 
 func (r *remotesapiAuth) Authenticate(creds *remotesrv.RequestCredentials) bool {
-	if r.serverConfig.User() == creds.Username {
-		compare := subtle.ConstantTimeCompare([]byte(r.serverConfig.Password()), []byte(creds.Password))
-		return compare != 0
-	}
-
 	user := r.rawDb.GetUser(creds.Username, "%", false)
 	if user == nil {
 		return false
