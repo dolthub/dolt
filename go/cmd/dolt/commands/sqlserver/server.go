@@ -16,21 +16,19 @@ package sqlserver
 
 import (
 	"context"
-	"crypto/sha1"
 	"crypto/subtle"
 	"crypto/tls"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"runtime"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
@@ -39,6 +37,7 @@ import (
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
@@ -258,7 +257,7 @@ func Serve(
 				GrpcListenAddr: listenaddr,
 			})
 
-			authen := newAuthenticator(remoteSrvSqlCtx, serverConfig, sqlEngine)
+			authen := newAuthenticator(remoteSrvSqlCtx, serverConfig, sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb)
 			shouldAuth := len(serverConfig.User()) > 0 || len(serverConfig.Password()) > 0
 			if shouldAuth {
 				args = sqle.WithUserPasswordAuth(args, authen)
@@ -372,11 +371,11 @@ func Serve(
 type remotesapiAuth struct {
 	ctx          *sql.Context
 	serverConfig ServerConfig
-	sqlEngine    *engine.SqlEngine
+	rawDb        *mysql_db.MySQLDb
 }
 
-func newAuthenticator(ctx *sql.Context, serverConfig ServerConfig, sqlEngine *engine.SqlEngine) remotesrv.Authenticator {
-	return &remotesapiAuth{ctx, serverConfig, sqlEngine}
+func newAuthenticator(ctx *sql.Context, serverConfig ServerConfig, rawDb *mysql_db.MySQLDb) remotesrv.Authenticator {
+	return &remotesapiAuth{ctx, serverConfig, rawDb}
 }
 
 func (r *remotesapiAuth) Authenticate(ctx context.Context, creds *remotesrv.RequestCredentials) bool {
@@ -388,27 +387,17 @@ func (r *remotesapiAuth) Authenticate(ctx context.Context, creds *remotesrv.Requ
 		return compare != 0
 	}
 
-	user := r.sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(creds.Username, "%", false)
+	user := r.rawDb.GetUser(creds.Username, "%", false)
 	if user == nil {
 		return false
 	}
-	pass := getPassword(creds.Password)
-	if compare := subtle.ConstantTimeCompare([]byte(user.Password), []byte(pass)); compare == 0 {
+
+	err := commands.ValidatePasswordWithAuthResponse(r.rawDb, creds.Username, creds.Password)
+	if err != nil {
 		return false
 	}
 
 	return user.PrivilegeSet.HasDynamic(plan.DynamicPrivilege_CloneAdmin)
-}
-
-func getPassword(password string) string {
-	hash := sha1.New()
-	hash.Write([]byte(password))
-	s1 := hash.Sum(nil)
-	hash.Reset()
-	hash.Write(s1)
-	s2 := hash.Sum(nil)
-	password = "*" + strings.ToUpper(hex.EncodeToString(s2))
-	return password
 }
 
 func LoadClusterTLSConfig(cfg cluster.Config) (*tls.Config, error) {
