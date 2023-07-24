@@ -657,7 +657,7 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, branchState *branchStat
 	}
 
 	var mergeParentCommits []*doltdb.Commit
-	if branchState.WorkingSet().MergeActive() {
+	if branchState.WorkingSet().MergeCommitParents() {
 		mergeParentCommits = []*doltdb.Commit{branchState.WorkingSet().MergeState().Commit()}
 	} else if props.Amend {
 		numParentsHeadForAmend := headCommit.NumParents()
