@@ -590,7 +590,7 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 		dbName, _ := dsess.SplitRevisionDbName(useDb)
 		targetEnv = mrEnv.GetEnv(dbName)
 		if targetEnv == nil {
-			return nil, fmt.Errorf("The provided --use-db %s does not exist or is not a directory.", dbName)
+			return nil, fmt.Errorf("The provided --use-db %s does not exist.", dbName)
 		}
 	} else {
 		useDb = mrEnv.GetFirstDatabase()
