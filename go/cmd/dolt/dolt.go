@@ -733,7 +733,7 @@ func buildGlobalArgs() *argparser.ArgParser {
 
 	ap.SupportsString(cli.UserFlag, "u", "user", fmt.Sprintf("Defines the local superuser (defaults to `%v`). If the specified user exists, will take on permissions of that user.", commands.DefaultUser))
 	ap.SupportsString(cli.PasswordFlag, "p", "password", "Defines the password for the user. Defaults to empty string.")
-	ap.SupportsString(cli.HostFlag, "", "host", "Defines the host to connect to. Defaults to `localhost`.")
+	ap.SupportsString(cli.HostFlag, "", "host", "Defines the host to connect to.")
 	ap.SupportsInt(cli.PortFlag, "", "port", "Defines the port to connect to. Only used when the --host flag is also provided. Defaults to `3306`.")
 	ap.SupportsFlag(cli.NoTLSFlag, "", "Disables TLS for the connection to remote databases.")
 	ap.SupportsString(commands.DataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory.")
