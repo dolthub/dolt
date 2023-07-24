@@ -165,6 +165,7 @@ type MergeState struct {
 	fromCommitAddr      *hash.Hash
 	fromCommitSpec      string
 	unmergableTables    []string
+	isCherryPick        bool
 
 	nomsMergeStateRef *types.Ref
 	nomsMergeState    *types.Struct
@@ -254,6 +255,13 @@ func (ms *MergeState) FromCommitSpec(ctx context.Context, vr types.ValueReader) 
 	}
 
 	return string(commitSpecStr.(types.String)), nil
+}
+
+func (ms *MergeState) IsCherryPick(_ context.Context, vr types.ValueReader) (bool, error) {
+	if vr.Format().UsesFlatbuffers() {
+		return ms.isCherryPick, nil
+	}
+	return false, nil
 }
 
 func (ms *MergeState) UnmergableTables(ctx context.Context, vr types.ValueReader) ([]string, error) {
@@ -381,6 +389,7 @@ func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
 		for i := range ret.MergeState.unmergableTables {
 			ret.MergeState.unmergableTables[i] = string(mergeState.UnmergableTables(i))
 		}
+		ret.MergeState.isCherryPick = mergeState.IsCherryPick()
 	}
 	return &ret, nil
 }

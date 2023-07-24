@@ -38,6 +38,8 @@ table MergeState {
   from_commit_spec_str:string;
 
   unmergable_tables:[string];
+
+  is_cherry_pick:bool;
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go
