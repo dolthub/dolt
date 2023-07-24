@@ -257,11 +257,9 @@ func Serve(
 				GrpcListenAddr: listenaddr,
 			})
 
-			authen := newAuthenticator(remoteSrvSqlCtx, serverConfig, sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb)
-			shouldAuth := len(serverConfig.User()) > 0 || len(serverConfig.Password()) > 0
-			if shouldAuth {
-				args = sqle.WithUserPasswordAuth(args, authen)
-			}
+			ctxFactory := func() (*sql.Context, error) { return sqlEngine.NewDefaultContext(ctx) }
+			authenticator := newAuthenticator(ctxFactory, serverConfig, sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb)
+			args = sqle.WithUserPasswordAuth(args, authenticator)
 
 			args.TLSConfig = serverConf.TLSConfig
 			remoteSrv, err = remotesrv.NewServer(args)
@@ -369,19 +367,16 @@ func Serve(
 }
 
 type remotesapiAuth struct {
-	ctx          *sql.Context
+	ctxFactory   func() (*sql.Context, error)
 	serverConfig ServerConfig
 	rawDb        *mysql_db.MySQLDb
 }
 
-func newAuthenticator(ctx *sql.Context, serverConfig ServerConfig, rawDb *mysql_db.MySQLDb) remotesrv.Authenticator {
-	return &remotesapiAuth{ctx, serverConfig, rawDb}
+func newAuthenticator(ctxFactory func() (*sql.Context, error), serverConfig ServerConfig, rawDb *mysql_db.MySQLDb) remotesrv.Authenticator {
+	return &remotesapiAuth{ctxFactory, serverConfig, rawDb}
 }
 
-func (r *remotesapiAuth) Authenticate(ctx context.Context, creds *remotesrv.RequestCredentials) bool {
-	if creds == nil {
-		return true
-	}
+func (r *remotesapiAuth) Authenticate(creds *remotesrv.RequestCredentials) bool {
 	if r.serverConfig.User() == creds.Username {
 		compare := subtle.ConstantTimeCompare([]byte(r.serverConfig.Password()), []byte(creds.Password))
 		return compare != 0
@@ -397,7 +392,14 @@ func (r *remotesapiAuth) Authenticate(ctx context.Context, creds *remotesrv.Requ
 		return false
 	}
 
-	return user.PrivilegeSet.HasDynamic(plan.DynamicPrivilege_CloneAdmin)
+	ctx, err := r.ctxFactory()
+	if err != nil {
+		return false
+	}
+	ctx.Session.SetClient(sql.Client{User: creds.Username, Address: creds.Address, Capabilities: 0})
+
+	privOp := sql.NewDynamicPrivilegedOperation(plan.DynamicPrivilege_CloneAdmin)
+	return r.rawDb.UserHasPrivileges(ctx, privOp)
 }
 
 func LoadClusterTLSConfig(cfg cluster.Config) (*tls.Config, error) {

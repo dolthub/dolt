@@ -23,12 +23,14 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 
 type RequestCredentials struct {
 	Username string
 	Password string
+	Address  string
 }
 
 type ServerInterceptor struct {
@@ -37,7 +39,7 @@ type ServerInterceptor struct {
 }
 
 type Authenticator interface {
-	Authenticate(ctx context.Context, creds *RequestCredentials) bool
+	Authenticate(creds *RequestCredentials) bool
 }
 
 func (si *ServerInterceptor) Stream() grpc.StreamServerInterceptor {
@@ -69,28 +71,38 @@ func (si *ServerInterceptor) Options() []grpc.ServerOption {
 
 func (si *ServerInterceptor) authenticate(ctx context.Context) error {
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		var username string
+		var password string
+
 		auths := md.Get("authorization")
 		if len(auths) != 1 {
-			si.Lgr.Info("incoming request had no authorization")
+			username = "root"
+		} else {
+			auth := auths[0]
+			if !strings.HasPrefix(auth, "Basic ") {
+				si.Lgr.Info("incoming request had malformed authentication header")
+				return status.Error(codes.Unauthenticated, "unauthenticated")
+			}
+			authTrim := strings.TrimPrefix(auth, "Basic ")
+			uDec, err := base64.URLEncoding.DecodeString(authTrim)
+			if err != nil {
+				si.Lgr.Infof("incoming request authorization header failed to decode: %v", err)
+				return status.Error(codes.Unauthenticated, "unauthenticated")
+			}
+			userPass := strings.Split(string(uDec), ":")
+			username = userPass[0]
+			password = userPass[1]
+		}
+		addr, ok := peer.FromContext(ctx)
+		if !ok {
+			si.Lgr.Info("incoming request had no peer")
 			return status.Error(codes.Unauthenticated, "unauthenticated")
 		}
-		auth := auths[0]
-		if !strings.HasPrefix(auth, "Basic ") {
-			si.Lgr.Info("incoming request had malformed authentication header")
-			return status.Error(codes.Unauthenticated, "unauthenticated")
-		}
-		authTrim := strings.TrimPrefix(auth, "Basic ")
-		uDec, err := base64.URLEncoding.DecodeString(authTrim)
-		if err != nil {
-			si.Lgr.Infof("incoming request authorization header failed to decode: %v", err)
-			return status.Error(codes.Unauthenticated, "unauthenticated")
-		}
-		userPass := strings.Split(string(uDec), ":")
-		if authed := si.Authenticator.Authenticate(ctx, &RequestCredentials{Username: userPass[0], Password: userPass[1]}); !authed {
+		if authed := si.Authenticator.Authenticate(&RequestCredentials{Username: username, Password: password, Address: addr.Addr.String()}); !authed {
 			return status.Error(codes.Unauthenticated, "unauthenticated")
 		}
 		return nil
 	}
 
-	return status.Error(codes.Unauthenticated, "unauthenticated")
+	return status.Error(codes.Unauthenticated, "unauthenticated 1")
 }
