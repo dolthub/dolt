@@ -55,7 +55,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "/* client b */ CALL DOLT_BRANCH('-d', 'branch1');",
-				ExpectedErrStr: "Error 1105: unsafe to delete or rename branches in use in other sessions; use --force to force the change",
+				ExpectedErrStr: "Error 1105 (HY000): unsafe to delete or rename branches in use in other sessions; use --force to force the change",
 			},
 			{
 				Query:    "/* client a */ CALL DOLT_CHECKOUT('branch2');",
@@ -67,7 +67,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "/* client b */ CALL DOLT_BRANCH('-d', 'branch2');",
-				ExpectedErrStr: "Error 1105: unsafe to delete or rename branches in use in other sessions; use --force to force the change",
+				ExpectedErrStr: "Error 1105 (HY000): unsafe to delete or rename branches in use in other sessions; use --force to force the change",
 			},
 			{
 				Query:    "/* client b */ CALL DOLT_BRANCH('-df', 'branch2');",
@@ -96,7 +96,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "/* client b */ CALL DOLT_BRANCH('-m', 'branch1', 'movedBranch1');",
-				ExpectedErrStr: "Error 1105: unsafe to delete or rename branches in use in other sessions; use --force to force the change",
+				ExpectedErrStr: "Error 1105 (HY000): unsafe to delete or rename branches in use in other sessions; use --force to force the change",
 			},
 			{
 				Query:    "/* client b */ CALL DOLT_BRANCH('-mf', 'branch1', 'movedBranch1');",
@@ -137,7 +137,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "/* client a */ CALL DOLT_BRANCH('-d', 'branch2');",
-				ExpectedErrStr: "Error 1105: unsafe to delete or rename branches in use in other sessions; use --force to force the change",
+				ExpectedErrStr: "Error 1105 (HY000): unsafe to delete or rename branches in use in other sessions; use --force to force the change",
 			},
 			{
 				Query:    "/* client a */ CALL DOLT_BRANCH('-df', 'branch2');",
@@ -188,7 +188,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "/* client a */ CALL DOLT_BRANCH('-m', 'branch2', 'newName');",
-				ExpectedErrStr: "Error 1105: unsafe to delete or rename branches in use in other sessions; use --force to force the change",
+				ExpectedErrStr: "Error 1105 (HY000): unsafe to delete or rename branches in use in other sessions; use --force to force the change",
 			},
 			{
 				Query:    "/* client a */ CALL DOLT_BRANCH('-mf', 'branch2', 'newName');",
@@ -239,11 +239,11 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "/* client a */ select name from dolt_branches;",
-				ExpectedErrStr: "Error 1105: database not found: dolt/branch1",
+				ExpectedErrStr: "Error 1105 (HY000): database not found: dolt/branch1",
 			},
 			{
 				Query:          "/* client a */ CALL DOLT_CHECKOUT('main');",
-				ExpectedErrStr: "Error 1105: database not found: dolt/branch1",
+				ExpectedErrStr: "Error 1105 (HY000): database not found: dolt/branch1",
 			},
 			{
 				Query:    "/* client a */ USE dolt/main;",
@@ -288,12 +288,12 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "/* client a */ select name from dolt_branches;",
-				ExpectedErrStr: "Error 1105: database not found: dolt/branch1",
+				ExpectedErrStr: "Error 1105 (HY000): database not found: dolt/branch1",
 			},
 			{
 				// TODO: this could be handled better, not the best experience. Maybe kill the session?
 				Query:          "/* client a */ CALL DOLT_CHECKOUT('main');",
-				ExpectedErrStr: "Error 1105: database not found: dolt/branch1",
+				ExpectedErrStr: "Error 1105 (HY000): database not found: dolt/branch1",
 			},
 			{
 				Query:    "/* client a */ USE dolt/main;",
@@ -415,7 +415,7 @@ var DropDatabaseMultiSessionScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "/* client b */ show tables;",
-				ExpectedErrStr: "Error 1105: database not found: db01/branch1",
+				ExpectedErrStr: "Error 1105 (HY000): database not found: db01/branch1",
 			},
 		},
 	},
