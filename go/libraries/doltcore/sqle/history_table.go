@@ -56,6 +56,7 @@ var (
 var _ sql.Table = (*HistoryTable)(nil)
 var _ sql.IndexAddressableTable = (*HistoryTable)(nil)
 var _ sql.IndexedTable = (*HistoryTable)(nil)
+var _ sql.PrimaryKeyTable = (*HistoryTable)(nil)
 
 // HistoryTable is a system table that shows the history of rows over time
 type HistoryTable struct {
@@ -65,6 +66,40 @@ type HistoryTable struct {
 	commitCheck   doltdb.CommitFilter
 	indexLookup   sql.IndexLookup
 	projectedCols []uint64
+}
+
+func (ht *HistoryTable) PrimaryKeySchema() sql.PrimaryKeySchema {
+	tableName := ht.Name()
+	basePkSch := ht.doltTable.PrimaryKeySchema()
+	newSch := sql.PrimaryKeySchema {
+		Schema: make(sql.Schema, len(basePkSch.Schema), len(basePkSch.Schema)+3),
+		PkOrdinals: basePkSch.PkOrdinals,
+	}
+
+	// Returning a schema from a single table with multiple table names can confuse parts of the analyzer
+	for i, col := range basePkSch.Schema {
+		col.Source = tableName
+		newSch.Schema[i] = col
+	}
+
+	newSch.Schema = append(newSch.Schema,
+		&sql.Column{
+			Name:   CommitHashCol,
+			Source: tableName,
+			Type:   CommitHashColType,
+		},
+		&sql.Column{
+			Name:   CommitterCol,
+			Source: tableName,
+			Type:   CommitterColType,
+		},
+		&sql.Column{
+			Name:   CommitDateCol,
+			Source: tableName,
+			Type:   types.Datetime,
+		},
+	)
+	return newSch
 }
 
 func (ht *HistoryTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
