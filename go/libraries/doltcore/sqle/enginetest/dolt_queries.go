@@ -2027,6 +2027,55 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_history table primary key",
+		SetUpScript: []string{
+			"create table xyz (x int, y int, z int, primary key(x, y));",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'creating table');",
+			"insert into xyz values (0, 1, 100);",
+			"call dolt_commit('-am', 'add data');",
+			"insert into xyz values (2, 3, 200);",
+			"call dolt_commit('-am', 'add data');",
+			"insert into xyz values (4, 5, 300);",
+			"call dolt_commit('-am', 'add data');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select x, y, z from dolt_history_xyz",
+				Expected: []sql.Row{
+					{0, 1, 100},
+					{2, 3, 200},
+					{4, 5, 300},
+					{0, 1, 100},
+					{0, 1, 100},
+					{2, 3, 200},
+				},
+			},
+			{
+				Query: "select y, z from dolt_history_xyz",
+				Expected: []sql.Row{
+					{1, 100},
+					{3, 200},
+					{5, 300},
+					{1, 100},
+					{1, 100},
+					{3, 200},
+				},
+			},
+			{
+				Query: "select z from dolt_history_xyz",
+				Expected: []sql.Row{
+					{100},
+					{200},
+					{300},
+					{100},
+					{100},
+					{200},
+				},
+			},
+		},
+	},
 }
 
 // BrokenHistorySystemTableScriptTests contains tests that work for non-prepared, but don't work
