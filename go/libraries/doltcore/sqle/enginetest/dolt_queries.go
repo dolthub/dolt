@@ -1578,6 +1578,10 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{1, "Eins", nil}, {2, "Zwei", nil}, {3, "Drei", nil}},
 			},
 			{
+				Query:    "select de, fr from dolt_history_T1 where commit_hash = @Commit1;",
+				Expected: []sql.Row{{"Eins", nil}, {"Zwei", nil}, {"Drei", nil}},
+			},
+			{
 				Query:    "select n, de, fr from dolt_history_T1 where commit_hash = @Commit2;",
 				Expected: []sql.Row{{1, "Eins", nil}, {2, "Zwei", nil}, {3, "Drei", nil}, {4, "Vier", "Quatre"}},
 			},
