@@ -77,7 +77,7 @@ func (ht *HistoryTable) PrimaryKeySchema() sql.PrimaryKeySchema {
 	}
 
 	// Returning a schema from a single table with multiple table names can confuse parts of the analyzer
-	for i, col := range basePkSch.Schema {
+	for i, col := range basePkSch.Schema.Copy() {
 		col.Source = tableName
 		newSch.Schema[i] = col
 	}

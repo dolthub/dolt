@@ -2114,6 +2114,22 @@ ORDER BY
 					{300, doltCommit},
 				},
 			},
+			{
+				Query: `
+SELECT z
+FROM xyz
+WHERE z IN (
+  SELECT z
+  FROM dolt_history_xyz
+  LEFT JOIN dolt_commits
+  ON dolt_history_xyz.commit_hash = dolt_commits.commit_hash
+);;`,
+				Expected: []sql.Row{
+					{100},
+					{200},
+					{300},
+				},
+			},
 		},
 	},
 }
