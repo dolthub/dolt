@@ -71,8 +71,8 @@ type HistoryTable struct {
 func (ht *HistoryTable) PrimaryKeySchema() sql.PrimaryKeySchema {
 	tableName := ht.Name()
 	basePkSch := ht.doltTable.PrimaryKeySchema()
-	newSch := sql.PrimaryKeySchema {
-		Schema: make(sql.Schema, len(basePkSch.Schema), len(basePkSch.Schema)+3),
+	newSch := sql.PrimaryKeySchema{
+		Schema:     make(sql.Schema, len(basePkSch.Schema), len(basePkSch.Schema)+3),
 		PkOrdinals: basePkSch.PkOrdinals,
 	}
 
