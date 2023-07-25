@@ -27,9 +27,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 	"github.com/pkg/profile"
+	"github.com/tidwall/gjson"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/jaeger"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -437,6 +439,27 @@ func runMain() int {
 
 	var fs filesys.Filesys
 	fs = filesys.LocalFS
+	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, Version)
+	dEnv.IgnoreLockFile = ignoreLockFile
+
+	// retrieve profile
+	profileName, hasProfile := apr.GetValue(commands.ProfileFlag)
+	if hasProfile {
+		// get profile from profileName
+		globalConfig, ok := dEnv.Config.GetConfig(env.GlobalConfig)
+		if !ok {
+			cli.PrintErrln(color.RedString("Failed to get global config"))
+			return 1
+		}
+		profileArgs, err := getProfile(globalConfig, profileName)
+		if err != nil {
+			cli.PrintErrln(color.RedString("Failed to get profile %s: %v", profileName, err))
+			return 1
+		}
+		// append profile's args to args
+		args = append(profileArgs, args...)
+	}
+
 	dataDir, hasDataDir := apr.GetValue(commands.DataDirFlag)
 	if hasDataDir {
 		// If a relative path was provided, this ensures we have an absolute path everywhere.
@@ -450,8 +473,6 @@ func runMain() int {
 			return 1
 		}
 	}
-	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, Version)
-	dEnv.IgnoreLockFile = ignoreLockFile
 
 	root, err := env.GetCurrentUserHomeDir()
 	if err != nil {
@@ -742,6 +763,27 @@ func buildGlobalArgs() *argparser.ArgParser {
 	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
 	ap.SupportsString(commands.BranchCtrlPathFlag, "", "branch control file", "Path to a file to load and store branch control permissions. Defaults to `$doltcfg-dir/branch_control.db`. Will only be created if there is a change to branch control permissions.")
 	ap.SupportsString(commands.UseDbFlag, "", "database", "The name of the database to use when executing SQL queries. Defaults the database of the root directory, if it exists, and the first alphabetically if not.")
+	ap.SupportsString(commands.ProfileFlag, "", "profile", "The name of the profile to use when executing SQL queries. Defaults to the `default` profile.")
 
 	return ap
+}
+
+func getProfile(config config.ReadWriteConfig, profileName string) ([]string, error) {
+	// get profiles from config
+	profiles, err := config.GetString("profile")
+	if err != nil {
+		return nil, err
+	}
+	// extract profileName from profiles
+	prof := gjson.Get(profiles, profileName)
+	if prof.Exists() {
+		var result []string
+		// gather profile values
+		for key, value := range prof.Map() {
+			result = append(result, "--"+key, value.String())
+		}
+		return result, nil
+	} else {
+		return nil, fmt.Errorf("profile %s not found", profileName)
+	}
 }
