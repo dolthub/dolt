@@ -2028,7 +2028,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "dolt_history table primary key",
+		Name: "dolt_history table primary key with join",
 		SetUpScript: []string{
 			"create table xyz (x int, y int, z int, primary key(x, y));",
 			"call dolt_add('.');",
@@ -2042,36 +2042,76 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "select x, y, z from dolt_history_xyz",
+
+				Query: `
+SELECT
+  dolt_history_xyz.x as x,
+  dolt_history_xyz.y as y,
+  dolt_history_xyz.z as z,
+  dolt_commits.commit_hash as comm
+FROM
+  dolt_history_xyz
+  LEFT JOIN
+  dolt_commits
+  ON
+  dolt_history_xyz.commit_hash = dolt_commits.commit_hash
+ORDER BY
+  dolt_history_xyz.x,
+  dolt_history_xyz.y,
+  dolt_history_xyz.z;`,
 				Expected: []sql.Row{
-					{0, 1, 100},
-					{2, 3, 200},
-					{4, 5, 300},
-					{0, 1, 100},
-					{0, 1, 100},
-					{2, 3, 200},
+					{0, 1, 100, doltCommit},
+					{0, 1, 100, doltCommit},
+					{0, 1, 100, doltCommit},
+					{2, 3, 200, doltCommit},
+					{2, 3, 200, doltCommit},
+					{4, 5, 300, doltCommit},
 				},
 			},
 			{
-				Query: "select y, z from dolt_history_xyz",
+				Query: `
+SELECT
+  dolt_history_xyz.y as y,
+  dolt_history_xyz.z as z,
+  dolt_commits.commit_hash as comm
+FROM
+  dolt_history_xyz
+  LEFT JOIN
+  dolt_commits
+  ON
+  dolt_history_xyz.commit_hash = dolt_commits.commit_hash
+ORDER BY
+  dolt_history_xyz.y,
+  dolt_history_xyz.z;`,
 				Expected: []sql.Row{
-					{1, 100},
-					{3, 200},
-					{5, 300},
-					{1, 100},
-					{1, 100},
-					{3, 200},
+					{1, 100, doltCommit},
+					{1, 100, doltCommit},
+					{1, 100, doltCommit},
+					{3, 200, doltCommit},
+					{3, 200, doltCommit},
+					{5, 300, doltCommit},
 				},
 			},
 			{
-				Query: "select z from dolt_history_xyz",
+				Query: `
+SELECT
+  dolt_history_xyz.z as z,
+  dolt_commits.commit_hash as comm
+FROM
+  dolt_history_xyz
+  LEFT JOIN
+  dolt_commits
+  ON
+  dolt_history_xyz.commit_hash = dolt_commits.commit_hash
+ORDER BY
+  dolt_history_xyz.z;`,
 				Expected: []sql.Row{
-					{100},
-					{200},
-					{300},
-					{100},
-					{100},
-					{200},
+					{100, doltCommit},
+					{100, doltCommit},
+					{100, doltCommit},
+					{200, doltCommit},
+					{200, doltCommit},
+					{300, doltCommit},
 				},
 			},
 		},
