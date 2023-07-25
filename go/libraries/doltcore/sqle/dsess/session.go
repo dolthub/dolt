@@ -45,7 +45,7 @@ const (
 	DbRevisionDelimiter = "/"
 )
 
-var ErrSessionNotPeristable = errors.New("session is not persistable")
+var ErrSessionNotPersistable = errors.New("session is not persistable")
 
 // DoltSession is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type DoltSession struct {
@@ -1383,7 +1383,7 @@ func (d DoltSession) WithGlobals(conf config.ReadWriteConfig) *DoltSession {
 // PersistGlobal implements sql.PersistableSession
 func (d *DoltSession) PersistGlobal(sysVarName string, value interface{}) error {
 	if d.globalsConf == nil {
-		return ErrSessionNotPeristable
+		return ErrSessionNotPersistable
 	}
 
 	sysVar, _, err := validatePersistableSysVar(sysVarName)
@@ -1399,7 +1399,7 @@ func (d *DoltSession) PersistGlobal(sysVarName string, value interface{}) error 
 // RemovePersistedGlobal implements sql.PersistableSession
 func (d *DoltSession) RemovePersistedGlobal(sysVarName string) error {
 	if d.globalsConf == nil {
-		return ErrSessionNotPeristable
+		return ErrSessionNotPersistable
 	}
 
 	sysVar, _, err := validatePersistableSysVar(sysVarName)
@@ -1415,7 +1415,7 @@ func (d *DoltSession) RemovePersistedGlobal(sysVarName string) error {
 // RemoveAllPersistedGlobals implements sql.PersistableSession
 func (d *DoltSession) RemoveAllPersistedGlobals() error {
 	if d.globalsConf == nil {
-		return ErrSessionNotPeristable
+		return ErrSessionNotPersistable
 	}
 
 	allVars := make([]string, d.globalsConf.Size())
@@ -1434,7 +1434,7 @@ func (d *DoltSession) RemoveAllPersistedGlobals() error {
 // RemoveAllPersistedGlobals implements sql.PersistableSession
 func (d *DoltSession) GetPersistedValue(k string) (interface{}, error) {
 	if d.globalsConf == nil {
-		return nil, ErrSessionNotPeristable
+		return nil, ErrSessionNotPersistable
 	}
 
 	return getPersistedValue(d.globalsConf, k)
@@ -1443,7 +1443,7 @@ func (d *DoltSession) GetPersistedValue(k string) (interface{}, error) {
 // SystemVariablesInConfig returns a list of System Variables associated with the session
 func (d *DoltSession) SystemVariablesInConfig() ([]sql.SystemVariable, error) {
 	if d.globalsConf == nil {
-		return nil, ErrSessionNotPeristable
+		return nil, ErrSessionNotPersistable
 	}
 	sysVars, _, err := SystemVariablesInConfig(d.globalsConf)
 	if err != nil {

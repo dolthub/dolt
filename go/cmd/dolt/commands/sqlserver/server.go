@@ -27,6 +27,8 @@ import (
 
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -34,6 +36,7 @@ import (
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
@@ -242,6 +245,7 @@ func Serve(
 
 	var remoteSrv *remotesrv.Server
 	if serverConfig.RemotesapiPort() != nil {
+
 		port := *serverConfig.RemotesapiPort()
 		if remoteSrvSqlCtx, err := sqlEngine.NewDefaultContext(ctx); err == nil {
 			listenaddr := fmt.Sprintf(":%d", port)
@@ -251,7 +255,11 @@ func Serve(
 				HttpListenAddr: listenaddr,
 				GrpcListenAddr: listenaddr,
 			})
-			args = sqle.WithUserPasswordAuth(args, remotesrv.UserAuth{User: serverConfig.User(), Password: serverConfig.Password()})
+
+			ctxFactory := func() (*sql.Context, error) { return sqlEngine.NewDefaultContext(ctx) }
+			authenticator := newAuthenticator(ctxFactory, sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb)
+			args = sqle.WithUserPasswordAuth(args, authenticator)
+
 			args.TLSConfig = serverConf.TLSConfig
 			remoteSrv, err = remotesrv.NewServer(args)
 			if err != nil {
@@ -355,6 +363,31 @@ func Serve(
 	}
 
 	return
+}
+
+type remotesapiAuth struct {
+	ctxFactory func() (*sql.Context, error)
+	rawDb      *mysql_db.MySQLDb
+}
+
+func newAuthenticator(ctxFactory func() (*sql.Context, error), rawDb *mysql_db.MySQLDb) remotesrv.Authenticator {
+	return &remotesapiAuth{ctxFactory, rawDb}
+}
+
+func (r *remotesapiAuth) Authenticate(creds *remotesrv.RequestCredentials) bool {
+	err := commands.ValidatePasswordWithAuthResponse(r.rawDb, creds.Username, creds.Password)
+	if err != nil {
+		return false
+	}
+
+	ctx, err := r.ctxFactory()
+	if err != nil {
+		return false
+	}
+	ctx.Session.SetClient(sql.Client{User: creds.Username, Address: creds.Address, Capabilities: 0})
+
+	privOp := sql.NewDynamicPrivilegedOperation(plan.DynamicPrivilege_CloneAdmin)
+	return r.rawDb.UserHasPrivileges(ctx, privOp)
 }
 
 func LoadClusterTLSConfig(cfg cluster.Config) (*tls.Config, error) {
