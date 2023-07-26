@@ -1578,6 +1578,10 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{1, "Eins", nil}, {2, "Zwei", nil}, {3, "Drei", nil}},
 			},
 			{
+				Query:    "select de, fr from dolt_history_T1 where commit_hash = @Commit1;",
+				Expected: []sql.Row{{"Eins", nil}, {"Zwei", nil}, {"Drei", nil}},
+			},
+			{
 				Query:    "select n, de, fr from dolt_history_T1 where commit_hash = @Commit2;",
 				Expected: []sql.Row{{1, "Eins", nil}, {2, "Zwei", nil}, {3, "Drei", nil}, {4, "Vier", "Quatre"}},
 			},
@@ -2019,6 +2023,111 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				Query: "select count(*) from dolt_history_xy where commit_hash = (select dolt_log.commit_hash from dolt_log limit 1 offset 1)",
 				Expected: []sql.Row{
 					{2},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_history table primary key with join",
+		SetUpScript: []string{
+			"create table xyz (x int, y int, z int, primary key(x, y));",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'creating table');",
+			"insert into xyz values (0, 1, 100);",
+			"call dolt_commit('-am', 'add data');",
+			"insert into xyz values (2, 3, 200);",
+			"call dolt_commit('-am', 'add data');",
+			"insert into xyz values (4, 5, 300);",
+			"call dolt_commit('-am', 'add data');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+
+				Query: `
+SELECT
+  dolt_history_xyz.x as x,
+  dolt_history_xyz.y as y,
+  dolt_history_xyz.z as z,
+  dolt_commits.commit_hash as comm
+FROM
+  dolt_history_xyz
+  LEFT JOIN
+  dolt_commits
+  ON
+  dolt_history_xyz.commit_hash = dolt_commits.commit_hash
+ORDER BY
+  dolt_history_xyz.x,
+  dolt_history_xyz.y,
+  dolt_history_xyz.z;`,
+				Expected: []sql.Row{
+					{0, 1, 100, doltCommit},
+					{0, 1, 100, doltCommit},
+					{0, 1, 100, doltCommit},
+					{2, 3, 200, doltCommit},
+					{2, 3, 200, doltCommit},
+					{4, 5, 300, doltCommit},
+				},
+			},
+			{
+				Query: `
+SELECT
+  dolt_history_xyz.y as y,
+  dolt_history_xyz.z as z,
+  dolt_commits.commit_hash as comm
+FROM
+  dolt_history_xyz
+  LEFT JOIN
+  dolt_commits
+  ON
+  dolt_history_xyz.commit_hash = dolt_commits.commit_hash
+ORDER BY
+  dolt_history_xyz.y,
+  dolt_history_xyz.z;`,
+				Expected: []sql.Row{
+					{1, 100, doltCommit},
+					{1, 100, doltCommit},
+					{1, 100, doltCommit},
+					{3, 200, doltCommit},
+					{3, 200, doltCommit},
+					{5, 300, doltCommit},
+				},
+			},
+			{
+				Query: `
+SELECT
+  dolt_history_xyz.z as z,
+  dolt_commits.commit_hash as comm
+FROM
+  dolt_history_xyz
+  LEFT JOIN
+  dolt_commits
+  ON
+  dolt_history_xyz.commit_hash = dolt_commits.commit_hash
+ORDER BY
+  dolt_history_xyz.z;`,
+				Expected: []sql.Row{
+					{100, doltCommit},
+					{100, doltCommit},
+					{100, doltCommit},
+					{200, doltCommit},
+					{200, doltCommit},
+					{300, doltCommit},
+				},
+			},
+			{
+				Query: `
+SELECT z
+FROM xyz
+WHERE z IN (
+  SELECT z
+  FROM dolt_history_xyz
+  LEFT JOIN dolt_commits
+  ON dolt_history_xyz.commit_hash = dolt_commits.commit_hash
+);;`,
+				Expected: []sql.Row{
+					{100},
+					{200},
+					{300},
 				},
 			},
 		},
