@@ -158,6 +158,10 @@ func validateIndexConsistency(
 }
 
 func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Index, primary, secondary prolly.Map) error {
+	// Full-Text indexes do not make use of their internal map, so we may safely skip this check
+	if def.IsFullText() {
+		return nil
+	}
 	secondary = prolly.ConvertToSecondaryKeylessIndex(secondary)
 	idxDesc, _ := secondary.Descriptors()
 	builder := val.NewTupleBuilder(idxDesc)
@@ -215,6 +219,10 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 }
 
 func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, primary, secondary prolly.Map) error {
+	// Full-Text indexes do not make use of their internal map, so we may safely skip this check
+	if def.IsFullText() {
+		return nil
+	}
 	// secondary indexes have empty values
 	idxDesc, _ := secondary.Descriptors()
 	builder := val.NewTupleBuilder(idxDesc)

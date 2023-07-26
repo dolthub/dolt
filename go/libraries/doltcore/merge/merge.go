@@ -207,7 +207,17 @@ func MergeRoots(
 	for _, tblName := range tblNames {
 		mergedTable, stats, err := merger.MergeTable(ctx, tblName, opts, mergeOpts)
 		if err != nil {
-			return nil, err
+			// If a Full-Text table was both modified and deleted, then we want to ignore the modification.
+			// The schema will reflect the deletion, so we need to treat it the same.
+			if doltdb.IsFullTextTable(tblName) && errors.Is(ErrTableDeletedAndModified, err) {
+				stats = &MergeStats{Operation: TableRemoved}
+			} else {
+				return nil, err
+			}
+		}
+		if doltdb.IsFullTextTable(tblName) && stats.Operation == TableModified {
+			// For modified tables, we'll be rebuilding them, so we don't need to calculate the merge
+			continue
 		}
 		if mergedTable.conflict.Count() > 0 {
 			if types.IsFormat_DOLT(nbf) {
@@ -248,6 +258,11 @@ func MergeRoots(
 			}
 			// Nothing to update, our root already has the table deleted
 		}
+	}
+
+	mergedRoot, err = rebuildFullTextIndexes(ctx, mergedRoot)
+	if err != nil {
+		return nil, err
 	}
 
 	mergedFKColl, conflicts, err := ForeignKeysMerge(ctx, mergedRoot, ourRoot, theirRoot, ancRoot)

@@ -48,10 +48,7 @@ func CreateIndex(
 	indexName string,
 	columns []string,
 	prefixLengths []uint16,
-	isUnique bool,
-	isSpatial bool,
-	isUserDefined bool,
-	comment string,
+	props schema.IndexProperties,
 	opts editor.Options,
 ) (*CreateIndexReturn, error) {
 	sch, err := table.GetSchema(ctx)
@@ -102,12 +99,7 @@ func CreateIndex(
 		indexName,
 		realColNames,
 		prefixLengths,
-		schema.IndexProperties{
-			IsUnique:      isUnique,
-			IsSpatial:     isSpatial,
-			IsUserDefined: isUserDefined,
-			Comment:       comment,
-		},
+		props,
 	)
 	if err != nil {
 		return nil, err

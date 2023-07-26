@@ -265,10 +265,12 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 			tags,
 			index.PrefixLengths(),
 			schema.IndexProperties{
-				IsUnique:      index.IsUnique(),
-				IsSpatial:     index.IsSpatial(),
-				IsUserDefined: index.IsUserDefined(),
-				Comment:       index.Comment(),
+				IsUnique:           index.IsUnique(),
+				IsSpatial:          index.IsSpatial(),
+				IsFullText:         index.IsFullText(),
+				IsUserDefined:      index.IsUserDefined(),
+				Comment:            index.Comment(),
+				FullTextProperties: index.FullTextProperties(),
 			})
 		if err != nil {
 			return nil, err

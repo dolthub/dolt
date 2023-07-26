@@ -276,10 +276,13 @@ func (t *TempTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) error {
 		idx.Name,
 		cols,
 		allocatePrefixLengths(idx.Columns),
-		idx.Constraint == sql.IndexConstraint_Unique,
-		idx.Constraint == sql.IndexConstraint_Spatial,
-		true,
-		idx.Comment,
+		schema.IndexProperties{
+			IsUnique:      idx.Constraint == sql.IndexConstraint_Unique,
+			IsSpatial:     idx.Constraint == sql.IndexConstraint_Spatial,
+			IsFullText:    idx.Constraint == sql.IndexConstraint_Fulltext,
+			IsUserDefined: true,
+			Comment:       idx.Comment,
+		},
 		t.opts,
 	)
 	if err != nil {

@@ -148,13 +148,26 @@ func (enc encodedTypeInfo) decodeTypeInfo() (typeinfo.TypeInfo, error) {
 }
 
 type encodedIndex struct {
-	Name            string   `noms:"name" json:"name"`
-	Tags            []uint64 `noms:"tags" json:"tags"`
-	Comment         string   `noms:"comment" json:"comment"`
-	Unique          bool     `noms:"unique" json:"unique"`
-	Spatial         bool     `noms:"spatial,omitempty" json:"spatial,omitempty"`
-	IsSystemDefined bool     `noms:"hidden,omitempty" json:"hidden,omitempty"` // Was previously named Hidden, do not change noms name
-	PrefixLengths   []uint16 `noms:"prefixLengths,omitempty" json:"prefixLengths,omitempty"`
+	Name            string              `noms:"name" json:"name"`
+	Tags            []uint64            `noms:"tags" json:"tags"`
+	Comment         string              `noms:"comment" json:"comment"`
+	Unique          bool                `noms:"unique" json:"unique"`
+	Spatial         bool                `noms:"spatial,omitempty" json:"spatial,omitempty"`
+	FullText        bool                `noms:"fulltext,omitempty" json:"fulltext,omitempty"`
+	IsSystemDefined bool                `noms:"hidden,omitempty" json:"hidden,omitempty"` // Was previously named Hidden, do not change noms name
+	PrefixLengths   []uint16            `noms:"prefixLengths,omitempty" json:"prefixLengths,omitempty"`
+	FullTextInfo    encodedFullTextInfo `noms:"fulltext_info,omitempty" json:"fulltext_info,omitempty"`
+}
+
+type encodedFullTextInfo struct {
+	ConfigTable      string   `noms:"config_table" json:"config_table"`
+	PositionTable    string   `noms:"position_table" json:"position_table"`
+	DocCountTable    string   `noms:"doc_count_table" json:"doc_count_table"`
+	GlobalCountTable string   `noms:"global_count_table" json:"global_count_table"`
+	RowCountTable    string   `noms:"row_count_table" json:"row_count_table"`
+	KeyType          uint8    `noms:"key_type" json:"key_type"`
+	KeyName          string   `noms:"key_name" json:"key_name"`
+	KeyPositions     []uint16 `noms:"key_positions" json:"key_positions"`
 }
 
 type encodedCheck struct {
@@ -241,14 +254,26 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 
 	encodedIndexes := make([]encodedIndex, sch.Indexes().Count())
 	for i, index := range sch.Indexes().AllIndexes() {
+		props := index.FullTextProperties()
 		encodedIndexes[i] = encodedIndex{
 			Name:            index.Name(),
 			Tags:            index.IndexedColumnTags(),
 			Comment:         index.Comment(),
 			Unique:          index.IsUnique(),
 			Spatial:         index.IsSpatial(),
+			FullText:        index.IsFullText(),
 			IsSystemDefined: !index.IsUserDefined(),
 			PrefixLengths:   index.PrefixLengths(),
+			FullTextInfo: encodedFullTextInfo{
+				ConfigTable:      props.ConfigTable,
+				PositionTable:    props.PositionTable,
+				DocCountTable:    props.DocCountTable,
+				GlobalCountTable: props.GlobalCountTable,
+				RowCountTable:    props.RowCountTable,
+				KeyType:          props.KeyType,
+				KeyName:          props.KeyName,
+				KeyPositions:     props.KeyPositions,
+			},
 		}
 	}
 
@@ -311,8 +336,19 @@ func (sd schemaData) addChecksIndexesAndPkOrderingToSchema(sch schema.Schema) er
 			schema.IndexProperties{
 				IsUnique:      encodedIndex.Unique,
 				IsSpatial:     encodedIndex.Spatial,
+				IsFullText:    encodedIndex.FullText,
 				IsUserDefined: !encodedIndex.IsSystemDefined,
 				Comment:       encodedIndex.Comment,
+				FullTextProperties: schema.FullTextProperties{
+					ConfigTable:      encodedIndex.FullTextInfo.ConfigTable,
+					PositionTable:    encodedIndex.FullTextInfo.PositionTable,
+					DocCountTable:    encodedIndex.FullTextInfo.DocCountTable,
+					GlobalCountTable: encodedIndex.FullTextInfo.GlobalCountTable,
+					RowCountTable:    encodedIndex.FullTextInfo.RowCountTable,
+					KeyType:          encodedIndex.FullTextInfo.KeyType,
+					KeyName:          encodedIndex.FullTextInfo.KeyName,
+					KeyPositions:     encodedIndex.FullTextInfo.KeyPositions,
+				},
 			},
 		)
 		if err != nil {

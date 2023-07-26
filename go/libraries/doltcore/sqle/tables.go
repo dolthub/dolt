@@ -29,6 +29,7 @@ import (
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/fulltext"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -462,7 +463,6 @@ func partitionRows(ctx *sql.Context, t *doltdb.Table, sqlSch sql.Schema, projCol
 type WritableDoltTable struct {
 	*DoltTable
 	db Database
-	ed writer.TableWriter
 }
 
 var _ doltTableInterface = (*WritableDoltTable)(nil)
@@ -491,7 +491,6 @@ func (t *WritableDoltTable) WithProjections(colNames []string) sql.Table {
 	return &WritableDoltTable{
 		DoltTable: t.DoltTable.WithProjections(colNames).(*DoltTable),
 		db:        t.db,
-		ed:        t.ed,
 	}
 }
 
@@ -517,12 +516,90 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWri
 
 	setter := ds.SetRoot
 	ed, err = state.WriteSession().GetTableWriter(ctx, t.tableName, t.db.RevisionQualifiedName(), setter)
-
 	if err != nil {
 		return nil, err
 	}
 
-	return ed, nil
+	if t.sch.Indexes().ContainsFullTextIndex() {
+		ftEditor, err := t.getFullTextEditor(ctx)
+		if err != nil {
+			return nil, err
+		}
+		multiEditor, err := fulltext.CreateMultiTableEditor(ctx, ed, ftEditor)
+		if err != nil {
+			return nil, err
+		}
+		return multiEditor.(writer.TableWriter), nil
+	} else {
+		return ed, nil
+	}
+}
+
+// getFullTextEditor gathers all pseudo-index tables for a Full-Text index and returns an editor that will write
+// to all of them. This assumes that there are Full-Text indexes in the schema.
+func (t *WritableDoltTable) getFullTextEditor(ctx *sql.Context) (fulltext.TableEditor, error) {
+	workingRoot, err := t.workingRoot(ctx)
+	if err != nil {
+		return fulltext.TableEditor{}, err
+	}
+	var configTable fulltext.EditableTable
+	var sets []fulltext.TableSet
+	for _, idx := range t.sch.Indexes().AllIndexes() {
+		if !idx.IsFullText() {
+			continue
+		}
+		props := idx.FullTextProperties()
+		// We only load the config table once since it's shared by all indexes
+		if configTable == nil {
+			tbl, ok, err := t.db.getTable(ctx, workingRoot, props.ConfigTable)
+			if err != nil {
+				return fulltext.TableEditor{}, err
+			} else if !ok {
+				return fulltext.TableEditor{}, fmt.Errorf("missing Full-Text table: %s", props.ConfigTable)
+			}
+			configTable = tbl.(fulltext.EditableTable)
+		}
+		// Load the rest of the tables
+		positionTable, ok, err := t.db.getTable(ctx, workingRoot, props.PositionTable)
+		if err != nil {
+			return fulltext.TableEditor{}, err
+		} else if !ok {
+			return fulltext.TableEditor{}, fmt.Errorf("missing Full-Text table: %s", props.PositionTable)
+		}
+		docCountTable, ok, err := t.db.getTable(ctx, workingRoot, props.DocCountTable)
+		if err != nil {
+			return fulltext.TableEditor{}, err
+		} else if !ok {
+			return fulltext.TableEditor{}, fmt.Errorf("missing Full-Text table: %s", props.DocCountTable)
+		}
+		globalCountTable, ok, err := t.db.getTable(ctx, workingRoot, props.GlobalCountTable)
+		if err != nil {
+			return fulltext.TableEditor{}, err
+		} else if !ok {
+			return fulltext.TableEditor{}, fmt.Errorf("missing Full-Text table: %s", props.GlobalCountTable)
+		}
+		rowCountTable, ok, err := t.db.getTable(ctx, workingRoot, props.RowCountTable)
+		if err != nil {
+			return fulltext.TableEditor{}, err
+		} else if !ok {
+			return fulltext.TableEditor{}, fmt.Errorf("missing Full-Text table: %s", props.RowCountTable)
+		}
+		// Convert the index into a sql.Index
+		sqlIdx, err := index.ConvertFullTextToSql(ctx, t.db.RevisionQualifiedName(), t.tableName, t.sch, idx)
+		if err != nil {
+			return fulltext.TableEditor{}, err
+		}
+
+		sets = append(sets, fulltext.TableSet{
+			Index:       sqlIdx.(fulltext.Index),
+			Position:    positionTable.(fulltext.EditableTable),
+			DocCount:    docCountTable.(fulltext.EditableTable),
+			GlobalCount: globalCountTable.(fulltext.EditableTable),
+			RowCount:    rowCountTable.(fulltext.EditableTable),
+		})
+	}
+
+	return fulltext.CreateEditor(ctx, t, configTable, sets...)
 }
 
 // Deleter implements sql.DeletableTable
@@ -730,7 +807,7 @@ func (t *WritableDoltTable) GetNextAutoIncrementValue(ctx *sql.Context, potentia
 		return 0, err
 	}
 
-	return ed.GetNextAutoIncrementValue(ctx, potentialVal)
+	return ed.(sql.AutoIncrementGetter).GetNextAutoIncrementValue(ctx, potentialVal)
 }
 
 func (t *DoltTable) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, error) {
@@ -1076,6 +1153,7 @@ type doltAlterableTableInterface interface {
 	sql.PrimaryKeyAlterableTable
 	sql.ProjectedTable
 	sql.CollationAlterableTable
+	fulltext.IndexAlterableTable
 }
 
 var _ doltAlterableTableInterface = (*AlterableDoltTable)(nil)
@@ -1324,10 +1402,12 @@ func (t *AlterableDoltTable) RewriteInserter(
 				colNames,
 				prefixLengths,
 				schema.IndexProperties{
-					IsUnique:      index.IsUnique(),
-					IsSpatial:     index.IsSpatial(),
-					IsUserDefined: index.IsUserDefined(),
-					Comment:       index.Comment(),
+					IsUnique:           index.IsUnique(),
+					IsSpatial:          index.IsSpatial(),
+					IsFullText:         index.IsFullText(),
+					IsUserDefined:      index.IsUserDefined(),
+					Comment:            index.Comment(),
+					FullTextProperties: index.FullTextProperties(),
 				})
 		}
 	} else {
@@ -1781,70 +1861,7 @@ func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) err
 		return fmt.Errorf("only the following types of index constraints are supported: none, unique, spatial")
 	}
 
-	columns := make([]string, len(idx.Columns))
-	for i, indexCol := range idx.Columns {
-		columns[i] = indexCol.Name
-	}
-
-	table, err := t.DoltTable.DoltTable(ctx)
-	if err != nil {
-		return err
-	}
-
-	ret, err := creation.CreateIndex(
-		ctx,
-		table,
-		idx.Name,
-		columns,
-		allocatePrefixLengths(idx.Columns),
-		idx.Constraint == sql.IndexConstraint_Unique,
-		idx.Constraint == sql.IndexConstraint_Spatial,
-		true,
-		idx.Comment,
-		t.opts,
-	)
-	if err != nil {
-		return err
-	}
-	root, err := t.getRoot(ctx)
-	if err != nil {
-		return err
-	}
-	if ret.OldIndex != nil && ret.OldIndex != ret.NewIndex { // old index was replaced, so we update foreign keys
-		fkc, err := root.GetForeignKeyCollection(ctx)
-		if err != nil {
-			return err
-		}
-		for _, fk := range fkc.AllKeys() {
-			newFk := fk
-			if t.tableName == fk.TableName && fk.TableIndex == ret.OldIndex.Name() {
-				newFk.TableIndex = ret.NewIndex.Name()
-			}
-			if t.tableName == fk.ReferencedTableName && fk.ReferencedTableIndex == ret.OldIndex.Name() {
-				newFk.ReferencedTableIndex = ret.NewIndex.Name()
-			}
-			fkc.RemoveKeys(fk)
-			err = fkc.AddKeys(newFk)
-			if err != nil {
-				return err
-			}
-		}
-		root, err = root.PutForeignKeyCollection(ctx, fkc)
-		if err != nil {
-			return err
-		}
-	}
-	newRoot, err := root.PutTable(ctx, t.tableName, ret.NewTable)
-	if err != nil {
-		return err
-	}
-
-	err = t.setRoot(ctx, newRoot)
-
-	if err != nil {
-		return err
-	}
-	return t.updateFromRoot(ctx, newRoot)
+	return t.createIndex(ctx, idx, fulltext.KeyColumns{}, fulltext.IndexTableNames{})
 }
 
 // DropIndex implements sql.IndexAlterableTable
@@ -1910,6 +1927,110 @@ func (t *AlterableDoltTable) RenameIndex(ctx *sql.Context, fromIndexName string,
 	}
 
 	err = t.setRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
+	return t.updateFromRoot(ctx, newRoot)
+}
+
+// CreateFulltextIndex implements fulltext.IndexAlterableTable
+func (t *AlterableDoltTable) CreateFulltextIndex(ctx *sql.Context, idx sql.IndexDef, keyCols fulltext.KeyColumns, tableNames fulltext.IndexTableNames) error {
+	if !types.IsFormat_DOLT(t.Format()) {
+		return fmt.Errorf("FULLTEXT is not supported on our old format")
+	}
+	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
+		return err
+	}
+	if idx.Constraint != sql.IndexConstraint_Fulltext {
+		return fmt.Errorf("attempted to create non-FullText index through FullText interface")
+	}
+
+	return t.createIndex(ctx, idx, keyCols, tableNames)
+}
+
+// createIndex handles the common functionality between CreateIndex and CreateFulltextIndex.
+func (t *AlterableDoltTable) createIndex(ctx *sql.Context, idx sql.IndexDef, keyCols fulltext.KeyColumns, tableNames fulltext.IndexTableNames) error {
+	columns := make([]string, len(idx.Columns))
+	for i, indexCol := range idx.Columns {
+		columns[i] = indexCol.Name
+	}
+
+	table, err := t.DoltTable.DoltTable(ctx)
+	if err != nil {
+		return err
+	}
+
+	var keyPositions []uint16
+	if len(keyCols.Positions) > 0 {
+		keyPositions = make([]uint16, len(keyCols.Positions))
+		for i := range keyPositions {
+			keyPositions[i] = uint16(keyCols.Positions[i])
+		}
+	}
+
+	ret, err := creation.CreateIndex(
+		ctx,
+		table,
+		idx.Name,
+		columns,
+		allocatePrefixLengths(idx.Columns),
+		schema.IndexProperties{
+			IsUnique:      idx.Constraint == sql.IndexConstraint_Unique,
+			IsSpatial:     idx.Constraint == sql.IndexConstraint_Spatial,
+			IsFullText:    idx.Constraint == sql.IndexConstraint_Fulltext,
+			IsUserDefined: true,
+			Comment:       idx.Comment,
+			FullTextProperties: schema.FullTextProperties{
+				ConfigTable:      tableNames.Config,
+				PositionTable:    tableNames.Position,
+				DocCountTable:    tableNames.DocCount,
+				GlobalCountTable: tableNames.GlobalCount,
+				RowCountTable:    tableNames.RowCount,
+				KeyType:          uint8(keyCols.Type),
+				KeyName:          keyCols.Name,
+				KeyPositions:     keyPositions,
+			},
+		},
+		t.opts,
+	)
+	if err != nil {
+		return err
+	}
+	root, err := t.getRoot(ctx)
+	if err != nil {
+		return err
+	}
+	if ret.OldIndex != nil && ret.OldIndex != ret.NewIndex { // old index was replaced, so we update foreign keys
+		fkc, err := root.GetForeignKeyCollection(ctx)
+		if err != nil {
+			return err
+		}
+		for _, fk := range fkc.AllKeys() {
+			newFk := fk
+			if t.tableName == fk.TableName && fk.TableIndex == ret.OldIndex.Name() {
+				newFk.TableIndex = ret.NewIndex.Name()
+			}
+			if t.tableName == fk.ReferencedTableName && fk.ReferencedTableIndex == ret.OldIndex.Name() {
+				newFk.ReferencedTableIndex = ret.NewIndex.Name()
+			}
+			fkc.RemoveKeys(fk)
+			err = fkc.AddKeys(newFk)
+			if err != nil {
+				return err
+			}
+		}
+		root, err = root.PutForeignKeyCollection(ctx, fkc)
+		if err != nil {
+			return err
+		}
+	}
+	newRoot, err := root.PutTable(ctx, t.tableName, ret.NewTable)
+	if err != nil {
+		return err
+	}
+
+	err = t.setRoot(ctx, newRoot)
+
 	if err != nil {
 		return err
 	}
@@ -2173,10 +2294,13 @@ func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.
 		idx.Name,
 		columns,
 		allocatePrefixLengths(idx.Columns),
-		idx.Constraint == sql.IndexConstraint_Unique,
-		idx.Constraint == sql.IndexConstraint_Spatial,
-		false,
-		"",
+		schema.IndexProperties{
+			IsUnique:      idx.Constraint == sql.IndexConstraint_Unique,
+			IsSpatial:     idx.Constraint == sql.IndexConstraint_Spatial,
+			IsFullText:    idx.Constraint == sql.IndexConstraint_Fulltext,
+			IsUserDefined: false,
+			Comment:       "",
+		},
 		t.opts,
 	)
 	if err != nil {

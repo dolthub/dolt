@@ -70,13 +70,28 @@ type IndexCollection interface {
 	RenameIndex(oldName, newName string) (Index, error)
 	//SetPks changes the pks or pk ordinals
 	SetPks([]uint64) error
+	// ContainsFullTextIndex returns whether the collection contains at least one Full-Text index.
+	ContainsFullTextIndex() bool
 }
 
 type IndexProperties struct {
 	IsUnique      bool
 	IsSpatial     bool
+	IsFullText    bool
 	IsUserDefined bool
 	Comment       string
+	FullTextProperties
+}
+
+type FullTextProperties struct {
+	ConfigTable      string
+	PositionTable    string
+	DocCountTable    string
+	GlobalCountTable string
+	RowCountTable    string
+	KeyType          uint8
+	KeyName          string
+	KeyPositions     []uint16
 }
 
 type indexCollectionImpl struct {
@@ -167,9 +182,11 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 		allTags:       combineAllTags(tags, ixc.pks),
 		isUnique:      props.IsUnique,
 		isSpatial:     props.IsSpatial,
+		isFullText:    props.IsFullText,
 		isUserDefined: props.IsUserDefined,
 		comment:       props.Comment,
 		prefixLengths: prefixLengths,
+		fullTextProps: props.FullTextProperties,
 	}
 	ixc.indexes[indexName] = index
 	for _, tag := range tags {
@@ -191,9 +208,11 @@ func (ixc *indexCollectionImpl) UnsafeAddIndexByColTags(indexName string, tags [
 		allTags:       combineAllTags(tags, ixc.pks),
 		isUnique:      props.IsUnique,
 		isSpatial:     props.IsSpatial,
+		isFullText:    props.IsFullText,
 		isUserDefined: props.IsUserDefined,
 		comment:       props.Comment,
 		prefixLengths: prefixLengths,
+		fullTextProps: props.FullTextProperties,
 	}
 	ixc.indexes[indexName] = index
 	for _, tag := range tags {
@@ -356,9 +375,11 @@ func (ixc *indexCollectionImpl) Merge(indexes ...Index) {
 				indexColl:     ixc,
 				isUnique:      index.IsUnique(),
 				isSpatial:     index.IsSpatial(),
+				isFullText:    index.IsFullText(),
 				isUserDefined: index.IsUserDefined(),
 				comment:       index.Comment(),
 				prefixLengths: index.PrefixLengths(),
+				fullTextProps: index.FullTextProperties(),
 			}
 			ixc.AddIndex(newIndex)
 		}
@@ -460,6 +481,27 @@ func (ixc *indexCollectionImpl) SetPks(tags []uint64) error {
 	}
 	ixc.pks = tags
 	return nil
+}
+
+func (ixc *indexCollectionImpl) ContainsFullTextIndex() bool {
+	for _, idx := range ixc.indexes {
+		if idx.isFullText {
+			return true
+		}
+	}
+	return false
+}
+
+//TODO: maybe delete?
+// TableNameSlice returns the table names as a slice, which may be used to easily grab all of the tables using a for loop.
+func (props FullTextProperties) TableNameSlice() []string {
+	return []string{
+		props.ConfigTable,
+		props.PositionTable,
+		props.DocCountTable,
+		props.GlobalCountTable,
+		props.RowCountTable,
+	}
 }
 
 func combineAllTags(tags []uint64, pks []uint64) []uint64 {
