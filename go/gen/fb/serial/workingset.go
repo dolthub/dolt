@@ -370,7 +370,19 @@ func (rcv *MergeState) UnmergableTablesLength() int {
 	return 0
 }
 
-const MergeStateNumFields = 4
+func (rcv *MergeState) IsCherryPick() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *MergeState) MutateIsCherryPick(n bool) bool {
+	return rcv._tab.MutateBoolSlot(12, n)
+}
+
+const MergeStateNumFields = 5
 
 func MergeStateStart(builder *flatbuffers.Builder) {
 	builder.StartObject(MergeStateNumFields)
@@ -395,6 +407,9 @@ func MergeStateAddUnmergableTables(builder *flatbuffers.Builder, unmergableTable
 }
 func MergeStateStartUnmergableTablesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
+}
+func MergeStateAddIsCherryPick(builder *flatbuffers.Builder, isCherryPick bool) {
+	builder.PrependBoolSlot(4, isCherryPick, false)
 }
 func MergeStateEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

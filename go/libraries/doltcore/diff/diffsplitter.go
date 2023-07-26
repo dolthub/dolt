@@ -118,9 +118,6 @@ func mapQuerySchemaToTargetSchema(query, target sql.Schema) (mapping []int, err 
 		} else {
 			return nil, errors.New("expected column prefix of 'to_' or 'from_' (" + col.Name + ")")
 		}
-		if mapping[i] < 0 { // sanity check
-			return nil, errors.New("failed to map diff column: " + col.Name)
-		}
 	}
 	return
 }
@@ -163,6 +160,10 @@ func (ds DiffSplitter) SplitDiffResultRow(row sql.Row) (from, to RowDiff, err er
 		from.RowDiff = Removed
 		for i := 0; i < ds.splitIdx; i++ {
 			j := ds.queryToTarget[i]
+			// skip any columns that aren't mapped
+			if j < 0 {
+				continue
+			}
 			from.Row[j] = row[i]
 			from.ColDiffs[j] = Removed
 		}
@@ -172,6 +173,10 @@ func (ds DiffSplitter) SplitDiffResultRow(row sql.Row) (from, to RowDiff, err er
 		to.RowDiff = Added
 		for i := ds.splitIdx; i < len(row); i++ {
 			j := ds.queryToTarget[i]
+			// skip any columns that aren't mapped
+			if j < 0 {
+				continue
+			}
 			to.Row[j] = row[i]
 			to.ColDiffs[j] = Added
 		}
@@ -181,6 +186,10 @@ func (ds DiffSplitter) SplitDiffResultRow(row sql.Row) (from, to RowDiff, err er
 		from.RowDiff = ModifiedOld
 		for i := 0; i < ds.splitIdx; i++ {
 			j := ds.queryToTarget[i]
+			// skip any columns that aren't mapped
+			if j < 0 {
+				continue
+			}
 			from.Row[j] = row[i]
 		}
 		to.Row = make(sql.Row, len(ds.targetSch))

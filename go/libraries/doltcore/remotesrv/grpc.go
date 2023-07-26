@@ -504,6 +504,7 @@ func (rs *RemoteChunkStore) GetRepoMetadata(ctx context.Context, req *remotesapi
 	if err := ValidateGetRepoMetadataRequest(req); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
+
 	repoPath := getRepoPath(req)
 	logger = logger.WithField(RepoPathField, repoPath)
 	defer func() { logger.Info("finished") }()

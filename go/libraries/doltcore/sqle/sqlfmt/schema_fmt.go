@@ -197,6 +197,15 @@ func AlterTableDropIndexStmt(tableName string, idx schema.Index) string {
 	return b.String()
 }
 
+func AlterTableCollateStmt(tableName string, fromCollation, toCollation schema.Collation) string {
+	var b strings.Builder
+	b.WriteString("ALTER TABLE ")
+	b.WriteString(QuoteIdentifier(tableName))
+	toCollationId := sql.CollationID(toCollation)
+	b.WriteString(" COLLATE=" + QuoteComment(toCollationId.Name()) + ";")
+	return b.String()
+}
+
 func AlterTableAddForeignKeyStmt(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")

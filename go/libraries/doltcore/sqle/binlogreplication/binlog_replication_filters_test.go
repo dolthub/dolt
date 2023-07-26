@@ -56,7 +56,7 @@ func TestBinlogReplicationFilters_ignoreTablesOnly(t *testing.T) {
 	// Verify that all changes from t1 were applied on the replica
 	rows, err := replicaDatabase.Queryx("SELECT COUNT(pk) as count, MIN(pk) as min, MAX(pk) as max from db01.t1;")
 	require.NoError(t, err)
-	row := convertByteArraysToStrings(readNextRow(t, rows))
+	row := convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "10", row["count"])
 	require.Equal(t, "0", row["min"])
 	require.Equal(t, "9", row["max"])
@@ -65,7 +65,7 @@ func TestBinlogReplicationFilters_ignoreTablesOnly(t *testing.T) {
 	// Verify that no changes from t2 were applied on the replica
 	rows, err = replicaDatabase.Queryx("SELECT COUNT(pk) as count, MIN(pk) as min, MAX(pk) as max from db01.t2;")
 	require.NoError(t, err)
-	row = convertByteArraysToStrings(readNextRow(t, rows))
+	row = convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "0", row["count"])
 	require.Equal(t, nil, row["min"])
 	require.Equal(t, nil, row["max"])
@@ -107,7 +107,7 @@ func TestBinlogReplicationFilters_doTablesOnly(t *testing.T) {
 	// Verify that all changes from t1 were applied on the replica
 	rows, err := replicaDatabase.Queryx("SELECT COUNT(pk) as count, MIN(pk) as min, MAX(pk) as max from db01.t1;")
 	require.NoError(t, err)
-	row := convertByteArraysToStrings(readNextRow(t, rows))
+	row := convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "10", row["count"])
 	require.Equal(t, "0", row["min"])
 	require.Equal(t, "9", row["max"])
@@ -116,7 +116,7 @@ func TestBinlogReplicationFilters_doTablesOnly(t *testing.T) {
 	// Verify that no changes from t2 were applied on the replica
 	rows, err = replicaDatabase.Queryx("SELECT COUNT(pk) as count, MIN(pk) as min, MAX(pk) as max from db01.t2;")
 	require.NoError(t, err)
-	row = convertByteArraysToStrings(readNextRow(t, rows))
+	row = convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "0", row["count"])
 	require.Equal(t, nil, row["min"])
 	require.Equal(t, nil, row["max"])
@@ -159,7 +159,7 @@ func TestBinlogReplicationFilters_doTablesAndIgnoreTables(t *testing.T) {
 	// Verify that all changes from t1 were applied on the replica
 	rows, err := replicaDatabase.Queryx("SELECT COUNT(pk) as count, MIN(pk) as min, MAX(pk) as max from db01.t1;")
 	require.NoError(t, err)
-	row := convertByteArraysToStrings(readNextRow(t, rows))
+	row := convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "10", row["count"])
 	require.Equal(t, "0", row["min"])
 	require.Equal(t, "9", row["max"])
@@ -168,7 +168,7 @@ func TestBinlogReplicationFilters_doTablesAndIgnoreTables(t *testing.T) {
 	// Verify that no changes from t2 were applied on the replica
 	rows, err = replicaDatabase.Queryx("SELECT COUNT(pk) as count, MIN(pk) as min, MAX(pk) as max from db01.t2;")
 	require.NoError(t, err)
-	row = convertByteArraysToStrings(readNextRow(t, rows))
+	row = convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "0", row["count"])
 	require.Equal(t, nil, row["min"])
 	require.Equal(t, nil, row["max"])

@@ -1,0 +1,32 @@
+#!/usr/bin/expect -f
+
+set timeout 5
+spawn dolt sql
+
+expect {
+    "> " { send "select 23;\r"; }
+    timeout { exit 1; }
+}
+
+expect {
+    "| 23 |" { }
+    timeout { exit 1; }
+}
+expect {
+    "| 23 |" { }
+    timeout { exit 1; }
+}
+
+expect {
+    "> " { send "exit;\r"; }
+    timeout { exit 1; }
+}
+
+expect {
+   eof { }
+   timeout { exit 1; }
+}
+
+set waitval [wait -i $spawn_id]
+set exval [lindex $waitval 3]
+exit $exval

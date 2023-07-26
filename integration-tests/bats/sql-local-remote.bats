@@ -1087,3 +1087,19 @@ SQL
 
   [[ $output =~ "dolt checkout can not currently be used when there is a local server running. Please stop your dolt sql-server and try again." ]] || false
 }
+
+@test "sql-local-remote: verify unmigrated command will fail with warning" {
+    cd altDB
+    start_sql_server altDB
+    run dolt --user dolt log
+    [ $status -eq 1 ]
+    [[ "$output" =~ "Global arguments are not supported for this command" ]]
+}
+
+@test "sql-local-remote: verify commands without global arg support will fail with warning" {
+    cd altDB
+    start_sql_server altDB
+    run dolt --user dolt version
+    [ $status -eq 1 ]
+    [[ "$output" =~ "This command does not support global arguments." ]]
+}

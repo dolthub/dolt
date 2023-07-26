@@ -435,6 +435,16 @@ func buildAuthResponse(salt []byte, password string) []byte {
 	return shaPwd
 }
 
+func ValidatePasswordWithAuthResponse(rawDb *mysql_db.MySQLDb, user, password string) error {
+	salt, err := rawDb.Salt()
+	if err != nil {
+		return err
+	}
+
+	authResponse := buildAuthResponse(salt, password)
+	return passwordValidate(rawDb, salt, user, authResponse)
+}
+
 // GetDoltStatus retrieves the status of the current working set of changes in the working set, and returns two
 // lists of modified tables: staged and unstaged. If both lists are empty, there are no changes in the working set.
 // The list of unstaged tables does not include tables that are ignored, as configured by the dolt_ignore table.

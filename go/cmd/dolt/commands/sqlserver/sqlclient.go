@@ -37,6 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -475,18 +476,25 @@ func (c ConnectionQueryist) Query(ctx *sql.Context, query string) (sql.Schema, s
 
 // BuildConnectionStringQueryist returns a Queryist that connects to the server specified by the given server config. Presence in this
 // module isn't ideal, but it's the only way to get the server config into the queryist.
-func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argparser.ArgParseResults, port int, database string) (cli.LateBindQueryist, error) {
+func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argparser.ArgParseResults, host string, port int, useTLS bool, dbRev string) (cli.LateBindQueryist, error) {
 	clientConfig, err := GetClientConfig(cwdFS, creds, apr)
 	if err != nil {
 		return nil, err
 	}
 
-	parsedMySQLConfig, err := mysqlDriver.ParseDSN(ConnectionString(clientConfig, database))
+	// ParseDSN currently doesn't support `/` in the db name
+	dbName, _ := dsess.SplitRevisionDbName(dbRev)
+	parsedMySQLConfig, err := mysqlDriver.ParseDSN(ConnectionString(clientConfig, dbName))
 	if err != nil {
 		return nil, err
 	}
 
-	parsedMySQLConfig.Addr = fmt.Sprintf("localhost:%d", port)
+	parsedMySQLConfig.DBName = dbRev
+	parsedMySQLConfig.Addr = fmt.Sprintf("%s:%d", host, port)
+
+	if useTLS {
+		parsedMySQLConfig.TLSConfig = "true"
+	}
 
 	mysqlConnector, err := mysqlDriver.NewConnector(parsedMySQLConfig)
 	if err != nil {
@@ -499,7 +507,7 @@ func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, c
 
 	var lateBind cli.LateBindQueryist = func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) {
 		sqlCtx := sql.NewContext(ctx)
-		sqlCtx.SetCurrentDatabase(database)
+		sqlCtx.SetCurrentDatabase(dbRev)
 		return queryist, sqlCtx, func() { conn.Conn(ctx) }, nil
 	}
 

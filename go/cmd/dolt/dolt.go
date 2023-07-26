@@ -61,7 +61,7 @@ import (
 )
 
 const (
-	Version = "1.7.6"
+	Version = "1.8.3"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -152,8 +152,31 @@ var commandsWithoutCliCtx = []cli.Command{
 	&commands.Assist{},
 }
 
+var commandsWithoutGlobalArgSupport = []cli.Command{
+	commands.InitCmd{},
+	commands.CloneCmd{},
+	docscmds.Commands,
+	commands.MigrateCmd{},
+	commands.ReadTablesCmd{},
+	commands.LoginCmd{},
+	credcmds.Commands,
+	sqlserver.SqlServerCmd{VersionStr: Version},
+	sqlserver.SqlClientCmd{VersionStr: Version},
+	commands.VersionCmd{VersionStr: Version},
+	commands.ConfigCmd{},
+}
+
 func initCliContext(commandName string) bool {
 	for _, command := range commandsWithoutCliCtx {
+		if command.Name() == commandName {
+			return false
+		}
+	}
+	return true
+}
+
+func supportsGlobalArgs(commandName string) bool {
+	for _, command := range commandsWithoutGlobalArgSupport {
 		if command.Name() == commandName {
 			return false
 		}
@@ -527,13 +550,26 @@ func runMain() int {
 		lateBind, err := buildLateBinder(ctx, dEnv.FS, mrEnv, creds, apr, subcommandName, verboseEngineSetup)
 
 		if err != nil {
-			cli.PrintErrln(color.RedString("Failure to Load SQL Engine: %v", err))
+			cli.PrintErrln(color.RedString("%v", err))
 			return 1
 		}
 
 		cliCtx, err = cli.NewCliContext(apr, dEnv.Config, lateBind)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Unexpected Error: %v", err))
+			return 1
+		}
+	} else {
+		if args[0] != subcommandName {
+			if supportsGlobalArgs(subcommandName) {
+				cli.PrintErrln(
+					`Global arguments are not supported for this command as it has not yet been migrated to function in a remote context. 
+If you're interested in running this command against a remote host, hit us up on discord (https://discord.gg/gqr7K4VNKe).`)
+			} else {
+				cli.PrintErrln(
+					`This command does not support global arguments. Please try again without the global arguments 
+or check the docs for questions about usage.`)
+			}
 			return 1
 		}
 	}
@@ -558,15 +594,39 @@ func runMain() int {
 	return res
 }
 
+// buildLateBinder builds a LateBindQueryist for which is used to obtain the Queryist used for the length of the
+// command execution.
 func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, creds *cli.UserPassword, apr *argparser.ArgParseResults, subcommandName string, verbose bool) (cli.LateBindQueryist, error) {
 
 	var targetEnv *env.DoltEnv = nil
 
 	useDb, hasUseDb := apr.GetValue(commands.UseDbFlag)
+	// If the host flag is given, we are forced to use a remote connection to a server.
+	host, hasHost := apr.GetValue(cli.HostFlag)
+	if hasHost {
+		if !hasUseDb && subcommandName != "sql" {
+			return nil, fmt.Errorf("The --%s flag requires the additional --%s flag.", cli.HostFlag, commands.UseDbFlag)
+		}
+
+		port, hasPort := apr.GetInt(cli.PortFlag)
+		if !hasPort {
+			port = 3306
+		}
+		useTLS := !apr.Contains(cli.NoTLSFlag)
+
+		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, host, port, useTLS, useDb)
+	} else {
+		_, hasPort := apr.GetInt(cli.PortFlag)
+		if hasPort {
+			return nil, fmt.Errorf("The --%s flag is only meaningful with the --%s flag.", cli.PortFlag, cli.HostFlag)
+		}
+	}
+
 	if hasUseDb {
-		targetEnv = mrEnv.GetEnv(useDb)
+		dbName, _ := dsess.SplitRevisionDbName(useDb)
+		targetEnv = mrEnv.GetEnv(dbName)
 		if targetEnv == nil {
-			return nil, fmt.Errorf("The provided --use-db %s does not exist or is not a directory.", useDb)
+			return nil, fmt.Errorf("The provided --use-db %s does not exist.", dbName)
 		}
 	} else {
 		useDb = mrEnv.GetFirstDatabase()
@@ -602,7 +662,7 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 				creds = &cli.UserPassword{Username: sqlserver.LocalConnectionUser, Password: lock.Secret, Specified: false}
 			}
 
-			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, lock.Port, useDb)
+			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", lock.Port, false, useDb)
 		}
 	}
 
@@ -674,6 +734,9 @@ func buildGlobalArgs() *argparser.ArgParser {
 
 	ap.SupportsString(cli.UserFlag, "u", "user", fmt.Sprintf("Defines the local superuser (defaults to `%v`). If the specified user exists, will take on permissions of that user.", commands.DefaultUser))
 	ap.SupportsString(cli.PasswordFlag, "p", "password", "Defines the password for the user. Defaults to empty string.")
+	ap.SupportsString(cli.HostFlag, "", "host", "Defines the host to connect to.")
+	ap.SupportsInt(cli.PortFlag, "", "port", "Defines the port to connect to. Only used when the --host flag is also provided. Defaults to `3306`.")
+	ap.SupportsFlag(cli.NoTLSFlag, "", "Disables TLS for the connection to remote databases.")
 	ap.SupportsString(commands.DataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory.")
 	ap.SupportsString(commands.CfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to `$data-dir/.doltcfg`. Will only be created if there is a change to configuration settings.")
 	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
