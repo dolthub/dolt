@@ -492,7 +492,7 @@ func (ixc *indexCollectionImpl) ContainsFullTextIndex() bool {
 	return false
 }
 
-//TODO: maybe delete?
+// TODO: maybe delete?
 // TableNameSlice returns the table names as a slice, which may be used to easily grab all of the tables using a for loop.
 func (props FullTextProperties) TableNameSlice() []string {
 	return []string{
