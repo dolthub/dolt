@@ -14,6 +14,6 @@ jobs:
       - uses: dolthub/label-customer-issues@main
         with:
           repo-token: ${{ secrets.REPO_ACCESS_TOKEN }}
-          issue-label: customer-issue
+          issue-label: customer issue
           pr-label: contribution
           exclude: dependabot
