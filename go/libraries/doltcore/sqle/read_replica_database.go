@@ -326,11 +326,11 @@ func pullBranches(
 						} else if err != nil {
 							return nil, err
 						}
-						
+
 						// If we pulled this branch, we need to also update its corresponding working set
-						// TODO: the ErrOptimisticLockFailed below will cause working set to not be updated the next time through 
+						// TODO: the ErrOptimisticLockFailed below will cause working set to not be updated the next time through
 						//  the loop, since pullLocalBranch will return false (branch already up to date)
-						//  A better solution would be to update both the working set and the branch in the same noms transaction, 
+						//  A better solution would be to update both the working set and the branch in the same noms transaction,
 						//  but that's difficult with the current structure
 						if pulled {
 							err = rrd.updateWorkingSet(ctx, localRef, behavior)
@@ -401,8 +401,8 @@ func (rrd ReadReplicaDatabase) createNewBranchFromRemote(ctx *sql.Context, remot
 	return rrd.ddb.SetHead(ctx, trackingRef, remoteRef.Hash)
 }
 
-// pullLocalBranch pulls the remote branch into the local branch if they differ and returns if any work was done. 
-// Sets the head directly if pullBehaviorForcePull is provided, otherwise attempts a fast-forward. 
+// pullLocalBranch pulls the remote branch into the local branch if they differ and returns if any work was done.
+// Sets the head directly if pullBehaviorForcePull is provided, otherwise attempts a fast-forward.
 func (rrd ReadReplicaDatabase) pullLocalBranch(ctx *sql.Context, localRef doltdb.RefWithHash, remoteRef doltdb.RefWithHash, trackingRef ref.RemoteRef, behavior pullBehavior) (bool, error) {
 	if localRef.Hash != remoteRef.Hash {
 		if behavior == pullBehaviorForcePull {
@@ -421,10 +421,10 @@ func (rrd ReadReplicaDatabase) pullLocalBranch(ctx *sql.Context, localRef doltdb
 		if err != nil {
 			return false, err
 		}
-		
+
 		return true, nil
 	}
-	
+
 	return false, nil
 }
 
@@ -434,8 +434,8 @@ func (rrd ReadReplicaDatabase) updateWorkingSet(ctx *sql.Context, localRef doltd
 	if err != nil {
 		return err
 	}
-	
-	var wsHash hash.Hash 
+
+	var wsHash hash.Hash
 	ws, err := rrd.ddb.ResolveWorkingSet(ctx, wsRef)
 	if err == doltdb.ErrWorkingSetNotFound {
 		// ignore, we'll create from scratch
@@ -456,7 +456,7 @@ func (rrd ReadReplicaDatabase) updateWorkingSet(ctx *sql.Context, localRef doltd
 	if err != nil {
 		return err
 	}
-	
+
 	wsMeta := doltdb.TodoWorkingSetMeta()
 	if dtx, ok := ctx.GetTransaction().(*dsess.DoltTransaction); ok {
 		wsMeta = dtx.WorkingSetMeta(ctx)
