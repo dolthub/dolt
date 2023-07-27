@@ -403,6 +403,29 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
+		// https://github.com/dolthub/dolt/issues/6391
+		Name: "columns modified to narrower types",
+		SetUpScript: []string{
+			"create table t (pk int primary key, col1 varchar(20), col2 int);",
+			"call dolt_commit('-Am', 'new table t');",
+			"insert into t values (1, '123456789012345', 420);",
+			"call dolt_commit('-am', 'inserting data');",
+			"update t set col1='1234567890', col2=13;",
+			"alter table t modify column col1 varchar(10);",
+			"alter table t modify column col2 tinyint;",
+			"call dolt_commit('-am', 'narrowing types');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select to_pk, to_col1, to_col2, to_commit, from_pk, from_col1, from_col2, from_commit, diff_type from dolt_diff_t order by from_commit_date ASC;",
+				Expected: []sql.Row{
+					{1, "123456789012345", 420, doltCommit, nil, nil, nil, doltCommit, "added"},
+					{1, "1234567890", 13, doltCommit, 1, "123456789012345", 420, doltCommit, "modified"},
+				},
+			},
+		},
+	},
+	{
 		Name: "multiple column renames",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 int);",
