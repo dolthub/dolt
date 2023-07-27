@@ -322,6 +322,31 @@ SQL
     [[ "${lines[1]}" =~ "t1" ]] || false
 }
 
+@test "replication: pull non-current head" {
+    dolt clone file://./rem1 repo2
+    cd repo2
+    dolt sql << SQL
+create table t1 (a int);
+insert into t1 values (1);
+SQL
+    dolt add .
+    dolt commit -am "cm"
+    dolt push origin main
+
+    dolt checkout -b "b1"
+    dolt sql -q "update t1 set a = 2"
+    dolt commit -am "new values"
+    dolt push origin b1
+
+    cd ../repo1
+    dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+    run dolt sql -q 'select * from `repo1/b1`.t1' -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "${lines[1]}" =~ "2" ]] || false
+}
+
 @test "replication: pull on sql checkout" {
     dolt clone file://./rem1 repo2
     cd repo2
