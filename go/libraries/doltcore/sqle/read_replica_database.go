@@ -455,7 +455,7 @@ func pullBranches(
 
 						continue REFS
 					default:
-						ctx.GetLogger().Warnf("skipping replication for unhandled remote ref %s", remoteRef.Ref.String())
+						ctx.GetLogger().Debugf("skipping replication for unhandled remote ref %s", remoteRef.Ref.String())
 						continue REFS
 					}
 				}
