@@ -256,7 +256,7 @@ func doltCommit(ctx *sql.Context,
 	workingSet = workingSet.ClearMerge()
 
 	var rsc doltdb.ReplicationStatusController
-	newCommit, err := doltDb.CommitWithWorkingSet(ctx, headRef, workingSet.Ref(), &pending, workingSet, currHash, tx.getWorkingSetMeta(ctx), &rsc)
+	newCommit, err := doltDb.CommitWithWorkingSet(ctx, headRef, workingSet.Ref(), &pending, workingSet, currHash, tx.WorkingSetMeta(ctx), &rsc)
 	WaitForReplicationController(ctx, rsc)
 	return workingSet, newCommit, err
 }
@@ -272,7 +272,7 @@ func txCommit(ctx *sql.Context,
 	_ editor.Options, // editor options for merges
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 	var rsc doltdb.ReplicationStatusController
-	err := doltDb.UpdateWorkingSet(ctx, workingSet.Ref(), workingSet, hash, tx.getWorkingSetMeta(ctx), &rsc)
+	err := doltDb.UpdateWorkingSet(ctx, workingSet.Ref(), workingSet, hash, tx.WorkingSetMeta(ctx), &rsc)
 	WaitForReplicationController(ctx, rsc)
 	return workingSet, nil, err
 }
@@ -759,7 +759,8 @@ func (tx *DoltTransaction) ClearSavepoint(name string) bool {
 	return false
 }
 
-func (tx DoltTransaction) getWorkingSetMeta(ctx *sql.Context) *datas.WorkingSetMeta {
+// WorkingSetMeta returns the metadata to use for a commit of this transaction
+func (tx DoltTransaction) WorkingSetMeta(ctx *sql.Context) *datas.WorkingSetMeta {
 	sess := DSessFromSess(ctx.Session)
 	return &datas.WorkingSetMeta{
 		Name:        sess.Username(),

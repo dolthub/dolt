@@ -121,9 +121,9 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 		return sql.ErrUnknownSystemVariable.New(dsess.ReplicateAllHeads)
 	}
 
-	behavior := pullBehavior_fastForward
+	behavior := pullBehaviorFastForward
 	if ReadReplicaForcePull() {
-		behavior = pullBehavior_forcePull
+		behavior = pullBehaviorForcePull
 	}
 
 	dSess := dsess.DSessFromSess(ctx.Session)
@@ -268,7 +268,7 @@ func (rrd ReadReplicaDatabase) CreateLocalBranchFromRemote(ctx *sql.Context, bra
 		_, err = pullBranches(ctx, rrd, []doltdb.RefWithHash{{
 			Ref:  branchRef,
 			Hash: cmHash,
-		}}, nil, pullBehavior_fastForward)
+		}}, nil, pullBehaviorFastForward)
 		if err != nil {
 			return nil, err
 		}
@@ -281,8 +281,8 @@ func (rrd ReadReplicaDatabase) CreateLocalBranchFromRemote(ctx *sql.Context, bra
 
 type pullBehavior bool
 
-const pullBehavior_fastForward pullBehavior = false
-const pullBehavior_forcePull pullBehavior = true
+const pullBehaviorFastForward pullBehavior = false
+const pullBehaviorForcePull pullBehavior = true
 
 // pullBranchesAndUpdateWorkingSet pulls the remote branches named. If a corresponding local branch exists, it will be
 // fast-forwarded. If it doesn't exist, it will be created. Afterward, the working set of the current branch is
@@ -302,6 +302,8 @@ func pullBranchesAndUpdateWorkingSet(
 	}
 
 	// update the current working set if necessary
+	// TODO: the current ref is wrong?
+	// Or we need to always update working sets?
 	if remoteRef, ok := remoteRefsByPath[currentBranchRef.GetPath()]; ok {
 		// Loop on optimistic lock failures.
 		for {
@@ -395,7 +397,7 @@ func pullBranches(
 			return nil, pullErr
 		}
 
-	REFS: // every successful pass through the loop below must end with CONTINUE REFS to get out of the retry loop
+	REFS: // every successful pass through the loop below must end with `continue REFS` to get out of the retry loop
 		for _, remoteRef := range remoteRefs {
 			trackingRef := ref.NewRemoteRef(rrd.remote.Name, remoteRef.Ref.GetPath())
 			localRef, localRefExists := localRefsByPath[remoteRef.Ref.GetPath()]
@@ -406,13 +408,26 @@ func pullBranches(
 				if pullErr != nil || localRefExists {
 					pullErr = nil
 
-					// TODO: this should work for workspaces too but doesn't, only branches
 					if localRef.Ref.GetType() == ref.BranchRefType {
-						err := rrd.pullLocalBranch(ctx, localRef, remoteRef, trackingRef, behavior)
+						pulled, err := rrd.pullLocalBranch(ctx, localRef, remoteRef, trackingRef, behavior)
 						if errors.Is(err, datas.ErrOptimisticLockFailed) {
 							continue OPTIMISTIC_RETRY
 						} else if err != nil {
 							return nil, err
+						}
+						
+						// If we pulled this branch, we need to also update its corresponding working set
+						// TODO: the ErrOptimisticLockFailed below will cause working set to not be updated the next time through 
+						//  the loop, since pullLocalBranch will return false (branch already up to date)
+						//  A better solution would be to update both the working set and the branch in the same noms transaction, 
+						//  but that's difficult with the current structure
+						if pulled {
+							err = rrd.updateWorkingSet(ctx, localRef, behavior)
+							if errors.Is(err, datas.ErrOptimisticLockFailed) {
+								continue OPTIMISTIC_RETRY
+							} else if err != nil {
+								return nil, err
+							}
 						}
 					}
 
@@ -420,6 +435,7 @@ func pullBranches(
 				} else {
 					switch remoteRef.Ref.GetType() {
 					case ref.BranchRefType:
+						// CreateNewBranch also creates its corresponding working set
 						err := rrd.createNewBranchFromRemote(ctx, remoteRef, trackingRef)
 						if errors.Is(err, datas.ErrOptimisticLockFailed) {
 							continue OPTIMISTIC_RETRY
@@ -471,34 +487,72 @@ func (rrd ReadReplicaDatabase) createNewBranchFromRemote(ctx *sql.Context, remot
 	}
 
 	err = rrd.ddb.NewBranchAtCommit(ctx, remoteRef.Ref, cm, nil)
-	err = rrd.ddb.SetHead(ctx, trackingRef, remoteRef.Hash)
-	if err != nil {
-		return err
-	}
-
 	return rrd.ddb.SetHead(ctx, trackingRef, remoteRef.Hash)
 }
 
-func (rrd ReadReplicaDatabase) pullLocalBranch(ctx *sql.Context, localRef doltdb.RefWithHash, remoteRef doltdb.RefWithHash, trackingRef ref.RemoteRef, behavior pullBehavior) error {
+// pullLocalBranch pulls the remote branch into the local branch if they differ and returns if any work was done. 
+// Sets the head directly if pullBehaviorForcePull is provided, otherwise attempts a fast-forward. 
+func (rrd ReadReplicaDatabase) pullLocalBranch(ctx *sql.Context, localRef doltdb.RefWithHash, remoteRef doltdb.RefWithHash, trackingRef ref.RemoteRef, behavior pullBehavior) (bool, error) {
 	if localRef.Hash != remoteRef.Hash {
-		if behavior == pullBehavior_forcePull {
+		if behavior == pullBehaviorForcePull {
 			err := rrd.ddb.SetHead(ctx, remoteRef.Ref, remoteRef.Hash)
 			if err != nil {
-				return err
+				return false, err
 			}
 		} else {
 			err := rrd.ddb.FastForwardToHash(ctx, remoteRef.Ref, remoteRef.Hash)
 			if err != nil {
-				return err
+				return false, err
 			}
 		}
 
 		err := rrd.ddb.SetHead(ctx, trackingRef, remoteRef.Hash)
 		if err != nil {
+			return false, err
+		}
+		
+		return true, nil
+	}
+	
+	return false, nil
+}
+
+// updateWorkingSet updates the working set for the branch ref given to the root value in that commit
+func (rrd ReadReplicaDatabase) updateWorkingSet(ctx *sql.Context, localRef doltdb.RefWithHash, behavior pullBehavior) error {
+	wsRef, err := ref.WorkingSetRefForHead(localRef.Ref)
+	if err != nil {
+		return err
+	}
+	
+	var wsHash hash.Hash 
+	ws, err := rrd.ddb.ResolveWorkingSet(ctx, wsRef)
+	if err == doltdb.ErrWorkingSetNotFound {
+		// ignore, we'll create from scratch
+	} else if err != nil {
+		return err
+	} else {
+		wsHash, err = ws.HashOf()
+		if err != nil {
 			return err
 		}
 	}
-	return nil
+
+	cm, err := rrd.ddb.ResolveCommitRef(ctx, localRef.Ref)
+	if err != nil {
+		return err
+	}
+	rv, err := cm.GetRootValue(ctx)
+	if err != nil {
+		return err
+	}
+	
+	wsMeta := doltdb.TodoWorkingSetMeta()
+	if dtx, ok := ctx.GetTransaction().(*dsess.DoltTransaction); ok {
+		wsMeta = dtx.WorkingSetMeta(ctx)
+	}
+
+	newWs := doltdb.EmptyWorkingSet(wsRef).WithWorkingRoot(rv).WithStagedRoot(rv)
+	return rrd.ddb.UpdateWorkingSet(ctx, wsRef, newWs, wsHash, wsMeta, nil)
 }
 
 func getReplicationRefs(ctx *sql.Context, rrd ReadReplicaDatabase) (
