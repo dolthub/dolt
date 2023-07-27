@@ -195,7 +195,7 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 		}
 
 		remoteRefs = prunedRefs
-		err = pullBranchesAndUpdateWorkingSet(ctx, rrd, remoteRefs, localRefs, currentBranchRef, behavior)
+		_, err = pullBranches(ctx, rrd, remoteRefs, localRefs, behavior)
 
 		if err != nil && !dsess.IgnoreReplicationErrors() {
 			return err
@@ -205,7 +205,7 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 		}
 
 	case allHeads == int8(1):
-		err = pullBranchesAndUpdateWorkingSet(ctx, rrd, remoteRefs, localRefs, currentBranchRef, behavior)
+		_, err = pullBranches(ctx, rrd, remoteRefs, localRefs, behavior)
 		if err != nil && !dsess.IgnoreReplicationErrors() {
 			return err
 		} else if err != nil {
@@ -283,86 +283,6 @@ type pullBehavior bool
 
 const pullBehaviorFastForward pullBehavior = false
 const pullBehaviorForcePull pullBehavior = true
-
-// pullBranchesAndUpdateWorkingSet pulls the remote branches named. If a corresponding local branch exists, it will be
-// fast-forwarded. If it doesn't exist, it will be created. Afterward, the working set of the current branch is
-// updated if the current branch ref was updated by the pull.
-func pullBranchesAndUpdateWorkingSet(
-	ctx *sql.Context,
-	rrd ReadReplicaDatabase,
-	remoteRefs []doltdb.RefWithHash,
-	localRefs []doltdb.RefWithHash,
-	currentBranchRef ref.DoltRef,
-	behavior pullBehavior,
-) error {
-
-	remoteRefsByPath, err := pullBranches(ctx, rrd, remoteRefs, localRefs, behavior)
-	if err != nil {
-		return err
-	}
-
-	// update the current working set if necessary
-	// TODO: the current ref is wrong?
-	// Or we need to always update working sets?
-	if remoteRef, ok := remoteRefsByPath[currentBranchRef.GetPath()]; ok {
-		// Loop on optimistic lock failures.
-		for {
-			wsRef, err := ref.WorkingSetRefForHead(currentBranchRef)
-			if err != nil {
-				return err
-			}
-			ws, err := rrd.ddb.ResolveWorkingSet(ctx, wsRef)
-			if err != nil {
-				return err
-			}
-			prevHash, err := ws.HashOf()
-			if err != nil {
-				return err
-			}
-			wsWorkingRootHash, err := ws.WorkingRoot().HashOf()
-			if err != nil {
-				return err
-			}
-			wsStagedRootHash, err := ws.StagedRoot().HashOf()
-			if err != nil {
-				return err
-			}
-
-			// The branch heads could have moved since we pulled
-			// them. We re-resolve the upstream ref every time to
-			// ensure we don't go backwards if another thread moves
-			// our working set due to read replication.
-			cm, err := rrd.srcDB.ResolveCommitRef(ctx, remoteRef.Ref)
-			if err != nil {
-				return err
-			}
-			commitRoot, err := cm.GetRootValue(ctx)
-			if err != nil {
-				return err
-			}
-			commitRootHash, err := commitRoot.HashOf()
-			if err != nil {
-				return err
-			}
-
-			if commitRootHash != wsWorkingRootHash || commitRootHash != wsStagedRootHash {
-				ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
-
-				err = rrd.ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, prevHash, doltdb.TodoWorkingSetMeta(), nil)
-				if err == nil {
-					return nil
-				}
-				if !errors.Is(err, datas.ErrOptimisticLockFailed) {
-					return err
-				}
-			} else {
-				return nil
-			}
-		}
-	}
-
-	return nil
-}
 
 // pullBranches pulls the remote branches named and returns the map of their hashes keyed by branch path.
 func pullBranches(
