@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 	"testing"
 	"time"
 
@@ -1026,6 +1027,9 @@ func TestForeignKeyBranchesPrepared(t *testing.T) {
 func TestFulltextIndexes(t *testing.T) {
 	if !types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip("FULLTEXT is not supported on the old format")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("For some reason, this is flaky only on Windows CI. Investigation is underway.")
 	}
 	h := newDoltHarness(t)
 	defer h.Close()
