@@ -363,3 +363,56 @@ SQL
     [[ "$output" =~ Tables_in_repo3 ]] || false
     [[ "$output" =~ t3 ]] || false
 }
+
+@test "replication-multidb: sql-server pull non-current head" {
+    push_helper $TMPDIRS
+    dolt --data-dir=dbs1 sql <<SQL
+use repo1; 
+create table t1 (a int primary key);
+insert into t1 values (1);
+call dolt_add('.');
+call dolt_commit('-am', 'initial table');
+call dolt_checkout('-b', 'b2');
+update t1 set a = 2;
+call dolt_commit('-am', 'new values');
+SQL
+
+    clone_helper $TMPDIRS
+    push_helper $TMPDIRS
+
+    dolt config --global --add sqlserver.global.dolt_read_replica_remote remote1
+    dolt config --global --add sqlserver.global.dolt_replicate_heads main
+
+    cd dbs1
+    start_multi_db_server repo1
+    
+    run dolt sql-client --use-db repo1/b2 -u dolt -P $PORT -q "select * from t1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ 2 ]] || false
+    [[ ! "$output" =~ 1 ]] || false
+
+    run dolt sql-client --use-db repo1/b2 -u dolt -P $PORT -q "select count(*) from dolt_status"
+    [ $status -eq 0 ]
+    [[ "$output" =~ 0 ]] || false
+
+    stop_sql_server
+
+    cd ..
+    dolt --data-dir=dbs1 sql <<SQL
+use repo1; 
+call dolt_checkout('b2');
+update t1 set a = 3;
+call dolt_commit('-am', 'new values again');
+SQL
+
+    cd dbs1
+    start_multi_db_server repo1
+    
+    run dolt sql-client --use-db repo1/b2 -u dolt -P $PORT -q "select * from t1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ 3 ]] || false
+
+    run dolt sql-client --use-db repo1/b2 -u dolt -P $PORT -q "select count(*) from dolt_status"
+    [ $status -eq 0 ]
+    [[ "$output" =~ 0 ]] || false
+}
