@@ -30,7 +30,7 @@ import (
 type TableWriter interface {
 	sql.TableEditor
 	sql.ForeignKeyEditor
-	sql.AutoIncrementEditor
+	sql.AutoIncrementSetter
 }
 
 // SessionRootSetter sets the root value for the session.
@@ -63,6 +63,7 @@ type nomsTableWriter struct {
 }
 
 var _ TableWriter = &nomsTableWriter{}
+var _ sql.AutoIncrementGetter = &nomsTableWriter{}
 
 func (te *nomsTableWriter) duplicateKeyErrFunc(keyString, indexName string, k, v types.Tuple, isPk bool) error {
 	oldRow, err := te.kvToSQLRow.ConvertKVTuplesToSqlRow(k, v)

@@ -91,6 +91,21 @@ table Index {
 
   prefix_lengths:[uint16];
   spatial_key:bool;
+
+  // fulltext information
+  fulltext_key:bool;
+  fulltext_info:FulltextInfo;
+}
+
+table FulltextInfo {
+  config_table:string;
+  position_table:string;
+  doc_count_table:string;
+  global_count_table:string;
+  row_count_table:string;
+  key_type:uint8;
+  key_name:string;
+  key_positions:[uint16];
 }
 
 table CheckConstraint {
