@@ -53,7 +53,7 @@ jobname="$actorShort-$timesuffix"
 
 timeprefix=$(date +%Y/%m/%d)
 
-actorprefix="$MODE/$ACTOR/$jobname/$NOMS_BIN_FORMAT"
+actorprefix="$MODE/$lowered/$jobname/$NOMS_BIN_FORMAT"
 
 format="markdown"
 if [[ "$MODE" = "release" || "$MODE" = "nightly" ]]; then
