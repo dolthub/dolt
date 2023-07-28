@@ -181,7 +181,7 @@ func Serve(
 	mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
 	ed := mysqlDb.Editor()
 	var numUsers int
-	ed.VisitUsers(func(*mysql_db.User) {  numUsers += 1 })
+	ed.VisitUsers(func(*mysql_db.User) { numUsers += 1 })
 	privsExist := numUsers != 0
 	if userSpecified {
 		superuser := mysqlDb.GetUser(ed, config.ServerUser, "%", false)
