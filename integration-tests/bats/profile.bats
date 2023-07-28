@@ -30,7 +30,9 @@ setup() {
     make_repo defaultDB
     make_repo altDB
 
-    dolt config --global --add profile '{"defaultTest": {"use-db":"defaultDB"}}'
+    dolt config --global --add profile '{"defaultTest": {"use-db":"defaultDB"},
+    "userProfile": {"user":"not-steph", "password":"pass"},
+    "userWithDBProfile": {"user":"not-steph", "password":"pass", "use-db":"altDB"}}'
     unset DOLT_CLI_PASSWORD
     unset DOLT_SILENCE_USER_REQ_FOR_TESTING
 }
@@ -57,4 +59,62 @@ teardown() {
     run dolt --profile nonExistentProfile sql -q "select * from altDB_tbl"
     [ "$status" -eq 1 ] || false
     [[ "$output" =~ "Failure to parse arguments: profile nonExistentProfile not found" ]] || false
+}
+
+@test "profile: additional flag gets used" {
+    cd altDB
+    dolt sql -q "create table test (pk int primary key)"
+    dolt sql -q "insert into test values (999)"
+    dolt add test
+    dolt commit -m "insert initial value into test"
+    cd ..
+
+    run dolt --profile userProfile --use-db altDB sql -q "select * from test"
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "999" ]] || false
+}
+
+@test "profile: duplicate flag overrides correctly" {
+    cd altDB
+    dolt sql -q "create table test (pk int primary key)"
+    dolt sql -q "insert into test values (999)"
+    dolt add test
+    dolt commit -m "insert initial value into test"
+    cd ..
+
+    run dolt --profile defaultTest --use-db altDB sql -q "select * from test"
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "999" ]] || false
+}
+
+@test "profile: duplicate flag with non-duplicate flags in profile overrides correctly" {
+    cd altDB
+    dolt sql -q "create table test (pk int primary key)"
+    dolt sql -q "insert into test values (999)"
+    dolt add test
+    dolt commit -m "insert initial value into test"
+    cd ..
+
+    start_sql_server altDb
+    dolt --user dolt --password "" sql -q "CREATE USER 'steph' IDENTIFIED BY 'pass'; GRANT ALL PRIVILEGES ON altDB.* TO 'steph' WITH GRANT OPTION;";
+
+    run dolt --profile userWithDBProfile --user steph sql -q "select * from test"
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "999" ]] || false
+}
+
+@test "profile: duplicate flag with non-duplicate flags overrides correctly" {
+    cd altDB
+    dolt sql -q "create table test (pk int primary key)"
+    dolt sql -q "insert into test values (999)"
+    dolt add test
+    dolt commit -m "insert initial value into test"
+    cd ..
+
+    start_sql_server altDb
+    dolt --user dolt --password "" sql -q "CREATE USER 'steph' IDENTIFIED BY 'pass'; GRANT ALL PRIVILEGES ON altDB.* TO 'steph' WITH GRANT OPTION;";
+
+    run dolt --profile userProfile --user steph --use-db altDB sql -q "select * from test"
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "999" ]] || false
 }
