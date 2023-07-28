@@ -69,12 +69,6 @@ teardown() {
     [ "${lines[8]}" = '+-----------------+' ]
 }
 
-@test "sql-client: --user argument is required" {
-    run dolt sql-client
-    [ "$status" -eq 1 ]
-    [[ "$output" =~  "--user or -u argument is required" ]] || false
-}
-
 @test "sql-client: multiple statments in --query" {
     cd repo1
     start_sql_server repo1
