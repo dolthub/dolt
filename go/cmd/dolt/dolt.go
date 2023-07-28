@@ -767,12 +767,15 @@ func parseGlobalArgsAndProfile(globalConfig config.ReadWriteConfig, args []strin
 		if err != nil {
 			return nil, nil, err
 		}
-		profileArgs, err := getProfile(profileName, profiles)
+		profileArgs, err := getProfile(apr, profileName, profiles)
 		if err != nil {
 			return nil, nil, err
 		}
 		args = append(profileArgs, args...)
 		apr, remaining, err = globalArgParser.ParseGlobalArgs(args)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	return
@@ -780,12 +783,13 @@ func parseGlobalArgsAndProfile(globalConfig config.ReadWriteConfig, args []strin
 
 // getProfile retrieves the given profile from the provided list of profiles and returns the args (as flags) and values
 // for that profile in a []string. If the profile is not found, an error is returned.
-func getProfile(profileName, profiles string) ([]string, error) {
+func getProfile(apr *argparser.ArgParseResults, profileName, profiles string) (result []string, err error) {
 	prof := gjson.Get(profiles, profileName)
 	if prof.Exists() {
-		var result []string
 		for flag, value := range prof.Map() {
-			result = append(result, "--"+flag, value.String())
+			if !apr.Contains(flag) {
+				result = append(result, "--"+flag, value.String())
+			}
 		}
 		return result, nil
 	} else {
