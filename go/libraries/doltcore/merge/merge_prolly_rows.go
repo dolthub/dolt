@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/transform"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	errorkinds "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -446,11 +447,25 @@ func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) 
 			return 0, err
 		}
 
-		if result == nil || result == true {
-			// If a check constraint returns NULL or TRUE, then the check constraint is fulfilled
+		// MySQL treats NULL as TRUE for a check constraint
+		if result == nil {
+			result = true
+		}
+
+		// Coerce into a boolean; technically, this shouldn't be
+		// necessary, since check constraint expressions should always
+		// be of a boolean type, but Dolt has allowed this previously.
+		// https://github.com/dolthub/dolt/issues/6411
+		booleanResult, err := types.ConvertToBool(result)
+		if err != nil {
+			return 0, fmt.Errorf("unable to convert check constraint expression (%s) into boolean value: %v", checkName, err.Error())
+		}
+
+		if booleanResult {
+			// If a check constraint returns TRUE (or NULL), then the check constraint is fulfilled
 			// https://dev.mysql.com/doc/refman/8.0/en/create-table-check-constraints.html
 			continue
-		} else if result == false {
+		} else {
 			conflictCount++
 			meta, err := newCheckCVMeta(cv.sch, checkName)
 			if err != nil {
@@ -459,8 +474,6 @@ func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) 
 			if err = cv.insertArtifact(ctx, diff.Key, newTuple, meta); err != nil {
 				return conflictCount, err
 			}
-		} else {
-			return 0, fmt.Errorf("unexpected result from check constraint expression: %v", result)
 		}
 	}
 
