@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 	"github.com/pkg/profile"
@@ -56,7 +57,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
@@ -422,8 +422,18 @@ func runMain() int {
 
 	_, usage := cli.HelpAndUsagePrinters(globalDocs)
 
-	apr, remainingArgs, err := globalArgParser.ParseGlobalArgs(args)
+	var fs filesys.Filesys
+	fs = filesys.LocalFS
+	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, Version)
+	dEnv.IgnoreLockFile = ignoreLockFile
 
+	globalConfig, ok := dEnv.Config.GetConfig(env.GlobalConfig)
+	if !ok {
+		cli.PrintErrln(color.RedString("Failed to get global config"))
+		return 1
+	}
+
+	apr, remainingArgs, err := parseGlobalArgsAndProfile(globalConfig, args)
 	if err == argparser.ErrHelp {
 		doltCommand.PrintUsage("dolt")
 		cli.Println(globalSpecialMsg)
@@ -436,29 +446,6 @@ func runMain() int {
 	}
 
 	subcommandName := remainingArgs[0]
-
-	var fs filesys.Filesys
-	fs = filesys.LocalFS
-	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, Version)
-	dEnv.IgnoreLockFile = ignoreLockFile
-
-	// retrieve profile
-	profileName, hasProfile := apr.GetValue(commands.ProfileFlag)
-	if hasProfile {
-		// get profile from profileName
-		globalConfig, ok := dEnv.Config.GetConfig(env.GlobalConfig)
-		if !ok {
-			cli.PrintErrln(color.RedString("Failed to get global config"))
-			return 1
-		}
-		profileArgs, err := getProfile(globalConfig, profileName)
-		if err != nil {
-			cli.PrintErrln(color.RedString("Failed to get profile %s: %v", profileName, err))
-			return 1
-		}
-		// append profile's args to args
-		args = append(profileArgs, args...)
-	}
 
 	dataDir, hasDataDir := apr.GetValue(commands.DataDirFlag)
 	if hasDataDir {
@@ -768,19 +755,37 @@ func buildGlobalArgs() *argparser.ArgParser {
 	return ap
 }
 
-func getProfile(config config.ReadWriteConfig, profileName string) ([]string, error) {
-	// get profiles from config
-	profiles, err := config.GetString("profile")
+func parseGlobalArgsAndProfile(globalConfig config.ReadWriteConfig, args []string) (apr *argparser.ArgParseResults, remaining []string, err error) {
+	apr, remaining, err = globalArgParser.ParseGlobalArgs(args)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	// extract profileName from profiles
+
+	profileName, hasProfile := apr.GetValue(commands.ProfileFlag)
+	if hasProfile {
+		profiles, err := globalConfig.GetString("profile")
+		if err != nil {
+			return nil, nil, err
+		}
+		profileArgs, err := getProfile(profileName, profiles)
+		if err != nil {
+			return nil, nil, err
+		}
+		args = append(profileArgs, args...)
+		apr, remaining, err = globalArgParser.ParseGlobalArgs(args)
+	}
+
+	return
+}
+
+// getProfile retrieves the given profile from the provided list of profiles and returns the args (as flags) and values
+// for that profile in a []string. If the profile is not found, an error is returned.
+func getProfile(profileName, profiles string) ([]string, error) {
 	prof := gjson.Get(profiles, profileName)
 	if prof.Exists() {
 		var result []string
-		// gather profile values
-		for key, value := range prof.Map() {
-			result = append(result, "--"+key, value.String())
+		for flag, value := range prof.Map() {
+			result = append(result, "--"+flag, value.String())
 		}
 		return result, nil
 	} else {
