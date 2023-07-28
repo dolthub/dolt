@@ -109,11 +109,6 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 	var serverController *ServerController
 	var err error
 
-	if _, ok := apr.GetValue(commands.UserFlag); !ok {
-		cli.PrintErrln(color.RedString("--user or -u argument is required"))
-		return 1
-	}
-
 	if apr.Contains(sqlClientDualFlag) {
 		if !dEnv.Valid() {
 			if !cli.CheckEnvIsValid(dEnv) {
@@ -212,6 +207,12 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 		cli.PrintErrln(err.Error())
 		return 1
 	}
+
+	if parsedMySQLConfig.User == "" {
+		cli.PrintErrln(color.RedString("--user or -u argument is required"))
+		return 1
+	}
+
 	parsedMySQLConfig.DBName = dbToUse
 	mysqlConnector, err := mysqlDriver.NewConnector(parsedMySQLConfig)
 	if err != nil {
