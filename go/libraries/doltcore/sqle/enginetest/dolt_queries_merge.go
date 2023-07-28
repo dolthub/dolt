@@ -4793,6 +4793,71 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 			},
 		},
 	},
+
+	// Constraints: Check Constraint Coercion
+	{
+		// MySQL doesn't allow creating non-boolean check constraint
+		// expressions, but we currently allow it. Eventually we should
+		// close this gap and then we wouldn't need to coerce return values.
+		Name: "check constraint - coercion to bool",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 int, col2 int, CHECK (col1+col2));",
+			"INSERT into t values (1, 1, 1);",
+			"alter table t add index idx1 (pk, col2);",
+		},
+		RightSetUpScript: []string{
+			"update t set col2=0;",
+		},
+		LeftSetUpScript: []string{
+			"update t set col1=2;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 2, 0}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/6411
+		Name: "check constraint violation - coercion to bool",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 int, col2 int, CHECK (col1+col2));",
+			"INSERT into t values (1, 1, 1);",
+			"alter table t add index idx1 (pk, col2);",
+		},
+		RightSetUpScript: []string{
+			"update t set col2=0;",
+		},
+		LeftSetUpScript: []string{
+			"update t set col1=0;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{"", 0, 1}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"t", uint64(1)}},
+			},
+			{
+				Query:    "select violation_type, pk, col1, col2, violation_info like '%(col1 + col2)%' from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{uint64(3), 1, 0, 0, true}},
+			},
+		},
+	},
+
 	{
 		Name: "check constraint violation - schema change",
 		AncSetUpScript: []string{
