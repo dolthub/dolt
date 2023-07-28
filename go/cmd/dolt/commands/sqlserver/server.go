@@ -177,15 +177,21 @@ func Serve(
 
 	// Add superuser if specified user exists; add root superuser if no user specified and no existing privileges
 	userSpecified := config.ServerUser != ""
-	privsExist := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.UserTable().Data().Count() != 0
+
+	mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
+	ed := mysqlDb.Editor()
+	var numUsers int
+	ed.VisitUsers(func(*mysql_db.User) {  numUsers += 1 })
+	privsExist := numUsers != 0
 	if userSpecified {
-		superuser := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, "%", false)
+		superuser := mysqlDb.GetUser(ed, config.ServerUser, "%", false)
 		if userSpecified && superuser == nil {
-			sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, "%", config.ServerPass)
+			mysqlDb.AddSuperUser(ed, config.ServerUser, "%", config.ServerPass)
 		}
 	} else if !privsExist {
-		sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(defaultUser, "%", defaultPass)
+		mysqlDb.AddSuperUser(ed, defaultUser, "%", defaultPass)
 	}
+	ed.Close()
 
 	labels := serverConfig.MetricsLabels()
 
@@ -226,7 +232,9 @@ func Serve(
 	lck := env.NewDBLock(serverConfig.Port())
 	sqlserver.SetRunningServer(mySQLServer, &lck)
 
-	sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(LocalConnectionUser, "localhost", lck.Secret)
+	ed = mysqlDb.Editor()
+	mysqlDb.AddSuperUser(ed, LocalConnectionUser, "localhost", lck.Secret)
+	ed.Close()
 
 	var metSrv *http.Server
 	if serverConfig.MetricsHost() != "" && serverConfig.MetricsPort() > 0 {
