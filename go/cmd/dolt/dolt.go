@@ -27,7 +27,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 	"github.com/pkg/profile"
@@ -57,6 +56,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
@@ -120,6 +120,7 @@ var doltSubCommands = []cli.Command{
 	docscmds.Commands,
 	stashcmds.StashCommands,
 	&commands.Assist{},
+	commands.ProfileCmd{},
 }
 
 var commandsWithoutCliCtx = []cli.Command{
@@ -152,6 +153,7 @@ var commandsWithoutCliCtx = []cli.Command{
 	dumpZshCommand,
 	docscmds.Commands,
 	&commands.Assist{},
+	commands.ProfileCmd{},
 }
 
 var commandsWithoutGlobalArgSupport = []cli.Command{
@@ -788,7 +790,18 @@ func getProfile(apr *argparser.ArgParseResults, profileName, profiles string) (r
 	if prof.Exists() {
 		for flag, value := range prof.Map() {
 			if !apr.Contains(flag) {
-				result = append(result, "--"+flag, value.String())
+				if flag == cli.UserFlag || flag == cli.PasswordFlag {
+					result = append(result, "--"+flag, value.Str)
+				} else if flag == cli.NoTLSFlag {
+					if value.Bool() {
+						result = append(result, "--"+flag)
+						continue
+					}
+				} else {
+					if value.Str != "" {
+						result = append(result, "--"+flag, value.Str)
+					}
+				}
 			}
 		}
 		return result, nil
