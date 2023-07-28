@@ -13,15 +13,6 @@ CREATE TABLE table2 (pk int PRIMARY KEY);
 INSERT INTO dolt_ignore VALUES ('generated_*', 1);
 SQL
   dolt add -A && dolt commit -m "tables table1, table2"
-  dolt sql <<SQL
-INSERT INTO  table1 VALUES (1),(2),(3);
-INSERT INTO  table2 VALUES (1),(2),(3);
-CREATE TABLE table3 (pk int PRIMARY KEY);
-CREATE TABLE generated_foo (pk int PRIMARY KEY);
-SQL
-  dolt add table1
-  # Note that we leave the table in a dirty state, which is useful to several tests, and harmless to others. For
-  # some, you need to ensure the repo is clean, and you should run `dolt reset --hard` at the beginning of the test.
   cd ..
 }
 
@@ -30,9 +21,6 @@ setup() {
     make_repo defaultDB
     make_repo altDB
 
-    dolt config --global --add profile '{"defaultTest": {"use-db":"defaultDB"},
-    "userProfile": {"user":"not-steph", "password":"pass"},
-    "userWithDBProfile": {"user":"not-steph", "password":"pass", "use-db":"altDB"}}'
     unset DOLT_CLI_PASSWORD
     unset DOLT_SILENCE_USER_REQ_FOR_TESTING
 }
@@ -50,12 +38,15 @@ teardown() {
     dolt commit -m "insert initial value into test"
     cd ..
 
+    dolt profile add --use-db defaultDB defaultTest
     run dolt --profile defaultTest sql -q "select * from test"
     [ "$status" -eq 0 ] || false
     [[ "$output" =~ "999" ]] || false
 }
 
 @test "profile: --profile doesn't exist" {
+    dolt profile add --use-db defaultDB defaultTest
+
     run dolt --profile nonExistentProfile sql -q "select * from altDB_tbl"
     [ "$status" -eq 1 ] || false
     [[ "$output" =~ "Failure to parse arguments: profile nonExistentProfile not found" ]] || false
@@ -69,6 +60,7 @@ teardown() {
     dolt commit -m "insert initial value into test"
     cd ..
 
+    dolt profile add --user dolt --password "" userProfile
     run dolt --profile userProfile --use-db altDB sql -q "select * from test"
     [ "$status" -eq 0 ] || false
     [[ "$output" =~ "999" ]] || false
@@ -82,6 +74,7 @@ teardown() {
     dolt commit -m "insert initial value into test"
     cd ..
 
+    dolt profile add --use-db defaultDB defaultTest
     run dolt --profile defaultTest --use-db altDB sql -q "select * from test"
     [ "$status" -eq 0 ] || false
     [[ "$output" =~ "999" ]] || false
@@ -97,6 +90,7 @@ teardown() {
 
     start_sql_server altDb
     dolt --user dolt --password "" sql -q "CREATE USER 'steph' IDENTIFIED BY 'pass'; GRANT ALL PRIVILEGES ON altDB.* TO 'steph' WITH GRANT OPTION;";
+    dolt profile add --user "not-steph" --password "pass" --use-db altDB userWithDBProfile
 
     run dolt --profile userWithDBProfile --user steph sql -q "select * from test"
     [ "$status" -eq 0 ] || false
@@ -113,8 +107,147 @@ teardown() {
 
     start_sql_server altDb
     dolt --user dolt --password "" sql -q "CREATE USER 'steph' IDENTIFIED BY 'pass'; GRANT ALL PRIVILEGES ON altDB.* TO 'steph' WITH GRANT OPTION;";
+    dolt profile add --user "not-steph" --password "pass" userProfile
 
     run dolt --profile userProfile --user steph --use-db altDB sql -q "select * from test"
     [ "$status" -eq 0 ] || false
     [[ "$output" =~ "999" ]] || false
+}
+
+@test "profile: dolt profile add adds a profile" {
+    run dolt profile add --use-db altDB altTest
+    [ "$status" -eq 0 ] || false
+
+    run dolt profile
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "altTest" ]] || false
+    [[ "$output" =~ "altDB" ]] || false
+}
+
+@test "profile: dolt profile add overwrites an existing profile" {
+    run dolt profile add --user "not-steph" --password "password123" userProfile
+    [ "$status" -eq 0 ] || false
+
+    run dolt profile
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "userProfile" ]] || false
+    [[ "$output" =~ "not-steph" ]] || false
+    [[ "$output" =~ "password123" ]] || false
+
+    run dolt profile add --user "steph" --password "password123" userProfile
+    [ "$status" -eq 0 ] || false
+
+    run dolt profile
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "userProfile" ]] || false
+    [[ "$output" =~ "steph" ]] || false
+    [[ ! "$output" =~ "not-steph" ]] || false
+    [[ "$output" =~ "password123" ]] || false
+}
+
+@test "profile: dolt profile add overwrites an existing profile with different flags" {
+    run dolt profile add --user "steph" --password "password123" userProfile
+    [ "$status" -eq 0 ] || false
+
+    run dolt profile
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "userProfile" ]] || false
+    [[ "$output" =~ "steph" ]] || false
+    [[ "$output" =~ "password123" ]] || false
+
+    run dolt profile add --user "dolt" --use-db defaultDB userProfile
+    [ "$status" -eq 0 ] || false
+
+    run dolt profile
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "userProfile" ]] || false
+    [[ ! "$output" =~ "steph" ]] || false
+    [[ ! "$output" =~ "password123" ]] || false
+    [[ "$output" =~ "dolt" ]] || false
+    [[ "$output" =~ "defaultDB" ]] || false
+}
+
+@test "profile: dolt profile add adds a profile with existing profiles" {
+    dolt profile add --use-db altDB altTest
+    dolt profile add --use-db defaultDB defaultTest
+
+    run dolt profile
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "altTest:" ]] || false
+    [[ "$output" =~ "defaultTest:" ]] || false
+}
+
+@test "profile: dolt profile add with multiple names errors" {
+    run dolt profile add --use-db altDB altTest altTest2
+    [ "$status" -eq 1 ] || false
+    [[ "$output" =~ "Only one profile name can be specified" ]] || false
+}
+
+@test "profile: dolt profile remove removes a profile" {
+    dolt profile add --use-db altDB altTest
+    run dolt profile
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "altTest" ]] || false
+
+    run dolt profile remove altTest
+    [ "$status" -eq 0 ] || false
+
+    run dolt profile
+    [ "$status" -eq 0 ] || false
+    [[ ! "$output" =~ "altTest:" ]] || false
+}
+
+@test "profile: dolt profile remove leaves existing profiles" {
+    dolt profile add --use-db altDB altTest
+    dolt profile add --use-db defaultDB defaultTest
+    run dolt profile
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "altTest" ]] || false
+    [[ "$output" =~ "defaultTest" ]] || false
+
+    run dolt profile remove altTest
+    [ "$status" -eq 0 ] || false
+
+    run dolt profile
+    [ "$status" -eq 0 ] || false
+    [[ ! "$output" =~ "altTest:" ]] || false
+    [[ "$output" =~ "defaultTest" ]] || false
+}
+
+@test "profile: dolt profile remove with no existing profiles errors" {
+    run dolt profile
+    [ "$status" -eq 0 ] || false
+    [[ "$output" = "" ]] || false
+
+    run dolt profile remove altTest
+    [ "$status" -eq 1 ] || false
+    [[ "$output" =~ "no existing profiles" ]] || false
+}
+
+@test "profile: dolt profile remove with non-existent profile errors" {
+    dolt profile add --use-db altDB altTest
+    run dolt profile
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "altTest" ]] || false
+
+    run dolt profile remove defaultTest
+    [ "$status" -eq 1 ] || false
+    [[ "$output" =~ "profile defaultTest does not exist" ]] || false
+}
+
+@test "profile: dolt profile remove with multiple names errors" {
+    dolt profile add --use-db altDB altTest
+    run dolt profile remove altTest altTest2
+    [ "$status" -eq 1 ] || false
+    [[ "$output" =~ "Only one profile name can be specified" ]] || false
+}
+
+@test "profile: dolt profile lists all profiles" {
+    dolt profile add --use-db altDB altTest
+    dolt profile add --use-db defaultDB defaultTest
+
+    run dolt profile
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "altTest" ]] || false
+    [[ "$output" =~ "defaultTest" ]] || false
 }
