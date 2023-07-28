@@ -156,29 +156,25 @@ func (d *doltBinlogReplicaController) configureReplicationUser(ctx *sql.Context)
 		return fmt.Errorf("unable to access a running SQL server")
 	}
 	mySQLDb := server.Engine.Analyzer.Catalog.MySQLDb
+	ed := mySQLDb.Editor()
+	defer ed.Close()
 
-	replicationUser := mySQLDb.GetUser(binlogApplierUser, "localhost", false)
+	replicationUser := mySQLDb.GetUser(ed, binlogApplierUser, "localhost", false)
 	if replicationUser == nil {
 		// If the replication user doesn't exist yet, create it and lock it
-		mySQLDb.AddSuperUser(binlogApplierUser, "localhost", "")
-		replicationUser := mySQLDb.GetUser(binlogApplierUser, "localhost", false)
+		mySQLDb.AddSuperUser(ed, binlogApplierUser, "localhost", "")
+		replicationUser := mySQLDb.GetUser(ed, binlogApplierUser, "localhost", false)
 		if replicationUser == nil {
 			return fmt.Errorf("unable to load replication user")
 		}
 		// Make sure this account is locked so that it cannot be used to log in
 		replicationUser.Locked = true
-		err := mySQLDb.UserTable().Data().Put(ctx, replicationUser)
-		if err != nil {
-			return err
-		}
+		ed.PutUser(replicationUser)
 	} else if replicationUser.IsSuperUser == false || replicationUser.Locked == false {
 		// Fix the replication user if it has been modified
 		replicationUser.IsSuperUser = true
 		replicationUser.Locked = true
-		err := mySQLDb.UserTable().Data().Put(ctx, replicationUser)
-		if err != nil {
-			return err
-		}
+		ed.PutUser(replicationUser)
 	}
 
 	return nil
