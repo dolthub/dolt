@@ -4526,6 +4526,118 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 	},
 
+	// Collation Changes
+	{
+		Name: "Changing a table's default collation on one side",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 varchar(100)) collate utf8mb3_unicode_ci;",
+			"INSERT into t values (1, '10');",
+		},
+		RightSetUpScript: []string{
+			"alter table t collate utf8mb4_0900_bin;",
+			"insert into t values (2, '20');",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (3, '30');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, "10"}, {2, "20"}, {3, "30"}},
+			},
+			{
+				Query:    "show create table t;",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` varchar(100) CHARACTER SET utf8mb3 COLLATE utf8mb3_unicode_ci,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
+		Name: "Changing a table's default collation on both sides to different values",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 varchar(100)) collate utf8mb3_unicode_ci;",
+			"INSERT into t values (1, '10');",
+		},
+		RightSetUpScript: []string{
+			"alter table t collate utf8mb4_0900_bin;",
+			"insert into t values (2, '20');",
+		},
+		LeftSetUpScript: []string{
+			"alter table t collate ascii_general_ci;",
+			"insert into t values (3, '30');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "call dolt_merge('right');",
+				ExpectedErr: merge.DefaultCollationConflictErr,
+			},
+		},
+	},
+	{
+		Name: "Changing a table's default collation on both sides to the same value",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 varchar(100)) collate utf8mb3_unicode_ci;",
+			"INSERT into t values (1, '10');",
+		},
+		RightSetUpScript: []string{
+			"alter table t collate utf8mb4_0900_bin;",
+			"insert into t values (2, '20');",
+		},
+		LeftSetUpScript: []string{
+			"alter table t collate utf8mb4_0900_bin;",
+			"insert into t values (3, '30');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, "10"}, {2, "20"}, {3, "30"}},
+			},
+			{
+				Query:    "show create table t;",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` varchar(100) CHARACTER SET utf8mb3 COLLATE utf8mb3_unicode_ci,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+		},
+	},
+	{
+		// TODO: Changing a column's collation requires rewriting the table and any indexes containing that column.
+		//       For now, we just detect the schema incompatibility and return schema conflict metadata, but we could
+		//       go further here and attempt to automatically convert the data to the new collation.
+		Name: "changing the collation of a column",
+		AncSetUpScript: []string{
+			"create table t (pk int primary key, col1 varchar(32) character set utf8mb4 collate utf8mb4_bin, index col1_idx (col1));",
+			"insert into t values (1, 'ab'), (2, 'Ab');",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify col1 varchar(32) character set utf8mb4 collate utf8mb4_general_ci;",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (3, 'c');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{"", 0, 1}},
+			},
+			{
+				Query: "select table_name, our_schema, their_schema, base_schema from dolt_schema_conflicts;",
+				Expected: []sql.Row{{"t",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` varchar(32) COLLATE utf8mb4_bin,\n  PRIMARY KEY (`pk`),\n  KEY `col1_idx` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` varchar(32) COLLATE utf8mb4_general_ci,\n  PRIMARY KEY (`pk`),\n  KEY `col1_idx` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` varchar(32) COLLATE utf8mb4_bin,\n  PRIMARY KEY (`pk`),\n  KEY `col1_idx` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"}},
+			},
+		},
+	},
+
 	// Constraints: Not Null
 	{
 		Name: "removing a not-null constraint",
@@ -5238,6 +5350,31 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 
 	// Unsupported automatic merge cases
 	{
+		// In this case, we can't auto merge a new column, because we don't know what value to plug in for existing rows,
+		// since it can't be NULL and there's no default value specified. The only resolution option we could apply
+		// automatically is `dolt conflicts resolve --ours`, which would ignore the new column. Since we have limited
+		// resolution options, instead of reporting this through the schema conflict interface, we throw an error.
+		Name: "add a non-nullable column, with no default value",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 int);",
+			"INSERT into t values (1, 10);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col3 int not null;",
+			"alter table t add index idx1 (col3, col1);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (2, 20);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "call dolt_merge('right');",
+				ExpectedErr: merge.UnmergeableNewColumnErr,
+			},
+		},
+	},
+	{
 		// This merge test reports a conflict on pk=1, because the tuple value is different on the left side, right
 		// side, and base. The value is the base is (10, '100'), on the right is nil, and on the left is ('100'),
 		// because the data migration for the schema change happens before the diff iterator is invoked.
@@ -5409,34 +5546,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 				Expected: []sql.Row{
 					{uint16(4), 3, types.JSONDocument{Val: merge.NullViolationMeta{Columns: []string{"col1"}}}},
 				},
-			},
-		},
-	},
-	{
-		// TODO: Changing a column's collation requires rewriting the table and any indexes containing that column.
-		//       For now, we just detect the schema incompatibility and return schema conflict metadata.
-		Name: "changing the collation of an indexed column",
-		AncSetUpScript: []string{
-			"create table t (pk int primary key, col1 varchar(32) character set utf8mb4 collate utf8mb4_bin, index col1_idx (col1));",
-			"insert into t values (1, 'ab'), (2, 'Ab');",
-		},
-		RightSetUpScript: []string{
-			"alter table t modify col1 varchar(32) character set utf8mb4 collate utf8mb4_general_ci;",
-		},
-		LeftSetUpScript: []string{
-			"insert into t values (3, 'c');",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{"", 0, 1}},
-			},
-			{
-				Query: "select table_name, our_schema, their_schema, base_schema from dolt_schema_conflicts;",
-				Expected: []sql.Row{{"t",
-					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` varchar(32) COLLATE utf8mb4_bin,\n  PRIMARY KEY (`pk`),\n  KEY `col1_idx` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` varchar(32) COLLATE utf8mb4_general_ci,\n  PRIMARY KEY (`pk`),\n  KEY `col1_idx` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` varchar(32) COLLATE utf8mb4_bin,\n  PRIMARY KEY (`pk`),\n  KEY `col1_idx` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"}},
 			},
 		},
 	},
