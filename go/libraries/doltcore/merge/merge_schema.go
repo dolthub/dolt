@@ -18,12 +18,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	errorkinds "gopkg.in/src-d/go-errors.v1"
 	"sort"
 	"strings"
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	errorkinds "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
