@@ -43,9 +43,9 @@ const (
 	DuplicateIndexColumnSet
 )
 
-var UnmergeableNewColumnErr = errorkinds.NewKind("Unable to merge new column `%s` in table `%s` because it is not-nullable and has no default value, so existing rows can't be updated automatically. To complete this merge, either manually add this new column to the target branch of the merge and update any existing rows, or change the column's definition on the other branch of the merge so that it is nullable or has a default value.")
+var ErrUnmergeableNewColumn = errorkinds.NewKind("Unable to merge new column `%s` in table `%s` because it is not-nullable and has no default value, so existing rows can't be updated automatically. To complete this merge, either manually add this new column to the target branch of the merge and update any existing rows, or change the column's definition on the other branch of the merge so that it is nullable or has a default value.")
 
-var DefaultCollationConflictErr = errorkinds.NewKind("Unable to merge table '%s', because its default collation setting has changed on both sides of the merge. Manually change the table's default collation setting on one of the sides of the merge and retry this merge.")
+var ErrDefaultCollationConflict = errorkinds.NewKind("Unable to merge table '%s', because its default collation setting has changed on both sides of the merge. Manually change the table's default collation setting on one of the sides of the merge and retry this merge.")
 
 type SchemaConflict struct {
 	TableName    string
@@ -352,7 +352,7 @@ func checkUnmergeableNewColumns(tblName string, columnMappings columnMappings) e
 			// If the new column is not nullable and has no default value, then we can't auto merge it
 			// (if there is any existing row data), so we need to error out and report the schema conflict.
 			if newCol.IsNullable() == false && newCol.Default == "" {
-				return UnmergeableNewColumnErr.New(newCol, tblName)
+				return ErrUnmergeableNewColumn.New(newCol, tblName)
 			}
 		}
 	}
@@ -1102,7 +1102,7 @@ func mergeTableCollation(_ context.Context, tblName string, ancSch, ourSch, thei
 	theirCollationChanged := ancSch != nil && ancSch.GetCollation() != theirSch.GetCollation()
 
 	if ourCollationChanged && theirCollationChanged && ourSch.GetCollation() != theirSch.GetCollation() {
-		return nil, DefaultCollationConflictErr.New(tblName)
+		return nil, ErrDefaultCollationConflict.New(tblName)
 	}
 	mergedSch.SetCollation(ourSch.GetCollation())
 	if theirCollationChanged {

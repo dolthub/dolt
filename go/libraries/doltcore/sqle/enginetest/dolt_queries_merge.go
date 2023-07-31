@@ -4574,7 +4574,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:       "call dolt_merge('right');",
-				ExpectedErr: merge.DefaultCollationConflictErr,
+				ExpectedErr: merge.ErrDefaultCollationConflict,
 			},
 		},
 	},
@@ -5370,7 +5370,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:       "call dolt_merge('right');",
-				ExpectedErr: merge.UnmergeableNewColumnErr,
+				ExpectedErr: merge.ErrUnmergeableNewColumn,
 			},
 		},
 	},
