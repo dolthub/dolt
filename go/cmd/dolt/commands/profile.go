@@ -19,8 +19,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
@@ -123,7 +125,7 @@ func addProfile(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbo
 	if !ok {
 		return errhand.BuildDError("error: failed to get global config").Build()
 	}
-	//TODO str -> json
+	//TODO: enable config to retrieve json objects instead of just strings
 	profilesJSON, err := cfg.GetString("profile")
 	if err != nil {
 		if err != config.ErrConfigParamNotFound {
@@ -132,6 +134,10 @@ func addProfile(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbo
 			err = cfg.SetStrings(map[string]string{"profile": "{\"" + profileName + "\"" + ": " + profStr + "}"})
 			if err != nil {
 				return errhand.BuildDError("error: failed to set profiles, %s", err).Build()
+			}
+			err = setGlobalConfigPermissions(dEnv)
+			if err != nil {
+				return errhand.BuildDError("error: failed to set permissions, %s", err).Build()
 			}
 			return nil
 		}
@@ -145,8 +151,10 @@ func addProfile(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbo
 	if err != nil {
 		return errhand.BuildDError("error: failed to set profiles, %s", err).Build()
 	}
-	path := "~/.dolt/config_global.json"
-	err = os.Chmod(path, 0400)
+	err = setGlobalConfigPermissions(dEnv)
+	if err != nil {
+		return errhand.BuildDError("error: failed to set permissions, %s", err).Build()
+	}
 
 	return nil
 }
@@ -182,6 +190,10 @@ func removeProfile(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ve
 	err = cfg.SetStrings(map[string]string{"profile": profilesJSON})
 	if err != nil {
 		return errhand.BuildDError("error: failed to set profiles, %s", err).Build()
+	}
+	err = setGlobalConfigPermissions(dEnv)
+	if err != nil {
+		return errhand.BuildDError("error: failed to set permissions, %s", err).Build()
 	}
 
 	return nil
@@ -221,6 +233,24 @@ func printProfiles(dEnv *env.DoltEnv) errhand.VerboseError {
 func prettyPrintProfile(profileName string, profile Profile) {
 	cli.Println(fmt.Sprintf("%s:\n\tuser: %s\n\tpassword: %s\n\thost: %s\n\tport: %s\n\tno-tls: %t\n\tdata-dir: %s\n\tdoltcfg-dir: %s\n\tprivilege-file: %s\n\tbranch-control-file: %s\n\tuse-db: %s\n",
 		profileName, profile.User, profile.Password, profile.Host, profile.Port, profile.NoTLS, profile.DataDir, profile.DoltCfgDir, profile.PrivilegeFile, profile.BranchControl, profile.UseDB))
+}
+
+// setGlobalConfigPermissions sets permissions on global config file to 0600 to protect potentially sensitive information (credentials)
+func setGlobalConfigPermissions(dEnv *env.DoltEnv) error {
+	homeDir, err := env.GetCurrentUserHomeDir()
+	if err != nil {
+		return errhand.BuildDError("error: failed to get home directory: %s", err).Build()
+	}
+	path, err := dEnv.FS.Abs(filepath.Join(homeDir, dbfactory.DoltDir, env.GlobalConfigFile))
+	if err != nil {
+		return errhand.BuildDError("error: failed to get global config path: %s", err).Build()
+	}
+	err = os.Chmod(path, 0600)
+	if err != nil {
+		return errhand.BuildDError("error: failed to set permissions on global config: %s", err).Build()
+	}
+
+	return nil
 }
 
 type Profile struct {
