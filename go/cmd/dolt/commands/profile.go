@@ -127,11 +127,11 @@ func addProfile(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbo
 	profilesJSON, err := cfg.GetString("profile")
 	if err != nil {
 		if err != config.ErrConfigParamNotFound {
-			return errhand.BuildDError("error: failed to get profiles").Build()
+			return errhand.BuildDError("error: failed to get profiles, %s", err).Build()
 		} else {
 			err = cfg.SetStrings(map[string]string{"profile": "{\"" + profileName + "\"" + ": " + profStr + "}"})
 			if err != nil {
-				return errhand.BuildDError("error: failed to set profiles").Build()
+				return errhand.BuildDError("error: failed to set profiles, %s", err).Build()
 			}
 			return nil
 		}
@@ -139,11 +139,11 @@ func addProfile(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbo
 
 	profilesJSON, err = sjson.Set(profilesJSON, profileName, profStr)
 	if err != nil {
-		return errhand.BuildDError("error: failed to add profile").Build()
+		return errhand.BuildDError("error: failed to add profile, %s", err).Build()
 	}
 	err = cfg.SetStrings(map[string]string{"profile": profilesJSON})
 	if err != nil {
-		return errhand.BuildDError("error: failed to set profiles").Build()
+		return errhand.BuildDError("error: failed to set profiles, %s", err).Build()
 	}
 	path := "~/.dolt/config_global.json"
 	err = os.Chmod(path, 0400)
@@ -167,7 +167,7 @@ func removeProfile(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ve
 		if err == config.ErrConfigParamNotFound {
 			return errhand.BuildDError("error: no existing profiles").Build()
 		}
-		return errhand.BuildDError("error: failed to get profiles").Build()
+		return errhand.BuildDError("error: failed to get profiles, %s", err).Build()
 	}
 
 	p := gjson.Get(profilesJSON, profileName)
@@ -177,11 +177,11 @@ func removeProfile(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ve
 
 	profilesJSON, err = sjson.Delete(profilesJSON, profileName)
 	if err != nil {
-		return errhand.BuildDError("error: failed to remove profile").Build()
+		return errhand.BuildDError("error: failed to remove profile, %s", err).Build()
 	}
 	err = cfg.SetStrings(map[string]string{"profile": profilesJSON})
 	if err != nil {
-		return errhand.BuildDError("error: failed to set profiles").Build()
+		return errhand.BuildDError("error: failed to set profiles, %s", err).Build()
 	}
 
 	return nil
@@ -197,7 +197,7 @@ func printProfiles(dEnv *env.DoltEnv) errhand.VerboseError {
 		if err == config.ErrConfigParamNotFound {
 			return nil
 		}
-		return errhand.BuildDError("error: failed to get profiles").Build()
+		return errhand.BuildDError("error: failed to get profiles, %s", err).Build()
 	}
 
 	profileMap := gjson.Parse(profilesJSON)
@@ -210,7 +210,7 @@ func printProfiles(dEnv *env.DoltEnv) errhand.VerboseError {
 		var val []byte = []byte(profile.String())
 		err := json.Unmarshal([]byte(val), &p)
 		if err != nil {
-			return errhand.BuildDError("error: failed to unmarshal profile").Build()
+			return errhand.BuildDError("error: failed to unmarshal profile, %s", err).Build()
 		}
 		prettyPrintProfile(profileName, p)
 	}
