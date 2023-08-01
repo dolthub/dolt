@@ -244,10 +244,14 @@ teardown() {
 
 @test "profile: dolt profile lists all profiles" {
     dolt profile add --use-db altDB altTest
-    dolt profile add --use-db defaultDB defaultTest
+    dolt profile add --use-db defaultDB -u "steph" --password "pass" defaultTest
 
     run dolt profile
     [ "$status" -eq 0 ] || false
-    [[ "$output" =~ "altTest" ]] || false
-    [[ "$output" =~ "defaultTest" ]] || false
+    [[ "$output" =~ "altTest:" ]] || false
+    [[ "$output" =~ "use-db: altDB" ]] || false
+    [[ "$output" =~ "defaultTest:" ]] || false
+    [[ "$output" =~ "user: steph" ]] || false
+    [[ "$output" =~ "password: pass" ]] || false
+    [[ "$output" =~ "use-db: defaultDB" ]] || false
 }

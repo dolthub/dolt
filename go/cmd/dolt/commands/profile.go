@@ -17,6 +17,8 @@ package commands
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"os"
 	"strings"
 
 	"github.com/tidwall/gjson"
@@ -143,6 +145,8 @@ func addProfile(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbo
 	if err != nil {
 		return errhand.BuildDError("error: failed to set profiles").Build()
 	}
+	path := "~/.dolt/config_global.json"
+	err = os.Chmod(path, 0400)
 
 	return nil
 }
@@ -202,11 +206,21 @@ func printProfiles(dEnv *env.DoltEnv) errhand.VerboseError {
 	}
 
 	for profileName, profile := range profileMap.Map() {
-		cli.Println(profileName + ":")
-		cli.Println(profile)
+		var p Profile
+		var val []byte = []byte(profile.String())
+		err := json.Unmarshal([]byte(val), &p)
+		if err != nil {
+			return errhand.BuildDError("error: failed to unmarshal profile").Build()
+		}
+		prettyPrintProfile(profileName, p)
 	}
 
 	return nil
+}
+
+func prettyPrintProfile(profileName string, profile Profile) {
+	cli.Println(fmt.Sprintf("%s:\n\tuser: %s\n\tpassword: %s\n\thost: %s\n\tport: %s\n\tno-tls: %t\n\tdata-dir: %s\n\tdoltcfg-dir: %s\n\tprivilege-file: %s\n\tbranch-control-file: %s\n\tuse-db: %s\n",
+		profileName, profile.User, profile.Password, profile.Host, profile.Port, profile.NoTLS, profile.DataDir, profile.DoltCfgDir, profile.PrivilegeFile, profile.BranchControl, profile.UseDB))
 }
 
 type Profile struct {
