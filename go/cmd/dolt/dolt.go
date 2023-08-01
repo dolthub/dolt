@@ -429,6 +429,12 @@ func runMain() int {
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, Version)
 	dEnv.IgnoreLockFile = ignoreLockFile
 
+	root, err := env.GetCurrentUserHomeDir()
+	if err != nil {
+		cli.PrintErrln(color.RedString("Failed to load the HOME directory: %v", err))
+		return 1
+	}
+
 	globalConfig, ok := dEnv.Config.GetConfig(env.GlobalConfig)
 	if !ok {
 		cli.PrintErrln(color.RedString("Failed to get global config"))
@@ -461,12 +467,6 @@ func runMain() int {
 			cli.Println(color.RedString("Provided data directory does not exist: %s", dataDir))
 			return 1
 		}
-	}
-
-	root, err := env.GetCurrentUserHomeDir()
-	if err != nil {
-		cli.PrintErrln(color.RedString("Failed to load the HOME directory: %v", err))
-		return 1
 	}
 
 	if dEnv.CfgLoadErr != nil {
