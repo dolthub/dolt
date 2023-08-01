@@ -966,7 +966,7 @@ func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sql
 		}
 		cli.Println("Database changed")
 		return sch, nil, err
-	case *sqlparser.MultiAlterDDL, *sqlparser.Set, *sqlparser.Commit:
+	case *sqlparser.AlterTable, *sqlparser.Set, *sqlparser.Commit:
 		_, ri, err := qryist.Query(ctx, query)
 		if err != nil {
 			return nil, nil, err
