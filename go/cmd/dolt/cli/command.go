@@ -34,7 +34,6 @@ import (
 )
 
 func IsHelp(str string) bool {
-
 	str = strings.TrimSpace(str)
 
 	if len(str) == 0 {

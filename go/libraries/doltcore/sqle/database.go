@@ -884,28 +884,13 @@ func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sq
 }
 
 // CreateFulltextTableNames returns a set of names that will be used to create Full-Text pseudo-index tables.
-func (db Database) CreateFulltextTableNames(ctx *sql.Context, parentTableName string, parentIndexName string) (fulltext.IndexTableNames, error) {
-	allTableNames, err := db.GetAllTableNames(ctx)
-	if err != nil {
-		return fulltext.IndexTableNames{}, err
-	}
-	var tablePrefix string
-OuterLoop:
-	for i := uint64(0); true; i++ {
-		tablePrefix = strings.ToLower(fmt.Sprintf("dolt_%s_%s_%d", parentTableName, parentIndexName, i))
-		for _, tableName := range allTableNames {
-			if strings.HasPrefix(strings.ToLower(tableName), tablePrefix) {
-				continue OuterLoop
-			}
-		}
-		break
-	}
+func (db Database) CreateFulltextTableNames(ctx *sql.Context, parentTable string, parentIndexName string) (fulltext.IndexTableNames, error) {
 	return fulltext.IndexTableNames{
-		Config:      fmt.Sprintf("dolt_%s_fts_config", parentTableName),
-		Position:    fmt.Sprintf("%s_fts_position", tablePrefix),
-		DocCount:    fmt.Sprintf("%s_fts_doc_count", tablePrefix),
-		GlobalCount: fmt.Sprintf("%s_fts_global_count", tablePrefix),
-		RowCount:    fmt.Sprintf("%s_fts_row_count", tablePrefix),
+		Config:      fmt.Sprintf("dolt_%s_fts_config", parentTable),
+		Position:    fmt.Sprintf("dolt_%s_%s_fts_position", parentTable, parentIndexName),
+		DocCount:    fmt.Sprintf("dolt_%s_%s_fts_doc_count", parentTable, parentIndexName),
+		GlobalCount: fmt.Sprintf("dolt_%s_%s_fts_global_count", parentTable, parentIndexName),
+		RowCount:    fmt.Sprintf("dolt_%s_%s_fts_row_count", parentTable, parentIndexName),
 	}, nil
 }
 
