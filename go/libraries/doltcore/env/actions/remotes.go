@@ -526,17 +526,17 @@ func pruneBranches(ctx context.Context, dbData env.DbData, remoteRefs []doltdb.R
 	}
 
 	// Delete any remote branch not present in the remoteRefs
-	for _, remoteRef := range remoteRefs {
+	for _, localRemoteRef := range localRemoteRefs {
 		found := false
-		for _, localRemoteRef := range localRemoteRefs {
-			if localRemoteRef == remoteRef.Ref {
+		for _, remoteRef := range remoteRefs {
+			if remoteRef.Ref == localRemoteRef {
 				found = true
 				break
 			}
 		}
 		
 		if !found {
-			err = dbData.Ddb.DeleteBranch(ctx, remoteRef.Ref, nil)
+			err = dbData.Ddb.DeleteBranch(ctx, localRemoteRef, nil)
 			if err != nil {
 				return err
 			}
