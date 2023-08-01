@@ -283,55 +283,6 @@ func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm *TableMerger, op
 	return nil, nil, nil
 }
 
-func validateTupleFields(existingSch schema.Schema, targetSch schema.Schema) (bool, error) {
-	existingVD := existingSch.GetValueDescriptor()
-	targetVD := targetSch.GetValueDescriptor()
-	_, valMapping, err := schema.MapSchemaBasedOnTagAndName(existingSch, targetSch)
-	if err != nil {
-		return false, err
-	}
-
-	for existingIndex, targetIndex := range valMapping {
-		// If the column was dropped, continue to the next column targetIndex
-		if targetIndex == -1 {
-			continue
-		}
-
-		// If the field types have changed between existing and target, bail.
-		if existingVD.Types[existingIndex].Enc != targetVD.Types[targetIndex].Enc {
-			return false, nil
-		}
-
-		// If the collation was changed, bail.
-		// Different collations will affect the ordering of any secondary indexes using this column.
-		existingStr, ok1 := existingSch.GetNonPKCols().GetByIndex(existingIndex).TypeInfo.ToSqlType().(sql.StringType)
-		targetStr, ok2 := targetSch.GetNonPKCols().GetByIndex(targetIndex).TypeInfo.ToSqlType().(sql.StringType)
-
-		if ok1 && ok2 && !existingStr.Collation().Equals(targetStr.Collation()) {
-			return false, nil
-		}
-	}
-
-	_, valMapping, err = schema.MapSchemaBasedOnTagAndName(targetSch, existingSch)
-	if err != nil {
-		return false, err
-	}
-
-	for targetIndex, existingIndex := range valMapping {
-		if targetIndex == existingIndex {
-			continue
-		}
-
-		col := targetSch.GetNonPKCols().GetByIndex(targetIndex)
-		// If we haven't bailed so far, then these fields were added at the end.
-		// If one of these fields is NOT NULL, without a default value, then fail.
-		if !col.IsNullable() && col.Default == "" {
-			return false, nil
-		}
-	}
-	return true, nil
-}
-
 func setConflicts(ctx context.Context, cons durable.ConflictIndex, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (*doltdb.Table, error) {
 	ancSch, err := ancTbl.GetSchema(ctx)
 	if err != nil {

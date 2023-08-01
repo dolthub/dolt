@@ -53,11 +53,6 @@ var ErrUnableToMergeColumnDefaultValue = errorkinds.NewKind("unable to automatic
 // conflicts), migrate any existing table data to the specified |mergedSch|, and merge table data from both sides
 // of the merge together.
 func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Schema) (*doltdb.Table, *MergeStats, error) {
-	err := maybeAbortDueToUnmergeableIndexes(tm.name, tm.leftSch, tm.rightSch, mergedSch)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	mergeTbl, err := mergeTableArtifacts(ctx, tm, tm.leftTbl)
 	if err != nil {
 		return nil, nil, err
@@ -308,24 +303,6 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 	}
 
 	return finalTbl, s, nil
-}
-
-func maybeAbortDueToUnmergeableIndexes(tableName string, leftSchema, rightSchema, targetSchema schema.Schema) error {
-	leftOk, err := validateTupleFields(leftSchema, targetSchema)
-	if err != nil {
-		return err
-	}
-
-	rightOk, err := validateTupleFields(rightSchema, targetSchema)
-	if err != nil {
-		return err
-	}
-
-	if !leftOk || !rightOk {
-		return fmt.Errorf("table %s can't be automatically merged.\nTo merge this table, make the schema on the source and target branch equal.", tableName)
-	}
-
-	return nil
 }
 
 func threeWayDiffer(ctx context.Context, tm *TableMerger, valueMerger *valueMerger) (*tree.ThreeWayDiffer[val.Tuple, val.TupleDesc], error) {
@@ -1237,7 +1214,7 @@ func remapTuple(tuple val.Tuple, desc val.TupleDesc, mapping val.OrdinalMapping)
 // remapTupleWithColumnDefaults takes the given |tuple| (and the |tupleDesc| that describes how to access its fields)
 // and uses |mapping| to map the tuple's data and return a new tuple. |tm| provides high access to the name of the table
 // currently being merged and associated node store. |mergedSch| is the new schema of the table and is used to look up
-// column default values to apply to any existing rows when a new column is added as part of a merge. |pool| is used to
+// column default values to apply to any existing rows when a new column is added as part of a merge. |pool| is used
 // to allocate memory for the new tuple. A pointer to the new tuple data is returned, along with any error encountered.
 func remapTupleWithColumnDefaults(ctx *sql.Context, keyTuple, valueTuple val.Tuple, tupleDesc val.TupleDesc, mapping val.OrdinalMapping, tm *TableMerger, mergedSch schema.Schema, pool pool.BuffPool) (val.Tuple, error) {
 	tb := val.NewTupleBuilder(mergedSch.GetValueDescriptor())
