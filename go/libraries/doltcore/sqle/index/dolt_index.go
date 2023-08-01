@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/fulltext"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -51,6 +52,7 @@ type DoltTableable interface {
 type DoltIndex interface {
 	sql.FilteredIndex
 	sql.OrderedIndex
+	fulltext.Index
 	Schema() schema.Schema
 	IndexSchema() schema.Schema
 	Format() *types.NomsBinFormat
@@ -373,6 +375,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		tableSch:                      sch,
 		unique:                        idx.IsUnique(),
 		spatial:                       idx.IsSpatial(),
+		fulltext:                      idx.IsFullText(),
 		isPk:                          false,
 		comment:                       idx.Comment(),
 		vrw:                           vrw,
@@ -382,6 +385,38 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		constrainedToLookupExpression: true,
 		doltBinFormat:                 types.IsFormat_DOLT(vrw.Format()),
 		prefixLengths:                 idx.PrefixLengths(),
+		fullTextProps:                 idx.FullTextProperties(),
+	}, nil
+}
+
+// ConvertFullTextToSql converts a given Full-Text schema.Index into a sql.Index. As we do not need to write to a
+// Full-Text index, we can omit all such fields. This must not be used in any other circumstance.
+func ConvertFullTextToSql(ctx context.Context, db, tbl string, sch schema.Schema, idx schema.Index) (sql.Index, error) {
+	cols := make([]schema.Column, idx.Count())
+	for i, tag := range idx.IndexedColumnTags() {
+		cols[i], _ = idx.GetColumn(tag)
+	}
+
+	return &doltIndex{
+		id:                            idx.Name(),
+		tblName:                       tbl,
+		dbName:                        db,
+		columns:                       cols,
+		indexSch:                      idx.Schema(),
+		tableSch:                      sch,
+		unique:                        idx.IsUnique(),
+		spatial:                       idx.IsSpatial(),
+		fulltext:                      idx.IsFullText(),
+		isPk:                          false,
+		comment:                       idx.Comment(),
+		vrw:                           nil,
+		ns:                            nil,
+		keyBld:                        nil,
+		order:                         sql.IndexOrderAsc,
+		constrainedToLookupExpression: true,
+		doltBinFormat:                 true,
+		prefixLengths:                 idx.PrefixLengths(),
+		fullTextProps:                 idx.FullTextProperties(),
 	}, nil
 }
 
@@ -502,6 +537,7 @@ type doltIndex struct {
 	tableSch schema.Schema
 	unique   bool
 	spatial  bool
+	fulltext bool
 	isPk     bool
 	comment  string
 	order    sql.IndexOrder
@@ -516,6 +552,7 @@ type doltIndex struct {
 	doltBinFormat bool
 
 	prefixLengths []uint16
+	fullTextProps schema.FullTextProperties
 }
 
 var _ DoltIndex = (*doltIndex)(nil)
@@ -846,6 +883,11 @@ func (di *doltIndex) IsSpatial() bool {
 	return di.spatial
 }
 
+// IsFullText implements sql.Index
+func (di *doltIndex) IsFullText() bool {
+	return di.fulltext
+}
+
 // IsPrimaryKey implements DoltIndex.
 func (di *doltIndex) IsPrimaryKey() bool {
 	return di.isPk
@@ -888,6 +930,34 @@ func (di *doltIndex) Table() string {
 
 func (di *doltIndex) Format() *types.NomsBinFormat {
 	return di.vrw.Format()
+}
+
+// FullTextTableNames implements sql.Index
+func (di *doltIndex) FullTextTableNames(ctx *sql.Context) (fulltext.IndexTableNames, error) {
+	return fulltext.IndexTableNames{
+		Config:      di.fullTextProps.ConfigTable,
+		Position:    di.fullTextProps.PositionTable,
+		DocCount:    di.fullTextProps.DocCountTable,
+		GlobalCount: di.fullTextProps.GlobalCountTable,
+		RowCount:    di.fullTextProps.RowCountTable,
+	}, nil
+}
+
+// FullTextKeyColumns implements sql.Index
+func (di *doltIndex) FullTextKeyColumns(ctx *sql.Context) (fulltext.KeyColumns, error) {
+	var positions []int
+	if len(di.fullTextProps.KeyPositions) > 0 {
+		positions = make([]int, len(di.fullTextProps.KeyPositions))
+		for i := range positions {
+			positions[i] = int(di.fullTextProps.KeyPositions[i])
+		}
+	}
+
+	return fulltext.KeyColumns{
+		Type:      fulltext.KeyType(di.fullTextProps.KeyType),
+		Name:      di.fullTextProps.KeyName,
+		Positions: positions,
+	}, nil
 }
 
 // keysToTuple returns a tuple that indicates the starting point for an index. The empty tuple will cause the index to

@@ -54,6 +54,7 @@ type prollyTableWriter struct {
 }
 
 var _ TableWriter = &prollyTableWriter{}
+var _ sql.AutoIncrementGetter = &prollyTableWriter{}
 
 func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch sql.Schema, sch schema.Schema) (map[string]indexWriter, error) {
 	s, err := t.GetIndexSet(ctx)
@@ -66,6 +67,9 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch
 	writers := make(map[string]indexWriter)
 
 	for _, def := range definitions {
+		if def.IsFullText() {
+			continue
+		}
 		defName := def.Name()
 		idxRows, err := s.GetIndex(ctx, sch, defName)
 		if err != nil {
@@ -104,6 +108,9 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, sqlS
 	writers := make(map[string]indexWriter)
 
 	for _, def := range definitions {
+		if def.IsFullText() {
+			continue
+		}
 		defName := def.Name()
 		idxRows, err := s.GetIndex(ctx, sch, defName)
 		if err != nil {

@@ -84,7 +84,7 @@ CREATE TABLE `address` (
   `last_update` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`address_id`),
   KEY `idx_fk_city_id` (`city_id`),
-  /* UNSUPPORTED SYNTAX (https://github.com/dolthub/dolt/issues/3204): SPATIAL KEY `idx_location` (`location`), */
+  SPATIAL KEY `idx_location` (`location`),
   CONSTRAINT `fk_address_city` FOREIGN KEY (`city_id`) REFERENCES `city` (`city_id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=606 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -433,8 +433,8 @@ CREATE TABLE `film_text` (
   `film_id` smallint NOT NULL,
   `title` varchar(255) NOT NULL,
   `description` text,
-  PRIMARY KEY (`film_id`)/*, UNSUPPORTED SYNTAX (https://github.com/dolthub/dolt/issues/2987):
-  FULLTEXT KEY `idx_title_description` (`title`,`description`)*/
+  PRIMARY KEY (`film_id`),
+  FULLTEXT KEY `idx_title_description` (`title`,`description`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

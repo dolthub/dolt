@@ -342,6 +342,11 @@ func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schem
 		}
 		po := b.EndVector(len(prefixLengths))
 
+		var ftInfo fb.UOffsetT
+		if idx.IsFullText() {
+			ftInfo = serializeFullTextInfo(b, idx)
+		}
+
 		serial.IndexStart(b)
 		serial.IndexAddName(b, no)
 		serial.IndexAddComment(b, co)
@@ -352,6 +357,10 @@ func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schem
 		serial.IndexAddSystemDefined(b, !idx.IsUserDefined())
 		serial.IndexAddPrefixLengths(b, po)
 		serial.IndexAddSpatialKey(b, idx.IsSpatial())
+		serial.IndexAddFulltextKey(b, idx.IsFullText())
+		if idx.IsFullText() {
+			serial.IndexAddFulltextInfo(b, ftInfo)
+		}
 		offs[i] = serial.IndexEnd(b)
 	}
 
@@ -371,10 +380,12 @@ func deserializeSecondaryIndexes(sch schema.Schema, s *serial.TableSchema) error
 
 		name := string(idx.Name())
 		props := schema.IndexProperties{
-			IsUnique:      idx.UniqueKey(),
-			IsSpatial:     idx.SpatialKey(),
-			IsUserDefined: !idx.SystemDefined(),
-			Comment:       string(idx.Comment()),
+			IsUnique:           idx.UniqueKey(),
+			IsSpatial:          idx.SpatialKey(),
+			IsFullText:         idx.FulltextKey(),
+			IsUserDefined:      !idx.SystemDefined(),
+			Comment:            string(idx.Comment()),
+			FullTextProperties: deserializeFullTextInfo(&idx),
 		}
 
 		tags := make([]uint64, idx.IndexColumnsLength())
@@ -431,6 +442,62 @@ func deserializeChecks(sch schema.Schema, s *serial.TableSchema) error {
 		}
 	}
 	return nil
+}
+
+func serializeFullTextInfo(b *fb.Builder, idx schema.Index) fb.UOffsetT {
+	props := idx.FullTextProperties()
+
+	configTable := b.CreateString(props.ConfigTable)
+	posTable := b.CreateString(props.PositionTable)
+	docCountTable := b.CreateString(props.DocCountTable)
+	globalCountTable := b.CreateString(props.GlobalCountTable)
+	rowCountTable := b.CreateString(props.RowCountTable)
+	keyName := b.CreateString(props.KeyName)
+
+	keyPositions := idx.FullTextProperties().KeyPositions
+	serial.FulltextInfoStartKeyPositionsVector(b, len(keyPositions))
+	for j := len(keyPositions) - 1; j >= 0; j-- {
+		b.PrependUint16(keyPositions[j])
+	}
+	keyPos := b.EndVector(len(keyPositions))
+
+	serial.FulltextInfoStart(b)
+	serial.FulltextInfoAddConfigTable(b, configTable)
+	serial.FulltextInfoAddPositionTable(b, posTable)
+	serial.FulltextInfoAddDocCountTable(b, docCountTable)
+	serial.FulltextInfoAddGlobalCountTable(b, globalCountTable)
+	serial.FulltextInfoAddRowCountTable(b, rowCountTable)
+	serial.FulltextInfoAddKeyType(b, props.KeyType)
+	serial.FulltextInfoAddKeyName(b, keyName)
+	serial.FulltextInfoAddKeyPositions(b, keyPos)
+	return serial.FulltextInfoEnd(b)
+}
+
+func deserializeFullTextInfo(idx *serial.Index) schema.FullTextProperties {
+	fulltext := serial.FulltextInfo{}
+	if idx.FulltextInfo(&fulltext) == nil {
+		return schema.FullTextProperties{}
+	}
+
+	var keyPositions []uint16
+	keyPositionsLength := fulltext.KeyPositionsLength()
+	if keyPositionsLength > 0 {
+		keyPositions = make([]uint16, keyPositionsLength)
+		for j := range keyPositions {
+			keyPositions[j] = fulltext.KeyPositions(j)
+		}
+	}
+
+	return schema.FullTextProperties{
+		ConfigTable:      string(fulltext.ConfigTable()),
+		PositionTable:    string(fulltext.PositionTable()),
+		DocCountTable:    string(fulltext.DocCountTable()),
+		GlobalCountTable: string(fulltext.GlobalCountTable()),
+		RowCountTable:    string(fulltext.RowCountTable()),
+		KeyType:          fulltext.KeyType(),
+		KeyName:          string(fulltext.KeyName()),
+		KeyPositions:     keyPositions,
+	}
 }
 
 func keylessSerialSchema(s *serial.TableSchema) bool {

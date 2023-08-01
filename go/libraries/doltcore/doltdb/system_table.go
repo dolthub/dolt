@@ -60,16 +60,26 @@ func HasDoltPrefix(s string) bool {
 	return strings.HasPrefix(strings.ToLower(s), DoltNamespace)
 }
 
+// IsFullTextTable returns a boolean stating whether the given table is one of the pseudo-index tables used by Full-Text
+// indexes.
+func IsFullTextTable(name string) bool {
+	return HasDoltPrefix(name) && (strings.HasSuffix(name, "_fts_config") ||
+		strings.HasSuffix(name, "_fts_position") ||
+		strings.HasSuffix(name, "_fts_doc_count") ||
+		strings.HasSuffix(name, "_fts_global_count") ||
+		strings.HasSuffix(name, "_fts_row_count"))
+}
+
 // IsReadOnlySystemTable returns whether the table name given is a system table that should not be included in command line
 // output (e.g. dolt status) by default.
 func IsReadOnlySystemTable(name string) bool {
-	return HasDoltPrefix(name) && !set.NewStrSet(writeableSystemTables).Contains(name)
+	return HasDoltPrefix(name) && !set.NewStrSet(writeableSystemTables).Contains(name) && !IsFullTextTable(name)
 }
 
 // IsNonAlterableSystemTable returns whether the table name given is a system table that cannot be dropped or altered
 // by the user.
 func IsNonAlterableSystemTable(name string) bool {
-	return IsReadOnlySystemTable(name) || strings.ToLower(name) == SchemasTableName
+	return (IsReadOnlySystemTable(name) && !IsFullTextTable(name)) || strings.ToLower(name) == SchemasTableName
 }
 
 // GetNonSystemTableNames gets non-system table names

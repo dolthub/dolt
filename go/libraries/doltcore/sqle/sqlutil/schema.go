@@ -71,9 +71,10 @@ func ParseCreateTableStatement(ctx context.Context, root *doltdb.RootValue, quer
 			prefixes = append(prefixes, uint16(c.Length))
 		}
 		props := schema.IndexProperties{
-			IsUnique:  idx.IsUnique(),
-			IsSpatial: idx.IsSpatial(),
-			Comment:   idx.Comment,
+			IsUnique:   idx.IsUnique(),
+			IsSpatial:  idx.IsSpatial(),
+			IsFullText: idx.IsFullText(),
+			Comment:    idx.Comment,
 		}
 		name := getIndexName(idx)
 		_, err = sch.Indexes().AddIndexByColNames(name, idx.ColumnNames(), prefixes, props)

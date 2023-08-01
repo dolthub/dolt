@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 	"testing"
 	"time"
 
@@ -49,7 +50,7 @@ var skipPrepared bool
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
 // as a reminder to consider prepareds when adding a new
 // enginetest suite.
-const SkipPreparedsCount = 82
+const SkipPreparedsCount = 83
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
@@ -1029,6 +1030,18 @@ func TestForeignKeyBranchesPrepared(t *testing.T) {
 		h.Setup(setup.MydbData, setup.Parent_childData)
 		enginetest.TestScriptPrepared(t, h, script)
 	}
+}
+
+func TestFulltextIndexes(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("FULLTEXT is not supported on the old format")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("For some reason, this is flaky only on Windows CI. Investigation is underway.")
+	}
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestFulltextIndexes(t, h)
 }
 
 func TestCreateCheckConstraints(t *testing.T) {

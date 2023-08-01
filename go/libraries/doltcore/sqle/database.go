@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/fulltext"
 	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -77,6 +78,7 @@ var _ sql.VersionedDatabase = Database{}
 var _ sql.ViewDatabase = Database{}
 var _ sql.EventDatabase = Database{}
 var _ sql.AliasedDatabase = Database{}
+var _ fulltext.Database = Database{}
 
 type ReadOnlyDatabase struct {
 	Database
@@ -631,7 +633,7 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 	}
 	if doltdb.IsReadOnlySystemTable(tableName) {
 		table = readonlyTable
-	} else if doltdb.HasDoltPrefix(tableName) {
+	} else if doltdb.HasDoltPrefix(tableName) && !doltdb.IsFullTextTable(tableName) {
 		table = &WritableDoltTable{DoltTable: readonlyTable, db: db}
 	} else {
 		table = &AlterableDoltTable{WritableDoltTable{DoltTable: readonlyTable, db: db}}
@@ -850,7 +852,7 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 		if !dtables.DoltDocsSqlSchema.Equals(sch.Schema) && !dtables.OldDoltDocsSqlSchema.Equals(sch.Schema) {
 			return fmt.Errorf("incorrect schema for dolt_docs table")
 		}
-	} else if doltdb.HasDoltPrefix(tableName) {
+	} else if doltdb.HasDoltPrefix(tableName) && !doltdb.IsFullTextTable(tableName) {
 		return ErrReservedTableName.New(tableName)
 	}
 
@@ -880,6 +882,32 @@ func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sq
 	}
 
 	return db.createIndexedSqlTable(ctx, tableName, sch, idxDef, collation)
+}
+
+// CreateFulltextTableNames returns a set of names that will be used to create Full-Text pseudo-index tables.
+func (db Database) CreateFulltextTableNames(ctx *sql.Context, parentTableName string, parentIndexName string) (fulltext.IndexTableNames, error) {
+	allTableNames, err := db.GetAllTableNames(ctx)
+	if err != nil {
+		return fulltext.IndexTableNames{}, err
+	}
+	var tablePrefix string
+OuterLoop:
+	for i := uint64(0); true; i++ {
+		tablePrefix = strings.ToLower(fmt.Sprintf("dolt_%s_%s_%d", parentTableName, parentIndexName, i))
+		for _, tableName := range allTableNames {
+			if strings.HasPrefix(strings.ToLower(tableName), tablePrefix) {
+				continue OuterLoop
+			}
+		}
+		break
+	}
+	return fulltext.IndexTableNames{
+		Config:      fmt.Sprintf("dolt_%s_fts_config", parentTableName),
+		Position:    fmt.Sprintf("%s_fts_position", tablePrefix),
+		DocCount:    fmt.Sprintf("%s_fts_doc_count", tablePrefix),
+		GlobalCount: fmt.Sprintf("%s_fts_global_count", tablePrefix),
+		RowCount:    fmt.Sprintf("%s_fts_row_count", tablePrefix),
+	}, nil
 }
 
 // createSqlTable is the private version of CreateTable. It doesn't enforce any table name checks.

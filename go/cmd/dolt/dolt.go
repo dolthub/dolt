@@ -61,7 +61,7 @@ import (
 )
 
 const (
-	Version = "1.8.3"
+	Version = "1.8.7"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -459,6 +459,11 @@ func runMain() int {
 		return 1
 	}
 
+	if dEnv.CfgLoadErr != nil {
+		cli.PrintErrln(color.RedString("Failed to load the global config. %v", dEnv.CfgLoadErr))
+		return 1
+	}
+
 	emitter := events.NewFileEmitter(root, dbfactory.DoltDir)
 
 	defer func() {
@@ -485,11 +490,6 @@ func runMain() int {
 			// log.Print(err)
 		}
 	}()
-
-	if dEnv.CfgLoadErr != nil {
-		cli.PrintErrln(color.RedString("Failed to load the global config. %v", dEnv.CfgLoadErr))
-		return 1
-	}
 
 	err = reconfigIfTempFileMoveFails(dEnv)
 

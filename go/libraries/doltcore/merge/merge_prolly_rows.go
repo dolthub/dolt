@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/transform"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	errorkinds "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -52,11 +53,6 @@ var ErrUnableToMergeColumnDefaultValue = errorkinds.NewKind("unable to automatic
 // conflicts), migrate any existing table data to the specified |mergedSch|, and merge table data from both sides
 // of the merge together.
 func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Schema) (*doltdb.Table, *MergeStats, error) {
-	err := maybeAbortDueToUnmergeableIndexes(tm.name, tm.leftSch, tm.rightSch, mergedSch)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	mergeTbl, err := mergeTableArtifacts(ctx, tm, tm.leftTbl)
 	if err != nil {
 		return nil, nil, err
@@ -309,24 +305,6 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 	return finalTbl, s, nil
 }
 
-func maybeAbortDueToUnmergeableIndexes(tableName string, leftSchema, rightSchema, targetSchema schema.Schema) error {
-	leftOk, err := validateTupleFields(leftSchema, targetSchema)
-	if err != nil {
-		return err
-	}
-
-	rightOk, err := validateTupleFields(rightSchema, targetSchema)
-	if err != nil {
-		return err
-	}
-
-	if !leftOk || !rightOk {
-		return fmt.Errorf("table %s can't be automatically merged.\nTo merge this table, make the schema on the source and target branch equal.", tableName)
-	}
-
-	return nil
-}
-
 func threeWayDiffer(ctx context.Context, tm *TableMerger, valueMerger *valueMerger) (*tree.ThreeWayDiffer[val.Tuple, val.TupleDesc], error) {
 	lr, err := tm.leftTbl.GetRowData(ctx)
 	if err != nil {
@@ -446,11 +424,25 @@ func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) 
 			return 0, err
 		}
 
-		if result == nil || result == true {
-			// If a check constraint returns NULL or TRUE, then the check constraint is fulfilled
+		// MySQL treats NULL as TRUE for a check constraint
+		if result == nil {
+			result = true
+		}
+
+		// Coerce into a boolean; technically, this shouldn't be
+		// necessary, since check constraint expressions should always
+		// be of a boolean type, but Dolt has allowed this previously.
+		// https://github.com/dolthub/dolt/issues/6411
+		booleanResult, err := types.ConvertToBool(result)
+		if err != nil {
+			return 0, fmt.Errorf("unable to convert check constraint expression (%s) into boolean value: %v", checkName, err.Error())
+		}
+
+		if booleanResult {
+			// If a check constraint returns TRUE (or NULL), then the check constraint is fulfilled
 			// https://dev.mysql.com/doc/refman/8.0/en/create-table-check-constraints.html
 			continue
-		} else if result == false {
+		} else {
 			conflictCount++
 			meta, err := newCheckCVMeta(cv.sch, checkName)
 			if err != nil {
@@ -459,8 +451,6 @@ func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) 
 			if err = cv.insertArtifact(ctx, diff.Key, newTuple, meta); err != nil {
 				return conflictCount, err
 			}
-		} else {
-			return 0, fmt.Errorf("unexpected result from check constraint expression: %v", result)
 		}
 	}
 
@@ -1224,7 +1214,7 @@ func remapTuple(tuple val.Tuple, desc val.TupleDesc, mapping val.OrdinalMapping)
 // remapTupleWithColumnDefaults takes the given |tuple| (and the |tupleDesc| that describes how to access its fields)
 // and uses |mapping| to map the tuple's data and return a new tuple. |tm| provides high access to the name of the table
 // currently being merged and associated node store. |mergedSch| is the new schema of the table and is used to look up
-// column default values to apply to any existing rows when a new column is added as part of a merge. |pool| is used to
+// column default values to apply to any existing rows when a new column is added as part of a merge. |pool| is used
 // to allocate memory for the new tuple. A pointer to the new tuple data is returned, along with any error encountered.
 func remapTupleWithColumnDefaults(ctx *sql.Context, keyTuple, valueTuple val.Tuple, tupleDesc val.TupleDesc, mapping val.OrdinalMapping, tm *TableMerger, mergedSch schema.Schema, pool pool.BuffPool) (val.Tuple, error) {
 	tb := val.NewTupleBuilder(mergedSch.GetValueDescriptor())
