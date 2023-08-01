@@ -229,6 +229,12 @@ func PutField(ctx context.Context, ns tree.NodeStore, tb *val.TupleBuilder, i in
 
 func convInt(v interface{}) int {
 	switch i := v.(type) {
+	case bool:
+		if i {
+			return 1
+		} else {
+			return 0
+		}
 	case int:
 		return i
 	case int8:

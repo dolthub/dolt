@@ -336,6 +336,14 @@ func TestVersionedQueries(t *testing.T) {
 	enginetest.TestVersionedQueries(t, h)
 }
 
+func TestAnsiQuotesSqlMode(t *testing.T) {
+	enginetest.TestAnsiQuotesSqlMode(t, newDoltHarness(t))
+}
+
+func TestAnsiQuotesSqlModePrepared(t *testing.T) {
+	enginetest.TestAnsiQuotesSqlModePrepared(t, newDoltHarness(t))
+}
+
 // Tests of choosing the correct execution plan independent of result correctness. Mostly useful for confirming that
 // the right indexes are being used for joining tables.
 func TestQueryPlans(t *testing.T) {

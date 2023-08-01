@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -1124,14 +1125,16 @@ func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableD
 	var viewDef sql.ViewDefinition
 	var views = make([]sql.ViewDefinition, len(fragments))
 	for i, fragment := range fragments {
-		cv, err := parse.Parse(ctx, fragments[i].fragment)
+		cv, err := parse.ParseWithOptions(ctx, fragments[i].fragment,
+			sqlparser.ParserOptions{AnsiQuotes: fragment.ansiQuotes})
 		if err != nil {
 			return nil, sql.ViewDefinition{}, false, err
 		}
 
 		createView, ok := cv.(*plan.CreateView)
 		if ok {
-			views[i] = sql.ViewDefinition{Name: fragments[i].name, TextDefinition: createView.Definition.TextDefinition, CreateViewStatement: fragments[i].fragment}
+			views[i] = sql.ViewDefinition{Name: fragments[i].name, TextDefinition: createView.Definition.TextDefinition,
+				CreateViewStatement: fragments[i].fragment, AnsiQuotes: fragment.ansiQuotes}
 		} else {
 			views[i] = sql.ViewDefinition{Name: fragments[i].name, TextDefinition: fragments[i].fragment, CreateViewStatement: fmt.Sprintf("CREATE VIEW %s AS %s", fragments[i].name, fragments[i].fragment)}
 		}
@@ -1200,6 +1203,7 @@ func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error
 			Name:            frag.name,
 			CreateStatement: frag.fragment,
 			CreatedAt:       frag.created,
+			AnsiQuotes:      frag.ansiQuotes,
 		})
 	}
 	if err != nil {
@@ -1241,12 +1245,14 @@ func (db Database) GetEvent(ctx *sql.Context, name string) (sql.EventDefinition,
 		return sql.EventDefinition{}, false, err
 	}
 
+	// TODO: Some duplication with GetEvents here... would be nice to clean up
 	for _, frag := range frags {
 		if strings.ToLower(frag.name) == strings.ToLower(name) {
 			return sql.EventDefinition{
 				Name:            frag.name,
 				CreateStatement: frag.fragment,
 				CreatedAt:       frag.created,
+				AnsiQuotes:      frag.ansiQuotes,
 			}, true, nil
 		}
 	}
@@ -1274,6 +1280,7 @@ func (db Database) GetEvents(ctx *sql.Context) ([]sql.EventDefinition, error) {
 			Name:            frag.name,
 			CreateStatement: frag.fragment,
 			CreatedAt:       frag.created,
+			AnsiQuotes:      frag.ansiQuotes,
 		})
 	}
 	return events, nil
@@ -1372,7 +1379,12 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 		return err
 	}
 
-	return inserter.Insert(ctx, sql.Row{fragType, name, definition, extraJSON})
+	sqlMode, err := sql.LoadSqlMode(ctx)
+	if err != nil {
+		return err
+	}
+
+	return inserter.Insert(ctx, sql.Row{fragType, name, definition, extraJSON, sqlMode.AnsiQuotes()})
 }
 
 func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name string, missingErr error) error {

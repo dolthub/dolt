@@ -244,8 +244,10 @@ const (
 	// SchemasTablesExtraCol The name of the column that stores extra information about a schema element in the
 	// dolt_schemas table
 	SchemasTablesExtraCol = "extra"
-	//
-	SchemasTablesIndexName = "fragment_name"
+	// SchemasTablesAnsiQuotesCol is the name of the column that stores whether this fragment needs to be parsed
+	// in ANSI_QUOTES mode to treat double quote chars as identifier quotes, instead of string literal quotes.
+	SchemasTablesAnsiQuotesCol = "ansi_quotes"
+	SchemasTablesIndexName     = "fragment_name"
 )
 
 const (
