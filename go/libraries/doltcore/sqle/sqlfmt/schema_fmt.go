@@ -36,7 +36,8 @@ func GenerateCreateTableIndentedColumnDefinition(col schema.Column) string {
 
 // GenerateCreateTableIndexDefinition returns index definition for CREATE TABLE statement with indentation of 2 spaces
 func GenerateCreateTableIndexDefinition(index schema.Index) string {
-	return sql.GenerateCreateTableIndexDefinition(index.IsUnique(), index.IsSpatial(), index.Name(), sql.QuoteIdentifiers(index.ColumnNames()), index.Comment())
+	return sql.GenerateCreateTableIndexDefinition(index.IsUnique(), index.IsSpatial(), index.IsFullText(), index.Name(),
+		sql.QuoteIdentifiers(index.ColumnNames()), index.Comment())
 }
 
 // GenerateCreateTableForeignKeyDefinition returns foreign key definition for CREATE TABLE statement with indentation of 2 spaces

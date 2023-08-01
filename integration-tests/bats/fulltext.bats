@@ -24,7 +24,7 @@ teardown() {
     dolt sql -q "CREATE TABLE test (pk BIGINT UNSIGNED PRIMARY KEY, v1 VARCHAR(200), v2 VARCHAR(200), FULLTEXT idx (v1, v2));"
     dolt sql -q "INSERT INTO test VALUES (1, 'abc', 'def pqr'), (2, 'ghi', 'jkl'), (3, 'mno', 'mno'), (4, 'stu vwx', 'xyz zyx yzx'), (5, 'ghs', 'mno shg');"
 
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_global_count;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_global_count;"
     [[ "$output" =~ "| word | global_count |" ]] || false
     [[ "$output" =~ "| abc  | 1            |" ]] || false
     [[ "$output" =~ "| def  | 1            |" ]] || false
@@ -55,7 +55,7 @@ teardown() {
 
     dolt checkout main
     dolt merge other
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_global_count;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_global_count;"
     [[ "$output" =~ "| word | global_count |" ]] || false
     [[ "$output" =~ "| abc  | 1            |" ]] || false
     [[ "$output" =~ "| bot  | 1            |" ]] || false
@@ -79,29 +79,29 @@ teardown() {
     dolt sql -q "INSERT INTO test VALUES (1, 'abc');"
     run dolt sql -q "SELECT * FROM dolt_test_fts_config;"
     [ "$status" -eq 0 ]
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_position;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_position;"
     [[ "$output" =~ "| word | C0 | position |" ]] || false
     [[ "$output" =~ "| abc  | 1  | 0        |" ]] || false
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_doc_count;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_doc_count;"
     [[ "$output" =~ "| word | C0 | doc_count |" ]] || false
     [[ "$output" =~ "| abc  | 1  | 1         |" ]] || false
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_global_count;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_global_count;"
     [[ "$output" =~ "| word | global_count |" ]] || false
     [[ "$output" =~ "| abc  | 1            |" ]] || false
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_row_count;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_row_count;"
     [[ "$output" =~ "| row_hash                                                         | row_count | unique_words |" ]] || false
     [[ "$output" =~ "| c38b3e71346a4847af87d87153e01eae2d83d905df14cc09ec1ac30516ec44ed | 1         | 1            |" ]] || false
 
     dolt sql -q "DROP INDEX idx ON test;"
     run dolt sql -q "SELECT * FROM dolt_test_fts_config;"
     [ "$status" -eq 1 ]
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_position;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_position;"
     [ "$status" -eq 1 ]
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_doc_count;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_doc_count;"
     [ "$status" -eq 1 ]
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_global_count;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_global_count;"
     [ "$status" -eq 1 ]
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_row_count;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_row_count;"
     [ "$status" -eq 1 ]
 }
 
@@ -121,13 +121,13 @@ teardown() {
     dolt merge other
     run dolt sql -q "SELECT * FROM dolt_test_fts_config;"
     [ "$status" -eq 1 ]
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_position;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_position;"
     [ "$status" -eq 1 ]
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_doc_count;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_doc_count;"
     [ "$status" -eq 1 ]
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_global_count;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_global_count;"
     [ "$status" -eq 1 ]
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_row_count;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_row_count;"
     [ "$status" -eq 1 ]
 }
 
@@ -153,13 +153,13 @@ teardown() {
     dolt merge other
     run dolt sql -q "SELECT * FROM dolt_test_fts_config;"
     [ "$status" -eq 1 ]
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_position;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_position;"
     [ "$status" -eq 1 ]
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_doc_count;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_doc_count;"
     [ "$status" -eq 1 ]
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_global_count;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_global_count;"
     [ "$status" -eq 1 ]
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_row_count;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_row_count;"
     [ "$status" -eq 1 ]
 }
 
@@ -181,13 +181,13 @@ teardown() {
     dolt merge other
     run dolt sql -q "SELECT * FROM dolt_test_fts_config;"
     [ "$status" -eq 0 ]
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_position;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_position;"
     [ "$status" -eq 0 ]
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_doc_count;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_doc_count;"
     [ "$status" -eq 0 ]
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_global_count;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_global_count;"
     [ "$status" -eq 0 ]
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_row_count;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_row_count;"
     [ "$status" -eq 0 ]
 }
 
@@ -213,12 +213,12 @@ teardown() {
     dolt merge other
     run dolt sql -q "SELECT * FROM dolt_test_fts_config;"
     [ "$status" -eq 0 ]
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_position;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_position;"
     [ "$status" -eq 0 ]
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_doc_count;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_doc_count;"
     [ "$status" -eq 0 ]
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_global_count;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_global_count;"
     [ "$status" -eq 0 ]
-    run dolt sql -q "SELECT * FROM dolt_test_idx_fts_row_count;"
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_row_count;"
     [ "$status" -eq 0 ]
 }
