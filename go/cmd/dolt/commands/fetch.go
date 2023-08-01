@@ -83,13 +83,15 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
-
+	
 	srcDB, err := r.GetRemoteDBWithoutCaching(ctx, dEnv.DbData().Ddb.ValueReadWriter().Format(), dEnv)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	err = actions.FetchRefSpecs(ctx, dEnv.DbData(), srcDB, refSpecs, r, ref.UpdateMode{Force: true}, buildProgStarter(downloadLanguage), stopProgFuncs)
+	prune := apr.Contains(cli.PruneFlag)
+	mode := ref.UpdateMode{Force: true, Prune: prune}
+	err = actions.FetchRefSpecs(ctx, dEnv.DbData(), srcDB, refSpecs, r, mode, buildProgStarter(downloadLanguage), stopProgFuncs)
 	if err != nil && err != doltdb.ErrUpToDate {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}

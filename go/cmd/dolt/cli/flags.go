@@ -53,6 +53,7 @@ const (
 	ParentsFlag      = "parents"
 	PasswordFlag     = "password"
 	PortFlag         = "port"
+	PruneFlag        = "prune"
 	RemoteParam      = "remote"
 	SetUpstreamFlag  = "set-upstream"
 	ShallowFlag      = "shallow"
