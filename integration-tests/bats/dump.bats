@@ -364,7 +364,6 @@ SQL
 }
 
 @test "dump: SQL type - with keyless tables" {
-
     dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     dolt sql -q "INSERT INTO new_table VALUES (1);"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
@@ -863,6 +862,32 @@ SQL
     run grep "COMMIT;" doltdump.sql
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
+}
+
+# Assert that we can create data in ANSI_QUOTES mode, and then correctly dump it
+# out after disabling ANSI_QUOTES mode.
+@test "dump: ANSI_QUOTES data" {
+    dolt sql << SQL
+SET @@SQL_MODE=ANSI_QUOTES;
+CREATE TABLE "table1"("pk" int primary key, "col1" int DEFAULT ("pk"));
+CREATE TRIGGER trigger1 BEFORE INSERT ON "table1" FOR EACH ROW SET NEW."pk" = NEW."pk" + 1;
+INSERT INTO "table1" ("pk") VALUES (1);
+CREATE VIEW "view1" AS select "pk", "col1" from "table1";
+CREATE PROCEDURE procedure1() SELECT "pk", "col1" from "table1";
+SQL
+
+    run dolt dump
+    [ $status -eq 0 ]
+    [[ $output =~ "Successfully exported data." ]] || false
+    [ -f doltdump.sql ]
+    cp doltdump.sql ~/doltdump.sql
+
+    # TODO: Would be good to make sure we can roundtrip it, but we won't be able
+    #       to without SQL_MODE set to ANSI_QUOTES
+    # TODO: Need to clean up setting SQL_MODE in dump file;
+    #       How does MySQL do this? If we could just normalize the query
+    #       or fragment to non-ANSI_QUOTES, then everything would be so
+    #       much easier!
 }
 
 @test "dump: round trip dolt dump with all data types" {

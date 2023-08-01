@@ -84,7 +84,7 @@ teardown() {
 }
 
 @test "sql-shell: works with ANSI_QUOTES SQL mode" {
-    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+    if [ $SQL_ENGINE = "remote-engine" ]; then
       skip "Presently sql command will not connect to remote server due to lack of lock file where there are not DBs."
     fi
 

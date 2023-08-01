@@ -41,6 +41,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 )
 
 const (
@@ -269,6 +270,7 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.
 	}
 
 	stmtColIdx := sch.IndexOfColName(doltdb.ProceduresTableCreateStmtCol)
+	ansiQuotesIdx := sch.IndexOfColName(doltdb.ProceduresTableAnsiQuotesCol)
 
 	defer func(iter sql.RowIter, context *sql.Context) {
 		err := iter.Close(context)
@@ -283,6 +285,20 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.
 			break
 		} else if err != nil {
 			return err
+		}
+
+		ansiQuotesMode := false
+		if len(row) >= ansiQuotesIdx {
+			if row[ansiQuotesIdx].(int8) > 0 {
+				ansiQuotesMode = true
+			}
+		}
+
+		if ansiQuotesMode {
+			err = iohelp.WriteLine(writer, "SET @@SQL_MODE=CONCAT(@@SQL_MODE, ',ANSI_QUOTES');")
+			if err != nil {
+				return err
+			}
 		}
 
 		err = iohelp.WriteLine(writer, "delimiter END_PROCEDURE")
@@ -321,6 +337,7 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.Ro
 
 	typeColIdx := sch.IndexOfColName(doltdb.SchemasTablesTypeCol)
 	fragColIdx := sch.IndexOfColName(doltdb.SchemasTablesFragmentCol)
+	ansiQuotesIdx := sch.IndexOfColName(doltdb.SchemasTablesAnsiQuotesCol)
 
 	defer func(iter sql.RowIter, context *sql.Context) {
 		err := iter.Close(context)
@@ -339,6 +356,20 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.Ro
 
 		if row[typeColIdx] != "trigger" {
 			continue
+		}
+
+		ansiQuotesMode := false
+		if row[ansiQuotesIdx].(int8) > 0 {
+			ansiQuotesMode = true
+		}
+
+		// TODO: helper functions?
+		// TODO: Need to clean up how we set SQL_MODE in the output dump file
+		if ansiQuotesMode {
+			err = iohelp.WriteLine(writer, "SET @@SQL_MODE=CONCAT(@@SQL_MODE, ',ANSI_QUOTES');")
+			if err != nil {
+				return err
+			}
 		}
 
 		err = iohelp.WriteLine(writer, fmt.Sprintf("%s;", row[fragColIdx]))
@@ -368,6 +399,7 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValu
 	typeColIdx := sch.IndexOfColName(doltdb.SchemasTablesTypeCol)
 	fragColIdx := sch.IndexOfColName(doltdb.SchemasTablesFragmentCol)
 	nameColIdx := sch.IndexOfColName(doltdb.SchemasTablesNameCol)
+	ansiQuotesColIdx := sch.IndexOfColName(doltdb.SchemasTablesAnsiQuotesCol)
 
 	defer func(iter sql.RowIter, context *sql.Context) {
 		err := iter.Close(context)
@@ -388,10 +420,28 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValu
 			continue
 		}
 
+		ansiQuotesMode := false
+		if row[ansiQuotesColIdx].(int8) > 0 {
+			ansiQuotesMode = true
+		}
+
 		// We used to store just the SELECT part of a view, but now we store the entire CREATE VIEW statement
-		cv, err := parse.Parse(ctx, row[fragColIdx].(string))
+		cv, err := parse.ParseWithOptions(ctx, row[fragColIdx].(string), sqlparser.ParserOptions{
+			AnsiQuotes: ansiQuotesMode,
+		})
 		if err != nil {
 			return err
+		}
+
+		if ansiQuotesMode {
+			err := iohelp.WriteLine(writer, "SET @previousSqlMode=@@SQL_MODE;")
+			if err != nil {
+				return err
+			}
+			err = iohelp.WriteLine(writer, "SET @@SQL_MODE=CONCAT(@@SQL_MODE, ',ANSI_QUOTES');")
+			if err != nil {
+				return err
+			}
 		}
 
 		_, ok := cv.(*plan.CreateView)
@@ -402,6 +452,13 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValu
 			}
 		} else {
 			err := iohelp.WriteLine(writer, fmt.Sprintf("CREATE VIEW %s AS %s;", row[nameColIdx], row[fragColIdx]))
+			if err != nil {
+				return err
+			}
+		}
+
+		if ansiQuotesMode {
+			err := iohelp.WriteLine(writer, "SET @@SQL_MODE=@previousSqlMode;")
 			if err != nil {
 				return err
 			}
