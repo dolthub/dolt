@@ -59,6 +59,7 @@ func ProceduresTableSchema() schema.Schema {
 		schema.NewColumn(doltdb.ProceduresTableCreateStmtCol, schema.DoltProceduresCreateStmtTag, types.StringKind, false),
 		schema.NewColumn(doltdb.ProceduresTableCreatedAtCol, schema.DoltProceduresCreatedAtTag, types.TimestampKind, false),
 		schema.NewColumn(doltdb.ProceduresTableModifiedAtCol, schema.DoltProceduresModifiedAtTag, types.TimestampKind, false),
+		schema.NewColumn(doltdb.ProceduresTableAnsiQuotesCol, schema.DoltProceduresAnsiQuotesTag, types.BoolKind, false),
 	)
 	return schema.MustSchemaFromCols(colColl)
 }
@@ -71,6 +72,18 @@ func DoltProceduresGetOrCreateTable(ctx *sql.Context, db Database) (*WritableDol
 		return nil, err
 	}
 	if found {
+		// If the table we found doesn't have the same number of fields in its schema,
+		// then add any schema fields from the end that are missing.
+		alterableDoltTable := tbl.(*AlterableDoltTable)
+		targetSchema := ProceduresTableSqlSchema().Schema
+		for i := len(tbl.Schema()); i < len(targetSchema); i++ {
+			columnOrder := sql.ColumnOrder{}
+			err := alterableDoltTable.AddColumn(ctx, targetSchema[i], &columnOrder)
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		return tbl.(*WritableDoltTable), nil
 	}
 
@@ -179,6 +192,9 @@ func DoltProceduresGetAll(ctx *sql.Context, db Database, procedureName string) (
 		if d.ModifiedAt, ok = sqlRow[3].(time.Time); !ok {
 			return nil, missingValue.New(doltdb.ProceduresTableModifiedAtCol, sqlRow)
 		}
+		if sqlRow[4].(int8) > 0 {
+			d.AnsiQuotes = true
+		}
 		details = append(details, d)
 	}
 	return details, nil
@@ -210,6 +226,7 @@ func DoltProceduresAddProcedure(ctx *sql.Context, db Database, spd sql.StoredPro
 		spd.CreateStatement,
 		spd.CreatedAt.UTC(),
 		spd.ModifiedAt.UTC(),
+		spd.AnsiQuotes,
 	})
 }
 
@@ -276,7 +293,7 @@ func DoltProceduresGetDetails(ctx *sql.Context, tbl *WritableDoltTable, name str
 
 	sqlRow, err := rowIter.Next(ctx)
 	if err == nil {
-		if len(sqlRow) != 4 {
+		if len(sqlRow) != 5 {
 			return sql.StoredProcedureDetails{}, false, fmt.Errorf("unexpected row in dolt_procedures:\n%v", sqlRow)
 		}
 		return sql.StoredProcedureDetails{

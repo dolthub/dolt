@@ -332,4 +332,7 @@ const (
 	ProceduresTableCreatedAtCol = "created_at"
 	// ProceduresTableModifiedAtCol is the time that the stored procedure was last modified, in UTC.
 	ProceduresTableModifiedAtCol = "modified_at"
+	// ProceduresTableAnsiQuotesCol is whether this stored procedure was defined in ANSI_QUOTES mode, indicating
+	// that double quotes should be treated as identifier quotes, instead of string literal quotes.
+	ProceduresTableAnsiQuotesCol = "ansi_quotes"
 )

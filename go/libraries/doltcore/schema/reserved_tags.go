@@ -94,6 +94,7 @@ const (
 	DoltProceduresCreateStmtTag
 	DoltProceduresCreatedAtTag
 	DoltProceduresModifiedAtTag
+	DoltProceduresAnsiQuotesTag
 )
 
 const (
