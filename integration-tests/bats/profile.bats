@@ -183,6 +183,14 @@ teardown() {
     [[ "$output" =~ "Only one profile name can be specified" ]] || false
 }
 
+@test "profile: dolt profile add locks global config with 0600" {
+    run dolt profile add --use-db altDB altTest
+    [ "$status" -eq 0 ] || false
+
+    run stat "$BATS_TMPDIR/config-$$/.dolt/config_global.json"
+    [[ "$output" =~ "-rw-------" ]] || false
+}
+
 @test "profile: dolt profile remove removes a profile" {
     dolt profile add --use-db altDB altTest
     run dolt profile
@@ -240,6 +248,15 @@ teardown() {
     run dolt profile remove altTest altTest2
     [ "$status" -eq 1 ] || false
     [[ "$output" =~ "Only one profile name can be specified" ]] || false
+}
+
+@test "profile: dolt profile remove locks global config with 0600" {
+    dolt profile add --use-db altDB altTest
+    run dolt profile remove altTest
+    [ "$status" -eq 0 ] || false
+
+    run stat "$BATS_TMPDIR/config-$$/.dolt/config_global.json"
+    [[ "$output" =~ "-rw-------" ]] || false
 }
 
 @test "profile: dolt profile lists all profiles" {
