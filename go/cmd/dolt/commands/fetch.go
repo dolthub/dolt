@@ -72,12 +72,22 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	ap := cli.CreateFetchArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, fetchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
-
-	r, refSpecs, err := env.NewFetchOpts(apr.Args, dEnv.RepoStateReader())
+	
+	r, remainingArgs, err := env.RemoteForFetchArgs(apr.Args, dEnv.RepoStateReader())
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
+	validationErr := validateFetchArgs(apr, remainingArgs)
+	if validationErr != nil {
+		return HandleVErrAndExitCode(validationErr, usage)
+	}
+
+	refSpecs, err := env.ParseRefSpecs(args, dEnv.RepoStateReader(), r)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	
 	var verr errhand.VerboseError
 	dEnv.UserPassConfig, verr = getRemoteUserAndPassConfig(apr)
 	if verr != nil {
@@ -96,4 +106,14 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 	return HandleVErrAndExitCode(nil, usage)
+}
+
+// validateFetchArgs returns an error if the arguments provided aren't valid.
+func validateFetchArgs(apr *argparser.ArgParseResults, refSpecArgs []string) errhand.VerboseError {
+	if len(refSpecArgs) > 0 && apr.ContainsArg(cli.PruneFlag) {
+		// The current prune implementation assumes that we're processing branch specs, which 
+		return errhand.BuildDError("--prune option cannot be provided with a ref spec").Build()
+	}
+
+	return nil
 }

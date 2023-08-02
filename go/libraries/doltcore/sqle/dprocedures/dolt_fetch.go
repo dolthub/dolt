@@ -17,6 +17,7 @@ package dprocedures
 import (
 	"fmt"
 
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -57,7 +58,17 @@ func doDoltFetch(ctx *sql.Context, args []string) (int, error) {
 		return cmdFailure, err
 	}
 
-	remote, refSpecs, err := env.NewFetchOpts(apr.Args, dbData.Rsr)
+	remote, refSpecArgs, err := env.RemoteForFetchArgs(apr.Args, dbData.Rsr)
+	if err != nil {
+		return cmdFailure, err
+	}
+
+	validationErr := validateFetchArgs(apr, refSpecArgs)
+	if validationErr != nil {
+		return cmdFailure, validationErr
+	}
+
+	refSpecs, err := env.ParseRefSpecs(refSpecArgs, dbData.Rsr, remote)
 	if err != nil {
 		return cmdFailure, err
 	}
@@ -66,8 +77,7 @@ func doDoltFetch(ctx *sql.Context, args []string) (int, error) {
 	if err != nil {
 		return 1, err
 	}
-
-
+	
 	prune := apr.Contains(cli.PruneFlag)
 	mode := ref.UpdateMode{Force: true, Prune: prune}
 	err = actions.FetchRefSpecs(ctx, dbData, srcDB, refSpecs, remote, mode, runProgFuncs, stopProgFuncs)
@@ -75,4 +85,14 @@ func doDoltFetch(ctx *sql.Context, args []string) (int, error) {
 		return cmdFailure, fmt.Errorf("fetch failed: %w", err)
 	}
 	return cmdSuccess, nil
+}
+
+// validateFetchArgs returns an error if the arguments provided aren't valid.
+func validateFetchArgs(apr *argparser.ArgParseResults, refSpecArgs []string) error {
+	if len(refSpecArgs) > 0 && apr.ContainsArg(cli.PruneFlag) {
+		// The current prune implementation assumes that we're processing branch specs, which 
+		return fmt.Errorf("--prune option cannot be provided with a ref spec")
+	}
+
+	return nil
 }
