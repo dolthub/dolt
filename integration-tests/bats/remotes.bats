@@ -2368,3 +2368,57 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test_table" ]] || false
 }
+
+@test "remotes: fetch --prune deletes remote refs not on remote" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote1
+    dolt remote add remote2 file://../remote2
+    dolt branch b1
+    dolt branch b2
+    dolt push origin main
+    dolt push remote2 main
+    dolt push origin b1
+    dolt push remote2 b2
+
+    cd ..
+    dolt clone file://./remote1 repo2
+
+    cd repo2
+    run dolt branch -va
+    [[ "$output" =~ "main" ]] || false
+
+    
+    dolt remote add remote2 file://../remote2
+    dolt fetch
+    dolt fetch remote2
+
+    run dolt branch -r
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "origin/b1" ]] || false
+    [[ "$output" =~ "remote2/b2" ]] || false
+
+    # delete the branches on the remote
+    cd ../repo1
+    dolt push origin :b1
+    dolt push remote2 :b2
+
+    cd ../repo2
+    dolt fetch --prune
+
+    # prune should have deleted the origin/b1 branch, but not the one on the other remote
+    run dolt branch -r
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "origin/b1" ]] || false
+    [[ "$output" =~ "remote2/b2" ]] || false
+
+    # now the other remote
+    dolt fetch --prune remote2
+    run dolt branch -r
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "origin/b1" ]] || false
+    [[ ! "$output" =~ "remote2/b2" ]] || false
+}
