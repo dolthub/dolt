@@ -67,7 +67,6 @@ func doDoltFetch(ctx *sql.Context, args []string) (int, error) {
 		return 1, err
 	}
 
-
 	prune := apr.Contains(cli.PruneFlag)
 	mode := ref.UpdateMode{Force: true, Prune: prune}
 	err = actions.FetchRefSpecs(ctx, dbData, srcDB, refSpecs, remote, mode, runProgFuncs, stopProgFuncs)

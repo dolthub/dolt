@@ -83,7 +83,7 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
-	
+
 	srcDB, err := r.GetRemoteDBWithoutCaching(ctx, dEnv.DbData().Ddb.ValueReadWriter().Format(), dEnv)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
