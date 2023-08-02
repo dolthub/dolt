@@ -541,6 +541,7 @@ func pruneBranches(ctx context.Context, dbData env.DbData, remote env.Remote, re
 		}
 		
 		if !found {
+			// TODO: this isn't thread-safe in a SQL context
 			err = dbData.Ddb.DeleteBranch(ctx, localRemoteRef, nil)
 			if err != nil {
 				return err

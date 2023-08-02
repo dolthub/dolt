@@ -2391,7 +2391,6 @@ SQL
     run dolt branch -va
     [[ "$output" =~ "main" ]] || false
 
-    
     dolt remote add remote2 file://../remote2
     dolt fetch
     dolt fetch remote2
