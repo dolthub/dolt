@@ -4872,8 +4872,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 			},
 		},
 	},
-
-	// Constraints: Check Constraint Violations
 	{
 		Name: "check constraint violation - simple case, no schema changes",
 		AncSetUpScript: []string{
@@ -4903,9 +4901,8 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 			},
 		},
 	},
-
-	// Constraints: Check Constraint Coercion
 	{
+		// Check Constraint Coercion:
 		// MySQL doesn't allow creating non-boolean check constraint
 		// expressions, but we currently allow it. Eventually we should
 		// close this gap and then we wouldn't need to coerce return values.
@@ -4967,7 +4964,6 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 			},
 		},
 	},
-
 	{
 		Name: "check constraint violation - schema change",
 		AncSetUpScript: []string{
@@ -5144,6 +5140,40 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 
 	// Resolvable type changes
 	{
+		Name: "varchar widening",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 varchar(10));",
+			"INSERT into t values (1, '123');",
+			"alter table t add index idx1 (col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 varchar(100);",
+			"INSERT into t values (2, '12345678901234567890');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '321');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, "123"}, {2, "12345678901234567890"}, {3, "321"}},
+			},
+			{
+				Query:    "show create table t;",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` varchar(100),\n  PRIMARY KEY (`pk`),\n  KEY `idx1` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:    "insert into t values (4, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJJKLMNOPQRSTUVWXYZ!@#$%^&*()_+');",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+		},
+	},
+	{
 		Name: "type widening - enums and sets",
 		AncSetUpScript: []string{
 			"CREATE table t (pk int primary key, col1 enum('blue', 'green'), col2 set('blue', 'green'));",
@@ -5170,6 +5200,31 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 					{2, uint64(2), uint64(3)},
 					{3, uint64(3), uint64(5)},
 				},
+			},
+		},
+	},
+	{
+		Name: "varchar widening to TEXT",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 varchar(10));",
+			"INSERT into t values (1, '123');",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 TEXT;",
+			"INSERT into t values (2, '12345678901234567890');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '321');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// TODO: We should be able to automatically widen a VARCHAR field to TEXT, but because TEXT data is
+				//       encoded differently (stored separate from the index data), this merge will require rewriting
+				//       any existing data in the table.
+				Skip:     true,
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 		},
 	},
@@ -5250,6 +5305,31 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` enum('blue','green','red'),\n  `col2` double,\n  `col3` bigint,\n  `col4` decimal(8,4),\n  `col5` varchar(20),\n  `col6` set('a','b','c'),\n  `col7` bit(2),\n  PRIMARY KEY (`pk`),\n  KEY `idx1` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` enum('blue','green'),\n  `col2` float,\n  `col3` smallint,\n  `col4` decimal(4,2),\n  `col5` varchar(10),\n  `col6` set('a','b'),\n  `col7` bit(1),\n  PRIMARY KEY (`pk`),\n  KEY `idx1` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` enum('blue','green','red'),\n  `col2` double,\n  `col3` bigint,\n  `col4` decimal(8,4),\n  `col5` varchar(20),\n  `col6` set('a','b','c'),\n  `col7` bit(2),\n  PRIMARY KEY (`pk`),\n  KEY `idx1` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"}},
+			},
+		},
+	},
+	{
+		Name: "varchar shortening",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 varchar(10));",
+			"INSERT into t values (1, '123');",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 varchar(9);",
+			"INSERT into t values (2, '12345');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '321');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{"", 0, 1}},
+			},
+			{
+				Query:    "select table_name, description like 'incompatible column types for column ''col1''%' from dolt_schema_conflicts;",
+				Expected: []sql.Row{{"t", true}},
 			},
 		},
 	},
