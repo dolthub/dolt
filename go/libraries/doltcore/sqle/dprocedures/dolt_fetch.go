@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
 // doltFetch is the stored procedure version for the CLI command `dolt fetch`.
@@ -57,7 +58,17 @@ func doDoltFetch(ctx *sql.Context, args []string) (int, error) {
 		return cmdFailure, err
 	}
 
-	remote, refSpecs, err := env.NewFetchOpts(apr.Args, dbData.Rsr)
+	remote, refSpecArgs, err := env.RemoteForFetchArgs(apr.Args, dbData.Rsr)
+	if err != nil {
+		return cmdFailure, err
+	}
+
+	validationErr := validateFetchArgs(apr, refSpecArgs)
+	if validationErr != nil {
+		return cmdFailure, validationErr
+	}
+
+	refSpecs, err := env.ParseRefSpecs(refSpecArgs, dbData.Rsr, remote)
 	if err != nil {
 		return cmdFailure, err
 	}
@@ -67,9 +78,21 @@ func doDoltFetch(ctx *sql.Context, args []string) (int, error) {
 		return 1, err
 	}
 
-	err = actions.FetchRefSpecs(ctx, dbData, srcDB, refSpecs, remote, ref.UpdateMode{Force: true}, runProgFuncs, stopProgFuncs)
+	prune := apr.Contains(cli.PruneFlag)
+	mode := ref.UpdateMode{Force: true, Prune: prune}
+	err = actions.FetchRefSpecs(ctx, dbData, srcDB, refSpecs, remote, mode, runProgFuncs, stopProgFuncs)
 	if err != nil {
 		return cmdFailure, fmt.Errorf("fetch failed: %w", err)
 	}
 	return cmdSuccess, nil
+}
+
+// validateFetchArgs returns an error if the arguments provided aren't valid.
+func validateFetchArgs(apr *argparser.ArgParseResults, refSpecArgs []string) error {
+	if len(refSpecArgs) > 0 && apr.Contains(cli.PruneFlag) {
+		// The current prune implementation assumes that we're processing branch specs, which
+		return fmt.Errorf("--prune option cannot be provided with a ref spec")
+	}
+
+	return nil
 }

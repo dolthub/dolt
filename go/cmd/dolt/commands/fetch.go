@@ -73,7 +73,17 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, fetchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	r, refSpecs, err := env.NewFetchOpts(apr.Args, dEnv.RepoStateReader())
+	r, remainingArgs, err := env.RemoteForFetchArgs(apr.Args, dEnv.RepoStateReader())
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	validationErr := validateFetchArgs(apr, remainingArgs)
+	if validationErr != nil {
+		return HandleVErrAndExitCode(validationErr, usage)
+	}
+
+	refSpecs, err := env.ParseRefSpecs(remainingArgs, dEnv.RepoStateReader(), r)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -89,9 +99,22 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	err = actions.FetchRefSpecs(ctx, dEnv.DbData(), srcDB, refSpecs, r, ref.UpdateMode{Force: true}, buildProgStarter(downloadLanguage), stopProgFuncs)
+	prune := apr.Contains(cli.PruneFlag)
+	mode := ref.UpdateMode{Force: true, Prune: prune}
+	err = actions.FetchRefSpecs(ctx, dEnv.DbData(), srcDB, refSpecs, r, mode, buildProgStarter(downloadLanguage), stopProgFuncs)
 	if err != nil && err != doltdb.ErrUpToDate {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 	return HandleVErrAndExitCode(nil, usage)
+}
+
+// validateFetchArgs returns an error if the arguments provided aren't valid
+func validateFetchArgs(apr *argparser.ArgParseResults, refSpecArgs []string) errhand.VerboseError {
+	if len(refSpecArgs) > 0 && apr.Contains(cli.PruneFlag) {
+		// The current prune implementation assumes that we're processing all branch specs on the remote, so if an
+		// explicit ref spec is provided we refuse to execute
+		return errhand.BuildDError("--prune option cannot be provided with a ref spec").Build()
+	}
+
+	return nil
 }
