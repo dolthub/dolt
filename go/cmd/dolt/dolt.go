@@ -764,11 +764,31 @@ func parseGlobalArgsAndProfile(globalConfig config.ReadWriteConfig, args []strin
 	}
 
 	profileName, hasProfile := apr.GetValue(commands.ProfileFlag)
-	if hasProfile {
-		profiles, err := globalConfig.GetString("profile")
-		if err != nil {
+	profiles, err := globalConfig.GetString(commands.GlobalCfgProfileKey)
+	if err != nil {
+		if err == config.ErrConfigParamNotFound {
+			if hasProfile {
+				return nil, nil, fmt.Errorf("no profiles found")
+			} else {
+				return apr, remaining, nil
+			}
+		} else {
 			return nil, nil, err
 		}
+	}
+	if !hasProfile {
+		defaultProfile := gjson.Get(profiles, "default")
+		if defaultProfile.Exists() {
+			args = append([]string{"--profile", "default"}, args...)
+			apr, remaining, err = globalArgParser.ParseGlobalArgs(args)
+			if err != nil {
+				return nil, nil, err
+			}
+			profileName, hasProfile = apr.GetValue(commands.ProfileFlag)
+		}
+	}
+
+	if hasProfile {
 		profileArgs, err := getProfile(apr, profileName, profiles)
 		if err != nil {
 			return nil, nil, err

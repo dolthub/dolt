@@ -22,13 +22,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -53,6 +53,7 @@ const (
 	addProfileId         = "add"
 	removeProfileId      = "remove"
 	removeProfileShortId = "rm"
+	GlobalCfgProfileKey  = "profile"
 )
 
 type ProfileCmd struct{}
@@ -126,12 +127,12 @@ func addProfile(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbo
 		return errhand.BuildDError("error: failed to get global config").Build()
 	}
 	//TODO: enable config to retrieve json objects instead of just strings
-	profilesJSON, err := cfg.GetString("profile")
+	profilesJSON, err := cfg.GetString(GlobalCfgProfileKey)
 	if err != nil {
 		if err != config.ErrConfigParamNotFound {
 			return errhand.BuildDError("error: failed to get profiles, %s", err).Build()
 		} else {
-			err = cfg.SetStrings(map[string]string{"profile": "{\"" + profileName + "\"" + ": " + profStr + "}"})
+			err = cfg.SetStrings(map[string]string{GlobalCfgProfileKey: "{\"" + profileName + "\"" + ": " + profStr + "}"})
 			if err != nil {
 				return errhand.BuildDError("error: failed to set profiles, %s", err).Build()
 			}
@@ -147,7 +148,7 @@ func addProfile(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbo
 	if err != nil {
 		return errhand.BuildDError("error: failed to add profile, %s", err).Build()
 	}
-	err = cfg.SetStrings(map[string]string{"profile": profilesJSON})
+	err = cfg.SetStrings(map[string]string{GlobalCfgProfileKey: profilesJSON})
 	if err != nil {
 		return errhand.BuildDError("error: failed to set profiles, %s", err).Build()
 	}
@@ -170,7 +171,7 @@ func removeProfile(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ve
 	if !ok {
 		return errhand.BuildDError("error: failed to get global config").Build()
 	}
-	profilesJSON, err := cfg.GetString("profile")
+	profilesJSON, err := cfg.GetString(GlobalCfgProfileKey)
 	if err != nil {
 		if err == config.ErrConfigParamNotFound {
 			return errhand.BuildDError("error: no existing profiles").Build()
@@ -187,7 +188,7 @@ func removeProfile(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ve
 	if err != nil {
 		return errhand.BuildDError("error: failed to remove profile, %s", err).Build()
 	}
-	err = cfg.SetStrings(map[string]string{"profile": profilesJSON})
+	err = cfg.SetStrings(map[string]string{GlobalCfgProfileKey: profilesJSON})
 	if err != nil {
 		return errhand.BuildDError("error: failed to set profiles, %s", err).Build()
 	}
@@ -204,7 +205,7 @@ func printProfiles(dEnv *env.DoltEnv) errhand.VerboseError {
 	if !ok {
 		return errhand.BuildDError("error: failed to get global config").Build()
 	}
-	profilesJSON, err := cfg.GetString("profile")
+	profilesJSON, err := cfg.GetString(GlobalCfgProfileKey)
 	if err != nil {
 		if err == config.ErrConfigParamNotFound {
 			return nil
