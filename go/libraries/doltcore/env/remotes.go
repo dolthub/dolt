@@ -267,11 +267,11 @@ func RemoteForFetchArgs(args []string, rsr RepoStateReader) (Remote, []string, e
 		msg := "does not appear to be a dolt database. could not read from the remote database. please make sure you have the correct access rights and the database exists"
 		return NoRemote, nil, fmt.Errorf("%w; '%s' %s", ErrUnknownRemote, remName, msg)
 	}
-	
+
 	return remote, args, nil
 }
 
-// ParseRefSpecs returns the ref specs for the string arguments given for the remote provided, or the default ref 
+// ParseRefSpecs returns the ref specs for the string arguments given for the remote provided, or the default ref
 // specs for that remote if no arguments are provided.
 func ParseRefSpecs(args []string, rsr RepoStateReader, remote Remote) ([]ref.RemoteRefSpec, error) {
 	if len(args) != 0 {

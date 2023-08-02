@@ -72,7 +72,7 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	ap := cli.CreateFetchArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, fetchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
-	
+
 	r, remainingArgs, err := env.RemoteForFetchArgs(apr.Args, dEnv.RepoStateReader())
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -87,7 +87,7 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	
+
 	var verr errhand.VerboseError
 	dEnv.UserPassConfig, verr = getRemoteUserAndPassConfig(apr)
 	if verr != nil {
@@ -111,8 +111,8 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 // validateFetchArgs returns an error if the arguments provided aren't valid
 func validateFetchArgs(apr *argparser.ArgParseResults, refSpecArgs []string) errhand.VerboseError {
 	if len(refSpecArgs) > 0 && apr.Contains(cli.PruneFlag) {
-		// The current prune implementation assumes that we're processing all branch specs on the remote, so if an 
-		// explicit ref spec is provided we refuse to execute 
+		// The current prune implementation assumes that we're processing all branch specs on the remote, so if an
+		// explicit ref spec is provided we refuse to execute
 		return errhand.BuildDError("--prune option cannot be provided with a ref spec").Build()
 	}
 

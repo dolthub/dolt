@@ -95,7 +95,7 @@ func TestRefSpec(t *testing.T) {
 			if test.skip {
 				t.Skip()
 			}
-			
+
 			var refSpec RefSpec
 			var err error
 

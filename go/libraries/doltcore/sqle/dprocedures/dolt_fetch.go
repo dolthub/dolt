@@ -17,7 +17,6 @@ package dprocedures
 import (
 	"fmt"
 
-	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -26,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
 // doltFetch is the stored procedure version for the CLI command `dolt fetch`.
@@ -77,7 +77,7 @@ func doDoltFetch(ctx *sql.Context, args []string) (int, error) {
 	if err != nil {
 		return 1, err
 	}
-	
+
 	prune := apr.Contains(cli.PruneFlag)
 	mode := ref.UpdateMode{Force: true, Prune: prune}
 	err = actions.FetchRefSpecs(ctx, dbData, srcDB, refSpecs, remote, mode, runProgFuncs, stopProgFuncs)
@@ -90,7 +90,7 @@ func doDoltFetch(ctx *sql.Context, args []string) (int, error) {
 // validateFetchArgs returns an error if the arguments provided aren't valid.
 func validateFetchArgs(apr *argparser.ArgParseResults, refSpecArgs []string) error {
 	if len(refSpecArgs) > 0 && apr.Contains(cli.PruneFlag) {
-		// The current prune implementation assumes that we're processing branch specs, which 
+		// The current prune implementation assumes that we're processing branch specs, which
 		return fmt.Errorf("--prune option cannot be provided with a ref spec")
 	}
 
