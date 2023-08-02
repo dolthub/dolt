@@ -389,14 +389,14 @@ func FetchRemoteBranch(
 // This function takes dbData which is a env.DbData object for handling repoState read and write, and srcDB is
 // a remote *doltdb.DoltDB object that is used to fetch remote branches from.
 func FetchRefSpecs(
-		ctx context.Context,
-		dbData env.DbData,
-		srcDB *doltdb.DoltDB,
-		refSpecs []ref.RemoteRefSpec,
-		remote env.Remote,
-		mode ref.UpdateMode,
-		progStarter ProgStarter,
-		progStopper ProgStopper,
+	ctx context.Context,
+	dbData env.DbData,
+	srcDB *doltdb.DoltDB,
+	refSpecs []ref.RemoteRefSpec,
+	remote env.Remote,
+	mode ref.UpdateMode,
+	progStarter ProgStarter,
+	progStopper ProgStopper,
 ) error {
 	var branchRefs []doltdb.RefWithHash
 	err := srcDB.VisitRefsOfType(ctx, ref.HeadRefTypes, func(r ref.DoltRef, addr hash.Hash) error {
@@ -495,7 +495,7 @@ func FetchRefSpecs(
 			}
 		}
 	}
-	
+
 	if mode.Prune {
 		err = pruneBranches(ctx, dbData, remote, newHeads)
 		if err != nil {
@@ -515,7 +515,7 @@ func pruneBranches(ctx context.Context, dbData env.DbData, remote env.Remote, re
 	remoteRefTypes := map[ref.RefType]struct{}{
 		ref.RemoteRefType: {},
 	}
-	
+
 	var localRemoteRefs []ref.RemoteRef
 	err := dbData.Ddb.VisitRefsOfType(ctx, remoteRefTypes, func(r ref.DoltRef, addr hash.Hash) error {
 		rref := r.(ref.RemoteRef)
@@ -531,7 +531,7 @@ func pruneBranches(ctx context.Context, dbData env.DbData, remote env.Remote, re
 		if localRemoteRef.GetRemote() != remote.Name {
 			continue
 		}
-		
+
 		found := false
 		for _, remoteRef := range remoteRefs {
 			if remoteRef.Ref == localRemoteRef {
@@ -539,7 +539,7 @@ func pruneBranches(ctx context.Context, dbData env.DbData, remote env.Remote, re
 				break
 			}
 		}
-		
+
 		if !found {
 			// TODO: this isn't thread-safe in a SQL context
 			err = dbData.Ddb.DeleteBranch(ctx, localRemoteRef, nil)
@@ -548,7 +548,7 @@ func pruneBranches(ctx context.Context, dbData env.DbData, remote env.Remote, re
 			}
 		}
 	}
-	
+
 	return nil
 }
 
