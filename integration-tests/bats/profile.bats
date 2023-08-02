@@ -10,7 +10,6 @@ make_repo() {
   dolt sql <<SQL
 CREATE TABLE table1 (pk int PRIMARY KEY);
 CREATE TABLE table2 (pk int PRIMARY KEY);
-INSERT INTO dolt_ignore VALUES ('generated_*', 1);
 SQL
   dolt add -A && dolt commit -m "tables table1, table2"
   cd ..
@@ -271,4 +270,46 @@ teardown() {
     [[ "$output" =~ "user: steph" ]] || false
     [[ "$output" =~ "password: pass" ]] || false
     [[ "$output" =~ "use-db: defaultDB" ]] || false
+}
+
+@test "profile: default profile used when none specified" {
+    cd defaultDB
+    dolt sql -q "create table test (pk int primary key)"
+    dolt sql -q "insert into test values (999)"
+    dolt add test
+    dolt commit -m "insert initial value into test"
+    cd ..
+
+    dolt profile add --use-db defaultDB default
+    run dolt sql -q "select * from test"
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "999" ]] || false
+}
+
+@test "profile: no profile used when none specified and no default set" {
+    cd defaultDB
+    dolt sql -q "insert into table1 values (999)"
+    dolt add table1
+    dolt commit -m "insert initial value into table1"
+    cd ..
+
+    dolt profile add --use-db defaultDB defaultTest
+    run dolt sql -q "select * from table1"
+    [ "$status" -eq 0 ] || false
+    [[ ! "$output" =~ "999" ]] || false
+}
+
+@test "profile: correct default profile used when none specified" {
+    cd defaultDB
+    dolt sql -q "create table test (pk int primary key)"
+    dolt sql -q "insert into test values (999)"
+    dolt add test
+    dolt commit -m "insert initial value into test"
+    cd ..
+
+    dolt profile add --use-db defaultDB default
+    dolt profile add --use-db altDB altTest
+    run dolt sql -q "select * from test"
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "999" ]] || false
 }
