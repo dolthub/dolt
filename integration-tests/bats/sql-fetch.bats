@@ -431,6 +431,10 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "origin/b1" ]] || false
     [[ ! "$output" =~ "remote2/b2" ]] || false
+
+    run dolt sql -q "call dolt_fetch('--prune', 'remote2', 'refs/heads/main:refs/remotes/remote2/othermain')"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "--prune option cannot be provided with a ref spec" ]] || false
 }
 
 @test "sql-fetch: dolt_fetch unknown remote fails" {

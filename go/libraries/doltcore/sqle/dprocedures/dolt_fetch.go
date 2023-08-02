@@ -89,7 +89,7 @@ func doDoltFetch(ctx *sql.Context, args []string) (int, error) {
 
 // validateFetchArgs returns an error if the arguments provided aren't valid.
 func validateFetchArgs(apr *argparser.ArgParseResults, refSpecArgs []string) error {
-	if len(refSpecArgs) > 0 && apr.ContainsArg(cli.PruneFlag) {
+	if len(refSpecArgs) > 0 && apr.Contains(cli.PruneFlag) {
 		// The current prune implementation assumes that we're processing branch specs, which 
 		return fmt.Errorf("--prune option cannot be provided with a ref spec")
 	}

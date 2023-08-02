@@ -2420,4 +2420,8 @@ SQL
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "origin/b1" ]] || false
     [[ ! "$output" =~ "remote2/b2" ]] || false
+
+    run dolt fetch --prune remote2 'refs/heads/main:refs/remotes/remote2/othermain'
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "--prune option cannot be provided with a ref spec" ]] || false
 }
