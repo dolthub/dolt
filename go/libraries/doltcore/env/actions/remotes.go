@@ -497,7 +497,7 @@ func FetchRefSpecs(
 	}
 	
 	if mode.Prune {
-		err = pruneBranches(ctx, dbData, newHeads)
+		err = pruneBranches(ctx, dbData, remote, newHeads)
 		if err != nil {
 			return err
 		}
@@ -511,22 +511,27 @@ func FetchRefSpecs(
 	return nil
 }
 
-func pruneBranches(ctx context.Context, dbData env.DbData, remoteRefs []doltdb.RefWithHash) error {
+func pruneBranches(ctx context.Context, dbData env.DbData, remote env.Remote, remoteRefs []doltdb.RefWithHash) error {
 	remoteRefTypes := map[ref.RefType]struct{}{
-		ref.RemoteRefType: struct{}{},
+		ref.RemoteRefType: {},
 	}
 	
-	var localRemoteRefs []ref.DoltRef
+	var localRemoteRefs []ref.RemoteRef
 	err := dbData.Ddb.VisitRefsOfType(ctx, remoteRefTypes, func(r ref.DoltRef, addr hash.Hash) error {
-		localRemoteRefs = append(localRemoteRefs, r)
+		rref := r.(ref.RemoteRef)
+		localRemoteRefs = append(localRemoteRefs, rref)
 		return nil
 	})
 	if err != nil {
 		return err
 	}
 
-	// Delete any remote branch not present in the remoteRefs
+	// Delete any local remote ref not present in the remoteRefs, only for this remote
 	for _, localRemoteRef := range localRemoteRefs {
+		if localRemoteRef.GetRemote() != remote.Name {
+			continue
+		}
+		
 		found := false
 		for _, remoteRef := range remoteRefs {
 			if remoteRef.Ref == localRemoteRef {
