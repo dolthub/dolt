@@ -83,7 +83,7 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return HandleVErrAndExitCode(validationErr, usage)
 	}
 
-	refSpecs, err := env.ParseRefSpecs(args, dEnv.RepoStateReader(), r)
+	refSpecs, err := env.ParseRefSpecs(remainingArgs, dEnv.RepoStateReader(), r)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
