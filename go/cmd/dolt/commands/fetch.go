@@ -108,10 +108,11 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	return HandleVErrAndExitCode(nil, usage)
 }
 
-// validateFetchArgs returns an error if the arguments provided aren't valid.
+// validateFetchArgs returns an error if the arguments provided aren't valid
 func validateFetchArgs(apr *argparser.ArgParseResults, refSpecArgs []string) errhand.VerboseError {
 	if len(refSpecArgs) > 0 && apr.Contains(cli.PruneFlag) {
-		// The current prune implementation assumes that we're processing branch specs, which 
+		// The current prune implementation assumes that we're processing all branch specs on the remote, so if an 
+		// explicit ref spec is provided we refuse to execute 
 		return errhand.BuildDError("--prune option cannot be provided with a ref spec").Build()
 	}
 
