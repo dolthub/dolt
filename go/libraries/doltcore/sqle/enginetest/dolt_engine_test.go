@@ -2286,7 +2286,10 @@ func TestAddDropPks(t *testing.T) {
 func TestAddAutoIncrementColumn(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestAddAutoIncrementColumn(t, h)
+	
+	for _, script := range queries.AlterTableAddAutoIncrementScripts {
+		enginetest.TestScript(t, h, script)
+	}
 }
 
 func TestNullRanges(t *testing.T) {
