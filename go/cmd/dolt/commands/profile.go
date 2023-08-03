@@ -43,7 +43,7 @@ Adds a profile named {{.LessThan}}name{{.GreaterThan}}. If the profile already e
 {{.EmphasisLeft}}remove{{.EmphasisRight}}, {{.EmphasisLeft}}rm{{.EmphasisRight}}
 Remove the profile named {{.LessThan}}name{{.GreaterThan}}.`,
 	Synopsis: []string{
-		"",
+		"[-v | --verbose]",
 		"add [-u {{.LessThan}}user{{.GreaterThan}}] [-p {{.LessThan}}password{{.GreaterThan}}] [--host {{.LessThan}}host{{.GreaterThan}}] [--port {{.LessThan}}port{{.GreaterThan}}] [--no-tls] [--data-dir {{.LessThan}}directory{{.GreaterThan}}] [--doltcfg-dir {{.LessThan}}directory{{.GreaterThan}}] [--privilege-file {{.LessThan}}privilege file{{.GreaterThan}}] [--branch-control-file {{.LessThan}}branch control file{{.GreaterThan}}] [--use-db {{.LessThan}}database{{.GreaterThan}}] {{.LessThan}}name{{.GreaterThan}}",
 		"remove {{.LessThan}}name{{.GreaterThan}}",
 	},
@@ -76,6 +76,7 @@ func (cmd ProfileCmd) Docs() *cli.CommandDocumentation {
 func (cmd ProfileCmd) ArgParser() *argparser.ArgParser {
 	ap := cli.CreateProfileArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"name", "Defines the name of the profile to add or remove."})
+	ap.SupportsFlag(cli.VerboseFlag, "v", "Includes full details when printing list of profiles.")
 	return ap
 }
 
@@ -98,7 +99,7 @@ func (cmd ProfileCmd) Exec(ctx context.Context, commandStr string, args []string
 
 	switch {
 	case apr.NArg() == 0:
-		verr = printProfiles(dEnv)
+		verr = printProfiles(dEnv, apr)
 	case apr.Arg(0) == addProfileId:
 		verr = addProfile(dEnv, apr)
 	case apr.Arg(0) == removeProfileId:
@@ -200,7 +201,7 @@ func removeProfile(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ve
 	return nil
 }
 
-func printProfiles(dEnv *env.DoltEnv) errhand.VerboseError {
+func printProfiles(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
 	cfg, ok := dEnv.Config.GetConfig(env.GlobalConfig)
 	if !ok {
 		return errhand.BuildDError("error: failed to get global config").Build()
@@ -225,15 +226,18 @@ func printProfiles(dEnv *env.DoltEnv) errhand.VerboseError {
 		if err != nil {
 			return errhand.BuildDError("error: failed to unmarshal profile, %s", err).Build()
 		}
-		prettyPrintProfile(profileName, p)
+		prettyPrintProfile(profileName, p, apr.Contains(cli.VerboseFlag))
 	}
 
 	return nil
 }
 
-func prettyPrintProfile(profileName string, profile Profile) {
-	cli.Println(fmt.Sprintf("%s:\n\tuser: %s\n\tpassword: %s\n\thost: %s\n\tport: %s\n\tno-tls: %t\n\tdata-dir: %s\n\tdoltcfg-dir: %s\n\tprivilege-file: %s\n\tbranch-control-file: %s\n\tuse-db: %s\n",
-		profileName, profile.User, profile.Password, profile.Host, profile.Port, profile.NoTLS, profile.DataDir, profile.DoltCfgDir, profile.PrivilegeFile, profile.BranchControl, profile.UseDB))
+func prettyPrintProfile(profileName string, profile Profile, verbose bool) {
+	cli.Println(profileName)
+	if verbose {
+		cli.Println(fmt.Sprintf("\tuser: %s\n\tpassword: %s\n\thost: %s\n\tport: %s\n\tno-tls: %t\n\tdata-dir: %s\n\tdoltcfg-dir: %s\n\tprivilege-file: %s\n\tbranch-control-file: %s\n\tuse-db: %s\n",
+			profile.User, profile.Password, profile.Host, profile.Port, profile.NoTLS, profile.DataDir, profile.DoltCfgDir, profile.PrivilegeFile, profile.BranchControl, profile.UseDB))
+	}
 }
 
 // setGlobalConfigPermissions sets permissions on global config file to 0600 to protect potentially sensitive information (credentials)

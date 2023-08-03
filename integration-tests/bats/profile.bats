@@ -120,14 +120,13 @@ teardown() {
     run dolt profile
     [ "$status" -eq 0 ] || false
     [[ "$output" =~ "altTest" ]] || false
-    [[ "$output" =~ "altDB" ]] || false
 }
 
 @test "profile: dolt profile add overwrites an existing profile" {
     run dolt profile add --user "not-steph" --password "password123" userProfile
     [ "$status" -eq 0 ] || false
 
-    run dolt profile
+    run dolt profile -v
     [ "$status" -eq 0 ] || false
     [[ "$output" =~ "userProfile" ]] || false
     [[ "$output" =~ "not-steph" ]] || false
@@ -136,7 +135,7 @@ teardown() {
     run dolt profile add --user "steph" --password "password123" userProfile
     [ "$status" -eq 0 ] || false
 
-    run dolt profile
+    run dolt profile -v
     [ "$status" -eq 0 ] || false
     [[ "$output" =~ "userProfile" ]] || false
     [[ "$output" =~ "steph" ]] || false
@@ -148,7 +147,7 @@ teardown() {
     run dolt profile add --user "steph" --password "password123" userProfile
     [ "$status" -eq 0 ] || false
 
-    run dolt profile
+    run dolt profile -v
     [ "$status" -eq 0 ] || false
     [[ "$output" =~ "userProfile" ]] || false
     [[ "$output" =~ "steph" ]] || false
@@ -157,7 +156,7 @@ teardown() {
     run dolt profile add --user "dolt" --use-db defaultDB userProfile
     [ "$status" -eq 0 ] || false
 
-    run dolt profile
+    run dolt profile -v
     [ "$status" -eq 0 ] || false
     [[ "$output" =~ "userProfile" ]] || false
     [[ ! "$output" =~ "steph" ]] || false
@@ -172,8 +171,8 @@ teardown() {
 
     run dolt profile
     [ "$status" -eq 0 ] || false
-    [[ "$output" =~ "altTest:" ]] || false
-    [[ "$output" =~ "defaultTest:" ]] || false
+    [[ "$output" =~ "altTest" ]] || false
+    [[ "$output" =~ "defaultTest" ]] || false
 }
 
 @test "profile: dolt profile add with multiple names errors" {
@@ -264,9 +263,23 @@ teardown() {
 
     run dolt profile
     [ "$status" -eq 0 ] || false
-    [[ "$output" =~ "altTest:" ]] || false
+    [[ "$output" =~ "altTest" ]] || false
+    [[ ! "$output" =~ "use-db: altDB" ]] || false
+    [[ "$output" =~ "defaultTest" ]] || false
+    [[ ! "$output" =~ "user: steph" ]] || false
+    [[ ! "$output" =~ "password: pass" ]] || false
+    [[ ! "$output" =~ "use-db: defaultDB" ]] || false
+}
+
+@test "profile: dolt profile --verbose lists all profiles and all details" {
+    dolt profile add --use-db altDB altTest
+    dolt profile add --use-db defaultDB -u "steph" --password "pass" defaultTest
+
+    run dolt profile -v
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "altTest" ]] || false
     [[ "$output" =~ "use-db: altDB" ]] || false
-    [[ "$output" =~ "defaultTest:" ]] || false
+    [[ "$output" =~ "defaultTest" ]] || false
     [[ "$output" =~ "user: steph" ]] || false
     [[ "$output" =~ "password: pass" ]] || false
     [[ "$output" =~ "use-db: defaultDB" ]] || false
