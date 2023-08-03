@@ -75,7 +75,7 @@ func (d doltTypeCompatibilityChecker) IsTypeChangeCompatible(from, to typeinfo.T
 		// Varchar data is stored directly in the index, in a variable length field that includes
 		// the data's length, so widening the type doesn't require a rewrite and doesn't affect
 		// any existing data.
-		return toStringType.Length() > fromStringType.Length() &&
+		return toStringType.Length() >= fromStringType.Length() &&
 			toStringType.Collation() == fromStringType.Collation()
 
 	case types.IsEnum(fromSqlType) && types.IsEnum(toSqlType):
