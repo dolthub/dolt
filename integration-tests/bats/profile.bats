@@ -160,6 +160,14 @@ teardown() {
     [[ "$output" =~ "Only one profile name can be specified" ]] || false
 }
 
+@test "profile: adding default profile prints warning message" {
+    run dolt profile add --use-db defaultDB default
+    [ "$status" -eq 1 ] || false
+    [[ "$output" =~ "Default profile has been added. All dolt commands taking global arguments will use this default profile until it is removed." ]] || false
+    [[ "$output" =~ "WARNING: This will alter the behavior of command which specify no \`--profile\`." ]] || false
+    [[ "$output" =~ "If you are using dolt in contexts where you expect a \`.dolt\` directory to be accessed, the default profile will be used instead." ]] || false
+}
+
 @test "profile: dolt profile add encodes profiles in config" {
     run dolt profile add --use-db altDB altTest
     [ "$status" -eq 0 ] || false

@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
@@ -51,10 +52,11 @@ Remove the profile named {{.LessThan}}name{{.GreaterThan}}.`,
 }
 
 const (
-	addProfileId        = "add"
-	removeProfileId     = "remove"
-	GlobalCfgProfileKey = "profile"
-	DefaultProfileName  = "default"
+	addProfileId          = "add"
+	removeProfileId       = "remove"
+	GlobalCfgProfileKey   = "profile"
+	DefaultProfileName    = "default"
+	defaultProfileWarning = "Default profile has been added. All dolt commands taking global arguments will use this default profile until it is removed.\nWARNING: This will alter the behavior of command which specify no `--profile`.\nIf you are using dolt in contexts where you expect a `.dolt` directory to be accessed, the default profile will be used instead."
 )
 
 type ProfileCmd struct{}
@@ -137,6 +139,10 @@ func addProfile(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbo
 			if err != nil {
 				return errhand.BuildDError("error: failed to write profile to config, %s", err).Build()
 			}
+			if profileName == DefaultProfileName {
+				cli.Println(color.YellowString(defaultProfileWarning))
+			}
+
 			err = setGlobalConfigPermissions(dEnv)
 			if err != nil {
 				return errhand.BuildDError("error: failed to set permissions, %s", err).Build()
@@ -156,6 +162,10 @@ func addProfile(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbo
 	err = writeProfileToGlobalConfig(profilesJSON, cfg)
 	if err != nil {
 		return errhand.BuildDError("error: failed to write profile to config, %s", err).Build()
+	}
+
+	if profileName == DefaultProfileName {
+		cli.Println(color.YellowString(defaultProfileWarning))
 	}
 
 	err = setGlobalConfigPermissions(dEnv)
