@@ -766,9 +766,9 @@ func parseGlobalArgsAndSubCommandName(globalConfig config.ReadWriteConfig, args 
 	}
 
 	if !hasProfile && supportsGlobalArgs(subcommandName) {
-		defaultProfile := gjson.Get(profiles, "default")
+		defaultProfile := gjson.Get(profiles, commands.DefaultProfileName)
 		if defaultProfile.Exists() {
-			args = append([]string{"--profile", "default"}, args...)
+			args = append([]string{"--profile", commands.DefaultProfileName}, args...)
 			apr, remaining, err = globalArgParser.ParseGlobalArgs(args)
 			if err != nil {
 				return nil, nil, "", err

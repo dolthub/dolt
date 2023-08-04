@@ -54,6 +54,7 @@ const (
 	addProfileId        = "add"
 	removeProfileId     = "remove"
 	GlobalCfgProfileKey = "profile"
+	DefaultProfileName  = "default"
 )
 
 type ProfileCmd struct{}
