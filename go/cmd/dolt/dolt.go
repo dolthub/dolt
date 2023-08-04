@@ -746,6 +746,7 @@ func parseGlobalArgsAndSubCommandName(globalConfig config.ReadWriteConfig, args 
 
 	subcommandName = remaining[0]
 
+	useDefaultProfile := false
 	profileName, hasProfile := apr.GetValue(commands.ProfileFlag)
 	encodedProfiles, err := globalConfig.GetString(commands.GlobalCfgProfileKey)
 	if err != nil {
@@ -772,11 +773,12 @@ func parseGlobalArgsAndSubCommandName(globalConfig config.ReadWriteConfig, args 
 			if err != nil {
 				return nil, nil, "", err
 			}
-			profileName, hasProfile = apr.GetValue(commands.ProfileFlag)
+			profileName, _ = apr.GetValue(commands.ProfileFlag)
+			useDefaultProfile = true
 		}
 	}
 
-	if hasProfile {
+	if hasProfile || useDefaultProfile {
 		profileArgs, err := getProfile(apr, profileName, profiles)
 		if err != nil {
 			return nil, nil, "", err

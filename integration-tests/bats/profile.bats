@@ -349,7 +349,6 @@ teardown() {
 @test "profile: profile with user but not password waits for password prompt" {
     dolt profile add --use-db defaultDB -u "steph" defaultTest
     run dolt --profile defaultTest sql -q "select * from table1" <<< ""
-    echo "$output"
     [ "$status" -eq 1 ] || false
     [[ "$output" =~ "Enter password:" ]] || false
 }

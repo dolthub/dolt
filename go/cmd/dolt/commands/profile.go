@@ -143,15 +143,8 @@ func addProfile(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbo
 			return nil
 		}
 	}
-	profilesJSON, err := DecodeProfile(encodedProfiles)
-	if err != nil {
-		return errhand.BuildDError("error: failed to decode profiles, %s", err).Build()
-	}
-	cli.Println(profilesJSON)
-
-	// don't allow overwriting existing profiles
-	profileCheck := gjson.Get(profilesJSON, profileName)
-	if profileCheck.Exists() {
+	profilesJSON, profileExists, err := decodeProfileAndCheckExists(profileName, encodedProfiles)
+	if profileExists {
 		return errhand.BuildDError("error: profile %s already exists, please delete this profile and re-add it if you want to edit any values.", profileName).Build()
 	}
 
@@ -190,13 +183,8 @@ func removeProfile(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ve
 		}
 		return errhand.BuildDError("error: failed to get profiles, %s", err).Build()
 	}
-	profilesJSON, err := DecodeProfile(encodedProfiles)
-	if err != nil {
-		return errhand.BuildDError("error: failed to decode profiles, %s", err).Build()
-	}
-
-	p := gjson.Get(profilesJSON, profileName)
-	if !p.Exists() {
+	profilesJSON, profileExists, err := decodeProfileAndCheckExists(profileName, encodedProfiles)
+	if !profileExists {
 		return errhand.BuildDError("error: profile %s does not exist", profileName).Build()
 	}
 
@@ -312,6 +300,17 @@ func DecodeProfile(encodedProfile string) (string, error) {
 	}
 	decodedProfile = decodedProfile[:n]
 	return string(decodedProfile), nil
+}
+
+// decodeProfileAndCheckExists decodes the given profiles and retrieves the profile named profileName. Returns a
+// string representing the profile JSON and a bool indicating whether the profile exists
+func decodeProfileAndCheckExists(profileName, encodedProfiles string) (string, bool, error) {
+	profilesJSON, err := DecodeProfile(encodedProfiles)
+	if err != nil {
+		return "", false, err
+	}
+	profileCheck := gjson.Get(profilesJSON, profileName)
+	return profilesJSON, profileCheck.Exists(), nil
 }
 
 type Profile struct {
