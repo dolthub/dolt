@@ -164,7 +164,7 @@ teardown() {
     run dolt profile add --use-db defaultDB default
     [ "$status" -eq 1 ] || false
     [[ "$output" =~ "Default profile has been added. All dolt commands taking global arguments will use this default profile until it is removed." ]] || false
-    [[ "$output" =~ "WARNING: This will alter the behavior of command which specify no \`--profile\`." ]] || false
+    [[ "$output" =~ "WARNING: This will alter the behavior of commands which specify no \`--profile\`." ]] || false
     [[ "$output" =~ "If you are using dolt in contexts where you expect a \`.dolt\` directory to be accessed, the default profile will be used instead." ]] || false
 }
 
