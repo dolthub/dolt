@@ -427,10 +427,10 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "SHOW WARNINGS;",
 				Expected: []sql.Row{
-					{"Warning", 1292, "Truncated incorrect tinyint value: 420"},
-					{"Warning", 1292, "Truncated incorrect tinyint value: 420"},
-					{"Warning", 1292, "Truncated incorrect varchar(10) value: 123456789012345"},
-					{"Warning", 1292, "Truncated incorrect varchar(10) value: 123456789012345"},
+					{"Warning", 1292, "Truncated tinyint value: 420"},
+					{"Warning", 1292, "Truncated tinyint value: 420"},
+					{"Warning", 1292, "Truncated varchar(10) value: 123456789012345"},
+					{"Warning", 1292, "Truncated varchar(10) value: 123456789012345"},
 				},
 			},
 		},

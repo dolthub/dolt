@@ -35,7 +35,7 @@ type WarnFunction func(int, string, ...interface{})
 const DatatypeCoercionFailureWarning = "unable to coerce value from field '%s' into latest column schema"
 const DatatypeCoercionFailureWarningCode int = 1105 // Since this our own custom warning we'll use 1105, the code for an unknown error
 
-const TruncatedOutOfRangeValueWarning = "Truncated incorrect %v value: %v"
+const TruncatedOutOfRangeValueWarning = "Truncated %v value: %v"
 const TruncatedOutOfRangeValueWarningCode = 1292
 
 // RowConverter converts rows from one schema to another
