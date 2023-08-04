@@ -12,7 +12,7 @@ CREATE TABLE table1 (pk int PRIMARY KEY);
 CREATE TABLE table2 (pk int PRIMARY KEY);
 SQL
   dolt add -A && dolt commit -m "tables table1, table2"
-  cd ..
+  cd -
 }
 
 setup() {
@@ -35,7 +35,7 @@ teardown() {
     dolt sql -q "insert into test values (999)"
     dolt add test
     dolt commit -m "insert initial value into test"
-    cd ..
+    cd -
 
     dolt profile add --use-db defaultDB defaultTest
     run dolt --profile defaultTest sql -q "select * from test"
@@ -57,7 +57,7 @@ teardown() {
     dolt sql -q "insert into test values (999)"
     dolt add test
     dolt commit -m "insert initial value into test"
-    cd ..
+    cd -
 
     dolt profile add --user dolt --password "" userProfile
     run dolt --profile userProfile --use-db altDB sql -q "select * from test"
@@ -71,7 +71,7 @@ teardown() {
     dolt sql -q "insert into test values (999)"
     dolt add test
     dolt commit -m "insert initial value into test"
-    cd ..
+    cd -
 
     dolt profile add --use-db defaultDB defaultTest
     run dolt --profile defaultTest --use-db altDB sql -q "select * from test"
@@ -85,7 +85,7 @@ teardown() {
     dolt sql -q "insert into test values (999)"
     dolt add test
     dolt commit -m "insert initial value into test"
-    cd ..
+    cd -
 
     start_sql_server altDb
     dolt --user dolt --password "" sql -q "CREATE USER 'steph' IDENTIFIED BY 'pass'; GRANT ALL PRIVILEGES ON altDB.* TO 'steph' WITH GRANT OPTION;";
@@ -102,7 +102,7 @@ teardown() {
     dolt sql -q "insert into test values (999)"
     dolt add test
     dolt commit -m "insert initial value into test"
-    cd ..
+    cd -
 
     start_sql_server altDb
     dolt --user dolt --password "" sql -q "CREATE USER 'steph' IDENTIFIED BY 'pass'; GRANT ALL PRIVILEGES ON altDB.* TO 'steph' WITH GRANT OPTION;";
@@ -122,28 +122,7 @@ teardown() {
     [[ "$output" =~ "altTest" ]] || false
 }
 
-@test "profile: dolt profile add overwrites an existing profile" {
-    run dolt profile add --user "not-steph" --password "password123" userProfile
-    [ "$status" -eq 0 ] || false
-
-    run dolt profile -v
-    [ "$status" -eq 0 ] || false
-    [[ "$output" =~ "userProfile" ]] || false
-    [[ "$output" =~ "not-steph" ]] || false
-    [[ "$output" =~ "password123" ]] || false
-
-    run dolt profile add --user "steph" --password "password123" userProfile
-    [ "$status" -eq 0 ] || false
-
-    run dolt profile -v
-    [ "$status" -eq 0 ] || false
-    [[ "$output" =~ "userProfile" ]] || false
-    [[ "$output" =~ "steph" ]] || false
-    [[ ! "$output" =~ "not-steph" ]] || false
-    [[ "$output" =~ "password123" ]] || false
-}
-
-@test "profile: dolt profile add overwrites an existing profile with different flags" {
+@test "profile: dolt profile add does not overwrite an existing profile" {
     run dolt profile add --user "steph" --password "password123" userProfile
     [ "$status" -eq 0 ] || false
 
@@ -153,16 +132,16 @@ teardown() {
     [[ "$output" =~ "steph" ]] || false
     [[ "$output" =~ "password123" ]] || false
 
-    run dolt profile add --user "dolt" --use-db defaultDB userProfile
-    [ "$status" -eq 0 ] || false
+    run dolt profile add --user "joe" --password "password123" userProfile
+    [ "$status" -eq 1 ] || false
+    [[ "$output" =~ "profile userProfile already exists, please delete this profile and re-add it if you want to edit any values" ]] || false
 
     run dolt profile -v
     [ "$status" -eq 0 ] || false
     [[ "$output" =~ "userProfile" ]] || false
-    [[ ! "$output" =~ "steph" ]] || false
-    [[ ! "$output" =~ "password123" ]] || false
-    [[ "$output" =~ "dolt" ]] || false
-    [[ "$output" =~ "defaultDB" ]] || false
+    [[ "$output" =~ "steph" ]] || false
+    [[ ! "$output" =~ "joe" ]] || false
+    [[ "$output" =~ "password123" ]] || false
 }
 
 @test "profile: dolt profile add adds a profile with existing profiles" {
@@ -179,6 +158,15 @@ teardown() {
     run dolt profile add --use-db altDB altTest altTest2
     [ "$status" -eq 1 ] || false
     [[ "$output" =~ "Only one profile name can be specified" ]] || false
+}
+
+@test "profile: dolt profile add encodes profiles in config" {
+    run dolt profile add --use-db altDB altTest
+    [ "$status" -eq 0 ] || false
+
+    run cat "$BATS_TMPDIR/config-$$/.dolt/config_global.json"
+    [ "$status" -eq 0 ] || false
+    [[ ! "$output" =~ "altTest" ]] || false
 }
 
 @test "profile: dolt profile add locks global config with 0600" {
@@ -218,6 +206,24 @@ teardown() {
     [ "$status" -eq 0 ] || false
     [[ ! "$output" =~ "altTest:" ]] || false
     [[ "$output" =~ "defaultTest" ]] || false
+}
+
+@test "profile: dolt profile remove last profile also removes profile param from global config" {
+    dolt profile add --use-db altDB altTest
+    run dolt profile
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "altTest" ]] || false
+
+    run dolt profile remove altTest
+    [ "$status" -eq 0 ] || false
+
+    run dolt profile
+    [ "$status" -eq 0 ] || false
+    [[ ! "$output" =~ "altTest" ]] || false
+
+    run dolt config --list --global
+    [ "$status" -eq 0 ] || false
+    [[ ! "$output" =~ "profile" ]] || false
 }
 
 @test "profile: dolt profile remove with no existing profiles errors" {
@@ -291,7 +297,7 @@ teardown() {
     dolt sql -q "insert into test values (999)"
     dolt add test
     dolt commit -m "insert initial value into test"
-    cd ..
+    cd -
 
     dolt profile add --use-db defaultDB default
     run dolt sql -q "select * from test"
@@ -304,7 +310,7 @@ teardown() {
     dolt sql -q "insert into table1 values (999)"
     dolt add table1
     dolt commit -m "insert initial value into table1"
-    cd ..
+    cd -
 
     dolt profile add --use-db defaultDB defaultTest
     run dolt sql -q "select * from table1"
@@ -318,11 +324,38 @@ teardown() {
     dolt sql -q "insert into test values (999)"
     dolt add test
     dolt commit -m "insert initial value into test"
-    cd ..
+    cd -
 
     dolt profile add --use-db defaultDB default
     dolt profile add --use-db altDB altTest
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ] || false
     [[ "$output" =~ "999" ]] || false
+}
+
+@test "profile: commands that don't support global args work with a default profile set" {
+    cd altDB
+    dolt sql -q "create table test (pk int primary key)"
+    dolt sql -q "insert into test values (999)"
+    dolt add test
+    dolt commit -m "insert initial value into test"
+    dolt profile add --use-db defaultDB default
+
+    run dolt log
+    [ "$status" -eq 0 ] || false
+    [[ "$output" =~ "insert initial value into test" ]] || false
+}
+
+@test "profile: profile with user but not password waits for password prompt" {
+    dolt profile add --use-db defaultDB -u "steph" defaultTest
+    run dolt --profile defaultTest sql -q "select * from table1" <<< ""
+    echo "$output"
+    [ "$status" -eq 1 ] || false
+    [[ "$output" =~ "Enter password:" ]] || false
+}
+
+@test "profile: profile with user and empty password doesn't wait for password prompt" {
+    dolt profile add --use-db defaultDB -u "steph" -p "" defaultTest
+    run dolt --profile defaultTest sql -q "show tables"
+    [ "$status" -eq 0 ] || false
 }

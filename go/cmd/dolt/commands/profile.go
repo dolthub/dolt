@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -36,7 +37,7 @@ import (
 
 var profileDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Manage dolt profiles for CLI global options.",
-	LongDesc: `With no arguments, shows a list of existing profiles. Several subcommands are available to perform operations on the profiles.
+	LongDesc: `With no arguments, shows a list of existing profiles. Two subcommands are available to perform operations on the profiles.
 {{.EmphasisLeft}}add{{.EmphasisRight}}
 Adds a profile named {{.LessThan}}name{{.GreaterThan}}. If the profile already exists, it will be overwritten.
 
@@ -50,10 +51,9 @@ Remove the profile named {{.LessThan}}name{{.GreaterThan}}.`,
 }
 
 const (
-	addProfileId         = "add"
-	removeProfileId      = "remove"
-	removeProfileShortId = "rm"
-	GlobalCfgProfileKey  = "profile"
+	addProfileId        = "add"
+	removeProfileId     = "remove"
+	GlobalCfgProfileKey = "profile"
 )
 
 type ProfileCmd struct{}
@@ -74,7 +74,7 @@ func (cmd ProfileCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd ProfileCmd) ArgParser() *argparser.ArgParser {
-	ap := cli.CreateProfileArgParser()
+	ap := cli.CreateGlobalArgParser("profile")
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"name", "Defines the name of the profile to add or remove."})
 	ap.SupportsFlag(cli.VerboseFlag, "v", "Includes full details when printing list of profiles.")
 	return ap
@@ -104,8 +104,6 @@ func (cmd ProfileCmd) Exec(ctx context.Context, commandStr string, args []string
 		verr = addProfile(dEnv, apr)
 	case apr.Arg(0) == removeProfileId:
 		verr = removeProfile(dEnv, apr)
-	case apr.Arg(0) == removeProfileShortId:
-		verr = removeProfile(dEnv, apr)
 	default:
 		verr = errhand.BuildDError("").SetPrintUsage().Build()
 	}
@@ -128,14 +126,15 @@ func addProfile(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbo
 		return errhand.BuildDError("error: failed to get global config").Build()
 	}
 	//TODO: enable config to retrieve json objects instead of just strings
-	profilesJSON, err := cfg.GetString(GlobalCfgProfileKey)
+	encodedProfiles, err := cfg.GetString(GlobalCfgProfileKey)
 	if err != nil {
 		if err != config.ErrConfigParamNotFound {
 			return errhand.BuildDError("error: failed to get profiles, %s", err).Build()
 		} else {
-			err = cfg.SetStrings(map[string]string{GlobalCfgProfileKey: "{\"" + profileName + "\"" + ": " + profStr + "}"})
+			profilesJSON := "{\"" + profileName + "\"" + ": " + profStr + "}"
+			err = writeProfileToGlobalConfig(profilesJSON, cfg)
 			if err != nil {
-				return errhand.BuildDError("error: failed to set profiles, %s", err).Build()
+				return errhand.BuildDError("error: failed to write profile to config, %s", err).Build()
 			}
 			err = setGlobalConfigPermissions(dEnv)
 			if err != nil {
@@ -144,15 +143,27 @@ func addProfile(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbo
 			return nil
 		}
 	}
+	profilesJSON, err := DecodeProfile(encodedProfiles)
+	if err != nil {
+		return errhand.BuildDError("error: failed to decode profiles, %s", err).Build()
+	}
+	cli.Println(profilesJSON)
+
+	// don't allow overwriting existing profiles
+	profileCheck := gjson.Get(profilesJSON, profileName)
+	if profileCheck.Exists() {
+		return errhand.BuildDError("error: profile %s already exists, please delete this profile and re-add it if you want to edit any values.", profileName).Build()
+	}
 
 	profilesJSON, err = sjson.Set(profilesJSON, profileName, profStr)
 	if err != nil {
 		return errhand.BuildDError("error: failed to add profile, %s", err).Build()
 	}
-	err = cfg.SetStrings(map[string]string{GlobalCfgProfileKey: profilesJSON})
+	err = writeProfileToGlobalConfig(profilesJSON, cfg)
 	if err != nil {
-		return errhand.BuildDError("error: failed to set profiles, %s", err).Build()
+		return errhand.BuildDError("error: failed to write profile to config, %s", err).Build()
 	}
+
 	err = setGlobalConfigPermissions(dEnv)
 	if err != nil {
 		return errhand.BuildDError("error: failed to set permissions, %s", err).Build()
@@ -172,12 +183,16 @@ func removeProfile(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ve
 	if !ok {
 		return errhand.BuildDError("error: failed to get global config").Build()
 	}
-	profilesJSON, err := cfg.GetString(GlobalCfgProfileKey)
+	encodedProfiles, err := cfg.GetString(GlobalCfgProfileKey)
 	if err != nil {
 		if err == config.ErrConfigParamNotFound {
 			return errhand.BuildDError("error: no existing profiles").Build()
 		}
 		return errhand.BuildDError("error: failed to get profiles, %s", err).Build()
+	}
+	profilesJSON, err := DecodeProfile(encodedProfiles)
+	if err != nil {
+		return errhand.BuildDError("error: failed to decode profiles, %s", err).Build()
 	}
 
 	p := gjson.Get(profilesJSON, profileName)
@@ -189,10 +204,18 @@ func removeProfile(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ve
 	if err != nil {
 		return errhand.BuildDError("error: failed to remove profile, %s", err).Build()
 	}
-	err = cfg.SetStrings(map[string]string{GlobalCfgProfileKey: profilesJSON})
-	if err != nil {
-		return errhand.BuildDError("error: failed to set profiles, %s", err).Build()
+	if profilesJSON == "{}" {
+		err = cfg.Unset([]string{GlobalCfgProfileKey})
+		if err != nil {
+			return errhand.BuildDError("error: failed to remove profile, %s", err).Build()
+		}
+	} else {
+		err = writeProfileToGlobalConfig(profilesJSON, cfg)
+		if err != nil {
+			return errhand.BuildDError("error: failed to write profile to config, %s", err).Build()
+		}
 	}
+
 	err = setGlobalConfigPermissions(dEnv)
 	if err != nil {
 		return errhand.BuildDError("error: failed to set permissions, %s", err).Build()
@@ -206,12 +229,16 @@ func printProfiles(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ve
 	if !ok {
 		return errhand.BuildDError("error: failed to get global config").Build()
 	}
-	profilesJSON, err := cfg.GetString(GlobalCfgProfileKey)
+	encodedProfiles, err := cfg.GetString(GlobalCfgProfileKey)
 	if err != nil {
 		if err == config.ErrConfigParamNotFound {
 			return nil
 		}
 		return errhand.BuildDError("error: failed to get profiles, %s", err).Build()
+	}
+	profilesJSON, err := DecodeProfile(encodedProfiles)
+	if err != nil {
+		return errhand.BuildDError("error: failed to decode profiles, %s", err).Build()
 	}
 
 	profileMap := gjson.Parse(profilesJSON)
@@ -235,8 +262,13 @@ func printProfiles(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ve
 func prettyPrintProfile(profileName string, profile Profile, verbose bool) {
 	cli.Println(profileName)
 	if verbose {
-		cli.Println(fmt.Sprintf("\tuser: %s\n\tpassword: %s\n\thost: %s\n\tport: %s\n\tno-tls: %t\n\tdata-dir: %s\n\tdoltcfg-dir: %s\n\tprivilege-file: %s\n\tbranch-control-file: %s\n\tuse-db: %s\n",
-			profile.User, profile.Password, profile.Host, profile.Port, profile.NoTLS, profile.DataDir, profile.DoltCfgDir, profile.PrivilegeFile, profile.BranchControl, profile.UseDB))
+		if profile.HasPassword {
+			cli.Println(fmt.Sprintf("\tuser: %s\n\tpassword: %s\n\thost: %s\n\tport: %s\n\tno-tls: %t\n\tdata-dir: %s\n\tdoltcfg-dir: %s\n\tprivilege-file: %s\n\tbranch-control-file: %s\n\tuse-db: %s\n",
+				profile.User, profile.Password, profile.Host, profile.Port, profile.NoTLS, profile.DataDir, profile.DoltCfgDir, profile.PrivilegeFile, profile.BranchControl, profile.UseDB))
+		} else {
+			cli.Println(fmt.Sprintf("\tuser: %s\n\thost: %s\n\tport: %s\n\tno-tls: %t\n\tdata-dir: %s\n\tdoltcfg-dir: %s\n\tprivilege-file: %s\n\tbranch-control-file: %s\n\tuse-db: %s\n",
+				profile.User, profile.Host, profile.Port, profile.NoTLS, profile.DataDir, profile.DoltCfgDir, profile.PrivilegeFile, profile.BranchControl, profile.UseDB))
+		}
 	}
 }
 
@@ -258,9 +290,34 @@ func setGlobalConfigPermissions(dEnv *env.DoltEnv) error {
 	return nil
 }
 
+// writeProfileToGlobalConfig encodes a given profile JSON (represented by a string) to base64 and writes that encoded profile to the global config
+func writeProfileToGlobalConfig(profile string, config config.ReadWriteConfig) error {
+	profilesData := []byte(profile)
+	encodedProfiles := make([]byte, base64.StdEncoding.EncodedLen(len(profilesData)))
+	base64.StdEncoding.Encode(encodedProfiles, profilesData)
+
+	err := config.SetStrings(map[string]string{GlobalCfgProfileKey: string(encodedProfiles)})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// DecodeProfile decodes a given base64 encoded profile string to a string representing a JSON
+func DecodeProfile(encodedProfile string) (string, error) {
+	decodedProfile := make([]byte, base64.StdEncoding.DecodedLen(len(encodedProfile)))
+	n, err := base64.StdEncoding.Decode(decodedProfile, []byte(encodedProfile))
+	if err != nil {
+		return "", err
+	}
+	decodedProfile = decodedProfile[:n]
+	return string(decodedProfile), nil
+}
+
 type Profile struct {
 	User          string `json:"user"`
 	Password      string `json:"password"`
+	HasPassword   bool   `json:"has-password"`
 	Host          string `json:"host"`
 	Port          string `json:"port"`
 	NoTLS         bool   `json:"no-tls"`
@@ -281,8 +338,9 @@ func (p Profile) String() string {
 
 func newProfile(apr *argparser.ArgParseResults) Profile {
 	return Profile{
-		User:          apr.GetValueOrDefault(cli.UserFlag, DefaultUser),
+		User:          apr.GetValueOrDefault(cli.UserFlag, ""),
 		Password:      apr.GetValueOrDefault(cli.PasswordFlag, ""),
+		HasPassword:   apr.Contains(cli.PasswordFlag),
 		Host:          apr.GetValueOrDefault(cli.HostFlag, ""),
 		Port:          apr.GetValueOrDefault(cli.PortFlag, ""),
 		NoTLS:         apr.Contains(cli.NoTLSFlag),

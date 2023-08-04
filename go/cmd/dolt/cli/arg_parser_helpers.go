@@ -309,8 +309,8 @@ func CreateCountCommitsArgParser() *argparser.ArgParser {
 	return ap
 }
 
-func CreateProfileArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithVariableArgs("profile")
+func CreateGlobalArgParser(name string) *argparser.ArgParser {
+	ap := argparser.NewArgParserWithVariableArgs(name)
 	ap.SupportsString("user", "u", "user", "Defines the local superuser.")
 	ap.SupportsString("password", "p", "password", "Defines the password for the user.")
 	ap.SupportsString("host", "", "host", "Defines the host to connect to.")
@@ -321,6 +321,7 @@ func CreateProfileArgParser() *argparser.ArgParser {
 	ap.SupportsString("privilege-file", "", "privilege-file", "DePath to a file to load and store users and grants.")
 	ap.SupportsString("branch-control-file", "", "branch-control-file", "Path to a file to load and store branch control permissions.")
 	ap.SupportsString("use-db", "", "use-db", "The name of the database to use when executing SQL queries.")
+	ap.SupportsString("profile", "", "profile", "The name of the profile to use when executing SQL queries. Run `dolt profile --help` for more information.")
 	return ap
 }
 
