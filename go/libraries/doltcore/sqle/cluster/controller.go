@@ -37,7 +37,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	"github.com/dolthub/dolt/go/gen/proto/dolt/services/replicationapi/v1alpha1"
+	replicationapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/replicationapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/creds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -554,7 +554,7 @@ func (c *Controller) HookMySQLDbPersister(persister MySQLDbPersister, mysqlDb *m
 	if c != nil {
 		c.mysqlDb = mysqlDb
 		c.mysqlDbPersister = &replicatingPersister{
-			base: persister,
+			base:     persister,
 			replicas: c.mysqlDbReplicas,
 		}
 		c.mysqlDbPersister.setRole(c.role)

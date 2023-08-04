@@ -19,11 +19,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	"github.com/sirupsen/logrus"
 
-	"github.com/dolthub/dolt/go/gen/proto/dolt/services/replicationapi/v1alpha1"
+	replicationapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/replicationapi/v1alpha1"
 )
 
 type MySQLDbPersister interface {
@@ -38,7 +38,7 @@ type replicatingPersister struct {
 	version  uint32
 	replicas []*mysqlDbReplica
 
-	mu       sync.Mutex
+	mu sync.Mutex
 }
 
 type mysqlDbReplica struct {
@@ -54,8 +54,8 @@ type mysqlDbReplica struct {
 	client *replicationServiceClient
 	lgr    *logrus.Entry
 
-	mu       sync.Mutex
-	cond     *sync.Cond
+	mu   sync.Mutex
+	cond *sync.Cond
 }
 
 func (r *mysqlDbReplica) UpdateMySQLDb(ctx context.Context, contents []byte, version uint32) error {
