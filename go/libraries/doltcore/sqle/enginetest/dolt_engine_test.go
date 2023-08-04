@@ -134,12 +134,12 @@ func TestSingleScript(t *testing.T) {
 					Query: "show create table t1",
 					Expected: []sql.Row{{"t1",
 						"CREATE TABLE `t1` (\n" +
-								"  `i` bigint NOT NULL,\n" +
-								"  `s` varchar(20),\n" +
-								"  `j` int AUTO_INCREMENT,\n" +
-								"  PRIMARY KEY (`i`),\n" +
-								"  UNIQUE KEY `j` (`j`)\n" +
-								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+							"  `i` bigint NOT NULL,\n" +
+							"  `s` varchar(20),\n" +
+							"  `j` int AUTO_INCREMENT,\n" +
+							"  PRIMARY KEY (`i`),\n" +
+							"  UNIQUE KEY `j` (`j`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 				},
 				{
 					Query: "select * from t1 order by i",
@@ -2262,7 +2262,7 @@ func TestAddDropPks(t *testing.T) {
 func TestAddAutoIncrementColumn(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	
+
 	for _, script := range queries.AlterTableAddAutoIncrementScripts {
 		enginetest.TestScript(t, h, script)
 	}
