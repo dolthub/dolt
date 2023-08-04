@@ -56,7 +56,7 @@ const (
 	removeProfileId       = "remove"
 	GlobalCfgProfileKey   = "profile"
 	DefaultProfileName    = "default"
-	defaultProfileWarning = "Default profile has been added. All dolt commands taking global arguments will use this default profile until it is removed.\nWARNING: This will alter the behavior of command which specify no `--profile`.\nIf you are using dolt in contexts where you expect a `.dolt` directory to be accessed, the default profile will be used instead."
+	defaultProfileWarning = "Default profile has been added. All dolt commands taking global arguments will use this default profile until it is removed.\nWARNING: This will alter the behavior of commands which specify no `--profile`.\nIf you are using dolt in contexts where you expect a `.dolt` directory to be accessed, the default profile will be used instead."
 )
 
 type ProfileCmd struct{}
