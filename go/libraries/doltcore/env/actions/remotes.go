@@ -388,7 +388,16 @@ func FetchRemoteBranch(
 // FetchRefSpecs is the common SQL and CLI entrypoint for fetching branches, tags, and heads from a remote.
 // This function takes dbData which is a env.DbData object for handling repoState read and write, and srcDB is
 // a remote *doltdb.DoltDB object that is used to fetch remote branches from.
-func FetchRefSpecs(ctx context.Context, dbData env.DbData, srcDB *doltdb.DoltDB, refSpecs []ref.RemoteRefSpec, remote env.Remote, mode ref.UpdateMode, progStarter ProgStarter, progStopper ProgStopper) error {
+func FetchRefSpecs(
+	ctx context.Context,
+	dbData env.DbData,
+	srcDB *doltdb.DoltDB,
+	refSpecs []ref.RemoteRefSpec,
+	remote env.Remote,
+	mode ref.UpdateMode,
+	progStarter ProgStarter,
+	progStopper ProgStopper,
+) error {
 	var branchRefs []doltdb.RefWithHash
 	err := srcDB.VisitRefsOfType(ctx, ref.HeadRefTypes, func(r ref.DoltRef, addr hash.Hash) error {
 		branchRefs = append(branchRefs, doltdb.RefWithHash{Ref: r, Hash: addr})
@@ -458,14 +467,13 @@ func FetchRefSpecs(ctx context.Context, dbData env.DbData, srcDB *doltdb.DoltDB,
 		}
 		remoteTrackRef := newHead.Ref
 
-		switch mode {
-		case ref.ForceUpdate:
+		if mode.Force {
 			// TODO: can't be used safely in a SQL context
 			err := dbData.Ddb.SetHeadToCommit(ctx, remoteTrackRef, commit)
 			if err != nil {
 				return err
 			}
-		case ref.FastForwardOnly:
+		} else {
 			ok, err := dbData.Ddb.CanFastForward(ctx, remoteTrackRef, commit)
 			if err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
 				return fmt.Errorf("%w: %s", ErrCantFF, err.Error())
@@ -488,9 +496,57 @@ func FetchRefSpecs(ctx context.Context, dbData env.DbData, srcDB *doltdb.DoltDB,
 		}
 	}
 
+	if mode.Prune {
+		err = pruneBranches(ctx, dbData, remote, newHeads)
+		if err != nil {
+			return err
+		}
+	}
+
 	err = FetchFollowTags(ctx, tmpDir, srcDB, dbData.Ddb, progStarter, progStopper)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func pruneBranches(ctx context.Context, dbData env.DbData, remote env.Remote, remoteRefs []doltdb.RefWithHash) error {
+	remoteRefTypes := map[ref.RefType]struct{}{
+		ref.RemoteRefType: {},
+	}
+
+	var localRemoteRefs []ref.RemoteRef
+	err := dbData.Ddb.VisitRefsOfType(ctx, remoteRefTypes, func(r ref.DoltRef, addr hash.Hash) error {
+		rref := r.(ref.RemoteRef)
+		localRemoteRefs = append(localRemoteRefs, rref)
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	// Delete any local remote ref not present in the remoteRefs, only for this remote
+	for _, localRemoteRef := range localRemoteRefs {
+		if localRemoteRef.GetRemote() != remote.Name {
+			continue
+		}
+
+		found := false
+		for _, remoteRef := range remoteRefs {
+			if remoteRef.Ref == localRemoteRef {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			// TODO: this isn't thread-safe in a SQL context
+			err = dbData.Ddb.DeleteBranch(ctx, localRemoteRef, nil)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil

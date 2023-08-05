@@ -202,6 +202,7 @@ func CreateCherryPickArgParser() *argparser.ArgParser {
 func CreateFetchArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("fetch")
 	ap.SupportsString(UserFlag, "u", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
+	ap.SupportsFlag(PruneFlag, "p", "After fetching, remove any remote-tracking references that don't exist on the remote.")
 	return ap
 }
 

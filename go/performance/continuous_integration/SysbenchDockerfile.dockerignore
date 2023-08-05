@@ -4,4 +4,5 @@
 # Except for the following
 !go
 !config.json
+!tpcc-config.json
 !sysbench-runner-tests-entrypoint.sh

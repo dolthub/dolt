@@ -242,9 +242,8 @@ func NewPushOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoSt
 	return opts, nil
 }
 
-// NewFetchOpts returns remote and refSpec for given remote name. If remote name is not defined,
-// default remote is used. Default remote is "origin" if there are multiple remotes for now.
-func NewFetchOpts(args []string, rsr RepoStateReader) (Remote, []ref.RemoteRefSpec, error) {
+// RemoteForFetchArgs returns the remote and remaining arg strings for a fetch command
+func RemoteForFetchArgs(args []string, rsr RepoStateReader) (Remote, []string, error) {
 	var err error
 	remotes, err := rsr.GetRemotes()
 	if err != nil {
@@ -269,18 +268,17 @@ func NewFetchOpts(args []string, rsr RepoStateReader) (Remote, []ref.RemoteRefSp
 		return NoRemote, nil, fmt.Errorf("%w; '%s' %s", ErrUnknownRemote, remName, msg)
 	}
 
-	var rs []ref.RemoteRefSpec
+	return remote, args, nil
+}
+
+// ParseRefSpecs returns the ref specs for the string arguments given for the remote provided, or the default ref
+// specs for that remote if no arguments are provided.
+func ParseRefSpecs(args []string, rsr RepoStateReader, remote Remote) ([]ref.RemoteRefSpec, error) {
 	if len(args) != 0 {
-		rs, err = ParseRSFromArgs(remName, args)
+		return ParseRSFromArgs(remote.Name, args)
 	} else {
-		rs, err = GetRefSpecs(rsr, remName)
+		return GetRefSpecs(rsr, remote.Name)
 	}
-
-	if err != nil {
-		return NoRemote, nil, err
-	}
-
-	return remote, rs, err
 }
 
 func ParseRSFromArgs(remName string, args []string) ([]ref.RemoteRefSpec, error) {
