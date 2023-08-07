@@ -29,7 +29,6 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -81,11 +80,6 @@ func (cmd ProfileCmd) ArgParser() *argparser.ArgParser {
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"name", "Defines the name of the profile to add or remove."})
 	ap.SupportsFlag(cli.VerboseFlag, "v", "Includes full details when printing list of profiles.")
 	return ap
-}
-
-// EventType returns the type of the event to log
-func (cmd ProfileCmd) EventType() eventsapi.ClientEventType {
-	return eventsapi.ClientEventType_PROFILE
 }
 
 func (cmd ProfileCmd) RequiresRepo() bool {
