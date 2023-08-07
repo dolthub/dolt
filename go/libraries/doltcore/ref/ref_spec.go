@@ -224,7 +224,7 @@ func newLocalToRemoteTrackingRef(remote string, srcRef BranchRef, destRef Remote
 		if srcWCs == 0 {
 			srcPattern := strPattern(srcRef.GetPath())
 			destPattern := strPattern(destRef.GetPath())
-			srcToDestMapper := identityBranchMapper(destRef.GetPath()[len(remoteInRef):])
+			srcToDestMapper := identityBranchMapper(destRef.GetPath()[len(remoteInRef)+1:])
 			destToSrcMapper := identityBranchMapper(srcRef.GetPath())
 
 			return BranchToTrackingBranchRefSpec{

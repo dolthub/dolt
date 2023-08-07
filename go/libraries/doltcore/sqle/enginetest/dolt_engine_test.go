@@ -120,57 +120,33 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "delete all rows in table in all branches",
+			Name: "add column auto_increment, non primary key",
 			SetUpScript: []string{
-				"create table t (a int primary key auto_increment, b int)",
-				"call dolt_add('.')",
-				"call dolt_commit('-am', 'empty table')",
-				"call dolt_branch('branch1')",
-				"call dolt_branch('branch2')",
-				"insert into t (b) values (1), (2)",
-				"call dolt_commit('-am', 'two values on main')",
-				"call dolt_checkout('branch1')",
-				"insert into t (b) values (3), (4)",
-				"call dolt_commit('-am', 'two values on branch1')",
-				"call dolt_checkout('branch2')",
-				"insert into t (b) values (5), (6)",
-				"call dolt_checkout('main')",
+				"CREATE TABLE t1 (i bigint primary key, s varchar(20))",
+				"INSERT INTO t1 VALUES (1, 'a'), (2, 'b'), (3, 'c')",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "delete from t",
-					Expected: []sql.Row{{gmstypes.NewOkResult(2)}},
+					Query:    "alter table t1 add column j int auto_increment unique",
+					Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
 				},
 				{
-					Query:    "delete from `mydb/branch1`.t",
-					Expected: []sql.Row{{gmstypes.NewOkResult(2)}},
+					Query: "show create table t1",
+					Expected: []sql.Row{{"t1",
+						"CREATE TABLE `t1` (\n" +
+							"  `i` bigint NOT NULL,\n" +
+							"  `s` varchar(20),\n" +
+							"  `j` int AUTO_INCREMENT,\n" +
+							"  PRIMARY KEY (`i`),\n" +
+							"  UNIQUE KEY `j` (`j`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 				},
 				{
-					Query:    "delete from `mydb/branch2`.t",
-					Expected: []sql.Row{{gmstypes.NewOkResult(2)}},
-				},
-				{
-					Query:            "alter table `mydb/branch1`.t auto_increment = 1",
-					SkipResultsCheck: true,
-				},
-				{
-					Query:            "alter table `mydb/branch2`.t auto_increment = 1",
-					SkipResultsCheck: true,
-				},
-				{
-					Query:            "alter table t auto_increment = 1",
-					SkipResultsCheck: true,
-				},
-				{
-					// empty tables, start at 1
-					Query:    "insert into t (b) values (7), (8)",
-					Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: 2, InsertID: 1}}},
-				},
-				{
-					Query: "select * from t order by a",
+					Query: "select * from t1 order by i",
 					Expected: []sql.Row{
-						{1, 7},
-						{2, 8},
+						{1, "a", 1},
+						{2, "b", 2},
+						{3, "c", 3},
 					},
 				},
 			},
@@ -1038,6 +1014,13 @@ func TestFulltextIndexes(t *testing.T) {
 	}
 	if runtime.GOOS == "windows" {
 		t.Skip("For some reason, this is flaky only on Windows CI. Investigation is underway.")
+	}
+	for i := range queries.FulltextTests {
+		//TODO: Dolt drops indexes automatically, which differs from the expectation of GMS
+		if queries.FulltextTests[i].Name == "ALTER TABLE DROP COLUMN used by index" {
+			queries.FulltextTests = append(queries.FulltextTests[:i], queries.FulltextTests[i+1:]...)
+			break
+		}
 	}
 	h := newDoltHarness(t)
 	defer h.Close()
@@ -2265,7 +2248,7 @@ func TestSystemTableIndexesPrepared(t *testing.T) {
 
 				ctx = ctx.WithQuery(tt.query)
 				if tt.exp != nil {
-					enginetest.TestPreparedQueryWithContext(t, ctx, e, harness, tt.query, tt.exp, nil)
+					enginetest.TestPreparedQueryWithContext(t, ctx, e, harness, tt.query, tt.exp, nil, nil)
 				}
 			})
 		}
@@ -2287,7 +2270,10 @@ func TestAddDropPks(t *testing.T) {
 func TestAddAutoIncrementColumn(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestAddAutoIncrementColumn(t, h)
+
+	for _, script := range queries.AlterTableAddAutoIncrementScripts {
+		enginetest.TestScript(t, h, script)
+	}
 }
 
 func TestNullRanges(t *testing.T) {

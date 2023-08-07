@@ -138,7 +138,7 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	resFormat, _ := apr.GetValue(FormatFlag)
 	resFormat = strings.TrimPrefix(resFormat, ".")
 
-	outputFileOrDirName, vErr := validateArgs(apr)
+	outputFileOrDirName, vErr := validateDumpArgs(apr)
 	if vErr != nil {
 		return HandleVErrAndExitCode(vErr, usage)
 	}
@@ -632,9 +632,9 @@ func getDumpDestination(path string) mvdata.DataLocation {
 	return destLoc
 }
 
-// validateArgs returns either filename of directory name after checking each cases of user input arguments,
+// validateDumpArgs returns either filename of directory name after checking each cases of user input arguments,
 // handling errors for invalid arguments
-func validateArgs(apr *argparser.ArgParseResults) (string, errhand.VerboseError) {
+func validateDumpArgs(apr *argparser.ArgParseResults) (string, errhand.VerboseError) {
 	rf, _ := apr.GetValue(FormatFlag)
 	rf = strings.TrimPrefix(rf, ".")
 	fn, fnOk := apr.GetValue(filenameFlag)
