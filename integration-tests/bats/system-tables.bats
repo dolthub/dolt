@@ -448,8 +448,8 @@ SQL
 
     run dolt sql -r csv -q "select to_pk, to_col1, to_col2, from_pk, from_col1, from_col2, diff_type from dolt_diff_t order by from_commit_date ASC;"
     [ $status -eq 0 ]
-    [[ $output =~ "1,123456789012345,420,,,,added" ]] || false
-    [[ $output =~ "1,1234567890,13,1,123456789012345,420,modified" ]] || false
+    [[ $output =~ "1,,,,,,added" ]] || false
+    [[ $output =~ "1,1234567890,13,1,,,modified" ]] || false
 }
 
 @test "system-tables: query dolt_history_ system table" {
