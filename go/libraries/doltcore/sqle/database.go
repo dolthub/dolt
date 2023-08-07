@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -1154,7 +1153,7 @@ func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableD
 	var views = make([]sql.ViewDefinition, len(fragments))
 	for i, fragment := range fragments {
 		cv, err := parse.ParseWithOptions(ctx, fragments[i].fragment,
-			sqlparser.ParserOptions{AnsiQuotes: fragment.ansiQuotes})
+			sql.NewSqlModeFromString(fragment.sqlMode).ParserOptions())
 		if err != nil {
 			return nil, sql.ViewDefinition{}, false, err
 		}
@@ -1162,7 +1161,7 @@ func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableD
 		createView, ok := cv.(*plan.CreateView)
 		if ok {
 			views[i] = sql.ViewDefinition{Name: fragments[i].name, TextDefinition: createView.Definition.TextDefinition,
-				CreateViewStatement: fragments[i].fragment, AnsiQuotes: fragment.ansiQuotes}
+				CreateViewStatement: fragments[i].fragment, SqlMode: fragment.sqlMode}
 		} else {
 			views[i] = sql.ViewDefinition{Name: fragments[i].name, TextDefinition: fragments[i].fragment, CreateViewStatement: fmt.Sprintf("CREATE VIEW %s AS %s", fragments[i].name, fragments[i].fragment)}
 		}
@@ -1231,7 +1230,7 @@ func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error
 			Name:            frag.name,
 			CreateStatement: frag.fragment,
 			CreatedAt:       frag.created,
-			AnsiQuotes:      frag.ansiQuotes,
+			SqlMode:         frag.sqlMode,
 		})
 	}
 	if err != nil {
@@ -1273,14 +1272,13 @@ func (db Database) GetEvent(ctx *sql.Context, name string) (sql.EventDefinition,
 		return sql.EventDefinition{}, false, err
 	}
 
-	// TODO: Some duplication with GetEvents here... would be nice to clean up
 	for _, frag := range frags {
 		if strings.ToLower(frag.name) == strings.ToLower(name) {
 			return sql.EventDefinition{
 				Name:            frag.name,
 				CreateStatement: frag.fragment,
 				CreatedAt:       frag.created,
-				AnsiQuotes:      frag.ansiQuotes,
+				SqlMode:         frag.sqlMode,
 			}, true, nil
 		}
 	}
@@ -1308,7 +1306,7 @@ func (db Database) GetEvents(ctx *sql.Context) ([]sql.EventDefinition, error) {
 			Name:            frag.name,
 			CreateStatement: frag.fragment,
 			CreatedAt:       frag.created,
-			AnsiQuotes:      frag.ansiQuotes,
+			SqlMode:         frag.sqlMode,
 		})
 	}
 	return events, nil

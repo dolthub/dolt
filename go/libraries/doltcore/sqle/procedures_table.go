@@ -59,7 +59,7 @@ func ProceduresTableSchema() schema.Schema {
 		schema.NewColumn(doltdb.ProceduresTableCreateStmtCol, schema.DoltProceduresCreateStmtTag, types.StringKind, false),
 		schema.NewColumn(doltdb.ProceduresTableCreatedAtCol, schema.DoltProceduresCreatedAtTag, types.TimestampKind, false),
 		schema.NewColumn(doltdb.ProceduresTableModifiedAtCol, schema.DoltProceduresModifiedAtTag, types.TimestampKind, false),
-		schema.NewColumn(doltdb.ProceduresTableAnsiQuotesCol, schema.DoltProceduresAnsiQuotesTag, types.BoolKind, false),
+		schema.NewColumn(doltdb.ProceduresTableSqlModeCol, schema.DoltProceduresSqlModeTag, types.BoolKind, false),
 	)
 	return schema.MustSchemaFromCols(colColl)
 }
@@ -72,19 +72,13 @@ func DoltProceduresGetOrCreateTable(ctx *sql.Context, db Database) (*WritableDol
 		return nil, err
 	}
 	if found {
-		// If the table we found doesn't have the same number of fields in its schema,
-		// then add any schema fields from the end that are missing.
-		alterableDoltTable := tbl.(*AlterableDoltTable)
+		// Make sure the schema is up to date
+		writableDoltTable := tbl.(*WritableDoltTable)
 		targetSchema := ProceduresTableSqlSchema().Schema
-		for i := len(tbl.Schema()); i < len(targetSchema); i++ {
-			columnOrder := sql.ColumnOrder{}
-			err := alterableDoltTable.AddColumn(ctx, targetSchema[i], &columnOrder)
-			if err != nil {
-				return nil, err
-			}
+		if len(tbl.Schema()) != len(targetSchema) {
+			return migrateDoltProceduresSchema(ctx, db, writableDoltTable)
 		}
-
-		return tbl.(*WritableDoltTable), nil
+		return writableDoltTable, nil
 	}
 
 	root, err := db.GetRoot(ctx)
@@ -104,6 +98,88 @@ func DoltProceduresGetOrCreateTable(ctx *sql.Context, db Database) (*WritableDol
 	if !found {
 		return nil, sql.ErrTableNotFound.New(ProceduresTableName)
 	}
+	return tbl.(*WritableDoltTable), nil
+}
+
+// TODO: godocs
+// TODO: what's the best way to test this? backwards compat test suite?
+func migrateDoltProceduresSchema(ctx *sql.Context, db Database, oldTable *WritableDoltTable) (newTable *WritableDoltTable, rerr error) {
+	// Copy all the old data
+	iter, err := SqlTableToRowIter(ctx, oldTable.DoltTable, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	nameIdx := oldTable.sqlSchema().IndexOfColName(doltdb.ProceduresTableNameCol)
+	createStatementIdx := oldTable.sqlSchema().IndexOfColName(doltdb.ProceduresTableCreateStmtCol)
+	createdAtIdx := oldTable.sqlSchema().IndexOfColName(doltdb.ProceduresTableCreatedAtCol)
+	modifiedAtIdx := oldTable.sqlSchema().IndexOfColName(doltdb.ProceduresTableModifiedAtCol)
+	sqlModeIdx := oldTable.sqlSchema().IndexOfColName(doltdb.ProceduresTableSqlModeCol)
+
+	defer func(iter sql.RowIter, ctx *sql.Context) {
+		err := iter.Close(ctx)
+		if err != nil && rerr == nil {
+			rerr = err
+		}
+	}(iter, ctx)
+
+	var newRows []sql.Row
+	for {
+		sqlRow, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		newRow := make(sql.Row, ProceduresTableSchema().GetAllCols().Size())
+		newRow[0] = sqlRow[nameIdx]
+		newRow[1] = sqlRow[createStatementIdx]
+		newRow[2] = sqlRow[createdAtIdx]
+		newRow[3] = sqlRow[modifiedAtIdx]
+		if sqlModeIdx >= 0 {
+			newRow[4] = sqlRow[sqlModeIdx]
+		}
+		newRows = append(newRows, newRow)
+	}
+
+	err = db.dropTable(ctx, doltdb.ProceduresTableName)
+	if err != nil {
+		return nil, err
+	}
+
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	err = db.createDoltTable(ctx, doltdb.ProceduresTableName, root, ProceduresTableSchema())
+	if err != nil {
+		return nil, err
+	}
+
+	tbl, found, err := db.GetTableInsensitive(ctx, doltdb.ProceduresTableName)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, sql.ErrTableNotFound.New(doltdb.ProceduresTableName)
+	}
+
+	inserter := tbl.(*WritableDoltTable).Inserter(ctx)
+	for _, row := range newRows {
+		err = inserter.Insert(ctx, row)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	err = inserter.Close(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	return tbl.(*WritableDoltTable), nil
 }
 
@@ -192,8 +268,8 @@ func DoltProceduresGetAll(ctx *sql.Context, db Database, procedureName string) (
 		if d.ModifiedAt, ok = sqlRow[3].(time.Time); !ok {
 			return nil, missingValue.New(doltdb.ProceduresTableModifiedAtCol, sqlRow)
 		}
-		if sqlRow[4].(int8) > 0 {
-			d.AnsiQuotes = true
+		if s, ok := sqlRow[4].(string); ok {
+			d.SqlMode = s
 		}
 		details = append(details, d)
 	}
@@ -226,7 +302,7 @@ func DoltProceduresAddProcedure(ctx *sql.Context, db Database, spd sql.StoredPro
 		spd.CreateStatement,
 		spd.CreatedAt.UTC(),
 		spd.ModifiedAt.UTC(),
-		spd.AnsiQuotes,
+		spd.SqlMode,
 	})
 }
 

@@ -254,10 +254,10 @@ const (
 	// SchemasTablesExtraCol The name of the column that stores extra information about a schema element in the
 	// dolt_schemas table
 	SchemasTablesExtraCol = "extra"
-	// SchemasTablesAnsiQuotesCol is the name of the column that stores whether this fragment needs to be parsed
-	// in ANSI_QUOTES mode to treat double quote chars as identifier quotes, instead of string literal quotes.
-	SchemasTablesAnsiQuotesCol = "ansi_quotes"
-	SchemasTablesIndexName     = "fragment_name"
+	// SchemasTablesSqlModeCol is the name of the column that stores the SQL_MODE string used when this fragment
+	// was originally defined. Mode settings, such as ANSI_QUOTES, are needed to correctly parse the fragment.
+	SchemasTablesSqlModeCol = "sql_mode"
+	SchemasTablesIndexName  = "fragment_name"
 )
 
 const (
@@ -332,7 +332,7 @@ const (
 	ProceduresTableCreatedAtCol = "created_at"
 	// ProceduresTableModifiedAtCol is the time that the stored procedure was last modified, in UTC.
 	ProceduresTableModifiedAtCol = "modified_at"
-	// ProceduresTableAnsiQuotesCol is whether this stored procedure was defined in ANSI_QUOTES mode, indicating
-	// that double quotes should be treated as identifier quotes, instead of string literal quotes.
-	ProceduresTableAnsiQuotesCol = "ansi_quotes"
+	// ProceduresTableSqlModeCol is the name of the column that stores the SQL_MODE string used when this fragment
+	// was originally defined. Mode settings, such as ANSI_QUOTES, are needed to correctly parse the fragment.
+	ProceduresTableSqlModeCol = "sql_mode"
 )

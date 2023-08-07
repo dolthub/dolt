@@ -61,7 +61,7 @@ var schemasTableCols = schema.NewColCollection(
 	mustNewColWithTypeInfo(doltdb.SchemasTablesNameCol, schema.DoltSchemasNameTag, typeinfo.CreateVarStringTypeFromSqlType(mustCreateStringType(query.Type_VARCHAR, 64, sql.Collation_utf8mb4_0900_ai_ci)), true, "", false, ""),
 	mustNewColWithTypeInfo(doltdb.SchemasTablesFragmentCol, schema.DoltSchemasFragmentTag, typeinfo.CreateVarStringTypeFromSqlType(gmstypes.LongText), false, "", false, ""),
 	mustNewColWithTypeInfo(doltdb.SchemasTablesExtraCol, schema.DoltSchemasExtraTag, typeinfo.JSONType, false, "", false, ""),
-	mustNewColWithTypeInfo(doltdb.SchemasTablesAnsiQuotesCol, schema.DoltSchemasAnsiQuotesTag, typeinfo.BoolType, false, "false", false, ""),
+	mustNewColWithTypeInfo(doltdb.SchemasTablesSqlModeCol, schema.DoltSchemasSqlModeTag, typeinfo.BoolType, false, "false", false, ""),
 )
 
 var schemaTableSchema = schema.MustSchemaFromCols(schemasTableCols)
@@ -118,7 +118,7 @@ func migrateOldSchemasTableToNew(ctx *sql.Context, db Database, schemasTable *Wr
 	typeIdx := schemasTable.sqlSchema().IndexOfColName(doltdb.SchemasTablesTypeCol)
 	fragmentIdx := schemasTable.sqlSchema().IndexOfColName(doltdb.SchemasTablesFragmentCol)
 	extraIdx := schemasTable.sqlSchema().IndexOfColName(doltdb.SchemasTablesExtraCol)
-	ansiQuotesIdx := schemasTable.sqlSchema().IndexOfColName(doltdb.SchemasTablesAnsiQuotesCol)
+	sqlModeIdx := schemasTable.sqlSchema().IndexOfColName(doltdb.SchemasTablesSqlModeCol)
 
 	defer func(iter sql.RowIter, ctx *sql.Context) {
 		err := iter.Close(ctx)
@@ -144,8 +144,8 @@ func migrateOldSchemasTableToNew(ctx *sql.Context, db Database, schemasTable *Wr
 		if extraIdx >= 0 {
 			newRow[3] = sqlRow[extraIdx]
 		}
-		if ansiQuotesIdx >= 0 {
-			newRow[4] = sqlRow[ansiQuotesIdx]
+		if sqlModeIdx >= 0 {
+			newRow[4] = sqlRow[sqlModeIdx]
 		}
 
 		newRows = append(newRows, newRow)
@@ -234,9 +234,9 @@ type schemaFragment struct {
 	name     string
 	fragment string
 	created  time.Time
-	// ansiQuotes indicates if this fragment must be parsed with ANSI_QUOTES mode, meaning it uses double quote
-	// characters as identifier quotes, instead of string literal quotes.
-	ansiQuotes bool
+	// sqlMode indicates the SQL_MODE that was used when this schema fragment was initially parsed. SQL_MODE settings
+	// such as ANSI_QUOTES control customized parsing behavior needed for some schema fragments.
+	sqlMode string
 }
 
 func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType string) (sf []schemaFragment, rerr error) {
@@ -251,7 +251,7 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 	typeIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesTypeCol)
 	fragmentIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesFragmentCol)
 	extraIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesExtraCol)
-	ansiQuotesIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesAnsiQuotesCol)
+	sqlModeIdx := tbl.sqlSchema().IndexOfColName(doltdb.SchemasTablesSqlModeCol)
 
 	defer func(iter sql.RowIter, ctx *sql.Context) {
 		err := iter.Close(ctx)
@@ -274,20 +274,20 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 			continue
 		}
 
-		ansiQuotes := false
-		if ansiQuotesIdx >= 0 {
-			if sqlRow[ansiQuotesIdx].(int8) > 0 {
-				ansiQuotes = true
+		sqlModeString := ""
+		if sqlModeIdx >= 0 {
+			if s, ok := sqlRow[sqlModeIdx].(string); ok {
+				sqlModeString = s
 			}
 		}
 
 		// For older tables, use 1 as the trigger creation time
 		if extraIdx < 0 || sqlRow[extraIdx] == nil {
 			frags = append(frags, schemaFragment{
-				name:       sqlRow[nameIdx].(string),
-				fragment:   sqlRow[fragmentIdx].(string),
-				created:    time.Unix(1, 0).UTC(), // TablePlus editor thinks 0 is out of range
-				ansiQuotes: ansiQuotes,
+				name:     sqlRow[nameIdx].(string),
+				fragment: sqlRow[fragmentIdx].(string),
+				created:  time.Unix(1, 0).UTC(), // TablePlus editor thinks 0 is out of range
+				sqlMode:  sqlModeString,
 			})
 			continue
 		}
@@ -296,10 +296,10 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 		createdTime, err := getCreatedTime(ctx, sqlRow[extraIdx].(gmstypes.JSONValue))
 
 		frags = append(frags, schemaFragment{
-			name:       sqlRow[nameIdx].(string),
-			fragment:   sqlRow[fragmentIdx].(string),
-			created:    time.Unix(createdTime, 0).UTC(),
-			ansiQuotes: ansiQuotes,
+			name:     sqlRow[nameIdx].(string),
+			fragment: sqlRow[fragmentIdx].(string),
+			created:  time.Unix(createdTime, 0).UTC(),
+			sqlMode:  sqlModeString,
 		})
 	}
 

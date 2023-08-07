@@ -79,7 +79,7 @@ const (
 	DoltSchemasNameTag
 	DoltSchemasFragmentTag
 	DoltSchemasExtraTag
-	DoltSchemasAnsiQuotesTag
+	DoltSchemasSqlModeTag
 )
 
 // Tags for hidden columns in keyless rows
@@ -94,7 +94,7 @@ const (
 	DoltProceduresCreateStmtTag
 	DoltProceduresCreatedAtTag
 	DoltProceduresModifiedAtTag
-	DoltProceduresAnsiQuotesTag
+	DoltProceduresSqlModeTag
 )
 
 const (

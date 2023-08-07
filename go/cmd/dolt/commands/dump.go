@@ -41,7 +41,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/dolthub/vitess/go/vt/sqlparser"
 )
 
 const (
@@ -270,7 +269,7 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.
 	}
 
 	stmtColIdx := sch.IndexOfColName(doltdb.ProceduresTableCreateStmtCol)
-	ansiQuotesIdx := sch.IndexOfColName(doltdb.ProceduresTableAnsiQuotesCol)
+	sqlModeIdx := sch.IndexOfColName(doltdb.ProceduresTableSqlModeCol)
 
 	defer func(iter sql.RowIter, context *sql.Context) {
 		err := iter.Close(context)
@@ -287,15 +286,15 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.
 			return err
 		}
 
-		ansiQuotesMode := false
-		if len(row) >= ansiQuotesIdx {
-			if row[ansiQuotesIdx].(int8) > 0 {
-				ansiQuotesMode = true
+		sqlMode := ""
+		if len(row) >= sqlModeIdx {
+			if s, ok := row[sqlModeIdx].(string); ok {
+				sqlMode = s
 			}
 		}
 
-		if ansiQuotesMode {
-			err = iohelp.WriteLine(writer, "SET @@SQL_MODE=CONCAT(@@SQL_MODE, ',ANSI_QUOTES');")
+		if sqlMode != "" {
+			err = iohelp.WriteLine(writer, fmt.Sprintf("SET @@SQL_MODE='%s;", sqlMode))
 			if err != nil {
 				return err
 			}
@@ -337,7 +336,7 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.Ro
 
 	typeColIdx := sch.IndexOfColName(doltdb.SchemasTablesTypeCol)
 	fragColIdx := sch.IndexOfColName(doltdb.SchemasTablesFragmentCol)
-	ansiQuotesIdx := sch.IndexOfColName(doltdb.SchemasTablesAnsiQuotesCol)
+	sqlModeIdx := sch.IndexOfColName(doltdb.SchemasTablesSqlModeCol)
 
 	defer func(iter sql.RowIter, context *sql.Context) {
 		err := iter.Close(context)
@@ -358,15 +357,15 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.Ro
 			continue
 		}
 
-		ansiQuotesMode := false
-		if row[ansiQuotesIdx].(int8) > 0 {
-			ansiQuotesMode = true
+		sqlMode := ""
+		if s, ok := row[sqlModeIdx].(string); ok {
+			sqlMode = s
 		}
 
 		// TODO: helper functions?
 		// TODO: Need to clean up how we set SQL_MODE in the output dump file
-		if ansiQuotesMode {
-			err = iohelp.WriteLine(writer, "SET @@SQL_MODE=CONCAT(@@SQL_MODE, ',ANSI_QUOTES');")
+		if sqlMode != "" {
+			err = iohelp.WriteLine(writer, fmt.Sprintf("SET @@SQL_MODE='%s';", sqlMode))
 			if err != nil {
 				return err
 			}
@@ -399,7 +398,7 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValu
 	typeColIdx := sch.IndexOfColName(doltdb.SchemasTablesTypeCol)
 	fragColIdx := sch.IndexOfColName(doltdb.SchemasTablesFragmentCol)
 	nameColIdx := sch.IndexOfColName(doltdb.SchemasTablesNameCol)
-	ansiQuotesColIdx := sch.IndexOfColName(doltdb.SchemasTablesAnsiQuotesCol)
+	sqlModeIdx := sch.IndexOfColName(doltdb.SchemasTablesSqlModeCol)
 
 	defer func(iter sql.RowIter, context *sql.Context) {
 		err := iter.Close(context)
@@ -420,25 +419,23 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValu
 			continue
 		}
 
-		ansiQuotesMode := false
-		if row[ansiQuotesColIdx].(int8) > 0 {
-			ansiQuotesMode = true
+		sqlMode := ""
+		if s, ok := row[sqlModeIdx].(string); ok {
+			sqlMode = s
 		}
 
 		// We used to store just the SELECT part of a view, but now we store the entire CREATE VIEW statement
-		cv, err := parse.ParseWithOptions(ctx, row[fragColIdx].(string), sqlparser.ParserOptions{
-			AnsiQuotes: ansiQuotesMode,
-		})
+		cv, err := parse.ParseWithOptions(ctx, row[fragColIdx].(string), sql.NewSqlModeFromString(sqlMode).ParserOptions())
 		if err != nil {
 			return err
 		}
 
-		if ansiQuotesMode {
+		if sqlMode != "" {
 			err := iohelp.WriteLine(writer, "SET @previousSqlMode=@@SQL_MODE;")
 			if err != nil {
 				return err
 			}
-			err = iohelp.WriteLine(writer, "SET @@SQL_MODE=CONCAT(@@SQL_MODE, ',ANSI_QUOTES');")
+			err = iohelp.WriteLine(writer, fmt.Sprintf("SET @@SQL_MODE='%s';", sqlMode))
 			if err != nil {
 				return err
 			}
@@ -457,7 +454,7 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValu
 			}
 		}
 
-		if ansiQuotesMode {
+		if sqlMode != "" {
 			err := iohelp.WriteLine(writer, "SET @@SQL_MODE=@previousSqlMode;")
 			if err != nil {
 				return err
