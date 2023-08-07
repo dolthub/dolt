@@ -316,7 +316,7 @@ func CreateGlobalArgParser(name string) *argparser.ArgParser {
 		ap.SupportsString("profile", "", "profile", "The name of the profile to use when executing SQL queries. Run `dolt profile --help` for more information.")
 	}
 	ap.SupportsString("user", "u", "user", "Defines the local superuser (defaults to `root`). If the specified user exists, will take on permissions of that user.")
-	ap.SupportsString("password", "p", "password", "Defines the password for the user. Defaults to empty string.")
+	ap.SupportsString("password", "p", "password", "Defines the password for the user. Defaults to empty string when the user is `root`.")
 	ap.SupportsString("host", "", "host", "Defines the host to connect to.")
 	ap.SupportsString("port", "", "port", "Defines the port to connect to.")
 	ap.SupportsFlag("no-tls", "", "Disables TLS for the connection to remote databases.")
