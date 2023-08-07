@@ -310,6 +310,24 @@ func CreateCountCommitsArgParser() *argparser.ArgParser {
 	return ap
 }
 
+func CreateGlobalArgParser(name string) *argparser.ArgParser {
+	ap := argparser.NewArgParserWithVariableArgs(name)
+	if name == "dolt" {
+		ap.SupportsString("profile", "", "profile", "The name of the profile to use when executing SQL queries. Run `dolt profile --help` for more information.")
+	}
+	ap.SupportsString("user", "u", "user", "Defines the local superuser.")
+	ap.SupportsString("password", "p", "password", "Defines the password for the user.")
+	ap.SupportsString("host", "", "host", "Defines the host to connect to.")
+	ap.SupportsString("port", "", "port", "Defines the port to connect to.")
+	ap.SupportsFlag("no-tls", "", "Disables TLS for the connection to remote databases.")
+	ap.SupportsString("data-dir", "", "data-dir", "Defines a data directory whose subdirectories should all be dolt data repositories accessible as independent databases.")
+	ap.SupportsString("doltcfg-dir", "", "doltcfg-dir", "Defines a directory that contains configuration files for dolt.")
+	ap.SupportsString("privilege-file", "", "privilege-file", "DePath to a file to load and store users and grants.")
+	ap.SupportsString("branch-control-file", "", "branch-control-file", "Path to a file to load and store branch control permissions.")
+	ap.SupportsString("use-db", "", "use-db", "The name of the database to use when executing SQL queries.")
+	return ap
+}
+
 var awsParams = []string{dbfactory.AWSRegionParam, dbfactory.AWSCredsTypeParam, dbfactory.AWSCredsFileParam, dbfactory.AWSCredsProfile}
 var ossParams = []string{dbfactory.OSSCredsFileParam, dbfactory.OSSCredsProfile}
 
