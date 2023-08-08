@@ -4736,6 +4736,10 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"t", uint64(2)}},
 			},
 			{
+				Query:    "select * from dolt_status",
+				Expected: []sql.Row{{"t", false, "modified"}, {"t", false, "conflict"}},
+			},
+			{
 				Query: "select base_pk, base_v, our_pk, our_diff_type, their_pk, their_diff_type from dolt_conflicts_t;",
 				Expected: []sql.Row{
 					{1, "one", nil, "removed", 1, "modified"},
@@ -4745,6 +4749,10 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			{
 				Query:    "call dolt_conflicts_resolve('--ours', 't');",
 				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select * from dolt_status",
+				Expected: []sql.Row{{"t", false, "modified"}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",

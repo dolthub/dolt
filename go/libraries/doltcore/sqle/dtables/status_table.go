@@ -133,6 +133,14 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		})
 	}
 
+	if st.workingSet.MergeActive() && len(rows) == 0 {
+		rows = append(rows, statusTableRow{
+			tableName: "",
+			isStaged:  true,
+			status:    mergeActiveStatus,
+		})
+	}
+
 	return &StatusItr{rows: rows}, nil
 }
 
@@ -157,6 +165,7 @@ func statusString(td diff.TableDelta) string {
 }
 
 const mergeConflictStatus = "conflict"
+const mergeActiveStatus = "merge active"
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
