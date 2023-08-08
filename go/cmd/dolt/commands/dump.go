@@ -294,7 +294,7 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.
 		}
 
 		if sqlMode != "" {
-			err = iohelp.WriteLine(writer, fmt.Sprintf("SET @@SQL_MODE='%s;", sqlMode))
+			err = iohelp.WriteLine(writer, fmt.Sprintf("SET @@SQL_MODE='%s';", sqlMode))
 			if err != nil {
 				return err
 			}
