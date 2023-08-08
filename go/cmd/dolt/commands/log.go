@@ -19,8 +19,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
-
-	"github.com/fatih/color"
+	"time"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -33,6 +32,8 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/fatih/color"
 )
 
 type logOpts struct {
@@ -110,19 +111,32 @@ func (cmd LogCmd) ArgParser() *argparser.ArgParser {
 
 // Exec executes the command
 func (cmd LogCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-	return cmd.logWithLoggerFunc(ctx, commandStr, args, dEnv)
+	return cmd.logWithLoggerFunc(ctx, commandStr, args, dEnv, cliCtx)
 }
 
-func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, logDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
+
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		handleErrAndExit(err)
+	}
+	if closeFunc != nil {
+		defer closeFunc()
+	}
+
+	logRows, err := GetRowsForSql(queryist, sqlCtx, "select * from dolt_log")
+	if err != nil {
+		handleErrAndExit(err)
+	}
 
 	opts, err := parseLogArgs(ctx, dEnv, apr)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	if len(opts.commitSpecs) == 0 {
+	/*if len(opts.commitSpecs) == 0 {
 		headRef, err := dEnv.RepoStateReader().CWBHeadSpec()
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -131,8 +145,8 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 	}
 	if len(opts.tableName) > 0 {
 		return handleErrAndExit(logTableCommits(ctx, dEnv, opts))
-	}
-	return logCommits(ctx, dEnv, opts)
+	}*/
+	return logCommits(opts, logRows, queryist, sqlCtx)
 }
 
 func parseLogArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*logOpts, error) {
@@ -283,88 +297,59 @@ func getCommitSpec(commit string) (*doltdb.CommitSpec, error) {
 	return cs, nil
 }
 
-func getHashToRefs(ctx context.Context, dEnv *env.DoltEnv, decorationLevel string) (map[hash.Hash][]string, error) {
+func getHashToRefs(decorationLevel string, queryist cli.Queryist, sqlCtx *sql.Context) (map[hash.Hash][]string, error) {
 	cHashToRefs := map[hash.Hash][]string{}
 
 	// Get all branches
-	branches, err := dEnv.DoltDB.GetBranchesWithHashes(ctx)
+	branches, err := GetRowsForSql(queryist, sqlCtx, "select name, hash from dolt_branches")
 	if err != nil {
 		return cHashToRefs, fmt.Errorf(color.HiRedString("Fatal error: cannot get Branch information."))
 	}
-
 	for _, b := range branches {
-		refName := b.Ref.String()
-		if decorationLevel != "full" {
+		refName := b[0].(string)
+		/*if decorationLevel != "full" {
 			refName = b.Ref.GetPath() // trim out "refs/heads/"
-		}
+		}*/
 		refName = fmt.Sprintf("\033[32;1m%s\033[0m", refName) // branch names are bright green (32;1m)
-		cHashToRefs[b.Hash] = append(cHashToRefs[b.Hash], refName)
+		cHashToRefs[hash.Parse(b[1].(string))] = append(cHashToRefs[hash.Parse(b[1].(string))], refName)
 	}
 
 	// Get all remote branches
-	remotes, err := dEnv.DoltDB.GetRemotesWithHashes(ctx)
+	remotes, err := GetRowsForSql(queryist, sqlCtx, "select name, hash from dolt_remote_branches")
 	if err != nil {
 		return cHashToRefs, fmt.Errorf(color.HiRedString("Fatal error: cannot get Remotes information."))
 	}
 	for _, r := range remotes {
-		refName := r.Ref.String()
-		if decorationLevel != "full" {
+		refName := r[0].(string)
+		/*if decorationLevel != "full" {
 			refName = r.Ref.GetPath() // trim out "refs/remotes/"
-		}
+		}*/
 		refName = fmt.Sprintf("\033[31;1m%s\033[0m", refName) // remote names are bright red (31;1m)
-		cHashToRefs[r.Hash] = append(cHashToRefs[r.Hash], refName)
+		cHashToRefs[hash.Parse(r[1].(string))] = append(cHashToRefs[hash.Parse(r[1].(string))], refName)
 	}
 
 	// Get all tags
-	tags, err := dEnv.DoltDB.GetTagsWithHashes(ctx)
+	tags, err := GetRowsForSql(queryist, sqlCtx, "select tag_name, tag_hash from dolt_tags")
 	if err != nil {
 		return cHashToRefs, fmt.Errorf(color.HiRedString("Fatal error: cannot get Tag information."))
 	}
 	for _, t := range tags {
-		tagName := t.Tag.GetDoltRef().String()
-		if decorationLevel != "full" {
+		tagName := t[0].(string)
+		/*if decorationLevel != "full" {
 			tagName = t.Tag.Name // trim out "refs/tags/"
-		}
+		}*/
 		tagName = fmt.Sprintf("\033[33;1mtag: %s\033[0m", tagName) // tags names are bright yellow (33;1m)
-		cHashToRefs[t.Hash] = append(cHashToRefs[t.Hash], tagName)
+		cHashToRefs[hash.Parse(t[1].(string))] = append(cHashToRefs[hash.Parse(t[1].(string))], tagName)
 	}
 	return cHashToRefs, nil
 }
 
-func logCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) int {
-	hashes := make([]hash.Hash, len(opts.commitSpecs))
-
-	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
-	if err != nil {
-		return handleErrAndExit(err)
-	}
-	for i, cs := range opts.commitSpecs {
-		commit, err := dEnv.DoltDB.Resolve(ctx, cs, headRef)
-		if err != nil {
-			cli.PrintErrln(color.HiRedString("Fatal error: cannot get HEAD commit for current branch."))
-			return 1
-		}
-
-		h, err := commit.HashOf()
-		if err != nil {
-			cli.PrintErrln(color.HiRedString("Fatal error: failed to get commit hash"))
-			return 1
-		}
-
-		hashes[i] = h
-	}
-
-	cHashToRefs, err := getHashToRefs(ctx, dEnv, opts.decoration)
-
-	if err != nil {
-		return handleErrAndExit(err)
-	}
-
-	matchFunc := func(c *doltdb.Commit) (bool, error) {
+func logCommits(opts *logOpts, sqlResult []sql.Row, queryist cli.Queryist, sqlCtx *sql.Context) int {
+	/*matchFunc := func(c *doltdb.Commit) (bool, error) {
 		return c.NumParents() >= opts.minParents, nil
-	}
+	}*/
 
-	var commits []*doltdb.Commit
+	/*var commits []*doltdb.Commit
 	if len(opts.excludingCommitSpecs) == 0 {
 		commits, err = commitwalk.GetTopNTopoOrderedCommitsMatching(ctx, dEnv.DoltDB, hashes, opts.numLines, matchFunc)
 	} else {
@@ -399,34 +384,50 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) int {
 	if err != nil {
 		cli.PrintErrln(err)
 		return 1
+	}*/
+
+	cHashToRefs, err := getHashToRefs(opts.decoration, queryist, sqlCtx)
+	if err != nil {
+		return handleErrAndExit(err)
 	}
 
 	var commitsInfo []logNode
-	for _, comm := range commits {
-		meta, mErr := comm.GetCommitMeta(ctx)
-		if mErr != nil {
-			cli.PrintErrln("error: failed to get commit metadata")
-			return 1
+	for _, row := range sqlResult {
+		name := row[1].(string)
+		email := row[2].(string)
+		timestamp := uint64(row[3].(time.Time).Unix())
+		description := row[4].(string)
+
+		meta := &datas.CommitMeta{
+			Name:          name,
+			Email:         email,
+			Timestamp:     timestamp,
+			Description:   description,
+			UserTimestamp: 0,
 		}
 
-		pHashes, pErr := comm.ParentHashes(ctx)
-		if pErr != nil {
+		parents, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("select parent_hash from dolt_commit_ancestors where commit_hash = '%s'", row[0]))
+		if err != nil {
 			cli.PrintErrln("error: failed to get parent hashes")
-			return 1
+			handleErrAndExit(err)
+		}
+		var pHashes []hash.Hash
+		for _, p := range parents {
+			if p[0] != nil {
+				pHashes = append(pHashes, hash.Parse(p[0].(string)))
+			}
 		}
 
-		cmHash, cErr := comm.HashOf()
-		if cErr != nil {
-			cli.PrintErrln("error: failed to get commit hash")
-			return 1
-		}
+		headResult, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("select @@%s_head", sqlCtx.GetCurrentDatabase()))
+		headHash := headResult[0][0].(string)
+		cmHash := hash.Parse(row[0].(string))
 
 		commitsInfo = append(commitsInfo, logNode{
 			commitMeta:   meta,
 			commitHash:   cmHash,
 			parentHashes: pHashes,
 			branchNames:  cHashToRefs[cmHash],
-			isHead:       cmHash == *cwbHash})
+			isHead:       row[0] == headHash})
 	}
 
 	logToStdOut(opts, commitsInfo)
