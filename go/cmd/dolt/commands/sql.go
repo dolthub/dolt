@@ -180,6 +180,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	globalArgs := cliCtx.GlobalArgs()
 	err = validateSqlArgs(globalArgs)
+
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -202,6 +203,18 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	}
 	if closeFunc != nil {
 		defer closeFunc()
+	}
+
+	if branchName, hasBranch := globalArgs.GetValue(cli.BranchParam); hasBranch{
+		var cmdCheckout CheckoutCmd
+		sqlQuery:= fmt.Sprintf("CALL DOLT_CHECKOUT('--move', \"%s\");",branchName)
+		code, err := cmdCheckout.switchBranch(sqlQuery,queryist,sqlCtx,false,dEnv,branchName)
+		if err!=nil{
+			if msg:=err.Verbose(); strings.TrimSpace(msg)!="" {
+				cli.PrintErrln(msg)
+			}
+			return code
+		}
 	}
 
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {

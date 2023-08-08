@@ -688,7 +688,7 @@ var doc = cli.CommandDocumentationContent{
 	LongDesc:  `Dolt comprises of multiple subcommands that allow users to import, export, update, and manipulate data with SQL.`,
 
 	Synopsis: []string{
-		"<--data-dir=<path>> subcommand <subcommand arguments>",
+		"<--branch=<branch_name>> <--data-dir=<path>> subcommand <subcommand arguments>",
 	},
 }
 

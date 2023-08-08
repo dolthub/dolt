@@ -325,6 +325,7 @@ func CreateGlobalArgParser(name string) *argparser.ArgParser {
 	ap.SupportsString("privilege-file", "", "privilege-file", "DePath to a file to load and store users and grants.")
 	ap.SupportsString("branch-control-file", "", "branch-control-file", "Path to a file to load and store branch control permissions.")
 	ap.SupportsString("use-db", "", "use-db", "The name of the database to use when executing SQL queries.")
+	ap.SupportsString(BranchParam,"",BranchParam,"The name of the branch to be selected")
 	return ap
 }
 

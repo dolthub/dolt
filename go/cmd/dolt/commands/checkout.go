@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 var checkoutDocs = cli.CommandDocumentationContent{
@@ -131,8 +132,16 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usagePrt)
 	}
 
-	rows, err := GetRowsForSql(queryEngine, sqlCtx, sqlQuery)
+	code, verboseError := cmd.switchBranch(sqlQuery, queryEngine, sqlCtx, branchOrTrack, dEnv, branchName)
+	if err!=nil{
+		return HandleVErrAndExitCode(verboseError, usagePrt)
+	}
 
+	return code
+}
+
+func (cmd CheckoutCmd) switchBranch(sqlQuery string,queryEngine cli.Queryist, sqlCtx *sql.Context, branchOrTrack bool, dEnv *env.DoltEnv, branchName string) (int, errhand.VerboseError) {
+	rows, err := GetRowsForSql(queryEngine, sqlCtx, sqlQuery)
 	if err != nil {
 		// In fringe cases the server can't start because the default branch doesn't exist, `dolt checkout <existing branch>`
 		// offers an escape hatch.
@@ -140,47 +149,44 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 			err := saveHeadBranch(dEnv.FS, branchName)
 			if err != nil {
 				cli.PrintErr(err)
-				return 1
+				return 1,nil
 			}
-			return 0
+			return 0,nil
 		}
-		return HandleVErrAndExitCode(handleErrors(branchName, err), usagePrt)
+		return 1, handleErrors(branchName, err)
 	}
 
 	if len(rows) != 1 {
-		return HandleVErrAndExitCode(errhand.BuildDError("expected 1 row response from %s, got %d", sqlQuery, len(rows)).Build(), usagePrt)
+		return 1, errhand.BuildDError("expected 1 row response from %s, got %d", sqlQuery, len(rows)).Build()
 	}
 
 	if len(rows[0]) < 2 {
-		return HandleVErrAndExitCode(errhand.BuildDError("no 'message' field in response from %s", sqlQuery).Build(), usagePrt)
+		return 1, errhand.BuildDError("no 'message' field in response from %s", sqlQuery).Build()
 	}
-
 	var message string
+	var ok bool
 	if message, ok = rows[0][1].(string); !ok {
-		return HandleVErrAndExitCode(errhand.BuildDError("expected string value for 'message' field in response from %s ", sqlQuery).Build(), usagePrt)
+		return 1, errhand.BuildDError("expected string value for 'message' field in response from %s ", sqlQuery).Build()
 	}
-
 	if message != "" {
 		cli.Println(message)
 	}
-
 	if strings.Contains(message, "Switched to branch") {
 		err := saveHeadBranch(dEnv.FS, branchName)
 		if err != nil {
 			cli.PrintErr(err)
-			return 1
+			return 1, nil
 		}
 		// This command doesn't modify `dEnv` which could break tests that call multiple commands in sequence.
 		// We must reload it so that it includes changes to the repo state.
 		err = dEnv.ReloadRepoState()
 		if err != nil {
-			return 1
+			return 1, nil
 		}
 	}
-
-	return 0
+	return 0 ,nil
 }
-
+ 
 // generateCheckoutSql returns the query that will call the `DOLT_CHECKOUT` stored procedure.
 func generateCheckoutSql(args []string) (string, error) {
 	var buffer bytes.Buffer
