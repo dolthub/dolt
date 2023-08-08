@@ -969,8 +969,8 @@ SQL
     [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` < 10))" ]] || false
     dolt commit -am "changes to main"
 
-    run dolt sql -q "call dolt_merge('other', '-m', 'merge other')"
-    run dolt status
+    dolt sql -q "set @@dolt_force_transaction_commit=1; call dolt_merge('other', '-m', 'merge other')"
+    dolt status
     log_status_eq 0
     [[ "$output" =~ "schema conflict:" ]]
     run dolt sql -q "select count(*) from dolt_schema_conflicts"
