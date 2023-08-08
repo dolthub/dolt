@@ -1410,7 +1410,7 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 		return err
 	}
 
-	return inserter.Insert(ctx, sql.Row{fragType, name, definition, extraJSON, sqlMode.AnsiQuotes()})
+	return inserter.Insert(ctx, sql.Row{fragType, name, definition, extraJSON, sqlMode.String()})
 }
 
 func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name string, missingErr error) error {
