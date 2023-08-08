@@ -28,8 +28,8 @@ const (
 	doltRootPathEnvVar = "DOLT_ROOT_PATH"
 	credsDir           = "creds"
 
-	configFile   = "config.json"
-	globalConfig = "config_global.json"
+	configFile       = "config.json"
+	GlobalConfigFile = "config_global.json"
 
 	repoStateFile = "repo_state.json"
 )
@@ -77,7 +77,7 @@ func getGlobalCfgPath(hdp HomeDirProvider) (string, error) {
 		return "", err
 	}
 
-	return filepath.Join(homeDir, dbfactory.DoltDir, globalConfig), nil
+	return filepath.Join(homeDir, dbfactory.DoltDir, GlobalConfigFile), nil
 }
 
 func getLocalConfigPath() string {

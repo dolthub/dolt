@@ -92,6 +92,7 @@ const (
 	DefaultUser           = "root"
 	DefaultHost           = "localhost"
 	UseDbFlag             = "use-db"
+	ProfileFlag           = "profile"
 
 	welcomeMsg = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
