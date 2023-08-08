@@ -905,7 +905,7 @@ SQL
     [[ "$output" =~ "CONSTRAINT \`c1\` CHECK ((\`i\` < 0))" ]] || false
     dolt commit -am "changes to main"
 
-    dolt sql -q "call dolt_merge('other', '-m', 'merge other')"
+    dolt sql -q "set @@dolt_force_transaction_commit=1; call dolt_merge('other', '-m', 'merge other')"
 
     run dolt status
     log_status_eq 0
@@ -1041,7 +1041,7 @@ SQL
     dolt checkout main
     run dolt merge b1 -m "merge b1" --commit
     log_status_eq 0
-    dolt sql -q "call dolt_merge('b2', '-m', 'merge b2')"
+    dolt sql -q "set @@dolt_force_transaction_commit=1; call dolt_merge('b2', '-m', 'merge b2')"
     run dolt status
     log_status_eq 0
     [[ "$output" =~ "schema conflict:" ]]
@@ -1076,7 +1076,7 @@ SQL
     dolt checkout main
     run dolt sql -q "call dolt_merge('b1', '-m', 'merge b1')"
     log_status_eq 0
-    dolt sql -q "call dolt_merge('b2', '-m', 'merge b2')"
+    dolt sql -q "set @@dolt_force_transaction_commit=1; call dolt_merge('b2', '-m', 'merge b2')"
     run dolt status
     log_status_eq 0
     [[ "$output" =~ "schema conflict:" ]]
