@@ -61,7 +61,7 @@ var schemasTableCols = schema.NewColCollection(
 	mustNewColWithTypeInfo(doltdb.SchemasTablesNameCol, schema.DoltSchemasNameTag, typeinfo.CreateVarStringTypeFromSqlType(mustCreateStringType(query.Type_VARCHAR, 64, sql.Collation_utf8mb4_0900_ai_ci)), true, "", false, ""),
 	mustNewColWithTypeInfo(doltdb.SchemasTablesFragmentCol, schema.DoltSchemasFragmentTag, typeinfo.CreateVarStringTypeFromSqlType(gmstypes.LongText), false, "", false, ""),
 	mustNewColWithTypeInfo(doltdb.SchemasTablesExtraCol, schema.DoltSchemasExtraTag, typeinfo.JSONType, false, "", false, ""),
-	mustNewColWithTypeInfo(doltdb.SchemasTablesSqlModeCol, schema.DoltSchemasSqlModeTag, typeinfo.BoolType, false, "false", false, ""),
+	mustNewColWithTypeInfo(doltdb.SchemasTablesSqlModeCol, schema.DoltSchemasSqlModeTag, typeinfo.CreateVarStringTypeFromSqlType(mustCreateStringType(query.Type_VARCHAR, 256, sql.Collation_utf8mb4_0900_ai_ci)), false, "false", false, ""),
 )
 
 var schemaTableSchema = schema.MustSchemaFromCols(schemasTableCols)

@@ -59,7 +59,7 @@ func ProceduresTableSchema() schema.Schema {
 		schema.NewColumn(doltdb.ProceduresTableCreateStmtCol, schema.DoltProceduresCreateStmtTag, types.StringKind, false),
 		schema.NewColumn(doltdb.ProceduresTableCreatedAtCol, schema.DoltProceduresCreatedAtTag, types.TimestampKind, false),
 		schema.NewColumn(doltdb.ProceduresTableModifiedAtCol, schema.DoltProceduresModifiedAtTag, types.TimestampKind, false),
-		schema.NewColumn(doltdb.ProceduresTableSqlModeCol, schema.DoltProceduresSqlModeTag, types.BoolKind, false),
+		schema.NewColumn(doltdb.ProceduresTableSqlModeCol, schema.DoltProceduresSqlModeTag, types.StringKind, false),
 	)
 	return schema.MustSchemaFromCols(colColl)
 }
