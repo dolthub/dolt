@@ -80,8 +80,8 @@ func TestSchemaTableMigrationOriginal(t *testing.T) {
 
 	require.NoError(t, iter.Close(ctx))
 	expectedRows := []sql.Row{
-		{"view", "view1", "SELECT v1 FROM test;", nil},
-		{"view", "view2", "SELECT v2 FROM test;", nil},
+		{"view", "view1", "SELECT v1 FROM test;", nil, nil},
+		{"view", "view2", "SELECT v2 FROM test;", nil, nil},
 	}
 
 	assert.Equal(t, expectedRows, rows)
@@ -159,8 +159,8 @@ func TestSchemaTableMigrationV1(t *testing.T) {
 	require.NoError(t, iter.Close(ctx))
 
 	expectedRows := []sql.Row{
-		{"view", "view1", "SELECT v1 FROM test;", `{"extra":"data"}`},
-		{"view", "view2", "SELECT v2 FROM test;", nil},
+		{"view", "view1", "SELECT v1 FROM test;", `{"extra":"data"}`, nil},
+		{"view", "view2", "SELECT v2 FROM test;", nil, nil},
 	}
 
 	assert.Equal(t, expectedRows, rows)
