@@ -970,12 +970,12 @@ SQL
     dolt commit -am "changes to main"
 
     dolt sql -q "set @@dolt_force_transaction_commit=1; call dolt_merge('other', '-m', 'merge other')"
-    dolt status
+    run dolt status
     log_status_eq 0
-    [[ "$output" =~ "schema conflict:" ]]
+    [[ "$output" =~ "schema conflict:" ]] || false
     run dolt sql -q "select count(*) from dolt_schema_conflicts"
     log_status_eq 0
-    [[ "$output" =~ "1" ]]
+    [[ "$output" =~ "1" ]] || false
     dolt sql -q "call dolt_conflicts_resolve('--ours', 't')"
     run dolt sql -q "show create table t"
     log_status_eq 0
