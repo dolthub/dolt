@@ -101,9 +101,10 @@ func DoltProceduresGetOrCreateTable(ctx *sql.Context, db Database) (*WritableDol
 	return tbl.(*WritableDoltTable), nil
 }
 
-// TODO: godocs
-// TODO: what's the best way to test this? backwards compat test suite?
+// migrateDoltProceduresSchema migrates the dolt_procedures system table from a previous schema version to the current
+// schema version by adding any columns that do not exist.
 func migrateDoltProceduresSchema(ctx *sql.Context, db Database, oldTable *WritableDoltTable) (newTable *WritableDoltTable, rerr error) {
+	// TODO: what's the best way to test this? backwards compat test suite?
 	// Copy all the old data
 	iter, err := SqlTableToRowIter(ctx, oldTable.DoltTable, nil)
 	if err != nil {
