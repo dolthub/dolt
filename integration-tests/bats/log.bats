@@ -439,7 +439,7 @@ teardown() {
     [[ "$output" =~ "Commit3" ]] || false
     [[ ! "$output" =~ "Initialize data repository" ]] || false
     [[ ! "$output" =~ "Merge:" ]] || false
-    [[ ! "$output" =~ "Commit2" ]]
+    [[ ! "$output" =~ "Commit2" ]] || false
 
     dolt add test
     dolt commit -m "MergeCommit"

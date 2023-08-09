@@ -39,8 +39,9 @@ import (
 var profileDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Manage dolt profiles for CLI global options.",
 	LongDesc: `With no arguments, shows a list of existing profiles. Two subcommands are available to perform operations on the profiles.
+
 {{.EmphasisLeft}}add{{.EmphasisRight}}
-Adds a profile named {{.LessThan}}name{{.GreaterThan}}. If the profile already exists, it will be overwritten.
+Adds a profile named {{.LessThan}}name{{.GreaterThan}}. Returns an error if the profile already exists.
 
 {{.EmphasisLeft}}remove{{.EmphasisRight}}, {{.EmphasisLeft}}rm{{.EmphasisRight}}
 Remove the profile named {{.LessThan}}name{{.GreaterThan}}.`,

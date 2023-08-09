@@ -96,7 +96,7 @@ teardown() {
     echo '{"sqlserver.global.unknown":"1000"}' > .dolt/config.json
     run dolt sql -q "SELECT @@GLOBAL.unknown" -r csv
     [ "$status" -eq 1 ]
-    [[ ! "$output" =~ "panic" ]]
+    [[ ! "$output" =~ "panic" ]] || false
     [[ "$output" =~ "Unknown system variable 'unknown'" ]] || false
 }
 
@@ -104,8 +104,8 @@ teardown() {
     echo '{"sqlserver.global.max_connections":"string"}' > .dolt/config.json
     run dolt sql -q "SELECT @@GLOBAL.max_connections" -r csv
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "panic" ]]
+    [[ ! "$output" =~ "panic" ]] || false
     [[ "$output" =~ "failed to load persisted global variables: key: 'max_connections'" ]] || false
     [[ "$output" =~ "invalid syntax" ]] || false
-    [[ "$output" =~ "151" ]]
+    [[ "$output" =~ "151" ]] || false
 }
