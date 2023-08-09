@@ -45,7 +45,7 @@ teardown() {
     # default user is root
     run dolt sql -q "select user from mysql.user"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "root" ]]
+    [[ "$output" =~ "root" ]] || false
 
     # create user
     run dolt sql -q "create user new_user@'localhost'"

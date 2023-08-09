@@ -65,13 +65,13 @@ teardown() {
 
   run dolt conflicts cat one_pk
   [ "$status" -eq 0 ]
-  [[ ! "$output" =~ "base" ]]
+  [[ ! "$output" =~ "base" ]] || false
   [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+ours[[:space:]] ]] || false
   [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+theirs[[:space:]] ]] || false
 
   run dolt conflicts cat two_pk
   [ "$status" -eq 0 ]
-  [[ ! "$output" =~ "base" ]]
+  [[ ! "$output" =~ "base" ]] || false
   [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+ours[[:space:]] ]] || false
   [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+theirs[[:space:]] ]] || false
 
@@ -127,13 +127,13 @@ SQL
 
   run dolt conflicts cat one_pk
   [ "$status" -eq 0 ]
-  [[ "$output" =~ "base" ]]
+  [[ "$output" =~ "base" ]] || false
   [[ "$output" =~ \*[[:space:]]*\|[[:space:]]+ours[[:space:]] ]] || false
   [[ "$output" =~ \*[[:space:]]*\|[[:space:]]+theirs[[:space:]] ]] || false
 
   run dolt conflicts cat two_pk
   [ "$status" -eq 0 ]
-  [[ "$output" =~ "base" ]]
+  [[ "$output" =~ "base" ]] || false
   [[ "$output" =~ \*[[:space:]]*\|[[:space:]]+ours[[:space:]] ]] || false
   [[ "$output" =~ \*[[:space:]]*\|[[:space:]]+theirs[[:space:]] ]] || false
 
@@ -185,13 +185,13 @@ SQL
 
   run dolt conflicts cat one_pk
   [ "$status" -eq 0 ]
-  [[ "$output" =~ "base" ]]
+  [[ "$output" =~ "base" ]] || false
   [[ "$output" =~ \*[[:space:]]*\|[[:space:]]+ours[[:space:]] ]] || false
   [[ "$output" =~ \-[[:space:]]*\|[[:space:]]+theirs[[:space:]] ]] || false
 
   run dolt conflicts cat two_pk
   [ "$status" -eq 0 ]
-  [[ "$output" =~ "base" ]]
+  [[ "$output" =~ "base" ]] || false
   [[ "$output" =~ \*[[:space:]]*\|[[:space:]]+ours[[:space:]] ]] || false
   [[ "$output" =~ \-[[:space:]]*\|[[:space:]]+theirs[[:space:]] ]] || false
 

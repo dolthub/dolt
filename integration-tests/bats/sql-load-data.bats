@@ -574,7 +574,7 @@ fields terminated by ','
 lines terminated by '\n'
 SQL
     [ $status -eq 1 ]
-    [[ $output =~ "LOCAL supported only in sql-server mode" ]]
+    [[ $output =~ "LOCAL supported only in sql-server mode" ]] || false
 
     start_sql_server 
 
@@ -584,7 +584,7 @@ fields terminated by ','
 lines terminated by '\n'
 "
     [ $status -ne 0 ]
-    [[ $output =~ "local_infile needs to be set to 1 to use LOCAL" ]]
+    [[ $output =~ "local_infile needs to be set to 1 to use LOCAL" ]] || false
 
     # This should work but does not because of dolt sql-client
     # mysql -e works locally
