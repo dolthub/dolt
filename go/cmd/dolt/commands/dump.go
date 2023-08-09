@@ -293,11 +293,8 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.
 			}
 		}
 
-		if sqlMode != "" {
-			err = iohelp.WriteLine(writer, fmt.Sprintf("SET @@SQL_MODE='%s';", sqlMode))
-			if err != nil {
-				return err
-			}
+		if err := changeSqlMode(writer, sqlMode); err != nil {
+			return err
 		}
 
 		err = iohelp.WriteLine(writer, "delimiter END_PROCEDURE")
@@ -312,6 +309,10 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.
 
 		err = iohelp.WriteLine(writer, "END_PROCEDURE\ndelimiter ;")
 		if err != nil {
+			return err
+		}
+
+		if err := resetSqlMode(writer); err != nil {
 			return err
 		}
 	}
@@ -362,17 +363,16 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.Ro
 			sqlMode = s
 		}
 
-		// TODO: helper functions?
-		// TODO: Need to clean up how we set SQL_MODE in the output dump file
-		if sqlMode != "" {
-			err = iohelp.WriteLine(writer, fmt.Sprintf("SET @@SQL_MODE='%s';", sqlMode))
-			if err != nil {
-				return err
-			}
+		if err := changeSqlMode(writer, sqlMode); err != nil {
+			return err
 		}
 
 		err = iohelp.WriteLine(writer, fmt.Sprintf("%s;", row[fragColIdx]))
 		if err != nil {
+			return err
+		}
+
+		if err := resetSqlMode(writer); err != nil {
 			return err
 		}
 	}
@@ -430,15 +430,8 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValu
 			return err
 		}
 
-		if sqlMode != "" {
-			err := iohelp.WriteLine(writer, "SET @previousSqlMode=@@SQL_MODE;")
-			if err != nil {
-				return err
-			}
-			err = iohelp.WriteLine(writer, fmt.Sprintf("SET @@SQL_MODE='%s';", sqlMode))
-			if err != nil {
-				return err
-			}
+		if err := changeSqlMode(writer, sqlMode); err != nil {
+			return err
 		}
 
 		_, ok := cv.(*plan.CreateView)
@@ -454,15 +447,34 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValu
 			}
 		}
 
-		if sqlMode != "" {
-			err := iohelp.WriteLine(writer, "SET @@SQL_MODE=@previousSqlMode;")
-			if err != nil {
-				return err
-			}
+		if err := resetSqlMode(writer); err != nil {
+			return err
 		}
 	}
 
 	return nil
+}
+
+// changeSqlMode outputs a SQL statement to |writer| to save the current @@SQL_MODE to a
+// variable and then outputs a SQL statement to set the @@SQL_MODE to |sqlMode|.
+func changeSqlMode(writer io.WriteCloser, sqlMode string) error {
+	if sqlMode == "" {
+		return nil
+	}
+
+	err := iohelp.WriteLine(writer, "SET @previousSqlMode=@@SQL_MODE;")
+	if err != nil {
+		return err
+	}
+
+	err = iohelp.WriteLine(writer, fmt.Sprintf("SET @@SQL_MODE='%s';", sqlMode))
+	return err
+}
+
+// resetSqlMode outputs a SQL statement to |writer| to reset @@SQL_MODE back to the
+// previous value stored by the last call to changeSqlMode.
+func resetSqlMode(writer io.WriteCloser) error {
+	return iohelp.WriteLine(writer, "SET @@SQL_MODE=@previousSqlMode;")
 }
 
 type dumpOptions struct {
