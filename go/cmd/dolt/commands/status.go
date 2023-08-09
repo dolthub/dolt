@@ -166,7 +166,7 @@ func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, show
 		return nil, err
 	}
 
-	statusRows, err := GetRowsForSql(queryist, sqlCtx, "select * from dolt_status;")
+	statusRows, err := GetRowsForSql(queryist, sqlCtx, "select table_name,staged,status from dolt_status;")
 	if err != nil {
 		return nil, err
 	}
