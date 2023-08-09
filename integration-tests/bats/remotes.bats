@@ -1086,7 +1086,7 @@ SQL
     dolt commit -m "conflicting row"
     run dolt pull origin
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "CONFLICT" ]]
+    [[ "$output" =~ "CONFLICT" ]] || false
     dolt conflicts resolve test --ours
     dolt add test
     dolt commit -m "Fixed conflicts"
@@ -1843,7 +1843,7 @@ setup_ref_test() {
     dolt fetch rem1
     dolt checkout other
     run dolt log
-    [[ "$output" =~ "adding table from other" ]]
+    [[ "$output" =~ "adding table from other" ]] || false
 }
 
 @test "remotes: dolt_remote uses the right db directory in a multidb env" {

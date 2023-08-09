@@ -909,10 +909,10 @@ SQL
 
     run dolt status
     log_status_eq 0
-    [[ "$output" =~ "schema conflict:" ]]
+    [[ "$output" =~ "schema conflict:" ]] || false
     run dolt sql -q "select count(*) from dolt_schema_conflicts"
     log_status_eq 0
-    [[ "$output" =~ "1" ]]
+    [[ "$output" =~ "1" ]] || false
     dolt sql -q "call dolt_conflicts_resolve('--ours', 't')"
     dolt sql -q "show create table t"
     run dolt sql -q "show create table t"
@@ -972,10 +972,10 @@ SQL
     run dolt sql -q "call dolt_merge('other', '-m', 'merge other')"
     run dolt status
     log_status_eq 0
-    [[ "$output" =~ "schema conflict:" ]]
+    [[ "$output" =~ "schema conflict:" ]] || false
     run dolt sql -q "select count(*) from dolt_schema_conflicts"
     log_status_eq 0
-    [[ "$output" =~ "1" ]]
+    [[ "$output" =~ "1" ]] || false
     dolt sql -q "call dolt_conflicts_resolve('--ours', 't')"
     run dolt sql -q "show create table t"
     log_status_eq 0
@@ -1044,10 +1044,10 @@ SQL
     dolt sql -q "call dolt_merge('b2', '-m', 'merge b2')"
     run dolt status
     log_status_eq 0
-    [[ "$output" =~ "schema conflict:" ]]
+    [[ "$output" =~ "schema conflict:" ]] || false
     run dolt sql -q "select count(*) from dolt_schema_conflicts"
     log_status_eq 0
-    [[ "$output" =~ "1" ]]
+    [[ "$output" =~ "1" ]] || false
     dolt sql -q "call dolt_conflicts_resolve('--ours', 't')"
     run dolt sql -q "show create table t"
     log_status_eq 0
@@ -1079,10 +1079,10 @@ SQL
     dolt sql -q "call dolt_merge('b2', '-m', 'merge b2')"
     run dolt status
     log_status_eq 0
-    [[ "$output" =~ "schema conflict:" ]]
+    [[ "$output" =~ "schema conflict:" ]] || false
     run dolt sql -q "select count(*) from dolt_schema_conflicts"
     log_status_eq 0
-    [[ "$output" =~ "1" ]]
+    [[ "$output" =~ "1" ]] || false
     dolt sql -q "call dolt_conflicts_resolve('--ours', 't')"
     run dolt sql -q "show create table t"
     log_status_eq 0

@@ -2858,8 +2858,8 @@ CALL DOLT_CHECKOUT('main');
 SQL
     run dolt merge right
     log_status_eq 0
-    [[ $output =~ "CONSTRAINT VIOLATION (content): Merge created constraint violation in t" ]]
-    [[ $output =~ "Automatic merge failed; 1 table(s) are unmerged." ]]
+    [[ $output =~ "CONSTRAINT VIOLATION (content): Merge created constraint violation in t" ]] || false
+    [[ $output =~ "Automatic merge failed; 1 table(s) are unmerged." ]] || false
 }
 
 @test "constraint-violations: altering FKs over PKs does not create bad index" {
