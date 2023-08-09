@@ -190,7 +190,7 @@ var tblDiffTypeToShortLabel = map[diff.TableDiffType]string{
 
 func printNotStaged(sqlCtx *sql.Context, queryist cli.Queryist) {
 	// Printing here is best effort.  Fail silently
-	schema, rowIter, err := queryist.Query(sqlCtx, "select * from dolt_status where staged = false")
+	schema, rowIter, err := queryist.Query(sqlCtx, "select table_name,status from dolt_status where staged = false")
 	if err != nil {
 		return
 	}
@@ -204,7 +204,7 @@ func printNotStaged(sqlCtx *sql.Context, queryist cli.Queryist) {
 
 	removeModified := 0
 	for _, row := range rows {
-		if row[2] != "new table" {
+		if row[1] != "new table" {
 			removeModified++
 		}
 	}
@@ -214,12 +214,12 @@ func printNotStaged(sqlCtx *sql.Context, queryist cli.Queryist) {
 
 		var lines []string
 		for _, row := range rows {
-			if row[2] == "new table" {
+			if row[1] == "new table" {
 				//  per Git, unstaged new tables are untracked
 				continue
-			} else if row[2] == "deleted" {
+			} else if row[1] == "deleted" {
 				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[diff.RemovedTable], row[0]))
-			} else if row[2] == "renamed" {
+			} else if row[1] == "renamed" {
 				// per Git, unstaged renames are shown as drop + add
 				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[diff.RemovedTable], row[0]))
 			} else {
