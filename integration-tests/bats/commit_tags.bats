@@ -89,8 +89,8 @@ teardown() {
     dolt tag v1 HEAD^
     run dolt diff v1
     [ $status -eq 0 ]
-    [[ "$output" =~ "- | 0" ]]
-    [[ "$output" =~ "+ | 3" ]]
+    [[ "$output" =~ "- | 0" ]] || false
+    [[ "$output" =~ "+ | 3" ]] || false
 }
 
 @test "commit_tags: use a tag as a ref for merge" {
@@ -106,11 +106,11 @@ teardown() {
     [ $status -eq 0 ]
     run dolt sql -q "select * from test"
     [ $status -eq 0 ]
-    [[ "$output" =~ "1" ]]
-    [[ "$output" =~ "2" ]]
-    [[ "$output" =~ "3" ]]
-    [[ "$output" =~ "8" ]]
-    [[ "$output" =~ "9" ]]
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2" ]] || false
+    [[ "$output" =~ "3" ]] || false
+    [[ "$output" =~ "8" ]] || false
+    [[ "$output" =~ "9" ]] || false
 }
 
 @test "commit_tags: push/pull tags to/from a remote" {
