@@ -882,12 +882,22 @@ SQL
     [ -f doltdump.sql ]
     cp doltdump.sql ~/doltdump.sql
 
-    # TODO: Would be good to make sure we can roundtrip it, but we won't be able
-    #       to without SQL_MODE set to ANSI_QUOTES
-    # TODO: Need to clean up setting SQL_MODE in dump file;
-    #       How does MySQL do this? If we could just normalize the query
-    #       or fragment to non-ANSI_QUOTES, then everything would be so
-    #       much easier!
+    mkdir roundtrip
+    cd roundtrip
+    dolt init
+
+    dolt sql < ../doltdump.sql
+    [ $status -eq 0 ]
+
+    run dolt sql -q "USE dolt_repo_$$; SHOW TABLES;"
+    [ $status -eq 0 ]
+    [[ $output =~ "table1" ]] || false
+    [[ $output =~ "view1" ]] || false
+
+    run dolt sql -r csv -q "USE dolt_repo_$$; CALL procedure1;"
+    [ $status -eq 0 ]
+    [[ $output =~ "pk,col1" ]] || false
+    [[ $output =~ "2,1" ]] || false
 }
 
 @test "dump: round trip dolt dump with all data types" {
