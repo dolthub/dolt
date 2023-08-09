@@ -29,7 +29,7 @@ setup_schema_conflict() {
 @test "schema-conflicts: sql merge, query schema conflicts" {
     setup_schema_conflict
 
-    dolt sql -q "call dolt_merge('other')"
+    dolt sql -q "set @@dolt_force_transaction_commit=1; call dolt_merge('other')"
 
     run dolt sql -q "select our_schema from dolt_schema_conflicts" -r csv
     [ "$status" -eq 0 ]
