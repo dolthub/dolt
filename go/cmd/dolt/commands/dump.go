@@ -293,7 +293,8 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.
 			}
 		}
 
-		if err := changeSqlMode(writer, sqlMode); err != nil {
+		modeChanged, err := changeSqlMode(sqlCtx, writer, sqlMode)
+		if err != nil {
 			return err
 		}
 
@@ -312,8 +313,10 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.
 			return err
 		}
 
-		if err := resetSqlMode(writer); err != nil {
-			return err
+		if modeChanged {
+			if err := resetSqlMode(writer); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -363,7 +366,8 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.Ro
 			sqlMode = s
 		}
 
-		if err := changeSqlMode(writer, sqlMode); err != nil {
+		modeChanged, err := changeSqlMode(sqlCtx, writer, sqlMode)
+		if err != nil {
 			return err
 		}
 
@@ -372,8 +376,10 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.Ro
 			return err
 		}
 
-		if err := resetSqlMode(writer); err != nil {
-			return err
+		if modeChanged {
+			if err := resetSqlMode(writer); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -430,7 +436,8 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValu
 			return err
 		}
 
-		if err := changeSqlMode(writer, sqlMode); err != nil {
+		modeChanged, err := changeSqlMode(ctx, writer, sqlMode)
+		if err != nil {
 			return err
 		}
 
@@ -447,32 +454,55 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValu
 			}
 		}
 
-		if err := resetSqlMode(writer); err != nil {
-			return err
+		if modeChanged {
+			if err := resetSqlMode(writer); err != nil {
+				return err
+			}
 		}
 	}
 
 	return nil
 }
 
-// changeSqlMode outputs a SQL statement to |writer| to save the current @@SQL_MODE to a
-// variable and then outputs a SQL statement to set the @@SQL_MODE to |sqlMode|.
-func changeSqlMode(writer io.WriteCloser, sqlMode string) error {
-	if sqlMode == "" {
-		return nil
+// changeSqlMode checks if the current SQL session's @@SQL_MODE is different from the requested |newSqlMode| and if so,
+// outputs a SQL statement to |writer| to save the current @@SQL_MODE to the @previousSqlMode variable and then outputs
+// a SQL statement to set the @@SQL_MODE to |sqlMode|. If |newSqlMode| is the identical to the current session's
+// SQL_MODE (the default, global @@SQL_MODE), then no statements are written to |writer|. The boolean return code
+// indicates if any statements were written.
+func changeSqlMode(ctx *sql.Context, writer io.WriteCloser, newSqlMode string) (bool, error) {
+	if newSqlMode == "" {
+		return false, nil
 	}
 
-	err := iohelp.WriteLine(writer, "SET @previousSqlMode=@@SQL_MODE;")
+	variable, err := ctx.Session.GetSessionVariable(ctx, "SQL_MODE")
 	if err != nil {
-		return err
+		return false, err
+	}
+	currentSqlMode, ok := variable.(string)
+	if !ok {
+		return false, fmt.Errorf("unable to read @@SQL_MODE system variable from value '%v'", currentSqlMode)
 	}
 
-	err = iohelp.WriteLine(writer, fmt.Sprintf("SET @@SQL_MODE='%s';", sqlMode))
-	return err
+	if currentSqlMode == newSqlMode {
+		return false, nil
+	}
+
+	err = iohelp.WriteLine(writer, "SET @previousSqlMode=@@SQL_MODE;")
+	if err != nil {
+		return false, err
+	}
+
+	err = iohelp.WriteLine(writer, fmt.Sprintf("SET @@SQL_MODE='%s';", newSqlMode))
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
-// resetSqlMode outputs a SQL statement to |writer| to reset @@SQL_MODE back to the
-// previous value stored by the last call to changeSqlMode.
+// resetSqlMode outputs a SQL statement to |writer| to reset @@SQL_MODE back to the previous value stored
+// by the last call to changeSqlMode. This function should only be called after changeSqlMode, otherwise the
+// @previousSqlMode variable will not be set correctly.
 func resetSqlMode(writer io.WriteCloser) error {
 	return iohelp.WriteLine(writer, "SET @@SQL_MODE=@previousSqlMode;")
 }
