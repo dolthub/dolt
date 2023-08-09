@@ -36,7 +36,8 @@ func GenerateCreateTableIndentedColumnDefinition(col schema.Column) string {
 
 // GenerateCreateTableIndexDefinition returns index definition for CREATE TABLE statement with indentation of 2 spaces
 func GenerateCreateTableIndexDefinition(index schema.Index) string {
-	return sql.GenerateCreateTableIndexDefinition(index.IsUnique(), index.IsSpatial(), index.Name(), sql.QuoteIdentifiers(index.ColumnNames()), index.Comment())
+	return sql.GenerateCreateTableIndexDefinition(index.IsUnique(), index.IsSpatial(), index.IsFullText(), index.Name(),
+		sql.QuoteIdentifiers(index.ColumnNames()), index.Comment())
 }
 
 // GenerateCreateTableForeignKeyDefinition returns foreign key definition for CREATE TABLE statement with indentation of 2 spaces
@@ -48,9 +49,7 @@ func GenerateCreateTableForeignKeyDefinition(fk doltdb.ForeignKey, sch, parentSc
 			fkCols = append(fkCols, c.Name)
 		}
 	} else {
-		for _, col := range fk.UnresolvedFKDetails.TableColumns {
-			fkCols = append(fkCols, col)
-		}
+		fkCols = append(fkCols, fk.UnresolvedFKDetails.TableColumns...)
 	}
 
 	var parentCols []string
@@ -60,9 +59,7 @@ func GenerateCreateTableForeignKeyDefinition(fk doltdb.ForeignKey, sch, parentSc
 			parentCols = append(parentCols, c.Name)
 		}
 	} else {
-		for _, col := range fk.UnresolvedFKDetails.ReferencedTableColumns {
-			parentCols = append(parentCols, col)
-		}
+		parentCols = append(parentCols, fk.UnresolvedFKDetails.ReferencedTableColumns...)
 	}
 
 	onDelete := ""
@@ -148,17 +145,17 @@ func AlterTableDropPks(tableName string) string {
 	return b.String()
 }
 
-func AlterTableAddPrimaryKeys(tableName string, pks *schema.ColCollection) string {
+func AlterTableAddPrimaryKeys(tableName string, pkColNames []string) string {
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")
 	b.WriteString(QuoteIdentifier(tableName))
 	b.WriteString(" ADD PRIMARY KEY (")
 
-	for i := 0; i < pks.Size(); i++ {
+	for i := 0; i < len(pkColNames); i++ {
 		if i == 0 {
-			b.WriteString(pks.GetByIndex(i).Name)
+			b.WriteString(pkColNames[i])
 		} else {
-			b.WriteString("," + pks.GetByIndex(i).Name)
+			b.WriteString("," + pkColNames[i])
 		}
 	}
 	b.WriteRune(')')
@@ -201,6 +198,15 @@ func AlterTableDropIndexStmt(tableName string, idx schema.Index) string {
 	return b.String()
 }
 
+func AlterTableCollateStmt(tableName string, fromCollation, toCollation schema.Collation) string {
+	var b strings.Builder
+	b.WriteString("ALTER TABLE ")
+	b.WriteString(QuoteIdentifier(tableName))
+	toCollationId := sql.CollationID(toCollation)
+	b.WriteString(" COLLATE=" + QuoteComment(toCollationId.Name()) + ";")
+	return b.String()
+}
+
 func AlterTableAddForeignKeyStmt(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")
@@ -225,12 +231,12 @@ func AlterTableAddForeignKeyStmt(fk doltdb.ForeignKey, sch, parentSch schema.Sch
 	return b.String()
 }
 
-func AlterTableDropForeignKeyStmt(fk doltdb.ForeignKey) string {
+func AlterTableDropForeignKeyStmt(tableName, fkName string) string {
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")
-	b.WriteString(QuoteIdentifier(fk.TableName))
+	b.WriteString(QuoteIdentifier(tableName))
 	b.WriteString(" DROP FOREIGN KEY ")
-	b.WriteString(QuoteIdentifier(fk.Name))
+	b.WriteString(QuoteIdentifier(fkName))
 	b.WriteRune(';')
 	return b.String()
 }

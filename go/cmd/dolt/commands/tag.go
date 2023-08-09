@@ -16,19 +16,30 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/datas"
 )
+
+type tagInfo struct {
+	Name      string
+	Hash      string
+	Tagger    string
+	Email     string
+	Timestamp uint64
+	Message   string
+}
 
 var tagDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Create, list, delete tags.`,
@@ -76,117 +87,149 @@ func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, tagDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		return handleStatusVErr(err)
+	}
+	if closeFunc != nil {
+		defer closeFunc()
+	}
+
 	// list tags
 	if len(apr.Args) == 0 {
-		var verr errhand.VerboseError
-		if apr.Contains(cli.DeleteFlag) {
-			verr = errhand.BuildDError("must specify a tag name to delete").Build()
-		} else if apr.Contains(cli.MessageArg) {
-			verr = errhand.BuildDError("must specify a tag name to create").Build()
-		} else {
-			verr = listTags(ctx, dEnv, apr)
-		}
-		return HandleVErrAndExitCode(verr, usage)
+		err = listTags(queryist, sqlCtx, apr)
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
 	// delete tag
 	if apr.Contains(cli.DeleteFlag) {
-		var verr errhand.VerboseError
-		if apr.Contains(cli.MessageArg) {
-			verr = errhand.BuildDError("delete and tag message options are incompatible").Build()
-		} else if apr.Contains(cli.VerboseFlag) {
-			verr = errhand.BuildDError("delete and verbose options are incompatible").Build()
-		} else {
-			err := actions.DeleteTags(ctx, dEnv, apr.Args...)
-			if err != nil {
-				verr = errhand.BuildDError("failed to delete tags").AddCause(err).Build()
-			}
-		}
-		return HandleVErrAndExitCode(verr, usage)
+		err = deleteTags(queryist, sqlCtx, apr)
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
 	// create tag
-	var verr errhand.VerboseError
+	err = createTag(queryist, sqlCtx, apr)
+	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+}
+
+func createTag(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseResults) error {
 	if apr.Contains(cli.VerboseFlag) {
-		verr = errhand.BuildDError("verbose flag can only be used with tag listing").Build()
+		return errors.New("verbose flag can only be used with tag listing")
 	} else if len(apr.Args) > 2 {
-		verr = errhand.BuildDError("create tag takes at most two args").Build()
+		return errors.New("create tag takes at most two args")
+	}
+
+	tagName := apr.Arg(0)
+	startPoint := "head"
+	if len(apr.Args) > 1 {
+		startPoint = apr.Arg(1)
+	}
+	message, _ := apr.GetValue(cli.MessageArg)
+	author, _ := apr.GetValue(cli.AuthorParam)
+
+	var query string
+	var params []interface{}
+	if len(message) == 0 {
+		if len(author) == 0 {
+			query = "call dolt_tag(?, ?)"
+			params = []interface{}{tagName, startPoint}
+		} else {
+			query = "call dolt_tag(?, ?, '--author', ?)"
+			params = []interface{}{tagName, startPoint, author}
+		}
 	} else {
-		props, err := getTagProps(dEnv, apr)
-		if err != nil {
-			verr = errhand.BuildDError("failed to get tag props").AddCause(err).Build()
-			return HandleVErrAndExitCode(verr, usage)
-		}
-		tagName := apr.Arg(0)
-		startPoint := "head"
-		if len(apr.Args) > 1 {
-			startPoint = apr.Arg(1)
-		}
-		err = actions.CreateTag(ctx, dEnv, tagName, startPoint, props)
-		if err != nil {
-			verr = errhand.BuildDError("failed to create tag").AddCause(err).Build()
+		if len(author) == 0 {
+			query = "call dolt_tag('-m', ?, ?, ?)"
+			params = []interface{}{message, tagName, startPoint}
+		} else {
+			query = "call dolt_tag('-m', ?, ?, ?, '--author', ?)"
+			params = []interface{}{message, tagName, startPoint, author}
 		}
 	}
 
-	return HandleVErrAndExitCode(verr, usage)
-}
-
-func getTagProps(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (props actions.TagProps, err error) {
-	var name, email string
-	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParseAuthor(authorStr)
-	} else {
-		name, email, err = env.GetNameAndEmail(dEnv.Config)
-	}
+	_, err := InterpolateAndRunQuery(queryist, sqlCtx, query, params...)
 	if err != nil {
-		return props, err
+		return fmt.Errorf("error: failed to create tag %s: %w", tagName, err)
 	}
-
-	msg, _ := apr.GetValue(cli.MessageArg)
-
-	props = actions.TagProps{
-		TaggerName:  name,
-		TaggerEmail: email,
-		Description: msg,
-	}
-
-	return props, nil
+	return nil
 }
 
-func listTags(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
-	var err error
-	if apr.Contains(cli.VerboseFlag) {
-		err = actions.IterResolvedTags(ctx, dEnv.DoltDB, func(tag *doltdb.Tag) (bool, error) {
+func deleteTags(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseResults) error {
+	if apr.Contains(cli.MessageArg) {
+		return errors.New("delete and tag message options are incompatible")
+	} else if apr.Contains(cli.VerboseFlag) {
+		return errors.New("delete and verbose options are incompatible")
+	} else {
+		for _, tagName := range apr.Args {
+			_, err := InterpolateAndRunQuery(queryist, sqlCtx, "call dolt_tag('-d', ?)", tagName)
+			if err != nil {
+				return fmt.Errorf("error: failed to delete tag %s: %w", tagName, err)
+			}
+		}
+	}
+	return nil
+}
+
+func listTags(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseResults) error {
+	if apr.Contains(cli.DeleteFlag) {
+		return errors.New("must specify a tag name to delete")
+	} else if apr.Contains(cli.MessageArg) {
+		return errors.New("must specify a tag name to create")
+	}
+
+	tagInfos, err := getTagInfos(queryist, sqlCtx)
+	if err != nil {
+		return fmt.Errorf("error: failed to list tags: %w", err)
+	}
+
+	for _, tag := range tagInfos {
+		if apr.Contains(cli.VerboseFlag) {
 			verboseTagPrint(tag)
-			return false, nil
-		})
-	} else {
-		err = actions.IterResolvedTags(ctx, dEnv.DoltDB, func(tag *doltdb.Tag) (bool, error) {
+		} else {
 			cli.Println(fmt.Sprintf("\t%s", tag.Name))
-			return false, nil
-		})
-	}
-
-	if err != nil {
-		return errhand.BuildDError("error listing tags").AddCause(err).Build()
+		}
 	}
 
 	return nil
 }
 
-func verboseTagPrint(tag *doltdb.Tag) {
-	h, _ := tag.Commit.HashOf()
+func verboseTagPrint(tag tagInfo) {
+	cli.Println(color.YellowString("%s\t%s", tag.Name, tag.Hash))
 
-	cli.Println(color.YellowString("%s\t%s", tag.Name, h.String()))
+	cli.Printf("Tagger: %s <%s>\n", tag.Tagger, tag.Email)
 
-	cli.Printf("Tagger: %s <%s>\n", tag.Meta.Name, tag.Meta.Email)
-
-	timeStr := tag.Meta.FormatTS()
+	timeStr := time.UnixMilli(int64(tag.Timestamp)).In(datas.CommitLoc).Format(time.RubyDate)
 	cli.Println("Date:  ", timeStr)
 
-	if tag.Meta.Description != "" {
-		formattedDesc := "\n\t" + strings.Replace(tag.Meta.Description, "\n", "\n\t", -1)
+	if tag.Message != "" {
+		formattedDesc := "\n\t" + strings.Replace(tag.Message, "\n", "\n\t", -1)
 		cli.Println(formattedDesc)
 	}
 	cli.Println("")
+}
+
+func getTagInfos(queryist cli.Queryist, sqlCtx *sql.Context) ([]tagInfo, error) {
+	rows, err := GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_tags")
+	if err != nil {
+		return nil, err
+	}
+
+	tags := []tagInfo{}
+	for _, row := range rows {
+		timestamp, err := getTimestampColAsUint64(row[4])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse tag timestamp: %w", err)
+		}
+		tag := tagInfo{
+			Name:      row[0].(string),
+			Hash:      row[1].(string),
+			Tagger:    row[2].(string),
+			Email:     row[3].(string),
+			Timestamp: timestamp,
+			Message:   row[5].(string),
+		}
+		tags = append(tags, tag)
+	}
+
+	return tags, nil
 }

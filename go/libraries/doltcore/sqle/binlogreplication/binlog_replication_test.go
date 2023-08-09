@@ -169,7 +169,7 @@ func TestResetReplica(t *testing.T) {
 
 	rows, err = replicaDatabase.Queryx("SHOW REPLICA STATUS;")
 	require.NoError(t, err)
-	status := convertByteArraysToStrings(readNextRow(t, rows))
+	status := convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "0", status["Last_Errno"])
 	require.Equal(t, "", status["Last_Error"])
 	require.Equal(t, "0", status["Last_IO_Errno"])
@@ -320,7 +320,7 @@ func TestDoltCommits(t *testing.T) {
 	waitForReplicaToCatchUp(t)
 	rows, err := replicaDatabase.Queryx("select count(*) as count from db01.dolt_log;")
 	require.NoError(t, err)
-	row := convertByteArraysToStrings(readNextRow(t, rows))
+	row := convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "5", row["count"])
 	require.NoError(t, rows.Close())
 
@@ -331,31 +331,31 @@ func TestDoltCommits(t *testing.T) {
 	require.NoError(t, err)
 
 	// Fourth transaction
-	row = convertByteArraysToStrings(readNextRow(t, rows))
+	row = convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "1", row["data_change"])
 	require.Equal(t, "0", row["schema_change"])
 	require.Equal(t, "t1", row["table_name"])
 	commitId := row["commit_hash"]
-	row = convertByteArraysToStrings(readNextRow(t, rows))
+	row = convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "1", row["data_change"])
 	require.Equal(t, "0", row["schema_change"])
 	require.Equal(t, "t2", row["table_name"])
 	require.Equal(t, commitId, row["commit_hash"])
 
 	// Third transaction
-	row = convertByteArraysToStrings(readNextRow(t, rows))
+	row = convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "1", row["data_change"])
 	require.Equal(t, "0", row["schema_change"])
 	require.Equal(t, "t2", row["table_name"])
 
 	// Second transaction
-	row = convertByteArraysToStrings(readNextRow(t, rows))
+	row = convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "0", row["data_change"])
 	require.Equal(t, "1", row["schema_change"])
 	require.Equal(t, "t2", row["table_name"])
 
 	// First transaction
-	row = convertByteArraysToStrings(readNextRow(t, rows))
+	row = convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "0", row["data_change"])
 	require.Equal(t, "1", row["schema_change"])
 	require.Equal(t, "t1", row["table_name"])
@@ -405,13 +405,13 @@ func TestForeignKeyChecks(t *testing.T) {
 	waitForReplicaToCatchUp(t)
 	rows, err := replicaDatabase.Queryx("select * from db01.t1 order by pk;")
 	require.NoError(t, err)
-	row := convertByteArraysToStrings(readNextRow(t, rows))
+	row := convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "1", row["pk"])
 	require.Equal(t, "red", row["color"])
-	row = convertByteArraysToStrings(readNextRow(t, rows))
+	row = convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "2", row["pk"])
 	require.Equal(t, "still-not-a-color", row["color"])
-	row = convertByteArraysToStrings(readNextRow(t, rows))
+	row = convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "3", row["pk"])
 	require.Equal(t, "not-a-color", row["color"])
 	require.False(t, rows.Next())
@@ -419,9 +419,9 @@ func TestForeignKeyChecks(t *testing.T) {
 
 	rows, err = replicaDatabase.Queryx("select * from db01.colors order by name;")
 	require.NoError(t, err)
-	row = convertByteArraysToStrings(readNextRow(t, rows))
+	row = convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "blue", row["name"])
-	row = convertByteArraysToStrings(readNextRow(t, rows))
+	row = convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "green", row["name"])
 	require.False(t, rows.Next())
 	require.NoError(t, rows.Close())
@@ -441,14 +441,14 @@ func TestCharsetsAndCollations(t *testing.T) {
 	waitForReplicaToCatchUp(t)
 	rows, err := replicaDatabase.Queryx("show create table db01.t1;")
 	require.NoError(t, err)
-	row := convertByteArraysToStrings(readNextRow(t, rows))
+	row := convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Contains(t, row["Create Table"], "ascii_general_ci")
 	require.Contains(t, row["Create Table"], "utf16_general_ci")
 	require.NoError(t, rows.Close())
 
 	rows, err = replicaDatabase.Queryx("select * from db01.t1;")
 	require.NoError(t, err)
-	row = convertByteArraysToStrings(readNextRow(t, rows))
+	row = convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "one", row["c1"])
 	require.Equal(t, "\x00o\x00n\x00e", row["c2"])
 	require.NoError(t, rows.Close())
@@ -515,7 +515,7 @@ func waitForReplicaToReachGtid(t *testing.T, target int) {
 func assertWarning(t *testing.T, database *sqlx.DB, code int, message string) {
 	rows, err := database.Queryx("SHOW WARNINGS;")
 	require.NoError(t, err)
-	warning := convertByteArraysToStrings(readNextRow(t, rows))
+	warning := convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, strconv.Itoa(code), warning["Code"])
 	require.Equal(t, message, warning["Message"])
 	require.False(t, rows.Next())
@@ -526,7 +526,7 @@ func queryGtid(t *testing.T, database *sqlx.DB) string {
 	rows, err := database.Queryx("SELECT @@global.gtid_executed as gtid_executed;")
 	require.NoError(t, err)
 	defer rows.Close()
-	row := convertByteArraysToStrings(readNextRow(t, rows))
+	row := convertMapScanResultToStrings(readNextRow(t, rows))
 	if row["gtid_executed"] == nil {
 		t.Fatal("no value for @@GLOBAL.gtid_executed")
 	}
@@ -550,7 +550,7 @@ func readAllRows(t *testing.T, rows *sqlx.Rows) []map[string]interface{} {
 		}
 		err := rows.MapScan(row)
 		require.NoError(t, err)
-		row = convertByteArraysToStrings(row)
+		row = convertMapScanResultToStrings(row)
 		result = append(result, row)
 	}
 }

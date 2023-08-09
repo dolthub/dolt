@@ -73,7 +73,7 @@ export const branchTests = [
   {
     q: `CALL DOLT_CHECKOUT("-b", :branchName)`,
     p: { branchName: "branch-to-delete" },
-    res: [{ status: 0 }],
+    res: [{ status: 0, message: "Switched to branch 'branch-to-delete'" }],
   },
   {
     q: `SELECT COUNT(*) FROM dolt_branches LIMIT 200`,

@@ -29,6 +29,8 @@ import (
 	"github.com/dolthub/go-mysql-server/eventscheduler"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -36,6 +38,7 @@ import (
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
@@ -45,6 +48,10 @@ import (
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
+)
+
+const (
+	LocalConnectionUser = "__dolt_local_user__"
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -178,15 +185,21 @@ func Serve(
 
 	// Add superuser if specified user exists; add root superuser if no user specified and no existing privileges
 	userSpecified := config.ServerUser != ""
-	privsExist := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.UserTable().Data().Count() != 0
+
+	mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
+	ed := mysqlDb.Editor()
+	var numUsers int
+	ed.VisitUsers(func(*mysql_db.User) { numUsers += 1 })
+	privsExist := numUsers != 0
 	if userSpecified {
-		superuser := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.GetUser(config.ServerUser, "%", false)
+		superuser := mysqlDb.GetUser(ed, config.ServerUser, "%", false)
 		if userSpecified && superuser == nil {
-			sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(config.ServerUser, "%", config.ServerPass)
+			mysqlDb.AddSuperUser(ed, config.ServerUser, "%", config.ServerPass)
 		}
 	} else if !privsExist {
-		sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.AddSuperUser(defaultUser, "%", defaultPass)
+		mysqlDb.AddSuperUser(ed, defaultUser, "%", defaultPass)
 	}
+	ed.Close()
 
 	labels := serverConfig.MetricsLabels()
 
@@ -227,6 +240,10 @@ func Serve(
 	lck := env.NewDBLock(serverConfig.Port())
 	sqlserver.SetRunningServer(mySQLServer, &lck)
 
+	ed = mysqlDb.Editor()
+	mysqlDb.AddSuperUser(ed, LocalConnectionUser, "localhost", lck.Secret)
+	ed.Close()
+
 	var metSrv *http.Server
 	if serverConfig.MetricsHost() != "" && serverConfig.MetricsPort() > 0 {
 		mux := http.NewServeMux()
@@ -244,6 +261,7 @@ func Serve(
 
 	var remoteSrv *remotesrv.Server
 	if serverConfig.RemotesapiPort() != nil {
+
 		port := *serverConfig.RemotesapiPort()
 		if remoteSrvSqlCtx, err := sqlEngine.NewDefaultContext(ctx); err == nil {
 			listenaddr := fmt.Sprintf(":%d", port)
@@ -253,7 +271,11 @@ func Serve(
 				HttpListenAddr: listenaddr,
 				GrpcListenAddr: listenaddr,
 			})
-			args = sqle.WithUserPasswordAuth(args, remotesrv.UserAuth{User: serverConfig.User(), Password: serverConfig.Password()})
+
+			ctxFactory := func() (*sql.Context, error) { return sqlEngine.NewDefaultContext(ctx) }
+			authenticator := newAuthenticator(ctxFactory, sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb)
+			args = sqle.WithUserPasswordAuth(args, authenticator)
+
 			args.TLSConfig = serverConf.TLSConfig
 			remoteSrv, err = remotesrv.NewServer(args)
 			if err != nil {
@@ -357,6 +379,31 @@ func Serve(
 	}
 
 	return
+}
+
+type remotesapiAuth struct {
+	ctxFactory func() (*sql.Context, error)
+	rawDb      *mysql_db.MySQLDb
+}
+
+func newAuthenticator(ctxFactory func() (*sql.Context, error), rawDb *mysql_db.MySQLDb) remotesrv.Authenticator {
+	return &remotesapiAuth{ctxFactory, rawDb}
+}
+
+func (r *remotesapiAuth) Authenticate(creds *remotesrv.RequestCredentials) bool {
+	err := commands.ValidatePasswordWithAuthResponse(r.rawDb, creds.Username, creds.Password)
+	if err != nil {
+		return false
+	}
+
+	ctx, err := r.ctxFactory()
+	if err != nil {
+		return false
+	}
+	ctx.Session.SetClient(sql.Client{User: creds.Username, Address: creds.Address, Capabilities: 0})
+
+	privOp := sql.NewDynamicPrivilegedOperation(plan.DynamicPrivilege_CloneAdmin)
+	return r.rawDb.UserHasPrivileges(ctx, privOp)
 }
 
 func LoadClusterTLSConfig(cfg cluster.Config) (*tls.Config, error) {

@@ -48,13 +48,13 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 	waitForReplicaToCatchUp(t)
 	rows, err := replicaDatabase.Queryx("select * from db01.alltypes order by pk asc;")
 	require.NoError(t, err)
-	row := convertByteArraysToStrings(readNextRow(t, rows))
+	row := convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "1", row["pk"])
 	assertValues(t, 0, row)
-	row = convertByteArraysToStrings(readNextRow(t, rows))
+	row = convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "2", row["pk"])
 	assertValues(t, 1, row)
-	row = convertByteArraysToStrings(readNextRow(t, rows))
+	row = convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "3", row["pk"])
 	assertNullValues(t, row)
 	require.False(t, rows.Next())
@@ -70,13 +70,13 @@ func TestBinlogReplicationForAllTypes(t *testing.T) {
 	replicaDatabase.MustExec("use db01;")
 	rows, err = replicaDatabase.Queryx("select * from db01.alltypes order by pk asc;")
 	require.NoError(t, err)
-	row = convertByteArraysToStrings(readNextRow(t, rows))
+	row = convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "1", row["pk"])
 	assertNullValues(t, row)
-	row = convertByteArraysToStrings(readNextRow(t, rows))
+	row = convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "2", row["pk"])
 	assertValues(t, 0, row)
-	row = convertByteArraysToStrings(readNextRow(t, rows))
+	row = convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "3", row["pk"])
 	assertValues(t, 1, row)
 	require.False(t, rows.Next())
@@ -516,7 +516,7 @@ func assertValues(t *testing.T, assertionIndex int, row map[string]interface{}) 
 
 		actualValue := ""
 		if row[typeDesc.ColumnName()] != nil {
-			actualValue = row[typeDesc.ColumnName()].(string)
+			actualValue = fmt.Sprintf("%v", row[typeDesc.ColumnName()])
 		}
 		if typeDesc.TypeDefinition == "json" {
 			// LD_1 and DOLT storage formats return JSON strings slightly differently; DOLT removes spaces

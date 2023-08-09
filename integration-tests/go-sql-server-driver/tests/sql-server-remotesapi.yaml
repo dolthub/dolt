@@ -1,0 +1,83 @@
+tests:
+- name: can clone from server1 remotesapi endpoint
+  multi_repos:
+  - name: server1
+    repos:
+    - name: repo1
+    - name: repo2
+    server:
+      args: ["--remotesapi-port", "50051", "--port", "3309"]
+      port: 3309
+  - name: server2
+    repos:
+    - name: repo1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3308
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3308
+  connections:
+  - on: server1
+    queries:
+    - exec: "use repo2"
+    - exec: "create table vals (id int primary key)"
+    - exec: "insert into vals values (0),(1),(2),(3),(4)"
+    - exec: "call dolt_commit('-Am', 'insert some data')"
+  - on: server2
+    queries:
+    - exec: "use repo1"
+    - exec: "call dolt_clone('http://localhost:50051/repo2')"
+    - exec: "use repo2"
+    - query: "select count(*) from vals"
+      result:
+        columns: ["count(*)"]
+        rows: [["5"]]
+- name: can clone from server1 remotesapi endpoint after a gc
+  multi_repos:
+  - name: server1
+    repos:
+    - name: repo1
+    - name: repo2
+    server:
+      args: ["--remotesapi-port", "50051", "--port", "3309"]
+      port: 3309
+  - name: server2
+    repos:
+    - name: repo1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3308
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3308
+  connections:
+  - on: server1
+    queries:
+    - exec: "use repo2"
+    - exec: "create table vals (id int primary key)"
+    - exec: "insert into vals values (0),(1),(2),(3),(4)"
+    - exec: "call dolt_commit('-Am', 'insert some data')"
+    - exec: "call dolt_gc()"
+  - on: server1
+    queries:
+    - exec: "use repo2"
+    - exec: "insert into vals values (5),(6),(7),(8),(9)"
+    - exec: "call dolt_commit('-Am', 'insert some more data')"
+  - on: server2
+    queries:
+    - exec: "use repo1"
+    - exec: "call dolt_clone('http://localhost:50051/repo2')"
+    - exec: "use repo2"
+    - query: "select count(*) from vals"
+      result:
+        columns: ["count(*)"]
+        rows: [["10"]]

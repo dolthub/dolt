@@ -74,7 +74,7 @@ export const tableTests = [
   FROM information_schema.statistics 
   WHERE table_schema=:tableSchema AND table_name=:tableName AND index_name!="PRIMARY" 
   GROUP BY index_name;`,
-    p: { tableSchema: `${dbName}`, tableName: "test" },
+    p: { tableSchema: `${dbName}/main`, tableName: "test" },
     res: [
       {
         TABLE_NAME: "test",
@@ -122,19 +122,19 @@ export const tableTests = [
   },
   {
     q: `SELECT * FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE table_name=:tableName AND table_schema=:tableSchema AND referenced_table_schema IS NOT NULL`,
-    p: { tableName: "test_info", tableSchema: `${dbName}` },
+    p: { tableName: "test_info", tableSchema: `${dbName}/main` },
     res: [
       {
         CONSTRAINT_CATALOG: "def",
-        CONSTRAINT_SCHEMA: `${dbName}`,
+        CONSTRAINT_SCHEMA: `${dbName}/main`,
         CONSTRAINT_NAME: "s7utamh8",
         TABLE_CATALOG: "def",
-        TABLE_SCHEMA: `${dbName}`,
+        TABLE_SCHEMA: `${dbName}/main`,
         TABLE_NAME: "test_info",
         COLUMN_NAME: "test_pk",
         ORDINAL_POSITION: 1,
         POSITION_IN_UNIQUE_CONSTRAINT: 1,
-        REFERENCED_TABLE_SCHEMA: `${dbName}`,
+        REFERENCED_TABLE_SCHEMA: dbName,
         REFERENCED_TABLE_NAME: "test",
         REFERENCED_COLUMN_NAME: "pk",
       },
@@ -144,5 +144,136 @@ export const tableTests = [
     q: `SELECT * FROM ::tableName ORDER BY ::col0 LIMIT :limit OFFSET :offset`,
     p: { tableName: "test_info", col0: "id", limit: 10, offset: 0 },
     res: [{ id: 1, info: "info about test pk 0", test_pk: 0 }],
+  },
+  {
+    q: `USE ::dbName`,
+    p: { dbName: `${dbName}/main` },
+    res: {
+      fieldCount: 0,
+      affectedRows: 0,
+      insertId: 0,
+      info: "",
+      serverStatus: 2,
+      warningStatus: 0,
+    },
+  },
+
+  // Load file
+  {
+    q: `SELECT * FROM dolt_status`,
+    res: [],
+  },
+  {
+    q: "SET GLOBAL local_infile=ON;",
+    res: {
+      fieldCount: 0,
+      affectedRows: 1,
+      insertId: 0,
+      info: "",
+      serverStatus: 2,
+      warningStatus: 0,
+    },
+  },
+  {
+    q: `LOAD DATA LOCAL INFILE '../testdata/update_test_info.csv'
+    INTO TABLE \`test_info\` 
+    FIELDS TERMINATED BY ',' ENCLOSED BY '' 
+    LINES TERMINATED BY '\n' 
+    IGNORE 1 ROWS;`,
+    file: "update_test_info.csv",
+    res: {
+      fieldCount: 0,
+      affectedRows: 3,
+      insertId: 0,
+      info: "",
+      serverStatus: 2,
+      warningStatus: 0,
+    },
+  },
+  {
+    q: "SELECT * FROM dolt_diff_stat(:fromRefName, :toRefName)",
+    p: { fromRefName: "HEAD", toRefName: "WORKING" },
+    res: [
+      {
+        table_name: "test_info",
+        rows_unmodified: 1,
+        rows_added: 3,
+        rows_deleted: 0,
+        rows_modified: 0,
+        cells_added: 9,
+        cells_deleted: 0,
+        cells_modified: 0,
+        old_row_count: 1,
+        new_row_count: 4,
+        old_cell_count: 3,
+        new_cell_count: 12,
+      },
+    ],
+  },
+  {
+    q: `LOAD DATA LOCAL INFILE '../testdata/replace_test_info.psv'
+    REPLACE INTO TABLE \`test_info\` 
+    FIELDS TERMINATED BY '|' ENCLOSED BY '' 
+    LINES TERMINATED BY '\n' 
+    IGNORE 1 ROWS;`,
+    file: "replace_test_info.psv",
+    res: {
+      fieldCount: 0,
+      affectedRows: 6,
+      insertId: 0,
+      info: "",
+      serverStatus: 2,
+      warningStatus: 0,
+    },
+  },
+  {
+    q: "SELECT * FROM dolt_diff_stat(:fromRefName, :toRefName)",
+    p: { fromRefName: "HEAD", toRefName: "WORKING" },
+    res: [
+      {
+        table_name: "test_info",
+        rows_unmodified: 0,
+        rows_added: 3,
+        rows_deleted: 0,
+        rows_modified: 1,
+        cells_added: 9,
+        cells_deleted: 0,
+        cells_modified: 1,
+        old_row_count: 1,
+        new_row_count: 4,
+        old_cell_count: 3,
+        new_cell_count: 12,
+      },
+    ],
+  },
+
+  // Add and revert load data changes
+  {
+    q: `SELECT * FROM dolt_status`,
+    res: [{ table_name: "test_info", staged: 0, status: "modified" }],
+  },
+  {
+    q: "CALL DOLT_ADD('.')",
+    res: [{ status: 0 }],
+  },
+  {
+    q: `SELECT * FROM dolt_status`,
+    res: [{ table_name: "test_info", staged: 1, status: "modified" }],
+  },
+  {
+    q: "CALL DOLT_RESET('test_info')",
+    res: [{ status: 0 }],
+  },
+  {
+    q: `SELECT * FROM dolt_status`,
+    res: [{ table_name: "test_info", staged: 0, status: "modified" }],
+  },
+  {
+    q: "CALL DOLT_CHECKOUT('test_info')",
+    res: [{ status: 0, message: "" }],
+  },
+  {
+    q: `SELECT * FROM dolt_status`,
+    res: [],
   },
 ];

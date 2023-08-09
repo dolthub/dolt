@@ -90,10 +90,17 @@ func doDoltBranch(ctx *sql.Context, args []string) (int, error) {
 }
 
 func commitTransaction(ctx *sql.Context, dSess *dsess.DoltSession, rsc *doltdb.ReplicationStatusController) error {
-	err := dSess.CommitTransaction(ctx, ctx.GetTransaction())
+	currentTx := ctx.GetTransaction()
+
+	err := dSess.CommitTransaction(ctx, currentTx)
 	if err != nil {
 		return err
 	}
+	newTx, err := dSess.StartTransaction(ctx, sql.ReadWrite)
+	if err != nil {
+		return err
+	}
+	ctx.SetTransaction(newTx)
 
 	if rsc != nil {
 		dsess.WaitForReplicationController(ctx, *rsc)
@@ -144,7 +151,13 @@ func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseRe
 		return err
 	}
 
-	err := actions.RenameBranch(ctx, dbData, oldBranchName, newBranchName, sess.Provider(), force, rsc)
+	headRef, err := dbData.Rsr.CWBHeadRef()
+	if err != nil {
+		return err
+	}
+	activeSessionBranch := headRef.GetPath()
+
+	err = actions.RenameBranch(ctx, dbData, oldBranchName, newBranchName, sess.Provider(), force, rsc)
 	if err != nil {
 		return err
 	}
@@ -161,6 +174,24 @@ func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseRe
 				repoState.Head.Ref = ref.NewBranchRef(newBranchName)
 				repoState.Save(fs)
 			}
+		}
+	}
+
+	err = sess.RenameBranchState(ctx, dbName, oldBranchName, newBranchName)
+	if err != nil {
+		return err
+	}
+
+	// If the active branch of the SQL session was renamed, switch to the new branch.
+	if oldBranchName == activeSessionBranch {
+		wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(newBranchName))
+		if err != nil {
+			return err
+		}
+
+		err = sess.SwitchWorkingSet(ctx, dbName, wsRef)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -424,13 +455,13 @@ func copyABranch(ctx *sql.Context, dbData env.DbData, srcBr string, destBr strin
 	err := actions.CopyBranchOnDB(ctx, dbData.Ddb, srcBr, destBr, force, rsc)
 	if err != nil {
 		if err == doltdb.ErrBranchNotFound {
-			return errors.New(fmt.Sprintf("fatal: A branch named '%s' not found", srcBr))
+			return fmt.Errorf("fatal: A branch named '%s' not found", srcBr)
 		} else if err == actions.ErrAlreadyExists {
-			return errors.New(fmt.Sprintf("fatal: A branch named '%s' already exists.", destBr))
+			return fmt.Errorf("fatal: A branch named '%s' already exists.", destBr)
 		} else if err == doltdb.ErrInvBranchName {
-			return errors.New(fmt.Sprintf("fatal: '%s' is not a valid branch name.", destBr))
+			return fmt.Errorf("fatal: '%s' is not a valid branch name.", destBr)
 		} else {
-			return errors.New(fmt.Sprintf("fatal: Unexpected error copying branch from '%s' to '%s'", srcBr, destBr))
+			return fmt.Errorf("fatal: Unexpected error copying branch from '%s' to '%s'", srcBr, destBr)
 		}
 	}
 	err = branch_control.AddAdminForContext(ctx, destBr)

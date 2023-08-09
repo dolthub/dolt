@@ -15,6 +15,7 @@
 package actions
 
 import (
+	"bytes"
 	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -96,7 +97,15 @@ type ErrCheckoutWouldOverwrite struct {
 }
 
 func (cwo ErrCheckoutWouldOverwrite) Error() string {
-	return "local changes would be overwritten by checkout"
+	var buffer bytes.Buffer
+	buffer.WriteString("Your local changes to the following tables would be overwritten by checkout:\n")
+	for _, tbl := range cwo.tables {
+		buffer.WriteString("\t" + tbl + "\n")
+	}
+
+	buffer.WriteString("Please commit your changes or stash them before you switch branches.\n")
+	buffer.WriteString("Aborting")
+	return buffer.String()
 }
 
 func IsCheckoutWouldOverwrite(err error) bool {

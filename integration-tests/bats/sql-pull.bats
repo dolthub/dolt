@@ -245,7 +245,7 @@ teardown() {
     dolt sql -q "CALL dolt_fetch('origin', 'feature2')"
     run dolt sql -q "call dolt_checkout('feature2'); show tables" -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 5 ]
+    [ "${#lines[@]}" -eq 6 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
     [[ "$output" =~ "t2" ]] || false

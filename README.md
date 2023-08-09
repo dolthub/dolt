@@ -3,13 +3,17 @@
 # Dolt is Git for Data!
 
 Dolt is a SQL database that you can fork, clone, branch, merge, push
-and pull just like a Git repository. Connect to Dolt just like any
-MySQL database to run queries or update the data using SQL
-commands. Use the command line interface to import CSV files, commit
-your changes, push them to a remote, or merge your teammate's changes.
+and pull just like a Git repository. 
 
-All the commands you know for Git work exactly the same for Dolt. Git
-versions files, Dolt versions tables. It's like Git and MySQL had a
+Connect to Dolt just like any MySQL database to read or modify schema 
+and data. Version control functionality is exposed in SQL via system 
+tables, functions, and procedures. 
+
+Or, use the Git-like command line interface to import CSV files, commit 
+your changes, push them to a remote, or merge your teammate's changes.
+All the commands you know for Git work exactly the same for Dolt. 
+
+Git versions files. Dolt versions tables. It's like Git and MySQL had a
 baby.
 
 We also built [DoltHub](https://www.dolthub.com), a place to share
@@ -85,11 +89,11 @@ Valid commands for dolt are
 
 # Installation
 
-Dolt is a single ~68 megabyte program. 
+Dolt is a single ~103 megabyte program. 
 
 ```bash
-dolt $ du -h /Users/timsehn//go/bin/dolt
- 68M	/Users/timsehn/go/bin/dolt
+dolt $ du -h /Users/timsehn/go/bin/dolt
+103M	/Users/timsehn/go/bin/dolt
 ```
 
 It's really easy to install. Download it and put it on your `PATH`. 

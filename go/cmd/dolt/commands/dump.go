@@ -137,7 +137,7 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	resFormat, _ := apr.GetValue(FormatFlag)
 	resFormat = strings.TrimPrefix(resFormat, ".")
 
-	outputFileOrDirName, vErr := validateArgs(apr)
+	outputFileOrDirName, vErr := validateDumpArgs(apr)
 	if vErr != nil {
 		return HandleVErrAndExitCode(vErr, usage)
 	}
@@ -146,9 +146,9 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	case emptyFileExt, sqlFileExt:
 		var defaultName string
 		if schemaOnly {
-			defaultName = fmt.Sprintf("doltdump_schema_only.sql")
+			defaultName = "doltdump_schema_only.sql"
 		} else {
-			defaultName = fmt.Sprintf("doltdump.sql")
+			defaultName = "doltdump.sql"
 		}
 
 		if outputFileOrDirName == emptyStr {
@@ -285,7 +285,7 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.
 			return err
 		}
 
-		err = iohelp.WriteLine(writer, fmt.Sprintf("delimiter END_PROCEDURE"))
+		err = iohelp.WriteLine(writer, "delimiter END_PROCEDURE")
 		if err != nil {
 			return err
 		}
@@ -295,7 +295,7 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.
 			return err
 		}
 
-		err = iohelp.WriteLine(writer, fmt.Sprintf("END_PROCEDURE\ndelimiter ;"))
+		err = iohelp.WriteLine(writer, "END_PROCEDURE\ndelimiter ;")
 		if err != nil {
 			return err
 		}
@@ -575,9 +575,9 @@ func getDumpDestination(path string) mvdata.DataLocation {
 	return destLoc
 }
 
-// validateArgs returns either filename of directory name after checking each cases of user input arguments,
+// validateDumpArgs returns either filename of directory name after checking each cases of user input arguments,
 // handling errors for invalid arguments
-func validateArgs(apr *argparser.ArgParseResults) (string, errhand.VerboseError) {
+func validateDumpArgs(apr *argparser.ArgParseResults) (string, errhand.VerboseError) {
 	rf, _ := apr.GetValue(FormatFlag)
 	rf = strings.TrimPrefix(rf, ".")
 	fn, fnOk := apr.GetValue(filenameFlag)
@@ -637,7 +637,7 @@ func newTableArgs(tblName string, destination mvdata.DataLocation, batched, auto
 func dumpNonSqlTables(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, force bool, tblNames []string, rf string, dirName string, batched bool) errhand.VerboseError {
 	var fName string
 	if dirName == emptyStr {
-		dirName = fmt.Sprintf("doltdump/")
+		dirName = "doltdump/"
 	} else {
 		if !strings.HasSuffix(dirName, "/") {
 			dirName = fmt.Sprintf("%s/", dirName)

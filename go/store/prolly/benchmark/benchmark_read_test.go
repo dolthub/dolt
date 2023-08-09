@@ -103,7 +103,7 @@ func BenchmarkNomsParallelGetLarge(b *testing.B) {
 func benchmarkProllyMapGet(b *testing.B, size uint64) {
 	bench := generateProllyBench(b, size)
 	b.ResetTimer()
-	b.Run(fmt.Sprintf("benchmark new format reads"), func(b *testing.B) {
+	b.Run("benchmark new format reads", func(b *testing.B) {
 		ctx := context.Background()
 
 		for i := 0; i < b.N; i++ {
@@ -120,7 +120,7 @@ func benchmarkProllyMapGet(b *testing.B, size uint64) {
 func benchmarkTypesMapGet(b *testing.B, size uint64) {
 	bench := generateTypesBench(b, size)
 	b.ResetTimer()
-	b.Run(fmt.Sprintf("benchmark old format reads"), func(b *testing.B) {
+	b.Run("benchmark old format reads", func(b *testing.B) {
 		ctx := context.Background()
 		for i := 0; i < b.N; i++ {
 			idx := rand.Uint64() % uint64(len(bench.tups))
@@ -133,7 +133,7 @@ func benchmarkTypesMapGet(b *testing.B, size uint64) {
 func benchmarkBBoltMapGet(b *testing.B, size uint64) {
 	bench := generateBBoltBench(b, size)
 	b.ResetTimer()
-	b.Run(fmt.Sprintf("benchmark bbolt reads"), func(b *testing.B) {
+	b.Run("benchmark bbolt reads", func(b *testing.B) {
 		tx, err := bench.db.Begin(false)
 		require.NoError(b, err)
 		bck := tx.Bucket(bucket)

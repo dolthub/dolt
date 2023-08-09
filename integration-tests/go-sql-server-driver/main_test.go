@@ -28,6 +28,10 @@ func TestCluster(t *testing.T) {
 	RunTestsFile(t, "tests/sql-server-cluster.yaml")
 }
 
+func TestRemotesAPI(t *testing.T) {
+	RunTestsFile(t, "tests/sql-server-remotesapi.yaml")
+}
+
 // TestSingle is a convenience method for running a single test from within an IDE. Unskip and set to the file and name
 // of the test you want to debug. See README.md in the `tests` directory for more debugging info.
 func TestSingle(t *testing.T) {

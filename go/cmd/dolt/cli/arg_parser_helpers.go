@@ -76,52 +76,6 @@ func ParseAuthor(authorStr string) (string, string, error) {
 }
 
 const (
-	AllowEmptyFlag   = "allow-empty"
-	SkipEmptyFlag    = "skip-empty"
-	DateParam        = "date"
-	MessageArg       = "message"
-	AuthorParam      = "author"
-	ForceFlag        = "force"
-	DryRunFlag       = "dry-run"
-	SetUpstreamFlag  = "set-upstream"
-	AllFlag          = "all"
-	UpperCaseAllFlag = "ALL"
-	HardResetParam   = "hard"
-	SoftResetParam   = "soft"
-	CheckoutCoBranch = "b"
-	NoFFParam        = "no-ff"
-	SquashParam      = "squash"
-	AbortParam       = "abort"
-	CopyFlag         = "copy"
-	MoveFlag         = "move"
-	DeleteFlag       = "delete"
-	DeleteForceFlag  = "D"
-	OutputOnlyFlag   = "output-only"
-	RemoteParam      = "remote"
-	BranchParam      = "branch"
-	TrackFlag        = "track"
-	AmendFlag        = "amend"
-	CommitFlag       = "commit"
-	NoCommitFlag     = "no-commit"
-	NoEditFlag       = "no-edit"
-	OursFlag         = "ours"
-	TheirsFlag       = "theirs"
-	NumberFlag       = "number"
-	NotFlag          = "not"
-	MergesFlag       = "merges"
-	ParentsFlag      = "parents"
-	MinParentsFlag   = "min-parents"
-	DecorateFlag     = "decorate"
-	OneLineFlag      = "oneline"
-	ShallowFlag      = "shallow"
-	CachedFlag       = "cached"
-	ListFlag         = "list"
-	UserParam        = "user"
-	NoPrettyFlag     = "no-pretty"
-	ShowIgnoredFlag  = "ignored"
-)
-
-const (
 	SyncBackupId        = "sync"
 	SyncBackupUrlId     = "sync-url"
 	RestoreBackupId     = "restore"
@@ -202,7 +156,7 @@ func CreateCloneArgParser() *argparser.ArgParser {
 	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use.")
 	ap.SupportsString(dbfactory.OSSCredsFileParam, "", "file", "OSS credentials file.")
 	ap.SupportsString(dbfactory.OSSCredsProfile, "", "profile", "OSS profile to use.")
-	ap.SupportsString(UserParam, "u", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
+	ap.SupportsString(UserFlag, "u", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
 	return ap
 }
 
@@ -247,7 +201,8 @@ func CreateCherryPickArgParser() *argparser.ArgParser {
 
 func CreateFetchArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("fetch")
-	ap.SupportsString(UserParam, "u", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
+	ap.SupportsString(UserFlag, "u", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
+	ap.SupportsFlag(PruneFlag, "p", "After fetching, remove any remote-tracking references that don't exist on the remote.")
 	return ap
 }
 
@@ -270,7 +225,7 @@ func CreatePullArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(CommitFlag, "", "Perform the merge and commit the result. This is the default option, but can be overridden with the --no-commit flag. Note that this option does not affect fast-forward merges, which don't create a new merge commit, and if any merge conflicts or constraint violations are detected, no commit will be attempted.")
 	ap.SupportsFlag(NoCommitFlag, "", "Perform the merge and stop just before creating a merge commit. Note this will not prevent a fast-forward merge; use the --no-ff arg together with the --no-commit arg to prevent both fast-forwards and merge commits.")
 	ap.SupportsFlag(NoEditFlag, "", "Use an auto-generated commit message when creating a merge commit. The default for interactive CLI sessions is to open an editor.")
-	ap.SupportsString(UserParam, "u", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
+	ap.SupportsString(UserFlag, "u", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
 	return ap
 }
 
@@ -352,6 +307,24 @@ func CreateCountCommitsArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("gc", 0)
 	ap.SupportsString("from", "f", "commit id", "commit to start counting from")
 	ap.SupportsString("to", "t", "commit id", "commit to stop counting at")
+	return ap
+}
+
+func CreateGlobalArgParser(name string) *argparser.ArgParser {
+	ap := argparser.NewArgParserWithVariableArgs(name)
+	if name == "dolt" {
+		ap.SupportsString("profile", "", "profile", "The name of the profile to use when executing SQL queries. Run `dolt profile --help` for more information.")
+	}
+	ap.SupportsString("user", "u", "user", "Defines the local superuser (defaults to `root`). If the specified user exists, will take on permissions of that user.")
+	ap.SupportsString("password", "p", "password", "Defines the password for the user. Defaults to empty string when the user is `root`.")
+	ap.SupportsString("host", "", "host", "Defines the host to connect to.")
+	ap.SupportsString("port", "", "port", "Defines the port to connect to.")
+	ap.SupportsFlag("no-tls", "", "Disables TLS for the connection to remote databases.")
+	ap.SupportsString("data-dir", "", "data-dir", "Defines a data directory whose subdirectories should all be dolt data repositories accessible as independent databases. Defaults to the current directory.")
+	ap.SupportsString("doltcfg-dir", "", "doltcfg-dir", "Defines a directory that contains configuration files for dolt. Defaults to `$data-dir/.doltcfg`. Will only be created if there is a change to configuration settings.")
+	ap.SupportsString("privilege-file", "", "privilege-file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
+	ap.SupportsString("branch-control-file", "", "branch-control-file", "Path to a file to load and store branch control permissions. Defaults to `$doltcfg-dir/branch_control.db`. Will only be created if there is a change to branch control permissions.")
+	ap.SupportsString("use-db", "", "use-db", "The name of the database to use when executing SQL queries. Defaults the database of the root directory, if it exists, and the first alphabetically if not.")
 	return ap
 }
 

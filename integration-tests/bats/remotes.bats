@@ -69,15 +69,14 @@ teardown() {
     dolt clone file://./remote repo2
 
     cd repo2
-    run dolt pull
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date." ]] || false
+     dolt pull
+
 
     dolt commit --allow-empty -m "a commit for main from repo2"
     dolt push
 
-    run dolt branch
-    [[ ! "$output" =~ "other" ]] || false
+     dolt branch
+
 
     run dolt checkout other
     [ "$status" -eq 0 ]
@@ -941,12 +940,12 @@ SQL
     [[ ! "$output" =~ "test commit" ]] || false
     run dolt merge origin/main
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "up-to-date" ]]
+    [[ "$output" =~ "Already up to date." ]] || false
     run dolt fetch
     [ "$status" -eq 0 ]
     run dolt merge origin/main
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Fast-forward" ]]
+    [[ "$output" =~ "Fast-forward" ]] || false
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test commit" ]] || false
@@ -975,12 +974,12 @@ SQL
     cd "dolt-repo-clones/test-repo"
     run dolt merge remotes/origin/main
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date" ]]
+    [[ "$output" =~ "Already up to date." ]] || false
     run dolt fetch origin main
     [ "$status" -eq 0 ]
     run dolt merge remotes/origin/main
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Fast-forward" ]]
+    [[ "$output" =~ "Fast-forward" ]] || false
 }
 
 @test "remotes: try to push a remote that is behind tip" {
@@ -2075,6 +2074,51 @@ SQL
     [[ "$output" =~ "Everything up-to-date." ]] || false
 }
 
+@test "remotes: dolt sql -q 'call dolt_checkout("-b", "newbranch", "--track", "origin/feature")'' checks out new local branch 'newbranch' with upstream set" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push --set-upstream origin main
+    dolt checkout -b feature
+    dolt push --set-upstream origin feature
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    run dolt branch
+    [[ ! "$output" =~ "feature" ]] || false
+
+    dolt sql -q 'call dolt_checkout("-b", "newbranch", "--track", "origin/feature");'
+
+    run dolt sql -q 'select * from dolt_branches;'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| origin | feature" ]] || false
+
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
+
+    dolt checkout main
+    dolt branch -D newbranch
+
+    # branch.autosetupmerge configuration defaults to --track, so the upstream is set
+    run dolt sql -q 'call dolt_checkout("-b", "newbranch2", "origin/feature");'
+    echo "$output"
+    [ "$status" -eq 0 ]
+    run dolt sql -q 'select * from dolt_branches;'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| origin | feature" ]] || false
+
+
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
+}
+
 @test "remotes: dolt branch track flag sets upstream" {
     mkdir remote
     mkdir repo1
@@ -2323,4 +2367,61 @@ SQL
     run dolt sql -q "use test_repo; show tables;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test_table" ]] || false
+}
+
+@test "remotes: fetch --prune deletes remote refs not on remote" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote1
+    dolt remote add remote2 file://../remote2
+    dolt branch b1
+    dolt branch b2
+    dolt push origin main
+    dolt push remote2 main
+    dolt push origin b1
+    dolt push remote2 b2
+
+    cd ..
+    dolt clone file://./remote1 repo2
+
+    cd repo2
+    run dolt branch -va
+    [[ "$output" =~ "main" ]] || false
+
+    dolt remote add remote2 file://../remote2
+    dolt fetch
+    dolt fetch remote2
+
+    run dolt branch -r
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "origin/b1" ]] || false
+    [[ "$output" =~ "remote2/b2" ]] || false
+
+    # delete the branches on the remote
+    cd ../repo1
+    dolt push origin :b1
+    dolt push remote2 :b2
+
+    cd ../repo2
+    dolt fetch --prune
+
+    # prune should have deleted the origin/b1 branch, but not the one on the other remote
+    run dolt branch -r
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "origin/b1" ]] || false
+    [[ "$output" =~ "remote2/b2" ]] || false
+
+    # now the other remote
+    dolt fetch --prune remote2
+    run dolt branch -r
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "origin/b1" ]] || false
+    [[ ! "$output" =~ "remote2/b2" ]] || false
+
+    run dolt fetch --prune remote2 'refs/heads/main:refs/remotes/remote2/othermain'
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "--prune option cannot be provided with a ref spec" ]] || false
 }

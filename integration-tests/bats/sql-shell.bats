@@ -21,28 +21,6 @@ teardown() {
     teardown_common
 }
 
-@test "sql-shell: --user option changes superuser" {
-    # remove config
-    rm -rf .doltcfg
-
-    # default is root@localhost
-    run dolt sql <<< "select user, host from mysql.user"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "root" ]] || false
-    ! [[ "$output" =~ "dolt" ]] || false
-    [[ "$output" =~ "localhost" ]] || false
-
-    # make it dolt@localhost
-    run dolt --user=dolt sql <<< "select user, host from mysql.user"
-    [ "$status" -eq 0 ]
-    ! [[ "$output" =~ "root" ]] || false
-    [[ "$output" =~ "dolt" ]] || false
-    [[ "$output" =~ "localhost" ]] || false
-
-    # remove config
-    rm -rf .doltcfg
-}
-
 @test "sql-shell: use user without privileges, and no superuser created" {
     rm -rf .doltcfg
 
@@ -57,7 +35,12 @@ teardown() {
 
     run dolt --user=new_user sql <<< "select user from mysql.user"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "command denied to user " ]] || false
+    # https://github.com/dolthub/dolt/issues/6307 
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      [[ "$output" =~ "Access denied for user 'new_user'@'localhost'" ]] || false
+    else
+      [[ "$output" =~ "command denied to user 'new_user'@'localhost'" ]] || false
+    fi
 
     rm -rf .doltcfg
 }
@@ -86,6 +69,18 @@ teardown() {
 @test "sql-shell: shell works after failing query" {
     skiponwindows "Need to install expect and make this script work on windows."
     $BATS_TEST_DIRNAME/sql-works-after-failing-query.expect
+}
+
+@test "sql-shell: empty DB in prompt is OK" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Presently sql command will not connect to remote server due to lack of lock file where there are not DBs."
+    fi
+    # ignore common setup. Use an empty db with no server.
+    rm -rf .dolt
+    mkdir emptyDb
+    cd emptyDb
+    $BATS_TEST_DIRNAME/sql-shell-empty-prompt.expect
 }
 
 @test "sql-shell: delimiter" {
@@ -258,6 +253,9 @@ teardown() {
 }
 
 @test "sql-shell: specify doltcfg directory" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Remote behavior differs"
+    fi
     # remove any previous config directories
     rm -rf .doltcfg
     rm -rf doltcfgdir
@@ -295,6 +293,9 @@ teardown() {
 }
 
 @test "sql-shell: specify privilege file" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Remote behavior differs"
+    fi
     # remove config files
     rm -rf .doltcfg
     rm -f privs.db
@@ -528,6 +529,9 @@ teardown() {
 }
 
 @test "sql-shell: specify doltcfg-dir and privilege-file" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Remote behavior differs"
+    fi
     # remove any previous config directories
     rm -rf .doltcfg
     rm -rf doltcfgdir

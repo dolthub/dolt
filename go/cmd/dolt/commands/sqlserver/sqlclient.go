@@ -37,6 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -107,11 +108,6 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 	var serverConfig ServerConfig
 	var serverController *ServerController
 	var err error
-
-	if _, ok := apr.GetValue(commands.UserFlag); !ok {
-		cli.PrintErrln(color.RedString("--user or -u argument is required"))
-		return 1
-	}
 
 	if apr.Contains(sqlClientDualFlag) {
 		if !dEnv.Valid() {
@@ -211,6 +207,12 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 		cli.PrintErrln(err.Error())
 		return 1
 	}
+
+	if parsedMySQLConfig.User == "" {
+		cli.PrintErrln(color.RedString("--user or -u argument is required"))
+		return 1
+	}
+
 	parsedMySQLConfig.DBName = dbToUse
 	mysqlConnector, err := mysqlDriver.NewConnector(parsedMySQLConfig)
 	if err != nil {
@@ -475,18 +477,25 @@ func (c ConnectionQueryist) Query(ctx *sql.Context, query string) (sql.Schema, s
 
 // BuildConnectionStringQueryist returns a Queryist that connects to the server specified by the given server config. Presence in this
 // module isn't ideal, but it's the only way to get the server config into the queryist.
-func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, apr *argparser.ArgParseResults, port int, database string) (cli.LateBindQueryist, error) {
-	serverConfig, err := GetServerConfig(cwdFS, apr)
+func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argparser.ArgParseResults, host string, port int, useTLS bool, dbRev string) (cli.LateBindQueryist, error) {
+	clientConfig, err := GetClientConfig(cwdFS, creds, apr)
 	if err != nil {
 		return nil, err
 	}
 
-	parsedMySQLConfig, err := mysqlDriver.ParseDSN(ConnectionString(serverConfig, database))
+	// ParseDSN currently doesn't support `/` in the db name
+	dbName, _ := dsess.SplitRevisionDbName(dbRev)
+	parsedMySQLConfig, err := mysqlDriver.ParseDSN(ConnectionString(clientConfig, dbName))
 	if err != nil {
 		return nil, err
 	}
 
-	parsedMySQLConfig.Addr = fmt.Sprintf("localhost:%d", port)
+	parsedMySQLConfig.DBName = dbRev
+	parsedMySQLConfig.Addr = fmt.Sprintf("%s:%d", host, port)
+
+	if useTLS {
+		parsedMySQLConfig.TLSConfig = "true"
+	}
 
 	mysqlConnector, err := mysqlDriver.NewConnector(parsedMySQLConfig)
 	if err != nil {
@@ -498,7 +507,9 @@ func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, a
 	queryist := ConnectionQueryist{connection: conn}
 
 	var lateBind cli.LateBindQueryist = func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) {
-		return queryist, sql.NewContext(ctx), func() { conn.Conn(ctx) }, nil
+		sqlCtx := sql.NewContext(ctx)
+		sqlCtx.SetCurrentDatabase(dbRev)
+		return queryist, sqlCtx, func() { conn.Conn(ctx) }, nil
 	}
 
 	return lateBind, nil

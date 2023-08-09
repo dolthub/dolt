@@ -45,7 +45,7 @@ const (
 	DbRevisionDelimiter = "/"
 )
 
-var ErrSessionNotPeristable = errors.New("session is not persistable")
+var ErrSessionNotPersistable = errors.New("session is not persistable")
 
 // DoltSession is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type DoltSession struct {
@@ -254,6 +254,38 @@ func (d *DoltSession) RemoveBranchState(ctx *sql.Context, dbName string, branchN
 	}
 
 	checkedOutState.dbState.checkedOutRevSpec = defaultHead
+
+	// also clear out any db-level caches for this db
+	d.dbCache.Clear()
+	return nil
+}
+
+// RenameBranchState replaces all references to a renamed branch with its new name
+func (d *DoltSession) RenameBranchState(ctx *sql.Context, dbName string, oldBranchName, newBranchName string) error {
+	baseName, _ := SplitRevisionDbName(dbName)
+
+	checkedOutState, ok, err := d.lookupDbState(ctx, baseName)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return sql.ErrDatabaseNotFound.New(baseName)
+	}
+
+	d.mu.Lock()
+	branch, ok := checkedOutState.dbState.heads[strings.ToLower(oldBranchName)]
+
+	if !ok {
+		// nothing to rename
+		d.mu.Unlock()
+		return nil
+	}
+
+	delete(checkedOutState.dbState.heads, strings.ToLower(oldBranchName))
+	branch.head = strings.ToLower(newBranchName)
+	checkedOutState.dbState.heads[strings.ToLower(newBranchName)] = branch
+
+	d.mu.Unlock()
 
 	// also clear out any db-level caches for this db
 	d.dbCache.Clear()
@@ -625,7 +657,7 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, branchState *branchStat
 	}
 
 	var mergeParentCommits []*doltdb.Commit
-	if branchState.WorkingSet().MergeActive() {
+	if branchState.WorkingSet().MergeCommitParents() {
 		mergeParentCommits = []*doltdb.Commit{branchState.WorkingSet().MergeState().Commit()}
 	} else if props.Amend {
 		numParentsHeadForAmend := headCommit.NumParents()
@@ -1168,13 +1200,13 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 
 		// TODO: this is pretty clunky, there is a silly dependency between InitialDbState and globalstate.StateProvider
 		//  that's hard to express with the current types
-		stateProvider, ok := db.(globalstate.StateProvider)
+		stateProvider, ok := db.(globalstate.GlobalStateProvider)
 		if !ok {
 			return fmt.Errorf("database does not contain global state store")
 		}
 		sessionState.globalState = stateProvider.GetGlobalState()
 
-		tracker, err := sessionState.globalState.GetAutoIncrementTracker(ctx)
+		tracker, err := sessionState.globalState.AutoIncrementTracker(ctx)
 		if err != nil {
 			return err
 		}
@@ -1351,7 +1383,7 @@ func (d DoltSession) WithGlobals(conf config.ReadWriteConfig) *DoltSession {
 // PersistGlobal implements sql.PersistableSession
 func (d *DoltSession) PersistGlobal(sysVarName string, value interface{}) error {
 	if d.globalsConf == nil {
-		return ErrSessionNotPeristable
+		return ErrSessionNotPersistable
 	}
 
 	sysVar, _, err := validatePersistableSysVar(sysVarName)
@@ -1367,7 +1399,7 @@ func (d *DoltSession) PersistGlobal(sysVarName string, value interface{}) error 
 // RemovePersistedGlobal implements sql.PersistableSession
 func (d *DoltSession) RemovePersistedGlobal(sysVarName string) error {
 	if d.globalsConf == nil {
-		return ErrSessionNotPeristable
+		return ErrSessionNotPersistable
 	}
 
 	sysVar, _, err := validatePersistableSysVar(sysVarName)
@@ -1383,7 +1415,7 @@ func (d *DoltSession) RemovePersistedGlobal(sysVarName string) error {
 // RemoveAllPersistedGlobals implements sql.PersistableSession
 func (d *DoltSession) RemoveAllPersistedGlobals() error {
 	if d.globalsConf == nil {
-		return ErrSessionNotPeristable
+		return ErrSessionNotPersistable
 	}
 
 	allVars := make([]string, d.globalsConf.Size())
@@ -1402,7 +1434,7 @@ func (d *DoltSession) RemoveAllPersistedGlobals() error {
 // RemoveAllPersistedGlobals implements sql.PersistableSession
 func (d *DoltSession) GetPersistedValue(k string) (interface{}, error) {
 	if d.globalsConf == nil {
-		return nil, ErrSessionNotPeristable
+		return nil, ErrSessionNotPersistable
 	}
 
 	return getPersistedValue(d.globalsConf, k)
@@ -1411,7 +1443,7 @@ func (d *DoltSession) GetPersistedValue(k string) (interface{}, error) {
 // SystemVariablesInConfig returns a list of System Variables associated with the session
 func (d *DoltSession) SystemVariablesInConfig() ([]sql.SystemVariable, error) {
 	if d.globalsConf == nil {
-		return nil, ErrSessionNotPeristable
+		return nil, ErrSessionNotPersistable
 	}
 	sysVars, _, err := SystemVariablesInConfig(d.globalsConf)
 	if err != nil {

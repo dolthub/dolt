@@ -152,7 +152,7 @@ func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	}
 
 	if !ok {
-		return nil, errors.New(fmt.Sprintf("table: %s does not exist", dt.name))
+		return nil, fmt.Errorf("table: %s does not exist", dt.name)
 	}
 
 	wrTblHash, _, err := dt.workingRoot.GetTableHash(ctx, exactName)
@@ -268,7 +268,7 @@ func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.
 	if err != nil {
 		return nil, err
 	} else if !ok {
-		return nil, errors.New(fmt.Sprintf("table: %s does not exist", dt.name))
+		return nil, fmt.Errorf("table: %s does not exist", dt.name)
 	}
 
 	var parentHashes []hash.Hash
@@ -434,7 +434,7 @@ func (dt *DiffTable) toCommitLookupPartitions(ctx *sql.Context, hashes []hash.Ha
 	if err != nil {
 		return nil, err
 	} else if !ok {
-		return nil, errors.New(fmt.Sprintf("table: %s does not exist", dt.name))
+		return nil, fmt.Errorf("table: %s does not exist", dt.name)
 	}
 
 	working, err := dt.head.HashOf()
@@ -704,17 +704,6 @@ type DiffPartitions struct {
 	selectFunc      partitionSelectFunc
 	toSch           schema.Schema
 	fromSch         schema.Schema
-}
-
-func NewDiffPartitions(tblName string, cmItr doltdb.CommitItr, cmHashToTblInfo map[hash.Hash]TblInfoAtCommit, selectFunc partitionSelectFunc, toSch, fromSch schema.Schema) *DiffPartitions {
-	return &DiffPartitions{
-		tblName:         tblName,
-		cmItr:           cmItr,
-		cmHashToTblInfo: cmHashToTblInfo,
-		selectFunc:      selectFunc,
-		toSch:           toSch,
-		fromSch:         fromSch,
-	}
 }
 
 // processCommit is called in a commit iteration loop. Adds partitions when it finds a commit and its parent that have

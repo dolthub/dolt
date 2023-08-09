@@ -21,12 +21,10 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -40,6 +38,12 @@ const (
 	RenamedTable
 	RemovedTable
 )
+
+type TableInfo struct {
+	Name       string
+	Sch        schema.Schema
+	CreateStmt string
+}
 
 // TableDelta represents the change of a single table between two roots.
 // FromFKs and ToFKs contain Foreign Keys that constrain columns in this table,
@@ -68,6 +72,25 @@ type TableDeltaSummary struct {
 	TableName     string
 	FromTableName string
 	ToTableName   string
+	AlterStmts    []string
+}
+
+// IsAdd returns true if the table was added between the fromRoot and toRoot.
+func (tds TableDeltaSummary) IsAdd() bool {
+	return tds.FromTableName == "" && tds.ToTableName != ""
+}
+
+// IsDrop returns true if the table was dropped between the fromRoot and toRoot.
+func (tds TableDeltaSummary) IsDrop() bool {
+	return tds.FromTableName != "" && tds.ToTableName == ""
+}
+
+// IsRename return true if the table was renamed between the fromRoot and toRoot.
+func (tds TableDeltaSummary) IsRename() bool {
+	if tds.IsAdd() || tds.IsDrop() {
+		return false
+	}
+	return tds.FromTableName != tds.ToTableName
 }
 
 // GetStagedUnstagedTableDeltas represents staged and unstaged changes as TableDelta slices.
@@ -560,115 +583,6 @@ func (td TableDelta) GetRowData(ctx context.Context) (from, to durable.Index, er
 	return from, to, nil
 }
 
-// SqlSchemaDiff returns a slice of DDL statements that will transform the schema in the from delta to the schema in
-// the to delta.
-func SqlSchemaDiff(ctx context.Context, td TableDelta, toSchemas map[string]schema.Schema) ([]string, error) {
-	fromSch, toSch, err := td.GetSchemas(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("cannot retrieve schema for table %s, cause: %s", td.ToName, err.Error())
-	}
-
-	var ddlStatements []string
-	if td.IsDrop() {
-		ddlStatements = append(ddlStatements, sqlfmt.DropTableStmt(td.FromName))
-	} else if td.IsAdd() {
-		toPkSch, err := sqlutil.FromDoltSchema(td.ToName, td.ToSch)
-		if err != nil {
-			return nil, err
-		}
-		stmt, err := GenerateCreateTableStatement(td.ToName, td.ToSch, toPkSch, td.ToFks, td.ToFksParentSch)
-		if err != nil {
-			return nil, errhand.VerboseErrorFromError(err)
-		}
-		ddlStatements = append(ddlStatements, stmt)
-	} else {
-		stmts, err := GetNonCreateNonDropTableSqlSchemaDiff(td, toSchemas, fromSch, toSch)
-		if err != nil {
-			return nil, err
-		}
-		ddlStatements = append(ddlStatements, stmts...)
-	}
-
-	return ddlStatements, nil
-}
-
-// GetNonCreateNonDropTableSqlSchemaDiff returns any schema diff in SQL statements that is NEITHER 'CREATE TABLE' NOR 'DROP TABLE' statements.
-func GetNonCreateNonDropTableSqlSchemaDiff(td TableDelta, toSchemas map[string]schema.Schema, fromSch, toSch schema.Schema) ([]string, error) {
-	if td.IsAdd() || td.IsDrop() {
-		// use add and drop specific methods
-		return nil, nil
-	}
-
-	var ddlStatements []string
-	if td.FromName != td.ToName {
-		ddlStatements = append(ddlStatements, sqlfmt.RenameTableStmt(td.FromName, td.ToName))
-	}
-
-	eq := schema.SchemasAreEqual(fromSch, toSch)
-	if eq && !td.HasFKChanges() {
-		return ddlStatements, nil
-	}
-
-	colDiffs, unionTags := DiffSchColumns(fromSch, toSch)
-	for _, tag := range unionTags {
-		cd := colDiffs[tag]
-		switch cd.DiffType {
-		case SchDiffNone:
-		case SchDiffAdded:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddColStmt(td.ToName, sqlfmt.GenerateCreateTableColumnDefinition(*cd.New)))
-		case SchDiffRemoved:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropColStmt(td.ToName, cd.Old.Name))
-		case SchDiffModified:
-			// Ignore any primary key set changes here
-			if cd.Old.IsPartOfPK != cd.New.IsPartOfPK {
-				continue
-			}
-			if cd.Old.Name != cd.New.Name {
-				ddlStatements = append(ddlStatements, sqlfmt.AlterTableRenameColStmt(td.ToName, cd.Old.Name, cd.New.Name))
-			}
-		}
-	}
-
-	// Print changes between a primary key set change. It contains an ALTER TABLE DROP and an ALTER TABLE ADD
-	if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
-		ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropPks(td.ToName))
-		if toSch.GetPKCols().Size() > 0 {
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddPrimaryKeys(td.ToName, toSch.GetPKCols()))
-		}
-	}
-
-	for _, idxDiff := range DiffSchIndexes(fromSch, toSch) {
-		switch idxDiff.DiffType {
-		case SchDiffNone:
-		case SchDiffAdded:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
-		case SchDiffRemoved:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
-		case SchDiffModified:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
-		}
-	}
-
-	for _, fkDiff := range DiffForeignKeys(td.FromFks, td.ToFks) {
-		switch fkDiff.DiffType {
-		case SchDiffNone:
-		case SchDiffAdded:
-			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
-		case SchDiffRemoved:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From))
-		case SchDiffModified:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From))
-
-			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
-		}
-	}
-
-	return ddlStatements, nil
-}
-
 // GetDataDiffStatement returns any data diff in SQL statements for given table including INSERT, UPDATE and DELETE row statements.
 func GetDataDiffStatement(tableName string, sch schema.Schema, row sql.Row, rowDiffType ChangeType, colDiffTypes []ChangeType) (string, error) {
 	if len(row) != len(colDiffTypes) {
@@ -686,6 +600,9 @@ func GetDataDiffStatement(tableName string, sch schema.Schema, row sql.Row, rowD
 			if diffType != None {
 				updatedCols.Add(sch.GetAllCols().GetByIndex(i).Name)
 			}
+		}
+		if updatedCols.Size() == 0 {
+			return "", nil
 		}
 		return sqlfmt.SqlRowAsUpdateStmt(row, tableName, sch, updatedCols)
 	case ModifiedOld:
@@ -758,4 +675,38 @@ func isPrimaryKeyIndex(index schema.Index, sch schema.Schema) bool {
 	}
 
 	return true
+}
+
+// WorkingSetContainsOnlyIgnoredTables returns true if all changes in working set are ignored tables.
+// Otherwise, if there are any non-ignored changes, returns false.
+// Note that only unstaged tables are subject to dolt_ignore (this is consistent with what git does.)
+func WorkingSetContainsOnlyIgnoredTables(ctx context.Context, roots doltdb.Roots) (bool, error) {
+	staged, unstaged, err := GetStagedUnstagedTableDeltas(ctx, roots)
+	if err != nil {
+		return false, err
+	}
+
+	if len(staged) > 0 {
+		return false, nil
+	}
+
+	ignorePatterns, err := doltdb.GetIgnoredTablePatterns(ctx, roots)
+	if err != nil {
+		return false, err
+	}
+
+	for _, tableDelta := range unstaged {
+		if !(tableDelta.IsAdd()) {
+			return false, nil
+		}
+		isIgnored, err := ignorePatterns.IsTableNameIgnored(tableDelta.ToName)
+		if err != nil {
+			return false, err
+		}
+		if isIgnored != doltdb.Ignore {
+			return false, nil
+		}
+	}
+
+	return true, nil
 }

@@ -44,14 +44,17 @@ type prollyTableWriter struct {
 	sch    schema.Schema
 	sqlSch sql.Schema
 
-	aiCol     schema.Column
-	aiTracker globalstate.AutoIncrementTracker
+	aiCol                  schema.Column
+	aiTracker              globalstate.AutoIncrementTracker
+	nextAutoIncrementValue map[string]uint64
+	setAutoIncrement       bool
 
 	flusher WriteSessionFlusher
 	setter  SessionRootSetter
 }
 
 var _ TableWriter = &prollyTableWriter{}
+var _ sql.AutoIncrementGetter = &prollyTableWriter{}
 
 func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch sql.Schema, sch schema.Schema) (map[string]indexWriter, error) {
 	s, err := t.GetIndexSet(ctx)
@@ -64,6 +67,9 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch
 	writers := make(map[string]indexWriter)
 
 	for _, def := range definitions {
+		if def.IsFullText() {
+			continue
+		}
 		defName := def.Name()
 		idxRows, err := s.GetIndex(ctx, sch, defName)
 		if err != nil {
@@ -102,6 +108,9 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, sqlS
 	writers := make(map[string]indexWriter)
 
 	for _, def := range definitions {
+		if def.IsFullText() {
+			continue
+		}
 		defName := def.Name()
 		idxRows, err := s.GetIndex(ctx, sch, defName)
 		if err != nil {
@@ -153,6 +162,8 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 	if err = w.primary.Insert(ctx, sqlRow); err != nil {
 		return err
 	}
+
+	w.setAutoIncrement = true
 	return nil
 }
 
@@ -182,6 +193,8 @@ func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.
 	if err := w.primary.Update(ctx, oldRow, newRow); err != nil {
 		return err
 	}
+
+	w.setAutoIncrement = true
 	return nil
 }
 
@@ -192,18 +205,15 @@ func (w *prollyTableWriter) GetNextAutoIncrementValue(ctx *sql.Context, insertVa
 
 // SetAutoIncrementValue implements TableWriter.
 func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) error {
-	seq, err := globalstate.CoerceAutoIncrementValue(val)
+	seq, err := w.aiTracker.CoerceAutoIncrementValue(val)
 	if err != nil {
 		return err
 	}
 
-	// todo(andy) set here or in flush?
-	w.tbl, err = w.tbl.SetAutoIncrementValue(ctx, seq)
-	if err != nil {
-		return err
-	}
-	w.aiTracker.Set(w.tableName, seq)
+	w.nextAutoIncrementValue = make(map[string]uint64)
+	w.nextAutoIncrementValue[w.tableName] = seq
 
+	// The work above is persisted in flush
 	return w.flush(ctx)
 }
 
@@ -337,19 +347,11 @@ func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err err
 		return nil, err
 	}
 
-	if w.aiCol.AutoIncrement {
-		seq := w.aiTracker.Current(w.tableName)
-		t, err = t.SetAutoIncrementValue(ctx, seq)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return t, nil
 }
 
 func (w *prollyTableWriter) flush(ctx *sql.Context) error {
-	ws, err := w.flusher.Flush(ctx)
+	ws, err := w.flusher.FlushWithAutoIncrementOverrides(ctx, w.setAutoIncrement, w.nextAutoIncrementValue)
 	if err != nil {
 		return err
 	}

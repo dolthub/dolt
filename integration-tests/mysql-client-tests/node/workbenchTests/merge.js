@@ -1,4 +1,4 @@
-import { logsMatcher, mergeBaseMatcher } from "./matchers.js";
+import { logsMatcher, mergeBaseMatcher, mergeMatcher } from "./matchers.js";
 
 export const mergeTests = [
   {
@@ -14,7 +14,8 @@ export const mergeTests = [
   {
     q: `CALL DOLT_MERGE(:branchName, "--no-ff", "-m", :commitMsg)`,
     p: { branchName: "mybranch", commitMsg: "Merge mybranch into main" },
-    res: [{ fast_forward: 0, conflicts: 0 }],
+    res: [{ hash: "", fast_forward: 0, conflicts: 0 }],
+    matcher: mergeMatcher,
   },
   {
     q: `SELECT * FROM DOLT_LOG(:refName, '--parents') LIMIT :limit OFFSET :offset`,

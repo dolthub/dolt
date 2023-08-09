@@ -227,7 +227,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 
 	case *sqlparser.Delete:
 		_, itr, err = eng.Query(sqlCtx, query)
-	case *sqlparser.MultiAlterDDL:
+	case *sqlparser.AlterTable:
 		_, itr, err = eng.Query(sqlCtx, query)
 	case *sqlparser.DDL:
 		_, itr, err = eng.Query(sqlCtx, query)

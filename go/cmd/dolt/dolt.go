@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 	"github.com/pkg/profile"
+	"github.com/tidwall/gjson"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/jaeger"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -55,13 +56,14 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 const (
-	Version = "1.6.1"
+	Version = "1.9.0"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -118,19 +120,14 @@ var doltSubCommands = []cli.Command{
 	docscmds.Commands,
 	stashcmds.StashCommands,
 	&commands.Assist{},
+	commands.ProfileCmd{},
 }
 
 var commandsWithoutCliCtx = []cli.Command{
-	commands.DiffCmd{},
-	commands.ResetCmd{},
-	commands.CleanCmd{},
 	admin.Commands,
 	sqlserver.SqlServerCmd{VersionStr: Version},
 	sqlserver.SqlClientCmd{VersionStr: Version},
 	commands.LogCmd{},
-	commands.ShowCmd{},
-	commands.CheckoutCmd{},
-	cnfcmds.Commands,
 	commands.CloneCmd{},
 	commands.FetchCmd{},
 	commands.PushCmd{},
@@ -140,7 +137,6 @@ var commandsWithoutCliCtx = []cli.Command{
 	credcmds.Commands,
 	commands.LsCmd{},
 	schcmds.Commands,
-	commands.TagCmd{},
 	cvcmds.Commands,
 	commands.SendMetricsCmd{},
 	commands.MigrateCmd{},
@@ -157,6 +153,21 @@ var commandsWithoutCliCtx = []cli.Command{
 	dumpZshCommand,
 	docscmds.Commands,
 	&commands.Assist{},
+	commands.ProfileCmd{},
+}
+
+var commandsWithoutGlobalArgSupport = []cli.Command{
+	commands.InitCmd{},
+	commands.CloneCmd{},
+	docscmds.Commands,
+	commands.MigrateCmd{},
+	commands.ReadTablesCmd{},
+	commands.LoginCmd{},
+	credcmds.Commands,
+	sqlserver.SqlServerCmd{VersionStr: Version},
+	sqlserver.SqlClientCmd{VersionStr: Version},
+	commands.VersionCmd{VersionStr: Version},
+	commands.ConfigCmd{},
 }
 
 func initCliContext(commandName string) bool {
@@ -168,12 +179,28 @@ func initCliContext(commandName string) bool {
 	return true
 }
 
-var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", doltSubCommands)
+func supportsGlobalArgs(commandName string) bool {
+	for _, command := range commandsWithoutGlobalArgSupport {
+		if command.Name() == commandName {
+			return false
+		}
+	}
+	return true
+}
 
-var globalArgParser = buildGlobalArgs()
+var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", doltSubCommands)
+var globalArgParser = cli.CreateGlobalArgParser("dolt")
+var globalDocs = cli.CommandDocsForCommandString("dolt", doc, globalArgParser)
+
+var globalSpecialMsg = `
+Dolt subcommands are in transition to using the flags listed below as global flags.
+Not all subcommands use these flags. If your command accepts these flags without error, then they are supported.
+`
 
 func init() {
 	dumpDocsCommand.DoltCommand = doltCommand
+	dumpDocsCommand.GlobalDocs = globalDocs
+	dumpDocsCommand.GlobalSpecialMsg = globalSpecialMsg
 	dumpZshCommand.DoltCommand = doltCommand
 	dfunctions.VersionString = Version
 }
@@ -395,18 +422,29 @@ func runMain() int {
 		return exit
 	}
 
-	_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString("dolt", doc, globalArgParser))
+	_, usage := cli.HelpAndUsagePrinters(globalDocs)
 
-	apr, remainingArgs, err := globalArgParser.ParseGlobalArgs(args)
+	var fs filesys.Filesys
+	fs = filesys.LocalFS
+	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, Version)
+	dEnv.IgnoreLockFile = ignoreLockFile
 
+	root, err := env.GetCurrentUserHomeDir()
+	if err != nil {
+		cli.PrintErrln(color.RedString("Failed to load the HOME directory: %v", err))
+		return 1
+	}
+
+	globalConfig, ok := dEnv.Config.GetConfig(env.GlobalConfig)
+	if !ok {
+		cli.PrintErrln(color.RedString("Failed to get global config"))
+		return 1
+	}
+
+	apr, remainingArgs, subcommandName, err := parseGlobalArgsAndSubCommandName(globalConfig, args)
 	if err == argparser.ErrHelp {
 		doltCommand.PrintUsage("dolt")
-
-		specialMsg := `
-Dolt subcommands are in transition to using the flags listed below as global flags.
-The sql subcommand is currently the only command that uses these flags. All other commands will ignore them.
-`
-		cli.Println(specialMsg)
+		cli.Println(globalSpecialMsg)
 		usage()
 
 		return 0
@@ -415,10 +453,6 @@ The sql subcommand is currently the only command that uses these flags. All othe
 		return 1
 	}
 
-	subcommandName := remainingArgs[0]
-
-	var fs filesys.Filesys
-	fs = filesys.LocalFS
 	dataDir, hasDataDir := apr.GetValue(commands.DataDirFlag)
 	if hasDataDir {
 		// If a relative path was provided, this ensures we have an absolute path everywhere.
@@ -432,12 +466,9 @@ The sql subcommand is currently the only command that uses these flags. All othe
 			return 1
 		}
 	}
-	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, Version)
-	dEnv.IgnoreLockFile = ignoreLockFile
 
-	root, err := env.GetCurrentUserHomeDir()
-	if err != nil {
-		cli.PrintErrln(color.RedString("Failed to load the HOME directory: %v", err))
+	if dEnv.CfgLoadErr != nil {
+		cli.PrintErrln(color.RedString("Failed to load the global config. %v", dEnv.CfgLoadErr))
 		return 1
 	}
 
@@ -467,11 +498,6 @@ The sql subcommand is currently the only command that uses these flags. All othe
 			// log.Print(err)
 		}
 	}()
-
-	if dEnv.CfgLoadErr != nil {
-		cli.PrintErrln(color.RedString("Failed to load the global config. %v", dEnv.CfgLoadErr))
-		return 1
-	}
 
 	err = reconfigIfTempFileMoveFails(dEnv)
 
@@ -521,15 +547,37 @@ The sql subcommand is currently the only command that uses these flags. All othe
 
 	var cliCtx cli.CliContext = nil
 	if initCliContext(subcommandName) {
-		lateBind, err := buildLateBinder(ctx, dEnv.FS, mrEnv, apr, subcommandName, verboseEngineSetup)
+		// validate that --user and --password are set appropriately.
+		aprAlt, creds, err := cli.BuildUserPasswordPrompt(apr)
+		apr = aprAlt
 		if err != nil {
-			cli.PrintErrln(color.RedString("Failure to Load SQL Engine: %v", err))
+			cli.PrintErrln(color.RedString("Failed to parse credentials: %v", err))
+			return 1
+		}
+
+		lateBind, err := buildLateBinder(ctx, dEnv.FS, mrEnv, creds, apr, subcommandName, verboseEngineSetup)
+
+		if err != nil {
+			cli.PrintErrln(color.RedString("%v", err))
 			return 1
 		}
 
 		cliCtx, err = cli.NewCliContext(apr, dEnv.Config, lateBind)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Unexpected Error: %v", err))
+			return 1
+		}
+	} else {
+		if args[0] != subcommandName {
+			if supportsGlobalArgs(subcommandName) {
+				cli.PrintErrln(
+					`Global arguments are not supported for this command as it has not yet been migrated to function in a remote context. 
+If you're interested in running this command against a remote host, hit us up on discord (https://discord.gg/gqr7K4VNKe).`)
+			} else {
+				cli.PrintErrln(
+					`This command does not support global arguments. Please try again without the global arguments 
+or check the docs for questions about usage.`)
+			}
 			return 1
 		}
 	}
@@ -554,15 +602,39 @@ The sql subcommand is currently the only command that uses these flags. All othe
 	return res
 }
 
-func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, apr *argparser.ArgParseResults, subcommandName string, verbose bool) (cli.LateBindQueryist, error) {
+// buildLateBinder builds a LateBindQueryist for which is used to obtain the Queryist used for the length of the
+// command execution.
+func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, creds *cli.UserPassword, apr *argparser.ArgParseResults, subcommandName string, verbose bool) (cli.LateBindQueryist, error) {
 
 	var targetEnv *env.DoltEnv = nil
 
 	useDb, hasUseDb := apr.GetValue(commands.UseDbFlag)
+	// If the host flag is given, we are forced to use a remote connection to a server.
+	host, hasHost := apr.GetValue(cli.HostFlag)
+	if hasHost {
+		if !hasUseDb && subcommandName != "sql" {
+			return nil, fmt.Errorf("The --%s flag requires the additional --%s flag.", cli.HostFlag, commands.UseDbFlag)
+		}
+
+		port, hasPort := apr.GetInt(cli.PortFlag)
+		if !hasPort {
+			port = 3306
+		}
+		useTLS := !apr.Contains(cli.NoTLSFlag)
+
+		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, host, port, useTLS, useDb)
+	} else {
+		_, hasPort := apr.GetInt(cli.PortFlag)
+		if hasPort {
+			return nil, fmt.Errorf("The --%s flag is only meaningful with the --%s flag.", cli.PortFlag, cli.HostFlag)
+		}
+	}
+
 	if hasUseDb {
-		targetEnv = mrEnv.GetEnv(useDb)
+		dbName, _ := dsess.SplitRevisionDbName(useDb)
+		targetEnv = mrEnv.GetEnv(dbName)
 		if targetEnv == nil {
-			return nil, fmt.Errorf("The provided --use-db %s does not exist or is not a directory.", useDb)
+			return nil, fmt.Errorf("The provided --use-db %s does not exist.", dbName)
 		}
 	} else {
 		useDb = mrEnv.GetFirstDatabase()
@@ -572,7 +644,7 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 		targetEnv = mrEnv.GetEnv(useDb)
 	}
 
-	// There is no target environment detected. This is allowed for a small number of command.
+	// There is no target environment detected. This is allowed for a small number of commands.
 	// We don't expect that number to grow, so we list them here.
 	// It's also allowed when --help is passed.
 	// So we defer the error until the caller tries to use the cli.LateBindQueryist
@@ -593,14 +665,20 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 			if verbose {
 				cli.Println("verbose: starting remote mode")
 			}
-			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, apr, lock.Port, useDb)
+
+			if !creds.Specified {
+				creds = &cli.UserPassword{Username: sqlserver.LocalConnectionUser, Password: lock.Secret, Specified: false}
+			}
+
+			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", lock.Port, false, useDb)
 		}
 	}
 
 	if verbose {
 		cli.Println("verbose: starting local mode")
 	}
-	return commands.BuildSqlEngineQueryist(ctx, cwdFS, mrEnv, apr)
+
+	return commands.BuildSqlEngineQueryist(ctx, cwdFS, mrEnv, creds, apr)
 }
 
 // doc is currently used only when a `initCliContext` command is specified. This will include all commands in time,
@@ -659,15 +737,92 @@ func interceptSendMetrics(ctx context.Context, args []string) (bool, int) {
 	return true, doltCommand.Exec(ctx, "dolt", args, dEnv, nil)
 }
 
-func buildGlobalArgs() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithVariableArgs("dolt")
+// parseGlobalArgsAndSubCommandName parses the global arguments, including a profile if given or a default profile if exists. Also returns the subcommand name.
+func parseGlobalArgsAndSubCommandName(globalConfig config.ReadWriteConfig, args []string) (apr *argparser.ArgParseResults, remaining []string, subcommandName string, err error) {
+	apr, remaining, err = globalArgParser.ParseGlobalArgs(args)
+	if err != nil {
+		return nil, nil, "", err
+	}
 
-	ap.SupportsString(commands.UserFlag, "u", "user", fmt.Sprintf("Defines the local superuser (defaults to `%v`). If the specified user exists, will take on permissions of that user.", commands.DefaultUser))
-	ap.SupportsString(commands.DataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory.")
-	ap.SupportsString(commands.CfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to `$data-dir/.doltcfg`. Will only be created if there is a change to configuration settings.")
-	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
-	ap.SupportsString(commands.BranchCtrlPathFlag, "", "branch control file", "Path to a file to load and store branch control permissions. Defaults to `$doltcfg-dir/branch_control.db`. Will only be created if there is a change to branch control permissions.")
-	ap.SupportsString(commands.UseDbFlag, "", "database", "The name of the database to use when executing SQL queries. Defaults the database of the root directory, if it exists, and the first alphabetically if not.")
+	subcommandName = remaining[0]
 
-	return ap
+	useDefaultProfile := false
+	profileName, hasProfile := apr.GetValue(commands.ProfileFlag)
+	encodedProfiles, err := globalConfig.GetString(commands.GlobalCfgProfileKey)
+	if err != nil {
+		if err == config.ErrConfigParamNotFound {
+			if hasProfile {
+				return nil, nil, "", fmt.Errorf("no profiles found")
+			} else {
+				return apr, remaining, subcommandName, nil
+			}
+		} else {
+			return nil, nil, "", err
+		}
+	}
+	profiles, err := commands.DecodeProfile(encodedProfiles)
+	if err != nil {
+		return nil, nil, "", err
+	}
+
+	if !hasProfile && supportsGlobalArgs(subcommandName) {
+		defaultProfile := gjson.Get(profiles, commands.DefaultProfileName)
+		if defaultProfile.Exists() {
+			args = append([]string{"--profile", commands.DefaultProfileName}, args...)
+			apr, remaining, err = globalArgParser.ParseGlobalArgs(args)
+			if err != nil {
+				return nil, nil, "", err
+			}
+			profileName, _ = apr.GetValue(commands.ProfileFlag)
+			useDefaultProfile = true
+		}
+	}
+
+	if hasProfile || useDefaultProfile {
+		profileArgs, err := getProfile(apr, profileName, profiles)
+		if err != nil {
+			return nil, nil, "", err
+		}
+		args = append(profileArgs, args...)
+		apr, remaining, err = globalArgParser.ParseGlobalArgs(args)
+		if err != nil {
+			return nil, nil, "", err
+		}
+	}
+
+	return
+}
+
+// getProfile retrieves the given profile from the provided list of profiles and returns the args (as flags) and values
+// for that profile in a []string. If the profile is not found, an error is returned.
+func getProfile(apr *argparser.ArgParseResults, profileName, profiles string) (result []string, err error) {
+	prof := gjson.Get(profiles, profileName)
+	if prof.Exists() {
+		hasPassword := false
+		password := ""
+		for flag, value := range prof.Map() {
+			if !apr.Contains(flag) {
+				if flag == cli.PasswordFlag {
+					password = value.Str
+				} else if flag == "has-password" {
+					hasPassword = value.Bool()
+				} else if flag == cli.NoTLSFlag {
+					if value.Bool() {
+						result = append(result, "--"+flag)
+						continue
+					}
+				} else {
+					if value.Str != "" {
+						result = append(result, "--"+flag, value.Str)
+					}
+				}
+			}
+		}
+		if !apr.Contains(cli.PasswordFlag) && hasPassword {
+			result = append(result, "--"+cli.PasswordFlag, password)
+		}
+		return result, nil
+	} else {
+		return nil, fmt.Errorf("profile %s not found", profileName)
+	}
 }

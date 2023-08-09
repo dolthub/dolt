@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 	"testing"
 	"time"
 
@@ -49,7 +50,7 @@ var skipPrepared bool
 // SkipPreparedsCount is used by the "ci-check-repo CI workflow
 // as a reminder to consider prepareds when adding a new
 // enginetest suite.
-const SkipPreparedsCount = 82
+const SkipPreparedsCount = 83
 
 const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
@@ -115,135 +116,38 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	// t.Skip()
+	t.Skip()
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "dolt_checkout and base name resolution",
+			Name: "add column auto_increment, non primary key",
 			SetUpScript: []string{
-				"create table t (a int primary key, b int);",
-				"call dolt_commit('-Am', 'creating table t');",
-				"call dolt_branch('b2');",
-				"call dolt_branch('b3');",
-				"insert into t values (1, 1);",
-				"call dolt_commit('-Am', 'added values on main');",
-				"call dolt_checkout('b2');",
-				"insert into t values (2, 2);",
-				"call dolt_commit('-am', 'added values on b2');",
-				"call dolt_checkout('b3');",
-				"insert into t values (3, 3);",
-				"call dolt_commit('-am', 'added values on b3');",
-				"call dolt_checkout('main');",
+				"CREATE TABLE t1 (i bigint primary key, s varchar(20))",
+				"INSERT INTO t1 VALUES (1, 'a'), (2, 'b'), (3, 'c')",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "select active_branch();",
-					Expected: []sql.Row{{"main"}},
+					Query:    "alter table t1 add column j int auto_increment unique",
+					Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
 				},
 				{
-					Query:    "select * from t;",
-					Expected: []sql.Row{{1, 1}},
+					Query: "show create table t1",
+					Expected: []sql.Row{{"t1",
+						"CREATE TABLE `t1` (\n" +
+							"  `i` bigint NOT NULL,\n" +
+							"  `s` varchar(20),\n" +
+							"  `j` int AUTO_INCREMENT,\n" +
+							"  PRIMARY KEY (`i`),\n" +
+							"  UNIQUE KEY `j` (`j`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 				},
 				{
-					Query:            "use `mydb/b2`;",
-					SkipResultsCheck: true,
-				},
-				{
-					Query:    "select active_branch();",
-					Expected: []sql.Row{{"b2"}},
-				},
-				{
-					Query:    "select * from t;",
-					Expected: []sql.Row{{2, 2}},
-				},
-				{
-					Query:    "select * from mydb.t;",
-					Expected: []sql.Row{{1, 1}},
-				},
-				{
-					Query:            "use `mydb/b3`;",
-					SkipResultsCheck: true,
-				},
-				{
-					Query:    "select active_branch();",
-					Expected: []sql.Row{{"b3"}},
-				},
-				{
-					Query:    "select * from t;",
-					Expected: []sql.Row{{3, 3}},
-				},
-				{
-					Query:    "select * from mydb.t;",
-					Expected: []sql.Row{{1, 1}},
-				},
-				{
-					Query:    "select * from `mydb/b2`.t;",
-					Expected: []sql.Row{{2, 2}},
-				},
-				{
-					Query:            "use `mydb/main`",
-					SkipResultsCheck: true,
-				},
-				{
-					Query:    "select active_branch();",
-					Expected: []sql.Row{{"main"}},
-				},
-				{
-					Query:    "select * from t;",
-					Expected: []sql.Row{{1, 1}},
-				},
-				{
-					Query:    "select * from mydb.t;",
-					Expected: []sql.Row{{1, 1}},
-				},
-				{
-					Query:    "select * from `mydb/b3`.t;",
-					Expected: []sql.Row{{3, 3}},
-				},
-				{
-					Query:            "use `mydb`",
-					SkipResultsCheck: true,
-				},
-				{
-					Query:    "select active_branch();",
-					Expected: []sql.Row{{"main"}},
-				},
-				{
-					Query:    "select * from t;",
-					Expected: []sql.Row{{1, 1}},
-				},
-				{
-					Query:    "select * from `mydb/main`.t;",
-					Expected: []sql.Row{{1, 1}},
-				},
-				{
-					Query:            "call dolt_checkout('b2');",
-					SkipResultsCheck: true,
-				},
-				{
-					Query:            "use `mydb/b3`",
-					SkipResultsCheck: true,
-				},
-				{
-					Query:    "select active_branch();",
-					Expected: []sql.Row{{"b3"}},
-				},
-				// Since b2 was the last branch checked out with dolt_checkout, it's what mydb resolves to
-				{
-					Query:    "select * from `mydb`.t;",
-					Expected: []sql.Row{{2, 2}},
-				},
-				{
-					Query:            "use `mydb`",
-					SkipResultsCheck: true,
-				},
-				{
-					Query:    "select active_branch();",
-					Expected: []sql.Row{{"b2"}},
-				},
-				{
-					Query:    "select * from t;",
-					Expected: []sql.Row{{2, 2}},
+					Query: "select * from t1 order by i",
+					Expected: []sql.Row{
+						{1, "a", 1},
+						{2, "b", 2},
+						{3, "c", 3},
+					},
 				},
 			},
 		},
@@ -1096,6 +1000,25 @@ func TestForeignKeyBranchesPrepared(t *testing.T) {
 	}
 }
 
+func TestFulltextIndexes(t *testing.T) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("FULLTEXT is not supported on the old format")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("For some reason, this is flaky only on Windows CI. Investigation is underway.")
+	}
+	for i := range queries.FulltextTests {
+		//TODO: Dolt drops indexes automatically, which differs from the expectation of GMS
+		if queries.FulltextTests[i].Name == "ALTER TABLE DROP COLUMN used by index" {
+			queries.FulltextTests = append(queries.FulltextTests[:i], queries.FulltextTests[i+1:]...)
+			break
+		}
+	}
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestFulltextIndexes(t, h)
+}
+
 func TestCreateCheckConstraints(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
@@ -1291,6 +1214,26 @@ func TestStoredProcedures(t *testing.T) {
 	enginetest.TestStoredProcedures(t, h)
 }
 
+func TestDoltStoredProcedures(t *testing.T) {
+	for _, script := range DoltProcedureTests {
+		func() {
+			h := newDoltHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func TestDoltStoredProceduresPrepared(t *testing.T) {
+	for _, script := range DoltProcedureTests {
+		func() {
+			h := newDoltHarness(t)
+			defer h.Close()
+			enginetest.TestScriptPrepared(t, h, script)
+		}()
+	}
+}
+
 func TestEvents(t *testing.T) {
 	doltHarness := newDoltHarness(t)
 	defer doltHarness.Close()
@@ -1484,7 +1427,7 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 			},
 			{
 				Query:    "call dolt_checkout('main');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
 			},
 			{
 				Query:    "select database();",
@@ -1616,16 +1559,6 @@ func TestDoltMerge(t *testing.T) {
 			enginetest.TestScript(t, h, script)
 		}()
 	}
-
-	if types.IsFormat_DOLT(types.Format_Default) {
-		for _, script := range Dolt1MergeScripts {
-			func() {
-				h := newDoltHarness(t).WithParallelism(1)
-				defer h.Close()
-				enginetest.TestScript(t, h, script)
-			}()
-		}
-	}
 }
 
 func TestDoltMergePrepared(t *testing.T) {
@@ -1638,15 +1571,27 @@ func TestDoltMergePrepared(t *testing.T) {
 			enginetest.TestScriptPrepared(t, h, script)
 		}()
 	}
+}
 
-	if types.IsFormat_DOLT(types.Format_Default) {
-		for _, script := range Dolt1MergeScripts {
-			func() {
-				h := newDoltHarness(t).WithParallelism(1)
-				defer h.Close()
-				enginetest.TestScriptPrepared(t, h, script)
-			}()
-		}
+func TestDoltRevert(t *testing.T) {
+	for _, script := range RevertScripts {
+		// harness can't reset effectively. Use a new harness for each script
+		func() {
+			h := newDoltHarness(t).WithParallelism(1)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func TestDoltRevertPrepared(t *testing.T) {
+	for _, script := range RevertScripts {
+		// harness can't reset effectively. Use a new harness for each script
+		func() {
+			h := newDoltHarness(t).WithParallelism(1)
+			defer h.Close()
+			enginetest.TestScriptPrepared(t, h, script)
+		}()
 	}
 }
 
@@ -1659,15 +1604,6 @@ func TestDoltAutoIncrement(t *testing.T) {
 			enginetest.TestScript(t, h, script)
 		}()
 	}
-
-	for _, script := range BrokenAutoIncrementTests {
-		t.Run(script.Name, func(t *testing.T) {
-			t.Skip()
-			h := newDoltHarness(t)
-			defer h.Close()
-			enginetest.TestScript(t, h, script)
-		})
-	}
 }
 
 func TestDoltAutoIncrementPrepared(t *testing.T) {
@@ -1678,15 +1614,6 @@ func TestDoltAutoIncrementPrepared(t *testing.T) {
 			defer h.Close()
 			enginetest.TestScriptPrepared(t, h, script)
 		}()
-	}
-
-	for _, script := range BrokenAutoIncrementTests {
-		t.Run(script.Name, func(t *testing.T) {
-			t.Skip()
-			h := newDoltHarness(t)
-			defer h.Close()
-			enginetest.TestScriptPrepared(t, h, script)
-		})
 	}
 }
 
@@ -2313,7 +2240,7 @@ func TestSystemTableIndexesPrepared(t *testing.T) {
 
 				ctx = ctx.WithQuery(tt.query)
 				if tt.exp != nil {
-					enginetest.TestPreparedQueryWithContext(t, ctx, e, harness, tt.query, tt.exp, nil)
+					enginetest.TestPreparedQueryWithContext(t, ctx, e, harness, tt.query, tt.exp, nil, nil)
 				}
 			})
 		}
@@ -2335,7 +2262,10 @@ func TestAddDropPks(t *testing.T) {
 func TestAddAutoIncrementColumn(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestAddAutoIncrementColumn(t, h)
+
+	for _, script := range queries.AlterTableAddAutoIncrementScripts {
+		enginetest.TestScript(t, h, script)
+	}
 }
 
 func TestNullRanges(t *testing.T) {

@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/transform"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	errorkinds "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -52,11 +53,6 @@ var ErrUnableToMergeColumnDefaultValue = errorkinds.NewKind("unable to automatic
 // conflicts), migrate any existing table data to the specified |mergedSch|, and merge table data from both sides
 // of the merge together.
 func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Schema) (*doltdb.Table, *MergeStats, error) {
-	err := maybeAbortDueToUnmergeableIndexes(tm.name, tm.leftSch, tm.rightSch, mergedSch)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	mergeTbl, err := mergeTableArtifacts(ctx, tm, tm.leftTbl)
 	if err != nil {
 		return nil, nil, err
@@ -186,7 +182,6 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		} else if err != nil {
 			return nil, nil, err
 		}
-
 		cnt, err := uniq.validateDiff(ctx, diff)
 		if err != nil {
 			return nil, nil, err
@@ -310,24 +305,6 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 	return finalTbl, s, nil
 }
 
-func maybeAbortDueToUnmergeableIndexes(tableName string, leftSchema, rightSchema, targetSchema schema.Schema) error {
-	leftOk, err := validateTupleFields(leftSchema, targetSchema)
-	if err != nil {
-		return err
-	}
-
-	rightOk, err := validateTupleFields(rightSchema, targetSchema)
-	if err != nil {
-		return err
-	}
-
-	if !leftOk || !rightOk {
-		return fmt.Errorf("table %s can't be automatically merged.\nTo merge this table, make the schema on the source and target branch equal.", tableName)
-	}
-
-	return nil
-}
-
 func threeWayDiffer(ctx context.Context, tm *TableMerger, valueMerger *valueMerger) (*tree.ThreeWayDiffer[val.Tuple, val.TupleDesc], error) {
 	lr, err := tm.leftTbl.GetRowData(ctx)
 	if err != nil {
@@ -447,11 +424,25 @@ func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) 
 			return 0, err
 		}
 
-		if result == nil || result == true {
-			// If a check constraint returns NULL or TRUE, then the check constraint is fulfilled
+		// MySQL treats NULL as TRUE for a check constraint
+		if result == nil {
+			result = true
+		}
+
+		// Coerce into a boolean; technically, this shouldn't be
+		// necessary, since check constraint expressions should always
+		// be of a boolean type, but Dolt has allowed this previously.
+		// https://github.com/dolthub/dolt/issues/6411
+		booleanResult, err := types.ConvertToBool(result)
+		if err != nil {
+			return 0, fmt.Errorf("unable to convert check constraint expression (%s) into boolean value: %v", checkName, err.Error())
+		}
+
+		if booleanResult {
+			// If a check constraint returns TRUE (or NULL), then the check constraint is fulfilled
 			// https://dev.mysql.com/doc/refman/8.0/en/create-table-check-constraints.html
 			continue
-		} else if result == false {
+		} else {
 			conflictCount++
 			meta, err := newCheckCVMeta(cv.sch, checkName)
 			if err != nil {
@@ -460,8 +451,6 @@ func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) 
 			if err = cv.insertArtifact(ctx, diff.Key, newTuple, meta); err != nil {
 				return conflictCount, err
 			}
-		} else {
-			return 0, fmt.Errorf("unexpected result from check constraint expression: %v", result)
 		}
 	}
 
@@ -585,11 +574,18 @@ func newUniqValidator(ctx context.Context, sch schema.Schema, tm *TableMerger, v
 	return uv, nil
 }
 
+// validateDiff processes |diff| and checks for any unique constraint violations that need to be updated. The number
+// of violations recorded along with any error encountered is returned. Processing |diff| may resolve existing unique
+// constraint violations, in which case the violations returned may be a negative number.
 func (uv uniqValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff) (violations int, err error) {
 	var value val.Tuple
 	switch diff.Op {
 	case tree.DiffOpRightAdd, tree.DiffOpRightModify:
 		value = diff.Right
+	case tree.DiffOpRightDelete:
+		// If we see a row deletion event from the right side, we grab the original/base value so that we can update our
+		// local copy of the secondary index.
+		value = diff.Base
 	case tree.DiffOpDivergentModifyResolved:
 		value = diff.Merged
 	default:
@@ -602,6 +598,23 @@ func (uv uniqValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff
 		value = val.NewTuple(uv.valueMerger.syncPool, modifiedValue...)
 	}
 
+	// For a row deletion... we need to remove any unique constraint violations that were previously recorded for
+	// this row.
+	if diff.Op == tree.DiffOpRightDelete {
+		// First update the unique indexes to remove this row.
+		for _, idx := range uv.indexes {
+			err := idx.removeRow(ctx, diff.Key, value)
+			if err != nil {
+				return violations, err
+			}
+		}
+
+		// Then clear any unique constraint violation artifacts for this row. If there is only one unique constraint
+		// violation artifact left, it will also be cleared by this function (since unique constraint violations
+		// must always occur with at least two rows reported).
+		return uv.clearArtifact(ctx, diff.Key, diff.Base)
+	}
+
 	for _, idx := range uv.indexes {
 		err = idx.findCollisions(ctx, diff.Key, value, func(k, v val.Tuple) error {
 			violations++
@@ -611,7 +624,74 @@ func (uv uniqValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff
 			break
 		}
 	}
-	return
+
+	// After detecting any unique constraint violations, we need to update our indexes with the updated row
+	if diff.Op == tree.DiffOpRightAdd || diff.Op == tree.DiffOpRightModify || diff.Op == tree.DiffOpDivergentModifyResolved {
+		for _, idx := range uv.indexes {
+			err := idx.insertRow(ctx, diff.Key, value)
+			if err != nil {
+				return violations, err
+			}
+
+			err = idx.clustered.Put(ctx, diff.Key, value)
+			if err != nil {
+				return violations, err
+			}
+		}
+	}
+
+	return violations, err
+}
+
+// deleteArtifact deletes the unique constraint violation artifact for the row identified by |key| and returns a
+// boolean that indicates if an artifact was deleted, as well as an error that indicates if there were any
+// unexpected errors encountered.
+func (uv uniqValidator) deleteArtifact(ctx context.Context, key val.Tuple) (bool, error) {
+	artifactKey := uv.edits.BuildArtifactKey(ctx, key, uv.srcHash, prolly.ArtifactTypeUniqueKeyViol)
+
+	has, err := uv.edits.Has(ctx, artifactKey)
+	if err != nil || !has {
+		return false, err
+	}
+
+	err = uv.edits.Delete(ctx, artifactKey)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+// clearArtifactsForValue deletes the unique constraint violation artifact for the row identified by |key| and |value|
+// and then checks to see if only one unique constraint violation artifact remains, and if so, deletes it as well,
+// since only a single row remaining for a unique constraint violation means that the violation has been fully
+// resolved and no other rows conflict with that unique value.
+func (uv uniqValidator) clearArtifact(ctx context.Context, key val.Tuple, prevValue val.Tuple) (int, error) {
+	deleted, err := uv.deleteArtifact(ctx, key)
+	if err != nil || !deleted {
+		return 0, err
+	}
+
+	// Start the violation count at -1 to represent the artifact above that we just removed
+	violationCount := -1
+
+	for _, idx := range uv.indexes {
+		// TODO: Test with multiple unique indexes and constraint violations on different values
+		//       Multiple unique indexes won't work yet: https://github.com/dolthub/dolt/issues/6329
+		err := idx.findCollisions(ctx, key, prevValue, func(k, v val.Tuple) error {
+			deleted, err := uv.deleteArtifact(ctx, k)
+			if err != nil || !deleted {
+				return err
+			}
+			violationCount = violationCount - 1
+			return nil
+		})
+		if err != nil {
+			break
+		}
+	}
+
+	return violationCount, nil
 }
 
 func (uv uniqValidator) insertArtifact(ctx context.Context, key, value val.Tuple, meta UniqCVMeta) error {
@@ -624,16 +704,17 @@ func (uv uniqValidator) insertArtifact(ctx context.Context, key, value val.Tuple
 }
 
 type uniqIndex struct {
-	def          schema.Index
-	secondary    prolly.Map
-	clustered    prolly.Map
-	meta         UniqCVMeta
-	prefixDesc   val.TupleDesc
-	secondaryBld index.SecondaryKeyBuilder
-	clusteredBld index.ClusteredKeyBuilder
+	def              schema.Index
+	secondary        *prolly.MutableMap
+	clustered        *prolly.MutableMap
+	meta             UniqCVMeta
+	prefixDesc       val.TupleDesc
+	secondaryBld     index.SecondaryKeyBuilder
+	clusteredBld     index.ClusteredKeyBuilder
+	clusteredKeyDesc val.TupleDesc
 }
 
-func newUniqIndex(sch schema.Schema, def schema.Index, clusterd, secondary prolly.Map) (uniqIndex, error) {
+func newUniqIndex(sch schema.Schema, def schema.Index, clustered, secondary prolly.Map) (uniqIndex, error) {
 	meta, err := makeUniqViolMeta(sch, def)
 	if err != nil {
 		return uniqIndex{}, err
@@ -642,58 +723,92 @@ func newUniqIndex(sch schema.Schema, def schema.Index, clusterd, secondary proll
 	if schema.IsKeyless(sch) { // todo(andy): sad panda
 		secondary = prolly.ConvertToSecondaryKeylessIndex(secondary)
 	}
-	p := clusterd.Pool()
+	p := clustered.Pool()
 
 	prefixDesc := secondary.KeyDesc().PrefixDesc(def.Count())
 	secondaryBld := index.NewSecondaryKeyBuilder(sch, def, secondary.KeyDesc(), p)
-	clusteredBld := index.NewClusteredKeyBuilder(def, sch, clusterd.KeyDesc(), p)
+	clusteredBld := index.NewClusteredKeyBuilder(def, sch, clustered.KeyDesc(), p)
 
 	return uniqIndex{
-		def:          def,
-		secondary:    secondary,
-		clustered:    clusterd,
-		meta:         meta,
-		prefixDesc:   prefixDesc,
-		secondaryBld: secondaryBld,
-		clusteredBld: clusteredBld,
+		def:              def,
+		secondary:        secondary.Mutate(),
+		clustered:        clustered.Mutate(),
+		clusteredKeyDesc: clustered.KeyDesc(),
+		meta:             meta,
+		prefixDesc:       prefixDesc,
+		secondaryBld:     secondaryBld,
+		clusteredBld:     clusteredBld,
 	}, nil
 }
 
 type collisionFn func(key, value val.Tuple) error
 
+func (idx uniqIndex) insertRow(ctx context.Context, key, value val.Tuple) error {
+	secondaryIndexKey := idx.secondaryBld.SecondaryKeyFromRow(key, value)
+	newValue := val.NewTuple(idx.secondary.NodeStore().Pool(), nil)
+	return idx.secondary.Put(ctx, secondaryIndexKey, newValue)
+}
+
+func (idx uniqIndex) removeRow(ctx context.Context, key, value val.Tuple) error {
+	secondaryIndexKey := idx.secondaryBld.SecondaryKeyFromRow(key, value)
+	err := idx.secondary.Delete(ctx, secondaryIndexKey)
+	if err != nil {
+		return err
+	}
+
+	clusteredIndexKey := idx.clusteredBld.ClusteredKeyFromIndexKey(secondaryIndexKey)
+	return idx.clustered.Delete(ctx, clusteredIndexKey)
+}
+
+// findCollisions searches this unique index to find any rows that have the same values as |value| for the columns
+// included in the unique constraint. For any matching row, the specified callback, |cb|, is invoked with the key
+// and value for the primary index, representing the conflicting row identified from the unique index.
 func (idx uniqIndex) findCollisions(ctx context.Context, key, value val.Tuple, cb collisionFn) error {
 	indexKey := idx.secondaryBld.SecondaryKeyFromRow(key, value)
 	if idx.prefixDesc.HasNulls(indexKey) {
 		return nil // NULLs cannot cause unique violations
 	}
 
-	var collision val.Tuple
+	// This code uses the secondary index to iterate over all rows (key/value pairs) that have the same prefix.
+	// The prefix here is all the value columns this index is set up to track
+	collisions := make([]val.Tuple, 0)
 	err := idx.secondary.GetPrefix(ctx, indexKey, idx.prefixDesc, func(k, _ val.Tuple) (err error) {
-		collision = k
+		if k != nil {
+			collisions = append(collisions, k)
+		}
 		return
 	})
-	if err != nil || collision == nil {
+	if err != nil || len(collisions) == 0 {
 		return err
 	}
 
-	clusteredKey := idx.clusteredBld.ClusteredKeyFromIndexKey(collision)
-	if bytes.Equal(key, clusteredKey) {
-		return nil // collided with ourselves
-	}
-
-	// |prefix| was non-unique, find the clustered index row that
-	// collided with row(|key|, |value|) and pass both to |cb|
-	err = idx.clustered.Get(ctx, clusteredKey, func(k val.Tuple, v val.Tuple) error {
-		if k == nil {
-			s := idx.clustered.KeyDesc().Format(clusteredKey)
-			return errors.New("failed to find key: " + s)
+	collisionDetected := false
+	for _, collision := range collisions {
+		// Next find the key in the primary (aka clustered) index
+		clusteredKey := idx.clusteredBld.ClusteredKeyFromIndexKey(collision)
+		if bytes.Equal(key, clusteredKey) {
+			continue // collided with ourselves
 		}
-		return cb(k, v)
-	})
-	if err != nil {
-		return err
+
+		// |prefix| was non-unique, find the clustered index row that
+		// collided with row(|key|, |value|) and pass both to |cb|
+		err = idx.clustered.Get(ctx, clusteredKey, func(k val.Tuple, v val.Tuple) error {
+			if k == nil {
+				s := idx.clusteredKeyDesc.Format(clusteredKey)
+				return errors.New("failed to find key: " + s)
+			}
+			collisionDetected = true
+			return cb(k, v)
+		})
+		if err != nil {
+			return err
+		}
 	}
-	return cb(key, value)
+	if collisionDetected {
+		return cb(key, value)
+	} else {
+		return nil
+	}
 }
 
 // nullValidator enforces NOT NULL constraints on merge
@@ -1099,7 +1214,7 @@ func remapTuple(tuple val.Tuple, desc val.TupleDesc, mapping val.OrdinalMapping)
 // remapTupleWithColumnDefaults takes the given |tuple| (and the |tupleDesc| that describes how to access its fields)
 // and uses |mapping| to map the tuple's data and return a new tuple. |tm| provides high access to the name of the table
 // currently being merged and associated node store. |mergedSch| is the new schema of the table and is used to look up
-// column default values to apply to any existing rows when a new column is added as part of a merge. |pool| is used to
+// column default values to apply to any existing rows when a new column is added as part of a merge. |pool| is used
 // to allocate memory for the new tuple. A pointer to the new tuple data is returned, along with any error encountered.
 func remapTupleWithColumnDefaults(ctx *sql.Context, keyTuple, valueTuple val.Tuple, tupleDesc val.TupleDesc, mapping val.OrdinalMapping, tm *TableMerger, mergedSch schema.Schema, pool pool.BuffPool) (val.Tuple, error) {
 	tb := val.NewTupleBuilder(mergedSch.GetValueDescriptor())

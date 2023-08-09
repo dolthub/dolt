@@ -17,7 +17,6 @@ package sysbench_runner
 import (
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 )
@@ -72,7 +71,7 @@ func ReadResultsJson(filename string) (Results, error) {
 
 	var textInput io.Reader = file
 
-	b, err := ioutil.ReadAll(textInput)
+	b, err := io.ReadAll(textInput)
 	if err != nil {
 		return nil, err
 	}

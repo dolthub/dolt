@@ -436,6 +436,22 @@ SQL
     [[ "$output" =~ "$EXPECTED" ]] || false
 }
 
+@test "system-tables: query dolt_diff_ system table when column types have been narrowed" {
+    dolt sql -q "create table t (pk int primary key, col1 varchar(20), col2 int);"
+    dolt commit -Am "new table t"
+    dolt sql -q "insert into t values (1, '123456789012345', 420);"
+    dolt commit -am "inserting a row"
+    dolt sql -q "update t set col1='1234567890', col2=13;"
+    dolt sql -q "alter table t modify column col1 varchar(10);"
+    dolt sql -q "alter table t modify column col2 tinyint;"
+    dolt commit -am "narrowing types"
+
+    run dolt sql -r csv -q "select to_pk, to_col1, to_col2, from_pk, from_col1, from_col2, diff_type from dolt_diff_t order by from_commit_date ASC;"
+    [ $status -eq 0 ]
+    [[ $output =~ "1,,,,,,added" ]] || false
+    [[ $output =~ "1,1234567890,13,1,,,modified" ]] || false
+}
+
 @test "system-tables: query dolt_history_ system table" {
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
@@ -635,11 +651,29 @@ SQL
 
       run dolt sql -q "select * from dolt_schema_diff('branch1', 'branch2');"
       [ "$status" -eq 0 ]
-      [[ "$output" =~ "ALTER TABLE \`test\` DROP \`c2\`;" ]] || false
-      [[ "$output" =~ "ALTER TABLE \`test\` ADD \`c3\` varchar(10);" ]] || false
+      [[ "$output" =~ "| test            | test          | CREATE TABLE \`test\` (                                             | CREATE TABLE \`test\` (                                             |" ]] || false
+      [[ "$output" =~ "|                 |               |   \`c2\` int,                                                       |   \`c3\` varchar(10),                                               |" ]] || false
+
+      run dolt sql -q "select * from dolt_schema_diff('branch2', 'branch1');"
+      [ "$status" -eq 0 ]
+      [[ "$output" =~ "| test            | test          | CREATE TABLE \`test\` (                                             | CREATE TABLE \`test\` (                                             |" ]] || false
+      [[ "$output" =~ "|                 |               |   \`c3\` varchar(10),                                               |   \`c2\` int,                                                       |" ]] || false
+
+      run dolt sql -q "select * from dolt_schema_diff('tag1', 'tag2');"
+      [ "$status" -eq 0 ]
+      [[ "$output" =~ "| test            | test          | CREATE TABLE \`test\` (                                             | CREATE TABLE \`test\` (                                             |" ]] || false
+      [[ "$output" =~ "|                 |               |   \`c2\` int,                                                       |   \`c3\` varchar(10),                                               |" ]] || false
 
       run dolt sql -q "select * from dolt_schema_diff('tag2', 'tag1');"
       [ "$status" -eq 0 ]
-      [[ "$output" =~ "ALTER TABLE \`test\` DROP \`c3\`;" ]] || false
-      [[ "$output" =~ "ALTER TABLE \`test\` ADD \`c2\` int;" ]] || false
+      [[ "$output" =~ "| test            | test          | CREATE TABLE \`test\` (                                             | CREATE TABLE \`test\` (                                             |" ]] || false
+      [[ "$output" =~ "|                 |               |   \`c3\` varchar(10),                                               |   \`c2\` int,                                                       |" ]] || false
+
+      run dolt sql -q "select * from dolt_schema_diff('branch1', 'branch1');"
+      [ "$status" -eq 0 ]
+      [ "$output" = "" ]
+
+      run dolt sql -q "select * from dolt_schema_diff('tag2', 'tag2');"
+      [ "$status" -eq 0 ]
+      [ "$output" = "" ]
 }

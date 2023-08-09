@@ -109,12 +109,7 @@ func (c ProllyRowConverter) PutConverted(ctx context.Context, key, value val.Tup
 		return err
 	}
 
-	err = c.putFields(ctx, value, c.valProj, c.valDesc, c.nonPkTargetTypes, dstRow)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return c.putFields(ctx, value, c.valProj, c.valDesc, c.nonPkTargetTypes, dstRow)
 }
 
 func (c ProllyRowConverter) putFields(ctx context.Context, tup val.Tuple, proj val.OrdinalMapping, desc val.TupleDesc, targetTypes []sql.Type, dstRow []interface{}) error {
@@ -135,7 +130,8 @@ func (c ProllyRowConverter) putFields(ctx context.Context, tup val.Tuple, proj v
 				dstRow[j] = nil
 				err = nil
 			} else if !inRange {
-				return sql.ErrValueOutOfRange.New(f, t)
+				c.warnFn(rowconv.TruncatedOutOfRangeValueWarningCode, rowconv.TruncatedOutOfRangeValueWarning, t, f)
+				dstRow[j] = nil
 			} else if err != nil {
 				return err
 			}

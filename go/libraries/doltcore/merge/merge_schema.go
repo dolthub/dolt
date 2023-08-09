@@ -23,6 +23,7 @@ import (
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	errorkinds "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -41,6 +42,10 @@ const (
 	// we're unable to accurately match them up on each side of the merge, so the user has to manually resolve.
 	DuplicateIndexColumnSet
 )
+
+var ErrUnmergeableNewColumn = errorkinds.NewKind("Unable to merge new column `%s` in table `%s` because it is not-nullable and has no default value, so existing rows can't be updated automatically. To complete this merge, either manually add this new column to the target branch of the merge and update any existing rows, or change the column's definition on the other branch of the merge so that it is nullable or has a default value.")
+
+var ErrDefaultCollationConflict = errorkinds.NewKind("Unable to merge table '%s', because its default collation setting has changed on both sides of the merge. Manually change the table's default collation setting on one of the sides of the merge and retry this merge.")
 
 type SchemaConflict struct {
 	TableName    string
@@ -161,7 +166,7 @@ func SchemaMerge(ctx context.Context, format *storetypes.NomsBinFormat, ourSch, 
 	}
 
 	var mergedCC *schema.ColCollection
-	mergedCC, sc.ColConflicts, err = mergeColumns(format, ourSch.GetAllCols(), theirSch.GetAllCols(), ancSch.GetAllCols())
+	mergedCC, sc.ColConflicts, err = mergeColumns(tblName, format, ourSch.GetAllCols(), theirSch.GetAllCols(), ancSch.GetAllCols())
 	if err != nil {
 		return nil, SchemaConflict{}, err
 	}
@@ -176,6 +181,11 @@ func SchemaMerge(ctx context.Context, format *storetypes.NomsBinFormat, ourSch, 
 	}
 
 	sch, err = schema.SchemaFromCols(mergedCC)
+	if err != nil {
+		return nil, sc, err
+	}
+
+	sch, err = mergeTableCollation(ctx, tblName, ancSch, ourSch, theirSch, sch)
 	if err != nil {
 		return nil, sc, err
 	}
@@ -288,6 +298,12 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 	})
 
 	err = ourNewFKs.Iter(func(ourFK doltdb.ForeignKey) (stop bool, err error) {
+		// The common set of FKs may already have this FK, if it was added on both branches
+		if commonFK, ok := common.GetByNameCaseInsensitive(ourFK.Name); ok && commonFK.EqualDefs(ourFK) {
+			// Skip this one if it's identical to the one in the common set
+			return false, nil
+		}
+
 		return false, common.AddKeys(ourFK)
 	})
 	if err != nil {
@@ -295,6 +311,12 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 	}
 
 	err = theirNewFKs.Iter(func(theirFK doltdb.ForeignKey) (stop bool, err error) {
+		// The common set of FKs may already have this FK, if it was added on both branches
+		if commonFK, ok := common.GetByNameCaseInsensitive(theirFK.Name); ok && commonFK.EqualDefs(theirFK) {
+			// Skip this one if it's identical to the one in the common set
+			return false, nil
+		}
+
 		return false, common.AddKeys(theirFK)
 	})
 	if err != nil {
@@ -309,6 +331,34 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 	return common, conflicts, err
 }
 
+// checkUnmergeableNewColumns checks the |columnMappings| to see if a new column has been added that does not allow
+// NULL values and has no default value, and returns an error if one is found. New, non-nullable columns that don't
+// have a default value cannot be merged automatically, since we don't know what value to set for any existing rows,
+// so instead of reporting a schema conflict and allowing customers to use the conflict resolution workflow, we return
+// an error and instruct them how to manually fix the problem.
+func checkUnmergeableNewColumns(tblName string, columnMappings columnMappings) error {
+	for _, mapping := range columnMappings {
+		anc := mapping.anc
+		ours := mapping.ours
+		theirs := mapping.theirs
+
+		// if a new column was added...
+		if anc == nil && ((ours == nil && theirs != nil) || (ours != nil && theirs == nil)) {
+			newCol := ours
+			if newCol == nil {
+				newCol = theirs
+			}
+
+			// If the new column is not nullable and has no default value, then we can't auto merge it
+			// (if there is any existing row data), so we need to error out and report the schema conflict.
+			if newCol.IsNullable() == false && newCol.Default == "" {
+				return ErrUnmergeableNewColumn.New(newCol, tblName)
+			}
+		}
+	}
+	return nil
+}
+
 // mergeColumns merges the columns from |ourCC|, |theirCC| into a single column collection, using the ancestor column
 // definitions in |ancCC| to determine on which side a column has changed. If merging is not possible because of
 // conflicting changes to the columns in |ourCC| and |theirCC|, then a set of ColConflict instances are returned
@@ -316,13 +366,18 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 // between types, since different storage formats have different restrictions on how much types can change and remain
 // compatible with the current stored format. If any unexpected error occurs, then that error is returned and the
 // other response fields should be ignored.
-func mergeColumns(format *storetypes.NomsBinFormat, ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColCollection, []ColConflict, error) {
+func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColCollection, []ColConflict, error) {
 	columnMappings, err := mapColumns(ourCC, theirCC, ancCC)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	conflicts, err := checkSchemaConflicts(columnMappings)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = checkUnmergeableNewColumns(tblName, columnMappings)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -355,7 +410,11 @@ func mergeColumns(format *storetypes.NomsBinFormat, ourCC, theirCC, ancCC *schem
 				oursChanged := !anc.Equals(*ours)
 				theirsChanged := !anc.Equals(*theirs)
 				if oursChanged && theirsChanged {
-					// This is a schema change conflict and has already been handled by checkSchemaConflicts
+					// If both columns changed in the same way, the modifications converge, so accept the column.
+					// If not, don't report a conflict, since this case is already handled in checkForColumnConflicts.
+					if ours.Equals(*theirs) {
+						mergedColumns = append(mergedColumns, *theirs)
+					}
 				} else if theirsChanged {
 					// In this case, only theirsChanged, so we need to check if moving from ours->theirs
 					// is valid, otherwise it's a conflict
@@ -384,9 +443,12 @@ func mergeColumns(format *storetypes.NomsBinFormat, ourCC, theirCC, ancCC *schem
 					// if neither side changed, just use ours
 					mergedColumns = append(mergedColumns, *ours)
 				}
-			} else if ours.Equals(*theirs) {
-				// if the columns are identical, just use ours
-				mergedColumns = append(mergedColumns, *ours)
+			} else {
+				// If both columns changed in the same way, the modifications converge, so accept the column.
+				// If not, don't report a conflict, since this case is already handled in checkForColumnConflicts.
+				if ours.Equals(*theirs) {
+					mergedColumns = append(mergedColumns, *ours)
+				}
 			}
 		}
 	}
@@ -1029,6 +1091,25 @@ func chkCollectionModified(anc, child []schema.Check) []schema.Check {
 		}
 	}
 	return result
+}
+
+// mergeTableCollation checks how the table's default collation setting has changed from |ancSch| to |ourSch|, as
+// well as from |ancSch| to |theirSch|, and then sets the collation in |mergedSch| and returns it. If the default
+// table collation setting was changed on both sides of the merge (to different collations), then an error is returned.
+func mergeTableCollation(_ context.Context, tblName string, ancSch, ourSch, theirSch, mergedSch schema.Schema) (schema.Schema, error) {
+	// Update the default charset/collation setting if it changed on only one side
+	ourCollationChanged := ancSch != nil && ancSch.GetCollation() != ourSch.GetCollation()
+	theirCollationChanged := ancSch != nil && ancSch.GetCollation() != theirSch.GetCollation()
+
+	if ourCollationChanged && theirCollationChanged && ourSch.GetCollation() != theirSch.GetCollation() {
+		return nil, ErrDefaultCollationConflict.New(tblName)
+	}
+	mergedSch.SetCollation(ourSch.GetCollation())
+	if theirCollationChanged {
+		mergedSch.SetCollation(theirSch.GetCollation())
+	}
+
+	return mergedSch, nil
 }
 
 // mergeChecks attempts to combine ourChks, theirChks, and ancChks into a single collection, or gathers the conflicts

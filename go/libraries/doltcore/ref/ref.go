@@ -78,10 +78,11 @@ func PrefixForType(refType RefType) string {
 
 type UpdateMode struct {
 	Force bool
+	Prune bool
 }
 
-var ForceUpdate = UpdateMode{true}
-var FastForwardOnly = UpdateMode{false}
+var ForceUpdate = UpdateMode{true, false}
+var FastForwardOnly = UpdateMode{false, false}
 
 // DoltRef is a reference to a commit.
 type DoltRef interface {

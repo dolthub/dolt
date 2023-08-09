@@ -14,7 +14,12 @@
 
 package ref
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 func TestRefSpec(t *testing.T) {
 	tests := []struct {
@@ -22,95 +27,99 @@ func TestRefSpec(t *testing.T) {
 		refSpecStr string
 		isValid    bool
 		inToExpOut map[string]string
+		skip       bool
 	}{
 		{
-			"origin",
-			"refs/heads/*:refs/remotes/origin/*",
-			true,
-			map[string]string{
+			remote:     "origin",
+			refSpecStr: "refs/heads/*:refs/remotes/origin/*",
+			isValid:    true,
+			inToExpOut: map[string]string{
 				"refs/heads/main":          "refs/remotes/origin/main",
 				"refs/heads/feature":       "refs/remotes/origin/feature",
 				"refs/remotes/origin/main": "refs/nil/",
 			},
 		}, {
-			"borigin",
-			"refs/heads/main:refs/remotes/borigin/mymain",
-			true,
-			map[string]string{
+			remote:     "borigin",
+			refSpecStr: "refs/heads/main:refs/remotes/borigin/mymain",
+			isValid:    true,
+			inToExpOut: map[string]string{
 				"refs/heads/main":    "refs/remotes/borigin/mymain",
 				"refs/heads/feature": "refs/nil/",
 			},
 		}, {
-			"",
-			"refs/heads/*/main:refs/remotes/borigin/*/mymain",
-			true,
-			map[string]string{
+			refSpecStr: "refs/heads/*/main:refs/remotes/borigin/*/mymain",
+			isValid:    true,
+			inToExpOut: map[string]string{
 				"refs/heads/main":    "refs/nil/",
 				"refs/heads/bh/main": "refs/remotes/borigin/bh/mymain",
 				"refs/heads/as/main": "refs/remotes/borigin/as/mymain",
 			},
 		}, {
-			"",
-			"main",
-			true,
-			map[string]string{
+			refSpecStr: "main",
+			isValid:    true,
+			inToExpOut: map[string]string{
 				"refs/heads/main":    "refs/heads/main",
 				"refs/heads/feature": "refs/nil/",
 			},
 		}, {
-			"",
-			"main:main",
-			true,
-			map[string]string{
+			refSpecStr: "main:main",
+			isValid:    true,
+			inToExpOut: map[string]string{
 				"refs/heads/main":    "refs/heads/main",
 				"refs/heads/feature": "refs/nil/",
 			},
 		}, {
-			"origin",
-			"refs/heads/main:refs/remotes/not_borigin/mymain",
-			false,
-			nil,
+			remote:     "origin",
+			refSpecStr: "refs/heads/main:refs/remotes/not_borigin/mymain",
 		}, {
-			"origin",
-			"refs/heads/*:refs/remotes/origin/branchname",
-			false,
-			nil,
+			remote:     "origin",
+			refSpecStr: "refs/heads/*:refs/remotes/origin/branchname",
 		}, {
-			"origin",
-			"refs/heads/branchname:refs/remotes/origin/*",
-			false,
-			nil,
+			remote:     "origin",
+			refSpecStr: "refs/heads/branchname:refs/remotes/origin/*",
 		}, {
-			"origin",
-			"refs/heads/*/*:refs/remotes/origin/*/*",
-			false,
-			nil,
+			remote:     "origin",
+			refSpecStr: "refs/heads/*/*:refs/remotes/origin/*/*",
+		}, {
+			refSpecStr: "refs/tags/*:refs/tags/*",
+			isValid:    true,
+			inToExpOut: map[string]string{
+				"refs/tags/v1": "refs/tags/v1",
+			},
+			skip: true,
 		},
 	}
 
 	for _, test := range tests {
-		var refSpec RefSpec
-		var err error
-
-		if test.remote == "" {
-			refSpec, err = ParseRefSpec(test.refSpecStr)
-		} else {
-			refSpec, err = ParseRefSpecForRemote(test.remote, test.refSpecStr)
-		}
-
-		if (err == nil) != test.isValid {
-			t.Error(test.refSpecStr, "is valid:", err == nil)
-		} else if err == nil {
-			for in, out := range test.inToExpOut {
-				inRef, _ := Parse(in)
-				outRef, _ := Parse(out)
-
-				actual := refSpec.DestRef(inRef)
-
-				if !Equals(actual, outRef) {
-					t.Error(test.refSpecStr, "mapped", in, "to", actual.String(), "expected", outRef.String())
-				}
+		t.Run(test.refSpecStr, func(t *testing.T) {
+			if test.skip {
+				t.Skip()
 			}
-		}
+
+			var refSpec RefSpec
+			var err error
+
+			if test.remote == "" {
+				refSpec, err = ParseRefSpec(test.refSpecStr)
+			} else {
+				refSpec, err = ParseRefSpecForRemote(test.remote, test.refSpecStr)
+			}
+
+			if test.isValid {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+			}
+
+			for in, out := range test.inToExpOut {
+				inRef, err := Parse(in)
+				require.NoError(t, err)
+				// outRef could be nil because of test construction, which is valid
+				expectedOutRef, _ := Parse(out)
+
+				outRef := refSpec.DestRef(inRef)
+				assert.Equal(t, expectedOutRef, outRef)
+			}
+		})
 	}
 }

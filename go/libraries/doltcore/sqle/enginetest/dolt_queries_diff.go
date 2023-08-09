@@ -403,6 +403,39 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
+		// https://github.com/dolthub/dolt/issues/6391
+		Name: "columns modified to narrower types",
+		SetUpScript: []string{
+			"create table t (pk int primary key, col1 varchar(20), col2 int);",
+			"call dolt_commit('-Am', 'new table t');",
+			"insert into t values (1, '123456789012345', 420);",
+			"call dolt_commit('-am', 'inserting data');",
+			"update t set col1='1234567890', col2=13;",
+			"alter table t modify column col1 varchar(10);",
+			"alter table t modify column col2 tinyint;",
+			"call dolt_commit('-am', 'narrowing types');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select to_pk, to_col1, to_col2, to_commit, from_pk, from_col1, from_col2, from_commit, diff_type from dolt_diff_t order by diff_type ASC;",
+				Expected: []sql.Row{
+					{1, nil, nil, doltCommit, nil, nil, nil, doltCommit, "added"},
+					{1, "1234567890", 13, doltCommit, 1, nil, nil, doltCommit, "modified"},
+				},
+				ExpectedWarningsCount: 4,
+			},
+			{
+				Query: "SHOW WARNINGS;",
+				Expected: []sql.Row{
+					{"Warning", 1292, "Truncated tinyint value: 420"},
+					{"Warning", 1292, "Truncated tinyint value: 420"},
+					{"Warning", 1292, "Truncated varchar(10) value: 123456789012345"},
+					{"Warning", 1292, "Truncated varchar(10) value: 123456789012345"},
+				},
+			},
+		},
+	},
+	{
 		Name: "multiple column renames",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 int);",
@@ -3011,6 +3044,28 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
+		// https://github.com/dolthub/dolt/issues/6350
+		Name: "binary data in patch statements is hex encoded",
+		SetUpScript: []string{
+			"create table t (pk varbinary(16) primary key, c1  binary(16));",
+			"insert into t values (0x42, NULL);",
+			"call dolt_commit('-Am', 'new table with binary pk');",
+			"update t set c1 = 0xeeee where pk = 0x42;",
+			"insert into t values (0x012345, NULL), (0x054321, binary 'efg_!4');",
+			"call dolt_commit('-am', 'more rows');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select statement from dolt_patch('HEAD~', 'HEAD', 't');",
+				Expected: []sql.Row{
+					{"INSERT INTO `t` (`pk`,`c1`) VALUES (0x012345,NULL);"},
+					{"INSERT INTO `t` (`pk`,`c1`) VALUES (0x054321,0x6566675f213400000000000000000000);"},
+					{"UPDATE `t` SET `c1`=0xeeee0000000000000000000000000000 WHERE `pk`=0x42;"},
+				},
+			},
+		},
+	},
+	{
 		Name: "basic case with multiple tables",
 		SetUpScript: []string{
 			"set @Commit0 = HashOf('HEAD');",
@@ -3102,29 +3157,25 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		SetUpScript: []string{
 			"set @Commit0 = HashOf('HEAD');",
 			"create table t (pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int comment 'tag:5');",
-			"call dolt_add('.')",
 			"insert into t values (0,1,2,3,4,5), (1,1,2,3,4,5);",
-			"set @Commit1 = '';",
-			"call dolt_commit_hash_out(@Commit1, '-am', 'inserting two rows into table t');",
-			"alter table t rename column c1 to c0",
-			"alter table t drop column c4",
-			"alter table t add c6 bigint",
+			"call dolt_commit('-Am', 'inserting two rows into table t');",
+			"alter table t rename column c1 to c0;",
+			"alter table t drop column c4;",
+			"alter table t add c6 bigint;",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch(@Commit1, 'WORKING', 't')",
+				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('HEAD', 'WORKING', 't')",
 				Expected: []sql.Row{
 					{1, "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c1` TO `c0`;"},
 					{2, "t", "schema", "ALTER TABLE `t` DROP `c4`;"},
 					{3, "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
-				},
-				ExpectedWarning:       1235,
-				ExpectedWarningsCount: 1,
-			},
-			{
-				Query: "SHOW WARNINGS;",
-				Expected: []sql.Row{
-					{"Warning", 1235, "Incompatible schema change, skipping data diff for table 't'"},
+					// NOTE: These two update statements aren't technically needed, but we can't tell that from the diff.
+					//       Because the rows were altered on disk due to the `drop column` statement above, these rows
+					//       really did change on disk and we can't currently safely tell that it was ONLY the column
+					//       rename and that there weren't other updates to that column.
+					{4, "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=0;"},
+					{5, "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=1;"},
 				},
 			},
 			{
@@ -3133,6 +3184,12 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 					{1, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c1` TO `c0`;"},
 					{2, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` DROP `c4`;"},
 					{3, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
+					// NOTE: These two update statements aren't technically needed, but we can't tell that from the diff.
+					//       Because the rows were altered on disk due to the `drop column` statement above, these rows
+					//       really did change on disk and we can't currently safely tell that it was ONLY the column
+					//       rename and that there weren't other updates to that column.
+					{4, "STAGED", "WORKING", "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=0;"},
+					{5, "STAGED", "WORKING", "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=1;"},
 				},
 			},
 			{
@@ -3141,6 +3198,12 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 					{1, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c1` TO `c0`;"},
 					{2, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` DROP `c4`;"},
 					{3, "STAGED", "WORKING", "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
+					// NOTE: These two update statements aren't technically needed, but we can't tell that from the diff.
+					//       Because the rows were altered on disk due to the `drop column` statement above, these rows
+					//       really did change on disk and we can't currently safely tell that it was ONLY the column
+					//       rename and that there weren't other updates to that column.
+					{4, "STAGED", "WORKING", "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=0;"},
+					{5, "STAGED", "WORKING", "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=1;"},
 				},
 			},
 			{
@@ -3149,6 +3212,12 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 					{1, "WORKING", "STAGED", "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c0` TO `c1`;"},
 					{2, "WORKING", "STAGED", "t", "schema", "ALTER TABLE `t` DROP `c6`;"},
 					{3, "WORKING", "STAGED", "t", "schema", "ALTER TABLE `t` ADD `c4` int;"},
+					// NOTE: Setting c1 in these two update statements isn't technically needed, but we can't tell that
+					//       from the diff. Because the rows were altered on disk due to the `drop column` statement above,
+					//       these rows really did change on disk and we can't currently safely tell that it was ONLY the
+					//       column rename and that there weren't other updates to that column.
+					{4, "WORKING", "STAGED", "t", "data", "UPDATE `t` SET `c1`=1,`c4`=4 WHERE `pk`=0;"},
+					{5, "WORKING", "STAGED", "t", "data", "UPDATE `t` SET `c1`=1,`c4`=4 WHERE `pk`=1;"},
 				},
 			},
 			{
@@ -3177,6 +3246,8 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 					{1, "t", "schema", "ALTER TABLE `t` RENAME COLUMN `c1` TO `c0`;"},
 					{2, "t", "schema", "ALTER TABLE `t` DROP `c4`;"},
 					{3, "t", "schema", "ALTER TABLE `t` ADD `c6` bigint;"},
+					{4, "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=0;"},
+					{5, "t", "data", "UPDATE `t` SET `c0`=1 WHERE `pk`=1;"},
 				},
 			},
 		},
@@ -3186,54 +3257,57 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
 			"call dolt_add('.')",
-			"set @Commit1 = '';",
-			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
+			"call dolt_commit('-am', 'creating table t');",
+			"set @Commit1 = hashof('HEAD');",
 
 			"insert into t values(1, 'one', 'two');",
-			"set @Commit2 = '';",
-			"call dolt_commit_hash_out(@Commit2, '-am', 'inserting row 1 into t in main');",
+			"call dolt_commit('-am', 'inserting row 1 into t in main');",
+			"set @Commit2 = hashof('HEAD');",
 
 			"CALL DOLT_checkout('-b', 'branch1');",
 			"alter table t drop column c2;",
-			"set @Commit3 = '';",
-			"call dolt_commit_hash_out(@Commit3, '-am', 'dropping column c2 in branch1');",
+			"call dolt_commit('-am', 'dropping column c2 in branch1');",
+			"set @Commit3 = hashof('HEAD');",
 
 			"delete from t where pk=1;",
-			"set @Commit4 = '';",
-			"call dolt_commit_hash_out(@Commit4, '-am', 'deleting row 1 in branch1');",
+			"call dolt_commit('-am', 'deleting row 1 in branch1');",
+			"set @Commit4 = hashof('HEAD');",
 
 			"insert into t values (2, 'two');",
-			"set @Commit5 = '';",
-			"call dolt_commit_hash_out(@Commit5, '-am', 'inserting row 2 in branch1');",
+			"call dolt_commit('-am', 'inserting row 2 in branch1');",
+			"set @Commit5 = hashof('HEAD');",
 
 			"CALL DOLT_checkout('main');",
 			"insert into t values (2, 'two', 'three');",
-			"set @Commit6 = '';",
-			"call dolt_commit_hash_out(@Commit6, '-am', 'inserting row 2 in main');",
+			"call dolt_commit('-am', 'inserting row 2 in main');",
+			"set @Commit6 = hashof('HEAD');",
 
 			"create table newtable (pk int primary key);",
 			"insert into newtable values (1), (2);",
-			"set @Commit7 = '';",
-			"call dolt_commit_hash_out(@Commit7, '-Am', 'new table newtable');",
+			"call dolt_commit('-Am', 'new table newtable');",
+			"set @Commit7 = hashof('HEAD');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main', 'branch1', 't');",
-				Expected: []sql.Row{{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"}},
+				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main', 'branch1', 't');",
+				Expected: []sql.Row{
+					{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
+					{2, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
+				},
 			},
 			{
-				Query:    "SHOW WARNINGS",
-				Expected: []sql.Row{{"Warning", 1235, "Incompatible schema change, skipping data diff for table 't'"}},
-			},
-			{
-				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main..branch1', 't');",
-				Expected: []sql.Row{{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"}},
+				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main..branch1', 't');",
+				Expected: []sql.Row{
+					{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
+					{2, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
+				},
 			},
 			{
 				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main', 'branch1');",
 				Expected: []sql.Row{
 					{1, "newtable", "schema", "DROP TABLE `newtable`;"},
 					{2, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
+					{3, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
 				},
 			},
 			{
@@ -3241,32 +3315,57 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{1, "newtable", "schema", "DROP TABLE `newtable`;"},
 					{2, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
+					{3, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
 				},
 			},
 			{
-				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('branch1', 'main', 't');",
-				Expected: []sql.Row{{1, "t", "schema", "ALTER TABLE `t` ADD `c2` varchar(20);"}},
+				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('branch1', 'main', 't');",
+				Expected: []sql.Row{
+					{1, "t", "schema", "ALTER TABLE `t` ADD `c2` varchar(20);"},
+					{2, "t", "data", "INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (1,'one','two');"},
+					{3, "t", "data", "UPDATE `t` SET `c2`='three' WHERE `pk`=2;"},
+				},
 			},
 			{
-				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('branch1..main', 't');",
-				Expected: []sql.Row{{1, "t", "schema", "ALTER TABLE `t` ADD `c2` varchar(20);"}},
+				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('branch1..main', 't');",
+				Expected: []sql.Row{
+					{1, "t", "schema", "ALTER TABLE `t` ADD `c2` varchar(20);"},
+					{2, "t", "data", "INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (1,'one','two');"},
+					{3, "t", "data", "UPDATE `t` SET `c2`='three' WHERE `pk`=2;"},
+				},
 			},
 			{
-				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main~2', 'branch1', 't');",
-				Expected: []sql.Row{{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"}},
+				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main~2', 'branch1', 't');",
+				Expected: []sql.Row{
+					{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
+					{2, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
+					{3, "t", "data", "INSERT INTO `t` (`pk`,`c1`) VALUES (2,'two');"},
+				},
 			},
 			{
-				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main~2..branch1', 't');",
-				Expected: []sql.Row{{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"}},
+				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main~2..branch1', 't');",
+				Expected: []sql.Row{
+					{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
+					{2, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
+					{3, "t", "data", "INSERT INTO `t` (`pk`,`c1`) VALUES (2,'two');"},
+				},
 			},
 			// Three dot
 			{
-				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main...branch1', 't');",
-				Expected: []sql.Row{{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"}},
+				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main...branch1', 't');",
+				Expected: []sql.Row{
+					{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
+					{2, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
+					{3, "t", "data", "INSERT INTO `t` (`pk`,`c1`) VALUES (2,'two');"},
+				},
 			},
 			{
-				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main...branch1');",
-				Expected: []sql.Row{{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"}},
+				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('main...branch1');",
+				Expected: []sql.Row{
+					{1, "t", "schema", "ALTER TABLE `t` DROP `c2`;"},
+					{2, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
+					{3, "t", "data", "INSERT INTO `t` (`pk`,`c1`) VALUES (2,'two');"},
+				},
 			},
 			{
 				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('branch1...main', 't');",
@@ -3349,8 +3448,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		SetUpScript: []string{
 			"CREATE TABLE parent (id int PRIMARY KEY, id_ext int, v1 int, v2 text COMMENT 'tag:1', INDEX v1 (v1));",
 			"CREATE TABLE child (id int primary key, v1 int);",
-			"call dolt_add('.')",
-			"call dolt_commit('-am', 'new tables')",
+			"call dolt_commit('-Am', 'new tables')",
 			"ALTER TABLE child ADD CONSTRAINT fk_named FOREIGN KEY (v1) REFERENCES parent(v1);",
 			"insert into parent values (0, 1, 2, NULL);",
 			"ALTER TABLE parent DROP PRIMARY KEY;",
@@ -3374,12 +3472,11 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 					{3, "STAGED", "parent", "schema", "ALTER TABLE `parent` DROP PRIMARY KEY;"},
 					{4, "STAGED", "parent", "schema", "ALTER TABLE `parent` ADD PRIMARY KEY (id,id_ext);"},
 				},
-				ExpectedWarningsCount: 2,
+				ExpectedWarningsCount: 1,
 			},
 			{
 				Query: "SHOW WARNINGS;",
 				Expected: []sql.Row{
-					{"Warning", 1235, "Incompatible schema change, skipping data diff for table 'child'"},
 					{"Warning", 1235, "Primary key sets differ between revisions for table 'parent', skipping data diff"},
 				},
 			},
@@ -3398,6 +3495,38 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "charset and collation changes",
+		SetUpScript: []string{
+			"create table t (pk int primary key) collate='utf8mb4_0900_bin';",
+			"call dolt_commit('-Am', 'empty table')",
+			"set @commit0=hashof('HEAD');",
+			"insert into t values (1)",
+			"alter table t collate='utf8mb4_0900_ai_ci';",
+			"call dolt_commit('-am', 'inserting a row and altering the collation')",
+			"set @commit1=hashof('HEAD');",
+			"alter table t CHARACTER SET='utf8mb3';",
+			"insert into t values (2)",
+			"call dolt_commit('-am', 'inserting a row and altering the collation')",
+			"set @commit2=hashof('HEAD');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from dolt_patch(@commit1, @commit0);",
+				Expected: []sql.Row{
+					{1, doltCommit, doltCommit, "t", "schema", "ALTER TABLE `t` COLLATE='utf8mb4_0900_bin';"},
+					{2, doltCommit, doltCommit, "t", "data", "DELETE FROM `t` WHERE `pk`=1;"},
+				},
+			},
+			{
+				Query: "select * from dolt_patch(@commit1, @commit2);",
+				Expected: []sql.Row{
+					{1, doltCommit, doltCommit, "t", "schema", "ALTER TABLE `t` COLLATE='utf8mb3_general_ci';"},
+					{2, doltCommit, doltCommit, "t", "data", "INSERT INTO `t` (`pk`) VALUES (2);"},
+				},
+			},
+		},
+	},
+	{
 		Name: "patch DDL changes",
 		SetUpScript: []string{
 			"create table t (pk int primary key, a int, b int, c int)",
@@ -3407,7 +3536,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			"alter table t drop column b",
 			"alter table t add column d int",
 			"delete from t where pk = 3",
-			"update t set a = 9 where a = NULL",
+			"update t set a = 9 where a is NULL",
 			"insert into t values (7,7,7,7)",
 			"CALL dolt_commit('-am', 'modified table t')",
 		},
@@ -3417,6 +3546,9 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"ALTER TABLE `t` DROP `b`;"},
 					{"ALTER TABLE `t` ADD `d` int;"},
+					{"UPDATE `t` SET `a`=9 WHERE `pk`=1;"},
+					{"DELETE FROM `t` WHERE `pk`=3;"},
+					{"INSERT INTO `t` (`pk`,`a`,`c`,`d`) VALUES (7,7,7,7);"},
 				},
 			},
 		},
@@ -4866,23 +4998,31 @@ var SchemaDiffSystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "basic schema changes",
 		SetUpScript: []string{
+			"create table employees (pk int primary key, name varchar(50));",
+			"create table vacations (pk int primary key, name varchar(50));",
+			"call dolt_add('.');",
+			"set @Commit0 = '';",
+			"call dolt_commit_hash_out(@Commit0, '-am', 'commit 0');",
+
 			"call dolt_checkout('-b', 'branch1');",
-			"create table test (pk int primary key, c1 int, c2 int);",
-			"call dolt_add('.')",
+			"create table inventory (pk int primary key, name varchar(50), quantity int);",
+			"drop table employees;",
+			"rename table vacations to trips;",
+			"call dolt_add('.');",
 			"set @Commit1 = '';",
 			"call dolt_commit_hash_out(@Commit1, '-am', 'commit 1');",
 			"call dolt_tag('tag1');",
 
 			"call dolt_checkout('-b', 'branch2');",
-			"alter table test drop column c2, add column c3 varchar(10);",
-			"call dolt_add('.')",
+			"alter table inventory drop column quantity, add column color varchar(10);",
+			"call dolt_add('.');",
 			"set @Commit2 = '';",
 			"call dolt_commit_hash_out(@Commit2, '-m', 'commit 2');",
 			"call dolt_tag('tag2');",
 
 			"call dolt_checkout('-b', 'branch3');",
-			"insert into test values (1, 2, 3);",
-			"call dolt_add('.')",
+			"insert into inventory values (1, 2, 3);",
+			"call dolt_add('.');",
 			"set @Commit3 = '';",
 			"call dolt_commit_hash_out(@Commit3, '-m', 'commit 3');",
 			"call dolt_tag('tag3');",
@@ -4918,11 +5058,11 @@ var SchemaDiffSystemTableScriptTests = []queries.ScriptTest{
 				ExpectedErrStr: "expected strings for from and to revisions, got: tag1, ",
 			},
 			{
-				Query:          "select * from dolt_schema_diff('HEAD', 'test');",
-				ExpectedErrStr: "branch not found: test",
+				Query:          "select * from dolt_schema_diff('HEAD', 'inventory');",
+				ExpectedErrStr: "branch not found: inventory",
 			},
 			{
-				Query:          "select * from dolt_schema_diff('test');",
+				Query:          "select * from dolt_schema_diff('inventory');",
 				ExpectedErrStr: "Invalid argument to dolt_schema_diff: There are less than 2 arguments present, and the first does not contain '..'",
 			},
 			{
@@ -4930,7 +5070,7 @@ var SchemaDiffSystemTableScriptTests = []queries.ScriptTest{
 				ExpectedErrStr: "branch not found: tag4",
 			},
 			{
-				Query:          "select * from dolt_schema_diff('tag3', 'tag4', 'test');",
+				Query:          "select * from dolt_schema_diff('tag3', 'tag4', 'inventory');",
 				ExpectedErrStr: "branch not found: tag4",
 			},
 			// Empty diffs due to same refs
@@ -4969,7 +5109,7 @@ var SchemaDiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "select * from dolt_schema_diff(@Commit2, @Commit3, 'test');",
+				Query:    "select * from dolt_schema_diff(@Commit2, @Commit3, 'inventory');",
 				Expected: []sql.Row{},
 			},
 			{
@@ -4977,7 +5117,7 @@ var SchemaDiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "select * from dolt_schema_diff('tag2', 'tag3', 'test');",
+				Query:    "select * from dolt_schema_diff('tag2', 'tag3', 'inventory');",
 				Expected: []sql.Row{},
 			},
 			{
@@ -4985,45 +5125,95 @@ var SchemaDiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "select * from dolt_schema_diff('branch2', 'branch3', 'test');",
+				Query:    "select * from dolt_schema_diff('branch2', 'branch3', 'inventory');",
 				Expected: []sql.Row{},
+			},
+			// Compare diffs where between from and to where: tables are added, tables are dropped, tables are renamed
+			{
+				Query: "select * from dolt_schema_diff(@Commit0, @Commit1);",
+				Expected: []sql.Row{
+					{"employees", "", "CREATE TABLE `employees` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", ""},
+					{"", "inventory", "", "CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+					{"vacations", "trips", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff(@Commit1, @Commit0);",
+				Expected: []sql.Row{
+					{"inventory", "", "CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", ""},
+					{"", "employees", "", "CREATE TABLE `employees` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+					{"trips", "vacations", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+				},
+			},
+			// Compare diffs with explicit table names
+			{
+				Query: "select * from dolt_schema_diff(@Commit0, @Commit1, 'employees');",
+				Expected: []sql.Row{
+					{"employees", "", "CREATE TABLE `employees` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", ""},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff(@Commit1, @Commit0, 'employees');",
+				Expected: []sql.Row{
+					{"", "employees", "", "CREATE TABLE `employees` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff(@Commit0, @Commit1, 'inventory');",
+				Expected: []sql.Row{
+					{"", "inventory", "", "CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff(@Commit1, @Commit0, 'inventory');",
+				Expected: []sql.Row{
+					{"inventory", "", "CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", ""},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff(@Commit0, @Commit1, 'trips');",
+				Expected: []sql.Row{
+					{"vacations", "trips", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff(@Commit1, @Commit0, 'trips');",
+				Expected: []sql.Row{
+					{"trips", "vacations", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff(@Commit0, @Commit1, 'vacations');",
+				Expected: []sql.Row{
+					{"vacations", "trips", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff(@Commit1, @Commit0, 'vacations');",
+				Expected: []sql.Row{
+					{"trips", "vacations", "CREATE TABLE `trips` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;", "CREATE TABLE `vacations` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+				},
 			},
 			// Compare two different commits, get expected results
 			{
 				Query: "select * from dolt_schema_diff(@Commit1, @Commit2);",
 				Expected: []sql.Row{
 					{
-						"test",
-						"test",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"ALTER TABLE `test` DROP `c2`;",
-					},
-					{
-						"test",
-						"test",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"ALTER TABLE `test` ADD `c3` varchar(10);",
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 					},
 				},
 			},
 			{
-				Query: "select * from dolt_schema_diff(@Commit1, @Commit2, 'test');",
+				Query: "select * from dolt_schema_diff(@Commit1, @Commit2, 'inventory');",
 				Expected: []sql.Row{
 					{
-						"test",
-						"test",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"ALTER TABLE `test` DROP `c2`;",
-					},
-					{
-						"test",
-						"test",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"ALTER TABLE `test` ADD `c3` varchar(10);",
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 					},
 				},
 			},
@@ -5031,37 +5221,43 @@ var SchemaDiffSystemTableScriptTests = []queries.ScriptTest{
 				Query: "select * from dolt_schema_diff('branch1', 'branch2');",
 				Expected: []sql.Row{
 					{
-						"test",
-						"test",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"ALTER TABLE `test` DROP `c2`;",
-					},
-					{
-						"test",
-						"test",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"ALTER TABLE `test` ADD `c3` varchar(10);",
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 					},
 				},
 			},
 			{
-				Query: "select * from dolt_schema_diff('branch1', 'branch2', 'test');",
+				Query: "select * from dolt_schema_diff('branch1..branch2');",
 				Expected: []sql.Row{
 					{
-						"test",
-						"test",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"ALTER TABLE `test` DROP `c2`;",
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 					},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff('branch1...branch2');",
+				Expected: []sql.Row{
 					{
-						"test",
-						"test",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"ALTER TABLE `test` ADD `c3` varchar(10);",
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff('branch1', 'branch2', 'inventory');",
+				Expected: []sql.Row{
+					{
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 					},
 				},
 			},
@@ -5069,37 +5265,43 @@ var SchemaDiffSystemTableScriptTests = []queries.ScriptTest{
 				Query: "select * from dolt_schema_diff('tag1', 'tag2');",
 				Expected: []sql.Row{
 					{
-						"test",
-						"test",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"ALTER TABLE `test` DROP `c2`;",
-					},
-					{
-						"test",
-						"test",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"ALTER TABLE `test` ADD `c3` varchar(10);",
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 					},
 				},
 			},
 			{
-				Query: "select * from dolt_schema_diff('tag1', 'tag2', 'test');",
+				Query: "select * from dolt_schema_diff('tag1..tag2');",
 				Expected: []sql.Row{
 					{
-						"test",
-						"test",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"ALTER TABLE `test` DROP `c2`;",
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 					},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff('tag1...tag2');",
+				Expected: []sql.Row{
 					{
-						"test",
-						"test",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"ALTER TABLE `test` ADD `c3` varchar(10);",
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					},
+				},
+			},
+			{
+				Query: "select * from dolt_schema_diff('tag1', 'tag2', 'inventory');",
+				Expected: []sql.Row{
+					{
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 					},
 				},
 			},
@@ -5108,37 +5310,21 @@ var SchemaDiffSystemTableScriptTests = []queries.ScriptTest{
 				Query: "select * from dolt_schema_diff(@Commit2, @Commit1);",
 				Expected: []sql.Row{
 					{
-						"test",
-						"test",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"ALTER TABLE `test` DROP `c3`;",
-					},
-					{
-						"test",
-						"test",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"ALTER TABLE `test` ADD `c2` int;",
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 					},
 				},
 			},
 			{
-				Query: "select * from dolt_schema_diff(@Commit2, @Commit1, 'test');",
+				Query: "select * from dolt_schema_diff(@Commit2, @Commit1, 'inventory');",
 				Expected: []sql.Row{
 					{
-						"test",
-						"test",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"ALTER TABLE `test` DROP `c3`;",
-					},
-					{
-						"test",
-						"test",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"ALTER TABLE `test` ADD `c2` int;",
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 					},
 				},
 			},
@@ -5146,37 +5332,21 @@ var SchemaDiffSystemTableScriptTests = []queries.ScriptTest{
 				Query: "select * from dolt_schema_diff('branch2', 'branch1');",
 				Expected: []sql.Row{
 					{
-						"test",
-						"test",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"ALTER TABLE `test` DROP `c3`;",
-					},
-					{
-						"test",
-						"test",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"ALTER TABLE `test` ADD `c2` int;",
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 					},
 				},
 			},
 			{
-				Query: "select * from dolt_schema_diff('branch2', 'branch1', 'test');",
+				Query: "select * from dolt_schema_diff('branch2', 'branch1', 'inventory');",
 				Expected: []sql.Row{
 					{
-						"test",
-						"test",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"ALTER TABLE `test` DROP `c3`;",
-					},
-					{
-						"test",
-						"test",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"ALTER TABLE `test` ADD `c2` int;",
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 					},
 				},
 			},
@@ -5184,37 +5354,21 @@ var SchemaDiffSystemTableScriptTests = []queries.ScriptTest{
 				Query: "select * from dolt_schema_diff('tag2', 'tag1');",
 				Expected: []sql.Row{
 					{
-						"test",
-						"test",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"ALTER TABLE `test` DROP `c3`;",
-					},
-					{
-						"test",
-						"test",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"ALTER TABLE `test` ADD `c2` int;",
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 					},
 				},
 			},
 			{
-				Query: "select * from dolt_schema_diff('tag2', 'tag1', 'test');",
+				Query: "select * from dolt_schema_diff('tag2', 'tag1', 'inventory');",
 				Expected: []sql.Row{
 					{
-						"test",
-						"test",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"ALTER TABLE `test` DROP `c3`;",
-					},
-					{
-						"test",
-						"test",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c3` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `c1` int,\n  `c2` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-						"ALTER TABLE `test` ADD `c2` int;",
+						"inventory",
+						"inventory",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `color` varchar(10),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+						"CREATE TABLE `inventory` (\n  `pk` int NOT NULL,\n  `name` varchar(50),\n  `quantity` int,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 					},
 				},
 			},

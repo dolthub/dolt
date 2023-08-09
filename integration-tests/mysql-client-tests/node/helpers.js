@@ -28,7 +28,10 @@ export function assertQueryResult(q, resultStr, expected, rows, matcher) {
   }
   if (q.toLowerCase().includes("dolt_merge")) {
     const result = JSON.parse(resultStr);
-    return expected.fast_forward === result.fast_forward && expected.conflicts === result.conflicts;
+    return (
+      expected.fast_forward === result.fast_forward &&
+      expected.conflicts === result.conflicts
+    );
   }
   return resultStr === JSON.stringify(expected);
 }

@@ -92,6 +92,7 @@ const (
 	DefaultUser           = "root"
 	DefaultHost           = "localhost"
 	UseDbFlag             = "use-db"
+	ProfileFlag           = "profile"
 
 	welcomeMsg = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
@@ -266,16 +267,6 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 func sqlHandleVErrAndExitCode(queryist cli.Queryist, verr errhand.VerboseError, usage cli.UsagePrinter) int {
 	if verr != nil {
 		if msg := verr.Verbose(); strings.TrimSpace(msg) != "" {
-			if _, ok := queryist.(*engine.SqlEngine); !ok {
-				// We are in a context where we are attempting to connect to a remote database. These errors
-				// are unstructured, so we add some additional context around them.
-				tmpMsg := `You've encountered a new behavior in dolt which is not fully documented yet.
-A local dolt server is using your dolt data directory, and in an attempt to service your request, we are attempting to 
-connect to it. That has failed. You should stop the server, or reach out to @macneale on https://discord.gg/gqr7K4VNKe
-for help.`
-				cli.PrintErrln(tmpMsg)
-				msg = fmt.Sprintf("A local server is running, and dolt is failing to connect. Error connecting to remote database: \"%s\".\n", msg)
-			}
 			cli.PrintErrln(msg)
 		}
 
@@ -785,7 +776,12 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 				}
 			}
 
+			db, ok := getDBFromSession(sqlCtx, qryist)
+			if ok {
+				sqlCtx.SetCurrentDatabase(db)
+			}
 			nextPrompt = fmt.Sprintf("%s> ", sqlCtx.GetCurrentDatabase())
+
 			return true
 		}()
 
@@ -801,6 +797,32 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 	_ = iohelp.WriteLine(cli.CliOut, "Bye")
 
 	return nil
+}
+
+// getDBFromSession returns the current database name for the session, handling all the errors along the way by printing
+// red error messages to the CLI. If there was an issue getting the db name, the second return value is false.
+func getDBFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string, ok bool) {
+	_, resp, err := qryist.Query(sqlCtx, "select database()")
+	if err != nil {
+		cli.Println(color.RedString("Failure to get DB Name for session" + err.Error()))
+		return db, false
+	}
+	// Expect single row/single column result with the db name.
+	row, err := resp.Next(sqlCtx)
+	if err != nil {
+		cli.Println(color.RedString("Failure to get DB Name for session" + err.Error()))
+		return db, false
+	}
+	if len(row) != 1 {
+		cli.Println(color.RedString("Failure to get DB Name for session" + err.Error()))
+		return db, false
+	}
+	if row[0] == nil {
+		db = ""
+	} else {
+		db = row[0].(string)
+	}
+	return db, true
 }
 
 // Returns a new auto completer with table names, column names, and SQL keywords.
@@ -945,7 +967,7 @@ func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sql
 		}
 		cli.Println("Database changed")
 		return sch, nil, err
-	case *sqlparser.MultiAlterDDL, *sqlparser.Set, *sqlparser.Commit:
+	case *sqlparser.AlterTable, *sqlparser.Set, *sqlparser.Commit:
 		_, ri, err := qryist.Query(ctx, query)
 		if err != nil {
 			return nil, nil, err

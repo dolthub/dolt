@@ -23,8 +23,11 @@ teardown() {
     run dolt ls
     [ "${#lines[@]}" -eq 17 ]
 
+
     # triggers
     run dolt sql -q "select trigger_name from information_schema.triggers;" -r csv
+    [ "$status" -eq 0 ]
+
     [ "$output" = "TRIGGER_NAME
 customer_create_date
 payment_date

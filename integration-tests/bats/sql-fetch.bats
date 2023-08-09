@@ -379,6 +379,64 @@ teardown() {
     [[ "$output" =~ "t2" ]] || false
 }
 
+@test "sql-fetch: fetch --prune deletes remote refs not on remote" {
+    mkdir firstRepo
+    mkdir secondRepo
+
+    cd firstRepo
+    dolt init
+    dolt remote add origin file://../remote1
+    dolt remote add remote2 file://../remote2
+    dolt branch b1
+    dolt branch b2
+    dolt push origin main
+    dolt push remote2 main
+    dolt push origin b1
+    dolt push remote2 b2
+
+    cd ..
+    dolt clone file://./remote1 secondRepo
+
+    cd secondRepo
+    run dolt branch -va
+    [[ "$output" =~ "main" ]] || false
+
+    dolt remote add remote2 file://../remote2
+    dolt fetch
+    dolt fetch remote2
+
+    run dolt branch -r
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "origin/b1" ]] || false
+    [[ "$output" =~ "remote2/b2" ]] || false
+
+    # delete the branches on the remote
+    cd ../firstRepo
+    dolt push origin :b1
+    dolt push remote2 :b2
+
+    cd ../secondRepo
+    dolt sql -q "call dolt_fetch('--prune')"
+
+    # prune should have deleted the origin/b1 branch, but not the one on the other remote
+    run dolt branch -r
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "origin/b1" ]] || false
+    [[ "$output" =~ "remote2/b2" ]] || false
+
+    # now the other remote
+    dolt sql -q "call dolt_fetch('--prune', 'remote2')"
+
+    run dolt branch -r
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "origin/b1" ]] || false
+    [[ ! "$output" =~ "remote2/b2" ]] || false
+
+    run dolt sql -q "call dolt_fetch('--prune', 'remote2', 'refs/heads/main:refs/remotes/remote2/othermain')"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "--prune option cannot be provided with a ref spec" ]] || false
+}
+
 @test "sql-fetch: dolt_fetch unknown remote fails" {
     cd repo2
     dolt remote remove origin

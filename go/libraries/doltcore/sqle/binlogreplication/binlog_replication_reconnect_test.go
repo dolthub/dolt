@@ -62,7 +62,7 @@ func TestBinlogReplicationAutoReconnect(t *testing.T) {
 	rows, err := replicaDatabase.Queryx("select min(pk) as min, max(pk) as max, count(pk) as count from db01.reconnect_test;")
 	require.NoError(t, err)
 
-	row := convertByteArraysToStrings(readNextRow(t, rows))
+	row := convertMapScanResultToStrings(readNextRow(t, rows))
 	require.Equal(t, "0", row["min"])
 	require.Equal(t, "999", row["max"])
 	require.Equal(t, "1000", row["count"])
@@ -79,7 +79,7 @@ func TestBinlogReplicationAutoReconnect(t *testing.T) {
 // connection retry interval. This is used for testing connection retry logic without waiting the full default period.
 func configureFastConnectionRetry(_ *testing.T) {
 	replicaDatabase.MustExec(
-		fmt.Sprintf("change replication source to SOURCE_CONNECT_RETRY=5;"))
+		"change replication source to SOURCE_CONNECT_RETRY=5;")
 }
 
 // testInitialReplicaStatus tests the data returned by SHOW REPLICA STATUS and errors
@@ -145,7 +145,7 @@ func showReplicaStatus(t *testing.T) map[string]interface{} {
 	rows, err := replicaDatabase.Queryx("show replica status;")
 	require.NoError(t, err)
 	defer rows.Close()
-	return convertByteArraysToStrings(readNextRow(t, rows))
+	return convertMapScanResultToStrings(readNextRow(t, rows))
 }
 
 func configureToxiProxy(t *testing.T) {
@@ -184,14 +184,18 @@ func turnOnLimitDataToxic(t *testing.T) {
 	t.Logf("Toxiproxy proxy with limit_data toxic (1KB) started on port %d", proxyPort)
 }
 
-// convertByteArraysToStrings converts each []byte value in the specified map |m| into a string.
+// convertMapScanResultToStrings converts each value in the specified map |m| into a string.
 // This is necessary because MapScan doesn't honor (or know about) the correct underlying SQL types – it
-// gets all results back as strings, typed as []byte.
+// gets results back as strings, typed as []byte. Results also get returned as int64, which are converted to strings
+// for ease of testing.
 // More info at the end of this issue: https://github.com/jmoiron/sqlx/issues/225
-func convertByteArraysToStrings(m map[string]interface{}) map[string]interface{} {
+func convertMapScanResultToStrings(m map[string]interface{}) map[string]interface{} {
 	for key, value := range m {
-		if bytes, ok := value.([]byte); ok {
+		if bytes, ok := value.([]uint8); ok {
 			m[key] = string(bytes)
+		}
+		if i, ok := value.(int64); ok {
+			m[key] = strconv.FormatInt(i, 10)
 		}
 	}
 

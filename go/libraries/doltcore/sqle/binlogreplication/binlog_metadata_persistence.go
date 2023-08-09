@@ -33,12 +33,11 @@ func persistReplicationConfiguration(ctx *sql.Context, replicaSourceInfo *mysql_
 	}
 	engine := server.Engine
 
-	replicaSourceInfoTableData := engine.Analyzer.Catalog.MySQLDb.ReplicaSourceInfoTable().Data()
-	err := replicaSourceInfoTableData.Put(ctx, replicaSourceInfo)
-	if err != nil {
-		return err
-	}
-	return engine.Analyzer.Catalog.MySQLDb.Persist(ctx)
+	mysqlDb := engine.Analyzer.Catalog.MySQLDb
+	ed := mysqlDb.Editor()
+	defer ed.Close()
+	ed.PutReplicaSourceInfo(replicaSourceInfo)
+	return mysqlDb.Persist(ctx, ed)
 }
 
 // loadReplicationConfiguration loads the replication configuration for default channel ("").
@@ -49,16 +48,15 @@ func loadReplicationConfiguration(_ *sql.Context) (*mysql_db.ReplicaSourceInfo, 
 			"replication commands may only be used when running from dolt sql-server, and not from dolt sql")
 	}
 	engine := server.Engine
-	replicaSourceInfoTableData := engine.Analyzer.Catalog.MySQLDb.ReplicaSourceInfoTable().Data()
+	mysqlDb := engine.Analyzer.Catalog.MySQLDb
+	rd := mysqlDb.Reader()
+	defer rd.Close()
 
-	// ReplicaSourceInfo is keyed on channel name, but we currently only support
-	// the default channel (""), so we use that regardless of what was passed in.
-	entries := replicaSourceInfoTableData.Get(mysql_db.ReplicaSourceInfoPrimaryKey{
+	rsi, ok := rd.GetReplicaSourceInfo(mysql_db.ReplicaSourceInfoPrimaryKey{
 		Channel: "",
 	})
-
-	if len(entries) == 1 {
-		return entries[0].(*mysql_db.ReplicaSourceInfo), nil
+	if ok {
+		return rsi, nil
 	}
 
 	return nil, nil
@@ -72,14 +70,13 @@ func deleteReplicationConfiguration(ctx *sql.Context) error {
 			"replication commands may only be used when running from dolt sql-server, and not from dolt sql")
 	}
 	engine := server.Engine
+	mysqlDb := engine.Analyzer.Catalog.MySQLDb
+	ed := mysqlDb.Editor()
+	defer ed.Close()
 
-	replicaSourceInfoTableData := engine.Analyzer.Catalog.MySQLDb.ReplicaSourceInfoTable().Data()
-	err := replicaSourceInfoTableData.Remove(ctx, mysql_db.ReplicaSourceInfoPrimaryKey{}, nil)
-	if err != nil {
-		return err
-	}
+	ed.RemoveReplicaSourceInfo(mysql_db.ReplicaSourceInfoPrimaryKey{})
 
-	return engine.Analyzer.Catalog.MySQLDb.Persist(ctx)
+	return engine.Analyzer.Catalog.MySQLDb.Persist(ctx, ed)
 }
 
 // persistSourceUuid saves the specified |sourceUuid| to a persistent storage location.

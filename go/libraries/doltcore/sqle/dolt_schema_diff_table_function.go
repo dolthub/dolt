@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
@@ -65,7 +64,6 @@ var schemaDiffTableSchema = sql.Schema{
 	&sql.Column{Name: "to_table_name", Type: types.LongText, Nullable: false},     // 1
 	&sql.Column{Name: "from_create_statement", Type: types.Text, Nullable: false}, // 2
 	&sql.Column{Name: "to_create_statement", Type: types.Text, Nullable: false},   // 3
-	&sql.Column{Name: "alter_statement", Type: types.Text, Nullable: false},       // 4
 }
 
 // NewInstance creates a new instance of TableFunction interface
@@ -271,10 +269,6 @@ func (ds *SchemaDiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.R
 	if err != nil {
 		return nil, err
 	}
-	toSchemas, err := toRoot.GetAllSchemas(ctx)
-	if err != nil {
-		return nil, err
-	}
 
 	deltas, err := diff.GetTableDeltas(ctx, fromRoot, toRoot)
 	if err != nil {
@@ -296,16 +290,11 @@ func (ds *SchemaDiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.R
 		toName := delta.ToName
 
 		var fromCreate, toCreate string
-		var fromSchema, toSchema schema.Schema
 
 		if delta.FromTable != nil {
 			fromSqlDb := NewUserSpaceDatabase(fromRoot, editor.Options{})
 			fromSqlCtx, fromEngine, _ := PrepareCreateTableStmt(ctx, fromSqlDb)
 			fromCreate, err = GetCreateTableStmt(fromSqlCtx, fromEngine, delta.FromName)
-			if err != nil {
-				return nil, err
-			}
-			fromSchema, err = delta.FromTable.GetSchema(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -318,29 +307,20 @@ func (ds *SchemaDiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.R
 			if err != nil {
 				return nil, err
 			}
-			toSchema, err = delta.ToTable.GetSchema(ctx)
-			if err != nil {
-				return nil, err
-			}
 		}
 
-		baseRow := sql.Row{
+		var schemasAreDifferent = fromCreate != toCreate
+		if !schemasAreDifferent {
+			continue
+		}
+
+		row := sql.Row{
 			fromName,   // 0
 			toName,     // 1
 			fromCreate, // 2
 			toCreate,   // 3
-			"",         // 4
 		}
-
-		statements, err := diff.GetNonCreateNonDropTableSqlSchemaDiff(delta, toSchemas, fromSchema, toSchema)
-		if err != nil {
-			return nil, err
-		}
-		for _, stmt := range statements {
-			row := baseRow.Copy()
-			row[4] = stmt
-			dataRows = append(dataRows, row)
-		}
+		dataRows = append(dataRows, row)
 	}
 
 	iter := &schemaDiffTableFunctionRowIter{

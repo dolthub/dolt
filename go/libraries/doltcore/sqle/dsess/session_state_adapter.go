@@ -37,24 +37,7 @@ type SessionStateAdapter struct {
 }
 
 func (s SessionStateAdapter) SetCWBHeadRef(ctx context.Context, newRef ref.MarshalableRef) error {
-	sqlCtx := sql.NewContext(ctx, sql.WithSession(s.session))
-
-	err := s.session.CommitTransaction(sqlCtx, sqlCtx.GetTransaction())
-	if err != nil {
-		return err
-	}
-
-	wsRef, err := ref.WorkingSetRefForHead(newRef.Ref)
-	if err != nil {
-		return err
-	}
-
-	err = s.session.SwitchWorkingSet(sqlCtx, s.dbName, wsRef)
-	if err != nil {
-		return err
-	}
-
-	return s.session.CommitTransaction(sqlCtx, sqlCtx.GetTransaction())
+	return fmt.Errorf("Cannot set cwb head ref with a SessionStateAdapter")
 }
 
 var _ env.RepoStateReader = SessionStateAdapter{}

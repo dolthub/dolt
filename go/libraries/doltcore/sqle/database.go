@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/fulltext"
 	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -53,7 +54,7 @@ type Database struct {
 	ddb           *doltdb.DoltDB
 	rsr           env.RepoStateReader
 	rsw           env.RepoStateWriter
-	gs            globalstate.GlobalState
+	gs            dsess.GlobalStateImpl
 	editOpts      editor.Options
 	revision      string
 	revType       dsess.RevisionType
@@ -61,7 +62,7 @@ type Database struct {
 
 var _ dsess.SqlDatabase = Database{}
 var _ dsess.RevisionDatabase = Database{}
-var _ globalstate.StateProvider = Database{}
+var _ globalstate.GlobalStateProvider = Database{}
 var _ sql.CollatedDatabase = Database{}
 var _ sql.Database = Database{}
 var _ sql.StoredProcedureDatabase = Database{}
@@ -76,6 +77,7 @@ var _ sql.VersionedDatabase = Database{}
 var _ sql.ViewDatabase = Database{}
 var _ sql.EventDatabase = Database{}
 var _ sql.AliasedDatabase = Database{}
+var _ fulltext.Database = Database{}
 
 type ReadOnlyDatabase struct {
 	Database
@@ -134,7 +136,7 @@ func (db Database) DoltDatabases() []*doltdb.DoltDB {
 
 // NewDatabase returns a new dolt database to use in queries.
 func NewDatabase(ctx context.Context, name string, dbData env.DbData, editOpts editor.Options) (Database, error) {
-	globalState, err := globalstate.NewGlobalStateStoreForDb(ctx, dbData.Ddb)
+	globalState, err := dsess.NewGlobalStateStoreForDb(ctx, name, dbData.Ddb)
 	if err != nil {
 		return Database{}, err
 	}
@@ -630,7 +632,7 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 	}
 	if doltdb.IsReadOnlySystemTable(tableName) {
 		table = readonlyTable
-	} else if doltdb.HasDoltPrefix(tableName) {
+	} else if doltdb.HasDoltPrefix(tableName) && !doltdb.IsFullTextTable(tableName) {
 		table = &WritableDoltTable{DoltTable: readonlyTable, db: db}
 	} else {
 		table = &AlterableDoltTable{WritableDoltTable{DoltTable: readonlyTable, db: db}}
@@ -826,7 +828,7 @@ func (db Database) removeTableFromAutoIncrementTracker(
 		wses = append(wses, ws)
 	}
 
-	ait, err := db.gs.GetAutoIncrementTracker(ctx)
+	ait, err := db.gs.AutoIncrementTracker(ctx)
 	if err != nil {
 		return err
 	}
@@ -849,7 +851,7 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 		if !dtables.DoltDocsSqlSchema.Equals(sch.Schema) && !dtables.OldDoltDocsSqlSchema.Equals(sch.Schema) {
 			return fmt.Errorf("incorrect schema for dolt_docs table")
 		}
-	} else if doltdb.HasDoltPrefix(tableName) {
+	} else if doltdb.HasDoltPrefix(tableName) && !doltdb.IsFullTextTable(tableName) {
 		return ErrReservedTableName.New(tableName)
 	}
 
@@ -879,6 +881,32 @@ func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sq
 	}
 
 	return db.createIndexedSqlTable(ctx, tableName, sch, idxDef, collation)
+}
+
+// CreateFulltextTableNames returns a set of names that will be used to create Full-Text pseudo-index tables.
+func (db Database) CreateFulltextTableNames(ctx *sql.Context, parentTableName string, parentIndexName string) (fulltext.IndexTableNames, error) {
+	allTableNames, err := db.GetAllTableNames(ctx)
+	if err != nil {
+		return fulltext.IndexTableNames{}, err
+	}
+	var tablePrefix string
+OuterLoop:
+	for i := uint64(0); true; i++ {
+		tablePrefix = strings.ToLower(fmt.Sprintf("dolt_%s_%s_%d", parentTableName, parentIndexName, i))
+		for _, tableName := range allTableNames {
+			if strings.HasPrefix(strings.ToLower(tableName), tablePrefix) {
+				continue OuterLoop
+			}
+		}
+		break
+	}
+	return fulltext.IndexTableNames{
+		Config:      fmt.Sprintf("dolt_%s_fts_config", parentTableName),
+		Position:    fmt.Sprintf("%s_fts_position", tablePrefix),
+		DocCount:    fmt.Sprintf("%s_fts_doc_count", tablePrefix),
+		GlobalCount: fmt.Sprintf("%s_fts_global_count", tablePrefix),
+		RowCount:    fmt.Sprintf("%s_fts_row_count", tablePrefix),
+	}, nil
 }
 
 // createSqlTable is the private version of CreateTable. It doesn't enforce any table name checks.
@@ -913,7 +941,7 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Pr
 	// Prevent any tables that use BINARY, CHAR, VARBINARY, VARCHAR prefixes
 
 	if schema.HasAutoIncrement(doltSch) {
-		ait, err := db.gs.GetAutoIncrementTracker(ctx)
+		ait, err := db.gs.AutoIncrementTracker(ctx)
 		if err != nil {
 			return err
 		}
@@ -961,7 +989,7 @@ func (db Database) createIndexedSqlTable(ctx *sql.Context, tableName string, sch
 	}
 
 	if schema.HasAutoIncrement(doltSch) {
-		ait, err := db.gs.GetAutoIncrementTracker(ctx)
+		ait, err := db.gs.AutoIncrementTracker(ctx)
 		if err != nil {
 			return err
 		}

@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { branchTests } from "./branches.js";
 import { databaseTests } from "./databases.js";
 import { logTests } from "./logs.js";
@@ -11,6 +13,9 @@ import { docsTests } from "./docs.js";
 import { tagsTests } from "./tags.js";
 import { viewsTests } from "./views.js";
 import { diffTests } from "./diffs.js";
+
+const args = process.argv.slice(2);
+const testDataPath = args[3];
 
 export default async function runWorkbenchTests(database) {
   await runTests(database, databaseTests);
@@ -27,23 +32,19 @@ export default async function runWorkbenchTests(database) {
 async function runTests(database, tests) {
   await Promise.all(
     tests.map((test) => {
-      const expected = test.res;
       const { sql, values } = getQueryWithEscapedParameters(test.q, test.p);
+
       return database
-        .query(sql, values)
+        .query({
+          sql,
+          values,
+          // For LOAD DATA
+          infileStreamFactory: test.file
+            ? () => fs.createReadStream(path.resolve(testDataPath, test.file))
+            : undefined,
+        })
         .then((rows) => {
-          const resultStr = JSON.stringify(rows);
-          const result = JSON.parse(resultStr);
-          if (
-            !assertQueryResult(test.q, resultStr, expected, rows, test.matcher)
-          ) {
-            console.log("Query:", test.q);
-            console.log("Results:", result);
-            console.log("Expected:", expected);
-            throw new Error("Query failed");
-          } else {
-            console.log("Query succeeded:", test.q);
-          }
+          assertEqualRows(test, rows);
         })
         .catch((err) => {
           if (test.expectedErr) {
@@ -58,4 +59,15 @@ async function runTests(database, tests) {
         });
     })
   );
+}
+
+function assertEqualRows(test, rows) {
+  const expected = test.res;
+  const resultStr = JSON.stringify(rows);
+  const result = JSON.parse(resultStr);
+  if (!assertQueryResult(test.q, resultStr, expected, rows, test.matcher)) {
+    console.log("Results:", result);
+    console.log("Expected:", expected);
+    throw new Error(`Query failed: ${test.q}`);
+  }
 }
