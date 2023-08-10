@@ -132,7 +132,8 @@ func (ixc *indexCollectionImpl) AddIndex(indexes ...Index) {
 		index = index.copy()
 		index.indexColl = ixc
 		index.allTags = combineAllTags(index.tags, ixc.pks)
-		oldNamedIndex, ok := ixc.indexes[index.name]
+		lowerName := strings.ToLower(index.name)
+		oldNamedIndex, ok := ixc.indexes[lowerName]
 		if ok {
 			ixc.removeIndex(oldNamedIndex)
 		}
@@ -140,7 +141,7 @@ func (ixc *indexCollectionImpl) AddIndex(indexes ...Index) {
 		if oldTaggedIndex != nil {
 			ixc.removeIndex(oldTaggedIndex)
 		}
-		ixc.indexes[index.name] = index
+		ixc.indexes[lowerName] = index
 		for _, tag := range index.tags {
 			ixc.colTagToIndex[tag] = append(ixc.colTagToIndex[tag], index)
 		}
@@ -156,11 +157,12 @@ func (ixc *indexCollectionImpl) AddIndexByColNames(indexName string, cols []stri
 }
 
 func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint64, prefixLengths []uint16, props IndexProperties) (Index, error) {
-	if strings.HasPrefix(indexName, "dolt_") {
+	lowerName := strings.ToLower(indexName)
+	if strings.HasPrefix(lowerName, "dolt_") {
 		return nil, fmt.Errorf("indexes cannot be prefixed with `dolt_`")
 	}
-	if ixc.Contains(indexName) {
-		return nil, fmt.Errorf("`%s` already exists as an index for this table", indexName)
+	if ixc.Contains(lowerName) {
+		return nil, fmt.Errorf("`%s` already exists as an index for this table", lowerName)
 	}
 	if !ixc.tagsExist(tags...) {
 		return nil, fmt.Errorf("tags %v do not exist on this table", tags)
@@ -177,7 +179,7 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 
 	index := &indexImpl{
 		indexColl:     ixc,
-		name:          indexName,
+		name:          lowerName,
 		tags:          tags,
 		allTags:       combineAllTags(tags, ixc.pks),
 		isUnique:      props.IsUnique,
@@ -188,7 +190,7 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 		prefixLengths: prefixLengths,
 		fullTextProps: props.FullTextProperties,
 	}
-	ixc.indexes[indexName] = index
+	ixc.indexes[lowerName] = index
 	for _, tag := range tags {
 		ixc.colTagToIndex[tag] = append(ixc.colTagToIndex[tag], index)
 	}
@@ -214,7 +216,7 @@ func (ixc *indexCollectionImpl) UnsafeAddIndexByColTags(indexName string, tags [
 		prefixLengths: prefixLengths,
 		fullTextProps: props.FullTextProperties,
 	}
-	ixc.indexes[indexName] = index
+	ixc.indexes[strings.ToLower(indexName)] = index
 	for _, tag := range tags {
 		ixc.colTagToIndex[tag] = append(ixc.colTagToIndex[tag], index)
 	}
@@ -235,7 +237,7 @@ func (ixc *indexCollectionImpl) AllIndexes() []Index {
 }
 
 func (ixc *indexCollectionImpl) Contains(indexName string) bool {
-	_, ok := ixc.indexes[indexName]
+	_, ok := ixc.indexes[strings.ToLower(indexName)]
 	return ok
 }
 
@@ -259,7 +261,7 @@ func (ixc *indexCollectionImpl) Equals(other IndexCollection) bool {
 }
 
 func (ixc *indexCollectionImpl) GetByName(indexName string) Index {
-	ix, ok := ixc.indexes[indexName]
+	ix, ok := ixc.indexes[strings.ToLower(indexName)]
 	if ok {
 		return ix
 	}
@@ -387,11 +389,12 @@ func (ixc *indexCollectionImpl) Merge(indexes ...Index) {
 }
 
 func (ixc *indexCollectionImpl) RemoveIndex(indexName string) (Index, error) {
-	if !ixc.Contains(indexName) {
-		return nil, fmt.Errorf("`%s` does not exist as an index for this table", indexName)
+	lowerName := strings.ToLower(indexName)
+	if !ixc.Contains(lowerName) {
+		return nil, fmt.Errorf("`%s` does not exist as an index for this table", lowerName)
 	}
-	index := ixc.indexes[indexName]
-	delete(ixc.indexes, indexName)
+	index := ixc.indexes[lowerName]
+	delete(ixc.indexes, lowerName)
 	for _, tag := range index.tags {
 		indexesRefThisCol := ixc.colTagToIndex[tag]
 		for i, comparisonIndex := range indexesRefThisCol {
@@ -450,7 +453,7 @@ func (ixc *indexCollectionImpl) containsColumnTagCollection(tags ...uint64) *ind
 }
 
 func (ixc *indexCollectionImpl) removeIndex(index *indexImpl) {
-	delete(ixc.indexes, index.name)
+	delete(ixc.indexes, strings.ToLower(index.name))
 	for _, tag := range index.tags {
 		var newReferences []*indexImpl
 		for _, referencedIndex := range ixc.colTagToIndex[tag] {
