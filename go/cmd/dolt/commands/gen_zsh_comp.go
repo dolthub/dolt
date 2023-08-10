@@ -73,7 +73,7 @@ func (z GenZshCompCmd) Exec(ctx context.Context, commandStr string, args []strin
 	} else {
 		wr = cli.OutStream
 	}
-	
+
 	_, err := wr.Write([]byte(fmt.Sprintf(preamble, dEnv.Version)))
 	if err != nil {
 		verr := errhand.BuildDError("error: Failed to dump zsh.").AddCause(err).Build()
