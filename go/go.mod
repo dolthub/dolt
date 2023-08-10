@@ -158,5 +158,3 @@ require (
 )
 
 go 1.19
-
-replace github.com/dolthub/vitess => /Users/max-hoffman/go/src/github.com/dolthub/vitess
