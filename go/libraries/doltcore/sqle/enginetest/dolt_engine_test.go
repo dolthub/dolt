@@ -568,11 +568,6 @@ func TestSpatialIndexPlans(t *testing.T) {
 	enginetest.TestSpatialIndexPlans(t, newDoltHarness(t))
 }
 
-func TestSpatialIndexPlansPrepared(t *testing.T) {
-	skipOldFormat(t)
-	enginetest.TestSpatialIndexPlansPrepared(t, newDoltHarness(t))
-}
-
 func TestTruncate(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
@@ -682,15 +677,6 @@ func TestJoinOps(t *testing.T) {
 	enginetest.TestJoinOps(t, h)
 }
 
-func TestJoinPlanningPrepared(t *testing.T) {
-	if types.IsFormat_LD(types.Format_Default) {
-		t.Skip("DOLT_LD keyless indexes are not sorted")
-	}
-	h := newDoltHarness(t).WithParallelism(1)
-	defer h.Close()
-	enginetest.TestJoinPlanningPrepared(t, h)
-}
-
 func TestJoinPlanning(t *testing.T) {
 	if types.IsFormat_LD(types.Format_Default) {
 		t.Skip("DOLT_LD keyless indexes are not sorted")
@@ -698,16 +684,6 @@ func TestJoinPlanning(t *testing.T) {
 	h := newDoltHarness(t).WithParallelism(1)
 	defer h.Close()
 	enginetest.TestJoinPlanning(t, h)
-}
-
-func TestJoinOpsPrepared(t *testing.T) {
-	if types.IsFormat_LD(types.Format_Default) {
-		t.Skip("DOLT_LD keyless indexes are not sorted")
-	}
-
-	h := newDoltHarness(t)
-	defer h.Close()
-	enginetest.TestJoinOpsPrepared(t, h)
 }
 
 func TestJoinQueries(t *testing.T) {
@@ -1556,6 +1532,7 @@ func TestDoltMerge(t *testing.T) {
 		func() {
 			h := newDoltHarness(t).WithParallelism(1)
 			defer h.Close()
+			h.Setup(setup.MydbData)
 			enginetest.TestScript(t, h, script)
 		}()
 	}
@@ -2334,12 +2311,6 @@ func TestQueriesPrepared(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestQueriesPrepared(t, h)
-}
-
-func TestPreparedStaticIndexQuery(t *testing.T) {
-	h := newDoltHarness(t)
-	defer h.Close()
-	enginetest.TestPreparedStaticIndexQuery(t, h)
 }
 
 func TestStatistics(t *testing.T) {

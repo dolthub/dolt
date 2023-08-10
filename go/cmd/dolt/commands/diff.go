@@ -17,14 +17,14 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"io"
 	"strconv"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/go-sql-driver/mysql"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
@@ -863,19 +863,27 @@ func getTableSchemaAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName s
 }
 
 func schemaFromCreateTableStmt(sqlCtx *sql.Context, createTableStmt string) (schema.Schema, error) {
-	p, err := sqlparser.Parse(createTableStmt)
+	//p, err := sqlparser.Parse(createTableStmt)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//ddl := p.(*sqlparser.DDL)
+
+	//s, _, err := parse.TableSpecToSchema(sqlCtx, ddl.TableSpec, false)
+	//if err != nil {
+	//	return nil, err
+	//}
+
+	parsed, err := planbuilder.Parse(sqlCtx, nil, createTableStmt)
 	if err != nil {
 		return nil, err
 	}
-	ddl := p.(*sqlparser.DDL)
-
-	s, _, err := parse.TableSpecToSchema(sqlCtx, ddl.TableSpec, false)
-	if err != nil {
-		return nil, err
+	create, ok := parsed.(*plan.CreateTable)
+	if !ok {
+		return nil, fmt.Errorf("expected create table, found %T", parsed)
 	}
-
 	cols := []schema.Column{}
-	for _, col := range s.Schema {
+	for _, col := range create.CreateSchema.Schema {
 		typeInfo, err := typeinfo.FromSqlType(col.Type)
 		if err != nil {
 			return nil, err

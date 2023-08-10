@@ -521,7 +521,7 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 				SkipResultsCheck:                true,
 			},
 			{
-				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;;",
+				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
 				Expected: []sql.Row{{1}},
 			},
 			{
@@ -3896,6 +3896,14 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 			"call dolt_commit('-am', 'make table changes');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
+			//{
+			//	Query:    "select * from modifiedTable",
+			//	Expected: []sql.Row{},
+			//},
+			//{
+			//	Query:    "select * from dolt_diff_modifiedTable",
+			//	Expected: []sql.Row{},
+			//},
 			{
 				Query: "SELECT table_name, column_name, diff_type FROM DOLT_COLUMN_DIFF WHERE table_name = 'modifiedTable';",
 				Expected: []sql.Row{

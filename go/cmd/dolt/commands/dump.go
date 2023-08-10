@@ -17,13 +17,13 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/fatih/color"
 
@@ -389,7 +389,7 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValu
 		}
 
 		// We used to store just the SELECT part of a view, but now we store the entire CREATE VIEW statement
-		cv, err := parse.Parse(ctx, row[fragColIdx].(string))
+		cv, err := planbuilder.Parse(ctx, nil, row[fragColIdx].(string))
 		if err != nil {
 			return err
 		}

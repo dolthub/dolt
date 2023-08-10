@@ -17,15 +17,14 @@ package encoding
 import (
 	"context"
 	"fmt"
-
-	fb "github.com/dolthub/flatbuffers/v23/go"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/parse"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
+	fb "github.com/dolthub/flatbuffers/v23/go"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 const (
@@ -539,7 +538,7 @@ func sqlTypeString(t typeinfo.TypeInfo) string {
 }
 
 func typeinfoFromSqlType(ctx context.Context, s string) (typeinfo.TypeInfo, error) {
-	t, err := parse.ParseColumnTypeString(sql.NewContext(ctx), s)
+	t, err := planbuilder.ParseColumnTypeString(sql.NewContext(ctx), s)
 	if err != nil {
 		return nil, err
 	}

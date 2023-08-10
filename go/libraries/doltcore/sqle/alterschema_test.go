@@ -18,10 +18,10 @@ import (
 	"context"
 	goerrors "errors"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/parse"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/stretchr/testify/assert"
@@ -292,7 +292,7 @@ func makePeopleTable(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, erro
 }
 
 func mustStringToColumnDefault(defaultString string) *sql.ColumnDefaultValue {
-	def, err := parse.StringToColumnDefaultValue(sql.NewEmptyContext(), defaultString)
+	def, err := planbuilder.StringToColumnDefaultValue(sql.NewEmptyContext(), defaultString)
 	if err != nil {
 		panic(err)
 	}

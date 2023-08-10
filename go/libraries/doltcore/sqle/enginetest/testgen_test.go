@@ -17,12 +17,11 @@ package enginetest
 import (
 	"bufio"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/dolthub/go-mysql-server/sql/parse"
 
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
@@ -47,7 +46,7 @@ func TestGenNewFormatQueryPlans(t *testing.T) {
 	for _, tt := range queries.PlanTests {
 		_, _ = w.WriteString("\t{\n")
 		ctx := enginetest.NewContextWithEngine(harness, engine)
-		parsed, err := parse.Parse(ctx, tt.Query)
+		parsed, err := planbuilder.Parse(ctx, engine.Analyzer.Catalog, tt.Query)
 		require.NoError(t, err)
 
 		node, err := engine.Analyzer.Analyze(ctx, parsed, nil)

@@ -16,11 +16,11 @@ package index_test
 
 import (
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"testing"
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/transform"
 	"github.com/stretchr/testify/assert"
@@ -1564,7 +1564,7 @@ func TestMergeableIndexesNulls(t *testing.T) {
 }
 
 func ReadRangesFromQuery(ctx *sql.Context, eng *sqle.Engine, query string) ([]*noms.ReadRange, error) {
-	parsed, err := parse.Parse(ctx, query)
+	parsed, err := planbuilder.Parse(ctx, eng.Analyzer.Catalog, query)
 	if err != nil {
 		return nil, err
 	}

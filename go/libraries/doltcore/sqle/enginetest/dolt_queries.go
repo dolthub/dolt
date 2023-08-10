@@ -16,11 +16,12 @@ package enginetest
 
 import (
 	"fmt"
+	"github.com/dolthub/vitess/go/sqltypes"
+	"github.com/dolthub/vitess/go/vt/proto/query"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
@@ -895,29 +896,29 @@ var DoltScripts = []queries.ScriptTest{
 			{
 				Query:    "select * from test as of 'HEAD~' where pk=?;",
 				Expected: []sql.Row{{0, 0}},
-				Bindings: map[string]sql.Expression{
-					"v1": expression.NewLiteral(0, types.Int8),
+				Bindings: map[string]*query.BindVariable{
+					"v1": sqltypes.Int8BindVariable(int8(0)),
 				},
 			},
 			{
 				Query:    "select * from test as of hashof('HEAD') where pk=?;",
 				Expected: []sql.Row{{1, 1, nil}},
-				Bindings: map[string]sql.Expression{
-					"v1": expression.NewLiteral(1, types.Int8),
+				Bindings: map[string]*query.BindVariable{
+					"v1": sqltypes.Int8BindVariable(int8(1)),
 				},
 			},
 			{
 				Query:    "select * from test as of @Commit1 where pk=?;",
 				Expected: []sql.Row{{0, 0}},
-				Bindings: map[string]sql.Expression{
-					"v1": expression.NewLiteral(0, types.Int8),
+				Bindings: map[string]*query.BindVariable{
+					"v1": sqltypes.Int8BindVariable(int8(0)),
 				},
 			},
 			{
 				Query:    "select * from test as of @Commit2 where pk=?;",
 				Expected: []sql.Row{{0, 0, nil}},
-				Bindings: map[string]sql.Expression{
-					"v1": expression.NewLiteral(0, types.Int8),
+				Bindings: map[string]*query.BindVariable{
+					"v1": sqltypes.Int8BindVariable(int8(0)),
 				},
 			},
 		},
@@ -1680,12 +1681,14 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "explain select pk, c from dolt_history_t1 where pk = 3",
 				Expected: []sql.Row{
-					{"Filter"},
-					{" ├─ (dolt_history_t1.pk = 3)"},
-					{" └─ IndexedTableAccess(dolt_history_t1)"},
-					{"     ├─ index: [dolt_history_t1.pk]"},
-					{"     ├─ filters: [{[3, 3]}]"},
-					{"     └─ columns: [pk c]"},
+					{"Project"},
+					{" ├─ columns: [dolt_history_t1.pk, dolt_history_t1.c]"},
+					{" └─ Filter"},
+					{"     ├─ (dolt_history_t1.pk = 3)"},
+					{"     └─ IndexedTableAccess(dolt_history_t1)"},
+					{"         ├─ index: [dolt_history_t1.pk]"},
+					{"         ├─ filters: [{[3, 3]}]"},
+					{"         └─ columns: [pk c commit_hash committer commit_date]"},
 				},
 			},
 			{
@@ -1698,7 +1701,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 					{"     └─ IndexedTableAccess(dolt_history_t1)"},
 					{"         ├─ index: [dolt_history_t1.pk]"},
 					{"         ├─ filters: [{[3, 3]}]"},
-					{"         └─ columns: [pk c committer]"},
+					{"         └─ columns: [pk c commit_hash committer commit_date]"},
 				},
 			},
 		},
@@ -1754,12 +1757,14 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "explain select pk, c from dolt_history_t1 where c = 4",
 				Expected: []sql.Row{
-					{"Filter"},
-					{" ├─ (dolt_history_t1.c = 4)"},
-					{" └─ IndexedTableAccess(dolt_history_t1)"},
-					{"     ├─ index: [dolt_history_t1.c]"},
-					{"     ├─ filters: [{[4, 4]}]"},
-					{"     └─ columns: [pk c]"},
+					{"Project"},
+					{" ├─ columns: [dolt_history_t1.pk, dolt_history_t1.c]"},
+					{" └─ Filter"},
+					{"     ├─ (dolt_history_t1.c = 4)"},
+					{"     └─ IndexedTableAccess(dolt_history_t1)"},
+					{"         ├─ index: [dolt_history_t1.c]"},
+					{"         ├─ filters: [{[4, 4]}]"},
+					{"         └─ columns: [pk c commit_hash committer commit_date]"},
 				},
 			},
 			{
@@ -1772,7 +1777,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 					{"     └─ IndexedTableAccess(dolt_history_t1)"},
 					{"         ├─ index: [dolt_history_t1.c]"},
 					{"         ├─ filters: [{[10, 10]}]"},
-					{"         └─ columns: [pk c committer]"},
+					{"         └─ columns: [pk c commit_hash committer commit_date]"},
 				},
 			},
 		},
@@ -2123,7 +2128,7 @@ WHERE z IN (
   FROM dolt_history_xyz
   LEFT JOIN dolt_commits
   ON dolt_history_xyz.commit_hash = dolt_commits.commit_hash
-);;`,
+);`,
 				Expected: []sql.Row{
 					{100},
 					{200},

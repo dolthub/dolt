@@ -16,56 +16,46 @@ package sqlutil
 
 import (
 	"context"
+	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"strings"
-
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/parse"
-	"github.com/dolthub/go-mysql-server/sql/plan"
-	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 )
 
 // ParseCreateTableStatement will parse a CREATE TABLE ddl statement and use it to create a Dolt Schema. A RootValue
 // is used to generate unique tags for the Schema
 func ParseCreateTableStatement(ctx context.Context, root *doltdb.RootValue, query string) (string, schema.Schema, error) {
 	// todo: verify create table statement
-	p, err := sqlparser.Parse(query)
-	if err != nil {
-		return "", nil, err
-	}
-	ddl := p.(*sqlparser.DDL)
+	//p, err := sqlparser.Parse(query)
+	//if err != nil {
+	//	return "", nil, err
+	//}
+	//ddl := p.(*sqlparser.DDL)
 
 	sctx := sql.NewContext(ctx)
-	s, collation, err := parse.TableSpecToSchema(sctx, ddl.TableSpec, false)
+	//s, collation, err := parse.TableSpecToSchema(sctx, ddl.TableSpec, false)
+	//if err != nil {
+	//	return "", nil, err
+	//}
+	parsed, err := planbuilder.Parse(sctx, nil, query)
+	if err != nil {
+		return "", nil, err
+	}
+	create, ok := parsed.(*plan.CreateTable)
+	if !ok {
+		return "", nil, fmt.Errorf("expected create table, found %T", create)
+	}
+
+	sch, err := ToDoltSchema(ctx, root, create.Name(), create.CreateSchema, nil, create.Collation)
 	if err != nil {
 		return "", nil, err
 	}
 
-	for _, col := range s.Schema {
-		if collatedType, ok := col.Type.(sql.TypeWithCollation); ok {
-			col.Type, err = collatedType.WithNewCollation(sql.Collation_Default)
-			if err != nil {
-				return "", nil, err
-			}
-		}
-	}
-
-	buf := sqlparser.NewTrackedBuffer(nil)
-	ddl.Table.Format(buf)
-	tableName := buf.String()
-	sch, err := ToDoltSchema(ctx, root, tableName, s, nil, collation)
-	if err != nil {
-		return "", nil, err
-	}
-
-	indexes, err := parse.ConvertIndexDefs(sctx, ddl.TableSpec)
-	if err != nil {
-		return "", nil, err
-	}
-
-	for _, idx := range indexes {
+	for _, idx := range create.IdxDefs {
 		var prefixes []uint16
 		for _, c := range idx.Columns {
 			prefixes = append(prefixes, uint16(c.Length))
@@ -84,18 +74,18 @@ func ParseCreateTableStatement(ctx context.Context, root *doltdb.RootValue, quer
 	}
 
 	// foreign keys are stored on the *doltdb.Table object, ignore them here
-	_, checks, err := parse.ConvertConstraintsDefs(sctx, ddl.Table, ddl.TableSpec)
-	if err != nil {
-		return "", nil, err
-	}
-	for _, chk := range checks {
+	//_, checks, err := parse.ConvertConstraintsDefs(sctx, ddl.Table, ddl.TableSpec)
+	//if err != nil {
+	//	return "", nil, err
+	//}
+	for _, chk := range create.ChDefs {
 		name := getCheckConstraintName(chk)
 		_, err = sch.Checks().AddCheck(name, chk.Expr.String(), chk.Enforced)
 		if err != nil {
 			return "", nil, err
 		}
 	}
-	return tableName, sch, err
+	return create.Name(), sch, err
 }
 
 func getIndexName(def *plan.IndexDefinition) string {

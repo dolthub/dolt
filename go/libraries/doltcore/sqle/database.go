@@ -24,9 +24,8 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/fulltext"
-	"github.com/dolthub/go-mysql-server/sql/parse"
-	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -246,6 +245,9 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 
 // GetTableInsensitiveAsOf implements sql.VersionedDatabase
 func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, asOf interface{}) (sql.Table, bool, error) {
+	if asOf == nil {
+		return db.GetTableInsensitive(ctx, tableName)
+	}
 	head, root, err := resolveAsOf(ctx, db, asOf)
 	if err != nil {
 		return nil, false, err
@@ -1152,14 +1154,15 @@ func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableD
 	var viewDef sql.ViewDefinition
 	var views = make([]sql.ViewDefinition, len(fragments))
 	for i, fragment := range fragments {
-		cv, err := parse.Parse(ctx, fragments[i].fragment)
+		cv, err := sqlparser.Parse(fragments[i].fragment)
 		if err != nil {
 			return nil, sql.ViewDefinition{}, false, err
 		}
 
-		createView, ok := cv.(*plan.CreateView)
+		createView, ok := cv.(*sqlparser.DDL)
 		if ok {
-			views[i] = sql.ViewDefinition{Name: fragments[i].name, TextDefinition: createView.Definition.TextDefinition, CreateViewStatement: fragments[i].fragment}
+			selectStr := fragments[i].fragment[createView.SubStatementPositionStart:createView.SubStatementPositionEnd]
+			views[i] = sql.ViewDefinition{Name: fragments[i].name, TextDefinition: selectStr, CreateViewStatement: fragments[i].fragment}
 		} else {
 			views[i] = sql.ViewDefinition{Name: fragments[i].name, TextDefinition: fragments[i].fragment, CreateViewStatement: fmt.Sprintf("CREATE VIEW %s AS %s", fragments[i].name, fragments[i].fragment)}
 		}
