@@ -157,10 +157,6 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 )
 
-replace github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
-
 go 1.19
-
-replace github.com/dolthub/go-mysql-server => /Users/max-hoffman/go/src/github.com/dolthub/go-mysql-server/
 
 replace github.com/dolthub/vitess => /Users/max-hoffman/go/src/github.com/dolthub/vitess
