@@ -56,7 +56,7 @@ func TestProceduresMigration(t *testing.T) {
 
 	// Insert some test data for procedures
 	inserter := sqlTbl.(*WritableDoltTable).Inserter(ctx)
-	timestamp := time.Now().UTC()
+	timestamp := time.Now().Truncate(time.Minute).UTC()
 	require.NoError(t, inserter.Insert(ctx, sql.Row{"proc1", "create procedure proc1() SELECT 42 as pk from dual;", timestamp, timestamp}))
 	require.NoError(t, inserter.Insert(ctx, sql.Row{"proc2", "create procedure proc2() SELECT 'HELLO' as greeting from dual;", timestamp, timestamp}))
 	require.NoError(t, inserter.Close(ctx))
