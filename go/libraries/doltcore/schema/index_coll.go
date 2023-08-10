@@ -179,7 +179,7 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 
 	index := &indexImpl{
 		indexColl:     ixc,
-		name:          lowerName,
+		name:          indexName,
 		tags:          tags,
 		allTags:       combineAllTags(tags, ixc.pks),
 		isUnique:      props.IsUnique,
