@@ -15,11 +15,18 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/fatih/color"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -32,8 +39,6 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/fatih/color"
 )
 
 type logOpts struct {
@@ -127,15 +132,20 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 		defer closeFunc()
 	}
 
-	logRows, err := GetRowsForSql(queryist, sqlCtx, "select * from dolt_log")
-	if err != nil {
-		handleErrAndExit(err)
-	}
-
 	opts, err := parseLogArgs(ctx, dEnv, apr)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
+
+	query, err := constructInterpolatedDoltLogQuery(apr)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	logRows, err := GetRowsForSql(queryist, sqlCtx, query)
+	if err != nil {
+		return handleErrAndExit(err)
+	}
+
 	/*if len(opts.commitSpecs) == 0 {
 		headRef, err := dEnv.RepoStateReader().CWBHeadSpec()
 		if err != nil {
@@ -146,7 +156,74 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 	if len(opts.tableName) > 0 {
 		return handleErrAndExit(logTableCommits(ctx, dEnv, opts))
 	}*/
-	return logCommits(opts, logRows, queryist, sqlCtx)
+	return logCommits(opts, apr, logRows, queryist, sqlCtx)
+}
+
+// constructInterpolatedDoltLogQuery generates the sql query necessary to call the DOLT_LOG() function.
+// Also interpolates this query to prevent sql injection.
+func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults) (string, error) {
+	var params []interface{}
+
+	var buffer bytes.Buffer
+	var first bool
+	first = true
+
+	buffer.WriteString("select commit_hash, committer, email, date, message, parents, refs from dolt_log(")
+
+	writeToBuffer := func(s string, param bool) {
+		if !first {
+			buffer.WriteString(", ")
+		}
+		if !param {
+			buffer.WriteString("'")
+		}
+		buffer.WriteString(s)
+		if !param {
+			buffer.WriteString("'")
+		}
+		first = false
+	}
+
+	for _, args := range apr.Args {
+		writeToBuffer("?", true)
+		params = append(params, args)
+	}
+
+	if minParents, hasMinParents := apr.GetValue(cli.MinParentsFlag); hasMinParents {
+		writeToBuffer("?", true)
+		params = append(params, "--min-parents="+minParents)
+	}
+
+	if hasMerges := apr.Contains(cli.MergesFlag); hasMerges {
+		writeToBuffer("--merges", false)
+	}
+
+	if excludedCommits, hasExcludedCommits := apr.GetValueList(cli.NotFlag); hasExcludedCommits {
+		writeToBuffer("--not", false)
+		for _, commit := range excludedCommits {
+			writeToBuffer("?", true)
+			params = append(params, commit)
+		}
+	}
+
+	writeToBuffer("--parents", false)
+	writeToBuffer("--decorate=full", false)
+	buffer.WriteString(")")
+
+	if numLines, hasNumLines := apr.GetValue(cli.NumberFlag); hasNumLines {
+		num, err := strconv.Atoi(numLines)
+		if err != nil || num < 0 {
+			return "", fmt.Errorf("fatal: invalid --number argument: %s", numLines)
+		}
+		buffer.WriteString(" limit " + numLines)
+	}
+
+	interpolatedQuery, err := dbr.InterpolateForDialect(buffer.String(), params, dialect.MySQL)
+	if err != nil {
+		return "", err
+	}
+
+	return interpolatedQuery, nil
 }
 
 func parseLogArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*logOpts, error) {
@@ -344,7 +421,7 @@ func getHashToRefs(decorationLevel string, queryist cli.Queryist, sqlCtx *sql.Co
 	return cHashToRefs, nil
 }
 
-func logCommits(opts *logOpts, sqlResult []sql.Row, queryist cli.Queryist, sqlCtx *sql.Context) int {
+func logCommits(opts *logOpts, apr *argparser.ArgParseResults, sqlResult []sql.Row, queryist cli.Queryist, sqlCtx *sql.Context) int {
 	/*matchFunc := func(c *doltdb.Commit) (bool, error) {
 		return c.NumParents() >= opts.minParents, nil
 	}*/
@@ -386,10 +463,10 @@ func logCommits(opts *logOpts, sqlResult []sql.Row, queryist cli.Queryist, sqlCt
 		return 1
 	}*/
 
-	cHashToRefs, err := getHashToRefs(opts.decoration, queryist, sqlCtx)
+	/*cHashToRefs, err := getHashToRefs(opts.decoration, queryist, sqlCtx)
 	if err != nil {
 		return handleErrAndExit(err)
-	}
+	}*/
 
 	var commitsInfo []logNode
 	for _, row := range sqlResult {
@@ -397,6 +474,15 @@ func logCommits(opts *logOpts, sqlResult []sql.Row, queryist cli.Queryist, sqlCt
 		email := row[2].(string)
 		timestamp := uint64(row[3].(time.Time).Unix())
 		description := row[4].(string)
+
+		var parents []hash.Hash
+		parentStrings := strings.Split(row[5].(string), ", ")
+		for _, parentString := range parentStrings {
+			if parentString != "" {
+				parents = append(parents, hash.Parse(parentString))
+			}
+		}
+		refs := strings.Split(row[6].(string), ", ")
 
 		meta := &datas.CommitMeta{
 			Name:          name,
@@ -406,28 +492,19 @@ func logCommits(opts *logOpts, sqlResult []sql.Row, queryist cli.Queryist, sqlCt
 			UserTimestamp: 0,
 		}
 
-		parents, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("select parent_hash from dolt_commit_ancestors where commit_hash = '%s'", row[0]))
-		if err != nil {
-			cli.PrintErrln("error: failed to get parent hashes")
-			handleErrAndExit(err)
-		}
-		var pHashes []hash.Hash
-		for _, p := range parents {
-			if p[0] != nil {
-				pHashes = append(pHashes, hash.Parse(p[0].(string)))
-			}
-		}
-
 		headResult, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("select @@%s_head", sqlCtx.GetCurrentDatabase()))
-		headHash := headResult[0][0].(string)
+		if err != nil {
+			return handleErrAndExit(err)
+		}
+		headHash := hash.Parse(headResult[0][0].(string))
 		cmHash := hash.Parse(row[0].(string))
 
 		commitsInfo = append(commitsInfo, logNode{
 			commitMeta:   meta,
 			commitHash:   cmHash,
-			parentHashes: pHashes,
-			branchNames:  cHashToRefs[cmHash],
-			isHead:       row[0] == headHash})
+			parentHashes: parents,
+			branchNames:  refs,
+			isHead:       cmHash == headHash})
 	}
 
 	logToStdOut(opts, commitsInfo)
