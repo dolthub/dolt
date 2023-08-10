@@ -19,7 +19,11 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/go-mysql-server/sql"
+	"io"
 )
 
 var queryDiffDocs = cli.CommandDocumentationContent{
@@ -64,13 +68,35 @@ func (q QueryDiff) Exec(ctx context.Context, commandStr string, args []string, d
 		defer closeFunc()
 	}
 
+	query1 := apr.Arg(0)
+	query2 := apr.Arg(1)
+
 	schema1, rowIter1, err := queryist.Query(sqlCtx, query1)
 	schema2, rowIter2, err := queryist.Query(sqlCtx, query2)
 
 	if !schema1.Equals(schema2) {}
 
-	rowIter1.Next(sqlCtx)
-	rowIter2.Next(sqlCtx)
+	cliWR := iohelp.NopWrCloser(cli.OutStream)
+	wr := tabular.NewFixedWidthTableWriter(diffSummarySchema, cliWR, 100)
+	defer wr.Close(ctx)
+
+	var err1, err2 error
+	var row1, row2 sql.Row
+	for {
+		row1, err1 = rowIter1.Next(sqlCtx)
+		if err1 == io.EOF {
+			break
+		}
+		_, rowIter2, _ = queryist.Query(sqlCtx, query2)
+		for {
+			row2, err2 = rowIter2.Next(sqlCtx)
+			if err2 == io.EOF {
+				break
+			}
+			wr.WriteSqlRow(ctx, append(row1, row2...))
+		}
+	}
+
 	return 0
 }
 
