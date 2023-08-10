@@ -863,17 +863,6 @@ func getTableSchemaAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName s
 }
 
 func schemaFromCreateTableStmt(sqlCtx *sql.Context, createTableStmt string) (schema.Schema, error) {
-	//p, err := sqlparser.Parse(createTableStmt)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//ddl := p.(*sqlparser.DDL)
-
-	//s, _, err := parse.TableSpecToSchema(sqlCtx, ddl.TableSpec, false)
-	//if err != nil {
-	//	return nil, err
-	//}
-
 	parsed, err := planbuilder.Parse(sqlCtx, nil, createTableStmt)
 	if err != nil {
 		return nil, err

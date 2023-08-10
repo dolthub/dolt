@@ -29,18 +29,7 @@ import (
 // ParseCreateTableStatement will parse a CREATE TABLE ddl statement and use it to create a Dolt Schema. A RootValue
 // is used to generate unique tags for the Schema
 func ParseCreateTableStatement(ctx context.Context, root *doltdb.RootValue, query string) (string, schema.Schema, error) {
-	// todo: verify create table statement
-	//p, err := sqlparser.Parse(query)
-	//if err != nil {
-	//	return "", nil, err
-	//}
-	//ddl := p.(*sqlparser.DDL)
-
 	sctx := sql.NewContext(ctx)
-	//s, collation, err := parse.TableSpecToSchema(sctx, ddl.TableSpec, false)
-	//if err != nil {
-	//	return "", nil, err
-	//}
 	parsed, err := planbuilder.Parse(sctx, nil, query)
 	if err != nil {
 		return "", nil, err
@@ -74,10 +63,6 @@ func ParseCreateTableStatement(ctx context.Context, root *doltdb.RootValue, quer
 	}
 
 	// foreign keys are stored on the *doltdb.Table object, ignore them here
-	//_, checks, err := parse.ConvertConstraintsDefs(sctx, ddl.Table, ddl.TableSpec)
-	//if err != nil {
-	//	return "", nil, err
-	//}
 	for _, chk := range create.ChDefs {
 		name := getCheckConstraintName(chk)
 		_, err = sch.Checks().AddCheck(name, chk.Expr.String(), chk.Enforced)
