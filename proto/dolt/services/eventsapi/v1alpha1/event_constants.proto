@@ -91,6 +91,7 @@ enum ClientEventType {
     STASH_LIST = 59;
     STASH_POP = 60;
     SHOW = 61;
+    PROFILE = 62;
 }
 
 enum MetricID {

@@ -463,7 +463,7 @@ func GetDoltStatus(queryist cli.Queryist, sqlCtx *sql.Context) (stagedChangedTab
 	}
 
 	var statusRows []sql.Row
-	statusRows, err = GetRowsForSql(queryist, sqlCtx, "select * from dolt_status;")
+	statusRows, err = GetRowsForSql(queryist, sqlCtx, "select table_name,staged from dolt_status;")
 	if err != nil {
 		return stagedChangedTables, unstagedChangedTables, fmt.Errorf("error: failed to get dolt status: %w", err)
 	}
