@@ -34,7 +34,7 @@ type GenZshCompCmd struct {
 
 func (z GenZshCompCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(z.Name(), 0)
-	ap.SupportsString(fileParamName, "", "file", "The file to write zsh comp file to")
+	ap.SupportsString(fileParamName, "", "file", "The file to write zsh comp file to. Defaults to STDOUT")
 	ap.SupportsFlag("includeHidden", "", "Include hidden commands")
 	return ap
 }
@@ -53,22 +53,28 @@ func (z GenZshCompCmd) Exec(ctx context.Context, commandStr string, args []strin
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cli.CommandDocumentationContent{}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	fileStr := apr.GetValueOrDefault(fileParamName, "_dolt")
+	var wr io.WriteCloser
+	if apr.Contains(fileParamName) {
+		fileStr := apr.GetValueOrDefault(fileParamName, "_dolt")
 
-	exists, _ := dEnv.FS.Exists(fileStr)
-	if exists {
-		cli.PrintErrln(fileStr + " exists")
-		usage()
-		return 1
+		exists, _ := dEnv.FS.Exists(fileStr)
+		if exists {
+			cli.PrintErrln(fileStr + " exists")
+			usage()
+			return 1
+		}
+
+		var err error
+		wr, err = dEnv.FS.OpenForWrite(fileStr, os.ModePerm)
+		if err != nil {
+			cli.PrintErrln(err.Error())
+			return 1
+		}
+	} else {
+		wr = cli.OutStream
 	}
 
-	wr, err := dEnv.FS.OpenForWrite(fileStr, os.ModePerm)
-	if err != nil {
-		cli.PrintErrln(err.Error())
-		return 1
-	}
-
-	_, err = wr.Write([]byte(fmt.Sprintf(preamble, dEnv.Version)))
+	_, err := wr.Write([]byte(fmt.Sprintf(preamble, dEnv.Version)))
 	if err != nil {
 		verr := errhand.BuildDError("error: Failed to dump zsh.").AddCause(err).Build()
 		cli.PrintErrln(verr.Verbose())
