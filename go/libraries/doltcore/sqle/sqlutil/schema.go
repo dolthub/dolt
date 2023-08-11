@@ -15,8 +15,8 @@
 package sqlutil
 
 import (
-	"context"
 	"fmt"
+	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"strings"
 
@@ -28,9 +28,8 @@ import (
 
 // ParseCreateTableStatement will parse a CREATE TABLE ddl statement and use it to create a Dolt Schema. A RootValue
 // is used to generate unique tags for the Schema
-func ParseCreateTableStatement(ctx context.Context, root *doltdb.RootValue, query string) (string, schema.Schema, error) {
-	sctx := sql.NewContext(ctx)
-	parsed, err := planbuilder.Parse(sctx, nil, query)
+func ParseCreateTableStatement(ctx *sql.Context, root *doltdb.RootValue, engine *sqle.Engine, query string) (string, schema.Schema, error) {
+	parsed, err := planbuilder.Parse(ctx, engine.Analyzer.Catalog, query)
 	if err != nil {
 		return "", nil, err
 	}

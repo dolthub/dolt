@@ -16,6 +16,7 @@ package encoding_test
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"strings"
 	"testing"
 
@@ -57,7 +58,12 @@ func parseSchemaString(t *testing.T, s string) schema.Schema {
 	defer dEnv.DoltDB.Close()
 	root, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
-	_, sch, err := sqlutil.ParseCreateTableStatement(ctx, root, s)
+	eng, db, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	require.NoError(t, err)
+	sqlCtx, err := eng.NewDefaultContext(ctx)
+	require.NoError(t, err)
+	sqlCtx.SetCurrentDatabase(db)
+	_, sch, err := sqlutil.ParseCreateTableStatement(sqlCtx, root, eng.GetUnderlyingEngine(), s)
 	require.NoError(t, err)
 	return sch
 }

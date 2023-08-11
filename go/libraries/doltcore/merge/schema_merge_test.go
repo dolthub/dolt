@@ -16,6 +16,7 @@ package merge_test
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -599,8 +600,11 @@ func sch(definition string) namedSchema {
 	ns := denv.DoltDB.NodeStore()
 	ctx := context.Background()
 	root, _ := doltdb.EmptyRootValue(ctx, vrw, ns)
+	eng, dbName, _ := engine.NewSqlEngineForEnv(ctx, denv)
+	sqlCtx, _ := eng.NewDefaultContext(ctx)
+	sqlCtx.SetCurrentDatabase(dbName)
 	// TODO: ParseCreateTableStatement silently drops any indexes or check constraints in the definition
-	name, s, err := sqlutil.ParseCreateTableStatement(ctx, root, definition)
+	name, s, err := sqlutil.ParseCreateTableStatement(sqlCtx, root, eng.GetUnderlyingEngine(), definition)
 	if err != nil {
 		panic(err)
 	}

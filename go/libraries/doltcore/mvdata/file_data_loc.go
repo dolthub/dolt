@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"io"
 	"os"
 	"strings"
@@ -75,7 +76,13 @@ func (dl FileDataLocation) Exists(ctx context.Context, root *doltdb.RootValue, f
 }
 
 // NewReader creates a TableReadCloser for the DataLocation
-func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, opts interface{}) (rdCl table.SqlRowReader, sorted bool, err error) {
+func (dl FileDataLocation) NewReader(ctx context.Context, dEnv *env.DoltEnv, opts interface{}) (rdCl table.SqlRowReader, sorted bool, err error) {
+	fs := dEnv.FS
+	root, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+
 	exists, isDir := fs.Exists(dl.Path)
 
 	if !exists {
@@ -113,7 +120,7 @@ func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue
 		var sch schema.Schema
 		jsonOpts, _ := opts.(JSONOptions)
 		if jsonOpts.SchFile != "" {
-			tn, s, err := SchAndTableNameFromFile(ctx, jsonOpts.SchFile, fs, root)
+			tn, s, err := SchAndTableNameFromFile(ctx, jsonOpts.SchFile, dEnv)
 			if err != nil {
 				return nil, false, err
 			}
@@ -145,7 +152,7 @@ func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue
 		var tableSch schema.Schema
 		parquetOpts, _ := opts.(ParquetOptions)
 		if parquetOpts.SchFile != "" {
-			tn, s, tnErr := SchAndTableNameFromFile(ctx, parquetOpts.SchFile, fs, root)
+			tn, s, tnErr := SchAndTableNameFromFile(ctx, parquetOpts.SchFile, dEnv)
 			if tnErr != nil {
 				return nil, false, tnErr
 			}
