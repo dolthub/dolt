@@ -38,12 +38,12 @@ func GenerateCreateTableIndentedColumnDefinition(col schema.Column) string {
 
 	return sql.GenerateCreateTableColumnDefinition(
 		&sql.Column{
-			Name:           col.Name,
-			Type:           col.TypeInfo.ToSqlType(),
-			Default:        defaultVal,
-			AutoIncrement:  col.AutoIncrement,
-			Nullable:       col.IsNullable(),
-			Comment:        col.Comment,
+			Name:          col.Name,
+			Type:          col.TypeInfo.ToSqlType(),
+			Default:       defaultVal,
+			AutoIncrement: col.AutoIncrement,
+			Nullable:      col.IsNullable(),
+			Comment:       col.Comment,
 			// TODO
 			// Generated:      nil,
 			// Virtual:        false,

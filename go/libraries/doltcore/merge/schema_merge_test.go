@@ -111,8 +111,8 @@ var columnAddDropTests = []schemaMergeTest{
 	},
 	{
 		name:     "right side column drop, text columns",
-		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a varchar(1), v1 text, b varchar(1))"), row(1, "a", "b","c")),
-		left: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a varchar(1), v1 text, b varchar(1))"), row(1, "a", "b","c")),
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a varchar(1), v1 text, b varchar(1))"), row(1, "a", "b", "c")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a varchar(1), v1 text, b varchar(1))"), row(1, "a", "b", "c")),
 		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, v1 text, b varchar(1))"), row(1, "b", "c")),
 		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, v1 text, b varchar(1))"), row(1, "b", "c")),
 	},

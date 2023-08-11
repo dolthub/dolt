@@ -1386,7 +1386,7 @@ func migrateDataToMergedSchema(ctx *sql.Context, tm *TableMerger, vm *valueMerge
 	if err != nil {
 		return err
 	}
-	
+
 	for {
 		keyTuple, valueTuple, err := mapIter.Next(ctx)
 		if err == io.EOF {
