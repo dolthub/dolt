@@ -18,11 +18,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
-	"time"
 
+	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 	"github.com/gocraft/dbr/v2"
@@ -34,10 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
 )
 
@@ -468,43 +465,14 @@ func logCommits(opts *logOpts, apr *argparser.ArgParseResults, sqlResult []sql.R
 		return handleErrAndExit(err)
 	}*/
 
-	var commitsInfo []logNode
+	var commitsInfo []CommitInfo
 	for _, row := range sqlResult {
-		name := row[1].(string)
-		email := row[2].(string)
-		timestamp := uint64(row[3].(time.Time).Unix())
-		description := row[4].(string)
-
-		var parents []hash.Hash
-		parentStrings := strings.Split(row[5].(string), ", ")
-		for _, parentString := range parentStrings {
-			if parentString != "" {
-				parents = append(parents, hash.Parse(parentString))
-			}
-		}
-		refs := strings.Split(row[6].(string), ", ")
-
-		meta := &datas.CommitMeta{
-			Name:          name,
-			Email:         email,
-			Timestamp:     timestamp,
-			Description:   description,
-			UserTimestamp: 0,
-		}
-
-		headResult, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("select @@%s_head", sqlCtx.GetCurrentDatabase()))
+		cmHash := row[0].(string)
+		commit, err := getCommitInfo(queryist, sqlCtx, cmHash)
 		if err != nil {
 			return handleErrAndExit(err)
 		}
-		headHash := hash.Parse(headResult[0][0].(string))
-		cmHash := hash.Parse(row[0].(string))
-
-		commitsInfo = append(commitsInfo, logNode{
-			commitMeta:   meta,
-			commitHash:   cmHash,
-			parentHashes: parents,
-			branchNames:  refs,
-			isHead:       cmHash == headHash})
+		commitsInfo = append(commitsInfo, *commit)
 	}
 
 	logToStdOut(opts, commitsInfo)
@@ -526,7 +494,7 @@ func tableExists(ctx context.Context, commit *doltdb.Commit, tableName string) (
 	return ok, nil
 }
 
-func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) error {
+/*func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) error {
 	hashes := make([]hash.Hash, len(opts.commitSpecs))
 
 	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
@@ -632,11 +600,11 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts *logOpts) erro
 	logToStdOut(opts, commitsInfo)
 
 	return nil
-}
+}*/
 
-func logRefs(pager *outputpager.Pager, comm logNode) {
+func logRefs(pager *outputpager.Pager, comm CommitInfo) {
 	// Do nothing if no associate branches
-	if len(comm.branchNames) == 0 {
+	if len(comm.localBranchNames) == 0 {
 		return
 	}
 
@@ -644,20 +612,20 @@ func logRefs(pager *outputpager.Pager, comm logNode) {
 	if comm.isHead {
 		pager.Writer.Write([]byte("\033[36;1mHEAD -> \033[0m"))
 	}
-	pager.Writer.Write([]byte(strings.Join(comm.branchNames, "\033[33m, \033[0m"))) // Separate with Dim Yellow comma
+	pager.Writer.Write([]byte(strings.Join(comm.localBranchNames, "\033[33m, \033[0m"))) // Separate with Dim Yellow comma
 	pager.Writer.Write([]byte("\033[33m) \033[0m"))
 }
 
-func logCompact(pager *outputpager.Pager, opts *logOpts, commits []logNode) {
+func logCompact(pager *outputpager.Pager, opts *logOpts, commits []CommitInfo) {
 	for _, comm := range commits {
 		if len(comm.parentHashes) < opts.minParents {
 			return
 		}
 
-		chStr := comm.commitHash.String()
+		chStr := comm.commitHash
 		if opts.showParents {
 			for _, h := range comm.parentHashes {
-				chStr += " " + h.String()
+				chStr += " " + h
 			}
 		}
 
@@ -666,7 +634,7 @@ func logCompact(pager *outputpager.Pager, opts *logOpts, commits []logNode) {
 		pager.Writer.Write([]byte(fmt.Sprintf("\033[33m%s \033[0m", chStr)))
 
 		if opts.decoration != "no" {
-			logRefs(pager, comm)
+			printRefs(pager, &comm)
 		}
 
 		formattedDesc := strings.Replace(comm.commitMeta.Description, "\n", " ", -1) + "\n"
@@ -674,15 +642,15 @@ func logCompact(pager *outputpager.Pager, opts *logOpts, commits []logNode) {
 	}
 }
 
-func PrintCommit(pager *outputpager.Pager, minParents int, showParents bool, decoration string, comm logNode) {
+func PrintCommit(pager *outputpager.Pager, minParents int, showParents bool, decoration string, comm *CommitInfo) {
 	if len(comm.parentHashes) < minParents {
 		return
 	}
 
-	chStr := comm.commitHash.String()
+	chStr := comm.commitHash
 	if showParents {
 		for _, h := range comm.parentHashes {
-			chStr += " " + h.String()
+			chStr += " " + h
 		}
 	}
 
@@ -691,13 +659,13 @@ func PrintCommit(pager *outputpager.Pager, minParents int, showParents bool, dec
 
 	// Show decoration
 	if decoration != "no" {
-		logRefs(pager, comm)
+		printRefs(pager, comm)
 	}
 
 	if len(comm.parentHashes) > 1 {
 		pager.Writer.Write([]byte("\nMerge:"))
 		for _, h := range comm.parentHashes {
-			pager.Writer.Write([]byte(fmt.Sprintf(" " + h.String())))
+			pager.Writer.Write([]byte(fmt.Sprintf(" " + h)))
 		}
 	}
 
@@ -710,13 +678,13 @@ func PrintCommit(pager *outputpager.Pager, minParents int, showParents bool, dec
 	pager.Writer.Write([]byte(formattedDesc))
 }
 
-func logDefault(pager *outputpager.Pager, opts *logOpts, commits []logNode) {
+func logDefault(pager *outputpager.Pager, opts *logOpts, commits []CommitInfo) {
 	for _, comm := range commits {
-		PrintCommit(pager, opts.minParents, opts.showParents, opts.decoration, comm)
+		PrintCommitInfo(pager, opts.minParents, opts.showParents, opts.decoration, &comm)
 	}
 }
 
-func logToStdOut(opts *logOpts, commits []logNode) {
+func logToStdOut(opts *logOpts, commits []CommitInfo) {
 	if cli.ExecuteWithStdioRestored == nil {
 		return
 	}
