@@ -16,12 +16,12 @@ package index_test
 
 import (
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"testing"
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/transform"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

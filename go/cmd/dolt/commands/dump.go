@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"io"
 	"os"
 	"path/filepath"
@@ -25,6 +24,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"

@@ -17,13 +17,13 @@ package commands
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/plan"
-	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"io"
 	"strconv"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/go-sql-driver/mysql"
 	"github.com/gocraft/dbr/v2"
