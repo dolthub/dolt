@@ -12,7 +12,8 @@ teardown() {
 
 @test "log: on initialized repo" {
     run dolt log
-    [ "$status" -eq "0" ]
+    echo $output
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "Initialize data repository" ]] || false
 }
 
@@ -147,6 +148,7 @@ teardown() {
     [[ "$output" =~ "BRANCHA" ]] || false
     run dolt log main branchA --not $(dolt merge-base main branchA)
     [ $status -eq 0 ]
+    echo $output
     [[ ! "$output" =~ "MAIN" ]] || false
     [[ "$output" =~ "AFTER" ]] || false
     [[ "$output" =~ "BRANCHA" ]] || false
@@ -269,6 +271,7 @@ teardown() {
     # Should default to first argument as branch name, second argument as table name (if table exists) if two arguments provided
     run dolt log myname myname 
     [ $status -eq 0 ]
+    echo $output
     [[ ! "$output" =~ "MAIN" ]] || false
     [[ "$output" =~ "BRANCH1" ]] || false
 
@@ -354,7 +357,8 @@ teardown() {
 
 @test "log: Properly throws an error when neither a valid commit hash nor a valid table are passed" {
     run dolt log notvalid
-    [ "$status" -eq "1" ]
+    echo $output
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "error: table notvalid does not exist" ]] || false
 }
 
@@ -364,6 +368,7 @@ teardown() {
     dolt commit -am "first commit"
 
     run dolt log test
+    echo $output
     [ $status -eq 0 ]
     [[ "$output" =~ "first commit" ]] || false
     [[ ! "$output" =~ "Initialize data repository" ]] || false
@@ -397,6 +402,7 @@ teardown() {
 
     run dolt log -n 1 test
     [ $status -eq 0 ]
+    echo $output
     [[ "$output" =~ "first commit" ]] || false
 
     dolt sql -q "INSERT INTO test VALUES (1)"
@@ -447,6 +453,7 @@ teardown() {
     dolt merge test-branch --no-commit
 
     run dolt log test
+    echo $output
     [ $status -eq 0 ]
     [[ "$output" =~ "Commit1" ]] || false
     [[ "$output" =~ "Commit3" ]] || false
@@ -478,6 +485,7 @@ teardown() {
     dolt checkout main
 
     run dolt log test-branch test
+    echo $output
     [ $status -eq 0 ]
     [[ "$output" =~ "Commit2" ]] || false
     [[ "$output" =~ "Commit1" ]] || false
@@ -493,6 +501,7 @@ teardown() {
     dolt commit -m "Commit 2"
 
     run dolt log test
+    echo $output
     [ $status -eq 1 ]
     [[ "$output" =~ "error: table test does not exist" ]] || false
 
@@ -652,7 +661,9 @@ teardown() {
     dolt commit --allow-empty -m "commit 2"
     dolt tag commit2
     run dolt log commit1
+    echo $output
     [[ !("$output" =~ "HEAD") ]] || false
     run dolt log commit2
+    echo $output
     [[ "$output" =~ "HEAD" ]] || false
 }

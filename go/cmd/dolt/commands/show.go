@@ -21,8 +21,6 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/gocraft/dbr/v2"
-	"github.com/gocraft/dbr/v2/dialect"
 	"github.com/pkg/errors"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -38,17 +36,6 @@ import (
 )
 
 var hashRegex = regexp.MustCompile(`^#?[0-9a-v]{32}$`)
-
-type commitInfo struct {
-	commitMeta        *datas.CommitMeta
-	commitHash        string
-	isHead            bool
-	parentHashes      []string
-	height            uint64
-	localBranchNames  []string
-	remoteBranchNames []string
-	tagNames          []string
-}
 
 type showOpts struct {
 	showParents            bool
@@ -353,7 +340,7 @@ func printCommitSpecPretty(queryist cli.Queryist, sqlCtx *sql.Context, opts *sho
 	return nil
 }
 
-func printCommit(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, commit *commitInfo) error {
+func printCommit(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, commit *CommitInfo) error {
 
 	cmHash := commit.commitHash
 	parents := commit.parentHashes
@@ -362,7 +349,7 @@ func printCommit(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, com
 		pager := outputpager.Start()
 		defer pager.Stop()
 
-		printCommitInfo(pager, 0, opts.showParents, opts.decoration, commit)
+		PrintCommitInfo(pager, 0, opts.showParents, opts.decoration, commit)
 	})
 
 	if len(parents) == 0 {
@@ -393,198 +380,4 @@ func printCommit(queryist cli.Queryist, sqlCtx *sql.Context, opts *showOpts, com
 	}
 
 	return diffUserTables(queryist, sqlCtx, dArgs)
-}
-
-func printCommitInfo(pager *outputpager.Pager, minParents int, showParents bool, decoration string, comm *commitInfo) {
-
-	if len(comm.parentHashes) < minParents {
-		return
-	}
-
-	chStr := comm.commitHash
-	if showParents {
-		for _, h := range comm.parentHashes {
-			chStr += " " + h
-		}
-	}
-
-	// Write commit hash
-	pager.Writer.Write([]byte(fmt.Sprintf("\033[33mcommit %s \033[0m", chStr))) // Use Dim Yellow (33m)
-
-	// Show decoration
-	if decoration != "no" {
-		printRefs(pager, comm)
-	}
-
-	if len(comm.parentHashes) > 1 {
-		pager.Writer.Write([]byte(fmt.Sprintf("\nMerge:")))
-		for _, h := range comm.parentHashes {
-			pager.Writer.Write([]byte(fmt.Sprintf(" " + h)))
-		}
-	}
-
-	pager.Writer.Write([]byte(fmt.Sprintf("\nAuthor: %s <%s>", comm.commitMeta.Name, comm.commitMeta.Email)))
-
-	timeStr := comm.commitMeta.FormatTS()
-	pager.Writer.Write([]byte(fmt.Sprintf("\nDate:  %s", timeStr)))
-
-	formattedDesc := "\n\n\t" + strings.Replace(comm.commitMeta.Description, "\n", "\n\t", -1) + "\n\n"
-	pager.Writer.Write([]byte(fmt.Sprintf("%s", formattedDesc)))
-
-}
-
-func printRefs(pager *outputpager.Pager, comm *commitInfo) {
-	// Do nothing if no associate branchNames
-	if len(comm.localBranchNames) == 0 && len(comm.remoteBranchNames) == 0 && len(comm.tagNames) == 0 {
-		return
-	}
-
-	references := []string{}
-
-	for _, b := range comm.localBranchNames {
-		// branch names are bright green (32;1m)
-		branchName := fmt.Sprintf("\033[32;1m%s\033[0m", b)
-		references = append(references, branchName)
-	}
-	for _, b := range comm.remoteBranchNames {
-		// remote names are bright red (31;1m)
-		branchName := fmt.Sprintf("\033[31;1m%s\033[0m", b)
-		references = append(references, branchName)
-	}
-	for _, t := range comm.tagNames {
-		// tag names are bright yellow (33;1m)
-		tagName := fmt.Sprintf("\033[33;1mtag: %s\033[0m", t)
-		references = append(references, tagName)
-	}
-
-	pager.Writer.Write([]byte("\033[33m(\033[0m"))
-	if comm.isHead {
-		pager.Writer.Write([]byte("\033[36;1mHEAD -> \033[0m"))
-	}
-	pager.Writer.Write([]byte(strings.Join(references, "\033[33m, \033[0m"))) // Separate with Dim Yellow comma
-	pager.Writer.Write([]byte("\033[33m) \033[0m"))
-}
-
-func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*commitInfo, error) {
-	hashOfHead, err := getHashOf(queryist, sqlCtx, "HEAD")
-	if err != nil {
-		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
-	}
-
-	q, err := dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full')", []interface{}{ref}, dialect.MySQL)
-	if err != nil {
-		return nil, fmt.Errorf("error interpolating query: %v", err)
-	}
-	rows, err := GetRowsForSql(queryist, sqlCtx, q)
-	if err != nil {
-		return nil, fmt.Errorf("error getting logs for ref '%s': %v", ref, err)
-	}
-	if len(rows) == 0 {
-		return nil, fmt.Errorf("no commits found for ref %s", ref)
-	}
-
-	row := rows[0]
-	commitHash := row[0].(string)
-	name := row[1].(string)
-	email := row[2].(string)
-	timestamp, err := getTimestampColAsUint64(row[3])
-	if err != nil {
-		return nil, fmt.Errorf("error parsing timestamp '%s': %v", row[3], err)
-	}
-	message := row[4].(string)
-	parent := row[5].(string)
-	height := uint64(len(rows))
-	isHead := commitHash == hashOfHead
-
-	localBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHash, true)
-	if err != nil {
-		return nil, fmt.Errorf("error getting branches for hash '%s': %v", commitHash, err)
-	}
-	remoteBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHash, false)
-	if err != nil {
-		return nil, fmt.Errorf("error getting remote branches for hash '%s': %v", commitHash, err)
-	}
-	tagsForHash, err := getTagsForHash(queryist, sqlCtx, commitHash)
-	if err != nil {
-		return nil, fmt.Errorf("error getting tags for hash '%s': %v", commitHash, err)
-	}
-
-	ci := &commitInfo{
-		commitMeta: &datas.CommitMeta{
-			Name:          name,
-			Email:         email,
-			Timestamp:     timestamp,
-			Description:   message,
-			UserTimestamp: int64(timestamp),
-		},
-		commitHash:        commitHash,
-		height:            height,
-		isHead:            isHead,
-		localBranchNames:  localBranchesForHash,
-		remoteBranchNames: remoteBranchesForHash,
-		tagNames:          tagsForHash,
-	}
-
-	if parent != "" {
-		ci.parentHashes = strings.Split(parent, ", ")
-	}
-
-	return ci, nil
-}
-
-func getTagsForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash string) ([]string, error) {
-	q, err := dbr.InterpolateForDialect("select tag_name from dolt_tags where tag_hash = ?", []interface{}{targetHash}, dialect.MySQL)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := GetRowsForSql(queryist, sqlCtx, q)
-	if err != nil {
-		return nil, err
-	}
-
-	tags := []string{}
-	for _, row := range rows {
-		name := row[0].(string)
-		tags = append(tags, name)
-	}
-	return tags, nil
-}
-
-func getBranchesForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash string, getLocalBranches bool) ([]string, error) {
-	var q string
-	if getLocalBranches {
-		q = "select name, hash from dolt_branches where hash = ?"
-	} else {
-		q = "select name, hash from dolt_remote_branches where hash = ?"
-	}
-	q, err := dbr.InterpolateForDialect(q, []interface{}{targetHash}, dialect.MySQL)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := GetRowsForSql(queryist, sqlCtx, q)
-	if err != nil {
-		return nil, err
-	}
-
-	branches := []string{}
-	for _, row := range rows {
-		name := row[0].(string)
-		branches = append(branches, name)
-	}
-	return branches, nil
-}
-
-func getHashOf(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (string, error) {
-	q, err := dbr.InterpolateForDialect("select hashof(?)", []interface{}{ref}, dialect.MySQL)
-	if err != nil {
-		return "", fmt.Errorf("error interpolating hashof query: %v", err)
-	}
-	rows, err := GetRowsForSql(queryist, sqlCtx, q)
-	if err != nil {
-		return "", fmt.Errorf("error getting hash of ref '%s': %v", ref, err)
-	}
-	if len(rows) == 0 {
-		return "", fmt.Errorf("no commits found for ref %s", ref)
-	}
-	return rows[0][0].(string), nil
 }

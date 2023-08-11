@@ -199,7 +199,7 @@ hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt re
 			pager := outputpager.Start()
 			defer pager.Stop()
 
-			printCommitInfo(pager, 0, false, "auto", commit)
+			PrintCommitInfo(pager, 0, false, "auto", commit)
 		})
 
 		return nil
