@@ -60,6 +60,15 @@ func newMutableMap(m Map) *MutableMap {
 	}
 }
 
+func newMutableMapWithDescriptors(m Map, kd, vd val.TupleDesc) *MutableMap {
+	return &MutableMap{
+		tuples:     m.tuples.Mutate(),
+		keyDesc:    kd,
+		valDesc:    vd,
+		maxPending: defaultMaxPending,
+	}
+}
+
 // Map materializes all pending and applied mutations in the MutableMap.
 func (mut *MutableMap) Map(ctx context.Context) (Map, error) {
 	s := message.NewProllyMapSerializer(mut.valDesc, mut.NodeStore().Pool())

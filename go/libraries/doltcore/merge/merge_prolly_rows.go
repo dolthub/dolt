@@ -88,12 +88,12 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 		// After we migrate the data on the left-side to the new, merged schema, we reset
 		// the left mapping to an identity mapping, since it's a direct mapping now.
 		valueMerger.leftMapping = val.NewIdentityOrdinalMapping(len(valueMerger.leftMapping))
-	}
-
-	// After we've migrated the existing data to the new schema, it's safe for us to update the schema on the table
-	mergeTbl, err = tm.leftTbl.UpdateSchema(sqlCtx, mergedSch)
-	if err != nil {
-		return nil, nil, err
+	} else {
+		// After we've migrated the existing data to the new schema, it's safe for us to update the schema on the table
+		mergeTbl, err = tm.leftTbl.UpdateSchema(sqlCtx, mergedSch)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	var stats *MergeStats
@@ -1254,7 +1254,8 @@ func remapTupleWithColumnDefaults(ctx *sql.Context, keyTuple, valueTuple val.Tup
 				}
 			}
 		} else {
-			tb.PutRaw(to, tupleDesc.GetField(from, valueTuple))
+			field := tupleDesc.GetField(from, valueTuple)
+			tb.PutRaw(to, field)
 		}
 	}
 	return tb.Build(pool), nil
@@ -1375,19 +1376,17 @@ func migrateDataToMergedSchema(ctx *sql.Context, tm *TableMerger, vm *valueMerge
 	if err != nil {
 		return err
 	}
+
+	keyDesc := mergedSch.GetKeyDescriptor()
+	valueDescriptor := mergedSch.GetValueDescriptor()
+
 	leftRows := durable.ProllyMapFromIndex(lr)
-	mut := leftRows.Mutate()
+	mut := leftRows.Rewriter(keyDesc, valueDescriptor)
 	mapIter, err := mut.IterAll(ctx)
 	if err != nil {
 		return err
 	}
-
-	leftSch, err := tm.leftTbl.GetSchema(ctx)
-	if err != nil {
-		return err
-	}
-	valueDescriptor := leftSch.GetValueDescriptor()
-
+	
 	for {
 		keyTuple, valueTuple, err := mapIter.Next(ctx)
 		if err == io.EOF {
@@ -1413,7 +1412,15 @@ func migrateDataToMergedSchema(ctx *sql.Context, tm *TableMerger, vm *valueMerge
 	}
 
 	newIndex := durable.IndexFromProllyMap(m)
-	newTable, err := tm.leftTbl.UpdateRows(ctx, newIndex)
+
+	// Now that we have the right data in the prolly index, we need to update the schema of the table to match the data
+	// we wrote before calling UpdateRows
+	newTable, err := tm.leftTbl.UpdateSchema(ctx, mergedSch)
+	if err != nil {
+		return err
+	}
+
+	newTable, err = newTable.UpdateRows(ctx, newIndex)
 	if err != nil {
 		return err
 	}
