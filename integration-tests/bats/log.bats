@@ -12,8 +12,7 @@ teardown() {
 
 @test "log: on initialized repo" {
     run dolt log
-    echo $output
-    [ "$status" -eq 1 ]
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "Initialize data repository" ]] || false
 }
 
@@ -24,7 +23,7 @@ teardown() {
     dolt commit	--allow-empty -m "commit 2"
     dolt commit	--allow-empty -m "commit 3"
     run dolt log
-    [ $status -eq 0 ]
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "commit 1" ]] || false
     [[ "$output" =~ "commit 2" ]] || false
     [[ "$output" =~ "commit 3" ]] || false
@@ -564,9 +563,9 @@ teardown() {
     dolt commit --allow-empty -m "a message 1"
     dolt commit --allow-empty -m "a message 2"
     run dolt log --oneline
-    [[ !("$output" =~ "Author") ]] || false
-    [[ !("$output" =~ "Date") ]] || false
-    [[ !("$output" =~ "commit") ]] || false
+    [[ ! "$output" =~ "Author" ]] || false
+    [[ ! "$output" =~ "Date" ]] || false
+    [[ ! "$output" =~ "commit" ]] || false
     res=$(dolt log --oneline | wc -l)
     [ "$res" -eq 3 ] # don't forget initial commit
     dolt commit --allow-empty -m "a message 3"
@@ -582,13 +581,14 @@ teardown() {
     [[ "$output" =~ "Date" ]] || false
     [[ "$output" =~ "main" ]] || false
     [[ "$output" =~ "tag: tag_v0" ]] || false
-    [[ !("$output" =~ "/refs/heads/") ]] || false
-    [[ !("$output" =~ "/refs/tags/") ]] || false
+    [[ ! "$output" =~ "/refs/heads/" ]] || false
+    [[ ! "$output" =~ "/refs/tags/" ]] || false
 }
 
 @test "log: --decorate=full shows full branches and tags" {
     dolt tag tag_v0
     run dolt log --decorate=full
+    echo $output
     [[ "$output" =~ "commit" ]] || false
     [[ "$output" =~ "Author" ]] || false
     [[ "$output" =~ "Date" ]] || false
@@ -602,17 +602,17 @@ teardown() {
     [[ "$output" =~ "commit" ]] || false
     [[ "$output" =~ "Author" ]] || false
     [[ "$output" =~ "Date" ]] || false
-    [[ !("$output" =~ "main") ]] || false
-    [[ !("$output" =~ "tag_v0") ]] || false
+    [[ ! "$output" =~ "main" ]] || false
+    [[ ! "$output" =~ "tag_v0" ]] || false
 }
 
 @test "log: decorate and oneline work together" {
     dolt commit --allow-empty -m "a message 1"
     dolt commit --allow-empty -m "a message 2"
     run dolt log --oneline --decorate=full
-    [[ !("$output" =~ "commit") ]] || false
-    [[ !("$output" =~ "Author") ]] || false
-    [[ !("$output" =~ "Date") ]] || false
+    [[ ! "$output" =~ "commit" ]] || false
+    [[ ! "$output" =~ "Author" ]] || false
+    [[ ! "$output" =~ "Date" ]] || false
     [[ "$output" =~ "refs/heads/main" ]] || false
     res=$(dolt log --oneline --decorate=full | wc -l)
     [ "$res" -eq 3 ] # don't forget initial commit
@@ -661,9 +661,7 @@ teardown() {
     dolt commit --allow-empty -m "commit 2"
     dolt tag commit2
     run dolt log commit1
-    echo $output
-    [[ !("$output" =~ "HEAD") ]] || false
+    [[ ! "$output" =~ "HEAD" ]] || false
     run dolt log commit2
-    echo $output
     [[ "$output" =~ "HEAD" ]] || false
 }
