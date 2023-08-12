@@ -265,7 +265,13 @@ func (s *SqlEngineTableWriter) createOrEmptyTableIfNeeded() error {
 
 // createTable creates a table.
 func (s *SqlEngineTableWriter) createTable() error {
-	cr := plan.NewCreateTable(sql.UnresolvedDatabase(s.database), s.tableName, false, false, &plan.TableSpec{Schema: s.tableSchema})
+	// TODO don't use internal interfaces to do this, use helpers to write a CREATE string
+	db, err := s.se.GetUnderlyingEngine().Analyzer.Catalog.Database(s.sqlCtx, s.database)
+	if err != nil {
+		return err
+	}
+
+	cr := plan.NewCreateTable(db, s.tableName, false, false, &plan.TableSpec{Schema: s.tableSchema})
 	analyzed, err := s.se.Analyze(s.sqlCtx, cr)
 	if err != nil {
 		return err
@@ -298,16 +304,15 @@ func (s *SqlEngineTableWriter) getInsertNode(inputChannel chan sql.Row, replace 
 	}
 	sep := ""
 	for _, col := range s.rowOperationSchema.Schema {
-		colNames += fmt.Sprintf("%s%s", sep, col.Name)
+		colNames += fmt.Sprintf("%s`%s`", sep, col.Name)
 		values += fmt.Sprintf("%s1", sep)
 		if update {
-			duplicate += fmt.Sprintf("%s%s = VALUES(%s)", sep, col.Name, col.Name)
+			duplicate += fmt.Sprintf("%s%s = VALUES(`%s`)", sep, col.Name, col.Name)
 		}
 		sep = ", "
 	}
 
-	insert := fmt.Sprintf("insert into %s (%s) VALUES (%s)%s", s.tableName, colNames, values, duplicate)
-	//insert := plan.NewInsertInto(sql.UnresolvedDatabase(s.database), dest, src, replace, colNames, onDuplicateExpression, ignore)
+	insert := fmt.Sprintf("insert into `%s` (%s) VALUES (%s)%s", s.tableName, colNames, values, duplicate)
 	parsed, err := planbuilder.Parse(s.sqlCtx, s.se.GetUnderlyingEngine().Analyzer.Catalog, insert)
 	if err != nil {
 		return nil, fmt.Errorf("error constructing import query '%s': %w", insert, err)

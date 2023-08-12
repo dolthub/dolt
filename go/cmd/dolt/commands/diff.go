@@ -17,13 +17,12 @@ package commands
 import (
 	"context"
 	"fmt"
+	ast "github.com/dolthub/vitess/go/vt/sqlparser"
 	"io"
 	"strconv"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/plan"
-	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/go-sql-driver/mysql"
 	"github.com/gocraft/dbr/v2"
@@ -854,7 +853,7 @@ func getTableSchemaAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName s
 		createStmt += ";"
 	}
 
-	sch, err = schemaFromCreateTableStmt(sqlCtx, createStmt)
+	sch, err = schemaFromCreateTableStmt(createStmt)
 	if err != nil {
 		return sch, createStmt, err
 	}
@@ -862,30 +861,46 @@ func getTableSchemaAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName s
 	return sch, createStmt, nil
 }
 
-func schemaFromCreateTableStmt(sqlCtx *sql.Context, createTableStmt string) (schema.Schema, error) {
-	parsed, err := planbuilder.Parse(sqlCtx, nil, createTableStmt)
+func schemaFromCreateTableStmt(createTableStmt string) (schema.Schema, error) {
+	parsed, err := ast.Parse(createTableStmt)
 	if err != nil {
 		return nil, err
 	}
-	create, ok := parsed.(*plan.CreateTable)
+	create, ok := parsed.(*ast.DDL)
 	if !ok {
 		return nil, fmt.Errorf("expected create table, found %T", parsed)
 	}
+
+	primaryCols := make(map[string]bool)
+	for _, index := range create.TableSpec.Indexes {
+		if index.Info.Primary {
+			for _, indexCol := range index.Columns {
+				primaryCols[indexCol.Column.Lowered()] = true
+			}
+			break
+		}
+	}
+
 	cols := []schema.Column{}
-	for _, col := range create.CreateSchema.Schema {
-		typeInfo, err := typeinfo.FromSqlType(col.Type)
+	for _, col := range create.TableSpec.Columns {
+		internalTyp, err := types.ColumnTypeToType(&col.Type)
+		typeInfo, err := typeinfo.FromSqlType(internalTyp)
 		if err != nil {
 			return nil, err
 		}
 
+		defBuf := ast.NewTrackedBuffer(nil)
+		if col.Type.Default != nil {
+			col.Type.Default.Format(defBuf)
+		}
 		sCol, err := schema.NewColumnWithTypeInfo(
-			col.Name,
+			col.Name.Lowered(),
 			0,
 			typeInfo,
-			col.PrimaryKey,
-			col.Default.String(),
-			col.AutoIncrement,
-			col.Comment,
+			primaryCols[col.Name.Lowered()],
+			defBuf.String(),
+			col.Type.Autoincrement == true,
+			col.Type.Comment.String(),
 		)
 		cols = append(cols, sCol)
 	}
