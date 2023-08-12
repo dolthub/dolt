@@ -17,13 +17,13 @@ package mvdata
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"io"
 	"sync/atomic"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
-	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"github.com/dolthub/go-mysql-server/sql/transform"
@@ -173,7 +173,7 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 		}
 	}
 
-	insertOrUpdateOperation, err := s.getInsertNode(inputChannel)
+	insertOrUpdateOperation, err := s.getInsertNode(inputChannel, false)
 	if err != nil {
 		return err
 	}
@@ -286,31 +286,46 @@ func (s *SqlEngineTableWriter) createTable() error {
 	}
 }
 
-// getInsertNode returns the sql.Node to be iterated on given the import option.
-func (s *SqlEngineTableWriter) getInsertNode(inputChannel chan sql.Row) (sql.Node, error) {
-	switch s.importOption {
-	case CreateOp, ReplaceOp, AppendOp:
-		return s.createInsertImportNode(inputChannel, s.contOnErr, false, nil) // contonerr translates to ignore
-	case UpdateOp:
-		return s.createInsertImportNode(inputChannel, s.contOnErr, false, generateOnDuplicateKeyExpressions(s.rowOperationSchema.Schema)) // contonerr translates to ignore
-	default:
-		return nil, fmt.Errorf("unsupported import type")
-	}
-}
-
 // createInsertImportNode creates the relevant/analyzed insert node given the import option. This insert node is wrapped
 // with an error handler.
-func (s *SqlEngineTableWriter) createInsertImportNode(source chan sql.Row, ignore bool, replace bool, onDuplicateExpression []sql.Expression) (sql.Node, error) {
-	src := NewChannelRowSource(s.rowOperationSchema.Schema, source)
-	dest := plan.NewUnresolvedTable(s.tableName, s.database)
-
-	colNames := make([]string, 0)
+func (s *SqlEngineTableWriter) getInsertNode(inputChannel chan sql.Row, replace bool) (sql.Node, error) {
+	update := s.importOption == UpdateOp
+	colNames := ""
+	values := ""
+	duplicate := ""
+	if update {
+		duplicate += " ON DUPLICATE KEY UPDATE "
+	}
+	sep := ""
 	for _, col := range s.rowOperationSchema.Schema {
-		colNames = append(colNames, col.Name)
+		colNames += fmt.Sprintf("%s%s", sep, col.Name)
+		values += fmt.Sprintf("%s1", sep)
+		if update {
+			duplicate += fmt.Sprintf("%s%s = VALUES(%s)", sep, col.Name, col.Name)
+		}
+		sep = ", "
 	}
 
-	insert := plan.NewInsertInto(sql.UnresolvedDatabase(s.database), dest, src, replace, colNames, onDuplicateExpression, ignore)
-	analyzed, err := s.se.Analyze(s.sqlCtx, insert)
+	insert := fmt.Sprintf("insert into %s (%s) VALUES (%s)%s", s.tableName, colNames, values, duplicate)
+	//insert := plan.NewInsertInto(sql.UnresolvedDatabase(s.database), dest, src, replace, colNames, onDuplicateExpression, ignore)
+	parsed, err := planbuilder.Parse(s.sqlCtx, s.se.GetUnderlyingEngine().Analyzer.Catalog, insert)
+	if err != nil {
+		return nil, fmt.Errorf("error constructing import query '%s': %w", insert, err)
+	}
+	parsedIns, ok := parsed.(*plan.InsertInto)
+	if !ok {
+		return nil, fmt.Errorf("import setup expected *plan.InsertInto root, found %T", parsed)
+	}
+	schema := make(sql.Schema, len(s.rowOperationSchema.Schema))
+	for i, c := range s.rowOperationSchema.Schema {
+		newC := c.Copy()
+		newC.Source = planbuilder.OnDupValuesPrefix
+		schema[i] = newC
+	}
+	parsedIns.Source = NewChannelRowSource(schema, inputChannel)
+	parsedIns.Ignore = s.contOnErr
+	parsedIns.IsReplace = replace
+	analyzed, err := s.se.Analyze(s.sqlCtx, parsedIns)
 	if err != nil {
 		return nil, err
 	}
@@ -329,16 +344,4 @@ func (s *SqlEngineTableWriter) createInsertImportNode(source chan sql.Row, ignor
 	})
 
 	return analyzed, nil
-}
-
-// generateOnDuplicateKeyExpressions generates the duplicate key expressions needed for the update import option.
-func generateOnDuplicateKeyExpressions(sch sql.Schema) []sql.Expression {
-	ret := make([]sql.Expression, len(sch))
-	for i, col := range sch {
-		columnExpression := expression.NewUnresolvedColumn(col.Name)
-		functionExpression := expression.NewUnresolvedFunction("values", false, nil, expression.NewUnresolvedColumn(col.Name))
-		ret[i] = expression.NewSetField(columnExpression, functionExpression)
-	}
-
-	return ret
 }
