@@ -893,6 +893,10 @@ func schemaFromCreateTableStmt(createTableStmt string) (schema.Schema, error) {
 		if col.Type.Default != nil {
 			col.Type.Default.Format(defBuf)
 		}
+		var comment string
+		if col.Type.Comment != nil {
+			comment = col.Type.Comment.String()
+		}
 		sCol, err := schema.NewColumnWithTypeInfo(
 			col.Name.Lowered(),
 			0,
@@ -900,7 +904,7 @@ func schemaFromCreateTableStmt(createTableStmt string) (schema.Schema, error) {
 			primaryCols[col.Name.Lowered()],
 			defBuf.String(),
 			col.Type.Autoincrement == true,
-			col.Type.Comment.String(),
+			comment,
 		)
 		cols = append(cols, sCol)
 	}
