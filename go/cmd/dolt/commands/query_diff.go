@@ -207,27 +207,6 @@ func (q QueryDiff) Exec(ctx context.Context, commandStr string, args []string, d
 			}
 		}
 	} else {
-		//cliWR := iohelp.NopWrCloser(cli.OutStream)
-		//wr := tabular.NewFixedWidthTableWriter(append(schema1, schema2...), cliWR, 100)
-		//defer wr.Close(ctx)
-		//
-		//var err1, err2 error
-		//var row1, row2 sql.Row
-		//for {
-		//	row1, err1 = rowIter1.Next(sqlCtx)
-		//	if err1 == io.EOF {
-		//		break
-		//	}
-		//	_, rowIter2, _ = queryist.Query(sqlCtx, query2)
-		//	for {
-		//		row2, err2 = rowIter2.Next(sqlCtx)
-		//		if err2 == io.EOF {
-		//			break
-		//		}
-		//		wr.WriteSqlRow(ctx, append(row1, row2...))
-		//	}
-		//}
-
 		dw, err := newDiffWriter(TabularDiffOutput)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
