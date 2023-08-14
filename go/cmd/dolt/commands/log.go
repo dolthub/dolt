@@ -125,10 +125,16 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 	first = true
 
 	tableGiven := false
+	tagGiven := false
+	var tagHash string
 	if apr.NArg() == 1 {
-		_, _, err := queryist.Query(sqlCtx, fmt.Sprintf("describe %s", apr.Arg(0)))
-		if err == nil {
+		if _, _, err := queryist.Query(sqlCtx, fmt.Sprintf("describe %s", apr.Arg(0))); err == nil {
 			tableGiven = true
+		} else if row, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("select tag_hash from dolt_tags where tag_name = '%s'", apr.Arg(0))); err == nil {
+			if len(row) > 0 {
+				tagGiven = true
+				tagHash = row[0][0].(string)
+			}
 		}
 	}
 
@@ -182,6 +188,8 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 	if tableGiven {
 		buffer.WriteString(") as dl join (select * from dolt_diff where table_name = ?) as dd on dl.commit_hash = dd.commit_hash")
 		params = append(params, apr.Arg(0))
+	} else if tagGiven {
+		buffer.WriteString(fmt.Sprintf(") where commit_hash = '%s'", tagHash))
 	} else {
 		buffer.WriteString(")")
 	}
