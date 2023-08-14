@@ -94,7 +94,7 @@ func (cmd LogCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, logDocs, ap))
+	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, logDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
@@ -107,7 +107,7 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 
 	query, err := constructInterpolatedDoltLogQuery(apr)
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		return handleErrAndExit(err)
 	}
 	logRows, err := GetRowsForSql(queryist, sqlCtx, query)
 	if err != nil {
@@ -164,6 +164,11 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults) (string, 
 		}
 	}
 
+	if decoration, hasDecoration := apr.GetValue(cli.DecorateFlag); hasDecoration {
+		writeToBuffer("? ", true)
+		params = append(params, "--decorate="+decoration)
+	}
+
 	buffer.WriteString(")")
 
 	if numLines, hasNumLines := apr.GetValue(cli.NumberFlag); hasNumLines {
@@ -215,8 +220,8 @@ func logCompact(pager *outputpager.Pager, apr *argparser.ArgParseResults, commit
 		// Write commit hash
 		pager.Writer.Write([]byte(fmt.Sprintf("\033[33m%s \033[0m", chStr)))
 
-		if apr.GetValueOrDefault(cli.DecorateFlag, "auto") != "no" {
-			printRefs(pager, &comm)
+		if decoration := apr.GetValueOrDefault(cli.DecorateFlag, "auto"); decoration != "no" {
+			printRefs(pager, &comm, decoration)
 		}
 
 		formattedDesc := strings.Replace(comm.commitMeta.Description, "\n", " ", -1) + "\n"
@@ -247,7 +252,7 @@ func logToStdOut(apr *argparser.ArgParseResults, commits []CommitInfo) {
 
 func handleErrAndExit(err error) int {
 	if err != nil {
-		cli.PrintErrln(err)
+		cli.PrintErrln(strings.ReplaceAll(err.Error(), "Invalid argument to dolt_log: ", ""))
 		return 1
 	}
 

@@ -588,7 +588,6 @@ teardown() {
 @test "log: --decorate=full shows full branches and tags" {
     dolt tag tag_v0
     run dolt log --decorate=full
-    echo $output
     [[ "$output" =~ "commit" ]] || false
     [[ "$output" =~ "Author" ]] || false
     [[ "$output" =~ "Date" ]] || false
@@ -624,7 +623,7 @@ teardown() {
 @test "log: --decorate=notanoption throws error" {
     run dolt log --decorate=notanoption
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "fatal: invalid --decorate option" ]] || false
+    [[ "$output" =~ "invalid --decorate option" ]] || false
 }
 
 @test "log: check pager" {

@@ -532,7 +532,7 @@ func PrintCommitInfo(pager *outputpager.Pager, minParents int, showParents bool,
 
 	// Show decoration
 	if decoration != "no" {
-		printRefs(pager, comm)
+		printRefs(pager, comm, decoration)
 	}
 
 	if len(comm.parentHashes) > 1 {
@@ -553,7 +553,7 @@ func PrintCommitInfo(pager *outputpager.Pager, minParents int, showParents bool,
 }
 
 // printRefs prints the refs associated with the commit in the formatting used by log and show.
-func printRefs(pager *outputpager.Pager, comm *CommitInfo) {
+func printRefs(pager *outputpager.Pager, comm *CommitInfo, decoration string) {
 	// Do nothing if no associate branchNames
 	if len(comm.localBranchNames) == 0 && len(comm.remoteBranchNames) == 0 && len(comm.tagNames) == 0 {
 		return
@@ -562,16 +562,25 @@ func printRefs(pager *outputpager.Pager, comm *CommitInfo) {
 	references := []string{}
 
 	for _, b := range comm.localBranchNames {
+		if decoration == "full" {
+			b = "refs/heads/" + b
+		}
 		// branch names are bright green (32;1m)
 		branchName := fmt.Sprintf("\033[32;1m%s\033[0m", b)
 		references = append(references, branchName)
 	}
 	for _, b := range comm.remoteBranchNames {
+		if decoration == "full" {
+			b = "refs/remotes/" + b
+		}
 		// remote names are bright red (31;1m)
 		branchName := fmt.Sprintf("\033[31;1m%s\033[0m", b)
 		references = append(references, branchName)
 	}
 	for _, t := range comm.tagNames {
+		if decoration == "full" {
+			t = "refs/tags/" + t
+		}
 		// tag names are bright yellow (33;1m)
 		tagName := fmt.Sprintf("\033[33;1mtag: %s\033[0m", t)
 		references = append(references, tagName)
