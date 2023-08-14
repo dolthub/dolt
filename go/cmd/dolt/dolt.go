@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 	"github.com/pkg/profile"
+	"github.com/tidwall/gjson"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/jaeger"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -55,13 +56,14 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 const (
-	Version = "1.8.8"
+	Version = "1.10.1"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -118,6 +120,7 @@ var doltSubCommands = []cli.Command{
 	docscmds.Commands,
 	stashcmds.StashCommands,
 	&commands.Assist{},
+	commands.ProfileCmd{},
 }
 
 var commandsWithoutCliCtx = []cli.Command{
@@ -150,6 +153,7 @@ var commandsWithoutCliCtx = []cli.Command{
 	dumpZshCommand,
 	docscmds.Commands,
 	&commands.Assist{},
+	commands.ProfileCmd{},
 }
 
 var commandsWithoutGlobalArgSupport = []cli.Command{
@@ -185,7 +189,7 @@ func supportsGlobalArgs(commandName string) bool {
 }
 
 var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", doltSubCommands)
-var globalArgParser = buildGlobalArgs()
+var globalArgParser = cli.CreateGlobalArgParser("dolt")
 var globalDocs = cli.CommandDocsForCommandString("dolt", doc, globalArgParser)
 
 var globalSpecialMsg = `
@@ -420,8 +424,24 @@ func runMain() int {
 
 	_, usage := cli.HelpAndUsagePrinters(globalDocs)
 
-	apr, remainingArgs, err := globalArgParser.ParseGlobalArgs(args)
+	var fs filesys.Filesys
+	fs = filesys.LocalFS
+	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, Version)
+	dEnv.IgnoreLockFile = ignoreLockFile
 
+	root, err := env.GetCurrentUserHomeDir()
+	if err != nil {
+		cli.PrintErrln(color.RedString("Failed to load the HOME directory: %v", err))
+		return 1
+	}
+
+	globalConfig, ok := dEnv.Config.GetConfig(env.GlobalConfig)
+	if !ok {
+		cli.PrintErrln(color.RedString("Failed to get global config"))
+		return 1
+	}
+
+	apr, remainingArgs, subcommandName, err := parseGlobalArgsAndSubCommandName(globalConfig, args)
 	if err == argparser.ErrHelp {
 		doltCommand.PrintUsage("dolt")
 		cli.Println(globalSpecialMsg)
@@ -433,10 +453,6 @@ func runMain() int {
 		return 1
 	}
 
-	subcommandName := remainingArgs[0]
-
-	var fs filesys.Filesys
-	fs = filesys.LocalFS
 	dataDir, hasDataDir := apr.GetValue(commands.DataDirFlag)
 	if hasDataDir {
 		// If a relative path was provided, this ensures we have an absolute path everywhere.
@@ -449,14 +465,6 @@ func runMain() int {
 			cli.Println(color.RedString("Provided data directory does not exist: %s", dataDir))
 			return 1
 		}
-	}
-	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, Version)
-	dEnv.IgnoreLockFile = ignoreLockFile
-
-	root, err := env.GetCurrentUserHomeDir()
-	if err != nil {
-		cli.PrintErrln(color.RedString("Failed to load the HOME directory: %v", err))
-		return 1
 	}
 
 	if dEnv.CfgLoadErr != nil {
@@ -729,19 +737,92 @@ func interceptSendMetrics(ctx context.Context, args []string) (bool, int) {
 	return true, doltCommand.Exec(ctx, "dolt", args, dEnv, nil)
 }
 
-func buildGlobalArgs() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithVariableArgs("dolt")
+// parseGlobalArgsAndSubCommandName parses the global arguments, including a profile if given or a default profile if exists. Also returns the subcommand name.
+func parseGlobalArgsAndSubCommandName(globalConfig config.ReadWriteConfig, args []string) (apr *argparser.ArgParseResults, remaining []string, subcommandName string, err error) {
+	apr, remaining, err = globalArgParser.ParseGlobalArgs(args)
+	if err != nil {
+		return nil, nil, "", err
+	}
 
-	ap.SupportsString(cli.UserFlag, "u", "user", fmt.Sprintf("Defines the local superuser (defaults to `%v`). If the specified user exists, will take on permissions of that user.", commands.DefaultUser))
-	ap.SupportsString(cli.PasswordFlag, "p", "password", "Defines the password for the user. Defaults to empty string.")
-	ap.SupportsString(cli.HostFlag, "", "host", "Defines the host to connect to.")
-	ap.SupportsInt(cli.PortFlag, "", "port", "Defines the port to connect to. Only used when the --host flag is also provided. Defaults to `3306`.")
-	ap.SupportsFlag(cli.NoTLSFlag, "", "Disables TLS for the connection to remote databases.")
-	ap.SupportsString(commands.DataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within. Defaults to the current directory.")
-	ap.SupportsString(commands.CfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt. Defaults to `$data-dir/.doltcfg`. Will only be created if there is a change to configuration settings.")
-	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
-	ap.SupportsString(commands.BranchCtrlPathFlag, "", "branch control file", "Path to a file to load and store branch control permissions. Defaults to `$doltcfg-dir/branch_control.db`. Will only be created if there is a change to branch control permissions.")
-	ap.SupportsString(commands.UseDbFlag, "", "database", "The name of the database to use when executing SQL queries. Defaults the database of the root directory, if it exists, and the first alphabetically if not.")
+	subcommandName = remaining[0]
 
-	return ap
+	useDefaultProfile := false
+	profileName, hasProfile := apr.GetValue(commands.ProfileFlag)
+	encodedProfiles, err := globalConfig.GetString(commands.GlobalCfgProfileKey)
+	if err != nil {
+		if err == config.ErrConfigParamNotFound {
+			if hasProfile {
+				return nil, nil, "", fmt.Errorf("no profiles found")
+			} else {
+				return apr, remaining, subcommandName, nil
+			}
+		} else {
+			return nil, nil, "", err
+		}
+	}
+	profiles, err := commands.DecodeProfile(encodedProfiles)
+	if err != nil {
+		return nil, nil, "", err
+	}
+
+	if !hasProfile && supportsGlobalArgs(subcommandName) {
+		defaultProfile := gjson.Get(profiles, commands.DefaultProfileName)
+		if defaultProfile.Exists() {
+			args = append([]string{"--profile", commands.DefaultProfileName}, args...)
+			apr, remaining, err = globalArgParser.ParseGlobalArgs(args)
+			if err != nil {
+				return nil, nil, "", err
+			}
+			profileName, _ = apr.GetValue(commands.ProfileFlag)
+			useDefaultProfile = true
+		}
+	}
+
+	if hasProfile || useDefaultProfile {
+		profileArgs, err := getProfile(apr, profileName, profiles)
+		if err != nil {
+			return nil, nil, "", err
+		}
+		args = append(profileArgs, args...)
+		apr, remaining, err = globalArgParser.ParseGlobalArgs(args)
+		if err != nil {
+			return nil, nil, "", err
+		}
+	}
+
+	return
+}
+
+// getProfile retrieves the given profile from the provided list of profiles and returns the args (as flags) and values
+// for that profile in a []string. If the profile is not found, an error is returned.
+func getProfile(apr *argparser.ArgParseResults, profileName, profiles string) (result []string, err error) {
+	prof := gjson.Get(profiles, profileName)
+	if prof.Exists() {
+		hasPassword := false
+		password := ""
+		for flag, value := range prof.Map() {
+			if !apr.Contains(flag) {
+				if flag == cli.PasswordFlag {
+					password = value.Str
+				} else if flag == "has-password" {
+					hasPassword = value.Bool()
+				} else if flag == cli.NoTLSFlag {
+					if value.Bool() {
+						result = append(result, "--"+flag)
+						continue
+					}
+				} else {
+					if value.Str != "" {
+						result = append(result, "--"+flag, value.Str)
+					}
+				}
+			}
+		}
+		if !apr.Contains(cli.PasswordFlag) && hasPassword {
+			result = append(result, "--"+cli.PasswordFlag, password)
+		}
+		return result, nil
+	} else {
+		return nil, fmt.Errorf("profile %s not found", profileName)
+	}
 }

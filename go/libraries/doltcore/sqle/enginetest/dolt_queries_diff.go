@@ -419,8 +419,18 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "select to_pk, to_col1, to_col2, to_commit, from_pk, from_col1, from_col2, from_commit, diff_type from dolt_diff_t order by diff_type ASC;",
 				Expected: []sql.Row{
-					{1, "123456789012345", 420, doltCommit, nil, nil, nil, doltCommit, "added"},
-					{1, "1234567890", 13, doltCommit, 1, "123456789012345", 420, doltCommit, "modified"},
+					{1, nil, nil, doltCommit, nil, nil, nil, doltCommit, "added"},
+					{1, "1234567890", 13, doltCommit, 1, nil, nil, doltCommit, "modified"},
+				},
+				ExpectedWarningsCount: 4,
+			},
+			{
+				Query: "SHOW WARNINGS;",
+				Expected: []sql.Row{
+					{"Warning", 1292, "Truncated tinyint value: 420"},
+					{"Warning", 1292, "Truncated tinyint value: 420"},
+					{"Warning", 1292, "Truncated varchar(10) value: 123456789012345"},
+					{"Warning", 1292, "Truncated varchar(10) value: 123456789012345"},
 				},
 			},
 		},

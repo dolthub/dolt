@@ -326,7 +326,7 @@ SQL
   run dolt checkout "$sha"
   [ "$status" -ne 0 ]
   cmd=$(echo "${lines[1]}" | cut -d ' ' -f 1,2,3)
-  [[ $cmd =~ "dolt checkout $sha" ]]
+  [[ $cmd =~ "dolt checkout $sha" ]] || false
 }
 
 @test "checkout: commit --amend only changes commit message" {

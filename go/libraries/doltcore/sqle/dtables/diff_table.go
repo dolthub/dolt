@@ -98,13 +98,6 @@ func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *do
 		return nil, err
 	}
 
-	// Process sch to widen all the fields so that any previous values (in the same type family) can be
-	// shown in the diff table, even if the current schema's type has been changed to a smaller type.
-	sch, err = widenSchemaColumns(sch)
-	if err != nil {
-		return nil, err
-	}
-
 	diffTableSchema, j, err := GetDiffTableSchemaAndJoiner(ddb.Format(), sch, sch)
 	if err != nil {
 		return nil, err
@@ -403,21 +396,6 @@ func (dt *DiffTable) reverseIterForChild(ctx *sql.Context, parent hash.Hash) (*d
 			}
 		}
 	}
-}
-
-// widenSchemaColumns takes a schema, |sch|, and returns a new schema with all the non-PK columns
-// promoted to their widest type in the same family (e.g. tinyint -> bigint, varchar(10) -> TEXT).
-// This function is used so that when a table's schema has changed throughout its history, we can
-// still show any previous values in the diff table, even if those previous values are larger than
-// the current schema's type.
-func widenSchemaColumns(sch schema.Schema) (schema.Schema, error) {
-	widenedCols := make([]schema.Column, 0, sch.GetAllCols().Size())
-	for _, col := range sch.GetAllCols().GetColumns() {
-		col.TypeInfo = col.TypeInfo.Promote()
-		widenedCols = append(widenedCols, col)
-	}
-	return schema.NewSchema(schema.NewColCollection(widenedCols...),
-		[]int{}, sch.GetCollation(), sch.Indexes(), sch.Checks())
 }
 
 func tableInfoForCommit(ctx context.Context, table string, cm *doltdb.Commit, hs hash.Hash) (TblInfoAtCommit, error) {

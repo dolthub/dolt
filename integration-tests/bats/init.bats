@@ -196,7 +196,7 @@ teardown() {
 
     run dolt version
     [ $status -eq 0 ]
-    [[ $output =~ "no valid database in this directory" ]]
+    [[ $output =~ "no valid database in this directory" ]] || false
 }
 
 @test "init: run init with --new-format, CREATE DATABASE through sql-server running in new-format repo should create a new format database" {

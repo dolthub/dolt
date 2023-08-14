@@ -23,7 +23,7 @@ import (
 
 func TestGetGlobalCfgPath(t *testing.T) {
 	homeDir := "/user/bheni"
-	expected := filepath.Join(homeDir, dbfactory.DoltDir, globalConfig)
+	expected := filepath.Join(homeDir, dbfactory.DoltDir, GlobalConfigFile)
 	actual, _ := getGlobalCfgPath(func() (string, error) {
 		return homeDir, nil
 	})
