@@ -21,9 +21,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"io"
@@ -112,6 +110,9 @@ func (q QueryDiff) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
+	defer rowIter1.Close(sqlCtx)
+	defer rowIter2.Close(sqlCtx)
+
 	if schema1.Equals(schema2) {
 		var pkOrds []int
 		for ord, col := range schema1 {
@@ -132,6 +133,7 @@ func (q QueryDiff) Exec(ctx context.Context, commandStr string, args []string, d
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
+		defer wr.Close(ctx)
 
 		// TODO: assume both are sorted according to their primary keys
 		row1, err1 := rowIter1.Next(sqlCtx)
@@ -167,11 +169,9 @@ func (q QueryDiff) Exec(ctx context.Context, commandStr string, args []string, d
 				row2, err2 = rowIter2.Next(sqlCtx)
 			}
 		}
+
 		// Append any remaining rows
-		//var rowIter sql.RowIter
 		if err1 == io.EOF && err2 == io.EOF {
-			//rowIter1.Close(sqlCtx)
-			//rowIter2.Close(sqlCtx)
 		} else if err1 == io.EOF {
 			if err = wr.WriteRow(ctx, row2, diff.Added, addedChange); err != nil {
 				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -206,28 +206,74 @@ func (q QueryDiff) Exec(ctx context.Context, commandStr string, args []string, d
 				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err2), usage)
 			}
 		}
-		rowIter1.Close(sqlCtx)
-		rowIter2.Close(sqlCtx)
-		defer wr.Close(ctx)
 	} else {
-		cliWR := iohelp.NopWrCloser(cli.OutStream)
-		wr := tabular.NewFixedWidthTableWriter(append(schema1, schema2...), cliWR, 100)
+		//cliWR := iohelp.NopWrCloser(cli.OutStream)
+		//wr := tabular.NewFixedWidthTableWriter(append(schema1, schema2...), cliWR, 100)
+		//defer wr.Close(ctx)
+		//
+		//var err1, err2 error
+		//var row1, row2 sql.Row
+		//for {
+		//	row1, err1 = rowIter1.Next(sqlCtx)
+		//	if err1 == io.EOF {
+		//		break
+		//	}
+		//	_, rowIter2, _ = queryist.Query(sqlCtx, query2)
+		//	for {
+		//		row2, err2 = rowIter2.Next(sqlCtx)
+		//		if err2 == io.EOF {
+		//			break
+		//		}
+		//		wr.WriteSqlRow(ctx, append(row1, row2...))
+		//	}
+		//}
+
+		dw, err := newDiffWriter(TabularDiffOutput)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
+		err = dw.BeginTable(query1, query2, false, false)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
+		sch := append(schema1, schema2...)
+		wr, err := dw.RowWriter(nil, nil, diff.TableDeltaSummary{}, sch)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
 		defer wr.Close(ctx)
 
-		var err1, err2 error
-		var row1, row2 sql.Row
+		removedChange := make([]diff.ChangeType, len(sch))
 		for {
-			row1, err1 = rowIter1.Next(sqlCtx)
-			if err1 == io.EOF {
+			row, err := rowIter1.Next(sqlCtx)
+			if err == io.EOF {
 				break
 			}
-			_, rowIter2, _ = queryist.Query(sqlCtx, query2)
-			for {
-				row2, err2 = rowIter2.Next(sqlCtx)
-				if err2 == io.EOF {
-					break
-				}
-				wr.WriteSqlRow(ctx, append(row1, row2...))
+			if err != nil {
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+			}
+			for range schema2 {
+				row = append(row, nil)
+			}
+			if err = wr.WriteRow(ctx, row, diff.Removed, removedChange); err != nil {
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+			}
+		}
+
+		addedChange := make([]diff.ChangeType, len(sch))
+		for {
+			row, err := rowIter2.Next(sqlCtx)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+			}
+			for range schema1 {
+				row = append(sql.Row{nil}, row...)
+			}
+			if err = wr.WriteRow(ctx, row, diff.Added, addedChange); err != nil {
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 			}
 		}
 	}
