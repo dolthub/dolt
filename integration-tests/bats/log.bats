@@ -367,7 +367,6 @@ teardown() {
     dolt commit -am "first commit"
 
     run dolt log test
-    echo $output
     [ $status -eq 0 ]
     [[ "$output" =~ "first commit" ]] || false
     [[ ! "$output" =~ "Initialize data repository" ]] || false
@@ -401,7 +400,6 @@ teardown() {
 
     run dolt log -n 1 test
     [ $status -eq 0 ]
-    echo $output
     [[ "$output" =~ "first commit" ]] || false
 
     dolt sql -q "INSERT INTO test VALUES (1)"

@@ -21,16 +21,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/gocraft/dbr/v2"
-	"github.com/gocraft/dbr/v2/dialect"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 )
 
 var logDocs = cli.CommandDocumentationContent{
@@ -105,7 +103,7 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 		defer closeFunc()
 	}
 
-	query, err := constructInterpolatedDoltLogQuery(apr)
+	query, err := constructInterpolatedDoltLogQuery(apr, queryist, sqlCtx)
 	if err != nil {
 		return handleErrAndExit(err)
 	}
@@ -119,14 +117,26 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 
 // constructInterpolatedDoltLogQuery generates the sql query necessary to call the DOLT_LOG() function.
 // Also interpolates this query to prevent sql injection.
-func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults) (string, error) {
+func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context) (string, error) {
 	var params []interface{}
 
 	var buffer bytes.Buffer
 	var first bool
 	first = true
 
-	buffer.WriteString("select commit_hash from dolt_log(")
+	tableGiven := false
+	if apr.NArg() == 1 {
+		_, _, err := queryist.Query(sqlCtx, fmt.Sprintf("describe %s", apr.Arg(0)))
+		if err == nil {
+			tableGiven = true
+		}
+	}
+
+	if tableGiven {
+		buffer.WriteString("select dl.commit_hash from dolt_log(")
+	} else {
+		buffer.WriteString("select commit_hash from dolt_log(")
+	}
 
 	writeToBuffer := func(s string, param bool) {
 		if !first {
@@ -142,10 +152,10 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults) (string, 
 		first = false
 	}
 
-	for _, args := range apr.Args {
+	/*for _, args := range apr.Args {
 		writeToBuffer("?", true)
 		params = append(params, args)
-	}
+	}*/
 
 	if minParents, hasMinParents := apr.GetValue(cli.MinParentsFlag); hasMinParents {
 		writeToBuffer("?", true)
@@ -169,7 +179,12 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults) (string, 
 		params = append(params, "--decorate="+decoration)
 	}
 
-	buffer.WriteString(")")
+	if tableGiven {
+		buffer.WriteString(") as dl join (select * from dolt_diff where table_name = ?) as dd on dl.commit_hash = dd.commit_hash")
+		params = append(params, apr.Arg(0))
+	} else {
+		buffer.WriteString(")")
+	}
 
 	if numLines, hasNumLines := apr.GetValue(cli.NumberFlag); hasNumLines {
 		num, err := strconv.Atoi(numLines)
