@@ -1007,13 +1007,6 @@ func TestFulltextIndexes(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("For some reason, this is flaky only on Windows CI. Investigation is underway.")
 	}
-	for i := range queries.FulltextTests {
-		//TODO: Dolt drops indexes automatically, which differs from the expectation of GMS
-		if queries.FulltextTests[i].Name == "ALTER TABLE DROP COLUMN used by index" {
-			queries.FulltextTests = append(queries.FulltextTests[:i], queries.FulltextTests[i+1:]...)
-			break
-		}
-	}
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestFulltextIndexes(t, h)
