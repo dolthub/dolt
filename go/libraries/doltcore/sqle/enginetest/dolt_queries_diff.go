@@ -2964,6 +2964,25 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "test indexes",
+		SetUpScript: []string{
+			"set @Commit0 = HashOf('HEAD');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "describe SELECT * from dolt_patch(@Commit0, @Commit0, 't') WHERE diff_type = 'schema';",
+				Expected: []sql.Row{
+					{"Filter"},
+					{" ├─ (dolt_patch.diff_type = 'schema')"},
+					{" └─ TableAlias(dolt_patch)"},
+					{"     └─ IndexedTableAccess(dolt_patch)"},
+					{"         ├─ index: [dolt_patch.diff_type]"},
+					{"         └─ filters: [{[schema, schema]}]"},
+				},
+			},
+		},
+	},
+	{
 		Name: "basic case with single table",
 		SetUpScript: []string{
 			"set @Commit0 = HashOf('HEAD');",
