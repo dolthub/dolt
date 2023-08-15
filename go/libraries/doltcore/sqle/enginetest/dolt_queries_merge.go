@@ -3280,8 +3280,37 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 
 var SchemaConflictScripts = []queries.ScriptTest{
 	{
+		Name: "schema conflicts return an error when autocommit is enabled",
+		SetUpScript: []string{
+			"set @@autocommit=1;",
+			"create table t (pk int primary key, c0 varchar(20))",
+			"call dolt_commit('-Am', 'added tabele t')",
+			"call dolt_checkout('-b', 'other')",
+			"alter table t modify column c0 int",
+			"call dolt_commit('-am', 'altered t on branch other')",
+			"call dolt_checkout('main')",
+			"alter table t modify column c0 datetime",
+			"call dolt_commit('-am', 'altered t on branch main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_merge('other')",
+				ExpectedErrStr: "Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1",
+			},
+			{
+				Query:    "select * from dolt_schema_conflicts",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from dolt_status",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
 		Name: "divergent type change causes schema conflict",
 		SetUpScript: []string{
+			"set @@autocommit=0;",
 			"create table t (pk int primary key, c0 varchar(20))",
 			"call dolt_commit('-Am', 'added tabele t')",
 			"call dolt_checkout('-b', 'other')",
@@ -4614,6 +4643,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		//       go further here and attempt to automatically convert the data to the new collation.
 		Name: "changing the collation of a column",
 		AncSetUpScript: []string{
+			"set @@autocommit=0;",
 			"create table t (pk int primary key, col1 varchar(32) character set utf8mb4 collate utf8mb4_bin, index col1_idx (col1));",
 			"insert into t values (1, 'ab'), (2, 'Ab');",
 		},
@@ -5241,6 +5271,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		//       automatically merge and instead return schema conflicts.
 		Name: "type widening",
 		AncSetUpScript: []string{
+			"set @@autocommit=0;",
 			"CREATE table t (pk int primary key, col1 enum('blue', 'green'), col2 float, col3 smallint, " +
 				"col4 decimal(4,2), col5 varchar(10), col6 set('a', 'b'), col7 bit(1));",
 			"INSERT into t values (1, 'blue', 1.0, 1, 0.1, 'one', 'a,b', 1);",
@@ -5281,6 +5312,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		// get merges to work, based on the schema conflict information.
 		Name: "type shortening",
 		AncSetUpScript: []string{
+			"set @@autocommit=0;",
 			"CREATE TABLE t (pk int primary key, col1 enum('blue','green','red'), col2 double, col3 bigint, col4 decimal(8,4), " +
 				"col5 varchar(20), col6 set('a','b','c'), col7 bit(2));",
 			"INSERT into t values (3, 'green', 3.0, 420, 0.001, 'three', 'a,b', 1);",
@@ -5345,6 +5377,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		// cover the same set of columns, we return a schema conflict and let the user decide how to resolve it.
 		Name: "duplicate index tag set",
 		AncSetUpScript: []string{
+			"set @@autocommit=0;",
 			"CREATE table t (pk int primary key, col1 varchar(100));",
 			"INSERT into t values (1, '100'), (2, '200');",
 			"alter table t add unique index idx1 (col1);",
@@ -5373,6 +5406,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 	{
 		Name: "index conflicts: both sides add an index with the same name, same columns, but different type",
 		AncSetUpScript: []string{
+			"set @@autocommit=0;",
 			"CREATE table t (pk int primary key, col1 int, col2 varchar(100));",
 		},
 		RightSetUpScript: []string{
@@ -5402,6 +5436,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		// https://github.com/dolthub/dolt/issues/2973
 		Name: "modifying a column on one side of a merge, and deleting it on the other",
 		AncSetUpScript: []string{
+			"set @@autocommit=0;",
 			"create table t(i int primary key, j int);",
 		},
 		RightSetUpScript: []string{
@@ -5424,6 +5459,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 	{
 		Name: "type changes to a column on both sides of a merge",
 		AncSetUpScript: []string{
+			"set @@autocommit=0;",
 			"create table t(i int primary key, j int);",
 		},
 		RightSetUpScript: []string{
@@ -5446,6 +5482,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 	{
 		Name: "changing the type of a column",
 		AncSetUpScript: []string{
+			"set @@autocommit=0;",
 			"create table t (pk int primary key, col1 int);",
 			"insert into t values (1, 10), (2, 20);",
 		},
@@ -5473,6 +5510,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 	{
 		Name: "changing the type of a column with an index",
 		AncSetUpScript: []string{
+			"set @@autocommit=0;",
 			"create table t (pk int primary key, col1 int, INDEX col1_idx (col1));",
 			"insert into t values (1, 100), (2, 20);",
 		},
