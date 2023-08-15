@@ -1376,7 +1376,7 @@ func migrateDataToMergedSchema(ctx *sql.Context, tm *TableMerger, vm *valueMerge
 		return err
 	}
 	leftRows := durable.ProllyMapFromIndex(lr)
-	mut := leftRows.Mutate()
+	mut := leftRows.Rewriter(mergedSch.GetKeyDescriptor(), mergedSch.GetValueDescriptor())
 	mapIter, err := mut.IterAll(ctx)
 	if err != nil {
 		return err
