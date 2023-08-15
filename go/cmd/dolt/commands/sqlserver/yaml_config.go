@@ -138,23 +138,25 @@ type UserSessionVars struct {
 
 // YAMLConfig is a ServerConfig implementation which is read from a yaml file
 type YAMLConfig struct {
-	LogLevelStr       *string               `yaml:"log_level,omitempty"`
-	MaxQueryLenInLogs *int                  `yaml:"max_logged_query_len,omitempty"`
-	EncodeLoggedQuery *bool                 `yaml:"encode_logged_query,omitempty"`
-	BehaviorConfig    BehaviorYAMLConfig    `yaml:"behavior"`
-	UserConfig        UserYAMLConfig        `yaml:"user"`
-	ListenerConfig    ListenerYAMLConfig    `yaml:"listener"`
-	PerformanceConfig PerformanceYAMLConfig `yaml:"performance"`
-	DataDirStr        *string               `yaml:"data_dir,omitempty"`
-	CfgDirStr         *string               `yaml:"cfg_dir,omitempty"`
-	MetricsConfig     MetricsYAMLConfig     `yaml:"metrics"`
-	RemotesapiConfig  RemotesapiYAMLConfig  `yaml:"remotesapi"`
-	ClusterCfg        *ClusterYAMLConfig    `yaml:"cluster,omitempty"`
-	PrivilegeFile     *string               `yaml:"privilege_file,omitempty"`
-	BranchControlFile *string               `yaml:"branch_control_file,omitempty"`
-	Vars              []UserSessionVars     `yaml:"user_session_vars"`
-	Jwks              []engine.JwksConfig   `yaml:"jwks"`
-	GoldenMysqlConn   *string               `yaml:"golden_mysql_conn,omitempty"`
+	LogLevelStr       *string                `yaml:"log_level,omitempty"`
+	MaxQueryLenInLogs *int                   `yaml:"max_logged_query_len,omitempty"`
+	EncodeLoggedQuery *bool                  `yaml:"encode_logged_query,omitempty"`
+	BehaviorConfig    BehaviorYAMLConfig     `yaml:"behavior"`
+	UserConfig        UserYAMLConfig         `yaml:"user"`
+	ListenerConfig    ListenerYAMLConfig     `yaml:"listener"`
+	PerformanceConfig PerformanceYAMLConfig  `yaml:"performance"`
+	DataDirStr        *string                `yaml:"data_dir,omitempty"`
+	CfgDirStr         *string                `yaml:"cfg_dir,omitempty"`
+	MetricsConfig     MetricsYAMLConfig      `yaml:"metrics"`
+	RemotesapiConfig  RemotesapiYAMLConfig   `yaml:"remotesapi"`
+	ClusterCfg        *ClusterYAMLConfig     `yaml:"cluster,omitempty"`
+	PrivilegeFile     *string                `yaml:"privilege_file,omitempty"`
+	BranchControlFile *string                `yaml:"branch_control_file,omitempty"`
+	// TODO: Rename to UserVars_
+	Vars              []UserSessionVars      `yaml:"user_session_vars"`
+	SystemVars_       engine.SystemVariables `yaml:"system_variables"`
+	Jwks              []engine.JwksConfig    `yaml:"jwks"`
+	GoldenMysqlConn   *string                `yaml:"golden_mysql_conn,omitempty"`
 }
 
 var _ ServerConfig = YAMLConfig{}
@@ -432,6 +434,10 @@ func (cfg YAMLConfig) UserVars() []UserSessionVars {
 	}
 
 	return nil
+}
+
+func (cfg YAMLConfig) SystemVars() engine.SystemVariables {
+	return cfg.SystemVars_
 }
 
 // JwksConfig is JSON Web Key Set config, and used to validate a user authed with a jwt (JSON Web Token).
