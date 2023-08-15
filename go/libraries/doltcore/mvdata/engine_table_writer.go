@@ -265,31 +265,29 @@ func (s *SqlEngineTableWriter) createOrEmptyTableIfNeeded() error {
 
 // createTable creates a table.
 func (s *SqlEngineTableWriter) createTable() error {
-	// TODO don't use internal interfaces to do this, use helpers to write a CREATE string
-	db, err := s.se.GetUnderlyingEngine().Analyzer.Catalog.Database(s.sqlCtx, s.database)
+	// TODO don't use internal interfaces to do this, we had to have a sql.Schema somewhere
+	// upstream to make the dolt schema
+	sqlCols := make([]string, len(s.tableSchema.Schema))
+	for i, c := range s.tableSchema.Schema {
+		sqlCols[i] = sql.GenerateCreateTableColumnDefinition(c, c.Default.String())
+	}
+	var pks string
+	var sep string
+	for _, i := range s.tableSchema.PkOrdinals {
+		pks += sep + s.tableSchema.Schema[i].Name
+		sep = ", "
+	}
+	if len(sep) > 0 {
+		sqlCols = append(sqlCols, fmt.Sprintf("PRIMARY KEY (%s)", pks))
+	}
+
+	createTable := sql.GenerateCreateTableStatement(s.tableName, sqlCols, sql.CharacterSet_utf8.String(), sql.Collation_Default.String())
+	sch, iter, err := s.se.Query(s.sqlCtx, createTable)
 	if err != nil {
 		return err
 	}
-
-	cr := plan.NewCreateTable(db, s.tableName, false, false, &plan.TableSpec{Schema: s.tableSchema})
-	analyzed, err := s.se.Analyze(s.sqlCtx, cr)
-	if err != nil {
-		return err
-	}
-
-	analyzedQueryProcess := analyzer.StripPassthroughNodes(analyzed.(*plan.QueryProcess))
-
-	ri, err := rowexec.DefaultBuilder.Build(s.sqlCtx, analyzedQueryProcess, nil)
-	if err != nil {
-		return err
-	}
-
-	for {
-		_, err = ri.Next(s.sqlCtx)
-		if err != nil {
-			return ri.Close(s.sqlCtx)
-		}
-	}
+	_, err = sql.RowIterToRows(s.sqlCtx, sch, iter)
+	return err
 }
 
 // createInsertImportNode creates the relevant/analyzed insert node given the import option. This insert node is wrapped

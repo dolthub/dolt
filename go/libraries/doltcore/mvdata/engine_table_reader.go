@@ -17,6 +17,8 @@ package mvdata
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -64,7 +66,17 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 	}
 	sqlCtx.SetCurrentDatabase(mrEnv.GetFirstDatabase())
 
-	sch, iter, err := se.Query(sqlCtx, fmt.Sprintf("SELECT * FROM `%s`", tableName))
+	ret, err := planbuilder.Parse(sqlCtx, se.GetUnderlyingEngine().Analyzer.Catalog, fmt.Sprintf("show create table `%s`", tableName))
+	if err != nil {
+		return nil, err
+	}
+
+	create, ok := ret.(*plan.ShowCreateTable)
+	if !ok {
+		return nil, fmt.Errorf("expected *plan.ShowCreate table, found %T", ret)
+	}
+
+	_, iter, err := se.Query(sqlCtx, fmt.Sprintf("SELECT * FROM `%s`", tableName))
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +86,7 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 		return nil, err
 	}
 
-	doltSchema, err := sqlutil.ToDoltSchema(ctx, root, tableName, sql.NewPrimaryKeySchema(sch), nil, sql.Collation_Default)
+	doltSchema, err := sqlutil.ToDoltSchema(ctx, root, tableName, create.PrimaryKeySchema, nil, sql.Collation_Default)
 	if err != nil {
 		return nil, err
 	}
