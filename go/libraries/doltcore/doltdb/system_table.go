@@ -257,7 +257,6 @@ const (
 	// SchemasTablesSqlModeCol is the name of the column that stores the SQL_MODE string used when this fragment
 	// was originally defined. Mode settings, such as ANSI_QUOTES, are needed to correctly parse the fragment.
 	SchemasTablesSqlModeCol = "sql_mode"
-	SchemasTablesIndexName  = "fragment_name"
 )
 
 const (

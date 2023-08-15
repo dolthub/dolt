@@ -270,6 +270,12 @@ func DoltProceduresGetAll(ctx *sql.Context, db Database, procedureName string) (
 		}
 		if s, ok := sqlRow[4].(string); ok {
 			d.SqlMode = s
+		} else {
+			defaultSqlMode, err := loadDefaultSqlMode()
+			if err != nil {
+				return nil, err
+			}
+			d.SqlMode = defaultSqlMode
 		}
 		details = append(details, d)
 	}

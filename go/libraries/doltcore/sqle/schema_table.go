@@ -279,6 +279,12 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 			if s, ok := sqlRow[sqlModeIdx].(string); ok {
 				sqlModeString = s
 			}
+		} else {
+			defaultSqlMode, err := loadDefaultSqlMode()
+			if err != nil {
+				return nil, err
+			}
+			sqlModeString = defaultSqlMode
 		}
 
 		// For older tables, use 1 as the trigger creation time
@@ -304,6 +310,20 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 	}
 
 	return frags, nil
+}
+
+// loadDefaultSqlMode loads the default value for the @@SQL_MODE system variable and returns it, along
+// with any unexpected errors encountered while reading the default value.
+func loadDefaultSqlMode() (string, error) {
+	global, _, ok := sql.SystemVariables.GetGlobal("SQL_MODE")
+	if !ok {
+		return "", fmt.Errorf("unable to load default @@SQL_MODE")
+	}
+	s, ok := global.Default.(string)
+	if !ok {
+		return "", fmt.Errorf("unexpected type for @@SQL_MODE default value: %T", global.Default)
+	}
+	return s, nil
 }
 
 func getCreatedTime(ctx *sql.Context, extraCol gmstypes.JSONValue) (int64, error) {
