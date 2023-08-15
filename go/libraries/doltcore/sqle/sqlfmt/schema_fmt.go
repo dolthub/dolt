@@ -25,13 +25,29 @@ import (
 
 // GenerateCreateTableColumnDefinition returns column definition for CREATE TABLE statement with no indentation
 func GenerateCreateTableColumnDefinition(col schema.Column) string {
-	colStr := sql.GenerateCreateTableColumnDefinition(col.Name, col.TypeInfo.ToSqlType(), col.IsNullable(), col.AutoIncrement, col.Default != "", col.Default, col.Comment)
+	colStr := GenerateCreateTableIndentedColumnDefinition(col)
 	return strings.TrimPrefix(colStr, "  ")
 }
 
 // GenerateCreateTableIndentedColumnDefinition returns column definition for CREATE TABLE statement with no indentation
 func GenerateCreateTableIndentedColumnDefinition(col schema.Column) string {
-	return sql.GenerateCreateTableColumnDefinition(col.Name, col.TypeInfo.ToSqlType(), col.IsNullable(), col.AutoIncrement, col.Default != "", col.Default, col.Comment)
+	var defaultVal *sql.ColumnDefaultValue
+	if col.Default != "" {
+		defaultVal = sql.NewUnresolvedColumnDefaultValue(col.Default)
+	}
+
+	return sql.GenerateCreateTableColumnDefinition(
+		&sql.Column{
+			Name:          col.Name,
+			Type:          col.TypeInfo.ToSqlType(),
+			Default:       defaultVal,
+			AutoIncrement: col.AutoIncrement,
+			Nullable:      col.IsNullable(),
+			Comment:       col.Comment,
+			// TODO
+			// Generated:      nil,
+			// Virtual:        false,
+		}, col.Default)
 }
 
 // GenerateCreateTableIndexDefinition returns index definition for CREATE TABLE statement with indentation of 2 spaces

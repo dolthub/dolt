@@ -60,7 +60,7 @@ teardown() {
     [[ ! "$output" =~ "t1" ]] || false
 
     run dolt show HEAD
-    [[ "$output" =~ "| 1" ]]
+    [[ "$output" =~ "| 1" ]] || false
 }
 
 @test "commit: -m sets commit message properly" {

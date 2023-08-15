@@ -315,17 +315,17 @@ func CreateGlobalArgParser(name string) *argparser.ArgParser {
 	if name == "dolt" {
 		ap.SupportsString("profile", "", "profile", "The name of the profile to use when executing SQL queries. Run `dolt profile --help` for more information.")
 	}
-	ap.SupportsString("user", "u", "user", "Defines the local superuser.")
-	ap.SupportsString("password", "p", "password", "Defines the password for the user.")
+	ap.SupportsString("user", "u", "user", "Defines the local superuser (defaults to `root`). If the specified user exists, will take on permissions of that user.")
+	ap.SupportsString("password", "p", "password", "Defines the password for the user. Defaults to empty string when the user is `root`.")
 	ap.SupportsString("host", "", "host", "Defines the host to connect to.")
 	ap.SupportsString("port", "", "port", "Defines the port to connect to.")
 	ap.SupportsFlag("no-tls", "", "Disables TLS for the connection to remote databases.")
-	ap.SupportsString("data-dir", "", "data-dir", "Defines a data directory whose subdirectories should all be dolt data repositories accessible as independent databases.")
-	ap.SupportsString("doltcfg-dir", "", "doltcfg-dir", "Defines a directory that contains configuration files for dolt.")
-	ap.SupportsString("privilege-file", "", "privilege-file", "DePath to a file to load and store users and grants.")
-	ap.SupportsString("branch-control-file", "", "branch-control-file", "Path to a file to load and store branch control permissions.")
-	ap.SupportsString("use-db", "", "use-db", "The name of the database to use when executing SQL queries.")
-	ap.SupportsString(BranchParam,"",BranchParam,"The name of the branch to be selected")
+	ap.SupportsString("data-dir", "", "data-dir", "Defines a data directory whose subdirectories should all be dolt data repositories accessible as independent databases. Defaults to the current directory.")
+	ap.SupportsString("doltcfg-dir", "", "doltcfg-dir", "Defines a directory that contains configuration files for dolt. Defaults to `$data-dir/.doltcfg`. Will only be created if there is a change to configuration settings.")
+	ap.SupportsString("privilege-file", "", "privilege-file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
+	ap.SupportsString("branch-control-file", "", "branch-control-file", "Path to a file to load and store branch control permissions. Defaults to `$doltcfg-dir/branch_control.db`. Will only be created if there is a change to branch control permissions.")
+	ap.SupportsString("use-db", "", "use-db", "The name of the database to use when executing SQL queries. Defaults the database of the root directory, if it exists, and the first alphabetically if not.")
+  ap.SupportsString(BranchParam,"",BranchParam,"The name of the branch to be selected")
 	return ap
 }
 

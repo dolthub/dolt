@@ -339,7 +339,7 @@ SQL
     dolt sql -q "alter table testdrop drop column col1"
     run dolt diff --stat
     [ $status -eq 0 ]
-    [[ $output =~ "1 Row Modified (100.00%)" ]]
+    [[ $output =~ "1 Row Modified (100.00%)" ]] || false
 }
 
 @test "diff-stat: stat/summary for renamed table" {

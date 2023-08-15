@@ -97,15 +97,23 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 
 	rows := make([]statusTableRow, 0, len(stagedTables)+len(unstagedTables))
 	for _, td := range stagedTables {
+		tblName := tableName(td)
+		if doltdb.IsFullTextTable(tblName) {
+			continue
+		}
 		rows = append(rows, statusTableRow{
-			tableName: tableName(td),
+			tableName: tblName,
 			isStaged:  true,
 			status:    statusString(td),
 		})
 	}
 	for _, td := range unstagedTables {
+		tblName := tableName(td)
+		if doltdb.IsFullTextTable(tblName) {
+			continue
+		}
 		rows = append(rows, statusTableRow{
-			tableName: tableName(td),
+			tableName: tblName,
 			isStaged:  false,
 			status:    statusString(td),
 		})
