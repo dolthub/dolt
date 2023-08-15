@@ -50,6 +50,15 @@ var schemaChangePartitionKey = []byte("schema")
 var dataChangePartitionKey = []byte("data")
 var schemaAndDataChangePartitionKey = []byte("all")
 
+const (
+	orderColumnName     = "statement_order"
+	fromColumnName      = "from_commit_hash"
+	toColumnName        = "to_commit_hash"
+	tableNameColumnName = "table_name"
+	diffTypeColumnName  = "diff_type"
+	statementColumnName = "statement"
+)
+
 type PatchTableFunction struct {
 	ctx *sql.Context
 
@@ -141,7 +150,7 @@ func (p *PatchTableFunction) PartitionRows(ctx *sql.Context, partition sql.Parti
 
 // LookupPartitions is a sql.IndexedTable interface function that takes an index lookup and returns the set of corresponding partitions.
 func (p *PatchTableFunction) LookupPartitions(context *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
-	if lookup.Index.ID() == "diff_type" {
+	if lookup.Index.ID() == diffTypeColumnName {
 		diffTypes, ok := index.LookupToPointSelectStr(lookup)
 		if !ok {
 			return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(lookup.Ranges))
@@ -182,17 +191,17 @@ func (p *PatchTableFunction) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTa
 
 func (p *PatchTableFunction) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return []sql.Index{
-		index.MockIndex("diff_type" /*p.String()*/, "dolt_patch", types.StringKind, false),
+		index.MockIndex(diffTypeColumnName, p.Name(), types.StringKind, false),
 	}, nil
 }
 
 var patchTableSchema = sql.Schema{
-	&sql.Column{Name: "statement_order", Type: sqltypes.Uint64, PrimaryKey: true, Nullable: false},
-	&sql.Column{Name: "from_commit_hash", Type: sqltypes.LongText, Nullable: false},
-	&sql.Column{Name: "to_commit_hash", Type: sqltypes.LongText, Nullable: false},
-	&sql.Column{Name: "table_name", Type: sqltypes.LongText, Nullable: false},
-	&sql.Column{Name: "diff_type", Type: sqltypes.LongText, Nullable: false},
-	&sql.Column{Name: "statement", Type: sqltypes.LongText, Nullable: false},
+	&sql.Column{Name: orderColumnName, Type: sqltypes.Uint64, PrimaryKey: true, Nullable: false},
+	&sql.Column{Name: fromColumnName, Type: sqltypes.LongText, Nullable: false},
+	&sql.Column{Name: toColumnName, Type: sqltypes.LongText, Nullable: false},
+	&sql.Column{Name: tableNameColumnName, Type: sqltypes.LongText, Nullable: false},
+	&sql.Column{Name: diffTypeColumnName, Type: sqltypes.LongText, Nullable: false},
+	&sql.Column{Name: statementColumnName, Type: sqltypes.LongText, Nullable: false},
 }
 
 // NewInstance creates a new instance of TableFunction interface
@@ -721,7 +730,7 @@ func getDiffQuerySqlSchemaAndProjections(diffTableSch sql.Schema, columns []stri
 		idx    int
 	}
 
-	columns = append(columns, "diff_type")
+	columns = append(columns, diffTypeColumnName)
 	colMap := make(map[string]*column)
 	for _, c := range columns {
 		colMap[c] = nil
