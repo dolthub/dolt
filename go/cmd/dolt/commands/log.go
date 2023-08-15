@@ -124,7 +124,10 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 	var first bool
 	first = true
 
+	// todo: clean up
+
 	branchName := ""
+	altBranchName := ""
 	tableName := ""
 	tagGiven := false
 	var tagHash string
@@ -166,7 +169,7 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 				if _, _, err := queryist.Query(sqlCtx, fmt.Sprintf("describe %s", arg)); err == nil {
 					tableName = arg
 				} else if row, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("select name from dolt_branches where name = '%s'", arg)); len(row) > 0 && err == nil {
-					branchName = arg
+					altBranchName = arg
 					writeToDoltLog = append(writeToDoltLog, arg)
 				} else if row, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("select tag_hash from dolt_tags where tag_name = '%s'", arg)); len(row) > 0 && err == nil {
 					tagGiven = true
@@ -178,6 +181,50 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 				}
 			}
 		}
+	}
+
+	// todo: 3 branch refs, 4 branch refs
+	/*if apr.NArg() == 3 {
+		b1 := fmt.Sprintf("'%s'", apr.Arg(0))
+		if notValue, hasNotFlag := apr.GetValue(cli.NotFlag); hasNotFlag {
+			b1 = b1 + ", '--not', '" + notValue + "'"
+		}
+		b2 := fmt.Sprintf("'%s'", apr.Arg(1))
+		if notValue, hasNotFlag := apr.GetValue(cli.NotFlag); hasNotFlag {
+			b2 = b2 + ", '--not', '" + notValue + "'"
+		}
+		b3 := fmt.Sprintf("'%s'", apr.Arg(2))
+		if notValue, hasNotFlag := apr.GetValue(cli.NotFlag); hasNotFlag {
+			b3 = b3 + ", '--not', '" + notValue + "'"
+		}
+
+		query := fmt.Sprintf(`
+			select b1.commit_hash from dolt_log(%s) as b1
+			cross join (select commit_hash from dolt_log(%s)) as b2
+			    on b1.commit_hash = b2.commit_hash
+			cross join (select commit_hash from dolt_log(%s)) as b3
+			on b2.commit_hash = b3.commit_hash`, b1, b2, b3)
+		return query, nil
+	}*/
+
+	if branchName != "" && altBranchName != "" {
+		leftBranch := fmt.Sprintf("'%s'", branchName)
+		if notValue, hasNotFlag := apr.GetValue(cli.NotFlag); hasNotFlag {
+			leftBranch = leftBranch + ", '--not', '" + notValue + "'"
+		}
+		rightBranch := fmt.Sprintf("'%s'", altBranchName)
+		if notValue, hasNotFlag := apr.GetValue(cli.NotFlag); hasNotFlag {
+			rightBranch = rightBranch + ", '--not', '" + notValue + "'"
+		}
+		query := fmt.Sprintf(`
+			select l.commit_hash from dolt_log(%s) as l 
+			left join (select * from dolt_log(%s)) as r 
+    		on l.commit_hash = r.commit_hash
+    		union
+    		select r.commit_hash from dolt_log(%s) as l
+    		right join (select * from dolt_log(%s)) as r
+    		on l.commit_hash = r.commit_hash`, leftBranch, rightBranch, leftBranch, rightBranch)
+		return query, nil
 	}
 
 	if tableName != "" {
