@@ -15,7 +15,12 @@
 package sqle
 
 import (
+	"bytes"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/store/types"
+	"golang.org/x/exp/slices"
 	"io"
 	"sort"
 	"strings"
@@ -31,7 +36,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -39,6 +43,12 @@ import (
 
 var _ sql.TableFunction = (*PatchTableFunction)(nil)
 var _ sql.ExecSourceRel = (*PatchTableFunction)(nil)
+var _ sql.IndexAddressable = (*PatchTableFunction)(nil)
+var _ sql.IndexedTable = (*PatchTableFunction)(nil)
+
+var schemaChangePartitionKey = []byte("schema")
+var dataChangePartitionKey = []byte("data")
+var schemaAndDataChangePartitionKey = []byte("all")
 
 type PatchTableFunction struct {
 	ctx *sql.Context
@@ -48,6 +58,132 @@ type PatchTableFunction struct {
 	dotCommitExpr  sql.Expression
 	tableNameExpr  sql.Expression
 	database       sql.Database
+}
+
+type Partition struct {
+	key []byte
+}
+
+func (p *Partition) Key() []byte { return p.key }
+
+// UnderlyingTable implements the plan.TableNode interface
+func (p *PatchTableFunction) UnderlyingTable() sql.Table {
+	return p
+}
+
+// Collation implements the sql.Table interface.
+func (p *PatchTableFunction) Collation() sql.CollationID {
+	return sql.Collation_Default
+}
+
+// Partitions is a sql.Table interface function that returns a partition of the data. This data has a single partition.
+func (p *PatchTableFunction) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
+	return dtables.NewSliceOfPartitionsItr([]sql.Partition{
+		&Partition{key: schemaAndDataChangePartitionKey},
+	}), nil
+}
+
+// PartitionRows is a sql.Table interface function that takes a partition and returns all rows in that partition.
+// This table has a partition for just schema changes, one for just data changes, and one for both.
+func (p *PatchTableFunction) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+	fromCommitVal, toCommitVal, dotCommitVal, tableName, err := p.evaluateArguments()
+	if err != nil {
+		return nil, err
+	}
+
+	sqledb, ok := p.database.(dsess.SqlDatabase)
+	if !ok {
+		return nil, fmt.Errorf("unable to get dolt database")
+	}
+
+	fromRefDetails, toRefDetails, err := loadDetailsForRefs(ctx, fromCommitVal, toCommitVal, dotCommitVal, sqledb)
+	if err != nil {
+		return nil, err
+	}
+
+	tableDeltas, err := diff.GetTableDeltas(ctx, fromRefDetails.root, toRefDetails.root)
+	if err != nil {
+		return nil, err
+	}
+
+	sort.Slice(tableDeltas, func(i, j int) bool {
+		return strings.Compare(tableDeltas[i].ToName, tableDeltas[j].ToName) < 0
+	})
+
+	// If tableNameExpr defined, return a single table patch result
+	if p.tableNameExpr != nil {
+		fromTblExists, err := fromRefDetails.root.HasTable(ctx, tableName)
+		if err != nil {
+			return nil, err
+		}
+		toTblExists, err := toRefDetails.root.HasTable(ctx, tableName)
+		if err != nil {
+			return nil, err
+		}
+		if !fromTblExists && !toTblExists {
+			return nil, sql.ErrTableNotFound.New(tableName)
+		}
+
+		delta := findMatchingDelta(tableDeltas, tableName)
+		tableDeltas = []diff.TableDelta{delta}
+	}
+
+	includeSchemaDiff := bytes.Equal(partition.Key(), schemaAndDataChangePartitionKey) || bytes.Equal(partition.Key(), schemaChangePartitionKey)
+	includeDataDiff := bytes.Equal(partition.Key(), schemaAndDataChangePartitionKey) || bytes.Equal(partition.Key(), dataChangePartitionKey)
+
+	patches, err := getPatchNodes(ctx, sqledb.DbData(), tableDeltas, fromRefDetails, toRefDetails, includeSchemaDiff, includeDataDiff)
+	if err != nil {
+		return nil, err
+	}
+
+	return newPatchTableFunctionRowIter(patches, fromRefDetails.hashStr, toRefDetails.hashStr), nil
+}
+
+// LookupPartitions is a sql.IndexedTable interface function that takes an index lookup and returns the set of corresponding partitions.
+func (p *PatchTableFunction) LookupPartitions(context *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	if lookup.Index.ID() == "diff_type" {
+		diffTypes, ok := index.LookupToPointSelectStr(lookup)
+		if !ok {
+			return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(lookup.Ranges))
+		}
+
+		includeSchemaDiff := slices.Contains(diffTypes, "schema")
+		includeDataDiff := slices.Contains(diffTypes, "data")
+
+		if includeSchemaDiff && includeDataDiff {
+			return dtables.NewSliceOfPartitionsItr([]sql.Partition{
+				&Partition{key: schemaAndDataChangePartitionKey},
+			}), nil
+		}
+
+		if includeSchemaDiff {
+			return dtables.NewSliceOfPartitionsItr([]sql.Partition{
+				&Partition{key: schemaChangePartitionKey},
+			}), nil
+		}
+
+		if includeDataDiff {
+			return dtables.NewSliceOfPartitionsItr([]sql.Partition{
+				&Partition{key: dataChangePartitionKey},
+			}), nil
+		}
+
+		return dtables.NewSliceOfPartitionsItr([]sql.Partition{}), nil
+	}
+
+	return dtables.NewSliceOfPartitionsItr([]sql.Partition{
+		&Partition{key: schemaAndDataChangePartitionKey},
+	}), nil
+}
+
+func (p *PatchTableFunction) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+	return p
+}
+
+func (p *PatchTableFunction) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	return []sql.Index{
+		index.MockIndex("diff_type" /*p.String()*/, "dolt_patch", types.StringKind, false),
+	}, nil
 }
 
 var patchTableSchema = sql.Schema{
@@ -244,56 +380,14 @@ func (p *PatchTableFunction) Name() string {
 	return "dolt_patch"
 }
 
-// RowIter implements the sql.Node interface
+// RowIter implements the sql.ExecSourceRel interface
 func (p *PatchTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
-	fromCommitVal, toCommitVal, dotCommitVal, tableName, err := p.evaluateArguments()
+	partitions, err := p.Partitions(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	sqledb, ok := p.database.(dsess.SqlDatabase)
-	if !ok {
-		return nil, fmt.Errorf("unable to get dolt database")
-	}
-
-	fromRefDetails, toRefDetails, err := loadDetailsForRefs(ctx, fromCommitVal, toCommitVal, dotCommitVal, sqledb)
-	if err != nil {
-		return nil, err
-	}
-
-	tableDeltas, err := diff.GetTableDeltas(ctx, fromRefDetails.root, toRefDetails.root)
-	if err != nil {
-		return nil, err
-	}
-
-	sort.Slice(tableDeltas, func(i, j int) bool {
-		return strings.Compare(tableDeltas[i].ToName, tableDeltas[j].ToName) < 0
-	})
-
-	// If tableNameExpr defined, return a single table patch result
-	if p.tableNameExpr != nil {
-		fromTblExists, err := fromRefDetails.root.HasTable(ctx, tableName)
-		if err != nil {
-			return nil, err
-		}
-		toTblExists, err := toRefDetails.root.HasTable(ctx, tableName)
-		if err != nil {
-			return nil, err
-		}
-		if !fromTblExists && !toTblExists {
-			return nil, sql.ErrTableNotFound.New(tableName)
-		}
-
-		delta := findMatchingDelta(tableDeltas, tableName)
-		tableDeltas = []diff.TableDelta{delta}
-	}
-
-	patches, err := getPatchNodes(ctx, sqledb.DbData(), tableDeltas, fromRefDetails, toRefDetails)
-	if err != nil {
-		return nil, err
-	}
-
-	return newPatchTableFunctionRowIter(patches, fromRefDetails.hashStr, toRefDetails.hashStr), nil
+	return sql.NewTableRowIter(ctx, p, partitions), nil
 }
 
 // evaluateArguments returns fromCommitVal, toCommitVal, dotCommitVal, and tableName.
@@ -341,8 +435,7 @@ type patchNode struct {
 	dataPatchStmts   []string
 }
 
-func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.TableDelta, fromRefDetails, toRefDetails *refDetails) ([]*patchNode, error) {
-	var patches []*patchNode
+func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.TableDelta, fromRefDetails, toRefDetails *refDetails, includeSchemaDiff, includeDataDiff bool) (patches []*patchNode, err error) {
 	for _, td := range tableDeltas {
 		// no diff
 		if td.FromTable == nil && td.ToTable == nil {
@@ -355,14 +448,18 @@ func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.Table
 		}
 
 		// Get SCHEMA DIFF
-		schemaStmts, err := getSchemaSqlPatch(ctx, toRefDetails.root, td)
-		if err != nil {
-			return nil, err
+		var schemaStmts []string
+		if includeSchemaDiff {
+
+			schemaStmts, err = getSchemaSqlPatch(ctx, toRefDetails.root, td)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		// Get DATA DIFF
 		var dataStmts []string
-		if canGetDataDiff(ctx, td) {
+		if includeDataDiff && canGetDataDiff(ctx, td) {
 			dataStmts, err = getUserTableDataSqlPatch(ctx, dbData, td, fromRefDetails, toRefDetails)
 			if err != nil {
 				return nil, err
