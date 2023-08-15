@@ -2,7 +2,10 @@
 load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
-    setup_common
+    setup_no_dolt_init
+    mkdir mydb
+    cd mydb
+    dolt init
 }
 
 teardown() {
@@ -270,13 +273,13 @@ teardown() {
     # Should default to first argument as branch name, second argument as table name (if table exists) if two arguments provided
     run dolt log myname myname 
     [ $status -eq 0 ]
-    echo $output
     [[ ! "$output" =~ "MAIN" ]] || false
     [[ "$output" =~ "BRANCH1" ]] || false
 
     # Table main does not exist
     run dolt log main main
     [ $status -eq 1 ]
+    [[ "$output" =~ "error: table main does not exist" ]] || false
 }
 
 @test "log: with -n specified" {
@@ -482,7 +485,6 @@ teardown() {
     dolt checkout main
 
     run dolt log test-branch test
-    echo $output
     [ $status -eq 0 ]
     [[ "$output" =~ "Commit2" ]] || false
     [[ "$output" =~ "Commit1" ]] || false
@@ -498,7 +500,6 @@ teardown() {
     dolt commit -m "Commit 2"
 
     run dolt log test
-    echo $output
     [ $status -eq 1 ]
     [[ "$output" =~ "error: table test does not exist" ]] || false
 

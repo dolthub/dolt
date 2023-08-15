@@ -124,21 +124,63 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 	var first bool
 	first = true
 
-	tableGiven := false
+	branchName := ""
+	tableName := ""
 	tagGiven := false
 	var tagHash string
+	var writeToDoltLog []string
+
+	if apr.NArg() > 2 {
+		return "", fmt.Errorf("error: too many arguments: %d", apr.NArg())
+	}
 	if apr.NArg() == 1 {
-		if _, _, err := queryist.Query(sqlCtx, fmt.Sprintf("describe %s", apr.Arg(0))); err == nil {
-			tableGiven = true
-		} else if row, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("select tag_hash from dolt_tags where tag_name = '%s'", apr.Arg(0))); err == nil {
-			if len(row) > 0 {
-				tagGiven = true
-				tagHash = row[0][0].(string)
+		if row, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("select name from dolt_branches where name = '%s'", apr.Arg(0))); len(row) > 0 && err == nil {
+			branchName = apr.Arg(0)
+			writeToDoltLog = append(writeToDoltLog, apr.Arg(0))
+		} else if _, _, err = queryist.Query(sqlCtx, fmt.Sprintf("describe %s", apr.Arg(0))); err == nil {
+			tableName = apr.Arg(0)
+		} else if row, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("select tag_hash from dolt_tags where tag_name = '%s'", apr.Arg(0))); len(row) > 0 && err == nil {
+			tagGiven = true
+			tagHash = row[0][0].(string)
+		} else if strings.Contains(apr.Arg(0), "..") || strings.Contains(apr.Arg(0), "^") {
+			writeToDoltLog = append(writeToDoltLog, apr.Arg(0))
+		} else {
+			return "", fmt.Errorf("error: table %s does not exist", apr.Arg(0))
+		}
+	}
+	if apr.NArg() == 2 {
+		for i, arg := range apr.Args {
+			if i == 0 {
+				if row, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("select name from dolt_branches where name = '%s'", arg)); len(row) > 0 && err == nil {
+					branchName = arg
+					writeToDoltLog = append(writeToDoltLog, arg)
+				} else if row, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("select tag_hash from dolt_tags where tag_name = '%s'", arg)); len(row) > 0 && err == nil {
+					tagGiven = true
+					tagHash = row[0][0].(string)
+				} else if strings.Contains(arg, "..") || strings.Contains(arg, "^") {
+					writeToDoltLog = append(writeToDoltLog, arg)
+				} else {
+					return "", fmt.Errorf("error: table %s does not exist", arg)
+				}
+			} else {
+				if _, _, err := queryist.Query(sqlCtx, fmt.Sprintf("describe %s", arg)); err == nil {
+					tableName = arg
+				} else if row, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("select name from dolt_branches where name = '%s'", arg)); len(row) > 0 && err == nil {
+					branchName = arg
+					writeToDoltLog = append(writeToDoltLog, arg)
+				} else if row, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("select tag_hash from dolt_tags where tag_name = '%s'", arg)); len(row) > 0 && err == nil {
+					tagGiven = true
+					tagHash = row[0][0].(string)
+				} else if strings.Contains(arg, "..") || strings.Contains(arg, "^") {
+					writeToDoltLog = append(writeToDoltLog, arg)
+				} else {
+					return "", fmt.Errorf("error: table %s does not exist", arg)
+				}
 			}
 		}
 	}
 
-	if tableGiven {
+	if tableName != "" {
 		buffer.WriteString("select dl.commit_hash from dolt_log(")
 	} else {
 		buffer.WriteString("select commit_hash from dolt_log(")
@@ -158,10 +200,10 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 		first = false
 	}
 
-	/*for _, args := range apr.Args {
+	for _, args := range writeToDoltLog {
 		writeToBuffer("?", true)
 		params = append(params, args)
-	}*/
+	}
 
 	if minParents, hasMinParents := apr.GetValue(cli.MinParentsFlag); hasMinParents {
 		writeToBuffer("?", true)
@@ -185,9 +227,18 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 		params = append(params, "--decorate="+decoration)
 	}
 
-	if tableGiven {
-		buffer.WriteString(") as dl join (select * from dolt_diff where table_name = ?) as dd on dl.commit_hash = dd.commit_hash")
-		params = append(params, apr.Arg(0))
+	if tableName != "" {
+		if branchName != "" {
+			rows, err := GetRowsForSql(queryist, sqlCtx, "select database()")
+			if err != nil {
+				return "", fmt.Errorf("could not retrieve database name")
+			}
+			dbName := rows[0][0].(string)
+			buffer.WriteString(fmt.Sprintf(") as dl join (select * from `%s/%s`.dolt_diff where table_name = ?) as dd on dl.commit_hash = dd.commit_hash", dbName, branchName))
+		} else {
+			buffer.WriteString(") as dl join (select * from dolt_diff where table_name = ?) as dd on dl.commit_hash = dd.commit_hash")
+		}
+		params = append(params, tableName)
 	} else if tagGiven {
 		buffer.WriteString(fmt.Sprintf(") where commit_hash = '%s'", tagHash))
 	} else {
@@ -275,6 +326,11 @@ func logToStdOut(apr *argparser.ArgParseResults, commits []CommitInfo) {
 
 func handleErrAndExit(err error) int {
 	if err != nil {
+		if strings.Contains(err.Error(), "both revisions cannot contain '^'") {
+			// just returns nothing
+			return 0
+		}
+
 		cli.PrintErrln(strings.ReplaceAll(err.Error(), "Invalid argument to dolt_log: ", ""))
 		return 1
 	}
