@@ -307,7 +307,7 @@ func (s *SqlEngineTableWriter) getInsertNode(inputChannel chan sql.Row, replace 
 		colNames += fmt.Sprintf("%s`%s`", sep, col.Name)
 		values += fmt.Sprintf("%s1", sep)
 		if update {
-			duplicate += fmt.Sprintf("%s%s = VALUES(`%s`)", sep, col.Name, col.Name)
+			duplicate += fmt.Sprintf("%s`%s` = VALUES(`%s`)", sep, col.Name, col.Name)
 		}
 		sep = ", "
 	}
