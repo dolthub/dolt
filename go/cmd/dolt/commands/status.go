@@ -210,6 +210,7 @@ func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, show
 				}
 				shouldIgnoreTable = ignored == doltdb.Ignore
 			}
+			shouldIgnoreTable = shouldIgnoreTable || doltdb.IsFullTextTable(tableName)
 
 			switch status {
 			case "renamed":
