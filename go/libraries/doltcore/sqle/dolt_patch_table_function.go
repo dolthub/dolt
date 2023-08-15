@@ -20,6 +20,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"golang.org/x/exp/slices"
 	"io"
 	"sort"
@@ -45,6 +46,7 @@ var _ sql.TableFunction = (*PatchTableFunction)(nil)
 var _ sql.ExecSourceRel = (*PatchTableFunction)(nil)
 var _ sql.IndexAddressable = (*PatchTableFunction)(nil)
 var _ sql.IndexedTable = (*PatchTableFunction)(nil)
+var _ plan.TableNode = (*PatchTableFunction)(nil)
 
 var schemaChangePartitionKey = []byte("schema")
 var dataChangePartitionKey = []byte("data")
@@ -67,6 +69,10 @@ type PatchTableFunction struct {
 	dotCommitExpr  sql.Expression
 	tableNameExpr  sql.Expression
 	database       sql.Database
+}
+
+func (p *PatchTableFunction) CollationCoercibility(ctx *sql.Context) (collation sql.CollationID, coercibility byte) {
+	return sql.Collation_binary, 7
 }
 
 type Partition struct {
