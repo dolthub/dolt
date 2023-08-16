@@ -51,7 +51,7 @@ func ParseCreateTableStatement(ctx context.Context, root *doltdb.RootValue, quer
 			}
 		}
 	}
-	
+
 	buf := sqlparser.NewTrackedBuffer(nil)
 	ddl.Table.Format(buf)
 	tableName := buf.String()

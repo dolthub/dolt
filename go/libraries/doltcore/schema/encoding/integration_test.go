@@ -19,7 +19,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
@@ -28,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/types"
@@ -67,7 +67,7 @@ func testSchemaSerializationFlatbuffers(t *testing.T, sch schema.Schema) {
 	require.NoError(t, err)
 	s, err := encoding.DeserializeSchema(ctx, nbf, v)
 	require.NoError(t, err)
-	
+
 	// The parsed schema includes collations for columns that didn't specify them, but we don't store those. So clear
 	// them out before doing the comparison
 	// TODO: we should probably not mess with column collations during parsing at all
@@ -124,7 +124,7 @@ func testSchemaSerializationFlatbuffers(t *testing.T, sch schema.Schema) {
 
 	correctedSchema, err = schema.NewSchema(newColColl, sch.GetPkOrdinals(), sch.GetCollation(), newIdxes, sch.Checks())
 	require.NoError(t, err)
-	
+
 	assert.Equal(t, correctedSchema, s)
 }
 
@@ -165,7 +165,7 @@ var integrationTests = []struct {
 			"CHECK (c1 > 3)," +
 			"PRIMARY KEY (pk));",
 	},
-	
+
 	// SHAQ
 	{
 		schema: "CREATE TABLE `league_seasons` (" +
@@ -251,7 +251,7 @@ var integrationTests = []struct {
 			"PRIMARY KEY (`team_id`,`league_id`)" +
 			") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 	},
-	
+
 	// Sakila
 	{
 		schema: "CREATE TABLE `actor` (" +
@@ -553,13 +553,13 @@ var integrationTests = []struct {
 	},
 	{
 		schema: "CREATE TABLE `collations` (" +
-				"`pk` int NOT NULL," +
-				"`v5` char(1) collate utf8mb3_esperanto_ci DEFAULT \"i\"," +
-				"`v17` longtext collate utf8mb3_esperanto_ci DEFAULT (\"abc\")," +
-				"`v20` mediumtext collate utf8mb3_esperanto_ci DEFAULT (\"abc\")," +
-				"`v25` text collate utf8mb3_esperanto_ci DEFAULT (\"abc\")," +
-				"`v31` varchar(255) collate utf8mb3_esperanto_ci DEFAULT \"varchar value\"," +
-				"PRIMARY KEY (`pk`)" +
-				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+			"`pk` int NOT NULL," +
+			"`v5` char(1) collate utf8mb3_esperanto_ci DEFAULT \"i\"," +
+			"`v17` longtext collate utf8mb3_esperanto_ci DEFAULT (\"abc\")," +
+			"`v20` mediumtext collate utf8mb3_esperanto_ci DEFAULT (\"abc\")," +
+			"`v25` text collate utf8mb3_esperanto_ci DEFAULT (\"abc\")," +
+			"`v31` varchar(255) collate utf8mb3_esperanto_ci DEFAULT \"varchar value\"," +
+			"PRIMARY KEY (`pk`)" +
+			") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 	},
 }

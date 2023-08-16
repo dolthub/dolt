@@ -30,11 +30,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	flag "github.com/juju/gnuflag"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
 	"github.com/dolthub/dolt/go/store/config"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -238,7 +238,7 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) err
 			if err != nil {
 				return err
 			}
-			
+
 			fmt.Fprintf(w, " {\n")
 			sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 				fmt.Fprintf(w, "\t%s: %s (additional info not shown)\n", col.Name, col.TypeInfo.ToSqlType().String())

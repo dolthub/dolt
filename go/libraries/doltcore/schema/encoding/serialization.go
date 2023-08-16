@@ -536,8 +536,8 @@ func sqlTypeString(t typeinfo.TypeInfo) string {
 			return fmt.Sprintf("%s SRID %d", typ.String(), srid)
 		}
 	}
-	
-	// For datetime types, always store the precision explicitly so that it can be read back precisely, although MySQL 
+
+	// For datetime types, always store the precision explicitly so that it can be read back precisely, although MySQL
 	// omits the precision when it's 0 (the default).
 	if sqltypes.IsDatetimeType(typ) || sqltypes.IsTimestampType(typ) {
 		dt := typ.(sql.DatetimeType)
@@ -546,7 +546,7 @@ func sqlTypeString(t typeinfo.TypeInfo) string {
 		}
 		return typ.String()
 	}
-	
+
 	return typ.String()
 }
 
