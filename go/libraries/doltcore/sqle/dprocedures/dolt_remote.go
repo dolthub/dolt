@@ -21,9 +21,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -99,16 +97,12 @@ func addRemote(_ *sql.Context, dbName string, dbd env.DbData, apr *argparser.Arg
 		return err
 	}
 
-	scheme, absRemoteUrl, err := env.GetAbsRemoteUrl(dbFs, &config.MapConfig{}, remoteUrl)
+	_, absRemoteUrl, err := env.GetAbsRemoteUrl(dbFs, &config.MapConfig{}, remoteUrl)
 	if err != nil {
 		return err
 	}
 
-	params, err := remoteParams(apr, scheme, absRemoteUrl)
-	if err != nil {
-		return err
-	}
-	r := env.NewRemote(remoteName, absRemoteUrl, params)
+	r := env.NewRemote(remoteName, absRemoteUrl, map[string]string{})
 	return dbd.Rsw.AddRemote(r)
 }
 
@@ -148,24 +142,4 @@ func removeRemote(ctx *sql.Context, dbd env.DbData, apr *argparser.ArgParseResul
 	}
 
 	return dbd.Rsw.RemoveRemote(ctx, remote.Name)
-}
-
-func remoteParams(apr *argparser.ArgParseResults, scheme, remoteUrl string) (map[string]string, errhand.VerboseError) {
-	params := map[string]string{}
-
-	var err error
-	switch scheme {
-	case dbfactory.AWSScheme:
-		err = cli.AddAWSParams(remoteUrl, apr, params)
-	case dbfactory.OSSScheme:
-		err = cli.AddOSSParams(remoteUrl, apr, params)
-	default:
-		err = cli.VerifyNoAwsParams(apr)
-	}
-
-	if err != nil {
-		return nil, errhand.VerboseErrorFromError(err)
-	}
-
-	return params, nil
 }
