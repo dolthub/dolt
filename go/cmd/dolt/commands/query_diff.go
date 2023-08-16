@@ -98,6 +98,7 @@ func (q QueryDiff) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("please provide exactly two queries")), usage)
 	}
 
+	// TODO: prevent create, insert, update, delete, etc. queries
 	query1 := apr.Arg(0)
 	query2 := apr.Arg(1)
 
