@@ -42,16 +42,7 @@ func ParseCreateTableStatement(ctx context.Context, root *doltdb.RootValue, quer
 	if err != nil {
 		return "", nil, err
 	}
-
-	for _, col := range s.Schema {
-		if collatedType, ok := col.Type.(sql.TypeWithCollation); ok {
-			col.Type, err = collatedType.WithNewCollation(sql.Collation_Default)
-			if err != nil {
-				return "", nil, err
-			}
-		}
-	}
-
+	
 	buf := sqlparser.NewTrackedBuffer(nil)
 	ddl.Table.Format(buf)
 	tableName := buf.String()
