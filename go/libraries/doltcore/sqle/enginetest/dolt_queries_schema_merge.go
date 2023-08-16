@@ -544,9 +544,9 @@ var SchemaChangeTestsCollations = []MergeScriptTest{
 		},
 	},
 	{
-		// TODO: Changing a column's collation requires rewriting the table and any indexes containing that column.
+		// TODO: Changing a column's collation may require rewriting the table and any indexes on that column.
 		//       For now, we just detect the schema incompatibility and return schema conflict metadata, but we could
-		//       go further here and attempt to automatically convert the data to the new collation.
+		//       go further here and automatically convert the data to the new collation.
 		Name: "changing the collation of a column",
 		AncSetUpScript: []string{
 			"set @@autocommit=0;",
@@ -1217,7 +1217,14 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 				Query:    "call dolt_merge('right');",
 				Expected: []sql.Row{{"", 0, 1}},
 			},
-			// TODO: assert on schema conflict data
+			{
+				Query:    "select * from dolt_conflicts;",
+				Expected: []sql.Row{{"t", uint64(0)}},
+			},
+			{
+				Query:    "select count(*) from dolt_schema_conflicts where description like 'incompatible column types for column ''col1''%';",
+				Expected: []sql.Row{{1}},
+			},
 		},
 	},
 	{
@@ -1239,7 +1246,14 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 				Query:    "call dolt_merge('right');",
 				Expected: []sql.Row{{"", 0, 1}},
 			},
-			// TODO: assert on schema conflict data
+			{
+				Query:    "select * from dolt_conflicts;",
+				Expected: []sql.Row{{"t", uint64(0)}},
+			},
+			{
+				Query:    "select count(*) from dolt_schema_conflicts where description like 'incompatible column types for column ''col1''%';",
+				Expected: []sql.Row{{1}},
+			},
 		},
 	},
 	{
@@ -1290,7 +1304,10 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 				Query:    "call dolt_merge('right');",
 				Expected: []sql.Row{{"", 0, 1}},
 			},
-			// TODO: Assert conflict metadata
+			{
+				Query:    "select count(*) from dolt_schema_conflicts where description like 'incompatible column types for column ''col1''%';",
+				Expected: []sql.Row{{1}},
+			},
 		},
 	},
 }
