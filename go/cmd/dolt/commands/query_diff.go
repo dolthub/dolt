@@ -17,25 +17,28 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/go-mysql-server/sql"
-	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
-	"io"
 )
 
 var queryDiffDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Show chances between two queries",
-	LongDesc: "Show chances between two queries",
+	LongDesc:  "Show chances between two queries",
 	Synopsis: []string{
 		`[options] [{{.LessThan}}query1{{.GreaterThan}}] [{{.LessThan}}query2{{.GreaterThan}}...]`,
 	},
 }
 
 type QueryDiff struct{}
+
 var _ cli.Command = QueryDiff{}
 
 func (q QueryDiff) Name() string {
@@ -84,7 +87,8 @@ func (q QueryDiff) Exec(ctx context.Context, commandStr string, args []string, d
 	ap := q.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, queryDiffDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
-	if apr == nil {}
+	if apr == nil {
+	}
 
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
@@ -187,7 +191,7 @@ func (q QueryDiff) Exec(ctx context.Context, commandStr string, args []string, d
 				}
 			}
 			rowIter1.Close(sqlCtx)
-		} else if err2 == io.EOF  {
+		} else if err2 == io.EOF {
 			if err = wr.WriteRow(ctx, row1, diff.Removed, removedChange); err != nil {
 				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 			}
@@ -260,7 +264,6 @@ func (q QueryDiff) Exec(ctx context.Context, commandStr string, args []string, d
 
 	return 0
 }
-
 
 func (q QueryDiff) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
 	if apr.NArg() != 2 {
