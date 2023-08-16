@@ -901,7 +901,7 @@ func schemaFromCreateTableStmt(createTableStmt string) (schema.Schema, error) {
 			comment = col.Type.Comment.String()
 		}
 		sCol, err := schema.NewColumnWithTypeInfo(
-			col.Name.Lowered(),
+			col.Name.String(),
 			0,
 			typeInfo,
 			primaryCols[col.Name.Lowered()],
