@@ -44,6 +44,10 @@ var (
 	TimestampType = &datetimeType{gmstypes.Timestamp}
 )
 
+func CreateDatetimeTypeFromSqlType(typ sql.DatetimeType) *datetimeType {
+	return &datetimeType{typ}
+}
+
 func CreateDatetimeTypeFromParams(params map[string]string) (TypeInfo, error) {
 	if sqlType, ok := params[datetimeTypeParam_SQL]; ok {
 		switch sqlType {

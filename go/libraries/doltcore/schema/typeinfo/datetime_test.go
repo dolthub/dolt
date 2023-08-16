@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/types"
+	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 )
 
 func TestDatetimeConvertNomsValueToValue(t *testing.T) {
@@ -86,37 +87,37 @@ func TestDatetimeConvertValueToNomsValue(t *testing.T) {
 			false,
 		},
 		{
-			TimestampType,
+			CreateDatetimeTypeFromSqlType(sqltypes.TimestampMaxPrecision),
 			time.Date(2030, 1, 2, 4, 6, 3, 472382485, time.UTC),
-			types.Timestamp(time.Date(2030, 1, 2, 4, 6, 3, 472382485, time.UTC)),
+			types.Timestamp(time.Date(2030, 1, 2, 4, 6, 3, 472382000, time.UTC)),
 			false,
 		},
 		{
-			DatetimeType,
+			CreateDatetimeTypeFromSqlType(sqltypes.DatetimeMaxPrecision),
 			time.Date(5800, 1, 2, 4, 6, 3, 472382485, time.UTC),
-			types.Timestamp(time.Date(5800, 1, 2, 4, 6, 3, 472382485, time.UTC)),
+			types.Timestamp(time.Date(5800, 1, 2, 4, 6, 3, 472382000, time.UTC)),
 			false,
 		},
 		{
-			DatetimeType,
+			CreateDatetimeTypeFromSqlType(sqltypes.DatetimeMaxPrecision),
 			time.Date(9999, 12, 31, 23, 59, 59, 999999000, time.UTC),
 			types.Timestamp(time.Date(9999, 12, 31, 23, 59, 59, 999999000, time.UTC)),
 			false,
 		},
 		{
-			DatetimeType,
+			CreateDatetimeTypeFromSqlType(sqltypes.DatetimeMaxPrecision),
 			time.Date(5, 1, 2, 4, 6, 3, 472382485, time.UTC),
-			types.Timestamp(time.Date(5, 1, 2, 4, 6, 3, 472382485, time.UTC)),
+			types.Timestamp(time.Date(5, 1, 2, 4, 6, 3, 472382000, time.UTC)),
 			false,
 		},
 		{
-			TimestampType,
+			CreateDatetimeTypeFromSqlType(sqltypes.TimestampMaxPrecision),
 			time.Date(2039, 1, 2, 4, 6, 3, 472382485, time.UTC),
 			types.Timestamp{},
 			true,
 		},
 		{
-			DatetimeType,
+			CreateDatetimeTypeFromSqlType(sqltypes.DatetimeMaxPrecision),
 			time.Date(-2022, 1, 2, 4, 6, 3, 472382485, time.UTC),
 			types.Timestamp{},
 			true,
@@ -203,31 +204,31 @@ func TestDatetimeConversion(t *testing.T) {
 			false,
 		},
 		{
-			TimestampType,
+			CreateDatetimeTypeFromSqlType(sqltypes.TimestampMaxPrecision),
 			"2030-01-02 04:06:03.472382",
 			types.Timestamp(time.Date(2030, 1, 2, 4, 6, 3, 472382000, time.UTC)),
 			false,
 		},
 		{
-			DatetimeType,
+			CreateDatetimeTypeFromSqlType(sqltypes.DatetimeMaxPrecision),
 			"5800-01-02 04:06:03.472382",
 			types.Timestamp(time.Date(5800, 1, 2, 4, 6, 3, 472382000, time.UTC)),
 			false,
 		},
 		{
-			DatetimeType,
+			CreateDatetimeTypeFromSqlType(sqltypes.DatetimeMaxPrecision),
 			"9999-12-31 23:59:59.999999",
 			types.Timestamp(time.Date(9999, 12, 31, 23, 59, 59, 999999000, time.UTC)),
 			false,
 		},
 		{
-			DatetimeType,
+			CreateDatetimeTypeFromSqlType(sqltypes.DatetimeMaxPrecision),
 			"0005-01-02 04:06:03.472382",
 			types.Timestamp(time.Date(5, 1, 2, 4, 6, 3, 472382000, time.UTC)),
 			false,
 		},
 		{
-			TimestampType,
+			CreateDatetimeTypeFromSqlType(sqltypes.TimestampMaxPrecision),
 			"2039-01-02 04:06:03.472382",
 			types.Timestamp{},
 			true,

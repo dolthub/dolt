@@ -135,7 +135,8 @@ type TypeInfo interface {
 
 // FromSqlType takes in a sql.Type and returns the most relevant TypeInfo.
 func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
-	switch sqlType.Type() {
+	queryType := sqlType.Type()
+	switch queryType {
 	case sqltypes.Null:
 		return UnknownType, nil
 	case sqltypes.Int8:
@@ -162,14 +163,12 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		return Float32Type, nil
 	case sqltypes.Float64:
 		return Float64Type, nil
-	case sqltypes.Timestamp:
-		return TimestampType, nil
+	case sqltypes.Timestamp, sqltypes.Datetime:
+		return CreateDatetimeTypeFromSqlType(sqlType.(sql.DatetimeType)), nil
 	case sqltypes.Date:
 		return DateType, nil
 	case sqltypes.Time:
 		return TimeType, nil
-	case sqltypes.Datetime:
-		return DatetimeType, nil
 	case sqltypes.Year:
 		return YearType, nil
 	case sqltypes.Geometry:
