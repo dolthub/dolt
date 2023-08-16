@@ -15,13 +15,14 @@
 package merge
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	storetypes "github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/go-mysql-server/sql"
-	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 )
 
 type typeChangeCompatibilityTest struct {
