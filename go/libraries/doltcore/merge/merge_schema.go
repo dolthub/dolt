@@ -217,7 +217,7 @@ func SchemaMerge(ctx context.Context, format *storetypes.NomsBinFormat, ourSch, 
 	for _, chk := range mergedChks {
 		// CONFLICT: a CHECK now references a column that no longer exists in schema
 		if ok, err := isCheckReferenced(sch, chk); err != nil {
-			return nil, sc, requiresTableRewrite, err
+			return nil, sc, false, err
 		} else if !ok {
 			// Append to conflicts
 			sc.ChkConflicts = append(sc.ChkConflicts, ChkConflict{
