@@ -4518,6 +4518,34 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 	},
 	{
+		// Repro for issue in: https://github.com/dolthub/dolt/pull/6496
+		Name: "drop a column, schema contains BLOB/AddrEnc columns",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 int, col2 text, col3 varchar(10));",
+			"INSERT into t values (1, 10, 'a', 'b'), (2, 20, 'c', 'd');",
+		},
+		RightSetUpScript: []string{
+			"INSERT into t values (300, 30, 'e', 'f');",
+		},
+		LeftSetUpScript: []string{
+			"alter table t drop column col1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select * from t;",
+				Expected: []sql.Row{
+					{1, "a", "b"},
+					{2, "c", "d"},
+					{300, "e", "f"}},
+			},
+		},
+	},
+	{
 		Name: "convergent schema changes",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
