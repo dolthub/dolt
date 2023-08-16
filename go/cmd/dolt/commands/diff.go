@@ -758,6 +758,9 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 
 	doltSchemasChanged := false
 	for _, delta := range deltas {
+		if doltdb.IsFullTextTable(delta.TableName) {
+			continue
+		}
 
 		// Don't print tables if one side of the diff is an ignored table in the working set being added.
 		if len(delta.FromTableName) == 0 {
