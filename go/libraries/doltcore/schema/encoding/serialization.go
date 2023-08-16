@@ -17,15 +17,13 @@ package encoding
 import (
 	"context"
 	"fmt"
-
-	fb "github.com/dolthub/flatbuffers/v23/go"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/planbuilder"
-
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
+	fb "github.com/dolthub/flatbuffers/v23/go"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 )
 
 const (
@@ -287,7 +285,7 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 	c := serial.Column{}
 	for i := range cols {
 		s.Columns(&c, i)
-		sqlType, err := typeinfoFromSqlType(ctx, string(c.SqlType()))
+		sqlType, err := typeinfoFromSqlType(string(c.SqlType()))
 		if err != nil {
 			return nil, err
 		}
@@ -538,12 +536,12 @@ func sqlTypeString(t typeinfo.TypeInfo) string {
 	return typ.String()
 }
 
-func typeinfoFromSqlType(ctx context.Context, s string) (typeinfo.TypeInfo, error) {
-	t, err := planbuilder.ParseColumnTypeString(sql.NewContext(ctx), s)
+func typeinfoFromSqlType(s string) (typeinfo.TypeInfo, error) {
+	sqlType, err := planbuilder.ParseColumnTypeString(s)
 	if err != nil {
 		return nil, err
 	}
-	return typeinfo.FromSqlType(t)
+	return typeinfo.FromSqlType(sqlType)
 }
 
 func encodingFromTypeinfo(t typeinfo.TypeInfo) serial.Encoding {
