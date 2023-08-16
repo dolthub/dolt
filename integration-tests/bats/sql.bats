@@ -2861,3 +2861,12 @@ SQL
     [[ "$output" =~ "role_edges" ]] || false
     
 }
+
+@test "sql: prevent LOAD_FILE() from accessing files outside of working directory" {
+    echo "should not be able to read this" > ../dont_read.txt
+    echo "should be able to read this" > ./do_read.txt
+
+    run dolt sql -q "select load_file('../dont_read.txt')";
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "should not be able to read this" ]] || false
+}
