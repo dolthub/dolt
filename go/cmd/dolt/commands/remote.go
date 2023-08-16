@@ -88,8 +88,8 @@ func (cmd RemoteCmd) ArgParser() *argparser.ArgParser {
 	ap := cli.CreateRemoteArgParser()
 	ap.SupportsFlag(cli.VerboseFlag, "v", "When printing the list of remotes adds additional details.")
 
-	ap.SupportsString(dbfactory.AWSRegionParam, "", "region", "")
-	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, dbfactory.AWSCredTypes))
+	ap.SupportsString(dbfactory.AWSRegionParam, "", "region", "Cloud provider region associated with this remote.")
+	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "Credential type. Valid options are role, env, and file. See the help section for additional details.", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, dbfactory.AWSCredTypes))
 	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file")
 	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use")
 
