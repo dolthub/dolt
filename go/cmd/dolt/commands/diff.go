@@ -17,13 +17,13 @@ package commands
 import (
 	"context"
 	"fmt"
-	ast "github.com/dolthub/vitess/go/vt/sqlparser"
 	"io"
 	"strconv"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	ast "github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/go-sql-driver/mysql"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"

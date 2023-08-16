@@ -17,7 +17,6 @@ package mvdata
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"io"
 	"sync/atomic"
 
@@ -25,6 +24,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"github.com/dolthub/go-mysql-server/sql/transform"
 
