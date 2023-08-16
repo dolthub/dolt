@@ -251,7 +251,10 @@ func (p *PatchTableFunction) String() string {
 	if p.tableNameExpr != nil {
 		return fmt.Sprintf("DOLT_PATCH(%s, %s, %s)", p.fromCommitExpr.String(), p.toCommitExpr.String(), p.tableNameExpr.String())
 	}
-	return fmt.Sprintf("DOLT_PATCH(%s, %s)", p.fromCommitExpr.String(), p.toCommitExpr.String())
+	if p.fromCommitExpr != nil && p.toCommitExpr != nil {
+		return fmt.Sprintf("DOLT_PATCH(%s, %s)", p.fromCommitExpr.String(), p.toCommitExpr.String())
+	}
+	return fmt.Sprintf("DOLT_PATCH(<INVALID>)")
 }
 
 // Schema implements the sql.Node interface.
