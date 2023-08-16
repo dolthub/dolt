@@ -93,9 +93,21 @@ func TestDatetimeConvertValueToNomsValue(t *testing.T) {
 			false,
 		},
 		{
+			CreateDatetimeTypeFromSqlType(sqltypes.Timestamp),
+			time.Date(2030, 1, 2, 4, 6, 3, 472382485, time.UTC),
+			types.Timestamp(time.Date(2030, 1, 2, 4, 6, 3, 0, time.UTC)),
+			false,
+		},
+		{
 			CreateDatetimeTypeFromSqlType(sqltypes.DatetimeMaxPrecision),
 			time.Date(5800, 1, 2, 4, 6, 3, 472382485, time.UTC),
 			types.Timestamp(time.Date(5800, 1, 2, 4, 6, 3, 472382000, time.UTC)),
+			false,
+		},
+		{
+			CreateDatetimeTypeFromSqlType(sqltypes.Datetime),
+			time.Date(5800, 1, 2, 4, 6, 3, 472382485, time.UTC),
+			types.Timestamp(time.Date(5800, 1, 2, 4, 6, 3, 0, time.UTC)),
 			false,
 		},
 		{

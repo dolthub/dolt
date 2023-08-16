@@ -40,8 +40,8 @@ type datetimeType struct {
 var _ TypeInfo = (*datetimeType)(nil)
 var (
 	DateType      = &datetimeType{gmstypes.Date}
-	DatetimeType  = &datetimeType{gmstypes.Datetime}
-	TimestampType = &datetimeType{gmstypes.Timestamp}
+	DatetimeType  = &datetimeType{gmstypes.DatetimeMaxPrecision}
+	TimestampType = &datetimeType{gmstypes.TimestampMaxPrecision}
 )
 
 func CreateDatetimeTypeFromSqlType(typ sql.DatetimeType) *datetimeType {
