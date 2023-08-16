@@ -83,6 +83,51 @@ teardown() {
     $BATS_TEST_DIRNAME/sql-shell-empty-prompt.expect
 }
 
+@test "sql-shell: works with ANSI_QUOTES SQL mode" {
+    if [ $SQL_ENGINE = "remote-engine" ]; then
+      skip "Presently sql command will not connect to remote server due to lack of lock file where there are not DBs."
+    fi
+
+    mkdir doltsql
+    cd doltsql
+    dolt init
+
+    dolt sql << SQL
+SET @@SQL_MODE=ANSI_QUOTES;
+CREATE TABLE "table1"("pk" int primary key, "col1" int DEFAULT ("pk"));
+CREATE TRIGGER trigger1 BEFORE INSERT ON "table1" FOR EACH ROW SET NEW."pk" = NEW."pk" + 1;
+INSERT INTO "table1" ("pk") VALUES (1);
+CREATE VIEW "view1" AS select "pk", "col1" from "table1";
+CREATE PROCEDURE procedure1() SELECT "pk", "col1" from "table1";
+SQL
+
+    # In a new session, with SQL_MODE set back to the default modes, assert that
+    # we can still use the entities we created with ANSI_QUOTES.
+    run dolt sql -q "INSERT INTO table1 (pk) VALUES (111);"
+    [ $status -eq "0" ]
+    [[ $output =~ "Query OK" ]] || false
+
+    run dolt sql -r csv -q "SELECT * from table1;"
+    [ $status -eq "0" ]
+    [[ $output =~ "2,1" ]] || false
+    [[ $output =~ "112,111" ]] || false
+
+    run dolt sql -q "show tables;"
+    [ $status -eq "0" ]
+    [[ $output =~ "table1" ]] || false
+    [[ $output =~ "view1" ]] || false
+
+    run dolt sql -r csv -q "SELECT * from view1;"
+    [ $status -eq "0" ]
+    [[ $output =~ "2,1" ]] || false
+    [[ $output =~ "112,111" ]] || false
+
+    run dolt sql -r csv -q "call procedure1;"
+    [ $status -eq "0" ]
+    [[ $output =~ "2,1" ]] || false
+    [[ $output =~ "112,111" ]] || false
+}
+
 @test "sql-shell: delimiter" {
     skiponwindows "Need to install expect and make this script work on windows."
     mkdir doltsql

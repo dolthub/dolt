@@ -1154,7 +1154,8 @@ func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableD
 	var viewDef sql.ViewDefinition
 	var views = make([]sql.ViewDefinition, len(fragments))
 	for i, fragment := range fragments {
-		cv, err := sqlparser.Parse(fragments[i].fragment)
+		cv, err := sqlparser.ParseWithOptions(fragments[i].fragment,
+			sql.NewSqlModeFromString(fragment.sqlMode).ParserOptions())
 		if err != nil {
 			return nil, sql.ViewDefinition{}, false, err
 		}
@@ -1162,7 +1163,8 @@ func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableD
 		createView, ok := cv.(*sqlparser.DDL)
 		if ok {
 			selectStr := fragments[i].fragment[createView.SubStatementPositionStart:createView.SubStatementPositionEnd]
-			views[i] = sql.ViewDefinition{Name: fragments[i].name, TextDefinition: selectStr, CreateViewStatement: fragments[i].fragment}
+			views[i] = sql.ViewDefinition{Name: fragments[i].name, TextDefinition: selectStr,
+				CreateViewStatement: fragments[i].fragment, SqlMode: fragment.sqlMode}
 		} else {
 			views[i] = sql.ViewDefinition{Name: fragments[i].name, TextDefinition: fragments[i].fragment, CreateViewStatement: fmt.Sprintf("CREATE VIEW %s AS %s", fragments[i].name, fragments[i].fragment)}
 		}
@@ -1231,6 +1233,7 @@ func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error
 			Name:            frag.name,
 			CreateStatement: frag.fragment,
 			CreatedAt:       frag.created,
+			SqlMode:         frag.sqlMode,
 		})
 	}
 	if err != nil {
@@ -1278,6 +1281,7 @@ func (db Database) GetEvent(ctx *sql.Context, name string) (sql.EventDefinition,
 				Name:            frag.name,
 				CreateStatement: frag.fragment,
 				CreatedAt:       frag.created,
+				SqlMode:         frag.sqlMode,
 			}, true, nil
 		}
 	}
@@ -1305,6 +1309,7 @@ func (db Database) GetEvents(ctx *sql.Context) ([]sql.EventDefinition, error) {
 			Name:            frag.name,
 			CreateStatement: frag.fragment,
 			CreatedAt:       frag.created,
+			SqlMode:         frag.sqlMode,
 		})
 	}
 	return events, nil
@@ -1403,7 +1408,12 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 		return err
 	}
 
-	return inserter.Insert(ctx, sql.Row{fragType, name, definition, extraJSON})
+	sqlMode, err := sql.LoadSqlMode(ctx)
+	if err != nil {
+		return err
+	}
+
+	return inserter.Insert(ctx, sql.Row{fragType, name, definition, extraJSON, sqlMode.String()})
 }
 
 func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name string, missingErr error) error {

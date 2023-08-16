@@ -196,6 +196,18 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
+	// restrict LOAD FILE invocations to current directory
+	wd, err := os.Getwd()
+	if err != nil {
+		wd = "/dev/null"
+	}
+	err = sql.SystemVariables.AssignValues(map[string]interface{}{
+		"secure_file_priv": wd,
+	})
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -608,7 +620,13 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 		if len(query) == 0 || query == "\n" {
 			continue
 		}
-		sqlStatement, err := sqlparser.Parse(query)
+
+		sqlMode, err := sql.LoadSqlMode(ctx)
+		if err != nil {
+			return err
+		}
+
+		sqlStatement, err := sqlparser.ParseWithOptions(query, sqlMode.ParserOptions())
 		if err == sqlparser.ErrEmpty {
 			continue
 		} else if err != nil {

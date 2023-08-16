@@ -59,7 +59,7 @@ require (
 	github.com/cespare/xxhash v1.1.0
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.16.1-0.20230816210319-f44d9ffb0373
+	github.com/dolthub/go-mysql-server v0.16.1-0.20230816223043-617a32966fdf
 	github.com/dolthub/swiss v0.1.0
 	github.com/goccy/go-json v0.10.2
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
@@ -160,3 +160,5 @@ require (
 replace github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 
 go 1.19
+
+replace github.com/dolthub/go-mysql-server => /Users/max-hoffman/go/src/github.com/dolthub/go-mysql-server/
