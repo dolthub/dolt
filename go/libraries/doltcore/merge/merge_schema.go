@@ -152,7 +152,9 @@ func (c ChkConflict) String() string {
 
 var ErrMergeWithDifferentPks = errors.New("error: cannot merge two tables with different primary keys")
 
-// SchemaMerge performs a three-way merge of ourSch, theirSch, and ancSch.
+// SchemaMerge performs a three-way merge of |ourSch|, |theirSch|, and |ancSch|, and returns: the merged schema,
+// any schema conflicts identified, whether moving to the new schema requires a full table rewrite, and any
+// unexpected error encountered while merging the schemas.
 func SchemaMerge(ctx context.Context, format *storetypes.NomsBinFormat, ourSch, theirSch, ancSch schema.Schema, tblName string) (sch schema.Schema, sc SchemaConflict, requiresTableRewrite bool, err error) {
 	// (sch - ancSch) ∪ (mergeSch - ancSch) ∪ (sch ∩ mergeSch)
 	sc = SchemaConflict{
@@ -364,9 +366,9 @@ func checkUnmergeableNewColumns(tblName string, columnMappings columnMappings) e
 // conflicting changes to the columns in |ourCC| and |theirCC|, then a set of ColConflict instances are returned
 // describing the conflicts. |format| indicates what storage format is in use, and is needed to determine compatibility
 // between types, since different storage formats have different restrictions on how much types can change and remain
-// compatible with the current stored format. If any unexpected error occurs, then that error is returned and the
-// other response fields should be ignored.
-// TODO: update godocs to explain new return param
+// compatible with the current stored format. The merged columns, any column conflicts, and a boolean value stating if
+// a full table rewrite is needed to align the existing table rows with the new, merged schema. If any unexpected error
+// occurs, then that error is returned and the other response fields should be ignored.
 func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColCollection, []ColConflict, bool, error) {
 	columnMappings, err := mapColumns(ourCC, theirCC, ancCC)
 	if err != nil {

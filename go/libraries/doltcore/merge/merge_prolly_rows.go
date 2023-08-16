@@ -49,10 +49,10 @@ var ErrUnableToMergeColumnDefaultValue = errorkinds.NewKind("unable to automatic
 	"in merge: %s for table '%s'; to continue merging, first manually apply the column alteration on this branch")
 
 // mergeProllyTable merges the table specified by |tm| using the specified |mergedSch| and returns the new table
-// instance, along with merge stats and any error. This function will merge the table artifacts (e.g. recorded
-// conflicts), migrate any existing table data to the specified |mergedSch|, and merge table data from both sides
-// of the merge together.
-// TODO: Update docs for |rewriteRows| param
+// instance, along with merge stats and any error. If |rewriteRows| is true, then any existing rows in the
+// table's primary index will also be rewritten. This function merges the table's artifacts (e.g. recorded
+// conflicts), migrates any existing table data to the specified |mergedSch|, and merges table data from both
+// sides of the merge together.
 func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Schema, rewriteRows bool) (*doltdb.Table, *MergeStats, error) {
 	mergeTbl, err := mergeTableArtifacts(ctx, tm, tm.leftTbl)
 	if err != nil {

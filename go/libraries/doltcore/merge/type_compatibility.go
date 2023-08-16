@@ -15,7 +15,6 @@
 package merge
 
 import (
-	"fmt"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/proto/query"
@@ -30,14 +29,14 @@ import (
 // in a table and without corrupting any other data in the table. You must use a TypeCompatibilityChecker
 // instance that is specific to the storage format you are using.
 type TypeCompatibilityChecker interface {
-	// IsTypeChangeCompatible returns true if the change from |from| to |to| is a compatible type change, meaning
-	// table data does not need to be rewritten and no data corruption or overwriting will occur.
+	// IsTypeChangeCompatible returns two boolean response params. The first boolean indicates if the change from
+	// |from| to |to| is a compatible type change, meaning that table data can safely be converted to the new type
+	// (e.g. varchar(100) to varchar(200)). The second boolean indicates if a full table rewrite is needed to
+	// convert the existing rows into the new schema.
+	//
 	// For the DOLT storage format, very few cases (outside of the types being exactly identical) are considered
-	// compatible, but we can widen them over time to optimize additional type changes that can be automatically
-	// merged. The older LD_1 storage format, has a more forgiving storage layout, so more type changes are
-	// considered compatible, generally as long as they are in the same type family/kind.
-	// TODO: Update godocs for return param change
-	// TODO: Maybe return a code instead of two booleans?
+	// compatible without requiring a full table rewrite. The older LD_1 storage format, has a more forgiving storage
+	// layout, so more type changes are considered compatible, generally as long as they are in the same type family/kind.
 	IsTypeChangeCompatible(from, to typeinfo.TypeInfo) (bool, bool)
 }
 
@@ -92,6 +91,8 @@ type doltTypeCompatibilityChecker struct {
 	checkers []typeChangeHandler
 }
 
+// newDoltTypeCompatibilityChecker creates a new TypeCompatibilityChecker for the DOLT storage engine,
+// pre-configured with all supported type change handlers.
 func newDoltTypeCompatibilityChecker() TypeCompatibilityChecker {
 	return &doltTypeCompatibilityChecker{
 		checkers: []typeChangeHandler{
@@ -107,7 +108,6 @@ var _ TypeCompatibilityChecker = (*doltTypeCompatibilityChecker)(nil)
 
 // IsTypeChangeCompatible implements TypeCompatibilityChecker.IsTypeChangeCompatible for the
 // DOLT storage format.
-// TODO: Explain new return param
 func (d doltTypeCompatibilityChecker) IsTypeChangeCompatible(from, to typeinfo.TypeInfo) (bool, bool) {
 	// If the types are exactly identical, then they are always compatible
 	fromSqlType := from.ToSqlType()
@@ -146,10 +146,12 @@ type varcharToVarcharTypeChangeHandler struct{}
 
 var _ typeChangeHandler = (*varcharToVarcharTypeChangeHandler)(nil)
 
+// canHandle implements the typeChangeHandler interface.
 func (v varcharToVarcharTypeChangeHandler) canHandle(fromSqlType, toSqlType sql.Type) bool {
 	return fromSqlType.Type() == query.Type_VARCHAR && toSqlType.Type() == query.Type_VARCHAR
 }
 
+// isCompatible implements the typeChangeHandler interface.
 func (v varcharToVarcharTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (bool, bool) {
 	fromStringType := fromSqlType.(types.StringType)
 	toStringType := toSqlType.(types.StringType)
@@ -166,6 +168,7 @@ type stringToBlobTypeChangeHandler struct{}
 
 var _ typeChangeHandler = (*stringToBlobTypeChangeHandler)(nil)
 
+// canHandle implements the typeChangeHandler interface.
 func (s stringToBlobTypeChangeHandler) canHandle(fromSqlType, toSqlType sql.Type) bool {
 	if (fromSqlType.Type() == query.Type_VARCHAR || fromSqlType.Type() == query.Type_CHAR) && toSqlType.Type() == query.Type_TEXT {
 		return true
@@ -179,31 +182,28 @@ func (s stringToBlobTypeChangeHandler) canHandle(fromSqlType, toSqlType sql.Type
 	return false
 }
 
+// isCompatible implements the typeChangeHandler interface.
 func (s stringToBlobTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (bool, bool) {
 	fromStringType, ok := fromSqlType.(sql.StringType)
 	if !ok {
-		// TODO: we need to return an error here!
-		panic(fmt.Sprintf("unexpected type: %T", fromSqlType))
 		return false, false
 	}
 
 	toStringType, ok := toSqlType.(sql.StringType)
 	if !ok {
-		// TODO: we need to return an error here!
-		panic(fmt.Sprintf("unexpected type: %T", toSqlType))
 		return false, false
 	}
 
 	// If the current type has a longer length setting than the new type, disallow the automatic conversion
 	if fromStringType.Length() > toStringType.Length() {
-		// TODO: As a future optimization, we could check the data to see if it would fit in the new type and
-		//       accept the type conversion if all data fits in the new type.
+		// TODO: For a future optimization, we could check the data to see if it would fit in the new type and
+		//       accept the type conversion if all data fits in the new type. This would need to be done while we
+		//       are processing the diff data, not as part of calculating the merged schema.
 		return false, false
 	}
 	if toStringType.Collation() != fromStringType.Collation() {
-		// TODO: If the charsets are different, we need to re-encode the data and rewrite the table
-		// TODO: Although... if the collation changes... that could change the sorting order... so that would
-		//       also require a rewrite, right?
+		// TODO: If the charsets or collations are different on each side of the merge, we need to re-encode
+		//       the data and rewrite the table.
 		return false, false
 	}
 
@@ -216,10 +216,12 @@ type enumTypeChangeHandler struct{}
 
 var _ typeChangeHandler = (*enumTypeChangeHandler)(nil)
 
+// canHandle implements the typeChangeHandler interface.
 func (e enumTypeChangeHandler) canHandle(from, to sql.Type) bool {
 	return types.IsEnum(from) && types.IsEnum(to)
 }
 
+// isCompatible implements the typeChangeHandler interface.
 func (e enumTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (bool, bool) {
 	fromEnumType := fromSqlType.(sql.EnumType)
 	toEnumType := toSqlType.(sql.EnumType)
@@ -255,10 +257,12 @@ type setTypeChangeHandler struct{}
 
 var _ typeChangeHandler = (*setTypeChangeHandler)(nil)
 
+// canHandle implements the typeChangeHandler interface.
 func (s setTypeChangeHandler) canHandle(fromType, toType sql.Type) bool {
 	return types.IsSet(fromType) && types.IsSet(toType)
 }
 
+// isCompatible implements the typeChangeHandler interface.
 func (s setTypeChangeHandler) isCompatible(fromType, toType sql.Type) (bool, bool) {
 	fromSetType := fromType.(sql.SetType)
 	toSetType := toType.(sql.SetType)
