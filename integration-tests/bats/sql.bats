@@ -2869,4 +2869,8 @@ SQL
     run dolt sql -q "select load_file('../dont_read.txt')";
     [ "$status" -eq 0 ]
     [[ "$output" =~ "should not be able to read this" ]] || false
+
+    run dolt sql -q "select load_file('./do_read.txt')";
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "should be able to read this" ]] || false
 }
