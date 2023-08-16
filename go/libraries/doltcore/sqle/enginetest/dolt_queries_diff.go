@@ -2967,6 +2967,8 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		Name: "test indexes",
 		SetUpScript: []string{
 			"set @Commit0 = HashOf('HEAD');",
+			"create table diff_type_name(name varchar(20), t varchar(20));",
+			"insert into diff_type_name values ('s', 'schema'), ('d', 'data');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -2975,8 +2977,8 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 					{"Filter"},
 					{" ├─ (dolt_patch.diff_type = 'schema')"},
 					{" └─ TableAlias(dolt_patch)"},
-					{"     └─ IndexedTableAccess(dolt_patch)"},
-					{"         ├─ index: [dolt_patch.diff_type]"},
+					{"     └─ IndexedTableAccess(DOLT_PATCH(@Commit0, @Commit0, 't'))"},
+					{"         ├─ index: [DOLT_PATCH(@Commit0, @Commit0, 't').diff_type]"},
 					{"         └─ filters: [{[schema, schema]}]"},
 				},
 			},

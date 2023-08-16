@@ -395,7 +395,7 @@ func (p *PatchTableFunction) WithDatabase(database sql.Database) (sql.Node, erro
 
 // Name implements the sql.TableFunction interface
 func (p *PatchTableFunction) Name() string {
-	return "dolt_patch"
+	return p.String()
 }
 
 // RowIter implements the sql.ExecSourceRel interface
