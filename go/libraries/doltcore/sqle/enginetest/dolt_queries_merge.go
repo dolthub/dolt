@@ -5267,7 +5267,7 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 	},
 	{
-		Name: "varchar widening to TEXT",
+		Name: "VARCHAR widening to TEXT",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
 			"CREATE table t (pk int primary key, col1 varchar(10));",
@@ -5282,13 +5282,142 @@ var ThreeWayMergeWithSchemaChangeTestScripts = []MergeScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				// TODO: We should be able to automatically widen a VARCHAR field to TEXT, but because TEXT data is
-				//       encoded differently (stored separate from the index data), this merge will require rewriting
-				//       any existing data in the table.
-				Skip:     true,
 				Query:    "call dolt_merge('right');",
 				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
+			{
+				Query: "select * from t order by pk;",
+				Expected: []sql.Row{
+					{1, "123"},
+					{2, "12345678901234567890"},
+					{3, "321"},
+				},
+			},
+		},
+	},
+	{
+		Name: "VARBINARY widening to BLOB",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 varbinary(10));",
+			"INSERT into t values (1, '123');",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 BLOB;",
+			"INSERT into t values (2, '12345678901234567890');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '321');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select * from t order by pk;",
+				Expected: []sql.Row{
+					{1, []uint8{0x31, 0x32, 0x33}},
+					{2, []uint8{0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30}},
+					{3, []uint8{0x33, 0x32, 0x31}},
+				},
+			},
+		},
+	},
+	{
+		Name: "schema conflict: varchar(300) to TINYTEXT(255)",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 varchar(300));",
+			"INSERT into t values (1, '123');",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 TINYTEXT;",
+			"INSERT into t values (2, '12345678901234567890');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '321');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{"", 0, 1}},
+			},
+			// TODO: assert on schema conflict data
+		},
+	},
+	{
+		Name: "schema conflict: VARBINARY(300) to TINYBLOB(255)",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 VARBINARY(300));",
+			"INSERT into t values (1, '123');",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 TINYBLOB;",
+			"INSERT into t values (2, '12345678901234567890');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '321');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{"", 0, 1}},
+			},
+			// TODO: assert on schema conflict data
+		},
+	},
+
+	{
+		Name: "CHAR(5) to TINYTEXT",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 char(5));",
+			"INSERT into t values (1, '123');",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 TINYTEXT;",
+			"INSERT into t values (2, '12345678901234567890');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '321');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select * from t order by pk;",
+				Expected: []sql.Row{
+					{1, "123"},
+					{2, "12345678901234567890"},
+					{3, "321"},
+				},
+			},
+		},
+	},
+	{
+		Name: "CHAR(5) to TINYTEXT, different charsets",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 char(5) COLLATE utf8mb3_esperanto_ci);",
+			"INSERT into t values (1, '123');",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 TINYTEXT COLLATE utf32_unicode_ci;",
+			"INSERT into t values (2, '12345678901234567890');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '321');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{"", 0, 1}},
+			},
+			// TODO: Assert conflict metadata
 		},
 	},
 

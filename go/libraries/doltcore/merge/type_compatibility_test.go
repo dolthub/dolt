@@ -15,14 +15,13 @@
 package merge
 
 import (
+	"github.com/stretchr/testify/assert"
 	"testing"
-
-	"github.com/dolthub/go-mysql-server/sql"
-	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	storetypes "github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 )
 
 type typeChangeCompatibilityTest struct {
@@ -189,8 +188,9 @@ func TestDoltIsTypeChangeCompatible(t *testing.T) {
 func runTypeCompatibilityTests(t *testing.T, compatChecker TypeCompatibilityChecker, tests []typeChangeCompatibilityTest) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := compatChecker.IsTypeChangeCompatible(tt.from, tt.to)
-			require.Equal(t, tt.expected, got)
+			got, requiresRewrite := compatChecker.IsTypeChangeCompatible(tt.from, tt.to)
+			assert.Equal(t, tt.expected, got)
+			assert.False(t, requiresRewrite)
 		})
 	}
 }
