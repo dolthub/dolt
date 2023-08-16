@@ -162,6 +162,7 @@ func Serve(
 		Autocommit:              serverConfig.AutoCommit(),
 		DoltTransactionCommit:   serverConfig.DoltTransactionCommit(),
 		JwksConfig:              serverConfig.JwksConfig(),
+		SystemVariables:         serverConfig.SystemVars(),
 		ClusterController:       clusterController,
 		BinlogReplicaController: binlogreplication.DoltBinlogReplicaController,
 	}
