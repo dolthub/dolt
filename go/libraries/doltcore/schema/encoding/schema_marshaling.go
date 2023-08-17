@@ -176,7 +176,7 @@ type encodedCheck struct {
 	Enforced   bool   `noms:"enforced" json:"enforced"`
 }
 
-type schemaData struct {
+type encodedSchemaData struct {
 	Columns          []encodedColumn  `noms:"columns" json:"columns"`
 	IndexCollection  []encodedIndex   `noms:"idxColl,omitempty" json:"idxColl,omitempty"`
 	CheckConstraints []encodedCheck   `noms:"checks,omitempty" json:"checks,omitempty"`
@@ -184,7 +184,7 @@ type schemaData struct {
 	Collation        schema.Collation `noms:"collation,omitempty" json:"collation,omitempty"`
 }
 
-func (sd *schemaData) Copy() *schemaData {
+func (sd *encodedSchemaData) Copy() *encodedSchemaData {
 	var columns []encodedColumn
 	if sd.Columns != nil {
 		columns = make([]encodedColumn, len(sd.Columns))
@@ -227,7 +227,7 @@ func (sd *schemaData) Copy() *schemaData {
 		}
 	}
 
-	return &schemaData{
+	return &encodedSchemaData{
 		Columns:          columns,
 		IndexCollection:  idxCol,
 		CheckConstraints: checks,
@@ -236,7 +236,7 @@ func (sd *schemaData) Copy() *schemaData {
 	}
 }
 
-func toSchemaData(sch schema.Schema) (schemaData, error) {
+func toSchemaData(sch schema.Schema) (encodedSchemaData, error) {
 	allCols := sch.GetAllCols()
 	encCols := make([]encodedColumn, allCols.Size())
 
@@ -249,7 +249,7 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 	})
 
 	if err != nil {
-		return schemaData{}, err
+		return encodedSchemaData{}, err
 	}
 
 	encodedIndexes := make([]encodedIndex, sch.Indexes().Count())
@@ -287,7 +287,7 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 		}
 	}
 
-	return schemaData{
+	return encodedSchemaData{
 		Columns:          encCols,
 		IndexCollection:  encodedIndexes,
 		CheckConstraints: encodedChecks,
@@ -296,7 +296,7 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 	}, nil
 }
 
-func (sd schemaData) decodeSchema() (schema.Schema, error) {
+func (sd encodedSchemaData) decodeSchema() (schema.Schema, error) {
 	numCols := len(sd.Columns)
 	cols := make([]schema.Column, numCols)
 
@@ -319,7 +319,7 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 	return sch, nil
 }
 
-func (sd schemaData) addChecksIndexesAndPkOrderingToSchema(sch schema.Schema) error {
+func (sd encodedSchemaData) addChecksIndexesAndPkOrderingToSchema(sch schema.Schema) error {
 	// initialize pk order before adding indexes
 	if sd.PkOrdinals != nil {
 		err := sch.SetPkOrdinals(sd.PkOrdinals)
@@ -424,35 +424,22 @@ type schCacheData struct {
 var schemaCacheMu *sync.Mutex = &sync.Mutex{}
 var unmarshalledSchemaCache = map[hash.Hash]schCacheData{}
 
-// UnmarshalSchema takes a types.Value instance and Unmarshalls it into a Schema.
+// UnmarshalSchema takes a types.Value representing a Schema and Unmarshalls it into a schema.Schema.
 func UnmarshalSchema(ctx context.Context, nbf *types.NomsBinFormat, schemaVal types.Value) (schema.Schema, error) {
-	h, err := schemaVal.Hash(nbf)
-	if err != nil {
-		return nil, err
-	}
-
-	schemaCacheMu.Lock()
-	cachedData, ok := unmarshalledSchemaCache[h]
-	schemaCacheMu.Unlock()
-
-	if ok {
-		cachedSch := cachedData.schema
-		return cachedSch.Copy(), nil
-	}
-
-	var sch schema.Schema 
+	var sch schema.Schema
+	var err error
 	if nbf.UsesFlatbuffers() {
 		sch, err = DeserializeSchema(ctx, nbf, schemaVal)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		var sd schemaData
+		var sd encodedSchemaData
 		err = marshal.Unmarshal(ctx, nbf, schemaVal, &sd)
 		if err != nil {
 			return nil, err
 		}
-		
+
 		sch, err = sd.decodeSchema()
 		if err != nil {
 			return nil, err
@@ -467,12 +454,36 @@ func UnmarshalSchema(ctx context.Context, nbf *types.NomsBinFormat, schemaVal ty
 		}
 	}
 	
+	return sch, nil
+}
+
+// UnmarshalSchemaAtAddr returns the schema at the given address, using the schema cache if possible.
+func UnmarshalSchemaAtAddr(ctx context.Context, vr types.ValueReader, addr hash.Hash) (schema.Schema, error) {
+	schemaCacheMu.Lock()
+	cachedData, ok := unmarshalledSchemaCache[addr]
+	schemaCacheMu.Unlock()
+
+	if ok {
+		cachedSch := cachedData.schema
+		return cachedSch.Copy(), nil
+	}
+	
+	schemaVal, err := vr.ReadValue(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+	
+	sch, err := UnmarshalSchema(ctx, vr.Format(), schemaVal)
+	if err != nil {
+		return nil, err
+	}
+	
 	d := schCacheData{
 		schema: sch,
 	}
 
 	schemaCacheMu.Lock()
-	unmarshalledSchemaCache[h] = d
+	unmarshalledSchemaCache[addr] = d
 	schemaCacheMu.Unlock()
 
 	return sch, nil

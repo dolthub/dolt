@@ -108,12 +108,7 @@ func deserializeSchema(ctx context.Context, vrw types.ValueReadWriter, v types.V
 		return nil, errors.New("conflict schemas field value is unexpected type")
 	}
 
-	tv, err := r.TargetValue(ctx, vrw)
-	if err != nil {
-		return nil, err
-	}
-
-	return encoding.UnmarshalSchema(ctx, vrw.Format(), tv)
+	return encoding.UnmarshalSchemaAtAddr(ctx, vrw, r.TargetHash())
 }
 
 type Conflict struct {
