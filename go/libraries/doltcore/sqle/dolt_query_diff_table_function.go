@@ -204,9 +204,6 @@ func (qdtf *QueryDiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.Ro
 
 	row1, err1 := qdtf.rowIter1.Next(qdtf.ctx)
 	row2, err2 := qdtf.rowIter2.Next(qdtf.ctx)
-
-
-
 	var pkOrds []int
 	for i, col := range qdtf.schema1 {
 		if col.PrimaryKey {
