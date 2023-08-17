@@ -387,7 +387,7 @@ func acquireGlobalSqlServerLock(port int, dEnv *env.DoltEnv) (*env.DBLock, error
 	}
 	if locked {
 		lockPath := dEnv.LockFile()
-		err = fmt.Errorf("Server can not start. Found lock file at '%s'", lockPath)
+		err = fmt.Errorf("Database locked by another sql-server; Lock file: %s", lockPath)
 		return nil, err
 	}
 

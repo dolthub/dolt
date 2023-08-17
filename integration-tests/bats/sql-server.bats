@@ -1658,7 +1658,8 @@ behavior:
     PORT=$( definePORT )
     run dolt sql-server --port=$PORT --socket "dolt.$PORT.sock"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
+
+    [[ "$output" =~ "Database locked by another sql-server" ]] || false
     stop_sql_server 1
 }
 
