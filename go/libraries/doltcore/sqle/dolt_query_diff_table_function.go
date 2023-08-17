@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -89,7 +88,18 @@ func (qdtf *QueryDiffTableFunction) evalQueries() error {
 	if qdtf.schema2, qdtf.rowIter2, err = qdtf.engine.Query(qdtf.ctx, q2.(string)); err != nil {
 		return err
 	}
-	qdtf.sqlSch = append(qdtf.schema1, qdtf.schema2...)
+	// TODO: need to deep copy
+	qdtf.sqlSch = append(qdtf.sqlSch, qdtf.schema1.Copy()...)
+	qdtf.sqlSch = append(qdtf.sqlSch, qdtf.schema2.Copy()...)
+	qdtf.sqlSch = append(qdtf.sqlSch, &sql.Column{Name: "diff_type", Type: gmstypes.Text})
+	for i := range qdtf.schema1 {
+		qdtf.sqlSch[i].Source = "query_diff"
+		qdtf.sqlSch[i].Name = "from_" + qdtf.sqlSch[i].Name
+	}
+	for i := range qdtf.schema2 {
+		qdtf.sqlSch[len(qdtf.schema1) + i].Source = "query_diff"
+		qdtf.sqlSch[len(qdtf.schema1) + i].Name = "to_" + qdtf.sqlSch[len(qdtf.schema1) + i].Name
+	}
 	return nil
 }
 
@@ -168,14 +178,6 @@ func (qdtf *QueryDiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.Ro
 	// TODO: assume both are sorted according to their primary keys
 	row1, err1 := qdtf.rowIter1.Next(qdtf.ctx)
 	row2, err2 := qdtf.rowIter2.Next(qdtf.ctx)
-	removedChange := make([]diff.ChangeType, len(qdtf.schema1))
-	for i := range removedChange {
-		removedChange[i] = diff.Removed
-	}
-	addedChange := make([]diff.ChangeType, len(qdtf.schema2))
-	for i := range addedChange {
-		addedChange[i] = diff.Added
-	}
 	if !qdtf.schema1.Equals(qdtf.schema2) {
 		return sql.RowsToRowIter(), nil
 	}
@@ -186,19 +188,23 @@ func (qdtf *QueryDiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.Ro
 		}
 	}
 	var results []sql.Row
+	var newRow sql.Row
+	nilRow := make(sql.Row, len(qdtf.schema1))
 	for err1 == nil && err2 == nil {
 		cmp, d := qdtf.compareRows(pkOrds, row1, row2)
 		switch cmp {
 		case -1: // deleted
-			results = append(results, append(row1, "deleted"))
+			newRow = append(append(row1, nilRow...), "deleted")
+			results = append(results, newRow)
 			row1, err1 = qdtf.rowIter1.Next(qdtf.ctx)
 		case 1: // added
-			results = append(results, append(row2, "added"))
+			newRow = append(append(nilRow, row2...), "added")
+			results = append(results, newRow)
 			row2, err2 = qdtf.rowIter2.Next(qdtf.ctx)
 		default: // modified or no change
 			if d {
-				results = append(results, append(row1, "modified"))
-				results = append(results, append(row2, "mofified"))
+				newRow = append(append(row1, row2...), "modified")
+				results = append(results, newRow)
 			}
 			row1, err1 = qdtf.rowIter1.Next(qdtf.ctx)
 			row2, err2 = qdtf.rowIter2.Next(qdtf.ctx)
@@ -208,22 +214,26 @@ func (qdtf *QueryDiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.Ro
 	// Append any remaining rows
 	if err1 == io.EOF && err2 == io.EOF {
 	} else if err1 == io.EOF {
-		results = append(results, append(row2, "added"))
+		newRow = append(append(nilRow, row2...), "added")
+		results = append(results, newRow)
 		for {
 			row2, err2 = qdtf.rowIter2.Next(qdtf.ctx)
 			if err2 == io.EOF {
 				break
 			}
-			results = append(results, append(row2, "added"))
+			newRow = append(append(nilRow, row2...), "added")
+			results = append(results, newRow)
 		}
 	} else if err2 == io.EOF {
-		results = append(results, append(row1, "modified"))
+		newRow = append(append(row1, nilRow...), "deleted")
+		results = append(results, newRow)
 		for {
 			row1, err1 = qdtf.rowIter1.Next(qdtf.ctx)
 			if err1 == io.EOF {
 				break
 			}
-			results = append(results, append(row1, "deleted"))
+			newRow = append(append(row1, nilRow...), "deleted")
+			results = append(results, newRow)
 		}
 	} else {
 		if err1 != nil {
