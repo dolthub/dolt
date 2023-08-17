@@ -1924,3 +1924,26 @@ behavior:
     [[ "$output" =~ "main" ]] || false
     [[ ! "$output" =~ "other" ]] || false
 }
+
+@test "sql-server: server won't start where another server is running" {
+    baseDir=$(mktemp -d)
+    cd $baseDir
+
+    start_sql_server
+
+    run dolt sql-server
+
+    [ $status -eq 1 ]
+    [[ "$output" =~ "Database locked by another sql-server; Lock file" ]] || false
+}
+
+@test "sql-server: empty server can be connected to using sql with no args" {
+    baseDir=$(mktemp -d)
+    cd $baseDir
+
+    start_sql_server
+
+    run dolt sql -q "select current_user"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "__dolt_local_user__@localhost" ]] || false
+}
