@@ -20,7 +20,9 @@ import (
 	"strings"
 	"testing"
 
+	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/stretchr/testify/assert"
@@ -31,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
@@ -892,7 +895,7 @@ func TestParseCreateTableStatement(t *testing.T) {
 		{
 			name:          "Test create table starting with number",
 			query:         "create table 123table (id int primary key)",
-			expectedTable: "`123table`",
+			expectedTable: "123table",
 			expectedSchema: dtestutils.CreateSchema(
 				schemaNewColumn(t, "id", 4817, gmstypes.Int32, true, schema.NotNullConstraint{})),
 		},
@@ -1076,8 +1079,17 @@ func TestParseCreateTableStatement(t *testing.T) {
 			defer dEnv.DoltDB.Close()
 			ctx := context.Background()
 			root, _ := dEnv.WorkingRoot(ctx)
+			//eng, dbName, _ := engine.NewSqlEngineForEnv(ctx, dEnv)
+			eng, sqlCtx := newTestEngine(ctx, dEnv)
 
-			tblName, sch, err := sqlutil.ParseCreateTableStatement(ctx, root, tt.query)
+			testSch, iter, err := eng.Query(sqlCtx, "create database test")
+			if err != nil {
+				panic(err)
+			}
+			_, _ = sql.RowIterToRows(sqlCtx, testSch, iter)
+			sqlCtx.SetCurrentDatabase("test")
+
+			tblName, sch, err := sqlutil.ParseCreateTableStatement(sqlCtx, root, eng, tt.query)
 
 			if tt.expectedErr != "" {
 				require.Error(t, err)
@@ -1091,6 +1103,30 @@ func TestParseCreateTableStatement(t *testing.T) {
 	}
 }
 
+func newTestEngine(ctx context.Context, dEnv *env.DoltEnv) (*gms.Engine, *sql.Context) {
+	pro, err := NewDoltDatabaseProviderWithDatabases("main", dEnv.FS, nil, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+	if err != nil {
+		panic(err)
+	}
+
+	doltSession, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, dEnv.Config.WriteableConfig(), nil)
+	if err != nil {
+		panic(err)
+	}
+
+	sqlCtx := sql.NewContext(ctx, sql.WithSession(doltSession))
+	sqlCtx.SetCurrentDatabase(mrEnv.GetFirstDatabase())
+
+	return gms.New(analyzer.NewBuilder(pro).WithParallelism(1).Build(), &gms.Config{
+		IsReadOnly:     false,
+		IsServerLocked: false,
+	}), sqlCtx
+}
 func TestIndexOverwrite(t *testing.T) {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()

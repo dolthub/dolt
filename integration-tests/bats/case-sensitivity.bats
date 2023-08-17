@@ -131,5 +131,5 @@ teardown() {
     run dolt sql -q "select AaA from Test order by 1 limit 1"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1" ]] || false
-    [[ "$output" =~ "Aaa" ]] || false
+    [[ "$output" =~ "AaA" ]] || false
 }
