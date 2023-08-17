@@ -273,10 +273,10 @@ var systemTableReplaceTests = []ReplaceTest{
 	{
 		Name: "replace into dolt_schemas",
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, schemaTableSchema,
-			"INSERT INTO dolt_schemas VALUES ('view', 'name', 'create view name as select 2+2 from dual', NULL)"),
+			"INSERT INTO dolt_schemas VALUES ('view', 'name', 'create view name as select 2+2 from dual', NULL, NULL)"),
 		ReplaceQuery:   "replace into dolt_schemas (type, name, fragment) values ('view', 'name', 'create view name as select 1+1 from dual')",
-		SelectQuery:    "select type, name, fragment, extra from dolt_schemas",
-		ExpectedRows:   []sql.Row{{"view", "name", "create view name as select 1+1 from dual", nil}},
+		SelectQuery:    "select type, name, fragment, extra, sql_mode from dolt_schemas",
+		ExpectedRows:   []sql.Row{{"view", "name", "create view name as select 1+1 from dual", nil, nil}},
 		ExpectedSchema: CompressSchema(schemaTableSchema),
 	},
 }

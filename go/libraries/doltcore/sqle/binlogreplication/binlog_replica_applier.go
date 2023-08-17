@@ -26,7 +26,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
-	"github.com/dolthub/go-mysql-server/sql/parse"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
@@ -870,14 +870,14 @@ func convertVitessJsonExpressionString(ctx *sql.Context, value sqltypes.Value) (
 		strValue = strValue[len("EXPRESSION(") : len(strValue)-1]
 	}
 
-	node, err := parse.Parse(ctx, "SELECT "+strValue)
-	if err != nil {
-		return nil, err
-	}
-
 	server, _ := sqlserver.GetRunningServer()
 	if server == nil {
 		return nil, fmt.Errorf("unable to access running SQL server")
+	}
+
+	node, err := planbuilder.Parse(ctx, server.Engine.Analyzer.Catalog, "SELECT "+strValue)
+	if err != nil {
+		return nil, err
 	}
 
 	analyze, err := server.Engine.Analyzer.Analyze(ctx, node, nil)

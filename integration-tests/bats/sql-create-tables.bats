@@ -765,7 +765,7 @@ DROP TABLE myTempTABLE;
 SELECT * FROM myTempTable;
 SQL
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "table not found: myTempTable" ]] || false
+    [[ "$output" =~ "table not found: mytemptable" ]] || false
 }
 
 @test "sql-create-tables: BINARY attributes" {
