@@ -1085,7 +1085,7 @@ SQL
 @test "sql: ambiguous column name" {
     run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where c1=0"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "ambiguous column name \"c1\", it's present in all these tables: one_pk, two_pk" ]] || false
+    [[ "$output" =~ "ambiguous column name \"c1\", it's present in all these tables: [two_pk one_pk]" ]] || false
 }
 
 @test "sql: select with and and or clauses" {

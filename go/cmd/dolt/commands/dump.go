@@ -23,8 +23,8 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -430,12 +430,12 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValu
 			sqlMode = s
 		}
 
+		opts := sql.NewSqlModeFromString(sqlMode).ParserOptions()
 		// We used to store just the SELECT part of a view, but now we store the entire CREATE VIEW statement
-		cv, err := parse.ParseWithOptions(ctx, row[fragColIdx].(string), sql.NewSqlModeFromString(sqlMode).ParserOptions())
+		cv, err := planbuilder.ParseWithOptions(ctx, engine.GetUnderlyingEngine().Analyzer.Catalog, row[fragColIdx].(string), opts)
 		if err != nil {
 			return err
 		}
-
 		modeChanged, err := changeSqlMode(ctx, writer, sqlMode)
 		if err != nil {
 			return err
