@@ -15,10 +15,11 @@
 package enginetest
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 )
 
 var SchemaChangeTestsForDataConflicts = []MergeScriptTest{
