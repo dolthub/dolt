@@ -418,10 +418,7 @@ func MarshalSchemaAsNomsValue(ctx context.Context, vrw types.ValueReadWriter, sc
 }
 
 type schCacheData struct {
-	all   *schema.ColCollection
-	pk    *schema.ColCollection
-	nonPK *schema.ColCollection
-	sd    *schemaData
+	schema schema.Schema
 }
 
 var schemaCacheMu *sync.Mutex = &sync.Mutex{}
@@ -439,35 +436,27 @@ func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, sch
 	schemaCacheMu.Unlock()
 
 	if ok {
-		cachedSch := schema.SchemaFromColCollections(cachedData.all, cachedData.pk, cachedData.nonPK)
-		sd := cachedData.sd.Copy()
-		err := sd.addChecksIndexesAndPkOrderingToSchema(cachedSch)
-		if err != nil {
-			return nil, err
-		}
-
-		return cachedSch, nil
+		cachedSch := cachedData.schema
+		return cachedSch.Copy(), nil
 	}
 
-	// TODO: the flatbuffers path does an additional round-trip serialization to the noms format and back which contains
-	//  business logic around collations. We can't remove that without resolving the collations mess
-	var sd schemaData
+	var sch schema.Schema 
 	if nbf.UsesFlatbuffers() {
-		sch, err := DeserializeSchema(ctx, nbf, schemaVal)
+		sch, err = DeserializeSchema(ctx, nbf, schemaVal)
 		if err != nil {
 			return nil, err
 		}
-		sd, err = toSchemaData(sch)
 	} else {
+		var sd schemaData
 		err = marshal.Unmarshal(ctx, nbf, schemaVal, &sd)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	sch, err := sd.decodeSchema()
-	if err != nil {
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
+		
+		sch, err = sd.decodeSchema()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if nbf.VersionString() != types.Format_DOLT.VersionString() {
@@ -477,23 +466,9 @@ func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, sch
 			}
 		}
 	}
-
-	if sd.PkOrdinals == nil {
-		// schemaData will not have PK ordinals in old versions of Dolt
-		// this sets the default PK ordinates for subsequent cache lookups
-		sd.PkOrdinals = sch.GetPkOrdinals()
-	}
-
-	err = sd.addChecksIndexesAndPkOrderingToSchema(sch)
-	if err != nil {
-		return nil, err
-	}
-
+	
 	d := schCacheData{
-		all:   sch.GetAllCols(),
-		pk:    sch.GetPKCols(),
-		nonPK: sch.GetNonPKCols(),
-		sd:    sd.Copy(),
+		schema: sch,
 	}
 
 	schemaCacheMu.Lock()
