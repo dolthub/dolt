@@ -372,8 +372,8 @@ func (sd schemaData) addChecksIndexesAndPkOrderingToSchema(sch schema.Schema) er
 	return nil
 }
 
-// MarshalSchemaAsNomsValue takes a Schema and converts it to a types.Value
-func MarshalSchemaAsNomsValue(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) (types.Value, error) {
+// MarshalSchema takes a Schema and converts it to a types.Value
+func MarshalSchema(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) (types.Value, error) {
 	// Anyone calling this is going to serialize this to disk, so it's our last line of defense against defective schemas.
 	// Business logic should catch errors before this point, but this is a failsafe.
 	err := schema.ValidateColumnConstraints(sch.GetAllCols())
@@ -424,8 +424,8 @@ type schCacheData struct {
 var schemaCacheMu *sync.Mutex = &sync.Mutex{}
 var unmarshalledSchemaCache = map[hash.Hash]schCacheData{}
 
-// UnmarshalSchemaNomsValue takes a types.Value instance and Unmarshalls it into a Schema.
-func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, schemaVal types.Value) (schema.Schema, error) {
+// UnmarshalSchema takes a types.Value instance and Unmarshalls it into a Schema.
+func UnmarshalSchema(ctx context.Context, nbf *types.NomsBinFormat, schemaVal types.Value) (schema.Schema, error) {
 	h, err := schemaVal.Hash(nbf)
 	if err != nil {
 		return nil, err

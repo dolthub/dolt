@@ -50,9 +50,9 @@ func testSchemaSerializationNoms(t *testing.T, sch schema.Schema) {
 	ctx := context.Background()
 	nbf := types.Format_Default
 	vrw := getTestVRW(nbf)
-	v, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
+	v, err := encoding.MarshalSchema(ctx, vrw, sch)
 	require.NoError(t, err)
-	s, err := encoding.UnmarshalSchemaNomsValue(ctx, nbf, v)
+	s, err := encoding.UnmarshalSchema(ctx, nbf, v)
 	require.NoError(t, err)
 	assert.Equal(t, sch, s)
 }

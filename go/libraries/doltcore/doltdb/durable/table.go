@@ -130,7 +130,7 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore,
 		return newDoltDevTable(ctx, vrw, ns, sch, rows, indexes, autoIncVal)
 	}
 
-	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
+	schVal, err := encoding.MarshalSchema(ctx, vrw, sch)
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +279,7 @@ func (t nomsTable) GetSchemaHash(ctx context.Context) (hash.Hash, error) {
 
 // SetSchema implements Table.
 func (t nomsTable) SetSchema(ctx context.Context, sch schema.Schema) (Table, error) {
-	newSchemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, t.vrw, sch)
+	newSchemaVal, err := encoding.MarshalSchema(ctx, t.vrw, sch)
 	if err != nil {
 		return nil, err
 	}
@@ -682,7 +682,7 @@ func schemaFromAddr(ctx context.Context, vrw types.ValueReadWriter, addr hash.Ha
 	}
 	
 	// schema, err := encoding.DeserializeSchema(ctx, vrw.Format(), schemaVal)
-	schema, err := encoding.UnmarshalSchemaNomsValue(ctx, vrw.Format(), schemaVal)
+	schema, err := encoding.UnmarshalSchema(ctx, vrw.Format(), schemaVal)
 	if err != nil {
 		return nil, err
 	}
@@ -762,7 +762,7 @@ func (fields serialTableFields) write() (*serial.Table, error) {
 }
 
 func newDoltDevTable(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, rows Index, indexes IndexSet, autoIncVal types.Value) (Table, error) {
-	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
+	schVal, err := encoding.MarshalSchema(ctx, vrw, sch)
 	if err != nil {
 		return nil, err
 	}
@@ -832,7 +832,7 @@ func (t doltDevTable) GetSchema(ctx context.Context) (schema.Schema, error) {
 }
 
 func (t doltDevTable) SetSchema(ctx context.Context, sch schema.Schema) (Table, error) {
-	newSchemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, t.vrw, sch)
+	newSchemaVal, err := encoding.MarshalSchema(ctx, t.vrw, sch)
 	if err != nil {
 		return nil, err
 	}
@@ -1145,11 +1145,11 @@ func getSchemaAtAddr(ctx context.Context, vrw types.ValueReadWriter, addr hash.H
 	if err != nil {
 		return nil, err
 	}
-	return encoding.UnmarshalSchemaNomsValue(ctx, vrw.Format(), val)
+	return encoding.UnmarshalSchema(ctx, vrw.Format(), val)
 }
 
 func getAddrForSchema(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) (hash.Hash, error) {
-	st, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
+	st, err := encoding.MarshalSchema(ctx, vrw, sch)
 	if err != nil {
 		return hash.Hash{}, err
 	}
