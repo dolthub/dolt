@@ -202,6 +202,10 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Text"`)
+		}	
+		stringType, err := fillInStringCollationWithDefault(stringType)
+		if err != nil {
+			return nil, err
 		}
 		return &blobStringType{stringType}, nil
 	case sqltypes.Blob:
@@ -209,11 +213,19 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Blob"`)
 		}
+		stringType, err := fillInStringCollationWithDefault(stringType)
+		if err != nil {
+			return nil, err
+		}
 		return &varBinaryType{stringType}, nil
 	case sqltypes.VarChar:
 		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "VarChar"`)
+		}
+		stringType, err := fillInStringCollationWithDefault(stringType)
+		if err != nil {
+			return nil, err
 		}
 		return &varStringType{stringType}, nil
 	case sqltypes.VarBinary:
@@ -221,17 +233,29 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "VarBinary"`)
 		}
+		stringType, err := fillInStringCollationWithDefault(stringType)
+		if err != nil {
+			return nil, err
+		}
 		return &inlineBlobType{stringType}, nil
 	case sqltypes.Char:
 		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Char"`)
 		}
+		stringType, err := fillInStringCollationWithDefault(stringType)
+		if err != nil {
+			return nil, err
+		}
 		return &varStringType{stringType}, nil
 	case sqltypes.Binary:
 		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Binary"`)
+		}
+		stringType, err := fillInStringCollationWithDefault(stringType)
+		if err != nil {
+			return nil, err
 		}
 		return &inlineBlobType{stringType}, nil
 	case sqltypes.Bit:
@@ -251,16 +275,45 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		if !ok {
 			return nil, fmt.Errorf(`expected "EnumTypeIdentifier" from SQL basetype "Enum"`)
 		}
-		return &enumType{enumSQLType}, nil
+		enumSqlType, err := fillInEnumCollationWithDefault(enumSQLType)
+		if err != nil {
+			return nil, err
+		}
+		return &enumType{enumSqlType}, nil
 	case sqltypes.Set:
 		setSQLType, ok := sqlType.(sql.SetType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "SetTypeIdentifier" from SQL basetype "Set"`)
 		}
+		setSQLType, err := fillInSetCollationWithDefault(setSQLType)
+		if err != nil {
+			return nil, err
+		}
 		return &setType{setSQLType}, nil
 	default:
 		return nil, fmt.Errorf(`no type info can be created from SQL base type "%v"`, sqlType.String())
 	}
+}
+
+func fillInSetCollationWithDefault(st sql.SetType) (sql.SetType, error) {
+	if st.Collation() == sql.Collation_Unspecified {
+		return gmstypes.CreateSetType(st.Values(), sql.Collation_Default)
+	}
+	return st, nil
+}
+
+func fillInEnumCollationWithDefault(enumType sql.EnumType) (sql.EnumType, error) {
+	if enumType.Collation() == sql.Collation_Unspecified {
+		return gmstypes.CreateEnumType(enumType.Values(), sql.Collation_Default)
+	}
+	return enumType, nil
+}
+
+func fillInStringCollationWithDefault(stringType sql.StringType) (sql.StringType, error) {
+	if stringType.Collation() == sql.Collation_Unspecified {
+		return gmstypes.CreateString(stringType.Type(), stringType.Length(), sql.Collation_Default)
+	}
+	return stringType, nil
 }
 
 // FromTypeParams constructs a TypeInfo from the given identifier and parameters.

@@ -19,8 +19,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -28,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/types"
@@ -68,65 +65,7 @@ func testSchemaSerializationFlatbuffers(t *testing.T, sch schema.Schema) {
 	require.NoError(t, err)
 	s, err := encoding.DeserializeSchema(ctx, nbf, v)
 	require.NoError(t, err)
-
-	// The parsed schema includes collations for columns that didn't specify them, but we don't store those. So clear
-	// them out before doing the comparison
-	// TODO: we should probably not mess with column collations during parsing at all
-	newColumns := make([]schema.Column, sch.GetAllCols().Size())
-	i := 0
-	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		sqlType := col.TypeInfo.ToSqlType()
-		if st, ok := sqlType.(sql.StringType); ok && st.Collation() == sql.Collation_Default {
-			correctedCollation, err := sqltypes.CreateString(st.Type(), st.Length(), sql.Collation_Unspecified)
-			require.NoError(t, err)
-			newTypeInfo, err := typeinfo.FromSqlType(correctedCollation)
-			require.NoError(t, err)
-			newColumns[i], err = schema.NewColumnWithTypeInfo(col.Name, tag, newTypeInfo, col.IsPartOfPK, col.Default, col.AutoIncrement, col.Comment, col.Constraints...)
-			require.NoError(t, err)
-		} else if et, ok := sqlType.(sql.EnumType); ok && et.Collation() == sql.Collation_Default {
-			enumType, err := sqltypes.CreateEnumType(et.Values(), sql.Collation_Unspecified)
-			require.NoError(t, err)
-			newTypeInfo, err := typeinfo.FromSqlType(enumType)
-			require.NoError(t, err)
-			newColumns[i], err = schema.NewColumnWithTypeInfo(col.Name, tag, newTypeInfo, col.IsPartOfPK, col.Default, col.AutoIncrement, col.Comment, col.Constraints...)
-			require.NoError(t, err)
-		} else if st, ok := sqlType.(sql.SetType); ok && st.Collation() == sql.Collation_Default {
-			setType, err := sqltypes.CreateSetType(st.Values(), sql.Collation_Unspecified)
-			require.NoError(t, err)
-			newTypeInfo, err := typeinfo.FromSqlType(setType)
-			require.NoError(t, err)
-			newColumns[i], err = schema.NewColumnWithTypeInfo(col.Name, tag, newTypeInfo, col.IsPartOfPK, col.Default, col.AutoIncrement, col.Comment, col.Constraints...)
-			require.NoError(t, err)
-		} else {
-			newColumns[i] = col
-		}
-		i++
-		return false, nil
-	})
-
-	newColColl := schema.NewColCollection(newColumns...)
-	correctedSchema, err := schema.NewSchema(newColColl, sch.GetPkOrdinals(), sch.GetCollation(), sch.Indexes(), sch.Checks())
-
-	// Same for indexes, which refer to columns
-	newIdxes := schema.NewIndexCollection(correctedSchema.GetAllCols(), correctedSchema.GetPKCols())
-	for _, idx := range sch.Indexes().AllIndexes() {
-		props := schema.IndexProperties{
-			IsUnique:           idx.IsUnique(),
-			IsSpatial:          idx.IsSpatial(),
-			IsFullText:         idx.IsFullText(),
-			IsUserDefined:      idx.IsUserDefined(),
-			Comment:            idx.Comment(),
-			FullTextProperties: idx.FullTextProperties(),
-		}
-
-		_, err = newIdxes.AddIndexByColTags(idx.Name(), idx.IndexedColumnTags(), idx.PrefixLengths(), props)
-		require.NoError(t, err)
-	}
-
-	correctedSchema, err = schema.NewSchema(newColColl, sch.GetPkOrdinals(), sch.GetCollation(), newIdxes, sch.Checks())
-	require.NoError(t, err)
-
-	assert.Equal(t, correctedSchema, s)
+	assert.Equal(t, sch, s)
 }
 
 func parseSchemaString(t *testing.T, s string) schema.Schema {
