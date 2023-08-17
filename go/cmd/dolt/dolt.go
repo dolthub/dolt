@@ -555,7 +555,7 @@ func runMain() int {
 			return 1
 		}
 
-		lateBind, err := buildLateBinder(ctx, dEnv.FS, mrEnv, creds, apr, subcommandName, verboseEngineSetup)
+		lateBind, err := buildLateBinder(ctx, dEnv, mrEnv, creds, apr, subcommandName, verboseEngineSetup)
 
 		if err != nil {
 			cli.PrintErrln(color.RedString("%v", err))
@@ -604,7 +604,7 @@ or check the docs for questions about usage.`)
 
 // buildLateBinder builds a LateBindQueryist for which is used to obtain the Queryist used for the length of the
 // command execution.
-func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, creds *cli.UserPassword, apr *argparser.ArgParseResults, subcommandName string, verbose bool) (cli.LateBindQueryist, error) {
+func buildLateBinder(ctx context.Context, rootEnv *env.DoltEnv, mrEnv *env.MultiRepoEnv, creds *cli.UserPassword, apr *argparser.ArgParseResults, subcommandName string, verbose bool) (cli.LateBindQueryist, error) {
 
 	var targetEnv *env.DoltEnv = nil
 
@@ -622,7 +622,7 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 		}
 		useTLS := !apr.Contains(cli.NoTLSFlag)
 
-		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, host, port, useTLS, useDb)
+		return sqlserver.BuildConnectionStringQueryist(ctx, rootEnv.FS, creds, apr, host, port, useTLS, useDb)
 	} else {
 		_, hasPort := apr.GetInt(cli.PortFlag)
 		if hasPort {
@@ -655,30 +655,32 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 		}, nil
 	}
 
-	// nil targetEnv will happen if the user ran a command in an empty directory - which we support in some cases.
-	if targetEnv != nil {
-		isLocked, lock, err := targetEnv.GetLock()
-		if err != nil {
-			return nil, err
-		}
-		if isLocked {
-			if verbose {
-				cli.Println("verbose: starting remote mode")
-			}
+	// nil targetEnv will happen if the user ran a command in an empty directory or when there is a server running with
+	// no databases. CLI will try to connect to the server in this case.
+	if targetEnv == nil {
+		targetEnv = rootEnv
+	}
 
-			if !creds.Specified {
-				creds = &cli.UserPassword{Username: sqlserver.LocalConnectionUser, Password: lock.Secret, Specified: false}
-			}
-
-			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", lock.Port, false, useDb)
+	isLocked, lock, err := targetEnv.GetLock()
+	if err != nil {
+		return nil, err
+	}
+	if isLocked {
+		if verbose {
+			cli.Println("verbose: starting remote mode")
 		}
+
+		if !creds.Specified {
+			creds = &cli.UserPassword{Username: sqlserver.LocalConnectionUser, Password: lock.Secret, Specified: false}
+		}
+		return sqlserver.BuildConnectionStringQueryist(ctx, rootEnv.FS, creds, apr, "localhost", lock.Port, false, useDb)
 	}
 
 	if verbose {
 		cli.Println("verbose: starting local mode")
 	}
 
-	return commands.BuildSqlEngineQueryist(ctx, cwdFS, mrEnv, creds, apr)
+	return commands.BuildSqlEngineQueryist(ctx, rootEnv.FS, mrEnv, creds, apr)
 }
 
 // doc is currently used only when a `initCliContext` command is specified. This will include all commands in time,
