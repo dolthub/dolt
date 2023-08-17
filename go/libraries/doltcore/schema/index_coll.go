@@ -131,7 +131,7 @@ func (ixc indexCollectionImpl) Copy() IndexCollection {
 		copy(pks, ixc.pks)
 		ixc.pks = pks
 	}
-	
+
 	if ixc.indexes != nil {
 		indexes := make(map[string]*indexImpl, len(ixc.indexes))
 		for name, index := range ixc.indexes {
@@ -139,7 +139,7 @@ func (ixc indexCollectionImpl) Copy() IndexCollection {
 		}
 		ixc.indexes = indexes
 	}
-	
+
 	if ixc.colTagToIndex != nil {
 		colTagToIndex := make(map[uint64][]*indexImpl, len(ixc.colTagToIndex))
 		for tag, indexes := range ixc.colTagToIndex {
@@ -154,7 +154,7 @@ func (ixc indexCollectionImpl) Copy() IndexCollection {
 		}
 		ixc.colTagToIndex = colTagToIndex
 	}
-	
+
 	// no need to copy the colColl, it's immutable
 	return &ixc
 }

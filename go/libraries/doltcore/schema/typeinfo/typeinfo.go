@@ -202,7 +202,7 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Text"`)
-		}	
+		}
 		stringType, err := fillInStringCollationWithDefault(stringType)
 		if err != nil {
 			return nil, err

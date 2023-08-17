@@ -20,11 +20,11 @@ import (
 	"testing"
 	"time"
 
+	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/types"
-	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 )
 
 func TestDatetimeConvertNomsValueToValue(t *testing.T) {

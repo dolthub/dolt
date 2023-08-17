@@ -142,6 +142,6 @@ func (c checkCollection) Copy() CheckCollection {
 	for i, check := range c.checks {
 		checks[i] = NewCheck(check.name, check.expression, check.enforced)
 	}
-	
+
 	return &c
 }

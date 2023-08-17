@@ -131,10 +131,10 @@ func TestSingleScript(t *testing.T) {
 					Query: "show create table t1",
 					Expected: []sql.Row{{"t1",
 						"CREATE TABLE `t1` (\n" +
-								"  `pk` int NOT NULL,\n" +
-								"  `d` datetime,\n" +
-								"  PRIMARY KEY (`pk`)\n" +
-								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+							"  `pk` int NOT NULL,\n" +
+							"  `d` datetime,\n" +
+							"  PRIMARY KEY (`pk`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 				},
 				{
 					Query:    "insert into t1 values (1, '2020-01-01 00:00:00.123456')",
@@ -148,10 +148,10 @@ func TestSingleScript(t *testing.T) {
 					Query: "show create table t2",
 					Expected: []sql.Row{{"t2",
 						"CREATE TABLE `t2` (\n" +
-								"  `pk` int NOT NULL,\n" +
-								"  `d` datetime(3),\n" +
-								"  PRIMARY KEY (`pk`)\n" +
-								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+							"  `pk` int NOT NULL,\n" +
+							"  `d` datetime(3),\n" +
+							"  PRIMARY KEY (`pk`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 				},
 				{
 					Query:    "insert into t2 values (1, '2020-01-01 00:00:00.123456')",
@@ -165,10 +165,10 @@ func TestSingleScript(t *testing.T) {
 					Query: "show create table t3",
 					Expected: []sql.Row{{"t3",
 						"CREATE TABLE `t3` (\n" +
-								"  `pk` int NOT NULL,\n" +
-								"  `d` datetime(6),\n" +
-								"  PRIMARY KEY (`pk`)\n" +
-								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+							"  `pk` int NOT NULL,\n" +
+							"  `d` datetime(6),\n" +
+							"  PRIMARY KEY (`pk`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 				},
 				{
 					Query:    "insert into t3 values (1, '2020-01-01 00:00:00.123456')",

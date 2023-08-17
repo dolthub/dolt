@@ -446,7 +446,7 @@ func UnmarshalSchema(ctx context.Context, nbf *types.NomsBinFormat, schemaVal ty
 			}
 		}
 	}
-	
+
 	return sch, nil
 }
 
@@ -460,17 +460,17 @@ func UnmarshalSchemaAtAddr(ctx context.Context, vr types.ValueReader, addr hash.
 		cachedSch := cachedData.schema
 		return cachedSch.Copy(), nil
 	}
-	
+
 	schemaVal, err := vr.ReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	sch, err := UnmarshalSchema(ctx, vr.Format(), schemaVal)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	d := schCacheData{
 		schema: sch,
 	}

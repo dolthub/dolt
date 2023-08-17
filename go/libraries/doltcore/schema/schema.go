@@ -87,7 +87,7 @@ type Schema interface {
 
 	// SetCollation sets the table's collation.
 	SetCollation(collation Collation)
-	
+
 	// Copy returns a copy of this Schema that can be safely modified independently.
 	Copy() Schema
 }
