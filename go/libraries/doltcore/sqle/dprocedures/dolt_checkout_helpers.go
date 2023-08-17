@@ -29,7 +29,7 @@ import (
 
 // MoveWorkingSetToBranch moves the working set from the currently checked out branch onto the branch specified
 // by `brName`. This is a POTENTIALLY DESTRUCTIVE ACTION used during command line checkout
-func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool) error {
+func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBranch bool) error {
 	branchRef := ref.NewBranchRef(brName)
 	dSess := dsess.DSessFromSess(ctx.Session)
 	dbName := dSess.GetCurrentDatabase()
@@ -78,7 +78,7 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool) error {
 		if err != nil {
 			return err
 		}
-		if actions.CheckoutWouldStompWorkingSetChanges(currentRoots, newBranchRoots) {
+		if !isNewBranch && actions.CheckoutWouldStompWorkingSetChanges(currentRoots, newBranchRoots) {
 			return actions.ErrWorkingSetsOnBothBranches
 		}
 	}
