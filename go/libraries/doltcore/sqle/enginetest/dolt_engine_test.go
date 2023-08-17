@@ -120,34 +120,71 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "add column auto_increment, non primary key",
+			Name: "datetime precision",
 			SetUpScript: []string{
-				"CREATE TABLE t1 (i bigint primary key, s varchar(20))",
-				"INSERT INTO t1 VALUES (1, 'a'), (2, 'b'), (3, 'c')",
+				"CREATE TABLE t1 (pk int primary key, d datetime)",
+				"CREATE TABLE t2 (pk int primary key, d datetime(3))",
+				"CREATE TABLE t3 (pk int primary key, d datetime(6))",
 			},
 			Assertions: []queries.ScriptTestAssertion{
-				{
-					Query:    "alter table t1 add column j int auto_increment unique",
-					Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
-				},
 				{
 					Query: "show create table t1",
 					Expected: []sql.Row{{"t1",
 						"CREATE TABLE `t1` (\n" +
-							"  `i` bigint NOT NULL,\n" +
-							"  `s` varchar(20),\n" +
-							"  `j` int AUTO_INCREMENT,\n" +
-							"  PRIMARY KEY (`i`),\n" +
-							"  UNIQUE KEY `j` (`j`)\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+								"  `pk` int NOT NULL,\n" +
+								"  `d` datetime,\n" +
+								"  PRIMARY KEY (`pk`)\n" +
+								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 				},
 				{
-					Query: "select * from t1 order by i",
-					Expected: []sql.Row{
-						{1, "a", 1},
-						{2, "b", 2},
-						{3, "c", 3},
-					},
+					Query:    "insert into t1 values (1, '2020-01-01 00:00:00.123456')",
+					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+				},
+				{
+					Query:    "select * from t1 order by pk",
+					Expected: []sql.Row{{1, queries.MustParseTime(time.DateTime, "2020-01-01 00:00:00")}},
+				},
+				{
+					Query: "show create table t2",
+					Expected: []sql.Row{{"t2",
+						"CREATE TABLE `t2` (\n" +
+								"  `pk` int NOT NULL,\n" +
+								"  `d` datetime(3),\n" +
+								"  PRIMARY KEY (`pk`)\n" +
+								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+				},
+				{
+					Query:    "insert into t2 values (1, '2020-01-01 00:00:00.123456')",
+					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+				},
+				{
+					Query:    "select * from t2 order by pk",
+					Expected: []sql.Row{{1, queries.MustParseTime(time.RFC3339Nano, "2020-01-01T00:00:00.123000000Z")}},
+				},
+				{
+					Query: "show create table t3",
+					Expected: []sql.Row{{"t3",
+						"CREATE TABLE `t3` (\n" +
+								"  `pk` int NOT NULL,\n" +
+								"  `d` datetime(6),\n" +
+								"  PRIMARY KEY (`pk`)\n" +
+								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+				},
+				{
+					Query:    "insert into t3 values (1, '2020-01-01 00:00:00.123456')",
+					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+				},
+				{
+					Query:    "select * from t3 order by pk",
+					Expected: []sql.Row{{1, queries.MustParseTime(time.RFC3339Nano, "2020-01-01T00:00:00.123456000Z")}},
+				},
+				{
+					Query:       "create table t4 (pk int primary key, d datetime(-1))",
+					ExpectedErr: sql.ErrSyntaxError,
+				},
+				{
+					Query:          "create table t4 (pk int primary key, d datetime(7))",
+					ExpectedErrStr: "DATETIME supports precision from 0 to 6",
 				},
 			},
 		},
@@ -158,7 +195,7 @@ func TestSingleScript(t *testing.T) {
 	defer cleanup()
 
 	harness := newDoltHarness(t)
-	harness.Setup(setup.MydbData, setup.Parent_childData)
+	harness.Setup(setup.MydbData)
 	for _, script := range scripts {
 		sql.RunWithNowFunc(tcc.Now, func() error {
 			enginetest.TestScript(t, harness, script)

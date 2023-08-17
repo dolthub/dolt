@@ -680,7 +680,8 @@ func schemaFromAddr(ctx context.Context, vrw types.ValueReadWriter, addr hash.Ha
 	if err != nil {
 		return nil, err
 	}
-
+	
+	// schema, err := encoding.DeserializeSchema(ctx, vrw.Format(), schemaVal)
 	schema, err := encoding.UnmarshalSchemaNomsValue(ctx, vrw.Format(), schemaVal)
 	if err != nil {
 		return nil, err

@@ -449,6 +449,8 @@ func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, sch
 		return cachedSch, nil
 	}
 
+	// TODO: the flatbuffers path does an additional round-trip serialization to the noms format and back which contains
+	//  business logic around collations. We can't remove that without resolving the collations mess
 	var sd schemaData
 	if nbf.UsesFlatbuffers() {
 		sch, err := DeserializeSchema(ctx, nbf, schemaVal)
