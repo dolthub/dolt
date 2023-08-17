@@ -244,7 +244,7 @@ teardown() {
     cd ..
     run dolt version
     [ "$status" -eq 0 ]
-    [[ $output =~ "no valid database in this directory" ]] || false
+    ! [[ $output =~ "no valid database in this directory" ]] || false
 
     dolt sql -q "create database test"
     run ls
