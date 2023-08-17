@@ -1268,6 +1268,13 @@ func (dEnv *DoltEnv) Unlock() error {
 
 // WriteLockfile writes a lockfile encoding the pid of the calling process.
 func WriteLockfile(fs filesys.Filesys, lock *DBLock) error {
+	// if the DoltDir doesn't exist, create it.
+	doltDir, _ := fs.Abs(dbfactory.DoltDir)
+	err := fs.MkDirs(doltDir)
+	if err != nil {
+		return err
+	}
+
 	lockFile, _ := fs.Abs(filepath.Join(dbfactory.DoltDir, ServerLockFile))
 
 	portStr := strconv.Itoa(lock.Port)
@@ -1286,7 +1293,7 @@ func WriteLockfile(fs filesys.Filesys, lock *DBLock) error {
 		}
 	}
 
-	err := fs.WriteFile(lockFile, []byte(fmt.Sprintf("%d:%s:%s", lock.Pid, portStr, lock.Secret)))
+	err = fs.WriteFile(lockFile, []byte(fmt.Sprintf("%d:%s:%s", lock.Pid, portStr, lock.Secret)))
 	if err != nil {
 		return err
 	}
