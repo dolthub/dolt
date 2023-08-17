@@ -88,7 +88,6 @@ func (qdtf *QueryDiffTableFunction) evalQueries() error {
 	if qdtf.schema2, qdtf.rowIter2, err = qdtf.engine.Query(qdtf.ctx, q2.(string)); err != nil {
 		return err
 	}
-	// TODO: need to deep copy
 	qdtf.sqlSch = append(qdtf.sqlSch, qdtf.schema1.Copy()...)
 	qdtf.sqlSch = append(qdtf.sqlSch, qdtf.schema2.Copy()...)
 	qdtf.sqlSch = append(qdtf.sqlSch, &sql.Column{Name: "diff_type", Type: gmstypes.Text})
@@ -148,50 +147,78 @@ func (qdtf *QueryDiffTableFunction) Children() []sql.Node {
 	return nil
 }
 
-func (qdtf *QueryDiffTableFunction) compareRows(pkOrds []int, row1, row2 sql.Row) (int, bool) {
+func (qdtf *QueryDiffTableFunction) compareRows(pkOrds []int, row1, row2 sql.Row) (int, bool, error) {
 	var cmp int
-	for _, pkOrd := range pkOrds {
-		pk1, _ := gmstypes.ConvertToString(row1[pkOrd], gmstypes.Text)
-		pk2, _ := gmstypes.ConvertToString(row2[pkOrd], gmstypes.Text)
-		if pk1 < pk2 {
-			cmp = -1
-		} else if pk1 > pk2 {
-			cmp = 1
-		} else {
-			cmp = 0
+	var err error
+	for i, pkOrd := range pkOrds {
+		cmp, err = qdtf.schema1[i].Type.Compare(row1[pkOrd], row2[pkOrd])
+		if err != nil {
+			return 0, false, err
+		}
+		if cmp != 0 {
+			break
 		}
 	}
 	var diff bool
 	for i := 0; i < len(row1); i++ {
-		a, _ := gmstypes.ConvertToString(row1[i], gmstypes.Text)
-		b, _ := gmstypes.ConvertToString(row2[i], gmstypes.Text)
-		if a != b {
+		if row1[i] != row2[i] {
 			diff = true
 			break
 		}
 	}
-	return cmp, diff
+	return cmp, diff, nil
 }
 
 // RowIter implements the sql.Node interface
+// TODO: actually implement a row iterator
 func (qdtf *QueryDiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter, error) {
-	// TODO: assume both are sorted according to their primary keys
+	var results []sql.Row
+	var newRow sql.Row
+	if !qdtf.schema1.Equals(qdtf.schema2) {
+		nilRow1 := make(sql.Row, len(qdtf.schema1))
+		nilRow2 := make(sql.Row, len(qdtf.schema2))
+		for {
+			row, err := qdtf.rowIter1.Next(qdtf.ctx)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return nil, err
+			}
+			newRow = append(append(row, nilRow2...), "deleted")
+			results = append(results, newRow)
+		}
+		for {
+			row, err := qdtf.rowIter2.Next(qdtf.ctx)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return nil, err
+			}
+			newRow = append(append(nilRow1, row...), "added")
+			results = append(results, newRow)
+		}
+		return sql.RowsToRowIter(results...), nil
+	}
+
 	row1, err1 := qdtf.rowIter1.Next(qdtf.ctx)
 	row2, err2 := qdtf.rowIter2.Next(qdtf.ctx)
-	if !qdtf.schema1.Equals(qdtf.schema2) {
-		return sql.RowsToRowIter(), nil
-	}
+
+
+
 	var pkOrds []int
 	for i, col := range qdtf.schema1 {
 		if col.PrimaryKey {
 			pkOrds = append(pkOrds, i)
 		}
 	}
-	var results []sql.Row
-	var newRow sql.Row
 	nilRow := make(sql.Row, len(qdtf.schema1))
 	for err1 == nil && err2 == nil {
-		cmp, d := qdtf.compareRows(pkOrds, row1, row2)
+		cmp, d, err := qdtf.compareRows(pkOrds, row1, row2)
+		if err != nil {
+			return nil, err
+		}
 		switch cmp {
 		case -1: // deleted
 			newRow = append(append(row1, nilRow...), "deleted")
@@ -213,6 +240,7 @@ func (qdtf *QueryDiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.Ro
 
 	// Append any remaining rows
 	if err1 == io.EOF && err2 == io.EOF {
+		return sql.RowsToRowIter(results...), nil
 	} else if err1 == io.EOF {
 		newRow = append(append(nilRow, row2...), "added")
 		results = append(results, newRow)
