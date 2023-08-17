@@ -316,15 +316,10 @@ func (sd encodedSchemaData) decodeSchema() (schema.Schema, error) {
 	}
 	sch.SetCollation(sd.Collation)
 
-	return sch, nil
-}
-
-func (sd encodedSchemaData) addChecksIndexesAndPkOrderingToSchema(sch schema.Schema) error {
-	// initialize pk order before adding indexes
 	if sd.PkOrdinals != nil {
 		err := sch.SetPkOrdinals(sd.PkOrdinals)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -352,7 +347,7 @@ func (sd encodedSchemaData) addChecksIndexesAndPkOrderingToSchema(sch schema.Sch
 			},
 		)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -363,13 +358,11 @@ func (sd encodedSchemaData) addChecksIndexesAndPkOrderingToSchema(sch schema.Sch
 			encodedCheck.Enforced,
 		)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	sch.SetCollation(sd.Collation)
-
-	return nil
+	return sch, nil
 }
 
 // MarshalSchema takes a Schema and converts it to a types.Value
