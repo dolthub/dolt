@@ -126,25 +126,34 @@ func NewIndexCollection(cols *ColCollection, pkCols *ColCollection) IndexCollect
 }
 
 func (ixc indexCollectionImpl) Copy() IndexCollection {
-	pks := make([]uint64, len(ixc.pks))
-	copy(pks, ixc.pks)
-	ixc.pks = pks
-	
-	indexes := make(map[string]*indexImpl, len(ixc.indexes))
-	for name, index := range ixc.indexes {
-		indexes[name] = index.copy()
+	if ixc.pks != nil {
+		pks := make([]uint64, len(ixc.pks))
+		copy(pks, ixc.pks)
+		ixc.pks = pks
 	}
-	ixc.indexes = indexes
 	
-	colTagToIndex := make(map[uint64][]*indexImpl, len(ixc.colTagToIndex))
-	for tag, indexes := range ixc.colTagToIndex {
-		indexesCopy := make([]*indexImpl, len(indexes))
-		for i, index := range indexes {
-			indexesCopy[i] = index.copy()
+	if ixc.indexes != nil {
+		indexes := make(map[string]*indexImpl, len(ixc.indexes))
+		for name, index := range ixc.indexes {
+			indexes[name] = index.copy()
 		}
-		colTagToIndex[tag] = indexesCopy
+		ixc.indexes = indexes
 	}
-	ixc.colTagToIndex = colTagToIndex
+	
+	if ixc.colTagToIndex != nil {
+		colTagToIndex := make(map[uint64][]*indexImpl, len(ixc.colTagToIndex))
+		for tag, indexes := range ixc.colTagToIndex {
+			var indexesCopy []*indexImpl
+			if indexes != nil {
+				indexesCopy = make([]*indexImpl, len(indexes))
+				for i, index := range indexes {
+					indexesCopy[i] = index.copy()
+				}
+			}
+			colTagToIndex[tag] = indexesCopy
+		}
+		ixc.colTagToIndex = colTagToIndex
+	}
 	
 	// no need to copy the colColl, it's immutable
 	return &ixc
