@@ -525,7 +525,7 @@ func runMain() int {
 	// variables like `${db_name}_default_branch` (maybe these should not be
 	// part of Dolt config in the first place!).
 
-	// Current working director is preserved to ensure that user provided path arguments are always calculated
+	// Current working directory is preserved to ensure that user provided path arguments are always calculated
 	// relative to this directory. The root environment's FS will be updated to be the --data-dir path if the user
 	// specified one.
 	cwdFS := dEnv.FS
