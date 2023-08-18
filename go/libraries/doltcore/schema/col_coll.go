@@ -18,8 +18,6 @@ import (
 	"errors"
 	"sort"
 	"strings"
-
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 // ErrColTagCollision is an error that is returned when two columns within a ColCollection have the same tag
@@ -273,47 +271,4 @@ func FilterColCollection(cc *ColCollection, cb func(col Column) bool) *ColCollec
 		}
 	}
 	return NewColCollection(filtered...)
-}
-
-func ColCollUnion(colColls ...*ColCollection) (*ColCollection, error) {
-	var allTags = make(map[uint64]bool)
-	var allCols []Column
-	for _, sch := range colColls {
-		err := sch.Iter(func(tag uint64, col Column) (stop bool, err error) {
-			// skip if already seen
-			if _, ok := allTags[tag]; ok {
-				return false, nil
-			}
-			allCols = append(allCols, col)
-			allTags[tag] = true
-			return false, nil
-		})
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return NewColCollection(allCols...), nil
-}
-
-// ColCollectionSetDifference returns the set difference leftCC - rightCC.
-func ColCollectionSetDifference(leftCC, rightCC *ColCollection) (d *ColCollection) {
-	d = FilterColCollection(leftCC, func(col Column) bool {
-		_, ok := rightCC.GetByTag(col.Tag)
-		return !ok
-	})
-	return d
-}
-
-func MakeColumnMapping(from, to *ColCollection) (m val.OrdinalMapping) {
-	m = make(val.OrdinalMapping, len(to.GetColumns()))
-	var ok bool
-	for i, col := range to.GetColumns() {
-		m[i], ok = from.TagToIdx[col.Tag]
-		if !ok {
-			m[i] = -1
-		}
-	}
-	return
 }

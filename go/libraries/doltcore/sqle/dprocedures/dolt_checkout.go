@@ -365,7 +365,7 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 	}
 
 	if isMove {
-		return newBranchName, remoteAndBranch, doGlobalCheckout(ctx, newBranchName, apr.Contains(cli.ForceFlag))
+		return newBranchName, remoteAndBranch, doGlobalCheckout(ctx, newBranchName, apr.Contains(cli.ForceFlag), true)
 	} else {
 
 		wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(newBranchName))
@@ -396,7 +396,7 @@ func checkoutExistingBranch(ctx *sql.Context, dbName string, branchName string, 
 	dSess := dsess.DSessFromSess(ctx.Session)
 
 	if apr.Contains(cli.MoveFlag) {
-		return doGlobalCheckout(ctx, branchName, apr.Contains(cli.ForceFlag))
+		return doGlobalCheckout(ctx, branchName, apr.Contains(cli.ForceFlag), false)
 	} else {
 
 		err = dSess.SwitchWorkingSet(ctx, dbName, wsRef)
@@ -410,9 +410,9 @@ func checkoutExistingBranch(ctx *sql.Context, dbName string, branchName string, 
 
 // doGlobalCheckout implements the behavior of the `dolt checkout` command line, moving the working set into
 // the new branch and persisting the checked-out branch into future sessions
-func doGlobalCheckout(ctx *sql.Context, branchName string, isForce bool) error {
+func doGlobalCheckout(ctx *sql.Context, branchName string, isForce bool, isNewBranch bool) error {
 
-	err := MoveWorkingSetToBranch(ctx, branchName, isForce)
+	err := MoveWorkingSetToBranch(ctx, branchName, isForce, isNewBranch)
 	if err != nil && err != doltdb.ErrAlreadyOnBranch {
 		return err
 	}

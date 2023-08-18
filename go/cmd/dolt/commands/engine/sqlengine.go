@@ -51,6 +51,8 @@ type SqlEngine struct {
 type sessionFactory func(mysqlSess *sql.BaseSession, pro sql.DatabaseProvider) (*dsess.DoltSession, error)
 type contextFactory func(ctx context.Context, session sql.Session) (*sql.Context, error)
 
+type SystemVariables map[string]interface{}
+
 type SqlEngineConfig struct {
 	IsReadOnly              bool
 	IsServerLocked          bool
@@ -64,6 +66,7 @@ type SqlEngineConfig struct {
 	DoltTransactionCommit   bool
 	Bulk                    bool
 	JwksConfig              []JwksConfig
+	SystemVariables         SystemVariables
 	ClusterController       *cluster.Controller
 	BinlogReplicaController binlogreplication.BinlogReplicaController
 }
@@ -101,6 +104,11 @@ func NewSqlEngine(
 	config.ClusterController.ManageSystemVariables(sql.SystemVariables)
 
 	err = config.ClusterController.ApplyStandbyReplicationConfig(ctx, bThreads, mrEnv, dbs...)
+	if err != nil {
+		return nil, err
+	}
+
+	err = applySystemVariables(sql.SystemVariables, config.SystemVariables)
 	if err != nil {
 		return nil, err
 	}
@@ -200,6 +208,13 @@ func NewRebasedSqlEngine(engine *gms.Engine, dbs map[string]dsess.SqlDatabase) *
 	return &SqlEngine{
 		engine: engine,
 	}
+}
+
+func applySystemVariables(vars sql.SystemVariableRegistry, cfg SystemVariables) error {
+	if cfg != nil {
+		return vars.AssignValues(cfg)
+	}
+	return nil
 }
 
 // Databases returns a slice of all databases in the engine

@@ -37,6 +37,9 @@ func rebuildFullTextIndexes(ctx *sql.Context, root *doltdb.RootValue) (*doltdb.R
 	if err != nil {
 		return nil, err
 	}
+	// Create a set that we'll check later to remove any orphaned pseudo-index tables.
+	// These may appear when a table is renamed on another branch and the index was recreated before merging.
+	foundTables := make(map[string]struct{})
 	// We'll purge the data from every Full-Text table so that we may rewrite their contents
 	for _, tblName := range allTableNames {
 		if !doltdb.IsFullTextTable(tblName) {
@@ -74,6 +77,8 @@ func rebuildFullTextIndexes(ctx *sql.Context, root *doltdb.RootValue) (*doltdb.R
 		if doltdb.IsFullTextTable(tblName) {
 			continue
 		}
+		// Add this table to the found tables, since it's not a pseudo-index table.
+		foundTables[tblName] = struct{}{}
 		tbl, ok, err := root.GetTable(ctx, tblName)
 		if err != nil {
 			return nil, err
@@ -101,6 +106,12 @@ func rebuildFullTextIndexes(ctx *sql.Context, root *doltdb.RootValue) (*doltdb.R
 				continue
 			}
 			props := idx.FullTextProperties()
+			// Add all of the pseudo-index tables as found tables
+			foundTables[props.ConfigTable] = struct{}{}
+			foundTables[props.PositionTable] = struct{}{}
+			foundTables[props.DocCountTable] = struct{}{}
+			foundTables[props.GlobalCountTable] = struct{}{}
+			foundTables[props.RowCountTable] = struct{}{}
 			// The config table is shared, and it's not written to during this process
 			if configTable == nil {
 				configTable, err = createFulltextTable(ctx, props.ConfigTable, root)
@@ -183,6 +194,16 @@ func rebuildFullTextIndexes(ctx *sql.Context, root *doltdb.RootValue) (*doltdb.R
 			if err != nil {
 				return nil, err
 			}
+		}
+	}
+	// Our last loop removes any orphaned pseudo-index tables
+	for _, tblName := range allTableNames {
+		if _, found := foundTables[tblName]; found || !doltdb.IsFullTextTable(tblName) {
+			continue
+		}
+		root, err = root.RemoveTables(ctx, true, true, tblName)
+		if err != nil {
+			return nil, err
 		}
 	}
 	return root, nil

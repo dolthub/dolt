@@ -521,7 +521,7 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 				SkipResultsCheck:                true,
 			},
 			{
-				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;;",
+				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
 				Expected: []sql.Row{{1}},
 			},
 			{
