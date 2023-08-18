@@ -131,7 +131,7 @@ SQL
     popd
 }
 
-@test "checkout: dolt checkout can be used when a working set has a different feature version than its head" {
+@test "feature-version: dolt checkout can be used when a working set has a different feature version than its head" {
     rm -rf .dolt/
     dolt --feature-version $OLD init
     dolt --feature-version $NEW sql -q "create table a (b int);"
