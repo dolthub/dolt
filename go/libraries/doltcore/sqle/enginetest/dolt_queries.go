@@ -3684,6 +3684,58 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "table names given",
+		SetUpScript: []string{
+			"create table test (pk int PRIMARY KEY)",
+			"call dolt_add('.')",
+			"call dolt_commit('-m', 'created table test')",
+			"create table test2 (pk int PRIMARY KEY)",
+			"call dolt_add('.')",
+			"call dolt_commit('-m', 'created table test2')",
+			"call dolt_checkout('-b', 'test-branch')",
+			"insert into test values (0)",
+			"call dolt_add('.')",
+			"call dolt_commit('-m', 'inserted 0 into test')",
+			"call dolt_checkout('main')",
+			"insert into test values (1)",
+			"call dolt_add('.')",
+			"call dolt_commit('-m', 'inserted 1 into test')",
+			"call dolt_merge('test-branch' '-m', 'merged test-branch')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select message from dolt_log('--tables', 'test');",
+				Expected: []sql.Row{
+					{"merged test-branch"},
+					{"inserted 1 into test"},
+					{"created table test"},
+				},
+			},
+			{
+				Query: "select message from dolt_log('--tables', 'test2');",
+				Expected: []sql.Row{
+					{"created table test2"},
+				},
+			},
+			{
+				Query: "select message from dolt_log('--tables', 'test', 'test2');",
+				Expected: []sql.Row{
+					{"merged test-branch"},
+					{"inserted 1 into test"},
+					{"created table test2"},
+					{"created table test"},
+				},
+			},
+			{
+				Query: "select message from dolt_log('test-branch', '--tables', 'test');",
+				Expected: []sql.Row{
+					{"inserted 0 into test"},
+					{"created table test"},
+				},
+			},
+		},
+	},
 	//TODO: figure out how we were returning a commit from the function
 	/*{
 		Name: "min parents, merges, show parents, decorate",
