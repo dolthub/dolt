@@ -609,6 +609,12 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 	var targetEnv *env.DoltEnv = nil
 
 	useDb, hasUseDb := apr.GetValue(commands.UseDbFlag)
+	useBranch, hasBranch := apr.GetValue(cli.BranchParam)
+
+	if hasUseDb && hasBranch{
+		dbName, _ := dsess.SplitRevisionDbName(useDb)
+		useDb=dbName+"/"+useBranch
+	}
 	// If the host flag is given, we are forced to use a remote connection to a server.
 	host, hasHost := apr.GetValue(cli.HostFlag)
 	if hasHost {
@@ -621,7 +627,6 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 			port = 3306
 		}
 		useTLS := !apr.Contains(cli.NoTLSFlag)
-
 		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, host, port, useTLS, useDb)
 	} else {
 		_, hasPort := apr.GetInt(cli.PortFlag)
@@ -638,6 +643,7 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 		}
 	} else {
 		useDb = mrEnv.GetFirstDatabase()
+		if hasBranch { useDb+="/"+useBranch }
 	}
 
 	if targetEnv == nil && useDb != "" {
@@ -654,7 +660,6 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 			return nil, nil, nil, fmt.Errorf("The current directory is not a valid dolt repository.")
 		}, nil
 	}
-
 	// nil targetEnv will happen if the user ran a command in an empty directory - which we support in some cases.
 	if targetEnv != nil {
 		isLocked, lock, err := targetEnv.GetLock()
@@ -677,7 +682,6 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 	if verbose {
 		cli.Println("verbose: starting local mode")
 	}
-
 	return commands.BuildSqlEngineQueryist(ctx, cwdFS, mrEnv, creds, apr)
 }
 
@@ -688,7 +692,7 @@ var doc = cli.CommandDocumentationContent{
 	LongDesc:  `Dolt comprises of multiple subcommands that allow users to import, export, update, and manipulate data with SQL.`,
 
 	Synopsis: []string{
-		"<--data-dir=<path>> subcommand <subcommand arguments>",
+		"<--data-dir=<path>> <--branch=<branch name>>  subcommand <subcommand arguments>",
 	},
 }
 
