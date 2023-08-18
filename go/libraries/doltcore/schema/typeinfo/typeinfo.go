@@ -139,7 +139,7 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	queryType := sqlType.Type()
 	switch queryType {
 	case sqltypes.Null:
@@ -207,7 +207,7 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Text"`)
-		}	
+		}
 		return &blobStringType{stringType}, nil
 	case sqltypes.Blob:
 		stringType, ok := sqlType.(sql.StringType)
