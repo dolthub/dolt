@@ -1015,43 +1015,43 @@ SQL
     FIRST_COMMIT=`dolt log | grep commit | cut -d " " -f 2 | tail -1`
     run dolt diff $FIRST_COMMIT test-branch
     [ $status -eq 0 ]
-    [[ ! $output =~ "panic" ]]
+    [[ ! $output =~ "panic" ]] || false
     run dolt diff main@$FIRST_COMMIT test-branch
     [ $status -eq 1 ]
-    [[ ! $output =~ "panic" ]]
+    [[ ! $output =~ "panic" ]] || false
     run dolt diff ref.with.period test-branch
     [ $status -eq 1 ]
-    [[ ! $output =~ "panic" ]]
+    [[ ! $output =~ "panic" ]] || false
 
     run dolt diff $FIRST_COMMIT..test-branch
     [ $status -eq 0 ]
-    [[ ! $output =~ "panic" ]]
+    [[ ! $output =~ "panic" ]] || false
     run dolt diff main@$FIRST_COMMIT..test-branch
     [ $status -eq 1 ]
-    [[ ! $output =~ "panic" ]]
+    [[ ! $output =~ "panic" ]] || false
     run dolt diff ref.with.period..test-branch
     [ $status -eq 1 ]
-    [[ ! $output =~ "panic" ]]
+    [[ ! $output =~ "panic" ]] || false
 
     run dolt diff $FIRST_COMMIT...test-branch
     [ $status -eq 0 ]
-    [[ ! $output =~ "panic" ]]
+    [[ ! $output =~ "panic" ]] || false
     run dolt diff main@$FIRST_COMMIT...test-branch
     [ $status -eq 1 ]
-    [[ ! $output =~ "panic" ]]
+    [[ ! $output =~ "panic" ]] || false
     run dolt diff ref.with.period...test-branch
     [ $status -eq 1 ]
-    [[ ! $output =~ "panic" ]]
+    [[ ! $output =~ "panic" ]] || false
 
     run dolt diff --merge-base $FIRST_COMMIT test-branch
     [ $status -eq 0 ]
-    [[ ! $output =~ "panic" ]]
+    [[ ! $output =~ "panic" ]] || false
     run dolt diff --merge-base main@$FIRST_COMMIT test-branch
     [ $status -eq 1 ]
-    [[ ! $output =~ "panic" ]]
+    [[ ! $output =~ "panic" ]] || false
     run dolt diff --merge-base ref.with.period test-branch
     [ $status -eq 1 ]
-    [[ ! $output =~ "panic" ]]
+    [[ ! $output =~ "panic" ]] || false
 }
 
 @test "diff: binary data in sql output is hex encoded" {
@@ -1293,10 +1293,10 @@ SQL
     dolt diff -r sql
     run dolt diff -r sql
     [ $status -eq 0 ]
-    [[ "$output" =~ 'DELETE FROM `t` WHERE `pk`=1 AND `val`=1;' ]]
-    [[ "$output" =~ 'DELETE FROM `t` WHERE `pk`=1 AND `val`=1;' ]]
-    [[ "$output" =~ 'INSERT INTO `t` (`pk`,`val`) VALUES (1,2);' ]]
-    [[ "$output" =~ 'INSERT INTO `t` (`pk`,`val`) VALUES (1,2);' ]]
+    [[ "$output" =~ 'DELETE FROM `t` WHERE `pk`=1 AND `val`=1;' ]] || false
+    [[ "$output" =~ 'DELETE FROM `t` WHERE `pk`=1 AND `val`=1;' ]] || false
+    [[ "$output" =~ 'INSERT INTO `t` (`pk`,`val`) VALUES (1,2);' ]] || false
+    [[ "$output" =~ 'INSERT INTO `t` (`pk`,`val`) VALUES (1,2);' ]] || false
     [ "${#lines[@]}" = "4" ]
 
     dolt commit -am "cm4"
@@ -1582,7 +1582,7 @@ SQL
 +---+------+------+------+
 EOF
 )
-    [[ "$output" =~ "$EXPECTED_TABLE" ]]
+    [[ "$output" =~ "$EXPECTED_TABLE" ]] || false
 
     EXPECTED_TABLE=$(cat <<'EOF'
 +---+------+------+------+------+------+
@@ -1593,7 +1593,7 @@ EOF
 +---+------+------+------+------+------+
 EOF
 )
-    [[ "$output" =~ "$EXPECTED_TABLE" ]]
+    [[ "$output" =~ "$EXPECTED_TABLE" ]] || false
 }
 
 # This test was added to prevent short tuples from causing an empty diff.

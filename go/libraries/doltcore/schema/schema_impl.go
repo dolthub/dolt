@@ -553,3 +553,16 @@ func columnMissingNotNullConstraint(col Column) bool {
 	}
 	return true
 }
+
+// Copy creates a copy of this schema safe to be edited independently. Some members, like column collections, are
+// immutable and don't need to be copied. Others, like index and check collections, must be copied.
+// We do this because it's cheaper to copy a schema than to deserialize one.
+func (si schemaImpl) Copy() Schema {
+	pkOrds := make([]int, len(si.pkOrdinals))
+	copy(pkOrds, si.pkOrdinals)
+
+	si.indexCollection = si.indexCollection.Copy()
+	si.checkCollection = si.checkCollection.Copy()
+
+	return &si
+}

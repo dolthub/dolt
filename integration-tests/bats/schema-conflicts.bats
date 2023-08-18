@@ -11,7 +11,7 @@ teardown() {
 
 @test "schema-conflicts: dolt_schema_conflicts smoke test" {
     run dolt sql -q "select * from dolt_schema_conflicts" -r csv
-    [[ "$output" =~ "table_name,base_schema,our_schema,their_schema,description" ]]
+    [[ "$output" =~ "table_name,base_schema,our_schema,their_schema,description" ]] || false
 }
 
 setup_schema_conflict() {
@@ -21,7 +21,7 @@ setup_schema_conflict() {
     dolt sql -q "alter table t modify c0 varchar(20)"
     dolt commit -am "alter table t on branch main"
     dolt checkout other
-    dolt sql -q "alter table t modify c0 datetime"
+    dolt sql -q "alter table t modify c0 datetime(6)"
     dolt commit -am "alter table t on branch other"
     dolt checkout main
 }
@@ -29,14 +29,14 @@ setup_schema_conflict() {
 @test "schema-conflicts: sql merge, query schema conflicts" {
     setup_schema_conflict
 
-    dolt sql -q "call dolt_merge('other')"
+    dolt sql -q "set @@dolt_force_transaction_commit=1; call dolt_merge('other')"
 
     run dolt sql -q "select our_schema from dolt_schema_conflicts" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "varchar(20)," ]]
+    [[ "$output" =~ "varchar(20)," ]] || false
     run dolt sql -q "select their_schema from dolt_schema_conflicts" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "datetime(6)," ]]
+    [[ "$output" =~ "datetime(6)," ]] || false
 }
 
 @test "schema-conflicts: cli merge, query schema conflicts" {
@@ -46,10 +46,10 @@ setup_schema_conflict() {
 
     run dolt sql -q "select our_schema from dolt_schema_conflicts" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "varchar(20)," ]]
+    [[ "$output" =~ "varchar(20)," ]] || false
     run dolt sql -q "select their_schema from dolt_schema_conflicts" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "datetime(6)," ]]
+    [[ "$output" =~ "datetime(6)," ]] || false
 }
 
 @test "schema-conflicts: resolve schema conflict with 'ours' via SQL" {
@@ -60,7 +60,7 @@ setup_schema_conflict() {
     dolt sql -q "call dolt_conflicts_resolve('--ours', 't')"
     run dolt schema show t
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "varchar(20)" ]]
+    [[ "$output" =~ "varchar(20)" ]] || false
 }
 
 @test "schema-conflicts: resolve schema conflict with 'theirs' via SQL" {
@@ -71,7 +71,7 @@ setup_schema_conflict() {
     dolt sql -q "call dolt_conflicts_resolve('--theirs', 't')"
     run dolt schema show t
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "datetime" ]]
+    [[ "$output" =~ "datetime" ]] || false
 }
 
 @test "schema-conflicts: resolve schema conflict with 'ours' via CLI" {
@@ -82,7 +82,7 @@ setup_schema_conflict() {
     dolt conflicts resolve --ours t
     run dolt schema show t
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "varchar(20)" ]]
+    [[ "$output" =~ "varchar(20)" ]] || false
 }
 
 @test "schema-conflicts: resolve schema conflict with 'theirs' via CLI" {
@@ -93,5 +93,5 @@ setup_schema_conflict() {
     dolt conflicts resolve --theirs t
     run dolt schema show t
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "datetime" ]]
+    [[ "$output" =~ "datetime" ]] || false
 }

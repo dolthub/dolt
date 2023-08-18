@@ -684,7 +684,7 @@ SQL
 
     run dolt sql -q "show tables"
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "panic" ]]
+    [[ ! "$output" =~ "panic" ]] || false
     [[ "$output" =~ "remote not found: 'unknown'" ]] || false
 }
 

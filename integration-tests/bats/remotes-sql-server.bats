@@ -73,10 +73,10 @@ teardown() {
     dolt pull remote1
     run dolt sql -q "select * from test" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[0]}" =~ "pk" ]]
-    [[ "${lines[1]}" =~ "0" ]]
-    [[ "${lines[2]}" =~ "1" ]]
-    [[ "${lines[3]}" =~ "2" ]]
+    [[ "${lines[0]}" =~ "pk" ]] || false
+    [[ "${lines[1]}" =~ "0" ]] || false
+    [[ "${lines[2]}" =~ "1" ]] || false
+    [[ "${lines[3]}" =~ "2" ]] || false
 }
 
 @test "remotes-sql-server: async push on sql-session commit" {
@@ -99,10 +99,10 @@ teardown() {
     
     run dolt sql -q "select * from test" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[0]}" =~ "pk" ]]
-    [[ "${lines[1]}" =~ "0" ]]
-    [[ "${lines[2]}" =~ "1" ]]
-    [[ "${lines[3]}" =~ "2" ]]
+    [[ "${lines[0]}" =~ "pk" ]] || false
+    [[ "${lines[1]}" =~ "0" ]] || false
+    [[ "${lines[2]}" =~ "1" ]] || false
+    [[ "${lines[3]}" =~ "2" ]] || false
 }
 
 @test "remotes-sql-server: pull new commits on read" {

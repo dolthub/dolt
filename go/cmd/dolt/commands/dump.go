@@ -23,8 +23,8 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -269,6 +269,7 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.
 	}
 
 	stmtColIdx := sch.IndexOfColName(doltdb.ProceduresTableCreateStmtCol)
+	sqlModeIdx := sch.IndexOfColName(doltdb.ProceduresTableSqlModeCol)
 
 	defer func(iter sql.RowIter, context *sql.Context) {
 		err := iter.Close(context)
@@ -285,6 +286,18 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.
 			return err
 		}
 
+		sqlMode := ""
+		if len(row) >= sqlModeIdx {
+			if s, ok := row[sqlModeIdx].(string); ok {
+				sqlMode = s
+			}
+		}
+
+		modeChanged, err := changeSqlMode(sqlCtx, writer, sqlMode)
+		if err != nil {
+			return err
+		}
+
 		err = iohelp.WriteLine(writer, "delimiter END_PROCEDURE")
 		if err != nil {
 			return err
@@ -298,6 +311,12 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.
 		err = iohelp.WriteLine(writer, "END_PROCEDURE\ndelimiter ;")
 		if err != nil {
 			return err
+		}
+
+		if modeChanged {
+			if err := resetSqlMode(writer); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -321,6 +340,7 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.Ro
 
 	typeColIdx := sch.IndexOfColName(doltdb.SchemasTablesTypeCol)
 	fragColIdx := sch.IndexOfColName(doltdb.SchemasTablesFragmentCol)
+	sqlModeIdx := sch.IndexOfColName(doltdb.SchemasTablesSqlModeCol)
 
 	defer func(iter sql.RowIter, context *sql.Context) {
 		err := iter.Close(context)
@@ -341,9 +361,25 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.Ro
 			continue
 		}
 
+		sqlMode := ""
+		if s, ok := row[sqlModeIdx].(string); ok {
+			sqlMode = s
+		}
+
+		modeChanged, err := changeSqlMode(sqlCtx, writer, sqlMode)
+		if err != nil {
+			return err
+		}
+
 		err = iohelp.WriteLine(writer, fmt.Sprintf("%s;", row[fragColIdx]))
 		if err != nil {
 			return err
+		}
+
+		if modeChanged {
+			if err := resetSqlMode(writer); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -368,6 +404,7 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValu
 	typeColIdx := sch.IndexOfColName(doltdb.SchemasTablesTypeCol)
 	fragColIdx := sch.IndexOfColName(doltdb.SchemasTablesFragmentCol)
 	nameColIdx := sch.IndexOfColName(doltdb.SchemasTablesNameCol)
+	sqlModeIdx := sch.IndexOfColName(doltdb.SchemasTablesSqlModeCol)
 
 	defer func(iter sql.RowIter, context *sql.Context) {
 		err := iter.Close(context)
@@ -388,8 +425,18 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValu
 			continue
 		}
 
+		sqlMode := ""
+		if s, ok := row[sqlModeIdx].(string); ok {
+			sqlMode = s
+		}
+
+		opts := sql.NewSqlModeFromString(sqlMode).ParserOptions()
 		// We used to store just the SELECT part of a view, but now we store the entire CREATE VIEW statement
-		cv, err := parse.Parse(ctx, row[fragColIdx].(string))
+		cv, err := planbuilder.ParseWithOptions(ctx, engine.GetUnderlyingEngine().Analyzer.Catalog, row[fragColIdx].(string), opts)
+		if err != nil {
+			return err
+		}
+		modeChanged, err := changeSqlMode(ctx, writer, sqlMode)
 		if err != nil {
 			return err
 		}
@@ -406,9 +453,58 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValu
 				return err
 			}
 		}
+
+		if modeChanged {
+			if err := resetSqlMode(writer); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
+}
+
+// changeSqlMode checks if the current SQL session's @@SQL_MODE is different from the requested |newSqlMode| and if so,
+// outputs a SQL statement to |writer| to save the current @@SQL_MODE to the @previousSqlMode variable and then outputs
+// a SQL statement to set the @@SQL_MODE to |sqlMode|. If |newSqlMode| is the identical to the current session's
+// SQL_MODE (the default, global @@SQL_MODE), then no statements are written to |writer|. The boolean return code
+// indicates if any statements were written.
+func changeSqlMode(ctx *sql.Context, writer io.WriteCloser, newSqlMode string) (bool, error) {
+	if newSqlMode == "" {
+		return false, nil
+	}
+
+	variable, err := ctx.Session.GetSessionVariable(ctx, "SQL_MODE")
+	if err != nil {
+		return false, err
+	}
+	currentSqlMode, ok := variable.(string)
+	if !ok {
+		return false, fmt.Errorf("unable to read @@SQL_MODE system variable from value '%v'", currentSqlMode)
+	}
+
+	if currentSqlMode == newSqlMode {
+		return false, nil
+	}
+
+	err = iohelp.WriteLine(writer, "SET @previousSqlMode=@@SQL_MODE;")
+	if err != nil {
+		return false, err
+	}
+
+	err = iohelp.WriteLine(writer, fmt.Sprintf("SET @@SQL_MODE='%s';", newSqlMode))
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+// resetSqlMode outputs a SQL statement to |writer| to reset @@SQL_MODE back to the previous value stored
+// by the last call to changeSqlMode. This function should only be called after changeSqlMode, otherwise the
+// @previousSqlMode variable will not be set correctly.
+func resetSqlMode(writer io.WriteCloser) error {
+	return iohelp.WriteLine(writer, "SET @@SQL_MODE=@previousSqlMode;")
 }
 
 type dumpOptions struct {

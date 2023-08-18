@@ -33,6 +33,8 @@ import (
 	flag "github.com/juju/gnuflag"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
 	"github.com/dolthub/dolt/go/store/config"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -231,6 +233,19 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) err
 				return err
 			}
 			return tree.OutputAddressMapNode(w, node)
+		case serial.TableSchemaFileID:
+			sch, err := encoding.DeserializeSchema(ctx, types.Format_Default, value)
+			if err != nil {
+				return err
+			}
+
+			fmt.Fprintf(w, " {\n")
+			sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+				fmt.Fprintf(w, "\t%s: %s (additional info not shown)\n", col.Name, col.TypeInfo.ToSqlType().String())
+				return false, nil
+			})
+			fmt.Fprintf(w, "}\n")
+			return nil
 		case serial.ProllyTreeNodeFileID:
 			fallthrough
 		case serial.AddressMapFileID:
