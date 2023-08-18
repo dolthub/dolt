@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -1282,7 +1283,7 @@ func WriteLockfile(fs filesys.Filesys, lock *DBLock) error {
 		portStr = "-"
 	}
 
-	if filesys.LocalFS == fs {
+	if reflect.TypeOf(fs) == reflect.TypeOf(filesys.LocalFS) {
 		_, err := os.Create(lockFile)
 		if err != nil {
 			return err

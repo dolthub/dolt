@@ -138,7 +138,7 @@ func Serve(
 	if startError != nil {
 		return
 	}
-	defer fs.Delete(dEnv.LockFile(), false)
+	defer dEnv.FS.Delete(dEnv.LockFile(), false)
 
 	mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	if err != nil {
