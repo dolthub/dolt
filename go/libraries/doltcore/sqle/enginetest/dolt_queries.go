@@ -3362,6 +3362,14 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Query:    "SELECT count(*) from dolt_log(@Commit4, '--not', @Commit2);",
 				Expected: []sql.Row{{2}}, // 4, 3
 			},
+			{
+				Query:    "SELECT count(*) from dolt_log('^main', '^new-branch');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_log('^main', '--not', 'new-branch');",
+				Expected: []sql.Row{{0}},
+			},
 		},
 	},
 	{
@@ -3504,6 +3512,92 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query:    "SELECT commit_hash = @Commit5, committer, email, message from dolt_log(@Commit5, '--not', @Commit4);",
 				Expected: []sql.Row{{true, "root", "root@localhost", "inserting into t 5"}},
+			},
+		},
+	},
+	{
+		Name: "multiple revisions",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"call dolt_add('.')",
+			"call dolt_commit('-m', 'commit 1 MAIN')",
+			"call dolt_commit('--allow-empty', '-m', 'commit 2 MAIN')",
+			"call dolt_checkout('-b', 'branchA')",
+			"call dolt_commit('--allow-empty', '-m', 'commit 1 BRANCHA')",
+			"call dolt_commit('--allow-empty', '-m', 'commit 2 BRANCHA')",
+			"call dolt_checkout('-b', 'branchB')",
+			"call dolt_commit('--allow-empty', '-m', 'commit 1 BRANCHB')",
+			"call dolt_checkout('branchA')",
+			"call dolt_commit('--allow-empty', '-m', 'commit 3 BRANCHA')",
+			"call dolt_checkout('main')",
+			"call dolt_commit('--allow-empty', '-m', 'commit 3 AFTER')",
+		},
+		/*
+
+		                         1B (branchB)
+		                        /
+		                  1A - 2A - 3A (branchA)
+		                 /
+		 (init) - 1M - 2M - 3M (main)
+
+		*/
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select message from dolt_log('branchB', 'branchA');",
+				Expected: []sql.Row{
+					{"commit 3 BRANCHA"},
+					{"commit 1 BRANCHB"},
+					{"commit 2 BRANCHA"},
+					{"commit 1 BRANCHA"},
+					{"commit 2 MAIN"},
+					{"commit 1 MAIN"},
+					{"Initialize data repository"},
+				},
+			},
+			{
+				Query: "select message from dolt_log('main', 'branchA');",
+				Expected: []sql.Row{
+					{"commit 3 BRANCHA"},
+					{"commit 2 BRANCHA"},
+					{"commit 3 AFTER"},
+					{"commit 1 BRANCHA"},
+					{"commit 2 MAIN"},
+					{"commit 1 MAIN"},
+					{"Initialize data repository"},
+				},
+			},
+			{
+				Query: "select message from dolt_log('main', 'branchB', 'branchA');",
+				Expected: []sql.Row{
+					{"commit 3 BRANCHA"},
+					{"commit 1 BRANCHB"},
+					{"commit 2 BRANCHA"},
+					{"commit 3 AFTER"},
+					{"commit 1 BRANCHA"},
+					{"commit 2 MAIN"},
+					{"commit 1 MAIN"},
+					{"Initialize data repository"},
+				},
+			},
+			{
+				Query: "select message from dolt_log('branchB', 'main', '^branchA');",
+				Expected: []sql.Row{
+					{"commit 1 BRANCHB"},
+					{"commit 3 AFTER"},
+				},
+			},
+			{
+				Query: "select message from dolt_log('branchB', 'main', '--not', 'branchA');",
+				Expected: []sql.Row{
+					{"commit 1 BRANCHB"},
+					{"commit 3 AFTER"},
+				},
+			},
+			{
+				Query: "select message from dolt_log('branchB', 'main', '^branchA', '^main');",
+				Expected: []sql.Row{
+					{"commit 1 BRANCHB"},
+				},
 			},
 		},
 	},
