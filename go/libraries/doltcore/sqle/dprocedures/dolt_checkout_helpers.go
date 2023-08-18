@@ -15,7 +15,6 @@
 package dprocedures
 
 import (
-	"context"
 	"errors"
 	"fmt"
 
@@ -79,20 +78,12 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBr
 		if err != nil {
 			return err
 		}
-		if !isNewBranch && actions.CheckoutWouldStompWorkingSetChanges(currentRoots, newBranchRoots) {
-			// In some cases, a working set differs from its head only by the feature version.
-			// If this is the case, moving the working set is safe.
-			modifiedCurrentRoots, err := clearFeatureVersion(ctx, currentRoots)
+		if !isNewBranch {
+			wouldStomp, err := actions.CheckoutWouldStompWorkingSetChanges(ctx, currentRoots, newBranchRoots)
 			if err != nil {
 				return err
 			}
-
-			modifiedNewRoots, err := clearFeatureVersion(ctx, newBranchRoots)
-			if err != nil {
-				return err
-			}
-
-			if !isNewBranch && actions.CheckoutWouldStompWorkingSetChanges(modifiedCurrentRoots, modifiedNewRoots) {
+			if wouldStomp {
 				return actions.ErrWorkingSetsOnBothBranches
 			}
 		}
@@ -152,32 +143,6 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBr
 	}
 
 	return nil
-}
-
-// clearFeatureVersion creates a new version of the provided roots where all three roots have the same
-// feature version. By hashing these new roots, we can easily determine whether the roots differ only by
-// their feature version.
-func clearFeatureVersion(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
-	currentBranchFeatureVersion, _, err := roots.Head.GetFeatureVersion(ctx)
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
-
-	modifiedWorking, err := roots.Working.SetFeatureVersion(currentBranchFeatureVersion)
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
-
-	modifiedStaged, err := roots.Staged.SetFeatureVersion(currentBranchFeatureVersion)
-	if err != nil {
-		return doltdb.Roots{}, err
-	}
-
-	return doltdb.Roots{
-		Head:    roots.Head,
-		Working: modifiedWorking,
-		Staged:  modifiedStaged,
-	}, nil
 }
 
 // transferWorkingChanges computes new roots for `branchRef` by applying the changes from the staged and working sets
