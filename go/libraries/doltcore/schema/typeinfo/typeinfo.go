@@ -135,6 +135,11 @@ type TypeInfo interface {
 
 // FromSqlType takes in a sql.Type and returns the most relevant TypeInfo.
 func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
+	sqlType, err := fillInCollationWithDefault(sqlType)
+	if err != nil {
+		return nil, err
+	}
+	
 	queryType := sqlType.Type()
 	switch queryType {
 	case sqltypes.Null:
@@ -203,19 +208,11 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Text"`)
 		}	
-		stringType, err := fillInStringCollationWithDefault(stringType)
-		if err != nil {
-			return nil, err
-		}
 		return &blobStringType{stringType}, nil
 	case sqltypes.Blob:
 		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Blob"`)
-		}
-		stringType, err := fillInStringCollationWithDefault(stringType)
-		if err != nil {
-			return nil, err
 		}
 		return &varBinaryType{stringType}, nil
 	case sqltypes.VarChar:
@@ -223,19 +220,11 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "VarChar"`)
 		}
-		stringType, err := fillInStringCollationWithDefault(stringType)
-		if err != nil {
-			return nil, err
-		}
 		return &varStringType{stringType}, nil
 	case sqltypes.VarBinary:
 		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "VarBinary"`)
-		}
-		stringType, err := fillInStringCollationWithDefault(stringType)
-		if err != nil {
-			return nil, err
 		}
 		return &inlineBlobType{stringType}, nil
 	case sqltypes.Char:
@@ -243,19 +232,11 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Char"`)
 		}
-		stringType, err := fillInStringCollationWithDefault(stringType)
-		if err != nil {
-			return nil, err
-		}
 		return &varStringType{stringType}, nil
 	case sqltypes.Binary:
 		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Binary"`)
-		}
-		stringType, err := fillInStringCollationWithDefault(stringType)
-		if err != nil {
-			return nil, err
 		}
 		return &inlineBlobType{stringType}, nil
 	case sqltypes.Bit:
@@ -275,19 +256,11 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		if !ok {
 			return nil, fmt.Errorf(`expected "EnumTypeIdentifier" from SQL basetype "Enum"`)
 		}
-		enumSqlType, err := fillInEnumCollationWithDefault(enumSQLType)
-		if err != nil {
-			return nil, err
-		}
-		return &enumType{enumSqlType}, nil
+		return &enumType{enumSQLType}, nil
 	case sqltypes.Set:
 		setSQLType, ok := sqlType.(sql.SetType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "SetTypeIdentifier" from SQL basetype "Set"`)
-		}
-		setSQLType, err := fillInSetCollationWithDefault(setSQLType)
-		if err != nil {
-			return nil, err
 		}
 		return &setType{setSQLType}, nil
 	default:
@@ -295,25 +268,14 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 	}
 }
 
-func fillInSetCollationWithDefault(st sql.SetType) (sql.SetType, error) {
-	if st.Collation() == sql.Collation_Unspecified {
-		return gmstypes.CreateSetType(st.Values(), sql.Collation_Default)
+// fillInCollationWithDefault sets the default collation on any collated type with no collation set.
+// We don't serialize the collation if it's the default collation, but the engine expects every column to have an
+// explicit collation. So fill it in on load in that case.
+func fillInCollationWithDefault(typ sql.Type) (sql.Type, error) {
+	if collationType, ok := typ.(sql.TypeWithCollation); ok && collationType.Collation() == sql.Collation_Unspecified {
+		return collationType.WithNewCollation(sql.Collation_Default)
 	}
-	return st, nil
-}
-
-func fillInEnumCollationWithDefault(enumType sql.EnumType) (sql.EnumType, error) {
-	if enumType.Collation() == sql.Collation_Unspecified {
-		return gmstypes.CreateEnumType(enumType.Values(), sql.Collation_Default)
-	}
-	return enumType, nil
-}
-
-func fillInStringCollationWithDefault(stringType sql.StringType) (sql.StringType, error) {
-	if stringType.Collation() == sql.Collation_Unspecified {
-		return gmstypes.CreateString(stringType.Type(), stringType.Length(), sql.Collation_Default)
-	}
-	return stringType, nil
+	return typ, nil
 }
 
 // FromTypeParams constructs a TypeInfo from the given identifier and parameters.
@@ -416,12 +378,6 @@ func FromKind(kind types.NomsKind) TypeInfo {
 	default:
 		panic(fmt.Errorf(`no default type info for NomsKind "%v"`, kind.String()))
 	}
-}
-
-// IsStringType returns whether the given TypeInfo represents a CHAR, VARCHAR, or TEXT-derivative.
-func IsStringType(ti TypeInfo) bool {
-	_, ok := ti.(*varStringType)
-	return ok
 }
 
 // ParseIdentifier takes in an Identifier in string form and returns the matching Identifier.
