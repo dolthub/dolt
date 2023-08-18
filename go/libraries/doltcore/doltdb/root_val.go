@@ -382,7 +382,7 @@ func (root *RootValue) GetFeatureVersion(ctx context.Context) (ver FeatureVersio
 	return root.st.GetFeatureVersion()
 }
 
-func (root *RootValue) setFeatureVersion(v FeatureVersion) (*RootValue, error) {
+func (root *RootValue) SetFeatureVersion(v FeatureVersion) (*RootValue, error) {
 	newStorage, err := root.st.SetFeatureVersion(v)
 	if err != nil {
 		return nil, err
