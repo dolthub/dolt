@@ -32,7 +32,7 @@ const (
 	datetimeTypeParam_SQL_Date      = "date"
 	datetimeTypeParam_SQL_Datetime  = "datetime"
 	datetimeTypeParam_SQL_Timestamp = "timestamp"
-	datetimeTypeParam_Precision 	  = "precision"
+	datetimeTypeParam_Precision     = "precision"
 )
 
 type datetimeType struct {
