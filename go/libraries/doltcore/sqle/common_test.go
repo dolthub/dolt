@@ -50,8 +50,6 @@ func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *d
 		return nil, nil, err
 	}
 
-	engine.Analyzer.Verbose = true
-	engine.Analyzer.Debug = true
 	sch, iter, err := engine.Query(sqlCtx, query)
 	if err != nil {
 		return nil, nil, err

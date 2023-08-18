@@ -21,6 +21,7 @@ import (
 	fb "github.com/dolthub/flatbuffers/v23/go"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
+	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -205,7 +206,8 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 		col := cols[i]
 		co := b.CreateString(col.Comment)
 		do := b.CreateString(col.Default)
-		to := b.CreateString(sqlTypeString(col.TypeInfo))
+		typeString := sqlTypeString(col.TypeInfo)
+		to := b.CreateString(typeString)
 		no := b.CreateString(col.Name)
 
 		serial.ColumnStart(b)
@@ -535,6 +537,17 @@ func sqlTypeString(t typeinfo.TypeInfo) string {
 			return fmt.Sprintf("%s SRID %d", typ.String(), srid)
 		}
 	}
+
+	// For datetime types, always store the precision explicitly so that it can be read back precisely, although MySQL
+	// omits the precision when it's 0 (the default).
+	if sqltypes.IsDatetimeType(typ) || sqltypes.IsTimestampType(typ) {
+		dt := typ.(sql.DatetimeType)
+		if dt.Precision() == 0 {
+			return fmt.Sprintf("%s(0)", typ.String())
+		}
+		return typ.String()
+	}
+
 	return typ.String()
 }
 

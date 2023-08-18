@@ -59,13 +59,13 @@ func TestNomsMarshalling(t *testing.T) {
 		t.Fatal("Could not create in mem noms db.")
 	}
 
-	val, err := MarshalSchemaAsNomsValue(context.Background(), vrw, tSchema)
+	val, err := MarshalSchema(context.Background(), vrw, tSchema)
 
 	if err != nil {
 		t.Fatal("Failed to marshal Schema as a types.Value.")
 	}
 
-	unMarshalled, err := UnmarshalSchemaNomsValue(context.Background(), types.Format_Default, val)
+	unMarshalled, err := UnmarshalSchema(context.Background(), types.Format_Default, val)
 
 	if err != nil {
 		t.Fatal("Failed to unmarshal types.Value as Schema")
@@ -147,9 +147,9 @@ func TestTypeInfoMarshalling(t *testing.T) {
 			require.NoError(t, err)
 			_, vrw, _, err := dbfactory.MemFactory{}.CreateDB(context.Background(), nbf, nil, nil)
 			require.NoError(t, err)
-			val, err := MarshalSchemaAsNomsValue(context.Background(), vrw, originalSch)
+			val, err := MarshalSchema(context.Background(), vrw, originalSch)
 			require.NoError(t, err)
-			unmarshalledSch, err := UnmarshalSchemaNomsValue(context.Background(), nbf, val)
+			unmarshalledSch, err := UnmarshalSchema(context.Background(), nbf, val)
 			require.NoError(t, err)
 			ok := schema.SchemasAreEqual(originalSch, unmarshalledSch)
 			assert.True(t, ok)
@@ -271,9 +271,9 @@ func TestSchemaMarshalling(t *testing.T) {
 	vrw := getTestVRW(nbf)
 	schemas := getSchemas(t, 1000)
 	for _, sch := range schemas {
-		v, err := MarshalSchemaAsNomsValue(ctx, vrw, sch)
+		v, err := MarshalSchema(ctx, vrw, sch)
 		require.NoError(t, err)
-		s, err := UnmarshalSchemaNomsValue(ctx, nbf, v)
+		s, err := UnmarshalSchema(ctx, nbf, v)
 		require.NoError(t, err)
 		assert.Equal(t, sch, s)
 	}

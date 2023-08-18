@@ -3289,7 +3289,7 @@ var SchemaConflictScripts = []queries.ScriptTest{
 			"alter table t modify column c0 int",
 			"call dolt_commit('-am', 'altered t on branch other')",
 			"call dolt_checkout('main')",
-			"alter table t modify column c0 datetime",
+			"alter table t modify column c0 datetime(6)",
 			"call dolt_commit('-am', 'altered t on branch main')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -3317,7 +3317,7 @@ var SchemaConflictScripts = []queries.ScriptTest{
 			"alter table t modify column c0 int",
 			"call dolt_commit('-am', 'altered t on branch other')",
 			"call dolt_checkout('main')",
-			"alter table t modify column c0 datetime",
+			"alter table t modify column c0 datetime(6)",
 			"call dolt_commit('-am', 'altered t on branch main')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
