@@ -131,6 +131,7 @@ func Serve(
 		if err != nil {
 			return err, nil
 		}
+		dEnv.FS = fs
 	}
 
 	serverLock, startError := acquireGlobalSqlServerLock(serverConfig.Port(), dEnv)

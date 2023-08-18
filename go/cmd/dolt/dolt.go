@@ -530,6 +530,8 @@ func runMain() int {
 		cli.PrintErrln(color.RedString("Failed to set the data directory. %v", err))
 		return 1
 	}
+	dEnv.FS = dataDirFS
+
 	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dataDirFS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	if err != nil {
 		cli.PrintErrln("failed to load database names")

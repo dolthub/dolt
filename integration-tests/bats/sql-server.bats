@@ -1947,3 +1947,28 @@ behavior:
     [ $status -eq 0 ]
     [[ "$output" =~ "__dolt_local_user__@localhost" ]] || false
 }
+
+@test "sql-server: --data-dir respected when creating server lock file" {
+    baseDir=$(mktemp -d)
+
+    PORT=$( definePORT )
+    dolt sql-server --data-dir=$baseDir --host 0.0.0.0 --port=$PORT &
+    SERVER_PID=$!
+    SQL_USER='root'
+    wait_for_connection $PORT 7500
+
+    run dolt --data-dir=$baseDir sql -q "select current_user"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "__dolt_local_user__@localhost" ]] || false
+
+    cd "$baseDir"
+    run dolt sql-server
+    [ $status -eq 1 ]
+    [[ "$output" =~ "Database locked by another sql-server; Lock file" ]] || false
+
+    run dolt sql -q "select current_user"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "__dolt_local_user__@localhost" ]] || false
+
+    teardown
+}
