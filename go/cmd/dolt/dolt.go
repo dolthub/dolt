@@ -525,6 +525,10 @@ func runMain() int {
 	// variables like `${db_name}_default_branch` (maybe these should not be
 	// part of Dolt config in the first place!).
 
+	// Current working director is preserved to ensure that user provided path arguments are always calculated
+	// relative to this directory. The root environment's FS will be updated to be the --data-dir path if the user
+	// specified one.
+	cwdFS := dEnv.FS
 	dataDirFS, err := dEnv.FS.WithWorkingDir(dataDir)
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to set the data directory. %v", err))
@@ -557,7 +561,7 @@ func runMain() int {
 			return 1
 		}
 
-		lateBind, err := buildLateBinder(ctx, dEnv, mrEnv, creds, apr, subcommandName, verboseEngineSetup)
+		lateBind, err := buildLateBinder(ctx, cwdFS, dEnv, mrEnv, creds, apr, subcommandName, verboseEngineSetup)
 
 		if err != nil {
 			cli.PrintErrln(color.RedString("%v", err))
@@ -606,7 +610,7 @@ or check the docs for questions about usage.`)
 
 // buildLateBinder builds a LateBindQueryist for which is used to obtain the Queryist used for the length of the
 // command execution.
-func buildLateBinder(ctx context.Context, rootEnv *env.DoltEnv, mrEnv *env.MultiRepoEnv, creds *cli.UserPassword, apr *argparser.ArgParseResults, subcommandName string, verbose bool) (cli.LateBindQueryist, error) {
+func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, rootEnv *env.DoltEnv, mrEnv *env.MultiRepoEnv, creds *cli.UserPassword, apr *argparser.ArgParseResults, subcommandName string, verbose bool) (cli.LateBindQueryist, error) {
 
 	var targetEnv *env.DoltEnv = nil
 
@@ -624,7 +628,7 @@ func buildLateBinder(ctx context.Context, rootEnv *env.DoltEnv, mrEnv *env.Multi
 		}
 		useTLS := !apr.Contains(cli.NoTLSFlag)
 
-		return sqlserver.BuildConnectionStringQueryist(ctx, rootEnv.FS, creds, apr, host, port, useTLS, useDb)
+		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, host, port, useTLS, useDb)
 	} else {
 		_, hasPort := apr.GetInt(cli.PortFlag)
 		if hasPort {
@@ -675,14 +679,14 @@ func buildLateBinder(ctx context.Context, rootEnv *env.DoltEnv, mrEnv *env.Multi
 		if !creds.Specified {
 			creds = &cli.UserPassword{Username: sqlserver.LocalConnectionUser, Password: lock.Secret, Specified: false}
 		}
-		return sqlserver.BuildConnectionStringQueryist(ctx, rootEnv.FS, creds, apr, "localhost", lock.Port, false, useDb)
+		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", lock.Port, false, useDb)
 	}
 
 	if verbose {
 		cli.Println("verbose: starting local mode")
 	}
 
-	return commands.BuildSqlEngineQueryist(ctx, rootEnv.FS, mrEnv, creds, apr)
+	return commands.BuildSqlEngineQueryist(ctx, cwdFS, mrEnv, creds, apr)
 }
 
 // doc is currently used only when a `initCliContext` command is specified. This will include all commands in time,
