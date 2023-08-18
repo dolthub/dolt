@@ -191,14 +191,6 @@ teardown() {
     [[ $output =~ "NEW ( __DOLT__ )" ]] || false
 }
 
-@test "init: empty database folder displays no version" {
-    set_dolt_user "baz", "bazbash.com"
-
-    run dolt version
-    [ $status -eq 0 ]
-    [[ $output =~ "no valid database in this directory" ]] || false
-}
-
 @test "init: run init with --new-format, CREATE DATABASE through sql-server running in new-format repo should create a new format database" {
     set_dolt_user "baz", "baz@bash.com"
 
@@ -244,7 +236,7 @@ teardown() {
     cd ..
     run dolt version
     [ "$status" -eq 0 ]
-    [[ $output =~ "no valid database in this directory" ]] || false
+    ! [[ $output =~ "no valid database in this directory" ]] || false
 
     dolt sql -q "create database test"
     run ls

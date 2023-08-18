@@ -68,8 +68,6 @@ func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string
 	} else if dEnv.HasDoltDir() && dEnv.RSLoadErr == nil {
 		nbf := dEnv.DoltDB.Format()
 		cli.Printf("database storage format: %s\n", dfunctions.GetStorageFormatDisplayString(nbf))
-	} else {
-		cli.Println("no valid database in this directory")
 	}
 
 	usage := func() {}

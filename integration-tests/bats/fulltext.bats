@@ -355,3 +355,12 @@ teardown() {
     [[ "$output" =~ "test_abc" ]] || false
     [[ ! "$output" =~ "dolt_" ]] || false
 }
+
+@test "fulltext: psuedo-index tables do not show in dolt schema show" {
+    dolt sql -q "CREATE TABLE test_abc (pk BIGINT UNSIGNED PRIMARY KEY, v1 VARCHAR(200), FULLTEXT idx (v1));"
+
+    run dolt schema show
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test_abc" ]] || false
+    [[ ! "$output" =~ "dolt_" ]] || false
+}
