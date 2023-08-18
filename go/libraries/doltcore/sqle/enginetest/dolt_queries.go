@@ -3631,6 +3631,59 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_log options",
+		SetUpScript: []string{
+			"create table test (pk int, c1 int, primary key(pk))",
+			"call dolt_add('.')",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-m', 'created table')",
+			"call dolt_checkout('-b', 'branch1')",
+			"insert into test values (0, 0)",
+			"call dolt_add('.')",
+			"call dolt_commit('-m', 'inserted 0,0')",
+			"call dolt_checkout('main')",
+			"call dolt_checkout('-b', 'branch2')",
+			"insert into test values (1, 1)",
+			"call dolt_add('.')",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-m', 'inserted 1,1')",
+			"call dolt_checkout('main')",
+			"call dolt_merge('branch1')",                         // fast-forward
+			"call dolt_merge('branch2', '-m', 'merged branch2')", // actual merge
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select message from dolt_log('--merges');",
+				Expected: []sql.Row{
+					{"merged branch2"},
+				},
+			},
+			{
+				Query: "select message from dolt_log('--min-parents', '2');",
+				Expected: []sql.Row{
+					{"merged branch2"},
+				},
+			},
+			{
+				Query: "select message from dolt_log('--min-parents', '1');",
+				Expected: []sql.Row{
+					{"merged branch2"},
+					{"inserted 1,1"},
+					{"inserted 0,0"},
+					{"created table"},
+				},
+			},
+			{
+				Query:    "select count(parents) from dolt_log('--parents') where parents != '';",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "select count(refs) from dolt_log('--decorate=full') where refs != '';",
+				Expected: []sql.Row{{3}},
+			},
+		},
+	},
 	//TODO: figure out how we were returning a commit from the function
 	/*{
 		Name: "min parents, merges, show parents, decorate",
