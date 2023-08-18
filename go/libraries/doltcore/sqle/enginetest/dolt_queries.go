@@ -3226,36 +3226,67 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT count(*) from dolt_log();",
-				Expected: []sql.Row{{4}},
+				Query: "SELECT message from dolt_log();",
+				Expected: []sql.Row{
+					{"inserting into t"},
+					{"creating table t"},
+					{"Initialize data repository"},
+				},
 			},
 			{
-				Query:    "SELECT count(*) from dolt_log('main');",
-				Expected: []sql.Row{{4}},
+				Query: "SELECT message from dolt_log('main');",
+				Expected: []sql.Row{
+					{"inserting into t"},
+					{"creating table t"},
+					{"Initialize data repository"},
+				},
 			},
 			{
-				Query:    "SELECT count(*) from dolt_log(@Commit1);",
-				Expected: []sql.Row{{3}},
+				Query: "SELECT message from dolt_log(@Commit1);",
+				Expected: []sql.Row{
+					{"creating table t"},
+					{"Initialize data repository"},
+				},
 			},
 			{
-				Query:    "SELECT count(*) from dolt_log(@Commit2);",
-				Expected: []sql.Row{{4}},
+				Query: "SELECT message from dolt_log(@Commit2);",
+				Expected: []sql.Row{
+					{"inserting into t"},
+					{"creating table t"},
+					{"Initialize data repository"},
+				},
 			},
 			{
-				Query:    "SELECT count(*) from dolt_log(@Commit3);",
-				Expected: []sql.Row{{5}},
+				Query: "SELECT message from dolt_log(@Commit3);",
+				Expected: []sql.Row{
+					{"inserting into t again"},
+					{"inserting into t"},
+					{"creating table t"},
+					{"Initialize data repository"},
+				},
 			},
 			{
-				Query:    "SELECT count(*) from dolt_log('new-branch');",
-				Expected: []sql.Row{{5}},
+				Query: "SELECT message from dolt_log('new-branch');",
+				Expected: []sql.Row{
+					{"inserting into t again"},
+					{"inserting into t"},
+					{"creating table t"},
+					{"Initialize data repository"},
+				},
 			},
 			{
-				Query:    "SELECT count(*) from dolt_log('main^');",
-				Expected: []sql.Row{{3}},
+				Query: "SELECT message from dolt_log('main^');",
+				Expected: []sql.Row{
+					{"creating table t"},
+					{"Initialize data repository"},
+				},
 			},
 			{
-				Query:    "SELECT count(*) from dolt_log('main') join dolt_diff(@Commit1, @Commit2, 't') where commit_hash = to_commit;",
-				Expected: []sql.Row{{2}},
+				Query: "SELECT message from dolt_log('main') join dolt_diff(@Commit1, @Commit2, 't') where commit_hash = to_commit;",
+				Expected: []sql.Row{
+					{"inserting into t"},
+					{"inserting into t"},
+				},
 			},
 		},
 	},
@@ -3396,7 +3427,6 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{true, false, "root", "root@localhost", "inserting into t"},
 					{false, true, "root", "root@localhost", "creating table t"},
-					{false, false, "root", "root@localhost", "checkpoint enginetest database mydb"},
 					{false, false, "billy bob", "bigbillieb@fake.horse", "Initialize data repository"},
 				},
 			},

@@ -2058,6 +2058,7 @@ func TestLogTableFunction(t *testing.T) {
 	harness.Setup(setup.MydbData)
 	for _, test := range LogTableFunctionScriptTests {
 		harness.engine = nil
+		harness.skipSetupCommit = true
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScript(t, harness, test)
 		})
@@ -2070,6 +2071,7 @@ func TestLogTableFunctionPrepared(t *testing.T) {
 	harness.Setup(setup.MydbData)
 	for _, test := range LogTableFunctionScriptTests {
 		harness.engine = nil
+		harness.skipSetupCommit = true
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScriptPrepared(t, harness, test)
 		})
