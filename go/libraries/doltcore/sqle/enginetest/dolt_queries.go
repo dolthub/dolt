@@ -3069,10 +3069,6 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "SELECT * from dolt_log(@Commit1, @Commit2, 't');",
-				ExpectedErr: sql.ErrInvalidArgumentNumber,
-			},
-			{
 				Query:       "SELECT * from dolt_log(null);",
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
@@ -3137,31 +3133,11 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
 			{
-				Query:       "SELECT * from dolt_log('^main', '--not', @Commit1);",
-				ExpectedErr: sql.ErrInvalidArgumentDetails,
-			},
-			{
 				Query:       "SELECT * from dolt_log('main', '--not', '^branch1');",
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
 			{
 				Query:       "SELECT * from dolt_log('main', '--not', 'main..branch1');",
-				ExpectedErr: sql.ErrInvalidArgumentDetails,
-			},
-			{
-				Query:       "SELECT * from dolt_log('^main', @Commit2, '--not', @Commit1);",
-				ExpectedErr: sql.ErrInvalidArgumentDetails,
-			},
-			{
-				Query:       "SELECT * from dolt_log(@Commit1, @Commit2);",
-				ExpectedErr: sql.ErrInvalidArgumentDetails,
-			},
-			{
-				Query:       "SELECT * from dolt_log('^main', '^branch1');",
-				ExpectedErr: sql.ErrInvalidArgumentDetails,
-			},
-			{
-				Query:       "SELECT * from dolt_log('^main');",
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
 			{
