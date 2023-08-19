@@ -20,6 +20,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"io"
+	"strings"
 )
 
 var _ sql.TableFunction = (*QueryDiffTableFunction)(nil)
@@ -42,25 +43,22 @@ type QueryDiffTableFunction struct {
 }
 
 // NewInstance creates a new instance of TableFunction interface
-func (qdtf *QueryDiffTableFunction) NewInstance(ctx *sql.Context, database sql.Database, expressions []sql.Expression) (sql.Node, error) {
+func (tf *QueryDiffTableFunction) NewInstance(ctx *sql.Context, database sql.Database, expressions []sql.Expression) (sql.Node, error) {
 	newInstance := &QueryDiffTableFunction{
 		ctx:      ctx,
 		database: database,
 	}
-
 	node, err := newInstance.WithExpressions(expressions...)
 	if err != nil {
 		return nil, err
 	}
-
 	return node, nil
 }
 
 // WithCatalog implements the sql.CatalogTableFunction interface
-func (qdtf *QueryDiffTableFunction) WithCatalog(c sql.Catalog) (sql.TableFunction, error) {
-	newInstance := *qdtf
+func (tf *QueryDiffTableFunction) WithCatalog(c sql.Catalog) (sql.TableFunction, error) {
+	newInstance := *tf
 	newInstance.catalog = c
-
 	pro, ok := c.(sql.DatabaseProvider)
 	if !ok {
 		return nil, fmt.Errorf("unable to get database provider")
@@ -73,69 +71,83 @@ func (qdtf *QueryDiffTableFunction) WithCatalog(c sql.Catalog) (sql.TableFunctio
 	return &newInstance, nil
 }
 
-func (qdtf *QueryDiffTableFunction) evalQueries() error {
-	q1, err := qdtf.query1.Eval(qdtf.ctx, nil)
+
+func (tf *QueryDiffTableFunction) evalQuery(query sql.Expression) (sql.Schema, sql.RowIter, error) {
+	q, err := query.Eval(tf.ctx, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	qStr, isStr := q.(string)
+	if !isStr {
+		return nil, nil, fmt.Errorf("query must be a string, not %T", q)
+	}
+	qStr = strings.TrimSpace(qStr)
+	if !strings.HasPrefix(strings.ToLower(qStr), "select") {
+		return nil, nil, fmt.Errorf("query must be a SELECT statement")
+	}
+	return tf.engine.Query(tf.ctx, qStr)
+}
+
+func (tf *QueryDiffTableFunction) evalQueries() error {
+	var err error
+	tf.schema1, tf.rowIter1, err = tf.evalQuery(tf.query1)
 	if err != nil {
 		return err
 	}
-	q2, err := qdtf.query2.Eval(qdtf.ctx, nil)
+	tf.schema2, tf.rowIter2, err = tf.evalQuery(tf.query2)
 	if err != nil {
 		return err
 	}
-	if qdtf.schema1, qdtf.rowIter1, err = qdtf.engine.Query(qdtf.ctx, q1.(string)); err != nil {
-		return err
+	tf.sqlSch = append(tf.sqlSch, tf.schema1.Copy()...)
+	tf.sqlSch = append(tf.sqlSch, tf.schema2.Copy()...)
+	tf.sqlSch = append(tf.sqlSch, &sql.Column{Name: "diff_type", Type: gmstypes.Text})
+	for i := range tf.schema1 {
+		tf.sqlSch[i].Source = "query_diff"
+		tf.sqlSch[i].Name = "from_" + tf.sqlSch[i].Name
 	}
-	if qdtf.schema2, qdtf.rowIter2, err = qdtf.engine.Query(qdtf.ctx, q2.(string)); err != nil {
-		return err
-	}
-	qdtf.sqlSch = append(qdtf.sqlSch, qdtf.schema1.Copy()...)
-	qdtf.sqlSch = append(qdtf.sqlSch, qdtf.schema2.Copy()...)
-	qdtf.sqlSch = append(qdtf.sqlSch, &sql.Column{Name: "diff_type", Type: gmstypes.Text})
-	for i := range qdtf.schema1 {
-		qdtf.sqlSch[i].Source = "query_diff"
-		qdtf.sqlSch[i].Name = "from_" + qdtf.sqlSch[i].Name
-	}
-	for i := range qdtf.schema2 {
-		qdtf.sqlSch[len(qdtf.schema1) + i].Source = "query_diff"
-		qdtf.sqlSch[len(qdtf.schema1) + i].Name = "to_" + qdtf.sqlSch[len(qdtf.schema1) + i].Name
+	offset := len(tf.schema1)
+	for i := range tf.schema2 {
+		idx := offset + i
+		tf.sqlSch[idx].Source = "query_diff"
+		tf.sqlSch[idx].Name = "to_" + tf.sqlSch[idx].Name
 	}
 	return nil
 }
 
 // Database implements the sql.Databaser interface
-func (qdtf *QueryDiffTableFunction) Database() sql.Database {
-	return qdtf.database
+func (tf *QueryDiffTableFunction) Database() sql.Database {
+	return tf.database
 }
 
 // WithDatabase implements the sql.Databaser interface
-func (qdtf *QueryDiffTableFunction) WithDatabase(database sql.Database) (sql.Node, error) {
-	nqdtf := *qdtf
-	nqdtf.database = database
-	return &nqdtf, nil
+func (tf *QueryDiffTableFunction) WithDatabase(database sql.Database) (sql.Node, error) {
+	ntf := *tf
+	ntf.database = database
+	return &ntf, nil
 }
 
 // Expressions implements the sql.Expressioner interface
-func (qdtf *QueryDiffTableFunction) Expressions() []sql.Expression {
-	return []sql.Expression{qdtf.query1, qdtf.query2}
+func (tf *QueryDiffTableFunction) Expressions() []sql.Expression {
+	return []sql.Expression{tf.query1, tf.query2}
 }
 
 // WithExpressions implements the sql.Expressioner interface
-func (qdtf *QueryDiffTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
+func (tf *QueryDiffTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
 	if len(expression) != 2 {
-		return nil, sql.ErrInvalidArgumentNumber.New(qdtf.Name(), "exactly 2", len(expression))
+		return nil, sql.ErrInvalidArgumentNumber.New(tf.Name(), "2", len(expression))
 	}
 
 	for _, expr := range expression {
 		if !expr.Resolved() {
-			return nil, ErrInvalidNonLiteralArgument.New(qdtf.Name(), expr.String())
+			return nil, ErrInvalidNonLiteralArgument.New(tf.Name(), expr.String())
 		}
 		// prepared statements resolve functions beforehand, so above check fails
 		if _, ok := expr.(sql.FunctionExpression); ok {
-			return nil, ErrInvalidNonLiteralArgument.New(qdtf.Name(), expr.String())
+			return nil, ErrInvalidNonLiteralArgument.New(tf.Name(), expr.String())
 		}
 	}
 
-	newQdtf := *qdtf
+	newQdtf := *tf
 	newQdtf.query1 = expression[0]
 	newQdtf.query2 = expression[1]
 
@@ -143,15 +155,15 @@ func (qdtf *QueryDiffTableFunction) WithExpressions(expression ...sql.Expression
 }
 
 // Children implements the sql.Node interface
-func (qdtf *QueryDiffTableFunction) Children() []sql.Node {
+func (tf *QueryDiffTableFunction) Children() []sql.Node {
 	return nil
 }
 
-func (qdtf *QueryDiffTableFunction) compareRows(pkOrds []int, row1, row2 sql.Row) (int, bool, error) {
+func (tf *QueryDiffTableFunction) compareRows(pkOrds []int, row1, row2 sql.Row) (int, bool, error) {
 	var cmp int
 	var err error
 	for i, pkOrd := range pkOrds {
-		cmp, err = qdtf.schema1[i].Type.Compare(row1[pkOrd], row2[pkOrd])
+		cmp, err = tf.schema1[i].Type.Compare(row1[pkOrd], row2[pkOrd])
 		if err != nil {
 			return 0, false, err
 		}
@@ -171,14 +183,13 @@ func (qdtf *QueryDiffTableFunction) compareRows(pkOrds []int, row1, row2 sql.Row
 
 // RowIter implements the sql.Node interface
 // TODO: actually implement a row iterator
-func (qdtf *QueryDiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter, error) {
+func (tf *QueryDiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter, error) {
 	var results []sql.Row
 	var newRow sql.Row
-	if !qdtf.schema1.Equals(qdtf.schema2) {
-		nilRow1 := make(sql.Row, len(qdtf.schema1))
-		nilRow2 := make(sql.Row, len(qdtf.schema2))
+	if !tf.schema1.Equals(tf.schema2) {
+		nilRow1, nilRow2 := make(sql.Row, len(tf.schema1)), make(sql.Row, len(tf.schema2))
 		for {
-			row, err := qdtf.rowIter1.Next(qdtf.ctx)
+			row, err := tf.rowIter1.Next(tf.ctx)
 			if err == io.EOF {
 				break
 			}
@@ -189,7 +200,7 @@ func (qdtf *QueryDiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.Ro
 			results = append(results, newRow)
 		}
 		for {
-			row, err := qdtf.rowIter2.Next(qdtf.ctx)
+			row, err := tf.rowIter2.Next(tf.ctx)
 			if err == io.EOF {
 				break
 			}
@@ -202,17 +213,17 @@ func (qdtf *QueryDiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.Ro
 		return sql.RowsToRowIter(results...), nil
 	}
 
-	row1, err1 := qdtf.rowIter1.Next(qdtf.ctx)
-	row2, err2 := qdtf.rowIter2.Next(qdtf.ctx)
+	row1, err1 := tf.rowIter1.Next(tf.ctx)
+	row2, err2 := tf.rowIter2.Next(tf.ctx)
 	var pkOrds []int
-	for i, col := range qdtf.schema1 {
+	for i, col := range tf.schema1 {
 		if col.PrimaryKey {
 			pkOrds = append(pkOrds, i)
 		}
 	}
-	nilRow := make(sql.Row, len(qdtf.schema1))
+	nilRow := make(sql.Row, len(tf.schema1))
 	for err1 == nil && err2 == nil {
-		cmp, d, err := qdtf.compareRows(pkOrds, row1, row2)
+		cmp, d, err := tf.compareRows(pkOrds, row1, row2)
 		if err != nil {
 			return nil, err
 		}
@@ -220,18 +231,18 @@ func (qdtf *QueryDiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.Ro
 		case -1: // deleted
 			newRow = append(append(row1, nilRow...), "deleted")
 			results = append(results, newRow)
-			row1, err1 = qdtf.rowIter1.Next(qdtf.ctx)
+			row1, err1 = tf.rowIter1.Next(tf.ctx)
 		case 1: // added
 			newRow = append(append(nilRow, row2...), "added")
 			results = append(results, newRow)
-			row2, err2 = qdtf.rowIter2.Next(qdtf.ctx)
+			row2, err2 = tf.rowIter2.Next(tf.ctx)
 		default: // modified or no change
 			if d {
 				newRow = append(append(row1, row2...), "modified")
 				results = append(results, newRow)
 			}
-			row1, err1 = qdtf.rowIter1.Next(qdtf.ctx)
-			row2, err2 = qdtf.rowIter2.Next(qdtf.ctx)
+			row1, err1 = tf.rowIter1.Next(tf.ctx)
+			row2, err2 = tf.rowIter2.Next(tf.ctx)
 		}
 	}
 
@@ -242,7 +253,7 @@ func (qdtf *QueryDiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.Ro
 		newRow = append(append(nilRow, row2...), "added")
 		results = append(results, newRow)
 		for {
-			row2, err2 = qdtf.rowIter2.Next(qdtf.ctx)
+			row2, err2 = tf.rowIter2.Next(tf.ctx)
 			if err2 == io.EOF {
 				break
 			}
@@ -253,7 +264,7 @@ func (qdtf *QueryDiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.Ro
 		newRow = append(append(row1, nilRow...), "deleted")
 		results = append(results, newRow)
 		for {
-			row1, err1 = qdtf.rowIter1.Next(qdtf.ctx)
+			row1, err1 = tf.rowIter1.Next(tf.ctx)
 			if err1 == io.EOF {
 				break
 			}
@@ -271,44 +282,41 @@ func (qdtf *QueryDiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.Ro
 }
 
 // WithChildren implements the sql.Node interface
-func (qdtf *QueryDiffTableFunction) WithChildren(node ...sql.Node) (sql.Node, error) {
+func (tf *QueryDiffTableFunction) WithChildren(node ...sql.Node) (sql.Node, error) {
 	if len(node) != 0 {
 		return nil, fmt.Errorf("unexpected children")
 	}
-	return qdtf, nil
+	return tf, nil
 }
 
 // CheckPrivileges implements the sql.Node interface
-func (qdtf *QueryDiffTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	return true
-	return opChecker.UserHasPrivileges(ctx, sql.NewPrivilegedOperation(qdtf.database.Name(), "", "", sql.PrivilegeType_Select))
+func (tf *QueryDiffTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
+	return opChecker.UserHasPrivileges(ctx, sql.NewPrivilegedOperation(tf.database.Name(), "", "", sql.PrivilegeType_Select))
 }
 
 // Schema implements the sql.Node interface
-func (qdtf *QueryDiffTableFunction) Schema() sql.Schema {
-	if !qdtf.Resolved() {
+func (tf *QueryDiffTableFunction) Schema() sql.Schema {
+	if !tf.Resolved() {
 		return nil
 	}
-
-	if qdtf.sqlSch == nil {
+	if tf.sqlSch == nil {
 		panic("schema hasn't been generated yet")
 	}
-
-	return qdtf.sqlSch
+	return tf.sqlSch
 }
 
 // Resolved implements the sql.Resolvable interface
-func (qdtf *QueryDiffTableFunction) Resolved() bool {
-	return qdtf.query1.Resolved() && qdtf.query2.Resolved()
+func (tf *QueryDiffTableFunction) Resolved() bool {
+	return tf.query1.Resolved() && tf.query2.Resolved()
 }
 
 // String implements the Stringer interface
-func (qdtf *QueryDiffTableFunction) String() string {
-	return fmt.Sprintf("DOLT_QUERY_DIFF('%s', '%s')", qdtf.query1.String(), qdtf.query2.String())
+func (tf *QueryDiffTableFunction) String() string {
+	return fmt.Sprintf("DOLT_QUERY_DIFF('%s', '%s')", tf.query1.String(), tf.query2.String())
 }
 
 // Name implements the sql.TableFunction interface
-func (qdtf *QueryDiffTableFunction) Name() string {
+func (tf *QueryDiffTableFunction) Name() string {
 	return "dolt_query_diff"
 }
 
