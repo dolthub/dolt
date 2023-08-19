@@ -48,8 +48,13 @@ var _ sql.IndexAddressable = (*PatchTableFunction)(nil)
 var _ sql.IndexedTable = (*PatchTableFunction)(nil)
 var _ plan.TableNode = (*PatchTableFunction)(nil)
 
-var schemaChangePartitionKey = []byte("schema")
-var dataChangePartitionKey = []byte("data")
+const (
+	diffTypeSchema = "schema"
+	diffTypeData   = "data"
+)
+
+var schemaChangePartitionKey = []byte(diffTypeSchema)
+var dataChangePartitionKey = []byte(diffTypeData)
 var schemaAndDataChangePartitionKey = []byte("all")
 
 const (
@@ -162,8 +167,8 @@ func (p *PatchTableFunction) LookupPartitions(context *sql.Context, lookup sql.I
 			return nil, fmt.Errorf("failed to parse commit lookup ranges: %s", sql.DebugString(lookup.Ranges))
 		}
 
-		includeSchemaDiff := slices.Contains(diffTypes, "schema")
-		includeDataDiff := slices.Contains(diffTypes, "data")
+		includeSchemaDiff := slices.Contains(diffTypes, diffTypeSchema)
+		includeDataDiff := slices.Contains(diffTypes, diffTypeData)
 
 		if includeSchemaDiff && includeDataDiff {
 			return dtables.NewSliceOfPartitionsItr([]sql.Partition{
@@ -860,9 +865,9 @@ func (p *patchStatementsRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 	stmt := p.stmts[p.idx]
-	diffType := "schema"
+	diffType := diffTypeSchema
 	if p.idx >= p.ddlLen {
-		diffType = "data"
+		diffType = diffTypeData
 	}
 
 	return sql.Row{diffType, stmt}, nil
