@@ -3002,7 +3002,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 				Query: "SELECT ( SELECT statement FROM (SELECT * FROM dolt_patch(@Commit0, @Commit1, 't') where diff_type = diff_type_name.t) as rhs) from diff_type_name;",
 				Expected: []sql.Row{
 					{"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `c1` varchar(20),\n  `c2` varchar(20),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
-					{"INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (1,'one','two');"}
+					{"INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (1,'one','two');"},
 				},
 				ExpectedIndexes: []string{"diff_type"},
 			},
