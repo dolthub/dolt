@@ -39,6 +39,7 @@ type LogTableFunction struct {
 	revisionExprs    []sql.Expression
 	notRevisionExprs []sql.Expression
 	notRevisionStrs  []string
+	tableNames       []string
 
 	minParents  int
 	showParents bool
@@ -216,8 +217,12 @@ func (ltf *LogTableFunction) addOptions(expression []sql.Expression) error {
 		return sql.ErrInvalidArgumentDetails.New(ltf.Name(), err.Error())
 	}
 
-	if notRevisionStr, ok := apr.GetValue(cli.NotFlag); ok {
-		ltf.notRevisionStrs = append(ltf.notRevisionStrs, notRevisionStr)
+	if notRevisionStrs, ok := apr.GetValueList(cli.NotFlag); ok {
+		ltf.notRevisionStrs = append(ltf.notRevisionStrs, notRevisionStrs...)
+	}
+
+	if tableNames, ok := apr.GetValueList(cli.TablesFlag); ok {
+		ltf.tableNames = append(ltf.tableNames, tableNames...)
 	}
 
 	minParents := apr.GetIntOrDefault(cli.MinParentsFlag, 0)
@@ -437,14 +442,14 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 
 		notCommits = append(notCommits, mergeCommit)
 
-		return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commits, notCommits, matchFunc, cHashToRefs)
+		return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commits, notCommits, matchFunc, cHashToRefs, ltf.tableNames)
 	}
 
 	if len(revisionValStrs) <= 1 && len(notRevisionValStrs) == 0 {
-		return ltf.NewLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commits[0], matchFunc, cHashToRefs)
+		return ltf.NewLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commits[0], matchFunc, cHashToRefs, ltf.tableNames)
 	}
 
-	return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commits, notCommits, matchFunc, cHashToRefs)
+	return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commits, notCommits, matchFunc, cHashToRefs, ltf.tableNames)
 }
 
 // evaluateArguments returns revisionValStrs, notRevisionValStrs, and three dot boolean.
@@ -544,9 +549,13 @@ type logTableFunctionRowIter struct {
 	decoration  string
 	cHashToRefs map[hash.Hash][]string
 	headHash    hash.Hash
+
+	tableNames []string
+	prevCommit *doltdb.Commit
+	prevHash   hash.Hash
 }
 
-func (ltf *LogTableFunction) NewLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, matchFn func(*doltdb.Commit) (bool, error), cHashToRefs map[hash.Hash][]string) (*logTableFunctionRowIter, error) {
+func (ltf *LogTableFunction) NewLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, matchFn func(*doltdb.Commit) (bool, error), cHashToRefs map[hash.Hash][]string, tableNames []string) (*logTableFunctionRowIter, error) {
 	h, err := commit.HashOf()
 	if err != nil {
 		return nil, err
@@ -563,10 +572,11 @@ func (ltf *LogTableFunction) NewLogTableFunctionRowIter(ctx *sql.Context, ddb *d
 		decoration:  ltf.decoration,
 		cHashToRefs: cHashToRefs,
 		headHash:    h,
+		tableNames:  tableNames,
 	}, nil
 }
 
-func (ltf *LogTableFunction) NewDotDotLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commits []*doltdb.Commit, excludingCommits []*doltdb.Commit, matchFn func(*doltdb.Commit) (bool, error), cHashToRefs map[hash.Hash][]string) (*logTableFunctionRowIter, error) {
+func (ltf *LogTableFunction) NewDotDotLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commits []*doltdb.Commit, excludingCommits []*doltdb.Commit, matchFn func(*doltdb.Commit) (bool, error), cHashToRefs map[hash.Hash][]string, tableNames []string) (*logTableFunctionRowIter, error) {
 	hashes := make([]hash.Hash, len(commits))
 	for i, commit := range commits {
 		h, err := commit.HashOf()
@@ -602,26 +612,76 @@ func (ltf *LogTableFunction) NewDotDotLogTableFunctionRowIter(ctx *sql.Context, 
 		decoration:  ltf.decoration,
 		cHashToRefs: cHashToRefs,
 		headHash:    headHash,
+		tableNames:  tableNames,
 	}, nil
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
 func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
-	h, cm, err := itr.child.Next(ctx)
+	var hashToLog hash.Hash
+	var cmToLog *doltdb.Commit
+	for {
+		h, cm, err := itr.child.Next(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		if itr.tableNames != nil {
+			if itr.prevCommit == nil {
+				itr.prevCommit = cm
+				itr.prevHash = h
+				continue
+			}
+
+			parentRV, err := cm.GetRootValue(ctx)
+			if err != nil {
+				return nil, err
+			}
+
+			childRV, err := itr.prevCommit.GetRootValue(ctx)
+			if err != nil {
+				return nil, err
+			}
+
+			didChange := false
+			for _, tableName := range itr.tableNames {
+				didChange, err = didTableChangeBetweenRootValues(ctx, childRV, parentRV, tableName)
+				if err != nil {
+					return nil, err
+				}
+				if didChange {
+					break
+				}
+			}
+			hashToLog = itr.prevHash
+			cmToLog = itr.prevCommit
+			itr.prevHash = h
+			itr.prevCommit = cm
+
+			if didChange {
+				break
+			} else {
+				continue
+			}
+		} else {
+			hashToLog = h
+			cmToLog = cm
+			itr.prevHash = h
+			itr.prevCommit = cm
+			break
+		}
+	}
+
+	meta, err := cmToLog.GetCommitMeta(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	meta, err := cm.GetCommitMeta(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	row := sql.NewRow(h.String(), meta.Name, meta.Email, meta.Time(), meta.Description)
+	row := sql.NewRow(hashToLog.String(), meta.Name, meta.Email, meta.Time(), meta.Description)
 
 	if itr.showParents {
-		prStr, err := getParentsString(ctx, cm)
+		prStr, err := getParentsString(ctx, cmToLog)
 		if err != nil {
 			return nil, err
 		}
@@ -629,8 +689,8 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 	if shouldDecorateWithRefs(itr.decoration) {
-		branchNames := itr.cHashToRefs[h]
-		isHead := itr.headHash == h
+		branchNames := itr.cHashToRefs[hashToLog]
+		isHead := itr.headHash == hashToLog
 		row = row.Append(sql.NewRow(getRefsString(branchNames, isHead)))
 	}
 
@@ -674,4 +734,29 @@ func getParentsString(ctx *sql.Context, cm *doltdb.Commit) (string, error) {
 // Default ("auto") for the dolt_log table function is "no"
 func shouldDecorateWithRefs(decoration string) bool {
 	return decoration == "full" || decoration == "short"
+}
+
+// didTableChangeBetweenRootValues checks if the given table changed between the two given root values.
+func didTableChangeBetweenRootValues(ctx *sql.Context, child, parent *doltdb.RootValue, tableName string) (bool, error) {
+	childHash, ok, err := child.GetTableHash(ctx, tableName)
+
+	if !ok {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	parentHash, ok, err := parent.GetTableHash(ctx, tableName)
+
+	// If the table didn't exist in the parent then we know there was a change
+	if !ok {
+		return true, nil
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	return childHash != parentHash, nil
 }

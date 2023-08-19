@@ -3701,7 +3701,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			"insert into test values (1)",
 			"call dolt_add('.')",
 			"call dolt_commit('-m', 'inserted 1 into test')",
-			"call dolt_merge('test-branch' '-m', 'merged test-branch')",
+			"call dolt_merge('test-branch', '-m', 'merged test-branch')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -3709,6 +3709,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"merged test-branch"},
 					{"inserted 1 into test"},
+					{"inserted 0 into test"},
 					{"created table test"},
 				},
 			},
@@ -3719,10 +3720,11 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "select message from dolt_log('--tables', 'test', 'test2');",
+				Query: "select message from dolt_log('--tables', 'test,test2');",
 				Expected: []sql.Row{
 					{"merged test-branch"},
 					{"inserted 1 into test"},
+					{"inserted 0 into test"},
 					{"created table test2"},
 					{"created table test"},
 				},
