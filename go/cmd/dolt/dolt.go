@@ -612,7 +612,10 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 	useBranch, hasBranch := apr.GetValue(cli.BranchParam)
 
 	if hasUseDb && hasBranch{
-		dbName, _ := dsess.SplitRevisionDbName(useDb)
+		dbName, branchNameInDb := dsess.SplitRevisionDbName(useDb)
+		if len(branchNameInDb)!=0 {
+			cli.PrintErrf("The branch name in %s will be ignored.\n",useDb)
+		}
 		useDb=dbName+"/"+useBranch
 	}
 	// If the host flag is given, we are forced to use a remote connection to a server.
@@ -692,7 +695,7 @@ var doc = cli.CommandDocumentationContent{
 	LongDesc:  `Dolt comprises of multiple subcommands that allow users to import, export, update, and manipulate data with SQL.`,
 
 	Synopsis: []string{
-		"<--data-dir=<path>> <--branch=<branch name>>  subcommand <subcommand arguments>",
+		"<--data-dir=<path>> subcommand <subcommand arguments>",
 	},
 }
 
