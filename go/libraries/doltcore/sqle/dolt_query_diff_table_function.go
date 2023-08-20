@@ -16,11 +16,12 @@ package sqle
 
 import (
 	"fmt"
+	"io"
+	"strings"
+
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
-	"io"
-	"strings"
 )
 
 var _ sql.TableFunction = (*QueryDiffTableFunction)(nil)
@@ -70,7 +71,6 @@ func (tf *QueryDiffTableFunction) WithCatalog(c sql.Catalog) (sql.TableFunction,
 	}
 	return &newInstance, nil
 }
-
 
 func (tf *QueryDiffTableFunction) evalQuery(query sql.Expression) (sql.Schema, sql.RowIter, error) {
 	q, err := query.Eval(tf.ctx, nil)
@@ -317,6 +317,3 @@ func (tf *QueryDiffTableFunction) String() string {
 func (tf *QueryDiffTableFunction) Name() string {
 	return "dolt_query_diff"
 }
-
-
-
