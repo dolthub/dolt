@@ -5632,6 +5632,10 @@ var QueryDiffTableScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion {
 			{
+				Query:    "select * from dolt_query_diff();",
+				ExpectedErrStr: "function 'dolt_query_diff' expected 2 arguments, 0 received",
+			},
+			{
 				Query:    "select * from dolt_query_diff('selectsyntaxerror', 'selectsyntaxerror');",
 				ExpectedErrStr: "syntax error at position 18 near 'selectsyntaxerror'",
 			},
