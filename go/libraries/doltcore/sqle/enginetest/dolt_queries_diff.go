@@ -5611,3 +5611,32 @@ var SystemTableIndexTests = []systabScript{
 		},
 	},
 }
+
+
+var QueryDiffTableScriptTests = []queries.ScriptTest{
+	{
+		Name: "basic schema changes",
+		SetUpScript: []string{
+			"create table t (i int primary key, j int);",
+			"insert into t values (1, 1), (2, 2), (3, 3);",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'first');",
+			"call dolt_branch('other');",
+			"update t set j = 10 where i = 2;",
+			"delete from t where i = 3;",
+			"insert into t values (4, 4);",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'second');",
+		},
+		Assertions: []queries.ScriptTestAssertion {
+			{
+				Query:    "select * from dolt_query_diff('select * from t as of other', 'select * from t as of head');",
+				Expected: []sql.Row{
+					{2, 2, 2, 10},
+					{3, 3, nil, nil},
+					{nil, nil, 4, 4},
+				},
+			},
+		},
+	},
+}

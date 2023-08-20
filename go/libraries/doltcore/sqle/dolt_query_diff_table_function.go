@@ -82,7 +82,7 @@ func (tf *QueryDiffTableFunction) evalQuery(query sql.Expression) (sql.Schema, s
 		return nil, nil, fmt.Errorf("query must be a string, not %T", q)
 	}
 	qStr = strings.TrimSpace(qStr)
-	if !strings.HasPrefix(strings.ToLower(qStr), "select") {
+	if !strings.HasPrefix(strings.ToLower(qStr), "select") { // TODO: allow "with?"
 		return nil, nil, fmt.Errorf("query must be a SELECT statement")
 	}
 	return tf.engine.Query(tf.ctx, qStr)
@@ -90,12 +90,10 @@ func (tf *QueryDiffTableFunction) evalQuery(query sql.Expression) (sql.Schema, s
 
 func (tf *QueryDiffTableFunction) evalQueries() error {
 	var err error
-	tf.schema1, tf.rowIter1, err = tf.evalQuery(tf.query1)
-	if err != nil {
+	if tf.schema1, tf.rowIter1, err = tf.evalQuery(tf.query1); err != nil {
 		return err
 	}
-	tf.schema2, tf.rowIter2, err = tf.evalQuery(tf.query2)
-	if err != nil {
+	if tf.schema2, tf.rowIter2, err = tf.evalQuery(tf.query2); err != nil {
 		return err
 	}
 	tf.sqlSch = append(tf.sqlSch, tf.schema1.Copy()...)

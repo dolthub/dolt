@@ -2176,6 +2176,18 @@ func TestSchemaDiffSystemTablePrepared(t *testing.T) {
 	}
 }
 
+func TestQueryDiff(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	harness.Setup(setup.MydbData)
+	for _, test := range QueryDiffTableScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScript(t, harness, test)
+		})
+	}
+}
+
 func mustNewEngine(t *testing.T, h enginetest.Harness) *gms.Engine {
 	e, err := h.NewEngine(t)
 	if err != nil {
