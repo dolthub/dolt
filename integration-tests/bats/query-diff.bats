@@ -39,44 +39,35 @@ teardown() {
 @test "query-diff: no changes" {
     run dolt query-diff "select * from t;" "select * from t;"
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 3 ]
-    [[ "${lines[0]}"  =~ "diff --dolt a/select * from t; b/select * from t;" ]] || false
-    [[ "${lines[1]}"  =~ "--- a/select * from t;" ]] || false
-    [[ "${lines[2]}"  =~ "+++ b/select * from t;" ]] || false
+    [ "${#lines[@]}" -eq 0 ]
 }
 
 @test "query-diff: basic case" {
     run dolt query-diff "select * from t as of other;" "select * from t as of head;"
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 11 ]
-    [[ "${lines[0]}"  =~ "diff --dolt a/select * from t as of other; b/select * from t as of head;" ]] || false
-    [[ "${lines[1]}"  =~ "--- a/select * from t as of other;" ]] || false
-    [[ "${lines[2]}"  =~ "+++ b/select * from t as of head;" ]] || false
-    [[ "${lines[3]}"  =~ "+---+---+----+" ]] || false
-    [[ "${lines[4]}"  =~ "|   | i | j  |" ]] || false
-    [[ "${lines[5]}"  =~ "+---+---+----+" ]] || false
-    [[ "${lines[6]}"  =~ "| < | 2 | 2  |" ]] || false
-    [[ "${lines[7]}"  =~ "| > | 2 | 10 |" ]] || false
-    [[ "${lines[8]}"  =~ "| - | 3 | 3  |" ]] || false
-    [[ "${lines[9]}"  =~ "| + | 4 | 4  |" ]] || false
-    [[ "${lines[10]}" =~ "+---+---+----+" ]] || false
+    [ "${#lines[@]}" -eq 7 ]
+    [[ "${lines[0]}"  =~ "+--------+--------+------+------+-----------+" ]] || false
+    [[ "${lines[1]}"  =~ "| from_i | from_j | to_i | to_j | diff_type |" ]] || false
+    [[ "${lines[2]}"  =~ "+--------+--------+------+------+-----------+" ]] || false
+    [[ "${lines[3]}"  =~ "| 2      | 2      | 2    | 10   | modified  |" ]] || false
+    [[ "${lines[4]}"  =~ "| 3      | 3      | NULL | NULL | deleted   |" ]] || false
+    [[ "${lines[5]}"  =~ "| NULL   | NULL   | 4    | 4    | added     |" ]] || false
+    [[ "${lines[6]}"  =~ "+--------+--------+------+------+-----------+" ]] || false
 }
 
 
 @test "query-diff: other table" {
     run dolt query-diff "select * from t;" "select * from tt;"
-
-    [[ "${lines[0]}"  =~ "diff --dolt a/select * from t; b/select * from tt;" ]] || false
-    [[ "${lines[1]}"  =~ "--- a/select * from t" ]] || false
-    [[ "${lines[2]}"  =~ "+++ b/select * from tt" ]] || false
-    [[ "${lines[3]}"  =~ "+---+------+------+------+------+" ]] || false
-    [[ "${lines[4]}"  =~ "|   | i    | j    | i    | j    |" ]] || false
-    [[ "${lines[5]}"  =~ "+---+------+------+------+------+" ]] || false
-    [[ "${lines[6]}"  =~ "| - | 1    | 1    | NULL | NULL |" ]] || false
-    [[ "${lines[7]}"  =~ "| - | 2    | 10   | NULL | NULL |" ]] || false
-    [[ "${lines[8]}"  =~ "| - | 4    | 4    | NULL | NULL |" ]] || false
-    [[ "${lines[9]}"  =~ "| + | NULL | NULL | 1    | 1    |" ]] || false
-    [[ "${lines[10]}" =~ "| + | NULL | NULL | 2    | 2    |" ]] || false
-    [[ "${lines[11]}" =~ "| + | NULL | NULL | 3    | 3    |" ]] || false
-    [[ "${lines[12]}" =~ "+---+------+------+------+------+" ]] || false
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 10 ]
+    [[ "${lines[0]}" =~ "+--------+--------+------+------+-----------+" ]] || false
+    [[ "${lines[1]}" =~ "| from_i | from_j | to_i | to_j | diff_type |" ]] || false
+    [[ "${lines[2]}" =~ "+--------+--------+------+------+-----------+" ]] || false
+    [[ "${lines[3]}" =~ "| 1      | 1      | NULL | NULL | deleted   |" ]] || false
+    [[ "${lines[4]}" =~ "| 2      | 10     | NULL | NULL | deleted   |" ]] || false
+    [[ "${lines[5]}" =~ "| 4      | 4      | NULL | NULL | deleted   |" ]] || false
+    [[ "${lines[6]}" =~ "| NULL   | NULL   | 1    | 1    | added     |" ]] || false
+    [[ "${lines[7]}" =~ "| NULL   | NULL   | 2    | 2    | added     |" ]] || false
+    [[ "${lines[8]}" =~ "| NULL   | NULL   | 3    | 3    | added     |" ]] || false
+    [[ "${lines[9]}" =~ "+--------+--------+------+------+-----------+" ]] || false
 }
