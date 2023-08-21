@@ -24,13 +24,13 @@ import (
 )
 
 // GenerateCreateTableColumnDefinition returns column definition for CREATE TABLE statement with no indentation
-func GenerateCreateTableColumnDefinition(col schema.Column) string {
-	colStr := GenerateCreateTableIndentedColumnDefinition(col)
+func GenerateCreateTableColumnDefinition(col schema.Column, tableCollation sql.CollationID) string {
+	colStr := GenerateCreateTableIndentedColumnDefinition(col, tableCollation)
 	return strings.TrimPrefix(colStr, "  ")
 }
 
 // GenerateCreateTableIndentedColumnDefinition returns column definition for CREATE TABLE statement with no indentation
-func GenerateCreateTableIndentedColumnDefinition(col schema.Column) string {
+func GenerateCreateTableIndentedColumnDefinition(col schema.Column, tableCollation sql.CollationID) string {
 	var defaultVal *sql.ColumnDefaultValue
 	if col.Default != "" {
 		defaultVal = sql.NewUnresolvedColumnDefaultValue(col.Default)
@@ -47,7 +47,7 @@ func GenerateCreateTableIndentedColumnDefinition(col schema.Column) string {
 			// TODO
 			// Generated:      nil,
 			// Virtual:        false,
-		}, col.Default)
+		}, col.Default, tableCollation)
 }
 
 // GenerateCreateTableIndexDefinition returns index definition for CREATE TABLE statement with indentation of 2 spaces
