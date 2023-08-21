@@ -403,6 +403,12 @@ func moveBranch(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.Ar
 		return 1
 	}
 
+	var newName = apr.Arg(1)
+	if !doltdb.IsValidUserBranchName(newName) {
+		cli.PrintErrf("%s is an invalid branch name", newName)
+		return 1
+	}
+
 	return callStoredProcedure(sqlCtx, queryEngine, args)
 }
 
@@ -424,6 +430,12 @@ func copyBranch(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.Ar
 
 	if apr.Contains(cli.RemoteParam) {
 		cli.PrintErrln("--remote/-r can only be supplied when listing or deleting branches, not when copying branches")
+		return 1
+	}
+
+	var branchName = apr.Arg(1)
+	if !doltdb.IsValidUserBranchName(branchName) {
+		cli.PrintErrf("%s is an invalid branch name", branchName)
 		return 1
 	}
 
