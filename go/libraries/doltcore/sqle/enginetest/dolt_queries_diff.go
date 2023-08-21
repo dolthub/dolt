@@ -5612,7 +5612,6 @@ var SystemTableIndexTests = []systabScript{
 	},
 }
 
-
 var QueryDiffTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "basic query diff tests",
@@ -5630,65 +5629,65 @@ var QueryDiffTableScriptTests = []queries.ScriptTest{
 			"call dolt_add('.');",
 			"call dolt_commit('-m', 'second');",
 		},
-		Assertions: []queries.ScriptTestAssertion {
+		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "select * from dolt_query_diff();",
+				Query:          "select * from dolt_query_diff();",
 				ExpectedErrStr: "function 'dolt_query_diff' expected 2 arguments, 0 received",
 			},
 			{
-				Query:    "select * from dolt_query_diff('selectsyntaxerror', 'selectsyntaxerror');",
+				Query:          "select * from dolt_query_diff('selectsyntaxerror', 'selectsyntaxerror');",
 				ExpectedErrStr: "syntax error at position 18 near 'selectsyntaxerror'",
 			},
 			{
-				Query:    "select * from dolt_query_diff('', '');",
+				Query:          "select * from dolt_query_diff('', '');",
 				ExpectedErrStr: "query must be a SELECT statement",
 			},
 			{
-				Query:    "select * from dolt_query_diff('create table tt (i int)', 'create table ttt (j int)');",
+				Query:          "select * from dolt_query_diff('create table tt (i int)', 'create table ttt (j int)');",
 				ExpectedErrStr: "query must be a SELECT statement",
 			},
 			{
-				Query:    "select * from dolt_query_diff('select * from missingtable', '');",
+				Query:          "select * from dolt_query_diff('select * from missingtable', '');",
 				ExpectedErrStr: "table not found: missingtable",
 			},
 			{
-				Query:    "select * from dolt_query_diff('select * from t as of other', 'select * from t as of head');",
+				Query: "select * from dolt_query_diff('select * from t as of other', 'select * from t as of head');",
 				Expected: []sql.Row{
-					{2,   2,   2,   10,  "modified"},
-					{3,   3,   nil, nil, "deleted"},
-					{nil, nil, 4,   4,   "added"},
+					{2, 2, 2, 10, "modified"},
+					{3, 3, nil, nil, "deleted"},
+					{nil, nil, 4, 4, "added"},
 				},
 			},
 			{
-				Query:    "select * from dolt_query_diff('select * from t as of head', 'select * from t as of other');",
-				Expected: []sql.Row {
-					{2,   10,  2,   2,   "modified"},
-					{nil, nil, 3,   3,   "added"},
-					{4,   4,   nil, nil, "deleted"},
+				Query: "select * from dolt_query_diff('select * from t as of head', 'select * from t as of other');",
+				Expected: []sql.Row{
+					{2, 10, 2, 2, "modified"},
+					{nil, nil, 3, 3, "added"},
+					{4, 4, nil, nil, "deleted"},
 				},
 			},
 			{
-				Query:    "select * from dolt_query_diff('select * from t as of other where i = 2', 'select * from t as of head where i = 2');",
+				Query: "select * from dolt_query_diff('select * from t as of other where i = 2', 'select * from t as of head where i = 2');",
 				Expected: []sql.Row{
 					{2, 2, 2, 10, "modified"},
 				},
 			},
 			{
-				Query:    "select * from dolt_query_diff('select * from t as of other where i < 2', 'select * from t as of head where i > 2');",
+				Query: "select * from dolt_query_diff('select * from t as of other where i < 2', 'select * from t as of head where i > 2');",
 				Expected: []sql.Row{
-					{1,   1,   nil, nil, "deleted"},
-					{nil, nil, 4,   4,   "added"},
+					{1, 1, nil, nil, "deleted"},
+					{nil, nil, 4, 4, "added"},
 				},
 			},
 			{
-				Query:    "select * from dolt_query_diff('select * from t', 'select * from tt');",
+				Query: "select * from dolt_query_diff('select * from t', 'select * from tt');",
 				Expected: []sql.Row{
-					{1,   1,   nil, nil, "deleted"},
-					{2,   10,  nil, nil, "deleted"},
-					{4,   4,   nil, nil, "deleted"},
-					{nil, nil, 10,  10,  "added"},
-					{nil, nil, 20,  20,  "added"},
-					{nil, nil, 30,  30,  "added"},
+					{1, 1, nil, nil, "deleted"},
+					{2, 10, nil, nil, "deleted"},
+					{4, 4, nil, nil, "deleted"},
+					{nil, nil, 10, 10, "added"},
+					{nil, nil, 20, 20, "added"},
+					{nil, nil, 30, 30, "added"},
 				},
 			},
 		},
