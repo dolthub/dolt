@@ -124,6 +124,10 @@ func (ltf *LogTableFunction) getOptionsString() string {
 		options = append(options, fmt.Sprintf("--%s %s", cli.DecorateFlag, ltf.decoration))
 	}
 
+	if len(ltf.tableNames) > 0 {
+		options = append(options, "--tables", strings.Join(ltf.tableNames, ","))
+	}
+
 	return strings.Join(options, ", ")
 }
 
