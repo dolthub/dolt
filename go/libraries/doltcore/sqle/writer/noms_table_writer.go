@@ -33,6 +33,12 @@ type TableWriter interface {
 	sql.AutoIncrementSetter
 }
 
+// AutoIncrementGetter is implemented by editors that support AUTO_INCREMENT to return the next value that will be
+// inserted.
+type AutoIncrementGetter interface {
+	GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error)
+}
+
 // SessionRootSetter sets the root value for the session.
 type SessionRootSetter func(ctx *sql.Context, dbName string, root *doltdb.RootValue) error
 
@@ -63,7 +69,7 @@ type nomsTableWriter struct {
 }
 
 var _ TableWriter = &nomsTableWriter{}
-var _ sql.AutoIncrementGetter = &nomsTableWriter{}
+var _ AutoIncrementGetter = &nomsTableWriter{}
 
 func (te *nomsTableWriter) duplicateKeyErrFunc(keyString, indexName string, k, v types.Tuple, isPk bool) error {
 	oldRow, err := te.kvToSQLRow.ConvertKVTuplesToSqlRow(k, v)
