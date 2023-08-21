@@ -3632,59 +3632,6 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "dolt_log options",
-		SetUpScript: []string{
-			"create table test (pk int, c1 int, primary key(pk))",
-			"call dolt_add('.')",
-			"set @Commit1 = '';",
-			"call dolt_commit_hash_out(@Commit1, '-m', 'created table')",
-			"call dolt_checkout('-b', 'branch1')",
-			"insert into test values (0, 0)",
-			"call dolt_add('.')",
-			"call dolt_commit('-m', 'inserted 0,0')",
-			"call dolt_checkout('main')",
-			"call dolt_checkout('-b', 'branch2')",
-			"insert into test values (1, 1)",
-			"call dolt_add('.')",
-			"set @Commit2 = '';",
-			"call dolt_commit_hash_out(@Commit2, '-m', 'inserted 1,1')",
-			"call dolt_checkout('main')",
-			"call dolt_merge('branch1')",                         // fast-forward
-			"call dolt_merge('branch2', '-m', 'merged branch2')", // actual merge
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "select message from dolt_log('--merges');",
-				Expected: []sql.Row{
-					{"merged branch2"},
-				},
-			},
-			{
-				Query: "select message from dolt_log('--min-parents', '2');",
-				Expected: []sql.Row{
-					{"merged branch2"},
-				},
-			},
-			{
-				Query: "select message from dolt_log('--min-parents', '1');",
-				Expected: []sql.Row{
-					{"merged branch2"},
-					{"inserted 1,1"},
-					{"inserted 0,0"},
-					{"created table"},
-				},
-			},
-			{
-				Query:    "select count(parents) from dolt_log('--parents') where parents != '';",
-				Expected: []sql.Row{{4}},
-			},
-			{
-				Query:    "select count(refs) from dolt_log('--decorate=full') where refs != '';",
-				Expected: []sql.Row{{3}},
-			},
-		},
-	},
-	{
 		Name: "table names given",
 		SetUpScript: []string{
 			"create table test (pk int PRIMARY KEY)",
@@ -3738,8 +3685,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
-	//TODO: figure out how we were returning a commit from the function
-	/*{
+	{
 		Name: "min parents, merges, show parents, decorate",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 int);",
@@ -3750,63 +3696,63 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			"call dolt_checkout('-b', 'branch1')",
 			"insert into t values(0,0);",
 			"set @Commit2 = '';",
-		"call dolt_commit_hash_out(@Commit2, '-am', 'inserting 0,0');",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'inserting 0,0');",
 
 			"call dolt_checkout('main')",
 			"call dolt_checkout('-b', 'branch2')",
 			"insert into t values(1,1);",
 			"set @Commit3 = '';",
-		"call dolt_commit_hash_out(@Commit3, '-am', 'inserting 1,1');",
+			"call dolt_commit_hash_out(@Commit3, '-am', 'inserting 1,1');",
 
 			"call dolt_checkout('main')",
-			"call dolt_merge('branch1')",               // fast-forward merge
-			"set @MergeCommit = dolt_merge('branch2')", // actual merge with commit
+			"call dolt_merge('branch1')", // fast-forward merge
+			"call dolt_merge('branch2')", // actual merge with commit
 			"call dolt_tag('v1')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT commit_hash = @MergeCommit, committer, email, message from dolt_log('--merges');",
-				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "Merge branch 'branch2' into main"}},
+				Query:    "SELECT committer, email, message from dolt_log('--merges');",
+				Expected: []sql.Row{{"root", "root@localhost", "Merge branch 'branch2' into main"}},
 			},
 			{
-				Query:    "SELECT commit_hash = @MergeCommit, committer, email, message from dolt_log('--min-parents', '2');",
-				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "Merge branch 'branch2' into main"}},
+				Query:    "SELECT committer, email, message from dolt_log('--min-parents', '2');",
+				Expected: []sql.Row{{"root", "root@localhost", "Merge branch 'branch2' into main"}},
 			},
 			{
-				Query:    "SELECT commit_hash = @MergeCommit, committer, email, message from dolt_log('main', '--min-parents', '2');",
-				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "Merge branch 'branch2' into main"}},
+				Query:    "SELECT committer, email, message from dolt_log('main', '--min-parents', '2');",
+				Expected: []sql.Row{{"root", "root@localhost", "Merge branch 'branch2' into main"}},
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('main');",
-				Expected: []sql.Row{{6}},
+				Expected: []sql.Row{{5}},
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('main', '--min-parents', '1');", // Should show everything except first commit
-				Expected: []sql.Row{{5}},
+				Expected: []sql.Row{{4}},
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('main', '--min-parents', '1', '--merges');", // --merges overrides --min-parents
 				Expected: []sql.Row{{1}},
 			},
 			{
-				Query:    "SELECT commit_hash = @MergeCommit, committer, email, message from dolt_log('branch1..main', '--min-parents', '2');",
-				Expected: []sql.Row{{true, "billy bob", "bigbillieb@fake.horse", "Merge branch 'branch2' into main"}},
+				Query:    "SELECT committer, email, message from dolt_log('branch1..main', '--min-parents', '2');",
+				Expected: []sql.Row{{"root", "root@localhost", "Merge branch 'branch2' into main"}},
 			},
 			{
 				Query:    "SELECT count(*) from dolt_log('--min-parents', '5');",
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:    "SELECT commit_hash = @MergeCommit, SUBSTRING_INDEX(parents, ', ', 1) = @Commit2, SUBSTRING_INDEX(parents, ', ', -1) = @Commit3 from dolt_log('main', '--parents', '--merges');",
-				Expected: []sql.Row{{true, true, true}}, // shows two parents for merge commit
+				Query:    "SELECT message, SUBSTRING_INDEX(parents, ', ', 1) = @Commit2, SUBSTRING_INDEX(parents, ', ', -1) = @Commit3 from dolt_log('main', '--parents', '--merges');",
+				Expected: []sql.Row{{"Merge branch 'branch2' into main", true, true}}, // shows two parents for merge commit
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit3, parents = @Commit1 from dolt_log('branch2', '--parents') LIMIT 1;", // shows one parent for non-merge commit
 				Expected: []sql.Row{{true, true}},
 			},
 			{
-				Query:    "SELECT commit_hash = @MergeCommit, SUBSTRING_INDEX(parents, ', ', 1) = @Commit2, SUBSTRING_INDEX(parents, ', ', -1) = @Commit3 from dolt_log('branch1..main', '--parents', '--merges') LIMIT 1;",
-				Expected: []sql.Row{{true, true, true}},
+				Query:    "SELECT message, SUBSTRING_INDEX(parents, ', ', 1) = @Commit2, SUBSTRING_INDEX(parents, ', ', -1) = @Commit3 from dolt_log('branch1..main', '--parents', '--merges') LIMIT 1;",
+				Expected: []sql.Row{{"Merge branch 'branch2' into main", true, true}},
 			},
 			{
 				Query:    "SELECT commit_hash = @Commit2, parents = @Commit1 from dolt_log('branch2..branch1', '--parents') LIMIT 1;",
@@ -3825,7 +3771,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{true, true, "HEAD -> branch1"}},
 			},
 		},
-	},*/
+	},
 }
 
 var LargeJsonObjectScriptTests = []queries.ScriptTest{
