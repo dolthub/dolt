@@ -122,12 +122,6 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
-	for _, arg := range apr.Args {
-		if !doltdb.IsValidUserBranchName(arg) {
-			cli.PrintErrf("%s is an invalid branch name", arg)
-		}
-	}
-
 	switch {
 	case apr.Contains(cli.MoveFlag):
 		return moveBranch(sqlCtx, queryEngine, apr, args, usage)
@@ -321,6 +315,7 @@ func generateBranchSql(args []string) (string, error) {
 }
 
 func createBranch(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.ArgParseResults, args []string, usage cli.UsagePrinter) int {
+
 	trackVal, setTrackUpstream := apr.GetValue(cli.TrackFlag)
 	if setTrackUpstream {
 		if trackVal == "inherit" {
@@ -365,6 +360,12 @@ func createBranch(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.
 
 	if apr.Contains(cli.RemoteParam) {
 		cli.PrintErrln("--remote/-r can only be supplied when listing or deleting branches, not when creating branches")
+		return 1
+	}
+
+	var branchName = apr.Arg(0)
+	if !doltdb.IsValidUserBranchName(branchName) {
+		cli.PrintErrf("%s is an invalid branch name", branchName)
 		return 1
 	}
 
