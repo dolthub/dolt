@@ -3688,42 +3688,42 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query: "select message from dolt_log('--tables', 'test');",
 				Expected: []sql.Row{
-					{"inserted 2 into test"},
-					{"merged test-branch"},
-					{"inserted 1 into test"},
-					{"inserted 0 into test"},
-					{"created table test"},
+					{"inserted 2 into test [6M]"},
+					{"merged test-branch [4M]"},
+					{"inserted 1 into test [3M]"},
+					{"inserted 0 into test [1TB]"},
+					{"created table test [1M]"},
 				},
 			},
 			{
 				Query: "select message from dolt_log('--tables', 'test2');",
 				Expected: []sql.Row{
-					{"created table test2"},
+					{"created table test2 [2M]"},
 				},
 			},
 			{
 				Query: "select message from dolt_log('--tables', 'test3')",
 				Expected: []sql.Row{
-					{"dropped table test3"},
-					{"created table test3"},
+					{"dropped table test3 [5M]"},
+					{"created table test3 [2TB]"},
 				},
 			},
 			{
 				Query: "select message from dolt_log('--tables', 'test,test2');",
 				Expected: []sql.Row{
-					{"inserted 2 into test"},
-					{"merged test-branch"},
-					{"inserted 1 into test"},
-					{"inserted 0 into test"},
-					{"created table test2"},
-					{"created table test"},
+					{"inserted 2 into test [6M]"},
+					{"merged test-branch [4M]"},
+					{"inserted 1 into test [3M]"},
+					{"inserted 0 into test [1TB]"},
+					{"created table test2 [2M]"},
+					{"created table test [1M]"},
 				},
 			},
 			{
 				Query: "select message from dolt_log('test-branch', '--tables', 'test');",
 				Expected: []sql.Row{
-					{"inserted 0 into test"},
-					{"created table test"},
+					{"inserted 0 into test [1TB]"},
+					{"created table test [1M]"},
 				},
 			},
 		},
