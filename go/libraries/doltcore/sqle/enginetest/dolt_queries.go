@@ -2801,6 +2801,10 @@ var DoltBranchScripts = []queries.ScriptTest{
 				Query:    "CALL DOLT_BRANCH('-m', 'myNewBranch2', 'myNewBranch3')",
 				Expected: []sql.Row{{0}},
 			},
+			{
+				Query:          "CALL DOLT_BRANCH('-m', 'myNewBranch3', 'HEAD')",
+				ExpectedErrStr: "not a valid user branch name",
+			},
 		},
 	},
 	{
@@ -2840,6 +2844,10 @@ var DoltBranchScripts = []queries.ScriptTest{
 			{
 				Query:    "CALL DOLT_BRANCH('-cf', 'myNewBranch1', 'myNewBranch2')",
 				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "CALL DOLT_BRANCH('-c', 'myNewBranch1', 'HEAD')",
+				ExpectedErrStr: "fatal: 'HEAD' is not a valid branch name.",
 			},
 		},
 	},

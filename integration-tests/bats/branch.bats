@@ -238,3 +238,65 @@ teardown() {
     [[ $output =~ "0" ]] || false
 }
 
+@test "branch: print nothing on successfull create" {
+    run dolt branch newbranch1 HEAD
+    [ $status -eq "0" ]
+    [[ $output == "" ]] || false
+
+    # Get the current commit - bare.
+    run dolt merge-base HEAD HEAD
+    [ $status -eq "0" ]
+    hash="$output"
+   
+    run dolt branch newbranch2 $hash
+    [ $status -eq "0" ]
+    [[ $output == "" ]] || false
+}
+
+@test "branch: don't allow branch creation with HEAD or a commit id as a name" {
+    # Get the current commit - bare.
+    run dolt merge-base HEAD HEAD
+    [ $status -eq "0" ]
+    hash="$output"
+
+    run dolt branch HEAD $hash
+    [ $status -eq "1" ]
+    [[ "$output" == "HEAD is an invalid branch name" ]] || false
+
+    run dolt branch $hash HEAD
+    [ $status -eq "1" ]
+    [[ "$output" =~ "is an invalid branch name" ]] || false
+    [[ ! "$output" =~ "HEAD" ]] || false
+
+    dolt branch altBranch HEAD
+
+    run dolt branch -m altBranch HEAD
+    [ $status -eq "1" ]
+    [[ "$output" == "HEAD is an invalid branch name" ]] || false
+    run dolt branch -m altBranch $hash
+    [ $status -eq "1" ]
+    [[ "$output" =~ "is an invalid branch name" ]] || false
+
+    run dolt branch -c altBranch HEAD
+    [ $status -eq "1" ]
+    [[ "$output" == "HEAD is an invalid branch name" ]] || false
+    run dolt branch -c altBranch $hash
+    [ $status -eq "1" ]
+    [[ "$output" =~ "is an invalid branch name" ]] || false
+
+    dolt checkout altBranch
+
+    run dolt branch -m HEAD
+    [ $status -eq "1" ]
+    [[ "$output" == "HEAD is an invalid branch name" ]] || false
+    run dolt branch -m $hash
+    [ $status -eq "1" ]
+    [[ "$output" =~ "is an invalid branch name" ]] || false
+
+    run dolt branch -c HEAD
+    [ $status -eq "1" ]
+    [[ "$output" == "HEAD is an invalid branch name" ]] || false
+    run dolt branch -c $hash
+    [ $status -eq "1" ]
+    [[ "$output" =~ "is an invalid branch name" ]] || false
+}
