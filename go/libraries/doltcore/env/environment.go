@@ -428,7 +428,15 @@ func (dEnv *DoltEnv) createDirectories(dir string) (string, error) {
 	}
 
 	if dEnv.hasDoltDir(dir) {
-		return "", fmt.Errorf(".dolt directory already exists at '%s'", dir)
+		// Special case a completely empty directory. We can allow that.
+		dotDolt := mustAbs(dEnv, dbfactory.DoltDir)
+		entries, err := os.ReadDir(dotDolt)
+		if err != nil {
+			return "", err
+		}
+		if len(entries) != 0 {
+			return "", fmt.Errorf(".dolt directory already exists at '%s'", dir)
+		}
 	}
 
 	absDataDir := filepath.Join(absPath, dbfactory.DoltDataDir)
