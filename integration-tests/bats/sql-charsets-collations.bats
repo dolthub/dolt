@@ -35,8 +35,8 @@ teardown() {
     dolt sql -q "create table german1 (c char(10)) CHARACTER SET latin1 COLLATE latin1_german1_ci"
     run dolt sql -q "show create table german1";
     [ $status -eq 0 ]
-    [[ $output =~ "CHARACTER SET latin1" ]] || false
-    [[ $output =~ "COLLATE latin1_german1_ci" ]] || false
+    [[ $output =~ "latin1_german1_ci" ]] || false
+    [[ ! $output =~ "utf8" ]] || false
 
     # check information_schema.TABLES table
     run dolt sql -q "select table_name, table_type, table_collation from information_schema.TABLES where table_name = 'german1';" -r csv
