@@ -20,7 +20,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/go-mysql-server/sql/plan"
 	"golang.org/x/exp/slices"
 	"io"
 	"sort"
@@ -46,7 +45,7 @@ var _ sql.TableFunction = (*PatchTableFunction)(nil)
 var _ sql.ExecSourceRel = (*PatchTableFunction)(nil)
 var _ sql.IndexAddressable = (*PatchTableFunction)(nil)
 var _ sql.IndexedTable = (*PatchTableFunction)(nil)
-var _ plan.TableNode = (*PatchTableFunction)(nil)
+var _ sql.TableNode = (*PatchTableFunction)(nil)
 
 const (
 	diffTypeSchema = "schema"
