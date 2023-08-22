@@ -406,7 +406,7 @@ func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name stri
 	// be the first db creation if sql-server was started from a bare directory.
 	_, lckDeets := sqlserver.GetRunningServer()
 	if lckDeets != nil {
-		err = newEnv.Lock(*lckDeets)
+		err = newEnv.Lock(lckDeets)
 		if err != nil {
 			ctx.GetLogger().Warnf("Failed to lock newly created database: %s", err.Error())
 		}

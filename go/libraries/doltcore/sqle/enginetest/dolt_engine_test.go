@@ -2772,45 +2772,57 @@ func TestDoltStorageFormatPrepared(t *testing.T) {
 
 func TestThreeWayMergeWithSchemaChangeScripts(t *testing.T) {
 	skipOldFormat(t)
-	t.Run("right to left merges", func(t *testing.T) {
-		for _, script := range ThreeWayMergeWithSchemaChangeTestScripts {
-			func() {
-				h := newDoltHarness(t)
-				defer h.Close()
-				enginetest.TestScript(t, h, convertMergeScriptTest(script, false))
-			}()
-		}
-	})
-	t.Run("left to right merges", func(t *testing.T) {
-		for _, script := range ThreeWayMergeWithSchemaChangeTestScripts {
-			func() {
-				h := newDoltHarness(t)
-				defer h.Close()
-				enginetest.TestScript(t, h, convertMergeScriptTest(script, true))
-			}()
-		}
-	})
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsBasicCases, "basic cases", false)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsForDataConflicts, "data conflicts", false)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsCollations, "collation changes", false)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsConstraints, "constraint changes", false)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsTypeChanges, "type changes", false)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsSchemaConflicts, "schema conflicts", false)
 }
 
 func TestThreeWayMergeWithSchemaChangeScriptsPrepared(t *testing.T) {
 	skipOldFormat(t)
-	t.Run("right to left merges", func(t *testing.T) {
-		for _, script := range ThreeWayMergeWithSchemaChangeTestScripts {
-			func() {
-				h := newDoltHarness(t)
-				defer h.Close()
-				enginetest.TestScript(t, h, convertMergeScriptTest(script, false))
-			}()
-		}
-	})
-	t.Run("left to right merges", func(t *testing.T) {
-		for _, script := range ThreeWayMergeWithSchemaChangeTestScripts {
-			func() {
-				h := newDoltHarness(t)
-				defer h.Close()
-				enginetest.TestScript(t, h, convertMergeScriptTest(script, true))
-			}()
-		}
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsBasicCases, "basic cases", true)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsForDataConflicts, "data conflicts", true)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsCollations, "collation changes", true)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsConstraints, "constraint changes", true)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsTypeChanges, "type changes", true)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsSchemaConflicts, "schema conflicts", true)
+}
+
+// runMergeScriptTestsInBothDirections creates a new test run, named |name|, and runs the specified merge |tests|
+// in both directions (right to left merge, and left to right merge). If
+// |runAsPrepared| is true then the test scripts will be run using the prepared
+// statement test code.
+func runMergeScriptTestsInBothDirections(t *testing.T, tests []MergeScriptTest, name string, runAsPrepared bool) {
+	t.Run(name, func(t *testing.T) {
+		t.Run("right to left merges", func(t *testing.T) {
+			for _, script := range tests {
+				// run in a func() so we can cleanly defer closing the harness
+				func() {
+					h := newDoltHarness(t)
+					defer h.Close()
+					if runAsPrepared {
+						enginetest.TestScriptPrepared(t, h, convertMergeScriptTest(script, false))
+					} else {
+						enginetest.TestScript(t, h, convertMergeScriptTest(script, false))
+					}
+				}()
+			}
+		})
+		t.Run("left to right merges", func(t *testing.T) {
+			for _, script := range tests {
+				func() {
+					h := newDoltHarness(t)
+					defer h.Close()
+					if runAsPrepared {
+						enginetest.TestScriptPrepared(t, h, convertMergeScriptTest(script, true))
+					} else {
+						enginetest.TestScript(t, h, convertMergeScriptTest(script, true))
+					}
+				}()
+			}
+		})
 	})
 }
 

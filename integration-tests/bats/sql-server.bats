@@ -1658,7 +1658,8 @@ behavior:
     PORT=$( definePORT )
     run dolt sql-server --port=$PORT --socket "dolt.$PORT.sock"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
+
+    [[ "$output" =~ "Database locked by another sql-server" ]] || false
     stop_sql_server 1
 }
 
@@ -1922,4 +1923,50 @@ behavior:
     [[ "$output" =~ "newOther" ]] || false
     [[ "$output" =~ "main" ]] || false
     [[ ! "$output" =~ "other" ]] || false
+}
+
+@test "sql-server: server won't start where another server is running" {
+    baseDir=$(mktemp -d)
+    cd $baseDir
+
+    start_sql_server
+
+    run dolt sql-server
+
+    [ $status -eq 1 ]
+    [[ "$output" =~ "Database locked by another sql-server; Lock file" ]] || false
+}
+
+@test "sql-server: empty server can be connected to using sql with no args" {
+    baseDir=$(mktemp -d)
+    cd $baseDir
+
+    start_sql_server
+
+    run dolt sql -q "select current_user"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "__dolt_local_user__@localhost" ]] || false
+}
+
+@test "sql-server: --data-dir respected when creating server lock file" {
+    baseDir=$(mktemp -d)
+
+    PORT=$( definePORT )
+    dolt sql-server --data-dir=$baseDir --host 0.0.0.0 --port=$PORT &
+    SERVER_PID=$!
+    SQL_USER='root'
+    wait_for_connection $PORT 7500
+
+    run dolt --data-dir=$baseDir sql -q "select current_user"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "__dolt_local_user__@localhost" ]] || false
+
+    cd "$baseDir"
+    run dolt sql-server
+    [ $status -eq 1 ]
+    [[ "$output" =~ "Database locked by another sql-server; Lock file" ]] || false
+
+    run dolt sql -q "select current_user"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "__dolt_local_user__@localhost" ]] || false
 }

@@ -31,11 +31,13 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
+	replicationapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/replicationapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/creds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -79,6 +81,10 @@ type Controller struct {
 	grpcCreds credentials.PerRPCCredentials
 	pub       ed25519.PublicKey
 	priv      ed25519.PrivateKey
+
+	mysqlDb          *mysql_db.MySQLDb
+	mysqlDbPersister *replicatingPersister
+	mysqlDbReplicas  []*mysqlDbReplica
 }
 
 type sqlvars interface {
@@ -154,6 +160,19 @@ func NewController(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) 
 	ret.sinterceptor.keyProvider = ret.jwks
 	ret.sinterceptor.jwtExpected = JWTExpectations()
 
+	clients, err := ret.replicationServiceClients(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	ret.mysqlDbReplicas = make([]*mysqlDbReplica, len(clients))
+	for i := range ret.mysqlDbReplicas {
+		ret.mysqlDbReplicas[i] = &mysqlDbReplica{
+			lgr:    lgr.WithFields(logrus.Fields{}),
+			client: clients[i],
+		}
+		ret.mysqlDbReplicas[i].cond = sync.NewCond(&ret.mysqlDbReplicas[i].mu)
+	}
+
 	return ret, nil
 }
 
@@ -164,11 +183,17 @@ func (c *Controller) Run() {
 		defer wg.Done()
 		c.jwks.Run()
 	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.mysqlDbPersister.Run()
+	}()
 	wg.Wait()
 }
 
 func (c *Controller) GracefulStop() error {
 	c.jwks.GracefulStop()
+	c.mysqlDbPersister.GracefulStop()
 	return nil
 }
 
@@ -448,6 +473,10 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, opts roleTransition
 		for _, h := range c.commithooks {
 			h.setRole(c.role)
 		}
+
+		// TODO: For a graceful transition, this should true up the
+		// replicas the same as we do for replication hooks.
+		c.mysqlDbPersister.setRole(c.role)
 	}
 	_ = c.persistVariables()
 	return roleTransitionResult{
@@ -519,6 +548,25 @@ func (c *Controller) RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.Server
 	args.HttpInterceptor = JWKSHandlerInterceptor(keyIDStr, c.pub)
 
 	return args
+}
+
+func (c *Controller) HookMySQLDbPersister(persister MySQLDbPersister, mysqlDb *mysql_db.MySQLDb) MySQLDbPersister {
+	if c != nil {
+		c.mysqlDb = mysqlDb
+		c.mysqlDbPersister = &replicatingPersister{
+			base:     persister,
+			replicas: c.mysqlDbReplicas,
+		}
+		c.mysqlDbPersister.setRole(c.role)
+		persister = c.mysqlDbPersister
+	}
+	return persister
+}
+
+func (c *Controller) RegisterGrpcServices(srv *grpc.Server) {
+	replicationapi.RegisterReplicationServiceServer(srv, &replicationServiceServer{
+		mysqlDb: c.mysqlDb,
+	})
 }
 
 // TODO: make the deadline here configurable or something.
@@ -842,4 +890,49 @@ func (c *Controller) standbyRemotesJWKS() *jwtauth.MultiJWKS {
 		urls[i] = strings.Replace(r.RemoteURLTemplate(), dsess.URLTemplateDatabasePlaceholder, ".well-known/jwks.json", -1)
 	}
 	return jwtauth.NewMultiJWKS(c.lgr.WithFields(logrus.Fields{"component": "jwks-key-provider"}), urls, client)
+}
+
+type replicationServiceClient struct {
+	remote string
+	url    string
+	client replicationapi.ReplicationServiceClient
+}
+
+func (c *Controller) replicationServiceDialOptions() []grpc.DialOption {
+	var ret []grpc.DialOption
+	if c.tlsCfg == nil {
+		ret = append(ret, grpc.WithInsecure())
+	} else {
+		ret = append(ret, grpc.WithTransportCredentials(credentials.NewTLS(c.tlsCfg)))
+	}
+
+	ret = append(ret, grpc.WithStreamInterceptor(c.cinterceptor.Stream()))
+	ret = append(ret, grpc.WithUnaryInterceptor(c.cinterceptor.Unary()))
+
+	ret = append(ret, grpc.WithPerRPCCredentials(c.grpcCreds))
+
+	return ret
+}
+
+func (c *Controller) replicationServiceClients(ctx context.Context) ([]*replicationServiceClient, error) {
+	var ret []*replicationServiceClient
+	for _, r := range c.cfg.StandbyRemotes() {
+		urlStr := strings.Replace(r.RemoteURLTemplate(), dsess.URLTemplateDatabasePlaceholder, "", -1)
+		url, err := url.Parse(urlStr)
+		if err != nil {
+			return nil, fmt.Errorf("could not parse remote url template [%s] for remote %s: %w", r.RemoteURLTemplate(), r.Name(), err)
+		}
+		grpcTarget := "dns:" + url.Hostname() + ":" + url.Port()
+		cc, err := grpc.DialContext(ctx, grpcTarget, c.replicationServiceDialOptions()...)
+		if err != nil {
+			return nil, fmt.Errorf("could not dial grpc endpoint [%s] for remote %s: %w", grpcTarget, r.Name(), err)
+		}
+		client := replicationapi.NewReplicationServiceClient(cc)
+		ret = append(ret, &replicationServiceClient{
+			remote: r.Name(),
+			url:    grpcTarget,
+			client: client,
+		})
+	}
+	return ret, nil
 }
