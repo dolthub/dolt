@@ -35,6 +35,7 @@ type MergeState struct {
 	commitSpecStr    string
 	preMergeWorking  *RootValue
 	unmergableTables []string
+	mergedTables     []string
 	// isCherryPick is set to true when the in-progress merge is a cherry-pick. This is needed so that
 	// commit knows to NOT create a commit with multiple parents when creating a commit for a cherry-pick.
 	isCherryPick bool
@@ -96,6 +97,10 @@ func (m MergeState) HasSchemaConflicts() bool {
 
 func (m MergeState) TablesWithSchemaConflicts() []string {
 	return m.unmergableTables
+}
+
+func (m MergeState) MergedTables() []string {
+	return m.mergedTables
 }
 
 func (m MergeState) IterSchemaConflicts(ctx context.Context, ddb *DoltDB, cb SchemaConflictFn) (err error) {
@@ -189,6 +194,11 @@ func (ws WorkingSet) WithMergeState(mergeState *MergeState) *WorkingSet {
 
 func (ws WorkingSet) WithUnmergableTables(tables []string) *WorkingSet {
 	ws.mergeState.unmergableTables = tables
+	return &ws
+}
+
+func (ws WorkingSet) WithMergedTables(tables []string) *WorkingSet {
+	ws.mergeState.mergedTables = tables
 	return &ws
 }
 

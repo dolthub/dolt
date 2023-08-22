@@ -172,6 +172,9 @@ func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, n
 	if err != nil {
 		return nil, err
 	}
+	if idx.IsFullText() {
+		return empty, nil
+	}
 	secondary := durable.ProllyMapFromIndex(empty)
 	if schema.IsKeyless(sch) {
 		secondary = prolly.ConvertToSecondaryKeylessIndex(secondary)
@@ -179,7 +182,6 @@ func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, n
 
 	p := primary.Pool()
 	mut := secondary.Mutate()
-	secondaryBld := index.NewSecondaryKeyBuilder(sch, idx, secondary.KeyDesc(), p)
 	secondaryBld := index.NewSecondaryKeyBuilder(sch, idx, secondary.KeyDesc(), p, secondary.NodeStore())
 
 	iter, err := primary.IterAll(ctx)
