@@ -45,8 +45,8 @@ func (s StatusTable) String() string {
 func (s StatusTable) Schema() sql.Schema {
 	return []*sql.Column{
 		{Name: "table_name", Type: types.Text, Source: doltdb.StatusTableName, PrimaryKey: true, Nullable: false},
-		{Name: "staged", Type: types.Boolean, Source: doltdb.StatusTableName, PrimaryKey: false, Nullable: false},
-		{Name: "status", Type: types.Text, Source: doltdb.StatusTableName, PrimaryKey: false, Nullable: false},
+		{Name: "staged", Type: types.Boolean, Source: doltdb.StatusTableName, PrimaryKey: true, Nullable: false},
+		{Name: "status", Type: types.Text, Source: doltdb.StatusTableName, PrimaryKey: true, Nullable: false},
 	}
 }
 
@@ -128,6 +128,14 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 				status:    "schema conflict",
 			})
 		}
+
+		for _, tbl := range ms.MergedTables() {
+			rows = append(rows, statusTableRow{
+				tableName: tbl,
+				isStaged:  true,
+				status:    mergedStatus,
+			})
+		}
 	}
 
 	cnfTables, err := roots.Working.TablesWithDataConflicts(ctx)
@@ -138,14 +146,6 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		rows = append(rows, statusTableRow{
 			tableName: tbl,
 			status:    mergeConflictStatus,
-		})
-	}
-
-	if st.workingSet.MergeActive() && len(rows) == 0 {
-		rows = append(rows, statusTableRow{
-			tableName: "",
-			isStaged:  true,
-			status:    mergeActiveStatus,
 		})
 	}
 
@@ -173,7 +173,7 @@ func statusString(td diff.TableDelta) string {
 }
 
 const mergeConflictStatus = "conflict"
-const mergeActiveStatus = "merge active"
+const mergedStatus = "merged"
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.

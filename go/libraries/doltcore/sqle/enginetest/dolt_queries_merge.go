@@ -490,7 +490,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"", true, "merge active"}},
+				Expected: []sql.Row{{"test", true, "merged"}},
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-m', 'merged');",
