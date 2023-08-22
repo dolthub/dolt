@@ -1025,8 +1025,8 @@ func TestFulltextIndexes(t *testing.T) {
 	if !types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip("FULLTEXT is not supported on the old format")
 	}
-	if runtime.GOOS == "windows" {
-		t.Skip("For some reason, this is flaky only on Windows CI. Investigation is underway.")
+	if runtime.GOOS == "windows" && os.Getenv("CI") != "" {
+		t.Skip("For some reason, this is flaky only on Windows CI.")
 	}
 	h := newDoltHarness(t)
 	defer h.Close()
