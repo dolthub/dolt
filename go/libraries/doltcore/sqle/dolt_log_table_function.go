@@ -624,26 +624,28 @@ func (ltf *LogTableFunction) NewDotDotLogTableFunctionRowIter(ctx *sql.Context, 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
 func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
-	var h hash.Hash
-	var cm *doltdb.Commit
+	var commitHash hash.Hash
+	var commit *doltdb.Commit
 	var err error
 	for {
-		h, cm, err = itr.child.Next(ctx)
+		commitHash, commit, err = itr.child.Next(ctx)
 		if err != nil {
 			return nil, err
 		}
 
 		if itr.tableNames != nil {
-			if cm.NumParents() == 0 {
+			if commit.NumParents() == 0 {
+				// if we're at the root commit, we continue without checking if any tables changed
+				// we expect EOF to be returned on the next call to Next(), but continue in case there are more commits
 				continue
 			}
-			parent0Cm, err := cm.GetParent(ctx, 0)
+			parent0Cm, err := commit.GetParent(ctx, 0)
 			if err != nil {
 				return nil, err
 			}
 			var parent1Cm *doltdb.Commit
-			if cm.NumParents() > 1 {
-				parent1Cm, err = cm.GetParent(ctx, 1)
+			if commit.NumParents() > 1 {
+				parent1Cm, err = commit.GetParent(ctx, 1)
 				if err != nil {
 					return nil, err
 				}
@@ -660,7 +662,7 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 					return nil, err
 				}
 			}
-			childRV, err := cm.GetRootValue(ctx)
+			childRV, err := commit.GetRootValue(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -684,15 +686,15 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 	}
 
-	meta, err := cm.GetCommitMeta(ctx)
+	meta, err := commit.GetCommitMeta(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	row := sql.NewRow(h.String(), meta.Name, meta.Email, meta.Time(), meta.Description)
+	row := sql.NewRow(commitHash.String(), meta.Name, meta.Email, meta.Time(), meta.Description)
 
 	if itr.showParents {
-		prStr, err := getParentsString(ctx, cm)
+		prStr, err := getParentsString(ctx, commit)
 		if err != nil {
 			return nil, err
 		}
@@ -700,8 +702,8 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 	if shouldDecorateWithRefs(itr.decoration) {
-		branchNames := itr.cHashToRefs[h]
-		isHead := itr.headHash == h
+		branchNames := itr.cHashToRefs[commitHash]
+		isHead := itr.headHash == commitHash
 		row = row.Append(sql.NewRow(getRefsString(branchNames, isHead)))
 	}
 

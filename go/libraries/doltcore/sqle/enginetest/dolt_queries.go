@@ -3565,11 +3565,12 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		/*
 
-		                         1B (branchB)
-		                        /
-		                  1A - 2A - 3A (branchA)
-		                 /
-		 (init) - 1M - 2M - 3M (main)
+			                         1B (branchB)
+			                        /
+			                  1A - 2A - 3A (branchA)
+			                 /
+			 (init) - 1M - 2M - 3M (main)
+					     (tagM)
 
 		*/
 		Assertions: []queries.ScriptTestAssertion{
@@ -3653,29 +3654,36 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 		SetUpScript: []string{
 			"create table test (pk int PRIMARY KEY)",
 			"call dolt_add('.')",
-			"call dolt_commit('-m', 'created table test')",
+			"call dolt_commit('-m', 'created table test [1M]')",
 			"create table test2 (pk int PRIMARY KEY)",
 			"call dolt_add('.')",
-			"call dolt_commit('-m', 'created table test2')",
+			"call dolt_commit('-m', 'created table test2 [2M]')",
 			"call dolt_checkout('-b', 'test-branch')",
 			"insert into test values (0)",
 			"call dolt_add('.')",
-			"call dolt_commit('-m', 'inserted 0 into test')",
+			"call dolt_commit('-m', 'inserted 0 into test [1TB]')",
 			"create table test3 (pk int PRIMARY KEY)",
 			"call dolt_add('.')",
-			"call dolt_commit('-m', 'created table test3')",
+			"call dolt_commit('-m', 'created table test3 [2TB]')",
 			"call dolt_checkout('main')",
 			"insert into test values (1)",
 			"call dolt_add('.')",
-			"call dolt_commit('-m', 'inserted 1 into test')",
-			"call dolt_merge('test-branch', '-m', 'merged test-branch')",
+			"call dolt_commit('-m', 'inserted 1 into test [3M]')",
+			"call dolt_merge('test-branch', '-m', 'merged test-branch [4M]')",
 			"drop table test3",
 			"call dolt_add('.')",
-			"call dolt_commit('-m', 'dropped table test3')",
+			"call dolt_commit('-m', 'dropped table test3 [5M]')",
 			"insert into test values (2)",
 			"call dolt_add('.')",
-			"call dolt_commit('-m', 'inserted 2 into test')",
+			"call dolt_commit('-m', 'inserted 2 into test [6M]')",
 		},
+		/*
+
+		                  1TB - 2TB     (test-branch)
+		                 /         \
+		 (init) - 1M - 2M  -  3M - 4M - 5M - 6M (main)
+
+		*/
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select message from dolt_log('--tables', 'test');",
