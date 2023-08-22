@@ -179,12 +179,26 @@ func (tf *QueryDiffTableFunction) compareRows(pkOrds []int, row1, row2 sql.Row) 
 	return cmp, diff, nil
 }
 
+func (tf *QueryDiffTableFunction) diffable(sch1, sch2 sql.Schema) bool {
+	if len(sch1) != len(sch2) {
+		return false
+	}
+	for i := 0; i < len(sch1); i++ {
+		col1 := sch1[i]
+		col2 := sch2[i]
+		if !strings.EqualFold(col1.Name, col2.Name) {
+			return false
+		}
+	}
+	return true
+}
+
 // RowIter implements the sql.Node interface
 // TODO: actually implement a row iterator
 func (tf *QueryDiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter, error) {
 	var results []sql.Row
 	var newRow sql.Row
-	if !tf.schema1.Equals(tf.schema2) {
+	if !tf.diffable(tf.schema1, tf.schema2) {
 		nilRow1, nilRow2 := make(sql.Row, len(tf.schema1)), make(sql.Row, len(tf.schema2))
 		for {
 			row, err := tf.rowIter1.Next(tf.ctx)
