@@ -312,6 +312,7 @@ func Serve(
 				startError = err
 				return
 			}
+			clusterController.RegisterGrpcServices(clusterRemoteSrv.GrpcServer())
 
 			listeners, err := clusterRemoteSrv.Listeners()
 			if err != nil {

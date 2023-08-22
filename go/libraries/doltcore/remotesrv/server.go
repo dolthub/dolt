@@ -160,6 +160,12 @@ func (s *Server) Listeners() (Listeners, error) {
 	return Listeners{http: httpListener, grpc: grpcListener}, nil
 }
 
+// Can be used to register more services on the server.
+// Should only be accessed before `Serve` is called.
+func (s *Server) GrpcServer() *grpc.Server {
+	return s.grpcSrv
+}
+
 func (s *Server) Serve(listeners Listeners) {
 	if listeners.grpc != nil {
 		go func() {
