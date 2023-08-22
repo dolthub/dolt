@@ -248,6 +248,33 @@ teardown() {
     [[ "$output" =~ "__DOLT__" ]] || false
 }
 
+@test "init: create a db when there is an empty .dolt dir works" {
+    set_dolt_user "baz", "baz@bash.com"
+
+    mkdir dbdir
+    cd dbdir
+    mkdir .dolt
+
+    dolt init
+}
+
+@test "init: Fail when there is anything in the .dolt dir" {
+    set_dolt_user "baz", "baz@bash.com"
+
+    mkdir dbdir
+    cd dbdir
+    mkdir .dolt
+
+    # Possible real world situation. sql-server crashes and leaves a lock file.
+    # Currently we don't handle this.
+    echo "42:3306:aebf244e-0693-4c36-8b2d-6eb0dfa4fe2d" > .dolt/sql-server.lock
+
+    run dolt init
+
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ ".dolt directory already exists" ]] || false
+}
+
 @test "init: fun flag produces an initial commit with the right hash" {
     set_dolt_user "baz", "baz@bash.com"	
     dolt init --fun

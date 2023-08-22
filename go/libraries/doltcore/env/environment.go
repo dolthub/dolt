@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -427,7 +428,15 @@ func (dEnv *DoltEnv) createDirectories(dir string) (string, error) {
 	}
 
 	if dEnv.hasDoltDir(dir) {
-		return "", fmt.Errorf(".dolt directory already exists at '%s'", dir)
+		// Special case a completely empty directory. We can allow that.
+		dotDolt := mustAbs(dEnv, dbfactory.DoltDir)
+		entries, err := os.ReadDir(dotDolt)
+		if err != nil {
+			return "", err
+		}
+		if len(entries) != 0 {
+			return "", fmt.Errorf(".dolt directory already exists at '%s'", dir)
+		}
 	}
 
 	absDataDir := filepath.Join(absPath, dbfactory.DoltDataDir)
@@ -1203,7 +1212,7 @@ func NewDBLock(port int) DBLock {
 }
 
 // Lock writes this database's lockfile with the pid of the calling process or errors if it already exists
-func (dEnv *DoltEnv) Lock(lock DBLock) error {
+func (dEnv *DoltEnv) Lock(lock *DBLock) error {
 	if dEnv.IgnoreLockFile {
 		return nil
 	}
@@ -1267,7 +1276,14 @@ func (dEnv *DoltEnv) Unlock() error {
 }
 
 // WriteLockfile writes a lockfile encoding the pid of the calling process.
-func WriteLockfile(fs filesys.Filesys, lock DBLock) error {
+func WriteLockfile(fs filesys.Filesys, lock *DBLock) error {
+	// if the DoltDir doesn't exist, create it.
+	doltDir, _ := fs.Abs(dbfactory.DoltDir)
+	err := fs.MkDirs(doltDir)
+	if err != nil {
+		return err
+	}
+
 	lockFile, _ := fs.Abs(filepath.Join(dbfactory.DoltDir, ServerLockFile))
 
 	portStr := strconv.Itoa(lock.Port)
@@ -1275,7 +1291,7 @@ func WriteLockfile(fs filesys.Filesys, lock DBLock) error {
 		portStr = "-"
 	}
 
-	if filesys.LocalFS == fs {
+	if reflect.TypeOf(fs) == reflect.TypeOf(filesys.LocalFS) {
 		_, err := os.Create(lockFile)
 		if err != nil {
 			return err
@@ -1286,7 +1302,7 @@ func WriteLockfile(fs filesys.Filesys, lock DBLock) error {
 		}
 	}
 
-	err := fs.WriteFile(lockFile, []byte(fmt.Sprintf("%d:%s:%s", lock.Pid, portStr, lock.Secret)))
+	err = fs.WriteFile(lockFile, []byte(fmt.Sprintf("%d:%s:%s", lock.Pid, portStr, lock.Secret)))
 	if err != nil {
 		return err
 	}
