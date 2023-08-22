@@ -3552,6 +3552,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			"call dolt_add('.')",
 			"call dolt_commit('-m', 'commit 1 MAIN')",
 			"call dolt_commit('--allow-empty', '-m', 'commit 2 MAIN')",
+			"call dolt_tag('tagM')",
 			"call dolt_checkout('-b', 'branchA')",
 			"call dolt_commit('--allow-empty', '-m', 'commit 1 BRANCHA')",
 			"call dolt_commit('--allow-empty', '-m', 'commit 2 BRANCHA')",
@@ -3629,6 +3630,22 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 					{"commit 1 BRANCHB"},
 				},
 			},
+			{
+				Query: "select message from dolt_log('tagM..branchB');",
+				Expected: []sql.Row{
+					{"commit 1 BRANCHB"},
+					{"commit 2 BRANCHA"},
+					{"commit 1 BRANCHA"},
+				},
+			},
+			{
+				Query: "select message from dolt_log('HEAD..branchB');",
+				Expected: []sql.Row{
+					{"commit 1 BRANCHB"},
+					{"commit 2 BRANCHA"},
+					{"commit 1 BRANCHA"},
+				},
+			},
 		},
 	},
 	{
@@ -3644,16 +3661,26 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			"insert into test values (0)",
 			"call dolt_add('.')",
 			"call dolt_commit('-m', 'inserted 0 into test')",
+			"create table test3 (pk int PRIMARY KEY)",
+			"call dolt_add('.')",
+			"call dolt_commit('-m', 'created table test3')",
 			"call dolt_checkout('main')",
 			"insert into test values (1)",
 			"call dolt_add('.')",
 			"call dolt_commit('-m', 'inserted 1 into test')",
 			"call dolt_merge('test-branch', '-m', 'merged test-branch')",
+			"drop table test3",
+			"call dolt_add('.')",
+			"call dolt_commit('-m', 'dropped table test3')",
+			"insert into test values (2)",
+			"call dolt_add('.')",
+			"call dolt_commit('-m', 'inserted 2 into test')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select message from dolt_log('--tables', 'test');",
 				Expected: []sql.Row{
+					{"inserted 2 into test"},
 					{"merged test-branch"},
 					{"inserted 1 into test"},
 					{"inserted 0 into test"},
@@ -3667,8 +3694,16 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
+				Query: "select message from dolt_log('--tables', 'test3')",
+				Expected: []sql.Row{
+					{"dropped table test3"},
+					{"created table test3"},
+				},
+			},
+			{
 				Query: "select message from dolt_log('--tables', 'test,test2');",
 				Expected: []sql.Row{
+					{"inserted 2 into test"},
 					{"merged test-branch"},
 					{"inserted 1 into test"},
 					{"inserted 0 into test"},

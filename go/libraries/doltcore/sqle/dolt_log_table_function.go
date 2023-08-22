@@ -326,6 +326,7 @@ func (ltf *LogTableFunction) validateRevisionExpressions() error {
 	return nil
 }
 
+// mustExpressionsToString converts a slice of expressions to a slice of resolved strings.
 func mustExpressionsToString(ctx *sql.Context, expr []sql.Expression) ([]string, error) {
 	var valStrs []string
 
@@ -420,7 +421,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 			return nil, err
 		}
 
-		notCommit, err := sqledb.DbData().Ddb.Resolve(ctx, cs, nil)
+		notCommit, err := sqledb.DbData().Ddb.Resolve(ctx, cs, headRef)
 		if err != nil {
 			return nil, err
 		}
@@ -623,34 +624,50 @@ func (ltf *LogTableFunction) NewDotDotLogTableFunctionRowIter(ctx *sql.Context, 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
 func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
-	var hashToLog hash.Hash
-	var cmToLog *doltdb.Commit
+	var h hash.Hash
+	var cm *doltdb.Commit
+	var err error
 	for {
-		h, cm, err := itr.child.Next(ctx)
+		h, cm, err = itr.child.Next(ctx)
 		if err != nil {
 			return nil, err
 		}
 
 		if itr.tableNames != nil {
-			if itr.prevCommit == nil {
-				itr.prevCommit = cm
-				itr.prevHash = h
+			if cm.NumParents() == 0 {
 				continue
 			}
-
-			parentRV, err := cm.GetRootValue(ctx)
+			parent0Cm, err := cm.GetParent(ctx, 0)
 			if err != nil {
 				return nil, err
 			}
+			var parent1Cm *doltdb.Commit
+			if cm.NumParents() > 1 {
+				parent1Cm, err = cm.GetParent(ctx, 1)
+				if err != nil {
+					return nil, err
+				}
+			}
 
-			childRV, err := itr.prevCommit.GetRootValue(ctx)
+			parent0RV, err := parent0Cm.GetRootValue(ctx)
+			if err != nil {
+				return nil, err
+			}
+			var parent1RV *doltdb.RootValue
+			if parent1Cm != nil {
+				parent1RV, err = parent1Cm.GetRootValue(ctx)
+				if err != nil {
+					return nil, err
+				}
+			}
+			childRV, err := cm.GetRootValue(ctx)
 			if err != nil {
 				return nil, err
 			}
 
 			didChange := false
 			for _, tableName := range itr.tableNames {
-				didChange, err = didTableChangeBetweenRootValues(ctx, childRV, parentRV, tableName)
+				didChange, err = didTableChangeBetweenRootValues(ctx, childRV, parent0RV, parent1RV, tableName)
 				if err != nil {
 					return nil, err
 				}
@@ -658,34 +675,24 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 					break
 				}
 			}
-			hashToLog = itr.prevHash
-			cmToLog = itr.prevCommit
-			itr.prevHash = h
-			itr.prevCommit = cm
 
 			if didChange {
 				break
-			} else {
-				continue
 			}
 		} else {
-			hashToLog = h
-			cmToLog = cm
-			itr.prevHash = h
-			itr.prevCommit = cm
 			break
 		}
 	}
 
-	meta, err := cmToLog.GetCommitMeta(ctx)
+	meta, err := cm.GetCommitMeta(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	row := sql.NewRow(hashToLog.String(), meta.Name, meta.Email, meta.Time(), meta.Description)
+	row := sql.NewRow(h.String(), meta.Name, meta.Email, meta.Time(), meta.Description)
 
 	if itr.showParents {
-		prStr, err := getParentsString(ctx, cmToLog)
+		prStr, err := getParentsString(ctx, cm)
 		if err != nil {
 			return nil, err
 		}
@@ -693,8 +700,8 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 	if shouldDecorateWithRefs(itr.decoration) {
-		branchNames := itr.cHashToRefs[hashToLog]
-		isHead := itr.headHash == hashToLog
+		branchNames := itr.cHashToRefs[h]
+		isHead := itr.headHash == h
 		row = row.Append(sql.NewRow(getRefsString(branchNames, isHead)))
 	}
 
@@ -741,26 +748,51 @@ func shouldDecorateWithRefs(decoration string) bool {
 }
 
 // didTableChangeBetweenRootValues checks if the given table changed between the two given root values.
-func didTableChangeBetweenRootValues(ctx *sql.Context, child, parent *doltdb.RootValue, tableName string) (bool, error) {
-	childHash, ok, err := child.GetTableHash(ctx, tableName)
-
-	if !ok {
-		return false, nil
-	}
+func didTableChangeBetweenRootValues(ctx *sql.Context, child, parent0, parent1 *doltdb.RootValue, tableName string) (bool, error) {
+	childHash, childOk, err := child.GetTableHash(ctx, tableName)
 	if err != nil {
 		return false, err
 	}
-
-	parentHash, ok, err := parent.GetTableHash(ctx, tableName)
-
-	// If the table didn't exist in the parent then we know there was a change
-	if !ok {
-		return true, nil
-	}
-
+	parent0Hash, parent0Ok, err := parent0.GetTableHash(ctx, tableName)
 	if err != nil {
 		return false, err
 	}
+	var parent1Hash hash.Hash
+	var parent1Ok bool
+	if parent1 != nil {
+		parent1Hash, parent1Ok, err = parent1.GetTableHash(ctx, tableName)
+		if err != nil {
+			return false, err
+		}
+	}
 
-	return childHash != parentHash, nil
+	if parent1 == nil {
+		if !childOk && !parent0Ok {
+			return false, nil
+		} else if !childOk && parent0Ok {
+			return true, nil
+		} else if childOk && !parent0Ok {
+			return true, nil
+		} else {
+			return childHash != parent0Hash, nil
+		}
+	} else {
+		if !childOk && !parent0Ok && !parent1Ok {
+			return false, nil
+		} else if !childOk && parent0Ok && !parent1Ok {
+			return true, nil
+		} else if !childOk && !parent0Ok && parent1Ok {
+			return true, nil
+		} else if !childOk && parent0Ok && parent1Ok {
+			return true, nil
+		} else if childOk && !parent0Ok && !parent1Ok {
+			return true, nil
+		} else if childOk && !parent0Ok && parent1Ok {
+			return childHash != parent1Hash, nil
+		} else if childOk && parent0Ok && !parent1Ok {
+			return childHash != parent0Hash, nil
+		} else {
+			return childHash != parent0Hash || childHash != parent1Hash, nil
+		}
+	}
 }
