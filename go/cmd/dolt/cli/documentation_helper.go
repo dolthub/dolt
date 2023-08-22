@@ -153,7 +153,7 @@ func NewCommandDocumentation(cmdDoc CommandDocumentationContent, argParser *argp
 	}
 }
 
-// CommandDocsForCommandString returns a |CommandDocumentation| for the the command string, doc contents, and arg
+// CommandDocsForCommandString returns a |CommandDocumentation| for the command string, doc contents, and arg
 // parser given.
 func CommandDocsForCommandString(command string, cmdDoc CommandDocumentationContent, argParser *argparser.ArgParser) *CommandDocumentation {
 	return &CommandDocumentation{
