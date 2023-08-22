@@ -614,7 +614,7 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 	if hasUseDb && hasBranch{
 		dbName, branchNameInDb := dsess.SplitRevisionDbName(useDb)
 		if len(branchNameInDb)!=0 {
-			cli.PrintErrf("The branch name in %s will be ignored.\n",useDb)
+			return nil, fmt.Errorf("The branch name in %s will be ignored. Remove the branch name from the DB name\n",useDb)
 		}
 		useDb=dbName+"/"+useBranch
 	}
