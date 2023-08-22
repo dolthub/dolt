@@ -202,8 +202,7 @@ func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, n
 		if err != nil {
 			return nil, err
 		}
-		idxVal := val.EmptyTuple
-		if err = mut.Put(ctx, idxKey, idxVal); err != nil {
+		if err = mut.Put(ctx, idxKey, val.EmptyTuple); err != nil {
 			return nil, err
 		}
 	}
@@ -272,7 +271,6 @@ func BuildUniqueProllyIndex(ctx context.Context, vrw types.ValueReadWriter, ns t
 		if err != nil {
 			return nil, err
 		}
-		idxVal := val.EmptyTuple
 
 		if prefixDesc.HasNulls(idxKey) {
 			continue
@@ -289,7 +287,7 @@ func BuildUniqueProllyIndex(ctx context.Context, vrw types.ValueReadWriter, ns t
 			return nil, err
 		}
 
-		if err = mut.Put(ctx, idxKey, idxVal); err != nil {
+		if err = mut.Put(ctx, idxKey, val.EmptyTuple); err != nil {
 			return nil, err
 		}
 	}

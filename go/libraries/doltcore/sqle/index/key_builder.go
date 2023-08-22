@@ -79,10 +79,16 @@ func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx context.Context, k, v val.T
 	for to := range b.mapping {
 		from := b.mapping.MapOrdinal(to)
 		if from < b.split {
-			// the from field comes from the key tuple fields
+			// the "from" field comes from the key tuple fields
+			// NOTE: Because we are using Tuple.GetField and TupleBuilder.PutRaw, we are not
+			//       interpreting the tuple data at all and just copying the bytes. This should work
+			//       for primary keys since they are always represented in the secondary index exactly
+			//       as they are in the primary index, but for the value tuple, we need to interpret the
+			//       data so that we can transform StringAddrEnc fields from pointers to strings (i.e. for
+			//       prefix indexes) as well as custom handling for ZCell geometry fields.
 			b.builder.PutRaw(to, k.GetField(from))
 		} else {
-			// the from field comes from the value tuple fields
+			// the "from" field comes from the value tuple fields
 			from -= b.split
 
 			value, err := GetField(ctx, b.sch.GetValueDescriptor(), from, v, b.nodeStore)

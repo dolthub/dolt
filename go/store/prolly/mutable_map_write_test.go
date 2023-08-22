@@ -489,8 +489,7 @@ func testInternalNodeSplits(t *testing.T) {
 			bld.PutInt32(0, int32(j))
 			bld.PutInt32(1, int32(j))
 			key := bld.Build(sharedPool)
-			value := val.EmptyTuple
-			err = mut.Put(ctx, key, value)
+			err = mut.Put(ctx, key, val.EmptyTuple)
 			require.NoError(t, err)
 		}
 		pm, err = mut.Map(ctx)

@@ -749,8 +749,7 @@ func (idx uniqIndex) insertRow(ctx context.Context, key, value val.Tuple) error 
 		return err
 	}
 
-	newValue := val.NewTuple(idx.secondary.NodeStore().Pool(), nil)
-	return idx.secondary.Put(ctx, secondaryIndexKey, newValue)
+	return idx.secondary.Put(ctx, secondaryIndexKey, val.EmptyTuple)
 }
 
 func (idx uniqIndex) removeRow(ctx context.Context, key, value val.Tuple) error {

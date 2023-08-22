@@ -125,14 +125,9 @@ func (m MutableSecondaryIdx) UpdateEntry(ctx context.Context, key, currValue, ne
 
 	err = m.mut.Delete(ctx, currKey)
 	if err != nil {
-		return nil
+		return err
 	}
-	err = m.mut.Put(ctx, newKey, val.EmptyTuple)
-	if err != nil {
-		return nil
-	}
-
-	return nil
+	return m.mut.Put(ctx, newKey, val.EmptyTuple)
 }
 
 // DeleteEntry deletes a secondary index entry given they key and value of the primary row.
@@ -142,11 +137,7 @@ func (m MutableSecondaryIdx) DeleteEntry(ctx context.Context, key val.Tuple, val
 		return err
 	}
 
-	err = m.mut.Delete(ctx, currKey)
-	if err != nil {
-		return nil
-	}
-	return nil
+	return m.mut.Delete(ctx, currKey)
 }
 
 // Map returns the finalized prolly.Map of the underlying prolly.MutableMap.
