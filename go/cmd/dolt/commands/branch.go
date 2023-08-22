@@ -403,7 +403,10 @@ func moveBranch(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.Ar
 		return 1
 	}
 
-	var newName = apr.Arg(1)
+	var newName = apr.Arg(0)
+	if apr.NArg() == 2 {
+		newName = apr.Arg(1)
+	}
 	if !doltdb.IsValidUserBranchName(newName) {
 		cli.PrintErrf("%s is an invalid branch name", newName)
 		return 1
@@ -433,9 +436,12 @@ func copyBranch(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.Ar
 		return 1
 	}
 
-	var branchName = apr.Arg(1)
-	if !doltdb.IsValidUserBranchName(branchName) {
-		cli.PrintErrf("%s is an invalid branch name", branchName)
+	var toName = apr.Arg(0)
+	if apr.NArg() == 2 {
+		toName = apr.Arg(1)
+	}
+	if !doltdb.IsValidUserBranchName(toName) {
+		cli.PrintErrf("%s is an invalid branch name", toName)
 		return 1
 	}
 

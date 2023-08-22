@@ -283,4 +283,20 @@ teardown() {
     run dolt branch -c altBranch $hash
     [ $status -eq "1" ]
     [[ "$output" =~ "is an invalid branch name" ]] || false
+
+    dolt checkout altBranch
+
+    run dolt branch -m HEAD
+    [ $status -eq "1" ]
+    [[ "$output" == "HEAD is an invalid branch name" ]] || false
+    run dolt branch -m $hash
+    [ $status -eq "1" ]
+    [[ "$output" =~ "is an invalid branch name" ]] || false
+
+    run dolt branch -c HEAD
+    [ $status -eq "1" ]
+    [[ "$output" == "HEAD is an invalid branch name" ]] || false
+    run dolt branch -c $hash
+    [ $status -eq "1" ]
+    [[ "$output" =~ "is an invalid branch name" ]] || false
 }
