@@ -318,7 +318,7 @@ func (ltf *LogTableFunction) validateRevisionExpressions() error {
 		if strings.Contains(notRevStr, "..") {
 			return ltf.invalidArgDetailsErr("--not revision cannot contain '..'")
 		}
-		if strings.Contains(notRevStr, "^") {
+		if strings.HasPrefix(notRevStr, "^") {
 			return ltf.invalidArgDetailsErr("--not revision cannot contain '^'")
 		}
 	}
