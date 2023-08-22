@@ -117,7 +117,7 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Ambiguous branch name: b1 or b2" ]] || false
 
-    run dolt --use-db db1/b1 --branch b2 sql -q "select * from t"
+    run dolt --use-db db1 --branch b2 sql -q "select * from t"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1" ]] || false
     [[ ! "$output" =~ "2" ]] || false
