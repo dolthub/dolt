@@ -556,8 +556,6 @@ type logTableFunctionRowIter struct {
 	headHash    hash.Hash
 
 	tableNames []string
-	prevCommit *doltdb.Commit
-	prevHash   hash.Hash
 }
 
 func (ltf *LogTableFunction) NewLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, matchFn func(*doltdb.Commit) (bool, error), cHashToRefs map[hash.Hash][]string, tableNames []string) (*logTableFunctionRowIter, error) {
