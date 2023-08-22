@@ -624,7 +624,7 @@ teardown() {
 @test "log: --decorate=notanoption throws error" {
     run dolt log --decorate=notanoption
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "fatal: invalid --decorate option" ]] || false
+    [[ "$output" =~ "invalid --decorate option" ]] || false
 }
 
 @test "log: check pager" {
