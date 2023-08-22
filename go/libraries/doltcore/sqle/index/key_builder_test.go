@@ -155,7 +155,7 @@ func TestGetIndexKeyMapping(t *testing.T) {
 			}
 			allTags := append(idxTags, sch.GetPKCols().Tags...)
 			idx := schema.NewIndex("test_idx", idxTags, allTags, nil, schema.IndexProperties{})
-			b := NewSecondaryKeyBuilder(sch, idx, val.TupleDesc{}, nil)
+			b := NewSecondaryKeyBuilder(sch, idx, val.TupleDesc{}, nil, nil)
 			require.Equal(t, tt.Split, b.split)
 			require.Equal(t, tt.Mapping, b.mapping)
 		})

@@ -180,6 +180,7 @@ func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, n
 	p := primary.Pool()
 	mut := secondary.Mutate()
 	secondaryBld := index.NewSecondaryKeyBuilder(sch, idx, secondary.KeyDesc(), p)
+	secondaryBld := index.NewSecondaryKeyBuilder(sch, idx, secondary.KeyDesc(), p, secondary.NodeStore())
 
 	iter, err := primary.IterAll(ctx)
 	if err != nil {
@@ -195,7 +196,10 @@ func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, n
 			return nil, err
 		}
 
-		idxKey := secondaryBld.SecondaryKeyFromRow(k, v)
+		idxKey, err := secondaryBld.SecondaryKeyFromRow(ctx, k, v)
+		if err != nil {
+			return nil, err
+		}
 		idxVal := val.EmptyTuple
 		if err = mut.Put(ctx, idxKey, idxVal); err != nil {
 			return nil, err
@@ -250,7 +254,7 @@ func BuildUniqueProllyIndex(ctx context.Context, vrw types.ValueReadWriter, ns t
 	p := primary.Pool()
 
 	prefixDesc := secondary.KeyDesc().PrefixDesc(idx.Count())
-	secondaryBld := index.NewSecondaryKeyBuilder(sch, idx, secondary.KeyDesc(), p)
+	secondaryBld := index.NewSecondaryKeyBuilder(sch, idx, secondary.KeyDesc(), p, secondary.NodeStore())
 
 	mut := secondary.Mutate()
 	for {
@@ -262,7 +266,10 @@ func BuildUniqueProllyIndex(ctx context.Context, vrw types.ValueReadWriter, ns t
 			return nil, err
 		}
 
-		idxKey := secondaryBld.SecondaryKeyFromRow(k, v)
+		idxKey, err := secondaryBld.SecondaryKeyFromRow(ctx, k, v)
+		if err != nil {
+			return nil, err
+		}
 		idxVal := val.EmptyTuple
 
 		if prefixDesc.HasNulls(idxKey) {
