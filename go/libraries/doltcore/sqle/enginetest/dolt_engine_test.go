@@ -2786,6 +2786,7 @@ func runMergeScriptTestsInBothDirections(t *testing.T, tests []MergeScriptTest, 
 	t.Run(name, func(t *testing.T) {
 		t.Run("right to left merges", func(t *testing.T) {
 			for _, script := range tests {
+				// run in a func() so we can cleanly defer closing the harness
 				func() {
 					h := newDoltHarness(t)
 					defer h.Close()
