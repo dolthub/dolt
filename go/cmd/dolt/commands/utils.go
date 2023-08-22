@@ -190,14 +190,14 @@ func BuildSqlEngineQueryist(ctx context.Context, cwdFS filesys.Filesys, mrEnv *e
 	// Whether we're running in shell mode or some other mode, sql commands from the command line always have a current
 	// database set when you begin using them.
 	database, hasDB := apr.GetValue(UseDbFlag)
-	useBranch, hasBranch :=apr.GetValue(cli.BranchParam)
+	useBranch, hasBranch := apr.GetValue(cli.BranchParam)
 	if !hasDB {
 		database = mrEnv.GetFirstDatabase()
 	}
-	if hasBranch{
+	if hasBranch {
 		dbName, _ := dsess.SplitRevisionDbName(database)
-		database=dbName+"/"+useBranch
-	} 
+		database = dbName + "/" + useBranch
+	}
 
 	binder, err := newLateBindingEngine(cfgDirPath, privsFp, branchControlFilePath, creds, database, mrEnv)
 	if err != nil {

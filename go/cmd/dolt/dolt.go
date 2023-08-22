@@ -611,12 +611,12 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 	useDb, hasUseDb := apr.GetValue(commands.UseDbFlag)
 	useBranch, hasBranch := apr.GetValue(cli.BranchParam)
 
-	if hasUseDb && hasBranch{
+	if hasUseDb && hasBranch {
 		dbName, branchNameInDb := dsess.SplitRevisionDbName(useDb)
-		if len(branchNameInDb)!=0 {
-			return nil, fmt.Errorf("Ambiguous branch name: %s or %s",branchNameInDb,useBranch)
+		if len(branchNameInDb) != 0 {
+			return nil, fmt.Errorf("Ambiguous branch name: %s or %s", branchNameInDb, useBranch)
 		}
-		useDb=dbName+"/"+useBranch
+		useDb = dbName + "/" + useBranch
 	}
 	// If the host flag is given, we are forced to use a remote connection to a server.
 	host, hasHost := apr.GetValue(cli.HostFlag)
@@ -646,7 +646,9 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 		}
 	} else {
 		useDb = mrEnv.GetFirstDatabase()
-		if hasBranch { useDb+="/"+useBranch }
+		if hasBranch {
+			useDb += "/" + useBranch
+		}
 	}
 
 	if targetEnv == nil && useDb != "" {
