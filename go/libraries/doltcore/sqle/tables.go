@@ -807,7 +807,11 @@ func (t *WritableDoltTable) GetNextAutoIncrementValue(ctx *sql.Context, potentia
 		return 0, err
 	}
 
-	return ed.(sql.AutoIncrementGetter).GetNextAutoIncrementValue(ctx, potentialVal)
+	if multiTableEditor, ok := ed.(fulltext.MultiTableEditor); ok {
+		return multiTableEditor.PrimaryEditor().(writer.AutoIncrementGetter).GetNextAutoIncrementValue(ctx, potentialVal)
+	} else {
+		return ed.(writer.AutoIncrementGetter).GetNextAutoIncrementValue(ctx, potentialVal)
+	}
 }
 
 func (t *DoltTable) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, error) {

@@ -364,7 +364,6 @@ SQL
 }
 
 @test "dump: SQL type - with keyless tables" {
-
     dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     dolt sql -q "INSERT INTO new_table VALUES (1);"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
@@ -863,6 +862,42 @@ SQL
     run grep "COMMIT;" doltdump.sql
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
+}
+
+# Assert that we can create data in ANSI_QUOTES mode, and then correctly dump it
+# out after disabling ANSI_QUOTES mode.
+@test "dump: ANSI_QUOTES data" {
+    dolt sql << SQL
+SET @@SQL_MODE=ANSI_QUOTES;
+CREATE TABLE "table1"("pk" int primary key, "col1" int DEFAULT ("pk"));
+CREATE TRIGGER trigger1 BEFORE INSERT ON "table1" FOR EACH ROW SET NEW."pk" = NEW."pk" + 1;
+INSERT INTO "table1" ("pk") VALUES (1);
+CREATE VIEW "view1" AS select "pk", "col1" from "table1";
+CREATE PROCEDURE procedure1() SELECT "pk", "col1" from "table1";
+SQL
+
+    run dolt dump
+    [ $status -eq 0 ]
+    [[ $output =~ "Successfully exported data." ]] || false
+    [ -f doltdump.sql ]
+    cp doltdump.sql ~/doltdump.sql
+
+    mkdir roundtrip
+    cd roundtrip
+    dolt init
+
+    dolt sql < ../doltdump.sql
+    [ $status -eq 0 ]
+
+    run dolt sql -q "USE dolt_repo_$$; SHOW TABLES;"
+    [ $status -eq 0 ]
+    [[ $output =~ "table1" ]] || false
+    [[ $output =~ "view1" ]] || false
+
+    run dolt sql -r csv -q "USE dolt_repo_$$; CALL procedure1;"
+    [ $status -eq 0 ]
+    [[ $output =~ "pk,col1" ]] || false
+    [[ $output =~ "2,1" ]] || false
 }
 
 @test "dump: round trip dolt dump with all data types" {

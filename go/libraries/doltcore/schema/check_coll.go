@@ -37,6 +37,8 @@ type CheckCollection interface {
 	Equals(other CheckCollection) bool
 	// Count returns the size of the collection
 	Count() int
+	// Copy returns a copy of the collection safe to modify without affecting the original
+	Copy() CheckCollection
 }
 
 type check struct {
@@ -133,4 +135,13 @@ func NewCheck(name, expression string, enforced bool) check {
 		expression: expression,
 		enforced:   enforced,
 	}
+}
+
+func (c checkCollection) Copy() CheckCollection {
+	checks := make([]check, len(c.checks))
+	for i, check := range c.checks {
+		checks[i] = NewCheck(check.name, check.expression, check.enforced)
+	}
+
+	return &c
 }

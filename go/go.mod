@@ -15,7 +15,7 @@ require (
 	github.com/dolthub/fslock v0.0.3
 	github.com/dolthub/ishell v0.0.0-20221214210346-d7db0b066488
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
-	github.com/dolthub/vitess v0.0.0-20230803210631-6a8ca1536779
+	github.com/dolthub/vitess v0.0.0-20230815195949-02f159e126f9
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.13.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
@@ -45,8 +45,8 @@ require (
 	golang.org/x/sync v0.2.0
 	golang.org/x/sys v0.10.0
 	google.golang.org/api v0.126.0
-	google.golang.org/grpc v1.55.0
-	google.golang.org/protobuf v1.30.0
+	google.golang.org/grpc v1.57.0
+	google.golang.org/protobuf v1.31.0
 	gopkg.in/square/go-jose.v2 v2.5.1
 	gopkg.in/src-d/go-errors.v1 v1.0.0
 	gopkg.in/yaml.v2 v2.4.0
@@ -59,7 +59,7 @@ require (
 	github.com/cespare/xxhash v1.1.0
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.16.1-0.20230811232523-cee5b01dd5ce
+	github.com/dolthub/go-mysql-server v0.16.1-0.20230822125426-8111b83cf1c5
 	github.com/dolthub/swiss v0.1.0
 	github.com/goccy/go-json v0.10.2
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
@@ -90,10 +90,10 @@ require (
 )
 
 require (
-	cloud.google.com/go v0.110.2 // indirect
-	cloud.google.com/go/compute v1.19.3 // indirect
+	cloud.google.com/go v0.110.7 // indirect
+	cloud.google.com/go/compute v1.23.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
-	cloud.google.com/go/iam v1.1.0 // indirect
+	cloud.google.com/go/iam v1.1.1 // indirect
 	git.sr.ht/~sbinet/gg v0.3.1 // indirect
 	github.com/ajstarks/svgo v0.0.0-20211024235047-1546f124cd8b // indirect
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
@@ -151,9 +151,9 @@ require (
 	golang.org/x/tools v0.6.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto v0.0.0-20230530153820-e85fd2cbaebc // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20230530153820-e85fd2cbaebc // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20230530153820-e85fd2cbaebc // indirect
+	google.golang.org/genproto v0.0.0-20230807174057-1744710a1577 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20230803162519-f966b187b2e5 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20230803162519-f966b187b2e5 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 )
 

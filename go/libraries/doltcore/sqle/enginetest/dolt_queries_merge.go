@@ -355,8 +355,8 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{true, "feature-branch", "refs/heads/main", ""}},
 			},
 			{
-				Query:    "SELECT COUNT(*) from dolt_status",
-				Expected: []sql.Row{{1}},
+				Query:    "SELECT * from dolt_status",
+				Expected: []sql.Row{{"test", true, "modified"}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
@@ -427,8 +427,82 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
+				Query:    "SELECT * from dolt_status",
+				Expected: []sql.Row{{"test", false, "modified"}},
+			},
+			{
 				Query:    "SELECT * from test ORDER BY pk",
 				Expected: []sql.Row{{0, 1001}, {1, 1}},
+			},
+		},
+	},
+	{
+		Name: "CALL DOLT_MERGE with schema conflicts can be correctly resolved using dolt_conflicts_resolve when autocommit is off",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key, val int)",
+			"call DOLT_ADD('.')",
+			"INSERT INTO test VALUES (0, 0)",
+			"SET autocommit = 0",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:01');",
+			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
+			"ALTER TABLE test MODIFY val bigint;",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:02');",
+			"CALL DOLT_CHECKOUT('main');",
+			"ALTER TABLE test MODIFY val smallint;",
+			"CALL DOLT_COMMIT('-a', '-m', 'update val col', '--date', '2022-08-06T12:00:03');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				Expected: []sql.Row{{"", 0, 1}},
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{true, "feature-branch", "refs/heads/main", "test"}},
+			},
+			{
+				Query:    "SELECT * from dolt_status",
+				Expected: []sql.Row{{"test", false, "schema conflict"}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
+				Expected: []sql.Row{{"update val col"}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "CALL DOLT_CONFLICTS_RESOLVE('--ours', 'test');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{true, "feature-branch", "refs/heads/main", ""}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * from dolt_status",
+				Expected: []sql.Row{{"test", true, "merged"}},
+			},
+			{
+				Query:            "CALL DOLT_COMMIT('-m', 'merged');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT * from dolt_status",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SHOW CREATE TABLE test",
+				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `val` smallint,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
 	},
@@ -456,6 +530,10 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
 				Expected: []sql.Row{{true, "feature-branch", "refs/heads/main", "test"}},
+			},
+			{
+				Query:    "SELECT * FROM DOLT_STATUS",
+				Expected: []sql.Row{{"test", false, "modified"}, {"test", false, "conflict"}},
 			},
 			{
 				// errors because creating a new branch implicitly commits the current transaction
@@ -3289,7 +3367,7 @@ var SchemaConflictScripts = []queries.ScriptTest{
 			"alter table t modify column c0 int",
 			"call dolt_commit('-am', 'altered t on branch other')",
 			"call dolt_checkout('main')",
-			"alter table t modify column c0 datetime",
+			"alter table t modify column c0 datetime(6)",
 			"call dolt_commit('-am', 'altered t on branch main')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -3317,7 +3395,7 @@ var SchemaConflictScripts = []queries.ScriptTest{
 			"alter table t modify column c0 int",
 			"call dolt_commit('-am', 'altered t on branch other')",
 			"call dolt_checkout('main')",
-			"alter table t modify column c0 datetime",
+			"alter table t modify column c0 datetime(6)",
 			"call dolt_commit('-am', 'altered t on branch main')",
 		},
 		Assertions: []queries.ScriptTestAssertion{

@@ -139,8 +139,8 @@ SQL
 
 @test "blame: returns an error when the table is not found in the given revision" {
     run dolt blame HEAD~4 blame_test
-    [ "$status" -eq 0 ]
-    [[ "$output" = "" ]] || false
+    [ "$status" -eq 1 ]
+    [[ "$output" = "table not found: dolt_diff_blame_test" ]] || false
 }
 
 @test "blame: pk ordered output" {
