@@ -1969,6 +1969,4 @@ behavior:
     run dolt sql -q "select current_user"
     [ $status -eq 0 ]
     [[ "$output" =~ "__dolt_local_user__@localhost" ]] || false
-
-    teardown
 }
