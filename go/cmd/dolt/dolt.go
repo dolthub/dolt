@@ -153,7 +153,6 @@ var commandsWithoutCliCtx = []cli.Command{
 	docscmds.Commands,
 	&commands.Assist{},
 	commands.ProfileCmd{},
-	stashcmds.StashCommands,
 }
 
 var commandsWithoutGlobalArgSupport = []cli.Command{
@@ -168,7 +167,6 @@ var commandsWithoutGlobalArgSupport = []cli.Command{
 	sqlserver.SqlClientCmd{VersionStr: Version},
 	commands.VersionCmd{VersionStr: Version},
 	commands.ConfigCmd{},
-	stashcmds.StashCommands,
 }
 
 func initCliContext(commandName string) bool {

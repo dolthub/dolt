@@ -1091,9 +1091,9 @@ SQL
 @test "sql-local-remote: verify unmigrated command will fail with warning" {
     cd altDB
     start_sql_server altDB
-    run dolt --user dolt stash
+    run dolt --user dolt profile
     [ $status -eq 1 ]
-    [[ "$output" =~ "This command does not support global arguments." ]] || false
+    [[ "$output" =~ "Global arguments are not supported for this command" ]] || false
 }
 
 @test "sql-local-remote: verify commands without global arg support will fail with warning" {

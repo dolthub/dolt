@@ -343,21 +343,12 @@ teardown() {
 
 @test "profile: commands that don't support global args work with a default profile set" {
     cd altDB
-    dolt sql -q "create table test (pk int primary key)"
-    dolt sql -q "insert into test values (999)"
-    dolt add .
     dolt profile add --use-db defaultDB default
 
-    run dolt --use-db altDB status
+    run dolt config --list
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "new table:        test" ]] || false
-
-    run dolt stash
-    [ "$status" -eq 0 ]
-
-    run dolt --use-db altDB status
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+    [[ "$output" =~ "user.email = bats@email.fake" ]] || false
+    [[ "$output" =~ "user.name = Bats Tests" ]] || false
 }
 
 @test "profile: profile with user but not password waits for password prompt" {
