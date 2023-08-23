@@ -1196,6 +1196,9 @@ func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.Ta
 	case "dolt_schema_diff":
 		dtf := &SchemaDiffTableFunction{}
 		return dtf, nil
+	case "dolt_query_diff":
+		dtf := &QueryDiffTableFunction{}
+		return dtf, nil
 	}
 
 	return nil, sql.ErrTableFunctionNotFound.New(name)

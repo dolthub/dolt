@@ -121,6 +121,7 @@ var doltSubCommands = []cli.Command{
 	stashcmds.StashCommands,
 	&commands.Assist{},
 	commands.ProfileCmd{},
+	commands.QueryDiff{},
 }
 
 var commandsWithoutCliCtx = []cli.Command{
