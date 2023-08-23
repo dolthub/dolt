@@ -141,9 +141,26 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults) (string, 
 		first = false
 	}
 
-	for _, args := range apr.Args {
-		writeToBuffer("?", true)
-		params = append(params, args)
+	if apr.PositionalArgsSeparatorIndex >= 0 {
+		for i := 0; i < apr.PositionalArgsSeparatorIndex; i++ {
+			writeToBuffer("?", true)
+			params = append(params, apr.Arg(i))
+		}
+		tableNames := ""
+		for i := apr.PositionalArgsSeparatorIndex; i < apr.NArg(); i++ {
+			tableNames = tableNames + "?,"
+			params = append(params, apr.Arg(i))
+		}
+		if tableNames != "" {
+			tableNames = strings.TrimSuffix(tableNames, ",")
+			writeToBuffer("--tables", false)
+			writeToBuffer(tableNames, true)
+		}
+	} else {
+		for _, arg := range apr.Args {
+			writeToBuffer("?", true)
+			params = append(params, arg)
+		}
 	}
 
 	if minParents, hasMinParents := apr.GetValue(cli.MinParentsFlag); hasMinParents {

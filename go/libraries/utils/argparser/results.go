@@ -26,6 +26,8 @@ type ArgParseResults struct {
 	options map[string]string
 	Args    []string
 	parser  *ArgParser
+
+	PositionalArgsSeparatorIndex int
 }
 
 // Equals res and other are only considered equal if the order and contents of their arguments
@@ -135,7 +137,7 @@ func (res *ArgParseResults) DropValue(name string) *ArgParseResults {
 		}
 	}
 
-	return &ArgParseResults{newNamedArgs, res.Args, res.parser}
+	return &ArgParseResults{newNamedArgs, res.Args, res.parser, -1}
 }
 
 func (res *ArgParseResults) MustGetValue(name string) string {
