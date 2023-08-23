@@ -290,6 +290,7 @@ func CreateLogArgParser() *argparser.ArgParser {
 	ap.SupportsString(DecorateFlag, "", "decorate_fmt", "Shows refs next to commits. Valid options are short, full, no, and auto")
 	ap.SupportsFlag(OneLineFlag, "", "Shows logs in a compact format.")
 	ap.SupportsStringList(NotFlag, "", "revision", "Excludes commits from revision.")
+	ap.SupportsStringList(TablesFlag, "t", "table", "Restricts the log to commits that modified the specified tables.")
 	return ap
 }
 
