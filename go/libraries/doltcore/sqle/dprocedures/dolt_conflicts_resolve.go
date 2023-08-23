@@ -362,11 +362,13 @@ func ResolveSchemaConflicts(ctx *sql.Context, ddb *doltdb.DoltDB, ws *doltdb.Wor
 		return nil, err
 	}
 
+	var merged []string
 	root := ws.WorkingRoot()
 	for name, tbl := range updates {
 		if root, err = root.PutTable(ctx, name, tbl); err != nil {
 			return nil, err
 		}
+		merged = append(merged, name)
 	}
 
 	// clear resolved schema conflicts
@@ -377,7 +379,8 @@ func ResolveSchemaConflicts(ctx *sql.Context, ddb *doltdb.DoltDB, ws *doltdb.Wor
 		}
 		unmerged = append(unmerged, tbl)
 	}
-	return ws.WithWorkingRoot(root).WithUnmergableTables(unmerged), nil
+
+	return ws.WithWorkingRoot(root).WithUnmergableTables(unmerged).WithMergedTables(merged), nil
 }
 
 func ResolveDataConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.RootValue, dbName string, ours bool, tblNames []string) error {

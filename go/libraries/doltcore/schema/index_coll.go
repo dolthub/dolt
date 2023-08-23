@@ -72,6 +72,8 @@ type IndexCollection interface {
 	SetPks([]uint64) error
 	// ContainsFullTextIndex returns whether the collection contains at least one Full-Text index.
 	ContainsFullTextIndex() bool
+	// Copy returns a copy of this index collection that can be modified without affecting the original.
+	Copy() IndexCollection
 }
 
 type IndexProperties struct {
@@ -121,6 +123,40 @@ func NewIndexCollection(cols *ColCollection, pkCols *ColCollection) IndexCollect
 		}
 	}
 	return ixc
+}
+
+func (ixc indexCollectionImpl) Copy() IndexCollection {
+	if ixc.pks != nil {
+		pks := make([]uint64, len(ixc.pks))
+		copy(pks, ixc.pks)
+		ixc.pks = pks
+	}
+
+	if ixc.indexes != nil {
+		indexes := make(map[string]*indexImpl, len(ixc.indexes))
+		for name, index := range ixc.indexes {
+			indexes[name] = index.copy()
+		}
+		ixc.indexes = indexes
+	}
+
+	if ixc.colTagToIndex != nil {
+		colTagToIndex := make(map[uint64][]*indexImpl, len(ixc.colTagToIndex))
+		for tag, indexes := range ixc.colTagToIndex {
+			var indexesCopy []*indexImpl
+			if indexes != nil {
+				indexesCopy = make([]*indexImpl, len(indexes))
+				for i, index := range indexes {
+					indexesCopy[i] = index.copy()
+				}
+			}
+			colTagToIndex[tag] = indexesCopy
+		}
+		ixc.colTagToIndex = colTagToIndex
+	}
+
+	// no need to copy the colColl, it's immutable
+	return &ixc
 }
 
 func (ixc *indexCollectionImpl) AddIndex(indexes ...Index) {

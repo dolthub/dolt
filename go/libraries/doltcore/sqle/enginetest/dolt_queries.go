@@ -2801,6 +2801,10 @@ var DoltBranchScripts = []queries.ScriptTest{
 				Query:    "CALL DOLT_BRANCH('-m', 'myNewBranch2', 'myNewBranch3')",
 				Expected: []sql.Row{{0}},
 			},
+			{
+				Query:          "CALL DOLT_BRANCH('-m', 'myNewBranch3', 'HEAD')",
+				ExpectedErrStr: "not a valid user branch name",
+			},
 		},
 	},
 	{
@@ -2840,6 +2844,10 @@ var DoltBranchScripts = []queries.ScriptTest{
 			{
 				Query:    "CALL DOLT_BRANCH('-cf', 'myNewBranch1', 'myNewBranch2')",
 				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "CALL DOLT_BRANCH('-c', 'myNewBranch1', 'HEAD')",
+				ExpectedErrStr: "fatal: 'HEAD' is not a valid branch name.",
 			},
 		},
 	},
@@ -3278,7 +3286,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{3}},
 			},
 			{
-				Query:    "SELECT count(*)	 from dolt_log('main') join dolt_diff(@Commit1, @Commit2, 't') where commit_hash = to_commit;",
+				Query:    "SELECT count(*) from dolt_log('main') join dolt_diff(@Commit1, @Commit2, 't') where commit_hash = to_commit;",
 				Expected: []sql.Row{{2}},
 			},
 		},
@@ -4737,6 +4745,10 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"t", uint64(2)}},
 			},
 			{
+				Query:    "select * from dolt_status",
+				Expected: []sql.Row{{"t", false, "modified"}, {"t", false, "conflict"}},
+			},
+			{
 				Query: "select base_pk, base_v, our_pk, our_diff_type, their_pk, their_diff_type from dolt_conflicts_t;",
 				Expected: []sql.Row{
 					{1, "one", nil, "removed", 1, "modified"},
@@ -4746,6 +4758,10 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			{
 				Query:    "call dolt_conflicts_resolve('--ours', 't');",
 				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select * from dolt_status",
+				Expected: []sql.Row{{"t", false, "modified"}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
@@ -5307,7 +5323,7 @@ var DoltIndexPrefixScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "show create table t",
-				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `i` int NOT NULL,\n  `v1` varchar(10) COLLATE utf8mb4_0900_ai_ci,\n  `v2` varchar(10) COLLATE utf8mb4_0900_ai_ci,\n  PRIMARY KEY (`i`),\n  UNIQUE KEY `v1v2` (`v1`(3),`v2`(5))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"}},
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `i` int NOT NULL,\n  `v1` varchar(10),\n  `v2` varchar(10),\n  PRIMARY KEY (`i`),\n  UNIQUE KEY `v1v2` (`v1`(3),`v2`(5))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"}},
 			},
 			{
 				Query:    "insert into t values (0, 'a', 'a'), (1, 'ab','ab'), (2, 'abc', 'abc'), (3, 'abcde', 'abcde')",
