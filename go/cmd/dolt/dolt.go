@@ -616,6 +616,15 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, rootEnv *env.Do
 	var targetEnv *env.DoltEnv = nil
 
 	useDb, hasUseDb := apr.GetValue(commands.UseDbFlag)
+	useBranch, hasBranch := apr.GetValue(cli.BranchParam)
+
+	if hasUseDb && hasBranch {
+		dbName, branchNameInDb := dsess.SplitRevisionDbName(useDb)
+		if len(branchNameInDb) != 0 {
+			return nil, fmt.Errorf("Ambiguous branch name: %s or %s", branchNameInDb, useBranch)
+		}
+		useDb = dbName + "/" + useBranch
+	}
 	// If the host flag is given, we are forced to use a remote connection to a server.
 	host, hasHost := apr.GetValue(cli.HostFlag)
 	if hasHost {
@@ -628,7 +637,6 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, rootEnv *env.Do
 			port = 3306
 		}
 		useTLS := !apr.Contains(cli.NoTLSFlag)
-
 		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, host, port, useTLS, useDb)
 	} else {
 		_, hasPort := apr.GetInt(cli.PortFlag)
@@ -645,6 +653,9 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, rootEnv *env.Do
 		}
 	} else {
 		useDb = mrEnv.GetFirstDatabase()
+		if hasBranch {
+			useDb += "/" + useBranch
+		}
 	}
 
 	if targetEnv == nil && useDb != "" {
@@ -686,7 +697,6 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, rootEnv *env.Do
 	if verbose {
 		cli.Println("verbose: starting local mode")
 	}
-
 	return commands.BuildSqlEngineQueryist(ctx, cwdFS, mrEnv, creds, apr)
 }
 
