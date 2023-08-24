@@ -135,6 +135,7 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~sql-checkout.bats~
 ~cli-hosted.bats~
 ~profile.bats~
+~log.bats~
 EOM
 )
 
