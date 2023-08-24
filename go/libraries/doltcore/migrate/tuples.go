@@ -331,7 +331,7 @@ func translateBlobField(ctx context.Context, ns tree.NodeStore, value types.Blob
 	case val.StringAddrEnc, val.BytesAddrEnc:
 		// common case
 	default:
-		return fmt.Errorf("unexpecte encoding for blob (%d)", b.Desc.Types[idx].Enc)
+		return fmt.Errorf("unexpected encoding for blob (%d)", b.Desc.Types[idx].Enc)
 	}
 
 	buf := make([]byte, value.Len())

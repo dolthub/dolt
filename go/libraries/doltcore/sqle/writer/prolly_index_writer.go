@@ -290,21 +290,7 @@ func (m prollySecondaryIndexWriter) trimKeyPart(to int, keyPart interface{}) int
 	if len(m.prefixLengths) > to {
 		prefixLength = m.prefixLengths[to]
 	}
-	if prefixLength != 0 {
-		switch kp := keyPart.(type) {
-		case string:
-			if prefixLength > uint16(len(kp)) {
-				prefixLength = uint16(len(kp))
-			}
-			keyPart = kp[:prefixLength]
-		case []uint8:
-			if prefixLength > uint16(len(kp)) {
-				prefixLength = uint16(len(kp))
-			}
-			keyPart = kp[:prefixLength]
-		}
-	}
-	return keyPart
+	return val.TrimValueToPrefixLength(keyPart, prefixLength)
 }
 
 func (m prollySecondaryIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {

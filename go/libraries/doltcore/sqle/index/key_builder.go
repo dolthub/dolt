@@ -31,6 +31,7 @@ func NewSecondaryKeyBuilder(sch schema.Schema, def schema.Index, idxDesc val.Tup
 	b.pool = p
 	b.nodeStore = nodeStore
 	b.sch = sch
+	b.def = def
 
 	keyless := schema.IsKeyless(sch)
 	if keyless {
@@ -64,6 +65,8 @@ func NewSecondaryKeyBuilder(sch schema.Schema, def schema.Index, idxDesc val.Tup
 type SecondaryKeyBuilder struct {
 	// sch holds the schema of the table on which the secondary index is created
 	sch schema.Schema
+	// def holds the definition of the secondary index
+	def schema.Index
 	// mapping defines how to map fields from the source table's schema to this index's tuple layout
 	mapping val.OrdinalMapping
 	// split marks the index in the secondary index's key tuple that splits the main table's
@@ -94,6 +97,10 @@ func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx context.Context, k, v val.T
 			value, err := GetField(ctx, b.sch.GetValueDescriptor(), from, v, b.nodeStore)
 			if err != nil {
 				return nil, err
+			}
+
+			if len(b.def.PrefixLengths()) > to {
+				value = val.TrimValueToPrefixLength(value, b.def.PrefixLengths()[to])
 			}
 
 			err = PutField(ctx, b.nodeStore, b.builder, to, value)
