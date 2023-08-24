@@ -89,7 +89,7 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 
 	dbName := mrEnv.GetFirstDatabase()
 
-	if se.GetUnderlyingEngine().IsReadOnly {
+	if se.GetUnderlyingEngine().IsReadOnly() {
 		// SqlEngineTableWriter does not respect read only mode
 		return nil, analyzererrors.ErrReadOnlyDatabase.New(dbName)
 	}
