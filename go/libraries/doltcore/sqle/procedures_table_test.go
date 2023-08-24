@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"io"
 	"testing"
 	"time"
@@ -28,6 +27,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
