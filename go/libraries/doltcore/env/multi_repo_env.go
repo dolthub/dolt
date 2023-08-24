@@ -303,7 +303,7 @@ func (mrEnv *MultiRepoEnv) IsLocked() (bool, string) {
 
 // Lock locks all child envs. The DBLock contains the details to write to the lock files. If an error is returned, all
 // child envs will be returned with their initial lock state.
-func (mrEnv *MultiRepoEnv) Lock(lck DBLock) (err error) {
+func (mrEnv *MultiRepoEnv) Lock(lck *DBLock) (err error) {
 	if mrEnv.ignoreLockFile {
 		return nil
 	}

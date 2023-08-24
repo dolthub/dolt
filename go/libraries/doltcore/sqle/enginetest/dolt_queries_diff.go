@@ -2964,6 +2964,51 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "test DOLT_PATCH() indexes",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+			"insert into t values(1, 'one', 'two');",
+			"set @Commit0 = HashOf('HEAD');",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'commit one');",
+			"set @Commit1 = HashOf('HEAD');",
+			"create table diff_type_name(name varchar(20), t varchar(20));",
+			"insert into diff_type_name values ('s', 'schema'), ('d', 'data');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT table_name, diff_type, statement from dolt_patch(@Commit0, @Commit1, 't') WHERE diff_type = 'schema';",
+				Expected: []sql.Row{
+					{"t", "schema", "CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `c1` varchar(20),\n  `c2` varchar(20),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+				},
+				ExpectedIndexes: []string{"diff_type"},
+			},
+			{
+				Query: "SELECT table_name, diff_type, statement from dolt_patch(@Commit0, @Commit1, 't') WHERE diff_type = 'data';",
+				Expected: []sql.Row{
+					{"t", "data", "INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (1,'one','two');"},
+				},
+				ExpectedIndexes: []string{"diff_type"},
+			},
+			{
+				Query: "SELECT /*+ JOIN_ORDER(diff_type_name,dolt_patch) LOOKUP_JOIN(diff_type_name,dolt_patch) */ name, t, table_name, statement from diff_type_name join dolt_patch(@Commit0, @Commit1, 't') on diff_type_name.t = diff_type;",
+				Expected: []sql.Row{
+					{"s", "schema", "t", "CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `c1` varchar(20),\n  `c2` varchar(20),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+					{"d", "data", "t", "INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (1,'one','two');"},
+				},
+				ExpectedIndexes: []string{"diff_type"},
+			},
+			{
+				Query: "SELECT ( SELECT statement FROM (SELECT * FROM dolt_patch(@Commit0, @Commit1, 't') where diff_type = diff_type_name.t) as rhs) from diff_type_name;",
+				Expected: []sql.Row{
+					{"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `c1` varchar(20),\n  `c2` varchar(20),\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+					{"INSERT INTO `t` (`pk`,`c1`,`c2`) VALUES (1,'one','two');"},
+				},
+				ExpectedIndexes: []string{"diff_type"},
+			},
+		},
+	},
+	{
 		Name: "basic case with single table",
 		SetUpScript: []string{
 			"set @Commit0 = HashOf('HEAD');",
@@ -5607,6 +5652,88 @@ var SystemTableIndexTests = []systabScript{
 			{
 				query: "select count(*) from dolt_diff_x where from_commit = @m2h2",
 				exp:   []sql.Row{{4}},
+			},
+		},
+	},
+}
+
+var QueryDiffTableScriptTests = []queries.ScriptTest{
+	{
+		Name: "basic query diff tests",
+		SetUpScript: []string{
+			"create table t (i int primary key, j int);",
+			"insert into t values (1, 1), (2, 2), (3, 3);",
+			"create table tt (i int primary key, j int);",
+			"insert into tt values (10, 10), (20, 20), (30, 30);",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'first');",
+			"call dolt_branch('other');",
+			"update t set j = 10 where i = 2;",
+			"delete from t where i = 3;",
+			"insert into t values (4, 4);",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'second');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "select * from dolt_query_diff();",
+				ExpectedErrStr: "function 'dolt_query_diff' expected 2 arguments, 0 received",
+			},
+			{
+				Query:          "select * from dolt_query_diff('selectsyntaxerror', 'selectsyntaxerror');",
+				ExpectedErrStr: "syntax error at position 18 near 'selectsyntaxerror'",
+			},
+			{
+				Query:          "select * from dolt_query_diff('', '');",
+				ExpectedErrStr: "query must be a SELECT statement",
+			},
+			{
+				Query:          "select * from dolt_query_diff('create table tt (i int)', 'create table ttt (j int)');",
+				ExpectedErrStr: "query must be a SELECT statement",
+			},
+			{
+				Query:          "select * from dolt_query_diff('select * from missingtable', '');",
+				ExpectedErrStr: "table not found: missingtable",
+			},
+			{
+				Query: "select * from dolt_query_diff('select * from t as of other', 'select * from t as of head');",
+				Expected: []sql.Row{
+					{2, 2, 2, 10, "modified"},
+					{3, 3, nil, nil, "deleted"},
+					{nil, nil, 4, 4, "added"},
+				},
+			},
+			{
+				Query: "select * from dolt_query_diff('select * from t as of head', 'select * from t as of other');",
+				Expected: []sql.Row{
+					{2, 10, 2, 2, "modified"},
+					{nil, nil, 3, 3, "added"},
+					{4, 4, nil, nil, "deleted"},
+				},
+			},
+			{
+				Query: "select * from dolt_query_diff('select * from t as of other where i = 2', 'select * from t as of head where i = 2');",
+				Expected: []sql.Row{
+					{2, 2, 2, 10, "modified"},
+				},
+			},
+			{
+				Query: "select * from dolt_query_diff('select * from t as of other where i < 2', 'select * from t as of head where i > 2');",
+				Expected: []sql.Row{
+					{1, 1, nil, nil, "deleted"},
+					{nil, nil, 4, 4, "added"},
+				},
+			},
+			{
+				Query: "select * from dolt_query_diff('select * from t', 'select * from tt');",
+				Expected: []sql.Row{
+					{1, 1, nil, nil, "deleted"},
+					{2, 10, nil, nil, "deleted"},
+					{4, 4, nil, nil, "deleted"},
+					{nil, nil, 10, 10, "added"},
+					{nil, nil, 20, 20, "added"},
+					{nil, nil, 30, 30, "added"},
+				},
 			},
 		},
 	},

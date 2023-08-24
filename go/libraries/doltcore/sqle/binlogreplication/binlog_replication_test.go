@@ -600,6 +600,13 @@ func stopDoltSqlServer(t *testing.T) {
 		err = os.Remove(lockFilepath)
 		require.NoError(t, err)
 	}
+	// Remove the global sql-server lock file as well
+	lockFilepath = filepath.Join(testDir, "dolt", ".dolt", "sql-server.lock")
+	stat, _ = os.Stat(lockFilepath)
+	if stat != nil {
+		err = os.Remove(lockFilepath)
+		require.NoError(t, err)
+	}
 }
 
 func startReplication(_ *testing.T, port int) {

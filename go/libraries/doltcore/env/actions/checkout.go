@@ -536,8 +536,15 @@ func clearFeatureVersion(ctx context.Context, roots doltdb.Roots) (doltdb.Roots,
 	}, nil
 }
 
-// RootHasUncommittedChanges returns whether the roots given have uncommitted changes, and the hashes of the working and staged roots
+// RootHasUncommittedChanges returns whether the roots given have uncommitted changes, and the hashes of
+// the working and staged roots are identical. This function will ignore any difference in feature
+// versions between the root values.
 func RootHasUncommittedChanges(roots doltdb.Roots) (hasChanges bool, workingHash hash.Hash, stagedHash hash.Hash, err error) {
+	roots, err = clearFeatureVersion(context.Background(), roots)
+	if err != nil {
+		return false, hash.Hash{}, hash.Hash{}, err
+	}
+
 	headHash, err := roots.Head.HashOf()
 	if err != nil {
 		return false, hash.Hash{}, hash.Hash{}, err

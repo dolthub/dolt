@@ -152,10 +152,15 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 			if err != nil {
 				return noConflictsOrViolations, threeWayMerge, err
 			}
-			err = checkForUncommittedChanges(ctx, roots.Working, roots.Head)
+
+			uncommittedChanges, _, _, err := actions.RootHasUncommittedChanges(roots)
 			if err != nil {
 				return noConflictsOrViolations, threeWayMerge, err
 			}
+			if uncommittedChanges {
+				return noConflictsOrViolations, threeWayMerge, ErrUncommittedChanges.New()
+			}
+
 			msg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, headRef.GetPath())
 			ws, _, conflicts, fastForward, err = performMerge(ctx, sess, roots, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
 			if err != nil && !errors.Is(doltdb.ErrUpToDate, err) {
@@ -218,23 +223,4 @@ func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, statsCh chan p
 	cancel()
 	close(statsCh)
 	wg.Wait()
-}
-
-func checkForUncommittedChanges(ctx *sql.Context, root *doltdb.RootValue, headRoot *doltdb.RootValue) error {
-	rootHash, err := root.HashOf()
-
-	if err != nil {
-		return err
-	}
-
-	headHash, err := headRoot.HashOf()
-
-	if err != nil {
-		return err
-	}
-
-	if rootHash != headHash {
-		return ErrUncommittedChanges.New()
-	}
-	return nil
 }
