@@ -212,7 +212,7 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 
 			// Apply prefix lengths if they are configured
 			if len(def.PrefixLengths()) > i {
-				field = trimValueToPrefixLength(field, def.PrefixLengths()[i])
+				field = trimValueToPrefixLength(field, def.PrefixLengths()[i], vd.Types[j+1].Enc)
 			}
 
 			builder.PutRaw(i, field)
@@ -298,7 +298,7 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 
 				// Apply prefix lengths if they are configured
 				if len(def.PrefixLengths()) > i {
-					field = trimValueToPrefixLength(field, def.PrefixLengths()[i])
+					field = trimValueToPrefixLength(field, def.PrefixLengths()[i], vd.Types[j-pkSize].Enc)
 				}
 
 				builder.PutRaw(i, field)
@@ -357,8 +357,9 @@ func dereferenceContent(ctx context.Context, tableValueDescriptor val.TupleDesc,
 }
 
 // trimValueToPrefixLength trims |value| by truncating the bytes after |prefixLength|. If |prefixLength|
-// is zero or if |value| is nil, then no trimming is done and |value| is directly returned.
-func trimValueToPrefixLength(value []byte, prefixLength uint16) []byte {
+// is zero or if |value| is nil, then no trimming is done and |value| is directly returned. The
+// |encoding| param indicates the original encoding of |value| in the source table.
+func trimValueToPrefixLength(value []byte, prefixLength uint16, encoding val.Encoding) []byte {
 	if value == nil || prefixLength == 0 {
 		return value
 	}
@@ -367,17 +368,21 @@ func trimValueToPrefixLength(value []byte, prefixLength uint16) []byte {
 		prefixLength = uint16(len(value))
 	}
 
-	// TODO: This is a hack to get around a terminating null byte
-	//       A better way to fix this would be to look at the encoding
-	terminalBytes := uint16(1)
-	if value[prefixLength-1] == byte(0) {
-		terminalBytes = 0
+	addTerminatingNullByte := false
+	if encoding == val.BytesAddrEnc || encoding == val.StringAddrEnc {
+		// If the original encoding was for a BLOB or TEXT field, then we need to add
+		// a null byte at the end of the prefix to get it into StringEnc format.
+		addTerminatingNullByte = true
+	} else if prefixLength < uint16(len(value)) {
+		// Otherwise, if we're trimming a StringEnc value, we also need to re-add the
+		// null terminating byte.
+		addTerminatingNullByte = true
 	}
 
-	newValue := make([]byte, prefixLength+terminalBytes)
+	newValue := make([]byte, prefixLength)
 	copy(newValue, value[:prefixLength])
-	if terminalBytes > 0 {
-		newValue[prefixLength] = byte(0)
+	if addTerminatingNullByte {
+		newValue = append(newValue, byte(0))
 	}
 
 	return newValue
