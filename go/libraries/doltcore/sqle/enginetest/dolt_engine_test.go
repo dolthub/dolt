@@ -2272,6 +2272,28 @@ func TestSystemTableIndexesPrepared(t *testing.T) {
 	}
 }
 
+func TestSystemTableFunctionIndexes(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range SystemTableFunctionIndexTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScript(t, harness, test)
+		})
+	}
+}
+
+func TestSystemTableFunctionIndexesPrepared(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range SystemTableFunctionIndexTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
+		})
+	}
+}
+
 func TestReadOnlyDatabases(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
