@@ -18,11 +18,11 @@ import (
 	"fmt"
 	"testing"
 
-	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/transform"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/require"
@@ -580,10 +580,10 @@ var BranchPlanTests = []struct {
 	},
 }
 
-func TestIndexedAccess(t *testing.T, e *sqle.Engine, harness enginetest.Harness, query string, index bool) {
+func TestIndexedAccess(t *testing.T, e enginetest.QueryEngine, harness enginetest.Harness, query string, index bool) {
 	ctx := enginetest.NewContext(harness)
 	ctx = ctx.WithQuery(query)
-	a, err := e.AnalyzeQuery(ctx, query)
+	a, err := analyzeQuery(ctx, e, query)
 	require.NoError(t, err)
 	var hasIndex bool
 	transform.Inspect(a, func(n sql.Node) bool {
@@ -600,4 +600,13 @@ func TestIndexedAccess(t *testing.T, e *sqle.Engine, harness enginetest.Harness,
 		fmt.Println(a.String())
 	}
 	require.Equal(t, index, hasIndex)
+}
+
+func analyzeQuery(ctx *sql.Context, e enginetest.QueryEngine, query string) (sql.Node, error) {
+	parsed, err := planbuilder.Parse(ctx, e.EngineAnalyzer().Catalog, query)
+	if err != nil {
+		return nil, err
+	}
+
+	return e.EngineAnalyzer().Analyze(ctx, parsed, nil)
 }

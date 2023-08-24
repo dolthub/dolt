@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
@@ -92,8 +91,8 @@ func TestSingleQuery(t *testing.T) {
 		enginetest.RunQuery(t, engine, harness, q)
 	}
 
-	engine.Analyzer.Debug = true
-	engine.Analyzer.Verbose = true
+	engine.EngineAnalyzer().Debug = true
+	engine.EngineAnalyzer().Verbose = true
 
 	var test queries.QueryTest
 	test = queries.QueryTest{
@@ -663,8 +662,8 @@ func TestDoltUserPrivileges(t *testing.T) {
 				Address: "localhost",
 			})
 
-			engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
-			engine.Analyzer.Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
+			engine.EngineAnalyzer().Catalog.MySQLDb.AddRootAccount()
+			engine.EngineAnalyzer().Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
 
 			for _, statement := range script.SetUpScript {
 				if sh, ok := interface{}(harness).(enginetest.SkippingHarness); ok {
@@ -2190,7 +2189,7 @@ func TestQueryDiff(t *testing.T) {
 	}
 }
 
-func mustNewEngine(t *testing.T, h enginetest.Harness) *gms.Engine {
+func mustNewEngine(t *testing.T, h enginetest.Harness) enginetest.QueryEngine {
 	e, err := h.NewEngine(t)
 	if err != nil {
 		require.NoError(t, err)
@@ -2216,7 +2215,7 @@ func TestSystemTableIndexes(t *testing.T) {
 		harness.SkipSetupCommit()
 		e := mustNewEngine(t, harness)
 		defer e.Close()
-		e.Analyzer.Coster = memo.NewMergeBiasedCoster()
+		e.EngineAnalyzer().Coster = memo.NewMergeBiasedCoster()
 
 		ctx := enginetest.NewContext(harness)
 		for _, q := range stt.setup {
@@ -2224,7 +2223,7 @@ func TestSystemTableIndexes(t *testing.T) {
 		}
 
 		for i, c := range []string{"inner", "lookup", "hash", "merge"} {
-			e.Analyzer.Coster = biasedCosters[i]
+			e.EngineAnalyzer().Coster = biasedCosters[i]
 			for _, tt := range stt.queries {
 				t.Run(fmt.Sprintf("%s(%s): %s", stt.name, c, tt.query), func(t *testing.T) {
 					if tt.skip {
