@@ -1377,8 +1377,8 @@ func TestBranchControl(t *testing.T) {
 				User:    "root",
 				Address: "localhost",
 			})
-			engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
-			engine.Analyzer.Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
+			engine.EngineAnalyzer().Catalog.MySQLDb.AddRootAccount()
+			engine.EngineAnalyzer().Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
 
 			for _, statement := range test.SetUpScript {
 				enginetest.RunQueryWithContext(t, engine, harness, ctx, statement)
@@ -1435,8 +1435,8 @@ func TestBranchControlBlocks(t *testing.T) {
 				User:    "root",
 				Address: "localhost",
 			})
-			engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
-			engine.Analyzer.Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
+			engine.EngineAnalyzer().Catalog.MySQLDb.AddRootAccount()
+			engine.EngineAnalyzer().Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
 
 			for _, statement := range append(TestUserSetUpScripts, test.SetUpScript...) {
 				enginetest.RunQueryWithContext(t, engine, harness, rootCtx, statement)
@@ -1479,8 +1479,8 @@ func TestBranchControlBlocks(t *testing.T) {
 				User:    "root",
 				Address: "localhost",
 			})
-			engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
-			engine.Analyzer.Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
+			engine.EngineAnalyzer().Catalog.MySQLDb.AddRootAccount()
+			engine.EngineAnalyzer().Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
 
 			for _, statement := range append(TestUserSetUpScripts, test.SetUpScript...) {
 				enginetest.RunQueryWithContext(t, engine, harness, rootCtx, statement)
