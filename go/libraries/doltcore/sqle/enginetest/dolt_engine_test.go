@@ -115,75 +115,29 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "datetime precision",
+			// panic: runtime error: slice bounds out of range [-1:]
+			Name: "Slice out of bounds panic repro",
 			SetUpScript: []string{
-				"CREATE TABLE t1 (pk int primary key, d datetime)",
-				"CREATE TABLE t2 (pk int primary key, d datetime(3))",
-				"CREATE TABLE t3 (pk int primary key, d datetime(6))",
+				"CREATE table t (pk int primary key, col1 TEXT);",
+				"INSERT into t values (1, '123');",
+				// NOTE: if the index is created over (pk, col1(3)), then this code works fine, but not if the pk
+				//       is either not included or included after the blob column
+				"CREATE INDEX test_index2 ON t(col1(3));",
+				// NOTE: If the index is created BEFORE any data is inserted into the table, then we don't see the issue
+				//"INSERT into t values (1, '123');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "show create table t1",
-					Expected: []sql.Row{{"t1",
-						"CREATE TABLE `t1` (\n" +
-							"  `pk` int NOT NULL,\n" +
-							"  `d` datetime,\n" +
-							"  PRIMARY KEY (`pk`)\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
-				},
-				{
-					Query:    "insert into t1 values (1, '2020-01-01 00:00:00.123456')",
+					Query:    "INSERT into t values (2, '222');",
 					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
 				},
 				{
-					Query:    "select * from t1 order by pk",
-					Expected: []sql.Row{{1, queries.MustParseTime(time.DateTime, "2020-01-01 00:00:00")}},
-				},
-				{
-					Query: "show create table t2",
-					Expected: []sql.Row{{"t2",
-						"CREATE TABLE `t2` (\n" +
-							"  `pk` int NOT NULL,\n" +
-							"  `d` datetime(3),\n" +
-							"  PRIMARY KEY (`pk`)\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
-				},
-				{
-					Query:    "insert into t2 values (1, '2020-01-01 00:00:00.123456')",
-					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
-				},
-				{
-					Query:    "select * from t2 order by pk",
-					Expected: []sql.Row{{1, queries.MustParseTime(time.RFC3339Nano, "2020-01-01T00:00:00.123000000Z")}},
-				},
-				{
-					Query: "show create table t3",
-					Expected: []sql.Row{{"t3",
-						"CREATE TABLE `t3` (\n" +
-							"  `pk` int NOT NULL,\n" +
-							"  `d` datetime(6),\n" +
-							"  PRIMARY KEY (`pk`)\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
-				},
-				{
-					Query:    "insert into t3 values (1, '2020-01-01 00:00:00.123456')",
-					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
-				},
-				{
-					Query:    "select * from t3 order by pk",
-					Expected: []sql.Row{{1, queries.MustParseTime(time.RFC3339Nano, "2020-01-01T00:00:00.123456000Z")}},
-				},
-				{
-					Query:       "create table t4 (pk int primary key, d datetime(-1))",
-					ExpectedErr: sql.ErrSyntaxError,
-				},
-				{
-					Query:          "create table t4 (pk int primary key, d datetime(7))",
-					ExpectedErrStr: "DATETIME supports precision from 0 to 6",
+					Query:    "select * from t;",
+					Expected: []sql.Row{{1, "123"}, {2, "222"}},
 				},
 			},
 		},

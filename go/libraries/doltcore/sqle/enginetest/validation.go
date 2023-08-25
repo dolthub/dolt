@@ -143,18 +143,25 @@ func validateIndexConsistency(
 	def schema.Index,
 	primary, secondary prolly.Map,
 ) error {
-	// TODO: the descriptors in the primary key are different
-	// than the ones in the secondary key; this test assumes
-	// they're the same
-	if len(def.PrefixLengths()) > 0 {
-		return nil
-	}
-
 	if schema.IsKeyless(sch) {
 		return validateKeylessIndex(ctx, sch, def, primary, secondary)
+	} else {
+		return validatePkIndex(ctx, sch, def, primary, secondary)
 	}
+}
 
-	return validatePkIndex(ctx, sch, def, primary, secondary)
+// printIndexContents prints the contents of |prollyMap| to stdout. Intended for use debugging
+// index consistency issues.
+func printIndexContents(ctx context.Context, prollyMap prolly.Map) {
+	fmt.Printf("Secondary index contents:\n")
+	iterAll, _ := prollyMap.IterAll(ctx)
+	for {
+		k, _, err := iterAll.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		fmt.Printf("  - k: %v \n", k)
+	}
 }
 
 func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Index, primary, secondary prolly.Map) error {
@@ -162,10 +169,12 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 	if def.IsFullText() {
 		return nil
 	}
+
 	secondary = prolly.ConvertToSecondaryKeylessIndex(secondary)
 	idxDesc, _ := secondary.Descriptors()
 	builder := val.NewTupleBuilder(idxDesc)
 	mapping := ordinalMappingsForSecondaryIndex(sch, def)
+	_, vd := primary.Descriptors()
 
 	iter, err := primary.IterAll(ctx)
 	if err != nil {
@@ -186,7 +195,13 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 			j := mapping.MapOrdinal(i)
 			// first field in |value| is cardinality
 			field := value.GetField(j + 1)
-			if def.IsSpatial() {
+
+			if shouldDereferenceContent(j+1, vd, i, idxDesc) {
+				field, err = dereferenceContent(ctx, vd, j+1, value, secondary.NodeStore())
+				if err != nil {
+					return err
+				}
+			} else if def.IsSpatial() {
 				geom, _, err := sqltypes.GeometryType{}.Convert(field[:len(field)-1])
 				if err != nil {
 					panic(err)
@@ -194,6 +209,12 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 				cell := index.ZCell(geom.(sqltypes.GeometryValue))
 				field = cell[:]
 			}
+
+			// Apply prefix lengths if they are configured
+			if len(def.PrefixLengths()) > i {
+				field = trimValueToPrefixLength(field, def.PrefixLengths()[i], vd.Types[j+1].Enc)
+			}
+
 			builder.PutRaw(i, field)
 		}
 		builder.PutRaw(idxDesc.Count()-1, hashId.GetField(0))
@@ -204,15 +225,7 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 			return err
 		}
 		if !ok {
-			fmt.Printf("Secondary index contents:\n")
-			iterAll, _ := secondary.IterAll(ctx)
-			for {
-				k, _, err := iterAll.Next(ctx)
-				if err == io.EOF {
-					break
-				}
-				fmt.Printf("  - k: %v \n", k)
-			}
+			printIndexContents(ctx, secondary)
 			return fmt.Errorf("index key %s not found in index %s", builder.Desc.Format(k), def.Name())
 		}
 	}
@@ -223,10 +236,12 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 	if def.IsFullText() {
 		return nil
 	}
+
 	// secondary indexes have empty values
 	idxDesc, _ := secondary.Descriptors()
 	builder := val.NewTupleBuilder(idxDesc)
 	mapping := ordinalMappingsForSecondaryIndex(sch, def)
+	kd, vd := primary.Descriptors()
 
 	// Before we walk through the primary index data and validate that every row in the primary index exists in the
 	// secondary index, we also check that the primary index and secondary index have the same number of rows.
@@ -244,7 +259,6 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 			totalPrimaryCount, totalSecondaryCount)
 	}
 
-	kd, _ := primary.Descriptors()
 	pkSize := kd.Count()
 	iter, err := primary.IterAll(ctx)
 	if err != nil {
@@ -267,7 +281,13 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 				builder.PutRaw(i, key.GetField(j))
 			} else {
 				field := value.GetField(j - pkSize)
-				if def.IsSpatial() {
+
+				if shouldDereferenceContent(j-pkSize, vd, i, idxDesc) {
+					field, err = dereferenceContent(ctx, vd, j-pkSize, value, secondary.NodeStore())
+					if err != nil {
+						return err
+					}
+				} else if def.IsSpatial() {
 					geom, _, err := sqltypes.GeometryType{}.Convert(field[:len(field)-1])
 					if err != nil {
 						panic(err)
@@ -275,6 +295,12 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 					cell := index.ZCell(geom.(sqltypes.GeometryValue))
 					field = cell[:]
 				}
+
+				// Apply prefix lengths if they are configured
+				if len(def.PrefixLengths()) > i {
+					field = trimValueToPrefixLength(field, def.PrefixLengths()[i], vd.Types[j-pkSize].Enc)
+				}
+
 				builder.PutRaw(i, field)
 			}
 		}
@@ -285,18 +311,81 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 			return err
 		}
 		if !ok {
-			fmt.Printf("Secondary index contents:\n")
-			iterAll, _ := secondary.IterAll(ctx)
-			for {
-				k, _, err := iterAll.Next(ctx)
-				if err == io.EOF {
-					break
-				}
-				fmt.Printf("  - k: %v \n", k)
-			}
+			printIndexContents(ctx, secondary)
 			return fmt.Errorf("index key %v not found in index %s", builder.Desc.Format(k), def.Name())
 		}
 	}
+}
+
+// shouldDereferenceContent returns true if address encoded content should be dereferenced when
+// building a key for a secondary index. This is determined by looking at the encoding of the field
+// in the main table (|tablePos| and |tableValueDescriptor|) and the encoding of the field in the index
+// (|indexPos| and |indexKeyDescriptor|) and seeing if one is an address encoding and the other is not.
+func shouldDereferenceContent(tablePos int, tableValueDescriptor val.TupleDesc, indexPos int, indexKeyDescriptor val.TupleDesc) bool {
+	if tableValueDescriptor.Types[tablePos].Enc == val.StringAddrEnc && indexKeyDescriptor.Types[indexPos].Enc != val.StringAddrEnc {
+		return true
+	}
+
+	if tableValueDescriptor.Types[tablePos].Enc == val.BytesAddrEnc && indexKeyDescriptor.Types[indexPos].Enc != val.BytesAddrEnc {
+		return true
+	}
+
+	return false
+}
+
+// dereferenceContent dereferences an address encoded field (e.g. TEXT, BLOB) to load the content
+// and return a []byte. |tableValueDescriptor| is the tuple descriptor for the value tuple of the main
+// table, |tablePos| is the field index into the value tuple, and |tuple| is the value tuple from the
+// main table.
+func dereferenceContent(ctx context.Context, tableValueDescriptor val.TupleDesc, tablePos int, tuple val.Tuple, ns tree.NodeStore) ([]byte, error) {
+	v, err := index.GetField(ctx, tableValueDescriptor, tablePos, tuple, ns)
+	if err != nil {
+		return nil, err
+	}
+	if v == nil {
+		return nil, nil
+	}
+
+	switch x := v.(type) {
+	case string:
+		return []byte(x), nil
+	case []byte:
+		return x, nil
+	default:
+		return nil, fmt.Errorf("unexpected type for address encoded content: %T", v)
+	}
+}
+
+// trimValueToPrefixLength trims |value| by truncating the bytes after |prefixLength|. If |prefixLength|
+// is zero or if |value| is nil, then no trimming is done and |value| is directly returned. The
+// |encoding| param indicates the original encoding of |value| in the source table.
+func trimValueToPrefixLength(value []byte, prefixLength uint16, encoding val.Encoding) []byte {
+	if value == nil || prefixLength == 0 {
+		return value
+	}
+
+	if uint16(len(value)) < prefixLength {
+		prefixLength = uint16(len(value))
+	}
+
+	addTerminatingNullByte := false
+	if encoding == val.BytesAddrEnc || encoding == val.StringAddrEnc {
+		// If the original encoding was for a BLOB or TEXT field, then we need to add
+		// a null byte at the end of the prefix to get it into StringEnc format.
+		addTerminatingNullByte = true
+	} else if prefixLength < uint16(len(value)) {
+		// Otherwise, if we're trimming a StringEnc value, we also need to re-add the
+		// null terminating byte.
+		addTerminatingNullByte = true
+	}
+
+	newValue := make([]byte, prefixLength)
+	copy(newValue, value[:prefixLength])
+	if addTerminatingNullByte {
+		newValue = append(newValue, byte(0))
+	}
+
+	return newValue
 }
 
 func ordinalMappingsForSecondaryIndex(sch schema.Schema, def schema.Index) (ord val.OrdinalMapping) {
