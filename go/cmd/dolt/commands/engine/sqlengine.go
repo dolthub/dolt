@@ -132,9 +132,17 @@ func NewSqlEngine(
 	pro.InitDatabaseHook = cluster.NewInitDatabaseHook(config.ClusterController, bThreads, pro.InitDatabaseHook)
 	config.ClusterController.ManageDatabaseProvider(pro)
 
+	// Create the engine
+	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{
+		IsReadOnly:     config.IsReadOnly,
+		IsServerLocked: config.IsServerLocked,
+	}).WithBackgroundThreads(bThreads)
+
 	// Load in privileges from file, if it exists
-	persister := mysql_file_handler.NewPersister(config.PrivFilePath, config.DoltCfgDirPath)
-	data, err := persister.LoadData()
+	var persister cluster.MySQLDbPersister
+	persister = mysql_file_handler.NewPersister(config.PrivFilePath, config.DoltCfgDirPath)
+	persister = config.ClusterController.HookMySQLDbPersister(persister, engine.Analyzer.Catalog.MySQLDb)
+	data, err := persister.LoadData(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -145,11 +153,7 @@ func NewSqlEngine(
 		return nil, err
 	}
 
-	// Set up engine
-	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{
-		IsReadOnly:     config.IsReadOnly,
-		IsServerLocked: config.IsServerLocked,
-	}).WithBackgroundThreads(bThreads)
+	// Setup the engine.
 	engine.Analyzer.Catalog.MySQLDb.SetPersister(persister)
 
 	engine.Analyzer.Catalog.MySQLDb.SetPlugins(map[string]mysql_db.PlaintextAuthPlugin{
@@ -288,7 +292,7 @@ func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engin
 		return err
 	}
 	dblr.DoltBinlogReplicaController.SetExecutionContext(executionCtx)
-	engine.Analyzer.BinlogReplicaController = config.BinlogReplicaController
+	engine.Analyzer.Catalog.BinlogReplicaController = config.BinlogReplicaController
 
 	return nil
 }

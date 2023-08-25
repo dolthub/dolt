@@ -74,11 +74,7 @@ func DoltProceduresGetOrCreateTable(ctx *sql.Context, db Database) (*WritableDol
 	if found {
 		// Make sure the schema is up to date
 		writableDoltTable := tbl.(*WritableDoltTable)
-		targetSchema := ProceduresTableSqlSchema().Schema
-		if len(tbl.Schema()) != len(targetSchema) {
-			return migrateDoltProceduresSchema(ctx, db, writableDoltTable)
-		}
-		return writableDoltTable, nil
+		return migrateDoltProceduresSchema(ctx, db, writableDoltTable)
 	}
 
 	root, err := db.GetRoot(ctx)
@@ -104,6 +100,12 @@ func DoltProceduresGetOrCreateTable(ctx *sql.Context, db Database) (*WritableDol
 // migrateDoltProceduresSchema migrates the dolt_procedures system table from a previous schema version to the current
 // schema version by adding any columns that do not exist.
 func migrateDoltProceduresSchema(ctx *sql.Context, db Database, oldTable *WritableDoltTable) (newTable *WritableDoltTable, rerr error) {
+	// Check whether the table needs to be migrated
+	targetSchema := ProceduresTableSqlSchema().Schema
+	if len(oldTable.Schema()) == len(targetSchema) {
+		return oldTable, nil
+	}
+
 	// Copy all the old data
 	iter, err := SqlTableToRowIter(ctx, oldTable.DoltTable, nil)
 	if err != nil {
@@ -190,7 +192,9 @@ func DoltProceduresGetTable(ctx *sql.Context, db Database) (*WritableDoltTable, 
 		return nil, err
 	}
 	if found {
-		return tbl.(*WritableDoltTable), nil
+		// Make sure the schema is up to date
+		writableDoltTable := tbl.(*WritableDoltTable)
+		return migrateDoltProceduresSchema(ctx, db, writableDoltTable)
 	} else {
 		return nil, nil
 	}
