@@ -1019,7 +1019,7 @@ func TestDropCheckConstraints(t *testing.T) {
 func TestReadOnly(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestReadOnly(t, h)
+	enginetest.TestReadOnly(t, h, false /* testStoredProcedures */)
 }
 
 func TestViews(t *testing.T) {
