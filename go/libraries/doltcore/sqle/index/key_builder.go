@@ -94,18 +94,31 @@ func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx context.Context, k, v val.T
 			// the "from" field comes from the value tuple fields
 			from -= b.split
 
-			value, err := GetField(ctx, b.sch.GetValueDescriptor(), from, v, b.nodeStore)
-			if err != nil {
-				return nil, err
+			// Copying the raw bytes from the source table to the secondary index is more efficient
+			// but some cases such as CellEnc or prefix indexes mean we have to manipulate the data.
+			copyRawBytes := true
+			if b.builder.Desc.Types[to].Enc == val.CellEnc {
+				copyRawBytes = false
+			} else if len(b.def.PrefixLengths()) > to && b.def.PrefixLengths()[to] > 0 {
+				copyRawBytes = false
 			}
 
-			if len(b.def.PrefixLengths()) > to {
-				value = val.TrimValueToPrefixLength(value, b.def.PrefixLengths()[to])
-			}
+			if copyRawBytes {
+				b.builder.PutRaw(to, v.GetField(from))
+			} else {
+				value, err := GetField(ctx, b.sch.GetValueDescriptor(), from, v, b.nodeStore)
+				if err != nil {
+					return nil, err
+				}
 
-			err = PutField(ctx, b.nodeStore, b.builder, to, value)
-			if err != nil {
-				return nil, err
+				if len(b.def.PrefixLengths()) > to {
+					value = val.TrimValueToPrefixLength(value, b.def.PrefixLengths()[to])
+				}
+
+				err = PutField(ctx, b.nodeStore, b.builder, to, value)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
