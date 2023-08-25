@@ -749,6 +749,7 @@ func (idx uniqIndex) insertRow(ctx context.Context, key, value val.Tuple) error 
 		return err
 	}
 
+	// secondary indexes only use their key tuple
 	return idx.secondary.Put(ctx, secondaryIndexKey, val.EmptyTuple)
 }
 

@@ -103,6 +103,7 @@ func (m MutableSecondaryIdx) InsertEntry(ctx context.Context, key, newValue val.
 		return err
 	}
 
+	// secondary indexes only use their key tuple
 	err = m.mut.Put(ctx, newKey, val.EmptyTuple)
 	if err != nil {
 		return err

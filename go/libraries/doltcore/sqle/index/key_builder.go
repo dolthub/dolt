@@ -26,12 +26,14 @@ import (
 // NewSecondaryKeyBuilder creates a new SecondaryKeyBuilder instance that can build keys for the secondary index |def|.
 // The schema of the source table is defined in |sch|, and |idxDesc| describes the tuple layout for the index's keys
 // (index value tuples are not used).
-func NewSecondaryKeyBuilder(sch schema.Schema, def schema.Index, idxDesc val.TupleDesc, p pool.BuffPool, nodeStore tree.NodeStore) (b SecondaryKeyBuilder) {
-	b.builder = val.NewTupleBuilder(idxDesc)
-	b.pool = p
-	b.nodeStore = nodeStore
-	b.sch = sch
-	b.def = def
+func NewSecondaryKeyBuilder(sch schema.Schema, def schema.Index, idxDesc val.TupleDesc, p pool.BuffPool, nodeStore tree.NodeStore) SecondaryKeyBuilder {
+	b := SecondaryKeyBuilder{
+		builder:   val.NewTupleBuilder(idxDesc),
+		pool:      p,
+		nodeStore: nodeStore,
+		sch:       sch,
+		def:       def,
+	}
 
 	keyless := schema.IsKeyless(sch)
 	if keyless {
@@ -59,7 +61,7 @@ func NewSecondaryKeyBuilder(sch schema.Schema, def schema.Index, idxDesc val.Tup
 		// last key in index is hash which is the only column in the key
 		b.mapping = append(b.mapping, 0)
 	}
-	return
+	return b
 }
 
 type SecondaryKeyBuilder struct {
@@ -94,16 +96,7 @@ func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx context.Context, k, v val.T
 			// the "from" field comes from the value tuple fields
 			from -= b.split
 
-			// Copying the raw bytes from the source table to the secondary index is more efficient
-			// but some cases such as CellEnc or prefix indexes mean we have to manipulate the data.
-			copyRawBytes := true
-			if b.builder.Desc.Types[to].Enc == val.CellEnc {
-				copyRawBytes = false
-			} else if len(b.def.PrefixLengths()) > to && b.def.PrefixLengths()[to] > 0 {
-				copyRawBytes = false
-			}
-
-			if copyRawBytes {
+			if b.canCopyRawBytes(to) {
 				b.builder.PutRaw(to, v.GetField(from))
 			} else {
 				value, err := GetField(ctx, b.sch.GetValueDescriptor(), from, v, b.nodeStore)
@@ -123,6 +116,22 @@ func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx context.Context, k, v val.T
 		}
 	}
 	return b.builder.Build(b.pool), nil
+}
+
+// canCopyRawBytes returns true if the bytes for |idxField| can
+// be copied directly. This is a faster way to populate an index
+// but requires that no data transformation is needed. For example,
+// prefix indexes have to manipulate the data to extract a prefix
+// before the data can be populated in the index, so if an index
+// field is a prefix index, this function will return false.
+func (b SecondaryKeyBuilder) canCopyRawBytes(idxField int) bool {
+	if b.builder.Desc.Types[idxField].Enc == val.CellEnc {
+		return false
+	} else if len(b.def.PrefixLengths()) > idxField && b.def.PrefixLengths()[idxField] > 0 {
+		return false
+	}
+
+	return true
 }
 
 func NewClusteredKeyBuilder(def schema.Index, sch schema.Schema, keyDesc val.TupleDesc, p pool.BuffPool) (b ClusteredKeyBuilder) {
