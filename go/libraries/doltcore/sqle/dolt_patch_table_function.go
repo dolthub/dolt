@@ -237,6 +237,10 @@ func (p *PatchTableFunction) Resolved() bool {
 	return p.commitsResolved()
 }
 
+func (p *PatchTableFunction) IsReadOnly() bool {
+	return true
+}
+
 func (p *PatchTableFunction) commitsResolved() bool {
 	if p.dotCommitExpr != nil {
 		return p.dotCommitExpr.Resolved()

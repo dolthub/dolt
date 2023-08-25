@@ -538,6 +538,10 @@ func (dtf *DiffTableFunction) Resolved() bool {
 	return dtf.tableNameExpr.Resolved() && dtf.fromCommitExpr.Resolved() && dtf.toCommitExpr.Resolved()
 }
 
+func (dtf *DiffTableFunction) IsReadOnly() bool {
+	return true
+}
+
 // String implements the Stringer interface
 func (dtf *DiffTableFunction) String() string {
 	if dtf.dotCommitExpr != nil {
