@@ -304,28 +304,31 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, sessFa
 			return nil, func() error { return nil }, err
 		}
 
-		// Starting transaction at the start of the server to load all events to
-		// the event scheduler is causing read replica test to fail as it tries
-		// pulling from remotes for branches that its remoteRef does not exist yet.
-		err = sql.SystemVariables.SetGlobal(dsess.SkipReplicationErrors, true)
-		if err != nil {
-			return nil, func() error { return nil }, err
-		}
+		// TODO: Seems like we either need to fix this test or change this behavior to
+		//        not start a transaction until right before we need one.
+		//// Starting transaction at the start of the server to load all events to
+		//// the event scheduler is causing read replica test to fail as it tries
+		//// pulling from remotes for branches that its remoteRef does not exist yet.
+		//err = sql.SystemVariables.SetGlobal(dsess.SkipReplicationErrors, true)
+		//if err != nil {
+		//	return nil, func() error { return nil }, err
+		//}
 
-		err = sess.SetSessionVariable(newCtx, sql.AutoCommitSessionVar, true)
-		if err != nil {
-			return nil, func() error { return nil }, err
-		}
+		// TODO: This should be enabled by default, plus it looks like we're calling commit anyway?
+		//err = sess.SetSessionVariable(newCtx, sql.AutoCommitSessionVar, true)
+		//if err != nil {
+		//	return nil, func() error { return nil }, err
+		//}
 
-		// set dolt_show_branch_databases to 'true' to get all revision databases
-		// when accessing all databases. When retrieving events from each database,
-		// only the default branch database will return events that have 'ENABLE' status.
-		// All other databases will return events with 'DISABLE' status regardless of the
-		// stored status.
-		err = sess.SetSessionVariable(newCtx, dsess.ShowBranchDatabases, true)
-		if err != nil {
-			return nil, func() error { return nil }, err
-		}
+		//// set dolt_show_branch_databases to 'true' to get all revision databases
+		//// when accessing all databases. When retrieving events from each database,
+		//// only the default branch database will return events that have 'ENABLE' status.
+		//// All other databases will return events with 'DISABLE' status regardless of the
+		//// stored status.
+		//err = sess.SetSessionVariable(newCtx, dsess.ShowBranchDatabases, true)
+		//if err != nil {
+		//	return nil, func() error { return nil }, err
+		//}
 
 		ts, ok := newCtx.Session.(sql.TransactionSession)
 		if !ok {
