@@ -201,7 +201,7 @@ func TestParsing(t *testing.T) {
 				parser.SupportOption(opt)
 			}
 
-			exp := &ArgParseResults{test.expectedOpts, test.expectedArgs, parser, -1}
+			exp := &ArgParseResults{test.expectedOpts, test.expectedArgs, parser, NO_POSITIONAL_ARGS}
 
 			res, err := parser.Parse(test.args)
 			if test.expectedErr != "" {

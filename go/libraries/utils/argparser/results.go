@@ -22,6 +22,11 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
+const (
+	// The default separator for positional arguments
+	NO_POSITIONAL_ARGS = -1
+)
+
 type ArgParseResults struct {
 	options map[string]string
 	Args    []string
@@ -137,7 +142,7 @@ func (res *ArgParseResults) DropValue(name string) *ArgParseResults {
 		}
 	}
 
-	return &ArgParseResults{newNamedArgs, res.Args, res.parser, -1}
+	return &ArgParseResults{newNamedArgs, res.Args, res.parser, NO_POSITIONAL_ARGS}
 }
 
 func (res *ArgParseResults) MustGetValue(name string) string {
