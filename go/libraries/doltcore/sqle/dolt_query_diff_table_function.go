@@ -308,6 +308,15 @@ func (tf *QueryDiffTableFunction) Resolved() bool {
 	return tf.query1.Resolved() && tf.query2.Resolved()
 }
 
+func (tf *QueryDiffTableFunction) IsReadOnly() bool {
+	// TODO: This table function is going to run two arbitrary queries
+	// after evaluating the string expressions. We don't have access to the
+	// string expressions here. In |evalQuery|, we have an adhoc check to
+	// see if we are only running a |SELECT|. This works for the most part
+	// for now --- non-read-only dfunctions may violate our assumption here.
+	return true
+}
+
 // String implements the Stringer interface
 func (tf *QueryDiffTableFunction) String() string {
 	return fmt.Sprintf("DOLT_QUERY_DIFF('%s', '%s')", tf.query1.String(), tf.query2.String())
