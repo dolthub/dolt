@@ -1304,7 +1304,6 @@ func (db Database) GetEvents(ctx *sql.Context) ([]sql.EventDefinition, error) {
 			Name:            frag.name,
 			CreateStatement: updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment),
 			CreatedAt:       frag.created,
-			// TODO: fill LastAltered, it cannot be nil/zero value
 			LastAltered: frag.created,
 			// TODO: fill TimezoneOffset and LastExecuted
 
