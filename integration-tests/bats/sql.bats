@@ -2875,3 +2875,18 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "should be able to read this" ]] || false
 }
+
+@test "sql: ignore an empty .dolt directory" {
+    mkdir empty_dir
+    cd empty_dir
+
+    mkdir .dolt
+    dolt sql -q "select 1"
+
+    # If there is a zombie lock file, sql should delete it.
+    echo "42:3306:aebf244e-0693-4c36-8b2d-6eb0dfa4fe2d" > .dolt/sql-server.lock}
+
+    dolt sql -q "select 1"
+
+    [[ ! -f .dolt/sql-server.lock ]] || false
+}

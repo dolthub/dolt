@@ -87,7 +87,7 @@ type MutableSecondaryIdx struct {
 
 // NewMutableSecondaryIdx returns a MutableSecondaryIdx. |m| is the secondary idx data.
 func NewMutableSecondaryIdx(idx prolly.Map, sch schema.Schema, def schema.Index) MutableSecondaryIdx {
-	b := index.NewSecondaryKeyBuilder(sch, def, idx.KeyDesc(), idx.Pool())
+	b := index.NewSecondaryKeyBuilder(sch, def, idx.KeyDesc(), idx.Pool(), idx.NodeStore())
 	return MutableSecondaryIdx{
 		Name:    def.Name(),
 		mut:     idx.Mutate(),
@@ -98,10 +98,15 @@ func NewMutableSecondaryIdx(idx prolly.Map, sch schema.Schema, def schema.Index)
 // InsertEntry inserts a secondary index entry given the key and new value
 // of the primary row.
 func (m MutableSecondaryIdx) InsertEntry(ctx context.Context, key, newValue val.Tuple) error {
-	newKey := m.builder.SecondaryKeyFromRow(key, newValue)
-	err := m.mut.Put(ctx, newKey, val.EmptyTuple)
+	newKey, err := m.builder.SecondaryKeyFromRow(ctx, key, newValue)
 	if err != nil {
-		return nil
+		return err
+	}
+
+	// secondary indexes only use their key tuple
+	err = m.mut.Put(ctx, newKey, val.EmptyTuple)
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -109,29 +114,31 @@ func (m MutableSecondaryIdx) InsertEntry(ctx context.Context, key, newValue val.
 // UpdateEntry modifies the corresponding secondary index entry given the key
 // and curr/new values of the primary row.
 func (m MutableSecondaryIdx) UpdateEntry(ctx context.Context, key, currValue, newValue val.Tuple) error {
-	currKey := m.builder.SecondaryKeyFromRow(key, currValue)
-	newKey := m.builder.SecondaryKeyFromRow(key, newValue)
-
-	err := m.mut.Delete(ctx, currKey)
+	currKey, err := m.builder.SecondaryKeyFromRow(ctx, key, currValue)
 	if err != nil {
-		return nil
-	}
-	err = m.mut.Put(ctx, newKey, val.EmptyTuple)
-	if err != nil {
-		return nil
+		return err
 	}
 
-	return nil
+	newKey, err := m.builder.SecondaryKeyFromRow(ctx, key, newValue)
+	if err != nil {
+		return err
+	}
+
+	err = m.mut.Delete(ctx, currKey)
+	if err != nil {
+		return err
+	}
+	return m.mut.Put(ctx, newKey, val.EmptyTuple)
 }
 
 // DeleteEntry deletes a secondary index entry given they key and value of the primary row.
 func (m MutableSecondaryIdx) DeleteEntry(ctx context.Context, key val.Tuple, value val.Tuple) error {
-	currKey := m.builder.SecondaryKeyFromRow(key, value)
-	err := m.mut.Delete(ctx, currKey)
+	currKey, err := m.builder.SecondaryKeyFromRow(ctx, key, value)
 	if err != nil {
-		return nil
+		return err
 	}
-	return nil
+
+	return m.mut.Delete(ctx, currKey)
 }
 
 // Map returns the finalized prolly.Map of the underlying prolly.MutableMap.

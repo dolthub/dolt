@@ -40,6 +40,10 @@ func (c *ChannelRowSource) Resolved() bool {
 	return true
 }
 
+func (c *ChannelRowSource) IsReadOnly() bool {
+	return true
+}
+
 // String implements the sql.Node interface.
 func (c *ChannelRowSource) String() string {
 	return "ChannelRowSource()"

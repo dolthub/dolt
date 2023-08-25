@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
@@ -92,8 +91,8 @@ func TestSingleQuery(t *testing.T) {
 		enginetest.RunQuery(t, engine, harness, q)
 	}
 
-	engine.Analyzer.Debug = true
-	engine.Analyzer.Verbose = true
+	engine.EngineAnalyzer().Debug = true
+	engine.EngineAnalyzer().Verbose = true
 
 	var test queries.QueryTest
 	test = queries.QueryTest{
@@ -116,75 +115,29 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "datetime precision",
+			// panic: runtime error: slice bounds out of range [-1:]
+			Name: "Slice out of bounds panic repro",
 			SetUpScript: []string{
-				"CREATE TABLE t1 (pk int primary key, d datetime)",
-				"CREATE TABLE t2 (pk int primary key, d datetime(3))",
-				"CREATE TABLE t3 (pk int primary key, d datetime(6))",
+				"CREATE table t (pk int primary key, col1 TEXT);",
+				"INSERT into t values (1, '123');",
+				// NOTE: if the index is created over (pk, col1(3)), then this code works fine, but not if the pk
+				//       is either not included or included after the blob column
+				"CREATE INDEX test_index2 ON t(col1(3));",
+				// NOTE: If the index is created BEFORE any data is inserted into the table, then we don't see the issue
+				//"INSERT into t values (1, '123');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "show create table t1",
-					Expected: []sql.Row{{"t1",
-						"CREATE TABLE `t1` (\n" +
-							"  `pk` int NOT NULL,\n" +
-							"  `d` datetime,\n" +
-							"  PRIMARY KEY (`pk`)\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
-				},
-				{
-					Query:    "insert into t1 values (1, '2020-01-01 00:00:00.123456')",
+					Query:    "INSERT into t values (2, '222');",
 					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
 				},
 				{
-					Query:    "select * from t1 order by pk",
-					Expected: []sql.Row{{1, queries.MustParseTime(time.DateTime, "2020-01-01 00:00:00")}},
-				},
-				{
-					Query: "show create table t2",
-					Expected: []sql.Row{{"t2",
-						"CREATE TABLE `t2` (\n" +
-							"  `pk` int NOT NULL,\n" +
-							"  `d` datetime(3),\n" +
-							"  PRIMARY KEY (`pk`)\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
-				},
-				{
-					Query:    "insert into t2 values (1, '2020-01-01 00:00:00.123456')",
-					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
-				},
-				{
-					Query:    "select * from t2 order by pk",
-					Expected: []sql.Row{{1, queries.MustParseTime(time.RFC3339Nano, "2020-01-01T00:00:00.123000000Z")}},
-				},
-				{
-					Query: "show create table t3",
-					Expected: []sql.Row{{"t3",
-						"CREATE TABLE `t3` (\n" +
-							"  `pk` int NOT NULL,\n" +
-							"  `d` datetime(6),\n" +
-							"  PRIMARY KEY (`pk`)\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
-				},
-				{
-					Query:    "insert into t3 values (1, '2020-01-01 00:00:00.123456')",
-					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
-				},
-				{
-					Query:    "select * from t3 order by pk",
-					Expected: []sql.Row{{1, queries.MustParseTime(time.RFC3339Nano, "2020-01-01T00:00:00.123456000Z")}},
-				},
-				{
-					Query:       "create table t4 (pk int primary key, d datetime(-1))",
-					ExpectedErr: sql.ErrSyntaxError,
-				},
-				{
-					Query:          "create table t4 (pk int primary key, d datetime(7))",
-					ExpectedErrStr: "DATETIME supports precision from 0 to 6",
+					Query:    "select * from t;",
+					Expected: []sql.Row{{1, "123"}, {2, "222"}},
 				},
 			},
 		},
@@ -663,8 +616,8 @@ func TestDoltUserPrivileges(t *testing.T) {
 				Address: "localhost",
 			})
 
-			engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
-			engine.Analyzer.Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
+			engine.EngineAnalyzer().Catalog.MySQLDb.AddRootAccount()
+			engine.EngineAnalyzer().Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
 
 			for _, statement := range script.SetUpScript {
 				if sh, ok := interface{}(harness).(enginetest.SkippingHarness); ok {
@@ -1066,7 +1019,7 @@ func TestDropCheckConstraints(t *testing.T) {
 func TestReadOnly(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestReadOnly(t, h)
+	enginetest.TestReadOnly(t, h, false /* testStoredProcedures */)
 }
 
 func TestViews(t *testing.T) {
@@ -2058,6 +2011,7 @@ func TestLogTableFunction(t *testing.T) {
 	harness.Setup(setup.MydbData)
 	for _, test := range LogTableFunctionScriptTests {
 		harness.engine = nil
+		harness.skipSetupCommit = true
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScript(t, harness, test)
 		})
@@ -2070,6 +2024,7 @@ func TestLogTableFunctionPrepared(t *testing.T) {
 	harness.Setup(setup.MydbData)
 	for _, test := range LogTableFunctionScriptTests {
 		harness.engine = nil
+		harness.skipSetupCommit = true
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScriptPrepared(t, harness, test)
 		})
@@ -2176,7 +2131,19 @@ func TestSchemaDiffSystemTablePrepared(t *testing.T) {
 	}
 }
 
-func mustNewEngine(t *testing.T, h enginetest.Harness) *gms.Engine {
+func TestQueryDiff(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	harness.Setup(setup.MydbData)
+	for _, test := range QueryDiffTableScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScript(t, harness, test)
+		})
+	}
+}
+
+func mustNewEngine(t *testing.T, h enginetest.Harness) enginetest.QueryEngine {
 	e, err := h.NewEngine(t)
 	if err != nil {
 		require.NoError(t, err)
@@ -2202,7 +2169,7 @@ func TestSystemTableIndexes(t *testing.T) {
 		harness.SkipSetupCommit()
 		e := mustNewEngine(t, harness)
 		defer e.Close()
-		e.Analyzer.Coster = memo.NewMergeBiasedCoster()
+		e.EngineAnalyzer().Coster = memo.NewMergeBiasedCoster()
 
 		ctx := enginetest.NewContext(harness)
 		for _, q := range stt.setup {
@@ -2210,7 +2177,7 @@ func TestSystemTableIndexes(t *testing.T) {
 		}
 
 		for i, c := range []string{"inner", "lookup", "hash", "merge"} {
-			e.Analyzer.Coster = biasedCosters[i]
+			e.EngineAnalyzer().Coster = biasedCosters[i]
 			for _, tt := range stt.queries {
 				t.Run(fmt.Sprintf("%s(%s): %s", stt.name, c, tt.query), func(t *testing.T) {
 					if tt.skip {
@@ -2256,6 +2223,28 @@ func TestSystemTableIndexesPrepared(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestSystemTableFunctionIndexes(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range SystemTableFunctionIndexTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScript(t, harness, test)
+		})
+	}
+}
+
+func TestSystemTableFunctionIndexesPrepared(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range SystemTableFunctionIndexTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
+		})
 	}
 }
 

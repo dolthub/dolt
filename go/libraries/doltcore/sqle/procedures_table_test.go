@@ -27,6 +27,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
@@ -37,6 +38,71 @@ func TestProceduresMigration(t *testing.T) {
 	tmpDir, err := dEnv.TempTableFilesDir()
 	require.NoError(t, err)
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: tmpDir}
+
+	timestamp := time.Now().Truncate(time.Minute).UTC()
+
+	ctx, db := newDatabase(t, dEnv, opts, timestamp)
+
+	t.Run("test migration logic", func(t *testing.T) {
+		// Call the logic to migrate it to the latest schema
+		tbl, err := DoltProceduresGetTable(ctx, *db)
+		require.NoError(t, err)
+
+		// Assert that the data was migrated correctly
+		rows := readAllRows(ctx, t, tbl)
+		expectedRows := []sql.Row{
+			{"proc1", "create procedure proc1() SELECT 42 as pk from dual;", timestamp, timestamp, nil},
+			{"proc2", "create procedure proc2() SELECT 'HELLO' as greeting from dual;", timestamp, timestamp, nil},
+		}
+		assert.Equal(t, expectedRows, rows)
+	})
+
+	t.Run("test that fetching stored procedure triggers the migration logic", func(t *testing.T) {
+		// Call the logic to migrate it to the latest schema
+		_, found, err := db.GetStoredProcedure(ctx, "proc1")
+		require.NoError(t, err)
+		require.True(t, found)
+
+		// Assert that the data was migrated correctly
+		tbl, found, err := db.GetTableInsensitive(ctx, doltdb.ProceduresTableName)
+		require.NoError(t, err)
+		require.True(t, found)
+		rows := readAllRows(ctx, t, tbl.(*WritableDoltTable))
+		expectedRows := []sql.Row{
+			{"proc1", "create procedure proc1() SELECT 42 as pk from dual;", timestamp, timestamp, nil},
+			{"proc2", "create procedure proc2() SELECT 'HELLO' as greeting from dual;", timestamp, timestamp, nil},
+		}
+		assert.Equal(t, expectedRows, rows)
+	})
+
+	t.Run("test that adding a new stored procedure triggers the migration logic", func(t *testing.T) {
+		// Call the logic to migrate it to the latest schema
+		proc3 := sql.StoredProcedureDetails{
+			Name:            "proc3",
+			CreateStatement: "create procedure proc3() SELECT 47 as pk from dual;",
+			CreatedAt:       timestamp,
+			ModifiedAt:      timestamp,
+			SqlMode:         "NO_ENGINE_SUBSTITUTION",
+		}
+		err := db.SaveStoredProcedure(ctx, proc3)
+		require.NoError(t, err)
+
+		// Assert that the data was migrated correctly
+		tbl, found, err := db.GetTableInsensitive(ctx, doltdb.ProceduresTableName)
+		require.NoError(t, err)
+		require.True(t, found)
+		rows := readAllRows(ctx, t, tbl.(*WritableDoltTable))
+		expectedRows := []sql.Row{
+			{"proc1", "create procedure proc1() SELECT 42 as pk from dual;", timestamp, timestamp, nil},
+			{"proc2", "create procedure proc2() SELECT 'HELLO' as greeting from dual;", timestamp, timestamp, nil},
+			{"proc3", "create procedure proc3() SELECT 47 as pk from dual;", timestamp, timestamp, "NO_ENGINE_SUBSTITUTION"},
+		}
+		assert.Equal(t, expectedRows, rows)
+	})
+
+}
+
+func newDatabase(t *testing.T, dEnv *env.DoltEnv, opts editor.Options, timestamp time.Time) (*sql.Context, *Database) {
 	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
@@ -58,22 +124,11 @@ func TestProceduresMigration(t *testing.T) {
 
 	// Insert some test data for procedures
 	inserter := sqlTbl.(*WritableDoltTable).Inserter(ctx)
-	timestamp := time.Now().Truncate(time.Minute).UTC()
 	require.NoError(t, inserter.Insert(ctx, sql.Row{"proc1", "create procedure proc1() SELECT 42 as pk from dual;", timestamp, timestamp}))
 	require.NoError(t, inserter.Insert(ctx, sql.Row{"proc2", "create procedure proc2() SELECT 'HELLO' as greeting from dual;", timestamp, timestamp}))
 	require.NoError(t, inserter.Close(ctx))
 
-	// Call the logic to migrate it to the latest schema
-	tbl, err := DoltProceduresGetOrCreateTable(ctx, db)
-	require.NoError(t, err)
-
-	// Assert that the data was migrated correctly
-	rows := readAllRows(ctx, t, tbl)
-	expectedRows := []sql.Row{
-		{"proc1", "create procedure proc1() SELECT 42 as pk from dual;", timestamp, timestamp, nil},
-		{"proc2", "create procedure proc2() SELECT 'HELLO' as greeting from dual;", timestamp, timestamp, nil},
-	}
-	assert.Equal(t, expectedRows, rows)
+	return ctx, &db
 }
 
 func readAllRows(ctx *sql.Context, t *testing.T, tbl *WritableDoltTable) []sql.Row {

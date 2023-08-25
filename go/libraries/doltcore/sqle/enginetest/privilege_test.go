@@ -84,8 +84,8 @@ func TestRevisionDatabasePrivileges(t *testing.T) {
 				User:    "root",
 				Address: "localhost",
 			})
-			engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
-			engine.Analyzer.Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
+			engine.EngineAnalyzer().Catalog.MySQLDb.AddRootAccount()
+			engine.EngineAnalyzer().Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
 
 			for _, statement := range append(script.SetUpScript, revisionDatabasePrivsSetupPostfix...) {
 				if harness.SkipQueryTest(statement) {
@@ -985,8 +985,8 @@ func TestDoltOnlyRevisionDatabasePrivileges(t *testing.T) {
 				User:    "root",
 				Address: "localhost",
 			})
-			engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
-			engine.Analyzer.Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
+			engine.EngineAnalyzer().Catalog.MySQLDb.AddRootAccount()
+			engine.EngineAnalyzer().Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
 
 			for _, statement := range script.SetUpScript {
 				enginetest.RunQueryWithContext(t, engine, harness, ctx, statement)

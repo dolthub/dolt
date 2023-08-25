@@ -63,7 +63,7 @@ import (
 )
 
 const (
-	Version = "1.13.0"
+	Version = "1.13.4"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -121,6 +121,7 @@ var doltSubCommands = []cli.Command{
 	stashcmds.StashCommands,
 	&commands.Assist{},
 	commands.ProfileCmd{},
+	commands.QueryDiff{},
 }
 
 var commandsWithoutCliCtx = []cli.Command{
@@ -525,11 +526,17 @@ func runMain() int {
 	// variables like `${db_name}_default_branch` (maybe these should not be
 	// part of Dolt config in the first place!).
 
+	// Current working directory is preserved to ensure that user provided path arguments are always calculated
+	// relative to this directory. The root environment's FS will be updated to be the --data-dir path if the user
+	// specified one.
+	cwdFS := dEnv.FS
 	dataDirFS, err := dEnv.FS.WithWorkingDir(dataDir)
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to set the data directory. %v", err))
 		return 1
 	}
+	dEnv.FS = dataDirFS
+
 	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dataDirFS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 	if err != nil {
 		cli.PrintErrln("failed to load database names")
@@ -555,7 +562,7 @@ func runMain() int {
 			return 1
 		}
 
-		lateBind, err := buildLateBinder(ctx, dEnv.FS, mrEnv, creds, apr, subcommandName, verboseEngineSetup)
+		lateBind, err := buildLateBinder(ctx, cwdFS, dEnv, mrEnv, creds, apr, subcommandName, verboseEngineSetup)
 
 		if err != nil {
 			cli.PrintErrln(color.RedString("%v", err))
@@ -604,11 +611,20 @@ or check the docs for questions about usage.`)
 
 // buildLateBinder builds a LateBindQueryist for which is used to obtain the Queryist used for the length of the
 // command execution.
-func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.MultiRepoEnv, creds *cli.UserPassword, apr *argparser.ArgParseResults, subcommandName string, verbose bool) (cli.LateBindQueryist, error) {
+func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, rootEnv *env.DoltEnv, mrEnv *env.MultiRepoEnv, creds *cli.UserPassword, apr *argparser.ArgParseResults, subcommandName string, verbose bool) (cli.LateBindQueryist, error) {
 
 	var targetEnv *env.DoltEnv = nil
 
 	useDb, hasUseDb := apr.GetValue(commands.UseDbFlag)
+	useBranch, hasBranch := apr.GetValue(cli.BranchParam)
+
+	if hasUseDb && hasBranch {
+		dbName, branchNameInDb := dsess.SplitRevisionDbName(useDb)
+		if len(branchNameInDb) != 0 {
+			return nil, fmt.Errorf("Ambiguous branch name: %s or %s", branchNameInDb, useBranch)
+		}
+		useDb = dbName + "/" + useBranch
+	}
 	// If the host flag is given, we are forced to use a remote connection to a server.
 	host, hasHost := apr.GetValue(cli.HostFlag)
 	if hasHost {
@@ -621,7 +637,6 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 			port = 3306
 		}
 		useTLS := !apr.Contains(cli.NoTLSFlag)
-
 		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, host, port, useTLS, useDb)
 	} else {
 		_, hasPort := apr.GetInt(cli.PortFlag)
@@ -638,6 +653,9 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 		}
 	} else {
 		useDb = mrEnv.GetFirstDatabase()
+		if hasBranch {
+			useDb += "/" + useBranch
+		}
 	}
 
 	if targetEnv == nil && useDb != "" {
@@ -655,29 +673,30 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, mrEnv *env.Mult
 		}, nil
 	}
 
-	// nil targetEnv will happen if the user ran a command in an empty directory - which we support in some cases.
-	if targetEnv != nil {
-		isLocked, lock, err := targetEnv.GetLock()
-		if err != nil {
-			return nil, err
-		}
-		if isLocked {
-			if verbose {
-				cli.Println("verbose: starting remote mode")
-			}
+	// nil targetEnv will happen if the user ran a command in an empty directory or when there is a server running with
+	// no databases. CLI will try to connect to the server in this case.
+	if targetEnv == nil {
+		targetEnv = rootEnv
+	}
 
-			if !creds.Specified {
-				creds = &cli.UserPassword{Username: sqlserver.LocalConnectionUser, Password: lock.Secret, Specified: false}
-			}
-
-			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", lock.Port, false, useDb)
+	isLocked, lock, err := targetEnv.GetLock()
+	if err != nil {
+		return nil, err
+	}
+	if isLocked {
+		if verbose {
+			cli.Println("verbose: starting remote mode")
 		}
+
+		if !creds.Specified {
+			creds = &cli.UserPassword{Username: sqlserver.LocalConnectionUser, Password: lock.Secret, Specified: false}
+		}
+		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", lock.Port, false, useDb)
 	}
 
 	if verbose {
 		cli.Println("verbose: starting local mode")
 	}
-
 	return commands.BuildSqlEngineQueryist(ctx, cwdFS, mrEnv, creds, apr)
 }
 

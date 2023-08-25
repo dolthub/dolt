@@ -727,7 +727,7 @@ func newUniqIndex(sch schema.Schema, def schema.Index, clustered, secondary prol
 	p := clustered.Pool()
 
 	prefixDesc := secondary.KeyDesc().PrefixDesc(def.Count())
-	secondaryBld := index.NewSecondaryKeyBuilder(sch, def, secondary.KeyDesc(), p)
+	secondaryBld := index.NewSecondaryKeyBuilder(sch, def, secondary.KeyDesc(), p, secondary.NodeStore())
 	clusteredBld := index.NewClusteredKeyBuilder(def, sch, clustered.KeyDesc(), p)
 
 	return uniqIndex{
@@ -745,14 +745,22 @@ func newUniqIndex(sch schema.Schema, def schema.Index, clustered, secondary prol
 type collisionFn func(key, value val.Tuple) error
 
 func (idx uniqIndex) insertRow(ctx context.Context, key, value val.Tuple) error {
-	secondaryIndexKey := idx.secondaryBld.SecondaryKeyFromRow(key, value)
-	newValue := val.NewTuple(idx.secondary.NodeStore().Pool(), nil)
-	return idx.secondary.Put(ctx, secondaryIndexKey, newValue)
+	secondaryIndexKey, err := idx.secondaryBld.SecondaryKeyFromRow(ctx, key, value)
+	if err != nil {
+		return err
+	}
+
+	// secondary indexes only use their key tuple
+	return idx.secondary.Put(ctx, secondaryIndexKey, val.EmptyTuple)
 }
 
 func (idx uniqIndex) removeRow(ctx context.Context, key, value val.Tuple) error {
-	secondaryIndexKey := idx.secondaryBld.SecondaryKeyFromRow(key, value)
-	err := idx.secondary.Delete(ctx, secondaryIndexKey)
+	secondaryIndexKey, err := idx.secondaryBld.SecondaryKeyFromRow(ctx, key, value)
+	if err != nil {
+		return err
+	}
+
+	err = idx.secondary.Delete(ctx, secondaryIndexKey)
 	if err != nil {
 		return err
 	}
@@ -765,7 +773,11 @@ func (idx uniqIndex) removeRow(ctx context.Context, key, value val.Tuple) error 
 // included in the unique constraint. For any matching row, the specified callback, |cb|, is invoked with the key
 // and value for the primary index, representing the conflicting row identified from the unique index.
 func (idx uniqIndex) findCollisions(ctx context.Context, key, value val.Tuple, cb collisionFn) error {
-	indexKey := idx.secondaryBld.SecondaryKeyFromRow(key, value)
+	indexKey, err := idx.secondaryBld.SecondaryKeyFromRow(ctx, key, value)
+	if err != nil {
+		return err
+	}
+
 	if idx.prefixDesc.HasNulls(indexKey) {
 		return nil // NULLs cannot cause unique violations
 	}
@@ -773,7 +785,7 @@ func (idx uniqIndex) findCollisions(ctx context.Context, key, value val.Tuple, c
 	// This code uses the secondary index to iterate over all rows (key/value pairs) that have the same prefix.
 	// The prefix here is all the value columns this index is set up to track
 	collisions := make([]val.Tuple, 0)
-	err := idx.secondary.GetPrefix(ctx, indexKey, idx.prefixDesc, func(k, _ val.Tuple) (err error) {
+	err = idx.secondary.GetPrefix(ctx, indexKey, idx.prefixDesc, func(k, _ val.Tuple) (err error) {
 		if k != nil {
 			collisions = append(collisions, k)
 		}

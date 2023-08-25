@@ -15,6 +15,7 @@
 package mysql_file_handler
 
 import (
+	"context"
 	"errors"
 	"os"
 	"sync"
@@ -56,7 +57,7 @@ func (p *Persister) Persist(ctx *sql.Context, data []byte) error {
 }
 
 // LoadData reads the mysql.db file, returns nil if empty or not found
-func (p Persister) LoadData() ([]byte, error) {
+func (p Persister) LoadData(context.Context) ([]byte, error) {
 	// do nothing if no filepath specified
 	if len(p.privsFilePath) == 0 {
 		return nil, nil

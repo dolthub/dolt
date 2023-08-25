@@ -5611,3 +5611,85 @@ var SystemTableIndexTests = []systabScript{
 		},
 	},
 }
+
+var QueryDiffTableScriptTests = []queries.ScriptTest{
+	{
+		Name: "basic query diff tests",
+		SetUpScript: []string{
+			"create table t (i int primary key, j int);",
+			"insert into t values (1, 1), (2, 2), (3, 3);",
+			"create table tt (i int primary key, j int);",
+			"insert into tt values (10, 10), (20, 20), (30, 30);",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'first');",
+			"call dolt_branch('other');",
+			"update t set j = 10 where i = 2;",
+			"delete from t where i = 3;",
+			"insert into t values (4, 4);",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'second');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "select * from dolt_query_diff();",
+				ExpectedErrStr: "function 'dolt_query_diff' expected 2 arguments, 0 received",
+			},
+			{
+				Query:          "select * from dolt_query_diff('selectsyntaxerror', 'selectsyntaxerror');",
+				ExpectedErrStr: "syntax error at position 18 near 'selectsyntaxerror'",
+			},
+			{
+				Query:          "select * from dolt_query_diff('', '');",
+				ExpectedErrStr: "query must be a SELECT statement",
+			},
+			{
+				Query:          "select * from dolt_query_diff('create table tt (i int)', 'create table ttt (j int)');",
+				ExpectedErrStr: "query must be a SELECT statement",
+			},
+			{
+				Query:          "select * from dolt_query_diff('select * from missingtable', '');",
+				ExpectedErrStr: "table not found: missingtable",
+			},
+			{
+				Query: "select * from dolt_query_diff('select * from t as of other', 'select * from t as of head');",
+				Expected: []sql.Row{
+					{2, 2, 2, 10, "modified"},
+					{3, 3, nil, nil, "deleted"},
+					{nil, nil, 4, 4, "added"},
+				},
+			},
+			{
+				Query: "select * from dolt_query_diff('select * from t as of head', 'select * from t as of other');",
+				Expected: []sql.Row{
+					{2, 10, 2, 2, "modified"},
+					{nil, nil, 3, 3, "added"},
+					{4, 4, nil, nil, "deleted"},
+				},
+			},
+			{
+				Query: "select * from dolt_query_diff('select * from t as of other where i = 2', 'select * from t as of head where i = 2');",
+				Expected: []sql.Row{
+					{2, 2, 2, 10, "modified"},
+				},
+			},
+			{
+				Query: "select * from dolt_query_diff('select * from t as of other where i < 2', 'select * from t as of head where i > 2');",
+				Expected: []sql.Row{
+					{1, 1, nil, nil, "deleted"},
+					{nil, nil, 4, 4, "added"},
+				},
+			},
+			{
+				Query: "select * from dolt_query_diff('select * from t', 'select * from tt');",
+				Expected: []sql.Row{
+					{1, 1, nil, nil, "deleted"},
+					{2, 10, nil, nil, "deleted"},
+					{4, 4, nil, nil, "deleted"},
+					{nil, nil, 10, 10, "added"},
+					{nil, nil, 20, 20, "added"},
+					{nil, nil, 30, 30, "added"},
+				},
+			},
+		},
+	},
+}

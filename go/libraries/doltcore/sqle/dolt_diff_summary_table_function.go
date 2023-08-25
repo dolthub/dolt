@@ -97,6 +97,10 @@ func (ds *DiffSummaryTableFunction) Resolved() bool {
 	return ds.commitsResolved()
 }
 
+func (ds *DiffSummaryTableFunction) IsReadOnly() bool {
+	return true
+}
+
 // String implements the Stringer interface
 func (ds *DiffSummaryTableFunction) String() string {
 	if ds.dotCommitExpr != nil {

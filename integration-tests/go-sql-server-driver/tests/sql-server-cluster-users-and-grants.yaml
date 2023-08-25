@@ -1,0 +1,145 @@
+tests:
+- name: users and grants replicate
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:3852/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3851
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3309
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3310
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:3851/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3852
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3310
+  connections:
+  - on: server1
+    queries:
+    - exec: 'SET @@PERSIST.dolt_cluster_ack_writes_timeout_secs = 10'
+    - exec: 'create database repo1'
+    - exec: "use repo1"
+    - exec: 'create table vals (i int primary key)'
+    - exec: 'insert into vals values (0),(1),(2),(3),(4)'
+    - exec: 'create user "aaron"@"%" IDENTIFIED BY "aaronspassword"'
+    - exec: 'grant ALL ON *.* to "aaron"@"%"'
+    - exec: 'insert into vals values (5),(6),(7),(8),(9)'
+  - on: server1
+    user: 'aaron'
+    password: 'aaronspassword'
+    queries:
+    - exec: "use repo1"
+    - exec: 'insert into vals values (10),(11),(12),(13),(14)'
+  - on: server2
+    user: 'aaron'
+    password: 'aaronspassword'
+    queries:
+    - exec: "use repo1"
+    - query: 'select count(*) from vals'
+      result:
+        columns: ["count(*)"]
+        rows: [["15"]]
+- name: users and grants applied to standby do not replicate
+### TODO: This test should not be possible; being able to run create user on a standby is a bug.
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:3852/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3851
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3309
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3310
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:3851/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3852
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3310
+  connections:
+  - on: server1
+    queries:
+    - exec: 'SET @@PERSIST.dolt_cluster_ack_writes_timeout_secs = 10'
+    - exec: 'create database repo1'
+    - exec: "use repo1"
+    - exec: 'create table vals (i int primary key)'
+    - exec: 'insert into vals values (0),(1),(2),(3),(4)'
+    - exec: 'create user "aaron"@"%" IDENTIFIED BY "aaronspassword"'
+    - exec: 'grant ALL ON *.* to "aaron"@"%"'
+    - exec: 'insert into vals values (5),(6),(7),(8),(9)'
+  - on: server1
+    user: 'aaron'
+    password: 'aaronspassword'
+    queries:
+    - exec: "use repo1"
+    - exec: 'insert into vals values (10),(11),(12),(13),(14)'
+  - on: server2
+    user: 'aaron'
+    password: 'aaronspassword'
+    queries:
+    - exec: "use repo1"
+    - query: 'select count(*) from vals'
+      result:
+        columns: ["count(*)"]
+        rows: [["15"]]
+    - exec: 'create user "brian"@"%" IDENTIFIED BY "brianspassword"'
+    - exec: 'grant ALL ON *.* to "brian"@"%"'
+    - exec: 'select sleep(1) from dual'
+  - on: server1
+    user: 'aaron'
+    password: 'aaronspassword'
+    queries:
+    - query: "select count(*) from mysql.user where User = 'brian'"
+      result:
+        columns: ["count(*)"]
+        rows: [["0"]]

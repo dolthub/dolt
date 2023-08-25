@@ -22,12 +22,17 @@ REMOTESAPI_protos := \
   dolt/services/remotesapi/v1alpha1/credentials.proto
 REMOTESAPI_pbgo_pkg_path := dolt/services/remotesapi/v1alpha1
 
+REPLICATIONAPI_protos := \
+  dolt/services/replicationapi/v1alpha1/replication.proto
+REPLICATIONAPI_pbgo_pkg_path := dolt/services/replicationapi/v1alpha1
+
 nonservice_protos := \
   dolt/services/eventsapi/v1alpha1/event_constants.proto
 
 PBGO_pkgs := \
   CLIENTEVENTS \
   REMOTESAPI \
+  REPLICATIONAPI \
   EVENTSAPI
 
 all:

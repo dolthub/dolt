@@ -1408,10 +1408,7 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 		return err
 	}
 
-	sqlMode, err := sql.LoadSqlMode(ctx)
-	if err != nil {
-		return err
-	}
+	sqlMode := sql.LoadSqlMode(ctx)
 
 	return inserter.Insert(ctx, sql.Row{fragType, name, definition, extraJSON, sqlMode.String()})
 }
