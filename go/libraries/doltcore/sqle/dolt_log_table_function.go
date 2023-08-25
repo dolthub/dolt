@@ -301,7 +301,7 @@ func (ltf *LogTableFunction) validateRevisionExpressions() error {
 		if !types.IsText(ltf.revisionExprs[i].Type()) {
 			return ltf.invalidArgDetailsErr(ltf.revisionExprs[i].String())
 		}
-		if strings.Contains(revisionStr, "..") && (len(revisionStrs) > 1 || ltf.notRevisionExprs != nil || ltf.notRevisionStrs != nil || ltf.tableNames != nil) {
+		if strings.Contains(revisionStr, "..") && (len(revisionStrs) > 1 || ltf.notRevisionExprs != nil || ltf.notRevisionStrs != nil) {
 			return ltf.invalidArgDetailsErr("revision cannot contain '..' or '...' if multiple revisions exist")
 		}
 	}
