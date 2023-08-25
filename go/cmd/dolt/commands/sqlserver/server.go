@@ -114,12 +114,14 @@ func Serve(
 				logrus.TraceLevel.String(),
 			),
 			Default: logrus.GetLevel().String(),
-			NotifyChanged: func(scope sql.SystemVariableScope, v sql.SystemVarValue) {
-				if level, err := logrus.ParseLevel(v.Val.(string)); err == nil {
-					logrus.SetLevel(level)
-				} else {
-					logrus.Warnf("could not parse requested log level %s as a log level. dolt_log_level variable value and logging behavior will diverge.", v.Val.(string))
+			NotifyChanged: func(scope sql.SystemVariableScope, v sql.SystemVarValue) error {
+				level, err := logrus.ParseLevel(v.Val.(string))
+				if err != nil {
+					return fmt.Errorf("could not parse requested log level %s as a log level. dolt_log_level variable value and logging behavior will diverge.", v.Val.(string))
 				}
+
+				logrus.SetLevel(level)
+				return nil
 			},
 		},
 	})

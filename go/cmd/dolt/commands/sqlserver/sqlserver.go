@@ -492,8 +492,8 @@ func getCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 
 	if esStatus, ok := apr.GetValue(eventSchedulerStatus); ok {
 		// make sure to assign eventSchedulerStatus first here
-		serverConfig.withEventScheduler(strings.ToUpper(esStatus))
-		err := sql.SystemVariables.SetGlobal("event_scheduler", serverConfig.EventSchedulerStatus())
+		config.withEventScheduler(strings.ToUpper(esStatus))
+		err := sql.SystemVariables.SetGlobal("event_scheduler", config.EventSchedulerStatus())
 		if err != nil {
 			return nil, fmt.Errorf("failed to set event_scheduler. Error: %s", err.Error())
 		}
