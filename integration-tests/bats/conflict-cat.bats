@@ -83,17 +83,17 @@ SQL
     # trick to disable colors
     dolt conflicts cat . > output.txt
     run cat output.txt
-    [[ $output =~ "|     | base   | 1  | 1    |" ]]
-    [[ $output =~ "|  *  | ours   | 1  | 2    |" ]]
-    [[ $output =~ "|  *  | theirs | 1  | 3    |" ]]
-    [[ $output =~ "|     | base   | 2  | 2    |" ]]
-    [[ $output =~ "|  -  | ours   | 2  | 2    |" ]]
-    [[ $output =~ "|  *  | theirs | 2  | 0    |" ]]
-    [[ $output =~ "|     | base   | 3  | 3    |" ]]
-    [[ $output =~ "|  *  | ours   | 3  | 0    |" ]]
-    [[ $output =~ "|  -  | theirs | 3  | 3    |" ]]
-    [[ $output =~ "|  +  | ours   | 4  | 4    |" ]]
-    [[ $output =~ "|  +  | theirs | 4  | -4   |" ]]
+    [[ $output =~ "|     | base   | 1  | 1    |" ]] || false
+    [[ $output =~ "|  *  | ours   | 1  | 2    |" ]] || false
+    [[ $output =~ "|  *  | theirs | 1  | 3    |" ]] || false
+    [[ $output =~ "|     | base   | 2  | 2    |" ]] || false
+    [[ $output =~ "|  -  | ours   | 2  | 2    |" ]] || false
+    [[ $output =~ "|  *  | theirs | 2  | 0    |" ]] || false
+    [[ $output =~ "|     | base   | 3  | 3    |" ]] || false
+    [[ $output =~ "|  *  | ours   | 3  | 0    |" ]] || false
+    [[ $output =~ "|  -  | theirs | 3  | 3    |" ]] || false
+    [[ $output =~ "|  +  | ours   | 4  | 4    |" ]] || false
+    [[ $output =~ "|  +  | theirs | 4  | -4   |" ]] || false
 }
 
 @test "conflict-cat: conflicts should show using the union-schema (new schema on right)" {
@@ -115,9 +115,9 @@ SQL
     dolt merge right -m "merge right"
 
     run dolt conflicts cat .
-    [[ "$output" =~ "| a" ]]
-    [[ "$output" =~ "| b" ]]
-    [[ "$output" =~ "| c" ]]
+    [[ "$output" =~ "| a" ]] || false
+    [[ "$output" =~ "| b" ]] || false
+    [[ "$output" =~ "| c" ]] || false
 }
 
 @test "conflict-cat: conflicts should show using the union-schema (new schema on left)" {
@@ -138,7 +138,7 @@ SQL
     dolt merge right -m "merge left"
 
     run dolt conflicts cat .
-    [[ "$output" =~ "| a" ]]
-    [[ "$output" =~ "| b" ]]
-    [[ "$output" =~ "| c" ]]
+    [[ "$output" =~ "| a" ]] || false
+    [[ "$output" =~ "| b" ]] || false
+    [[ "$output" =~ "| c" ]] || false
 }

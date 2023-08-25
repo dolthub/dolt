@@ -19,6 +19,8 @@ import (
 	"errors"
 	"io"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
@@ -46,7 +48,12 @@ func (dl StreamDataLocation) Exists(ctx context.Context, root *doltdb.RootValue,
 }
 
 // NewReader creates a TableReadCloser for the DataLocation
-func (dl StreamDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, opts interface{}) (rdCl table.SqlRowReader, sorted bool, err error) {
+func (dl StreamDataLocation) NewReader(ctx context.Context, dEnv *env.DoltEnv, opts interface{}) (rdCl table.SqlRowReader, sorted bool, err error) {
+	root, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+
 	switch dl.Format {
 	case CsvFile:
 		delim := ","

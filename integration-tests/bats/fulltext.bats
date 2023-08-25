@@ -40,21 +40,27 @@ teardown() {
     [[ "$output" =~ "| yzx  | 1            |" ]] || false
     [[ "$output" =~ "| zyx  | 1            |" ]] || false
 
-    dolt add -A
+    # We add only the "test" table to verify that the Full-Text pseudo-index tables are automatically included.
+    # If they were not, then our later merge would produce incorrect results.
+    dolt add test
     dolt commit -m "Initial commit"
     dolt branch other
 
     dolt sql -q "DELETE FROM test WHERE pk = 3;"
-    dolt add -A
+    dolt add test
     dolt commit -m "Main commit"
 
     dolt checkout other
     dolt sql -q "INSERT INTO test VALUES (6, 'jak', 'mno'), (7, 'mno', 'bot');"
-    dolt add -A
+    dolt add test
     dolt commit -m "Other commit"
 
     dolt checkout main
-    dolt merge other
+    # Check that we don't output stats for the pseudo-index tables
+    run dolt merge other
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "dolt_" ]] || false
+    [[ "$output" =~ "1 tables changed" ]] || false
     run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_global_count;"
     [[ "$output" =~ "| word | global_count |" ]] || false
     [[ "$output" =~ "| abc  | 1            |" ]] || false
@@ -221,4 +227,140 @@ teardown() {
     [ "$status" -eq 0 ]
     run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_row_count;"
     [ "$status" -eq 0 ]
+}
+
+@test "fulltext: merge with renamed pseudo-index tables on main branch" {
+    dolt sql -q "CREATE TABLE test (pk BIGINT UNSIGNED PRIMARY KEY, v1 VARCHAR(200), FULLTEXT idx (v1));"
+    dolt sql -q "INSERT INTO test VALUES (1, 'abc');"
+    dolt add -A
+    dolt commit -m "Initial commit"
+    dolt branch other
+    dolt sql -q "DROP INDEX idx ON test;"
+    dolt sql -q "INSERT INTO test VALUES (2, 'def');"
+    dolt sql -q "RENAME TABLE test TO test_temp;"
+    dolt sql -q "ALTER TABLE test_temp ADD FULLTEXT INDEX idx (v1);"
+    dolt sql -q "RENAME TABLE test_temp TO test;"
+    dolt add -A
+    dolt commit -m "Renamed pseudo-index tables"
+
+    dolt checkout other
+    dolt sql -q "INSERT INTO test VALUES (3, 'ghi');"
+    dolt add -A
+    dolt commit -m "Insertion commit"
+
+    dolt checkout main
+    dolt merge other
+    # Verify that we retain the main branch's pseudo-index tables
+    run dolt sql -q "SELECT * FROM dolt_test_fts_config"
+    [ "$status" -eq 1 ]
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_doc_count"
+    [ "$status" -eq 1 ]
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_global_count"
+    [ "$status" -eq 1 ]
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_position"
+    [ "$status" -eq 1 ]
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_row_count"
+    [ "$status" -eq 1 ]
+    run dolt sql -q "SELECT * FROM dolt_test_temp_fts_config"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "SELECT * FROM dolt_test_temp_idx_0_fts_doc_count"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "SELECT * FROM dolt_test_temp_idx_0_fts_global_count"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "SELECT * FROM dolt_test_temp_idx_0_fts_position"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "SELECT * FROM dolt_test_temp_idx_0_fts_row_count"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT v1 FROM test WHERE MATCH(v1) AGAINST ('abc def ghi');" -r=json
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "{\"rows\": [{\"v1\":\"abc\"},{\"v1\":\"def\"},{\"v1\":\"ghi\"}]}" ]] || false
+}
+
+@test "fulltext: merge with renamed pseudo-index tables on other branch" {
+    dolt sql -q "CREATE TABLE test (pk BIGINT UNSIGNED PRIMARY KEY, v1 VARCHAR(200), FULLTEXT idx (v1));"
+    dolt sql -q "INSERT INTO test VALUES (1, 'abc');"
+    dolt add -A
+    dolt commit -m "Initial commit"
+    dolt branch other
+    dolt sql -q "INSERT INTO test VALUES (2, 'def');"
+    dolt add -A
+    dolt commit -m "Insertion commit"
+
+    dolt checkout other
+    dolt sql -q "DROP INDEX idx ON test;"
+    dolt sql -q "INSERT INTO test VALUES (3, 'ghi');"
+    dolt sql -q "RENAME TABLE test TO test_temp;"
+    dolt sql -q "ALTER TABLE test_temp ADD FULLTEXT INDEX idx (v1);"
+    dolt sql -q "RENAME TABLE test_temp TO test;"
+    dolt add -A
+    dolt commit -m "Renamed pseudo-index tables"
+
+    dolt checkout main
+    dolt merge other
+    # Verify that we retain the main branch's pseudo-index tables
+    run dolt sql -q "SELECT * FROM dolt_test_fts_config"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_doc_count"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_global_count"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_position"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "SELECT * FROM dolt_test_idx_0_fts_row_count"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "SELECT * FROM dolt_test_temp_fts_config"
+    [ "$status" -eq 1 ]
+    run dolt sql -q "SELECT * FROM dolt_test_temp_idx_0_fts_doc_count"
+    [ "$status" -eq 1 ]
+    run dolt sql -q "SELECT * FROM dolt_test_temp_idx_0_fts_global_count"
+    [ "$status" -eq 1 ]
+    run dolt sql -q "SELECT * FROM dolt_test_temp_idx_0_fts_position"
+    [ "$status" -eq 1 ]
+    run dolt sql -q "SELECT * FROM dolt_test_temp_idx_0_fts_row_count"
+    [ "$status" -eq 1 ]
+
+    run dolt sql -q "SELECT v1 FROM test WHERE MATCH(v1) AGAINST ('abc def ghi');" -r=json
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "{\"rows\": [{\"v1\":\"abc\"},{\"v1\":\"def\"},{\"v1\":\"ghi\"}]}" ]] || false
+}
+
+@test "fulltext: psuedo-index tables do not show in dolt status" {
+    dolt sql -q "CREATE TABLE test_abc (pk BIGINT UNSIGNED PRIMARY KEY, v1 VARCHAR(200), FULLTEXT idx (v1));"
+    dolt sql -q "INSERT INTO test_abc VALUES (1, 'abc');"
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test_abc" ]] || false
+    [[ ! "$output" =~ "dolt_" ]] || false
+    run dolt sql -q "SELECT * from dolt_status;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test_abc" ]] || false
+    [[ ! "$output" =~ "dolt_" ]] || false
+}
+
+@test "fulltext: psuedo-index tables do not show in dolt diff" {
+    dolt sql -q "CREATE TABLE test_abc (pk BIGINT UNSIGNED PRIMARY KEY, v1 VARCHAR(200), FULLTEXT idx (v1));"
+    dolt add -A
+    dolt commit -m "Initial commit"
+    dolt sql -q "INSERT INTO test_abc VALUES (1, 'abc');"
+    dolt add -A
+    dolt commit -m "Inserted row"
+
+    run dolt diff HEAD HEAD~1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test_abc" ]] || false
+    [[ ! "$output" =~ "dolt_" ]] || false
+    run dolt diff HEAD~1 HEAD
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test_abc" ]] || false
+    [[ ! "$output" =~ "dolt_" ]] || false
+}
+
+@test "fulltext: psuedo-index tables do not show in dolt schema show" {
+    dolt sql -q "CREATE TABLE test_abc (pk BIGINT UNSIGNED PRIMARY KEY, v1 VARCHAR(200), FULLTEXT idx (v1));"
+
+    run dolt schema show
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test_abc" ]] || false
+    [[ ! "$output" =~ "dolt_" ]] || false
 }

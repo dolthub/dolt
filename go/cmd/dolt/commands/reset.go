@@ -188,9 +188,22 @@ var tblDiffTypeToShortLabel = map[diff.TableDiffType]string{
 	diff.AddedTable:    "N",
 }
 
+type StatRow struct {
+	tableName string
+	status    string
+}
+
+func buildStatRows(rows []sql.Row) []StatRow {
+	statRows := make([]StatRow, 0, len(rows))
+	for _, row := range rows {
+		statRows = append(statRows, StatRow{row[0].(string), row[1].(string)})
+	}
+	return statRows
+}
+
 func printNotStaged(sqlCtx *sql.Context, queryist cli.Queryist) {
 	// Printing here is best effort.  Fail silently
-	schema, rowIter, err := queryist.Query(sqlCtx, "select * from dolt_status where staged = false")
+	schema, rowIter, err := queryist.Query(sqlCtx, "select table_name,status from dolt_status where staged = false")
 	if err != nil {
 		return
 	}
@@ -201,10 +214,11 @@ func printNotStaged(sqlCtx *sql.Context, queryist cli.Queryist) {
 	if rows == nil {
 		return
 	}
+	tranRow := buildStatRows(rows)
 
 	removeModified := 0
-	for _, row := range rows {
-		if row[2] != "new table" {
+	for _, row := range tranRow {
+		if row.status != "new table" {
 			removeModified++
 		}
 	}
@@ -213,17 +227,17 @@ func printNotStaged(sqlCtx *sql.Context, queryist cli.Queryist) {
 		cli.Println("Unstaged changes after reset:")
 
 		var lines []string
-		for _, row := range rows {
-			if row[2] == "new table" {
+		for _, row := range tranRow {
+			if row.status == "new table" {
 				//  per Git, unstaged new tables are untracked
 				continue
-			} else if row[2] == "deleted" {
-				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[diff.RemovedTable], row[0]))
-			} else if row[2] == "renamed" {
+			} else if row.status == "deleted" {
+				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[diff.RemovedTable], row.tableName))
+			} else if row.status == "renamed" {
 				// per Git, unstaged renames are shown as drop + add
-				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[diff.RemovedTable], row[0]))
+				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[diff.RemovedTable], row.tableName))
 			} else {
-				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[diff.ModifiedTable], row[0]))
+				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[diff.ModifiedTable], row.tableName))
 			}
 		}
 		cli.Println(strings.Join(lines, "\n"))

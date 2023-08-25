@@ -235,7 +235,7 @@ SQL
     [[ "$output" =~ "Rows Processed: 3, Additions: 3, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt schema export employees
-    [[ "$status" -eq 0 ]]
+    [[ "$status" -eq 0 ]] || false
     [[ "${lines[1]}" =~ "id" ]]         || false
     [[ "${lines[2]}" =~ "first name" ]] || false
     [[ "${lines[3]}" =~ "last name" ]]  || false
@@ -261,7 +261,7 @@ SQL
     [[ "$output" =~ "Rows Processed: 3, Additions: 3, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt schema export employees
-    [[ "$status" -eq 0 ]]
+    [[ "$status" -eq 0 ]] || false
     [[ "${lines[1]}" =~ "id" ]]         || false
     [[ "${lines[2]}" =~ "first name" ]] || false
     [[ "${lines[3]}" =~ "last name" ]]  || false
@@ -1194,7 +1194,7 @@ DELIM
     [ "$status" -eq 1 ]
     [[ "$output" =~ "A bad row was encountered" ]] || false
     [[ "$output" =~ "CSV reader expected 3 values, but saw 2" ]] || false
-    [[ "$output" =~ "row values:" ]]
+    [[ "$output" =~ "row values:" ]] || false
     ! [[ "$output" =~ "with the following values left over: '[\"\"]'" ]] || false
 
     # Case there are more columns in the rows than the number of columns in the schema
@@ -1208,9 +1208,9 @@ DELIM
     [ "$status" -eq 1 ]
     [[ "$output" =~ "A bad row was encountered" ]] || false
     [[ "$output" =~ "CSV reader expected 2 values, but saw 3" ]] || false
-    [[ "$output" =~ "row values:" ]]
-    [[ "$output" =~ '"pk": "5"' ]]
-    [[ "$output" =~ '"v1": "7"' ]]
+    [[ "$output" =~ "row values:" ]] || false
+    [[ "$output" =~ '"pk": "5"' ]] || false
+    [[ "$output" =~ '"v1": "7"' ]] || false
     [[ "$output" =~ "with the following values left over: '[\"5\"]'" ]] || false
 
     # Add a continue statement

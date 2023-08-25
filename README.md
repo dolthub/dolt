@@ -829,6 +829,10 @@ Dolt provides powerful data audit capabilities down to individual cells. When, h
 
 Head over to [our documentation](https://docs.dolthub.com/introduction/what-is-dolt) now that you have a feel for Dolt. You can also read about what we've been working on in [our blog](https://www.dolthub.com/blog/).
 
+# Security Policy
+
+[Dolt's current security policy](https://github.com/dolthub/dolt/blob/main/SECURITY.md) is maintained in this repository. Please follow the disclosure instructions there. Please do not initially report security issues in this repository's public GitHub issues.
+
 # Credits and License
 
 Dolt relies heavily on open source code and ideas from the

@@ -470,7 +470,7 @@ func newImportDataReader(ctx context.Context, root *doltdb.RootValue, dEnv *env.
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: fmt.Errorf("%s already exists. Use -f to overwrite.", impOpts.DestName())}
 	}
 
-	rd, _, err := impOpts.src.NewReader(ctx, root, dEnv.FS, impOpts.srcOptions)
+	rd, _, err := impOpts.src.NewReader(ctx, dEnv, impOpts.srcOptions)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 	}
@@ -646,14 +646,11 @@ func moveRows(
 }
 
 func getImportSchema(ctx context.Context, dEnv *env.DoltEnv, impOpts *importOptions) (schema.Schema, *mvdata.DataMoverCreationError) {
-	root, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
-	}
-
 	if impOpts.schFile != "" {
-		tn, out, err := mvdata.SchAndTableNameFromFile(ctx, impOpts.schFile, dEnv.FS, root)
-
+		tn, out, err := mvdata.SchAndTableNameFromFile(ctx, impOpts.schFile, dEnv)
+		if err != nil {
+			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
+		}
 		if err == nil && tn != impOpts.destTableName {
 			err = fmt.Errorf("table name '%s' from schema file %s does not match table arg '%s'", tn, impOpts.schFile, impOpts.destTableName)
 		}
@@ -671,7 +668,7 @@ func getImportSchema(ctx context.Context, dEnv *env.DoltEnv, impOpts *importOpti
 			return nil, nil
 		}
 
-		rd, _, err := impOpts.src.NewReader(ctx, root, dEnv.FS, impOpts.srcOptions)
+		rd, _, err := impOpts.src.NewReader(ctx, dEnv, impOpts.srcOptions)
 		if err != nil {
 			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 		}
@@ -679,6 +676,11 @@ func getImportSchema(ctx context.Context, dEnv *env.DoltEnv, impOpts *importOpti
 
 		if impOpts.srcIsJson() {
 			return rd.GetSchema(), nil
+		}
+
+		root, err := dEnv.WorkingRoot(ctx)
+		if err != nil {
+			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 		}
 
 		outSch, err := mvdata.InferSchema(ctx, root, rd, impOpts.destTableName, impOpts.primaryKeys, impOpts)

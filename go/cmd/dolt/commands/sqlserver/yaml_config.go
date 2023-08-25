@@ -154,9 +154,11 @@ type YAMLConfig struct {
 	ClusterCfg        *ClusterYAMLConfig    `yaml:"cluster,omitempty"`
 	PrivilegeFile     *string               `yaml:"privilege_file,omitempty"`
 	BranchControlFile *string               `yaml:"branch_control_file,omitempty"`
-	Vars              []UserSessionVars     `yaml:"user_session_vars"`
-	Jwks              []engine.JwksConfig   `yaml:"jwks"`
-	GoldenMysqlConn   *string               `yaml:"golden_mysql_conn,omitempty"`
+	// TODO: Rename to UserVars_
+	Vars            []UserSessionVars       `yaml:"user_session_vars"`
+	SystemVars_     *engine.SystemVariables `yaml:"system_variables,omitempty" minver:"1.11.1"`
+	Jwks            []engine.JwksConfig     `yaml:"jwks"`
+	GoldenMysqlConn *string                 `yaml:"golden_mysql_conn,omitempty"`
 }
 
 var _ ServerConfig = YAMLConfig{}
@@ -435,6 +437,14 @@ func (cfg YAMLConfig) UserVars() []UserSessionVars {
 	}
 
 	return nil
+}
+
+func (cfg YAMLConfig) SystemVars() engine.SystemVariables {
+	if cfg.SystemVars_ == nil {
+		return engine.SystemVariables{}
+	}
+
+	return *cfg.SystemVars_
 }
 
 // JwksConfig is JSON Web Key Set config, and used to validate a user authed with a jwt (JSON Web Token).

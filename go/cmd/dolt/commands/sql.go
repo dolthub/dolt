@@ -53,16 +53,14 @@ var sqlDocs = cli.CommandDocumentationContent{
 
 Multiple SQL statements must be separated by semicolons. Use {{.EmphasisLeft}}-b{{.EmphasisRight}} to enable batch mode to speed up large batches of INSERT / UPDATE statements. Pipe SQL files to dolt sql (no {{.EmphasisLeft}}-q{{.EmphasisRight}}) to execute a SQL import or update script. 
 
-Queries can be saved to the query catalog with {{.EmphasisLeft}}-s{{.EmphasisRight}}. Alternatively {{.EmphasisLeft}}-x{{.EmphasisRight}} can be used to execute a saved query by name.
+By default this command uses the dolt database in the current working directory. If you would prefer to use a different directory, user the {{.EmphasisLeft}}--data-dir <directory>{{.EmphasisRight}} argument before the sql subcommand.
 
-By default this command uses the dolt database in the current working directory, as well as any dolt databases that are found in the current directory. Any databases created with CREATE DATABASE are placed in the current directory as well. Running with {{.EmphasisLeft}}--data-dir <directory>{{.EmphasisRight}} uses each of the subdirectories of the supplied directory (each subdirectory must be a valid dolt data repository) as databases. Subdirectories starting with '.' are ignored.`,
+If a server is running for the database in question, then the query will go through the server automatically. If connecting to a remote server is preferred, used the {{.EmphasisLeft}}--host <host>{{.EmphasisRight}} and {{.EmphasisLeft}}--port <port>{{.EmphasisRight}} global arguments. See 'dolt --help' for more information about global arguments.`,
 
 	Synopsis: []string{
 		"",
 		"< script.sql",
-		"[--data-dir {{.LessThan}}directory{{.GreaterThan}}] [-r {{.LessThan}}result format{{.GreaterThan}}]",
 		"-q {{.LessThan}}query{{.GreaterThan}} [-r {{.LessThan}}result format{{.GreaterThan}}] [-s {{.LessThan}}name{{.GreaterThan}} -m {{.LessThan}}message{{.GreaterThan}}] [-b]",
-		"-q {{.LessThan}}query{{.GreaterThan}} --data-dir {{.LessThan}}directory{{.GreaterThan}} [-r {{.LessThan}}result format{{.GreaterThan}}] [-b]",
 		"-x {{.LessThan}}name{{.GreaterThan}}",
 		"--list-saved",
 	},
@@ -194,6 +192,18 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
+	}
+
+	// restrict LOAD FILE invocations to current directory
+	wd, err := os.Getwd()
+	if err != nil {
+		wd = "/dev/null"
+	}
+	err = sql.SystemVariables.AssignValues(map[string]interface{}{
+		"secure_file_priv": wd,
+	})
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
@@ -608,7 +618,10 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 		if len(query) == 0 || query == "\n" {
 			continue
 		}
-		sqlStatement, err := sqlparser.Parse(query)
+
+		sqlMode := sql.LoadSqlMode(ctx)
+
+		sqlStatement, err := sqlparser.ParseWithOptions(query, sqlMode.ParserOptions())
 		if err == sqlparser.ErrEmpty {
 			continue
 		} else if err != nil {

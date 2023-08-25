@@ -17,6 +17,8 @@ package actions
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -35,6 +37,36 @@ func MoveTablesBetweenRoots(ctx context.Context, tbls []string, src, dest *doltd
 	tblDeltas, err := diff.GetTableDeltas(ctx, dest, src)
 	if err != nil {
 		return nil, err
+	}
+
+	// We want to include all Full-Text tables for every move
+	for _, td := range tblDeltas {
+		var ftIndexes []schema.Index
+		if tblSet.Contains(td.ToName) && td.ToSch.Indexes().ContainsFullTextIndex() {
+			for _, idx := range td.ToSch.Indexes().AllIndexes() {
+				if !idx.IsFullText() {
+					continue
+				}
+				ftIndexes = append(ftIndexes, idx)
+			}
+		} else if tblSet.Contains(td.FromName) && td.FromSch.Indexes().ContainsFullTextIndex() {
+			for _, idx := range td.FromSch.Indexes().AllIndexes() {
+				if !idx.IsFullText() {
+					continue
+				}
+				ftIndexes = append(ftIndexes, idx)
+			}
+		}
+		for _, ftIndex := range ftIndexes {
+			props := ftIndex.FullTextProperties()
+			tblSet.Add(
+				props.ConfigTable,
+				props.PositionTable,
+				props.DocCountTable,
+				props.GlobalCountTable,
+				props.RowCountTable,
+			)
+		}
 	}
 
 	tblsToDrop := set.NewStrSet(nil)

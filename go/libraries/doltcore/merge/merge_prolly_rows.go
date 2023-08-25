@@ -133,7 +133,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 	if err != nil {
 		return nil, nil, err
 	}
-	leftEditor := durable.ProllyMapFromIndex(lr).Mutate()
+	leftEditor := durable.ProllyMapFromIndex(lr).Rewriter(finalSch.GetKeyDescriptor(), finalSch.GetValueDescriptor())
 
 	ai, err := mergeTbl.GetArtifacts(ctx)
 	if err != nil {
@@ -1376,7 +1376,7 @@ func migrateDataToMergedSchema(ctx *sql.Context, tm *TableMerger, vm *valueMerge
 		return err
 	}
 	leftRows := durable.ProllyMapFromIndex(lr)
-	mut := leftRows.Mutate()
+	mut := leftRows.Rewriter(mergedSch.GetKeyDescriptor(), mergedSch.GetValueDescriptor())
 	mapIter, err := mut.IterAll(ctx)
 	if err != nil {
 		return err

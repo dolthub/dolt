@@ -565,8 +565,13 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 		return err
 	}
 
+	hasSchemaConflicts := false
+	if workingSet.MergeState() != nil {
+		hasSchemaConflicts = workingSet.MergeState().HasSchemaConflicts()
+	}
+
 	workingRoot := workingSet.WorkingRoot()
-	hasConflicts, err := workingRoot.HasConflicts(ctx)
+	hasDataConflicts, err := workingRoot.HasConflicts(ctx)
 	if err != nil {
 		return err
 	}
@@ -575,7 +580,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 		return err
 	}
 
-	if hasConflicts {
+	if hasDataConflicts || hasSchemaConflicts {
 		// TODO: Sometimes this returns the wrong error. Define an internal
 		// merge to be a merge that occurs inside a transaction. Define a
 		// transaction merge to be the merge that resolves changes between two

@@ -471,7 +471,30 @@ func writeTableHashes(ctx context.Context, head *doltdb.RootValue, tblHashes map
 // This means that if both working sets are present (ie there are changes on both source and dest branches),
 // we check if the changes are identical before allowing a clobbering checkout.
 // Working set errors are ignored by this function, because they are properly handled elsewhere.
-func CheckoutWouldStompWorkingSetChanges(sourceRoots, destRoots doltdb.Roots) bool {
+func CheckoutWouldStompWorkingSetChanges(ctx context.Context, sourceRoots, destRoots doltdb.Roots) (bool, error) {
+
+	wouldStomp := doRootsHaveIncompatibleChanges(sourceRoots, destRoots)
+
+	if !wouldStomp {
+		return false, nil
+	}
+
+	// In some cases, a working set differs from its head only by the feature version.
+	// If this is the case, moving the working set is safe.
+	modifiedSourceRoots, err := clearFeatureVersion(ctx, sourceRoots)
+	if err != nil {
+		return true, err
+	}
+
+	modifiedDestRoots, err := clearFeatureVersion(ctx, destRoots)
+	if err != nil {
+		return true, err
+	}
+
+	return doRootsHaveIncompatibleChanges(modifiedSourceRoots, modifiedDestRoots), nil
+}
+
+func doRootsHaveIncompatibleChanges(sourceRoots, destRoots doltdb.Roots) bool {
 	sourceHasChanges, sourceWorkingHash, sourceStagedHash, err := RootHasUncommittedChanges(sourceRoots)
 	if err != nil {
 		return false
@@ -487,8 +510,41 @@ func CheckoutWouldStompWorkingSetChanges(sourceRoots, destRoots doltdb.Roots) bo
 	return sourceHasChanges && destHasChanges && (sourceWorkingHash != destWorkingHash || sourceStagedHash != destStagedHash)
 }
 
-// RootHasUncommittedChanges returns whether the roots given have uncommitted changes, and the hashes of the working and staged roots
+// clearFeatureVersion creates a new version of the provided roots where all three roots have the same
+// feature version. By hashing these new roots, we can easily determine whether the roots differ only by
+// their feature version.
+func clearFeatureVersion(ctx context.Context, roots doltdb.Roots) (doltdb.Roots, error) {
+	currentBranchFeatureVersion, _, err := roots.Head.GetFeatureVersion(ctx)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	modifiedWorking, err := roots.Working.SetFeatureVersion(currentBranchFeatureVersion)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	modifiedStaged, err := roots.Staged.SetFeatureVersion(currentBranchFeatureVersion)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	return doltdb.Roots{
+		Head:    roots.Head,
+		Working: modifiedWorking,
+		Staged:  modifiedStaged,
+	}, nil
+}
+
+// RootHasUncommittedChanges returns whether the roots given have uncommitted changes, and the hashes of
+// the working and staged roots are identical. This function will ignore any difference in feature
+// versions between the root values.
 func RootHasUncommittedChanges(roots doltdb.Roots) (hasChanges bool, workingHash hash.Hash, stagedHash hash.Hash, err error) {
+	roots, err = clearFeatureVersion(context.Background(), roots)
+	if err != nil {
+		return false, hash.Hash{}, hash.Hash{}, err
+	}
+
 	headHash, err := roots.Head.HashOf()
 	if err != nil {
 		return false, hash.Hash{}, hash.Hash{}, err

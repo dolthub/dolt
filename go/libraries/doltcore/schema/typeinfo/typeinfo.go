@@ -135,7 +135,13 @@ type TypeInfo interface {
 
 // FromSqlType takes in a sql.Type and returns the most relevant TypeInfo.
 func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
-	switch sqlType.Type() {
+	sqlType, err := fillInCollationWithDefault(sqlType)
+	if err != nil {
+		return nil, err
+	}
+
+	queryType := sqlType.Type()
+	switch queryType {
 	case sqltypes.Null:
 		return UnknownType, nil
 	case sqltypes.Int8:
@@ -162,14 +168,12 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		return Float32Type, nil
 	case sqltypes.Float64:
 		return Float64Type, nil
-	case sqltypes.Timestamp:
-		return TimestampType, nil
+	case sqltypes.Timestamp, sqltypes.Datetime:
+		return CreateDatetimeTypeFromSqlType(sqlType.(sql.DatetimeType)), nil
 	case sqltypes.Date:
 		return DateType, nil
 	case sqltypes.Time:
 		return TimeType, nil
-	case sqltypes.Datetime:
-		return DatetimeType, nil
 	case sqltypes.Year:
 		return YearType, nil
 	case sqltypes.Geometry:
@@ -262,6 +266,16 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 	default:
 		return nil, fmt.Errorf(`no type info can be created from SQL base type "%v"`, sqlType.String())
 	}
+}
+
+// fillInCollationWithDefault sets the default collation on any collated type with no collation set.
+// We don't serialize the collation if it's the default collation, but the engine expects every column to have an
+// explicit collation. So fill it in on load in that case.
+func fillInCollationWithDefault(typ sql.Type) (sql.Type, error) {
+	if collationType, ok := typ.(sql.TypeWithCollation); ok && collationType.Collation() == sql.Collation_Unspecified {
+		return collationType.WithNewCollation(sql.Collation_Default)
+	}
+	return typ, nil
 }
 
 // FromTypeParams constructs a TypeInfo from the given identifier and parameters.
@@ -364,12 +378,6 @@ func FromKind(kind types.NomsKind) TypeInfo {
 	default:
 		panic(fmt.Errorf(`no default type info for NomsKind "%v"`, kind.String()))
 	}
-}
-
-// IsStringType returns whether the given TypeInfo represents a CHAR, VARCHAR, or TEXT-derivative.
-func IsStringType(ti TypeInfo) bool {
-	_, ok := ti.(*varStringType)
-	return ok
 }
 
 // ParseIdentifier takes in an Identifier in string form and returns the matching Identifier.

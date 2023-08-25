@@ -130,3 +130,46 @@ SQL
     dolt --feature-version $OLD checkout other
     popd
 }
+
+@test "feature-version: dolt checkout can be used when a working set has a different feature version than its head" {
+    rm -rf .dolt/
+    dolt --feature-version $OLD init
+    dolt --feature-version $NEW sql -q "create table a (b int);"
+    dolt --feature-version $NEW checkout -b other
+    run dolt --feature-version $NEW status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "other" ]] || false
+    dolt --feature-version $NEW checkout main
+    run dolt --feature-version $NEW status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "main" ]] || false
+}
+
+@test "feature-version: dolt pull can be used when a source set has a different feature version than the dest" {
+    # Clear out the current Dolt repo and create subdirs for new repos
+    rm -rf .dolt/
+    mkdir remote
+    mkdir repo1
+
+    # Create a repo using an OLD feature version and push its remote
+    cd repo1
+    dolt --feature-version $OLD init
+    dolt --feature-version $OLD remote add origin file://../remote
+    dolt --feature-version $OLD push origin main
+
+    # Create a clone that we can use to test dolt pull
+    cd ..
+    dolt --feature-version $NEW clone file://./remote repo2
+
+    # Create a new commit on repo1, so that we have something to pull
+    cd repo1
+    dolt --feature-version $OLD sql -q 'create table t (pk int primary key);'
+    dolt --feature-version $OLD sql -q 'call dolt_commit("-Am", "new table with old format");'
+    dolt --feature-version $OLD push origin main
+
+    # Assert that we can successfully pull the changes into repo2
+    cd ../repo2
+    run dolt --feature-version $NEW sql -q 'call dolt_pull();'
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "cannot merge with uncommitted changes" ]] || false
+}

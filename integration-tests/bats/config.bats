@@ -73,7 +73,7 @@ teardown() {
     [ "${#lines[@]}" -eq 3 ]
     run dolt config --global --unset test1 test2 test3
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Config successfully updated" ]]
+    [[ "$output" =~ "Config successfully updated" ]] || false
     run dolt config --list
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
@@ -248,15 +248,15 @@ teardown() {
     dolt config --list
     run dolt config --list
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "init.defaultbranch = master" ]]
+    [[ "$output" =~ "init.defaultbranch = master" ]] || false
 
     dolt init
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]]
+    [[ "$output" =~ "On branch master" ]] || false
     run dolt branch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "* master" ]]
+    [[ "$output" =~ "* master" ]] || false
 
     # cleanup
     dolt config --global --unset init.defaultBranch
@@ -269,10 +269,10 @@ teardown() {
     dolt init
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch main" ]]
+    [[ "$output" =~ "On branch main" ]] || false
     run dolt branch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "* main" ]]
+    [[ "$output" =~ "* main" ]] || false
 }
 
 @test "config: init accepts branch flag" {
@@ -282,8 +282,8 @@ teardown() {
     dolt init -b=vegan-btw
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch vegan-btw" ]]
+    [[ "$output" =~ "On branch vegan-btw" ]] || false
     run dolt branch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "* vegan-btw" ]]
+    [[ "$output" =~ "* vegan-btw" ]] || false
 }

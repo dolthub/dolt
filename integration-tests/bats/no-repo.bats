@@ -342,8 +342,8 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     HOME=/this/is/garbage
     run dolt status
     [ "$status" -eq 1 ]
-    [[ ! "$output" =~ "panic" ]]
-    [[ "$output" =~ "Failed to load the HOME directory" ]]
+    [[ ! "$output" =~ "panic" ]] || false
+    [[ "$output" =~ "Failed to load the HOME directory" ]] || false
 }
 
 @test "no-repo: dolt login exits when receiving SIGINT" {

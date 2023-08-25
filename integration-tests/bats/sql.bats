@@ -45,7 +45,7 @@ teardown() {
     # default user is root
     run dolt sql -q "select user from mysql.user"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "root" ]]
+    [[ "$output" =~ "root" ]] || false
 
     # create user
     run dolt sql -q "create user new_user@'localhost'"
@@ -1085,7 +1085,7 @@ SQL
 @test "sql: ambiguous column name" {
     run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where c1=0"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "ambiguous column name \"c1\", it's present in all these tables: one_pk, two_pk" ]] || false
+    [[ "$output" =~ "ambiguous column name \"c1\", it's present in all these tables: [two_pk one_pk]" ]] || false
 }
 
 @test "sql: select with and and or clauses" {
@@ -2328,7 +2328,7 @@ SQL
     [[ "$output" =~ "name,create_stmt,created_at,modified_at" ]] || false
     [[ "$output" =~ 'p1,CREATE PROCEDURE p1() SELECT 5*5' ]] || false
     [[ "$output" =~ 'p2,CREATE PROCEDURE p2() SELECT 6*6' ]] || false
-    
+
     run dolt sql -b -q "SET @@show_external_procedures = 0;SHOW PROCEDURE STATUS" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "Db,Name,Type,Definer,Modified,Created,Security_type,Comment,character_set_client,collation_connection,Database Collation" ]] || false
@@ -2859,5 +2859,34 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Database changed" ]] || false
     [[ "$output" =~ "role_edges" ]] || false
-    
+
+}
+
+@test "sql: prevent LOAD_FILE() from accessing files outside of working directory" {
+    echo "should not be able to read this" > ../dont_read.txt
+    echo "should be able to read this" > ./do_read.txt
+
+    run dolt sql -q "select load_file('../dont_read.txt')";
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "NULL" ]] || false
+    [[ "$output" != "should not be able to read this" ]] || false
+
+    run dolt sql -q "select load_file('./do_read.txt')";
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "should be able to read this" ]] || false
+}
+
+@test "sql: ignore an empty .dolt directory" {
+    mkdir empty_dir
+    cd empty_dir
+
+    mkdir .dolt
+    dolt sql -q "select 1"
+
+    # If there is a zombie lock file, sql should delete it.
+    echo "42:3306:aebf244e-0693-4c36-8b2d-6eb0dfa4fe2d" > .dolt/sql-server.lock}
+
+    dolt sql -q "select 1"
+
+    [[ ! -f .dolt/sql-server.lock ]] || false
 }

@@ -440,7 +440,7 @@ var ModifyColumnTypeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:            "alter table test modify column pk datetime",
+				Query:            "alter table test modify column pk datetime(6)",
 				SkipResultsCheck: true,
 			},
 			{

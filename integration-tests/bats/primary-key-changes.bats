@@ -666,7 +666,7 @@ alter table mydb.test add primary key(pk);
 SQL
     run dolt sql -q "show create table mydb.test"
     [ $status -eq 0 ]
-    [[ "$output" =~ "PRIMARY KEY" ]]
+    [[ "$output" =~ "PRIMARY KEY" ]] || false
 }
 
 @test "primary-key-changes: can add and drop primary keys on keyless db.table named tables" {
@@ -680,7 +680,7 @@ SQL
     dolt sql -q "ALTER TABLE mydb.test DROP PRIMARY KEY"
     run dolt sql -q "SHOW CREATE TABLE mydb.test"
     [ $status -eq 0 ]
-    [[ ! "$output" =~ "PRIMARY KEY" ]]
+    [[ ! "$output" =~ "PRIMARY KEY" ]] || false
 
     dolt sql -q "SHOW CREATE TABLE mydb.test" > output.txt
     run grep 'NOT NULL' output.txt

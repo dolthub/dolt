@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
@@ -92,8 +91,8 @@ func TestSingleQuery(t *testing.T) {
 		enginetest.RunQuery(t, engine, harness, q)
 	}
 
-	engine.Analyzer.Debug = true
-	engine.Analyzer.Verbose = true
+	engine.EngineAnalyzer().Debug = true
+	engine.EngineAnalyzer().Verbose = true
 
 	var test queries.QueryTest
 	test = queries.QueryTest{
@@ -120,34 +119,71 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "add column auto_increment, non primary key",
+			Name: "datetime precision",
 			SetUpScript: []string{
-				"CREATE TABLE t1 (i bigint primary key, s varchar(20))",
-				"INSERT INTO t1 VALUES (1, 'a'), (2, 'b'), (3, 'c')",
+				"CREATE TABLE t1 (pk int primary key, d datetime)",
+				"CREATE TABLE t2 (pk int primary key, d datetime(3))",
+				"CREATE TABLE t3 (pk int primary key, d datetime(6))",
 			},
 			Assertions: []queries.ScriptTestAssertion{
-				{
-					Query:    "alter table t1 add column j int auto_increment unique",
-					Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
-				},
 				{
 					Query: "show create table t1",
 					Expected: []sql.Row{{"t1",
 						"CREATE TABLE `t1` (\n" +
-							"  `i` bigint NOT NULL,\n" +
-							"  `s` varchar(20),\n" +
-							"  `j` int AUTO_INCREMENT,\n" +
-							"  PRIMARY KEY (`i`),\n" +
-							"  UNIQUE KEY `j` (`j`)\n" +
+							"  `pk` int NOT NULL,\n" +
+							"  `d` datetime,\n" +
+							"  PRIMARY KEY (`pk`)\n" +
 							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 				},
 				{
-					Query: "select * from t1 order by i",
-					Expected: []sql.Row{
-						{1, "a", 1},
-						{2, "b", 2},
-						{3, "c", 3},
-					},
+					Query:    "insert into t1 values (1, '2020-01-01 00:00:00.123456')",
+					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+				},
+				{
+					Query:    "select * from t1 order by pk",
+					Expected: []sql.Row{{1, queries.MustParseTime(time.DateTime, "2020-01-01 00:00:00")}},
+				},
+				{
+					Query: "show create table t2",
+					Expected: []sql.Row{{"t2",
+						"CREATE TABLE `t2` (\n" +
+							"  `pk` int NOT NULL,\n" +
+							"  `d` datetime(3),\n" +
+							"  PRIMARY KEY (`pk`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+				},
+				{
+					Query:    "insert into t2 values (1, '2020-01-01 00:00:00.123456')",
+					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+				},
+				{
+					Query:    "select * from t2 order by pk",
+					Expected: []sql.Row{{1, queries.MustParseTime(time.RFC3339Nano, "2020-01-01T00:00:00.123000000Z")}},
+				},
+				{
+					Query: "show create table t3",
+					Expected: []sql.Row{{"t3",
+						"CREATE TABLE `t3` (\n" +
+							"  `pk` int NOT NULL,\n" +
+							"  `d` datetime(6),\n" +
+							"  PRIMARY KEY (`pk`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+				},
+				{
+					Query:    "insert into t3 values (1, '2020-01-01 00:00:00.123456')",
+					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+				},
+				{
+					Query:    "select * from t3 order by pk",
+					Expected: []sql.Row{{1, queries.MustParseTime(time.RFC3339Nano, "2020-01-01T00:00:00.123456000Z")}},
+				},
+				{
+					Query:       "create table t4 (pk int primary key, d datetime(-1))",
+					ExpectedErr: sql.ErrSyntaxError,
+				},
+				{
+					Query:          "create table t4 (pk int primary key, d datetime(7))",
+					ExpectedErrStr: "DATETIME supports precision from 0 to 6",
 				},
 			},
 		},
@@ -158,7 +194,7 @@ func TestSingleScript(t *testing.T) {
 	defer cleanup()
 
 	harness := newDoltHarness(t)
-	harness.Setup(setup.MydbData, setup.Parent_childData)
+	harness.Setup(setup.MydbData)
 	for _, script := range scripts {
 		sql.RunWithNowFunc(tcc.Now, func() error {
 			enginetest.TestScript(t, harness, script)
@@ -311,6 +347,14 @@ func TestVersionedQueries(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestVersionedQueries(t, h)
+}
+
+func TestAnsiQuotesSqlMode(t *testing.T) {
+	enginetest.TestAnsiQuotesSqlMode(t, newDoltHarness(t))
+}
+
+func TestAnsiQuotesSqlModePrepared(t *testing.T) {
+	enginetest.TestAnsiQuotesSqlModePrepared(t, newDoltHarness(t))
 }
 
 // Tests of choosing the correct execution plan independent of result correctness. Mostly useful for confirming that
@@ -568,11 +612,6 @@ func TestSpatialIndexPlans(t *testing.T) {
 	enginetest.TestSpatialIndexPlans(t, newDoltHarness(t))
 }
 
-func TestSpatialIndexPlansPrepared(t *testing.T) {
-	skipOldFormat(t)
-	enginetest.TestSpatialIndexPlansPrepared(t, newDoltHarness(t))
-}
-
 func TestTruncate(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
@@ -623,8 +662,8 @@ func TestDoltUserPrivileges(t *testing.T) {
 				Address: "localhost",
 			})
 
-			engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
-			engine.Analyzer.Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
+			engine.EngineAnalyzer().Catalog.MySQLDb.AddRootAccount()
+			engine.EngineAnalyzer().Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
 
 			for _, statement := range script.SetUpScript {
 				if sh, ok := interface{}(harness).(enginetest.SkippingHarness); ok {
@@ -682,15 +721,6 @@ func TestJoinOps(t *testing.T) {
 	enginetest.TestJoinOps(t, h)
 }
 
-func TestJoinPlanningPrepared(t *testing.T) {
-	if types.IsFormat_LD(types.Format_Default) {
-		t.Skip("DOLT_LD keyless indexes are not sorted")
-	}
-	h := newDoltHarness(t).WithParallelism(1)
-	defer h.Close()
-	enginetest.TestJoinPlanningPrepared(t, h)
-}
-
 func TestJoinPlanning(t *testing.T) {
 	if types.IsFormat_LD(types.Format_Default) {
 		t.Skip("DOLT_LD keyless indexes are not sorted")
@@ -698,16 +728,6 @@ func TestJoinPlanning(t *testing.T) {
 	h := newDoltHarness(t).WithParallelism(1)
 	defer h.Close()
 	enginetest.TestJoinPlanning(t, h)
-}
-
-func TestJoinOpsPrepared(t *testing.T) {
-	if types.IsFormat_LD(types.Format_Default) {
-		t.Skip("DOLT_LD keyless indexes are not sorted")
-	}
-
-	h := newDoltHarness(t)
-	defer h.Close()
-	enginetest.TestJoinOpsPrepared(t, h)
 }
 
 func TestJoinQueries(t *testing.T) {
@@ -1004,15 +1024,8 @@ func TestFulltextIndexes(t *testing.T) {
 	if !types.IsFormat_DOLT(types.Format_Default) {
 		t.Skip("FULLTEXT is not supported on the old format")
 	}
-	if runtime.GOOS == "windows" {
-		t.Skip("For some reason, this is flaky only on Windows CI. Investigation is underway.")
-	}
-	for i := range queries.FulltextTests {
-		//TODO: Dolt drops indexes automatically, which differs from the expectation of GMS
-		if queries.FulltextTests[i].Name == "ALTER TABLE DROP COLUMN used by index" {
-			queries.FulltextTests = append(queries.FulltextTests[:i], queries.FulltextTests[i+1:]...)
-			break
-		}
+	if runtime.GOOS == "windows" && os.Getenv("CI") != "" {
+		t.Skip("For some reason, this is flaky only on Windows CI.")
 	}
 	h := newDoltHarness(t)
 	defer h.Close()
@@ -1052,7 +1065,7 @@ func TestDropCheckConstraints(t *testing.T) {
 func TestReadOnly(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestReadOnly(t, h)
+	enginetest.TestReadOnly(t, h, false /* testStoredProcedures */)
 }
 
 func TestViews(t *testing.T) {
@@ -1556,6 +1569,7 @@ func TestDoltMerge(t *testing.T) {
 		func() {
 			h := newDoltHarness(t).WithParallelism(1)
 			defer h.Close()
+			h.Setup(setup.MydbData)
 			enginetest.TestScript(t, h, script)
 		}()
 	}
@@ -1653,9 +1667,6 @@ func TestKeylessDoltMergeCVsAndConflicts(t *testing.T) {
 
 // eventually this will be part of TestDoltMerge
 func TestDoltMergeArtifacts(t *testing.T) {
-	if !types.IsFormat_DOLT(types.Format_Default) {
-		t.Skip()
-	}
 	for _, script := range MergeArtifactsScripts {
 		func() {
 			h := newDoltHarness(t)
@@ -2046,6 +2057,7 @@ func TestLogTableFunction(t *testing.T) {
 	harness.Setup(setup.MydbData)
 	for _, test := range LogTableFunctionScriptTests {
 		harness.engine = nil
+		harness.skipSetupCommit = true
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScript(t, harness, test)
 		})
@@ -2058,6 +2070,7 @@ func TestLogTableFunctionPrepared(t *testing.T) {
 	harness.Setup(setup.MydbData)
 	for _, test := range LogTableFunctionScriptTests {
 		harness.engine = nil
+		harness.skipSetupCommit = true
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScriptPrepared(t, harness, test)
 		})
@@ -2164,7 +2177,19 @@ func TestSchemaDiffSystemTablePrepared(t *testing.T) {
 	}
 }
 
-func mustNewEngine(t *testing.T, h enginetest.Harness) *gms.Engine {
+func TestQueryDiff(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	harness.Setup(setup.MydbData)
+	for _, test := range QueryDiffTableScriptTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScript(t, harness, test)
+		})
+	}
+}
+
+func mustNewEngine(t *testing.T, h enginetest.Harness) enginetest.QueryEngine {
 	e, err := h.NewEngine(t)
 	if err != nil {
 		require.NoError(t, err)
@@ -2190,7 +2215,7 @@ func TestSystemTableIndexes(t *testing.T) {
 		harness.SkipSetupCommit()
 		e := mustNewEngine(t, harness)
 		defer e.Close()
-		e.Analyzer.Coster = memo.NewMergeBiasedCoster()
+		e.EngineAnalyzer().Coster = memo.NewMergeBiasedCoster()
 
 		ctx := enginetest.NewContext(harness)
 		for _, q := range stt.setup {
@@ -2198,7 +2223,7 @@ func TestSystemTableIndexes(t *testing.T) {
 		}
 
 		for i, c := range []string{"inner", "lookup", "hash", "merge"} {
-			e.Analyzer.Coster = biasedCosters[i]
+			e.EngineAnalyzer().Coster = biasedCosters[i]
 			for _, tt := range stt.queries {
 				t.Run(fmt.Sprintf("%s(%s): %s", stt.name, c, tt.query), func(t *testing.T) {
 					if tt.skip {
@@ -2244,6 +2269,28 @@ func TestSystemTableIndexesPrepared(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestSystemTableFunctionIndexes(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range SystemTableFunctionIndexTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScript(t, harness, test)
+		})
+	}
+}
+
+func TestSystemTableFunctionIndexesPrepared(t *testing.T) {
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	for _, test := range SystemTableFunctionIndexTests {
+		harness.engine = nil
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
+		})
 	}
 }
 
@@ -2334,12 +2381,6 @@ func TestQueriesPrepared(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestQueriesPrepared(t, h)
-}
-
-func TestPreparedStaticIndexQuery(t *testing.T) {
-	h := newDoltHarness(t)
-	defer h.Close()
-	enginetest.TestPreparedStaticIndexQuery(t, h)
 }
 
 func TestStatistics(t *testing.T) {
@@ -2754,45 +2795,57 @@ func TestDoltStorageFormatPrepared(t *testing.T) {
 
 func TestThreeWayMergeWithSchemaChangeScripts(t *testing.T) {
 	skipOldFormat(t)
-	t.Run("right to left merges", func(t *testing.T) {
-		for _, script := range ThreeWayMergeWithSchemaChangeTestScripts {
-			func() {
-				h := newDoltHarness(t)
-				defer h.Close()
-				enginetest.TestScript(t, h, convertMergeScriptTest(script, false))
-			}()
-		}
-	})
-	t.Run("left to right merges", func(t *testing.T) {
-		for _, script := range ThreeWayMergeWithSchemaChangeTestScripts {
-			func() {
-				h := newDoltHarness(t)
-				defer h.Close()
-				enginetest.TestScript(t, h, convertMergeScriptTest(script, true))
-			}()
-		}
-	})
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsBasicCases, "basic cases", false)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsForDataConflicts, "data conflicts", false)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsCollations, "collation changes", false)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsConstraints, "constraint changes", false)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsTypeChanges, "type changes", false)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsSchemaConflicts, "schema conflicts", false)
 }
 
 func TestThreeWayMergeWithSchemaChangeScriptsPrepared(t *testing.T) {
 	skipOldFormat(t)
-	t.Run("right to left merges", func(t *testing.T) {
-		for _, script := range ThreeWayMergeWithSchemaChangeTestScripts {
-			func() {
-				h := newDoltHarness(t)
-				defer h.Close()
-				enginetest.TestScript(t, h, convertMergeScriptTest(script, false))
-			}()
-		}
-	})
-	t.Run("left to right merges", func(t *testing.T) {
-		for _, script := range ThreeWayMergeWithSchemaChangeTestScripts {
-			func() {
-				h := newDoltHarness(t)
-				defer h.Close()
-				enginetest.TestScript(t, h, convertMergeScriptTest(script, true))
-			}()
-		}
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsBasicCases, "basic cases", true)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsForDataConflicts, "data conflicts", true)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsCollations, "collation changes", true)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsConstraints, "constraint changes", true)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsTypeChanges, "type changes", true)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsSchemaConflicts, "schema conflicts", true)
+}
+
+// runMergeScriptTestsInBothDirections creates a new test run, named |name|, and runs the specified merge |tests|
+// in both directions (right to left merge, and left to right merge). If
+// |runAsPrepared| is true then the test scripts will be run using the prepared
+// statement test code.
+func runMergeScriptTestsInBothDirections(t *testing.T, tests []MergeScriptTest, name string, runAsPrepared bool) {
+	t.Run(name, func(t *testing.T) {
+		t.Run("right to left merges", func(t *testing.T) {
+			for _, script := range tests {
+				// run in a func() so we can cleanly defer closing the harness
+				func() {
+					h := newDoltHarness(t)
+					defer h.Close()
+					if runAsPrepared {
+						enginetest.TestScriptPrepared(t, h, convertMergeScriptTest(script, false))
+					} else {
+						enginetest.TestScript(t, h, convertMergeScriptTest(script, false))
+					}
+				}()
+			}
+		})
+		t.Run("left to right merges", func(t *testing.T) {
+			for _, script := range tests {
+				func() {
+					h := newDoltHarness(t)
+					defer h.Close()
+					if runAsPrepared {
+						enginetest.TestScriptPrepared(t, h, convertMergeScriptTest(script, true))
+					} else {
+						enginetest.TestScript(t, h, convertMergeScriptTest(script, true))
+					}
+				}()
+			}
+		})
 	})
 }
 

@@ -21,8 +21,8 @@ import (
 	"sort"
 	"strings"
 
-	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	ast "github.com/dolthub/vitess/go/vt/sqlparser"
 	errorkinds "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -1154,7 +1154,7 @@ func mergeChecks(ctx context.Context, ourChks, theirChks, ancChks schema.CheckCo
 			CheckExpression: chk.Expression(),
 			Enforced:        chk.Enforced(),
 		}
-		colNames, err := sqle.ColumnsFromCheckDefinition(sql.NewContext(ctx), &chkDef)
+		colNames, err := ColumnsFromCheckDefinition(sql.NewContext(ctx), &chkDef)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1176,7 +1176,7 @@ func mergeChecks(ctx context.Context, ourChks, theirChks, ancChks schema.CheckCo
 			CheckExpression: ourChk.Expression(),
 			Enforced:        ourChk.Enforced(),
 		}
-		colNames, err := sqle.ColumnsFromCheckDefinition(sql.NewContext(ctx), &chkDef)
+		colNames, err := ColumnsFromCheckDefinition(sql.NewContext(ctx), &chkDef)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1267,7 +1267,7 @@ func isCheckReferenced(sch schema.Schema, chk schema.Check) (bool, error) {
 		CheckExpression: chk.Expression(),
 		Enforced:        chk.Enforced(),
 	}
-	colNames, err := sqle.ColumnsFromCheckDefinition(sql.NewEmptyContext(), &chkDef)
+	colNames, err := ColumnsFromCheckDefinition(sql.NewEmptyContext(), &chkDef)
 	if err != nil {
 		return false, err
 	}
@@ -1280,4 +1280,40 @@ func isCheckReferenced(sch schema.Schema, chk schema.Check) (bool, error) {
 	}
 
 	return true, nil
+}
+
+// ColumnsFromCheckDefinition retrieves the Column Names referenced by a CheckDefinition
+func ColumnsFromCheckDefinition(ctx *sql.Context, def *sql.CheckDefinition) ([]string, error) {
+	// Evaluate the CheckDefinition to get evaluated Expression
+	parseStr := fmt.Sprintf("select %s", def.CheckExpression)
+	parsed, err := ast.Parse(parseStr)
+	if err != nil {
+		return nil, err
+	}
+
+	selectStmt, ok := parsed.(*ast.Select)
+	if !ok || len(selectStmt.SelectExprs) != 1 {
+		err := sql.ErrInvalidCheckConstraint.New(def.CheckExpression)
+		return nil, err
+	}
+
+	expr := selectStmt.SelectExprs[0]
+	ae, ok := expr.(*ast.AliasedExpr)
+	if !ok {
+		err := sql.ErrInvalidCheckConstraint.New(def.CheckExpression)
+		return nil, err
+	}
+
+	// Look for any column references in the evaluated Expression
+	var cols []string
+	ast.Walk(func(n ast.SQLNode) (kontinue bool, err error) {
+		switch n := n.(type) {
+		case *ast.ColName:
+			colName := n.Name.Lowered()
+			cols = append(cols, colName)
+		default:
+		}
+		return true, nil
+	}, ae.Expr)
+	return cols, nil
 }

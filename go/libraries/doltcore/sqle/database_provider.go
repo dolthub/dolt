@@ -407,7 +407,7 @@ func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name stri
 	// be the first db creation if sql-server was started from a bare directory.
 	_, lckDeets := sqlserver.GetRunningServer()
 	if lckDeets != nil {
-		err = newEnv.Lock(*lckDeets)
+		err = newEnv.Lock(lckDeets)
 		if err != nil {
 			ctx.GetLogger().Warnf("Failed to lock newly created database: %s", err.Error())
 		}
@@ -1196,6 +1196,9 @@ func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.Ta
 		return dtf, nil
 	case "dolt_schema_diff":
 		dtf := &SchemaDiffTableFunction{}
+		return dtf, nil
+	case "dolt_query_diff":
+		dtf := &QueryDiffTableFunction{}
 		return dtf, nil
 	}
 

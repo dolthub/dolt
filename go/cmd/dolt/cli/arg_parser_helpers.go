@@ -169,10 +169,6 @@ func CreateResetArgParser() *argparser.ArgParser {
 
 func CreateRemoteArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("remote")
-	ap.SupportsString(dbfactory.AWSRegionParam, "", "region", "")
-	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, dbfactory.AWSCredTypes))
-	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file")
-	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use")
 	return ap
 }
 
@@ -294,6 +290,7 @@ func CreateLogArgParser() *argparser.ArgParser {
 	ap.SupportsString(DecorateFlag, "", "decorate_fmt", "Shows refs next to commits. Valid options are short, full, no, and auto")
 	ap.SupportsFlag(OneLineFlag, "", "Shows logs in a compact format.")
 	ap.SupportsStringList(NotFlag, "", "revision", "Excludes commits from revision.")
+	ap.SupportsStringList(TablesFlag, "t", "table", "Restricts the log to commits that modified the specified tables.")
 	return ap
 }
 
@@ -325,6 +322,7 @@ func CreateGlobalArgParser(name string) *argparser.ArgParser {
 	ap.SupportsString("privilege-file", "", "privilege-file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will only be created if there is a change to privileges.")
 	ap.SupportsString("branch-control-file", "", "branch-control-file", "Path to a file to load and store branch control permissions. Defaults to `$doltcfg-dir/branch_control.db`. Will only be created if there is a change to branch control permissions.")
 	ap.SupportsString("use-db", "", "use-db", "The name of the database to use when executing SQL queries. Defaults the database of the root directory, if it exists, and the first alphabetically if not.")
+	ap.SupportsString("branch", "", "branch", "Name of the branch to be selected")
 	return ap
 }
 

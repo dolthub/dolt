@@ -546,10 +546,10 @@ pk1,pk2,v1
 DELIM
     run dolt table import -c --pk=pk test null-pk-1.csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "pk" ]]
+    [[ "$output" =~ "pk" ]] || false
     run dolt table import -c --pk=pk1,pk2 test null-pk-2.csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "pk2" ]]
+    [[ "$output" =~ "pk2" ]] || false
 }
 
 @test "import-create-tables: table import -c infers types from data" {
@@ -561,15 +561,15 @@ DELIM
     [ "$status" -eq 0 ]
     run dolt schema show test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "CREATE TABLE \`test\`" ]]
-    [[ "$output" =~ "\`pk\` int" ]]
-    [[ "$output" =~ "\`str\` varchar(16383)" ]]
-    [[ "$output" =~ "\`int\` int" ]]
-    [[ "$output" =~ "\`bool\` tinyint" ]]
-    [[ "$output" =~ "\`float\` float" ]]
-    [[ "$output" =~ "\`date\` date" ]]
-    [[ "$output" =~ "\`time\` time" ]]
-    [[ "$output" =~ "\`datetime\` datetime" ]]
+    [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
+    [[ "$output" =~ "\`pk\` int" ]] || false
+    [[ "$output" =~ "\`str\` varchar(16383)" ]] || false
+    [[ "$output" =~ "\`int\` int" ]] || false
+    [[ "$output" =~ "\`bool\` tinyint" ]] || false
+    [[ "$output" =~ "\`float\` float" ]] || false
+    [[ "$output" =~ "\`date\` date" ]] || false
+    [[ "$output" =~ "\`time\` time" ]] || false
+    [[ "$output" =~ "\`datetime\` datetime" ]] || false
 }
 
 @test "import-create-tables: table import -c collects garbage" {

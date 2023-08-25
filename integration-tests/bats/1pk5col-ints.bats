@@ -41,7 +41,7 @@ teardown() {
     
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Untracked tables" ]]
+    [[ "$output" =~ "Untracked tables" ]] || false
     [[ "$output" =~ new[[:space:]]table:[[:space:]]+test ]] || false
 }
 
@@ -51,21 +51,21 @@ teardown() {
     [ "$output" = "" ]
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Changes to be committed" ]]
+    [[ "$output" =~ "Changes to be committed" ]] || false
     [[ "$output" =~ "new table:" ]] || false
     run dolt reset test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Untracked tables" ]]
+    [[ "$output" =~ "Untracked tables" ]] || false
     [[ "$output" =~ "new table:" ]] || false
     run dolt add .
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Changes to be committed" ]]
+    [[ "$output" =~ "Changes to be committed" ]] || false
     [[ "$output" =~ "new table:" ]] || false
     run dolt commit -m "test commit"
     [ "$status" -eq 0 ]
@@ -407,7 +407,7 @@ teardown() {
     dolt checkout main
     run dolt merge test-branch --no-commit
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "CONFLICT (content)" ]]
+    [[ "$output" =~ "CONFLICT (content)" ]] || false
     run dolt conflicts cat test
     [ "$status" -eq 0 ]
     [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+ours[[:space:]] ]] || false
@@ -451,7 +451,7 @@ teardown() {
     dolt checkout main
     run dolt merge test-branch --no-commit
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "CONFLICT (content)" ]]
+    [[ "$output" =~ "CONFLICT (content)" ]] || false
     run dolt conflicts cat test
     [ "$status" -eq 0 ]
     [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+ours[[:space:]] ]] || false

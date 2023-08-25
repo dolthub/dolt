@@ -49,7 +49,7 @@ SQL
 
 @test "doltpy: hashof returns expected header names" {
     run dolt sql -r csv -q "select HASHOF('HEAD') as hash"
-    [[ $output =~ "hash" ]]
+    [[ $output =~ "hash" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
 }
 

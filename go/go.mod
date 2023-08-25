@@ -45,8 +45,8 @@ require (
 	golang.org/x/sync v0.2.0
 	golang.org/x/sys v0.10.0
 	google.golang.org/api v0.126.0
-	google.golang.org/grpc v1.55.0
-	google.golang.org/protobuf v1.30.0
+	google.golang.org/grpc v1.57.0
+	google.golang.org/protobuf v1.31.0
 	gopkg.in/square/go-jose.v2 v2.5.1
 	gopkg.in/src-d/go-errors.v1 v1.0.0
 	gopkg.in/yaml.v2 v2.4.0
@@ -59,7 +59,7 @@ require (
 	github.com/cespare/xxhash v1.1.0
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.16.1-0.20230808175755-1ac374e90cbe
+	github.com/dolthub/go-mysql-server v0.17.1-0.20230825172157-b2303e01b41b
 	github.com/dolthub/swiss v0.1.0
 	github.com/goccy/go-json v0.10.2
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
@@ -84,16 +84,17 @@ require (
 	go.opentelemetry.io/otel/exporters/jaeger v1.7.0
 	go.opentelemetry.io/otel/sdk v1.7.0
 	go.opentelemetry.io/otel/trace v1.7.0
+	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
 	golang.org/x/text v0.11.0
 	gonum.org/v1/plot v0.11.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
-	cloud.google.com/go v0.110.2 // indirect
-	cloud.google.com/go/compute v1.19.3 // indirect
+	cloud.google.com/go v0.110.7 // indirect
+	cloud.google.com/go/compute v1.23.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
-	cloud.google.com/go/iam v1.1.0 // indirect
+	cloud.google.com/go/iam v1.1.1 // indirect
 	git.sr.ht/~sbinet/gg v0.3.1 // indirect
 	github.com/ajstarks/svgo v0.0.0-20211024235047-1546f124cd8b // indirect
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
@@ -151,9 +152,9 @@ require (
 	golang.org/x/tools v0.6.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto v0.0.0-20230530153820-e85fd2cbaebc // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20230530153820-e85fd2cbaebc // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20230530153820-e85fd2cbaebc // indirect
+	google.golang.org/genproto v0.0.0-20230807174057-1744710a1577 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20230803162519-f966b187b2e5 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20230803162519-f966b187b2e5 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 )
 

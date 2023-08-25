@@ -113,6 +113,10 @@ func (ds *SchemaDiffTableFunction) Resolved() bool {
 	return ds.commitsResolved()
 }
 
+func (ds *SchemaDiffTableFunction) IsReadOnly() bool {
+	return true
+}
+
 // String implements the Stringer interface
 func (ds *SchemaDiffTableFunction) String() string {
 	if ds.dotCommitExpr != nil {

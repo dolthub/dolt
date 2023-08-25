@@ -416,6 +416,10 @@ func calculateMergeStats(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats 
 	var allUnmodified = true
 	// get table operations
 	for _, summary := range diffSummaries {
+		// We want to ignore all statistics for Full-Text tables
+		if doltdb.IsFullTextTable(summary.TableName) {
+			continue
+		}
 		if summary.DiffType == "added" {
 			allUnmodified = false
 			mergeStats[summary.TableName] = &merge.MergeStats{

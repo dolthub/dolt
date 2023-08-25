@@ -306,3 +306,74 @@ tests:
       result:
         columns: ["@@GLOBAL.dolt_log_level"]
         rows: [["info"]]
+- name: system variables in config.yaml can be read in show variables
+  repos:
+  - name: repo1
+    with_files:
+      - name: "config.yaml"
+        contents: |
+          system_variables:
+            secure_file_priv: "/dev/null"
+            max_connections: 1000
+    server:
+      args: ["-l", "trace", "--config", "config.yaml"]
+  connections:
+  - on: repo1
+    queries:
+    - query: "select @@GLOBAL.secure_file_priv, @@GLOBAL.max_connections"
+      result:
+        columns: ["@@GLOBAL.secure_file_priv", "@@GLOBAL.max_connections"]
+        rows: [["/dev/null", "1000"]]
+- name: secure_file_priv set to /dev/null prevents loading files
+  repos:
+  - name: repo1
+    with_files:
+      - name: "config.yaml"
+        contents: |
+          system_variables:
+            secure_file_priv: "/dev/null"
+    server:
+      args: ["-l", "trace", "--config", "config.yaml"]
+  connections:
+  - on: repo1
+    queries:
+    - query: "select LOAD_FILE('config.yaml')"
+      result:
+        columns: ["LOAD_FILE('config.yaml')"]
+        rows: [["NULL"]]
+    - query: "select LOAD_FILE('/etc/passwd')"
+      result:
+        columns: ["LOAD_FILE('/etc/passwd')"]
+        rows: [["NULL"]]
+    - exec: "create table loaded (contents text)"
+    - exec: "load data infile \"config.yaml\" into table loaded"
+      error_match: "LOAD DATA is unable to open file: open /dev/null/config.yaml"
+    - exec: "load data infile \"/config.yaml\" into table loaded"
+      error_match: "LOAD DATA is unable to open file: open /dev/null/config.yaml"
+- name: secure_file_priv set to empty strings allows loading files
+  repos:
+  - name: repo1
+    with_files:
+      - name: "config.yaml"
+        contents: |
+          system_variables:
+            secure_file_priv: ""
+    server:
+      args: ["-l", "trace", "--config", "config.yaml"]
+  connections:
+  - on: repo1
+    queries:
+    - query: "select LOAD_FILE('config.yaml')"
+      result:
+        columns: ["LOAD_FILE('config.yaml')"]
+        rows: [["system_variables:\n  secure_file_priv: \"\"\n"]]
+    - query: "select LOAD_FILE('./.dolt/../config.yaml')"
+      result:
+        columns: ["LOAD_FILE('./.dolt/../config.yaml')"]
+        rows: [["system_variables:\n  secure_file_priv: \"\"\n"]]
+    - exec: "create table loaded (contents text)"
+    - exec: "load data infile \"config.yaml\" into table loaded lines terminated by \"\\0\""
+    - query: "select contents from loaded"
+      result:
+        columns: ["contents"]
+        rows: [["system_variables:\n  secure_file_priv: \"\"\n"]]

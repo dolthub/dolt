@@ -109,6 +109,14 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 			}
 			for _, index := range sch.Indexes().AllIndexes() {
 				output = append(output, fmt.Sprintf("    %s(%s)", index.Name(), strings.Join(index.ColumnNames(), ", ")))
+				if index.IsFullText() {
+					props := index.FullTextProperties()
+					output = append(output, fmt.Sprintf("        %s", props.ConfigTable))
+					output = append(output, fmt.Sprintf("        %s", props.PositionTable))
+					output = append(output, fmt.Sprintf("        %s", props.DocCountTable))
+					output = append(output, fmt.Sprintf("        %s", props.GlobalCountTable))
+					output = append(output, fmt.Sprintf("        %s", props.RowCountTable))
+				}
 			}
 		}
 	}

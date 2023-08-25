@@ -199,28 +199,35 @@ func DoltToFromCommitIndex(tbl string) sql.Index {
 		constrainedToLookupExpression: false,
 	}
 }
+
+// MockIndex returns a sql.Index that is not backed by an actual datastore. It's useful for system tables and
+// system table functions provide indexes but produce their rows at execution time based on the provided `IndexLookup`
+func MockIndex(columnName, tableName string, columnType types.NomsKind, unique bool) (index *doltIndex) {
+	return &doltIndex{
+		id:      columnName,
+		tblName: tableName,
+		dbName:  "",
+		columns: []schema.Column{
+			schema.NewColumn(columnName, 0, columnType, false),
+		},
+		indexSch:                      nil,
+		tableSch:                      nil,
+		unique:                        unique,
+		comment:                       "",
+		vrw:                           nil,
+		ns:                            nil,
+		order:                         sql.IndexOrderNone,
+		constrainedToLookupExpression: false,
+	}
+}
+
 func DoltCommitIndexes(tab string, db *doltdb.DoltDB, unique bool) (indexes []sql.Index, err error) {
 	if !types.IsFormat_DOLT(db.Format()) {
 		return nil, nil
 	}
 
 	return []sql.Index{
-		NewCommitIndex(&doltIndex{
-			id:      CommitHashIndexId,
-			tblName: tab,
-			dbName:  "",
-			columns: []schema.Column{
-				schema.NewColumn(CommitHashIndexId, 0, types.StringKind, false),
-			},
-			indexSch:                      nil,
-			tableSch:                      nil,
-			unique:                        unique,
-			comment:                       "",
-			vrw:                           db.ValueReadWriter(),
-			ns:                            db.NodeStore(),
-			order:                         sql.IndexOrderNone,
-			constrainedToLookupExpression: false,
-		}),
+		NewCommitIndex(MockIndex(CommitHashIndexId, tab, types.StringKind, unique)),
 	}, nil
 }
 

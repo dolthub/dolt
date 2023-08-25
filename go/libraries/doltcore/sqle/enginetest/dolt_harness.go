@@ -162,7 +162,7 @@ func commitScripts(dbs []string) []setup.SetupScript {
 
 // NewEngine creates a new *gms.Engine or calls reset and clear scripts on the existing
 // engine for reuse.
-func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
+func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	initializeEngine := d.engine == nil
 	if initializeEngine {
 		d.branchControl = branch_control.CreateDefaultController()
@@ -278,6 +278,7 @@ func (d *DoltHarness) newSessionWithClient(client sql.Client) *dsess.DoltSession
 	pro := d.session.Provider()
 
 	dSession, err := dsess.NewDoltSession(sql.NewBaseSessionWithClientServer("address", client, 1), pro.(dsess.DoltDatabaseProvider), localConfig, d.branchControl)
+	dSession.SetCurrentDatabase("mydb")
 	require.NoError(d.t, err)
 	return dSession
 }
@@ -339,7 +340,7 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	return dbs
 }
 
-func (d *DoltHarness) NewReadOnlyEngine(provider sql.DatabaseProvider) (*gms.Engine, error) {
+func (d *DoltHarness) NewReadOnlyEngine(provider sql.DatabaseProvider) (enginetest.QueryEngine, error) {
 	ddp, ok := provider.(sqle.DoltDatabaseProvider)
 	if !ok {
 		return nil, fmt.Errorf("expected a DoltDatabaseProvider")

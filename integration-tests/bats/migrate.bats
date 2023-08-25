@@ -323,11 +323,11 @@ SQL
     dolt migrate
     run dolt sql -r csv -q "select * from t order by col1 asc;"
     [ $status -eq 0 ]
-    [[ $output =~ "col1,col2,col3" ]]
-    [[ $output =~ "1,2,a" ]]
-    [[ $output =~ "2,3,b" ]]
-    [[ $output =~ "3,4,a" ]]
-    [[ $output =~ "5,6,b" ]]
+    [[ $output =~ "col1,col2,col3" ]] || false
+    [[ $output =~ "1,2,a" ]] || false
+    [[ $output =~ "2,3,b" ]] || false
+    [[ $output =~ "3,4,a" ]] || false
+    [[ $output =~ "5,6,b" ]] || false
 }
 
 @test "migrate: indexes, collation, and checks should be preserved" {

@@ -67,13 +67,13 @@ merge_with_conflicts() {
     [ $status -eq 0 ]
 
     run dolt status
-    [[ "$output" =~ "nothing to commit, working tree clean" ]]
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
     run dolt merge --abort
-    [[ "$output" =~ "fatal: There is no merge to abort" ]]
+    [[ "$output" =~ "fatal: There is no merge to abort" ]] || false
 
     run dolt sql -q "SELECT * from dolt_merge_status;"
-    [[ "$output" =~ "false" ]]
+    [[ "$output" =~ "false" ]] || false
 }
 
 @test "reset: dolt reset --hard should clear a conflicted merge state" {
@@ -89,13 +89,13 @@ merge_with_conflicts() {
     [ $status -eq 0 ]
 
     run dolt status
-    [[ "$output" =~ "nothing to commit, working tree clean" ]]
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
     run dolt merge --abort
-    [[ "$output" =~ "fatal: There is no merge to abort" ]]
+    [[ "$output" =~ "fatal: There is no merge to abort" ]] || false
 
     run dolt sql -q "SELECT * from dolt_merge_status;"
-    [[ "$output" =~ "false" ]]
+    [[ "$output" =~ "false" ]] || false
 }
 
 @test "reset: dolt reset head works" {

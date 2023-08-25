@@ -378,10 +378,10 @@ var systemTableUpdateTests = []UpdateTest{
 	{
 		Name: "update dolt_schemas",
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, schemaTableSchema,
-			`INSERT INTO dolt_schemas VALUES ('view', 'name', 'create view name as select 2+2 from dual', NULL)`),
+			`INSERT INTO dolt_schemas VALUES ('view', 'name', 'create view name as select 2+2 from dual', NULL, NULL)`),
 		UpdateQuery:    "update dolt_schemas set type = 'not a view'",
 		SelectQuery:    "select * from dolt_schemas",
-		ExpectedRows:   []sql.Row{{"not a view", "name", "create view name as select 2+2 from dual", nil}},
+		ExpectedRows:   []sql.Row{{"not a view", "name", "create view name as select 2+2 from dual", nil, nil}},
 		ExpectedSchema: CompressSchema(schemaTableSchema),
 	},
 }

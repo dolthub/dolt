@@ -254,8 +254,9 @@ const (
 	// SchemasTablesExtraCol The name of the column that stores extra information about a schema element in the
 	// dolt_schemas table
 	SchemasTablesExtraCol = "extra"
-	//
-	SchemasTablesIndexName = "fragment_name"
+	// SchemasTablesSqlModeCol is the name of the column that stores the SQL_MODE string used when this fragment
+	// was originally defined. Mode settings, such as ANSI_QUOTES, are needed to correctly parse the fragment.
+	SchemasTablesSqlModeCol = "sql_mode"
 )
 
 const (
@@ -330,4 +331,7 @@ const (
 	ProceduresTableCreatedAtCol = "created_at"
 	// ProceduresTableModifiedAtCol is the time that the stored procedure was last modified, in UTC.
 	ProceduresTableModifiedAtCol = "modified_at"
+	// ProceduresTableSqlModeCol is the name of the column that stores the SQL_MODE string used when this fragment
+	// was originally defined. Mode settings, such as ANSI_QUOTES, are needed to correctly parse the fragment.
+	ProceduresTableSqlModeCol = "sql_mode"
 )

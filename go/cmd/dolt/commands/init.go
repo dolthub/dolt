@@ -96,7 +96,7 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return 1
 	}
 
-	if dEnv.HasDoltDir() {
+	if dEnv.HasDoltDataDir() {
 		cli.PrintErrln(color.RedString("This directory has already been initialized."))
 		return 1
 	}
