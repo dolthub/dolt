@@ -96,6 +96,10 @@ func (ltf *LogTableFunction) Resolved() bool {
 	return true
 }
 
+func (ltf *LogTableFunction) IsReadOnly() bool {
+	return true
+}
+
 // String implements the Stringer interface
 func (ltf *LogTableFunction) String() string {
 	return fmt.Sprintf("DOLT_LOG(%s)", ltf.getOptionsString())

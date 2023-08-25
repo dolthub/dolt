@@ -106,6 +106,10 @@ func (ds *DiffStatTableFunction) Resolved() bool {
 	return ds.commitsResolved()
 }
 
+func (ds *DiffStatTableFunction) IsReadOnly() bool {
+	return true
+}
+
 // String implements the Stringer interface
 func (ds *DiffStatTableFunction) String() string {
 	if ds.dotCommitExpr != nil {
