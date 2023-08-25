@@ -127,23 +127,17 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 
 	buffer.WriteString("select commit_hash from dolt_log(")
 
-	writeToBuffer := func(s string, param bool) {
+	writeToBuffer := func(s string) {
 		if !first {
 			buffer.WriteString(", ")
 		}
-		if !param {
-			buffer.WriteString("'")
-		}
 		buffer.WriteString(s)
-		if !param {
-			buffer.WriteString("'")
-		}
 		first = false
 	}
 
 	if apr.PositionalArgsSeparatorIndex >= 0 {
 		for i := 0; i < apr.PositionalArgsSeparatorIndex; i++ {
-			writeToBuffer("?", true)
+			writeToBuffer("?")
 			params = append(params, apr.Arg(i))
 		}
 		tableNames := ""
@@ -153,8 +147,8 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 		if tableNames != "" {
 			tableNames = strings.TrimSuffix(tableNames, ",")
 			params = append(params, tableNames)
-			writeToBuffer("--tables", false)
-			writeToBuffer("?", true)
+			writeToBuffer("'--tables'")
+			writeToBuffer("?")
 		}
 	} else {
 		rows, err := GetRowsForSql(queryist, sqlCtx, "show tables")
@@ -178,7 +172,7 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 				tableNames = tableNames + arg + ","
 			} else {
 				if strings.Contains(arg, "..") || strings.HasPrefix(arg, "^") {
-					writeToBuffer("?", true)
+					writeToBuffer("?")
 					params = append(params, arg)
 				} else {
 					_, err := GetRowsForSql(queryist, sqlCtx, "select hashof('"+arg+"')")
@@ -198,7 +192,7 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 						} else {
 							seenRevs[arg] = true
 						}
-						writeToBuffer("?", true)
+						writeToBuffer("?")
 						params = append(params, arg)
 					}
 				}
@@ -208,31 +202,31 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 		if tableNames != "" {
 			tableNames = strings.TrimSuffix(tableNames, ",")
 			params = append(params, tableNames)
-			writeToBuffer("--tables", false)
-			writeToBuffer("?", true)
+			writeToBuffer("'--tables'")
+			writeToBuffer("?")
 		}
 	}
 
 	if minParents, hasMinParents := apr.GetValue(cli.MinParentsFlag); hasMinParents {
-		writeToBuffer("?", true)
+		writeToBuffer("?")
 		params = append(params, "--min-parents="+minParents)
 	}
 
 	if hasMerges := apr.Contains(cli.MergesFlag); hasMerges {
-		writeToBuffer("--merges", false)
+		writeToBuffer("'--merges'")
 	}
 
 	if excludedCommits, hasExcludedCommits := apr.GetValueList(cli.NotFlag); hasExcludedCommits {
-		writeToBuffer("--not", false)
+		writeToBuffer("'--not'")
 		for _, commit := range excludedCommits {
-			writeToBuffer("?", true)
+			writeToBuffer("?")
 			params = append(params, commit)
 		}
 	}
 
 	// included to check for invalid --decorate options
 	if decorate, hasDecorate := apr.GetValue(cli.DecorateFlag); hasDecorate {
-		writeToBuffer("?", true)
+		writeToBuffer("?")
 		params = append(params, "--decorate="+decorate)
 	}
 
