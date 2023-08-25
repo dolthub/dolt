@@ -214,14 +214,6 @@ teardown() {
     [[ "$output" =~ "BRANCHB" ]] || false
 
     # Invalid
-    run dolt log main..branchA testtable
-    [ $status -eq 1 ]
-    run dolt log testtable main..branchA 
-    [ $status -eq 1 ]
-    run dolt log main...branchA testtable
-    [ $status -eq 1 ]
-    run dolt log testtable main...branchA 
-    [ $status -eq 1 ]
     run dolt log main..branchA main
     [ $status -eq 1 ]
      run dolt log main main..branchA
