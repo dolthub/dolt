@@ -3113,6 +3113,10 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
 			{
+				Query:       "SELECT * from dolt_log('main..branch1', 't');",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
 				Query:       "SELECT * from dolt_log('main..branch1', @Commit1);",
 				ExpectedErr: sql.ErrInvalidArgumentDetails,
 			},
