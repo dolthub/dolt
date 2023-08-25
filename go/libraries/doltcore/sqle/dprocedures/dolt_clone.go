@@ -44,17 +44,12 @@ func doltClone(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
-	scheme, remoteUrl, err := env.GetAbsRemoteUrl(sess.Provider().FileSystem(), emptyConfig(), urlStr)
+	_, remoteUrl, err := env.GetAbsRemoteUrl(sess.Provider().FileSystem(), emptyConfig(), urlStr)
 	if err != nil {
 		return nil, errhand.BuildDError("error: '%s' is not valid.", urlStr).Build()
 	}
 
-	params, err := remoteParams(apr, scheme, remoteUrl)
-	if err != nil {
-		return nil, err
-	}
-
-	err = sess.Provider().CloneDatabaseFromRemote(ctx, dir, branch, remoteName, remoteUrl, params)
+	err = sess.Provider().CloneDatabaseFromRemote(ctx, dir, branch, remoteName, remoteUrl, map[string]string{})
 	if err != nil {
 		return nil, err
 	}

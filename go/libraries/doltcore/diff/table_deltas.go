@@ -624,7 +624,7 @@ func GenerateCreateTableStatement(tblName string, sch schema.Schema, pkSchema sq
 
 	// Statement creation parts for each column
 	for i, col := range sch.GetAllCols().GetColumns() {
-		colStmts[i] = sqlfmt.GenerateCreateTableIndentedColumnDefinition(col)
+		colStmts[i] = sqlfmt.GenerateCreateTableIndentedColumnDefinition(col, sql.CollationID(sch.GetCollation()))
 	}
 
 	primaryKeyCols := sch.GetPKCols().GetColumnNames()

@@ -512,7 +512,7 @@ func GetNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas map[str
 		switch cd.DiffType {
 		case diff.SchDiffNone:
 		case diff.SchDiffAdded:
-			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddColStmt(td.ToName, sqlfmt.GenerateCreateTableColumnDefinition(*cd.New)))
+			ddlStatements = append(ddlStatements, sqlfmt.AlterTableAddColStmt(td.ToName, sqlfmt.GenerateCreateTableColumnDefinition(*cd.New, sql.CollationID(td.ToSch.GetCollation()))))
 		case diff.SchDiffRemoved:
 			ddlStatements = append(ddlStatements, sqlfmt.AlterTableDropColStmt(td.ToName, cd.Old.Name))
 		case diff.SchDiffModified:

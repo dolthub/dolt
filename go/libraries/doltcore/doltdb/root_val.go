@@ -50,7 +50,7 @@ type FeatureVersion int64
 
 // DoltFeatureVersion is described in feature_version.md.
 // only variable for testing.
-var DoltFeatureVersion FeatureVersion = 3 // last bumped when storing creation time for triggers
+var DoltFeatureVersion FeatureVersion = 4 // last bumped when adding sql_mode column to dolt_schemas
 
 // RootValue is the value of the Database and is the committed value in every Dolt commit.
 type RootValue struct {
@@ -382,7 +382,7 @@ func (root *RootValue) GetFeatureVersion(ctx context.Context) (ver FeatureVersio
 	return root.st.GetFeatureVersion()
 }
 
-func (root *RootValue) setFeatureVersion(v FeatureVersion) (*RootValue, error) {
+func (root *RootValue) SetFeatureVersion(v FeatureVersion) (*RootValue, error) {
 	newStorage, err := root.st.SetFeatureVersion(v)
 	if err != nil {
 		return nil, err

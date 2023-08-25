@@ -21,7 +21,7 @@ setup_schema_conflict() {
     dolt sql -q "alter table t modify c0 varchar(20)"
     dolt commit -am "alter table t on branch main"
     dolt checkout other
-    dolt sql -q "alter table t modify c0 datetime"
+    dolt sql -q "alter table t modify c0 datetime(6)"
     dolt commit -am "alter table t on branch other"
     dolt checkout main
 }

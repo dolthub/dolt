@@ -130,3 +130,17 @@ SQL
     dolt --feature-version $OLD checkout other
     popd
 }
+
+@test "feature-version: dolt checkout can be used when a working set has a different feature version than its head" {
+    rm -rf .dolt/
+    dolt --feature-version $OLD init
+    dolt --feature-version $NEW sql -q "create table a (b int);"
+    dolt --feature-version $NEW checkout -b other
+    run dolt --feature-version $NEW status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "other" ]] || false
+    dolt --feature-version $NEW checkout main
+    run dolt --feature-version $NEW status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "main" ]] || false
+}

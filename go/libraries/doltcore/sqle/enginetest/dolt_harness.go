@@ -278,6 +278,7 @@ func (d *DoltHarness) newSessionWithClient(client sql.Client) *dsess.DoltSession
 	pro := d.session.Provider()
 
 	dSession, err := dsess.NewDoltSession(sql.NewBaseSessionWithClientServer("address", client, 1), pro.(dsess.DoltDatabaseProvider), localConfig, d.branchControl)
+	dSession.SetCurrentDatabase("mydb")
 	require.NoError(d.t, err)
 	return dSession
 }

@@ -21,8 +21,8 @@ import (
 	"sort"
 	"strings"
 
-	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	ast "github.com/dolthub/vitess/go/vt/sqlparser"
 	errorkinds "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -155,7 +155,7 @@ var ErrMergeWithDifferentPks = errors.New("error: cannot merge two tables with d
 // SchemaMerge performs a three-way merge of |ourSch|, |theirSch|, and |ancSch|, and returns: the merged schema,
 // any schema conflicts identified, whether moving to the new schema requires a full table rewrite, and any
 // unexpected error encountered while merging the schemas.
-func SchemaMerge(ctx context.Context, format *storetypes.NomsBinFormat, ourSch, theirSch, ancSch schema.Schema, tblName string) (sch schema.Schema, sc SchemaConflict, requiresTableRewrite bool, err error) {
+func SchemaMerge(ctx context.Context, format *storetypes.NomsBinFormat, ourSch, theirSch, ancSch schema.Schema, tblName string) (sch schema.Schema, sc SchemaConflict, tableRewrite bool, err error) {
 	// (sch - ancSch) ∪ (mergeSch - ancSch) ∪ (sch ∩ mergeSch)
 	sc = SchemaConflict{
 		TableName: tblName,
@@ -168,18 +168,18 @@ func SchemaMerge(ctx context.Context, format *storetypes.NomsBinFormat, ourSch, 
 	}
 
 	var mergedCC *schema.ColCollection
-	mergedCC, sc.ColConflicts, requiresTableRewrite, err = mergeColumns(tblName, format, ourSch.GetAllCols(), theirSch.GetAllCols(), ancSch.GetAllCols())
+	mergedCC, sc.ColConflicts, tableRewrite, err = mergeColumns(tblName, format, ourSch.GetAllCols(), theirSch.GetAllCols(), ancSch.GetAllCols())
 	if err != nil {
 		return nil, SchemaConflict{}, false, err
 	}
 	if len(sc.ColConflicts) > 0 {
-		return nil, sc, requiresTableRewrite, nil
+		return nil, sc, tableRewrite, nil
 	}
 
 	var mergedIdxs schema.IndexCollection
 	mergedIdxs, sc.IdxConflicts = mergeIndexes(mergedCC, ourSch, theirSch, ancSch)
 	if len(sc.IdxConflicts) > 0 {
-		return nil, sc, requiresTableRewrite, nil
+		return nil, sc, tableRewrite, nil
 	}
 
 	sch, err = schema.SchemaFromCols(mergedCC)
@@ -232,7 +232,7 @@ func SchemaMerge(ctx context.Context, format *storetypes.NomsBinFormat, ourSch, 
 		sch.Checks().AddCheck(chk.Name(), chk.Expression(), chk.Enforced())
 	}
 
-	return sch, sc, requiresTableRewrite, nil
+	return sch, sc, tableRewrite, nil
 }
 
 // ForeignKeysMerge performs a three-way merge of (ourRoot, theirRoot, ancRoot) and using mergeRoot to validate FKs.
@@ -387,7 +387,7 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 
 	compatChecker := newTypeCompatabilityCheckerForStorageFormat(format)
 
-	requiresTableRewrite := false
+	tableRewrite := false
 
 	// After we've checked for schema conflicts, merge the columns together
 	// TODO: We don't currently preserve all column position changes; the returned merged columns are always based on
@@ -425,7 +425,7 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 					// is valid, otherwise it's a conflict
 					compatible, rewrite := compatChecker.IsTypeChangeCompatible(ours.TypeInfo, theirs.TypeInfo)
 					if rewrite {
-						requiresTableRewrite = true
+						tableRewrite = true
 					}
 					if compatible {
 						mergedColumns = append(mergedColumns, *theirs)
@@ -441,7 +441,7 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 					// is valid, otherwise it's a conflict
 					compatible, rewrite := compatChecker.IsTypeChangeCompatible(theirs.TypeInfo, ours.TypeInfo)
 					if rewrite {
-						requiresTableRewrite = true
+						tableRewrite = true
 					}
 					if compatible {
 						mergedColumns = append(mergedColumns, *ours)
@@ -472,7 +472,7 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 		return nil, conflicts, false, nil
 	}
 
-	return schema.NewColCollection(mergedColumns...), nil, requiresTableRewrite, nil
+	return schema.NewColCollection(mergedColumns...), nil, tableRewrite, nil
 }
 
 // checkForColumnConflicts iterates over |mergedColumns|, checks for duplicate column names or column tags, and returns
@@ -1167,7 +1167,7 @@ func mergeChecks(ctx context.Context, ourChks, theirChks, ancChks schema.CheckCo
 			CheckExpression: chk.Expression(),
 			Enforced:        chk.Enforced(),
 		}
-		colNames, err := sqle.ColumnsFromCheckDefinition(sql.NewContext(ctx), &chkDef)
+		colNames, err := ColumnsFromCheckDefinition(sql.NewContext(ctx), &chkDef)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1189,7 +1189,7 @@ func mergeChecks(ctx context.Context, ourChks, theirChks, ancChks schema.CheckCo
 			CheckExpression: ourChk.Expression(),
 			Enforced:        ourChk.Enforced(),
 		}
-		colNames, err := sqle.ColumnsFromCheckDefinition(sql.NewContext(ctx), &chkDef)
+		colNames, err := ColumnsFromCheckDefinition(sql.NewContext(ctx), &chkDef)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1280,7 +1280,7 @@ func isCheckReferenced(sch schema.Schema, chk schema.Check) (bool, error) {
 		CheckExpression: chk.Expression(),
 		Enforced:        chk.Enforced(),
 	}
-	colNames, err := sqle.ColumnsFromCheckDefinition(sql.NewEmptyContext(), &chkDef)
+	colNames, err := ColumnsFromCheckDefinition(sql.NewEmptyContext(), &chkDef)
 	if err != nil {
 		return false, err
 	}
@@ -1293,4 +1293,40 @@ func isCheckReferenced(sch schema.Schema, chk schema.Check) (bool, error) {
 	}
 
 	return true, nil
+}
+
+// ColumnsFromCheckDefinition retrieves the Column Names referenced by a CheckDefinition
+func ColumnsFromCheckDefinition(ctx *sql.Context, def *sql.CheckDefinition) ([]string, error) {
+	// Evaluate the CheckDefinition to get evaluated Expression
+	parseStr := fmt.Sprintf("select %s", def.CheckExpression)
+	parsed, err := ast.Parse(parseStr)
+	if err != nil {
+		return nil, err
+	}
+
+	selectStmt, ok := parsed.(*ast.Select)
+	if !ok || len(selectStmt.SelectExprs) != 1 {
+		err := sql.ErrInvalidCheckConstraint.New(def.CheckExpression)
+		return nil, err
+	}
+
+	expr := selectStmt.SelectExprs[0]
+	ae, ok := expr.(*ast.AliasedExpr)
+	if !ok {
+		err := sql.ErrInvalidCheckConstraint.New(def.CheckExpression)
+		return nil, err
+	}
+
+	// Look for any column references in the evaluated Expression
+	var cols []string
+	ast.Walk(func(n ast.SQLNode) (kontinue bool, err error) {
+		switch n := n.(type) {
+		case *ast.ColName:
+			colName := n.Name.Lowered()
+			cols = append(cols, colName)
+		default:
+		}
+		return true, nil
+	}, ae.Expr)
+	return cols, nil
 }

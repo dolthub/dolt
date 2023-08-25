@@ -32,8 +32,7 @@ jobs:
           go run -mod=readonly ./utils/copyrightshdrs/
           ./Godeps/verify.sh
           ./utils/repofmt/check_bats_fmt.sh
-          ./utils/repofmt/check_prepared_tests.sh
-          
+
           if ./utils/repofmt/check_fmt.sh ; then
             echo "code is formatted"
           else

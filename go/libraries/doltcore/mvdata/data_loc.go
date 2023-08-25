@@ -21,12 +21,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
@@ -89,7 +89,7 @@ type DataLocation interface {
 	Exists(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) (bool, error)
 
 	// NewReader creates a TableReadCloser for the DataLocation
-	NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, opts interface{}) (rdCl table.SqlRowReader, sorted bool, err error)
+	NewReader(ctx context.Context, dEnv *env.DoltEnv, opts interface{}) (rdCl table.SqlRowReader, sorted bool, err error)
 
 	// NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
 	// an existing table.

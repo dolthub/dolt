@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
@@ -35,18 +36,34 @@ func TestSchemaSerializationIntegration(t *testing.T) {
 		s := integrationTests[i].schema
 		t.Run(getTestName(s), func(t *testing.T) {
 			sch := parseSchemaString(t, s)
-			testSchemaSerialization(t, sch)
+			t.Run("noms", func(t *testing.T) {
+				testSchemaSerializationNoms(t, sch)
+			})
+			t.Run("flatbuffers", func(t *testing.T) {
+				testSchemaSerializationFlatbuffers(t, sch)
+			})
 		})
 	}
 }
 
-func testSchemaSerialization(t *testing.T, sch schema.Schema) {
+func testSchemaSerializationNoms(t *testing.T, sch schema.Schema) {
 	ctx := context.Background()
 	nbf := types.Format_Default
 	vrw := getTestVRW(nbf)
-	v, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
+	v, err := encoding.MarshalSchema(ctx, vrw, sch)
 	require.NoError(t, err)
-	s, err := encoding.UnmarshalSchemaNomsValue(ctx, nbf, v)
+	s, err := encoding.UnmarshalSchema(ctx, nbf, v)
+	require.NoError(t, err)
+	assert.Equal(t, sch, s)
+}
+
+func testSchemaSerializationFlatbuffers(t *testing.T, sch schema.Schema) {
+	ctx := context.Background()
+	nbf := types.Format_Default
+	vrw := getTestVRW(nbf)
+	v, err := encoding.SerializeSchema(ctx, vrw, sch)
+	require.NoError(t, err)
+	s, err := encoding.DeserializeSchema(ctx, nbf, v)
 	require.NoError(t, err)
 	assert.Equal(t, sch, s)
 }
@@ -57,7 +74,12 @@ func parseSchemaString(t *testing.T, s string) schema.Schema {
 	defer dEnv.DoltDB.Close()
 	root, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)
-	_, sch, err := sqlutil.ParseCreateTableStatement(ctx, root, s)
+	eng, db, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	require.NoError(t, err)
+	sqlCtx, err := eng.NewDefaultContext(ctx)
+	require.NoError(t, err)
+	sqlCtx.SetCurrentDatabase(db)
+	_, sch, err := sqlutil.ParseCreateTableStatement(sqlCtx, root, eng.GetUnderlyingEngine(), s)
 	require.NoError(t, err)
 	return sch
 }
@@ -238,6 +260,10 @@ var integrationTests = []struct {
 			"`v31` varchar(255) DEFAULT NULL," +
 			"`v32` varbinary(255) DEFAULT NULL," +
 			"`v33` year DEFAULT NULL," +
+			"`v34` datetime(6) DEFAULT current_timestamp," +
+			"`v35` timestamp(6) DEFAULT now()," +
+			"`v36` datetime(3) DEFAULT current_timestamp," +
+			"`v37` timestamp(3) DEFAULT now()," +
 			"PRIMARY KEY (`pk`)" +
 			") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 	},
@@ -469,5 +495,27 @@ var integrationTests = []struct {
 			"`v33` year DEFAULT \"2018\"," +
 			"PRIMARY KEY (`pk`)" +
 			") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+	},
+	{
+		schema: "CREATE TABLE `collations` (" +
+			"`pk` int NOT NULL," +
+			"`v5` char(1) collate utf8mb3_esperanto_ci DEFAULT \"i\"," +
+			"`v17` longtext collate utf8mb3_esperanto_ci DEFAULT (\"abc\")," +
+			"`v20` mediumtext collate utf8mb3_esperanto_ci DEFAULT (\"abc\")," +
+			"`v25` text collate utf8mb3_esperanto_ci DEFAULT (\"abc\")," +
+			"`v31` varchar(255) collate utf8mb3_esperanto_ci DEFAULT \"varchar value\"," +
+			"PRIMARY KEY (`pk`)" +
+			") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+	},
+	{
+		schema: "CREATE TABLE `collations2` (" +
+			"`pk` int NOT NULL," +
+			"`v5` char(1) DEFAULT \"i\"," +
+			"`v17` longtext DEFAULT (\"abc\")," +
+			"`v20` mediumtext collate utf8mb4_es_0900_ai_ci DEFAULT (\"abc\")," +
+			"`v25` text collate utf8mb4_0900_bin DEFAULT (\"abc\")," +
+			"`v31` varchar(255) collate utf8mb4_hungarian_ci DEFAULT \"varchar value\"," +
+			"PRIMARY KEY (`pk`)" +
+			") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb3_esperanto_ci;",
 	},
 }

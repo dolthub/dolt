@@ -97,7 +97,7 @@ teardown() {
     run dolt sql -q "SELECT @@GLOBAL.unknown" -r csv
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "Unknown system variable 'unknown'" ]] || false
+    [[ "$output" =~ "Unknown system variable '@@global.unknown'" ]] || false
 }
 
 @test "sql-config: invalid persisted system variable type errors on cli sql command" {

@@ -150,6 +150,8 @@ type ServerConfig interface {
 	BranchControlFilePath() string
 	// UserVars is an array containing user specific session variables
 	UserVars() []UserSessionVars
+	// SystemVars is a map setting global SQL system variables. For example, `secure_file_priv`.
+	SystemVars() engine.SystemVariables
 	// JwksConfig is an array containing jwks config
 	JwksConfig() []engine.JwksConfig
 	// AllowCleartextPasswords is true if the server should accept cleartext passwords.
@@ -338,6 +340,10 @@ func (cfg *commandLineServerConfig) BranchControlFilePath() string {
 
 // UserVars is an array containing user specific session variables.
 func (cfg *commandLineServerConfig) UserVars() []UserSessionVars {
+	return nil
+}
+
+func (cfg *commandLineServerConfig) SystemVars() engine.SystemVariables {
 	return nil
 }
 

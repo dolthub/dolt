@@ -240,7 +240,7 @@ func TestCreateRdWr(t *testing.T) {
 			t.Fatal("Failed to write data. bad:", numBad, err)
 		}
 
-		rd, _, err := loc.NewReader(context.Background(), root, dEnv.FS, JSONOptions{TableName: testTableName, SchFile: testSchemaFileName})
+		rd, _, err := loc.NewReader(context.Background(), dEnv, JSONOptions{TableName: testTableName, SchFile: testSchemaFileName})
 
 		if err != nil {
 			t.Fatal("Unexpected error creating reader", err)

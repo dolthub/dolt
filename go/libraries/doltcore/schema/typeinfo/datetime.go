@@ -17,6 +17,7 @@ package typeinfo
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -31,6 +32,7 @@ const (
 	datetimeTypeParam_SQL_Date      = "date"
 	datetimeTypeParam_SQL_Datetime  = "datetime"
 	datetimeTypeParam_SQL_Timestamp = "timestamp"
+	datetimeTypeParam_Precision     = "precision"
 )
 
 type datetimeType struct {
@@ -40,19 +42,39 @@ type datetimeType struct {
 var _ TypeInfo = (*datetimeType)(nil)
 var (
 	DateType      = &datetimeType{gmstypes.Date}
-	DatetimeType  = &datetimeType{gmstypes.Datetime}
-	TimestampType = &datetimeType{gmstypes.Timestamp}
+	DatetimeType  = &datetimeType{gmstypes.DatetimeMaxPrecision}
+	TimestampType = &datetimeType{gmstypes.TimestampMaxPrecision}
 )
+
+func CreateDatetimeTypeFromSqlType(typ sql.DatetimeType) *datetimeType {
+	return &datetimeType{typ}
+}
 
 func CreateDatetimeTypeFromParams(params map[string]string) (TypeInfo, error) {
 	if sqlType, ok := params[datetimeTypeParam_SQL]; ok {
+		precision := 6
+		if precisionParam, ok := params[datetimeTypeParam_Precision]; ok {
+			var err error
+			precision, err = strconv.Atoi(precisionParam)
+			if err != nil {
+				return nil, err
+			}
+		}
 		switch sqlType {
 		case datetimeTypeParam_SQL_Date:
 			return DateType, nil
 		case datetimeTypeParam_SQL_Datetime:
-			return DatetimeType, nil
+			gmsType, err := gmstypes.CreateDatetimeType(sqltypes.Datetime, precision)
+			if err != nil {
+				return nil, err
+			}
+			return CreateDatetimeTypeFromSqlType(gmsType), nil
 		case datetimeTypeParam_SQL_Timestamp:
-			return TimestampType, nil
+			gmsType, err := gmstypes.CreateDatetimeType(sqltypes.Timestamp, precision)
+			if err != nil {
+				return nil, err
+			}
+			return CreateDatetimeTypeFromSqlType(gmsType), nil
 		default:
 			return nil, fmt.Errorf(`create datetime type info has invalid param "%v"`, sqlType)
 		}
@@ -154,18 +176,20 @@ func (ti *datetimeType) GetTypeIdentifier() Identifier {
 
 // GetTypeParams implements TypeInfo interface.
 func (ti *datetimeType) GetTypeParams() map[string]string {
-	sqlParam := ""
+	params := map[string]string{}
 	switch ti.sqlDatetimeType.Type() {
 	case sqltypes.Date:
-		sqlParam = datetimeTypeParam_SQL_Date
+		params[datetimeTypeParam_SQL] = datetimeTypeParam_SQL_Date
 	case sqltypes.Datetime:
-		sqlParam = datetimeTypeParam_SQL_Datetime
+		params[datetimeTypeParam_SQL] = datetimeTypeParam_SQL_Datetime
+		params[datetimeTypeParam_Precision] = strconv.Itoa(ti.sqlDatetimeType.Precision())
 	case sqltypes.Timestamp:
-		sqlParam = datetimeTypeParam_SQL_Timestamp
+		params[datetimeTypeParam_SQL] = datetimeTypeParam_SQL_Timestamp
+		params[datetimeTypeParam_Precision] = strconv.Itoa(ti.sqlDatetimeType.Precision())
 	default:
 		panic(fmt.Errorf(`unknown datetime type info sql type "%v"`, ti.sqlDatetimeType.Type().String()))
 	}
-	return map[string]string{datetimeTypeParam_SQL: sqlParam}
+	return params
 }
 
 // IsValid implements TypeInfo interface.

@@ -547,7 +547,7 @@ func (ddb *DoltDB) WriteRootValue(ctx context.Context, rv *RootValue) (*RootValu
 }
 
 func (ddb *DoltDB) writeRootValue(ctx context.Context, rv *RootValue) (*RootValue, types.Ref, error) {
-	rv, err := rv.setFeatureVersion(DoltFeatureVersion)
+	rv, err := rv.SetFeatureVersion(DoltFeatureVersion)
 	if err != nil {
 		return nil, types.Ref{}, err
 	}

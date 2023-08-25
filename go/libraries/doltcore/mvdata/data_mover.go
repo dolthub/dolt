@@ -19,13 +19,14 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
@@ -88,15 +89,30 @@ func (dmce *DataMoverCreationError) String() string {
 }
 
 // SchAndTableNameFromFile reads a SQL schema file and creates a Dolt schema from it.
-func SchAndTableNameFromFile(ctx context.Context, path string, fs filesys.ReadableFS, root *doltdb.RootValue) (string, schema.Schema, error) {
+func SchAndTableNameFromFile(ctx context.Context, path string, dEnv *env.DoltEnv) (string, schema.Schema, error) {
+	root, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return "", nil, err
+	}
+	fs := dEnv.FS
+
 	if path != "" {
 		data, err := fs.ReadFile(path)
-
 		if err != nil {
 			return "", nil, err
 		}
 
-		tn, sch, err := sqlutil.ParseCreateTableStatement(ctx, root, string(data))
+		eng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+		if err != nil {
+			return "", nil, err
+		}
+
+		sqlCtx, err := eng.NewDefaultContext(ctx)
+		if err != nil {
+			return "", nil, err
+		}
+		sqlCtx.SetCurrentDatabase(dbName)
+		tn, sch, err := sqlutil.ParseCreateTableStatement(sqlCtx, root, eng.GetUnderlyingEngine(), string(data))
 
 		if err != nil {
 			return "", nil, fmt.Errorf("%s in schema file %s", err.Error(), path)
