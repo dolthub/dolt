@@ -104,7 +104,7 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 		defer closeFunc()
 	}
 
-	query, err := constructInterpolatedDoltLogQuery(apr)
+	query, err := constructInterpolatedDoltLogQuery(apr, queryist, sqlCtx)
 	if err != nil {
 		return handleErrAndExit(err)
 	}
@@ -118,7 +118,7 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 
 // constructInterpolatedDoltLogQuery generates the sql query necessary to call the DOLT_LOG() function.
 // Also interpolates this query to prevent sql injection.
-func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults) (string, error) {
+func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context) (string, error) {
 	var params []interface{}
 
 	var buffer bytes.Buffer
@@ -148,18 +148,68 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults) (string, 
 		}
 		tableNames := ""
 		for i := apr.PositionalArgsSeparatorIndex; i < apr.NArg(); i++ {
-			tableNames = tableNames + "?,"
-			params = append(params, apr.Arg(i))
+			tableNames = tableNames + apr.Arg(i) + ","
 		}
 		if tableNames != "" {
 			tableNames = strings.TrimSuffix(tableNames, ",")
+			params = append(params, tableNames)
 			writeToBuffer("--tables", false)
-			writeToBuffer(tableNames, true)
+			writeToBuffer("?", true)
 		}
 	} else {
+		rows, err := GetRowsForSql(queryist, sqlCtx, "show tables")
+		if err != nil {
+			return "", err
+		}
+		existingTables := make(map[string]bool, len(rows))
+		for _, r := range rows {
+			existingTables[r[0].(string)] = true
+		}
+		seenRevs := make(map[string]bool, apr.NArg())
+
+		finishedRevs := false
+		tableNames := ""
 		for _, arg := range apr.Args {
+			// once we encounter a rev we can't resolve, we assume the rest are table names
+			if finishedRevs {
+				if _, ok := existingTables[arg]; !ok {
+					return "", fmt.Errorf("error: table %s does not exist", arg)
+				}
+				tableNames = tableNames + arg + ","
+			} else {
+				if strings.Contains(arg, "..") || strings.HasPrefix(arg, "^") {
+					writeToBuffer("?", true)
+					params = append(params, arg)
+				} else {
+					_, err := GetRowsForSql(queryist, sqlCtx, "select hashof('"+arg+"')")
+					if err != nil {
+						finishedRevs = true
+						if _, ok := existingTables[arg]; !ok {
+							return "", fmt.Errorf("error: table %s does not exist", arg)
+						}
+						tableNames = tableNames + arg + ","
+					} else {
+						if _, ok := seenRevs[arg]; ok {
+							finishedRevs = true
+							if _, ok := existingTables[arg]; !ok {
+								return "", fmt.Errorf("error: table %s does not exist", arg)
+							}
+							tableNames = tableNames + arg + ","
+						} else {
+							seenRevs[arg] = true
+						}
+						writeToBuffer("?", true)
+						params = append(params, arg)
+					}
+				}
+			}
+
+		}
+		if tableNames != "" {
+			tableNames = strings.TrimSuffix(tableNames, ",")
+			params = append(params, tableNames)
+			writeToBuffer("--tables", false)
 			writeToBuffer("?", true)
-			params = append(params, arg)
 		}
 	}
 
