@@ -252,8 +252,19 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 func getExistingTables(revisions []string, queryist cli.Queryist, sqlCtx *sql.Context) (map[string]bool, error) {
 	tableNames := make(map[string]bool)
 
+	if len(revisions) == 0 {
+		rows, err := GetRowsForSql(queryist, sqlCtx, "show tables")
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range rows {
+			tableNames[r[0].(string)] = true
+		}
+		return tableNames, nil
+	}
+
 	for _, rev := range revisions {
-		rows, err := GetRowsForSql(queryist, sqlCtx, "show tables as of "+rev)
+		rows, err := GetRowsForSql(queryist, sqlCtx, "show tables as of '"+rev+"'")
 		if err != nil {
 			return nil, err
 		}
