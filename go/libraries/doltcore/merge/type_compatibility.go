@@ -17,6 +17,7 @@ package merge
 import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
@@ -96,8 +97,7 @@ type doltTypeCompatibilityChecker struct {
 func newDoltTypeCompatibilityChecker() TypeCompatibilityChecker {
 	return &doltTypeCompatibilityChecker{
 		checkers: []typeChangeHandler{
-			varcharToVarcharTypeChangeHandler{},
-			stringToBlobTypeChangeHandler{},
+			stringTypeChangeHandler{},
 			enumTypeChangeHandler{},
 			setTypeChangeHandler{},
 		},
@@ -140,74 +140,60 @@ type typeChangeHandler interface {
 	isCompatible(fromSqlType, toSqlType sql.Type) (bool, bool)
 }
 
-// varcharToVarcharTypeChangeHandler handles compatibility checking when a varchar type is changed to a new varchar
-// type (e.g. VARCHAR(20) -> VARCHAR(100))
-type varcharToVarcharTypeChangeHandler struct{}
+// stringTypeChangeHandler handles type change compatibility between from string types, i.e. VARCHAR, VARBINARY,
+// CHAR, BINARY, TEXT, and BLOB types.
+type stringTypeChangeHandler struct{}
 
-var _ typeChangeHandler = (*varcharToVarcharTypeChangeHandler)(nil)
+var _ typeChangeHandler = (*stringTypeChangeHandler)(nil)
 
-// canHandle implements the typeChangeHandler interface.
-func (v varcharToVarcharTypeChangeHandler) canHandle(fromSqlType, toSqlType sql.Type) bool {
-	return fromSqlType.Type() == query.Type_VARCHAR && toSqlType.Type() == query.Type_VARCHAR
+func (s stringTypeChangeHandler) canHandle(fromSqlType, toSqlType sql.Type) bool {
+	switch fromSqlType.Type() {
+	case query.Type_VARCHAR, query.Type_CHAR, query.Type_TEXT:
+		switch toSqlType.Type() {
+		case query.Type_VARCHAR, query.Type_CHAR, query.Type_TEXT:
+			return true
+		default:
+			return false
+		}
+	case query.Type_VARBINARY, query.Type_BINARY, query.Type_BLOB:
+		switch toSqlType.Type() {
+		case query.Type_VARBINARY, query.Type_BINARY, query.Type_BLOB:
+			return true
+		default:
+			return false
+		}
+	default:
+		return false
+	}
 }
 
-// isCompatible implements the typeChangeHandler interface.
-func (v varcharToVarcharTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (bool, bool) {
+func (s stringTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (bool, bool) {
 	fromStringType := fromSqlType.(types.StringType)
 	toStringType := toSqlType.(types.StringType)
-	// Varchar data is stored directly in the index, in a variable length field that includes
-	// the data's length, so widening the type doesn't require a rewrite and doesn't affect
-	// any existing data.
-	return toStringType.Length() >= fromStringType.Length() &&
-		toStringType.Collation() == fromStringType.Collation(), false
+
+	compatible := toStringType.MaxByteLength() >= fromStringType.MaxByteLength() &&
+		toStringType.Collation() == fromStringType.Collation()
+
+	rewriteRequired := false
+	if compatible {
+		// TODO: Document me!
+		fromTypeOutOfBand := outOfBandType(fromSqlType)
+		toTypeOutOfBand := outOfBandType(toSqlType)
+		if !fromTypeOutOfBand && toTypeOutOfBand {
+			rewriteRequired = true
+		}
+	}
+
+	return compatible, rewriteRequired
 }
 
-// stringToBlobTypeChangeHandler handles type change compatibility checking when a CHAR or VARCHAR column is changed to
-// a TEXT type, and also when a BINARY or VARBINARY column is changed to a BLOB type.
-type stringToBlobTypeChangeHandler struct{}
-
-var _ typeChangeHandler = (*stringToBlobTypeChangeHandler)(nil)
-
-// canHandle implements the typeChangeHandler interface.
-func (s stringToBlobTypeChangeHandler) canHandle(fromSqlType, toSqlType sql.Type) bool {
-	if (fromSqlType.Type() == query.Type_VARCHAR || fromSqlType.Type() == query.Type_CHAR) && toSqlType.Type() == query.Type_TEXT {
+func outOfBandType(t sql.Type) bool {
+	switch t.Type() {
+	case sqltypes.Blob, sqltypes.Text:
 		return true
+	default:
+		return false
 	}
-
-	// BINARY andVARBINARY types can be converted to BLOB types
-	if (fromSqlType.Type() == query.Type_VARBINARY || fromSqlType.Type() == query.Type_BINARY) && toSqlType.Type() == query.Type_BLOB {
-		return true
-	}
-
-	return false
-}
-
-// isCompatible implements the typeChangeHandler interface.
-func (s stringToBlobTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (bool, bool) {
-	fromStringType, ok := fromSqlType.(sql.StringType)
-	if !ok {
-		return false, false
-	}
-
-	toStringType, ok := toSqlType.(sql.StringType)
-	if !ok {
-		return false, false
-	}
-
-	// If the current type has a longer length setting than the new type, disallow the automatic conversion
-	if fromStringType.Length() > toStringType.Length() {
-		// TODO: For a future optimization, we could check the data to see if it would fit in the new type and
-		//       accept the type conversion if all data fits in the new type. This would need to be done while we
-		//       are processing the diff data, not as part of calculating the merged schema.
-		return false, false
-	}
-	if toStringType.Collation() != fromStringType.Collation() {
-		// TODO: If the charsets or collations are different on each side of the merge, we need to re-encode
-		//       the data and rewrite the table.
-		return false, false
-	}
-
-	return true, true
 }
 
 // enumTypeChangeHandler handles type change compatibility checking for changes to an enum type. If a new enum value

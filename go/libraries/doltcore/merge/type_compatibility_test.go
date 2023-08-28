@@ -19,6 +19,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
@@ -26,10 +27,11 @@ import (
 )
 
 type typeChangeCompatibilityTest struct {
-	name     string
-	from     typeinfo.TypeInfo
-	to       typeinfo.TypeInfo
-	expected bool
+	name       string
+	from       typeinfo.TypeInfo
+	to         typeinfo.TypeInfo
+	compatible bool
+	rewrite    bool
 }
 
 // Enum test data
@@ -50,74 +52,105 @@ var abcdSetCi = typeinfo.CreateSetTypeFromSqlSetType(gmstypes.MustCreateSetType(
 var geo = typeinfo.CreateGeometryTypeFromSqlGeometryType(gmstypes.GeometryType{SRID: uint32(4326), DefinedSRID: true})
 var point = typeinfo.CreatePointTypeFromSqlPointType(gmstypes.PointType{SRID: uint32(4326), DefinedSRID: true})
 
+// String type test data
+var varchar10 = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.VarChar, 10, sql.Collation_Default))
+var varchar20 = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.VarChar, 20, sql.Collation_Default))
+var text = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.Text, 65_535, sql.Collation_Default))
+var mediumText = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.Text, 16_777_215, sql.Collation_Default))
+
+// Binary type test data
+var varbinary10 typeinfo.TypeInfo
+var blob, mediumBlob typeinfo.TypeInfo
+
+func init() {
+	var err error
+	// TODO: This interface kinda sucks... maybe add a better creation function to help keep tests cleaner?
+	foo := gmstypes.MustCreateString(sqltypes.VarBinary, 10, sql.Collation_binary)
+	varbinary10, err = typeinfo.FromSqlType(foo)
+	if err != nil {
+		panic(err)
+	}
+
+	// TODO: Is this the right/best way to create a BLOB?
+	blob, err = typeinfo.CreateBlobStringTypeFromParams(map[string]string{"length": "65535", "collate": "binary"})
+	if err != nil {
+		panic(err)
+	}
+
+	mediumBlob, err = typeinfo.FromSqlType(gmstypes.MustCreateBinary(sqltypes.Blob, 16_777_215))
+	if err != nil {
+		panic(err)
+	}
+}
+
 // TestLd1IsTypeChangeCompatible tests that the LD1 TypeCompatibilityChecker implementation
 // correctly computes compatibility between types.
 func TestLd1IsTypeChangeCompatible(t *testing.T) {
 	compatChecker := newTypeCompatabilityCheckerForStorageFormat(storetypes.Format_LD_1)
 	runTypeCompatibilityTests(t, compatChecker, []typeChangeCompatibilityTest{
 		{
-			name:     "equivalent types are compatible",
-			from:     typeinfo.Int64Type,
-			to:       typeinfo.Int64Type,
-			expected: true,
+			name:       "equivalent types are compatible",
+			from:       typeinfo.Int64Type,
+			to:         typeinfo.Int64Type,
+			compatible: true,
 		}, {
-			name:     "ints: small to large type changes are compatible",
-			from:     typeinfo.Int8Type,
-			to:       typeinfo.Int16Type,
-			expected: true,
+			name:       "ints: small to large type changes are compatible",
+			from:       typeinfo.Int8Type,
+			to:         typeinfo.Int16Type,
+			compatible: true,
 		}, {
-			name:     "ints: large to small type changes are compatible",
-			from:     typeinfo.Int64Type,
-			to:       typeinfo.Int16Type,
-			expected: true,
+			name:       "ints: large to small type changes are compatible",
+			from:       typeinfo.Int64Type,
+			to:         typeinfo.Int16Type,
+			compatible: true,
 		}, {
-			name:     "enums: additive changes are compatible",
-			from:     abcEnum,
-			to:       abcdEnum,
-			expected: true,
+			name:       "enums: additive changes are compatible",
+			from:       abcEnum,
+			to:         abcdEnum,
+			compatible: true,
 		}, {
 			// NOTE: LD_1 considers these compatible, even though it probably shouldn't. This matches the existing
 			//       behavior for LD_1, so we're preserving it, since we don't want to invest more in LD_1.
-			name:     "enums: subtractive changes are compatible",
-			from:     abcdEnum,
-			to:       abcEnum,
-			expected: true,
+			name:       "enums: subtractive changes are compatible",
+			from:       abcdEnum,
+			to:         abcEnum,
+			compatible: true,
 		}, {
 			// NOTE: This should be incompatible, but preserving the existing behavior since we don't want
 			//       to invest more in LD_1.
-			name:     "enums: collation changes are incompatible",
-			from:     abcEnum,
-			to:       abcdEnum,
-			expected: true,
+			name:       "enums: collation changes are incompatible",
+			from:       abcEnum,
+			to:         abcdEnum,
+			compatible: true,
 		}, {
-			name:     "sets: additive set changes are compatible",
-			from:     abcSet,
-			to:       abcdSet,
-			expected: true,
-		}, {
-			// NOTE: This should be incompatible, but preserving the existing behavior since we don't want
-			//       to invest more in LD_1.
-			name:     "sets: subtractive changes are compatible",
-			from:     abcdSet,
-			to:       abcSet,
-			expected: true,
+			name:       "sets: additive set changes are compatible",
+			from:       abcSet,
+			to:         abcdSet,
+			compatible: true,
 		}, {
 			// NOTE: This should be incompatible, but preserving the existing behavior since we don't want
 			//       to invest more in LD_1.
-			name:     "sets: collation changes are incompatible",
-			from:     abcSet,
-			to:       abcdSet,
-			expected: true,
+			name:       "sets: subtractive changes are compatible",
+			from:       abcdSet,
+			to:         abcSet,
+			compatible: true,
 		}, {
-			name:     "geometry: identical types are compatible",
-			from:     geo,
-			to:       geo,
-			expected: true,
+			// NOTE: This should be incompatible, but preserving the existing behavior since we don't want
+			//       to invest more in LD_1.
+			name:       "sets: collation changes are incompatible",
+			from:       abcSet,
+			to:         abcdSet,
+			compatible: true,
 		}, {
-			name:     "geometry: non-identical types are not compatible",
-			from:     geo,
-			to:       point,
-			expected: false,
+			name:       "geometry: identical types are compatible",
+			from:       geo,
+			to:         geo,
+			compatible: true,
+		}, {
+			name:       "geometry: non-identical types are not compatible",
+			from:       geo,
+			to:         point,
+			compatible: false,
 		},
 	})
 }
@@ -128,60 +161,131 @@ func TestDoltIsTypeChangeCompatible(t *testing.T) {
 	compatChecker := newTypeCompatabilityCheckerForStorageFormat(storetypes.Format_DOLT)
 	runTypeCompatibilityTests(t, compatChecker, []typeChangeCompatibilityTest{
 		{
-			name:     "equivalent types are compatible",
-			from:     typeinfo.Int64Type,
-			to:       typeinfo.Int64Type,
-			expected: true,
+			name:       "equivalent types are compatible",
+			from:       typeinfo.Int64Type,
+			to:         typeinfo.Int64Type,
+			compatible: true,
 		}, {
-			name:     "int family: small to large type changes are incompatible",
-			from:     typeinfo.Int8Type,
-			to:       typeinfo.Int16Type,
-			expected: false,
+			name:       "int family: small to large type changes are incompatible",
+			from:       typeinfo.Int8Type,
+			to:         typeinfo.Int16Type,
+			compatible: false,
 		}, {
-			name:     "int family: large to small type changes are incompatible",
-			from:     typeinfo.Int64Type,
-			to:       typeinfo.Int16Type,
-			expected: false,
+			name:       "int family: large to small type changes are incompatible",
+			from:       typeinfo.Int64Type,
+			to:         typeinfo.Int16Type,
+			compatible: false,
 		}, {
-			name:     "additive enum changes are compatible",
-			from:     abcEnum,
-			to:       abcdEnum,
-			expected: true,
+			name:       "additive enum changes are compatible",
+			from:       abcEnum,
+			to:         abcdEnum,
+			compatible: true,
 		}, {
-			name:     "subtractive enum changes are incompatible",
-			from:     abcdEnum,
-			to:       abcEnum,
-			expected: false,
+			name:       "subtractive enum changes are incompatible",
+			from:       abcdEnum,
+			to:         abcEnum,
+			compatible: false,
 		}, {
-			name:     "enum collation changes are incompatible",
-			from:     abcEnum,
-			to:       abcEnumCi,
-			expected: false,
+			name:       "enum collation changes are incompatible",
+			from:       abcEnum,
+			to:         abcEnumCi,
+			compatible: false,
 		}, {
-			name:     "additive set changes are compatible",
-			from:     abcSet,
-			to:       abcdSet,
-			expected: true,
+			name:       "additive set changes are compatible",
+			from:       abcSet,
+			to:         abcdSet,
+			compatible: true,
 		}, {
-			name:     "subtractive set changes are incompatible",
-			from:     abcdSet,
-			to:       abcSet,
-			expected: false,
+			name:       "subtractive set changes are incompatible",
+			from:       abcdSet,
+			to:         abcSet,
+			compatible: false,
 		}, {
-			name:     "set collation changes are incompatible",
-			from:     abcSet,
-			to:       abcSetCi,
-			expected: false,
+			name:       "set collation changes are incompatible",
+			from:       abcSet,
+			to:         abcSetCi,
+			compatible: false,
 		}, {
-			name:     "geometry: identical types are compatible",
-			from:     geo,
-			to:       geo,
-			expected: true,
+			name:       "geometry: identical types are compatible",
+			from:       geo,
+			to:         geo,
+			compatible: true,
 		}, {
-			name:     "geometry: non-identical types are incompatible",
-			from:     geo,
-			to:       point,
-			expected: false,
+			name:       "geometry: non-identical types are incompatible",
+			from:       geo,
+			to:         point,
+			compatible: false,
+		},
+
+		// TODO: Add more tests for type widening changes
+		{
+			name:       "type widening: varchar(10) to varchar(20)",
+			from:       varchar10,
+			to:         varchar20,
+			compatible: true,
+			rewrite:    false,
+		}, {
+			name:       "type narrowing: varchar(20) to varchar(10)",
+			from:       varchar20,
+			to:         varchar10,
+			compatible: false,
+		}, {
+			name:       "type widening: varchar to TEXT",
+			from:       varchar10,
+			to:         text,
+			compatible: true,
+			rewrite:    true,
+		}, {
+			name:       "type narrowing: TEXT to varchar",
+			from:       text,
+			to:         varchar10,
+			compatible: false,
+		}, {
+			name:       "type widening: varbinary to BLOB",
+			from:       varbinary10,
+			to:         blob,
+			compatible: true,
+			rewrite:    true,
+		}, {
+			name:       "type narrowing: BLOB to varbinary",
+			from:       blob,
+			to:         varbinary10,
+			compatible: false,
+		}, {
+			name:       "type widening: TEXT to MEDIUMTEXT",
+			from:       text,
+			to:         mediumText,
+			compatible: true,
+			rewrite:    false,
+		}, {
+			name:       "type narrowing: MEDIUMTEXT to TEXT",
+			from:       mediumText,
+			to:         text,
+			compatible: false,
+		}, {
+			name:       "type widening: BLOB to MEDIUMBLOB",
+			from:       blob,
+			to:         mediumBlob,
+			compatible: true,
+			rewrite:    false,
+		}, {
+			name:       "type narrowing: MEDIUMBLOB to BLOB",
+			from:       mediumBlob,
+			to:         blob,
+			compatible: false,
+		},
+
+		// Incompatible types
+		{
+			name:       "incompatible: BLOB to TEXT",
+			from:       blob,
+			to:         text,
+			compatible: false,
+		}, {
+			name:       "incompatible: VARBINARY(10) to TEXT",
+			from:       varbinary10,
+			to:         text,
+			compatible: false,
 		},
 	})
 }
@@ -189,9 +293,9 @@ func TestDoltIsTypeChangeCompatible(t *testing.T) {
 func runTypeCompatibilityTests(t *testing.T, compatChecker TypeCompatibilityChecker, tests []typeChangeCompatibilityTest) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, requiresRewrite := compatChecker.IsTypeChangeCompatible(tt.from, tt.to)
-			assert.Equal(t, tt.expected, got)
-			assert.False(t, requiresRewrite)
+			compatible, requiresRewrite := compatChecker.IsTypeChangeCompatible(tt.from, tt.to)
+			assert.Equal(t, tt.compatible, compatible, "expected compatible to be %t, but was %t", tt.compatible, compatible)
+			assert.Equal(t, tt.rewrite, requiresRewrite, "expected rewrite required to be %t, but was %t", tt.rewrite, requiresRewrite)
 		})
 	}
 }
