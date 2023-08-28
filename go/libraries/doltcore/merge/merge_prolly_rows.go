@@ -1445,9 +1445,9 @@ func migrateDataToMergedSchema(ctx *sql.Context, tm *TableMerger, vm *valueMerge
 	//       dropped column, so there's nothing to do currently.
 	//       https://github.com/dolthub/dolt/issues/5641
 	//
-	//       Once we start handling more type changes changes that have different encodings (e.g. float -> decimal)
+	//       Once we start merging column type changes changes that have different encodings (e.g. float -> decimal)
 	//       or fixed width sizes (e.g. uint8 -> uint64) or primary key changes, then we'll need to start rewriting
-	//       index data. Currently, we only supporting widening types in ways that do not invalidate an index's format.
+	//       index data. Currently, we only support widening types in ways that do not invalidate an index's data.
 	return nil
 }
 
