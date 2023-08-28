@@ -142,34 +142,25 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 		}
 		tableNames := ""
 		for i := apr.PositionalArgsSeparatorIndex; i < apr.NArg(); i++ {
-			tableNames = tableNames + apr.Arg(i) + ","
+			tableNames = strings.Join([]string{tableNames, apr.Arg(i)}, ",")
 		}
 		if tableNames != "" {
-			tableNames = strings.TrimSuffix(tableNames, ",")
 			params = append(params, tableNames)
 			writeToBuffer("'--tables'")
 			writeToBuffer("?")
 		}
 	} else {
-		rows, err := GetRowsForSql(queryist, sqlCtx, "show tables")
-		if err != nil {
-			return "", err
-		}
-		existingTables := make(map[string]bool, len(rows))
-		for _, r := range rows {
-			existingTables[r[0].(string)] = true
-		}
+		var existingTables map[string]bool
 		seenRevs := make(map[string]bool, apr.NArg())
-
 		finishedRevs := false
 		tableNames := ""
-		for _, arg := range apr.Args {
+		for i, arg := range apr.Args {
 			// once we encounter a rev we can't resolve, we assume the rest are table names
 			if finishedRevs {
 				if _, ok := existingTables[arg]; !ok {
 					return "", fmt.Errorf("error: table %s does not exist", arg)
 				}
-				tableNames = tableNames + arg + ","
+				tableNames = strings.Join([]string{tableNames, arg}, ",")
 			} else {
 				if strings.Contains(arg, "..") || strings.HasPrefix(arg, "^") {
 					writeToBuffer("?")
@@ -178,17 +169,27 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 					_, err := GetRowsForSql(queryist, sqlCtx, "select hashof('"+arg+"')")
 					if err != nil {
 						finishedRevs = true
+						existingTables, err = getExistingTables(apr.Args[:i], queryist, sqlCtx)
+						if err != nil {
+							return "", err
+						}
+
 						if _, ok := existingTables[arg]; !ok {
 							return "", fmt.Errorf("error: table %s does not exist", arg)
 						}
-						tableNames = tableNames + arg + ","
+						tableNames = strings.Join([]string{tableNames, arg}, ",")
 					} else {
 						if _, ok := seenRevs[arg]; ok {
 							finishedRevs = true
+							existingTables, err = getExistingTables(apr.Args[:i], queryist, sqlCtx)
+							if err != nil {
+								return "", err
+							}
+
 							if _, ok := existingTables[arg]; !ok {
 								return "", fmt.Errorf("error: table %s does not exist", arg)
 							}
-							tableNames = tableNames + arg + ","
+							tableNames = strings.Join([]string{tableNames, arg}, ",")
 						} else {
 							seenRevs[arg] = true
 						}
@@ -200,7 +201,6 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 
 		}
 		if tableNames != "" {
-			tableNames = strings.TrimSuffix(tableNames, ",")
 			params = append(params, tableNames)
 			writeToBuffer("'--tables'")
 			writeToBuffer("?")
@@ -246,6 +246,23 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 	}
 
 	return interpolatedQuery, nil
+}
+
+// getExistingTables returns a map of table names that exist in the commit history of the given revisions
+func getExistingTables(revisions []string, queryist cli.Queryist, sqlCtx *sql.Context) (map[string]bool, error) {
+	tableNames := make(map[string]bool)
+
+	for _, rev := range revisions {
+		rows, err := GetRowsForSql(queryist, sqlCtx, "show tables as of "+rev)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range rows {
+			tableNames[r[0].(string)] = true
+		}
+	}
+
+	return tableNames, nil
 }
 
 func logCommits(apr *argparser.ArgParseResults, sqlResult []sql.Row, queryist cli.Queryist, sqlCtx *sql.Context) int {

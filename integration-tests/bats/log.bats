@@ -243,6 +243,13 @@ teardown() {
     dolt commit -m "commit 1 BRANCH1"
     dolt commit --allow-empty -m "commit 2 BRANCH1"
     dolt commit --allow-empty -m "commit 3 BRANCH1"
+    dolt checkout main
+    dolt sql -q "create table main (pk int PRIMARY KEY)"
+    dolt add .
+    dolt commit -m "commit 3 MAIN"
+    dolt checkout -b newBranch
+    dolt commit --allow-empty -m "commit 2 BRANCH2"
+    dolt checkout myname
 
     # Should default to branch name if one argument provided
     run dolt log myname
@@ -260,9 +267,15 @@ teardown() {
     run dolt log main -- main
     [ $status -eq 0 ]
 
+    # Table main exists on different branch
     run dolt log main main
+    [ $status -eq 0 ]
+    [[ "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "BRANCH1" ]] || false
+
+    run dolt log newBranch newBranch
     [ $status -eq 1 ]
-    [[ "$output" =~ "error: table main does not exist" ]] || false
+    [[ "$output" =~ "error: table newBranch does not exist" ]] || false
 }
 
 @test "log: branch with multiple tables" {

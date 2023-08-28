@@ -1103,3 +1103,18 @@ SQL
     [ $status -eq 1 ]
     [[ "$output" =~ "This command does not support global arguments." ]] || false
 }
+
+@test "sql-local-remote: verify dolt log behavior" {
+    cd altDB
+
+    run dolt --verbose-engine-setup log
+    [ $status -eq 0 ]
+    [[ "$output" =~ "starting local mode" ]] || false
+    [[ "$output" =~ "tables table1, table2" ]] || false
+
+    start_sql_server altDB
+    run dolt --verbose-engine-setup log
+    [ $status -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+    [[ "$output" =~ "tables table1, table2" ]] || false
+}
