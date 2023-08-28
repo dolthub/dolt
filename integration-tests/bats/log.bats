@@ -30,6 +30,10 @@ teardown() {
 }
 
 @test "log: log respects branches" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "needs checkout which is unsupported for remote-engine"
+    fi
+
     dolt branch branch1
     dolt commit --allow-empty -m "commit 1 MAIN"
     dolt commit	--allow-empty -m "commit 2 MAIN"
@@ -54,6 +58,10 @@ teardown() {
 }
 
 @test "log: two and three dot log" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "needs checkout which is unsupported for remote-engine"
+    fi
+
     dolt sql -q "create table testtable (pk int PRIMARY KEY)"
     dolt add .
     dolt commit -m "commit 1 MAIN"
@@ -235,6 +243,10 @@ teardown() {
 }
 
 @test "log: branch name and table name are the same" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "needs checkout which is unsupported for remote-engine"
+    fi
+
     dolt commit --allow-empty -m "commit 1 MAIN"
     dolt commit	--allow-empty -m "commit 2 MAIN"
     dolt checkout -b myname
@@ -279,6 +291,10 @@ teardown() {
 }
 
 @test "log: branch with multiple tables" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "needs checkout which is unsupported for remote-engine"
+    fi
+
     dolt sql -q "create table test (pk int PRIMARY KEY)"
     dolt add .
     dolt commit -m "created table test"
@@ -345,6 +361,10 @@ teardown() {
 }
 
 @test "log: on fast-forward merge commits" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "needs checkout which is unsupported for remote-engine"
+    fi
+
     dolt sql -q	"create table test (pk int, c1 int, primary key(pk))"
     dolt add test
     dolt commit -m "Commit1"
@@ -363,6 +383,10 @@ teardown() {
 }
 
 @test "log: properly orders merge commits" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "needs checkout which is unsupported for remote-engine"
+    fi
+
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
     dolt commit -m "Commit1"
@@ -486,6 +510,10 @@ teardown() {
 }
 
 @test "log: Log on a table works with merge commits" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "needs checkout which is unsupported for remote-engine"
+    fi
+
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
     dolt commit -m "Commit1"
@@ -521,6 +549,10 @@ teardown() {
 }
 
 @test "log: dolt log with ref and table" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "needs checkout which is unsupported for remote-engine"
+    fi
+
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
     dolt commit -m "Commit1"
@@ -563,6 +595,10 @@ teardown() {
 }
 
 @test "log: --merges, --parents, --min-parents option" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "needs checkout which is unsupported for remote-engine"
+    fi
+
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add -A
     dolt commit -m "Created table"
