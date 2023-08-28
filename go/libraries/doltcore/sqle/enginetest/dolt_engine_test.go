@@ -2753,8 +2753,21 @@ func TestThreeWayMergeWithSchemaChangeScripts(t *testing.T) {
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsForDataConflicts, "data conflicts", false)
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsCollations, "collation changes", false)
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsConstraints, "constraint changes", false)
-	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsTypeChanges, "type changes", false)
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsSchemaConflicts, "schema conflicts", false)
+
+	// Run non-symmetric schema merge tests in just one direction
+	t.Run("type changes", func(t *testing.T) {
+		t.Run("right to left merges", func(t *testing.T) {
+			for _, script := range SchemaChangeTestsTypeChanges {
+				// run in a func() so we can cleanly defer closing the harness
+				func() {
+					h := newDoltHarness(t)
+					defer h.Close()
+					enginetest.TestScript(t, h, convertMergeScriptTest(script, false))
+				}()
+			}
+		})
+	})
 }
 
 func TestThreeWayMergeWithSchemaChangeScriptsPrepared(t *testing.T) {
@@ -2763,8 +2776,22 @@ func TestThreeWayMergeWithSchemaChangeScriptsPrepared(t *testing.T) {
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsForDataConflicts, "data conflicts", true)
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsCollations, "collation changes", true)
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsConstraints, "constraint changes", true)
-	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsTypeChanges, "type changes", true)
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsSchemaConflicts, "schema conflicts", true)
+
+	// Run non-symmetric schema merge tests in just one direction
+	t.Run("type changes", func(t *testing.T) {
+		t.Run("right to left merges", func(t *testing.T) {
+			for _, script := range SchemaChangeTestsTypeChanges {
+				// run in a func() so we can cleanly defer closing the harness
+				func() {
+					h := newDoltHarness(t)
+					defer h.Close()
+					enginetest.TestScriptPrepared(t, h, convertMergeScriptTest(script, false))
+				}()
+			}
+		})
+	})
+
 }
 
 // runMergeScriptTestsInBothDirections creates a new test run, named |name|, and runs the specified merge |tests|

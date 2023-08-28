@@ -217,7 +217,7 @@ func TestDoltIsTypeChangeCompatible(t *testing.T) {
 			compatible: false,
 		},
 
-		// TODO: Add more tests for type widening changes
+		// Type width changes
 		{
 			name:       "type widening: varchar(10) to varchar(20)",
 			from:       varchar10,

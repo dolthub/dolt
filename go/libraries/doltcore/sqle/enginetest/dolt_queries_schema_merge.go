@@ -1071,6 +1071,9 @@ var SchemaChangeTestsConstraints = []MergeScriptTest{
 	},
 }
 
+// SchemaChangeTestsTypeChanges holds test scripts for schema merge where column types have changed. Note that
+// unlike other schema change tests, these tests are NOT symmetric, so they do not get automatically run in both
+// directions.
 var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 	{
 		Name: "varchar widening",
@@ -1311,12 +1314,37 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 			},
 		},
 	},
+	{
+		Name: "varchar shortening",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 varchar(10));",
+			"INSERT into t values (1, '123');",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 varchar(9);",
+			"INSERT into t values (2, '12345');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '321');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{"", 0, 1}},
+			},
+			{
+				Query:    "select table_name, description like 'incompatible column types for column ''col1''%' from dolt_schema_conflicts;",
+				Expected: []sql.Row{{"t", true}},
+			},
+		},
+	},
 }
 
 var SchemaChangeTestsSchemaConflicts = []MergeScriptTest{
 	{
 		// Type widening - these changes move from smaller types to bigger types, so they are guaranteed to be safe.
-		// TODO: We don't support automatically converting column types in merges yet, so currently these won't
+		// TODO: We don't support automatically converting all types in merges yet, so currently these won't
 		//       automatically merge and instead return schema conflicts.
 		Name: "type widening",
 		AncSetUpScript: []string{
@@ -1391,31 +1419,6 @@ var SchemaChangeTestsSchemaConflicts = []MergeScriptTest{
 					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` enum('blue','green','red'),\n  `col2` double,\n  `col3` bigint,\n  `col4` decimal(8,4),\n  `col5` varchar(20),\n  `col6` set('a','b','c'),\n  `col7` bit(2),\n  PRIMARY KEY (`pk`),\n  KEY `idx1` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` enum('blue','green'),\n  `col2` float,\n  `col3` smallint,\n  `col4` decimal(4,2),\n  `col5` varchar(10),\n  `col6` set('a','b'),\n  `col7` bit(1),\n  PRIMARY KEY (`pk`),\n  KEY `idx1` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` enum('blue','green','red'),\n  `col2` double,\n  `col3` bigint,\n  `col4` decimal(8,4),\n  `col5` varchar(20),\n  `col6` set('a','b','c'),\n  `col7` bit(2),\n  PRIMARY KEY (`pk`),\n  KEY `idx1` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"}},
-			},
-		},
-	},
-	{
-		Name: "varchar shortening",
-		AncSetUpScript: []string{
-			"set autocommit = 0;",
-			"CREATE table t (pk int primary key, col1 varchar(10));",
-			"INSERT into t values (1, '123');",
-		},
-		RightSetUpScript: []string{
-			"alter table t modify column col1 varchar(9);",
-			"INSERT into t values (2, '12345');",
-		},
-		LeftSetUpScript: []string{
-			"INSERT into t values (3, '321');",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{"", 0, 1}},
-			},
-			{
-				Query:    "select table_name, description like 'incompatible column types for column ''col1''%' from dolt_schema_conflicts;",
-				Expected: []sql.Row{{"t", true}},
 			},
 		},
 	},

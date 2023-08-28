@@ -439,7 +439,7 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 				} else if oursChanged {
 					// In this case, only oursChanged, so we need to check if moving from theirs->ours
 					// is valid, otherwise it's a conflict
-					compatible, rewrite := compatChecker.IsTypeChangeCompatible(theirs.TypeInfo, ours.TypeInfo)
+					compatible, rewrite := compatChecker.IsTypeChangeCompatible(ours.TypeInfo, theirs.TypeInfo)
 					if rewrite {
 						tableRewrite = true
 					}
