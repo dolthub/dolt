@@ -140,12 +140,12 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 			writeToBuffer("?")
 			params = append(params, apr.Arg(i))
 		}
-		tableNames := ""
+		var tableNames []string
 		for i := apr.PositionalArgsSeparatorIndex; i < apr.NArg(); i++ {
-			tableNames = strings.Join([]string{tableNames, apr.Arg(i)}, ",")
+			tableNames = append(tableNames, apr.Arg(i))
 		}
-		if tableNames != "" {
-			params = append(params, tableNames)
+		if len(tableNames) > 0 {
+			params = append(params, strings.Join(tableNames, ","))
 			writeToBuffer("'--tables'")
 			writeToBuffer("?")
 		}
@@ -153,14 +153,14 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 		var existingTables map[string]bool
 		seenRevs := make(map[string]bool, apr.NArg())
 		finishedRevs := false
-		tableNames := ""
+		var tableNames []string
 		for i, arg := range apr.Args {
 			// once we encounter a rev we can't resolve, we assume the rest are table names
 			if finishedRevs {
 				if _, ok := existingTables[arg]; !ok {
 					return "", fmt.Errorf("error: table %s does not exist", arg)
 				}
-				tableNames = strings.Join([]string{tableNames, arg}, ",")
+				tableNames = append(tableNames, arg)
 			} else {
 				if strings.Contains(arg, "..") || strings.HasPrefix(arg, "^") {
 					writeToBuffer("?")
@@ -177,7 +177,7 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 						if _, ok := existingTables[arg]; !ok {
 							return "", fmt.Errorf("error: table %s does not exist", arg)
 						}
-						tableNames = strings.Join([]string{tableNames, arg}, ",")
+						tableNames = append(tableNames, arg)
 					} else {
 						if _, ok := seenRevs[arg]; ok {
 							finishedRevs = true
@@ -189,7 +189,7 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 							if _, ok := existingTables[arg]; !ok {
 								return "", fmt.Errorf("error: table %s does not exist", arg)
 							}
-							tableNames = strings.Join([]string{tableNames, arg}, ",")
+							tableNames = append(tableNames, arg)
 						} else {
 							seenRevs[arg] = true
 						}
@@ -200,8 +200,8 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 			}
 
 		}
-		if tableNames != "" {
-			params = append(params, tableNames)
+		if len(tableNames) > 0 {
+			params = append(params, strings.Join(tableNames, ","))
 			writeToBuffer("'--tables'")
 			writeToBuffer("?")
 		}
