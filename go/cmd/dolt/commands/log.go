@@ -162,7 +162,7 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 				}
 				tableNames = append(tableNames, arg)
 			} else {
-				if strings.Contains(arg, "..") || strings.HasPrefix(arg, "^") {
+				if strings.Contains(arg, "..") || strings.HasPrefix(arg, "^") || strings.HasPrefix(arg, "refs/") || strings.HasPrefix(arg, "remotes/") {
 					writeToBuffer("?")
 					params = append(params, arg)
 				} else {
