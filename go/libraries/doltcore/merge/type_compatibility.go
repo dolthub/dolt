@@ -176,7 +176,9 @@ func (s stringTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (
 
 	rewriteRequired := false
 	if compatible {
-		// TODO: Document me!
+		// Because inline string types (e.g. VARCHAR, CHAR) have the same encoding, the only time
+		// a table rewrite is required is when moving between an inline string type and an
+		// out-of-band string type (e.g. TEXT).
 		fromTypeOutOfBand := outOfBandType(fromSqlType)
 		toTypeOutOfBand := outOfBandType(toSqlType)
 		if !fromTypeOutOfBand && toTypeOutOfBand {
@@ -187,6 +189,8 @@ func (s stringTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (
 	return compatible, rewriteRequired
 }
 
+// outOfBandType returns true if the specified type |t| is stored outside of a table's index file, for example
+// TINYTEXT, TEXT, BLOB, etc.
 func outOfBandType(t sql.Type) bool {
 	switch t.Type() {
 	case sqltypes.Blob, sqltypes.Text:
