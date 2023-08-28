@@ -55,33 +55,16 @@ var point = typeinfo.CreatePointTypeFromSqlPointType(gmstypes.PointType{SRID: ui
 // String type test data
 var varchar10 = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.VarChar, 10, sql.Collation_Default))
 var varchar20 = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.VarChar, 20, sql.Collation_Default))
+var varchar300 = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.VarChar, 300, sql.Collation_Default))
+var varchar10BinaryCollation = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.VarChar, 10, sql.Collation_binary))
+var tinyText = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.Text, 255, sql.Collation_Default))
 var text = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.Text, 65_535, sql.Collation_Default))
 var mediumText = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.Text, 16_777_215, sql.Collation_Default))
 
 // Binary type test data
-var varbinary10 typeinfo.TypeInfo
-var blob, mediumBlob typeinfo.TypeInfo
-
-func init() {
-	var err error
-	// TODO: This interface kinda sucks... maybe add a better creation function to help keep tests cleaner?
-	foo := gmstypes.MustCreateString(sqltypes.VarBinary, 10, sql.Collation_binary)
-	varbinary10, err = typeinfo.FromSqlType(foo)
-	if err != nil {
-		panic(err)
-	}
-
-	// TODO: Is this the right/best way to create a BLOB?
-	blob, err = typeinfo.CreateBlobStringTypeFromParams(map[string]string{"length": "65535", "collate": "binary"})
-	if err != nil {
-		panic(err)
-	}
-
-	mediumBlob, err = typeinfo.FromSqlType(gmstypes.MustCreateBinary(sqltypes.Blob, 16_777_215))
-	if err != nil {
-		panic(err)
-	}
-}
+var varbinary10 = mustCreateType(gmstypes.MustCreateString(sqltypes.VarBinary, 10, sql.Collation_binary))
+var blob = mustCreateType(gmstypes.MustCreateString(sqltypes.Blob, 65_535, sql.Collation_binary))
+var mediumBlob = mustCreateType(gmstypes.MustCreateBinary(sqltypes.Blob, 16_777_215))
 
 // TestLd1IsTypeChangeCompatible tests that the LD1 TypeCompatibilityChecker implementation
 // correctly computes compatibility between types.
@@ -273,10 +256,20 @@ func TestDoltIsTypeChangeCompatible(t *testing.T) {
 			from:       mediumBlob,
 			to:         blob,
 			compatible: false,
+		}, {
+			name:       "type narrowing: VARCHAR(300) to TINYTEXT",
+			from:       varchar300,
+			to:         tinyText,
+			compatible: false,
 		},
 
 		// Incompatible types
 		{
+			name:       "incompatible: varchar(10) collation change",
+			from:       varchar10,
+			to:         varchar10BinaryCollation,
+			compatible: false,
+		}, {
 			name:       "incompatible: BLOB to TEXT",
 			from:       blob,
 			to:         text,
@@ -298,4 +291,14 @@ func runTypeCompatibilityTests(t *testing.T, compatChecker TypeCompatibilityChec
 			assert.Equal(t, tt.rewrite, requiresRewrite, "expected rewrite required to be %t, but was %t", tt.rewrite, requiresRewrite)
 		})
 	}
+}
+
+// mustCreateType creates a new Dolt TypeInfo instance from the specified sql.Type. If any problems are encountered
+// creating the type, this method will panic.
+func mustCreateType(sqlType sql.Type) typeinfo.TypeInfo {
+	mediumBlob, err := typeinfo.FromSqlType(sqlType)
+	if err != nil {
+		panic(err)
+	}
+	return mediumBlob
 }

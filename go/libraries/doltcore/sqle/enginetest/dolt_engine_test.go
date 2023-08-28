@@ -2757,16 +2757,14 @@ func TestThreeWayMergeWithSchemaChangeScripts(t *testing.T) {
 
 	// Run non-symmetric schema merge tests in just one direction
 	t.Run("type changes", func(t *testing.T) {
-		t.Run("right to left merges", func(t *testing.T) {
-			for _, script := range SchemaChangeTestsTypeChanges {
-				// run in a func() so we can cleanly defer closing the harness
-				func() {
-					h := newDoltHarness(t)
-					defer h.Close()
-					enginetest.TestScript(t, h, convertMergeScriptTest(script, false))
-				}()
-			}
-		})
+		for _, script := range SchemaChangeTestsTypeChanges {
+			// run in a func() so we can cleanly defer closing the harness
+			func() {
+				h := newDoltHarness(t)
+				defer h.Close()
+				enginetest.TestScript(t, h, convertMergeScriptTest(script, false))
+			}()
+		}
 	})
 }
 

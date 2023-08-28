@@ -1115,7 +1115,7 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 		},
 	},
 	{
-		Name: "type widening - enums and sets",
+		Name: "enums and sets widening",
 		AncSetUpScript: []string{
 			"CREATE table t (pk int primary key, col1 enum('blue', 'green'), col2 set('blue', 'green'));",
 			"INSERT into t values (1, 'blue', 'blue,green');",
@@ -1145,11 +1145,12 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 		},
 	},
 	{
-		Name: "VARCHAR widening to TEXT",
+		Name: "VARCHAR to TEXT widening",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
 			"CREATE table t (pk int primary key, col1 varchar(10));",
 			"INSERT into t values (1, '123');",
+			"alter table t add index idx1 (col1(10));",
 		},
 		RightSetUpScript: []string{
 			"alter table t modify column col1 TEXT;",
@@ -1174,11 +1175,12 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 		},
 	},
 	{
-		Name: "VARBINARY widening to BLOB",
+		Name: "VARBINARY to BLOB widening",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
 			"CREATE table t (pk int primary key, col1 varbinary(10));",
 			"INSERT into t values (1, '123');",
+			"alter table t add index idx1 (col1(10));",
 		},
 		RightSetUpScript: []string{
 			"alter table t modify column col1 BLOB;",
@@ -1203,11 +1205,12 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 		},
 	},
 	{
-		Name: "schema conflict: varchar(300) to TINYTEXT(255)",
+		Name: "varchar(300) to TINYTEXT(255) narrowing",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
 			"CREATE table t (pk int primary key, col1 varchar(300));",
 			"INSERT into t values (1, '123');",
+			"alter table t add index idx1 (col1(10));",
 		},
 		RightSetUpScript: []string{
 			"alter table t modify column col1 TINYTEXT;",
@@ -1237,6 +1240,7 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 			"set autocommit = 0;",
 			"CREATE table t (pk int primary key, col1 VARBINARY(300));",
 			"INSERT into t values (1, '123');",
+			"alter table t add index idx1 (col1(10));",
 		},
 		RightSetUpScript: []string{
 			"alter table t modify column col1 TINYBLOB;",
@@ -1261,11 +1265,12 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 		},
 	},
 	{
-		Name: "CHAR(5) to TINYTEXT",
+		Name: "CHAR(5) to TINYTEXT widening",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
 			"CREATE table t (pk int primary key, col1 char(5));",
 			"INSERT into t values (1, '123');",
+			"alter table t add index idx1 (col1(5));",
 		},
 		RightSetUpScript: []string{
 			"alter table t modify column col1 TINYTEXT;",
@@ -1295,6 +1300,7 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 			"set autocommit = 0;",
 			"CREATE table t (pk int primary key, col1 char(5) COLLATE utf8mb3_esperanto_ci);",
 			"INSERT into t values (1, '123');",
+			"alter table t add index idx1 (col1(3));",
 		},
 		RightSetUpScript: []string{
 			"alter table t modify column col1 TINYTEXT COLLATE utf32_unicode_ci;",
@@ -1315,11 +1321,38 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 		},
 	},
 	{
-		Name: "varchar shortening",
+		Name: "varchar narrowing",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
 			"CREATE table t (pk int primary key, col1 varchar(10));",
 			"INSERT into t values (1, '123');",
+			"alter table t add index idx1 (col1(10));",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 varchar(9);",
+			"INSERT into t values (2, '12345');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '321');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{"", 0, 1}},
+			},
+			{
+				Query:    "select table_name, description like 'incompatible column types for column ''col1''%' from dolt_schema_conflicts;",
+				Expected: []sql.Row{{"t", true}},
+			},
+		},
+	},
+	{
+		Name: "TEXT to VARCHAR narrowing",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 TEXT);",
+			"INSERT into t values (1, '123');",
+			"alter table t add index idx1 (col1(10));",
 		},
 		RightSetUpScript: []string{
 			"alter table t modify column col1 varchar(9);",

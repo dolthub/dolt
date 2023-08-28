@@ -1444,9 +1444,10 @@ func migrateDataToMergedSchema(ctx *sql.Context, tm *TableMerger, vm *valueMerge
 	//       secondary indexes. Columns drops *should*, but currently Dolt just drops any index referencing the
 	//       dropped column, so there's nothing to do currently.
 	//       https://github.com/dolthub/dolt/issues/5641
-	//       Once we start handling type changes changes or primary key changes, or fix the bug above,
-	//       then we will need to start migrating secondary index data, too.
-
+	//
+	//       Once we start handling more type changes changes that have different encodings (e.g. float -> decimal)
+	//       or fixed width sizes (e.g. uint8 -> uint64) or primary key changes, then we'll need to start rewriting
+	//       index data. Currently, we only supporting widening types in ways that do not invalidate an index's format.
 	return nil
 }
 
