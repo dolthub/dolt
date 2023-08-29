@@ -1481,15 +1481,17 @@ func migrateDataToMergedSchema(ctx *sql.Context, tm *TableMerger, vm *valueMerge
 	}
 	tm.leftTbl = newTable
 
-	// TODO: for now... we don't actually need to migrate any of the data held in secondary indexes (yet).
-	//       We're currently dealing with column adds/drops/renames/reorders, but none of those directly affect
-	//       secondary indexes. Columns drops *should*, but currently Dolt just drops any index referencing the
-	//       dropped column, so there's nothing to do currently.
+	// NOTE: We don't handle migrating secondary index data to the new schema here. In most cases, a schema change
+	//       won't affect secondary index data, but there are a few cases where we do rebuild the indexes. Dropping
+	//       a column *should* keep the index, but remove that column from it and rebuild it, but Dolt/GMS currently
+	//       drop the index completely if a used column is removed.
 	//       https://github.com/dolthub/dolt/issues/5641
 	//
-	//       Once we start merging column type changes changes that have different encodings (e.g. float -> decimal)
-	//       or fixed width sizes (e.g. uint8 -> uint64) or primary key changes, then we'll need to start rewriting
-	//       index data. Currently, we only support widening types in ways that do not invalidate an index's data.
+	//       Most of the currently supported type changes for a schema merge don't require rebuilding secondary
+	//       indexes either. The exception is converting a column to BINARY, which requires us to rewrite the data
+	//       and ensure it's right-padded with null bytes, up to the column length. This is handled at the end of
+	//       the table merge. If we detect that the table rows needed to be rewritten, then we'll rebuild all indexes
+	//       on the table, just to be safe.
 	return nil
 }
 
