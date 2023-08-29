@@ -1499,7 +1499,34 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 				Expected: []sql.Row{{1, 255}, {2, 255}, {3, 255}},
 			},
 		},
-	}}
+	},
+	{
+		Name: "TINYTEXT to VARCHAR(300) widening",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 TINYTEXT);",
+			"INSERT into t values (1, 'tiny tiny text');",
+			"alter table t add unique index idx1 (col1(10));",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 VARCHAR(300);",
+			"INSERT into t values (2, 'more teeny tiny text');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, 'the teeniest of tiny text');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query:    "select pk, col1 from t order by pk;",
+				Expected: []sql.Row{{1, "tiny tiny text"}, {2, "more teeny tiny text"}, {3, "the teeniest of tiny text"}},
+			},
+		},
+	},
+}
 
 var SchemaChangeTestsSchemaConflicts = []MergeScriptTest{
 	{

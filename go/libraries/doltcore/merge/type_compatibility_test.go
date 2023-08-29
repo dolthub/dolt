@@ -202,27 +202,33 @@ func TestDoltIsTypeChangeCompatible(t *testing.T) {
 
 		// Type width changes
 		{
-			name:       "type widening: varchar(10) to varchar(20)",
+			name:       "type widening: VARCHAR(10) to VARCHAR(20)",
 			from:       varchar10,
 			to:         varchar20,
 			compatible: true,
 			rewrite:    false,
 		}, {
-			name:       "type narrowing: varchar(20) to varchar(10)",
+			name:       "type narrowing: VARCHAR(20) to VARCHAR(10)",
 			from:       varchar20,
 			to:         varchar10,
 			compatible: false,
 		}, {
-			name:       "type widening: varchar to TEXT",
+			name:       "type widening: VARCHAR to TEXT",
 			from:       varchar10,
 			to:         text,
 			compatible: true,
 			rewrite:    true,
 		}, {
-			name:       "type narrowing: TEXT to varchar",
+			name:       "type narrowing: TEXT to VARCHAR(10)",
 			from:       text,
 			to:         varchar10,
 			compatible: false,
+		}, {
+			name:       "type widening: TINYTEXT to VARCHAR(300)",
+			from:       tinyText,
+			to:         varchar300,
+			compatible: true,
+			rewrite:    true,
 		}, {
 			name:       "type widening: varbinary to BLOB",
 			from:       varbinary10,
@@ -265,7 +271,7 @@ func TestDoltIsTypeChangeCompatible(t *testing.T) {
 
 		// Incompatible types
 		{
-			name:       "incompatible: varchar(10) collation change",
+			name:       "incompatible: VARCHAR(10) collation change",
 			from:       varchar10,
 			to:         varchar10BinaryCollation,
 			compatible: false,

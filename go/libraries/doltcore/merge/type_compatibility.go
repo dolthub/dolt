@@ -176,12 +176,12 @@ func (s stringTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (
 
 	tableRewrite = false
 	if compatible {
-		// Because inline string types (e.g. VARCHAR, CHAR) have the same encoding, the only time
-		// a table rewrite is required is when moving between an inline string type and an
-		// out-of-band string type (e.g. TEXT).
+		// Because inline string types (e.g. VARCHAR, CHAR) have the same encoding, the main case
+		// when a table rewrite is required is when moving between an inline string type (e.g. CHAR)
+		// and an out-of-band string type (e.g. TEXT).
 		fromTypeOutOfBand := outOfBandType(fromSqlType)
 		toTypeOutOfBand := outOfBandType(toSqlType)
-		if !fromTypeOutOfBand && toTypeOutOfBand {
+		if fromTypeOutOfBand != toTypeOutOfBand {
 			tableRewrite = true
 		}
 
