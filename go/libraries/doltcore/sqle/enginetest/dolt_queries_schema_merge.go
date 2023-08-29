@@ -1472,7 +1472,34 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 			},
 		},
 	},
-}
+	{
+		Name: "TINYBLOB to BINARY(300) widening",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 TINYBLOB);",
+			"INSERT into t values (1, 0x01);",
+			"alter table t add unique index idx1 (col1(10));",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 BINARY(255);",
+			"INSERT into t values (2, 0x0102);",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, 0x010203);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				// When MySQL converts from TINYTEXT to BINARY(255), MySQL right-pads each existing value
+				// with null bytes, to expand the value up to 255 bytes.
+				Query:    "select pk, length(col1) from t order by pk;",
+				Expected: []sql.Row{{1, 255}, {2, 255}, {3, 255}},
+			},
+		},
+	}}
 
 var SchemaChangeTestsSchemaConflicts = []MergeScriptTest{
 	{
