@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -98,7 +99,7 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 	}
 
 	var stats *MergeStats
-	mergeTbl, stats, err = mergeProllyTableData(sqlCtx, tm, mergedSch, mergeTbl, valueMerger)
+	mergeTbl, stats, err = mergeProllyTableData(sqlCtx, tm, mergedSch, mergeTbl, valueMerger, rewriteRows)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -123,8 +124,10 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 // to the right-side, we apply it to the left-side by merging it into the left-side's primary index
 // as well as any secondary indexes, and also checking for unique constraints incrementally. When
 // conflicts are detected, this function attempts to resolve them automatically if possible, and
-// if not, they are recorded as conflicts in the table's artifacts.
-func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Schema, mergeTbl *doltdb.Table, valueMerger *valueMerger) (*doltdb.Table, *MergeStats, error) {
+// if not, they are recorded as conflicts in the table's artifacts. If |rebuildIndexes| is set to
+// true, then secondary indexes will be rebuilt, instead of being incrementally merged together. This
+// is less efficient, but safer, especially when type changes have been applied to a table's schema.
+func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Schema, mergeTbl *doltdb.Table, valueMerger *valueMerger, rebuildIndexes bool) (*doltdb.Table, *MergeStats, error) {
 	iter, err := threeWayDiffer(ctx, tm, valueMerger)
 	if err != nil {
 		return nil, nil, err
@@ -280,7 +283,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		return nil, nil, err
 	}
 
-	finalIdxs, err := mergeProllySecondaryIndexes(ctx, tm, leftIdxs, rightIdxs, finalSch, finalRows, conflicts.ae)
+	finalIdxs, err := mergeProllySecondaryIndexes(ctx, tm, leftIdxs, rightIdxs, finalSch, finalRows, conflicts.ae, rebuildIndexes)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1059,7 +1062,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 			}
 		} else {
 			tempTupleValue, err := remapTupleWithColumnDefaults(ctx, diff.Key, diff.Right, sourceSch.GetValueDescriptor(),
-				m.valueMerger.rightMapping, m.tableMerger, m.finalSch, m.valueMerger.syncPool)
+				m.valueMerger.rightMapping, m.tableMerger, m.finalSch, m.valueMerger.syncPool, true)
 			if err != nil {
 				return err
 			}
@@ -1229,14 +1232,16 @@ func remapTuple(tuple val.Tuple, desc val.TupleDesc, mapping val.OrdinalMapping)
 // currently being merged and associated node store. |mergedSch| is the new schema of the table and is used to look up
 // column default values to apply to any existing rows when a new column is added as part of a merge. |pool| is used
 // to allocate memory for the new tuple. A pointer to the new tuple data is returned, along with any error encountered.
-func remapTupleWithColumnDefaults(ctx *sql.Context, keyTuple, valueTuple val.Tuple, tupleDesc val.TupleDesc, mapping val.OrdinalMapping, tm *TableMerger, mergedSch schema.Schema, pool pool.BuffPool) (val.Tuple, error) {
+// The |rightSide| parameter indicates if the tuple came from the right side of the merge; this is needed to determine
+// if the tuple data needs to be converted from the old schema type to a changed schema type.
+func remapTupleWithColumnDefaults(ctx *sql.Context, keyTuple, valueTuple val.Tuple, tupleDesc val.TupleDesc, mapping val.OrdinalMapping, tm *TableMerger, mergedSch schema.Schema, pool pool.BuffPool, rightSide bool) (val.Tuple, error) {
 	tb := val.NewTupleBuilder(mergedSch.GetValueDescriptor())
 
 	for to, from := range mapping {
 		var value interface{}
+		col := mergedSch.GetNonPKCols().GetByIndex(to)
 		if from == -1 {
 			// If the column is a new column, then look up any default value
-			col := mergedSch.GetNonPKCols().GetByIndex(to)
 			if col.Default != "" {
 				// TODO: Not great to reparse the expression for every single row... need to cache this
 				expression, err := resolveExpression(ctx, col.Default, mergedSch, tm.name)
@@ -1271,6 +1276,13 @@ func remapTupleWithColumnDefaults(ctx *sql.Context, keyTuple, valueTuple val.Tup
 			if err != nil {
 				return nil, err
 			}
+
+			// If the type has changed, then call convert to convert the value to the new type
+			value, err = convertValueToNewType(value, col.TypeInfo, tm, from, rightSide)
+			if err != nil {
+				return nil, err
+			}
+
 			err = index.PutField(ctx, tm.ns, tb, to, value)
 			if err != nil {
 				return nil, err
@@ -1278,6 +1290,36 @@ func remapTupleWithColumnDefaults(ctx *sql.Context, keyTuple, valueTuple val.Tup
 		}
 	}
 	return tb.Build(pool), nil
+}
+
+// convertValueToNewType handles converting a value from a previous type into a new type. |value| is the value from
+// the previous schema, |newTypeInfo| is the type info for the value in the new schema, |tm| is the TableMerger
+// instance that describes how the table is being merged, |from| is the field position in the value tuple from the
+// previous schema, and |rightSide| indicates whether the previous type info can be found on the right side of the merge
+// or the left side. If the previous type info is the same as the current type info for the merged schema, then this
+// function is a no-op and simply returns |value|. The converted value along with any unexpected error encountered is
+// returned.
+func convertValueToNewType(value interface{}, newTypeInfo typeinfo.TypeInfo, tm *TableMerger, from int, rightSide bool) (interface{}, error) {
+	var previousTypeInfo typeinfo.TypeInfo
+	if rightSide {
+		previousTypeInfo = tm.rightSch.GetNonPKCols().GetByIndex(from).TypeInfo
+	} else {
+		previousTypeInfo = tm.leftSch.GetNonPKCols().GetByIndex(from).TypeInfo
+	}
+
+	// If the type has changed, then call convert to convert the value to the new type
+	if newTypeInfo.Equals(previousTypeInfo) {
+		return value, nil
+	}
+
+	newValue, inRange, err := newTypeInfo.ToSqlType().Convert(value)
+	if err != nil {
+		return nil, err
+	}
+	if !inRange {
+		return nil, fmt.Errorf("out of range conversion for value %v to type %s", value, newTypeInfo.String())
+	}
+	return newValue, nil
 }
 
 func mergeTableArtifacts(ctx context.Context, tm *TableMerger, mergeTbl *doltdb.Table) (*doltdb.Table, error) {
@@ -1416,7 +1458,7 @@ func migrateDataToMergedSchema(ctx *sql.Context, tm *TableMerger, vm *valueMerge
 			return err
 		}
 
-		newValueTuple, err := remapTupleWithColumnDefaults(ctx, keyTuple, valueTuple, valueDescriptor, vm.leftMapping, tm, mergedSch, vm.syncPool)
+		newValueTuple, err := remapTupleWithColumnDefaults(ctx, keyTuple, valueTuple, valueDescriptor, vm.leftMapping, tm, mergedSch, vm.syncPool, false)
 		if err != nil {
 			return err
 		}

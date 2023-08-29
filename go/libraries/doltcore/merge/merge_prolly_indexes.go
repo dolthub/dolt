@@ -30,7 +30,9 @@ import (
 
 // mergeProllySecondaryIndexes merges the secondary indexes of the given |tbl|,
 // |mergeTbl|, and |ancTbl|. It stores the merged indexes into |tableToUpdate|
-// and returns its updated value.
+// and returns its updated value. If |rebuildIndexes| is true, then all indexes
+// will be rebuilt from the table's data, instead of merging in incremental
+// changes from the other side of the merge. This is safer, but less efficient.
 func mergeProllySecondaryIndexes(
 	ctx context.Context,
 	tm *TableMerger,
@@ -38,6 +40,7 @@ func mergeProllySecondaryIndexes(
 	finalSch schema.Schema,
 	finalRows durable.Index,
 	artifacts *prolly.ArtifactsEditor,
+	rebuildIndexes bool,
 ) (durable.IndexSet, error) {
 	ancSet, err := tm.ancTbl.GetIndexSet(ctx)
 	if err != nil {
@@ -82,7 +85,7 @@ func mergeProllySecondaryIndexes(
 		}
 
 		mergedIndex, err := func() (durable.Index, error) {
-			if !rootOK || !mergeOK || !ancOK {
+			if rebuildIndexes || !rootOK || !mergeOK || !ancOK {
 				return buildIndex(ctx, tm.vrw, tm.ns, finalSch, index, mergedM, artifacts, tm.rightSrc, tm.name)
 			}
 			return durable.IndexFromProllyMap(left), nil

@@ -184,6 +184,14 @@ func (s stringTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (
 		if !fromTypeOutOfBand && toTypeOutOfBand {
 			rewriteRequired = true
 		}
+
+		// The exception to this is when converting to a fixed width BINARY(N) field, which requires rewriting the
+		// table. This is due to MySQL's handling of BINARY(N) field conversion – any existing values in the table,
+		// or its indexes, need to be right padded up to N bytes. Note that MySQL does NOT do a similar conversion
+		// when converting to VARBINARY(N).
+		if toSqlType.Type() == sqltypes.Binary {
+			rewriteRequired = true
+		}
 	}
 
 	return compatible, rewriteRequired

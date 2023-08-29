@@ -1372,6 +1372,106 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 			},
 		},
 	},
+	{
+		Name: "VARCHAR to CHAR widening",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 VARCHAR(10));",
+			"INSERT into t values (1, '123');",
+			"alter table t add unique index idx1 (col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 CHAR(11);",
+			"INSERT into t values (2, '12345');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '321');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select * from t order by pk;",
+				Expected: []sql.Row{
+					{1, "123"},
+					{2, "12345"},
+					{3, "321"},
+				},
+			},
+		},
+	},
+	{
+		Name: "BINARY to VARBINARY widening",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 BINARY(5));",
+			"INSERT into t values (1, 0x01);",
+			"alter table t add unique index idx1 (col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 VARBINARY(10);",
+			"INSERT into t values (2, 0x0102);",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, 0x010203);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select pk, col1 from t order by pk;",
+				Expected: []sql.Row{
+					// NOTE: When MySQL converts from BINARY(N) to VARBINARY(N), it does not change any values. But...
+					//       when converting from VARBINARY(N) to BINARY(N), MySQL *DOES* right-pad any values up to
+					//       N bytes.
+
+					// Written to BINARY(N), so right padded
+					{1, []byte{0x01, 0x00, 0x00, 0x00, 0x00}},
+					// Written to VARBINARY(N), so no padding
+					{2, []byte{0x01, 0x02}},
+					// Written to BINARY(N), so right padded
+					{3, []byte{0x01, 0x02, 0x03, 0x00, 0x00}},
+				},
+			},
+		},
+	},
+	{
+		Name: "VARBINARY to BINARY widening",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 VARBINARY(3));",
+			"INSERT into t values (1, 0x01);",
+			"alter table t add unique index idx1 (col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 BINARY(5);",
+			"INSERT into t values (2, 0x0102);",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, 0x010203);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select pk, col1 from t order by pk;",
+				Expected: []sql.Row{
+					// NOTE: When MySQL converts from BINARY(N) to VARBINARY(N), it does not change any values. But...
+					//       when converting from VARBINARY(N) to BINARY(N), MySQL *DOES* right-pad any values up to
+					//       N bytes, so all values here are right padded, matching MySQL's behavior.
+					{1, []byte{0x01, 0x00, 0x00, 0x00, 0x00}},
+					{2, []byte{0x01, 0x02, 0x00, 0x00, 0x00}},
+					{3, []byte{0x01, 0x02, 0x03, 0x00, 0x00}},
+				},
+			},
+		},
+	},
 }
 
 var SchemaChangeTestsSchemaConflicts = []MergeScriptTest{
