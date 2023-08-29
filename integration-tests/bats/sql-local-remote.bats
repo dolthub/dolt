@@ -1112,9 +1112,19 @@ SQL
     [[ "$output" =~ "starting local mode" ]] || false
     [[ "$output" =~ "tables table1, table2" ]] || false
 
+    run dolt log
+    [ $status -eq 0 ]
+    localOutput=$output
+
     start_sql_server altDB
     run dolt --verbose-engine-setup log
     [ $status -eq 0 ]
     [[ "$output" =~ "starting remote mode" ]] || false
     [[ "$output" =~ "tables table1, table2" ]] || false
+
+    run dolt log
+    [ $status -eq 0 ]
+    remoteOutput=$output
+
+    [[ "$localOutput" == "$remoteOutput" ]] || false
 }

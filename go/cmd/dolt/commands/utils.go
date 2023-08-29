@@ -522,9 +522,7 @@ func PrintCommitInfo(pager *outputpager.Pager, minParents int, showParents bool,
 
 	chStr := comm.commitHash
 	if showParents {
-		for _, h := range comm.parentHashes {
-			chStr += " " + h
-		}
+		chStr = strings.Join(append([]string{chStr}, comm.parentHashes...), " ")
 	}
 
 	// Write commit hash

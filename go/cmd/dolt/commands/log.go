@@ -253,14 +253,7 @@ func getExistingTables(revisions []string, queryist cli.Queryist, sqlCtx *sql.Co
 	tableNames := make(map[string]bool)
 
 	if len(revisions) == 0 {
-		rows, err := GetRowsForSql(queryist, sqlCtx, "show tables")
-		if err != nil {
-			return nil, err
-		}
-		for _, r := range rows {
-			tableNames[r[0].(string)] = true
-		}
-		return tableNames, nil
+		revisions = []string{"HEAD"}
 	}
 
 	for _, rev := range revisions {
@@ -276,10 +269,11 @@ func getExistingTables(revisions []string, queryist cli.Queryist, sqlCtx *sql.Co
 	return tableNames, nil
 }
 
-func logCommits(apr *argparser.ArgParseResults, sqlResult []sql.Row, queryist cli.Queryist, sqlCtx *sql.Context) int {
+// logCommits takes a list of sql rows that have only 1 column, commit hash, and retrieves the commit info for each hash to be printed to std out
+func logCommits(apr *argparser.ArgParseResults, commitHashes []sql.Row, queryist cli.Queryist, sqlCtx *sql.Context) int {
 	var commitsInfo []CommitInfo
-	for _, row := range sqlResult {
-		cmHash := row[0].(string)
+	for _, hash := range commitHashes {
+		cmHash := hash[0].(string)
 		commit, err := getCommitInfo(queryist, sqlCtx, cmHash)
 		if err != nil {
 			return handleErrAndExit(err)

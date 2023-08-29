@@ -23,7 +23,6 @@ import (
 )
 
 const (
-	// The default separator for positional arguments
 	NO_POSITIONAL_ARGS = -1
 )
 
