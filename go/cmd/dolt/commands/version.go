@@ -26,6 +26,7 @@ import (
 
 const (
 	featureVersionFlag = "feature"
+	verboseFlag        = "verbose"
 )
 
 type VersionCmd struct {
@@ -55,6 +56,7 @@ func (cmd VersionCmd) Docs() *cli.CommandDocumentation {
 func (cmd VersionCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsFlag(featureVersionFlag, "f", "query the feature version of this repository.")
+	ap.SupportsFlag(verboseFlag, "v", "include additional details on this repository's storage format.")
 	return ap
 }
 
@@ -63,16 +65,18 @@ func (cmd VersionCmd) ArgParser() *argparser.ArgParser {
 func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	cli.Println("dolt version", cmd.VersionStr)
 
-	if dEnv.HasDoltDir() && dEnv.RSLoadErr == nil && !cli.CheckEnvIsValid(dEnv) {
-		return 2
-	} else if dEnv.HasDoltDir() && dEnv.RSLoadErr == nil {
-		nbf := dEnv.DoltDB.Format()
-		cli.Printf("database storage format: %s\n", dfunctions.GetStorageFormatDisplayString(nbf))
-	}
-
 	usage := func() {}
 	ap := cmd.ArgParser()
 	apr := cli.ParseArgsOrDie(ap, args, usage)
+
+	if apr.Contains(verboseFlag) {
+		if dEnv.HasDoltDir() && dEnv.RSLoadErr == nil && !cli.CheckEnvIsValid(dEnv) {
+			return 2
+		} else if dEnv.HasDoltDir() && dEnv.RSLoadErr == nil {
+			nbf := dEnv.DoltDB.Format()
+			cli.Printf("database storage format: %s\n", dfunctions.GetStorageFormatDisplayString(nbf))
+		}
+	}
 
 	var verr errhand.VerboseError
 	if apr.Contains(featureVersionFlag) {

@@ -183,7 +183,7 @@ teardown() {
     run dolt init --new-format
     [ $status -eq 0 ]
 
-    run dolt version
+    run dolt version -v
     [ $status -eq 0 ]
     [[ $output =~ "database storage format: NEW ( __DOLT__ )" ]] || false
 
@@ -197,7 +197,7 @@ teardown() {
     run dolt init --new-format
     [ $status -eq 0 ]
 
-    run dolt version
+    run dolt version --verbose
     [ "$status" -eq 0 ]
     [[ ! $output =~ "OLD ( __LD_1__ )" ]] || false
     [[ $output =~ "NEW ( __DOLT__ )" ]] || false
@@ -207,7 +207,7 @@ teardown() {
     [[ $output =~ "test" ]] || false
 
     cd test
-    run dolt version
+    run dolt version --verbose
     [ "$status" -eq 0 ]
     [[ ! $output =~ "OLD ( __LD_1__ )" ]] || false
     [[ $output =~ "NEW ( __DOLT__ )" ]] || false
@@ -228,13 +228,13 @@ teardown() {
     run dolt init --new-format
     [ $status -eq 0 ]
 
-    run dolt version
+    run dolt version --verbose
     [ "$status" -eq 0 ]
     [[ ! $output =~ "OLD ( __LD_1__ )" ]] || false
     [[ $output =~ "NEW ( __DOLT__ )" ]] || false
 
     cd ..
-    run dolt version
+    run dolt version --verbose
     [ "$status" -eq 0 ]
     ! [[ $output =~ "no valid database in this directory" ]] || false
 
@@ -243,7 +243,7 @@ teardown() {
     [[ $output =~ "test" ]] || false
 
     cd test
-    run dolt version
+    run dolt version --verbose
     [ "$status" -eq 0 ]
     [[ "$output" =~ "__DOLT__" ]] || false
 }
