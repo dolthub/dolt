@@ -397,6 +397,71 @@ SQL
     [[ "${lines[1]}" =~ "t2" ]] || false
 }
 
+@test "replication: pull with wildcard branch heads" {
+    dolt clone file://./rem1 repo2
+    cd repo2
+    dolt checkout -b feature1
+    dolt sql -q "create table feature1 (a int)"
+    dolt commit -Am "cm"
+    dolt push origin feature1
+    dolt checkout main
+    dolt checkout -b feature22
+    dolt sql -q "create table feature22 (a int)"
+    dolt commit -Am "cm"
+    dolt push origin feature22
+    dolt checkout main
+    dolt checkout -b myfeature
+    dolt sql -q "create table myfeature (a int)"
+    dolt commit -Am "cm"
+    dolt push origin myfeature
+    dolt checkout main
+    dolt checkout -b releases
+    dolt sql -q "create table releases (a int)"
+    dolt commit -Am "cm"
+    dolt push origin releases
+    dolt checkout main
+    dolt sql -q "create table main (a int)"
+    dolt commit -Am "cm"
+    dolt push origin main
+
+    cd ../repo1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads main,*feature*
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+
+    run dolt sql -q "show tables as of hashof('feature1')" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "${lines[0]}" =~ "Table" ]] || false
+    [[ "${lines[1]}" =~ "feature1" ]] || false
+
+    run dolt sql -q "show tables as of hashof('feature22')" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "${lines[0]}" =~ "Table" ]] || false
+    [[ "${lines[1]}" =~ "feature22" ]] || false
+
+    run dolt sql -q "show tables as of hashof('myfeature')" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "${lines[0]}" =~ "Table" ]] || false
+    [[ "${lines[1]}" =~ "myfeature" ]] || false
+
+    run dolt sql -q "show tables as of hashof('main')" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "${lines[0]}" =~ "Table" ]] || false
+    [[ "${lines[1]}" =~ "main" ]] || false
+
+    run dolt sql -q "select count(*) from dolt_branches where name='releases'" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" =~ "count(*)" ]] || false
+    [[ "${lines[1]}" =~ "0" ]] || false
+
+    run dolt sql -q "show tables as of hashof('releases')" -r csv
+    [ $status -ne 0 ]
+    [[ "${lines[0]}" =~ "invalid ref spec" ]] || false
+}
+
 @test "replication: pull with unknown head" {
     dolt clone file://./rem1 repo2
     cd repo2
