@@ -21,20 +21,20 @@ import (
 )
 
 func TestMatch(t *testing.T) {
-	assert.False(t, match("", "abcdefgh"))
-	assert.True(t, match("*", "abcdefgh"))
-	assert.True(t, match("**", "abcdefgh"))
+	assert.False(t, matchWildcardPattern("", "abcdefgh"))
+	assert.True(t, matchWildcardPattern("*", "abcdefgh"))
+	assert.True(t, matchWildcardPattern("**", "abcdefgh"))
 
-	assert.False(t, match("*cdefg", "abcdefgh"))
-	assert.True(t, match("*cdefgh", "abcdefgh"))
-	assert.True(t, match("*cdef*", "abcdefgh"))
-	assert.True(t, match("abcd*efgh", "abcdefgh"))
-	assert.True(t, match("a*cdef*h", "abcdefgh"))
-	assert.True(t, match("a*", "abcdefgh"))
-	assert.True(t, match("*h", "abcdefgh"))
-	assert.True(t, match("*abcdefgh", "abcdefgh"))
-	assert.False(t, match("*abcdefg", "abcdefgh"))
-	assert.True(t, match("*abcdefgh*", "abcdefgh"))
+	assert.False(t, matchWildcardPattern("*cdefg", "abcdefgh"))
+	assert.True(t, matchWildcardPattern("*cdefgh", "abcdefgh"))
+	assert.True(t, matchWildcardPattern("*cdef*", "abcdefgh"))
+	assert.True(t, matchWildcardPattern("abcd*efgh", "abcdefgh"))
+	assert.True(t, matchWildcardPattern("a*cdef*h", "abcdefgh"))
+	assert.True(t, matchWildcardPattern("a*", "abcdefgh"))
+	assert.True(t, matchWildcardPattern("*h", "abcdefgh"))
+	assert.True(t, matchWildcardPattern("*abcdefgh", "abcdefgh"))
+	assert.False(t, matchWildcardPattern("*abcdefg", "abcdefgh"))
+	assert.True(t, matchWildcardPattern("*abcdefgh*", "abcdefgh"))
 }
 
 func TestContainsWildcard(t *testing.T) {

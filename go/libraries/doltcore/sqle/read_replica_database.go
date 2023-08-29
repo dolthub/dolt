@@ -407,7 +407,7 @@ func (rrd ReadReplicaDatabase) expandWildcardBranchPattern(ctx context.Context, 
 	}
 	expandedBranches := make([]string, 0)
 	for _, sourceBranch := range sourceBranches {
-		if match(pattern, sourceBranch.GetPath()) {
+		if matchWildcardPattern(pattern, sourceBranch.GetPath()) {
 			expandedBranches = append(expandedBranches, sourceBranch.GetPath())
 		}
 	}

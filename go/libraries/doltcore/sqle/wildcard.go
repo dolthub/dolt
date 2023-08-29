@@ -19,9 +19,9 @@ import (
 	"strings"
 )
 
-// match returns true if |s| fully matches |pattern|. |pattern| may contain '*' wildcards
-// which match 0 or more characters.
-func match(pattern string, s string) bool {
+// matchWildcardPattern returns true if |s| fully matches |pattern|. |pattern| may contain '*' wildcards
+// which matchWildcardPattern 0 or more characters.
+func matchWildcardPattern(pattern string, s string) bool {
 	result, _ := regexp.MatchString(wildcardToRegexp(pattern), s)
 	return result
 }
