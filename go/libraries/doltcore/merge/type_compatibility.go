@@ -38,7 +38,7 @@ type TypeCompatibilityChecker interface {
 	// For the DOLT storage format, very few cases (outside of the types being exactly identical) are considered
 	// compatible without requiring a full table rewrite. The older LD_1 storage format, has a more forgiving storage
 	// layout, so more type changes are considered compatible, generally as long as they are in the same type family/kind.
-	IsTypeChangeCompatible(from, to typeinfo.TypeInfo) (bool, bool)
+	IsTypeChangeCompatible(from, to typeinfo.TypeInfo) (compatible bool, tableRewrite bool)
 }
 
 // newTypeCompatabilityCheckerForStorageFormat returns a new TypeCompatibilityChecker
@@ -63,7 +63,7 @@ var _ TypeCompatibilityChecker = ld1TypeCompatibilityChecker{}
 
 // IsTypeChangeCompatible implements TypeCompatibilityChecker.IsTypeChangeCompatible for the
 // deprecated LD_1 storage format.
-func (l ld1TypeCompatibilityChecker) IsTypeChangeCompatible(from, to typeinfo.TypeInfo) (bool, bool) {
+func (l ld1TypeCompatibilityChecker) IsTypeChangeCompatible(from, to typeinfo.TypeInfo) (compatible bool, tableRewrite bool) {
 	// If the types are exactly identical, then they are always compatible
 	fromSqlType := from.ToSqlType()
 	toSqlType := to.ToSqlType()
@@ -108,7 +108,7 @@ var _ TypeCompatibilityChecker = (*doltTypeCompatibilityChecker)(nil)
 
 // IsTypeChangeCompatible implements TypeCompatibilityChecker.IsTypeChangeCompatible for the
 // DOLT storage format.
-func (d doltTypeCompatibilityChecker) IsTypeChangeCompatible(from, to typeinfo.TypeInfo) (bool, bool) {
+func (d doltTypeCompatibilityChecker) IsTypeChangeCompatible(from, to typeinfo.TypeInfo) (compatible bool, tableRewrite bool) {
 	// If the types are exactly identical, then they are always compatible
 	fromSqlType := from.ToSqlType()
 	toSqlType := to.ToSqlType()
@@ -137,7 +137,7 @@ type typeChangeHandler interface {
 	// isCompatible returns two booleans – the first boolean response parameter indicates if a type change from
 	// |fromType| to |toType| is compatible and safe to perform automatically. The second boolean response parameter
 	// indicates if the type conversion requires a full table rewrite.
-	isCompatible(fromSqlType, toSqlType sql.Type) (bool, bool)
+	isCompatible(fromSqlType, toSqlType sql.Type) (compatible bool, tableRewrite bool)
 }
 
 // stringTypeChangeHandler handles type change compatibility between from string types, i.e. VARCHAR, VARBINARY,
@@ -167,14 +167,14 @@ func (s stringTypeChangeHandler) canHandle(fromSqlType, toSqlType sql.Type) bool
 	}
 }
 
-func (s stringTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (bool, bool) {
+func (s stringTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (compatible bool, tableRewrite bool) {
 	fromStringType := fromSqlType.(types.StringType)
 	toStringType := toSqlType.(types.StringType)
 
-	compatible := toStringType.MaxByteLength() >= fromStringType.MaxByteLength() &&
+	compatible = toStringType.MaxByteLength() >= fromStringType.MaxByteLength() &&
 		toStringType.Collation() == fromStringType.Collation()
 
-	rewriteRequired := false
+	tableRewrite = false
 	if compatible {
 		// Because inline string types (e.g. VARCHAR, CHAR) have the same encoding, the only time
 		// a table rewrite is required is when moving between an inline string type and an
@@ -182,7 +182,7 @@ func (s stringTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (
 		fromTypeOutOfBand := outOfBandType(fromSqlType)
 		toTypeOutOfBand := outOfBandType(toSqlType)
 		if !fromTypeOutOfBand && toTypeOutOfBand {
-			rewriteRequired = true
+			tableRewrite = true
 		}
 
 		// The exception to this is when converting to a fixed width BINARY(N) field, which requires rewriting the
@@ -190,11 +190,11 @@ func (s stringTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (
 		// or its indexes, need to be right padded up to N bytes. Note that MySQL does NOT do a similar conversion
 		// when converting to VARBINARY(N).
 		if toSqlType.Type() == sqltypes.Binary {
-			rewriteRequired = true
+			tableRewrite = true
 		}
 	}
 
-	return compatible, rewriteRequired
+	return compatible, tableRewrite
 }
 
 // outOfBandType returns true if the specified type |t| is stored outside of a table's index file, for example
@@ -220,7 +220,7 @@ func (e enumTypeChangeHandler) canHandle(from, to sql.Type) bool {
 }
 
 // isCompatible implements the typeChangeHandler interface.
-func (e enumTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (bool, bool) {
+func (e enumTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (compatible bool, tableRewrite bool) {
 	fromEnumType := fromSqlType.(sql.EnumType)
 	toEnumType := toSqlType.(sql.EnumType)
 	if fromEnumType.NumberOfElements() > toEnumType.NumberOfElements() {
@@ -261,7 +261,7 @@ func (s setTypeChangeHandler) canHandle(fromType, toType sql.Type) bool {
 }
 
 // isCompatible implements the typeChangeHandler interface.
-func (s setTypeChangeHandler) isCompatible(fromType, toType sql.Type) (bool, bool) {
+func (s setTypeChangeHandler) isCompatible(fromType, toType sql.Type) (compatible bool, tableRewrite bool) {
 	fromSetType := fromType.(sql.SetType)
 	toSetType := toType.(sql.SetType)
 	if fromSetType.NumberOfElements() > toSetType.NumberOfElements() {

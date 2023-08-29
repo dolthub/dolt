@@ -1307,11 +1307,11 @@ func convertValueToNewType(value interface{}, newTypeInfo typeinfo.TypeInfo, tm 
 		previousTypeInfo = tm.leftSch.GetNonPKCols().GetByIndex(from).TypeInfo
 	}
 
-	// If the type has changed, then call convert to convert the value to the new type
 	if newTypeInfo.Equals(previousTypeInfo) {
 		return value, nil
 	}
 
+	// If the type has changed, then call convert to convert the value to the new type
 	newValue, inRange, err := newTypeInfo.ToSqlType().Convert(value)
 	if err != nil {
 		return nil, err
