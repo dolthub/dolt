@@ -1071,6 +1071,9 @@ var SchemaChangeTestsConstraints = []MergeScriptTest{
 	},
 }
 
+// SchemaChangeTestsTypeChanges holds test scripts for schema merge where column types have changed. Note that
+// unlike other schema change tests, these tests are NOT symmetric, so they do not get automatically run in both
+// directions.
 var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 	{
 		Name: "varchar widening",
@@ -1112,7 +1115,7 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 		},
 	},
 	{
-		Name: "type widening - enums and sets",
+		Name: "enums and sets widening",
 		AncSetUpScript: []string{
 			"CREATE table t (pk int primary key, col1 enum('blue', 'green'), col2 set('blue', 'green'));",
 			"INSERT into t values (1, 'blue', 'blue,green');",
@@ -1141,12 +1144,394 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 			},
 		},
 	},
+	{
+		Name: "VARCHAR to TEXT widening",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 varchar(10));",
+			"INSERT into t values (1, '123');",
+			"alter table t add index idx1 (col1(10));",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 TEXT;",
+			"INSERT into t values (2, '12345678901234567890');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '321');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select * from t order by pk;",
+				Expected: []sql.Row{
+					{1, "123"},
+					{2, "12345678901234567890"},
+					{3, "321"},
+				},
+			},
+		},
+	},
+	{
+		Name: "VARBINARY to BLOB widening",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 varbinary(10));",
+			"INSERT into t values (1, '123');",
+			"alter table t add index idx1 (col1(10));",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 BLOB;",
+			"INSERT into t values (2, '12345678901234567890');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '321');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select * from t order by pk;",
+				Expected: []sql.Row{
+					{1, []uint8{0x31, 0x32, 0x33}},
+					{2, []uint8{0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30}},
+					{3, []uint8{0x33, 0x32, 0x31}},
+				},
+			},
+		},
+	},
+	{
+		Name: "varchar(300) to TINYTEXT(255) narrowing",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 varchar(300));",
+			"INSERT into t values (1, '123');",
+			"alter table t add index idx1 (col1(10));",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 TINYTEXT;",
+			"INSERT into t values (2, '12345678901234567890');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '321');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{"", 0, 1}},
+			},
+			{
+				Query:    "select * from dolt_conflicts;",
+				Expected: []sql.Row{{"t", uint64(0)}},
+			},
+			{
+				Query:    "select count(*) from dolt_schema_conflicts where description like 'incompatible column types for column ''col1''%';",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		Name: "schema conflict: VARBINARY(300) to TINYBLOB(255)",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 VARBINARY(300));",
+			"INSERT into t values (1, '123');",
+			"alter table t add index idx1 (col1(10));",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 TINYBLOB;",
+			"INSERT into t values (2, '12345678901234567890');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '321');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{"", 0, 1}},
+			},
+			{
+				Query:    "select * from dolt_conflicts;",
+				Expected: []sql.Row{{"t", uint64(0)}},
+			},
+			{
+				Query:    "select count(*) from dolt_schema_conflicts where description like 'incompatible column types for column ''col1''%';",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		Name: "CHAR(5) to TINYTEXT widening",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 char(5));",
+			"INSERT into t values (1, '123');",
+			"alter table t add index idx1 (col1(5));",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 TINYTEXT;",
+			"INSERT into t values (2, '12345678901234567890');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '321');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select * from t order by pk;",
+				Expected: []sql.Row{
+					{1, "123"},
+					{2, "12345678901234567890"},
+					{3, "321"},
+				},
+			},
+		},
+	},
+	{
+		Name: "CHAR(5) to TINYTEXT, different charsets",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 char(5) COLLATE utf8mb3_esperanto_ci);",
+			"INSERT into t values (1, '123');",
+			"alter table t add index idx1 (col1(3));",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 TINYTEXT COLLATE utf32_unicode_ci;",
+			"INSERT into t values (2, '12345678901234567890');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '321');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{"", 0, 1}},
+			},
+			{
+				Query:    "select count(*) from dolt_schema_conflicts where description like 'incompatible column types for column ''col1''%';",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		Name: "varchar narrowing",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 varchar(10));",
+			"INSERT into t values (1, '123');",
+			"alter table t add index idx1 (col1(10));",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 varchar(9);",
+			"INSERT into t values (2, '12345');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '321');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{"", 0, 1}},
+			},
+			{
+				Query:    "select table_name, description like 'incompatible column types for column ''col1''%' from dolt_schema_conflicts;",
+				Expected: []sql.Row{{"t", true}},
+			},
+		},
+	},
+	{
+		Name: "TEXT to VARCHAR narrowing",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 TEXT);",
+			"INSERT into t values (1, '123');",
+			"alter table t add index idx1 (col1(10));",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 varchar(9);",
+			"INSERT into t values (2, '12345');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '321');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{"", 0, 1}},
+			},
+			{
+				Query:    "select table_name, description like 'incompatible column types for column ''col1''%' from dolt_schema_conflicts;",
+				Expected: []sql.Row{{"t", true}},
+			},
+		},
+	},
+	{
+		Name: "VARCHAR to CHAR widening",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 VARCHAR(10));",
+			"INSERT into t values (1, '123');",
+			"alter table t add unique index idx1 (col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 CHAR(11);",
+			"INSERT into t values (2, '12345');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '321');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select * from t order by pk;",
+				Expected: []sql.Row{
+					{1, "123"},
+					{2, "12345"},
+					{3, "321"},
+				},
+			},
+		},
+	},
+	{
+		Name: "BINARY to VARBINARY widening",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 BINARY(5));",
+			"INSERT into t values (1, 0x01);",
+			"alter table t add unique index idx1 (col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 VARBINARY(10);",
+			"INSERT into t values (2, 0x0102);",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, 0x010203);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select pk, col1 from t order by pk;",
+				Expected: []sql.Row{
+					// NOTE: When MySQL converts from BINARY(N) to VARBINARY(N), it does not change any values. But...
+					//       when converting from VARBINARY(N) to BINARY(N), MySQL *DOES* right-pad any values up to
+					//       N bytes.
+
+					// Written to BINARY(N), so right padded
+					{1, []byte{0x01, 0x00, 0x00, 0x00, 0x00}},
+					// Written to VARBINARY(N), so no padding
+					{2, []byte{0x01, 0x02}},
+					// Written to BINARY(N), so right padded
+					{3, []byte{0x01, 0x02, 0x03, 0x00, 0x00}},
+				},
+			},
+		},
+	},
+	{
+		Name: "VARBINARY to BINARY widening",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 VARBINARY(3));",
+			"INSERT into t values (1, 0x01);",
+			"alter table t add unique index idx1 (col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 BINARY(5);",
+			"INSERT into t values (2, 0x0102);",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, 0x010203);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select pk, col1 from t order by pk;",
+				Expected: []sql.Row{
+					// NOTE: When MySQL converts from BINARY(N) to VARBINARY(N), it does not change any values. But...
+					//       when converting from VARBINARY(N) to BINARY(N), MySQL *DOES* right-pad any values up to
+					//       N bytes, so all values here are right padded, matching MySQL's behavior.
+					{1, []byte{0x01, 0x00, 0x00, 0x00, 0x00}},
+					{2, []byte{0x01, 0x02, 0x00, 0x00, 0x00}},
+					{3, []byte{0x01, 0x02, 0x03, 0x00, 0x00}},
+				},
+			},
+		},
+	},
+	{
+		Name: "TINYBLOB to BINARY(300) widening",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 TINYBLOB);",
+			"INSERT into t values (1, 0x01);",
+			"alter table t add unique index idx1 (col1(10));",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 BINARY(255);",
+			"INSERT into t values (2, 0x0102);",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, 0x010203);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				// When MySQL converts from TINYTEXT to BINARY(255), MySQL right-pads each existing value
+				// with null bytes, to expand the value up to 255 bytes.
+				Query:    "select pk, length(col1) from t order by pk;",
+				Expected: []sql.Row{{1, 255}, {2, 255}, {3, 255}},
+			},
+		},
+	},
+	{
+		Name: "TINYTEXT to VARCHAR(300) widening",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 TINYTEXT);",
+			"INSERT into t values (1, 'tiny tiny text');",
+			"alter table t add unique index idx1 (col1(10));",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 VARCHAR(300);",
+			"INSERT into t values (2, 'more teeny tiny text');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, 'the teeniest of tiny text');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query:    "select pk, col1 from t order by pk;",
+				Expected: []sql.Row{{1, "tiny tiny text"}, {2, "more teeny tiny text"}, {3, "the teeniest of tiny text"}},
+			},
+		},
+	},
 }
 
 var SchemaChangeTestsSchemaConflicts = []MergeScriptTest{
 	{
 		// Type widening - these changes move from smaller types to bigger types, so they are guaranteed to be safe.
-		// TODO: We don't support automatically converting column types in merges yet, so currently these won't
+		// TODO: We don't support automatically converting all types in merges yet, so currently these won't
 		//       automatically merge and instead return schema conflicts.
 		Name: "type widening",
 		AncSetUpScript: []string{
@@ -1221,31 +1606,6 @@ var SchemaChangeTestsSchemaConflicts = []MergeScriptTest{
 					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` enum('blue','green','red'),\n  `col2` double,\n  `col3` bigint,\n  `col4` decimal(8,4),\n  `col5` varchar(20),\n  `col6` set('a','b','c'),\n  `col7` bit(2),\n  PRIMARY KEY (`pk`),\n  KEY `idx1` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` enum('blue','green'),\n  `col2` float,\n  `col3` smallint,\n  `col4` decimal(4,2),\n  `col5` varchar(10),\n  `col6` set('a','b'),\n  `col7` bit(1),\n  PRIMARY KEY (`pk`),\n  KEY `idx1` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` enum('blue','green','red'),\n  `col2` double,\n  `col3` bigint,\n  `col4` decimal(8,4),\n  `col5` varchar(20),\n  `col6` set('a','b','c'),\n  `col7` bit(2),\n  PRIMARY KEY (`pk`),\n  KEY `idx1` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"}},
-			},
-		},
-	},
-	{
-		Name: "varchar shortening",
-		AncSetUpScript: []string{
-			"set autocommit = 0;",
-			"CREATE table t (pk int primary key, col1 varchar(10));",
-			"INSERT into t values (1, '123');",
-		},
-		RightSetUpScript: []string{
-			"alter table t modify column col1 varchar(9);",
-			"INSERT into t values (2, '12345');",
-		},
-		LeftSetUpScript: []string{
-			"INSERT into t values (3, '321');",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{"", 0, 1}},
-			},
-			{
-				Query:    "select table_name, description like 'incompatible column types for column ''col1''%' from dolt_schema_conflicts;",
-				Expected: []sql.Row{{"t", true}},
 			},
 		},
 	},
