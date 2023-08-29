@@ -151,10 +151,27 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 		if !ok {
 			return sql.ErrInvalidSystemVariableValue.New(dsess.ReplicateHeads)
 		}
-		branches := strings.Split(heads, ",")
+
 		branchesToPull := make(map[string]bool)
-		for _, branch := range branches {
-			branchesToPull[branch] = true
+		for _, branch := range strings.Split(heads, ",") {
+			if !containsWildcards(branch) {
+				branchesToPull[branch] = true
+			} else {
+				expandedBranches, err := rrd.expandWildcardBranchPattern(ctx, branch)
+				if err != nil {
+					return err
+				}
+
+				for _, expandedBranch := range expandedBranches {
+					branchesToPull[expandedBranch] = true
+				}
+
+				if len(expandedBranches) == 0 {
+					ctx.GetLogger().Warnf("branch pattern '%s' did not match any branches", branch)
+				} else {
+					ctx.GetLogger().Debugf("expanded '%s' to: %s", branch, strings.Join(expandedBranches, ","))
+				}
+			}
 		}
 
 		// Reduce the remote branch list to only the ones configured to replicate
@@ -379,6 +396,22 @@ func pullBranches(
 	}
 
 	return remoteRefsByPath, nil
+}
+
+// expandWildcardBranchPattern evaluates |pattern| and returns a list of branch names from the source database that
+// match the branch name pattern. The '*' wildcard may be used in the pattern to match zero or more characters.
+func (rrd ReadReplicaDatabase) expandWildcardBranchPattern(ctx context.Context, pattern string) ([]string, error) {
+	sourceBranches, err := rrd.srcDB.GetBranches(ctx)
+	if err != nil {
+		return nil, err
+	}
+	expandedBranches := make([]string, 0)
+	for _, sourceBranch := range sourceBranches {
+		if matchWildcardPattern(pattern, sourceBranch.GetPath()) {
+			expandedBranches = append(expandedBranches, sourceBranch.GetPath())
+		}
+	}
+	return expandedBranches, nil
 }
 
 func (rrd ReadReplicaDatabase) createNewBranchFromRemote(ctx *sql.Context, remoteRef doltdb.RefWithHash, trackingRef ref.RemoteRef) error {
