@@ -1091,7 +1091,7 @@ SQL
 @test "sql-local-remote: verify unmigrated command will fail with warning" {
     cd altDB
     start_sql_server altDB
-    run dolt --user dolt log
+    run dolt --user dolt profile
     [ $status -eq 1 ]
     [[ "$output" =~ "Global arguments are not supported for this command" ]] || false
 }
@@ -1102,4 +1102,29 @@ SQL
     run dolt --user dolt version
     [ $status -eq 1 ]
     [[ "$output" =~ "This command does not support global arguments." ]] || false
+}
+
+@test "sql-local-remote: verify dolt log behavior" {
+    cd altDB
+
+    run dolt --verbose-engine-setup log
+    [ $status -eq 0 ]
+    [[ "$output" =~ "starting local mode" ]] || false
+    [[ "$output" =~ "tables table1, table2" ]] || false
+
+    run dolt log
+    [ $status -eq 0 ]
+    localOutput=$output
+
+    start_sql_server altDB
+    run dolt --verbose-engine-setup log
+    [ $status -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+    [[ "$output" =~ "tables table1, table2" ]] || false
+
+    run dolt log
+    [ $status -eq 0 ]
+    remoteOutput=$output
+
+    [[ "$localOutput" == "$remoteOutput" ]] || false
 }

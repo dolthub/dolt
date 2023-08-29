@@ -39,7 +39,7 @@ teardown() {
 
     dolt profile add --use-db defaultDB defaultTest
     run dolt --profile defaultTest sql -q "select * from test"
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "999" ]] || false
 }
 
@@ -47,7 +47,7 @@ teardown() {
     dolt profile add --use-db defaultDB defaultTest
 
     run dolt --profile nonExistentProfile sql -q "select * from altDB_tbl"
-    [ "$status" -eq 1 ] || false
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "Failure to parse arguments: profile nonExistentProfile not found" ]] || false
 }
 
@@ -61,7 +61,7 @@ teardown() {
 
     dolt profile add --user dolt --password "" userProfile
     run dolt --profile userProfile --use-db altDB sql -q "select * from test"
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "999" ]] || false
 }
 
@@ -75,7 +75,7 @@ teardown() {
 
     dolt profile add --use-db defaultDB defaultTest
     run dolt --profile defaultTest --use-db altDB sql -q "select * from test"
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "999" ]] || false
 }
 
@@ -92,7 +92,7 @@ teardown() {
     dolt profile add --user "not-steph" --password "pass" --use-db altDB userWithDBProfile
 
     run dolt --profile userWithDBProfile --user steph sql -q "select * from test"
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "999" ]] || false
 }
 
@@ -109,35 +109,35 @@ teardown() {
     dolt profile add --user "not-steph" --password "pass" userProfile
 
     run dolt --profile userProfile --user steph --use-db altDB sql -q "select * from test"
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "999" ]] || false
 }
 
 @test "profile: dolt profile add adds a profile" {
     run dolt profile add --use-db altDB altTest
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
 
     run dolt profile
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "altTest" ]] || false
 }
 
 @test "profile: dolt profile add does not overwrite an existing profile" {
     run dolt profile add --user "steph" --password "password123" userProfile
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
 
     run dolt profile -v
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "userProfile" ]] || false
     [[ "$output" =~ "steph" ]] || false
     [[ "$output" =~ "password123" ]] || false
 
     run dolt profile add --user "joe" --password "password123" userProfile
-    [ "$status" -eq 1 ] || false
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "profile userProfile already exists, please delete this profile and re-add it if you want to edit any values" ]] || false
 
     run dolt profile -v
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "userProfile" ]] || false
     [[ "$output" =~ "steph" ]] || false
     [[ ! "$output" =~ "joe" ]] || false
@@ -149,20 +149,20 @@ teardown() {
     dolt profile add --use-db defaultDB defaultTest
 
     run dolt profile
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "altTest" ]] || false
     [[ "$output" =~ "defaultTest" ]] || false
 }
 
 @test "profile: dolt profile add with multiple names errors" {
     run dolt profile add --use-db altDB altTest altTest2
-    [ "$status" -eq 1 ] || false
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "Only one profile name can be specified" ]] || false
 }
 
 @test "profile: adding default profile prints warning message" {
     run dolt profile add --use-db defaultDB default
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "Default profile has been added. All dolt commands taking global arguments will use this default profile until it is removed." ]] || false
     [[ "$output" =~ "WARNING: This will alter the behavior of commands which specify no \`--profile\`." ]] || false
     [[ "$output" =~ "If you are using dolt in contexts where you expect a \`.dolt\` directory to be accessed, the default profile will be used instead." ]] || false
@@ -170,16 +170,16 @@ teardown() {
 
 @test "profile: dolt profile add encodes profiles in config" {
     run dolt profile add --use-db altDB altTest
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
 
     run cat "$BATS_TMPDIR/config-$$/.dolt/config_global.json"
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ ! "$output" =~ "altTest" ]] || false
 }
 
 @test "profile: dolt profile add locks global config with 0600" {
     run dolt profile add --use-db altDB altTest
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
 
     run stat "$BATS_TMPDIR/config-$$/.dolt/config_global.json"
     [[ "$output" =~ "-rw-------" ]] || false
@@ -188,14 +188,14 @@ teardown() {
 @test "profile: dolt profile remove removes a profile" {
     dolt profile add --use-db altDB altTest
     run dolt profile
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "altTest" ]] || false
 
     run dolt profile remove altTest
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
 
     run dolt profile
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ ! "$output" =~ "altTest:" ]] || false
 }
 
@@ -203,15 +203,15 @@ teardown() {
     dolt profile add --use-db altDB altTest
     dolt profile add --use-db defaultDB defaultTest
     run dolt profile
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "altTest" ]] || false
     [[ "$output" =~ "defaultTest" ]] || false
 
     run dolt profile remove altTest
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
 
     run dolt profile
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ ! "$output" =~ "altTest:" ]] || false
     [[ "$output" =~ "defaultTest" ]] || false
 }
@@ -219,53 +219,53 @@ teardown() {
 @test "profile: dolt profile remove last profile also removes profile param from global config" {
     dolt profile add --use-db altDB altTest
     run dolt profile
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "altTest" ]] || false
 
     run dolt profile remove altTest
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
 
     run dolt profile
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ ! "$output" =~ "altTest" ]] || false
 
     run dolt config --list --global
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ ! "$output" =~ "profile" ]] || false
 }
 
 @test "profile: dolt profile remove with no existing profiles errors" {
     run dolt profile
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
 
     run dolt profile remove altTest
-    [ "$status" -eq 1 ] || false
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "no existing profiles" ]] || false
 }
 
 @test "profile: dolt profile remove with non-existent profile errors" {
     dolt profile add --use-db altDB altTest
     run dolt profile
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "altTest" ]] || false
 
     run dolt profile remove defaultTest
-    [ "$status" -eq 1 ] || false
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "profile defaultTest does not exist" ]] || false
 }
 
 @test "profile: dolt profile remove with multiple names errors" {
     dolt profile add --use-db altDB altTest
     run dolt profile remove altTest altTest2
-    [ "$status" -eq 1 ] || false
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "Only one profile name can be specified" ]] || false
 }
 
 @test "profile: dolt profile remove locks global config with 0600" {
     dolt profile add --use-db altDB altTest
     run dolt profile remove altTest
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
 
     run stat "$BATS_TMPDIR/config-$$/.dolt/config_global.json"
     [[ "$output" =~ "-rw-------" ]] || false
@@ -276,7 +276,7 @@ teardown() {
     dolt profile add --use-db defaultDB -u "steph" --password "pass" defaultTest
 
     run dolt profile
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "altTest" ]] || false
     [[ ! "$output" =~ "use-db: altDB" ]] || false
     [[ "$output" =~ "defaultTest" ]] || false
@@ -290,7 +290,7 @@ teardown() {
     dolt profile add --use-db defaultDB -u "steph" --password "pass" defaultTest
 
     run dolt profile -v
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "altTest" ]] || false
     [[ "$output" =~ "use-db: altDB" ]] || false
     [[ "$output" =~ "defaultTest" ]] || false
@@ -309,7 +309,7 @@ teardown() {
 
     dolt profile add --use-db defaultDB default
     run dolt sql -q "select * from test"
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "999" ]] || false
 }
 
@@ -322,7 +322,7 @@ teardown() {
 
     dolt profile add --use-db defaultDB defaultTest
     run dolt sql -q "select * from table1"
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ ! "$output" =~ "999" ]] || false
 }
 
@@ -337,32 +337,29 @@ teardown() {
     dolt profile add --use-db defaultDB default
     dolt profile add --use-db altDB altTest
     run dolt sql -q "select * from test"
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "999" ]] || false
 }
 
 @test "profile: commands that don't support global args work with a default profile set" {
     cd altDB
-    dolt sql -q "create table test (pk int primary key)"
-    dolt sql -q "insert into test values (999)"
-    dolt add test
-    dolt commit -m "insert initial value into test"
     dolt profile add --use-db defaultDB default
 
-    run dolt log
-    [ "$status" -eq 0 ] || false
-    [[ "$output" =~ "insert initial value into test" ]] || false
+    run dolt config --list
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "user.email = bats@email.fake" ]] || false
+    [[ "$output" =~ "user.name = Bats Tests" ]] || false
 }
 
 @test "profile: profile with user but not password waits for password prompt" {
     dolt profile add --use-db defaultDB -u "steph" defaultTest
     run dolt --profile defaultTest sql -q "select * from table1" <<< ""
-    [ "$status" -eq 1 ] || false
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "Enter password:" ]] || false
 }
 
 @test "profile: profile with user and empty password doesn't wait for password prompt" {
     dolt profile add --use-db defaultDB -u "steph" -p "" defaultTest
     run dolt --profile defaultTest sql -q "show tables"
-    [ "$status" -eq 0 ] || false
+    [ "$status" -eq 0 ]
 }

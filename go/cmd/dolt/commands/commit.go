@@ -177,7 +177,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 			pager := outputpager.Start()
 			defer pager.Stop()
 
-			printCommitInfo(pager, 0, false, "auto", commit)
+			PrintCommitInfo(pager, 0, false, "auto", commit)
 		})
 	}
 

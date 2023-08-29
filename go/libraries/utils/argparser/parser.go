@@ -285,7 +285,7 @@ func (ap *ArgParser) ParseGlobalArgs(args []string) (apr *ArgParseResults, remai
 
 		if arg[0] != '-' {
 			// This isn't a flag; assume it's the subcommand. Don't parse the remaining args.
-			return &ArgParseResults{results, nil, ap}, args[i:], nil
+			return &ArgParseResults{results, nil, ap, NO_POSITIONAL_ARGS}, args[i:], nil
 		}
 
 		var err error
@@ -304,6 +304,7 @@ func (ap *ArgParser) ParseGlobalArgs(args []string) (apr *ArgParseResults, remai
 // universal --help or -h flag is found, an ErrHelp error is returned.
 func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 	positionalArgs := make([]string, 0, 16)
+	positionalArgsSeparatorIndex := NO_POSITIONAL_ARGS
 	namedArgs := make(map[string]string)
 	onlyPositionalArgsLeft := false
 
@@ -319,6 +320,7 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 
 		if arg == "--" {
 			onlyPositionalArgsLeft = true
+			positionalArgsSeparatorIndex = len(positionalArgs)
 			continue
 		}
 
@@ -338,7 +340,7 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 		return nil, ap.TooManyArgsErrorFunc(positionalArgs)
 	}
 
-	return &ArgParseResults{namedArgs, positionalArgs, ap}, nil
+	return &ArgParseResults{namedArgs, positionalArgs, ap, positionalArgsSeparatorIndex}, nil
 }
 
 func (ap *ArgParser) parseToken(args []string, index int, positionalArgs []string, namedArgs map[string]string) (newIndex int, newPositionalArgs []string, newNamedArgs map[string]string, err error) {
