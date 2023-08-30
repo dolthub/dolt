@@ -83,7 +83,7 @@ func (cmd LogCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd LogCmd) ArgParser() *argparser.ArgParser {
-	return cli.CreateLogArgParser()
+	return cli.CreateLogArgParser(false)
 }
 
 // Exec executes the command
