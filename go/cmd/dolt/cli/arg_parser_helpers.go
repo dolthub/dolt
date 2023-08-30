@@ -281,19 +281,7 @@ func CreateVerifyConstraintsArgParser(name string) *argparser.ArgParser {
 	return ap
 }
 
-func CreateLogArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithVariableArgs("log")
-	ap.SupportsInt(NumberFlag, "n", "num_commits", "Limit the number of commits to output.")
-	ap.SupportsInt(MinParentsFlag, "", "parent_count", "The minimum number of parents a commit must have to be included in the log.")
-	ap.SupportsFlag(MergesFlag, "", "Equivalent to min-parents == 2, this will limit the log to commits with 2 or more parents.")
-	ap.SupportsFlag(ParentsFlag, "", "Shows all parents of each commit in the log.")
-	ap.SupportsString(DecorateFlag, "", "decorate_fmt", "Shows refs next to commits. Valid options are short, full, no, and auto")
-	ap.SupportsFlag(OneLineFlag, "", "Shows logs in a compact format.")
-	ap.SupportsStringList(NotFlag, "", "revision", "Excludes commits from revision.")
-	return ap
-}
-
-func CreateLogTableArgParser() *argparser.ArgParser {
+func CreateLogArgParser(isTableFunction bool) *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("log")
 	ap.SupportsInt(NumberFlag, "n", "num_commits", "Limit the number of commits to output.")
 	ap.SupportsInt(MinParentsFlag, "", "parent_count", "The minimum number of parents a commit must have to be included in the log.")
@@ -301,7 +289,11 @@ func CreateLogTableArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(ParentsFlag, "", "Shows all parents of each commit in the log.")
 	ap.SupportsString(DecorateFlag, "", "decorate_fmt", "Shows refs next to commits. Valid options are short, full, no, and auto")
 	ap.SupportsStringList(NotFlag, "", "revision", "Excludes commits from revision.")
-	ap.SupportsStringList(TablesFlag, "t", "table", "Restricts the log to commits that modified the specified tables.")
+	if isTableFunction {
+		ap.SupportsStringList(TablesFlag, "t", "table", "Restricts the log to commits that modified the specified tables.")
+	} else {
+		ap.SupportsFlag(OneLineFlag, "", "Shows logs in a compact format.")
+	}
 	return ap
 }
 

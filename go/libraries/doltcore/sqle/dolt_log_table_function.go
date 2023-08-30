@@ -220,7 +220,7 @@ func (ltf *LogTableFunction) addOptions(expression []sql.Expression) error {
 		return err
 	}
 
-	apr, err := cli.CreateLogTableArgParser().Parse(args)
+	apr, err := cli.CreateLogArgParser(true).Parse(args)
 	if err != nil {
 		return sql.ErrInvalidArgumentDetails.New(ltf.Name(), err.Error())
 	}
