@@ -55,8 +55,8 @@ func (cmd VersionCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd VersionCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
-	ap.SupportsFlag(featureVersionFlag, "f", "query the feature version of this repository.")
-	ap.SupportsFlag(verboseFlag, "v", "include additional details on this repository's storage format.")
+	ap.SupportsFlag(featureVersionFlag, "f", "display the feature version of this repository.")
+	ap.SupportsFlag(verboseFlag, "v", "display verbose details, including the storage format of this repository.")
 	return ap
 }
 
