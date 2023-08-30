@@ -56,7 +56,6 @@ func main() {
 	results := new(sysbench.Results)
 	u, err := driver.NewDoltUser()
 	for _, test := range defs.Tests {
-		test.Results = results
 		test.InitWithTmpDir(tmpdir)
 
 		for _, r := range test.Repos {
@@ -72,8 +71,8 @@ func main() {
 			if err != nil {
 				log.Fatalln(err)
 			}
-			results.Append(test.Results.Res...)
 		}
+		results.Append(test.Results.Res...)
 	}
 	if *out != "" {
 		of, err := os.Create(*out)

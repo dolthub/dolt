@@ -55,6 +55,7 @@ type Config struct {
 	Histogram bool   `yaml:"histogram"`
 	ScriptDir string `yaml:"scriptDir"`
 	Verbose   bool   `yaml:"verbose"`
+	Prepared  bool   `yaml:prepared`
 }
 
 func (c Config) WithScriptDir(dir string) Config {
@@ -64,6 +65,11 @@ func (c Config) WithScriptDir(dir string) Config {
 
 func (c Config) WithVerbose(v bool) Config {
 	c.Verbose = v
+	return c
+}
+
+func (c Config) WithPrepared(v bool) Config {
+	c.Prepared = v
 	return c
 }
 
@@ -92,6 +98,9 @@ func (c Config) AsOpts() []string {
 	}
 	if c.Time > 0 {
 		ret = append(ret, fmt.Sprintf("--time=%s", strconv.Itoa(c.Time)))
+	}
+	if c.Prepared {
+		ret = append(ret, fmt.Sprint("--db-ps-mode=auto"))
 	}
 	ret = append(ret,
 		fmt.Sprintf("--rand-seed=%s", strconv.Itoa(c.Seed)),
@@ -463,21 +472,30 @@ func modifyServerForImport(db *sql.DB) error {
 
 // RunExternalServerTests connects to a single externally provided server to run every test
 func (test *Script) RunExternalServerTests(repoName string, s *driver.ExternalServer, conf Config) error {
+	conf.Port = strconv.Itoa(s.Port)
+	conf.Password = s.Password
 	return test.IterSysbenchScripts(conf, test.Scripts, func(script string, prep, run, clean *exec.Cmd) error {
+		log.Printf("starting scipt: %s", script)
+
 		db, err := driver.ConnectDB(s.User, s.Password, s.Name, s.Host, s.Port, nil)
 		if err != nil {
 			return err
 		}
 		defer db.Close()
+		defer clean.Run()
 
+		buf := new(bytes.Buffer)
+		prep.Stdout = buf
 		if err := prep.Run(); err != nil {
+			log.Println(buf)
 			return err
 		}
 
-		buf := new(bytes.Buffer)
+		buf = new(bytes.Buffer)
 		run.Stdout = buf
 		err = run.Run()
 		if err != nil {
+			log.Println(buf)
 			return err
 		}
 
@@ -497,6 +515,7 @@ func (test *Script) RunExternalServerTests(repoName string, s *driver.ExternalSe
 // RunSqlServerTests creates a new repo and server for every import test.
 func (test *Script) RunSqlServerTests(repo driver.TestRepo, user driver.DoltUser, conf Config) error {
 	return test.IterSysbenchScripts(conf, test.Scripts, func(script string, prep, run, clean *exec.Cmd) error {
+		log.Printf("starting scipt: %s", script)
 		//make a new server for every test
 		server, err := newServer(user, repo, conf)
 		if err != nil {
@@ -522,7 +541,7 @@ func (test *Script) RunSqlServerTests(repo driver.TestRepo, user driver.DoltUser
 		run.Stdout = buf
 		err = run.Run()
 		if err != nil {
-			fmt.Println(buf)
+			log.Println(buf)
 			return err
 		}
 
@@ -535,9 +554,9 @@ func (test *Script) RunSqlServerTests(repo driver.TestRepo, user driver.DoltUser
 		}
 		test.Results.Append(r)
 
-		if conf.Verbose {
-			return nil
-		}
+		//if conf.Verbose {
+		//	return nil
+		//}
 		return clean.Run()
 	})
 }
