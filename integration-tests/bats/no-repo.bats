@@ -126,6 +126,7 @@ teardown() {
     [ "$status" -eq 0 ]
     regex='dolt version [0-9]+.[0-9]+.[0-9]+'
     [[ "$output" =~ $regex ]] || false
+    [[ ! "$output" =~ "database storage format" ]] || false
 }
 
 @test "no-repo: dolt version does not need write permissions" {
