@@ -63,7 +63,7 @@ import (
 )
 
 const (
-	Version = "1.13.3"
+	Version = "1.13.6"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -128,7 +128,6 @@ var commandsWithoutCliCtx = []cli.Command{
 	admin.Commands,
 	sqlserver.SqlServerCmd{VersionStr: Version},
 	sqlserver.SqlClientCmd{VersionStr: Version},
-	commands.LogCmd{},
 	commands.CloneCmd{},
 	commands.FetchCmd{},
 	commands.PushCmd{},

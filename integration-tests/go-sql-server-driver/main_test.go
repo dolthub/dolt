@@ -54,3 +54,7 @@ func TestOriginal(t *testing.T) {
 func TestTLS(t *testing.T) {
 	RunTestsFile(t, "tests/sql-server-tls.yaml")
 }
+
+func TestClusterReadOnly(t *testing.T) {
+	RunTestsFile(t, "tests/sql-server-cluster-read-only.yaml")
+}

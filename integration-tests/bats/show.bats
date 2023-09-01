@@ -49,7 +49,7 @@ assert_has_key_value() {
 
 @test "show: on initialized repo" {
     run dolt show
-    [ "$status" -eq "0" ]
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "Initialize data repository" ]] || false
 }
 

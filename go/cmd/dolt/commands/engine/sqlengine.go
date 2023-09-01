@@ -132,13 +132,23 @@ func NewSqlEngine(
 
 	config.ClusterController.RegisterStoredProcedures(pro)
 	pro.InitDatabaseHook = cluster.NewInitDatabaseHook(config.ClusterController, bThreads, pro.InitDatabaseHook)
-	config.ClusterController.ManageDatabaseProvider(pro)
 
 	// Create the engine
 	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{
 		IsReadOnly:     config.IsReadOnly,
 		IsServerLocked: config.IsServerLocked,
 	}).WithBackgroundThreads(bThreads)
+
+	config.ClusterController.SetIsStandbyCallback(func(isStandby bool) {
+		pro.SetIsStandby(isStandby)
+
+		// Standbys are read only, primarys are not.
+		// We only change this here if the server was not forced read
+		// only by its startup config.
+		if !config.IsReadOnly {
+			engine.ReadOnly.Store(isStandby)
+		}
+	})
 
 	// Load in privileges from file, if it exists
 	var persister cluster.MySQLDbPersister

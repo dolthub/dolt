@@ -109,7 +109,6 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~sql-privs.bats~
 ~keyless-foreign-keys.bats~
 ~index-on-writes-2.bats~
-~log.bats~
 ~checkout.bats~
 ~sql-fetch.bats~
 ~foreign-keys-invert-pk.bats~
