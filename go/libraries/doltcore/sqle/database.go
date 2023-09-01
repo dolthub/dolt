@@ -24,6 +24,7 @@ import (
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/fulltext"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
@@ -1280,14 +1281,11 @@ func (db Database) GetEvent(ctx *sql.Context, name string) (sql.EventDefinition,
 
 	for _, frag := range frags {
 		if strings.ToLower(frag.name) == strings.ToLower(name) {
-			return sql.EventDefinition{
-				Name:            frag.name,
-				CreateStatement: updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment),
-				CreatedAt:       frag.created,
-				SqlMode:         frag.sqlMode,
-				LastAltered: frag.created,
-				// TODO: fill TimezoneOffset and LastExecuted
-			}, true, nil
+			event, err := db.createEventDefinitionFromFragment(ctx, frag)
+			if err != nil {
+				return sql.EventDefinition{}, false, err
+			}
+			return *event, true, nil
 		}
 	}
 	return sql.EventDefinition{}, false, nil
@@ -1310,17 +1308,58 @@ func (db Database) GetEvents(ctx *sql.Context) ([]sql.EventDefinition, error) {
 
 	var events []sql.EventDefinition
 	for _, frag := range frags {
-		events = append(events, sql.EventDefinition{
-			Name:            frag.name,
-			CreateStatement: updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment),
-			CreatedAt:       frag.created,
-			SqlMode:         frag.sqlMode,
-			LastAltered: frag.created,
-			// TODO: fill TimezoneOffset and LastExecuted
-
-		})
+		event, err := db.createEventDefinitionFromFragment(ctx, frag)
+		if err != nil {
+			return nil, err
+		}
+		events = append(events, *event)
 	}
 	return events, nil
+}
+
+// createEventDefinitionFromFragment creates an EventDefinition instance from the schema fragment |frag|.
+func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag schemaFragment) (*sql.EventDefinition, error) {
+	catalog, err := db.getCatalog()
+	if err != nil {
+		return nil, err
+	}
+
+	sqlMode := sql.NewSqlModeFromString(frag.sqlMode)
+	parsed, err := planbuilder.ParseWithOptions(ctx, catalog, updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment), sqlMode.ParserOptions())
+	if err != nil {
+		return nil, err
+	}
+
+	eventPlan, ok := parsed.(*plan.CreateEvent)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type %T for create event statement", eventPlan)
+	}
+
+	// NOTE: Time fields for events are assumed to be specified in the session's timezone, which defaults to the
+	//       system's timezone. When we store them, we store them at UTC, and when we send them back to a caller
+	//       we convert them back to the caller's session timezone.
+	//       Here we are loading the events from disk, so they are already in UTC and don't need any other
+	//       timezone applied, so we specify "+00:00".
+	event, err := eventPlan.GetParsedEventDefinition(ctx, frag.created, frag.created, frag.created, "+00:00")
+	if err != nil {
+		return nil, err
+	}
+	event.SqlMode = frag.sqlMode
+
+	return &event, nil
+}
+
+// getCatalog creates and returns a new analyzer.Catalog instance with access to only this database.
+// NOTE: Because we don't have access to the real Catalog here, and we need it to call planbuilder.ParseWithOptions
+//
+//	to parse create event fragments, we create a new DoltDB provider and a new engine, and then use that Catalog.
+//	It would be cleaner and more efficient if we could grab the real Catalog, but we don't have access here.
+func (db Database) getCatalog() (*analyzer.Catalog, error) {
+	pro, err := NewDoltDatabaseProviderWithDatabase(env.DefaultInitBranch, nil, db, nil)
+	if err != nil {
+		return nil, err
+	}
+	return sqle.NewDefault(pro).Analyzer.Catalog, nil
 }
 
 // SaveEvent implements sql.EventDatabase.
