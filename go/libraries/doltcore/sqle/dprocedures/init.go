@@ -34,7 +34,7 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dolt_fetch", Schema: int64Schema("success"), Function: doltFetch},
 
 	// dolt_gc is enabled behind a feature flag for now, see dolt_gc.go
-	{Name: "dolt_gc", Schema: int64Schema("success"), Function: doltGC},
+	{Name: "dolt_gc", Schema: int64Schema("success"), Function: doltGC, ReadOnly: true},
 
 	{Name: "dolt_merge", Schema: doltMergeSchema, Function: doltMerge},
 	{Name: "dolt_pull", Schema: int64Schema("fast_forward", "conflicts"), Function: doltPull},
