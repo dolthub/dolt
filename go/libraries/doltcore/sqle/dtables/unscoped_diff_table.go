@@ -50,6 +50,9 @@ type UnscopedDiffTable struct {
 	commitCheck      doltdb.CommitFilter
 }
 
+var _ sql.Table = (*UnscopedDiffTable)(nil)
+var _ sql.IndexAddressable = (*UnscopedDiffTable)(nil)
+
 // NewUnscopedDiffTable creates an UnscopedDiffTable
 func NewUnscopedDiffTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
 	return &UnscopedDiffTable{dbName: dbName, ddb: ddb, head: head}
@@ -125,9 +128,9 @@ func (dt *UnscopedDiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 }
 
 // IndexedAccess implements sql.IndexAddressable
-func (dt *UnscopedDiffTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+func (dt *UnscopedDiffTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) (sql.IndexedTable, error) {
 	nt := *dt
-	return &nt
+	return &nt, nil
 }
 
 func (dt *UnscopedDiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {

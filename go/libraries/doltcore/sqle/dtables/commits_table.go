@@ -26,14 +26,15 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-var _ sql.Table = (*CommitsTable)(nil)
-
 // CommitsTable is a sql.Table that implements a system table which
 // shows the combined commit log for all branches in the repo.
 type CommitsTable struct {
 	dbName string
 	ddb    *doltdb.DoltDB
 }
+
+var _ sql.Table = (*CommitsTable)(nil)
+var _ sql.IndexAddressable = (*CommitsTable)(nil)
 
 // NewCommitsTable creates a CommitsTable
 func NewCommitsTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
@@ -88,9 +89,9 @@ func (dt *CommitsTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 }
 
 // IndexedAccess implements sql.IndexAddressable
-func (dt *CommitsTable) IndexedAccess(_ sql.IndexLookup) sql.IndexedTable {
+func (dt *CommitsTable) IndexedAccess(ctx *sql.Context, _ sql.IndexLookup) (sql.IndexedTable, error) {
 	nt := *dt
-	return &nt
+	return &nt, nil
 }
 
 func (dt *CommitsTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {

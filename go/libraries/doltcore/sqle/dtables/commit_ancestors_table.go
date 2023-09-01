@@ -24,13 +24,14 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
 
-var _ sql.Table = (*CommitAncestorsTable)(nil)
-
 // CommitAncestorsTable is a sql.Table that implements a system table which
 // shows (commit, parent_commit) relationships for all commits in the repo.
 type CommitAncestorsTable struct {
 	ddb *doltdb.DoltDB
 }
+
+var _ sql.Table = (*CommitAncestorsTable)(nil)
+var _ sql.IndexAddressable = (*CommitAncestorsTable)(nil)
 
 // NewCommitAncestorsTable creates a CommitAncestorsTable
 func NewCommitAncestorsTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
@@ -86,9 +87,9 @@ func (dt *CommitAncestorsTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error
 }
 
 // IndexedAccess implements sql.IndexAddressable
-func (dt *CommitAncestorsTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+func (dt *CommitAncestorsTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) (sql.IndexedTable, error) {
 	nt := *dt
-	return &nt
+	return &nt, nil
 }
 
 func (dt *CommitAncestorsTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {

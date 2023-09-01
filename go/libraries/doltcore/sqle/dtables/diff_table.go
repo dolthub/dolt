@@ -52,6 +52,7 @@ const (
 
 var _ sql.Table = (*DiffTable)(nil)
 var _ sql.IndexedTable = (*DiffTable)(nil)
+var _ sql.IndexAddressable = (*DiffTable)(nil)
 
 type DiffTable struct {
 	name        string
@@ -530,9 +531,9 @@ func (dt *DiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 }
 
 // IndexedAccess implements sql.IndexAddressable
-func (dt *DiffTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+func (dt *DiffTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) (sql.IndexedTable, error) {
 	nt := *dt
-	return &nt
+	return &nt, nil
 }
 
 // tableData returns the map of primary key to values for the specified table (or an empty map if the tbl is null)
