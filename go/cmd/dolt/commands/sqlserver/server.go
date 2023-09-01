@@ -270,7 +270,6 @@ func Serve(
 
 	var remoteSrv *remotesrv.Server
 	if serverConfig.RemotesapiPort() != nil {
-
 		port := *serverConfig.RemotesapiPort()
 		if remoteSrvSqlCtx, err := sqlEngine.NewDefaultContext(ctx); err == nil {
 			listenaddr := fmt.Sprintf(":%d", port)

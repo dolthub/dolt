@@ -22,8 +22,11 @@ import (
 	"strings"
 	"time"
 
+	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/fulltext"
+	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"gopkg.in/src-d/go-errors.v1"
@@ -1321,12 +1324,12 @@ func (db Database) GetEvents(ctx *sql.Context) ([]sql.EventDefinition, error) {
 }
 
 // SaveEvent implements sql.EventDatabase.
-func (db Database) SaveEvent(ctx *sql.Context, ed sql.EventDetails) (bool, error) {
+func (db Database) SaveEvent(ctx *sql.Context, event sql.EventDefinition) (bool, error) {
 	// If the database is not the default branch database, then the event is disabled.
 	// TODO: need better way to determine the default branch; currently it checks only 'main'
-	if db.revision != env.DefaultInitBranch && ed.Status == sql.EventStatus_Enable.String() {
+	if db.revision != env.DefaultInitBranch && event.Status == sql.EventStatus_Enable.String() {
 		// using revision database name
-		ed.Status = sql.EventStatus_Disable.String()
+		event.Status = sql.EventStatus_Disable.String()
 		ctx.Session.Warn(&sql.Warning{
 			Level:   "Warning",
 			Code:    1105,
@@ -1334,14 +1337,13 @@ func (db Database) SaveEvent(ctx *sql.Context, ed sql.EventDetails) (bool, error
 		})
 	}
 
-	evDef := ed.GetEventStorageDefinition()
 	// TODO: store LastAltered, LastExecuted and TimezoneOffset in appropriate place
-	return ed.Status == sql.EventStatus_Enable.String(), db.addFragToSchemasTable(ctx,
+	return event.Status == sql.EventStatus_Enable.String(), db.addFragToSchemasTable(ctx,
 		eventFragment,
-		evDef.Name,
-		evDef.CreateStatement,
-		evDef.CreatedAt,
-		sql.ErrEventAlreadyExists.New(evDef.Name),
+		event.Name,
+		event.CreateEventStatement(),
+		event.CreatedAt,
+		sql.ErrEventAlreadyExists.New(event.Name),
 	)
 }
 
@@ -1351,13 +1353,13 @@ func (db Database) DropEvent(ctx *sql.Context, name string) error {
 }
 
 // UpdateEvent implements sql.EventDatabase.
-func (db Database) UpdateEvent(ctx *sql.Context, originalName string, ed sql.EventDetails) (bool, error) {
+func (db Database) UpdateEvent(ctx *sql.Context, originalName string, event sql.EventDefinition) (bool, error) {
 	// TODO: any EVENT STATUS change should also update the branch-specific event scheduling
 	err := db.DropEvent(ctx, originalName)
 	if err != nil {
 		return false, err
 	}
-	return db.SaveEvent(ctx, ed)
+	return db.SaveEvent(ctx, event)
 }
 
 // UpdateLastExecuted implements sql.EventDatabase
