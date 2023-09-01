@@ -66,6 +66,7 @@ type nomsTableWriter struct {
 	nextAutoIncrementValue map[string]uint64
 
 	setter SessionRootSetter
+	errEncountered error
 }
 
 var _ TableWriter = &nomsTableWriter{}
@@ -168,7 +169,10 @@ func (te *nomsTableWriter) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 
 // Close implements Closer
 func (te *nomsTableWriter) Close(ctx *sql.Context) error {
-	return te.flush(ctx)
+	if te.errEncountered == nil {
+		return te.flush(ctx)
+	}
+	return nil
 }
 
 // StatementBegin implements the interface sql.TableEditor.
@@ -178,6 +182,9 @@ func (te *nomsTableWriter) StatementBegin(ctx *sql.Context) {
 
 // DiscardChanges implements the interface sql.TableEditor.
 func (te *nomsTableWriter) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
+	if _, ignored := errorEncountered.(sql.IgnorableError); !ignored {
+		te.errEncountered = errorEncountered
+	}
 	return te.tableEditor.StatementFinished(ctx, true)
 }
 

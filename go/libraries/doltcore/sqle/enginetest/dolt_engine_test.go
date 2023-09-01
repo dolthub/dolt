@@ -119,25 +119,36 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			// panic: runtime error: slice bounds out of range [-1:]
-			Name: "Slice out of bounds panic repro",
+			Name: "Add primary key",
 			SetUpScript: []string{
-				"CREATE table t (pk int primary key, col1 TEXT);",
-				"INSERT into t values (1, '123');",
-				// NOTE: if the index is created over (pk, col1(3)), then this code works fine, but not if the pk
-				//       is either not included or included after the blob column
-				"CREATE INDEX test_index2 ON t(col1(3));",
-				// NOTE: If the index is created BEFORE any data is inserted into the table, then we don't see the issue
-				//"INSERT into t values (1, '123');",
+				"create table t1 (i int, j int)",
+				"insert into t1 values (1,1), (1,2), (1,3)",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "INSERT into t values (2, '222');",
-					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+					Query:       "alter table t1 add primary key (i)",
+					ExpectedErr: sql.ErrPrimaryKeyViolation,
 				},
 				{
-					Query:    "select * from t;",
-					Expected: []sql.Row{{1, "123"}, {2, "222"}},
+					Query: "show create table t1",
+					Expected: []sql.Row{{"t1",
+						"CREATE TABLE `t1` (\n" +
+								"  `i` int,\n" +
+								"  `j` int\n" +
+								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+				},
+				{
+					Query:    "alter table t1 add primary key (i, j)",
+					Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
+				},
+				{
+					Query: "show create table t1",
+					Expected: []sql.Row{{"t1",
+						"CREATE TABLE `t1` (\n" +
+								"  `i` int NOT NULL,\n" +
+								"  `j` int NOT NULL,\n" +
+								"  PRIMARY KEY (`i`,`j`)\n" +
+								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 				},
 			},
 		},

@@ -51,6 +51,8 @@ type prollyTableWriter struct {
 
 	flusher WriteSessionFlusher
 	setter  SessionRootSetter
+	
+	errEncountered error
 }
 
 var _ TableWriter = &prollyTableWriter{}
@@ -219,7 +221,11 @@ func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) 
 
 // Close implements Closer
 func (w *prollyTableWriter) Close(ctx *sql.Context) error {
-	return w.flush(ctx)
+	// We discard data changes in DiscardChanges, but this doesn't include schema changes, which we don't want to flush 
+	if w.errEncountered == nil {
+		return w.flush(ctx)
+	}
+	return nil
 }
 
 // StatementBegin implements TableWriter.
@@ -229,6 +235,9 @@ func (w *prollyTableWriter) StatementBegin(ctx *sql.Context) {
 
 // DiscardChanges implements TableWriter.
 func (w *prollyTableWriter) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
+	if _, ignored := errorEncountered.(sql.IgnorableError); !ignored {
+		w.errEncountered = errorEncountered
+	}
 	err := w.primary.Discard(ctx)
 	for _, secondary := range w.secondary {
 		sErr := secondary.Discard(ctx)
