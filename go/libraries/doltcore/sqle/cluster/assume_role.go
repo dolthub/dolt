@@ -56,6 +56,7 @@ func newAssumeRoleProcedure(controller *Controller) sql.ExternalStoredProcedureD
 			}
 			return sql.RowsToRowIter(sql.Row{0}), nil
 		},
+		ReadOnly: true,
 	}
 }
 
