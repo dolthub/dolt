@@ -58,7 +58,7 @@ func createFulltextTable(ctx *sql.Context, name string, root *doltdb.RootValue) 
 	if err != nil {
 		return nil, err
 	}
-	gmsTable := memory.NewTable(name, sqlSch, nil)
+	gmsTable := memory.NewTable(nil, name, sqlSch, nil)
 	gmsTable.EnablePrimaryKeyIndexes()
 	return &fulltextTable{
 		GMSTable: gmsTable,
@@ -114,8 +114,8 @@ func (table *fulltextTable) Deleter(ctx *sql.Context) sql.RowDeleter {
 }
 
 // IndexedAccess implements the interface fulltext.EditableTable.
-func (table *fulltextTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
-	return table.GMSTable.IndexedAccess(lookup)
+func (table *fulltextTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) (sql.IndexedTable, error) {
+	return table.GMSTable.IndexedAccess(ctx, lookup)
 }
 
 // GetIndexes implements the interface fulltext.EditableTable.

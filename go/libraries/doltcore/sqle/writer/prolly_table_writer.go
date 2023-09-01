@@ -262,12 +262,12 @@ func (w *prollyTableWriter) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 }
 
 // IndexedAccess implements sql.IndexAddressableTable.
-func (w *prollyTableWriter) IndexedAccess(i sql.IndexLookup) sql.IndexedTable {
+func (w *prollyTableWriter) IndexedAccess(ctx *sql.Context, i sql.IndexLookup) (sql.IndexedTable, error) {
 	idx := index.DoltIndexFromSqlIndex(i.Index)
 	return &prollyFkIndexer{
 		writer: w,
 		index:  idx,
-	}
+	}, nil
 }
 
 // Reset puts the writer into a fresh state, updating the schema and index writers according to the newly given table.
