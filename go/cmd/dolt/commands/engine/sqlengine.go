@@ -137,7 +137,7 @@ func NewSqlEngine(
 		IsServerLocked: config.IsServerLocked,
 	}).WithBackgroundThreads(bThreads)
 
-	config.ClusterController.SetIsStandbyCallback(func (isStandby bool) {
+	config.ClusterController.SetIsStandbyCallback(func(isStandby bool) {
 		pro.SetIsStandby(isStandby)
 
 		// Standbys are read only, primarys are not.
