@@ -55,7 +55,7 @@ type Config struct {
 	Histogram bool   `yaml:"histogram"`
 	ScriptDir string `yaml:"scriptDir"`
 	Verbose   bool   `yaml:"verbose"`
-	Prepared  bool   `yaml:prepared`
+	Prepared  bool   `yaml:"prepared"`
 }
 
 func (c Config) WithScriptDir(dir string) Config {
