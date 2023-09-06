@@ -1,0 +1,9 @@
+tests:
+  - name: "index scan join"
+    repos:
+      - name: dolt
+        server:
+          port: 3309
+          args: [ "--port", "3309", "--password", "password"]
+    scripts:
+      - index_join_scan.lua

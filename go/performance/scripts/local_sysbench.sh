@@ -69,13 +69,14 @@ listener:
   read_timeout_millis: 28800000
   write_timeout_millis: 28800000
 
-databases:
-  - name: "sbtest"
-    path: "."
+data_dir: .
 YAML
 
 # start a server
+mkdir sbtest
+cd sbtest
 dolt init
+cd ..
 dolt sql-server --config="dolt-config.yaml" 2> prepare.log &
 SERVER_PID="$!"
 
@@ -119,6 +120,8 @@ sysbench \
   --mysql-port="$PORT" \
   --mysql-user="user" \
   --mysql-password="pass" \
+  --db-ps-mode=disable \
+  --time=30 \
   --db-ps-mode=disable \
   "$SYSBENCH_TEST" run
 
