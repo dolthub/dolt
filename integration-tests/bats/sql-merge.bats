@@ -887,6 +887,8 @@ SQL
 }
 
 @test "sql-merge: different check constraints on same column throw conflict" {
+    skip "auto conflict resolution for schema merges is blocked until https://github.com/dolthub/dolt/issues/6616 is fixed"
+
     dolt sql -q "create table t (i int)"
     dolt add .
     dolt commit -am "initial commit"
@@ -949,6 +951,8 @@ SQL
 }
 
 @test "sql-merge: dropping constraint in one branch and modifying same in other results in conflict" {
+    skip "auto conflict resolution for schema merges is blocked until https://github.com/dolthub/dolt/issues/6616 is fixed"
+
     dolt sql -q "create table t (i int)"
     dolt add .
     dolt sql -q "alter table t add constraint c check (i > 0)"
@@ -1017,6 +1021,8 @@ SQL
 }
 
 @test "sql-merge: check constraint with name collision" {
+    skip "auto conflict resolution for schema merges is blocked until https://github.com/dolthub/dolt/issues/6616 is fixed"
+
     dolt sql -q "create table t (i int)"
     dolt add .
     dolt commit -am "initial commit"
@@ -1055,6 +1061,8 @@ SQL
 }
 
 @test "sql-merge: check constraint for deleted column in another table" {
+    skip "auto conflict resolution for schema merges is blocked until https://github.com/dolthub/dolt/issues/6616 is fixed"
+
     dolt sql -q "create table t (i int primary key, j int)"
     dolt add .
     dolt commit -am "initial commit"

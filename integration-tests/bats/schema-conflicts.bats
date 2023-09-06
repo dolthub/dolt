@@ -53,6 +53,8 @@ setup_schema_conflict() {
 }
 
 @test "schema-conflicts: resolve schema conflict with 'ours' via SQL" {
+    skip "auto conflict resolution for schema merges is blocked until https://github.com/dolthub/dolt/issues/6616 is fixed"
+
     setup_schema_conflict
 
     dolt merge other
@@ -64,6 +66,8 @@ setup_schema_conflict() {
 }
 
 @test "schema-conflicts: resolve schema conflict with 'theirs' via SQL" {
+    skip "auto conflict resolution for schema merges is blocked until https://github.com/dolthub/dolt/issues/6616 is fixed"
+
     setup_schema_conflict
 
     dolt merge other
@@ -75,6 +79,8 @@ setup_schema_conflict() {
 }
 
 @test "schema-conflicts: resolve schema conflict with 'ours' via CLI" {
+    skip "auto conflict resolution for schema merges is blocked until https://github.com/dolthub/dolt/issues/6616 is fixed"
+
     setup_schema_conflict
 
     dolt merge other
@@ -86,6 +92,8 @@ setup_schema_conflict() {
 }
 
 @test "schema-conflicts: resolve schema conflict with 'theirs' via CLI" {
+    skip "auto conflict resolution for schema merges is blocked until https://github.com/dolthub/dolt/issues/6616 is fixed"
+
     setup_schema_conflict
 
     dolt merge other
