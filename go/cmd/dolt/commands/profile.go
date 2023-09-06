@@ -156,7 +156,7 @@ func addProfile(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbo
 		return errhand.BuildDError("error: profile %s already exists, please delete this profile and re-add it if you want to edit any values.", profileName).Build()
 	}
 
-	profilesJSON, err = sjson.Set(profilesJSON, profileName, profStr)
+	profilesJSON, err = sjson.SetRaw(profilesJSON, profileName, profStr)
 	if err != nil {
 		return errhand.BuildDError("error: failed to add profile, %s", err).Build()
 	}
