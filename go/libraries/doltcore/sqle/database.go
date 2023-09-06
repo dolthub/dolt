@@ -1319,11 +1319,7 @@ func (db Database) GetEvents(ctx *sql.Context) ([]sql.EventDefinition, error) {
 
 // createEventDefinitionFromFragment creates an EventDefinition instance from the schema fragment |frag|.
 func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag schemaFragment) (*sql.EventDefinition, error) {
-	catalog, err := db.getCatalog()
-	if err != nil {
-		return nil, err
-	}
-
+	catalog := db.getCatalog(ctx)
 	sqlMode := sql.NewSqlModeFromString(frag.sqlMode)
 	parsed, err := planbuilder.ParseWithOptions(ctx, catalog, updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment), sqlMode.ParserOptions())
 	if err != nil {
@@ -1349,17 +1345,10 @@ func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag sche
 	return &event, nil
 }
 
-// getCatalog creates and returns a new analyzer.Catalog instance with access to only this database.
-// NOTE: Because we don't have access to the real Catalog here, and we need it to call planbuilder.ParseWithOptions
-//
-//	to parse create event fragments, we create a new DoltDB provider and a new engine, and then use that Catalog.
-//	It would be cleaner and more efficient if we could grab the real Catalog, but we don't have access here.
-func (db Database) getCatalog() (*analyzer.Catalog, error) {
-	pro, err := NewDoltDatabaseProviderWithDatabase(env.DefaultInitBranch, nil, db, nil)
-	if err != nil {
-		return nil, err
-	}
-	return sqle.NewDefault(pro).Analyzer.Catalog, nil
+// getCatalog creates and returns the analyzer.Catalog instance for this database.
+func (db Database) getCatalog(ctx *sql.Context) *analyzer.Catalog {
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	return sqle.NewDefault(doltSession.Provider()).Analyzer.Catalog
 }
 
 // SaveEvent implements sql.EventDatabase.
