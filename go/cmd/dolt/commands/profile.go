@@ -131,27 +131,17 @@ func addProfile(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbo
 	}
 	//TODO: enable config to retrieve json objects instead of just strings
 	encodedProfiles, err := cfg.GetString(GlobalCfgProfileKey)
-	if err != nil {
-		if err != config.ErrConfigParamNotFound {
-			return errhand.BuildDError("error: failed to get profiles, %s", err).Build()
-		} else {
-			profilesJSON := "{\"" + profileName + "\"" + ": " + profStr + "}"
-			err = writeProfileToGlobalConfig(profilesJSON, cfg)
-			if err != nil {
-				return errhand.BuildDError("error: failed to write profile to config, %s", err).Build()
-			}
-			if profileName == DefaultProfileName {
-				cli.Println(color.YellowString(defaultProfileWarning))
-			}
-
-			err = setGlobalConfigPermissions(dEnv)
-			if err != nil {
-				return errhand.BuildDError("error: failed to set permissions, %s", err).Build()
-			}
-			return nil
+	if err != nil && err != config.ErrConfigParamNotFound {
+		return errhand.BuildDError("error: failed to get profiles, %s", err).Build()
+	}
+	profilesJSON := ""
+	profileExists := false
+	if encodedProfiles != "" {
+		profilesJSON, profileExists, err = decodeProfileAndCheckExists(profileName, encodedProfiles)
+		if err != nil {
+			return errhand.BuildDError("error: failed to decode profiles, %s", err).Build()
 		}
 	}
-	profilesJSON, profileExists, err := decodeProfileAndCheckExists(profileName, encodedProfiles)
 	if profileExists {
 		return errhand.BuildDError("error: profile %s already exists, please delete this profile and re-add it if you want to edit any values.", profileName).Build()
 	}
