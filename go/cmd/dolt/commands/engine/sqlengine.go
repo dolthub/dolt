@@ -333,16 +333,6 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, sessFa
 			return nil, func() error { return nil }, err
 		}
 
-		// TODO: Seems like we either need to fix this test or change this behavior to
-		//        not start a transaction until right before we need one.
-		//// Starting transaction at the start of the server to load all events to
-		//// the event scheduler is causing read replica test to fail as it tries
-		//// pulling from remotes for branches that its remoteRef does not exist yet.
-		//err = sql.SystemVariables.SetGlobal(dsess.SkipReplicationErrors, true)
-		//if err != nil {
-		//	return nil, func() error { return nil }, err
-		//}
-
 		ts, ok := newCtx.Session.(sql.TransactionSession)
 		if !ok {
 			return nil, func() error { return nil }, nil

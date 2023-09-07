@@ -1336,7 +1336,7 @@ func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag sche
 	//       we convert them back to the caller's session timezone.
 	//       Here we are loading the events from disk, so they are already in UTC and don't need any other
 	//       timezone applied, so we specify "+00:00".
-	event, err := eventPlan.GetParsedEventDefinition(ctx, frag.created, frag.created, frag.created, "+00:00")
+	event, err := eventPlan.GetEventDefinition(ctx, frag.created, frag.created, frag.created, "+00:00")
 	if err != nil {
 		return nil, err
 	}
