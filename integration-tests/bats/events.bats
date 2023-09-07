@@ -3,13 +3,13 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
 make_test_repo_and_start_server() {
+  rm -rf ./"$1"
   mkdir "$1"
   cd "$1"
-  dolt init
-  dolt sql -q "CREATE TABLE totals (id int PRIMARY KEY AUTO_INCREMENT, int_col int)"
-  dolt commit -Am "create table"
   start_sql_server
-  cd ..
+  dolt sql-client -P $PORT -u dolt --use-db information_schema -q "CREATE DATABASE repo1;"
+  dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CREATE TABLE totals (id int PRIMARY KEY AUTO_INCREMENT, int_col int);"
+  dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_commit('-Am', 'creating table');"
 }
 
 setup() {
@@ -20,7 +20,6 @@ setup() {
 
 teardown() {
     stop_sql_server 1 && sleep 0.5
-    rm -rf $BATS_TMPDIR/sql-server-test$$
     teardown_common
 }
 
@@ -106,7 +105,7 @@ teardown() {
 
 @test "events: checking out a branch should disable all events leaving the working set dirty" {
     dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CREATE EVENT insert1 ON SCHEDULE EVERY 2 SECOND ENDS CURRENT_TIMESTAMP + INTERVAL 3 SECOND ON COMPLETION PRESERVE DO INSERT INTO totals (int_col) VALUES (1); SELECT SLEEP(5);"
-    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CALL DOLT_COMMIT('-am','commit with an event')"
+    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CALL DOLT_COMMIT('-am','commit event changes to totals table')"
 
     dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CALL DOLT_CHECKOUT('-b','newbranch')"
     # should be disabled
@@ -115,16 +114,17 @@ teardown() {
     [[ $output =~ "DISABLED" ]] || false
 }
 
-@test "events: events on default branch still runs after switching to non default branch" {
-    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CREATE EVENT insert1 ON SCHEDULE EVERY 5 SECOND ENDS CURRENT_TIMESTAMP + INTERVAL 1 MINUTE DO INSERT INTO totals (int_col) VALUES (1);"
-    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CALL DOLT_COMMIT('-am','commit with an event')"
+@test "events: events on default branch still run after switching to non-default branch" {
+    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CREATE EVENT insert1 ON SCHEDULE EVERY 3 SECOND ENDS CURRENT_TIMESTAMP + INTERVAL 3 MINUTE DO INSERT INTO totals (int_col) VALUES (1);"
+    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CALL DOLT_COMMIT('-Am','commit with an event');"
 
-    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CALL DOLT_CHECKOUT('-b','newbranch')"
+    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CALL DOLT_CHECKOUT('-b','newbranch');"
     # should be disabled
     run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT COUNT(*) FROM totals;"
     [ $status -eq 0 ]
     [[ $output =~ "| 1        |" ]] || false
 
+    # While we are sleeping, the event executor should still be running our event on schedule, on the main branch
     sleep 5
     run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CALL DOLT_CHECKOUT('main'); SELECT COUNT(*) FROM totals;"
     [ $status -eq 0 ]
