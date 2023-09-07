@@ -363,3 +363,28 @@ teardown() {
     run dolt --profile defaultTest sql -q "show tables"
     [ "$status" -eq 0 ]
 }
+
+@test "profile: multiple profiles work" {
+    cd defaultDB
+    dolt sql -q "create table defaultTable (pk int primary key)"
+    dolt commit -Am "create defaultTable"
+    cd -
+
+    cd altDB
+    dolt sql -q "create table altTable (pk int primary key)"
+    dolt commit -Am "create altTable"
+    cd -
+
+    dolt profile add --use-db defaultDB defaultTest
+    dolt profile add --use-db altDB altTest
+
+    run dolt --profile defaultTest sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "defaultTable" ]] || false
+    [[ ! "$output" =~ "altTable" ]] || false
+
+    run dolt --profile altTest sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "defaultTable" ]] || false
+    [[ "$output" =~ "altTable" ]] || false
+}
