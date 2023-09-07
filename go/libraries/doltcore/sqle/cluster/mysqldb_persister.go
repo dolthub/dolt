@@ -32,7 +32,7 @@ type MySQLDbPersister interface {
 	LoadData(context.Context) ([]byte, error)
 }
 
-type replicatingPersister struct {
+type replicatingMySQLDbPersister struct {
 	base MySQLDbPersister
 
 	current  []byte
@@ -133,7 +133,7 @@ func (r *mysqlDbReplica) setRole(role Role) {
 	r.cond.Broadcast()
 }
 
-func (p *replicatingPersister) setRole(role Role) {
+func (p *replicatingMySQLDbPersister) setRole(role Role) {
 	for _, r := range p.replicas {
 		r.setRole(role)
 	}
@@ -148,7 +148,7 @@ func (p *replicatingPersister) setRole(role Role) {
 	}
 }
 
-func (p *replicatingPersister) Run() {
+func (p *replicatingMySQLDbPersister) Run() {
 	var wg sync.WaitGroup
 	for _, r := range p.replicas {
 		r := r
@@ -161,13 +161,13 @@ func (p *replicatingPersister) Run() {
 	wg.Wait()
 }
 
-func (p *replicatingPersister) GracefulStop() {
+func (p *replicatingMySQLDbPersister) GracefulStop() {
 	for _, r := range p.replicas {
 		r.GracefulStop()
 	}
 }
 
-func (p *replicatingPersister) Persist(ctx *sql.Context, data []byte) error {
+func (p *replicatingMySQLDbPersister) Persist(ctx *sql.Context, data []byte) error {
 	err := p.base.Persist(ctx, data)
 	if err == nil {
 		p.mu.Lock()
@@ -181,7 +181,7 @@ func (p *replicatingPersister) Persist(ctx *sql.Context, data []byte) error {
 	return err
 }
 
-func (p *replicatingPersister) LoadData(ctx context.Context) ([]byte, error) {
+func (p *replicatingMySQLDbPersister) LoadData(ctx context.Context) ([]byte, error) {
 	ret, err := p.base.LoadData(ctx)
 	if err == nil {
 		p.mu.Lock()
@@ -193,24 +193,4 @@ func (p *replicatingPersister) LoadData(ctx context.Context) ([]byte, error) {
 		}
 	}
 	return ret, err
-}
-
-type replicationServiceServer struct {
-	replicationapi.UnimplementedReplicationServiceServer
-	mysqlDb *mysql_db.MySQLDb
-}
-
-func (s *replicationServiceServer) UpdateUsersAndGrants(ctx context.Context, req *replicationapi.UpdateUsersAndGrantsRequest) (*replicationapi.UpdateUsersAndGrantsResponse, error) {
-	sqlCtx := sql.NewContext(ctx)
-	ed := s.mysqlDb.Editor()
-	defer ed.Close()
-	err := s.mysqlDb.OverwriteUsersAndGrantData(sqlCtx, ed, req.SerializedContents)
-	if err != nil {
-		return nil, err
-	}
-	err = s.mysqlDb.Persist(sqlCtx, ed)
-	if err != nil {
-		return nil, err
-	}
-	return &replicationapi.UpdateUsersAndGrantsResponse{}, nil
 }

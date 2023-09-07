@@ -39,6 +39,7 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	replicationapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/replicationapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/creds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -48,6 +49,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/clusterdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/jwtauth"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -83,9 +85,15 @@ type Controller struct {
 	pub       ed25519.PublicKey
 	priv      ed25519.PrivateKey
 
+	replicationClients []*replicationServiceClient
+
 	mysqlDb          *mysql_db.MySQLDb
-	mysqlDbPersister *replicatingPersister
+	mysqlDbPersister *replicatingMySQLDbPersister
 	mysqlDbReplicas  []*mysqlDbReplica
+
+	branchControlController *branch_control.Controller
+	branchControlFilesys    filesys.Filesys
+	bcReplication           *branchControlReplication
 }
 
 type sqlvars interface {
@@ -160,11 +168,11 @@ func NewController(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) 
 	ret.sinterceptor.keyProvider = ret.jwks
 	ret.sinterceptor.jwtExpected = JWTExpectations()
 
-	clients, err := ret.replicationServiceClients(context.Background())
+	ret.replicationClients, err = ret.replicationServiceClients(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	ret.mysqlDbReplicas = make([]*mysqlDbReplica, len(clients))
+	ret.mysqlDbReplicas = make([]*mysqlDbReplica, len(ret.replicationClients))
 	for i := range ret.mysqlDbReplicas {
 		bo := backoff.NewExponentialBackOff()
 		bo.InitialInterval = time.Second
@@ -172,7 +180,7 @@ func NewController(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) 
 		bo.MaxElapsedTime = 0
 		ret.mysqlDbReplicas[i] = &mysqlDbReplica{
 			lgr:     lgr.WithFields(logrus.Fields{}),
-			client:  clients[i],
+			client:  ret.replicationClients[i],
 			backoff: bo,
 		}
 		ret.mysqlDbReplicas[i].cond = sync.NewCond(&ret.mysqlDbReplicas[i].mu)
@@ -193,12 +201,18 @@ func (c *Controller) Run() {
 		defer wg.Done()
 		c.mysqlDbPersister.Run()
 	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c.bcReplication.Run()
+	}()
 	wg.Wait()
 }
 
 func (c *Controller) GracefulStop() error {
 	c.jwks.GracefulStop()
 	c.mysqlDbPersister.GracefulStop()
+	c.bcReplication.GracefulStop()
 	return nil
 }
 
@@ -482,6 +496,7 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, opts roleTransition
 		// TODO: For a graceful transition, this should true up the
 		// replicas the same as we do for replication hooks.
 		c.mysqlDbPersister.setRole(c.role)
+		c.bcReplication.setRole(c.role)
 	}
 	_ = c.persistVariables()
 	return roleTransitionResult{
@@ -558,7 +573,7 @@ func (c *Controller) RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.Server
 func (c *Controller) HookMySQLDbPersister(persister MySQLDbPersister, mysqlDb *mysql_db.MySQLDb) MySQLDbPersister {
 	if c != nil {
 		c.mysqlDb = mysqlDb
-		c.mysqlDbPersister = &replicatingPersister{
+		c.mysqlDbPersister = &replicatingMySQLDbPersister{
 			base:     persister,
 			replicas: c.mysqlDbReplicas,
 		}
@@ -568,9 +583,45 @@ func (c *Controller) HookMySQLDbPersister(persister MySQLDbPersister, mysqlDb *m
 	return persister
 }
 
+func (c *Controller) HookBranchControlPersistence(controller *branch_control.Controller, fs filesys.Filesys) {
+	if c != nil {
+		c.branchControlController = controller
+		c.branchControlFilesys = fs
+
+		replicas := make([]*branchControlReplica, len(c.replicationClients))
+		for i := range replicas {
+			bo := backoff.NewExponentialBackOff()
+			bo.InitialInterval = time.Second
+			bo.MaxInterval = time.Minute
+			bo.MaxElapsedTime = 0
+			replicas[i] = &branchControlReplica{
+				backoff: bo,
+				client:  c.replicationClients[i],
+				lgr:     c.lgr.WithFields(logrus.Fields{}),
+			}
+			replicas[i].cond = sync.NewCond(&replicas[i].mu)
+		}
+		c.bcReplication = &branchControlReplication{
+			replicas:     replicas,
+			bcController: controller,
+		}
+		c.bcReplication.setRole(c.role)
+
+		controller.SavedCallback = func() {
+			contents := controller.Serialized.Load()
+			if contents != nil {
+				c.bcReplication.UpdateBranchControlContents(*contents)
+			}
+		}
+	}
+}
+
 func (c *Controller) RegisterGrpcServices(srv *grpc.Server) {
 	replicationapi.RegisterReplicationServiceServer(srv, &replicationServiceServer{
-		mysqlDb: c.mysqlDb,
+		mysqlDb:              c.mysqlDb,
+		branchControl:        c.branchControlController,
+		branchControlFilesys: c.branchControlFilesys,
+		lgr:                  c.lgr.WithFields(logrus.Fields{}),
 	})
 }
 
