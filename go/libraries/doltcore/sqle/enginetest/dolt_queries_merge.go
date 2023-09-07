@@ -437,6 +437,11 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		// TODO: These tests are skipped, because we have temporarily disabled dolt_conflicts_resolve
+		//       when there are schema conflicts, since schema conflicts prevent table data from being
+		//       merged, and resolving the schema changes, but not completing the data merge will likely
+		//       give customers unexpected results.
+		//       https://github.com/dolthub/dolt/issues/6616
 		Name: "CALL DOLT_MERGE with schema conflicts can be correctly resolved using dolt_conflicts_resolve when autocommit is off",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
@@ -453,54 +458,67 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Skip:     true,
 				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
 				Expected: []sql.Row{{"", 0, 1}},
 			},
 			{
+				Skip:     true,
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
 				Expected: []sql.Row{{true, "feature-branch", "refs/heads/main", "test"}},
 			},
 			{
+				Skip:     true,
 				Query:    "SELECT * from dolt_status",
 				Expected: []sql.Row{{"test", false, "schema conflict"}},
 			},
 			{
+				Skip:     true,
 				Query:    "SELECT COUNT(*) FROM dolt_log",
 				Expected: []sql.Row{{4}},
 			},
 			{
+				Skip:     true,
 				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
 				Expected: []sql.Row{{"update val col"}},
 			},
 			{
+				Skip:     true,
 				Query:    "SELECT COUNT(*) FROM dolt_conflicts",
 				Expected: []sql.Row{{1}},
 			},
 			{
+				Skip:     true,
 				Query:    "CALL DOLT_CONFLICTS_RESOLVE('--ours', 'test');",
 				Expected: []sql.Row{{0}},
 			},
 			{
+				Skip:     true,
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
 				Expected: []sql.Row{{true, "feature-branch", "refs/heads/main", ""}},
 			},
 			{
+				Skip:     true,
 				Query:    "SELECT COUNT(*) FROM dolt_conflicts",
 				Expected: []sql.Row{{0}},
 			},
 			{
+				Skip:     true,
 				Query:    "SELECT * from dolt_status",
 				Expected: []sql.Row{{"test", true, "merged"}},
 			},
 			{
+				Skip:             true,
 				Query:            "CALL DOLT_COMMIT('-m', 'merged');",
 				SkipResultsCheck: true,
 			},
 			{
+				Skip:     true,
 				Query:    "SELECT * from dolt_status",
 				Expected: []sql.Row{},
 			},
 			{
+				Skip:     true,
 				Query:    "SHOW CREATE TABLE test",
 				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n  `pk` int NOT NULL,\n  `val` smallint,\n  PRIMARY KEY (`pk`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
