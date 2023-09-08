@@ -15,16 +15,16 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 )
 
 var fetchDocs = cli.CommandDocumentationContent{
@@ -67,54 +67,68 @@ func (cmd FetchCmd) ArgParser() *argparser.ArgParser {
 	return cli.CreateFetchArgParser()
 }
 
+func (cmd FetchCmd) RequiresRepo() bool {
+	return false
+}
+
 // Exec executes the command
 func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cli.CreateFetchArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, fetchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	r, remainingArgs, err := env.RemoteForFetchArgs(apr.Args, dEnv.RepoStateReader())
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		handleErrAndExit(err)
+	}
+	if closeFunc != nil {
+		defer closeFunc()
+	}
+
+	query, err := constructInterpolatedDoltFetchQuery(apr)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	_, _, err = queryist.Query(sqlCtx, query)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	validationErr := validateFetchArgs(apr, remainingArgs)
-	if validationErr != nil {
-		return HandleVErrAndExitCode(validationErr, usage)
-	}
-
-	refSpecs, err := env.ParseRefSpecs(remainingArgs, dEnv.RepoStateReader(), r)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-
-	var verr errhand.VerboseError
-	dEnv.UserPassConfig, verr = getRemoteUserAndPassConfig(apr)
-	if verr != nil {
-		return HandleVErrAndExitCode(verr, usage)
-	}
-
-	srcDB, err := r.GetRemoteDBWithoutCaching(ctx, dEnv.DbData().Ddb.ValueReadWriter().Format(), dEnv)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-
-	prune := apr.Contains(cli.PruneFlag)
-	mode := ref.UpdateMode{Force: true, Prune: prune}
-	err = actions.FetchRefSpecs(ctx, dEnv.DbData(), srcDB, refSpecs, r, mode, buildProgStarter(downloadLanguage), stopProgFuncs)
-	if err != nil && err != doltdb.ErrUpToDate {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
 	return HandleVErrAndExitCode(nil, usage)
 }
 
-// validateFetchArgs returns an error if the arguments provided aren't valid
-func validateFetchArgs(apr *argparser.ArgParseResults, refSpecArgs []string) errhand.VerboseError {
-	if len(refSpecArgs) > 0 && apr.Contains(cli.PruneFlag) {
-		// The current prune implementation assumes that we're processing all branch specs on the remote, so if an
-		// explicit ref spec is provided we refuse to execute
-		return errhand.BuildDError("--prune option cannot be provided with a ref spec").Build()
+// constructInterpolatedDoltFetchQuery constructs the sql query necessary to call the DOLT_FETCH() function.
+// Also interpolates this query to prevent sql injection.
+func constructInterpolatedDoltFetchQuery(apr *argparser.ArgParseResults) (string, error) {
+	var params []interface{}
+
+	var buffer bytes.Buffer
+	var first bool
+	first = true
+
+	buffer.WriteString("call dolt_fetch(")
+
+	writeToBuffer := func(s string) {
+		if !first {
+			buffer.WriteString(", ")
+		}
+		buffer.WriteString(s)
+		first = false
 	}
 
-	return nil
+	if apr.Contains(cli.PruneFlag) {
+		writeToBuffer("'--prune'")
+	}
+	for _, arg := range apr.Args {
+		writeToBuffer("?")
+		params = append(params, arg)
+	}
+	buffer.WriteString(")")
+
+	interpolatedQuery, err := dbr.InterpolateForDialect(buffer.String(), params, dialect.MySQL)
+	if err != nil {
+		return "", err
+	}
+
+	return interpolatedQuery, nil
 }

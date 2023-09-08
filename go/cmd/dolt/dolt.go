@@ -129,7 +129,6 @@ var commandsWithoutCliCtx = []cli.Command{
 	sqlserver.SqlServerCmd{VersionStr: Version},
 	sqlserver.SqlClientCmd{VersionStr: Version},
 	commands.CloneCmd{},
-	commands.FetchCmd{},
 	commands.PushCmd{},
 	commands.RemoteCmd{},
 	commands.BackupCmd{},
