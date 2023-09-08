@@ -245,12 +245,10 @@ func RunAsyncReplicationThreads(bThreads *sql.BackgroundThreads, ch chan PushArg
 			return nil
 		}
 
-		var newHeadsCopy = make(map[string]PushArg, asyncPushBufferSize)
-		for k, v := range newHeads {
-			newHeadsCopy[k] = v
-		}
+		toRet := newHeads
+		newHeads = make(map[string]PushArg, asyncPushBufferSize)
 
-		return newHeadsCopy
+		return toRet
 	}
 
 	flush := func(newHeads map[string]PushArg, latestHeads map[string]hash.Hash) {
