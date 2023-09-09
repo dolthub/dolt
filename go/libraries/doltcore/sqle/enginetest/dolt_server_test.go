@@ -421,6 +421,57 @@ var DropDatabaseMultiSessionScriptTests = []queries.ScriptTest{
 	},
 }
 
+var PersistVariableTests = []queries.ScriptTest{
+	{
+		Name: "set persisted variables with on and off",
+		SetUpScript: []string{
+			"set @@persist.dolt_skip_replication_errors = on;",
+			"set @@persist.dolt_read_replica_force_pull = off;",
+		},
+	},
+	{
+		Name: "retrieve persisted variables",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select @@dolt_skip_replication_errors",
+				Expected: []sql.Row{
+					{1},
+				},
+			},
+			{
+				Query: "select @@dolt_read_replica_force_pull",
+				Expected: []sql.Row{
+					{0},
+				},
+			},
+		},
+	},
+	{
+		Name: "set persisted variables with 1 and 0",
+		SetUpScript: []string{
+			"set @@persist.dolt_skip_replication_errors = 0;",
+			"set @@persist.dolt_read_replica_force_pull = 1;",
+		},
+	},
+	{
+		Name: "retrieve persisted variables",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select @@dolt_skip_replication_errors",
+				Expected: []sql.Row{
+					{0},
+				},
+			},
+			{
+				Query: "select @@dolt_read_replica_force_pull",
+				Expected: []sql.Row{
+					{1},
+				},
+			},
+		},
+	},
+}
+
 // TestDoltMultiSessionBehavior runs tests that exercise multi-session logic on a running SQL server. Statements
 // are sent through the server, from out of process, instead of directly to the in-process engine API.
 func TestDoltMultiSessionBehavior(t *testing.T) {
@@ -431,6 +482,11 @@ func TestDoltMultiSessionBehavior(t *testing.T) {
 // in other sessions.
 func TestDropDatabaseMultiSessionBehavior(t *testing.T) {
 	testMultiSessionScriptTests(t, DropDatabaseMultiSessionScriptTests)
+}
+
+// TestPersistVariable tests persisting variables across server starts
+func TestPersistVariable(t *testing.T) {
+	testSerialSessionScriptTests(t, PersistVariableTests)
 }
 
 func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
@@ -482,6 +538,62 @@ func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
 
 			require.NoError(t, conn1.Close())
 			require.NoError(t, conn2.Close())
+
+			sc.StopServer()
+			err = sc.WaitForClose()
+			require.NoError(t, err)
+		})
+	}
+}
+
+// testSerialSessionScriptTests creates an environment, then for each script starts a server and runs assertions,
+// stopping the server in between scripts. Unlike other script test executors, scripts may influence later scripts in
+// the block.
+func testSerialSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
+	dEnv := dtestutils.CreateTestEnv()
+	serverConfig := sqlserver.DefaultServerConfig()
+	rand.Seed(time.Now().UnixNano())
+	port := 15403 + rand.Intn(25)
+	serverConfig = serverConfig.WithPort(port)
+	defer dEnv.DoltDB.Close()
+	
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			sc, serverConfig := startServerOnEnv(t, serverConfig, dEnv)
+			err := sc.WaitForStart()
+			require.NoError(t, err)
+
+			conn1, sess1 := newConnection(t, serverConfig)
+
+			t.Run(test.Name, func(t *testing.T) {
+				for _, setupStatement := range test.SetUpScript {
+					_, err := sess1.Exec(setupStatement)
+					require.NoError(t, err)
+				}
+
+				for _, assertion := range test.Assertions {
+					t.Run(assertion.Query, func(t *testing.T) {
+						activeSession := sess1
+						rows, err := activeSession.Query(assertion.Query)
+
+						if len(assertion.ExpectedErrStr) > 0 {
+							require.EqualError(t, err, assertion.ExpectedErrStr)
+						} else if assertion.ExpectedErr != nil {
+							require.True(t, assertion.ExpectedErr.Is(err), "expected error %v, got %v", assertion.ExpectedErr, err)
+						} else if assertion.Expected != nil {
+							require.NoError(t, err)
+							assertResultsEqual(t, assertion.Expected, rows)
+						} else {
+							require.Fail(t, "unsupported ScriptTestAssertion property: %v", assertion)
+						}
+						if rows != nil {
+							require.NoError(t, rows.Close())
+						}
+					})
+				}
+			})
+
+			require.NoError(t, conn1.Close())
 
 			sc.StopServer()
 			err = sc.WaitForClose()
@@ -548,7 +660,6 @@ func assertResultsEqual(t *testing.T, expected []sql.Row, rows *gosql.Rows) {
 func startServer(t *testing.T, withPort bool, host string, unixSocketPath string) (*env.DoltEnv, *sqlserver.ServerController, sqlserver.ServerConfig) {
 	dEnv := dtestutils.CreateTestEnv()
 	serverConfig := sqlserver.DefaultServerConfig()
-
 	if withPort {
 		rand.Seed(time.Now().UnixNano())
 		port := 15403 + rand.Intn(25)
@@ -561,6 +672,11 @@ func startServer(t *testing.T, withPort bool, host string, unixSocketPath string
 		serverConfig = serverConfig.WithSocket(unixSocketPath)
 	}
 
+	onEnv, config := startServerOnEnv(t, serverConfig, dEnv)
+	return dEnv, onEnv, config
+}
+
+func startServerOnEnv(t *testing.T, serverConfig sqlserver.ServerConfig, dEnv *env.DoltEnv, ) (*sqlserver.ServerController, sqlserver.ServerConfig) {
 	sc := sqlserver.NewServerController()
 	go func() {
 		_, _ = sqlserver.Serve(context.Background(), "0.0.0", serverConfig, sc, dEnv)
@@ -568,7 +684,7 @@ func startServer(t *testing.T, withPort bool, host string, unixSocketPath string
 	err := sc.WaitForStart()
 	require.NoError(t, err)
 
-	return dEnv, sc, serverConfig
+	return sc, serverConfig
 }
 
 // newConnection takes sqlserver.serverConfig and opens a connection, and will return that connection with a new session
