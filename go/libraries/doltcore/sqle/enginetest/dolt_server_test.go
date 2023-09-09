@@ -556,7 +556,7 @@ func testSerialSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
 	port := 15403 + rand.Intn(25)
 	serverConfig = serverConfig.WithPort(port)
 	defer dEnv.DoltDB.Close()
-	
+
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
 			sc, serverConfig := startServerOnEnv(t, serverConfig, dEnv)
@@ -676,7 +676,7 @@ func startServer(t *testing.T, withPort bool, host string, unixSocketPath string
 	return dEnv, onEnv, config
 }
 
-func startServerOnEnv(t *testing.T, serverConfig sqlserver.ServerConfig, dEnv *env.DoltEnv, ) (*sqlserver.ServerController, sqlserver.ServerConfig) {
+func startServerOnEnv(t *testing.T, serverConfig sqlserver.ServerConfig, dEnv *env.DoltEnv) (*sqlserver.ServerController, sqlserver.ServerConfig) {
 	sc := sqlserver.NewServerController()
 	go func() {
 		_, _ = sqlserver.Serve(context.Background(), "0.0.0", serverConfig, sc, dEnv)
