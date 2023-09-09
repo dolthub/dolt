@@ -1580,7 +1580,6 @@ func setPersistedValue(conf config.WritableConfig, key string, value interface{}
 		} else {
 			return config.SetInt(conf, key, 0)
 		}
-		return sql.ErrInvalidType.New(v)
 	default:
 		return sql.ErrInvalidType.New(v)
 	}
