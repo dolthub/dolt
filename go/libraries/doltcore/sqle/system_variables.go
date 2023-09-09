@@ -56,11 +56,11 @@ func AddDoltSystemVariables() {
 		},
 		{
 			Name:              dsess.ReadReplicaForcePull,
-			Scope:             sql.SystemVariableScope_Global,
+			Scope:             sql.SystemVariableScope_Persist,
 			Dynamic:           true,
 			SetVarHintApplies: false,
-			Type:              types.NewSystemStringType(dsess.ReadReplicaForcePull),
-			Default:           int8(0),
+			Type:              types.NewSystemBoolType(dsess.ReadReplicaForcePull),
+			Default:           int8(1),
 		},
 		{
 			Name:              dsess.SkipReplicationErrors,
