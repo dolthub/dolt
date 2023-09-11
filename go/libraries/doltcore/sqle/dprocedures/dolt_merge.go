@@ -155,7 +155,7 @@ func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, error) {
 		msg = userMsg
 	}
 
-	ws, commit, conflicts, fastForward, err := performMerge(ctx, sess, roots, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
+	ws, commit, conflicts, fastForward, err := performMerge(ctx, sess, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
 	if err != nil || conflicts != 0 || fastForward != 0 {
 		return commit, conflicts, fastForward, err
 	}
@@ -169,7 +169,15 @@ func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, error) {
 // fast-forward was performed. This commits the working set if merge is successful and
 // 'no-commit' flag is not defined.
 // TODO FF merging commit with constraint violations requires `constraint verify`
-func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots, ws *doltdb.WorkingSet, dbName string, spec *merge.MergeSpec, noCommit bool, msg string) (*doltdb.WorkingSet, string, int, int, error) {
+func performMerge(
+		ctx *sql.Context,
+		sess *dsess.DoltSession,
+		ws *doltdb.WorkingSet,
+		dbName string,
+		spec *merge.MergeSpec,
+		noCommit bool,
+		msg string,
+) (*doltdb.WorkingSet, string, int, int, error) {
 	// todo: allow merges even when an existing merge is uncommitted
 	if ws.MergeActive() {
 		return ws, "", noConflictsOrViolations, threeWayMerge, doltdb.ErrMergeActive
@@ -197,7 +205,7 @@ func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots,
 	if canFF {
 		if spec.NoFF {
 			var commit *doltdb.Commit
-			ws, commit, err = executeNoFFMerge(ctx, sess, spec, dbName, ws, dbData, noCommit)
+			ws, commit, err = executeNoFFMerge(ctx, sess, spec, msg, dbName, ws, noCommit)
 			if err == doltdb.ErrUnresolvedConflictsOrViolations {
 				// if there are unresolved conflicts, write the resulting working set back to the session and return an
 				// error message
@@ -366,13 +374,13 @@ func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.Wor
 }
 
 func executeNoFFMerge(
-	ctx *sql.Context,
-	dSess *dsess.DoltSession,
-	spec *merge.MergeSpec,
-	dbName string,
-	ws *doltdb.WorkingSet,
-	dbData env.DbData,
-	noCommit bool,
+		ctx *sql.Context,
+		dSess *dsess.DoltSession,
+		spec *merge.MergeSpec,
+		msg string,
+		dbName string,
+		ws *doltdb.WorkingSet,
+		noCommit bool,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 	mergeRoot, err := spec.MergeC.GetRootValue(ctx)
 	if err != nil {
@@ -410,9 +418,9 @@ func executeNoFFMerge(
 
 		return ws.WithStagedRoot(roots.Staged), nil, nil
 	}
-
+	
 	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{
-		Message:    spec.Msg,
+		Message:    msg,
 		Date:       spec.Date,
 		Force:      spec.Force,
 		Name:       spec.Name,
@@ -438,13 +446,7 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 	ddb, ok := sess.GetDoltDB(ctx, dbName)
 
 	dbData, ok := sess.GetDbData(ctx, dbName)
-
-	msg, ok := apr.GetValue(cli.MessageArg)
-	if !ok {
-		// TODO probably change, but we can't open editor so it'll have to be automated
-		msg = "automatic SQL merge"
-	}
-
+	
 	var err error
 	var name, email string
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
