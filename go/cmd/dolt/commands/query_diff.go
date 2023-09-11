@@ -34,9 +34,9 @@ import (
 
 var queryDiffDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Shows table diff between two queries",
-	LongDesc:  "Shows table diff between two queries",
+	LongDesc:  "Will execute two queries and compare the resulting table sets",
 	Synopsis: []string{
-		`[options] [{{.LessThan}}query1{{.GreaterThan}}] [{{.LessThan}}query2{{.GreaterThan}}...]`,
+		`[options] [{{.LessThan}}query1{{.GreaterThan}}] [{{.LessThan}}query2{{.GreaterThan}}]`,
 	},
 }
 
