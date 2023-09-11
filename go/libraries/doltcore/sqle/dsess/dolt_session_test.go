@@ -142,13 +142,13 @@ func TestSetPersistedValue(t *testing.T) {
 			Value: "7",
 		},
 		{
-			Name:  "bool",
-			Value: true,
+			Name:        "bool",
+			Value:       true,
 			ExpectedRes: "1",
 		},
 		{
-			Name:  "bool",
-			Value: false,
+			Name:        "bool",
+			Value:       false,
 			ExpectedRes: "0",
 		},
 		{
