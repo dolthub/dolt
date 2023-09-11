@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -165,9 +166,14 @@ func NewController(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) 
 	}
 	ret.mysqlDbReplicas = make([]*mysqlDbReplica, len(clients))
 	for i := range ret.mysqlDbReplicas {
+		bo := backoff.NewExponentialBackOff()
+		bo.InitialInterval = time.Second
+		bo.MaxInterval = time.Minute
+		bo.MaxElapsedTime = 0
 		ret.mysqlDbReplicas[i] = &mysqlDbReplica{
-			lgr:    lgr.WithFields(logrus.Fields{}),
-			client: clients[i],
+			lgr:     lgr.WithFields(logrus.Fields{}),
+			client:  clients[i],
+			backoff: bo,
 		}
 		ret.mysqlDbReplicas[i].cond = sync.NewCond(&ret.mysqlDbReplicas[i].mu)
 	}

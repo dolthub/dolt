@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/sirupsen/logrus"
@@ -49,6 +50,7 @@ type mysqlDbReplica struct {
 	version  uint32
 
 	replicatedVersion uint32
+	backoff           backoff.BackOff
 	nextAttempt       time.Time
 
 	client *replicationServiceClient
@@ -64,6 +66,7 @@ func (r *mysqlDbReplica) UpdateMySQLDb(ctx context.Context, contents []byte, ver
 	r.contents = contents
 	r.version = version
 	r.nextAttempt = time.Time{}
+	r.backoff.Reset()
 	r.cond.Broadcast()
 	return nil
 }
@@ -89,25 +92,29 @@ func (r *mysqlDbReplica) Run() {
 			r.cond.Wait()
 			continue
 		}
-		_, err := r.client.client.UpdateUsersAndGrants(context.Background(), &replicationapi.UpdateUsersAndGrantsRequest{
-			SerializedContents: r.contents,
-		})
-		if err != nil {
-			r.lgr.Warnf("mysqlDbReplica[%s]: error replicating users and grants. backing off. %v", r.client.remote, err)
-			// TODO: Add backoff.
-			r.nextAttempt = time.Now().Add(1 * time.Second)
-			next := r.nextAttempt
-			go func() {
-				<-time.After(time.Until(next))
-				r.mu.Lock()
-				defer r.mu.Unlock()
-				for !time.Now().After(next) {
-				}
-				r.cond.Broadcast()
-			}()
-			continue
+		if len(r.contents) > 0 {
+			_, err := r.client.client.UpdateUsersAndGrants(context.Background(), &replicationapi.UpdateUsersAndGrantsRequest{
+				SerializedContents: r.contents,
+			})
+			if err != nil {
+				r.lgr.Warnf("mysqlDbReplica[%s]: error replicating users and grants. backing off. %v", r.client.remote, err)
+				r.nextAttempt = time.Now().Add(r.backoff.NextBackOff())
+				next := r.nextAttempt
+				go func() {
+					<-time.After(time.Until(next))
+					r.mu.Lock()
+					defer r.mu.Unlock()
+					for !time.Now().After(next) {
+					}
+					r.cond.Broadcast()
+				}()
+				continue
+			}
+			r.backoff.Reset()
+			r.lgr.Debugf("mysqlDbReplica[%s]: sucessfully replicated users and grants.", r.client.remote)
+		} else {
+			r.lgr.Debugf("mysqlDbReplica[%s]: not replicating empty users and grants.", r.client.remote)
 		}
-		r.lgr.Warnf("mysqlDbReplica[%s]: sucessfully replicated users and grants.", r.client.remote)
 		r.replicatedVersion = r.version
 	}
 }
