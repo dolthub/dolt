@@ -310,7 +310,17 @@ func abortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Ro
 	return workingSet, nil
 }
 
-func executeMerge(ctx *sql.Context, sess *dsess.DoltSession, dbName string, squash bool, head, cm *doltdb.Commit, cmSpec string, ws *doltdb.WorkingSet, opts editor.Options, workingDiffs map[string]hash.Hash) (*doltdb.WorkingSet, error) {
+func executeMerge(
+		ctx *sql.Context,
+		sess *dsess.DoltSession,
+		dbName string,
+		squash bool,
+		head, cm *doltdb.Commit,
+		cmSpec string,
+		ws *doltdb.WorkingSet,
+		opts editor.Options,
+		workingDiffs map[string]hash.Hash,
+) (*doltdb.WorkingSet, error) {
 	result, err := merge.MergeCommits(ctx, head, cm, opts)
 	if err != nil {
 		switch err {
@@ -446,17 +456,10 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 	ddb, ok := sess.GetDoltDB(ctx, dbName)
 
 	dbData, ok := sess.GetDbData(ctx, dbName)
-	
-	var err error
-	var name, email string
-	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParseAuthor(authorStr)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		name = ctx.Client().User
-		email = fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
+
+	name, email, err := getNameAndEmail(ctx, apr)
+	if err != nil {
+		return nil, err
 	}
 
 	t := ctx.QueryTime()
@@ -490,6 +493,21 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 		merge.WithNoCommit(apr.Contains(cli.NoCommitFlag)),
 		merge.WithNoEdit(apr.Contains(cli.NoEditFlag)),
 	)
+}
+
+func getNameAndEmail(ctx *sql.Context, apr *argparser.ArgParseResults) (string, string, error) {
+	var err error
+	var name, email string
+	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
+		name, email, err = cli.ParseAuthor(authorStr)
+		if err != nil {
+			return "", "", err
+		}
+	} else {
+		name = ctx.Client().User
+		email = fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
+	}
+	return name, email, nil
 }
 
 func mergeRootToWorking(

@@ -1057,6 +1057,42 @@ SQL
     [[ ! "$output" =~ "another test commit" ]] || false
 }
 
+@test "remotes: dolt_pull() with divergent head" {
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt push test-remote main
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt add test
+    dolt commit -m "test commit"
+    dolt push test-remote main
+
+    cd "dolt-repo-clones"
+    dolt clone http://localhost:50051/test-org/test-repo
+    cd ..
+
+    dolt commit --amend -m 'new message'
+    dolt push -f test-remote main
+    
+    cd "dolt-repo-clones/test-repo"
+
+    run dolt sql -q "call dolt_pull('origin')"
+    [ "$status" -eq 0 ]
+
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Merge branch 'main' of" ]] || false
+    [[ ! "$output" =~ "new message" ]] || false
+}
+
 @test "remotes: merge with divergent head" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote main

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -140,14 +141,22 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 				return noConflictsOrViolations, threeWayMerge, err
 			}
 
+			headRef, err := dbData.Rsr.CWBHeadRef()
+			if err != nil {
+				return noConflictsOrViolations, threeWayMerge, err
+			}
+
+			msg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, headRef.GetPath())
+
 			// TODO: this could be replaced with a canFF check to test for error
 			err = dbData.Ddb.FastForward(ctx, remoteTrackRef, srcDBCommit)
-			if errors.Is(err, datas.ErrMergeNeeded) && pullSpec.Force {
-				h, err := srcDBCommit.HashOf()
+			if errors.Is(err, datas.ErrMergeNeeded) {
+				name, email, err := getNameAndEmail(ctx, apr)
 				if err != nil {
 					return noConflictsOrViolations, threeWayMerge, err
 				}
-				err = dbData.Ddb.SetHead(ctx, branchRef, h)
+
+				err = mergeRemoteTrackingBranch(ctx, sess, dbName, remoteTrackRef, srcDBCommit, name, email, msg)
 				if err != nil {
 					return noConflictsOrViolations, threeWayMerge, err
 				}
@@ -169,12 +178,7 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 			if err != nil {
 				return noConflictsOrViolations, threeWayMerge, err
 			}
-
-			headRef, err := dbData.Rsr.CWBHeadRef()
-			if err != nil {
-				return noConflictsOrViolations, threeWayMerge, err
-			}
-
+			
 			uncommittedChanges, _, _, err := actions.RootHasUncommittedChanges(roots)
 			if err != nil {
 				return noConflictsOrViolations, threeWayMerge, err
@@ -183,7 +187,6 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 				return noConflictsOrViolations, threeWayMerge, ErrUncommittedChanges.New()
 			}
 
-			msg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, headRef.GetPath())
 			ws, _, conflicts, fastForward, err = performMerge(ctx, sess, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
 			if err != nil && !errors.Is(doltdb.ErrUpToDate, err) {
 				return conflicts, fastForward, err
@@ -209,6 +212,84 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 	}
 
 	return conflicts, fastForward, nil
+}
+
+// mergeRemoteTrackingBranch merges the |srcDBCommit| commit into the remote tracking branch with the ref provided
+// TODO: none of this is transactional
+func mergeRemoteTrackingBranch(
+		ctx *sql.Context,
+		sess *dsess.DoltSession,
+		dbName string,
+		remoteTrackRef ref.DoltRef,
+		srcDBCommit *doltdb.Commit,
+		name, email, msg string,
+) error {
+	dbState, ok, err := sess.LookupDbState(ctx, dbName)
+	if err != nil {
+		return err
+	} else if !ok {
+		return sql.ErrDatabaseNotFound.New(dbName)
+	}
+
+	dbData, ok := sess.GetDbData(ctx, dbName)
+	if !ok {
+		return sql.ErrDatabaseNotFound.New(dbName)
+	}
+
+	remoteTrackingRefCommit, err := dbData.Ddb.ResolveCommitRef(ctx, remoteTrackRef)
+	if err != nil {
+		return err
+	}
+	
+	result, err := merge.MergeCommits(ctx, remoteTrackingRefCommit, srcDBCommit, dbState.EditOpts())
+	if err != nil {
+		return err
+	}
+
+	_, mergeRootHash, err := dbData.Ddb.WriteRootValue(ctx, result.Root)
+	if err != nil {
+		return err
+	}
+
+	ts := datas.CommitNowFunc().Unix()
+	cm := &datas.CommitMeta{
+		Name:          name,
+		Email:         email,
+		Timestamp:     uint64(ts),
+		Description:   msg,
+		UserTimestamp: ts,
+	}
+
+	remoteTrackingHash, err := remoteTrackingRefCommit.HashOf()
+	if err != nil {
+		return err
+	}
+
+	firstParent, err := doltdb.NewCommitSpec(remoteTrackingHash.String())
+	if err != nil {
+		return err
+	}
+
+	srcCommitHash, err := srcDBCommit.HashOf()
+	if err != nil {
+		return err
+	}
+
+	secondParent, err := doltdb.NewCommitSpec(srcCommitHash.String())
+	if err != nil {
+		return err
+	}
+
+	parentSpecs := []*doltdb.CommitSpec{
+		firstParent,
+		secondParent,
+	}
+
+	_, err = dbData.Ddb.CommitWithParentSpecs(ctx, mergeRootHash, remoteTrackRef, parentSpecs, cm)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // TODO: remove this as it does not do anything useful
