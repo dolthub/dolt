@@ -76,7 +76,19 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 		remoteRefName = apr.Arg(1)
 	}
 
-	pullSpec, err := env.NewPullSpec(ctx, dbData.Rsr, remoteName, remoteRefName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.NoCommitFlag), apr.Contains(cli.NoEditFlag), apr.Contains(cli.ForceFlag), apr.NArg() == 1)
+	remoteOnly := apr.NArg() == 1
+	pullSpec, err := env.NewPullSpec(
+		ctx,
+		dbData.Rsr,
+		remoteName,
+		remoteRefName,
+		remoteOnly,
+		env.WithSquash(apr.Contains(cli.SquashParam)),
+		env.WithNoFF(apr.Contains(cli.NoFFParam)),
+		env.WithNoCommit(apr.Contains(cli.NoCommitFlag)),
+		env.WithNoEdit(apr.Contains(cli.NoEditFlag)),
+		env.WithForce(apr.Contains(cli.ForceFlag)),
+	)
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, err
 	}

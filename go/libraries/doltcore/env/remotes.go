@@ -404,13 +404,44 @@ type PullSpec struct {
 
 type PullSpecOpt func(*PullSpec)
 
+func WithSquash(squash bool) PullSpecOpt {
+	return func(ps *PullSpec) {
+		ps.Squash = squash
+	}
+}
+
+func WithNoFF(noff bool) PullSpecOpt {
+	return func(ps *PullSpec) {
+		ps.NoFF = noff
+	}
+}
+
+func WithNoCommit(nocommit bool) PullSpecOpt {
+	return func(ps *PullSpec) {
+		ps.NoCommit = nocommit
+	}
+}
+
+func WithNoEdit(noedit bool) PullSpecOpt {
+	return func(ps *PullSpec) {
+		ps.NoEdit = noedit
+	}
+}
+
+func WithForce(force bool) PullSpecOpt {
+	return func(ps *PullSpec) {
+		ps.Force = force
+	}
+}
+
 // NewPullSpec returns a PullSpec for the arguments given. This function validates remote and gets remoteRef
 // for given remoteRefName; if it's not defined, it uses current branch to get its upstream branch if it exists.
 func NewPullSpec(
 		_ context.Context,
 		rsr RepoStateReader,
 		remoteName, remoteRefName string,
-		squash, noff, noCommit, noEdit, force, remoteOnly bool,
+		remoteOnly bool,
+		opts ...PullSpecOpt,
 ) (*PullSpec, error) {
 	refSpecs, err := GetRefSpecs(rsr, remoteName)
 	if err != nil {
@@ -451,17 +482,18 @@ func NewPullSpec(
 		remoteRef = ref.NewBranchRef(remoteRefName)
 	}
 
-	return &PullSpec{
-		Squash:     squash,
-		NoFF:       noff,
-		NoCommit:   noCommit,
-		NoEdit:     noEdit,
+	spec := &PullSpec{
 		RemoteName: remoteName,
 		Remote:     remote,
 		RefSpecs:   refSpecs,
 		Branch:     remoteRef,
-		Force:      force,
-	}, nil
+	}
+	
+	for _, opt := range opts {
+		opt(spec)
+	}
+	
+	return spec, nil
 }
 
 func GetAbsRemoteUrl(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg string) (string, string, error) {
