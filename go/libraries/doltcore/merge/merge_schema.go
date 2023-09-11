@@ -1033,7 +1033,7 @@ func checksInCommon(ourChks, theirChks, ancChks []schema.Check) ([]schema.Check,
 
 		// NO CONFLICT: CHECK was only modified in their branch, so update check definition with theirs
 		if ancChk == ourChk {
-			common = append(common, ourChk)
+			common = append(common, theirChk)
 			continue
 		}
 
