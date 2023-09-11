@@ -40,7 +40,6 @@ type MergeSpec struct {
 	StompedTblNames []string
 	WorkingDiffs    map[string]hash.Hash
 	Squash          bool
-	Msg      string
 	NoFF     bool
 	NoCommit bool
 	NoEdit          bool
@@ -55,12 +54,6 @@ type MergeSpecOpt func(*MergeSpec)
 func WithNoFf(noFF bool) MergeSpecOpt {
 	return func(ms *MergeSpec)  {
 		ms.NoFF = noFF
-	}
-}
-
-func WithMsg(msg string) MergeSpecOpt {
-	return func(ms *MergeSpec) {
-		ms.Msg = msg
 	}
 }
 
@@ -98,15 +91,13 @@ func WithPullSpecOpts(pullSpec *env.PullSpec) MergeSpecOpt {
 	}
 }
 
-// NewMergeSpec returns MergeSpec object using arguments passed into this function, which are doltdb.Roots, username,
-// user email, commit msg, commitSpecStr, to squash, to noff, to force, noCommit, noEdit and date. This function
-// resolves head and merge commit, and it gets current diffs between current head and working set if it exists.
+// NewMergeSpec returns a MergeSpec with the arguments provided.
 func NewMergeSpec(
 		ctx context.Context,
 		rsr env.RepoStateReader,
 		ddb *doltdb.DoltDB,
 		roots doltdb.Roots,
-		name, email, msg, commitSpecStr string,
+		name, email, commitSpecStr string,
 		date time.Time,
 		opts ...MergeSpecOpt,
 ) (*MergeSpec, error) {
@@ -159,7 +150,6 @@ func NewMergeSpec(
 		MergeC:          mergeCM,
 		StompedTblNames: stompedTblNames,
 		WorkingDiffs:    workingDiffs,
-		Msg:             msg,
 		Email:           email,
 		Name:            name,
 		Date:            date,

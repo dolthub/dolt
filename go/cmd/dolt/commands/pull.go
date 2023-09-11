@@ -109,7 +109,19 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	pullSpec, err := env.NewPullSpec(ctx, dEnv.RepoStateReader(), remoteName, remoteRefName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.NoCommitFlag), apr.Contains(cli.NoEditFlag), apr.Contains(cli.ForceFlag), apr.NArg() == 1)
+	pullSpec, err := env.NewPullSpec(
+		ctx,
+		dEnv.RepoStateReader(),
+		remoteName,
+		remoteRefName,
+		apr.Contains(cli.SquashParam),
+		apr.Contains(cli.NoFFParam),
+		apr.Contains(cli.NoCommitFlag),
+		apr.Contains(cli.NoEditFlag),
+		apr.Contains(cli.ForceFlag),
+		apr.NArg() == 1,
+	)
+	
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -122,7 +134,14 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 }
 
 // pullHelper splits pull into fetch, prepare merge, and merge to interleave printing
-func pullHelper(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist, dEnv *env.DoltEnv, pullSpec *env.PullSpec, cliCtx cli.CliContext) error {
+func pullHelper(
+		ctx context.Context,
+		sqlCtx *sql.Context,
+		queryist cli.Queryist,
+		dEnv *env.DoltEnv,
+		pullSpec *env.PullSpec,
+		cliCtx cli.CliContext,
+) error {
 	srcDB, err := pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB.ValueReadWriter().Format(), dEnv)
 	if err != nil {
 		return fmt.Errorf("failed to get remote db; %w", err)
@@ -200,18 +219,7 @@ func pullHelper(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist,
 			}
 
 			// Begin merge of working and head with the remote head
-			mergeSpec, err := merge.NewMergeSpec(
-				ctx,
-				dEnv.RepoStateReader(),
-				dEnv.DoltDB,
-				roots,
-				name,
-				email,
-				pullSpec.Msg,
-				remoteTrackRef.String(),
-				t,
-				merge.WithPullSpecOpts(pullSpec),
-			)
+			mergeSpec, err := merge.NewMergeSpec(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, roots, name, email, remoteTrackRef.String(), t, merge.WithPullSpecOpts(pullSpec))
 			if err != nil {
 				return err
 			}
@@ -284,7 +292,6 @@ func mergeRemoteTrackingBranch(
 		remoteTrackRef ref.DoltRef,
 		srcDBCommit *doltdb.Commit,
 ) error {
-	// merge the remote tracking ref before continuing to perform a merge of the local branch and working set
 	name, email, _ := env.GetNameAndEmail(dEnv.Config)
 
 	suggestedMsg := fmt.Sprintf(
@@ -293,7 +300,7 @@ func mergeRemoteTrackingBranch(
 		pullSpec.Remote.Url,
 		remoteTrackRef.GetPath(),
 	)
-	msg, err := getCommitMsgForMerge(ctx, sqlCtx, queryist, pullSpec.Msg, suggestedMsg, pullSpec.NoEdit, cliCtx)
+	msg, err := getCommitMsgForMerge(sqlCtx, queryist, suggestedMsg, pullSpec.NoEdit, cliCtx)
 	if err != nil {
 		return err
 	}

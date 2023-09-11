@@ -480,7 +480,6 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 		roots,
 		name,
 		email,
-		msg,
 		commitSpecStr,
 		t,
 		merge.WithSquash(apr.Contains(cli.SquashParam)),

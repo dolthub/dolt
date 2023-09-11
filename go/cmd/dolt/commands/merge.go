@@ -763,7 +763,7 @@ func executeNoFFMergeAndCommit(ctx context.Context, sqlCtx *sql.Context, queryis
 		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
 	}
 
-	msg, err := getCommitMsgForMerge(ctx, sqlCtx, queryist, spec.Msg, suggestedMsg, spec.NoEdit, cliCtx)
+	msg, err := getCommitMsgForMerge(sqlCtx, queryist, suggestedMsg, spec.NoEdit, cliCtx)
 	if err != nil {
 		return tblToStats, err
 	}
@@ -815,7 +815,7 @@ func executeMergeAndCommit(ctx context.Context, sqlCtx *sql.Context, queryist cl
 		return tblToStats, nil
 	}
 
-	msg, err := getCommitMsgForMerge(ctx, sqlCtx, queryist, spec.Msg, suggestedMsg, spec.NoEdit, cliCtx)
+	msg, err := getCommitMsgForMerge(sqlCtx, queryist, suggestedMsg, spec.NoEdit, cliCtx)
 	if err != nil {
 		return tblToStats, err
 	}
@@ -831,11 +831,13 @@ func executeMergeAndCommit(ctx context.Context, sqlCtx *sql.Context, queryist cl
 }
 
 // getCommitMsgForMerge returns user defined message if exists; otherwise, get the commit message from editor.
-func getCommitMsgForMerge(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist, userDefinedMsg, suggestedMsg string, noEdit bool, cliCtx cli.CliContext) (string, error) {
-	if userDefinedMsg != "" {
-		return userDefinedMsg, nil
-	}
-
+func getCommitMsgForMerge(
+		sqlCtx *sql.Context,
+		queryist cli.Queryist,
+		suggestedMsg string,
+		noEdit bool,
+		cliCtx cli.CliContext,
+) (string, error) {
 	msg, err := getCommitMessageFromEditor(sqlCtx, queryist, suggestedMsg, "", noEdit, cliCtx)
 	if err != nil {
 		return msg, err
