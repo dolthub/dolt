@@ -56,7 +56,7 @@ func AddDoltSystemVariables() {
 		},
 		{
 			Name:              dsess.ReadReplicaForcePull,
-			Scope:             sql.SystemVariableScope_Persist,
+			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,
 			SetVarHintApplies: false,
 			Type:              types.NewSystemBoolType(dsess.ReadReplicaForcePull),
