@@ -195,7 +195,7 @@ func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots,
 	}
 
 	if canFF {
-		if spec.Noff {
+		if spec.NoFF {
 			var commit *doltdb.Commit
 			ws, commit, err = executeNoFFMerge(ctx, sess, spec, dbName, ws, dbData, noCommit)
 			if err == doltdb.ErrUnresolvedConflictsOrViolations {
@@ -414,7 +414,6 @@ func executeNoFFMerge(
 	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{
 		Message:    spec.Msg,
 		Date:       spec.Date,
-		AllowEmpty: spec.AllowEmpty,
 		Force:      spec.Force,
 		Name:       spec.Name,
 		Email:      spec.Email,
@@ -474,7 +473,22 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 	if apr.Contains(cli.NoCommitFlag) && apr.Contains(cli.CommitFlag) {
 		return nil, errors.New("cannot define both 'commit' and 'no-commit' flags at the same time")
 	}
-	return merge.NewMergeSpec(ctx, dbData.Rsr, ddb, roots, name, email, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), apr.Contains(cli.NoCommitFlag), apr.Contains(cli.NoEditFlag), t)
+	return merge.NewMergeSpec(
+		ctx,
+		dbData.Rsr,
+		ddb,
+		roots,
+		name,
+		email,
+		msg,
+		commitSpecStr,
+		t,
+		merge.WithSquash(apr.Contains(cli.SquashParam)),
+		merge.WithNoFf(apr.Contains(cli.NoFFParam)),
+		merge.WithForce(apr.Contains(cli.ForceFlag)),
+		merge.WithNoCommit(apr.Contains(cli.NoCommitFlag)),
+		merge.WithNoEdit(apr.Contains(cli.NoEditFlag)),
+	)
 }
 
 func mergeRootToWorking(

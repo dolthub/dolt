@@ -28,10 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-var ErrFailedToDetermineUnstagedDocs = errors.New("failed to determine unstaged docs")
 var ErrFailedToReadDatabase = errors.New("failed to read database")
-var ErrMergeFailedToUpdateDocs = errors.New("failed to update docs to the new working root")
-var ErrMergeFailedToUpdateRepoState = errors.New("unable to execute repo state update")
 var ErrFailedToDetermineMergeability = errors.New("failed to determine mergeability")
 
 type MergeSpec struct {
@@ -43,15 +40,62 @@ type MergeSpec struct {
 	StompedTblNames []string
 	WorkingDiffs    map[string]hash.Hash
 	Squash          bool
-	Msg             string
-	Noff            bool
-	NoCommit        bool
+	Msg      string
+	NoFF     bool
+	NoCommit bool
 	NoEdit          bool
 	Force           bool
-	AllowEmpty      bool
 	Email           string
 	Name            string
 	Date            time.Time
+}
+
+type MergeSpecOpt func(*MergeSpec)
+
+func WithNoFf(noFF bool) MergeSpecOpt {
+	return func(ms *MergeSpec)  {
+		ms.NoFF = noFF
+	}
+}
+
+func WithMsg(msg string) MergeSpecOpt {
+	return func(ms *MergeSpec) {
+		ms.Msg = msg
+	}
+}
+
+func WithNoCommit(noCommit bool) MergeSpecOpt {
+	return func(ms *MergeSpec) {
+		ms.NoCommit = noCommit
+	}
+}
+
+func WithNoEdit(noEdit bool) MergeSpecOpt {
+	return func(ms *MergeSpec) {
+		ms.NoEdit = noEdit
+	}
+}
+
+func WithForce(force bool) MergeSpecOpt {
+	return func(ms *MergeSpec) {
+		ms.Force = force
+	}
+}
+
+func WithSquash(squash bool) MergeSpecOpt {
+	return func(ms *MergeSpec) {
+		ms.Squash = squash
+	}
+}
+
+func WithPullSpecOpts(pullSpec *env.PullSpec) MergeSpecOpt {
+	return func(ms *MergeSpec) {
+		ms.NoEdit = pullSpec.NoEdit
+		ms.NoCommit = pullSpec.NoCommit
+		ms.Force = pullSpec.Force
+		ms.NoFF = pullSpec.NoFF
+		ms.Squash = pullSpec.Squash
+	}
 }
 
 // NewMergeSpec returns MergeSpec object using arguments passed into this function, which are doltdb.Roots, username,
@@ -63,8 +107,8 @@ func NewMergeSpec(
 		ddb *doltdb.DoltDB,
 		roots doltdb.Roots,
 		name, email, msg, commitSpecStr string,
-		squash, noff, force, noCommit, noEdit bool,
 		date time.Time,
+		opts ...MergeSpecOpt,
 ) (*MergeSpec, error) {
 	headCS, err := doltdb.NewCommitSpec("HEAD")
 	if err != nil {
@@ -107,7 +151,7 @@ func NewMergeSpec(
 		return nil, fmt.Errorf("%w; %s", ErrFailedToDetermineMergeability, err.Error())
 	}
 
-	return &MergeSpec{
+	spec := &MergeSpec{
 		HeadH:           headH,
 		MergeH:          mergeH,
 		HeadC:           headCM,
@@ -115,16 +159,17 @@ func NewMergeSpec(
 		MergeC:          mergeCM,
 		StompedTblNames: stompedTblNames,
 		WorkingDiffs:    workingDiffs,
-		Squash:          squash,
 		Msg:             msg,
-		Noff:            noff,
-		NoCommit:        noCommit,
-		NoEdit:          noEdit,
-		Force:           force,
 		Email:           email,
 		Name:            name,
 		Date:            date,
-	}, nil
+	}
+	
+	for _, opt := range opts {
+		opt(spec)
+	}
+	
+	return spec, nil
 }
 
 func ExecNoFFMerge(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[string]*MergeStats, error) {

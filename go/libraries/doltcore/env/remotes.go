@@ -392,9 +392,9 @@ func GetTrackingRef(branchRef ref.DoltRef, remote Remote) (ref.DoltRef, error) {
 
 type PullSpec struct {
 	Msg        string
-	Squash     bool
-	Noff       bool
-	NoCommit   bool
+	Squash   bool
+	NoFF     bool
+	NoCommit bool
 	NoEdit     bool
 	Force      bool
 	RemoteName string
@@ -453,7 +453,7 @@ func NewPullSpec(
 
 	return &PullSpec{
 		Squash:     squash,
-		Noff:       noff,
+		NoFF:       noff,
 		NoCommit:   noCommit,
 		NoEdit:     noEdit,
 		RemoteName: remoteName,

@@ -497,7 +497,7 @@ func validateMergeSpec(ctx context.Context, spec *merge.MergeSpec) errhand.Verbo
 		if _, err := merge.MayHaveConstraintViolations(ctx, ancRoot, mergedRoot); err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
-		if !spec.Noff {
+		if !spec.NoFF {
 			cli.Println("Fast-forward")
 		}
 	} else if err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
@@ -728,7 +728,7 @@ func performMerge(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryis
 	if ok, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
 		return nil, err
 	} else if ok {
-		if spec.Noff {
+		if spec.NoFF {
 			return executeNoFFMergeAndCommit(ctx, sqlCtx, queryist, dEnv, spec, suggestedMsg, cliCtx)
 		}
 		return nil, merge.ExecuteFFMerge(ctx, dEnv, spec)
@@ -771,7 +771,6 @@ func executeNoFFMergeAndCommit(ctx context.Context, sqlCtx *sql.Context, queryis
 	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws, mergeParentCommits, dEnv.DbData().Ddb, actions.CommitStagedProps{
 		Message:    msg,
 		Date:       spec.Date,
-		AllowEmpty: spec.AllowEmpty,
 		Force:      spec.Force,
 		Name:       spec.Name,
 		Email:      spec.Email,
