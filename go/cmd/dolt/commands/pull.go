@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -160,7 +161,16 @@ func pullHelper(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist,
 			}
 
 			err = dEnv.DoltDB.FastForward(ctx, remoteTrackRef, srcDBCommit)
-			if err != nil {
+			if errors.Is(err, datas.ErrMergeNeeded) && pullSpec.Force {
+				h, err := srcDBCommit.HashOf()
+				if err != nil {
+					return err
+				}
+				err = dEnv.DoltDB.SetHead(ctx, branchRef, h)
+				if err != nil {
+					return err
+				}
+			} else if err != nil {
 				return fmt.Errorf("fetch failed; %w", err)
 			}
 
@@ -178,7 +188,7 @@ func pullHelper(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist,
 
 			name, email, configErr := env.GetNameAndEmail(dEnv.Config)
 			// If the name and email aren't set we can set them to empty values for now. This is only valid for ff
-			// merges which detect for later.
+			// merges which we detect later.
 			if configErr != nil {
 				if pullSpec.Noff {
 					return configErr

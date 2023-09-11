@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -129,7 +130,16 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 
 			// TODO: this could be replaced with a canFF check to test for error
 			err = dbData.Ddb.FastForward(ctx, remoteTrackRef, srcDBCommit)
-			if err != nil {
+			if errors.Is(err, datas.ErrMergeNeeded) && pullSpec.Force {
+				h, err := srcDBCommit.HashOf()
+				if err != nil {
+					return noConflictsOrViolations, threeWayMerge, err
+				}
+				err = dbData.Ddb.SetHead(ctx, branchRef, h)
+				if err != nil {
+					return noConflictsOrViolations, threeWayMerge, err
+				}
+			} else if err != nil {
 				return noConflictsOrViolations, threeWayMerge, fmt.Errorf("fetch failed; %w", err)
 			}
 
