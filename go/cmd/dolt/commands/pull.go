@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -160,21 +161,92 @@ func pullHelper(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist,
 				return err
 			}
 
+			h, err := srcDBCommit.HashOf()
+			if err != nil {
+				return err
+			}
+			fmt.Println(h.String())
+			
 			err = dEnv.DoltDB.FastForward(ctx, remoteTrackRef, srcDBCommit)
-			if errors.Is(err, datas.ErrMergeNeeded) && pullSpec.Force {
-				h, err := srcDBCommit.HashOf()
+			if errors.Is(err, datas.ErrMergeNeeded) {
+				// merge the remote tracking ref before continuing to perform a merge of the local branch and working set
+				roots, err := dEnv.Roots(ctx)
 				if err != nil {
 					return err
 				}
-				err = dEnv.DoltDB.SetHead(ctx, branchRef, h)
+				name, email, _ := env.GetNameAndEmail(dEnv.Config)
+
+				mergeSpec, err := merge.NewMergeSpec(
+					ctx,
+					dEnv.RepoStateReader(),
+					dEnv.DoltDB,
+					roots,
+					name,
+					email,
+					pullSpec.Msg,
+					remoteTrackRef.String(),
+					pullSpec.Squash,
+					pullSpec.Noff,
+					pullSpec.Force,
+					pullSpec.NoCommit,
+					pullSpec.NoEdit,
+					datas.CommitNowFunc(),
+				)
+				if err != nil {
+					return err
+				}
+				
+				suggestedMsg := fmt.Sprintf(
+					pullSpec.Branch.GetPath(),
+					pullSpec.Remote.Url,
+					remoteTrackRef.GetPath(),
+				)
+				
+				msg, err := getCommitMsgForMerge(ctx, sqlCtx, queryist, "", suggestedMsg, mergeSpec.NoEdit, cliCtx)
+				if err != nil {
+					return err
+				}
+
+				tmpDir, err := dEnv.TempTableFilesDir()
+				if err != nil {
+					return err
+				}
+				opts := editor.Options{Deaf: dEnv.BulkDbEaFactory(), Tempdir: tmpDir}
+
+				remoteTrackingRefCommit, err := dEnv.DoltDB.ResolveCommitRef(ctx, remoteTrackRef)
+				if err != nil {
+					return err
+				}
+
+				result, err := merge.MergeCommits(sqlCtx, remoteTrackingRefCommit, srcDBCommit, opts)
+				if err != nil {
+					return err
+				}
+
+				_, mergeRootHash, err := dEnv.DoltDB.WriteRootValue(ctx, result.Root)
+				if err != nil {
+					return err
+				}
+
+				ts := datas.CommitNowFunc().Unix()
+				cm := &datas.CommitMeta{
+					Name:          name,
+					Email:         email,
+					Timestamp: 		 uint64(ts),
+					Description:   msg,
+					UserTimestamp: ts,
+				}
+				
+				_, err = dEnv.DoltDB.Commit(ctx, mergeRootHash, remoteTrackRef, cm)
 				if err != nil {
 					return err
 				}
 			} else if err != nil {
-				return fmt.Errorf("fetch failed; %w", err)
+				return fmt.Errorf("fetch failed: %w", err)
 			}
 
 			// Merge iff branch is current branch and there is an upstream set (pullSpec.Branch is set to nil if there is no upstream)
+			// TODO: we should merge every branch
 			if branchRef != pullSpec.Branch {
 				continue
 			}
@@ -196,7 +268,7 @@ func pullHelper(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist,
 				name, email = "", ""
 			}
 
-			// Begin merge
+			// Begin merge of working and head with the remote head
 			mergeSpec, err := merge.NewMergeSpec(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, roots, name, email, pullSpec.Msg, remoteTrackRef.String(), pullSpec.Squash, pullSpec.Noff, pullSpec.Force, pullSpec.NoCommit, pullSpec.NoEdit, t)
 			if err != nil {
 				return err

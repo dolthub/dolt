@@ -57,7 +57,15 @@ type MergeSpec struct {
 // NewMergeSpec returns MergeSpec object using arguments passed into this function, which are doltdb.Roots, username,
 // user email, commit msg, commitSpecStr, to squash, to noff, to force, noCommit, noEdit and date. This function
 // resolves head and merge commit, and it gets current diffs between current head and working set if it exists.
-func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.DoltDB, roots doltdb.Roots, name, email, msg, commitSpecStr string, squash, noff, force, noCommit, noEdit bool, date time.Time) (*MergeSpec, error) {
+func NewMergeSpec(
+		ctx context.Context,
+		rsr env.RepoStateReader,
+		ddb *doltdb.DoltDB,
+		roots doltdb.Roots,
+		name, email, msg, commitSpecStr string,
+		squash, noff, force, noCommit, noEdit bool,
+		date time.Time,
+) (*MergeSpec, error) {
 	headCS, err := doltdb.NewCommitSpec("HEAD")
 	if err != nil {
 		return nil, err
