@@ -51,7 +51,7 @@ type MergeSpec struct {
 
 type MergeSpecOpt func(*MergeSpec)
 
-func WithNoFf(noFF bool) MergeSpecOpt {
+func WithNoFF(noFF bool) MergeSpecOpt {
 	return func(ms *MergeSpec) {
 		ms.NoFF = noFF
 	}
