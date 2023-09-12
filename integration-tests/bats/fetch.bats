@@ -307,3 +307,16 @@ teardown() {
     [ "$status" -eq 1 ]
     [[ "$output" =~ "invalid fetch spec: ''" ]] || false
 }
+
+@test "fetch: fetch from remote host fails" {
+    run dolt --host hostedHost --port 3306 --user root --password password fetch origin
+    [ "$status" -eq 1 ]
+    [[ "${lines[0]}" =~ "This command is not supported against a remote host yet." ]] || false
+    [[ "${lines[1]}" =~ "If you're interested in running this command against a remote host, hit us up on discord (https://discord.gg/gqr7K4VNKe)." ]] || false
+
+    dolt profile add --host hostedHost --port 3306 --user root --password password hostedProfile
+    run dolt --profile hostedProfile fetch origin
+    [ "$status" -eq 1 ]
+    [[ "${lines[0]}" =~ "This command is not supported against a remote host yet." ]] || false
+    [[ "${lines[1]}" =~ "If you're interested in running this command against a remote host, hit us up on discord (https://discord.gg/gqr7K4VNKe)." ]] || false
+}

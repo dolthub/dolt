@@ -452,6 +452,15 @@ func runMain() int {
 		return 1
 	}
 
+	if subcommandName == "fetch" || subcommandName == "pull" || subcommandName == "push" {
+		if apr.Contains(cli.HostFlag) {
+			cli.PrintErrln(
+				`This command is not supported against a remote host yet. 
+If you're interested in running this command against a remote host, hit us up on discord (https://discord.gg/gqr7K4VNKe).`)
+			return 1
+		}
+	}
+
 	dataDir, hasDataDir := apr.GetValue(commands.DataDirFlag)
 	if hasDataDir {
 		// If a relative path was provided, this ensures we have an absolute path everywhere.
