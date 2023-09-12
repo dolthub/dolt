@@ -488,7 +488,7 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 		commitSpecStr,
 		t,
 		merge.WithSquash(apr.Contains(cli.SquashParam)),
-		merge.WithNoFf(apr.Contains(cli.NoFFParam)),
+		merge.WithNoFF(apr.Contains(cli.NoFFParam)),
 		merge.WithForce(apr.Contains(cli.ForceFlag)),
 		merge.WithNoCommit(apr.Contains(cli.NoCommitFlag)),
 		merge.WithNoEdit(apr.Contains(cli.NoEditFlag)),
