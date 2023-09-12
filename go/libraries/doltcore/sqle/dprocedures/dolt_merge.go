@@ -155,7 +155,7 @@ func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, error) {
 		msg = userMsg
 	}
 
-	ws, commit, conflicts, fastForward, err := performMerge(ctx, sess, roots, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
+	ws, commit, conflicts, fastForward, err := performMerge(ctx, sess, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
 	if err != nil || conflicts != 0 || fastForward != 0 {
 		return commit, conflicts, fastForward, err
 	}
@@ -169,7 +169,15 @@ func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, error) {
 // fast-forward was performed. This commits the working set if merge is successful and
 // 'no-commit' flag is not defined.
 // TODO FF merging commit with constraint violations requires `constraint verify`
-func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots, ws *doltdb.WorkingSet, dbName string, spec *merge.MergeSpec, noCommit bool, msg string) (*doltdb.WorkingSet, string, int, int, error) {
+func performMerge(
+	ctx *sql.Context,
+	sess *dsess.DoltSession,
+	ws *doltdb.WorkingSet,
+	dbName string,
+	spec *merge.MergeSpec,
+	noCommit bool,
+	msg string,
+) (*doltdb.WorkingSet, string, int, int, error) {
 	// todo: allow merges even when an existing merge is uncommitted
 	if ws.MergeActive() {
 		return ws, "", noConflictsOrViolations, threeWayMerge, doltdb.ErrMergeActive
@@ -195,9 +203,9 @@ func performMerge(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb.Roots,
 	}
 
 	if canFF {
-		if spec.Noff {
+		if spec.NoFF {
 			var commit *doltdb.Commit
-			ws, commit, err = executeNoFFMerge(ctx, sess, spec, dbName, ws, dbData, noCommit)
+			ws, commit, err = executeNoFFMerge(ctx, sess, spec, msg, dbName, ws, noCommit)
 			if err == doltdb.ErrUnresolvedConflictsOrViolations {
 				// if there are unresolved conflicts, write the resulting working set back to the session and return an
 				// error message
@@ -302,7 +310,17 @@ func abortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Ro
 	return workingSet, nil
 }
 
-func executeMerge(ctx *sql.Context, sess *dsess.DoltSession, dbName string, squash bool, head, cm *doltdb.Commit, cmSpec string, ws *doltdb.WorkingSet, opts editor.Options, workingDiffs map[string]hash.Hash) (*doltdb.WorkingSet, error) {
+func executeMerge(
+	ctx *sql.Context,
+	sess *dsess.DoltSession,
+	dbName string,
+	squash bool,
+	head, cm *doltdb.Commit,
+	cmSpec string,
+	ws *doltdb.WorkingSet,
+	opts editor.Options,
+	workingDiffs map[string]hash.Hash,
+) (*doltdb.WorkingSet, error) {
 	result, err := merge.MergeCommits(ctx, head, cm, opts)
 	if err != nil {
 		switch err {
@@ -369,9 +387,9 @@ func executeNoFFMerge(
 	ctx *sql.Context,
 	dSess *dsess.DoltSession,
 	spec *merge.MergeSpec,
+	msg string,
 	dbName string,
 	ws *doltdb.WorkingSet,
-	dbData env.DbData,
 	noCommit bool,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 	mergeRoot, err := spec.MergeC.GetRootValue(ctx)
@@ -412,12 +430,11 @@ func executeNoFFMerge(
 	}
 
 	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{
-		Message:    spec.Msg,
-		Date:       spec.Date,
-		AllowEmpty: spec.AllowEmpty,
-		Force:      spec.Force,
-		Name:       spec.Name,
-		Email:      spec.Email,
+		Message: msg,
+		Date:    spec.Date,
+		Force:   spec.Force,
+		Name:    spec.Name,
+		Email:   spec.Email,
 	})
 	if err != nil {
 		return nil, nil, err
@@ -440,22 +457,9 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 
 	dbData, ok := sess.GetDbData(ctx, dbName)
 
-	msg, ok := apr.GetValue(cli.MessageArg)
-	if !ok {
-		// TODO probably change, but we can't open editor so it'll have to be automated
-		msg = "automatic SQL merge"
-	}
-
-	var err error
-	var name, email string
-	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParseAuthor(authorStr)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		name = ctx.Client().User
-		email = fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
+	name, email, err := getNameAndEmail(ctx, apr)
+	if err != nil {
+		return nil, err
 	}
 
 	t := ctx.QueryTime()
@@ -474,7 +478,36 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 	if apr.Contains(cli.NoCommitFlag) && apr.Contains(cli.CommitFlag) {
 		return nil, errors.New("cannot define both 'commit' and 'no-commit' flags at the same time")
 	}
-	return merge.NewMergeSpec(ctx, dbData.Rsr, ddb, roots, name, email, msg, commitSpecStr, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), apr.Contains(cli.NoCommitFlag), apr.Contains(cli.NoEditFlag), t)
+	return merge.NewMergeSpec(
+		ctx,
+		dbData.Rsr,
+		ddb,
+		roots,
+		name,
+		email,
+		commitSpecStr,
+		t,
+		merge.WithSquash(apr.Contains(cli.SquashParam)),
+		merge.WithNoFF(apr.Contains(cli.NoFFParam)),
+		merge.WithForce(apr.Contains(cli.ForceFlag)),
+		merge.WithNoCommit(apr.Contains(cli.NoCommitFlag)),
+		merge.WithNoEdit(apr.Contains(cli.NoEditFlag)),
+	)
+}
+
+func getNameAndEmail(ctx *sql.Context, apr *argparser.ArgParseResults) (string, string, error) {
+	var err error
+	var name, email string
+	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
+		name, email, err = cli.ParseAuthor(authorStr)
+		if err != nil {
+			return "", "", err
+		}
+	} else {
+		name = ctx.Client().User
+		email = fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
+	}
+	return name, email, nil
 }
 
 func mergeRootToWorking(

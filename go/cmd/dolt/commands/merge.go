@@ -497,7 +497,7 @@ func validateMergeSpec(ctx context.Context, spec *merge.MergeSpec) errhand.Verbo
 		if _, err := merge.MayHaveConstraintViolations(ctx, ancRoot, mergedRoot); err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
-		if !spec.Noff {
+		if !spec.NoFF {
 			cli.Println("Fast-forward")
 		}
 	} else if err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
@@ -728,7 +728,7 @@ func performMerge(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryis
 	if ok, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
 		return nil, err
 	} else if ok {
-		if spec.Noff {
+		if spec.NoFF {
 			return executeNoFFMergeAndCommit(ctx, sqlCtx, queryist, dEnv, spec, suggestedMsg, cliCtx)
 		}
 		return nil, merge.ExecuteFFMerge(ctx, dEnv, spec)
@@ -763,18 +763,17 @@ func executeNoFFMergeAndCommit(ctx context.Context, sqlCtx *sql.Context, queryis
 		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
 	}
 
-	msg, err := getCommitMsgForMerge(ctx, sqlCtx, queryist, spec.Msg, suggestedMsg, spec.NoEdit, cliCtx)
+	msg, err := getCommitMsgForMerge(sqlCtx, queryist, suggestedMsg, spec.NoEdit, cliCtx)
 	if err != nil {
 		return tblToStats, err
 	}
 
 	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws, mergeParentCommits, dEnv.DbData().Ddb, actions.CommitStagedProps{
-		Message:    msg,
-		Date:       spec.Date,
-		AllowEmpty: spec.AllowEmpty,
-		Force:      spec.Force,
-		Name:       spec.Name,
-		Email:      spec.Email,
+		Message: msg,
+		Date:    spec.Date,
+		Force:   spec.Force,
+		Name:    spec.Name,
+		Email:   spec.Email,
 	})
 
 	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
@@ -816,7 +815,7 @@ func executeMergeAndCommit(ctx context.Context, sqlCtx *sql.Context, queryist cl
 		return tblToStats, nil
 	}
 
-	msg, err := getCommitMsgForMerge(ctx, sqlCtx, queryist, spec.Msg, suggestedMsg, spec.NoEdit, cliCtx)
+	msg, err := getCommitMsgForMerge(sqlCtx, queryist, suggestedMsg, spec.NoEdit, cliCtx)
 	if err != nil {
 		return tblToStats, err
 	}
@@ -832,11 +831,13 @@ func executeMergeAndCommit(ctx context.Context, sqlCtx *sql.Context, queryist cl
 }
 
 // getCommitMsgForMerge returns user defined message if exists; otherwise, get the commit message from editor.
-func getCommitMsgForMerge(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist, userDefinedMsg, suggestedMsg string, noEdit bool, cliCtx cli.CliContext) (string, error) {
-	if userDefinedMsg != "" {
-		return userDefinedMsg, nil
-	}
-
+func getCommitMsgForMerge(
+	sqlCtx *sql.Context,
+	queryist cli.Queryist,
+	suggestedMsg string,
+	noEdit bool,
+	cliCtx cli.CliContext,
+) (string, error) {
 	msg, err := getCommitMessageFromEditor(sqlCtx, queryist, suggestedMsg, "", noEdit, cliCtx)
 	if err != nil {
 		return msg, err
