@@ -102,7 +102,8 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
-		handleErrAndExit(err)
+		cli.PrintErrln(err)
+		return 1
 	}
 	if closeFunc != nil {
 		defer closeFunc()
