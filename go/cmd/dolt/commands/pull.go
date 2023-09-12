@@ -179,12 +179,7 @@ func pullHelper(
 			if err != nil {
 				return err
 			}
-
-			h, err := srcDBCommit.HashOf()
-			if err != nil {
-				return err
-			}
-
+			
 			err = dEnv.DoltDB.FastForward(ctx, remoteTrackRef, srcDBCommit)
 			if errors.Is(err, datas.ErrMergeNeeded) {
 				// If the remote tracking branch has diverged from the local copy, we just overwrite it
