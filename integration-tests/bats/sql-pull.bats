@@ -49,17 +49,7 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
-@test "sql-pull: CALL dolt_pull main" {
-    cd repo2
-    dolt sql -q "CALL dolt_pull('origin')"
-    run dolt sql -q "show tables" -r csv
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
-    [[ "$output" =~ "Table" ]] || false
-    [[ "$output" =~ "t1" ]] || false
-}
-
-@test "sql-pull: CALL dpull main" {
+@test "sql-pull: dpull main" {
     cd repo2
     dolt sql -q "CALL dpull('origin')"
     run dolt sql -q "show tables" -r csv
@@ -79,31 +69,10 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
-@test "sql-pull: CALL dolt_pull custom remote" {
-    cd repo2
-    dolt sql -q "CALL dolt_pull('test-remote')"
-    run dolt sql -q "show tables" -r csv
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
-    [[ "$output" =~ "Table" ]] || false
-    [[ "$output" =~ "t1" ]] || false
-}
-
 @test "sql-pull: dolt_pull default origin" {
     cd repo2
     dolt remote remove test-remote
     dolt sql -q "call dolt_pull()"
-    run dolt sql -q "show tables" -r csv
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
-    [[ "$output" =~ "Table" ]] || false
-    [[ "$output" =~ "t1" ]] || false
-}
-
-@test "sql-pull: CALL dolt_pull default origin" {
-    cd repo2
-    dolt remote remove test-remote
-    dolt sql -q "CALL dolt_pull()"
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
@@ -122,32 +91,10 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
-@test "sql-pull: CALL dolt_pull default custom remote" {
-    cd repo2
-    dolt remote remove origin
-    dolt sql -q "CALL dolt_pull()"
-    run dolt sql -q "show tables" -r csv
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
-    [[ "$output" =~ "Table" ]] || false
-    [[ "$output" =~ "t1" ]] || false
-}
-
 @test "sql-pull: dolt_pull up to date does not error" {
     cd repo2
     dolt sql -q "call dolt_pull('origin')"
     dolt sql -q "call dolt_pull('origin')"
-    run dolt sql -q "show tables" -r csv
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
-    [[ "$output" =~ "Table" ]] || false
-    [[ "$output" =~ "t1" ]] || false
-}
-
-@test "sql-pull: CALL dolt_pull up to date does not error" {
-    cd repo2
-    dolt sql -q "CALL dolt_pull('origin')"
-    dolt sql -q "CALL dolt_pull('origin')"
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
@@ -163,27 +110,10 @@ teardown() {
     [[ ! "$output" =~ "panic" ]] || false
 }
 
-@test "sql-pull: CALL dolt_pull unknown remote fails" {
-    cd repo2
-    run dolt sql -q "CALL dolt_pull('unknown')"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "unknown remote" ]] || false
-    [[ ! "$output" =~ "panic" ]] || false
-}
-
 @test "sql-pull: dolt_pull unknown feature branch fails" {
     cd repo2
     dolt checkout feature
     run dolt sql -q "call dolt_pull('origin')"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "You asked to pull from the remote 'origin', but did not specify a branch" ]] || false
-    [[ ! "$output" =~ "panic" ]] || false
-}
-
-@test "sql-pull: CALL dolt_pull unknown feature branch fails" {
-    cd repo2
-    dolt checkout feature
-    run dolt sql -q "CALL dolt_pull('origin')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "You asked to pull from the remote 'origin', but did not specify a branch" ]] || false
     [[ ! "$output" =~ "panic" ]] || false
@@ -211,29 +141,7 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
-@test "sql-pull: CALL dolt_pull feature branch" {
-    cd repo1
-    dolt checkout feature
-    dolt push --set-upstream origin feature
-
-    cd ../repo2
-    dolt checkout feature
-    dolt push --set-upstream origin feature
-
-    cd ../repo1
-    dolt merge main
-    dolt push
-
-    cd ../repo2
-    dolt sql -q "CALL dolt_pull('origin')"
-    run dolt sql -q "show tables" -r csv
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
-    [[ "$output" =~ "Table" ]] || false
-    [[ "$output" =~ "t1" ]] || false
-}
-
-@test "sql-pull: CALL dolt_checkout after dolt_fetch a new feature branch" {
+@test "sql-pull: dolt_checkout after dolt_fetch a new feature branch" {
     cd repo1
     dolt checkout -b feature2
     dolt sql -q "create table t2 (i int primary key);"
@@ -265,36 +173,6 @@ teardown() {
     dolt push -f origin main
 
     cd ../repo2
-    run dolt sql -q "call dolt_pull('origin')"
-    [ "$status" -eq 1 ]
-    [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "fetch failed; dataset head is not ancestor of commit" ]] || false
-
-    dolt sql -q "call dolt_pull('-f', 'origin')"
-
-    run dolt log -n 1
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "2.1 commit" ]] || false
-
-    run dolt sql -q "show tables" -r csv
-    [ "${#lines[@]}" -eq 4 ]
-    [[ "$output" =~ "t3" ]] || false
-}
-
-@test "sql-pull: CALL dolt_pull force" {
-    skip "todo: support dolt pull --force (cli too)"
-    cd repo2
-    dolt sql -q "create table t2 (a int)"
-    dolt commit -am "2.0 commit"
-    dolt push origin main
-
-    cd ../repo1
-    dolt sql -q "create table t2 (a int primary key)"
-    dolt sql -q "create table t3 (a int primary key)"
-    dolt commit -am "2.1 commit"
-    dolt push -f origin main
-
-    cd ../repo2
     run dolt sql -q "CALL dolt_pull('origin')"
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
@@ -311,17 +189,6 @@ teardown() {
     [[ "$output" =~ "t3" ]] || false
 }
 
-@test "sql-pull: dolt_pull squash" {
-    skip "todo: support dolt pull --squash (cli too)"
-    cd repo2
-    dolt sql -q "call dolt_pull('--squash', 'origin')"
-    run dolt sql -q "show tables" -r csv
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
-    [[ "$output" =~ "Table" ]] || false
-    [[ "$output" =~ "t1" ]] || false
-}
-
 @test "sql-pull: CALL dolt_pull squash" {
     skip "todo: support dolt pull --squash (cli too)"
     cd repo2
@@ -334,22 +201,6 @@ teardown() {
 }
 
 @test "sql-pull: dolt_pull --noff flag" {
-    cd repo2
-    dolt sql -q "call dolt_pull('--no-ff', 'origin')"
-    dolt status
-    run dolt log -n 1
-    [ "$status" -eq 0 ]
-    # TODO change the default message name
-    [[ "$output" =~ "automatic SQL merge" ]] || false
-
-    run dolt sql -q "show tables" -r csv
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
-    [[ "$output" =~ "Table" ]] || false
-    [[ "$output" =~ "t1" ]] || false
-}
-
-@test "sql-pull: CALL dolt_pull --noff flag" {
     cd repo2
     dolt sql -q "CALL dolt_pull('--no-ff', 'origin')"
     dolt status
