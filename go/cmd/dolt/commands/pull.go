@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -189,7 +188,12 @@ func pullHelper(
 			
 			err = dEnv.DoltDB.FastForward(ctx, remoteTrackRef, srcDBCommit)
 			if errors.Is(err, datas.ErrMergeNeeded) {
-				err := mergeRemoteTrackingBranch(ctx, sqlCtx, queryist, dEnv, pullSpec, cliCtx, remoteTrackRef, srcDBCommit)
+				// If the remote tracking branch has diverged from the local copy, we just overwrite it
+				h, err := srcDBCommit.HashOf()
+				if err != nil {
+					return err
+				}
+				err = dEnv.DoltDB.SetHead(ctx, remoteTrackRef, h)
 				if err != nil {
 					return err
 				}
@@ -279,91 +283,5 @@ func pullHelper(
 		return err
 	}
 
-	return nil
-}
-
-// mergeRemoteTrackingBranch merges the |srcDBCommit| commit into the remote tracking branch with the ref provided
-func mergeRemoteTrackingBranch(
-		ctx context.Context,
-		sqlCtx *sql.Context,
-		queryist cli.Queryist,
-		dEnv *env.DoltEnv,
-		pullSpec *env.PullSpec,
-		cliCtx cli.CliContext,
-		remoteTrackRef ref.DoltRef,
-		srcDBCommit *doltdb.Commit,
-) error {
-	name, email, _ := env.GetNameAndEmail(dEnv.Config)
-
-	suggestedMsg := fmt.Sprintf(
-		"Merge branch '%s' of %s into %s",
-		pullSpec.Branch.GetPath(),
-		pullSpec.Remote.Url,
-		remoteTrackRef.GetPath(),
-	)
-	msg, err := getCommitMsgForMerge(sqlCtx, queryist, suggestedMsg, pullSpec.NoEdit, cliCtx)
-	if err != nil {
-		return err
-	}
-
-	tmpDir, err := dEnv.TempTableFilesDir()
-	if err != nil {
-		return err
-	}
-	opts := editor.Options{Deaf: dEnv.BulkDbEaFactory(), Tempdir: tmpDir}
-
-	remoteTrackingRefCommit, err := dEnv.DoltDB.ResolveCommitRef(ctx, remoteTrackRef)
-	if err != nil {
-		return err
-	}
-
-	result, err := merge.MergeCommits(sqlCtx, remoteTrackingRefCommit, srcDBCommit, opts)
-	if err != nil {
-		return err
-	}
-
-	_, mergeRootHash, err := dEnv.DoltDB.WriteRootValue(ctx, result.Root)
-	if err != nil {
-		return err
-	}
-
-	ts := datas.CommitNowFunc().Unix()
-	cm := &datas.CommitMeta{
-		Name:          name,
-		Email:         email,
-		Timestamp:     uint64(ts),
-		Description:   msg,
-		UserTimestamp: ts,
-	}
-
-	remoteTrackingHash, err := remoteTrackingRefCommit.HashOf()
-	if err != nil {
-		return err
-	}
-
-	firstParent, err := doltdb.NewCommitSpec(remoteTrackingHash.String())
-	if err != nil {
-		return err
-	}
-
-	srcCommitHash, err := srcDBCommit.HashOf()
-	if err != nil {
-		return err
-	}
-
-	secondParent, err := doltdb.NewCommitSpec(srcCommitHash.String())
-	if err != nil {
-		return err
-	}
-
-	parentSpecs := []*doltdb.CommitSpec{
-		firstParent,
-		secondParent,
-	}
-
-	_, err = dEnv.DoltDB.CommitWithParentSpecs(ctx, mergeRootHash, remoteTrackRef, parentSpecs, cm)
-	if err != nil {
-		return err
-	}
 	return nil
 }
