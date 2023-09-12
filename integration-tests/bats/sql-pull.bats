@@ -204,10 +204,10 @@ teardown() {
     cd repo2
     dolt sql -q "CALL dolt_pull('--no-ff', 'origin')"
     dolt status
+    
     run dolt log -n 1
     [ "$status" -eq 0 ]
-    # TODO change the default message name
-    [[ "$output" =~ "automatic SQL merge" ]] || false
+    [[ "$output" =~ "Merge branch 'main'" ]] || false
 
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
