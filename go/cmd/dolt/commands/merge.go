@@ -769,11 +769,11 @@ func executeNoFFMergeAndCommit(ctx context.Context, sqlCtx *sql.Context, queryis
 	}
 
 	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws, mergeParentCommits, dEnv.DbData().Ddb, actions.CommitStagedProps{
-		Message:    msg,
-		Date:       spec.Date,
-		Force:      spec.Force,
-		Name:       spec.Name,
-		Email:      spec.Email,
+		Message: msg,
+		Date:    spec.Date,
+		Force:   spec.Force,
+		Name:    spec.Name,
+		Email:   spec.Email,
 	})
 
 	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
@@ -832,11 +832,11 @@ func executeMergeAndCommit(ctx context.Context, sqlCtx *sql.Context, queryist cl
 
 // getCommitMsgForMerge returns user defined message if exists; otherwise, get the commit message from editor.
 func getCommitMsgForMerge(
-		sqlCtx *sql.Context,
-		queryist cli.Queryist,
-		suggestedMsg string,
-		noEdit bool,
-		cliCtx cli.CliContext,
+	sqlCtx *sql.Context,
+	queryist cli.Queryist,
+	suggestedMsg string,
+	noEdit bool,
+	cliCtx cli.CliContext,
 ) (string, error) {
 	msg, err := getCommitMessageFromEditor(sqlCtx, queryist, suggestedMsg, "", noEdit, cliCtx)
 	if err != nil {

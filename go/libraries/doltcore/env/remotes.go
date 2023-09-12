@@ -391,9 +391,9 @@ func GetTrackingRef(branchRef ref.DoltRef, remote Remote) (ref.DoltRef, error) {
 }
 
 type PullSpec struct {
-	Squash   bool
-	NoFF     bool
-	NoCommit bool
+	Squash     bool
+	NoFF       bool
+	NoCommit   bool
 	NoEdit     bool
 	Force      bool
 	RemoteName string
@@ -437,11 +437,11 @@ func WithForce(force bool) PullSpecOpt {
 // NewPullSpec returns a PullSpec for the arguments given. This function validates remote and gets remoteRef
 // for given remoteRefName; if it's not defined, it uses current branch to get its upstream branch if it exists.
 func NewPullSpec(
-		_ context.Context,
-		rsr RepoStateReader,
-		remoteName, remoteRefName string,
-		remoteOnly bool,
-		opts ...PullSpecOpt,
+	_ context.Context,
+	rsr RepoStateReader,
+	remoteName, remoteRefName string,
+	remoteOnly bool,
+	opts ...PullSpecOpt,
 ) (*PullSpec, error) {
 	refSpecs, err := GetRefSpecs(rsr, remoteName)
 	if err != nil {
@@ -488,11 +488,11 @@ func NewPullSpec(
 		RefSpecs:   refSpecs,
 		Branch:     remoteRef,
 	}
-	
+
 	for _, opt := range opts {
 		opt(spec)
 	}
-	
+
 	return spec, nil
 }
 

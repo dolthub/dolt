@@ -170,13 +170,13 @@ func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, error) {
 // 'no-commit' flag is not defined.
 // TODO FF merging commit with constraint violations requires `constraint verify`
 func performMerge(
-		ctx *sql.Context,
-		sess *dsess.DoltSession,
-		ws *doltdb.WorkingSet,
-		dbName string,
-		spec *merge.MergeSpec,
-		noCommit bool,
-		msg string,
+	ctx *sql.Context,
+	sess *dsess.DoltSession,
+	ws *doltdb.WorkingSet,
+	dbName string,
+	spec *merge.MergeSpec,
+	noCommit bool,
+	msg string,
 ) (*doltdb.WorkingSet, string, int, int, error) {
 	// todo: allow merges even when an existing merge is uncommitted
 	if ws.MergeActive() {
@@ -311,15 +311,15 @@ func abortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Ro
 }
 
 func executeMerge(
-		ctx *sql.Context,
-		sess *dsess.DoltSession,
-		dbName string,
-		squash bool,
-		head, cm *doltdb.Commit,
-		cmSpec string,
-		ws *doltdb.WorkingSet,
-		opts editor.Options,
-		workingDiffs map[string]hash.Hash,
+	ctx *sql.Context,
+	sess *dsess.DoltSession,
+	dbName string,
+	squash bool,
+	head, cm *doltdb.Commit,
+	cmSpec string,
+	ws *doltdb.WorkingSet,
+	opts editor.Options,
+	workingDiffs map[string]hash.Hash,
 ) (*doltdb.WorkingSet, error) {
 	result, err := merge.MergeCommits(ctx, head, cm, opts)
 	if err != nil {
@@ -384,13 +384,13 @@ func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.Wor
 }
 
 func executeNoFFMerge(
-		ctx *sql.Context,
-		dSess *dsess.DoltSession,
-		spec *merge.MergeSpec,
-		msg string,
-		dbName string,
-		ws *doltdb.WorkingSet,
-		noCommit bool,
+	ctx *sql.Context,
+	dSess *dsess.DoltSession,
+	spec *merge.MergeSpec,
+	msg string,
+	dbName string,
+	ws *doltdb.WorkingSet,
+	noCommit bool,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
 	mergeRoot, err := spec.MergeC.GetRootValue(ctx)
 	if err != nil {
@@ -428,13 +428,13 @@ func executeNoFFMerge(
 
 		return ws.WithStagedRoot(roots.Staged), nil, nil
 	}
-	
+
 	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{
-		Message:    msg,
-		Date:       spec.Date,
-		Force:      spec.Force,
-		Name:       spec.Name,
-		Email:      spec.Email,
+		Message: msg,
+		Date:    spec.Date,
+		Force:   spec.Force,
+		Name:    spec.Name,
+		Email:   spec.Email,
 	})
 	if err != nil {
 		return nil, nil, err

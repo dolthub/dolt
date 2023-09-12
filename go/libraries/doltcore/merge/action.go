@@ -40,8 +40,8 @@ type MergeSpec struct {
 	StompedTblNames []string
 	WorkingDiffs    map[string]hash.Hash
 	Squash          bool
-	NoFF     bool
-	NoCommit bool
+	NoFF            bool
+	NoCommit        bool
 	NoEdit          bool
 	Force           bool
 	Email           string
@@ -52,7 +52,7 @@ type MergeSpec struct {
 type MergeSpecOpt func(*MergeSpec)
 
 func WithNoFf(noFF bool) MergeSpecOpt {
-	return func(ms *MergeSpec)  {
+	return func(ms *MergeSpec) {
 		ms.NoFF = noFF
 	}
 }
@@ -93,13 +93,13 @@ func WithPullSpecOpts(pullSpec *env.PullSpec) MergeSpecOpt {
 
 // NewMergeSpec returns a MergeSpec with the arguments provided.
 func NewMergeSpec(
-		ctx context.Context,
-		rsr env.RepoStateReader,
-		ddb *doltdb.DoltDB,
-		roots doltdb.Roots,
-		name, email, commitSpecStr string,
-		date time.Time,
-		opts ...MergeSpecOpt,
+	ctx context.Context,
+	rsr env.RepoStateReader,
+	ddb *doltdb.DoltDB,
+	roots doltdb.Roots,
+	name, email, commitSpecStr string,
+	date time.Time,
+	opts ...MergeSpecOpt,
 ) (*MergeSpec, error) {
 	headCS, err := doltdb.NewCommitSpec("HEAD")
 	if err != nil {
@@ -154,11 +154,11 @@ func NewMergeSpec(
 		Name:            name,
 		Date:            date,
 	}
-	
+
 	for _, opt := range opts {
 		opt(spec)
 	}
-	
+
 	return spec, nil
 }
 

@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -30,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
 )
 
@@ -178,7 +178,7 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 			if err != nil {
 				return noConflictsOrViolations, threeWayMerge, err
 			}
-			
+
 			uncommittedChanges, _, _, err := actions.RootHasUncommittedChanges(roots)
 			if err != nil {
 				return noConflictsOrViolations, threeWayMerge, err

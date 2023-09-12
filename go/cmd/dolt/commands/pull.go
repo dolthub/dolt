@@ -121,7 +121,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		env.WithNoEdit(apr.Contains(cli.NoEditFlag)),
 		env.WithForce(apr.Contains(cli.ForceFlag)),
 	)
-	
+
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -135,12 +135,12 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 // pullHelper splits pull into fetch, prepare merge, and merge to interleave printing
 func pullHelper(
-		ctx context.Context,
-		sqlCtx *sql.Context,
-		queryist cli.Queryist,
-		dEnv *env.DoltEnv,
-		pullSpec *env.PullSpec,
-		cliCtx cli.CliContext,
+	ctx context.Context,
+	sqlCtx *sql.Context,
+	queryist cli.Queryist,
+	dEnv *env.DoltEnv,
+	pullSpec *env.PullSpec,
+	cliCtx cli.CliContext,
 ) error {
 	srcDB, err := pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB.ValueReadWriter().Format(), dEnv)
 	if err != nil {
@@ -185,7 +185,7 @@ func pullHelper(
 				return err
 			}
 			fmt.Println(h.String())
-			
+
 			err = dEnv.DoltDB.FastForward(ctx, remoteTrackRef, srcDBCommit)
 			if errors.Is(err, datas.ErrMergeNeeded) {
 				// If the remote tracking branch has diverged from the local copy, we just overwrite it
