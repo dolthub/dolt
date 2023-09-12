@@ -184,7 +184,6 @@ func pullHelper(
 			if err != nil {
 				return err
 			}
-			fmt.Println(h.String())
 
 			err = dEnv.DoltDB.FastForward(ctx, remoteTrackRef, srcDBCommit)
 			if errors.Is(err, datas.ErrMergeNeeded) {
