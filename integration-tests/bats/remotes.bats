@@ -1084,8 +1084,9 @@ SQL
     
     cd "dolt-repo-clones/test-repo"
 
-    run dolt sql -q "call dolt_pull('origin')"
+    run dolt sql -q "call dolt_pull('origin')" -r csv
     [ "$status" -eq 0 ]
+    [[ "$output" =~ '0,0' ]] || false
 
     run dolt log --oneline -n 1
     [ "$status" -eq 0 ]
@@ -1122,8 +1123,8 @@ SQL
 
     run dolt pull origin
     [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "Fast-forward" ]] || false
 
-    dolt log --oneline -n 2
     run dolt log --oneline -n 1
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Merge branch 'main' of" ]] || false
