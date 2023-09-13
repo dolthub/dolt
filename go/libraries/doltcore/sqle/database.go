@@ -1399,9 +1399,13 @@ func (db Database) UpdateLastExecuted(ctx *sql.Context, eventName string, lastEx
 // updateEventStatusTemporarilyForNonDefaultBranch updates the event status from ENABLE to DISABLE if it's not default branch.
 // The event status metadata is not updated in storage, but only for display purposes we return event status as 'DISABLE'.
 // This function is used temporarily to implement logic of only allowing enabled events to be executed on default branch.
-func updateEventStatusTemporarilyForNonDefaultBranch(defaultBranch, createStmt string) string {
+func updateEventStatusTemporarilyForNonDefaultBranch(revision, createStmt string) string {
 	// TODO: need better way to determine the default branch; currently it checks only 'main'
-	if defaultBranch == env.DefaultInitBranch {
+
+	// TODO: We currently rely on having the dolt_show_branch_databases flag turned on for this event scheduler's
+	//       session in order to identify the events from the main branch. This is a bit inefficient (e.g. for databases
+	//       with many, many branches), but this code should only run at startup, so may be okay for first version.
+	if revision == env.DefaultInitBranch {
 		return createStmt
 	}
 	return strings.Replace(createStmt, "ENABLE", "DISABLE", 1)
