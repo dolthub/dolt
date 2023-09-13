@@ -130,3 +130,36 @@ teardown() {
     [ $status -eq 0 ]
     [[ ! $output =~ "| 1        |" ]] || false
 }
+
+# Test that events with multiple statements in nested BEGIN/END blocks work correctly
+@test "events: multiple statements in nested BEGIN END blocks in event body" {
+    # Use dolt sql to pipe in a HEREDOC; Note that this will connect to the running sql-server
+    cd repo1
+    dolt sql << SQL
+delimiter //
+CREATE EVENT event1234
+ON SCHEDULE AT CURRENT_TIMESTAMP
+DO
+BEGIN
+INSERT INTO totals (int_col) VALUES (111);
+BEGIN
+INSERT INTO totals (int_col) VALUES (222);
+INSERT INTO totals (int_col) VALUES (333);
+END;
+END;
+//
+delimiter ;
+SQL
+
+    # Verify that our event ran correctly and inserted three rows
+    run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT * FROM totals;"
+    [ $status -eq 0 ]
+    [[ $output =~ "| 1  | 111     |" ]] || false
+    [[ $output =~ "| 2  | 222     |" ]] || false
+    [[ $output =~ "| 3  | 333     |" ]] || false
+
+    # Verify that the event did not persist after execution
+    run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT COUNT(*) FROM information_schema.events;"
+    [ $status -eq 0 ]
+    [[ $output =~ "| 0        |" ]] || false
+}
