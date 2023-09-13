@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
 )
 
@@ -75,7 +76,19 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 		remoteRefName = apr.Arg(1)
 	}
 
-	pullSpec, err := env.NewPullSpec(ctx, dbData.Rsr, remoteName, remoteRefName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.NoCommitFlag), apr.Contains(cli.NoEditFlag), apr.Contains(cli.ForceFlag), apr.NArg() == 1)
+	remoteOnly := apr.NArg() == 1
+	pullSpec, err := env.NewPullSpec(
+		ctx,
+		dbData.Rsr,
+		remoteName,
+		remoteRefName,
+		remoteOnly,
+		env.WithSquash(apr.Contains(cli.SquashParam)),
+		env.WithNoFF(apr.Contains(cli.NoFFParam)),
+		env.WithNoCommit(apr.Contains(cli.NoCommitFlag)),
+		env.WithNoEdit(apr.Contains(cli.NoEditFlag)),
+		env.WithForce(apr.Contains(cli.ForceFlag)),
+	)
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, err
 	}
@@ -127,9 +140,27 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 				return noConflictsOrViolations, threeWayMerge, err
 			}
 
+			headRef, err := dbData.Rsr.CWBHeadRef()
+			if err != nil {
+				return noConflictsOrViolations, threeWayMerge, err
+			}
+
+			msg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, headRef.GetPath())
+
 			// TODO: this could be replaced with a canFF check to test for error
 			err = dbData.Ddb.FastForward(ctx, remoteTrackRef, srcDBCommit)
-			if err != nil {
+			if errors.Is(err, datas.ErrMergeNeeded) {
+				// If the remote tracking branch has diverged from the local copy, we just overwrite it
+				// TODO: none of this is transactional
+				h, err := srcDBCommit.HashOf()
+				if err != nil {
+					return noConflictsOrViolations, threeWayMerge, err
+				}
+				err = dbData.Ddb.SetHead(ctx, remoteTrackRef, h)
+				if err != nil {
+					return noConflictsOrViolations, threeWayMerge, err
+				}
+			} else if err != nil {
 				return noConflictsOrViolations, threeWayMerge, fmt.Errorf("fetch failed; %w", err)
 			}
 
@@ -148,11 +179,6 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 				return noConflictsOrViolations, threeWayMerge, err
 			}
 
-			headRef, err := dbData.Rsr.CWBHeadRef()
-			if err != nil {
-				return noConflictsOrViolations, threeWayMerge, err
-			}
-
 			uncommittedChanges, _, _, err := actions.RootHasUncommittedChanges(roots)
 			if err != nil {
 				return noConflictsOrViolations, threeWayMerge, err
@@ -161,8 +187,7 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 				return noConflictsOrViolations, threeWayMerge, ErrUncommittedChanges.New()
 			}
 
-			msg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, headRef.GetPath())
-			ws, _, conflicts, fastForward, err = performMerge(ctx, sess, roots, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
+			ws, _, conflicts, fastForward, err = performMerge(ctx, sess, ws, dbName, mergeSpec, apr.Contains(cli.NoCommitFlag), msg)
 			if err != nil && !errors.Is(doltdb.ErrUpToDate, err) {
 				return conflicts, fastForward, err
 			}

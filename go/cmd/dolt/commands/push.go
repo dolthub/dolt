@@ -45,6 +45,8 @@ When the command line does not specify where to push with the {{.LessThan}}remot
 
 When the command line does not specify what to push with {{.LessThan}}refspec{{.GreaterThan}}... then the current branch will be used.
 
+A remote's branch can be deleted by pushing an empty source ref: ` + "`dolt push origin :branch`" + `
+
 When neither the command-line does not specify what to push, the default behavior is used, which corresponds to the current branch being pushed to the corresponding upstream branch, but as a safety measure, the push is aborted if the upstream branch does not have the same name as the local one.
 `,
 
