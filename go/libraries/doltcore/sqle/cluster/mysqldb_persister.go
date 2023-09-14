@@ -115,7 +115,7 @@ func (r *mysqlDbReplica) Run() {
 			r.backoff.Reset()
 			r.lgr.Debugf("mysqlDbReplica[%s]: sucessfully replicated users and grants at version %d.", r.client.remote, r.version)
 		} else {
-			r.lgr.Debugf("mysqlDbReplica[%s]: not replicating empty users and grants at version %d.", r.client.remote)
+			r.lgr.Debugf("mysqlDbReplica[%s]: not replicating empty users and grants at version %d.", r.client.remote, r.version)
 		}
 		r.replicatedVersion = r.version
 	}
@@ -231,7 +231,6 @@ func (p *replicatingMySQLDbPersister) waitForReplication(timeout time.Duration) 
 	caughtup := make([]bool, len(replicas))
 	var wg sync.WaitGroup
 	wg.Add(len(replicas))
-	replicas[0].lgr.Infof("waiting for replication")
 	for li, lr := range replicas {
 		i := li
 		r := lr
@@ -239,11 +238,9 @@ func (p *replicatingMySQLDbPersister) waitForReplication(timeout time.Duration) 
 			// called with r.mu locked.
 			if !caughtup[i] {
 				if r.isCaughtUp() {
-					r.lgr.Infof("it is caught up")
 					caughtup[i] = true
 					wg.Done()
 				} else {
-					r.lgr.Infof("it is not up...still waiting, role: %v, version: %, replicatedVersion: %v", r.role, r.version, r.replicatedVersion)
 				}
 			}
 		})
@@ -283,8 +280,6 @@ func (p *replicatingMySQLDbPersister) waitForReplication(timeout time.Duration) 
 		}
 	}
 	<-done
-
-	replicas[0].lgr.Infof("returning %v", all)
 
 	return all
 }

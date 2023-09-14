@@ -492,9 +492,6 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, opts roleTransition
 		for _, h := range c.commithooks {
 			h.setRole(c.role)
 		}
-
-		// TODO: For a graceful transition, this should true up the
-		// replicas the same as we do for replication hooks.
 		c.mysqlDbPersister.setRole(c.role)
 		c.bcReplication.setRole(c.role)
 	}
@@ -713,6 +710,9 @@ func (c *Controller) gracefulTransitionToStandby(saveConnID, minCaughtUpStandbys
 
 	if !c.mysqlDbPersister.waitForReplication(waitForHooksToReplicateTimeout) {
 		c.lgr.Warnf("cluster/controller: when transitioning to standby, did not successfully replicate users and grants to all standbys.")
+	}
+	if !c.bcReplication.waitForReplication(waitForHooksToReplicateTimeout) {
+		c.lgr.Warnf("cluster/controller: when transitioning to standby, did not successfully replicate branch control data to all standbys.")
 	}
 
 	return res, nil

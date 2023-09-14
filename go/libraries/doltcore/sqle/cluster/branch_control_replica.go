@@ -50,6 +50,8 @@ type branchControlReplica struct {
 	client *replicationServiceClient
 	lgr    *logrus.Entry
 
+	waitNotify func()
+
 	mu   sync.Mutex
 	cond *sync.Cond
 }
@@ -70,19 +72,19 @@ func (r *branchControlReplica) Run() {
 	r.lgr.Tracef("branchControlReplica[%s]: running", r.client.remote)
 	for !r.shutdown {
 		if r.role != RolePrimary {
-			r.cond.Wait()
+			r.wait()
 			continue
 		}
 		if r.version == 0 {
-			r.cond.Wait()
+			r.wait()
 			continue
 		}
 		if r.replicatedVersion == r.version {
-			r.cond.Wait()
+			r.wait()
 			continue
 		}
 		if r.nextAttempt.After(time.Now()) {
-			r.cond.Wait()
+			r.wait()
 			continue
 		}
 		_, err := r.client.client.UpdateBranchControl(context.Background(), &replicationapi.UpdateBranchControlRequest{
@@ -96,8 +98,7 @@ func (r *branchControlReplica) Run() {
 				<-time.After(time.Until(next))
 				r.mu.Lock()
 				defer r.mu.Unlock()
-				for !time.Now().After(next) {
-				}
+				r.nextAttempt = time.Time{}
 				r.cond.Broadcast()
 			}()
 			continue
@@ -106,6 +107,27 @@ func (r *branchControlReplica) Run() {
 		r.lgr.Debugf("branchControlReplica[%s]: sucessfully replicated branch control permissions.", r.client.remote)
 		r.replicatedVersion = r.version
 	}
+}
+
+func (r *branchControlReplica) wait() {
+	r.cond.Wait()
+}
+
+func (r *branchControlReplica) isCaughtUp() bool {
+	return r.version == r.replicatedVersion || r.role != RolePrimary
+}
+
+func (r *branchControlReplica) setWaitNotify(notify func()) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if notify != nil {
+		if r.waitNotify != nil {
+			return false
+		}
+		notify()
+	}
+	r.waitNotify = notify
+	return true
 }
 
 func (r *branchControlReplica) GracefulStop() {
@@ -119,6 +141,7 @@ func (r *branchControlReplica) setRole(role Role) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.role = role
+	r.nextAttempt = time.Time{}
 	r.cond.Broadcast()
 }
 
@@ -163,4 +186,64 @@ func (p *branchControlReplication) UpdateBranchControlContents(contents []byte) 
 	for _, r := range p.replicas {
 		r.UpdateContents(p.current, p.version)
 	}
+}
+
+func (p *branchControlReplication) waitForReplication(timeout time.Duration) bool {
+	p.mu.Lock()
+	replicas := make([]*branchControlReplica, len(p.replicas))
+	copy(replicas, p.replicas)
+	caughtup := make([]bool, len(replicas))
+	var wg sync.WaitGroup
+	wg.Add(len(replicas))
+	for li, lr := range replicas {
+		i := li
+		r := lr
+		ok := r.setWaitNotify(func() {
+			// called with r.mu locked.
+			if !caughtup[i] {
+				if r.isCaughtUp() {
+					caughtup[i] = true
+					wg.Done()
+				} else {
+				}
+			}
+		})
+		if !ok {
+			for j := li - 1; j >= 0; j-- {
+				replicas[j].setWaitNotify(nil)
+			}
+			return false
+		}
+	}
+	p.mu.Unlock()
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(timeout):
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, r := range replicas {
+		r.setWaitNotify(nil)
+	}
+
+	// Make certain we don't leak the wg.Wait goroutine in the failure case.
+	// At this point, none of the callbacks will ever be called again and
+	// ch.setWaitNotify grabs a lock and so establishes the happens before.
+	all := true
+	for _, b := range caughtup {
+		if !b {
+			wg.Done()
+			all = false
+		}
+	}
+	<-done
+
+	return all
 }
