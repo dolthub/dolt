@@ -85,7 +85,7 @@ func MakeServer(t *testing.T, dc driver.DoltCmdable, s *driver.Server) *driver.S
 	if s == nil {
 		return nil
 	}
-	opts := []driver.SqlServerOpt{driver.WithArgs(s.Args...), driver.WithEnvs(s.Envs...)}
+	opts := []driver.SqlServerOpt{driver.WithArgs(s.Args...), driver.WithEnvs(s.Envs...), driver.WithName(s.Name)}
 	if s.Port != 0 {
 		opts = append(opts, driver.WithPort(s.Port))
 	}
@@ -142,9 +142,11 @@ func (test Test) Run(t *testing.T) {
 	for _, r := range test.Repos {
 		repo := MakeRepo(t, rs, r)
 
+		if r.Server.Name == "" {
+			r.Server.Name = r.Name
+		}
 		server := MakeServer(t, repo, r.Server)
 		if server != nil {
-			server.DBName = r.Name
 			servers[r.Name] = server
 		}
 	}
@@ -164,6 +166,9 @@ func (test Test) Run(t *testing.T) {
 			require.NoError(t, f.WriteAtDir(rs.Dir))
 		}
 
+		if mr.Server.Name == "" {
+			mr.Server.Name = mr.Name
+		}
 		server := MakeServer(t, rs, mr.Server)
 		if server != nil {
 			servers[mr.Name] = server
