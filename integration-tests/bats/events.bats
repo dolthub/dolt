@@ -163,3 +163,43 @@ SQL
     [ $status -eq 0 ]
     [[ $output =~ "| 0        |" ]] || false
 }
+
+# Test that events containing procedure calls work correctly
+@test "events: procedure calls in events" {
+    # Create a procedure
+    cd repo1
+    dolt sql << SQL
+DELIMITER //
+CREATE PROCEDURE InsertIntoTotals()
+BEGIN
+  INSERT INTO totals (int_col) VALUES (42);
+END //
+DELIMITER ;
+SQL
+
+    # Use dolt sql to pipe in a HEREDOC; Note that this will connect to the running sql-server
+    dolt sql << SQL
+delimiter //
+CREATE EVENT event1234
+ON SCHEDULE AT CURRENT_TIMESTAMP
+DO
+BEGIN
+  CALL InsertIntoTotals();
+END;
+//
+delimiter ;
+SQL
+
+    # Verify that our event ran correctly and inserted one row
+    run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT * FROM totals;"
+    [ $status -eq 0 ]
+    [[ $output =~ "| 1  | 42      |" ]] || false
+    run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT COUNT(*) FROM totals;"
+    [ $status -eq 0 ]
+    [[ $output =~ "| 1  " ]] || false
+
+    # Verify that the event did not persist after execution
+    run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT COUNT(*) FROM information_schema.events;"
+    [ $status -eq 0 ]
+    [[ $output =~ "| 0        |" ]] || false
+}
