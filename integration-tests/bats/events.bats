@@ -203,3 +203,34 @@ SQL
     [ $status -eq 0 ]
     [[ $output =~ "| 0        |" ]] || false
 }
+
+# Test that out-of-band event definition changes (e.g. merges, reverts, or anything else that doesn't go through
+# CREATE EVENT statements) are reflected correctly.
+@test "events: out-of-band event changes are detected" {
+    # Use dolt sql to pipe in a HEREDOC; Note that this will connect to the running sql-server
+    dolt sql << SQL
+call dolt_checkout('-b', 'other');
+CREATE EVENT event12345
+ON SCHEDULE EVERY 0.5 SECOND STARTS CURRENT_TIMESTAMP
+DO INSERT INTO totals (int_col) VALUES (42);
+call dolt_commit('-Am', 'Adding a new recurring event');
+SQL
+
+    # Verify that our event IS NOT executing (on a non-main branch)
+    sleep 1
+    run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT COUNT(*) FROM totals;"
+    [ $status -eq 0 ]
+    [[ $output =~ "| 0  " ]] || false
+
+    # Merge our event from other back to main
+    dolt sql << SQL
+call dolt_checkout('main');
+call dolt_merge('other');
+SQL
+
+    # Verify that the new event starts executing on main after we merge it over
+    sleep 1
+    run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT (SELECT COUNT(*) FROM totals) > 0;"
+    [ $status -eq 0 ]
+    [[ $output =~ "| 1  " ]] || false
+}
