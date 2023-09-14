@@ -142,14 +142,14 @@ func TestSetPersistedValue(t *testing.T) {
 			Value: "7",
 		},
 		{
-			Name:  "bool",
-			Value: true,
-			Err:   sql.ErrInvalidType,
+			Name:        "bool",
+			Value:       true,
+			ExpectedRes: "1",
 		},
 		{
-			Name:  "bool",
-			Value: false,
-			Err:   sql.ErrInvalidType,
+			Name:        "bool",
+			Value:       false,
+			ExpectedRes: "0",
 		},
 		{
 			Value: complex64(7),

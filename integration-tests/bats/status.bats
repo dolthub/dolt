@@ -23,7 +23,6 @@ get_head_commit() {
 }
 
 @test "status: no changes" {
-    dolt status
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "On branch main" ]] || false
@@ -487,4 +486,52 @@ SQL
     [[ "$output" =~ "Ignored tables:" ]] || false
     [[ "$output" =~ "  (use \"dolt add -f <table>\" to include in what will be committed)" ]] || false
     [[ "$output" =~ "	new table:        generated_foo" ]] || false
+}
+
+@test "status: with remote" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push origin main
+
+    cd ..
+    dolt clone file://./remote repo2
+    cd repo2
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" = "On branch main" ]] || false
+    [[ "${lines[1]}" = "Your branch is up to date with 'origin/main'." ]] || false
+    [[ "${lines[2]}" = "nothing to commit, working tree clean" ]] || false
+
+    cd ../repo1
+    dolt commit --allow-empty -m "cm1"
+    dolt push origin main
+
+    cd ../repo2
+    dolt fetch origin
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" = "On branch main" ]] || false
+    [[ "${lines[1]}" = "Your branch is behind 'origin/main' by 1 commit, and can be fast-forwarded." ]] || false
+    [[ "${lines[2]}" = "  (use \"dolt pull\" to update your local branch)" ]] || false
+
+    dolt commit --allow-empty -m "cm2"
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" = "On branch main" ]] || false
+    [[ "${lines[1]}" = "Your branch and 'origin/main' have diverged," ]] || false
+    [[ "${lines[2]}" = "and have 1 and 1 different commits each, respectively." ]] || false
+    [[ "${lines[3]}" = "  (use \"dolt pull\" to update your local branch)" ]] || false
+
+    dolt reset --hard origin/main
+    dolt commit --allow-empty -m "cm3"
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" = "On branch main" ]] || false
+    [[ "${lines[1]}" = "Your branch is ahead of 'origin/main' by 1 commit." ]] || false
+    [[ "${lines[2]}" = "  (use \"dolt push\" to publish your local commits)" ]] || false
 }

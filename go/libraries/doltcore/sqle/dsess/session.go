@@ -1575,7 +1575,11 @@ func setPersistedValue(conf config.WritableConfig, key string, value interface{}
 	case string:
 		return config.SetString(conf, key, v)
 	case bool:
-		return sql.ErrInvalidType.New(v)
+		if v {
+			return config.SetInt(conf, key, 1)
+		} else {
+			return config.SetInt(conf, key, 0)
+		}
 	default:
 		return sql.ErrInvalidType.New(v)
 	}

@@ -29,8 +29,8 @@ import (
 )
 
 const (
-	cmdFailure = 0
-	cmdSuccess = 1
+	cmdFailure = 1
+	cmdSuccess = 0
 )
 
 func init() {

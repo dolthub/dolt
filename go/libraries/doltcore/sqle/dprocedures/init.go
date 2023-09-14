@@ -21,7 +21,7 @@ import (
 
 var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dolt_add", Schema: int64Schema("status"), Function: doltAdd},
-	{Name: "dolt_backup", Schema: int64Schema("success"), Function: doltBackup},
+	{Name: "dolt_backup", Schema: int64Schema("status"), Function: doltBackup},
 	{Name: "dolt_branch", Schema: int64Schema("status"), Function: doltBranch},
 	{Name: "dolt_checkout", Schema: doltCheckoutSchema, Function: doltCheckout},
 	{Name: "dolt_cherry_pick", Schema: cherryPickSchema, Function: doltCherryPick},
@@ -31,14 +31,14 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dolt_commit_hash_out", Schema: stringSchema("hash"), Function: doltCommitHashOut},
 	{Name: "dolt_conflicts_resolve", Schema: int64Schema("status"), Function: doltConflictsResolve},
 	{Name: "dolt_count_commits", Schema: int64Schema("ahead", "behind"), Function: doltCountCommits},
-	{Name: "dolt_fetch", Schema: int64Schema("success"), Function: doltFetch},
+	{Name: "dolt_fetch", Schema: int64Schema("status"), Function: doltFetch},
 
 	// dolt_gc is enabled behind a feature flag for now, see dolt_gc.go
-	{Name: "dolt_gc", Schema: int64Schema("success"), Function: doltGC},
+	{Name: "dolt_gc", Schema: int64Schema("status"), Function: doltGC, ReadOnly: true},
 
 	{Name: "dolt_merge", Schema: doltMergeSchema, Function: doltMerge},
 	{Name: "dolt_pull", Schema: int64Schema("fast_forward", "conflicts"), Function: doltPull},
-	{Name: "dolt_push", Schema: int64Schema("success"), Function: doltPush},
+	{Name: "dolt_push", Schema: int64Schema("status"), Function: doltPush},
 	{Name: "dolt_remote", Schema: int64Schema("status"), Function: doltRemote},
 	{Name: "dolt_reset", Schema: int64Schema("status"), Function: doltReset},
 	{Name: "dolt_revert", Schema: int64Schema("status"), Function: doltRevert},
@@ -54,13 +54,13 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dclean", Schema: int64Schema("status"), Function: doltClean},
 	{Name: "dclone", Schema: int64Schema("status"), Function: doltClone},
 	{Name: "dcommit", Schema: stringSchema("hash"), Function: doltCommit},
-	{Name: "dfetch", Schema: int64Schema("success"), Function: doltFetch},
+	{Name: "dfetch", Schema: int64Schema("status"), Function: doltFetch},
 
 	//	{Name: "dgc", Schema: int64Schema("status"), Function: doltGC},
 
 	{Name: "dmerge", Schema: doltMergeSchema, Function: doltMerge},
 	{Name: "dpull", Schema: int64Schema("fast_forward", "conflicts"), Function: doltPull},
-	{Name: "dpush", Schema: int64Schema("success"), Function: doltPush},
+	{Name: "dpush", Schema: int64Schema("status"), Function: doltPush},
 	{Name: "dremote", Schema: int64Schema("status"), Function: doltRemote},
 	{Name: "dreset", Schema: int64Schema("status"), Function: doltReset},
 	{Name: "drevert", Schema: int64Schema("status"), Function: doltRevert},

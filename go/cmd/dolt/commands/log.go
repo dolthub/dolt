@@ -86,6 +86,10 @@ func (cmd LogCmd) ArgParser() *argparser.ArgParser {
 	return cli.CreateLogArgParser(false)
 }
 
+func (cmd LogCmd) RequiresRepo() bool {
+	return false
+}
+
 // Exec executes the command
 func (cmd LogCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	return cmd.logWithLoggerFunc(ctx, commandStr, args, dEnv, cliCtx)
@@ -98,7 +102,8 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
-		handleErrAndExit(err)
+		cli.PrintErrln(err)
+		return 1
 	}
 	if closeFunc != nil {
 		defer closeFunc()

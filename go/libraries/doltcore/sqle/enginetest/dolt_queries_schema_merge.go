@@ -645,6 +645,32 @@ var SchemaChangeTestsConstraints = []MergeScriptTest{
 		},
 	},
 	{
+		Name: "altering a check constraint on one side",
+		AncSetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(100));",
+			"insert into t values (1, 'one');",
+			"alter table t ADD CONSTRAINT check1 CHECK (c1 in ('one', 'two'));",
+		},
+		RightSetUpScript: []string{
+			"alter table t drop constraint check1;",
+			"alter table t ADD CONSTRAINT check1 CHECK (c1 in ('one', 'two', 'three'));",
+			"insert into t values (3, 'three');",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (2, 'two');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, "one"}, {2, "two"}, {3, "three"}},
+			},
+		},
+	},
+	{
 		Name: "dropping a foreign key",
 		AncSetUpScript: []string{
 			"create table parent (pk int primary key);",

@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -71,10 +72,10 @@ type Controller struct {
 	cinterceptor  clientinterceptor
 	lgr           *logrus.Logger
 
-	provider       dbProvider
-	iterSessions   IterSessions
-	killQuery      func(uint32)
-	killConnection func(uint32) error
+	standbyCallback IsStandbyCallback
+	iterSessions    IterSessions
+	killQuery       func(uint32)
+	killConnection  func(uint32) error
 
 	jwks      *jwtauth.MultiJWKS
 	tlsCfg    *tls.Config
@@ -92,11 +93,10 @@ type sqlvars interface {
 	GetGlobal(name string) (sql.SystemVariable, interface{}, bool)
 }
 
-// We can manage certain aspects of the exposed databases on the server through
-// this.
-type dbProvider interface {
-	SetIsStandby(bool)
-}
+// Our IsStandbyCallback gets called with |true| or |false| when the server
+// becomes a standby or a primary respectively. Standby replicas should be read
+// only.
+type IsStandbyCallback func(bool)
 
 type procedurestore interface {
 	Register(sql.ExternalStoredProcedureDetails)
@@ -166,9 +166,14 @@ func NewController(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) 
 	}
 	ret.mysqlDbReplicas = make([]*mysqlDbReplica, len(clients))
 	for i := range ret.mysqlDbReplicas {
+		bo := backoff.NewExponentialBackOff()
+		bo.InitialInterval = time.Second
+		bo.MaxInterval = time.Minute
+		bo.MaxElapsedTime = 0
 		ret.mysqlDbReplicas[i] = &mysqlDbReplica{
-			lgr:    lgr.WithFields(logrus.Fields{}),
-			client: clients[i],
+			lgr:     lgr.WithFields(logrus.Fields{}),
+			client:  clients[i],
+			backoff: bo,
 		}
 		ret.mysqlDbReplicas[i].cond = sync.NewCond(&ret.mysqlDbReplicas[i].mu)
 	}
@@ -230,13 +235,13 @@ func (c *Controller) ApplyStandbyReplicationConfig(ctx context.Context, bt *sql.
 
 type IterSessions func(func(sql.Session) (bool, error)) error
 
-func (c *Controller) ManageDatabaseProvider(p dbProvider) {
+func (c *Controller) SetIsStandbyCallback(callback IsStandbyCallback) {
 	if c == nil {
 		return
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.provider = p
+	c.standbyCallback = callback
 	c.setProviderIsStandby(c.role != RolePrimary)
 }
 
@@ -701,8 +706,8 @@ func (c *Controller) killRunningQueries(saveConnID int) {
 
 // called with c.mu held
 func (c *Controller) setProviderIsStandby(standby bool) {
-	if c.provider != nil {
-		c.provider.SetIsStandby(standby)
+	if c.standbyCallback != nil {
+		c.standbyCallback(standby)
 	}
 }
 

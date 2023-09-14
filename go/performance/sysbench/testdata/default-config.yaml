@@ -9,3 +9,4 @@ randType: uniform
 eventCnt: 1500
 time: 120
 histogram: true
+prepared: true

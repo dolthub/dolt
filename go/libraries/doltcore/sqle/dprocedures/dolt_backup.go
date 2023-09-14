@@ -34,8 +34,8 @@ import (
 const (
 	DoltBackupFuncName = "dolt_backup"
 
-	statusOk  = 1
-	statusErr = 0
+	statusOk  = 0
+	statusErr = 1
 )
 
 // doltBackup is the stored procedure version for the CLI command `dolt backup`.
