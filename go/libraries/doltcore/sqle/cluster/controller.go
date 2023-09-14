@@ -711,6 +711,10 @@ func (c *Controller) gracefulTransitionToStandby(saveConnID, minCaughtUpStandbys
 		c.lgr.Tracef("cluster/controller: successfully replicated all databases to %d out of %d standbys; transitioning to standby.", numCaughtUp, len(replicas))
 	}
 
+	if !c.mysqlDbPersister.waitForReplication(waitForHooksToReplicateTimeout) {
+		c.lgr.Warnf("cluster/controller: when transitioning to standby, did not successfully replicate users and grants to all standbys.")
+	}
+
 	return res, nil
 }
 
