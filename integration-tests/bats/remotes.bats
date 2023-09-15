@@ -847,10 +847,6 @@ SQL
     # The number of $lines and $output printed is non-deterministic
     # due to EphemeralPrinter. We can't test for their length here.
     [ "$output" != "" ]
-
-    run dolt fetch
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
 }
 
 @test "remotes: dolt fetch with docs" {

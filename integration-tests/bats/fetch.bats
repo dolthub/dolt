@@ -320,3 +320,11 @@ teardown() {
     [[ "${lines[0]}" =~ "This command is not supported against a remote host yet." ]] || false
     [[ "${lines[1]}" =~ "If you're interested in running this command against a remote host, hit us up on discord (https://discord.gg/gqr7K4VNKe)." ]] || false
 }
+
+@test "fetch: output" {
+    cd repo2
+    run dolt fetch
+    [ "$status" -eq 0 ]
+    # fetch should print some kind of status message
+    [[ "$output" =~ "Fetching..." ]] || false
+}
