@@ -147,6 +147,7 @@ func (test Test) Run(t *testing.T) {
 		}
 		server := MakeServer(t, repo, r.Server)
 		if server != nil {
+			server.DBName = r.Name
 			servers[r.Name] = server
 		}
 	}
