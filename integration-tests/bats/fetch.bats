@@ -136,6 +136,10 @@ teardown() {
 
 @test "fetch: fetch feature branch" {
     cd repo1
+    dolt checkout feature
+    dolt sql -q "create table t2 (a int primary key, b int)"
+    dolt add .
+    dolt commit -am "Third commit"
     dolt push origin feature
 
     cd ../repo2
@@ -146,9 +150,10 @@ teardown() {
     [[ "$output" =~ "added table" ]] || false
 
     run dolt sql -q "show tables as of 'origin/feature'" -r csv
-    [ "${#lines[@]}" -eq 2 ]
+    [ "${#lines[@]}" -eq 3 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
+    [[ "$output" =~ "t2" ]] || false
 }
 
 @test "fetch: fetch tag" {
