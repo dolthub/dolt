@@ -17,6 +17,7 @@ package commands
 import (
 	"bytes"
 	"context"
+	"time"
 
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
@@ -91,12 +92,33 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	_, _, err = queryist.Query(sqlCtx, query)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
 
-	return HandleVErrAndExitCode(nil, usage)
+	errChan := make(chan error)
+	go func() {
+		defer close(errChan)
+		_, _, err = queryist.Query(sqlCtx, query)
+		if err != nil {
+			errChan <- err
+			return
+		}
+	}()
+
+	spinner := TextSpinner{}
+	cli.Print(spinner.next() + " Fetching...")
+	defer func() {
+		cli.DeleteAndPrint(13, "")
+	}()
+
+	for {
+		select {
+		case err := <-errChan:
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		case <-ctx.Done():
+			return HandleVErrAndExitCode(nil, usage)
+		case <-time.After(time.Millisecond * 50):
+			cli.DeleteAndPrint(13, spinner.next()+" Fetching...")
+		}
+	}
 }
 
 // constructInterpolatedDoltFetchQuery constructs the sql query necessary to call the DOLT_FETCH() function.
