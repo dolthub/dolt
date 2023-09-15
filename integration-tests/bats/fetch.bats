@@ -66,6 +66,14 @@ teardown() {
 }
 
 @test "fetch: fetch main" {
+    cd repo1
+    dolt checkout feature
+    dolt sql -q "create table t2 (a int primary key, b int)"
+    dolt add .
+    dolt commit -am "Third commit"
+    dolt push origin feature
+    cd ..
+
     cd repo2
     dolt fetch origin main
 
@@ -77,6 +85,10 @@ teardown() {
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
+
+    run dolt branch -r
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "feature" ]] || false
 }
 
 @test "fetch: fetch custom remote" {
@@ -311,13 +323,13 @@ teardown() {
 @test "fetch: fetch from remote host fails" {
     run dolt --host hostedHost --port 3306 --user root --password password fetch origin
     [ "$status" -eq 1 ]
-    [[ "${lines[0]}" =~ "This command is not supported against a remote host yet." ]] || false
+    [[ "${lines[0]}" =~ "The fetch command is not supported against a remote host yet." ]] || false
     [[ "${lines[1]}" =~ "If you're interested in running this command against a remote host, hit us up on discord (https://discord.gg/gqr7K4VNKe)." ]] || false
 
     dolt profile add --host hostedHost --port 3306 --user root --password password hostedProfile
     run dolt --profile hostedProfile fetch origin
     [ "$status" -eq 1 ]
-    [[ "${lines[0]}" =~ "This command is not supported against a remote host yet." ]] || false
+    [[ "${lines[0]}" =~ "The fetch command is not supported against a remote host yet." ]] || false
     [[ "${lines[1]}" =~ "If you're interested in running this command against a remote host, hit us up on discord (https://discord.gg/gqr7K4VNKe)." ]] || false
 }
 

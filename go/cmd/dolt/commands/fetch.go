@@ -15,8 +15,8 @@
 package commands
 
 import (
-	"bytes"
 	"context"
+	"strings"
 	"time"
 
 	"github.com/gocraft/dbr/v2"
@@ -125,36 +125,24 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 // Also interpolates this query to prevent sql injection.
 func constructInterpolatedDoltFetchQuery(apr *argparser.ArgParseResults) (string, error) {
 	var params []interface{}
-
-	var buffer bytes.Buffer
-	var first bool
-	first = true
-
-	buffer.WriteString("call dolt_fetch(")
-
-	writeToBuffer := func(s string) {
-		if !first {
-			buffer.WriteString(", ")
-		}
-		buffer.WriteString(s)
-		first = false
-	}
+	var args []string
 
 	if apr.Contains(cli.PruneFlag) {
-		writeToBuffer("'--prune'")
+		args = append(args, "'--prune'")
 	}
 	if user, hasUser := apr.GetValue(cli.UserFlag); hasUser {
-		writeToBuffer("'--user'")
-		writeToBuffer("?")
+		args = append(args, "'--user'")
+		args = append(args, "?")
 		params = append(params, user)
 	}
 	for _, arg := range apr.Args {
-		writeToBuffer("?")
+		args = append(args, "?")
 		params = append(params, arg)
 	}
-	buffer.WriteString(")")
 
-	interpolatedQuery, err := dbr.InterpolateForDialect(buffer.String(), params, dialect.MySQL)
+	query := "call dolt_fetch(" + strings.Join(args, ", ") + ")"
+
+	interpolatedQuery, err := dbr.InterpolateForDialect(query, params, dialect.MySQL)
 	if err != nil {
 		return "", err
 	}

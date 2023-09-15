@@ -452,15 +452,6 @@ func runMain() int {
 		return 1
 	}
 
-	if subcommandName == "fetch" || subcommandName == "pull" || subcommandName == "push" {
-		if apr.Contains(cli.HostFlag) {
-			cli.PrintErrln(
-				`This command is not supported against a remote host yet. 
-If you're interested in running this command against a remote host, hit us up on discord (https://discord.gg/gqr7K4VNKe).`)
-			return 1
-		}
-	}
-
 	dataDir, hasDataDir := apr.GetValue(commands.DataDirFlag)
 	if hasDataDir {
 		// If a relative path was provided, this ensures we have an absolute path everywhere.
@@ -624,6 +615,13 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, rootEnv *env.Do
 
 	useDb, hasUseDb := apr.GetValue(commands.UseDbFlag)
 	useBranch, hasBranch := apr.GetValue(cli.BranchParam)
+
+	if subcommandName == "fetch" || subcommandName == "pull" || subcommandName == "push" {
+		if apr.Contains(cli.HostFlag) {
+			return nil, fmt.Errorf(`The %s command is not supported against a remote host yet. 
+If you're interested in running this command against a remote host, hit us up on discord (https://discord.gg/gqr7K4VNKe).`, subcommandName)
+		}
+	}
 
 	if hasUseDb && hasBranch {
 		dbName, branchNameInDb := dsess.SplitRevisionDbName(useDb)
