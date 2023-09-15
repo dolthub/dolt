@@ -143,6 +143,11 @@ func constructInterpolatedDoltFetchQuery(apr *argparser.ArgParseResults) (string
 	if apr.Contains(cli.PruneFlag) {
 		writeToBuffer("'--prune'")
 	}
+	if user, hasUser := apr.GetValue(cli.UserFlag); hasUser {
+		writeToBuffer("'--user'")
+		writeToBuffer("?")
+		params = append(params, user)
+	}
 	for _, arg := range apr.Args {
 		writeToBuffer("?")
 		params = append(params, arg)
