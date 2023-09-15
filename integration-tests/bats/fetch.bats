@@ -59,7 +59,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "added table" ]] || false
 
-    run dolt sql -q "show tables as of hashof('origin/main')" -r csv
+    run dolt sql -q "show tables as of 'origin/main'" -r csv
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
@@ -81,10 +81,11 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "added table" ]] || false
 
-    run dolt sql -q "show tables as of hashof('origin/main')" -r csv
+    run dolt sql -q "show tables as of 'origin/main'" -r csv
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
+    [[ ! "$output" =~ "t2" ]] || false
 
     run dolt branch -r
     [ "$status" -eq 0 ]
@@ -92,31 +93,45 @@ teardown() {
 }
 
 @test "fetch: fetch custom remote" {
-    cd repo2
+    cd repo1
+    dolt sql -q "create table t2 (a int primary key, b int)"
+    dolt add .
+    dolt commit -am "Third commit"
+    dolt push test-remote main
+
+    cd ../repo2
     dolt fetch test-remote
 
    run dolt diff main test-remote/main
     [ "$status" -eq 0 ]
     [[ "$output" =~ "added table" ]] || false
 
-    run dolt sql -q "show tables as of hashof('test-remote/main')" -r csv
-    [ "${#lines[@]}" -eq 2 ]
+    run dolt sql -q "show tables as of 'test-remote/main'" -r csv
+    [ "${#lines[@]}" -eq 3 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
+    [[ "$output" =~ "t2" ]] || false
 }
 
 @test "fetch: fetch specific ref" {
-    cd repo2
+    cd repo1
+    dolt sql -q "create table t2 (a int primary key, b int)"
+    dolt add .
+    dolt commit -am "Third commit"
+    dolt push test-remote main
+
+    cd ../repo2
     dolt fetch test-remote refs/heads/main:refs/remotes/test-remote/main
 
     run dolt diff main test-remote/main
     [ "$status" -eq 0 ]
     [[ "$output" =~ "added table" ]] || false
 
-    run dolt sql -q "show tables as of hashof('test-remote/main')" -r csv
-    [ "${#lines[@]}" -eq 2 ]
+    run dolt sql -q "show tables as of 'test-remote/main'" -r csv
+    [ "${#lines[@]}" -eq 3 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
+    [[ "$output" =~ "t2" ]] || false
 }
 
 @test "fetch: fetch feature branch" {
@@ -130,7 +145,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "added table" ]] || false
 
-    run dolt sql -q "show tables as of hashof('origin/feature')" -r csv
+    run dolt sql -q "show tables as of 'origin/feature'" -r csv
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
@@ -148,7 +163,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "added table" ]] || false
 
-    run dolt sql -q "show tables as of hashof('v1')" -r csv
+    run dolt sql -q "show tables as of 'v1'" -r csv
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
@@ -167,7 +182,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "added table" ]] || false
 
-    run dolt sql -q "show tables as of hashof('v1')" -r csv
+    run dolt sql -q "show tables as of 'v1'" -r csv
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
@@ -181,7 +196,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "added table" ]] || false
 
-    run dolt sql -q "show tables as of hashof('test-remote/other')" -r csv
+    run dolt sql -q "show tables as of 'test-remote/other'" -r csv
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
@@ -196,7 +211,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "removed table" ]] || false
 
-    run dolt sql -q "show tables as of hashof('main')" -r csv
+    run dolt sql -q "show tables as of 'main'" -r csv
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
@@ -218,7 +233,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "deleted table" ]] || false
 
-    run dolt sql -q "show tables as of hashof('origin/main')" -r csv
+    run dolt sql -q "show tables as of 'origin/main'" -r csv
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t2" ]] || false

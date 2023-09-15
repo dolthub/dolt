@@ -106,7 +106,7 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	spinner := TextSpinner{}
 	cli.Print(spinner.next() + " Fetching...")
 	defer func() {
-		cli.DeleteAndPrint(13, "")
+		cli.DeleteAndPrint(len(" Fetching...")+1, "")
 	}()
 
 	for {
@@ -116,7 +116,7 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		case <-ctx.Done():
 			return HandleVErrAndExitCode(nil, usage)
 		case <-time.After(time.Millisecond * 50):
-			cli.DeleteAndPrint(13, spinner.next()+" Fetching...")
+			cli.DeleteAndPrint(len(" Fetching...")+1, spinner.next()+" Fetching...")
 		}
 	}
 }
