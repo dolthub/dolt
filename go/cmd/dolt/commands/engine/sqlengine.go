@@ -315,7 +315,8 @@ func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engin
 	return nil
 }
 
-// configureEventScheduler configures the event scheduler with the |engine|.
+// configureEventScheduler configures the event scheduler with the |engine| for executing events, a |sessFactory|
+// for creating sessions, and a DoltDatabaseProvider, |pro|.
 func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, sessFactory sessionFactory, pro dsqle.DoltDatabaseProvider) error {
 	// need to give correct user, use the definer as user to run the event definition queries
 	ctxFactory := sqlContextFactory()
