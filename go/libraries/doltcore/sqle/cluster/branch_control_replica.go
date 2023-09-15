@@ -98,7 +98,9 @@ func (r *branchControlReplica) Run() {
 				<-time.After(time.Until(next))
 				r.mu.Lock()
 				defer r.mu.Unlock()
-				r.nextAttempt = time.Time{}
+				if r.nextAttempt == next {
+					r.nextAttempt = time.Time{}
+				}
 				r.cond.Broadcast()
 			}()
 			continue
