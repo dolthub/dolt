@@ -195,8 +195,8 @@ func (p *PatchTableFunction) LookupPartitions(context *sql.Context, lookup sql.I
 	}), nil
 }
 
-func (p *PatchTableFunction) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) (sql.IndexedTable, error) {
-	return p, nil
+func (p *PatchTableFunction) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+	return p
 }
 
 func (p *PatchTableFunction) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {

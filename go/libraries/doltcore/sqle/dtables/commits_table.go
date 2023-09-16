@@ -89,9 +89,9 @@ func (dt *CommitsTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 }
 
 // IndexedAccess implements sql.IndexAddressable
-func (dt *CommitsTable) IndexedAccess(ctx *sql.Context, _ sql.IndexLookup) (sql.IndexedTable, error) {
+func (dt *CommitsTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
 	nt := *dt
-	return &nt, nil
+	return &nt
 }
 
 func (dt *CommitsTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {

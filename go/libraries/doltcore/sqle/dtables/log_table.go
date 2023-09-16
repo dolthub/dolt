@@ -112,9 +112,9 @@ func (dt *LogTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 }
 
 // IndexedAccess implements sql.IndexAddressable
-func (dt *LogTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) (sql.IndexedTable, error) {
+func (dt *LogTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
 	nt := *dt
-	return &nt, nil
+	return &nt
 }
 
 func (dt *LogTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {

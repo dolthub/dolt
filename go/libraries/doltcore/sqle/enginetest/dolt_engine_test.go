@@ -119,36 +119,27 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Add primary key",
+			Name: "merge constraint with valid data on different branches",
 			SetUpScript: []string{
-				"create table t1 (i int, j int)",
-				"insert into t1 values (1,1), (1,2), (1,3)",
+				"create table t (i int)",
+				"call dolt_commit('-Am', 'initial commit')",
+
+				"call dolt_checkout('-b', 'other')",
+				"insert into t values (1)",
+				"call dolt_commit('-Am', 'changes to other')",
+
+				"call dolt_checkout('main')",
+				"alter table t add check (i < 10)",
+				"call dolt_commit('-Am', 'changes to main')",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:       "alter table t1 add primary key (i)",
-					ExpectedErr: sql.ErrPrimaryKeyViolation,
+					Query:    "CALL DOLT_MERGE('other');",
+					Expected: []sql.Row{{doltCommit, 0, 0}},
 				},
 				{
-					Query: "show create table t1",
-					Expected: []sql.Row{{"t1",
-						"CREATE TABLE `t1` (\n" +
-								"  `i` int,\n" +
-								"  `j` int\n" +
-								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
-				},
-				{
-					Query:    "alter table t1 add primary key (i, j)",
-					Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
-				},
-				{
-					Query: "show create table t1",
-					Expected: []sql.Row{{"t1",
-						"CREATE TABLE `t1` (\n" +
-								"  `i` int NOT NULL,\n" +
-								"  `j` int NOT NULL,\n" +
-								"  PRIMARY KEY (`i`,`j`)\n" +
-								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+					Query:    "select * from t",
+					Expected: []sql.Row{{1}},
 				},
 			},
 		},

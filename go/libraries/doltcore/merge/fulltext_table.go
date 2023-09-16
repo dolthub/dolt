@@ -114,8 +114,8 @@ func (table *fulltextTable) Deleter(ctx *sql.Context) sql.RowDeleter {
 }
 
 // IndexedAccess implements the interface fulltext.EditableTable.
-func (table *fulltextTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) (sql.IndexedTable, error) {
-	return table.GMSTable.IndexedAccess(ctx, lookup)
+func (table *fulltextTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+	return table.GMSTable.IndexedAccess(lookup)
 }
 
 // GetIndexes implements the interface fulltext.EditableTable.

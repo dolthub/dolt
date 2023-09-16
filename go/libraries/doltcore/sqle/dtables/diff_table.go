@@ -531,9 +531,9 @@ func (dt *DiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 }
 
 // IndexedAccess implements sql.IndexAddressable
-func (dt *DiffTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) (sql.IndexedTable, error) {
+func (dt *DiffTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
 	nt := *dt
-	return &nt, nil
+	return &nt
 }
 
 // tableData returns the map of primary key to values for the specified table (or an empty map if the tbl is null)

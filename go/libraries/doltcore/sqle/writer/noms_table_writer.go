@@ -149,13 +149,13 @@ func (te *nomsTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) e
 	return te.flush(ctx)
 }
 
-func (te *nomsTableWriter) IndexedAccess(ctx *sql.Context, i sql.IndexLookup) (sql.IndexedTable, error) {
+func (te *nomsTableWriter) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
 	idx := index.DoltIndexFromSqlIndex(i.Index)
 	return &nomsFkIndexer{
 		writer:  te,
 		idxName: idx.ID(),
 		idxSch:  idx.IndexSchema(),
-	}, nil
+	}
 }
 
 func (te *nomsTableWriter) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {

@@ -257,8 +257,8 @@ func (t *TempTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 	}
 }
 
-func (t *TempTable) IndexedAccess(_ *sql.Context, _ sql.IndexLookup) (sql.IndexedTable, error) {
-	return t, nil
+func (t *TempTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+	return t
 }
 
 func (t *TempTable) CreateIndex(ctx *sql.Context, idx sql.IndexDef) error {

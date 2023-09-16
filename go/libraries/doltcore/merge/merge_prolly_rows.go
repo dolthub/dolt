@@ -1188,7 +1188,7 @@ func resolveExpression(ctx *sql.Context, expression string, sch schema.Schema, t
 		return nil, err
 	}
 	mockDatabase := memory.NewDatabase("mydb")
-	mockTable := memory.NewTable(mockDatabase.BaseDatabase, tableName, sqlSch, nil)
+	mockTable := memory.NewLocalTable(mockDatabase.BaseDatabase, tableName, sqlSch, nil)
 	mockDatabase.AddTable(tableName, mockTable)
 	mockProvider := memory.NewDBProvider(mockDatabase)
 	catalog := analyzer.NewCatalog(mockProvider)

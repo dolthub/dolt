@@ -111,9 +111,9 @@ func (dt *CommitDiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 }
 
 // IndexedAccess implements sql.IndexAddressable
-func (dt *CommitDiffTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) (sql.IndexedTable, error) {
+func (dt *CommitDiffTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
 	nt := *dt
-	return &nt, nil
+	return &nt
 }
 
 func (dt *CommitDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
