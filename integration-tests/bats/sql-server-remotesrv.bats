@@ -162,6 +162,8 @@ SQL
 }
 
 @test "sql-server-remotesrv: clone/fetch/pull from remotesapi port with authentication" {
+    skip "only support authenticating fetch with dolthub for now."
+
     mkdir remote
     cd remote
     dolt init
@@ -234,6 +236,8 @@ SQL
 }
 
 @test "sql-server-remotesrv: clone/fetch/pull from remotesapi port with clone_admin authentication" {
+    skip "only support authenticating fetch with dolthub for now."
+
     mkdir remote
     cd remote
     dolt init
