@@ -753,16 +753,16 @@ SQL
     dolt push test-remote main
     run dolt fetch test-remote
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [ "$output" != "" ]  # spinner output
     run dolt fetch test-remote refs/heads/main:refs/remotes/test-remote/main
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [ "$output" != "" ]  # spinner output
     run dolt fetch poop refs/heads/main:refs/remotes/poop/main
     [ "$status" -eq 1 ]
     [[ "$output" =~ "unknown remote" ]] || false
     run dolt fetch test-remote refs/heads/main:refs/remotes/test-remote/poop
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [ "$output" != "" ]  # spinner output
     run dolt branch -v -a
     [ "$status" -eq 0 ]
     [[ "$output" =~ "remotes/test-remote/poop" ]] || false
@@ -847,10 +847,6 @@ SQL
     # The number of $lines and $output printed is non-deterministic
     # due to EphemeralPrinter. We can't test for their length here.
     [ "$output" != "" ]
-
-    run dolt fetch
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
 }
 
 @test "remotes: dolt fetch with docs" {
@@ -865,7 +861,7 @@ SQL
     dolt push test-remote main
     run dolt fetch test-remote
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [ "$output" != "" ]  # spinner output
     run cat README.md
     [ "$status" -eq 0 ]
     [[ "$output" =~ "initial-readme" ]] || false
