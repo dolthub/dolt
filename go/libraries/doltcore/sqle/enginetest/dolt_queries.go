@@ -2620,6 +2620,18 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 				Query: "use mydb/h4jks5lomp9u41r6902knn0pfr7lsgth",
 				ExpectedErrStr: "database not found: mydb/h4jks5lomp9u41r6902knn0pfr7lsgth",
 			},
+			{
+				Query: "select * from `mydb/b2`.t;",
+				ExpectedErrStr: "database not found: mydb/b2",
+			},
+			{
+				Query: "select * from `mydb/tag2`.t",
+				ExpectedErrStr: "database not found: mydb/tag2",
+			},
+			{
+				Query: "select * from `mydb/h4jks5lomp9u41r6902knn0pfr7lsgth`.t",
+				ExpectedErrStr: "database not found: mydb/h4jks5lomp9u41r6902knn0pfr7lsgth",
+			},
 		},
 	},
 }
