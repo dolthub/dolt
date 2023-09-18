@@ -160,8 +160,4 @@ require (
 
 replace github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 
-replace github.com/dolthub/go-mysql-server => ../../go-mysql-server
-
-replace github.com/dolthub/vitess => ../../vitess
-
 go 1.19
