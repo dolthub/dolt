@@ -333,7 +333,7 @@ func LoadCommitAddr(ctx context.Context, vr types.ValueReader, addr hash.Hash) (
 		return nil, err
 	}
 	if v == nil {
-		return nil, errors.New("target commit not found")
+		return nil, ErrCommitNotFound
 	}
 	return CommitFromValue(vr.Format(), v)
 }
