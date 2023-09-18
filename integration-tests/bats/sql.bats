@@ -2103,7 +2103,6 @@ SQL
 }
 
 @test "sql: date_format function" {
-    skip "date_format() not supported"
     dolt sql -q "select date_format(date_created, '%Y-%m-%d') from has_datetimes"
 }
 
@@ -2486,8 +2485,6 @@ SQL
 }
 
 @test "sql: found_row works with update properly in batch mode" {
-    skip "the auto commit semantics of batch mode make this fail"
-
     run dolt sql <<SQL
 CREATE TABLE tbl(pk int primary key, v1 int);
 INSERT INTO tbl VALUES (1,1), (2,1);
