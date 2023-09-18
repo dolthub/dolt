@@ -211,7 +211,7 @@ SQL
     dolt sql << SQL
 call dolt_checkout('-b', 'other');
 CREATE EVENT event12345
-ON SCHEDULE EVERY 0.5 SECOND STARTS CURRENT_TIMESTAMP
+ON SCHEDULE EVERY 1 SECOND STARTS CURRENT_TIMESTAMP
 DO INSERT INTO totals (int_col) VALUES (42);
 call dolt_commit('-Am', 'Adding a new recurring event');
 SQL
@@ -222,14 +222,16 @@ SQL
     [ $status -eq 0 ]
     [[ $output =~ "| 0  " ]] || false
 
-    # Merge our event from other back to main
+    # Merge our event from other back to main and enable it
     dolt sql << SQL
 call dolt_checkout('main');
 call dolt_merge('other');
+ALTER EVENT event12345 ENABLE;
+call dolt_commit('-am', 'committing enabled event');
 SQL
 
     # Verify that the new event starts executing on main after we merge it over
-    sleep 1
+    sleep 2
     run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT (SELECT COUNT(*) FROM totals) > 0;"
     [ $status -eq 0 ]
     [[ $output =~ "| 1  " ]] || false
