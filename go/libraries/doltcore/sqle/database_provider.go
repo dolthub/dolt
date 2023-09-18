@@ -22,7 +22,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -38,6 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -796,7 +796,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQual
 		if !ok {
 			return nil, false, nil
 		}
-		
+
 		db, err := revisionDbForCommit(ctx, srcDb.(Database), rev, requestedName)
 		if err != nil {
 			return nil, false, err
@@ -844,7 +844,7 @@ func revisionDbType(ctx *sql.Context, srcDb dsess.SqlDatabase, revSpec string) (
 		if err != nil {
 			return 0, "", err
 		}
-		
+
 		if valid {
 			return dsess.RevisionTypeCommit, resolvedRevSpec, nil
 		}
@@ -866,10 +866,10 @@ func isValidCommitHash(ctx *sql.Context, db dsess.SqlDatabase, commitHash string
 		} else if err != nil {
 			return false, err
 		}
-		
+
 		return true, nil
 	}
-	
+
 	return false, nil
 }
 

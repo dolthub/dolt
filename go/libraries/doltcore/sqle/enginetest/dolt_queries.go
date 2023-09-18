@@ -2601,35 +2601,35 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "use mydb/b1",
+				Query:    "use mydb/b1",
 				Expected: []sql.Row{},
 			},
 			{
-				Query: "use mydb/b2",
+				Query:          "use mydb/b2",
 				ExpectedErrStr: "database not found: mydb/b2",
 			},
 			{
-				Query: "use mydb/tag1",
+				Query:    "use mydb/tag1",
 				Expected: []sql.Row{},
 			},
 			{
-				Query: "use mydb/tag2",
+				Query:          "use mydb/tag2",
 				ExpectedErrStr: "database not found: mydb/tag2",
 			},
 			{
-				Query: "use mydb/h4jks5lomp9u41r6902knn0pfr7lsgth",
+				Query:          "use mydb/h4jks5lomp9u41r6902knn0pfr7lsgth",
 				ExpectedErrStr: "database not found: mydb/h4jks5lomp9u41r6902knn0pfr7lsgth",
 			},
 			{
-				Query: "select * from `mydb/b2`.t;",
+				Query:          "select * from `mydb/b2`.t;",
 				ExpectedErrStr: "database not found: mydb/b2",
 			},
 			{
-				Query: "select * from `mydb/tag2`.t",
+				Query:          "select * from `mydb/tag2`.t",
 				ExpectedErrStr: "database not found: mydb/tag2",
 			},
 			{
-				Query: "select * from `mydb/h4jks5lomp9u41r6902knn0pfr7lsgth`.t",
+				Query:          "select * from `mydb/h4jks5lomp9u41r6902knn0pfr7lsgth`.t",
 				ExpectedErrStr: "database not found: mydb/h4jks5lomp9u41r6902knn0pfr7lsgth",
 			},
 		},
