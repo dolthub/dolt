@@ -180,9 +180,8 @@ func (tbl BranchNamespaceControlTable) Insert(ctx *sql.Context, row sql.Row) err
 	if branchAwareSession := branch_control.GetBranchAwareSession(ctx); branchAwareSession != nil &&
 		// Having the correct database privileges also allows the insertion
 		!branch_control.HasDatabasePrivileges(branchAwareSession, database) {
-		// Need to acquire a read lock on the Access table since we have to read from it
-		tbl.Access().RWMutex.RLock()
-		defer tbl.Access().RWMutex.RUnlock()
+
+		// tbl.Access() shares a lock with the namespace table. No need to acquire its lock.
 
 		insertUser := branchAwareSession.GetUser()
 		insertHost := branchAwareSession.GetHost()
@@ -229,9 +228,7 @@ func (tbl BranchNamespaceControlTable) Update(ctx *sql.Context, old sql.Row, new
 
 	// A nil session means we're not in the SQL context, so we'd allow the update in such a case
 	if branchAwareSession := branch_control.GetBranchAwareSession(ctx); branchAwareSession != nil {
-		// Need to acquire a read lock on the Access table since we have to read from it
-		tbl.Access().RWMutex.RLock()
-		defer tbl.Access().RWMutex.RUnlock()
+		// tbl.Access() shares a lock with the namespace table. No need to acquire its lock.
 
 		insertUser := branchAwareSession.GetUser()
 		insertHost := branchAwareSession.GetHost()
@@ -276,9 +273,8 @@ func (tbl BranchNamespaceControlTable) Delete(ctx *sql.Context, row sql.Row) err
 	if branchAwareSession := branch_control.GetBranchAwareSession(ctx); branchAwareSession != nil &&
 		// Having the correct database privileges also allows the deletion
 		!branch_control.HasDatabasePrivileges(branchAwareSession, database) {
-		// Need to acquire a read lock on the Access table since we have to read from it
-		tbl.Access().RWMutex.RLock()
-		defer tbl.Access().RWMutex.RUnlock()
+
+		// tbl.Access() shares a lock with the namespace table. No need to acquire its lock.
 
 		insertUser := branchAwareSession.GetUser()
 		insertHost := branchAwareSession.GetHost()

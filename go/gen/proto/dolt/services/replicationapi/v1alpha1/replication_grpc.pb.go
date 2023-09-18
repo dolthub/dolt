@@ -44,6 +44,7 @@ type ReplicationServiceClient interface {
 	// of the `*MySQLDb` instance at the primary, such that it can be applied
 	// with OverwriteUsersAndGrantData.
 	UpdateUsersAndGrants(ctx context.Context, in *UpdateUsersAndGrantsRequest, opts ...grpc.CallOption) (*UpdateUsersAndGrantsResponse, error)
+	UpdateBranchControl(ctx context.Context, in *UpdateBranchControlRequest, opts ...grpc.CallOption) (*UpdateBranchControlResponse, error)
 }
 
 type replicationServiceClient struct {
@@ -63,6 +64,15 @@ func (c *replicationServiceClient) UpdateUsersAndGrants(ctx context.Context, in 
 	return out, nil
 }
 
+func (c *replicationServiceClient) UpdateBranchControl(ctx context.Context, in *UpdateBranchControlRequest, opts ...grpc.CallOption) (*UpdateBranchControlResponse, error) {
+	out := new(UpdateBranchControlResponse)
+	err := c.cc.Invoke(ctx, "/dolt.services.replicationapi.v1alpha1.ReplicationService/UpdateBranchControl", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ReplicationServiceServer is the server API for ReplicationService service.
 // All implementations must embed UnimplementedReplicationServiceServer
 // for forward compatibility
@@ -74,6 +84,7 @@ type ReplicationServiceServer interface {
 	// of the `*MySQLDb` instance at the primary, such that it can be applied
 	// with OverwriteUsersAndGrantData.
 	UpdateUsersAndGrants(context.Context, *UpdateUsersAndGrantsRequest) (*UpdateUsersAndGrantsResponse, error)
+	UpdateBranchControl(context.Context, *UpdateBranchControlRequest) (*UpdateBranchControlResponse, error)
 	mustEmbedUnimplementedReplicationServiceServer()
 }
 
@@ -83,6 +94,9 @@ type UnimplementedReplicationServiceServer struct {
 
 func (UnimplementedReplicationServiceServer) UpdateUsersAndGrants(context.Context, *UpdateUsersAndGrantsRequest) (*UpdateUsersAndGrantsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateUsersAndGrants not implemented")
+}
+func (UnimplementedReplicationServiceServer) UpdateBranchControl(context.Context, *UpdateBranchControlRequest) (*UpdateBranchControlResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateBranchControl not implemented")
 }
 func (UnimplementedReplicationServiceServer) mustEmbedUnimplementedReplicationServiceServer() {}
 
@@ -115,6 +129,24 @@ func _ReplicationService_UpdateUsersAndGrants_Handler(srv interface{}, ctx conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ReplicationService_UpdateBranchControl_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateBranchControlRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReplicationServiceServer).UpdateBranchControl(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dolt.services.replicationapi.v1alpha1.ReplicationService/UpdateBranchControl",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReplicationServiceServer).UpdateBranchControl(ctx, req.(*UpdateBranchControlRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ReplicationService_ServiceDesc is the grpc.ServiceDesc for ReplicationService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -125,6 +157,10 @@ var ReplicationService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateUsersAndGrants",
 			Handler:    _ReplicationService_UpdateUsersAndGrants_Handler,
+		},
+		{
+			MethodName: "UpdateBranchControl",
+			Handler:    _ReplicationService_UpdateBranchControl_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
