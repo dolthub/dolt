@@ -542,6 +542,16 @@ func (t *WritableDoltTable) getFullTextEditor(ctx *sql.Context) (fulltext.TableE
 	if err != nil {
 		return fulltext.TableEditor{}, err
 	}
+	
+	configTable, sets, err := t.fulltextTableSets(ctx, workingRoot)
+	if err != nil {
+		return fulltext.TableEditor{}, err
+	}
+
+	return fulltext.CreateEditor(ctx, t, configTable, sets...)
+}
+
+func (t *WritableDoltTable) fulltextTableSets(ctx *sql.Context, workingRoot *doltdb.RootValue) (fulltext.EditableTable, []fulltext.TableSet, error) {
 	var configTable fulltext.EditableTable
 	var sets []fulltext.TableSet
 	for _, idx := range t.sch.Indexes().AllIndexes() {
@@ -550,44 +560,45 @@ func (t *WritableDoltTable) getFullTextEditor(ctx *sql.Context) (fulltext.TableE
 		}
 		props := idx.FullTextProperties()
 		// We only load the config table once since it's shared by all indexes
+		// TODO: should this load directly from the root, bypassing the session?
 		if configTable == nil {
 			tbl, ok, err := t.db.getTable(ctx, workingRoot, props.ConfigTable)
 			if err != nil {
-				return fulltext.TableEditor{}, err
+				return nil, nil, err
 			} else if !ok {
-				return fulltext.TableEditor{}, fmt.Errorf("missing Full-Text table: %s", props.ConfigTable)
+				return nil, nil, fmt.Errorf("missing Full-Text table: %s", props.ConfigTable)
 			}
 			configTable = tbl.(fulltext.EditableTable)
 		}
 		// Load the rest of the tables
 		positionTable, ok, err := t.db.getTable(ctx, workingRoot, props.PositionTable)
 		if err != nil {
-			return fulltext.TableEditor{}, err
+			return nil, nil, err
 		} else if !ok {
-			return fulltext.TableEditor{}, fmt.Errorf("missing Full-Text table: %s", props.PositionTable)
+			return nil, nil, fmt.Errorf("missing Full-Text table: %s", props.PositionTable)
 		}
 		docCountTable, ok, err := t.db.getTable(ctx, workingRoot, props.DocCountTable)
 		if err != nil {
-			return fulltext.TableEditor{}, err
+			return nil, nil, err
 		} else if !ok {
-			return fulltext.TableEditor{}, fmt.Errorf("missing Full-Text table: %s", props.DocCountTable)
+			return nil, nil, fmt.Errorf("missing Full-Text table: %s", props.DocCountTable)
 		}
 		globalCountTable, ok, err := t.db.getTable(ctx, workingRoot, props.GlobalCountTable)
 		if err != nil {
-			return fulltext.TableEditor{}, err
+			return nil, nil, err
 		} else if !ok {
-			return fulltext.TableEditor{}, fmt.Errorf("missing Full-Text table: %s", props.GlobalCountTable)
+			return nil, nil, fmt.Errorf("missing Full-Text table: %s", props.GlobalCountTable)
 		}
 		rowCountTable, ok, err := t.db.getTable(ctx, workingRoot, props.RowCountTable)
 		if err != nil {
-			return fulltext.TableEditor{}, err
+			return nil, nil, err
 		} else if !ok {
-			return fulltext.TableEditor{}, fmt.Errorf("missing Full-Text table: %s", props.RowCountTable)
+			return nil, nil, fmt.Errorf("missing Full-Text table: %s", props.RowCountTable)
 		}
 		// Convert the index into a sql.Index
 		sqlIdx, err := index.ConvertFullTextToSql(ctx, t.db.RevisionQualifiedName(), t.tableName, t.sch, idx)
 		if err != nil {
-			return fulltext.TableEditor{}, err
+			return nil, nil, err
 		}
 
 		sets = append(sets, fulltext.TableSet{
@@ -598,8 +609,106 @@ func (t *WritableDoltTable) getFullTextEditor(ctx *sql.Context) (fulltext.TableE
 			RowCount:    rowCountTable.(fulltext.EditableTable),
 		})
 	}
+	return configTable, sets, nil
+}
+
+// getFullTextRewriteEditor gathers all pseudo-index tables for a Full-Text index and returns an editor that will write
+// to all of them. This assumes that there are Full-Text indexes in the schema.
+func (t *WritableDoltTable) getFullTextRewriteEditor(ctx *sql.Context, workingRoot *doltdb.RootValue) (fulltext.TableEditor, error) {
+	configTable, sets, err := t.fulltextTableSets(ctx, workingRoot)
+	if err != nil {
+		return fulltext.TableEditor{}, err
+	}
+	
+	// truncate each of the fullset tables in each set before returning them
+	_, insertCols, err := fulltext.GetKeyColumns(ctx, t)
+	if err != nil {
+		return fulltext.TableEditor{}, err
+	}
+
+	for _, set := range sets {
+		positionSch, err := fulltext.NewSchema(fulltext.SchemaPosition, insertCols, set.Position.Name(), t.Collation())
+		if err != nil {
+			return fulltext.TableEditor{}, err
+		}
+		
+		posTable, err := emptyFulltextTable(ctx, t, workingRoot, set.Position, positionSch)
+		if err != nil {
+			return fulltext.TableEditor{}, err
+		}
+
+		docCountSch, err := fulltext.NewSchema(fulltext.SchemaDocCount, insertCols, set.DocCount.Name(), t.Collation())
+		if err != nil {
+			return fulltext.TableEditor{}, err
+		}
+		
+		dcTable, err := emptyFulltextTable(ctx, t, workingRoot, set.DocCount, docCountSch)
+		if err != nil {
+			return fulltext.TableEditor{}, err
+		}
+
+		globalCountSch, err := fulltext.NewSchema(fulltext.SchemaGlobalCount, nil, set.GlobalCount.Name(), t.Collation())
+		if err != nil {
+			return fulltext.TableEditor{}, err
+		}
+		
+		gcTable, err := emptyFulltextTable(ctx, t, workingRoot, set.GlobalCount, globalCountSch)
+		if err != nil {
+			return fulltext.TableEditor{}, err
+		}
+
+		rowCountSch, err := fulltext.NewSchema(fulltext.SchemaRowCount, nil, set.RowCount.Name(), t.Collation())
+		if err != nil {
+			return fulltext.TableEditor{}, err
+		}
+		
+		rcTable, err := emptyFulltextTable(ctx, t, workingRoot, set.RowCount, rowCountSch)
+		if err != nil {
+			return fulltext.TableEditor{}, err
+		}
+
+		set.Position = posTable
+		set.DocCount = dcTable
+		set.GlobalCount = gcTable
+		set.RowCount = rcTable
+	}
 
 	return fulltext.CreateEditor(ctx, t, configTable, sets...)
+}
+
+func emptyFulltextTable(ctx *sql.Context, parentTable *WritableDoltTable, workingRoot *doltdb.RootValue, fulltextTable fulltext.EditableTable, fulltextSch sql.Schema) (fulltext.EditableTable, error) {
+	doltTable, ok := fulltextTable.(*AlterableDoltTable)
+	if !ok {
+		return nil, fmt.Errorf("unexpected row count table type: %T", fulltextTable)
+	}
+
+	// TODO: this should be the head root, not working root
+	doltSchema, err := sqlutil.ToDoltSchema(ctx, workingRoot, doltTable.tableName, sql.NewPrimaryKeySchema(fulltextSch), workingRoot, parentTable.Collation())
+	if err != nil {
+		return nil, err
+	}
+
+	dt, err := doltTable.DoltTable.DoltTable(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	empty, err := durable.NewEmptyIndex(ctx, dt.ValueReadWriter(), dt.NodeStore(), doltSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	dt, err = doltdb.NewTable(ctx, dt.ValueReadWriter(), dt.NodeStore(), doltSchema, empty, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	newTable, err := parentTable.db.newDoltTable(fulltextTable.Name(), doltSchema, dt)
+	if err != nil {
+		return nil, err
+	}
+	
+	return newTable.(fulltext.EditableTable), nil
 }
 
 // Deleter implements sql.DeletableTable
@@ -1436,7 +1545,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 	}
 	
 	// Truncate all the full text tables as well, for the same reason
-	
+
 	newRoot, err := ws.WorkingRoot().PutTable(ctx, t.Name(), dt)
 	if err != nil {
 		return nil, err
@@ -1469,6 +1578,19 @@ func (t *AlterableDoltTable) RewriteInserter(
 	if err != nil {
 		return nil, err
 	}
+
+	if t.sch.Indexes().ContainsFullTextIndex() {
+		ftEditor, err := t.getFullTextEditor(ctx)
+		if err != nil {
+			return nil, err
+		}
+		multiEditor, err := fulltext.CreateMultiTableEditor(ctx, ed, ftEditor)
+		if err != nil {
+			return nil, err
+		}
+		return multiEditor.(writer.TableWriter), nil
+	}
+
 
 	return ed, nil
 }
@@ -1943,7 +2065,7 @@ func (t *AlterableDoltTable) RenameIndex(ctx *sql.Context, fromIndexName string,
 // CreateFulltextIndex implements fulltext.IndexAlterableTable
 func (t *AlterableDoltTable) CreateFulltextIndex(ctx *sql.Context, idx sql.IndexDef, keyCols fulltext.KeyColumns, tableNames fulltext.IndexTableNames) error {
 	if !types.IsFormat_DOLT(t.Format()) {
-		return fmt.Errorf("FULLTEXT is not supported on our old format")
+		return fmt.Errorf("FULLTEXT is not supported on storage format %s. Run `dolt migrate` to upgrade to the latest storage format.", t.Format())
 	}
 	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
 		return err
