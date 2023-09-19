@@ -1434,18 +1434,16 @@ func (t *AlterableDoltTable) RewriteInserter(
 	if err != nil {
 		return nil, err
 	}
-
-	// We can't just call getTableEditor here because it uses the session state, which we can't update until after the
-	// rewrite operation
-	opts := dbState.WriteSession().GetOptions()
-	opts.ForeignKeyChecksDisabled = true
-
+	
+	// Truncate all the full text tables as well, for the same reason
+	
 	newRoot, err := ws.WorkingRoot().PutTable(ctx, t.Name(), dt)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(oldSchema.PkOrdinals) > 0 && len(newSchema.PkOrdinals) == 0 {
+	isPrimaryKeyDrop := len(oldSchema.PkOrdinals) > 0 && len(newSchema.PkOrdinals) == 0
+	if isPrimaryKeyDrop {
 		newRoot, err = t.adjustForeignKeysForDroppedPk(ctx, t.Name(), newRoot)
 		if err != nil {
 			return nil, err
@@ -1461,7 +1459,12 @@ func (t *AlterableDoltTable) RewriteInserter(
 		return nil, err
 	}
 
+	// We can't just call getTableEditor here because it uses the session state, which we can't update until after the
+	// rewrite operation
+	opts := dbState.WriteSession().GetOptions()
+	opts.ForeignKeyChecksDisabled = true
 	writeSession := writer.NewWriteSession(dt.Format(), newWs, ait, opts)
+	
 	ed, err := writeSession.GetTableWriter(ctx, t.Name(), t.db.RevisionQualifiedName(), sess.SetRoot)
 	if err != nil {
 		return nil, err

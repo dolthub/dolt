@@ -119,27 +119,19 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "merge constraint with valid data on different branches",
+			Name: "ALTER TABLE ADD COLUMN",
 			SetUpScript: []string{
-				"create table t (i int)",
-				"call dolt_commit('-Am', 'initial commit')",
-
-				"call dolt_checkout('-b', 'other')",
-				"insert into t values (1)",
-				"call dolt_commit('-Am', 'changes to other')",
-
-				"call dolt_checkout('main')",
-				"alter table t add check (i < 10)",
-				"call dolt_commit('-Am', 'changes to main')",
+				"CREATE TABLE test (pk BIGINT UNSIGNED PRIMARY KEY, v1 VARCHAR(200), v2 VARCHAR(200), FULLTEXT idx (v1, v2));",
+				"INSERT INTO test VALUES (1, 'abc', 'def pqr'), (2, 'ghi', 'jkl'), (3, 'mno', 'mno'), (4, 'stu vwx', 'xyz zyx yzx'), (5, 'ghs', 'mno shg');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "CALL DOLT_MERGE('other');",
-					Expected: []sql.Row{{doltCommit, 0, 0}},
+					Query:    "ALTER TABLE test ADD COLUMN v3 FLOAT DEFAULT 7 FIRST;",
+					Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
 				},
 				{
-					Query:    "select * from t",
-					Expected: []sql.Row{{1}},
+					Query:    "SELECT * FROM test WHERE MATCH(v1, v2) AGAINST ('ghi');",
+					Expected: []sql.Row{{float32(7), uint64(2), "ghi", "jkl"}},
 				},
 			},
 		},
