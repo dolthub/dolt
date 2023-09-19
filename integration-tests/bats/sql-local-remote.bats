@@ -1128,3 +1128,30 @@ SQL
 
     [[ "$localOutput" == "$remoteOutput" ]] || false
 }
+
+@test "sql-local-remote: verify dolt fetch behavior" {
+    mkdir remote
+    cd altDB
+    dolt remote add origin file://../remote
+    dolt commit --allow-empty -m "cm1"
+    dolt push origin main
+
+    cd ../defaultDB
+    dolt remote add origin file://../remote
+
+    dolt fetch
+    run dolt log origin/main
+    [ $status -eq 0 ]
+    [[ "$output" =~ "cm1" ]] || false
+
+    cd ../altDB
+    dolt commit --allow-empty -m "cm2"
+    dolt push origin main
+    cd ../defaultDB
+
+    start_sql_server defaultDB
+    dolt fetch
+    run dolt log origin/main
+    [ $status -eq 0 ]
+    [[ "$output" =~ "cm2" ]] || false
+}

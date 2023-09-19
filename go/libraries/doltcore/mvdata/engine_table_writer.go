@@ -325,7 +325,14 @@ func (s *SqlEngineTableWriter) getInsertNode(inputChannel chan sql.Row, replace 
 		newC.Source = planbuilder.OnDupValuesPrefix
 		schema[i] = newC
 	}
-	parsedIns.Source = NewChannelRowSource(schema, inputChannel)
+
+	switch n := parsedIns.Source.(type) {
+	case *plan.Values:
+		parsedIns.Source = NewChannelRowSource(schema, inputChannel)
+	case *plan.Project:
+		n.Child = NewChannelRowSource(schema, inputChannel)
+	}
+
 	parsedIns.Ignore = s.contOnErr
 	parsedIns.IsReplace = replace
 	analyzed, err := s.se.Analyze(s.sqlCtx, parsedIns)

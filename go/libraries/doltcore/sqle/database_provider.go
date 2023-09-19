@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -36,6 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -794,6 +796,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQual
 		if !ok {
 			return nil, false, nil
 		}
+
 		db, err := revisionDbForCommit(ctx, srcDb.(Database), rev, requestedName)
 		if err != nil {
 			return nil, false, err
@@ -814,12 +817,12 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQual
 func revisionDbType(ctx *sql.Context, srcDb dsess.SqlDatabase, revSpec string) (revType dsess.RevisionType, resolvedRevSpec string, err error) {
 	resolvedRevSpec, err = resolveAncestorSpec(ctx, revSpec, srcDb.DbData().Ddb)
 	if err != nil {
-		return 0, "", err
+		return dsess.RevisionTypeNone, "", err
 	}
 
 	caseSensitiveBranchName, isBranch, err := isBranch(ctx, srcDb, resolvedRevSpec)
 	if err != nil {
-		return 0, "", err
+		return dsess.RevisionTypeNone, "", err
 	}
 
 	if isBranch {
@@ -828,7 +831,7 @@ func revisionDbType(ctx *sql.Context, srcDb dsess.SqlDatabase, revSpec string) (
 
 	isTag, err := isTag(ctx, srcDb, resolvedRevSpec)
 	if err != nil {
-		return 0, "", err
+		return dsess.RevisionTypeNone, "", err
 	}
 
 	if isTag {
@@ -836,10 +839,38 @@ func revisionDbType(ctx *sql.Context, srcDb dsess.SqlDatabase, revSpec string) (
 	}
 
 	if doltdb.IsValidCommitHash(resolvedRevSpec) {
-		return dsess.RevisionTypeCommit, resolvedRevSpec, nil
+		// IsValidCommitHash just checks a regex, we need to see if the commit actually exists
+		valid, err := isValidCommitHash(ctx, srcDb, resolvedRevSpec)
+		if err != nil {
+			return 0, "", err
+		}
+
+		if valid {
+			return dsess.RevisionTypeCommit, resolvedRevSpec, nil
+		}
 	}
 
 	return dsess.RevisionTypeNone, "", nil
+}
+
+func isValidCommitHash(ctx *sql.Context, db dsess.SqlDatabase, commitHash string) (bool, error) {
+	cs, err := doltdb.NewCommitSpec(commitHash)
+	if err != nil {
+		return false, err
+	}
+
+	for _, ddb := range db.DoltDatabases() {
+		_, err = ddb.Resolve(ctx, cs, nil)
+		if errors.Is(err, datas.ErrCommitNotFound) {
+			continue
+		} else if err != nil {
+			return false, err
+		}
+
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func initialDbState(ctx context.Context, db dsess.SqlDatabase, branch string) (dsess.InitialDbState, error) {

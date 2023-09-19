@@ -139,33 +139,6 @@ func (binlog *Binlog) Deserialize(fb *serial.BranchControlBinlog) error {
 	return nil
 }
 
-// NewOverlay returns a new BinlogOverlay for the calling Binlog.
-func (binlog *Binlog) NewOverlay() *BinlogOverlay {
-	binlog.RWMutex.RLock()
-	defer binlog.RWMutex.RUnlock()
-
-	return &BinlogOverlay{
-		parentLength: len(binlog.rows),
-		rows:         nil,
-	}
-}
-
-// MergeOverlay merges the given BinlogOverlay with the calling Binlog. Fails if the Binlog has been written to since
-// the overlay was created.
-func (binlog *Binlog) MergeOverlay(overlay *BinlogOverlay) error {
-	binlog.RWMutex.Lock()
-	defer binlog.RWMutex.Unlock()
-
-	// Except for recovery situations, the binlog is an append-only structure, therefore if there are a different number
-	// of entries than when the overlay was created, then it has probably been written to. The likelihood of there being
-	// an outstanding overlay while the binlog is being modified is exceedingly low.
-	if len(binlog.rows) != overlay.parentLength {
-		return fmt.Errorf("cannot merge overlay as binlog has been modified")
-	}
-	binlog.rows = append(binlog.rows, overlay.rows...)
-	return nil
-}
-
 // Insert adds an insert entry to the Binlog.
 func (binlog *Binlog) Insert(database string, branch string, user string, host string, permissions uint64) {
 	binlog.RWMutex.Lock()
@@ -216,28 +189,4 @@ func (row *BinlogRow) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
 	serial.BranchControlBinlogRowAddHost(b, host)
 	serial.BranchControlBinlogRowAddPermissions(b, row.Permissions)
 	return serial.BranchControlBinlogRowEnd(b)
-}
-
-// Insert adds an insert entry to the BinlogOverlay.
-func (overlay *BinlogOverlay) Insert(database string, branch string, user string, host string, permissions uint64) {
-	overlay.rows = append(overlay.rows, BinlogRow{
-		IsInsert:    true,
-		Database:    database,
-		Branch:      branch,
-		User:        user,
-		Host:        host,
-		Permissions: permissions,
-	})
-}
-
-// Delete adds a delete entry to the BinlogOverlay.
-func (overlay *BinlogOverlay) Delete(database string, branch string, user string, host string, permissions uint64) {
-	overlay.rows = append(overlay.rows, BinlogRow{
-		IsInsert:    false,
-		Database:    database,
-		Branch:      branch,
-		User:        user,
-		Host:        host,
-		Permissions: permissions,
-	})
 }

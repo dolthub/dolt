@@ -65,3 +65,126 @@ tests:
       result:
         columns: ["count(*)"]
         rows: [["15"]]
+- name: branch control replicates
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:3852/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3851
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3309
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3310
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:3851/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3852
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3310
+  connections:
+  - on: server1
+    queries:
+    - exec: 'SET @@PERSIST.dolt_cluster_ack_writes_timeout_secs = 10'
+    - exec: 'create database repo1'
+    - exec: "use repo1"
+    - exec: 'create table vals (i int primary key)'
+    - exec: 'insert into vals values (0),(1),(2),(3),(4)'
+    - exec: 'create user "aaron"@"%" IDENTIFIED BY "aaronspassword"'
+    - exec: 'grant ALL ON *.* to "aaron"@"%"'
+    - exec: 'create user "brian"@"%" IDENTIFIED BY "brianpassword"'
+    - exec: 'grant ALL ON *.* to "brian"@"%"'
+    - exec: 'delete from dolt_branch_control'
+    - exec: 'insert into dolt_branch_control values ("repo1", "main", "aaron", "%", "admin")'
+  - on: server1
+    user: 'aaron'
+    password: 'aaronspassword'
+    queries:
+    - exec: "use repo1"
+    - exec: 'insert into vals values (5),(6),(7),(8),(9)'
+    - exec: 'insert into vals values (10),(11),(12),(13),(14)'
+# Assert brian cannot write to `main` on server1
+  - on: server1
+    user: 'brian'
+    password: 'brianpassword'
+    queries:
+    - exec: "use repo1"
+    - exec: 'insert into vals values (15),(16),(17),(18),(19)'
+      error_match: 'does not have the correct permissions on branch `main`'
+# Failover to `server2` so we can assert brian is restricted there as well.
+  - on: server1
+    queries:
+    - exec: "use repo1"
+    - exec: "call dolt_assume_cluster_role('standby', 2)"
+  - on: server2
+    queries:
+    - exec: "use repo1"
+    - exec: "call dolt_assume_cluster_role('primary', 2)"
+# Assert aaron can write to main on server2 and brian cannot.
+  - on: server2
+    user: 'aaron'
+    password: 'aaronspassword'
+    queries:
+    - exec: "use repo1"
+    - query: 'select count(*) from vals'
+      result:
+        columns: ["count(*)"]
+        rows: [["15"]]
+    - exec: 'insert into vals values (20),(21),(22),(23),(24)'
+  - on: server2
+    user: 'brian'
+    password: 'brianpassword'
+    queries:
+    - exec: "use repo1"
+    - query: 'select count(*) from vals'
+      result:
+        columns: ["count(*)"]
+        rows: [["20"]]
+    - exec: 'insert into vals values (25),(26),(27),(28),(29)'
+      error_match: 'does not have the correct permissions on branch `main`'
+# Now we are going to grant brian permission, and fail back over to server1,
+# and ensure brian can write to the branch there.
+  - on: server2
+    user: 'aaron'
+    password: 'aaronspassword'
+    queries:
+    - exec: "use repo1"
+    - exec: 'insert into dolt_branch_control values ("repo1", "main", "brian", "%", "write")'
+    - exec: 'insert into vals values (30)'
+  - on: server2
+    queries:
+    - exec: 'call dolt_assume_cluster_role("standby", 3)'
+  - on: server1
+    queries:
+    - exec: "use repo1"
+    - exec: 'call dolt_assume_cluster_role("primary", 3)'
+# Here brian should be allowed to write now.
+  - on: server1
+    user: 'brian'
+    password: 'brianpassword'
+    queries:
+    - exec: "use repo1"
+    - exec: 'insert into vals values (31)'

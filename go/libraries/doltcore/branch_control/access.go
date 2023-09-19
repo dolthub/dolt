@@ -64,13 +64,7 @@ type AccessRowIter struct {
 // newAccess returns a new Access.
 func newAccess() *Access {
 	return &Access{
-		Root: &MatchNode{
-			SortOrders: []int32{columnMarker},
-			Children:   make(map[int32]*MatchNode),
-			Data:       nil,
-		},
 		RWMutex: &sync.RWMutex{},
-		binlog:  NewAccessBinlog(nil),
 	}
 }
 
@@ -98,9 +92,6 @@ func (tbl *Access) GetBinlog() *Binlog {
 
 // Serialize returns the offset for the Access table written to the given builder.
 func (tbl *Access) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
-	tbl.RWMutex.RLock()
-	defer tbl.RWMutex.RUnlock()
-
 	// Serialize the binlog
 	binlog := tbl.binlog.Serialize(b)
 	serial.BranchControlAccessStart(b)
@@ -108,11 +99,19 @@ func (tbl *Access) Serialize(b *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return serial.BranchControlAccessEnd(b)
 }
 
+func (tbl *Access) reinit() {
+	tbl.Root = &MatchNode{
+		SortOrders: []int32{columnMarker},
+		Children:   make(map[int32]*MatchNode),
+		Data:       nil,
+	}
+	tbl.binlog = NewAccessBinlog(nil)
+	tbl.rows = nil
+	tbl.freeRows = nil
+}
+
 // Deserialize populates the table with the data from the flatbuffers representation.
 func (tbl *Access) Deserialize(fb *serial.BranchControlAccess) error {
-	tbl.RWMutex.Lock()
-	defer tbl.RWMutex.Unlock()
-
 	// Read the binlog
 	fbBinlog, err := fb.TryBinlog(nil)
 	if err != nil {
@@ -122,6 +121,9 @@ func (tbl *Access) Deserialize(fb *serial.BranchControlAccess) error {
 	if err = binlog.Deserialize(fbBinlog); err != nil {
 		return err
 	}
+
+	tbl.reinit()
+
 	// Recreate the table from the binlog
 	for _, binlogRow := range binlog.rows {
 		if binlogRow.IsInsert {
@@ -136,6 +138,7 @@ func (tbl *Access) Deserialize(fb *serial.BranchControlAccess) error {
 // insertDefaultRow adds a row that allows all users to access and modify all branches, but does not allow them to
 // modify any branch control tables. This was the default behavior of Dolt before the introduction of branch permissions.
 func (tbl *Access) insertDefaultRow() {
+	tbl.reinit()
 	tbl.Insert("%", "%", "%", "%", Permissions_Write)
 }
 

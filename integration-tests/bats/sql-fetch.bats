@@ -19,7 +19,7 @@ setup() {
     dolt branch feature
     dolt remote add test-remote file://../rem1
 
-    # table and comits only present on repo1, rem1 at start
+    # table and commits only present on repo1, rem1 at start
     cd $TMPDIRS/repo1
     dolt sql -q "create table t1 (a int primary key, b int)"
     dolt add .

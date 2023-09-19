@@ -26,6 +26,8 @@ service ReplicationService {
   // of the `*MySQLDb` instance at the primary, such that it can be applied
   // with OverwriteUsersAndGrantData.
   rpc UpdateUsersAndGrants(UpdateUsersAndGrantsRequest) returns (UpdateUsersAndGrantsResponse);
+
+  rpc UpdateBranchControl(UpdateBranchControlRequest) returns (UpdateBranchControlResponse);
 }
 
 message UpdateUsersAndGrantsRequest {
@@ -35,4 +37,12 @@ message UpdateUsersAndGrantsRequest {
 }
 
 message UpdateUsersAndGrantsResponse {
+}
+
+message UpdateBranchControlRequest {
+  // The serialized contents of the branch_control.Controller.
+  bytes serialized_contents = 1;
+}
+
+message UpdateBranchControlResponse {
 }
