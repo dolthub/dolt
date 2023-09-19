@@ -1466,63 +1466,14 @@ func (t *AlterableDoltTable) RewriteInserter(
 	}
 	newSch = schema.CopyChecksConstraints(oldSch, newSch)
 
+	isModifyColumn := newColumn != nil && oldColumn != nil
 	if isColumnDrop(oldSchema, newSchema) {
-		newSch = schema.CopyIndexes(oldSch, newSch)
-		droppedCol := getDroppedColumn(oldSchema, newSchema)
-		for _, index := range newSch.Indexes().IndexesWithColumn(droppedCol.Name) {
-			_, err = newSch.Indexes().RemoveIndex(index.Name())
-			if err != nil {
-				return nil, err
-			}
+		newSch, err = dropIndexesOnDroppedColumn(newSch, oldSch, oldSchema, newSchema, err)
+		if err != nil {
+			return nil, err
 		}
-	} else if newColumn != nil && oldColumn != nil { // modify column
-		// It may be possible to optimize this and not always rewrite every index, but since we're already truncating the
-		// table to rewrite it we also truncate all the indexes. Much easier to get right.
-		for _, index := range oldSch.Indexes().AllIndexes() {
-			var colNames []string
-			prefixLengths := index.PrefixLengths()
-			for i, colName := range index.ColumnNames() {
-				if strings.ToLower(oldColumn.Name) == strings.ToLower(colName) {
-					colNames = append(colNames, newColumn.Name)
-					if len(prefixLengths) > 0 {
-						if !sqltypes.IsText(newColumn.Type) {
-							// drop prefix lengths if column is not a string type
-							prefixLengths[i] = 0
-						} else if uint32(prefixLengths[i]) > newColumn.Type.MaxTextResponseByteLength(ctx) {
-							// drop prefix length if prefixLength is too long
-							prefixLengths[i] = 0
-						}
-					}
-				} else {
-					colNames = append(colNames, colName)
-				}
-			}
-
-			// check if prefixLengths should be dropped entirely
-			var nonZeroPrefixLength bool
-			for _, prefixLength := range prefixLengths {
-				if prefixLength > 0 {
-					nonZeroPrefixLength = true
-					break
-				}
-			}
-			if !nonZeroPrefixLength {
-				prefixLengths = nil
-			}
-
-			newSch.Indexes().AddIndexByColNames(
-				index.Name(),
-				colNames,
-				prefixLengths,
-				schema.IndexProperties{
-					IsUnique:           index.IsUnique(),
-					IsSpatial:          index.IsSpatial(),
-					IsFullText:         index.IsFullText(),
-					IsUserDefined:      index.IsUserDefined(),
-					Comment:            index.Comment(),
-					FullTextProperties: index.FullTextProperties(),
-				})
-		}
+	} else if isModifyColumn { // modify column
+		newSch = modifyIndexesForTableRewrite(ctx, oldSch, oldColumn, newColumn, newSch)
 	} else {
 		newSch = schema.CopyIndexes(oldSch, newSch)
 	}
@@ -1544,8 +1495,6 @@ func (t *AlterableDoltTable) RewriteInserter(
 		return nil, err
 	}
 	
-	// Truncate all the full text tables as well, for the same reason
-
 	newRoot, err := ws.WorkingRoot().PutTable(ctx, t.Name(), dt)
 	if err != nil {
 		return nil, err
@@ -1573,14 +1522,19 @@ func (t *AlterableDoltTable) RewriteInserter(
 	opts := dbState.WriteSession().GetOptions()
 	opts.ForeignKeyChecksDisabled = true
 	writeSession := writer.NewWriteSession(dt.Format(), newWs, ait, opts)
-	
+
 	ed, err := writeSession.GetTableWriter(ctx, t.Name(), t.db.RevisionQualifiedName(), sess.SetRoot)
 	if err != nil {
 		return nil, err
 	}
 
 	if t.sch.Indexes().ContainsFullTextIndex() {
-		ftEditor, err := t.getFullTextEditor(ctx)
+		newTable, err := t.db.newDoltTable(t.Name(), newSch, dt)
+		if err != nil {
+			return nil, err
+		}
+		
+		ftEditor, err := newTable.(*AlterableDoltTable).getFullTextRewriteEditor(ctx, newRoot)
 		if err != nil {
 			return nil, err
 		}
@@ -1591,8 +1545,70 @@ func (t *AlterableDoltTable) RewriteInserter(
 		return multiEditor.(writer.TableWriter), nil
 	}
 
-
 	return ed, nil
+}
+
+func dropIndexesOnDroppedColumn(newSch schema.Schema, oldSch schema.Schema, oldSchema sql.PrimaryKeySchema, newSchema sql.PrimaryKeySchema, err error) (schema.Schema, error) {
+	newSch = schema.CopyIndexes(oldSch, newSch)
+	droppedCol := getDroppedColumn(oldSchema, newSchema)
+	for _, index := range newSch.Indexes().IndexesWithColumn(droppedCol.Name) {
+		_, err = newSch.Indexes().RemoveIndex(index.Name())
+		if err != nil {
+			return nil, err
+		}
+	}
+	
+	return newSch, nil
+}
+
+func modifyIndexesForTableRewrite(ctx *sql.Context, oldSch schema.Schema, oldColumn *sql.Column, newColumn *sql.Column, newSch schema.Schema) schema.Schema {
+	for _, index := range oldSch.Indexes().AllIndexes() {
+		var colNames []string
+		prefixLengths := index.PrefixLengths()
+		for i, colName := range index.ColumnNames() {
+			if strings.ToLower(oldColumn.Name) == strings.ToLower(colName) {
+				colNames = append(colNames, newColumn.Name)
+				if len(prefixLengths) > 0 {
+					if !sqltypes.IsText(newColumn.Type) {
+						// drop prefix lengths if column is not a string type
+						prefixLengths[i] = 0
+					} else if uint32(prefixLengths[i]) > newColumn.Type.MaxTextResponseByteLength(ctx) {
+						// drop prefix length if prefixLength is too long
+						prefixLengths[i] = 0
+					}
+				}
+			} else {
+				colNames = append(colNames, colName)
+			}
+		}
+
+		// check if prefixLengths should be dropped entirely
+		var nonZeroPrefixLength bool
+		for _, prefixLength := range prefixLengths {
+			if prefixLength > 0 {
+				nonZeroPrefixLength = true
+				break
+			}
+		}
+		if !nonZeroPrefixLength {
+			prefixLengths = nil
+		}
+
+		newSch.Indexes().AddIndexByColNames(
+			index.Name(),
+			colNames,
+			prefixLengths,
+			schema.IndexProperties{
+				IsUnique:           index.IsUnique(),
+				IsSpatial:          index.IsSpatial(),
+				IsFullText:         index.IsFullText(),
+				IsUserDefined:      index.IsUserDefined(),
+				Comment:            index.Comment(),
+				FullTextProperties: index.FullTextProperties(),
+			})
+	}
+	
+	return newSch
 }
 
 func (t *AlterableDoltTable) getNewSch(ctx context.Context, oldColumn, newColumn *sql.Column, oldSch schema.Schema, newSchema sql.PrimaryKeySchema, root, headRoot *doltdb.RootValue) (schema.Schema, error) {
