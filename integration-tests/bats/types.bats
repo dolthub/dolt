@@ -190,12 +190,11 @@ CREATE TABLE test (
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` tinyint" ]] || false
+    [[ "$output" =~ "\`v\` tinyint(1)" ]] || false
 
     # check information_schema.COLUMNS table
-    # TODO : 'column_type' should be 'tinyint(1)'
     run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
-    [[ "$output" =~ 'test,v,2,,YES,tinyint,,,3,0,,,,tinyint,"","","insert,references,select,update","","",' ]] || false
+    [[ "$output" =~ 'test,v,2,,YES,tinyint,,,3,0,,,,tinyint(1),"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: BOOLEAN" {
@@ -208,7 +207,7 @@ CREATE TABLE test (
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` tinyint" ]] || false
+    [[ "$output" =~ "\`v\` tinyint(1)" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, true);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -219,9 +218,8 @@ SQL
     [[ "${lines[3]}" =~ " 0 " ]] || false
 
     # check information_schema.COLUMNS table
-    # TODO : 'column_type' should be 'tinyint(1)'
     run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
-    [[ "$output" =~ 'test,v,2,,YES,tinyint,,,3,0,,,,tinyint,"","","insert,references,select,update","","",' ]] || false
+    [[ "$output" =~ 'test,v,2,,YES,tinyint,,,3,0,,,,tinyint(1),"","","insert,references,select,update","","",' ]] || false
 }
 
 @test "types: CHAR(10)" {
