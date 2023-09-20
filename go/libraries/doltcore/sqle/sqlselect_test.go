@@ -466,7 +466,7 @@ func BasicSelectTests() []SelectTest {
 			Query:        "select is_married and age >= 40 from people where last_name = 'Simpson' order by id limit 2",
 			ExpectedRows: []sql.Row{{true}, {false}},
 			ExpectedSqlSchema: sql.Schema{
-				&sql.Column{Name: "is_married and age >= 40", Type: gmstypes.Int8},
+				&sql.Column{Name: "is_married and age >= 40", Type: gmstypes.Boolean},
 			},
 		},
 		{
@@ -480,7 +480,7 @@ func BasicSelectTests() []SelectTest {
 			},
 			ExpectedSqlSchema: sql.Schema{
 				&sql.Column{Name: "first_name", Type: typeinfo.StringDefaultType.ToSqlType()},
-				&sql.Column{Name: "not_marge", Type: gmstypes.Int8},
+				&sql.Column{Name: "not_marge", Type: gmstypes.Boolean},
 			},
 		},
 		{
