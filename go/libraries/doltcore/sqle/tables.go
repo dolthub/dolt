@@ -1603,7 +1603,7 @@ func fullTextRewriteEditor(
 		ws *doltdb.WorkingSet,
 		sess *dsess.DoltSession,
 		dbState dsess.SessionState,
-		newRoot *doltdb.RootValue,
+		workingRoot *doltdb.RootValue,
 ) (sql.RowInserter, error) {
 	
 	newTable, err := t.db.newDoltTable(t.Name(), newSch, dt)
@@ -1611,7 +1611,7 @@ func fullTextRewriteEditor(
 		return nil, err
 	}
 
-	updatedRoot, configTable, tableSets, err := newTable.(*AlterableDoltTable).tableSetsForRewrite(ctx, newRoot)
+	updatedRoot, configTable, tableSets, err := newTable.(*AlterableDoltTable).tableSetsForRewrite(ctx, workingRoot)
 
 	// TODO: figure out locking. Other DBs automatically lock a table during this kind of operation, we should probably
 	//  do the same. We're messing with global auto-increment values here and it's not safe.
@@ -1622,6 +1622,9 @@ func fullTextRewriteEditor(
 
 	newWs := ws.WithWorkingRoot(updatedRoot)
 
+	// We need our own write session for the rewrite operation. The connection's session must continue to return rows of
+	// the table as it existed before the rewrite operation began until it completes, at which point we update the
+	// session with the rewritten table.  
 	opts := dbState.WriteSession().GetOptions()
 	opts.ForeignKeyChecksDisabled = true
 	writeSession := writer.NewWriteSession(dt.Format(), newWs, ait, opts)
@@ -1642,8 +1645,8 @@ func fullTextRewriteEditor(
 		tableSets[i].GlobalCount.(*AlterableDoltTable).SetWriteSession(writeSession)
 		tableSets[i].RowCount.(*AlterableDoltTable).SetWriteSession(writeSession)
 	}
-
-	ftEditor, err := fulltext.CreateEditor(ctx, t, configTable, tableSets...)
+	
+	ftEditor, err := fulltext.CreateEditor(ctx, newTable, configTable, tableSets...)
 	if err != nil {
 		return nil, err
 	}

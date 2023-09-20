@@ -636,6 +636,7 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 	return table, true, nil
 }
 
+// newDoltTable returns a sql.Table wrapping the given underlying dolt table
 func (db Database) newDoltTable(tableName string, sch schema.Schema, tbl *doltdb.Table) (sql.Table, error) {
 	readonlyTable, err := NewDoltTable(tableName, sch, tbl, db, db.editOpts)
 	if err != nil {
