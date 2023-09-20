@@ -119,23 +119,15 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "ALTER TABLE ADD COLUMN",
+			Name: "ALTER TABLE MODIFY COLUMN used by index to invalid type",
 			SetUpScript: []string{
 				"CREATE TABLE test (pk BIGINT UNSIGNED PRIMARY KEY, v1 VARCHAR(200), v2 VARCHAR(200), FULLTEXT idx (v1, v2));",
 				"INSERT INTO test VALUES (1, 'abc', 'def pqr'), (2, 'ghi', 'jkl'), (3, 'mno', 'mno'), (4, 'stu vwx', 'xyz zyx yzx'), (5, 'ghs', 'mno shg');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "show create table dolt_test_idx_0_fts_position",
-					Expected: []sql.Row{{}},
-				},
-				{
-					Query:    "ALTER TABLE test ADD COLUMN v3 FLOAT DEFAULT 7 FIRST;",
-					Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
-				},
-				{
-					Query:    "SELECT * FROM test WHERE MATCH(v1, v2) AGAINST ('ghi');",
-					Expected: []sql.Row{{float32(7), uint64(2), "ghi", "jkl"}},
+					Query:       "ALTER TABLE test MODIFY COLUMN v2 VARBINARY(200);",
+					ExpectedErr: sql.ErrFullTextInvalidColumnType,
 				},
 			},
 		},

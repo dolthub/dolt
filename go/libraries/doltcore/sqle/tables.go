@@ -1517,7 +1517,10 @@ func (t *AlterableDoltTable) RewriteInserter(
 			return nil, err
 		}
 	} else if isModifyColumn { // modify column
-		newSch = modifyIndexesForTableRewrite(ctx, oldSch, oldColumn, newColumn, newSch)
+		newSch, err = modifyIndexesForTableRewrite(ctx, oldSch, oldColumn, newColumn, newSch)
+		if err != nil {
+			return nil, err
+		}
 	} else { 
 		// we need a temp version of a sql.Table here to get key columns
 		// TODO: do we need the new indexes here already? we might :(
@@ -1702,11 +1705,13 @@ func dropIndexesOnDroppedColumn(newSch schema.Schema, oldSch schema.Schema, oldS
 	return newSch, nil
 }
 
-func modifyIndexesForTableRewrite(ctx *sql.Context, oldSch schema.Schema, oldColumn *sql.Column, newColumn *sql.Column, newSch schema.Schema) schema.Schema {
+func modifyIndexesForTableRewrite(ctx *sql.Context, oldSch schema.Schema, oldColumn *sql.Column, newColumn *sql.Column, newSch schema.Schema) (schema.Schema, error) {
 	for _, index := range oldSch.Indexes().AllIndexes() {
 		if index.IsFullText() {
-			// fulltext indexes are handled separately
-			continue
+			err := validateFullTextColumnChange(ctx, index, oldColumn, newColumn)
+			if err != nil {
+				return nil, err
+			}
 		}
 		
 		var colNames []string
@@ -1753,8 +1758,22 @@ func modifyIndexesForTableRewrite(ctx *sql.Context, oldSch schema.Schema, oldCol
 				FullTextProperties: index.FullTextProperties(),
 			})
 	}
-	
-	return newSch
+
+	return newSch, nil
+}
+
+// validateFullTextColumnChange returns an error if the column change given violates this full text index.
+func validateFullTextColumnChange(ctx *sql.Context, idx schema.Index, oldColumn *sql.Column, newColumn *sql.Column) error {
+	colNames := idx.ColumnNames()
+	for _, colName := range colNames {
+		if oldColumn.Name != colName && newColumn.Name != colName {
+			continue
+		}
+		if !sqltypes.IsTextOnly(newColumn.Type) {
+			return sql.ErrFullTextInvalidColumnType.New()
+		}
+	}
+	return nil
 }
 
 func (t *AlterableDoltTable) getNewSch(ctx context.Context, oldColumn, newColumn *sql.Column, oldSch schema.Schema, newSchema sql.PrimaryKeySchema, root, headRoot *doltdb.RootValue) (schema.Schema, error) {
