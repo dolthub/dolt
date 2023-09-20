@@ -648,7 +648,7 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 		if rowIter != nil {
 			switch sqlStatement.(type) {
 			case *sqlparser.Select, *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete,
-				*sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
+				*sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.SetOp:
 				// For any statement that prints out result, print a newline to put the regular output on its own line
 				if fileReadProg != nil {
 					fileReadProg.printNewLineIfNeeded()
