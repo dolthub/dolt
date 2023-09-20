@@ -1700,9 +1700,47 @@ func dropIndexesOnDroppedColumn(newSch schema.Schema, oldSch schema.Schema, oldS
 		if err != nil {
 			return nil, err
 		}
+		
+		// For fulltext indexes, we don't just remove them entirely on a column drop, we modify them to contain only the
+		// remaining columns
+		if index.IsFullText() {
+			modifyFulltextIndexForColumnDrop(index, newSch, droppedCol)
+		}
 	}
 	
 	return newSch, nil
+}
+
+// modifyFulltextIndexForColumnDrop modifies a fulltext index to remove a column that was dropped, adding it to the
+// schema's indexes only if there are still remaining columns in the index after the drop
+func modifyFulltextIndexForColumnDrop(index schema.Index, newSch schema.Schema, droppedCol *sql.Column) {
+	if len(index.ColumnNames()) == 1 {
+		// if there was only one column left in the index, we remove it entirely
+		return
+	}
+	
+	var i int
+	colNames := make([]string, len(index.ColumnNames())-1)
+	for _, col := range index.ColumnNames() {
+		if col == droppedCol.Name {
+			continue
+		}
+		colNames[i] = col
+		i++
+	}
+	
+	newSch.Indexes().AddIndexByColNames(
+		index.Name(),
+		colNames,
+		index.PrefixLengths(),
+		schema.IndexProperties{
+			IsUnique:           index.IsUnique(),
+			IsSpatial:          false,
+			IsFullText:         true,
+			IsUserDefined:      index.IsUserDefined(),
+			Comment:            index.Comment(),
+			FullTextProperties: index.FullTextProperties(),
+		})
 }
 
 func modifyIndexesForTableRewrite(ctx *sql.Context, oldSch schema.Schema, oldColumn *sql.Column, newColumn *sql.Column, newSch schema.Schema) (schema.Schema, error) {
