@@ -145,7 +145,13 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 	case sqltypes.Null:
 		return UnknownType, nil
 	case sqltypes.Int8:
-		return Int8Type, nil
+		// MySQL allows only the TINYINT type to have a display width, so it's the only
+		// integer type that needs to be checked for it's underlying NumberType data.
+		numberType, ok := sqlType.(sql.NumberType)
+		if !ok {
+			return nil, fmt.Errorf("expected sql.NumberType, but received: %T", sqlType)
+		}
+		return &intType{numberType}, nil
 	case sqltypes.Int16:
 		return Int16Type, nil
 	case sqltypes.Int24:
