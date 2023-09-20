@@ -700,3 +700,45 @@ behavior:
      run dolt sql-client -P $PORT -u test --use-db test_db -q "show tables"
      [ $status -ne 0 ]
 }
+
+# Don't run this test with a server - we want to ensure that the privileges file
+# is being serialized, persisted, and loaded
+@test "sql-privs: revoking last privilege doesn't result in corrupted privileges file" {
+     make_test_repo
+
+     dolt sql -q "CREATE USER tester@localhost"
+     dolt sql -q "GRANT SELECT ON test_db.* TO tester@localhost"
+     dolt sql -q "REVOKE SELECT ON test_db.* FROM tester@localhost"
+
+     run dolt sql -q "SHOW GRANTS FOR tester@localhost"
+     [ $status -eq 0 ]
+     [[ $output =~ "GRANT USAGE ON *.* TO \`tester\`@\`localhost\`" ]] || false
+     ! [[ $output =~ "SELECT" ]] || false
+
+     dolt sql -q "GRANT SELECT ON test_db.* TO tester@localhost"
+     dolt sql -q "GRANT UPDATE ON test_db.* TO tester@localhost"
+     run dolt sql -q "SHOW GRANTS FOR tester@localhost"
+     [ $status -eq 0 ]
+     [[ $output =~ "GRANT USAGE ON *.* TO \`tester\`@\`localhost\`" ]] || false
+     [[ $output =~ "GRANT SELECT, UPDATE ON \`test_db\`.* TO \`tester\`@\`localhost\`" ]] || false
+
+     dolt sql -q "REVOKE UPDATE ON test_db.* FROM tester@localhost"
+     run dolt sql -q "SHOW GRANTS FOR tester@localhost"
+     [ $status -eq 0 ]
+     [[ $output =~ "GRANT USAGE ON *.* TO \`tester\`@\`localhost\`" ]] || false
+     [[ $output =~ "GRANT SELECT ON \`test_db\`.* TO \`tester\`@\`localhost\`" ]] || false
+     ! [[ $output =~ "UPDATE" ]] || false
+}
+
+@test "sql-privs: revoking all privleges doesn't result in a corrupted privileges file" {
+     make_test_repo
+
+     dolt sql -q "CREATE USER tester@localhost"
+     dolt sql -q "GRANT SELECT ON test_db.* TO tester@localhost"
+     dolt sql -q "REVOKE ALL ON test_db.* FROM tester@localhost"
+
+     run dolt sql -q "SHOW GRANTS FOR tester@localhost"
+     [ $status -eq 0 ]
+     [[ $output =~ "GRANT USAGE ON *.* TO \`tester\`@\`localhost\`" ]] || false
+     ! [[ $output =~ "SELECT" ]] || false
+}
