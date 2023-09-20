@@ -2287,7 +2287,7 @@ func (t *AlterableDoltTable) RenameIndex(ctx *sql.Context, fromIndexName string,
 // CreateFulltextIndex implements fulltext.IndexAlterableTable
 func (t *AlterableDoltTable) CreateFulltextIndex(ctx *sql.Context, idx sql.IndexDef, keyCols fulltext.KeyColumns, tableNames fulltext.IndexTableNames) error {
 	if !types.IsFormat_DOLT(t.Format()) {
-		return fmt.Errorf("FULLTEXT is not supported on storage format %s. Run `dolt migrate` to upgrade to the latest storage format.", t.Format())
+		return fmt.Errorf("FULLTEXT is not supported on storage format %s. Run `dolt migrate` to upgrade to the latest storage format.", t.Format().VersionString())
 	}
 	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
 		return err
