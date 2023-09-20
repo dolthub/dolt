@@ -1516,20 +1516,19 @@ func (t *AlterableDoltTable) RewriteInserter(
 		if err != nil {
 			return nil, err
 		}
-	} else if isModifyColumn { // modify column
+	} else if isModifyColumn {
 		newSch, err = modifyIndexesForTableRewrite(ctx, oldSch, oldColumn, newColumn, newSch)
 		if err != nil {
 			return nil, err
 		}
 	} else { 
 		// we need a temp version of a sql.Table here to get key columns
-		// TODO: do we need the new indexes here already? we might :(
-		tmpTable, err := t.db.newDoltTable(t.Name(), newSch, dt)
+		newTbl, err := t.db.newDoltTable(t.Name(), newSch, dt)
 		if err != nil {
 			return nil, err
 		}
 		
-		keyCols, _, err := fulltext.GetKeyColumns(ctx, tmpTable)
+		keyCols, _, err := fulltext.GetKeyColumns(ctx, newTbl)
 		if err != nil {
 			return nil, err
 		}
@@ -1662,7 +1661,8 @@ func fullTextRewriteEditor(
 	return multiEditor, nil
 }
 
-// modifyFulltextIndexesForRewrite will modify the fulltext indexes of a table to correspond to a new schema before a rewrite.
+// modifyFulltextIndexesForRewrite modifies the fulltext indexes of a table to correspond to the new schema before 
+// a table rewrite. All non-full-text indexes are copied from the old schema directly.
 func modifyFulltextIndexesForRewrite(ctx *sql.Context, keyCols fulltext.KeyColumns, oldSch schema.Schema, newSch schema.Schema) (schema.Schema, error) {
 	for _, idx := range oldSch.Indexes().AllIndexes() {
 		if !idx.IsFullText() {
@@ -1675,7 +1675,10 @@ func modifyFulltextIndexesForRewrite(ctx *sql.Context, keyCols fulltext.KeyColum
 		for i, pos := range keyCols.Positions {
 			keyColPositions[i] = uint16(pos)
 		}
+		
 		ft.KeyPositions = keyColPositions
+		ft.KeyType = uint8(keyCols.Type)
+		
 		props := schema.IndexProperties{
 			IsUnique:           idx.IsUnique(),
 			IsSpatial:          idx.IsSpatial(),
@@ -1685,13 +1688,13 @@ func modifyFulltextIndexesForRewrite(ctx *sql.Context, keyCols fulltext.KeyColum
 			FullTextProperties: ft,
 		}
 		
-		newIdx := schema.NewIndex(idx.Name(), idx.IndexedColumnTags(), idx.AllTags(), newSch.Indexes(), props)
-		newSch.Indexes().AddIndex(newIdx)
+		newSch.Indexes().AddIndexByColNames(idx.Name(), idx.ColumnNames(), idx.PrefixLengths(), props)
 	}
 	
 	return newSch, nil
 }
 
+// dropIndexesOnDroppedColumn removes from the schema any indexes which contain a dropped column.
 func dropIndexesOnDroppedColumn(newSch schema.Schema, oldSch schema.Schema, oldSchema sql.PrimaryKeySchema, newSchema sql.PrimaryKeySchema, err error) (schema.Schema, error) {
 	newSch = schema.CopyIndexes(oldSch, newSch)
 	droppedCol := getDroppedColumn(oldSchema, newSchema)
