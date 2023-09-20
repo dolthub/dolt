@@ -46,6 +46,7 @@ type ColumnDiffTable struct {
 }
 
 var _ sql.Table = (*ColumnDiffTable)(nil)
+
 // var _ sql.IndexAddressable = (*ColumnDiffTable)(nil)
 
 // NewColumnDiffTable creates an ColumnDiffTable
@@ -117,7 +118,7 @@ func (dt *ColumnDiffTable) PartitionRows(ctx *sql.Context, partition sql.Partiti
 // func (dt *ColumnDiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 // 	return index.DoltCommitIndexes(dt.Name(), dt.ddb, true)
 // }
-// 
+//
 // // IndexedAccess implements sql.IndexAddressable
 // func (dt *ColumnDiffTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) (sql.IndexedTable, error) {
 // 	nt := *dt

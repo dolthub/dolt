@@ -65,7 +65,7 @@ type nomsTableWriter struct {
 	autoInc                globalstate.AutoIncrementTracker
 	nextAutoIncrementValue map[string]uint64
 
-	setter SessionRootSetter
+	setter         SessionRootSetter
 	errEncountered error
 }
 

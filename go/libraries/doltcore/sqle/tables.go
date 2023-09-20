@@ -462,7 +462,7 @@ func partitionRows(ctx *sql.Context, t *doltdb.Table, sqlSch sql.Schema, projCol
 // WritableDoltTable allows updating, deleting, and inserting new rows. It implements sql.UpdatableTable and friends.
 type WritableDoltTable struct {
 	*DoltTable
-	db Database
+	db                 Database
 	pinnedWriteSession writer.WriteSession
 }
 
@@ -519,14 +519,13 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWri
 			return nil, err
 		}
 		writeSession = state.WriteSession()
-	} 
-	
+	}
+
 	setter := ds.SetRoot
 	ed, err = writeSession.GetTableWriter(ctx, t.tableName, t.db.RevisionQualifiedName(), setter)
 	if err != nil {
 		return nil, err
 	}
-	
 
 	if t.sch.Indexes().ContainsFullTextIndex() {
 		ftEditor, err := t.getFullTextEditor(ctx)
@@ -550,7 +549,7 @@ func (t *WritableDoltTable) getFullTextEditor(ctx *sql.Context) (fulltext.TableE
 	if err != nil {
 		return fulltext.TableEditor{}, err
 	}
-	
+
 	configTable, sets, err := t.fulltextTableSets(ctx, workingRoot)
 	if err != nil {
 		return fulltext.TableEditor{}, err
@@ -620,12 +619,12 @@ func (t *WritableDoltTable) fulltextTableSets(ctx *sql.Context, workingRoot *dol
 	return configTable, sets, nil
 }
 
-// tableSetsForRewrite returns the fulltext.TableSet for each Full-Text index in the table, truncated and modified 
-// for a table rewrite operation. Returns the root given with all full-set pseudo tables updated with their new 
+// tableSetsForRewrite returns the fulltext.TableSet for each Full-Text index in the table, truncated and modified
+// for a table rewrite operation. Returns the root given with all full-set pseudo tables updated with their new
 // truncated value.
 func (t *WritableDoltTable) tableSetsForRewrite(
-		ctx *sql.Context,
-		workingRoot *doltdb.RootValue,
+	ctx *sql.Context,
+	workingRoot *doltdb.RootValue,
 ) (*doltdb.RootValue, fulltext.EditableTable, []fulltext.TableSet, error) {
 	configTable, sets, err := t.fulltextTableSets(ctx, workingRoot)
 	if err != nil {
@@ -681,12 +680,12 @@ func (t *WritableDoltTable) tableSetsForRewrite(
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		
+
 		set.Position = posTable
 		set.DocCount = dcTable
 		set.GlobalCount = gcTable
 		set.RowCount = rcTable
-		
+
 		workingRoot, err = workingRoot.PutTable(ctx, posTable.Name(), posTableDolt)
 		if err != nil {
 			return nil, nil, nil, err
@@ -706,7 +705,7 @@ func (t *WritableDoltTable) tableSetsForRewrite(
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		
+
 		newSets[i] = set
 	}
 
@@ -715,11 +714,11 @@ func (t *WritableDoltTable) tableSetsForRewrite(
 
 // emptyFulltextTable returns a new empty fulltext table with the given schema, and the underlying dolt table.
 func emptyFulltextTable(
-		ctx *sql.Context,
-		parentTable *WritableDoltTable,
-		workingRoot *doltdb.RootValue,
-		fulltextTable fulltext.EditableTable,
-		fulltextSch sql.Schema,
+	ctx *sql.Context,
+	parentTable *WritableDoltTable,
+	workingRoot *doltdb.RootValue,
+	fulltextTable fulltext.EditableTable,
+	fulltextSch sql.Schema,
 ) (*doltdb.Table, fulltext.EditableTable, error) {
 	doltTable, ok := fulltextTable.(*AlterableDoltTable)
 	if !ok {
@@ -1521,13 +1520,13 @@ func (t *AlterableDoltTable) RewriteInserter(
 		if err != nil {
 			return nil, err
 		}
-	} else { 
+	} else {
 		// we need a temp version of a sql.Table here to get key columns
 		newTbl, err := t.db.newDoltTable(t.Name(), newSch, dt)
 		if err != nil {
 			return nil, err
 		}
-		
+
 		keyCols, _, err := fulltext.GetKeyColumns(ctx, newTbl)
 		if err != nil {
 			return nil, err
@@ -1556,7 +1555,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 	if err != nil {
 		return nil, err
 	}
-	
+
 	newRoot, err := ws.WorkingRoot().PutTable(ctx, t.Name(), dt)
 	if err != nil {
 		return nil, err
@@ -1569,7 +1568,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 			return nil, err
 		}
 	}
-	
+
 	// We can't just call getTableEditor for this operation because it uses the session state, which we can't update
 	// until after the rewrite operation
 	if newSch.Indexes().ContainsFullTextIndex() {
@@ -1584,7 +1583,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 	}
 
 	newWs := ws.WithWorkingRoot(newRoot)
-	
+
 	opts := dbState.WriteSession().GetOptions()
 	opts.ForeignKeyChecksDisabled = true
 	writeSession := writer.NewWriteSession(dt.Format(), newWs, ait, opts)
@@ -1593,21 +1592,21 @@ func (t *AlterableDoltTable) RewriteInserter(
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return ed, nil
 }
 
 func fullTextRewriteEditor(
-		ctx *sql.Context,
-		t *AlterableDoltTable,
-		newSch schema.Schema,
-		dt *doltdb.Table,
-		ws *doltdb.WorkingSet,
-		sess *dsess.DoltSession,
-		dbState dsess.SessionState,
-		workingRoot *doltdb.RootValue,
+	ctx *sql.Context,
+	t *AlterableDoltTable,
+	newSch schema.Schema,
+	dt *doltdb.Table,
+	ws *doltdb.WorkingSet,
+	sess *dsess.DoltSession,
+	dbState dsess.SessionState,
+	workingRoot *doltdb.RootValue,
 ) (sql.RowInserter, error) {
-	
+
 	newTable, err := t.db.newDoltTable(t.Name(), newSch, dt)
 	if err != nil {
 		return nil, err
@@ -1626,7 +1625,7 @@ func fullTextRewriteEditor(
 
 	// We need our own write session for the rewrite operation. The connection's session must continue to return rows of
 	// the table as it existed before the rewrite operation began until it completes, at which point we update the
-	// session with the rewritten table.  
+	// session with the rewritten table.
 	opts := dbState.WriteSession().GetOptions()
 	opts.ForeignKeyChecksDisabled = true
 	writeSession := writer.NewWriteSession(dt.Format(), newWs, ait, opts)
@@ -1637,8 +1636,8 @@ func fullTextRewriteEditor(
 	}
 
 	// There's a layer of indirection here: the call to fulltext.CreateEditor is going to in turn ask each of these
-	// tables for an Inserter, and we need to return the one we're using to do the rewrite, not a fresh one from the 
-	// session's data (which still has the tables as they existed before the rewrite began). To get around this, 
+	// tables for an Inserter, and we need to return the one we're using to do the rewrite, not a fresh one from the
+	// session's data (which still has the tables as they existed before the rewrite began). To get around this,
 	// we manually set the writeSession in these tables before passing control back to the engine. Then in Inserter(),
 	// we check for a pinned writeSession and return that one, not the session one.
 	for i := range tableSets {
@@ -1647,21 +1646,21 @@ func fullTextRewriteEditor(
 		tableSets[i].GlobalCount.(*AlterableDoltTable).SetWriteSession(writeSession)
 		tableSets[i].RowCount.(*AlterableDoltTable).SetWriteSession(writeSession)
 	}
-	
+
 	ftEditor, err := fulltext.CreateEditor(ctx, newTable, configTable, tableSets...)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	multiEditor, err := fulltext.CreateMultiTableEditor(ctx, parentEditor, ftEditor)
 	if err != nil {
-		return nil, err 
+		return nil, err
 	}
-	
+
 	return multiEditor, nil
 }
 
-// modifyFulltextIndexesForRewrite modifies the fulltext indexes of a table to correspond to the new schema before 
+// modifyFulltextIndexesForRewrite modifies the fulltext indexes of a table to correspond to the new schema before
 // a table rewrite. All non-full-text indexes are copied from the old schema directly.
 func modifyFulltextIndexesForRewrite(ctx *sql.Context, keyCols fulltext.KeyColumns, oldSch schema.Schema, newSch schema.Schema) (schema.Schema, error) {
 	for _, idx := range oldSch.Indexes().AllIndexes() {
@@ -1669,16 +1668,16 @@ func modifyFulltextIndexesForRewrite(ctx *sql.Context, keyCols fulltext.KeyColum
 			newSch.Indexes().AddIndex(idx)
 			continue
 		}
-		
+
 		ft := idx.FullTextProperties()
 		keyColPositions := make([]uint16, len(keyCols.Positions))
 		for i, pos := range keyCols.Positions {
 			keyColPositions[i] = uint16(pos)
 		}
-		
+
 		ft.KeyPositions = keyColPositions
 		ft.KeyType = uint8(keyCols.Type)
-		
+
 		props := schema.IndexProperties{
 			IsUnique:           idx.IsUnique(),
 			IsSpatial:          idx.IsSpatial(),
@@ -1687,10 +1686,10 @@ func modifyFulltextIndexesForRewrite(ctx *sql.Context, keyCols fulltext.KeyColum
 			Comment:            idx.Comment(),
 			FullTextProperties: ft,
 		}
-		
+
 		newSch.Indexes().AddIndexByColNames(idx.Name(), idx.ColumnNames(), idx.PrefixLengths(), props)
 	}
-	
+
 	return newSch, nil
 }
 
@@ -1703,14 +1702,14 @@ func dropIndexesOnDroppedColumn(newSch schema.Schema, oldSch schema.Schema, oldS
 		if err != nil {
 			return nil, err
 		}
-		
+
 		// For fulltext indexes, we don't just remove them entirely on a column drop, we modify them to contain only the
 		// remaining columns
 		if index.IsFullText() {
 			modifyFulltextIndexForColumnDrop(index, newSch, droppedCol)
 		}
 	}
-	
+
 	return newSch, nil
 }
 
@@ -1721,7 +1720,7 @@ func modifyFulltextIndexForColumnDrop(index schema.Index, newSch schema.Schema, 
 		// if there was only one column left in the index, we remove it entirely
 		return
 	}
-	
+
 	var i int
 	colNames := make([]string, len(index.ColumnNames())-1)
 	for _, col := range index.ColumnNames() {
@@ -1731,7 +1730,7 @@ func modifyFulltextIndexForColumnDrop(index schema.Index, newSch schema.Schema, 
 		colNames[i] = col
 		i++
 	}
-	
+
 	newSch.Indexes().AddIndexByColNames(
 		index.Name(),
 		colNames,
@@ -1754,7 +1753,7 @@ func modifyIndexesForTableRewrite(ctx *sql.Context, oldSch schema.Schema, oldCol
 				return nil, err
 			}
 		}
-		
+
 		var colNames []string
 		prefixLengths := index.PrefixLengths()
 		for i, colName := range index.ColumnNames() {

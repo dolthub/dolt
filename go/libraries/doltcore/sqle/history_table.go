@@ -507,7 +507,7 @@ func newRowItrForTableAtCommit(ctx *sql.Context, table *DoltTable, h hash.Hash, 
 				if err != nil {
 					return nil, err
 				}
-				
+
 				if histTable != nil {
 					newLookup := sql.IndexLookup{Index: idx, Ranges: lookup.Ranges}
 					partIter, err = histTable.(sql.IndexedTable).LookupPartitions(ctx, newLookup)

@@ -650,7 +650,7 @@ func (db Database) newDoltTable(tableName string, sch schema.Schema, tbl *doltdb
 	} else {
 		table = &AlterableDoltTable{WritableDoltTable{DoltTable: readonlyTable, db: db}}
 	}
-	
+
 	return table, nil
 }
 
