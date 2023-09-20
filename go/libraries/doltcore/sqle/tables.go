@@ -620,21 +620,9 @@ func (t *WritableDoltTable) fulltextTableSets(ctx *sql.Context, workingRoot *dol
 	return configTable, sets, nil
 }
 
-// getFullTextRewriteEditor gathers all pseudo-index tables for a Full-Text index and returns an editor that will write
-// to all of them. This assumes that there are Full-Text indexes in the schema.
-func (t *WritableDoltTable) getFullTextRewriteEditor(
-		ctx *sql.Context,
-		session writer.WriteSession,
-		workingRoot *doltdb.RootValue,
-) (fulltext.TableEditor, error) {
-	_, configTable, newSets, err := t.tableSetsForRewrite(ctx, session, workingRoot)
-	if err != nil {
-		return fulltext.TableEditor{}, err
-	}
-
-	return fulltext.CreateEditor(ctx, t, configTable, newSets...)
-}
-
+// tableSetsForRewrite returns the fulltext.TableSet for each Full-Text index in the table, truncated and modified 
+// for a table rewrite operation. Returns the root given with all full-set pseudo tables updated with their new 
+// truncated value.
 func (t *WritableDoltTable) tableSetsForRewrite(
 		ctx *sql.Context,
 		workingRoot *doltdb.RootValue,
@@ -725,7 +713,14 @@ func (t *WritableDoltTable) tableSetsForRewrite(
 	return workingRoot, configTable, newSets, nil
 }
 
-func emptyFulltextTable(ctx *sql.Context, parentTable *WritableDoltTable, workingRoot *doltdb.RootValue, fulltextTable fulltext.EditableTable, fulltextSch sql.Schema) (*doltdb.Table, fulltext.EditableTable, error) {
+// emptyFulltextTable returns a new empty fulltext table with the given schema, and the underlying dolt table.
+func emptyFulltextTable(
+		ctx *sql.Context,
+		parentTable *WritableDoltTable,
+		workingRoot *doltdb.RootValue,
+		fulltextTable fulltext.EditableTable,
+		fulltextSch sql.Schema,
+) (*doltdb.Table, fulltext.EditableTable, error) {
 	doltTable, ok := fulltextTable.(*AlterableDoltTable)
 	if !ok {
 		return nil, nil, fmt.Errorf("unexpected row count table type: %T", fulltextTable)
@@ -1641,14 +1636,12 @@ func fullTextRewriteEditor(
 	// session's data (which still has the tables as they existed before the rewrite began). To get around this, 
 	// we manually set the writeSession in these tables before passing control back to the engine. Then in Inserter(),
 	// we check for a pinned writeSession and return that one, not the session one.
-	// TODO: need to make a copy of the slices here here
-	for _, set := range tableSets {
-		set.Position.(*AlterableDoltTable).SetWriteSession(writeSession)
-		set.DocCount.(*AlterableDoltTable).SetWriteSession(writeSession)
-		set.GlobalCount.(*AlterableDoltTable).SetWriteSession(writeSession)
-		set.RowCount.(*AlterableDoltTable).SetWriteSession(writeSession)
+	for i := range tableSets {
+		tableSets[i].Position.(*AlterableDoltTable).SetWriteSession(writeSession)
+		tableSets[i].DocCount.(*AlterableDoltTable).SetWriteSession(writeSession)
+		tableSets[i].GlobalCount.(*AlterableDoltTable).SetWriteSession(writeSession)
+		tableSets[i].RowCount.(*AlterableDoltTable).SetWriteSession(writeSession)
 	}
-
 
 	ftEditor, err := fulltext.CreateEditor(ctx, t, configTable, tableSets...)
 	if err != nil {

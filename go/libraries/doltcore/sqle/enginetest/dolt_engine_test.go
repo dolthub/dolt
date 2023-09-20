@@ -126,6 +126,10 @@ func TestSingleScript(t *testing.T) {
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
+					Query: "show create table dolt_test_idx_0_fts_position",
+					Expected: []sql.Row{{}},
+				},
+				{
 					Query:    "ALTER TABLE test ADD COLUMN v3 FLOAT DEFAULT 7 FIRST;",
 					Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
 				},
