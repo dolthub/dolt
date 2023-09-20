@@ -338,7 +338,7 @@ DELIM
     [ "$status" -eq 0 ]
     [[ "$output" =~ '-  `a` varchar(16383),' ]] || false
     [[ "$output" =~ '-  `b` float,' ]] || false
-    [[ "$output" =~ '-  `c` tinyint,' ]] || false
+    [[ "$output" =~ '-  `c` tinyint(1),' ]] || false
     # assert no columns were added
     [[ ! "$output" = "+    \`" ]] || false
 }

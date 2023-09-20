@@ -137,7 +137,8 @@ func TestCreateTable(t *testing.T) {
 							c23 tinyint unsigned,
 							c24 smallint unsigned,
 							c25 mediumint unsigned,
-							c26 bigint unsigned)`,
+							c26 bigint unsigned,
+							c27 tinyint(1))`,
 			expectedSchema: dtestutils.CreateSchema(
 				schemaNewColumn(t, "c0", 594, gmstypes.Int32, true, schema.NotNullConstraint{}),
 				schemaNewColumn(t, "c1", 601, gmstypes.Int8, false),
@@ -166,6 +167,7 @@ func TestCreateTable(t *testing.T) {
 				schemaNewColumn(t, "c24", 8689, gmstypes.Uint16, false),
 				schemaNewColumn(t, "c25", 5243, gmstypes.Uint24, false),
 				schemaNewColumn(t, "c26", 9338, gmstypes.Uint64, false),
+				schemaNewColumn(t, "c27", 5981, gmstypes.Boolean, false),
 			),
 		},
 		{
