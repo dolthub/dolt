@@ -43,6 +43,7 @@ type commithook struct {
 	mu                   sync.Mutex
 	wg                   sync.WaitGroup
 	cond                 *sync.Cond
+	shutdown             atomic.Bool
 	nextHead             hash.Hash
 	lastPushedHead       hash.Hash
 	nextPushAttempt      time.Time
@@ -126,7 +127,7 @@ func (h *commithook) replicate(ctx context.Context) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	shouldHeartbeat := false
-	for {
+	for !h.shutdown.Load() {
 		lgr := h.logger()
 		// Shutdown for context canceled.
 		if ctx.Err() != nil {
@@ -371,7 +372,7 @@ func (h *commithook) tick(ctx context.Context) {
 	defer h.wg.Done()
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
-	for {
+	for !h.shutdown.Load() {
 		select {
 		case <-ctx.Done():
 			return
@@ -379,6 +380,11 @@ func (h *commithook) tick(ctx context.Context) {
 			h.cond.Signal()
 		}
 	}
+}
+
+func (h *commithook) databaseWasDropped() {
+	h.shutdown.Store(true)
+	h.cond.Signal()
 }
 
 func (h *commithook) recordSuccessfulRemoteSrvCommit() {
