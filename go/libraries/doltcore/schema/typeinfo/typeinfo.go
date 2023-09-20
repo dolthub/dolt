@@ -144,13 +144,18 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 	switch queryType {
 	case sqltypes.Null:
 		return UnknownType, nil
-	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int24, sqltypes.Int32, sqltypes.Int64,
-		sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint24, sqltypes.Uint32, sqltypes.Uint64:
+	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int24, sqltypes.Int32, sqltypes.Int64:
 		numberType, ok := sqlType.(sql.NumberType)
 		if !ok {
 			return nil, fmt.Errorf("expected sql.NumberType, but received: %T", sqlType)
 		}
 		return &intType{numberType}, nil
+	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint24, sqltypes.Uint32, sqltypes.Uint64:
+		numberType, ok := sqlType.(sql.NumberType)
+		if !ok {
+			return nil, fmt.Errorf("expected sql.NumberType, but received: %T", sqlType)
+		}
+		return &uintType{numberType}, nil
 	case sqltypes.Float32:
 		return Float32Type, nil
 	case sqltypes.Float64:
