@@ -12,6 +12,7 @@ docker run --rm -v `pwd`:/src golang:"$GO_BUILD_VERSION"-buster /bin/bash -c '
 set -e
 set -o pipefail
 apt-get update && apt-get install -y p7zip pigz
+export PATH=$PATH:/usr/local/bin
 cd /src
 
 BINS="dolt"
