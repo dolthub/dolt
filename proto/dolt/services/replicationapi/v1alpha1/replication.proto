@@ -28,6 +28,8 @@ service ReplicationService {
   rpc UpdateUsersAndGrants(UpdateUsersAndGrantsRequest) returns (UpdateUsersAndGrantsResponse);
 
   rpc UpdateBranchControl(UpdateBranchControlRequest) returns (UpdateBranchControlResponse);
+
+  rpc DropDatabase(DropDatabaseRequest) returns (DropDatabaseResponse);
 }
 
 message UpdateUsersAndGrantsRequest {
@@ -45,4 +47,12 @@ message UpdateBranchControlRequest {
 }
 
 message UpdateBranchControlResponse {
+}
+
+message DropDatabaseRequest {
+  // The name of the database to be dropped.
+  string name = 1;
+}
+
+message DropDatabaseResponse {
 }

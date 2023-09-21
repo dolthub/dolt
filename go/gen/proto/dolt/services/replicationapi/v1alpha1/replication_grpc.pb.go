@@ -22,7 +22,6 @@ package replicationapi
 
 import (
 	context "context"
-
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -45,6 +44,7 @@ type ReplicationServiceClient interface {
 	// with OverwriteUsersAndGrantData.
 	UpdateUsersAndGrants(ctx context.Context, in *UpdateUsersAndGrantsRequest, opts ...grpc.CallOption) (*UpdateUsersAndGrantsResponse, error)
 	UpdateBranchControl(ctx context.Context, in *UpdateBranchControlRequest, opts ...grpc.CallOption) (*UpdateBranchControlResponse, error)
+	DropDatabase(ctx context.Context, in *DropDatabaseRequest, opts ...grpc.CallOption) (*DropDatabaseResponse, error)
 }
 
 type replicationServiceClient struct {
@@ -73,6 +73,15 @@ func (c *replicationServiceClient) UpdateBranchControl(ctx context.Context, in *
 	return out, nil
 }
 
+func (c *replicationServiceClient) DropDatabase(ctx context.Context, in *DropDatabaseRequest, opts ...grpc.CallOption) (*DropDatabaseResponse, error) {
+	out := new(DropDatabaseResponse)
+	err := c.cc.Invoke(ctx, "/dolt.services.replicationapi.v1alpha1.ReplicationService/DropDatabase", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ReplicationServiceServer is the server API for ReplicationService service.
 // All implementations must embed UnimplementedReplicationServiceServer
 // for forward compatibility
@@ -85,6 +94,7 @@ type ReplicationServiceServer interface {
 	// with OverwriteUsersAndGrantData.
 	UpdateUsersAndGrants(context.Context, *UpdateUsersAndGrantsRequest) (*UpdateUsersAndGrantsResponse, error)
 	UpdateBranchControl(context.Context, *UpdateBranchControlRequest) (*UpdateBranchControlResponse, error)
+	DropDatabase(context.Context, *DropDatabaseRequest) (*DropDatabaseResponse, error)
 	mustEmbedUnimplementedReplicationServiceServer()
 }
 
@@ -97,6 +107,9 @@ func (UnimplementedReplicationServiceServer) UpdateUsersAndGrants(context.Contex
 }
 func (UnimplementedReplicationServiceServer) UpdateBranchControl(context.Context, *UpdateBranchControlRequest) (*UpdateBranchControlResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateBranchControl not implemented")
+}
+func (UnimplementedReplicationServiceServer) DropDatabase(context.Context, *DropDatabaseRequest) (*DropDatabaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DropDatabase not implemented")
 }
 func (UnimplementedReplicationServiceServer) mustEmbedUnimplementedReplicationServiceServer() {}
 
@@ -147,6 +160,24 @@ func _ReplicationService_UpdateBranchControl_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ReplicationService_DropDatabase_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DropDatabaseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReplicationServiceServer).DropDatabase(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dolt.services.replicationapi.v1alpha1.ReplicationService/DropDatabase",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReplicationServiceServer).DropDatabase(ctx, req.(*DropDatabaseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ReplicationService_ServiceDesc is the grpc.ServiceDesc for ReplicationService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -161,6 +192,10 @@ var ReplicationService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateBranchControl",
 			Handler:    _ReplicationService_UpdateBranchControl_Handler,
+		},
+		{
+			MethodName: "DropDatabase",
+			Handler:    _ReplicationService_DropDatabase_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
