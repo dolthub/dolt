@@ -8,6 +8,7 @@ venv
 .sqlhistory
 .doltcfg
 test.sh
+*eventsapi@*
 
 # ignore cp'd sysbench runner testing files
 SysbenchDockerfile

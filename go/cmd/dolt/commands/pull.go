@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -107,7 +108,20 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	pullSpec, err := env.NewPullSpec(ctx, dEnv.RepoStateReader(), remoteName, remoteRefName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.NoCommitFlag), apr.Contains(cli.NoEditFlag), apr.Contains(cli.ForceFlag), apr.NArg() == 1)
+	remoteOnly := apr.NArg() == 1
+	pullSpec, err := env.NewPullSpec(
+		ctx,
+		dEnv.RepoStateReader(),
+		remoteName,
+		remoteRefName,
+		remoteOnly,
+		env.WithSquash(apr.Contains(cli.SquashParam)),
+		env.WithNoFF(apr.Contains(cli.NoFFParam)),
+		env.WithNoCommit(apr.Contains(cli.NoCommitFlag)),
+		env.WithNoEdit(apr.Contains(cli.NoEditFlag)),
+		env.WithForce(apr.Contains(cli.ForceFlag)),
+	)
+
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -120,7 +134,14 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 }
 
 // pullHelper splits pull into fetch, prepare merge, and merge to interleave printing
-func pullHelper(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist, dEnv *env.DoltEnv, pullSpec *env.PullSpec, cliCtx cli.CliContext) error {
+func pullHelper(
+	ctx context.Context,
+	sqlCtx *sql.Context,
+	queryist cli.Queryist,
+	dEnv *env.DoltEnv,
+	pullSpec *env.PullSpec,
+	cliCtx cli.CliContext,
+) error {
 	srcDB, err := pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB.ValueReadWriter().Format(), dEnv)
 	if err != nil {
 		return fmt.Errorf("failed to get remote db; %w", err)
@@ -160,8 +181,18 @@ func pullHelper(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist,
 			}
 
 			err = dEnv.DoltDB.FastForward(ctx, remoteTrackRef, srcDBCommit)
-			if err != nil {
-				return fmt.Errorf("fetch failed; %w", err)
+			if errors.Is(err, datas.ErrMergeNeeded) {
+				// If the remote tracking branch has diverged from the local copy, we just overwrite it
+				h, err := srcDBCommit.HashOf()
+				if err != nil {
+					return err
+				}
+				err = dEnv.DoltDB.SetHead(ctx, remoteTrackRef, h)
+				if err != nil {
+					return err
+				}
+			} else if err != nil {
+				return fmt.Errorf("fetch failed: %w", err)
 			}
 
 			// Merge iff branch is current branch and there is an upstream set (pullSpec.Branch is set to nil if there is no upstream)
@@ -178,16 +209,16 @@ func pullHelper(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist,
 
 			name, email, configErr := env.GetNameAndEmail(dEnv.Config)
 			// If the name and email aren't set we can set them to empty values for now. This is only valid for ff
-			// merges which detect for later.
+			// merges which we detect later.
 			if configErr != nil {
-				if pullSpec.Noff {
+				if pullSpec.NoFF {
 					return configErr
 				}
 				name, email = "", ""
 			}
 
-			// Begin merge
-			mergeSpec, err := merge.NewMergeSpec(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, roots, name, email, pullSpec.Msg, remoteTrackRef.String(), pullSpec.Squash, pullSpec.Noff, pullSpec.Force, pullSpec.NoCommit, pullSpec.NoEdit, t)
+			// Begin merge of working and head with the remote head
+			mergeSpec, err := merge.NewMergeSpec(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, roots, name, email, remoteTrackRef.String(), t, merge.WithPullSpecOpts(pullSpec))
 			if err != nil {
 				return err
 			}
@@ -217,7 +248,12 @@ func pullHelper(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist,
 				return err
 			}
 
-			suggestedMsg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, headRef.GetPath())
+			suggestedMsg := fmt.Sprintf(
+				"Merge branch '%s' of %s into %s",
+				pullSpec.Branch.GetPath(),
+				pullSpec.Remote.Url,
+				headRef.GetPath(),
+			)
 			tblStats, err := performMerge(ctx, sqlCtx, queryist, dEnv, mergeSpec, suggestedMsg, cliCtx)
 			printSuccessStats(tblStats)
 			if err != nil {

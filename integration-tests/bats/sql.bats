@@ -1785,7 +1785,6 @@ SQL
 }
 
 @test "sql: USE tag doesn't create duplicate commit DB name" {
-    skip "unrelated panic when dolt_checkout is called after using a read-only revision db https://github.com/dolthub/dolt/issues/4067"
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch
 
@@ -1799,6 +1798,24 @@ CALL DOLT_TAG("v1");
 USE \`dolt_repo_$$/v1\`;
 CALL dolt_checkout('feature-branch');
 SQL
+}
+
+@test "sql: USE fake hash throws error" {
+    dolt add .; dolt commit -m 'commit tables'
+
+    # get the last commit hash
+    hash=`dolt log | grep commit | cut -d" " -f2 | tail -n+1 | head -n1`
+
+    # no error for this hash
+    dolt sql  <<SQL
+USE \`dolt_repo_$$/$hash\`;
+SQL
+
+    # try with a fake hash
+    hash='h4jks5lomp9u41r6902knn0pfr7lsgth'
+    run dolt sql -q "use \`dolt_repo_$$/$hash\`"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "database not found" ]] || false
 }
 
 @test "sql: tag qualified DB name in delete" {
@@ -2086,7 +2103,6 @@ SQL
 }
 
 @test "sql: date_format function" {
-    skip "date_format() not supported"
     dolt sql -q "select date_format(date_created, '%Y-%m-%d') from has_datetimes"
 }
 
@@ -2469,8 +2485,6 @@ SQL
 }
 
 @test "sql: found_row works with update properly in batch mode" {
-    skip "the auto commit semantics of batch mode make this fail"
-
     run dolt sql <<SQL
 CREATE TABLE tbl(pk int primary key, v1 int);
 INSERT INTO tbl VALUES (1,1), (2,1);

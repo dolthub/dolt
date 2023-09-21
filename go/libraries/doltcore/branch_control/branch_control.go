@@ -19,6 +19,7 @@ import (
 	goerrors "errors"
 	"fmt"
 	"os"
+	"sync/atomic"
 
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -57,6 +58,12 @@ type Controller struct {
 	Access    *Access
 	Namespace *Namespace
 
+	Serialized atomic.Pointer[[]byte]
+
+	// A callback which we call when we successfully save new data.
+	// The new data will be available in |Serialized|.
+	SavedCallback func()
+
 	branchControlFilePath string
 	doltConfigDirPath     string
 }
@@ -94,36 +101,68 @@ func LoadData(branchControlFilePath string, doltConfigDirPath string) (*Controll
 	if err != nil && !goerrors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
+
+	err = controller.LoadData(data /* isFirstLoad */, true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to deserialize config at '%s': %w", branchControlFilePath, err)
+	}
+	return controller, nil
+}
+
+func (controller *Controller) LoadData(data []byte, isFirstLoad bool) error {
+	controller.Access.RWMutex.Lock()
+	defer controller.Access.RWMutex.Unlock()
+
 	// Nothing to load so we can return
 	if len(data) == 0 {
 		// As there is nothing to load, we should populate the controller with the default row to ensure normal (expected) operation
 		controller.Access.insertDefaultRow()
-		return controller, nil
+		controller.Serialized.Store(&data)
+		if controller.SavedCallback != nil {
+			controller.SavedCallback()
+		}
+		return nil
 	}
 	// Load the tables
 	if serial.GetFileID(data) != serial.BranchControlFileID {
-		return nil, fmt.Errorf("unable to deserialize branch controller, unknown file ID `%s`", serial.GetFileID(data))
+		return fmt.Errorf("unable to deserialize branch controller, unknown file ID `%s`", serial.GetFileID(data))
 	}
 	bc, err := serial.TryGetRootAsBranchControl(data, serial.MessagePrefixSz)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	access, err := bc.TryAccessTbl(nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	namespace, err := bc.TryNamespaceTbl(nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
+
+	rollback := controller.Serialized.Load()
+
+	// TODO: Better concurrency control here. We see |Namespace| and
+	// |Access| in different views of the data here.
+
 	// The Deserialize functions acquire write locks, so we don't acquire them here
 	if err = controller.Access.Deserialize(access); err != nil {
-		return nil, fmt.Errorf("failed to deserialize config at '%s': %w", branchControlFilePath, err)
+		// TODO: More principaled rollback. Hopefully this does not fail.
+		controller.LoadData(*rollback, isFirstLoad)
+		return err
 	}
 	if err = controller.Namespace.Deserialize(namespace); err != nil {
-		return nil, err
+		// TODO: More principaled rollback. Hopefully this does not fail.
+		controller.LoadData(*rollback, isFirstLoad)
+		return err
 	}
-	return controller, nil
+
+	controller.Serialized.Store(&data)
+	if controller.SavedCallback != nil {
+		controller.SavedCallback()
+	}
+
+	return nil
 }
 
 // SaveData saves the data from the context's controller to the location pointed by it.
@@ -138,12 +177,15 @@ func SaveData(ctx context.Context) error {
 	if controller == nil {
 		return nil
 	}
+
+	return controller.SaveData(branchAwareSession.GetFileSystem())
+}
+
+func (controller *Controller) SaveData(fs filesys.Filesys) error {
 	// If we never set a save location then we just return
 	if len(controller.branchControlFilePath) == 0 {
 		return nil
 	}
-
-	fs := branchAwareSession.GetFileSystem()
 
 	// Create the doltcfg directory if it doesn't exist
 	if len(controller.doltConfigDirPath) != 0 {
@@ -151,6 +193,10 @@ func SaveData(ctx context.Context) error {
 			return mkErr
 		}
 	}
+
+	controller.Access.RWMutex.Lock()
+	defer controller.Access.RWMutex.Unlock()
+
 	b := flatbuffers.NewBuilder(1024)
 	// The Serialize functions acquire read locks, so we don't acquire them here
 	accessOffset := controller.Access.Serialize(b)
@@ -174,7 +220,16 @@ func SaveData(ctx context.Context) error {
 		return err
 	}
 
-	return writeCloser.Close()
+	err = writeCloser.Close()
+	if err != nil {
+		return err
+	}
+
+	controller.Serialized.Store(&data)
+	if controller.SavedCallback != nil {
+		controller.SavedCallback()
+	}
+	return nil
 }
 
 // CheckAccess returns whether the given context has the correct permissions on its selected branch. In general, SQL

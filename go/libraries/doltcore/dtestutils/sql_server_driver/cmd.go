@@ -15,6 +15,7 @@
 package sql_server_driver
 
 import (
+	"bufio"
 	"bytes"
 	"database/sql"
 	"fmt"
@@ -200,6 +201,7 @@ func (r Repo) CreateRemote(name, url string) error {
 }
 
 type SqlServer struct {
+	Name        string
 	Done        chan struct{}
 	Cmd         *exec.Cmd
 	Port        int
@@ -214,6 +216,12 @@ type SqlServerOpt func(s *SqlServer)
 func WithArgs(args ...string) SqlServerOpt {
 	return func(s *SqlServer) {
 		s.Cmd.Args = append(s.Cmd.Args, args...)
+	}
+}
+
+func WithName(name string) SqlServerOpt {
+	return func(s *SqlServer) {
+		s.Name = name
 	}
 }
 
@@ -267,10 +275,6 @@ func runSqlServerCommand(dc DoltCmdable, opts []SqlServerOpt, cmd *exec.Cmd) (*S
 	output := new(bytes.Buffer)
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		io.Copy(io.MultiWriter(os.Stdout, output), stdout)
-	}()
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
@@ -286,6 +290,31 @@ func runSqlServerCommand(dc DoltCmdable, opts []SqlServerOpt, cmd *exec.Cmd) (*S
 	for _, o := range opts {
 		o(server)
 	}
+
+	go func() {
+		defer wg.Done()
+		reader := bufio.NewReader(stdout)
+		multiOut := io.MultiWriter(os.Stdout, output)
+		wantsPrefix := true
+		for {
+			line, isPrefix, err := reader.ReadLine()
+			if err != nil {
+				return
+			}
+			if wantsPrefix && server.Name != "" {
+				os.Stdout.Write([]byte("["))
+				os.Stdout.Write([]byte(server.Name))
+				os.Stdout.Write([]byte("] "))
+			}
+			multiOut.Write(line)
+			if isPrefix {
+				wantsPrefix = false
+			} else {
+				multiOut.Write([]byte("\n"))
+				wantsPrefix = true
+			}
+		}
+	}()
 
 	server.RecreateCmd = func(args ...string) *exec.Cmd {
 		if server.DebugPort > 0 {

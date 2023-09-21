@@ -18,8 +18,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
@@ -216,14 +218,14 @@ func TestAsyncPushOnWrite(t *testing.T) {
 		t.Fatal("Unexpected error creating empty repo", err)
 	}
 
-	// setup hook
-	bThreads := sql.NewBackgroundThreads()
-	hook, err := NewAsyncPushOnWriteHook(bThreads, destDB, tmpDir, &buffer.Buffer{})
-	if err != nil {
-		t.Fatal("Unexpected error creating push hook", err)
-	}
-
 	t.Run("replicate to remote", func(t *testing.T) {
+		bThreads := sql.NewBackgroundThreads()
+		defer bThreads.Shutdown()
+		hook, err := NewAsyncPushOnWriteHook(bThreads, destDB, tmpDir, &buffer.Buffer{})
+		if err != nil {
+			t.Fatal("Unexpected error creating push hook", err)
+		}
+
 		for i := 0; i < 200; i++ {
 			cs, _ := NewCommitSpec("main")
 			commit, err := ddb.Resolve(context.Background(), cs, nil)
@@ -273,4 +275,72 @@ func TestAsyncPushOnWrite(t *testing.T) {
 			require.NoError(t, err)
 		}
 	})
+
+	t.Run("does not over replicate branch delete", func(t *testing.T) {
+		// We used to have a bug where a branch delete would be
+		// replicated over and over again endlessly.
+
+		// The test construction here is that we put a counting commit
+		// hook on *destDB*.  Then we call the async push hook as if we
+		// need to replicate certain head updates.  We call once for a
+		// branch that does exist and once for a branch which does not
+		// exist. Calling with a branch which does not exist looks the
+		// same as the call which is made after a branch delete.
+
+		counts := &countingCommitHook{make(map[string]int)}
+		destDB.SetCommitHooks(context.Background(), []CommitHook{counts})
+
+		bThreads := sql.NewBackgroundThreads()
+		hook, err := NewAsyncPushOnWriteHook(bThreads, destDB, tmpDir, &buffer.Buffer{})
+		require.NoError(t, err, "create push on write hook without an error")
+
+		// Pretend we replicate a HEAD which does exist.
+		ds, err := ddb.db.GetDataset(ctx, "refs/heads/main")
+		require.NoError(t, err)
+		_, err = hook.Execute(ctx, ds, ddb.db)
+		require.NoError(t, err)
+
+		// Pretend we replicate a HEAD which does not exist, i.e., a branch delete.
+		ds, err = ddb.db.GetDataset(ctx, "refs/heads/does_not_exist")
+		require.NoError(t, err)
+		_, err = hook.Execute(ctx, ds, ddb.db)
+		require.NoError(t, err)
+
+		// Wait a bit for background thread to fire, in case it is
+		// going to betray us. TODO: Structure AsyncPushOnWriteHook to
+		// be more testable, so we do not have to rely on
+		// non-determinstic goroutine scheduling and best-effort sleeps
+		// to observe the potential failure here.
+		time.Sleep(10 * time.Second)
+
+		// Shutdown thread to get final replication if necessary.
+		bThreads.Shutdown()
+
+		// If all went well, the branch delete was executed exactly once.
+		require.Equal(t, 1, counts.counts["refs/heads/does_not_exist"])
+	})
+}
+
+var _ CommitHook = (*countingCommitHook)(nil)
+
+type countingCommitHook struct {
+	// The number of times Execute() got called for given dataset.
+	counts map[string]int
+}
+
+func (c *countingCommitHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) (func(context.Context) error, error) {
+	c.counts[ds.ID()] += 1
+	return nil, nil
+}
+
+func (c *countingCommitHook) HandleError(ctx context.Context, err error) error {
+	return nil
+}
+
+func (c *countingCommitHook) SetLogger(ctx context.Context, wr io.Writer) error {
+	return nil
+}
+
+func (c *countingCommitHook) ExecuteForWorkingSets() bool {
+	return false
 }

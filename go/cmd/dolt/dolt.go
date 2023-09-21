@@ -63,7 +63,7 @@ import (
 )
 
 const (
-	Version = "1.14.0"
+	Version = "1.16.2"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -129,7 +129,6 @@ var commandsWithoutCliCtx = []cli.Command{
 	sqlserver.SqlServerCmd{VersionStr: Version},
 	sqlserver.SqlClientCmd{VersionStr: Version},
 	commands.CloneCmd{},
-	commands.FetchCmd{},
 	commands.PushCmd{},
 	commands.RemoteCmd{},
 	commands.BackupCmd{},
@@ -616,6 +615,13 @@ func buildLateBinder(ctx context.Context, cwdFS filesys.Filesys, rootEnv *env.Do
 
 	useDb, hasUseDb := apr.GetValue(commands.UseDbFlag)
 	useBranch, hasBranch := apr.GetValue(cli.BranchParam)
+
+	if subcommandName == "fetch" || subcommandName == "pull" || subcommandName == "push" {
+		if apr.Contains(cli.HostFlag) {
+			return nil, fmt.Errorf(`The %s command is not supported against a remote host yet. 
+If you're interested in running this command against a remote host, hit us up on discord (https://discord.gg/gqr7K4VNKe).`, subcommandName)
+		}
+	}
 
 	if hasUseDb && hasBranch {
 		dbName, branchNameInDb := dsess.SplitRevisionDbName(useDb)

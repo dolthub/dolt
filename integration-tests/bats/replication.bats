@@ -678,7 +678,7 @@ SQL
     [ "$status" -eq 0 ]
 }
 
-@test "replication: non-fast-forward pull fails replication" {
+@test "replication: non-fast-forward pull fails with force turned off" {
     dolt clone file://./rem1 clone1
     cd clone1
     dolt sql -q "create table t1 (a int primary key)"
@@ -690,6 +690,7 @@ SQL
     cd ../repo1
     dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
     dolt config --local --add sqlserver.global.dolt_replicate_heads main
+    dolt sql -q "set @@persist.dolt_read_replica_force_pull = off"
 
     run dolt sql -q "show tables"
     [ "$status" -eq 0 ]
@@ -698,12 +699,15 @@ SQL
     cd ../clone1
     dolt checkout -b new-main HEAD~
     dolt sql -q "create table t1 (a int primary key)"
-    dolt sql -q "insert into t1 values (1), (2), (3);"
+    dolt sql -q "insert into t1 values (1);"
     dolt add .
     dolt commit -am "new commit"
     dolt push -f origin new-main:main
 
     cd ../repo1
+    
+    # with dolt_read_replica_force_pull set to false (not default), this fails with a replication
+    # error
     run dolt sql -q "show tables"
     [ "$status" -ne 0 ]
     [[ "$output" =~ "replication" ]] || false
@@ -721,7 +725,6 @@ SQL
     cd ../repo1
     dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
     dolt config --local --add sqlserver.global.dolt_replicate_heads main
-    dolt config --local --add sqlserver.global.dolt_read_replica_force_pull 1
 
     run dolt sql -q "select sum(a) from t1"
     [ "$status" -eq 0 ]
@@ -821,4 +824,38 @@ SQL
     run dolt ls
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
+}
+
+@test "replication: commit --amend" {
+    mkdir test_commit_amend_replication_primary
+    dolt init --fun
+
+    dolt remote add origin file://./test_commit_amend_replication
+    dolt push origin main
+
+    dolt sql -q "set @@persist.dolt_replicate_all_heads = 1"
+    dolt sql -q "set @@persist.dolt_replicate_to_remote = 'origin'"
+
+    dolt sql << SQL
+create table foo (pk int primary key, c1 int);
+insert into foo values (1,1);
+SQL
+    
+    dolt commit -Am "Created Table"
+
+    mkdir clone && cd clone
+    dolt clone file://../test_commit_amend_replication
+    cd test_commit_amend_replication
+    dolt sql -q "set @@persist.dolt_replicate_heads = 'main'"
+    dolt sql -q "set @@persist.dolt_read_replica_remote = 'origin'"
+    dolt sql -q "select * from foo"
+
+    cd ../../
+    dolt commit --amend -m "inserted 0,0. amended"
+    dolt push origin main
+
+    cd clone/test_commit_amend_replication
+    run dolt sql -q "select * from foo" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,1" ]] || false 
 }

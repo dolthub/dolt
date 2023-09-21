@@ -132,6 +132,7 @@ func NewSqlEngine(
 
 	config.ClusterController.RegisterStoredProcedures(pro)
 	pro.InitDatabaseHook = cluster.NewInitDatabaseHook(config.ClusterController, bThreads, pro.InitDatabaseHook)
+	pro.DropDatabaseHook = config.ClusterController.DropDatabaseHook
 
 	// Create the engine
 	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{
@@ -153,6 +154,7 @@ func NewSqlEngine(
 	// Load in privileges from file, if it exists
 	var persister cluster.MySQLDbPersister
 	persister = mysql_file_handler.NewPersister(config.PrivFilePath, config.DoltCfgDirPath)
+
 	persister = config.ClusterController.HookMySQLDbPersister(persister, engine.Analyzer.Catalog.MySQLDb)
 	data, err := persister.LoadData(ctx)
 	if err != nil {
@@ -164,6 +166,7 @@ func NewSqlEngine(
 	if bcController, err = branch_control.LoadData(config.BranchCtrlFilePath, config.DoltCfgDirPath); err != nil {
 		return nil, err
 	}
+	config.ClusterController.HookBranchControlPersistence(bcController, mrEnv.FileSystem())
 
 	// Setup the engine.
 	engine.Analyzer.Catalog.MySQLDb.SetPersister(persister)

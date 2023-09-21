@@ -63,7 +63,7 @@ func (ltf *LogTableFunction) NewInstance(ctx *sql.Context, db sql.Database, expr
 		database: db,
 	}
 
-	node, err := newInstance.WithExpressions(expressions...)
+	node, err := newInstance.evalArguments(expressions...)
 	if err != nil {
 		return nil, err
 	}
@@ -179,11 +179,7 @@ func (ltf *LogTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.Pri
 
 // Expressions implements the sql.Expressioner interface.
 func (ltf *LogTableFunction) Expressions() []sql.Expression {
-	var exprs []sql.Expression
-	for _, expr := range ltf.revisionExprs {
-		exprs = append(exprs, expr)
-	}
-	return exprs
+	return []sql.Expression{}
 }
 
 // getDoltArgs builds an argument string from sql expressions so that we can
@@ -252,8 +248,16 @@ func (ltf *LogTableFunction) addOptions(expression []sql.Expression) error {
 	return nil
 }
 
-// WithExpressions implements the sql.Expressioner interface.
-func (ltf *LogTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
+func (ltf *LogTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node, error) {
+	if len(exprs) != 0 {
+		return nil, sql.ErrInvalidChildrenNumber.New(0, len(exprs))
+	}
+	return ltf, nil
+}
+
+// evalArguments converts the input expressions into string literals and
+// formats them as function arguments.
+func (ltf *LogTableFunction) evalArguments(expression ...sql.Expression) (sql.Node, error) {
 	for _, expr := range expression {
 		if !expr.Resolved() {
 			return nil, ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())

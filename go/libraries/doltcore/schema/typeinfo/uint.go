@@ -144,7 +144,8 @@ func (ti *uintType) Equals(other TypeInfo) bool {
 		return false
 	}
 	if ti2, ok := other.(*uintType); ok {
-		return ti.sqlUintType.Type() == ti2.sqlUintType.Type()
+		return ti.sqlUintType.Type() == ti2.sqlUintType.Type() &&
+			ti.sqlUintType.DisplayWidth() == ti2.sqlUintType.DisplayWidth()
 	}
 	return false
 }

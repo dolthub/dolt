@@ -231,7 +231,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 		_, itr, err = eng.Query(sqlCtx, query)
 	case *sqlparser.DDL:
 		_, itr, err = eng.Query(sqlCtx, query)
-	case *sqlparser.Select, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
+	case *sqlparser.Select, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.SetOp:
 		return nil, fmt.Errorf("filter-branch queries must be write queries: '%s'", query)
 
 	default:

@@ -753,16 +753,16 @@ SQL
     dolt push test-remote main
     run dolt fetch test-remote
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [ "$output" != "" ]  # spinner output
     run dolt fetch test-remote refs/heads/main:refs/remotes/test-remote/main
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [ "$output" != "" ]  # spinner output
     run dolt fetch poop refs/heads/main:refs/remotes/poop/main
     [ "$status" -eq 1 ]
     [[ "$output" =~ "unknown remote" ]] || false
     run dolt fetch test-remote refs/heads/main:refs/remotes/test-remote/poop
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [ "$output" != "" ]  # spinner output
     run dolt branch -v -a
     [ "$status" -eq 0 ]
     [[ "$output" =~ "remotes/test-remote/poop" ]] || false
@@ -847,10 +847,6 @@ SQL
     # The number of $lines and $output printed is non-deterministic
     # due to EphemeralPrinter. We can't test for their length here.
     [ "$output" != "" ]
-
-    run dolt fetch
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
 }
 
 @test "remotes: dolt fetch with docs" {
@@ -865,7 +861,7 @@ SQL
     dolt push test-remote main
     run dolt fetch test-remote
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [ "$output" != "" ]  # spinner output
     run cat README.md
     [ "$status" -eq 0 ]
     [[ "$output" =~ "initial-readme" ]] || false
@@ -1055,6 +1051,80 @@ SQL
     [[ "$output" =~ "Merge branch 'main' of" ]] || false
     [[ ! "$output" =~ "test commit" ]] || false
     [[ ! "$output" =~ "another test commit" ]] || false
+}
+
+@test "remotes: dolt_pull() with divergent head" {
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt push test-remote main
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt add test
+    dolt commit -m "test commit"
+    dolt push test-remote main
+
+    cd "dolt-repo-clones"
+    dolt clone http://localhost:50051/test-org/test-repo
+    cd ..
+
+    dolt commit --amend -m 'new message'
+    dolt push -f test-remote main
+    
+    cd "dolt-repo-clones/test-repo"
+
+    run dolt sql -q "call dolt_pull('origin')" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '0,0' ]] || false
+
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Merge branch 'main' of" ]] || false
+    [[ ! "$output" =~ "new message" ]] || false
+}
+
+@test "remotes: merge with divergent head" {
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt push test-remote main
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt add test
+    dolt commit -m "test commit"
+    dolt push test-remote main
+
+    cd "dolt-repo-clones"
+    dolt clone http://localhost:50051/test-org/test-repo
+    cd ..
+
+    dolt commit --amend -m 'new message'
+    dolt push -f test-remote main
+    
+    cd "dolt-repo-clones/test-repo"
+
+    run dolt pull origin
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "Fast-forward" ]] || false
+
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Merge branch 'main' of" ]] || false
+    [[ ! "$output" =~ "new message" ]] || false
 }
 
 @test "remotes: generate a merge with a conflict with a remote branch" {
@@ -1260,6 +1330,7 @@ SQL
     dolt add test
     dolt commit -m "test commit"
     dolt push test-remote main
+    
     cd "dolt-repo-clones/test-repo"
     dolt sql <<SQL
 CREATE TABLE other (
@@ -1277,12 +1348,9 @@ SQL
     dolt fetch
     dolt push -f origin main
     cd ../../
-    run dolt pull
-    [ "$status" -ne 0 ]
-    run dolt fetch test-remote
-    [ "$status" -eq 0 ]
+    
     run dolt pull --no-edit
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 0 ]    
 }
 
 @test "remotes: validate that a config isn't needed for a pull." {

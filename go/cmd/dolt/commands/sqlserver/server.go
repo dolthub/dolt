@@ -54,6 +54,10 @@ const (
 	LocalConnectionUser = "__dolt_local_user__"
 )
 
+// ExternalDisableUsers is called by implementing applications to disable users. This is not used by Dolt itself,
+// but will break compatibility with implementing applications that do not yet support users.
+var ExternalDisableUsers bool = false
+
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
 func Serve(
 	ctx context.Context,
@@ -252,6 +256,9 @@ func Serve(
 	ed = mysqlDb.Editor()
 	mysqlDb.AddSuperUser(ed, LocalConnectionUser, "localhost", serverLock.Secret)
 	ed.Close()
+	if ExternalDisableUsers {
+		mysqlDb.SetEnabled(false)
+	}
 
 	var metSrv *http.Server
 	if serverConfig.MetricsHost() != "" && serverConfig.MetricsPort() > 0 {
