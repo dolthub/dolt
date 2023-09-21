@@ -113,18 +113,6 @@ func (dt *ColumnDiffTable) PartitionRows(ctx *sql.Context, partition sql.Partiti
 	}
 }
 
-// // todo fix indexed paths, these were missing tests in CI
-// // GetIndexes implements sql.IndexAddressable
-// func (dt *ColumnDiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-// 	return index.DoltCommitIndexes(dt.Name(), dt.ddb, true)
-// }
-//
-// // IndexedAccess implements sql.IndexAddressable
-// func (dt *ColumnDiffTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) (sql.IndexedTable, error) {
-// 	nt := *dt
-// 	return &nt, nil
-// }
-
 // Collation implements the sql.Table interface.
 func (dt *ColumnDiffTable) Collation() sql.CollationID {
 	return sql.Collation_Default

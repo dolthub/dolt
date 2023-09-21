@@ -620,7 +620,7 @@ func (t *WritableDoltTable) fulltextTableSets(ctx *sql.Context, workingRoot *dol
 }
 
 // tableSetsForRewrite returns the fulltext.TableSet for each Full-Text index in the table, truncated and modified
-// for a table rewrite operation. Returns the root given with all full-set pseudo tables updated with their new
+// for a table rewrite operation. Returns the root given with all full-text pseudo tables updated with their new
 // truncated value.
 func (t *WritableDoltTable) tableSetsForRewrite(
 	ctx *sql.Context,
@@ -631,7 +631,7 @@ func (t *WritableDoltTable) tableSetsForRewrite(
 		return nil, nil, nil, err
 	}
 
-	// truncate each of the fullset tables in each set before returning them
+	// truncate each of the fulltext tables in each set before returning them
 	_, insertCols, err := fulltext.GetKeyColumns(ctx, t)
 	if err != nil {
 		return nil, nil, nil, err
@@ -1613,6 +1613,9 @@ func fullTextRewriteEditor(
 	}
 
 	updatedRoot, configTable, tableSets, err := newTable.(*AlterableDoltTable).tableSetsForRewrite(ctx, workingRoot)
+	if err != nil {
+		return nil, err
+	}
 
 	// TODO: figure out locking. Other DBs automatically lock a table during this kind of operation, we should probably
 	//  do the same. We're messing with global auto-increment values here and it's not safe.
