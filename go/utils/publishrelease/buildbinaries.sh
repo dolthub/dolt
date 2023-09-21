@@ -11,7 +11,7 @@ cd $script_dir/../..
 docker run --rm -v `pwd`:/src golang:"$GO_BUILD_VERSION"-buster /bin/bash -c '
 set -e
 set -o pipefail
-apt-get update && apt-get install -y zip
+apt-get update && apt-get install -y p7zip pigz
 cd /src
 
 BINS="dolt"
@@ -29,12 +29,12 @@ for tuple in $OS_ARCH_TUPLES; do
     if [ "$os" = windows ]; then
       obin="$bin.exe"
     fi
-    CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -o "$o/bin/$obin" "./cmd/$bin/"
+    CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -ldflags="-s -w" -o "$o/bin/$obin" "./cmd/$bin/"
   done
   if [ "$os" = windows ]; then
-    (cd out && zip -r "dolt-$os-$arch" "dolt-$os-$arch")
+    (cd out && 7z a "dolt-$os-$arch.zip" "dolt-$os-$arch" && 7z a "dolt-$os-$arch.7z" "dolt-$os-$arch")
   else
-    tar czf "out/dolt-$os-$arch.tar.gz" -C out "dolt-$os-$arch"
+    tar cf - "dolt-$os-$arch" | pigz -9 > "out/dolt-$os-$arch.tar.gz"
   fi
 done
 
