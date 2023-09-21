@@ -1292,29 +1292,65 @@ func (db Database) GetEvent(ctx *sql.Context, name string) (sql.EventDefinition,
 }
 
 // GetEvents implements sql.EventDatabase.
-func (db Database) GetEvents(ctx *sql.Context) ([]sql.EventDefinition, error) {
+func (db Database) GetEvents(ctx *sql.Context) (events []sql.EventDefinition, token interface{}, err error) {
 	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if !ok {
-		return nil, nil
+		// If the dolt_schemas table doesn't exist, it's not an error, just no events
+		return nil, nil, nil
 	}
 
 	frags, err := getSchemaFragmentsOfType(ctx, tbl.(*WritableDoltTable), eventFragment)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	var events []sql.EventDefinition
 	for _, frag := range frags {
 		event, err := db.createEventDefinitionFromFragment(ctx, frag)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		events = append(events, *event)
 	}
-	return events, nil
+
+	// Grab a hash of the dolt_schemas table to use as the identifying token
+	// to track if events need to be reloaded.
+	tableHash, err := db.doltSchemaTableHash(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return events, tableHash, nil
+}
+
+// NeedsToReloadEvents implements sql.EventDatabase.
+func (db Database) NeedsToReloadEvents(ctx *sql.Context, token interface{}) (bool, error) {
+	hash, ok := token.(hash.Hash)
+	if !ok {
+		return false, fmt.Errorf("expected token to be hash.Hash, but received %T", token)
+	}
+
+	tableHash, err := db.doltSchemaTableHash(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	// If the current hash doesn't match what we last loaded, then we
+	// need to reload event definitions
+	return !tableHash.Equal(hash), nil
+}
+
+// doltSchemaTableHash returns the hash of the dolt_schemas table, or any error encountered along the way.
+func (db Database) doltSchemaTableHash(ctx *sql.Context) (hash.Hash, error) {
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+
+	tableHash, _, err := root.GetTableHash(ctx, doltdb.SchemasTableName)
+	return tableHash, err
 }
 
 // createEventDefinitionFromFragment creates an EventDefinition instance from the schema fragment |frag|.
