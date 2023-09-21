@@ -34,7 +34,7 @@ for tuple in $OS_ARCH_TUPLES; do
   if [ "$os" = windows ]; then
     (cd out && 7z a "dolt-$os-$arch.zip" "dolt-$os-$arch" && 7z a "dolt-$os-$arch.7z" "dolt-$os-$arch")
   else
-    tar cf - "dolt-$os-$arch" | pigz -9 > "out/dolt-$os-$arch.tar.gz"
+    tar cf - -C out "dolt-$os-$arch" | pigz -9 > "out/dolt-$os-$arch.tar.gz"
   fi
 done
 
