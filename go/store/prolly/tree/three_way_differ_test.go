@@ -215,8 +215,8 @@ func TestThreeWayDiffer(t *testing.T) {
 	}
 }
 
-func testResolver(t *testing.T, ns NodeStore, valDesc val.TupleDesc, valBuilder *val.TupleBuilder) func(val.Tuple, val.Tuple, val.Tuple) (val.Tuple, bool) {
-	return func(l, r, b val.Tuple) (val.Tuple, bool) {
+func testResolver(t *testing.T, ns NodeStore, valDesc val.TupleDesc, valBuilder *val.TupleBuilder) func(context.Context, val.Tuple, val.Tuple, val.Tuple) (val.Tuple, bool) {
+	return func(_ context.Context, l, r, b val.Tuple) (val.Tuple, bool) {
 		for i := range valDesc.Types {
 			var base, left, right int64
 			var ok bool

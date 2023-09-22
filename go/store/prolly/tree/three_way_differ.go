@@ -38,7 +38,7 @@ type ThreeWayDiffer[K ~[]byte, O Ordering[K]] struct {
 
 //var _ DiffIter = (*threeWayDiffer[Item, val.TupleDesc])(nil)
 
-type resolveCb func(val.Tuple, val.Tuple, val.Tuple) (val.Tuple, bool)
+type resolveCb func(context.Context, val.Tuple, val.Tuple, val.Tuple) (val.Tuple, bool)
 
 func NewThreeWayDiffer[K, V ~[]byte, O Ordering[K]](
 	ctx context.Context,
@@ -165,7 +165,7 @@ func (d *ThreeWayDiffer[K, O]) Next(ctx context.Context) (ThreeWayDiff, error) {
 			} else if d.lDiff.Type == d.rDiff.Type && bytes.Equal(d.lDiff.To, d.rDiff.To) {
 				res = d.newConvergentEdit(d.lDiff.Key, d.lDiff.To, d.lDiff.Type)
 			} else {
-				resolved, ok := d.resolveCb(val.Tuple(d.lDiff.To), val.Tuple(d.rDiff.To), val.Tuple(d.lDiff.From))
+				resolved, ok := d.resolveCb(ctx, val.Tuple(d.lDiff.To), val.Tuple(d.rDiff.To), val.Tuple(d.lDiff.From))
 				if !ok {
 					res = d.newDivergentClashConflict(d.lDiff.Key, d.lDiff.From, d.lDiff.To, d.rDiff.To)
 				} else {
