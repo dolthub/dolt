@@ -2102,15 +2102,15 @@ var MergeScripts = []queries.ScriptTest{
 	{
 		Name: "merge fulltext with renamed table",
 		SetUpScript: []string{
-			 "CREATE TABLE test (pk BIGINT UNSIGNED PRIMARY KEY, v1 VARCHAR(200), FULLTEXT idx (v1));",
-			 "INSERT INTO test VALUES (1, 'abc');",
+			"CREATE TABLE test (pk BIGINT UNSIGNED PRIMARY KEY, v1 VARCHAR(200), FULLTEXT idx (v1));",
+			"INSERT INTO test VALUES (1, 'abc');",
 			"CALL dolt_commit('-Am', 'Initial commit')",
 			"call dolt_branch('other')",
-			 "DROP INDEX idx ON test;",
-			 "INSERT INTO test VALUES (2, 'def');",
-			 "RENAME TABLE test TO test_temp;",
-			 "ALTER TABLE test_temp ADD FULLTEXT INDEX idx (v1);",
-			 "RENAME TABLE test_temp TO test;",
+			"DROP INDEX idx ON test;",
+			"INSERT INTO test VALUES (2, 'def');",
+			"RENAME TABLE test TO test_temp;",
+			"ALTER TABLE test_temp ADD FULLTEXT INDEX idx (v1);",
+			"RENAME TABLE test_temp TO test;",
 			"call dolt_commit('-Am', 'Renamed pseudo-index tables')",
 			"call dolt_checkout('other')",
 			"INSERT INTO test VALUES (3, 'ghi');",
@@ -2119,7 +2119,7 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "call dolt_merge('other')",
+				Query:            "call dolt_merge('other')",
 				SkipResultsCheck: true, // contains commit hash, we just need it to not error
 			},
 			{

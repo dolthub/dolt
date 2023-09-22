@@ -138,7 +138,7 @@ func TestSingleScript(t *testing.T) {
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "call dolt_merge('other')",
+					Query:            "call dolt_merge('other')",
 					SkipResultsCheck: true, // returns a commit hash, can't check easily
 				},
 				{
