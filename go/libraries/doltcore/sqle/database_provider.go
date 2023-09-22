@@ -48,6 +48,7 @@ type DoltDatabaseProvider struct {
 	functions          map[string]sql.Function
 	externalProcedures sql.ExternalStoredProcedureRegistry
 	InitDatabaseHook   InitDatabaseHook
+	DropDatabaseHook   DropDatabaseHook
 	mu                 *sync.RWMutex
 
 	defaultBranch string
@@ -446,6 +447,7 @@ func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name stri
 }
 
 type InitDatabaseHook func(ctx *sql.Context, pro DoltDatabaseProvider, name string, env *env.DoltEnv) error
+type DropDatabaseHook func(name string)
 
 // ConfigureReplicationDatabaseHook sets up replication for a newly created database as necessary
 // TODO: consider the replication heads / all heads setting
@@ -633,6 +635,12 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	err = dbfactory.DeleteFromSingletonCache(dropDbLoc + "/.dolt/noms")
 	if err != nil {
 		return err
+	}
+
+	if p.DropDatabaseHook != nil {
+		// For symmetry with InitDatabaseHook and the names we see in
+		// MultiEnv initialization, we use `name` here, not `dbKey`.
+		p.DropDatabaseHook(name)
 	}
 
 	rootDbLoc, err := p.fs.Abs("")

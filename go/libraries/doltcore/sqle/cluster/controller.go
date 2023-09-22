@@ -310,6 +310,27 @@ func (c *Controller) RegisterStoredProcedures(store procedurestore) {
 	store.Register(newTransitionToStandbyProcedure(c))
 }
 
+func (c *Controller) DropDatabaseHook(dbname string) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	j := 0
+	for i := 0; i < len(c.commithooks); i++ {
+		if c.commithooks[i].dbname == dbname {
+			c.commithooks[i].databaseWasDropped()
+			continue
+		}
+		if j != i {
+			c.commithooks[j] = c.commithooks[i]
+		}
+		j += 1
+	}
+	c.commithooks = c.commithooks[:j]
+}
+
 func (c *Controller) ClusterDatabase() sql.Database {
 	if c == nil {
 		return nil
