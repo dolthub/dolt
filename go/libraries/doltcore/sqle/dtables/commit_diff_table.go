@@ -35,8 +35,6 @@ var ErrExactlyOneToCommit = errors.New("dolt_commit_diff_* tables must be filter
 var ErrExactlyOneFromCommit = errors.New("dolt_commit_diff_* tables must be filtered to a single 'from_commit'")
 var ErrInvalidCommitDiffTableArgs = errors.New("commit_diff_<table> requires one 'to_commit' and one 'from_commit'")
 
-var _ sql.Table = (*CommitDiffTable)(nil)
-
 type CommitDiffTable struct {
 	name        string
 	ddb         *doltdb.DoltDB
@@ -50,6 +48,9 @@ type CommitDiffTable struct {
 	requiredFilterErr error
 	targetSchema      schema.Schema
 }
+
+var _ sql.Table = (*CommitDiffTable)(nil)
+var _ sql.IndexAddressable = (*CommitDiffTable)(nil)
 
 func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue) (sql.Table, error) {
 	diffTblName := doltdb.DoltCommitDiffTablePrefix + tblName
