@@ -2104,23 +2104,23 @@ var MergeScripts = []queries.ScriptTest{
 		SetUpScript: []string{
 			 "CREATE TABLE test (pk BIGINT UNSIGNED PRIMARY KEY, v1 VARCHAR(200), FULLTEXT idx (v1));",
 			 "INSERT INTO test VALUES (1, 'abc');",
-			"CALL dolt_commit('Am', 'Initial commit')",
+			"CALL dolt_commit('-Am', 'Initial commit')",
 			"call dolt_branch('other')",
 			 "DROP INDEX idx ON test;",
 			 "INSERT INTO test VALUES (2, 'def');",
 			 "RENAME TABLE test TO test_temp;",
 			 "ALTER TABLE test_temp ADD FULLTEXT INDEX idx (v1);",
 			 "RENAME TABLE test_temp TO test;",
-			"call dolt_commit('-m', 'Renamed pseudo-index tables')",
+			"call dolt_commit('-Am', 'Renamed pseudo-index tables')",
 			"call dolt_checkout('other')",
 			"INSERT INTO test VALUES (3, 'ghi');",
-			"call dolt_commit('-m', 'Insertion commit')",
+			"call dolt_commit('-Am', 'Insertion commit')",
 			"call dolt_checkout('main')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "call dolt_merge('other')",
-				Expected: []sql.Row{{"", 0, 0}},
+				SkipResultsCheck: true, // contains commit hash, we just need it to not error
 			},
 			{
 				Query: "SELECT v1 FROM test WHERE MATCH(v1) AGAINST ('abc def ghi');",
