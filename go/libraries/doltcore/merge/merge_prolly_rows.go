@@ -1588,8 +1588,8 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 		return nil, false
 	}
 
-	b := m.baseMapping[i]
-	baseVal := base.GetField(b)
+	baseColumnIndex := m.baseMapping[i]
+	baseVal := base.GetField(baseColumnIndex)
 
 	// We can now assume that both left are right are modifications to an existing column.
 	// We want to know if they're the same modification, otherwise there's a conflict.
@@ -1617,7 +1617,7 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 		if rightSchemaChanged {
 			// Attempt to convert the left column to match the changed right schema
 			var conflict bool
-			leftCol, conflict = Convert(ctx, m.leftVD, m.resultVD, m.resultSchema, i, left, m.ns)
+			leftCol, conflict = convert(ctx, m.leftVD, m.resultVD, m.resultSchema, leftColumnIndex, i, left, m.ns)
 			if conflict {
 				return nil, true
 			}
@@ -1625,7 +1625,7 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 			leftModified = m.resultVD.Comparator().CompareValues(i, leftCol, baseVal, leftType) != 0
 			// To determine if the right value changed from the base value, we need to convert the base value.
 
-			convertedBaseValue, conflict := Convert(ctx, m.baseVD, m.rightVD, m.rightSchema, i, base, m.ns)
+			convertedBaseValue, conflict := convert(ctx, m.baseVD, m.rightVD, m.rightSchema, baseColumnIndex, rightColumnIndex, base, m.ns)
 			if conflict {
 				return nil, true
 			}
@@ -1635,15 +1635,15 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 		if leftSchemaChanged {
 			// Attempt to convert the right column to match the changed left schema
 			var conflict bool
-			rightCol, conflict = Convert(ctx, m.rightVD, m.resultVD, m.resultSchema, i, right, m.ns)
+			rightCol, conflict = convert(ctx, m.rightVD, m.resultVD, m.resultSchema, rightColumnIndex, i, right, m.ns)
 			if conflict {
 				return nil, true
 			}
 
 			rightModified = m.resultVD.Comparator().CompareValues(i, rightCol, baseVal, rightType) != 0
-			// To determine if the right value changed from the base value, we need to convert the base value.
+			// To determine if the left value changed from the base value, we need to convert the base value.
 
-			convertedBaseValue, conflict := Convert(ctx, m.baseVD, m.leftVD, m.leftSchema, i, base, m.ns)
+			convertedBaseValue, conflict := convert(ctx, m.baseVD, m.leftVD, m.leftSchema, baseColumnIndex, leftColumnIndex, base, m.ns)
 			if conflict {
 				return nil, true
 			}
@@ -1671,17 +1671,19 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 	}
 }
 
-func Convert(ctx context.Context, fromDesc, toDesc val.TupleDesc, toSchema schema.Schema, i int, tuple val.Tuple, ns tree.NodeStore) ([]byte, bool) {
-	parsedLeftCol, err := index.GetField(nil, fromDesc, i, tuple, nil)
+// convert takes the `i`th column in the provided tuple and converts it to the type specified in the provided schema.
+// returns the new representation, and a bool indicating whether there was a conflict.
+func convert(ctx context.Context, fromDesc, toDesc val.TupleDesc, toSchema schema.Schema, fromIndex, toIndex int, tuple val.Tuple, ns tree.NodeStore) ([]byte, bool) {
+	parsedCell, err := index.GetField(ctx, fromDesc, fromIndex, tuple, ns)
 	if err != nil {
 		return nil, true
 	}
-	convertedLeftCol, inRange, err := toSchema.GetAllCols().GetByIndex(i).TypeInfo.ToSqlType().Convert(parsedLeftCol)
+	convertedCell, inRange, err := toSchema.GetAllCols().GetByIndex(toIndex).TypeInfo.ToSqlType().Convert(parsedCell)
 	if err != nil {
 		return nil, true
 	}
 	if !inRange {
 		return nil, true
 	}
-	return index.Serialize(ctx, ns, toDesc.Types[i], convertedLeftCol, nil), false
+	return index.Serialize(ctx, ns, toDesc.Types[toIndex], convertedCell), false
 }

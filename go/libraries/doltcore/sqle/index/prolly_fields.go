@@ -131,7 +131,7 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tr
 }
 
 // Serialize writes an interface{} to the ith field of the Tuple being built.
-func Serialize(ctx context.Context, ns tree.NodeStore, t val.Type, v interface{}, tb *val.TupleBuilder) []byte {
+func Serialize(ctx context.Context, ns tree.NodeStore, t val.Type, v interface{}) []byte {
 	var res []byte
 
 	if v == nil {
