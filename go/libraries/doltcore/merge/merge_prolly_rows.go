@@ -1559,11 +1559,10 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 		// There are three possible cases:
 		// - The base row doesn't exist, or
 		// - The column doesn't exist in the base row, or
-		// - The column was nullable and not reflected in the tuple.
+		// - The column was default-null and not reflected in the tuple. (TODO: verify this is handled correctly)
 		// Regardless, either both left and right are inserts, or one is an insert and the other
 		// is a no-op. If they're inserts of different types, then we would have already detected a conflict.
 		// Thus, we can assume that there is no schema change conflict here.
-		// TODO: What about the case with a nullable column, where one side inserts a value and the other side changes the type?
 		if m.resultVD.Comparator().CompareValues(i, leftCol, rightCol, m.resultVD.Types[i]) == 0 {
 			// columns are equal, return either.
 			return leftCol, false
@@ -1582,9 +1581,9 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 		}
 	}
 
-	// Since we now know the column existed at base, if either left or right was not in the tuple, the column must have either
-	// been deleted, or removed from the tuple because it's nullable. Is it possible for us to distinguish between
-	// these cases?
+	// Since we now know the column existed at base, if either left or right was not in the tuple,
+	// then the column must have either been deleted, it's default-NULL and the value was NULLed.
+	// TODO: For now, assume it was deleted. Is it possible for us to distinguish between these cases?
 	if leftColumnIndex == -1 || rightColumnIndex == -1 {
 		return nil, false
 	}
