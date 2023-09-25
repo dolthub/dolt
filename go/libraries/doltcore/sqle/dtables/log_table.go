@@ -28,10 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 )
 
-var _ sql.Table = (*LogTable)(nil)
-
-var _ sql.StatisticsTable = (*LogTable)(nil)
-
 // LogTable is a sql.Table implementation that implements a system table which shows the dolt commit log
 type LogTable struct {
 	ddb               *doltdb.DoltDB
@@ -39,6 +35,10 @@ type LogTable struct {
 	headHash          hash.Hash
 	headCommitClosure *prolly.CommitClosure
 }
+
+var _ sql.Table = (*LogTable)(nil)
+var _ sql.StatisticsTable = (*LogTable)(nil)
+var _ sql.IndexAddressable = (*LogTable)(nil)
 
 // NewLogTable creates a LogTable
 func NewLogTable(_ *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {

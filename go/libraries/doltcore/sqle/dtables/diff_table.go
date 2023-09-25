@@ -52,6 +52,7 @@ const (
 
 var _ sql.Table = (*DiffTable)(nil)
 var _ sql.IndexedTable = (*DiffTable)(nil)
+var _ sql.IndexAddressable = (*DiffTable)(nil)
 
 type DiffTable struct {
 	name        string

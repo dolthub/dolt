@@ -630,12 +630,23 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 		return nil, false, err
 	}
 
-	var table sql.Table
-
-	readonlyTable, err := NewDoltTable(tableName, sch, tbl, db, db.editOpts)
+	table, err := db.newDoltTable(tableName, sch, tbl)
 	if err != nil {
 		return nil, false, err
 	}
+
+	dbState.SessionCache().CacheTable(key, tableName, table)
+
+	return table, true, nil
+}
+
+// newDoltTable returns a sql.Table wrapping the given underlying dolt table
+func (db Database) newDoltTable(tableName string, sch schema.Schema, tbl *doltdb.Table) (sql.Table, error) {
+	readonlyTable, err := NewDoltTable(tableName, sch, tbl, db, db.editOpts)
+	if err != nil {
+		return nil, err
+	}
+	var table sql.Table
 	if doltdb.IsReadOnlySystemTable(tableName) {
 		table = readonlyTable
 	} else if doltdb.HasDoltPrefix(tableName) && !doltdb.IsFullTextTable(tableName) {
@@ -644,9 +655,7 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 		table = &AlterableDoltTable{WritableDoltTable{DoltTable: readonlyTable, db: db}}
 	}
 
-	dbState.SessionCache().CacheTable(key, tableName, table)
-
-	return table, true, nil
+	return table, nil
 }
 
 // GetTableNames returns the names of all user tables. System tables in user space (e.g. dolt_docs, dolt_query_catalog)

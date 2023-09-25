@@ -115,29 +115,39 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	//t.Skip()
+	t.Skip()
 
 	var scripts = []queries.ScriptTest{
 		{
-			// panic: runtime error: slice bounds out of range [-1:]
-			Name: "Slice out of bounds panic repro",
+			Name: "merge fulltext with renamed table",
 			SetUpScript: []string{
-				"CREATE table t (pk int primary key, col1 TEXT);",
-				"INSERT into t values (1, '123');",
-				// NOTE: if the index is created over (pk, col1(3)), then this code works fine, but not if the pk
-				//       is either not included or included after the blob column
-				"CREATE INDEX test_index2 ON t(col1(3));",
-				// NOTE: If the index is created BEFORE any data is inserted into the table, then we don't see the issue
-				//"INSERT into t values (1, '123');",
+				"CREATE TABLE test (pk BIGINT UNSIGNED PRIMARY KEY, v1 VARCHAR(200), FULLTEXT idx (v1));",
+				"INSERT INTO test VALUES (1, 'abc');",
+				"CALL dolt_commit('-Am', 'Initial commit')",
+				"call dolt_branch('other')",
+				"DROP INDEX idx ON test;",
+				"INSERT INTO test VALUES (2, 'def');",
+				"RENAME TABLE test TO test_temp;",
+				"ALTER TABLE test_temp ADD FULLTEXT INDEX idx (v1);",
+				"RENAME TABLE test_temp TO test;",
+				"call dolt_commit('-Am', 'Renamed pseudo-index tables')",
+				"call dolt_checkout('other')",
+				"INSERT INTO test VALUES (3, 'ghi');",
+				"call dolt_commit('-Am', 'Insertion commit')",
+				"call dolt_checkout('main')",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "INSERT into t values (2, '222');",
-					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+					Query:            "call dolt_merge('other')",
+					SkipResultsCheck: true, // returns a commit hash, can't check easily
 				},
 				{
-					Query:    "select * from t;",
-					Expected: []sql.Row{{1, "123"}, {2, "222"}},
+					Query: "SELECT v1 FROM test WHERE MATCH(v1) AGAINST ('abc def ghi');",
+					Expected: []sql.Row{
+						{"abc"},
+						{"def"},
+						{"ghi"},
+					},
 				},
 			},
 		},
@@ -1109,7 +1119,8 @@ func TestColumnDefaults(t *testing.T) {
 }
 
 func TestAlterTable(t *testing.T) {
-	h := newDoltHarness(t)
+	// This is a newly added test in GMS that dolt doesn't support yet
+	h := newDoltHarness(t).WithSkippedQueries([]string{"ALTER TABLE t42 ADD COLUMN s varchar(20), drop check check1"})
 	defer h.Close()
 	enginetest.TestAlterTable(t, h)
 }
