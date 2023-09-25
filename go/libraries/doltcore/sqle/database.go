@@ -1438,10 +1438,7 @@ func (db Database) UpdateLastExecuted(ctx *sql.Context, eventName string, lastEx
 func updateEventStatusTemporarilyForNonDefaultBranch(revision, createStmt string) string {
 	// TODO: need better way to determine the default branch; currently it checks only 'main'
 
-	// TODO: We currently rely on having the dolt_show_branch_databases flag turned on for this event scheduler's
-	//       session in order to identify the events from the main branch. This is a bit inefficient (e.g. for databases
-	//       with many, many branches), but this code should only run at startup, so may be okay for first version.
-	if revision == env.DefaultInitBranch {
+	if revision == "" || revision == env.DefaultInitBranch {
 		return createStmt
 	}
 	return strings.Replace(createStmt, "ENABLE", "DISABLE", 1)

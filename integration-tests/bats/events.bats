@@ -236,3 +236,26 @@ SQL
     [ $status -eq 0 ]
     [[ $output =~ "| 1  " ]] || false
 }
+
+@test "events: restarting a sql-server correctly schedules existing events" {
+    # Create the recurring event and make sure it runs at least once
+    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CREATE EVENT eventTest1 ON SCHEDULE EVERY 1 SECOND STARTS CURRENT_TIMESTAMP DO INSERT INTO totals (int_col) VALUES (111);"
+    sleep 1
+    run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT (SELECT COUNT(*) FROM totals) > 0;"
+    [ $status -eq 0 ]
+    [[ $output =~ "| 1  " ]] || false
+
+    # Stop the sql-server, truncate the totals table, and assert it's empty
+    stop_sql_server 1
+    dolt sql -q "truncate totals;"
+    run dolt sql -q "SELECT (SELECT COUNT(*) FROM totals) > 0;"
+    [ $status -eq 0 ]
+    [[ $output =~ "| false  " ]] || false
+
+    # Restart the server and assert that the event gets scheduled and executed again
+    start_sql_server
+    sleep 1
+    run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT (SELECT COUNT(*) FROM totals) > 0;"
+    [ $status -eq 0 ]
+    [[ $output =~ "| 1  " ]] || false
+}
