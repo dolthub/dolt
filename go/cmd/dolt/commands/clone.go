@@ -240,7 +240,7 @@ func getRemoteUserAndPassConfig(apr *argparser.ArgParseResults) (*creds.DoltCred
 	if !apr.Contains(cli.UserFlag) {
 		return nil, nil
 	}
-	pass, found := os.LookupEnv("DOLT_REMOTE_PASSWORD")
+	pass, found := os.LookupEnv(doltdb.EnvDoltRemotePassword)
 	if !found {
 		return nil, errhand.BuildDError("error: must set DOLT_REMOTE_PASSWORD environment variable to use --user param").Build()
 	}

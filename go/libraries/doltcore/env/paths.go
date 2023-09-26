@@ -20,13 +20,12 @@ import (
 	"path/filepath"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 const (
-	homeEnvVar         = "HOME"
-	doltRootPathEnvVar = "DOLT_ROOT_PATH"
-	credsDir           = "creds"
+	credsDir        = "creds"
 
 	configFile       = "config.json"
 	GlobalConfigFile = "config_global.json"
@@ -42,12 +41,12 @@ type HomeDirProvider func() (string, error)
 // state will be stored inside of the .dolt directory.  The environment variable DOLT_ROOT_PATH can be used to
 // provide a different directory where the root .dolt directory should be located and global state will be stored there.
 func GetCurrentUserHomeDir() (string, error) {
-	if doltRootPath, ok := os.LookupEnv(doltRootPathEnvVar); ok && doltRootPath != "" {
+	if doltRootPath, ok := os.LookupEnv(doltdb.EnvDoltRootPath); ok && doltRootPath != "" {
 		return filesys.LocalFS.Abs(doltRootPath)
 	}
 
 	var home string
-	if homeEnvPath, ok := os.LookupEnv(homeEnvVar); ok && homeEnvPath != "" {
+	if homeEnvPath, ok := os.LookupEnv(doltdb.EnvHome); ok && homeEnvPath != "" {
 		home = homeEnvPath
 	} else if usr, err := user.Current(); err != nil {
 		return "", err

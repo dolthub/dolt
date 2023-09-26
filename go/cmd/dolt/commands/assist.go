@@ -28,6 +28,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/google/shlex"
 
@@ -69,7 +70,7 @@ func (a Assist) Hidden() bool {
 func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	a.messages = make([]string, 0)
 
-	apiKey, ok := os.LookupEnv("OPENAI_API_KEY")
+	apiKey, ok := os.LookupEnv(doltdb.EnvOpenAiKey)
 	if !ok {
 		cli.PrintErrln("Could not find OpenAI API key. Please set the OPENAI_API_KEY environment variable.")
 		return 1

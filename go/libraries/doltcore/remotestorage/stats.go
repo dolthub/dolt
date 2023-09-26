@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/HdrHistogram/hdrhistogram-go"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/fatih/color"
 )
 
@@ -41,7 +42,7 @@ func StatsFlusherToColorError(r StatsRecorder) {
 }
 
 func init() {
-	if _, ok := os.LookupEnv("DOLT_REMOTE_VERBOSE_DOWNLOAD_STATS"); ok {
+	if _, ok := os.LookupEnv(doltdb.EnvRemoteVersionDownloadStats); ok {
 		StatsFactory = HistogramStatsRecorderFactory
 		StatsFlusher = StatsFlusherToColorError
 	}

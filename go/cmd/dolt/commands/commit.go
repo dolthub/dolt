@@ -350,7 +350,7 @@ func getCommitMessageFromEditor(sqlCtx *sql.Context, queryist cli.Queryist, sugg
 
 	backupEd := "vim"
 	// try getting default editor on the user system
-	if ed, edSet := os.LookupEnv("EDITOR"); edSet {
+	if ed, edSet := os.LookupEnv(doltdb.EnvEditor); edSet {
 		backupEd = ed
 	}
 	// try getting Dolt config core.editor
