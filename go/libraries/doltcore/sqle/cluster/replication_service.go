@@ -20,6 +20,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	replicationapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/replicationapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -38,6 +40,8 @@ type replicationServiceServer struct {
 
 	branchControl        BranchControlPersistence
 	branchControlFilesys filesys.Filesys
+
+	dropDatabaseProvider func(context.Context, string) error
 }
 
 func (s *replicationServiceServer) UpdateUsersAndGrants(ctx context.Context, req *replicationapi.UpdateUsersAndGrantsRequest) (*replicationapi.UpdateUsersAndGrantsResponse, error) {
@@ -65,4 +69,17 @@ func (s *replicationServiceServer) UpdateBranchControl(ctx context.Context, req 
 		return nil, err
 	}
 	return &replicationapi.UpdateBranchControlResponse{}, nil
+}
+
+func (s *replicationServiceServer) DropDatabase(ctx context.Context, req *replicationapi.DropDatabaseRequest) (*replicationapi.DropDatabaseResponse, error) {
+	if s.dropDatabaseProvider == nil {
+		return nil, status.Error(codes.Unimplemented, "unimplemented")
+	}
+
+	err := s.dropDatabaseProvider(ctx, req.Name)
+	s.lgr.Tracef("dropped database [%s] through dropDatabaseProvider. err: %v", req.Name, err)
+	if err != nil && !sql.ErrDatabaseNotFound.Is(err) {
+		return nil, err
+	}
+	return &replicationapi.DropDatabaseResponse{}, nil
 }

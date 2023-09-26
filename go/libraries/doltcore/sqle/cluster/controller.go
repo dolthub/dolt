@@ -36,7 +36,9 @@ import (
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/status"
 
 	replicationapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/replicationapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -94,6 +96,8 @@ type Controller struct {
 	branchControlController *branch_control.Controller
 	branchControlFilesys    filesys.Filesys
 	bcReplication           *branchControlReplication
+
+	dropDatabaseProvider func(context.Context, string) error
 }
 
 type sqlvars interface {
@@ -310,12 +314,27 @@ func (c *Controller) RegisterStoredProcedures(store procedurestore) {
 	store.Register(newTransitionToStandbyProcedure(c))
 }
 
-func (c *Controller) DropDatabaseHook(dbname string) {
+func (c *Controller) SetDropDatabaseProvider(dropDatabaseProvider func(context.Context, string) error) {
 	if c == nil {
 		return
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.dropDatabaseProvider = dropDatabaseProvider
+}
+
+func (c *Controller) DropDatabaseHook() func(string) {
+	if c == nil {
+		return nil
+	}
+	return c.dropDatabaseHook
+}
+
+func (c *Controller) dropDatabaseHook(dbname string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// We always cleanup the commithooks associated with that database.
 
 	j := 0
 	for i := 0; i < len(c.commithooks); i++ {
@@ -329,6 +348,43 @@ func (c *Controller) DropDatabaseHook(dbname string) {
 		j += 1
 	}
 	c.commithooks = c.commithooks[:j]
+
+	if c.role != RolePrimary {
+		return
+	}
+
+	// If we are the primary, we will replicate the drop to our standby replicas.
+
+	for _, client := range c.replicationClients {
+		client := client
+		go c.replicateDropDatabase(client, dbname)
+	}
+}
+
+func (c *Controller) replicateDropDatabase(client *replicationServiceClient, dbname string) {
+	bo := backoff.NewExponentialBackOff()
+	bo.InitialInterval = time.Millisecond
+	bo.MaxInterval = time.Minute
+	bo.MaxElapsedTime = 0
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		_, err := client.client.DropDatabase(ctx, &replicationapi.DropDatabaseRequest{
+			Name: dbname,
+		})
+		cancel()
+		if err == nil {
+			c.lgr.Tracef("successfully replicated drop of [%s] to %s", dbname, client.remote)
+			return
+		}
+		if status.Code(err) == codes.FailedPrecondition {
+			c.lgr.Warnf("drop of [%s] to %s will note be replicated; FailedPrecondition", dbname, client.remote)
+			return
+		}
+		c.lgr.Warnf("failed to replicate drop of [%s] to %s: %v", dbname, client.remote, err)
+		d := bo.NextBackOff()
+		c.lgr.Tracef("sleeping %v before next drop attempt for database [%s] at %s", d, dbname, client.remote)
+		time.Sleep(d)
+	}
 }
 
 func (c *Controller) ClusterDatabase() sql.Database {
@@ -639,6 +695,7 @@ func (c *Controller) RegisterGrpcServices(srv *grpc.Server) {
 		mysqlDb:              c.mysqlDb,
 		branchControl:        c.branchControlController,
 		branchControlFilesys: c.branchControlFilesys,
+		dropDatabaseProvider: c.dropDatabaseProvider,
 		lgr:                  c.lgr.WithFields(logrus.Fields{}),
 	})
 }
