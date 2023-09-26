@@ -63,7 +63,7 @@ type CommitMeta struct {
 // NewCommitMeta creates a CommitMeta instance from a name, email, and description and uses the current time for the
 // timestamp
 func NewCommitMeta(name, email, desc string) (*CommitMeta, error) {
-	return NewCommitMetaWithUserTS(name, email, desc, CommitterDate())
+	return NewCommitMetaWithUserTS(name, email, desc, AuthorDate())
 }
 
 func init() {
@@ -110,10 +110,10 @@ func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*Commi
 		return nil, ErrEmptyCommitMessage
 	}
 
-	ms := uint64(CommitterDate().UnixMilli())
-	userMS := userTS.UnixMilli()
+	committerDateMillis := uint64(CommitterDate().UnixMilli())
+	authorDateMillis := userTS.UnixMilli()
 
-	return &CommitMeta{n, e, ms, d, userMS}, nil
+	return &CommitMeta{n, e, committerDateMillis, d, authorDateMillis}, nil
 }
 
 func getRequiredFromSt(st types.Struct, k string) (types.Value, error) {
