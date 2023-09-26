@@ -240,9 +240,9 @@ SQL
     run dolt_log_in_PST
     [[ ! "$output" =~ 'Tue Sep 26 12:34:56' ]] || false
 
-    TZ=PST+8 DOLT_COMMITTER_DATE='2023-09-26T12:34:56' DOLT_AUTHOR_DATE='2023-09-26T01:23:34' dolt commit --allow-empty -m "empty commit"
+    TZ=PST+8 DOLT_COMMITTER_DATE='2023-09-26T12:34:56' DOLT_AUTHOR_DATE='2023-09-26T01:23:45' dolt commit --allow-empty -m "empty commit"
     run dolt_log_in_PST
-    [[ ! "$output" =~ 'Tue Sep 26 01:23:45' ]] || false
+    [[ "$output" =~ 'Tue Sep 26 01:23:45' ]] || false
 
     run dolt_log_in_PST
     [[ ! "$output" =~ 'Tue Sep 26 12:34:56' ]] || false
@@ -254,12 +254,12 @@ SQL
     dolt branch b2
 
     dolt checkout b1
-    TZ=PST+8 DOLT_COMMITTER_DATE='2023-09-26T12:34:56' DOLT_AUTHOR_DATE='2023-09-26T01:23:34' dolt commit --allow-empty -m "empty commit"
+    TZ=PST+8 DOLT_COMMITTER_DATE='2023-09-26T12:34:56' DOLT_AUTHOR_DATE='2023-09-26T01:23:45' dolt commit --allow-empty -m "empty commit"
     get_head_commit
     head1=`get_head_commit`
 
     dolt checkout b2
-    TZ=PST+8 DOLT_COMMITTER_DATE='2023-09-26T12:34:56' DOLT_AUTHOR_DATE='2023-09-26T01:23:34' dolt commit --allow-empty -m "empty commit"
+    TZ=PST+8 DOLT_COMMITTER_DATE='2023-09-26T12:34:56' DOLT_AUTHOR_DATE='2023-09-26T01:23:45' dolt commit --allow-empty -m "empty commit"
     get_head_commit
     head2=`get_head_commit`
 
