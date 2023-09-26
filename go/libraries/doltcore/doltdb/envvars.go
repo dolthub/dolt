@@ -14,21 +14,4 @@
 
 package doltdb
 
-// Environment variables used by the Dolt CLI and server
-const (
-	EnvPassword                 = "DOLT_CLI_PASSWORD"
-	EnvUser                     = "DOLT_CLI_USER"
-	EnvSilenceUserReqForTesting = "DOLT_SILENCE_USER_REQ_FOR_TESTING"
-)
-
-const EnvOpenAiKey = "OPENAI_API_KEY"
-const EnvDoltRemotePassword = "DOLT_REMOTE_PASSWORD"
-const EnvEditor = "EDITOR"
-const EnvSqlDebugLogVerbose = "DOLT_SQL_DEBUG_LOG_VERBOSE"
-const EnvSqlDebugLog = "DOLT_SQL_DEBUG_LOG"
-const EnvHome = "HOME"
-const EnvDoltRootPath = "DOLT_ROOT_PATH"
-const EnvRemoteVersionDownloadStats = "DOLT_REMOTE_VERBOSE_DOWNLOAD_STATS"
-const EnvPushLog = "PUSH_LOG"
-const EnvDefaultBinFormat = "DOLT_DEFAULT_BIN_FORMAT"
 

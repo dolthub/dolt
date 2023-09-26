@@ -24,6 +24,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -44,7 +45,7 @@ var (
 )
 
 func init() {
-	if maxOpsEnv := os.Getenv("DOLT_EDIT_TABLE_BUFFER_ROWS"); maxOpsEnv != "" {
+	if maxOpsEnv := os.Getenv(dconfig.EnvEditTableBufferRows); maxOpsEnv != "" {
 		if v, err := strconv.ParseUint(maxOpsEnv, 10, 63); err == nil {
 			tableEditorMaxOps = v
 		}

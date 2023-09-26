@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 	"github.com/pkg/profile"
@@ -237,7 +238,7 @@ func runMain() int {
 		return 1
 	}
 
-	if os.Getenv("DOLT_VERBOSE_ASSERT_TABLE_FILES_CLOSED") == "" {
+	if os.Getenv(dconfig.EnvVerboseAssertTableFilesClosed) == "" {
 		nbs.TableIndexGCFinalizerWithStackTrace = false
 	}
 

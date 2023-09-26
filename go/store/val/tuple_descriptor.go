@@ -22,13 +22,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
 func init() {
-	if v := os.Getenv("DOLT_DISABLE_FIXED_ACCESS"); v != "" {
+	if v := os.Getenv(dconfig.EnvDisableFixedAccess); v != "" {
 		disableFixedAccess = true
 	}
 }

@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -34,7 +35,7 @@ const (
 )
 
 func init() {
-	if os.Getenv("DOLT_DISABLE_GC_PROCEDURE") != "" {
+	if os.Getenv(dconfig.EnvDisableGcProcedure) != "" {
 		DoltGCFeatureFlag = false
 	}
 }

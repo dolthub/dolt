@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
@@ -32,7 +33,7 @@ import (
 
 func init() {
 	// default to chunk journal unless feature flag is set
-	if os.Getenv("DOLT_DISABLE_CHUNK_JOURNAL") != "" {
+	if os.Getenv(dconfig.EnvDisableChunkJournal) != "" {
 		chunkJournalFeatureFlag = false
 	}
 }

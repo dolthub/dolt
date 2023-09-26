@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -154,10 +155,10 @@ func Test_getOSSClient(t *testing.T) {
 		{
 			name: "get valid oss client from env",
 			before: func() {
-				os.Setenv(ossEndpointEnvKey, "testendpoint")
+				os.Setenv(dconfig.EnvOssEndpoint, "testendpoint")
 			},
 			after: func() {
-				os.Unsetenv(ossEndpointEnvKey)
+				os.Unsetenv(dconfig.EnvOssEndpoint)
 			},
 			args: args{
 				opts: ossCredential{

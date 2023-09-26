@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"golang.org/x/crypto/ssh/terminal"
 
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -36,7 +36,7 @@ type UserPassword struct {
 func BuildUserPasswordPrompt(parsedArgs *argparser.ArgParseResults) (newParsedArgs *argparser.ArgParseResults, credentials *UserPassword, err error) {
 	userId, hasUserId := parsedArgs.GetValue(UserFlag)
 	if !hasUserId {
-		envUser, hasEnvUser := os.LookupEnv(doltdb.EnvUser)
+		envUser, hasEnvUser := os.LookupEnv(dconfig.EnvUser)
 		if hasEnvUser {
 			userId = envUser
 			hasUserId = true
@@ -45,7 +45,7 @@ func BuildUserPasswordPrompt(parsedArgs *argparser.ArgParseResults) (newParsedAr
 
 	password, hasPassword := parsedArgs.GetValue(PasswordFlag)
 	if !hasPassword {
-		envPassword, hasEnvPassword := os.LookupEnv(doltdb.EnvPassword)
+		envPassword, hasEnvPassword := os.LookupEnv(dconfig.EnvPassword)
 		if hasEnvPassword {
 			password = envPassword
 			hasPassword = true
@@ -66,7 +66,7 @@ func BuildUserPasswordPrompt(parsedArgs *argparser.ArgParseResults) (newParsedAr
 
 	if hasUserId && !hasPassword {
 		password = ""
-		val, hasVal := os.LookupEnv(doltdb.EnvPassword)
+		val, hasVal := os.LookupEnv(dconfig.EnvPassword)
 		if hasVal {
 			password = val
 		} else {
@@ -80,7 +80,7 @@ func BuildUserPasswordPrompt(parsedArgs *argparser.ArgParseResults) (newParsedAr
 		return newParsedArgs, &UserPassword{Username: userId, Password: password, Specified: true}, nil
 	}
 
-	testOverride, hasTestOverride := os.LookupEnv(doltdb.EnvSilenceUserReqForTesting)
+	testOverride, hasTestOverride := os.LookupEnv(dconfig.EnvSilenceUserReqForTesting)
 	if hasTestOverride && testOverride == "Y" {
 		// Used for BATS testing only. Typical usage will not hit this path, but we have many legacy tests which
 		// do not provide a user, and the DOLT_ENV_PWD is set to avoid the prompt.

@@ -28,7 +28,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/google/shlex"
 
@@ -70,7 +70,7 @@ func (a Assist) Hidden() bool {
 func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	a.messages = make([]string, 0)
 
-	apiKey, ok := os.LookupEnv(doltdb.EnvOpenAiKey)
+	apiKey, ok := os.LookupEnv(dconfig.EnvOpenAiKey)
 	if !ok {
 		cli.PrintErrln("Could not find OpenAI API key. Please set the OPENAI_API_KEY environment variable.")
 		return 1
@@ -146,7 +146,7 @@ func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEn
 }
 
 func agreeToTerms(scanner *bufio.Scanner) bool {
-	_, ok := os.LookupEnv("DOLT_ASSIST_AGREE")
+	_, ok := os.LookupEnv(dconfig.EnvDoltAssistAgree)
 	if ok {
 		return true
 	}

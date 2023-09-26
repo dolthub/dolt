@@ -22,8 +22,10 @@ import (
 
 var Debug bool
 
+const envDebug = "DEBUG"
+
 func init() {
-	if os.Getenv("DEBUG") != "" {
+	if os.Getenv(envDebug) != "" {
 		Debug = true
 	}
 }

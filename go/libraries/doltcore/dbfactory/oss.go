@@ -24,7 +24,7 @@ import (
 	"path/filepath"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
-
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -34,9 +34,6 @@ import (
 )
 
 const (
-	ossEndpointEnvKey        = "OSS_ENDPOINT"
-	ossAccessKeyIDEnvKey     = "OSS_ACCESS_KEY_ID"
-	ossAccessKeySecretEnvKey = "OSS_ACCESS_KEY_SECRET"
 
 	// OSSCredsFileParam is a creation parameter that can be used to specify a credential file to use.
 	OSSCredsFileParam = "oss-creds-file"
@@ -149,30 +146,30 @@ func (opt ossCredential) getEndPoint() (string, error) {
 	if opt.Endpoint != "" {
 		return opt.Endpoint, nil
 	}
-	if v := os.Getenv(ossEndpointEnvKey); v != "" {
+	if v := os.Getenv(dconfig.EnvOssEndpoint); v != "" {
 		return v, nil
 	}
-	return "", fmt.Errorf("failed to find endpoint from cred file or env %s", ossEndpointEnvKey)
+	return "", fmt.Errorf("failed to find endpoint from cred file or env %s", dconfig.EnvOssEndpoint)
 }
 
 func (opt ossCredential) getAccessKeyID() (string, error) {
 	if opt.AccessKeyID != "" {
 		return opt.AccessKeyID, nil
 	}
-	if v := os.Getenv(ossAccessKeyIDEnvKey); v != "" {
+	if v := os.Getenv(dconfig.EnvOssAccessKeyID); v != "" {
 		return v, nil
 	}
-	return "", fmt.Errorf("failed to find accessKeyID from cred file or env %s", ossAccessKeyIDEnvKey)
+	return "", fmt.Errorf("failed to find accessKeyID from cred file or env %s", dconfig.EnvOssAccessKeyID)
 }
 
 func (opt ossCredential) getAccessKeySecret() (string, error) {
 	if opt.AccessKeySecret != "" {
 		return opt.AccessKeySecret, nil
 	}
-	if v := os.Getenv(ossAccessKeySecretEnvKey); v != "" {
+	if v := os.Getenv(dconfig.EnvOssAccessKeySecret); v != "" {
 		return v, nil
 	}
-	return "", fmt.Errorf("failed to find accessKeySecret from cred file or env %s", ossAccessKeySecretEnvKey)
+	return "", fmt.Errorf("failed to find accessKeySecret from cred file or env %s", dconfig.EnvOssAccessKeySecret)
 }
 
 func readOSSCredentialsFromFile(credFile string) (ossCredentials, error) {

@@ -22,6 +22,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 	"github.com/gocraft/dbr/v2"
@@ -350,7 +351,7 @@ func getCommitMessageFromEditor(sqlCtx *sql.Context, queryist cli.Queryist, sugg
 
 	backupEd := "vim"
 	// try getting default editor on the user system
-	if ed, edSet := os.LookupEnv(doltdb.EnvEditor); edSet {
+	if ed, edSet := os.LookupEnv(dconfig.EnvEditor); edSet {
 		backupEd = ed
 	}
 	// try getting Dolt config core.editor
@@ -374,7 +375,7 @@ func getCommitMessageFromEditor(sqlCtx *sql.Context, queryist cli.Queryist, sugg
 func checkIsTerminal() bool {
 	isTerminal := false
 	cli.ExecuteWithStdioRestored(func() {
-		if goisatty.IsTerminal(os.Stdout.Fd()) || os.Getenv("DOLT_TEST_FORCE_OPEN_EDITOR") == "1" {
+		if goisatty.IsTerminal(os.Stdout.Fd()) || os.Getenv(dconfig.EnvTestForceOpenEditor) == "1" {
 			isTerminal = true
 		}
 	})
