@@ -1151,11 +1151,3 @@ SQL
 
     [ "$head1" == "$head2" ]
 }
-
-dolt_log_in_PST() {
-    TZ=PST+8 dolt log -n1
-}
-
-get_head_commit() {
-    dolt log -n 1 | grep -m 1 commit | awk '{print $2}'
-}
