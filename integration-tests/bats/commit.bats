@@ -215,3 +215,17 @@ SQL
     [[ "$output" =~ "Log into DoltHub: dolt login" ]] || false
     [[ "$output" =~ "OR add name to config: dolt config [--global|--local] --add user.name \"FIRST LAST\"" ]] || false
 }
+
+@test "commit: set author time with env var" {
+    dolt sql -q "CREATE table t (pk int primary key);"
+    dolt add t
+
+    DOLT_AUTHOR_DATE='2023-09-26T12:34:56' dolt commit -m "adding table t"
+
+    run dolt_log_in_PST
+    [[ "$output" =~ 'Tue Sep 26 12:34:56' ]] || false
+}
+
+dolt_log_in_PST() {
+    TZ=PST-7 dolt log -n1
+}
