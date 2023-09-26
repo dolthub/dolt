@@ -230,6 +230,9 @@ func (w *prollyTableWriter) Close(ctx *sql.Context) error {
 
 // StatementBegin implements TableWriter.
 func (w *prollyTableWriter) StatementBegin(ctx *sql.Context) {
+	// Table writers are reused in a session, which means we need to reset the error state resulting from previous 
+	// errors on every new statement. 
+	w.errEncountered = nil
 	return
 }
 
