@@ -227,5 +227,5 @@ SQL
 }
 
 dolt_log_in_PST() {
-    TZ=PST-7 dolt log -n1
+    TZ=PST+8 dolt log -n1
 }

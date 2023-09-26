@@ -49,6 +49,7 @@ var CommitterDate = time.Now
 var CommitLoc = time.Local
 
 var AuthorDate = time.Now
+var CustomAuthorDate bool
 var AuthorLoc = time.Local
 
 // CommitMeta contains all the metadata that is associated with a commit within a data repo.
@@ -73,9 +74,10 @@ func init() {
 		if err != nil {
 			logrus.Warnf("Unable to parse value for %s: %s. System time will be used instead.",
 				dconfig.EnvDoltCommitterDate, err.Error())
-		}
-		CommitterDate = func() time.Time {
-			return committerDate
+		} else {
+			CommitterDate = func() time.Time {
+				return committerDate
+			}
 		}
 	}
 	
@@ -85,9 +87,11 @@ func init() {
 		if err != nil {
 			logrus.Warnf("Unable to parse value for %s: %s. System time will be used instead.",
 				dconfig.EnvDoltAuthorDate, err.Error())
-		}
-		AuthorDate = func() time.Time {
-			return authorDate
+		} else {
+			AuthorDate = func() time.Time {
+				return authorDate
+			}
+			CustomAuthorDate = true
 		}
 	}
 }

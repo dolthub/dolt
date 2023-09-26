@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 )
@@ -131,6 +132,8 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		if err != nil {
 			return "", false, fmt.Errorf(err.Error())
 		}
+	} else if datas.CustomAuthorDate {
+		t = datas.AuthorDate()
 	}
 
 	if apr.Contains(cli.ForceFlag) {
