@@ -22,8 +22,9 @@ import (
 	"time"
 
 	"github.com/HdrHistogram/hdrhistogram-go"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/fatih/color"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 )
 
 var StatsFactory func() StatsRecorder = NullStatsRecorderFactory

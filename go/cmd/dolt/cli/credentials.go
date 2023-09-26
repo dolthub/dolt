@@ -18,9 +18,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"golang.org/x/crypto/ssh/terminal"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 

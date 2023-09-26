@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"

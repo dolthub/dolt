@@ -120,7 +120,7 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 		printWithIndendationLevel(level, ret, "\tDesc: %s\n", msg.Description())
 		printWithIndendationLevel(level, ret, "\tEmail: %s\n", msg.Email())
 		printWithIndendationLevel(level, ret, "\tTimestamp: %s\n", time.UnixMilli((int64)(msg.TimestampMillis())).String())
-		printWithIndendationLevel(level, ret, "\tUser Timestamp: %s\n", time.UnixMilli(msg.UserTimestampMillis()).String())
+		printWithIndendationLevel(level, ret, "\tUserTimestamp: %s\n", time.UnixMilli(msg.UserTimestampMillis()).String())
 		printWithIndendationLevel(level, ret, "\tHeight: %d\n", msg.Height())
 
 		printWithIndendationLevel(level, ret, "\tRootValue: {\n")

@@ -24,9 +24,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"

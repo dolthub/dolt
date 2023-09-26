@@ -21,6 +21,7 @@ import (
 )
 
 var Debug bool
+
 const envDebug = "DEBUG"
 
 func init() {
