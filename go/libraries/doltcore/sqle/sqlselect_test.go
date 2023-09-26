@@ -1327,13 +1327,13 @@ func (tcc *testCommitClock) Now() time.Time {
 }
 
 func installTestCommitClock() func() {
-	oldNowFunc := datas.CommitNowFunc
+	oldNowFunc := datas.CommitterDate
 	oldCommitLoc := datas.CommitLoc
 	tcc := &testCommitClock{}
-	datas.CommitNowFunc = tcc.Now
+	datas.CommitterDate = tcc.Now
 	datas.CommitLoc = time.UTC
 	return func() {
-		datas.CommitNowFunc = oldNowFunc
+		datas.CommitterDate = oldNowFunc
 		datas.CommitLoc = oldCommitLoc
 	}
 }

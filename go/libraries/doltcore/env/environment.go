@@ -366,7 +366,7 @@ func (dEnv *DoltEnv) bestEffortDeleteAll(dir string) {
 // InitRepo takes an empty directory and initializes it with a .dolt directory containing repo state, uncommitted license and readme, and creates a noms
 // database with dolt structure.
 func (dEnv *DoltEnv) InitRepo(ctx context.Context, nbf *types.NomsBinFormat, name, email, branchName string) error { // should remove name and email args
-	return dEnv.InitRepoWithTime(ctx, nbf, name, email, branchName, datas.CommitNowFunc())
+	return dEnv.InitRepoWithTime(ctx, nbf, name, email, branchName, datas.CommitterDate())
 }
 
 func (dEnv *DoltEnv) InitRepoWithTime(ctx context.Context, nbf *types.NomsBinFormat, name, email, branchName string, t time.Time) error { // should remove name and email args

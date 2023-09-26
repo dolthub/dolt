@@ -252,7 +252,7 @@ func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit
 		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
 	}
 
-	t := datas.CommitNowFunc()
+	t := datas.CommitterDate()
 	roots, err := dEnv.Roots(ctx)
 	if err != nil {
 		panic("couldn't get roots: " + err.Error())

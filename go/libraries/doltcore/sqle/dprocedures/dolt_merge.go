@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	goerrors "gopkg.in/src-d/go-errors.v1"
@@ -464,7 +465,7 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 
 	t := ctx.QueryTime()
 	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
-		t, err = cli.ParseDate(commitTimeStr)
+		t, err = dconfig.ParseDate(commitTimeStr)
 		if err != nil {
 			return nil, err
 		}
