@@ -119,35 +119,32 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "merge fulltext with renamed table",
+			Name: "insert duplicate key doesn't prevent other updates, autocommit off",
 			SetUpScript: []string{
-				"CREATE TABLE test (pk BIGINT UNSIGNED PRIMARY KEY, v1 VARCHAR(200), FULLTEXT idx (v1));",
-				"INSERT INTO test VALUES (1, 'abc');",
-				"CALL dolt_commit('-Am', 'Initial commit')",
-				"call dolt_branch('other')",
-				"DROP INDEX idx ON test;",
-				"INSERT INTO test VALUES (2, 'def');",
-				"RENAME TABLE test TO test_temp;",
-				"ALTER TABLE test_temp ADD FULLTEXT INDEX idx (v1);",
-				"RENAME TABLE test_temp TO test;",
-				"call dolt_commit('-Am', 'Renamed pseudo-index tables')",
-				"call dolt_checkout('other')",
-				"INSERT INTO test VALUES (3, 'ghi');",
-				"call dolt_commit('-Am', 'Insertion commit')",
-				"call dolt_checkout('main')",
+				"CREATE TABLE t1 (pk BIGINT PRIMARY KEY, v1 VARCHAR(3));",
+				"INSERT INTO t1 VALUES (1, 'abc');",
+				"SET autocommit = 0;",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:            "call dolt_merge('other')",
-					SkipResultsCheck: true, // returns a commit hash, can't check easily
+					Query:    "select * from t1 order by pk",
+					Expected: []sql.Row{{1, "abc"}},
 				},
 				{
-					Query: "SELECT v1 FROM test WHERE MATCH(v1) AGAINST ('abc def ghi');",
-					Expected: []sql.Row{
-						{"abc"},
-						{"def"},
-						{"ghi"},
-					},
+					Query:       "INSERT INTO t1 VALUES (1, 'abc');",
+					ExpectedErr: sql.ErrPrimaryKeyViolation,
+				},
+				{
+					Query:    "INSERT INTO t1 VALUES (2, 'def');",
+					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+				},
+				{
+					Query:            "commit",
+					SkipResultsCheck: true,
+				},
+				{
+					Query:    "select * from t1 order by pk",
+					Expected: []sql.Row{{1, "abc"}, {2, "def"}},
 				},
 			},
 		},
@@ -1764,67 +1761,56 @@ func TestSingleTransactionScript(t *testing.T) {
 	defer cleanup()
 
 	sql.RunWithNowFunc(tcc.Now, func() error {
-
 		script := queries.TransactionTest{
-			Name: "READ ONLY Transactions",
+			Name: "Insert error with auto commit off",
 			SetUpScript: []string{
-				"create table t2 (pk int primary key, val int)",
-				"insert into t2 values (0,0)",
-				"commit",
+				"create table t1 (pk int primary key, val int)",
+				"insert into t1 values (0,0)",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "/* client a */ set autocommit = off",
-					Expected: []sql.Row{{}},
+					Query:            "/* client a */ set autocommit = off",
+					SkipResultsCheck: true,
 				},
 				{
-					Query:    "/* client a */ create temporary table tmp(pk int primary key)",
-					Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
+					Query:            "/* client b */ set autocommit = off",
+					SkipResultsCheck: true,
 				},
 				{
-					Query:    "/* client a */  START TRANSACTION READ ONLY",
-					Expected: []sql.Row{},
-				},
-				{
-					Query:    "/* client a */ INSERT INTO tmp VALUES (1)",
+					Query:    "/* client a */ insert into t1 values (1, 1)",
 					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
 				},
 				{
-					Query:       "/* client a */ insert into t2 values (1, 1)",
-					ExpectedErr: sql.ErrReadOnlyTransaction,
+					Query:       "/* client a */ insert into t1 values (1, 2)",
+					ExpectedErr: sql.ErrPrimaryKeyViolation,
 				},
 				{
-					Query:       "/* client a */ insert into t2 values (2, 2)",
-					ExpectedErr: sql.ErrReadOnlyTransaction,
+					Query:    "/* client a */ insert into t1 values (2, 2)",
+					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
 				},
 				{
-					Query:       "/* client a */ delete from t2 where pk = 0",
-					ExpectedErr: sql.ErrReadOnlyTransaction,
+					Query:    "/* client a */ select * from t1 order by pk",
+					Expected: []sql.Row{{0, 0}, {1, 1}, {2, 2}},
 				},
 				{
-
-					Query:    "/* client a */ alter table t2 add val2 int",
-					Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
+					Query:    "/* client b */ select * from t1 order by pk",
+					Expected: []sql.Row{{0, 0}},
 				},
 				{
-					Query:    "/* client a */ select * from t2",
-					Expected: []sql.Row{{0, 0, nil}},
+					Query:            "/* client a */ commit",
+					SkipResultsCheck: true,
 				},
 				{
-					Query:       "/* client a */ create temporary table tmp2(pk int primary key)",
-					ExpectedErr: sql.ErrReadOnlyTransaction,
+					Query:            "/* client b */ start transaction",
+					SkipResultsCheck: true,
 				},
 				{
-					Query:    "/* client a */ COMMIT",
-					Expected: []sql.Row{},
+					Query:    "/* client b */ select * from t1 order by pk",
+					Expected: []sql.Row{{0, 0}, {1, 1}, {2, 2}},
 				},
 				{
-					Query:    "/* client b */ START TRANSACTION READ ONLY",
-					Expected: []sql.Row{},
-				},
-				{
-					Query:    "/* client b */ SELECT * FROM t2",
-					Expected: []sql.Row{{0, 0, nil}},
+					Query:    "/* client a */ select * from t1 order by pk",
+					Expected: []sql.Row{{0, 0}, {1, 1}, {2, 2}},
 				},
 			},
 		}
