@@ -50,6 +50,9 @@ type UnscopedDiffTable struct {
 	commitCheck      doltdb.CommitFilter
 }
 
+var _ sql.Table = (*UnscopedDiffTable)(nil)
+var _ sql.IndexAddressable = (*UnscopedDiffTable)(nil)
+
 // NewUnscopedDiffTable creates an UnscopedDiffTable
 func NewUnscopedDiffTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
 	return &UnscopedDiffTable{dbName: dbName, ddb: ddb, head: head}

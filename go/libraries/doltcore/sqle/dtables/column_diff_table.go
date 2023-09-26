@@ -45,6 +45,10 @@ type ColumnDiffTable struct {
 	commitCheck      doltdb.CommitFilter
 }
 
+var _ sql.Table = (*ColumnDiffTable)(nil)
+
+// var _ sql.IndexAddressable = (*ColumnDiffTable)(nil)
+
 // NewColumnDiffTable creates an ColumnDiffTable
 func NewColumnDiffTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
 	return &ColumnDiffTable{dbName: dbName, ddb: ddb, head: head}
@@ -108,18 +112,6 @@ func (dt *ColumnDiffTable) PartitionRows(ctx *sql.Context, partition sql.Partiti
 		}
 	}
 }
-
-//todo fix indexed paths, these were missing tests in CI
-// GetIndexes implements sql.IndexAddressable
-//func (dt *ColumnDiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-//	return index.DoltCommitIndexes(dt.Name(), dt.ddb, true)
-//}
-
-// IndexedAccess implements sql.IndexAddressable
-//func (dt *ColumnDiffTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
-//	nt := *dt
-//	return &nt
-//}
 
 // Collation implements the sql.Table interface.
 func (dt *ColumnDiffTable) Collation() sql.CollationID {

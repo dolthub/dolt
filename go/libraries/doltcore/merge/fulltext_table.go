@@ -58,7 +58,9 @@ func createFulltextTable(ctx *sql.Context, name string, root *doltdb.RootValue) 
 	if err != nil {
 		return nil, err
 	}
-	gmsTable := memory.NewTable(name, sqlSch, nil)
+
+	gmsDb := memory.NewDatabase("gms_db")
+	gmsTable := memory.NewLocalTable(gmsDb, name, sqlSch, nil)
 	gmsTable.EnablePrimaryKeyIndexes()
 	return &fulltextTable{
 		GMSTable: gmsTable,
