@@ -220,12 +220,56 @@ SQL
     dolt sql -q "CREATE table t (pk int primary key);"
     dolt add t
 
-    DOLT_AUTHOR_DATE='2023-09-26T12:34:56' dolt commit -m "adding table t"
+    TZ=PST+8 DOLT_AUTHOR_DATE='2023-09-26T12:34:56' dolt commit -m "adding table t"
 
     run dolt_log_in_PST
     [[ "$output" =~ 'Tue Sep 26 12:34:56' ]] || false
+
+    # --date should take precendent over the env var
+    TZ=PST+8 DOLT_AUTHOR_DATE='2023-09-26T12:34:56' dolt commit --date '2023-09-26T01:23:45' --allow-empty -m "empty commit"
+    run dolt_log_in_PST
+    [[ "$output" =~ 'Tue Sep 26 01:23:45' ]] || false
+}
+
+@test "commit: set committer time with env var" {
+    dolt sql -q "CREATE table t (pk int primary key);"
+    dolt add t
+
+    TZ=PST+8 DOLT_COMMITTER_DATE='2023-09-26T12:34:56' dolt commit -m "adding table t"
+
+    run dolt_log_in_PST
+    [[ ! "$output" =~ 'Tue Sep 26 12:34:56' ]] || false
+
+    TZ=PST+8 DOLT_COMMITTER_DATE='2023-09-26T12:34:56' DOLT_AUTHOR_DATE='2023-09-26T01:23:34' dolt commit --allow-empty -m "empty commit"
+    run dolt_log_in_PST
+    [[ ! "$output" =~ 'Tue Sep 26 01:23:45' ]] || false
+
+    run dolt_log_in_PST
+    [[ ! "$output" =~ 'Tue Sep 26 12:34:56' ]] || false
+
+    # We don't have a way to examine the committer time directly with dolt show or another user
+    # command. So we'll make two identical commits on two different branches and assert they get the
+    # same hash
+    dolt branch b1
+    dolt branch b2
+
+    dolt checkout b1
+    TZ=PST+8 DOLT_COMMITTER_DATE='2023-09-26T12:34:56' DOLT_AUTHOR_DATE='2023-09-26T01:23:34' dolt commit --allow-empty -m "empty commit"
+    get_head_commit
+    head1=`get_head_commit`
+
+    dolt checkout b2
+    TZ=PST+8 DOLT_COMMITTER_DATE='2023-09-26T12:34:56' DOLT_AUTHOR_DATE='2023-09-26T01:23:34' dolt commit --allow-empty -m "empty commit"
+    get_head_commit
+    head2=`get_head_commit`
+
+    [ "$head1" == "$head2" ]
 }
 
 dolt_log_in_PST() {
     TZ=PST+8 dolt log -n1
+}
+
+get_head_commit() {
+    dolt log -n 1 | grep -m 1 commit | awk '{print $2}'
 }
