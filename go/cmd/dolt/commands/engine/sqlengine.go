@@ -16,8 +16,10 @@ package engine
 
 import (
 	"context"
+	"github.com/sirupsen/logrus"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 
 	gms "github.com/dolthub/go-mysql-server"
@@ -354,7 +356,21 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, sessFa
 		}, nil
 	}
 
-	return engine.InitializeEventScheduler(getCtxFunc, config.EventSchedulerStatus)
+	// A hidden env var allows overriding the event scheduler period for testing. This option is not
+	// exposed via configuration because we do not want to encourage customers to use it. If the value
+	// is equal to or less than 0, then the period is ignored and the default period, 30s, is used.
+	eventSchedulerPeriod := 0
+	eventSchedulerPeriodEnvVar := "DOLT_EVENT_SCHEDULER_PERIOD"
+	if s, ok := os.LookupEnv(eventSchedulerPeriodEnvVar); ok {
+		i, err := strconv.Atoi(s)
+		if err != nil {
+			logrus.Warnf("unable to parse value '%s' from env var '%s' as an integer", s, eventSchedulerPeriodEnvVar)
+		} else {
+			logrus.Warnf("overriding Dolt event scheduler period to %d seconds", i)
+			eventSchedulerPeriod = i
+		}
+	}
+	return engine.InitializeEventScheduler(getCtxFunc, config.EventSchedulerStatus, eventSchedulerPeriod)
 }
 
 // sqlContextFactory returns a contextFactory that creates a new sql.Context with the initial database provided

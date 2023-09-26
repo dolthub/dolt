@@ -6,7 +6,12 @@ make_test_repo_and_start_server() {
   rm -rf ./"$1"
   mkdir "$1"
   cd "$1"
+
+  # Override the default event scheduler period (30s) and set it to 1s so that we can run
+  # tests faster, without having to wait for the default 30s period to elapse several times.
+  export DOLT_EVENT_SCHEDULER_PERIOD=1
   start_sql_server
+
   dolt sql-client -P $PORT -u dolt --use-db information_schema -q "CREATE DATABASE repo1;"
   dolt sql-client -P $PORT -u dolt --use-db repo1 -q "CREATE TABLE totals (id int PRIMARY KEY AUTO_INCREMENT, int_col int);"
   dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_commit('-Am', 'creating table');"
