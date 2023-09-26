@@ -29,7 +29,7 @@ for tuple in $OS_ARCH_TUPLES; do
     if [ "$os" = windows ]; then
       obin="$bin.exe"
     fi
-    CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -ldflags="-s -w" -o "$o/bin/$obin" "./cmd/$bin/"
+    CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags="-s -w" -o "$o/bin/$obin" "./cmd/$bin/"
   done
   if [ "$os" = windows ]; then
     (cd out && 7z a "dolt-$os-$arch.zip" "dolt-$os-$arch" && 7z a "dolt-$os-$arch.7z" "dolt-$os-$arch")
