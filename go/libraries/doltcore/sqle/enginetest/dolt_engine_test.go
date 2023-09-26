@@ -127,15 +127,15 @@ func TestSingleScript(t *testing.T) {
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:            "select * from t1 order by pk",
+					Query:    "select * from t1 order by pk",
 					Expected: []sql.Row{{1, "abc"}},
 				},
 				{
-					Query: "INSERT INTO t1 VALUES (1, 'abc');",
+					Query:       "INSERT INTO t1 VALUES (1, 'abc');",
 					ExpectedErr: sql.ErrPrimaryKeyViolation,
 				},
 				{
-					Query: "INSERT INTO t1 VALUES (2, 'def');",
+					Query:    "INSERT INTO t1 VALUES (2, 'def');",
 					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
 				},
 				{
@@ -143,7 +143,7 @@ func TestSingleScript(t *testing.T) {
 					SkipResultsCheck: true,
 				},
 				{
-					Query:            "select * from t1 order by pk",
+					Query:    "select * from t1 order by pk",
 					Expected: []sql.Row{{1, "abc"}, {2, "def"}},
 				},
 			},
@@ -1769,11 +1769,11 @@ func TestSingleTransactionScript(t *testing.T) {
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "/* client a */ set autocommit = off",
+					Query:            "/* client a */ set autocommit = off",
 					SkipResultsCheck: true,
 				},
 				{
-					Query:    "/* client b */ set autocommit = off",
+					Query:            "/* client b */ set autocommit = off",
 					SkipResultsCheck: true,
 				},
 				{
@@ -1781,7 +1781,7 @@ func TestSingleTransactionScript(t *testing.T) {
 					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
 				},
 				{
-					Query:    "/* client a */ insert into t1 values (1, 2)",
+					Query:       "/* client a */ insert into t1 values (1, 2)",
 					ExpectedErr: sql.ErrPrimaryKeyViolation,
 				},
 				{
@@ -1790,27 +1790,27 @@ func TestSingleTransactionScript(t *testing.T) {
 				},
 				{
 					Query:    "/* client a */ select * from t1 order by pk",
-					Expected: []sql.Row{{0,0}, {1,1}, {2,2}},
+					Expected: []sql.Row{{0, 0}, {1, 1}, {2, 2}},
 				},
 				{
 					Query:    "/* client b */ select * from t1 order by pk",
-					Expected: []sql.Row{{0,0}},
+					Expected: []sql.Row{{0, 0}},
 				},
 				{
-					Query:    "/* client a */ commit",
+					Query:            "/* client a */ commit",
 					SkipResultsCheck: true,
 				},
 				{
-					Query:    "/* client b */ start transaction",
+					Query:            "/* client b */ start transaction",
 					SkipResultsCheck: true,
 				},
 				{
 					Query:    "/* client b */ select * from t1 order by pk",
-					Expected: []sql.Row{{0,0}, {1,1}, {2,2}},
+					Expected: []sql.Row{{0, 0}, {1, 1}, {2, 2}},
 				},
 				{
 					Query:    "/* client a */ select * from t1 order by pk",
-					Expected: []sql.Row{{0,0}, {1,1}, {2,2}},
+					Expected: []sql.Row{{0, 0}, {1, 1}, {2, 2}},
 				},
 			},
 		}
