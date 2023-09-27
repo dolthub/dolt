@@ -109,7 +109,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 1, "", err
 	}
 	if !isModification {
-		return 0, fmt.Sprintf("Already on branch '%s'\n", branchName), nil
+		return 0, fmt.Sprintf("Already on branch '%s'", branchName), nil
 	}
 
 	// Check if user wants to checkout branch.

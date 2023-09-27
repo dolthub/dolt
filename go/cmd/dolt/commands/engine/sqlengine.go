@@ -18,15 +18,18 @@ import (
 	"context"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 
 	gms "github.com/dolthub/go-mysql-server"
+	"github.com/dolthub/go-mysql-server/eventscheduler"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -69,6 +72,7 @@ type SqlEngineConfig struct {
 	SystemVariables         SystemVariables
 	ClusterController       *cluster.Controller
 	BinlogReplicaController binlogreplication.BinlogReplicaController
+	EventSchedulerStatus    eventscheduler.SchedulerStatus
 }
 
 // NewSqlEngine returns a SqlEngine
@@ -197,10 +201,17 @@ func NewSqlEngine(
 		return nil, err
 	}
 
-	sessionFactory := doltSessionFactory(pro, mrEnv.Config(), bcController, config.Autocommit)
+	sessFactory := doltSessionFactory(pro, mrEnv.Config(), bcController, config.Autocommit)
+
+	if engine.EventScheduler == nil {
+		err = configureEventScheduler(config, engine, sessFactory, pro)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	if config.BinlogReplicaController != nil {
-		binLogSession, err := sessionFactory(sql.NewBaseSession(), pro)
+		binLogSession, err := sessFactory(sql.NewBaseSession(), pro)
 		if err != nil {
 			return nil, err
 		}
@@ -214,7 +225,7 @@ func NewSqlEngine(
 	return &SqlEngine{
 		provider:       pro,
 		contextFactory: sqlContextFactory(),
-		dsessFactory:   sessionFactory,
+		dsessFactory:   sessFactory,
 		engine:         engine,
 	}, nil
 }
@@ -298,9 +309,8 @@ func (se *SqlEngine) Close() error {
 
 // configureBinlogReplicaController configures the binlog replication controller with the |engine|.
 func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engine, session *dsess.DoltSession) error {
-	contextFactory := sqlContextFactory()
-
-	executionCtx, err := contextFactory(context.Background(), session)
+	ctxFactory := sqlContextFactory()
+	executionCtx, err := ctxFactory(context.Background(), session)
 	if err != nil {
 		return err
 	}
@@ -308,6 +318,59 @@ func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engin
 	engine.Analyzer.Catalog.BinlogReplicaController = config.BinlogReplicaController
 
 	return nil
+}
+
+// configureEventScheduler configures the event scheduler with the |engine| for executing events, a |sessFactory|
+// for creating sessions, and a DoltDatabaseProvider, |pro|.
+func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, sessFactory sessionFactory, pro dsqle.DoltDatabaseProvider) error {
+	// need to give correct user, use the definer as user to run the event definition queries
+	ctxFactory := sqlContextFactory()
+
+	// getCtxFunc is used to create new session context for event scheduler.
+	// It starts a transaction that needs to be committed using the function returned.
+	getCtxFunc := func() (*sql.Context, func() error, error) {
+		sess, err := sessFactory(sql.NewBaseSession(), pro)
+		if err != nil {
+			return nil, func() error { return nil }, err
+		}
+
+		newCtx, err := ctxFactory(context.Background(), sess)
+		if err != nil {
+			return nil, func() error { return nil }, err
+		}
+
+		ts, ok := newCtx.Session.(sql.TransactionSession)
+		if !ok {
+			return nil, func() error { return nil }, nil
+		}
+
+		tr, err := sess.StartTransaction(newCtx, sql.ReadWrite)
+		if err != nil {
+			return nil, func() error { return nil }, err
+		}
+
+		ts.SetTransaction(tr)
+
+		return newCtx, func() error {
+			return ts.CommitTransaction(newCtx, tr)
+		}, nil
+	}
+
+	// A hidden env var allows overriding the event scheduler period for testing. This option is not
+	// exposed via configuration because we do not want to encourage customers to use it. If the value
+	// is equal to or less than 0, then the period is ignored and the default period, 30s, is used.
+	eventSchedulerPeriod := 0
+	eventSchedulerPeriodEnvVar := "DOLT_EVENT_SCHEDULER_PERIOD"
+	if s, ok := os.LookupEnv(eventSchedulerPeriodEnvVar); ok {
+		i, err := strconv.Atoi(s)
+		if err != nil {
+			logrus.Warnf("unable to parse value '%s' from env var '%s' as an integer", s, eventSchedulerPeriodEnvVar)
+		} else {
+			logrus.Warnf("overriding Dolt event scheduler period to %d seconds", i)
+			eventSchedulerPeriod = i
+		}
+	}
+	return engine.InitializeEventScheduler(getCtxFunc, config.EventSchedulerStatus, eventSchedulerPeriod)
 }
 
 // sqlContextFactory returns a contextFactory that creates a new sql.Context with the initial database provided

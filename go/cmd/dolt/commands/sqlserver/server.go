@@ -23,8 +23,10 @@ import (
 	"net/http"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/eventscheduler"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
@@ -116,12 +118,14 @@ func Serve(
 				logrus.TraceLevel.String(),
 			),
 			Default: logrus.GetLevel().String(),
-			NotifyChanged: func(scope sql.SystemVariableScope, v sql.SystemVarValue) {
-				if level, err := logrus.ParseLevel(v.Val.(string)); err == nil {
-					logrus.SetLevel(level)
-				} else {
-					logrus.Warnf("could not parse requested log level %s as a log level. dolt_log_level variable value and logging behavior will diverge.", v.Val.(string))
+			NotifyChanged: func(scope sql.SystemVariableScope, v sql.SystemVarValue) error {
+				level, err := logrus.ParseLevel(v.Val.(string))
+				if err != nil {
+					return fmt.Errorf("could not parse requested log level %s as a log level. dolt_log_level variable value and logging behavior will diverge.", v.Val.(string))
 				}
+
+				logrus.SetLevel(level)
+				return nil
 			},
 		},
 	})
@@ -177,6 +181,12 @@ func Serve(
 		ClusterController:       clusterController,
 		BinlogReplicaController: binlogreplication.DoltBinlogReplicaController,
 	}
+	esStatus, err := getEventSchedulerStatus(serverConfig.EventSchedulerStatus())
+	if err != nil {
+		return err, nil
+	}
+	config.EventSchedulerStatus = esStatus
+
 	sqlEngine, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
@@ -267,7 +277,6 @@ func Serve(
 
 	var remoteSrv *remotesrv.Server
 	if serverConfig.RemotesapiPort() != nil {
-
 		port := *serverConfig.RemotesapiPort()
 		if remoteSrvSqlCtx, err := sqlEngine.NewDefaultContext(ctx); err == nil {
 			listenaddr := fmt.Sprintf(":%d", port)
@@ -591,4 +600,17 @@ func checkForUnixSocket(config ServerConfig) (string, bool, error) {
 	}
 
 	return "", false, nil
+}
+
+func getEventSchedulerStatus(status string) (eventscheduler.SchedulerStatus, error) {
+	switch strings.ToLower(status) {
+	case "on", "1":
+		return eventscheduler.SchedulerOn, nil
+	case "off", "0":
+		return eventscheduler.SchedulerOff, nil
+	case "disabled":
+		return eventscheduler.SchedulerDisabled, nil
+	default:
+		return eventscheduler.SchedulerDisabled, fmt.Errorf("Error while setting value '%s' to 'event_scheduler'.", status)
+	}
 }
