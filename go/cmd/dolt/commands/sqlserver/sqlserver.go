@@ -48,6 +48,7 @@ const (
 	socketFlag                  = "socket"
 	remotesapiPortFlag          = "remotesapi-port"
 	goldenMysqlConn             = "golden"
+	eventSchedulerStatus        = "event-scheduler"
 )
 
 func indentLines(s string) string {
@@ -166,6 +167,7 @@ func (cmd SqlServerCmd) ArgParserWithName(name string) *argparser.ArgParser {
 	ap.SupportsOptionalString(socketFlag, "", "socket file", "Path for the unix socket file. Defaults to '/tmp/mysql.sock'.")
 	ap.SupportsUint(remotesapiPortFlag, "", "remotesapi port", "Sets the port for a server which can expose the databases in this sql-server over remotesapi, so that clients can clone or pull from this server.")
 	ap.SupportsString(goldenMysqlConn, "", "mysql connection string", "Provides a connection string to a MySQL instance to be used to validate query results")
+	ap.SupportsString(eventSchedulerStatus, "", "status", "Determines whether the Event Scheduler is enabled and running on the server. It has one of the following values: 'ON', 'OFF' or 'DISABLED'.")
 	return ap
 }
 
@@ -488,6 +490,15 @@ func getCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 		config.withGoldenMysqlConnectionString(connStr)
 	}
 
+	if esStatus, ok := apr.GetValue(eventSchedulerStatus); ok {
+		// make sure to assign eventSchedulerStatus first here
+		config.withEventScheduler(strings.ToUpper(esStatus))
+		err := sql.SystemVariables.SetGlobal("event_scheduler", config.EventSchedulerStatus())
+		if err != nil {
+			return nil, fmt.Errorf("failed to set event_scheduler. Error: %s", err.Error())
+		}
+	}
+
 	return config, nil
 }
 
@@ -519,6 +530,12 @@ func getYAMLServerConfig(fs filesys.Filesys, path string) (ServerConfig, error) 
 		err = sql.SystemVariables.SetGlobal("net_write_timeout", *cfg.ListenerConfig.WriteTimeoutMillis)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to set net_write_timeout from yaml file '%s'. Error: %s", path, err.Error())
+		}
+	}
+	if cfg.BehaviorConfig.EventSchedulerStatus != nil {
+		err = sql.SystemVariables.SetGlobal("event_scheduler", cfg.EventSchedulerStatus())
+		if err != nil {
+			return nil, fmt.Errorf("Failed to set event_scheduler from yaml file '%s'. Error: %s", path, err.Error())
 		}
 	}
 

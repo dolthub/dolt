@@ -15,7 +15,6 @@
 package sqlserver
 
 import (
-	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -445,7 +444,6 @@ func runDefaultBranchTests(t *testing.T, tests []defaultBranchTest, conn *dbr.Co
 }
 
 func TestReadReplica(t *testing.T) {
-	var err error
 	cwd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("no working directory: %s", err.Error())
@@ -467,10 +465,8 @@ func TestReadReplica(t *testing.T) {
 	sourceDbName := multiSetup.DbNames[1]
 
 	localCfg, ok := multiSetup.GetEnv(readReplicaDbName).Config.GetConfig(env.LocalConfig)
-	if !ok {
-		t.Fatal("local config does not exist")
-	}
-	config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{dsess.ReadReplicaRemote: "remote1", dsess.ReplicateHeads: "main,feature"})
+	require.True(t, ok, "local config does not exist")
+	config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{dsess.ReadReplicaRemote: "remote1", dsess.ReplicateHeads: "main"})
 	dsess.InitPersistedSystemVars(multiSetup.GetEnv(readReplicaDbName))
 
 	// start server as read replica
@@ -480,14 +476,12 @@ func TestReadReplica(t *testing.T) {
 	// set socket to nil to force tcp
 	serverConfig = serverConfig.WithHost("127.0.0.1").WithSocket("")
 
-	func() {
-		os.Chdir(multiSetup.DbPaths[readReplicaDbName])
-		go func() {
-			_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, multiSetup.GetEnv(readReplicaDbName))
-		}()
-		err = sc.WaitForStart()
+	os.Chdir(multiSetup.DbPaths[readReplicaDbName])
+	go func() {
+		err, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, multiSetup.GetEnv(readReplicaDbName))
 		require.NoError(t, err)
 	}()
+	require.NoError(t, sc.WaitForStart())
 	defer sc.StopServer()
 
 	replicatedTable := "new_table"
@@ -502,14 +496,16 @@ func TestReadReplica(t *testing.T) {
 		require.NoError(t, err)
 		sess := conn.NewSession(nil)
 
-		newBranch := "feature"
-		multiSetup.NewBranch(sourceDbName, newBranch)
-		multiSetup.CheckoutBranch(sourceDbName, newBranch)
-		multiSetup.PushToRemote(sourceDbName, "remote1", newBranch)
+		multiSetup.NewBranch(sourceDbName, "feature")
+		multiSetup.CheckoutBranch(sourceDbName, "feature")
+		multiSetup.PushToRemote(sourceDbName, "remote1", "feature")
+
+		// Configure the read replica to pull the new feature branch we just created
+		config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{dsess.ReadReplicaRemote: "remote1", dsess.ReplicateHeads: "main,feature"})
+		dsess.InitPersistedSystemVars(multiSetup.GetEnv(readReplicaDbName))
 
 		var res []int
-
-		q := sess.SelectBySql(fmt.Sprintf("call dolt_checkout('%s')", newBranch))
+		q := sess.SelectBySql("call dolt_checkout('feature');")
 		_, err = q.LoadContext(context.Background(), &res)
 		require.NoError(t, err)
 		assert.ElementsMatch(t, res, []int{0})

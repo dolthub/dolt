@@ -165,6 +165,8 @@ type ServerConfig interface {
 	RemotesapiPort() *int
 	// ClusterConfig is the configuration for clustering in this sql-server.
 	ClusterConfig() cluster.Config
+	// EventSchedulerStatus is the configuration for enabling or disabling the event scheduler in this server.
+	EventSchedulerStatus() string
 }
 
 type validatingServerConfig interface {
@@ -200,6 +202,7 @@ type commandLineServerConfig struct {
 	socket                  string
 	remotesapiPort          *int
 	goldenMysqlConn         string
+	eventSchedulerStatus    string
 }
 
 var _ ServerConfig = (*commandLineServerConfig)(nil)
@@ -478,6 +481,22 @@ func (cfg *commandLineServerConfig) goldenMysqlConnectionString() string {
 
 func (cfg *commandLineServerConfig) withGoldenMysqlConnectionString(cs string) *commandLineServerConfig {
 	cfg.goldenMysqlConn = cs
+	return cfg
+}
+
+func (cfg *commandLineServerConfig) EventSchedulerStatus() string {
+	switch cfg.eventSchedulerStatus {
+	case "", "1":
+		return "ON"
+	case "0":
+		return "OFF"
+	default:
+		return strings.ToUpper(cfg.eventSchedulerStatus)
+	}
+}
+
+func (cfg *commandLineServerConfig) withEventScheduler(es string) *commandLineServerConfig {
+	cfg.eventSchedulerStatus = es
 	return cfg
 }
 

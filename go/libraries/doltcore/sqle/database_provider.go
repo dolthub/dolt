@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/clusterdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -270,7 +271,7 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 	for _, db := range p.databases {
 		all = append(all, db)
 
-		if showBranches {
+		if showBranches && db.Name() != clusterdb.DoltClusterDbName {
 			revisionDbs, err := p.allRevisionDbs(ctx, db)
 			if err != nil {
 				// TODO: this interface is wrong, needs to return errors
