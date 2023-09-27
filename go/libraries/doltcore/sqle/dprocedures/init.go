@@ -23,14 +23,14 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dolt_add", Schema: int64Schema("status"), Function: doltAdd},
 	{Name: "dolt_backup", Schema: int64Schema("status"), Function: doltBackup},
 	{Name: "dolt_branch", Schema: int64Schema("status"), Function: doltBranch},
-	{Name: "dolt_checkout", Schema: doltCheckoutSchema, Function: doltCheckout},
+	{Name: "dolt_checkout", Schema: doltCheckoutSchema, Function: doltCheckout, ReadOnly: true},
 	{Name: "dolt_cherry_pick", Schema: cherryPickSchema, Function: doltCherryPick},
 	{Name: "dolt_clean", Schema: int64Schema("status"), Function: doltClean},
 	{Name: "dolt_clone", Schema: int64Schema("status"), Function: doltClone},
 	{Name: "dolt_commit", Schema: stringSchema("hash"), Function: doltCommit},
 	{Name: "dolt_commit_hash_out", Schema: stringSchema("hash"), Function: doltCommitHashOut},
 	{Name: "dolt_conflicts_resolve", Schema: int64Schema("status"), Function: doltConflictsResolve},
-	{Name: "dolt_count_commits", Schema: int64Schema("ahead", "behind"), Function: doltCountCommits},
+	{Name: "dolt_count_commits", Schema: int64Schema("ahead", "behind"), Function: doltCountCommits, ReadOnly: true},
 	{Name: "dolt_fetch", Schema: int64Schema("status"), Function: doltFetch},
 
 	// dolt_gc is enabled behind a feature flag for now, see dolt_gc.go
@@ -49,7 +49,7 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	// TODO: Add new procedure aliases in doltProcedureAliasSet in go-mysql-server/sql/information_schema/routines.go file
 	{Name: "dadd", Schema: int64Schema("status"), Function: doltAdd},
 	{Name: "dbranch", Schema: int64Schema("status"), Function: doltBranch},
-	{Name: "dcheckout", Schema: doltCheckoutSchema, Function: doltCheckout},
+	{Name: "dcheckout", Schema: doltCheckoutSchema, Function: doltCheckout, ReadOnly: true},
 	{Name: "dcherry_pick", Schema: cherryPickSchema, Function: doltCherryPick},
 	{Name: "dclean", Schema: int64Schema("status"), Function: doltClean},
 	{Name: "dclone", Schema: int64Schema("status"), Function: doltClone},
