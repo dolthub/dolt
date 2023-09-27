@@ -181,7 +181,7 @@ teardown() {
     cd ../repo1
     run dolt push origin main
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Updates were rejected because the tip of your current branch is behind" ]] || false
+    [[ "$output" =~ "the tip of your current branch is behind its remote counterpart" ]] || false
 
     dolt push --force origin main
 }

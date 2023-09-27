@@ -38,7 +38,7 @@ type RefSpec interface {
 	// for the source reference of an operation involving a reference spec
 	SrcRef(cwbRef DoltRef) DoltRef
 
-	// DestRef will take a source reference and return a reference to what shat should be used for the destination
+	// DestRef will take a source reference and return a reference to what should be used for the destination
 	// reference of an operation involving a reference spec.
 	DestRef(srcRef DoltRef) DoltRef
 }
