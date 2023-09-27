@@ -202,6 +202,26 @@ SQL
     [[ "$output" =~ "Variable 'aws_credentials_file' is a read only variable" ]] || false
 }
 
+@test "sql-server: read-only mode" {
+    skiponwindows "Missing dependencies"
+
+    # Create a second branch to test `call dolt_checkout()`
+    # and push to a remote to test `dolt status`
+    cd repo1
+    dolt sql -q "call dolt_branch('other');"
+    mkdir ../repo1-remote
+    dolt remote add origin file://../repo1-remote
+    dolt push origin main
+
+    # Start up the server in read-only mode
+    start_sql_server_with_args "--readonly" "--user dolt"
+
+    # Assert that we can still checkout other branches and run dolt status
+    # while the sql-server is running in read-only mode
+    dolt sql -q "call dolt_checkout('other');"
+    dolt sql -q "call dolt_count_commits('--from', 'HEAD', '--to', 'HEAD');"
+    dolt status
+}
 
 @test "sql-server: inspect sql-server using CLI" {
     skiponwindows "Missing dependencies"
