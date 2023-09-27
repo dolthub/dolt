@@ -21,7 +21,7 @@ import (
 
 var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dolt_add", Schema: int64Schema("status"), Function: doltAdd},
-	{Name: "dolt_backup", Schema: int64Schema("status"), Function: doltBackup},
+	{Name: "dolt_backup", Schema: int64Schema("status"), Function: doltBackup, ReadOnly: true},
 	{Name: "dolt_branch", Schema: int64Schema("status"), Function: doltBranch},
 	{Name: "dolt_checkout", Schema: doltCheckoutSchema, Function: doltCheckout, ReadOnly: true},
 	{Name: "dolt_cherry_pick", Schema: cherryPickSchema, Function: doltCherryPick},
