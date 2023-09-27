@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	credsDir        = "creds"
+	credsDir = "creds"
 
 	configFile       = "config.json"
 	GlobalConfigFile = "config_global.json"

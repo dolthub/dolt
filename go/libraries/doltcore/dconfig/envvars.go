@@ -39,5 +39,3 @@ const (
 	EnvDisableFixedAccess            = "DOLT_DISABLE_FIXED_ACCESS"
 	EnvDoltAssistAgree               = "DOLT_ASSIST_AGREE"
 )
-
-
