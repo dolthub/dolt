@@ -1156,3 +1156,29 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "cm2" ]] || false
 }
+
+@test "sql-local-remote: verify dolt push behavior" {
+    mkdir remote
+    cd altDB
+    dolt remote add origin file://../remote
+    dolt commit --allow-empty -m "cm1"
+    dolt push origin main
+
+    cd ..
+    dolt clone file://./remote repo
+    cd repo
+    run dolt log
+    [ $status -eq 0 ]
+    [[ "$output" =~ "cm1" ]] || false
+
+    cd ../altDB
+    start_sql_server altDB
+    dolt commit --allow-empty -m "cm2"
+    dolt push origin main
+    cd ../repo
+
+    dolt pull
+    run dolt log
+    [ $status -eq 0 ]
+    [[ "$output" =~ "cm2" ]] || false
+}

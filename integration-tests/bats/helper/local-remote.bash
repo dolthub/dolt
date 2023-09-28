@@ -71,7 +71,6 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~sql-backup.bats~
 ~drop-create.bats~
 ~constraint-violations.bats~
-~sql-push.bats~
 ~branch-control.bats~
 ~import-tables.bats~
 ~feature-version.bats~
