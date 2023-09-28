@@ -89,7 +89,13 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 
 		// After we migrate the data on the left-side to the new, merged schema, we reset
 		// the left mapping to an identity mapping, since it's a direct mapping now.
-		valueMerger.leftMapping = val.NewIdentityOrdinalMapping(len(valueMerger.leftMapping))
+		// However, columns that did not exist on the left schema shouldn't be updated, because they
+		// still don't exist on the migrated data.
+		for i, col := range mergedSch.GetNonPKCols().GetColumns() {
+			if findNonPKColumnMappingByTagOrName(tm.leftSch, col) != -1 {
+				valueMerger.leftMapping[i] = i
+			}
+		}
 	}
 
 	// After we've migrated the existing data to the new schema, it's safe for us to update the schema on the table
@@ -1548,19 +1554,19 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 	rightCol, rightColIdx, rightColExists := getColumn(&right, m.rightSchema, &m.rightMapping, i)
 	resultType := m.resultVD.Types[i]
 
-	if !leftColExists || !rightColExists {
-		// If a column does not exist on either branch, it must have been dropped.
-		// But `processColumn` is currently only called on columns in the merged schema.
-		// So this should not be possible.
-		panic("Column unexpectedly dropped during merge.")
-	}
-
 	if base == nil || !baseColExists {
 		// There are two possible cases:
 		// - The base row doesn't exist, or
 		// - The column doesn't exist in the base row
-		// Regardless, both left and right are inserts. (If one was a no-op, then `processColumn` would
-		// not have been called in the first place because there is no data conflict to resolve.)
+		// Regardless, both left and right are inserts, or one is an insert and the other doesn't exist.
+
+		if !leftColExists {
+			return rightCol, false
+		}
+
+		if !rightColExists {
+			return leftCol, false
+		}
 
 		if m.resultVD.Comparator().CompareValues(i, leftCol, rightCol, resultType) == 0 {
 			// columns are equal, return either.
@@ -1630,8 +1636,7 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 func getColumn(tuple *val.Tuple, schema schema.Schema, mapping *val.OrdinalMapping, idx int) (col []byte, colIndex int, exists bool) {
 	colIdx := (*mapping)[idx]
 	if colIdx == -1 {
-		exists = idx < schema.GetNonPKCols().Size()
-		return nil, -1, exists
+		return nil, -1, false
 	}
 	return tuple.GetField(colIdx), colIdx, true
 }
