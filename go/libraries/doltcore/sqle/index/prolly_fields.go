@@ -131,108 +131,65 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tr
 }
 
 // Serialize writes an interface{} to the ith field of the Tuple being built.
-func Serialize(ctx context.Context, ns tree.NodeStore, t val.Type, v interface{}) []byte {
+func Serialize(ctx context.Context, ns tree.NodeStore, t val.Type, v interface{}) ([]byte, bool) {
 	var res []byte
 
 	if v == nil {
-		return res // NULL
+		return res, true // NULL
 	}
 
 	enc := t.Enc
 	switch enc {
 	case val.Int8Enc:
-		return []byte{byte(convInt(v))}
+		return []byte{byte(convInt(v))}, true
 	case val.Uint8Enc:
-		return []byte{byte(convUint(v))}
+		return []byte{byte(convUint(v))}, true
 	case val.Int16Enc:
-		return binary.LittleEndian.AppendUint16(res, uint16(convInt(v)))
+		return binary.LittleEndian.AppendUint16(res, uint16(convInt(v))), true
 	case val.Uint16Enc:
-		return binary.LittleEndian.AppendUint16(res, uint16(convUint(v)))
-		/*
-			case val.Int32Enc:
-				tb.PutInt32(i, int32(convInt(v)))
-			case val.Uint32Enc:
-				tb.PutUint32(i, uint32(convUint(v)))
-			case val.Int64Enc:
-				tb.PutInt64(i, int64(convInt(v)))
-			case val.Uint64Enc:
-				tb.PutUint64(i, uint64(convUint(v)))
-			case val.Float32Enc:
-				tb.PutFloat32(i, v.(float32))
-			case val.Float64Enc:
-				tb.PutFloat64(i, v.(float64))
-			case val.Bit64Enc:
-				tb.PutBit(i, uint64(convUint(v)))
-			case val.DecimalEnc:
-				tb.PutDecimal(i, v.(decimal.Decimal))
-			case val.YearEnc:
-				tb.PutYear(i, v.(int16))
-			case val.DateEnc:
-				tb.PutDate(i, v.(time.Time))
-			case val.TimeEnc:
-				tb.PutSqlTime(i, int64(v.(types.Timespan)))
-			case val.DatetimeEnc:
-				tb.PutDatetime(i, v.(time.Time))
-			case val.EnumEnc:
-				tb.PutEnum(i, v.(uint16))
-			case val.SetEnc:
-				tb.PutSet(i, v.(uint64))*/
+		return binary.LittleEndian.AppendUint16(res, uint16(convUint(v))), true
+	case val.Int32Enc:
+		return binary.LittleEndian.AppendUint32(res, uint32(convInt(v))), true
+	case val.Uint32Enc:
+		return binary.LittleEndian.AppendUint32(res, uint32(convUint(v))), true
+	case val.Int64Enc:
+		return binary.LittleEndian.AppendUint64(res, uint64(convInt(v))), true
+	case val.Uint64Enc:
+		return binary.LittleEndian.AppendUint64(res, uint64(convUint(v))), true
+	case val.EnumEnc:
+		return binary.LittleEndian.AppendUint16(res, v.(uint16)), true
+	case val.SetEnc:
+		return binary.LittleEndian.AppendUint64(res, v.(uint64)), true
 	case val.StringEnc:
 		s := v.(string)
 		res = make([]byte, len(s)+1)
 		copy(res, s)
 		res[len(s)] = byte(0)
-		/*
-			case val.ByteStringEnc:
-				if s, ok := v.(string); ok {
-					if len(s) > math.MaxUint16 {
-						return ErrValueExceededMaxFieldSize
-					}
-					v = []byte(s)
-				}
-				tb.PutByteString(i, v.([]byte))
-			case val.Hash128Enc:
-				tb.PutHash128(i, v.([]byte))
-			case val.GeometryEnc:
-				geo := serializeGeometry(v)
-				if len(geo) > math.MaxUint16 {
-					return ErrValueExceededMaxFieldSize
-				}
-				tb.PutGeometry(i, geo)
-			case val.JSONAddrEnc:
-				buf, err := convJson(v)
-				if err != nil {
-					return err
-				}
-				h, err := serializeBytesToAddr(ctx, ns, bytes.NewReader(buf), len(buf))
-				if err != nil {
-					return err
-				}
-				tb.PutJSONAddr(i, h)
-			case val.BytesAddrEnc:
-				h, err := serializeBytesToAddr(ctx, ns, bytes.NewReader(v.([]byte)), len(v.([]byte)))
-				if err != nil {
-					return err
-				}
-				tb.PutBytesAddr(i, h)*/
+		return res, true
+	case val.ByteStringEnc:
+		if s, ok := v.(string); ok {
+			if len(s) > math.MaxUint16 {
+				return nil, false
+			}
+			res = make([]byte, len(s)+1)
+			copy(res, s)
+			res[len(s)] = byte(0)
+			return res, true
+		}
+
+		b := v.([]byte)
+		res = make([]byte, len(b)+1)
+		copy(res, b)
+		return res, true
 	case val.StringAddrEnc:
 		//todo: v will be []byte after daylon's changes
 		h, err := serializeBytesToAddr(ctx, ns, bytes.NewReader([]byte(v.(string))), len(v.(string)))
 		if err != nil {
 			panic("return err")
 		}
-		return h[:]
-		/*case val.CommitAddrEnc:
-			tb.PutCommitAddr(i, v.(hash.Hash))
-		case val.CellEnc:
-			if _, ok := v.([]byte); ok {
-				v = deserializeGeometry(v.([]byte))
-			}
-			tb.PutCell(i, ZCell(v.(types.GeometryValue)))*/
-	default:
-		panic(fmt.Sprintf("unknown encoding %v %v", enc, v))
+		return h[:], true
 	}
-	return nil
+	panic(fmt.Sprintf("unknown encoding, or convert not defined for %v %v", enc, v))
 }
 
 // PutField writes an interface{} to the ith field of the Tuple being built.

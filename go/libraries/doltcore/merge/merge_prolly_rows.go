@@ -1660,5 +1660,5 @@ func convert(ctx context.Context, fromDesc, toDesc val.TupleDesc, toSchema schem
 	if !inRange {
 		return nil, false
 	}
-	return index.Serialize(ctx, ns, toDesc.Types[toIndex], convertedCell), true
+	return index.Serialize(ctx, ns, toDesc.Types[toIndex], convertedCell)
 }
