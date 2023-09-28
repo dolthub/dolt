@@ -25,6 +25,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
@@ -34,7 +35,7 @@ const (
 )
 
 func init() {
-	if os.Getenv("DOLT_DISABLE_GC_PROCEDURE") != "" {
+	if os.Getenv(dconfig.EnvDisableGcProcedure) != "" {
 		DoltGCFeatureFlag = false
 	}
 }

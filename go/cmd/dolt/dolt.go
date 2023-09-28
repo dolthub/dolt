@@ -50,6 +50,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/stashcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/tblcmds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
@@ -237,7 +238,7 @@ func runMain() int {
 		return 1
 	}
 
-	if os.Getenv("DOLT_VERBOSE_ASSERT_TABLE_FILES_CLOSED") == "" {
+	if os.Getenv(dconfig.EnvVerboseAssertTableFilesClosed) == "" {
 		nbs.TableIndexGCFinalizerWithStackTrace = false
 	}
 

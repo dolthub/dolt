@@ -40,8 +40,10 @@ const TestEmailAddress = "bats@email.fake"
 const ConnectAttempts = 50
 const RetrySleepDuration = 50 * time.Millisecond
 
+const EnvDoltBinPath = "DOLT_BIN_PATH"
+
 func init() {
-	path := os.Getenv("DOLT_BIN_PATH")
+	path := os.Getenv(EnvDoltBinPath)
 	if path == "" {
 		path = "dolt"
 	}

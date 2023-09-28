@@ -90,7 +90,16 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 		printWithIndendationLevel(level, ret, "}")
 		return ret.String()
 	case serial.TagFileID:
-		return "Tag"
+		msg := serial.GetRootAsTag(sm, serial.MessagePrefixSz)
+		ret := &strings.Builder{}
+		printWithIndendationLevel(level, ret, "{\n")
+		printWithIndendationLevel(level, ret, "\tName: %s\n", msg.Name())
+		printWithIndendationLevel(level, ret, "\tDesc: %s\n", msg.Desc())
+		printWithIndendationLevel(level, ret, "\tEmail: %s\n", msg.Email())
+		printWithIndendationLevel(level, ret, "\tUserTimestamp: %d\n", msg.UserTimestampMillis())
+		printWithIndendationLevel(level, ret, "\tCommitAddress: #%s\n", hash.New(msg.CommitAddrBytes()).String())
+		printWithIndendationLevel(level, ret, "}")
+		return ret.String()
 	case serial.WorkingSetFileID:
 		msg := serial.GetRootAsWorkingSet(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
@@ -110,7 +119,8 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 		printWithIndendationLevel(level, ret, "\tName: %s\n", msg.Name())
 		printWithIndendationLevel(level, ret, "\tDesc: %s\n", msg.Description())
 		printWithIndendationLevel(level, ret, "\tEmail: %s\n", msg.Email())
-		printWithIndendationLevel(level, ret, "\tTime: %s\n", time.UnixMilli((int64)(msg.TimestampMillis())).String())
+		printWithIndendationLevel(level, ret, "\tTimestamp: %s\n", time.UnixMilli((int64)(msg.TimestampMillis())).String())
+		printWithIndendationLevel(level, ret, "\tUserTimestamp: %s\n", time.UnixMilli(msg.UserTimestampMillis()).String())
 		printWithIndendationLevel(level, ret, "\tHeight: %d\n", msg.Height())
 
 		printWithIndendationLevel(level, ret, "\tRootValue: {\n")

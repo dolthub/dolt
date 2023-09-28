@@ -1,4 +1,4 @@
-// Copyright 2019-2022 Dolthub, Inc.
+// Copyright 2023 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,29 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dolt_builder
-
-import (
-	"context"
-	"os"
-	"os/exec"
-)
-
-var Debug bool
-
-const envDebug = "DEBUG"
-
-func init() {
-	if os.Getenv(envDebug) != "" {
-		Debug = true
-	}
-}
-
-func ExecCommand(ctx context.Context, name string, arg ...string) *exec.Cmd {
-	e := exec.CommandContext(ctx, name, arg...)
-	if Debug {
-		e.Stdout = os.Stdout
-		e.Stderr = os.Stderr
-	}
-	return e
-}
+package doltdb

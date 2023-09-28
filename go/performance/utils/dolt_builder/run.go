@@ -27,6 +27,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+const envDoltBin = "DOLT_BIN"
+
 func Run(commitList []string) error {
 	parentCtx := context.Background()
 
@@ -106,7 +108,7 @@ func Run(commitList []string) error {
 // as the parent directory for a `doltBin` directory
 func getDoltBin() (string, error) {
 	var doltBin string
-	dir := os.Getenv("DOLT_BIN")
+	dir := os.Getenv(envDoltBin)
 	if dir == "" {
 		cwd, err := os.Getwd()
 		if err != nil {

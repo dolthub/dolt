@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -350,7 +351,7 @@ func getCommitMessageFromEditor(sqlCtx *sql.Context, queryist cli.Queryist, sugg
 
 	backupEd := "vim"
 	// try getting default editor on the user system
-	if ed, edSet := os.LookupEnv("EDITOR"); edSet {
+	if ed, edSet := os.LookupEnv(dconfig.EnvEditor); edSet {
 		backupEd = ed
 	}
 	// try getting Dolt config core.editor
@@ -374,7 +375,7 @@ func getCommitMessageFromEditor(sqlCtx *sql.Context, queryist cli.Queryist, sugg
 func checkIsTerminal() bool {
 	isTerminal := false
 	cli.ExecuteWithStdioRestored(func() {
-		if goisatty.IsTerminal(os.Stdout.Fd()) || os.Getenv("DOLT_TEST_FORCE_OPEN_EDITOR") == "1" {
+		if goisatty.IsTerminal(os.Stdout.Fd()) || os.Getenv(dconfig.EnvTestForceOpenEditor) == "1" {
 			isTerminal = true
 		}
 	})

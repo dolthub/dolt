@@ -46,8 +46,10 @@ var (
 	testGCSBucket string
 )
 
+const envTestBucket = "TEST_GCS_BUCKET"
+
 func init() {
-	testGCSBucket = os.Getenv("TEST_GCS_BUCKET")
+	testGCSBucket = os.Getenv(envTestBucket)
 	if testGCSBucket != "" {
 		ctx = context.Background()
 		gcs, err := storage.NewClient(ctx)
