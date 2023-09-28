@@ -47,4 +47,3 @@ func ParseDate(dateStr string) (time.Time, error) {
 
 	return time.Time{}, errors.New("error: '" + dateStr + "' is not in a supported format.")
 }
-

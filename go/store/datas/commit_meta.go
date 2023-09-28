@@ -21,9 +21,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -80,7 +81,7 @@ func init() {
 			}
 		}
 	}
-	
+
 	authorDate := os.Getenv(dconfig.EnvDoltAuthorDate)
 	if authorDate != "" {
 		authorDate, err := dconfig.ParseDate(authorDate)

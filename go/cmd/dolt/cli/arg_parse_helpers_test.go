@@ -18,9 +18,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 )
 
 func TestParseDate(t *testing.T) {
