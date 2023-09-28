@@ -705,6 +705,13 @@ func (nbs *NomsBlockStore) putChunk(ctx context.Context, c chunks.Chunk, getAddr
 	return nil
 }
 
+func (nbs *NomsBlockStore) handlePossibleDanglingRefError(err error) {
+	if errors.Is(err, ErrDanglingRef) {
+		nbs.mt = nil
+		nbs.hasCache.Purge()
+	}
+}
+
 func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, addrs hash.HashSet, checker refCheck) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
@@ -725,9 +732,7 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, addrs 
 		if addChunkRes == chunkNotAdded {
 			ts, err := nbs.tables.append(ctx, nbs.mt, checker, nbs.hasCache, nbs.stats)
 			if err != nil {
-				if errors.Is(err, ErrDanglingRef) {
-					nbs.mt = nil
-				}
+				nbs.handlePossibleDanglingRefError(err)
 				return false, err
 			}
 			nbs.tables = ts
@@ -1132,9 +1137,7 @@ func (nbs *NomsBlockStore) commit(ctx context.Context, current, last hash.Hash, 
 
 	// check for dangling references in |nbs.mt|
 	if err = nbs.errorIfDangling(current, checker); err != nil {
-		if errors.Is(err, ErrDanglingRef) {
-			nbs.mt = nil
-		}
+		nbs.handlePossibleDanglingRefError(err)
 		return false, err
 	}
 
@@ -1154,9 +1157,7 @@ func (nbs *NomsBlockStore) commit(ctx context.Context, current, last hash.Hash, 
 		if cnt > preflushChunkCount {
 			ts, err := nbs.tables.append(ctx, nbs.mt, checker, nbs.hasCache, nbs.stats)
 			if err != nil {
-				if errors.Is(err, ErrDanglingRef) {
-					nbs.mt = nil
-				}
+				nbs.handlePossibleDanglingRefError(err)
 				return false, err
 			}
 			nbs.tables, nbs.mt = ts, nil
@@ -1233,9 +1234,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		if cnt > 0 {
 			ts, err := nbs.tables.append(ctx, nbs.mt, checker, nbs.hasCache, nbs.stats)
 			if err != nil {
-				if errors.Is(err, ErrDanglingRef) {
-					nbs.mt = nil
-				}
+				nbs.handlePossibleDanglingRefError(err)
 				return err
 			}
 			nbs.tables, nbs.mt = ts, nil
