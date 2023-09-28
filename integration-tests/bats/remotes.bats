@@ -75,9 +75,6 @@ teardown() {
     dolt commit --allow-empty -m "a commit for main from repo2"
     dolt push
 
-     dolt branch
-
-
     run dolt checkout other
     [ "$status" -eq 0 ]
     [[ "$output" =~ "branch 'other' set up to track 'origin/other'." ]] || false
@@ -2492,4 +2489,42 @@ SQL
     run dolt fetch --prune remote2 'refs/heads/main:refs/remotes/remote2/othermain'
     [ "$status" -ne 0 ]
     [[ "$output" =~ "--prune option cannot be provided with a ref spec" ]] || false
+}
+
+@test "remotes: pull with DOLT_AUTHOR_DATE and DOLT_COMMITER_DATE doesn't overwrite commit timestamps" {
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt sql -q "create table t1(a int)"
+    dolt commit -Am "new table"
+    dolt branch b1
+    dolt remote add origin file://../remote1
+    dolt push origin main
+    dolt push origin b1
+
+    cd ..
+    dolt clone file://./remote1 repo2
+
+    cd repo2
+    TZ=PST+8 DOLT_COMMITTER_DATE='2023-09-26T12:34:56' DOLT_AUTHOR_DATE='2023-09-26T01:23:45' dolt fetch
+    TZ=PST+8 DOLT_COMMITTER_DATE='2023-09-26T12:34:56' DOLT_AUTHOR_DATE='2023-09-26T01:23:45' dolt pull
+
+    run dolt_log_in_PST
+    [[ ! "$output" =~ 'Tue Sep 26 01:23:45' ]] || false
+
+    TZ=PST+8 DOLT_COMMITTER_DATE='2023-09-26T12:34:56' DOLT_AUTHOR_DATE='2023-09-26T01:23:45' dolt checkout b1
+    run dolt_log_in_PST
+    [[ ! "$output" =~ 'Tue Sep 26 01:23:45' ]] || false
+
+    cd ../repo1
+    dolt checkout b1
+    dolt commit --allow-empty -m 'empty commit'
+    dolt push origin b1
+
+    cd ../repo2
+    TZ=PST+8 DOLT_COMMITTER_DATE='2023-09-26T12:34:56' DOLT_AUTHOR_DATE='2023-09-26T01:23:45' dolt pull
+
+    run dolt_log_in_PST
+    [[ ! "$output" =~ 'Tue Sep 26 01:23:45' ]] || false
 }

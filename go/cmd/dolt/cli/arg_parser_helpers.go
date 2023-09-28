@@ -19,41 +19,12 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
 const VerboseFlag = "verbose"
-
-// we are more permissive than what is documented.
-var SupportedLayouts = []string{
-	"2006/01/02",
-	"2006/01/02T15:04:05",
-	"2006/01/02T15:04:05Z07:00",
-
-	"2006.01.02",
-	"2006.01.02T15:04:05",
-	"2006.01.02T15:04:05Z07:00",
-
-	"2006-01-02",
-	"2006-01-02T15:04:05",
-	"2006-01-02T15:04:05Z07:00",
-}
-
-// Parses a date string. Used by multiple commands.
-func ParseDate(dateStr string) (time.Time, error) {
-	for _, layout := range SupportedLayouts {
-		t, err := time.Parse(layout, dateStr)
-
-		if err == nil {
-			return t, nil
-		}
-	}
-
-	return time.Time{}, errors.New("error: '" + dateStr + "' is not in a supported format.")
-}
 
 // Parses the author flag for the commit method.
 func ParseAuthor(authorStr string) (string, string, error) {

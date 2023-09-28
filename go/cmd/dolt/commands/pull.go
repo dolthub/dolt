@@ -200,7 +200,7 @@ func pullHelper(
 				continue
 			}
 
-			t := datas.CommitNowFunc()
+			t := datas.CommitterDate()
 
 			roots, err := dEnv.Roots(ctx)
 			if err != nil {

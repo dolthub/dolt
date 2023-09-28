@@ -17,9 +17,13 @@ package datas
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -41,8 +45,13 @@ var ErrNameNotConfigured = errors.New("Aborting commit due to empty committer na
 var ErrEmailNotConfigured = errors.New("Aborting commit due to empty committer email. Is your config set?")
 var ErrEmptyCommitMessage = errors.New("Aborting commit due to empty commit message.")
 
-var CommitNowFunc = time.Now
+// CommitterDate is the function used to get the committer time when creating commits.
+var CommitterDate = time.Now
 var CommitLoc = time.Local
+
+var AuthorDate = time.Now
+var CustomAuthorDate bool
+var AuthorLoc = time.Local
 
 // CommitMeta contains all the metadata that is associated with a commit within a data repo.
 type CommitMeta struct {
@@ -56,7 +65,36 @@ type CommitMeta struct {
 // NewCommitMeta creates a CommitMeta instance from a name, email, and description and uses the current time for the
 // timestamp
 func NewCommitMeta(name, email, desc string) (*CommitMeta, error) {
-	return NewCommitMetaWithUserTS(name, email, desc, CommitNowFunc())
+	return NewCommitMetaWithUserTS(name, email, desc, AuthorDate())
+}
+
+func init() {
+	committerDate := os.Getenv(dconfig.EnvDoltCommitterDate)
+	if committerDate != "" {
+		committerDate, err := dconfig.ParseDate(committerDate)
+		if err != nil {
+			logrus.Warnf("Unable to parse value for %s: %s. System time will be used instead.",
+				dconfig.EnvDoltCommitterDate, err.Error())
+		} else {
+			CommitterDate = func() time.Time {
+				return committerDate
+			}
+		}
+	}
+
+	authorDate := os.Getenv(dconfig.EnvDoltAuthorDate)
+	if authorDate != "" {
+		authorDate, err := dconfig.ParseDate(authorDate)
+		if err != nil {
+			logrus.Warnf("Unable to parse value for %s: %s. System time will be used instead.",
+				dconfig.EnvDoltAuthorDate, err.Error())
+		} else {
+			AuthorDate = func() time.Time {
+				return authorDate
+			}
+			CustomAuthorDate = true
+		}
+	}
 }
 
 // NewCommitMetaWithUserTS creates a user metadata
@@ -77,10 +115,10 @@ func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*Commi
 		return nil, ErrEmptyCommitMessage
 	}
 
-	ms := uint64(CommitNowFunc().UnixMilli())
-	userMS := userTS.UnixMilli()
+	committerDateMillis := uint64(CommitterDate().UnixMilli())
+	authorDateMillis := userTS.UnixMilli()
 
-	return &CommitMeta{n, e, ms, d, userMS}, nil
+	return &CommitMeta{n, e, committerDateMillis, d, authorDateMillis}, nil
 }
 
 func getRequiredFromSt(st types.Struct, k string) (types.Value, error) {

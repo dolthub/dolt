@@ -38,4 +38,6 @@ const (
 	EnvEditTableBufferRows           = "DOLT_EDIT_TABLE_BUFFER_ROWS"
 	EnvDisableFixedAccess            = "DOLT_DISABLE_FIXED_ACCESS"
 	EnvDoltAssistAgree               = "DOLT_ASSIST_AGREE"
+	EnvDoltAuthorDate                = "DOLT_AUTHOR_DATE"
+	EnvDoltCommitterDate             = "DOLT_COMMITTER_DATE"
 )

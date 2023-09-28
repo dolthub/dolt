@@ -25,6 +25,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -464,7 +465,7 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 
 	t := ctx.QueryTime()
 	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
-		t, err = cli.ParseDate(commitTimeStr)
+		t, err = dconfig.ParseDate(commitTimeStr)
 		if err != nil {
 			return nil, err
 		}

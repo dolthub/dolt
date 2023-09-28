@@ -55,7 +55,7 @@ func NewMemoryDoltDB(ctx context.Context, initBranch string) (*doltdb.DoltDB, er
 
 	m := "memory"
 	branchRef := ref.NewBranchRef(initBranch)
-	err := ddb.WriteEmptyRepoWithCommitTimeAndDefaultBranch(ctx, m, m, datas.CommitNowFunc(), branchRef)
+	err := ddb.WriteEmptyRepoWithCommitTimeAndDefaultBranch(ctx, m, m, datas.CommitterDate(), branchRef)
 	if err != nil {
 		return nil, err
 	}
