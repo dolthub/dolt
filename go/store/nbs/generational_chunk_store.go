@@ -16,7 +16,6 @@ package nbs
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
@@ -152,18 +151,6 @@ func (gcs *GenerationalNBS) hasMany(recs []hasRecord) (absent hash.HashSet, err 
 	gcs.oldGen.mu.RLock()
 	defer gcs.oldGen.mu.RUnlock()
 	return gcs.oldGen.hasMany(recs)
-}
-
-func (gcs *GenerationalNBS) errorIfDangling(ctx context.Context, addrs hash.HashSet) error {
-	absent, err := gcs.HasMany(ctx, addrs)
-	if err != nil {
-		return err
-	}
-	if len(absent) != 0 {
-		s := absent.String()
-		return fmt.Errorf("Found dangling references to %s", s)
-	}
-	return nil
 }
 
 // Put caches c in the ChunkSource. Upon return, c must be visible to

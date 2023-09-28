@@ -705,10 +705,33 @@ func (nbs *NomsBlockStore) putChunk(ctx context.Context, c chunks.Chunk, getAddr
 	return nil
 }
 
+// When we have chunks with dangling references in our memtable, we have to
+// throw away the entire memtable.
 func (nbs *NomsBlockStore) handlePossibleDanglingRefError(err error) {
 	if errors.Is(err, ErrDanglingRef) {
 		nbs.mt = nil
-		nbs.hasCache.Purge()
+	}
+}
+
+// Writes to a Dolt database typically involve mutating some tuple maps and
+// then mutating the top-level address map which points to all the branch heads
+// and working sets. Each internal node of the address map can have many
+// references and many of them typically change quite slowly. We keep a cache
+// of recently written references which we know are in the database so that we
+// don't have to check the table file indexes for these  chunks when we write
+// references to them again in the near future.
+//
+// This cache needs to be treated in a principled manner. The integrity checks
+// that we run against the a set of chunks we are attempting to write consider
+// the to-be-written chunks themselves as also being in the database. This is
+// correct, assuming that all the chunks are written at the same time. However,
+// we should not add the results of those presence checks to the cache until
+// those chunks actually land in the database.
+func (nbs *NomsBlockStore) addPendingRefsToHasCache() {
+	for _, e := range nbs.mt.pendingRefs {
+		if e.has {
+			nbs.hasCache.Add(*e.a, struct{}{})
+		}
 	}
 }
 
@@ -735,6 +758,7 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, addrs 
 				nbs.handlePossibleDanglingRefError(err)
 				return false, err
 			}
+			nbs.addPendingRefsToHasCache()
 			nbs.tables = ts
 			nbs.mt = newMemTable(nbs.mtSize)
 			addChunkRes = nbs.mt.addChunk(a, ch.Data())
@@ -762,7 +786,6 @@ type refCheck func(reqs []hasRecord) (hash.HashSet, error)
 func (nbs *NomsBlockStore) errorIfDangling(root hash.Hash, checker refCheck) error {
 	if !root.IsEmpty() {
 		a := addr(root)
-		// We use |Get| here, since it updates recency of the entry.
 		if _, ok := nbs.hasCache.Get(a); !ok {
 			var hr [1]hasRecord
 			hr[0].a = &a
@@ -776,32 +799,6 @@ func (nbs *NomsBlockStore) errorIfDangling(root hash.Hash, checker refCheck) err
 			nbs.hasCache.Add(a, struct{}{})
 		}
 	}
-
-	if nbs.mt == nil || nbs.mt.pendingRefs == nil {
-		return nil // no pending refs to check
-	}
-
-	for i := range nbs.mt.pendingRefs {
-		// All of these are going to be |Add|ed after the call.  We use
-		// |Contains| to check here so the frequency count only gets
-		// bumped once.
-		if nbs.hasCache.Contains(*nbs.mt.pendingRefs[i].a) {
-			nbs.mt.pendingRefs[i].has = true
-		}
-	}
-
-	sort.Sort(hasRecordByPrefix(nbs.mt.pendingRefs))
-	absent, err := checker(nbs.mt.pendingRefs)
-	if err != nil {
-		return err
-	} else if absent.Size() > 0 {
-		return fmt.Errorf("%w: found dangling references to %s", ErrDanglingRef, absent.String())
-	}
-
-	for _, e := range nbs.mt.pendingRefs {
-		nbs.hasCache.Add(*e.a, struct{}{})
-	}
-
 	return nil
 }
 
@@ -1135,35 +1132,6 @@ func (nbs *NomsBlockStore) commit(ctx context.Context, current, last hash.Hash, 
 		return true, nil
 	}
 
-	// check for dangling references in |nbs.mt|
-	if err = nbs.errorIfDangling(current, checker); err != nil {
-		nbs.handlePossibleDanglingRefError(err)
-		return false, err
-	}
-
-	// This is unfortunate. We want to serialize commits to the same store
-	// so that we avoid writing a bunch of unreachable small tables which result
-	// from optimistic lock failures. However, this means that the time to
-	// write tables is included in "commit" time and if all commits are
-	// serialized, it means a lot more waiting.
-	// "non-trivial" tables are persisted here, outside of the commit-lock.
-	// all other tables are persisted in updateManifest()
-	if nbs.mt != nil {
-		cnt, err := nbs.mt.count()
-		if err != nil {
-			return false, err
-		}
-
-		if cnt > preflushChunkCount {
-			ts, err := nbs.tables.append(ctx, nbs.mt, checker, nbs.hasCache, nbs.stats)
-			if err != nil {
-				nbs.handlePossibleDanglingRefError(err)
-				return false, err
-			}
-			nbs.tables, nbs.mt = ts, nil
-		}
-	}
-
 	nbs.mm.LockForUpdate()
 	defer func() {
 		unlockErr := nbs.mm.UnlockForUpdate()
@@ -1237,6 +1205,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 				nbs.handlePossibleDanglingRefError(err)
 				return err
 			}
+			nbs.addPendingRefsToHasCache()
 			nbs.tables, nbs.mt = ts, nil
 		}
 	}
@@ -1247,6 +1216,12 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 	}
 	if didConjoin {
 		return errOptimisticLockFailedTables
+	}
+
+	// check for dangling reference to the new root
+	if err = nbs.errorIfDangling(current, checker); err != nil {
+		nbs.handlePossibleDanglingRefError(err)
+		return err
 	}
 
 	specs, err := nbs.tables.toSpecs()
