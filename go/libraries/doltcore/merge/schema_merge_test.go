@@ -721,6 +721,20 @@ var typeChangeTests = []schemaMergeTest{
 				right:    singleRow(1, "hello world", 1, "hello world"),
 				merged:   singleRow(1, "hello world", 1, "hello world"),
 			},
+			{
+				name:     "convergent inserts",
+				ancestor: nil,
+				left:     singleRow(1, "test", 1, "test"),
+				right:    singleRow(1, "test", 1, "test"),
+				merged:   singleRow(1, "test", 1, "test"),
+			},
+			{
+				name:         "conflicting inserts",
+				ancestor:     nil,
+				left:         singleRow(1, "test", 1, "test"),
+				right:        singleRow(1, "hello world", 1, "hello world"),
+				dataConflict: true,
+			},
 		},
 	},
 }
