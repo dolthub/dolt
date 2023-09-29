@@ -41,7 +41,7 @@ type replicationServiceServer struct {
 	branchControl        BranchControlPersistence
 	branchControlFilesys filesys.Filesys
 
-	dropDatabaseProvider func(context.Context, string) error
+	dropDatabase func(context.Context, string) error
 }
 
 func (s *replicationServiceServer) UpdateUsersAndGrants(ctx context.Context, req *replicationapi.UpdateUsersAndGrantsRequest) (*replicationapi.UpdateUsersAndGrantsResponse, error) {
@@ -72,12 +72,12 @@ func (s *replicationServiceServer) UpdateBranchControl(ctx context.Context, req 
 }
 
 func (s *replicationServiceServer) DropDatabase(ctx context.Context, req *replicationapi.DropDatabaseRequest) (*replicationapi.DropDatabaseResponse, error) {
-	if s.dropDatabaseProvider == nil {
+	if s.dropDatabase == nil {
 		return nil, status.Error(codes.Unimplemented, "unimplemented")
 	}
 
-	err := s.dropDatabaseProvider(ctx, req.Name)
-	s.lgr.Tracef("dropped database [%s] through dropDatabaseProvider. err: %v", req.Name, err)
+	err := s.dropDatabase(ctx, req.Name)
+	s.lgr.Tracef("dropped database [%s] through sqle.DropDatabase. err: %v", req.Name, err)
 	if err != nil && !sql.ErrDatabaseNotFound.Is(err) {
 		return nil, err
 	}

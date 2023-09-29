@@ -138,7 +138,7 @@ func NewSqlEngine(
 
 	sqlEngine := &SqlEngine{}
 
-	var dropDatabaseProvider = func(ctx context.Context, name string) error {
+	var dropDatabase = func(ctx context.Context, name string) error {
 		sqlCtx, err := sqlEngine.NewDefaultContext(ctx)
 		if err != nil {
 			return err
@@ -146,7 +146,7 @@ func NewSqlEngine(
 		return pro.DropDatabase(sqlCtx, name)
 	}
 
-	config.ClusterController.SetDropDatabaseProvider(dropDatabaseProvider)
+	config.ClusterController.SetDropDatabase(dropDatabase)
 	pro.DropDatabaseHook = config.ClusterController.DropDatabaseHook()
 
 	// Create the engine

@@ -97,7 +97,7 @@ type Controller struct {
 	branchControlFilesys    filesys.Filesys
 	bcReplication           *branchControlReplication
 
-	dropDatabaseProvider func(context.Context, string) error
+	dropDatabase func(context.Context, string) error
 }
 
 type sqlvars interface {
@@ -314,15 +314,19 @@ func (c *Controller) RegisterStoredProcedures(store procedurestore) {
 	store.Register(newTransitionToStandbyProcedure(c))
 }
 
-func (c *Controller) SetDropDatabaseProvider(dropDatabaseProvider func(context.Context, string) error) {
+// Incoming drop database replication requests need a way to drop a database in
+// the sqle.DatabaseProvider. This is our callback for that functionality.
+func (c *Controller) SetDropDatabase(dropDatabase func(context.Context, string) error) {
 	if c == nil {
 		return
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.dropDatabaseProvider = dropDatabaseProvider
+	c.dropDatabase = dropDatabase
 }
 
+// Our DropDatabaseHook gets called when the database provider drops a
+// database. This is how we learn that we need to replicate a drop database.
 func (c *Controller) DropDatabaseHook() func(string) {
 	if c == nil {
 		return nil
@@ -695,7 +699,7 @@ func (c *Controller) RegisterGrpcServices(srv *grpc.Server) {
 		mysqlDb:              c.mysqlDb,
 		branchControl:        c.branchControlController,
 		branchControlFilesys: c.branchControlFilesys,
-		dropDatabaseProvider: c.dropDatabaseProvider,
+		dropDatabase:         c.dropDatabase,
 		lgr:                  c.lgr.WithFields(logrus.Fields{}),
 	})
 }
