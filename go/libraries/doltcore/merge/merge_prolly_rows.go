@@ -1373,13 +1373,13 @@ func mergeTableArtifacts(ctx context.Context, tm *TableMerger, mergeTbl *doltdb.
 // key but with conflicting values. A successful resolve produces
 // a three-way cell edit (tree.DiffOpDivergentModifyResolved).
 type valueMerger struct {
-	numCols                                           int
-	baseVD, rightVD, resultVD                         val.TupleDesc
-	baseSchema, leftSchema, rightSchema, resultSchema schema.Schema
-	leftMapping, rightMapping, baseMapping            val.OrdinalMapping
-	syncPool                                          pool.BuffPool
-	keyless                                           bool
-	ns                                                tree.NodeStore
+	numCols                                int
+	baseVD, rightVD, resultVD              val.TupleDesc
+	resultSchema                           schema.Schema
+	leftMapping, rightMapping, baseMapping val.OrdinalMapping
+	syncPool                               pool.BuffPool
+	keyless                                bool
+	ns                                     tree.NodeStore
 }
 
 func newValueMerger(merged, leftSch, rightSch, baseSch schema.Schema, syncPool pool.BuffPool, ns tree.NodeStore) *valueMerger {
@@ -1390,9 +1390,6 @@ func newValueMerger(merged, leftSch, rightSch, baseSch schema.Schema, syncPool p
 		baseVD:       baseSch.GetValueDescriptor(),
 		rightVD:      rightSch.GetValueDescriptor(),
 		resultVD:     merged.GetValueDescriptor(),
-		baseSchema:   baseSch,
-		leftSchema:   leftSch,
-		rightSchema:  rightSch,
 		resultSchema: merged,
 		leftMapping:  leftMapping,
 		rightMapping: rightMapping,
@@ -1549,9 +1546,9 @@ func (m *valueMerger) tryMerge(ctx context.Context, left, right, base val.Tuple)
 // based on the |left|, |right|, and |base| schema.
 func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, base val.Tuple) ([]byte, bool) {
 	// missing columns are coerced into NULL column values
-	baseCol, baseColIdx, baseColExists := getColumn(&base, m.baseSchema, &m.baseMapping, i)
-	leftCol, leftColIdx, leftColExists := getColumn(&left, m.leftSchema, &m.leftMapping, i)
-	rightCol, rightColIdx, rightColExists := getColumn(&right, m.rightSchema, &m.rightMapping, i)
+	baseCol, baseColIdx, baseColExists := getColumn(&base, &m.baseMapping, i)
+	leftCol, leftColIdx, leftColExists := getColumn(&left, &m.leftMapping, i)
+	rightCol, rightColIdx, rightColExists := getColumn(&right, &m.rightMapping, i)
 	resultType := m.resultVD.Types[i]
 
 	if base == nil || !baseColExists {
@@ -1633,7 +1630,7 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 	}
 }
 
-func getColumn(tuple *val.Tuple, schema schema.Schema, mapping *val.OrdinalMapping, idx int) (col []byte, colIndex int, exists bool) {
+func getColumn(tuple *val.Tuple, mapping *val.OrdinalMapping, idx int) (col []byte, colIndex int, exists bool) {
 	colIdx := (*mapping)[idx]
 	if colIdx == -1 {
 		return nil, -1, false
