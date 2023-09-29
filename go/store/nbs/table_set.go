@@ -302,10 +302,6 @@ func (ts tableSet) append(ctx context.Context, mt *memTable, checker refCheck, h
 		return tableSet{}, fmt.Errorf("%w: found dangling references to %s", ErrDanglingRef, absent.String())
 	}
 
-	for _, e := range mt.pendingRefs {
-		hasCache.Add(*e.a, struct{}{})
-	}
-
 	cs, err := ts.p.Persist(ctx, mt, ts, stats)
 	if err != nil {
 		return tableSet{}, err
