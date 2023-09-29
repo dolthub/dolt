@@ -40,7 +40,7 @@ push_helper() {
     TMPDIRS=$1
     for i in {1..3}; do
         cd "${TMPDIRS}/dbs1/repo${i}"
-        dolt push remote1 main
+        run dolt push remote1 main    # Everything up-to-date returns an error code
     done
     cd $TMPDIRS
 }
