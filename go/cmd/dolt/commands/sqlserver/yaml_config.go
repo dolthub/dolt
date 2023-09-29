@@ -80,7 +80,7 @@ type BehaviorYAMLConfig struct {
 	// automatically creates a Dolt commit when any SQL transaction is committed.
 	DoltTransactionCommit *bool `yaml:"dolt_transaction_commit"`
 
-	EventSchedulerStatus *string `yaml:"event_scheduler" minver:"1.17.0"`
+	EventSchedulerStatus *string `yaml:"event_scheduler,omitempty" minver:"1.17.0"`
 }
 
 // UserYAMLConfig contains server configuration regarding the user account clients must use to connect
