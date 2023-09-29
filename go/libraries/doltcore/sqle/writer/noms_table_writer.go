@@ -177,6 +177,9 @@ func (te *nomsTableWriter) Close(ctx *sql.Context) error {
 
 // StatementBegin implements the interface sql.TableEditor.
 func (te *nomsTableWriter) StatementBegin(ctx *sql.Context) {
+	// Table writers are reused in a session, which means we need to reset the error state resulting from previous
+	// errors on every new statement.
+	te.errEncountered = nil
 	te.tableEditor.StatementStarted(ctx)
 }
 

@@ -43,6 +43,10 @@ get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 13-44
 }
 
+dolt_log_in_PST() {
+    TZ=PST+8 dolt log -n1
+}
+
 setup_no_dolt_init() {
     export PATH=$PATH:~/go/bin
     cd $BATS_TMPDIR

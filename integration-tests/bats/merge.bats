@@ -1086,3 +1086,68 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "2 tables changed, 3 rows added(+), 1 rows modified(*), 1 rows deleted(-)" ]] || false
 }
+
+@test "merge: setting DOLT_AUTHOR_DATE" {
+    dolt sql -q "CREATE table t (pk int primary key, col1 int);"
+    dolt sql -q "INSERT INTO t VALUES (1, 1), (2, 2);"
+    dolt commit -Am "add table t"
+
+    dolt checkout -b right
+    dolt sql -q "insert into t values (3, 3), (4, 4);"
+    dolt sql -q "delete from t where pk = 1;"
+    dolt commit -Am "right"
+
+    dolt checkout main
+    dolt sql -q "insert into t values (5, 5);"
+    dolt commit -Am "left"
+
+   
+    TZ=PST+8 DOLT_AUTHOR_DATE='2023-09-26T01:23:45' dolt merge right -m "merge right into main"
+
+    run dolt_log_in_PST
+    [[ "$output" =~ 'Tue Sep 26 01:23:45' ]] || false
+}
+
+@test "merge: setting DOLT_AUTHOR_DATE and DOLT_COMMITTER_DATE" {
+    dolt sql -q "CREATE table t (pk int primary key, col1 int);"
+    dolt sql -q "INSERT INTO t VALUES (1, 1), (2, 2);"
+    dolt commit -Am "add table t"
+
+    dolt remote add local file://./remote
+    dolt push local main
+
+    dolt checkout -b right
+    dolt sql -q "insert into t values (3, 3), (4, 4);"
+    dolt sql -q "delete from t where pk = 1;"
+    dolt commit -Am "right"
+    dolt push local right
+
+    dolt checkout main
+    dolt sql -q "insert into t values (5, 5);"
+    dolt commit -Am "left"
+    dolt push local main
+    
+    # We don't have any way to print the committer time of a commit, so instead we'll do the merge
+    # here and on a clone and assert that they get the same hash
+    TZ=PST+8 DOLT_COMMITTER_DATE='2023-09-26T12:34:56' DOLT_AUTHOR_DATE='2023-09-26T01:23:45' dolt merge right -m "merge right into main"
+
+    run dolt_log_in_PST
+    [[ "$output" =~ 'Tue Sep 26 01:23:45' ]] || false
+
+    head1=`get_head_commit`
+
+    dolt clone file://./remote clone
+    cd clone
+    dolt fetch
+    dolt checkout right
+    dolt checkout main
+
+    TZ=PST+8 DOLT_COMMITTER_DATE='2023-09-26T12:34:56' DOLT_AUTHOR_DATE='2023-09-26T01:23:45' dolt merge right -m "merge right into main"
+
+    run dolt_log_in_PST
+    [[ "$output" =~ 'Tue Sep 26 01:23:45' ]] || false
+
+    head2=`get_head_commit`
+
+    [ "$head1" == "$head2" ]
+}

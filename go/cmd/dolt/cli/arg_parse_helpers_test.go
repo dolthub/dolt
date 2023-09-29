@@ -20,6 +20,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 )
 
 func TestParseDate(t *testing.T) {
@@ -42,7 +44,7 @@ func TestParseDate(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.dateStr, func(t *testing.T) {
-			result, err := ParseDate(test.dateStr)
+			result, err := dconfig.ParseDate(test.dateStr)
 
 			if test.expErr {
 				assert.Error(t, err)

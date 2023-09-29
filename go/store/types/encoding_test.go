@@ -33,6 +33,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -616,7 +617,7 @@ func TestWriteEmptyUnionList(t *testing.T) {
 }
 
 func TestNomsBinFormat(t *testing.T) {
-	v, _ := os.LookupEnv("DOLT_DEFAULT_BIN_FORMAT")
+	v, _ := os.LookupEnv(dconfig.EnvDefaultBinFormat)
 	switch v {
 	case constants.FormatLD1String:
 		assert.Equal(t, Format_LD_1, Format_Default)

@@ -33,6 +33,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
@@ -69,7 +70,7 @@ func (a Assist) Hidden() bool {
 func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	a.messages = make([]string, 0)
 
-	apiKey, ok := os.LookupEnv("OPENAI_API_KEY")
+	apiKey, ok := os.LookupEnv(dconfig.EnvOpenAiKey)
 	if !ok {
 		cli.PrintErrln("Could not find OpenAI API key. Please set the OPENAI_API_KEY environment variable.")
 		return 1
@@ -145,7 +146,7 @@ func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEn
 }
 
 func agreeToTerms(scanner *bufio.Scanner) bool {
-	_, ok := os.LookupEnv("DOLT_ASSIST_AGREE")
+	_, ok := os.LookupEnv(dconfig.EnvDoltAssistAgree)
 	if ok {
 		return true
 	}

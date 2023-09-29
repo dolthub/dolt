@@ -292,7 +292,7 @@ SQL
     [ "$status" -eq 0 ]
     run dolt sql -q 'select * from all_users'
     [ "$status" -eq 1 ]
-    [[ "${lines[0]}" =~ "table not found: users" ]] || false
+    [[ "${lines[0]}" =~ "View 'dolt_repo_$$.all_users' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them" ]] || false
     run dolt sql -q 'drop view all_users'
     [ "$status" -eq 0 ]
 }

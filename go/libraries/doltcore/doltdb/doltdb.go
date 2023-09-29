@@ -146,7 +146,7 @@ func (ddb *DoltDB) CSMetricsSummary() string {
 // WriteEmptyRepo will create initialize the given db with a master branch which points to a commit which has valid
 // metadata for the creation commit, and an empty RootValue.
 func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, initBranch, name, email string) error {
-	return ddb.WriteEmptyRepoWithCommitMetaGenerator(ctx, initBranch, datas.MakeCommitMetaGenerator(name, email, datas.CommitNowFunc()))
+	return ddb.WriteEmptyRepoWithCommitMetaGenerator(ctx, initBranch, datas.MakeCommitMetaGenerator(name, email, datas.CommitterDate()))
 }
 
 func (ddb *DoltDB) WriteEmptyRepoWithCommitMetaGenerator(ctx context.Context, initBranch string, commitMeta datas.CommitMetaGenerator) error {

@@ -70,15 +70,15 @@ var ViewsWithAsOfScriptTest = queries.ScriptTest{
 		{
 			// At this point table t1 doesn't exist yet, so the view should return an error
 			Query:          "select * from v1 as of 'HEAD~3'",
-			ExpectedErrStr: "table not found: t2, maybe you mean t1?",
+			ExpectedErrStr: "View 'mydb.v1' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them",
 		},
 		{
 			Query:          "select * from v1 as of 'HEAD~4'",
-			ExpectedErrStr: "table not found: t2, maybe you mean t1?",
+			ExpectedErrStr: "View 'mydb.v1' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them",
 		},
 		{
 			Query:          "select * from v1 as of 'HEAD~5'",
-			ExpectedErrStr: "table not found: t1",
+			ExpectedErrStr: "View 'mydb.v1' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them",
 		},
 		{
 			Query:    "select * from v1 as of HEAD",

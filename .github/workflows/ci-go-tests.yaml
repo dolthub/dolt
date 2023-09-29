@@ -79,7 +79,6 @@ jobs:
     - name: Test All
       working-directory: ./go
       run: |
-        go test -vet=off -timeout 30m ./libraries/doltcore/sqle/altertests
         go test -vet=off -timeout 30m ./libraries/doltcore/sqle/integration_test
       env:
         MATRIX_OS: ${{ matrix.os }}

@@ -20,15 +20,14 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/datas"
 )
-
-var hashType = types.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
 
 // doltCommit is the stored procedure version for the CLI command `dolt commit`.
 func doltCommit(ctx *sql.Context, args ...string) (sql.RowIter, error) {
@@ -129,11 +128,13 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 	t := ctx.QueryTime()
 	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
 		var err error
-		t, err = cli.ParseDate(commitTimeStr)
+		t, err = dconfig.ParseDate(commitTimeStr)
 
 		if err != nil {
 			return "", false, fmt.Errorf(err.Error())
 		}
+	} else if datas.CustomAuthorDate {
+		t = datas.AuthorDate()
 	}
 
 	if apr.Contains(cli.ForceFlag) {

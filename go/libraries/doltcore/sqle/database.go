@@ -22,8 +22,12 @@ import (
 	"strings"
 	"time"
 
+	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/fulltext"
+	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"gopkg.in/src-d/go-errors.v1"
@@ -1286,52 +1290,133 @@ func (db Database) GetEvent(ctx *sql.Context, name string) (sql.EventDefinition,
 
 	for _, frag := range frags {
 		if strings.ToLower(frag.name) == strings.ToLower(name) {
-			return sql.EventDefinition{
-				Name:            frag.name,
-				CreateStatement: frag.fragment,
-				CreatedAt:       frag.created,
-				SqlMode:         frag.sqlMode,
-			}, true, nil
+			event, err := db.createEventDefinitionFromFragment(ctx, frag)
+			if err != nil {
+				return sql.EventDefinition{}, false, err
+			}
+			return *event, true, nil
 		}
 	}
 	return sql.EventDefinition{}, false, nil
 }
 
 // GetEvents implements sql.EventDatabase.
-func (db Database) GetEvents(ctx *sql.Context) ([]sql.EventDefinition, error) {
+func (db Database) GetEvents(ctx *sql.Context) (events []sql.EventDefinition, token interface{}, err error) {
 	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if !ok {
-		return nil, nil
+		// If the dolt_schemas table doesn't exist, it's not an error, just no events
+		return nil, nil, nil
 	}
 
 	frags, err := getSchemaFragmentsOfType(ctx, tbl.(*WritableDoltTable), eventFragment)
 	if err != nil {
+		return nil, nil, err
+	}
+
+	for _, frag := range frags {
+		event, err := db.createEventDefinitionFromFragment(ctx, frag)
+		if err != nil {
+			return nil, nil, err
+		}
+		events = append(events, *event)
+	}
+
+	// Grab a hash of the dolt_schemas table to use as the identifying token
+	// to track if events need to be reloaded.
+	tableHash, err := db.doltSchemaTableHash(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return events, tableHash, nil
+}
+
+// NeedsToReloadEvents implements sql.EventDatabase.
+func (db Database) NeedsToReloadEvents(ctx *sql.Context, token interface{}) (bool, error) {
+	hash, ok := token.(hash.Hash)
+	if !ok {
+		return false, fmt.Errorf("expected token to be hash.Hash, but received %T", token)
+	}
+
+	tableHash, err := db.doltSchemaTableHash(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	// If the current hash doesn't match what we last loaded, then we
+	// need to reload event definitions
+	return !tableHash.Equal(hash), nil
+}
+
+// doltSchemaTableHash returns the hash of the dolt_schemas table, or any error encountered along the way.
+func (db Database) doltSchemaTableHash(ctx *sql.Context) (hash.Hash, error) {
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+
+	tableHash, _, err := root.GetTableHash(ctx, doltdb.SchemasTableName)
+	return tableHash, err
+}
+
+// createEventDefinitionFromFragment creates an EventDefinition instance from the schema fragment |frag|.
+func (db Database) createEventDefinitionFromFragment(ctx *sql.Context, frag schemaFragment) (*sql.EventDefinition, error) {
+	catalog := db.getCatalog(ctx)
+	sqlMode := sql.NewSqlModeFromString(frag.sqlMode)
+	parsed, err := planbuilder.ParseWithOptions(ctx, catalog, updateEventStatusTemporarilyForNonDefaultBranch(db.revision, frag.fragment), sqlMode.ParserOptions())
+	if err != nil {
 		return nil, err
 	}
 
-	var events []sql.EventDefinition
-	for _, frag := range frags {
-		events = append(events, sql.EventDefinition{
-			Name:            frag.name,
-			CreateStatement: frag.fragment,
-			CreatedAt:       frag.created,
-			SqlMode:         frag.sqlMode,
-		})
+	eventPlan, ok := parsed.(*plan.CreateEvent)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type %T for create event statement", eventPlan)
 	}
-	return events, nil
+
+	// NOTE: Time fields for events are assumed to be specified in the session's timezone, which defaults to the
+	//       system's timezone. When we store them, we store them at UTC, and when we send them back to a caller
+	//       we convert them back to the caller's session timezone.
+	//       Here we are loading the events from disk, so they are already in UTC and don't need any other
+	//       timezone applied, so we specify "+00:00".
+	event, err := eventPlan.GetEventDefinition(ctx, frag.created, frag.created, frag.created, "+00:00")
+	if err != nil {
+		return nil, err
+	}
+	event.SqlMode = frag.sqlMode
+
+	return &event, nil
+}
+
+// getCatalog creates and returns the analyzer.Catalog instance for this database.
+func (db Database) getCatalog(ctx *sql.Context) *analyzer.Catalog {
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	return sqle.NewDefault(doltSession.Provider()).Analyzer.Catalog
 }
 
 // SaveEvent implements sql.EventDatabase.
-func (db Database) SaveEvent(ctx *sql.Context, ed sql.EventDefinition) error {
-	return db.addFragToSchemasTable(ctx,
+func (db Database) SaveEvent(ctx *sql.Context, event sql.EventDefinition) (bool, error) {
+	// If the database is not the default branch database, then the event is disabled.
+	// TODO: need better way to determine the default branch; currently it checks only 'main'
+	if db.revision != env.DefaultInitBranch && event.Status == sql.EventStatus_Enable.String() {
+		// using revision database name
+		event.Status = sql.EventStatus_Disable.String()
+		ctx.Session.Warn(&sql.Warning{
+			Level:   "Warning",
+			Code:    1105,
+			Message: fmt.Sprintf("Event status cannot be enabled for revision database."),
+		})
+	}
+
+	// TODO: store LastAltered, LastExecuted and TimezoneOffset in appropriate place
+	return event.Status == sql.EventStatus_Enable.String(), db.addFragToSchemasTable(ctx,
 		eventFragment,
-		ed.Name,
-		ed.CreateStatement,
-		ed.CreatedAt,
-		sql.ErrEventAlreadyExists.New(ed.Name),
+		event.Name,
+		event.CreateEventStatement(),
+		event.CreatedAt,
+		sql.ErrEventAlreadyExists.New(event.Name),
 	)
 }
 
@@ -1341,13 +1426,31 @@ func (db Database) DropEvent(ctx *sql.Context, name string) error {
 }
 
 // UpdateEvent implements sql.EventDatabase.
-func (db Database) UpdateEvent(ctx *sql.Context, originalName string, ed sql.EventDefinition) error {
+func (db Database) UpdateEvent(ctx *sql.Context, originalName string, event sql.EventDefinition) (bool, error) {
 	// TODO: any EVENT STATUS change should also update the branch-specific event scheduling
 	err := db.DropEvent(ctx, originalName)
 	if err != nil {
-		return err
+		return false, err
 	}
-	return db.SaveEvent(ctx, ed)
+	return db.SaveEvent(ctx, event)
+}
+
+// UpdateLastExecuted implements sql.EventDatabase
+func (db Database) UpdateLastExecuted(ctx *sql.Context, eventName string, lastExecuted time.Time) error {
+	// TODO: update LastExecuted in appropriate place
+	return nil
+}
+
+// updateEventStatusTemporarilyForNonDefaultBranch updates the event status from ENABLE to DISABLE if it's not default branch.
+// The event status metadata is not updated in storage, but only for display purposes we return event status as 'DISABLE'.
+// This function is used temporarily to implement logic of only allowing enabled events to be executed on default branch.
+func updateEventStatusTemporarilyForNonDefaultBranch(revision, createStmt string) string {
+	// TODO: need better way to determine the default branch; currently it checks only 'main'
+
+	if revision == "" || revision == env.DefaultInitBranch {
+		return createStmt
+	}
+	return strings.Replace(createStmt, "ENABLE", "DISABLE", 1)
 }
 
 // GetStoredProcedure implements sql.StoredProcedureDatabase.

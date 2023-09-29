@@ -20,6 +20,7 @@ import (
 
 	"golang.org/x/crypto/ssh/terminal"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
@@ -29,17 +30,13 @@ type UserPassword struct {
 	Specified bool // If true, the user and password were provided by the user.
 }
 
-const DOLT_ENV_PWD = "DOLT_CLI_PASSWORD"
-const DOLT_ENV_USER = "DOLT_CLI_USER"
-const DOLT_SILENCE_USER_REQ_FOR_TESTING = "DOLT_SILENCE_USER_REQ_FOR_TESTING"
-
 // BuildUserPasswordPrompt builds a UserPassword struct from the parsed args. The user is prompted for a password if one
 // is not provided. If a username is not provided, the default is "root" (which will not be allowed is a password is
 // provided). A new instances of ArgParseResults is returned which does not contain the user or password flags.
 func BuildUserPasswordPrompt(parsedArgs *argparser.ArgParseResults) (newParsedArgs *argparser.ArgParseResults, credentials *UserPassword, err error) {
 	userId, hasUserId := parsedArgs.GetValue(UserFlag)
 	if !hasUserId {
-		envUser, hasEnvUser := os.LookupEnv(DOLT_ENV_USER)
+		envUser, hasEnvUser := os.LookupEnv(dconfig.EnvUser)
 		if hasEnvUser {
 			userId = envUser
 			hasUserId = true
@@ -48,7 +45,7 @@ func BuildUserPasswordPrompt(parsedArgs *argparser.ArgParseResults) (newParsedAr
 
 	password, hasPassword := parsedArgs.GetValue(PasswordFlag)
 	if !hasPassword {
-		envPassword, hasEnvPassword := os.LookupEnv(DOLT_ENV_PWD)
+		envPassword, hasEnvPassword := os.LookupEnv(dconfig.EnvPassword)
 		if hasEnvPassword {
 			password = envPassword
 			hasPassword = true
@@ -69,7 +66,7 @@ func BuildUserPasswordPrompt(parsedArgs *argparser.ArgParseResults) (newParsedAr
 
 	if hasUserId && !hasPassword {
 		password = ""
-		val, hasVal := os.LookupEnv(DOLT_ENV_PWD)
+		val, hasVal := os.LookupEnv(dconfig.EnvPassword)
 		if hasVal {
 			password = val
 		} else {
@@ -83,7 +80,7 @@ func BuildUserPasswordPrompt(parsedArgs *argparser.ArgParseResults) (newParsedAr
 		return newParsedArgs, &UserPassword{Username: userId, Password: password, Specified: true}, nil
 	}
 
-	testOverride, hasTestOverride := os.LookupEnv(DOLT_SILENCE_USER_REQ_FOR_TESTING)
+	testOverride, hasTestOverride := os.LookupEnv(dconfig.EnvSilenceUserReqForTesting)
 	if hasTestOverride && testOverride == "Y" {
 		// Used for BATS testing only. Typical usage will not hit this path, but we have many legacy tests which
 		// do not provide a user, and the DOLT_ENV_PWD is set to avoid the prompt.
