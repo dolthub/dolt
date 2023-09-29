@@ -19,13 +19,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dustin/go-humanize"
-	"github.com/gocraft/dbr/v2"
-	"github.com/gocraft/dbr/v2/dialect"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"time"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -37,6 +31,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dustin/go-humanize"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var pushDocs = cli.CommandDocumentationContent{
@@ -102,66 +102,33 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	_, _, err = queryist.Query(sqlCtx, query)
-	if err != nil {
-		var verr errhand.VerboseError
-		switch err {
-		case doltdb.ErrUpToDate:
-			cli.Println("Everything up-to-date.")
-			return 0
-		case env.ErrNoUpstreamForBranch:
-			rows, err := GetRowsForSql(queryist, sqlCtx, "select active_branch()")
-			if err != nil {
-				verr = errhand.BuildDError("fatal: The current branch could not be identified").AddCause(err).Build()
-			} else {
-				currentBranch := rows[0][0].(string)
-				remoteName := "<remote>"
-				if defRemote, verr := getDefaultRemote(sqlCtx, queryist); verr == nil {
-					remoteName = defRemote
-				}
-				verr = errhand.BuildDError("fatal: The current branch " + currentBranch + " has no upstream branch.\n" +
-					"To push the current branch and set the remote as upstream, use\n" +
-					"\tdolt push --set-upstream " + remoteName + " " + currentBranch + "\n" +
-					"To have this happen automatically for branches without a tracking\n" +
-					"upstream, see 'push.autoSetupRemote' in 'dolt config --help'.").Build()
-			}
-		case env.ErrInvalidSetUpstreamArgs:
-			verr = errhand.BuildDError("error: --set-upstream requires <remote> and <refspec> params.").SetPrintUsage().Build()
-		case doltdb.ErrIsAhead, actions.ErrCantFF, datas.ErrMergeNeeded:
-			rows, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("select url, fetch_specs from dolt_remotes where name = %s", apr.Arg(0)))
-			if err != nil {
-				verr = errhand.BuildDError("could not identify remote").AddCause(err).Build()
-			} else {
-				remoteUrl := rows[0][0].(string)
-				fetchSpecs := rows[0][1].(string)
-				destRef := strings.TrimPrefix(fetchSpecs, "[refs/heads/*:refs/remotes/")
-				destRef = strings.TrimSuffix(destRef, "/*]")
-				cli.Printf("To %s\n", remoteUrl)
-				cli.Printf("! [rejected]          %s -> %s (non-fast-forward)\n", destRef, apr.Arg(0))
-				cli.Printf("error: failed to push some refs to '%s'\n", remoteUrl)
-				cli.Println("hint: Updates were rejected because the tip of your current branch is behind")
-				cli.Println("hint: its remote counterpart. Integrate the remote changes (e.g.")
-				cli.Println("hint: 'dolt pull ...') before pushing again.")
-				verr = errhand.BuildDError("").Build()
-			}
-		case actions.ErrUnknownPushErr:
-			s, ok := status.FromError(err)
-			if ok && s.Code() == codes.PermissionDenied {
-				cli.Println("hint: have you logged into DoltHub using 'dolt login'?")
-				cli.Println("hint: check that user.email in 'dolt config --list' has write perms to DoltHub repo")
-			}
-			if rpcErr, ok := err.(*remotestorage.RpcError); ok {
-				verr = errhand.BuildDError("error: push failed").AddCause(err).AddDetails(rpcErr.FullDetails()).Build()
-			} else {
-				verr = errhand.BuildDError("error: push failed").AddCause(err).Build()
-			}
-		default:
-			verr = errhand.VerboseErrorFromError(err)
-		}
-		return HandleVErrAndExitCode(verr, usage)
-	}
 
-	return HandleVErrAndExitCode(nil, usage)
+	errChan := make(chan error)
+	go func() {
+		defer close(errChan)
+		_, _, err = queryist.Query(sqlCtx, query)
+		if err != nil {
+			errChan <- err
+			return
+		}
+	}()
+
+	spinner := TextSpinner{}
+	cli.Print(spinner.next() + " Uploading...")
+	defer func() {
+		cli.DeleteAndPrint(len(" Uploading...")+1, "")
+	}()
+
+	for {
+		select {
+		case err := <-errChan:
+			return handlePushError(err, usage, apr, queryist, sqlCtx)
+		case <-ctx.Done():
+			return 0
+		case <-time.After(time.Millisecond * 50):
+			cli.DeleteAndPrint(len(" Uploading...")+1, spinner.next()+" Uploading...")
+		}
+	}
 }
 
 // constructInterpolatedDoltPushQuery generates the sql query necessary to call the DOLT_PUSH() function
@@ -211,6 +178,69 @@ func getDefaultRemote(sqlCtx *sql.Context, queryist cli.Queryist) (string, error
 		}
 	}
 	return "", env.ErrCantDetermineDefault
+}
+
+// handlePushError prints the appropriate error message and returns the exit code
+func handlePushError(err error, usage cli.UsagePrinter, apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context) int {
+	if err == nil {
+		return 0
+	}
+
+	var verr errhand.VerboseError
+	switch err {
+	case doltdb.ErrUpToDate:
+		cli.Println("Everything up-to-date.")
+		return 0
+	case env.ErrNoUpstreamForBranch:
+		rows, err := GetRowsForSql(queryist, sqlCtx, "select active_branch()")
+		if err != nil {
+			verr = errhand.BuildDError("fatal: The current branch could not be identified").AddCause(err).Build()
+		} else {
+			currentBranch := rows[0][0].(string)
+			remoteName := "<remote>"
+			if defRemote, verr := getDefaultRemote(sqlCtx, queryist); verr == nil {
+				remoteName = defRemote
+			}
+			verr = errhand.BuildDError("fatal: The current branch " + currentBranch + " has no upstream branch.\n" +
+				"To push the current branch and set the remote as upstream, use\n" +
+				"\tdolt push --set-upstream " + remoteName + " " + currentBranch + "\n" +
+				"To have this happen automatically for branches without a tracking\n" +
+				"upstream, see 'push.autoSetupRemote' in 'dolt config --help'.").Build()
+		}
+	case env.ErrInvalidSetUpstreamArgs:
+		verr = errhand.BuildDError("error: --set-upstream requires <remote> and <refspec> params.").SetPrintUsage().Build()
+	case doltdb.ErrIsAhead, actions.ErrCantFF, datas.ErrMergeNeeded:
+		rows, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("select url, fetch_specs from dolt_remotes where name = %s", apr.Arg(0)))
+		if err != nil {
+			verr = errhand.BuildDError("could not identify remote").AddCause(err).Build()
+		} else {
+			remoteUrl := rows[0][0].(string)
+			fetchSpecs := rows[0][1].(string)
+			destRef := strings.TrimPrefix(fetchSpecs, "[refs/heads/*:refs/remotes/")
+			destRef = strings.TrimSuffix(destRef, "/*]")
+			cli.Printf("To %s\n", remoteUrl)
+			cli.Printf("! [rejected]          %s -> %s (non-fast-forward)\n", destRef, apr.Arg(0))
+			cli.Printf("error: failed to push some refs to '%s'\n", remoteUrl)
+			cli.Println("hint: Updates were rejected because the tip of your current branch is behind")
+			cli.Println("hint: its remote counterpart. Integrate the remote changes (e.g.")
+			cli.Println("hint: 'dolt pull ...') before pushing again.")
+			verr = errhand.BuildDError("").Build()
+		}
+	case actions.ErrUnknownPushErr:
+		s, ok := status.FromError(err)
+		if ok && s.Code() == codes.PermissionDenied {
+			cli.Println("hint: have you logged into DoltHub using 'dolt login'?")
+			cli.Println("hint: check that user.email in 'dolt config --list' has write perms to DoltHub repo")
+		}
+		if rpcErr, ok := err.(*remotestorage.RpcError); ok {
+			verr = errhand.BuildDError("error: push failed").AddCause(err).AddDetails(rpcErr.FullDetails()).Build()
+		} else {
+			verr = errhand.BuildDError("error: push failed").AddCause(err).Build()
+		}
+	default:
+		verr = errhand.VerboseErrorFromError(err)
+	}
+	return HandleVErrAndExitCode(verr, usage)
 }
 
 func pullerProgFunc(ctx context.Context, statsCh chan pull.Stats, language progLanguage) {
