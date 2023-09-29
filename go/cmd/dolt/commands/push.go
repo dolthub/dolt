@@ -166,15 +166,12 @@ func getDefaultRemote(sqlCtx *sql.Context, queryist cli.Queryist) (string, error
 	if len(rows) == 0 {
 		return "", env.ErrNoRemote
 	}
-	if len(rows[0]) == 0 {
-		return "", env.ErrNoRemote
-	}
-	if len(rows[0]) == 1 {
+	if len(rows) == 1 {
 		return rows[0][0].(string), nil
 	}
 	for _, row := range rows {
 		if row[0].(string) == "origin" {
-			return row[0].(string), nil
+			return "origin", nil
 		}
 	}
 	return "", env.ErrCantDetermineDefault
