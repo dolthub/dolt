@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dustin/go-humanize"
@@ -107,10 +108,22 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	errChan := make(chan error)
 	go func() {
 		defer close(errChan)
-		_, _, err = queryist.Query(sqlCtx, query)
+		schema, rowIter, err := queryist.Query(sqlCtx, query)
 		if err != nil {
 			errChan <- err
 			return
+		}
+
+		sqlRows, err := sql.RowIterToRows(sqlCtx, schema, rowIter)
+		if err != nil {
+			errChan <- err
+			return
+		}
+		cli.Println(sqlRows)
+		if sqlRows[0][0].(int64) == 0 && len(sqlRows[0]) > 1 {
+			if sqlRows[0][1].(string) == dprocedures.UpToDateMessage {
+				cli.Println(dprocedures.UpToDateMessage)
+			}
 		}
 	}()
 
@@ -202,9 +215,6 @@ func handlePushError(err error, usage cli.UsagePrinter, apr *argparser.ArgParseR
 
 	var verr errhand.VerboseError
 	switch err {
-	case doltdb.ErrUpToDate:
-		cli.Println("Everything up-to-date.")
-		return 0
 	case env.ErrNoUpstreamForBranch:
 		rows, err := GetRowsForSql(queryist, sqlCtx, "select active_branch()")
 		if err != nil {

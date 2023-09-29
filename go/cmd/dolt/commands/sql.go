@@ -277,9 +277,6 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 func sqlHandleVErrAndExitCode(queryist cli.Queryist, verr errhand.VerboseError, usage cli.UsagePrinter) int {
 	if verr != nil {
 		if msg := verr.Verbose(); strings.TrimSpace(msg) != "" {
-			if strings.Contains(msg, "up to date") {
-				return 0
-			}
 			cli.PrintErrln(msg)
 		}
 
