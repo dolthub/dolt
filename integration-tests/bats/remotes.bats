@@ -347,10 +347,10 @@ SQL
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     run dolt push test-remote main
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Uploaded" ]] || false
+    [[ "$output" =~ "Uploading" ]] || false
 
     run dolt push test-remote main
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
@@ -435,7 +435,7 @@ SQL
     dolt commit -m "Added test table"
     dolt push --set-upstream test-remote test-branch | tr "\n" "*" > output.txt
     run tail -c 1 output.txt
-    [ "$output" = "*" ]
+    [[ "$output" != "" ]] || false   # should have a spinner
 }
 
 @test "remotes: push and pull with docs from remote" {
@@ -997,11 +997,12 @@ SQL
     dolt push test-remote main
     cd "dolt-repo-clones/test-repo"
     run dolt push origin main
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "Everything up-to-date" ]] || false
     dolt fetch
     run dolt push origin main
     [ "$status" -eq 1 ]
+    [[ "$output" =~ "refs/heads/main -> refs/remotes/origin/main" ]] || false
     [[ "$output" =~ "tip of your current branch is behind" ]] || false
 }
 
@@ -1842,7 +1843,9 @@ setup_ref_test() {
     cd dolt-repo-clones
     dolt clone http://localhost:50051/test-org/test-repo
     cd test-repo
-    dolt push
+    run dolt push
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
 }
 
 @test "remotes: set upstream succeeds even if up to date" {
@@ -1857,8 +1860,13 @@ setup_ref_test() {
     dolt checkout -b feature
     run dolt push
     [ "$status" -eq 1 ]
-    dolt push --set-upstream origin feature
-    dolt push
+    [[ "$output" =~ "The current branch feature has no upstream branch." ]] || false
+    run dolt push --set-upstream origin feature
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
+    run dolt push
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
 }
 
 @test "remotes: local clone does not contain working set changes" {
@@ -2172,7 +2180,6 @@ SQL
 
     # branch.autosetupmerge configuration defaults to --track, so the upstream is set
     run dolt sql -q 'call dolt_checkout("-b", "newbranch2", "origin/feature");'
-    echo "$output"
     [ "$status" -eq 0 ]
     run dolt sql -q 'select * from dolt_branches;'
     [ "$status" -eq 0 ]

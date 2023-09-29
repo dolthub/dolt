@@ -212,7 +212,7 @@ SQL
     dolt sql -q "call dolt_push('-u', 'origin', 'other')"
     # upstream should be set still
     run dolt push
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "Everything up-to-date" ]] || false
     [[ ! "$output" =~ "The current branch main has no upstream branch." ]] || false
 }
@@ -228,7 +228,7 @@ SQL
     dolt sql -q "call dolt_push()"
     # upstream should be set still
     run dolt push
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "Everything up-to-date" ]] || false
     [[ ! "$output" =~ "The current branch main has no upstream branch." ]] || false
 }
@@ -244,7 +244,7 @@ SQL
     dolt sql -q "call dolt_push()"
     # upstream should be set still
     run dolt push
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "Everything up-to-date" ]] || false
     [[ ! "$output" =~ "The current branch main has no upstream branch." ]] || false
 }
@@ -259,7 +259,7 @@ SQL
     dolt sql -q "call dolt_push('-u', 'origin', 'other')"
     # upstream should be set still
     run dolt push
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ ! "$output" =~ "The current branch main has no upstream branch." ]] || false
 }
 

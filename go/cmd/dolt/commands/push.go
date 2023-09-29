@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dustin/go-humanize"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
@@ -91,8 +92,7 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
-		cli.PrintErrln(err)
-		return 1
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 	if closeFunc != nil {
 		defer closeFunc()
@@ -180,6 +180,22 @@ func getDefaultRemote(sqlCtx *sql.Context, queryist cli.Queryist) (string, error
 	return "", env.ErrCantDetermineDefault
 }
 
+// processFetchSpecs takes a string of fetch specs and returns the destination ref and remote ref
+// Assumes the fetch specs look something like: ["refs/heads/*:refs/remotes/origin/*"]
+func processFetchSpecs(fetchSpecs string, branch string) (destRef, remoteRef string) {
+	// TODO: replace string parsing with better logic when more JSONDocument functionality is available
+	destAndRemoteRefs := strings.Split(fetchSpecs, ":")
+	destRef = destAndRemoteRefs[0]
+	destRef = strings.TrimPrefix(destRef, "[\"")
+	destRef = strings.ReplaceAll(destRef, "*", branch)
+
+	remoteRef = destAndRemoteRefs[1]
+	remoteRef = strings.TrimSuffix(remoteRef, "\"]")
+	remoteRef = strings.ReplaceAll(remoteRef, "*", branch)
+
+	return
+}
+
 // handlePushError prints the appropriate error message and returns the exit code
 func handlePushError(err error, usage cli.UsagePrinter, apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context) int {
 	if err == nil {
@@ -189,8 +205,7 @@ func handlePushError(err error, usage cli.UsagePrinter, apr *argparser.ArgParseR
 	var verr errhand.VerboseError
 	switch err {
 	case doltdb.ErrUpToDate:
-		cli.Println("Everything up-to-date.")
-		return 0
+		verr = errhand.BuildDError("Everything up-to-date.").Build()
 	case env.ErrNoUpstreamForBranch:
 		rows, err := GetRowsForSql(queryist, sqlCtx, "select active_branch()")
 		if err != nil {
@@ -210,16 +225,31 @@ func handlePushError(err error, usage cli.UsagePrinter, apr *argparser.ArgParseR
 	case env.ErrInvalidSetUpstreamArgs:
 		verr = errhand.BuildDError("error: --set-upstream requires <remote> and <refspec> params.").SetPrintUsage().Build()
 	case doltdb.ErrIsAhead, actions.ErrCantFF, datas.ErrMergeNeeded:
-		rows, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("select url, fetch_specs from dolt_remotes where name = %s", apr.Arg(0)))
+		rows, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("select url, fetch_specs from dolt_remotes where name = '%s'", apr.Arg(0)))
 		if err != nil {
 			verr = errhand.BuildDError("could not identify remote").AddCause(err).Build()
 		} else {
 			remoteUrl := rows[0][0].(string)
-			fetchSpecs := rows[0][1].(string)
-			destRef := strings.TrimPrefix(fetchSpecs, "[refs/heads/*:refs/remotes/")
-			destRef = strings.TrimSuffix(destRef, "/*]")
+			fetchSpecs := rows[0][1].(types.JSONDocument)
+			fetchSpecsStr, err := fetchSpecs.ToString(sqlCtx)
+			if err != nil {
+				verr = errhand.BuildDError("could not identify destination remote").AddCause(err).Build()
+			}
+			var branch string
+			if apr.NArg() > 1 {
+				branch = apr.Arg(1)
+			} else {
+				rows, err := GetRowsForSql(queryist, sqlCtx, "select active_branch()")
+				if err != nil {
+					verr = errhand.BuildDError("could not identify current branch").AddCause(err).Build()
+				} else {
+					branch = rows[0][0].(string)
+				}
+			}
+			destRef, remoteRef := processFetchSpecs(fetchSpecsStr, branch)
+
 			cli.Printf("To %s\n", remoteUrl)
-			cli.Printf("! [rejected]          %s -> %s (non-fast-forward)\n", destRef, apr.Arg(0))
+			cli.Printf("! [rejected]          %s -> %s (non-fast-forward)\n", destRef, remoteRef)
 			cli.Printf("error: failed to push some refs to '%s'\n", remoteUrl)
 			cli.Println("hint: Updates were rejected because the tip of your current branch is behind")
 			cli.Println("hint: its remote counterpart. Integrate the remote changes (e.g.")
@@ -240,6 +270,7 @@ func handlePushError(err error, usage cli.UsagePrinter, apr *argparser.ArgParseR
 	default:
 		verr = errhand.VerboseErrorFromError(err)
 	}
+
 	return HandleVErrAndExitCode(verr, usage)
 }
 

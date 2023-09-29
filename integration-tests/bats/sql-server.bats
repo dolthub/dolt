@@ -1075,9 +1075,13 @@ END""")
     [ $status -ne 0 ]
     [[ "$output" =~ "the current branch has no upstream branch" ]] || false
 
-    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_push('--set-upstream', 'origin', 'main')"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_push('--set-upstream', 'origin', 'main')"
+    [ $status -eq 1 ]
+    [[ $output =~ "up to date" ]] || false
 
-    dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_push()"
+    run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_push()"
+    [ $status -eq 1 ]
+    [[ $output =~ "up to date" ]] || false
 }
 
 @test "sql-server: replicate to backup after sql-session commit" {
