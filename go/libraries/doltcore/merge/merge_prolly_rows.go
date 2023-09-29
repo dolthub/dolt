@@ -1571,15 +1571,16 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 		}
 		// conflicting inserts
 		return nil, true
-
 	}
 
-	// We can now assume that both left are right are modifications to an existing column.
-	// We want to know if they're the same modification, otherwise there's a conflict.
-	// Note that we can't just look at the bytes to determine this, because if a cell's byte representation changed,
+	// We can now assume that both left are right contain byte-level changes to an existing column.
+	// But we need to know if those byte-level changes represent a modification to the underlying value,
+	// and whether those changes represent the *same* modification, otherwise there's a conflict.
+
+	// We can't just look at the bytes to determine this, because if a cell's byte representation changed,
 	// but only because of a schema change, we shouldn't consider that a conflict.
-	//  Conversely, if there was a schema change on only one side, we shouldn't consider the cells equal
-	//  even if they have the same bytes.
+	// Conversely, if there was a schema change on only one side, we shouldn't consider the cells equal
+	// even if they have the same bytes.
 
 	// Thus, we must convert all cells to the type in the result schema before comparing them.
 
