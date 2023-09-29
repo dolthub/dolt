@@ -87,9 +87,20 @@ func (r *branchControlReplica) Run() {
 			r.wait()
 			continue
 		}
-		_, err := r.client.client.UpdateBranchControl(context.Background(), &replicationapi.UpdateBranchControlRequest{
-			SerializedContents: r.contents,
+		// We do not call into the client with the lock held here.
+		// Client interceptors could call
+		// `controller.setRoleAndEpoch()`, which will call back into
+		// this replica with the new role. We need to release this lock
+		// in order to avoid deadlock.
+		contents := r.contents
+		client := r.client.client
+		r.mu.Unlock()
+		ctx, cancel := context.WithTimeout(context.Background(), 15 * time.Second)
+		_, err := client.UpdateBranchControl(ctx, &replicationapi.UpdateBranchControlRequest{
+			SerializedContents: contents,
 		})
+		cancel()
+		r.mu.Lock()
 		if err != nil {
 			r.lgr.Warnf("branchControlReplica[%s]: error replicating branch control permissions. backing off. %v", r.client.remote, err)
 			r.nextAttempt = time.Now().Add(r.backoff.NextBackOff())

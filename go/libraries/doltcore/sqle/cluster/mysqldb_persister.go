@@ -96,9 +96,20 @@ func (r *mysqlDbReplica) Run() {
 			continue
 		}
 		if len(r.contents) > 0 {
-			_, err := r.client.client.UpdateUsersAndGrants(context.Background(), &replicationapi.UpdateUsersAndGrantsRequest{
-				SerializedContents: r.contents,
+			// We do not call into the client with the lock held
+			// here.  Client interceptors could call
+			// `controller.setRoleAndEpoch()`, which will call back
+			// into this replica with the new role. We need to
+			// release this lock in order to avoid deadlock.
+			contents := r.contents
+			client := r.client.client
+			r.mu.Unlock()
+			ctx, cancel := context.WithTimeout(context.Background(), 15 * time.Second)
+			_, err := client.UpdateUsersAndGrants(ctx, &replicationapi.UpdateUsersAndGrantsRequest{
+				SerializedContents: contents,
 			})
+			cancel()
+			r.mu.Lock()
 			if err != nil {
 				r.lgr.Warnf("mysqlDbReplica[%s]: error replicating users and grants. backing off. %v", r.client.remote, err)
 				r.nextAttempt = time.Now().Add(r.backoff.NextBackOff())
