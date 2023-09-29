@@ -193,9 +193,7 @@ teardown() {
     cd repo1
     dolt checkout -b new_feature
     dolt push remote1 new_feature
-    run dolt push remote1 main
-    [ $status -eq 1 ]
-    [[ "$output" =~ "Everything up-to-date" ]] || false
+    dolt push remote1 main
 
     cd ../repo2
     dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
@@ -225,9 +223,7 @@ teardown() {
     dolt push remote1 b2
     dolt push remote1 b3
     dolt checkout main
-    run dolt push remote1 main
-    [ $status -eq 1 ]
-    [[ "$output" =~ "Everything up-to-date" ]] || false
+    dolt push remote1 main
 
     cd ../repo2
     dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
@@ -412,9 +408,7 @@ teardown() {
     dolt commit -am "first commit"
     dolt push remote1 feature
     dolt checkout main
-    run dolt push remote1 main
-    [ $status -eq 1 ]
-    [[ "$output" =~ "Everything up-to-date" ]] || false
+    dolt push remote1 main
 
     cd ../repo2
     dolt fetch
@@ -453,9 +447,7 @@ teardown() {
     dolt commit -am "first commit"
     dolt push remote1 feature
     dolt checkout main
-    run dolt push remote1 main
-    [ $status -eq 1 ]
-    [[ "$output" =~ "Everything up-to-date" ]] || false
+    dolt push remote1 main
 
     cd ../repo2
     dolt fetch
@@ -492,9 +484,7 @@ teardown() {
     dolt commit -am "first commit"
     dolt push remote1 feature
     dolt checkout main
-    run dolt push remote1 main
-    [ $status -eq 1 ]
-    [[ "$output" =~ "Everything up-to-date" ]] || false
+    dolt push remote1 main
 
     cd ../repo2
     dolt fetch

@@ -134,7 +134,7 @@ teardown() {
     dolt push -u origin other
     # upstream should be set still
     run dolt push
-    [ "$status" -eq 1 ]
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "Everything up-to-date" ]] || false
     [[ ! "$output" =~ "The current branch main has no upstream branch." ]] || false
 }
@@ -150,7 +150,7 @@ teardown() {
     dolt push
     # upstream should be set still
     run dolt push
-    [ "$status" -eq 1 ]
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "Everything up-to-date" ]] || false
     [[ ! "$output" =~ "The current branch main has no upstream branch." ]] || false
 }
@@ -166,7 +166,7 @@ teardown() {
     dolt push
     # upstream should be set still
     run dolt push
-    [ "$status" -eq 1 ]
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "Everything up-to-date" ]] || false
     [[ ! "$output" =~ "The current branch main has no upstream branch." ]] || false
 }

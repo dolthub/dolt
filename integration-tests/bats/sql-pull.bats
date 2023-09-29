@@ -365,9 +365,7 @@ teardown() {
     dolt checkout other
     # this checkout will not set upstream because this 'feature' branch existed before matching remote tracking branch was created
     dolt checkout feature
-    run dolt push --set-upstream origin feature
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "Everything up-to-date" ]] || false
+    dolt push --set-upstream origin feature
 
     cd ../repo1
     dolt merge main

@@ -350,7 +350,7 @@ SQL
     [[ "$output" =~ "Uploading" ]] || false
 
     run dolt push test-remote main
-    [ "$status" -eq 1 ]
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
@@ -997,7 +997,7 @@ SQL
     dolt push test-remote main
     cd "dolt-repo-clones/test-repo"
     run dolt push origin main
-    [ "$status" -eq 1 ]
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "Everything up-to-date" ]] || false
     dolt fetch
     run dolt push origin main
@@ -1843,9 +1843,7 @@ setup_ref_test() {
     cd dolt-repo-clones
     dolt clone http://localhost:50051/test-org/test-repo
     cd test-repo
-    run dolt push
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "Everything up-to-date." ]] || false
+    dolt push
 }
 
 @test "remotes: set upstream succeeds even if up to date" {
@@ -1861,12 +1859,8 @@ setup_ref_test() {
     run dolt push
     [ "$status" -eq 1 ]
     [[ "$output" =~ "The current branch feature has no upstream branch." ]] || false
-    run dolt push --set-upstream origin feature
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "Everything up-to-date." ]] || false
-    run dolt push
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "Everything up-to-date." ]] || false
+    dolt push --set-upstream origin feature
+    dolt push
 }
 
 @test "remotes: local clone does not contain working set changes" {

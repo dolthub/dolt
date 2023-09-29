@@ -203,7 +203,8 @@ func handlePushError(err error, usage cli.UsagePrinter, apr *argparser.ArgParseR
 	var verr errhand.VerboseError
 	switch err {
 	case doltdb.ErrUpToDate:
-		verr = errhand.BuildDError("Everything up-to-date.").Build()
+		cli.Println("Everything up-to-date.")
+		return 0
 	case env.ErrNoUpstreamForBranch:
 		rows, err := GetRowsForSql(queryist, sqlCtx, "select active_branch()")
 		if err != nil {

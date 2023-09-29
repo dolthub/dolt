@@ -243,6 +243,9 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 
 			rows, err := conn.Query(query)
 			if err != nil {
+				if strings.Contains(err.Error(), "up to date") {
+					return 0
+				}
 				cli.PrintErrln(err.Error())
 				return 1
 			}
