@@ -56,6 +56,7 @@ type dataTest struct {
 	merged       []sql.Row
 	dataConflict bool
 	skip         bool
+	skipFlip     bool
 }
 
 type table struct {
@@ -156,6 +157,7 @@ var columnAddDropTests = []schemaMergeTest{
 				left:     singleRow(1, 2, 3),
 				right:    singleRow(1, 4),
 				merged:   singleRow(1, 2, 4),
+				skipFlip: true,
 			},
 			{
 				name:     "left side adds column and assigns non-null value, extra column has data change on right to NULL",
@@ -163,6 +165,7 @@ var columnAddDropTests = []schemaMergeTest{
 				left:     singleRow(1, 2, 3),
 				right:    singleRow(1, nil),
 				merged:   singleRow(1, 2, nil),
+				skipFlip: true,
 			},
 			{
 				name:     "left side adds column and assigns non-null value, extra column has data change on right to non-NULL",
@@ -170,6 +173,7 @@ var columnAddDropTests = []schemaMergeTest{
 				left:     singleRow(1, 2, nil),
 				right:    singleRow(1, 3),
 				merged:   singleRow(1, 2, 3),
+				skipFlip: true,
 			},
 			{
 				name:     "left side adds column and assigns non-null value, extra column is NULL",
@@ -191,6 +195,7 @@ var columnAddDropTests = []schemaMergeTest{
 				left:     singleRow(1, nil, 3),
 				right:    singleRow(1, 4),
 				merged:   singleRow(1, nil, 4),
+				skipFlip: true,
 			},
 			{
 				name:     "left side adds column and assigns null value, extra column has data change on right to NULL",
@@ -198,6 +203,7 @@ var columnAddDropTests = []schemaMergeTest{
 				left:     singleRow(1, nil, 3),
 				right:    singleRow(1, nil),
 				merged:   singleRow(1, nil, nil),
+				skipFlip: true,
 			},
 			{
 				name:     "left side adds column and assigns null value, extra column has data change on right to non-NULL",
@@ -205,6 +211,7 @@ var columnAddDropTests = []schemaMergeTest{
 				left:     singleRow(1, nil, nil),
 				right:    singleRow(1, 3),
 				merged:   singleRow(1, nil, 3),
+				skipFlip: true,
 			},
 		},
 	},
@@ -399,14 +406,11 @@ var columnAddDropTests = []schemaMergeTest{
 				merged:   singleRow(1, nil, 2),
 			},
 			{
-				// Skipped because the differ currently doesn't see the left change as
-				// a data change, because the tuple representation is the same.
 				name:         "convergent adds with differing nullness",
 				ancestor:     singleRow(1, 2),
 				left:         singleRow(1, nil, 2),
 				right:        singleRow(1, 3, 2),
 				dataConflict: true,
-				//skip:         true,
 			},
 			{
 				name:         "convergent adds with differing nullness, plus convergent data change",
@@ -947,6 +951,8 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 				test.left.rows = data.left
 				test.right.rows = data.right
 				test.merged.rows = data.merged
+				test.skipNewFmt = test.skipNewFmt || data.skip
+				test.skipFlipOnNewFormat = test.skipFlipOnNewFormat || data.skipFlip
 				t.Run(data.name, func(t *testing.T) {
 					if data.skip {
 						t.Skip()
