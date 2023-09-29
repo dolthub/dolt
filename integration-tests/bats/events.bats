@@ -87,6 +87,9 @@ teardown() {
     sleep 10
     run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT COUNT(*) FROM totals;"
     [ $status -eq 0 ]
+    # TODO: This line is failing in CI for some reason...
+    #       Adding some more debugging output to figure out what's going on
+    echo "OUTPUT: $output"
     [[ $output =~ "| 2        |" ]] || false
 
     # should be dropped
