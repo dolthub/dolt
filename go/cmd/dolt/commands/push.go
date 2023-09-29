@@ -21,6 +21,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dustin/go-humanize"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -31,13 +39,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/dustin/go-humanize"
-	"github.com/gocraft/dbr/v2"
-	"github.com/gocraft/dbr/v2/dialect"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 var pushDocs = cli.CommandDocumentationContent{
