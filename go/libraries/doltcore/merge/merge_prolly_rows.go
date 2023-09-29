@@ -1546,7 +1546,13 @@ func (m *valueMerger) tryMerge(ctx context.Context, left, right, base val.Tuple)
 // based on the |left|, |right|, and |base| schema.
 func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, base val.Tuple) ([]byte, bool) {
 	// missing columns are coerced into NULL column values
-	baseCol, baseColIdx, baseColExists := getColumn(&base, &m.baseMapping, i)
+
+	var baseCol []byte
+	var baseColIdx = -1
+	var baseColExists = false
+	if base != nil {
+		baseCol, baseColIdx, baseColExists = getColumn(&base, &m.baseMapping, i)
+	}
 	leftCol, leftColIdx, leftColExists := getColumn(&left, &m.leftMapping, i)
 	rightCol, rightColIdx, rightColExists := getColumn(&right, &m.rightMapping, i)
 	resultType := m.resultVD.Types[i]
@@ -1557,12 +1563,18 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 		// - The column doesn't exist in the base row
 		// Regardless, both left and right are inserts, or one is an insert and the other doesn't exist.
 
-		if !leftColExists {
-			return rightCol, false
-		}
-
 		if !rightColExists {
 			return leftCol, false
+		}
+
+		var ok bool
+		rightCol, ok = convert(ctx, m.rightVD, m.resultVD, m.resultSchema, rightColIdx, i, right, rightCol, m.ns)
+		if !ok {
+			return nil, true
+		}
+
+		if !leftColExists {
+			return rightCol, false
 		}
 
 		if m.resultVD.Comparator().CompareValues(i, leftCol, rightCol, resultType) == 0 {
