@@ -104,7 +104,7 @@ func (r *mysqlDbReplica) Run() {
 			contents := r.contents
 			client := r.client.client
 			r.mu.Unlock()
-			ctx, cancel := context.WithTimeout(context.Background(), 15 * time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			_, err := client.UpdateUsersAndGrants(ctx, &replicationapi.UpdateUsersAndGrantsRequest{
 				SerializedContents: contents,
 			})
