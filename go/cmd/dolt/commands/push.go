@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -119,11 +120,10 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			errChan <- err
 			return
 		}
-		cli.Println(sqlRows)
-		if sqlRows[0][0].(int64) == 0 && len(sqlRows[0]) > 1 {
-			if sqlRows[0][1].(string) == dprocedures.UpToDateMessage {
-				cli.Println(dprocedures.UpToDateMessage)
-			}
+		err = printPushMessage(sqlRows)
+		if err != nil {
+			errChan <- err
+			return
 		}
 	}()
 
@@ -205,6 +205,24 @@ func processFetchSpecs(fetchSpecs string, branch string) (destRef, remoteRef str
 	remoteRef = strings.ReplaceAll(remoteRef, "*", branch)
 
 	return
+}
+
+// printPushMessage prints the appropriate message for the given push output
+func printPushMessage(rows []sql.Row) error {
+	var statusCode int64
+	if intCode, ok := rows[0][0].(int64); ok {
+		statusCode = intCode
+	} else if strCode, ok := rows[0][0].(string); ok {
+		intCode, err := strconv.Atoi(strCode)
+		if err != nil {
+			return err
+		}
+		statusCode = int64(intCode)
+	}
+	if statusCode == 0 && len(rows[0]) > 1 && rows[0][1].(string) == dprocedures.UpToDateMessage {
+		cli.Println(dprocedures.UpToDateMessage)
+	}
+	return nil
 }
 
 // handlePushError prints the appropriate error message and returns the exit code
