@@ -1557,6 +1557,8 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 	rightCol, rightColIdx, rightColExists := getColumn(&right, &m.rightMapping, i)
 	resultType := m.resultVD.Types[i]
 
+	// We previously asserted that left and right are not nil: processColumn can currently get called in that case
+	// because it's not detected as a data conflict. But convergent inserts are detected, and result in a nil base.
 	if base == nil || !baseColExists {
 		// There are two possible cases:
 		// - The base row doesn't exist, or
