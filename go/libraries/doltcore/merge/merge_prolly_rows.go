@@ -1511,17 +1511,17 @@ func migrateDataToMergedSchema(ctx *sql.Context, tm *TableMerger, vm *valueMerge
 // tuples. It returns the merged cell value tuple and a bool indicating if a
 // conflict occurred. tryMerge should only be called if left and right produce
 // non-identical diffs against base.
-func (m *valueMerger) tryMerge(ctx context.Context, left, right, base val.Tuple) (val.Tuple, bool) {
+func (m *valueMerger) tryMerge(ctx context.Context, left, right, base val.Tuple) (val.Tuple, bool, error) {
 	// If we're merging a keyless table and the keys match, but the values are different,
 	// that means that the row data is the same, but the cardinality has changed, and if the
 	// cardinality has changed in different ways on each merge side, we can't auto resolve.
 	if m.keyless {
-		return nil, false
+		return nil, false, nil
 	}
 
 	if base != nil && (left == nil) != (right == nil) {
 		// One row deleted, the other modified
-		return nil, false
+		return nil, false, nil
 	}
 
 	// Because we have non-identical diffs, left and right are guaranteed to be
@@ -1532,19 +1532,22 @@ func (m *valueMerger) tryMerge(ctx context.Context, left, right, base val.Tuple)
 
 	mergedValues := make([][]byte, m.numCols)
 	for i := 0; i < m.numCols; i++ {
-		v, isConflict := m.processColumn(ctx, i, left, right, base)
+		v, isConflict, err := m.processColumn(ctx, i, left, right, base)
+		if err != nil {
+			return nil, false, err
+		}
 		if isConflict {
-			return nil, false
+			return nil, false, nil
 		}
 		mergedValues[i] = v
 	}
 
-	return val.NewTuple(m.syncPool, mergedValues...), true
+	return val.NewTuple(m.syncPool, mergedValues...), true, nil
 }
 
 // processColumn returns the merged value of column |i| of the merged schema,
 // based on the |left|, |right|, and |base| schema.
-func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, base val.Tuple) ([]byte, bool) {
+func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, base val.Tuple) (result []byte, conflict bool, err error) {
 	// missing columns are coerced into NULL column values
 
 	var baseCol []byte
@@ -1566,25 +1569,24 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 		// Regardless, both left and right are inserts, or one is an insert and the other doesn't exist.
 
 		if !rightColExists {
-			return leftCol, false
+			return leftCol, false, nil
 		}
 
-		var ok bool
-		rightCol, ok = convert(ctx, m.rightVD, m.resultVD, m.resultSchema, rightColIdx, i, right, rightCol, m.ns)
-		if !ok {
-			return nil, true
+		rightCol, err = convert(ctx, m.rightVD, m.resultVD, m.resultSchema, rightColIdx, i, right, rightCol, m.ns)
+		if err != nil {
+			return nil, false, err
 		}
 
 		if !leftColExists {
-			return rightCol, false
+			return rightCol, false, nil
 		}
 
 		if m.resultVD.Comparator().CompareValues(i, leftCol, rightCol, resultType) == 0 {
 			// columns are equal, return either.
-			return leftCol, false
+			return leftCol, false, nil
 		}
 		// conflicting inserts
-		return nil, true
+		return nil, true, nil
 	}
 
 	// We can now assume that both left are right contain byte-level changes to an existing column.
@@ -1599,10 +1601,9 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 	// Thus, we must convert all cells to the type in the result schema before comparing them.
 
 	if baseCol != nil {
-		var ok bool
-		baseCol, ok = convert(ctx, m.baseVD, m.resultVD, m.resultSchema, baseColIdx, i, base, baseCol, m.ns)
-		if !ok {
-			return nil, true
+		baseCol, err = convert(ctx, m.baseVD, m.resultVD, m.resultSchema, baseColIdx, i, base, baseCol, m.ns)
+		if err != nil {
+			return nil, false, err
 		}
 	}
 
@@ -1610,7 +1611,7 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 
 	if leftColIdx == -1 && rightColIdx == -1 {
 		// Both branches are implicitly NULL
-		return nil, false
+		return nil, false, err
 	}
 
 	if rightColIdx == -1 {
@@ -1618,10 +1619,9 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 		rightModified = baseCol != nil
 	} else {
 		// Attempt to convert the right column to match the result schema, then compare it to the base.
-		var ok bool
-		rightCol, ok = convert(ctx, m.rightVD, m.resultVD, m.resultSchema, rightColIdx, i, right, rightCol, m.ns)
-		if !ok {
-			return nil, true
+		rightCol, err = convert(ctx, m.rightVD, m.resultVD, m.resultSchema, rightColIdx, i, right, rightCol, m.ns)
+		if err != nil {
+			return nil, true, nil
 		}
 		rightModified = m.resultVD.Comparator().CompareValues(i, rightCol, baseCol, resultType) != 0
 	}
@@ -1629,7 +1629,7 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 	// The left value was previously converted in `migrateDataToMergedSchema`, so we don't need to convert it here.
 	if m.resultVD.Comparator().CompareValues(i, leftCol, rightCol, resultType) == 0 {
 		// columns are equal, return either.
-		return leftCol, false
+		return leftCol, false, nil
 	}
 
 	leftModified = m.resultVD.Comparator().CompareValues(i, leftCol, baseCol, resultType) != 0
@@ -1637,11 +1637,11 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 	switch {
 	case leftModified && rightModified:
 		// concurrent modification
-		return nil, true
+		return nil, true, nil
 	case leftModified:
-		return leftCol, false
+		return leftCol, false, nil
 	default:
-		return rightCol, false
+		return rightCol, false, nil
 	}
 }
 
@@ -1655,22 +1655,19 @@ func getColumn(tuple *val.Tuple, mapping *val.OrdinalMapping, idx int) (col []by
 
 // convert takes the `i`th column in the provided tuple and converts it to the type specified in the provided schema.
 // returns the new representation, and a bool indicating success.
-func convert(ctx context.Context, fromDesc, toDesc val.TupleDesc, toSchema schema.Schema, fromIndex, toIndex int, tuple val.Tuple, originalValue []byte, ns tree.NodeStore) ([]byte, bool) {
+func convert(ctx context.Context, fromDesc, toDesc val.TupleDesc, toSchema schema.Schema, fromIndex, toIndex int, tuple val.Tuple, originalValue []byte, ns tree.NodeStore) ([]byte, error) {
 	if fromDesc.Types[fromIndex] == toDesc.Types[toIndex] {
 		// No conversion is necessary here.
-		return originalValue, true
+		return originalValue, nil
 	}
 	parsedCell, err := index.GetField(ctx, fromDesc, fromIndex, tuple, ns)
 	if err != nil {
-		return nil, true
+		return nil, err
 	}
 	sqlType := toSchema.GetNonPKCols().GetByIndex(toIndex).TypeInfo.ToSqlType()
-	convertedCell, inRange, err := sqlType.Convert(parsedCell)
+	convertedCell, _, err := sqlType.Convert(parsedCell)
 	if err != nil {
-		return nil, false
-	}
-	if !inRange {
-		return nil, false
+		return nil, err
 	}
 	return index.Serialize(ctx, ns, toDesc.Types[toIndex], convertedCell)
 }
