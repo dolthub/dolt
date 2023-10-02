@@ -17,10 +17,10 @@ package index
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/pool"
 	"io"
 	"math"
 	"time"
@@ -130,66 +130,16 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tr
 	return v, err
 }
 
-// Serialize writes an interface{} into the byte string representation used in val.Tuple.
-func Serialize(ctx context.Context, ns tree.NodeStore, t val.Type, v interface{}) ([]byte, bool) {
-	var res []byte
-
-	if v == nil {
-		return res, true // NULL
+// Serialize writes an interface{} into the byte string representation used in val.Tuple, and returns the byte string,
+// and a boolean indicating success.
+func Serialize(ctx context.Context, ns tree.NodeStore, t val.Type, v interface{}) (result []byte, success bool) {
+	newTupleDesc := val.NewTupleDescriptor(t)
+	tb := val.NewTupleBuilder(newTupleDesc)
+	err := PutField(ctx, ns, tb, 0, v)
+	if err != nil {
+		return nil, false
 	}
-
-	enc := t.Enc
-	switch enc {
-	case val.Int8Enc:
-		return []byte{byte(convInt(v))}, true
-	case val.Uint8Enc:
-		return []byte{byte(convUint(v))}, true
-	case val.Int16Enc:
-		return binary.LittleEndian.AppendUint16(res, uint16(convInt(v))), true
-	case val.Uint16Enc:
-		return binary.LittleEndian.AppendUint16(res, uint16(convUint(v))), true
-	case val.Int32Enc:
-		return binary.LittleEndian.AppendUint32(res, uint32(convInt(v))), true
-	case val.Uint32Enc:
-		return binary.LittleEndian.AppendUint32(res, uint32(convUint(v))), true
-	case val.Int64Enc:
-		return binary.LittleEndian.AppendUint64(res, uint64(convInt(v))), true
-	case val.Uint64Enc:
-		return binary.LittleEndian.AppendUint64(res, uint64(convUint(v))), true
-	case val.EnumEnc:
-		return binary.LittleEndian.AppendUint16(res, v.(uint16)), true
-	case val.SetEnc:
-		return binary.LittleEndian.AppendUint64(res, v.(uint64)), true
-	case val.StringEnc:
-		s := v.(string)
-		res = make([]byte, len(s)+1)
-		copy(res, s)
-		res[len(s)] = byte(0)
-		return res, true
-	case val.ByteStringEnc:
-		if s, ok := v.(string); ok {
-			if len(s) > math.MaxUint16 {
-				return nil, false
-			}
-			res = make([]byte, len(s)+1)
-			copy(res, s)
-			res[len(s)] = byte(0)
-			return res, true
-		}
-
-		b := v.([]byte)
-		res = make([]byte, len(b)+1)
-		copy(res, b)
-		return res, true
-	case val.StringAddrEnc:
-		//todo: v will be []byte after daylon's changes
-		h, err := serializeBytesToAddr(ctx, ns, bytes.NewReader([]byte(v.(string))), len(v.(string)))
-		if err != nil {
-			panic("return err")
-		}
-		return h[:], true
-	}
-	panic(fmt.Sprintf("unknown encoding, or convert not defined for %v %v", enc, v))
+	return newTupleDesc.GetField(0, tb.Build(pool.NewBuffPool())), true
 }
 
 // PutField writes an interface{} to the ith field of the Tuple being built.
