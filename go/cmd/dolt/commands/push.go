@@ -194,7 +194,6 @@ func getDefaultRemote(sqlCtx *sql.Context, queryist cli.Queryist) (string, error
 // processFetchSpecs takes a string of fetch specs and returns the destination ref and remote ref
 // Assumes the fetch specs look something like: ["refs/heads/*:refs/remotes/origin/*"]
 func processFetchSpecs(fetchSpecs string, branch string) (destRef, remoteRef string) {
-	// TODO: replace string parsing with better logic when more JSONDocument functionality is available
 	destAndRemoteRefs := strings.Split(fetchSpecs, ":")
 	destRef = destAndRemoteRefs[0]
 	destRef = strings.TrimPrefix(destRef, "[\"")
