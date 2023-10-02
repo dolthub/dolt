@@ -271,8 +271,7 @@ func (fs *localFS) Delete(path string, force bool) error {
 }
 
 // MoveFile will move a file from the srcPath in the filesystem to the destPath
-func (fs *localFS) MoveFile(srcPath, destPath string) error {
-	var err error
+func (fs *localFS) MoveFile(srcPath, destPath string) (err error) {
 	srcPath, err = fs.Abs(srcPath)
 
 	if err != nil {
@@ -281,6 +280,24 @@ func (fs *localFS) MoveFile(srcPath, destPath string) error {
 
 	destPath, err = fs.Abs(destPath)
 
+	if err != nil {
+		return err
+	}
+
+	return file.Rename(srcPath, destPath)
+}
+
+func (fs *localFS) MoveDir(srcPath, destPath string) (err error) {
+	// TODO: This is the exact same implementation as MoveFile
+	//       Should probably at least add assertions that |srcPath| is really a dir?
+	// TODO: Or should we just try to make MoveFile work with dirs? It seems like the filesystem
+	//       based implementation already does, it's just the in-memory implementation that doesn't.
+	srcPath, err = fs.Abs(srcPath)
+	if err != nil {
+		return err
+	}
+
+	destPath, err = fs.Abs(destPath)
 	if err != nil {
 		return err
 	}

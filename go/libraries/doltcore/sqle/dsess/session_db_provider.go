@@ -96,6 +96,17 @@ type DoltDatabaseProvider interface {
 	BaseDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool)
 	// DoltDatabases returns all databases known to this provider.
 	DoltDatabases() []SqlDatabase
+	// UndropDatabase attempts to restore the database |dbName| that was previously dropped.
+	// The restored database will appear identically when accessed through the SQL
+	// interface, but may be stored in a slightly different location on disk
+	// (e.g. a root database will be restored as a regular/non-root database,
+	// databases original stored with hyphens in their directory name will be rewritten
+	// to underscores to match their SQL database name).
+	// TODO: Is this a problem for anything on hosted?
+	// If the database is unable to be restored, an error is returned explaining why.
+	UndropDatabase(ctx *sql.Context, dbName string) error
+	// ListUndroppableDatabases returns a list of database names for dropped databases that are available to be restored.
+	ListUndroppableDatabases(ctx *sql.Context) ([]string, error)
 }
 
 type SessionDatabaseBranchSpec struct {

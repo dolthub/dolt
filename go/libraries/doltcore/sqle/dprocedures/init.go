@@ -32,6 +32,7 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dolt_conflicts_resolve", Schema: int64Schema("status"), Function: doltConflictsResolve},
 	{Name: "dolt_count_commits", Schema: int64Schema("ahead", "behind"), Function: doltCountCommits, ReadOnly: true},
 	{Name: "dolt_fetch", Schema: int64Schema("status"), Function: doltFetch},
+	{Name: "dolt_undrop", Schema: int64Schema("status"), Function: doltUndrop},
 
 	// dolt_gc is enabled behind a feature flag for now, see dolt_gc.go
 	{Name: "dolt_gc", Schema: int64Schema("status"), Function: doltGC, ReadOnly: true},
@@ -55,6 +56,7 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dclone", Schema: int64Schema("status"), Function: doltClone},
 	{Name: "dcommit", Schema: stringSchema("hash"), Function: doltCommit},
 	{Name: "dfetch", Schema: int64Schema("status"), Function: doltFetch},
+	{Name: "dundrop", Schema: int64Schema("status"), Function: doltUndrop},
 
 	//	{Name: "dgc", Schema: int64Schema("status"), Function: doltGC},
 

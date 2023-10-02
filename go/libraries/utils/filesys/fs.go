@@ -72,6 +72,11 @@ type WritableFS interface {
 	// MoveFile will move a file from the srcPath in the filesystem to the destPath
 	MoveFile(srcPath, destPath string) error
 
+	// MoveDir will move a directory from the srcPath in the filesystem to the destPath. For example,
+	// MoveDir("foo", "bar/baz") will move the "foo" directory to "bar/baz", meaning the contents of "foo" are now
+	// directly under the "baz" directory.
+	MoveDir(srcPath, destPath string) error
+
 	// TempDir returns the path of a new temporary directory.
 	TempDir() string
 }

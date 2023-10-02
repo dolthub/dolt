@@ -537,6 +537,10 @@ func (fs *InMemFS) MoveFile(srcPath, destPath string) error {
 	return os.ErrNotExist
 }
 
+func (fs InMemFS) MoveDir(srcPath, destPath string) error {
+	panic("not implemented!")
+}
+
 func (fs *InMemFS) CopyFile(srcPath, destPath string) error {
 	fs.rwLock.Lock()
 	defer fs.rwLock.Unlock()
