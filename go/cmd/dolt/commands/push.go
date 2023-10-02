@@ -145,8 +145,9 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			case context.Canceled:
 				cli.Println("push cancelled by force")
 				return 1
+			default:
+				return 0
 			}
-			return 0
 		case <-time.After(time.Millisecond * 50):
 			cli.DeleteAndPrint(len(" Uploading...")+1, spinner.next()+" Uploading...")
 		}
@@ -220,6 +221,7 @@ func printPushMessage(rows []sql.Row) error {
 	if intCode, ok := rows[0][0].(int64); ok {
 		statusCode = intCode
 	} else if strCode, ok := rows[0][0].(string); ok {
+		// remote execution returns status code as a string
 		intCode, err := strconv.Atoi(strCode)
 		if err != nil {
 			return err
