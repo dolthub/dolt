@@ -693,7 +693,7 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 	}
 
 	if !success {
-		return errors.New("could not destination root to the same value as this database's root. the destination database received too many writes while we were pushing and we exhausted our retries.")
+		return errors.New("could not set destination root to the same value as this database's root. the destination database received too many writes while we were pushing and we exhausted our retries.")
 	}
 
 	return nil
