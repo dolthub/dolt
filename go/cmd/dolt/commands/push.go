@@ -138,6 +138,14 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		case err := <-errChan:
 			return handlePushError(err, usage, apr, queryist, sqlCtx)
 		case <-ctx.Done():
+			switch ctx.Err() {
+			case context.DeadlineExceeded:
+				cli.Println("timeout exceeded")
+				return 1
+			case context.Canceled:
+				cli.Println("push cancelled by force")
+				return 1
+			}
 			return 0
 		case <-time.After(time.Millisecond * 50):
 			cli.DeleteAndPrint(len(" Uploading...")+1, spinner.next()+" Uploading...")
