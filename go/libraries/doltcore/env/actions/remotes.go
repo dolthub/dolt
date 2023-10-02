@@ -679,7 +679,22 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 		return err
 	}
 
-	destDb.CommitRoot(ctx, srcRoot, destRoot)
+	var numRetries int
+	var success bool
+	for err == nil && !success && numRetries < 10 {
+		success, err = destDb.CommitRoot(ctx, srcRoot, destRoot)
+		if err == nil && !success {
+			destRoot, err = destDb.NomsRoot(ctx)
+			numRetries += 1
+		}
+	}
+	if err != nil {
+		return err
+	}
+
+	if !success {
+		return errors.New("could not destination root to the same value as this database's root. the destination database received too many writes while we were pushing and we exhausted our retries.")
+	}
 
 	return nil
 }
