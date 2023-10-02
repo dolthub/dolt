@@ -135,7 +135,19 @@ func NewSqlEngine(
 
 	config.ClusterController.RegisterStoredProcedures(pro)
 	pro.InitDatabaseHook = cluster.NewInitDatabaseHook(config.ClusterController, bThreads, pro.InitDatabaseHook)
-	pro.DropDatabaseHook = config.ClusterController.DropDatabaseHook
+
+	sqlEngine := &SqlEngine{}
+
+	var dropDatabase = func(ctx context.Context, name string) error {
+		sqlCtx, err := sqlEngine.NewDefaultContext(ctx)
+		if err != nil {
+			return err
+		}
+		return pro.DropDatabase(sqlCtx, name)
+	}
+
+	config.ClusterController.SetDropDatabase(dropDatabase)
+	pro.DropDatabaseHook = config.ClusterController.DropDatabaseHook()
 
 	// Create the engine
 	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{
@@ -223,12 +235,12 @@ func NewSqlEngine(
 		}
 	}
 
-	return &SqlEngine{
-		provider:       pro,
-		contextFactory: sqlContextFactory(),
-		dsessFactory:   sessFactory,
-		engine:         engine,
-	}, nil
+	sqlEngine.provider = pro
+	sqlEngine.contextFactory = sqlContextFactory()
+	sqlEngine.dsessFactory = sessFactory
+	sqlEngine.engine = engine
+
+	return sqlEngine, nil
 }
 
 // NewRebasedSqlEngine returns a smalled rebased engine primarily used in filterbranch.
