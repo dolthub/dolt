@@ -722,3 +722,19 @@ func getHashOf(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (string, 
 	}
 	return rows[0][0].(string), nil
 }
+
+func HandleVErrAndExitCode(verr errhand.VerboseError, usage cli.UsagePrinter) int {
+	if verr != nil {
+		if msg := verr.Verbose(); strings.TrimSpace(msg) != "" {
+			cli.PrintErrln(msg)
+		}
+
+		if verr.ShouldPrintUsage() {
+			usage()
+		}
+
+		return 1
+	}
+
+	return 0
+}
