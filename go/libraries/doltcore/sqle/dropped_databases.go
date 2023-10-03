@@ -16,12 +16,14 @@ package sqle
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/go-mysql-server/sql"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 // deletedDatabaseDirectoryName is the subdirectory within the data folder where Dolt moves databases after they are
