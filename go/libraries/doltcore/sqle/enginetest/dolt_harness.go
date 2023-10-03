@@ -168,7 +168,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		d.branchControl = branch_control.CreateDefaultController()
 
 		pro := d.newProvider()
-		doltProvider, ok := pro.(sqle.DoltDatabaseProvider)
+		doltProvider, ok := pro.(*sqle.DoltDatabaseProvider)
 		require.True(t, ok)
 		d.provider = doltProvider
 
@@ -303,7 +303,7 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	d.branchControl = branch_control.CreateDefaultController()
 
 	pro := d.newProvider()
-	doltProvider, ok := pro.(sqle.DoltDatabaseProvider)
+	doltProvider, ok := pro.(*sqle.DoltDatabaseProvider)
 	require.True(d.t, ok)
 	d.provider = doltProvider
 
@@ -341,7 +341,7 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 }
 
 func (d *DoltHarness) NewReadOnlyEngine(provider sql.DatabaseProvider) (enginetest.QueryEngine, error) {
-	ddp, ok := provider.(sqle.DoltDatabaseProvider)
+	ddp, ok := provider.(*sqle.DoltDatabaseProvider)
 	if !ok {
 		return nil, fmt.Errorf("expected a DoltDatabaseProvider")
 	}
