@@ -521,12 +521,12 @@ func (fs *InMemFS) moveDirHelper(dir *memDir, destPath string) error {
 	for _, v := range dir.objs {
 		switch newone := v.(type) {
 		case *memDir:
-			parentDir, _ := filepath.Split(destPath)
-			destParentDir := (fs.objs[parentDir]).(*memDir)
+			parentDir := filepath.Dir(destPath)
+			destParentDir := fs.objs[parentDir].(*memDir)
 
 			destObj := &memDir{
 				absPath:   destPath,
-				objs:      nil,
+				objs:      make(map[string]memObj),
 				parentDir: destParentDir,
 				time:      InMemNowFunc(),
 			}
