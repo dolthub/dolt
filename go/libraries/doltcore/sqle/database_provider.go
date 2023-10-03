@@ -18,11 +18,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -44,10 +42,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// deletedDatabaseDirectoryName is the subdirectory within the data folder where Dolt moves databases after they are
-// dropped. The dolt_undrop() stored procedure is then able to restore them from this location.
-const deletedDatabaseDirectoryName = "dolt_deleted_databases"
-
 type DoltDatabaseProvider struct {
 	// dbLocations maps a database name to its file system root
 	dbLocations        map[string]filesys.Filesys
@@ -57,6 +51,8 @@ type DoltDatabaseProvider struct {
 	InitDatabaseHook   InitDatabaseHook
 	DropDatabaseHook   DropDatabaseHook
 	mu                 *sync.RWMutex
+
+	droppedDatabaseManager *droppedDatabases
 
 	defaultBranch string
 	fs            filesys.Filesys
@@ -124,16 +120,17 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 	}
 
 	return DoltDatabaseProvider{
-		dbLocations:        dbLocations,
-		databases:          dbs,
-		functions:          funcs,
-		externalProcedures: externalProcedures,
-		mu:                 &sync.RWMutex{},
-		fs:                 fs,
-		defaultBranch:      defaultBranch,
-		dbFactoryUrl:       dbFactoryUrl,
-		InitDatabaseHook:   ConfigureReplicationDatabaseHook,
-		isStandby:          new(bool),
+		dbLocations:            dbLocations,
+		databases:              dbs,
+		functions:              funcs,
+		externalProcedures:     externalProcedures,
+		mu:                     &sync.RWMutex{},
+		fs:                     fs,
+		defaultBranch:          defaultBranch,
+		dbFactoryUrl:           dbFactoryUrl,
+		InitDatabaseHook:       ConfigureReplicationDatabaseHook,
+		isStandby:              new(bool),
+		droppedDatabaseManager: newDroppedDatabaseManager(fs),
 	}, nil
 }
 
@@ -565,23 +562,6 @@ func (p DoltDatabaseProvider) cloneDatabaseFromRemote(
 	return dEnv, nil
 }
 
-// initializeDeletedDatabaseDirectory initializes the special directory Dolt uses to store dropped databases until
-// they are fully removed. If the directory is already created and set up correctly, then this method is a no-op.
-// If the directory doesn't exist yet, it will be created. If there are any problems initializing the directory, an
-// error is returned.
-func (p DoltDatabaseProvider) initializeDeletedDatabaseDirectory() error {
-	exists, isDir := p.fs.Exists(deletedDatabaseDirectoryName)
-	if exists && !isDir {
-		return fmt.Errorf("%s exists, but is not a directory", deletedDatabaseDirectoryName)
-	}
-
-	if exists {
-		return nil
-	}
-
-	return p.fs.MkDirs(deletedDatabaseDirectoryName)
-}
-
 // DropDatabase implements the sql.MutableDatabaseProvider interface
 func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
 	_, revision := dsess.SplitRevisionDbName(name)
@@ -589,13 +569,10 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 		return fmt.Errorf("unable to drop revision database: %s", name)
 	}
 
-	// get the case-sensitive name for case-sensitive file systems
-	// TODO: there are still cases (not server-first) where we rename databases because the directory name would need
-	//  quoting if used as a database name, and that breaks here. We either need the database name to match the directory
-	//  name in all cases, or else keep a mapping from database name to directory on disk.
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	// get the case-sensitive name for case-sensitive file systems
 	dbKey := formatDbMapKeyName(name)
 	db := p.databases[dbKey]
 
@@ -628,195 +605,38 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 		p.DropDatabaseHook(name)
 	}
 
-	rootDbLoc, err := p.fs.Abs("")
+	err = p.droppedDatabaseManager.DropDatabase(ctx, name, dropDbLoc)
 	if err != nil {
 		return err
 	}
 
-	isRootDatabase := false
-	//dirToDelete := ""
-	// if the database is in the directory itself, we remove '.dolt' directory rather than
-	// the whole directory itself because it can have other databases that are nested.
-	if rootDbLoc == dropDbLoc {
-		doltDirExists, _ := p.fs.Exists(dbfactory.DoltDir)
-		if !doltDirExists {
-			return sql.ErrDatabaseNotFound.New(db.Name())
-		}
-		dropDbLoc = filepath.Join(dropDbLoc, dbfactory.DoltDir)
-		isRootDatabase = true
-	} else {
-		// TODO: Do we really need the code in this block?
-		//       Seems like a few places are checking this.
-		exists, isDir := p.fs.Exists(dropDbLoc)
-		// Get the DB's directory
-		if !exists {
-			// engine should already protect against this
-			return sql.ErrDatabaseNotFound.New(db.Name())
-		} else if !isDir {
-			return fmt.Errorf("unexpected error: %s exists but is not a directory", dbKey)
-		}
-	}
-
-	if err = p.initializeDeletedDatabaseDirectory(); err != nil {
-		return fmt.Errorf("unable to drop database %s: %w", name, err.Error())
-	}
-
-	// Move the dropped database to the Dolt deleted database directory so it can be restored if needed
-	_, file := filepath.Split(dropDbLoc)
-	var destinationDirectory string
-	if isRootDatabase {
-		// NOTE: This won't work without first creating the new subdirectory
-		newSubdirectory := filepath.Join(deletedDatabaseDirectoryName, name)
-		// TODO: If newSubdirectory exists already... then we're in trouble! (need to handle that)
-		// TODO: Maybe we should have this talk to the DroppedDatabaseVault API instead?
-		if err := p.fs.MkDirs(newSubdirectory); err != nil {
-			return err
-		}
-		destinationDirectory = filepath.Join(newSubdirectory, file)
-	} else {
-		destinationDirectory = filepath.Join(deletedDatabaseDirectoryName, file)
-	}
-
-	// Add the final directory segment and convert all hyphens to underscores in the database directory name
-	dir, file := filepath.Split(destinationDirectory)
-	if strings.Contains(file, "-") {
-		destinationDirectory = filepath.Join(dir, strings.ReplaceAll(file, "-", "_"))
-	}
-
-	if err := p.prepareToMoveDroppedDatabase(ctx, destinationDirectory); err != nil {
-		return err
-	}
-	if err = p.fs.MoveDir(dropDbLoc, destinationDirectory); err != nil {
-		return err
-	}
-
-	// We not only have to delete tracking metadata for this database, but also for any derivative ones we've stored
-	// as a result of USE or connection strings
+	// We not only have to delete tracking metadata for this database, but also for any derivative
+	// ones we've stored as a result of USE or connection strings
 	derivativeNamePrefix := strings.ToLower(dbKey + dsess.DbRevisionDelimiter)
 	for dbName := range p.databases {
 		if strings.HasPrefix(strings.ToLower(dbName), derivativeNamePrefix) {
 			delete(p.databases, dbName)
 		}
 	}
-
 	delete(p.databases, dbKey)
 
 	return p.invalidateDbStateInAllSessions(ctx, name)
 }
 
-// TODO: Might be helpful to group some of these DoltDeletedDatabaseDirectory helper functions into their own
-//
-//	type. For example... maybe there's a new type for DroppedDatabaseVault that we can interact with?
-func (p DoltDatabaseProvider) prepareToMoveDroppedDatabase(_ *sql.Context, targetPath string) error {
-	if exists, _ := p.fs.Exists(targetPath); !exists {
-		// If there's nothing at the desired targetPath, we're all set
-		return nil
-	}
-
-	// If there is something already there, pick a new path to move it to
-	newPath := fmt.Sprintf("%s.backup.%d", targetPath, time.Now().Unix())
-	if exists, _ := p.fs.Exists(newPath); exists {
-		return fmt.Errorf("unable to move existing dropped database out of the way: "+
-			"tried to move it to %s", newPath)
-	}
-	if err := p.fs.MoveFile(targetPath, newPath); err != nil {
-		return fmt.Errorf("unable to move existing dropped database out of the way: %w", err)
-	}
-
-	return nil
-}
-
-func (p DoltDatabaseProvider) ListUndroppableDatabases(_ *sql.Context) ([]string, error) {
-	if err := p.initializeDeletedDatabaseDirectory(); err != nil {
-		return nil, fmt.Errorf("unable to list undroppable database: %w", err.Error())
-	}
-
-	databaseNames := make([]string, 0, 5)
-	callback := func(path string, size int64, isDir bool) (stop bool) {
-		_, lastPathSegment := filepath.Split(path)
-		// TODO: Is there a common util we use for this somewhere?
-		lastPathSegment = strings.ReplaceAll(lastPathSegment, "-", "_")
-		databaseNames = append(databaseNames, lastPathSegment)
-		return false
-	}
-
-	if err := p.fs.Iter(deletedDatabaseDirectoryName, false, callback); err != nil {
-		return nil, err
-	}
-
-	return databaseNames, nil
-}
-
-// validateUndropDatabase validates that the database |name| is available to be "undropped" and that no existing
-// database is already being managed that has the same (case-insensitive) name. If any problems are encountered,
-// an error is returned.
-func (p DoltDatabaseProvider) validateUndropDatabase(ctx *sql.Context, name string) (sourcePath, destinationPath, exactCaseName string, err error) {
-	// TODO: rename to ListDatabasesThatCanBeUndropped(ctx)?
-	availableDatabases, err := p.ListUndroppableDatabases(ctx)
-	if err != nil {
-		return "", "", "", err
-	}
-
-	found := false
-	exactCaseName = name
-	lowercaseName := strings.ToLower(name)
-	for _, s := range availableDatabases {
-		if lowercaseName == strings.ToLower(s) {
-			exactCaseName = s
-			found = true
-			break
-		}
-	}
-
-	// TODO: this error creation information could be extracted to a common function that dolt_undrop function could use
-	if !found {
-		extraInformation := "there are no databases currently available to be undropped"
-		if len(availableDatabases) > 0 {
-			extraInformation = fmt.Sprintf("available databases that can be undropped: %s", strings.Join(availableDatabases, ", "))
-		}
-		return "", "", "", fmt.Errorf("no database named '%s' found to undrop. %s", name, extraInformation)
-	}
-
-	// Check to see if the destination directory for restoring the database already exists (case insensitive match)
-	destinationPath, err = p.fs.Abs(exactCaseName)
-	if err != nil {
-		return "", "", "", err
-	}
-
-	sourcePath = filepath.Join(deletedDatabaseDirectoryName, exactCaseName)
-
-	// TODO: is this always a case insensitive check??? It seems like it must be since our test is working?
-	if exists, _ := p.fs.Exists(destinationPath); exists {
-		return "", "", "", fmt.Errorf("unable to undrop database '%s'; "+
-			"another database already exists with the same case-insensitive name", exactCaseName)
-	}
-
-	return sourcePath, destinationPath, exactCaseName, nil
+func (p DoltDatabaseProvider) ListUndroppableDatabases(ctx *sql.Context) ([]string, error) {
+	return p.droppedDatabaseManager.ListUndroppableDatabases(ctx)
 }
 
 func (p DoltDatabaseProvider) UndropDatabase(ctx *sql.Context, name string) (err error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	// TODO: not sure I like sourcePath and destinationPath being returned here, but seems like they're needed in this function
-	sourcePath, destinationPath, exactCaseName, err := p.validateUndropDatabase(ctx, name)
+	newFs, exactCaseName, err := p.droppedDatabaseManager.UndropDatabase(ctx, name)
 	if err != nil {
 		return err
 	}
 
-	// TODO: Need to account for database directory renaming (i.e. converting '-' to '_')
-
-	err = p.fs.MoveDir(sourcePath, destinationPath)
-	if err != nil {
-		return err
-	}
-
-	newFs, err := p.fs.WithWorkingDir(exactCaseName)
-	if err != nil {
-		return err
-	}
 	newEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
-
 	return p.registerNewDatabase(ctx, exactCaseName, newEnv)
 }
 
