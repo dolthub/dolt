@@ -502,22 +502,6 @@ func callStoredProcedure(sqlCtx *sql.Context, queryEngine cli.Queryist, args []s
 	return 0
 }
 
-func HandleVErrAndExitCode(verr errhand.VerboseError, usage cli.UsagePrinter) int {
-	if verr != nil {
-		if msg := verr.Verbose(); strings.TrimSpace(msg) != "" {
-			cli.PrintErrln(msg)
-		}
-
-		if verr.ShouldPrintUsage() {
-			usage()
-		}
-
-		return 1
-	}
-
-	return 0
-}
-
 // BuildVerrAndExit is a shortcut for building a verbose error and calling HandleVerrAndExitCode with it
 func BuildVerrAndExit(errMsg string, cause error) int {
 	return HandleVErrAndExitCode(errhand.BuildDError(errMsg).AddCause(cause).Build(), nil)
