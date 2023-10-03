@@ -28,10 +28,11 @@ import (
 )
 
 const (
-	testFilename  = "testfile.txt"
-	movedFilename = "movedfile.txt"
-	testString    = "this is a test"
-	testStringLen = int64(len(testString))
+	testFilename       = "testfile.txt"
+	testSubdirFilename = "anothertest.txt"
+	movedFilename      = "movedfile.txt"
+	testString         = "this is a test"
+	testStringLen      = int64(len(testString))
 )
 
 var filesysetmsToTest = map[string]Filesys{
@@ -41,6 +42,9 @@ var filesysetmsToTest = map[string]Filesys{
 
 func TestFilesystems(t *testing.T) {
 	dir := test.TestDir("filesys_test")
+	newLocation := test.TestDir("newLocation")
+	subdir := filepath.Join(dir, "subdir")
+	subdirFile := filepath.Join(subdir, testSubdirFilename)
 	fp := filepath.Join(dir, testFilename)
 	movedFilePath := filepath.Join(dir, movedFilename)
 
@@ -50,12 +54,17 @@ func TestFilesystems(t *testing.T) {
 			exists, _ := fs.Exists(dir)
 			require.False(t, exists)
 
-			// Test creating a directory
+			// Test creating directories
 			err := fs.MkDirs(dir)
 			require.NoError(t, err)
+			err = fs.MkDirs(subdir)
+			require.NoError(t, err)
 
-			// Test directory exists, and is in fact a directory
+			// Test directories exists, and are in fact directories
 			exists, isDir := fs.Exists(dir)
+			require.True(t, exists)
+			require.True(t, isDir)
+			exists, isDir = fs.Exists(subdir)
 			require.True(t, exists)
 			require.True(t, isDir)
 
@@ -110,6 +119,32 @@ func TestFilesystems(t *testing.T) {
 			wrc, err := fs.OpenForWrite(fp2, os.ModePerm)
 			require.NoError(t, err)
 			require.NoError(t, wrc.Close())
+
+			// Test moving a directory
+			err = fs.WriteFile(subdirFile, []byte("helloworld"))
+			require.NoError(t, err)
+			err = fs.MkDirs(newLocation)
+			require.NoError(t, err)
+			err = fs.MoveDir(subdir, filepath.Join(newLocation, "subdir"))
+			require.NoError(t, err)
+
+			// Assert that nothing exists as the old path
+			exists, isDir = fs.Exists(subdir)
+			require.False(t, exists)
+			require.False(t, isDir)
+
+			// Assert that our directory exists as the new path
+			exists, isDir = fs.Exists(filepath.Join(newLocation, "subdir"))
+			require.True(t, exists)
+			require.True(t, isDir)
+
+			// Assert that the file in the sub-directory has been moved, too
+			exists, isDir = fs.Exists(subdirFile)
+			require.False(t, exists)
+			require.False(t, isDir)
+			exists, isDir = fs.Exists(filepath.Join(newLocation, "subdir", testSubdirFilename))
+			require.True(t, exists)
+			require.False(t, isDir)
 
 			// Test writing/reading random data to tmp file
 			err = fs.WriteFile(fp2, data)

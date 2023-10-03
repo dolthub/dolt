@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"encoding/base32"
 	"errors"
+	"fmt"
 	"io"
 	"math/rand"
 	"os"
@@ -492,6 +493,74 @@ func (fs *InMemFS) Delete(path string, force bool) error {
 	return nil
 }
 
+func (fs *InMemFS) MoveDir(srcPath, destPath string) error {
+	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
+
+	srcPath = fs.getAbsPath(srcPath)
+	destPath = fs.getAbsPath(destPath)
+
+	destPathParent, _ := filepath.Split(destPath)
+	if exists, destIsDir := fs.exists(destPathParent); !exists || !destIsDir {
+		return ErrDirNotExist
+	}
+
+	obj, ok := fs.objs[srcPath]
+	if !ok {
+		return os.ErrNotExist
+	}
+
+	if !obj.isDir() {
+		return ErrIsFile
+	}
+
+	return fs.moveDirHelper(obj.(*memDir), destPath)
+}
+
+func (fs *InMemFS) moveDirHelper(dir *memDir, destPath string) error {
+	for _, v := range dir.objs {
+		switch newone := v.(type) {
+		case *memDir:
+			parentDir, _ := filepath.Split(destPath)
+			destParentDir := (fs.objs[parentDir]).(*memDir)
+
+			destObj := &memDir{
+				absPath:   destPath,
+				objs:      nil,
+				parentDir: destParentDir,
+				time:      InMemNowFunc(),
+			}
+			fs.objs[destPath] = destObj
+
+			destParentDir.objs[destPath] = destObj
+			destParentDir.time = InMemNowFunc()
+
+			_, file := filepath.Split(newone.absPath)
+			err := fs.moveDirHelper(newone, filepath.Join(destPath, file))
+			if err != nil {
+				return err
+			}
+
+			dir.time = InMemNowFunc()
+			delete(fs.objs, newone.absPath)
+			delete(dir.objs, newone.absPath)
+		case *memFile:
+			_, file := filepath.Split(newone.absPath)
+			newDestPath := filepath.Join(destPath, file)
+			err := fs.moveFileHelper(newone, newDestPath)
+			if err != nil {
+				return err
+			}
+			delete(dir.objs, newone.absPath)
+		default:
+			return fmt.Errorf("unexpected type of memory object: %T", v)
+		}
+	}
+
+	delete(fs.objs, dir.absPath)
+	return nil
+}
+
 // MoveFile will move a file from the srcPath in the filesystem to the destPath
 func (fs *InMemFS) MoveFile(srcPath, destPath string) error {
 	fs.rwLock.Lock()
@@ -509,36 +578,36 @@ func (fs *InMemFS) MoveFile(srcPath, destPath string) error {
 			return ErrIsDir
 		}
 
-		destDir := filepath.Dir(destPath)
-		destParentDir, err := fs.mkDirs(destDir)
-
-		if err != nil {
-			return err
-		}
-
-		now := InMemNowFunc()
-		destObj := &memFile{destPath, obj.(*memFile).data, destParentDir, now}
-
-		fs.objs[destPath] = destObj
-		delete(fs.objs, srcPath)
-
-		parentDir := obj.parent()
-		if parentDir != nil {
-			parentDir.time = now
-			delete(parentDir.objs, srcPath)
-		}
-
-		destParentDir.objs[destPath] = destObj
-		destParentDir.time = now
-
-		return nil
+		return fs.moveFileHelper(obj.(*memFile), destPath)
 	}
 
 	return os.ErrNotExist
 }
 
-func (fs InMemFS) MoveDir(srcPath, destPath string) error {
-	panic("not implemented!")
+func (fs *InMemFS) moveFileHelper(obj *memFile, destPath string) error {
+	destDir := filepath.Dir(destPath)
+	destParentDir, err := fs.mkDirs(destDir)
+	if err != nil {
+		return err
+	}
+
+	now := InMemNowFunc()
+	destObj := &memFile{destPath, obj.data, destParentDir, now}
+
+	fs.objs[destPath] = destObj
+
+	delete(fs.objs, obj.absPath)
+
+	parentDir := obj.parent()
+	if parentDir != nil {
+		parentDir.time = now
+		delete(parentDir.objs, obj.absPath)
+	}
+
+	destParentDir.objs[destPath] = destObj
+	destParentDir.time = now
+
+	return nil
 }
 
 func (fs *InMemFS) CopyFile(srcPath, destPath string) error {
