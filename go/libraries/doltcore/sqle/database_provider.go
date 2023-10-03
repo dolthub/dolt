@@ -624,6 +624,9 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 }
 
 func (p DoltDatabaseProvider) ListUndroppableDatabases(ctx *sql.Context) ([]string, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	return p.droppedDatabaseManager.ListUndroppableDatabases(ctx)
 }
 
@@ -644,6 +647,13 @@ func (p DoltDatabaseProvider) UndropDatabase(ctx *sql.Context, name string) (err
 // function is responsible for instantiating the new Database instance and updating the tracking metadata
 // in this provider. If any problems are encountered while registering the new database, an error is returned.
 func (p DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string, newEnv *env.DoltEnv) (err error) {
+	// This method MUST be called with the provider's mutex locked. TryLock allows us to validate that the
+	// mutex is locked (without actually locking it and causing a deadlock) and to error out if we detect
+	// that the mutex is NOT locked.
+	if p.mu.TryLock() {
+		return fmt.Errorf("unable to register new database without database provider mutex being locked")
+	}
+
 	// If we're running in a sql-server context, ensure the new database is locked so that it can't
 	// be edited from the CLI. We can't rely on looking for an existing lock file, since this could
 	// be the first db creation if sql-server was started from a bare directory.
@@ -679,9 +689,6 @@ func (p DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string,
 		return err
 	}
 
-	// TODO: accessing p.databases requires locking!!!
-	//       But right now we're just assuming this function is called from another function
-	//       that has grabbed the right lock, but that's eventually going to cause a problem.
 	formattedName := formatDbMapKeyName(db.Name())
 	p.databases[formattedName] = db
 	p.dbLocations[formattedName] = newEnv.FS

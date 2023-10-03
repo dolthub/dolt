@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/utils/errors"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
@@ -182,16 +183,12 @@ func (dd *droppedDatabases) validateUndropDatabase(ctx *sql.Context, name string
 		}
 	}
 
-	// TODO: this error creation information could be extracted to a common function that dolt_undrop function could use
 	if !found {
-		extraInformation := "there are no databases currently available to be undropped"
-		if len(availableDatabases) > 0 {
-			extraInformation = fmt.Sprintf("available databases that can be undropped: %s", strings.Join(availableDatabases, ", "))
-		}
-		return "", "", "", fmt.Errorf("no database named '%s' found to undrop. %s", name, extraInformation)
+		return "", "", "", fmt.Errorf("no database named '%s' found to undrop. %s",
+			name, errors.CreateUndropErrorMessage(availableDatabases))
 	}
 
-	// Check to see if the destination directory for restoring the database already exists (case insensitive match)
+	// Check to see if the destination directory for restoring the database already exists (case-insensitive match)
 	destinationPath, err = dd.fs.Abs(exactCaseName)
 	if err != nil {
 		return "", "", "", err
@@ -199,8 +196,15 @@ func (dd *droppedDatabases) validateUndropDatabase(ctx *sql.Context, name string
 
 	sourcePath = filepath.Join(deletedDatabaseDirectoryName, exactCaseName)
 
-	// TODO: is this always a case insensitive check??? It seems like it must be since our test is working?
-	if exists, _ := dd.fs.Exists(destinationPath); exists {
+	found = false
+	dd.fs.Iter(filepath.Dir(destinationPath), false, func(path string, size int64, isDir bool) (stop bool) {
+		if strings.ToLower(filepath.Base(path)) == strings.ToLower(filepath.Base(destinationPath)) {
+			found = true
+		}
+		return found
+	})
+
+	if found {
 		return "", "", "", fmt.Errorf("unable to undrop database '%s'; "+
 			"another database already exists with the same case-insensitive name", exactCaseName)
 	}

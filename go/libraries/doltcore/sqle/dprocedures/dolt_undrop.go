@@ -16,11 +16,11 @@ package dprocedures
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/errors"
 )
 
 // doltClean is the stored procedure version for the CLI command `dolt clean`.
@@ -28,20 +28,16 @@ func doltUndrop(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	provider := doltSession.Provider()
 
+	// TODO: What are the right permissions for dolt_undrop?
+	//       the same as drop? or create db?
+
 	switch len(args) {
 	case 0:
-		// TODO: Are there any permission issues for undrop? probably the same as drop?
-		undroppableDatabases, err := provider.ListUndroppableDatabases(ctx)
+		availableDatabases, err := provider.ListUndroppableDatabases(ctx)
 		if err != nil {
 			return nil, err
 		}
-
-		extraInformation := "there are no databases that can currently be undropped."
-		if len(undroppableDatabases) > 0 {
-			extraInformation = fmt.Sprintf("the following dropped databases are availble to be undropped: %s",
-				strings.Join(undroppableDatabases, ", "))
-		}
-		return nil, fmt.Errorf("no database name specified. %s", extraInformation)
+		return nil, fmt.Errorf("no database name specified. %s", errors.CreateUndropErrorMessage(availableDatabases))
 
 	case 1:
 		if err := provider.UndropDatabase(ctx, args[0]); err != nil {

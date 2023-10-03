@@ -21,7 +21,7 @@ teardown() {
   run dolt sql -q "CALL dolt_undrop();"
   [ $status -eq 1 ]
   [[ $output =~ "no database name specified." ]] || false
-  [[ $output =~ "there are no databases that can currently be undropped" ]] || false
+  [[ $output =~ "there are no databases currently available to be undropped" ]] || false
 
   # When called without an invalid database name, dolt_undrop() returns
   # an error that includes the database names that can be undropped.
