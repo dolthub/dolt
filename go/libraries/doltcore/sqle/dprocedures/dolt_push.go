@@ -49,6 +49,9 @@ var doltPushSchema = []*sql.Column{
 func doltPush(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, message, err := doDoltPush(ctx, args)
 	if err != nil {
+		if err == doltdb.ErrUpToDate {
+			return rowToIter(int64(cmdSuccess)), doltdb.ErrUpToDate
+		}
 		return nil, err
 	}
 	return rowToIter(int64(res), message), nil

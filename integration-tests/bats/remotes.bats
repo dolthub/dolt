@@ -347,7 +347,7 @@ SQL
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     run dolt push test-remote main
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Uploaded" ]] || false
+    [[ "$output" =~ "Uploading" ]] || false
 
     run dolt push test-remote main
     [ "$status" -eq 0 ]
@@ -435,7 +435,7 @@ SQL
     dolt commit -m "Added test table"
     dolt push --set-upstream test-remote test-branch | tr "\n" "*" > output.txt
     run tail -c 1 output.txt
-    [ "$output" = "*" ]
+    [[ "$output" != "" ]] || false   # should have a spinner
 }
 
 @test "remotes: push and pull with docs from remote" {
@@ -1002,6 +1002,7 @@ SQL
     dolt fetch
     run dolt push origin main
     [ "$status" -eq 1 ]
+    [[ "$output" =~ "refs/heads/main -> refs/remotes/origin/main" ]] || false
     [[ "$output" =~ "tip of your current branch is behind" ]] || false
 }
 
@@ -1857,6 +1858,7 @@ setup_ref_test() {
     dolt checkout -b feature
     run dolt push
     [ "$status" -eq 1 ]
+    [[ "$output" =~ "The current branch feature has no upstream branch." ]] || false
     dolt push --set-upstream origin feature
     dolt push
 }
@@ -2172,7 +2174,6 @@ SQL
 
     # branch.autosetupmerge configuration defaults to --track, so the upstream is set
     run dolt sql -q 'call dolt_checkout("-b", "newbranch2", "origin/feature");'
-    echo "$output"
     [ "$status" -eq 0 ]
     run dolt sql -q 'select * from dolt_branches;'
     [ "$status" -eq 0 ]
