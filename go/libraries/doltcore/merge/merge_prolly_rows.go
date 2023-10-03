@@ -70,7 +70,7 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 		return nil, nil, err
 	}
 	leftRows := durable.ProllyMapFromIndex(lr)
-	valueMerger := newValueMerger(mergedSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool())
+	valueMerger := newValueMerger(mergedSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool(), tm.ns)
 	leftMapping := valueMerger.leftMapping
 
 	// We need a sql.Context to apply column default values in merges; if we don't have one already,
@@ -89,7 +89,13 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 
 		// After we migrate the data on the left-side to the new, merged schema, we reset
 		// the left mapping to an identity mapping, since it's a direct mapping now.
-		valueMerger.leftMapping = val.NewIdentityOrdinalMapping(len(valueMerger.leftMapping))
+		// However, columns that did not exist on the left schema shouldn't be updated, because they
+		// still don't exist on the migrated data.
+		for i, col := range mergedSch.GetNonPKCols().GetColumns() {
+			if findNonPKColumnMappingByTagOrName(tm.leftSch, col) != -1 {
+				valueMerger.leftMapping[i] = i
+			}
+		}
 	}
 
 	// After we've migrated the existing data to the new schema, it's safe for us to update the schema on the table
@@ -1368,23 +1374,29 @@ func mergeTableArtifacts(ctx context.Context, tm *TableMerger, mergeTbl *doltdb.
 // a three-way cell edit (tree.DiffOpDivergentModifyResolved).
 type valueMerger struct {
 	numCols                                int
-	vD                                     val.TupleDesc
+	baseVD, rightVD, resultVD              val.TupleDesc
+	resultSchema                           schema.Schema
 	leftMapping, rightMapping, baseMapping val.OrdinalMapping
 	syncPool                               pool.BuffPool
 	keyless                                bool
+	ns                                     tree.NodeStore
 }
 
-func newValueMerger(merged, leftSch, rightSch, baseSch schema.Schema, syncPool pool.BuffPool) *valueMerger {
+func newValueMerger(merged, leftSch, rightSch, baseSch schema.Schema, syncPool pool.BuffPool, ns tree.NodeStore) *valueMerger {
 	leftMapping, rightMapping, baseMapping := generateSchemaMappings(merged, leftSch, rightSch, baseSch)
 
 	return &valueMerger{
 		numCols:      merged.GetNonPKCols().Size(),
-		vD:           merged.GetValueDescriptor(),
+		baseVD:       baseSch.GetValueDescriptor(),
+		rightVD:      rightSch.GetValueDescriptor(),
+		resultVD:     merged.GetValueDescriptor(),
+		resultSchema: merged,
 		leftMapping:  leftMapping,
 		rightMapping: rightMapping,
 		baseMapping:  baseMapping,
 		syncPool:     syncPool,
 		keyless:      schema.IsKeyless(merged),
+		ns:           ns,
 	}
 }
 
@@ -1499,17 +1511,17 @@ func migrateDataToMergedSchema(ctx *sql.Context, tm *TableMerger, vm *valueMerge
 // tuples. It returns the merged cell value tuple and a bool indicating if a
 // conflict occurred. tryMerge should only be called if left and right produce
 // non-identical diffs against base.
-func (m *valueMerger) tryMerge(left, right, base val.Tuple) (val.Tuple, bool) {
+func (m *valueMerger) tryMerge(ctx context.Context, left, right, base val.Tuple) (val.Tuple, bool, error) {
 	// If we're merging a keyless table and the keys match, but the values are different,
 	// that means that the row data is the same, but the cardinality has changed, and if the
 	// cardinality has changed in different ways on each merge side, we can't auto resolve.
 	if m.keyless {
-		return nil, false
+		return nil, false, nil
 	}
 
 	if base != nil && (left == nil) != (right == nil) {
 		// One row deleted, the other modified
-		return nil, false
+		return nil, false, nil
 	}
 
 	// Because we have non-identical diffs, left and right are guaranteed to be
@@ -1520,52 +1532,142 @@ func (m *valueMerger) tryMerge(left, right, base val.Tuple) (val.Tuple, bool) {
 
 	mergedValues := make([][]byte, m.numCols)
 	for i := 0; i < m.numCols; i++ {
-		v, isConflict := m.processColumn(i, left, right, base)
+		v, isConflict, err := m.processColumn(ctx, i, left, right, base)
+		if err != nil {
+			return nil, false, err
+		}
 		if isConflict {
-			return nil, false
+			return nil, false, nil
 		}
 		mergedValues[i] = v
 	}
 
-	return val.NewTuple(m.syncPool, mergedValues...), true
+	return val.NewTuple(m.syncPool, mergedValues...), true, nil
 }
 
 // processColumn returns the merged value of column |i| of the merged schema,
 // based on the |left|, |right|, and |base| schema.
-func (m *valueMerger) processColumn(i int, left, right, base val.Tuple) ([]byte, bool) {
+func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, base val.Tuple) (result []byte, conflict bool, err error) {
 	// missing columns are coerced into NULL column values
-	var leftCol []byte
-	if l := m.leftMapping[i]; l != -1 {
-		leftCol = left.GetField(l)
+
+	var baseCol []byte
+	var baseColIdx = -1
+	var baseColExists = false
+	if base != nil {
+		baseCol, baseColIdx, baseColExists = getColumn(&base, &m.baseMapping, i)
 	}
-	var rightCol []byte
-	if r := m.rightMapping[i]; r != -1 {
-		rightCol = right.GetField(r)
+	leftCol, leftColIdx, leftColExists := getColumn(&left, &m.leftMapping, i)
+	rightCol, rightColIdx, rightColExists := getColumn(&right, &m.rightMapping, i)
+	resultType := m.resultVD.Types[i]
+
+	// We previously asserted that left and right are not nil.
+	//But base can be nil in the event of convergent inserts.
+	if base == nil || !baseColExists {
+		// There are two possible cases:
+		// - The base row doesn't exist, or
+		// - The column doesn't exist in the base row
+		// Regardless, both left and right are inserts, or one is an insert and the other doesn't exist.
+
+		if !rightColExists {
+			return leftCol, false, nil
+		}
+
+		rightCol, err = convert(ctx, m.rightVD, m.resultVD, m.resultSchema, rightColIdx, i, right, rightCol, m.ns)
+		if err != nil {
+			return nil, false, err
+		}
+
+		if !leftColExists {
+			return rightCol, false, nil
+		}
+
+		if m.resultVD.Comparator().CompareValues(i, leftCol, rightCol, resultType) == 0 {
+			// columns are equal, return either.
+			return leftCol, false, nil
+		}
+		// conflicting inserts
+		return nil, true, nil
 	}
 
-	if m.vD.Comparator().CompareValues(i, leftCol, rightCol, m.vD.Types[i]) == 0 {
-		return leftCol, false
+	// We can now assume that both left are right contain byte-level changes to an existing column.
+	// But we need to know if those byte-level changes represent a modification to the underlying value,
+	// and whether those changes represent the *same* modification, otherwise there's a conflict.
+
+	// We can't just look at the bytes to determine this, because if a cell's byte representation changed,
+	// but only because of a schema change, we shouldn't consider that a conflict.
+	// Conversely, if there was a schema change on only one side, we shouldn't consider the cells equal
+	// even if they have the same bytes.
+
+	// Thus, we must convert all cells to the type in the result schema before comparing them.
+
+	if baseCol != nil {
+		baseCol, err = convert(ctx, m.baseVD, m.resultVD, m.resultSchema, baseColIdx, i, base, baseCol, m.ns)
+		if err != nil {
+			return nil, false, err
+		}
 	}
 
-	if base == nil {
-		// Conflicting insert
-		return nil, true
+	var leftModified, rightModified bool
+
+	if leftColIdx == -1 && rightColIdx == -1 {
+		// Both branches are implicitly NULL
+		return nil, false, err
 	}
 
-	var baseVal []byte
-	if b := m.baseMapping[i]; b != -1 {
-		baseVal = base.GetField(b)
+	if rightColIdx == -1 {
+		// The right branch is implicitly NULL
+		rightModified = baseCol != nil
+	} else {
+		// Attempt to convert the right column to match the result schema, then compare it to the base.
+		rightCol, err = convert(ctx, m.rightVD, m.resultVD, m.resultSchema, rightColIdx, i, right, rightCol, m.ns)
+		if err != nil {
+			return nil, true, nil
+		}
+		rightModified = m.resultVD.Comparator().CompareValues(i, rightCol, baseCol, resultType) != 0
 	}
 
-	leftModified := m.vD.Comparator().CompareValues(i, leftCol, baseVal, m.vD.Types[i]) != 0
-	rightModified := m.vD.Comparator().CompareValues(i, rightCol, baseVal, m.vD.Types[i]) != 0
+	// The left value was previously converted in `migrateDataToMergedSchema`, so we don't need to convert it here.
+	if m.resultVD.Comparator().CompareValues(i, leftCol, rightCol, resultType) == 0 {
+		// columns are equal, return either.
+		return leftCol, false, nil
+	}
+
+	leftModified = m.resultVD.Comparator().CompareValues(i, leftCol, baseCol, resultType) != 0
 
 	switch {
 	case leftModified && rightModified:
-		return nil, true
+		// concurrent modification
+		return nil, true, nil
 	case leftModified:
-		return leftCol, false
+		return leftCol, false, nil
 	default:
-		return rightCol, false
+		return rightCol, false, nil
 	}
+}
+
+func getColumn(tuple *val.Tuple, mapping *val.OrdinalMapping, idx int) (col []byte, colIndex int, exists bool) {
+	colIdx := (*mapping)[idx]
+	if colIdx == -1 {
+		return nil, -1, false
+	}
+	return tuple.GetField(colIdx), colIdx, true
+}
+
+// convert takes the `i`th column in the provided tuple and converts it to the type specified in the provided schema.
+// returns the new representation, and a bool indicating success.
+func convert(ctx context.Context, fromDesc, toDesc val.TupleDesc, toSchema schema.Schema, fromIndex, toIndex int, tuple val.Tuple, originalValue []byte, ns tree.NodeStore) ([]byte, error) {
+	if fromDesc.Types[fromIndex] == toDesc.Types[toIndex] {
+		// No conversion is necessary here.
+		return originalValue, nil
+	}
+	parsedCell, err := index.GetField(ctx, fromDesc, fromIndex, tuple, ns)
+	if err != nil {
+		return nil, err
+	}
+	sqlType := toSchema.GetNonPKCols().GetByIndex(toIndex).TypeInfo.ToSqlType()
+	convertedCell, _, err := sqlType.Convert(parsedCell)
+	if err != nil {
+		return nil, err
+	}
+	return index.Serialize(ctx, ns, toDesc.Types[toIndex], convertedCell)
 }
