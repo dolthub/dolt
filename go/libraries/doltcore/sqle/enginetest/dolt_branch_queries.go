@@ -469,7 +469,7 @@ var DdlBranchTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "alter table `mydb/b1`.t1 add constraint chk1 check (b < 4)",
-				Expected: []sql.Row{},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query: "show create table `mydb/b1`.t1",
