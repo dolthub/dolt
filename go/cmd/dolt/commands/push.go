@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -141,17 +142,14 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			if ctx.Err() != nil {
 				switch ctx.Err() {
 				case context.DeadlineExceeded:
-					cli.Println("timeout exceeded")
-					return 1
+					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("timeout exceeded")), usage)
 				case context.Canceled:
-					cli.Println("push cancelled by force")
-					return 1
+					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("push cancelled by force")), usage)
 				default:
-					cli.Println("error cancelling context: ", ctx.Err())
-					return 1
+					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("error cancelling context: "+ctx.Err().Error())), usage)
 				}
 			}
-			return 0
+			return HandleVErrAndExitCode(nil, usage)
 		case <-time.After(time.Millisecond * 50):
 			cli.DeleteAndPrint(len(" Uploading...")+1, spinner.next()+" Uploading...")
 		}
