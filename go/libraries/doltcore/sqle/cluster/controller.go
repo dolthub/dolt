@@ -106,7 +106,7 @@ type Controller struct {
 	branchControlFilesys    filesys.Filesys
 	bcReplication           *branchControlReplication
 
-	dropDatabase             func(context.Context, string) error
+	dropDatabase             func(*sql.Context, string) error
 	outstandingDropDatabases map[string]*databaseDropReplication
 	remoteSrvDBCache         remotesrv.DBCache
 }
@@ -329,7 +329,7 @@ func (c *Controller) RegisterStoredProcedures(store procedurestore) {
 
 // Incoming drop database replication requests need a way to drop a database in
 // the sqle.DatabaseProvider. This is our callback for that functionality.
-func (c *Controller) SetDropDatabase(dropDatabase func(context.Context, string) error) {
+func (c *Controller) SetDropDatabase(dropDatabase func(*sql.Context, string) error) {
 	if c == nil {
 		return
 	}
@@ -744,8 +744,9 @@ func (c *Controller) HookBranchControlPersistence(controller *branch_control.Con
 	}
 }
 
-func (c *Controller) RegisterGrpcServices(srv *grpc.Server) {
+func (c *Controller) RegisterGrpcServices(ctxFactory func(context.Context) (*sql.Context, error), srv *grpc.Server) {
 	replicationapi.RegisterReplicationServiceServer(srv, &replicationServiceServer{
+		ctxFactory:           ctxFactory,
 		mysqlDb:              c.mysqlDb,
 		branchControl:        c.branchControlController,
 		branchControlFilesys: c.branchControlFilesys,

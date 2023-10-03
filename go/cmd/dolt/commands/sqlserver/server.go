@@ -337,7 +337,7 @@ func Serve(
 			startError = err
 			return
 		}
-		clusterController.RegisterGrpcServices(clusterRemoteSrv.GrpcServer())
+		clusterController.RegisterGrpcServices(sqlEngine.NewDefaultContext, clusterRemoteSrv.GrpcServer())
 
 		listeners, err := clusterRemoteSrv.Listeners()
 		if err != nil {

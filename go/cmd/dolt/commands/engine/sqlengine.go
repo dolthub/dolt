@@ -138,16 +138,8 @@ func NewSqlEngine(
 
 	sqlEngine := &SqlEngine{}
 
-	var dropDatabase = func(ctx context.Context, name string) error {
-		sqlCtx, err := sqlEngine.NewDefaultContext(ctx)
-		if err != nil {
-			return err
-		}
-		return pro.DropDatabase(sqlCtx, name)
-	}
-
-	config.ClusterController.SetDropDatabase(dropDatabase)
 	pro.DropDatabaseHook = config.ClusterController.DropDatabaseHook()
+	config.ClusterController.SetDropDatabase(pro.DropDatabase)
 
 	// Create the engine
 	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{
