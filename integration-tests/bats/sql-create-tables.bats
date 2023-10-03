@@ -377,7 +377,7 @@ CREATE TABLE test1 (
 );
 SQL
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "same name" ]] || false
+    [[ "$output" =~ "duplicate column name" ]] || false
 
     run dolt sql <<SQL
 CREATE TABLE test1 (
@@ -386,7 +386,7 @@ CREATE TABLE test1 (
 );
 SQL
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "same name" ]] || false
+    [[ "$output" =~ "duplicate column name" ]] || false
 
     dolt sql <<SQL
 CREATE TABLE test1 (

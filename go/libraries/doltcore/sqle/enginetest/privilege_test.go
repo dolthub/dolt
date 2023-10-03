@@ -720,7 +720,7 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "alter table test add constraint chk1 CHECK (a < 10);",
-				Expected: []sql.Row{},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				User:  "tester",
@@ -775,7 +775,7 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "alter table test add constraint chk1 CHECK (a < 10);",
-				Expected: []sql.Row{},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				User:     "root",
