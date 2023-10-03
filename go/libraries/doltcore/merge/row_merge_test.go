@@ -222,7 +222,8 @@ func TestRowMerge(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			v := newValueMerger(test.mergedSch, test.leftSch, test.rightSch, test.baseSch, syncPool, nil)
 
-			merged, ok := v.tryMerge(ctx, test.row, test.mergeRow, test.ancRow)
+			merged, ok, err := v.tryMerge(ctx, test.row, test.mergeRow, test.ancRow)
+			assert.NoError(t, err)
 			assert.Equal(t, test.expectConflict, !ok)
 			vD := test.mergedSch.GetValueDescriptor()
 			assert.Equal(t, vD.Format(test.expectedResult), vD.Format(merged))
