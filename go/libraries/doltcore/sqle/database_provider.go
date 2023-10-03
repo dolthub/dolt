@@ -638,12 +638,6 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 		return err
 	}
 
-	if p.DropDatabaseHook != nil {
-		// For symmetry with InitDatabaseHook and the names we see in
-		// MultiEnv initialization, we use `name` here, not `dbKey`.
-		p.DropDatabaseHook(name)
-	}
-
 	rootDbLoc, err := p.fs.Abs("")
 	if err != nil {
 		return err
@@ -672,6 +666,12 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	err = p.fs.Delete(dirToDelete, true)
 	if err != nil {
 		return err
+	}
+
+	if p.DropDatabaseHook != nil {
+		// For symmetry with InitDatabaseHook and the names we see in
+		// MultiEnv initialization, we use `name` here, not `dbKey`.
+		p.DropDatabaseHook(name)
 	}
 
 	// We not only have to delete this database, but any derivative ones that we've stored as a result of USE or

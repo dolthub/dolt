@@ -286,7 +286,7 @@ func writeTableFile(ctx context.Context, logger *logrus.Entry, dbCache DBCache, 
 		return logger, http.StatusBadRequest
 	}
 
-	cs, err := dbCache.Get(path, types.Format_Default.VersionString())
+	cs, err := dbCache.Get(ctx, path, types.Format_Default.VersionString())
 	if err != nil {
 		logger = logger.WithField("status", http.StatusInternalServerError)
 		logger.WithError(err).Error("failed to get repository")

@@ -64,6 +64,15 @@ const RoleDetectedBrokenConfig Role = "detected_broken_config"
 
 const PersistentConfigPrefix = "sqlserver.cluster"
 
+// State for any ongoing DROP DATABASE replication attempts we have
+// outstanding. When we create a database, we cancel all on going DROP DATABASE
+// replication attempts.
+type databaseDropReplication struct {
+	ctx    context.Context
+	cancel func()
+	wg     *sync.WaitGroup
+}
+
 type Controller struct {
 	cfg           Config
 	persistentCfg config.ReadWriteConfig
@@ -97,7 +106,9 @@ type Controller struct {
 	branchControlFilesys    filesys.Filesys
 	bcReplication           *branchControlReplication
 
-	dropDatabase func(context.Context, string) error
+	dropDatabase             func(context.Context, string) error
+	outstandingDropDatabases map[string]*databaseDropReplication
+	remoteSrvDBCache         remotesrv.DBCache
 }
 
 type sqlvars interface {
@@ -189,6 +200,8 @@ func NewController(lgr *logrus.Logger, cfg Config, pCfg config.ReadWriteConfig) 
 		}
 		ret.mysqlDbReplicas[i].cond = sync.NewCond(&ret.mysqlDbReplicas[i].mu)
 	}
+
+	ret.outstandingDropDatabases = make(map[string]*databaseDropReplication)
 
 	return ret, nil
 }
@@ -359,19 +372,42 @@ func (c *Controller) dropDatabaseHook(dbname string) {
 
 	// If we are the primary, we will replicate the drop to our standby replicas.
 
+	ctx, cancel := context.WithCancel(context.Background())
+	wg := &sync.WaitGroup{}
+	wg.Add(len(c.replicationClients))
+	state := &databaseDropReplication{
+		ctx:    ctx,
+		cancel: cancel,
+		wg:     wg,
+	}
+	c.outstandingDropDatabases[dbname] = state
+
 	for _, client := range c.replicationClients {
 		client := client
-		go c.replicateDropDatabase(client, dbname)
+		go c.replicateDropDatabase(state, client, dbname)
 	}
 }
 
-func (c *Controller) replicateDropDatabase(client *replicationServiceClient, dbname string) {
+func (c *Controller) cancelDropDatabaseReplication(dbname string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if s := c.outstandingDropDatabases[dbname]; s != nil {
+		s.cancel()
+		s.wg.Wait()
+	}
+}
+
+func (c *Controller) replicateDropDatabase(s *databaseDropReplication, client *replicationServiceClient, dbname string) {
+	defer s.wg.Done()
 	bo := backoff.NewExponentialBackOff()
 	bo.InitialInterval = time.Millisecond
 	bo.MaxInterval = time.Minute
 	bo.MaxElapsedTime = 0
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		if s.ctx.Err() != nil {
+			return
+		}
+		ctx, cancel := context.WithTimeout(s.ctx, 15*time.Second)
 		_, err := client.client.DropDatabase(ctx, &replicationapi.DropDatabaseRequest{
 			Name: dbname,
 		})
@@ -385,9 +421,16 @@ func (c *Controller) replicateDropDatabase(client *replicationServiceClient, dbn
 			return
 		}
 		c.lgr.Warnf("failed to replicate drop of [%s] to %s: %v", dbname, client.remote, err)
+		if s.ctx.Err() != nil {
+			return
+		}
 		d := bo.NextBackOff()
 		c.lgr.Tracef("sleeping %v before next drop attempt for database [%s] at %s", d, dbname, client.remote)
-		time.Sleep(d)
+		select {
+		case <-time.After(d):
+		case <-s.ctx.Done():
+			return
+		}
 	}
 }
 
@@ -633,19 +676,26 @@ func (c *Controller) recordSuccessfulRemoteSrvCommit(name string) {
 	}
 }
 
-func (c *Controller) RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.ServerArgs) remotesrv.ServerArgs {
+func (c *Controller) RemoteSrvServerArgs(ctxFactory func(context.Context) (*sql.Context, error), args remotesrv.ServerArgs) (remotesrv.ServerArgs, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	listenaddr := c.RemoteSrvListenAddr()
 	args.HttpListenAddr = listenaddr
 	args.GrpcListenAddr = listenaddr
 	args.Options = c.ServerOptions()
-	args = sqle.RemoteSrvServerArgs(ctx, args)
+	var err error
+	args, err = sqle.RemoteSrvServerArgs(ctxFactory, args)
+	if err != nil {
+		return remotesrv.ServerArgs{}, err
+	}
 	args.DBCache = remotesrvStoreCache{args.DBCache, c}
+	c.remoteSrvDBCache = args.DBCache
 
 	keyID := creds.PubKeyToKID(c.pub)
 	keyIDStr := creds.B32CredsEncoding.EncodeToString(keyID)
 	args.HttpInterceptor = JWKSHandlerInterceptor(keyIDStr, c.pub)
 
-	return args
+	return args, nil
 }
 
 func (c *Controller) HookMySQLDbPersister(persister MySQLDbPersister, mysqlDb *mysql_db.MySQLDb) MySQLDbPersister {
