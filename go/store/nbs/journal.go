@@ -458,7 +458,6 @@ func newJournalManifest(ctx context.Context, dir string) (m *journalManifest, er
 		}
 	}()
 
-
 	var ok bool
 	ok, _, err = m.ParseIfExists(ctx, &Stats{}, nil)
 	if err != nil {
