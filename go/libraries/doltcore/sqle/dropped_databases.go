@@ -171,17 +171,7 @@ func (dd *droppedDatabases) validateUndropDatabase(ctx *sql.Context, name string
 		return "", "", "", err
 	}
 
-	found := false
-	exactCaseName = name
-	lowercaseName := strings.ToLower(name)
-	for _, s := range availableDatabases {
-		if lowercaseName == strings.ToLower(s) {
-			exactCaseName = s
-			found = true
-			break
-		}
-	}
-
+	found, exactCaseName := hasCaseInsensitiveMatch(availableDatabases, name)
 	if !found {
 		return "", "", "", fmt.Errorf("no database named '%s' found to undrop. %s",
 			name, errors.CreateUndropErrorMessage(availableDatabases))
@@ -193,22 +183,45 @@ func (dd *droppedDatabases) validateUndropDatabase(ctx *sql.Context, name string
 		return "", "", "", err
 	}
 
-	sourcePath = filepath.Join(deletedDatabaseDirectoryName, exactCaseName)
-
-	found = false
-	dd.fs.Iter(filepath.Dir(destinationPath), false, func(path string, size int64, isDir bool) (stop bool) {
-		if strings.ToLower(filepath.Base(path)) == strings.ToLower(filepath.Base(destinationPath)) {
-			found = true
-		}
-		return found
-	})
-
-	if found {
+	if hasCaseInsensitivePath(dd.fs, destinationPath) {
 		return "", "", "", fmt.Errorf("unable to undrop database '%s'; "+
 			"another database already exists with the same case-insensitive name", exactCaseName)
 	}
 
+	sourcePath = filepath.Join(deletedDatabaseDirectoryName, exactCaseName)
 	return sourcePath, destinationPath, exactCaseName, nil
+}
+
+// hasCaseInsensitivePath returns true if the specified |path| already exists on the filesystem |fs|, with a
+// case-insensitive match on the final component of the path. Note that only the final component of the path is
+// checked in a case-insensitive match – the other components of the path must be a case-sensitive match.
+func hasCaseInsensitivePath(fs filesys.Filesys, path string) bool {
+	found := false
+	fs.Iter(filepath.Dir(path), false, func(path string, size int64, isDir bool) (stop bool) {
+		if strings.ToLower(filepath.Base(path)) == strings.ToLower(filepath.Base(path)) {
+			found = true
+		}
+		return found
+	})
+	return found
+}
+
+// hasCaseInsensitiveMatch tests to see if any of |candidates| are a case-insensitive match for |target| and if so,
+// returns true along with the exact candidate string that matched. If there was not a match, false and the empty
+// string are returned.
+func hasCaseInsensitiveMatch(candidates []string, target string) (bool, string) {
+	found := false
+	exactCaseName := ""
+	lowercaseName := strings.ToLower(target)
+	for _, s := range candidates {
+		if lowercaseName == strings.ToLower(s) {
+			exactCaseName = s
+			found = true
+			break
+		}
+	}
+
+	return found, exactCaseName
 }
 
 func (dd *droppedDatabases) prepareToMoveDroppedDatabase(_ *sql.Context, targetPath string) error {
@@ -218,12 +231,12 @@ func (dd *droppedDatabases) prepareToMoveDroppedDatabase(_ *sql.Context, targetP
 	}
 
 	// If there is something already there, pick a new path to move it to
-	newPath := fmt.Sprintf("%s.backup.%d", targetPath, time.Now().Unix())
+	newPath := fmt.Sprintf("%s.backup.%d", targetPath, time.Now().UnixMilli())
 	if exists, _ := dd.fs.Exists(newPath); exists {
 		return fmt.Errorf("unable to move existing dropped database out of the way: "+
 			"tried to move it to %s", newPath)
 	}
-	if err := dd.fs.MoveFile(targetPath, newPath); err != nil {
+	if err := dd.fs.MoveDir(targetPath, newPath); err != nil {
 		return fmt.Errorf("unable to move existing dropped database out of the way: %w", err)
 	}
 
