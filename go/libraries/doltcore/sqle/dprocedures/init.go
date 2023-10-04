@@ -33,6 +33,7 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dolt_count_commits", Schema: int64Schema("ahead", "behind"), Function: doltCountCommits, ReadOnly: true},
 	{Name: "dolt_fetch", Schema: int64Schema("status"), Function: doltFetch},
 	{Name: "dolt_undrop", Schema: int64Schema("status"), Function: doltUndrop},
+	{Name: "dolt_purge_dropped_databases", Schema: int64Schema("status"), Function: doltPurgeDroppedDatabases},
 
 	// dolt_gc is enabled behind a feature flag for now, see dolt_gc.go
 	{Name: "dolt_gc", Schema: int64Schema("status"), Function: doltGC, ReadOnly: true},

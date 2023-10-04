@@ -137,7 +137,29 @@ func (dd *droppedDatabaseManager) UndropDatabase(ctx *sql.Context, name string) 
 // holding directory. Once dropped databases are purged, they can no longer be restored, so this method should be used
 // with caution.
 func (dd *droppedDatabaseManager) PurgeAllDroppedDatabases(_ *sql.Context) error {
-	return fmt.Errorf("not supported yet")
+	// If the dropped database holding directory doesn't exist, then there's nothing to purge
+	if exists, _ := dd.fs.Exists(droppedDatabaseDirectoryName); !exists {
+		return nil
+	}
+
+	var err error
+	callback := func(path string, size int64, isDir bool) (stop bool) {
+		// Sanity check that the path we're about to delete is under the dropped database holding directory
+		if strings.Contains(path, droppedDatabaseDirectoryName) == false {
+			err = fmt.Errorf("path of database to purge isn't under dropped database holding directory: %s", path)
+			return true
+		}
+
+		// Attempt to permanently delete the dropped database and stop execution if we hit an error
+		err = dd.fs.Delete(path, true)
+		return err != nil
+	}
+	iterErr := dd.fs.Iter(droppedDatabaseDirectoryName, false, callback)
+	if iterErr != nil {
+		return iterErr
+	}
+
+	return err
 }
 
 // initializeDeletedDatabaseDirectory initializes the special directory Dolt uses to store dropped databases until

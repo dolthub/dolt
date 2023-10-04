@@ -19,12 +19,7 @@ teardown() {
     teardown_common
 }
 
-@test "undrop: GC deletes dropped databases" {
-	# TODO: Garbage collection should remove deleted databases; implement in second milestone
-  skip "not supported yet"
-}
-
-@test "undrop: error messages" {
+@test "undrop: undrop error messages" {
   # When called without any argument, dolt_undrop() returns an error
   # that includes the database names that can be undropped.
   run dolt sql -q "CALL dolt_undrop();"
@@ -45,6 +40,13 @@ teardown() {
   [ $status -eq 1 ]
   [[ $output =~ "dolt_undrop called with too many arguments" ]] || false
   [[ $output =~ "dolt_undrop only accepts one argument - the name of the dropped database to restore" ]] || false
+}
+
+@test "undrop: purge error messages" {
+  # Assert that specifying args when calling dolt_purge_dropped_databases() returns an error
+  run dolt sql -q "call dolt_purge_dropped_databases('all', 'of', 'the', 'dbs');"
+  [ $status -eq 1 ]
+  [[ $output =~ "dolt_purge_dropped_databases does not take any arguments" ]] || false
 }
 
 @test "undrop: undrop root database" {
@@ -193,4 +195,43 @@ EOF
   [ $status -eq 1 ]
   [[ $output =~ "unable to undrop database 'dAtAbAsE1'" ]] || false
   [[ $output =~ "another database already exists with the same case-insensitive name" ]] || false
+}
+
+@test "undrop: purging dropped databases" {
+  # Create a database to keep and a database to purge
+  dolt sql << EOF
+create database keepme;
+create database purgeme;
+use purgeme;
+create table t3 (pk int primary key, c1 varchar(200));
+insert into t3 values (3, "three");
+call dolt_commit('-Am', 'creating table t3');
+EOF
+  run dolt sql -q "show databases;"
+  [ $status -eq 0 ]
+  [[ $output =~ "purgeme" ]] || false
+  [[ $output =~ "keepme" ]] || false
+
+  # Assert that we can call dolt_purge_dropped_databases when there aren't any dropped dbs yet
+  dolt sql -q "call dolt_purge_dropped_databases;"
+
+  # Drop the purgeme database so we can purge it
+  dolt sql -q "drop database purgeme;"
+  run dolt sql -q "show databases;"
+  [ $status -eq 0 ]
+  [[ ! $output =~ "purgeme" ]] || false
+  [[ $output =~ "keepme" ]] || false
+
+  # Purge the purgeme database and make sure we can't undrop it
+  dolt sql -q "call dolt_purge_dropped_databases;"
+  run dolt sql -q "call dolt_undrop('purgeme');"
+  [ $status -eq 1 ]
+  [[ $output =~ "no database named 'purgeme' found to undrop" ]] || false
+  [[ $output =~ "there are no databases currently available to be undropped" ]] || false
+
+  # Double check that the keepme database is still present
+  run dolt sql -q "show databases;"
+  [ $status -eq 0 ]
+  [[ ! $output =~ "purgeme" ]] || false
+  [[ $output =~ "keepme" ]] || false
 }

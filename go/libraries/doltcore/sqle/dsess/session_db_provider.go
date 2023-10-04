@@ -108,6 +108,9 @@ type DoltDatabaseProvider interface {
 	// ListDroppedDatabases returns a list of the database names for dropped databases that are still
 	// available on disk and can be restored with dolt_undrop().
 	ListDroppedDatabases(ctx *sql.Context) ([]string, error)
+	// PurgeDroppedDatabases permanently deletes any dropped databases that are being held in temporary storage
+	// in case they need to be restored. This operation is not reversible, so use with caution!
+	PurgeDroppedDatabases(ctx *sql.Context) error
 }
 
 type SessionDatabaseBranchSpec struct {

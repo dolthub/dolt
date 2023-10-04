@@ -645,6 +645,15 @@ func (p *DoltDatabaseProvider) UndropDatabase(ctx *sql.Context, name string) (er
 	return p.registerNewDatabase(ctx, exactCaseName, newEnv)
 }
 
+// PurgeDroppedDatabases permanently deletes all dropped databases that have been stashed away in case they need
+// to be restored. Use caution with this operation – it is not reversible!
+func (p *DoltDatabaseProvider) PurgeDroppedDatabases(ctx *sql.Context) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	return p.droppedDatabaseManager.PurgeAllDroppedDatabases(ctx)
+}
+
 // registerNewDatabase registers the specified DoltEnv, |newEnv|, as a new database named |name|. This
 // function is responsible for instantiating the new Database instance and updating the tracking metadata
 // in this provider. If any problems are encountered while registering the new database, an error is returned.
