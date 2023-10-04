@@ -25,6 +25,8 @@ func doltPurgeDroppedDatabases(ctx *sql.Context, args ...string) (sql.RowIter, e
 		return nil, fmt.Errorf("dolt_purge_dropped_databases does not take any arguments")
 	}
 
+	// TODO: What are the right permissions for dolt_purge_dropped_databases? admin?
+
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	err := doltSession.Provider().PurgeDroppedDatabases(ctx)
 	if err != nil {

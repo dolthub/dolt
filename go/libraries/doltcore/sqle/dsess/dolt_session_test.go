@@ -259,6 +259,10 @@ func (e emptyRevisionDatabaseProvider) ListDroppedDatabases(ctx *sql.Context) ([
 	return nil, nil
 }
 
+func (e emptyRevisionDatabaseProvider) PurgeDroppedDatabases(ctx *sql.Context) error {
+	return nil
+}
+
 func (e emptyRevisionDatabaseProvider) BaseDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool) {
 	return nil, false
 }
