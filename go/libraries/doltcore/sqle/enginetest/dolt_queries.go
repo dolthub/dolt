@@ -1096,6 +1096,46 @@ func makeLargeInsert(sz int) string {
 // DoltUserPrivTests are tests for Dolt-specific functionality that includes privilege checking logic.
 var DoltUserPrivTests = []queries.UserPrivilegeTest{
 	{
+		Name: "dolt_purge_dropped_databases() privilege checking",
+		SetUpScript: []string{
+			"create database mydb2;",
+			"DROP DATABASE mydb2;",
+			"CREATE USER tester@localhost;",
+			"CREATE DATABASE other;",
+			"GRANT EXECUTE ON *.* TO tester@localhost;",
+		},
+		Assertions: []queries.UserPrivilegeTestAssertion{
+			{
+				// Users without SUPER privilege cannot execute dolt_purge_dropped_databases
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "call dolt_purge_dropped_databases;",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				// Grant SUPER privileges to tester
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SUPER ON *.* TO tester@localhost;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				// Now that tester has SUPER privileges, they can execute dolt_purge_dropped_databases
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "call dolt_purge_dropped_databases;",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				// Since root has SUPER privileges, they can execute dolt_purge_dropped_databases
+				User:     "root",
+				Host:     "localhost",
+				Query:    "call dolt_purge_dropped_databases;",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
 		Name: "table function privilege checking",
 		SetUpScript: []string{
 			"CREATE TABLE mydb.test (pk BIGINT PRIMARY KEY);",
