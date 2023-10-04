@@ -133,6 +133,13 @@ func (dd *droppedDatabaseManager) UndropDatabase(ctx *sql.Context, name string) 
 	return newFs, exactCaseName, nil
 }
 
+// PurgeAllDroppedDatabases permanently removes all dropped databases that are being held in the dolt_dropped_database
+// holding directory. Once dropped databases are purged, they can no longer be restored, so this method should be used
+// with caution.
+func (dd *droppedDatabaseManager) PurgeAllDroppedDatabases(_ *sql.Context) error {
+	return fmt.Errorf("not supported yet")
+}
+
 // initializeDeletedDatabaseDirectory initializes the special directory Dolt uses to store dropped databases until
 // they are fully removed. If the directory is already created and set up correctly, then this method is a no-op.
 // If the directory doesn't exist yet, it will be created. If there are any problems initializing the directory, an
