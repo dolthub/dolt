@@ -625,14 +625,14 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	return p.invalidateDbStateInAllSessions(ctx, name)
 }
 
-func (p DoltDatabaseProvider) ListDroppedDatabases(ctx *sql.Context) ([]string, error) {
+func (p *DoltDatabaseProvider) ListDroppedDatabases(ctx *sql.Context) ([]string, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	return p.droppedDatabaseManager.ListDroppedDatabases(ctx)
 }
 
-func (p DoltDatabaseProvider) UndropDatabase(ctx *sql.Context, name string) (err error) {
+func (p *DoltDatabaseProvider) UndropDatabase(ctx *sql.Context, name string) (err error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -648,7 +648,7 @@ func (p DoltDatabaseProvider) UndropDatabase(ctx *sql.Context, name string) (err
 // registerNewDatabase registers the specified DoltEnv, |newEnv|, as a new database named |name|. This
 // function is responsible for instantiating the new Database instance and updating the tracking metadata
 // in this provider. If any problems are encountered while registering the new database, an error is returned.
-func (p DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string, newEnv *env.DoltEnv) (err error) {
+func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string, newEnv *env.DoltEnv) (err error) {
 	// This method MUST be called with the provider's mutex locked. TryLock allows us to validate that the
 	// mutex is locked (without actually locking it and causing a deadlock) and to error out if we detect
 	// that the mutex is NOT locked.
