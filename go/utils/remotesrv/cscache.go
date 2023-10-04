@@ -43,7 +43,7 @@ func NewLocalCSCache(filesys filesys.Filesys) *LocalCSCache {
 	}
 }
 
-func (cache *LocalCSCache) Get(repopath, nbfVerStr string) (remotesrv.RemoteSrvStore, error) {
+func (cache *LocalCSCache) Get(ctx context.Context, repopath, nbfVerStr string) (remotesrv.RemoteSrvStore, error) {
 	cache.mu.Lock()
 	defer cache.mu.Unlock()
 
@@ -62,7 +62,7 @@ func (cache *LocalCSCache) Get(repopath, nbfVerStr string) (remotesrv.RemoteSrvS
 		return nil, err
 	}
 
-	newCS, err := nbs.NewLocalStore(context.TODO(), nbfVerStr, path, defaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
+	newCS, err := nbs.NewLocalStore(ctx, nbfVerStr, path, defaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
 	if err != nil {
 		return nil, err
 	}
@@ -76,6 +76,6 @@ type SingletonCSCache struct {
 	s remotesrv.RemoteSrvStore
 }
 
-func (cache SingletonCSCache) Get(path, nbfVerStr string) (remotesrv.RemoteSrvStore, error) {
+func (cache SingletonCSCache) Get(_ context.Context, path, nbfVerStr string) (remotesrv.RemoteSrvStore, error) {
 	return cache.s, nil
 }

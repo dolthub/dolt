@@ -278,85 +278,82 @@ func Serve(
 	var remoteSrv *remotesrv.Server
 	if serverConfig.RemotesapiPort() != nil {
 		port := *serverConfig.RemotesapiPort()
-		if remoteSrvSqlCtx, err := sqlEngine.NewDefaultContext(ctx); err == nil {
-			listenaddr := fmt.Sprintf(":%d", port)
-			args := sqle.RemoteSrvServerArgs(remoteSrvSqlCtx, remotesrv.ServerArgs{
-				Logger:         logrus.NewEntry(lgr),
-				ReadOnly:       true,
-				HttpListenAddr: listenaddr,
-				GrpcListenAddr: listenaddr,
-			})
-
-			ctxFactory := func() (*sql.Context, error) { return sqlEngine.NewDefaultContext(ctx) }
-			authenticator := newAuthenticator(ctxFactory, sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb)
-			args = sqle.WithUserPasswordAuth(args, authenticator)
-
-			args.TLSConfig = serverConf.TLSConfig
-			remoteSrv, err = remotesrv.NewServer(args)
-			if err != nil {
-				lgr.Errorf("error creating remotesapi server on port %d: %v", port, err)
-				startError = err
-				return
-			}
-			listeners, err := remoteSrv.Listeners()
-			if err != nil {
-				lgr.Errorf("error starting remotesapi server listeners on port %d: %v", port, err)
-				startError = err
-				return
-			} else {
-				go remoteSrv.Serve(listeners)
-			}
-		} else {
+		listenaddr := fmt.Sprintf(":%d", port)
+		args, err := sqle.RemoteSrvServerArgs(sqlEngine.NewDefaultContext, remotesrv.ServerArgs{
+			Logger:         logrus.NewEntry(lgr),
+			ReadOnly:       true,
+			HttpListenAddr: listenaddr,
+			GrpcListenAddr: listenaddr,
+		})
+		if err != nil {
 			lgr.Errorf("error creating SQL engine context for remotesapi server: %v", err)
 			startError = err
 			return
+		}
+
+		ctxFactory := func() (*sql.Context, error) { return sqlEngine.NewDefaultContext(ctx) }
+		authenticator := newAuthenticator(ctxFactory, sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb)
+		args = sqle.WithUserPasswordAuth(args, authenticator)
+
+		args.TLSConfig = serverConf.TLSConfig
+		remoteSrv, err = remotesrv.NewServer(args)
+		if err != nil {
+			lgr.Errorf("error creating remotesapi server on port %d: %v", port, err)
+			startError = err
+			return
+		}
+		listeners, err := remoteSrv.Listeners()
+		if err != nil {
+			lgr.Errorf("error starting remotesapi server listeners on port %d: %v", port, err)
+			startError = err
+			return
+		} else {
+			go remoteSrv.Serve(listeners)
 		}
 	}
 
 	var clusterRemoteSrv *remotesrv.Server
 	if clusterController != nil {
-		if remoteSrvSqlCtx, err := sqlEngine.NewDefaultContext(ctx); err == nil {
-			args := clusterController.RemoteSrvServerArgs(remoteSrvSqlCtx, remotesrv.ServerArgs{
-				Logger: logrus.NewEntry(lgr),
-			})
-
-			clusterRemoteSrvTLSConfig, err := LoadClusterTLSConfig(serverConfig.ClusterConfig())
-			if err != nil {
-				lgr.Errorf("error starting remotesapi server for cluster config, could not load tls config: %v", err)
-				startError = err
-				return
-			}
-			args.TLSConfig = clusterRemoteSrvTLSConfig
-
-			clusterRemoteSrv, err = remotesrv.NewServer(args)
-			if err != nil {
-				lgr.Errorf("error creating remotesapi server on port %d: %v", *serverConfig.RemotesapiPort(), err)
-				startError = err
-				return
-			}
-			clusterController.RegisterGrpcServices(clusterRemoteSrv.GrpcServer())
-
-			listeners, err := clusterRemoteSrv.Listeners()
-			if err != nil {
-				lgr.Errorf("error starting remotesapi server listeners for cluster config on %s: %v", clusterController.RemoteSrvListenAddr(), err)
-				startError = err
-				return
-			}
-
-			go clusterRemoteSrv.Serve(listeners)
-			go clusterController.Run()
-
-			clusterController.ManageQueryConnections(
-				mySQLServer.SessionManager().Iter,
-				sqlEngine.GetUnderlyingEngine().ProcessList.Kill,
-				mySQLServer.SessionManager().KillConnection,
-			)
-		} else {
+		args, err := clusterController.RemoteSrvServerArgs(sqlEngine.NewDefaultContext, remotesrv.ServerArgs{
+			Logger: logrus.NewEntry(lgr),
+		})
+		if err != nil {
 			lgr.Errorf("error creating SQL engine context for remotesapi server: %v", err)
 			startError = err
 			return
 		}
 
+		clusterRemoteSrvTLSConfig, err := LoadClusterTLSConfig(serverConfig.ClusterConfig())
+		if err != nil {
+			lgr.Errorf("error starting remotesapi server for cluster config, could not load tls config: %v", err)
+			startError = err
+			return
+		}
+		args.TLSConfig = clusterRemoteSrvTLSConfig
+
+		clusterRemoteSrv, err = remotesrv.NewServer(args)
+		if err != nil {
+			lgr.Errorf("error creating remotesapi server on port %d: %v", *serverConfig.RemotesapiPort(), err)
+			startError = err
+			return
+		}
+		clusterController.RegisterGrpcServices(sqlEngine.NewDefaultContext, clusterRemoteSrv.GrpcServer())
+
+		listeners, err := clusterRemoteSrv.Listeners()
+		if err != nil {
+			lgr.Errorf("error starting remotesapi server listeners for cluster config on %s: %v", clusterController.RemoteSrvListenAddr(), err)
+			startError = err
+			return
+		}
+
+		go clusterRemoteSrv.Serve(listeners)
+		go clusterController.Run()
+
+		clusterController.ManageQueryConnections(
+			mySQLServer.SessionManager().Iter,
+			sqlEngine.GetUnderlyingEngine().ProcessList.Kill,
+			mySQLServer.SessionManager().KillConnection,
+		)
 	}
 
 	if ok, f := mrEnv.IsLocked(); ok {

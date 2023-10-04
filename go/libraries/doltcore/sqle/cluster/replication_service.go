@@ -38,17 +38,23 @@ type replicationServiceServer struct {
 	mysqlDb *mysql_db.MySQLDb
 	lgr     *logrus.Entry
 
+	ctxFactory func(context.Context) (*sql.Context, error)
+
 	branchControl        BranchControlPersistence
 	branchControlFilesys filesys.Filesys
 
-	dropDatabase func(context.Context, string) error
+	dropDatabase func(*sql.Context, string) error
 }
 
 func (s *replicationServiceServer) UpdateUsersAndGrants(ctx context.Context, req *replicationapi.UpdateUsersAndGrantsRequest) (*replicationapi.UpdateUsersAndGrantsResponse, error) {
-	sqlCtx := sql.NewContext(ctx)
+	sqlCtx, err := s.ctxFactory(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	ed := s.mysqlDb.Editor()
 	defer ed.Close()
-	err := s.mysqlDb.OverwriteUsersAndGrantData(sqlCtx, ed, req.SerializedContents)
+	err = s.mysqlDb.OverwriteUsersAndGrantData(sqlCtx, ed, req.SerializedContents)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +82,12 @@ func (s *replicationServiceServer) DropDatabase(ctx context.Context, req *replic
 		return nil, status.Error(codes.Unimplemented, "unimplemented")
 	}
 
-	err := s.dropDatabase(ctx, req.Name)
+	sqlCtx, err := s.ctxFactory(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.dropDatabase(sqlCtx, req.Name)
 	s.lgr.Tracef("dropped database [%s] through sqle.DropDatabase. err: %v", req.Name, err)
 	if err != nil && !sql.ErrDatabaseNotFound.Is(err) {
 		return nil, err

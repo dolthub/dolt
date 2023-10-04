@@ -601,15 +601,15 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 		return err
 	}
 
+	err = p.droppedDatabaseManager.DropDatabase(ctx, name, dropDbLoc)
+	if err != nil {
+		return err
+	}
+
 	if p.DropDatabaseHook != nil {
 		// For symmetry with InitDatabaseHook and the names we see in
 		// MultiEnv initialization, we use `name` here, not `dbKey`.
 		p.DropDatabaseHook(name)
-	}
-
-	err = p.droppedDatabaseManager.DropDatabase(ctx, name, dropDbLoc)
-	if err != nil {
-		return err
 	}
 
 	// We not only have to delete tracking metadata for this database, but also for any derivative

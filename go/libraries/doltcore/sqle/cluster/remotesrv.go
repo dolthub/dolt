@@ -26,8 +26,8 @@ type remotesrvStoreCache struct {
 	controller *Controller
 }
 
-func (s remotesrvStoreCache) Get(path, nbfVerStr string) (remotesrv.RemoteSrvStore, error) {
-	rss, err := s.DBCache.Get(path, nbfVerStr)
+func (s remotesrvStoreCache) Get(ctx context.Context, path, nbfVerStr string) (remotesrv.RemoteSrvStore, error) {
+	rss, err := s.DBCache.Get(ctx, path, nbfVerStr)
 	if err != nil {
 		return nil, err
 	}
