@@ -72,13 +72,13 @@ var _ dsess.DoltDatabaseProvider = (*DoltDatabaseProvider)(nil)
 
 // NewDoltDatabaseProvider returns a new provider, initialized without any databases, along with any
 // errors that occurred while trying to create the database provider.
-func NewDoltDatabaseProvider(defaultBranch string, fs filesys.Filesys) (DoltDatabaseProvider, error) {
+func NewDoltDatabaseProvider(defaultBranch string, fs filesys.Filesys) (*DoltDatabaseProvider, error) {
 	return NewDoltDatabaseProviderWithDatabases(defaultBranch, fs, nil, nil)
 }
 
 // NewDoltDatabaseProviderWithDatabase returns a new provider, initialized with one database at the
 // specified location, and any error that occurred along the way.
-func NewDoltDatabaseProviderWithDatabase(defaultBranch string, fs filesys.Filesys, database dsess.SqlDatabase, dbLocation filesys.Filesys) (DoltDatabaseProvider, error) {
+func NewDoltDatabaseProviderWithDatabase(defaultBranch string, fs filesys.Filesys, database dsess.SqlDatabase, dbLocation filesys.Filesys) (*DoltDatabaseProvider, error) {
 	return NewDoltDatabaseProviderWithDatabases(defaultBranch, fs, []dsess.SqlDatabase{database}, []filesys.Filesys{dbLocation})
 }
 
@@ -86,9 +86,9 @@ func NewDoltDatabaseProviderWithDatabase(defaultBranch string, fs filesys.Filesy
 // at the specified locations. For every database specified, there must be a corresponding filesystem
 // specified that represents where the database is located. If the number of specified databases is not the
 // same as the number of specified locations, an error is returned.
-func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Filesys, databases []dsess.SqlDatabase, locations []filesys.Filesys) (DoltDatabaseProvider, error) {
+func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Filesys, databases []dsess.SqlDatabase, locations []filesys.Filesys) (*DoltDatabaseProvider, error) {
 	if len(databases) != len(locations) {
-		return DoltDatabaseProvider{}, fmt.Errorf("unable to create DoltDatabaseProvider: "+
+		return nil, fmt.Errorf("unable to create DoltDatabaseProvider: "+
 			"incorrect number of databases (%d) and database locations (%d) specified", len(databases), len(locations))
 	}
 
@@ -119,7 +119,7 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		dbFactoryUrl = doltdb.InMemDoltDB
 	}
 
-	return DoltDatabaseProvider{
+	return &DoltDatabaseProvider{
 		dbLocations:            dbLocations,
 		databases:              dbs,
 		functions:              funcs,
@@ -135,37 +135,39 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 }
 
 // WithFunctions returns a copy of this provider with the functions given. Any previous functions are removed.
-func (p DoltDatabaseProvider) WithFunctions(fns []sql.Function) DoltDatabaseProvider {
+func (p *DoltDatabaseProvider) WithFunctions(fns []sql.Function) *DoltDatabaseProvider {
 	funcs := make(map[string]sql.Function, len(dfunctions.DoltFunctions))
 	for _, fn := range fns {
 		funcs[strings.ToLower(fn.FunctionName())] = fn
 	}
-
-	p.functions = funcs
-	return p
+	cp := *p
+	cp.functions = funcs
+	return &cp
 }
 
 // WithDbFactoryUrl returns a copy of this provider with the DbFactoryUrl set as provided.
 // The URL is used when creating new databases.
 // See doltdb.InMemDoltDB, doltdb.LocalDirDoltDB
-func (p DoltDatabaseProvider) WithDbFactoryUrl(url string) DoltDatabaseProvider {
-	p.dbFactoryUrl = url
-	return p
+func (p *DoltDatabaseProvider) WithDbFactoryUrl(url string) *DoltDatabaseProvider {
+	cp := *p
+	cp.dbFactoryUrl = url
+	return &cp
 }
 
 // WithRemoteDialer returns a copy of this provider with the dialer provided
-func (p DoltDatabaseProvider) WithRemoteDialer(provider dbfactory.GRPCDialProvider) DoltDatabaseProvider {
-	p.remoteDialer = provider
-	return p
+func (p *DoltDatabaseProvider) WithRemoteDialer(provider dbfactory.GRPCDialProvider) *DoltDatabaseProvider {
+	cp := *p
+	cp.remoteDialer = provider
+	return &cp
 }
 
-func (p DoltDatabaseProvider) FileSystem() filesys.Filesys {
+func (p *DoltDatabaseProvider) FileSystem() filesys.Filesys {
 	return p.fs
 }
 
 // SetIsStandby sets whether this provider is set to standby |true|. Standbys return every dolt database as a read only
 // database. Set back to |false| to get read-write behavior from dolt databases again.
-func (p DoltDatabaseProvider) SetIsStandby(standby bool) {
+func (p *DoltDatabaseProvider) SetIsStandby(standby bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	*p.isStandby = standby
@@ -174,7 +176,7 @@ func (p DoltDatabaseProvider) SetIsStandby(standby bool) {
 // FileSystemForDatabase returns a filesystem, with the working directory set to the root directory
 // of the requested database. If the requested database isn't found, a database not found error
 // is returned.
-func (p DoltDatabaseProvider) FileSystemForDatabase(dbname string) (filesys.Filesys, error) {
+func (p *DoltDatabaseProvider) FileSystemForDatabase(dbname string) (filesys.Filesys, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -189,7 +191,7 @@ func (p DoltDatabaseProvider) FileSystemForDatabase(dbname string) (filesys.File
 }
 
 // Database implements the sql.DatabaseProvider interface
-func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (sql.Database, error) {
+func (p *DoltDatabaseProvider) Database(ctx *sql.Context, name string) (sql.Database, error) {
 	database, b, err := p.SessionDatabase(ctx, name)
 	if err != nil {
 		return nil, err
@@ -219,7 +221,7 @@ func wrapForStandby(db dsess.SqlDatabase, standby bool) dsess.SqlDatabase {
 // attemptCloneReplica attempts to clone a database from the configured replication remote URL template, returning an error
 // if it cannot be found
 // TODO: distinct error for not found v. others
-func (p DoltDatabaseProvider) attemptCloneReplica(ctx *sql.Context, dbName string) error {
+func (p *DoltDatabaseProvider) attemptCloneReplica(ctx *sql.Context, dbName string) error {
 	// TODO: these need some reworking, they don't make total sense together
 	_, readReplicaRemoteName, _ := sql.SystemVariables.GetGlobal(dsess.ReadReplicaRemote)
 	if readReplicaRemoteName == "" {
@@ -255,7 +257,7 @@ func (p DoltDatabaseProvider) attemptCloneReplica(ctx *sql.Context, dbName strin
 	return nil
 }
 
-func (p DoltDatabaseProvider) HasDatabase(ctx *sql.Context, name string) bool {
+func (p *DoltDatabaseProvider) HasDatabase(ctx *sql.Context, name string) bool {
 	_, err := p.Database(ctx, name)
 	if err != nil && !sql.ErrDatabaseNotFound.Is(err) {
 		ctx.GetLogger().Warnf("Error getting database %s: %s", name, err.Error())
@@ -263,7 +265,7 @@ func (p DoltDatabaseProvider) HasDatabase(ctx *sql.Context, name string) bool {
 	return err == nil
 }
 
-func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database) {
+func (p *DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database) {
 	currentDb := ctx.GetCurrentDatabase()
 	_, currRev := dsess.SplitRevisionDbName(currentDb)
 
@@ -306,7 +308,7 @@ func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database
 }
 
 // DoltDatabases implements the dsess.DoltDatabaseProvider interface
-func (p DoltDatabaseProvider) DoltDatabases() []dsess.SqlDatabase {
+func (p *DoltDatabaseProvider) DoltDatabases() []dsess.SqlDatabase {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -325,7 +327,7 @@ func (p DoltDatabaseProvider) DoltDatabases() []dsess.SqlDatabase {
 }
 
 // allRevisionDbs returns all revision dbs for the database given
-func (p DoltDatabaseProvider) allRevisionDbs(ctx *sql.Context, db dsess.SqlDatabase) ([]sql.Database, error) {
+func (p *DoltDatabaseProvider) allRevisionDbs(ctx *sql.Context, db dsess.SqlDatabase) ([]sql.Database, error) {
 	branches, err := db.DbData().Ddb.GetBranches(ctx)
 	if err != nil {
 		return nil, err
@@ -347,18 +349,18 @@ func (p DoltDatabaseProvider) allRevisionDbs(ctx *sql.Context, db dsess.SqlDatab
 	return revDbs, nil
 }
 
-func (p DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r env.Remote, withCaching bool) (*doltdb.DoltDB, error) {
+func (p *DoltDatabaseProvider) GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r env.Remote, withCaching bool) (*doltdb.DoltDB, error) {
 	if withCaching {
 		return r.GetRemoteDB(ctx, format, p.remoteDialer)
 	}
 	return r.GetRemoteDBWithoutCaching(ctx, format, p.remoteDialer)
 }
 
-func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) error {
+func (p *DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) error {
 	return p.CreateCollatedDatabase(ctx, name, sql.Collation_Default)
 }
 
-func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name string, collation sql.CollationID) error {
+func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name string, collation sql.CollationID) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -411,12 +413,12 @@ func (p DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name stri
 	return p.registerNewDatabase(ctx, name, newEnv)
 }
 
-type InitDatabaseHook func(ctx *sql.Context, pro DoltDatabaseProvider, name string, env *env.DoltEnv) error
+type InitDatabaseHook func(ctx *sql.Context, pro *DoltDatabaseProvider, name string, env *env.DoltEnv) error
 type DropDatabaseHook func(name string)
 
 // ConfigureReplicationDatabaseHook sets up replication for a newly created database as necessary
 // TODO: consider the replication heads / all heads setting
-func ConfigureReplicationDatabaseHook(ctx *sql.Context, p DoltDatabaseProvider, name string, newEnv *env.DoltEnv) error {
+func ConfigureReplicationDatabaseHook(ctx *sql.Context, p *DoltDatabaseProvider, name string, newEnv *env.DoltEnv) error {
 	_, replicationRemoteName, _ := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
 	if replicationRemoteName == "" {
 		return nil
@@ -466,7 +468,7 @@ func ConfigureReplicationDatabaseHook(ctx *sql.Context, p DoltDatabaseProvider, 
 }
 
 // CloneDatabaseFromRemote implements DoltDatabaseProvider interface
-func (p DoltDatabaseProvider) CloneDatabaseFromRemote(
+func (p *DoltDatabaseProvider) CloneDatabaseFromRemote(
 	ctx *sql.Context,
 	dbName, branch, remoteName, remoteUrl string,
 	remoteParams map[string]string,
@@ -502,7 +504,7 @@ func (p DoltDatabaseProvider) CloneDatabaseFromRemote(
 // is returned by this function, the caller can capture the error and safely clean up the failed
 // clone directory before returning the error to the user. This function should not be used directly;
 // use CloneDatabaseFromRemote instead.
-func (p DoltDatabaseProvider) cloneDatabaseFromRemote(
+func (p *DoltDatabaseProvider) cloneDatabaseFromRemote(
 	ctx *sql.Context,
 	dbName, remoteName, branch, remoteUrl string,
 	remoteParams map[string]string,
@@ -563,7 +565,7 @@ func (p DoltDatabaseProvider) cloneDatabaseFromRemote(
 }
 
 // DropDatabase implements the sql.MutableDatabaseProvider interface
-func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
+func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
 	_, revision := dsess.SplitRevisionDbName(name)
 	if revision != "" {
 		return fmt.Errorf("unable to drop revision database: %s", name)
@@ -697,7 +699,7 @@ func (p DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string,
 
 // invalidateDbStateInAllSessions removes the db state for this database from every session. This is necessary when a
 // database is dropped, so that other sessions don't use stale db state.
-func (p DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, name string) error {
+func (p *DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, name string) error {
 	// Remove the db state from the current session
 	err := dsess.DSessFromSess(ctx.Session).RemoveDbState(ctx, name)
 	if err != nil {
@@ -730,7 +732,7 @@ func (p DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, n
 	return nil
 }
 
-func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQualifiedName string, requestedName string) (dsess.SqlDatabase, bool, error) {
+func (p *DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQualifiedName string, requestedName string) (dsess.SqlDatabase, bool, error) {
 	if !strings.Contains(revisionQualifiedName, dsess.DbRevisionDelimiter) {
 		return nil, false, nil
 	}
@@ -1010,7 +1012,7 @@ func initialStateForRevisionDb(ctx *sql.Context, db dsess.SqlDatabase) (dsess.In
 
 // databaseForClone returns a newly cloned database if read replication is enabled and a remote DB exists, or an error
 // otherwise
-func (p DoltDatabaseProvider) databaseForClone(ctx *sql.Context, revDB string) (dsess.SqlDatabase, error) {
+func (p *DoltDatabaseProvider) databaseForClone(ctx *sql.Context, revDB string) (dsess.SqlDatabase, error) {
 	if !readReplicationActive(ctx) {
 		return nil, nil
 	}
@@ -1098,7 +1100,7 @@ func resolveAncestorSpec(ctx *sql.Context, revSpec string, ddb *doltdb.DoltDB) (
 
 // BaseDatabase returns the base database for the specified database name. Meant for informational purposes when
 // managing the session initialization only. Use SessionDatabase for normal database retrieval.
-func (p DoltDatabaseProvider) BaseDatabase(ctx *sql.Context, name string) (dsess.SqlDatabase, bool) {
+func (p *DoltDatabaseProvider) BaseDatabase(ctx *sql.Context, name string) (dsess.SqlDatabase, bool) {
 	baseName := name
 	isRevisionDbName := strings.Contains(name, dsess.DbRevisionDelimiter)
 
@@ -1116,7 +1118,7 @@ func (p DoltDatabaseProvider) BaseDatabase(ctx *sql.Context, name string) (dsess
 }
 
 // SessionDatabase implements dsess.SessionDatabaseProvider
-func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (dsess.SqlDatabase, bool, error) {
+func (p *DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (dsess.SqlDatabase, bool, error) {
 	baseName := name
 	isRevisionDbName := strings.Contains(name, dsess.DbRevisionDelimiter)
 
@@ -1199,7 +1201,7 @@ func (p DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (ds
 }
 
 // Function implements the FunctionProvider interface
-func (p DoltDatabaseProvider) Function(_ *sql.Context, name string) (sql.Function, error) {
+func (p *DoltDatabaseProvider) Function(_ *sql.Context, name string) (sql.Function, error) {
 	fn, ok := p.functions[strings.ToLower(name)]
 	if !ok {
 		return nil, sql.ErrFunctionNotFound.New(name)
@@ -1207,22 +1209,22 @@ func (p DoltDatabaseProvider) Function(_ *sql.Context, name string) (sql.Functio
 	return fn, nil
 }
 
-func (p DoltDatabaseProvider) Register(d sql.ExternalStoredProcedureDetails) {
+func (p *DoltDatabaseProvider) Register(d sql.ExternalStoredProcedureDetails) {
 	p.externalProcedures.Register(d)
 }
 
 // ExternalStoredProcedure implements the sql.ExternalStoredProcedureProvider interface
-func (p DoltDatabaseProvider) ExternalStoredProcedure(_ *sql.Context, name string, numOfParams int) (*sql.ExternalStoredProcedureDetails, error) {
+func (p *DoltDatabaseProvider) ExternalStoredProcedure(_ *sql.Context, name string, numOfParams int) (*sql.ExternalStoredProcedureDetails, error) {
 	return p.externalProcedures.LookupByNameAndParamCount(name, numOfParams)
 }
 
 // ExternalStoredProcedures implements the sql.ExternalStoredProcedureProvider interface
-func (p DoltDatabaseProvider) ExternalStoredProcedures(_ *sql.Context, name string) ([]sql.ExternalStoredProcedureDetails, error) {
+func (p *DoltDatabaseProvider) ExternalStoredProcedures(_ *sql.Context, name string) ([]sql.ExternalStoredProcedureDetails, error) {
 	return p.externalProcedures.LookupByName(name)
 }
 
 // TableFunction implements the sql.TableFunctionProvider interface
-func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.TableFunction, error) {
+func (p *DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.TableFunction, error) {
 	// TODO: Clean this up and store table functions in a map, similar to regular functions.
 	switch strings.ToLower(name) {
 	case "dolt_diff":
@@ -1253,7 +1255,7 @@ func (p DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.Ta
 
 // ensureReplicaHeadExists tries to pull the latest version of a remote branch. Will fail if the branch
 // does not exist on the ReadReplicaDatabase's remote.
-func (p DoltDatabaseProvider) ensureReplicaHeadExists(ctx *sql.Context, branch string, db ReadReplicaDatabase) error {
+func (p *DoltDatabaseProvider) ensureReplicaHeadExists(ctx *sql.Context, branch string, db ReadReplicaDatabase) error {
 	return db.CreateLocalBranchFromRemote(ctx, ref.NewBranchRef(branch))
 }
 

@@ -348,3 +348,11 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "invalid ref spec: ''" ]] || false
 }
+
+@test "sql-push: up to date push returns message" {
+    cd repo1
+    dolt sql -q "call dolt_push('origin', 'main')"
+    run dolt sql -q "call dolt_push('origin', 'main')"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date" ]] || false
+}

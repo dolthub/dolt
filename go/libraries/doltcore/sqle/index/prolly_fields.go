@@ -28,6 +28,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -127,6 +128,18 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tr
 		return nil, err
 	}
 	return v, err
+}
+
+// Serialize writes an interface{} into the byte string representation used in val.Tuple, and returns the byte string,
+// and a boolean indicating success.
+func Serialize(ctx context.Context, ns tree.NodeStore, t val.Type, v interface{}) (result []byte, err error) {
+	newTupleDesc := val.NewTupleDescriptor(t)
+	tb := val.NewTupleBuilder(newTupleDesc)
+	err = PutField(ctx, ns, tb, 0, v)
+	if err != nil {
+		return nil, err
+	}
+	return newTupleDesc.GetField(0, tb.Build(pool.NewBuffPool())), nil
 }
 
 // PutField writes an interface{} to the ith field of the Tuple being built.

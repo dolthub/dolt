@@ -135,7 +135,19 @@ func NewSqlEngine(
 
 	config.ClusterController.RegisterStoredProcedures(pro)
 	pro.InitDatabaseHook = cluster.NewInitDatabaseHook(config.ClusterController, bThreads, pro.InitDatabaseHook)
-	pro.DropDatabaseHook = config.ClusterController.DropDatabaseHook
+
+	sqlEngine := &SqlEngine{}
+
+	var dropDatabase = func(ctx context.Context, name string) error {
+		sqlCtx, err := sqlEngine.NewDefaultContext(ctx)
+		if err != nil {
+			return err
+		}
+		return pro.DropDatabase(sqlCtx, name)
+	}
+
+	config.ClusterController.SetDropDatabase(dropDatabase)
+	pro.DropDatabaseHook = config.ClusterController.DropDatabaseHook()
 
 	// Create the engine
 	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{
@@ -223,12 +235,12 @@ func NewSqlEngine(
 		}
 	}
 
-	return &SqlEngine{
-		provider:       pro,
-		contextFactory: sqlContextFactory(),
-		dsessFactory:   sessFactory,
-		engine:         engine,
-	}, nil
+	sqlEngine.provider = pro
+	sqlEngine.contextFactory = sqlContextFactory()
+	sqlEngine.dsessFactory = sessFactory
+	sqlEngine.engine = engine
+
+	return sqlEngine, nil
 }
 
 // NewRebasedSqlEngine returns a smalled rebased engine primarily used in filterbranch.
@@ -323,7 +335,7 @@ func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engin
 
 // configureEventScheduler configures the event scheduler with the |engine| for executing events, a |sessFactory|
 // for creating sessions, and a DoltDatabaseProvider, |pro|.
-func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, sessFactory sessionFactory, pro dsqle.DoltDatabaseProvider) error {
+func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, sessFactory sessionFactory, pro *dsqle.DoltDatabaseProvider) error {
 	// need to give correct user, use the definer as user to run the event definition queries
 	ctxFactory := sqlContextFactory()
 
@@ -383,7 +395,7 @@ func sqlContextFactory() contextFactory {
 }
 
 // doltSessionFactory returns a sessionFactory that creates a new DoltSession
-func doltSessionFactory(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfig, bc *branch_control.Controller, autocommit bool) sessionFactory {
+func doltSessionFactory(pro *dsqle.DoltDatabaseProvider, config config.ReadWriteConfig, bc *branch_control.Controller, autocommit bool) sessionFactory {
 	return func(mysqlSess *sql.BaseSession, provider sql.DatabaseProvider) (*dsess.DoltSession, error) {
 		doltSession, err := dsess.NewDoltSession(mysqlSess, pro, config, bc)
 		if err != nil {

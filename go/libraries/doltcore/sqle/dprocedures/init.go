@@ -39,7 +39,7 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 
 	{Name: "dolt_merge", Schema: doltMergeSchema, Function: doltMerge},
 	{Name: "dolt_pull", Schema: int64Schema("fast_forward", "conflicts"), Function: doltPull},
-	{Name: "dolt_push", Schema: int64Schema("status"), Function: doltPush},
+	{Name: "dolt_push", Schema: doltPushSchema, Function: doltPush},
 	{Name: "dolt_remote", Schema: int64Schema("status"), Function: doltRemote},
 	{Name: "dolt_reset", Schema: int64Schema("status"), Function: doltReset},
 	{Name: "dolt_revert", Schema: int64Schema("status"), Function: doltRevert},
@@ -62,7 +62,7 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 
 	{Name: "dmerge", Schema: doltMergeSchema, Function: doltMerge},
 	{Name: "dpull", Schema: int64Schema("fast_forward", "conflicts"), Function: doltPull},
-	{Name: "dpush", Schema: int64Schema("status"), Function: doltPush},
+	{Name: "dpush", Schema: doltPushSchema, Function: doltPush},
 	{Name: "dremote", Schema: int64Schema("status"), Function: doltRemote},
 	{Name: "dreset", Schema: int64Schema("status"), Function: doltReset},
 	{Name: "drevert", Schema: int64Schema("status"), Function: doltRevert},

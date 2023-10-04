@@ -46,6 +46,17 @@ type schemaMergeTest struct {
 	skipOldFmt          bool
 	skipFlipOnNewFormat bool
 	skipFlipOnOldFormat bool
+	dataTests           []dataTest
+}
+
+type dataTest struct {
+	name         string
+	ancestor     []sql.Row
+	left, right  []sql.Row
+	merged       []sql.Row
+	dataConflict bool
+	skip         bool
+	skipFlip     bool
 }
 
 type table struct {
@@ -98,17 +109,251 @@ var columnAddDropTests = []schemaMergeTest{
 	// one side changes columns
 	{
 		name:     "left side column add",
-		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1)),
-		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2)),
-		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1)),
-		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2)),
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       ")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       ")),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)")),
+		dataTests: []dataTest{
+			{
+				name:     "left side adds column and assigns non-null value",
+				ancestor: singleRow(1),
+				left:     singleRow(1, 2),
+				right:    singleRow(1),
+				merged:   singleRow(1, 2),
+			},
+			{
+				name:     "left side adds column and assigns null value",
+				ancestor: singleRow(1),
+				left:     singleRow(1, nil),
+				right:    singleRow(1),
+				merged:   singleRow(1, nil),
+			},
+		},
+	},
+	{
+		name:     "left side column add with additional column after",
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int)       ")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int)")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int)       ")),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int)")),
+		dataTests: []dataTest{
+			{
+				name:     "left side adds column and assigns non-null value, extra column is non-NULL",
+				ancestor: singleRow(1, 3),
+				left:     singleRow(1, 2, 3),
+				right:    singleRow(1, 3),
+				merged:   singleRow(1, 2, 3),
+			},
+			{
+				name:     "left side adds column and assigns null value, extra column is non-NULL",
+				ancestor: singleRow(1, 3),
+				left:     singleRow(1, nil, 3),
+				right:    singleRow(1, 3),
+				merged:   singleRow(1, nil, 3),
+			},
+			{
+				// Skipped because of (https://github.com/dolthub/dolt/issues/6745)
+				name:     "left side adds column and assigns non-null value, extra column has data change on right",
+				ancestor: singleRow(1, 3),
+				left:     singleRow(1, 2, 3),
+				right:    singleRow(1, 4),
+				merged:   singleRow(1, 2, 4),
+				skipFlip: true,
+			},
+			{
+				// Skipped because of (https://github.com/dolthub/dolt/issues/6745)
+				name:     "left side adds column and assigns non-null value, extra column has data change on right to NULL",
+				ancestor: singleRow(1, 3),
+				left:     singleRow(1, 2, 3),
+				right:    singleRow(1, nil),
+				merged:   singleRow(1, 2, nil),
+				skipFlip: true,
+			},
+			{
+				// Skipped because of (https://github.com/dolthub/dolt/issues/6745)
+				name:     "left side adds column and assigns non-null value, extra column has data change on right to non-NULL",
+				ancestor: singleRow(1, nil),
+				left:     singleRow(1, 2, nil),
+				right:    singleRow(1, 3),
+				merged:   singleRow(1, 2, 3),
+				skipFlip: true,
+			},
+			{
+				name:     "left side adds column and assigns non-null value, extra column is NULL",
+				ancestor: singleRow(1, nil),
+				left:     singleRow(1, 2, nil),
+				right:    singleRow(1, nil),
+				merged:   singleRow(1, 2, nil),
+			},
+			{
+				name:     "left side adds column and assigns null value, extra column is NULL",
+				ancestor: singleRow(1, nil),
+				left:     singleRow(1, nil, nil),
+				right:    singleRow(1, nil),
+				merged:   singleRow(1, nil, nil),
+			},
+			{
+				// Skipped because of (https://github.com/dolthub/dolt/issues/6745)
+				name:     "left side adds column and assigns null value, extra column has data change on right",
+				ancestor: singleRow(1, 3),
+				left:     singleRow(1, nil, 3),
+				right:    singleRow(1, 4),
+				merged:   singleRow(1, nil, 4),
+				skipFlip: true,
+			},
+			{
+				// Skipped because of (https://github.com/dolthub/dolt/issues/6745)
+				name:     "left side adds column and assigns null value, extra column has data change on right to NULL",
+				ancestor: singleRow(1, 3),
+				left:     singleRow(1, nil, 3),
+				right:    singleRow(1, nil),
+				merged:   singleRow(1, nil, nil),
+				skipFlip: true,
+			},
+			{
+				// Skipped because of (https://github.com/dolthub/dolt/issues/6745)
+				name:     "left side adds column and assigns null value, extra column has data change on right to non-NULL",
+				ancestor: singleRow(1, nil),
+				left:     singleRow(1, nil, nil),
+				right:    singleRow(1, 3),
+				merged:   singleRow(1, nil, 3),
+				skipFlip: true,
+			},
+		},
 	},
 	{
 		name:     "left side column drop",
-		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2)),
-		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1)),
-		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2)),
-		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1)),
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int, a int)")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int)       ")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int, a int)")),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int)       ")),
+		dataTests: []dataTest{
+			{
+				name:     "no data change",
+				ancestor: singleRow(1, 2, 3),
+				left:     singleRow(1, 2),
+				right:    singleRow(1, 2, 3),
+				merged:   singleRow(1, 2),
+			},
+			{
+				// Skipped because the differ currently doesn't see this as a data conflict because
+				// both left and right tuple representations are the same.
+				// (https://github.com/dolthub/dolt/issues/6748)
+				name:         "one side sets to NULL, other drops non-NULL",
+				ancestor:     singleRow(1, 2, 3),
+				left:         singleRow(1, 2),
+				right:        singleRow(1, 2, nil),
+				dataConflict: true,
+				skip:         true,
+			},
+			{
+				// Skipped because the differ currently doesn't try to merge the dropped column.
+				// (https://github.com/dolthub/dolt/issues/6747)
+				name:         "one side sets to NULL, other drops non-NULL, plus data change",
+				ancestor:     singleRow(1, 2, 3),
+				left:         singleRow(1, 2),
+				right:        singleRow(1, 3, nil),
+				dataConflict: true,
+				skip:         true,
+			},
+			{
+				// Skipped because the differ doesn't see left as modified because
+				// it has the same tuple representation as ancestor.
+				// (https://github.com/dolthub/dolt/issues/6746)
+				name:         "one side sets to non-NULL, other drops NULL",
+				ancestor:     singleRow(1, 2, nil),
+				left:         singleRow(1, 2),
+				right:        singleRow(1, 2, 3),
+				dataConflict: true,
+				skip:         true,
+			},
+			{
+				// Skipped because the differ currently doesn't try to merge the dropped column.
+				// (https://github.com/dolthub/dolt/issues/6747)
+				name:         "one side sets to non-NULL, other drops NULL, plus data change",
+				ancestor:     singleRow(1, 2, nil),
+				left:         singleRow(1, 3),
+				right:        singleRow(1, 2, 3),
+				dataConflict: true,
+				skip:         true,
+			},
+			{
+				// Skipped because the differ currently doesn't try to merge the dropped column.
+				// (https://github.com/dolthub/dolt/issues/6747)
+				name:         "one side sets to non-NULL, other drops non-NULL",
+				ancestor:     singleRow(1, 2, 3),
+				left:         singleRow(1, 2),
+				right:        singleRow(1, 2, 4),
+				dataConflict: true,
+				skip:         true,
+			},
+		},
+	},
+	{
+		name:     "left side column drop with additional column after",
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int)")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int)       ")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int)")),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int)       ")),
+		dataTests: []dataTest{
+			{
+				name:     "no data change",
+				ancestor: singleRow(1, 2, 3),
+				left:     singleRow(1, 3),
+				right:    singleRow(1, 2, 3),
+				merged:   singleRow(1, 3),
+			},
+			{
+				// Skipped because the differ currently doesn't try to merge the dropped column.
+				// (https://github.com/dolthub/dolt/issues/6747)
+				name:         "one side sets to NULL, other drops non-NULL",
+				ancestor:     singleRow(1, 2, 3),
+				left:         singleRow(1, 3),
+				right:        singleRow(1, nil, 3),
+				dataConflict: true,
+				skip:         true,
+			},
+			{
+				// Skipped because the differ currently doesn't try to merge the dropped column.
+				// (https://github.com/dolthub/dolt/issues/6747)
+				name:         "one side sets to NULL, other drops non-NULL, plus data change",
+				ancestor:     singleRow(1, 2, 4),
+				left:         singleRow(1, 3),
+				right:        singleRow(1, nil, 4),
+				dataConflict: true,
+				skip:         true,
+			},
+			{
+				// Skipped because the differ currently doesn't try to merge the dropped column.
+				// (https://github.com/dolthub/dolt/issues/6747)
+				name:         "one side sets to non-NULL, other drops NULL, plus data change",
+				ancestor:     singleRow(1, nil, 3),
+				left:         singleRow(1, 3),
+				right:        singleRow(1, 2, 3),
+				dataConflict: true,
+				skip:         true,
+			},
+			{
+				// Skipped because the differ currently doesn't try to merge the dropped column.
+				// (https://github.com/dolthub/dolt/issues/6747)
+				name:         "one side sets to non-NULL, other drops NULL, plus data change",
+				ancestor:     singleRow(1, nil, 3),
+				left:         singleRow(1, 4),
+				right:        singleRow(1, 2, 3),
+				dataConflict: true,
+				skip:         true,
+			},
+			{
+				// Skipped because the differ currently doesn't try to merge the dropped column.
+				// (https://github.com/dolthub/dolt/issues/6747)
+				name:         "one side sets to non-NULL, other drops non-NULL",
+				ancestor:     singleRow(1, 2, 3),
+				left:         singleRow(1, 3),
+				right:        singleRow(1, 4, 3),
+				dataConflict: true,
+				skip:         true,
+			},
+		},
 	},
 	// both sides change columns
 	{
@@ -131,17 +376,90 @@ var columnAddDropTests = []schemaMergeTest{
 	},
 	{
 		name:     "convergent column adds",
-		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1)),
-		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, nil)),
-		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, nil)),
-		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, nil)),
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int)       ")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int, a int)")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int, a int)")),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int, a int)")),
+		dataTests: []dataTest{
+			{
+				name:     "convergent adds assigning null",
+				ancestor: singleRow(1, 2),
+				left:     singleRow(1, 2, nil),
+				right:    singleRow(1, 2, nil),
+				merged:   singleRow(1, 2, nil),
+			},
+			{
+				// Skipped because the differ doesn't see left as modified because
+				// it has the same tuple representation as ancestor.
+				// (https://github.com/dolthub/dolt/issues/6746)
+				name:         "convergent adds with differing nullness",
+				ancestor:     singleRow(1, 2),
+				left:         singleRow(1, 2, nil),
+				right:        singleRow(1, 2, 3),
+				dataConflict: true,
+				skip:         true,
+			},
+			{
+				name:         "convergent adds with differing nullness, plus convergent data change",
+				ancestor:     singleRow(1, 2),
+				left:         singleRow(1, 3, nil),
+				right:        singleRow(1, 3, 4),
+				dataConflict: true,
+			},
+		},
+	},
+	{
+		name:     "convergent column add in middle of schema",
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)       ")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int, a int)")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int, a int)")),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int, a int)")),
+		dataTests: []dataTest{
+			{
+				name:     "convergent adds assigning null",
+				ancestor: singleRow(1, 2),
+				left:     singleRow(1, nil, 2),
+				right:    singleRow(1, nil, 2),
+				merged:   singleRow(1, nil, 2),
+			},
+			{
+				name:         "convergent adds with differing nullness",
+				ancestor:     singleRow(1, 2),
+				left:         singleRow(1, nil, 2),
+				right:        singleRow(1, 3, 2),
+				dataConflict: true,
+			},
+			{
+				name:         "convergent adds with differing nullness, plus convergent data change",
+				ancestor:     singleRow(1, 2),
+				left:         singleRow(1, nil, 3),
+				right:        singleRow(1, 4, 3),
+				dataConflict: true,
+			},
+		},
 	},
 	{
 		name:     "convergent column drops",
-		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)"), row(1, 2)),
-		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1)),
-		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1)),
-		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       "), row(1)),
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int)")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       ")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       ")),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY)       ")),
+		dataTests: []dataTest{
+			{
+				name:     "no data change",
+				ancestor: singleRow(1, 2),
+				left:     singleRow(1),
+				right:    singleRow(1),
+				merged:   singleRow(1),
+			},
+			{
+				name:     "convergent drops on new row",
+				ancestor: nil,
+				left:     singleRow(1),
+				right:    singleRow(1),
+				merged:   singleRow(1),
+			},
+		},
 	},
 	{
 		name:       "convergent column adds, independent drops",
@@ -347,6 +665,78 @@ var typeChangeTests = []schemaMergeTest{
 		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a char(20), b int)"), row(1, "2", 3)),
 	},
 	// column changes one side, data changes other side
+	{
+		name:     "modify column type on the left side between compatible string types",
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a varchar(20), b int, c varchar(20))")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a text, b int, c text)")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a varchar(20), b int, c varchar(20))")),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a text, b int, c text)")),
+		dataTests: []dataTest{
+			{
+				name:     "schema change, no data change",
+				ancestor: singleRow(1, "test", 1, "test"),
+				left:     singleRow(1, "test", 1, "test"),
+				right:    singleRow(1, "test", 1, "test"),
+				merged:   singleRow(1, "test", 1, "test"),
+			},
+			{
+				name:     "insert and schema change on left, no change on right",
+				ancestor: nil,
+				left:     singleRow(1, "test", 1, "test"),
+				right:    nil,
+				merged:   singleRow(1, "test", 1, "test"),
+			},
+			{
+				name:     "insert on right, schema change on left",
+				ancestor: nil,
+				left:     nil,
+				right:    singleRow(1, "test", 1, "test"),
+				merged:   singleRow(1, "test", 1, "test"),
+			},
+			{
+				name:     "data and schema change on left, no change on right",
+				ancestor: singleRow(1, "test", 1, "test"),
+				left:     singleRow(1, "hello world", 1, "hello world"),
+				right:    singleRow(1, "test", 1, "test"),
+				merged:   singleRow(1, "hello world", 1, "hello world"),
+			},
+			{
+				name:     "data change on right, schema change on left",
+				ancestor: singleRow(1, "test", 1, "test"),
+				left:     singleRow(1, "test", 1, "test"),
+				right:    singleRow(1, "hello world", 1, "hello world"),
+				merged:   singleRow(1, "hello world", 1, "hello world"),
+			},
+			{
+				name:     "data set and schema change on left, no change on right",
+				ancestor: singleRow(1, nil, 1, nil),
+				left:     singleRow(1, "hello world", 1, "hello world"),
+				right:    singleRow(1, nil, 1, nil),
+				merged:   singleRow(1, "hello world", 1, "hello world"),
+			},
+			{
+				name:     "data set on right, schema change on left",
+				ancestor: singleRow(1, nil, 1, nil),
+				left:     singleRow(1, nil, 1, nil),
+				right:    singleRow(1, "hello world", 1, "hello world"),
+				merged:   singleRow(1, "hello world", 1, "hello world"),
+			},
+			{
+				name:     "convergent inserts",
+				ancestor: nil,
+				left:     singleRow(1, "test", 1, "test"),
+				right:    singleRow(1, "test", 1, "test"),
+				merged:   singleRow(1, "test", 1, "test"),
+			},
+			{
+				name:         "conflicting inserts",
+				ancestor:     nil,
+				left:         singleRow(1, "test", 1, "test"),
+				right:        singleRow(1, "hello world", 1, "hello world"),
+				dataConflict: true,
+			},
+		},
+	},
 }
 
 var keyChangeTests = []schemaMergeTest{
@@ -520,42 +910,86 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 			tmp := test.left
 			test.left = test.right
 			test.right = tmp
+			for i, _ := range test.dataTests {
+				tmp := test.dataTests[i].left
+				test.dataTests[i].left = test.dataTests[i].right
+				test.dataTests[i].right = tmp
+			}
 		}
 
 		t.Run(test.name, func(t *testing.T) {
-			a, l, r, m := setupSchemaMergeTest(t, test)
+			runTest := func(t *testing.T, test schemaMergeTest, expectDataConflict bool) {
+				a, l, r, m := setupSchemaMergeTest(t, test)
 
-			ctx := context.Background()
-			var mo merge.MergeOpts
-			var eo editor.Options
-			eo = eo.WithDeaf(editor.NewInMemDeaf(a.VRW()))
-			// attempt merge before skipping to assert no panics
-			result, err := merge.MergeRoots(sql.NewContext(ctx), l, r, a, rootish{r}, rootish{a}, eo, mo)
-			maybeSkip(t, a.VRW().Format(), test, flipSides)
+				ctx := context.Background()
+				var mo merge.MergeOpts
+				var eo editor.Options
+				eo = eo.WithDeaf(editor.NewInMemDeaf(a.VRW()))
+				// attempt merge before skipping to assert no panics
+				result, err := merge.MergeRoots(sql.NewContext(ctx), l, r, a, rootish{r}, rootish{a}, eo, mo)
+				maybeSkip(t, a.VRW().Format(), test, flipSides)
 
-			if test.conflict {
-				// TODO: Test the conflict error message more deeply
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				exp, err := m.MapTableHashes(ctx)
-				assert.NoError(t, err)
-				act, err := result.Root.MapTableHashes(ctx)
-				assert.NoError(t, err)
+				if test.conflict {
+					// TODO: Test the conflict error message more deeply
+					require.Error(t, err)
+				} else {
+					require.NoError(t, err)
+					exp, err := m.MapTableHashes(ctx)
+					assert.NoError(t, err)
+					act, err := result.Root.MapTableHashes(ctx)
+					assert.NoError(t, err)
 
-				assert.Equal(t, len(exp), len(act))
-				for name, addr := range exp {
-					a, ok := act[name]
-					assert.True(t, ok)
-					if !assert.Equal(t, addr, a) {
-						expTbl, _, err := m.GetTable(ctx, name)
-						require.NoError(t, err)
-						t.Logf("expected rows: %s", expTbl.DebugString(ctx))
-						actTbl, _, err := result.Root.GetTable(ctx, name)
-						require.NoError(t, err)
-						t.Logf("actual rows: %s", actTbl.DebugString(ctx))
+					assert.Equal(t, len(exp), len(act))
+
+					if expectDataConflict {
+						foundDataConflict := false
+						for name, _ := range exp {
+							_, ok := act[name]
+							assert.True(t, ok)
+							actTbl, _, err := result.Root.GetTable(ctx, name)
+							require.NoError(t, err)
+							hasConflict, err := actTbl.HasConflicts(ctx)
+							require.NoError(t, err)
+							foundDataConflict = foundDataConflict || hasConflict
+						}
+						require.Equal(t, expectDataConflict, foundDataConflict)
+					} else {
+						for name, addr := range exp {
+							a, ok := act[name]
+							assert.True(t, ok)
+
+							actTbl, _, err := result.Root.GetTable(ctx, name)
+							require.NoError(t, err)
+							hasConflict, err := actTbl.HasConflicts(ctx)
+							require.NoError(t, err)
+							require.False(t, hasConflict, "Unexpected data conflict")
+
+							if !assert.Equal(t, addr, a) {
+								expTbl, _, err := m.GetTable(ctx, name)
+								require.NoError(t, err)
+								t.Logf("expected rows: %s", expTbl.DebugString(ctx))
+								t.Logf("actual rows: %s", actTbl.DebugString(ctx))
+							}
+						}
 					}
 				}
+			}
+			t.Run("test schema merge", func(t *testing.T) {
+				runTest(t, test, false)
+			})
+			for _, data := range test.dataTests {
+				test.ancestor.rows = data.ancestor
+				test.left.rows = data.left
+				test.right.rows = data.right
+				test.merged.rows = data.merged
+				test.skipNewFmt = test.skipNewFmt || data.skip
+				test.skipFlipOnNewFormat = test.skipFlipOnNewFormat || data.skipFlip
+				t.Run(data.name, func(t *testing.T) {
+					if data.skip {
+						t.Skip()
+					}
+					runTest(t, test, data.dataConflict)
+				})
 			}
 		})
 	}
@@ -613,6 +1047,10 @@ func sch(definition string) namedSchema {
 
 func row(values ...any) sql.Row {
 	return sql.NewRow(values...)
+}
+
+func singleRow(values ...any) []sql.Row {
+	return []sql.Row{row(values...)}
 }
 
 func makeRootWithTable(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options, tbl table) *doltdb.RootValue {

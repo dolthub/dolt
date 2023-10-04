@@ -16,11 +16,18 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
+	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dustin/go-humanize"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -30,8 +37,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
@@ -87,93 +94,222 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, pushDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	autoSetUpRemote := dEnv.Config.GetStringOrDefault(env.PushAutoSetupRemote, "false")
-	pushAutoSetUpRemote, err := strconv.ParseBool(autoSetUpRemote)
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	if closeFunc != nil {
+		defer closeFunc()
+	}
+
+	query, err := constructInterpolatedDoltPushQuery(apr)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	opts, err := env.NewPushOpts(ctx, apr, dEnv.RepoStateReader(), dEnv.DoltDB, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag), pushAutoSetUpRemote)
-	if err != nil {
-		var verr errhand.VerboseError
-		switch err {
-		case env.ErrNoUpstreamForBranch:
-			currentBranch, err := dEnv.RepoStateReader().CWBHeadRef()
-			if err != nil {
-				verr = errhand.BuildDError("fatal: The current branch could not be identified").AddCause(err).Build()
-			} else {
-				remoteName := "<remote>"
-				if defRemote, verr := env.GetDefaultRemote(dEnv.RepoStateReader()); verr == nil {
-					remoteName = defRemote.Name
-				}
-				verr = errhand.BuildDError("fatal: The current branch " + currentBranch.GetPath() + " has no upstream branch.\n" +
-					"To push the current branch and set the remote as upstream, use\n" +
-					"\tdolt push --set-upstream " + remoteName + " " + currentBranch.GetPath() + "\n" +
-					"To have this happen automatically for branches without a tracking\n" +
-					"upstream, see 'push.autoSetupRemote' in 'dolt config --help'.").Build()
-			}
-
-		case env.ErrInvalidSetUpstreamArgs:
-			verr = errhand.BuildDError("error: --set-upstream requires <remote> and <refspec> params.").SetPrintUsage().Build()
-		default:
-			verr = errhand.VerboseErrorFromError(err)
-		}
-		return HandleVErrAndExitCode(verr, usage)
-	}
-
-	remoteDB, err := opts.Remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format(), dEnv)
-	if err != nil {
-		err = actions.HandleInitRemoteStorageClientErr(opts.Remote.Name, opts.Remote.Url, err)
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-
-	tmpDir, err := dEnv.TempTableFilesDir()
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-	var verr errhand.VerboseError
-	err = actions.DoPush(ctx, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), dEnv.DoltDB, remoteDB, tmpDir, opts, buildProgStarter(defaultLanguage), stopProgFuncs)
-	if err != nil {
-		verr = printInfoForPushError(err, opts.Remote, opts.DestRef, opts.RemoteRef)
-	}
-
-	if opts.SetUpstream {
-		err := dEnv.RepoState.Save(dEnv.FS)
+	errChan := make(chan error)
+	go func() {
+		defer close(errChan)
+		schema, rowIter, err := queryist.Query(sqlCtx, query)
 		if err != nil {
-			err = fmt.Errorf("%w; %s", actions.ErrFailedToSaveRepoState, err.Error())
+			errChan <- err
+			return
+		}
+
+		sqlRows, err := sql.RowIterToRows(sqlCtx, schema, rowIter)
+		if err != nil {
+			errChan <- err
+			return
+		}
+		err = printPushMessage(sqlRows)
+		if err != nil {
+			errChan <- err
+			return
+		}
+	}()
+
+	spinner := TextSpinner{}
+	cli.Print(spinner.next() + " Uploading...")
+	defer func() {
+		cli.DeleteAndPrint(len(" Uploading...")+1, "")
+	}()
+
+	for {
+		select {
+		case err := <-errChan:
+			return handlePushError(err, usage, apr, queryist, sqlCtx)
+		case <-ctx.Done():
+			if ctx.Err() != nil {
+				switch ctx.Err() {
+				case context.DeadlineExceeded:
+					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("timeout exceeded")), usage)
+				case context.Canceled:
+					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("push cancelled by force")), usage)
+				default:
+					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("error cancelling context: "+ctx.Err().Error())), usage)
+				}
+			}
+			return HandleVErrAndExitCode(nil, usage)
+		case <-time.After(time.Millisecond * 50):
+			cli.DeleteAndPrint(len(" Uploading...")+1, spinner.next()+" Uploading...")
 		}
 	}
-
-	return HandleVErrAndExitCode(verr, usage)
 }
 
-func printInfoForPushError(err error, remote env.Remote, destRef, remoteRef ref.DoltRef) errhand.VerboseError {
+// constructInterpolatedDoltPushQuery generates the sql query necessary to call the DOLT_PUSH() function
+// Also interpolates this query to prevent sql injection.
+func constructInterpolatedDoltPushQuery(apr *argparser.ArgParseResults) (string, error) {
+	var params []interface{}
+	var args []string
+
+	if setUpstream := apr.Contains(cli.SetUpstreamFlag); setUpstream {
+		args = append(args, "'--set-upstream'")
+	}
+	if force := apr.Contains(cli.ForceFlag); force {
+		args = append(args, "'--force'")
+	}
+	for _, arg := range apr.Args {
+		args = append(args, "?")
+		params = append(params, arg)
+	}
+
+	query := fmt.Sprintf("call dolt_push(%s)", strings.Join(args, ", "))
+	interpolatedQuery, err := dbr.InterpolateForDialect(query, params, dialect.MySQL)
+	if err != nil {
+		return "", err
+	}
+
+	return interpolatedQuery, nil
+}
+
+// getDefaultRemote gets the name of the default remote.
+func getDefaultRemote(sqlCtx *sql.Context, queryist cli.Queryist) (string, error) {
+	rows, err := GetRowsForSql(queryist, sqlCtx, "select name from dolt_remotes")
+	if err != nil {
+		return "", err
+	}
+	if len(rows) == 0 {
+		return "", env.ErrNoRemote
+	}
+	if len(rows) == 1 {
+		return rows[0][0].(string), nil
+	}
+	for _, row := range rows {
+		if row[0].(string) == "origin" {
+			return "origin", nil
+		}
+	}
+	return "", env.ErrCantDetermineDefault
+}
+
+// processFetchSpecs takes a string of fetch specs and returns the destination ref and remote ref
+// Assumes the fetch specs look something like: ["refs/heads/*:refs/remotes/origin/*"]
+func processFetchSpecs(fetchSpecs string, branch string) (destRef, remoteRef string) {
+	destAndRemoteRefs := strings.Split(fetchSpecs, ":")
+	destRef = destAndRemoteRefs[0]
+	destRef = strings.TrimPrefix(destRef, "[\"")
+	destRef = strings.ReplaceAll(destRef, "*", branch)
+
+	remoteRef = destAndRemoteRefs[1]
+	remoteRef = strings.TrimSuffix(remoteRef, "\"]")
+	remoteRef = strings.ReplaceAll(remoteRef, "*", branch)
+
+	return
+}
+
+// printPushMessage prints the appropriate message for the given push output
+func printPushMessage(rows []sql.Row) error {
+	var statusCode int64
+	if intCode, ok := rows[0][0].(int64); ok {
+		statusCode = intCode
+	} else if strCode, ok := rows[0][0].(string); ok {
+		// remote execution returns status code as a string
+		intCode, err := strconv.Atoi(strCode)
+		if err != nil {
+			return err
+		}
+		statusCode = int64(intCode)
+	}
+	if statusCode == 0 && len(rows[0]) > 1 && rows[0][1].(string) == dprocedures.UpToDateMessage {
+		cli.Println(dprocedures.UpToDateMessage)
+	}
+	return nil
+}
+
+// handlePushError prints the appropriate error message and returns the exit code
+func handlePushError(err error, usage cli.UsagePrinter, apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context) int {
+	if err == nil {
+		return 0
+	}
+
+	var verr errhand.VerboseError
 	switch err {
-	case doltdb.ErrUpToDate:
-		cli.Println("Everything up-to-date")
+	case env.ErrNoUpstreamForBranch:
+		rows, err := GetRowsForSql(queryist, sqlCtx, "select active_branch()")
+		if err != nil {
+			verr = errhand.BuildDError("fatal: The current branch could not be identified").AddCause(err).Build()
+		} else {
+			currentBranch := rows[0][0].(string)
+			remoteName := "<remote>"
+			if defRemote, verr := getDefaultRemote(sqlCtx, queryist); verr == nil {
+				remoteName = defRemote
+			}
+			verr = errhand.BuildDError("fatal: The current branch " + currentBranch + " has no upstream branch.\n" +
+				"To push the current branch and set the remote as upstream, use\n" +
+				"\tdolt push --set-upstream " + remoteName + " " + currentBranch + "\n" +
+				"To have this happen automatically for branches without a tracking\n" +
+				"upstream, see 'push.autoSetupRemote' in 'dolt config --help'.").Build()
+		}
+	case env.ErrInvalidSetUpstreamArgs:
+		verr = errhand.BuildDError("error: --set-upstream requires <remote> and <refspec> params.").SetPrintUsage().Build()
 	case doltdb.ErrIsAhead, actions.ErrCantFF, datas.ErrMergeNeeded:
-		cli.Printf("To %s\n", remote.Url)
-		cli.Printf("! [rejected]          %s -> %s (non-fast-forward)\n", destRef.String(), remoteRef.String())
-		cli.Printf("error: failed to push some refs to '%s'\n", remote.Url)
-		cli.Println("hint: Updates were rejected because the tip of your current branch is behind")
-		cli.Println("hint: its remote counterpart. Integrate the remote changes (e.g.")
-		cli.Println("hint: 'dolt pull ...') before pushing again.")
-		return errhand.BuildDError("").Build()
+		rows, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("select url, fetch_specs from dolt_remotes where name = '%s'", apr.Arg(0)))
+		if err != nil {
+			verr = errhand.BuildDError("could not identify remote").AddCause(err).Build()
+		} else {
+			remoteUrl := rows[0][0].(string)
+			fetchSpecs := rows[0][1].(types.JSONDocument)
+			fetchSpecsStr, err := fetchSpecs.ToString(sqlCtx)
+			if err != nil {
+				verr = errhand.BuildDError("could not identify destination remote").AddCause(err).Build()
+			}
+			var branch string
+			if apr.NArg() > 1 {
+				branch = apr.Arg(1)
+			} else {
+				rows, err := GetRowsForSql(queryist, sqlCtx, "select active_branch()")
+				if err != nil {
+					verr = errhand.BuildDError("could not identify current branch").AddCause(err).Build()
+				} else {
+					branch = rows[0][0].(string)
+				}
+			}
+			destRef, remoteRef := processFetchSpecs(fetchSpecsStr, branch)
+
+			cli.Printf("To %s\n", remoteUrl)
+			cli.Printf("! [rejected]          %s -> %s (non-fast-forward)\n", destRef, remoteRef)
+			cli.Printf("error: failed to push some refs to '%s'\n", remoteUrl)
+			cli.Println("hint: Updates were rejected because the tip of your current branch is behind")
+			cli.Println("hint: its remote counterpart. Integrate the remote changes (e.g.")
+			cli.Println("hint: 'dolt pull ...') before pushing again.")
+			verr = errhand.BuildDError("").Build()
+		}
 	case actions.ErrUnknownPushErr:
-		status, ok := status.FromError(err)
-		if ok && status.Code() == codes.PermissionDenied {
+		s, ok := status.FromError(err)
+		if ok && s.Code() == codes.PermissionDenied {
 			cli.Println("hint: have you logged into DoltHub using 'dolt login'?")
 			cli.Println("hint: check that user.email in 'dolt config --list' has write perms to DoltHub repo")
 		}
 		if rpcErr, ok := err.(*remotestorage.RpcError); ok {
-			return errhand.BuildDError("error: push failed").AddCause(err).AddDetails(rpcErr.FullDetails()).Build()
+			verr = errhand.BuildDError("error: push failed").AddCause(err).AddDetails(rpcErr.FullDetails()).Build()
 		} else {
-			return errhand.BuildDError("error: push failed").AddCause(err).Build()
+			verr = errhand.BuildDError("error: push failed").AddCause(err).Build()
 		}
 	default:
-		return errhand.BuildDError("error: push failed").AddCause(err).Build()
+		verr = errhand.VerboseErrorFromError(err)
 	}
-	return nil
+
+	return HandleVErrAndExitCode(verr, usage)
 }
 
 func pullerProgFunc(ctx context.Context, statsCh chan pull.Stats, language progLanguage) {

@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -114,6 +115,16 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		case err := <-errChan:
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		case <-ctx.Done():
+			if ctx.Err() != nil {
+				switch ctx.Err() {
+				case context.DeadlineExceeded:
+					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("timeout exceeded")), usage)
+				case context.Canceled:
+					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("fetch cancelled by force")), usage)
+				default:
+					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("error cancelling context: "+ctx.Err().Error())), usage)
+				}
+			}
 			return HandleVErrAndExitCode(nil, usage)
 		case <-time.After(time.Millisecond * 50):
 			cli.DeleteAndPrint(len(" Fetching...")+1, spinner.next()+" Fetching...")
