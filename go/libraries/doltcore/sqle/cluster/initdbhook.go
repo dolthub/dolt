@@ -16,6 +16,7 @@ package cluster
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -45,16 +46,33 @@ func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads, orig
 			// TODO: url sanitize name
 			remoteUrl := strings.Replace(r.RemoteURLTemplate(), dsess.URLTemplateDatabasePlaceholder, name, -1)
 
-			// TODO: Assert remotesapi URL.
-			r := env.NewRemote(r.Name(), remoteUrl, nil)
-
-			err := denv.AddRemote(r)
+			// We're going to check if this database already has
+			// the remote we're trying to add. This can happen in
+			// the DOLT_UNDROP case, for example. If a matching
+			// remote exists, we assert that it has the expected
+			// URL. It's an error otherwise.
+			remotes, err := denv.GetRemotes()
 			if err != nil {
 				return err
 			}
 
+			var er env.Remote
+			var ok bool
+			if er, ok = remotes[r.Name()]; ok {
+				if er.Url != remoteUrl {
+					return fmt.Errorf("invalid remote (%s) for cluster replication found in database %s: expect url %s but the existing remote had url %s", r.Name(), name, remoteUrl, er.Url)
+				}
+			} else {
+				// TODO: Assert remotesapi URL.
+				er = env.NewRemote(r.Name(), remoteUrl, nil)
+				err := denv.AddRemote(er)
+				if err != nil {
+					return err
+				}
+			}
+
 			remoteDBs = append(remoteDBs, func(ctx context.Context) (*doltdb.DoltDB, error) {
-				return r.GetRemoteDB(ctx, types.Format_Default, dialprovider)
+				return er.GetRemoteDB(ctx, types.Format_Default, dialprovider)
 			})
 			remoteUrls = append(remoteUrls, remoteUrl)
 		}

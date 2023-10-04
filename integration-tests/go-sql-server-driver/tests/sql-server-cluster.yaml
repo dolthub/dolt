@@ -1570,3 +1570,72 @@ tests:
         columns: ["database","standby_remote","role","epoch",]
         rows:
         - ["repo1", "standby", "standby", "1"]
+- name: undropped database on primary is replicated to standby
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:3852/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3851
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3309
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3310
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:3851/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3852
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3310
+  connections:
+  - on: server1
+    queries:
+    - exec: 'SET @@GLOBAL.dolt_cluster_ack_writes_timeout_secs = 10'
+    - exec: 'create database repo1'
+    - exec: 'create database droppedrepo'
+    - exec: 'use droppedrepo'
+    - exec: 'create table vals (i int primary key)'
+    - exec: 'use repo1'
+    - exec: 'drop database droppedrepo'
+    - exec: 'create table vals (i int primary key)'
+  - on: server2
+    queries:
+    - exec: 'use repo1'
+    - exec: 'call dolt_undrop("droppedrepo")'
+      error_match: "database server is set to read only mode"
+  - on: server1
+    queries:
+    - exec: 'use repo1'
+    - exec: 'call dolt_undrop("droppedrepo")'
+    - exec: 'use droppedrepo'
+    - exec: 'insert into vals values (0),(1),(2)'
+  - on: server2
+    queries:
+    - exec: 'use droppedrepo'
+    - query: 'select count(*) as cnt from vals'
+      result:
+        columns: ["cnt"]
+        rows: [["3"]]
