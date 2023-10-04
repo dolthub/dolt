@@ -33,7 +33,7 @@ func doltUndrop(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 
 	switch len(args) {
 	case 0:
-		availableDatabases, err := provider.ListUndroppableDatabases(ctx)
+		availableDatabases, err := provider.ListDroppedDatabases(ctx)
 		if err != nil {
 			return nil, err
 		}

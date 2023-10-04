@@ -623,11 +623,11 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	return p.invalidateDbStateInAllSessions(ctx, name)
 }
 
-func (p DoltDatabaseProvider) ListUndroppableDatabases(ctx *sql.Context) ([]string, error) {
+func (p DoltDatabaseProvider) ListDroppedDatabases(ctx *sql.Context) ([]string, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	return p.droppedDatabaseManager.ListUndroppableDatabases(ctx)
+	return p.droppedDatabaseManager.ListDroppedDatabases(ctx)
 }
 
 func (p DoltDatabaseProvider) UndropDatabase(ctx *sql.Context, name string) (err error) {

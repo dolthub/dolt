@@ -105,8 +105,9 @@ type DoltDatabaseProvider interface {
 	// TODO: Is this a problem for anything on hosted?
 	// If the database is unable to be restored, an error is returned explaining why.
 	UndropDatabase(ctx *sql.Context, dbName string) error
-	// ListUndroppableDatabases returns a list of database names for dropped databases that are available to be restored.
-	ListUndroppableDatabases(ctx *sql.Context) ([]string, error)
+	// ListDroppedDatabases returns a list of the database names for dropped databases that are still
+	// available on disk and can be restored with dolt_undrop().
+	ListDroppedDatabases(ctx *sql.Context) ([]string, error)
 }
 
 type SessionDatabaseBranchSpec struct {

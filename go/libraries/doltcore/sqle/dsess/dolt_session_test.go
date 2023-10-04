@@ -255,7 +255,7 @@ func (e emptyRevisionDatabaseProvider) UndropDatabase(ctx *sql.Context, dbName s
 	return nil
 }
 
-func (e emptyRevisionDatabaseProvider) ListUndroppableDatabases(ctx *sql.Context) ([]string, error) {
+func (e emptyRevisionDatabaseProvider) ListDroppedDatabases(ctx *sql.Context) ([]string, error) {
 	return nil, nil
 }
 

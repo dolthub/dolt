@@ -141,7 +141,7 @@ func (dd *droppedDatabases) initializeDeletedDatabaseDirectory() error {
 	return dd.fs.MkDirs(deletedDatabaseDirectoryName)
 }
 
-func (dd *droppedDatabases) ListUndroppableDatabases(_ *sql.Context) ([]string, error) {
+func (dd *droppedDatabases) ListDroppedDatabases(_ *sql.Context) ([]string, error) {
 	if err := dd.initializeDeletedDatabaseDirectory(); err != nil {
 		return nil, fmt.Errorf("unable to list undroppable database: %w", err)
 	}
@@ -166,8 +166,7 @@ func (dd *droppedDatabases) ListUndroppableDatabases(_ *sql.Context) ([]string, 
 // database is already being managed that has the same (case-insensitive) name. If any problems are encountered,
 // an error is returned.
 func (dd *droppedDatabases) validateUndropDatabase(ctx *sql.Context, name string) (sourcePath, destinationPath, exactCaseName string, err error) {
-	// TODO: rename to ListDatabasesThatCanBeUndropped(ctx)?
-	availableDatabases, err := dd.ListUndroppableDatabases(ctx)
+	availableDatabases, err := dd.ListDroppedDatabases(ctx)
 	if err != nil {
 		return "", "", "", err
 	}
