@@ -884,6 +884,21 @@ from dolt_diff(@Commit1, @Commit2, 't')
 inner join t on to_pk = t.pk;`,
 				Expected: []sql.Row{{1, "one", "two", nil, nil, nil, "added"}},
 			},
+			{
+				Query: `
+SELECT to_pk, from_c1, to_c1, from_c1, to_c1, diff_type, diff_type
+from dolt_diff(@Commit1, @Commit2, 't') inner join dolt_diff(@Commit1, @Commit3, 't');`,
+				ExpectedErr: sql.ErrDuplicateAliasOrTable,
+			},
+			{
+				Query: `
+SELECT a.to_pk, a.from_c1, a.to_c1, b.from_c1, b.to_c1, a.diff_type, b.diff_type
+from dolt_diff(@Commit1, @Commit2, 't') a inner join dolt_diff(@Commit1, @Commit3, 't') b
+on a.to_pk = b.to_pk;`,
+				Expected: []sql.Row{
+					{1, nil, "one", nil, "one", "added", "added"},
+				},
+			},
 		},
 	},
 	{
