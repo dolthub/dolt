@@ -56,6 +56,8 @@ The second syntax ({{.LessThan}}dolt merge --abort{{.GreaterThan}}) can only be 
 	},
 }
 
+var ErrConflictingFlags = "error: Flags '--%s' and '--%s' cannot be used together"
+
 type MergeCmd struct{}
 
 // Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -224,8 +226,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 // validateDoltMergeArgs checks if the arguments passed to 'dolt merge' are valid
 func validateDoltMergeArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter, cliCtx cli.CliContext) int {
 	if apr.ContainsAll(cli.SquashParam, cli.NoFFParam) {
-		cli.PrintErrf("error: Flags '--%s' and '--%s' cannot be used together.\n", cli.SquashParam, cli.NoFFParam)
-		return 1
+		return HandleVErrAndExitCode(errhand.BuildDError(ErrConflictingFlags, cli.SquashParam, cli.NoFFParam).Build(), usage)
 	}
 
 	// This command may create a commit, so we need user identity
@@ -256,7 +257,7 @@ func validateDoltMergeArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinte
 	}
 
 	if apr.ContainsAll(cli.CommitFlag, cli.NoCommitFlag) {
-		return HandleVErrAndExitCode(errhand.BuildDError("cannot define both 'commit' and 'no-commit' flags at the same time").Build(), usage)
+		return HandleVErrAndExitCode(errhand.BuildDError(ErrConflictingFlags, cli.CommitFlag, cli.NoCommitFlag).Build(), usage)
 	}
 	if !apr.Contains(cli.AbortParam) && apr.NArg() == 0 {
 		usage()

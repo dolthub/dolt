@@ -18,8 +18,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -80,6 +84,14 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		verr := errhand.VerboseErrorFromError(actions.ErrInvalidPullArgs)
 		return HandleVErrAndExitCode(verr, usage)
 	}
+	if apr.ContainsAll(cli.CommitFlag, cli.NoCommitFlag) {
+		verr := errhand.VerboseErrorFromError(errors.New(fmt.Sprintf(ErrConflictingFlags, cli.CommitFlag, cli.NoCommitFlag)))
+		return HandleVErrAndExitCode(verr, usage)
+	}
+	if apr.ContainsAll(cli.SquashParam, cli.NoFFParam) {
+		verr := errhand.VerboseErrorFromError(errors.New(fmt.Sprintf(ErrConflictingFlags, cli.SquashParam, cli.NoFFParam)))
+		return HandleVErrAndExitCode(verr, usage)
+	}
 
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
@@ -90,47 +102,98 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		defer closeFunc()
 	}
 
-	var remoteName, remoteRefName string
-	if apr.NArg() == 1 {
-		remoteName = apr.Arg(0)
-	} else if apr.NArg() == 2 {
-		remoteName = apr.Arg(0)
-		remoteRefName = apr.Arg(1)
-	}
-
-	if dEnv.IsLocked() {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
-	}
-
-	var verr errhand.VerboseError
-	dEnv.UserPassConfig, verr = getRemoteUserAndPassConfig(apr)
-	if verr != nil {
-		return HandleVErrAndExitCode(verr, usage)
-	}
-
-	remoteOnly := apr.NArg() == 1
-	pullSpec, err := env.NewPullSpec(
-		ctx,
-		dEnv.RepoStateReader(),
-		remoteName,
-		remoteRefName,
-		remoteOnly,
-		env.WithSquash(apr.Contains(cli.SquashParam)),
-		env.WithNoFF(apr.Contains(cli.NoFFParam)),
-		env.WithNoCommit(apr.Contains(cli.NoCommitFlag)),
-		env.WithNoEdit(apr.Contains(cli.NoEditFlag)),
-		env.WithForce(apr.Contains(cli.ForceFlag)),
-	)
-
+	query, err := constructInterpolatedDoltPullQuery(apr)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	err = pullHelper(ctx, sqlCtx, queryist, dEnv, pullSpec, cliCtx)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	errChan := make(chan error)
+	go func() {
+		defer close(errChan)
+		schema, rowIter, err := queryist.Query(sqlCtx, query)
+		if err != nil {
+			errChan <- err
+			return
+		}
+
+		_, err = sql.RowIterToRows(sqlCtx, schema, rowIter)
+		if err != nil {
+			errChan <- err
+			return
+		}
+	}()
+
+	spinner := TextSpinner{}
+	cli.Print(spinner.next() + " Pulling...")
+	defer func() {
+		cli.DeleteAndPrint(len(" Pulling...")+1, "")
+	}()
+
+	for {
+		select {
+		case err := <-errChan:
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		case <-ctx.Done():
+			if ctx.Err() != nil {
+				switch ctx.Err() {
+				case context.DeadlineExceeded:
+					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("timeout exceeded")), usage)
+				case context.Canceled:
+					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("pull cancelled by force")), usage)
+				default:
+					return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("error cancelling context: "+ctx.Err().Error())), usage)
+				}
+			}
+			return HandleVErrAndExitCode(nil, usage)
+		case <-time.After(time.Millisecond * 50):
+			cli.DeleteAndPrint(len(" Pulling...")+1, spinner.next()+" Pulling...")
+		}
 	}
-	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+}
+
+// constructInterpolatedDoltPullQuery constructs the sql query necessary to call the DOLT_PULL() function.
+// Also interpolates this query to prevent sql injection.
+func constructInterpolatedDoltPullQuery(apr *argparser.ArgParseResults) (string, error) {
+	var params []interface{}
+	var args []string
+
+	for _, arg := range apr.Args {
+		args = append(args, "?")
+		params = append(params, arg)
+	}
+
+	if apr.Contains(cli.SquashParam) {
+		args = append(args, "'--squash'")
+	}
+	if apr.Contains(cli.NoFFParam) {
+		args = append(args, "'--no-ff'")
+	}
+	if apr.Contains(cli.ForceFlag) {
+		args = append(args, "'--force'")
+	}
+	if apr.Contains(cli.CommitFlag) {
+		args = append(args, "'--commit'")
+	}
+	if apr.Contains(cli.NoCommitFlag) {
+		args = append(args, "'--no-commit'")
+	}
+	if apr.Contains(cli.NoEditFlag) {
+		args = append(args, "'--no-edit'")
+	}
+	if user, hasUser := apr.GetValue(cli.UserFlag); hasUser {
+		args = append(args, "'--user'")
+		args = append(args, "?")
+		params = append(params, user)
+	}
+
+	query := "call dolt_pull(" + strings.Join(args, ", ") + ")"
+
+	interpolatedQuery, err := dbr.InterpolateForDialect(query, params, dialect.MySQL)
+	if err != nil {
+		return "", err
+	}
+
+	return interpolatedQuery, nil
 }
 
 // pullHelper splits pull into fetch, prepare merge, and merge to interleave printing

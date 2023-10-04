@@ -226,7 +226,7 @@ teardown() {
     dolt sql -q "insert into t1 values (2, 2)"
     run dolt pull origin
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Please commit your changes before you merge" ]] || false
+    [[ "$output" =~ "cannot merge with uncommitted changes" ]] || false
 }
 
 @test "pull: pull tag" {
@@ -293,14 +293,13 @@ teardown() {
     dolt sql -q "insert into t1 values (0, 100);"
     run dolt pull origin main
     [ "$status" -eq 1 ]
-    [[ "$output" =~ 'Please commit your changes before you merge' ]] || false
+    [[ "$output" =~ 'cannot merge with uncommitted changes' ]] || false
 
     # Commit changes and test that a merge conflict fails the pull
     dolt commit -am "adding new t1 table"
     run dolt pull origin main
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "| fast_forward | conflicts |" ]] || false
-    [[ "$output" =~ "| 0            | 1         |" ]] || false
+    [[ "$output" =~ "Merge conflict detected" ]] || false
 }
 
 @test "pull: pull also fetches, but does not merge other branches" {
