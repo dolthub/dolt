@@ -16,8 +16,10 @@ package dprocedures
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+
 	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 func doltPurgeDroppedDatabases(ctx *sql.Context, args ...string) (sql.RowIter, error) {
