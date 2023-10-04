@@ -52,7 +52,7 @@ type DoltDatabaseProvider struct {
 	DropDatabaseHook   DropDatabaseHook
 	mu                 *sync.RWMutex
 
-	droppedDatabaseManager *droppedDatabases
+	droppedDatabaseManager *droppedDatabaseManager
 
 	defaultBranch string
 	fs            filesys.Filesys

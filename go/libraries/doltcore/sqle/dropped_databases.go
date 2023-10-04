@@ -27,22 +27,30 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
-// deletedDatabaseDirectoryName is the subdirectory within the data folder where Dolt moves databases after they are
+// droppedDatabaseDirectoryName is the subdirectory within the data folder where Dolt moves databases after they are
 // dropped. The dolt_undrop() stored procedure is then able to restore them from this location.
-const deletedDatabaseDirectoryName = "dolt_deleted_databases"
+const droppedDatabaseDirectoryName = "dolt_dropped_databases"
 
-// TODO: Godoc
-type droppedDatabases struct {
+// droppedDatabaseManager is responsible for dropping databases and "undropping", or restoring, dropped databases. It
+// is given a Filesys where all database directories can be found. When dropping a database, instead of deleting the
+// database directory, it will move it to a new "dolt_dropped_databases" directory where databases can be restored.
+type droppedDatabaseManager struct {
 	fs filesys.Filesys
 }
 
-func newDroppedDatabaseManager(fs filesys.Filesys) *droppedDatabases {
-	return &droppedDatabases{
+// newDroppedDatabaseManager creates a new droppedDatabaseManager instance using the specified |fs| as the location
+// where databases can be found. It will create a new "dolt_dropped_databases" directory at the root of |fs| where
+// dropped databases will be moved until they are permanently removed.
+func newDroppedDatabaseManager(fs filesys.Filesys) *droppedDatabaseManager {
+	return &droppedDatabaseManager{
 		fs: fs,
 	}
 }
 
-func (dd *droppedDatabases) DropDatabase(ctx *sql.Context, name string, dropDbLoc string) error {
+// DropDatabase will move the database directory for the database named |name| at the location |dropDbLoc| to the
+// dolt_dropped_database directory where it can later be "undropped" to restore it. If any problems are encountered
+// moving the database directory, an error is returned.
+func (dd *droppedDatabaseManager) DropDatabase(ctx *sql.Context, name string, dropDbLoc string) error {
 	rootDbLoc, err := dd.fs.Abs("")
 	if err != nil {
 		return err
@@ -80,16 +88,14 @@ func (dd *droppedDatabases) DropDatabase(ctx *sql.Context, name string, dropDbLo
 	_, file := filepath.Split(dropDbLoc)
 	var destinationDirectory string
 	if isRootDatabase {
-		// NOTE: This won't work without first creating the new subdirectory
-		newSubdirectory := filepath.Join(deletedDatabaseDirectoryName, name)
-		// TODO: If newSubdirectory exists already... then we're in trouble! (need to handle that)
-		// TODO: Maybe we should have this talk to the DroppedDatabaseVault API instead?
+		// For a root database, first create the subdirectory before we copy over the .dolt directory
+		newSubdirectory := filepath.Join(droppedDatabaseDirectoryName, name)
 		if err := dd.fs.MkDirs(newSubdirectory); err != nil {
 			return err
 		}
 		destinationDirectory = filepath.Join(newSubdirectory, file)
 	} else {
-		destinationDirectory = filepath.Join(deletedDatabaseDirectoryName, file)
+		destinationDirectory = filepath.Join(droppedDatabaseDirectoryName, file)
 	}
 
 	// Add the final directory segment and convert all hyphens to underscores in the database directory name
@@ -104,8 +110,11 @@ func (dd *droppedDatabases) DropDatabase(ctx *sql.Context, name string, dropDbLo
 	return dd.fs.MoveDir(dropDbLoc, destinationDirectory)
 }
 
-func (dd *droppedDatabases) UndropDatabase(ctx *sql.Context, name string) (filesys.Filesys, string, error) {
-	// TODO: not sure I like sourcePath and destinationPath being returned here, but seems like they're needed in this function
+// UndropDatabase will restore the database named |name| by moving it from the dolt_dropped_database directory, back
+// into the root of the filesystem where database directories are managed. This function returns the new location of
+// the database directory and the exact name (case-sensitive) of the database. If any errors are encountered while
+// attempting to undrop the database, an error is returned and other return parameters should be ignored.
+func (dd *droppedDatabaseManager) UndropDatabase(ctx *sql.Context, name string) (filesys.Filesys, string, error) {
 	sourcePath, destinationPath, exactCaseName, err := dd.validateUndropDatabase(ctx, name)
 	if err != nil {
 		return nil, "", err
@@ -128,20 +137,20 @@ func (dd *droppedDatabases) UndropDatabase(ctx *sql.Context, name string) (files
 // they are fully removed. If the directory is already created and set up correctly, then this method is a no-op.
 // If the directory doesn't exist yet, it will be created. If there are any problems initializing the directory, an
 // error is returned.
-func (dd *droppedDatabases) initializeDeletedDatabaseDirectory() error {
-	exists, isDir := dd.fs.Exists(deletedDatabaseDirectoryName)
+func (dd *droppedDatabaseManager) initializeDeletedDatabaseDirectory() error {
+	exists, isDir := dd.fs.Exists(droppedDatabaseDirectoryName)
 	if exists && !isDir {
-		return fmt.Errorf("%s exists, but is not a directory", deletedDatabaseDirectoryName)
+		return fmt.Errorf("%s exists, but is not a directory", droppedDatabaseDirectoryName)
 	}
 
 	if exists {
 		return nil
 	}
 
-	return dd.fs.MkDirs(deletedDatabaseDirectoryName)
+	return dd.fs.MkDirs(droppedDatabaseDirectoryName)
 }
 
-func (dd *droppedDatabases) ListDroppedDatabases(_ *sql.Context) ([]string, error) {
+func (dd *droppedDatabaseManager) ListDroppedDatabases(_ *sql.Context) ([]string, error) {
 	if err := dd.initializeDeletedDatabaseDirectory(); err != nil {
 		return nil, fmt.Errorf("unable to list undroppable database: %w", err)
 	}
@@ -155,7 +164,7 @@ func (dd *droppedDatabases) ListDroppedDatabases(_ *sql.Context) ([]string, erro
 		return false
 	}
 
-	if err := dd.fs.Iter(deletedDatabaseDirectoryName, false, callback); err != nil {
+	if err := dd.fs.Iter(droppedDatabaseDirectoryName, false, callback); err != nil {
 		return nil, err
 	}
 
@@ -165,7 +174,7 @@ func (dd *droppedDatabases) ListDroppedDatabases(_ *sql.Context) ([]string, erro
 // validateUndropDatabase validates that the database |name| is available to be "undropped" and that no existing
 // database is already being managed that has the same (case-insensitive) name. If any problems are encountered,
 // an error is returned.
-func (dd *droppedDatabases) validateUndropDatabase(ctx *sql.Context, name string) (sourcePath, destinationPath, exactCaseName string, err error) {
+func (dd *droppedDatabaseManager) validateUndropDatabase(ctx *sql.Context, name string) (sourcePath, destinationPath, exactCaseName string, err error) {
 	availableDatabases, err := dd.ListDroppedDatabases(ctx)
 	if err != nil {
 		return "", "", "", err
@@ -188,7 +197,7 @@ func (dd *droppedDatabases) validateUndropDatabase(ctx *sql.Context, name string
 			"another database already exists with the same case-insensitive name", exactCaseName)
 	}
 
-	sourcePath = filepath.Join(deletedDatabaseDirectoryName, exactCaseName)
+	sourcePath = filepath.Join(droppedDatabaseDirectoryName, exactCaseName)
 	return sourcePath, destinationPath, exactCaseName, nil
 }
 
@@ -224,7 +233,10 @@ func hasCaseInsensitiveMatch(candidates []string, target string) (bool, string) 
 	return found, exactCaseName
 }
 
-func (dd *droppedDatabases) prepareToMoveDroppedDatabase(_ *sql.Context, targetPath string) error {
+// prepareToMoveDroppedDatabase checks the specified |targetPath| to make sure there is not already a dropped database
+// there, and if so, the existing dropped database will be renamed with a unique suffix. If any problems are encountered,
+// such as not being able to rename an existing dropped database, this function will return an error.
+func (dd *droppedDatabaseManager) prepareToMoveDroppedDatabase(_ *sql.Context, targetPath string) error {
 	if exists, _ := dd.fs.Exists(targetPath); !exists {
 		// If there's nothing at the desired targetPath, we're all set
 		return nil

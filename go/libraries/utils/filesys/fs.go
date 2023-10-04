@@ -74,7 +74,7 @@ type WritableFS interface {
 
 	// MoveDir will move a directory from the srcPath in the filesystem to the destPath. For example,
 	// MoveDir("foo", "bar/baz") will move the "foo" directory to "bar/baz", meaning the contents of "foo" are now
-	// directly under the "baz" directory.
+	// directly under the "baz" directory. All subdirectories on |destPath| must already exist before MoveDir is called.
 	MoveDir(srcPath, destPath string) error
 
 	// TempDir returns the path of a new temporary directory.
