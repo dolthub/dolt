@@ -57,7 +57,6 @@ func (dd *droppedDatabaseManager) DropDatabase(ctx *sql.Context, name string, dr
 	}
 
 	isRootDatabase := false
-	//dirToDelete := ""
 	// if the database is in the directory itself, we remove '.dolt' directory rather than
 	// the whole directory itself because it can have other databases that are nested.
 	if rootDbLoc == dropDbLoc {

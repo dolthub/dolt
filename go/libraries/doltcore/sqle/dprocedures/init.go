@@ -57,7 +57,6 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dclone", Schema: int64Schema("status"), Function: doltClone},
 	{Name: "dcommit", Schema: stringSchema("hash"), Function: doltCommit},
 	{Name: "dfetch", Schema: int64Schema("status"), Function: doltFetch},
-	{Name: "dundrop", Schema: int64Schema("status"), Function: doltUndrop},
 
 	//	{Name: "dgc", Schema: int64Schema("status"), Function: doltGC},
 
