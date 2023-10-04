@@ -192,13 +192,13 @@ func (dd *droppedDatabases) validateUndropDatabase(ctx *sql.Context, name string
 	return sourcePath, destinationPath, exactCaseName, nil
 }
 
-// hasCaseInsensitivePath returns true if the specified |path| already exists on the filesystem |fs|, with a
-// case-insensitive match on the final component of the path. Note that only the final component of the path is
+// hasCaseInsensitivePath returns true if the specified path |target| already exists on the filesystem |fs|, with
+// a case-insensitive match on the final component of the path. Note that only the final component of the path is
 // checked in a case-insensitive match – the other components of the path must be a case-sensitive match.
-func hasCaseInsensitivePath(fs filesys.Filesys, path string) bool {
+func hasCaseInsensitivePath(fs filesys.Filesys, target string) bool {
 	found := false
-	fs.Iter(filepath.Dir(path), false, func(path string, size int64, isDir bool) (stop bool) {
-		if strings.ToLower(filepath.Base(path)) == strings.ToLower(filepath.Base(path)) {
+	fs.Iter(filepath.Dir(target), false, func(path string, size int64, isDir bool) (stop bool) {
+		if strings.ToLower(filepath.Base(path)) == strings.ToLower(filepath.Base(target)) {
 			found = true
 		}
 		return found
