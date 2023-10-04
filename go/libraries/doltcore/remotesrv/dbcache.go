@@ -15,13 +15,15 @@
 package remotesrv
 
 import (
+	"context"
+
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
 )
 
 type DBCache interface {
-	Get(path, nbfVerStr string) (RemoteSrvStore, error)
+	Get(ctx context.Context, path, nbfVerStr string) (RemoteSrvStore, error)
 }
 
 type RemoteSrvStore interface {

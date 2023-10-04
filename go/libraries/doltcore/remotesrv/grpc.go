@@ -93,7 +93,7 @@ func (rs *RemoteChunkStore) HasChunks(ctx context.Context, req *remotesapi.HasCh
 	logger = logger.WithField(RepoPathField, repoPath)
 	defer func() { logger.Info("finished") }()
 
-	cs, err := rs.getStore(logger, repoPath)
+	cs, err := rs.getStore(ctx, logger, repoPath)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 	logger = logger.WithField(RepoPathField, repoPath)
 	defer func() { logger.Info("finished") }()
 
-	cs, err := rs.getStore(logger, repoPath)
+	cs, err := rs.getStore(ctx, logger, repoPath)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +255,7 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 		if nextPath != repoPath {
 			repoPath = nextPath
 			logger = ologger.WithField(RepoPathField, repoPath)
-			cs, err = rs.getStore(logger, repoPath)
+			cs, err = rs.getStore(stream.Context(), logger, repoPath)
 			if err != nil {
 				return err
 			}
@@ -368,7 +368,7 @@ func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotes
 	logger = logger.WithField(RepoPathField, repoPath)
 	defer func() { logger.Info("finished") }()
 
-	_, err := rs.getStore(logger, repoPath)
+	_, err := rs.getStore(ctx, logger, repoPath)
 	if err != nil {
 		return nil, err
 	}
@@ -426,7 +426,7 @@ func (rs *RemoteChunkStore) Rebase(ctx context.Context, req *remotesapi.RebaseRe
 	logger = logger.WithField(RepoPathField, repoPath)
 	defer func() { logger.Info("finished") }()
 
-	_, err := rs.getStore(logger, repoPath)
+	_, err := rs.getStore(ctx, logger, repoPath)
 	if err != nil {
 		return nil, err
 	}
@@ -443,7 +443,7 @@ func (rs *RemoteChunkStore) Root(ctx context.Context, req *remotesapi.RootReques
 	logger = logger.WithField(RepoPathField, repoPath)
 	defer func() { logger.Info("finished") }()
 
-	cs, err := rs.getStore(logger, repoPath)
+	cs, err := rs.getStore(ctx, logger, repoPath)
 	if err != nil {
 		return nil, err
 	}
@@ -466,7 +466,7 @@ func (rs *RemoteChunkStore) Commit(ctx context.Context, req *remotesapi.CommitRe
 	logger = logger.WithField(RepoPathField, repoPath)
 	defer func() { logger.Info("finished") }()
 
-	cs, err := rs.getStore(logger, repoPath)
+	cs, err := rs.getStore(ctx, logger, repoPath)
 	if err != nil {
 		return nil, err
 	}
@@ -509,7 +509,7 @@ func (rs *RemoteChunkStore) GetRepoMetadata(ctx context.Context, req *remotesapi
 	logger = logger.WithField(RepoPathField, repoPath)
 	defer func() { logger.Info("finished") }()
 
-	cs, err := rs.getOrCreateStore(logger, repoPath, req.ClientRepoFormat.NbfVersion)
+	cs, err := rs.getOrCreateStore(ctx, logger, repoPath, req.ClientRepoFormat.NbfVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -536,7 +536,7 @@ func (rs *RemoteChunkStore) ListTableFiles(ctx context.Context, req *remotesapi.
 	logger = logger.WithField(RepoPathField, repoPath)
 	defer func() { logger.Info("finished") }()
 
-	cs, err := rs.getStore(logger, repoPath)
+	cs, err := rs.getStore(ctx, logger, repoPath)
 	if err != nil {
 		return nil, err
 	}
@@ -614,7 +614,7 @@ func (rs *RemoteChunkStore) AddTableFiles(ctx context.Context, req *remotesapi.A
 	logger = logger.WithField(RepoPathField, repoPath)
 	defer func() { logger.Info("finished") }()
 
-	cs, err := rs.getStore(logger, repoPath)
+	cs, err := rs.getStore(ctx, logger, repoPath)
 	if err != nil {
 		return nil, err
 	}
@@ -637,12 +637,12 @@ func (rs *RemoteChunkStore) AddTableFiles(ctx context.Context, req *remotesapi.A
 	return &remotesapi.AddTableFilesResponse{Success: true}, nil
 }
 
-func (rs *RemoteChunkStore) getStore(logger *logrus.Entry, repoPath string) (RemoteSrvStore, error) {
-	return rs.getOrCreateStore(logger, repoPath, types.Format_Default.VersionString())
+func (rs *RemoteChunkStore) getStore(ctx context.Context, logger *logrus.Entry, repoPath string) (RemoteSrvStore, error) {
+	return rs.getOrCreateStore(ctx, logger, repoPath, types.Format_Default.VersionString())
 }
 
-func (rs *RemoteChunkStore) getOrCreateStore(logger *logrus.Entry, repoPath, nbfVerStr string) (RemoteSrvStore, error) {
-	cs, err := rs.csCache.Get(repoPath, nbfVerStr)
+func (rs *RemoteChunkStore) getOrCreateStore(ctx context.Context, logger *logrus.Entry, repoPath, nbfVerStr string) (RemoteSrvStore, error) {
+	cs, err := rs.csCache.Get(ctx, repoPath, nbfVerStr)
 	if err != nil {
 		logger.WithError(err).Error("Failed to retrieve chunkstore")
 		if errors.Is(err, ErrUnimplemented) {

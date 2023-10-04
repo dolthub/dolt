@@ -15,6 +15,8 @@
 package sqle
 
 import (
+	"context"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -24,22 +26,26 @@ import (
 )
 
 type remotesrvStore struct {
-	ctx      *sql.Context
-	readonly bool
+	ctxFactory func(context.Context) (*sql.Context, error)
+	readonly   bool
 }
 
 var _ remotesrv.DBCache = remotesrvStore{}
 
-func (s remotesrvStore) Get(path, nbfVerStr string) (remotesrv.RemoteSrvStore, error) {
-	sess := dsess.DSessFromSess(s.ctx.Session)
-	db, err := sess.Provider().Database(s.ctx, path)
+func (s remotesrvStore) Get(ctx context.Context, path, nbfVerStr string) (remotesrv.RemoteSrvStore, error) {
+	sqlCtx, err := s.ctxFactory(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sess := dsess.DSessFromSess(sqlCtx.Session)
+	db, err := sess.Provider().Database(sqlCtx, path)
 	if err != nil {
 		if !s.readonly && sql.ErrDatabaseNotFound.Is(err) {
-			err = sess.Provider().CreateDatabase(s.ctx, path)
+			err = sess.Provider().CreateDatabase(sqlCtx, path)
 			if err != nil {
 				return nil, err
 			}
-			db, err = sess.Provider().Database(s.ctx, path)
+			db, err = sess.Provider().Database(sqlCtx, path)
 			if err != nil {
 				return nil, err
 			}
@@ -61,11 +67,15 @@ func (s remotesrvStore) Get(path, nbfVerStr string) (remotesrv.RemoteSrvStore, e
 	return rss, nil
 }
 
-func RemoteSrvServerArgs(ctx *sql.Context, args remotesrv.ServerArgs) remotesrv.ServerArgs {
-	sess := dsess.DSessFromSess(ctx.Session)
+func RemoteSrvServerArgs(ctxFactory func(context.Context) (*sql.Context, error), args remotesrv.ServerArgs) (remotesrv.ServerArgs, error) {
+	sqlCtx, err := ctxFactory(context.Background())
+	if err != nil {
+		return remotesrv.ServerArgs{}, err
+	}
+	sess := dsess.DSessFromSess(sqlCtx.Session)
 	args.FS = sess.Provider().FileSystem()
-	args.DBCache = remotesrvStore{ctx, args.ReadOnly}
-	return args
+	args.DBCache = remotesrvStore{ctxFactory, args.ReadOnly}
+	return args, nil
 }
 
 func WithUserPasswordAuth(args remotesrv.ServerArgs, auth remotesrv.Authenticator) remotesrv.ServerArgs {
