@@ -695,14 +695,17 @@ func handleMergeErr(sqlCtx *sql.Context, queryist cli.Queryist, mergeErr error, 
 		cli.Printf("Automatic merge failed; %d table(s) are unmerged.\n"+
 			"Fix conflicts and constraint violations and then commit the result.\n"+
 			"Use 'dolt conflicts' to investigate and resolve conflicts.\n", unmergedCnt)
+		return 1
 	} else if hasConflicts {
 		cli.Printf("Automatic merge failed; %d table(s) are unmerged.\n"+
 			"Use 'dolt conflicts' to investigate and resolve conflicts.\n", unmergedCnt)
+		return 1
 	} else if hasConstraintViolations {
 		cli.Printf("Automatic merge failed; %d table(s) are unmerged.\n"+
 			"Fix constraint violations and then commit the result.\n"+
 			"Constraint violations for the working set may be viewed using the 'dolt_constraint_violations' system table.\n"+
 			"They may be queried and removed per-table using the 'dolt_constraint_violations_TABLENAME' system table.\n", unmergedCnt)
+		return 1
 	}
 
 	if mergeErr != nil {

@@ -137,7 +137,11 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		if remoteHashErr != nil {
 			cli.Println("pull finished, but failed to get hash of remote ref")
 		}
-		printMergeStats(rows, apr, queryist, sqlCtx, usage, remoteHash, remoteHashErr)
+		success := printMergeStats(rows, apr, queryist, sqlCtx, usage, remoteHash, remoteHashErr)
+		if success == 1 {
+			errChan <- errors.New(" ") //return a non-nil error for the correct exit code but no further messages to print
+			return
+		}
 	}()
 
 	spinner := TextSpinner{}
