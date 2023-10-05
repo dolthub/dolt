@@ -107,7 +107,7 @@ WORKDIR /mysql-client-tests/node
 RUN npm install
 
 # install cpan dependencies
-RUN cpanm DBD::mysql
+RUN cpanm --force DBD::mysql
 
 # install ruby dependencies
 COPY mysql-client-tests/ruby/Gemfile /mysql-client-tests/ruby/
