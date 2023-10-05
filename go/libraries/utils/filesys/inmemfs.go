@@ -518,6 +518,13 @@ func (fs *InMemFS) MoveDir(srcPath, destPath string) error {
 }
 
 func (fs *InMemFS) moveDirHelper(dir *memDir, destPath string) error {
+	// All calls to moveDirHelper should happen with the filesystem's read-write mutex locked;
+	// if we detect the mutex isn't locked, then return an error.
+	if fs.rwLock.TryLock() {
+		defer fs.rwLock.Unlock()
+		return fmt.Errorf("moveDirHelper called without first aquiring filesystem read-write lock")
+	}
+
 	if _, exists := fs.objs[destPath]; exists {
 		return fmt.Errorf("destination path exists: %s", destPath)
 	}
@@ -589,6 +596,13 @@ func (fs *InMemFS) MoveFile(srcPath, destPath string) error {
 }
 
 func (fs *InMemFS) moveFileHelper(obj *memFile, destPath string) error {
+	// All calls to moveFileHelper should happen with the filesystem's read-write mutex locked;
+	// if we detect the mutex isn't locked, then return an error.
+	if fs.rwLock.TryLock() {
+		defer fs.rwLock.Unlock()
+		return fmt.Errorf("moveFileHelper called without first aquiring filesystem read-write lock")
+	}
+
 	destDir := filepath.Dir(destPath)
 	destParentDir, err := fs.mkDirs(destDir)
 	if err != nil {

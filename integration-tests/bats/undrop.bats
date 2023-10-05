@@ -40,6 +40,14 @@ teardown() {
   [ $status -eq 1 ]
   [[ $output =~ "dolt_undrop called with too many arguments" ]] || false
   [[ $output =~ "dolt_undrop only accepts one argument - the name of the dropped database to restore" ]] || false
+
+  # Create and drop a database to test error messages when there is a db available to undrop
+  dolt sql -q "create database dropper;"
+  dolt sql -q "drop database dropper;"
+  run dolt sql -q "CALL dolt_undrop();"
+  [ $status -eq 1 ]
+  [[ $output =~ "no database name specified." ]] || false
+  [[ $output =~ " available databases that can be undropped: dropper" ]] || false
 }
 
 @test "undrop: purge error messages" {

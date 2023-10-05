@@ -662,6 +662,7 @@ func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string
 	// mutex is locked (without actually locking it and causing a deadlock) and to error out if we detect
 	// that the mutex is NOT locked.
 	if p.mu.TryLock() {
+		defer p.mu.Unlock()
 		return fmt.Errorf("unable to register new database without database provider mutex being locked")
 	}
 

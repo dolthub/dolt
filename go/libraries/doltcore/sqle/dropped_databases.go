@@ -175,7 +175,6 @@ func (dd *droppedDatabaseManager) ListDroppedDatabases(_ *sql.Context) ([]string
 	databaseNames := make([]string, 0, 5)
 	callback := func(path string, size int64, isDir bool) (stop bool) {
 		_, lastPathSegment := filepath.Split(path)
-		// TODO: Is there a common util we use for this somewhere?
 		lastPathSegment = strings.ReplaceAll(lastPathSegment, "-", "_")
 		databaseNames = append(databaseNames, lastPathSegment)
 		return false
