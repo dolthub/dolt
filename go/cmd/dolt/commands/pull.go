@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
@@ -28,13 +29,8 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/store/datas"
 )
 
 var pullDocs = cli.CommandDocumentationContent{
@@ -244,151 +240,4 @@ func getRemoteHashForPull(apr *argparser.ArgParseResults, sqlCtx *sql.Context, q
 		return "", err
 	}
 	return remoteHash, nil
-}
-
-// pullHelper splits pull into fetch, prepare merge, and merge to interleave printing
-func pullHelper(
-	ctx context.Context,
-	sqlCtx *sql.Context,
-	queryist cli.Queryist,
-	dEnv *env.DoltEnv,
-	pullSpec *env.PullSpec,
-	cliCtx cli.CliContext,
-) error {
-	srcDB, err := pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB.ValueReadWriter().Format(), dEnv)
-	if err != nil {
-		return fmt.Errorf("failed to get remote db; %w", err)
-	}
-
-	// Fetch all references
-	branchRefs, err := srcDB.GetHeadRefs(ctx)
-	if err != nil {
-		return fmt.Errorf("%w: %s", env.ErrFailedToReadDb, err.Error())
-	}
-
-	_, hasBranch, err := srcDB.HasBranch(ctx, pullSpec.Branch.GetPath())
-	if err != nil {
-		return err
-	}
-	if !hasBranch {
-		return fmt.Errorf("branch %q not found on remote", pullSpec.Branch.GetPath())
-	}
-
-	// Go through every reference and every branch in each reference
-	for _, rs := range pullSpec.RefSpecs {
-		rsSeen := false // track invalid refSpecs
-		for _, branchRef := range branchRefs {
-			remoteTrackRef := rs.DestRef(branchRef)
-			if remoteTrackRef == nil {
-				continue
-			}
-
-			rsSeen = true
-			tmpDir, err := dEnv.TempTableFilesDir()
-			if err != nil {
-				return err
-			}
-			srcDBCommit, err := actions.FetchRemoteBranch(ctx, tmpDir, pullSpec.Remote, srcDB, dEnv.DoltDB, branchRef, buildProgStarter(downloadLanguage), stopProgFuncs)
-			if err != nil {
-				return err
-			}
-
-			err = dEnv.DoltDB.FastForward(ctx, remoteTrackRef, srcDBCommit)
-			if errors.Is(err, datas.ErrMergeNeeded) {
-				// If the remote tracking branch has diverged from the local copy, we just overwrite it
-				h, err := srcDBCommit.HashOf()
-				if err != nil {
-					return err
-				}
-				err = dEnv.DoltDB.SetHead(ctx, remoteTrackRef, h)
-				if err != nil {
-					return err
-				}
-			} else if err != nil {
-				return fmt.Errorf("fetch failed: %w", err)
-			}
-
-			// Merge iff branch is current branch and there is an upstream set (pullSpec.Branch is set to nil if there is no upstream)
-			if branchRef != pullSpec.Branch {
-				continue
-			}
-
-			t := datas.CommitterDate()
-
-			roots, err := dEnv.Roots(ctx)
-			if err != nil {
-				return err
-			}
-
-			name, email, configErr := env.GetNameAndEmail(dEnv.Config)
-			// If the name and email aren't set we can set them to empty values for now. This is only valid for ff
-			// merges which we detect later.
-			if configErr != nil {
-				if pullSpec.NoFF {
-					return configErr
-				}
-				name, email = "", ""
-			}
-
-			// Begin merge of working and head with the remote head
-			mergeSpec, err := merge.NewMergeSpec(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, roots, name, email, remoteTrackRef.String(), t, merge.WithPullSpecOpts(pullSpec))
-			if err != nil {
-				return err
-			}
-			if mergeSpec == nil {
-				return nil
-			}
-
-			// If configurations are not set and a ff merge are not possible throw an error.
-			if configErr != nil {
-				canFF, err := mergeSpec.HeadC.CanFastForwardTo(ctx, mergeSpec.MergeC)
-				if err != nil && err != doltdb.ErrUpToDate {
-					return err
-				}
-
-				if !canFF {
-					return configErr
-				}
-			}
-
-			err = validateMergeSpec(ctx, mergeSpec)
-			if err != nil {
-				return err
-			}
-
-			headRef, err := dEnv.RepoStateReader().CWBHeadRef()
-			if err != nil {
-				return err
-			}
-
-			suggestedMsg := fmt.Sprintf(
-				"Merge branch '%s' of %s into %s",
-				pullSpec.Branch.GetPath(),
-				pullSpec.Remote.Url,
-				headRef.GetPath(),
-			)
-			tblStats, err := performMerge(ctx, sqlCtx, queryist, dEnv, mergeSpec, suggestedMsg, cliCtx)
-			printSuccessStats(tblStats)
-			if err != nil {
-				return err
-			}
-		}
-		if !rsSeen {
-			return fmt.Errorf("%w: '%s'", ref.ErrInvalidRefSpec, rs.GetRemRefToLocal())
-		}
-	}
-
-	if err != nil {
-		return err
-	}
-	tmpDir, err := dEnv.TempTableFilesDir()
-	if err != nil {
-		return err
-	}
-	err = actions.FetchFollowTags(ctx, tmpDir, srcDB, dEnv.DoltDB, buildProgStarter(downloadLanguage), stopProgFuncs)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
