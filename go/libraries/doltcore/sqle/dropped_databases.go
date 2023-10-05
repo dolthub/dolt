@@ -66,17 +66,6 @@ func (dd *droppedDatabaseManager) DropDatabase(ctx *sql.Context, name string, dr
 		}
 		dropDbLoc = filepath.Join(dropDbLoc, dbfactory.DoltDir)
 		isRootDatabase = true
-	} else {
-		// TODO: Do we really need the code in this block?
-		//       Seems like a few places are checking this.
-		exists, isDir := dd.fs.Exists(dropDbLoc)
-		// Get the DB's directory
-		if !exists {
-			// engine should already protect against this
-			return sql.ErrDatabaseNotFound.New(name)
-		} else if !isDir {
-			return fmt.Errorf("unexpected error: %s exists but is not a directory", name)
-		}
 	}
 
 	if err = dd.initializeDeletedDatabaseDirectory(); err != nil {
