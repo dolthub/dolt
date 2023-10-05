@@ -144,7 +144,17 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return 0
 	}
 
-	return printMergeStats(rows, apr, queryist, sqlCtx, usage)
+	if !apr.Contains(cli.AbortParam) {
+		//todo: refs with the `remotes/` prefix will fail to get a hash
+		mergeHash, mergeHashErr := getHashOf(queryist, sqlCtx, apr.Arg(0))
+		if mergeHashErr != nil {
+			cli.Println("merge finished, but failed to get hash of merge ref")
+			cli.Println(mergeHashErr.Error())
+		}
+		return printMergeStats(rows, apr, queryist, sqlCtx, usage, mergeHash, mergeHashErr)
+	}
+
+	return 0
 }
 
 // validateDoltMergeArgs checks if the arguments passed to 'dolt merge' are valid
@@ -284,89 +294,79 @@ func constructInterpolatedDoltMergeQuery(apr *argparser.ArgParseResults, cliCtx 
 }
 
 // printMergeStats calculates and prints all merge stats and information.
-func printMergeStats(result []sql.Row, apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context, usage cli.UsagePrinter) int {
-	if result != nil && result[0][1].(int64) == 1 {
+func printMergeStats(result []sql.Row, apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context, usage cli.UsagePrinter, mergeHash string, mergeHashErr error) int {
+	fastForward := result != nil && result[0][1].(int64) == 1
+	if fastForward {
 		cli.Println("Fast-forward")
 	}
 
-	// calculate merge stats
-	if !apr.Contains(cli.AbortParam) {
-		//todo: refs with the `remotes/` prefix will fail to get a hash
-		mergeHash, mergeHashErr := getHashOf(queryist, sqlCtx, apr.Arg(0))
-		if mergeHashErr != nil {
-			cli.Println("merge finished, but failed to get hash of merge ref")
-			cli.Println(mergeHashErr.Error())
-		}
-		headHash, headhHashErr := getHashOf(queryist, sqlCtx, "HEAD")
-		if headhHashErr != nil {
-			cli.Println("merge finished, but failed to get hash of HEAD")
-			cli.Println(headhHashErr.Error())
-		}
-		if mergeHashErr == nil && headhHashErr == nil {
-			cli.Println("Updating", headHash+".."+mergeHash)
-		}
+	headHash, headhHashErr := getHashOf(queryist, sqlCtx, "HEAD")
+	if headhHashErr != nil {
+		cli.Println("merge finished, but failed to get hash of HEAD")
+		cli.Println(headhHashErr.Error())
+	}
+	if mergeHashErr == nil && headhHashErr == nil {
+		cli.Println("Updating", headHash+".."+mergeHash)
+	}
 
-		if apr.Contains(cli.SquashParam) {
-			cli.Println("Squash commit -- not updating HEAD")
-		}
+	if apr.Contains(cli.SquashParam) {
+		cli.Println("Squash commit -- not updating HEAD")
+	}
 
+	if apr.Contains(cli.NoCommitFlag) {
+		cli.Println("Automatic merge went well; stopped before committing as requested")
+	}
+
+	mergeStats := make(map[string]*merge.MergeStats)
+	mergeStats, noConflicts, err := calculateMergeConflicts(queryist, sqlCtx, mergeStats)
+	if err != nil {
+		cli.Println("merge finished, but could not calculate conflicts")
+		cli.Println(err.Error())
+		return 1
+	}
+
+	if noConflicts {
 		if apr.Contains(cli.NoCommitFlag) {
-			cli.Println("Automatic merge went well; stopped before committing as requested")
+			mergeStats, err = calculateMergeStats(queryist, sqlCtx, mergeStats, "HEAD", "STAGED")
+		} else {
+			mergeStats, err = calculateMergeStats(queryist, sqlCtx, mergeStats, "HEAD^1", "HEAD")
 		}
-
-		mergeStats := make(map[string]*merge.MergeStats)
-		mergeStats, noConflicts, err := calculateMergeConflicts(queryist, sqlCtx, mergeStats)
 		if err != nil {
-			cli.Println("merge finished, but could not calculate conflicts")
+			if err.Error() == "Already up to date." || err.Error() == "error: unable to get diff summary from HEAD^1 to HEAD: invalid ancestor spec" {
+				cli.Println("Already up to date.")
+				return 0
+			}
+			cli.Println("merge successful, but could not calculate stats")
 			cli.Println(err.Error())
 			return 1
 		}
-
-		if noConflicts {
-			if apr.Contains(cli.NoCommitFlag) {
-				mergeStats, err = calculateMergeStats(queryist, sqlCtx, mergeStats, "HEAD", "STAGED")
-			} else {
-				mergeStats, err = calculateMergeStats(queryist, sqlCtx, mergeStats, "HEAD^1", "HEAD")
-			}
-			if err != nil {
-				if err.Error() == "Already up to date." || err.Error() == "error: unable to get diff summary from HEAD^1 to HEAD: invalid ancestor spec" {
-					cli.Println("Already up to date.")
-					return 0
-				}
-				cli.Println("merge successful, but could not calculate stats")
-				cli.Println(err.Error())
-				return 1
-			}
-		}
-
-		if !apr.Contains(cli.NoCommitFlag) && !apr.Contains(cli.NoFFParam) {
-			commit, err := getCommitInfo(queryist, sqlCtx, "HEAD")
-			if err != nil {
-				cli.Println("merge finished, but failed to get commit info")
-				cli.Println(err.Error())
-				return 0
-			}
-			if cli.ExecuteWithStdioRestored != nil {
-				cli.ExecuteWithStdioRestored(func() {
-					pager := outputpager.Start()
-					defer pager.Stop()
-
-					PrintCommitInfo(pager, 0, false, "auto", commit)
-				})
-			}
-		}
-
-		hasConflicts, hasConstraintViolations := printSuccessStats(mergeStats)
-		return handleMergeErr(sqlCtx, queryist, nil, hasConflicts, hasConstraintViolations, usage)
 	}
 
-	return 0
+	if !apr.Contains(cli.NoCommitFlag) && !apr.Contains(cli.NoFFParam) && !fastForward {
+		commit, err := getCommitInfo(queryist, sqlCtx, "HEAD")
+		if err != nil {
+			cli.Println("merge finished, but failed to get commit info")
+			cli.Println(err.Error())
+			return 0
+		}
+		if cli.ExecuteWithStdioRestored != nil {
+			cli.ExecuteWithStdioRestored(func() {
+				pager := outputpager.Start()
+				defer pager.Stop()
+
+				PrintCommitInfo(pager, 0, false, "auto", commit)
+			})
+		}
+	}
+
+	hasConflicts, hasConstraintViolations := printSuccessStats(mergeStats)
+	return handleMergeErr(sqlCtx, queryist, nil, hasConflicts, hasConstraintViolations, usage)
 }
 
 // calculateMergeConflicts calculates the count of conflicts that occurred during the merge. Returns a map of table name to MergeStats,
 // a bool indicating whether there were any conflicts, and a bool indicating whether calculation was successful.
 func calculateMergeConflicts(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats map[string]*merge.MergeStats) (map[string]*merge.MergeStats, bool, error) {
-	dataConflicts, err := GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_conflicts")
+	dataConflicts, err := GetRowsForSql(queryist, sqlCtx, "SELECT `table`, num_conflicts FROM dolt_conflicts")
 	if err != nil {
 		return nil, false, err
 	}
@@ -379,7 +379,7 @@ func calculateMergeConflicts(queryist cli.Queryist, sqlCtx *sql.Context, mergeSt
 		}
 	}
 
-	schemaConflicts, err := GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_schema_conflicts")
+	schemaConflicts, err := GetRowsForSql(queryist, sqlCtx, "SELECT table_name FROM dolt_schema_conflicts")
 	if err != nil {
 		return nil, false, err
 	}
@@ -392,7 +392,7 @@ func calculateMergeConflicts(queryist cli.Queryist, sqlCtx *sql.Context, mergeSt
 		}
 	}
 
-	constraintViolations, err := GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_constraint_violations")
+	constraintViolations, err := GetRowsForSql(queryist, sqlCtx, "SELECT `table`, num_violations FROM dolt_constraint_violations")
 	if err != nil {
 		return nil, false, err
 	}

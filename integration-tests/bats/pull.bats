@@ -298,8 +298,11 @@ teardown() {
     # Commit changes and test that a merge conflict fails the pull
     dolt commit -am "adding new t1 table"
     run dolt pull origin main
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "Merge conflict detected" ]] || false
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Auto-merging t1" ]] || false
+    [[ "$output" =~ "CONFLICT (content): Merge conflict in t1" ]] || false
+    [[ "$output" =~ "Automatic merge failed; 1 table(s) are unmerged." ]] || false
+    [[ "$output" =~ "Use 'dolt conflicts' to investigate and resolve conflicts." ]] || false
 }
 
 @test "pull: pull also fetches, but does not merge other branches" {

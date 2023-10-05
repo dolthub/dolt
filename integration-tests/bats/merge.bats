@@ -971,7 +971,7 @@ SQL
     dolt checkout main
     run dolt merge other --no-commit --commit
     log_status_eq 1
-    [[ "$output" =~ "cannot define both 'commit' and 'no-commit' flags at the same time" ]] || false
+    [[ "$output" =~ "Flags '--commit' and '--no-commit' cannot be used together" ]] || false
 
     run dolt merge other --no-commit
     log_status_eq 0

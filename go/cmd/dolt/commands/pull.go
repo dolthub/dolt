@@ -110,17 +110,34 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	errChan := make(chan error)
 	go func() {
 		defer close(errChan)
+		// allows pulls (merges) that create conflicts to stick
+		_, _, err = queryist.Query(sqlCtx, "set @@dolt_force_transaction_commit = 1")
+		if err != nil {
+			errChan <- err
+			return
+		}
+		remoteHash, remoteHashErr := getRemoteHashForPull(apr, sqlCtx, queryist) // get the hash of the remote ref before the pull
+
 		schema, rowIter, err := queryist.Query(sqlCtx, query)
 		if err != nil {
 			errChan <- err
 			return
 		}
-
-		_, err = sql.RowIterToRows(sqlCtx, schema, rowIter)
+		_, _, err = queryist.Query(sqlCtx, "COMMIT")
 		if err != nil {
 			errChan <- err
 			return
 		}
+		rows, err := sql.RowIterToRows(sqlCtx, schema, rowIter)
+		if err != nil {
+			errChan <- err
+			return
+		}
+
+		if remoteHashErr != nil {
+			cli.Println("pull finished, but failed to get hash of remote ref")
+		}
+		printMergeStats(rows, apr, queryist, sqlCtx, usage, remoteHash, remoteHashErr)
 	}()
 
 	spinner := TextSpinner{}
@@ -194,6 +211,35 @@ func constructInterpolatedDoltPullQuery(apr *argparser.ArgParseResults) (string,
 	}
 
 	return interpolatedQuery, nil
+}
+
+// getRemoteHashForPull gets the hash of the remote branch being merged in
+func getRemoteHashForPull(apr *argparser.ArgParseResults, sqlCtx *sql.Context, queryist cli.Queryist) (string, error) {
+	var remote, branch string
+	var err error
+	if apr.NArg() == 0 {
+		remote, err = getDefaultRemote(sqlCtx, queryist)
+		if err != nil {
+			return "", err
+		}
+	} else if apr.NArg() == 1 {
+		remote = apr.Arg(0)
+	} else if apr.NArg() == 2 {
+		remote = apr.Arg(0)
+		branch = apr.Arg(1)
+	}
+	if branch == "" {
+		branch, err = getActiveBranchName(sqlCtx, queryist)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	remoteHash, err := getHashOf(queryist, sqlCtx, remote+"/"+branch)
+	if err != nil {
+		return "", err
+	}
+	return remoteHash, nil
 }
 
 // pullHelper splits pull into fetch, prepare merge, and merge to interleave printing
