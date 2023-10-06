@@ -28,8 +28,8 @@ import (
 )
 
 type BranchControlPersistence interface {
-	LoadData([]byte, bool) error
-	SaveData(filesys.Filesys) error
+	LoadData(context.Context, []byte, bool) error
+	SaveData(context.Context, filesys.Filesys) error
 }
 
 type replicationServiceServer struct {
@@ -66,11 +66,16 @@ func (s *replicationServiceServer) UpdateUsersAndGrants(ctx context.Context, req
 }
 
 func (s *replicationServiceServer) UpdateBranchControl(ctx context.Context, req *replicationapi.UpdateBranchControlRequest) (*replicationapi.UpdateBranchControlResponse, error) {
-	err := s.branchControl.LoadData(req.SerializedContents /* isFirstLoad */, false)
+	sqlCtx, err := s.ctxFactory(ctx)
 	if err != nil {
 		return nil, err
 	}
-	err = s.branchControl.SaveData(s.branchControlFilesys)
+
+	err = s.branchControl.LoadData(sqlCtx, req.SerializedContents /* isFirstLoad */, false)
+	if err != nil {
+		return nil, err
+	}
+	err = s.branchControl.SaveData(sqlCtx, s.branchControlFilesys)
 	if err != nil {
 		return nil, err
 	}

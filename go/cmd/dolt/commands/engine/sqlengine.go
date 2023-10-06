@@ -170,7 +170,7 @@ func NewSqlEngine(
 
 	// Load the branch control permissions, if they exist
 	var bcController *branch_control.Controller
-	if bcController, err = branch_control.LoadData(config.BranchCtrlFilePath, config.DoltCfgDirPath); err != nil {
+	if bcController, err = branch_control.LoadData(ctx, config.BranchCtrlFilePath, config.DoltCfgDirPath); err != nil {
 		return nil, err
 	}
 	config.ClusterController.HookBranchControlPersistence(bcController, mrEnv.FileSystem())

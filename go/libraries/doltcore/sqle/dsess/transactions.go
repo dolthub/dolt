@@ -300,7 +300,7 @@ func WaitForReplicationController(ctx *sql.Context, rsc doltdb.ReplicationStatus
 		return
 	}
 
-	cCtx, cancel := context.WithCancel(ctx)
+	cCtx, cancel := context.WithCancelCause(ctx)
 	var wg sync.WaitGroup
 	wg.Add(len(rsc.Wait))
 	for i, f := range rsc.Wait {
@@ -326,11 +326,11 @@ func WaitForReplicationController(ctx *sql.Context, rsc doltdb.ReplicationStatus
 	case <-time.After(time.Duration(timeoutI) * time.Second):
 		// We timed out before all the waiters were done.
 		// First we make certain to finalize everything.
-		cancel()
+		cancel(doltdb.ErrReplicationWaitFailed)
 		<-done
 		waitFailed = true
 	case <-done:
-		cancel()
+		cancel(context.Canceled)
 	}
 
 	// Just because our waiters all completed does not mean they all
@@ -345,11 +345,13 @@ func WaitForReplicationController(ctx *sql.Context, rsc doltdb.ReplicationStatus
 			}
 		}
 	}
-	ctx.Session.Warn(&sql.Warning{
-		Level:   "Warning",
-		Code:    mysql.ERQueryTimeout,
-		Message: fmt.Sprintf("Timed out replication of commit to %d out of %d replicas.", numFailed, len(rsc.Wait)),
-	})
+	if numFailed > 0 {
+		ctx.Session.Warn(&sql.Warning{
+			Level:   "Warning",
+			Code:    mysql.ERQueryTimeout,
+			Message: fmt.Sprintf("Timed out replication of commit to %d out of %d replicas.", numFailed, len(rsc.Wait)),
+		})
+	}
 }
 
 // doCommit commits this transaction with the write function provided. It takes the same params as DoltCommit
