@@ -94,6 +94,7 @@ func (r *branchControlReplica) Run() {
 		// in order to avoid deadlock.
 		contents := r.contents
 		client := r.client.client
+		version := r.version
 		r.mu.Unlock()
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		_, err := client.UpdateBranchControl(ctx, &replicationapi.UpdateBranchControlRequest{
@@ -118,7 +119,7 @@ func (r *branchControlReplica) Run() {
 		}
 		r.backoff.Reset()
 		r.lgr.Debugf("branchControlReplica[%s]: sucessfully replicated branch control permissions.", r.client.remote)
-		r.replicatedVersion = r.version
+		r.replicatedVersion = version
 	}
 }
 
