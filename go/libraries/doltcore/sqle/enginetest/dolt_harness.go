@@ -165,7 +165,7 @@ func commitScripts(dbs []string) []setup.SetupScript {
 func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	initializeEngine := d.engine == nil
 	if initializeEngine {
-		d.branchControl = branch_control.CreateDefaultController()
+		d.branchControl = branch_control.CreateDefaultController(context.Background())
 
 		pro := d.newProvider()
 		doltProvider, ok := pro.(*sqle.DoltDatabaseProvider)
@@ -300,7 +300,7 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	d.engine = nil
 	d.provider = nil
 
-	d.branchControl = branch_control.CreateDefaultController()
+	d.branchControl = branch_control.CreateDefaultController(context.Background())
 
 	pro := d.newProvider()
 	doltProvider, ok := pro.(*sqle.DoltDatabaseProvider)
