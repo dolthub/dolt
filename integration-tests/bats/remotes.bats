@@ -1279,7 +1279,7 @@ SQL
     run dolt push origin main
     [ "$status" -eq 1 ]
     [[ "$output" =~ "tip of your current branch is behind" ]] || false
-    dolt push -f main
+    dolt push -f origin main
     run dolt push -f origin main
     [ "$status" -eq 0 ]
 }
@@ -1682,10 +1682,75 @@ setup_ref_test() {
     [[ "$output" =~ "remotes/origin/branch-two" ]] || false
 }
 
-@test "remotes: not specifying a branch throws an error" {
-    run dolt push -u origin
+@test "remotes: not specifying a branch throws error on default remote" {
+    dolt remote add origin http://localhost:50051/test-org/test-repo
+    run dolt remote -v
+    [[ "$output" =~  origin ]] || false
+    run dolt push origin
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: --set-upstream requires <remote> and <refspec> params." ]] || false
+    [[ "$output" =~ "fatal: The current branch main has no upstream branch." ]] || false
+}
+
+@test "remotes: not specifying a branch create new remote branch without setting upstream on non-default remote" {
+    dolt remote add origin http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    run dolt remote -v
+    [[ "$output" =~  origin ]] || false
+    [[ "$output" =~  test-remote ]] || false
+
+    dolt checkout -b test-branch
+    dolt branch -a
+    run dolt push test-remote
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "* [new branch]          test-branch -> test-branch" ]] || false
+}
+
+@test "remotes: not specifying a branch creates new remote branch and sets upstream on non-default remote when -u is used" {
+    dolt remote add origin http://localhost:50051/test-org/test-repo
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    run dolt remote -v
+    [[ "$output" =~  origin ]] || false
+    [[ "$output" =~  test-remote ]] || false
+
+    dolt checkout -b test-branch
+    run dolt push -u test-remote
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "* [new branch]          test-branch -> test-branch" ]] || false
+    [[ "$output" =~ "branch 'test-branch' set up to track 'test-remote/test-branch'." ]] || false
+}
+
+@test "remotes: no remote is set" {
+    run dolt push
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "fatal: No configured push destination." ]] || false
+}
+
+@test "remotes: push origin throws an error when no remote is set" {
+    run dolt remote -v
+    [ "$output" = "" ]
+    run dolt push origin
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "fatal: 'origin' does not appear to be a dolt repository" ]] || false
+}
+
+@test "remotes: push --all with no remote or refspec specified" {
+    dolt remote add origin http://localhost:50051/test-org/test-repo
+    run dolt remote -v
+    [[ "$output" =~  origin ]] || false
+
+    dolt checkout -b new-branch
+    run dolt push --all
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "* [new branch]          main -> main" ]] || false
+    [[ "$output" =~ "* [new branch]          new-branch -> new-branch" ]] || false
+}
+
+@test "remotes: push --all with only remote specified" {
+
+}
+
+@test "remotes: push --all with multiple remotes will push all local branches to default remote, regardless of their upstream" {
+
 }
 
 @test "remotes: pushing empty branch does not panic" {

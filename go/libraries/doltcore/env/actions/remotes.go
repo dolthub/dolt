@@ -94,37 +94,44 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 	return err
 }
 
-func DoPush(ctx context.Context, rsr env.RepoStateReader, rsw env.RepoStateWriter, srcDB, destDB *doltdb.DoltDB, tempTableDir string, opts *env.PushOpts, progStarter ProgStarter, progStopper ProgStopper) error {
+func DoPush(ctx context.Context, pushMeta *env.PushMeta, progStarter ProgStarter, progStopper ProgStopper) (string, error) {
 	var err error
-
-	switch opts.SrcRef.GetType() {
-	case ref.BranchRefType:
-		if opts.SrcRef == ref.EmptyBranchRef {
-			err = deleteRemoteBranch(ctx, opts.DestRef, opts.RemoteRef, srcDB, destDB, opts.Remote)
-		} else {
-			err = PushToRemoteBranch(ctx, rsr, tempTableDir, opts.Mode, opts.SrcRef, opts.DestRef, opts.RemoteRef, srcDB, destDB, opts.Remote, progStarter, progStopper)
-		}
-	case ref.TagRefType:
-		err = pushTagToRemote(ctx, tempTableDir, opts.SrcRef, opts.DestRef, srcDB, destDB, progStarter, progStopper)
-	default:
-		err = fmt.Errorf("%w: %s of type %s", ErrCannotPushRef, opts.SrcRef.String(), opts.SrcRef.GetType())
-	}
-
-	if err == nil || errors.Is(err, doltdb.ErrUpToDate) || errors.Is(err, pull.ErrDBUpToDate) {
-		if opts.SetUpstream {
-			err := rsw.UpdateBranch(opts.SrcRef.GetPath(), env.BranchConfig{
-				Merge: ref.MarshalableRef{
-					Ref: opts.DestRef,
-				},
-				Remote: opts.Remote.Name,
-			})
-			if err != nil {
-				return err
+	var retMsg string
+	for _, opts := range pushMeta.Opts {
+		switch opts.SrcRef.GetType() {
+		case ref.BranchRefType:
+			if opts.SrcRef == ref.EmptyBranchRef {
+				err = deleteRemoteBranch(ctx, opts.DestRef, opts.RemoteRef, pushMeta.SrcDb, pushMeta.DestDb, pushMeta.Remote)
+			} else {
+				err = PushToRemoteBranch(ctx, pushMeta.Rsr, pushMeta.TmpDir, opts.Mode, opts.SrcRef, opts.DestRef, opts.RemoteRef, pushMeta.SrcDb, pushMeta.DestDb, pushMeta.Remote, progStarter, progStopper)
 			}
+		case ref.TagRefType:
+			err = pushTagToRemote(ctx, pushMeta.TmpDir, opts.SrcRef, opts.DestRef, pushMeta.SrcDb, pushMeta.DestDb, progStarter, progStopper)
+		default:
+			err = fmt.Errorf("%w: %s of type %s", ErrCannotPushRef, opts.SrcRef.String(), opts.SrcRef.GetType())
+		}
+
+		if err == nil || errors.Is(err, doltdb.ErrUpToDate) || errors.Is(err, pull.ErrDBUpToDate) {
+			if err == nil && !opts.HasUpstream {
+				retMsg = fmt.Sprintf("%s\n%s", retMsg, fmt.Sprintf(" * [new branch]          %s -> %s", opts.SrcRef.GetPath(), opts.DestRef.GetPath()))
+			}
+			if opts.SetUpstream {
+				err = pushMeta.Rsw.UpdateBranch(opts.SrcRef.GetPath(), env.BranchConfig{
+					Merge: ref.MarshalableRef{
+						Ref: opts.DestRef,
+					},
+					Remote: pushMeta.Remote.Name,
+				})
+				if err != nil {
+					return retMsg, err
+				}
+				retMsg = fmt.Sprintf("%s\n%s", retMsg, fmt.Sprintf("branch '%s' set up to track '%s'.", opts.SrcRef.GetPath(), opts.RemoteRef.GetPath()))
+			}
+		} else {
+			return retMsg, err
 		}
 	}
-
-	return err
+	return retMsg, nil
 }
 
 // PushTag pushes a commit tag and all underlying data from a local source database to a remote destination database.

@@ -105,6 +105,7 @@ func CreatePushArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("push", 2)
 	ap.SupportsFlag(SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less {{.EmphasisLeft}}dolt pull{{.EmphasisRight}} and other commands.")
 	ap.SupportsFlag(ForceFlag, "f", "Update the remote with local history, overwriting any conflicting history in the remote.")
+	ap.SupportsFlag(AllFlag, "", "Push all branches.")
 	return ap
 }
 

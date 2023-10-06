@@ -144,13 +144,13 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 }
 
-type branchMeta struct {
+type BranchMeta struct {
 	name   string
 	hash   string
 	remote bool
 }
 
-func getBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, remote bool) ([]branchMeta, error) {
+func GetBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, remote bool) ([]BranchMeta, error) {
 	var command string
 	if remote {
 		command = "SELECT name, hash from dolt_remote_branches"
@@ -163,7 +163,7 @@ func getBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, remote bool) ([]
 		return nil, err
 	}
 
-	var branches []branchMeta
+	var branches []BranchMeta
 
 	for {
 		row, err := rowIter.Next(sqlCtx)
@@ -182,7 +182,7 @@ func getBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, remote bool) ([]
 			return nil, err
 		}
 
-		branches = append(branches, branchMeta{name: rowStrings[0], hash: rowStrings[1], remote: remote})
+		branches = append(branches, BranchMeta{name: rowStrings[0], hash: rowStrings[1], remote: remote})
 	}
 }
 
@@ -193,9 +193,9 @@ func printBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser
 	printRemote := apr.Contains(cli.RemoteParam)
 	printAll := apr.Contains(cli.AllFlag)
 
-	var branches []branchMeta
+	var branches []BranchMeta
 	if printAll || printRemote {
-		remoteBranches, err := getBranches(sqlCtx, queryEngine, true)
+		remoteBranches, err := GetBranches(sqlCtx, queryEngine, true)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError("error: failed to read remote branches from db").AddCause(err).Build(), nil)
 		}
@@ -203,7 +203,7 @@ func printBranches(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser
 	}
 
 	if printAll || !printRemote {
-		localBranches, err := getBranches(sqlCtx, queryEngine, false)
+		localBranches, err := GetBranches(sqlCtx, queryEngine, false)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError("error: failed to read local branches from db").AddCause(err).Build(), nil)
 		}

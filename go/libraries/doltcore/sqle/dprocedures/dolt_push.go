@@ -30,8 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
-var UpToDateMessage = "Everything up-to-date"
-
 var doltPushSchema = []*sql.Column{
 	{
 		Name:     "status",
@@ -85,24 +83,35 @@ func doDoltPush(ctx *sql.Context, args []string) (int, string, error) {
 		return cmdFailure, "", err
 	}
 
-	opts, err := env.NewPushOpts(ctx, apr, dbData.Rsr, dbData.Ddb, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag), pushAutoSetUpRemote)
+	opts, remote, err := env.NewPushOpts(ctx, apr, dbData.Rsr, dbData.Ddb, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag), pushAutoSetUpRemote, apr.Contains(cli.AllFlag))
 	if err != nil {
 		return cmdFailure, "", err
 	}
-	remoteDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), opts.Remote, true)
+	remoteDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), remote, true)
 	if err != nil {
-		return 1, "", actions.HandleInitRemoteStorageClientErr(opts.Remote.Name, opts.Remote.Url, err)
+		return 1, "", actions.HandleInitRemoteStorageClientErr(remote.Name, remote.Url, err)
 	}
 
 	tmpDir, err := dbData.Rsw.TempTableFilesDir()
 	if err != nil {
 		return cmdFailure, "", err
 	}
-	err = actions.DoPush(ctx, dbData.Rsr, dbData.Rsw, dbData.Ddb, remoteDB, tmpDir, opts, runProgFuncs, stopProgFuncs)
+
+	var msg string
+	pushMeta := &env.PushMeta{
+		Opts: opts,
+		Remote: remote,
+		Rsr: dbData.Rsr,
+		Rsw: dbData.Rsw,
+		SrcDb: dbData.Ddb,
+		DestDb: remoteDB,
+		TmpDir: tmpDir,
+	}
+	msg, err = actions.DoPush(ctx, pushMeta, runProgFuncs, stopProgFuncs)
 	if err != nil {
 		switch err {
 		case doltdb.ErrUpToDate:
-			return cmdSuccess, UpToDateMessage, nil
+			return cmdSuccess, "Everything up-to-date", nil
 		case datas.ErrMergeNeeded:
 			return cmdFailure, "", fmt.Errorf("%w; the tip of your current branch is behind its remote counterpart", err)
 		default:
@@ -110,5 +119,5 @@ func doDoltPush(ctx *sql.Context, args []string) (int, string, error) {
 		}
 	}
 	// TODO : set upstream should be persisted outside of session
-	return cmdSuccess, "", nil
+	return cmdSuccess, msg, nil
 }

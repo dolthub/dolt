@@ -38,7 +38,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
@@ -168,6 +167,9 @@ func constructInterpolatedDoltPushQuery(apr *argparser.ArgParseResults) (string,
 	if force := apr.Contains(cli.ForceFlag); force {
 		args = append(args, "'--force'")
 	}
+	if all := apr.Contains(cli.AllFlag); all {
+		args = append(args, fmt.Sprintf("'--%s'", cli.AllFlag))
+	}
 	for _, arg := range apr.Args {
 		args = append(args, "?")
 		params = append(params, arg)
@@ -230,8 +232,8 @@ func printPushMessage(rows []sql.Row) error {
 		}
 		statusCode = int64(intCode)
 	}
-	if statusCode == 0 && len(rows[0]) > 1 && rows[0][1].(string) == dprocedures.UpToDateMessage {
-		cli.Println(dprocedures.UpToDateMessage)
+	if statusCode == 0 && len(rows[0]) > 1 {
+		cli.Println(rows[0][1].(string))
 	}
 	return nil
 }
@@ -254,11 +256,7 @@ func handlePushError(err error, usage cli.UsagePrinter, apr *argparser.ArgParseR
 			if defRemote, verr := getDefaultRemote(sqlCtx, queryist); verr == nil {
 				remoteName = defRemote
 			}
-			verr = errhand.BuildDError("fatal: The current branch " + currentBranch + " has no upstream branch.\n" +
-				"To push the current branch and set the remote as upstream, use\n" +
-				"\tdolt push --set-upstream " + remoteName + " " + currentBranch + "\n" +
-				"To have this happen automatically for branches without a tracking\n" +
-				"upstream, see 'push.autoSetupRemote' in 'dolt config --help'.").Build()
+			verr = errhand.BuildDError(env.ErrCurrentBranchHasNoUpstream.New(currentBranch, remoteName, currentBranch).Error()).Build()
 		}
 	case env.ErrInvalidSetUpstreamArgs:
 		verr = errhand.BuildDError("error: --set-upstream requires <remote> and <refspec> params.").SetPrintUsage().Build()
