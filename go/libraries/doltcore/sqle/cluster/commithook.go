@@ -56,13 +56,8 @@ type commithook struct {
 	// commithooks are caught up with replicating to the standby.
 	waitNotify func()
 
-	// This is a slice of notification channels maintained by the
-	// commithook. The semantics are:
-	// 1. All accesses to |successChs| must happen with |mu| held.
-	// 2. There may be |0| or more channels in the slice.
-	// 3. As a reader, if |successChs| is non-empty, you should just read a value, for example, |successChs[0]| and use it. All entries will be closed at the same time. If |successChs| is empty when you need a channel, you should add one to it.
-	// 4. If you read a channel out of |successChs|, that channel will be closed on the next successful replication attempt. It will not be closed before then.
-	successChs []chan struct{}
+	// |mu| must be held for all accesses.
+	progressNotifier ProgressNotifier
 
 	// If this is true, the waitF returned by Execute() will fast fail if
 	// we are not already caught up, instead of blocking on a successCh
@@ -164,12 +159,23 @@ func (h *commithook) replicate(ctx context.Context) {
 				h.waitNotify()
 			}
 			caughtUp := h.isCaughtUp()
-			if len(h.successChs) != 0 && caughtUp {
-				for _, ch := range h.successChs {
-					close(ch)
-				}
-				h.successChs = nil
+			if caughtUp {
 				h.fastFailReplicationWait = false
+
+				// If we ABA on h.nextHead, so that it gets set
+				// to one value, then another, then back to the
+				// first, then the setter for B can make an
+				// outstanding wait while we are replicating
+				// the first set to A. We can be back to
+				// nextHead == A by the time we complete
+				// replicating the first A and we will have the
+				// outstanding waiter for the work for B but we
+				// will be fully quiesced. We make sure to
+				// notify B of success here.
+				if h.progressNotifier.HasWaiters() {
+					a := h.progressNotifier.BeginAttempt()
+					h.progressNotifier.RecordSuccess(a)
+				}
 			}
 			if shouldHeartbeat {
 				h.attemptHeartbeat(ctx)
@@ -256,13 +262,8 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 		}
 		h.cancelReplicate = nil
 	}()
-	successChs := h.successChs
-	h.successChs = nil
-	defer func() {
-		if len(successChs) != 0 {
-			h.successChs = append(h.successChs, successChs...)
-		}
-	}()
+	attempt := h.progressNotifier.BeginAttempt()
+	defer h.progressNotifier.RecordFailure(attempt)
 	h.mu.Unlock()
 
 	if destDB == nil {
@@ -313,12 +314,7 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 			h.lastPushedHead = toPush
 			h.lastSuccess = incomingTime
 			h.nextPushAttempt = time.Time{}
-			if len(successChs) != 0 {
-				for _, ch := range successChs {
-					close(ch)
-				}
-				successChs = nil
-			}
+			h.progressNotifier.RecordSuccess(attempt)
 		} else {
 			h.currentError = new(string)
 			*h.currentError = fmt.Sprintf("failed to commit chunks on destDB: %v", err)
@@ -466,18 +462,7 @@ func (h *commithook) Execute(ctx context.Context, ds datas.Dataset, db datas.Dat
 				return fmt.Errorf("circuit breaker for replication to %s/%s is open. this commit did not necessarily replicate successfully.", h.remotename, h.dbname)
 			}
 		} else {
-			if len(h.successChs) == 0 {
-				h.successChs = append(h.successChs, make(chan struct{}))
-			}
-			successCh := h.successChs[0]
-			waitF = func(ctx context.Context) error {
-				select {
-				case <-successCh:
-					return nil
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-			}
+			waitF = h.progressNotifier.Wait()
 		}
 	}
 	return waitF, nil
