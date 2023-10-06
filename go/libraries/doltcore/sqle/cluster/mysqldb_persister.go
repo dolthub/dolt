@@ -16,6 +16,8 @@ package cluster
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -25,6 +27,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	replicationapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/replicationapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 type MySQLDbPersister interface {
@@ -58,11 +62,14 @@ type mysqlDbReplica struct {
 
 	waitNotify func()
 
+	progressNotifier        ProgressNotifier
+	fastFailReplicationWait bool
+
 	mu   sync.Mutex
 	cond *sync.Cond
 }
 
-func (r *mysqlDbReplica) UpdateMySQLDb(ctx context.Context, contents []byte, version uint32) error {
+func (r *mysqlDbReplica) UpdateMySQLDb(ctx context.Context, contents []byte, version uint32) func(context.Context) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.lgr.Infof("mysqlDbReplica got new contents at version %d", version)
@@ -71,7 +78,28 @@ func (r *mysqlDbReplica) UpdateMySQLDb(ctx context.Context, contents []byte, ver
 	r.nextAttempt = time.Time{}
 	r.backoff.Reset()
 	r.cond.Broadcast()
-	return nil
+
+	if r.fastFailReplicationWait {
+		remote := r.client.remote
+		return func(ctx context.Context) error {
+			return fmt.Errorf("circuit breaker for replication to %s/mysql is open. this update to users and grants did not necessarily replicate successfully.", remote)
+		}
+	} else {
+		w := r.progressNotifier.Wait()
+		return func(ctx context.Context) error {
+			err := w(ctx)
+			if err != nil && errors.Is(err, doltdb.ErrReplicationWaitFailed) {
+				r.setFastFailReplicationWait(true)
+			}
+			return err
+		}
+	}
+}
+
+func (r *mysqlDbReplica) setFastFailReplicationWait(v bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.fastFailReplicationWait = v
 }
 
 func (r *mysqlDbReplica) Run() {
@@ -104,6 +132,7 @@ func (r *mysqlDbReplica) Run() {
 			contents := r.contents
 			client := r.client.client
 			version := r.version
+			attempt := r.progressNotifier.BeginAttempt()
 			r.mu.Unlock()
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			_, err := client.UpdateUsersAndGrants(ctx, &replicationapi.UpdateUsersAndGrantsRequest{
@@ -112,6 +141,7 @@ func (r *mysqlDbReplica) Run() {
 			cancel()
 			r.mu.Lock()
 			if err != nil {
+				r.progressNotifier.RecordFailure(attempt)
 				r.lgr.Warnf("mysqlDbReplica[%s]: error replicating users and grants. backing off. %v", r.client.remote, err)
 				r.nextAttempt = time.Now().Add(r.backoff.NextBackOff())
 				next := r.nextAttempt
@@ -126,6 +156,8 @@ func (r *mysqlDbReplica) Run() {
 				}()
 				continue
 			}
+			r.progressNotifier.RecordSuccess(attempt)
+			r.fastFailReplicationWait = false
 			r.backoff.Reset()
 			r.lgr.Debugf("mysqlDbReplica[%s]: sucessfully replicated users and grants at version %d.", r.client.remote, version)
 			r.replicatedVersion = version
@@ -158,6 +190,10 @@ func (r *mysqlDbReplica) wait() {
 		r.waitNotify()
 	}
 	r.lgr.Infof("mysqlDbReplica waiting...")
+	if r.isCaughtUp() {
+		attempt := r.progressNotifier.BeginAttempt()
+		r.progressNotifier.RecordSuccess(attempt)
+	}
 	r.cond.Wait()
 }
 
@@ -212,26 +248,33 @@ func (p *replicatingMySQLDbPersister) GracefulStop() {
 }
 
 func (p *replicatingMySQLDbPersister) Persist(ctx *sql.Context, data []byte) error {
+	p.mu.Lock()
 	err := p.base.Persist(ctx, data)
 	if err == nil {
-		p.mu.Lock()
 		p.current = data
 		p.version += 1
-		defer p.mu.Unlock()
-		for _, r := range p.replicas {
-			r.UpdateMySQLDb(ctx, p.current, p.version)
+		var rsc doltdb.ReplicationStatusController
+		rsc.Wait = make([]func(context.Context) error, len(p.replicas))
+		rsc.NotifyWaitFailed = make([]func(), len(p.replicas))
+		for i, r := range p.replicas {
+			rsc.Wait[i] = r.UpdateMySQLDb(ctx, p.current, p.version)
+			rsc.NotifyWaitFailed[i] = func() {}
 		}
+		p.mu.Unlock()
+		dsess.WaitForReplicationController(ctx, rsc)
+	} else {
+		p.mu.Unlock()
 	}
 	return err
 }
 
 func (p *replicatingMySQLDbPersister) LoadData(ctx context.Context) ([]byte, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	ret, err := p.base.LoadData(ctx)
 	if err == nil {
-		p.mu.Lock()
 		p.current = ret
 		p.version += 1
-		defer p.mu.Unlock()
 		for _, r := range p.replicas {
 			r.UpdateMySQLDb(ctx, p.current, p.version)
 		}

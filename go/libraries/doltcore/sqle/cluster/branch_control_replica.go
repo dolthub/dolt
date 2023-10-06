@@ -70,13 +70,13 @@ func (r *branchControlReplica) UpdateContents(contents []byte, version uint32) f
 	r.nextAttempt = time.Time{}
 	r.backoff.Reset()
 	r.cond.Broadcast()
-	w := r.progressNotifier.Wait()
 	if r.fastFailReplicationWait {
 		remote := r.client.remote
 		return func(ctx context.Context) error {
 			return fmt.Errorf("circuit breaker for replication to %s/dolt_branch_control is open. this branch control update did not necessarily replicate successfully.", remote)
 		}
 	}
+	w := r.progressNotifier.Wait()
 	return func(ctx context.Context) error {
 		err := w(ctx)
 		if err != nil && errors.Is(err, doltdb.ErrReplicationWaitFailed) {
