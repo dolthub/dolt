@@ -8,7 +8,7 @@ cd $script_dir/../..
 
 [ ! -z "$GO_BUILD_VERSION" ] || (echo "Must supply GO_BUILD_VERSION"; exit 1)
 
-docker run --rm -v `pwd`:/src golang:"$GO_BUILD_VERSION"-buster /bin/bash -c '
+docker run --rm -v `pwd`:/src golang:"$GO_BUILD_VERSION"-bookworm /bin/bash -c '
 set -e
 set -o pipefail
 apt-get update && apt-get install -y p7zip-full pigz
