@@ -103,6 +103,7 @@ func (r *mysqlDbReplica) Run() {
 			// release this lock in order to avoid deadlock.
 			contents := r.contents
 			client := r.client.client
+			version := r.version
 			r.mu.Unlock()
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			_, err := client.UpdateUsersAndGrants(ctx, &replicationapi.UpdateUsersAndGrantsRequest{
@@ -126,11 +127,12 @@ func (r *mysqlDbReplica) Run() {
 				continue
 			}
 			r.backoff.Reset()
-			r.lgr.Debugf("mysqlDbReplica[%s]: sucessfully replicated users and grants at version %d.", r.client.remote, r.version)
+			r.lgr.Debugf("mysqlDbReplica[%s]: sucessfully replicated users and grants at version %d.", r.client.remote, version)
+			r.replicatedVersion = version
 		} else {
 			r.lgr.Debugf("mysqlDbReplica[%s]: not replicating empty users and grants at version %d.", r.client.remote, r.version)
+			r.replicatedVersion = r.version
 		}
-		r.replicatedVersion = r.version
 	}
 }
 
