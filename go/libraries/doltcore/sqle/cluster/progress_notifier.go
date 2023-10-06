@@ -52,7 +52,7 @@ func (p *ProgressNotifier) HasWaiters() bool {
 func (p *ProgressNotifier) BeginAttempt() *Attempt {
 	chs := p.chs
 	p.chs = nil
-	return &Attempt{ chs: chs }
+	return &Attempt{chs: chs}
 }
 
 func (*ProgressNotifier) RecordSuccess(a *Attempt) {
