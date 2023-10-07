@@ -82,7 +82,7 @@ func DefaultSession(pro DoltDatabaseProvider) *DoltSession {
 		provider:         pro,
 		tempTables:       make(map[string][]sql.Table),
 		globalsConf:      config.NewMapConfig(make(map[string]string)),
-		branchController: branch_control.CreateDefaultController(), // Default sessions are fine with the default controller
+		branchController: branch_control.CreateDefaultController(context.TODO()), // Default sessions are fine with the default controller
 		mu:               &sync.Mutex{},
 		fs:               pro.FileSystem(),
 	}

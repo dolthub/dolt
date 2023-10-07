@@ -188,3 +188,79 @@ tests:
     queries:
     - exec: "use repo1"
     - exec: 'insert into vals values (31)'
+- name: branch control block on write replication
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:3852/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3851
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3309
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3310
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:3851/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3852
+    - name: nocluster.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3310
+    server:
+      args: ["--config", "nocluster.yaml"]
+      port: 3310
+  connections:
+  - on: server1
+    queries:
+    - exec: 'SET @@PERSIST.dolt_cluster_ack_writes_timeout_secs = 2'
+    - exec: 'create user "aaron"@"%" IDENTIFIED BY "aaronspassword"'
+    - exec: 'create database repo1'
+    - exec: 'use repo1'
+    - exec: 'delete from dolt_branch_control'
+    - query: 'show warnings'
+      result:
+        columns: ["Level", "Code", "Message"]
+        rows: [["Warning", "3024", "Timed out replication of commit to 1 out of 1 replicas."]]
+    - exec: 'insert into dolt_branch_control values ("repo1", "main", "aaron", "%", "admin")'
+    - query: 'show warnings'
+      result:
+        columns: ["Level", "Code", "Message"]
+        rows: [["Warning", "3024", "Timed out replication of commit to 1 out of 1 replicas."]]
+  - on: server2
+    restart_server:
+      args: ["--config", "server.yaml"]
+  - on: server1
+    restart_server: {}
+  - on: server1
+    queries:
+    - exec: 'use repo1'
+    - exec: 'delete from dolt_branch_control'
+    - query: 'show warnings'
+      result:
+        columns: ["Level", "Code", "Message"]
+        rows: []

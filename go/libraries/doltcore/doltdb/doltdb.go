@@ -1212,6 +1212,12 @@ func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, tagRef ref.DoltRef, c *Co
 	return err
 }
 
+// This should be used as the cancel cause for the context passed to a
+// ReplicationStatusController Wait function when the wait has been canceled
+// because it timed out. Seeing this error from a passed in context may be used
+// by some agents to open circuit breakers or tune timeouts.
+var ErrReplicationWaitFailed = errors.New("replication wait failed")
+
 type ReplicationStatusController struct {
 	// A slice of funcs which can be called to wait for the replication
 	// associated with a commithook to complete. Must return if the
