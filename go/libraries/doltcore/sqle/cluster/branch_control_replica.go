@@ -114,8 +114,8 @@ func (r *branchControlReplica) Run() {
 		// in order to avoid deadlock.
 		contents := r.contents
 		client := r.client.client
-		attempt := r.progressNotifier.BeginAttempt()
 		version := r.version
+		attempt := r.progressNotifier.BeginAttempt()
 		r.mu.Unlock()
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		_, err := client.UpdateBranchControl(ctx, &replicationapi.UpdateBranchControlRequest{
