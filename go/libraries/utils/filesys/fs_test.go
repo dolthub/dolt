@@ -128,12 +128,12 @@ func TestFilesystems(t *testing.T) {
 			err = fs.MoveDir(subdir, filepath.Join(newLocation, "subdir"))
 			require.NoError(t, err)
 
-			// Assert that nothing exists as the old path
+			// Assert that nothing exists at the old path
 			exists, isDir = fs.Exists(subdir)
 			require.False(t, exists)
 			require.False(t, isDir)
 
-			// Assert that our directory exists as the new path
+			// Assert that our directory exists at the new path
 			exists, isDir = fs.Exists(filepath.Join(newLocation, "subdir"))
 			require.True(t, exists)
 			require.True(t, isDir)

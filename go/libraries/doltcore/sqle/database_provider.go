@@ -52,7 +52,7 @@ type DoltDatabaseProvider struct {
 	DropDatabaseHook   DropDatabaseHook
 	mu                 *sync.RWMutex
 
-	droppedDatabaseManager *droppedDatabases
+	droppedDatabaseManager *droppedDatabaseManager
 
 	defaultBranch string
 	fs            filesys.Filesys
@@ -601,15 +601,15 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 		return err
 	}
 
+	err = p.droppedDatabaseManager.DropDatabase(ctx, name, dropDbLoc)
+	if err != nil {
+		return err
+	}
+
 	if p.DropDatabaseHook != nil {
 		// For symmetry with InitDatabaseHook and the names we see in
 		// MultiEnv initialization, we use `name` here, not `dbKey`.
 		p.DropDatabaseHook(name)
-	}
-
-	err = p.droppedDatabaseManager.DropDatabase(ctx, name, dropDbLoc)
-	if err != nil {
-		return err
 	}
 
 	// We not only have to delete tracking metadata for this database, but also for any derivative
@@ -645,6 +645,15 @@ func (p *DoltDatabaseProvider) UndropDatabase(ctx *sql.Context, name string) (er
 	return p.registerNewDatabase(ctx, exactCaseName, newEnv)
 }
 
+// PurgeDroppedDatabases permanently deletes all dropped databases that have been stashed away in case they need
+// to be restored. Use caution with this operation – it is not reversible!
+func (p *DoltDatabaseProvider) PurgeDroppedDatabases(ctx *sql.Context) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	return p.droppedDatabaseManager.PurgeAllDroppedDatabases(ctx)
+}
+
 // registerNewDatabase registers the specified DoltEnv, |newEnv|, as a new database named |name|. This
 // function is responsible for instantiating the new Database instance and updating the tracking metadata
 // in this provider. If any problems are encountered while registering the new database, an error is returned.
@@ -653,6 +662,7 @@ func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string
 	// mutex is locked (without actually locking it and causing a deadlock) and to error out if we detect
 	// that the mutex is NOT locked.
 	if p.mu.TryLock() {
+		defer p.mu.Unlock()
 		return fmt.Errorf("unable to register new database without database provider mutex being locked")
 	}
 

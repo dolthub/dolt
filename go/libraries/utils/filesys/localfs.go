@@ -288,10 +288,6 @@ func (fs *localFS) MoveFile(srcPath, destPath string) (err error) {
 }
 
 func (fs *localFS) MoveDir(srcPath, destPath string) (err error) {
-	// TODO: This is the exact same implementation as MoveFile
-	//       Should probably at least add assertions that |srcPath| is really a dir?
-	// TODO: Or should we just try to make MoveFile work with dirs? It seems like the filesystem
-	//       based implementation already does, it's just the in-memory implementation that doesn't.
 	srcPath, err = fs.Abs(srcPath)
 	if err != nil {
 		return err

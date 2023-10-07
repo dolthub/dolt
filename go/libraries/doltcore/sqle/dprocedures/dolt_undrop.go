@@ -23,13 +23,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/errors"
 )
 
-// doltClean is the stored procedure version for the CLI command `dolt clean`.
+// doltUndrop restores a database that has been dropped and moved to a temporary holding area.
 func doltUndrop(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	provider := doltSession.Provider()
-
-	// TODO: What are the right permissions for dolt_undrop?
-	//       the same as drop? or create db?
 
 	switch len(args) {
 	case 0:

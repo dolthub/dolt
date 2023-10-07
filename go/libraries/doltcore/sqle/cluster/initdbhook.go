@@ -53,6 +53,7 @@ func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads, orig
 			// URL. It's an error otherwise.
 			remotes, err := denv.GetRemotes()
 			if err != nil {
+				// XXX: An error here means we are not replicating.
 				return err
 			}
 
@@ -77,16 +78,25 @@ func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads, orig
 			remoteUrls = append(remoteUrls, remoteUrl)
 		}
 
+		// When we create a new database, we stop trying to replicate a
+		// previous drop of that database to the replicas. Successfully
+		// replicating a new head update will set the state of any
+		// existing database to the state of this new database going
+		// forward.
+		controller.cancelDropDatabaseReplication(name)
+
 		role, _ := controller.roleAndEpoch()
 		for i, r := range controller.cfg.StandbyRemotes() {
 			ttfdir, err := denv.TempTableFilesDir()
 			if err != nil {
+				// XXX: An error here means we are not replicating to every standby.
 				return err
 			}
 			commitHook := newCommitHook(controller.lgr, r.Name(), remoteUrls[i], name, role, remoteDBs[i], denv.DoltDB, ttfdir)
 			denv.DoltDB.PrependCommitHook(ctx, commitHook)
 			controller.registerCommitHook(commitHook)
 			if err := commitHook.Run(bt); err != nil {
+				// XXX: An error here means we are not replicating to every standby.
 				return err
 			}
 		}

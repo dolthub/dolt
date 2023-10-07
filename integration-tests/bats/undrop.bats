@@ -2,7 +2,16 @@
 load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
-    setup_common
+  setup_no_dolt_init
+  dolt init
+
+  # NOTE: Instead of running setup_common, we embed the same commands here so that we can set up our test data
+  #       to work with with the remote-engine test variant. To test database directory names that contain a hyphen
+  #       (which is converted to an underscore when accessed through a SQL interface), we need to create the
+  #       directory on disk *before* the remote-engine sql-server starts.
+  mkdir drop-me-2 && cd drop-me-2
+  dolt init && cd ..
+  setup_remote_server
 }
 
 teardown() {
@@ -10,12 +19,7 @@ teardown() {
     teardown_common
 }
 
-@test "undrop: GC deletes dropped databases" {
-	# TODO: Garbage collection should remove deleted databases; implement in second milestone
-  skip "not supported yet"
-}
-
-@test "undrop: error messages" {
+@test "undrop: undrop error messages" {
   # When called without any argument, dolt_undrop() returns an error
   # that includes the database names that can be undropped.
   run dolt sql -q "CALL dolt_undrop();"
@@ -36,6 +40,21 @@ teardown() {
   [ $status -eq 1 ]
   [[ $output =~ "dolt_undrop called with too many arguments" ]] || false
   [[ $output =~ "dolt_undrop only accepts one argument - the name of the dropped database to restore" ]] || false
+
+  # Create and drop a database to test error messages when there is a db available to undrop
+  dolt sql -q "create database dropper;"
+  dolt sql -q "drop database dropper;"
+  run dolt sql -q "CALL dolt_undrop();"
+  [ $status -eq 1 ]
+  [[ $output =~ "no database name specified." ]] || false
+  [[ $output =~ " available databases that can be undropped: dropper" ]] || false
+}
+
+@test "undrop: purge error messages" {
+  # Assert that specifying args when calling dolt_purge_dropped_databases() returns an error
+  run dolt sql -q "call dolt_purge_dropped_databases('all', 'of', 'the', 'dbs');"
+  [ $status -eq 1 ]
+  [[ $output =~ "dolt_purge_dropped_databases does not take any arguments" ]] || false
 }
 
 @test "undrop: undrop root database" {
@@ -77,34 +96,29 @@ EOF
 # Asserts that a non-root database can be dropped and then restored with dolt_undrop(), even when
 # the case of the database name given to dolt_undrop() doesn't match match the original case.
 @test "undrop: undrop non-root database" {
-  # We manually create a database directory with hyphens in it to test the drop/undrop logic
-  # that handles translating database directory names to logical database names.
-  mkdir drop-me && cd drop-me
-  dolt init && cd ..
-
   dolt sql << EOF
-use drop_me;
+use drop_me_2;
 create table t1 (pk int primary key, c1 varchar(200));
 insert into t1 values (1, "one");
 call dolt_commit('-Am', 'creating table t1');
 EOF
   run dolt sql -q "show databases;"
   [ $status -eq 0 ]
-  [[ $output =~ "drop_me" ]] || false
+  [[ $output =~ "drop_me_2" ]] || false
 
-  dolt sql -q "drop database drop_me;"
+  dolt sql -q "drop database drop_me_2;"
   run dolt sql -q "show databases;"
   [ $status -eq 0 ]
-  [[ ! $output =~ "drop_me" ]] || false
+  [[ ! $output =~ "drop_me_2" ]] || false
 
   # Call dolt_undrop() with non-matching case for the database name to
   # ensure dolt_undrop() works with case-insensitive database names.
-  dolt sql -q "call dolt_undrop('DrOp_mE');"
+  dolt sql -q "call dolt_undrop('DrOp_mE_2');"
   run dolt sql -q "show databases;"
   [ $status -eq 0 ]
-  [[ $output =~ "drop_me" ]] || false
+  [[ $output =~ "drop_me_2" ]] || false
 
-  run dolt sql -r csv -q "select * from drop_me.t1;"
+  run dolt sql -r csv -q "select * from drop_me_2.t1;"
   [ $status -eq 0 ]
   [[ $output =~ "1,one" ]] || false
 }
@@ -189,4 +203,43 @@ EOF
   [ $status -eq 1 ]
   [[ $output =~ "unable to undrop database 'dAtAbAsE1'" ]] || false
   [[ $output =~ "another database already exists with the same case-insensitive name" ]] || false
+}
+
+@test "undrop: purging dropped databases" {
+  # Create a database to keep and a database to purge
+  dolt sql << EOF
+create database keepme;
+create database purgeme;
+use purgeme;
+create table t3 (pk int primary key, c1 varchar(200));
+insert into t3 values (3, "three");
+call dolt_commit('-Am', 'creating table t3');
+EOF
+  run dolt sql -q "show databases;"
+  [ $status -eq 0 ]
+  [[ $output =~ "purgeme" ]] || false
+  [[ $output =~ "keepme" ]] || false
+
+  # Assert that we can call dolt_purge_dropped_databases when there aren't any dropped dbs yet
+  dolt sql -q "call dolt_purge_dropped_databases;"
+
+  # Drop the purgeme database so we can purge it
+  dolt sql -q "drop database purgeme;"
+  run dolt sql -q "show databases;"
+  [ $status -eq 0 ]
+  [[ ! $output =~ "purgeme" ]] || false
+  [[ $output =~ "keepme" ]] || false
+
+  # Purge the purgeme database and make sure we can't undrop it
+  dolt sql -q "call dolt_purge_dropped_databases;"
+  run dolt sql -q "call dolt_undrop('purgeme');"
+  [ $status -eq 1 ]
+  [[ $output =~ "no database named 'purgeme' found to undrop" ]] || false
+  [[ $output =~ "there are no databases currently available to be undropped" ]] || false
+
+  # Double check that the keepme database is still present
+  run dolt sql -q "show databases;"
+  [ $status -eq 0 ]
+  [[ ! $output =~ "purgeme" ]] || false
+  [[ $output =~ "keepme" ]] || false
 }
