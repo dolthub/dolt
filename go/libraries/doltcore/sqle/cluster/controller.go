@@ -735,10 +735,14 @@ func (c *Controller) HookBranchControlPersistence(controller *branch_control.Con
 		}
 		c.bcReplication.setRole(c.role)
 
-		controller.SavedCallback = func() {
+		controller.SavedCallback = func(ctx context.Context) {
 			contents := controller.Serialized.Load()
 			if contents != nil {
-				c.bcReplication.UpdateBranchControlContents(*contents)
+				var rsc doltdb.ReplicationStatusController
+				c.bcReplication.UpdateBranchControlContents(ctx, *contents, &rsc)
+				if sqlCtx, ok := ctx.(*sql.Context); ok {
+					dsess.WaitForReplicationController(sqlCtx, rsc)
+				}
 			}
 		}
 	}
