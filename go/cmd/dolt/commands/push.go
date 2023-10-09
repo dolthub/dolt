@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dustin/go-humanize"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
@@ -34,12 +33,10 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
 )
 
@@ -105,6 +102,7 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
+	var statusCode int
 
 	errChan := make(chan error)
 	go func() {
@@ -120,7 +118,7 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			errChan <- err
 			return
 		}
-		err = printPushMessage(sqlRows)
+		statusCode, err = handlePushResult(sqlRows)
 		if err != nil {
 			errChan <- err
 			return
@@ -135,8 +133,8 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	for {
 		select {
-		case err := <-errChan:
-			return handlePushError(err, usage, apr, queryist, sqlCtx)
+		case err = <-errChan:
+			return handlePushError(statusCode, err, usage)
 		case <-ctx.Done():
 			if ctx.Err() != nil {
 				switch ctx.Err() {
@@ -184,114 +182,38 @@ func constructInterpolatedDoltPushQuery(apr *argparser.ArgParseResults) (string,
 	return interpolatedQuery, nil
 }
 
-// getDefaultRemote gets the name of the default remote.
-func getDefaultRemote(sqlCtx *sql.Context, queryist cli.Queryist) (string, error) {
-	rows, err := GetRowsForSql(queryist, sqlCtx, "select name from dolt_remotes")
-	if err != nil {
-		return "", err
-	}
-	if len(rows) == 0 {
-		return "", env.ErrNoRemote
-	}
-	if len(rows) == 1 {
-		return rows[0][0].(string), nil
-	}
-	for _, row := range rows {
-		if row[0].(string) == "origin" {
-			return "origin", nil
-		}
-	}
-	return "", env.ErrCantDetermineDefault
-}
-
-// processFetchSpecs takes a string of fetch specs and returns the destination ref and remote ref
-// Assumes the fetch specs look something like: ["refs/heads/*:refs/remotes/origin/*"]
-func processFetchSpecs(fetchSpecs string, branch string) (destRef, remoteRef string) {
-	destAndRemoteRefs := strings.Split(fetchSpecs, ":")
-	destRef = destAndRemoteRefs[0]
-	destRef = strings.TrimPrefix(destRef, "[\"")
-	destRef = strings.ReplaceAll(destRef, "*", branch)
-
-	remoteRef = destAndRemoteRefs[1]
-	remoteRef = strings.TrimSuffix(remoteRef, "\"]")
-	remoteRef = strings.ReplaceAll(remoteRef, "*", branch)
-
-	return
-}
-
-// printPushMessage prints the appropriate message for the given push output
-func printPushMessage(rows []sql.Row) error {
-	var statusCode int64
+// handlePushResult prints the appropriate message for the given push output
+func handlePushResult(rows []sql.Row) (int, error) {
+	var statusCode int
+	var err error
 	if intCode, ok := rows[0][0].(int64); ok {
-		statusCode = intCode
+		statusCode = int(intCode)
 	} else if strCode, ok := rows[0][0].(string); ok {
 		// remote execution returns status code as a string
-		intCode, err := strconv.Atoi(strCode)
+		statusCode, err = strconv.Atoi(strCode)
 		if err != nil {
-			return err
+			return 1, err
 		}
-		statusCode = int64(intCode)
 	}
-	if statusCode == 0 && len(rows[0]) > 1 {
+	if len(rows[0]) > 1 {
 		cli.Println(rows[0][1].(string))
 	}
-	return nil
+	if len(rows[0]) > 2 {
+		if errMsg, ok := rows[0][2].(string); ok && errMsg != "" {
+			err = fmt.Errorf(errMsg)
+		}
+	}
+	return statusCode, err
 }
 
 // handlePushError prints the appropriate error message and returns the exit code
-func handlePushError(err error, usage cli.UsagePrinter, apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context) int {
+func handlePushError(statusCode int, err error, usage cli.UsagePrinter) int {
 	if err == nil {
-		return 0
+		return statusCode
 	}
 
 	var verr errhand.VerboseError
 	switch err {
-	case env.ErrNoUpstreamForBranch:
-		rows, err := GetRowsForSql(queryist, sqlCtx, "select active_branch()")
-		if err != nil {
-			verr = errhand.BuildDError("fatal: The current branch could not be identified").AddCause(err).Build()
-		} else {
-			currentBranch := rows[0][0].(string)
-			remoteName := "<remote>"
-			if defRemote, verr := getDefaultRemote(sqlCtx, queryist); verr == nil {
-				remoteName = defRemote
-			}
-			verr = errhand.BuildDError(env.ErrCurrentBranchHasNoUpstream.New(currentBranch, remoteName, currentBranch).Error()).Build()
-		}
-	case env.ErrInvalidSetUpstreamArgs:
-		verr = errhand.BuildDError("error: --set-upstream requires <remote> and <refspec> params.").SetPrintUsage().Build()
-	case doltdb.ErrIsAhead, actions.ErrCantFF, datas.ErrMergeNeeded:
-		rows, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("select url, fetch_specs from dolt_remotes where name = '%s'", apr.Arg(0)))
-		if err != nil {
-			verr = errhand.BuildDError("could not identify remote").AddCause(err).Build()
-		} else {
-			remoteUrl := rows[0][0].(string)
-			fetchSpecs := rows[0][1].(types.JSONDocument)
-			fetchSpecsStr, err := fetchSpecs.ToString(sqlCtx)
-			if err != nil {
-				verr = errhand.BuildDError("could not identify destination remote").AddCause(err).Build()
-			}
-			var branch string
-			if apr.NArg() > 1 {
-				branch = apr.Arg(1)
-			} else {
-				rows, err := GetRowsForSql(queryist, sqlCtx, "select active_branch()")
-				if err != nil {
-					verr = errhand.BuildDError("could not identify current branch").AddCause(err).Build()
-				} else {
-					branch = rows[0][0].(string)
-				}
-			}
-			destRef, remoteRef := processFetchSpecs(fetchSpecsStr, branch)
-
-			cli.Printf("To %s\n", remoteUrl)
-			cli.Printf("! [rejected]          %s -> %s (non-fast-forward)\n", destRef, remoteRef)
-			cli.Printf("error: failed to push some refs to '%s'\n", remoteUrl)
-			cli.Println("hint: Updates were rejected because the tip of your current branch is behind")
-			cli.Println("hint: its remote counterpart. Integrate the remote changes (e.g.")
-			cli.Println("hint: 'dolt pull ...') before pushing again.")
-			verr = errhand.BuildDError("").Build()
-		}
 	case actions.ErrUnknownPushErr:
 		s, ok := status.FromError(err)
 		if ok && s.Code() == codes.PermissionDenied {

@@ -16,6 +16,7 @@ package dprocedures
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/store/datas"
 	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -27,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/store/datas"
 )
 
 var doltPushSchema = []*sql.Column{
@@ -37,7 +37,12 @@ var doltPushSchema = []*sql.Column{
 		Nullable: false,
 	},
 	{
-		Name:     "message",
+		Name:     "return_message",
+		Type:     types.LongText,
+		Nullable: true,
+	},
+	{
+		Name:     "error_message",
 		Type:     types.LongText,
 		Nullable: true,
 	},
@@ -45,56 +50,51 @@ var doltPushSchema = []*sql.Column{
 
 // doltPush is the stored procedure version for the CLI command `dolt push`.
 func doltPush(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	res, message, err := doDoltPush(ctx, args)
-	if err != nil {
-		if err == doltdb.ErrUpToDate {
-			return rowToIter(int64(cmdSuccess)), doltdb.ErrUpToDate
-		}
-		return nil, err
-	}
-	return rowToIter(int64(res), message), nil
+	status, returnMsg, errMsg, err := doDoltPush(ctx, args)
+	// err needs to be nil in order to pass the return and error messages to the query caller.
+	// otherwise, only err is returned with nil RowIter.
+	return rowToIter(int64(status), returnMsg, errMsg), err
 }
 
-func doDoltPush(ctx *sql.Context, args []string) (int, string, error) {
+func doDoltPush(ctx *sql.Context, args []string) (int, string, string, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
-		return cmdFailure, "", fmt.Errorf("empty database name")
+		return returnErr(fmt.Errorf("empty database name"))
 	}
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
-		return cmdFailure, "", err
+		return returnErr(err)
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
 	dbData, ok := sess.GetDbData(ctx, dbName)
-
 	if !ok {
-		return cmdFailure, "", fmt.Errorf("could not load database %s", dbName)
+		return returnErr(fmt.Errorf("could not load database %s", dbName))
 	}
 
 	apr, err := cli.CreatePushArgParser().Parse(args)
 	if err != nil {
-		return cmdFailure, "", err
+		return returnErr(err)
 	}
 
 	autoSetUpRemote := loadConfig(ctx).GetStringOrDefault(env.PushAutoSetupRemote, "false")
 	pushAutoSetUpRemote, err := strconv.ParseBool(autoSetUpRemote)
 	if err != nil {
-		return cmdFailure, "", err
+		return returnErr(err)
 	}
 
 	opts, remote, err := env.NewPushOpts(ctx, apr, dbData.Rsr, dbData.Ddb, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag), pushAutoSetUpRemote, apr.Contains(cli.AllFlag))
 	if err != nil {
-		return cmdFailure, "", err
+		return returnErr(err)
 	}
 	remoteDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), remote, true)
 	if err != nil {
-		return 1, "", actions.HandleInitRemoteStorageClientErr(remote.Name, remote.Url, err)
+		return returnErr(actions.HandleInitRemoteStorageClientErr(remote.Name, remote.Url, err))
 	}
 
 	tmpDir, err := dbData.Rsw.TempTableFilesDir()
 	if err != nil {
-		return cmdFailure, "", err
+		return returnErr(err)
 	}
 
 	var msg string
@@ -111,13 +111,17 @@ func doDoltPush(ctx *sql.Context, args []string) (int, string, error) {
 	if err != nil {
 		switch err {
 		case doltdb.ErrUpToDate:
-			return cmdSuccess, "Everything up-to-date", nil
+			return cmdSuccess, fmt.Sprintf("%s\n%s", msg, "Everything up-to-date"), "", nil
 		case datas.ErrMergeNeeded:
-			return cmdFailure, "", fmt.Errorf("%w; the tip of your current branch is behind its remote counterpart", err)
+			return returnErr(fmt.Errorf("%w; the tip of your current branch is behind its remote counterpart", err))
 		default:
-			return cmdFailure, "", err
+			return cmdFailure, msg, err.Error(), nil
 		}
 	}
 	// TODO : set upstream should be persisted outside of session
-	return cmdSuccess, msg, nil
+	return cmdSuccess, msg, "", nil
+}
+
+func returnErr(err error) (int, string, string, error) {
+	return cmdFailure, "", "", err
 }

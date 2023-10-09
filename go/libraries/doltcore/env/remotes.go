@@ -39,13 +39,11 @@ import (
 var NoRemote = Remote{}
 
 var ErrBranchDoesNotMatchUpstream = errors.New("the upstream branch of your current branch does not match the name of your current branch")
-var ErrNoUpstreamForBranch = errors.New("the current branch has no upstream branch")
 var ErrFailedToReadDb = errors.New("failed to read from the db")
 var ErrUnknownBranch = errors.New("unknown branch")
 var ErrCannotSetUpstreamForTag = errors.New("cannot set upstream for tag")
 var ErrCannotPushRef = errors.New("cannot push ref")
 var ErrNoRefSpecForRemote = errors.New("no refspec for remote")
-var ErrInvalidSetUpstreamArgs = errors.New("invalid set-upstream arguments")
 var ErrInvalidFetchSpec = errors.New("invalid fetch spec")
 var ErrPullWithRemoteNoUpstream = errors.New("You asked to pull from the remote '%s', but did not specify a branch. Because this is not the default configured remote for your current branch, you must specify a branch.")
 var ErrPullWithNoRemoteAndNoUpstream = errors.New("There is no tracking information for the current branch.\nPlease specify which branch you want to merge with.\n\n\tdolt pull <remote> <branch>\n\nIf you wish to set tracking information for this branch you can do so with:\n\n\t dolt push --set-upstream <remote> <branch>\n")
@@ -65,6 +63,10 @@ var ErrNoPushDestination = goerrors.NewKind("fatal: No configured push destinati
 	"\tdolt remote add <name> <url>\n\n" +
 	"and then push using the remote name\n\n" +
 	"\tdolt push <name>\n\n")
+var ErrFailedToPush = goerrors.NewKind("error: failed to push some refs to '%s'\n" +
+	"hint: Updates were rejected because the tip of your current branch is behind\n" +
+	"hint: its remote counterpart. Integrate the remote changes (e.g.\n" +
+	"hint: 'dolt pull ...') before pushing again.\n")
 
 func IsEmptyRemote(r Remote) bool {
 	return len(r.Name) == 0 && len(r.Url) == 0 && r.FetchSpecs == nil && r.Params == nil

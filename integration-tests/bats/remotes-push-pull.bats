@@ -350,7 +350,7 @@ SQL
     dolt fetch
     run dolt push origin main
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "refs/heads/main -> refs/remotes/origin/main" ]] || false
+    [[ "$output" =~ " ! [rejected]          main -> main" ]] || false
     [[ "$output" =~ "tip of your current branch is behind" ]] || false
 }
 
@@ -626,6 +626,10 @@ SQL
 }
 
 @test "remotes-push-pull: push --all with multiple remotes will push all local branches to default remote, regardless of their upstream" {
+
+}
+
+@test "remotes-push-pull: push --all with local branch that has conflict" {
 
 }
 

@@ -38,11 +38,8 @@ import (
 var ErrCantFF = errors.New("can't fast forward merge")
 var ErrInvalidPullArgs = errors.New("dolt pull takes at most two args")
 var ErrCannotPushRef = errors.New("cannot push ref")
-var ErrFailedToSaveRepoState = errors.New("failed to save repo state")
 var ErrFailedToDeleteRemote = errors.New("failed to delete remote")
 var ErrFailedToGetRemoteDb = errors.New("failed to get remote db")
-var ErrFailedToDeleteBackup = errors.New("failed to delete backup")
-var ErrFailedToGetBackupDb = errors.New("failed to get backup db")
 var ErrUnknownPushErr = errors.New("unknown push error")
 
 type ProgStarter func(ctx context.Context) (*sync.WaitGroup, chan pull.Stats)
@@ -96,7 +93,7 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 
 func DoPush(ctx context.Context, pushMeta *env.PushMeta, progStarter ProgStarter, progStopper ProgStopper) (string, error) {
 	var err error
-	var retMsg string
+	var successPush, setUpstreamPush, failedPush []string
 	for _, opts := range pushMeta.Opts {
 		switch opts.SrcRef.GetType() {
 		case ref.BranchRefType:
@@ -111,9 +108,11 @@ func DoPush(ctx context.Context, pushMeta *env.PushMeta, progStarter ProgStarter
 			err = fmt.Errorf("%w: %s of type %s", ErrCannotPushRef, opts.SrcRef.String(), opts.SrcRef.GetType())
 		}
 
-		if err == nil || errors.Is(err, doltdb.ErrUpToDate) || errors.Is(err, pull.ErrDBUpToDate) {
+		if errors.Is(err, doltdb.ErrIsAhead) || errors.Is(err, ErrCantFF) || errors.Is(err, datas.ErrMergeNeeded) {
+			failedPush = append(failedPush, fmt.Sprintf(" ! [rejected]          %s -> %s (non-fast-forward)", opts.SrcRef.GetPath(), opts.DestRef.GetPath()))
+		} else if err == nil || errors.Is(err, doltdb.ErrUpToDate) || errors.Is(err, pull.ErrDBUpToDate) {
 			if err == nil && !opts.HasUpstream {
-				retMsg = fmt.Sprintf("%s\n%s", retMsg, fmt.Sprintf(" * [new branch]          %s -> %s", opts.SrcRef.GetPath(), opts.DestRef.GetPath()))
+				successPush = append(successPush, fmt.Sprintf(" * [new branch]          %s -> %s", opts.SrcRef.GetPath(), opts.DestRef.GetPath()))
 			}
 			if opts.SetUpstream {
 				err = pushMeta.Rsw.UpdateBranch(opts.SrcRef.GetPath(), env.BranchConfig{
@@ -123,11 +122,33 @@ func DoPush(ctx context.Context, pushMeta *env.PushMeta, progStarter ProgStarter
 					Remote: pushMeta.Remote.Name,
 				})
 				if err != nil {
-					return retMsg, err
+					return "", err
 				}
-				retMsg = fmt.Sprintf("%s\n%s", retMsg, fmt.Sprintf("branch '%s' set up to track '%s'.", opts.SrcRef.GetPath(), opts.RemoteRef.GetPath()))
+				setUpstreamPush = append(setUpstreamPush, fmt.Sprintf("branch '%s' set up to track '%s'.", opts.SrcRef.GetPath(), opts.RemoteRef.GetPath()))
 			}
 		}
+	}
+
+	return buildReturnMsg(successPush, setUpstreamPush, failedPush, pushMeta.Remote.Url, err)
+}
+
+func buildReturnMsg(success, setUpstream, failed []string, remoteUrl string, err error) (string, error) {
+	var retMsg string
+	if len(success) == 0 && len(failed) == 0 {
+		return "", err
+	}
+	retMsg = fmt.Sprintf("To %s", remoteUrl)
+	for _, sMsg := range success {
+		retMsg = fmt.Sprintf("%s\n%s", retMsg, sMsg)
+	}
+	for _, uMsg := range setUpstream {
+		retMsg = fmt.Sprintf("%s\n%s", retMsg, uMsg)
+	}
+	for _, fMsg := range failed {
+		retMsg = fmt.Sprintf("%s\n%s", retMsg, fMsg)
+	}
+	if len(failed) > 0 {
+		err = env.ErrFailedToPush.New(remoteUrl)
 	}
 	return retMsg, err
 }
