@@ -154,7 +154,7 @@ SQL
     dolt commit -m "changed pk=0 all cells to 11"
     dolt checkout main
     run dolt merge change-cell -m "merge"
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "CONFLICT" ]] || false
     run dolt status
     [[ "$output" =~ "You have unmerged tables." ]] || false

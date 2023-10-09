@@ -406,7 +406,7 @@ teardown() {
     dolt commit -m "added conflicting test row"
     dolt checkout main
     run dolt merge test-branch --no-commit
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "CONFLICT (content)" ]] || false
     run dolt conflicts cat test
     [ "$status" -eq 0 ]
@@ -450,7 +450,7 @@ teardown() {
     dolt commit -m "added conflicting test row"
     dolt checkout main
     run dolt merge test-branch --no-commit
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "CONFLICT (content)" ]] || false
     run dolt conflicts cat test
     [ "$status" -eq 0 ]
@@ -492,7 +492,9 @@ teardown() {
     dolt add test
     dolt commit -m "added conflicting test row"
     dolt checkout main
-    dolt merge test-branch
+    run dolt merge test-branch
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content)" ]] || false
     run dolt sql -q "select * from test"
     [[ "$output" =~ \|[[:space:]]+5 ]] || false
     run dolt conflicts cat test
@@ -520,7 +522,9 @@ teardown() {
     dolt add test
     dolt commit -m "added conflicting test row"
     dolt checkout main
-    dolt merge test-branch
+    run dolt merge test-branch
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content)" ]] || false
     run dolt conflicts resolve --theirs test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
@@ -541,7 +545,9 @@ teardown() {
     dolt add test
     dolt commit -m "added conflicting test row"
     dolt checkout main
-    dolt merge test-branch
+    run dolt merge test-branch
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content)" ]] || false
     run dolt sql -q "call dolt_conflicts_resolve('--theirs', 'test')"
     [ "$status" -eq 0 ]
     run dolt sql -q "select * from test"

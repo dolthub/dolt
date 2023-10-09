@@ -159,7 +159,7 @@ SQL
     dolt commit -am "made changes on branch another"
 
     run dolt merge other -m "merge"
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "CONFLICT" ]] || false
     run dolt conflicts resolve --ours js
     [ "$status" -eq 0 ]
@@ -209,7 +209,7 @@ SQL
     dolt commit -am "made changes on branch another"
 
     run dolt merge other -m "merge"
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "CONFLICT" ]] || false
     run dolt sql -q "call dolt_conflicts_resolve('--ours', 'js')"
     [ "$status" -eq 0 ]
