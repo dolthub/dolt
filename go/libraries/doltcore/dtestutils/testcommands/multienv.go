@@ -369,11 +369,11 @@ func (mr *MultiRepoTestSetup) PushToRemote(dbName, remoteName, branchName string
 	}
 
 	pushMeta := &env.PushMeta{
-		Opts: opts,
+		Opts:   opts,
 		Remote: remote,
-		Rsr: dEnv.RepoStateReader(),
-		Rsw: dEnv.RepoStateWriter(),
-		SrcDb: dEnv.DoltDB,
+		Rsr:    dEnv.RepoStateReader(),
+		Rsw:    dEnv.RepoStateWriter(),
+		SrcDb:  dEnv.DoltDB,
 		DestDb: remoteDB,
 		TmpDir: tmpDir,
 	}

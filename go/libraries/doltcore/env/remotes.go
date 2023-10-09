@@ -18,12 +18,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	goerrors "gopkg.in/src-d/go-errors.v1"
 	"net/url"
 	"path"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -131,11 +132,11 @@ func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsB
 }
 
 type PushMeta struct {
-	Opts []*PushOpts
-	Rsr RepoStateReader
-	Rsw RepoStateWriter
+	Opts   []*PushOpts
+	Rsr    RepoStateReader
+	Rsw    RepoStateWriter
 	Remote Remote
-	SrcDb *doltdb.DoltDB
+	SrcDb  *doltdb.DoltDB
 	DestDb *doltdb.DoltDB
 	TmpDir string
 }
@@ -250,7 +251,7 @@ func pushWithNoArg(ctx context.Context, rsr RepoStateReader, ddb *doltdb.DoltDB,
 	if all {
 		return getPushOptsForAll(ctx, rsrBranches, currentBranch, remote, ddb, force, setUpstream)
 	} else {
-		refSpec, remoteName, hasUpstream, err := getCurrentBranchRefSpec(ctx, rsrBranches, rsr, ddb, remote.Name, true,false, setUpstream, pushAutoSetupRemote)
+		refSpec, remoteName, hasUpstream, err := getCurrentBranchRefSpec(ctx, rsrBranches, rsr, ddb, remote.Name, true, false, setUpstream, pushAutoSetupRemote)
 		if err != nil {
 			return nil, NoRemote, err
 		}

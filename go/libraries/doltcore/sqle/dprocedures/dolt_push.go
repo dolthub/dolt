@@ -99,11 +99,11 @@ func doDoltPush(ctx *sql.Context, args []string) (int, string, error) {
 
 	var msg string
 	pushMeta := &env.PushMeta{
-		Opts: opts,
+		Opts:   opts,
 		Remote: remote,
-		Rsr: dbData.Rsr,
-		Rsw: dbData.Rsw,
-		SrcDb: dbData.Ddb,
+		Rsr:    dbData.Rsr,
+		Rsw:    dbData.Rsw,
+		SrcDb:  dbData.Ddb,
 		DestDb: remoteDB,
 		TmpDir: tmpDir,
 	}
