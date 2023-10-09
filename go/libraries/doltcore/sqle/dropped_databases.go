@@ -29,17 +29,17 @@ import (
 
 // droppedDatabaseDirectoryName is the subdirectory within the data folder where Dolt moves databases after they are
 // dropped. The dolt_undrop() stored procedure is then able to restore them from this location.
-const droppedDatabaseDirectoryName = "dolt_dropped_databases"
+const droppedDatabaseDirectoryName = ".dolt_dropped_databases"
 
 // droppedDatabaseManager is responsible for dropping databases and "undropping", or restoring, dropped databases. It
 // is given a Filesys where all database directories can be found. When dropping a database, instead of deleting the
-// database directory, it will move it to a new "dolt_dropped_databases" directory where databases can be restored.
+// database directory, it will move it to a new ".dolt_dropped_databases" directory where databases can be restored.
 type droppedDatabaseManager struct {
 	fs filesys.Filesys
 }
 
 // newDroppedDatabaseManager creates a new droppedDatabaseManager instance using the specified |fs| as the location
-// where databases can be found. It will create a new "dolt_dropped_databases" directory at the root of |fs| where
+// where databases can be found. It will create a new ".dolt_dropped_databases" directory at the root of |fs| where
 // dropped databases will be moved until they are permanently removed.
 func newDroppedDatabaseManager(fs filesys.Filesys) *droppedDatabaseManager {
 	return &droppedDatabaseManager{
