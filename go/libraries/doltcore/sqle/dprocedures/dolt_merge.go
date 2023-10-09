@@ -543,7 +543,7 @@ func mergeRootToWorking(
 	}
 
 	ws = ws.WithWorkingRoot(working)
-	if !merged.HasMergeArtifacts() || !force {
+	if !merged.HasMergeArtifacts() && !force {
 		ws = ws.WithStagedRoot(staged)
 	}
 
