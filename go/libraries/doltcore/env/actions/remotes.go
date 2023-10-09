@@ -127,11 +127,9 @@ func DoPush(ctx context.Context, pushMeta *env.PushMeta, progStarter ProgStarter
 				}
 				retMsg = fmt.Sprintf("%s\n%s", retMsg, fmt.Sprintf("branch '%s' set up to track '%s'.", opts.SrcRef.GetPath(), opts.RemoteRef.GetPath()))
 			}
-		} else {
-			return retMsg, err
 		}
 	}
-	return retMsg, nil
+	return retMsg, err
 }
 
 // PushTag pushes a commit tag and all underlying data from a local source database to a remote destination database.
