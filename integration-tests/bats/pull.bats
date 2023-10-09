@@ -399,3 +399,24 @@ SQL
     [[ ! "$output" =~ "add (1,2) to t1" ]] || false
     [[ ! "$output" =~ "add (2,3) to t1" ]] || false
 }
+
+@test "pull: --no-ff and --no-commit" {
+    cd repo2
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+
+    run dolt pull --no-ff --no-commit origin
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Automatic merge went well; stopped before committing as requested" ]] || false
+
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "t1" ]] || false
+
+    dolt commit -m "merge from origin"
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "merge from origin" ]] || false
+}
