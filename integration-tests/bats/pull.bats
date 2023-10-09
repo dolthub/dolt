@@ -196,14 +196,23 @@ SQL
 }
 
 @test "pull: pull squash" {
-    skip "todo: support dolt pull --squash"
     cd repo2
+    dolt sql -q "create table t2 (i int primary key);"
+    dolt commit -Am "commit 1"
+
     dolt pull --squash origin
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
+    [ "${#lines[@]}" -eq 3 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
+    [[ "$output" =~ "t2" ]] || false
+
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Merge branch" ]] || false
+    [[ ! "$output" =~ "Second commit" ]] || false
+    [[ ! "$output" =~ "First commit" ]] || false
 }
 
 @test "pull: pull --noff flag" {
