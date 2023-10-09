@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/dolt/go/store/util/outputpager"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
@@ -133,10 +134,36 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		if remoteHashErr != nil {
 			cli.Println("pull finished, but failed to get hash of remote ref")
 		}
-		success := printMergeStats(rows, apr, queryist, sqlCtx, usage, remoteHash, remoteHashErr)
-		if success == 1 {
-			errChan <- errors.New(" ") //return a non-nil error for the correct exit code but no further messages to print
-			return
+
+		if apr.Contains(cli.ForceFlag) {
+			headHash, headhHashErr := getHashOf(queryist, sqlCtx, "HEAD")
+			if headhHashErr != nil {
+				cli.Println("merge finished, but failed to get hash of HEAD")
+				cli.Println(headhHashErr.Error())
+			}
+			if remoteHashErr == nil && headhHashErr == nil {
+				cli.Println("Updating", headHash+".."+remoteHash)
+			}
+			commit, err := getCommitInfo(queryist, sqlCtx, "HEAD")
+			if err != nil {
+				cli.Println("merge finished, but failed to get commit info")
+				cli.Println(err.Error())
+				return
+			}
+			if cli.ExecuteWithStdioRestored != nil {
+				cli.ExecuteWithStdioRestored(func() {
+					pager := outputpager.Start()
+					defer pager.Stop()
+
+					PrintCommitInfo(pager, 0, false, "auto", commit)
+				})
+			}
+		} else {
+			success := printMergeStats(rows, apr, queryist, sqlCtx, usage, remoteHash, remoteHashErr)
+			if success == 1 {
+				errChan <- errors.New(" ") //return a non-nil error for the correct exit code but no further messages to print
+				return
+			}
 		}
 	}()
 

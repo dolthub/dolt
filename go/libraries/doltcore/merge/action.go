@@ -81,16 +81,6 @@ func WithSquash(squash bool) MergeSpecOpt {
 	}
 }
 
-func WithPullSpecOpts(pullSpec *env.PullSpec) MergeSpecOpt {
-	return func(ms *MergeSpec) {
-		ms.NoEdit = pullSpec.NoEdit
-		ms.NoCommit = pullSpec.NoCommit
-		ms.Force = pullSpec.Force
-		ms.NoFF = pullSpec.NoFF
-		ms.Squash = pullSpec.Squash
-	}
-}
-
 // NewMergeSpec returns a MergeSpec with the arguments provided.
 func NewMergeSpec(
 	ctx context.Context,

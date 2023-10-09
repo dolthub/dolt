@@ -241,7 +241,7 @@ func performMerge(
 		return ws, "", noConflictsOrViolations, threeWayMerge, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	ws, err = executeMerge(ctx, sess, dbName, spec.Squash, spec.HeadC, spec.MergeC, spec.MergeCSpecStr, ws, dbState.EditOpts(), spec.WorkingDiffs)
+	ws, err = executeMerge(ctx, sess, dbName, spec.Squash, spec.Force, spec.HeadC, spec.MergeC, spec.MergeCSpecStr, ws, dbState.EditOpts(), spec.WorkingDiffs)
 	if err == doltdb.ErrUnresolvedConflictsOrViolations {
 		// if there are unresolved conflicts, write the resulting working set back to the session and return an
 		// error message
@@ -265,7 +265,11 @@ func performMerge(
 	var commit string
 	if !noCommit {
 		author := fmt.Sprintf("%s <%s>", spec.Name, spec.Email)
-		commit, _, err = doDoltCommit(ctx, []string{"-m", msg, "--author", author})
+		args := []string{"-m", msg, "--author", author}
+		if spec.Force {
+			args = append(args, "--force")
+		}
+		commit, _, err = doDoltCommit(ctx, args)
 		if err != nil {
 			return ws, commit, noConflictsOrViolations, threeWayMerge, fmt.Errorf("dolt_commit failed")
 		}
@@ -316,6 +320,7 @@ func executeMerge(
 	sess *dsess.DoltSession,
 	dbName string,
 	squash bool,
+	force bool,
 	head, cm *doltdb.Commit,
 	cmSpec string,
 	ws *doltdb.WorkingSet,
@@ -333,7 +338,7 @@ func executeMerge(
 			return nil, err
 		}
 	}
-	return mergeRootToWorking(ctx, sess, dbName, squash, ws, result, workingDiffs, cm, cmSpec)
+	return mergeRootToWorking(ctx, sess, dbName, squash, force, ws, result, workingDiffs, cm, cmSpec)
 }
 
 func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.WorkingSet, dbData env.DbData, cm2 *doltdb.Commit, spec *merge.MergeSpec) (*doltdb.WorkingSet, error) {
@@ -399,7 +404,7 @@ func executeNoFFMerge(
 	}
 	result := &merge.Result{Root: mergeRoot, Stats: make(map[string]*merge.MergeStats)}
 
-	ws, err = mergeRootToWorking(ctx, dSess, dbName, false, ws, result, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr)
+	ws, err = mergeRootToWorking(ctx, dSess, dbName, false, spec.Force, ws, result, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr)
 	if err != nil {
 		// This error is recoverable, so we return a working set value along with the error
 		return ws, nil, err
@@ -515,7 +520,7 @@ func mergeRootToWorking(
 	ctx *sql.Context,
 	dSess *dsess.DoltSession,
 	dbName string,
-	squash bool,
+	squash, force bool,
 	ws *doltdb.WorkingSet,
 	merged *merge.Result,
 	workingDiffs map[string]hash.Hash,
@@ -538,7 +543,7 @@ func mergeRootToWorking(
 	}
 
 	ws = ws.WithWorkingRoot(working)
-	if !merged.HasMergeArtifacts() {
+	if !merged.HasMergeArtifacts() || !force {
 		ws = ws.WithStagedRoot(staged)
 	}
 
@@ -547,7 +552,7 @@ func mergeRootToWorking(
 		return nil, err
 	}
 
-	if merged.HasMergeArtifacts() {
+	if merged.HasMergeArtifacts() && !force {
 		// this error is recoverable in-session, so we return the new ws along with the error
 		return ws, doltdb.ErrUnresolvedConflictsOrViolations
 	}

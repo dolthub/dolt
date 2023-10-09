@@ -160,33 +160,47 @@ teardown() {
 }
 
 @test "sql-pull: dolt_pull force" {
-    skip "todo: support dolt pull --force (cli too)"
-    cd repo2
-    dolt sql -q "create table t2 (a int)"
-    dolt commit -am "2.0 commit"
+    cd repo1
+    dolt sql <<SQL
+SET FOREIGN_KEY_CHECKS=0;
+CREATE TABLE colors (
+    id INT NOT NULL,
+    color VARCHAR(32) NOT NULL,
+
+    PRIMARY KEY (id),
+    INDEX color_index(color)
+);
+CREATE TABLE objects (
+    id INT NOT NULL,
+    name VARCHAR(64) NOT NULL,
+    color VARCHAR(32)
+);
+SQL
+    dolt commit -A -m "Commit1"
     dolt push origin main
 
+    cd ../repo2
+    dolt pull
+    dolt sql -q "alter table objects add constraint color FOREIGN KEY (color) REFERENCES colors(color)"
+    dolt commit -A -m "Commit2"
+
     cd ../repo1
-    dolt sql -q "create table t2 (a int primary key)"
-    dolt sql -q "create table t3 (a int primary key)"
-    dolt commit -am "2.1 commit"
-    dolt push -f origin main
+    dolt sql -q "INSERT INTO objects (id,name,color) VALUES (1,'truck','red'),(2,'ball','green'),(3,'shoe','blue')"
+    dolt commit -A -m "Commit3"
+    dolt push origin main
 
     cd ../repo2
-    run dolt sql -q "CALL dolt_pull('origin')"
+    run dolt sql -q "call dolt_pull()"
     [ "$status" -eq 1 ]
-    [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "fetch failed; dataset head is not ancestor of commit" ]] || false
+    [[ "$output" =~ "Constraint violations" ]] || false
 
-    dolt sql -q "CALL dolt_pull('-f', 'origin')"
-
-    run dolt log -n 1
+    run dolt sql -q "call dolt_pull('-f')"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "2.1 commit" ]] || false
-
-    run dolt sql -q "show tables" -r csv
-    [ "${#lines[@]}" -eq 4 ]
-    [[ "$output" =~ "t3" ]] || false
+    run dolt sql -q "select * from objects"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "truck" ]] || false
+    [[ "$output" =~ "ball" ]] || false
+    [[ "$output" =~ "shoe" ]] || false
 }
 
 @test "sql-pull: CALL dolt_pull squash" {
