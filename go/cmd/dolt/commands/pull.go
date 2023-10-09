@@ -120,6 +120,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			errChan <- err
 			return
 		}
+		// if merge is called with '--no-commit', we need to commit the sql transaction or the staged changes will be lost
 		_, _, err = queryist.Query(sqlCtx, "COMMIT")
 		if err != nil {
 			errChan <- err

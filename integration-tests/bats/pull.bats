@@ -4,39 +4,38 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 setup() {
     setup_common
 
-    TMPDIRS=$(pwd)/tmpdirs
-    mkdir -p $TMPDIRS/{rem1,repo1}
+    TESTDIRS=$(pwd)/testdirs
+    mkdir -p $TESTDIRS/{rem1,repo1}
 
     # repo1 -> rem1 -> repo2
-    cd $TMPDIRS/repo1
+    cd $TESTDIRS/repo1
     dolt init
     dolt branch feature
     dolt remote add origin file://../rem1
     dolt remote add test-remote file://../rem1
     dolt push origin main
 
-    cd $TMPDIRS
+    cd $TESTDIRS
     dolt clone file://rem1 repo2
-    cd $TMPDIRS/repo2
+    cd $TESTDIRS/repo2
     dolt log
     dolt branch feature
     dolt remote add test-remote file://../rem1
 
     # table and commits only present on repo1, rem1 at start
-    cd $TMPDIRS/repo1
+    cd $TESTDIRS/repo1
     dolt sql -q "create table t1 (a int primary key, b int)"
     dolt add .
     dolt commit -am "First commit"
     dolt sql -q "insert into t1 values (0,0)"
     dolt commit -am "Second commit"
     dolt push origin main
-    cd $TMPDIRS
+    cd $TESTDIRS
 }
 
 teardown() {
     teardown_common
-    rm -rf $TMPDIRS
-    cd $BATS_TMPDIR
+    rm -rf $TESTDIRS
 }
 
 @test "pull: pull main" {
@@ -47,6 +46,10 @@ teardown() {
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "First commit" ]] || false
+    [[ "$output" =~ "Second commit" ]] || false
 }
 
 @test "pull: pull custom remote" {
@@ -57,6 +60,10 @@ teardown() {
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "First commit" ]] || false
+    [[ "$output" =~ "Second commit" ]] || false
 }
 
 @test "pull: pull default origin" {
@@ -68,6 +75,10 @@ teardown() {
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "First commit" ]] || false
+    [[ "$output" =~ "Second commit" ]] || false
 }
 
 @test "pull: pull default custom remote" {
@@ -79,6 +90,10 @@ teardown() {
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "First commit" ]] || false
+    [[ "$output" =~ "Second commit" ]] || false
 }
 
 @test "pull: pull up to date does not error" {
@@ -129,6 +144,10 @@ teardown() {
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "First commit" ]] || false
+    [[ "$output" =~ "Second commit" ]] || false
 }
 
 @test "pull: checkout after fetch a new feature branch" {
@@ -148,6 +167,11 @@ teardown() {
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
     [[ "$output" =~ "t2" ]] || false
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "First commit" ]] || false
+    [[ "$output" =~ "Second commit" ]] || false
+    [[ "$output" =~ "create t2" ]] || false
 }
 
 @test "pull: pull force" {
@@ -193,6 +217,12 @@ SQL
     [[ "$output" =~ "truck" ]] || false
     [[ "$output" =~ "ball" ]] || false
     [[ "$output" =~ "shoe" ]] || false
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "First commit" ]] || false
+    [[ "$output" =~ "Second commit" ]] || false
+    [[ "$output" =~ "Commit1" ]] || false
+    [[ "$output" =~ "Commit3" ]] || false
 }
 
 @test "pull: pull squash" {
@@ -326,6 +356,10 @@ SQL
     [[ "$output" =~ "CONFLICT (content): Merge conflict in t1" ]] || false
     [[ "$output" =~ "Automatic merge failed; 1 table(s) are unmerged." ]] || false
     [[ "$output" =~ "Use 'dolt conflicts' to investigate and resolve conflicts." ]] || false
+
+    run dolt show head
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "adding new t1 table" ]] || false
 }
 
 @test "pull: pull also fetches, but does not merge other branches" {

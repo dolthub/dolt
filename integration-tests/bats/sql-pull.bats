@@ -4,39 +4,38 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 setup() {
     setup_common
 
-    TMPDIRS=$(pwd)/tmpdirs
-    mkdir -p $TMPDIRS/{rem1,repo1}
+    TESTDIRS=$(pwd)/testdirs
+    mkdir -p $TESTDIRS/{rem1,repo1}
 
     # repo1 -> rem1 -> repo2
-    cd $TMPDIRS/repo1
+    cd $TESTDIRS/repo1
     dolt init
     dolt branch feature
     dolt remote add origin file://../rem1
     dolt remote add test-remote file://../rem1
     dolt push origin main
 
-    cd $TMPDIRS
+    cd $TESTDIRS
     dolt clone file://rem1 repo2
-    cd $TMPDIRS/repo2
+    cd $TESTDIRS/repo2
     dolt log
     dolt branch feature
     dolt remote add test-remote file://../rem1
 
     # table and commits only present on repo1, rem1 at start
-    cd $TMPDIRS/repo1
+    cd $TESTDIRS/repo1
     dolt sql -q "create table t1 (a int primary key, b int)"
     dolt add .
     dolt commit -am "First commit"
     dolt sql -q "insert into t1 values (0,0)"
     dolt commit -am "Second commit"
     dolt push origin main
-    cd $TMPDIRS
+    cd $TESTDIRS
 }
 
 teardown() {
     teardown_common
-    rm -rf $TMPDIRS
-    cd $BATS_TMPDIR
+    rm -rf $TESTDIRS
 }
 
 @test "sql-pull: dolt_pull main" {
