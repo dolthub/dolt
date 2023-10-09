@@ -111,8 +111,13 @@ func DoPush(ctx context.Context, pushMeta *env.PushMeta, progStarter ProgStarter
 		if errors.Is(err, doltdb.ErrIsAhead) || errors.Is(err, ErrCantFF) || errors.Is(err, datas.ErrMergeNeeded) {
 			failedPush = append(failedPush, fmt.Sprintf(" ! [rejected]          %s -> %s (non-fast-forward)", opts.SrcRef.GetPath(), opts.DestRef.GetPath()))
 		} else if err == nil || errors.Is(err, doltdb.ErrUpToDate) || errors.Is(err, pull.ErrDBUpToDate) {
-			if err == nil && !opts.HasUpstream {
-				successPush = append(successPush, fmt.Sprintf(" * [new branch]          %s -> %s", opts.SrcRef.GetPath(), opts.DestRef.GetPath()))
+			if err == nil {
+				if opts.HasUpstream {
+					// TODO: should add commit hash info for branches with upstream set
+					//  (e.g. 74476cf38..080b073e7  branch1 -> branch1)
+				} else {
+					successPush = append(successPush, fmt.Sprintf(" * [new branch]          %s -> %s", opts.SrcRef.GetPath(), opts.DestRef.GetPath()))
+				}
 			}
 			if opts.SetUpstream {
 				err = pushMeta.Rsw.UpdateBranch(opts.SrcRef.GetPath(), env.BranchConfig{
@@ -132,6 +137,8 @@ func DoPush(ctx context.Context, pushMeta *env.PushMeta, progStarter ProgStarter
 	return buildReturnMsg(successPush, setUpstreamPush, failedPush, pushMeta.Remote.Url, err)
 }
 
+// buildReturnMsg combines the push progress information of created branches, remote tracking branches
+// and rejected branches, in order. // TODO: updated branches info is missing
 func buildReturnMsg(success, setUpstream, failed []string, remoteUrl string, err error) (string, error) {
 	var retMsg string
 	if len(success) == 0 && len(failed) == 0 {

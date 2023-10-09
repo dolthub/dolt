@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -102,7 +101,6 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	var statusCode int
 
 	errChan := make(chan error)
 	go func() {
@@ -118,7 +116,7 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			errChan <- err
 			return
 		}
-		statusCode, err = handlePushResult(sqlRows)
+		err = handlePushResult(sqlRows)
 		if err != nil {
 			errChan <- err
 			return
@@ -134,7 +132,7 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	for {
 		select {
 		case err = <-errChan:
-			return handlePushError(statusCode, err, usage)
+			return handlePushError(err, usage)
 		case <-ctx.Done():
 			if ctx.Err() != nil {
 				switch ctx.Err() {
@@ -183,18 +181,8 @@ func constructInterpolatedDoltPushQuery(apr *argparser.ArgParseResults) (string,
 }
 
 // handlePushResult prints the appropriate message for the given push output
-func handlePushResult(rows []sql.Row) (int, error) {
-	var statusCode int
+func handlePushResult(rows []sql.Row) error {
 	var err error
-	if intCode, ok := rows[0][0].(int64); ok {
-		statusCode = int(intCode)
-	} else if strCode, ok := rows[0][0].(string); ok {
-		// remote execution returns status code as a string
-		statusCode, err = strconv.Atoi(strCode)
-		if err != nil {
-			return 1, err
-		}
-	}
 	if len(rows[0]) > 1 {
 		cli.Println(rows[0][1].(string))
 	}
@@ -203,13 +191,13 @@ func handlePushResult(rows []sql.Row) (int, error) {
 			err = fmt.Errorf(errMsg)
 		}
 	}
-	return statusCode, err
+	return err
 }
 
 // handlePushError prints the appropriate error message and returns the exit code
-func handlePushError(statusCode int, err error, usage cli.UsagePrinter) int {
+func handlePushError(err error, usage cli.UsagePrinter) int {
 	if err == nil {
-		return statusCode
+		return 0
 	}
 
 	var verr errhand.VerboseError
