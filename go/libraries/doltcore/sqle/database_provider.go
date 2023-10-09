@@ -38,6 +38,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/lockutil"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -658,11 +659,8 @@ func (p *DoltDatabaseProvider) PurgeDroppedDatabases(ctx *sql.Context) error {
 // function is responsible for instantiating the new Database instance and updating the tracking metadata
 // in this provider. If any problems are encountered while registering the new database, an error is returned.
 func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string, newEnv *env.DoltEnv) (err error) {
-	// This method MUST be called with the provider's mutex locked. TryLock allows us to validate that the
-	// mutex is locked (without actually locking it and causing a deadlock) and to error out if we detect
-	// that the mutex is NOT locked.
-	if p.mu.TryLock() {
-		defer p.mu.Unlock()
+	// This method MUST be called with the provider's mutex locked
+	if err = lockutil.AssertRWMutexIsLocked(p.mu); err != nil {
 		return fmt.Errorf("unable to register new database without database provider mutex being locked")
 	}
 
