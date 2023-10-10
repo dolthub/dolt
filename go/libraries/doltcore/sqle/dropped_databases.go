@@ -95,6 +95,7 @@ func (dd *droppedDatabaseManager) DropDatabase(ctx *sql.Context, name string, dr
 	if err := dd.prepareToMoveDroppedDatabase(ctx, destinationDirectory); err != nil {
 		return err
 	}
+
 	return dd.fs.MoveDir(dropDbLoc, destinationDirectory)
 }
 

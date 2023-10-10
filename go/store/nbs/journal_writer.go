@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/dolthub/swiss"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -504,6 +505,12 @@ func (wr *journalWriter) recordCount() uint32 {
 func (wr *journalWriter) Close() (err error) {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
+
+	if wr.journal == nil {
+		logrus.Warn("journal writer has already been closed")
+		return nil
+	}
+
 	if err = wr.flush(); err != nil {
 		return err
 	}
@@ -515,8 +522,12 @@ func (wr *journalWriter) Close() (err error) {
 	}
 	if cerr := wr.journal.Close(); cerr != nil {
 		err = cerr
+	} else {
+		// Nil out the journal after the file has been closed, so that it's obvious it's been closed
+		wr.journal = nil
 	}
-	return
+
+	return err
 }
 
 // A rangeIndex maps chunk addresses to read Ranges in the chunk journal file.

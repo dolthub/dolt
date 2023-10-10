@@ -21,6 +21,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -211,11 +213,31 @@ func (gcs *GenerationalNBS) StatsSummary() string {
 	return sb.String()
 }
 
-// Close tears down any resources in use by the implementation. After // Close(), the ChunkStore may not be used again. It is NOT SAFE to call
+// Close tears down any resources in use by the implementation. After
+// Close(), the ChunkStore may not be used again. It is NOT SAFE to call
 // Close() concurrently with any other ChunkStore method; behavior is
 // undefined and probably crashy.
 func (gcs *GenerationalNBS) Close() error {
+	if gcs.oldGen == gcs.newGen {
+		// NOTE: this never hit
+		logrus.Errorf("GenerationalNBS::Close() - old and new gen are the SAME!!!")
+	}
+
+	if gcs.oldGen.p == gcs.newGen.p {
+		logrus.Errorf("GenerationalNBS::Close() - old and new gen have the SAME table persister!!!!")
+	} else {
+		one, ok1 := gcs.oldGen.p.(*chunkJournal)
+		two, ok2 := gcs.newGen.p.(*chunkJournal)
+		if ok1 && ok2 && one.Name() == two.Name() {
+			logrus.Errorf("GenerationalNBS::Close() - old and new gen have the SAME chunk journal file location!!!!")
+			// TODO: Testing if this happens... might be indicative of a test setup configuration error?
+			panic("GenerationalNBS::Close() - old and new gen have the SAME chunk journal file location!!!!")
+		}
+	}
+
+	logrus.Errorf("GenerationalNBS::Close() - oldGen...")
 	oErr := gcs.oldGen.Close()
+	logrus.Errorf("GenerationalNBS::Close() - newGen...")
 	nErr := gcs.newGen.Close()
 
 	if oErr != nil {
