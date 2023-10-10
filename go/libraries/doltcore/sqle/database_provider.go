@@ -628,7 +628,7 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 
 	err = p.invalidateDbStateInAllSessions(ctx, name)
 
-	if err != nil {
+	if err == nil {
 		logrus.Errorf("DEBUG: returning from DropDatabase, NO errors!")
 	} else {
 		logrus.Errorf("DEBUG: returning from DropDatabase, WITH an error: %s", err.Error())
