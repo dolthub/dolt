@@ -745,6 +745,7 @@ func (p *DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, 
 			return false, nil
 		})
 		if err != nil {
+			logrus.Errorf("invalidateDbStateInAllSessions(2): ERROR from sessionManager.Iter: %s", err.Error())
 			return err
 		}
 	}
