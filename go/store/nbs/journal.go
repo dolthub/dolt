@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/dolthub/fslock"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -383,6 +384,18 @@ func (j *chunkJournal) maybeInit(ctx context.Context) (err error) {
 
 // Close implements io.Closer
 func (j *chunkJournal) Close() (err error) {
+	logrus.Errorf("chunkJournal::Close()")
+
+	logrus.Errorf("chunkJournal::Close() - stat'ing: %s", j.Path())
+
+	_, err = os.Stat(j.Path())
+	if os.IsNotExist(err) {
+		logrus.Errorf("chunkJournal::Close() - path did not exist; not attempting to close")
+		return nil
+	} else {
+		logrus.Errorf("chunkJournal::Close() - seems like path exists? attempting to close")
+	}
+
 	if j.wr != nil {
 		err = j.wr.Close()
 		// flush the latest root to the backing manifest
@@ -397,7 +410,12 @@ func (j *chunkJournal) Close() (err error) {
 	if cerr := j.backing.Close(); err == nil {
 		err = cerr // keep first error
 	}
-	return
+
+	if err != nil {
+		logrus.Errorf("chunkJournal::Close() - ERROR!!: %s", err.Error())
+	}
+
+	return err
 }
 
 type journalConjoiner struct {
