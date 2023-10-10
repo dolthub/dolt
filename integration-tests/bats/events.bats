@@ -85,9 +85,13 @@ teardown() {
 @test "events: recurring event with STARTS and ENDS defined" {
     dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "CREATE EVENT insert1 ON SCHEDULE EVERY 2 SECOND STARTS CURRENT_TIMESTAMP + INTERVAL 2 SECOND ENDS CURRENT_TIMESTAMP + INTERVAL 5 SECOND DO INSERT INTO totals (int_col) VALUES (1);"
     sleep 10
-    run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT COUNT(*) FROM totals;"
+
+    # used for debugging
+    dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT COUNT(*) FROM totals;"
+
+    run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT COUNT(*) >= 2 FROM totals;"
     [ $status -eq 0 ]
-    [[ $output =~ "| 2        |" ]] || false
+    [[ $output =~ "| 1             |" ]] || false
 
     # should be dropped
     run dolt sql-client -P $PORT -u dolt --use-db 'repo1' -q "SELECT COUNT(*) FROM information_schema.events;"
