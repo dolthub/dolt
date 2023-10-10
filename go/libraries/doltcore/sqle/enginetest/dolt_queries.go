@@ -4122,6 +4122,78 @@ var DoltRemoteTestScripts = []queries.ScriptTest{
 	},
 }
 
+var DoltUndropTestScripts = []queries.ScriptTest{
+	{
+		Name: "dolt-undrop",
+		SetUpScript: []string{
+			"create database one;",
+			"create database two;",
+			"use one;",
+			"create table t1(pk int primary key);",
+			"insert into t1 values(1);",
+			"call dolt_commit('-Am', 'creating table t1');",
+			"use two;",
+			"create table t2(pk int primary key);",
+			"insert into t2 values(2);",
+			"call dolt_commit('-Am', 'creating table t2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mysql"}, {"one"}, {"two"}},
+			},
+			{
+				Query:    "drop database one;",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mysql"}, {"two"}},
+			},
+			{
+				Query:    "call dolt_undrop('one');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mysql"}, {"one"}, {"two"}},
+			},
+			{
+				Query:    "use one;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select * from one.t1;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select * from two.t2;",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "drop database one;",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:          "call dolt_undrop;",
+				ExpectedErrStr: "no database name specified. available databases that can be undropped: one",
+			},
+			{
+				Query:    "call dolt_purge_dropped_databases;",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "show databases;",
+				Expected: []sql.Row{{"information_schema"}, {"mydb"}, {"mysql"}, {"two"}},
+			},
+			{
+				Query:          "call dolt_undrop;",
+				ExpectedErrStr: "no database name specified. there are no databases currently available to be undropped",
+			},
+		},
+	},
+}
+
 // DoltAutoIncrementTests is tests of dolt's global auto increment logic
 var DoltAutoIncrementTests = []queries.ScriptTest{
 	{
