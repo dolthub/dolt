@@ -16,12 +16,12 @@ package sqle
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/utils/errors"
