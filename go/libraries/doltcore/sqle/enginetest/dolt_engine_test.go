@@ -1731,12 +1731,10 @@ func TestDoltRemote(t *testing.T) {
 }
 
 func TestDoltUndrop(t *testing.T) {
+	h := newDoltHarnessForLocalFilesystem(t)
+	defer h.Close()
 	for _, script := range DoltUndropTestScripts {
-		func() {
-			h := newDoltHarnessForLocalFilesystem(t)
-			defer h.Close()
-			enginetest.TestScript(t, h, script)
-		}()
+		enginetest.TestScript(t, h, script)
 	}
 }
 
