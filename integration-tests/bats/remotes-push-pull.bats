@@ -350,7 +350,7 @@ SQL
     dolt fetch
     run dolt push origin main
     [ "$status" -eq 1 ]
-    [[ "$output" =~ " ! [rejected]          main -> main" ]] || false
+    [[ "$output" =~ " ! [rejected]            main -> main" ]] || false
     [[ "$output" =~ "tip of your current branch is behind" ]] || false
 }
 

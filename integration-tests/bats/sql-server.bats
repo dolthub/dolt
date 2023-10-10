@@ -1073,7 +1073,7 @@ END""")
 
     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call  dolt_push()"
     [ $status -ne 0 ]
-    [[ "$output" =~ "the current branch has no upstream branch" ]] || false
+    [[ "$output" =~ "The current branch main has no upstream branch" ]] || false
 
     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "call dolt_push('--set-upstream', 'origin', 'main')"
 
