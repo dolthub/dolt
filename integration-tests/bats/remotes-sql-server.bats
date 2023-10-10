@@ -51,7 +51,7 @@ teardown() {
 
     run dolt sql-client --use-db repo1 -P $PORT -u dolt -q "call dolt_push()"
     [ $status -ne 0 ]
-    [[ "$output" =~ "the current branch has no upstream branch" ]] || false
+    [[ "$output" =~ "The current branch other has no upstream branch" ]] || false
 
     dolt sql-client --use-db repo1 -P $PORT -u dolt -q "call dolt_push('--set-upstream', 'origin', 'other')"
 

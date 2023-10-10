@@ -109,7 +109,7 @@ func DoPush(ctx context.Context, pushMeta *env.PushMeta, progStarter ProgStarter
 		}
 
 		if errors.Is(err, doltdb.ErrIsAhead) || errors.Is(err, ErrCantFF) || errors.Is(err, datas.ErrMergeNeeded) {
-			failedPush = append(failedPush, fmt.Sprintf(" ! [rejected]          %s -> %s (non-fast-forward)", opts.SrcRef.GetPath(), opts.DestRef.GetPath()))
+			failedPush = append(failedPush, fmt.Sprintf(" ! [rejected]            %s -> %s (non-fast-forward)", opts.SrcRef.GetPath(), opts.DestRef.GetPath()))
 		} else if err == nil || errors.Is(err, doltdb.ErrUpToDate) || errors.Is(err, pull.ErrDBUpToDate) {
 			if err == nil {
 				if opts.HasUpstream {
@@ -143,19 +143,22 @@ func buildReturnMsg(success, setUpstream, failed []string, remoteUrl string, err
 	var retMsg string
 	if len(success) == 0 && len(failed) == 0 {
 		return "", err
+	} else if len(failed) > 0 {
+		err = env.ErrFailedToPush.New(remoteUrl)
+	} else if errors.Is(err, doltdb.ErrUpToDate) {
+		// if there are some branches with successful push
+		err = nil
 	}
+
 	retMsg = fmt.Sprintf("To %s", remoteUrl)
 	for _, sMsg := range success {
 		retMsg = fmt.Sprintf("%s\n%s", retMsg, sMsg)
 	}
-	for _, uMsg := range setUpstream {
-		retMsg = fmt.Sprintf("%s\n%s", retMsg, uMsg)
-	}
 	for _, fMsg := range failed {
 		retMsg = fmt.Sprintf("%s\n%s", retMsg, fMsg)
 	}
-	if len(failed) > 0 {
-		err = env.ErrFailedToPush.New(remoteUrl)
+	for _, uMsg := range setUpstream {
+		retMsg = fmt.Sprintf("%s\n%s", retMsg, uMsg)
 	}
 	return retMsg, err
 }

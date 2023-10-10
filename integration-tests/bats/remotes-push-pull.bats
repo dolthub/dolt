@@ -621,16 +621,137 @@ SQL
     [[ "$output" =~ "* [new branch]          new-branch -> new-branch" ]] || false
 }
 
-@test "remotes-push-pull: push --all with only remote specified" {
+@test "remotes-push-pull: push --all with remote specified" {
+    mkdir remote
+    mkdir repo1
 
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push origin main
+
+    cd ..
+    dolt clone file://./remote repo2
+    cd repo2
+
+    dolt sql -q "CREATE TABLE test (pk INT PRIMARY KEY, col1 VARCHAR(10))"
+    dolt add .
+    dolt commit -am "create table"
+    dolt checkout -b branch1
+    dolt sql -q "INSERT INTO test VALUES (1, '1')"
+    dolt commit -am "add 1s"
+    run dolt push --all origin  # should not set upstream for new branches
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " * [new branch]          branch1 -> branch1" ]] || false
+    [[ ! "$output" =~ "branch 'branch1' set up to track 'origin/branch1'." ]] || false
+
+    dolt sql -q "INSERT INTO test VALUES (2, '2')"
+    dolt commit -am "add 2s"
+    dolt checkout -b branch2
+    dolt sql -q "INSERT INTO test VALUES (3, '3')"
+    dolt commit -am "add 3s"
+    run dolt push --all -u origin   # should set upstream for all branches
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " * [new branch]          branch1 -> branch1" ]] || false
+    [[ "$output" =~ "branch 'branch1' set up to track 'origin/branch1'." ]] || false
+    [[ "$output" =~ "branch 'branch2' set up to track 'origin/branch2'." ]] || false
 }
 
 @test "remotes-push-pull: push --all with multiple remotes will push all local branches to default remote, regardless of their upstream" {
+    mkdir remote1
+    mkdir repo1
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote1
+    dolt push origin main
 
+    cd ..
+    dolt clone file://./remote1 remote2
+    cd repo1
+    dolt remote add test-remote file://../remote2
+
+    dolt sql -q "CREATE TABLE test (pk INT PRIMARY KEY, col1 VARCHAR(10))"
+    dolt add .
+    dolt commit -am "create table"
+    dolt checkout -b branch1
+    dolt sql -q "INSERT INTO test VALUES (1, '1')"
+    dolt commit -am "add 1s"
+    run dolt push --all -u origin
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " * [new branch]          branch1 -> branch1" ]] || false
+    [[ "$output" =~ "branch 'branch1' set up to track 'origin/branch1'." ]] || false
+
+    dolt sql -q "INSERT INTO test VALUES (2, '2')"
+    dolt commit -am "add 2s"
+    dolt checkout -b branch2
+    dolt sql -q "INSERT INTO test VALUES (3, '3')"
+    dolt commit -am "add 3s"
+    run dolt push -u test-remote branch2
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " * [new branch]          branch2 -> branch2" ]] || false
+    [[ "$output" =~ "branch 'branch2' set up to track 'test-remote/branch2'." ]] || false
+
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "remotes/origin/branch1" ]] || false
+    [[ "$output" =~ "remotes/origin/main" ]] || false
+    [[ "$output" =~ "remotes/test-remote/branch2" ]] || false
+    [[ ! "$output" =~ "remotes/origin/branch2" ]] || false
+
+    run dolt push --all   # should push all branches to origin including branch2
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " * [new branch]          branch2 -> branch2" ]] || false
+
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "remotes/origin/branch2" ]] || false
 }
 
 @test "remotes-push-pull: push --all with local branch that has conflict" {
+    mkdir remote
+    mkdir repo1
 
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push origin main
+
+    cd ..
+    dolt clone file://./remote repo2
+    cd repo2
+
+    dolt sql -q "CREATE TABLE test (pk INT PRIMARY KEY, col1 VARCHAR(10))"
+    dolt add .
+    dolt commit -am "create table"
+    dolt checkout -b branch1
+    dolt sql -q "INSERT INTO test VALUES (1, '1')"
+    dolt commit -am "add 1s"
+    run dolt push --all -u   # should not set upstream for new branches
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " * [new branch]          branch1 -> branch1" ]] || false
+    [[ "$output" =~ "branch 'branch1' set up to track 'origin/branch1'." ]] || false
+
+    cd ../repo1
+    dolt fetch
+    dolt pull origin main
+    dolt checkout branch1
+    dolt sql -q "INSERT INTO test VALUES (2, '2')"
+    dolt commit -am "add 2s"
+    dolt push
+
+    cd ../repo2
+    dolt sql -q "INSERT INTO test VALUES (2, '2')"
+    dolt commit -am "add 2s"
+
+    dolt checkout -b branch2
+    dolt sql -q "INSERT INTO test VALUES (3, '3')"
+    dolt commit -am "add 3s"
+    run dolt push --all -u   # should set upstream for all branches
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ " * [new branch]          branch2 -> branch2" ]] || false
+    [[ "$output" =~ " ! [rejected]            branch1 -> branch1 (non-fast-forward)" ]] || false
+    [[ "$output" =~ "branch 'branch2' set up to track 'origin/branch2'." ]] || false
+    [[ "$output" =~ "Updates were rejected because the tip of your current branch is behind" ]] || false
 }
 
 @test "remotes-push-pull: pushing empty branch does not panic" {

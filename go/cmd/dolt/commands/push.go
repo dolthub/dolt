@@ -116,11 +116,7 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			errChan <- err
 			return
 		}
-		err = handlePushResult(sqlRows)
-		if err != nil {
-			errChan <- err
-			return
-		}
+		printPushResult(sqlRows)
 	}()
 
 	spinner := TextSpinner{}
@@ -180,18 +176,12 @@ func constructInterpolatedDoltPushQuery(apr *argparser.ArgParseResults) (string,
 	return interpolatedQuery, nil
 }
 
-// handlePushResult prints the appropriate message for the given push output
-func handlePushResult(rows []sql.Row) error {
-	var err error
+// printPushResult prints the appropriate message for the given push output.
+// This function is called only when error is nil.
+func printPushResult(rows []sql.Row) {
 	if len(rows[0]) > 1 {
 		cli.Println(rows[0][1].(string))
 	}
-	if len(rows[0]) > 2 {
-		if errMsg, ok := rows[0][2].(string); ok && errMsg != "" {
-			err = fmt.Errorf(errMsg)
-		}
-	}
-	return err
 }
 
 // handlePushError prints the appropriate error message and returns the exit code

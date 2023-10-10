@@ -37,12 +37,7 @@ var doltPushSchema = []*sql.Column{
 		Nullable: false,
 	},
 	{
-		Name:     "return_message",
-		Type:     types.LongText,
-		Nullable: true,
-	},
-	{
-		Name:     "error_message",
+		Name:     "message",
 		Type:     types.LongText,
 		Nullable: true,
 	},
@@ -50,51 +45,49 @@ var doltPushSchema = []*sql.Column{
 
 // doltPush is the stored procedure version for the CLI command `dolt push`.
 func doltPush(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	status, returnMsg, errMsg, err := doDoltPush(ctx, args)
-	// err needs to be nil in order to pass the return and error messages to the query caller.
-	// otherwise, only err is returned with nil RowIter.
-	return rowToIter(int64(status), returnMsg, errMsg), err
+	res, message, err := doDoltPush(ctx, args)
+	return rowToIter(int64(res), message), err
 }
 
-func doDoltPush(ctx *sql.Context, args []string) (int, string, string, error) {
+func doDoltPush(ctx *sql.Context, args []string) (int, string, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
-		return returnErr(fmt.Errorf("empty database name"))
+		return cmdFailure, "", fmt.Errorf("empty database name")
 	}
 	if err := branch_control.CheckAccess(ctx, branch_control.Permissions_Write); err != nil {
-		return returnErr(err)
+		return cmdFailure, "", err
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
 	dbData, ok := sess.GetDbData(ctx, dbName)
 	if !ok {
-		return returnErr(fmt.Errorf("could not load database %s", dbName))
+		return cmdFailure, "", fmt.Errorf("could not load database %s", dbName)
 	}
 
 	apr, err := cli.CreatePushArgParser().Parse(args)
 	if err != nil {
-		return returnErr(err)
+		return cmdFailure, "", err
 	}
 
 	autoSetUpRemote := loadConfig(ctx).GetStringOrDefault(env.PushAutoSetupRemote, "false")
 	pushAutoSetUpRemote, err := strconv.ParseBool(autoSetUpRemote)
 	if err != nil {
-		return returnErr(err)
+		return cmdFailure, "", err
 	}
 
 	opts, remote, err := env.NewPushOpts(ctx, apr, dbData.Rsr, dbData.Ddb, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag), pushAutoSetUpRemote, apr.Contains(cli.AllFlag))
 	if err != nil {
-		return returnErr(err)
+		return cmdFailure, "", err
 	}
 	remoteDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), remote, true)
 	if err != nil {
-		return returnErr(actions.HandleInitRemoteStorageClientErr(remote.Name, remote.Url, err))
+		return cmdFailure, "", actions.HandleInitRemoteStorageClientErr(remote.Name, remote.Url, err)
 	}
 
 	tmpDir, err := dbData.Rsw.TempTableFilesDir()
 	if err != nil {
-		return returnErr(err)
+		return cmdFailure, "", err
 	}
 
 	var msg string
@@ -111,17 +104,17 @@ func doDoltPush(ctx *sql.Context, args []string) (int, string, string, error) {
 	if err != nil {
 		switch err {
 		case doltdb.ErrUpToDate:
-			return cmdSuccess, fmt.Sprintf("%s\n%s", msg, "Everything up-to-date"), "", nil
+			return cmdSuccess, "Everything up-to-date", nil
 		case datas.ErrMergeNeeded:
-			return returnErr(fmt.Errorf("%w; the tip of your current branch is behind its remote counterpart", err))
+			return cmdFailure, msg, fmt.Errorf("%w; the tip of your current branch is behind its remote counterpart", err)
 		default:
-			return cmdFailure, msg, err.Error(), nil
+			// include successful push message in the error message
+			if msg != "" {
+				err = fmt.Errorf("%s\n%s", msg, err.Error())
+			}
+			return cmdFailure, "", err
 		}
 	}
 	// TODO : set upstream should be persisted outside of session
-	return cmdSuccess, msg, "", nil
-}
-
-func returnErr(err error) (int, string, string, error) {
-	return cmdFailure, "", "", err
+	return cmdSuccess, msg, nil
 }
