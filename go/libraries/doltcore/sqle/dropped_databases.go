@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"path/filepath"
 	"strings"
 	"time"
@@ -56,6 +57,8 @@ func (dd *droppedDatabaseManager) DropDatabase(ctx *sql.Context, name string, dr
 		return err
 	}
 
+	logrus.Errorf("DEBUG: Entering droppedDatabaseManager::DropDatabase('%s', '%s')", name, dropDbLoc)
+
 	isRootDatabase := false
 	// if the database is in the directory itself, we remove '.dolt' directory rather than
 	// the whole directory itself because it can have other databases that are nested.
@@ -92,10 +95,19 @@ func (dd *droppedDatabaseManager) DropDatabase(ctx *sql.Context, name string, dr
 	base = dbfactory.DirToDBName(file)
 	destinationDirectory = filepath.Join(dir, base)
 
+	logrus.Errorf("DEBUG: Preparing to move dropped database ...")
+
 	if err := dd.prepareToMoveDroppedDatabase(ctx, destinationDirectory); err != nil {
 		return err
 	}
-	return dd.fs.MoveDir(dropDbLoc, destinationDirectory)
+
+	logrus.Errorf("DEBUG: About to move directory ...")
+
+	err = dd.fs.MoveDir(dropDbLoc, destinationDirectory)
+
+	logrus.Errorf("DEBUG: Moved directory")
+
+	return err
 }
 
 // UndropDatabase will restore the database named |name| by moving it from the dolt_dropped_database directory, back
