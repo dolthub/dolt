@@ -86,11 +86,11 @@ func (dd *droppedDatabaseManager) DropDatabase(ctx *sql.Context, name string, dr
 		destinationDirectory = filepath.Join(droppedDatabaseDirectoryName, file)
 	}
 
-	// Add the final directory segment and convert all hyphens to underscores in the database directory name
-	dir, file := filepath.Split(destinationDirectory)
-	if strings.Contains(file, "-") {
-		destinationDirectory = filepath.Join(dir, strings.ReplaceAll(file, "-", "_"))
-	}
+	// Add the final directory segment and convert any invalid chars so that the physical directory
+	// name matches the current logical/SQL name of the database.
+	dir, base := filepath.Split(destinationDirectory)
+	base = dbfactory.DirToDBName(file)
+	destinationDirectory = filepath.Join(dir, base)
 
 	if err := dd.prepareToMoveDroppedDatabase(ctx, destinationDirectory); err != nil {
 		return err
@@ -174,9 +174,9 @@ func (dd *droppedDatabaseManager) ListDroppedDatabases(_ *sql.Context) ([]string
 
 	databaseNames := make([]string, 0, 5)
 	callback := func(path string, size int64, isDir bool) (stop bool) {
-		_, lastPathSegment := filepath.Split(path)
-		lastPathSegment = strings.ReplaceAll(lastPathSegment, "-", "_")
-		databaseNames = append(databaseNames, lastPathSegment)
+		// When we move a database to the dropped database directory, we normalize the physical directory
+		// name to be the same as the logical SQL name, so there's no need to do any name mapping here.
+		databaseNames = append(databaseNames, filepath.Base(path))
 		return false
 	}
 
