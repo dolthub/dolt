@@ -62,9 +62,17 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
-@test "push: push infers correct remote" {
+@test "push: push without repository defined throws error" {
     cd repo1
-    dolt push main    # should push to origin
+    run dolt push main    # should push to origin
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "fatal: 'main' does not appear to be a dolt repository" ]] || false
+
+    run dolt push origin  # should not push to current branch since its upstream is not set
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "fatal: The current branch main has no upstream branch." ]] || false
+
+    dolt push origin main
 
     cd ../repo2
     dolt pull origin
@@ -181,16 +189,16 @@ teardown() {
     cd ../repo1
     run dolt push origin main
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "the tip of your current branch is behind its remote counterpart" ]] || false
+    [[ "$output" =~ "hint: Updates were rejected because the tip of your current branch is behind" ]] || false
 
     dolt push --force origin main
 }
 
 @test "push: push to unknown remote" {
     cd repo1
-    run dolt push unknkown main
+    run dolt push unknown main
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "unknown remote: 'unknkown'" ]] || false
+    [[ "$output" =~ "fatal: 'unknown' does not appear to be a dolt repository" ]] || false
 }
 
 @test "push: push unknown branch" {
@@ -204,7 +212,7 @@ teardown() {
     cd repo1
     run dolt push -u origin
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "--set-upstream requires <remote> and <refspec> params" ]] || false
+    [[ "$output" =~ "fatal: The current branch main has no upstream branch." ]] || false
 }
 
 @test "push: pushing empty branch does not panic" {

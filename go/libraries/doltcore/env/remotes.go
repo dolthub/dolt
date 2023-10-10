@@ -353,11 +353,11 @@ func getCurrentBranchRefSpec(ctx context.Context, branches map[string]BranchConf
 	currentBranchName := currentBranch.GetPath()
 	upstream, hasUpstream := branches[currentBranchName]
 
-	if remoteSpecified {
-		setUpstream = setUpstream || pushAutoSetupRemote
-		if isDefaultRemote && !setUpstream {
+	if remoteSpecified || pushAutoSetupRemote {
+		if isDefaultRemote && !pushAutoSetupRemote {
 			return nil, "", false, ErrCurrentBranchHasNoUpstream.New(currentBranchName, remoteName, currentBranchName)
 		}
+		setUpstream = true
 		refSpec, err = getRefSpecFromStr(ctx, ddb, currentBranchName)
 		if err != nil {
 			return nil, "", false, err
@@ -365,12 +365,6 @@ func getCurrentBranchRefSpec(ctx context.Context, branches map[string]BranchConf
 	} else if hasUpstream {
 		remoteName = upstream.Remote
 		refSpec, err = getCurrentBranchRefSpecFromUpstream(currentBranch, upstream)
-		if err != nil {
-			return nil, "", false, err
-		}
-	} else if pushAutoSetupRemote {
-		setUpstream = true
-		refSpec, err = getRefSpecFromStr(ctx, ddb, currentBranchName)
 		if err != nil {
 			return nil, "", false, err
 		}
