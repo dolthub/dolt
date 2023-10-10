@@ -631,7 +631,7 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	if err != nil {
 		logrus.Errorf("DEBUG: returning from DropDatabase, NO errors!")
 	} else {
-		logrus.Errorf("DEBUG: returning from DropDatabase, WITH an error!")
+		logrus.Errorf("DEBUG: returning from DropDatabase, WITH an error: %s", err.Error())
 	}
 
 	return err
@@ -722,6 +722,7 @@ func (p *DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, 
 	// Remove the db state from the current session
 	err := dsess.DSessFromSess(ctx.Session).RemoveDbState(ctx, name)
 	if err != nil {
+		logrus.Errorf("invalidateDbStateInAllSessions: ERROR from RemoveDbState: %s", err.Error())
 		return err
 	}
 
