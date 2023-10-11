@@ -426,7 +426,8 @@ func (j *chunkJournal) Close() (err error) {
 	// TODO: Add note about windows system call impl difference
 	if err != nil && strings.Contains(err.Error(), "file already closed") {
 		logrus.Errorf("chunkJournal::Close() - ERROR (type: %T): %s", err, err.Error())
-		err = nil
+		// TODO: Commenting this out so that tests continue failing while we keep debugging
+		//err = nil
 	}
 
 	return err
