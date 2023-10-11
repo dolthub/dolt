@@ -21,6 +21,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sync"
 
 	"github.com/dolthub/swiss"
@@ -507,9 +508,13 @@ func (wr *journalWriter) Close() (err error) {
 	defer wr.lock.Unlock()
 
 	if wr.journal == nil {
-		logrus.Warn("journal writer has already been closed")
-		panic("journalWriter::Close(): This shouldn't happen!")
+		logrus.Warnf("journal writer has already been closed (%s)", wr.path)
+		logrus.Errorf("Stack: %s", string(debug.Stack()))
+		//panic("journalWriter::Close(): This shouldn't happen!")
 		return nil
+	} else {
+		logrus.Errorf("closing journal writer (%s)", wr.path)
+		logrus.Errorf("Stack: %s", string(debug.Stack()))
 	}
 
 	if err = wr.flush(); err != nil {
