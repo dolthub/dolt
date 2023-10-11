@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/dolthub/swiss"
@@ -503,6 +504,8 @@ func (wr *journalWriter) recordCount() uint32 {
 }
 
 func (wr *journalWriter) Close() (err error) {
+	logrus.Errorf("entering journalWriter::Close() - File: %s", wr.journal.Name())
+
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
 	if err = wr.flush(); err != nil {
@@ -513,12 +516,20 @@ func (wr *journalWriter) Close() (err error) {
 	}
 	if cerr := wr.journal.Sync(); cerr != nil {
 		err = cerr
+		logrus.Errorf("journalWriter::Close() - Error from wr.journal.Sync(): %s", err, err.Error())
 	}
 
 	if cerr := wr.journal.Close(); cerr != nil {
 		logrus.Errorf("journalWriter::Close() - ERROR (type: %T): %s", err, err.Error())
-		panic("journalWriter::Close() - ERROR")
-		err = cerr
+
+		// TODO: If the error contains "file already closed" then just log the error, but don't return it
+		//       however... it seems like we'd still have an error from wr.journal.Sync()
+		if strings.Contains(cerr.Error(), "file already closed") {
+			logrus.Warnf("journalWriter::Close() unable to close journal: %s ", cerr.Error())
+			// TODO: enable this else block
+			//} else {
+			err = cerr
+		}
 	}
 	return
 }
