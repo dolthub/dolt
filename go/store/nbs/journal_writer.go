@@ -516,7 +516,7 @@ func (wr *journalWriter) Close() (err error) {
 	}
 	if cerr := wr.journal.Sync(); cerr != nil {
 		err = cerr
-		logrus.Errorf("journalWriter::Close() - Error from wr.journal.Sync(): %s", err, err.Error())
+		logrus.Errorf("journalWriter::Close() - Error from wr.journal.Sync(): %s", err.Error())
 	}
 
 	if cerr := wr.journal.Close(); cerr != nil {
