@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/dolthub/fslock"
@@ -415,7 +416,7 @@ func (j *chunkJournal) Close() (err error) {
 	}
 
 	// TODO: Add note about windows system call impl difference
-	if err != nil && err.Error() == "file already closed" {
+	if err != nil && strings.Contains(err.Error(), "file already closed") {
 		logrus.Errorf("chunkJournal::Close() - ERROR (type: %T): %s", err, err.Error())
 		err = nil
 	}
