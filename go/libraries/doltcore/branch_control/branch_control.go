@@ -62,7 +62,7 @@ type Controller struct {
 
 	// A callback which we call when we successfully save new data.
 	// The new data will be available in |Serialized|.
-	SavedCallback func()
+	SavedCallback func(context.Context)
 
 	branchControlFilePath string
 	doltConfigDirPath     string
@@ -71,8 +71,8 @@ type Controller struct {
 // CreateDefaultController returns a default controller, which only has a single entry allowing all users to have write
 // permissions on all branches (only the super user has admin, if a super user has been set). This is equivalent to
 // passing empty strings to LoadData.
-func CreateDefaultController() *Controller {
-	controller, err := LoadData("", "")
+func CreateDefaultController(ctx context.Context) *Controller {
+	controller, err := LoadData(ctx, "", "")
 	if err != nil {
 		panic(err) // should never happen
 	}
@@ -81,7 +81,7 @@ func CreateDefaultController() *Controller {
 
 // LoadData loads the data from the given location and returns a controller. Returns the default controller if the
 // `branchControlFilePath` is empty.
-func LoadData(branchControlFilePath string, doltConfigDirPath string) (*Controller, error) {
+func LoadData(ctx context.Context, branchControlFilePath string, doltConfigDirPath string) (*Controller, error) {
 	accessTbl := newAccess()
 	controller := &Controller{
 		Access:                accessTbl,
@@ -102,14 +102,14 @@ func LoadData(branchControlFilePath string, doltConfigDirPath string) (*Controll
 		return nil, err
 	}
 
-	err = controller.LoadData(data /* isFirstLoad */, true)
+	err = controller.LoadData(ctx, data /* isFirstLoad */, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to deserialize config at '%s': %w", branchControlFilePath, err)
 	}
 	return controller, nil
 }
 
-func (controller *Controller) LoadData(data []byte, isFirstLoad bool) error {
+func (controller *Controller) LoadData(ctx context.Context, data []byte, isFirstLoad bool) error {
 	controller.Access.RWMutex.Lock()
 	defer controller.Access.RWMutex.Unlock()
 
@@ -119,7 +119,7 @@ func (controller *Controller) LoadData(data []byte, isFirstLoad bool) error {
 		controller.Access.insertDefaultRow()
 		controller.Serialized.Store(&data)
 		if controller.SavedCallback != nil {
-			controller.SavedCallback()
+			controller.SavedCallback(ctx)
 		}
 		return nil
 	}
@@ -148,18 +148,18 @@ func (controller *Controller) LoadData(data []byte, isFirstLoad bool) error {
 	// The Deserialize functions acquire write locks, so we don't acquire them here
 	if err = controller.Access.Deserialize(access); err != nil {
 		// TODO: More principaled rollback. Hopefully this does not fail.
-		controller.LoadData(*rollback, isFirstLoad)
+		controller.LoadData(ctx, *rollback, isFirstLoad)
 		return err
 	}
 	if err = controller.Namespace.Deserialize(namespace); err != nil {
 		// TODO: More principaled rollback. Hopefully this does not fail.
-		controller.LoadData(*rollback, isFirstLoad)
+		controller.LoadData(ctx, *rollback, isFirstLoad)
 		return err
 	}
 
 	controller.Serialized.Store(&data)
 	if controller.SavedCallback != nil {
-		controller.SavedCallback()
+		controller.SavedCallback(ctx)
 	}
 
 	return nil
@@ -178,10 +178,10 @@ func SaveData(ctx context.Context) error {
 		return nil
 	}
 
-	return controller.SaveData(branchAwareSession.GetFileSystem())
+	return controller.SaveData(ctx, branchAwareSession.GetFileSystem())
 }
 
-func (controller *Controller) SaveData(fs filesys.Filesys) error {
+func (controller *Controller) SaveData(ctx context.Context, fs filesys.Filesys) error {
 	// If we never set a save location then we just return
 	if len(controller.branchControlFilePath) == 0 {
 		return nil
@@ -227,7 +227,7 @@ func (controller *Controller) SaveData(fs filesys.Filesys) error {
 
 	controller.Serialized.Store(&data)
 	if controller.SavedCallback != nil {
-		controller.SavedCallback()
+		controller.SavedCallback(ctx)
 	}
 	return nil
 }
