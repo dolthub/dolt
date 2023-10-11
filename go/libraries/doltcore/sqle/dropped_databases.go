@@ -103,23 +103,7 @@ func (dd *droppedDatabaseManager) DropDatabase(ctx *sql.Context, name string, dr
 
 	logrus.Errorf("DEBUG: About to move directory ...")
 
-	err = dd.fs.MoveDir(dropDbLoc, destinationDirectory)
-
-	fsAbs, _ := dd.fs.Abs("")
-	logrus.Errorf("dd.fs: %s ; dropDbLoc: %s ; destinationDirectory: %s", fsAbs, dropDbLoc, destinationDirectory)
-	logrus.Errorf("DEBUG: Moved directory")
-
-	exists, _ := dd.fs.Exists(dropDbLoc)
-	if exists {
-		panic(fmt.Sprintf("unexpected error(1)! dropDbLoc should NOT exist, but it does!?"))
-	}
-
-	exists, _ = dd.fs.Exists(destinationDirectory)
-	if !exists {
-		panic(fmt.Sprintf("unexpected error(3)! destinationDirectory should exist: %s", destinationDirectory))
-	}
-
-	return err
+	return dd.fs.MoveDir(dropDbLoc, destinationDirectory)
 }
 
 // UndropDatabase will restore the database named |name| by moving it from the dolt_dropped_database directory, back
