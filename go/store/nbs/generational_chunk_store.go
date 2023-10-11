@@ -16,6 +16,7 @@ package nbs
 
 import (
 	"context"
+	"github.com/sirupsen/logrus"
 	"io"
 	"path/filepath"
 	"strings"
