@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -105,7 +106,21 @@ func (dd *droppedDatabaseManager) DropDatabase(ctx *sql.Context, name string, dr
 
 	err = dd.fs.MoveDir(dropDbLoc, destinationDirectory)
 
+	fsAbs, _ := dd.fs.Abs("")
+	logrus.Errorf("dd.fs: %s ; dropDbLoc: %s ; destinationDirectory: %s", fsAbs, dropDbLoc, destinationDirectory)
 	logrus.Errorf("DEBUG: Moved directory")
+
+	fileInfo, err := os.Stat(filepath.Join(fsAbs, dropDbLoc))
+	if err == nil {
+		panic(fmt.Sprintf("unexpected error(1)! dropDbLoc should NOT exist: %v", fileInfo))
+	} else if !os.IsNotExist(err) {
+		panic(fmt.Sprintf("unexpected error(2)! dropDbLoc should NOT exist: %s", err.Error()))
+	}
+
+	_, err = os.Stat(filepath.Join(fsAbs, destinationDirectory))
+	if err != nil {
+		panic(fmt.Sprintf("unexpected error! destinationDirectory should exist: %s", err.Error()))
+	}
 
 	return err
 }
