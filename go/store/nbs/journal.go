@@ -406,13 +406,18 @@ func (j *chunkJournal) Close() (err error) {
 			}
 		}
 	}
+	// TODO: Does Windows reuse the same file descriptor or something?
+	//       Maybe we are calling close on the right file descriptor?
+
 	// close the journal manifest to release the file lock
 	if cerr := j.backing.Close(); err == nil {
 		err = cerr // keep first error
 	}
 
-	if err != nil {
-		logrus.Errorf("chunkJournal::Close() - ERROR!!: %s", err.Error())
+	// TODO: Add note about windows system call impl difference
+	if err != nil && err.Error() == "file already closed" {
+		logrus.Errorf("chunkJournal::Close() - ERROR (type: %T): %s", err, err.Error())
+		err = nil
 	}
 
 	return err
