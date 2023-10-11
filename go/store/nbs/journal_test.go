@@ -46,20 +46,6 @@ func makeTestChunkJournal(t *testing.T) *chunkJournal {
 	return j
 }
 
-func TestChunkJournalWindowsExperiment(t *testing.T) {
-	dir := os.TempDir()
-	jm, err := newJournalManifest(context.Background(), dir)
-	require.NoError(t, err)
-
-	// Close the first time and no error
-	err = jm.Close()
-	require.NoError(t, err)
-
-	// Can we close a second time on Windows? It works on Mac
-	err = jm.Close()
-	require.NoError(t, err)
-}
-
 func TestChunkJournalBlockStoreSuite(t *testing.T) {
 	cacheOnce.Do(makeGlobalCaches)
 	fn := func(ctx context.Context, dir string) (*NomsBlockStore, error) {
