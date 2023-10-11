@@ -16,6 +16,7 @@ package dtestutils
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -84,7 +85,7 @@ func createTestEnvWithNameAndFilesystem(envName string, fs filesys.Filesys, home
 	if isInMemFs {
 		urlStr = doltdb.InMemDoltDB + envName
 	} else {
-		urlStr = doltdb.LocalDirDoltDB
+		urlStr = fmt.Sprintf("file://%s/.dolt/noms", envName)
 	}
 
 	dEnv := env.Load(context.Background(), homeDirFunc, fs, urlStr, "test")
