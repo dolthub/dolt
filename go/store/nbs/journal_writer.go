@@ -509,8 +509,8 @@ func (wr *journalWriter) Close() (err error) {
 
 	if wr.journal == nil {
 		logrus.Warnf("journal writer has already been closed (%s)", wr.path)
-		logrus.Errorf("Stack: %s", string(debug.Stack()))
-		//panic("journalWriter::Close(): This shouldn't happen!")
+		//logrus.Errorf("Stack: %s", string(debug.Stack()))
+		panic("journalWriter::Close(): This shouldn't happen!")
 		return nil
 	} else {
 		logrus.Errorf("closing journal writer (%s)", wr.path)
