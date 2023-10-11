@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"io"
 	"os"
 	"path/filepath"
@@ -26,6 +25,7 @@ import (
 	"sync"
 
 	"github.com/dolthub/swiss"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
