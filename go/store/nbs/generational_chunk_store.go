@@ -218,11 +218,18 @@ func (gcs *GenerationalNBS) StatsSummary() string {
 // undefined and probably crashy.
 func (gcs *GenerationalNBS) Close() error {
 	if gcs.oldGen == gcs.newGen {
+		// NOTE: this never hit
 		logrus.Errorf("GenerationalNBS::Close() - old and new gen are the SAME!!!")
 	}
 
+	if gcs.oldGen.p == gcs.newGen.p {
+		logrus.Errorf("GenerationalNBS::Close() - old and new gen have the SAME table persister!!!!")
+	}
+
+	logrus.Errorf("GenerationalNBS::Close() - oldGen...")
 	oErr := gcs.oldGen.Close()
-	nErr := gcs.newGen.Close()
+	logrus.Errorf("GenerationalNBS::Close() - newGen...")
+	nErr := gcs.newGen.Close() // newGen.Close() triggers the windows "file already closed" error
 
 	if oErr != nil {
 		return oErr

@@ -508,6 +508,12 @@ func (wr *journalWriter) Close() (err error) {
 
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
+
+	if wr.journal == nil {
+		logrus.Errorf("journal writer has already been closed! no-op...")
+		return nil
+	}
+
 	if err = wr.flush(); err != nil {
 		return err
 	}
@@ -531,6 +537,10 @@ func (wr *journalWriter) Close() (err error) {
 			err = cerr
 		}
 	}
+
+	// Nil out the journal after the file has been closed, so that it's obvious it's been closed
+	wr.journal = nil
+
 	return
 }
 
