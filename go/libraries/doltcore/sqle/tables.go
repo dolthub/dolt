@@ -996,6 +996,15 @@ func checksInSchema(sch schema.Schema) []sql.CheckDefinition {
 	return checks
 }
 
+// GetForeignKeyEditor implements sql.ForeignKeyTable
+func (t *WritableDoltTable) GetForeignKeyEditor(ctx *sql.Context) sql.ForeignKeyEditor {
+	te, err := t.getTableEditor(ctx)
+	if err != nil {
+		return sqlutil.NewStaticErrorEditor(err)
+	}
+	return te
+}
+
 // GetDeclaredForeignKeys implements sql.ForeignKeyTable
 func (t *DoltTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
 	root, err := t.workingRoot(ctx)
@@ -2674,15 +2683,6 @@ func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.
 		return err
 	}
 	return t.updateFromRoot(ctx, newRoot)
-}
-
-// GetForeignKeyEditor implements sql.ForeignKeyTable
-func (t *AlterableDoltTable) GetForeignKeyEditor(ctx *sql.Context) sql.ForeignKeyEditor {
-	te, err := t.getTableEditor(ctx)
-	if err != nil {
-		return sqlutil.NewStaticErrorEditor(err)
-	}
-	return te
 }
 
 // toForeignKeyConstraint converts a Dolt resolved foreign key to a GMS foreign key. If the key is unresolved, then this
