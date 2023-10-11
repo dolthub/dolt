@@ -16,11 +16,12 @@ package nbs
 
 import (
 	"context"
-	"github.com/sirupsen/logrus"
 	"io"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
