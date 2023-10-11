@@ -230,13 +230,15 @@ func (gcs *GenerationalNBS) Close() error {
 		two, ok2 := gcs.newGen.p.(*chunkJournal)
 		if ok1 && ok2 && one.Name() == two.Name() {
 			logrus.Errorf("GenerationalNBS::Close() - old and new gen have the SAME chunk journal file location!!!!")
+			// TODO: Testing if this happens... might be indicative of a test setup configuration error?
+			panic("GenerationalNBS::Close() - old and new gen have the SAME chunk journal file location!!!!")
 		}
 	}
 
 	logrus.Errorf("GenerationalNBS::Close() - oldGen...")
 	oErr := gcs.oldGen.Close()
 	logrus.Errorf("GenerationalNBS::Close() - newGen...")
-	nErr := gcs.newGen.Close() // newGen.Close() triggers the windows "file already closed" error
+	nErr := gcs.newGen.Close()
 
 	if oErr != nil {
 		return oErr

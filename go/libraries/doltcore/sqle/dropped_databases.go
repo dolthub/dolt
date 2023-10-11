@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/utils/errors"
@@ -56,8 +55,6 @@ func (dd *droppedDatabaseManager) DropDatabase(ctx *sql.Context, name string, dr
 	if err != nil {
 		return err
 	}
-
-	logrus.Errorf("DEBUG: Entering droppedDatabaseManager::DropDatabase('%s', '%s')", name, dropDbLoc)
 
 	isRootDatabase := false
 	// if the database is in the directory itself, we remove '.dolt' directory rather than
@@ -95,13 +92,9 @@ func (dd *droppedDatabaseManager) DropDatabase(ctx *sql.Context, name string, dr
 	base = dbfactory.DirToDBName(file)
 	destinationDirectory = filepath.Join(dir, base)
 
-	logrus.Errorf("DEBUG: Preparing to move dropped database ...")
-
 	if err := dd.prepareToMoveDroppedDatabase(ctx, destinationDirectory); err != nil {
 		return err
 	}
-
-	logrus.Errorf("DEBUG: About to move directory ...")
 
 	return dd.fs.MoveDir(dropDbLoc, destinationDirectory)
 }

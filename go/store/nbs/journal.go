@@ -22,11 +22,9 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/dolthub/fslock"
-	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -398,13 +396,6 @@ func (j *chunkJournal) Close() (err error) {
 	// close the journal manifest to release the file lock
 	if cerr := j.backing.Close(); err == nil {
 		err = cerr // keep first error
-	}
-
-	// TODO: Add note about windows system call impl difference
-	if err != nil && strings.Contains(err.Error(), "file already closed") {
-		logrus.Errorf("chunkJournal::Close() - ERROR (type: %T): %s", err, err.Error())
-		// TODO: Commenting this out so that tests continue failing while we keep debugging
-		//err = nil
 	}
 
 	return err

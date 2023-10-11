@@ -21,7 +21,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/dolthub/swiss"
@@ -508,11 +507,9 @@ func (wr *journalWriter) Close() (err error) {
 	defer wr.lock.Unlock()
 
 	if wr.journal == nil {
-		logrus.Errorf("journal writer has already been closed! no-op...")
+		logrus.Warn("journal writer has already been closed")
 		return nil
 	}
-
-	logrus.Errorf("entering journalWriter::Close() - File: %s", wr.journal.Name())
 
 	if err = wr.flush(); err != nil {
 		return err
@@ -522,26 +519,15 @@ func (wr *journalWriter) Close() (err error) {
 	}
 	if cerr := wr.journal.Sync(); cerr != nil {
 		err = cerr
-		logrus.Errorf("journalWriter::Close() - Error from wr.journal.Sync(): %s", err.Error())
 	}
-
 	if cerr := wr.journal.Close(); cerr != nil {
-		logrus.Errorf("journalWriter::Close() - ERROR (type: %T): %s", err, err.Error())
-
-		// TODO: If the error contains "file already closed" then just log the error, but don't return it
-		//       however... it seems like we'd still have an error from wr.journal.Sync()
-		if strings.Contains(cerr.Error(), "file already closed") {
-			logrus.Warnf("journalWriter::Close() unable to close journal: %s ", cerr.Error())
-			// TODO: enable this else block
-			//} else {
-			err = cerr
-		}
+		err = cerr
+	} else {
+		// Nil out the journal after the file has been closed, so that it's obvious it's been closed
+		wr.journal = nil
 	}
 
-	// Nil out the journal after the file has been closed, so that it's obvious it's been closed
-	wr.journal = nil
-
-	return
+	return err
 }
 
 // A rangeIndex maps chunk addresses to read Ranges in the chunk journal file.
