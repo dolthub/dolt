@@ -158,7 +158,7 @@ func TestSingleScript(t *testing.T) {
 	tcc := &testCommitClock{}
 	cleanup := installTestCommitClock(tcc)
 	defer cleanup()
-	
+
 	for _, script := range scripts {
 		sql.RunWithNowFunc(tcc.Now, func() error {
 			harness := newDoltHarness(t)
