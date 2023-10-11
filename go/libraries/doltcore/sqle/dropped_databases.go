@@ -29,17 +29,17 @@ import (
 
 // droppedDatabaseDirectoryName is the subdirectory within the data folder where Dolt moves databases after they are
 // dropped. The dolt_undrop() stored procedure is then able to restore them from this location.
-const droppedDatabaseDirectoryName = "dolt_dropped_databases"
+const droppedDatabaseDirectoryName = ".dolt_dropped_databases"
 
 // droppedDatabaseManager is responsible for dropping databases and "undropping", or restoring, dropped databases. It
 // is given a Filesys where all database directories can be found. When dropping a database, instead of deleting the
-// database directory, it will move it to a new "dolt_dropped_databases" directory where databases can be restored.
+// database directory, it will move it to a new ".dolt_dropped_databases" directory where databases can be restored.
 type droppedDatabaseManager struct {
 	fs filesys.Filesys
 }
 
 // newDroppedDatabaseManager creates a new droppedDatabaseManager instance using the specified |fs| as the location
-// where databases can be found. It will create a new "dolt_dropped_databases" directory at the root of |fs| where
+// where databases can be found. It will create a new ".dolt_dropped_databases" directory at the root of |fs| where
 // dropped databases will be moved until they are permanently removed.
 func newDroppedDatabaseManager(fs filesys.Filesys) *droppedDatabaseManager {
 	return &droppedDatabaseManager{
@@ -86,15 +86,16 @@ func (dd *droppedDatabaseManager) DropDatabase(ctx *sql.Context, name string, dr
 		destinationDirectory = filepath.Join(droppedDatabaseDirectoryName, file)
 	}
 
-	// Add the final directory segment and convert all hyphens to underscores in the database directory name
-	dir, file := filepath.Split(destinationDirectory)
-	if strings.Contains(file, "-") {
-		destinationDirectory = filepath.Join(dir, strings.ReplaceAll(file, "-", "_"))
-	}
+	// Add the final directory segment and convert any invalid chars so that the physical directory
+	// name matches the current logical/SQL name of the database.
+	dir, base := filepath.Split(destinationDirectory)
+	base = dbfactory.DirToDBName(file)
+	destinationDirectory = filepath.Join(dir, base)
 
 	if err := dd.prepareToMoveDroppedDatabase(ctx, destinationDirectory); err != nil {
 		return err
 	}
+
 	return dd.fs.MoveDir(dropDbLoc, destinationDirectory)
 }
 
@@ -174,9 +175,9 @@ func (dd *droppedDatabaseManager) ListDroppedDatabases(_ *sql.Context) ([]string
 
 	databaseNames := make([]string, 0, 5)
 	callback := func(path string, size int64, isDir bool) (stop bool) {
-		_, lastPathSegment := filepath.Split(path)
-		lastPathSegment = strings.ReplaceAll(lastPathSegment, "-", "_")
-		databaseNames = append(databaseNames, lastPathSegment)
+		// When we move a database to the dropped database directory, we normalize the physical directory
+		// name to be the same as the logical SQL name, so there's no need to do any name mapping here.
+		databaseNames = append(databaseNames, filepath.Base(path))
 		return false
 	}
 

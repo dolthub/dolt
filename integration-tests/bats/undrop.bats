@@ -6,10 +6,11 @@ setup() {
   dolt init
 
   # NOTE: Instead of running setup_common, we embed the same commands here so that we can set up our test data
-  #       to work with with the remote-engine test variant. To test database directory names that contain a hyphen
-  #       (which is converted to an underscore when accessed through a SQL interface), we need to create the
-  #       directory on disk *before* the remote-engine sql-server starts.
-  mkdir drop-me-2 && cd drop-me-2
+  #       to work with with the remote-engine test variant. To test database directory names that need to be
+  #       mapped from their physical, directory name to a valid logical/SQL database name, we create a directory
+  #       that contains hyphens and whitespace. We need to create the directory on disk *before* the remote-engine
+  #       sql-server starts.
+  mkdir ' drop- me-2 ' && cd ' drop- me-2 '
   dolt init && cd ..
   setup_remote_server
 }
@@ -60,7 +61,7 @@ teardown() {
 @test "undrop: undrop root database" {
   # Create a new Dolt database directory to use as a root database
   # NOTE: We use hyphens here to test how db dirs are renamed.
-  mkdir test-db-1 && cd test-db-1
+  mkdir ' test- db-1 ' && cd ' test- db-1 '
   dolt init
 
   # Create some data and a commit in the database

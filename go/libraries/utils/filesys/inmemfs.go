@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/dolt/go/libraries/utils/lockutil"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 )
 
@@ -518,10 +519,8 @@ func (fs *InMemFS) MoveDir(srcPath, destPath string) error {
 }
 
 func (fs *InMemFS) moveDirHelper(dir *memDir, destPath string) error {
-	// All calls to moveDirHelper should happen with the filesystem's read-write mutex locked;
-	// if we detect the mutex isn't locked, then return an error.
-	if fs.rwLock.TryLock() {
-		defer fs.rwLock.Unlock()
+	// All calls to moveDirHelper MUST happen with the filesystem's read-write mutex locked
+	if err := lockutil.AssertRWMutexIsLocked(fs.rwLock); err != nil {
 		return fmt.Errorf("moveDirHelper called without first aquiring filesystem read-write lock")
 	}
 
@@ -596,10 +595,8 @@ func (fs *InMemFS) MoveFile(srcPath, destPath string) error {
 }
 
 func (fs *InMemFS) moveFileHelper(obj *memFile, destPath string) error {
-	// All calls to moveFileHelper should happen with the filesystem's read-write mutex locked;
-	// if we detect the mutex isn't locked, then return an error.
-	if fs.rwLock.TryLock() {
-		defer fs.rwLock.Unlock()
+	// All calls to moveFileHelper MUST happen with the filesystem's read-write mutex locked
+	if err := lockutil.AssertRWMutexIsLocked(fs.rwLock); err != nil {
 		return fmt.Errorf("moveFileHelper called without first aquiring filesystem read-write lock")
 	}
 

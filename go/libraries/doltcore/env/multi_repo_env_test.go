@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -38,7 +39,7 @@ func TestDirToDBName(t *testing.T) {
 	}
 
 	for dirName, expected := range tests {
-		actual := dirToDBName(dirName)
+		actual := dbfactory.DirToDBName(dirName)
 		assert.Equal(t, expected, actual)
 	}
 }
