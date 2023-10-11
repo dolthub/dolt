@@ -399,9 +399,17 @@ func (j *chunkJournal) Close() (err error) {
 
 	if j.wr != nil {
 		err = j.wr.Close()
+		if err != nil {
+			logrus.Errorf("chunkJournal::Close() ERROR! from j.wr.Close(): %s", err.Error())
+		}
+
 		// flush the latest root to the backing manifest
 		if !j.backing.readOnly() {
 			cerr := j.flushToBackingManifest(context.Background(), j.contents, &Stats{})
+			if cerr != nil {
+				logrus.Errorf("chunkJournal::Close() ERROR! from flushToBackingManifest: %s", cerr.Error())
+			}
+
 			if err == nil {
 				err = cerr
 			}
