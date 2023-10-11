@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"io"
 	"os"
 	"path/filepath"
@@ -513,7 +514,10 @@ func (wr *journalWriter) Close() (err error) {
 	if cerr := wr.journal.Sync(); cerr != nil {
 		err = cerr
 	}
+
 	if cerr := wr.journal.Close(); cerr != nil {
+		logrus.Errorf("journalWriter::Close() - ERROR (type: %T): %s", err, err.Error())
+		panic("journalWriter::Close() - ERROR")
 		err = cerr
 	}
 	return
