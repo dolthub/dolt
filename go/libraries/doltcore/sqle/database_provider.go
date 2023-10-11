@@ -23,7 +23,6 @@ import (
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -624,17 +623,7 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	}
 	delete(p.databases, dbKey)
 
-	logrus.Errorf("DEBUG: about to invalidateDbStateInAllSessions")
-
-	err = p.invalidateDbStateInAllSessions(ctx, name)
-
-	if err == nil {
-		logrus.Errorf("DEBUG: returning from DropDatabase, NO errors!")
-	} else {
-		logrus.Errorf("DEBUG: returning from DropDatabase, WITH an error: %s", err.Error())
-	}
-
-	return err
+	return p.invalidateDbStateInAllSessions(ctx, name)
 }
 
 func (p *DoltDatabaseProvider) ListDroppedDatabases(ctx *sql.Context) ([]string, error) {
@@ -722,7 +711,6 @@ func (p *DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, 
 	// Remove the db state from the current session
 	err := dsess.DSessFromSess(ctx.Session).RemoveDbState(ctx, name)
 	if err != nil {
-		logrus.Errorf("invalidateDbStateInAllSessions: ERROR from RemoveDbState: %s", err.Error())
 		return err
 	}
 
@@ -745,7 +733,6 @@ func (p *DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, 
 			return false, nil
 		})
 		if err != nil {
-			logrus.Errorf("invalidateDbStateInAllSessions(2): ERROR from sessionManager.Iter: %s", err.Error())
 			return err
 		}
 	}

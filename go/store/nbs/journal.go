@@ -385,39 +385,16 @@ func (j *chunkJournal) maybeInit(ctx context.Context) (err error) {
 
 // Close implements io.Closer
 func (j *chunkJournal) Close() (err error) {
-	logrus.Errorf("chunkJournal::Close()")
-
-	logrus.Errorf("chunkJournal::Close() - stat'ing: %s", j.Path())
-
-	_, err = os.Stat(j.Path())
-	if os.IsNotExist(err) {
-		logrus.Errorf("chunkJournal::Close() - path did not exist; not attempting to close")
-		return nil
-	} else {
-		logrus.Errorf("chunkJournal::Close() - seems like path exists? attempting to close")
-	}
-
 	if j.wr != nil {
 		err = j.wr.Close()
-		if err != nil {
-			logrus.Errorf("chunkJournal::Close() ERROR! from j.wr.Close(): %s", err.Error())
-		}
-
 		// flush the latest root to the backing manifest
 		if !j.backing.readOnly() {
 			cerr := j.flushToBackingManifest(context.Background(), j.contents, &Stats{})
-			if cerr != nil {
-				logrus.Errorf("chunkJournal::Close() ERROR! from flushToBackingManifest: %s", cerr.Error())
-			}
-
 			if err == nil {
 				err = cerr
 			}
 		}
 	}
-	// TODO: Does Windows reuse the same file descriptor or something?
-	//       Maybe we are calling close on the right file descriptor?
-
 	// close the journal manifest to release the file lock
 	if cerr := j.backing.Close(); err == nil {
 		err = cerr // keep first error
@@ -573,15 +550,9 @@ func (jm *journalManifest) UpdateGCGen(ctx context.Context, lastLock addr, newCo
 func (jm *journalManifest) Close() (err error) {
 	if jm.lock != nil {
 		err = jm.lock.Unlock()
-		if err != nil {
-			// TODO: testing a theory...
-			logrus.Errorf("journalManifest::Close() error: %s", err.Error())
-			err = nil
-		}
-
 		jm.lock = nil
 	}
-	return err
+	return
 }
 
 func containsJournalSpec(specs []tableSpec) (ok bool) {
