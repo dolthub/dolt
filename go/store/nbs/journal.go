@@ -558,9 +558,15 @@ func (jm *journalManifest) UpdateGCGen(ctx context.Context, lastLock addr, newCo
 func (jm *journalManifest) Close() (err error) {
 	if jm.lock != nil {
 		err = jm.lock.Unlock()
+		if err != nil {
+			// TODO: testing a theory...
+			logrus.Errorf("journalManifest::Close() error: %s", err.Error())
+			err = nil
+		}
+
 		jm.lock = nil
 	}
-	return
+	return err
 }
 
 func containsJournalSpec(specs []tableSpec) (ok bool) {
