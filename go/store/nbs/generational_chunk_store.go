@@ -224,6 +224,12 @@ func (gcs *GenerationalNBS) Close() error {
 
 	if gcs.oldGen.p == gcs.newGen.p {
 		logrus.Errorf("GenerationalNBS::Close() - old and new gen have the SAME table persister!!!!")
+	} else {
+		one, ok1 := gcs.oldGen.p.(*chunkJournal)
+		two, ok2 := gcs.newGen.p.(*chunkJournal)
+		if ok1 && ok2 && one.Name() == two.Name() {
+			logrus.Errorf("GenerationalNBS::Close() - old and new gen have the SAME chunk journal file location!!!!")
+		}
 	}
 
 	logrus.Errorf("GenerationalNBS::Close() - oldGen...")

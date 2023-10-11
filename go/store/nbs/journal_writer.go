@@ -504,8 +504,6 @@ func (wr *journalWriter) recordCount() uint32 {
 }
 
 func (wr *journalWriter) Close() (err error) {
-	logrus.Errorf("entering journalWriter::Close() - File: %s", wr.journal.Name())
-
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
 
@@ -513,6 +511,8 @@ func (wr *journalWriter) Close() (err error) {
 		logrus.Errorf("journal writer has already been closed! no-op...")
 		return nil
 	}
+
+	logrus.Errorf("entering journalWriter::Close() - File: %s", wr.journal.Name())
 
 	if err = wr.flush(); err != nil {
 		return err
