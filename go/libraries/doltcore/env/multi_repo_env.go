@@ -21,7 +21,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"unicode"
 
 	"github.com/sirupsen/logrus"
 	"gopkg.in/src-d/go-errors.v1"
@@ -87,7 +86,7 @@ func MultiEnvForDirectory(
 			return nil, err
 		}
 		envName := getRepoRootDir(path, string(os.PathSeparator))
-		dbName = dirToDBName(envName)
+		dbName = dbfactory.DirToDBName(envName)
 
 		newDEnv = Load(ctx, GetCurrentUserHomeDir, dataDirFS, doltdb.LocalDirDoltDB, version)
 	}
@@ -126,7 +125,7 @@ func MultiEnvForDirectory(
 
 		newEnv := Load(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, version)
 		if newEnv.Valid() {
-			envSet[dirToDBName(dir)] = newEnv
+			envSet[dbfactory.DirToDBName(dir)] = newEnv
 		}
 		return false
 	})
@@ -402,23 +401,4 @@ func enforceSingleFormat(envSet map[string]*DoltEnv) {
 			delete(envSet, name)
 		}
 	}
-}
-
-func dirToDBName(dirName string) string {
-	dbName := strings.TrimSpace(dirName)
-	dbName = strings.Map(func(r rune) rune {
-		if unicode.IsSpace(r) || r == '-' {
-			return '_'
-		}
-		return r
-	}, dbName)
-
-	newDBName := strings.ReplaceAll(dbName, "__", "_")
-
-	for dbName != newDBName {
-		dbName = newDBName
-		newDBName = strings.ReplaceAll(dbName, "__", "_")
-	}
-
-	return dbName
 }
