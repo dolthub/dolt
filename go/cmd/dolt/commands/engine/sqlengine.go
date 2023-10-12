@@ -16,6 +16,7 @@ package engine
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/stats"
 	"os"
 	"runtime"
 	"strconv"
@@ -183,6 +184,8 @@ func NewSqlEngine(
 	})
 
 	engine.Analyzer.ExecBuilder = rowexec.DefaultBuilder
+
+	engine.Analyzer.Catalog.StatsProvider = stats.NewProvider()
 
 	// Load MySQL Db information
 	if err = engine.Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), data); err != nil {

@@ -17,6 +17,7 @@ package enginetest
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/stats"
 	"runtime"
 	"strings"
 	"testing"
@@ -186,7 +187,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl)
 		require.NoError(t, err)
 
-		e, err := enginetest.NewEngine(t, d, d.provider, d.setupData)
+		e, err := enginetest.NewEngine(t, d, d.provider, d.setupData, stats.NewProvider())
 		if err != nil {
 			return nil, err
 		}
