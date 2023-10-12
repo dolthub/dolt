@@ -1743,6 +1743,14 @@ func TestDoltRemote(t *testing.T) {
 	}
 }
 
+func TestDoltUndrop(t *testing.T) {
+	h := newDoltHarnessForLocalFilesystem(t)
+	defer h.Close()
+	for _, script := range DoltUndropTestScripts {
+		enginetest.TestScript(t, h, script)
+	}
+}
+
 type testCommitClock struct {
 	unixNano int64
 }

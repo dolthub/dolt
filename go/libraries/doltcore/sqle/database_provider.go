@@ -38,6 +38,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/lockutil"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -51,6 +52,8 @@ type DoltDatabaseProvider struct {
 	InitDatabaseHook   InitDatabaseHook
 	DropDatabaseHook   DropDatabaseHook
 	mu                 *sync.RWMutex
+
+	droppedDatabaseManager *droppedDatabaseManager
 
 	defaultBranch string
 	fs            filesys.Filesys
@@ -118,16 +121,17 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 	}
 
 	return &DoltDatabaseProvider{
-		dbLocations:        dbLocations,
-		databases:          dbs,
-		functions:          funcs,
-		externalProcedures: externalProcedures,
-		mu:                 &sync.RWMutex{},
-		fs:                 fs,
-		defaultBranch:      defaultBranch,
-		dbFactoryUrl:       dbFactoryUrl,
-		InitDatabaseHook:   ConfigureReplicationDatabaseHook,
-		isStandby:          new(bool),
+		dbLocations:            dbLocations,
+		databases:              dbs,
+		functions:              funcs,
+		externalProcedures:     externalProcedures,
+		mu:                     &sync.RWMutex{},
+		fs:                     fs,
+		defaultBranch:          defaultBranch,
+		dbFactoryUrl:           dbFactoryUrl,
+		InitDatabaseHook:       ConfigureReplicationDatabaseHook,
+		isStandby:              new(bool),
+		droppedDatabaseManager: newDroppedDatabaseManager(fs),
 	}, nil
 }
 
@@ -407,46 +411,7 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 		}
 	}
 
-	// If we're running in a sql-server context, ensure the new database is locked so that it can't
-	// be edited from the CLI. We can't rely on looking for an existing lock file, since this could
-	// be the first db creation if sql-server was started from a bare directory.
-	_, lckDeets := sqlserver.GetRunningServer()
-	if lckDeets != nil {
-		err = newEnv.Lock(lckDeets)
-		if err != nil {
-			ctx.GetLogger().Warnf("Failed to lock newly created database: %s", err.Error())
-		}
-	}
-
-	fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
-	if err != nil {
-		return err
-	}
-
-	opts := editor.Options{
-		Deaf: newEnv.DbEaFactory(),
-		// TODO: this doesn't seem right, why is this getting set in the constructor to the DB
-		ForeignKeyChecksDisabled: fkChecks.(int8) == 0,
-	}
-
-	db, err := NewDatabase(ctx, name, newEnv.DbData(), opts)
-	if err != nil {
-		return err
-	}
-
-	// If we have an initialization hook, invoke it.  By default, this will
-	// be ConfigureReplicationDatabaseHook, which will setup replication
-	// for the new database if a remote url template is set.
-	err = p.InitDatabaseHook(ctx, p, name, newEnv)
-	if err != nil {
-		return err
-	}
-
-	formattedName := formatDbMapKeyName(db.Name())
-	p.databases[formattedName] = db
-	p.dbLocations[formattedName] = newEnv.FS
-
-	return nil
+	return p.registerNewDatabase(ctx, name, newEnv)
 }
 
 type InitDatabaseHook func(ctx *sql.Context, pro *DoltDatabaseProvider, name string, env *env.DoltEnv) error
@@ -607,13 +572,10 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 		return fmt.Errorf("unable to drop revision database: %s", name)
 	}
 
-	// get the case-sensitive name for case-sensitive file systems
-	// TODO: there are still cases (not server-first) where we rename databases because the directory name would need
-	//  quoting if used as a database name, and that breaks here. We either need the database name to match the directory
-	//  name in all cases, or else keep a mapping from database name to directory on disk.
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	// get the case-sensitive name for case-sensitive file systems
 	dbKey := formatDbMapKeyName(name)
 	db := p.databases[dbKey]
 
@@ -640,32 +602,7 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 		return err
 	}
 
-	rootDbLoc, err := p.fs.Abs("")
-	if err != nil {
-		return err
-	}
-	dirToDelete := ""
-	// if the database is in the directory itself, we remove '.dolt' directory rather than
-	// the whole directory itself because it can have other databases that are nested.
-	if rootDbLoc == dropDbLoc {
-		doltDirExists, _ := p.fs.Exists(dbfactory.DoltDir)
-		if !doltDirExists {
-			return sql.ErrDatabaseNotFound.New(db.Name())
-		}
-		dirToDelete = dbfactory.DoltDir
-	} else {
-		exists, isDir := p.fs.Exists(dropDbLoc)
-		// Get the DB's directory
-		if !exists {
-			// engine should already protect against this
-			return sql.ErrDatabaseNotFound.New(db.Name())
-		} else if !isDir {
-			return fmt.Errorf("unexpected error: %s exists but is not a directory", dbKey)
-		}
-		dirToDelete = dropDbLoc
-	}
-
-	err = p.fs.Delete(dirToDelete, true)
+	err = p.droppedDatabaseManager.DropDatabase(ctx, name, dropDbLoc)
 	if err != nil {
 		return err
 	}
@@ -676,18 +613,96 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 		p.DropDatabaseHook(name)
 	}
 
-	// We not only have to delete this database, but any derivative ones that we've stored as a result of USE or
-	// connection strings
+	// We not only have to delete tracking metadata for this database, but also for any derivative
+	// ones we've stored as a result of USE or connection strings
 	derivativeNamePrefix := strings.ToLower(dbKey + dsess.DbRevisionDelimiter)
 	for dbName := range p.databases {
 		if strings.HasPrefix(strings.ToLower(dbName), derivativeNamePrefix) {
 			delete(p.databases, dbName)
 		}
 	}
-
 	delete(p.databases, dbKey)
 
 	return p.invalidateDbStateInAllSessions(ctx, name)
+}
+
+func (p *DoltDatabaseProvider) ListDroppedDatabases(ctx *sql.Context) ([]string, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	return p.droppedDatabaseManager.ListDroppedDatabases(ctx)
+}
+
+func (p *DoltDatabaseProvider) UndropDatabase(ctx *sql.Context, name string) (err error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	newFs, exactCaseName, err := p.droppedDatabaseManager.UndropDatabase(ctx, name)
+	if err != nil {
+		return err
+	}
+
+	newEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
+	return p.registerNewDatabase(ctx, exactCaseName, newEnv)
+}
+
+// PurgeDroppedDatabases permanently deletes all dropped databases that have been stashed away in case they need
+// to be restored. Use caution with this operation – it is not reversible!
+func (p *DoltDatabaseProvider) PurgeDroppedDatabases(ctx *sql.Context) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	return p.droppedDatabaseManager.PurgeAllDroppedDatabases(ctx)
+}
+
+// registerNewDatabase registers the specified DoltEnv, |newEnv|, as a new database named |name|. This
+// function is responsible for instantiating the new Database instance and updating the tracking metadata
+// in this provider. If any problems are encountered while registering the new database, an error is returned.
+func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string, newEnv *env.DoltEnv) (err error) {
+	// This method MUST be called with the provider's mutex locked
+	if err = lockutil.AssertRWMutexIsLocked(p.mu); err != nil {
+		return fmt.Errorf("unable to register new database without database provider mutex being locked")
+	}
+
+	// If we're running in a sql-server context, ensure the new database is locked so that it can't
+	// be edited from the CLI. We can't rely on looking for an existing lock file, since this could
+	// be the first db creation if sql-server was started from a bare directory.
+	_, lckDeets := sqlserver.GetRunningServer()
+	if lckDeets != nil {
+		err = newEnv.Lock(lckDeets)
+		if err != nil {
+			ctx.GetLogger().Warnf("Failed to lock newly created database: %s", err.Error())
+		}
+	}
+
+	fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
+	if err != nil {
+		return err
+	}
+
+	opts := editor.Options{
+		Deaf: newEnv.DbEaFactory(),
+		// TODO: this doesn't seem right, why is this getting set in the constructor to the DB
+		ForeignKeyChecksDisabled: fkChecks.(int8) == 0,
+	}
+
+	db, err := NewDatabase(ctx, name, newEnv.DbData(), opts)
+	if err != nil {
+		return err
+	}
+
+	// If we have an initialization hook, invoke it.  By default, this will
+	// be ConfigureReplicationDatabaseHook, which will setup replication
+	// for the new database if a remote url template is set.
+	err = p.InitDatabaseHook(ctx, p, name, newEnv)
+	if err != nil {
+		return err
+	}
+
+	formattedName := formatDbMapKeyName(db.Name())
+	p.databases[formattedName] = db
+	p.dbLocations[formattedName] = newEnv.FS
+	return nil
 }
 
 // invalidateDbStateInAllSessions removes the db state for this database from every session. This is necessary when a

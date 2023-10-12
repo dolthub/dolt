@@ -397,7 +397,8 @@ func (j *chunkJournal) Close() (err error) {
 	if cerr := j.backing.Close(); err == nil {
 		err = cerr // keep first error
 	}
-	return
+
+	return err
 }
 
 type journalConjoiner struct {
