@@ -211,7 +211,8 @@ func (gcs *GenerationalNBS) StatsSummary() string {
 	return sb.String()
 }
 
-// Close tears down any resources in use by the implementation. After // Close(), the ChunkStore may not be used again. It is NOT SAFE to call
+// Close tears down any resources in use by the implementation. After
+// Close(), the ChunkStore may not be used again. It is NOT SAFE to call
 // Close() concurrently with any other ChunkStore method; behavior is
 // undefined and probably crashy.
 func (gcs *GenerationalNBS) Close() error {

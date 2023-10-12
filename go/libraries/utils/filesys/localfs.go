@@ -271,8 +271,7 @@ func (fs *localFS) Delete(path string, force bool) error {
 }
 
 // MoveFile will move a file from the srcPath in the filesystem to the destPath
-func (fs *localFS) MoveFile(srcPath, destPath string) error {
-	var err error
+func (fs *localFS) MoveFile(srcPath, destPath string) (err error) {
 	srcPath, err = fs.Abs(srcPath)
 
 	if err != nil {
@@ -281,6 +280,20 @@ func (fs *localFS) MoveFile(srcPath, destPath string) error {
 
 	destPath, err = fs.Abs(destPath)
 
+	if err != nil {
+		return err
+	}
+
+	return file.Rename(srcPath, destPath)
+}
+
+func (fs *localFS) MoveDir(srcPath, destPath string) (err error) {
+	srcPath, err = fs.Abs(srcPath)
+	if err != nil {
+		return err
+	}
+
+	destPath, err = fs.Abs(destPath)
 	if err != nil {
 		return err
 	}

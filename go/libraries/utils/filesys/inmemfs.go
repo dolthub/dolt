@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"encoding/base32"
 	"errors"
+	"fmt"
 	"io"
 	"math/rand"
 	"os"
@@ -27,6 +28,7 @@ import (
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/dolt/go/libraries/utils/lockutil"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 )
 
@@ -492,6 +494,83 @@ func (fs *InMemFS) Delete(path string, force bool) error {
 	return nil
 }
 
+func (fs *InMemFS) MoveDir(srcPath, destPath string) error {
+	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
+
+	srcPath = fs.getAbsPath(srcPath)
+	destPath = fs.getAbsPath(destPath)
+
+	destPathParent, _ := filepath.Split(destPath)
+	if exists, destIsDir := fs.exists(destPathParent); !exists || !destIsDir {
+		return ErrDirNotExist
+	}
+
+	obj, ok := fs.objs[srcPath]
+	if !ok {
+		return os.ErrNotExist
+	}
+
+	if !obj.isDir() {
+		return ErrIsFile
+	}
+
+	return fs.moveDirHelper(obj.(*memDir), destPath)
+}
+
+func (fs *InMemFS) moveDirHelper(dir *memDir, destPath string) error {
+	// All calls to moveDirHelper MUST happen with the filesystem's read-write mutex locked
+	if err := lockutil.AssertRWMutexIsLocked(fs.rwLock); err != nil {
+		return fmt.Errorf("moveDirHelper called without first aquiring filesystem read-write lock")
+	}
+
+	if _, exists := fs.objs[destPath]; exists {
+		return fmt.Errorf("destination path exists: %s", destPath)
+	}
+
+	if _, exists := fs.objs[filepath.Dir(destPath)]; !exists {
+		return fmt.Errorf("destination parent dir does NOT exist: %s", filepath.Dir(destPath))
+	}
+
+	// Create the base directory in the new location before we process the files in dir
+	parentDir := filepath.Dir(destPath)
+	destParentDir := fs.objs[parentDir].(*memDir)
+	destObj := &memDir{
+		absPath:   destPath,
+		objs:      make(map[string]memObj),
+		parentDir: destParentDir,
+		time:      InMemNowFunc(),
+	}
+	fs.objs[destPath] = destObj
+	destParentDir.objs[destPath] = destObj
+	destParentDir.time = InMemNowFunc()
+
+	for _, v := range dir.objs {
+		switch obj := v.(type) {
+		case *memDir:
+			base := filepath.Base(obj.absPath)
+			newPath := filepath.Join(destPath, base)
+			if err := fs.moveDirHelper(obj, newPath); err != nil {
+				return err
+			}
+		case *memFile:
+			base := filepath.Base(obj.absPath)
+			newDestPath := filepath.Join(destPath, base)
+			if err := fs.moveFileHelper(obj, newDestPath); err != nil {
+				return err
+			}
+			delete(dir.objs, obj.absPath)
+			delete(fs.objs, obj.absPath)
+		default:
+			return fmt.Errorf("unexpected type of memory object: %T", v)
+		}
+	}
+
+	delete(dir.parentDir.objs, dir.absPath)
+	delete(fs.objs, dir.absPath)
+	return nil
+}
+
 // MoveFile will move a file from the srcPath in the filesystem to the destPath
 func (fs *InMemFS) MoveFile(srcPath, destPath string) error {
 	fs.rwLock.Lock()
@@ -509,32 +588,41 @@ func (fs *InMemFS) MoveFile(srcPath, destPath string) error {
 			return ErrIsDir
 		}
 
-		destDir := filepath.Dir(destPath)
-		destParentDir, err := fs.mkDirs(destDir)
-
-		if err != nil {
-			return err
-		}
-
-		now := InMemNowFunc()
-		destObj := &memFile{destPath, obj.(*memFile).data, destParentDir, now}
-
-		fs.objs[destPath] = destObj
-		delete(fs.objs, srcPath)
-
-		parentDir := obj.parent()
-		if parentDir != nil {
-			parentDir.time = now
-			delete(parentDir.objs, srcPath)
-		}
-
-		destParentDir.objs[destPath] = destObj
-		destParentDir.time = now
-
-		return nil
+		return fs.moveFileHelper(obj.(*memFile), destPath)
 	}
 
 	return os.ErrNotExist
+}
+
+func (fs *InMemFS) moveFileHelper(obj *memFile, destPath string) error {
+	// All calls to moveFileHelper MUST happen with the filesystem's read-write mutex locked
+	if err := lockutil.AssertRWMutexIsLocked(fs.rwLock); err != nil {
+		return fmt.Errorf("moveFileHelper called without first aquiring filesystem read-write lock")
+	}
+
+	destDir := filepath.Dir(destPath)
+	destParentDir, err := fs.mkDirs(destDir)
+	if err != nil {
+		return err
+	}
+
+	now := InMemNowFunc()
+	destObj := &memFile{destPath, obj.data, destParentDir, now}
+
+	fs.objs[destPath] = destObj
+
+	delete(fs.objs, obj.absPath)
+
+	parentDir := obj.parent()
+	if parentDir != nil {
+		parentDir.time = now
+		delete(parentDir.objs, obj.absPath)
+	}
+
+	destParentDir.objs[destPath] = destObj
+	destParentDir.time = now
+
+	return nil
 }
 
 func (fs *InMemFS) CopyFile(srcPath, destPath string) error {
