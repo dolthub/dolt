@@ -71,7 +71,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 1, "", err
 	}
 
-	branchOrTrack := apr.Contains(cli.CheckoutCoBranch) || apr.Contains(cli.TrackFlag)
+	branchOrTrack := apr.Contains(cli.CheckoutCreateBranch) || apr.Contains(cli.TrackFlag)
 	if apr.Contains(cli.TrackFlag) && apr.NArg() > 0 {
 		return 1, "", errors.New("Improper usage.")
 	}
@@ -83,6 +83,15 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	dbData, ok := dSess.GetDbData(ctx, currentDbName)
 	if !ok {
 		return 1, "", fmt.Errorf("Could not load database %s", currentDbName)
+	}
+
+	// Prevent the -b option from being used to create new branches on read-only databases
+	readOnlyDatabase, err := isReadOnlyDatabase(ctx, currentDbName)
+	if err != nil {
+		return 1, "", err
+	}
+	if apr.Contains(cli.CheckoutCreateBranch) && readOnlyDatabase {
+		return 1, "", fmt.Errorf("unable to create new branch in a read-only database")
 	}
 
 	updateHead := apr.Contains(cli.MoveFlag)
@@ -188,6 +197,19 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	dsess.WaitForReplicationController(ctx, rsc)
 
 	return 0, successMessage, nil
+}
+
+// isReadOnlyDatabase returns true if the named database is a read-only database. An error is returned
+// if any issues are encountered while looking up the named database.
+func isReadOnlyDatabase(ctx *sql.Context, dbName string) (bool, error) {
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	db, err := doltSession.Provider().Database(ctx, dbName)
+	if err != nil {
+		return false, err
+	}
+
+	rodb, ok := db.(sql.ReadOnlyDatabase)
+	return ok && rodb.IsReadOnly(), nil
 }
 
 // createWorkingSetForLocalBranch will make a new working set for a local
@@ -324,7 +346,7 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 		newBranchName = remoteBranchName
 	}
 
-	if newBranch, ok := apr.GetValue(cli.CheckoutCoBranch); ok {
+	if newBranch, ok := apr.GetValue(cli.CheckoutCreateBranch); ok {
 		if len(newBranch) == 0 {
 			return "", "", ErrEmptyBranchName
 		}
