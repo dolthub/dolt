@@ -2676,6 +2676,18 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 	},
 }
 
+var DoltCheckoutReadOnlyScripts = []queries.ScriptTest{
+	{
+		Name: "dolt checkout -b returns an error for read-only databases",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_checkout('-b', 'newBranch');",
+				ExpectedErrStr: "unable to create new branch in a read-only database",
+			},
+		},
+	},
+}
+
 var DoltInfoSchemaScripts = []queries.ScriptTest{
 	{
 		Name: "info_schema changes with dolt_checkout",

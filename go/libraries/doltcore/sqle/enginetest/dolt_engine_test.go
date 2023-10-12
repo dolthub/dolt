@@ -1701,6 +1701,17 @@ func TestDoltCheckout(t *testing.T) {
 			enginetest.TestScript(t, h, script)
 		}()
 	}
+
+	h := newDoltHarness(t)
+	defer h.Close()
+	engine, err := h.NewEngine(t)
+	require.NoError(t, err)
+	readOnlyEngine, err := h.NewReadOnlyEngine(engine.EngineAnalyzer().Catalog.DbProvider)
+	require.NoError(t, err)
+
+	for _, script := range DoltCheckoutReadOnlyScripts {
+		enginetest.TestScriptWithEngine(t, readOnlyEngine, h, script)
+	}
 }
 
 func TestDoltCheckoutPrepared(t *testing.T) {
@@ -1710,6 +1721,17 @@ func TestDoltCheckoutPrepared(t *testing.T) {
 			defer h.Close()
 			enginetest.TestScriptPrepared(t, h, script)
 		}()
+	}
+
+	h := newDoltHarness(t)
+	defer h.Close()
+	engine, err := h.NewEngine(t)
+	require.NoError(t, err)
+	readOnlyEngine, err := h.NewReadOnlyEngine(engine.EngineAnalyzer().Catalog.DbProvider)
+	require.NoError(t, err)
+
+	for _, script := range DoltCheckoutReadOnlyScripts {
+		enginetest.TestScriptWithEnginePrepared(t, readOnlyEngine, h, script)
 	}
 }
 
