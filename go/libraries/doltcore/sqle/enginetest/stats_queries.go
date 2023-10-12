@@ -16,10 +16,11 @@ package enginetest
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"strings"
 )
 
 // fillerVarchar pushes the tree into level 3

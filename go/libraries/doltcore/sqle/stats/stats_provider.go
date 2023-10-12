@@ -16,13 +16,15 @@ package stats
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type DoltStats struct {
