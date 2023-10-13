@@ -302,6 +302,7 @@ func constructInterpolatedDoltMergeQuery(apr *argparser.ArgParseResults, cliCtx 
 
 // printMergeStats calculates and prints all merge stats and information.
 func printMergeStats(result []sql.Row, apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context, usage cli.UsagePrinter, headHash, mergeHash, fromRef, toRef string) int {
+	// dolt_merge returns hash, fast_forward, conflicts and dolt_pull returns fast_forward, conflicts
 	fastForward := false
 	if result != nil && len(result) > 0 {
 		ffIndex := 0

@@ -290,6 +290,10 @@ func getRemoteHashForPull(apr *argparser.ArgParseResults, sqlCtx *sql.Context, q
 		branch = apr.Args[1]
 	}
 
+	if remote == "" || branch == "" {
+		return "", "", errors.New("pull finished successfully but remote and/or branch provided is empty")
+	}
+
 	remoteHash, err = getHashOf(queryist, sqlCtx, remote+"/"+branch)
 	if err != nil {
 		return "", "", err
