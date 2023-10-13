@@ -132,9 +132,14 @@ func parseTypeString(types []string) ([]sql.Type, error) {
 	typRegex := regexp.MustCompile("([a-z]+)\\((\\d+)\\)")
 	for i, typ := range types {
 		typMatch := typRegex.FindStringSubmatch(typ)
-		colType := &sqlparser.ColumnType{Type: typMatch[1]}
-		if len(typMatch) > 2 {
-			colType.Length = &sqlparser.SQLVal{Val: []byte(typMatch[2]), Type: sqlparser.IntVal}
+		colType := &sqlparser.ColumnType{}
+		if typMatch == nil {
+			colType.Type = typ
+		} else {
+			colType.Type = typMatch[1]
+			if len(typMatch) > 2 {
+				colType.Length = &sqlparser.SQLVal{Val: []byte(typMatch[2]), Type: sqlparser.IntVal}
+			}
 		}
 		ret[i], err = types2.ColumnTypeToType(colType)
 		if err != nil {
