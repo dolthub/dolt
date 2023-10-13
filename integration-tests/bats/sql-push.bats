@@ -35,6 +35,164 @@ teardown() {
     rm -rf $TESTDIRS
 }
 
+@test "sql-push: dolt_push origin" {
+    cd repo1
+    dolt sql -q "call dolt_push('origin', 'main')"
+
+    cd ../repo2
+    dolt pull origin
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "Table" ]] || false
+    [[ "$output" =~ "t1" ]] || false
+}
+
+@test "sql-push: CALL dolt_push origin in stored procedure" {
+    cd repo1
+    dolt sql <<SQL
+delimiter //
+create procedure merge_push_branch(branchName varchar(255))
+begin
+	call dolt_checkout(branchName);
+	call dolt_merge('--no-ff', 'main');
+  call dolt_push('origin', branchName);
+end;
+//
+SQL
+
+    dolt sql <<SQL
+call dolt_checkout('-b', 'branch1');
+insert into t1 values (5,500);
+call dolt_commit('-am', 'new row on branch1');
+SQL
+
+    dolt sql <<SQL
+insert into t1 values (10,100);
+call dolt_commit('-am', 'new row on main');
+SQL
+
+    dolt sql -q "CALL merge_push_branch('branch1')"
+
+    cd ../repo2
+    dolt fetch origin
+    dolt checkout branch1
+
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "Table" ]] || false
+    [[ "$output" =~ "t1" ]] || false
+
+    run dolt sql -q "select * from t1 order by 1" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ "$output" =~ "10,100" ]] || false
+    [[ "$output" =~ "5,500" ]] || false
+}
+
+@test "sql-push: CALL dpush origin" {
+    cd repo1
+    dolt sql -q "CALL dpush('origin', 'main')"
+
+    cd ../repo2
+    dolt pull origin
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "Table" ]] || false
+    [[ "$output" =~ "t1" ]] || false
+}
+
+@test "sql-push: dolt_push custom remote" {
+    cd repo1
+    dolt sql -q "call dolt_push('test-remote', 'main')"
+
+    cd ../repo2
+    dolt pull origin
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "Table" ]] || false
+    [[ "$output" =~ "t1" ]] || false
+}
+
+@test "sql-push: dolt_push active branch" {
+    skip "upstream state lost between sessions"
+    cd repo1
+    dolt sql -q "call dolt_push('origin')"
+
+    cd ../repo2
+    dolt pull origin
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "Table" ]] || false
+    [[ "$output" =~ "t1" ]] || false
+}
+
+@test "sql-push: dolt_push feature branch" {
+    cd repo1
+    dolt checkout -b feature
+    dolt sql -q "call dolt_push('origin', 'feature')"
+
+    cd ../repo2
+    dolt fetch origin feature
+    dolt checkout feature
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "Table" ]] || false
+    [[ "$output" =~ "t1" ]] || false
+}
+
+@test "sql-push: dolt_push --set-upstream persists outside of session" {
+    cd repo1
+    dolt checkout -b other
+    run dolt push
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "The current branch other has no upstream branch." ]] || false
+
+    dolt sql -q "call dolt_push('-u', 'origin', 'other')"
+    # upstream should be set still
+    run dolt push
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date" ]] || false
+    [[ ! "$output" =~ "The current branch main has no upstream branch." ]] || false
+}
+
+@test "sql-push: dolt_push without --set-upstream persists outside of session when push.autoSetupRemote is set to true" {
+    cd repo1
+    dolt checkout -b other
+    run dolt push
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "The current branch other has no upstream branch." ]] || false
+
+    dolt config --local --add push.autoSetUpRemote true
+    dolt sql -q "call dolt_push()"
+    # upstream should be set still
+    run dolt push
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date" ]] || false
+    [[ ! "$output" =~ "The current branch main has no upstream branch." ]] || false
+}
+
+@test "sql-push: dolt_push without --set-upstream persists outside of session when push.autoSetupRemote is set to all capital TRUE" {
+    cd repo1
+    dolt checkout -b other
+    run dolt push
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "The current branch other has no upstream branch." ]] || false
+
+    dolt config --local --add push.autoSetUpRemote TRUE
+    dolt sql -q "call dolt_push()"
+    # upstream should be set still
+    run dolt push
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date" ]] || false
+    [[ ! "$output" =~ "The current branch main has no upstream branch." ]] || false
+}
+
 @test "sql-push: dolt_push --force flag" {
     cd repo2
     dolt sql -q "create table t2 (a int)"

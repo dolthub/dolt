@@ -488,7 +488,7 @@ SQL
     [ "$status" -eq 0 ]
 }
 
-@test "remotes: validate that a config is needed for a pull." {
+@test "remotes-push-pull: validate that a config is needed for a pull." {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote main
     dolt fetch test-remote
