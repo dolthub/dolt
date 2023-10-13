@@ -54,7 +54,7 @@ var ErrCurrentBranchHasNoUpstream = goerrors.NewKind("fatal: The current branch 
 	"To have this happen automatically for branches without a tracking\n" +
 	"upstream, see 'push.autoSetupRemote' in 'dolt config --help'.")
 var ErrInvalidRepository = goerrors.NewKind("fatal: remote '%s' not found.\n" +
-	"Please make sure the repository exists.")
+	"Please make sure the remote exists.")
 var ErrAllFlagCannotBeUsedWithRefSpec = goerrors.NewKind("fatal: --all can't be combined with refspecs")
 var ErrNoPushDestination = goerrors.NewKind("fatal: No configured push destination.\n" +
 	"Either specify the URL from the command-line or configure a remote repository using\n\n" +
