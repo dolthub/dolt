@@ -160,6 +160,7 @@ teardown() {
 
 @test "sql-pull: dolt_pull force" {
     cd repo1
+    # disable foreign key checks to create merge conflicts
     dolt sql <<SQL
 SET FOREIGN_KEY_CHECKS=0;
 CREATE TABLE colors (
@@ -193,7 +194,7 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Constraint violations" ]] || false
 
-    run dolt sql -q "call dolt_pull('-f')"
+    run dolt sql -q "call dolt_pull('--force')"
     [ "$status" -eq 0 ]
     run dolt sql -q "select * from objects"
     [ "$status" -eq 0 ]

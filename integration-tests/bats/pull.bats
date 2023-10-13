@@ -178,7 +178,8 @@ teardown() {
 }
 
 @test "pull: pull force" {
-        cd repo1
+    cd repo1
+    # disable foreign key checks to create merge conflicts
     dolt sql <<SQL
 SET FOREIGN_KEY_CHECKS=0;
 CREATE TABLE colors (
@@ -213,7 +214,7 @@ SQL
     [[ "$output" =~ "CONSTRAINT VIOLATION" ]] || false
 
     dolt merge --abort
-    run dolt pull -f
+    run dolt pull --force
     [ "$status" -eq 0 ]
     run dolt sql -q "select * from objects"
     [ "$status" -eq 0 ]
