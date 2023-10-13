@@ -391,7 +391,7 @@ SQL
     [[ ! "$output" =~ "new message" ]] || false
 }
 
-@test "remotes: dolt pull onto a dirty working set fails" {
+@test "remotes-push-pull: dolt pull onto a dirty working set fails" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (
@@ -846,7 +846,7 @@ SQL
     [[ ! "$output" =~ 'Tue Sep 26 01:23:45' ]] || false
 }
 
-@test "remotes: validate that a config is needed for a pull." {
+@test "remotes-push-pull: validate that a config is needed for a pull." {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote main
     dolt fetch test-remote
