@@ -119,32 +119,37 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "insert duplicate key doesn't prevent other updates, autocommit off",
+			Name: "failed statements data validation for DELETE, REPLACE",
 			SetUpScript: []string{
-				"CREATE TABLE t1 (pk BIGINT PRIMARY KEY, v1 VARCHAR(3));",
-				"INSERT INTO t1 VALUES (1, 'abc');",
-				"SET autocommit = 0;",
+				"CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX (v1));",
+				"INSERT INTO test VALUES (1,1), (4,4), (5,5);",
+				"CREATE TABLE test2 (pk BIGINT PRIMARY KEY, CONSTRAINT fk_test FOREIGN KEY (pk) REFERENCES test (v1));",
+				"INSERT INTO test2 VALUES (4);",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "select * from t1 order by pk",
-					Expected: []sql.Row{{1, "abc"}},
+					Query:       "DELETE FROM test WHERE pk > 0;",
+					ExpectedErr: sql.ErrForeignKeyParentViolation,
 				},
 				{
-					Query:       "INSERT INTO t1 VALUES (1, 'abc');",
-					ExpectedErr: sql.ErrPrimaryKeyViolation,
+					Query:    "SELECT * FROM test;",
+					Expected: []sql.Row{{1, 1}, {4, 4}, {5, 5}},
 				},
 				{
-					Query:    "INSERT INTO t1 VALUES (2, 'def');",
-					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+					Query:    "SELECT * FROM test2;",
+					Expected: []sql.Row{{4}},
 				},
 				{
-					Query:            "commit",
-					SkipResultsCheck: true,
+					Query:       "REPLACE INTO test VALUES (1,7), (4,8), (5,9);",
+					ExpectedErr: sql.ErrForeignKeyParentViolation,
 				},
 				{
-					Query:    "select * from t1 order by pk",
-					Expected: []sql.Row{{1, "abc"}, {2, "def"}},
+					Query:    "SELECT * FROM test;",
+					Expected: []sql.Row{{1, 1}, {4, 4}, {5, 5}},
+				},
+				{
+					Query:    "SELECT * FROM test2;",
+					Expected: []sql.Row{{4}},
 				},
 			},
 		},
@@ -154,11 +159,19 @@ func TestSingleScript(t *testing.T) {
 	cleanup := installTestCommitClock(tcc)
 	defer cleanup()
 
-	harness := newDoltHarness(t)
-	harness.Setup(setup.MydbData)
 	for _, script := range scripts {
 		sql.RunWithNowFunc(tcc.Now, func() error {
-			enginetest.TestScript(t, harness, script)
+			harness := newDoltHarness(t)
+			harness.Setup(setup.MydbData)
+
+			engine, err := harness.NewEngine(t)
+			if err != nil {
+				panic(err)
+			}
+			engine.EngineAnalyzer().Debug = true
+			engine.EngineAnalyzer().Verbose = true
+
+			enginetest.TestScriptWithEngine(t, engine, harness, script)
 			return nil
 		})
 	}
@@ -1688,6 +1701,17 @@ func TestDoltCheckout(t *testing.T) {
 			enginetest.TestScript(t, h, script)
 		}()
 	}
+
+	h := newDoltHarness(t)
+	defer h.Close()
+	engine, err := h.NewEngine(t)
+	require.NoError(t, err)
+	readOnlyEngine, err := h.NewReadOnlyEngine(engine.EngineAnalyzer().Catalog.DbProvider)
+	require.NoError(t, err)
+
+	for _, script := range DoltCheckoutReadOnlyScripts {
+		enginetest.TestScriptWithEngine(t, readOnlyEngine, h, script)
+	}
 }
 
 func TestDoltCheckoutPrepared(t *testing.T) {
@@ -1697,6 +1721,17 @@ func TestDoltCheckoutPrepared(t *testing.T) {
 			defer h.Close()
 			enginetest.TestScriptPrepared(t, h, script)
 		}()
+	}
+
+	h := newDoltHarness(t)
+	defer h.Close()
+	engine, err := h.NewEngine(t)
+	require.NoError(t, err)
+	readOnlyEngine, err := h.NewReadOnlyEngine(engine.EngineAnalyzer().Catalog.DbProvider)
+	require.NoError(t, err)
+
+	for _, script := range DoltCheckoutReadOnlyScripts {
+		enginetest.TestScriptWithEnginePrepared(t, readOnlyEngine, h, script)
 	}
 }
 
@@ -1727,6 +1762,14 @@ func TestDoltRemote(t *testing.T) {
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
 		}()
+	}
+}
+
+func TestDoltUndrop(t *testing.T) {
+	h := newDoltHarnessForLocalFilesystem(t)
+	defer h.Close()
+	for _, script := range DoltUndropTestScripts {
+		enginetest.TestScript(t, h, script)
 	}
 }
 
@@ -2337,7 +2380,10 @@ func TestQueriesPrepared(t *testing.T) {
 func TestStatistics(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestStatistics(t, h)
+	for _, script := range queries.StatisticsQueries {
+		h.engine = nil
+		enginetest.TestScript(t, h, script)
+	}
 }
 
 func TestSpatialQueriesPrepared(t *testing.T) {
@@ -2351,7 +2397,10 @@ func TestSpatialQueriesPrepared(t *testing.T) {
 func TestPreparedStatistics(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestStatisticsPrepared(t, h)
+	for _, script := range queries.StatisticsQueries {
+		h.engine = nil
+		enginetest.TestScriptPrepared(t, h, script)
+	}
 }
 
 func TestVersionedQueriesPrepared(t *testing.T) {

@@ -65,7 +65,7 @@ teardown() {
     dolt clone file://./remote repo2
 
     cd repo2
-     dolt pull
+    dolt pull
 
 
     dolt commit --allow-empty -m "a commit for main from repo2"
@@ -195,7 +195,7 @@ teardown() {
     dolt sql -q "create table t1 (pk int primary key);"
     run dolt pull test-remote test-branch
     [ "$status" -eq 1 ]
-    [[ "$output" =~ 'local changes to the following tables would be overwritten by merge' ]] || false
+    [[ "$output" =~ 'cannot merge with uncommitted changes' ]] || false
 
     # Commit changes and test that a merge conflict fails the pull
     dolt add .
@@ -391,7 +391,7 @@ SQL
     [[ ! "$output" =~ "new message" ]] || false
 }
 
-@test "remotes-push-pull: dolt pull onto a dirty working set fails" {
+@test "remotes: dolt pull onto a dirty working set fails" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (
@@ -418,9 +418,7 @@ SQL
     dolt sql -q "insert into test values (0, 1, 1, 1, 1, 1)"
     run dolt pull origin
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "error: Your local changes to the following tables would be overwritten by merge:" ]] || false
-    [[ "$output" =~ "test" ]] || false
-    [[ "$output" =~ "Please commit your changes before you merge." ]] || false
+    [[ "$output" =~ "cannot merge with uncommitted changes" ]] || false
 }
 
 @test "remotes-push-pull: force push to main" {
@@ -846,4 +844,84 @@ SQL
 
     run dolt_log_in_PST
     [[ ! "$output" =~ 'Tue Sep 26 01:23:45' ]] || false
+}
+
+@test "remotes: validate that a config is needed for a pull." {
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt push test-remote main
+    dolt fetch test-remote
+    cd "dolt-repo-clones"
+    dolt clone http://localhost:50051/test-org/test-repo
+    cd ..
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk int,
+  val int,
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt add test
+    dolt commit -m "test commit"
+    dolt push test-remote main
+
+    # cd to the other directory and execute a pull without a config
+    cd "dolt-repo-clones/test-repo"
+    dolt config --global --unset user.name
+    dolt config --global --unset user.email
+    run dolt pull
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Could not determine name and/or email." ]] || false
+
+    dolt config --global --add user.name mysql-test-runner
+    dolt config --global --add user.email mysql-test-runner@liquidata.co
+    dolt pull
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test commit" ]] || false
+
+    # test pull with workspace up to date
+    dolt config --global --unset user.name
+    dolt config --global --unset user.email
+    run dolt pull
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Could not determine name and/or email." ]] || false
+
+    # turn back on the configs and make a change in the remote
+    dolt config --global --add user.name mysql-test-runner
+    dolt config --global --add user.email mysql-test-runner@liquidata.co
+
+    cd ../../
+    dolt sql -q "insert into test values (1,1)"
+    dolt commit -am "commit from main repo"
+    dolt push test-remote main
+
+    # Try a --no-ff merge and make sure it fails
+    cd "dolt-repo-clones/test-repo"
+    # turn configs off again
+    dolt config --global --unset user.name
+    dolt config --global --unset user.email
+
+    run dolt pull --no-ff
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Could not determine name and/or email." ]] || false
+
+    # Now do a two sided merge
+    dolt config --global --add user.name mysql-test-runner
+    dolt config --global --add user.email mysql-test-runner@liquidata.co
+
+    dolt sql -q "insert into test values (2,1)"
+    dolt commit -am "commit from test repo"
+
+    cd ../../
+    dolt sql -q "insert into test values (2,2)"
+    dolt commit -am "commit from main repo"
+    dolt push test-remote main
+
+    cd "dolt-repo-clones/test-repo"
+    dolt config --global --unset user.name
+    dolt config --global --unset user.email
+
+    run dolt pull
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Could not determine name and/or email." ]] || false
 }

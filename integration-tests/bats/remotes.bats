@@ -631,7 +631,7 @@ SQL
     [[ ! "$output" =~ "test commit" ]] || false
     run dolt merge origin/main
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Already up to date." ]] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
     run dolt fetch
     [ "$status" -eq 0 ]
     run dolt merge origin/main
@@ -665,7 +665,7 @@ SQL
     cd "dolt-repo-clones/test-repo"
     run dolt merge remotes/origin/main
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Already up to date." ]] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
     run dolt fetch origin main
     [ "$status" -eq 0 ]
     run dolt merge remotes/origin/main
@@ -783,7 +783,7 @@ SQL
     dolt add test
     dolt commit -m "conflicting row"
     run dolt pull origin
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "CONFLICT" ]] || false
     dolt conflicts resolve test --ours
     dolt add test
@@ -881,7 +881,6 @@ SQL
     run dolt pull --no-edit
     [ "$status" -eq 0 ]    
 }
-
 
 create_main_remote_branch() {
     dolt remote add origin http://localhost:50051/test-org/test-repo
@@ -1453,7 +1452,8 @@ SQL
 
     run dolt pull
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date." ]] || false
+    echo "$output"
+    [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
 @test "remotes: call dolt_checkout track flag sets upstream" {
@@ -1491,7 +1491,7 @@ SQL
 
     run dolt pull
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date." ]] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
 @test "remotes: call dolt_checkout with --track and no arg returns error" {
@@ -1531,7 +1531,7 @@ SQL
 
     run dolt pull
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date." ]] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
 
     dolt checkout main
     dolt branch -D newbranch
@@ -1544,10 +1544,10 @@ SQL
 
     run dolt pull
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date." ]] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
-@test "remotes: dolt sql -q 'call dolt_checkout("-b", "newbranch", "--track", "origin/feature")'' checks out new local branch 'newbranch' with upstream set" {
+@test "remotes: call dolt_checkout('-b', 'newbranch', '--track', 'origin/feature') checks out new local branch 'newbranch' with upstream set" {
     mkdir remote
     mkdir repo1
 
@@ -1573,7 +1573,7 @@ SQL
 
     run dolt pull
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date." ]] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
 
     dolt checkout main
     dolt branch -D newbranch
@@ -1588,7 +1588,7 @@ SQL
 
     run dolt pull
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date." ]] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
 @test "remotes: dolt branch track flag sets upstream" {
@@ -1623,7 +1623,7 @@ SQL
     dolt checkout other
     run dolt pull
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date." ]] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
 
     # NOTE: this command fails with git, requiring `--track=direct`, when both branch name and starting point name are defined, but Dolt allows both formats.
     run dolt branch feature --track direct origin/other
@@ -1687,7 +1687,7 @@ SQL
 
     run dolt pull
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date." ]] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
 
     # NOTE: this command fails with git, requiring `--track=direct`, when both branch name and starting point name are defined, but Dolt allows both formats.
     dolt sql -q "CALL DOLT_BRANCH('feature','--track','direct','origin/other');"

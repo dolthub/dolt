@@ -30,7 +30,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -40,17 +39,18 @@ import (
 )
 
 type DoltHarness struct {
-	t               *testing.T
-	provider        dsess.DoltDatabaseProvider
-	multiRepoEnv    *env.MultiRepoEnv
-	session         *dsess.DoltSession
-	branchControl   *branch_control.Controller
-	parallelism     int
-	skippedQueries  []string
-	setupData       []setup.SetupScript
-	resetData       []setup.SetupScript
-	engine          *gms.Engine
-	skipSetupCommit bool
+	t                  *testing.T
+	provider           dsess.DoltDatabaseProvider
+	multiRepoEnv       *env.MultiRepoEnv
+	session            *dsess.DoltSession
+	branchControl      *branch_control.Controller
+	parallelism        int
+	skippedQueries     []string
+	setupData          []setup.SetupScript
+	resetData          []setup.SetupScript
+	engine             *gms.Engine
+	skipSetupCommit    bool
+	useLocalFilesystem bool
 }
 
 var _ enginetest.Harness = (*DoltHarness)(nil)
@@ -63,12 +63,22 @@ var _ enginetest.KeylessTableHarness = (*DoltHarness)(nil)
 var _ enginetest.ReadOnlyDatabaseHarness = (*DoltHarness)(nil)
 var _ enginetest.ValidatingHarness = (*DoltHarness)(nil)
 
+// newDoltHarness creates a new harness for testing Dolt, using an in-memory filesystem and an in-memory blob store.
 func newDoltHarness(t *testing.T) *DoltHarness {
 	dh := &DoltHarness{
 		t:              t,
 		skippedQueries: defaultSkippedQueries,
 	}
 
+	return dh
+}
+
+// newDoltHarnessForLocalFilesystem creates a new harness for testing Dolt, using
+// the local filesystem for all storage, instead of in-memory versions. This setup
+// is useful for testing functionality that requires a real filesystem.
+func newDoltHarnessForLocalFilesystem(t *testing.T) *DoltHarness {
+	dh := newDoltHarness(t)
+	dh.useLocalFilesystem = true
 	return dh
 }
 
@@ -392,7 +402,12 @@ func (d *DoltHarness) closeProvider() {
 func (d *DoltHarness) newProvider() sql.MutableDatabaseProvider {
 	d.closeProvider()
 
-	dEnv := dtestutils.CreateTestEnv()
+	var dEnv *env.DoltEnv
+	if d.useLocalFilesystem {
+		dEnv = dtestutils.CreateTestEnvForLocalFilesystem()
+	} else {
+		dEnv = dtestutils.CreateTestEnv()
+	}
 	defer dEnv.DoltDB.Close()
 
 	store := dEnv.DoltDB.ValueReadWriter().(*types.ValueStore)
@@ -405,8 +420,7 @@ func (d *DoltHarness) newProvider() sql.MutableDatabaseProvider {
 	b := env.GetDefaultInitBranch(d.multiRepoEnv.Config())
 	pro, err := sqle.NewDoltDatabaseProvider(b, d.multiRepoEnv.FileSystem())
 	require.NoError(d.t, err)
-
-	return pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
+	return pro
 }
 
 func (d *DoltHarness) newTable(db sql.Database, name string, schema sql.PrimaryKeySchema) (sql.Table, error) {

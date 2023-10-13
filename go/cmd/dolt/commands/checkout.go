@@ -106,15 +106,15 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return 1
 	}
 
-	branchOrTrack := apr.Contains(cli.CheckoutCoBranch) || apr.Contains(cli.TrackFlag)
+	branchOrTrack := apr.Contains(cli.CheckoutCreateBranch) || apr.Contains(cli.TrackFlag)
 	if (branchOrTrack && apr.NArg() > 1) || (!branchOrTrack && apr.NArg() == 0) {
 		usagePrt()
 		return 1
 	}
 
 	var branchName string
-	if apr.Contains(cli.CheckoutCoBranch) {
-		branchName, _ = apr.GetValue(cli.CheckoutCoBranch)
+	if apr.Contains(cli.CheckoutCreateBranch) {
+		branchName, _ = apr.GetValue(cli.CheckoutCreateBranch)
 	} else if apr.Contains(cli.TrackFlag) {
 		if apr.NArg() > 0 {
 			usagePrt()

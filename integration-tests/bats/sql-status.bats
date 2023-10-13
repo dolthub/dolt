@@ -99,7 +99,7 @@ teardown() {
     dolt commit -m "changed pk=0 all cells to 11"
     dolt checkout main
     run dolt merge change-cell -m "merge change-cell"
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 
     run dolt sql -r csv -q "select * from dolt_status"
@@ -143,7 +143,7 @@ teardown() {
      # A merge with conflicts does not change the working root.
      # If the conflicts are resolved with --ours, the working root and the docs on the filesystem remain the same.
      run dolt merge test-b -m "merge test-b"
-     [ "$status" -eq 0 ]
+     [ "$status" -eq 1 ]
      [[ $output =~ "CONFLICT" ]] || false
 
      dolt status

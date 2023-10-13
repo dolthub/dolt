@@ -1121,7 +1121,9 @@ SQL
     dolt add -A
     dolt commit --force -m "updated parent"
     dolt checkout main
-    dolt merge other -m "merge other"
+    run dolt merge other -m "merge other"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "table,num_violations" ]] || false
@@ -1197,7 +1199,9 @@ SQL
     dolt add -A
     dolt commit --force -m "updated child"
     dolt checkout main
-    dolt merge other -m "merge other"
+    run dolt merge other -m "merge other"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "table,num_violations" ]] || false
@@ -1276,7 +1280,9 @@ SQL
     dolt add -A
     dolt commit --force -m "updated both"
     dolt checkout main
-    dolt merge other -m "merge other"
+    run dolt merge other -m "merge other"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "table,num_violations" ]] || false
@@ -1306,7 +1312,9 @@ SQL
     dolt add -A
     dolt commit -m "added 2s"
     dolt checkout main
-    dolt merge other -m "merge other"
+    run dolt merge other -m "merge other"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content):" ]] || false
     run dolt conflicts resolve --theirs parent
     [ "$status" -eq "1" ]
     [[ "$output" =~ "violation" ]] || false
@@ -1338,7 +1346,9 @@ SQL
     dolt add -A
     dolt commit -m "added 2s"
     dolt checkout main
-    dolt merge other -m "merge other"
+    run dolt merge other -m "merge other"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content):" ]] || false
     run dolt sql <<SQL
 set @@dolt_allow_commit_conflicts = 1;
 call dolt_conflicts_resolve('--theirs', 'parent');
