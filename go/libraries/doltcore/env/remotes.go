@@ -133,17 +133,20 @@ func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsB
 	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, filesys2.LocalFS, params)
 }
 
-type PushMeta struct {
-	Opts   []*PushOpts
+// PushOptions contains information needed for push for
+// one or more branches or a tag for a specific remote database.
+type PushOptions struct {
+	Opts   []*PushTarget
 	Rsr    RepoStateReader
 	Rsw    RepoStateWriter
-	Remote Remote
+	Remote *Remote
 	SrcDb  *doltdb.DoltDB
 	DestDb *doltdb.DoltDB
 	TmpDir string
 }
 
-type PushOpts struct {
+// PushTarget contains information needed for push per branch or tag.
+type PushTarget struct {
 	SrcRef      ref.DoltRef
 	DestRef     ref.DoltRef
 	RemoteRef   ref.DoltRef
@@ -152,19 +155,19 @@ type PushOpts struct {
 	HasUpstream bool
 }
 
-func NewPushOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoStateReader, ddb *doltdb.DoltDB, force, setUpstream, pushAutoSetupRemote, all bool) ([]*PushOpts, Remote, error) {
+func NewPushOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoStateReader, ddb *doltdb.DoltDB, force, setUpstream, pushAutoSetupRemote, all bool) ([]*PushTarget, *Remote, error) {
 	if apr.NArg() == 0 {
-		return getPushOptsAndRemoteFromNoArg(ctx, rsr, ddb, force, setUpstream, pushAutoSetupRemote, all)
+		return getPushTargetsAndRemoteFromNoArg(ctx, rsr, ddb, force, setUpstream, pushAutoSetupRemote, all)
 	}
 
 	rsrBranches, err := rsr.GetBranches()
 	if err != nil {
-		return nil, NoRemote, err
+		return nil, nil, err
 	}
 
 	currentBranch, err := rsr.CWBHeadRef()
 	if err != nil {
-		return nil, NoRemote, err
+		return nil, nil, err
 	}
 
 	// the first argument defines the remote name
@@ -172,46 +175,46 @@ func NewPushOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoSt
 	if apr.NArg() == 1 {
 		remote, err := getRemote(rsr, remoteName)
 		if err != nil {
-			return nil, NoRemote, err
+			return nil, nil, err
 		}
 
 		if all {
-			return getPushOptsAndRemoteForAllBranches(ctx, rsrBranches, currentBranch, remote, ddb, force, setUpstream)
+			return getPushTargetsAndRemoteForAllBranches(ctx, rsrBranches, currentBranch, &remote, ddb, force, setUpstream)
 		} else {
 			defaultRemote, err := GetDefaultRemote(rsr)
 			if err != nil {
-				return nil, NoRemote, err
+				return nil, nil, err
 			}
 
 			refSpec, _, hasUpstream, err := getCurrentBranchRefSpec(ctx, rsrBranches, rsr, ddb, remoteName, defaultRemote.Name == remoteName, true, setUpstream, pushAutoSetupRemote)
 			if err != nil {
-				return nil, NoRemote, err
+				return nil, nil, err
 			}
 
-			opts, err := getPushOptsFromRefSpec(refSpec, currentBranch, remote, force, setUpstream, hasUpstream)
+			opts, err := getPushTargetFromRefSpec(refSpec, currentBranch, &remote, force, setUpstream, hasUpstream)
 			if err != nil {
-				return nil, NoRemote, err
+				return nil, nil, err
 			}
-			return []*PushOpts{opts}, remote, nil
+			return []*PushTarget{opts}, &remote, nil
 		}
 	} else {
 		if all {
-			return nil, NoRemote, ErrAllFlagCannotBeUsedWithRefSpec.New()
+			return nil, nil, ErrAllFlagCannotBeUsedWithRefSpec.New()
 		}
 
 		refSpecNames := apr.Args[1:]
 		// validate given refSpec names
 		for _, refSpecName := range refSpecNames {
 			if len(refSpecName) == 0 {
-				return nil, NoRemote, fmt.Errorf("%w: '%s'", ref.ErrInvalidRefSpec, refSpecName)
+				return nil, nil, fmt.Errorf("%w: '%s'", ref.ErrInvalidRefSpec, refSpecName)
 			}
 		}
 
 		remote, err := getRemote(rsr, apr.Arg(0))
 		if err != nil {
-			return nil, NoRemote, err
+			return nil, nil, err
 		}
-		return getPushOptsAndRemoteForBranchRefs(ctx, rsrBranches, refSpecNames, currentBranch, remote, ddb, force, setUpstream)
+		return getPushTargetsAndRemoteForBranchRefs(ctx, rsrBranches, refSpecNames, currentBranch, &remote, ddb, force, setUpstream)
 	}
 }
 
@@ -228,17 +231,17 @@ func getRemote(rsr RepoStateReader, name string) (Remote, error) {
 	return remote, nil
 }
 
-// getPushOptsAndRemoteFromNoArg pushes the current branch on default remote if upstream is set or `-u` is defined;
+// getPushTargetsAndRemoteFromNoArg pushes the current branch on default remote if upstream is set or `-u` is defined;
 // otherwise, all branches of default remote if `--all` flag is used.
-func getPushOptsAndRemoteFromNoArg(ctx context.Context, rsr RepoStateReader, ddb *doltdb.DoltDB, force, setUpstream, pushAutoSetupRemote, all bool) ([]*PushOpts, Remote, error) {
+func getPushTargetsAndRemoteFromNoArg(ctx context.Context, rsr RepoStateReader, ddb *doltdb.DoltDB, force, setUpstream, pushAutoSetupRemote, all bool) ([]*PushTarget, *Remote, error) {
 	rsrBranches, err := rsr.GetBranches()
 	if err != nil {
-		return nil, NoRemote, err
+		return nil, nil, err
 	}
 
 	currentBranch, err := rsr.CWBHeadRef()
 	if err != nil {
-		return nil, NoRemote, err
+		return nil, nil, err
 	}
 
 	remote, err := GetDefaultRemote(rsr)
@@ -246,48 +249,48 @@ func getPushOptsAndRemoteFromNoArg(ctx context.Context, rsr RepoStateReader, ddb
 		if err == ErrNoRemote {
 			err = ErrNoPushDestination.New()
 		}
-		return nil, NoRemote, err
+		return nil, nil, err
 	}
 	if all {
-		return getPushOptsAndRemoteForAllBranches(ctx, rsrBranches, currentBranch, remote, ddb, force, setUpstream)
+		return getPushTargetsAndRemoteForAllBranches(ctx, rsrBranches, currentBranch, &remote, ddb, force, setUpstream)
 	} else {
 		refSpec, remoteName, hasUpstream, err := getCurrentBranchRefSpec(ctx, rsrBranches, rsr, ddb, remote.Name, true, false, setUpstream, pushAutoSetupRemote)
 		if err != nil {
-			return nil, NoRemote, err
+			return nil, nil, err
 		}
 		if remoteName != remote.Name {
 			remote, err = getRemote(rsr, remoteName)
 			if err != nil {
-				return nil, NoRemote, err
+				return nil, nil, err
 			}
 		}
 
-		opts, err := getPushOptsFromRefSpec(refSpec, currentBranch, remote, force, setUpstream, hasUpstream)
+		opts, err := getPushTargetFromRefSpec(refSpec, currentBranch, &remote, force, setUpstream, hasUpstream)
 		if err != nil {
-			return nil, NoRemote, err
+			return nil, nil, err
 		}
-		return []*PushOpts{opts}, remote, nil
+		return []*PushTarget{opts}, &remote, nil
 	}
 }
 
-func getPushOptsAndRemoteForAllBranches(ctx context.Context, rsrBranches map[string]BranchConfig, currentBranch ref.DoltRef, remote Remote, ddb *doltdb.DoltDB, force, setUpstream bool) ([]*PushOpts, Remote, error) {
+func getPushTargetsAndRemoteForAllBranches(ctx context.Context, rsrBranches map[string]BranchConfig, currentBranch ref.DoltRef, remote *Remote, ddb *doltdb.DoltDB, force, setUpstream bool) ([]*PushTarget, *Remote, error) {
 	localBranches, err := ddb.GetBranches(ctx)
 	if err != nil {
-		return nil, NoRemote, err
+		return nil, nil, err
 	}
 	var lbNames = make([]string, len(localBranches))
 	for i, branch := range localBranches {
 		lbNames[i] = branch.GetPath()
 	}
-	return getPushOptsAndRemoteForBranchRefs(ctx, rsrBranches, lbNames, currentBranch, remote, ddb, force, setUpstream)
+	return getPushTargetsAndRemoteForBranchRefs(ctx, rsrBranches, lbNames, currentBranch, remote, ddb, force, setUpstream)
 }
 
-func getPushOptsAndRemoteForBranchRefs(ctx context.Context, rsrBranches map[string]BranchConfig, localBranches []string, currentBranch ref.DoltRef, remote Remote, ddb *doltdb.DoltDB, force, setUpstream bool) ([]*PushOpts, Remote, error) {
-	var pushOptsList []*PushOpts
+func getPushTargetsAndRemoteForBranchRefs(ctx context.Context, rsrBranches map[string]BranchConfig, localBranches []string, currentBranch ref.DoltRef, remote *Remote, ddb *doltdb.DoltDB, force, setUpstream bool) ([]*PushTarget, *Remote, error) {
+	var pushOptsList []*PushTarget
 	for _, refSpecName := range localBranches {
 		refSpec, err := getRefSpecFromStr(ctx, ddb, refSpecName)
 		if err != nil {
-			return nil, NoRemote, err
+			return nil, nil, err
 		}
 
 		// if the remote of upstream does not match the remote given,
@@ -295,9 +298,9 @@ func getPushOptsAndRemoteForBranchRefs(ctx context.Context, rsrBranches map[stri
 		upstream, hasUpstream := rsrBranches[refSpecName]
 		hasUpstream = hasUpstream && upstream.Remote == remote.Name
 
-		opts, err := getPushOptsFromRefSpec(refSpec, currentBranch, remote, force, setUpstream, hasUpstream)
+		opts, err := getPushTargetFromRefSpec(refSpec, currentBranch, remote, force, setUpstream, hasUpstream)
 		if err != nil {
-			return nil, NoRemote, err
+			return nil, nil, err
 		}
 
 		pushOptsList = append(pushOptsList, opts)
@@ -305,7 +308,7 @@ func getPushOptsAndRemoteForBranchRefs(ctx context.Context, rsrBranches map[stri
 	return pushOptsList, remote, nil
 }
 
-func getPushOptsFromRefSpec(refSpec ref.RefSpec, currentBranch ref.DoltRef, remote Remote, force, setUpstream, hasUpstream bool) (*PushOpts, error) {
+func getPushTargetFromRefSpec(refSpec ref.RefSpec, currentBranch ref.DoltRef, remote *Remote, force, setUpstream, hasUpstream bool) (*PushTarget, error) {
 	src := refSpec.SrcRef(currentBranch)
 	dest := refSpec.DestRef(src)
 
@@ -313,7 +316,7 @@ func getPushOptsFromRefSpec(refSpec ref.RefSpec, currentBranch ref.DoltRef, remo
 	var err error
 	switch src.GetType() {
 	case ref.BranchRefType:
-		remoteRef, err = GetTrackingRef(dest, remote)
+		remoteRef, err = GetTrackingRef(dest, *remote)
 	case ref.TagRefType:
 		if setUpstream {
 			err = ErrCannotSetUpstreamForTag
@@ -325,7 +328,7 @@ func getPushOptsFromRefSpec(refSpec ref.RefSpec, currentBranch ref.DoltRef, remo
 		return nil, err
 	}
 
-	return &PushOpts{
+	return &PushTarget{
 		SrcRef:    src,
 		DestRef:   dest,
 		RemoteRef: remoteRef,

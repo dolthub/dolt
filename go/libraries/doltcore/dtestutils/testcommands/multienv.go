@@ -368,7 +368,7 @@ func (mr *MultiRepoTestSetup) PushToRemote(dbName, remoteName, branchName string
 		mr.Errhand(fmt.Sprintf("Failed to access .dolt directory: %s", err.Error()))
 	}
 
-	pushMeta := &env.PushMeta{
+	pushOptions := &env.PushOptions{
 		Opts:   opts,
 		Remote: remote,
 		Rsr:    dEnv.RepoStateReader(),
@@ -377,7 +377,7 @@ func (mr *MultiRepoTestSetup) PushToRemote(dbName, remoteName, branchName string
 		DestDb: remoteDB,
 		TmpDir: tmpDir,
 	}
-	_, err = actions.DoPush(ctx, pushMeta, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+	_, err = actions.DoPush(ctx, pushOptions, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
 	if err != nil {
 		mr.Errhand(fmt.Sprintf("Failed to push remote: %s", err.Error()))
 	}

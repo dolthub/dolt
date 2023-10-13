@@ -80,7 +80,7 @@ func doDoltPush(ctx *sql.Context, args []string) (int, string, error) {
 	if err != nil {
 		return cmdFailure, "", err
 	}
-	remoteDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), remote, true)
+	remoteDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), *remote, true)
 	if err != nil {
 		return cmdFailure, "", actions.HandleInitRemoteStorageClientErr(remote.Name, remote.Url, err)
 	}
@@ -90,8 +90,8 @@ func doDoltPush(ctx *sql.Context, args []string) (int, string, error) {
 		return cmdFailure, "", err
 	}
 
-	var msg string
-	pushMeta := &env.PushMeta{
+	var returnMsg string
+	po := &env.PushOptions{
 		Opts:   opts,
 		Remote: remote,
 		Rsr:    dbData.Rsr,
@@ -100,21 +100,24 @@ func doDoltPush(ctx *sql.Context, args []string) (int, string, error) {
 		DestDb: remoteDB,
 		TmpDir: tmpDir,
 	}
-	msg, err = actions.DoPush(ctx, pushMeta, runProgFuncs, stopProgFuncs)
+	returnMsg, err = actions.DoPush(ctx, po, runProgFuncs, stopProgFuncs)
 	if err != nil {
 		switch err {
 		case doltdb.ErrUpToDate:
 			return cmdSuccess, "Everything up-to-date", nil
 		case datas.ErrMergeNeeded:
-			return cmdFailure, msg, fmt.Errorf("%w; the tip of your current branch is behind its remote counterpart", err)
+			return cmdFailure, returnMsg, fmt.Errorf("%w; the tip of your current branch is behind its remote counterpart", err)
 		default:
-			// include successful push message in the error message
-			if msg != "" {
-				err = fmt.Errorf("%s\n%s", msg, err.Error())
+			if returnMsg != "" {
+				// For multiple branches push, we need to print successful push message
+				// before the error message. We currently cannot return success message
+				// if there was a failed push with error. So, we need to include the success
+				// message in the error message before returning.
+				err = fmt.Errorf("%s\n%s", returnMsg, err.Error())
 			}
 			return cmdFailure, "", err
 		}
 	}
 	// TODO : set upstream should be persisted outside of session
-	return cmdSuccess, msg, nil
+	return cmdSuccess, returnMsg, nil
 }

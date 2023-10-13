@@ -91,50 +91,54 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 	return err
 }
 
-func DoPush(ctx context.Context, pushMeta *env.PushMeta, progStarter ProgStarter, progStopper ProgStopper) (string, error) {
-	var err error
+// DoPush returns a message about whether the push was successful for each branch or a tag.
+// This includes if there is a new remote branch created, upstream is set or push was rejected for a branch.
+func DoPush(ctx context.Context, pushMeta *env.PushOptions, progStarter ProgStarter, progStopper ProgStopper) (returnMsg string, err error) {
 	var successPush, setUpstreamPush, failedPush []string
 	for _, opts := range pushMeta.Opts {
-		switch opts.SrcRef.GetType() {
-		case ref.BranchRefType:
-			if opts.SrcRef == ref.EmptyBranchRef {
-				err = deleteRemoteBranch(ctx, opts.DestRef, opts.RemoteRef, pushMeta.SrcDb, pushMeta.DestDb, pushMeta.Remote)
+		err = push(ctx, pushMeta.Rsr, pushMeta.TmpDir, pushMeta.SrcDb, pushMeta.DestDb, pushMeta.Remote, opts, progStarter, progStopper)
+		if err == nil {
+			if opts.HasUpstream {
+				// TODO: should add commit hash info for branches with upstream set
+				//  (e.g. 74476cf38..080b073e7  branch1 -> branch1)
 			} else {
-				err = PushToRemoteBranch(ctx, pushMeta.Rsr, pushMeta.TmpDir, opts.Mode, opts.SrcRef, opts.DestRef, opts.RemoteRef, pushMeta.SrcDb, pushMeta.DestDb, pushMeta.Remote, progStarter, progStopper)
+				successPush = append(successPush, fmt.Sprintf(" * [new branch]          %s -> %s", opts.SrcRef.GetPath(), opts.DestRef.GetPath()))
 			}
-		case ref.TagRefType:
-			err = pushTagToRemote(ctx, pushMeta.TmpDir, opts.SrcRef, opts.DestRef, pushMeta.SrcDb, pushMeta.DestDb, progStarter, progStopper)
-		default:
-			err = fmt.Errorf("%w: %s of type %s", ErrCannotPushRef, opts.SrcRef.String(), opts.SrcRef.GetType())
-		}
-
-		if errors.Is(err, doltdb.ErrIsAhead) || errors.Is(err, ErrCantFF) || errors.Is(err, datas.ErrMergeNeeded) {
+		} else if !errors.Is(err, doltdb.ErrUpToDate) {
 			failedPush = append(failedPush, fmt.Sprintf(" ! [rejected]            %s -> %s (non-fast-forward)", opts.SrcRef.GetPath(), opts.DestRef.GetPath()))
-		} else if err == nil || errors.Is(err, doltdb.ErrUpToDate) || errors.Is(err, pull.ErrDBUpToDate) {
-			if err == nil {
-				if opts.HasUpstream {
-					// TODO: should add commit hash info for branches with upstream set
-					//  (e.g. 74476cf38..080b073e7  branch1 -> branch1)
-				} else {
-					successPush = append(successPush, fmt.Sprintf(" * [new branch]          %s -> %s", opts.SrcRef.GetPath(), opts.DestRef.GetPath()))
-				}
+		}
+		if opts.SetUpstream {
+			err = pushMeta.Rsw.UpdateBranch(opts.SrcRef.GetPath(), env.BranchConfig{
+				Merge: ref.MarshalableRef{
+					Ref: opts.DestRef,
+				},
+				Remote: pushMeta.Remote.Name,
+			})
+			if err != nil {
+				return "", err
 			}
-			if opts.SetUpstream {
-				err = pushMeta.Rsw.UpdateBranch(opts.SrcRef.GetPath(), env.BranchConfig{
-					Merge: ref.MarshalableRef{
-						Ref: opts.DestRef,
-					},
-					Remote: pushMeta.Remote.Name,
-				})
-				if err != nil {
-					return "", err
-				}
-				setUpstreamPush = append(setUpstreamPush, fmt.Sprintf("branch '%s' set up to track '%s'.", opts.SrcRef.GetPath(), opts.RemoteRef.GetPath()))
-			}
+			setUpstreamPush = append(setUpstreamPush, fmt.Sprintf("branch '%s' set up to track '%s'.", opts.SrcRef.GetPath(), opts.RemoteRef.GetPath()))
 		}
 	}
 
-	return buildReturnMsg(successPush, setUpstreamPush, failedPush, pushMeta.Remote.Url, err)
+	returnMsg, err = buildReturnMsg(successPush, setUpstreamPush, failedPush, pushMeta.Remote.Url, err)
+	return
+}
+
+// push performs push on a branch or a tag.
+func push(ctx context.Context, rsr env.RepoStateReader, tmpDir string, src, dest *doltdb.DoltDB, remote *env.Remote, opts *env.PushTarget, progStarter ProgStarter, progStopper ProgStopper) error {
+	switch opts.SrcRef.GetType() {
+	case ref.BranchRefType:
+		if opts.SrcRef == ref.EmptyBranchRef {
+			return deleteRemoteBranch(ctx, opts.DestRef, opts.RemoteRef, src, dest, *remote)
+		} else {
+			return PushToRemoteBranch(ctx, rsr, tmpDir, opts.Mode, opts.SrcRef, opts.DestRef, opts.RemoteRef, src, dest, *remote, progStarter, progStopper)
+		}
+	case ref.TagRefType:
+		return pushTagToRemote(ctx, tmpDir, opts.SrcRef, opts.DestRef, src, dest, progStarter, progStopper)
+	default:
+		return fmt.Errorf("%w: %s of type %s", ErrCannotPushRef, opts.SrcRef.String(), opts.SrcRef.GetType())
+	}
 }
 
 // buildReturnMsg combines the push progress information of created branches, remote tracking branches
