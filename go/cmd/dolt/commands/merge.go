@@ -145,12 +145,22 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 	if !apr.Contains(cli.AbortParam) {
 		//todo: refs with the `remotes/` prefix will fail to get a hash
+		headHash, headHashErr := getHashOf(queryist, sqlCtx, "HEAD")
+		if headHashErr != nil {
+			headHash = ""
+			cli.Println("merge finished, but failed to get hash of HEAD ref")
+			cli.Println(headHashErr.Error())
+		}
 		mergeHash, mergeHashErr := getHashOf(queryist, sqlCtx, apr.Arg(0))
 		if mergeHashErr != nil {
+			mergeHash = ""
 			cli.Println("merge finished, but failed to get hash of merge ref")
 			cli.Println(mergeHashErr.Error())
 		}
-		return printMergeStats(rows, apr, queryist, sqlCtx, usage, mergeHash, mergeHashErr)
+		if apr.Contains(cli.NoCommitFlag) {
+			return printMergeStats(rows, apr, queryist, sqlCtx, usage, headHash, mergeHash, "HEAD", "STAGED")
+		}
+		return printMergeStats(rows, apr, queryist, sqlCtx, usage, headHash, mergeHash, "HEAD^1", "HEAD")
 	}
 
 	return 0
@@ -293,12 +303,16 @@ func constructInterpolatedDoltMergeQuery(apr *argparser.ArgParseResults, cliCtx 
 }
 
 // printMergeStats calculates and prints all merge stats and information.
-func printMergeStats(result []sql.Row, apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context, usage cli.UsagePrinter, mergeHash string, mergeHashErr error) int {
+func printMergeStats(result []sql.Row, apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context, usage cli.UsagePrinter, headHash, mergeHash, fromRef, toRef string) int {
 	fastForward := false
 	if result != nil && len(result) > 0 {
-		if ff, ok := result[0][1].(int64); ok {
+		ffIndex := 0
+		if len(result[0]) == 3 {
+			ffIndex = 1
+		}
+		if ff, ok := result[0][ffIndex].(int64); ok {
 			fastForward = ff == 1
-		} else if ff, ok := result[0][1].(string); ok {
+		} else if ff, ok := result[0][ffIndex].(string); ok {
 			// remote execution returns result as a string
 			fastForward = ff == "1"
 		}
@@ -307,12 +321,7 @@ func printMergeStats(result []sql.Row, apr *argparser.ArgParseResults, queryist 
 		cli.Println("Fast-forward")
 	}
 
-	headHash, headhHashErr := getHashOf(queryist, sqlCtx, "HEAD")
-	if headhHashErr != nil {
-		cli.Println("merge finished, but failed to get hash of HEAD")
-		cli.Println(headhHashErr.Error())
-	}
-	if mergeHashErr == nil && headhHashErr == nil {
+	if mergeHash != "" && headHash != "" {
 		cli.Println("Updating", headHash+".."+mergeHash)
 	}
 
@@ -333,14 +342,10 @@ func printMergeStats(result []sql.Row, apr *argparser.ArgParseResults, queryist 
 	}
 
 	if noConflicts {
-		if apr.Contains(cli.NoCommitFlag) {
-			mergeStats, err = calculateMergeStats(queryist, sqlCtx, mergeStats, "HEAD", "STAGED")
-		} else {
-			mergeStats, err = calculateMergeStats(queryist, sqlCtx, mergeStats, "HEAD^1", "HEAD")
-		}
+		mergeStats, err = calculateMergeStats(queryist, sqlCtx, mergeStats, fromRef, toRef)
 		if err != nil {
-			if err.Error() == "Already up to date." || err.Error() == "error: unable to get diff summary from HEAD^1 to HEAD: invalid ancestor spec" {
-				cli.Println("Already up to date.")
+			if err == doltdb.ErrUpToDate || err.Error() == "error: unable to get diff summary from HEAD^1 to HEAD: invalid ancestor spec" {
+				cli.Println(doltdb.ErrUpToDate.Error())
 				return 0
 			}
 			cli.Println("merge successful, but could not calculate stats")
@@ -462,7 +467,7 @@ func calculateMergeStats(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats 
 	}
 
 	if allUnmodified {
-		return nil, errors.New("Already up to date.")
+		return nil, doltdb.ErrUpToDate
 	}
 
 	// get row stats

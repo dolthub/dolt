@@ -89,6 +89,14 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		verr := errhand.VerboseErrorFromError(errors.New(fmt.Sprintf(ErrConflictingFlags, cli.SquashParam, cli.NoFFParam)))
 		return HandleVErrAndExitCode(verr, usage)
 	}
+	// This command may create a commit, so we need user identity
+	if !cli.CheckUserNameAndEmail(cliCtx.Config()) {
+		bdr := errhand.BuildDError("Could not determine name and/or email.")
+		bdr.AddDetails("Log into DoltHub: dolt login")
+		bdr.AddDetails("OR add name to config: dolt config [--global|--local] --add %[1]s \"FIRST LAST\"", env.UserNameKey)
+		bdr.AddDetails("OR add email to config: dolt config [--global|--local] --add %[1]s \"EMAIL_ADDRESS\"", env.UserEmailKey)
+		return HandleVErrAndExitCode(bdr.Build(), usage)
+	}
 
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
@@ -113,7 +121,8 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			errChan <- err
 			return
 		}
-		remoteHash, remoteHashErr := getRemoteHashForPull(apr, sqlCtx, queryist) // get the hash of the remote ref before the pull
+		// save current head for diff summaries after pull
+		headHash, headHashErr := getHashOf(queryist, sqlCtx, "head")
 
 		schema, rowIter, err := queryist.Query(sqlCtx, query)
 		if err != nil {
@@ -132,22 +141,24 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			return
 		}
 
+		if headHashErr != nil {
+			headHash = ""
+			cli.Println("pull finished, but failed to get hash of HEAD")
+			cli.Println(headHashErr.Error())
+		}
+		remoteHash, remoteRef, remoteHashErr := getRemoteHashForPull(apr, sqlCtx, queryist)
 		if remoteHashErr != nil {
 			cli.Println("pull finished, but failed to get hash of remote ref")
+			cli.Println(remoteHashErr.Error())
 		}
 
 		if apr.Contains(cli.ForceFlag) {
-			headHash, headhHashErr := getHashOf(queryist, sqlCtx, "HEAD")
-			if headhHashErr != nil {
-				cli.Println("merge finished, but failed to get hash of HEAD")
-				cli.Println(headhHashErr.Error())
-			}
-			if remoteHashErr == nil && headhHashErr == nil {
+			if remoteHashErr == nil && headHashErr == nil {
 				cli.Println("Updating", headHash+".."+remoteHash)
 			}
 			commit, err := getCommitInfo(queryist, sqlCtx, "HEAD")
 			if err != nil {
-				cli.Println("merge finished, but failed to get commit info")
+				cli.Println("pull finished, but failed to get commit info")
 				cli.Println(err.Error())
 				return
 			}
@@ -160,7 +171,12 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 				})
 			}
 		} else {
-			success := printMergeStats(rows, apr, queryist, sqlCtx, usage, remoteHash, remoteHashErr)
+			var success int
+			if apr.Contains(cli.NoCommitFlag) {
+				success = printMergeStats(rows, apr, queryist, sqlCtx, usage, headHash, remoteHash, "HEAD", "STAGED")
+			} else {
+				success = printMergeStats(rows, apr, queryist, sqlCtx, usage, headHash, remoteHash, "HEAD", remoteRef)
+			}
 			if success == 1 {
 				errChan <- errors.New(" ") //return a non-nil error for the correct exit code but no further messages to print
 				return
@@ -241,31 +257,48 @@ func constructInterpolatedDoltPullQuery(apr *argparser.ArgParseResults) (string,
 	return interpolatedQuery, nil
 }
 
-// getRemoteHashForPull gets the hash of the remote branch being merged in
-func getRemoteHashForPull(apr *argparser.ArgParseResults, sqlCtx *sql.Context, queryist cli.Queryist) (string, error) {
+// getRemoteHashForPull gets the hash of the remote branch being merged in and the ref to the remote head
+func getRemoteHashForPull(apr *argparser.ArgParseResults, sqlCtx *sql.Context, queryist cli.Queryist) (remoteHash, remoteRef string, err error) {
 	var remote, branch string
-	var err error
-	if apr.NArg() == 0 {
-		remote, err = getDefaultRemote(sqlCtx, queryist)
-		if err != nil {
-			return "", err
+	var args []string
+	for _, arg := range apr.Args {
+		if arg != "" {
+			args = append(args, arg)
 		}
-	} else if apr.NArg() == 1 {
-		remote = apr.Arg(0)
-	} else if apr.NArg() == 2 {
-		remote = apr.Arg(0)
-		branch = apr.Arg(1)
 	}
-	if branch == "" {
-		branch, err = getActiveBranchName(sqlCtx, queryist)
-		if err != nil {
-			return "", err
+	if len(args) < 2 {
+		if len(args) == 0 {
+			remote, err = getDefaultRemote(sqlCtx, queryist)
+			if err != nil {
+				return "", "", err
+			}
+		} else {
+			remote = args[0]
 		}
+
+		rows, err := GetRowsForSql(queryist, sqlCtx, "select name from dolt_remote_branches")
+		if err != nil {
+			return "", "", err
+		}
+		for _, row := range rows {
+			ref := row[0].(string)
+			if ref == "remotes/"+remote+"/main" {
+				branch = "main"
+				break
+			}
+		}
+		if branch == "" {
+			ref := rows[0][0].(string)
+			branch = strings.TrimPrefix(ref, "remotes/"+remote+"/")
+		}
+	} else {
+		remote = args[0]
+		branch = args[1]
 	}
 
-	remoteHash, err := getHashOf(queryist, sqlCtx, remote+"/"+branch)
+	remoteHash, err = getHashOf(queryist, sqlCtx, remote+"/"+branch)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return remoteHash, nil
+	return remoteHash, remote + "/" + branch, nil
 }
