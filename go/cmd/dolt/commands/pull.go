@@ -300,3 +300,24 @@ func getRemoteHashForPull(apr *argparser.ArgParseResults, sqlCtx *sql.Context, q
 	}
 	return remoteHash, remote + "/" + branch, nil
 }
+
+
+// getDefaultRemote gets the name of the default remote.
+func getDefaultRemote(sqlCtx *sql.Context, queryist cli.Queryist) (string, error) {
+	rows, err := GetRowsForSql(queryist, sqlCtx, "select name from dolt_remotes")
+	if err != nil {
+		return "", err
+	}
+	if len(rows) == 0 {
+		return "", env.ErrNoRemote
+	}
+	if len(rows) == 1 {
+		return rows[0][0].(string), nil
+	}
+	for _, row := range rows {
+		if row[0].(string) == "origin" {
+			return "origin", nil
+		}
+	}
+	return rows[0][0].(string), nil
+}
