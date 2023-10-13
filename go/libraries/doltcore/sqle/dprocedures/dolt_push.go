@@ -76,7 +76,7 @@ func doDoltPush(ctx *sql.Context, args []string) (int, string, error) {
 		return cmdFailure, "", err
 	}
 
-	opts, remote, err := env.NewPushOpts(ctx, apr, dbData.Rsr, dbData.Ddb, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag), pushAutoSetUpRemote, apr.Contains(cli.AllFlag))
+	targets, remote, err := env.NewPushOpts(ctx, apr, dbData.Rsr, dbData.Ddb, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag), pushAutoSetUpRemote, apr.Contains(cli.AllFlag))
 	if err != nil {
 		return cmdFailure, "", err
 	}
@@ -92,13 +92,13 @@ func doDoltPush(ctx *sql.Context, args []string) (int, string, error) {
 
 	var returnMsg string
 	po := &env.PushOptions{
-		Opts:   opts,
-		Remote: remote,
-		Rsr:    dbData.Rsr,
-		Rsw:    dbData.Rsw,
-		SrcDb:  dbData.Ddb,
-		DestDb: remoteDB,
-		TmpDir: tmpDir,
+		Targets: targets,
+		Remote:  remote,
+		Rsr:     dbData.Rsr,
+		Rsw:     dbData.Rsw,
+		SrcDb:   dbData.Ddb,
+		DestDb:  remoteDB,
+		TmpDir:  tmpDir,
 	}
 	returnMsg, err = actions.DoPush(ctx, po, runProgFuncs, stopProgFuncs)
 	if err != nil {

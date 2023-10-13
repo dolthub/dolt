@@ -353,7 +353,7 @@ func (mr *MultiRepoTestSetup) PushToRemote(dbName, remoteName, branchName string
 	if err != nil {
 		mr.Errhand(fmt.Sprintf("Failed to push remote: %s", err.Error()))
 	}
-	opts, remote, err := env.NewPushOpts(ctx, apr, dEnv.RepoStateReader(), dEnv.DoltDB, false, false, false, false)
+	targets, remote, err := env.NewPushOpts(ctx, apr, dEnv.RepoStateReader(), dEnv.DoltDB, false, false, false, false)
 	if err != nil {
 		mr.Errhand(fmt.Sprintf("Failed to push remote: %s", err.Error()))
 	}
@@ -369,13 +369,13 @@ func (mr *MultiRepoTestSetup) PushToRemote(dbName, remoteName, branchName string
 	}
 
 	pushOptions := &env.PushOptions{
-		Opts:   opts,
-		Remote: remote,
-		Rsr:    dEnv.RepoStateReader(),
-		Rsw:    dEnv.RepoStateWriter(),
-		SrcDb:  dEnv.DoltDB,
-		DestDb: remoteDB,
-		TmpDir: tmpDir,
+		Targets: targets,
+		Remote:  remote,
+		Rsr:     dEnv.RepoStateReader(),
+		Rsw:     dEnv.RepoStateWriter(),
+		SrcDb:   dEnv.DoltDB,
+		DestDb:  remoteDB,
+		TmpDir:  tmpDir,
 	}
 	_, err = actions.DoPush(ctx, pushOptions, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
 	if err != nil {

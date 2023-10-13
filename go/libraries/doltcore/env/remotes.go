@@ -134,13 +134,13 @@ func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsB
 // PushOptions contains information needed for push for
 // one or more branches or a tag for a specific remote database.
 type PushOptions struct {
-	Opts   []*PushTarget
-	Rsr    RepoStateReader
-	Rsw    RepoStateWriter
-	Remote *Remote
-	SrcDb  *doltdb.DoltDB
-	DestDb *doltdb.DoltDB
-	TmpDir string
+	Targets []*PushTarget
+	Rsr     RepoStateReader
+	Rsw     RepoStateWriter
+	Remote  *Remote
+	SrcDb   *doltdb.DoltDB
+	DestDb  *doltdb.DoltDB
+	TmpDir  string
 }
 
 // PushTarget contains information needed for push per branch or tag.

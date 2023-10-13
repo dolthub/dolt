@@ -95,33 +95,33 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 // This includes if there is a new remote branch created, upstream is set or push was rejected for a branch.
 func DoPush(ctx context.Context, pushMeta *env.PushOptions, progStarter ProgStarter, progStopper ProgStopper) (returnMsg string, err error) {
 	var successPush, setUpstreamPush, failedPush []string
-	for _, opts := range pushMeta.Opts {
-		err = push(ctx, pushMeta.Rsr, pushMeta.TmpDir, pushMeta.SrcDb, pushMeta.DestDb, pushMeta.Remote, opts, progStarter, progStopper)
+	for _, targets := range pushMeta.Targets {
+		err = push(ctx, pushMeta.Rsr, pushMeta.TmpDir, pushMeta.SrcDb, pushMeta.DestDb, pushMeta.Remote, targets, progStarter, progStopper)
 		if err == nil {
-			if opts.HasUpstream {
+			if targets.HasUpstream {
 				// TODO: should add commit hash info for branches with upstream set
 				//  (e.g. 74476cf38..080b073e7  branch1 -> branch1)
 			} else {
-				successPush = append(successPush, fmt.Sprintf(" * [new branch]          %s -> %s", opts.SrcRef.GetPath(), opts.DestRef.GetPath()))
+				successPush = append(successPush, fmt.Sprintf(" * [new branch]          %s -> %s", targets.SrcRef.GetPath(), targets.DestRef.GetPath()))
 			}
 		} else if errors.Is(err, doltdb.ErrIsAhead) || errors.Is(err, ErrCantFF) || errors.Is(err, datas.ErrMergeNeeded) {
-			failedPush = append(failedPush, fmt.Sprintf(" ! [rejected]            %s -> %s (non-fast-forward)", opts.SrcRef.GetPath(), opts.DestRef.GetPath()))
+			failedPush = append(failedPush, fmt.Sprintf(" ! [rejected]            %s -> %s (non-fast-forward)", targets.SrcRef.GetPath(), targets.DestRef.GetPath()))
 			continue
 		} else if !errors.Is(err, doltdb.ErrUpToDate) {
 			// this will allow getting successful push messages along with the error of current push
 			break
 		}
-		if opts.SetUpstream {
-			err = pushMeta.Rsw.UpdateBranch(opts.SrcRef.GetPath(), env.BranchConfig{
+		if targets.SetUpstream {
+			err = pushMeta.Rsw.UpdateBranch(targets.SrcRef.GetPath(), env.BranchConfig{
 				Merge: ref.MarshalableRef{
-					Ref: opts.DestRef,
+					Ref: targets.DestRef,
 				},
 				Remote: pushMeta.Remote.Name,
 			})
 			if err != nil {
 				return "", err
 			}
-			setUpstreamPush = append(setUpstreamPush, fmt.Sprintf("branch '%s' set up to track '%s'.", opts.SrcRef.GetPath(), opts.RemoteRef.GetPath()))
+			setUpstreamPush = append(setUpstreamPush, fmt.Sprintf("branch '%s' set up to track '%s'.", targets.SrcRef.GetPath(), targets.RemoteRef.GetPath()))
 		}
 	}
 
