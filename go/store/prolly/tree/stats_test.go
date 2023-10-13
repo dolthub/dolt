@@ -17,9 +17,11 @@ package tree
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/val"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 func TestStatsLevel(t *testing.T) {
