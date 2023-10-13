@@ -488,7 +488,7 @@ SQL
     [ "$status" -eq 0 ]
 }
 
-@test "remotes-push-pull: validate that a config isn't needed for a pull." {
+@test "remotes: validate that a config is needed for a pull." {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote main
     dolt fetch test-remote
@@ -510,17 +510,23 @@ SQL
     cd "dolt-repo-clones/test-repo"
     dolt config --global --unset user.name
     dolt config --global --unset user.email
-
     run dolt pull
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Could not determine name and/or email." ]] || false
+
+    dolt config --global --add user.name mysql-test-runner
+    dolt config --global --add user.email mysql-test-runner@liquidata.co
+    dolt pull
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test commit" ]] || false
 
     # test pull with workspace up to date
+    dolt config --global --unset user.name
+    dolt config --global --unset user.email
     run dolt pull
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date." ]] || false
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Could not determine name and/or email." ]] || false
 
     # turn back on the configs and make a change in the remote
     dolt config --global --add user.name mysql-test-runner
@@ -539,7 +545,7 @@ SQL
 
     run dolt pull --no-ff
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Aborting commit due to empty committer name. Is your config set?" ]] || false
+    [[ "$output" =~ "Could not determine name and/or email." ]] || false
 
     # Now do a two sided merge
     dolt config --global --add user.name mysql-test-runner
@@ -559,7 +565,7 @@ SQL
 
     run dolt pull
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Aborting commit due to empty committer name. Is your config set?" ]] || false
+    [[ "$output" =~ "Could not determine name and/or email." ]] || false
 }
 
 @test "remotes-push-pull: push not specifying a branch throws error on default remote" {
