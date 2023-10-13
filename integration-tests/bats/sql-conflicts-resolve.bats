@@ -89,7 +89,7 @@ teardown() {
     [[ $output =~ "main" ]] || false
 
     run dolt merge other
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [[ $output =~ "Automatic merge failed" ]] || false
 
     run dolt sql -q "CALL dolt_conflicts_resolve('--ours', 't')"
@@ -108,7 +108,7 @@ teardown() {
     [[ $output =~ "main" ]] || false
 
     run dolt merge other
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [[ $output =~ "Automatic merge failed" ]] || false
 
     run dolt sql -q "CALL dolt_conflicts_resolve('--theirs', 't')"
@@ -127,7 +127,7 @@ teardown() {
     [[ $output =~ "other" ]] || false
 
     run dolt merge main
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [[ $output =~ "Automatic merge failed" ]] || false
 
     run dolt sql -q "CALL dolt_conflicts_resolve('--ours', 't')"
@@ -146,7 +146,7 @@ teardown() {
     [[ $output =~ "other" ]] || false
 
     run dolt merge main
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [[ $output =~ "Automatic merge failed" ]] || false
 
     run dolt sql -q "CALL dolt_conflicts_resolve('--theirs', 't')"

@@ -37,7 +37,9 @@ MODIFY COLUMN age BIGINT;
 SQL
     dolt commit -am "left"
 
-    dolt merge right -m "merge right"
+    run dolt merge right -m "merge right"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (schema):" ]] || false
 
     run dolt conflicts cat .
     [ "$status" -eq 0 ]
@@ -78,7 +80,9 @@ UPDATE t set col1 = 0 where pk = 3;
 INSERT INTO t VALUES (4, 4);
 SQL
     dolt commit -am 'left edit'
-    dolt merge other -m "merge other"
+    run dolt merge other -m "merge other"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content):" ]] || false
 
     # trick to disable colors
     dolt conflicts cat . > output.txt
@@ -112,7 +116,9 @@ SQL
     dolt sql -q "INSERT INTO t values (1, 3);"
     dolt commit -am "left"
 
-    dolt merge right -m "merge right"
+    run dolt merge right -m "merge right"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content):" ]] || false
 
     run dolt conflicts cat .
     [[ "$output" =~ "| a" ]] || false
@@ -135,7 +141,9 @@ ALTER TABLE t ADD c INT;
 INSERT INTO t VALUES (1, 3, 1);
 SQL
     dolt commit -am "left"
-    dolt merge right -m "merge left"
+    run dolt merge right -m "merge left"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content):" ]] || false
 
     run dolt conflicts cat .
     [[ "$output" =~ "| a" ]] || false

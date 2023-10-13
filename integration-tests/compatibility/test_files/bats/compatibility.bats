@@ -193,16 +193,10 @@ EOF
 }
 
 @test "dolt merge other into $DEFAULT_BRANCH" {
-    run dolt version
-    if [[ $output =~ "__DOLT__" ]]; then
-        run dolt merge other
-        [ $status -eq 0 ]
-        [[ $output =~ "Merge conflict in abc" ]] || false
-        [[ $output =~ "Automatic merge failed" ]] || false
-    else
-        # throws a conflict
-        dolt merge other
-    fi
+    run dolt merge other
+    [ $status -eq 1 ]
+    [[ $output =~ "Merge conflict in abc" ]] || false
+    [[ $output =~ "Automatic merge failed" ]] || false
 }
 
 @test "dolt table import" {
@@ -212,4 +206,3 @@ EOF
 
     dolt sql -q 'drop table abc2'
 }
-

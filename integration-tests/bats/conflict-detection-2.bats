@@ -399,7 +399,7 @@ SQL
 
     dolt checkout -b merge-into-modified modifier
     run dolt merge deleter -m "merge"
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "CONFLICT" ]] || false
     dolt merge --abort
 
@@ -407,7 +407,9 @@ SQL
     dolt checkout main
     dolt branch -d -f merge-into-modified
     dolt checkout -b merge-into-modified modifier
-    dolt merge deleter -m "merge"
+    run dolt merge deleter -m "merge"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content):" ]] || false
 
     dolt conflicts resolve --theirs foo
     run dolt sql -q 'select count(*) from foo'
@@ -420,7 +422,9 @@ SQL
     dolt checkout main
     dolt branch -d -f merge-into-modified
     dolt checkout -b merge-into-modified modifier
-    dolt merge deleter -m "merge"
+    run dolt merge deleter -m "merge"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content):" ]] || false
     dolt conflicts resolve --ours foo
     run dolt sql -q 'select count(*) from foo'
     [ "$status" -eq 0 ]
@@ -430,7 +434,7 @@ SQL
 
     dolt checkout -b merge-into-deleter deleter
     run dolt merge modifier -m "merge"
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "CONFLICT" ]] || false
     dolt merge --abort
 
@@ -438,7 +442,9 @@ SQL
     dolt checkout main
     dolt branch -d -f merge-into-deleter
     dolt checkout -b merge-into-deleter deleter
-    dolt merge modifier -m "merge"
+    run dolt merge modifier -m "merge"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content):" ]] || false
     dolt conflicts resolve --ours foo
     run dolt sql -q 'select count(*) from foo'
     [ "$status" -eq 0 ]
@@ -450,7 +456,9 @@ SQL
     dolt checkout main
     dolt branch -d -f merge-into-deleter
     dolt checkout -b merge-into-deleter deleter
-    dolt merge modifier -m "merge"
+    run dolt merge modifier -m "merge"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content):" ]] || false
     dolt conflicts resolve --theirs foo
     run dolt sql -q 'select count(*) from foo'
     [ "$status" -eq 0 ]
@@ -477,7 +485,7 @@ SQL
 
     dolt checkout -b merge-into-modified modifier
     run dolt merge deleter -m "merge"
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "CONFLICT" ]] || false
     dolt merge --abort
 
@@ -485,7 +493,9 @@ SQL
     dolt checkout main
     dolt branch -d -f merge-into-modified
     dolt checkout -b merge-into-modified modifier
-    dolt merge deleter -m "merge"
+    run dolt merge deleter -m "merge"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content):" ]] || false
 
     dolt sql -q "call dolt_conflicts_resolve('--theirs', 'foo')"
     run dolt sql -q 'select count(*) from foo'
@@ -498,7 +508,9 @@ SQL
     dolt checkout main
     dolt branch -d -f merge-into-modified
     dolt checkout -b merge-into-modified modifier
-    dolt merge deleter -m "merge"
+    run dolt merge deleter -m "merge"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content):" ]] || false
     dolt sql -q "call dolt_conflicts_resolve('--ours', 'foo')"
     run dolt sql -q 'select count(*) from foo'
     [ "$status" -eq 0 ]
@@ -508,7 +520,7 @@ SQL
 
     dolt checkout -b merge-into-deleter deleter
     run dolt merge modifier -m "merge"
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "CONFLICT" ]] || false
     dolt merge --abort
 
@@ -516,7 +528,9 @@ SQL
     dolt checkout main
     dolt branch -d -f merge-into-deleter
     dolt checkout -b merge-into-deleter deleter
-    dolt merge modifier -m "merge"
+    run dolt merge modifier -m "merge"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content):" ]] || false
     dolt sql -q "call dolt_conflicts_resolve('--ours', 'foo')"
     run dolt sql -q 'select count(*) from foo'
     [ "$status" -eq 0 ]
@@ -528,7 +542,9 @@ SQL
     dolt checkout main
     dolt branch -d -f merge-into-deleter
     dolt checkout -b merge-into-deleter deleter
-    dolt merge modifier -m "merge"
+    run dolt merge modifier -m "merge"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content):" ]] || false
     dolt sql -q "call dolt_conflicts_resolve('--theirs', 'foo')"
     run dolt sql -q 'select count(*) from foo'
     [ "$status" -eq 0 ]
@@ -586,7 +602,9 @@ SQL
     dolt add .
     dolt commit -m "inserted 0,1"
     dolt checkout main
-    dolt merge branch1 -m "merge"
+    run dolt merge branch1 -m "merge"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content):" ]] || false
     dolt conflicts resolve --ours test
 
     run dolt conflicts cat test
@@ -626,7 +644,9 @@ SQL
     dolt add .
     dolt commit -m "inserted 0,1"
     dolt checkout main
-    dolt merge branch1 -m "merge"
+    run dolt merge branch1 -m "merge"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content):" ]] || false
     run dolt sql -q "call dolt_conflicts_resolve('--ours', 'test')"
     [ $status -eq 0 ]
 

@@ -2196,7 +2196,9 @@ SQL
     dolt add -A
     dolt commit -m "other changes"
     dolt checkout main
-    dolt merge other -m "merge"
+    run dolt merge other -m "merge"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content):" ]] || false
     run dolt index cat onepk idx_v1 -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "v1,pk1" ]] || false
@@ -2232,7 +2234,9 @@ SQL
     dolt add -A
     dolt commit -m "other changes"
     dolt checkout main
-    dolt merge other -m "merge"
+    run dolt merge other -m "merge"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content):" ]] || false
     dolt conflicts resolve --ours onepk
     run dolt index cat onepk idx_v1 -r=csv
     [ "$status" -eq "0" ]
@@ -2259,7 +2263,9 @@ SQL
     dolt add -A
     dolt commit -m "other changes"
     dolt checkout main
-    dolt merge other -m "merge"
+    run dolt merge other -m "merge"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content):" ]] || false
     dolt sql -q "call dolt_conflicts_resolve('--ours', 'onepk')"
     run dolt index cat onepk idx_v1 -r=csv
     [ "$status" -eq "0" ]
@@ -2287,7 +2293,9 @@ SQL
     dolt add -A
     dolt commit -m "other changes"
     dolt checkout main
-    dolt merge other -m "merge"
+    run dolt merge other -m "merge"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content):" ]] || false
     dolt conflicts resolve --theirs onepk
     run dolt index cat onepk idx_v1 -r=csv
     [ "$status" -eq "0" ]
@@ -2314,7 +2322,9 @@ SQL
     dolt add -A
     dolt commit -m "other changes"
     dolt checkout main
-    dolt merge other -m "merge"
+    run dolt merge other -m "merge"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content):" ]] || false
     dolt sql -q "call dolt_conflicts_resolve('--theirs', 'onepk')"
     run dolt index cat onepk idx_v1 -r=csv
     [ "$status" -eq "0" ]
@@ -2342,7 +2352,9 @@ SQL
     dolt add -A
     dolt commit -m "other changes"
     dolt checkout main
-    dolt merge other -m "merge"
+    run dolt merge other -m "merge"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (content):" ]] || false
     run dolt sql <<SQL
 SET dolt_allow_commit_conflicts = on;
 DELETE from dolt_conflicts_onepk where our_pk1 = 4;
@@ -2379,7 +2391,9 @@ SQL
 
     dolt checkout main
 
-    dolt merge other -m "merge"
+    run dolt merge other -m "merge"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "table,num_violations" ]] || false

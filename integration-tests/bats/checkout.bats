@@ -392,7 +392,9 @@ SQL
   # remove special characters (color)
   shaparent2=$(echo $shaparent2 | sed -E "s/[[:cntrl:]]\[[0-9]{1,3}m//g")
 
-  dolt merge test-branch
+  run dolt merge test-branch
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "CONFLICT (content):" ]] || false
   dolt conflicts resolve --theirs .
   dolt commit -m "final merge"
 
@@ -424,7 +426,10 @@ SQL
   # remove special characters (color)
   shaparent2=$(echo $shaparent2 | sed -E "s/[[:cntrl:]]\[[0-9]{1,3}m//g")
 
-  dolt merge test-branch
+  run dolt merge test-branch
+  [ "$status" -eq 1 ]
+  echo "$output"
+  [[ "$output" =~ "CONFLICT (content):" ]] || false
   dolt conflicts resolve --theirs .
   dolt commit -m "final merge"
 

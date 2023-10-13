@@ -42,7 +42,9 @@ setup_schema_conflict() {
 @test "schema-conflicts: cli merge, query schema conflicts" {
     setup_schema_conflict
 
-    dolt merge other
+    run dolt merge other
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONFLICT (schema)" ]] || false
 
     run dolt sql -q "select our_schema from dolt_schema_conflicts" -r csv
     [ "$status" -eq 0 ]

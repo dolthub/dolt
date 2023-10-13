@@ -523,7 +523,9 @@ MODIFY COLUMN age BIGINT;
 SQL
   dolt commit -am "left"
 
-  dolt merge right -m "merge right"
+  run dolt merge right -m "merge right"
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "CONFLICT (schema)" ]] || false
 
   run dolt conflicts cat .
   [ "$status" -eq 0 ]
@@ -739,7 +741,7 @@ SQL
   [ $status -eq 0 ]
   [[ $output =~ "main" ]] || false
   run dolt merge other
-  [ $status -eq 0 ]
+  [ $status -eq 1 ]
   [[ $output =~ "Automatic merge failed" ]] || false
 
   # start server
@@ -768,7 +770,7 @@ SQL
   [[ $output =~ "main" ]] || false
 
   run dolt merge other
-  [ $status -eq 0 ]
+  [ $status -eq 1 ]
   [[ $output =~ "Automatic merge failed" ]] || false
 
   run dolt conflicts resolve --ours .
@@ -1181,4 +1183,35 @@ SQL
     run dolt log
     [ $status -eq 0 ]
     [[ "$output" =~ "cm2" ]] || false
+}
+
+@test "sql-local-remote: verify dolt pull behavior" {
+    mkdir remote
+    cd altDB
+    dolt remote add origin file://../remote
+    dolt commit --allow-empty -m "cm1"
+    dolt push origin main
+
+    cd ..
+    dolt clone file://./remote repo
+    cd altDB
+    dolt commit --allow-empty -m "cm2"
+    dolt push origin main
+
+    cd ../repo
+    dolt pull
+    run dolt log
+    [ $status -eq 0 ]
+    [[ "$output" =~ "cm2" ]] || false
+
+    cd ../altDB
+    dolt commit --allow-empty -m "cm3"
+    dolt push origin main
+    cd ../repo
+
+    start_sql_server repo
+    dolt pull origin main
+    run dolt log
+    [ $status -eq 0 ]
+    [[ "$output" =~ "cm3" ]] || false
 }

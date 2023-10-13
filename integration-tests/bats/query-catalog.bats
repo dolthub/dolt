@@ -109,7 +109,7 @@ teardown() {
     dolt checkout main
     dolt merge edit_a -m "merge edit_a"
     run dolt merge edit_b -m "merge edit_b"
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "Merge conflict in dolt_query_catalog" ]] || false
 
     run dolt conflicts cat .
