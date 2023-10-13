@@ -106,7 +106,7 @@ teardown() {
     cd repo2
     run dolt sql -q "call dolt_pull('unknown')"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "fatal: 'unknown' does not appear to be a dolt repository" ]] || false
+    [[ "$output" =~ "fatal: remote 'unknown' not found" ]] || false
     [[ ! "$output" =~ "panic" ]] || false
 }
 

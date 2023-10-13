@@ -104,8 +104,12 @@ func DoPush(ctx context.Context, pushMeta *env.PushOptions, progStarter ProgStar
 			} else {
 				successPush = append(successPush, fmt.Sprintf(" * [new branch]          %s -> %s", opts.SrcRef.GetPath(), opts.DestRef.GetPath()))
 			}
-		} else if !errors.Is(err, doltdb.ErrUpToDate) {
+		} else if errors.Is(err, doltdb.ErrIsAhead) || errors.Is(err, ErrCantFF) || errors.Is(err, datas.ErrMergeNeeded) {
 			failedPush = append(failedPush, fmt.Sprintf(" ! [rejected]            %s -> %s (non-fast-forward)", opts.SrcRef.GetPath(), opts.DestRef.GetPath()))
+			continue
+		} else if !errors.Is(err, doltdb.ErrUpToDate) {
+			// this will allow getting successful push messages along with the error of current push
+			break
 		}
 		if opts.SetUpstream {
 			err = pushMeta.Rsw.UpdateBranch(opts.SrcRef.GetPath(), env.BranchConfig{
@@ -213,7 +217,6 @@ func PushToRemoteBranch(ctx context.Context, rsr env.RepoStateReader, tempTableD
 		return err
 	}
 	cm, err := localDB.Resolve(ctx, cs, headRef)
-
 	if err != nil {
 		return fmt.Errorf("%w; refspec not found: '%s'; %s", ref.ErrInvalidRefSpec, srcRef.GetPath(), err.Error())
 	}

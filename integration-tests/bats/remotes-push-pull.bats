@@ -116,10 +116,10 @@ teardown() {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     run dolt push poop main
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "'poop' does not appear to be a dolt repository" ]] || false
+    [[ "$output" =~ "remote 'poop' not found" ]] || false
     run dolt pull poop
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "'poop' does not appear to be a dolt repository" ]] || false
+    [[ "$output" =~ "remote 'poop' not found" ]] || false
 }
 
 @test "remotes-push-pull: push with only one argument" {
@@ -606,7 +606,7 @@ SQL
     [ "$output" = "" ]
     run dolt push origin
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "fatal: 'origin' does not appear to be a dolt repository" ]] || false
+    [[ "$output" =~ "fatal: remote 'origin' not found" ]] || false
 }
 
 @test "remotes-push-pull: push --all with no remote or refspec specified" {

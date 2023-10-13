@@ -66,7 +66,7 @@ teardown() {
     cd repo1
     run dolt push main    # should push to origin
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "fatal: 'main' does not appear to be a dolt repository" ]] || false
+    [[ "$output" =~ "fatal: remote 'main' not found." ]] || false
 
     run dolt push origin  # should not push to current branch since its upstream is not set
     [ "$status" -eq 1 ]
@@ -198,7 +198,7 @@ teardown() {
     cd repo1
     run dolt push unknown main
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "fatal: 'unknown' does not appear to be a dolt repository" ]] || false
+    [[ "$output" =~ "fatal: remote 'unknown' not found" ]] || false
 }
 
 @test "push: push unknown branch" {

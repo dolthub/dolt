@@ -55,7 +55,7 @@ teardown() {
     cd repo1
     run dolt sql -q "CALL dolt_push('unknown', 'main')"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "fatal: 'unknown' does not appear to be a dolt repository" ]] || false
+    [[ "$output" =~ "fatal: remote 'unknown' not found" ]] || false
 }
 
 @test "sql-push: push unknown branch on CALL" {

@@ -53,10 +53,8 @@ var ErrCurrentBranchHasNoUpstream = goerrors.NewKind("fatal: The current branch 
 	"\tdolt push --set-upstream %s %s\n" +
 	"To have this happen automatically for branches without a tracking\n" +
 	"upstream, see 'push.autoSetupRemote' in 'dolt config --help'.")
-var ErrInvalidRepository = goerrors.NewKind("fatal: '%s' does not appear to be a dolt repository\n" +
-	"fatal: Could not read from remote repository.\n\n" +
-	"Please make sure you have the correct access rights\n" +
-	"and the repository exists.")
+var ErrInvalidRepository = goerrors.NewKind("fatal: remote '%s' not found.\n" +
+	"Please make sure the repository exists.")
 var ErrAllFlagCannotBeUsedWithRefSpec = goerrors.NewKind("fatal: --all can't be combined with refspecs")
 var ErrNoPushDestination = goerrors.NewKind("fatal: No configured push destination.\n" +
 	"Either specify the URL from the command-line or configure a remote repository using\n\n" +
