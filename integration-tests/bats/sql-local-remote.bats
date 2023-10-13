@@ -523,7 +523,9 @@ MODIFY COLUMN age BIGINT;
 SQL
   dolt commit -am "left"
 
-  dolt merge right -m "merge right"
+  run dolt merge right -m "merge right"
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "CONFLICT (schema)" ]] || false
 
   run dolt conflicts cat .
   [ "$status" -eq 0 ]
@@ -739,7 +741,7 @@ SQL
   [ $status -eq 0 ]
   [[ $output =~ "main" ]] || false
   run dolt merge other
-  [ $status -eq 0 ]
+  [ $status -eq 1 ]
   [[ $output =~ "Automatic merge failed" ]] || false
 
   # start server
@@ -768,7 +770,7 @@ SQL
   [[ $output =~ "main" ]] || false
 
   run dolt merge other
-  [ $status -eq 0 ]
+  [ $status -eq 1 ]
   [[ $output =~ "Automatic merge failed" ]] || false
 
   run dolt conflicts resolve --ours .

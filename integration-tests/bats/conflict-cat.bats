@@ -82,7 +82,7 @@ SQL
     dolt commit -am 'left edit'
     run dolt merge other -m "merge other"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (schema):" ]] || false
+    [[ "$output" =~ "CONFLICT (content):" ]] || false
 
     # trick to disable colors
     dolt conflicts cat . > output.txt
@@ -118,7 +118,7 @@ SQL
 
     run dolt merge right -m "merge right"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (schema):" ]] || false
+    [[ "$output" =~ "CONFLICT (content):" ]] || false
 
     run dolt conflicts cat .
     [[ "$output" =~ "| a" ]] || false
@@ -143,7 +143,7 @@ SQL
     dolt commit -am "left"
     run dolt merge right -m "merge left"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (schema):" ]] || false
+    [[ "$output" =~ "CONFLICT (content):" ]] || false
 
     run dolt conflicts cat .
     [[ "$output" =~ "| a" ]] || false

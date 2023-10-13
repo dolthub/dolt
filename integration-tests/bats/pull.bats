@@ -99,7 +99,10 @@ teardown() {
 @test "pull: pull up to date does not error" {
     cd repo2
     dolt pull origin
-    dolt pull origin
+    run dolt pull origin
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date" ]] || false
+
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]

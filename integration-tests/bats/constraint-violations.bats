@@ -58,7 +58,7 @@ SQL
     dolt commit -m "this works"
     run dolt merge other
     log_status_eq "0"
-    [[ "$output" =~ "up to date" ]] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
 @test "constraint-violations: dolt_force_transaction_commit along with dolt_allow_commit_conflicts ignores constraint violations" {
@@ -113,7 +113,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -162,7 +162,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -218,7 +218,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -273,7 +273,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -331,7 +331,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -384,7 +384,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -435,7 +435,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -484,7 +484,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -539,7 +539,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -594,7 +594,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -652,7 +652,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -705,7 +705,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -756,7 +756,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -805,7 +805,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -860,7 +860,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -915,7 +915,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -973,7 +973,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -1026,7 +1026,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -1172,7 +1172,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -1224,7 +1224,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -1280,7 +1280,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -1338,7 +1338,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -1397,7 +1397,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -1451,7 +1451,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -1505,7 +1505,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -1557,7 +1557,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -1613,7 +1613,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -1671,7 +1671,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -1730,7 +1730,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -1784,7 +1784,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -1838,7 +1838,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -1890,7 +1890,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -1946,7 +1946,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -2004,7 +2004,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -2063,7 +2063,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -2117,7 +2117,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -2170,7 +2170,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -2221,7 +2221,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -2272,7 +2272,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -2322,7 +2322,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -2372,7 +2372,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -2422,7 +2422,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -2476,7 +2476,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -2529,7 +2529,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -2591,7 +2591,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -2653,7 +2653,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -2716,7 +2716,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -2875,7 +2875,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"
@@ -2914,7 +2914,7 @@ SQL
     dolt checkout main
     run dolt merge other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     log_status_eq "0"

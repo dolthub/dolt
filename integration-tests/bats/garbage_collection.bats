@@ -218,7 +218,7 @@ setup_merge_with_cv() {
     setup_merge_with_cv
     run dolt merge other -m "merge"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "CONFLICT (content):" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION (content):" ]] || false
 
     run dolt sql -r csv -q "select pk, fk from dolt_constraint_violations_child;"
     [ $status -eq 0 ]
