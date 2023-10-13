@@ -643,7 +643,11 @@ SQL
     run dolt push --all origin  # should not set upstream for new branches
     [ "$status" -eq 0 ]
     [[ "$output" =~ " * [new branch]          branch1 -> branch1" ]] || false
-    [[ ! "$output" =~ "branch 'branch1' set up to track 'origin/branch1'." ]] || false
+
+    # on branch1
+    run dolt push
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "fatal: The current branch branch1 has no upstream branch." ]] || false
 
     dolt sql -q "INSERT INTO test VALUES (2, '2')"
     dolt commit -am "add 2s"
