@@ -147,13 +147,11 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		//todo: refs with the `remotes/` prefix will fail to get a hash
 		headHash, headHashErr := getHashOf(queryist, sqlCtx, "HEAD")
 		if headHashErr != nil {
-			headHash = ""
 			cli.Println("merge finished, but failed to get hash of HEAD ref")
 			cli.Println(headHashErr.Error())
 		}
 		mergeHash, mergeHashErr := getHashOf(queryist, sqlCtx, apr.Arg(0))
 		if mergeHashErr != nil {
-			mergeHash = ""
 			cli.Println("merge finished, but failed to get hash of merge ref")
 			cli.Println(mergeHashErr.Error())
 		}

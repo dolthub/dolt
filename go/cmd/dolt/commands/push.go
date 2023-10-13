@@ -199,10 +199,7 @@ func getDefaultRemote(sqlCtx *sql.Context, queryist cli.Queryist) (string, error
 			return "origin", nil
 		}
 	}
-	for _, row := range rows {
-		return row[0].(string), nil
-	}
-	return "", env.ErrCantDetermineDefault
+	return rows[0][0].(string), nil
 }
 
 // processFetchSpecs takes a string of fetch specs and returns the destination ref and remote ref

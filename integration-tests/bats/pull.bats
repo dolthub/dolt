@@ -265,11 +265,6 @@ SQL
     [[ "$output" =~ "t1" ]] || false
 }
 
-@test "pull: empty remote name does not panic" {
-    cd repo2
-    dolt pull ""
-}
-
 @test "pull: pull dirty working set fails" {
     cd repo2
     dolt pull

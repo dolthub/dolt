@@ -122,7 +122,11 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			return
 		}
 		// save current head for diff summaries after pull
-		headHash, headHashErr := getHashOf(queryist, sqlCtx, "head")
+		headHash, err := getHashOf(queryist, sqlCtx, "HEAD")
+		if err != nil {
+			cli.Println("failed to get hash of HEAD, pull not started")
+			errChan <- err
+		}
 
 		schema, rowIter, err := queryist.Query(sqlCtx, query)
 		if err != nil {
@@ -141,19 +145,14 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			return
 		}
 
-		if headHashErr != nil {
-			headHash = ""
-			cli.Println("pull finished, but failed to get hash of HEAD")
-			cli.Println(headHashErr.Error())
-		}
-		remoteHash, remoteRef, remoteHashErr := getRemoteHashForPull(apr, sqlCtx, queryist)
-		if remoteHashErr != nil {
+		remoteHash, remoteRef, err := getRemoteHashForPull(apr, sqlCtx, queryist)
+		if err != nil {
 			cli.Println("pull finished, but failed to get hash of remote ref")
-			cli.Println(remoteHashErr.Error())
+			cli.Println(err.Error())
 		}
 
 		if apr.Contains(cli.ForceFlag) {
-			if remoteHashErr == nil && headHashErr == nil {
+			if remoteHash != "" && headHash != "" {
 				cli.Println("Updating", headHash+".."+remoteHash)
 			}
 			commit, err := getCommitInfo(queryist, sqlCtx, "HEAD")
@@ -260,20 +259,15 @@ func constructInterpolatedDoltPullQuery(apr *argparser.ArgParseResults) (string,
 // getRemoteHashForPull gets the hash of the remote branch being merged in and the ref to the remote head
 func getRemoteHashForPull(apr *argparser.ArgParseResults, sqlCtx *sql.Context, queryist cli.Queryist) (remoteHash, remoteRef string, err error) {
 	var remote, branch string
-	var args []string
-	for _, arg := range apr.Args {
-		if arg != "" {
-			args = append(args, arg)
-		}
-	}
-	if len(args) < 2 {
-		if len(args) == 0 {
+
+	if apr.NArg() < 2 {
+		if apr.NArg() == 0 {
 			remote, err = getDefaultRemote(sqlCtx, queryist)
 			if err != nil {
 				return "", "", err
 			}
 		} else {
-			remote = args[0]
+			remote = apr.Args[0]
 		}
 
 		rows, err := GetRowsForSql(queryist, sqlCtx, "select name from dolt_remote_branches")
@@ -292,8 +286,8 @@ func getRemoteHashForPull(apr *argparser.ArgParseResults, sqlCtx *sql.Context, q
 			branch = strings.TrimPrefix(ref, "remotes/"+remote+"/")
 		}
 	} else {
-		remote = args[0]
-		branch = args[1]
+		remote = apr.Args[0]
+		branch = apr.Args[1]
 	}
 
 	remoteHash, err = getHashOf(queryist, sqlCtx, remote+"/"+branch)
