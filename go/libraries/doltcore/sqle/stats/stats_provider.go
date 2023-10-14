@@ -16,12 +16,12 @@ package stats
 
 import (
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/stats"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/stats"
 	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 
