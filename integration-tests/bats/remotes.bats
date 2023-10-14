@@ -69,7 +69,7 @@ teardown() {
     dolt clone file://./remote repo2
 
     cd repo2
-     dolt pull
+    dolt pull
 
 
     dolt commit --allow-empty -m "a commit for main from repo2"
@@ -404,7 +404,7 @@ SQL
     dolt sql -q "create table t1 (pk int primary key);"
     run dolt pull test-remote test-branch
     [ "$status" -eq 1 ]
-    [[ "$output" =~ 'local changes to the following tables would be overwritten by merge' ]] || false
+    [[ "$output" =~ 'cannot merge with uncommitted changes' ]] || false
 
     # Commit changes and test that a merge conflict fails the pull
     dolt add .
@@ -933,7 +933,7 @@ SQL
     [[ ! "$output" =~ "test commit" ]] || false
     run dolt merge origin/main
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Already up to date." ]] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
     run dolt fetch
     [ "$status" -eq 0 ]
     run dolt merge origin/main
@@ -967,7 +967,7 @@ SQL
     cd "dolt-repo-clones/test-repo"
     run dolt merge remotes/origin/main
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Already up to date." ]] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
     run dolt fetch origin main
     [ "$status" -eq 0 ]
     run dolt merge remotes/origin/main
@@ -1153,7 +1153,7 @@ SQL
     dolt add test
     dolt commit -m "conflicting row"
     run dolt pull origin
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "CONFLICT" ]] || false
     dolt conflicts resolve test --ours
     dolt add test
@@ -1234,9 +1234,7 @@ SQL
     dolt sql -q "insert into test values (0, 1, 1, 1, 1, 1)"
     run dolt pull origin
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "error: Your local changes to the following tables would be overwritten by merge:" ]] || false
-    [[ "$output" =~ "test" ]] || false
-    [[ "$output" =~ "Please commit your changes before you merge." ]] || false
+    [[ "$output" =~ "cannot merge with uncommitted changes" ]] || false
 }
 
 @test "remotes: force push to main" {
@@ -1351,7 +1349,7 @@ SQL
     [ "$status" -eq 0 ]    
 }
 
-@test "remotes: validate that a config isn't needed for a pull." {
+@test "remotes: validate that a config is needed for a pull." {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote main
     dolt fetch test-remote
@@ -1373,17 +1371,23 @@ SQL
     cd "dolt-repo-clones/test-repo"
     dolt config --global --unset user.name
     dolt config --global --unset user.email
-
     run dolt pull
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Could not determine name and/or email." ]] || false
+
+    dolt config --global --add user.name mysql-test-runner
+    dolt config --global --add user.email mysql-test-runner@liquidata.co
+    dolt pull
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test commit" ]] || false
 
     # test pull with workspace up to date
+    dolt config --global --unset user.name
+    dolt config --global --unset user.email
     run dolt pull
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date." ]] || false
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Could not determine name and/or email." ]] || false
 
     # turn back on the configs and make a change in the remote
     dolt config --global --add user.name mysql-test-runner
@@ -1402,7 +1406,7 @@ SQL
 
     run dolt pull --no-ff
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Aborting commit due to empty committer name. Is your config set?" ]] || false
+    [[ "$output" =~ "Could not determine name and/or email." ]] || false
 
     # Now do a two sided merge
     dolt config --global --add user.name mysql-test-runner
@@ -1422,7 +1426,7 @@ SQL
 
     run dolt pull
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Aborting commit due to empty committer name. Is your config set?" ]] || false
+    [[ "$output" =~ "Could not determine name and/or email." ]] || false
 }
 
 create_main_remote_branch() {
@@ -2047,7 +2051,8 @@ SQL
 
     run dolt pull
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date." ]] || false
+    echo "$output"
+    [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
 @test "remotes: call dolt_checkout track flag sets upstream" {
@@ -2085,7 +2090,7 @@ SQL
 
     run dolt pull
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date." ]] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
 @test "remotes: call dolt_checkout with --track and no arg returns error" {
@@ -2125,7 +2130,7 @@ SQL
 
     run dolt pull
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date." ]] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
 
     dolt checkout main
     dolt branch -D newbranch
@@ -2138,10 +2143,10 @@ SQL
 
     run dolt pull
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date." ]] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
-@test "remotes: dolt sql -q 'call dolt_checkout("-b", "newbranch", "--track", "origin/feature")'' checks out new local branch 'newbranch' with upstream set" {
+@test "remotes: call dolt_checkout('-b', 'newbranch', '--track', 'origin/feature') checks out new local branch 'newbranch' with upstream set" {
     mkdir remote
     mkdir repo1
 
@@ -2167,7 +2172,7 @@ SQL
 
     run dolt pull
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date." ]] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
 
     dolt checkout main
     dolt branch -D newbranch
@@ -2182,7 +2187,7 @@ SQL
 
     run dolt pull
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date." ]] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
 @test "remotes: dolt branch track flag sets upstream" {
@@ -2217,7 +2222,7 @@ SQL
     dolt checkout other
     run dolt pull
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date." ]] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
 
     # NOTE: this command fails with git, requiring `--track=direct`, when both branch name and starting point name are defined, but Dolt allows both formats.
     run dolt branch feature --track direct origin/other
@@ -2281,7 +2286,7 @@ SQL
 
     run dolt pull
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date." ]] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
 
     # NOTE: this command fails with git, requiring `--track=direct`, when both branch name and starting point name are defined, but Dolt allows both formats.
     dolt sql -q "CALL DOLT_BRANCH('feature','--track','direct','origin/other');"

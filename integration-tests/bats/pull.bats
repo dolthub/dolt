@@ -38,51 +38,71 @@ teardown() {
     rm -rf $TESTDIRS
 }
 
-@test "sql-pull: dolt_pull main" {
+@test "pull: pull main" {
     cd repo2
-    dolt sql -q "call dolt_pull('origin')"
+    dolt pull origin
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "First commit" ]] || false
+    [[ "$output" =~ "Second commit" ]] || false
 }
 
-@test "sql-pull: dpull main" {
+@test "pull: pull custom remote" {
     cd repo2
-    dolt sql -q "CALL dpull('origin')"
+    dolt pull test-remote
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
-}
-
-@test "sql-pull: dolt_pull custom remote" {
-    cd repo2
-    dolt sql -q "call dolt_pull('test-remote')"
-    run dolt sql -q "show tables" -r csv
+    run dolt log
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
-    [[ "$output" =~ "Table" ]] || false
-    [[ "$output" =~ "t1" ]] || false
+    [[ "$output" =~ "First commit" ]] || false
+    [[ "$output" =~ "Second commit" ]] || false
 }
 
-@test "sql-pull: dolt_pull default origin" {
+@test "pull: pull default origin" {
     cd repo2
     dolt remote remove test-remote
-    dolt sql -q "call dolt_pull()"
+    dolt pull
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "First commit" ]] || false
+    [[ "$output" =~ "Second commit" ]] || false
 }
 
-@test "sql-pull: dolt_pull default custom remote" {
+@test "pull: pull default custom remote" {
     cd repo2
     dolt remote remove origin
-    dolt sql -q "call dolt_pull()"
+    dolt pull
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "Table" ]] || false
+    [[ "$output" =~ "t1" ]] || false
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "First commit" ]] || false
+    [[ "$output" =~ "Second commit" ]] || false
+}
+
+@test "pull: pull up to date does not error" {
+    cd repo2
+    dolt pull origin
+    run dolt pull origin
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date" ]] || false
+
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
@@ -90,35 +110,24 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
-@test "sql-pull: dolt_pull up to date does not error" {
+@test "pull: pull unknown remote fails" {
     cd repo2
-    dolt sql -q "call dolt_pull('origin')"
-    dolt sql -q "call dolt_pull('origin')"
-    run dolt sql -q "show tables" -r csv
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
-    [[ "$output" =~ "Table" ]] || false
-    [[ "$output" =~ "t1" ]] || false
-}
-
-@test "sql-pull: dolt_pull unknown remote fails" {
-    cd repo2
-    run dolt sql -q "call dolt_pull('unknown')"
+    run dolt pull unknown
     [ "$status" -eq 1 ]
     [[ "$output" =~ "unknown remote" ]] || false
     [[ ! "$output" =~ "panic" ]] || false
 }
 
-@test "sql-pull: dolt_pull unknown feature branch fails" {
+@test "pull: pull unknown feature branch fails" {
     cd repo2
     dolt checkout feature
-    run dolt sql -q "call dolt_pull('origin')"
+    run dolt pull origin
     [ "$status" -eq 1 ]
     [[ "$output" =~ "You asked to pull from the remote 'origin', but did not specify a branch" ]] || false
     [[ ! "$output" =~ "panic" ]] || false
 }
 
-@test "sql-pull: dolt_pull feature branch" {
+@test "pull: pull feature branch" {
     cd repo1
     dolt checkout feature
     dolt push --set-upstream origin feature
@@ -132,15 +141,19 @@ teardown() {
     dolt push
 
     cd ../repo2
-    dolt sql -q "call dolt_pull('origin')"
+    dolt pull origin
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "First commit" ]] || false
+    [[ "$output" =~ "Second commit" ]] || false
 }
 
-@test "sql-pull: dolt_checkout after dolt_fetch a new feature branch" {
+@test "pull: checkout after fetch a new feature branch" {
     cd repo1
     dolt checkout -b feature2
     dolt sql -q "create table t2 (i int primary key);"
@@ -149,16 +162,22 @@ teardown() {
     dolt push --set-upstream origin feature2
 
     cd ../repo2
-    dolt sql -q "CALL dolt_fetch('origin', 'feature2')"
-    run dolt sql -q "call dolt_checkout('feature2'); show tables" -r csv
+    dolt fetch origin feature2
+    dolt checkout feature2
+    run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 6 ]
+    [ "${#lines[@]}" -eq 3 ]
     [[ "$output" =~ "Table" ]] || false
     [[ "$output" =~ "t1" ]] || false
     [[ "$output" =~ "t2" ]] || false
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "First commit" ]] || false
+    [[ "$output" =~ "Second commit" ]] || false
+    [[ "$output" =~ "create t2" ]] || false
 }
 
-@test "sql-pull: dolt_pull force" {
+@test "pull: pull force" {
     cd repo1
     # disable foreign key checks to create merge conflicts
     dolt sql <<SQL
@@ -190,25 +209,32 @@ SQL
     dolt push origin main
 
     cd ../repo2
-    run dolt sql -q "call dolt_pull()"
+    run dolt pull
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Constraint violations" ]] || false
+    [[ "$output" =~ "CONSTRAINT VIOLATION" ]] || false
 
-    run dolt sql -q "call dolt_pull('--force')"
+    dolt merge --abort
+    run dolt pull --force
     [ "$status" -eq 0 ]
     run dolt sql -q "select * from objects"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "truck" ]] || false
     [[ "$output" =~ "ball" ]] || false
     [[ "$output" =~ "shoe" ]] || false
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "First commit" ]] || false
+    [[ "$output" =~ "Second commit" ]] || false
+    [[ "$output" =~ "Commit1" ]] || false
+    [[ "$output" =~ "Commit3" ]] || false
 }
 
-@test "sql-pull: CALL dolt_pull squash" {
+@test "pull: pull squash" {
     cd repo2
     dolt sql -q "create table t2 (i int primary key);"
     dolt commit -Am "commit 1"
 
-    dolt sql -q "CALL dolt_pull('--squash', 'origin')"
+    dolt pull --squash origin
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
@@ -223,11 +249,11 @@ SQL
     [[ ! "$output" =~ "First commit" ]] || false
 }
 
-@test "sql-pull: dolt_pull --noff flag" {
+@test "pull: pull --noff flag" {
     cd repo2
-    dolt sql -q "CALL dolt_pull('--no-ff', 'origin')"
+    dolt pull --no-ff origin
     dolt status
-    
+
     run dolt log -n 1
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Merge branch 'main'" ]] || false
@@ -239,59 +265,36 @@ SQL
     [[ "$output" =~ "t1" ]] || false
 }
 
-@test "sql-pull: empty remote name does not panic" {
+@test "pull: pull dirty working set fails" {
     cd repo2
-    dolt sql -q "call dolt_pull('')"
-}
+    dolt pull
 
-@test "sql-pull: empty remote name does not panic on CALL" {
-    cd repo2
-    dolt sql -q "CALL dolt_pull('')"
-}
+    cd ../repo1
+    dolt sql -q "insert into t1 values (3, 3)"
+    dolt commit -am "dirty commit"
+    dolt push origin main
 
-@test "sql-pull: dolt_pull dirty working set fails" {
-    cd repo2
-    dolt sql -q "create table t2 (a int)"
-    run dolt sql -q "call dolt_pull('origin')"
+    cd ../repo2
+    dolt sql -q "insert into t1 values (2, 2)"
+    run dolt pull origin
     [ "$status" -eq 1 ]
     [[ "$output" =~ "cannot merge with uncommitted changes" ]] || false
 }
 
-@test "sql-pull: CALL dolt_pull dirty working set fails" {
-    cd repo2
-    dolt sql -q "create table t2 (a int)"
-    run dolt sql -q "CALL dolt_pull('origin')"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "cannot merge with uncommitted changes" ]] || false
-}
-
-@test "sql-pull: dolt_pull tag" {
+@test "pull: pull tag" {
     cd repo1
     dolt tag v1
     dolt push origin v1
     dolt tag
 
     cd ../repo2
-    dolt sql -q "call dolt_pull('origin')"
+    dolt pull origin
     run dolt tag
     [ "$status" -eq 0 ]
     [[ "$output" =~ "v1" ]] || false
 }
 
-@test "sql-pull: CALL dolt_pull tag" {
-    cd repo1
-    dolt tag v1
-    dolt push origin v1
-    dolt tag
-
-    cd ../repo2
-    dolt sql -q "CALL dolt_pull('origin')"
-    run dolt tag
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "v1" ]] || false
-}
-
-@test "sql-pull: dolt_pull tags only for resolved commits" {
+@test "pull: pull tags only for resolved commits" {
     cd repo1
     dolt tag v1 head
     dolt tag v2 head^
@@ -306,7 +309,7 @@ SQL
     dolt push origin v3
 
     cd ../repo2
-    dolt sql -q "call dolt_pull('origin')"
+    dolt pull origin
     run dolt tag
     [ "$status" -eq 0 ]
     [[ "$output" =~ "v1" ]] || false
@@ -314,30 +317,7 @@ SQL
     [[ ! "$output" =~ "v3" ]] || false
 }
 
-@test "sql-pull: CALL dolt_pull tags only for resolved commits" {
-    cd repo1
-    dolt tag v1 head
-    dolt tag v2 head^
-    dolt push origin v1
-    dolt push origin v2
-
-    dolt checkout feature
-    dolt sql -q "create table t2 (a int)"
-    dolt add .
-    dolt commit -am "feature commit"
-    dolt tag v3
-    dolt push origin v3
-
-    cd ../repo2
-    dolt sql -q "CALL dolt_pull('origin')"
-    run dolt tag
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "v1" ]] || false
-    [[ "$output" =~ "v2" ]] || false
-    [[ ! "$output" =~ "v3" ]] || false
-}
-
-@test "sql-pull: dolt_pull with remote and remote ref" {
+@test "pull: pull with remote and remote ref" {
     cd repo1
     dolt checkout feature
     dolt checkout -b newbranch
@@ -346,12 +326,12 @@ SQL
     [[ ! "$output" =~ "t1" ]] || false
 
     # Specifying a non-existent remote branch returns an error
-    run dolt sql -q "call dolt_pull('origin', 'doesnotexist');"
+    run dolt pull origin doesnotexist
     [ "$status" -eq 1 ]
     [[ "$output" =~ 'branch "doesnotexist" not found on remote' ]] || false
 
     # Explicitly specifying the remote and branch will merge in that branch
-    run dolt sql -q "call dolt_pull('origin', 'main');"
+    run dolt pull origin main
     [ "$status" -eq 0 ]
     run dolt sql -q "show tables"
     [ "$status" -eq 0 ]
@@ -363,19 +343,25 @@ SQL
     # Make a conflicting working set change and test that pull complains
     dolt reset --hard HEAD^1
     dolt sql -q "insert into t1 values (0, 100);"
-    run dolt sql -q "call dolt_pull('origin', 'main');"
+    run dolt pull origin main
     [ "$status" -eq 1 ]
     [[ "$output" =~ 'cannot merge with uncommitted changes' ]] || false
 
     # Commit changes and test that a merge conflict fails the pull
     dolt commit -am "adding new t1 table"
-    run dolt sql -q "call dolt_pull('origin', 'main');"
+    run dolt pull origin main
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "| fast_forward | conflicts |" ]] || false
-    [[ "$output" =~ "| 0            | 1         |" ]] || false
+    [[ "$output" =~ "Auto-merging t1" ]] || false
+    [[ "$output" =~ "CONFLICT (content): Merge conflict in t1" ]] || false
+    [[ "$output" =~ "Automatic merge failed; 1 table(s) are unmerged." ]] || false
+    [[ "$output" =~ "Use 'dolt conflicts' to investigate and resolve conflicts." ]] || false
+
+    run dolt show head
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "adding new t1 table" ]] || false
 }
 
-@test "sql-pull: dolt_pull also fetches, but does not merge other branches" {
+@test "pull: pull also fetches, but does not merge other branches" {
     cd repo1
     dolt checkout -b other
     dolt push --set-upstream origin other
@@ -398,7 +384,7 @@ SQL
     dolt push
 
     cd ../repo2
-    dolt sql -q "call dolt_pull()"
+    dolt pull
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
@@ -415,7 +401,7 @@ SQL
     [[ "$output" =~ "behind 'origin/other' by 1 commit" ]] || false
 }
 
-@test "sql-pull: dolt_pull commits successful merge on current branch" {
+@test "pull: pull commits successful merge on current branch" {
     cd repo1
     dolt checkout -b other
     dolt push --set-upstream origin other
@@ -437,7 +423,7 @@ SQL
 
     dolt sql -q "insert into t1 values (2, 3)"
     dolt commit -am "add (2,3) to t1"
-    run dolt sql -q "call dolt_pull()"
+    run dolt pull
     [ "$status" -eq 0 ]
 
     run dolt log --oneline -n 1
@@ -447,13 +433,16 @@ SQL
     [[ ! "$output" =~ "add (2,3) to t1" ]] || false
 }
 
-@test "sql-pull: --no-ff and --no-commit" {
+@test "pull: --no-ff and --no-commit" {
     cd repo2
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
 
-    dolt sql -q "call dolt_pull('--no-ff', '--no-commit')"
+    run dolt pull --no-ff --no-commit origin
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Automatic merge went well; stopped before committing as requested" ]] || false
+
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
@@ -464,4 +453,3 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "merge from origin" ]] || false
 }
-

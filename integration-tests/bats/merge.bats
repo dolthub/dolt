@@ -144,7 +144,9 @@ SQL
     # dirty the working set with changes to test2
     dolt sql -q "INSERT INTO test2 VALUES (9,9,9);"
 
-    dolt merge other --no-commit
+    run dolt merge other --no-commit
+    log_status_eq 1
+    [[ "$output" =~ "Automatic merge failed" ]] || false
     dolt merge --abort
 
     run dolt sql -q "SELECT * from dolt_merge_status"
@@ -257,7 +259,8 @@ SQL
     dolt commit -m "add pk 0 = 2,2 to test1"
 
     run dolt merge merge_branch -m "merge_branch"
-    log_status_eq 0
+    log_status_eq 1
+    [[ "$output" =~ "Automatic merge failed" ]] || false
     [[ "$output" =~ "test1" ]] || false
 
     dolt add test1
@@ -286,7 +289,8 @@ SQL
     dolt commit -m "add pk 0 = 2,2 to test1"
 
     run dolt merge merge_branch --no-commit
-    log_status_eq 0
+    log_status_eq 1
+    [[ "$output" =~ "Automatic merge failed" ]] || false
     [[ "$output" =~ "test1" ]] || false
 
     run dolt commit -m 'create a merge commit'
@@ -533,7 +537,8 @@ SQL
     dolt commit -am "added row"
 
     run dolt merge other
-    log_status_eq 0
+    log_status_eq 1
+    [[ "$output" =~ "Automatic merge failed" ]] || false
 
     run dolt sql -q "select * from dolt_constraint_violations" -r=csv
     [[ "$output" =~ "test,2" ]] || false
@@ -773,10 +778,13 @@ SQL
     dolt commit -am "non-fk insert"
 
     dolt checkout main
-    dolt merge right
+    run dolt merge right
+    log_status_eq 1
+    [[ "$output" =~ "Automatic merge failed" ]] || false
     dolt commit -afm "commit constraint violations"
 
-    dolt merge other --no-commit
+    run dolt merge other --no-commit
+    [[ "$output" =~ "Automatic merge failed" ]] || false
 
     run dolt sql -r csv -q "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;";
     [[ "${lines[1]}" = "foreign key,1,1" ]] || false
@@ -827,7 +835,8 @@ SQL
     dolt commit -afm "committing merge conflicts"
 
     # merge should be allowed and previous conflicts and violations should be retained
-    dolt merge other2 --no-commit
+    run dolt merge other2 --no-commit
+    [[ "$output" =~ "Automatic merge failed" ]] || false
     run dolt sql -r csv -q "SELECT * FROM parent;"
     [[ "${lines[1]}" = "1,2" ]] || false
     [[ "${lines[2]}" = "3,1" ]] || false
@@ -869,7 +878,7 @@ SQL
 
     # Create a conflicted state by merging other into main
     run dolt merge other
-    log_status_eq 0
+    log_status_eq 1
     [[ "$output" =~ "CONFLICT" ]] || false
 
     run dolt sql -r csv -q "SELECT * FROM parent;"
@@ -971,7 +980,7 @@ SQL
     dolt checkout main
     run dolt merge other --no-commit --commit
     log_status_eq 1
-    [[ "$output" =~ "cannot define both 'commit' and 'no-commit' flags at the same time" ]] || false
+    [[ "$output" =~ "Flags '--commit' and '--no-commit' cannot be used together" ]] || false
 
     run dolt merge other --no-commit
     log_status_eq 0

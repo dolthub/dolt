@@ -89,7 +89,7 @@ teardown() {
     [[ $output =~ "main" ]] || false
 
     run dolt merge other
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [[ $output =~ "Automatic merge failed" ]] || false
 
     run dolt conflicts resolve --ours .
@@ -108,7 +108,7 @@ teardown() {
     [[ $output =~ "main" ]] || false
 
     run dolt merge other
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [[ $output =~ "Automatic merge failed" ]] || false
 
     run dolt conflicts resolve --ours t
@@ -127,7 +127,7 @@ teardown() {
     [[ $output =~ "main" ]] || false
 
     run dolt merge other
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [[ $output =~ "Automatic merge failed" ]] || false
 
     run dolt conflicts resolve --theirs .
@@ -146,7 +146,7 @@ teardown() {
     [[ $output =~ "main" ]] || false
 
     run dolt merge other
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [[ $output =~ "Automatic merge failed" ]] || false
 
     run dolt conflicts resolve --theirs t
@@ -165,7 +165,7 @@ teardown() {
     [[ $output =~ "other" ]] || false
 
     run dolt merge main
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [[ $output =~ "Automatic merge failed" ]] || false
 
     run dolt conflicts resolve --ours .
@@ -184,7 +184,7 @@ teardown() {
     [[ $output =~ "other" ]] || false
 
     run dolt merge main
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [[ $output =~ "Automatic merge failed" ]] || false
 
     run dolt conflicts resolve --ours t
@@ -203,7 +203,7 @@ teardown() {
     [[ $output =~ "other" ]] || false
 
     run dolt merge main
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [[ $output =~ "Automatic merge failed" ]] || false
 
     run dolt conflicts resolve --theirs .
@@ -222,7 +222,7 @@ teardown() {
     [[ $output =~ "other" ]] || false
 
     run dolt merge main
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [[ $output =~ "Automatic merge failed" ]] || false
 
     run dolt conflicts resolve --theirs t

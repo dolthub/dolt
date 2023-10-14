@@ -305,7 +305,7 @@ SQL
     dolt commit -am "inserted on other"
 
     run dolt merge main
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     run dolt sql -q "SELECT * FROM keyless WHERE c0 > 6 ORDER BY c0;" -r csv
     [ $status -eq 0 ]
     [[ "${lines[1]}" = "7,7" ]] || false
@@ -414,7 +414,7 @@ SQL
     dolt commit -am "deleted four rows on left"
 
     run dolt merge right -m "merge"
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 
     run dolt conflicts resolve --ours dupe
@@ -439,7 +439,7 @@ SQL
     dolt commit -am "deleted four rows on left"
 
     run dolt merge right -m "merge"
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 
     run dolt sql -q "call dolt_conflicts_resolve('--ours', 'dupe')"
@@ -487,7 +487,7 @@ SQL
     dolt commit -am "updated four rows on left"
 
     run dolt merge right -m "merge"
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 
     run dolt conflicts resolve --theirs dupe
@@ -512,7 +512,7 @@ SQL
     dolt commit -am "updated four rows on left"
 
     run dolt merge right -m "merge"
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 
     run dolt sql -q "call dolt_conflicts_resolve('--theirs', 'dupe')"
@@ -676,7 +676,7 @@ CSV
     dolt commit -am "updated on other"
 
     run dolt merge main -m "merge"
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 
     run dolt conflicts resolve --ours keyless
@@ -723,7 +723,7 @@ CSV
     dolt commit -am "inserted on other"
 
     run dolt merge main -m "merge"
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
      run dolt sql -q "SELECT count(*) FROM keyless WHERE c0 > 6;" -r csv
     [ $status -eq 0 ]
     [[ "${lines[1]}" = "3" ]] || false
@@ -770,7 +770,7 @@ SQL
     dolt commit -am "inserted on other"
 
     run dolt merge main -m "merge"
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 
     run dolt conflicts resolve --theirs keyless
@@ -798,7 +798,7 @@ SQL
     dolt commit -am "inserted on other"
 
     run dolt merge main -m "merge"
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 
     run dolt sql -q "call dolt_conflicts_resolve('--theirs', 'keyless')"
@@ -838,7 +838,7 @@ SQL
     dolt commit -am "inserted on other"
 
     run dolt merge main -m "merge"
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 
     run dolt conflicts resolve --ours keyless
@@ -863,7 +863,7 @@ SQL
     dolt commit -am "inserted on other"
 
     run dolt merge main -m "merge"
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 
     run dolt sql -q "call dolt_conflicts_resolve('--ours', 'keyless')"
@@ -921,7 +921,7 @@ SQL
     dolt commit -am "inserted twos on left"
 
     run dolt merge right -m "merge"
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 
     run dolt conflicts resolve --theirs keyless
@@ -947,7 +947,7 @@ SQL
     dolt commit -am "inserted twos on left"
 
     run dolt merge right -m "merge"
-    [ $status -eq 0 ]
+    [ $status -eq 1 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 
     run dolt sql -q "call dolt_conflicts_resolve('--theirs', 'keyless')"
