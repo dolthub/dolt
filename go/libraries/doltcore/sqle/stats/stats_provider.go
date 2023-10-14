@@ -16,6 +16,7 @@ package stats
 
 import (
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/stats"
 	"regexp"
 	"strings"
 	"time"
@@ -40,7 +41,7 @@ type DoltStats struct {
 	Types         []sql.Type
 }
 
-func DoltStatsFromSql(stats *sql.Stats) (*DoltStats, error) {
+func DoltStatsFromSql(stats *stats.Stats) (*DoltStats, error) {
 	typs, err := parseTypeString(stats.Types)
 	if err != nil {
 		return nil, err
@@ -61,12 +62,12 @@ func DoltStatsFromSql(stats *sql.Stats) (*DoltStats, error) {
 	}, nil
 }
 
-func (s *DoltStats) toSql() *sql.Stats {
+func (s *DoltStats) toSql() *stats.Stats {
 	typStrs := make([]string, len(s.Types))
 	for i, typ := range s.Types {
 		typStrs[i] = typ.String()
 	}
-	return &sql.Stats{
+	return &stats.Stats{
 		Rows:      s.RowCount,
 		Distinct:  s.DistinctCount,
 		Nulls:     s.NullCount,
@@ -91,7 +92,7 @@ type DoltBucket struct {
 	UpperBound sql.Row
 }
 
-func DoltHistFromSql(hist sql.Histogram, types []sql.Type) (DoltHistogram, error) {
+func DoltHistFromSql(hist stats.Histogram, types []sql.Type) (DoltHistogram, error) {
 	ret := make([]DoltBucket, len(hist))
 	var err error
 	for i, b := range hist {
@@ -151,8 +152,8 @@ func parseTypeString(types []string) ([]sql.Type, error) {
 	return ret, nil
 }
 
-func (s DoltHistogram) toSql() []sql.Bucket {
-	ret := make([]sql.Bucket, len(s))
+func (s DoltHistogram) toSql() []stats.Bucket {
+	ret := make([]stats.Bucket, len(s))
 	for i, b := range s {
 		upperBound := make([]interface{}, len(b.UpperBound))
 		copy(upperBound, b.UpperBound)
@@ -162,7 +163,7 @@ func (s DoltHistogram) toSql() []sql.Bucket {
 				mcvs[i] = append(mcvs[i], v)
 			}
 		}
-		ret[i] = sql.Bucket{
+		ret[i] = stats.Bucket{
 			Count:      b.Count,
 			Distinct:   b.Distinct,
 			Null:       b.Null,
@@ -202,8 +203,8 @@ type Provider struct {
 
 var _ sql.StatsProvider = (*Provider)(nil)
 
-func (p *Provider) GetTableStats(ctx *sql.Context, db, table string) ([]*sql.Stats, error) {
-	var ret []*sql.Stats
+func (p *Provider) GetTableStats(ctx *sql.Context, db, table string) ([]*stats.Stats, error) {
+	var ret []*stats.Stats
 	for meta, stat := range p.stats {
 		if strings.EqualFold(db, meta.db) && strings.EqualFold(table, meta.table) {
 			ret = append(ret, stat.toSql())
@@ -212,7 +213,7 @@ func (p *Provider) GetTableStats(ctx *sql.Context, db, table string) ([]*sql.Sta
 	return ret, nil
 }
 
-func (p *Provider) SetStats(ctx *sql.Context, db, table string, stats *sql.Stats) error {
+func (p *Provider) SetStats(ctx *sql.Context, db, table string, stats *stats.Stats) error {
 	meta := statsMeta{
 		db:    strings.ToLower(db),
 		table: strings.ToLower(table),
@@ -226,7 +227,7 @@ func (p *Provider) SetStats(ctx *sql.Context, db, table string, stats *sql.Stats
 	return nil
 }
 
-func (p *Provider) GetStats(ctx *sql.Context, db, table string, cols []string) (*sql.Stats, bool) {
+func (p *Provider) GetStats(ctx *sql.Context, db, table string, cols []string) (*stats.Stats, bool) {
 	meta := statsMeta{
 		db:    strings.ToLower(db),
 		table: strings.ToLower(table),

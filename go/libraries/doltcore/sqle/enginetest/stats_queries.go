@@ -56,9 +56,9 @@ var DoltStatsTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: " SELECT bound from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(bound JSON path '$.UpperBound')) as dt  where table_name = 'xy' and column_name = 'y,z'",
+				Query: " SELECT x,z from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(x bigint path '$.UpperBound[0]', z text path '$.UpperBound[1]')) as dt  where table_name = 'xy' and column_name = 'y,z'",
 				Expected: []sql.Row{
-					{types.JSONDocument{Val: []interface{}{float64(2), "a"}}},
+					{2, "a"},
 				},
 			},
 		},
