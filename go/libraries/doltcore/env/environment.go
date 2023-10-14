@@ -1083,7 +1083,7 @@ func GetRefSpecs(rsr RepoStateReader, remoteName string) ([]ref.RemoteRefSpec, e
 	} else if r, ok := remotes[remoteName]; ok {
 		remote = r
 	} else {
-		err = ErrUnknownRemote
+		err = ErrInvalidRepository.New(remoteName)
 	}
 
 	if err != nil {

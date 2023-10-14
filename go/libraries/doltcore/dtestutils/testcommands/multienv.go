@@ -353,21 +353,31 @@ func (mr *MultiRepoTestSetup) PushToRemote(dbName, remoteName, branchName string
 	if err != nil {
 		mr.Errhand(fmt.Sprintf("Failed to push remote: %s", err.Error()))
 	}
-	opts, err := env.NewPushOpts(ctx, apr, dEnv.RepoStateReader(), dEnv.DoltDB, false, false, false)
+	targets, remote, err := env.NewPushOpts(ctx, apr, dEnv.RepoStateReader(), dEnv.DoltDB, false, false, false, false)
 	if err != nil {
 		mr.Errhand(fmt.Sprintf("Failed to push remote: %s", err.Error()))
 	}
 
-	remoteDB, err := opts.Remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format(), mr.envs[dbName])
+	remoteDB, err := remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format(), mr.envs[dbName])
 	if err != nil {
-		mr.Errhand(actions.HandleInitRemoteStorageClientErr(opts.Remote.Name, opts.Remote.Url, err))
+		mr.Errhand(actions.HandleInitRemoteStorageClientErr(remote.Name, remote.Url, err))
 	}
 
 	tmpDir, err := dEnv.TempTableFilesDir()
 	if err != nil {
 		mr.Errhand(fmt.Sprintf("Failed to access .dolt directory: %s", err.Error()))
 	}
-	err = actions.DoPush(ctx, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), dEnv.DoltDB, remoteDB, tmpDir, opts, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+
+	pushOptions := &env.PushOptions{
+		Targets: targets,
+		Remote:  remote,
+		Rsr:     dEnv.RepoStateReader(),
+		Rsw:     dEnv.RepoStateWriter(),
+		SrcDb:   dEnv.DoltDB,
+		DestDb:  remoteDB,
+		TmpDir:  tmpDir,
+	}
+	_, err = actions.DoPush(ctx, pushOptions, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
 	if err != nil {
 		mr.Errhand(fmt.Sprintf("Failed to push remote: %s", err.Error()))
 	}

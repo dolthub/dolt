@@ -38,11 +38,8 @@ import (
 var ErrCantFF = errors.New("can't fast forward merge")
 var ErrInvalidPullArgs = errors.New("dolt pull takes at most two args")
 var ErrCannotPushRef = errors.New("cannot push ref")
-var ErrFailedToSaveRepoState = errors.New("failed to save repo state")
 var ErrFailedToDeleteRemote = errors.New("failed to delete remote")
 var ErrFailedToGetRemoteDb = errors.New("failed to get remote db")
-var ErrFailedToDeleteBackup = errors.New("failed to delete backup")
-var ErrFailedToGetBackupDb = errors.New("failed to get backup db")
 var ErrUnknownPushErr = errors.New("unknown push error")
 
 type ProgStarter func(ctx context.Context) (*sync.WaitGroup, chan pull.Stats)
@@ -94,37 +91,84 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 	return err
 }
 
-func DoPush(ctx context.Context, rsr env.RepoStateReader, rsw env.RepoStateWriter, srcDB, destDB *doltdb.DoltDB, tempTableDir string, opts *env.PushOpts, progStarter ProgStarter, progStopper ProgStopper) error {
-	var err error
+// DoPush returns a message about whether the push was successful for each branch or a tag.
+// This includes if there is a new remote branch created, upstream is set or push was rejected for a branch.
+func DoPush(ctx context.Context, pushMeta *env.PushOptions, progStarter ProgStarter, progStopper ProgStopper) (returnMsg string, err error) {
+	var successPush, setUpstreamPush, failedPush []string
+	for _, targets := range pushMeta.Targets {
+		err = push(ctx, pushMeta.Rsr, pushMeta.TmpDir, pushMeta.SrcDb, pushMeta.DestDb, pushMeta.Remote, targets, progStarter, progStopper)
+		if err == nil {
+			if targets.HasUpstream {
+				// TODO: should add commit hash info for branches with upstream set
+				//  (e.g. 74476cf38..080b073e7  branch1 -> branch1)
+			} else {
+				successPush = append(successPush, fmt.Sprintf(" * [new branch]          %s -> %s", targets.SrcRef.GetPath(), targets.DestRef.GetPath()))
+			}
+		} else if errors.Is(err, doltdb.ErrIsAhead) || errors.Is(err, ErrCantFF) || errors.Is(err, datas.ErrMergeNeeded) {
+			failedPush = append(failedPush, fmt.Sprintf(" ! [rejected]            %s -> %s (non-fast-forward)", targets.SrcRef.GetPath(), targets.DestRef.GetPath()))
+			continue
+		} else if !errors.Is(err, doltdb.ErrUpToDate) {
+			// this will allow getting successful push messages along with the error of current push
+			break
+		}
+		if targets.SetUpstream {
+			err = pushMeta.Rsw.UpdateBranch(targets.SrcRef.GetPath(), env.BranchConfig{
+				Merge: ref.MarshalableRef{
+					Ref: targets.DestRef,
+				},
+				Remote: pushMeta.Remote.Name,
+			})
+			if err != nil {
+				return "", err
+			}
+			setUpstreamPush = append(setUpstreamPush, fmt.Sprintf("branch '%s' set up to track '%s'.", targets.SrcRef.GetPath(), targets.RemoteRef.GetPath()))
+		}
+	}
 
+	returnMsg, err = buildReturnMsg(successPush, setUpstreamPush, failedPush, pushMeta.Remote.Url, err)
+	return
+}
+
+// push performs push on a branch or a tag.
+func push(ctx context.Context, rsr env.RepoStateReader, tmpDir string, src, dest *doltdb.DoltDB, remote *env.Remote, opts *env.PushTarget, progStarter ProgStarter, progStopper ProgStopper) error {
 	switch opts.SrcRef.GetType() {
 	case ref.BranchRefType:
 		if opts.SrcRef == ref.EmptyBranchRef {
-			err = deleteRemoteBranch(ctx, opts.DestRef, opts.RemoteRef, srcDB, destDB, opts.Remote)
+			return deleteRemoteBranch(ctx, opts.DestRef, opts.RemoteRef, src, dest, *remote)
 		} else {
-			err = PushToRemoteBranch(ctx, rsr, tempTableDir, opts.Mode, opts.SrcRef, opts.DestRef, opts.RemoteRef, srcDB, destDB, opts.Remote, progStarter, progStopper)
+			return PushToRemoteBranch(ctx, rsr, tmpDir, opts.Mode, opts.SrcRef, opts.DestRef, opts.RemoteRef, src, dest, *remote, progStarter, progStopper)
 		}
 	case ref.TagRefType:
-		err = pushTagToRemote(ctx, tempTableDir, opts.SrcRef, opts.DestRef, srcDB, destDB, progStarter, progStopper)
+		return pushTagToRemote(ctx, tmpDir, opts.SrcRef, opts.DestRef, src, dest, progStarter, progStopper)
 	default:
-		err = fmt.Errorf("%w: %s of type %s", ErrCannotPushRef, opts.SrcRef.String(), opts.SrcRef.GetType())
+		return fmt.Errorf("%w: %s of type %s", ErrCannotPushRef, opts.SrcRef.String(), opts.SrcRef.GetType())
+	}
+}
+
+// buildReturnMsg combines the push progress information of created branches, remote tracking branches
+// and rejected branches, in order. // TODO: updated branches info is missing
+func buildReturnMsg(success, setUpstream, failed []string, remoteUrl string, err error) (string, error) {
+	var retMsg string
+	if len(success) == 0 && len(failed) == 0 {
+		return "", err
+	} else if len(failed) > 0 {
+		err = env.ErrFailedToPush.New(remoteUrl)
+	} else if errors.Is(err, doltdb.ErrUpToDate) {
+		// if there are some branches with successful push
+		err = nil
 	}
 
-	if err == nil || errors.Is(err, doltdb.ErrUpToDate) || errors.Is(err, pull.ErrDBUpToDate) {
-		if opts.SetUpstream {
-			err := rsw.UpdateBranch(opts.SrcRef.GetPath(), env.BranchConfig{
-				Merge: ref.MarshalableRef{
-					Ref: opts.DestRef,
-				},
-				Remote: opts.Remote.Name,
-			})
-			if err != nil {
-				return err
-			}
-		}
+	retMsg = fmt.Sprintf("To %s", remoteUrl)
+	for _, sMsg := range success {
+		retMsg = fmt.Sprintf("%s\n%s", retMsg, sMsg)
 	}
-
-	return err
+	for _, fMsg := range failed {
+		retMsg = fmt.Sprintf("%s\n%s", retMsg, fMsg)
+	}
+	for _, uMsg := range setUpstream {
+		retMsg = fmt.Sprintf("%s\n%s", retMsg, uMsg)
+	}
+	return retMsg, err
 }
 
 // PushTag pushes a commit tag and all underlying data from a local source database to a remote destination database.
@@ -173,7 +217,6 @@ func PushToRemoteBranch(ctx context.Context, rsr env.RepoStateReader, tempTableD
 		return err
 	}
 	cm, err := localDB.Resolve(ctx, cs, headRef)
-
 	if err != nil {
 		return fmt.Errorf("%w; refspec not found: '%s'; %s", ref.ErrInvalidRefSpec, srcRef.GetPath(), err.Error())
 	}

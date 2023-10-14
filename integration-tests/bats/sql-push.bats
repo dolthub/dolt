@@ -48,19 +48,6 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
-@test "sql-push: CALL dolt_push origin" {
-    cd repo1
-    dolt sql -q "CALL dolt_push('origin', 'main')"
-
-    cd ../repo2
-    dolt pull origin
-    run dolt sql -q "show tables" -r csv
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
-    [[ "$output" =~ "Table" ]] || false
-    [[ "$output" =~ "t1" ]] || false
-}
-
 @test "sql-push: CALL dolt_push origin in stored procedure" {
     cd repo1
     dolt sql <<SQL
@@ -84,7 +71,7 @@ SQL
 insert into t1 values (10,100);
 call dolt_commit('-am', 'new row on main');
 SQL
-    
+
     dolt sql -q "CALL merge_push_branch('branch1')"
 
     cd ../repo2
@@ -130,19 +117,6 @@ SQL
     [[ "$output" =~ "t1" ]] || false
 }
 
-@test "sql-push: CALL dolt_push custom remote" {
-    cd repo1
-    dolt sql -q "CALL dolt_push('test-remote', 'main')"
-
-    cd ../repo2
-    dolt pull origin
-    run dolt sql -q "show tables" -r csv
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
-    [[ "$output" =~ "Table" ]] || false
-    [[ "$output" =~ "t1" ]] || false
-}
-
 @test "sql-push: dolt_push active branch" {
     skip "upstream state lost between sessions"
     cd repo1
@@ -157,39 +131,10 @@ SQL
     [[ "$output" =~ "t1" ]] || false
 }
 
-@test "sql-push: CALL dolt_push active branch" {
-    skip "upstream state lost between sessions"
-    cd repo1
-    dolt sql -q "CALL dolt_push('origin')"
-
-    cd ../repo2
-    dolt pull origin
-    run dolt sql -q "show tables" -r csv
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
-    [[ "$output" =~ "Table" ]] || false
-    [[ "$output" =~ "t1" ]] || false
-}
-
 @test "sql-push: dolt_push feature branch" {
     cd repo1
     dolt checkout -b feature
     dolt sql -q "call dolt_push('origin', 'feature')"
-
-    cd ../repo2
-    dolt fetch origin feature
-    dolt checkout feature
-    run dolt sql -q "show tables" -r csv
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
-    [[ "$output" =~ "Table" ]] || false
-    [[ "$output" =~ "t1" ]] || false
-}
-
-@test "sql-push: CALL dolt_push feature branch" {
-    cd repo1
-    dolt checkout -b feature
-    dolt sql -q "CALL dolt_push('origin', 'feature')"
 
     cd ../repo2
     dolt fetch origin feature
@@ -248,36 +193,7 @@ SQL
     [[ ! "$output" =~ "The current branch main has no upstream branch." ]] || false
 }
 
-@test "sql-push: CALL dolt_push --set-upstream persists outside of session" {
-    cd repo1
-    dolt checkout -b other
-    run dolt push
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "The current branch other has no upstream branch." ]] || false
-
-    dolt sql -q "call dolt_push('-u', 'origin', 'other')"
-    # upstream should be set still
-    run dolt push
-    [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "The current branch main has no upstream branch." ]] || false
-}
-
 @test "sql-push: dolt_push --force flag" {
-    cd repo2
-    dolt sql -q "create table t2 (a int)"
-    dolt add .
-    dolt commit -am "commit to override"
-    dolt push origin main
-
-    cd ../repo1
-    run dolt sql -q "call dolt_push('origin', 'main')"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "the tip of your current branch is behind its remote counterpart" ]] || false
-
-    dolt sql -q "call dolt_push('--force', 'origin', 'main')"
-}
-
-@test "sql-push: CALL dolt_push --force flag" {
     cd repo2
     dolt sql -q "create table t2 (a int)"
     dolt add .
@@ -287,30 +203,16 @@ SQL
     cd ../repo1
     run dolt sql -q "CALL dolt_push('origin', 'main')"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "the tip of your current branch is behind its remote counterpart" ]] || false
+    [[ "$output" =~ "Updates were rejected because the tip of your current branch is behind" ]] || false
 
     dolt sql -q "CALL dolt_push('--force', 'origin', 'main')"
-}
-
-@test "sql-push: push to unknown remote" {
-    cd repo1
-    run dolt sql -q "call dolt_push('unknown', 'main')"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "unknown remote: 'unknown'" ]] || false
 }
 
 @test "sql-push: push to unknown remote on CALL" {
     cd repo1
     run dolt sql -q "CALL dolt_push('unknown', 'main')"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "unknown remote: 'unknown'" ]] || false
-}
-
-@test "sql-push: push unknown branch" {
-    cd repo1
-    run dolt sql -q "call dolt_push('origin', 'unknown')"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "refspec not found: 'unknown'" ]] || false
+    [[ "$output" =~ "fatal: remote 'unknown' not found" ]] || false
 }
 
 @test "sql-push: push unknown branch on CALL" {
@@ -320,25 +222,11 @@ SQL
     [[ "$output" =~ "refspec not found: 'unknown'" ]] || false
 }
 
-@test "sql-push: not specifying a branch throws an error" {
-    cd repo1
-    run dolt sql -q "call dolt_push('-u', 'origin')"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "invalid set-upstream arguments" ]] || false
-}
-
 @test "sql-push: not specifying a branch throws an error on CALL" {
     cd repo1
     run dolt sql -q "CALL dolt_push('-u', 'origin')"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "invalid set-upstream arguments" ]] || false
-}
-
-@test "sql-push: pushing empty branch does not panic" {
-    cd repo1
-    run dolt sql -q "call dolt_push('origin', '')"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "invalid ref spec: ''" ]] || false
+    [[ "$output" =~ "fatal: The current branch main has no upstream branch." ]] || false
 }
 
 @test "sql-push: pushing empty branch does not panic on CALL" {

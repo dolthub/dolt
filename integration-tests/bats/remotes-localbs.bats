@@ -92,7 +92,7 @@ SQL
 
     #add origin push and fetch
     dolt remote add origin localbs://remote1
-    dolt push main:notmain
+    dolt push origin main:notmain
 
     #fetch should now work without a specified remote because origin exists
     dolt fetch

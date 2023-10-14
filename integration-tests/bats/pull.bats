@@ -114,7 +114,7 @@ teardown() {
     cd repo2
     run dolt pull unknown
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "unknown remote" ]] || false
+    [[ "$output" =~ "fatal: remote 'unknown' not found" ]] || false
     [[ ! "$output" =~ "panic" ]] || false
 }
 
