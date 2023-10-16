@@ -75,7 +75,7 @@ func init() {
 	}
 }
 
-var _ dtables.VersionedTable = (*DoltTable)(nil)
+var _ dtables.VersionableTable = (*DoltTable)(nil)
 
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {

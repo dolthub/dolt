@@ -275,12 +275,12 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 		return table, ok, nil
 	}
 
-	lockableTable, ok := table.(dtables.VersionedTable)
+	versionableTable, ok := table.(dtables.VersionableTable)
 	if !ok {
 		panic(fmt.Sprintf("unexpected table type %T", table))
 	}
 
-	versionedTable, err := lockableTable.LockedToRoot(ctx, root)
+	versionedTable, err := versionableTable.LockedToRoot(ctx, root)
 
 	if err != nil {
 		return nil, false, err
@@ -447,12 +447,11 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		if err != nil {
 			return nil, false, err
 		}
-		lockableTable, ok := backingTable.(dtables.VersionedTable)
-		if !ok {
-			// check for nil
-			dt, found = dtables.NewIgnoreTable(ctx, nil), true
+		if backingTable == nil {
+			dt, found = dtables.NewEmptyIgnoreTable(ctx), true
 		}
-		dt, found = dtables.NewIgnoreTable(ctx, lockableTable), true
+		versionableTable := backingTable.(dtables.VersionableTable)
+		dt, found = dtables.NewIgnoreTable(ctx, versionableTable), true
 	}
 
 	if found {

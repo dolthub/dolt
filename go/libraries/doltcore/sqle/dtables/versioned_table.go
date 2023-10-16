@@ -19,8 +19,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
-// VersionedTable is a sql.Table that has a history. The history can be queried by setting a specific doltdb.RootValue.
-type VersionedTable interface {
+// VersionableTable is a sql.Table that has a history. The history can be queried by setting a specific doltdb.RootValue.
+type VersionableTable interface {
 	sql.Table
 	LockedToRoot(ctx *sql.Context, root *doltdb.RootValue) (sql.IndexAddressableTable, error)
 }

@@ -37,7 +37,7 @@ var _ sql.ReplaceableTable = (*IgnoreTable)(nil)
 
 // IgnoreTable is the system table that stores patterns for table names that should not be committed.
 type IgnoreTable struct {
-	backingTable VersionedTable
+	backingTable VersionableTable
 }
 
 func (i *IgnoreTable) Name() string {
@@ -79,8 +79,13 @@ func (i *IgnoreTable) PartitionRows(context *sql.Context, partition sql.Partitio
 }
 
 // NewIgnoreTable creates an IgnoreTable
-func NewIgnoreTable(_ *sql.Context, backingTable VersionedTable) sql.Table {
+func NewIgnoreTable(_ *sql.Context, backingTable VersionableTable) sql.Table {
 	return &IgnoreTable{backingTable: backingTable}
+}
+
+// NewEmptyIgnoreTable creates an IgnoreTable
+func NewEmptyIgnoreTable(_ *sql.Context) sql.Table {
+	return &IgnoreTable{}
 }
 
 // Replacer returns a RowReplacer for this table. The RowReplacer will have Insert and optionally Delete called once
