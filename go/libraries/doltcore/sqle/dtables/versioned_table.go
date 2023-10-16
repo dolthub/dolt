@@ -15,8 +15,9 @@
 package dtables
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
 // VersionableTable is a sql.Table that has a history. The history can be queried by setting a specific doltdb.RootValue.

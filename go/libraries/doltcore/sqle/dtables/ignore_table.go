@@ -16,6 +16,7 @@ package dtables
 
 import (
 	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	sqlTypes "github.com/dolthub/go-mysql-server/sql/types"
 
