@@ -2380,7 +2380,7 @@ func TestQueriesPrepared(t *testing.T) {
 func TestStatistics(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	for _, script := range queries.StatisticsQueries {
+	for _, script := range DoltStatsTests {
 		h.engine = nil
 		enginetest.TestScript(t, h, script)
 	}
@@ -2397,7 +2397,7 @@ func TestSpatialQueriesPrepared(t *testing.T) {
 func TestPreparedStatistics(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	for _, script := range queries.StatisticsQueries {
+	for _, script := range DoltStatsTests {
 		h.engine = nil
 		enginetest.TestScriptPrepared(t, h, script)
 	}
