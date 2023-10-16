@@ -16,9 +16,10 @@ package sqle
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"io"
 	"strings"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"

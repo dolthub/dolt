@@ -16,7 +16,6 @@ package dtables
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -24,6 +23,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
