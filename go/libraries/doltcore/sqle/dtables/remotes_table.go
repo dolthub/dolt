@@ -16,6 +16,7 @@ package dtables
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -26,6 +27,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
+
+const remotesDefaultRowCount = 1
 
 var _ sql.Table = (*RemotesTable)(nil)
 var _ sql.UpdatableTable = (*RemotesTable)(nil)
@@ -41,6 +44,19 @@ type RemotesTable struct {
 // NewRemotesTable creates a RemotesTable
 func NewRemotesTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
 	return &RemotesTable{ddb}
+}
+
+func (bt *RemotesTable) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(bt.Schema())
+	numRows, err := bt.RowCount(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return numBytesPerRow * numRows, nil
+}
+
+func (bt *RemotesTable) RowCount(_ *sql.Context) (uint64, error) {
+	return remotesDefaultRowCount, nil
 }
 
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant

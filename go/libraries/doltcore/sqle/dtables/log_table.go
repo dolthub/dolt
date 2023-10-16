@@ -17,6 +17,7 @@ package dtables
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -27,6 +28,8 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 )
+
+const logsDefaultRowCount = 100
 
 // LogTable is a sql.Table implementation that implements a system table which shows the dolt commit log
 type LogTable struct {
@@ -47,7 +50,12 @@ func NewLogTable(_ *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Ta
 
 // DataLength implements sql.StatisticsTable
 func (dt *LogTable) DataLength(ctx *sql.Context) (uint64, error) {
-	return uint64(4*types.Text.MaxByteLength()*4 + 16), nil
+	numBytesPerRow := schema.SchemaAvgLength(dt.Schema())
+	numRows, err := dt.RowCount(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return numBytesPerRow * numRows, nil
 }
 
 // RowCount implements sql.StatisticsTable
@@ -55,7 +63,7 @@ func (dt *LogTable) RowCount(ctx *sql.Context) (uint64, error) {
 	cc, err := dt.head.GetCommitClosure(ctx)
 	if err != nil {
 		// TODO: remove this when we deprecate LD
-		return 1000, nil
+		return logsDefaultRowCount, nil
 	}
 	if cc.IsEmpty() {
 		return 1, nil

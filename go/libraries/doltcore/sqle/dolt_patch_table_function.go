@@ -57,12 +57,13 @@ var dataChangePartitionKey = []byte(diffTypeData)
 var schemaAndDataChangePartitionKey = []byte("all")
 
 const (
-	orderColumnName     = "statement_order"
-	fromColumnName      = "from_commit_hash"
-	toColumnName        = "to_commit_hash"
-	tableNameColumnName = "table_name"
-	diffTypeColumnName  = "diff_type"
-	statementColumnName = "statement"
+	orderColumnName           = "statement_order"
+	fromColumnName            = "from_commit_hash"
+	toColumnName              = "to_commit_hash"
+	tableNameColumnName       = "table_name"
+	diffTypeColumnName        = "diff_type"
+	statementColumnName       = "statement"
+	patchTableDefaultRowCount = 100
 )
 
 type PatchTableFunction struct {
@@ -73,6 +74,19 @@ type PatchTableFunction struct {
 	dotCommitExpr  sql.Expression
 	tableNameExpr  sql.Expression
 	database       sql.Database
+}
+
+func (p *PatchTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(p.Schema())
+	numRows, err := p.RowCount(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return numBytesPerRow * numRows, nil
+}
+
+func (p *PatchTableFunction) RowCount(_ *sql.Context) (uint64, error) {
+	return patchTableDefaultRowCount, nil
 }
 
 func (p *PatchTableFunction) CollationCoercibility(ctx *sql.Context) (collation sql.CollationID, coercibility byte) {

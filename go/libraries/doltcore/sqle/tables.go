@@ -394,38 +394,11 @@ func (t *DoltTable) IsTemporary() bool {
 
 // DataLength implements the sql.StatisticsTable interface.
 func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
-	schema := t.Schema()
-	var numBytesPerRow uint64 = 0
-	for _, col := range schema {
-		switch n := col.Type.(type) {
-		case sql.NumberType:
-			numBytesPerRow += 8
-		case sql.StringType:
-			numBytesPerRow += uint64(n.MaxByteLength())
-		case sqltypes.BitType:
-			numBytesPerRow += 1
-		case sql.DatetimeType:
-			numBytesPerRow += 8
-		case sql.DecimalType:
-			numBytesPerRow += uint64(n.MaximumScale())
-		case sql.EnumType:
-			numBytesPerRow += 2
-		case sqltypes.JsonType:
-			numBytesPerRow += 20
-		case sql.NullType:
-			numBytesPerRow += 1
-		case sqltypes.TimeType:
-			numBytesPerRow += 16
-		case sql.YearType:
-			numBytesPerRow += 8
-		}
-	}
-
+	numBytesPerRow := schema.SchemaAvgLength(t.Schema())
 	numRows, err := t.numRows(ctx)
 	if err != nil {
 		return 0, err
 	}
-
 	return numBytesPerRow * numRows, nil
 }
 

@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"io"
 	"strings"
 
@@ -23,6 +24,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 )
+
+const queryDiffDefaultRowCount = 100
 
 var _ sql.TableFunction = (*QueryDiffTableFunction)(nil)
 var _ sql.CatalogTableFunction = (*QueryDiffTableFunction)(nil)
@@ -70,6 +73,19 @@ func (tf *QueryDiffTableFunction) WithCatalog(c sql.Catalog) (sql.TableFunction,
 		return nil, err
 	}
 	return &newInstance, nil
+}
+
+func (tf *QueryDiffTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(tf.Schema())
+	numRows, err := tf.RowCount(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return numBytesPerRow * numRows, nil
+}
+
+func (tf *QueryDiffTableFunction) RowCount(_ *sql.Context) (uint64, error) {
+	return queryDiffDefaultRowCount, nil
 }
 
 func (tf *QueryDiffTableFunction) evalQuery(query sql.Expression) (sql.Schema, sql.RowIter, error) {

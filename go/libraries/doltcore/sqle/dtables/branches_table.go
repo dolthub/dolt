@@ -16,6 +16,7 @@ package dtables
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -27,7 +28,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
 
+const branchesDefaultRowCount = 10
+
 var _ sql.Table = (*BranchesTable)(nil)
+var _ sql.StatisticsTable = (*BranchesTable)(nil)
 var _ sql.UpdatableTable = (*BranchesTable)(nil)
 var _ sql.DeletableTable = (*BranchesTable)(nil)
 var _ sql.InsertableTable = (*BranchesTable)(nil)
@@ -47,6 +51,19 @@ func NewBranchesTable(_ *sql.Context, db dsess.SqlDatabase) sql.Table {
 // NewRemoteBranchesTable creates a BranchesTable with only remote refs
 func NewRemoteBranchesTable(_ *sql.Context, ddb dsess.SqlDatabase) sql.Table {
 	return &BranchesTable{ddb, true}
+}
+
+func (bt *BranchesTable) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(bt.Schema())
+	numRows, err := bt.RowCount(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return numBytesPerRow * numRows, nil
+}
+
+func (bt *BranchesTable) RowCount(_ *sql.Context) (uint64, error) {
+	return branchesDefaultRowCount, nil
 }
 
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant

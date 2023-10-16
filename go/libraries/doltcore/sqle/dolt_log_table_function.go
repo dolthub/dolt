@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -29,6 +30,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/hash"
 )
+
+const logTableDefaultRowCount = 10
 
 var _ sql.TableFunction = (*LogTableFunction)(nil)
 var _ sql.ExecSourceRel = (*LogTableFunction)(nil)
@@ -74,6 +77,19 @@ func (ltf *LogTableFunction) NewInstance(ctx *sql.Context, db sql.Database, expr
 // Database implements the sql.Databaser interface
 func (ltf *LogTableFunction) Database() sql.Database {
 	return ltf.database
+}
+
+func (ltf *LogTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(ltf.Schema())
+	numRows, err := ltf.RowCount(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return numBytesPerRow * numRows, nil
+}
+
+func (ltf *LogTableFunction) RowCount(_ *sql.Context) (uint64, error) {
+	return logTableDefaultRowCount, nil
 }
 
 // WithDatabase implements the sql.Databaser interface

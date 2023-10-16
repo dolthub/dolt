@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"io"
 	"sort"
 	"strings"
@@ -27,6 +28,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
+
+const schemaDiffDefaultRowCount = 100
 
 var _ sql.TableFunction = (*SchemaDiffTableFunction)(nil)
 var _ sql.ExecSourceRel = (*SchemaDiffTableFunction)(nil)
@@ -79,6 +82,19 @@ func (ds *SchemaDiffTableFunction) NewInstance(ctx *sql.Context, db sql.Database
 	}
 
 	return node, nil
+}
+
+func (ds *SchemaDiffTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(ds.Schema())
+	numRows, err := ds.RowCount(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return numBytesPerRow * numRows, nil
+}
+
+func (ds *SchemaDiffTableFunction) RowCount(_ *sql.Context) (uint64, error) {
+	return schemaDiffDefaultRowCount, nil
 }
 
 // Database implements the sql.Databaser interface

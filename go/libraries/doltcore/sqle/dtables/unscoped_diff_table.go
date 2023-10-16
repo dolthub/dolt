@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -34,6 +35,8 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 )
+
+const unscopedDiffDefaultRowCount = 1000
 
 var workingSetPartitionKey = []byte("workingset")
 var commitHistoryPartitionKey = []byte("commithistory")
@@ -56,6 +59,19 @@ var _ sql.IndexAddressable = (*UnscopedDiffTable)(nil)
 // NewUnscopedDiffTable creates an UnscopedDiffTable
 func NewUnscopedDiffTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
 	return &UnscopedDiffTable{dbName: dbName, ddb: ddb, head: head}
+}
+
+func (dt *UnscopedDiffTable) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(dt.Schema())
+	numRows, err := dt.RowCount(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return numBytesPerRow * numRows, nil
+}
+
+func (dt *UnscopedDiffTable) RowCount(_ *sql.Context) (uint64, error) {
+	return unscopedDiffDefaultRowCount, nil
 }
 
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant

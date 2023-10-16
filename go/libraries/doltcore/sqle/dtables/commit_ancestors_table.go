@@ -16,6 +16,7 @@ package dtables
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -23,6 +24,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
+
+const commitAncestorsDefaultRowCount = 100
 
 // CommitAncestorsTable is a sql.Table that implements a system table which
 // shows (commit, parent_commit) relationships for all commits in the repo.
@@ -36,6 +39,19 @@ var _ sql.IndexAddressable = (*CommitAncestorsTable)(nil)
 // NewCommitAncestorsTable creates a CommitAncestorsTable
 func NewCommitAncestorsTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
 	return &CommitAncestorsTable{ddb: ddb}
+}
+
+func (dt *CommitAncestorsTable) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(dt.Schema())
+	numRows, err := dt.RowCount(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return numBytesPerRow * numRows, nil
+}
+
+func (dt *CommitAncestorsTable) RowCount(_ *sql.Context) (uint64, error) {
+	return commitAncestorsDefaultRowCount, nil
 }
 
 // Name is a sql.Table interface function which returns the name of the table.

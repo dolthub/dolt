@@ -31,6 +31,8 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+const commitDiffDefaultRowCount = 1000
+
 var ErrExactlyOneToCommit = errors.New("dolt_commit_diff_* tables must be filtered to a single 'to_commit'")
 var ErrExactlyOneFromCommit = errors.New("dolt_commit_diff_* tables must be filtered to a single 'from_commit'")
 var ErrInvalidCommitDiffTableArgs = errors.New("commit_diff_<table> requires one 'to_commit' and one 'from_commit'")
@@ -86,6 +88,19 @@ func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, ro
 		sqlSch:       sqlSch,
 		targetSchema: sch,
 	}, nil
+}
+
+func (dt *CommitDiffTable) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(dt.Schema())
+	numRows, err := dt.RowCount(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return numBytesPerRow * numRows, nil
+}
+
+func (dt *CommitDiffTable) RowCount(_ *sql.Context) (uint64, error) {
+	return commitDiffDefaultRowCount, nil
 }
 
 func (dt *CommitDiffTable) Name() string {

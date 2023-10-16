@@ -38,6 +38,8 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+const diffTableDefaultRowCount = 10
+
 const (
 	toCommit       = "to_commit"
 	fromCommit     = "from_commit"
@@ -121,6 +123,19 @@ func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *do
 		table:            table,
 		joiner:           j,
 	}, nil
+}
+
+func (dt *DiffTable) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(dt.Schema())
+	numRows, err := dt.RowCount(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return numBytesPerRow * numRows, nil
+}
+
+func (dt *DiffTable) RowCount(_ *sql.Context) (uint64, error) {
+	return diffTableDefaultRowCount, nil
 }
 
 func (dt *DiffTable) Name() string {
