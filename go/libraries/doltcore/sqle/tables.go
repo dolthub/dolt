@@ -403,8 +403,9 @@ func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 }
 
 // RowCount implements the sql.StatisticsTable interface.
-func (t *DoltTable) RowCount(ctx *sql.Context) (uint64, error) {
-	return t.numRows(ctx)
+func (t *DoltTable) RowCount(ctx *sql.Context) (uint64, bool, error) {
+	rows, err := t.numRows(ctx)
+	return rows, true, err
 }
 
 func (t *DoltTable) PrimaryKeySchema() sql.PrimaryKeySchema {
