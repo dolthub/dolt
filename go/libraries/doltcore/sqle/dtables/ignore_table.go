@@ -16,7 +16,6 @@ package dtables
 
 import (
 	"fmt"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	sqlTypes "github.com/dolthub/go-mysql-server/sql/types"
 
@@ -38,8 +37,7 @@ var _ sql.ReplaceableTable = (*IgnoreTable)(nil)
 
 // IgnoreTable is the system table that stores patterns for table names that should not be committed.
 type IgnoreTable struct {
-	ddb          *doltdb.DoltDB
-	backingTable sql.Table
+	backingTable VersionedTable
 }
 
 func (i *IgnoreTable) Name() string {
@@ -81,8 +79,8 @@ func (i *IgnoreTable) PartitionRows(context *sql.Context, partition sql.Partitio
 }
 
 // NewIgnoreTable creates an IgnoreTable
-func NewIgnoreTable(_ *sql.Context, ddb *doltdb.DoltDB, backingTable sql.Table) sql.Table {
-	return &IgnoreTable{ddb: ddb, backingTable: backingTable}
+func NewIgnoreTable(_ *sql.Context, backingTable VersionedTable) sql.Table {
+	return &IgnoreTable{backingTable: backingTable}
 }
 
 // Replacer returns a RowReplacer for this table. The RowReplacer will have Insert and optionally Delete called once
@@ -107,6 +105,24 @@ func (it *IgnoreTable) Inserter(*sql.Context) sql.RowInserter {
 // and will end with a call to Close() to finalize the delete operation.
 func (it *IgnoreTable) Deleter(*sql.Context) sql.RowDeleter {
 	return newIgnoreWriter(it)
+}
+
+func (it *IgnoreTable) LockedToRoot(ctx *sql.Context, root *doltdb.RootValue) (sql.IndexAddressableTable, error) {
+	if it.backingTable == nil {
+		return it, nil
+	}
+	return it.backingTable.LockedToRoot(ctx, root)
+}
+
+// IndexedAccess implements IndexAddressableTable, but IgnoreTables has no indexes.
+// Thus, this should never be called.
+func (it *IgnoreTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+	panic("Unreachable")
+}
+
+// GetIndexes implements IndexAddressableTable, but IgnoreTables has no indexes.
+func (it *IgnoreTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	return nil, nil
 }
 
 var _ sql.RowReplacer = (*ignoreWriter)(nil)
