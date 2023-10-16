@@ -73,15 +73,15 @@ func (dtf *DiffTableFunction) NewInstance(ctx *sql.Context, database sql.Databas
 
 func (dtf *DiffTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
 	numBytesPerRow := schema.SchemaAvgLength(dtf.Schema())
-	numRows, err := dtf.RowCount(ctx)
+	numRows, _, err := dtf.RowCount(ctx)
 	if err != nil {
 		return 0, err
 	}
 	return numBytesPerRow * numRows, nil
 }
 
-func (dtf *DiffTableFunction) RowCount(_ *sql.Context) (uint64, error) {
-	return diffTableDefaultRowCount, nil
+func (dtf *DiffTableFunction) RowCount(_ *sql.Context) (uint64, bool, error) {
+	return diffTableDefaultRowCount, false, nil
 }
 
 // Database implements the sql.Databaser interface

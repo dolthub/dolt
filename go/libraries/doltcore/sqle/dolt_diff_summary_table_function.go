@@ -69,15 +69,15 @@ func (ds *DiffSummaryTableFunction) NewInstance(ctx *sql.Context, db sql.Databas
 
 func (ds *DiffSummaryTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
 	numBytesPerRow := schema.SchemaAvgLength(ds.Schema())
-	numRows, err := ds.RowCount(ctx)
+	numRows, _, err := ds.RowCount(ctx)
 	if err != nil {
 		return 0, err
 	}
 	return numBytesPerRow * numRows, nil
 }
 
-func (ds *DiffSummaryTableFunction) RowCount(_ *sql.Context) (uint64, error) {
-	return diffSummaryDefaultRowCount, nil
+func (ds *DiffSummaryTableFunction) RowCount(_ *sql.Context) (uint64, bool, error) {
+	return diffSummaryDefaultRowCount, false, nil
 }
 
 // Database implements the sql.Databaser interface

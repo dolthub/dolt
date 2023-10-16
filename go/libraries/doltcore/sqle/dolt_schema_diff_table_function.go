@@ -86,15 +86,15 @@ func (ds *SchemaDiffTableFunction) NewInstance(ctx *sql.Context, db sql.Database
 
 func (ds *SchemaDiffTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
 	numBytesPerRow := schema.SchemaAvgLength(ds.Schema())
-	numRows, err := ds.RowCount(ctx)
+	numRows, _, err := ds.RowCount(ctx)
 	if err != nil {
 		return 0, err
 	}
 	return numBytesPerRow * numRows, nil
 }
 
-func (ds *SchemaDiffTableFunction) RowCount(_ *sql.Context) (uint64, error) {
-	return schemaDiffDefaultRowCount, nil
+func (ds *SchemaDiffTableFunction) RowCount(_ *sql.Context) (uint64, bool, error) {
+	return schemaDiffDefaultRowCount, false, nil
 }
 
 // Database implements the sql.Databaser interface

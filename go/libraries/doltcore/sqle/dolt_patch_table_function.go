@@ -78,15 +78,15 @@ type PatchTableFunction struct {
 
 func (p *PatchTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
 	numBytesPerRow := schema.SchemaAvgLength(p.Schema())
-	numRows, err := p.RowCount(ctx)
+	numRows, _, err := p.RowCount(ctx)
 	if err != nil {
 		return 0, err
 	}
 	return numBytesPerRow * numRows, nil
 }
 
-func (p *PatchTableFunction) RowCount(_ *sql.Context) (uint64, error) {
-	return patchTableDefaultRowCount, nil
+func (p *PatchTableFunction) RowCount(_ *sql.Context) (uint64, bool, error) {
+	return patchTableDefaultRowCount, false, nil
 }
 
 func (p *PatchTableFunction) CollationCoercibility(ctx *sql.Context) (collation sql.CollationID, coercibility byte) {

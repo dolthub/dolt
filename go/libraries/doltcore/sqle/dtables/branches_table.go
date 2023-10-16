@@ -55,15 +55,15 @@ func NewRemoteBranchesTable(_ *sql.Context, ddb dsess.SqlDatabase) sql.Table {
 
 func (bt *BranchesTable) DataLength(ctx *sql.Context) (uint64, error) {
 	numBytesPerRow := schema.SchemaAvgLength(bt.Schema())
-	numRows, err := bt.RowCount(ctx)
+	numRows, _, err := bt.RowCount(ctx)
 	if err != nil {
 		return 0, err
 	}
 	return numBytesPerRow * numRows, nil
 }
 
-func (bt *BranchesTable) RowCount(_ *sql.Context) (uint64, error) {
-	return branchesDefaultRowCount, nil
+func (bt *BranchesTable) RowCount(_ *sql.Context) (uint64, bool, error) {
+	return branchesDefaultRowCount, false, nil
 }
 
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant

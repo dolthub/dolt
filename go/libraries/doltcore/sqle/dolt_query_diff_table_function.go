@@ -77,15 +77,15 @@ func (tf *QueryDiffTableFunction) WithCatalog(c sql.Catalog) (sql.TableFunction,
 
 func (tf *QueryDiffTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
 	numBytesPerRow := schema.SchemaAvgLength(tf.Schema())
-	numRows, err := tf.RowCount(ctx)
+	numRows, _, err := tf.RowCount(ctx)
 	if err != nil {
 		return 0, err
 	}
 	return numBytesPerRow * numRows, nil
 }
 
-func (tf *QueryDiffTableFunction) RowCount(_ *sql.Context) (uint64, error) {
-	return queryDiffDefaultRowCount, nil
+func (tf *QueryDiffTableFunction) RowCount(_ *sql.Context) (uint64, bool, error) {
+	return queryDiffDefaultRowCount, false, nil
 }
 
 func (tf *QueryDiffTableFunction) evalQuery(query sql.Expression) (sql.Schema, sql.RowIter, error) {

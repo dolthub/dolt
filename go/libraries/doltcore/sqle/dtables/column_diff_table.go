@@ -48,6 +48,7 @@ type ColumnDiffTable struct {
 }
 
 var _ sql.Table = (*ColumnDiffTable)(nil)
+var _ sql.StatisticsTable = (*ColumnDiffTable)(nil)
 
 // var _ sql.IndexAddressable = (*ColumnDiffTable)(nil)
 
@@ -64,15 +65,15 @@ func (dt *ColumnDiffTable) Name() string {
 
 func (dt *ColumnDiffTable) DataLength(ctx *sql.Context) (uint64, error) {
 	numBytesPerRow := schema.SchemaAvgLength(dt.Schema())
-	numRows, err := dt.RowCount(ctx)
+	numRows, _, err := dt.RowCount(ctx)
 	if err != nil {
 		return 0, err
 	}
 	return numBytesPerRow * numRows, nil
 }
 
-func (dt *ColumnDiffTable) RowCount(_ *sql.Context) (uint64, error) {
-	return columnDiffDefaultRowCount, nil
+func (dt *ColumnDiffTable) RowCount(_ *sql.Context) (uint64, bool, error) {
+	return columnDiffDefaultRowCount, false, nil
 }
 
 // String is a sql.Table interface function which returns the name of the table which is defined by the constant

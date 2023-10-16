@@ -38,6 +38,7 @@ type CommitsTable struct {
 
 var _ sql.Table = (*CommitsTable)(nil)
 var _ sql.IndexAddressable = (*CommitsTable)(nil)
+var _ sql.StatisticsTable = (*CommitsTable)(nil)
 
 // NewCommitsTable creates a CommitsTable
 func NewCommitsTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
@@ -46,15 +47,15 @@ func NewCommitsTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
 
 func (dt *CommitsTable) DataLength(ctx *sql.Context) (uint64, error) {
 	numBytesPerRow := schema.SchemaAvgLength(dt.Schema())
-	numRows, err := dt.RowCount(ctx)
+	numRows, _, err := dt.RowCount(ctx)
 	if err != nil {
 		return 0, err
 	}
 	return numBytesPerRow * numRows, nil
 }
 
-func (dt *CommitsTable) RowCount(_ *sql.Context) (uint64, error) {
-	return commitsDefaultRowCount, nil
+func (dt *CommitsTable) RowCount(_ *sql.Context) (uint64, bool, error) {
+	return commitsDefaultRowCount, false, nil
 }
 
 // Name is a sql.Table interface function which returns the name of the table.

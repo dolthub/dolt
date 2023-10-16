@@ -51,7 +51,7 @@ func NewLogTable(_ *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Ta
 // DataLength implements sql.StatisticsTable
 func (dt *LogTable) DataLength(ctx *sql.Context) (uint64, error) {
 	numBytesPerRow := schema.SchemaAvgLength(dt.Schema())
-	numRows, err := dt.RowCount(ctx)
+	numRows, _, err := dt.RowCount(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -59,17 +59,17 @@ func (dt *LogTable) DataLength(ctx *sql.Context) (uint64, error) {
 }
 
 // RowCount implements sql.StatisticsTable
-func (dt *LogTable) RowCount(ctx *sql.Context) (uint64, error) {
+func (dt *LogTable) RowCount(ctx *sql.Context) (uint64, bool, error) {
 	cc, err := dt.head.GetCommitClosure(ctx)
 	if err != nil {
 		// TODO: remove this when we deprecate LD
-		return logsDefaultRowCount, nil
+		return logsDefaultRowCount, false, nil
 	}
 	if cc.IsEmpty() {
-		return 1, nil
+		return 1, true, nil
 	}
 	cnt, err := cc.Count()
-	return uint64(cnt + 1), err
+	return uint64(cnt + 1), true, err
 }
 
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant

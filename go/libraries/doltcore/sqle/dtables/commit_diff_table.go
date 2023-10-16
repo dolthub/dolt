@@ -53,6 +53,7 @@ type CommitDiffTable struct {
 
 var _ sql.Table = (*CommitDiffTable)(nil)
 var _ sql.IndexAddressable = (*CommitDiffTable)(nil)
+var _ sql.StatisticsTable = (*CommitDiffTable)(nil)
 
 func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue) (sql.Table, error) {
 	diffTblName := doltdb.DoltCommitDiffTablePrefix + tblName
@@ -92,15 +93,15 @@ func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, ro
 
 func (dt *CommitDiffTable) DataLength(ctx *sql.Context) (uint64, error) {
 	numBytesPerRow := schema.SchemaAvgLength(dt.Schema())
-	numRows, err := dt.RowCount(ctx)
+	numRows, _, err := dt.RowCount(ctx)
 	if err != nil {
 		return 0, err
 	}
 	return numBytesPerRow * numRows, nil
 }
 
-func (dt *CommitDiffTable) RowCount(_ *sql.Context) (uint64, error) {
-	return commitDiffDefaultRowCount, nil
+func (dt *CommitDiffTable) RowCount(_ *sql.Context) (uint64, bool, error) {
+	return commitDiffDefaultRowCount, false, nil
 }
 
 func (dt *CommitDiffTable) Name() string {

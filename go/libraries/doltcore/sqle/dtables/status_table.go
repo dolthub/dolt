@@ -37,17 +37,19 @@ type StatusTable struct {
 	rootsProvider env.RootsProvider
 }
 
+var _ sql.StatisticsTable = (*StatusTable)(nil)
+
 func (s StatusTable) DataLength(ctx *sql.Context) (uint64, error) {
 	numBytesPerRow := schema.SchemaAvgLength(s.Schema())
-	numRows, err := s.RowCount(ctx)
+	numRows, _, err := s.RowCount(ctx)
 	if err != nil {
 		return 0, err
 	}
 	return numBytesPerRow * numRows, nil
 }
 
-func (s StatusTable) RowCount(_ *sql.Context) (uint64, error) {
-	return statusDefaultRowCount, nil
+func (s StatusTable) RowCount(_ *sql.Context) (uint64, bool, error) {
+	return statusDefaultRowCount, false, nil
 }
 
 func (s StatusTable) Name() string {

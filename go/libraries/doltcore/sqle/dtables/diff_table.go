@@ -55,6 +55,7 @@ const (
 var _ sql.Table = (*DiffTable)(nil)
 var _ sql.IndexedTable = (*DiffTable)(nil)
 var _ sql.IndexAddressable = (*DiffTable)(nil)
+var _ sql.StatisticsTable = (*DiffTable)(nil)
 
 type DiffTable struct {
 	name        string
@@ -127,15 +128,15 @@ func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *do
 
 func (dt *DiffTable) DataLength(ctx *sql.Context) (uint64, error) {
 	numBytesPerRow := schema.SchemaAvgLength(dt.Schema())
-	numRows, err := dt.RowCount(ctx)
+	numRows, _, err := dt.RowCount(ctx)
 	if err != nil {
 		return 0, err
 	}
 	return numBytesPerRow * numRows, nil
 }
 
-func (dt *DiffTable) RowCount(_ *sql.Context) (uint64, error) {
-	return diffTableDefaultRowCount, nil
+func (dt *DiffTable) RowCount(_ *sql.Context) (uint64, bool, error) {
+	return diffTableDefaultRowCount, false, nil
 }
 
 func (dt *DiffTable) Name() string {

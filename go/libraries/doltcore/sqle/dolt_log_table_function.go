@@ -81,15 +81,15 @@ func (ltf *LogTableFunction) Database() sql.Database {
 
 func (ltf *LogTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
 	numBytesPerRow := schema.SchemaAvgLength(ltf.Schema())
-	numRows, err := ltf.RowCount(ctx)
+	numRows, _, err := ltf.RowCount(ctx)
 	if err != nil {
 		return 0, err
 	}
 	return numBytesPerRow * numRows, nil
 }
 
-func (ltf *LogTableFunction) RowCount(_ *sql.Context) (uint64, error) {
-	return logTableDefaultRowCount, nil
+func (ltf *LogTableFunction) RowCount(_ *sql.Context) (uint64, bool, error) {
+	return logTableDefaultRowCount, false, nil
 }
 
 // WithDatabase implements the sql.Databaser interface
