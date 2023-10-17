@@ -458,7 +458,12 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		if err != nil {
 			return nil, false, err
 		}
-		dt, found = dtables.NewDocsTable(ctx, backingTable), true
+		if backingTable == nil {
+			dt, found = dtables.NewEmptyDocsTable(ctx), true
+		} else {
+			versionableTable := backingTable.(dtables.VersionableTable)
+			dt, found = dtables.NewDocsTable(ctx, versionableTable), true
+		}
 	}
 
 	if found {

@@ -43,77 +43,99 @@ var _ sql.DeletableTable = (*DocsTable)(nil)
 var _ sql.InsertableTable = (*DocsTable)(nil)
 var _ sql.ReplaceableTable = (*DocsTable)(nil)
 
-// DocsTable is the system table that stores patterns for table names that should not be committed.
+// DocsTable is the system table that stores Dolt docs, such as LICENSE and README.
 type DocsTable struct {
-	ddb          *doltdb.DoltDB
-	backingTable sql.Table
+	backingTable VersionableTable
 }
 
-func (i *DocsTable) Name() string {
+func (dt *DocsTable) Name() string {
 	return doltdb.DocTableName
 }
 
-func (i *DocsTable) String() string {
+func (dt *DocsTable) String() string {
 	return doltdb.DocTableName
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the dolt_docs system table.
-func (i *DocsTable) Schema() sql.Schema {
+func (dt *DocsTable) Schema() sql.Schema {
 	return []*sql.Column{
 		{Name: doltdb.DocPkColumnName, Type: sqlTypes.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_Default), Source: doltdb.DocTableName, PrimaryKey: true, Nullable: false},
 		{Name: doltdb.DocTextColumnName, Type: sqlTypes.LongText, Source: doltdb.DocTableName, PrimaryKey: false},
 	}
 }
 
-func (i *DocsTable) Collation() sql.CollationID {
+func (dt *DocsTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
 // Partitions is a sql.Table interface function that returns a partition of the data.
-func (i *DocsTable) Partitions(context *sql.Context) (sql.PartitionIter, error) {
-	if i.backingTable == nil {
+func (dt *DocsTable) Partitions(context *sql.Context) (sql.PartitionIter, error) {
+	if dt.backingTable == nil {
 		// no backing table; return an empty iter.
 		return index.SinglePartitionIterFromNomsMap(nil), nil
 	}
-	return i.backingTable.Partitions(context)
+	return dt.backingTable.Partitions(context)
 }
 
-func (i *DocsTable) PartitionRows(context *sql.Context, partition sql.Partition) (sql.RowIter, error) {
-	if i.backingTable == nil {
+func (dt *DocsTable) PartitionRows(context *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+	if dt.backingTable == nil {
 		// no backing table; return an empty iter.
 		return sql.RowsToRowIter(), nil
 	}
 
-	return i.backingTable.PartitionRows(context, partition)
+	return dt.backingTable.PartitionRows(context, partition)
 }
 
-// NewDocsTable creates an DocsTable
-func NewDocsTable(_ *sql.Context, ddb *doltdb.DoltDB, backingTable sql.Table) sql.Table {
-	return &DocsTable{ddb: ddb, backingTable: backingTable}
+// NewDocsTable creates a DocsTable
+func NewDocsTable(_ *sql.Context, backingTable VersionableTable) sql.Table {
+	return &DocsTable{backingTable: backingTable}
+}
+
+// NewEmptyDocsTable creates a DocsTable
+func NewEmptyDocsTable(_ *sql.Context) sql.Table {
+	return &DocsTable{}
 }
 
 // Replacer returns a RowReplacer for this table. The RowReplacer will have Insert and optionally Delete called once
 // for each row, followed by a call to Close() when all rows have been processed.
-func (it *DocsTable) Replacer(ctx *sql.Context) sql.RowReplacer {
-	return newDocsWriter(it)
+func (dt *DocsTable) Replacer(ctx *sql.Context) sql.RowReplacer {
+	return newDocsWriter(dt)
 }
 
 // Updater returns a RowUpdater for this table. The RowUpdater will have Update called once for each row to be
 // updated, followed by a call to Close() when all rows have been processed.
-func (it *DocsTable) Updater(ctx *sql.Context) sql.RowUpdater {
-	return newDocsWriter(it)
+func (dt *DocsTable) Updater(ctx *sql.Context) sql.RowUpdater {
+	return newDocsWriter(dt)
 }
 
 // Inserter returns an Inserter for this table. The Inserter will get one call to Insert() for each row to be
 // inserted, and will end with a call to Close() to finalize the insert operation.
-func (it *DocsTable) Inserter(*sql.Context) sql.RowInserter {
-	return newDocsWriter(it)
+func (dt *DocsTable) Inserter(*sql.Context) sql.RowInserter {
+	return newDocsWriter(dt)
 }
 
 // Deleter returns a RowDeleter for this table. The RowDeleter will get one call to Delete for each row to be deleted,
 // and will end with a call to Close() to finalize the delete operation.
-func (it *DocsTable) Deleter(*sql.Context) sql.RowDeleter {
-	return newDocsWriter(it)
+func (dt *DocsTable) Deleter(*sql.Context) sql.RowDeleter {
+	return newDocsWriter(dt)
+}
+
+func (dt *DocsTable) LockedToRoot(ctx *sql.Context, root *doltdb.RootValue) (sql.IndexAddressableTable, error) {
+	if dt.backingTable == nil {
+		return dt, nil
+	}
+	return dt.backingTable.LockedToRoot(ctx, root)
+}
+
+// IndexedAccess implements IndexAddressableTable, but DocsTables has no indexes.
+// Thus, this should never be called.
+func (dt *DocsTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+	panic("Unreachable")
+}
+
+// GetIndexes implements IndexAddressableTable, but DocsTables has no indexes.
+func (dt *DocsTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	return nil, nil
 }
 
 var _ sql.RowReplacer = (*docsWriter)(nil)
