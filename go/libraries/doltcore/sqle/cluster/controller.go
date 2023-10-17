@@ -825,7 +825,7 @@ func (c *Controller) gracefulTransitionToStandby(saveConnID, minCaughtUpStandbys
 		return nil, errors.New("cluster/controller: failed to transition to standby; the set of replicated databases changed during the transition.")
 	}
 
-	res := make([]graceTransitionResult, 0, len(hookStates) + len(mysqlStates) + len(bcStates))
+	res := make([]graceTransitionResult, 0, len(hookStates)+len(mysqlStates)+len(bcStates))
 	res = append(res, hookStates...)
 	res = append(res, mysqlStates...)
 	res = append(res, bcStates...)
