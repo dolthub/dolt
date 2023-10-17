@@ -79,7 +79,7 @@ teardown() {
 @test "cp-and-mv: cp table with invalid name" {
     run dolt table cp test1 dolt_docs
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "incorrect schema for dolt_docs table" ]] || false
+    [[ "$output" =~ "Invalid table name dolt_docs" ]] || false
     run dolt table cp test1 dolt_query_catalog
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Invalid table name" ]] || false

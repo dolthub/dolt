@@ -275,28 +275,18 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 		return table, ok, nil
 	}
 
-	switch table := table.(type) {
-	case *DoltTable:
-		tbl, err := table.LockedToRoot(ctx, root)
-		if err != nil {
-			return nil, false, err
-		}
-		return tbl, true, nil
-	case *AlterableDoltTable:
-		tbl, err := table.LockedToRoot(ctx, root)
-		if err != nil {
-			return nil, false, err
-		}
-		return tbl, true, nil
-	case *WritableDoltTable:
-		tbl, err := table.LockedToRoot(ctx, root)
-		if err != nil {
-			return nil, false, err
-		}
-		return tbl, true, nil
-	default:
+	versionableTable, ok := table.(dtables.VersionableTable)
+	if !ok {
 		panic(fmt.Sprintf("unexpected table type %T", table))
 	}
+
+	versionedTable, err := versionableTable.LockedToRoot(ctx, root)
+
+	if err != nil {
+		return nil, false, err
+	}
+	return versionedTable, true, nil
+
 }
 
 func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds *dsess.DoltSession, root *doltdb.RootValue, tblName string) (sql.Table, bool, error) {
@@ -457,7 +447,23 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		if err != nil {
 			return nil, false, err
 		}
-		dt, found = dtables.NewIgnoreTable(ctx, db.ddb, backingTable), true
+		if backingTable == nil {
+			dt, found = dtables.NewEmptyIgnoreTable(ctx), true
+		} else {
+			versionableTable := backingTable.(dtables.VersionableTable)
+			dt, found = dtables.NewIgnoreTable(ctx, versionableTable), true
+		}
+	case doltdb.DocTableName:
+		backingTable, _, err := db.getTable(ctx, root, doltdb.DocTableName)
+		if err != nil {
+			return nil, false, err
+		}
+		if backingTable == nil {
+			dt, found = dtables.NewEmptyDocsTable(ctx), true
+		} else {
+			versionableTable := backingTable.(dtables.VersionableTable)
+			dt, found = dtables.NewDocsTable(ctx, versionableTable), true
+		}
 	}
 
 	if found {
@@ -861,12 +867,7 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
-	if strings.ToLower(tableName) == doltdb.DocTableName {
-		// validate correct schema
-		if !dtables.DoltDocsSqlSchema.Equals(sch.Schema) && !dtables.OldDoltDocsSqlSchema.Equals(sch.Schema) {
-			return fmt.Errorf("incorrect schema for dolt_docs table")
-		}
-	} else if doltdb.HasDoltPrefix(tableName) && !doltdb.IsFullTextTable(tableName) {
+	if doltdb.HasDoltPrefix(tableName) && !doltdb.IsFullTextTable(tableName) {
 		return ErrReservedTableName.New(tableName)
 	}
 
@@ -882,12 +883,7 @@ func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sq
 	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
-	if strings.ToLower(tableName) == doltdb.DocTableName {
-		// validate correct schema
-		if !dtables.DoltDocsSqlSchema.Equals(sch.Schema) && !dtables.OldDoltDocsSqlSchema.Equals(sch.Schema) {
-			return fmt.Errorf("incorrect schema for dolt_docs table")
-		}
-	} else if doltdb.HasDoltPrefix(tableName) {
+	if doltdb.HasDoltPrefix(tableName) {
 		return ErrReservedTableName.New(tableName)
 	}
 
