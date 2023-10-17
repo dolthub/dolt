@@ -17,8 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"io"
-	"sort"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -26,18 +24,16 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
-)
-
-const (
-	systemFlag = "system"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 )
 
 var lsDocs = cli.CommandDocumentationContent{
 	ShortDesc: "List tables",
 	LongDesc: `With no arguments lists the tables in the current working set but if a commit is specified it will list the tables in that commit.  If the {{.EmphasisLeft}}--verbose{{.EmphasisRight}} flag is provided a row count and a hash of the table will also be displayed.
 
-If the {{.EmphasisLeft}}--system{{.EmphasisRight}} flag is supplied this will show the dolt system tables which are queryable with SQL.  Some system tables can be queried even if they are not in the working set by specifying appropriate parameters in the SQL queries. To see these tables too you may pass the {{.EmphasisLeft}}--verbose{{.EmphasisRight}} flag.
+If the {{.EmphasisLeft}}--system{{.EmphasisRight}} flag is supplied this will show the dolt system tables which are queryable with SQL.
 
 If the {{.EmphasisLeft}}--all{{.EmphasisRight}} flag is supplied both user and system tables will be printed.
 `,
@@ -66,9 +62,9 @@ func (cmd LsCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd LsCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 1)
-	ap.SupportsFlag(cli.VerboseFlag, "v", "show the hash of the table")
-	ap.SupportsFlag(systemFlag, "s", "show system tables")
-	ap.SupportsFlag(cli.AllFlag, "a", "show system tables")
+	ap.SupportsFlag(cli.VerboseFlag, "v", "show the hash of the table and row count")
+	ap.SupportsFlag(cli.SystemFlag, "s", "show system tables")
+	ap.SupportsFlag(cli.AllFlag, "a", "show user and system tables")
 	return ap
 }
 
@@ -83,90 +79,107 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, lsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if apr.Contains(systemFlag) && apr.Contains(cli.AllFlag) {
-		verr := errhand.BuildDError("--%s and --%s are mutually exclusive", systemFlag, cli.AllFlag).SetPrintUsage().Build()
-		HandleVErrAndExitCode(verr, usage)
+	if apr.Contains(cli.SystemFlag) && apr.Contains(cli.AllFlag) {
+		verr := errhand.BuildDError("--%s and --%s are mutually exclusive", cli.SystemFlag, cli.AllFlag).SetPrintUsage().Build()
+		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	var root *doltdb.RootValue
-	var verr errhand.VerboseError
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	if closeFunc != nil {
+		defer closeFunc()
+	}
+
+	query, err := constructInterpolatedDoltLsQuery(apr)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	_, _, err = queryist.Query(sqlCtx, "set @@dolt_show_system_tables = 1")
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	rows, err := GetRowsForSql(queryist, sqlCtx, query)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	_, _, err = queryist.Query(sqlCtx, "set @@dolt_show_system_tables = 0")
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	var userTables []string
+	var systemTables []string
+	for _, row := range rows {
+		tableName := row[0].(string)
+		if doltdb.HasDoltPrefix(tableName) {
+			systemTables = append(systemTables, tableName)
+		} else {
+			userTables = append(userTables, tableName)
+		}
+	}
+
+	if apr.Contains(cli.AllFlag) {
+		err = printUserTables(userTables, apr, queryist, sqlCtx)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
+		err = printSystemTables(systemTables)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
+	} else if apr.Contains(cli.SystemFlag) {
+		err = printSystemTables(systemTables)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
+	} else {
+		err = printUserTables(userTables, apr, queryist, sqlCtx)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
+	}
+
+	return HandleVErrAndExitCode(nil, usage)
+}
+
+// constructInterpolatedDoltLsQuery generates the sql query necessary to list all tables and interpolates this query
+// to prevent sql injection
+func constructInterpolatedDoltLsQuery(apr *argparser.ArgParseResults) (string, error) {
+	query := "show tables"
+	if apr.NArg() == 1 {
+		query += " as of ?"
+		interpolatedQuery, err := dbr.InterpolateForDialect(query, []interface{}{apr.Arg(0)}, dialect.MySQL)
+		if err != nil {
+			return "", err
+		}
+		return interpolatedQuery, nil
+	} else {
+		return query, nil
+	}
+}
+
+func printUserTables(tableNames []string, apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context) error {
 	var label string
 	if apr.NArg() == 0 {
 		label = "working set"
-		root, verr = GetWorkingWithVErr(dEnv)
 	} else {
-		label, root, verr = getRootForCommitSpecStr(ctx, apr.Arg(0), dEnv)
-	}
-
-	if verr == nil {
-		if !apr.Contains(systemFlag) || apr.Contains(cli.AllFlag) {
-			verr = printUserTables(ctx, root, label, apr.Contains(cli.VerboseFlag))
-			cli.Println()
+		row, err := GetRowsForSql(queryist, sqlCtx, "select hashof('"+apr.Arg(0)+"')")
+		if err != nil {
+			return err
 		}
-
-		if verr == nil && (apr.Contains(systemFlag) || apr.Contains(cli.AllFlag)) {
-			verr = printSystemTables(ctx, root, dEnv.DoltDB, apr.Contains(cli.VerboseFlag))
-			cli.Println()
-		}
-	}
-
-	return HandleVErrAndExitCode(verr, usage)
-}
-
-func getRootForCommitSpecStr(ctx context.Context, csStr string, dEnv *env.DoltEnv) (string, *doltdb.RootValue, errhand.VerboseError) {
-	cs, err := doltdb.NewCommitSpec(csStr)
-
-	if err != nil {
-		bdr := errhand.BuildDError(`"%s" is not a validly formatted branch, or commit reference.`, csStr)
-		return "", nil, bdr.AddCause(err).Build()
-	}
-
-	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
-	if err != nil {
-		return "", nil, errhand.VerboseErrorFromError(err)
-	}
-
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs, headRef)
-
-	if err != nil {
-		return "", nil, errhand.BuildDError(`Unable to resolve "%s"`, csStr).AddCause(err).Build()
-	}
-
-	r, err := cm.GetRootValue(ctx)
-
-	if err != nil {
-		return "", nil, errhand.BuildDError("error: failed to get root").AddCause(err).Build()
-	}
-
-	h, err := cm.HashOf()
-
-	if err != nil {
-		return "", nil, errhand.BuildDError("error: failed to get commit hash").AddCause(err).Build()
-	}
-
-	return h.String(), r, nil
-}
-
-func printUserTables(ctx context.Context, root *doltdb.RootValue, label string, verbose bool) errhand.VerboseError {
-	tblNames, err := doltdb.GetNonSystemTableNames(ctx, root)
-
-	if err != nil {
-		return errhand.BuildDError("error: failed to get tables").AddCause(err).Build()
-	}
-
-	if len(tblNames) == 0 {
-		cli.Println("No tables in", label)
-		return nil
+		label = row[0][0].(string)
 	}
 
 	cli.Printf("Tables in %s:\n", label)
-	for _, tbl := range tblNames {
-		if verbose {
-			ls, verr := listTableVerbose(ctx, tbl, root)
-			if verr != nil {
-				return verr
+	for _, tbl := range tableNames {
+		if apr.Contains(cli.VerboseFlag) {
+			err := printTableVerbose(tbl, queryist, sqlCtx)
+			if err != nil {
+				return err
 			}
-			cli.Println(ls)
 		} else {
 			cli.Println("\t", tbl)
 		}
@@ -175,106 +188,20 @@ func printUserTables(ctx context.Context, root *doltdb.RootValue, label string, 
 	return nil
 }
 
-func listTableVerbose(ctx context.Context, tbl string, root *doltdb.RootValue) (string, errhand.VerboseError) {
-	h, _, err := root.GetTableHash(ctx, tbl)
+func printTableVerbose(table string, queryist cli.Queryist, sqlCtx *sql.Context) error {
+	row, err := GetRowsForSql(queryist, sqlCtx, "select count(*) from "+table)
 	if err != nil {
-		return "", errhand.BuildDError("error: failed to get table hash").AddCause(err).Build()
+		return err
 	}
 
-	tblVal, _, err := root.GetTable(ctx, tbl)
-	if err != nil {
-		return "", errhand.BuildDError("error: failed to get table").AddCause(err).Build()
-	}
-
-	rows, err := tblVal.GetRowData(ctx)
-	if err != nil {
-		return "", errhand.BuildDError("error: failed to get row data").AddCause(err).Build()
-	}
-	cnt, err := rows.Count()
-	if err != nil {
-		return "", errhand.VerboseErrorFromError(err)
-	}
-
-	return fmt.Sprintf("\t%-32s %s    %d rows\n", tbl, h.String(), cnt), nil
+	cli.Println(fmt.Sprintf("\t%-20s     %d rows\n", table, row[0][0].(int64)))
+	return nil
 }
 
-func printSystemTables(ctx context.Context, root *doltdb.RootValue, ddb *doltdb.DoltDB, verbose bool) errhand.VerboseError {
-	perSysTbls, err := doltdb.GetPersistedSystemTables(ctx, root)
-	if err != nil {
-		return errhand.BuildDError("error retrieving persisted table names").AddCause(err).Build()
-	}
-
-	genSysTbls, err := doltdb.GetGeneratedSystemTables(ctx, root)
-	if err != nil {
-		return errhand.BuildDError("error retrieving generated table names").AddCause(err).Build()
-	}
-
+func printSystemTables(tableNames []string) error {
 	cli.Println("System tables:")
-	for _, tbl := range perSysTbls {
-		if verbose {
-			ls, verr := listTableVerbose(ctx, tbl, root)
-			if verr != nil {
-				return verr
-			}
-			cli.Println(ls)
-		} else {
-			cli.Println("\t", tbl)
-		}
-	}
-	for _, tbl := range genSysTbls {
+	for _, tbl := range tableNames {
 		cli.Println("\t", tbl)
-	}
-
-	if verbose {
-		return printSysTablesNotInWorkingSet(ctx, ddb, root)
-	}
-
-	return nil
-}
-
-func printSysTablesNotInWorkingSet(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue) errhand.VerboseError {
-	workingSetTblNames, err := doltdb.GetAllTableNames(ctx, root)
-	if err != nil {
-		return errhand.BuildDError("failed to get table names").AddCause(err).Build()
-	}
-	activeTableSet := set.NewStrSet(workingSetTblNames)
-
-	cmItr, err := doltdb.CommitItrForAllBranches(ctx, ddb)
-	if err != nil {
-		return errhand.BuildDError("error: failed to read history").AddCause(err).Build()
-	}
-
-	deletedTableSet := set.NewStrSet([]string{})
-	for {
-		_, cm, err := cmItr.Next(ctx)
-
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return errhand.BuildDError("error: failed to iterate through history").AddCause(err).Build()
-		}
-
-		currRoot, err := cm.GetRootValue(ctx)
-
-		if err != nil {
-			return errhand.BuildDError("error: failed to read root from db.").AddCause(err).Build()
-		}
-
-		currTblNames, err := doltdb.GetSystemTableNames(ctx, currRoot)
-
-		if err != nil {
-			return errhand.BuildDError("error: failed to read tables").AddCause(err).Build()
-		}
-
-		_, _, missing := activeTableSet.LeftIntersectionRight(set.NewStrSet(currTblNames))
-		deletedTableSet.Add(missing.AsSlice()...)
-	}
-
-	deletedSlice := deletedTableSet.AsSlice()
-	sort.Strings(deletedSlice)
-	for _, dt := range deletedSlice {
-		const ncbPrefix = "(not on current branch) "
-		cli.Printf("\t%s %s\n", ncbPrefix, dt)
 	}
 
 	return nil
