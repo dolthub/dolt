@@ -449,9 +449,10 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		}
 		if backingTable == nil {
 			dt, found = dtables.NewEmptyIgnoreTable(ctx), true
+		} else {
+			versionableTable := backingTable.(dtables.VersionableTable)
+			dt, found = dtables.NewIgnoreTable(ctx, versionableTable), true
 		}
-		versionableTable := backingTable.(dtables.VersionableTable)
-		dt, found = dtables.NewIgnoreTable(ctx, versionableTable), true
 	}
 
 	if found {
