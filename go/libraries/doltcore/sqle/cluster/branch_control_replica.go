@@ -148,6 +148,9 @@ func (r *branchControlReplica) Run() {
 }
 
 func (r *branchControlReplica) wait() {
+	if r.waitNotify != nil {
+		r.waitNotify()
+	}
 	if r.isCaughtUp() {
 		attempt := r.progressNotifier.BeginAttempt()
 		r.progressNotifier.RecordSuccess(attempt)
@@ -256,7 +259,7 @@ func (p *branchControlReplication) waitForReplication(timeout time.Duration) ([]
 	for i := range res {
 		res[i].database = "dolt_branch_control"
 		res[i].remote = replicas[i].client.remote
-		res[i].remoteUrl = replicas[i].client.url
+		res[i].remoteUrl = replicas[i].client.httpUrl()
 	}
 	var wg sync.WaitGroup
 	wg.Add(len(replicas))

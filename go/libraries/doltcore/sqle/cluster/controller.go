@@ -786,25 +786,55 @@ func (c *Controller) gracefulTransitionToStandby(saveConnID, minCaughtUpStandbys
 	c.setProviderIsStandby(true)
 	c.killRunningQueries(saveConnID)
 
-	// waitForHooksToReplicate will release the lock while it
-	// blocks, but will return with the lock held.
-	states, err := c.waitForHooksToReplicate(waitForHooksToReplicateTimeout)
-	if err != nil {
-		return nil, err
+	var hookStates, mysqlStates, bcStates []graceTransitionResult
+	var hookErr, mysqlErr, bcErr error
+
+	// We concurrently wait for hooks, mysql and dolt_branch_control replication to true up.
+	// If we encounter any errors while doing this, we fail the graceful transition.
+
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		// waitForHooksToReplicate will release the lock while it
+		// blocks, but will return with the lock held.
+		hookStates, hookErr = c.waitForHooksToReplicate(waitForHooksToReplicateTimeout)
+	}()
+	go func() {
+		defer wg.Done()
+		mysqlStates, mysqlErr = c.mysqlDbPersister.waitForReplication(waitForHooksToReplicateTimeout)
+	}()
+	go func() {
+		defer wg.Done()
+		bcStates, bcErr = c.bcReplication.waitForReplication(waitForHooksToReplicateTimeout)
+	}()
+	wg.Wait()
+
+	if hookErr != nil {
+		return nil, hookErr
+	}
+	if mysqlErr != nil {
+		return nil, mysqlErr
+	}
+	if bcErr != nil {
+		return nil, bcErr
 	}
 
-	if len(states) != len(c.commithooks) {
+	if len(hookStates) != len(c.commithooks) {
 		c.lgr.Warnf("cluster/controller: failed to transition to standby; the set of replicated databases changed during the transition.")
 		return nil, errors.New("cluster/controller: failed to transition to standby; the set of replicated databases changed during the transition.")
 	}
 
-	res := states
+	res := make([]graceTransitionResult, 0, len(hookStates) + len(mysqlStates) + len(bcStates))
+	res = append(res, hookStates...)
+	res = append(res, mysqlStates...)
+	res = append(res, bcStates...)
 
 	if minCaughtUpStandbys == 0 {
-		for _, state := range states {
+		for _, state := range res {
 			if !state.caughtUp {
 				c.lgr.Warnf("cluster/controller: failed to replicate all databases to all standbys; not transitioning to standby.")
-				return nil, errors.New("cluster/controller: failed to transition from primary to standby gracefully; could not replicate databases to standby in a timely manner.")
+				return nil, fmt.Errorf("cluster/controller: failed to transition from primary to standby gracefully; could not replicate databases to standby in a timely manner.")
 			}
 		}
 		c.lgr.Tracef("cluster/controller: successfully replicated all databases to all standbys; transitioning to standby.")
@@ -834,15 +864,6 @@ func (c *Controller) gracefulTransitionToStandby(saveConnID, minCaughtUpStandbys
 			return nil, fmt.Errorf("cluster/controller: failed to transition from primary to standby gracefully; could not ensure %d replicas were caught up on all %d databases. Only caught up %d standbys fully.", minCaughtUpStandbys, len(databases), numCaughtUp)
 		}
 		c.lgr.Tracef("cluster/controller: successfully replicated all databases to %d out of %d standbys; transitioning to standby.", numCaughtUp, len(replicas))
-	}
-
-	mysqlRes, err := c.mysqlDbPersister.waitForReplication(waitForHooksToReplicateTimeout)
-	if err != nil || !allCaughtUp(mysqlRes) {
-		c.lgr.Warnf("cluster/controller: when transitioning to standby, did not successfully replicate users and grants to all standbys.")
-	}
-	bcRes, err := c.bcReplication.waitForReplication(waitForHooksToReplicateTimeout)
-	if err != nil || !allCaughtUp(bcRes) {
-		c.lgr.Warnf("cluster/controller: when transitioning to standby, did not successfully replicate branch control data to all standbys.")
 	}
 
 	return res, nil
@@ -1099,6 +1120,7 @@ func (c *Controller) standbyRemotesJWKS() *jwtauth.MultiJWKS {
 type replicationServiceClient struct {
 	remote string
 	url    string
+	tls    bool
 	client replicationapi.ReplicationServiceClient
 }
 
@@ -1135,8 +1157,20 @@ func (c *Controller) replicationServiceClients(ctx context.Context) ([]*replicat
 		ret = append(ret, &replicationServiceClient{
 			remote: r.Name(),
 			url:    grpcTarget,
+			tls:    c.tlsCfg != nil,
 			client: client,
 		})
 	}
 	return ret, nil
+}
+
+// Generally r.url is a gRPC dial endpoint and will be something like "dns:53.78.2.1:3832", or something like that.
+//
+// We want to match these endpoints up with Dolt remotes URLs, which will typically be something like http://53.78.2.1:3832.
+func (r *replicationServiceClient) httpUrl() string {
+	prefix := "https://"
+	if !r.tls {
+		prefix = "http://"
+	}
+	return prefix + strings.TrimPrefix(r.url, "dns:")
 }

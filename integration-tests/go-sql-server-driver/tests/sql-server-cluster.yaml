@@ -886,7 +886,10 @@ tests:
     - query: "call dolt_cluster_transition_to_standby('2', '1')"
       result:
         columns: ["caught_up", "database", "remote", "remote_url"]
-        rows: [["1", "repo1", "standby", "http://localhost:3852/repo1"]]
+        rows:
+        - ["1", "repo1", "standby", "http://localhost:3852/repo1"]
+        - ["1", "mysql", "standby", "http://localhost:3852"]
+        - ["1", "dolt_branch_control", "standby", "http://localhost:3852"]
 - name: dolt_cluster_transition_to_standby too many standbys provided
   multi_repos:
   - name: server1
@@ -935,7 +938,7 @@ tests:
     - exec: 'create table vals (i int primary key)'
     - exec: 'insert into vals values (0),(1),(2),(3),(4)'
     - query: "call dolt_cluster_transition_to_standby('2', '2')"
-      error_match: failed to transition from primary to standby gracefully; could not ensure 2 replicas were caught up on all 1 databases. Only caught up 1 standbys fully.
+      error_match: failed to transition from primary to standby gracefully; could not ensure 2 replicas were caught up on all 3 databases. Only caught up 1 standbys fully.
 - name: create new database, primary replicates to standby, fails over, new primary replicates to standby, fails over, new primary has all writes
   multi_repos:
   - name: server1
