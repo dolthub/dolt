@@ -28,7 +28,7 @@ func SchemaAvgLength(schema sql.Schema) uint64 {
 		case sql.StringType:
 			numBytesPerRow += uint64(n.MaxByteLength())
 		case sqltypes.BitType:
-			numBytesPerRow += 1
+			numBytesPerRow += 8
 		case sql.DatetimeType:
 			numBytesPerRow += 8
 		case sql.DecimalType:
