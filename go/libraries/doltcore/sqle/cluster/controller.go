@@ -845,14 +845,25 @@ func (c *Controller) gracefulTransitionToStandby(saveConnID, minCaughtUpStandbys
 		c.lgr.Tracef("cluster/controller: successfully replicated all databases to %d out of %d standbys; transitioning to standby.", numCaughtUp, len(replicas))
 	}
 
-	if !c.mysqlDbPersister.waitForReplication(waitForHooksToReplicateTimeout) {
+	mysqlRes, err := c.mysqlDbPersister.waitForReplication(waitForHooksToReplicateTimeout)
+	if err != nil || !allCaughtUp(mysqlRes) {
 		c.lgr.Warnf("cluster/controller: when transitioning to standby, did not successfully replicate users and grants to all standbys.")
 	}
-	if !c.bcReplication.waitForReplication(waitForHooksToReplicateTimeout) {
+	bcRes, err := c.bcReplication.waitForReplication(waitForHooksToReplicateTimeout)
+	if err != nil || !allCaughtUp(bcRes) {
 		c.lgr.Warnf("cluster/controller: when transitioning to standby, did not successfully replicate branch control data to all standbys.")
 	}
 
 	return res, nil
+}
+
+func allCaughtUp(res []graceTransitionResult) bool {
+	for _, r := range res {
+		if !r.caughtUp {
+			return false
+		}
+	}
+	return true
 }
 
 // The order of operations is:

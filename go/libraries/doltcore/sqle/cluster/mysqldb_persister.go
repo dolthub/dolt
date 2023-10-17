@@ -282,11 +282,16 @@ func (p *replicatingMySQLDbPersister) LoadData(ctx context.Context) ([]byte, err
 	return ret, err
 }
 
-func (p *replicatingMySQLDbPersister) waitForReplication(timeout time.Duration) bool {
+func (p *replicatingMySQLDbPersister) waitForReplication(timeout time.Duration) ([]graceTransitionResult, error) {
 	p.mu.Lock()
 	replicas := make([]*mysqlDbReplica, len(p.replicas))
 	copy(replicas, p.replicas)
-	caughtup := make([]bool, len(replicas))
+	res := make([]graceTransitionResult, len(replicas))
+	for i := range replicas {
+		res[i].database = "mysql"
+		res[i].remote = replicas[i].client.remote
+		res[i].remoteUrl = replicas[i].client.url
+	}
 	var wg sync.WaitGroup
 	wg.Add(len(replicas))
 	for li, lr := range replicas {
@@ -294,9 +299,9 @@ func (p *replicatingMySQLDbPersister) waitForReplication(timeout time.Duration) 
 		r := lr
 		ok := r.setWaitNotify(func() {
 			// called with r.mu locked.
-			if !caughtup[i] {
+			if !res[i].caughtUp {
 				if r.isCaughtUp() {
-					caughtup[i] = true
+					res[i].caughtUp = true
 					wg.Done()
 				} else {
 				}
@@ -306,7 +311,7 @@ func (p *replicatingMySQLDbPersister) waitForReplication(timeout time.Duration) 
 			for j := li - 1; j >= 0; j-- {
 				replicas[j].setWaitNotify(nil)
 			}
-			return false
+			return nil, errors.New("cluster: mysqldb replication: could not wait for replication. Concurrent waiters conflicted with each other.")
 		}
 	}
 	p.mu.Unlock()
@@ -330,14 +335,12 @@ func (p *replicatingMySQLDbPersister) waitForReplication(timeout time.Duration) 
 	// Make certain we don't leak the wg.Wait goroutine in the failure case.
 	// At this point, none of the callbacks will ever be called again and
 	// ch.setWaitNotify grabs a lock and so establishes the happens before.
-	all := true
-	for _, b := range caughtup {
-		if !b {
+	for _, b := range res {
+		if !b.caughtUp {
 			wg.Done()
-			all = false
 		}
 	}
 	<-done
 
-	return all
+	return res, nil
 }
