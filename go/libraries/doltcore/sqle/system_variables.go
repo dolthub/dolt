@@ -173,6 +173,13 @@ func AddDoltSystemVariables() {
 			Type:    types.NewSystemIntType(dsess.DoltClusterAckWritesTimeoutSecs, 0, 60, false),
 			Default: int64(0),
 		},
+		{
+			Name:    dsess.ShowSystemTables,
+			Dynamic: true,
+			Scope:   sql.SystemVariableScope_Both,
+			Type:    types.NewSystemBoolType(dsess.ShowSystemTables),
+			Default: int8(0),
+		},
 	})
 }
 
