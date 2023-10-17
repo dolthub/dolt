@@ -94,6 +94,9 @@ teardown() {
 }
 
 @test "docs: docs are available from SQL" {
+    run dolt sql -q "SELECT * FROM dolt_docs"
+    [ "$status" -eq 0 ]
+
     dolt docs upload LICENSE.md LICENSE.md
     dolt sql -q "SELECT doc_name FROM dolt_docs" -r csv
     run dolt sql -q "SELECT doc_name FROM dolt_docs" -r csv
@@ -103,18 +106,18 @@ teardown() {
 }
 
 @test "docs: docs can be created from SQL" {
-    # must use correct schema
     run dolt sql -q "CREATE TABLE dolt_docs (x int);"
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "incorrect schema for dolt_docs table" ]] || false
+    [[ "$output" =~ "Invalid table name dolt_docs" ]] || false
 
-    dolt sql <<SQL
-CREATE TABLE dolt_docs (
-  doc_name varchar(16383) NOT NULL,
-  doc_text longtext,
-  PRIMARY KEY (doc_name)
-);
-SQL
+    run dolt sql -q "CREATE TABLE dolt_docs (
+        doc_name varchar(16383) NOT NULL, 
+        doc_text longtext, 
+        PRIMARY KEY (doc_name)
+    );"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Invalid table name dolt_docs" ]] || false
+
     dolt sql -q "INSERT INTO dolt_docs VALUES ('README.md', 'this is a README')"
 
     run dolt sql -q "SELECT * FROM dolt_docs"

@@ -983,6 +983,14 @@ var AsOfTests = []SelectTest{
 		Query:       "select * from test_table as of CONVERT('1970-01-01 02:00:00', DATETIME)",
 		ExpectedErr: "not found",
 	},
+	{
+		Name: "select from dolt_docs as of main",
+		AdditionalSetup: CreateTableFn("dolt_docs", doltdb.DocsSchema,
+			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')"),
+		Query:          "select * from dolt_docs as of 'main'",
+		ExpectedRows:   []sql.Row{{"LICENSE.md", "A license"}},
+		ExpectedSchema: CompressSchema(doltdb.DocsSchema),
+	},
 }
 
 // Tests of join functionality, basically any query involving more than one table should go here for now.

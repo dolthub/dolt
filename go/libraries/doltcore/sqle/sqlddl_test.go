@@ -805,19 +805,13 @@ func TestRenameTableStatements(t *testing.T) {
 }
 
 func TestAlterSystemTables(t *testing.T) {
-	systemTableNames := []string{"dolt_log", "dolt_history_people", "dolt_diff_people", "dolt_commit_diff_people", "dolt_schemas"} // "dolt_docs",
-	reservedTableNames := []string{"dolt_query_catalog"}
+	systemTableNames := []string{"dolt_log", "dolt_history_people", "dolt_diff_people", "dolt_commit_diff_people", "dolt_schemas"}
+	reservedTableNames := []string{"dolt_query_catalog", "dolt_docs", "dolt_procedures", "dolt_ignore"}
 
 	var dEnv *env.DoltEnv
 	var err error
 	setup := func() {
 		dEnv, err = CreateTestDatabase()
-		require.NoError(t, err)
-
-		err := CreateEmptyTestTable(dEnv, "dolt_docs", doltdb.DocsSchema)
-		require.NoError(t, err)
-
-		err = CreateEmptyTestTable(dEnv, doltdb.SchemasTableName, schemaTableSchema)
 		require.NoError(t, err)
 
 		CreateTestTable(t, dEnv, "dolt_docs", doltdb.DocsSchema,
@@ -826,6 +820,9 @@ func TestAlterSystemTables(t *testing.T) {
 			"INSERT INTO dolt_query_catalog VALUES ('abc123', 1, 'example', 'select 2+2 from dual', 'description')")
 		CreateTestTable(t, dEnv, doltdb.SchemasTableName, schemaTableSchema,
 			"INSERT INTO dolt_schemas (type, name, fragment) VALUES ('view', 'name', 'create view name as select 2+2 from dual')")
+		ExecuteSetupSQL(context.Background(), `
+		CREATE PROCEDURE simple_proc2() SELECT 1+1;
+		INSERT INTO dolt_ignore VALUES ('test', 1);`)(t, dEnv)
 	}
 
 	t.Run("Create", func(t *testing.T) {
