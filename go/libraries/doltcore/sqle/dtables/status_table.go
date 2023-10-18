@@ -24,14 +24,32 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
+
+const statusDefaultRowCount = 10
 
 // StatusTable is a sql.Table implementation that implements a system table which shows the dolt branches
 type StatusTable struct {
 	ddb           *doltdb.DoltDB
 	workingSet    *doltdb.WorkingSet
 	rootsProvider env.RootsProvider
+}
+
+var _ sql.StatisticsTable = (*StatusTable)(nil)
+
+func (s StatusTable) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(s.Schema())
+	numRows, _, err := s.RowCount(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return numBytesPerRow * numRows, nil
+}
+
+func (s StatusTable) RowCount(_ *sql.Context) (uint64, bool, error) {
+	return statusDefaultRowCount, false, nil
 }
 
 func (s StatusTable) Name() string {

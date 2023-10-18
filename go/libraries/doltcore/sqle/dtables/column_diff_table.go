@@ -35,6 +35,8 @@ import (
 	dtypes "github.com/dolthub/dolt/go/store/types"
 )
 
+const columnDiffDefaultRowCount = 100
+
 // ColumnDiffTable is a sql.Table implementation of a system table that shows which tables and columns have
 // changed in each commit, across all branches.
 type ColumnDiffTable struct {
@@ -46,6 +48,7 @@ type ColumnDiffTable struct {
 }
 
 var _ sql.Table = (*ColumnDiffTable)(nil)
+var _ sql.StatisticsTable = (*ColumnDiffTable)(nil)
 
 // var _ sql.IndexAddressable = (*ColumnDiffTable)(nil)
 
@@ -58,6 +61,19 @@ func NewColumnDiffTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, head 
 // ColumnDiffTableName
 func (dt *ColumnDiffTable) Name() string {
 	return doltdb.ColumnDiffTableName
+}
+
+func (dt *ColumnDiffTable) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(dt.Schema())
+	numRows, _, err := dt.RowCount(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return numBytesPerRow * numRows, nil
+}
+
+func (dt *ColumnDiffTable) RowCount(_ *sql.Context) (uint64, bool, error) {
+	return columnDiffDefaultRowCount, false, nil
 }
 
 // String is a sql.Table interface function which returns the name of the table which is defined by the constant

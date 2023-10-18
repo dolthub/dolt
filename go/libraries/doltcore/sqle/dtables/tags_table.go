@@ -21,10 +21,14 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
 
+const tagsDefaultRowCount = 10
+
 var _ sql.Table = (*TagsTable)(nil)
+var _ sql.StatisticsTable = (*TagsTable)(nil)
 
 // TagsTable is a sql.Table implementation that implements a system table which shows the dolt tags
 type TagsTable struct {
@@ -34,6 +38,19 @@ type TagsTable struct {
 // NewTagsTable creates a TagsTable
 func NewTagsTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
 	return &TagsTable{ddb: ddb}
+}
+
+func (dt *TagsTable) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(dt.Schema())
+	numRows, _, err := dt.RowCount(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return numBytesPerRow * numRows, nil
+}
+
+func (dt *TagsTable) RowCount(_ *sql.Context) (uint64, bool, error) {
+	return tagsDefaultRowCount, false, nil
 }
 
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant
