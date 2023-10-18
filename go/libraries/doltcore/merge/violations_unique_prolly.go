@@ -67,7 +67,7 @@ func (m UniqCVMeta) Unmarshall(ctx *sql.Context) (val types.JSONDocument, err er
 	return types.JSONDocument{Val: m}, nil
 }
 
-func (m UniqCVMeta) ToString(ctx *sql.Context) (string, error) {
+func (m UniqCVMeta) JSONString() (string, error) {
 	return m.PrettyPrint(), nil
 }
 
@@ -163,7 +163,7 @@ func (m NullViolationMeta) Unmarshall(ctx *sql.Context) (val types.JSONDocument,
 	return types.JSONDocument{Val: m}, nil
 }
 
-func (m NullViolationMeta) ToString(ctx *sql.Context) (string, error) {
+func (m NullViolationMeta) JSONString() (string, error) {
 	return fmt.Sprintf("{Columns: [%s]}", strings.Join(m.Columns, ",")), nil
 }
 
@@ -208,8 +208,8 @@ func (m CheckCVMeta) ToInterface() interface{} {
 	}
 }
 
-// ToString implements sql.JSONWrapper
-func (m CheckCVMeta) ToString(_ *sql.Context) (string, error) {
+// JSONString implements sql.JSONWrapper
+func (m CheckCVMeta) JSONString() (string, error) {
 	jsonStr := fmt.Sprintf(`{`+
 		`"Name": "%s", `+
 		`"Expression": "%s"}`,

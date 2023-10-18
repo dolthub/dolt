@@ -92,7 +92,7 @@ func TestJSONValueMarshallingRoundTrip(t *testing.T) {
 			assert.Equal(t, test.doc.Val, jsDoc.Val)
 
 			// sql.JSONDocument -> NomsJSON -> string -> sql.JSONDocument
-			str, err := nomsVal.ToString(ctx)
+			str, err := nomsVal.JSONString()
 			assert.NoError(t, err)
 
 			var val interface{}

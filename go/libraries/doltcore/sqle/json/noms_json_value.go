@@ -203,9 +203,9 @@ func unmarshalJSONObject(ctx context.Context, m types.Map) (obj map[string]inter
 	return
 }
 
-// ToString implements the sql.JSONValue interface.
-func (v NomsJSON) ToString(ctx *sql.Context) (string, error) {
-	return NomsJSONToString(ctx, v)
+// JSONString implements the sql.JSONWrapper interface.
+func (v NomsJSON) JSONString() (string, error) {
+	return NomsJSONToString(context.Background(), v)
 }
 
 func NomsJSONToString(ctx context.Context, js NomsJSON) (string, error) {

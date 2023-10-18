@@ -388,7 +388,7 @@ type FkCVMeta struct {
 
 var _ sql.JSONWrapper = FkCVMeta{}
 
-func (m FkCVMeta) ToString(ctx *sql.Context) (string, error) {
+func (m FkCVMeta) JSONString() (string, error) {
 	return m.PrettyPrint(), nil
 }
 
