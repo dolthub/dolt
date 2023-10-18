@@ -174,6 +174,11 @@ func printUserTables(tableNames []string, apr *argparser.ArgParseResults, queryi
 		label = row[0][0].(string)
 	}
 
+	if len(tableNames) == 0 {
+		cli.Printf("No tables in %s\n", label)
+		return nil
+	}
+
 	cli.Printf("Tables in %s:\n", label)
 	for _, tbl := range tableNames {
 		if apr.Contains(cli.VerboseFlag) {
@@ -195,7 +200,15 @@ func printTableVerbose(table string, queryist cli.Queryist, sqlCtx *sql.Context)
 		return err
 	}
 
-	cli.Println(fmt.Sprintf("\t%-20s     %d rows\n", table, row[0][0].(int64)))
+	if cnt, ok := row[0][0].(int64); ok {
+		cli.Println(fmt.Sprintf("\t%-20s     %d rows", table, cnt))
+	} else if cnt, ok := row[0][0].(string); ok {
+		// remote execution returns result as a string
+		cli.Println(fmt.Sprintf("\t%-20s     %s rows", table, cnt))
+	} else {
+		return fmt.Errorf("unexpected type for count: %T", row[0][0])
+	}
+
 	return nil
 }
 

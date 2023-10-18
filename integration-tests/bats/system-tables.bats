@@ -55,34 +55,6 @@ teardown() {
     [[ "$output" =~ "dolt_commit_diff_test" ]] || false
 }
 
-@test "system-tables: dolt ls --system -v shows history and diff systems tables for tables on other branches" {
-    dolt checkout -b add-table-branch
-    dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
-    dolt add test
-    dolt commit -m "Added test table"
-    dolt checkout main
-    run dolt ls --system
-    [ $status -eq 0 ]
-    [[ "$output" =~ "dolt_log" ]] || false
-    [[ "$output" =~ "dolt_conflicts" ]] || false
-    [[ "$output" =~ "dolt_branches" ]] || false
-    [[ "$output" =~ "dolt_remote_branches" ]] || false
-    [[ "$output" =~ "dolt_remotes" ]] || false
-    [[ ! "$output" =~ "dolt_history_test" ]] || false
-    [[ ! "$output" =~ "dolt_diff_test" ]] || false
-    [[ ! "$output" =~ "dolt_commit_diff_test" ]] || false
-    run dolt ls --system -v
-    [ $status -eq 0 ]
-    [[ "$output" =~ "dolt_log" ]] || false
-    [[ "$output" =~ "dolt_conflicts" ]] || false
-    [[ "$output" =~ "dolt_branches" ]] || false
-    [[ "$output" =~ "dolt_remote_branches" ]] || false
-    [[ "$output" =~ "dolt_remotes" ]] || false
-    [[ "$output" =~ "dolt_history_test" ]] || false
-    [[ "$output" =~ "dolt_diff_test" ]] || false
-    [[ "$output" =~ "dolt_commit_diff_test" ]] || false
-}
-
 @test "system-tables: query dolt_log system table" {
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test

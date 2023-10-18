@@ -183,6 +183,15 @@ teardown() {
     [[ "$output" =~ "t3" ]] || false
 }
 
+@test "ls: no tables in working set" {
+    dolt sql -q "drop table t1"
+    dolt sql -q "drop table t2"
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No tables in working set" ]] || false
+}
+
 @test "ls: too many arguments" {
     run dolt ls HEAD HEAD~1
     [ "$status" -eq 1 ]

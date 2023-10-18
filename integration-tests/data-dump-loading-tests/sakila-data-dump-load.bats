@@ -19,9 +19,9 @@ teardown() {
 
     cd sakila
 
-    # tables in working set
+    # tables and views in working set
     run dolt ls
-    [ "${#lines[@]}" -eq 17 ]
+    [ "${#lines[@]}" -eq 24 ]
 
 
     # triggers
