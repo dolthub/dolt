@@ -146,21 +146,6 @@ func (v NomsJSON) ToInterface() interface{} {
 	return val
 }
 
-func (v NomsJSON) Keys(s string) (sql.JSONWrapper, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (v NomsJSON) Overlaps(wrapper sql.JSONWrapper) (bool, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (v NomsJSON) Search() (string, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
 // Unmarshall implements the sql.JSONValue interface.
 func (v NomsJSON) Unmarshall(ctx *sql.Context) (doc gmstypes.JSONDocument, err error) {
 	nomsVal, err := types.JSON(v).Inner()

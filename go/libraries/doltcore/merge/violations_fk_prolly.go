@@ -393,8 +393,17 @@ func (m FkCVMeta) ToString(ctx *sql.Context) (string, error) {
 }
 
 func (m FkCVMeta) ToInterface() interface{} {
-	//TODO implement me
-	panic("implement me")
+	return map[string]interface{}{
+		"Columns":           m.Columns,
+		"ForeignKey":        m.ForeignKey,
+		"Index":             m.Index,
+		"OnDelete":          m.OnDelete,
+		"OnUpdate":          m.OnUpdate,
+		"ReferencedColumns": m.ReferencedColumns,
+		"ReferencedIndex":   m.ReferencedIndex,
+		"ReferencedTable":   m.ReferencedTable,
+		"Table":             m.Table,
+	}
 }
 
 // PrettyPrint is a custom pretty print function to match the old format's
