@@ -146,7 +146,7 @@ func TestJSONCompare(t *testing.T) {
 		// arrays
 		{`[1,2]`, `[1,2]`, 0},
 		// deterministic array ordering by hash
-		{`[1,2]`, `[1,9]`, 1},
+		{`[1,2]`, `[1,9]`, -1},
 
 		// objects
 		{`{"a": 0}`, `{"a": 0}`, 0},
@@ -160,11 +160,7 @@ func TestJSONCompare(t *testing.T) {
 			left, right := MustNomsJSON(test.left), MustNomsJSON(test.right)
 			cmp, err := gmstypes.CompareJSON(left, right)
 			require.NoError(t, err)
-			if test.left == `[1,2]` && test.right == `[1,9]` {
-				assert.NotEqual(t, 0, cmp)
-			} else {
-				assert.Equal(t, test.cmp, cmp)
-			}
+			assert.Equal(t, test.cmp, cmp)
 		})
 	}
 }
