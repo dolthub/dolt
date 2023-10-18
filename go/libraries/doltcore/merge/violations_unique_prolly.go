@@ -67,10 +67,6 @@ func (m UniqCVMeta) Unmarshall(ctx *sql.Context) (val types.JSONDocument, err er
 	return types.JSONDocument{Val: m}, nil
 }
 
-func (m UniqCVMeta) JSONString() (string, error) {
-	return m.PrettyPrint(), nil
-}
-
 func (m UniqCVMeta) PrettyPrint() string {
 	jsonStr := fmt.Sprintf(`{`+
 		`"Name": "%s", `+
@@ -163,10 +159,6 @@ func (m NullViolationMeta) Unmarshall(ctx *sql.Context) (val types.JSONDocument,
 	return types.JSONDocument{Val: m}, nil
 }
 
-func (m NullViolationMeta) JSONString() (string, error) {
-	return fmt.Sprintf("{Columns: [%s]}", strings.Join(m.Columns, ",")), nil
-}
-
 // CheckCVMeta holds metadata describing a check constraint violation.
 type CheckCVMeta struct {
 	Name       string `json:"Name"`
@@ -206,14 +198,4 @@ func (m CheckCVMeta) ToInterface() interface{} {
 		"Name":       m.Name,
 		"Expression": m.Expression,
 	}
-}
-
-// JSONString implements sql.JSONWrapper
-func (m CheckCVMeta) JSONString() (string, error) {
-	jsonStr := fmt.Sprintf(`{`+
-		`"Name": "%s", `+
-		`"Expression": "%s"}`,
-		m.Name,
-		m.Expression)
-	return jsonStr, nil
 }

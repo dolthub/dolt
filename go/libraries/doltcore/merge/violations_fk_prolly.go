@@ -388,10 +388,6 @@ type FkCVMeta struct {
 
 var _ sql.JSONWrapper = FkCVMeta{}
 
-func (m FkCVMeta) JSONString() (string, error) {
-	return m.PrettyPrint(), nil
-}
-
 func (m FkCVMeta) ToInterface() interface{} {
 	return map[string]interface{}{
 		"Columns":           m.Columns,
