@@ -453,3 +453,10 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "merge from origin" ]] || false
 }
+
+@test "pull: --silent suppresses progress message" {
+    cd repo2
+    run dolt pull origin --silent
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "Pulling..." ]] || false
+}

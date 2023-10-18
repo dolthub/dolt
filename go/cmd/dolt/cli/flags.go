@@ -58,6 +58,7 @@ const (
 	SetUpstreamFlag      = "set-upstream"
 	ShallowFlag          = "shallow"
 	ShowIgnoredFlag      = "ignored"
+	SilentFlag           = "silent"
 	SkipEmptyFlag        = "skip-empty"
 	SoftResetParam       = "soft"
 	SquashParam          = "squash"

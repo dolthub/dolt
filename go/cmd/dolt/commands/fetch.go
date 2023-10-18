@@ -105,10 +105,12 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	}()
 
 	spinner := TextSpinner{}
-	cli.Print(spinner.next() + " Fetching...")
-	defer func() {
-		cli.DeleteAndPrint(len(" Fetching...")+1, "")
-	}()
+	if !apr.Contains(cli.SilentFlag) {
+		cli.Print(spinner.next() + " Fetching...")
+		defer func() {
+			cli.DeleteAndPrint(len(" Fetching...")+1, "")
+		}()
+	}
 
 	for {
 		select {
@@ -127,7 +129,9 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			}
 			return HandleVErrAndExitCode(nil, usage)
 		case <-time.After(time.Millisecond * 50):
-			cli.DeleteAndPrint(len(" Fetching...")+1, spinner.next()+" Fetching...")
+			if !apr.Contains(cli.SilentFlag) {
+				cli.DeleteAndPrint(len(" Fetching...")+1, spinner.next()+" Fetching...")
+			}
 		}
 	}
 }

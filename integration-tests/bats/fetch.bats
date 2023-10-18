@@ -359,3 +359,10 @@ teardown() {
     # fetch should print some kind of status message
     [[ "$output" =~ "Fetching..." ]] || false
 }
+
+@test "fetch: --silent suppresses progress message" {
+    cd repo2
+    run dolt fetch --silent
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "Fetching..." ]] || false
+}
