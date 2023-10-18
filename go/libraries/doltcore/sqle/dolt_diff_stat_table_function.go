@@ -27,9 +27,12 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 )
+
+const diffStatDefaultRowCount = 10
 
 var _ sql.TableFunction = (*DiffStatTableFunction)(nil)
 var _ sql.ExecSourceRel = (*DiffStatTableFunction)(nil)
@@ -72,6 +75,19 @@ func (ds *DiffStatTableFunction) NewInstance(ctx *sql.Context, db sql.Database, 
 	}
 
 	return node, nil
+}
+
+func (ds *DiffStatTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(ds.Schema())
+	numRows, _, err := ds.RowCount(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return numBytesPerRow * numRows, nil
+}
+
+func (ds *DiffStatTableFunction) RowCount(_ *sql.Context) (uint64, bool, error) {
+	return diffStatDefaultRowCount, false, nil
 }
 
 // Database implements the sql.Databaser interface

@@ -29,6 +29,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 )
 
+const diffSummaryDefaultRowCount = 10
+
 var _ sql.TableFunction = (*DiffSummaryTableFunction)(nil)
 var _ sql.ExecSourceRel = (*DiffSummaryTableFunction)(nil)
 
@@ -63,6 +65,19 @@ func (ds *DiffSummaryTableFunction) NewInstance(ctx *sql.Context, db sql.Databas
 	}
 
 	return node, nil
+}
+
+func (ds *DiffSummaryTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(ds.Schema())
+	numRows, _, err := ds.RowCount(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return numBytesPerRow * numRows, nil
+}
+
+func (ds *DiffSummaryTableFunction) RowCount(_ *sql.Context) (uint64, bool, error) {
+	return diffSummaryDefaultRowCount, false, nil
 }
 
 // Database implements the sql.Databaser interface

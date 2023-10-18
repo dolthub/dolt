@@ -21,10 +21,13 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 )
+
+const commitsDefaultRowCount = 10
 
 // CommitsTable is a sql.Table that implements a system table which
 // shows the combined commit log for all branches in the repo.
@@ -35,10 +38,24 @@ type CommitsTable struct {
 
 var _ sql.Table = (*CommitsTable)(nil)
 var _ sql.IndexAddressable = (*CommitsTable)(nil)
+var _ sql.StatisticsTable = (*CommitsTable)(nil)
 
 // NewCommitsTable creates a CommitsTable
 func NewCommitsTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
 	return &CommitsTable{ddb: ddb}
+}
+
+func (dt *CommitsTable) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(dt.Schema())
+	numRows, _, err := dt.RowCount(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return numBytesPerRow * numRows, nil
+}
+
+func (dt *CommitsTable) RowCount(_ *sql.Context) (uint64, bool, error) {
+	return commitsDefaultRowCount, false, nil
 }
 
 // Name is a sql.Table interface function which returns the name of the table.

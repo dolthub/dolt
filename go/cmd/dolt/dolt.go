@@ -142,7 +142,6 @@ var commandsWithoutCliCtx = []cli.Command{
 	commands.ReadTablesCmd{},
 	commands.GarbageCollectionCmd{},
 	commands.FilterBranchCmd{},
-	commands.MergeBaseCmd{},
 	commands.RootsCmd{},
 	commands.VersionCmd{VersionStr: Version},
 	commands.DumpCmd{},

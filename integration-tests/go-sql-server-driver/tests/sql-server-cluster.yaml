@@ -1674,3 +1674,65 @@ tests:
       result:
         columns: ["d"]
         rows: []
+# Assert that we can gracefully transition to standby even when there are no
+# dolt databases which we are replicating.
+- name: dolt_cluster_transition_to_standby no dolt databases exist
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:3852/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3851
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3309
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3310
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:3851/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3852
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3310
+  connections:
+  - on: server1
+    queries:
+    - query: "show databases"
+      result:
+        columns: ["Database"]
+        rows:
+        - ["dolt_cluster"]
+        - ["information_schema"]
+        - ["mysql"]
+    - exec: "call dolt_cluster_transition_to_standby('2', '1')"
+  - on: server2
+    queries:
+    - exec: "call dolt_assume_cluster_role('primary', '2')"
+  - on: server2
+    queries:
+    - exec: "call dolt_cluster_transition_to_standby('3', '1')"
+  - on: server1
+    queries:
+    - exec: "call dolt_assume_cluster_role('primary', '3')"

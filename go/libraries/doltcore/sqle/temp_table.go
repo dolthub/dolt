@@ -175,12 +175,13 @@ func setTempTableRoot(t *TempTable) func(ctx *sql.Context, dbName string, newRoo
 	}
 }
 
-func (t *TempTable) RowCount(ctx *sql.Context) (uint64, error) {
+func (t *TempTable) RowCount(ctx *sql.Context) (uint64, bool, error) {
 	rows, err := t.table.GetRowData(ctx)
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
-	return rows.Count()
+	cnt, err := rows.Count()
+	return cnt, true, err
 }
 
 func (t *TempTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {

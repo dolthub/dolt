@@ -34,6 +34,8 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+const diffTableDefaultRowCount = 1000
+
 var ErrInvalidNonLiteralArgument = errors.NewKind("Invalid argument to %s: %s – only literal values supported")
 
 var _ sql.TableFunction = (*DiffTableFunction)(nil)
@@ -67,6 +69,19 @@ func (dtf *DiffTableFunction) NewInstance(ctx *sql.Context, database sql.Databas
 	}
 
 	return node, nil
+}
+
+func (dtf *DiffTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(dtf.Schema())
+	numRows, _, err := dtf.RowCount(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return numBytesPerRow * numRows, nil
+}
+
+func (dtf *DiffTableFunction) RowCount(_ *sql.Context) (uint64, bool, error) {
+	return diffTableDefaultRowCount, false, nil
 }
 
 // Database implements the sql.Databaser interface
