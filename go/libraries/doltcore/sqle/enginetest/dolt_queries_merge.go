@@ -2094,7 +2094,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query: "select violation_type, pk, violation_info from dolt_constraint_violations_test",
 				Expected: []sql.Row{
-					{uint16(4), 2, types.JSONDocument{Val: merge.NullViolationMeta{Columns: []string{"c0"}}}},
+					{uint16(4), 2, merge.NullViolationMeta{Columns: []string{"c0"}}},
 				},
 			},
 		},

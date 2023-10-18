@@ -140,7 +140,7 @@ func TestSchemaTableMigrationV1(t *testing.T) {
 			// Annoying difference in representation between storage versions here
 			jsonDoc, ok := row[3].(gmstypes.JSONDocument)
 			if ok {
-				row[3], err = jsonDoc.ToString(nil)
+				row[3], err = jsonDoc.ToString()
 				row[3] = strings.ReplaceAll(row[3].(string), " ", "") // remove spaces
 			}
 

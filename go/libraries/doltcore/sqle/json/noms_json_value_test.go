@@ -154,7 +154,6 @@ func TestJSONCompare(t *testing.T) {
 		{`{"a": 1}`, `{"a": 0}`, 1},
 	}
 
-	ctx := sql.NewEmptyContext()
 	for _, test := range tests {
 		name := fmt.Sprintf("%v_%v__%d", test.left, test.right, test.cmp)
 		t.Run(name, func(t *testing.T) {
