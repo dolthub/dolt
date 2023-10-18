@@ -42,7 +42,7 @@ type DoltStats struct {
 	Types         []sql.Type
 }
 
-func DoltStatsFromSql(stat sql.StatisticIf) (*DoltStats, error) {
+func DoltStatsFromSql(stat sql.Statistic) (*DoltStats, error) {
 	hist, err := DoltHistFromSql(stat.Histogram(), stat.Types())
 	if err != nil {
 		return nil, err
@@ -59,7 +59,7 @@ func DoltStatsFromSql(stat sql.StatisticIf) (*DoltStats, error) {
 	}, nil
 }
 
-func (s *DoltStats) toSql() sql.StatisticIf {
+func (s *DoltStats) toSql() sql.Statistic {
 	typStrs := make([]string, len(s.Types))
 	for i, typ := range s.Types {
 		typStrs[i] = typ.String()
@@ -176,8 +176,8 @@ type Provider struct {
 
 var _ sql.StatsProvider = (*Provider)(nil)
 
-func (p *Provider) GetTableStats(ctx *sql.Context, db, table string) ([]sql.StatisticIf, error) {
-	var ret []sql.StatisticIf
+func (p *Provider) GetTableStats(ctx *sql.Context, db, table string) ([]sql.Statistic, error) {
+	var ret []sql.Statistic
 	for meta, stat := range p.stats {
 		if strings.EqualFold(db, meta.db) && strings.EqualFold(table, meta.table) {
 			ret = append(ret, stat.toSql())
@@ -186,7 +186,7 @@ func (p *Provider) GetTableStats(ctx *sql.Context, db, table string) ([]sql.Stat
 	return ret, nil
 }
 
-func (p *Provider) SetStats(ctx *sql.Context, stats sql.StatisticIf) error {
+func (p *Provider) SetStats(ctx *sql.Context, stats sql.Statistic) error {
 	meta := statsMeta{
 		db:    strings.ToLower(stats.Qualifier().Db()),
 		table: strings.ToLower(stats.Qualifier().Table()),
@@ -200,7 +200,7 @@ func (p *Provider) SetStats(ctx *sql.Context, stats sql.StatisticIf) error {
 	return nil
 }
 
-func (p *Provider) GetStats(ctx *sql.Context, qual sql.StatQualifier, cols []string) (sql.StatisticIf, bool) {
+func (p *Provider) GetStats(ctx *sql.Context, qual sql.StatQualifier, cols []string) (sql.Statistic, bool) {
 	meta := statsMeta{
 		db:    strings.ToLower(qual.Db()),
 		table: strings.ToLower(qual.Table()),
