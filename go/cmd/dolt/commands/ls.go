@@ -167,7 +167,7 @@ func printUserTables(tableNames []string, apr *argparser.ArgParseResults, queryi
 	if apr.NArg() == 0 {
 		label = "working set"
 	} else {
-		query := fmt.Sprintf("select hashof('%%s')", apr.Arg(0))
+		query := fmt.Sprintf("select hashof('%s')", apr.Arg(0))
 		row, err := GetRowsForSql(queryist, sqlCtx, query)
 		if err != nil {
 			return err
