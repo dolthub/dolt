@@ -167,7 +167,8 @@ func printUserTables(tableNames []string, apr *argparser.ArgParseResults, queryi
 	if apr.NArg() == 0 {
 		label = "working set"
 	} else {
-		row, err := GetRowsForSql(queryist, sqlCtx, "select hashof('"+apr.Arg(0)+"')")
+		query := fmt.Sprintf("select hashof('%%s')", apr.Arg(0))
+		row, err := GetRowsForSql(queryist, sqlCtx, query)
 		if err != nil {
 			return err
 		}
@@ -195,7 +196,8 @@ func printUserTables(tableNames []string, apr *argparser.ArgParseResults, queryi
 }
 
 func printTableVerbose(table string, queryist cli.Queryist, sqlCtx *sql.Context) error {
-	row, err := GetRowsForSql(queryist, sqlCtx, "select count(*) from "+table)
+	query := fmt.Sprintf("select count(*) from `%s`", table)
+	row, err := GetRowsForSql(queryist, sqlCtx, query)
 	if err != nil {
 		return err
 	}

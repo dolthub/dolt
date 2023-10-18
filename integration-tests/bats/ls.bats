@@ -83,12 +83,6 @@ teardown() {
     [[ "$output" =~ "dolt_commit_diff_t2" ]] || false
 }
 
-@test "ls: --verbose doesn't show row count for system tables" {
-    run dolt ls --system --verbose
-    [ "$status" -eq 0 ]
-    ! [[ "$output" =~ "rows" ]] || false
-}
-
 @test "ls: --all shows tables in working set and system tables" {
     run dolt ls --all
     [ "$status" -eq 0 ]
