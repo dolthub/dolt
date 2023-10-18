@@ -662,7 +662,7 @@ func getJsonDocumentColAsString(sqlCtx *sql.Context, col interface{}) (string, e
 	case string:
 		return v, nil
 	case types.JSONDocument:
-		text, err := v.ToString(sqlCtx)
+		text, err := v.ToString()
 		if err != nil {
 			return "", err
 		}

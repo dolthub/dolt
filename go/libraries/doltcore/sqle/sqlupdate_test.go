@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -422,7 +423,7 @@ func testUpdateQuery(t *testing.T, test UpdateTest) {
 		assert.Equal(t, len(test.ExpectedRows[i]), len(actualRows[i]))
 		for j := 0; j < len(test.ExpectedRows[i]); j++ {
 			if _, ok := actualRows[i][j].(json.NomsJSON); ok {
-				cmp, err := actualRows[i][j].(json.NomsJSON).Compare(nil, test.ExpectedRows[i][j].(json.NomsJSON))
+				cmp, err := gmstypes.CompareJSON(actualRows[i][j].(json.NomsJSON), test.ExpectedRows[i][j].(json.NomsJSON))
 				assert.NoError(t, err)
 				assert.Equal(t, 0, cmp)
 			} else {

@@ -35,49 +35,36 @@ type DoltStats struct {
 	DistinctCount uint64
 	NullCount     uint64
 	AvgSize       uint64
+	Qualifier     sql.StatQualifier
 	CreatedAt     time.Time
 	Histogram     DoltHistogram
 	Columns       []string
 	Types         []sql.Type
 }
 
-func DoltStatsFromSql(stats *stats.Stats) (*DoltStats, error) {
-	typs, err := parseTypeString(stats.Types)
-	if err != nil {
-		return nil, err
-	}
-	hist, err := DoltHistFromSql(stats.Histogram, typs)
+func DoltStatsFromSql(stat sql.StatisticIf) (*DoltStats, error) {
+	hist, err := DoltHistFromSql(stat.Histogram(), stat.Types())
 	if err != nil {
 		return nil, err
 	}
 	return &DoltStats{
-		RowCount:      stats.Rows,
-		DistinctCount: stats.Distinct,
-		NullCount:     stats.Nulls,
-		AvgSize:       stats.AvgSize,
-		CreatedAt:     stats.CreatedAt,
+		RowCount:      stat.RowCount(),
+		DistinctCount: stat.DistinctCount(),
+		NullCount:     stat.NullCount(),
+		AvgSize:       stat.AvgSize(),
+		CreatedAt:     stat.CreatedAt(),
 		Histogram:     hist,
-		Columns:       stats.Columns,
-		Types:         typs,
+		Columns:       stat.Columns(),
+		Types:         stat.Types(),
 	}, nil
 }
 
-func (s *DoltStats) toSql() *stats.Stats {
+func (s *DoltStats) toSql() sql.StatisticIf {
 	typStrs := make([]string, len(s.Types))
 	for i, typ := range s.Types {
 		typStrs[i] = typ.String()
 	}
-	return &stats.Stats{
-		Rows:      s.RowCount,
-		Distinct:  s.DistinctCount,
-		Nulls:     s.NullCount,
-		AvgSize:   s.AvgSize,
-		CreatedAt: s.CreatedAt,
-		Histogram: s.Histogram.toSql(),
-		Columns:   s.Columns,
-		Types:     typStrs,
-		Version:   0,
-	}
+	return stats.NewStatistic(s.RowCount, s.DistinctCount, s.NullCount, s.AvgSize, s.CreatedAt, s.Qualifier, s.Columns, s.Types, s.Histogram.toSql())
 }
 
 type DoltHistogram []DoltBucket
@@ -86,25 +73,25 @@ type DoltBucket struct {
 	Count      uint64
 	Distinct   uint64
 	Null       uint64
-	Mcv        []sql.Row
+	Mcvs       []sql.Row
 	McvCount   []uint64
 	BoundCount uint64
 	UpperBound sql.Row
 }
 
-func DoltHistFromSql(hist stats.Histogram, types []sql.Type) (DoltHistogram, error) {
+func DoltHistFromSql(hist sql.Histogram, types []sql.Type) (DoltHistogram, error) {
 	ret := make([]DoltBucket, len(hist))
 	var err error
 	for i, b := range hist {
-		upperBound := make(sql.Row, len(b.UpperBound))
-		for i, v := range b.UpperBound {
+		upperBound := make(sql.Row, len(b.UpperBound()))
+		for i, v := range b.UpperBound() {
 			upperBound[i], _, err = types[i].Convert(v)
 			if err != nil {
 				return nil, fmt.Errorf("failed to convert %v to type %s", v, types[i].String())
 			}
 		}
-		mcvs := make([]sql.Row, len(b.Mcv))
-		for i, mcv := range b.Mcv {
+		mcvs := make([]sql.Row, len(b.Mcvs()))
+		for i, mcv := range b.Mcvs() {
 			for _, v := range mcv {
 				conv, _, err := types[i].Convert(v)
 				if err != nil {
@@ -114,12 +101,12 @@ func DoltHistFromSql(hist stats.Histogram, types []sql.Type) (DoltHistogram, err
 			}
 		}
 		ret[i] = DoltBucket{
-			Count:      b.Count,
-			Distinct:   b.Distinct,
-			Null:       b.Null,
-			Mcv:        mcvs,
-			McvCount:   b.McvCount,
-			BoundCount: b.BoundCount,
+			Count:      b.RowCount(),
+			Distinct:   b.DistinctCount(),
+			Null:       b.NullCount(),
+			Mcvs:       mcvs,
+			McvCount:   b.McvCounts(),
+			BoundCount: b.BoundCount(),
 			UpperBound: nil,
 		}
 	}
@@ -152,26 +139,12 @@ func parseTypeString(types []string) ([]sql.Type, error) {
 	return ret, nil
 }
 
-func (s DoltHistogram) toSql() []stats.Bucket {
-	ret := make([]stats.Bucket, len(s))
+func (s DoltHistogram) toSql() []*stats.Bucket {
+	ret := make([]*stats.Bucket, len(s))
 	for i, b := range s {
 		upperBound := make([]interface{}, len(b.UpperBound))
 		copy(upperBound, b.UpperBound)
-		mcvs := make([][]interface{}, len(b.Mcv))
-		for i, mcv := range b.Mcv {
-			for _, v := range mcv {
-				mcvs[i] = append(mcvs[i], v)
-			}
-		}
-		ret[i] = stats.Bucket{
-			Count:      b.Count,
-			Distinct:   b.Distinct,
-			Null:       b.Null,
-			UpperBound: upperBound,
-			BoundCount: b.BoundCount,
-			Mcv:        mcvs,
-			McvCount:   b.McvCount,
-		}
+		ret[i] = stats.NewHistogramBucket(b.Count, b.Distinct, b.Null, b.BoundCount, upperBound, b.McvCount, b.Mcvs)
 	}
 	return ret
 }
@@ -203,8 +176,8 @@ type Provider struct {
 
 var _ sql.StatsProvider = (*Provider)(nil)
 
-func (p *Provider) GetTableStats(ctx *sql.Context, db, table string) ([]*stats.Stats, error) {
-	var ret []*stats.Stats
+func (p *Provider) GetTableStats(ctx *sql.Context, db, table string) ([]sql.StatisticIf, error) {
+	var ret []sql.StatisticIf
 	for meta, stat := range p.stats {
 		if strings.EqualFold(db, meta.db) && strings.EqualFold(table, meta.table) {
 			ret = append(ret, stat.toSql())
@@ -213,11 +186,11 @@ func (p *Provider) GetTableStats(ctx *sql.Context, db, table string) ([]*stats.S
 	return ret, nil
 }
 
-func (p *Provider) SetStats(ctx *sql.Context, db, table string, stats *stats.Stats) error {
+func (p *Provider) SetStats(ctx *sql.Context, stats sql.StatisticIf) error {
 	meta := statsMeta{
-		db:    strings.ToLower(db),
-		table: strings.ToLower(table),
-		pref:  strings.Join(stats.Columns, ","),
+		db:    strings.ToLower(stats.Qualifier().Db()),
+		table: strings.ToLower(stats.Qualifier().Table()),
+		pref:  strings.Join(stats.Columns(), ","),
 	}
 	doltStats, err := DoltStatsFromSql(stats)
 	if err != nil {
@@ -227,10 +200,10 @@ func (p *Provider) SetStats(ctx *sql.Context, db, table string, stats *stats.Sta
 	return nil
 }
 
-func (p *Provider) GetStats(ctx *sql.Context, db, table string, cols []string) (*stats.Stats, bool) {
+func (p *Provider) GetStats(ctx *sql.Context, qual sql.StatQualifier, cols []string) (sql.StatisticIf, bool) {
 	meta := statsMeta{
-		db:    strings.ToLower(db),
-		table: strings.ToLower(table),
+		db:    strings.ToLower(qual.Db()),
+		table: strings.ToLower(qual.Table()),
 		pref:  strings.Join(cols, ","),
 	}
 	if s, ok := p.stats[meta]; ok {
@@ -239,10 +212,10 @@ func (p *Provider) GetStats(ctx *sql.Context, db, table string, cols []string) (
 	return nil, false
 }
 
-func (p *Provider) DropStats(ctx *sql.Context, db, table string, cols []string) error {
+func (p *Provider) DropStats(ctx *sql.Context, qual sql.StatQualifier, cols []string) error {
 	meta := statsMeta{
-		db:    strings.ToLower(db),
-		table: strings.ToLower(table),
+		db:    strings.ToLower(qual.Db()),
+		table: strings.ToLower(qual.Table()),
 		pref:  strings.Join(cols, ","),
 	}
 	delete(p.stats, meta)

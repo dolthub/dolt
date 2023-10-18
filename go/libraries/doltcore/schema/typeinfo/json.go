@@ -72,7 +72,7 @@ func (ti *jsonType) ConvertValueToNomsValue(ctx context.Context, vrw types.Value
 		return nil, err
 	}
 
-	jsVal, ok := jsDoc.(sqltypes.JSONValue)
+	jsVal, ok := jsDoc.(sql.JSONWrapper)
 	if !ok {
 		return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
 	}

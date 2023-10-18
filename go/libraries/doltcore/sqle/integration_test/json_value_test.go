@@ -19,6 +19,7 @@ import (
 	"encoding/base32"
 	json2 "encoding/json"
 	"fmt"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -149,7 +150,7 @@ func testJsonValue(t *testing.T, test jsonValueTest, setupCommon []testCommand) 
 
 			// special logic for comparing JSONValues
 			if js, ok := exp.(json.NomsJSON); ok {
-				cmp, err := js.Compare(sql.NewEmptyContext(), act.(json.NomsJSON))
+				cmp, err := gmstypes.CompareJSON(js, act.(json.NomsJSON))
 				require.NoError(t, err)
 				assert.Zero(t, cmp)
 			} else {

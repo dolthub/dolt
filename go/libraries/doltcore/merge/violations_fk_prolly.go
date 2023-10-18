@@ -20,9 +20,6 @@ import (
 	"io"
 	"strings"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -31,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 func prollyParentSecDiffFkConstraintViolations(
@@ -387,22 +385,16 @@ type FkCVMeta struct {
 	Table             string   `json:"Table"`
 }
 
-var _ types.JSONValue = FkCVMeta{}
-
-func (m FkCVMeta) Unmarshall(ctx *sql.Context) (val types.JSONDocument, err error) {
-	return types.JSONDocument{Val: m}, nil
-}
-
-func (m FkCVMeta) Compare(ctx *sql.Context, v types.JSONValue) (cmp int, err error) {
-	ours := types.JSONDocument{Val: m}
-	return ours.Compare(ctx, v)
-}
+var _ sql.JSONWrapper = FkCVMeta{}
 
 func (m FkCVMeta) ToString(ctx *sql.Context) (string, error) {
 	return m.PrettyPrint(), nil
 }
 
-var _ types.JSONValue = FkCVMeta{}
+func (m FkCVMeta) ToInterface() interface{} {
+	//TODO implement me
+	panic("implement me")
+}
 
 // PrettyPrint is a custom pretty print function to match the old format's
 // output which includes additional whitespace between keys, values, and array elements.
