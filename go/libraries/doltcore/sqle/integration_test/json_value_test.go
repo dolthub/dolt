@@ -19,13 +19,13 @@ import (
 	"encoding/base32"
 	json2 "encoding/json"
 	"fmt"
-	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"math/rand"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 

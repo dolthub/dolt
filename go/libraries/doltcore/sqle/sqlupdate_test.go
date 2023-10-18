@@ -16,10 +16,10 @@ package sqle
 
 import (
 	"context"
-	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
