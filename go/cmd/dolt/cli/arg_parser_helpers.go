@@ -106,6 +106,7 @@ func CreatePushArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less {{.EmphasisLeft}}dolt pull{{.EmphasisRight}} and other commands.")
 	ap.SupportsFlag(ForceFlag, "f", "Update the remote with local history, overwriting any conflicting history in the remote.")
 	ap.SupportsFlag(AllFlag, "", "Push all branches.")
+	ap.SupportsFlag(SilentFlag, "", "Suppress progress information.")
 	return ap
 }
 
@@ -171,6 +172,7 @@ func CreateFetchArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("fetch")
 	ap.SupportsString(UserFlag, "u", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
 	ap.SupportsFlag(PruneFlag, "p", "After fetching, remove any remote-tracking references that don't exist on the remote.")
+	ap.SupportsFlag(SilentFlag, "", "Suppress progress information.")
 	return ap
 }
 
@@ -194,6 +196,7 @@ func CreatePullArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(NoCommitFlag, "", "Perform the merge and stop just before creating a merge commit. Note this will not prevent a fast-forward merge; use the --no-ff arg together with the --no-commit arg to prevent both fast-forwards and merge commits.")
 	ap.SupportsFlag(NoEditFlag, "", "Use an auto-generated commit message when creating a merge commit. The default for interactive CLI sessions is to open an editor.")
 	ap.SupportsString(UserFlag, "u", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
+	ap.SupportsFlag(SilentFlag, "", "Suppress progress information.")
 	return ap
 }
 
