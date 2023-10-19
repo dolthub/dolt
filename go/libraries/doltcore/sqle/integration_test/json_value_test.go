@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -149,7 +150,7 @@ func testJsonValue(t *testing.T, test jsonValueTest, setupCommon []testCommand) 
 
 			// special logic for comparing JSONValues
 			if js, ok := exp.(json.NomsJSON); ok {
-				cmp, err := js.Compare(sql.NewEmptyContext(), act.(json.NomsJSON))
+				cmp, err := gmstypes.CompareJSON(js, act.(json.NomsJSON))
 				require.NoError(t, err)
 				assert.Zero(t, cmp)
 			} else {

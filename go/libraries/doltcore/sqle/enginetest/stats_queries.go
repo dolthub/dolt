@@ -36,7 +36,7 @@ var DoltStatsTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: " SELECT mcv_cnt from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(mcv_cnt JSON path '$.McvCount')) as dt  where table_name = 'xy' and column_name = 'y,z'",
+				Query: " SELECT mcv_cnt from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(mcv_cnt JSON path '$.mcv_counts')) as dt  where table_name = 'xy' and column_name = 'y,z'",
 				Expected: []sql.Row{
 					{types.JSONDocument{Val: []interface{}{
 						float64(1),
@@ -46,7 +46,7 @@ var DoltStatsTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: " SELECT mcv from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(mcv JSON path '$.Mcv')) as dt  where table_name = 'xy' and column_name = 'y,z'",
+				Query: " SELECT mcv from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(mcv JSON path '$.mcvs')) as dt  where table_name = 'xy' and column_name = 'y,z'",
 				Expected: []sql.Row{
 					{types.JSONDocument{Val: []interface{}{
 						[]interface{}{float64(1), "a"},
@@ -56,7 +56,7 @@ var DoltStatsTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: " SELECT x,z from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(x bigint path '$.UpperBound[0]', z text path '$.UpperBound[1]')) as dt  where table_name = 'xy' and column_name = 'y,z'",
+				Query: " SELECT x,z from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(x bigint path '$.upper_bound[0]', z text path '$.upper_bound[1]')) as dt  where table_name = 'xy' and column_name = 'y,z'",
 				Expected: []sql.Row{
 					{2, "a"},
 				},
@@ -76,23 +76,23 @@ var DoltStatsTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT json_length(json_extract(histogram, \"$.buckets\")) from information_schema.column_statistics where column_name = 'x'",
+				Query:    "SELECT json_length(json_extract(histogram, \"$.statistic.buckets\")) from information_schema.column_statistics where column_name = 'x'",
 				Expected: []sql.Row{{32}},
 			},
 			{
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(cnt int path '$.Count')) as dt  where table_name = 'xy' and column_name = 'x'",
+				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.row_count')) as dt  where table_name = 'xy' and column_name = 'x'",
 				Expected: []sql.Row{{float64(30000)}},
 			},
 			{
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(cnt int path '$.Null')) as dt  where table_name = 'xy' and column_name = 'x'",
+				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.null_count')) as dt  where table_name = 'xy' and column_name = 'x'",
 				Expected: []sql.Row{{float64(0)}},
 			},
 			{
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(cnt int path '$.Distinct')) as dt  where table_name = 'xy' and column_name = 'x'",
+				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.distinct_count')) as dt  where table_name = 'xy' and column_name = 'x'",
 				Expected: []sql.Row{{float64(30000)}},
 			},
 			{
-				Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(bound_cnt int path '$.BoundCount')) as dt  where table_name = 'xy' and column_name = 'x'",
+				Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(bound_cnt int path '$.bound_count')) as dt  where table_name = 'xy' and column_name = 'x'",
 				Expected: []sql.Row{{int64(1)}},
 			},
 		},
@@ -107,30 +107,30 @@ var DoltStatsTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT json_length(json_extract(histogram, \"$.buckets\")) from information_schema.column_statistics where column_name = 'z'",
+				Query:    "SELECT json_length(json_extract(histogram, \"$.statistic.buckets\")) from information_schema.column_statistics where column_name = 'z'",
 				Expected: []sql.Row{{2}},
 			},
 			{
 				// bucket boundary duplication
-				Query:    "SELECT json_value(histogram, \"$.distinct\", 'signed') from information_schema.column_statistics where column_name = 'z'",
+				Query:    "SELECT json_value(histogram, \"$.statistic.distinct_count\", 'signed') from information_schema.column_statistics where column_name = 'z'",
 				Expected: []sql.Row{{202}},
 			},
 			{
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(cnt int path '$.Count')) as dt  where table_name = 'xy' and column_name = 'z'",
+				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.row_count')) as dt  where table_name = 'xy' and column_name = 'z'",
 				Expected: []sql.Row{{float64(400)}},
 			},
 			{
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(cnt int path '$.Null')) as dt  where table_name = 'xy' and column_name = 'z'",
+				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.null_count')) as dt  where table_name = 'xy' and column_name = 'z'",
 				Expected: []sql.Row{{float64(200)}},
 			},
 			{
 				// chunk border double count
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(cnt int path '$.Distinct')) as dt  where table_name = 'xy' and column_name = 'z'",
+				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.distinct_count')) as dt  where table_name = 'xy' and column_name = 'z'",
 				Expected: []sql.Row{{float64(202)}},
 			},
 			{
 				// max bound count is an all nulls chunk
-				Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(bound_cnt int path '$.BoundCount')) as dt  where table_name = 'xy' and column_name = 'z'",
+				Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(bound_cnt int path '$.bound_count')) as dt  where table_name = 'xy' and column_name = 'z'",
 				Expected: []sql.Row{{int64(183)}},
 			},
 		},
@@ -146,25 +146,25 @@ var DoltStatsTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT json_length(json_extract(histogram, \"$.buckets\")) from information_schema.column_statistics where column_name = 'z'",
+				Query:    "SELECT json_length(json_extract(histogram, \"$.statistic.buckets\")) from information_schema.column_statistics where column_name = 'z'",
 				Expected: []sql.Row{{152}},
 			},
 			{
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(cnt int path '$.Count')) as dt  where table_name = 'xy' and column_name = 'z'",
+				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.row_count')) as dt  where table_name = 'xy' and column_name = 'z'",
 				Expected: []sql.Row{{float64(30000)}},
 			},
 			{
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(cnt int path '$.Null')) as dt  where table_name = 'xy' and column_name = 'z'",
+				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.null_count')) as dt  where table_name = 'xy' and column_name = 'z'",
 				Expected: []sql.Row{{float64(10000)}},
 			},
 			{
 				// border NULL double count
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(cnt int path '$.Distinct')) as dt  where table_name = 'xy' and column_name = 'z'",
+				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.distinct_count')) as dt  where table_name = 'xy' and column_name = 'z'",
 				Expected: []sql.Row{{float64(20036)}},
 			},
 			{
 				// max bound count is nulls chunk
-				Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(bound_cnt int path '$.BoundCount')) as dt  where table_name = 'xy' and column_name = 'z'",
+				Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(bound_cnt int path '$.bound_count')) as dt  where table_name = 'xy' and column_name = 'z'",
 				Expected: []sql.Row{{int64(440)}},
 			},
 		},
@@ -180,24 +180,24 @@ var DoltStatsTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT json_length(json_extract(histogram, \"$.buckets\")) from information_schema.column_statistics where column_name = 'x,z'",
+				Query:    "SELECT json_length(json_extract(histogram, \"$.statistic.buckets\")) from information_schema.column_statistics where column_name = 'x,z'",
 				Expected: []sql.Row{{155}},
 			},
 			{
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(cnt int path '$.Count')) as dt  where table_name = 'xy' and column_name = 'x,z'",
+				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.row_count')) as dt  where table_name = 'xy' and column_name = 'x,z'",
 				Expected: []sql.Row{{float64(30000)}},
 			},
 			{
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(cnt int path '$.Null')) as dt  where table_name = 'xy' and column_name = 'x,z'",
+				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.null_count')) as dt  where table_name = 'xy' and column_name = 'x,z'",
 				Expected: []sql.Row{{float64(10000)}},
 			},
 			{
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(cnt int path '$.Distinct')) as dt  where table_name = 'xy' and column_name = 'x,z'",
+				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.distinct_count')) as dt  where table_name = 'xy' and column_name = 'x,z'",
 				Expected: []sql.Row{{float64(30000)}},
 			},
 			{
 				// max bound count is nulls chunk
-				Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(bound_cnt int path '$.BoundCount')) as dt  where table_name = 'xy' and column_name = 'x,z'",
+				Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(bound_cnt int path '$.bound_count')) as dt  where table_name = 'xy' and column_name = 'x,z'",
 				Expected: []sql.Row{{int64(1)}},
 			},
 		},
@@ -233,24 +233,24 @@ var DoltStatsTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT json_length(json_extract(histogram, \"$.buckets\")) from information_schema.column_statistics where column_name = 'x'",
+				Query:    "SELECT json_length(json_extract(histogram, \"$.statistic.buckets\")) from information_schema.column_statistics where column_name = 'x'",
 				Expected: []sql.Row{{26}},
 			},
 			{
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(cnt int path '$.Count')) as dt  where table_name = 'xy' and column_name = 'x'",
+				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.row_count')) as dt  where table_name = 'xy' and column_name = 'x'",
 				Expected: []sql.Row{{float64(30000)}},
 			},
 			{
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(cnt int path '$.Null')) as dt  where table_name = 'xy' and column_name = 'x'",
+				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.null_count')) as dt  where table_name = 'xy' and column_name = 'x'",
 				Expected: []sql.Row{{float64(0)}},
 			},
 			{
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(cnt int path '$.Distinct')) as dt  where table_name = 'xy' and column_name = 'x'",
+				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.distinct_count')) as dt  where table_name = 'xy' and column_name = 'x'",
 				Expected: []sql.Row{{float64(30000)}},
 			},
 			{
 				// max bound count is nulls chunk
-				Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(bound_cnt int path '$.BoundCount')) as dt  where table_name = 'xy' and column_name = 'x'",
+				Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(bound_cnt int path '$.bound_count')) as dt  where table_name = 'xy' and column_name = 'x'",
 				Expected: []sql.Row{{int64(1)}},
 			},
 		},
@@ -270,24 +270,24 @@ var DoltStatsTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"z"}, {"z,x"}},
 			},
 			{
-				Query:    "SELECT json_length(json_extract(histogram, \"$.buckets\")) from information_schema.column_statistics where column_name = 'z,x'",
+				Query:    "SELECT json_length(json_extract(histogram, \"$.statistic.buckets\")) from information_schema.column_statistics where column_name = 'z,x'",
 				Expected: []sql.Row{{42}},
 			},
 			{
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(cnt int path '$.Count')) as dt  where table_name = 'xy' and column_name = 'z,x'",
+				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.row_count')) as dt  where table_name = 'xy' and column_name = 'z,x'",
 				Expected: []sql.Row{{float64(30000)}},
 			},
 			{
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(cnt int path '$.Null')) as dt  where table_name = 'xy' and column_name = 'z,x'",
+				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.null_count')) as dt  where table_name = 'xy' and column_name = 'z,x'",
 				Expected: []sql.Row{{float64(0)}},
 			},
 			{
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(cnt int path '$.Distinct')) as dt  where table_name = 'xy' and column_name = 'z,x'",
+				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.distinct_count')) as dt  where table_name = 'xy' and column_name = 'z,x'",
 				Expected: []sql.Row{{float64(30000)}},
 			},
 			{
 				// max bound count is nulls chunk
-				Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.buckets[*]' COLUMNS(bound_cnt int path '$.BoundCount')) as dt  where table_name = 'xy' and column_name = 'z,x'",
+				Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(bound_cnt int path '$.bound_count')) as dt  where table_name = 'xy' and column_name = 'z,x'",
 				Expected: []sql.Row{{int64(1)}},
 			},
 		},

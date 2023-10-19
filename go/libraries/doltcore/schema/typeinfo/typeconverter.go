@@ -20,7 +20,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/shopspring/decimal"
 	"gopkg.in/src-d/go-errors.v1"
 
@@ -145,7 +144,7 @@ func wrapConvertValueToNomsValue(
 			vInt = int64(val)
 		case types.JSON:
 			var err error
-			vInt, err = json.NomsJSON(val).ToString(sql.NewEmptyContext())
+			vInt, err = json.NomsJSON(val).JSONString()
 			if err != nil {
 				return nil, err
 			}

@@ -299,7 +299,7 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 		}
 
 		// Extract Created Time from JSON column
-		createdTime, err := getCreatedTime(ctx, sqlRow[extraIdx].(gmstypes.JSONValue))
+		createdTime, err := getCreatedTime(ctx, sqlRow[extraIdx].(sql.JSONWrapper))
 
 		frags = append(frags, schemaFragment{
 			name:     sqlRow[nameIdx].(string),
@@ -326,15 +326,12 @@ func loadDefaultSqlMode() (string, error) {
 	return s, nil
 }
 
-func getCreatedTime(ctx *sql.Context, extraCol gmstypes.JSONValue) (int64, error) {
-	doc, err := extraCol.Unmarshall(ctx)
-	if err != nil {
-		return 0, err
-	}
+func getCreatedTime(ctx *sql.Context, extraCol sql.JSONWrapper) (int64, error) {
+	doc := extraCol.ToInterface()
 
-	err = fmt.Errorf("value %v does not contain creation time", doc.Val)
+	err := fmt.Errorf("value %v does not contain creation time", doc)
 
-	obj, ok := doc.Val.(map[string]interface{})
+	obj, ok := doc.(map[string]interface{})
 	if !ok {
 		return 0, err
 	}

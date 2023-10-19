@@ -69,7 +69,7 @@ func TestBucketBuilder(t *testing.T) {
 			bucket: DoltBucket{
 				Count:      15,
 				Distinct:   5,
-				Mcv:        []sql.Row{{int64(4)}, {int64(2)}, {int64(3)}},
+				Mcvs:       []sql.Row{{int64(4)}, {int64(2)}, {int64(3)}},
 				McvCount:   []uint64{3, 4, 3},
 				UpperBound: sql.Row{int64(5)},
 				BoundCount: 2,
@@ -84,7 +84,7 @@ func TestBucketBuilder(t *testing.T) {
 				Count:      16,
 				Distinct:   6,
 				Null:       3,
-				Mcv:        []sql.Row{{int64(4)}, {int64(2)}, {nil}},
+				Mcvs:       []sql.Row{{int64(4)}, {int64(2)}, {nil}},
 				McvCount:   []uint64{3, 4, 3},
 				UpperBound: sql.Row{int64(5)},
 				BoundCount: 2,
@@ -98,7 +98,7 @@ func TestBucketBuilder(t *testing.T) {
 				Count:      15,
 				Distinct:   6,
 				Null:       2,
-				Mcv:        []sql.Row{{int64(3)}, {int64(4)}, {int64(2)}},
+				Mcvs:       []sql.Row{{int64(3)}, {int64(4)}, {int64(2)}},
 				McvCount:   []uint64{3, 3, 4},
 				UpperBound: sql.Row{int64(5)},
 				BoundCount: 2,
@@ -112,7 +112,7 @@ func TestBucketBuilder(t *testing.T) {
 				Count:      22,
 				Distinct:   7,
 				BoundCount: 1,
-				Mcv:        []sql.Row{{int64(2)}, {int64(6)}, {int64(5)}},
+				Mcvs:       []sql.Row{{int64(2)}, {int64(6)}, {int64(5)}},
 				McvCount:   []uint64{4, 4, 4},
 				UpperBound: sql.Row{int64(7)},
 			},
@@ -124,7 +124,7 @@ func TestBucketBuilder(t *testing.T) {
 			bucket: DoltBucket{
 				Count:      15,
 				Distinct:   11,
-				Mcv:        []sql.Row{{int64(1), int64(1)}, {int64(4), int64(1)}, {int64(2), int64(3)}},
+				Mcvs:       []sql.Row{{int64(1), int64(1)}, {int64(4), int64(1)}, {int64(2), int64(3)}},
 				McvCount:   []uint64{2, 3, 2},
 				UpperBound: sql.Row{int64(5), int64(2)},
 				BoundCount: 1,
@@ -138,7 +138,7 @@ func TestBucketBuilder(t *testing.T) {
 				Count:      5,
 				Distinct:   5,
 				Null:       3,
-				Mcv:        []sql.Row{{int64(2), int64(2)}, {int64(1), nil}, {int64(1), int64(2)}},
+				Mcvs:       []sql.Row{{int64(2), int64(2)}, {int64(1), nil}, {int64(1), int64(2)}},
 				McvCount:   []uint64{1, 1, 1},
 				UpperBound: sql.Row{int64(2), int64(2)},
 				BoundCount: 1,
@@ -151,7 +151,7 @@ func TestBucketBuilder(t *testing.T) {
 			bucket: DoltBucket{
 				Count:      15,
 				Distinct:   9,
-				Mcv:        []sql.Row{{"i"}, {"h"}, {"g"}},
+				Mcvs:       []sql.Row{{"i"}, {"h"}, {"g"}},
 				McvCount:   []uint64{2, 3, 3},
 				UpperBound: sql.Row{"i"},
 				BoundCount: 2,
@@ -164,7 +164,7 @@ func TestBucketBuilder(t *testing.T) {
 			bucket: DoltBucket{
 				Count:      15,
 				Distinct:   12,
-				Mcv:        []sql.Row{{"i", int64(1)}, {"g", int64(2)}, {"h", int64(1)}},
+				Mcvs:       []sql.Row{{"i", int64(1)}, {"g", int64(2)}, {"h", int64(1)}},
 				McvCount:   []uint64{2, 2, 2},
 				UpperBound: sql.Row{"i", int64(1)},
 				BoundCount: 2,
@@ -196,7 +196,7 @@ func TestBucketBuilder(t *testing.T) {
 			require.Equal(t, int(tt.bucket.BoundCount), int(bucket.BoundCount))
 			require.Equal(t, tt.bucket.UpperBound, bucket.UpperBound)
 			require.Equal(t, tt.bucket.McvCount, bucket.McvCount)
-			require.Equal(t, tt.bucket.Mcv, bucket.Mcv)
+			require.Equal(t, tt.bucket.Mcvs, bucket.Mcvs)
 		})
 	}
 }
