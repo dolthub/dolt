@@ -533,7 +533,7 @@ func (wr *journalWriter) Close() (err error) {
 // A rangeIndex maps chunk addresses to read Ranges in the chunk journal file.
 type rangeIndex struct {
 	// novel Ranges represent most recent chunks written to
-	// the journal. These Ranges have not yet been writen to
+	// the journal. These Ranges have not yet been written to
 	// a journal index record.
 	novel *swiss.Map[addr, Range]
 
