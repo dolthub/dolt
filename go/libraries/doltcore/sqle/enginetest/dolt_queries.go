@@ -727,6 +727,7 @@ var DoltScripts = []queries.ScriptTest{
 			"insert into xy values (3)",
 			"call dolt_commit('-Am', 'add 3')",
 			"set @btwo1 = hashof('HEAD');",
+			"call dolt_tag('tag_btwo1')",
 			"call dolt_checkout('main')",
 			"insert into xy values (4)",
 			"call dolt_commit('-Am', 'add 4')",
@@ -761,6 +762,14 @@ var DoltScripts = []queries.ScriptTest{
 			{
 				Query:    "select has_ancestor(commit_hash, 'btwo') from dolt_log as of 'onetwo' where commit_hash = @onetwo1",
 				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "select has_ancestor('HEAD', 'tag_btwo1'), has_ancestor(@bone2, 'tag_btwo1'),has_ancestor(@onetwo1, 'tag_btwo1'), has_ancestor(@btwo1, 'tag_btwo1'), has_ancestor(@main2, 'tag_btwo1'), has_ancestor(@main1, 'tag_btwo1')",
+				Expected: []sql.Row{{false, false, true, true, false, false}},
+			},
+			{
+				Query:    "select has_ancestor('tag_btwo1', 'HEAD'), has_ancestor('tag_btwo1', @bone2), has_ancestor('tag_btwo1', @onetwo1), has_ancestor('tag_btwo1', @btwo1), has_ancestor('tag_btwo1', @main2), has_ancestor('tag_btwo1', @main1)",
+				Expected: []sql.Row{{false, false, false, true, false, true}},
 			},
 		},
 	},

@@ -21,7 +21,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const HasAncestorFuncName = "has_ancestor"
@@ -47,27 +46,29 @@ func (a *HasAncestor) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, sql.ErrInvalidArgumentDetails.New(a, a.ancestor)
 	}
 
+	// TODO analysis should embed a database the same way as table functions
 	sess := dsess.DSessFromSess(ctx.Session)
-
 	db := sess.GetCurrentDatabase()
 	dbd, ok := sess.GetDbData(ctx, db)
 	if !ok {
 		return nil, fmt.Errorf("error during has_ancestor check: database not found '%s'", db)
 	}
 	ddb := dbd.Ddb
-	headRef, err := sess.CWBHeadRef(ctx, db)
-	if err != nil {
-		return nil, fmt.Errorf("error during has_ancestor check: head ref not found '%s'", db)
-	}
 
-	headIf, err := a.reference.Eval(ctx, row)
-	headStr, _, err := types.Text.Convert(headIf)
-	if err != nil {
-		return nil, err
-	}
-	headHash, ok := hash.MaybeParse(headStr.(string))
+	// this errors for non-branch refs
+	// ddb.Resolve will error if combination of head and commit are invalid
+	headRef, _ := sess.CWBHeadRef(ctx, db)
 	var headCommit *doltdb.Commit
-	if !ok {
+	{
+		headIf, err := a.reference.Eval(ctx, row)
+		if err != nil {
+			return nil, err
+		}
+		headStr, _, err := types.Text.Convert(headIf)
+		if err != nil {
+			return nil, err
+		}
+
 		cs, err := doltdb.NewCommitSpec(headStr.(string))
 		if err != nil {
 			return nil, err
@@ -76,22 +77,18 @@ func (a *HasAncestor) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error during has_ancestor check: ref not found '%s'", headStr)
 		}
-	} else {
-		headCommit, err = doltdb.HashToCommit(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), headHash)
-		if err != nil {
-			return nil, fmt.Errorf("error during has_ancestor check: %s", err.Error())
-		}
 	}
 
-	ancIf, err := a.ancestor.Eval(ctx, row)
-	ancStr, _, err := types.Text.Convert(ancIf)
-	if err != nil {
-		return nil, err
-	}
 	var ancCommit *doltdb.Commit
-
-	ancHash, ok := hash.MaybeParse(ancStr.(string))
-	if !ok {
+	{
+		ancIf, err := a.ancestor.Eval(ctx, row)
+		if err != nil {
+			return nil, err
+		}
+		ancStr, _, err := types.Text.Convert(ancIf)
+		if err != nil {
+			return nil, err
+		}
 		cs, err := doltdb.NewCommitSpec(ancStr.(string))
 		if err != nil {
 			return nil, err
@@ -100,19 +97,15 @@ func (a *HasAncestor) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error during has_ancestor check: ref not found '%s'", ancStr)
 		}
-	} else {
-		ancCommit, err = doltdb.HashToCommit(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), ancHash)
-		if err != nil {
-			return nil, fmt.Errorf("error during has_ancestor check: %s", err.Error())
-		}
+
 	}
 
-	headHash, err = headCommit.HashOf()
+	headHash, err := headCommit.HashOf()
 	if err != nil {
 		return nil, fmt.Errorf("error during has_ancestor check: %s", err.Error())
 	}
 
-	ancHash, err = ancCommit.HashOf()
+	ancHash, err := ancCommit.HashOf()
 	if err != nil {
 		return nil, fmt.Errorf("error during has_ancestor check: %s", err.Error())
 	}
