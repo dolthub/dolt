@@ -771,6 +771,13 @@ var DoltScripts = []queries.ScriptTest{
 				Query:    "select has_ancestor('tag_btwo1', 'HEAD'), has_ancestor('tag_btwo1', @bone2), has_ancestor('tag_btwo1', @onetwo1), has_ancestor('tag_btwo1', @btwo1), has_ancestor('tag_btwo1', @main2), has_ancestor('tag_btwo1', @main1)",
 				Expected: []sql.Row{{false, false, false, true, false, true}},
 			},
+			{
+				Query: "use `mydb/onetwo`;",
+			},
+			{
+				Query:    "select has_ancestor(commit_hash, 'btwo') from dolt_log where commit_hash = @onetwo1",
+				Expected: []sql.Row{{true}},
+			},
 		},
 	},
 	{
