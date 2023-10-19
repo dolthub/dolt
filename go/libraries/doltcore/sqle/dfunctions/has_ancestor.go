@@ -1,0 +1,179 @@
+// Copyright 2021 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package dfunctions
+
+import (
+	"fmt"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/hash"
+)
+
+const HasAncestorFuncName = "has_ancestor"
+
+type HasAncestor struct {
+	reference sql.Expression
+	ancestor  sql.Expression
+}
+
+var _ sql.FunctionExpression = (*HasAncestor)(nil)
+
+// NewHasAncestor creates a new HasAncestor expression.
+func NewHasAncestor(head, anc sql.Expression) sql.Expression {
+	return &HasAncestor{reference: head, ancestor: anc}
+}
+
+// Eval implements the Expression interface.
+func (a *HasAncestor) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
+	if !types.IsText(a.reference.Type()) {
+		return nil, sql.ErrInvalidArgumentDetails.New(a, a.reference)
+	}
+	if !types.IsText(a.ancestor.Type()) {
+		return nil, sql.ErrInvalidArgumentDetails.New(a, a.ancestor)
+	}
+
+	sess := dsess.DSessFromSess(ctx.Session)
+
+	db := sess.GetCurrentDatabase()
+	dbd, ok := sess.GetDbData(ctx, db)
+	if !ok {
+		return nil, fmt.Errorf("error during has_ancestor check: database not found '%s'", db)
+	}
+	ddb := dbd.Ddb
+	headRef, err := sess.CWBHeadRef(ctx, db)
+	if err != nil {
+		return nil, fmt.Errorf("error during has_ancestor check: head ref not found '%s'", db)
+	}
+
+	headIf, err := a.reference.Eval(ctx, row)
+	headStr, _, err := types.Text.Convert(headIf)
+	if err != nil {
+		return nil, err
+	}
+	headHash, ok := hash.MaybeParse(headStr.(string))
+	var headCommit *doltdb.Commit
+	if !ok {
+		cs, err := doltdb.NewCommitSpec(headStr.(string))
+		if err != nil {
+			return nil, err
+		}
+		headCommit, err = ddb.Resolve(ctx, cs, headRef)
+		if err != nil {
+			return nil, fmt.Errorf("error during has_ancestor check: ref not found '%s'", headStr)
+		}
+	} else {
+		headCommit, err = doltdb.HashToCommit(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), headHash)
+		if err != nil {
+			return nil, fmt.Errorf("error during has_ancestor check: %s", err.Error())
+		}
+	}
+
+	ancIf, err := a.ancestor.Eval(ctx, row)
+	ancStr, _, err := types.Text.Convert(ancIf)
+	if err != nil {
+		return nil, err
+	}
+	var ancCommit *doltdb.Commit
+
+	ancHash, ok := hash.MaybeParse(ancStr.(string))
+	if !ok {
+		cs, err := doltdb.NewCommitSpec(ancStr.(string))
+		if err != nil {
+			return nil, err
+		}
+		ancCommit, err = ddb.Resolve(ctx, cs, headRef)
+		if err != nil {
+			return nil, fmt.Errorf("error during has_ancestor check: ref not found '%s'", ancStr)
+		}
+	} else {
+		ancCommit, err = doltdb.HashToCommit(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), ancHash)
+		if err != nil {
+			return nil, fmt.Errorf("error during has_ancestor check: %s", err.Error())
+		}
+	}
+
+	headHash, err = headCommit.HashOf()
+	if err != nil {
+		return nil, fmt.Errorf("error during has_ancestor check: %s", err.Error())
+	}
+
+	ancHash, err = ancCommit.HashOf()
+	if err != nil {
+		return nil, fmt.Errorf("error during has_ancestor check: %s", err.Error())
+	}
+	if headHash == ancHash {
+		return true, nil
+	}
+
+	cc, err := headCommit.GetCommitClosure(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error during has_ancestor check: %s", err.Error())
+	}
+	ancHeight, err := ancCommit.Height()
+	if err != nil {
+		return nil, fmt.Errorf("error during has_ancestor check: %s", err.Error())
+	}
+
+	isAncestor, err := cc.ContainsKey(ctx, ancHash, ancHeight)
+	if err != nil {
+		return nil, fmt.Errorf("error during has_ancestor check: %s", err.Error())
+	}
+
+	return isAncestor, nil
+}
+
+func (a *HasAncestor) Resolved() bool {
+	return a.reference.Resolved() && a.ancestor.Resolved()
+}
+
+func (a *HasAncestor) Children() []sql.Expression {
+	return []sql.Expression{a.reference, a.ancestor}
+}
+
+// String implements the Stringer interface.
+func (a *HasAncestor) String() string {
+	return fmt.Sprintf("HAS_ANCESTOR(%s, %s)", a.reference, a.ancestor)
+}
+
+// FunctionName implements the FunctionExpression interface
+func (a *HasAncestor) FunctionName() string {
+	return HasAncestorFuncName
+}
+
+// Description implements the FunctionExpression interface
+func (a *HasAncestor) Description() string {
+	return "returns whether a reference commit's ancestor graph contains a target commit"
+}
+
+// IsNullable implements the Expression interface.
+func (a *HasAncestor) IsNullable() bool {
+	return a.reference.IsNullable() || a.ancestor.IsNullable()
+}
+
+// WithChildren implements the Expression interface.
+func (a *HasAncestor) WithChildren(children ...sql.Expression) (sql.Expression, error) {
+	if len(children) != 2 {
+		return nil, sql.ErrInvalidChildrenNumber.New(a, len(children), 2)
+	}
+	return NewHasAncestor(children[0], children[1]), nil
+}
+
+// Type implements the Expression interface.
+func (a *HasAncestor) Type() sql.Type {
+	return types.Boolean
+}

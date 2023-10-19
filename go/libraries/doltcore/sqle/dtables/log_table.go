@@ -166,16 +166,16 @@ func (dt *LogTable) commitHashPartitionIter(ctx *sql.Context, lookup sql.IndexLo
 // CommitIsInScope returns true if a given commit hash is head or is
 // visible from the current head's ancestry graph.
 func (dt *LogTable) CommitIsInScope(ctx context.Context, height uint64, h hash.Hash) (bool, error) {
-	cc, err := dt.HeadCommitClosure(ctx)
-	if err != nil {
-		return false, err
-	}
 	headHash, err := dt.HeadHash()
 	if err != nil {
 		return false, err
 	}
 	if headHash == h {
 		return true, nil
+	}
+	cc, err := dt.HeadCommitClosure(ctx)
+	if err != nil {
+		return false, err
 	}
 	return cc.ContainsKey(ctx, h, height)
 }
