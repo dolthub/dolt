@@ -6197,3 +6197,36 @@ END`,
 		},
 	},
 }
+
+var DoltSystemVariables = []queries.ScriptTest{
+	{
+		Name: "DOLT_SHOW_SYSTEM_TABLES",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int PRIMARY KEY);",
+			"SET @@DOLT_SHOW_SYSTEM_TABLES=1",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SHOW TABLES;",
+				Expected: []sql.Row{
+					{"dolt_branches"},
+					{"dolt_commit_ancestors"},
+					{"dolt_commit_diff_test"},
+					{"dolt_commits"},
+					{"dolt_conflicts"},
+					{"dolt_conflicts_test"},
+					{"dolt_constraint_violations"},
+					{"dolt_constraint_violations_test"},
+					{"dolt_diff_test"},
+					{"dolt_history_test"},
+					{"dolt_log"},
+					{"dolt_remote_branches"},
+					{"dolt_remotes"},
+					{"dolt_status"},
+					{"myview"},
+					{"test"},
+				},
+			},
+		},
+	},
+}

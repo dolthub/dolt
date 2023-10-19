@@ -673,7 +673,15 @@ func (db Database) GetTableNames(ctx *sql.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return filterDoltInternalTables(tblNames), nil
+	showSystemTables, err := ctx.GetSessionVariable(ctx, dsess.ShowSystemTables)
+	if err != nil {
+		return nil, err
+	}
+	if showSystemTables.(int8) == 1 {
+		return tblNames, nil
+	} else {
+		return filterDoltInternalTables(tblNames), nil
+	}
 }
 
 // GetAllTableNames returns all user-space tables, including system tables in user space
@@ -689,7 +697,13 @@ func (db Database) GetAllTableNames(ctx *sql.Context) ([]string, error) {
 }
 
 func getAllTableNames(ctx context.Context, root *doltdb.RootValue) ([]string, error) {
-	return root.GetTableNames(ctx)
+	systemTables, err := doltdb.GetGeneratedSystemTables(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+	result, err := root.GetTableNames(ctx)
+	result = append(result, systemTables...)
+	return result, err
 }
 
 func filterDoltInternalTables(tblNames []string) []string {
