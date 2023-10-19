@@ -239,7 +239,7 @@ func (u *bucketBuilder) finalize(ctx context.Context, ns tree.NodeStore) (DoltBu
 		Count:      uint64(u.count),
 		Distinct:   uint64(u.distinct),
 		BoundCount: uint64(u.currentCnt),
-		Mcv:        mcvRows,
+		Mcvs:       mcvRows,
 		McvCount:   u.mcvs.Counts(),
 		UpperBound: upperBound,
 		Null:       uint64(u.nulls),

@@ -1379,7 +1379,7 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 		assert.Equal(t, len(test.ExpectedRows[i]), len(actualRows[i]))
 		for j := 0; j < len(test.ExpectedRows[i]); j++ {
 			if _, ok := actualRows[i][j].(json.NomsJSON); ok {
-				cmp, err := actualRows[i][j].(json.NomsJSON).Compare(nil, test.ExpectedRows[i][j].(json.NomsJSON))
+				cmp, err := gmstypes.CompareJSON(actualRows[i][j].(json.NomsJSON), test.ExpectedRows[i][j].(json.NomsJSON))
 				assert.NoError(t, err)
 				assert.Equal(t, 0, cmp)
 			} else {
