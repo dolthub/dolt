@@ -281,7 +281,8 @@ DELIM
     [ "$status" -eq 1 ]
     [[ "$output" =~ "An error occurred while moving data" ]] || false
     [[ "$output" =~ "A bad row was encountered" ]] || false
-    [[ "$output" =~ "[1,123456]" ]] || false    
+    [[ "$output" =~ "pk: 1" ]] || false
+    [[ "$output" =~ "c: 123456" ]] || false
     [[ "$output" =~ 'too large for column' ]] || false
 }
 
@@ -314,9 +315,11 @@ DELIM
     dolt sql < check-constraint-sch.sql
     run dolt table import -u persons persons.csv
     [ "$status" -eq 1 ]
-
     [[ "$output" =~ "A bad row was encountered" ]] || false
-    [[ "$output" =~ "[2,little,doe,10]" ]] || false
+    [[ "$output" =~ "ID: 2" ]] || false
+    [[ "$output" =~ "LastName: little" ]] || false
+    [[ "$output" =~ "FirstName: doe" ]] || false
+    [[ "$output" =~ "Age: 10" ]] || false
 
     run dolt table import -u --continue persons persons.csv
     [ "$status" -eq 0 ]
@@ -404,7 +407,7 @@ DELIM
     run dolt table import -u test bad-updates.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "A bad row was encountered" ]] || false
-    [[ "$output" =~ "[100]" ]] || false
+    [[ "$output" =~ "pk: 100" ]] || false
 
     run dolt table import -u --continue test bad-updates.csv
     [ "$status" -eq 0 ]
@@ -806,7 +809,9 @@ DELIM
     run dolt table import -u objects objects-bad.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "A bad row was encountered" ]] || false
-    [[ "$output" =~ "[6,bottle,gray]" ]] || false
+    [[ "$output" =~ "id: 6" ]] || false
+    [[ "$output" =~ "name: bottle" ]] || false
+    [[ "$output" =~ "color: gray" ]] || false
     [[ "$output" =~ "cannot add or update a child row - Foreign key violation" ]] || false
 
     run dolt table import -u objects objects-bad.csv --continue
@@ -886,7 +891,10 @@ DELIM
     run dolt table import -u objects multi-key-bad.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "A bad row was encountered" ]] || false
-    [[ "$output" =~ "[6,bottle,blue,steel]" ]] || false
+    [[ "$output" =~ "id: 6" ]] || false
+    [[ "$output" =~ "name: bottle" ]] || false
+    [[ "$output" =~ "color: blue" ]] || false
+    [[ "$output" =~ "material: steel" ]] || false
     [[ "$output" =~ "cannot add or update a child row - Foreign key violation" ]] || false
 
     run dolt table import -u objects multi-key-bad.csv --continue

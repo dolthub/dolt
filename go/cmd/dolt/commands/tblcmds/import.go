@@ -529,7 +529,11 @@ func move(ctx context.Context, rd table.SqlRowReader, wr *mvdata.SqlEngineTableW
 		if row != nil && rowErr == nil && !options.contOnErr {
 			var sqlRowWithColumns []string
 			for i, val := range row {
-				sqlRowWithColumns = append(sqlRowWithColumns, fmt.Sprintf("\t%s: %v\n", rowSchema.Schema[i].Name, val))
+				columnName := "<nil>"
+				if len(rowSchema.Schema) > i {
+					columnName = rowSchema.Schema[i].Name
+				}
+				sqlRowWithColumns = append(sqlRowWithColumns, fmt.Sprintf("\t%s: %v\n", columnName, val))
 			}
 			formattedSqlRow := strings.Join(sqlRowWithColumns, "")
 
