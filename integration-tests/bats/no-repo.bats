@@ -132,7 +132,6 @@ teardown() {
 @test "no-repo: dolt version does not need write permissions" {
     chmod 111 .
     run dolt version
-    skip "dolt version needs write perms"
     [ "$status" -eq 0 ]
     chmod 755 .
 }
