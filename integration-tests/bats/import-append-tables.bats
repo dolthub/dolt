@@ -102,7 +102,7 @@ CSV
     [ "${#lines[@]}" -eq 6 ]
 }
 
-@test "import-append-tables: import error message lists columns with row" {
+@test "import-append-tables: import error message contains useful information" {
     dolt sql -q "CREATE TABLE shirts (name VARCHAR(40), size ENUM('x-small', 'small', 'medium', 'large', 'x-large'), color ENUM('red', 'blue'));"
     run dolt table import -a shirts <<CSV
 name, size, color
@@ -112,8 +112,8 @@ CSV
     [ "$status" -eq 1 ]
     [[ "$output" =~ "An error occurred while moving data" ]] || false
     [[ "$output" =~ "cause: value other is not valid for this Enum" ]] || false
-    [[ "$output" =~ "A bad row was encountered" ]] || false
-    [[ "$output" =~ "name: shirt2" ]] || false
+    [[ "$output" =~ "A bad row was encountered inserting into table shirts:" ]] || false    # table name
+    [[ "$output" =~ "name: shirt2" ]] || false                                              # column names
     [[ "$output" =~ "size: other" ]] || false
     [[ "$output" =~ "color: green" ]] || false
     [[ "$output" =~ "Errors during import can be ignored using '--continue'" ]] || false
