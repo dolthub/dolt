@@ -513,7 +513,7 @@ func newImportSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, rdSchema sc
 	return mv, nil
 }
 
-type badRowFn func(row sql.Row, rowSchema sql.PrimaryKeySchema, tableName string, err error) (quit bool)
+type badRowFn func(row sql.Row, rowSchema sql.PrimaryKeySchema, tableName string, lineNumber int, err error) (quit bool)
 
 func move(ctx context.Context, rd table.SqlRowReader, wr *mvdata.SqlEngineTableWriter, options *importOptions) (int64, error) {
 	g, ctx := errgroup.WithContext(ctx)
@@ -524,7 +524,7 @@ func move(ctx context.Context, rd table.SqlRowReader, wr *mvdata.SqlEngineTableW
 	var printBadRowsStarted bool
 	var badCount int64
 
-	badRowCB := func(row sql.Row, rowSchema sql.PrimaryKeySchema, tableName string, err error) (quit bool) {
+	badRowCB := func(row sql.Row, rowSchema sql.PrimaryKeySchema, tableName string, lineNumber int, err error) (quit bool) {
 		// record the first error encountered unless asked to ignore it
 		if row != nil && rowErr == nil && !options.contOnErr {
 			var sqlRowWithColumns []string
@@ -533,7 +533,7 @@ func move(ctx context.Context, rd table.SqlRowReader, wr *mvdata.SqlEngineTableW
 			}
 			formattedSqlRow := strings.Join(sqlRowWithColumns, "")
 
-			rowErr = fmt.Errorf("A bad row was encountered inserting into table %s:\n%s", tableName, formattedSqlRow)
+			rowErr = fmt.Errorf("A bad row was encountered inserting into table %s (on line %d):\n%s", tableName, lineNumber, formattedSqlRow)
 			if wie, ok := err.(sql.WrappedInsertError); ok {
 				if e, ok := wie.Cause.(*errors.Error); ok {
 					if ue, ok := e.Cause().(sql.UniqueKeyError); ok {
@@ -616,15 +616,18 @@ func moveRows(
 		return err
 	}
 
+	line := 1
+
 	for {
 		sqlRow, err := rd.ReadSqlRow(ctx)
 		if err == io.EOF {
 			return nil
 		}
+		line += 1
 
 		if err != nil {
 			if table.IsBadRow(err) {
-				quit := badRowCb(sqlRow, rdSqlSch, options.destTableName, err)
+				quit := badRowCb(sqlRow, rdSqlSch, options.destTableName, line, err)
 				if quit {
 					return err
 				}
