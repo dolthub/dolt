@@ -128,7 +128,7 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 	}, nil
 }
 
-func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan sql.Row, badRowCb func(row sql.Row, err error) bool) (err error) {
+func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan sql.Row, badRowCb func(row sql.Row, rowSchema sql.PrimaryKeySchema, err error) bool) (err error) {
 	err = s.forceDropTableIfNeeded()
 	if err != nil {
 		return err
@@ -219,7 +219,7 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 				offendingRow = n.OffendingRow
 			}
 
-			quit := badRowCb(offendingRow, err)
+			quit := badRowCb(offendingRow, s.tableSchema, err)
 			if quit {
 				return err
 			}
