@@ -965,7 +965,7 @@ inner join t on to_pk = t.pk;`,
 				Query: `
 SELECT to_pk, from_c1, to_c1, from_c1, to_c1, diff_type, diff_type
 from dolt_diff(@Commit1, @Commit2, 't') inner join dolt_diff(@Commit1, @Commit3, 't');`,
-				ExpectedErr: sql.ErrDuplicateAliasOrTable,
+				ExpectedErr: sql.ErrAmbiguousColumnName,
 			},
 			{
 				Query: `
