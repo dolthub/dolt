@@ -422,15 +422,15 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 		return nil, err
 	}
 
-	return partitionRows(ctx, table, t.sqlSch.Schema, t.projectedCols, partition)
+	return partitionRows(ctx, table, t.projectedCols, partition)
 }
 
-func partitionRows(ctx *sql.Context, t *doltdb.Table, sqlSch sql.Schema, projCols []uint64, partition sql.Partition) (sql.RowIter, error) {
+func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []uint64, partition sql.Partition) (sql.RowIter, error) {
 	switch typedPartition := partition.(type) {
 	case doltTablePartition:
-		return newRowIterator(ctx, t, sqlSch, projCols, typedPartition)
+		return newRowIterator(ctx, t, projCols, typedPartition)
 	case index.SinglePartition:
-		return newRowIterator(ctx, t, sqlSch, projCols, doltTablePartition{rowData: typedPartition.RowData, end: NoUpperBound})
+		return newRowIterator(ctx, t, projCols, doltTablePartition{rowData: typedPartition.RowData, end: NoUpperBound})
 	}
 
 	return nil, errors.New("unsupported partition type")
@@ -2134,7 +2134,7 @@ func (t *AlterableDoltTable) getFirstAutoIncrementValue(
 
 	// Note that we aren't calling the public PartitionRows, because it always gets the table data from the session
 	// root, which hasn't been updated yet
-	rowIter, err := partitionRows(ctx, table, t.sqlSch.Schema, t.projectedCols, index.SinglePartition{RowData: rowData})
+	rowIter, err := partitionRows(ctx, table, t.projectedCols, index.SinglePartition{RowData: rowData})
 	if err != nil {
 		return 0, err
 	}
