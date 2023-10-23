@@ -41,8 +41,8 @@ var _ sql.IndexAddressable = (*CommitsTable)(nil)
 var _ sql.StatisticsTable = (*CommitsTable)(nil)
 
 // NewCommitsTable creates a CommitsTable
-func NewCommitsTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
-	return &CommitsTable{ddb: ddb}
+func NewCommitsTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB) sql.Table {
+	return &CommitsTable{dbName: dbName, ddb: ddb}
 }
 
 func (dt *CommitsTable) DataLength(ctx *sql.Context) (uint64, error) {
@@ -102,7 +102,7 @@ func (dt *CommitsTable) PartitionRows(ctx *sql.Context, p sql.Partition) (sql.Ro
 
 // GetIndexes implements sql.IndexAddressable
 func (dt *CommitsTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	return index.DoltCommitIndexes(dt.Name(), dt.ddb, true)
+	return index.DoltCommitIndexes(dt.dbName, dt.Name(), dt.ddb, true)
 }
 
 // IndexedAccess implements sql.IndexAddressable
