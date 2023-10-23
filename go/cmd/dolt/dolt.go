@@ -496,11 +496,14 @@ func runMain() int {
 		}
 	}()
 
-	err = reconfigIfTempFileMoveFails(dEnv)
+	// version does not need write permissions
+	if subcommandName != "version" {
+		err = reconfigIfTempFileMoveFails(dEnv)
 
-	if err != nil {
-		cli.PrintErrln(color.RedString("Failed to setup the temporary directory. %v`", err))
-		return 1
+		if err != nil {
+			cli.PrintErrln(color.RedString("Failed to setup the temporary directory. %v`", err))
+			return 1
+		}
 	}
 
 	defer tempfiles.MovableTempFileProvider.Clean()
