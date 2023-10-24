@@ -107,7 +107,7 @@ func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *do
 		return nil, err
 	}
 
-	sqlSch, err := sqlutil.FromDoltSchema(diffTblName, diffTableSchema)
+	sqlSch, err := sqlutil.FromDoltSchema("", diffTblName, diffTableSchema)
 	if err != nil {
 		return nil, err
 	}

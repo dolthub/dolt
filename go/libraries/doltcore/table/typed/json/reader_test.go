@@ -78,7 +78,7 @@ func TestReader(t *testing.T) {
 	sch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
 
-	sqlSch, err := sqlutil.FromDoltSchema("", sch)
+	sqlSch, err := sqlutil.FromDoltSchema("", "", sch)
 	require.NoError(t, err)
 
 	vrw := types.NewMemoryValueStore()

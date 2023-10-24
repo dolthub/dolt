@@ -60,7 +60,7 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, table, db string, 
 	if err != nil {
 		return nil, err
 	}
-	pkSch, err := sqlutil.FromDoltSchema(table, sch)
+	pkSch, err := sqlutil.FromDoltSchema("", table, sch)
 	if err != nil {
 		return nil, err
 	}

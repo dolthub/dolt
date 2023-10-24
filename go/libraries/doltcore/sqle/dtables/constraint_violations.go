@@ -46,7 +46,7 @@ func newNomsCVTable(ctx *sql.Context, tblName string, root *doltdb.RootValue, rs
 	if err != nil {
 		return nil, err
 	}
-	sqlSch, err := sqlutil.FromDoltSchema(doltdb.DoltConstViolTablePrefix+tblName, cvSch)
+	sqlSch, err := sqlutil.FromDoltSchema("", doltdb.DoltConstViolTablePrefix+tblName, cvSch)
 	if err != nil {
 		return nil, err
 	}

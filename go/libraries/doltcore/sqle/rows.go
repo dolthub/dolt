@@ -232,7 +232,7 @@ func DoltTablePartitionToRowIter(ctx *sql.Context, name string, table *doltdb.Ta
 	if err != nil {
 		return nil, nil, err
 	}
-	pkSch, err := sqlutil.FromDoltSchema(name, sch)
+	pkSch, err := sqlutil.FromDoltSchema("", name, sch)
 	if err != nil {
 		return nil, nil, err
 	}

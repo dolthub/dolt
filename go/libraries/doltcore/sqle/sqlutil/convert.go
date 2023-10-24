@@ -26,7 +26,10 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func FromDoltSchema(tableName string, sch schema.Schema) (sql.PrimaryKeySchema, error) {
+// TODO: Many callers only care about field names and types, not the table or db names.
+// Those callers may be passing in "" for these values, or may be passing in incorrect values
+// that are currently unused.
+func FromDoltSchema(dbName, tableName string, sch schema.Schema) (sql.PrimaryKeySchema, error) {
 	cols := make(sql.Schema, sch.GetAllCols().Size())
 
 	var i int
@@ -43,15 +46,16 @@ func FromDoltSchema(tableName string, sch schema.Schema) (sql.PrimaryKeySchema, 
 		}
 
 		cols[i] = &sql.Column{
-			Name:          col.Name,
-			Type:          sqlType,
-			Default:       deflt,
-			Nullable:      col.IsNullable(),
-			Source:        tableName,
-			PrimaryKey:    col.IsPartOfPK,
-			AutoIncrement: col.AutoIncrement,
-			Comment:       col.Comment,
-			Extra:         extra,
+			Name:           col.Name,
+			Type:           sqlType,
+			Default:        deflt,
+			Nullable:       col.IsNullable(),
+			DatabaseSource: dbName,
+			Source:         tableName,
+			PrimaryKey:     col.IsPartOfPK,
+			AutoIncrement:  col.AutoIncrement,
+			Comment:        col.Comment,
+			Extra:          extra,
 		}
 		i++
 		return false, nil

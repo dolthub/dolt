@@ -103,7 +103,7 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db dsess.Sq
 		return
 	})
 
-	sqlSch, err := sqlutil.FromDoltSchema(name, sch)
+	sqlSch, err := sqlutil.FromDoltSchema(db.Name(), name, sch)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +145,7 @@ func (t *DoltTable) LockedToRoot(ctx *sql.Context, root *doltdb.RootValue) (sql.
 		return
 	})
 
-	sqlSch, err := sqlutil.FromDoltSchema(t.tableName, sch)
+	sqlSch, err := sqlutil.FromDoltSchema("", t.tableName, sch)
 	if err != nil {
 		return nil, err
 	}
@@ -363,7 +363,7 @@ func (t *DoltTable) sqlSchema() sql.PrimaryKeySchema {
 	}
 
 	// TODO: fix panics
-	sqlSch, err := sqlutil.FromDoltSchema(t.tableName, t.sch)
+	sqlSch, err := sqlutil.FromDoltSchema(t.db.RevisionQualifiedName(), t.tableName, t.sch)
 	if err != nil {
 		panic(err)
 	}
