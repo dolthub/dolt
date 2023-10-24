@@ -22,7 +22,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -72,11 +71,7 @@ func NewTableIterator(ctx context.Context, sch schema.Schema, idx durable.Index,
 		if err != nil {
 			return nil, err
 		}
-		s, err := sqlutil.FromDoltSchema("", sch)
-		if err != nil {
-			return nil, err
-		}
-		rowItr, err = index.NewProllyRowIter(sch, s.Schema, m, itr, nil)
+		rowItr, err = index.NewProllyRowIter(sch, m, itr, nil)
 		if err != nil {
 			return nil, err
 		}

@@ -131,7 +131,7 @@ func equalSchemas(t *testing.T, expectedSch schema.Schema, sch schema.Schema) {
 
 // Returns the dolt schema given as a sql.Schema, or panics.
 func mustSqlSchema(sch schema.Schema) sql.Schema {
-	sqlSchema, err := sqlutil.FromDoltSchema("", sch)
+	sqlSchema, err := sqlutil.FromDoltSchema("", "", sch)
 	if err != nil {
 		panic(err)
 	}

@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 )
 
 // rebuildFullTextIndexes scans the entire root and rebuilds all of the pseudo-index tables. This is not the most
@@ -163,7 +162,7 @@ func rebuildFullTextIndexes(ctx *sql.Context, root *doltdb.RootValue) (*doltdb.R
 			ftEditor.StatementBegin(ctx)
 			defer ftEditor.StatementComplete(ctx)
 
-			rowIter, err := createRowIterForTable(ctx, tblName, tbl, sch)
+			rowIter, err := createRowIterForTable(ctx, tbl, sch)
 			if err != nil {
 				return err
 			}
@@ -209,12 +208,7 @@ func rebuildFullTextIndexes(ctx *sql.Context, root *doltdb.RootValue) (*doltdb.R
 	return root, nil
 }
 
-func createRowIterForTable(ctx *sql.Context, name string, t *doltdb.Table, sch schema.Schema) (sql.RowIter, error) {
-	sqlSch, err := sqlutil.FromDoltSchema(name, sch)
-	if err != nil {
-		return nil, err
-	}
-
+func createRowIterForTable(ctx *sql.Context, t *doltdb.Table, sch schema.Schema) (sql.RowIter, error) {
 	rowData, err := t.GetRowData(ctx)
 	if err != nil {
 		return nil, err
@@ -230,5 +224,5 @@ func createRowIterForTable(ctx *sql.Context, name string, t *doltdb.Table, sch s
 		return nil, err
 	}
 
-	return index.NewProllyRowIter(sch, sqlSch.Schema, rows, iter, nil)
+	return index.NewProllyRowIter(sch, rows, iter, nil)
 }

@@ -68,7 +68,7 @@ type doltTableRowIter struct {
 }
 
 // Returns a new row iterator for the table given
-func newRowIterator(ctx context.Context, tbl *doltdb.Table, sqlSch sql.Schema, projCols []uint64, partition doltTablePartition) (sql.RowIter, error) {
+func newRowIterator(ctx context.Context, tbl *doltdb.Table, projCols []uint64, partition doltTablePartition) (sql.RowIter, error) {
 	sch, err := tbl.GetSchema(ctx)
 
 	if err != nil {
@@ -76,7 +76,7 @@ func newRowIterator(ctx context.Context, tbl *doltdb.Table, sqlSch sql.Schema, p
 	}
 
 	if types.IsFormat_DOLT(tbl.Format()) {
-		return ProllyRowIterFromPartition(ctx, sch, sqlSch, projCols, partition)
+		return ProllyRowIterFromPartition(ctx, sch, projCols, partition)
 	}
 
 	mapIter, err := iterForPartition(ctx, partition)
@@ -180,7 +180,6 @@ func (itr *doltTableRowIter) Close(*sql.Context) error {
 func ProllyRowIterFromPartition(
 	ctx context.Context,
 	sch schema.Schema,
-	sqlSch sql.Schema,
 	projections []uint64,
 	partition doltTablePartition,
 ) (sql.RowIter, error) {
@@ -198,7 +197,7 @@ func ProllyRowIterFromPartition(
 		return nil, err
 	}
 
-	return index.NewProllyRowIter(sch, sqlSch, rows, iter, projections)
+	return index.NewProllyRowIter(sch, rows, iter, projections)
 }
 
 // SqlTableToRowIter returns a |sql.RowIter| for a full table scan for the given |table|. If
@@ -223,9 +222,8 @@ func SqlTableToRowIter(ctx *sql.Context, table *DoltTable, columns []uint64) (sq
 		end:     NoUpperBound,
 		rowData: data,
 	}
-	sqlSch := table.sqlSch.Schema
 
-	return newRowIterator(ctx, t, sqlSch, columns, p)
+	return newRowIterator(ctx, t, columns, p)
 }
 
 // DoltTablePartitionToRowIter returns a sql.RowIter for a partition of the clustered index of |table|.
@@ -234,7 +232,7 @@ func DoltTablePartitionToRowIter(ctx *sql.Context, name string, table *doltdb.Ta
 	if err != nil {
 		return nil, nil, err
 	}
-	pkSch, err := sqlutil.FromDoltSchema(name, sch)
+	pkSch, err := sqlutil.FromDoltSchema("", name, sch)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -257,7 +255,7 @@ func DoltTablePartitionToRowIter(ctx *sql.Context, name string, table *doltdb.Ta
 		if err != nil {
 			return nil, nil, err
 		}
-		rowIter, err := index.NewProllyRowIter(sch, pkSch.Schema, idx, iter, nil)
+		rowIter, err := index.NewProllyRowIter(sch, idx, iter, nil)
 		if err != nil {
 			return nil, nil, err
 		}

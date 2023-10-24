@@ -54,7 +54,7 @@ func newNomsConflictsTable(ctx *sql.Context, tbl *doltdb.Table, tblName string, 
 	}
 	confSch := rd.GetSchema()
 
-	sqlSch, err := sqlutil.FromDoltSchema(doltdb.DoltConfTablePrefix+tblName, confSch)
+	sqlSch, err := sqlutil.FromDoltSchema("", doltdb.DoltConfTablePrefix+tblName, confSch)
 	if err != nil {
 		return nil, err
 	}

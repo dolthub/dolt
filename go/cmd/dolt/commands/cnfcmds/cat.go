@@ -181,7 +181,7 @@ func printConflicts(queryist cli.Queryist, sqlCtx *sql.Context, tblNames []strin
 			return fmt.Errorf("error: failed to get union schema for table '%s': %w", tblName, err)
 		}
 
-		sqlTargetSch, err := sqlutil.FromDoltSchema(tblName, targetSch)
+		sqlTargetSch, err := sqlutil.FromDoltSchema(sqlCtx.GetCurrentDatabase(), tblName, targetSch)
 		if err != nil {
 			return fmt.Errorf("error: failed to convert dolt schema to sql schema for table '%s': %w", tblName, err)
 		}

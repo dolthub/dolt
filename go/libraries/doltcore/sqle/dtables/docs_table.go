@@ -33,8 +33,8 @@ var DoltDocsSqlSchema sql.PrimaryKeySchema
 var OldDoltDocsSqlSchema sql.PrimaryKeySchema
 
 func init() {
-	DoltDocsSqlSchema, _ = sqlutil.FromDoltSchema(doltdb.DocTableName, doltdb.DocsSchema)
-	OldDoltDocsSqlSchema, _ = sqlutil.FromDoltSchema(doltdb.DocTableName, doltdb.OldDocsSchema)
+	DoltDocsSqlSchema, _ = sqlutil.FromDoltSchema("", doltdb.DocTableName, doltdb.DocsSchema)
+	OldDoltDocsSqlSchema, _ = sqlutil.FromDoltSchema("", doltdb.DocTableName, doltdb.OldDocsSchema)
 }
 
 var _ sql.Table = (*DocsTable)(nil)

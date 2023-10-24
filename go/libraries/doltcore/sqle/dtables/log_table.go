@@ -33,6 +33,7 @@ const logsDefaultRowCount = 100
 
 // LogTable is a sql.Table implementation that implements a system table which shows the dolt commit log
 type LogTable struct {
+	dbName            string
 	ddb               *doltdb.DoltDB
 	head              *doltdb.Commit
 	headHash          hash.Hash
@@ -44,8 +45,8 @@ var _ sql.StatisticsTable = (*LogTable)(nil)
 var _ sql.IndexAddressable = (*LogTable)(nil)
 
 // NewLogTable creates a LogTable
-func NewLogTable(_ *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
-	return &LogTable{ddb: ddb, head: head}
+func NewLogTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
+	return &LogTable{dbName: dbName, ddb: ddb, head: head}
 }
 
 // DataLength implements sql.StatisticsTable
@@ -116,7 +117,7 @@ func (dt *LogTable) PartitionRows(ctx *sql.Context, p sql.Partition) (sql.RowIte
 }
 
 func (dt *LogTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	return index.DoltCommitIndexes(dt.Name(), dt.ddb, true)
+	return index.DoltCommitIndexes(dt.dbName, dt.Name(), dt.ddb, true)
 }
 
 // IndexedAccess implements sql.IndexAddressable
