@@ -3130,6 +3130,29 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "Join same table at two commits",
+		SetUpScript: []string{
+			"create table t (i int);",
+			"insert into t values (1);",
+			"call dolt_add('t');",
+			"call dolt_commit('-m', 'add t');",
+			"call dolt_branch('b1');",
+			"insert into t values (2);",
+			"call dolt_add('t');",
+			"call dolt_commit('-m', 'insert into t');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from `mydb/b1`.t join t",
+				Expected: []sql.Row{{1, 1}, {1, 2}},
+			},
+			{
+				Query:    "select * from `mydb/b1`.t join `mydb/main`.t",
+				Expected: []sql.Row{{1, 1}, {1, 2}},
+			},
+		},
+	},
 }
 
 var DoltReset = []queries.ScriptTest{
