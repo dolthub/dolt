@@ -1189,7 +1189,7 @@ func (m *secondaryMerger) finalize(ctx context.Context) (durable.IndexSet, durab
 // name of the table in |tableName|.
 func resolveExpression(ctx *sql.Context, expression string, sch schema.Schema, tableName string) (sql.Expression, error) {
 	query := fmt.Sprintf("SELECT %s from %s.%s", expression, "mydb", tableName)
-	sqlSch, err := sqlutil.FromDoltSchema(tableName, sch)
+	sqlSch, err := sqlutil.FromDoltSchema("", tableName, sch)
 	if err != nil {
 		return nil, err
 	}

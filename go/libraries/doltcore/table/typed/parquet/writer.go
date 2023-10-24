@@ -71,7 +71,7 @@ func NewParquetRowWriter(outSch sql.Schema, w io.WriteCloser) (*ParquetRowWriter
 // NewParquetRowWriterForFile creates a new ParquetRowWriter instance for the specified schema and
 // writing to the specified file name.
 func NewParquetRowWriterForFile(outSch schema.Schema, destName string) (*ParquetRowWriter, error) {
-	primaryKeySchema, err := sqlutil.FromDoltSchema("", outSch)
+	primaryKeySchema, err := sqlutil.FromDoltSchema("", "", outSch)
 	if err != nil {
 		return nil, err
 	}

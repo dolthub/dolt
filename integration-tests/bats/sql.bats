@@ -2904,3 +2904,28 @@ SQL
 
     [[ ! -f .dolt/sql-server.lock ]] || false
 }
+
+@test "sql: join same table at two commits" {
+    dolt sql -q "show databases"
+    dolt sql -q "create table t (i int)"
+    dolt sql -q "insert into t values (1)"
+    dolt add t
+    dolt commit -m "add t"
+    dolt branch b1
+    dolt sql -q "insert into t values (2)"
+    dolt add t
+    dolt commit -m "insert into t"
+    run dolt sql -q "select * from \`dolt_repo_$$/b1\`.t join t"
+    [ "$status" -eq 0 ]
+    echo "$output"
+    [[ "$output" =~ "| 1 | 1 |" ]] || false
+    [[ "$output" =~ "| 1 | 2 |" ]] || false
+
+    run dolt sql -q "select * from \`dolt_repo_$$/b1\`.t join \`dolt_repo_$$/main\`.t"
+    [ "$status" -eq 0 ]
+    echo "$output"
+    [[ "$output" =~ "| 1 | 1 |" ]] || false
+    [[ "$output" =~ "| 1 | 2 |" ]] || false
+
+    [[ ! -f .dolt/sql-server.lock ]] || false
+}

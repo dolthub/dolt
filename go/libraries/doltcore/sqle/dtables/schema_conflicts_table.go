@@ -193,7 +193,7 @@ func newSchemaConflict(ctx context.Context, table string, baseRoot *doltdb.RootV
 }
 
 func getCreateTableStatement(table string, sch schema.Schema, fks []doltdb.ForeignKey, parents map[string]schema.Schema) (string, error) {
-	pkSch, err := sqlutil.FromDoltSchema(table, sch)
+	pkSch, err := sqlutil.FromDoltSchema("", table, sch)
 	if err != nil {
 		return "", err
 	}

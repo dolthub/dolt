@@ -458,7 +458,7 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 	//       This allows column projections to work correctly with table functions, but we will need to add a
 	//       unique id (e.g. hash generated from method arguments) when we add support for aliasing and joining
 	//       table functions in order for the analyzer to determine which table function result a column comes from.
-	sqlSchema, err := sqlutil.FromDoltSchema("", diffTableSch)
+	sqlSchema, err := sqlutil.FromDoltSchema("", "", diffTableSch)
 	if err != nil {
 		return err
 	}

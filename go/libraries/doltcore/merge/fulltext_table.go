@@ -54,7 +54,7 @@ func createFulltextTable(ctx *sql.Context, name string, root *doltdb.RootValue) 
 	if err != nil {
 		return nil, err
 	}
-	sqlSch, err := sqlutil.FromDoltSchema(name, sch)
+	sqlSch, err := sqlutil.FromDoltSchema("", name, sch)
 	if err != nil {
 		return nil, err
 	}
