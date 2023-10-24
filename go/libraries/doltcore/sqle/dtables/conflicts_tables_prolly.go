@@ -51,7 +51,7 @@ func newProllyConflictsTable(ctx *sql.Context, tbl *doltdb.Table, sourceUpdatabl
 	if err != nil {
 		return nil, err
 	}
-	sqlSch, err := sqlutil.FromDoltSchema(doltdb.DoltConfTablePrefix+tblName, confSch)
+	sqlSch, err := sqlutil.FromDoltSchema("", doltdb.DoltConfTablePrefix+tblName, confSch)
 	if err != nil {
 		return nil, err
 	}

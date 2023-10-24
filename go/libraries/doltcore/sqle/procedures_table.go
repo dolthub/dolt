@@ -45,7 +45,7 @@ const (
 
 // The fixed SQL schema for the `dolt_procedures` table.
 func ProceduresTableSqlSchema() sql.PrimaryKeySchema {
-	sqlSchema, err := sqlutil.FromDoltSchema(doltdb.ProceduresTableName, ProceduresTableSchema())
+	sqlSchema, err := sqlutil.FromDoltSchema("", doltdb.ProceduresTableName, ProceduresTableSchema())
 	if err != nil {
 		panic(err) // should never happen
 	}

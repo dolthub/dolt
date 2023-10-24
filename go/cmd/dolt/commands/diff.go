@@ -1190,14 +1190,14 @@ func diffRows(
 
 	var toSch, fromSch sql.Schema
 	if fromTableInfo != nil {
-		pkSch, err := sqlutil.FromDoltSchema(fromTableInfo.Name, fromTableInfo.Sch)
+		pkSch, err := sqlutil.FromDoltSchema(sqlCtx.GetCurrentDatabase(), fromTableInfo.Name, fromTableInfo.Sch)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
 		fromSch = pkSch.Schema
 	}
 	if toTableInfo != nil {
-		pkSch, err := sqlutil.FromDoltSchema(toTableInfo.Name, toTableInfo.Sch)
+		pkSch, err := sqlutil.FromDoltSchema(sqlCtx.GetCurrentDatabase(), toTableInfo.Name, toTableInfo.Sch)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}

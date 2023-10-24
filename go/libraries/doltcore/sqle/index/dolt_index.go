@@ -202,11 +202,11 @@ func DoltToFromCommitIndex(tbl string) sql.Index {
 
 // MockIndex returns a sql.Index that is not backed by an actual datastore. It's useful for system tables and
 // system table functions provide indexes but produce their rows at execution time based on the provided `IndexLookup`
-func MockIndex(columnName, tableName string, columnType types.NomsKind, unique bool) (index *doltIndex) {
+func MockIndex(dbName, tableName, columnName string, columnType types.NomsKind, unique bool) (index *doltIndex) {
 	return &doltIndex{
 		id:      columnName,
 		tblName: tableName,
-		dbName:  "",
+		dbName:  dbName,
 		columns: []schema.Column{
 			schema.NewColumn(columnName, 0, columnType, false),
 		},
@@ -221,13 +221,13 @@ func MockIndex(columnName, tableName string, columnType types.NomsKind, unique b
 	}
 }
 
-func DoltCommitIndexes(tab string, db *doltdb.DoltDB, unique bool) (indexes []sql.Index, err error) {
+func DoltCommitIndexes(dbName, tab string, db *doltdb.DoltDB, unique bool) (indexes []sql.Index, err error) {
 	if !types.IsFormat_DOLT(db.Format()) {
 		return nil, nil
 	}
 
 	return []sql.Index{
-		NewCommitIndex(MockIndex(CommitHashIndexId, tab, types.StringKind, unique)),
+		NewCommitIndex(MockIndex(dbName, tab, CommitHashIndexId, types.StringKind, unique)),
 	}, nil
 }
 
@@ -321,7 +321,7 @@ func DoltHistoryIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.
 		unorderedIndexes[i] = di
 	}
 
-	cmIdx, err := DoltCommitIndexes(tbl, ddb, false)
+	cmIdx, err := DoltCommitIndexes(db, tbl, ddb, false)
 	if err != nil {
 		return nil, err
 	}
