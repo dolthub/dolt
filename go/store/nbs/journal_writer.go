@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/dolthub/swiss"
 	"github.com/sirupsen/logrus"
@@ -161,8 +162,10 @@ type journalWriter struct {
 var _ io.Closer = &journalWriter{}
 
 // bootstrapJournal reads in records from the journal file and the journal index file, initializing
-// the state of the journalWriter. It returns the most recent root hash for the journal.
-func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, err error) {
+// the state of the journalWriter. It returns the most recent root hash for the journal, as well as
+// a slice of all root hash strings in reverse chronological order, and a slice of timestamps that
+// indicate the time each returned root was created.
+func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, roots []string, times []time.Time, err error) {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
 
@@ -188,7 +191,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 	if ok {
 		var info os.FileInfo
 		if info, err = wr.index.Stat(); err != nil {
-			return hash.Hash{}, err
+			return hash.Hash{}, nil, nil, err
 		}
 
 		// initialize range index with enough capacity to
@@ -250,7 +253,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 			if cerr := wr.corruptIndexRecovery(ctx); cerr != nil {
 				err = fmt.Errorf("error recovering corrupted chunk journal index: %s", err.Error())
 			}
-			return hash.Hash{}, err
+			return hash.Hash{}, nil, nil, err
 		}
 		wr.ranges = wr.ranges.flatten()
 	}
@@ -265,16 +268,21 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 				Length: uint32(len(r.payload)),
 			})
 			wr.uncmpSz += r.uncompressedPayloadSize()
+
 		case rootHashJournalRecKind:
 			last = hash.Hash(r.address)
+			roots = append(roots, r.address.String())
+			times = append(times, r.timestamp)
+
 		default:
 			return fmt.Errorf("unknown journal record kind (%d)", r.kind)
 		}
 		return nil
 	})
 	if err != nil {
-		return hash.Hash{}, err
+		return hash.Hash{}, nil, nil, err
 	}
+
 	return
 }
 
@@ -352,6 +360,7 @@ func (wr *journalWriter) writeCompressedChunk(cc CompressedChunk) error {
 func (wr *journalWriter) commitRootHash(root hash.Hash) error {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
+
 	buf, err := wr.getBytes(rootHashRecordSize())
 	if err != nil {
 		return err

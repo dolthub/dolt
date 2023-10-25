@@ -44,6 +44,11 @@ type ChunkJournal struct {
 	contents  manifestContents
 	backing   *journalManifest
 	persister *fsTablePersister
+
+	// Roots holds an in-memory representation of the root hashes that have been written to the ChunkJournal
+	Roots []string
+	// RootTimestamps holds a timestamp for each of the root hashes that have been written to the ChunkJournal
+	RootTimestamps []time.Time
 }
 
 var _ tablePersister = &ChunkJournal{}
@@ -99,7 +104,7 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context) (err error) {
 			return err
 		}
 
-		_, err = j.wr.bootstrapJournal(ctx)
+		_, _, _, err = j.wr.bootstrapJournal(ctx)
 		if err != nil {
 			return err
 		}
@@ -127,10 +132,13 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context) (err error) {
 	}
 
 	// parse existing journal file
-	root, err := j.wr.bootstrapJournal(ctx)
+	root, roots, rootTimestamps, err := j.wr.bootstrapJournal(ctx)
 	if err != nil {
 		return err
 	}
+
+	j.Roots = roots
+	j.RootTimestamps = rootTimestamps
 
 	mc, err := trueUpBackingManifest(ctx, root, j.backing)
 	if err != nil {
@@ -292,6 +300,10 @@ func (j *ChunkJournal) Update(ctx context.Context, lastLock addr, next manifestC
 		return manifestContents{}, err
 	}
 	j.contents = next
+
+	// Update the in-memory structures so that the ChunkJournal can be queried for reflog data
+	j.Roots = append(j.Roots, next.root.String())
+	j.RootTimestamps = append(j.RootTimestamps, time.Now())
 
 	return j.contents, nil
 }
