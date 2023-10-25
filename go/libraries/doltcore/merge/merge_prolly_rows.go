@@ -242,7 +242,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 			if err != nil {
 				return nil, nil, err
 			}
-		case tree.DiffOpRightDelete:
+		case tree.DiffOpRightDelete, tree.DiffOpDivergentDeleteResolved:
 			s.Deletes++
 			err = pri.merge(ctx, diff, tm.rightSch)
 			if err != nil {
@@ -1077,6 +1077,8 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 		return m.mut.Put(ctx, diff.Key, newTupleValue)
 	case tree.DiffOpRightDelete:
 		return m.mut.Put(ctx, diff.Key, diff.Right)
+	case tree.DiffOpDivergentDeleteResolved:
+		return m.mut.Delete(ctx, diff.Key)
 	case tree.DiffOpDivergentModifyResolved:
 		return m.mut.Put(ctx, diff.Key, diff.Merged)
 	default:
