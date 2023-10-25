@@ -1247,6 +1247,8 @@ func (p *DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.T
 		return &PatchTableFunction{}, nil
 	case "dolt_schema_diff":
 		return &SchemaDiffTableFunction{}, nil
+	case "dolt_reflog":
+		return &ReflogTableFunction{}, nil
 	case "dolt_query_diff":
 		return &QueryDiffTableFunction{}, nil
 	}
