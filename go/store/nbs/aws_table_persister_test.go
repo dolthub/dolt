@@ -31,6 +31,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -337,7 +338,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 	rl := make(chan struct{}, 8)
 	defer close(rl)
 
-	newPersister := func(s3svc s3svc, ddb *ddbTableStore) awsTablePersister {
+	newPersister := func(s3svc s3iface.S3API, ddb *ddbTableStore) awsTablePersister {
 		return awsTablePersister{
 			s3svc,
 			"bucket",

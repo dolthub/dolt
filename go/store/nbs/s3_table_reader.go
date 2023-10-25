@@ -34,8 +34,8 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/jpillora/backoff"
 	"golang.org/x/sync/errgroup"
 )
@@ -48,16 +48,6 @@ const (
 type s3TableReaderAt struct {
 	s3 *s3ObjectReader
 	h  addr
-}
-
-type s3svc interface {
-	AbortMultipartUploadWithContext(ctx aws.Context, input *s3.AbortMultipartUploadInput, opts ...request.Option) (*s3.AbortMultipartUploadOutput, error)
-	CreateMultipartUploadWithContext(ctx aws.Context, input *s3.CreateMultipartUploadInput, opts ...request.Option) (*s3.CreateMultipartUploadOutput, error)
-	UploadPartWithContext(ctx aws.Context, input *s3.UploadPartInput, opts ...request.Option) (*s3.UploadPartOutput, error)
-	UploadPartCopyWithContext(ctx aws.Context, input *s3.UploadPartCopyInput, opts ...request.Option) (*s3.UploadPartCopyOutput, error)
-	CompleteMultipartUploadWithContext(ctx aws.Context, input *s3.CompleteMultipartUploadInput, opts ...request.Option) (*s3.CompleteMultipartUploadOutput, error)
-	GetObjectWithContext(ctx aws.Context, input *s3.GetObjectInput, opts ...request.Option) (*s3.GetObjectOutput, error)
-	PutObjectWithContext(ctx aws.Context, input *s3.PutObjectInput, opts ...request.Option) (*s3.PutObjectOutput, error)
 }
 
 func (s3tra *s3TableReaderAt) Close() error {
@@ -78,7 +68,7 @@ func (s3tra *s3TableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off
 
 // TODO: Bring all the multipart upload and remote-conjoin stuff over here and make this a better analogue to ddbTableStore
 type s3ObjectReader struct {
-	s3     s3svc
+	s3     s3iface.S3API
 	bucket string
 	readRl chan struct{}
 	ns     string

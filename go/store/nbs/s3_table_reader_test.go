@@ -32,6 +32,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -88,16 +89,16 @@ func TestS3TableReaderAtNamespace(t *testing.T) {
 }
 
 type flakyS3 struct {
-	s3svc
+	s3iface.S3API
 	alreadyFailed map[string]struct{}
 }
 
-func makeFlakyS3(svc s3svc) *flakyS3 {
+func makeFlakyS3(svc s3iface.S3API) *flakyS3 {
 	return &flakyS3{svc, map[string]struct{}{}}
 }
 
 func (fs3 *flakyS3) GetObjectWithContext(ctx aws.Context, input *s3.GetObjectInput, opts ...request.Option) (*s3.GetObjectOutput, error) {
-	output, err := fs3.s3svc.GetObjectWithContext(ctx, input)
+	output, err := fs3.S3API.GetObjectWithContext(ctx, input)
 
 	if err != nil {
 		return nil, err

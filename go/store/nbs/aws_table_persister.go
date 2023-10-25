@@ -34,7 +34,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -56,7 +56,7 @@ const (
 )
 
 type awsTablePersister struct {
-	s3     s3svc
+	s3     s3iface.S3API
 	bucket string
 	rl     chan struct{}
 	ddb    *ddbTableStore

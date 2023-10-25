@@ -35,6 +35,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/store/d"
@@ -58,6 +59,8 @@ func makeFakeS3(t *testing.T) *fakeS3 {
 }
 
 type fakeS3 struct {
+	s3iface.S3API
+
 	assert *assert.Assertions
 
 	mu                sync.Mutex
