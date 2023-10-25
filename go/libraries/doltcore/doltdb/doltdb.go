@@ -1516,7 +1516,7 @@ func (ddb *DoltDB) IsTableFileStore() bool {
 }
 
 // ChunkJournal returns the ChunkJournal for this DoltDB, if one is in use.
-func (ddb *DoltDB) ChunkJournal(_ context.Context) *nbs.ChunkJournal {
+func (ddb *DoltDB) ChunkJournal() *nbs.ChunkJournal {
 	tableFileStore, ok := datas.ChunkStoreFromDatabase(ddb.db).(chunks.TableFileStore)
 	if !ok {
 		return nil
