@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/types/edits"
@@ -1514,6 +1515,27 @@ func (ddb *DoltDB) IsTableFileStore() bool {
 	return ok
 }
 
+// ChunkJournal returns the ChunkJournal for this DoltDB, if one is in use.
+func (ddb *DoltDB) ChunkJournal(_ context.Context) *nbs.ChunkJournal {
+	tableFileStore, ok := datas.ChunkStoreFromDatabase(ddb.db).(chunks.TableFileStore)
+	if !ok {
+		return nil
+	}
+
+	generationalNbs, ok := tableFileStore.(*nbs.GenerationalNBS)
+	if !ok {
+		return nil
+	}
+
+	newGen := generationalNbs.NewGen()
+	nbs, ok := newGen.(*nbs.NomsBlockStore)
+	if !ok {
+		return nil
+	}
+
+	return nbs.ChunkJournal()
+}
+
 func (ddb *DoltDB) TableFileStoreHasJournal(ctx context.Context) (bool, error) {
 	tableFileStore, ok := datas.ChunkStoreFromDatabase(ddb.db).(chunks.TableFileStore)
 	if !ok {
@@ -1529,6 +1551,11 @@ func (ddb *DoltDB) TableFileStoreHasJournal(ctx context.Context) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// DatasetsByRootHash returns the DatasetsMap for the specified root |hashof|.
+func (ddb *DoltDB) DatasetsByRootHash(ctx context.Context, hashof hash.Hash) (datas.DatasetsMap, error) {
+	return ddb.db.DatasetsByRootHash(ctx, hashof)
 }
 
 func (ddb *DoltDB) SetCommitHooks(ctx context.Context, postHooks []CommitHook) *DoltDB {
