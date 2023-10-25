@@ -3,7 +3,7 @@ module github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi
 go 1.19
 
 require (
-	google.golang.org/grpc v1.55.0
+	google.golang.org/grpc v1.56.3
 	google.golang.org/protobuf v1.30.0
 )
 
