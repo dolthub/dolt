@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/client/metadata"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
@@ -281,4 +282,38 @@ func (m *fakeS3) PutObjectWithContext(ctx aws.Context, input *s3.PutObjectInput,
 	m.data[*input.Key] = buff.Bytes()
 
 	return &s3.PutObjectOutput{}, nil
+}
+
+func (m *fakeS3) GetObjectRequest(input *s3.GetObjectInput) (*request.Request, *s3.GetObjectOutput) {
+	out := &s3.GetObjectOutput{}
+	var handlers request.Handlers
+	handlers.Send.PushBack(func(r *request.Request) {
+		res, err := m.GetObjectWithContext(r.Context(), input)
+		r.Error = err
+		if res != nil {
+			*(r.Data.(*s3.GetObjectOutput)) = *res
+		}
+	})
+	return request.New(aws.Config{}, metadata.ClientInfo{}, handlers, nil, &request.Operation{
+		Name:       "GetObject",
+		HTTPMethod: "GET",
+		HTTPPath:   "/{Bucket}/{Key+}",
+	}, input, out), out
+}
+
+func (m *fakeS3) PutObjectRequest(input *s3.PutObjectInput) (*request.Request, *s3.PutObjectOutput) {
+	out := &s3.PutObjectOutput{}
+	var handlers request.Handlers
+	handlers.Send.PushBack(func(r *request.Request) {
+		res, err := m.PutObjectWithContext(r.Context(), input)
+		r.Error = err
+		if res != nil {
+			*(r.Data.(*s3.PutObjectOutput)) = *res
+		}
+	})
+	return request.New(aws.Config{}, metadata.ClientInfo{}, handlers, nil, &request.Operation{
+		Name:       "PutObject",
+		HTTPMethod: "PUT",
+		HTTPPath:   "/{Bucket}/{Key+}",
+	}, input, out), out
 }

@@ -35,6 +35,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -185,19 +186,15 @@ func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver ch
 }
 
 func (s3p awsTablePersister) multipartUpload(ctx context.Context, r io.Reader, sz uint64, key string) error {
-	uploadID, err := s3p.startMultipartUpload(ctx, key)
-
-	if err != nil {
-		return err
-	}
-
-	multipartUpload, err := s3p.uploadParts(ctx, r, sz, key, uploadID)
-	if err != nil {
-		_ = s3p.abortMultipartUpload(ctx, key, uploadID)
-		return err
-	}
-
-	return s3p.completeMultipartUpload(ctx, key, uploadID, multipartUpload)
+	uploader := s3manager.NewUploaderWithClient(s3p.s3, func(u *s3manager.Uploader) {
+		u.PartSize = int64(s3p.limits.partTarget)
+	})
+	_, err := uploader.Upload(&s3manager.UploadInput{
+		Bucket: aws.String(s3p.bucket),
+		Key:    aws.String(s3p.key(key)),
+		Body:   r,
+	})
+	return err
 }
 
 func (s3p awsTablePersister) startMultipartUpload(ctx context.Context, key string) (string, error) {
@@ -232,90 +229,6 @@ func (s3p awsTablePersister) completeMultipartUpload(ctx context.Context, key, u
 	})
 
 	return err
-}
-
-func (s3p awsTablePersister) uploadParts(ctx context.Context, r io.Reader, sz uint64, key, uploadID string) (*s3.CompletedMultipartUpload, error) {
-	sent, failed, done := make(chan s3UploadedPart), make(chan error), make(chan struct{})
-
-	numParts := getNumParts(sz, s3p.limits.partTarget)
-
-	if numParts > maxS3Parts {
-		return nil, errors.New("exceeded maximum parts")
-	}
-
-	data, err := io.ReadAll(r)
-	if err != nil {
-		return nil, err
-	}
-
-	var wg sync.WaitGroup
-	sendPart := func(partNum, start, end uint64) {
-		if s3p.rl != nil {
-			s3p.rl <- struct{}{}
-			defer func() { <-s3p.rl }()
-		}
-		defer wg.Done()
-
-		// Check if upload has been terminated
-		select {
-		case <-done:
-			return
-		default:
-		}
-		// Upload the desired part
-		if partNum == numParts { // If this is the last part, make sure it includes any overflow
-			end = uint64(len(data))
-		}
-		etag, err := s3p.uploadPart(ctx, data[start:end], key, uploadID, int64(partNum))
-		if err != nil {
-			failed <- err
-			return
-		}
-		// Try to send along part info. In the case that the upload was aborted, reading from done allows this worker to exit correctly.
-		select {
-		case sent <- s3UploadedPart{int64(partNum), etag}:
-		case <-done:
-			return
-		}
-	}
-	for i := uint64(0); i < numParts; i++ {
-		wg.Add(1)
-		partNum := i + 1 // Parts are 1-indexed
-		start, end := i*s3p.limits.partTarget, (i+1)*s3p.limits.partTarget
-		go sendPart(partNum, start, end)
-	}
-	go func() {
-		wg.Wait()
-		close(sent)
-		close(failed)
-	}()
-
-	multipartUpload := &s3.CompletedMultipartUpload{}
-	var firstFailure error
-	for cont := true; cont; {
-		select {
-		case sentPart, open := <-sent:
-			if open {
-				multipartUpload.Parts = append(multipartUpload.Parts, &s3.CompletedPart{
-					ETag:       aws.String(sentPart.etag),
-					PartNumber: aws.Int64(sentPart.idx),
-				})
-			}
-			cont = open
-
-		case err := <-failed:
-			if err != nil && firstFailure == nil { // nil err may happen when failed gets closed
-				firstFailure = err
-				close(done)
-			}
-		}
-	}
-
-	if firstFailure == nil {
-		close(done)
-	}
-	sort.Sort(partsByPartNum(multipartUpload.Parts))
-	return multipartUpload, firstFailure
 }
 
 func getNumParts(dataLen, minPartSize uint64) uint64 {

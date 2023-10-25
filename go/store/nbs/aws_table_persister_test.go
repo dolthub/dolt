@@ -23,6 +23,7 @@ package nbs
 
 import (
 	"context"
+	crand "crypto/rand"
 	"io"
 	"math/rand"
 	"sync"
@@ -38,24 +39,59 @@ import (
 	"github.com/dolthub/dolt/go/store/util/sizecache"
 )
 
+func randomChunks(t *testing.T, r *rand.Rand, sz int) [][]byte {
+	buf := make([]byte, sz)
+	_, err := io.ReadFull(crand.Reader, buf)
+	require.NoError(t, err)
+
+	var ret [][]byte
+	var i int
+	for i < len(buf) {
+		j := int(r.NormFloat64()*1024 + 4096)
+		if i+j >= len(buf) {
+			ret = append(ret, buf[i:])
+		} else {
+			ret = append(ret, buf[i:i+j])
+		}
+		i += j
+	}
+
+	return ret
+}
+
+func TestRandomChunks(t *testing.T) {
+	r := rand.New(rand.NewSource(1024))
+	res := randomChunks(t, r, 10)
+	assert.Len(t, res, 1)
+	res = randomChunks(t, r, 4096+2048)
+	assert.Len(t, res, 2)
+	res = randomChunks(t, r, 4096+4096)
+	assert.Len(t, res, 3)
+}
+
 func TestAWSTablePersisterPersist(t *testing.T) {
 	ctx := context.Background()
 	calcPartSize := func(rdr chunkReader, maxPartNum uint64) uint64 {
 		return maxTableSize(uint64(mustUint32(rdr.count())), mustUint64(rdr.uncompressedLen())) / maxPartNum
 	}
 
-	mt := newMemTable(testMemTableSize)
+	r := rand.New(rand.NewSource(1024))
+	const sz15mb = 1 << 20 * 15
+	mt := newMemTable(sz15mb)
+	testChunks := randomChunks(t, r, 1<<20*12)
 	for _, c := range testChunks {
 		assert.Equal(t, mt.addChunk(computeAddr(c), c), chunkAdded)
 	}
+
+	var limits5mb = awsLimits{partTarget: 1 << 20 * 5}
+	var limits64mb = awsLimits{partTarget: 1 << 20 * 64}
 
 	t.Run("PersistToS3", func(t *testing.T) {
 		testIt := func(t *testing.T, ns string) {
 			t.Run("InMultipleParts", func(t *testing.T) {
 				assert := assert.New(t)
 				s3svc, ddb := makeFakeS3(t), makeFakeDTS(makeFakeDDB(t), nil)
-				limits := awsLimits{partTarget: calcPartSize(mt, 3)}
-				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits, ns: ns, q: &UnlimitedQuotaProvider{}}
+				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits5mb, ns: ns, q: &UnlimitedQuotaProvider{}}
 
 				src, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
 				require.NoError(t, err)
@@ -73,8 +109,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 				assert := assert.New(t)
 
 				s3svc, ddb := makeFakeS3(t), makeFakeDTS(makeFakeDDB(t), nil)
-				limits := awsLimits{partTarget: calcPartSize(mt, 1)}
-				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits, ns: ns, q: &UnlimitedQuotaProvider{}}
+				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits64mb, ns: ns, q: &UnlimitedQuotaProvider{}}
 
 				src, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
 				require.NoError(t, err)
@@ -90,8 +125,8 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 			t.Run("NoNewChunks", func(t *testing.T) {
 				assert := assert.New(t)
 
-				mt := newMemTable(testMemTableSize)
-				existingTable := newMemTable(testMemTableSize)
+				mt := newMemTable(sz15mb)
+				existingTable := newMemTable(sz15mb)
 
 				for _, c := range testChunks {
 					assert.Equal(mt.addChunk(computeAddr(c), c), chunkAdded)
@@ -99,8 +134,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 				}
 
 				s3svc, ddb := makeFakeS3(t), makeFakeDTS(makeFakeDDB(t), nil)
-				limits := awsLimits{partTarget: 1 << 10}
-				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits, ns: ns, q: &UnlimitedQuotaProvider{}}
+				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits5mb, ns: ns, q: &UnlimitedQuotaProvider{}}
 
 				src, err := s3p.Persist(context.Background(), mt, existingTable, &Stats{})
 				require.NoError(t, err)
@@ -116,8 +150,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 
 				s3svc := &failingFakeS3{makeFakeS3(t), sync.Mutex{}, 1}
 				ddb := makeFakeDTS(makeFakeDDB(t), nil)
-				limits := awsLimits{partTarget: calcPartSize(mt, 4)}
-				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits, ns: ns, q: &UnlimitedQuotaProvider{}}
+				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits5mb, ns: ns, q: &UnlimitedQuotaProvider{}}
 
 				_, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
 				assert.Error(err)
@@ -331,7 +364,8 @@ func TestAWSTablePersisterCalcPartSizes(t *testing.T) {
 
 func TestAWSTablePersisterConjoinAll(t *testing.T) {
 	ctx := context.Background()
-	targetPartSize := uint64(1024)
+	const sz5mb = 1 << 20 * 5
+	targetPartSize := uint64(sz5mb)
 	minPartSize, maxPartSize := targetPartSize, 5*targetPartSize
 	maxItemSize, maxChunkCount := int(targetPartSize/2), uint32(4)
 
