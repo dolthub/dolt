@@ -45,7 +45,7 @@ require (
 	golang.org/x/sync v0.3.0
 	golang.org/x/sys v0.13.0
 	google.golang.org/api v0.126.0
-	google.golang.org/grpc v1.57.0
+	google.golang.org/grpc v1.57.1
 	google.golang.org/protobuf v1.31.0
 	gopkg.in/square/go-jose.v2 v2.5.1
 	gopkg.in/src-d/go-errors.v1 v1.0.0
