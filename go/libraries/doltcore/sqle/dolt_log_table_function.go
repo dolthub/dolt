@@ -187,7 +187,8 @@ func (ltf *LogTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.Pri
 
 	var operations []sql.PrivilegedOperation
 	for _, tblName := range tblNames {
-		operations = append(operations, sql.NewPrivilegedOperation(ltf.database.Name(), tblName, "", sql.PrivilegeType_Select))
+		subject := sql.PrivilegeCheckSubject{Database: ltf.database.Name(), Table: tblName}
+		operations = append(operations, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 	}
 
 	return opChecker.UserHasPrivileges(ctx, operations...)
