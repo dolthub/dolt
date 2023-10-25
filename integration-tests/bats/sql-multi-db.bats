@@ -92,7 +92,6 @@ seed_repos_with_tables_with_use_statements() {
             CREATE TABLE r2_t1 (pk BIGINT, c1 BIGINT, PRIMARY KEY(pk));
             INSERT INTO r2_t1 (pk, c1) values (2,200),(3,300),(4,400);"
     run dolt --data-dir ./ sql -q "select * from repo1.r2_t1 join repo2.r2_t1 on repo1.r2_t1.pk=repo2.r2_t1.pk"
-    skip "Fails on Not unique table/alias"
     [ "$status" -eq 0 ]
     [[ ! $output =~ "Not unique table/alias" ]] || false
 }
