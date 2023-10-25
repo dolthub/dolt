@@ -109,7 +109,7 @@ func (rltf *ReflogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 				return nil
 			}
 
-			doltRef, err := ref.Parse(refName)
+			doltRef, err := ref.Parse(id)
 			if err != nil {
 				return err
 			}
