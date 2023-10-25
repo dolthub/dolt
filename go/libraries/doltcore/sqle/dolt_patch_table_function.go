@@ -313,8 +313,8 @@ func (p *PatchTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.Pri
 			return false
 		}
 
-		return opChecker.UserHasPrivileges(ctx,
-			sql.NewPrivilegedOperation(p.database.Name(), tableName, "", sql.PrivilegeType_Select))
+		subject := sql.PrivilegeCheckSubject{Database: p.database.Name(), Table: tableName}
+		return opChecker.UserHasPrivileges(ctx, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 	}
 
 	tblNames, err := p.database.GetTableNames(ctx)
@@ -322,9 +322,10 @@ func (p *PatchTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.Pri
 		return false
 	}
 
-	var operations []sql.PrivilegedOperation
+	operations := make([]sql.PrivilegedOperation, 0, len(tblNames))
 	for _, tblName := range tblNames {
-		operations = append(operations, sql.NewPrivilegedOperation(p.database.Name(), tblName, "", sql.PrivilegeType_Select))
+		subject := sql.PrivilegeCheckSubject{Database: p.database.Name(), Table: tblName}
+		operations = append(operations, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 	}
 
 	return opChecker.UserHasPrivileges(ctx, operations...)

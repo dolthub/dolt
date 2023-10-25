@@ -164,9 +164,9 @@ func (ds *DiffSummaryTableFunction) CheckPrivileges(ctx *sql.Context, opChecker 
 			return false
 		}
 
+		subject := sql.PrivilegeCheckSubject{Database: ds.database.Name(), Table: tableName}
 		// TODO: Add tests for privilege checking
-		return opChecker.UserHasPrivileges(ctx,
-			sql.NewPrivilegedOperation(ds.database.Name(), tableName, "", sql.PrivilegeType_Select))
+		return opChecker.UserHasPrivileges(ctx, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 	}
 
 	tblNames, err := ds.database.GetTableNames(ctx)
@@ -176,7 +176,8 @@ func (ds *DiffSummaryTableFunction) CheckPrivileges(ctx *sql.Context, opChecker 
 
 	var operations []sql.PrivilegedOperation
 	for _, tblName := range tblNames {
-		operations = append(operations, sql.NewPrivilegedOperation(ds.database.Name(), tblName, "", sql.PrivilegeType_Select))
+		subject := sql.PrivilegeCheckSubject{Database: ds.database.Name(), Table: tblName}
+		operations = append(operations, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 	}
 
 	return opChecker.UserHasPrivileges(ctx, operations...)

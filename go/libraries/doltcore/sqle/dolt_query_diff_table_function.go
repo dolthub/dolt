@@ -306,7 +306,8 @@ func (tf *QueryDiffTableFunction) WithChildren(node ...sql.Node) (sql.Node, erro
 
 // CheckPrivileges implements the sql.Node interface
 func (tf *QueryDiffTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	return opChecker.UserHasPrivileges(ctx, sql.NewPrivilegedOperation(tf.database.Name(), "", "", sql.PrivilegeType_Select))
+	subject := sql.PrivilegeCheckSubject{Database: tf.database.Name()}
+	return opChecker.UserHasPrivileges(ctx, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 }
 
 // Schema implements the sql.Node interface
