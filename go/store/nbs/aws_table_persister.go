@@ -34,6 +34,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -120,21 +121,20 @@ func (s3p awsTablePersister) CopyTableFile(ctx context.Context, r io.ReadCloser,
 		}
 	}()
 
-	data, err := io.ReadAll(r)
-	if err != nil {
-		return err
-	}
-
 	name, err := parseAddr(fileId)
 	if err != nil {
 		return err
 	}
 
-	if s3p.limits.tableFitsInDynamo(name, len(data), chunkCount) {
+	if s3p.limits.tableFitsInDynamo(name, int(fileSz), chunkCount) {
+		data, err := io.ReadAll(r)
+		if err != nil {
+			return err
+		}
 		return s3p.ddb.Write(ctx, name, data)
 	}
 
-	return s3p.multipartUpload(ctx, data, fileId)
+	return s3p.multipartUpload(ctx, r, fileSz, fileId)
 }
 
 func (s3p awsTablePersister) Path() string {
@@ -174,7 +174,7 @@ func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver ch
 		return newReaderFromIndexData(ctx, s3p.q, data, name, &dynamoTableReaderAt{ddb: s3p.ddb, h: name}, s3BlockSize)
 	}
 
-	err = s3p.multipartUpload(ctx, data, name.String())
+	err = s3p.multipartUpload(ctx, bytes.NewReader(data), uint64(len(data)), name.String())
 
 	if err != nil {
 		return emptyChunkSource{}, err
@@ -184,14 +184,14 @@ func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver ch
 	return newReaderFromIndexData(ctx, s3p.q, data, name, tra, s3BlockSize)
 }
 
-func (s3p awsTablePersister) multipartUpload(ctx context.Context, data []byte, key string) error {
+func (s3p awsTablePersister) multipartUpload(ctx context.Context, r io.Reader, sz uint64, key string) error {
 	uploadID, err := s3p.startMultipartUpload(ctx, key)
 
 	if err != nil {
 		return err
 	}
 
-	multipartUpload, err := s3p.uploadParts(ctx, data, key, uploadID)
+	multipartUpload, err := s3p.uploadParts(ctx, r, sz, key, uploadID)
 	if err != nil {
 		_ = s3p.abortMultipartUpload(ctx, key, uploadID)
 		return err
@@ -234,13 +234,18 @@ func (s3p awsTablePersister) completeMultipartUpload(ctx context.Context, key, u
 	return err
 }
 
-func (s3p awsTablePersister) uploadParts(ctx context.Context, data []byte, key, uploadID string) (*s3.CompletedMultipartUpload, error) {
+func (s3p awsTablePersister) uploadParts(ctx context.Context, r io.Reader, sz uint64, key, uploadID string) (*s3.CompletedMultipartUpload, error) {
 	sent, failed, done := make(chan s3UploadedPart), make(chan error), make(chan struct{})
 
-	numParts := getNumParts(uint64(len(data)), s3p.limits.partTarget)
+	numParts := getNumParts(sz, s3p.limits.partTarget)
 
 	if numParts > maxS3Parts {
 		return nil, errors.New("exceeded maximum parts")
+	}
+
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
 	}
 
 	var wg sync.WaitGroup
