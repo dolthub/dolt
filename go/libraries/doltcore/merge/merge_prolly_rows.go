@@ -1561,7 +1561,7 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 	resultType := m.resultVD.Types[i]
 
 	// We previously asserted that left and right are not nil.
-	//But base can be nil in the event of convergent inserts.
+	// But base can be nil in the event of convergent inserts.
 	if base == nil || !baseColExists {
 		// There are two possible cases:
 		// - The base row doesn't exist, or
