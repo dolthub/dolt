@@ -4206,6 +4206,28 @@ var DoltUndropTestScripts = []queries.ScriptTest{
 	},
 }
 
+var DoltReflogTestScripts = []queries.ScriptTest{
+	{
+		Name: "dolt_reflog",
+		SetUpScript: []string{
+			"create table t1(pk int primary key);",
+			"call dolt_commit('-Am', 'creating table t1');",
+
+			"insert into t1 values(1);",
+			"call dolt_commit('-Am', 'inserting row 1');",
+
+			"insert into t1 values(2);",
+			"call dolt_commit('-Am', 'inserting row 2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select 1;",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+}
+
 // DoltAutoIncrementTests is tests of dolt's global auto increment logic
 var DoltAutoIncrementTests = []queries.ScriptTest{
 	{

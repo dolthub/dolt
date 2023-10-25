@@ -2071,6 +2071,22 @@ func TestLogTableFunctionPrepared(t *testing.T) {
 	}
 }
 
+func TestDoltReflog(t *testing.T) {
+	h := newDoltHarnessForLocalFilesystem(t)
+	defer h.Close()
+	for _, script := range DoltReflogTestScripts {
+		enginetest.TestScript(t, h, script)
+	}
+}
+
+func TestDoltReflogPrepared(t *testing.T) {
+	h := newDoltHarnessForLocalFilesystem(t)
+	defer h.Close()
+	for _, script := range DoltReflogTestScripts {
+		enginetest.TestScriptPrepared(t, h, script)
+	}
+}
+
 func TestCommitDiffSystemTable(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
