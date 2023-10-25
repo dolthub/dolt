@@ -45,12 +45,6 @@ const (
 	maxS3PartSize = 64 * 1 << 20 // 64MiB
 	maxS3Parts    = 10000
 
-	// Disable persisting tables in DynamoDB.  This is currently unused by
-	// Dolthub and keeping it requires provisioning DynamoDB throughout for
-	// the noop reads.
-	maxDynamoChunks   = 0
-	maxDynamoItemSize = 0
-
 	defaultS3PartSize = minS3PartSize // smallest allowed by S3 allows for most throughput
 )
 
@@ -58,7 +52,6 @@ type awsTablePersister struct {
 	s3     s3svc
 	bucket string
 	rl     chan struct{}
-	ddb    *ddbTableStore
 	limits awsLimits
 	ns     string
 	q      MemoryQuotaProvider
@@ -69,25 +62,11 @@ var _ tableFilePersister = awsTablePersister{}
 
 type awsLimits struct {
 	partTarget, partMin, partMax uint64
-	itemMax                      int
-	chunkMax                     uint32
-}
-
-func (al awsLimits) tableFitsInDynamo(name addr, dataLen int, chunkCount uint32) bool {
-	calcItemSize := func(n addr, dataLen int) int {
-		return len(dbAttr) + len(tablePrefix) + len(n.String()) + len(dataAttr) + dataLen
-	}
-	return chunkCount <= al.chunkMax && calcItemSize(name, dataLen) < al.itemMax
-}
-
-func (al awsLimits) tableMayBeInDynamo(chunkCount uint32) bool {
-	return chunkCount <= al.chunkMax
 }
 
 func (s3p awsTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {
 	return newAWSChunkSource(
 		ctx,
-		s3p.ddb,
 		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns},
 		s3p.limits,
 		name,
@@ -100,7 +79,6 @@ func (s3p awsTablePersister) Open(ctx context.Context, name addr, chunkCount uin
 func (s3p awsTablePersister) Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error) {
 	return tableExistsInChunkSource(
 		ctx,
-		s3p.ddb,
 		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns},
 		s3p.limits,
 		name,
@@ -123,15 +101,6 @@ func (s3p awsTablePersister) CopyTableFile(ctx context.Context, r io.ReadCloser,
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return err
-	}
-
-	name, err := parseAddr(fileId)
-	if err != nil {
-		return err
-	}
-
-	if s3p.limits.tableFitsInDynamo(name, len(data), chunkCount) {
-		return s3p.ddb.Write(ctx, name, data)
 	}
 
 	return s3p.multipartUpload(ctx, data, fileId)
@@ -162,16 +131,6 @@ func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver ch
 
 	if chunkCount == 0 {
 		return emptyChunkSource{}, nil
-	}
-
-	if s3p.limits.tableFitsInDynamo(name, len(data), chunkCount) {
-		err := s3p.ddb.Write(ctx, name, data)
-
-		if err != nil {
-			return nil, err
-		}
-
-		return newReaderFromIndexData(ctx, s3p.q, data, name, &dynamoTableReaderAt{ddb: s3p.ddb, h: name}, s3BlockSize)
 	}
 
 	err = s3p.multipartUpload(ctx, data, name.String())
