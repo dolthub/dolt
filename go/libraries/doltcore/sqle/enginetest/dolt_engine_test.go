@@ -507,6 +507,10 @@ func TestInsertIntoErrors(t *testing.T) {
 	enginetest.TestInsertIntoErrors(t, h)
 }
 
+func TestGeneratedColumns(t *testing.T) {
+	enginetest.TestGeneratedColumns(t, enginetest.NewDefaultMemoryHarness())
+}
+
 func TestSpatialQueries(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
