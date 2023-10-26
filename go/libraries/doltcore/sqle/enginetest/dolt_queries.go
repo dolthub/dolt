@@ -1962,6 +1962,13 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit2 order by pk;",
 				Expected: []sql.Row{{1, 3}, {4, 6}},
 			},
+			{
+				// When filtering on a column from the original table, we use the primary index here, but because
+				// column tags have changed in previous versions of the table, the index tags don't match up completely.
+				// https://github.com/dolthub/dolt/issues/6891
+				Query:    "select pk, c1, c2 from dolt_history_t where pk=4;",
+				Expected: []sql.Row{{4, 5, 6}},
+			},
 		},
 	},
 	{
