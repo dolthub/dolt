@@ -1464,6 +1464,7 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, nu
 	if err != nil {
 		return err
 	}
+	defer r.Close()
 	return tfp.CopyTableFile(ctx, r, fileId, sz, uint32(numChunks))
 }
 
