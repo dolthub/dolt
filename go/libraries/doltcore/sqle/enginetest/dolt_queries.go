@@ -3080,7 +3080,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "show tables",
-				Expected: []sql.Row{{"a"}, {"myview"}},
+				Expected: []sql.Row{{"a"}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'newBranch', 'head~1')",
@@ -3088,7 +3088,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show tables",
-				Expected: []sql.Row{{"myview"}},
+				Expected: []sql.Row{},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'newBranch2', @commit1)",
@@ -3096,7 +3096,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show tables",
-				Expected: []sql.Row{{"a"}, {"myview"}},
+				Expected: []sql.Row{{"a"}},
 			},
 			{
 				Query:          "CALL DOLT_CHECKOUT('-b', 'otherBranch', 'unknownCommit')",
@@ -4974,7 +4974,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SHOW TABLES;",
-				Expected: []sql.Row{{"myview"}},
+				Expected: []sql.Row{},
 			},
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
@@ -4987,7 +4987,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SHOW TABLES;",
-				Expected: []sql.Row{{"myview"}, {"table_a"}},
+				Expected: []sql.Row{{"table_a"}},
 			},
 			{
 				Query:    "SELECT * FROM table_a;",
@@ -5010,7 +5010,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SHOW TABLES;",
-				Expected: []sql.Row{{"myview"}, {"dropme"}},
+				Expected: []sql.Row{{"dropme"}},
 			},
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
@@ -5018,7 +5018,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SHOW TABLES;",
-				Expected: []sql.Row{{"myview"}},
+				Expected: []sql.Row{},
 			},
 		},
 	},
@@ -6321,7 +6321,6 @@ var DoltSystemVariables = []queries.ScriptTest{
 					{"dolt_remote_branches"},
 					{"dolt_remotes"},
 					{"dolt_status"},
-					{"myview"},
 					{"test"},
 				},
 			},
