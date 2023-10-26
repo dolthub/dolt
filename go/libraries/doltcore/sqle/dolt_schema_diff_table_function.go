@@ -175,18 +175,18 @@ func (ds *SchemaDiffTableFunction) CheckPrivileges(ctx *sql.Context, opChecker s
 			return false
 		}
 
-		result := opChecker.UserHasPrivileges(ctx,
-			sql.NewPrivilegedOperation(ds.database.Name(), tableName, "", sql.PrivilegeType_Select))
-		return result
+		subject := sql.PrivilegeCheckSubject{Database: ds.database.Name(), Table: tableName}
+		return opChecker.UserHasPrivileges(ctx, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 	}
 
 	tblNames, err := ds.database.GetTableNames(ctx)
 	if err != nil {
 		return false
 	}
-	var operations []sql.PrivilegedOperation
+	operations := make([]sql.PrivilegedOperation, 0, len(tblNames))
 	for _, tblName := range tblNames {
-		operations = append(operations, sql.NewPrivilegedOperation(ds.database.Name(), tblName, "", sql.PrivilegeType_Select))
+		subject := sql.PrivilegeCheckSubject{Database: ds.database.Name(), Table: tblName}
+		operations = append(operations, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 	}
 
 	return opChecker.UserHasPrivileges(ctx, operations...)
