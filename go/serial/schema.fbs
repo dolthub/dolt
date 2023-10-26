@@ -33,7 +33,7 @@ table Column {
   // sql column type
   sql_type:string;
 
-  // sql default value
+  // sql default value. For generated columns, this is the generated expression rather than the default.
   default_value:string;
 
   // sql comment

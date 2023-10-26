@@ -37,15 +37,10 @@ var (
 var (
 	// InvalidCol is a Column instance that is returned when there is nothing to return and can be tested against.
 	InvalidCol = Column{
-		"invalid",
-		InvalidTag,
-		types.NullKind,
-		false,
-		typeinfo.UnknownType,
-		"",
-		false,
-		"",
-		nil,
+		Name:     "invalid",
+		Tag:      InvalidTag,
+		Kind:     types.NullKind,
+		TypeInfo: typeinfo.UnknownType,
 	}
 )
 
@@ -75,6 +70,12 @@ type Column struct {
 
 	// Default is the default value of this column. This is the string representation of a sql.Expression.
 	Default string
+	
+	// Generated is the generated value of this column. This is the string representation of a sql.Expression.
+	Generated string
+	
+	// Virtual is true if this is a virtual column.
+	Virtual bool
 
 	// AutoIncrement says whether this column auto increments.
 	AutoIncrement bool
@@ -109,15 +110,15 @@ func NewColumnWithTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, 
 	}
 
 	return Column{
-		name,
-		tag,
-		typeInfo.NomsKind(),
-		partOfPK,
-		typeInfo,
-		defaultVal,
-		autoIncrement,
-		comment,
-		constraints,
+		Name:          name,
+		Tag:           tag,
+		Kind:          typeInfo.NomsKind(),
+		IsPartOfPK:    partOfPK,
+		TypeInfo:      typeInfo,
+		Default:       defaultVal,
+		AutoIncrement: autoIncrement,
+		Comment:       comment,
+		Constraints:   constraints,
 	}, nil
 }
 
