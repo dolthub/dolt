@@ -294,7 +294,26 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 			return nil, err
 		}
 
-		cols[i], err = schema.NewColumnWithTypeInfo(string(c.Name()), c.Tag(), sqlType, c.PrimaryKey(), string(c.DefaultValue()), "", false, c.AutoIncrement(), string(c.Comment()), constraintsFromSerialColumn(&c)...)
+		defVal := ""
+		generatedVal := ""
+		if c.DefaultValue() != nil {
+			defVal = string(c.DefaultValue())
+		} else {
+			generatedVal = string(c.DefaultValue())
+		}
+		
+		cols[i], err = schema.NewColumnWithTypeInfo(
+			string(c.Name()),
+			c.Tag(),
+			sqlType,
+			c.PrimaryKey(),
+			defVal,
+			generatedVal,
+			c.Virtual(),
+			c.AutoIncrement(),
+			string(c.Comment()),
+			constraintsFromSerialColumn(&c)...,
+		)
 		if err != nil {
 			return nil, err
 		}
