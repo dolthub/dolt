@@ -97,6 +97,12 @@ const (
 	journalRecMaxSz = 128 * 1024
 )
 
+// journalRecordTimestampGenerator returns the current time in Unix epoch seconds. This function is stored in a
+// variable so that unit tests can override it to ensure the journal record timestamps are a known, expected value.
+var journalRecordTimestampGenerator = func() uint64 {
+	return uint64(time.Now().Unix())
+}
+
 func chunkRecordSize(c CompressedChunk) (recordSz, payloadOff uint32) {
 	recordSz += journalRecLenSz
 	recordSz += journalRecTagSz + journalRecKindSz
@@ -159,7 +165,7 @@ func writeRootHashRecord(buf []byte, root addr) (n uint32) {
 	// timestamp
 	buf[n] = byte(timestampJournalRecTag)
 	n += journalRecTagSz
-	writeUint64(buf[n:], uint64(time.Now().Unix()))
+	writeUint64(buf[n:], journalRecordTimestampGenerator())
 	n += journalRecTimestampSz
 
 	// address
