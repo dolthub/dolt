@@ -104,9 +104,9 @@ func orderToOrder(order *sql.ColumnOrder) *schema.ColumnOrder {
 
 func createColumn(nullable Nullable, newColName string, tag uint64, typeInfo typeinfo.TypeInfo, defaultVal, comment string) (schema.Column, error) {
 	if nullable {
-		return schema.NewColumnWithTypeInfo(newColName, tag, typeInfo, false, defaultVal, false, comment)
+		return schema.NewColumnWithTypeInfo(newColName, tag, typeInfo, false, defaultVal, "", false, false, comment)
 	} else {
-		return schema.NewColumnWithTypeInfo(newColName, tag, typeInfo, false, defaultVal, false, comment, schema.NotNullConstraint{})
+		return schema.NewColumnWithTypeInfo(newColName, tag, typeInfo, false, defaultVal, "", false, false, comment, schema.NotNullConstraint{})
 	}
 }
 

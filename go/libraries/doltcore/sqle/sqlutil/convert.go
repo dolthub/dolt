@@ -137,7 +137,7 @@ func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 		return schema.Column{}, err
 	}
 
-	return schema.NewColumnWithTypeInfo(col.Name, tag, typeInfo, col.PrimaryKey, col.Default.String(), col.AutoIncrement, col.Comment, constraints...)
+	return schema.NewColumnWithTypeInfo(col.Name, tag, typeInfo, col.PrimaryKey, col.Default.String(), "", false, col.AutoIncrement, col.Comment, constraints...)
 }
 
 // ToDoltResultSchema returns a dolt Schema from the sql schema given, suitable for use as a result set

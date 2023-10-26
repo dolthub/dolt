@@ -900,15 +900,7 @@ func schemaFromCreateTableStmt(createTableStmt string) (schema.Schema, error) {
 		if col.Type.Comment != nil {
 			comment = col.Type.Comment.String()
 		}
-		sCol, err := schema.NewColumnWithTypeInfo(
-			col.Name.String(),
-			0,
-			typeInfo,
-			primaryCols[col.Name.Lowered()],
-			defBuf.String(),
-			col.Type.Autoincrement == true,
-			comment,
-		)
+		sCol, err := schema.NewColumnWithTypeInfo(col.Name.String(), 0, typeInfo, primaryCols[col.Name.Lowered()], defBuf.String(), "", false, col.Type.Autoincrement == true, comment)
 		cols = append(cols, sCol)
 	}
 

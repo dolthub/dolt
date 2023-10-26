@@ -137,7 +137,7 @@ func TestTypeInfoMarshalling(t *testing.T) {
 		t.Run(sqlType.String(), func(t *testing.T) {
 			ti, err := typeinfo.FromSqlType(sqlType)
 			require.NoError(t, err)
-			col, err := schema.NewColumnWithTypeInfo("pk", 1, ti, true, "", false, "", schema.NotNullConstraint{})
+			col, err := schema.NewColumnWithTypeInfo("pk", 1, ti, true, "", "", false, false, "", schema.NotNullConstraint{})
 			require.NoError(t, err)
 			colColl := schema.NewColCollection(col)
 			originalSch, err := schema.SchemaFromCols(colColl)
@@ -232,7 +232,7 @@ func (tec testEncodedColumn) decodeColumn() (schema.Column, error) {
 		return schema.Column{}, errors.New("cannot decode column due to unknown schema format")
 	}
 	colConstraints := decodeAllColConstraint(tec.Constraints)
-	return schema.NewColumnWithTypeInfo(tec.Name, tec.Tag, typeInfo, tec.IsPartOfPK, tec.Default, tec.AutoIncrement, tec.Comment, colConstraints...)
+	return schema.NewColumnWithTypeInfo(tec.Name, tec.Tag, typeInfo, tec.IsPartOfPK, tec.Default, "", false, tec.AutoIncrement, tec.Comment, colConstraints...)
 }
 
 func (tsd testSchemaData) decodeSchema() (schema.Schema, error) {
@@ -297,8 +297,7 @@ func getColumns(t *testing.T) (cols []schema.Column) {
 	for i := range cols {
 		name := "col" + strconv.Itoa(i)
 		tag := uint64(i)
-		cols[i], err = schema.NewColumnWithTypeInfo(
-			name, tag, ti[i], false, "", false, "")
+		cols[i], err = schema.NewColumnWithTypeInfo(name, tag, ti[i], false, "", "", false, false, "")
 		require.NoError(t, err)
 	}
 	return

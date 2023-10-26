@@ -650,7 +650,7 @@ func TestModifyColumn(t *testing.T) {
 	)
 	ti, err := typeinfo.FromSqlType(gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 599))
 	require.NoError(t, err)
-	newNameColSameTag, err := schema.NewColumnWithTypeInfo("name", dtestutils.NameTag, ti, false, "", false, "", schema.NotNullConstraint{})
+	newNameColSameTag, err := schema.NewColumnWithTypeInfo("name", dtestutils.NameTag, ti, false, "", "", false, false, "", schema.NotNullConstraint{})
 	require.NoError(t, err)
 	alteredTypeSch2 := dtestutils.CreateSchema(
 		schema.NewColumn("id", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),

@@ -222,8 +222,8 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 		serial.ColumnAddPrimaryKey(b, col.IsPartOfPK)
 		serial.ColumnAddAutoIncrement(b, col.AutoIncrement)
 		serial.ColumnAddNullable(b, col.IsNullable())
-		serial.ColumnAddGenerated(b, false)
-		serial.ColumnAddVirtual(b, false)
+		serial.ColumnAddGenerated(b, col.Generated != "")
+		serial.ColumnAddVirtual(b, col.Virtual)
 		serial.ColumnAddHidden(b, false)
 		offs[i] = serial.ColumnEnd(b)
 	}
@@ -294,15 +294,7 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 			return nil, err
 		}
 
-		cols[i], err = schema.NewColumnWithTypeInfo(
-			string(c.Name()),
-			c.Tag(),
-			sqlType,
-			c.PrimaryKey(),
-			string(c.DefaultValue()),
-			c.AutoIncrement(),
-			string(c.Comment()),
-			constraintsFromSerialColumn(&c)...)
+		cols[i], err = schema.NewColumnWithTypeInfo(string(c.Name()), c.Tag(), sqlType, c.PrimaryKey(), string(c.DefaultValue()), "", false, c.AutoIncrement(), string(c.Comment()), constraintsFromSerialColumn(&c)...)
 		if err != nil {
 			return nil, err
 		}

@@ -90,7 +90,7 @@ type Column struct {
 // NewColumn creates a Column instance with the default type info for the NomsKind
 func NewColumn(name string, tag uint64, kind types.NomsKind, partOfPK bool, constraints ...ColConstraint) Column {
 	typeInfo := typeinfo.FromKind(kind)
-	col, err := NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, "", false, "", constraints...)
+	col, err := NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, "", "", false, false, "", constraints...)
 	if err != nil {
 		panic(err)
 	}
@@ -98,7 +98,16 @@ func NewColumn(name string, tag uint64, kind types.NomsKind, partOfPK bool, cons
 }
 
 // NewColumnWithTypeInfo creates a Column instance with the given type info.
-func NewColumnWithTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfPK bool, defaultVal string, autoIncrement bool, comment string, constraints ...ColConstraint) (Column, error) {
+func NewColumnWithTypeInfo(
+		name string,
+		tag uint64,
+		typeInfo typeinfo.TypeInfo,
+		partOfPK bool,
+		defaultVal, generatedVal string,
+		virtual, autoIncrement bool,
+		comment string,
+		constraints ...ColConstraint,
+) (Column, error) {
 	for _, c := range constraints {
 		if c == nil {
 			return Column{}, errors.New("nil passed as a constraint")
@@ -116,6 +125,8 @@ func NewColumnWithTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, 
 		IsPartOfPK:    partOfPK,
 		TypeInfo:      typeInfo,
 		Default:       defaultVal,
+		Generated:     generatedVal,
+		Virtual:  	   virtual,
 		AutoIncrement: autoIncrement,
 		Comment:       comment,
 		Constraints:   constraints,

@@ -715,7 +715,7 @@ func calculateConflictSchema(base, ours, theirs schema.Schema) (schema.Schema, *
 			if !stripConstraints {
 				cons = col.Constraints
 			}
-			c, err := schema.NewColumnWithTypeInfo(prefix+col.Name, uint64(i), col.TypeInfo, false, col.Default, false, col.Comment, cons...)
+			c, err := schema.NewColumnWithTypeInfo(prefix+col.Name, uint64(i), col.TypeInfo, false, col.Default, "", false, false, col.Comment, cons...)
 			if err != nil {
 				return true, err
 			}
@@ -732,7 +732,7 @@ func calculateConflictSchema(base, ours, theirs schema.Schema) (schema.Schema, *
 			if !stripConstraints {
 				cons = col.Constraints
 			}
-			c, err := schema.NewColumnWithTypeInfo(prefix+col.Name, uint64(i), col.TypeInfo, false, col.Default, false, col.Comment, cons...)
+			c, err := schema.NewColumnWithTypeInfo(prefix+col.Name, uint64(i), col.TypeInfo, false, col.Default, "", false, false, col.Comment, cons...)
 			if err != nil {
 				return true, err
 			}
