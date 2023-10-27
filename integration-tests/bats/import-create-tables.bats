@@ -793,7 +793,6 @@ DELIM
 }
 
 @test "import-create-tables: created table with force option can be added and committed as modified" {
-    skip "overwritten table cannot be added and committed as modified"
     run dolt table import -c --pk=id test `batshelper jails.csv`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
