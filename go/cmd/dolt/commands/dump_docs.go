@@ -33,7 +33,7 @@ const (
 		"---\n" +
 		"title: CLI\n" +
 		"---\n\n" +
-		"# CLI Commands\n\n"
+		"# Command Line Interface Reference\n\n"
 )
 
 type DumpDocsCmd struct {
