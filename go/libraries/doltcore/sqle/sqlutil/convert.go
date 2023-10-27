@@ -40,21 +40,26 @@ func FromDoltSchema(dbName, tableName string, sch schema.Schema) (sql.PrimaryKey
 			extra = "auto_increment"
 		}
 
-		var deflt *sql.ColumnDefaultValue
+		var deflt, generated *sql.ColumnDefaultValue
 		if col.Default != "" {
 			deflt = sql.NewUnresolvedColumnDefaultValue(col.Default)
 		}
-
+		if col.Generated != "" {
+			generated = sql.NewUnresolvedColumnDefaultValue(col.Generated)
+		}
+		
 		cols[i] = &sql.Column{
 			Name:           col.Name,
 			Type:           sqlType,
 			Default:        deflt,
+			Generated:      generated,
 			Nullable:       col.IsNullable(),
 			DatabaseSource: dbName,
 			Source:         tableName,
 			PrimaryKey:     col.IsPartOfPK,
 			AutoIncrement:  col.AutoIncrement,
 			Comment:        col.Comment,
+			Virtual:  			col.Virtual,
 			Extra:          extra,
 		}
 		i++
@@ -137,7 +142,26 @@ func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 		return schema.Column{}, err
 	}
 
-	return schema.NewColumnWithTypeInfo(col.Name, tag, typeInfo, col.PrimaryKey, col.Default.String(), "", false, col.AutoIncrement, col.Comment, constraints...)
+	defaultVal := ""
+	generatedVal := ""
+	if col.Default != nil {
+		defaultVal = col.Default.String()
+	} else {
+		generatedVal = col.Generated.String()
+	}
+	
+	return schema.NewColumnWithTypeInfo(
+		col.Name,
+		tag,
+		typeInfo,
+		col.PrimaryKey,
+		defaultVal,
+		generatedVal,
+		col.Virtual,
+		col.AutoIncrement,
+		col.Comment,
+		constraints...,
+	)
 }
 
 // ToDoltResultSchema returns a dolt Schema from the sql schema given, suitable for use as a result set

@@ -380,10 +380,9 @@ func makeOrdinalMapping(from sql.Schema, to *schema.ColCollection) (m val.Ordina
 	m = make(val.OrdinalMapping, len(to.GetColumns()))
 	for i := range m {
 		name := to.GetByIndex(i).Name
-		for j, col := range from {
-			if col.Name == name {
-				m[i] = j
-			}
+		colIdx := from.IndexOfColName(name)
+		if !from[colIdx].Virtual {
+			m[i] = colIdx
 		}
 	}
 	return

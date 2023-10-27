@@ -32,7 +32,7 @@ type prollyRowIter struct {
 
 	keyProj []int
 	valProj []int
-	// orjProj is a concatenated list of output ordinals for |keyProj| and |valProj|
+	// ordProj is a concatenated list of output ordinals for |keyProj| and |valProj|
 	ordProj []int
 	rowLen  int
 }

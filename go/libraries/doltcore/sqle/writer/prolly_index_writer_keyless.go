@@ -32,6 +32,7 @@ type prollyKeylessWriter struct {
 	keyBld *val.TupleBuilder
 	valBld *val.TupleBuilder
 	valMap val.OrdinalMapping
+	virtualCols []int
 }
 
 var _ indexWriter = prollyKeylessWriter{}
@@ -51,6 +52,7 @@ func (k prollyKeylessWriter) ValidateKeyViolations(ctx context.Context, sqlRow s
 }
 
 func (k prollyKeylessWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
+	// TODO: this thing needs a function that can convert a row to it storage equivalent as necessary
 	hashId, value, err := k.tuplesFromRow(ctx, sqlRow)
 	if err != nil {
 		return err

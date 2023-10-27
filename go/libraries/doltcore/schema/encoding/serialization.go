@@ -304,9 +304,11 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 		defVal := ""
 		generatedVal := ""
 		if c.DefaultValue() != nil {
-			defVal = string(c.DefaultValue())
-		} else {
-			generatedVal = string(c.DefaultValue())
+			if c.Generated() {
+				generatedVal = string(c.DefaultValue())
+			} else {
+				defVal = string(c.DefaultValue())
+			}
 		}
 		
 		cols[i], err = schema.NewColumnWithTypeInfo(
