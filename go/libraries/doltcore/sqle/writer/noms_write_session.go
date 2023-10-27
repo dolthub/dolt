@@ -109,7 +109,7 @@ func (s *nomsWriteSession) GetTableWriter(ctx *sql.Context, table, db string, se
 	if err != nil {
 		return nil, err
 	}
-	sqlSch, err := sqlutil.FromDoltSchema(table, sch)
+	sqlSch, err := sqlutil.FromDoltSchema("", table, sch)
 	if err != nil {
 		return nil, err
 	}

@@ -1139,6 +1139,9 @@ func TestVariables(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestVariables(t, h)
+	for _, script := range DoltSystemVariables {
+		enginetest.TestScript(t, h, script)
+	}
 }
 
 func TestVariableErrors(t *testing.T) {

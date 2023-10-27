@@ -20,6 +20,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -27,6 +28,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/s3"
 
+	"github.com/dolthub/dolt/go/libraries/utils/awsrefreshcreds"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
@@ -48,6 +50,8 @@ const (
 	//AWSCredsProfile is a creation parameter that can be used to specify which AWS profile to use.
 	AWSCredsProfile = "aws-creds-profile"
 )
+
+var AWSFileCredsRefreshDuration = time.Minute
 
 var AWSCredTypes = []string{RoleCS.String(), EnvCS.String(), FileCS.String()}
 
@@ -210,7 +214,11 @@ func awsConfigFromParams(params map[string]interface{}) (session.Options, error)
 		if filePath, ok := params[AWSCredsFileParam]; !ok {
 			return opts, os.ErrNotExist
 		} else {
-			creds := credentials.NewSharedCredentials(filePath.(string), profile)
+			provider := &credentials.SharedCredentialsProvider{
+				Filename: filePath.(string),
+				Profile:  profile,
+			}
+			creds := credentials.NewCredentials(awsrefreshcreds.NewRefreshingCredentialsProvider(provider, AWSFileCredsRefreshDuration))
 			awsConfig = awsConfig.WithCredentials(creds)
 		}
 	case AutoCS:

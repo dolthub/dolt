@@ -202,13 +202,6 @@ const (
 	ReadmeDoc = "README.md"
 )
 
-var DocsMaybeCreateTableStmt = `
-CREATE TABLE IF NOT EXISTS dolt_docs (
-  doc_name varchar(16383) NOT NULL,
-  doc_text longtext,
-  PRIMARY KEY (doc_name)
-);`
-
 const (
 	// DocTableName is the name of the dolt table containing documents such as the license and readme
 	DocTableName = "dolt_docs"

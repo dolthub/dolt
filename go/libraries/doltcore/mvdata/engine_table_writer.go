@@ -100,12 +100,12 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 	}
 	sqlCtx.SetCurrentDatabase(dbName)
 
-	doltCreateTableSchema, err := sqlutil.FromDoltSchema(options.TableToWriteTo, createTableSchema)
+	doltCreateTableSchema, err := sqlutil.FromDoltSchema("", options.TableToWriteTo, createTableSchema)
 	if err != nil {
 		return nil, err
 	}
 
-	doltRowOperationSchema, err := sqlutil.FromDoltSchema(options.TableToWriteTo, rowOperationSchema)
+	doltRowOperationSchema, err := sqlutil.FromDoltSchema("", options.TableToWriteTo, rowOperationSchema)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +128,7 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 	}, nil
 }
 
-func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan sql.Row, badRowCb func(row sql.Row, err error) bool) (err error) {
+func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan sql.Row, badRowCb func(row sql.Row, rowSchema sql.PrimaryKeySchema, tableName string, lineNumber int, err error) bool) (err error) {
 	err = s.forceDropTableIfNeeded()
 	if err != nil {
 		return err
@@ -190,6 +190,8 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 		}
 	}()
 
+	line := 1
+
 	for {
 		if s.statsCB != nil && atomic.LoadInt32(&s.statOps) >= tableWriterStatUpdateRate {
 			atomic.StoreInt32(&s.statOps, 0)
@@ -197,6 +199,7 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 		}
 
 		row, err := iter.Next(s.sqlCtx)
+		line += 1
 
 		// All other errors are handled by the errorHandler
 		if err == nil {
@@ -219,7 +222,7 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 				offendingRow = n.OffendingRow
 			}
 
-			quit := badRowCb(offendingRow, err)
+			quit := badRowCb(offendingRow, s.tableSchema, s.tableName, line, err)
 			if quit {
 				return err
 			}

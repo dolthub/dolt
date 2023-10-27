@@ -34,6 +34,8 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3iface"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -45,20 +47,13 @@ const (
 	maxS3PartSize = 64 * 1 << 20 // 64MiB
 	maxS3Parts    = 10000
 
-	// Disable persisting tables in DynamoDB.  This is currently unused by
-	// Dolthub and keeping it requires provisioning DynamoDB throughout for
-	// the noop reads.
-	maxDynamoChunks   = 0
-	maxDynamoItemSize = 0
-
 	defaultS3PartSize = minS3PartSize // smallest allowed by S3 allows for most throughput
 )
 
 type awsTablePersister struct {
-	s3     s3svc
+	s3     s3iface.S3API
 	bucket string
 	rl     chan struct{}
-	ddb    *ddbTableStore
 	limits awsLimits
 	ns     string
 	q      MemoryQuotaProvider
@@ -69,25 +64,11 @@ var _ tableFilePersister = awsTablePersister{}
 
 type awsLimits struct {
 	partTarget, partMin, partMax uint64
-	itemMax                      int
-	chunkMax                     uint32
-}
-
-func (al awsLimits) tableFitsInDynamo(name addr, dataLen int, chunkCount uint32) bool {
-	calcItemSize := func(n addr, dataLen int) int {
-		return len(dbAttr) + len(tablePrefix) + len(n.String()) + len(dataAttr) + dataLen
-	}
-	return chunkCount <= al.chunkMax && calcItemSize(name, dataLen) < al.itemMax
-}
-
-func (al awsLimits) tableMayBeInDynamo(chunkCount uint32) bool {
-	return chunkCount <= al.chunkMax
 }
 
 func (s3p awsTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {
 	return newAWSChunkSource(
 		ctx,
-		s3p.ddb,
 		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns},
 		s3p.limits,
 		name,
@@ -100,7 +81,6 @@ func (s3p awsTablePersister) Open(ctx context.Context, name addr, chunkCount uin
 func (s3p awsTablePersister) Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error) {
 	return tableExistsInChunkSource(
 		ctx,
-		s3p.ddb,
 		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns},
 		s3p.limits,
 		name,
@@ -120,21 +100,7 @@ func (s3p awsTablePersister) CopyTableFile(ctx context.Context, r io.ReadCloser,
 		}
 	}()
 
-	data, err := io.ReadAll(r)
-	if err != nil {
-		return err
-	}
-
-	name, err := parseAddr(fileId)
-	if err != nil {
-		return err
-	}
-
-	if s3p.limits.tableFitsInDynamo(name, len(data), chunkCount) {
-		return s3p.ddb.Write(ctx, name, data)
-	}
-
-	return s3p.multipartUpload(ctx, data, fileId)
+	return s3p.multipartUpload(ctx, r, fileSz, fileId)
 }
 
 func (s3p awsTablePersister) Path() string {
@@ -164,17 +130,7 @@ func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver ch
 		return emptyChunkSource{}, nil
 	}
 
-	if s3p.limits.tableFitsInDynamo(name, len(data), chunkCount) {
-		err := s3p.ddb.Write(ctx, name, data)
-
-		if err != nil {
-			return nil, err
-		}
-
-		return newReaderFromIndexData(ctx, s3p.q, data, name, &dynamoTableReaderAt{ddb: s3p.ddb, h: name}, s3BlockSize)
-	}
-
-	err = s3p.multipartUpload(ctx, data, name.String())
+	err = s3p.multipartUpload(ctx, bytes.NewReader(data), uint64(len(data)), name.String())
 
 	if err != nil {
 		return emptyChunkSource{}, err
@@ -184,20 +140,16 @@ func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver ch
 	return newReaderFromIndexData(ctx, s3p.q, data, name, tra, s3BlockSize)
 }
 
-func (s3p awsTablePersister) multipartUpload(ctx context.Context, data []byte, key string) error {
-	uploadID, err := s3p.startMultipartUpload(ctx, key)
-
-	if err != nil {
-		return err
-	}
-
-	multipartUpload, err := s3p.uploadParts(ctx, data, key, uploadID)
-	if err != nil {
-		_ = s3p.abortMultipartUpload(ctx, key, uploadID)
-		return err
-	}
-
-	return s3p.completeMultipartUpload(ctx, key, uploadID, multipartUpload)
+func (s3p awsTablePersister) multipartUpload(ctx context.Context, r io.Reader, sz uint64, key string) error {
+	uploader := s3manager.NewUploaderWithClient(s3p.s3, func(u *s3manager.Uploader) {
+		u.PartSize = int64(s3p.limits.partTarget)
+	})
+	_, err := uploader.Upload(&s3manager.UploadInput{
+		Bucket: aws.String(s3p.bucket),
+		Key:    aws.String(s3p.key(key)),
+		Body:   r,
+	})
+	return err
 }
 
 func (s3p awsTablePersister) startMultipartUpload(ctx context.Context, key string) (string, error) {
@@ -232,85 +184,6 @@ func (s3p awsTablePersister) completeMultipartUpload(ctx context.Context, key, u
 	})
 
 	return err
-}
-
-func (s3p awsTablePersister) uploadParts(ctx context.Context, data []byte, key, uploadID string) (*s3.CompletedMultipartUpload, error) {
-	sent, failed, done := make(chan s3UploadedPart), make(chan error), make(chan struct{})
-
-	numParts := getNumParts(uint64(len(data)), s3p.limits.partTarget)
-
-	if numParts > maxS3Parts {
-		return nil, errors.New("exceeded maximum parts")
-	}
-
-	var wg sync.WaitGroup
-	sendPart := func(partNum, start, end uint64) {
-		if s3p.rl != nil {
-			s3p.rl <- struct{}{}
-			defer func() { <-s3p.rl }()
-		}
-		defer wg.Done()
-
-		// Check if upload has been terminated
-		select {
-		case <-done:
-			return
-		default:
-		}
-		// Upload the desired part
-		if partNum == numParts { // If this is the last part, make sure it includes any overflow
-			end = uint64(len(data))
-		}
-		etag, err := s3p.uploadPart(ctx, data[start:end], key, uploadID, int64(partNum))
-		if err != nil {
-			failed <- err
-			return
-		}
-		// Try to send along part info. In the case that the upload was aborted, reading from done allows this worker to exit correctly.
-		select {
-		case sent <- s3UploadedPart{int64(partNum), etag}:
-		case <-done:
-			return
-		}
-	}
-	for i := uint64(0); i < numParts; i++ {
-		wg.Add(1)
-		partNum := i + 1 // Parts are 1-indexed
-		start, end := i*s3p.limits.partTarget, (i+1)*s3p.limits.partTarget
-		go sendPart(partNum, start, end)
-	}
-	go func() {
-		wg.Wait()
-		close(sent)
-		close(failed)
-	}()
-
-	multipartUpload := &s3.CompletedMultipartUpload{}
-	var firstFailure error
-	for cont := true; cont; {
-		select {
-		case sentPart, open := <-sent:
-			if open {
-				multipartUpload.Parts = append(multipartUpload.Parts, &s3.CompletedPart{
-					ETag:       aws.String(sentPart.etag),
-					PartNumber: aws.Int64(sentPart.idx),
-				})
-			}
-			cont = open
-
-		case err := <-failed:
-			if err != nil && firstFailure == nil { // nil err may happen when failed gets closed
-				firstFailure = err
-				close(done)
-			}
-		}
-	}
-
-	if firstFailure == nil {
-		close(done)
-	}
-	sort.Sort(partsByPartNum(multipartUpload.Parts))
-	return multipartUpload, firstFailure
 }
 
 func getNumParts(dataLen, minPartSize uint64) uint64 {

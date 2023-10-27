@@ -1065,7 +1065,7 @@ func TestDoltIndexBetween(t *testing.T) {
 			indexLookup, err := sqlIndex.Build(ctx)
 			require.NoError(t, err)
 
-			pkSch, err := sqlutil.FromDoltSchema("fake_table", idx.Schema())
+			pkSch, err := sqlutil.FromDoltSchema("", "fake_table", idx.Schema())
 			require.NoError(t, err)
 
 			dt, ok, err := root.GetTable(ctx, idx.Table())
@@ -1320,7 +1320,7 @@ func testDoltIndex(t *testing.T, ctx *sql.Context, root *doltdb.RootValue, keys 
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	pkSch, err := sqlutil.FromDoltSchema("fake_table", idx.Schema())
+	pkSch, err := sqlutil.FromDoltSchema("", "fake_table", idx.Schema())
 	require.NoError(t, err)
 
 	indexIter, err := index.RowIterForIndexLookup(ctx, NoCacheTableable{dt}, indexLookup, pkSch, nil)

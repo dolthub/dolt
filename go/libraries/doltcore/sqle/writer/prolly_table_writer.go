@@ -284,7 +284,7 @@ func (w *prollyTableWriter) IndexedAccess(i sql.IndexLookup) sql.IndexedTable {
 
 // Reset puts the writer into a fresh state, updating the schema and index writers according to the newly given table.
 func (w *prollyTableWriter) Reset(ctx context.Context, sess *prollyWriteSession, tbl *doltdb.Table, sch schema.Schema) error {
-	sqlSch, err := sqlutil.FromDoltSchema(w.tableName, sch)
+	sqlSch, err := sqlutil.FromDoltSchema("", w.tableName, sch)
 	if err != nil {
 		return err
 	}

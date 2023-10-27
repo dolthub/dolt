@@ -21,21 +21,39 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
+
+const commitAncestorsDefaultRowCount = 100
 
 // CommitAncestorsTable is a sql.Table that implements a system table which
 // shows (commit, parent_commit) relationships for all commits in the repo.
 type CommitAncestorsTable struct {
-	ddb *doltdb.DoltDB
+	dbName string
+	ddb    *doltdb.DoltDB
 }
 
 var _ sql.Table = (*CommitAncestorsTable)(nil)
 var _ sql.IndexAddressable = (*CommitAncestorsTable)(nil)
+var _ sql.StatisticsTable = (*CommitAncestorsTable)(nil)
 
 // NewCommitAncestorsTable creates a CommitAncestorsTable
-func NewCommitAncestorsTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
-	return &CommitAncestorsTable{ddb: ddb}
+func NewCommitAncestorsTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB) sql.Table {
+	return &CommitAncestorsTable{dbName: dbName, ddb: ddb}
+}
+
+func (dt *CommitAncestorsTable) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(dt.Schema())
+	numRows, _, err := dt.RowCount(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return numBytesPerRow * numRows, nil
+}
+
+func (dt *CommitAncestorsTable) RowCount(_ *sql.Context) (uint64, bool, error) {
+	return commitAncestorsDefaultRowCount, false, nil
 }
 
 // Name is a sql.Table interface function which returns the name of the table.
@@ -83,7 +101,7 @@ func (dt *CommitAncestorsTable) PartitionRows(ctx *sql.Context, p sql.Partition)
 
 // GetIndexes implements sql.IndexAddressable
 func (dt *CommitAncestorsTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	return index.DoltCommitIndexes(dt.Name(), dt.ddb, true)
+	return index.DoltCommitIndexes(dt.dbName, dt.Name(), dt.ddb, true)
 }
 
 // IndexedAccess implements sql.IndexAddressable

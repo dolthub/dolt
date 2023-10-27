@@ -1100,7 +1100,7 @@ func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string
 			}
 		}
 	} else {
-		return fmt.Errorf("variable 'foreign_key_checks' can't be set to the value of '%d'", intVal)
+		return sql.ErrInvalidSystemVariableValue.New("foreign_key_checks", intVal)
 	}
 
 	return d.Session.SetSessionVariable(ctx, key, value)

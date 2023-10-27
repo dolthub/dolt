@@ -489,7 +489,7 @@ func newRowItrForTableAtCommit(ctx *sql.Context, table *DoltTable, h hash.Hash, 
 		return &historyIter{nonExistentTable: true}, nil
 	}
 
-	table, err = table.LockedToRoot(ctx, root)
+	lockedTable, err := table.LockedToRoot(ctx, root)
 	if err != nil {
 		return nil, err
 	}
@@ -497,13 +497,13 @@ func newRowItrForTableAtCommit(ctx *sql.Context, table *DoltTable, h hash.Hash, 
 	var partIter sql.PartitionIter
 	var histTable sql.Table
 	if !lookup.IsEmpty() {
-		indexes, err := table.GetIndexes(ctx)
+		indexes, err := lockedTable.GetIndexes(ctx)
 		if err != nil {
 			return nil, err
 		}
 		for _, idx := range indexes {
 			if idx.ID() == lookup.Index.ID() {
-				histTable = table.IndexedAccess(lookup)
+				histTable = lockedTable.IndexedAccess(lookup)
 				if err != nil {
 					return nil, err
 				}
@@ -520,14 +520,14 @@ func newRowItrForTableAtCommit(ctx *sql.Context, table *DoltTable, h hash.Hash, 
 		}
 	}
 	if histTable == nil {
-		histTable = table
-		partIter, err = table.Partitions(ctx)
+		histTable = lockedTable
+		partIter, err = lockedTable.Partitions(ctx)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	converter := rowConverter(table.Schema(), targetSchema, h, meta, projections)
+	converter := rowConverter(lockedTable.Schema(), targetSchema, h, meta, projections)
 	return &historyIter{
 		table:           histTable,
 		tablePartitions: partIter,

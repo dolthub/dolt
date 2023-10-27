@@ -1215,3 +1215,57 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "cm3" ]] || false
 }
+
+@test "sql-local-remote: verify dolt ls behavior" {
+    cd altDB
+
+    run dolt --verbose-engine-setup ls
+    [ $status -eq 0 ]
+    [[ "$output" =~ "starting local mode" ]] || false
+    [[ "$output" =~ "altDB_tbl" ]] || false
+    [[ "$output" =~ "generated_foo" ]] || false
+    [[ "$output" =~ "table1" ]] || false
+    [[ "$output" =~ "table2" ]] || false
+    [[ "$output" =~ "table3" ]] || false
+
+    run dolt ls
+    [ $status -eq 0 ]
+    localOutput=$output
+
+    start_sql_server altDB
+    run dolt --verbose-engine-setup ls
+    [ $status -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+    [[ "$output" =~ "altDB_tbl" ]] || false
+    [[ "$output" =~ "generated_foo" ]] || false
+    [[ "$output" =~ "table1" ]] || false
+    [[ "$output" =~ "table2" ]] || false
+    [[ "$output" =~ "table3" ]] || false
+
+    run dolt ls
+    [ $status -eq 0 ]
+    remoteOutput=$output
+    
+    [[ "$localOutput" == "$remoteOutput" ]] || false
+}
+
+@test "sql-local-remote: verify dolt merge-base behavior" {
+    cd altDB
+    dolt checkout -b feature
+    dolt sql -q "create table table4 (pk int PRIMARY KEY)"
+    dolt add .
+    dolt commit -m "created table3"
+
+    run dolt --verbose-engine-setup merge-base main feature
+    [ $status -eq 0 ]
+    [[ "$output" =~ "starting local mode" ]] || false
+    localOutput="${lines[1]}"
+
+    start_sql_server altDB
+    run dolt --verbose-engine-setup merge-base main feature
+    [ $status -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+    remoteOutput="${lines[1]}"
+
+    [[ "$localOutput" == "$remoteOutput" ]] || false
+}

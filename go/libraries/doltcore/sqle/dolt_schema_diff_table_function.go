@@ -24,9 +24,12 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
+
+const schemaDiffDefaultRowCount = 100
 
 var _ sql.TableFunction = (*SchemaDiffTableFunction)(nil)
 var _ sql.ExecSourceRel = (*SchemaDiffTableFunction)(nil)
@@ -79,6 +82,19 @@ func (ds *SchemaDiffTableFunction) NewInstance(ctx *sql.Context, db sql.Database
 	}
 
 	return node, nil
+}
+
+func (ds *SchemaDiffTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(ds.Schema())
+	numRows, _, err := ds.RowCount(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return numBytesPerRow * numRows, nil
+}
+
+func (ds *SchemaDiffTableFunction) RowCount(_ *sql.Context) (uint64, bool, error) {
+	return schemaDiffDefaultRowCount, false, nil
 }
 
 // Database implements the sql.Databaser interface
@@ -159,18 +175,18 @@ func (ds *SchemaDiffTableFunction) CheckPrivileges(ctx *sql.Context, opChecker s
 			return false
 		}
 
-		result := opChecker.UserHasPrivileges(ctx,
-			sql.NewPrivilegedOperation(ds.database.Name(), tableName, "", sql.PrivilegeType_Select))
-		return result
+		subject := sql.PrivilegeCheckSubject{Database: ds.database.Name(), Table: tableName}
+		return opChecker.UserHasPrivileges(ctx, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 	}
 
 	tblNames, err := ds.database.GetTableNames(ctx)
 	if err != nil {
 		return false
 	}
-	var operations []sql.PrivilegedOperation
+	operations := make([]sql.PrivilegedOperation, 0, len(tblNames))
 	for _, tblName := range tblNames {
-		operations = append(operations, sql.NewPrivilegedOperation(ds.database.Name(), tblName, "", sql.PrivilegeType_Select))
+		subject := sql.PrivilegeCheckSubject{Database: ds.database.Name(), Table: tblName}
+		operations = append(operations, sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 	}
 
 	return opChecker.UserHasPrivileges(ctx, operations...)

@@ -51,6 +51,7 @@ const (
 	AwsCredsRegion                = "aws_credentials_region"
 	ShowBranchDatabases           = "dolt_show_branch_databases"
 	DoltLogLevel                  = "dolt_log_level"
+	ShowSystemTables              = "dolt_show_system_tables"
 
 	DoltClusterRoleVariable         = "dolt_cluster_role"
 	DoltClusterRoleEpochVariable    = "dolt_cluster_role_epoch"

@@ -33,8 +33,10 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/client/metadata"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/store/d"
@@ -58,6 +60,8 @@ func makeFakeS3(t *testing.T) *fakeS3 {
 }
 
 type fakeS3 struct {
+	s3iface.S3API
+
 	assert *assert.Assertions
 
 	mu                sync.Mutex
@@ -225,12 +229,12 @@ func (m *fakeS3) CompleteMultipartUploadWithContext(ctx aws.Context, input *s3.C
 }
 
 func (m *fakeS3) GetObjectWithContext(ctx aws.Context, input *s3.GetObjectInput, opts ...request.Option) (*s3.GetObjectOutput, error) {
-	m.getCount++
 	m.assert.NotNil(input.Bucket, "Bucket is a required field")
 	m.assert.NotNil(input.Key, "Key is a required field")
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.getCount++
 	obj, present := m.data[*input.Key]
 	if !present {
 		return nil, mockAWSError("NoSuchKey")
@@ -278,4 +282,38 @@ func (m *fakeS3) PutObjectWithContext(ctx aws.Context, input *s3.PutObjectInput,
 	m.data[*input.Key] = buff.Bytes()
 
 	return &s3.PutObjectOutput{}, nil
+}
+
+func (m *fakeS3) GetObjectRequest(input *s3.GetObjectInput) (*request.Request, *s3.GetObjectOutput) {
+	out := &s3.GetObjectOutput{}
+	var handlers request.Handlers
+	handlers.Send.PushBack(func(r *request.Request) {
+		res, err := m.GetObjectWithContext(r.Context(), input)
+		r.Error = err
+		if res != nil {
+			*(r.Data.(*s3.GetObjectOutput)) = *res
+		}
+	})
+	return request.New(aws.Config{}, metadata.ClientInfo{}, handlers, nil, &request.Operation{
+		Name:       "GetObject",
+		HTTPMethod: "GET",
+		HTTPPath:   "/{Bucket}/{Key+}",
+	}, input, out), out
+}
+
+func (m *fakeS3) PutObjectRequest(input *s3.PutObjectInput) (*request.Request, *s3.PutObjectOutput) {
+	out := &s3.PutObjectOutput{}
+	var handlers request.Handlers
+	handlers.Send.PushBack(func(r *request.Request) {
+		res, err := m.PutObjectWithContext(r.Context(), input)
+		r.Error = err
+		if res != nil {
+			*(r.Data.(*s3.PutObjectOutput)) = *res
+		}
+	})
+	return request.New(aws.Config{}, metadata.ClientInfo{}, handlers, nil, &request.Operation{
+		Name:       "PutObject",
+		HTTPMethod: "PUT",
+		HTTPPath:   "/{Bucket}/{Key+}",
+	}, input, out), out
 }

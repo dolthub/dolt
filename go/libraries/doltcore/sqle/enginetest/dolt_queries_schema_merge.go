@@ -760,8 +760,8 @@ var SchemaChangeTestsConstraints = []MergeScriptTest{
 			{
 				Query: "select violation_type, pk, col2, violation_info from dolt_constraint_violations_t;",
 				Expected: []sql.Row{
-					{uint(2), "1", "same", types.JSONDocument{Val: merge.UniqCVMeta{Columns: []string{"col2"}, Name: "unique1"}}},
-					{uint(2), "10", "same", types.JSONDocument{Val: merge.UniqCVMeta{Columns: []string{"col2"}, Name: "unique1"}}},
+					{uint(2), "1", "same", merge.UniqCVMeta{Columns: []string{"col2"}, Name: "unique1"}},
+					{uint(2), "10", "same", merge.UniqCVMeta{Columns: []string{"col2"}, Name: "unique1"}},
 				},
 			},
 			{
@@ -1997,7 +1997,7 @@ var SchemaChangeTestsSchemaConflicts = []MergeScriptTest{
 			{
 				Query: "select violation_type, pk, violation_info from dolt_constraint_violations_t",
 				Expected: []sql.Row{
-					{uint16(4), 3, types.JSONDocument{Val: merge.NullViolationMeta{Columns: []string{"col1"}}}},
+					{uint16(4), 3, merge.NullViolationMeta{Columns: []string{"col1"}}},
 				},
 			},
 		},

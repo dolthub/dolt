@@ -34,6 +34,8 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+const diffTableDefaultRowCount = 1000
+
 var ErrInvalidNonLiteralArgument = errors.NewKind("Invalid argument to %s: %s – only literal values supported")
 
 var _ sql.TableFunction = (*DiffTableFunction)(nil)
@@ -67,6 +69,19 @@ func (dtf *DiffTableFunction) NewInstance(ctx *sql.Context, database sql.Databas
 	}
 
 	return node, nil
+}
+
+func (dtf *DiffTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(dtf.Schema())
+	numRows, _, err := dtf.RowCount(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return numBytesPerRow * numRows, nil
+}
+
+func (dtf *DiffTableFunction) RowCount(_ *sql.Context) (uint64, bool, error) {
+	return diffTableDefaultRowCount, false, nil
 }
 
 // Database implements the sql.Databaser interface
@@ -339,9 +354,10 @@ func (dtf *DiffTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.Pr
 		return false
 	}
 
+	subject := sql.PrivilegeCheckSubject{Database: dtf.database.Name(), Table: tableName}
 	// TODO: Add tests for privilege checking
 	return opChecker.UserHasPrivileges(ctx,
-		sql.NewPrivilegedOperation(dtf.database.Name(), tableName, "", sql.PrivilegeType_Select))
+		sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 }
 
 // evaluateArguments evaluates the argument expressions to turn them into values this DiffTableFunction
@@ -443,7 +459,7 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 	//       This allows column projections to work correctly with table functions, but we will need to add a
 	//       unique id (e.g. hash generated from method arguments) when we add support for aliasing and joining
 	//       table functions in order for the analyzer to determine which table function result a column comes from.
-	sqlSchema, err := sqlutil.FromDoltSchema("", diffTableSch)
+	sqlSchema, err := sqlutil.FromDoltSchema("", "", diffTableSch)
 	if err != nil {
 		return err
 	}

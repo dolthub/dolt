@@ -38,20 +38,17 @@ const (
 // logic to be kept separate from the storage-layer code in pkg types.
 type NomsJSON types.JSON
 
-var _ gmstypes.JSONValue = NomsJSON{}
+var _ sql.JSONWrapper = NomsJSON{}
 
 // NomsJSONFromJSONValue converts a sql.JSONValue to a NomsJSON value.
-func NomsJSONFromJSONValue(ctx context.Context, vrw types.ValueReadWriter, val gmstypes.JSONValue) (NomsJSON, error) {
+func NomsJSONFromJSONValue(ctx context.Context, vrw types.ValueReadWriter, val sql.JSONWrapper) (NomsJSON, error) {
 	if noms, ok := val.(NomsJSON); ok {
 		return noms, nil
 	}
 
-	sqlDoc, err := val.Unmarshall(sql.NewContext(ctx))
-	if err != nil {
-		return NomsJSON{}, err
-	}
+	sqlVal := val.ToInterface()
 
-	v, err := marshalJSON(ctx, vrw, sqlDoc.Val)
+	v, err := marshalJSON(ctx, vrw, sqlVal)
 	if err != nil {
 		return NomsJSON{}, err
 	}
@@ -136,6 +133,19 @@ func marshalJSONObject(ctx context.Context, vrw types.ValueReadWriter, obj map[s
 	return types.NewMap(ctx, vrw, vals...)
 }
 
+func (v NomsJSON) ToInterface() interface{} {
+	nomsVal, err := types.JSON(v).Inner()
+	if err != nil {
+		panic(err)
+	}
+
+	val, err := unmarshalJSON(context.Background(), nomsVal)
+	if err != nil {
+		panic(err)
+	}
+	return val
+}
+
 // Unmarshall implements the sql.JSONValue interface.
 func (v NomsJSON) Unmarshall(ctx *sql.Context) (doc gmstypes.JSONDocument, err error) {
 	nomsVal, err := types.JSON(v).Inner()
@@ -193,23 +203,9 @@ func unmarshalJSONObject(ctx context.Context, m types.Map) (obj map[string]inter
 	return
 }
 
-// Compare implements the sql.JSONValue interface.
-func (v NomsJSON) Compare(ctx *sql.Context, other gmstypes.JSONValue) (cmp int, err error) {
-	noms, ok := other.(NomsJSON)
-	if !ok {
-		doc, err := v.Unmarshall(ctx)
-		if err != nil {
-			return 0, err
-		}
-		return doc.Compare(ctx, other)
-	}
-
-	return types.JSON(v).Compare(ctx, types.JSON(noms))
-}
-
-// ToString implements the sql.JSONValue interface.
-func (v NomsJSON) ToString(ctx *sql.Context) (string, error) {
-	return NomsJSONToString(ctx, v)
+// JSONString implements the sql.JSONWrapper interface.
+func (v NomsJSON) JSONString() (string, error) {
+	return NomsJSONToString(context.Background(), v)
 }
 
 func NomsJSONToString(ctx context.Context, js NomsJSON) (string, error) {

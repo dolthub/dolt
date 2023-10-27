@@ -175,12 +175,13 @@ func setTempTableRoot(t *TempTable) func(ctx *sql.Context, dbName string, newRoo
 	}
 }
 
-func (t *TempTable) RowCount(ctx *sql.Context) (uint64, error) {
+func (t *TempTable) RowCount(ctx *sql.Context) (uint64, bool, error) {
 	rows, err := t.table.GetRowData(ctx)
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
-	return rows.Count()
+	cnt, err := rows.Count()
+	return cnt, true, err
 }
 
 func (t *TempTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
@@ -253,7 +254,7 @@ func (t *TempTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 	if !t.lookup.IsEmpty() {
 		return index.RowIterForIndexLookup(ctx, t, t.lookup, t.pkSch, nil)
 	} else {
-		return partitionRows(ctx, t.table, t.sqlSchema().Schema, nil, partition)
+		return partitionRows(ctx, t.table, nil, partition)
 	}
 }
 

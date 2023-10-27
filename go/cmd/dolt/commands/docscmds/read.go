@@ -151,10 +151,6 @@ func writeDocToTable(ctx context.Context, eng *engine.SqlEngine, dbName, docName
 
 	sctx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
-	if err = execQuery(sctx, eng, doltdb.DocsMaybeCreateTableStmt); err != nil {
-		return err
-	}
-
 	content = strings.ReplaceAll(content, `"`, `\"`)
 	update := fmt.Sprintf(writeDocTemplate, docName, content)
 

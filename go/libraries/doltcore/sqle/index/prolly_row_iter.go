@@ -27,7 +27,6 @@ type prollyRowIter struct {
 	iter prolly.MapIter
 	ns   tree.NodeStore
 
-	sqlSch  sql.Schema
 	keyDesc val.TupleDesc
 	valDesc val.TupleDesc
 
@@ -40,7 +39,7 @@ type prollyRowIter struct {
 
 var _ sql.RowIter = prollyRowIter{}
 
-func NewProllyRowIter(sch schema.Schema, sqlSch sql.Schema, rows prolly.Map, iter prolly.MapIter, projections []uint64) (sql.RowIter, error) {
+func NewProllyRowIter(sch schema.Schema, rows prolly.Map, iter prolly.MapIter, projections []uint64) (sql.RowIter, error) {
 	if projections == nil {
 		projections = sch.GetAllCols().Tags
 	}
@@ -61,7 +60,6 @@ func NewProllyRowIter(sch schema.Schema, sqlSch sql.Schema, rows prolly.Map, ite
 
 	return prollyRowIter{
 		iter:    iter,
-		sqlSch:  sqlSch,
 		keyDesc: kd,
 		valDesc: vd,
 		keyProj: keyProj,

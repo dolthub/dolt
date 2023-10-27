@@ -22,6 +22,7 @@ var DoltFunctions = []sql.Function{
 	sql.Function0{Name: StorageFormatFuncName, Fn: NewStorageFormat},
 	sql.Function0{Name: ActiveBranchFuncName, Fn: NewActiveBranchFunc},
 	sql.Function2{Name: DoltMergeBaseFuncName, Fn: NewMergeBase},
+	sql.Function2{Name: HasAncestorFuncName, Fn: NewHasAncestor},
 }
 
 // DolthubApiFunctions are the DoltFunctions that get exposed to Dolthub Api.

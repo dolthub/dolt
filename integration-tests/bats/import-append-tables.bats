@@ -26,7 +26,6 @@ CSV
     [[ "$output" =~ "row [1,1] would be overwritten by [1,2]" ]] || false
 
     run dolt sql -q "select * from t"
-    echo "$output"
     [ "$status" -eq 0 ]
     [[   "$output" =~ "| 1  | 1    |" ]] || false
     [[ ! "$output" =~ "| 1  | 2    |" ]] || false
@@ -41,7 +40,6 @@ pk, col1
 1, 2
 CSV
 
-    echo "$output"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "An error occurred while moving data" ]] || false
     [[ "$output" =~ "row [1,1] would be overwritten by [1,2]" ]] || false
@@ -102,4 +100,21 @@ CSV
     [[   "$output" =~ "| 2  | 3    |" ]] || false
     [[ ! "$output" =~ "| 1  | 2    |" ]] || false
     [ "${#lines[@]}" -eq 6 ]
+}
+
+@test "import-append-tables: import error message contains useful information" {
+    dolt sql -q "CREATE TABLE shirts (name VARCHAR(40), size ENUM('x-small', 'small', 'medium', 'large', 'x-large'), color ENUM('red', 'blue'));"
+    run dolt table import -a shirts <<CSV
+name, size, color
+"shirt1", "x-small", "red"
+"shirt2", "other", "green"
+CSV
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "An error occurred while moving data" ]] || false
+    [[ "$output" =~ "cause: value other is not valid for this Enum" ]] || false
+    [[ "$output" =~ "A bad row was encountered inserting into table shirts (on line 3):" ]] || false    # table name
+    [[ "$output" =~ "name: shirt2" ]] || false                                              # column names
+    [[ "$output" =~ "size: other" ]] || false
+    [[ "$output" =~ "color: green" ]] || false
+    [[ "$output" =~ "Errors during import can be ignored using '--continue'" ]] || false
 }

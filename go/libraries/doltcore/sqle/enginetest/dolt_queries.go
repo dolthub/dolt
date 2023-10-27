@@ -706,6 +706,81 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 // this slice into others with good names as it grows.
 var DoltScripts = []queries.ScriptTest{
 	{
+		Name: "test has_ancestor",
+		SetUpScript: []string{
+			"create table xy (x int primary key)",
+			"call dolt_commit('-Am', 'create')",
+			"set @main1 = hashof('HEAD');",
+			"insert into xy values (0)",
+			"call dolt_commit('-Am', 'add 0')",
+			"set @main2 = hashof('HEAD');",
+			"call dolt_branch('bone', @main1)",
+			"call dolt_checkout('bone')",
+			"insert into xy values (1)",
+			"call dolt_commit('-Am', 'add 1')",
+			"set @bone1 = hashof('HEAD');",
+			"insert into xy values (2)",
+			"call dolt_commit('-Am', 'add 2')",
+			"set @bone2 = hashof('HEAD');",
+			"call dolt_branch('btwo', @main1)",
+			"call dolt_checkout('btwo')",
+			"insert into xy values (3)",
+			"call dolt_commit('-Am', 'add 3')",
+			"set @btwo1 = hashof('HEAD');",
+			"call dolt_tag('tag_btwo1')",
+			"call dolt_checkout('main')",
+			"insert into xy values (4)",
+			"call dolt_commit('-Am', 'add 4')",
+			"set @main3 = hashof('HEAD');",
+			"call dolt_branch('onetwo', @bone2)",
+			"call dolt_checkout('onetwo')",
+			"call dolt_merge('btwo')",
+			"set @onetwo1 = hashof('HEAD');",
+			"call dolt_checkout('bone')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select has_ancestor('main', @main1), has_ancestor('main', @main2), has_ancestor('main', @bone1), has_ancestor('main', @bone2), has_ancestor('main', @btwo1), has_ancestor('main', @onetwo1), has_ancestor('main', 'HEAD')",
+				Expected: []sql.Row{{true, true, false, false, false, false, false}},
+			},
+			{
+				Query:    "select has_ancestor('bone', @main1), has_ancestor('bone', @main2), has_ancestor('bone', @bone1), has_ancestor('bone', @bone2), has_ancestor('bone', @btwo1), has_ancestor('bone', @onetwo1), has_ancestor('bone', 'HEAD')",
+				Expected: []sql.Row{{true, false, true, true, false, false, true}},
+			},
+			{
+				Query:    "select has_ancestor('btwo', @main1), has_ancestor('btwo', @main2), has_ancestor('btwo', @bone1), has_ancestor('btwo', @bone2), has_ancestor('btwo', @btwo1), has_ancestor('btwo', @onetwo1), has_ancestor('btwo', 'HEAD')",
+				Expected: []sql.Row{{true, false, false, false, true, false, false}},
+			},
+			{
+				Query:    "select has_ancestor('onetwo', @main1), has_ancestor('onetwo', @main2), has_ancestor('onetwo', @bone1), has_ancestor('onetwo', @bone2), has_ancestor('onetwo', @btwo1), has_ancestor('onetwo', @onetwo1), has_ancestor('onetwo', 'HEAD')",
+				Expected: []sql.Row{{true, false, true, true, true, true, true}},
+			},
+			{
+				Query:    "select has_ancestor(commit_hash, 'btwo') from dolt_log where commit_hash = @onetwo1",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select has_ancestor(commit_hash, 'btwo') from dolt_log as of 'onetwo' where commit_hash = @onetwo1",
+				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "select has_ancestor('HEAD', 'tag_btwo1'), has_ancestor(@bone2, 'tag_btwo1'),has_ancestor(@onetwo1, 'tag_btwo1'), has_ancestor(@btwo1, 'tag_btwo1'), has_ancestor(@main2, 'tag_btwo1'), has_ancestor(@main1, 'tag_btwo1')",
+				Expected: []sql.Row{{false, false, true, true, false, false}},
+			},
+			{
+				Query:    "select has_ancestor('tag_btwo1', 'HEAD'), has_ancestor('tag_btwo1', @bone2), has_ancestor('tag_btwo1', @onetwo1), has_ancestor('tag_btwo1', @btwo1), has_ancestor('tag_btwo1', @main2), has_ancestor('tag_btwo1', @main1)",
+				Expected: []sql.Row{{false, false, false, true, false, true}},
+			},
+			{
+				Query: "use `mydb/onetwo`;",
+			},
+			{
+				Query:    "select has_ancestor(commit_hash, 'btwo') from dolt_log where commit_hash = @onetwo1",
+				Expected: []sql.Row{{true}},
+			},
+		},
+	},
+	{
 		Name: "test null filtering in secondary indexes (https://github.com/dolthub/dolt/issues/4199)",
 		SetUpScript: []string{
 			"create table t (pk int primary key auto_increment, d datetime, index index1 (d));",
@@ -1887,6 +1962,13 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit2 order by pk;",
 				Expected: []sql.Row{{1, 3}, {4, 6}},
 			},
+			{
+				// When filtering on a column from the original table, we use the primary index here, but because
+				// column tags have changed in previous versions of the table, the index tags don't match up completely.
+				// https://github.com/dolthub/dolt/issues/6891
+				Query:    "select pk, c1, c2 from dolt_history_t where pk=4;",
+				Expected: []sql.Row{{4, 5, 6}},
+			},
 		},
 	},
 	{
@@ -3005,7 +3087,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "show tables",
-				Expected: []sql.Row{{"a"}, {"myview"}},
+				Expected: []sql.Row{{"a"}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'newBranch', 'head~1')",
@@ -3013,7 +3095,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show tables",
-				Expected: []sql.Row{{"myview"}},
+				Expected: []sql.Row{},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'newBranch2', @commit1)",
@@ -3021,7 +3103,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show tables",
-				Expected: []sql.Row{{"a"}, {"myview"}},
+				Expected: []sql.Row{{"a"}},
 			},
 			{
 				Query:          "CALL DOLT_CHECKOUT('-b', 'otherBranch', 'unknownCommit')",
@@ -3052,6 +3134,29 @@ var DoltBranchScripts = []queries.ScriptTest{
 			{
 				Query:    "select count(*) from dolt_branches where name='-b';",
 				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "Join same table at two commits",
+		SetUpScript: []string{
+			"create table t (i int);",
+			"insert into t values (1);",
+			"call dolt_add('t');",
+			"call dolt_commit('-m', 'add t');",
+			"call dolt_branch('b1');",
+			"insert into t values (2);",
+			"call dolt_add('t');",
+			"call dolt_commit('-m', 'insert into t');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from `mydb/b1`.t join t",
+				Expected: []sql.Row{{1, 1}, {1, 2}},
+			},
+			{
+				Query:    "select * from `mydb/b1`.t join `mydb/main`.t",
+				Expected: []sql.Row{{1, 1}, {1, 2}},
 			},
 		},
 	},
@@ -5026,7 +5131,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SHOW TABLES;",
-				Expected: []sql.Row{{"myview"}},
+				Expected: []sql.Row{},
 			},
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
@@ -5039,7 +5144,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SHOW TABLES;",
-				Expected: []sql.Row{{"myview"}, {"table_a"}},
+				Expected: []sql.Row{{"table_a"}},
 			},
 			{
 				Query:    "SELECT * FROM table_a;",
@@ -5062,7 +5167,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SHOW TABLES;",
-				Expected: []sql.Row{{"myview"}, {"dropme"}},
+				Expected: []sql.Row{{"dropme"}},
 			},
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
@@ -5070,7 +5175,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SHOW TABLES;",
-				Expected: []sql.Row{{"myview"}},
+				Expected: []sql.Row{},
 			},
 		},
 	},
@@ -6343,6 +6448,38 @@ END`,
 			{
 				Query:    "CALL `mydb/other`.p1() AS OF 'HEAD~1';",
 				Expected: []sql.Row{{20}},
+			},
+		},
+	},
+}
+
+var DoltSystemVariables = []queries.ScriptTest{
+	{
+		Name: "DOLT_SHOW_SYSTEM_TABLES",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int PRIMARY KEY);",
+			"SET @@DOLT_SHOW_SYSTEM_TABLES=1",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SHOW TABLES;",
+				Expected: []sql.Row{
+					{"dolt_branches"},
+					{"dolt_commit_ancestors"},
+					{"dolt_commit_diff_test"},
+					{"dolt_commits"},
+					{"dolt_conflicts"},
+					{"dolt_conflicts_test"},
+					{"dolt_constraint_violations"},
+					{"dolt_constraint_violations_test"},
+					{"dolt_diff_test"},
+					{"dolt_history_test"},
+					{"dolt_log"},
+					{"dolt_remote_branches"},
+					{"dolt_remotes"},
+					{"dolt_status"},
+					{"test"},
+				},
 			},
 		},
 	},

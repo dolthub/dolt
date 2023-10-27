@@ -220,3 +220,10 @@ teardown() {
     [ "$status" -eq 1 ]
     [[ "$output" =~ "invalid ref spec: ''" ]] || false
 }
+
+@test "push: --silent suppresses progress message" {
+    cd repo1
+    run dolt push origin main --silent
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "Uploading..." ]] || false
+}

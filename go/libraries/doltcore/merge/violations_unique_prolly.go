@@ -54,17 +54,17 @@ type UniqCVMeta struct {
 	Name    string   `json:"Name"`
 }
 
+func (m UniqCVMeta) ToInterface() interface{} {
+	return map[string]interface{}{
+		"Columns": m.Columns,
+		"Name":    m.Name,
+	}
+}
+
+var _ sql.JSONWrapper = UniqCVMeta{}
+
 func (m UniqCVMeta) Unmarshall(ctx *sql.Context) (val types.JSONDocument, err error) {
 	return types.JSONDocument{Val: m}, nil
-}
-
-func (m UniqCVMeta) Compare(ctx *sql.Context, v types.JSONValue) (cmp int, err error) {
-	ours := types.JSONDocument{Val: m}
-	return ours.Compare(ctx, v)
-}
-
-func (m UniqCVMeta) ToString(ctx *sql.Context) (string, error) {
-	return m.PrettyPrint(), nil
 }
 
 func (m UniqCVMeta) PrettyPrint() string {
@@ -136,6 +136,8 @@ type NullViolationMeta struct {
 	Columns []string `json:"Columns"`
 }
 
+var _ sql.JSONWrapper = NullViolationMeta{}
+
 func newNotNullViolationMeta(violations []string, value val.Tuple) (prolly.ConstraintViolationMeta, error) {
 	info, err := json.Marshal(NullViolationMeta{Columns: violations})
 	if err != nil {
@@ -147,17 +149,14 @@ func newNotNullViolationMeta(violations []string, value val.Tuple) (prolly.Const
 	}, nil
 }
 
+func (m NullViolationMeta) ToInterface() interface{} {
+	return map[string]interface{}{
+		"Columns": m.Columns,
+	}
+}
+
 func (m NullViolationMeta) Unmarshall(ctx *sql.Context) (val types.JSONDocument, err error) {
 	return types.JSONDocument{Val: m}, nil
-}
-
-func (m NullViolationMeta) Compare(ctx *sql.Context, v types.JSONValue) (cmp int, err error) {
-	ours := types.JSONDocument{Val: m}
-	return ours.Compare(ctx, v)
-}
-
-func (m NullViolationMeta) ToString(ctx *sql.Context) (string, error) {
-	return fmt.Sprintf("{Columns: [%s]}", strings.Join(m.Columns, ",")), nil
 }
 
 // CheckCVMeta holds metadata describing a check constraint violation.
@@ -166,7 +165,7 @@ type CheckCVMeta struct {
 	Expression string `json:"Expression"`
 }
 
-var _ types.JSONValue = CheckCVMeta{}
+var _ sql.JSONWrapper = CheckCVMeta{}
 
 // newCheckCVMeta creates a new CheckCVMeta from a schema |sch| and a check constraint name |checkName|. If the
 // check constraint is not found in the specified schema, an error is returned.
@@ -189,23 +188,14 @@ func newCheckCVMeta(sch schema.Schema, checkName string) (CheckCVMeta, error) {
 	}, nil
 }
 
-// Unmarshall implements types.JSONValue
+// Unmarshall implements sql.JSONWrapper
 func (m CheckCVMeta) Unmarshall(_ *sql.Context) (val types.JSONDocument, err error) {
 	return types.JSONDocument{Val: m}, nil
 }
 
-// Compare implements types.JSONValue
-func (m CheckCVMeta) Compare(ctx *sql.Context, v types.JSONValue) (cmp int, err error) {
-	ours := types.JSONDocument{Val: m}
-	return ours.Compare(ctx, v)
-}
-
-// ToString implements types.JSONValue
-func (m CheckCVMeta) ToString(_ *sql.Context) (string, error) {
-	jsonStr := fmt.Sprintf(`{`+
-		`"Name": "%s", `+
-		`"Expression": "%s"}`,
-		m.Name,
-		m.Expression)
-	return jsonStr, nil
+func (m CheckCVMeta) ToInterface() interface{} {
+	return map[string]interface{}{
+		"Name":       m.Name,
+		"Expression": m.Expression,
+	}
 }

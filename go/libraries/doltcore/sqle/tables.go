@@ -39,6 +39,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
@@ -74,6 +75,8 @@ func init() {
 	}
 }
 
+var _ dtables.VersionableTable = (*DoltTable)(nil)
+
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {
 	tableName    string
@@ -100,7 +103,7 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db dsess.Sq
 		return
 	})
 
-	sqlSch, err := sqlutil.FromDoltSchema(name, sch)
+	sqlSch, err := sqlutil.FromDoltSchema(db.Name(), name, sch)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +123,7 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db dsess.Sq
 // LockedToRoot returns a version of this table with its root value locked to the given value. The table's values will
 // not change as the session's root value changes. Appropriate for AS OF queries, or other use cases where the table's
 // values should not change throughout execution of a session.
-func (t *DoltTable) LockedToRoot(ctx *sql.Context, root *doltdb.RootValue) (*DoltTable, error) {
+func (t *DoltTable) LockedToRoot(ctx *sql.Context, root *doltdb.RootValue) (sql.IndexAddressableTable, error) {
 	tbl, ok, err := root.GetTable(ctx, t.tableName)
 	if err != nil {
 		return nil, err
@@ -142,7 +145,7 @@ func (t *DoltTable) LockedToRoot(ctx *sql.Context, root *doltdb.RootValue) (*Dol
 		return
 	})
 
-	sqlSch, err := sqlutil.FromDoltSchema(t.tableName, sch)
+	sqlSch, err := sqlutil.FromDoltSchema("", t.tableName, sch)
 	if err != nil {
 		return nil, err
 	}
@@ -360,7 +363,7 @@ func (t *DoltTable) sqlSchema() sql.PrimaryKeySchema {
 	}
 
 	// TODO: fix panics
-	sqlSch, err := sqlutil.FromDoltSchema(t.tableName, t.sch)
+	sqlSch, err := sqlutil.FromDoltSchema(t.db.RevisionQualifiedName(), t.tableName, t.sch)
 	if err != nil {
 		panic(err)
 	}
@@ -394,44 +397,18 @@ func (t *DoltTable) IsTemporary() bool {
 
 // DataLength implements the sql.StatisticsTable interface.
 func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
-	schema := t.Schema()
-	var numBytesPerRow uint64 = 0
-	for _, col := range schema {
-		switch n := col.Type.(type) {
-		case sql.NumberType:
-			numBytesPerRow += 8
-		case sql.StringType:
-			numBytesPerRow += uint64(n.MaxByteLength())
-		case sqltypes.BitType:
-			numBytesPerRow += 1
-		case sql.DatetimeType:
-			numBytesPerRow += 8
-		case sql.DecimalType:
-			numBytesPerRow += uint64(n.MaximumScale())
-		case sql.EnumType:
-			numBytesPerRow += 2
-		case sqltypes.JsonType:
-			numBytesPerRow += 20
-		case sql.NullType:
-			numBytesPerRow += 1
-		case sqltypes.TimeType:
-			numBytesPerRow += 16
-		case sql.YearType:
-			numBytesPerRow += 8
-		}
-	}
-
+	numBytesPerRow := schema.SchemaAvgLength(t.Schema())
 	numRows, err := t.numRows(ctx)
 	if err != nil {
 		return 0, err
 	}
-
 	return numBytesPerRow * numRows, nil
 }
 
 // RowCount implements the sql.StatisticsTable interface.
-func (t *DoltTable) RowCount(ctx *sql.Context) (uint64, error) {
-	return t.numRows(ctx)
+func (t *DoltTable) RowCount(ctx *sql.Context) (uint64, bool, error) {
+	rows, err := t.numRows(ctx)
+	return rows, true, err
 }
 
 func (t *DoltTable) PrimaryKeySchema() sql.PrimaryKeySchema {
@@ -445,15 +422,15 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 		return nil, err
 	}
 
-	return partitionRows(ctx, table, t.sqlSch.Schema, t.projectedCols, partition)
+	return partitionRows(ctx, table, t.projectedCols, partition)
 }
 
-func partitionRows(ctx *sql.Context, t *doltdb.Table, sqlSch sql.Schema, projCols []uint64, partition sql.Partition) (sql.RowIter, error) {
+func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []uint64, partition sql.Partition) (sql.RowIter, error) {
 	switch typedPartition := partition.(type) {
 	case doltTablePartition:
-		return newRowIterator(ctx, t, sqlSch, projCols, typedPartition)
+		return newRowIterator(ctx, t, projCols, typedPartition)
 	case index.SinglePartition:
-		return newRowIterator(ctx, t, sqlSch, projCols, doltTablePartition{rowData: typedPartition.RowData, end: NoUpperBound})
+		return newRowIterator(ctx, t, projCols, doltTablePartition{rowData: typedPartition.RowData, end: NoUpperBound})
 	}
 
 	return nil, errors.New("unsupported partition type")
@@ -2157,7 +2134,7 @@ func (t *AlterableDoltTable) getFirstAutoIncrementValue(
 
 	// Note that we aren't calling the public PartitionRows, because it always gets the table data from the session
 	// root, which hasn't been updated yet
-	rowIter, err := partitionRows(ctx, table, t.sqlSch.Schema, t.projectedCols, index.SinglePartition{RowData: rowData})
+	rowIter, err := partitionRows(ctx, table, t.projectedCols, index.SinglePartition{RowData: rowData})
 	if err != nil {
 		return 0, err
 	}

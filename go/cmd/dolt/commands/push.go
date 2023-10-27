@@ -120,10 +120,12 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}()
 
 	spinner := TextSpinner{}
-	cli.Print(spinner.next() + " Uploading...")
-	defer func() {
-		cli.DeleteAndPrint(len(" Uploading...")+1, "")
-	}()
+	if !apr.Contains(cli.SilentFlag) {
+		cli.Print(spinner.next() + " Uploading...")
+		defer func() {
+			cli.DeleteAndPrint(len(" Uploading...")+1, "")
+		}()
+	}
 
 	for {
 		select {
@@ -142,7 +144,9 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			}
 			return HandleVErrAndExitCode(nil, usage)
 		case <-time.After(time.Millisecond * 50):
-			cli.DeleteAndPrint(len(" Uploading...")+1, spinner.next()+" Uploading...")
+			if !apr.Contains(cli.SilentFlag) {
+				cli.DeleteAndPrint(len(" Uploading...")+1, spinner.next()+" Uploading...")
+			}
 		}
 	}
 }

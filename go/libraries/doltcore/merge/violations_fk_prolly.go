@@ -21,7 +21,6 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -387,22 +386,21 @@ type FkCVMeta struct {
 	Table             string   `json:"Table"`
 }
 
-var _ types.JSONValue = FkCVMeta{}
+var _ sql.JSONWrapper = FkCVMeta{}
 
-func (m FkCVMeta) Unmarshall(ctx *sql.Context) (val types.JSONDocument, err error) {
-	return types.JSONDocument{Val: m}, nil
+func (m FkCVMeta) ToInterface() interface{} {
+	return map[string]interface{}{
+		"Columns":           m.Columns,
+		"ForeignKey":        m.ForeignKey,
+		"Index":             m.Index,
+		"OnDelete":          m.OnDelete,
+		"OnUpdate":          m.OnUpdate,
+		"ReferencedColumns": m.ReferencedColumns,
+		"ReferencedIndex":   m.ReferencedIndex,
+		"ReferencedTable":   m.ReferencedTable,
+		"Table":             m.Table,
+	}
 }
-
-func (m FkCVMeta) Compare(ctx *sql.Context, v types.JSONValue) (cmp int, err error) {
-	ours := types.JSONDocument{Val: m}
-	return ours.Compare(ctx, v)
-}
-
-func (m FkCVMeta) ToString(ctx *sql.Context) (string, error) {
-	return m.PrettyPrint(), nil
-}
-
-var _ types.JSONValue = FkCVMeta{}
 
 // PrettyPrint is a custom pretty print function to match the old format's
 // output which includes additional whitespace between keys, values, and array elements.
