@@ -53,6 +53,8 @@ type ColCollection struct {
 	cols []Column
 	// virtualColumns stores the indexes of any virtual columns in the collection
 	virtualColumns []int
+	// storedIndexes stores the indexes of the stored columns in the collection
+	storedIndexes []int
 	// Tags is a list of all the tags in the ColCollection in their original order.
 	Tags []uint64
 	// SortedTags is a list of all the tags in the ColCollection in sorted order.
@@ -65,6 +67,8 @@ type ColCollection struct {
 	LowerNameToCol map[string]Column
 	// TagToIdx is a map from a tag to the column index
 	TagToIdx map[uint64]int
+	// tagToStorageIndex is a map from a tag to the physical storage column index
+	tagToStorageIndex map[uint64]int
 }
 
 // NewColCollection creates a new collection from a list of columns. If any columns have the same tag, by-tag lookups in
@@ -80,9 +84,12 @@ func NewColCollection(cols ...Column) *ColCollection {
 	nameToCol := make(map[string]Column, len(cols))
 	lowerNameToCol := make(map[string]Column, len(cols))
 	tagToIdx := make(map[uint64]int, len(cols))
+	tagToStorageIndex := make(map[uint64]int, len(cols))
 	var virtualColumns []int
 
 	var columns []Column
+	var storedIndexes []int
+	storageIdx := 0
 	for i, col := range cols {
 		// If multiple columns have the same tag, the last one is used for tag lookups.
 		// Columns must have unique tags to pass schema.ValidateForInsert.
@@ -102,20 +109,26 @@ func NewColCollection(cols ...Column) *ColCollection {
 		
 		if col.Virtual {
 			virtualColumns = append(virtualColumns, i)
+		} else {
+			storedIndexes = append(storedIndexes, i)
+			tagToStorageIndex[col.Tag] = storageIdx
+			storageIdx++
 		}
 	}
 
 	sort.Slice(sortedTags, func(i, j int) bool { return sortedTags[i] < sortedTags[j] })
 
 	return &ColCollection{
-		cols:           columns,
-		virtualColumns: virtualColumns,
-		Tags:           tags,
-		SortedTags:     sortedTags,
-		TagToCol:       tagToCol,
-		NameToCol:      nameToCol,
-		LowerNameToCol: lowerNameToCol,
-		TagToIdx:       tagToIdx,
+		cols:              columns,
+		virtualColumns:    virtualColumns,
+		storedIndexes:     storedIndexes,
+		tagToStorageIndex: tagToStorageIndex,
+		Tags:              tags,
+		SortedTags:        sortedTags,
+		TagToCol:          tagToCol,
+		NameToCol:         nameToCol,
+		LowerNameToCol:    lowerNameToCol,
+		TagToIdx:          tagToIdx,
 	}
 }
 
@@ -228,29 +241,20 @@ func (cc *ColCollection) GetByTag(tag uint64) (Column, bool) {
 	return InvalidCol, false
 }
 
-// GetByIndex returns a column with a given index
+// GetByIndex returns the Nth column in the collection
 func (cc *ColCollection) GetByIndex(idx int) Column {
 	return cc.cols[idx]
 }
 
-// GetByStoredIndex returns the column with the given storage index (omitting virtual columns from index calculation)
+// GetByStoredIndex returns the Nth stored column (omitting virtual columns from index calculation)
 func (cc *ColCollection) GetByStoredIndex(idx int) Column {
-	if len(cc.virtualColumns) == 0 {
-		return cc.cols[idx]
-	}
+	return cc.cols[cc.storedIndexes[idx]]
+}
 
-	storageIdx := 0
-	for _, col := range cc.cols {
-		if col.Virtual {
-			continue
-		}
-		if idx == storageIdx {
-			return col
-		}
-		storageIdx++
-	}
-	
-	return InvalidCol
+// StoredIndexByTag returns the storage index of the column with the given tag, ignoring virtual columns
+func (cc *ColCollection) StoredIndexByTag(tag uint64) (int, bool) {
+	idx, ok := cc.tagToStorageIndex[tag]
+	return idx, ok
 }
 
 // Size returns the number of columns in the collection.

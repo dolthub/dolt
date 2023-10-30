@@ -76,36 +76,41 @@ func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap
 	pks := sch.GetPKCols()
 	nonPks := sch.GetNonPKCols()
 
-	// Our mappings should only contain the physical columns of the schema
+	
+	
 	numPhysicalColumns := len(projections)
 	if schema.IsVirtual(sch) {
 		numPhysicalColumns = 0
 		for _, t := range projections {
-			if idx, ok := pks.TagToIdx[t]; ok && !sch.GetAllCols().GetByIndex(idx).Virtual {
-				numPhysicalColumns++
-			} else if idx, ok := nonPks.TagToIdx[t]; ok && !sch.GetAllCols().GetByIndex(idx).Virtual {
+			if idx, ok := sch.GetAllCols().TagToIdx[t]; ok && !sch.GetAllCols().GetByIndex(idx).Virtual {
 				numPhysicalColumns++
 			}
 		}
 	}
 	
+	// Build a slice of positional values. For a set of P projections, for K key columns and N=P-K non-key columns, 
+	// we'll generate a slice 2P long structured as follows:
+	// [K key projections, // list of tuple indexes to read for key columns
+	//  N non-key projections, // list of tuple indexes to read for non-key columns
+	//  P output ordinals]  // list of output column ordinals for each projection
+	// Afterward we slice this into three separate mappings to return.
 	allMap := make([]int, 2*numPhysicalColumns)
-	i := 0
-	j := numPhysicalColumns - 1
-	for k, t := range projections {
-		if idx, ok := pks.TagToIdx[t]; ok && !pks.GetByIndex(idx).Virtual {
-			allMap[numPhysicalColumns+i] = k
-			allMap[i] = idx
-			i++
-		} else if idx, ok := nonPks.TagToIdx[t]; ok && !nonPks.GetByIndex(idx).Virtual {
-			allMap[j] = idx
-			allMap[numPhysicalColumns+j] = k
-			j--
+	keyIdx := 0
+	nonKeyIdx := numPhysicalColumns - 1
+	for projNum, tag := range projections {
+		if idx, ok := pks.StoredIndexByTag(tag); ok && !pks.GetByStoredIndex(idx).Virtual {
+			allMap[keyIdx] = idx
+			allMap[numPhysicalColumns+keyIdx] = projNum
+			keyIdx++
+		} else if idx, ok := nonPks.StoredIndexByTag(tag); ok && !nonPks.GetByStoredIndex(idx).Virtual {
+			allMap[nonKeyIdx] = idx
+			allMap[numPhysicalColumns+nonKeyIdx] = projNum
+			nonKeyIdx--
 		}
 	}
 	
-	keyMap = allMap[:i]
-	valMap = allMap[i:numPhysicalColumns]
+	keyMap = allMap[:keyIdx]
+	valMap = allMap[keyIdx:numPhysicalColumns]
 	ordMap = allMap[numPhysicalColumns:]
 	if schema.IsKeyless(sch) {
 		// skip the cardinality value, increment every index
