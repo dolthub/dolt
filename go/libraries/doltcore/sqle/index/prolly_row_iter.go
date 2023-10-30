@@ -76,24 +76,37 @@ func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap
 	pks := sch.GetPKCols()
 	nonPks := sch.GetNonPKCols()
 
-	allMap := make([]int, 2*len(projections))
+	// Our mappings should only contain the physical columns of the schema
+	numPhysicalColumns := len(projections)
+	if schema.IsVirtual(sch) {
+		numPhysicalColumns = 0
+		for _, t := range projections {
+			if idx, ok := pks.TagToIdx[t]; ok && !sch.GetAllCols().GetByIndex(idx).Virtual {
+				numPhysicalColumns++
+			} else if idx, ok := nonPks.TagToIdx[t]; ok && !sch.GetAllCols().GetByIndex(idx).Virtual {
+				numPhysicalColumns++
+			}
+		}
+	}
+	
+	allMap := make([]int, 2*numPhysicalColumns)
 	i := 0
-	j := len(projections) - 1
+	j := numPhysicalColumns - 1
 	for k, t := range projections {
-		if idx, ok := pks.TagToIdx[t]; ok {
-			allMap[len(projections)+i] = k
+		if idx, ok := pks.TagToIdx[t]; ok && !pks.GetByIndex(idx).Virtual {
+			allMap[numPhysicalColumns+i] = k
 			allMap[i] = idx
 			i++
-		} else if idx, ok := nonPks.TagToIdx[t]; ok {
+		} else if idx, ok := nonPks.TagToIdx[t]; ok && !nonPks.GetByIndex(idx).Virtual {
 			allMap[j] = idx
-			allMap[len(projections)+j] = k
+			allMap[numPhysicalColumns+j] = k
 			j--
 		}
 	}
 	
 	keyMap = allMap[:i]
-	valMap = allMap[i:len(projections)]
-	ordMap = allMap[len(projections):]
+	valMap = allMap[i:numPhysicalColumns]
+	ordMap = allMap[numPhysicalColumns:]
 	if schema.IsKeyless(sch) {
 		// skip the cardinality value, increment every index
 		for i := range keyMap {
@@ -101,15 +114,6 @@ func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap
 		}
 		for i := range valMap {
 			valMap[i]++
-		}
-	}
-	
-	// For virtual schemas, insert -1 into the ordinal mapping for every virtual column
-	if schema.IsVirtual(sch) {
-		for i := range ordMap {
-			if sch.GetAllCols().GetByIndex(i).Virtual {
-				ordMap[i] = -1
-			}
 		}
 	}
 	
@@ -184,12 +188,9 @@ func (it *prollyKeylessIter) nextTuple(ctx *sql.Context) error {
 
 	for i, idx := range it.valProj {
 		outputIdx := it.ordProj[i]
-		// TODO: this is bad, it introduces a branch here where it isn't necessary
-		if outputIdx >= 0 {
-			it.curr[outputIdx], err = GetField(ctx, it.valDesc, idx, value, it.ns)
-			if err != nil {
-				return err
-			}
+		it.curr[outputIdx], err = GetField(ctx, it.valDesc, idx, value, it.ns)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
