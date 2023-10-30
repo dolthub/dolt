@@ -270,16 +270,15 @@ func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta) {
 	for _, name := range matchedNames {
 		t := to[name]
 		f := from[name]
-		if schemasOverlap(t.ToSch, f.FromSch) {
-			matched := match(t, f)
-			deltas = append(deltas, matched)
-			delete(from, f.FromName)
-			delete(to, t.ToName)
-		}
+		matched := match(t, f)
+		deltas = append(deltas, matched)
+		delete(from, f.FromName)
+		delete(to, t.ToName)
 	}
 
 	for _, f := range from {
 		for _, t := range to {
+			// check for overlapping schemas to try and match tables when names don't match
 			if schemasOverlap(f.FromSch, t.ToSch) {
 				matched := match(t, f)
 				deltas = append(deltas, matched)

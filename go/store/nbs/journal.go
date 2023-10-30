@@ -284,7 +284,7 @@ func (j *ChunkJournal) Path() string {
 	return filepath.Dir(j.path)
 }
 
-func (j *ChunkJournal) CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string, fileSz uint64, chunkCount uint32) error {
+func (j *ChunkJournal) CopyTableFile(ctx context.Context, r io.Reader, fileId string, fileSz uint64, chunkCount uint32) error {
 	if j.backing.readOnly() {
 		return errReadOnlyManifest
 	}
