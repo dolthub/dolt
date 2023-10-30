@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/memo"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/stretchr/testify/assert"
@@ -91,8 +92,8 @@ func TestSingleQuery(t *testing.T) {
 		enginetest.RunQuery(t, engine, harness, q)
 	}
 
-	engine.EngineAnalyzer().Debug = true
-	engine.EngineAnalyzer().Verbose = true
+	// engine.EngineAnalyzer().Debug = true
+	// engine.EngineAnalyzer().Verbose = true
 
 	var test queries.QueryTest
 	test = queries.QueryTest{
@@ -115,41 +116,63 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	// t.Skip()
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "failed statements data validation for DELETE, REPLACE",
+			Name: "virtual column ordering",
 			SetUpScript: []string{
-				"CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX (v1));",
-				"INSERT INTO test VALUES (1,1), (4,4), (5,5);",
-				"CREATE TABLE test2 (pk BIGINT PRIMARY KEY, CONSTRAINT fk_test FOREIGN KEY (pk) REFERENCES test (v1));",
-				"INSERT INTO test2 VALUES (4);",
+				// virtual is the default for generated columns
+				"create table t1 (v1 int generated always as (2), a int, v2 int generated always as (a + v1), c int)",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:       "DELETE FROM test WHERE pk > 0;",
-					ExpectedErr: sql.ErrForeignKeyParentViolation,
+					Query:    "insert into t1 (a, c) values (1,5), (3,7)",
+					Expected: []sql.Row{{gmstypes.NewOkResult(2)}},
 				},
 				{
-					Query:    "SELECT * FROM test;",
-					Expected: []sql.Row{{1, 1}, {4, 4}, {5, 5}},
+					Query:    "insert into t1 (c, a) values (5,6), (7,8)",
+					Expected: []sql.Row{{gmstypes.NewOkResult(2)}},
 				},
 				{
-					Query:    "SELECT * FROM test2;",
-					Expected: []sql.Row{{4}},
+					Query: "select * from t1 order by a",
+					Expected: []sql.Row{
+						{2, 1, 3, 5},
+						{2, 3, 5, 7},
+						{2, 6, 8, 5},
+						{2, 8, 10, 7},
+					},
 				},
 				{
-					Query:       "REPLACE INTO test VALUES (1,7), (4,8), (5,9);",
-					ExpectedErr: sql.ErrForeignKeyParentViolation,
+					Query: "update t1 set a = 4 where a = 3",
+					Expected: []sql.Row{{gmstypes.OkResult{
+						RowsAffected: 1,
+						Info: plan.UpdateInfo{
+							Matched: 1,
+							Updated: 1,
+						}},
+					}},
 				},
 				{
-					Query:    "SELECT * FROM test;",
-					Expected: []sql.Row{{1, 1}, {4, 4}, {5, 5}},
+					Query: "select * from t1 order by a",
+					Expected: []sql.Row{
+						{2, 1, 3, 5},
+						{2, 4, 6, 7},
+						{2, 6, 8, 5},
+						{2, 8, 10, 7},
+					},
 				},
 				{
-					Query:    "SELECT * FROM test2;",
-					Expected: []sql.Row{{4}},
+					Query:    "delete from t1 where v2 = 6",
+					Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: 1}}},
+				},
+				{
+					Query: "select * from t1 order by a",
+					Expected: []sql.Row{
+						{2, 1, 3, 5},
+						{2, 6, 8, 5},
+						{2, 8, 10, 7},
+					},
 				},
 			},
 		},

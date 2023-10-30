@@ -90,6 +90,7 @@ func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap
 			j--
 		}
 	}
+	
 	keyMap = allMap[:i]
 	valMap = allMap[i:len(projections)]
 	ordMap = allMap[len(projections):]
@@ -102,6 +103,16 @@ func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap
 			valMap[i]++
 		}
 	}
+	
+	// For virtual schemas, insert -1 into the ordinal mapping for every virtual column
+	if schema.IsVirtual(sch) {
+		for i := range ordMap {
+			if sch.GetAllCols().GetByIndex(i).Virtual {
+				ordMap[i] = -1
+			}
+		}
+	}
+	
 	return
 }
 
@@ -173,9 +184,12 @@ func (it *prollyKeylessIter) nextTuple(ctx *sql.Context) error {
 
 	for i, idx := range it.valProj {
 		outputIdx := it.ordProj[i]
-		it.curr[outputIdx], err = GetField(ctx, it.valDesc, idx, value, it.ns)
-		if err != nil {
-			return err
+		// TODO: this is bad, it introduces a branch here where it isn't necessary
+		if outputIdx >= 0 {
+			it.curr[outputIdx], err = GetField(ctx, it.valDesc, idx, value, it.ns)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil

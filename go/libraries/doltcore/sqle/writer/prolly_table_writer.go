@@ -377,13 +377,12 @@ func ordinalMappingsFromSchema(from sql.Schema, to schema.Schema) (km, vm val.Or
 }
 
 func makeOrdinalMapping(from sql.Schema, to *schema.ColCollection) (m val.OrdinalMapping) {
-	m = make(val.OrdinalMapping, len(to.GetColumns()))
+	m = make(val.OrdinalMapping, to.StoredSize())
 	for i := range m {
-		name := to.GetByIndex(i).Name
+		col := to.GetByStoredIndex(i)
+		name := col.Name
 		colIdx := from.IndexOfColName(name)
-		if !from[colIdx].Virtual {
-			m[i] = colIdx
-		}
+		m[i] = colIdx	
 	}
 	return
 }

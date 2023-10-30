@@ -37,13 +37,13 @@ var ErrNoPrimaryKeyColumns = errors.New("no primary key columns")
 var ErrNonAutoIncType = errors.New("column type cannot be auto incremented")
 
 var EmptyColColl = &ColCollection{
-	[]Column{},
-	[]uint64{},
-	[]uint64{},
-	map[uint64]Column{},
-	map[string]Column{},
-	map[string]Column{},
-	map[uint64]int{},
+	cols:           []Column{},
+	Tags:           []uint64{},
+	SortedTags:     []uint64{},
+	TagToCol:       map[uint64]Column{},
+	NameToCol:      map[string]Column{},
+	LowerNameToCol: map[string]Column{},
+	TagToIdx:       map[uint64]int{},
 }
 
 // ColCollection is a collection of columns. As a stand-alone collection, all columns in the collection must have unique
@@ -51,6 +51,8 @@ var EmptyColColl = &ColCollection{
 // See schema.ValidateForInsert for details.
 type ColCollection struct {
 	cols []Column
+	// virtualColumns stores the indexes of any virtual columns in the collection
+	virtualColumns []int
 	// Tags is a list of all the tags in the ColCollection in their original order.
 	Tags []uint64
 	// SortedTags is a list of all the tags in the ColCollection in sorted order.
@@ -78,6 +80,7 @@ func NewColCollection(cols ...Column) *ColCollection {
 	nameToCol := make(map[string]Column, len(cols))
 	lowerNameToCol := make(map[string]Column, len(cols))
 	tagToIdx := make(map[uint64]int, len(cols))
+	var virtualColumns []int
 
 	var columns []Column
 	for i, col := range cols {
@@ -96,12 +99,17 @@ func NewColCollection(cols ...Column) *ColCollection {
 		if _, ok := lowerNameToCol[lowerCaseName]; !ok {
 			lowerNameToCol[lowerCaseName] = cols[i]
 		}
+		
+		if col.Virtual {
+			virtualColumns = append(virtualColumns, i)
+		}
 	}
 
 	sort.Slice(sortedTags, func(i, j int) bool { return sortedTags[i] < sortedTags[j] })
 
 	return &ColCollection{
 		cols:           columns,
+		virtualColumns: virtualColumns,
 		Tags:           tags,
 		SortedTags:     sortedTags,
 		TagToCol:       tagToCol,
@@ -225,9 +233,40 @@ func (cc *ColCollection) GetByIndex(idx int) Column {
 	return cc.cols[idx]
 }
 
+// GetByStoredIndex returns the column with the given storage index (omitting virtual columns from index calculation)
+func (cc *ColCollection) GetByStoredIndex(idx int) Column {
+	if len(cc.virtualColumns) == 0 {
+		return cc.cols[idx]
+	}
+
+	storageIdx := 0
+	for _, col := range cc.cols {
+		if col.Virtual {
+			continue
+		}
+		if idx == storageIdx {
+			return col
+		}
+		storageIdx++
+	}
+	
+	return InvalidCol
+}
+
 // Size returns the number of columns in the collection.
 func (cc *ColCollection) Size() int {
 	return len(cc.cols)
+}
+
+// StoredSize returns the number of non-virtual columns in the collection
+func (cc *ColCollection) StoredSize() int {
+	num := 0
+	for _, col := range cc.cols {
+		if !col.Virtual {
+			num++
+		}
+	}
+	return num
 }
 
 // Contains returns whether this column collection contains a column with the name given, case insensitive
