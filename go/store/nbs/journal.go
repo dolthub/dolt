@@ -339,6 +339,20 @@ func (j *ChunkJournal) UpdateGCGen(ctx context.Context, lastLock addr, next mani
 			return manifestContents{}, err
 		}
 	}
+
+	// Truncate the in-memory root and root timestamp metadata to the most recent
+	// entry, and double check that it matches the root stored in the manifest.
+	if len(j.Roots) == 0 {
+		return manifestContents{}, fmt.Errorf(
+			"ChunkJournal roots not intialized; no roots in memory")
+	}
+	j.Roots = j.Roots[len(j.Roots)-1:]
+	j.RootTimestamps = j.RootTimestamps[len(j.RootTimestamps)-1:]
+	if j.Roots[0] != latest.root.String() {
+		return manifestContents{}, fmt.Errorf(
+			"ChunkJournal root doesn't match manifest root")
+	}
+
 	return latest, nil
 }
 

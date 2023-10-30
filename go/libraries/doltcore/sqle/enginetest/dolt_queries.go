@@ -4362,7 +4362,6 @@ var DoltReflogTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"refs/heads/main", doltCommit, "inserting row 1"},
 					{"refs/heads/main", doltCommit, "creating table t1"},
-					{"refs/heads/main", doltCommit, "checkpoint enginetest database mydb"},
 					{"refs/heads/main", doltCommit, "Initialize data repository"},
 				},
 			}, {
@@ -4371,7 +4370,6 @@ var DoltReflogTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"refs/heads/main", doltCommit, "inserting row 1"},
 					{"refs/heads/main", doltCommit, "creating table t1"},
-					{"refs/heads/main", doltCommit, "checkpoint enginetest database mydb"},
 					{"refs/heads/main", doltCommit, "Initialize data repository"},
 				},
 			}, {
@@ -4379,7 +4377,6 @@ var DoltReflogTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"refs/heads/main", doltCommit, "inserting row 1"},
 					{"refs/heads/main", doltCommit, "creating table t1"},
-					{"refs/heads/main", doltCommit, "checkpoint enginetest database mydb"},
 					{"refs/heads/main", doltCommit, "Initialize data repository"},
 				},
 			}, {
@@ -4388,7 +4385,6 @@ var DoltReflogTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"refs/heads/main", doltCommit, "inserting row 1"},
 					{"refs/heads/main", doltCommit, "creating table t1"},
-					{"refs/heads/main", doltCommit, "checkpoint enginetest database mydb"},
 					{"refs/heads/main", doltCommit, "Initialize data repository"},
 				},
 			}, {
@@ -4455,6 +4451,64 @@ var DoltReflogTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"refs/tags/tag1", doltCommit, "inserting row 3"},
 					{"refs/tags/tag1", doltCommit, "inserting row 1"},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_reflog: garbage collection with no newgen data",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select ref, commit_hash, commit_message from dolt_reflog('main')",
+				Expected: []sql.Row{
+					{"refs/heads/main", doltCommit, "Initialize data repository"},
+				},
+			},
+			{
+				Query:    "call dolt_gc();",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				// Calling dolt_gc() invalidates the session, so we have to ask this assertion to create a new session
+				NewSession: true,
+				Query:      "select ref, commit_hash, commit_message from dolt_reflog('main')",
+				Expected: []sql.Row{
+					{"refs/heads/main", doltCommit, "Initialize data repository"},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_reflog: garbage collection with newgen data",
+		SetUpScript: []string{
+			"create table t1(pk int primary key);",
+			"call dolt_commit('-Am', 'creating table t1');",
+			"insert into t1 values(1);",
+			"call dolt_commit('-Am', 'inserting row 1');",
+			"call dolt_tag('tag1');",
+			"insert into t1 values(2);",
+			"call dolt_commit('-Am', 'inserting row 2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select ref, commit_hash, commit_message from dolt_reflog('main')",
+				Expected: []sql.Row{
+					{"refs/heads/main", doltCommit, "inserting row 2"},
+					{"refs/heads/main", doltCommit, "inserting row 1"},
+					{"refs/heads/main", doltCommit, "creating table t1"},
+					{"refs/heads/main", doltCommit, "Initialize data repository"},
+				},
+			},
+			{
+				Query:    "call dolt_gc();",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				// Calling dolt_gc() invalidates the session, so we have to force this test to create a new session
+				NewSession: true,
+				Query:      "select ref, commit_hash, commit_message from dolt_reflog('main')",
+				Expected: []sql.Row{
+					{"refs/heads/main", doltCommit, "inserting row 2"},
 				},
 			},
 		},
