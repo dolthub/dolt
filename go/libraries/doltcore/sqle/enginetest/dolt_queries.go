@@ -4331,10 +4331,6 @@ var DoltReflogTestScripts = []queries.ScriptTest{
 				Query:          "select * from dolt_reflog(-100);",
 				ExpectedErrStr: "argument (-100) is not a string value, but a int8",
 			},
-			{
-				Query:    "select * from dolt_reflog('doesNotExist');",
-				Expected: []sql.Row{},
-			},
 		},
 	},
 	{
@@ -4357,6 +4353,10 @@ var DoltReflogTestScripts = []queries.ScriptTest{
 			"call dolt_tag('tag1');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from dolt_reflog('doesNotExist');",
+				Expected: []sql.Row{},
+			},
 			{
 				Query: "select ref, commit_hash, commit_message from dolt_reflog('refs/heads/main')",
 				Expected: []sql.Row{
