@@ -746,6 +746,7 @@ func TestJSONTableScriptsPrepared(t *testing.T) {
 
 func TestUserPrivileges(t *testing.T) {
 	h := newDoltHarness(t)
+	h.setupTestProcedures = true
 	defer h.Close()
 	enginetest.TestUserPrivileges(t, h)
 }
