@@ -233,7 +233,7 @@ teardown() {
     # No data on main
     run dolt sql-client --use-db repo2 -P $PORT -u dolt -q "show tables"
     [ $status -eq 0 ]
-    [ "$output" = "" ]
+    [ "$output" = "WARNING: this command is being deprecated and is not recommended for general use." ]
 
     # Connecting to heads that exist only on the remote should work fine (they get fetched)
     dolt sql-client --use-db "repo2/b1" -u dolt -P $PORT -q "show tables"
@@ -324,7 +324,7 @@ teardown() {
 
     run dolt sql-client --use-db repo2 -P $PORT -u dolt -q "SHOW tables"
     [ $status -eq 0 ]
-    [ "$output" = "" ]
+    [ "$output" = "WARNING: this command is being deprecated and is not recommended for general use." ]
 }
 
 @test "remotes-sql-server: connect to missing branch pulls remote" {
@@ -343,7 +343,7 @@ teardown() {
 
     run dolt sql-client --use-db repo2 -P $PORT -u dolt -q "SHOW tables"
     [ $status -eq 0 ]
-    [ "$output" = "" ]
+    [ "$output" = "WARNING: this command is being deprecated and is not recommended for general use." ]
 
     # Can't connect to a specific branch with dolt sql-client
     run dolt sql-client --use-db "repo2/feature-branch" -u dolt -P $PORT -q "SHOW Tables"
@@ -372,7 +372,7 @@ teardown() {
     
     run dolt sql-client --use-db repo2 -P $PORT -u dolt -q "use \`repo2/$head_hash\`"
     [ $status -eq 0 ]
-    [ "$output" = "" ]
+    [ "$output" = "WARNING: this command is being deprecated and is not recommended for general use." ]
 }
 
 @test "remotes-sql-server: connect to tag works" {
@@ -397,7 +397,7 @@ teardown() {
 
     run dolt sql-client --use-db repo2 -P $PORT -u dolt -q "use \`repo2/v1\`"
     [ $status -eq 0 ]
-    [ "$output" = "" ]
+    [ "$output" = "WARNING: this command is being deprecated and is not recommended for general use." ]
 }
 
 @test "remotes-sql-server: connect to remote branch that does not exist locally" {
@@ -423,7 +423,7 @@ teardown() {
     # No data on main
     run dolt sql-client --use-db repo2 -P $PORT -u dolt -q "show tables"
     [ $status -eq 0 ]
-    [ "$output" = "" ]
+    [ "$output" = "WARNING: this command is being deprecated and is not recommended for general use." ]
 
     run dolt sql-client --use-db repo2/feature -P $PORT -u dolt -q "select active_branch()"
     [ $status -eq 0 ]
@@ -498,7 +498,7 @@ teardown() {
     # No data on main
     run dolt sql-client --use-db repo2 -P $PORT -u dolt -q "show tables"
     [ $status -eq 0 ]
-    [ "$output" = "" ]
+    [ "$output" = "WARNING: this command is being deprecated and is not recommended for general use." ]
 
     run dolt sql-client --use-db repo2/feature -P $PORT -u dolt -q "select active_branch()"
     [ $status -eq 1 ]

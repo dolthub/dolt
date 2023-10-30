@@ -771,7 +771,8 @@ SQL
     # check no tables on main
     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW Tables"
     [ $status -eq 0 ]
-    [ "${#lines[@]}" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [[ "$output" = "WARNING: this command is being deprecated and is not recommended for general use." ]] || false
 
     # make some changes to main and commit to branch test_branch
     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "
@@ -818,7 +819,8 @@ SQL
 
     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW Tables"
     [ $status -eq 0 ]
-    [ "${#lines[@]}" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [[ "$output" = "WARNING: this command is being deprecated and is not recommended for general use." ]] || false
 
     run dolt sql-client --use-db "repo1/feature-branch" -u dolt -P $PORT -q "SHOW Tables"
     [ $status -eq 0 ]
@@ -878,7 +880,8 @@ SQL
 
     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW Tables"
     [ $status -eq 0 ]
-    [ "${#lines[@]}" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [[ "$output" = "WARNING: this command is being deprecated and is not recommended for general use." ]] || false
 
     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "set GLOBAL repo1_default_branch = 'refs/heads/new'"
     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "select @@GLOBAL.repo1_default_branch;"
@@ -908,7 +911,8 @@ SQL
 
     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "SHOW Tables"
     [ $status -eq 0 ]
-    [ "${#lines[@]}" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+    [[ "$output" = "WARNING: this command is being deprecated and is not recommended for general use." ]] || false
 
     dolt sql-client -P $PORT -u dolt --use-db repo1 -q "set GLOBAL repo1_default_branch = 'new'"
     run dolt sql-client -P $PORT -u dolt --use-db repo1 -q "select @@GLOBAL.repo1_default_branch;"

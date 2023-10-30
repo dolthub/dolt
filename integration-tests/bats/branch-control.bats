@@ -47,8 +47,8 @@ setup_test_user() {
 
     run dolt sql-client -u dolt -P $PORT --use-db "dolt_repo_$$" --result-format csv -q "select * from dolt_branch_control"
     [ $status -eq 0 ]
-    [ ${lines[0]} = "database,branch,user,host,permissions" ]
-    [ ${lines[1]} = "%,%,%,%,write" ]
+    [ ${lines[1]} = "database,branch,user,host,permissions" ]
+    [ ${lines[2]} = "%,%,%,%,write" ]
 
     dolt sql-client -u dolt -P $PORT --use-db "dolt_repo_$$" -q "select * from dolt_branch_namespace_control"
 }
@@ -65,8 +65,8 @@ setup_test_user() {
     start_sql_server
     run dolt sql-client -u dolt -P $PORT --use-db "dolt_repo_$$" --result-format csv -q "select * from dolt_branch_control"
     [ $status -eq 0 ]
-    [ ${lines[0]} = "database,branch,user,host,permissions" ]
-    [ ${lines[1]} = "test-db,test-branch,test,%,write" ]
+    [ ${lines[1]} = "database,branch,user,host,permissions" ]
+    [ ${lines[2]} = "test-db,test-branch,test,%,write" ]
 }
 
 @test "branch-control: default user root works as expected" {
@@ -79,14 +79,14 @@ setup_test_user() {
     sleep 5 # not using python wait so this works on windows
 
     run dolt sql-client --use-db "dolt_repo_$$" -u root -P $PORT --result-format csv -q "select * from dolt_branch_control"
-    [ ${lines[0]} = "database,branch,user,host,permissions" ]
-    [ ${lines[1]} = "%,%,%,%,write" ]
+    [ ${lines[1]} = "database,branch,user,host,permissions" ]
+    [ ${lines[2]} = "%,%,%,%,write" ]
 
     dolt sql-client --use-db "dolt_repo_$$" -u root -P $PORT -q "delete from dolt_branch_control where user='%'"
      
     run dolt sql-client --use-db "dolt_repo_$$" -u root -P $PORT -q "select * from dolt_branch_control"
     [ $status -eq 0 ]
-    [ "$output" == "" ] 
+    [ "$output" == "WARNING: this command is being deprecated and is not recommended for general use." ]
 }
 
 @test "branch-control: test basic branch write permissions" {
@@ -137,18 +137,18 @@ setup_test_user() {
     dolt sql-client -P $PORT --use-db "dolt_repo_$$" -u test -q "insert into dolt_branch_control values ('dolt_repo_$$', 'test-branch', 'test2', '%', 'write')"
     run dolt sql-client -P $PORT --use-db "dolt_repo_$$" -u test --result-format csv -q "select * from dolt_branch_control"
     [ $status -eq 0 ]
-    [ ${lines[0]} = "database,branch,user,host,permissions" ]
-    [ ${lines[1]} = "dolt_repo_$$,test-branch,test,%,admin" ]
-    [ ${lines[2]} = "dolt_repo_$$,test-branch,root,localhost,admin" ]
-    [ ${lines[3]} = "dolt_repo_$$,test-branch,test2,%,write" ]
+    [ ${lines[1]} = "database,branch,user,host,permissions" ]
+    [ ${lines[2]} = "dolt_repo_$$,test-branch,test,%,admin" ]
+    [ ${lines[3]} = "dolt_repo_$$,test-branch,root,localhost,admin" ]
+    [ ${lines[4]} = "dolt_repo_$$,test-branch,test2,%,write" ]
 
     # test2 can see all branch permissions
     run dolt sql-client -P $PORT --use-db "dolt_repo_$$" -u test2 --result-format csv -q "select * from dolt_branch_control"
     [ $status -eq 0 ]
-    [ ${lines[0]} = "database,branch,user,host,permissions" ]
-    [ ${lines[1]} = "dolt_repo_$$,test-branch,test,%,admin" ]
-    [ ${lines[2]} = "dolt_repo_$$,test-branch,root,localhost,admin" ]
-    [ ${lines[3]} = "dolt_repo_$$,test-branch,test2,%,write" ]
+    [ ${lines[1]} = "database,branch,user,host,permissions" ]
+    [ ${lines[2]} = "dolt_repo_$$,test-branch,test,%,admin" ]
+    [ ${lines[3]} = "dolt_repo_$$,test-branch,root,localhost,admin" ]
+    [ ${lines[4]} = "dolt_repo_$$,test-branch,test2,%,write" ]
 
     # test2 now has write permissions on test-branch
     dolt sql-client -P $PORT --use-db "dolt_repo_$$" -u test2 -q "call dolt_checkout('test-branch'); insert into t values(0)"
@@ -158,8 +158,8 @@ setup_test_user() {
 
     run dolt sql-client -P $PORT --use-db "dolt_repo_$$" -u test --result-format csv -q "select * from dolt_branch_control"
     [ $status -eq 0 ]
-    [ ${lines[0]} = "database,branch,user,host,permissions" ]
-    [ ${lines[1]} = "dolt_repo_$$,test-branch,test,%,admin" ]
+    [ ${lines[1]} = "database,branch,user,host,permissions" ]
+    [ ${lines[2]} = "dolt_repo_$$,test-branch,test,%,admin" ]
 
     # test2 cannot write to branch
     run dolt sql-client -P $PORT --use-db "dolt_repo_$$" -u test2 -q "call dolt_checkout('test-branch'); insert into t values(1)"
@@ -178,9 +178,9 @@ setup_test_user() {
 
     run dolt sql-client -P $PORT --use-db "dolt_repo_$$" -u test --result-format csv -q "select * from dolt_branch_control"
     [ $status -eq 0 ]
-    [ ${lines[0]} = "database,branch,user,host,permissions" ]
-    [ ${lines[1]} = "dolt_repo_$$,main,test,%,write" ]
-    [ ${lines[2]} = "dolt_repo_$$,test-branch,test,%,admin" ]
+    [ ${lines[1]} = "database,branch,user,host,permissions" ]
+    [ ${lines[2]} = "dolt_repo_$$,main,test,%,write" ]
+    [ ${lines[3]} = "dolt_repo_$$,test-branch,test,%,admin" ]
 }
 
 @test "branch-control: test branch namespace control" {
@@ -197,8 +197,8 @@ branch', 'test', '%', 'admin')"
 
     run dolt sql-client -u test -P $PORT --use-db "dolt_repo_$$" --result-format csv -q "select * from dolt_branch_namespace_control"
     [ $status -eq 0 ]
-    [ ${lines[0]} = "database,branch,user,host" ]
-    [ ${lines[1]} = "dolt_repo_$$,test-%,test2,%" ]
+    [ ${lines[1]} = "database,branch,user,host" ]
+    [ ${lines[2]} = "dolt_repo_$$,test-%,test2,%" ]
 
     # test cannot create test-branch
     run dolt sql-client -u test -P $PORT --use-db "dolt_repo_$$" -q "call dolt_branch('test-branch')"
