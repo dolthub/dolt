@@ -17,6 +17,7 @@ package sqle
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -81,20 +82,15 @@ func (rltf *ReflogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 
 	previousCommit := ""
 	rows := make([]sql.Row, 0)
-	// journal.Roots are stored in chronological order, so we need to iterate over them backwards
-	// so that we process the most recent root updates first.
-	for i := len(journal.Roots) - 1; i >= 0; i-- {
-		root := journal.Roots[i]
-		timestamp := journal.RootTimestamps[i]
-
+	err = journal.IterateRoots(func(root string, timestamp time.Time) error {
 		hashof := hash.Parse(root)
 		datasets, err := ddb.DatasetsByRootHash(ctx, hashof)
 		if err != nil {
-			return nil, fmt.Errorf("unable to look up references for root hash %s: %s",
+			return fmt.Errorf("unable to look up references for root hash %s: %s",
 				hashof.String(), err.Error())
 		}
 
-		err = datasets.IterAll(ctx, func(id string, addr hash.Hash) error {
+		return datasets.IterAll(ctx, func(id string, addr hash.Hash) error {
 			// If the caller has supplied a branch or tag name, without the fully qualified ref path,
 			// take the first match and use that as the canonical
 			if strings.HasSuffix(strings.ToLower(id), "/"+strings.ToLower(refName)) {
@@ -133,10 +129,10 @@ func (rltf *ReflogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 			previousCommit = addr.String()
 			return nil
 		})
-		if err != nil {
-			return nil, fmt.Errorf("unable to process references for root hash %s: %s",
-				hashof.String(), err.Error())
-		}
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
 	return sql.RowsToRowIter(rows...), nil

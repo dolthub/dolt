@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/dolthub/fslock"
@@ -45,10 +46,12 @@ type ChunkJournal struct {
 	backing   *journalManifest
 	persister *fsTablePersister
 
-	// Roots holds an in-memory representation of the root hashes that have been written to the ChunkJournal
-	Roots []string
-	// RootTimestamps holds a timestamp for each of the root hashes that have been written to the ChunkJournal
-	RootTimestamps []time.Time
+	// mu locks access to the in-memory roots and root timestamp information that is queried by Dolt's reflog
+	mu sync.Mutex
+	// roots holds an in-memory representation of the root hashes that have been written to the ChunkJournal
+	roots []string
+	// rootTimestamps holds a timestamp for each of the root hashes that have been written to the ChunkJournal
+	rootTimestamps []time.Time
 }
 
 var _ tablePersister = &ChunkJournal{}
@@ -137,8 +140,10 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context) (err error) {
 		return err
 	}
 
-	j.Roots = roots
-	j.RootTimestamps = rootTimestamps
+	j.mu.Lock()
+	j.roots = roots
+	j.rootTimestamps = rootTimestamps
+	j.mu.Unlock()
 
 	mc, err := trueUpBackingManifest(ctx, root, j.backing)
 	if err != nil {
@@ -177,6 +182,31 @@ func trueUpBackingManifest(ctx context.Context, root hash.Hash, backing *journal
 	}
 	// true-up succeeded
 	return mc, nil
+}
+
+// IterateRoots iterates over the in-memory roots tracked by the ChunkJournal and passes the root and associated
+// timestamp to a callback function, |f|. If |f| returns an error, iteration is stopped and the error is returned.
+func (j *ChunkJournal) IterateRoots(f func(root string, timestamp time.Time) error) error {
+	j.mu.Lock()
+	roots := j.roots
+	rootTimestamps := j.rootTimestamps
+	length := len(roots)
+	j.mu.Unlock()
+
+	if len(roots) != len(rootTimestamps) {
+		return fmt.Errorf("different number of roots and root timestamps encountered in ChunkJournal")
+	}
+
+	// journal.roots are stored in chronological order, so we need to iterate over them backwards
+	// so that we process the most recent root updates first.
+	for i := length - 1; i >= 0; i-- {
+		err := f(roots[i], rootTimestamps[i])
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Persist implements tablePersister.
@@ -302,8 +332,10 @@ func (j *ChunkJournal) Update(ctx context.Context, lastLock addr, next manifestC
 	j.contents = next
 
 	// Update the in-memory structures so that the ChunkJournal can be queried for reflog data
-	j.Roots = append(j.Roots, next.root.String())
-	j.RootTimestamps = append(j.RootTimestamps, time.Now())
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	j.roots = append(j.roots, next.root.String())
+	j.rootTimestamps = append(j.rootTimestamps, time.Now())
 
 	return j.contents, nil
 }
@@ -342,13 +374,15 @@ func (j *ChunkJournal) UpdateGCGen(ctx context.Context, lastLock addr, next mani
 
 	// Truncate the in-memory root and root timestamp metadata to the most recent
 	// entry, and double check that it matches the root stored in the manifest.
-	if len(j.Roots) == 0 {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	if len(j.roots) == 0 {
 		return manifestContents{}, fmt.Errorf(
 			"ChunkJournal roots not intialized; no roots in memory")
 	}
-	j.Roots = j.Roots[len(j.Roots)-1:]
-	j.RootTimestamps = j.RootTimestamps[len(j.RootTimestamps)-1:]
-	if j.Roots[0] != latest.root.String() {
+	j.roots = j.roots[len(j.roots)-1:]
+	j.rootTimestamps = j.rootTimestamps[len(j.rootTimestamps)-1:]
+	if j.roots[0] != latest.root.String() {
 		return manifestContents{}, fmt.Errorf(
 			"ChunkJournal root doesn't match manifest root")
 	}
