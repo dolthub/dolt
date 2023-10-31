@@ -120,44 +120,73 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "virtual column inserts, updates, deletes",
+			Name: "virtual column index",
 			SetUpScript: []string{
-				"create table t1 (a int primary key, b int generated always as (a + 1) virtual)",
+				"create table t1 (a int primary key, b int, c int generated always as (a + b) virtual, index idx_c (c))",
+				"insert into t1 (a, b) values (1, 2), (3, 4)",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "insert into t1 (a) values (1), (2), (3)",
-					Expected: []sql.Row{{gmstypes.NewOkResult(3)}},
+					Query:    "select * from t1 where c = 7",
+					Expected: []sql.Row{{3, 4, 7}},
 				},
 				{
-					Query:    "select * from t1 order by a",
-					Expected: []sql.Row{{1, 2}, {2, 3}, {3, 4}},
+					Query: "explain select * from t1 where c = 7",
+					Expected: []sql.Row{
+						{"IndexedTableAccess(t1)"},
+						{" ├─ index: [t1.c]"},
+						{" └─ filters: [{[7, 7]}]"},
+					},
 				},
 				{
-					Query: "update t1 set a = 4 where a = 3",
-					Expected: []sql.Row{{gmstypes.OkResult{
-						RowsAffected: 1,
-						Info: plan.UpdateInfo{
-							Matched: 1,
-							Updated: 1,
-						}},
-					}},
+					Query:    "select * from t1 where c = 8",
+					Expected: []sql.Row{},
 				},
 				{
-					Query:    "select * from t1 order by a",
-					Expected: []sql.Row{{1, 2}, {2, 3}, {4, 5}},
+					Query: "explain update t1 set b = 5 where c = 3",
+					Expected: []sql.Row{
+						{"Update"},
+						{" └─ UpdateSource(SET t1.b = 5,SET t1.c = ((t1.a + t1.b)))"},
+						{"     └─ IndexedTableAccess(t1)"},
+						{"         ├─ index: [t1.c]"},
+						{"         └─ filters: [{[3, 3]}]"},
+					},
 				},
 				{
-					Query:    "delete from t1 where a = 2",
-					Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: 1}}},
+					Query:    "update t1 set b = 5 where c = 3",
+					Expected: []sql.Row{{newUpdateResult(1, 1)}},
 				},
 				{
-					Query:    "select * from t1 order by a",
-					Expected: []sql.Row{{1, 2}, {4, 5}},
+					Query: "select * from t1 order by a",
+					Expected: []sql.Row{
+						{1, 5, 6},
+						{3, 4, 7},
+					},
 				},
 				{
-					Query:       "update t1 set b = b + 1",
-					ExpectedErr: sql.ErrGeneratedColumnValue,
+					Query: "select * from t1 where c = 6",
+					Expected: []sql.Row{
+						{1, 5, 6},
+					},
+				},
+				{
+					Query: "explain delete from t1 where c = 6",
+					Expected: []sql.Row{
+						{"Delete"},
+						{" └─ IndexedTableAccess(t1)"},
+						{"     ├─ index: [t1.c]"},
+						{"     └─ filters: [{[6, 6]}]"},
+					},
+				},
+				{
+					Query:    "delete from t1 where c = 6",
+					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+				},
+				{
+					Query: "select * from t1 order by a",
+					Expected: []sql.Row{
+						{3, 4, 7},
+					},
 				},
 			},
 		},
@@ -185,6 +214,12 @@ func TestSingleScript(t *testing.T) {
 	}
 }
 
+func newUpdateResult(matched, updated int) gmstypes.OkResult {
+	return gmstypes.OkResult{
+		RowsAffected: uint64(updated),
+		Info:         plan.UpdateInfo{Matched: matched, Updated: updated},
+	}
+}
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleMergeScript(t *testing.T) {
 	t.Skip()

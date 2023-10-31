@@ -19,10 +19,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/mysql_db"
-	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -33,6 +29,9 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 )
 
 func ValidateDatabase(ctx context.Context, db sql.Database) (err error) {
@@ -170,6 +169,11 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 		return nil
 	}
 
+	// Indexes on virtual columns cannot be rebuilt via the method below
+	if isVirtualIndex(def, sch) {
+		return nil
+	}
+
 	secondary = prolly.ConvertToSecondaryKeylessIndex(secondary)
 	idxDesc, _ := secondary.Descriptors()
 	builder := val.NewTupleBuilder(idxDesc)
@@ -234,6 +238,11 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, primary, secondary prolly.Map) error {
 	// Full-Text indexes do not make use of their internal map, so we may safely skip this check
 	if def.IsFullText() {
+		return nil
+	}
+	
+	// Indexes on virtual columns cannot be rebuilt via the method below
+	if isVirtualIndex(def, sch) {
 		return nil
 	}
 
@@ -315,6 +324,19 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 			return fmt.Errorf("index key %v not found in index %s", builder.Desc.Format(k), def.Name())
 		}
 	}
+}
+
+func isVirtualIndex(def schema.Index, sch schema.Schema) bool {
+	for _, colName := range def.ColumnNames() {
+		col, ok := sch.GetAllCols().GetByName(colName)
+		if !ok {
+			panic(fmt.Sprintf("column not found: %s", colName))
+		}
+		if col.Virtual {
+			return true
+		}
+	}
+	return false
 }
 
 // shouldDereferenceContent returns true if address encoded content should be dereferenced when
