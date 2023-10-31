@@ -73,11 +73,27 @@ func NewProllyRowIter(sch schema.Schema, rows prolly.Map, iter prolly.MapIter, p
 // projectionMappings returns data structures that specify 1) which fields we read
 // from key and value tuples, and 2) the position of those fields in the output row.
 func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap, ordMap val.OrdinalMapping) {
+	keyMap, valMap, ordMap = projectionMappingsForIndex(sch, projections)
+	adjustOffsetsForKeylessTable(sch, keyMap, valMap)
+	return keyMap, valMap, ordMap
+}
+
+func adjustOffsetsForKeylessTable(sch schema.Schema, keyMap val.OrdinalMapping, valMap val.OrdinalMapping) {
+	if schema.IsKeyless(sch) {
+		// skip the cardinality value, increment every index
+		for i := range keyMap {
+			keyMap[i]++
+		}
+		for i := range valMap {
+			valMap[i]++
+		}
+	}
+}
+
+func projectionMappingsForIndex(sch schema.Schema, projections []uint64) (keyMap, valMap, ordMap val.OrdinalMapping) {
 	pks := sch.GetPKCols()
 	nonPks := sch.GetNonPKCols()
 
-	
-	
 	numPhysicalColumns := len(projections)
 	if schema.IsVirtual(sch) {
 		numPhysicalColumns = 0
@@ -87,11 +103,11 @@ func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap
 			}
 		}
 	}
-	
+
 	// Build a slice of positional values. For a set of P projections, for K key columns and N=P-K non-key columns, 
 	// we'll generate a slice 2P long structured as follows:
 	// [K key projections, // list of tuple indexes to read for key columns
-	//  N non-key projections, // list of tuple indexes to read for non-key columns
+	//  N non-key projections, // list of tuple indexes to read for non-key columns, ordered backward from end
 	//  P output ordinals]  // list of output column ordinals for each projection
 	// Afterward we slice this into three separate mappings to return.
 	allMap := make([]int, 2*numPhysicalColumns)
@@ -108,21 +124,11 @@ func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap
 			nonKeyIdx--
 		}
 	}
-	
+
 	keyMap = allMap[:keyIdx]
 	valMap = allMap[keyIdx:numPhysicalColumns]
 	ordMap = allMap[numPhysicalColumns:]
-	if schema.IsKeyless(sch) {
-		// skip the cardinality value, increment every index
-		for i := range keyMap {
-			keyMap[i]++
-		}
-		for i := range valMap {
-			valMap[i]++
-		}
-	}
-	
-	return
+	return keyMap, valMap, ordMap
 }
 
 func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {

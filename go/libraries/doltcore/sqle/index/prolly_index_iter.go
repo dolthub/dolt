@@ -17,7 +17,6 @@ package index
 import (
 	"context"
 	"io"
-	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
@@ -263,38 +262,7 @@ func coveringIndexMapping(d DoltIndex, projections []uint64) (keyMap, ordMap val
 }
 
 func primaryIndexMapping(idx DoltIndex, sqlSch sql.PrimaryKeySchema, projections []uint64) (keyProj, valProj, ordProj val.OrdinalMapping) {
-	pks := idx.Schema().GetPKCols()
-	nonPks := idx.Schema().GetNonPKCols()
-
-	allMap := make([]int, len(projections)*2)
-	i := 0
-	j := len(projections) - 1
-	for k, p := range projections {
-		if idx, ok := pks.TagToIdx[p]; ok {
-			allMap[i] = idx
-			allMap[len(projections)+i] = k
-			i++
-		}
-
-		if idx, ok := nonPks.TagToIdx[p]; ok {
-			allMap[j] = idx
-			allMap[len(projections)+j] = k
-			j--
-		}
-	}
-	keyProj = allMap[:i]
-	valProj = allMap[i:len(projections)]
-	ordProj = allMap[len(projections):]
-	return
-}
-
-func contains(slice []string, str string) (ok bool) {
-	for _, x := range slice {
-		if strings.ToLower(x) == strings.ToLower(str) {
-			ok = true
-		}
-	}
-	return
+	return projectionMappingsForIndex(idx.Schema(), projections)
 }
 
 type prollyKeylessIndexIter struct {
