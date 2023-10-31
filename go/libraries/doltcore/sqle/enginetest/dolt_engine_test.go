@@ -220,6 +220,7 @@ func newUpdateResult(matched, updated int) gmstypes.OkResult {
 		Info:         plan.UpdateInfo{Matched: matched, Updated: updated},
 	}
 }
+
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleMergeScript(t *testing.T) {
 	t.Skip()
@@ -552,7 +553,7 @@ func TestInsertIntoErrors(t *testing.T) {
 
 func TestGeneratedColumns(t *testing.T) {
 	enginetest.TestGeneratedColumns(t, newDoltHarness(t))
-	
+
 	for _, script := range GeneratedColumnMergeTestScripts {
 		func() {
 			h := newDoltHarness(t)

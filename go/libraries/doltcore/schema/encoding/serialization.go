@@ -216,7 +216,7 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 			defVal = col.Generated
 		}
 		do := b.CreateString(defVal)
-		
+
 		serial.ColumnStart(b)
 		serial.ColumnAddName(b, no)
 		serial.ColumnAddSqlType(b, to)
@@ -310,7 +310,7 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 				defVal = string(c.DefaultValue())
 			}
 		}
-		
+
 		cols[i], err = schema.NewColumnWithTypeInfo(
 			string(c.Name()),
 			c.Tag(),

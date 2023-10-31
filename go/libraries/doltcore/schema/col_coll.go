@@ -106,7 +106,7 @@ func NewColCollection(cols ...Column) *ColCollection {
 		if _, ok := lowerNameToCol[lowerCaseName]; !ok {
 			lowerNameToCol[lowerCaseName] = cols[i]
 		}
-		
+
 		if col.Virtual {
 			virtualColumns = append(virtualColumns, i)
 		} else {

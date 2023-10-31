@@ -419,8 +419,8 @@ func (si *schemaImpl) GetKeyDescriptor() val.TupleDesc {
 	_ = si.GetPKCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
 		if col.Virtual {
 			return
-		} 
-		
+		}
+
 		sqlType := col.TypeInfo.ToSqlType()
 		queryType := sqlType.Type()
 		var t val.Type
@@ -480,7 +480,7 @@ func (si *schemaImpl) GetValueDescriptor() val.TupleDesc {
 		if col.Virtual {
 			return
 		}
-		
+
 		sqlType := col.TypeInfo.ToSqlType()
 		queryType := sqlType.Type()
 		tt = append(tt, val.Type{

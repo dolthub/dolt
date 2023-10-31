@@ -70,10 +70,10 @@ type Column struct {
 
 	// Default is the default value of this column. This is the string representation of a sql.Expression.
 	Default string
-	
+
 	// Generated is the generated value of this column. This is the string representation of a sql.Expression.
 	Generated string
-	
+
 	// Virtual is true if this is a virtual column.
 	Virtual bool
 
@@ -99,14 +99,14 @@ func NewColumn(name string, tag uint64, kind types.NomsKind, partOfPK bool, cons
 
 // NewColumnWithTypeInfo creates a Column instance with the given type info.
 func NewColumnWithTypeInfo(
-		name string,
-		tag uint64,
-		typeInfo typeinfo.TypeInfo,
-		partOfPK bool,
-		defaultVal, generatedVal string,
-		virtual, autoIncrement bool,
-		comment string,
-		constraints ...ColConstraint,
+	name string,
+	tag uint64,
+	typeInfo typeinfo.TypeInfo,
+	partOfPK bool,
+	defaultVal, generatedVal string,
+	virtual, autoIncrement bool,
+	comment string,
+	constraints ...ColConstraint,
 ) (Column, error) {
 	for _, c := range constraints {
 		if c == nil {
@@ -126,7 +126,7 @@ func NewColumnWithTypeInfo(
 		TypeInfo:      typeInfo,
 		Default:       defaultVal,
 		Generated:     generatedVal,
-		Virtual:  	   virtual,
+		Virtual:       virtual,
 		AutoIncrement: autoIncrement,
 		Comment:       comment,
 		Constraints:   constraints,

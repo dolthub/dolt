@@ -19,6 +19,10 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -29,9 +33,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/mysql_db"
-	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 )
 
 func ValidateDatabase(ctx context.Context, db sql.Database) (err error) {
@@ -240,7 +241,7 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 	if def.IsFullText() {
 		return nil
 	}
-	
+
 	// Indexes on virtual columns cannot be rebuilt via the method below
 	if isVirtualIndex(def, sch) {
 		return nil

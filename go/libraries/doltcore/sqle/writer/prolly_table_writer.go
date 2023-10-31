@@ -382,7 +382,7 @@ func makeOrdinalMapping(from sql.Schema, to *schema.ColCollection) (m val.Ordina
 		col := to.GetByStoredIndex(i)
 		name := col.Name
 		colIdx := from.IndexOfColName(name)
-		m[i] = colIdx	
+		m[i] = colIdx
 	}
 	return
 }
