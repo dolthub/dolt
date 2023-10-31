@@ -72,6 +72,9 @@ type Bound struct {
 // physical partition defined by a Range.
 func (r Range) aboveStart(t val.Tuple) bool {
 	order := r.Desc.Comparator()
+	if len(r.Fields) == 0 {
+		panic("empty Range")
+	}
 	for i := range r.Fields {
 		bound := r.Fields[i].Lo
 		if !bound.Binding {
@@ -104,6 +107,9 @@ func (r Range) aboveStart(t val.Tuple) bool {
 // physical partition defined by a Range.
 func (r Range) belowStop(t val.Tuple) bool {
 	order := r.Desc.Comparator()
+	if len(r.Fields) == 0 {
+		panic("empty Range")
+	}
 	for i := range r.Fields {
 		bound := r.Fields[i].Hi
 		if !bound.Binding {
@@ -136,6 +142,9 @@ func (r Range) belowStop(t val.Tuple) bool {
 // for Range |r| are true for Tuple |t|.
 func (r Range) Matches(t val.Tuple) bool {
 	order := r.Desc.Comparator()
+	if len(r.Fields) == 0 {
+		panic("empty Range")
+	}
 	for i := range r.Fields {
 		field := r.Desc.GetField(i, t)
 		typ := r.Desc.Types[i]
