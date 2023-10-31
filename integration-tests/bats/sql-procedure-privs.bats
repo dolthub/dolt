@@ -62,6 +62,7 @@ mike_blocked_check() {
     [ $status -eq 1 ]
     [[ $output =~ "command denied to user 'mike'@'localhost" ]] || false
 }
+
 @test "sql-procedure-privs: admin procedures all block" {
     # Execute privs on a DB does not grant admin procedure privs
     dolt sql -q "GRANT EXECUTE ON mydb.* TO mike@localhost"
