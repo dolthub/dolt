@@ -390,7 +390,7 @@ func TestQueryPlans(t *testing.T) {
 	}
 	// Parallelism introduces Exchange nodes into the query plans, so disable.
 	// TODO: exchange nodes should really only be part of the explain plan under certain debug settings
-	harness := newDoltHarness(t).WithParallelism(1).WithSkippedQueries(skipped)
+	harness := newDoltHarness(t).WithSkippedQueries(skipped)
 	if !types.IsFormat_DOLT(types.Format_Default) {
 		// only new format supports reverse IndexTableAccess
 		reverseIndexSkip := []string{
@@ -415,7 +415,7 @@ func TestQueryPlans(t *testing.T) {
 }
 
 func TestIntegrationQueryPlans(t *testing.T) {
-	harness := newDoltHarness(t).WithParallelism(1)
+	harness := newDoltHarness(t)
 
 	defer harness.Close()
 	enginetest.TestIntegrationPlans(t, harness)
@@ -441,7 +441,7 @@ func TestDoltDiffQueryPlans(t *testing.T) {
 func TestBranchPlans(t *testing.T) {
 	for _, script := range BranchPlanTests {
 		t.Run(script.Name, func(t *testing.T) {
-			harness := newDoltHarness(t).WithParallelism(1)
+			harness := newDoltHarness(t)
 			defer harness.Close()
 
 			e := mustNewEngine(t, harness)
@@ -552,6 +552,14 @@ func TestInsertIntoErrors(t *testing.T) {
 
 func TestGeneratedColumns(t *testing.T) {
 	enginetest.TestGeneratedColumns(t, newDoltHarness(t))
+	
+	for _, script := range GeneratedColumnMergeTestScripts {
+		func() {
+			h := newDoltHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
 }
 
 func TestSpatialQueries(t *testing.T) {
@@ -662,7 +670,7 @@ func TestScripts(t *testing.T) {
 	if types.IsFormat_DOLT(types.Format_Default) {
 		skipped = append(skipped, newFormatSkippedScripts...)
 	}
-	h := newDoltHarness(t).WithSkippedQueries(skipped).WithParallelism(1)
+	h := newDoltHarness(t).WithSkippedQueries(skipped)
 	defer h.Close()
 	enginetest.TestScripts(t, h)
 }
@@ -746,7 +754,7 @@ func TestJoinPlanning(t *testing.T) {
 	if types.IsFormat_LD(types.Format_Default) {
 		t.Skip("DOLT_LD keyless indexes are not sorted")
 	}
-	h := newDoltHarness(t).WithParallelism(1)
+	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestJoinPlanning(t, h)
 }
@@ -1592,7 +1600,7 @@ func TestDoltMerge(t *testing.T) {
 		// harness can't reset effectively when there are new commits / branches created, so use a new harness for
 		// each script
 		func() {
-			h := newDoltHarness(t).WithParallelism(1)
+			h := newDoltHarness(t)
 			defer h.Close()
 			h.Setup(setup.MydbData)
 			enginetest.TestScript(t, h, script)
@@ -1605,7 +1613,7 @@ func TestDoltMergePrepared(t *testing.T) {
 		// harness can't reset effectively when there are new commits / branches created, so use a new harness for
 		// each script
 		func() {
-			h := newDoltHarness(t).WithParallelism(1)
+			h := newDoltHarness(t)
 			defer h.Close()
 			enginetest.TestScriptPrepared(t, h, script)
 		}()
@@ -1616,7 +1624,7 @@ func TestDoltRevert(t *testing.T) {
 	for _, script := range RevertScripts {
 		// harness can't reset effectively. Use a new harness for each script
 		func() {
-			h := newDoltHarness(t).WithParallelism(1)
+			h := newDoltHarness(t)
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
 		}()
@@ -1627,7 +1635,7 @@ func TestDoltRevertPrepared(t *testing.T) {
 	for _, script := range RevertScripts {
 		// harness can't reset effectively. Use a new harness for each script
 		func() {
-			h := newDoltHarness(t).WithParallelism(1)
+			h := newDoltHarness(t)
 			defer h.Close()
 			enginetest.TestScriptPrepared(t, h, script)
 		}()
@@ -2501,7 +2509,7 @@ func TestScriptsPrepared(t *testing.T) {
 		skipped = append(skipped, newFormatSkippedScripts...)
 	}
 	skipPreparedTests(t)
-	h := newDoltHarness(t).WithSkippedQueries(skipped).WithParallelism(1)
+	h := newDoltHarness(t).WithSkippedQueries(skipped)
 	defer h.Close()
 	enginetest.TestScriptsPrepared(t, h)
 }
