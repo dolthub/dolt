@@ -122,20 +122,13 @@ func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLo
 }
 
 func newPointPartitionIter(ctx *sql.Context, lookup sql.IndexLookup, idx *doltIndex) (sql.PartitionIter, error) {
-	tb := idx.keyBld
-	rng := lookup.Ranges[0]
-	ns := idx.ns
-	for j, expr := range rng {
-		v, err := getRangeCutValue(expr.LowerBound, expr.Typ)
-		if err != nil {
-			return nil, err
-		}
-		if err = PutField(ctx, ns, tb, j, v); err != nil {
-			return nil, err
-		}
+	prollyRanges, err := idx.prollyRanges(ctx, idx.ns, lookup.Ranges[0])
+	if err != nil {
+		return nil, err
 	}
-	tup := tb.BuildPermissive(sharePool)
-	return &pointPartition{r: prolly.Range{Tup: tup, Desc: tb.Desc}}, nil
+	return &pointPartition{
+		r: prollyRanges[0],
+	}, nil
 }
 
 var _ sql.PartitionIter = (*pointPartition)(nil)
