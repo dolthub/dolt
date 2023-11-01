@@ -343,11 +343,11 @@ func (t *Table) GetConstraintViolationsSchema(ctx context.Context) (schema.Schem
 	if err != nil {
 		return nil, err
 	}
-	typeCol, err := schema.NewColumnWithTypeInfo("violation_type", schema.DoltConstraintViolationsTypeTag, typeType, true, "", "", false, false, "")
+	typeCol, err := schema.NewColumnWithTypeInfo("violation_type", schema.DoltConstraintViolationsTypeTag, typeType, true, "", false, "")
 	if err != nil {
 		return nil, err
 	}
-	infoCol, err := schema.NewColumnWithTypeInfo("violation_info", schema.DoltConstraintViolationsInfoTag, typeinfo.JSONType, false, "", "", false, false, "")
+	infoCol, err := schema.NewColumnWithTypeInfo("violation_info", schema.DoltConstraintViolationsInfoTag, typeinfo.JSONType, false, "", false, "")
 	if err != nil {
 		return nil, err
 	}

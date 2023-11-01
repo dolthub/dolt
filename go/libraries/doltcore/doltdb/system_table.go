@@ -43,7 +43,7 @@ var OldDocsSchema = schema.MustSchemaFromCols(schema.NewColCollection(
 var DocsSchema schema.Schema
 
 func init() {
-	docTextCol, err := schema.NewColumnWithTypeInfo(DocTextColumnName, schema.DocTextTag, typeinfo.LongTextType, false, "", "", false, false, "")
+	docTextCol, err := schema.NewColumnWithTypeInfo(DocTextColumnName, schema.DocTextTag, typeinfo.LongTextType, false, "", false, "")
 	if err != nil {
 		panic(err)
 	}

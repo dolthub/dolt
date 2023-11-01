@@ -182,9 +182,9 @@ func setupMigrationTest(t *testing.T, ctx context.Context, test migrationTest) *
 }
 
 func SetupHookRefKeys(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, error) {
-	pk, _ := schema.NewColumnWithTypeInfo("pk", 1, typeinfo.TextType, true, "", "", false, false, "", schema.NotNullConstraint{})
-	c0, _ := schema.NewColumnWithTypeInfo("c0", 2, typeinfo.Int32Type, false, "", "", false, false, "")
-	c1, _ := schema.NewColumnWithTypeInfo("c1", 3, typeinfo.BlobType, false, "", "", false, false, "")
+	pk, _ := schema.NewColumnWithTypeInfo("pk", 1, typeinfo.TextType, true, "", false, "", schema.NotNullConstraint{})
+	c0, _ := schema.NewColumnWithTypeInfo("c0", 2, typeinfo.Int32Type, false, "", false, "")
+	c1, _ := schema.NewColumnWithTypeInfo("c1", 3, typeinfo.BlobType, false, "", false, "")
 
 	sch, err := schema.SchemaFromCols(schema.NewColCollection(pk, c0, c1))
 	if err != nil {

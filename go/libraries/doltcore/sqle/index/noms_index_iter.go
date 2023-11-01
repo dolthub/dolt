@@ -261,7 +261,7 @@ func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter *no
 		_, partOfIndexKey := idxCols.GetByTag(col.Tag)
 		_, partOfTableKeys := tblPKCols.GetByTag(col.Tag)
 		if partOfIndexKey != partOfTableKeys {
-			cols[i], _ = schema.NewColumnWithTypeInfo(col.Name, col.Tag, col.TypeInfo, partOfIndexKey, col.Default, "", false, col.AutoIncrement, col.Comment, col.Constraints...)
+			cols[i], _ = schema.NewColumnWithTypeInfo(col.Name, col.Tag, col.TypeInfo, partOfIndexKey, col.Default, col.AutoIncrement, col.Comment, col.Constraints...)
 		}
 	}
 

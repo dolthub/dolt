@@ -484,11 +484,11 @@ func migrateSchema(ctx context.Context, tableName string, existing schema.Schema
 			case query.Type_TEXT:
 				patched = true
 				info := typeinfo.StringDefaultType
-				cols[i], err = schema.NewColumnWithTypeInfo(c.Name, c.Tag, info, c.IsPartOfPK, c.Default, "", false, c.AutoIncrement, c.Comment, c.Constraints...)
+				cols[i], err = schema.NewColumnWithTypeInfo(c.Name, c.Tag, info, c.IsPartOfPK, c.Default, c.AutoIncrement, c.Comment, c.Constraints...)
 			case query.Type_BLOB:
 				patched = true
 				info := typeinfo.VarbinaryDefaultType
-				cols[i], err = schema.NewColumnWithTypeInfo(c.Name, c.Tag, info, c.IsPartOfPK, c.Default, "", false, c.AutoIncrement, c.Comment, c.Constraints...)
+				cols[i], err = schema.NewColumnWithTypeInfo(c.Name, c.Tag, info, c.IsPartOfPK, c.Default, c.AutoIncrement, c.Comment, c.Constraints...)
 			}
 			if err != nil {
 				return nil, err
@@ -521,7 +521,7 @@ func migrateSchema(ctx context.Context, tableName string, existing schema.Schema
 			return nil, err
 		}
 
-		cols[i], err = schema.NewColumnWithTypeInfo(c.Name, c.Tag, info, c.IsPartOfPK, c.Default, "", false, c.AutoIncrement, c.Comment, c.Constraints...)
+		cols[i], err = schema.NewColumnWithTypeInfo(c.Name, c.Tag, info, c.IsPartOfPK, c.Default, c.AutoIncrement, c.Comment, c.Constraints...)
 		if err != nil {
 			return nil, err
 		}

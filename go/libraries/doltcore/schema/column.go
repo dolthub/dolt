@@ -90,7 +90,7 @@ type Column struct {
 // NewColumn creates a Column instance with the default type info for the NomsKind
 func NewColumn(name string, tag uint64, kind types.NomsKind, partOfPK bool, constraints ...ColConstraint) Column {
 	typeInfo := typeinfo.FromKind(kind)
-	col, err := NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, "", "", false, false, "", constraints...)
+	col, err := NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, "", false, "", constraints...)
 	if err != nil {
 		panic(err)
 	}
@@ -98,39 +98,46 @@ func NewColumn(name string, tag uint64, kind types.NomsKind, partOfPK bool, cons
 }
 
 // NewColumnWithTypeInfo creates a Column instance with the given type info.
-func NewColumnWithTypeInfo(
-	name string,
-	tag uint64,
-	typeInfo typeinfo.TypeInfo,
-	partOfPK bool,
-	defaultVal, generatedVal string,
-	virtual, autoIncrement bool,
-	comment string,
-	constraints ...ColConstraint,
-) (Column, error) {
-	for _, c := range constraints {
-		if c == nil {
-			return Column{}, errors.New("nil passed as a constraint")
-		}
-	}
-
-	if typeInfo == nil {
-		return Column{}, errors.New("cannot instantiate column with nil type info")
-	}
-
-	return Column{
+// Callers are encouraged to construct schema.Column structs directly instead of using this method, then call
+// ValidateColumn.
+func NewColumnWithTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfPK bool, defaultVal string, autoIncrement bool, comment string, constraints ...ColConstraint, ) (Column, error) {
+	c := Column{
 		Name:          name,
 		Tag:           tag,
 		Kind:          typeInfo.NomsKind(),
 		IsPartOfPK:    partOfPK,
 		TypeInfo:      typeInfo,
 		Default:       defaultVal,
-		Generated:     generatedVal,
-		Virtual:       virtual,
 		AutoIncrement: autoIncrement,
 		Comment:       comment,
 		Constraints:   constraints,
-	}, nil
+	}
+	
+	err := ValidateColumn(c)
+	if err != nil {
+		return InvalidCol, err
+	}
+	
+	return c, nil
+}
+
+// ValidateColumn validates the given column.
+func ValidateColumn(c Column) error {
+	for _, c := range c.Constraints {
+		if c == nil {
+			return errors.New("nil passed as a constraint")
+		}
+	}
+
+	if c.TypeInfo == nil {
+		return errors.New("cannot instantiate column with nil type info")
+	}
+	
+	if c.TypeInfo.NomsKind() != c.Kind {
+		return errors.New("type info and kind do not match")
+	}
+
+	return nil
 }
 
 // IsNullable returns whether the column can be set to a null value.
