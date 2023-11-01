@@ -552,7 +552,7 @@ func TestDeleteFrom(t *testing.T) {
 func TestDeleteFromErrors(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestDeleteErrors(t, h)
+	enginetest.TestDeleteFromErrors(t, h)
 }
 
 func TestSpatialDelete(t *testing.T) {
