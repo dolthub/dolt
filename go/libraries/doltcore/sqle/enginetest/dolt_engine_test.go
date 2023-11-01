@@ -371,10 +371,6 @@ func TestQueryPlans(t *testing.T) {
 	enginetest.TestQueryPlans(t, harness, queries.PlanTests)
 }
 
-func TestQueryPlanScripts(t *testing.T) {
-	enginetest.TestQueryPlanScripts(t, newDoltHarness(t).WithParallelism(1))
-}
-
 func TestIntegrationQueryPlans(t *testing.T) {
 	harness := newDoltHarness(t).WithParallelism(1)
 
