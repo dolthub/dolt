@@ -187,14 +187,9 @@ func trueUpBackingManifest(ctx context.Context, root hash.Hash, backing *journal
 // IterateRoots iterates over the in-memory roots tracked by the ChunkJournal and passes the root and associated
 // timestamp to a callback function, |f|. If |f| returns an error, iteration is stopped and the error is returned.
 func (j *ChunkJournal) IterateRoots(f func(root string, timestamp *time.Time) error) error {
-	j.mu.Lock()
-	roots := j.roots
-	rootTimestamps := j.rootTimestamps
-	length := len(roots)
-	j.mu.Unlock()
-
-	if len(roots) != len(rootTimestamps) {
-		return fmt.Errorf("different number of roots and root timestamps encountered in ChunkJournal")
+	roots, rootTimestamps, length, err := j.readCurrentRootsAndTimestamps()
+	if err != nil {
+		return err
 	}
 
 	// journal.roots are stored in chronological order, so we need to iterate over them backwards
@@ -214,6 +209,26 @@ func (j *ChunkJournal) IterateRoots(f func(root string, timestamp *time.Time) er
 	}
 
 	return nil
+}
+
+// readCurrentRootsAndTimestamps grabs the mutex that protects the in-memory root and root timestamps that represent the
+// root hash updates in the chunk journal and returns the references to the roots and root timestamps slices, as well as
+// the length that can be safely read from them. Callers MUST honor this length and NOT read beyond it in the returned
+// slices, otherwise they risk getting inconsistent data (since the chunk journal continues to append entries to these
+// slices as new root update journal records are saved).
+func (j *ChunkJournal) readCurrentRootsAndTimestamps() (roots []string, rootTimestamps []time.Time, length int, err error) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+
+	roots = j.roots
+	rootTimestamps = j.rootTimestamps
+	length = len(roots)
+	if len(roots) != len(rootTimestamps) {
+		return nil, nil, -1, fmt.Errorf(
+			"different number of roots and root timestamps encountered in ChunkJournal")
+	}
+
+	return roots, rootTimestamps, length, nil
 }
 
 // Persist implements tablePersister.
