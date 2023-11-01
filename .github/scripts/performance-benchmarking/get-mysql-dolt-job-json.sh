@@ -19,7 +19,7 @@ issueNumber="$9"
 initBigRepo="${10}"
 nomsBinFormat="${11}"
 withTpcc="${12}"
-precision="3"
+precision="1"
 tpccRegex="tpcc%"
 
 if [ -n "$initBigRepo" ]; then
