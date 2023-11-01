@@ -61,7 +61,11 @@ func (c *Connection) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 func (c Connection) Password() (string, error) {
 	if c.PassFile != "" {
-		bs, err := os.ReadFile(c.PassFile)
+		passFile := c.PassFile
+		if v := os.Getenv("TESTGENDIR"); v != "" {
+			passFile = strings.ReplaceAll(passFile, "$TESTGENDIR", v)
+		}
+		bs, err := os.ReadFile(passFile)
 		if err != nil {
 			return "", err
 		}
@@ -135,7 +139,11 @@ func (f WithFile) WriteAtDir(dir string) error {
 		return err
 	}
 	if f.SourcePath != "" {
-		source, err := os.Open(f.SourcePath)
+		sourcePath := f.SourcePath
+		if v := os.Getenv("TESTGENDIR"); v != "" {
+			sourcePath = strings.ReplaceAll(sourcePath, "$TESTGENDIR", v)
+		}
+		source, err := os.Open(sourcePath)
 		if err != nil {
 			return err
 		}

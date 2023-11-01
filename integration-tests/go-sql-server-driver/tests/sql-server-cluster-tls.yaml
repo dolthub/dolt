@@ -21,11 +21,11 @@ tests:
             tls_cert: cert.pem
             tls_ca: root.pem
     - name: key.pem
-      source_path: testdata/rsa_key.pem
+      source_path: $TESTGENDIR/rsa_key.pem
     - name: cert.pem
-      source_path: testdata/rsa_chain.pem
+      source_path: $TESTGENDIR/rsa_chain.pem
     - name: root.pem
-      source_path: testdata/ed25519_root.pem
+      source_path: $TESTGENDIR/ed25519_root.pem
     server:
       args: ["--config", "server.yaml"]
       port: 3309
@@ -49,11 +49,11 @@ tests:
             tls_cert: cert.pem
             tls_ca: root.pem
     - name: key.pem
-      source_path: testdata/rsa_key.pem
+      source_path: $TESTGENDIR/rsa_key.pem
     - name: cert.pem
-      source_path: testdata/rsa_chain.pem
+      source_path: $TESTGENDIR/rsa_chain.pem
     - name: root.pem
-      source_path: testdata/rsa_root.pem
+      source_path: $TESTGENDIR/rsa_root.pem
     server:
       args: ["--config", "server.yaml"]
       port: 3310
@@ -88,11 +88,11 @@ tests:
             tls_cert: cert.pem
             tls_ca: root.pem
     - name: key.pem
-      source_path: testdata/rsa_key.pem
+      source_path: $TESTGENDIR/rsa_key.pem
     - name: cert.pem
-      source_path: testdata/rsa_chain.pem
+      source_path: $TESTGENDIR/rsa_chain.pem
     - name: root.pem
-      source_path: testdata/rsa_root.pem
+      source_path: $TESTGENDIR/rsa_root.pem
     server:
       args: ["--config", "server.yaml"]
       port: 3309
@@ -116,11 +116,11 @@ tests:
             tls_cert: cert.pem
             tls_ca: root.pem
     - name: key.pem
-      source_path: testdata/rsa_exp_key.pem
+      source_path: $TESTGENDIR/rsa_exp_key.pem
     - name: cert.pem
-      source_path: testdata/rsa_exp_chain.pem
+      source_path: $TESTGENDIR/rsa_exp_chain.pem
     - name: root.pem
-      source_path: testdata/rsa_root.pem
+      source_path: $TESTGENDIR/rsa_root.pem
     server:
       args: ["--config", "server.yaml"]
       port: 3310
@@ -156,11 +156,11 @@ tests:
             tls_ca: root.pem
             server_name_dns: ["does-not-match.dolt-instance.dolt-integration-test.example"]
     - name: key.pem
-      source_path: testdata/rsa_key.pem
+      source_path: $TESTGENDIR/rsa_key.pem
     - name: cert.pem
-      source_path: testdata/rsa_chain.pem
+      source_path: $TESTGENDIR/rsa_chain.pem
     - name: root.pem
-      source_path: testdata/rsa_root.pem
+      source_path: $TESTGENDIR/rsa_root.pem
     server:
       args: ["--config", "server.yaml"]
       port: 3309
@@ -184,11 +184,11 @@ tests:
             tls_cert: cert.pem
             tls_ca: root.pem
     - name: key.pem
-      source_path: testdata/rsa_key.pem
+      source_path: $TESTGENDIR/rsa_key.pem
     - name: cert.pem
-      source_path: testdata/rsa_chain.pem
+      source_path: $TESTGENDIR/rsa_chain.pem
     - name: root.pem
-      source_path: testdata/rsa_root.pem
+      source_path: $TESTGENDIR/rsa_root.pem
     server:
       args: ["--config", "server.yaml"]
       port: 3310
@@ -224,11 +224,11 @@ tests:
             tls_ca: root.pem
             server_name_urls: ["spiffe://dolt-integration-tests.dev.trust.dolthub.com.example/dolt-instance/does-not-match"]
     - name: key.pem
-      source_path: testdata/rsa_key.pem
+      source_path: $TESTGENDIR/rsa_key.pem
     - name: cert.pem
-      source_path: testdata/rsa_chain.pem
+      source_path: $TESTGENDIR/rsa_chain.pem
     - name: root.pem
-      source_path: testdata/rsa_root.pem
+      source_path: $TESTGENDIR/rsa_root.pem
     server:
       args: ["--config", "server.yaml"]
       port: 3309
@@ -252,11 +252,11 @@ tests:
             tls_cert: cert.pem
             tls_ca: root.pem
     - name: key.pem
-      source_path: testdata/rsa_key.pem
+      source_path: $TESTGENDIR/rsa_key.pem
     - name: cert.pem
-      source_path: testdata/rsa_chain.pem
+      source_path: $TESTGENDIR/rsa_chain.pem
     - name: root.pem
-      source_path: testdata/rsa_root.pem
+      source_path: $TESTGENDIR/rsa_root.pem
     server:
       args: ["--config", "server.yaml"]
       port: 3310
@@ -291,11 +291,11 @@ tests:
             tls_cert: cert.pem
             tls_ca: root.pem
     - name: key.pem
-      source_path: testdata/rsa_key.pem
+      source_path: $TESTGENDIR/rsa_key.pem
     - name: cert.pem
-      source_path: testdata/rsa_chain.pem
+      source_path: $TESTGENDIR/rsa_chain.pem
     - name: root.pem
-      source_path: testdata/rsa_root.pem
+      source_path: $TESTGENDIR/rsa_root.pem
     server:
       args: ["--config", "server.yaml"]
       port: 3309
@@ -319,11 +319,11 @@ tests:
             tls_cert: cert.pem
             tls_ca: root.pem
     - name: key.pem
-      source_path: testdata/rsa_key.pem
+      source_path: $TESTGENDIR/rsa_key.pem
     - name: cert.pem
-      source_path: testdata/rsa_chain.pem
+      source_path: $TESTGENDIR/rsa_chain.pem
     - name: root.pem
-      source_path: testdata/rsa_root.pem
+      source_path: $TESTGENDIR/rsa_root.pem
     server:
       args: ["--config", "server.yaml"]
       port: 3310
@@ -400,11 +400,11 @@ tests:
             server_name_urls: ["spiffe://dolt-integration-tests.dev.trust.dolthub.com.example/dolt-instance"]
             server_name_dns: ["dolt-instance.dolt-integration-test.example"]
     - name: key.pem
-      source_path: testdata/ed25519_key.pem
+      source_path: $TESTGENDIR/ed25519_key.pem
     - name: cert.pem
-      source_path: testdata/ed25519_chain.pem
+      source_path: $TESTGENDIR/ed25519_chain.pem
     - name: root.pem
-      source_path: testdata/ed25519_root.pem
+      source_path: $TESTGENDIR/ed25519_root.pem
     server:
       args: ["--config", "server.yaml"]
       port: 3309
@@ -430,11 +430,11 @@ tests:
             server_name_urls: ["spiffe://dolt-integration-tests.dev.trust.dolthub.com.example/dolt-instance"]
             server_name_dns: ["dolt-instance.dolt-integration-test.example"]
     - name: key.pem
-      source_path: testdata/ed25519_key.pem
+      source_path: $TESTGENDIR/ed25519_key.pem
     - name: cert.pem
-      source_path: testdata/ed25519_chain.pem
+      source_path: $TESTGENDIR/ed25519_chain.pem
     - name: root.pem
-      source_path: testdata/ed25519_root.pem
+      source_path: $TESTGENDIR/ed25519_root.pem
     server:
       args: ["--config", "server.yaml"]
       port: 3310
