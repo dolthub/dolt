@@ -213,7 +213,7 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 
 		co := b.CreateString(col.Comment)
 		do := b.CreateString(defVal)
-		typeString := sqlTypeString(col.TypeInfo)
+typeString := sqlTypeString(col.TypeInfo)
 		to := b.CreateString(typeString)
 		no := b.CreateString(col.Name)
 		
@@ -310,7 +310,7 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 				defVal = string(c.DefaultValue())
 			}
 		}
-		
+
 		cols[i], err = schema.NewColumnWithTypeInfo(
 			string(c.Name()),
 			c.Tag(),

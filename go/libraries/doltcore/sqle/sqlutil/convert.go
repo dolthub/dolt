@@ -47,7 +47,7 @@ func FromDoltSchema(dbName, tableName string, sch schema.Schema) (sql.PrimaryKey
 		if col.Generated != "" {
 			generated = sql.NewUnresolvedColumnDefaultValue(col.Generated)
 		}
-		
+
 		cols[i] = &sql.Column{
 			Name:           col.Name,
 			Type:           sqlType,
@@ -59,7 +59,7 @@ func FromDoltSchema(dbName, tableName string, sch schema.Schema) (sql.PrimaryKey
 			PrimaryKey:     col.IsPartOfPK,
 			AutoIncrement:  col.AutoIncrement,
 			Comment:        col.Comment,
-			Virtual:  			col.Virtual,
+			Virtual:        col.Virtual,
 			Extra:          extra,
 		}
 		i++
@@ -149,7 +149,7 @@ func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 	} else {
 		generatedVal = col.Generated.String()
 	}
-	
+
 	return schema.NewColumnWithTypeInfo(
 		col.Name,
 		tag,

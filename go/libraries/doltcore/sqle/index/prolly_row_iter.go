@@ -104,7 +104,7 @@ func projectionMappingsForIndex(sch schema.Schema, projections []uint64) (keyMap
 		}
 	}
 
-	// Build a slice of positional values. For a set of P projections, for K key columns and N=P-K non-key columns, 
+	// Build a slice of positional values. For a set of P projections, for K key columns and N=P-K non-key columns,
 	// we'll generate a slice 2P long structured as follows:
 	// [K key projections, // list of tuple indexes to read for key columns
 	//  N non-key projections, // list of tuple indexes to read for non-key columns, ordered backward from end

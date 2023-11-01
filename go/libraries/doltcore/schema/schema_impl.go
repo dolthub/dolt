@@ -476,7 +476,7 @@ func (si *schemaImpl) GetValueDescriptor() val.TupleDesc {
 		if col.Virtual {
 			return
 		}
-		
+
 		sqlType := col.TypeInfo.ToSqlType()
 		queryType := sqlType.Type()
 		tt = append(tt, val.Type{

@@ -29,9 +29,9 @@ type prollyKeylessWriter struct {
 	name string
 	mut  *prolly.MutableMap
 
-	keyBld *val.TupleBuilder
-	valBld *val.TupleBuilder
-	valMap val.OrdinalMapping
+	keyBld      *val.TupleBuilder
+	valBld      *val.TupleBuilder
+	valMap      val.OrdinalMapping
 	virtualCols []int
 }
 

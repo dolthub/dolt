@@ -69,7 +69,7 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	dh := &DoltHarness{
 		t:              t,
 		skippedQueries: defaultSkippedQueries,
-		parallelism: 1,
+		parallelism:    1,
 	}
 
 	return dh
