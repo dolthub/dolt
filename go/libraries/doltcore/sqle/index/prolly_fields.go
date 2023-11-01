@@ -92,11 +92,17 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tr
 			v = doc
 		}
 	case val.GeometryEnc:
-		var buf []byte
-		buf, ok = td.GetGeometry(i, tup)
-		if ok {
-			v = deserializeGeometry(buf)
+		var h hash.Hash
+		h, ok = td.GetGeometryAddr(i, tup)
+		if !ok {
+			return nil, nil // TODO: error?
 		}
+		var buf []byte
+		buf, err = tree.NewByteArray(h, ns).ToBytes(ctx)
+		if err != nil {
+			return nil, err
+		}
+		v = deserializeGeometry(buf)
 	case val.Hash128Enc:
 		v, ok = td.GetHash128(i, tup)
 	case val.BytesAddrEnc:
@@ -200,10 +206,11 @@ func PutField(ctx context.Context, ns tree.NodeStore, tb *val.TupleBuilder, i in
 		tb.PutHash128(i, v.([]byte))
 	case val.GeometryEnc:
 		geo := serializeGeometry(v)
-		if len(geo) > math.MaxUint16 {
-			return ErrValueExceededMaxFieldSize
+		h, err := serializeBytesToAddr(ctx, ns, bytes.NewReader(geo), len(geo))
+		if err != nil {
+			return err
 		}
-		tb.PutGeometry(i, geo)
+		tb.PutGeometryAddr(i, h)
 	case val.JSONAddrEnc:
 		buf, err := convJson(v)
 		if err != nil {

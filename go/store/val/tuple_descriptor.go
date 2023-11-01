@@ -439,6 +439,11 @@ func (td TupleDesc) GetGeometry(i int, tup Tuple) (v []byte, ok bool) {
 	return
 }
 
+func (td TupleDesc) GetGeometryAddr(i int, tup Tuple) (hash.Hash, bool) {
+	td.expectEncoding(i, GeometryEnc)
+	return td.getAddr(i, tup)
+}
+
 func (td TupleDesc) GetHash128(i int, tup Tuple) (v []byte, ok bool) {
 	td.expectEncoding(i, Hash128Enc)
 	b := td.GetField(i, tup)
