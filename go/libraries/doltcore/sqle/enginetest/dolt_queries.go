@@ -1962,6 +1962,13 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit2 order by pk;",
 				Expected: []sql.Row{{1, 3}, {4, 6}},
 			},
+			{
+				// When filtering on a column from the original table, we use the primary index here, but because
+				// column tags have changed in previous versions of the table, the index tags don't match up completely.
+				// https://github.com/dolthub/dolt/issues/6891
+				Query:    "select pk, c1, c2 from dolt_history_t where pk=4;",
+				Expected: []sql.Row{{4, 5, 6}},
+			},
 		},
 	},
 	{
@@ -3080,7 +3087,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "show tables",
-				Expected: []sql.Row{{"a"}, {"myview"}},
+				Expected: []sql.Row{{"a"}},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'newBranch', 'head~1')",
@@ -3088,7 +3095,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show tables",
-				Expected: []sql.Row{{"myview"}},
+				Expected: []sql.Row{},
 			},
 			{
 				Query:    "CALL DOLT_CHECKOUT('-b', 'newBranch2', @commit1)",
@@ -3096,7 +3103,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "show tables",
-				Expected: []sql.Row{{"a"}, {"myview"}},
+				Expected: []sql.Row{{"a"}},
 			},
 			{
 				Query:          "CALL DOLT_CHECKOUT('-b', 'otherBranch', 'unknownCommit')",
@@ -4974,7 +4981,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SHOW TABLES;",
-				Expected: []sql.Row{{"myview"}},
+				Expected: []sql.Row{},
 			},
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
@@ -4987,7 +4994,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SHOW TABLES;",
-				Expected: []sql.Row{{"myview"}, {"table_a"}},
+				Expected: []sql.Row{{"table_a"}},
 			},
 			{
 				Query:    "SELECT * FROM table_a;",
@@ -5010,7 +5017,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SHOW TABLES;",
-				Expected: []sql.Row{{"myview"}, {"dropme"}},
+				Expected: []sql.Row{{"dropme"}},
 			},
 			{
 				Query:    "call dolt_cherry_pick(@commit1);",
@@ -5018,7 +5025,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SHOW TABLES;",
-				Expected: []sql.Row{{"myview"}},
+				Expected: []sql.Row{},
 			},
 		},
 	},
@@ -6321,7 +6328,6 @@ var DoltSystemVariables = []queries.ScriptTest{
 					{"dolt_remote_branches"},
 					{"dolt_remotes"},
 					{"dolt_status"},
-					{"myview"},
 					{"test"},
 				},
 			},

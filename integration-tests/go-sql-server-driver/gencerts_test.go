@@ -21,6 +21,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"fmt"
 	"path/filepath"
 	"math/big"
 	"net/url"
@@ -45,39 +46,38 @@ import (
 // TODO: Further tests which should not verify? (SHA-1 signatures, expired
 // roots or intermediates, wrong isCA, wrong key usage, etc.)
 
-const RelPath = "../testdata"
-
-func main() {
+func GenerateX509Certs(dir string) error {
 	rsacerts, err := MakeRSACerts()
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("could not make rsa certs: %w", err)
 	}
 
-	err = WriteRSACerts(rsacerts)
+	err = WriteRSACerts(dir, rsacerts)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("could not write rsa certs: %w", err)
 	}
 
 	edcerts, err := MakeEd25519Certs()
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("could not make ed25519 certs: %w", err)
 	}
 
-	err = WriteEd25519Certs(edcerts)
+	err = WriteEd25519Certs(dir, edcerts)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("could not write ed25519 certs: %w", err)
 	}
+	return nil
 }
 
-func WriteRSACerts(rsacerts TestCerts) error {
-	err := os.WriteFile(filepath.Join(RelPath, "rsa_root.pem"), pem.EncodeToMemory(&pem.Block{
+func WriteRSACerts(dir string, rsacerts TestCerts) error {
+	err := os.WriteFile(filepath.Join(dir, "rsa_root.pem"), pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: rsacerts.Root.Raw,
 	}), 0664)
 	if err != nil {
 		return err
 	}
-	err = os.WriteFile(filepath.Join(RelPath, "rsa_chain.pem"), append(pem.EncodeToMemory(&pem.Block{
+	err = os.WriteFile(filepath.Join(dir, "rsa_chain.pem"), append(pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: rsacerts.Leaf.Raw,
 	}), pem.EncodeToMemory(&pem.Block{
@@ -87,7 +87,7 @@ func WriteRSACerts(rsacerts TestCerts) error {
 	if err != nil {
 		return err
 	}
-	err = os.WriteFile(filepath.Join(RelPath, "rsa_key.pem"), pem.EncodeToMemory(&pem.Block{
+	err = os.WriteFile(filepath.Join(dir, "rsa_key.pem"), pem.EncodeToMemory(&pem.Block{
 		Type:  "RSA PRIVATE KEY",
 		Bytes: x509.MarshalPKCS1PrivateKey(rsacerts.LeafKey.(*rsa.PrivateKey)),
 	}), 0664)
@@ -95,7 +95,7 @@ func WriteRSACerts(rsacerts TestCerts) error {
 		return err
 	}
 
-	err = os.WriteFile(filepath.Join(RelPath, "rsa_exp_chain.pem"), append(pem.EncodeToMemory(&pem.Block{
+	err = os.WriteFile(filepath.Join(dir, "rsa_exp_chain.pem"), append(pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: rsacerts.ExpiredLeaf.Raw,
 	}), pem.EncodeToMemory(&pem.Block{
@@ -105,7 +105,7 @@ func WriteRSACerts(rsacerts TestCerts) error {
 	if err != nil {
 		return err
 	}
-	err = os.WriteFile(filepath.Join(RelPath, "rsa_exp_key.pem"), pem.EncodeToMemory(&pem.Block{
+	err = os.WriteFile(filepath.Join(dir, "rsa_exp_key.pem"), pem.EncodeToMemory(&pem.Block{
 		Type:  "RSA PRIVATE KEY",
 		Bytes: x509.MarshalPKCS1PrivateKey(rsacerts.ExpiredLeafKey.(*rsa.PrivateKey)),
 	}), 0664)
@@ -116,15 +116,15 @@ func WriteRSACerts(rsacerts TestCerts) error {
 	return nil
 }
 
-func WriteEd25519Certs(edcerts TestCerts) error {
-	err := os.WriteFile(filepath.Join(RelPath, "ed25519_root.pem"), pem.EncodeToMemory(&pem.Block{
+func WriteEd25519Certs(dir string, edcerts TestCerts) error {
+	err := os.WriteFile(filepath.Join(dir, "ed25519_root.pem"), pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: edcerts.Root.Raw,
 	}), 0664)
 	if err != nil {
 		return err
 	}
-	err = os.WriteFile(filepath.Join(RelPath, "ed25519_chain.pem"), append(pem.EncodeToMemory(&pem.Block{
+	err = os.WriteFile(filepath.Join(dir, "ed25519_chain.pem"), append(pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: edcerts.Leaf.Raw,
 	}), pem.EncodeToMemory(&pem.Block{
@@ -138,7 +138,7 @@ func WriteEd25519Certs(edcerts TestCerts) error {
 	if err != nil {
 		return err
 	}
-	err = os.WriteFile(filepath.Join(RelPath, "ed25519_key.pem"), pem.EncodeToMemory(&pem.Block{
+	err = os.WriteFile(filepath.Join(dir, "ed25519_key.pem"), pem.EncodeToMemory(&pem.Block{
 		Type:  "PRIVATE KEY",
 		Bytes: keybytes,
 	}), 0664)
@@ -146,7 +146,7 @@ func WriteEd25519Certs(edcerts TestCerts) error {
 		return err
 	}
 
-	err = os.WriteFile(filepath.Join(RelPath, "ed25519_exp_chain.pem"), append(pem.EncodeToMemory(&pem.Block{
+	err = os.WriteFile(filepath.Join(dir, "ed25519_exp_chain.pem"), append(pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: edcerts.ExpiredLeaf.Raw,
 	}), pem.EncodeToMemory(&pem.Block{
@@ -160,7 +160,7 @@ func WriteEd25519Certs(edcerts TestCerts) error {
 	if err != nil {
 		return err
 	}
-	err = os.WriteFile(filepath.Join(RelPath, "edcerts_exp_key.pem"), pem.EncodeToMemory(&pem.Block{
+	err = os.WriteFile(filepath.Join(dir, "edcerts_exp_key.pem"), pem.EncodeToMemory(&pem.Block{
 		Type:  "PRIVATE KEY",
 		Bytes: keybytes,
 	}), 0664)

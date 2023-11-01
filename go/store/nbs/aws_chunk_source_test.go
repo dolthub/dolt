@@ -39,17 +39,14 @@ func TestAWSChunkSource(t *testing.T) {
 	require.NoError(t, err)
 
 	s3 := makeFakeS3(t)
-	ddb := makeFakeDDB(t)
 
 	s3or := &s3ObjectReader{s3, "bucket", nil, ""}
-	dts := &ddbTableStore{ddb, "table", nil, nil}
 
 	makeSrc := func(chunkMax int) chunkSource {
 		cs, err := newAWSChunkSource(
 			context.Background(),
-			dts,
 			s3or,
-			awsLimits{itemMax: maxDynamoItemSize, chunkMax: uint32(chunkMax)},
+			awsLimits{},
 			h,
 			uint32(len(chunks)),
 			NewUnlimitedMemQuotaProvider(),
@@ -60,16 +57,6 @@ func TestAWSChunkSource(t *testing.T) {
 
 		return cs
 	}
-
-	t.Run("Dynamo", func(t *testing.T) {
-		ddb.putData(fmtTableName(h), tableData)
-
-		t.Run("Has Chunks", func(t *testing.T) {
-			src := makeSrc(len(chunks) + 1)
-			assertChunksInReader(chunks, src, assert.New(t))
-			src.close()
-		})
-	})
 
 	t.Run("S3", func(t *testing.T) {
 		s3.data[h.String()] = tableData

@@ -229,12 +229,12 @@ func (m *fakeS3) CompleteMultipartUploadWithContext(ctx aws.Context, input *s3.C
 }
 
 func (m *fakeS3) GetObjectWithContext(ctx aws.Context, input *s3.GetObjectInput, opts ...request.Option) (*s3.GetObjectOutput, error) {
-	m.getCount++
 	m.assert.NotNil(input.Bucket, "Bucket is a required field")
 	m.assert.NotNil(input.Key, "Key is a required field")
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.getCount++
 	obj, present := m.data[*input.Key]
 	if !present {
 		return nil, mockAWSError("NoSuchKey")

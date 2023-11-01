@@ -491,8 +491,7 @@ func NewAWSStoreWithMMapIndex(ctx context.Context, nbfVerStr string, table, ns, 
 		s3,
 		bucket,
 		readRateLimiter,
-		&ddbTableStore{ddb, table, readRateLimiter, nil},
-		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize, maxDynamoItemSize, maxDynamoChunks},
+		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize},
 		ns,
 		q,
 	}
@@ -507,8 +506,7 @@ func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string
 		s3,
 		bucket,
 		readRateLimiter,
-		&ddbTableStore{ddb, table, readRateLimiter, nil},
-		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize, maxDynamoItemSize, maxDynamoChunks},
+		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize},
 		ns,
 		q,
 	}
@@ -1464,6 +1462,7 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, nu
 	if err != nil {
 		return err
 	}
+	defer r.Close()
 	return tfp.CopyTableFile(ctx, r, fileId, sz, uint32(numChunks))
 }
 
