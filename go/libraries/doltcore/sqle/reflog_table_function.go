@@ -92,7 +92,7 @@ func (rltf *ReflogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 
 		return datasets.IterAll(ctx, func(id string, addr hash.Hash) error {
 			// If the caller has supplied a branch or tag name, without the fully qualified ref path,
-			// take the first match and use that as the canonical
+			// take the first match and use that as the canonical ref to filter on
 			if strings.HasSuffix(strings.ToLower(id), "/"+strings.ToLower(refName)) {
 				refName = id
 			}
