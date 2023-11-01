@@ -264,13 +264,7 @@ func (cc *ColCollection) Size() int {
 
 // StoredSize returns the number of non-virtual columns in the collection
 func (cc *ColCollection) StoredSize() int {
-	num := 0
-	for _, col := range cc.cols {
-		if !col.Virtual {
-			num++
-		}
-	}
-	return num
+	return len(cc.storedIndexes)
 }
 
 // Contains returns whether this column collection contains a column with the name given, case insensitive

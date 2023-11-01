@@ -204,18 +204,18 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 	// serialize columns in |cols|
 	for i := len(cols) - 1; i >= 0; i-- {
 		col := cols[i]
-		co := b.CreateString(col.Comment)
-		typeString := sqlTypeString(col.TypeInfo)
-		to := b.CreateString(typeString)
-		no := b.CreateString(col.Name)
-
 		defVal := ""
 		if col.Default != "" {
 			defVal = col.Default
 		} else {
 			defVal = col.Generated
 		}
+
+		co := b.CreateString(col.Comment)
 		do := b.CreateString(defVal)
+		typeString := sqlTypeString(col.TypeInfo)
+		to := b.CreateString(typeString)
+		no := b.CreateString(col.Name)
 		
 		serial.ColumnStart(b)
 		serial.ColumnAddName(b, no)

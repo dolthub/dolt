@@ -562,6 +562,10 @@ func TestGeneratedColumns(t *testing.T) {
 	}
 }
 
+func TestGeneratedColumnPlans(t *testing.T) {
+	enginetest.TestGeneratedColumnPlans(t, newDoltHarness(t))
+}
+
 func TestSpatialQueries(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
