@@ -162,11 +162,11 @@ func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 		Comment:       col.Comment,
 		Constraints:   constraints,
 	}
-	
+
 	err = schema.ValidateColumn(c)
 	if err != nil {
 		return schema.Column{}, err
 	}
-	
+
 	return c, nil
 }

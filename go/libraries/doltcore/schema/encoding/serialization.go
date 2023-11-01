@@ -213,10 +213,10 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 
 		co := b.CreateString(col.Comment)
 		do := b.CreateString(defVal)
-typeString := sqlTypeString(col.TypeInfo)
+		typeString := sqlTypeString(col.TypeInfo)
 		to := b.CreateString(typeString)
 		no := b.CreateString(col.Name)
-		
+
 		serial.ColumnStart(b)
 		serial.ColumnAddName(b, no)
 		serial.ColumnAddSqlType(b, to)

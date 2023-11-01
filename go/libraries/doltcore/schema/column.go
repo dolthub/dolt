@@ -100,7 +100,7 @@ func NewColumn(name string, tag uint64, kind types.NomsKind, partOfPK bool, cons
 // NewColumnWithTypeInfo creates a Column instance with the given type info.
 // Callers are encouraged to construct schema.Column structs directly instead of using this method, then call
 // ValidateColumn.
-func NewColumnWithTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfPK bool, defaultVal string, autoIncrement bool, comment string, constraints ...ColConstraint, ) (Column, error) {
+func NewColumnWithTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfPK bool, defaultVal string, autoIncrement bool, comment string, constraints ...ColConstraint) (Column, error) {
 	c := Column{
 		Name:          name,
 		Tag:           tag,
@@ -112,12 +112,12 @@ func NewColumnWithTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, 
 		Comment:       comment,
 		Constraints:   constraints,
 	}
-	
+
 	err := ValidateColumn(c)
 	if err != nil {
 		return InvalidCol, err
 	}
-	
+
 	return c, nil
 }
 
@@ -132,7 +132,7 @@ func ValidateColumn(c Column) error {
 	if c.TypeInfo == nil {
 		return errors.New("cannot instantiate column with nil type info")
 	}
-	
+
 	if c.TypeInfo.NomsKind() != c.Kind {
 		return errors.New("type info and kind do not match")
 	}
