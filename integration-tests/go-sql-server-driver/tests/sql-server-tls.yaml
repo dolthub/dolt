@@ -16,9 +16,9 @@ tests:
   - name: repo1
     with_files:
     - name: chain_key.pem
-      source_path: testdata/rsa_key.pem
+      source_path: $TESTGENDIR/rsa_key.pem
     - name: chain_cert.pem
-      source_path: testdata/rsa_chain.pem
+      source_path: $TESTGENDIR/rsa_chain.pem
     - name: server.yaml
       contents: |
         listener:
@@ -33,9 +33,9 @@ tests:
   - name: repo1
     with_files:
     - name: chain_key.pem
-      source_path: testdata/rsa_key.pem
+      source_path: $TESTGENDIR/rsa_key.pem
     - name: chain_cert.pem
-      source_path: testdata/rsa_chain.pem
+      source_path: $TESTGENDIR/rsa_chain.pem
     - name: server.yaml
       contents: |
         listener:
@@ -53,9 +53,9 @@ tests:
   - name: repo1
     with_files:
     - name: chain_key.pem
-      source_path: testdata/rsa_key.pem
+      source_path: $TESTGENDIR/rsa_key.pem
     - name: chain_cert.pem
-      source_path: testdata/rsa_chain.pem
+      source_path: $TESTGENDIR/rsa_chain.pem
     - name: server.yaml
       contents: |
         listener:

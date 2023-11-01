@@ -29,42 +29,46 @@ import (
 	"gopkg.in/square/go-jose.v2/jwt"
 )
 
-const RelPath = "../testdata"
-
 var sub = "test_user"
 var iss = "dolthub.com"
 var aud = "my_resource"
 var onBehalfOf = "my_user"
 
-func main() {
+// Generates a JWKS and a JWT for authenticating against it. Outputs it into
+// files `|dir|/token.jwt` and `|dir|/test_jwks.json`.
+//
+// These files are used by sql-server-jwt-auth.yaml, for example.
+
+func GenerateTestJWTs(dir string) error {
 	privKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
-		fmt.Println(err)
+		return fmt.Errorf("could not generate rsa key: %w", err)
 	}
 	pubKey := privKey.Public()
 
 	kid, err := uuid.NewRandom()
 	if err != nil {
-		fmt.Println(err)
+		return fmt.Errorf("could not generate random uuid: %w", err)
 	}
 
-	err = writeJWKSToFile(pubKey, kid.String())
+	err = writeJWKSToFile(dir, pubKey, kid.String())
 	if err != nil {
-		fmt.Println(err)
+		return fmt.Errorf("could not write jwks to file: %w", err)
 	}
 
 	jwt, err := generateJWT(privKey, kid.String())
 	if err != nil {
-		fmt.Println(err)
+		return fmt.Errorf("could not generate jwt: %w", err)
 	}
 
-	err = ioutil.WriteFile(filepath.Join(RelPath, "token.jwt"), []byte(jwt), 0644)
+	err = ioutil.WriteFile(filepath.Join(dir, "token.jwt"), []byte(jwt), 0644)
 	if err != nil {
-		fmt.Println(err)
+		return fmt.Errorf("could not write jwt to file: %w", err)
 	}
+	return nil
 }
 
-func writeJWKSToFile(pubKey crypto.PublicKey, kid string) error {
+func writeJWKSToFile(dir string, pubKey crypto.PublicKey, kid string) error {
 	jwk := jose.JSONWebKey{
 		KeyID:     kid,
 		Key:       pubKey,
@@ -78,7 +82,7 @@ func writeJWKSToFile(pubKey crypto.PublicKey, kid string) error {
 		return err
 	}
 
-	err = ioutil.WriteFile(filepath.Join(RelPath, "test_jwks.json"), jwksjson, 0644)
+	err = ioutil.WriteFile(filepath.Join(dir, "test_jwks.json"), jwksjson, 0644)
 	if err != nil {
 		return err
 	}
