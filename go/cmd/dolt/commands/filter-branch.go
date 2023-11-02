@@ -82,7 +82,7 @@ func (cmd FilterBranchCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(branchesFlag, "b", "filter all branches")
 	ap.SupportsFlag(cli.AllFlag, "a", "filter all branches and tags")
 	ap.SupportsFlag(continueFlag, "c", "log a warning and continue if any errors occur executing statements")
-	ap.SupportsString(QueryFlag, "q", "the queries to run", "If not provided, queries are read from stdin.")
+	ap.SupportsString(QueryFlag, "q", "queries", "Queries to run, separated by semicolons. If not provided, queries are read from STDIN.")
 	return ap
 }
 
@@ -97,7 +97,7 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, filterBranchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if apr.NArg() == 0 || apr.NArg() > 1 {
+	if apr.NArg() > 1 {
 		args := strings.Join(apr.Args, ", ")
 		verr := errhand.BuildDError("%s takes 0 or 1 args, %d provided: %s", cmd.Name(), apr.NArg(), args).Build()
 		return HandleVErrAndExitCode(verr, usage)
@@ -130,9 +130,7 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 				return nil, err
 			}
 			
-			if verbose {
-				cli.Printf("processing commit %s\n", cmHash.String())
-			}
+			cli.Printf("processing commit %s\n", cmHash.String())
 			
 			root, err = commit.GetRootValue(ctx)
 			if err != nil {
@@ -144,7 +142,7 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 			}
 		}
 
-		updatedRoot, err := processFilterQuery(ctx, dEnv, commit, queryString, continueOnErr)
+		updatedRoot, err := processFilterQuery(ctx, dEnv, commit, queryString, verbose, continueOnErr)
 
 		if err != nil {
 			return nil, err
@@ -208,13 +206,7 @@ func getNerf(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResu
 	return rebase.StopAtCommit(cm), nil
 }
 
-func processFilterQuery(
-		ctx context.Context,
-		dEnv *env.DoltEnv,
-		cm *doltdb.Commit,
-		query string,
-		continueOnErr bool,
-) (*doltdb.RootValue, error) {
+func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit, query string, verbose bool, continueOnErr bool) (*doltdb.RootValue, error) {
 	sqlCtx, eng, err := rebaseSqlEngine(ctx, dEnv, cm)
 	if err != nil {
 		return nil, err
@@ -227,6 +219,10 @@ func processFilterQuery(
 	
 	for scanner.Scan() {
 		q := scanner.Text()
+		
+		if verbose {
+			cli.Printf("executing query: %s\n", q)
+		}
 		
 		err = func () error {
 			_, itr, err := eng.Query(sqlCtx, q)
@@ -247,11 +243,13 @@ func processFilterQuery(
 		
 		if err != nil {
 			if continueOnErr {
-				cmHash, err := cm.HashOf()
-				if err != nil {
-					return nil, err
+				if verbose {
+					cmHash, cmErr := cm.HashOf()
+					if cmErr != nil {
+						return nil, err
+					}
+					cli.PrintErrf("error encountered processing commit %s (continuing): %s\n", cmHash.String(), err.Error())
 				}
-				cli.PrintErrln("error encountered processing commit %s (continuing): %s", cmHash.String(), err.Error())
 			} else {
 				return nil, err
 			}

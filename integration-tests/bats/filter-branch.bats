@@ -154,7 +154,7 @@ SQL
     dolt add -A && dolt commit -m "dropped test"
 
     # filter-branch warns about missing table but doesn't error
-    run dolt filter-branch --continue -q "DELETE FROM test WHERE pk > 1;"
+    run dolt filter-branch --continue --verbose -q "DELETE FROM test WHERE pk > 1;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "table not found: test" ]] || false
 
