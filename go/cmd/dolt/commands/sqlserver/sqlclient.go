@@ -109,7 +109,8 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 	var serverController *ServerController
 	var err error
 
-	cli.Println(color.YellowString("WARNING: this command is being deprecated and is not recommended for general use."))
+	cli.Println(color.YellowString("WARNING: This command is being deprecated and is not recommended for general use.\n" +
+		"\t Use dolt sql or any compatible MySQL client instead."))
 
 	if apr.Contains(sqlClientDualFlag) {
 		if !dEnv.Valid() {

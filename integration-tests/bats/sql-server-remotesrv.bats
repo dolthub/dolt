@@ -43,11 +43,11 @@ teardown() {
     run dolt sql -q 'select count(*) from vals'
     [[ "$output" =~ "5" ]] || false
 
-    dolt sql-client -u root <<SQL
+    dolt -u root -p "" sql -q "
 use remote;
 insert into vals (i) values (6), (7), (8), (9), (10);
 call dolt_commit('-am', 'add some vals');
-SQL
+"
 
     dolt pull
 
@@ -66,14 +66,14 @@ SQL
     # By cloning here, we have a near-at-hand way to wait for the server to be ready.
     dolt clone http://localhost:50051/remote cloned_remote
 
-    dolt sql-client -u root <<SQL
+    dolt -u root -p "" sql -q "
 create database created;
 use created;
 create table vals (i int);
 insert into vals (i) values (1), (2), (3), (4), (5);
 call dolt_add('vals');
 call dolt_commit('-m', 'add some vals');
-SQL
+"
 
     dolt clone http://localhost:50051/created cloned_created
     cd cloned_created
@@ -148,16 +148,16 @@ SQL
     # move CWD to make sure we don't lock ".../read_replica/db"
     mkdir tmp && cd tmp
 
-    dolt sql-client -u root <<SQL
+    dolt -u root -p "" sql -q "
 use db;
 insert into vals values (1), (2), (3), (4), (5);
 call dolt_commit('-am', 'insert 1-5.');
-SQL
+"
 
-    run dolt sql-client --port 3307 -u root <<SQL
+    run dolt --port 3307 --host 127.0.0.1 -u root -p "" sql -q "
 use db;
 select count(*) from vals;
-SQL
+"
     [[ "$output" =~ "| 5 " ]] || false
 }
 
@@ -187,12 +187,12 @@ SQL
     run dolt sql -q 'select count(*) from vals'
     [[ "$output" =~ "5" ]] || false
 
-    dolt sql-client --port 3307 -u $DOLT_REMOTE_USER  -p $DOLT_REMOTE_PASSWORD <<SQL
+    dolt --port 3307 --host localhost -u $DOLT_REMOTE_USER -p $DOLT_REMOTE_PASSWORD sql -q "
 use remote;
 call dolt_checkout('-b', 'new_branch');
 insert into vals (i) values (6), (7), (8), (9), (10);
 call dolt_commit('-am', 'add some vals');
-SQL
+"
 
     run dolt branch -v -a
     [ "$status" -eq 0 ]
@@ -216,12 +216,12 @@ SQL
     run dolt checkout new_branch
     [[ "$status" -eq 0 ]] || false
 
-    dolt sql-client --port 3307 -u $DOLT_REMOTE_USER  -p $DOLT_REMOTE_PASSWORD <<SQL
+    dolt --port 3307 --host localhost -u $DOLT_REMOTE_USER -p $DOLT_REMOTE_PASSWORD sql -q "
 use remote;
 call dolt_checkout('new_branch');
 insert into vals (i) values (11);
 call dolt_commit('-am', 'add one val');
-SQL
+"
 
     # No auth pull
     run dolt pull
@@ -246,15 +246,15 @@ SQL
     dolt add vals
     dolt commit -m 'initial vals.'
 
-    dolt sql-server --port 3307 -u user0  -p pass0 --remotesapi-port 50051 &
+    dolt sql-server --port 3307 -u user0 -p pass0 --remotesapi-port 50051 &
     srv_pid=$!
     sleep 2 # wait for server to start so we don't lock it out
 
-    run dolt sql-client --port 3307 -u user0  -p pass0 <<SQL
+    run dolt --port 3307 --host localhost -u user0 -p pass0 sql -q "
 CREATE USER clone_admin_user@'%' IDENTIFIED BY 'pass1';
 GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'%';
 select user from mysql.user;
-SQL
+"
     [ $status -eq 0 ]
     [[ $output =~ user0 ]] || false
     [[ $output =~ clone_admin_user ]] || false
@@ -268,12 +268,12 @@ SQL
     run dolt sql -q 'select count(*) from vals'
     [[ "$output" =~ "5" ]] || false
 
-    dolt sql-client --port 3307 -u user0  -p pass0 <<SQL
+    dolt --port 3307 --host localhost -u user0 -p pass0 sql -q "
 use remote;
 call dolt_checkout('-b', 'new_branch');
 insert into vals (i) values (6), (7), (8), (9), (10);
 call dolt_commit('-am', 'add some vals');
-SQL
+"
 
     run dolt branch -v -a
     [ "$status" -eq 0 ]
@@ -297,12 +297,12 @@ SQL
     run dolt checkout new_branch
     [[ "$status" -eq 0 ]] || false
 
-    dolt sql-client --port 3307 -u user0  -p pass0 <<SQL
+    dolt --port 3307 --host localhost -u user0 -p pass0 sql -q "
 use remote;
 call dolt_checkout('new_branch');
 insert into vals (i) values (11);
 call dolt_commit('-am', 'add one val');
-SQL
+"
 
     # No auth pull
     run dolt pull

@@ -52,23 +52,25 @@ teardown() {
     run show_tables
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "WARNING: this command is being deprecated and is not recommended for general use." ]
-    [ "${lines[1]}" = '# Welcome to the Dolt MySQL client.' ]
-    [ "${lines[2]}" = "# Statements must be terminated with ';'." ]
-    [ "${lines[3]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
+    [ "${lines[1]}" = '	 Use dolt sql or any compatible MySQL client instead.' ]
+    [ "${lines[2]}" = '# Welcome to the Dolt MySQL client.' ]
+    [ "${lines[3]}" = "# Statements must be terminated with ';'." ]
+    [ "${lines[4]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
 
     create_test_table
     run show_tables
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "WARNING: this command is being deprecated and is not recommended for general use." ]
-    [ "${lines[1]}" = '# Welcome to the Dolt MySQL client.' ]
-    [ "${lines[2]}" = "# Statements must be terminated with ';'." ]
-    [ "${lines[3]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
-    [ "${lines[4]}" = 'Query OK (0.00 sec)' ]
-    [ "${lines[5]}" = '+-----------------+' ]
-    [ "${lines[6]}" = '| Tables_in_repo1 |' ]
-    [ "${lines[7]}" = '+-----------------+' ]
-    [ "${lines[8]}" = '| test            |' ]
-    [ "${lines[9]}" = '+-----------------+' ]
+    [ "${lines[1]}" = '	 Use dolt sql or any compatible MySQL client instead.' ]
+    [ "${lines[2]}" = '# Welcome to the Dolt MySQL client.' ]
+    [ "${lines[3]}" = "# Statements must be terminated with ';'." ]
+    [ "${lines[4]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
+    [ "${lines[5]}" = 'Query OK (0.00 sec)' ]
+    [ "${lines[6]}" = '+-----------------+' ]
+    [ "${lines[7]}" = '| Tables_in_repo1 |' ]
+    [ "${lines[8]}" = '+-----------------+' ]
+    [ "${lines[9]}" = '| test            |' ]
+    [ "${lines[10]}" = '+-----------------+' ]
 }
 
 @test "sql-client: multiple statments in --query" {

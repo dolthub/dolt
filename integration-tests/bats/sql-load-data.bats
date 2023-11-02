@@ -578,28 +578,28 @@ SQL
 
     start_sql_server 
 
-    run dolt sql-client -P $PORT -u dolt -q "
+    run dolt --port $PORT --host 0.0.0.0 --no-tls -u dolt -p "" sql -q "
 load data local infile 'in.csv' into table t
 fields terminated by ','
 lines terminated by '\n'
 "
     [ $status -ne 0 ]
-    [[ $output =~ "local_infile needs to be set to 1 to use LOCAL" ]] || false
+    [[ $output =~ "LOCAL supported only in sql-server mode" ]] || false
 
-    # This should work but does not because of dolt sql-client
+    # This should work but does not because of dolt sql
     # mysql -e works locally
-    run dolt sql-client -P $PORT -u dolt -q "
+    run dolt --port $PORT --host 0.0.0.0 --no-tls -u dolt -p "" sql -q "
 set global local_infile=1;
 load data local infile 'in.csv' into table t
 fields terminated by ','
 lines terminated by '\n'
 "
     [ $status -ne 0 ]
-    [[ $output =~ "local file 'in.csv' is not registered" ]] || false
+    [[ $output =~ "LOCAL supported only in sql-server mode" ]] || false
     
     stop_sql_server
 
-    skip "dolt sql-client does not work with local infile but a mysql client does"
+    skip "dolt sql does not work with local infile but a mysql client does"
     
     run dolt sql -r csv -q "select * from t"
     [ $status -eq 0 ]
@@ -608,6 +608,10 @@ lines terminated by '\n'
 }
 
 @test "sql-load-data: sql-server mode" {
+    mkdir repo1
+    cd repo1
+    dolt init
+
     cat <<CSV > in.csv
 0,0,0
 1,1,1
@@ -617,11 +621,11 @@ CSV
     start_sql_server
 
     # File not found errors
-    run dolt sql-client -P $PORT -u dolt -q "load data infile 'foo.csv' into table t"
+    run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db repo1 -u dolt -p "" sql -q "load data infile 'foo.csv' into table t"
     [ $status -ne 0 ]
     [[ $output =~ "no such file or directory" ]] || false
     
-    dolt sql-client -P $PORT -u dolt -q "
+    dolt --port $PORT --host 0.0.0.0 --no-tls --use-db repo1 -u dolt -p "" sql -q "
 load data infile 'in.csv' into table t                                    
 fields terminated by ','
 lines terminated by '\n'

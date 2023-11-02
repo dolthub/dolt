@@ -45,9 +45,9 @@ teardown() {
 
 @test "sql-charsets-collations: define charset and collation on a database" {
     start_sql_server
-    dolt sql-client -u dolt --use-db '' -P $PORT -q "CREATE DATABASE test CHARACTER SET latin1 COLLATE latin1_swedish_ci;"
-    dolt sql-client -u dolt --use-db test -P $PORT -q "SELECT @@character_set_database" ";@@SESSION.character_set_database\nlatin1"
-    dolt sql-client -u dolt --use-db test -P $PORT -q "SELECT @@character_set_database" ";@@SESSION.collation_database\nlatin1_swedish_ci"
+    dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db '' sql -q "CREATE DATABASE test CHARACTER SET latin1 COLLATE latin1_swedish_ci;"
+    dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db test sql -q "SELECT @@character_set_database; set @@SESSION.character_set_database=latin1"
+    dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db test sql -q "SELECT @@character_set_database; set @@SESSION.collation_database=latin1_swedish_ci"
     stop_sql_server
     sleep 0.5
 }
