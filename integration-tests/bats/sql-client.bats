@@ -51,7 +51,7 @@ teardown() {
     show_tables
     run show_tables
     [ "$status" -eq 0 ]
-    [ "${lines[0]}" = "WARNING: this command is being deprecated and is not recommended for general use." ]
+    [ "${lines[0]}" = "WARNING: This command is being deprecated and is not recommended for general use." ]
     [ "${lines[1]}" = '	 Use dolt sql or any compatible MySQL client instead.' ]
     [ "${lines[2]}" = '# Welcome to the Dolt MySQL client.' ]
     [ "${lines[3]}" = "# Statements must be terminated with ';'." ]
@@ -60,7 +60,7 @@ teardown() {
     create_test_table
     run show_tables
     [ "$status" -eq 0 ]
-    [ "${lines[0]}" = "WARNING: this command is being deprecated and is not recommended for general use." ]
+    [ "${lines[0]}" = "WARNING: This command is being deprecated and is not recommended for general use." ]
     [ "${lines[1]}" = '	 Use dolt sql or any compatible MySQL client instead.' ]
     [ "${lines[2]}" = '# Welcome to the Dolt MySQL client.' ]
     [ "${lines[3]}" = "# Statements must be terminated with ';'." ]
