@@ -21,12 +21,6 @@ import (
 	"runtime"
 	"strings"
 
-	sqle "github.com/dolthub/go-mysql-server"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/analyzer"
-	"github.com/fatih/color"
-	"gopkg.in/src-d/go-errors.v1"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -39,6 +33,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/hash"
+	sqle "github.com/dolthub/go-mysql-server"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
 )
 
 const (
@@ -61,8 +58,6 @@ If the {{.EmphasisLeft}}--all{{.EmphasisRight}} flag is supplied, filter-branch 
 		"[--all] -q {{.LessThan}}queries{{.GreaterThan}} [{{.LessThan}}commit{{.GreaterThan}}]",
 	},
 }
-
-type missingTbls map[hash.Hash]*errors.Error
 
 type FilterBranchCmd struct{}
 
@@ -115,7 +110,6 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 	queryString := apr.GetValueOrDefault(QueryFlag, "")
 	verbose := apr.Contains(cli.VerboseFlag)
 	continueOnErr := apr.Contains(continueFlag)
-	notFound := make(missingTbls)
 	
 	// If we didn't get a query string, read one from STDIN
 	if len(queryString) == 0 {
@@ -150,15 +144,10 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 			}
 		}
 
-		updatedRoot, err := processFilterQuery(ctx, dEnv, commit, queryString, notFound)
+		updatedRoot, err := processFilterQuery(ctx, dEnv, commit, queryString, continueOnErr)
 
 		if err != nil {
-			if continueOnErr {
-				cli.PrintErrln("error encountered processing commit %s (continuing): %s", cmHash.String(), err.Error())
-				return root, nil
-			} else {
-				return nil, err
-			}
+			return nil, err
 		}
 
 		if verbose {
@@ -192,11 +181,7 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-
-	for h, e := range notFound {
-		cli.PrintErrln(color.YellowString("for root value %s: %s", h.String(), e.Error()))
-	}
-
+	
 	return 0
 }
 
@@ -223,18 +208,14 @@ func getNerf(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResu
 	return rebase.StopAtCommit(cm), nil
 }
 
-func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit, query string, mt missingTbls) (*doltdb.RootValue, error) {
-	root, err := cm.GetRootValue(ctx)
-	if err != nil {
-		return nil, err
-	}
-
+func processFilterQuery(
+		ctx context.Context,
+		dEnv *env.DoltEnv,
+		cm *doltdb.Commit,
+		query string,
+		continueOnErr bool,
+) (*doltdb.RootValue, error) {
 	sqlCtx, eng, err := rebaseSqlEngine(ctx, dEnv, cm)
-	if err != nil {
-		return nil, err
-	}
-
-	rh, err := root.HashOf()
 	if err != nil {
 		return nil, err
 	}
@@ -246,28 +227,34 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 	
 	for scanner.Scan() {
 		q := scanner.Text()
-		_, itr, err := eng.Query(sqlCtx, q)
+		
+		err = func () error {
+			_, itr, err := eng.Query(sqlCtx, q)
+			if err != nil {
+				return err
+			}
 
-		err, ok := captureTblNotFoundErr(err, mt, rh)
-		if ok {
-			// table doesn't exist, save the error and continue
-			return root, nil
-		}
+			for {
+				_, err = itr.Next(sqlCtx)
+				if err == io.EOF {
+					break
+				} else if err != nil {
+					return err
+				}
+			}
+			return itr.Close(sqlCtx)
+		}()
+		
 		if err != nil {
-			return nil, err
-		}
-
-		for {
-			_, err = itr.Next(sqlCtx)
-			if err == io.EOF {
-				break
-			} else if err != nil {
+			if continueOnErr {
+				cmHash, err := cm.HashOf()
+				if err != nil {
+					return nil, err
+				}
+				cli.PrintErrln("error encountered processing commit %s (continuing): %s", cmHash.String(), err.Error())
+			} else {
 				return nil, err
 			}
-		}
-		err = itr.Close(sqlCtx)
-		if err != nil {
-			return nil, err
 		}
 	}
 	
@@ -337,12 +324,4 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 	se := engine.NewRebasedSqlEngine(sqle.New(azr, &sqle.Config{IsReadOnly: false}), map[string]dsess.SqlDatabase{filterDbName: db})
 
 	return sqlCtx, se, nil
-}
-
-func captureTblNotFoundErr(e error, mt missingTbls, h hash.Hash) (error, bool) {
-	if sql.ErrTableNotFound.Is(e) {
-		mt[h] = e.(*errors.Error)
-		return nil, true
-	}
-	return e, false
 }
