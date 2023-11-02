@@ -184,17 +184,19 @@ func trueUpBackingManifest(ctx context.Context, root hash.Hash, backing *journal
 	return mc, nil
 }
 
-// IterateRoots iterates over the in-memory roots tracked by the ChunkJournal and passes the root and associated
-// timestamp to a callback function, |f|. If |f| returns an error, iteration is stopped and the error is returned.
+// IterateRoots iterates over the in-memory roots tracked by the ChunkJournal, from oldest root to newest root,
+// and passes the root and associated timestamp to a callback function, |f|. If |f| returns an error, iteration
+// is stopped and the error is returned.
 func (j *ChunkJournal) IterateRoots(f func(root string, timestamp *time.Time) error) error {
 	roots, rootTimestamps, length, err := j.readCurrentRootsAndTimestamps()
 	if err != nil {
 		return err
 	}
 
-	// journal.roots are stored in chronological order, so we need to iterate over them backwards
-	// so that we process the most recent root updates first.
-	for i := length - 1; i >= 0; i-- {
+	// journal.roots are stored in chronological order. We need to process them in that order so that we can
+	// accurately detect the root where a ref was first set to a commit. Note that we are careful to not iterate
+	// beyond |length| in the slice, otherwise we risk a race condition that would read inconsistent data.
+	for i := 0; i < length; i++ {
 		// If we're reading a chunk journal written with an older version of Dolt, the root hash journal record may
 		// not have a timestamp value, so we'll have a time.Time instance in its zero value. If we see this, pass
 		// nil instead to signal to callers that there is no valid timestamp available.
