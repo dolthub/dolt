@@ -196,7 +196,7 @@ func (j *ChunkJournal) IterateRoots(f func(root string, timestamp *time.Time) er
 	// journal.roots are stored in chronological order. We need to process them in that order so that we can
 	// accurately detect the root where a ref was first set to a commit. Note that we are careful to not iterate
 	// beyond |length| in the slice, otherwise we risk a race condition that would read inconsistent data.
-	for i := 0; i <= length-1; i++ {
+	for i := 0; i < length; i++ {
 		// If we're reading a chunk journal written with an older version of Dolt, the root hash journal record may
 		// not have a timestamp value, so we'll have a time.Time instance in its zero value. If we see this, pass
 		// nil instead to signal to callers that there is no valid timestamp available.
