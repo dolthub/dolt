@@ -92,27 +92,38 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tr
 			v = doc
 		}
 	case val.GeometryEnc:
-		var buf []byte
-		buf, ok = td.GetGeometry(i, tup)
-		if !ok {
-			return nil, err
-		}
-		v, err = deserializeGeometry(buf)
-		if err != nil {
-			var h hash.Hash
-			h, ok = td.GetGeometryAddr(i, tup)
-			if !ok {
-				return nil, fmt.Errorf("failed to get geometry addr")
-			}
+		var h hash.Hash
+		h, ok = td.GetGeometryAddr(i, tup)
+		if ok {
+			var buf []byte
 			buf, err = tree.NewByteArray(h, ns).ToBytes(ctx)
 			if err != nil {
 				return nil, err
 			}
 			v, err = deserializeGeometry(buf)
-			if err != nil {
-				return nil, err
-			}
 		}
+		// TODO: if we decide to keep reading old version for some reason
+		//var buf []byte
+		//buf, ok = td.GetGeometry(i, tup)
+		//if !ok {
+		//	return nil, err
+		//}
+		//v, err = deserializeGeometry(buf)
+		//if err != nil {
+		//	var h hash.Hash
+		//	h, ok = td.GetGeometryAddr(i, tup)
+		//	if !ok {
+		//		return nil, fmt.Errorf("failed to get geometry addr")
+		//	}
+		//	buf, err = tree.NewByteArray(h, ns).ToBytes(ctx)
+		//	if err != nil {
+		//		return nil, err
+		//	}
+		//	v, err = deserializeGeometry(buf)
+		//	if err != nil {
+		//		return nil, err
+		//	}
+		//}
 	case val.Hash128Enc:
 		v, ok = td.GetHash128(i, tup)
 	case val.BytesAddrEnc:
@@ -314,7 +325,10 @@ func convUint(v interface{}) uint {
 }
 
 func deserializeGeometry(buf []byte) (v interface{}, err error) {
-	srid, _, typ, _ := types.DeserializeEWKBHeader(buf)
+	srid, _, typ, err := types.DeserializeEWKBHeader(buf)
+	if err != nil {
+		return nil, err
+	}
 	buf = buf[types.EWKBHeaderSize:]
 	switch typ {
 	case types.WKBPointID:
