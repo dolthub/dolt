@@ -48,7 +48,7 @@ const (
 
 var filterBranchDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Edits the commit history using the provided query",
-	LongDesc: `Traverses the commit history to the initial commit starting at the current HEAD commit. Replays all commits, rewriting the history using the provided SQL queries. Separate multiple queries with semicolons. Use the DELIMITER syntax to define stored procedures, triggers, etc. 
+	LongDesc: `Traverses the commit history to the initial commit starting at the current HEAD commit, or a commit you name. Replays all commits, rewriting the history using the provided SQL queries. Separate multiple queries with semicolons. Use the DELIMITER syntax to define stored procedures, triggers, etc. 
 
 If a {{.LessThan}}commit-spec{{.GreaterThan}} is provided, the traversal will stop when the commit is reached and rewriting will begin at that commit, or will error if the commit is not found.
 
@@ -58,7 +58,7 @@ If the {{.EmphasisLeft}}--all{{.EmphasisRight}} flag is supplied, filter-branch 
 `,
 
 	Synopsis: []string{
-		"[--all] {{.LessThan}}queries{{.GreaterThan}} [{{.LessThan}}commit{{.GreaterThan}}]",
+		"[--all] -q {{.LessThan}}queries{{.GreaterThan}} [{{.LessThan}}commit{{.GreaterThan}}]",
 	},
 }
 
@@ -87,6 +87,7 @@ func (cmd FilterBranchCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(branchesFlag, "b", "filter all branches")
 	ap.SupportsFlag(cli.AllFlag, "a", "filter all branches and tags")
 	ap.SupportsFlag(continueFlag, "c", "log a warning and continue if any errors occur executing statements")
+	ap.SupportsString(QueryFlag, "q", "the queries to run", "If not provided, queries are read from stdin.")
 	return ap
 }
 
@@ -101,9 +102,9 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, filterBranchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if apr.NArg() < 1 || apr.NArg() > 2 {
+	if apr.NArg() == 0 || apr.NArg() > 1 {
 		args := strings.Join(apr.Args, ", ")
-		verr := errhand.BuildDError("%s takes 1 or 2 args, %d provided: %s", cmd.Name(), apr.NArg(), args).Build()
+		verr := errhand.BuildDError("%s takes 0 or 1 args, %d provided: %s", cmd.Name(), apr.NArg(), args).Build()
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
@@ -111,10 +112,19 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
 	}
 
-	query := apr.Arg(0)
+	queryString := apr.GetValueOrDefault(QueryFlag, "")
 	verbose := apr.Contains(cli.VerboseFlag)
 	continueOnErr := apr.Contains(continueFlag)
 	notFound := make(missingTbls)
+	
+	// If we didn't get a query string, read one from STDIN
+	if len(queryString) == 0 {
+		queryStringBytes, err := io.ReadAll(cli.InStream)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.BuildDError("error reading from stdin").AddCause(err).Build(), usage)
+		}
+		queryString = string(queryStringBytes)
+	}
 
 	replay := func(ctx context.Context, commit, _, _ *doltdb.Commit) (*doltdb.RootValue, error) {
 		var cmHash, before hash.Hash
@@ -140,7 +150,7 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 			}
 		}
 
-		updatedRoot, err := processFilterQuery(ctx, dEnv, commit, query, notFound)
+		updatedRoot, err := processFilterQuery(ctx, dEnv, commit, queryString, notFound)
 
 		if err != nil {
 			if continueOnErr {
@@ -191,11 +201,11 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 }
 
 func getNerf(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (rebase.NeedsRebaseFn, error) {
-	if apr.NArg() == 1 {
+	if apr.NArg() == 0 {
 		return rebase.EntireHistory(), nil
 	}
 
-	cs, err := doltdb.NewCommitSpec(apr.Arg(1))
+	cs, err := doltdb.NewCommitSpec(apr.Arg(0))
 	if err != nil {
 		return nil, err
 	}
