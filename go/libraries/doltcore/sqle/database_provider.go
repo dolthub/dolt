@@ -1236,26 +1236,21 @@ func (p *DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.T
 	// TODO: Clean this up and store table functions in a map, similar to regular functions.
 	switch strings.ToLower(name) {
 	case "dolt_diff":
-		dtf := &DiffTableFunction{}
-		return dtf, nil
+		return &DiffTableFunction{}, nil
 	case "dolt_diff_stat":
-		dtf := &DiffStatTableFunction{}
-		return dtf, nil
+		return &DiffStatTableFunction{}, nil
 	case "dolt_diff_summary":
-		dtf := &DiffSummaryTableFunction{}
-		return dtf, nil
+		return &DiffSummaryTableFunction{}, nil
 	case "dolt_log":
-		dtf := &LogTableFunction{}
-		return dtf, nil
+		return &LogTableFunction{}, nil
 	case "dolt_patch":
-		dtf := &PatchTableFunction{}
-		return dtf, nil
+		return &PatchTableFunction{}, nil
 	case "dolt_schema_diff":
-		dtf := &SchemaDiffTableFunction{}
-		return dtf, nil
+		return &SchemaDiffTableFunction{}, nil
+	case "dolt_reflog":
+		return &ReflogTableFunction{}, nil
 	case "dolt_query_diff":
-		dtf := &QueryDiffTableFunction{}
-		return dtf, nil
+		return &QueryDiffTableFunction{}, nil
 	}
 
 	return nil, sql.ErrTableFunctionNotFound.New(name)

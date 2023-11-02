@@ -26,9 +26,9 @@ import (
 )
 
 // journalChunkSource is a chunkSource that reads chunks
-// from a chunkJournal. Unlike other NBS chunkSources,
+// from a ChunkJournal. Unlike other NBS chunkSources,
 // it is not immutable and its set of chunks grows as
-// more commits are made to the chunkJournal.
+// more commits are made to the ChunkJournal.
 type journalChunkSource struct {
 	journal *journalWriter
 }
@@ -162,7 +162,7 @@ func (s journalChunkSource) clone() (chunkSource, error) {
 }
 
 func (s journalChunkSource) close() error {
-	// |s.journal| closed via chunkJournal
+	// |s.journal| closed via ChunkJournal
 	return nil
 }
 
