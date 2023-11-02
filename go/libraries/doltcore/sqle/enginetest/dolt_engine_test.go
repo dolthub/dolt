@@ -116,80 +116,9 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	// t.Skip()
+	t.Skip()
 
 	var scripts = []queries.ScriptTest{
-		{
-			Name: "virtual column index",
-			SetUpScript: []string{
-				"create table t1 (a int primary key, b int, c int generated always as (a + b) virtual, index idx_c (c))",
-				"insert into t1 (a, b) values (1, 2), (3, 4)",
-			},
-			Assertions: []queries.ScriptTestAssertion{
-				{
-					Query:    "select * from t1 where c = 7",
-					Expected: []sql.Row{{3, 4, 7}},
-				},
-				{
-					Query: "explain select * from t1 where c = 7",
-					Expected: []sql.Row{
-						{"IndexedTableAccess(t1)"},
-						{" ├─ index: [t1.c]"},
-						{" └─ filters: [{[7, 7]}]"},
-					},
-				},
-				{
-					Query:    "select * from t1 where c = 8",
-					Expected: []sql.Row{},
-				},
-				{
-					Query: "explain update t1 set b = 5 where c = 3",
-					Expected: []sql.Row{
-						{"Update"},
-						{" └─ UpdateSource(SET t1.b = 5,SET t1.c = ((t1.a + t1.b)))"},
-						{"     └─ IndexedTableAccess(t1)"},
-						{"         ├─ index: [t1.c]"},
-						{"         └─ filters: [{[3, 3]}]"},
-					},
-				},
-				{
-					Query:    "update t1 set b = 5 where c = 3",
-					Expected: []sql.Row{{newUpdateResult(1, 1)}},
-				},
-				{
-					Query: "select * from t1 order by a",
-					Expected: []sql.Row{
-						{1, 5, 6},
-						{3, 4, 7},
-					},
-				},
-				{
-					Query: "select * from t1 where c = 6",
-					Expected: []sql.Row{
-						{1, 5, 6},
-					},
-				},
-				{
-					Query: "explain delete from t1 where c = 6",
-					Expected: []sql.Row{
-						{"Delete"},
-						{" └─ IndexedTableAccess(t1)"},
-						{"     ├─ index: [t1.c]"},
-						{"     └─ filters: [{[6, 6]}]"},
-					},
-				},
-				{
-					Query:    "delete from t1 where c = 6",
-					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
-				},
-				{
-					Query: "select * from t1 order by a",
-					Expected: []sql.Row{
-						{3, 4, 7},
-					},
-				},
-			},
-		},
 	}
 
 	tcc := &testCommitClock{}
