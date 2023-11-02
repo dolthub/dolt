@@ -4316,12 +4316,8 @@ var DoltReflogTestScripts = []queries.ScriptTest{
 		Name: "dolt_reflog: error cases",
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "select * from dolt_reflog();",
-				ExpectedErrStr: "function 'dolt_reflog' expected 1 arguments, 0 received",
-			},
-			{
 				Query:          "select * from dolt_reflog('foo', 'bar');",
-				ExpectedErrStr: "function 'dolt_reflog' expected 1 arguments, 2 received",
+				ExpectedErrStr: "function 'dolt_reflog' expected 0 or 1 arguments, 2 received",
 			},
 			{
 				Query:          "select * from dolt_reflog(NULL);",
@@ -4334,7 +4330,42 @@ var DoltReflogTestScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "dolt_reflog: basic cases",
+		Name: "dolt_reflog: basic cases with no arguments",
+		SetUpScript: []string{
+			"create table t1(pk int primary key);",
+			"call dolt_commit('-Am', 'creating table t1');",
+
+			"insert into t1 values(1);",
+			"call dolt_commit('-Am', 'inserting row 1');",
+			"call dolt_tag('tag1');",
+
+			"call dolt_checkout('-b', 'branch1');",
+			"insert into t1 values(2);",
+			"call dolt_commit('-Am', 'inserting row 2');",
+
+			"insert into t1 values(3);",
+			"call dolt_commit('-Am', 'inserting row 3');",
+			"call dolt_tag('-d', 'tag1');",
+			"call dolt_tag('tag1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select ref, commit_hash, commit_message from dolt_reflog();",
+				Expected: []sql.Row{
+					{"refs/tags/tag1", doltCommit, "inserting row 3"},
+					{"refs/heads/branch1", doltCommit, "inserting row 3"},
+					{"refs/heads/branch1", doltCommit, "inserting row 2"},
+					{"refs/heads/branch1", doltCommit, "inserting row 1"},
+					{"refs/tags/tag1", doltCommit, "inserting row 1"},
+					{"refs/heads/main", doltCommit, "inserting row 1"},
+					{"refs/heads/main", doltCommit, "creating table t1"},
+					{"refs/heads/main", doltCommit, "Initialize data repository"},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_reflog: basic cases with a ref argument",
 		SetUpScript: []string{
 			"create table t1(pk int primary key);",
 			"call dolt_commit('-Am', 'creating table t1');",

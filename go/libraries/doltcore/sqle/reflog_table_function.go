@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -63,15 +64,18 @@ func (rltf *ReflogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 		return nil, fmt.Errorf("unexpected database type: %T", rltf.database)
 	}
 
-	target, err := rltf.refExpr.Eval(ctx, row)
-	if err != nil {
-		return nil, fmt.Errorf("error evaluating expression (%s): %s",
-			rltf.refExpr.String(), err.Error())
-	}
+	var refName string
+	if rltf.refExpr != nil {
+		target, err := rltf.refExpr.Eval(ctx, row)
+		if err != nil {
+			return nil, fmt.Errorf("error evaluating expression (%s): %s",
+				rltf.refExpr.String(), err.Error())
+		}
 
-	refName, ok := target.(string)
-	if !ok {
-		return nil, fmt.Errorf("argument (%v) is not a string value, but a %T", target, target)
+		refName, ok = target.(string)
+		if !ok {
+			return nil, fmt.Errorf("argument (%v) is not a string value, but a %T", target, target)
+		}
 	}
 
 	ddb := sqlDb.DbData().Ddb
@@ -80,9 +84,9 @@ func (rltf *ReflogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 		return sql.RowsToRowIter(), nil
 	}
 
-	previousCommit := ""
+	previousCommitsByRef := make(map[string]string)
 	rows := make([]sql.Row, 0)
-	err = journal.IterateRoots(func(root string, timestamp *time.Time) error {
+	err := journal.IterateRoots(func(root string, timestamp *time.Time) error {
 		hashof := hash.Parse(root)
 		datasets, err := ddb.DatasetsByRootHash(ctx, hashof)
 		if err != nil {
@@ -91,19 +95,8 @@ func (rltf *ReflogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 		}
 
 		return datasets.IterAll(ctx, func(id string, addr hash.Hash) error {
-			// If the caller has supplied a branch or tag name, without the fully qualified ref path,
-			// take the first match and use that as the canonical ref to filter on
-			if strings.HasSuffix(strings.ToLower(id), "/"+strings.ToLower(refName)) {
-				refName = id
-			}
-
-			// Skip refs that don't match the target we're looking for
-			if strings.ToLower(id) != strings.ToLower(refName) {
-				return nil
-			}
-
-			// Skip ref entries where the commit didn't change from the previous ref entry
-			if addr.String() == previousCommit {
+			// Skip working set references (WorkingSetRefs can't always be resolved to commits)
+			if ref.IsWorkingSet(id) {
 				return nil
 			}
 
@@ -111,6 +104,31 @@ func (rltf *ReflogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 			if err != nil {
 				return err
 			}
+
+			// Skip any internal refs
+			if doltRef.GetType() == ref.InternalRefType {
+				return nil
+			}
+
+			// If a ref expression to filter on was specified, see if we match the current ref
+			if rltf.refExpr != nil {
+				// If the caller has supplied a branch or tag name, without the fully qualified ref path,
+				// take the first match and use that as the canonical ref to filter on
+				if strings.HasSuffix(strings.ToLower(id), "/"+strings.ToLower(refName)) {
+					refName = id
+				}
+
+				// Skip refs that don't match the target we're looking for
+				if strings.ToLower(id) != strings.ToLower(refName) {
+					return nil
+				}
+			}
+
+			// Skip ref entries where the commit didn't change from the previous ref entry
+			if prev, ok := previousCommitsByRef[id]; ok && prev == addr.String() {
+				return nil
+			}
+
 			commit, err := ddb.ResolveCommitRefAtRoot(ctx, doltRef, hashof)
 			if err != nil {
 				return err
@@ -134,7 +152,7 @@ func (rltf *ReflogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 				addr.String(),          // commit_hash
 				commitMeta.Description, // commit_message
 			})
-			previousCommit = addr.String()
+			previousCommitsByRef[id] = addr.String()
 			return nil
 		})
 	})
@@ -142,6 +160,9 @@ func (rltf *ReflogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 	if err != nil {
 		return nil, err
 	}
+
+	// Reverse the results so that we return the most recent reflog entries first
+	slices.Reverse(rows)
 
 	return sql.RowsToRowIter(rows...), nil
 }
@@ -151,7 +172,10 @@ func (rltf *ReflogTableFunction) Schema() sql.Schema {
 }
 
 func (rltf *ReflogTableFunction) Resolved() bool {
-	return rltf.refExpr.Resolved()
+	if rltf.refExpr != nil {
+		return rltf.refExpr.Resolved()
+	}
+	return true
 }
 
 func (rltf *ReflogTableFunction) String() string {
@@ -180,16 +204,21 @@ func (rltf *ReflogTableFunction) IsReadOnly() bool {
 }
 
 func (rltf *ReflogTableFunction) Expressions() []sql.Expression {
-	return []sql.Expression{rltf.refExpr}
+	if rltf.refExpr != nil {
+		return []sql.Expression{rltf.refExpr}
+	}
+	return []sql.Expression{}
 }
 
 func (rltf *ReflogTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
-	if len(expression) != 1 {
-		return nil, sql.ErrInvalidArgumentNumber.New(rltf.Name(), "1", len(expression))
+	if len(expression) > 1 {
+		return nil, sql.ErrInvalidArgumentNumber.New(rltf.Name(), "0 or 1", len(expression))
 	}
 
 	new := *rltf
-	new.refExpr = expression[0]
+	if len(expression) > 0 {
+		new.refExpr = expression[0]
+	}
 	return &new, nil
 }
 
