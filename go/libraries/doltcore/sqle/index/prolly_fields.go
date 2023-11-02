@@ -92,17 +92,27 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tr
 			v = doc
 		}
 	case val.GeometryEnc:
-		var h hash.Hash
-		h, ok = td.GetGeometryAddr(i, tup)
-		if !ok {
-			return nil, fmt.Errorf("failed to get geometry addr")
-		}
 		var buf []byte
-		buf, err = tree.NewByteArray(h, ns).ToBytes(ctx)
-		if err != nil {
+		buf, ok = td.GetGeometry(i, tup)
+		if !ok {
 			return nil, err
 		}
-		v = deserializeGeometry(buf)
+		v, err = deserializeGeometry(buf)
+		if err != nil {
+			var h hash.Hash
+			h, ok = td.GetGeometryAddr(i, tup)
+			if !ok {
+				return nil, fmt.Errorf("failed to get geometry addr")
+			}
+			buf, err = tree.NewByteArray(h, ns).ToBytes(ctx)
+			if err != nil {
+				return nil, err
+			}
+			v, err = deserializeGeometry(buf)
+			if err != nil {
+				return nil, err
+			}
+		}
 	case val.Hash128Enc:
 		v, ok = td.GetHash128(i, tup)
 	case val.BytesAddrEnc:
@@ -238,7 +248,11 @@ func PutField(ctx context.Context, ns tree.NodeStore, tb *val.TupleBuilder, i in
 		tb.PutCommitAddr(i, v.(hash.Hash))
 	case val.CellEnc:
 		if _, ok := v.([]byte); ok {
-			v = deserializeGeometry(v.([]byte))
+			var err error
+			v, err = deserializeGeometry(v.([]byte))
+			if err != nil {
+				return err
+			}
 		}
 		tb.PutCell(i, ZCell(v.(types.GeometryValue)))
 	default:
@@ -299,26 +313,26 @@ func convUint(v interface{}) uint {
 	}
 }
 
-func deserializeGeometry(buf []byte) (v interface{}) {
+func deserializeGeometry(buf []byte) (v interface{}, err error) {
 	srid, _, typ, _ := types.DeserializeEWKBHeader(buf)
 	buf = buf[types.EWKBHeaderSize:]
 	switch typ {
 	case types.WKBPointID:
-		v, _, _ = types.DeserializePoint(buf, false, srid)
+		v, _, err = types.DeserializePoint(buf, false, srid)
 	case types.WKBLineID:
-		v, _, _ = types.DeserializeLine(buf, false, srid)
+		v, _, err = types.DeserializeLine(buf, false, srid)
 	case types.WKBPolyID:
-		v, _, _ = types.DeserializePoly(buf, false, srid)
+		v, _, err = types.DeserializePoly(buf, false, srid)
 	case types.WKBMultiPointID:
-		v, _, _ = types.DeserializeMPoint(buf, false, srid)
+		v, _, err = types.DeserializeMPoint(buf, false, srid)
 	case types.WKBMultiLineID:
-		v, _, _ = types.DeserializeMLine(buf, false, srid)
+		v, _, err = types.DeserializeMLine(buf, false, srid)
 	case types.WKBMultiPolyID:
-		v, _, _ = types.DeserializeMPoly(buf, false, srid)
+		v, _, err = types.DeserializeMPoly(buf, false, srid)
 	case types.WKBGeomCollID:
-		v, _, _ = types.DeserializeGeomColl(buf, false, srid)
+		v, _, err = types.DeserializeGeomColl(buf, false, srid)
 	default:
-		panic(fmt.Sprintf("unknown geometry type %d", typ))
+		return nil, fmt.Errorf("unknown geometry type %d", typ)
 	}
 	return
 }
