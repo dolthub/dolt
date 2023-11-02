@@ -204,8 +204,15 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 	// serialize columns in |cols|
 	for i := len(cols) - 1; i >= 0; i-- {
 		col := cols[i]
+		defVal := ""
+		if col.Default != "" {
+			defVal = col.Default
+		} else {
+			defVal = col.Generated
+		}
+
 		co := b.CreateString(col.Comment)
-		do := b.CreateString(col.Default)
+		do := b.CreateString(defVal)
 		typeString := sqlTypeString(col.TypeInfo)
 		to := b.CreateString(typeString)
 		no := b.CreateString(col.Name)
@@ -222,8 +229,8 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 		serial.ColumnAddPrimaryKey(b, col.IsPartOfPK)
 		serial.ColumnAddAutoIncrement(b, col.AutoIncrement)
 		serial.ColumnAddNullable(b, col.IsNullable())
-		serial.ColumnAddGenerated(b, false)
-		serial.ColumnAddVirtual(b, false)
+		serial.ColumnAddGenerated(b, col.Generated != "")
+		serial.ColumnAddVirtual(b, col.Virtual)
 		serial.ColumnAddHidden(b, false)
 		offs[i] = serial.ColumnEnd(b)
 	}
@@ -294,17 +301,28 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 			return nil, err
 		}
 
-		cols[i], err = schema.NewColumnWithTypeInfo(
-			string(c.Name()),
-			c.Tag(),
-			sqlType,
-			c.PrimaryKey(),
-			string(c.DefaultValue()),
-			c.AutoIncrement(),
-			string(c.Comment()),
-			constraintsFromSerialColumn(&c)...)
-		if err != nil {
-			return nil, err
+		defVal := ""
+		generatedVal := ""
+		if c.DefaultValue() != nil {
+			if c.Generated() {
+				generatedVal = string(c.DefaultValue())
+			} else {
+				defVal = string(c.DefaultValue())
+			}
+		}
+
+		cols[i] = schema.Column{
+			Name:          string(c.Name()),
+			Tag:           c.Tag(),
+			Kind:          sqlType.NomsKind(),
+			IsPartOfPK:    c.PrimaryKey(),
+			TypeInfo:      sqlType,
+			Default:       defVal,
+			Generated:     generatedVal,
+			Virtual:       c.Virtual(),
+			AutoIncrement: c.AutoIncrement(),
+			Comment:       string(c.Comment()),
+			Constraints:   constraintsFromSerialColumn(&c),
 		}
 	}
 	return cols, nil

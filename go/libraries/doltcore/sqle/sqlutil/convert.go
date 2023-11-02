@@ -40,21 +40,26 @@ func FromDoltSchema(dbName, tableName string, sch schema.Schema) (sql.PrimaryKey
 			extra = "auto_increment"
 		}
 
-		var deflt *sql.ColumnDefaultValue
+		var deflt, generated *sql.ColumnDefaultValue
 		if col.Default != "" {
 			deflt = sql.NewUnresolvedColumnDefaultValue(col.Default)
+		}
+		if col.Generated != "" {
+			generated = sql.NewUnresolvedColumnDefaultValue(col.Generated)
 		}
 
 		cols[i] = &sql.Column{
 			Name:           col.Name,
 			Type:           sqlType,
 			Default:        deflt,
+			Generated:      generated,
 			Nullable:       col.IsNullable(),
 			DatabaseSource: dbName,
 			Source:         tableName,
 			PrimaryKey:     col.IsPartOfPK,
 			AutoIncrement:  col.AutoIncrement,
 			Comment:        col.Comment,
+			Virtual:        col.Virtual,
 			Extra:          extra,
 		}
 		i++
@@ -65,7 +70,6 @@ func FromDoltSchema(dbName, tableName string, sch schema.Schema) (sql.PrimaryKey
 }
 
 // ToDoltSchema returns a dolt Schema from the sql schema given, suitable for use in creating a table.
-// For result set schemas, see ToDoltResultSchema.
 func ToDoltSchema(
 	ctx context.Context,
 	root *doltdb.RootValue,
@@ -137,20 +141,32 @@ func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 		return schema.Column{}, err
 	}
 
-	return schema.NewColumnWithTypeInfo(col.Name, tag, typeInfo, col.PrimaryKey, col.Default.String(), col.AutoIncrement, col.Comment, constraints...)
-}
-
-// ToDoltResultSchema returns a dolt Schema from the sql schema given, suitable for use as a result set
-func ToDoltResultSchema(sqlSchema sql.Schema) (schema.Schema, error) {
-	var cols []schema.Column
-	for i, col := range sqlSchema {
-		convertedCol, err := ToDoltCol(uint64(i), col)
-		if err != nil {
-			return nil, err
-		}
-		cols = append(cols, convertedCol)
+	defaultVal := ""
+	generatedVal := ""
+	if col.Default != nil {
+		defaultVal = col.Default.String()
+	} else {
+		generatedVal = col.Generated.String()
 	}
 
-	colColl := schema.NewColCollection(cols...)
-	return schema.UnkeyedSchemaFromCols(colColl), nil
+	c := schema.Column{
+		Name:          col.Name,
+		Tag:           tag,
+		Kind:          typeInfo.NomsKind(),
+		IsPartOfPK:    col.PrimaryKey,
+		TypeInfo:      typeInfo,
+		Default:       defaultVal,
+		Generated:     generatedVal,
+		Virtual:       col.Virtual,
+		AutoIncrement: col.AutoIncrement,
+		Comment:       col.Comment,
+		Constraints:   constraints,
+	}
+
+	err = schema.ValidateColumn(c)
+	if err != nil {
+		return schema.Column{}, err
+	}
+
+	return c, nil
 }
