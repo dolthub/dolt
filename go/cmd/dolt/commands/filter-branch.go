@@ -21,6 +21,10 @@ import (
 	"runtime"
 	"strings"
 
+	sqle "github.com/dolthub/go-mysql-server"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -33,9 +37,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/hash"
-	sqle "github.com/dolthub/go-mysql-server"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/analyzer"
 )
 
 const (
@@ -110,7 +111,7 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 	queryString := apr.GetValueOrDefault(QueryFlag, "")
 	verbose := apr.Contains(cli.VerboseFlag)
 	continueOnErr := apr.Contains(continueFlag)
-	
+
 	// If we didn't get a query string, read one from STDIN
 	if len(queryString) == 0 {
 		queryStringBytes, err := io.ReadAll(cli.InStream)
@@ -129,9 +130,9 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 			if err != nil {
 				return nil, err
 			}
-			
+
 			cli.Printf("processing commit %s\n", cmHash.String())
-			
+
 			root, err = commit.GetRootValue(ctx)
 			if err != nil {
 				return nil, err
@@ -179,7 +180,7 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	
+
 	return 0
 }
 
@@ -216,15 +217,15 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 	if err != nil {
 		return nil, err
 	}
-	
+
 	for scanner.Scan() {
 		q := scanner.Text()
-		
+
 		if verbose {
 			cli.Printf("executing query: %s\n", q)
 		}
-		
-		err = func () error {
+
+		err = func() error {
 			_, itr, err := eng.Query(sqlCtx, q)
 			if err != nil {
 				return err
@@ -240,7 +241,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 			}
 			return itr.Close(sqlCtx)
 		}()
-		
+
 		if err != nil {
 			if continueOnErr {
 				if verbose {
@@ -255,7 +256,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 			}
 		}
 	}
-	
+
 	sess := dsess.DSessFromSess(sqlCtx.Session)
 	ws, err := sess.WorkingSet(sqlCtx, filterDbName)
 	if err != nil {
