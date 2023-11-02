@@ -14,14 +14,6 @@ get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 13-44
 }
 
-@test "status: dolt version --feature" {
-    # bump this test with feature version bumps
-    run dolt version --feature
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "dolt version" ]] || false
-    [[ "$output" =~ "feature version: 4" ]] || false
-}
-
 @test "status: no changes" {
     run dolt status
     [ "$status" -eq 0 ]

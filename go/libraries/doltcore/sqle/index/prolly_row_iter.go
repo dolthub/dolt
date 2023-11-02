@@ -32,7 +32,7 @@ type prollyRowIter struct {
 
 	keyProj []int
 	valProj []int
-	// orjProj is a concatenated list of output ordinals for |keyProj| and |valProj|
+	// ordProj is a concatenated list of output ordinals for |keyProj| and |valProj|
 	ordProj []int
 	rowLen  int
 }
@@ -73,26 +73,12 @@ func NewProllyRowIter(sch schema.Schema, rows prolly.Map, iter prolly.MapIter, p
 // projectionMappings returns data structures that specify 1) which fields we read
 // from key and value tuples, and 2) the position of those fields in the output row.
 func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap, ordMap val.OrdinalMapping) {
-	pks := sch.GetPKCols()
-	nonPks := sch.GetNonPKCols()
+	keyMap, valMap, ordMap = projectionMappingsForIndex(sch, projections)
+	adjustOffsetsForKeylessTable(sch, keyMap, valMap)
+	return keyMap, valMap, ordMap
+}
 
-	allMap := make([]int, 2*len(projections))
-	i := 0
-	j := len(projections) - 1
-	for k, t := range projections {
-		if idx, ok := pks.TagToIdx[t]; ok {
-			allMap[len(projections)+i] = k
-			allMap[i] = idx
-			i++
-		} else if idx, ok := nonPks.TagToIdx[t]; ok {
-			allMap[j] = idx
-			allMap[len(projections)+j] = k
-			j--
-		}
-	}
-	keyMap = allMap[:i]
-	valMap = allMap[i:len(projections)]
-	ordMap = allMap[len(projections):]
+func adjustOffsetsForKeylessTable(sch schema.Schema, keyMap val.OrdinalMapping, valMap val.OrdinalMapping) {
 	if schema.IsKeyless(sch) {
 		// skip the cardinality value, increment every index
 		for i := range keyMap {
@@ -102,7 +88,47 @@ func projectionMappings(sch schema.Schema, projections []uint64) (keyMap, valMap
 			valMap[i]++
 		}
 	}
-	return
+}
+
+func projectionMappingsForIndex(sch schema.Schema, projections []uint64) (keyMap, valMap, ordMap val.OrdinalMapping) {
+	pks := sch.GetPKCols()
+	nonPks := sch.GetNonPKCols()
+
+	numPhysicalColumns := len(projections)
+	if schema.IsVirtual(sch) {
+		numPhysicalColumns = 0
+		for _, t := range projections {
+			if idx, ok := sch.GetAllCols().TagToIdx[t]; ok && !sch.GetAllCols().GetByIndex(idx).Virtual {
+				numPhysicalColumns++
+			}
+		}
+	}
+
+	// Build a slice of positional values. For a set of P projections, for K key columns and N=P-K non-key columns,
+	// we'll generate a slice 2P long structured as follows:
+	// [K key projections, // list of tuple indexes to read for key columns
+	//  N non-key projections, // list of tuple indexes to read for non-key columns, ordered backward from end
+	//  P output ordinals]  // list of output column ordinals for each projection
+	// Afterward we slice this into three separate mappings to return.
+	allMap := make([]int, 2*numPhysicalColumns)
+	keyIdx := 0
+	nonKeyIdx := numPhysicalColumns - 1
+	for projNum, tag := range projections {
+		if idx, ok := pks.StoredIndexByTag(tag); ok && !pks.GetByStoredIndex(idx).Virtual {
+			allMap[keyIdx] = idx
+			allMap[numPhysicalColumns+keyIdx] = projNum
+			keyIdx++
+		} else if idx, ok := nonPks.StoredIndexByTag(tag); ok && !nonPks.GetByStoredIndex(idx).Virtual {
+			allMap[nonKeyIdx] = idx
+			allMap[numPhysicalColumns+nonKeyIdx] = projNum
+			nonKeyIdx--
+		}
+	}
+
+	keyMap = allMap[:keyIdx]
+	valMap = allMap[keyIdx:numPhysicalColumns]
+	ordMap = allMap[numPhysicalColumns:]
+	return keyMap, valMap, ordMap
 }
 
 func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {

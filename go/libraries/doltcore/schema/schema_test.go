@@ -17,7 +17,7 @@ package schema
 import (
 	"fmt"
 	"reflect"
-	"strings"
+	strings "strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -42,21 +42,15 @@ const (
 	reservedColTag  = 50
 )
 
-var lnVal = types.String("astley")
-var fnVal = types.String("rick")
-var addrVal = types.String("123 Fake St")
-var ageVal = types.Uint(53)
-var titleVal = types.NullValue
-
 var pkCols = []Column{
-	{lnColName, lnColTag, types.StringKind, true, typeinfo.StringDefaultType, "", false, "", nil},
-	{fnColName, fnColTag, types.StringKind, true, typeinfo.StringDefaultType, "", false, "", nil},
+	{Name: lnColName, Tag: lnColTag, Kind: types.StringKind, IsPartOfPK: true, TypeInfo: typeinfo.StringDefaultType},
+	{Name: fnColName, Tag: fnColTag, Kind: types.StringKind, IsPartOfPK: true, TypeInfo: typeinfo.StringDefaultType},
 }
 var nonPkCols = []Column{
-	{addrColName, addrColTag, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil},
-	{ageColName, ageColTag, types.UintKind, false, typeinfo.FromKind(types.UintKind), "", false, "", nil},
-	{titleColName, titleColTag, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil},
-	{reservedColName, reservedColTag, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil},
+	{Name: addrColName, Tag: addrColTag, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
+	{Name: ageColName, Tag: ageColTag, Kind: types.UintKind, TypeInfo: typeinfo.FromKind(types.UintKind)},
+	{Name: titleColName, Tag: titleColTag, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
+	{Name: reservedColName, Tag: reservedColTag, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
 }
 
 var allCols = append(append([]Column(nil), pkCols...), nonPkCols...)
@@ -204,7 +198,7 @@ func TestValidateForInsert(t *testing.T) {
 	})
 
 	t.Run("Name collision", func(t *testing.T) {
-		cols := append(allCols, Column{titleColName, 100, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil})
+		cols := append(allCols, Column{Name: titleColName, Tag: 100, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType})
 		colColl := NewColCollection(cols...)
 
 		err := ValidateForInsert(colColl)
@@ -213,7 +207,7 @@ func TestValidateForInsert(t *testing.T) {
 	})
 
 	t.Run("Case insensitive collision", func(t *testing.T) {
-		cols := append(allCols, Column{strings.ToUpper(titleColName), 100, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil})
+		cols := append(allCols, Column{Name: strings.ToUpper(titleColName), Tag: 100, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType})
 		colColl := NewColCollection(cols...)
 
 		err := ValidateForInsert(colColl)
@@ -222,7 +216,7 @@ func TestValidateForInsert(t *testing.T) {
 	})
 
 	t.Run("Tag collision", func(t *testing.T) {
-		cols := append(allCols, Column{"newCol", lnColTag, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil})
+		cols := append(allCols, Column{Name: "newCol", Tag: lnColTag, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType})
 		colColl := NewColCollection(cols...)
 
 		err := ValidateForInsert(colColl)

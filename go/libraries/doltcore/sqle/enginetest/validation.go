@@ -170,6 +170,11 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 		return nil
 	}
 
+	// Indexes on virtual columns cannot be rebuilt via the method below
+	if isVirtualIndex(def, sch) {
+		return nil
+	}
+
 	secondary = prolly.ConvertToSecondaryKeylessIndex(secondary)
 	idxDesc, _ := secondary.Descriptors()
 	builder := val.NewTupleBuilder(idxDesc)
@@ -238,6 +243,11 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, primary, secondary prolly.Map) error {
 	// Full-Text indexes do not make use of their internal map, so we may safely skip this check
 	if def.IsFullText() {
+		return nil
+	}
+
+	// Indexes on virtual columns cannot be rebuilt via the method below
+	if isVirtualIndex(def, sch) {
 		return nil
 	}
 
@@ -323,6 +333,19 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 			return fmt.Errorf("index key %v not found in index %s", builder.Desc.Format(k), def.Name())
 		}
 	}
+}
+
+func isVirtualIndex(def schema.Index, sch schema.Schema) bool {
+	for _, colName := range def.ColumnNames() {
+		col, ok := sch.GetAllCols().GetByName(colName)
+		if !ok {
+			panic(fmt.Sprintf("column not found: %s", colName))
+		}
+		if col.Virtual {
+			return true
+		}
+	}
+	return false
 }
 
 // shouldDereferenceContent returns true if address encoded content should be dereferenced when

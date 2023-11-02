@@ -40,7 +40,7 @@ func RefFromConflictIndex(ctx context.Context, vrw types.ValueReadWriter, idx Co
 		return types.Ref{}, fmt.Errorf("__DOLT__ conflicts should be stored in ArtifactIndex")
 
 	default:
-		return types.Ref{}, errNbfUnkown
+		return types.Ref{}, errNbfUnknown
 	}
 }
 
@@ -58,7 +58,7 @@ func NewEmptyConflictIndex(ctx context.Context, vrw types.ValueReadWriter, ns tr
 		return nil, fmt.Errorf("__DOLT__ conflicts should be stored in ArtifactIndex")
 
 	default:
-		return nil, errNbfUnkown
+		return nil, errNbfUnknown
 	}
 }
 
@@ -91,7 +91,7 @@ func conflictIndexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tr
 		return nil, fmt.Errorf("__DOLT__ conflicts should be stored in ArtifactIndex")
 
 	default:
-		return nil, errNbfUnkown
+		return nil, errNbfUnknown
 	}
 }
 
