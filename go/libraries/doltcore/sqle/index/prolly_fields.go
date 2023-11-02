@@ -95,7 +95,7 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tr
 		var h hash.Hash
 		h, ok = td.GetGeometryAddr(i, tup)
 		if !ok {
-			return nil, nil // TODO: error?
+			return nil, fmt.Errorf("failed to get geometry addr")
 		}
 		var buf []byte
 		buf, err = tree.NewByteArray(h, ns).ToBytes(ctx)
