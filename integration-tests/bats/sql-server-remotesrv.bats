@@ -148,13 +148,13 @@ SQL
     # move CWD to make sure we don't lock ".../read_replica/db"
     mkdir tmp && cd tmp
 
-    dolt -u root --port 3307 --host 127.0.0.1 --no-tls sql -q "
+    dolt -u root --port 3306 --host 127.0.0.1 --no-tls sql -q "
 use db;
 insert into vals values (1), (2), (3), (4), (5);
 call dolt_commit('-am', 'insert 1-5.');
 "
 
-    run dolt --port 3307 --host 127.0.0.1 --no-tls -u root sql -q "
+    run dolt --port 3306 --host 127.0.0.1 --no-tls -u root sql -q "
 use db;
 select count(*) from vals;
 "
