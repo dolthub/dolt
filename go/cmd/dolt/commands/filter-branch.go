@@ -24,9 +24,6 @@ import (
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
-	"github.com/dolthub/vitess/go/vt/sqlparser"
-	"github.com/fatih/color"
-	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -49,7 +46,7 @@ const (
 
 var filterBranchDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Edits the commit history using the provided query",
-	LongDesc: `Traverses the commit history to the initial commit starting at the current HEAD commit. Replays all commits, rewriting the history using the provided SQL query.
+	LongDesc: `Traverses the commit history to the initial commit starting at the current HEAD commit, or a commit you name. Replays all commits, rewriting the history using the provided SQL queries. Separate multiple queries with semicolons. Use the DELIMITER syntax to define stored procedures, triggers, etc. 
 
 If a {{.LessThan}}commit-spec{{.GreaterThan}} is provided, the traversal will stop when the commit is reached and rewriting will begin at that commit, or will error if the commit is not found.
 
@@ -59,11 +56,9 @@ If the {{.EmphasisLeft}}--all{{.EmphasisRight}} flag is supplied, filter-branch 
 `,
 
 	Synopsis: []string{
-		"[--all] {{.LessThan}}query{{.GreaterThan}} [{{.LessThan}}commit{{.GreaterThan}}]",
+		"[--all] -q {{.LessThan}}queries{{.GreaterThan}} [{{.LessThan}}commit{{.GreaterThan}}]",
 	},
 }
-
-type missingTbls map[hash.Hash]*errors.Error
 
 type FilterBranchCmd struct{}
 
@@ -87,6 +82,8 @@ func (cmd FilterBranchCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(cli.VerboseFlag, "v", "logs more information")
 	ap.SupportsFlag(branchesFlag, "b", "filter all branches")
 	ap.SupportsFlag(cli.AllFlag, "a", "filter all branches and tags")
+	ap.SupportsFlag(continueFlag, "c", "log a warning and continue if any errors occur executing statements")
+	ap.SupportsString(QueryFlag, "q", "queries", "Queries to run, separated by semicolons. If not provided, queries are read from STDIN.")
 	return ap
 }
 
@@ -101,9 +98,9 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, filterBranchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if apr.NArg() < 1 || apr.NArg() > 2 {
+	if apr.NArg() > 1 {
 		args := strings.Join(apr.Args, ", ")
-		verr := errhand.BuildDError("%s takes 1 or 2 args, %d provided: %s", cmd.Name(), apr.NArg(), args).Build()
+		verr := errhand.BuildDError("%s takes 0 or 1 args, %d provided: %s", cmd.Name(), apr.NArg(), args).Build()
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
@@ -111,20 +108,32 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
 	}
 
-	query := apr.Arg(0)
+	queryString := apr.GetValueOrDefault(QueryFlag, "")
 	verbose := apr.Contains(cli.VerboseFlag)
-	notFound := make(missingTbls)
+	continueOnErr := apr.Contains(continueFlag)
+
+	// If we didn't get a query string, read one from STDIN
+	if len(queryString) == 0 {
+		queryStringBytes, err := io.ReadAll(cli.InStream)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.BuildDError("error reading from stdin").AddCause(err).Build(), usage)
+		}
+		queryString = string(queryStringBytes)
+	}
 
 	replay := func(ctx context.Context, commit, _, _ *doltdb.Commit) (*doltdb.RootValue, error) {
 		var cmHash, before hash.Hash
+		var root *doltdb.RootValue
 		if verbose {
 			var err error
 			cmHash, err = commit.HashOf()
 			if err != nil {
 				return nil, err
 			}
+
 			cli.Printf("processing commit %s\n", cmHash.String())
-			root, err := commit.GetRootValue(ctx)
+
+			root, err = commit.GetRootValue(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -134,22 +143,25 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 			}
 		}
 
-		root, err := processFilterQuery(ctx, dEnv, commit, query, notFound)
+		updatedRoot, err := processFilterQuery(ctx, dEnv, commit, queryString, verbose, continueOnErr)
+
 		if err != nil {
 			return nil, err
 		}
 
 		if verbose {
-			after, err := root.HashOf()
+			after, err := updatedRoot.HashOf()
 			if err != nil {
 				return nil, err
 			}
 			if before != after {
 				cli.Printf("updated commit %s (root: %s -> %s)\n",
 					cmHash.String(), before.String(), after.String())
+			} else {
+				cli.Printf("no changes to commit %s", cmHash.String())
 			}
 		}
-		return root, nil
+		return updatedRoot, nil
 	}
 
 	nerf, err := getNerf(ctx, dEnv, apr)
@@ -169,19 +181,15 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	for h, e := range notFound {
-		cli.PrintErrln(color.YellowString("for root value %s: %s", h.String(), e.Error()))
-	}
-
 	return 0
 }
 
 func getNerf(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (rebase.NeedsRebaseFn, error) {
-	if apr.NArg() == 1 {
+	if apr.NArg() == 0 {
 		return rebase.EntireHistory(), nil
 	}
 
-	cs, err := doltdb.NewCommitSpec(apr.Arg(1))
+	cs, err := doltdb.NewCommitSpec(apr.Arg(0))
 	if err != nil {
 		return nil, err
 	}
@@ -199,65 +207,54 @@ func getNerf(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResu
 	return rebase.StopAtCommit(cm), nil
 }
 
-func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit, query string, mt missingTbls) (*doltdb.RootValue, error) {
-	root, err := cm.GetRootValue(ctx)
-	if err != nil {
-		return nil, err
-	}
-
+func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit, query string, verbose bool, continueOnErr bool) (*doltdb.RootValue, error) {
 	sqlCtx, eng, err := rebaseSqlEngine(ctx, dEnv, cm)
 	if err != nil {
 		return nil, err
 	}
 
-	rh, err := root.HashOf()
+	scanner := NewSqlStatementScanner(strings.NewReader(query))
 	if err != nil {
 		return nil, err
 	}
 
-	sqlStatement, err := sqlparser.Parse(query)
-	if err != nil {
-		return nil, err
-	}
+	for scanner.Scan() {
+		q := scanner.Text()
 
-	itr := sql.RowsToRowIter() // empty RowIter
-	switch sqlStatement.(type) {
-	case *sqlparser.Insert, *sqlparser.Update:
-		_, itr, err = eng.Query(sqlCtx, query)
-
-	case *sqlparser.Delete:
-		_, itr, err = eng.Query(sqlCtx, query)
-	case *sqlparser.AlterTable:
-		_, itr, err = eng.Query(sqlCtx, query)
-	case *sqlparser.DDL:
-		_, itr, err = eng.Query(sqlCtx, query)
-	case *sqlparser.Select, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.SetOp:
-		return nil, fmt.Errorf("filter-branch queries must be write queries: '%s'", query)
-
-	default:
-		return nil, fmt.Errorf("SQL statement not supported for filter-branch: '%s'", query)
-	}
-
-	err, ok := captureTblNotFoundErr(err, mt, rh)
-	if ok {
-		// table doesn't exist, save the error and continue
-		return root, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	for {
-		_, err = itr.Next(sqlCtx)
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return nil, err
+		if verbose {
+			cli.Printf("executing query: %s\n", q)
 		}
-	}
-	err = itr.Close(sqlCtx)
-	if err != nil {
-		return nil, err
+
+		err = func() error {
+			_, itr, err := eng.Query(sqlCtx, q)
+			if err != nil {
+				return err
+			}
+
+			for {
+				_, err = itr.Next(sqlCtx)
+				if err == io.EOF {
+					break
+				} else if err != nil {
+					return err
+				}
+			}
+			return itr.Close(sqlCtx)
+		}()
+
+		if err != nil {
+			if continueOnErr {
+				if verbose {
+					cmHash, cmErr := cm.HashOf()
+					if cmErr != nil {
+						return nil, err
+					}
+					cli.PrintErrf("error encountered processing commit %s (continuing): %s\n", cmHash.String(), err.Error())
+				}
+			} else {
+				return nil, err
+			}
+		}
 	}
 
 	sess := dsess.DSessFromSess(sqlCtx.Session)
@@ -326,12 +323,4 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 	se := engine.NewRebasedSqlEngine(sqle.New(azr, &sqle.Config{IsReadOnly: false}), map[string]dsess.SqlDatabase{filterDbName: db})
 
 	return sqlCtx, se, nil
-}
-
-func captureTblNotFoundErr(e error, mt missingTbls, h hash.Hash) (error, bool) {
-	if sql.ErrTableNotFound.Is(e) {
-		mt[h] = e.(*errors.Error)
-		return nil, true
-	}
-	return e, false
 }

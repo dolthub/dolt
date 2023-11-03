@@ -122,6 +122,14 @@ type Range struct {
 	Length uint32
 }
 
+// ChunkJournal returns the ChunkJournal in use by this NomsBlockStore, or nil if no ChunkJournal is being used.
+func (nbs *NomsBlockStore) ChunkJournal() *ChunkJournal {
+	if cj, ok := nbs.p.(*ChunkJournal); ok {
+		return cj
+	}
+	return nil
+}
+
 func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
 	locs, err := nbs.GetChunkLocations(hashes)
 	if err != nil {
@@ -1442,7 +1450,7 @@ func (nbs *NomsBlockStore) SupportedOperations() chunks.TableFileStoreOps {
 func (nbs *NomsBlockStore) Path() (string, bool) {
 	if tfp, ok := nbs.p.(tableFilePersister); ok {
 		switch p := tfp.(type) {
-		case *fsTablePersister, *chunkJournal:
+		case *fsTablePersister, *ChunkJournal:
 			return p.Path(), true
 		default:
 			return "", false
@@ -1462,6 +1470,7 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, nu
 	if err != nil {
 		return err
 	}
+	defer r.Close()
 	return tfp.CopyTableFile(ctx, r, fileId, sz, uint32(numChunks))
 }
 

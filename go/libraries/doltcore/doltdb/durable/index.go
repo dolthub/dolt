@@ -88,7 +88,7 @@ func RefFromIndex(ctx context.Context, vrw types.ValueReadWriter, idx Index) (ty
 		return refFromNomsValue(ctx, vrw, b)
 
 	default:
-		return types.Ref{}, errNbfUnkown
+		return types.Ref{}, errNbfUnknown
 	}
 }
 
@@ -115,7 +115,7 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 		return IndexFromProllyMap(pm), nil
 
 	default:
-		return nil, errNbfUnkown
+		return nil, errNbfUnknown
 	}
 }
 
@@ -138,7 +138,7 @@ func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 		return IndexFromProllyMap(m), nil
 
 	default:
-		return nil, errNbfUnkown
+		return nil, errNbfUnknown
 	}
 }
 

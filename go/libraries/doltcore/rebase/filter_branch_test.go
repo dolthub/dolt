@@ -95,7 +95,7 @@ func filterBranchTests() []filterBranchTest {
 				{cmd.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (7,7),(8,8),(9,9);"}},
 				{cmd.AddCmd{}, args{"-A"}},
 				{cmd.CommitCmd{}, args{"-m", "added more rows againg"}},
-				{cmd.FilterBranchCmd{}, args{"--all", "DELETE FROM test WHERE pk IN (5,8);"}},
+				{cmd.FilterBranchCmd{}, args{"--all", "-q", "DELETE FROM test WHERE pk IN (5,8);"}},
 			},
 			asserts: []testAssertion{
 				{
@@ -123,7 +123,7 @@ func filterBranchTests() []filterBranchTest {
 				{cmd.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (7,7),(8,8),(9,9);"}},
 				{cmd.AddCmd{}, args{"-A"}},
 				{cmd.CommitCmd{}, args{"-m", "added more rows on main"}},
-				{cmd.FilterBranchCmd{}, args{"--all", "DELETE FROM test WHERE pk > 4;"}},
+				{cmd.FilterBranchCmd{}, args{"--all", "-q", "DELETE FROM test WHERE pk > 4;"}},
 			},
 			asserts: []testAssertion{
 				{
@@ -185,7 +185,7 @@ func filterBranchTests() []filterBranchTest {
 				{
 					setup: []testCommand{
 						// expeced error: "table not found: test"
-						{cmd.FilterBranchCmd{}, args{"DELETE FROM test WHERE pk > 1;"}},
+						{cmd.FilterBranchCmd{}, args{"--continue", "-q", "DELETE FROM test WHERE pk > 1;"}},
 					},
 				},
 				{

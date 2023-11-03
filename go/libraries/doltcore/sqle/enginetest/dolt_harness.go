@@ -24,6 +24,7 @@ import (
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
+	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
@@ -40,18 +41,19 @@ import (
 )
 
 type DoltHarness struct {
-	t                  *testing.T
-	provider           dsess.DoltDatabaseProvider
-	multiRepoEnv       *env.MultiRepoEnv
-	session            *dsess.DoltSession
-	branchControl      *branch_control.Controller
-	parallelism        int
-	skippedQueries     []string
-	setupData          []setup.SetupScript
-	resetData          []setup.SetupScript
-	engine             *gms.Engine
-	skipSetupCommit    bool
-	useLocalFilesystem bool
+	t                   *testing.T
+	provider            dsess.DoltDatabaseProvider
+	multiRepoEnv        *env.MultiRepoEnv
+	session             *dsess.DoltSession
+	branchControl       *branch_control.Controller
+	parallelism         int
+	skippedQueries      []string
+	setupData           []setup.SetupScript
+	resetData           []setup.SetupScript
+	engine              *gms.Engine
+	skipSetupCommit     bool
+	useLocalFilesystem  bool
+	setupTestProcedures bool
 }
 
 var _ enginetest.Harness = (*DoltHarness)(nil)
@@ -69,6 +71,7 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	dh := &DoltHarness{
 		t:              t,
 		skippedQueries: defaultSkippedQueries,
+		parallelism:    1,
 	}
 
 	return dh
@@ -179,6 +182,9 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		d.branchControl = branch_control.CreateDefaultController(context.Background())
 
 		pro := d.newProvider()
+		if d.setupTestProcedures {
+			pro = d.newProviderWithProcedures()
+		}
 		doltProvider, ok := pro.(*sqle.DoltDatabaseProvider)
 		require.True(t, ok)
 		d.provider = doltProvider
@@ -421,7 +427,18 @@ func (d *DoltHarness) newProvider() sql.MutableDatabaseProvider {
 	b := env.GetDefaultInitBranch(d.multiRepoEnv.Config())
 	pro, err := sqle.NewDoltDatabaseProvider(b, d.multiRepoEnv.FileSystem())
 	require.NoError(d.t, err)
+
 	return pro
+}
+
+func (d *DoltHarness) newProviderWithProcedures() sql.MutableDatabaseProvider {
+	pro := d.newProvider()
+	provider, ok := pro.(*sqle.DoltDatabaseProvider)
+	require.True(d.t, ok)
+	for _, esp := range memory.ExternalStoredProcedures {
+		provider.Register(esp)
+	}
+	return provider
 }
 
 func (d *DoltHarness) newTable(db sql.Database, name string, schema sql.PrimaryKeySchema) (sql.Table, error) {

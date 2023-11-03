@@ -95,15 +95,8 @@ func (ftp *fsTablePersister) Path() string {
 	return ftp.dir
 }
 
-func (ftp *fsTablePersister) CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string, fileSz uint64, chunkCount uint32) error {
+func (ftp *fsTablePersister) CopyTableFile(ctx context.Context, r io.Reader, fileId string, fileSz uint64, chunkCount uint32) error {
 	tn, f, err := func() (n string, cleanup func(), err error) {
-		defer func() {
-			cerr := r.Close()
-			if err == nil {
-				err = cerr
-			}
-		}()
-
 		ftp.removeMu.Lock()
 		var temp *os.File
 		temp, err = tempfiles.MovableTempFileProvider.NewFile(ftp.dir, tempTablePrefix)

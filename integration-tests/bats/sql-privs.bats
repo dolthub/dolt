@@ -729,7 +729,7 @@ behavior:
      ! [[ $output =~ "UPDATE" ]] || false
 }
 
-@test "sql-privs: revoking all privleges doesn't result in a corrupted privileges file" {
+@test "sql-privs: revoking all privileges doesn't result in a corrupted privileges file" {
      make_test_repo
 
      dolt sql -q "CREATE USER tester@localhost"

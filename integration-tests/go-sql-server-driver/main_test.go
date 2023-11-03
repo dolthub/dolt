@@ -14,7 +14,43 @@
 
 package main
 
-import "testing"
+import (
+	"flag"
+	"log"
+	"os"
+	"testing"
+)
+
+// We generate various TLS keys and certificates and some JWKS/JWT material
+// which the tests reference. We do this once for the test run, because it can
+// be expensive, and we expose the location of the generated files through an
+// environment variable. dtestutils/sql_server_driver interpolates that
+// environment variable into a few fields in the test definition.
+//
+// It's good enough for now, and it keeps us from checking in certificates or
+// JWT which will expire at some point in the future.
+func TestMain(m *testing.M) {
+	old := os.Getenv("TESTGENDIR")
+	defer func() {
+		os.Setenv("TESTGENDIR", old)
+	}()
+	gendir, err := os.MkdirTemp(os.TempDir(), "go-sql-server-driver-gen-*")
+	if err != nil {
+		log.Fatalf("could not create temp dir: %v", err)
+	}
+	defer os.RemoveAll(gendir)
+	err = GenerateTestJWTs(gendir)
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+	err = GenerateX509Certs(gendir)
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+	os.Setenv("TESTGENDIR", gendir)
+	flag.Parse()
+	os.Exit(m.Run())
+}
 
 func TestConfig(t *testing.T) {
 	RunTestsFile(t, "tests/sql-server-config.yaml")

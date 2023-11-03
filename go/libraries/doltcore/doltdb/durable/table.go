@@ -52,7 +52,7 @@ var (
 )
 
 var (
-	errNbfUnkown      = fmt.Errorf("unknown NomsBinFormat")
+	errNbfUnknown     = fmt.Errorf("unknown NomsBinFormat")
 	errNbfUnsupported = fmt.Errorf("operation unsupported for NomsBinFormat")
 )
 

@@ -90,16 +90,7 @@ func (s3p awsTablePersister) Exists(ctx context.Context, name addr, chunkCount u
 	)
 }
 
-func (s3p awsTablePersister) CopyTableFile(ctx context.Context, r io.ReadCloser, fileId string, fileSz uint64, chunkCount uint32) error {
-	var err error
-
-	defer func() {
-		cerr := r.Close()
-		if err == nil {
-			err = cerr
-		}
-	}()
-
+func (s3p awsTablePersister) CopyTableFile(ctx context.Context, r io.Reader, fileId string, fileSz uint64, chunkCount uint32) error {
 	return s3p.multipartUpload(ctx, r, fileSz, fileId)
 }
 

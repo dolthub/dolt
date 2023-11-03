@@ -65,28 +65,6 @@ type ReplayRootFn func(ctx context.Context, root, parentRoot, rebasedParentRoot 
 
 type ReplayCommitFn func(ctx context.Context, commit, parent, rebasedParent *doltdb.Commit) (rebaseRoot *doltdb.RootValue, err error)
 
-// wrapReplayRootFn converts a |ReplayRootFn| to a |ReplayCommitFn|
-func wrapReplayRootFn(fn ReplayRootFn) ReplayCommitFn {
-	return func(ctx context.Context, commit, parent, rebasedParent *doltdb.Commit) (rebaseRoot *doltdb.RootValue, err error) {
-		root, err := commit.GetRootValue(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		parentRoot, err := parent.GetRootValue(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		rebasedParentRoot, err := rebasedParent.GetRootValue(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		return fn(ctx, root, parentRoot, rebasedParentRoot)
-	}
-}
-
 // AllBranchesAndTags rewrites the history of all branches and tags in the repo using the |replay| function.
 func AllBranchesAndTags(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {
 	branches, err := dEnv.DoltDB.GetBranches(ctx)
@@ -118,27 +96,6 @@ func CurrentBranch(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn
 		return nil
 	}
 	return rebaseRefs(ctx, dEnv.DbData(), replay, nerf, headRef)
-}
-
-// AllBranchesByRoots rewrites the history of all branches in the repo using the |replay| function.
-func AllBranchesByRoots(ctx context.Context, dEnv *env.DoltEnv, replay ReplayRootFn, nerf NeedsRebaseFn) error {
-	branches, err := dEnv.DoltDB.GetBranches(ctx)
-	if err != nil {
-		return err
-	}
-
-	replayCommit := wrapReplayRootFn(replay)
-	return rebaseRefs(ctx, dEnv.DbData(), replayCommit, nerf, branches...)
-}
-
-// CurrentBranchByRoot rewrites the history of the current branch using the |replay| function.
-func CurrentBranchByRoot(ctx context.Context, dEnv *env.DoltEnv, replay ReplayRootFn, nerf NeedsRebaseFn) error {
-	replayCommit := wrapReplayRootFn(replay)
-	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
-	if err != nil {
-		return nil
-	}
-	return rebaseRefs(ctx, dEnv.DbData(), replayCommit, nerf, headRef)
 }
 
 func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, nerf NeedsRebaseFn, refs ...ref.DoltRef) error {

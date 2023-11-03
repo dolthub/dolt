@@ -4,11 +4,11 @@ tests:
   - name: repo1
     with_files:
     - name: chain_key.pem
-      source_path: testdata/rsa_key.pem
+      source_path: $TESTGENDIR/rsa_key.pem
     - name: chain_cert.pem
-      source_path: testdata/rsa_chain.pem
+      source_path: $TESTGENDIR/rsa_chain.pem
     - name: test_jwks.json
-      source_path: testdata/test_jwks.json
+      source_path: $TESTGENDIR/test_jwks.json
     - name: server.yaml
       contents: |
         listener:
@@ -33,7 +33,7 @@ tests:
     - exec: "GRANT ALL ON *.* TO test_jwt_user@'127.0.0.1' WITH GRANT OPTION"
   - on: repo1
     user: test_jwt_user
-    password_file: testdata/token.jwt
+    password_file: $TESTGENDIR/token.jwt
     driver_params:
       allowCleartextPasswords: "true"
     queries:

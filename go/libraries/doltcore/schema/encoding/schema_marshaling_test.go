@@ -297,8 +297,7 @@ func getColumns(t *testing.T) (cols []schema.Column) {
 	for i := range cols {
 		name := "col" + strconv.Itoa(i)
 		tag := uint64(i)
-		cols[i], err = schema.NewColumnWithTypeInfo(
-			name, tag, ti[i], false, "", false, "")
+		cols[i], err = schema.NewColumnWithTypeInfo(name, tag, ti[i], false, "", false, "")
 		require.NoError(t, err)
 	}
 	return
