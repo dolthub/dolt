@@ -39,7 +39,7 @@ const (
 )
 
 var reflogDisabled = false
-var reflogRecordLimit = 250_000
+var reflogRecordLimit = 100_000
 var loggedReflogMaxSizeWarning = false
 
 func init() {
