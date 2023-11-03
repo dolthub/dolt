@@ -23,7 +23,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -38,26 +37,18 @@ const (
 	chunkJournalName = chunkJournalAddr // todo
 )
 
+// reflogDisabled indicates whether access to the reflog has been disabled and if so, no chunk journal root references
+// should be kept in memory. This is controlled by the DOLT_DISABLE_REFLOG env var and this var is ONLY written to
+// during initialization. All access after initialization is read-only, so no additional locking is needed.
 var reflogDisabled = false
-var reflogRecordLimit = 100_000
-var loggedReflogMaxSizeWarning = false
+
+// defaultReflogBufferSize controls how many of the most recent root references for root updates are kept in-memory.
+// This default can be overridden by setting the DOLT_REFLOG_RECORD_LIMIT before Dolt starts.
+const defaultReflogBufferSize = 5_000
 
 func init() {
 	if os.Getenv(dconfig.EnvDisableReflog) != "" {
 		reflogDisabled = true
-	}
-
-	if limit := os.Getenv(dconfig.EnvReflogRecordLimit); limit != "" {
-		i, err := strconv.Atoi(limit)
-		if err != nil {
-			logrus.Warnf("unable to parse integer value for %s: %s", dconfig.EnvReflogRecordLimit, err.Error())
-		} else {
-			if i <= 0 {
-				reflogDisabled = true
-			} else {
-				reflogRecordLimit = i
-			}
-		}
 	}
 }
 
@@ -72,12 +63,9 @@ type ChunkJournal struct {
 	backing   *journalManifest
 	persister *fsTablePersister
 
-	// mu locks access to the in-memory roots and root timestamp information that is queried by Dolt's reflog
-	mu sync.Mutex
-	// roots holds an in-memory representation of the root hashes that have been written to the ChunkJournal
-	roots []string
-	// rootTimestamps holds a timestamp for each of the root hashes that have been written to the ChunkJournal
-	rootTimestamps []time.Time
+	// reflogRingBuffer holds the most recent roots written to the chunk journal so that they can be
+	// quickly loaded for reflog queries without having to re-read the journal file from disk.
+	reflogRingBuffer *reflogRingBuffer
 }
 
 var _ tablePersister = &ChunkJournal{}
@@ -94,6 +82,7 @@ func newChunkJournal(ctx context.Context, nbfVers, dir string, m *journalManifes
 
 	j := &ChunkJournal{path: path, backing: m, persister: p}
 	j.contents.nbfVers = nbfVers
+	j.reflogRingBuffer = newReflogRingBuffer(reflogBufferSize())
 
 	ok, err := fileExists(path)
 	if err != nil {
@@ -106,6 +95,33 @@ func newChunkJournal(ctx context.Context, nbfVers, dir string, m *journalManifes
 		}
 	}
 	return j, nil
+}
+
+// reflogBufferSize returns the size of the ring buffer to allocate to store in-memory roots references when
+// new roots are written to a chunk journal. If reflog queries have been disabled, this function will return 0.
+// If the default buffer size has been overridden via DOLT_REFLOG_RECORD_LIMIT, that value will be returned if
+// it can be successfully parsed. Otherwise, the default buffer size will be returned.
+func reflogBufferSize() int {
+	if reflogDisabled {
+		return 0
+	}
+
+	reflogBufferSize := defaultReflogBufferSize
+	if limit := os.Getenv(dconfig.EnvReflogRecordLimit); limit != "" {
+		i, err := strconv.Atoi(limit)
+		if err != nil {
+			logrus.Warnf("unable to parse integer value for %s from %s: %s",
+				dconfig.EnvReflogRecordLimit, limit, err.Error())
+		} else {
+			if i <= 0 {
+				reflogDisabled = true
+			} else {
+				reflogBufferSize = i
+			}
+		}
+	}
+
+	return reflogBufferSize
 }
 
 // bootstrapJournalWriter initializes the journalWriter, which manages access to the
@@ -133,7 +149,7 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context) (err error) {
 			return err
 		}
 
-		_, _, _, err = j.wr.bootstrapJournal(ctx)
+		_, err = j.wr.bootstrapJournal(ctx, j.reflogRingBuffer)
 		if err != nil {
 			return err
 		}
@@ -161,15 +177,10 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context) (err error) {
 	}
 
 	// parse existing journal file
-	root, roots, rootTimestamps, err := j.wr.bootstrapJournal(ctx)
+	root, err := j.wr.bootstrapJournal(ctx, j.reflogRingBuffer)
 	if err != nil {
 		return err
 	}
-
-	j.mu.Lock()
-	j.roots = roots
-	j.rootTimestamps = rootTimestamps
-	j.mu.Unlock()
 
 	mc, err := trueUpBackingManifest(ctx, root, j.backing)
 	if err != nil {
@@ -214,49 +225,17 @@ func trueUpBackingManifest(ctx context.Context, root hash.Hash, backing *journal
 // and passes the root and associated timestamp to a callback function, |f|. If |f| returns an error, iteration
 // is stopped and the error is returned.
 func (j *ChunkJournal) IterateRoots(f func(root string, timestamp *time.Time) error) error {
-	roots, rootTimestamps, length, err := j.readCurrentRootsAndTimestamps()
-	if err != nil {
-		return err
-	}
-
-	// journal.roots are stored in chronological order. We need to process them in that order so that we can
-	// accurately detect the root where a ref was first set to a commit. Note that we are careful to not iterate
-	// beyond |length| in the slice, otherwise we risk a race condition that would read inconsistent data.
-	for i := 0; i < length; i++ {
+	return j.reflogRingBuffer.Iterate(func(entry reflogRootHashEntry) error {
 		// If we're reading a chunk journal written with an older version of Dolt, the root hash journal record may
 		// not have a timestamp value, so we'll have a time.Time instance in its zero value. If we see this, pass
 		// nil instead to signal to callers that there is no valid timestamp available.
-		var timestamp *time.Time = nil
-		if time.Time.IsZero(rootTimestamps[i]) == false {
-			timestamp = &rootTimestamps[i]
+		var pTimestamp *time.Time = nil
+		if time.Time.IsZero(entry.timestamp) == false {
+			pTimestamp = &entry.timestamp
 		}
-		err := f(roots[i], timestamp)
-		if err != nil {
-			return err
-		}
-	}
 
-	return nil
-}
-
-// readCurrentRootsAndTimestamps grabs the mutex that protects the in-memory root and root timestamps that represent the
-// root hash updates in the chunk journal and returns the references to the roots and root timestamps slices, as well as
-// the length that can be safely read from them. Callers MUST honor this length and NOT read beyond it in the returned
-// slices, otherwise they risk getting inconsistent data (since the chunk journal continues to append entries to these
-// slices as new root update journal records are saved).
-func (j *ChunkJournal) readCurrentRootsAndTimestamps() (roots []string, rootTimestamps []time.Time, length int, err error) {
-	j.mu.Lock()
-	defer j.mu.Unlock()
-
-	roots = j.roots
-	rootTimestamps = j.rootTimestamps
-	length = len(roots)
-	if len(roots) != len(rootTimestamps) {
-		return nil, nil, -1, fmt.Errorf(
-			"different number of roots and root timestamps encountered in ChunkJournal")
-	}
-
-	return roots, rootTimestamps, length, nil
+		return f(entry.root, pTimestamp)
+	})
 }
 
 // Persist implements tablePersister.
@@ -383,16 +362,10 @@ func (j *ChunkJournal) Update(ctx context.Context, lastLock addr, next manifestC
 
 	// Update the in-memory structures so that the ChunkJournal can be queried for reflog data
 	if !reflogDisabled {
-		j.mu.Lock()
-		defer j.mu.Unlock()
-
-		if len(j.roots) < reflogRecordLimit {
-			j.roots = append(j.roots, next.root.String())
-			j.rootTimestamps = append(j.rootTimestamps, time.Now())
-		} else if !loggedReflogMaxSizeWarning {
-			loggedReflogMaxSizeWarning = true
-			logrus.Warnf("exceeded reflog record limit (%d)", reflogRecordLimit)
-		}
+		j.reflogRingBuffer.Push(reflogRootHashEntry{
+			root:      next.root.String(),
+			timestamp: time.Now(),
+		})
 	}
 
 	return j.contents, nil
@@ -433,8 +406,7 @@ func (j *ChunkJournal) UpdateGCGen(ctx context.Context, lastLock addr, next mani
 	// Truncate the in-memory root and root timestamp metadata to the most recent
 	// entry, and double check that it matches the root stored in the manifest.
 	if !reflogDisabled {
-		j.mu.Lock()
-		defer j.mu.Unlock()
+		j.reflogRingBuffer.TruncateToLastRecord()
 
 		if len(j.roots) == 0 {
 			return manifestContents{}, fmt.Errorf(
