@@ -1240,7 +1240,16 @@ func remapTuple(tuple val.Tuple, desc val.TupleDesc, mapping val.OrdinalMapping)
 // to allocate memory for the new tuple. A pointer to the new tuple data is returned, along with any error encountered.
 // The |rightSide| parameter indicates if the tuple came from the right side of the merge; this is needed to determine
 // if the tuple data needs to be converted from the old schema type to a changed schema type.
-func remapTupleWithColumnDefaults(ctx *sql.Context, keyTuple, valueTuple val.Tuple, tupleDesc val.TupleDesc, mapping val.OrdinalMapping, tm *TableMerger, mergedSch schema.Schema, pool pool.BuffPool, rightSide bool) (val.Tuple, error) {
+func remapTupleWithColumnDefaults(
+		ctx *sql.Context,
+		keyTuple, valueTuple val.Tuple,
+		tupleDesc val.TupleDesc,
+		mapping val.OrdinalMapping,
+		tm *TableMerger,
+		mergedSch schema.Schema,
+		pool pool.BuffPool,
+		rightSide bool,
+) (val.Tuple, error) {
 	tb := val.NewTupleBuilder(mergedSch.GetValueDescriptor())
 
 	for to, from := range mapping {
@@ -1405,15 +1414,20 @@ func newValueMerger(merged, leftSch, rightSch, baseSch schema.Schema, syncPool p
 // mapped from the source schema to destination schema by finding an identical tag, or if no
 // identical tag is found, then falling back to a match on column name and type.
 func generateSchemaMappings(mergedSch, leftSch, rightSch, baseSch schema.Schema) (leftMapping, rightMapping, baseMapping val.OrdinalMapping) {
-	n := mergedSch.GetNonPKCols().Size()
+	n := mergedSch.GetNonPKCols().StoredSize()
 	leftMapping = make(val.OrdinalMapping, n)
 	rightMapping = make(val.OrdinalMapping, n)
 	baseMapping = make(val.OrdinalMapping, n)
 
-	for i, col := range mergedSch.GetNonPKCols().GetColumns() {
+	i := 0
+	for _, col := range mergedSch.GetNonPKCols().GetColumns() {
+		if col.Virtual {
+			continue
+		}
 		leftMapping[i] = findNonPKColumnMappingByTagOrName(leftSch, col)
 		rightMapping[i] = findNonPKColumnMappingByTagOrName(rightSch, col)
 		baseMapping[i] = findNonPKColumnMappingByTagOrName(baseSch, col)
+		i++
 	}
 
 	return leftMapping, rightMapping, baseMapping
