@@ -111,6 +111,10 @@ func (dt *CommitsTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
 	return &nt
 }
 
+func (dt *CommitsTable) PreciseMatch() bool {
+	return true
+}
+
 func (dt *CommitsTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	if lookup.Index.ID() == index.CommitHashIndexId {
 		hashStrs, ok := index.LookupToPointSelectStr(lookup)

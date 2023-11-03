@@ -42,6 +42,7 @@ var _ sql.UpdatableTable = (*DocsTable)(nil)
 var _ sql.DeletableTable = (*DocsTable)(nil)
 var _ sql.InsertableTable = (*DocsTable)(nil)
 var _ sql.ReplaceableTable = (*DocsTable)(nil)
+var _ sql.IndexAddressableTable = (*DocsTable)(nil)
 
 // DocsTable is the system table that stores Dolt docs, such as LICENSE and README.
 type DocsTable struct {
@@ -136,6 +137,10 @@ func (dt *DocsTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
 // GetIndexes implements IndexAddressableTable, but DocsTables has no indexes.
 func (dt *DocsTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return nil, nil
+}
+
+func (dt *DocsTable) PreciseMatch() bool {
+	return true
 }
 
 var _ sql.RowReplacer = (*docsWriter)(nil)

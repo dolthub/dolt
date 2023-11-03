@@ -105,6 +105,10 @@ func (e *StaticErrorEditor) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTab
 	return &StaticErrorTable{nil, e.err}
 }
 
+func (e *StaticErrorEditor) PreciseMatch() bool {
+	return true
+}
+
 func (e *StaticErrorEditor) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return nil, nil
 }

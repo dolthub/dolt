@@ -150,6 +150,11 @@ func (dt *UnscopedDiffTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTa
 	return &nt
 }
 
+// PreciseMatch implements sql.IndexAddressable
+func (dt *UnscopedDiffTable) PreciseMatch() bool {
+	return true
+}
+
 func (dt *UnscopedDiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	if lookup.Index.ID() == index.CommitHashIndexId {
 		hs, ok := index.LookupToPointSelectStr(lookup)

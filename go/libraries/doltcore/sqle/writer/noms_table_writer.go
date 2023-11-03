@@ -69,6 +69,10 @@ type nomsTableWriter struct {
 	errEncountered error
 }
 
+func (te *nomsTableWriter) PreciseMatch() bool {
+	return true
+}
+
 var _ TableWriter = &nomsTableWriter{}
 var _ AutoIncrementGetter = &nomsTableWriter{}
 
