@@ -578,7 +578,7 @@ SQL
 
     start_sql_server 
 
-    run dolt --port $PORT --host 0.0.0.0 --no-tls -u dolt -p "" sql -q "
+    run dolt sql -q "
 load data local infile 'in.csv' into table t
 fields terminated by ','
 lines terminated by '\n'
@@ -588,7 +588,7 @@ lines terminated by '\n'
 
     # This should work but does not because of dolt sql
     # mysql -e works locally
-    run dolt --port $PORT --host 0.0.0.0 --no-tls -u dolt -p "" sql -q "
+    run dolt sql -q "
 set global local_infile=1;
 load data local infile 'in.csv' into table t
 fields terminated by ','
@@ -621,11 +621,11 @@ CSV
     start_sql_server
 
     # File not found errors
-    run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db repo1 -u dolt -p "" sql -q "load data infile 'foo.csv' into table t"
+    run dolt sql -q "load data infile 'foo.csv' into table t"
     [ $status -ne 0 ]
     [[ $output =~ "no such file or directory" ]] || false
     
-    dolt --port $PORT --host 0.0.0.0 --no-tls --use-db repo1 -u dolt -p "" sql -q "
+    dolt sql -q "
 load data infile 'in.csv' into table t                                    
 fields terminated by ','
 lines terminated by '\n'

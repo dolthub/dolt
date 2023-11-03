@@ -207,16 +207,16 @@ teardown() {
     
     start_sql_server
 
-    dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db '' sql -q "create database testdb"
-    run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db '' sql --result-format csv -q "show databases"
+    dolt sql -q "create database testdb"
+    run dolt sql --result-format csv -q "show databases"
     [ $status -eq 0 ]
     [[ "$output" =~ "testdb" ]] || false
-    dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db testdb sql -q "create table a(x int)"
-    dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db testdb sql -q "insert into a values (1), (2)"
+    dolt sql -q "create table a(x int)"
+    dolt sql -q "insert into a values (1), (2)"
 
     [ -d "testdb" ]
-    dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db testdb sql -q "select * from dolt_log"
-    run dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db testdb sql -q "select * from dolt_log"
+    dolt --use-db testdb sql -q "select * from dolt_log"
+    run dolt --use-db testdb sql -q "select * from dolt_log"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Dolt System Account" ]] || false
     [[ "$output" =~ "doltuser@dolthub.com" ]] || false

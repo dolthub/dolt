@@ -30,14 +30,14 @@ teardown() {
 @test "multidb: database default branches" {
     cd dbs1
     start_multi_db_server repo1
-    dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db repo1 sql -q "create database new;
+    dolt sql -q "create database new;
     	 use new;
     	 call dcheckout('-b', 'feat');
     	 create table t (x int);
     	 call dolt_add('.');
     	 call dcommit('-am', 'cm');
     	 set @@global.new_default_branch='feat'"
-    dolt -u dolt --port $PORT --host 0.0.0.0 --no-tls --use-db repo1 sql -q "use repo1"
+    dolt sql -q "use repo1"
 }
 
 @test "multidb: incompatible BIN FORMATs" {

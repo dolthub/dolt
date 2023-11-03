@@ -43,7 +43,7 @@ teardown() {
     run dolt sql -q 'select count(*) from vals'
     [[ "$output" =~ "5" ]] || false
 
-    dolt -u root -p "" sql -q "
+    dolt -u root --port 3306 --host localhost --no-tls sql -q "
 use remote;
 insert into vals (i) values (6), (7), (8), (9), (10);
 call dolt_commit('-am', 'add some vals');
@@ -66,7 +66,7 @@ call dolt_commit('-am', 'add some vals');
     # By cloning here, we have a near-at-hand way to wait for the server to be ready.
     dolt clone http://localhost:50051/remote cloned_remote
 
-    dolt -u root -p "" sql -q "
+    dolt -u root --port 3306 --host localhost --no-tls sql -q "
 create database created;
 use created;
 create table vals (i int);
@@ -148,13 +148,13 @@ SQL
     # move CWD to make sure we don't lock ".../read_replica/db"
     mkdir tmp && cd tmp
 
-    dolt -u root -p "" sql -q "
+    dolt -u root --port 3307 --host 127.0.0.1 --no-tls sql -q "
 use db;
 insert into vals values (1), (2), (3), (4), (5);
 call dolt_commit('-am', 'insert 1-5.');
 "
 
-    run dolt --port 3307 --host 127.0.0.1 -u root -p "" sql -q "
+    run dolt --port 3307 --host 127.0.0.1 --no-tls -u root sql -q "
 use db;
 select count(*) from vals;
 "

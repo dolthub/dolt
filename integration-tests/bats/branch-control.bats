@@ -45,12 +45,12 @@ setup_test_user() {
 @test "branch-control: fresh database. branch control tables exist through server interface" {
     start_sql_server
 
-    run dolt -u dolt -p "" --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" sql --result-format csv -q "select * from dolt_branch_control"
+    run dolt sql --result-format csv -q "select * from dolt_branch_control"
     [ $status -eq 0 ]
     [ ${lines[0]} = "database,branch,user,host,permissions" ]
     [ ${lines[1]} = "%,%,%,%,write" ]
 
-    dolt -u dolt -p "" --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" sql -q "select * from dolt_branch_namespace_control"
+    dolt sql -q "select * from dolt_branch_namespace_control"
 }
 
 @test "branch-control: modify dolt_branch_control from dolt sql then make sure changes are reflected" {
@@ -63,7 +63,7 @@ setup_test_user() {
     [ ${lines[1]} = "test-db,test-branch,test,%,write" ]
 
     start_sql_server
-    run dolt -u dolt -p "" --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" sql --result-format csv -q "select * from dolt_branch_control"
+    run dolt sql --result-format csv -q "select * from dolt_branch_control"
     [ $status -eq 0 ]
     [ ${lines[0]} = "database,branch,user,host,permissions" ]
     [ ${lines[1]} = "test-db,test-branch,test,%,write" ]
@@ -78,13 +78,13 @@ setup_test_user() {
     SERVER_PID=$! # will get killed by teardown_common
     sleep 5 # not using python wait so this works on windows
 
-    run dolt --use-db "dolt_repo_$$" -u root -p "" --port $PORT --host 0.0.0.0 --no-tls sql --result-format csv -q "select * from dolt_branch_control"
+    run dolt sql --result-format csv -q "select * from dolt_branch_control"
     [ ${lines[0]} = "database,branch,user,host,permissions" ]
     [ ${lines[1]} = "%,%,%,%,write" ]
 
-    dolt --use-db "dolt_repo_$$" -u root -p "" --port $PORT --host 0.0.0.0 --no-tls sql -q "delete from dolt_branch_control where user='%'"
+    dolt sql -q "delete from dolt_branch_control where user='%'"
      
-    run dolt --use-db "dolt_repo_$$" -u root -p "" --port $PORT --host 0.0.0.0 --no-tls sql -q "select * from dolt_branch_control"
+    run dolt sql -q "select * from dolt_branch_control"
     [ $status -eq 0 ]
     [ "$output" == "" ]
 }
@@ -97,19 +97,19 @@ setup_test_user() {
     
     start_sql_server
 
-    run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" -u test -p "" sql -q "create table t (c1 int)"
+    run dolt sql -q "create table t (c1 int)"
     [ $status -ne 0 ]
     [[ $output =~ "does not have the correct permissions" ]] || false
 
-    dolt --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" -u test -p "" sql -q "call dolt_checkout('test-branch'); create table t (c1 int)"
+    dolt -u test sql -q "call dolt_checkout('test-branch'); create table t (c1 int)"
 
-    dolt --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" -u test -p "" sql -q "call dolt_checkout('test-branch'); call dolt_add('t'); call dolt_commit('-m', 'Testing commit');"
+    dolt -u test sql -q "call dolt_checkout('test-branch'); call dolt_add('t'); call dolt_commit('-m', 'Testing commit');"
 
     # I should also have branch permissions on branches I create
-    dolt --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" -u test -p "" sql -q "call dolt_checkout('-b', 'test-branch-2'); create table t (c1 int)"
+    dolt sql -q "call dolt_checkout('-b', 'test-branch-2'); create table t (c1 int)"
 
     # Now back to main. Still locked out.
-    run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" -u test -p "" sql -q "create table t (c1 int)"
+    run dolt sql -q "create table t (c1 int)"
     [ $status -ne 0 ]
     [[ $output =~ "does not have the correct permissions" ]] || false
 }
@@ -126,16 +126,16 @@ setup_test_user() {
     start_sql_server
     
     # Admin has no write permission to branch not an admin on
-    run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" -u test -p "" sql -q "create table t (c1 int)"
+    run dolt -u test sql -q "create table t (c1 int)"
     [ $status -ne 0 ]
     [[ $output =~ "does not have the correct permissions" ]] || false
     
     # Admin can write
-    dolt --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" -u test -p "" sql -q "call dolt_checkout('test-branch'); create table t (c1 int)"
+    dolt -u test sql -q "call dolt_checkout('test-branch'); create table t (c1 int)"
 
     # Admin can make other users
-    dolt --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" -u test -p "" sql -q "insert into dolt_branch_control values ('dolt_repo_$$', 'test-branch', 'test2', '%', 'write')"
-    run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" -u test -p "" sql --result-format csv -q "select * from dolt_branch_control"
+    dolt -u test sql -q "insert into dolt_branch_control values ('dolt_repo_$$', 'test-branch', 'test2', '%', 'write')"
+    run dolt -u test sql --result-format csv -q "select * from dolt_branch_control"
     [ $status -eq 0 ]
     [ ${lines[0]} = "database,branch,user,host,permissions" ]
     [ ${lines[1]} = "dolt_repo_$$,test-branch,test,%,admin" ]
@@ -143,7 +143,7 @@ setup_test_user() {
     [ ${lines[3]} = "dolt_repo_$$,test-branch,test2,%,write" ]
 
     # test2 can see all branch permissions
-    run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" -u test2 -p "" sql --result-format csv -q "select * from dolt_branch_control"
+    run dolt -u test2 sql --result-format csv -q "select * from dolt_branch_control"
     [ $status -eq 0 ]
     [ ${lines[0]} = "database,branch,user,host,permissions" ]
     [ ${lines[1]} = "dolt_repo_$$,test-branch,test,%,admin" ]
@@ -151,18 +151,18 @@ setup_test_user() {
     [ ${lines[3]} = "dolt_repo_$$,test-branch,test2,%,write" ]
 
     # test2 now has write permissions on test-branch
-    dolt --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" -u test2 -p "" sql -q "call dolt_checkout('test-branch'); insert into t values(0)"
+    dolt -u test2 sql -q "call dolt_checkout('test-branch'); insert into t values(0)"
 
     # Remove test2 permissions
-    dolt --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" -u test -p "" sql -q "delete from dolt_branch_control where user='test2'"
+    dolt -u test sql -q "delete from dolt_branch_control where user='test2'"
 
-    run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" -u test -p "" sql --result-format csv -q "select * from dolt_branch_control"
+    run dolt -u test sql --result-format csv -q "select * from dolt_branch_control"
     [ $status -eq 0 ]
     [ ${lines[0]} = "database,branch,user,host,permissions" ]
     [ ${lines[1]} = "dolt_repo_$$,test-branch,test,%,admin" ]
 
     # test2 cannot write to branch
-    run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" -u test2 -p "" sql -q "call dolt_checkout('test-branch'); insert into t values(1)"
+    run dolt -u test2 sql -q "call dolt_checkout('test-branch'); insert into t values(1)"
     [ $status -ne 0 ]
     [[ $output =~ "does not have the correct permissions" ]] || false
 }
@@ -174,9 +174,9 @@ setup_test_user() {
 
     start_sql_server
 
-    dolt --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" -u test -p "" sql -q "call dolt_branch('test-branch')"
+    dolt -u test sql -q "call dolt_branch('test-branch')"
 
-    run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" -u test -p "" sql --result-format csv -q "select * from dolt_branch_control"
+    run dolt -u test sql --result-format csv -q "select * from dolt_branch_control"
     [ $status -eq 0 ]
     [ ${lines[0]} = "database,branch,user,host,permissions" ]
     [ ${lines[1]} = "dolt_repo_$$,main,test,%,write" ]
@@ -195,18 +195,18 @@ branch', 'test', '%', 'admin')"
 
     start_sql_server
 
-    run dolt -u test -p "" --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" sql --result-format csv -q "select * from dolt_branch_namespace_control"
+    run dolt -u test sql --result-format csv -q "select * from dolt_branch_namespace_control"
     [ $status -eq 0 ]
     [ ${lines[0]} = "database,branch,user,host" ]
     [ ${lines[1]} = "dolt_repo_$$,test-%,test2,%" ]
 
     # test cannot create test-branch
-    run dolt -u test -p "" --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" sql -q "call dolt_branch('test-branch')"
+    run dolt -u test sql -q "call dolt_branch('test-branch')"
     [ $status -ne 0 ]
     [[ $output =~ "cannot create a branch" ]] || false
 
     # test2 can create test-branch
-    dolt -u test2 -p "" --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" sql -q "call dolt_branch('test-branch')"
+    dolt -u test2 sql -q "call dolt_branch('test-branch')"
 }
 
 @test "branch-control: test longest match in branch namespace control" {
@@ -221,13 +221,13 @@ branch', 'test', '%', 'admin')"
     start_sql_server
 
     # test can create a branch in its namesapce but not in test2
-    dolt -u test -p "" --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" sql -q "call dolt_branch('test/branch1')"
-    run dolt -u test -p "" --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" sql -q "call dolt_branch('test2/branch1')"
+    dolt -u test sql -q "call dolt_branch('test/branch1')"
+    run dolt -u test sql -q "call dolt_branch('test2/branch1')"
     [ $status -ne 0 ]
     [[ $output =~ "cannot create a branch" ]] || false
 
-    dolt -u test2 -p "" --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" sql -q "call dolt_branch('test2/branch1')"
-    run dolt -u test2 -p "" --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" sql -q "call dolt_branch('test/branch1')"
+    dolt -u test2 sql -q "call dolt_branch('test2/branch1')"
+    run dolt -u test2 sql -q "call dolt_branch('test/branch1')"
     [ $status -ne 0 ]
     [[ $output =~ "cannot create a branch" ]] || false   
 }
@@ -244,13 +244,13 @@ branch', 'test', '%', 'admin')"
 
   start_sql_server
 
-  run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" -u test -p "" sql -q "call dolt_checkout('test-branch'); create table t (c1 int)"
+  run dolt -u test sql -q "call dolt_checkout('test-branch'); create table t (c1 int)"
   [ $status -ne 0 ]
   [[ $output =~ "does not have the correct permissions" ]] || false
 
-  dolt --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" -u admin -p "" sql -q "delete from dolt_branch_control where branch = 'test-branch'"
+  dolt -u admin sql -q "delete from dolt_branch_control where branch = 'test-branch'"
 
-  run dolt --port $PORT --host 0.0.0.0 --no-tls --use-db "dolt_repo_$$" -u test -p "" sql -q "call dolt_checkout('test-branch'); create table t (c1 int)"
+  run dolt -u test sql -q "call dolt_checkout('test-branch'); create table t (c1 int)"
   [ $status -eq 0 ]
   [[ ! $output =~ "does not have the correct permissions" ]] || false
 }
