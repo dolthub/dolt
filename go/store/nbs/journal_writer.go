@@ -173,6 +173,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 		wr.maxNovel = journalIndexDefaultMaxNovel
 	}
 	wr.ranges = newRangeIndex()
+	loggedReflogMaxSizeWarning := false
 
 	p := filepath.Join(filepath.Dir(wr.path), journalIndexFileName)
 	var ok bool
@@ -272,8 +273,13 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 		case rootHashJournalRecKind:
 			last = hash.Hash(r.address)
 			if !reflogDisabled {
-				roots = append(roots, r.address.String())
-				times = append(times, r.timestamp)
+				if len(roots) < reflogRecordLimit {
+					roots = append(roots, r.address.String())
+					times = append(times, r.timestamp)
+				} else if !loggedReflogMaxSizeWarning {
+					loggedReflogMaxSizeWarning = true
+					logrus.Warnf("journal writer exceeded reflog record limit (%d)", reflogRecordLimit)
+				}
 			}
 
 		default:
