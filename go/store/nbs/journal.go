@@ -27,6 +27,7 @@ import (
 
 	"github.com/dolthub/fslock"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -34,6 +35,14 @@ import (
 const (
 	chunkJournalName = chunkJournalAddr // todo
 )
+
+var reflogDisabled = false
+
+func init() {
+	if os.Getenv(dconfig.EnvDisableReflog) != "" {
+		reflogDisabled = true
+	}
+}
 
 // ChunkJournal is a persistence abstraction for a NomsBlockStore.
 // It implements both manifest and tablePersister, durably writing
@@ -356,10 +365,12 @@ func (j *ChunkJournal) Update(ctx context.Context, lastLock addr, next manifestC
 	j.contents = next
 
 	// Update the in-memory structures so that the ChunkJournal can be queried for reflog data
-	j.mu.Lock()
-	defer j.mu.Unlock()
-	j.roots = append(j.roots, next.root.String())
-	j.rootTimestamps = append(j.rootTimestamps, time.Now())
+	if !reflogDisabled {
+		j.mu.Lock()
+		defer j.mu.Unlock()
+		j.roots = append(j.roots, next.root.String())
+		j.rootTimestamps = append(j.rootTimestamps, time.Now())
+	}
 
 	return j.contents, nil
 }
@@ -398,17 +409,19 @@ func (j *ChunkJournal) UpdateGCGen(ctx context.Context, lastLock addr, next mani
 
 	// Truncate the in-memory root and root timestamp metadata to the most recent
 	// entry, and double check that it matches the root stored in the manifest.
-	j.mu.Lock()
-	defer j.mu.Unlock()
-	if len(j.roots) == 0 {
-		return manifestContents{}, fmt.Errorf(
-			"ChunkJournal roots not intialized; no roots in memory")
-	}
-	j.roots = j.roots[len(j.roots)-1:]
-	j.rootTimestamps = j.rootTimestamps[len(j.rootTimestamps)-1:]
-	if j.roots[0] != latest.root.String() {
-		return manifestContents{}, fmt.Errorf(
-			"ChunkJournal root doesn't match manifest root")
+	if !reflogDisabled {
+		j.mu.Lock()
+		defer j.mu.Unlock()
+		if len(j.roots) == 0 {
+			return manifestContents{}, fmt.Errorf(
+				"ChunkJournal roots not intialized; no roots in memory")
+		}
+		j.roots = j.roots[len(j.roots)-1:]
+		j.rootTimestamps = j.rootTimestamps[len(j.rootTimestamps)-1:]
+		if j.roots[0] != latest.root.String() {
+			return manifestContents{}, fmt.Errorf(
+				"ChunkJournal root doesn't match manifest root")
+		}
 	}
 
 	return latest, nil

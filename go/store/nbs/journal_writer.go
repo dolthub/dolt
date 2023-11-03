@@ -271,8 +271,10 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 
 		case rootHashJournalRecKind:
 			last = hash.Hash(r.address)
-			roots = append(roots, r.address.String())
-			times = append(times, r.timestamp)
+			if !reflogDisabled {
+				roots = append(roots, r.address.String())
+				times = append(times, r.timestamp)
+			}
 
 		default:
 			return fmt.Errorf("unknown journal record kind (%d)", r.kind)
