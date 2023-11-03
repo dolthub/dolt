@@ -30,3 +30,17 @@ teardown() {
     [[ "$output"  =~ "initial commit" ]] || false
     [[ "$output"  =~ "Initialize data repository" ]] || false
 }
+
+@test "reflog: set DOLT_REFLOG_RECORD_LIMIT" {
+    export DOLT_REFLOG_RECORD_LIMIT=2
+    setup_common
+    dolt sql -q "create table t (i int primary key, j int);"
+    dolt sql -q "insert into t values (1, 1), (2, 2), (3, 3)";
+    dolt commit -Am "initial commit"
+    dolt commit --allow-empty -m "test commit"
+
+    run dolt sql -q "select * from dolt_reflog();"
+    [ "$status" -eq 0 ]
+    [[ "$output"  =~ "exceeded reflog record limit" ]] || false
+    [[ "$output"  =~ "Initialize data repository" ]] || false
+}
