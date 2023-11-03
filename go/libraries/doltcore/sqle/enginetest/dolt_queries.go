@@ -4311,6 +4311,241 @@ var DoltUndropTestScripts = []queries.ScriptTest{
 	},
 }
 
+var DoltReflogTestScripts = []queries.ScriptTest{
+	{
+		Name: "dolt_reflog: error cases",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "select * from dolt_reflog('foo', 'bar');",
+				ExpectedErrStr: "function 'dolt_reflog' expected 0 or 1 arguments, 2 received",
+			},
+			{
+				Query:          "select * from dolt_reflog(NULL);",
+				ExpectedErrStr: "argument (<nil>) is not a string value, but a <nil>",
+			},
+			{
+				Query:          "select * from dolt_reflog(-100);",
+				ExpectedErrStr: "argument (-100) is not a string value, but a int8",
+			},
+		},
+	},
+	{
+		Name: "dolt_reflog: basic cases with no arguments",
+		SetUpScript: []string{
+			"create table t1(pk int primary key);",
+			"call dolt_commit('-Am', 'creating table t1');",
+
+			"insert into t1 values(1);",
+			"call dolt_commit('-Am', 'inserting row 1');",
+			"call dolt_tag('tag1');",
+
+			"call dolt_checkout('-b', 'branch1');",
+			"insert into t1 values(2);",
+			"call dolt_commit('-Am', 'inserting row 2');",
+
+			"insert into t1 values(3);",
+			"call dolt_commit('-Am', 'inserting row 3');",
+			"call dolt_tag('-d', 'tag1');",
+			"call dolt_tag('tag1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select ref, commit_hash, commit_message from dolt_reflog();",
+				Expected: []sql.Row{
+					{"refs/tags/tag1", doltCommit, "inserting row 3"},
+					{"refs/heads/branch1", doltCommit, "inserting row 3"},
+					{"refs/heads/branch1", doltCommit, "inserting row 2"},
+					{"refs/heads/branch1", doltCommit, "inserting row 1"},
+					{"refs/tags/tag1", doltCommit, "inserting row 1"},
+					{"refs/heads/main", doltCommit, "inserting row 1"},
+					{"refs/heads/main", doltCommit, "creating table t1"},
+					{"refs/heads/main", doltCommit, "Initialize data repository"},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_reflog: basic cases with a ref argument",
+		SetUpScript: []string{
+			"create table t1(pk int primary key);",
+			"call dolt_commit('-Am', 'creating table t1');",
+
+			"insert into t1 values(1);",
+			"call dolt_commit('-Am', 'inserting row 1');",
+			"call dolt_tag('tag1');",
+
+			"call dolt_checkout('-b', 'branch1');",
+			"insert into t1 values(2);",
+			"call dolt_commit('-Am', 'inserting row 2');",
+
+			"insert into t1 values(3);",
+			"call dolt_commit('-Am', 'inserting row 3');",
+			"call dolt_tag('-d', 'tag1');",
+			"call dolt_tag('tag1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from dolt_reflog('doesNotExist');",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select ref, commit_hash, commit_message from dolt_reflog('refs/heads/main')",
+				Expected: []sql.Row{
+					{"refs/heads/main", doltCommit, "inserting row 1"},
+					{"refs/heads/main", doltCommit, "creating table t1"},
+					{"refs/heads/main", doltCommit, "Initialize data repository"},
+				},
+			}, {
+				// ref is case-insensitive
+				Query: "select ref, commit_hash, commit_message from dolt_reflog('reFS/Heads/MaIn')",
+				Expected: []sql.Row{
+					{"refs/heads/main", doltCommit, "inserting row 1"},
+					{"refs/heads/main", doltCommit, "creating table t1"},
+					{"refs/heads/main", doltCommit, "Initialize data repository"},
+				},
+			}, {
+				Query: "select ref, commit_hash, commit_message from dolt_reflog('main')",
+				Expected: []sql.Row{
+					{"refs/heads/main", doltCommit, "inserting row 1"},
+					{"refs/heads/main", doltCommit, "creating table t1"},
+					{"refs/heads/main", doltCommit, "Initialize data repository"},
+				},
+			}, {
+				// ref is case-insensitive
+				Query: "select ref, commit_hash, commit_message from dolt_reflog('MaIN')",
+				Expected: []sql.Row{
+					{"refs/heads/main", doltCommit, "inserting row 1"},
+					{"refs/heads/main", doltCommit, "creating table t1"},
+					{"refs/heads/main", doltCommit, "Initialize data repository"},
+				},
+			}, {
+				Query: "select ref, commit_hash, commit_message from dolt_reflog('refs/heads/branch1')",
+				Expected: []sql.Row{
+					{"refs/heads/branch1", doltCommit, "inserting row 3"},
+					{"refs/heads/branch1", doltCommit, "inserting row 2"},
+					{"refs/heads/branch1", doltCommit, "inserting row 1"},
+				},
+			}, {
+				Query: "select ref, commit_hash, commit_message from dolt_reflog('branch1')",
+				Expected: []sql.Row{
+					{"refs/heads/branch1", doltCommit, "inserting row 3"},
+					{"refs/heads/branch1", doltCommit, "inserting row 2"},
+					{"refs/heads/branch1", doltCommit, "inserting row 1"},
+				},
+			}, {
+				Query: "select ref, commit_hash, commit_message from dolt_reflog('refs/tags/tag1')",
+				Expected: []sql.Row{
+					{"refs/tags/tag1", doltCommit, "inserting row 3"},
+					{"refs/tags/tag1", doltCommit, "inserting row 1"},
+				},
+			}, {
+				// ref is case-insensitive
+				Query: "select ref, commit_hash, commit_message from dolt_reflog('Refs/TAGs/taG1')",
+				Expected: []sql.Row{
+					{"refs/tags/tag1", doltCommit, "inserting row 3"},
+					{"refs/tags/tag1", doltCommit, "inserting row 1"},
+				},
+			}, {
+				Query: "select ref, commit_hash, commit_message from dolt_reflog('tag1')",
+				Expected: []sql.Row{
+					{"refs/tags/tag1", doltCommit, "inserting row 3"},
+					{"refs/tags/tag1", doltCommit, "inserting row 1"},
+				},
+			}, {
+				// ref is case-insensitive
+				Query: "select ref, commit_hash, commit_message from dolt_reflog('tAG1')",
+				Expected: []sql.Row{
+					{"refs/tags/tag1", doltCommit, "inserting row 3"},
+					{"refs/tags/tag1", doltCommit, "inserting row 1"},
+				},
+			}, {
+				// checkout main, so we can delete branch1
+				Query:    "call dolt_checkout('main');",
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
+			}, {
+				// delete branch branch1 and make sure we can still query it in reflog
+				Query:    "call dolt_branch('-D', 'branch1')",
+				Expected: []sql.Row{{0}},
+			}, {
+				Query: "select ref, commit_hash, commit_message from dolt_reflog('branch1')",
+				Expected: []sql.Row{
+					{"refs/heads/branch1", doltCommit, "inserting row 3"},
+					{"refs/heads/branch1", doltCommit, "inserting row 2"},
+					{"refs/heads/branch1", doltCommit, "inserting row 1"},
+				},
+			}, {
+				// delete tag tag1 and make sure we can still query it in reflog
+				Query:    "call dolt_tag('-d', 'tag1')",
+				Expected: []sql.Row{{0}},
+			}, {
+				Query: "select ref, commit_hash, commit_message from dolt_reflog('tag1')",
+				Expected: []sql.Row{
+					{"refs/tags/tag1", doltCommit, "inserting row 3"},
+					{"refs/tags/tag1", doltCommit, "inserting row 1"},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_reflog: garbage collection with no newgen data",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select ref, commit_hash, commit_message from dolt_reflog('main')",
+				Expected: []sql.Row{
+					{"refs/heads/main", doltCommit, "Initialize data repository"},
+				},
+			},
+			{
+				Query:    "call dolt_gc();",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				// Calling dolt_gc() invalidates the session, so we have to ask this assertion to create a new session
+				NewSession: true,
+				Query:      "select ref, commit_hash, commit_message from dolt_reflog('main')",
+				Expected: []sql.Row{
+					{"refs/heads/main", doltCommit, "Initialize data repository"},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_reflog: garbage collection with newgen data",
+		SetUpScript: []string{
+			"create table t1(pk int primary key);",
+			"call dolt_commit('-Am', 'creating table t1');",
+			"insert into t1 values(1);",
+			"call dolt_commit('-Am', 'inserting row 1');",
+			"call dolt_tag('tag1');",
+			"insert into t1 values(2);",
+			"call dolt_commit('-Am', 'inserting row 2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select ref, commit_hash, commit_message from dolt_reflog('main')",
+				Expected: []sql.Row{
+					{"refs/heads/main", doltCommit, "inserting row 2"},
+					{"refs/heads/main", doltCommit, "inserting row 1"},
+					{"refs/heads/main", doltCommit, "creating table t1"},
+					{"refs/heads/main", doltCommit, "Initialize data repository"},
+				},
+			},
+			{
+				Query:    "call dolt_gc();",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				// Calling dolt_gc() invalidates the session, so we have to force this test to create a new session
+				NewSession: true,
+				Query:      "select ref, commit_hash, commit_message from dolt_reflog('main')",
+				Expected: []sql.Row{
+					{"refs/heads/main", doltCommit, "inserting row 2"},
+				},
+			},
+		},
+	},
+}
+
 // DoltAutoIncrementTests is tests of dolt's global auto increment logic
 var DoltAutoIncrementTests = []queries.ScriptTest{
 	{

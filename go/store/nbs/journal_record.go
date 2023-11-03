@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -44,11 +45,12 @@ import (
 // to be extracted from the journalRec using only the record length and payload
 // offset. See recLookup for more detail.
 type journalRec struct {
-	length   uint32
-	kind     journalRecKind
-	address  addr
-	payload  []byte
-	checksum uint32
+	length    uint32
+	kind      journalRecKind
+	address   addr
+	payload   []byte
+	timestamp time.Time
+	checksum  uint32
 }
 
 // payloadOffset returns the journalOffset of the payload within the record
@@ -76,22 +78,30 @@ const (
 type journalRecTag uint8
 
 const (
-	unknownJournalRecTag journalRecTag = 0
-	kindJournalRecTag    journalRecTag = 1
-	addrJournalRecTag    journalRecTag = 2
-	payloadJournalRecTag journalRecTag = 3
+	unknownJournalRecTag   journalRecTag = 0
+	kindJournalRecTag      journalRecTag = 1
+	addrJournalRecTag      journalRecTag = 2
+	payloadJournalRecTag   journalRecTag = 3
+	timestampJournalRecTag journalRecTag = 4
 )
 
 const (
-	journalRecTagSz      = 1
-	journalRecLenSz      = 4
-	journalRecKindSz     = 1
-	journalRecAddrSz     = 20
-	journalRecChecksumSz = 4
+	journalRecTagSz       = 1
+	journalRecLenSz       = 4
+	journalRecKindSz      = 1
+	journalRecAddrSz      = 20
+	journalRecChecksumSz  = 4
+	journalRecTimestampSz = 8
 
 	// todo(andy): less arbitrary
 	journalRecMaxSz = 128 * 1024
 )
+
+// journalRecordTimestampGenerator returns the current time in Unix epoch seconds. This function is stored in a
+// variable so that unit tests can override it to ensure the journal record timestamps are a known, expected value.
+var journalRecordTimestampGenerator = func() uint64 {
+	return uint64(time.Now().Unix())
+}
 
 func chunkRecordSize(c CompressedChunk) (recordSz, payloadOff uint32) {
 	recordSz += journalRecLenSz
@@ -108,6 +118,7 @@ func rootHashRecordSize() (recordSz int) {
 	recordSz += journalRecLenSz
 	recordSz += journalRecTagSz + journalRecKindSz
 	recordSz += journalRecTagSz + journalRecAddrSz
+	recordSz += journalRecTagSz + journalRecTimestampSz
 	recordSz += journalRecChecksumSz
 	return
 }
@@ -144,17 +155,27 @@ func writeRootHashRecord(buf []byte, root addr) (n uint32) {
 	l := rootHashRecordSize()
 	writeUint32(buf[:journalRecLenSz], uint32(l))
 	n += journalRecLenSz
+
 	// kind
 	buf[n] = byte(kindJournalRecTag)
 	n += journalRecTagSz
 	buf[n] = byte(rootHashJournalRecKind)
 	n += journalRecKindSz
+
+	// timestamp
+	buf[n] = byte(timestampJournalRecTag)
+	n += journalRecTagSz
+	writeUint64(buf[n:], journalRecordTimestampGenerator())
+	n += journalRecTimestampSz
+
 	// address
 	buf[n] = byte(addrJournalRecTag)
 	n += journalRecTagSz
 	copy(buf[n:], root[:])
 	n += journalRecAddrSz
+
 	// empty payload
+
 	// checksum
 	writeUint32(buf[n:], crc(buf[:n]))
 	n += journalRecChecksumSz
@@ -174,6 +195,10 @@ func readJournalRecord(buf []byte) (rec journalRec, err error) {
 		case addrJournalRecTag:
 			copy(rec.address[:], buf)
 			buf = buf[journalRecAddrSz:]
+		case timestampJournalRecTag:
+			unixSeconds := readUint64(buf)
+			rec.timestamp = time.Unix(int64(unixSeconds), 0)
+			buf = buf[journalRecTimestampSz:]
 		case payloadJournalRecTag:
 			sz := len(buf) - journalRecChecksumSz
 			rec.payload = buf[:sz]
@@ -201,6 +226,9 @@ func validateJournalRecord(buf []byte) bool {
 	return crc(buf[:off]) == readUint32(buf[off:])
 }
 
+// processJournalRecords iterates over a chunk journal's records by reading from disk using |r|, starting at
+// offset |off|, and calls the callback function |cb| with each journal record. The offset where reading was stopped
+// is returned, or any error encounterd along the way.
 func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb func(o int64, r journalRec) error) (int64, error) {
 	var (
 		buf []byte
