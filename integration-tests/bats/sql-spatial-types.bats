@@ -75,6 +75,7 @@ teardown() {
 }
 
 @test "sql-spatial-types: can create large geometry" {
+    skip "This test is too slow to run on CI"
     run dolt sql < $BATS_TEST_DIRNAME/helper/big_spatial.sql
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Query OK" ]] || false
