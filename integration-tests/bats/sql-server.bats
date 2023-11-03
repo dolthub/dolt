@@ -139,7 +139,7 @@ EOF
     SERVER_PID=$!
     sleep 5
 
-    run dolt --user=dolt --password=wrongpassword sql
+    run dolt --user=dolt --password=wrongpassword sql -q "select 1"
     [ "$status" -eq 1 ]
     run grep 'Error authenticating user using MySQL native password' log.txt
     [ "$status" -eq 0 ]
