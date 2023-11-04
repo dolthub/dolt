@@ -1293,25 +1293,15 @@ func remapTupleWithColumnDefaults(
 ) (val.Tuple, error) {
 	tb := val.NewTupleBuilder(mergedSch.GetValueDescriptor())
 
-	type pair struct {
-		to, from int
-	}
-	var secondPass []pair
-	
+	var secondPass []int
 	for to, from := range mapping {
 		col := mergedSch.GetNonPKCols().GetByIndex(to)
 		if from == -1 {
-			// If the column is a new column, then look up any default or generated value
-			if col.Default != "" {
-				err := writeTupleExpression(ctx, keyTuple, valueTuple, col.Default, col, mergedSch, tm, tb, to)
-				if err != nil {
-					return nil, err
-				}
-			} else if col.Generated != "" {
-				err := writeTupleExpression(ctx, keyTuple, valueTuple, col.Generated, col, mergedSch, tm, tb, to)
-				if err != nil {
-					return nil, err
-				}
+			// If the column is a new column, then look up any default or generated value in a second pass, after the 
+			// non-default and non-generated fields have been established. Virtual columns have been excluded, so any
+			// generated column is stored.
+			if col.Default != "" || col.Generated != "" {
+				secondPass = append(secondPass, to)
 			}
 		} else {
 			var value any
@@ -1338,6 +1328,28 @@ func remapTupleWithColumnDefaults(
 			}
 		}
 	}
+	
+	for _, to := range secondPass {
+		col := mergedSch.GetNonPKCols().GetByIndex(to)
+		var value any
+		if col.Default != "" {
+			err := writeTupleExpression(ctx, keyTuple, valueTuple, col.Default, col, mergedSch, tm, tb, to)
+			if err != nil {
+				return nil, err
+			}
+		} else if col.Generated != "" {
+			err := writeTupleExpression(ctx, keyTuple, valueTuple, col.Generated, col, mergedSch, tm, tb, to)
+			if err != nil {
+				return nil, err
+			}
+		}
+		
+		err := index.PutField(ctx, tm.ns, tb, to, value)
+		if err != nil {
+			return nil, err
+		}
+	}
+	
 	return tb.Build(pool), nil
 }
 
