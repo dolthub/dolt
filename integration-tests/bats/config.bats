@@ -206,17 +206,17 @@ teardown() {
     skiponwindows "This test has dependencies missing on windows installations"
     
     start_sql_server
-    
-    dolt sql-client --use-db '' -u dolt -P $PORT -q "create database testdb"
-    run dolt sql-client --use-db '' -u dolt -P $PORT --result-format csv -q "show databases"
+
+    dolt sql -q "create database testdb"
+    run dolt sql --result-format csv -q "show databases"
     [ $status -eq 0 ]
     [[ "$output" =~ "testdb" ]] || false
-    dolt sql-client --use-db testdb -u dolt -P $PORT -q "create table a(x int)"
-    dolt sql-client --use-db testdb -u dolt -P $PORT -q "insert into a values (1), (2)"
+    dolt sql -q "create table a(x int)"
+    dolt sql -q "insert into a values (1), (2)"
 
     [ -d "testdb" ]
-    dolt sql-client --use-db testdb -u dolt -P $PORT -q "select * from dolt_log"
-    run dolt sql-client --use-db testdb -u dolt -P $PORT -q "select * from dolt_log"
+    dolt --use-db testdb sql -q "select * from dolt_log"
+    run dolt --use-db testdb sql -q "select * from dolt_log"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Dolt System Account" ]] || false
     [[ "$output" =~ "doltuser@dolthub.com" ]] || false

@@ -14,7 +14,7 @@ wait_for_connection() {
   end_time=$((SECONDS+($timeout/1000)))
 
   while [ $SECONDS -lt $end_time ]; do
-    run dolt sql-client -u $user --host localhost --port $port --use-db "$DEFAULT_DB" --timeout 1 -q "SELECT 1;"
+    run dolt -u $user -p "" --host localhost --no-tls --port $port --use-db "$DEFAULT_DB" sql -q "SELECT 1;"
     if [ $status -eq 0 ]; then
       echo "Connected successfully!"
       return 0

@@ -321,7 +321,7 @@ func (cmd SqlCmd) handleLegacyArguments(ap *argparser.ArgParser, commandStr stri
 		}
 
 		// The legacy form worked, so print an error and exit.
-		err = fmt.Errorf("SQL arguments have changed. Move --data-dir, --doltcfg-dir to before the sql sub command.")
+		err = fmt.Errorf("SQL arguments have changed. Move global arguments before the sql sub command.")
 		return nil, err
 	}
 
