@@ -1,5 +1,10 @@
 const core = require('@actions/core');
 const aws = require('aws-sdk');
+
+const {
+    SES
+} = require("@aws-sdk/client-ses");
+
 const fs = require('fs');
 
 const region = core.getInput('region');
@@ -27,6 +32,9 @@ const templated = {
 };
 
 // Set the region
+// JS SDK v3 does not support global configuration.
+// Codemod has attempted to pass values to each service client in this file.
+// You may need to update clients outside of this file, if they use global config.
 aws.config.update({ region });
 
 // Create sendEmail params
@@ -45,7 +53,14 @@ console.log(params)
 
 // Create the promise and SES service object
 // const sendPromise = new aws.SES({apiVersion: '2010-12-01'}).sendEmail(params).promise();
-const sendPromise = new aws.SES({apiVersion: '2010-12-01'}).sendTemplatedEmail(params).promise();
+const sendPromise = new SES({
+    // The transformation for apiVersion is not implemented.
+    // Refer to UPGRADING.md on aws-sdk-js-v3 for changes needed.
+    // Please create/upvote feature request on aws-sdk-js-codemod for apiVersion.
+    apiVersion: '2010-12-01',
+
+    region
+}).sendTemplatedEmail(params).promise();
 
 // Handle promise's fulfilled/rejected states
 sendPromise
