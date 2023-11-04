@@ -126,11 +126,13 @@ func TestSingleScript(t *testing.T) {
 				"insert into t1 (id, v1, v2) values (1, 1, 1), (2, 2, 2)",
 				"call dolt_commit('-Am', 'first commit')",
 				"call dolt_branch('branch1')",
-				"update t1 set v1 = 3 where id = 1",
-				"call dolt_commit('-Am', 'main commit')",
+				"call dolt_branch('branch2')",
 				"call dolt_checkout('branch1')",
-				"update t1 set v2 = 3 where id = 1",
+				"update t1 set v1 = 4 where id = 1",
 				"call dolt_commit('-Am', 'branch1 commit')",
+				"call dolt_checkout('branch2')",
+				"update t1 set v2 = 5 where id = 1",
+				"call dolt_commit('-Am', 'branch2 commit')",
 				"call dolt_checkout('main')",
 			},
 			Assertions: []queries.ScriptTestAssertion{
@@ -141,18 +143,28 @@ func TestSingleScript(t *testing.T) {
 				{
 					Query: "select * from t1 order by id",
 					Expected: []sql.Row{
-						{1, 3, 3, 6},
+						{1, 4, 1, 5},
 						{2, 2, 2, 4},
 					},
 				},
 				{
-					Query:    "select id from t1 where v3 = 6",
+					Query:    "select id from t1 where v3 = 5",
 					Expected: []sql.Row{{1}},
-					Skip:     true,
 				},
 				{
-					Query:    "select id from t1 where v3 = 4",
-					Expected: []sql.Row{{2}},
+					Query:            "call dolt_merge('branch2')",
+					SkipResultsCheck: true,
+				},
+				{
+					Query: "select * from t1 order by id",
+					Expected: []sql.Row{
+						{1, 4, 5, 9},
+						{2, 2, 2, 4},
+					},
+				},
+				{
+					Query:    "select id from t1 where v3 = 9",
+					Expected: []sql.Row{{1}},
 				},
 			},
 		},
@@ -264,8 +276,8 @@ func TestSingleScript(t *testing.T) {
 			if err != nil {
 				panic(err)
 			}
-			engine.EngineAnalyzer().Debug = true
-			engine.EngineAnalyzer().Verbose = true
+			// engine.EngineAnalyzer().Debug = true
+			// engine.EngineAnalyzer().Verbose = true
 
 			enginetest.TestScriptWithEngine(t, engine, harness, script)
 			return nil

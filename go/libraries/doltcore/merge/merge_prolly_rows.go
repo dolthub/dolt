@@ -1095,7 +1095,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 				ctx,
 				diff.Key,
 				merged,
-				sourceSch.GetValueDescriptor(),
+				m.finalSch.GetValueDescriptor(),
 				m.valueMerger.rightMapping,
 				m.tableMerger,
 				m.finalSch,
