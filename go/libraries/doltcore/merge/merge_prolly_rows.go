@@ -1067,8 +1067,17 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 				return fmt.Errorf("cannot merge keyless tables with reordered columns")
 			}
 		} else {
-			tempTupleValue, err := remapTupleWithColumnDefaults(ctx, diff.Key, diff.Right, sourceSch.GetValueDescriptor(),
-				m.valueMerger.rightMapping, m.tableMerger, m.finalSch, m.valueMerger.syncPool, true)
+			tempTupleValue, err := remapTupleWithColumnDefaults(
+				ctx,
+				diff.Key,
+				diff.Right,
+				sourceSch.GetValueDescriptor(),
+				m.valueMerger.rightMapping,
+				m.tableMerger,
+				m.finalSch,
+				m.valueMerger.syncPool,
+				true,
+			)
 			if err != nil {
 				return err
 			}
@@ -1078,10 +1087,42 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 	case tree.DiffOpRightDelete:
 		return m.mut.Put(ctx, diff.Key, diff.Right)
 	case tree.DiffOpDivergentModifyResolved:
-		return m.mut.Put(ctx, diff.Key, diff.Merged)
+		// any generated columns need to be re-resolved because their computed values may have changed as a result of 
+		// the merge
+		merged := diff.Merged
+		if hasStoredGeneratedColumns(m.finalSch) {
+			tempTupleValue, err := remapTupleWithColumnDefaults(
+				ctx,
+				diff.Key,
+				merged,
+				sourceSch.GetValueDescriptor(),
+				m.valueMerger.rightMapping,
+				m.tableMerger,
+				m.finalSch,
+				m.valueMerger.syncPool,
+				true)
+			if err != nil {
+				return err
+			}
+			merged = tempTupleValue
+		}
+		
+		return m.mut.Put(ctx, diff.Key, merged)
 	default:
 		return fmt.Errorf("unexpected diffOp for editing primary index: %s", diff.Op)
 	}
+}
+
+func hasStoredGeneratedColumns(sch schema.Schema) bool {
+	hasGenerated := false
+	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if col.Generated != "" && !col.Virtual {
+			hasGenerated = true
+			return true, nil
+		}
+		return false, nil 
+	})
+	return hasGenerated
 }
 
 func (m *primaryMerger) finalize(ctx context.Context) (durable.Index, error) {
@@ -1252,42 +1293,35 @@ func remapTupleWithColumnDefaults(
 ) (val.Tuple, error) {
 	tb := val.NewTupleBuilder(mergedSch.GetValueDescriptor())
 
+	type pair struct {
+		to, from int
+	}
+	var secondPass []pair
+	
 	for to, from := range mapping {
-		var value interface{}
 		col := mergedSch.GetNonPKCols().GetByIndex(to)
 		if from == -1 {
-			// If the column is a new column, then look up any default value
+			// If the column is a new column, then look up any default or generated value
 			if col.Default != "" {
-				// TODO: Not great to reparse the expression for every single row... need to cache this
-				expression, err := resolveExpression(ctx, col.Default, mergedSch, tm.name)
+				err := writeTupleExpression(ctx, keyTuple, valueTuple, col.Default, col, mergedSch, tm, tb, to)
 				if err != nil {
 					return nil, err
 				}
-
-				if !expression.Resolved() {
-					return nil, ErrUnableToMergeColumnDefaultValue.New(col.Default, tm.name)
-				}
-
-				row, err := buildRow(ctx, keyTuple, valueTuple, mergedSch, tm)
-				if err != nil {
-					return nil, err
-				}
-
-				value, err = expression.Eval(ctx, row)
-				if err != nil {
-					return nil, err
-				}
-				value, _, err = col.TypeInfo.ToSqlType().Convert(value)
-				if err != nil {
-					return nil, err
-				}
-				err = index.PutField(ctx, tm.ns, tb, to, value)
+			} else if col.Generated != "" {
+				err := writeTupleExpression(ctx, keyTuple, valueTuple, col.Generated, col, mergedSch, tm, tb, to)
 				if err != nil {
 					return nil, err
 				}
 			}
 		} else {
-			value, err := index.GetField(ctx, tupleDesc, from, valueTuple, tm.ns)
+			var value any
+			var err error
+			// Get the value from this column either from the merge result or the 
+			if col.Generated != "" {
+				
+			}
+			
+			value, err = index.GetField(ctx, tupleDesc, from, valueTuple, tm.ns)
 			if err != nil {
 				return nil, err
 			}
@@ -1305,6 +1339,49 @@ func remapTupleWithColumnDefaults(
 		}
 	}
 	return tb.Build(pool), nil
+}
+
+// writeTupleExpression attempts to evaluate the expression string |exprString| against the row provided and write it 
+// to the provided index in the tuple builder. This is necessary for column default values and generated columns.
+func writeTupleExpression(
+		ctx *sql.Context,
+		keyTuple val.Tuple,
+		valueTuple val.Tuple,
+		exprString string,
+		col schema.Column,
+		mergedSch schema.Schema,
+		tm *TableMerger,
+		tb *val.TupleBuilder,
+		colIdx int,
+) error {
+	expression, err := resolveExpression(ctx, exprString, mergedSch, tm.name)
+	if err != nil {
+		return err
+	}
+
+	if !expression.Resolved() {
+		return ErrUnableToMergeColumnDefaultValue.New(exprString, tm.name)
+	}
+
+	row, err := buildRow(ctx, keyTuple, valueTuple, mergedSch, tm)
+	if err != nil {
+		return err
+	}
+
+	value, err := expression.Eval(ctx, row)
+	if err != nil {
+		return err
+	}
+	
+	value, _, err = col.TypeInfo.ToSqlType().Convert(value)
+	if err != nil {
+		return err
+	}
+	err = index.PutField(ctx, tm.ns, tb, colIdx, value)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // convertValueToNewType handles converting a value from a previous type into a new type. |value| is the value from

@@ -209,16 +209,16 @@ type DiffOp uint16
 const (
 	DiffOpLeftAdd                 DiffOp = iota // leftAdd
 	DiffOpRightAdd                              // rightAdd
-	DiffOpLeftDelete                            //leftDelete
-	DiffOpRightDelete                           //rightDelete
-	DiffOpLeftModify                            //leftModify
-	DiffOpRightModify                           //rightModify
-	DiffOpConvergentAdd                         //convergentAdd
-	DiffOpConvergentDelete                      //convergentDelete
-	DiffOpConvergentModify                      //convergentModify
-	DiffOpDivergentModifyResolved               //divergenModifytResolved
-	DiffOpDivergentDeleteConflict               //divergentDeleteConflict
-	DiffOpDivergentModifyConflict               //divergentModifyConflict
+	DiffOpLeftDelete                            // leftDelete
+	DiffOpRightDelete                           // rightDelete
+	DiffOpLeftModify                            // leftModify
+	DiffOpRightModify                           // rightModify
+	DiffOpConvergentAdd                         // convergentAdd
+	DiffOpConvergentDelete                      // convergentDelete
+	DiffOpConvergentModify                      // convergentModify
+	DiffOpDivergentModifyResolved               // divergentModifyResolved
+	DiffOpDivergentDeleteConflict              // divergentDeleteConflict
+	DiffOpDivergentModifyConflict              // divergentModifyConflict
 )
 
 // ThreeWayDiff is a generic object for encoding a three way diff.
