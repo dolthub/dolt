@@ -4326,6 +4326,43 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "merge a generated column with non-conflicting changes on both sides",
+		SetUpScript: []string{
+			"create table t1 (id bigint primary key, v1 bigint, v2 bigint, v3 bigint as (v1 + v2) stored)",
+			"insert into t1 (id, v1, v2) values (1, 1, 1), (2, 2, 2)",
+			"call dolt_commit('-Am', 'first commit')",
+			"call dolt_branch('branch1')",
+			"update t1 set v1 = 3 where id = 1",
+			"call dolt_commit('-Am', 'main commit')",
+			"call dolt_checkout('branch1')",
+			"update t1 set v2 = 3 where id = 1",
+			"call dolt_commit('-Am', 'branch1 commit')",
+			"call dolt_checkout('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "call dolt_merge('branch1')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "select * from t1 order by id",
+				Expected: []sql.Row{
+					{1, 3, 3, 6},
+					{2, 2, 2, 4},
+				},
+			},
+			{
+				Query:    "select id from t1 where v3 = 6",
+				Expected: []sql.Row{{1}},
+				Skip:     true,
+			},
+			{
+				Query:    "select id from t1 where v3 = 4",
+				Expected: []sql.Row{{2}},
+			},
+		},
+	},
+	{
 		Name: "merge a generated column created on another branch",
 		SetUpScript: []string{
 			"create table t1 (id bigint primary key, v1 bigint, v2 bigint)",
