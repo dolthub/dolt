@@ -180,9 +180,12 @@ DELIM
     run dolt table import -c --pk=id fktest 1pk5col-ints.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "fktest already exists. Use -f to overwrite." ]] || false
-    run dolt table import -c --pk=pk test 1pk5col-ints.csv -f
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ 'it is referenced in foreign key' ]] || false
+    run dolt table import -c -f --pk=pk fktest other.csv
+    [ "$status" -eq 0 ]
+
+    run dolt schema show
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "FOREIGN KEY" ]] || false
 }
 
 @test "import-create-tables: try to create a table with a bad csv" {
