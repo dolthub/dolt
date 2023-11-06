@@ -334,7 +334,16 @@ func threeWayDiffer(ctx context.Context, tm *TableMerger, valueMerger *valueMerg
 	}
 	ancRows := durable.ProllyMapFromIndex(ar)
 
-	return tree.NewThreeWayDiffer(ctx, leftRows.NodeStore(), leftRows.Tuples(), rightRows.Tuples(), ancRows.Tuples(), valueMerger.tryMerge, valueMerger.keyless, leftRows.Tuples().Order)
+	return tree.NewThreeWayDiffer(
+		ctx,
+		leftRows.NodeStore(),
+		leftRows.Tuples(),
+		rightRows.Tuples(),
+		ancRows.Tuples(),
+		valueMerger.tryMerge,
+		valueMerger.keyless,
+		leftRows.Tuples().Order,
+	)
 }
 
 // checkValidator is responsible for inspecting three-way diff events, running any check constraint expressions
@@ -1662,15 +1671,17 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 	leftCol, leftColIdx, leftColExists := getColumn(&left, &m.leftMapping, i)
 	rightCol, rightColIdx, rightColExists := getColumn(&right, &m.rightMapping, i)
 	resultType := m.resultVD.Types[i]
-
+	resultColumn := m.resultSchema.GetNonPKCols().GetByIndex(i)
+	generatedColumn := resultColumn.Generated != ""
+	
 	// We previously asserted that left and right are not nil.
-	//But base can be nil in the event of convergent inserts.
+	// But base can be nil in the event of convergent inserts.
 	if base == nil || !baseColExists {
 		// There are two possible cases:
 		// - The base row doesn't exist, or
 		// - The column doesn't exist in the base row
 		// Regardless, both left and right are inserts, or one is an insert and the other doesn't exist.
-
+		
 		if !rightColExists {
 			return leftCol, false, nil
 		}
@@ -1688,6 +1699,12 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 			// columns are equal, return either.
 			return leftCol, false, nil
 		}
+		
+		// generated columns will be updated as part of the merge later on, so choose either value for now
+		if generatedColumn {
+			return leftCol, false, nil
+		}
+		
 		// conflicting inserts
 		return nil, true, nil
 	}
@@ -1709,7 +1726,7 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 			return nil, false, err
 		}
 	}
-
+	
 	var leftModified, rightModified bool
 
 	if leftColIdx == -1 && rightColIdx == -1 {
@@ -1738,7 +1755,11 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 	leftModified = m.resultVD.Comparator().CompareValues(i, leftCol, baseCol, resultType) != 0
 
 	switch {
-	case leftModified && rightModified:
+	case leftModified && rightModified:	
+		// generated columns will be updated as part of the merge later on, so choose either value for now
+		if generatedColumn {
+			return leftCol, false, nil
+		}
 		// concurrent modification
 		return nil, true, nil
 	case leftModified:
