@@ -25,12 +25,12 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/dolthub/fslock"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/fslock"
 )
 
 const (

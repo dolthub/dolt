@@ -15,9 +15,10 @@
 package nbs
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // TestIteration asserts that we can iterate over the contents of a reflog ring buffer as the ring buffer grows.
