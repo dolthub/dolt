@@ -855,7 +855,7 @@ func emptyStringToNil(val interface{}) interface{} {
 	}
 
 	if s, canConvert := val.(string); canConvert {
-		if s == "" {
+		if s == "" || strings.ToLower(s) == "null" {
 			return nil
 		}
 	}

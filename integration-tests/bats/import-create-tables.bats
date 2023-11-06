@@ -812,3 +812,40 @@ DELIM
     [ "${lines[0]}" = "On branch main" ]
     [ "${lines[1]}" = "nothing to commit, working tree clean" ]
 }
+
+@test "import-create-tables: import null foreign key value" {
+    cat <<DELIM > test.csv
+id, state_id, data
+1, NULL,poop
+DELIM
+
+    dolt sql <<SQL
+CREATE TABLE states (
+  id int NOT NULL,
+  abbr char(2),
+  PRIMARY KEY (id)
+);
+CREATE TABLE data (
+  id int NOT NULL,
+  state_id int,
+  data varchar(500),
+  PRIMARY KEY (id),
+  KEY state_id (state_id),
+  CONSTRAINT d4jibcjf FOREIGN KEY (state_id) REFERENCES states (id)
+);
+SQL
+
+    run dolt sql -q "insert into data values (0, NULL, 'poop')"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "select * from data"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| 0  | NULL     | poop |" ]] || false
+
+    run dolt table import -u data test.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
+    run dolt sql -q "select * from data"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| 0  | NULL     | poop |" ]] || false
+    [[ "$output" =~ "| 1  | NULL     | poop |" ]] || false
+}
