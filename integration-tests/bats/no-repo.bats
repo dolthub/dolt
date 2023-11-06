@@ -32,7 +32,6 @@ teardown() {
     [[ "$output" =~ "commit - Record changes to the repository." ]] || false
     [[ "$output" =~ "sql - Run a SQL query against tables in repository." ]] || false
     [[ "$output" =~ "sql-server - Start a MySQL-compatible server." ]] || false
-    [[ "$output" =~ "sql-client - Starts a built-in MySQL client." ]] || false
     [[ "$output" =~ "log - Show commit logs." ]] || false
     [[ "$output" =~ "branch - Create, list, edit, delete branches." ]] || false
     [[ "$output" =~ "checkout - Checkout a branch or overwrite a table from HEAD." ]] || false
