@@ -63,7 +63,7 @@ const (
 	commitAddrEnc ByteSize = hash.ByteLen
 	stringAddrEnc ByteSize = hash.ByteLen
 	jsonAddrEnc   ByteSize = hash.ByteLen
-	cellSize          ByteSize = 17
+	cellSize      ByteSize = 17
 	geomAddrEnc   ByteSize = hash.ByteLen
 )
 
