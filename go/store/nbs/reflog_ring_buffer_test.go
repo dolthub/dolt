@@ -15,9 +15,13 @@
 package nbs
 
 import (
-	"github.com/stretchr/testify/assert"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestIteration asserts that we can iterate over the contents of a reflog ring buffer as the ring buffer grows.
@@ -110,6 +114,47 @@ func TestTruncateToLastRecord(t *testing.T) {
 	insertTestRecord(buffer, "mmmm")
 	buffer.TruncateToLastRecord()
 	assertExpectedIterationOrder(t, buffer, []string{"mmmm"})
+}
+
+// TestSlowIteration asserts that when iterating through a reflog ring buffer too slowly and the insertion index
+// wraps around into the iteration range, that iteration stops early and an error is returned.
+func TestSlowIteration(t *testing.T) {
+	buffer := newReflogRingBuffer(5)
+	buffer.Push(reflogRootHashEntry{"aaaa", time.Now()})
+	buffer.Push(reflogRootHashEntry{"bbbb", time.Now()})
+	buffer.Push(reflogRootHashEntry{"cccc", time.Now()})
+	buffer.Push(reflogRootHashEntry{"dddd", time.Now()})
+	buffer.Push(reflogRootHashEntry{"eeee", time.Now()})
+
+	// Create a wait group to allow our two go routines to complete before
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+
+	// Create one goroutine that *very* slowly iterates through the buffer
+	var err error
+	iterationCount := 0
+	go func() {
+		err = buffer.Iterate(func(item reflogRootHashEntry) error {
+			time.Sleep(1 * time.Second)
+			iterationCount++
+			return nil
+		})
+		wg.Done()
+	}()
+
+	// Create a second goroutine that quickly inserts more data than the buffer can hold
+	go func() {
+		for i := 0; i < 20; i++ {
+			buffer.Push(reflogRootHashEntry{fmt.Sprintf("i-%d", i), time.Now()})
+		}
+		wg.Done()
+	}()
+
+	// Wait for both goroutines to complete, then assert that the conflict detection logic triggered
+	wg.Wait()
+	require.Error(t, err)
+	require.Equal(t, errUnsafeIteration, err)
+	require.True(t, iterationCount < 5)
 }
 
 func insertTestRecord(buffer *reflogRingBuffer, root string) {

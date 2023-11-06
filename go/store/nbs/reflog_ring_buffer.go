@@ -15,10 +15,16 @@
 package nbs
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 )
+
+// errUnsafeIteration is returned when iterating through a ring buffer too slowly and new, inserted data is detected
+// as wrapping around into the iteration range.
+var errUnsafeIteration = errors.New(
+	"unable to finish iteration: insertion index has wrapped around into iteration range")
 
 // reflogRootHashEntry is a data container for a root hash update that was recorded to the chunk journal. It contains
 // the root and the time at which it was written.
@@ -85,16 +91,10 @@ func (rb *reflogRingBuffer) Iterate(f func(item reflogRootHashEntry) error) erro
 	for idx := startPosition; ; {
 		// The ring buffer holds twice as many entries as we ever expose through the Iterate function, so that
 		// entries can still be inserted without having to lock the whole ring buffer during iteration. However,
-		// as a sanity check, before we look at an index, we make sure the current insertion index doesn't conflict.
-		// TODO: this works if we happen to catch the currentInsertIndex at exactly the right time, but it could fly
-		//       over with us missing it. It would be a better sanity check to make sure the current insertion index
-		//       isn't within a range – perhaps 20% of the requested size?
-		rb.mu.Lock()
-		currentInsertIndex := rb.insertIndex
-		rb.mu.Unlock()
-
-		if idx == currentInsertIndex {
-			return fmt.Errorf("unable to finish iteration: insertion index has wrapped around into read range")
+		// as a sanity check, before we look at an index, we make sure the current insertion index hasn't
+		// gone into the range we're iterating.
+		if rb.insertionIndexIsInRange(startPosition, endPosition) {
+			return fmt.Errorf("unable to finish iteration: insertion index has wrapped around into iteration range")
 		}
 
 		err := f(rb.items[idx])
@@ -153,4 +153,21 @@ func (rb *reflogRingBuffer) getIterationIndexes() (int, int) {
 	}
 
 	return startPosition, endPosition
+}
+
+// insertionIndexIsInRange returns true if the current insertion pointer for this ring buffer is within the
+// specified |rangeStart| and |rangeEnd| indexes. This function handles ranges that wrap around the ring buffer.
+func (rb *reflogRingBuffer) insertionIndexIsInRange(rangeStart, rangeEnd int) bool {
+	rb.mu.Lock()
+	currentInsertIndex := rb.insertIndex
+	rb.mu.Unlock()
+
+	// If the range wraps around the ring buffer, adjust currentInsertIndex and rangeEnd
+	// so that we can use the same logic for an in range check.
+	if rangeStart > rangeEnd {
+		currentInsertIndex += rb.totalSize
+		rangeEnd += rb.totalSize
+	}
+
+	return currentInsertIndex >= rangeStart && currentInsertIndex <= rangeEnd
 }
