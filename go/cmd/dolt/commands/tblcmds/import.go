@@ -761,13 +761,6 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 	row = applyMapperToRow(row, rowOperationSchema, rdSchema, nameMapper)
 
 	for i, col := range rowOperationSchema.Schema {
-		if s, ok := row[i].(string); ok {
-			if strings.ToLower(s) == "null" {
-				row[i] = nil
-				continue
-			}
-		}
-
 		// Check if this a string that can be converted to a boolean
 		val, ok := detectAndConvertToBoolean(row[i], col.Type)
 		if ok {

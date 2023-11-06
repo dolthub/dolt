@@ -813,10 +813,10 @@ DELIM
     [ "${lines[1]}" = "nothing to commit, working tree clean" ]
 }
 
-@test "import-create-tables: import null foreign key value" {
+@test "import-create-tables: import null foreign key value does not violate constraint" {
     cat <<DELIM > test.csv
 id, state_id, data
-1, NULL,poop
+1, ,poop
 DELIM
 
     dolt sql <<SQL
