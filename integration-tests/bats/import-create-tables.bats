@@ -816,7 +816,7 @@ DELIM
 @test "import-create-tables: import null foreign key value does not violate constraint" {
     cat <<DELIM > test.csv
 id, state_id, data
-1, ,poop
+1,,poop
 DELIM
 
     dolt sql <<SQL
