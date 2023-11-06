@@ -407,17 +407,7 @@ func (j *ChunkJournal) UpdateGCGen(ctx context.Context, lastLock addr, next mani
 	// entry, and double check that it matches the root stored in the manifest.
 	if !reflogDisabled {
 		j.reflogRingBuffer.TruncateToLastRecord()
-
-		if len(j.roots) == 0 {
-			return manifestContents{}, fmt.Errorf(
-				"ChunkJournal roots not intialized; no roots in memory")
-		}
-		j.roots = j.roots[len(j.roots)-1:]
-		j.rootTimestamps = j.rootTimestamps[len(j.rootTimestamps)-1:]
-		if j.roots[0] != latest.root.String() {
-			return manifestContents{}, fmt.Errorf(
-				"ChunkJournal root doesn't match manifest root")
-		}
+		// TODO: sanity check that j.reflogRingBuffer.Peek matches latest.root ?
 	}
 
 	return latest, nil
