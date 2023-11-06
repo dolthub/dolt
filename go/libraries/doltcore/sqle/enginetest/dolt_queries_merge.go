@@ -4403,12 +4403,10 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 					{3, 3, 3, 6},
 					{4, 4, 4, 8},
 				},
-				Skip: true,
 			},
 			{
 				Query:    "select id from t1 where v3 = 6",
 				Expected: []sql.Row{{3}},
-				Skip:     true,
 			},
 			{
 				Query:    "select id from t1 where v3 = 8",
@@ -4435,7 +4433,6 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 			{
 				Query:            "call dolt_merge('branch1')",
 				SkipResultsCheck: true,
-				Skip:             true,
 			},
 			{
 				Query: "select * from t1 order by id",
@@ -4444,17 +4441,14 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 					{2, 2, 2, 4},
 					{3, 3, 3, 6},
 				},
-				Skip: true,
 			},
 			{
 				Query:    "select id from t1 where v3 = 6",
 				Expected: []sql.Row{{3}},
-				Skip:     true,
 			},
 			{
 				Query:            "call dolt_merge('branch2')",
 				SkipResultsCheck: true,
-				Skip:             true,
 			},
 			{
 				Query: "select * from t1 order by id",
@@ -4464,12 +4458,10 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 					{3, 3, 3, 6},
 					{4, 4, 4, 8},
 				},
-				Skip: true,
 			},
 			{
 				Query:    "select id from t1 where v3 = 8",
 				Expected: []sql.Row{{4}},
-				Skip:     true,
 			},
 		},
 	},
@@ -4493,7 +4485,6 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 			{
 				Query:            "call dolt_merge('branch1')",
 				SkipResultsCheck: true,
-				Skip:             true,
 			},
 			{
 				Query: "select * from t1 order by id",
@@ -4502,17 +4493,14 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 					{2, 2, 2, 4},
 					{3, 3, 3, 6},
 				},
-				Skip: true,
 			},
 			{
 				Query:    "select id from t1 where v3 = 6",
 				Expected: []sql.Row{{3}},
-				Skip:     true,
 			},
 			{
 				Query:            "call dolt_merge('branch2')",
 				SkipResultsCheck: true,
-				Skip:             true,
 			},
 			{
 				Query: "select * from t1 order by id",
@@ -4522,12 +4510,10 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 					{3, 3, 3, 6},
 					{4, 4, 4, 8},
 				},
-				Skip: true,
 			},
 			{
 				Query:    "select id from t1 where v3 = 8",
 				Expected: []sql.Row{{4}},
-				Skip:     true,
 			},
 		},
 	},
