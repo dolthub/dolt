@@ -184,7 +184,7 @@ func newTestJournalWriter(t *testing.T, path string) *journalWriter {
 	j, err := createJournalWriter(ctx, path)
 	require.NoError(t, err)
 	require.NotNil(t, j)
-	_, _, _, err = j.bootstrapJournal(ctx)
+	_, err = j.bootstrapJournal(ctx, nil)
 	require.NoError(t, err)
 	return j
 }
@@ -217,8 +217,10 @@ func TestJournalWriterBootstrap(t *testing.T) {
 
 	j, _, err := openJournalWriter(ctx, path)
 	require.NoError(t, err)
-	_, _, _, err = j.bootstrapJournal(ctx)
+	reflogBuffer := newReflogRingBuffer(10)
+	last, err = j.bootstrapJournal(ctx, reflogBuffer)
 	require.NoError(t, err)
+	assertExpectedIterationOrder(t, reflogBuffer, []string{last.String()})
 
 	validateAllLookups(t, j, data)
 
@@ -353,7 +355,7 @@ func TestJournalIndexBootstrap(t *testing.T) {
 				require.NoError(t, err)
 				require.True(t, ok)
 				// bootstrap journal and validate chunk records
-				last, _, _, err := journal.bootstrapJournal(ctx)
+				last, err := journal.bootstrapJournal(ctx, nil)
 				assert.NoError(t, err)
 				for _, e := range expected {
 					var act CompressedChunk
@@ -388,9 +390,8 @@ func TestJournalIndexBootstrap(t *testing.T) {
 			jnl, ok, err := openJournalWriter(ctx, idxPath)
 			require.NoError(t, err)
 			require.True(t, ok)
-			_, _, _, err = jnl.bootstrapJournal(ctx)
+			_, err = jnl.bootstrapJournal(ctx, nil)
 			assert.Error(t, err)
-
 		})
 	}
 }
