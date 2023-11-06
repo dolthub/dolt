@@ -177,7 +177,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		return nil, nil, err
 	}
 
-	nullChk, err := newNullValidator(ctx, finalSch, tm, valueMerger, artEditor, leftEditor, sec.leftMut)
+	nullChk, err := newNullValidator(ctx, finalSch, tm, valueMerger, artEditor, leftEditor, sec.leftIdxes)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1146,9 +1146,9 @@ func (m *primaryMerger) finalize(ctx context.Context) (durable.Index, error) {
 // into secondary index updates.
 type secondaryMerger struct {
 	leftSet      durable.IndexSet
-	rightSet     durable.IndexSet
-	leftMut      []MutableSecondaryIdx
-	valueMerger  *valueMerger
+	rightSet    durable.IndexSet
+	leftIdxes   []MutableSecondaryIdx
+	valueMerger *valueMerger
 	mergedSchema schema.Schema
 }
 
@@ -1174,7 +1174,7 @@ func newSecondaryMerger(ctx context.Context, tm *TableMerger, valueMerger *value
 	return &secondaryMerger{
 		leftSet:      ls,
 		rightSet:     rs,
-		leftMut:      lm,
+		leftIdxes:    lm,
 		valueMerger:  valueMerger,
 		mergedSchema: mergedSchema,
 	}, nil
@@ -1182,7 +1182,7 @@ func newSecondaryMerger(ctx context.Context, tm *TableMerger, valueMerger *value
 
 func (m *secondaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sourceSch schema.Schema) error {
 	var err error
-	for _, idx := range m.leftMut {
+	for _, idx := range m.leftIdxes {
 		switch diff.Op {
 		case tree.DiffOpDivergentModifyResolved:
 			err = applyEdit(ctx, idx, diff.Key, diff.Left, diff.Merged)
@@ -1221,7 +1221,7 @@ func (m *secondaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sou
 
 // finalize reifies edits into output index sets
 func (m *secondaryMerger) finalize(ctx context.Context) (durable.IndexSet, durable.IndexSet, error) {
-	for _, idx := range m.leftMut {
+	for _, idx := range m.leftIdxes {
 		idxMap, err := idx.Map(ctx)
 		if err != nil {
 			return nil, nil, err
