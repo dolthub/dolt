@@ -155,17 +155,17 @@ func TestRoundTripProllyFields(t *testing.T) {
 		},
 		{
 			name:  "point",
-			typ:   val.Type{Enc: val.GeometryEnc},
+			typ:   val.Type{Enc: val.GeomAddrEnc},
 			value: mustParseGeometryType(t, "POINT(1 2)"),
 		},
 		{
 			name:  "linestring",
-			typ:   val.Type{Enc: val.GeometryEnc},
+			typ:   val.Type{Enc: val.GeomAddrEnc},
 			value: mustParseGeometryType(t, "LINESTRING(1 2,3 4)"),
 		},
 		{
 			name:  "polygon",
-			typ:   val.Type{Enc: val.GeometryEnc},
+			typ:   val.Type{Enc: val.GeomAddrEnc},
 			value: mustParseGeometryType(t, "POLYGON((0 0,1 1,1 0,0 0))"),
 		},
 		{

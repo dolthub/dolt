@@ -333,7 +333,7 @@ func (tb *TupleBuilder) PutGeometry(i int, v []byte) {
 
 // PutGeometryAddr writes a Geometry's address ref to the ith field
 func (tb *TupleBuilder) PutGeometryAddr(i int, v hash.Hash) {
-	tb.Desc.expectEncoding(i, GeometryEnc)
+	tb.Desc.expectEncoding(i, GeomAddrEnc)
 	tb.ensureCapacity(hash.ByteLen)
 	tb.putAddr(i, v)
 }

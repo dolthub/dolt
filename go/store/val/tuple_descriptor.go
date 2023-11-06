@@ -440,7 +440,7 @@ func (td TupleDesc) GetGeometry(i int, tup Tuple) (v []byte, ok bool) {
 }
 
 func (td TupleDesc) GetGeometryAddr(i int, tup Tuple) (hash.Hash, bool) {
-	td.expectEncoding(i, GeometryEnc)
+	td.expectEncoding(i, GeomAddrEnc)
 	return td.getAddr(i, tup)
 }
 

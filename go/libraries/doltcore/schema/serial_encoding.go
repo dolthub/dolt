@@ -76,7 +76,7 @@ func EncodingFromSqlType(typ query.Type) serial.Encoding {
 	case query.Type_VARCHAR:
 		return serial.EncodingString
 	case query.Type_GEOMETRY:
-		return serial.EncodingGeometry
+		return serial.EncodingGeomAddr
 	case query.Type_JSON:
 		return serial.EncodingJSONAddr
 	case query.Type_BLOB:
