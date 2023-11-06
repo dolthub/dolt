@@ -30,7 +30,7 @@ import (
 
 // mergeProllySecondaryIndexes merges the secondary indexes of the given |tbl|,
 // |mergeTbl|, and |ancTbl|. It stores the merged indexes into |tableToUpdate|
-// and returns its updated value. If |rebuildIndexes| is true, then all indexes
+// and returns its updated value. If |forceIndexRebuild| is true, then all indexes
 // will be rebuilt from the table's data, instead of relying on incremental
 // changes from the other side of the merge to have been merged in before this
 // function was called. This is safer, but less efficient.
