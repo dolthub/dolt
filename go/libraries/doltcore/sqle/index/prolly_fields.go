@@ -91,41 +91,27 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tr
 			err = json.Unmarshal(buf, &doc.Val)
 			v = doc
 		}
-	// TODO: eventually remove this, and only read GeometryAddr
+	// TODO: eventually remove this, and only read GeomAddrEnc
 	case val.GeometryEnc:
 		var buf []byte
 		buf, ok = td.GetGeometry(i, tup)
 		if ok {
 			v, err = deserializeGeometry(buf)
-			if err != nil {
-				var h hash.Hash
-				h, ok = td.GetGeometryAddr(i, tup)
-				if ok {
-					buf, err = tree.NewByteArray(h, ns).ToBytes(ctx)
-					if err != nil {
-						return nil, err
-					}
-					v, err = deserializeGeometry(buf)
-					if err != nil {
-						return nil, err
-					}
-				}
-			}
 		}
 	case val.GeomAddrEnc:
 		var h hash.Hash
+		var buf []byte
 		h, ok = td.GetGeometryAddr(i, tup)
 		if ok {
-			var buf []byte
 			buf, err = tree.NewByteArray(h, ns).ToBytes(ctx)
-			if err != nil {
-				return nil, err
-			}
-			v, err = deserializeGeometry(buf)
-			if err != nil {
-				return nil, err
-			}
+		} else {
+			// TODO: until GeometryEnc is removed, we must check if GeomAddrEnc is a GeometryEnc
+			buf, ok = td.GetGeometry(i, tup)
 		}
+		if !ok || err != nil {
+			return nil, err
+		}
+		v, err = deserializeGeometry(buf)
 	case val.Hash128Enc:
 		v, ok = td.GetHash128(i, tup)
 	case val.BytesAddrEnc:
@@ -227,6 +213,7 @@ func PutField(ctx context.Context, ns tree.NodeStore, tb *val.TupleBuilder, i in
 		tb.PutByteString(i, v.([]byte))
 	case val.Hash128Enc:
 		tb.PutHash128(i, v.([]byte))
+	// TODO: eventually remove GeometryEnc, but in the meantime write them as GeomAddrEnc
 	case val.GeometryEnc:
 		geo := serializeGeometry(v)
 		h, err := serializeBytesToAddr(ctx, ns, bytes.NewReader(geo), len(geo))
