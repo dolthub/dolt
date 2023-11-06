@@ -1315,9 +1315,9 @@ func remapTupleWithColumnDefaults(
 		} else {
 			var value any
 			var err error
-			// Get the value from this column either from the merge result or the 
+			// Generated column values need to be regenerated after the merge 
 			if col.Generated != "" {
-				
+				secondPass = append(secondPass, to)
 			}
 			
 			value, err = index.GetField(ctx, tupleDesc, from, valueTuple, tm.ns)
