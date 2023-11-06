@@ -31,8 +31,9 @@ import (
 // mergeProllySecondaryIndexes merges the secondary indexes of the given |tbl|,
 // |mergeTbl|, and |ancTbl|. It stores the merged indexes into |tableToUpdate|
 // and returns its updated value. If |rebuildIndexes| is true, then all indexes
-// will be rebuilt from the table's data, instead of merging in incremental
-// changes from the other side of the merge. This is safer, but less efficient.
+// will be rebuilt from the table's data, instead of relying on incremental
+// changes from the other side of the merge to have been merged in before this
+// function was called. This is safer, but less efficient.
 func mergeProllySecondaryIndexes(
 	ctx context.Context,
 	tm *TableMerger,
@@ -40,12 +41,8 @@ func mergeProllySecondaryIndexes(
 	finalSch schema.Schema,
 	finalRows durable.Index,
 	artifacts *prolly.ArtifactsEditor,
-	rebuildIndexes bool,
+	forceIndexRebuild bool,
 ) (durable.IndexSet, error) {
-	ancSet, err := tm.ancTbl.GetIndexSet(ctx)
-	if err != nil {
-		return nil, err
-	}
 	mergedIndexSet, err := durable.NewIndexSet(ctx, tm.vrw, tm.ns)
 	if err != nil {
 		return nil, err
@@ -75,17 +72,20 @@ func mergeProllySecondaryIndexes(
 		if err != nil {
 			return nil, err
 		}
-		_, mergeOK, err := tryGetIdx(tm.rightSch, rightSet, index.Name())
-		if err != nil {
-			return nil, err
-		}
-		_, ancOK, err := tryGetIdx(tm.ancSch, ancSet, index.Name())
-		if err != nil {
-			return nil, err
+
+		// If the left (destination) side of the merge doesn't have an index it is supposed to have,
+		// then a full rebuild for this index is required.
+		rebuildRequired := !rootOK
+
+		// If the index existed on the left (destination) side, before this merge, and differs
+		// from the final version we need for the merged schema, then it needs to be rebuilt.
+		leftIndexDefinition := tm.leftSch.Indexes().GetByName(index.Name())
+		if leftIndexDefinition != nil && leftIndexDefinition.Equals(index) == false {
+			rebuildRequired = true
 		}
 
 		mergedIndex, err := func() (durable.Index, error) {
-			if rebuildIndexes || !rootOK || !mergeOK || !ancOK {
+			if forceIndexRebuild || rebuildRequired {
 				return buildIndex(ctx, tm.vrw, tm.ns, finalSch, index, mergedM, artifacts, tm.rightSrc, tm.name)
 			}
 			return durable.IndexFromProllyMap(left), nil
