@@ -45,6 +45,7 @@ type reflogRingBuffer struct {
 	totalSize     int
 	insertIndex   int
 	itemCount     int
+	epoch         uint
 }
 
 // newReflogRingBuffer creates a new reflogRingBuffer that allows the reflog to query up to |size| records.
@@ -62,6 +63,7 @@ func newReflogRingBuffer(size int) *reflogRingBuffer {
 		mu:            &sync.Mutex{},
 		insertIndex:   0,
 		itemCount:     0,
+		epoch:         1,
 	}
 }
 
@@ -73,6 +75,10 @@ func (rb *reflogRingBuffer) Push(newItem reflogRootHashEntry) {
 
 	rb.items[rb.insertIndex] = newItem
 	rb.insertIndex = (rb.insertIndex + 1) % len(rb.items)
+	if rb.insertIndex == 0 {
+		rb.epoch++
+	}
+
 	if rb.itemCount < rb.requestedSize {
 		rb.itemCount++
 	}
@@ -83,7 +89,7 @@ func (rb *reflogRingBuffer) Push(newItem reflogRootHashEntry) {
 // entry. This function will iterate over at most N entries, where N is the requested size the caller specified
 // when constructing this ring buffer.
 func (rb *reflogRingBuffer) Iterate(f func(item reflogRootHashEntry) error) error {
-	startPosition, endPosition := rb.getIterationIndexes()
+	startPosition, endPosition, startingEpoch := rb.getIterationIndexes()
 	if startPosition == endPosition {
 		return nil
 	}
@@ -93,8 +99,8 @@ func (rb *reflogRingBuffer) Iterate(f func(item reflogRootHashEntry) error) erro
 		// entries can still be inserted without having to lock the whole ring buffer during iteration. However,
 		// as a sanity check, before we look at an index, we make sure the current insertion index hasn't
 		// gone into the range we're iterating.
-		if rb.insertionIndexIsInRange(startPosition, endPosition) {
-			return fmt.Errorf("unable to finish iteration: insertion index has wrapped around into iteration range")
+		if rb.insertionIndexIsInRange(startPosition, endPosition, startingEpoch) {
+			return errUnsafeIteration
 		}
 
 		err := f(rb.items[idx])
@@ -127,15 +133,16 @@ func (rb *reflogRingBuffer) TruncateToLastRecord() {
 }
 
 // getIterationIndexes returns the start (inclusive) and end (exclusive) positions for iterating over the
-// entries in this ring buffer. Note that the end position may be less than the start position, which
-// indicates that iteration should wrap around the ring buffer.
-func (rb *reflogRingBuffer) getIterationIndexes() (int, int) {
+// entries in this ring buffer, as well as the current epoch, or generation of the ring buffer for the starting
+// position. Note that the end position may be less than the start position, which indicates that iteration
+// wraps around the ring buffer.
+func (rb *reflogRingBuffer) getIterationIndexes() (int, int, uint) {
 	rb.mu.Lock()
 	defer rb.mu.Unlock()
 
 	// If the buffer is empty, return the start position equal to the end position so that iteration is a no-op
 	if rb.itemCount == 0 || rb.totalSize == 0 {
-		return rb.insertIndex, rb.insertIndex
+		return rb.insertIndex, rb.insertIndex, rb.epoch
 	}
 
 	// When the ring buffer isn't fully populated yet, we need to be careful to limit iteration to the number
@@ -148,26 +155,46 @@ func (rb *reflogRingBuffer) getIterationIndexes() (int, int) {
 
 	endPosition := rb.insertIndex
 	startPosition := (endPosition - itemCount) % rb.totalSize
+	epoch := rb.epoch
 	if startPosition < 0 {
 		startPosition = rb.totalSize + startPosition
+		epoch--
 	}
 
-	return startPosition, endPosition
+	return startPosition, endPosition, epoch
 }
 
 // insertionIndexIsInRange returns true if the current insertion pointer for this ring buffer is within the
-// specified |rangeStart| and |rangeEnd| indexes. This function handles ranges that wrap around the ring buffer.
-func (rb *reflogRingBuffer) insertionIndexIsInRange(rangeStart, rangeEnd int) bool {
+// specified |rangeStart| and |rangeEnd| indexes. The |startingEpoch| parameter is used to determine if the
+// current insertion index has wrapped around the ring buffer, possibly multiple times.
+func (rb *reflogRingBuffer) insertionIndexIsInRange(rangeStart, rangeEnd int, startingEpoch uint) bool {
 	rb.mu.Lock()
 	currentInsertIndex := rb.insertIndex
+	currentEpoch := rb.epoch
 	rb.mu.Unlock()
+
+	// When the epoch value overflows and wraps around to 0 again, adjust the starting epoch accordingly
+	epochDelta := currentEpoch - startingEpoch
+	if epochDelta < 0 {
+		maxUint := ^uint(0)
+		epochDelta += maxUint
+	}
 
 	// If the range wraps around the ring buffer, adjust currentInsertIndex and rangeEnd
 	// so that we can use the same logic for an in range check.
 	if rangeStart > rangeEnd {
 		currentInsertIndex += rb.totalSize
 		rangeEnd += rb.totalSize
+		epochDelta--
 	}
 
-	return currentInsertIndex >= rangeStart && currentInsertIndex <= rangeEnd
+	switch epochDelta {
+	case 0:
+		// same epoch
+		return currentInsertIndex >= rangeStart && currentInsertIndex < rangeEnd
+	case 1:
+		return currentInsertIndex >= rangeStart
+	default:
+		return true
+	}
 }
