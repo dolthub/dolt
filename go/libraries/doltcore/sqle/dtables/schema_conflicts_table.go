@@ -19,10 +19,10 @@ import (
 	"errors"
 	"io"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -197,7 +197,7 @@ func getCreateTableStatement(table string, sch schema.Schema, fks []doltdb.Forei
 	if err != nil {
 		return "", err
 	}
-	return diff.GenerateCreateTableStatement(table, sch, pkSch, fks, parents)
+	return sqlfmt.GenerateCreateTableStatement(table, sch, fks, parents)
 }
 
 func getSchemaConflictDescription(ctx context.Context, table string, base, ours, theirs schema.Schema) (string, error) {
