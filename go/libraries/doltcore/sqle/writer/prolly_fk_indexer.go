@@ -137,9 +137,9 @@ func (iter prollyFkPkRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 		pkTup := pkBld.BuildPermissive(sharePool)
 
-		var tblKey, tblVal val.Tuple
+		var tblKey val.Tuple
 		err = iter.primary.mut.Get(ctx, pkTup, func(k, v val.Tuple) error {
-			tblKey, tblVal = k, v
+			tblKey = k
 			return nil
 		})
 		if err != nil {
@@ -149,16 +149,10 @@ func (iter prollyFkPkRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 			continue // referential integrity broken
 		}
 
-		nextRow := make(sql.Row, len(iter.primary.keyMap)+len(iter.primary.valMap))
+		nextRow := make(sql.Row, len(iter.primary.keyMap))
 		for from := range iter.primary.keyMap {
 			to := iter.primary.keyMap.MapOrdinal(from)
 			if nextRow[to], err = index.GetField(ctx, iter.primary.keyBld.Desc, from, tblKey, iter.primary.mut.NodeStore()); err != nil {
-				return nil, err
-			}
-		}
-		for from := range iter.primary.valMap {
-			to := iter.primary.valMap.MapOrdinal(from)
-			if nextRow[to], err = index.GetField(ctx, iter.primary.valBld.Desc, from, tblVal, iter.primary.mut.NodeStore()); err != nil {
 				return nil, err
 			}
 		}
