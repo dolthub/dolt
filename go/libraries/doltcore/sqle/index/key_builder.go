@@ -225,10 +225,7 @@ func buildRow(ctx *sql.Context, key, value val.Tuple, sch schema.Schema, ns tree
 	valueCols := sch.GetNonPKCols()
 	allCols := sch.GetAllCols()
 
-	// When we parse and resolve the check constraint expression with planbuilder, it leaves row position 0
-	// for the expression itself, so we add an empty spot in index 0 of our row to account for that to make sure
-	// the GetField expressions' indexes match up to the right columns.
-	row := make(sql.Row, allCols.Size()+1)
+	row := make(sql.Row, allCols.Size())
 
 	// Skip adding the key tuple if we're working with a keyless table, since the table row data is
 	// always all contained in the value tuple for keyless tables.
@@ -260,7 +257,7 @@ func buildRow(ctx *sql.Context, key, value val.Tuple, sch schema.Schema, ns tree
 		}
 
 		col := valueCols.GetColumns()[valueColIndex]
-		row[allCols.TagToIdx[col.Tag]+1] = value
+		row[allCols.TagToIdx[col.Tag]] = value
 		valueColIndex += 1
 	}
 
