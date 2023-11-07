@@ -1088,7 +1088,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 func resolveDefaults(ctx *sql.Context, tableName string, sch schema.Schema) ([]sql.Expression, error) {
 	var exprs []sql.Expression
 	i := 0
-	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+	err := sch.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.Default != "" || col.Generated != "" {
 			expr, err := index.ResolveDefaultExpression(ctx, tableName, sch, col)
 			if err != nil {

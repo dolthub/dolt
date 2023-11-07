@@ -197,7 +197,7 @@ func ProllyRowIterFromPartition(
 		return nil, err
 	}
 
-	return index.NewProllyRowIterForMap(sch, rows, iter, projections)
+	return index.NewProllyRowIterForMap(sch, rows, iter, projections), nil
 }
 
 // SqlTableToRowIter returns a |sql.RowIter| for a full table scan for the given |table|. If
