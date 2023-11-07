@@ -584,7 +584,7 @@ func newUniqValidator(ctx context.Context, sch schema.Schema, tm *TableMerger, v
 		}
 		secondary := durable.ProllyMapFromIndex(idx)
 
-		u, err := newUniqIndex(sch, def, clustered, secondary)
+		u, err := newUniqIndex(ctx, sch, def, clustered, secondary)
 		if err != nil {
 			return uniqValidator{}, err
 		}
@@ -733,7 +733,7 @@ type uniqIndex struct {
 	clusteredKeyDesc val.TupleDesc
 }
 
-func newUniqIndex(sch schema.Schema, def schema.Index, clustered, secondary prolly.Map) (uniqIndex, error) {
+func newUniqIndex(ctx context.Context, sch schema.Schema, def schema.Index, clustered, secondary prolly.Map) (uniqIndex, error) {
 	meta, err := makeUniqViolMeta(sch, def)
 	if err != nil {
 		return uniqIndex{}, err
@@ -745,7 +745,11 @@ func newUniqIndex(sch schema.Schema, def schema.Index, clustered, secondary prol
 	p := clustered.Pool()
 
 	prefixDesc := secondary.KeyDesc().PrefixDesc(def.Count())
-	secondaryBld := index.NewSecondaryKeyBuilder(sch, def, secondary.KeyDesc(), p, secondary.NodeStore())
+	secondaryBld, err := index.NewSecondaryKeyBuilder(ctx, "", sch, def, secondary.KeyDesc(), p, secondary.NodeStore())
+	if err != nil {
+		return uniqIndex{}, err
+	}
+	
 	clusteredBld := index.NewClusteredKeyBuilder(def, sch, clustered.KeyDesc(), p)
 
 	return uniqIndex{

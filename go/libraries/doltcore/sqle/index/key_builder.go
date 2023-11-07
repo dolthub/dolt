@@ -16,23 +16,30 @@ package index
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/memory"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
+	"github.com/dolthub/go-mysql-server/sql/transform"
 )
 
 // NewSecondaryKeyBuilder creates a new SecondaryKeyBuilder instance that can build keys for the secondary index |def|.
 // The schema of the source table is defined in |sch|, and |idxDesc| describes the tuple layout for the index's keys
 // (index value tuples are not used).
-func NewSecondaryKeyBuilder(sch schema.Schema, def schema.Index, idxDesc val.TupleDesc, p pool.BuffPool, nodeStore tree.NodeStore) SecondaryKeyBuilder {
+func NewSecondaryKeyBuilder(ctx context.Context, tableName string, sch schema.Schema, def schema.Index, idxDesc val.TupleDesc, p pool.BuffPool, nodeStore tree.NodeStore) (SecondaryKeyBuilder, error) {
 	b := SecondaryKeyBuilder{
 		builder:   val.NewTupleBuilder(idxDesc),
 		pool:      p,
 		nodeStore: nodeStore,
 		sch:       sch,
-		def:       def,
+		indexDef:  def,
 	}
 
 	keyless := schema.IsKeyless(sch)
@@ -44,10 +51,28 @@ func NewSecondaryKeyBuilder(sch schema.Schema, def schema.Index, idxDesc val.Tup
 	}
 
 	b.mapping = make(val.OrdinalMapping, len(def.AllTags()))
+	var virtualExpressions []sql.Expression
 	for i, tag := range def.AllTags() {
 		j, ok := sch.GetPKCols().TagToIdx[tag]
 		if !ok {
-			if keyless {
+			col := sch.GetNonPKCols().TagToCol[tag]
+			if col.Virtual {
+				if len(virtualExpressions) == 0 {
+					virtualExpressions = make([]sql.Expression, len(def.AllTags()))
+				}
+				sqlCtx, ok := ctx.(*sql.Context)
+				if !ok {
+					sqlCtx = sql.NewContext(ctx)
+				}
+
+				expr, err := resolveExpression(sqlCtx, col.Generated, sch, tableName)
+				if err != nil {
+					return SecondaryKeyBuilder{}, err
+				}
+				
+				virtualExpressions[i] = expr
+				j = -1
+			} else if keyless {
 				// Skip cardinality column
 				j = b.split + 1 + sch.GetNonPKCols().TagToIdx[tag]
 			} else {
@@ -56,21 +81,58 @@ func NewSecondaryKeyBuilder(sch schema.Schema, def schema.Index, idxDesc val.Tup
 		}
 		b.mapping[i] = j
 	}
+	
+	b.virtualExpressions = virtualExpressions
 
 	if keyless {
 		// last key in index is hash which is the only column in the key
 		b.mapping = append(b.mapping, 0)
 	}
-	return b
+	return b, nil
+}
+
+// TODO: dedupe this
+func resolveExpression(ctx *sql.Context, expression string, sch schema.Schema, tableName string) (sql.Expression, error) {
+	query := fmt.Sprintf("SELECT %s from %s.%s", expression, "mydb", tableName)
+	sqlSch, err := sqlutil.FromDoltSchema("", tableName, sch)
+	if err != nil {
+		return nil, err
+	}
+	mockDatabase := memory.NewDatabase("mydb")
+	mockTable := memory.NewLocalTable(mockDatabase.BaseDatabase, tableName, sqlSch, nil)
+	mockDatabase.AddTable(tableName, mockTable)
+	mockProvider := memory.NewDBProvider(mockDatabase)
+	catalog := analyzer.NewCatalog(mockProvider)
+
+	pseudoAnalyzedQuery, err := planbuilder.Parse(ctx, catalog, query)
+	if err != nil {
+		return nil, err
+	}
+
+	var expr sql.Expression
+	transform.Inspect(pseudoAnalyzedQuery, func(n sql.Node) bool {
+		if projector, ok := n.(sql.Projector); ok {
+			expr = projector.ProjectedExprs()[0]
+			return false
+		}
+		return true
+	})
+	if expr == nil {
+		return nil, fmt.Errorf("unable to find expression in analyzed query")
+	}
+
+	return expr, nil
 }
 
 type SecondaryKeyBuilder struct {
 	// sch holds the schema of the table on which the secondary index is created
 	sch schema.Schema
-	// def holds the definition of the secondary index
-	def schema.Index
+	// indexDef holds the definition of the secondary index
+	indexDef schema.Index
 	// mapping defines how to map fields from the source table's schema to this index's tuple layout
 	mapping val.OrdinalMapping
+	// virtualExpressions holds the expressions for virtual columns in the index, nil for non-virtual indexes
+	virtualExpressions []sql.Expression
 	// split marks the index in the secondary index's key tuple that splits the main table's
 	// key fields from the main table's value fields.
 	split     int
@@ -83,7 +145,10 @@ type SecondaryKeyBuilder struct {
 func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx context.Context, k, v val.Tuple) (val.Tuple, error) {
 	for to := range b.mapping {
 		from := b.mapping.MapOrdinal(to)
-		if from < b.split {
+		if from == -1 {
+			// the "from" field is a virtual column
+			expr := b.virtualExpressions[to]
+		} else if from < b.split {
 			// the "from" field comes from the key tuple fields
 			// NOTE: Because we are using Tuple.GetField and TupleBuilder.PutRaw, we are not
 			//       interpreting the tuple data at all and just copying the bytes. This should work
@@ -104,8 +169,8 @@ func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx context.Context, k, v val.T
 					return nil, err
 				}
 
-				if len(b.def.PrefixLengths()) > to {
-					value = val.TrimValueToPrefixLength(value, b.def.PrefixLengths()[to])
+				if len(b.indexDef.PrefixLengths()) > to {
+					value = val.TrimValueToPrefixLength(value, b.indexDef.PrefixLengths()[to])
 				}
 
 				err = PutField(ctx, b.nodeStore, b.builder, to, value)
@@ -127,7 +192,7 @@ func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx context.Context, k, v val.T
 func (b SecondaryKeyBuilder) canCopyRawBytes(idxField int) bool {
 	if b.builder.Desc.Types[idxField].Enc == val.CellEnc {
 		return false
-	} else if len(b.def.PrefixLengths()) > idxField && b.def.PrefixLengths()[idxField] > 0 {
+	} else if len(b.indexDef.PrefixLengths()) > idxField && b.indexDef.PrefixLengths()[idxField] > 0 {
 		return false
 	}
 

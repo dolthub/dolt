@@ -36,7 +36,10 @@ func GetMutableSecondaryIdxs(ctx context.Context, sch schema.Schema, indexes dur
 		if schema.IsKeyless(sch) {
 			m = prolly.ConvertToSecondaryKeylessIndex(m)
 		}
-		mods[i] = NewMutableSecondaryIdx(m, sch, index)
+		mods[i], err = NewMutableSecondaryIdx(ctx, m, sch, index)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return mods, nil
 }
@@ -69,7 +72,11 @@ func GetMutableSecondaryIdxsWithPending(ctx context.Context, sch schema.Schema, 
 		if schema.IsKeyless(sch) {
 			m = prolly.ConvertToSecondaryKeylessIndex(m)
 		}
-		newMutableSecondaryIdx := NewMutableSecondaryIdx(m, sch, index)
+		newMutableSecondaryIdx, err := NewMutableSecondaryIdx(ctx, m, sch, index)
+		if err != nil {
+			return nil, err
+		}
+		
 		newMutableSecondaryIdx.mut = newMutableSecondaryIdx.mut.WithMaxPending(pendingSize)
 		mods = append(mods, newMutableSecondaryIdx)
 	}
@@ -86,13 +93,17 @@ type MutableSecondaryIdx struct {
 }
 
 // NewMutableSecondaryIdx returns a MutableSecondaryIdx. |m| is the secondary idx data.
-func NewMutableSecondaryIdx(idx prolly.Map, sch schema.Schema, def schema.Index) MutableSecondaryIdx {
-	b := index.NewSecondaryKeyBuilder(sch, def, idx.KeyDesc(), idx.Pool(), idx.NodeStore())
+func NewMutableSecondaryIdx(ctx context.Context, idx prolly.Map, sch schema.Schema, def schema.Index) (MutableSecondaryIdx, error) {
+	b, err := index.NewSecondaryKeyBuilder(ctx, "", sch, def, idx.KeyDesc(), idx.Pool(), idx.NodeStore())
+	if err != nil {
+		return MutableSecondaryIdx{}, err
+	}
+	
 	return MutableSecondaryIdx{
 		Name:    def.Name(),
 		mut:     idx.Mutate(),
 		builder: b,
-	}
+	}, nil
 }
 
 // InsertEntry inserts a secondary index entry given the key and new value
