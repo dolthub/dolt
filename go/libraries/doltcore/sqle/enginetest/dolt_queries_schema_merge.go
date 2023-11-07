@@ -325,6 +325,30 @@ var SchemaChangeTestsBasicCases = []MergeScriptTest{
 		},
 	},
 	{
+		Name: "right-side adds a column with a default value",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, c1 varchar(100), c2 varchar(100));",
+			"INSERT into t values ('1', 'BAD', 'hello');",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column c3 varchar(100) default (CONCAT(c2, c1, 'default'));",
+			"insert into t values ('2', 'BAD', 'hello', 'hi');",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values ('3', 'BAD', 'hi');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query:    "select * from t order by pk;",
+				Expected: []sql.Row{{1, "BAD", "hello", "helloBADdefault"}, {2, "BAD", "hello", "hi"}, {3, "BAD", "hi", "hiBADdefault"}},
+			},
+		},
+	},
+	{
 		Name: "adding different columns to both sides",
 		AncSetUpScript: []string{
 			"create table t (pk int primary key);",

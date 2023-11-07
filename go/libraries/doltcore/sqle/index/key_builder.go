@@ -104,6 +104,7 @@ func resolveExpression(ctx *sql.Context, expression string, sch schema.Schema, t
 	mockProvider := memory.NewDBProvider(mockDatabase)
 	catalog := analyzer.NewCatalog(mockProvider)
 
+	// TODO: the indexes here are wrong, need to get planbuilder.parse to have the correct indexes earlier
 	pseudoAnalyzedQuery, err := planbuilder.Parse(ctx, catalog, query)
 	if err != nil {
 		return nil, err
