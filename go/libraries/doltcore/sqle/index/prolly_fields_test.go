@@ -246,10 +246,11 @@ func dateFromTime(t time.Time) time.Time {
 }
 
 // TestGeometryEncoding contains tests that ensure backwards compatibility with the old geometry encoding.
-//  Initially, Geometries were stored in line, but now they are stored out of band as BLOBs.
+//
+//	Initially, Geometries were stored in line, but now they are stored out of band as BLOBs.
 func TestGeometryEncoding(t *testing.T) {
-	tests := []struct{
-		name string
+	tests := []struct {
+		name  string
 		value interface{}
 	}{
 		{
