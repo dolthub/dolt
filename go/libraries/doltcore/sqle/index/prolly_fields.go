@@ -99,19 +99,23 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tr
 			v, err = deserializeGeometry(buf)
 		}
 	case val.GeomAddrEnc:
-		var h hash.Hash
+		// TODO: until GeometryEnc is removed, we must check if GeomAddrEnc is a GeometryEnc
 		var buf []byte
-		h, ok = td.GetGeometryAddr(i, tup)
+		buf, ok = td.GetGeometry(i, tup)
 		if ok {
-			buf, err = tree.NewByteArray(h, ns).ToBytes(ctx)
-		} else {
-			// TODO: until GeometryEnc is removed, we must check if GeomAddrEnc is a GeometryEnc
-			buf, ok = td.GetGeometry(i, tup)
+			v, err = deserializeGeometry(buf)
 		}
 		if !ok || err != nil {
-			return nil, err
+			var h hash.Hash
+			h, ok = td.GetGeometryAddr(i, tup)
+			if ok {
+				buf, err = tree.NewByteArray(h, ns).ToBytes(ctx)
+				if err != nil {
+					return nil, err
+				}
+				v, err = deserializeGeometry(buf)
+			}
 		}
-		v, err = deserializeGeometry(buf)
 	case val.Hash128Enc:
 		v, ok = td.GetHash128(i, tup)
 	case val.BytesAddrEnc:

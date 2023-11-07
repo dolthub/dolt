@@ -443,7 +443,7 @@ func (td TupleDesc) GetGeometry(i int, tup Tuple) (v []byte, ok bool) {
 func (td TupleDesc) GetGeometryAddr(i int, tup Tuple) (hash.Hash, bool) {
 	// TODO: we are support both Geometry and GeometryAddr for now, so we can't expect just one
 	// td.expectEncoding(i, GeomAddrEnc)
-	return td.maybeGetAddr(i, tup)
+	return td.getAddr(i, tup)
 }
 
 func (td TupleDesc) GetHash128(i int, tup Tuple) (v []byte, ok bool) {
@@ -474,14 +474,6 @@ func (td TupleDesc) GetBytesAddr(i int, tup Tuple) (hash.Hash, bool) {
 func (td TupleDesc) GetCommitAddr(i int, tup Tuple) (v hash.Hash, ok bool) {
 	td.expectEncoding(i, CommitAddrEnc)
 	return td.getAddr(i, tup)
-}
-
-func (td TupleDesc) maybeGetAddr(i int, tup Tuple) (hash.Hash, bool) {
-	b := td.GetField(i, tup)
-	if len(b) != hash.ByteLen {
-		return hash.Hash{}, false
-	}
-	return hash.New(b), true
 }
 
 func (td TupleDesc) getAddr(i int, tup Tuple) (hash.Hash, bool) {
