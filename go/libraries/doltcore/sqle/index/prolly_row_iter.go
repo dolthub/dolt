@@ -39,7 +39,7 @@ type prollyRowIter struct {
 
 var _ sql.RowIter = prollyRowIter{}
 
-func NewProllyRowIterForMap(sch schema.Schema, rows prolly.Map, iter prolly.MapIter, projections []uint64) (sql.RowIter, error) {
+func NewProllyRowIterForMap(sch schema.Schema, rows prolly.Map, iter prolly.MapIter, projections []uint64) sql.RowIter {
 	if projections == nil {
 		projections = sch.GetAllCols().Tags
 	}
@@ -57,7 +57,7 @@ func NewProllyRowIterForSchema(
 		vd val.TupleDesc,
 		projections []uint64,
 		ns tree.NodeStore,
-) (sql.RowIter, error) {
+) sql.RowIter {
 	if schema.IsKeyless(sch) {
 		return NewKeylessProllyRowIter(sch, iter, vd, projections, ns)
 	}
@@ -72,7 +72,7 @@ func NewKeyedProllyRowIter(
 		vd val.TupleDesc,
 		projections []uint64,
 		ns tree.NodeStore,
-) (sql.RowIter, error) {
+) sql.RowIter {
 	keyProj, valProj, ordProj := projectionMappings(sch, projections)
 
 	return prollyRowIter{
@@ -84,7 +84,7 @@ func NewKeyedProllyRowIter(
 		ordProj: ordProj,
 		rowLen:  len(projections),
 		ns:      ns,
-	}, nil
+	}
 }
 
 func NewKeylessProllyRowIter(
@@ -93,7 +93,7 @@ func NewKeylessProllyRowIter(
 		vd val.TupleDesc,
 		projections []uint64,
 		ns tree.NodeStore,
-) (sql.RowIter, error) {
+) sql.RowIter {
 	_, valProj, ordProj := projectionMappings(sch, projections)
 
 	return &prollyKeylessIter{
@@ -103,7 +103,7 @@ func NewKeylessProllyRowIter(
 		ordProj: ordProj,
 		rowLen:  len(projections),
 		ns:      ns,
-	}, nil
+	}
 }
 
 // projectionMappings returns data structures that specify 1) which fields we read

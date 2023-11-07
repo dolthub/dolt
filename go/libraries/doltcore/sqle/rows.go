@@ -255,7 +255,7 @@ func DoltTablePartitionToRowIter(ctx *sql.Context, name string, table *doltdb.Ta
 		if err != nil {
 			return nil, nil, err
 		}
-		rowIter, err := index.NewProllyRowIterForMap(sch, idx, iter, nil)
+		rowIter := index.NewProllyRowIterForMap(sch, idx, iter, nil)
 		if err != nil {
 			return nil, nil, err
 		}

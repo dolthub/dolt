@@ -22,11 +22,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/analyzer"
-	"github.com/dolthub/go-mysql-server/sql/planbuilder"
-	"github.com/dolthub/go-mysql-server/sql/transform"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	errorkinds "gopkg.in/src-d/go-errors.v1"
 
@@ -35,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -370,7 +365,7 @@ func newCheckValidator(ctx *sql.Context, tm *TableMerger, vm *valueMerger, sch s
 			continue
 		}
 
-		expr, err := resolveExpression(ctx, check.Expression(), sch, tm.name)
+		expr, err := index.ResolveCheckExpression(ctx, tm.name, sch, check.Expression())
 		if err != nil {
 			return checkValidator{}, err
 		}
@@ -433,7 +428,7 @@ func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) 
 			newTuple = val.NewTuple(cv.valueMerger.syncPool, newTupleBytes...)
 		}
 
-		row, err := buildRow(ctx, diff.Key, newTuple, cv.sch, cv.tableMerger)
+		row, err := index.BuildRow(ctx, diff.Key, newTuple, cv.sch, cv.valueMerger.ns)
 		if err != nil {
 			return 0, err
 		}
@@ -485,54 +480,6 @@ func (cv checkValidator) insertArtifact(ctx context.Context, key, value val.Tupl
 	}
 	cvm := prolly.ConstraintViolationMeta{VInfo: vinfo, Value: value}
 	return cv.edits.ReplaceConstraintViolation(ctx, key, cv.srcHash, prolly.ArtifactTypeChkConsViol, cvm)
-}
-
-// buildRow takes the |key| and |value| tuple and returns a new sql.Row, along with any errors encountered.
-func buildRow(ctx *sql.Context, key, value val.Tuple, sch schema.Schema, tableMerger *TableMerger) (sql.Row, error) {
-	pkCols := sch.GetPKCols()
-	valueCols := sch.GetNonPKCols()
-	allCols := sch.GetAllCols()
-
-	// When we parse and resolve the check constraint expression with planbuilder, it leaves row position 0
-	// for the expression itself, so we add an empty spot in index 0 of our row to account for that to make sure
-	// the GetField expressions' indexes match up to the right columns.
-	row := make(sql.Row, allCols.Size()+1)
-
-	// Skip adding the key tuple if we're working with a keyless table, since the table row data is
-	// always all contained in the value tuple for keyless tables.
-	if !schema.IsKeyless(sch) {
-		keyDesc := sch.GetKeyDescriptor()
-		for i := range keyDesc.Types {
-			value, err := index.GetField(ctx, keyDesc, i, key, tableMerger.ns)
-			if err != nil {
-				return nil, err
-			}
-
-			pkCol := pkCols.GetColumns()[i]
-			row[allCols.TagToIdx[pkCol.Tag]+1] = value
-		}
-	}
-
-	valueColIndex := 0
-	valueDescriptor := sch.GetValueDescriptor()
-	for valueTupleIndex := range valueDescriptor.Types {
-		// Skip processing the first value in the value tuple for keyless tables, since that field
-		// always holds the cardinality of the row and shouldn't be passed in to an expression.
-		if schema.IsKeyless(sch) && valueTupleIndex == 0 {
-			continue
-		}
-
-		value, err := index.GetField(ctx, valueDescriptor, valueTupleIndex, value, tableMerger.ns)
-		if err != nil {
-			return nil, err
-		}
-
-		col := valueCols.GetColumns()[valueColIndex]
-		row[allCols.TagToIdx[col.Tag]+1] = value
-		valueColIndex += 1
-	}
-
-	return row, nil
 }
 
 // uniqValidator checks whether new additions from the merge-right
@@ -1236,41 +1183,6 @@ func (m *secondaryMerger) finalize(ctx context.Context) (durable.IndexSet, durab
 		}
 	}
 	return m.leftSet, m.rightSet, nil
-}
-
-// resolveExpression takes in a string |expression| and does basic resolution on it (e.g. column names and function
-// names) so that the returned sql.Expression can be evaluated. The schema of the table is specified in |sch| and the
-// name of the table in |tableName|.
-func resolveExpression(ctx *sql.Context, expression string, sch schema.Schema, tableName string) (sql.Expression, error) {
-	query := fmt.Sprintf("SELECT %s from %s.%s", expression, "mydb", tableName)
-	sqlSch, err := sqlutil.FromDoltSchema("", tableName, sch)
-	if err != nil {
-		return nil, err
-	}
-	mockDatabase := memory.NewDatabase("mydb")
-	mockTable := memory.NewLocalTable(mockDatabase.BaseDatabase, tableName, sqlSch, nil)
-	mockDatabase.AddTable(tableName, mockTable)
-	mockProvider := memory.NewDBProvider(mockDatabase)
-	catalog := analyzer.NewCatalog(mockProvider)
-
-	pseudoAnalyzedQuery, err := planbuilder.Parse(ctx, catalog, query)
-	if err != nil {
-		return nil, err
-	}
-
-	var expr sql.Expression
-	transform.Inspect(pseudoAnalyzedQuery, func(n sql.Node) bool {
-		if projector, ok := n.(sql.Projector); ok {
-			expr = projector.ProjectedExprs()[0]
-			return false
-		}
-		return true
-	})
-	if expr == nil {
-		return nil, fmt.Errorf("unable to find expression in analyzed query")
-	}
-
-	return expr, nil
 }
 
 // remapTuple takes the given |tuple| and the |desc| that describes its data, and uses |mapping| to map the tuple's

@@ -67,7 +67,7 @@ func NewSecondaryKeyBuilder(ctx context.Context, tableName string, sch schema.Sc
 					sqlCtx = sql.NewContext(ctx)
 				}
 
-				expr, err := resolveDefaultExpression(sqlCtx, col, sch, tableName)
+				expr, err := ResolveDefaultExpression(sqlCtx, tableName, sch, col)
 				if err != nil {
 					return SecondaryKeyBuilder{}, err
 				}
@@ -93,20 +93,60 @@ func NewSecondaryKeyBuilder(ctx context.Context, tableName string, sch schema.Sc
 	return b, nil
 }
 
-// resolveDefaultExpression returns an sql.Expression for the column default or generated expression for the 
+// ResolveDefaultExpression returns a sql.Expression for the column default or generated expression for the 
 // column provided
-func resolveDefaultExpression(ctx *sql.Context, col schema.Column, sch schema.Schema, tableName string) (sql.Expression, error) {
+func ResolveDefaultExpression(ctx *sql.Context, tableName string, sch schema.Schema, col schema.Column) (sql.Expression, error) {
+	ct, err := parseCreateTable(ctx, tableName, sch)
+	if err != nil {
+		return nil, err
+	}
+
+	colIdx := ct.CreateSchema.Schema.IndexOfColName(col.Name)
+	if colIdx < 0 {
+		return nil, fmt.Errorf("unable to find column %s in analyzed query", col.Name)
+	}
+
+	sqlCol := ct.CreateSchema.Schema[colIdx]
+	expr := sqlCol.Default
+	if expr == nil || expr.Expr == nil {
+		expr = sqlCol.Generated
+	}
+
+	if expr == nil || expr.Expr == nil {
+		return nil, fmt.Errorf("unable to find default or generated expression")
+	}
+
+	return expr.Expr, nil
+}
+
+// ResolveCheckExpression returns a sql.Expression for the check provided
+func ResolveCheckExpression(ctx *sql.Context, tableName string, sch schema.Schema, checkExpr string) (sql.Expression, error) {
+	ct, err := parseCreateTable(ctx, tableName, sch)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, check := range ct.Checks() {
+		if check.Expr.String() == checkExpr {
+			return check.Expr, nil
+		}
+	}
+	
+	return nil, fmt.Errorf("unable to find check expression")
+}
+
+func parseCreateTable(ctx *sql.Context, tableName string, sch schema.Schema) (*plan.CreateTable, error) {
 	createTable, err := sqlfmt.GenerateCreateTableStatement(tableName, sch, nil, nil)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	query := createTable
 	sqlSch, err := sqlutil.FromDoltSchema("", tableName, sch)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	mockDatabase := memory.NewDatabase("mydb")
 	mockTable := memory.NewLocalTable(mockDatabase.BaseDatabase, tableName, sqlSch, nil)
 	mockDatabase.AddTable(tableName, mockTable)
@@ -122,23 +162,7 @@ func resolveDefaultExpression(ctx *sql.Context, col schema.Column, sch schema.Sc
 	if !ok {
 		return nil, fmt.Errorf("expected a *plan.CreateTable node, but got %T", pseudoAnalyzedQuery)
 	}
-
-	colIdx := ct.CreateSchema.Schema.IndexOfColName(col.Name)
-	if colIdx == -1 {
-		return nil, fmt.Errorf("unable to find column %s in analyzed query", col.Name)
-	}
-	
-	sqlCol := ct.CreateSchema.Schema[colIdx]
-	expr := sqlCol.Default
-	if expr == nil || expr.Expr == nil {
-		expr = sqlCol.Generated
-	}
-	
-	if expr == nil || expr.Expr == nil {
-		return nil, fmt.Errorf("unable to find default or generated expression")
-	}
-	
-	return expr.Expr, nil
+	return ct, nil
 }
 
 type SecondaryKeyBuilder struct {
@@ -170,7 +194,7 @@ func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx context.Context, k, v val.T
 				sqlCtx = sql.NewContext(ctx)
 			}
 
-			sqlRow, err := buildRow(sqlCtx, k, v, b.sch, b.nodeStore)
+			sqlRow, err := BuildRow(sqlCtx, k, v, b.sch, b.nodeStore)
 			if err != nil {
 				return nil, err
 			}
@@ -220,17 +244,12 @@ func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx context.Context, k, v val.T
 	return b.builder.Build(b.pool), nil
 }
 
-// buildRow returns a row for the given key/value tuple pair
-func buildRow(ctx *sql.Context, key, value val.Tuple, sch schema.Schema, ns tree.NodeStore) (sql.Row, error) {
-	prollyRowIter := prolly.NewPointLookup(key, value)
-	iter, err := NewProllyRowIterForSchema(sch, prollyRowIter, sch.GetKeyDescriptor(), sch.GetValueDescriptor(), sch.GetAllCols().Tags, ns)
-	if err != nil {
-		return nil, err
-	}
-	
-	return iter.Next(ctx)
+// BuildRow returns a sql.Row for the given key/value tuple pair
+func BuildRow(ctx *sql.Context, key, value val.Tuple, sch schema.Schema, ns tree.NodeStore) (sql.Row, error) {
+	prollyIter := prolly.NewPointLookup(key, value)
+	rowIter := NewProllyRowIterForSchema(sch, prollyIter, sch.GetKeyDescriptor(), sch.GetValueDescriptor(), sch.GetAllCols().Tags, ns)
+	return rowIter.Next(ctx)
 }
-
 
 // canCopyRawBytes returns true if the bytes for |idxField| can
 // be copied directly. This is a faster way to populate an index
