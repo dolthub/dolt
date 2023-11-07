@@ -148,6 +148,26 @@ func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx context.Context, k, v val.T
 		if from == -1 {
 			// the "from" field is a virtual column
 			expr := b.virtualExpressions[to]
+			sqlCtx, ok := ctx.(*sql.Context)
+			if !ok {
+				sqlCtx = sql.NewContext(ctx)
+			}
+
+			sqlRow, err := buildRow(sqlCtx, k, v, b.sch, b.nodeStore)
+			if err != nil {
+				return nil, err
+			}
+			
+			value, err := expr.Eval(sqlCtx, sqlRow)
+			if err != nil {
+				return nil, err
+			}
+			
+			// TODO: type conversion
+			err = PutField(ctx, b.nodeStore, b.builder, to, value)
+			if err != nil {
+				return nil, err
+			}
 		} else if from < b.split {
 			// the "from" field comes from the key tuple fields
 			// NOTE: Because we are using Tuple.GetField and TupleBuilder.PutRaw, we are not
@@ -182,6 +202,55 @@ func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx context.Context, k, v val.T
 	}
 	return b.builder.Build(b.pool), nil
 }
+
+// TODO: dedupe
+func buildRow(ctx *sql.Context, key, value val.Tuple, sch schema.Schema, ns tree.NodeStore) (sql.Row, error) {
+	pkCols := sch.GetPKCols()
+	valueCols := sch.GetNonPKCols()
+	allCols := sch.GetAllCols()
+
+	// When we parse and resolve the check constraint expression with planbuilder, it leaves row position 0
+	// for the expression itself, so we add an empty spot in index 0 of our row to account for that to make sure
+	// the GetField expressions' indexes match up to the right columns.
+	row := make(sql.Row, allCols.Size()+1)
+
+	// Skip adding the key tuple if we're working with a keyless table, since the table row data is
+	// always all contained in the value tuple for keyless tables.
+	if !schema.IsKeyless(sch) {
+		keyDesc := sch.GetKeyDescriptor()
+		for i := range keyDesc.Types {
+			value, err := GetField(ctx, keyDesc, i, key, ns)
+			if err != nil {
+				return nil, err
+			}
+
+			pkCol := pkCols.GetColumns()[i]
+			row[allCols.TagToIdx[pkCol.Tag]+1] = value
+		}
+	}
+
+	valueColIndex := 0
+	valueDescriptor := sch.GetValueDescriptor()
+	for valueTupleIndex := range valueDescriptor.Types {
+		// Skip processing the first value in the value tuple for keyless tables, since that field
+		// always holds the cardinality of the row and shouldn't be passed in to an expression.
+		if schema.IsKeyless(sch) && valueTupleIndex == 0 {
+			continue
+		}
+
+		value, err := GetField(ctx, valueDescriptor, valueTupleIndex, value, ns)
+		if err != nil {
+			return nil, err
+		}
+
+		col := valueCols.GetColumns()[valueColIndex]
+		row[allCols.TagToIdx[col.Tag]+1] = value
+		valueColIndex += 1
+	}
+
+	return row, nil
+}
+
 
 // canCopyRawBytes returns true if the bytes for |idxField| can
 // be copied directly. This is a faster way to populate an index
