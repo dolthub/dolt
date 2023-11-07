@@ -102,7 +102,7 @@ func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string
 	if idxSch == nil {
 		return HandleErr(errhand.BuildDError("the index `%s` does not exist on table `%s`", indexName, tableName).Build(), nil)
 	}
-	indexRowData, err := creation.BuildSecondaryIndex(ctx, table, idxSch, opts)
+	indexRowData, err := creation.BuildSecondaryIndex(ctx, table, idxSch, tableName, opts)
 	if err != nil {
 		return HandleErr(errhand.BuildDError("Unable to rebuild index `%s` on table `%s`.", indexName, tableName).AddCause(err).Build(), nil)
 	}

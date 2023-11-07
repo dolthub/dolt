@@ -103,7 +103,17 @@ func mergeProllySecondaryIndexes(
 	return mergedIndexSet, nil
 }
 
-func buildIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, postMergeSchema schema.Schema, index schema.Index, m prolly.Map, artEditor *prolly.ArtifactsEditor, theirRootIsh doltdb.Rootish, tblName string) (durable.Index, error) {
+func buildIndex(
+		ctx context.Context,
+		vrw types.ValueReadWriter,
+		ns tree.NodeStore,
+		postMergeSchema schema.Schema,
+		index schema.Index,
+		m prolly.Map,
+		artEditor *prolly.ArtifactsEditor,
+		theirRootIsh doltdb.Rootish,
+		tblName string,
+) (durable.Index, error) {
 	if index.IsUnique() {
 		meta, err := makeUniqViolMeta(postMergeSchema, index)
 		if err != nil {
@@ -119,33 +129,26 @@ func buildIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStor
 
 		pkMapping := ordinalMappingFromIndex(index)
 
-		mergedMap, err := creation.BuildUniqueProllyIndex(
-			ctx,
-			vrw,
-			ns,
-			postMergeSchema,
-			index,
-			m,
-			func(ctx context.Context, existingKey, newKey val.Tuple) (err error) {
-				eK := getPKFromSecondaryKey(kb, p, pkMapping, existingKey)
-				nK := getPKFromSecondaryKey(kb, p, pkMapping, newKey)
-				err = replaceUniqueKeyViolation(ctx, artEditor, m, eK, kd, theirRootIsh, vInfo, tblName)
-				if err != nil {
-					return err
-				}
-				err = replaceUniqueKeyViolation(ctx, artEditor, m, nK, kd, theirRootIsh, vInfo, tblName)
-				if err != nil {
-					return err
-				}
-				return nil
-			})
+		mergedMap, err := creation.BuildUniqueProllyIndex(ctx, vrw, ns, postMergeSchema, tblName, index, m, func(ctx context.Context, existingKey, newKey val.Tuple) (err error) {
+			eK := getPKFromSecondaryKey(kb, p, pkMapping, existingKey)
+			nK := getPKFromSecondaryKey(kb, p, pkMapping, newKey)
+			err = replaceUniqueKeyViolation(ctx, artEditor, m, eK, kd, theirRootIsh, vInfo, tblName)
+			if err != nil {
+				return err
+			}
+			err = replaceUniqueKeyViolation(ctx, artEditor, m, nK, kd, theirRootIsh, vInfo, tblName)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
 		if err != nil {
 			return nil, err
 		}
 		return mergedMap, nil
 	}
 
-	mergedIndex, err := creation.BuildSecondaryProllyIndex(ctx, vrw, ns, postMergeSchema, index, m)
+	mergedIndex, err := creation.BuildSecondaryProllyIndex(ctx, vrw, ns, postMergeSchema, tblName, index, m)
 	if err != nil {
 		return nil, err
 	}
