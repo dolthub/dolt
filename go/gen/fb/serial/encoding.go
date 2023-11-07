@@ -47,6 +47,7 @@ const (
 	EncodingStringAddr Encoding = 23
 	EncodingJSONAddr   Encoding = 24
 	EncodingCell       Encoding = 25
+	EncodingGeomAddr   Encoding = 26
 	EncodingString     Encoding = 128
 	EncodingBytes      Encoding = 129
 	EncodingDecimal    Encoding = 130
@@ -79,6 +80,7 @@ var EnumNamesEncoding = map[Encoding]string{
 	EncodingStringAddr: "StringAddr",
 	EncodingJSONAddr:   "JSONAddr",
 	EncodingCell:       "Cell",
+	EncodingGeomAddr:   "GeomAddr",
 	EncodingString:     "String",
 	EncodingBytes:      "Bytes",
 	EncodingDecimal:    "Decimal",
@@ -111,6 +113,7 @@ var EnumValuesEncoding = map[string]Encoding{
 	"StringAddr": EncodingStringAddr,
 	"JSONAddr":   EncodingJSONAddr,
 	"Cell":       EncodingCell,
+	"GeomAddr":   EncodingGeomAddr,
 	"String":     EncodingString,
 	"Bytes":      EncodingBytes,
 	"Decimal":    EncodingDecimal,

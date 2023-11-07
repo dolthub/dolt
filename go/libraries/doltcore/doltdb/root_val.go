@@ -50,7 +50,7 @@ type FeatureVersion int64
 
 // DoltFeatureVersion is described in feature_version.md.
 // only variable for testing.
-var DoltFeatureVersion FeatureVersion = 5 // last bumped when adding virtual columns to schema storage
+var DoltFeatureVersion FeatureVersion = 6 // last bumped when changing geometry types to be stored as BLOBs
 
 // RootValue is the value of the Database and is the committed value in every Dolt commit.
 type RootValue struct {

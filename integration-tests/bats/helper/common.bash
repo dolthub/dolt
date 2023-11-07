@@ -81,7 +81,7 @@ assert_feature_version() {
     # Tests that don't end in a valid dolt dir will fail the above
     # command, don't check its output in that case
     if [ "$status" -eq 0 ]; then
-        [[ "$output" =~ "feature version: 5" ]] || exit 1
+        [[ "$output" =~ "feature version: 6" ]] || exit 1
     else
       # Clear status to avoid BATS failing if this is the last run command
       status=0
