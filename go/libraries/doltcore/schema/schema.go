@@ -79,6 +79,8 @@ type Schema interface {
 	// GetKeyDescriptor returns the key tuple descriptor for this schema.
 	GetKeyDescriptor() val.TupleDesc
 
+	GetKeyColumnsDescriptor(convertAddressColumns bool) val.TupleDesc
+
 	// GetValueDescriptor returns the value tuple descriptor for this schema.
 	GetValueDescriptor() val.TupleDesc
 

@@ -409,6 +409,10 @@ func (si *schemaImpl) GetMapDescriptors() (keyDesc, valueDesc val.TupleDesc) {
 
 // GetKeyDescriptor implements the Schema interface.
 func (si *schemaImpl) GetKeyDescriptor() val.TupleDesc {
+	return si.GetKeyColumnsDescriptor(true)
+}
+
+func (si *schemaImpl) GetKeyColumnsDescriptor(convertAddressColumns bool) val.TupleDesc {
 	if IsKeyless(si) {
 		return val.KeylessTupleDesc
 	}
@@ -420,17 +424,17 @@ func (si *schemaImpl) GetKeyDescriptor() val.TupleDesc {
 		sqlType := col.TypeInfo.ToSqlType()
 		queryType := sqlType.Type()
 		var t val.Type
-		if queryType == query.Type_BLOB {
+		if convertAddressColumns && queryType == query.Type_BLOB {
 			t = val.Type{
 				Enc:      val.Encoding(EncodingFromSqlType(query.Type_VARBINARY)),
 				Nullable: columnMissingNotNullConstraint(col),
 			}
-		} else if queryType == query.Type_TEXT {
+		} else if convertAddressColumns && queryType == query.Type_TEXT {
 			t = val.Type{
 				Enc:      val.Encoding(EncodingFromSqlType(query.Type_VARCHAR)),
 				Nullable: columnMissingNotNullConstraint(col),
 			}
-		} else if queryType == query.Type_GEOMETRY {
+		} else if convertAddressColumns && queryType == query.Type_GEOMETRY {
 			t = val.Type{
 				Enc:      val.Encoding(serial.EncodingCell),
 				Nullable: columnMissingNotNullConstraint(col),
