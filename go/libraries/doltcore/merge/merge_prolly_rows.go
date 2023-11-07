@@ -1027,6 +1027,11 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 				return fmt.Errorf("cannot merge keyless tables with reordered columns")
 			}
 		} else {
+			defaults, err := resolveDefaults(ctx, m.tableMerger.name, m.finalSch)
+			if err != nil {
+				return err
+			}
+			
 			tempTupleValue, err := remapTupleWithColumnDefaults(
 				ctx,
 				diff.Key,
@@ -1035,6 +1040,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 				m.valueMerger.rightMapping,
 				m.tableMerger,
 				m.finalSch,
+				defaults,
 				m.valueMerger.syncPool,
 				true,
 			)
@@ -1051,6 +1057,11 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 		// the merge
 		merged := diff.Merged
 		if hasStoredGeneratedColumns(m.finalSch) {
+			defaults, err := resolveDefaults(ctx, m.tableMerger.name, m.finalSch)
+			if err != nil {
+				return err
+			}
+			
 			tempTupleValue, err := remapTupleWithColumnDefaults(
 				ctx,
 				diff.Key,
@@ -1059,6 +1070,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 				m.valueMerger.rightMapping,
 				m.tableMerger,
 				m.finalSch,
+				defaults,
 				m.valueMerger.syncPool,
 				true)
 			if err != nil {
@@ -1071,6 +1083,31 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 	default:
 		return fmt.Errorf("unexpected diffOp for editing primary index: %s", diff.Op)
 	}
+}
+
+func resolveDefaults(ctx *sql.Context, tableName string, sch schema.Schema) ([]sql.Expression, error) {
+	var exprs []sql.Expression
+	i := 0
+	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if col.Default != "" || col.Generated != "" {
+			expr, err := index.ResolveDefaultExpression(ctx, tableName, sch, col)
+			if err != nil {
+				return true, err
+			}
+			if len(exprs) == 0 {
+				exprs = make([]sql.Expression, sch.GetAllCols().Size())
+			}
+			exprs[i] = expr
+		}
+		
+		i++
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	
+	return exprs, nil
 }
 
 func hasStoredGeneratedColumns(sch schema.Schema) bool {
@@ -1213,6 +1250,7 @@ func remapTupleWithColumnDefaults(
 		mapping val.OrdinalMapping,
 		tm *TableMerger,
 		mergedSch schema.Schema,
+		defaultExprs []sql.Expression,
 		pool pool.BuffPool,
 		rightSide bool,
 ) (val.Tuple, error) {
@@ -1256,20 +1294,7 @@ func remapTupleWithColumnDefaults(
 	
 	for _, to := range secondPass {
 		col := mergedSch.GetNonPKCols().GetByIndex(to)
-		var value any
-		if col.Default != "" {
-			err := writeTupleExpression(ctx, keyTuple, valueTuple, col.Default, col, mergedSch, tm, tb, to)
-			if err != nil {
-				return nil, err
-			}
-		} else if col.Generated != "" {
-			err := writeTupleExpression(ctx, keyTuple, valueTuple, col.Generated, col, mergedSch, tm, tb, to)
-			if err != nil {
-				return nil, err
-			}
-		}
-		
-		err := index.PutField(ctx, tm.ns, tb, to, value)
+		err := writeTupleExpression(ctx, keyTuple, valueTuple, defaultExprs[to], col, mergedSch, tm, tb, to)
 		if err != nil {
 			return nil, err
 		}
@@ -1280,32 +1305,17 @@ func remapTupleWithColumnDefaults(
 
 // writeTupleExpression attempts to evaluate the expression string |exprString| against the row provided and write it 
 // to the provided index in the tuple builder. This is necessary for column default values and generated columns.
-func writeTupleExpression(
-		ctx *sql.Context,
-		keyTuple val.Tuple,
-		valueTuple val.Tuple,
-		exprString string,
-		col schema.Column,
-		mergedSch schema.Schema,
-		tm *TableMerger,
-		tb *val.TupleBuilder,
-		colIdx int,
-) error {
-	expression, err := resolveExpression(ctx, exprString, mergedSch, tm.name)
+func writeTupleExpression(ctx *sql.Context, keyTuple val.Tuple, valueTuple val.Tuple, expr sql.Expression, col schema.Column, mergedSch schema.Schema, tm *TableMerger, tb *val.TupleBuilder, colIdx int, ) error {
+	if !expr.Resolved() {
+		return ErrUnableToMergeColumnDefaultValue.New(expr.String(), tm.name)
+	}
+
+	row, err := index.BuildRow(ctx, keyTuple, valueTuple, mergedSch, tm.ns)
 	if err != nil {
 		return err
 	}
 
-	if !expression.Resolved() {
-		return ErrUnableToMergeColumnDefaultValue.New(exprString, tm.name)
-	}
-
-	row, err := buildRow(ctx, keyTuple, valueTuple, mergedSch, tm)
-	if err != nil {
-		return err
-	}
-
-	value, err := expression.Eval(ctx, row)
+	value, err := expr.Eval(ctx, row)
 	if err != nil {
 		return err
 	}
@@ -1490,6 +1500,11 @@ func migrateDataToMergedSchema(ctx *sql.Context, tm *TableMerger, vm *valueMerge
 	}
 	valueDescriptor := leftSch.GetValueDescriptor()
 
+	defaults, err := resolveDefaults(ctx, tm.name, mergedSch)
+	if err != nil {
+		return err
+	}
+	
 	for {
 		keyTuple, valueTuple, err := mapIter.Next(ctx)
 		if err == io.EOF {
@@ -1498,7 +1513,18 @@ func migrateDataToMergedSchema(ctx *sql.Context, tm *TableMerger, vm *valueMerge
 			return err
 		}
 
-		newValueTuple, err := remapTupleWithColumnDefaults(ctx, keyTuple, valueTuple, valueDescriptor, vm.leftMapping, tm, mergedSch, vm.syncPool, false)
+		newValueTuple, err := remapTupleWithColumnDefaults(
+			ctx,
+			keyTuple,
+			valueTuple,
+			valueDescriptor,
+			vm.leftMapping,
+			tm,
+			mergedSch,
+			defaults,
+			vm.syncPool,
+			false,
+		)
 		if err != nil {
 			return err
 		}
