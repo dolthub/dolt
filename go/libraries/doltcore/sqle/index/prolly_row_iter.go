@@ -39,24 +39,41 @@ type prollyRowIter struct {
 
 var _ sql.RowIter = prollyRowIter{}
 
-func NewProllyRowIter(sch schema.Schema, rows prolly.Map, iter prolly.MapIter, projections []uint64) (sql.RowIter, error) {
+func NewProllyRowIterForMap(sch schema.Schema, rows prolly.Map, iter prolly.MapIter, projections []uint64) (sql.RowIter, error) {
 	if projections == nil {
 		projections = sch.GetAllCols().Tags
 	}
 
-	keyProj, valProj, ordProj := projectionMappings(sch, projections)
 	kd, vd := rows.Descriptors()
+	ns := rows.NodeStore()
 
+	return NewProllyRowIterForSchema(sch, iter, kd, vd, projections, ns)
+}
+
+func NewProllyRowIterForSchema(
+		sch schema.Schema,
+		iter prolly.MapIter,
+		kd val.TupleDesc,
+		vd val.TupleDesc,
+		projections []uint64,
+		ns tree.NodeStore,
+) (sql.RowIter, error) {
 	if schema.IsKeyless(sch) {
-		return &prollyKeylessIter{
-			iter:    iter,
-			valDesc: vd,
-			valProj: valProj,
-			ordProj: ordProj,
-			rowLen:  len(projections),
-			ns:      rows.NodeStore(),
-		}, nil
+		return NewKeylessProllyRowIter(sch, iter, vd, projections, ns)
 	}
+
+	return NewKeyedProllyRowIter(sch, iter, kd, vd, projections, ns)
+}
+
+func NewKeyedProllyRowIter(
+		sch schema.Schema,
+		iter prolly.MapIter,
+		kd val.TupleDesc,
+		vd val.TupleDesc,
+		projections []uint64,
+		ns tree.NodeStore,
+) (sql.RowIter, error) {
+	keyProj, valProj, ordProj := projectionMappings(sch, projections)
 
 	return prollyRowIter{
 		iter:    iter,
@@ -66,7 +83,26 @@ func NewProllyRowIter(sch schema.Schema, rows prolly.Map, iter prolly.MapIter, p
 		valProj: valProj,
 		ordProj: ordProj,
 		rowLen:  len(projections),
-		ns:      rows.NodeStore(),
+		ns:      ns,
+	}, nil
+}
+
+func NewKeylessProllyRowIter(
+	  sch schema.Schema,
+		iter prolly.MapIter,
+		vd val.TupleDesc,
+		projections []uint64,
+		ns tree.NodeStore,
+) (sql.RowIter, error) {
+	_, valProj, ordProj := projectionMappings(sch, projections)
+
+	return &prollyKeylessIter{
+		iter:    iter,
+		valDesc: vd,
+		valProj: valProj,
+		ordProj: ordProj,
+		rowLen:  len(projections),
+		ns:      ns,
 	}, nil
 }
 

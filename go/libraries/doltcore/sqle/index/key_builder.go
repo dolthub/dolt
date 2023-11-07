@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/go-mysql-server/memory"
@@ -219,49 +220,15 @@ func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx context.Context, k, v val.T
 	return b.builder.Build(b.pool), nil
 }
 
-// TODO: dedupe
+// buildRow returns a row for the given key/value tuple pair
 func buildRow(ctx *sql.Context, key, value val.Tuple, sch schema.Schema, ns tree.NodeStore) (sql.Row, error) {
-	pkCols := sch.GetPKCols()
-	valueCols := sch.GetNonPKCols()
-	allCols := sch.GetAllCols()
-
-	row := make(sql.Row, allCols.Size())
-
-	// Skip adding the key tuple if we're working with a keyless table, since the table row data is
-	// always all contained in the value tuple for keyless tables.
-	if !schema.IsKeyless(sch) {
-		keyDesc := sch.GetKeyDescriptor()
-		for i := range keyDesc.Types {
-			value, err := GetField(ctx, keyDesc, i, key, ns)
-			if err != nil {
-				return nil, err
-			}
-
-			pkCol := pkCols.GetColumns()[i]
-			row[allCols.TagToIdx[pkCol.Tag]+1] = value
-		}
+	prollyRowIter := prolly.NewPointLookup(key, value)
+	iter, err := NewProllyRowIterForSchema(sch, prollyRowIter, sch.GetKeyDescriptor(), sch.GetValueDescriptor(), sch.GetAllCols().Tags, ns)
+	if err != nil {
+		return nil, err
 	}
-
-	valueColIndex := 0
-	valueDescriptor := sch.GetValueDescriptor()
-	for valueTupleIndex := range valueDescriptor.Types {
-		// Skip processing the first value in the value tuple for keyless tables, since that field
-		// always holds the cardinality of the row and shouldn't be passed in to an expression.
-		if schema.IsKeyless(sch) && valueTupleIndex == 0 {
-			continue
-		}
-
-		value, err := GetField(ctx, valueDescriptor, valueTupleIndex, value, ns)
-		if err != nil {
-			return nil, err
-		}
-
-		col := valueCols.GetColumns()[valueColIndex]
-		row[allCols.TagToIdx[col.Tag]] = value
-		valueColIndex += 1
-	}
-
-	return row, nil
+	
+	return iter.Next(ctx)
 }
 
 
