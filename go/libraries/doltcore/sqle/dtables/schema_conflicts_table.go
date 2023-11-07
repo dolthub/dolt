@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	noms "github.com/dolthub/dolt/go/store/types"
 )
 
@@ -193,10 +192,6 @@ func newSchemaConflict(ctx context.Context, table string, baseRoot *doltdb.RootV
 }
 
 func getCreateTableStatement(table string, sch schema.Schema, fks []doltdb.ForeignKey, parents map[string]schema.Schema) (string, error) {
-	pkSch, err := sqlutil.FromDoltSchema("", table, sch)
-	if err != nil {
-		return "", err
-	}
 	return sqlfmt.GenerateCreateTableStatement(table, sch, fks, parents)
 }
 

@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -26,8 +27,8 @@ import (
 	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
-	"github.com/dolthub/go-mysql-server/sql/transform"
 )
 
 // NewSecondaryKeyBuilder creates a new SecondaryKeyBuilder instance that can build keys for the secondary index |def|.
@@ -65,7 +66,7 @@ func NewSecondaryKeyBuilder(ctx context.Context, tableName string, sch schema.Sc
 					sqlCtx = sql.NewContext(ctx)
 				}
 
-				expr, err := resolveExpression(sqlCtx, col.Generated, sch, tableName)
+				expr, err := resolveDefaultExpression(sqlCtx, col, sch, tableName)
 				if err != nil {
 					return SecondaryKeyBuilder{}, err
 				}
@@ -91,38 +92,52 @@ func NewSecondaryKeyBuilder(ctx context.Context, tableName string, sch schema.Sc
 	return b, nil
 }
 
-// TODO: dedupe this
-func resolveExpression(ctx *sql.Context, expression string, sch schema.Schema, tableName string) (sql.Expression, error) {
-	query := fmt.Sprintf("SELECT %s from %s.%s", expression, "mydb", tableName)
+// resolveDefaultExpression returns an sql.Expression for the column default or generated expression for the 
+// column provided
+func resolveDefaultExpression(ctx *sql.Context, col schema.Column, sch schema.Schema, tableName string) (sql.Expression, error) {
+	createTable, err := sqlfmt.GenerateCreateTableStatement(tableName, sch, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	
+	query := createTable
 	sqlSch, err := sqlutil.FromDoltSchema("", tableName, sch)
 	if err != nil {
 		return nil, err
 	}
+	
 	mockDatabase := memory.NewDatabase("mydb")
 	mockTable := memory.NewLocalTable(mockDatabase.BaseDatabase, tableName, sqlSch, nil)
 	mockDatabase.AddTable(tableName, mockTable)
 	mockProvider := memory.NewDBProvider(mockDatabase)
 	catalog := analyzer.NewCatalog(mockProvider)
 
-	// TODO: the indexes here are wrong, need to get planbuilder.parse to have the correct indexes earlier
 	pseudoAnalyzedQuery, err := planbuilder.Parse(ctx, catalog, query)
 	if err != nil {
 		return nil, err
 	}
 
-	var expr sql.Expression
-	transform.Inspect(pseudoAnalyzedQuery, func(n sql.Node) bool {
-		if projector, ok := n.(sql.Projector); ok {
-			expr = projector.ProjectedExprs()[0]
-			return false
-		}
-		return true
-	})
-	if expr == nil {
-		return nil, fmt.Errorf("unable to find expression in analyzed query")
+	ct, ok := pseudoAnalyzedQuery.(*plan.CreateTable)
+	if !ok {
+		return nil, fmt.Errorf("expected a *plan.CreateTable node, but got %T", pseudoAnalyzedQuery)
 	}
 
-	return expr, nil
+	colIdx := ct.CreateSchema.Schema.IndexOfColName(col.Name)
+	if colIdx == -1 {
+		return nil, fmt.Errorf("unable to find column %s in analyzed query", col.Name)
+	}
+	
+	sqlCol := ct.CreateSchema.Schema[colIdx]
+	expr := sqlCol.Default
+	if expr == nil || expr.Expr == nil {
+		expr = sqlCol.Generated
+	}
+	
+	if expr == nil || expr.Expr == nil {
+		return nil, fmt.Errorf("unable to find default or generated expression")
+	}
+	
+	return expr.Expr, nil
 }
 
 type SecondaryKeyBuilder struct {
