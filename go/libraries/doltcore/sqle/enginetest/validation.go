@@ -170,6 +170,11 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 		return nil
 	}
 
+	// Indexes on virtual columns cannot be rebuilt via the method below
+	if isVirtualIndex(def, sch) {
+		return nil
+	}
+
 	secondary = prolly.ConvertToSecondaryKeylessIndex(secondary)
 	idxDesc, _ := secondary.Descriptors()
 	builder := val.NewTupleBuilder(idxDesc)
@@ -202,9 +207,13 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 					return err
 				}
 			} else if def.IsSpatial() {
-				geom, _, err := sqltypes.GeometryType{}.Convert(field[:len(field)-1])
+				geom, err := dereferenceGeometry(ctx, vd, j+1, value, secondary.NodeStore())
 				if err != nil {
-					panic(err)
+					return err
+				}
+				geom, _, err = sqltypes.GeometryType{}.Convert(geom)
+				if err != nil {
+					return err
 				}
 				cell := index.ZCell(geom.(sqltypes.GeometryValue))
 				field = cell[:]
@@ -234,6 +243,11 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, primary, secondary prolly.Map) error {
 	// Full-Text indexes do not make use of their internal map, so we may safely skip this check
 	if def.IsFullText() {
+		return nil
+	}
+
+	// Indexes on virtual columns cannot be rebuilt via the method below
+	if isVirtualIndex(def, sch) {
 		return nil
 	}
 
@@ -288,9 +302,13 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 						return err
 					}
 				} else if def.IsSpatial() {
-					geom, _, err := sqltypes.GeometryType{}.Convert(field[:len(field)-1])
+					geom, err := dereferenceGeometry(ctx, vd, j-pkSize, value, secondary.NodeStore())
 					if err != nil {
-						panic(err)
+						return err
+					}
+					geom, _, err = sqltypes.GeometryType{}.Convert(geom)
+					if err != nil {
+						return err
 					}
 					cell := index.ZCell(geom.(sqltypes.GeometryValue))
 					field = cell[:]
@@ -315,6 +333,19 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 			return fmt.Errorf("index key %v not found in index %s", builder.Desc.Format(k), def.Name())
 		}
 	}
+}
+
+func isVirtualIndex(def schema.Index, sch schema.Schema) bool {
+	for _, colName := range def.ColumnNames() {
+		col, ok := sch.GetAllCols().GetByName(colName)
+		if !ok {
+			panic(fmt.Sprintf("column not found: %s", colName))
+		}
+		if col.Virtual {
+			return true
+		}
+	}
+	return false
 }
 
 // shouldDereferenceContent returns true if address encoded content should be dereferenced when
@@ -350,6 +381,31 @@ func dereferenceContent(ctx context.Context, tableValueDescriptor val.TupleDesc,
 	case string:
 		return []byte(x), nil
 	case []byte:
+		return x, nil
+	default:
+		return nil, fmt.Errorf("unexpected type for address encoded content: %T", v)
+	}
+}
+
+// dereferenceGeometry dereferences an address encoded geometry field to load the content
+// and return a GeometryType. |tableValueDescriptor| is the tuple descriptor for the value tuple of the main
+// table, |tablePos| is the field index into the value tuple, and |tuple| is the value tuple from the
+// main table.
+func dereferenceGeometry(ctx context.Context, tableValueDescriptor val.TupleDesc, tablePos int, tuple val.Tuple, ns tree.NodeStore) (interface{}, error) {
+	v, err := index.GetField(ctx, tableValueDescriptor, tablePos, tuple, ns)
+	if err != nil {
+		return nil, err
+	}
+	if v == nil {
+		return nil, nil
+	}
+
+	switch x := v.(type) {
+	case string:
+		return []byte(x), nil
+	case []byte:
+		return x, nil
+	case sqltypes.Point, sqltypes.LineString, sqltypes.Polygon, sqltypes.MultiPoint, sqltypes.MultiLineString, sqltypes.MultiPolygon, sqltypes.GeometryType, sqltypes.GeomColl:
 		return x, nil
 	default:
 		return nil, fmt.Errorf("unexpected type for address encoded content: %T", v)

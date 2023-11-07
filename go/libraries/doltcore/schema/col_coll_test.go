@@ -21,14 +21,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	typeinfo "github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-var firstNameCol = Column{"first", 0, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil}
-var lastNameCol = Column{"last", 1, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil}
-var firstNameCapsCol = Column{"FiRsT", 2, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil}
-var lastNameCapsCol = Column{"LAST", 3, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil}
+var firstNameCol = Column{Name: "first", Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType}
+var lastNameCol = Column{Name: "last", Tag: 1, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType}
+var firstNameCapsCol = Column{Name: "FiRsT", Tag: 2, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType}
+var lastNameCapsCol = Column{Name: "LAST", Tag: 3, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType}
 
 func TestGetByNameAndTag(t *testing.T) {
 	cols := []Column{firstNameCol, lastNameCol, firstNameCapsCol, lastNameCapsCol}
@@ -102,18 +102,18 @@ func TestGetByNameCaseInsensitive(t *testing.T) {
 
 func TestAppendAndItrInSortOrder(t *testing.T) {
 	cols := []Column{
-		{"0", 0, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil},
-		{"2", 2, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil},
-		{"4", 4, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil},
-		{"3", 3, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil},
-		{"1", 1, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil},
+		{Name: "0", Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
+		{Name: "2", Tag: 2, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
+		{Name: "4", Tag: 4, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
+		{Name: "3", Tag: 3, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
+		{Name: "1", Tag: 1, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
 	}
 	cols2 := []Column{
-		{"7", 7, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil},
-		{"9", 9, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil},
-		{"5", 5, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil},
-		{"8", 8, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil},
-		{"6", 6, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil},
+		{Name: "7", Tag: 7, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
+		{Name: "9", Tag: 9, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
+		{Name: "5", Tag: 5, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
+		{Name: "8", Tag: 8, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
+		{Name: "6", Tag: 6, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
 	}
 
 	colColl := NewColCollection(cols...)

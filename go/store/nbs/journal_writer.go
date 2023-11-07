@@ -161,8 +161,10 @@ type journalWriter struct {
 var _ io.Closer = &journalWriter{}
 
 // bootstrapJournal reads in records from the journal file and the journal index file, initializing
-// the state of the journalWriter. It returns the most recent root hash for the journal.
-func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, err error) {
+// the state of the journalWriter. Root hashes read from root update records in the journal are written
+// to |reflogRingBuffer|, which maintains the most recently updated roots which are used to generate the
+// reflog. This function returns the most recent root hash for the journal as well as any error encountered.
+func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer *reflogRingBuffer) (last hash.Hash, err error) {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
 
@@ -265,8 +267,16 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 				Length: uint32(len(r.payload)),
 			})
 			wr.uncmpSz += r.uncompressedPayloadSize()
+
 		case rootHashJournalRecKind:
 			last = hash.Hash(r.address)
+			if !reflogDisabled && reflogRingBuffer != nil {
+				reflogRingBuffer.Push(reflogRootHashEntry{
+					root:      r.address.String(),
+					timestamp: r.timestamp,
+				})
+			}
+
 		default:
 			return fmt.Errorf("unknown journal record kind (%d)", r.kind)
 		}
@@ -275,6 +285,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 	if err != nil {
 		return hash.Hash{}, err
 	}
+
 	return
 }
 
@@ -352,6 +363,7 @@ func (wr *journalWriter) writeCompressedChunk(cc CompressedChunk) error {
 func (wr *journalWriter) commitRootHash(root hash.Hash) error {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
+
 	buf, err := wr.getBytes(rootHashRecordSize())
 	if err != nil {
 		return err
@@ -533,7 +545,7 @@ func (wr *journalWriter) Close() (err error) {
 // A rangeIndex maps chunk addresses to read Ranges in the chunk journal file.
 type rangeIndex struct {
 	// novel Ranges represent most recent chunks written to
-	// the journal. These Ranges have not yet been writen to
+	// the journal. These Ranges have not yet been written to
 	// a journal index record.
 	novel *swiss.Map[addr, Range]
 
