@@ -91,11 +91,30 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tr
 			err = json.Unmarshal(buf, &doc.Val)
 			v = doc
 		}
+	// TODO: eventually remove this, and only read GeomAddrEnc
 	case val.GeometryEnc:
 		var buf []byte
 		buf, ok = td.GetGeometry(i, tup)
 		if ok {
-			v = deserializeGeometry(buf)
+			v, err = deserializeGeometry(buf)
+		}
+	case val.GeomAddrEnc:
+		// TODO: until GeometryEnc is removed, we must check if GeomAddrEnc is a GeometryEnc
+		var buf []byte
+		buf, ok = td.GetGeometry(i, tup)
+		if ok {
+			v, err = deserializeGeometry(buf)
+		}
+		if !ok || err != nil {
+			var h hash.Hash
+			h, ok = td.GetGeometryAddr(i, tup)
+			if ok {
+				buf, err = tree.NewByteArray(h, ns).ToBytes(ctx)
+				if err != nil {
+					return nil, err
+				}
+				v, err = deserializeGeometry(buf)
+			}
 		}
 	case val.Hash128Enc:
 		v, ok = td.GetHash128(i, tup)
@@ -198,12 +217,21 @@ func PutField(ctx context.Context, ns tree.NodeStore, tb *val.TupleBuilder, i in
 		tb.PutByteString(i, v.([]byte))
 	case val.Hash128Enc:
 		tb.PutHash128(i, v.([]byte))
+	// TODO: eventually remove GeometryEnc, but in the meantime write them as GeomAddrEnc
 	case val.GeometryEnc:
 		geo := serializeGeometry(v)
-		if len(geo) > math.MaxUint16 {
-			return ErrValueExceededMaxFieldSize
+		h, err := serializeBytesToAddr(ctx, ns, bytes.NewReader(geo), len(geo))
+		if err != nil {
+			return err
 		}
-		tb.PutGeometry(i, geo)
+		tb.PutGeometryAddr(i, h)
+	case val.GeomAddrEnc:
+		geo := serializeGeometry(v)
+		h, err := serializeBytesToAddr(ctx, ns, bytes.NewReader(geo), len(geo))
+		if err != nil {
+			return err
+		}
+		tb.PutGeometryAddr(i, h)
 	case val.JSONAddrEnc:
 		buf, err := convJson(v)
 		if err != nil {
@@ -231,7 +259,11 @@ func PutField(ctx context.Context, ns tree.NodeStore, tb *val.TupleBuilder, i in
 		tb.PutCommitAddr(i, v.(hash.Hash))
 	case val.CellEnc:
 		if _, ok := v.([]byte); ok {
-			v = deserializeGeometry(v.([]byte))
+			var err error
+			v, err = deserializeGeometry(v.([]byte))
+			if err != nil {
+				return err
+			}
 		}
 		tb.PutCell(i, ZCell(v.(types.GeometryValue)))
 	default:
@@ -292,26 +324,29 @@ func convUint(v interface{}) uint {
 	}
 }
 
-func deserializeGeometry(buf []byte) (v interface{}) {
-	srid, _, typ, _ := types.DeserializeEWKBHeader(buf)
+func deserializeGeometry(buf []byte) (v interface{}, err error) {
+	srid, _, typ, err := types.DeserializeEWKBHeader(buf)
+	if err != nil {
+		return nil, err
+	}
 	buf = buf[types.EWKBHeaderSize:]
 	switch typ {
 	case types.WKBPointID:
-		v, _, _ = types.DeserializePoint(buf, false, srid)
+		v, _, err = types.DeserializePoint(buf, false, srid)
 	case types.WKBLineID:
-		v, _, _ = types.DeserializeLine(buf, false, srid)
+		v, _, err = types.DeserializeLine(buf, false, srid)
 	case types.WKBPolyID:
-		v, _, _ = types.DeserializePoly(buf, false, srid)
+		v, _, err = types.DeserializePoly(buf, false, srid)
 	case types.WKBMultiPointID:
-		v, _, _ = types.DeserializeMPoint(buf, false, srid)
+		v, _, err = types.DeserializeMPoint(buf, false, srid)
 	case types.WKBMultiLineID:
-		v, _, _ = types.DeserializeMLine(buf, false, srid)
+		v, _, err = types.DeserializeMLine(buf, false, srid)
 	case types.WKBMultiPolyID:
-		v, _, _ = types.DeserializeMPoly(buf, false, srid)
+		v, _, err = types.DeserializeMPoly(buf, false, srid)
 	case types.WKBGeomCollID:
-		v, _, _ = types.DeserializeGeomColl(buf, false, srid)
+		v, _, err = types.DeserializeGeomColl(buf, false, srid)
 	default:
-		panic(fmt.Sprintf("unknown geometry type %d", typ))
+		return nil, fmt.Errorf("unknown geometry type %d", typ)
 	}
 	return
 }

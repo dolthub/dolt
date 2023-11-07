@@ -74,6 +74,16 @@ teardown() {
     [[ "$output" =~ "POLYGON((0.123 0.456,1.22 1.33,1.11 0.99,0.123 0.456))" ]] || false
 }
 
+@test "sql-spatial-types: can create large geometry" {
+    run dolt sql < $BATS_TEST_DIRNAME/helper/big_spatial.sql
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Query OK" ]] || false
+
+    run dolt sql -q "select count(*) from t"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+}
+
 @test "sql-spatial-types: create geometry table and insert existing spatial types" {
 
     # create geometry table

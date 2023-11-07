@@ -40,6 +40,7 @@ enum Encoding : uint8 {
   StringAddr = 23,
   JSONAddr   = 24,
   Cell       = 25,
+  GeomAddr   = 26,
 
   // variable width
   String   = 128,
