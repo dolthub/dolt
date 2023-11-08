@@ -1027,7 +1027,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 				return fmt.Errorf("cannot merge keyless tables with reordered columns")
 			}
 		} else {
-			defaults, err := resolveDefaults(ctx, m.tableMerger.name, m.finalSch)
+			defaults, err := resolveDefaults(ctx, m.tableMerger.name, m.tableMerger.rightSch)
 			if err != nil {
 				return err
 			}
@@ -1294,7 +1294,8 @@ func remapTupleWithColumnDefaults(
 	
 	for _, to := range secondPass {
 		col := mergedSch.GetNonPKCols().GetByIndex(to)
-		err := writeTupleExpression(ctx, keyTuple, valueTuple, defaultExprs[to], col, tm.rightSch, tm, tb, to)
+		defaultIdx := mapping.MapOrdinal(to)
+		err := writeTupleExpression(ctx, keyTuple, valueTuple, defaultExprs[defaultIdx], col, tm.rightSch, tm, tb, to)
 		if err != nil {
 			return nil, err
 		}

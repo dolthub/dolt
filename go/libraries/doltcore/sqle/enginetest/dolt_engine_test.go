@@ -220,7 +220,7 @@ func TestSingleMergeScript(t *testing.T) {
 					Expected: []sql.Row{{doltCommit, 0, 0}},
 				},
 				{
-					Query: "select pk, col1, col2 from t;",
+					Query: "select pk, col1, col2 from t order by pk",
 					Expected: []sql.Row{
 						{1, 10, "10hello"}, {2, 20, "20hello"},
 						{3, 30, "30hello"}, {4, 40, "40hello"},
