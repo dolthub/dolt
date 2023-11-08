@@ -2027,3 +2027,134 @@ var SchemaChangeTestsSchemaConflicts = []MergeScriptTest{
 		},
 	},
 }
+
+var SchemaChangeTestsGeneratedColumns = []MergeScriptTest{
+	{
+		Name: "reordering a column",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 int, col2 varchar(100) as (concat(col1, 'hello')) stored);",
+			"INSERT into t (pk, col1) values (1, 10), (2, 20);",
+			"alter table t add index idx1 (pk, col1);",
+			"alter table t add index idx2 (col2);",
+			"alter table t add index idx3 (pk, col1, col2);",
+			"alter table t add index idx4 (col1, col2);",
+			"alter table t add index idx5 (col2, col1);",
+			"alter table t add index idx6 (col2, pk, col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify col1 int after col2;",
+			"insert into t (pk, col1) values (3, 30), (4, 40);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t (pk, col1) values (5, 50), (6, 60);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select pk, col1, col2 from t;",
+				Expected: []sql.Row{
+					{1, 10, "10hello"}, {2, 20, "20hello"},
+					{3, 30, "30hello"}, {4, 40, "40hello"},
+					{5, 50, "50hello"}, {6, 60, "60hello"}},
+			},
+		},
+	},
+	{
+		Name: "adding virtual columns to one side",
+		AncSetUpScript: []string{
+			"create table t (pk int primary key, col1 int as (pk + 1));",
+			"insert into t (pk) values (1);",
+			"alter table t add index idx1 (col1, pk);",
+			"alter table t add index idx2 (col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col2 int;",
+			"alter table t add column col3 int;",
+			"insert into t (pk, col2, col3) values (2, 2, 2);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t (pk) values (3);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 1, nil, 2}, {2, 2, 2, 3}, {3, 3, nil, 4}},
+			},
+		},
+	},
+	{
+		Name: "adding generated columns to both sides",
+		AncSetUpScript: []string{
+			"create table t (pk int primary key);",
+			"insert into t values (1), (2);",
+			"alter table t add index idx1 (pk);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col2 varchar(100) as (concat(pk1, 'hello'));",
+			"insert into t (pk) values (3), (4);",
+			"alter table t add index idx1 (col2);",
+		},
+		LeftSetUpScript: []string{
+			"alter table t add column col1 int as (pk + 100) stored;",
+			"insert into t (pk) values (5), (6);",
+			"alter table t add index idx1 (col1);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select pk, col1, col2 from t;",
+				Expected: []sql.Row{
+					{1, 101, "1hello"},
+					{2, 102, "2hello"},
+					{3, 103, "3hello"},
+					{4, 104, "4hello"},
+					{5, 105, "5hello"},
+					{6, 106, "6hello"},
+				},
+			},
+		},
+	},
+	{
+		Name: "convergent schema changes with virtual columns",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 int);",
+			"INSERT into t values (1, 10);",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 int not null;",
+			"alter table t add column col3 int as (pk + 1);",
+			"alter table t add index idx1 (col3, col1);",
+		},
+		LeftSetUpScript: []string{
+			"alter table t modify column col1 int not null;",
+			"alter table t add column col3 int as (pk + 1);",
+			"alter table t add index idx1 (col3, col1);",
+			"update t set col1=-1000 where t.pk = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query:    "show create table t;",
+				Expected: []sql.Row{{"t", "CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` int NOT NULL,\n  `col3` int,\n  PRIMARY KEY (`pk`),\n  KEY `idx1` (`col3`,`col1`),\n  CONSTRAINT `fk1` FOREIGN KEY (`col3`) REFERENCES `parent` (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, -1000, nil}},
+			},
+		},
+	},
+}

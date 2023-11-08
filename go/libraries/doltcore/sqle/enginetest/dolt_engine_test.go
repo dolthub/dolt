@@ -2851,6 +2851,7 @@ func TestThreeWayMergeWithSchemaChangeScripts(t *testing.T) {
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsCollations, "collation changes", false)
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsConstraints, "constraint changes", false)
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsSchemaConflicts, "schema conflicts", false)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsGeneratedColumns, "generated columns", false)
 
 	// Run non-symmetric schema merge tests in just one direction
 	t.Run("type changes", func(t *testing.T) {
@@ -2872,6 +2873,7 @@ func TestThreeWayMergeWithSchemaChangeScriptsPrepared(t *testing.T) {
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsCollations, "collation changes", true)
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsConstraints, "constraint changes", true)
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsSchemaConflicts, "schema conflicts", true)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsGeneratedColumns, "generated columns", true)
 
 	// Run non-symmetric schema merge tests in just one direction
 	t.Run("type changes", func(t *testing.T) {
