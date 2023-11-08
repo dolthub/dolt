@@ -414,9 +414,14 @@ func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) 
 		// the merged schema, and we skip keyless tables, since their value tuples require different mapping
 		// logic and we don't currently support merges to keyless tables that contain schema changes anyway.
 		newTuple := valueTuple
-		if !cv.valueMerger.keyless && (diff.Op == tree.DiffOpRightAdd || diff.Op == tree.DiffOpRightModify) {
-			newTupleBytes := remapTuple(valueTuple, valueDesc, cv.valueMerger.rightMapping)
-			newTuple = val.NewTuple(cv.valueMerger.syncPool, newTupleBytes...)
+		if !cv.valueMerger.keyless {
+			if diff.Op == tree.DiffOpRightAdd || diff.Op == tree.DiffOpRightModify {
+				newTupleBytes := remapTuple(valueTuple, valueDesc, cv.valueMerger.rightMapping)
+				newTuple = val.NewTuple(cv.valueMerger.syncPool, newTupleBytes...)
+			} else if diff.Op == tree.DiffOpLeftAdd || diff.Op == tree.DiffOpLeftModify {
+				newTupleBytes := remapTuple(valueTuple, valueDesc, cv.valueMerger.leftMapping)
+				newTuple = val.NewTuple(cv.valueMerger.syncPool, newTupleBytes...)
+			}
 		}
 
 		row, err := buildRow(ctx, diff.Key, newTuple, cv.sch, cv.tableMerger)
@@ -582,11 +587,24 @@ func newUniqValidator(ctx context.Context, sch schema.Schema, tm *TableMerger, v
 // validateDiff processes |diff| and checks for any unique constraint violations that need to be updated. The number
 // of violations recorded along with any error encountered is returned. Processing |diff| may resolve existing unique
 // constraint violations, in which case the violations returned may be a negative number.
-func (uv uniqValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff) (violations int, err error) {
+func (uv uniqValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (violations int, err error) {
 	var value val.Tuple
 	switch diff.Op {
 	case tree.DiffOpRightAdd, tree.DiffOpRightModify:
 		value = diff.Right
+		// Don't remap the value to the merged schema if the table is keyless or if the mapping is an identity mapping.
+		if !uv.valueMerger.keyless && !uv.valueMerger.rightMapping.IsIdentityMapping() {
+			modifiedValue := remapTuple(value, uv.tm.rightSch.GetValueDescriptor(), uv.valueMerger.rightMapping)
+			value = val.NewTuple(uv.valueMerger.syncPool, modifiedValue...)
+		}
+	case tree.DiffOpLeftAdd, tree.DiffOpLeftModify:
+		// TODO: It may be possible to improve performance by returning early unless we're rebuilding the tree
+		value = diff.Left
+		// Don't remap the value to the merged schema if the table is keyless or if the mapping is an identity mapping.
+		if !uv.valueMerger.keyless && !uv.valueMerger.leftMapping.IsIdentityMapping() {
+			modifiedValue := remapTuple(value, uv.tm.leftSch.GetValueDescriptor(), uv.valueMerger.leftMapping)
+			value = val.NewTuple(uv.valueMerger.syncPool, modifiedValue...)
+		}
 	case tree.DiffOpRightDelete:
 		// If we see a row deletion event from the right side, we grab the original/base value so that we can update our
 		// local copy of the secondary index.
@@ -595,12 +613,6 @@ func (uv uniqValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff
 		value = diff.Merged
 	default:
 		return
-	}
-
-	// Don't remap the value to the merged schema if the table is keyless or if the mapping is an identity mapping.
-	if !uv.valueMerger.keyless && !uv.valueMerger.rightMapping.IsIdentityMapping() {
-		modifiedValue := remapTuple(value, uv.tm.rightSch.GetValueDescriptor(), uv.valueMerger.rightMapping)
-		value = val.NewTuple(uv.valueMerger.syncPool, modifiedValue...)
 	}
 
 	// For a row deletion... we need to remove any unique constraint violations that were previously recorded for
@@ -631,7 +643,7 @@ func (uv uniqValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff
 	}
 
 	// After detecting any unique constraint violations, we need to update our indexes with the updated row
-	if diff.Op == tree.DiffOpRightAdd || diff.Op == tree.DiffOpRightModify || diff.Op == tree.DiffOpDivergentModifyResolved {
+	if diff.Op != tree.DiffOpRightDelete {
 		for _, idx := range uv.indexes {
 			err := idx.insertRow(ctx, diff.Key, value)
 			if err != nil {
