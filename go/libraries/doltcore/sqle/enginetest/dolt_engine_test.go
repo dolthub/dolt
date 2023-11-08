@@ -196,18 +196,23 @@ func TestSingleMergeScript(t *testing.T) {
 	// t.Skip()
 	var scripts = []MergeScriptTest{
 		{
-			Name: "adding a column with a literal default value",
+			Name: "reordering a column",
 			AncSetUpScript: []string{
-				"CREATE table t (pk int primary key);",
-				"INSERT into t values (1);",
+				"CREATE table t (pk int primary key, col1 int, col2 varchar(100) as (concat(col1, 'hello')) stored);",
+				"INSERT into t (pk, col1) values (1, 10), (2, 20);",
+				"alter table t add index idx1 (pk, col1);",
+				"alter table t add index idx2 (col2);",
+				"alter table t add index idx3 (pk, col1, col2);",
+				"alter table t add index idx4 (col1, col2);",
+				"alter table t add index idx5 (col2, col1);",
+				"alter table t add index idx6 (col2, pk, col1);",
 			},
 			RightSetUpScript: []string{
-				"alter table t add column c1 varchar(100) default ('hello');",
-				"insert into t values (2, 'hi');",
-				"alter table t add index idx1 (c1, pk);",
+				"alter table t modify col1 int after col2;",
+				"insert into t (pk, col1) values (3, 30), (4, 40);",
 			},
 			LeftSetUpScript: []string{
-				"insert into t values (3);",
+				"insert into t (pk, col1) values (5, 50), (6, 60);",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
@@ -215,11 +220,70 @@ func TestSingleMergeScript(t *testing.T) {
 					Expected: []sql.Row{{doltCommit, 0, 0}},
 				},
 				{
-					Query:    "select * from t;",
-					Expected: []sql.Row{{1, "hello"}, {2, "hi"}, {3, "hello"}},
+					Query: "select pk, col1, col2 from t;",
+					Expected: []sql.Row{
+						{1, 10, "10hello"}, {2, 20, "20hello"},
+						{3, 30, "30hello"}, {4, 40, "40hello"},
+						{5, 50, "50hello"}, {6, 60, "60hello"}},
 				},
 			},
 		},
+		// {
+		// 	Name: "adding a column with a literal default value",
+		// 	AncSetUpScript: []string{
+		// 		"CREATE table t (pk int primary key);",
+		// 		"INSERT into t values (1);",
+		// 	},
+		// 	RightSetUpScript: []string{
+		// 		"alter table t add column c1 varchar(100) default ('hello');",
+		// 		"insert into t values (2, 'hi');",
+		// 		"alter table t add index idx1 (c1, pk);",
+		// 	},
+		// 	LeftSetUpScript: []string{
+		// 		"insert into t values (3);",
+		// 	},
+		// 	Assertions: []queries.ScriptTestAssertion{
+		// 		{
+		// 			Query:    "call dolt_merge('right');",
+		// 			Expected: []sql.Row{{doltCommit, 0, 0}},
+		// 		},
+		// 		{
+		// 			Query:    "select * from t;",
+		// 			Expected: []sql.Row{{1, "hello"}, {2, "hi"}, {3, "hello"}},
+		// 		},
+		// 	},
+		// },
+		// {
+		// 	Name: "check constraint violation - right side violates new check constraint",
+		// 	AncSetUpScript: []string{
+		// 		"set autocommit = 0;",
+		// 		"CREATE table t (pk int primary key, col00 int, col01 int, col1 varchar(100) default ('hello'));",
+		// 		"INSERT into t values (1, 0, 0, 'hi');",
+		// 		"alter table t add index idx1 (col1);",
+		// 	},
+		// 	RightSetUpScript: []string{
+		// 		"insert into t values (2, 0, 0, DEFAULT);",
+		// 	},
+		// 	LeftSetUpScript: []string{
+		// 		"alter table t drop column col00;",
+		// 		"alter table t drop column col01;",
+		// 		"alter table t add constraint CHECK (col1 != concat('he', 'llo'))",
+		// 	},
+		// 	Assertions: []queries.ScriptTestAssertion{
+		// 		{
+		// 			Query:    "call dolt_merge('right');",
+		// 			Expected: []sql.Row{{"", 0, 1}},
+		// 		},
+		// 		{
+		// 			Query:    "select * from dolt_constraint_violations;",
+		// 			Expected: []sql.Row{{"t", uint64(1)}},
+		// 		},
+		// 		{
+		// 			Query:    `select violation_type, pk, col1, violation_info like "\%NOT((col1 = concat('he','llo')))\%" from dolt_constraint_violations_t;`,
+		// 			Expected: []sql.Row{{uint64(3), 2, "hello", true}},
+		// 		},
+		// 	},
+		// },
 	}
 	for _, test := range scripts {
 		t.Run("merge right into left", func(t *testing.T) {
