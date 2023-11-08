@@ -23,6 +23,8 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 )
 
 type Persister struct {
@@ -86,7 +88,13 @@ func (p *Persister) Persist(ctx *sql.Context, data []byte) error {
 		return err
 	}
 
-	return os.Rename(f.Name(), p.privsFilePath)
+	err = os.Rename(f.Name(), p.privsFilePath)
+	if err != nil {
+		os.Remove(f.Name())
+		return err
+	}
+
+	return file.SyncDirectoryHandle(filepath.Dir(f.Name()))
 }
 
 // LoadData reads the mysql.db file, returns nil if empty or not found
