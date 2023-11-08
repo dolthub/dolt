@@ -71,37 +71,12 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 	}
 	leftRows := durable.ProllyMapFromIndex(lr)
 	valueMerger := newValueMerger(mergedSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool(), tm.ns)
-	leftMapping := valueMerger.leftMapping
 
 	// We need a sql.Context to apply column default values in merges; if we don't have one already,
 	// create one, since this code also gets called from the CLI merge code path.
 	sqlCtx, ok := ctx.(*sql.Context)
 	if !ok {
 		sqlCtx = sql.NewContext(ctx)
-	}
-
-	// Migrate primary index data to rewrite the values on the left side of the merge if necessary
-	schemasDifferentSize := len(tm.leftSch.GetAllCols().GetColumns()) != len(mergedSch.GetAllCols().GetColumns())
-	if rewriteRows || schemasDifferentSize || leftMapping.IsIdentityMapping() == false {
-		if err := migrateDataToMergedSchema(sqlCtx, tm, valueMerger, mergedSch); err != nil {
-			return nil, nil, err
-		}
-
-		// After we migrate the data on the left-side to the new, merged schema, we reset
-		// the left mapping to an identity mapping, since it's a direct mapping now.
-		// However, columns that did not exist on the left schema shouldn't be updated, because they
-		// still don't exist on the migrated data.
-		for i, col := range mergedSch.GetNonPKCols().GetColumns() {
-			if findNonPKColumnMappingByTagOrName(tm.leftSch, col) != -1 {
-				valueMerger.leftMapping[i] = i
-			}
-		}
-	}
-
-	// After we've migrated the existing data to the new schema, it's safe for us to update the schema on the table
-	mergeTbl, err = tm.leftTbl.UpdateSchema(sqlCtx, mergedSch)
-	if err != nil {
-		return nil, nil, err
 	}
 
 	var stats *MergeStats
@@ -277,6 +252,12 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 			// Currently, all changes are applied to the left-side of the merge, so for any left-side diff ops,
 			// we can simply ignore them since that data is already in the destination (the left-side).
 		}
+	}
+
+	// After we've resolved all the diffs, it's safe for us to update the schema on the table
+	mergeTbl, err = tm.leftTbl.UpdateSchema(ctx, finalSch)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	finalRows, err := pri.finalize(ctx)
