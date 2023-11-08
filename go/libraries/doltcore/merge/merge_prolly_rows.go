@@ -965,6 +965,7 @@ func (nv nullValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff
 				}
 			}
 		}
+		count = len(violations)
 	}
 	return
 }
