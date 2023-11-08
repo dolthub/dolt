@@ -1027,10 +1027,12 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 				return fmt.Errorf("cannot merge keyless tables with reordered columns")
 			}
 		} else {
-			defaults, err := resolveDefaults(ctx, m.tableMerger.name, m.tableMerger.rightSch)
+			// defaults, err := resolveDefaults(ctx, m.tableMerger.name, m.finalSch)
+			defaults, err := resolveDefaults(ctx, m.tableMerger.name, m.finalSch, m.valueMerger.rightMapping)
 			if err != nil {
 				return err
 			}
+			
 			
 			tempTupleValue, err := remapTupleWithColumnDefaults(
 				ctx,
@@ -1057,7 +1059,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 		// the merge
 		merged := diff.Merged
 		if hasStoredGeneratedColumns(m.finalSch) {
-			defaults, err := resolveDefaults(ctx, m.tableMerger.name, m.finalSch)
+			defaults, err := resolveDefaults(ctx, m.tableMerger.name, m.finalSch, m.valueMerger.rightMapping)
 			if err != nil {
 				return err
 			}
@@ -1085,7 +1087,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 	}
 }
 
-func resolveDefaults(ctx *sql.Context, tableName string, sch schema.Schema) ([]sql.Expression, error) {
+func resolveDefaults(ctx *sql.Context, tableName string, sch schema.Schema, mapping val.OrdinalMapping) ([]sql.Expression, error) {
 	var exprs []sql.Expression
 	i := 0
 	err := sch.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
@@ -1097,7 +1099,11 @@ func resolveDefaults(ctx *sql.Context, tableName string, sch schema.Schema) ([]s
 			if len(exprs) == 0 {
 				exprs = make([]sql.Expression, sch.GetAllCols().Size())
 			}
-			exprs[i] = expr
+			idx := mapping.MapOrdinal(i)
+			if idx == -1 {
+				idx = i
+			}
+			exprs[idx] = expr
 		}
 		
 		i++
@@ -1298,6 +1304,9 @@ func remapTupleWithColumnDefaults(
 	for _, to := range secondPass {
 		col := mergedSch.GetNonPKCols().GetByIndex(to)
 		defaultIdx := mapping.MapOrdinal(to)
+		if defaultIdx == -1 {
+			defaultIdx = to
+		}
 		err := writeTupleExpression(ctx, keyTuple, valueTuple, defaultExprs[defaultIdx], col, tm.rightSch, tm, tb, to)
 		if err != nil {
 			return nil, err
@@ -1511,7 +1520,7 @@ func migrateDataToMergedSchema(ctx *sql.Context, tm *TableMerger, vm *valueMerge
 	}
 	valueDescriptor := leftSch.GetValueDescriptor()
 
-	defaults, err := resolveDefaults(ctx, tm.name, mergedSch)
+	defaults, err := resolveDefaults(ctx, tm.name, mergedSch, vm.leftMapping)
 	if err != nil {
 		return err
 	}
