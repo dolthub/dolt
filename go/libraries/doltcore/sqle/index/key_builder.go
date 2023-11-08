@@ -28,8 +28,10 @@ import (
 	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
+	"github.com/dolthub/go-mysql-server/sql/transform"
 )
 
 // NewSecondaryKeyBuilder creates a new SecondaryKeyBuilder instance that can build keys for the secondary index |def|.
@@ -127,12 +129,22 @@ func ResolveCheckExpression(ctx *sql.Context, tableName string, sch schema.Schem
 	}
 
 	for _, check := range ct.Checks() {
-		if check.Expr.String() == checkExpr {
+		if stripTableNamesFromExpression(check.Expr).String() == checkExpr {
 			return check.Expr, nil
 		}
 	}
 	
 	return nil, fmt.Errorf("unable to find check expression")
+}
+
+func stripTableNamesFromExpression(expr sql.Expression) sql.Expression {
+	e, _, _ := transform.Expr(expr, func(e sql.Expression) (sql.Expression, transform.TreeIdentity, error) {
+		if col, ok := e.(*expression.GetField); ok {
+			return col.WithTable(""), transform.NewTree, nil
+		}
+		return e, transform.SameTree, nil	
+	})
+	return e
 }
 
 func parseCreateTable(ctx *sql.Context, tableName string, sch schema.Schema) (*plan.CreateTable, error) {

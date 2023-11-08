@@ -208,26 +208,31 @@ func TestSingleMergeScript(t *testing.T) {
 	// t.Skip()
 	var scripts = []MergeScriptTest{
 		{
-			Name: "right-side adds a column with a default value",
+			Name: "check constraint violation - simple case, no schema changes",
 			AncSetUpScript: []string{
-				"CREATE table t (pk int primary key, c1 varchar(100), c2 varchar(100));",
-				"INSERT into t values ('1', 'BAD', 'hello');",
+				"set autocommit = 0;",
+				"CREATE table t (pk int primary key, col1 int, col2 int, CHECK (col1 != col2));",
+				"INSERT into t values (1, 2, 3);",
+				"alter table t add index idx1 (pk, col2);",
 			},
 			RightSetUpScript: []string{
-				"alter table t add column c3 varchar(100) default (CONCAT(c2, c1, 'default'));",
-				"insert into t values ('2', 'BAD', 'hello', 'hi');",
+				"update t set col2=4;",
 			},
 			LeftSetUpScript: []string{
-				"insert into t values ('3', 'BAD', 'hi');",
+				"update t set col1=4;",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
 					Query:    "call dolt_merge('right');",
-					Expected: []sql.Row{{doltCommit, 0, 0}},
+					Expected: []sql.Row{{"", 0, 1}},
 				},
 				{
-					Query:    "select * from t order by pk;",
-					Expected: []sql.Row{{1, "BAD", "hello", "helloBADdefault"}, {2, "BAD", "hello", "hi"}, {3, "BAD", "hi", "hiBADdefault"}},
+					Query:    "select * from dolt_constraint_violations;",
+					Expected: []sql.Row{{"t", uint64(1)}},
+				},
+				{
+					Query:    "select violation_type, pk, col1, col2, violation_info like '\\%NOT((col1 = col2))\\%' from dolt_constraint_violations_t;",
+					Expected: []sql.Row{{uint64(3), 1, 4, 4, true}},
 				},
 			},
 		},
