@@ -1246,7 +1246,7 @@ func remapTuple(tuple val.Tuple, desc val.TupleDesc, mapping val.OrdinalMapping)
 func remapTupleWithColumnDefaults(
 		ctx *sql.Context,
 		keyTuple, valueTuple val.Tuple,
-		tupleDesc val.TupleDesc,
+		valDesc val.TupleDesc,
 		mapping val.OrdinalMapping,
 		tm *TableMerger,
 		mergedSch schema.Schema,
@@ -1274,7 +1274,7 @@ func remapTupleWithColumnDefaults(
 				secondPass = append(secondPass, to)
 			}
 			
-			value, err = index.GetField(ctx, tupleDesc, from, valueTuple, tm.ns)
+			value, err = index.GetField(ctx, valDesc, from, valueTuple, tm.ns)
 			if err != nil {
 				return nil, err
 			}
@@ -1294,7 +1294,7 @@ func remapTupleWithColumnDefaults(
 	
 	for _, to := range secondPass {
 		col := mergedSch.GetNonPKCols().GetByIndex(to)
-		err := writeTupleExpression(ctx, keyTuple, valueTuple, defaultExprs[to], col, mergedSch, tm, tb, to)
+		err := writeTupleExpression(ctx, keyTuple, valueTuple, defaultExprs[to], col, tm.rightSch, tm, tb, to)
 		if err != nil {
 			return nil, err
 		}
@@ -1305,12 +1305,22 @@ func remapTupleWithColumnDefaults(
 
 // writeTupleExpression attempts to evaluate the expression string |exprString| against the row provided and write it 
 // to the provided index in the tuple builder. This is necessary for column default values and generated columns.
-func writeTupleExpression(ctx *sql.Context, keyTuple val.Tuple, valueTuple val.Tuple, expr sql.Expression, col schema.Column, mergedSch schema.Schema, tm *TableMerger, tb *val.TupleBuilder, colIdx int, ) error {
+func writeTupleExpression(
+		ctx *sql.Context,
+		keyTuple val.Tuple,
+		valueTuple val.Tuple,
+		expr sql.Expression,
+		col schema.Column,
+		sch schema.Schema,
+		tm *TableMerger,
+		tb *val.TupleBuilder,
+		colIdx int,
+) error {
 	if !expr.Resolved() {
 		return ErrUnableToMergeColumnDefaultValue.New(expr.String(), tm.name)
 	}
 
-	row, err := index.BuildRow(ctx, keyTuple, valueTuple, mergedSch, tm.ns)
+	row, err := index.BuildRow(ctx, keyTuple, valueTuple, sch, tm.ns)
 	if err != nil {
 		return err
 	}
@@ -1324,11 +1334,8 @@ func writeTupleExpression(ctx *sql.Context, keyTuple val.Tuple, valueTuple val.T
 	if err != nil {
 		return err
 	}
-	err = index.PutField(ctx, tm.ns, tb, colIdx, value)
-	if err != nil {
-		return err
-	}
-	return nil
+	
+	return index.PutField(ctx, tm.ns, tb, colIdx, value)
 }
 
 // convertValueToNewType handles converting a value from a previous type into a new type. |value| is the value from
