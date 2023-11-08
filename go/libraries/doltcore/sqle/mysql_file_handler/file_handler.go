@@ -27,6 +27,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 )
 
+var PermsFileMode os.FileMode = 0600
+
 type Persister struct {
 	privsFilePath  string
 	doltCfgDirPath string
@@ -81,8 +83,7 @@ func (p *Persister) Persist(ctx *sql.Context, data []byte) error {
 		return err
 	}
 
-	// ??? why 0777?
-	err = os.Chmod(f.Name(), 0777)
+	err = os.Chmod(f.Name(), PermsFileMode)
 	if err != nil {
 		os.Remove(f.Name())
 		return err
