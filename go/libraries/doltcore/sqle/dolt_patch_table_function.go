@@ -219,6 +219,10 @@ func (p *PatchTableFunction) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	}, nil
 }
 
+func (p *PatchTableFunction) PreciseMatch() bool {
+	return true
+}
+
 var patchTableSchema = sql.Schema{
 	&sql.Column{Name: orderColumnName, Type: sqltypes.Uint64, PrimaryKey: true, Nullable: false},
 	&sql.Column{Name: fromColumnName, Type: sqltypes.LongText, Nullable: false},

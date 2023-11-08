@@ -273,6 +273,10 @@ func (w *prollyTableWriter) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return ret, nil
 }
 
+func (w *prollyTableWriter) PreciseMatch() bool {
+	return true
+}
+
 // IndexedAccess implements sql.IndexAddressableTable.
 func (w *prollyTableWriter) IndexedAccess(i sql.IndexLookup) sql.IndexedTable {
 	idx := index.DoltIndexFromSqlIndex(i.Index)
