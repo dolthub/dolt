@@ -1532,15 +1532,20 @@ func (m *valueMerger) tryMerge(ctx context.Context, left, right, base val.Tuple)
 		return nil, false, nil
 	}
 
-	if base != nil && (left == nil) != (right == nil) {
-		// One row deleted, the other modified
-		return nil, false, nil
+	for i := 0; i < len(m.baseToRightMapping); i++ {
+		isConflict, err := m.processBaseColumn(ctx, i, left, right, base)
+		if err != nil {
+			return nil, false, err
+		}
+		if isConflict {
+			return nil, false, nil
+		}
 	}
 
-	// Because we have non-identical diffs, left and right are guaranteed to be
-	// non-nil at this point.
-	if left == nil || right == nil {
-		panic("found nil left / right which should never occur")
+	if base != nil && (left == nil) != (right == nil) {
+		// One row deleted, the other modified
+		// We just validated that this is not a conflict.
+		return nil, true, nil
 	}
 
 	mergedValues := make([][]byte, m.numCols)
@@ -1556,6 +1561,107 @@ func (m *valueMerger) tryMerge(ctx context.Context, left, right, base val.Tuple)
 	}
 
 	return val.NewTuple(m.syncPool, mergedValues...), true, nil
+}
+
+// processBaseColumn returns whether column |i| of the base schema,
+// if removed on one side, causes a conflict when merged with the other side.
+func (m *valueMerger) processBaseColumn(ctx context.Context, i int, left, right, base val.Tuple) (conflict bool, err error) {
+	if base == nil {
+		// We're resolving an insertion. This can be done entirely in `processColumn`.
+		return false, nil
+	}
+	baseCol := base.GetField(i)
+
+	if left == nil {
+		// Left side deleted the row. Thus, right side must have modified the row in order for there to be a conflict to resolve.
+		rightCol, rightColIdx, rightColExists := getColumn(&right, &m.baseToRightMapping, i)
+
+		if !rightColExists {
+			// Right side deleted the column while left side deleted the row. This is a conflict.
+			return true, nil
+		}
+		// This is a conflict if the value on the right changed.
+		// But if the right side only changed its representation (from ALTER COLUMN) and still has the same value,
+		// then this can be resolved.
+		baseCol, err = convert(ctx, m.baseVD, m.rightVD, m.rightSchema, i, rightColIdx, base, baseCol, m.ns)
+		if err != nil {
+			return false, err
+		}
+		if m.resultVD.Comparator().CompareValues(i, baseCol, rightCol, m.rightVD.Types[rightColIdx]) == 0 {
+			// right column did not change, so there is no conflict.
+			return false, nil
+		}
+		// conflicting modifications
+		return true, nil
+	}
+
+	if right == nil {
+		// Right side deleted the row. Thus, left side must have modified the row in order for there to be a conflict to resolve.
+		leftCol, _, leftColExists := getColumn(&left, &m.leftMapping, i)
+
+		if !leftColExists {
+			// Left side deleted the column while right side deleted the row. This is a conflict.
+			// TODO: If the rightside deleted the row and the column and the leftside already updated the schema,
+			// then we get it wrong here.
+			return true, nil
+		}
+		// This is a conflict if the value on the left changed.
+		// But if the left side only changed its representation (from ALTER COLUMN) and still has the same value,
+		// then this can be resolved.
+		// The left value was already converted to the result schema, so convert the base value too.
+		resultColIdx := m.baseToResultMapping[i]
+		if resultColIdx == -1 {
+			// The left column has already been migrated to the result schema, so if the left column exists, this should too.
+			panic("unreachable")
+		}
+		baseCol, err = convert(ctx, m.baseVD, m.resultVD, m.resultSchema, i, resultColIdx, base, baseCol, m.ns)
+		if err != nil {
+			return false, err
+		}
+		if m.resultVD.Comparator().CompareValues(i, baseCol, leftCol, m.resultVD.Types[resultColIdx]) == 0 {
+			// left column did not change, so there is no conflict.
+			return false, nil
+		}
+		// conflicting modifications
+		return true, nil
+	}
+
+	rightCol, rightColIdx, rightColExists := getColumn(&right, &m.baseToRightMapping, i)
+
+	leftCol, leftColIdx, leftColExists := getColumn(&left, &m.baseToLeftMapping, i)
+
+	if leftColExists && rightColExists {
+		// This column also exists in the merged schema, and will be processed there.
+		return false, nil
+	}
+
+	if !leftColExists && !rightColExists {
+		// This column is a convergent deletion. There is no conflict.
+		return false, nil
+	}
+
+	var modifiedCol []byte
+	var modifiedColIdx int
+	var modifiedSchema schema.Schema
+	var modifiedVD val.TupleDesc
+	if !leftColExists {
+		modifiedCol, modifiedColIdx = rightCol, rightColIdx
+		modifiedSchema = m.rightSchema
+		modifiedVD = m.rightVD
+	} else {
+		modifiedCol, modifiedColIdx = leftCol, leftColIdx
+		modifiedSchema = m.leftSchema
+		modifiedVD = m.leftVD
+	}
+
+	baseCol, err = convert(ctx, m.baseVD, m.resultVD, modifiedSchema, i, modifiedColIdx, base, baseCol, m.ns)
+	if err != nil {
+		return false, err
+	}
+	if modifiedVD.Comparator().CompareValues(i, baseCol, modifiedCol, modifiedVD.Types[i]) == 0 {
+		return false, nil
+	}
+	return true, nil
 }
 
 // processColumn returns the merged value of column |i| of the merged schema,
