@@ -1237,12 +1237,15 @@ func remapTuple(tuple val.Tuple, desc val.TupleDesc, mapping val.OrdinalMapping)
 }
 
 // remapTupleWithColumnDefaults takes the given |tuple| (and the |tupleDesc| that describes how to access its fields)
-// and uses |mapping| to map the tuple's data and return a new tuple. |tm| provides high access to the name of the table
-// currently being merged and associated node store. |mergedSch| is the new schema of the table and is used to look up
-// column default values to apply to any existing rows when a new column is added as part of a merge. |pool| is used
-// to allocate memory for the new tuple. A pointer to the new tuple data is returned, along with any error encountered.
-// The |rightSide| parameter indicates if the tuple came from the right side of the merge; this is needed to determine
-// if the tuple data needs to be converted from the old schema type to a changed schema type.
+// and uses |mapping| to map the tuple's data and return a new tuple.
+// |tm| provides high access to the name of the table currently being merged and associated node store.
+// |mergedSch| is the new schema of the table and is used to look up column default values to apply to any existing 
+// rows when a new column is added as part of a merge. 
+// |pool| is used to allocate memory for the new tuple.
+// |defaultExprs| is a slice of expressions that represent the default or generated values for all columns, with 
+// indexes in the same order as the tuple provided. 
+// |rightSide| indicates if the tuple came from the right side of the merge; this is needed to determine if the tuple
+// data needs to be converted from the old schema type to a changed schema type.
 func remapTupleWithColumnDefaults(
 		ctx *sql.Context,
 		keyTuple, valueTuple val.Tuple,
