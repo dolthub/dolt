@@ -1374,9 +1374,12 @@ func mergeTableArtifacts(ctx context.Context, tm *TableMerger, mergeTbl *doltdb.
 // a three-way cell edit (tree.DiffOpDivergentModifyResolved).
 type valueMerger struct {
 	numCols                                int
-	baseVD, rightVD, resultVD              val.TupleDesc
-	resultSchema                           schema.Schema
+	baseVD, leftVD, rightVD, resultVD      val.TupleDesc
+	leftSchema, rightSchema, resultSchema  schema.Schema
 	leftMapping, rightMapping, baseMapping val.OrdinalMapping
+	baseToLeftMapping                      val.OrdinalMapping
+	baseToRightMapping                     val.OrdinalMapping
+	baseToResultMapping                    val.OrdinalMapping
 	syncPool                               pool.BuffPool
 	keyless                                bool
 	ns                                     tree.NodeStore
@@ -1385,18 +1388,26 @@ type valueMerger struct {
 func newValueMerger(merged, leftSch, rightSch, baseSch schema.Schema, syncPool pool.BuffPool, ns tree.NodeStore) *valueMerger {
 	leftMapping, rightMapping, baseMapping := generateSchemaMappings(merged, leftSch, rightSch, baseSch)
 
+	baseToLeftMapping, baseToRightMapping, baseToResultMapping := generateSchemaMappings(baseSch, leftSch, rightSch, merged)
+
 	return &valueMerger{
-		numCols:      merged.GetNonPKCols().Size(),
-		baseVD:       baseSch.GetValueDescriptor(),
-		rightVD:      rightSch.GetValueDescriptor(),
-		resultVD:     merged.GetValueDescriptor(),
-		resultSchema: merged,
-		leftMapping:  leftMapping,
-		rightMapping: rightMapping,
-		baseMapping:  baseMapping,
-		syncPool:     syncPool,
-		keyless:      schema.IsKeyless(merged),
-		ns:           ns,
+		numCols:             merged.GetNonPKCols().Size(),
+		baseVD:              baseSch.GetValueDescriptor(),
+		rightVD:             rightSch.GetValueDescriptor(),
+		resultVD:            merged.GetValueDescriptor(),
+		leftVD:              leftSch.GetValueDescriptor(),
+		resultSchema:        merged,
+		leftMapping:         leftMapping,
+		rightMapping:        rightMapping,
+		baseMapping:         baseMapping,
+		baseToLeftMapping:   baseToLeftMapping,
+		baseToRightMapping:  baseToRightMapping,
+		baseToResultMapping: baseToResultMapping,
+		leftSchema:          leftSch,
+		rightSchema:         rightSch,
+		syncPool:            syncPool,
+		keyless:             schema.IsKeyless(merged),
+		ns:                  ns,
 	}
 }
 
