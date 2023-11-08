@@ -1734,6 +1734,11 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 			return rightCol, false, nil
 		}
 
+		leftCol, err = convert(ctx, m.leftVD, m.resultVD, m.resultSchema, leftColIdx, i, left, leftCol, m.ns)
+		if err != nil {
+			return nil, false, err
+		}
+
 		if m.resultVD.Comparator().CompareValues(i, leftCol, rightCol, resultType) == 0 {
 			// columns are equal, return either.
 			return leftCol, false, nil
@@ -1779,13 +1784,21 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 		rightModified = m.resultVD.Comparator().CompareValues(i, rightCol, baseCol, resultType) != 0
 	}
 
-	// The left value was previously converted in `migrateDataToMergedSchema`, so we don't need to convert it here.
+	leftCol, err = convert(ctx, m.leftVD, m.resultVD, m.resultSchema, leftColIdx, i, left, leftCol, m.ns)
+	if err != nil {
+		return nil, true, nil
+	}
 	if m.resultVD.Comparator().CompareValues(i, leftCol, rightCol, resultType) == 0 {
 		// columns are equal, return either.
 		return leftCol, false, nil
 	}
 
 	leftModified = m.resultVD.Comparator().CompareValues(i, leftCol, baseCol, resultType) != 0
+
+	leftCol, err = convert(ctx, m.leftVD, m.resultVD, m.resultSchema, leftColIdx, i, left, leftCol, m.ns)
+	if err != nil {
+		return nil, false, err
+	}
 
 	switch {
 	case leftModified && rightModified:
