@@ -76,7 +76,7 @@ func IterAddressFields(td TupleDesc, cb func(int, Type)) {
 	for i, typ := range td.Types {
 		switch typ.Enc {
 		case BytesAddrEnc, StringAddrEnc,
-			JSONAddrEnc, CommitAddrEnc:
+			JSONAddrEnc, CommitAddrEnc, GeomAddrEnc:
 			cb(i, typ)
 		}
 	}
