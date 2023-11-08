@@ -834,7 +834,7 @@ func (di *doltIndex) HandledFilters(filters []sql.Expression) []sql.Expression {
 
 	var handled []sql.Expression
 	for _, f := range filters {
-		if expression.ContainsImpreciseComparison(f) {
+		if !expression.PreciseComparison(f) {
 			continue
 		}
 		handled = append(handled, f)

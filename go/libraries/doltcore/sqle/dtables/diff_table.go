@@ -552,6 +552,11 @@ func (dt *DiffTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
 	return &nt
 }
 
+// PreciseMatch implements sql.IndexAddressable
+func (dt *DiffTable) PreciseMatch() bool {
+	return false
+}
+
 // tableData returns the map of primary key to values for the specified table (or an empty map if the tbl is null)
 // and the schema of the table (or EmptySchema if tbl is null).
 func tableData(ctx *sql.Context, tbl *doltdb.Table, ddb *doltdb.DoltDB) (durable.Index, schema.Schema, error) {
