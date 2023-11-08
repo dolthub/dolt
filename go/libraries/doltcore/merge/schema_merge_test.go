@@ -952,7 +952,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 							require.NoError(t, err)
 							foundDataConflict = foundDataConflict || hasConflict
 						}
-						require.Equal(t, expectDataConflict, foundDataConflict)
+						require.True(t, foundDataConflict, "Expected data conflict, but didn't find one.")
 					} else {
 						for name, addr := range exp {
 							a, ok := act[name]
