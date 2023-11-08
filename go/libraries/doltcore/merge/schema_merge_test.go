@@ -547,6 +547,29 @@ var columnAddDropTests = []schemaMergeTest{
 		skipNewFmt: true,
 		skipOldFmt: true,
 	},
+	{
+		name:     "right side drops and adds column of same type",
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c int, a int)")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c int, a int)")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c int, b int)")),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c int, b int)")),
+		dataTests: []dataTest{
+			{
+				name:         "left side modifies dropped column",
+				ancestor:     singleRow(1, 1, 2),
+				left:         singleRow(1, 1, 3),
+				right:        singleRow(1, 2, 2),
+				dataConflict: true,
+			},
+		},
+	},
+	{
+		name:     "right side drops and adds column of different type",
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c int, a int)")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c int, a int)")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c int, b text)")),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c int, b text)")),
+	},
 }
 
 var columnDefaultTests = []schemaMergeTest{
@@ -733,6 +756,27 @@ var typeChangeTests = []schemaMergeTest{
 				ancestor:     nil,
 				left:         singleRow(1, "test", 1, "test"),
 				right:        singleRow(1, "hello world", 1, "hello world"),
+				dataConflict: true,
+			},
+			{
+				name:     "delete and schema change on left",
+				ancestor: singleRow(1, "test", 1, "test"),
+				left:     nil,
+				right:    singleRow(1, "test", 1, "test"),
+				merged:   nil,
+			},
+			{
+				name:     "schema change on left, delete on right",
+				ancestor: singleRow(1, "test", 1, "test"),
+				left:     singleRow(1, "test", 1, "test"),
+				right:    nil,
+				merged:   nil,
+			},
+			{
+				name:         "schema and value change on left, delete on right",
+				ancestor:     singleRow(1, "test", 1, "test"),
+				left:         singleRow(1, "hello", 1, "hello"),
+				right:        nil,
 				dataConflict: true,
 			},
 		},
