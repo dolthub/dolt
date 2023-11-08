@@ -189,11 +189,25 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		s.ConstraintViolations += cnt
 
 		switch diff.Op {
+		case tree.DiffOpLeftAdd, tree.DiffOpLeftModify:
+			// In the event that the right side introduced a schema change, account for it here.
+			err = pri.merge(ctx, diff, tm.leftSch)
+			if err != nil {
+				return nil, nil, err
+			}
+			err = sec.merge(ctx, diff, tm.leftSch, tm.leftSch, tm, finalSch)
+			if err != nil {
+				return nil, nil, err
+			}
 		case tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict:
 			// In this case, a modification or delete was made to one side, and a conflicting delete or modification
 			// was made to the other side, so these cannot be automatically resolved.
 			s.DataConflicts++
 			err = conflicts.merge(ctx, diff, nil)
+			if err != nil {
+				return nil, nil, err
+			}
+			err = pri.merge(ctx, diff, tm.leftSch)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -1062,6 +1076,25 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 		return m.mut.Delete(ctx, diff.Key)
 	case tree.DiffOpDivergentModifyResolved:
 		return m.mut.Put(ctx, diff.Key, diff.Merged)
+	case tree.DiffOpLeftAdd, tree.DiffOpLeftModify, tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict:
+		if diff.Left == nil {
+			return m.mut.Put(ctx, diff.Key, nil)
+		}
+		newTupleValue := diff.Left
+		if schema.IsKeyless(sourceSch) {
+			if m.valueMerger.leftMapping.IsIdentityMapping() == false {
+				return fmt.Errorf("cannot merge keyless tables with reordered columns")
+			}
+		} else {
+			tempTupleValue, err := remapTupleWithColumnDefaults(ctx, diff.Key, newTupleValue, sourceSch.GetValueDescriptor(),
+				m.valueMerger.leftMapping, m.tableMerger, m.finalSch, m.valueMerger.syncPool, false)
+			if err != nil {
+				return err
+			}
+			newTupleValue = tempTupleValue
+		}
+		return m.mut.Put(ctx, diff.Key, newTupleValue)
+
 	default:
 		return fmt.Errorf("unexpected diffOp for editing primary index: %s", diff.Op)
 	}
