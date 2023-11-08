@@ -17,6 +17,7 @@ package mysql_file_handler
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"os"
 	"sync"
 
@@ -53,7 +54,39 @@ func (p *Persister) Persist(ctx *sql.Context, data []byte) error {
 		}
 	}
 
-	return os.WriteFile(p.privsFilePath, data, 0777)
+	dir := filepath.Dir(p.privsFilePath)
+	f, err := os.CreateTemp(dir, filepath.Base(p.privsFilePath) + "-*")
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(data)
+	if err != nil {
+		f.Close()
+		os.Remove(f.Name())
+		return err
+	}
+
+	err = f.Sync()
+	if err != nil {
+		f.Close()
+		os.Remove(f.Name())
+		return err
+	}
+
+	err = f.Close()
+	if err != nil {
+		os.Remove(f.Name())
+		return err
+	}
+
+	// ??? why 0777?
+	err = os.Chmod(f.Name(), 0777)
+	if err != nil {
+		os.Remove(f.Name())
+		return err
+	}
+
+	return os.Rename(f.Name(), p.privsFilePath)
 }
 
 // LoadData reads the mysql.db file, returns nil if empty or not found
