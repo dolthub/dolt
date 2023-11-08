@@ -203,7 +203,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 			if err != nil {
 				return nil, nil, err
 			}
-			err = sec.merge(ctx, diff, tm.rightSch)
+			err = sec.merge(ctx, diff, tm.leftSch, tm.rightSch, tm, finalSch)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -213,7 +213,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 			if err != nil {
 				return nil, nil, err
 			}
-			err = sec.merge(ctx, diff, tm.rightSch)
+			err = sec.merge(ctx, diff, tm.leftSch, tm.rightSch, tm, finalSch)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -223,7 +223,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 			if err != nil {
 				return nil, nil, err
 			}
-			err = sec.merge(ctx, diff, tm.rightSch)
+			err = sec.merge(ctx, diff, tm.leftSch, tm.rightSch, tm, finalSch)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -235,7 +235,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 			if err != nil {
 				return nil, nil, err
 			}
-			err = sec.merge(ctx, diff, nil)
+			err = sec.merge(ctx, diff, tm.leftSch, tm.rightSch, tm, finalSch)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -1113,7 +1113,7 @@ func newSecondaryMerger(ctx context.Context, tm *TableMerger, valueMerger *value
 	}, nil
 }
 
-func (m *secondaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sourceSch schema.Schema) error {
+func (m *secondaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, leftSchema, rightSchema schema.Schema, tm *TableMerger, finalSchema schema.Schema) error {
 	var err error
 	for _, idx := range m.leftMut {
 		switch diff.Op {
@@ -1121,21 +1121,29 @@ func (m *secondaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sou
 			err = applyEdit(ctx, idx, diff.Key, diff.Left, diff.Merged)
 		case tree.DiffOpRightAdd, tree.DiffOpRightModify:
 			// Just as with the primary index, we need to map right-side changes to the final, merged schema.
-			if sourceSch == nil {
+			if rightSchema == nil {
 				return fmt.Errorf("no source schema specified to map right-side changes to merged schema")
 			}
 
 			newTupleValue := diff.Right
-			if schema.IsKeyless(sourceSch) {
+			baseTupleValue := diff.Base
+			if schema.IsKeyless(rightSchema) {
 				if m.valueMerger.rightMapping.IsIdentityMapping() == false {
 					return fmt.Errorf("cannot merge keyless tables with reordered columns")
 				}
 			} else {
-				valueMappedToMergeSchema := remapTuple(diff.Right, sourceSch.GetValueDescriptor(), m.valueMerger.rightMapping)
+				valueMappedToMergeSchema := remapTuple(diff.Right, rightSchema.GetValueDescriptor(), m.valueMerger.rightMapping)
 				newTupleValue = val.NewTuple(m.valueMerger.syncPool, valueMappedToMergeSchema...)
+				if diff.Base != nil {
+					baseTupleValue, err = remapTupleWithColumnDefaults(ctx, diff.Key, diff.Base, leftSchema.GetValueDescriptor(), m.valueMerger.rightMapping,
+						tm, finalSchema, m.valueMerger.syncPool, false)
+					if err != nil {
+						return err
+					}
+				}
 			}
 
-			err = applyEdit(ctx, idx, diff.Key, diff.Base, newTupleValue)
+			err = applyEdit(ctx, idx, diff.Key, baseTupleValue, newTupleValue)
 		case tree.DiffOpRightDelete:
 			err = applyEdit(ctx, idx, diff.Key, diff.Base, diff.Right)
 		default:
