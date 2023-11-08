@@ -126,6 +126,11 @@ func (dt *LogTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
 	return &nt
 }
 
+// PreciseMatch implements sql.IndexAddressable
+func (dt *LogTable) PreciseMatch() bool {
+	return true
+}
+
 func (dt *LogTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	if lookup.Index.ID() == index.CommitHashIndexId {
 		return dt.commitHashPartitionIter(ctx, lookup)

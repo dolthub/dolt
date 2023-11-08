@@ -2269,7 +2269,7 @@ func TestSystemTableIndexesPrepared(t *testing.T) {
 
 				ctx = ctx.WithQuery(tt.query)
 				if tt.exp != nil {
-					enginetest.TestPreparedQueryWithContext(t, ctx, e, harness, tt.query, tt.exp, nil, nil)
+					enginetest.TestPreparedQueryWithContext(t, ctx, e, harness, tt.query, tt.exp, nil, nil, false)
 				}
 			})
 		}

@@ -275,6 +275,10 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return indexes, nil
 }
 
+func (t *DoltTable) PreciseMatch() bool {
+	return true
+}
+
 // HasIndex returns whether the given index is present in the table
 func (t *DoltTable) HasIndex(ctx *sql.Context, idx sql.Index) (bool, error) {
 	tbl, err := t.DoltTable(ctx)
