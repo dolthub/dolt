@@ -382,6 +382,39 @@ var SchemaChangeTestsBasicCases = []MergeScriptTest{
 		},
 	},
 	{
+		Name: "adding columns with default values to both sides",
+		AncSetUpScript: []string{
+			"create table t (pk int primary key);",
+			"insert into t values (1), (2);",
+			"alter table t add index idx1 (pk);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col2 varchar(100) default 'abc'",
+			"insert into t values (3, '300'), (4, '400');",
+		},
+		LeftSetUpScript: []string{
+			"alter table t add column col1 int default 101;",
+			"insert into t values (5, 50), (6, 60);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select pk, col1, col2 from t;",
+				Expected: []sql.Row{
+					{1, 101, "abc"},
+					{2, 101, "abc"},
+					{3, 101, "300"},
+					{4, 101, "400"},
+					{5, 50, "abc"},
+					{6, 60, "abc"},
+				},
+			},
+		},
+	},
+	{
 		// TODO: Need another test with a different type for the same column name, and verify it's an error?
 		Name: "dropping and adding a column with the same name",
 		AncSetUpScript: []string{
