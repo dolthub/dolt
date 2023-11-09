@@ -250,7 +250,7 @@ func coveringIndexMapping(d DoltIndex, projections []uint64) (keyMap, ordMap val
 	allMap := make(val.OrdinalMapping, len(projections)*2)
 	var i int
 	for _, p := range projections {
-		if idx, ok := idx.TagToIdx[p]; ok {
+		if idx, ok := idx.StoredIndexByTag(p); ok {
 			allMap[i] = idx
 			allMap[len(projections)+i] = i
 			i++

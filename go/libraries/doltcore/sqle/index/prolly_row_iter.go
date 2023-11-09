@@ -131,10 +131,13 @@ func projectionMappingsForIndex(sch schema.Schema, projections []uint64) (keyMap
 	nonPks := sch.GetNonPKCols()
 
 	numPhysicalColumns := len(projections)
+	physicalProjections := projections
 	if schema.IsVirtual(sch) {
 		numPhysicalColumns = 0
+		physicalProjections = make([]uint64, sch.GetAllCols().StoredSize())
 		for _, t := range projections {
 			if idx, ok := sch.GetAllCols().TagToIdx[t]; ok && !sch.GetAllCols().GetByIndex(idx).Virtual {
+				physicalProjections[numPhysicalColumns] = t
 				numPhysicalColumns++
 			}
 		}

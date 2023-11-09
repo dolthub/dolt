@@ -1294,7 +1294,7 @@ func remapTupleWithColumnDefaults(
 
 	var secondPass []int
 	for to, from := range mapping {
-		col := mergedSch.GetNonPKCols().GetByIndex(to)
+		col := mergedSch.GetNonPKCols().GetByStoredIndex(to)
 		if from == -1 {
 			// If the column is a new column, then look up any default or generated value in a second pass, after the 
 			// non-default and non-generated fields have been established. Virtual columns have been excluded, so any
@@ -1515,7 +1515,7 @@ func findNonPKColumnMappingByName(sch schema.Schema, name string) int {
 // matching tag is not found, then this function falls back to looking for a matching column by name. If no
 // matching column is found, then this function returns -1.
 func findNonPKColumnMappingByTagOrName(sch schema.Schema, col schema.Column) int {
-	if idx, ok := sch.GetNonPKCols().TagToIdx[col.Tag]; ok {
+	if idx, ok := sch.GetNonPKCols().StoredIndexByTag(col.Tag); ok {
 		return idx
 	} else {
 		return findNonPKColumnMappingByName(sch, col.Name)

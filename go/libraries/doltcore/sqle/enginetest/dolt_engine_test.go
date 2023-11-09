@@ -196,23 +196,20 @@ func TestSingleMergeScript(t *testing.T) {
 	// t.Skip()
 	var scripts = []MergeScriptTest{
 		{
-			Name: "reordering a column",
+			Name: "adding columns to a table with a virtual column",
 			AncSetUpScript: []string{
-				"CREATE table t (pk int primary key, col1 int, col2 varchar(100) as (concat(col1, 'hello')) stored);",
-				"INSERT into t (pk, col1) values (1, 10), (2, 20);",
-				"alter table t add index idx1 (pk, col1);",
-				"alter table t add index idx2 (col2);",
-				"alter table t add index idx3 (pk, col1, col2);",
-				"alter table t add index idx4 (col1, col2);",
-				"alter table t add index idx5 (col2, col1);",
-				"alter table t add index idx6 (col2, pk, col1);",
+				"create table t (pk int primary key, col1 int as (pk + 1));",
+				"insert into t (pk) values (1);",
+				"alter table t add index idx1 (col1, pk);",
+				"alter table t add index idx2 (col1);",
 			},
 			RightSetUpScript: []string{
-				"alter table t modify col1 int after col2;",
-				"insert into t (pk, col1) values (3, 30), (4, 40);",
+				"alter table t add column col2 int;",
+				"alter table t add column col3 int;",
+				"insert into t (pk, col2, col3) values (2, 2, 2);",
 			},
 			LeftSetUpScript: []string{
-				"insert into t (pk, col1) values (5, 50), (6, 60);",
+				"insert into t (pk) values (3);",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
@@ -220,11 +217,11 @@ func TestSingleMergeScript(t *testing.T) {
 					Expected: []sql.Row{{doltCommit, 0, 0}},
 				},
 				{
-					Query: "select pk, col1, col2 from t;",
+					Query:    "select * from t order by pk",
 					Expected: []sql.Row{
-						{1, 10, "10hello"}, {2, 20, "20hello"},
-						{3, 30, "30hello"}, {4, 40, "40hello"},
-						{5, 50, "50hello"}, {6, 60, "60hello"}},
+						{1, 1, nil, 2},
+						{2, 2, 2, 3},
+						{3, 3, nil, 4}},
 				},
 			},
 		},
