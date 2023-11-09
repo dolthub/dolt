@@ -1228,6 +1228,7 @@ func LoadDBLockFile(fs filesys.Filesys, lockFilePath string) (lock *DBLock, err 
 	if err != nil {
 		return nil, err
 	}
+	defer rd.Close()
 
 	b := make([]byte, 256)
 	n, err := rd.Read(b)
