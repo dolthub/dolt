@@ -206,6 +206,7 @@ func newProllyCoveringIndexIter(
 		valMap:    valMap,
 		ordMap:    ordMap,
 		sqlSch:    pkSch.Schema,
+		projections: projections,
 		ns:        secondary.NodeStore(),
 	}, nil
 }
