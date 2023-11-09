@@ -191,6 +191,15 @@ func (s *Server) Serve(listeners Listeners) {
 		defer s.wg.Done()
 		<-s.stopChan
 		s.httpSrv.Shutdown(context.Background())
+
+		// If we are multiplexing HTTP and gRPC requests on the same
+		// listener, we need to stop the gRPC server here as well. We
+		// cannot stop it gracefully, but it we stop it forcefully
+		// here, we guarantee all the handler threads are cleaned up
+		// before we return.
+		if listeners.grpc == nil {
+			s.grpcSrv.Stop()
+		}
 	}()
 
 	s.wg.Wait()
