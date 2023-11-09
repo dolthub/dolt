@@ -131,6 +131,10 @@ func IsKeyless(sch Schema) bool {
 		sch.GetAllCols().Size() != 0
 }
 
+func IsVirtual(sch Schema) bool {
+	return sch != nil && len(sch.GetAllCols().virtualColumns) > 0
+}
+
 func HasAutoIncrement(sch Schema) (ok bool) {
 	_ = sch.GetAllCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
 		if col.AutoIncrement {

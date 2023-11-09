@@ -30,6 +30,8 @@ const (
 	EnvDefaultBinFormat              = "DOLT_DEFAULT_BIN_FORMAT"
 	EnvTestForceOpenEditor           = "DOLT_TEST_FORCE_OPEN_EDITOR"
 	EnvDisableChunkJournal           = "DOLT_DISABLE_CHUNK_JOURNAL"
+	EnvDisableReflog                 = "DOLT_DISABLE_REFLOG"
+	EnvReflogRecordLimit             = "DOLT_REFLOG_RECORD_LIMIT"
 	EnvOssEndpoint                   = "OSS_ENDPOINT"
 	EnvOssAccessKeyID                = "OSS_ACCESS_KEY_ID"
 	EnvOssAccessKeySecret            = "OSS_ACCESS_KEY_SECRET"

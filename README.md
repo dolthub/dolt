@@ -18,7 +18,11 @@ baby.
 
 We also built [DoltHub](https://www.dolthub.com), a place to share
 Dolt databases. We host public data for free. If you want to host
-your own version of DoltHub, we have [DoltLab](https://www.doltlab.com). If you want us to run a Dolt server for you, we have [Hosted Dolt](https://hosted.doltdb.com).
+your own version of DoltHub, we have [DoltLab](https://www.doltlab.com). 
+If you want us to run a Dolt server for you, we have [Hosted Dolt](https://hosted.doltdb.com). 
+If you are looking for a Postgres version of Dolt, we built 
+[DoltgreSQL](https://github.com/dolthub/doltgresql). Warning, it's 
+early Alpha. Dolt is production-ready.
 
 [Join us on Discord](https://discord.com/invite/RFwfYpu) to say hi and
 ask questions, or [check out our roadmap](https://docs.dolthub.com/other/roadmap) 
@@ -234,7 +238,7 @@ Your terminal will just hang there. This means the server is running. Any errors
 In the new terminal, we will now connect to the running database server using a client. Dolt also ships with a MySQL compatible client. 
 
 ```bash
-% dolt sql-client -u root
+% dolt -u root -p "" sql
 # Welcome to the Dolt MySQL client.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.

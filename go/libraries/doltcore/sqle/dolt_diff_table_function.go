@@ -354,9 +354,10 @@ func (dtf *DiffTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.Pr
 		return false
 	}
 
+	subject := sql.PrivilegeCheckSubject{Database: dtf.database.Name(), Table: tableName}
 	// TODO: Add tests for privilege checking
 	return opChecker.UserHasPrivileges(ctx,
-		sql.NewPrivilegedOperation(dtf.database.Name(), tableName, "", sql.PrivilegeType_Select))
+		sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 }
 
 // evaluateArguments evaluates the argument expressions to turn them into values this DiffTableFunction

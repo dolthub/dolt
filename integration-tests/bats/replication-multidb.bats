@@ -294,15 +294,15 @@ SQL
     start_multi_db_server repo1
     cd ..
 
-    dolt sql-client --use-db repo1 -u dolt -P $PORT -q "create table t1 (a int primary key)"
-    dolt sql-client --use-db repo1 -u dolt -P $PORT -q "call dolt_add('.')"
-    dolt sql-client --use-db repo1 -u dolt -P $PORT -q "call dolt_commit('-am', 'cm')"
-    dolt sql-client --use-db repo2 -u dolt -P $PORT -q "create table t2 (a int primary key)"
-    dolt sql-client --use-db repo2 -u dolt -P $PORT -q "call dolt_add('.')"
-    dolt sql-client --use-db repo2 -u dolt -P $PORT -q "call dolt_commit('-am', 'cm')"
-    dolt sql-client --use-db repo3 -u dolt -P $PORT -q "create table t3 (a int primary key)"
-    dolt sql-client --use-db repo3 -u dolt -P $PORT -q "call dolt_add('.')"
-    dolt sql-client --use-db repo3 -u dolt -P $PORT -q "call dolt_commit('-am', 'cm')"
+    dolt --use-db repo1 -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "create table t1 (a int primary key)"
+    dolt --use-db repo1 -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "call dolt_add('.')"
+    dolt --use-db repo1 -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "call dolt_commit('-am', 'cm')"
+    dolt --use-db repo2 -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "create table t2 (a int primary key)"
+    dolt --use-db repo2 -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "call dolt_add('.')"
+    dolt --use-db repo2 -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "call dolt_commit('-am', 'cm')"
+    dolt --use-db repo3 -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "create table t3 (a int primary key)"
+    dolt --use-db repo3 -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "call dolt_add('.')"
+    dolt --use-db repo3 -u dolt --port $PORT --host 0.0.0.0 --no-tls sql -q "call dolt_commit('-am', 'cm')"
 
     clone_helper $TMPDIRS
 
@@ -348,17 +348,17 @@ SQL
     cd dbs1
     start_multi_db_server repo1
     
-    run dolt sql-client --use-db repo1 -u dolt -P $PORT -q "show tables"
+    run dolt --use-db repo1 sql -q "show tables"
     [ $status -eq 0 ]
     [[ "$output" =~ Tables_in_repo1 ]] || false
     [[ "$output" =~ t1 ]] || false
     
-    run dolt sql-client --use-db repo2 -u dolt -P $PORT -q "show tables"
+    run dolt --use-db repo2 sql -q "show tables"
     [ $status -eq 0 ]
     [[ "$output" =~ Tables_in_repo2 ]] || false
     [[ "$output" =~ t2 ]] || false
     
-    run dolt sql-client --use-db repo3 -u dolt -P $PORT -q "show tables"
+    run dolt --use-db repo3 sql -q "show tables"
     [ $status -eq 0 ]
     [[ "$output" =~ Tables_in_repo3 ]] || false
     [[ "$output" =~ t3 ]] || false
@@ -386,12 +386,12 @@ SQL
     cd dbs1
     start_multi_db_server repo1
     
-    run dolt sql-client --use-db repo1/b2 -u dolt -P $PORT -q "select * from t1"
+    run dolt --use-db repo1/b2 sql -q "select * from t1"
     [ $status -eq 0 ]
     [[ "$output" =~ 2 ]] || false
     [[ ! "$output" =~ 1 ]] || false
 
-    run dolt sql-client --use-db repo1/b2 -u dolt -P $PORT -q "select count(*) from dolt_status"
+    run dolt --use-db repo1/b2 sql -q "select count(*) from dolt_status"
     [ $status -eq 0 ]
     [[ "$output" =~ 0 ]] || false
 
@@ -408,11 +408,11 @@ SQL
     cd dbs1
     start_multi_db_server repo1
     
-    run dolt sql-client --use-db repo1/b2 -u dolt -P $PORT -q "select * from t1"
+    run dolt --use-db repo1/b2 sql -q "select * from t1"
     [ $status -eq 0 ]
     [[ "$output" =~ 3 ]] || false
 
-    run dolt sql-client --use-db repo1/b2 -u dolt -P $PORT -q "select count(*) from dolt_status"
+    run dolt --use-db repo1/b2 sql -q "select count(*) from dolt_status"
     [ $status -eq 0 ]
     [[ "$output" =~ 0 ]] || false
 }

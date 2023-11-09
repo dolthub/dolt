@@ -28,18 +28,7 @@ import (
 	"time"
 )
 
-func tableExistsInChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (bool, error) {
-	if al.tableMayBeInDynamo(chunkCount) {
-		data, err := ddb.ReadTable(ctx, name, nil)
-		if err != nil {
-			return false, err
-		}
-		if data == nil {
-			return false, nil
-		}
-		return true, nil
-	}
-
+func tableExistsInChunkSource(ctx context.Context, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (bool, error) {
 	magic := make([]byte, magicNumberSize)
 	n, _, err := s3.ReadFromEnd(ctx, name, magic, stats)
 	if err != nil {
@@ -51,28 +40,9 @@ func tableExistsInChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3Obj
 	return bytes.Equal(magic, []byte(magicNumber)), nil
 }
 
-func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
+func newAWSChunkSource(ctx context.Context, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
 	var tra tableReaderAt
 	index, err := loadTableIndex(ctx, stats, chunkCount, q, func(p []byte) error {
-		if al.tableMayBeInDynamo(chunkCount) {
-			data, err := ddb.ReadTable(ctx, name, stats)
-			if data == nil && err == nil { // There MUST be either data or an error
-				return errors.New("no data available")
-			}
-			if data != nil {
-				if len(p) > len(data) {
-					return errors.New("not enough data for chunk count")
-				}
-				indexBytes := data[len(data)-len(p):]
-				copy(p, indexBytes)
-				tra = &dynamoTableReaderAt{ddb: ddb, h: name}
-				return nil
-			}
-			if _, ok := err.(tableNotInDynamoErr); !ok {
-				return err
-			}
-		}
-
 		n, _, err := s3.ReadFromEnd(ctx, name, p, stats)
 		if err != nil {
 			return err

@@ -122,20 +122,13 @@ func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLo
 }
 
 func newPointPartitionIter(ctx *sql.Context, lookup sql.IndexLookup, idx *doltIndex) (sql.PartitionIter, error) {
-	tb := idx.keyBld
-	rng := lookup.Ranges[0]
-	ns := idx.ns
-	for j, expr := range rng {
-		v, err := getRangeCutValue(expr.LowerBound, expr.Typ)
-		if err != nil {
-			return nil, err
-		}
-		if err = PutField(ctx, ns, tb, j, v); err != nil {
-			return nil, err
-		}
+	prollyRanges, err := idx.prollyRanges(ctx, idx.ns, lookup.Ranges[0])
+	if err != nil {
+		return nil, err
 	}
-	tup := tb.BuildPermissive(sharePool)
-	return &pointPartition{r: prolly.Range{Tup: tup, Desc: tb.Desc}}, nil
+	return &pointPartition{
+		r: prollyRanges[0],
+	}, nil
 }
 
 var _ sql.PartitionIter = (*pointPartition)(nil)
@@ -281,8 +274,13 @@ func NewLookupBuilder(
 		}, nil
 	case idx.coversColumns(s, projections):
 		return newCoveringLookupBuilder(base), nil
+	case idx.ID() == "PRIMARY":
+		// If we are using the primary index, always use a covering lookup builder. In some cases, coversColumns
+		// can return false, for example if a column was modified in an older version and has a different tag than
+		// the current schema. In those cases, the primary index is still the best we have, so go ahead and use it.
+		return newCoveringLookupBuilder(base), nil
 	default:
-		return newNonCoveringLookupBuilder(s, base), nil
+		return newNonCoveringLookupBuilder(s, base)
 	}
 }
 
@@ -301,7 +299,17 @@ func newCoveringLookupBuilder(b *baseLookupBuilder) *coveringLookupBuilder {
 	}
 }
 
-func newNonCoveringLookupBuilder(s *durableIndexState, b *baseLookupBuilder) *nonCoveringLookupBuilder {
+// newNonCoveringLookupBuilder returns a LookupBuilder that uses the specified index state and
+// base lookup builder to create a nonCoveringLookupBuilder that uses the secondary index (from
+// |b|) to find the PK row identifier, and then uses that PK to look up the complete row from
+// the primary index (from |s|). If a baseLookupBuilder built on the primary index is passed in,
+// this function returns an error.
+func newNonCoveringLookupBuilder(s *durableIndexState, b *baseLookupBuilder) (*nonCoveringLookupBuilder, error) {
+	if b.idx.ID() == "PRIMARY" {
+		return nil, fmt.Errorf("incompatible index passed to newNonCoveringLookupBuilder: " +
+			"primary index passed, but only secondary indexes are supported")
+	}
+
 	primary := durable.ProllyMapFromIndex(s.Primary)
 	priKd, _ := primary.Descriptors()
 	tbBld := val.NewTupleBuilder(priKd)
@@ -316,7 +324,7 @@ func newNonCoveringLookupBuilder(s *durableIndexState, b *baseLookupBuilder) *no
 		keyMap:            keyProj,
 		valMap:            valProj,
 		ordMap:            ordProj,
-	}
+	}, nil
 }
 
 var _ LookupBuilder = (*baseLookupBuilder)(nil)
@@ -411,7 +419,7 @@ func (lb *coveringLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition
 
 // nonCoveringLookupBuilder constructs row iters for non-covering lookups,
 // where we need to seek on the secondary table for key identity, and then
-// the primary table to fill all requrested projections.
+// the primary table to fill all requested projections.
 type nonCoveringLookupBuilder struct {
 	*baseLookupBuilder
 

@@ -40,6 +40,9 @@ type DoltStats struct {
 	Histogram     DoltHistogram
 	Columns       []string
 	Types         []sql.Type
+	IdxClass      uint8
+	fds           *sql.FuncDepSet
+	colSet        sql.ColSet
 }
 
 func DoltStatsFromSql(stat sql.Statistic) (*DoltStats, error) {
@@ -56,6 +59,7 @@ func DoltStatsFromSql(stat sql.Statistic) (*DoltStats, error) {
 		Histogram:     hist,
 		Columns:       stat.Columns(),
 		Types:         stat.Types(),
+		IdxClass:      uint8(stat.IndexClass()),
 	}, nil
 }
 
@@ -64,7 +68,10 @@ func (s *DoltStats) toSql() sql.Statistic {
 	for i, typ := range s.Types {
 		typStrs[i] = typ.String()
 	}
-	return stats.NewStatistic(s.RowCount, s.DistinctCount, s.NullCount, s.AvgSize, s.CreatedAt, s.Qualifier, s.Columns, s.Types, s.Histogram.toSql())
+	stat := stats.NewStatistic(s.RowCount, s.DistinctCount, s.NullCount, s.AvgSize, s.CreatedAt, s.Qualifier, s.Columns, s.Types, s.Histogram.toSql(), sql.IndexClass(s.IdxClass))
+	stat.SetColSet(s.colSet)
+	stat.SetFuncDeps(s.fds)
+	return stat
 }
 
 type DoltHistogram []DoltBucket

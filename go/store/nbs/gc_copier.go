@@ -110,6 +110,7 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context, tfp tableFilePersister
 	if err != nil {
 		return nil, err
 	}
+	defer r.Close()
 	sz := gcc.writer.ContentLength()
 
 	err = tfp.CopyTableFile(ctx, r, filename, sz, uint32(gcc.writer.ChunkCount()))

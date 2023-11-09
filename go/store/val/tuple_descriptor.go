@@ -76,7 +76,7 @@ func IterAddressFields(td TupleDesc, cb func(int, Type)) {
 	for i, typ := range td.Types {
 		switch typ.Enc {
 		case BytesAddrEnc, StringAddrEnc,
-			JSONAddrEnc, CommitAddrEnc:
+			JSONAddrEnc, CommitAddrEnc, GeomAddrEnc:
 			cb(i, typ)
 		}
 	}
@@ -430,13 +430,20 @@ func (td TupleDesc) GetJSON(i int, tup Tuple) (v []byte, ok bool) {
 // GetGeometry reads a []byte from the ith field of the Tuple.
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetGeometry(i int, tup Tuple) (v []byte, ok bool) {
-	td.expectEncoding(i, GeometryEnc)
+	// TODO: we are support both Geometry and GeometryAddr for now, so we can't expect just one
+	// td.expectEncoding(i, GeometryEnc)
 	b := td.GetField(i, tup)
 	if b != nil {
 		v = readByteString(b)
 		ok = true
 	}
 	return
+}
+
+func (td TupleDesc) GetGeometryAddr(i int, tup Tuple) (hash.Hash, bool) {
+	// TODO: we are support both Geometry and GeometryAddr for now, so we can't expect just one
+	// td.expectEncoding(i, GeomAddrEnc)
+	return td.getAddr(i, tup)
 }
 
 func (td TupleDesc) GetHash128(i int, tup Tuple) (v []byte, ok bool) {

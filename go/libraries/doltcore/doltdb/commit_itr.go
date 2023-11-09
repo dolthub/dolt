@@ -16,7 +16,6 @@ package doltdb
 
 import (
 	"context"
-	"fmt"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -114,39 +113,16 @@ func (cmItr *commitItr) Next(ctx context.Context) (hash.Hash, *Commit, error) {
 	}
 
 	parents, err := cmItr.curr.ParentHashes(ctx)
+
 	if err != nil {
 		return hash.Hash{}, nil, err
 	}
 
-	// Add the first parent to the back of the unprocessed queue (i.e. the front of the slice)
-	// so that we only process it AFTER we have processed everything else in front if it in the queue.
-	if len(parents) > 0 {
-		h := parents[0]
-		if !cmItr.added[h] {
-			cmItr.added[h] = true
-			cmItr.unprocessed = append([]hash.Hash{h}, cmItr.unprocessed...)
-		}
-	}
-
-	// For merge commits, we always want to process the second parent BEFORE the first parent, because the
-	// second parent contains the commits that were merged from the source branch into the destination branch.
-	// Processing these first ensures that we attribute data changes to the most specific commit, and not more
-	// generally to a merge commit. To prioritize these second parents, we simply add them to the front of the
-	// unprocessed queue (i.e. the back of the slice).
-	if len(parents) > 1 {
-		h := parents[1]
+	for _, h := range parents {
 		if !cmItr.added[h] {
 			cmItr.added[h] = true
 			cmItr.unprocessed = append(cmItr.unprocessed, h)
 		}
-	}
-
-	if len(parents) > 2 {
-		currentCommitHash, err := cmItr.curr.HashOf()
-		if err != nil {
-			return hash.Hash{}, nil, fmt.Errorf("found commit with more than two parents: %s", err.Error())
-		}
-		return hash.Hash{}, nil, fmt.Errorf("found commit %s with more than two parents", currentCommitHash.String())
 	}
 
 	numUnprocessed := len(cmItr.unprocessed)

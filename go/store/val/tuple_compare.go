@@ -135,6 +135,8 @@ func compare(typ Type, left, right []byte) int {
 		return compareByteString(readByteString(left), readByteString(right))
 	case Hash128Enc:
 		return compareHash128(readHash128(left), readHash128(right))
+	case GeomAddrEnc:
+		return compareAddr(readAddr(left), readAddr(right))
 	case BytesAddrEnc:
 		return compareAddr(readAddr(left), readAddr(right))
 	case CommitAddrEnc:

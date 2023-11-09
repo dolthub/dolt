@@ -19,6 +19,7 @@ import (
 	"context"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,6 +28,10 @@ import (
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 )
+
+func testTimestampGenerator() uint64 {
+	return 42
+}
 
 func TestRoundTripJournalRecords(t *testing.T) {
 	t.Run("chunk record", func(t *testing.T) {
@@ -42,6 +47,11 @@ func TestRoundTripJournalRecords(t *testing.T) {
 			assert.Equal(t, rec, r)
 		}
 	})
+
+	// Root hash records contain a timestamp, so override the journal record timestamp
+	// generator function with a test version that returns a known, predictable value.
+	journalRecordTimestampGenerator = testTimestampGenerator
+
 	t.Run("root hash record", func(t *testing.T) {
 		for i := 0; i < 64; i++ {
 			rec, buf := makeRootHashRecord()
@@ -74,6 +84,10 @@ func TestProcessJournalRecords(t *testing.T) {
 	records := make([]journalRec, cnt)
 	buffers := make([][]byte, cnt)
 	journal := make([]byte, cnt*1024)
+
+	// Root hash records contain a timestamp, so override the journal record timestamp
+	// generator function with a test version that returns a known, predictable value.
+	journalRecordTimestampGenerator = testTimestampGenerator
 
 	var off uint32
 	for i := range records {
@@ -178,6 +192,11 @@ func makeRootHashRecord() (journalRec, []byte) {
 	n += journalRecTagSz
 	buf[n] = byte(rootHashJournalRecKind)
 	n += journalRecKindSz
+	// timestamp
+	buf[n] = byte(timestampJournalRecTag)
+	n += journalRecTagSz
+	writeUint64(buf[n:], testTimestampGenerator())
+	n += journalRecTimestampSz
 	// address
 	buf[n] = byte(addrJournalRecTag)
 	n += journalRecTagSz
@@ -187,10 +206,11 @@ func makeRootHashRecord() (journalRec, []byte) {
 	c := crc(buf[:len(buf)-journalRecChecksumSz])
 	writeUint32(buf[len(buf)-journalRecChecksumSz:], c)
 	r := journalRec{
-		length:   uint32(len(buf)),
-		kind:     rootHashJournalRecKind,
-		address:  a,
-		checksum: c,
+		length:    uint32(len(buf)),
+		kind:      rootHashJournalRecKind,
+		address:   a,
+		checksum:  c,
+		timestamp: time.Unix(int64(testTimestampGenerator()), 0),
 	}
 	return r, buf
 }

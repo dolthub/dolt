@@ -477,6 +477,10 @@ func (si *schemaImpl) GetValueDescriptor() val.TupleDesc {
 
 	useCollations := false // We only use collations if a string exists
 	_ = si.GetNonPKCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
+		if col.Virtual {
+			return
+		}
+
 		sqlType := col.TypeInfo.ToSqlType()
 		queryType := sqlType.Type()
 		tt = append(tt, val.Type{

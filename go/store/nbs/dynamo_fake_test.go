@@ -23,7 +23,6 @@ package nbs
 
 import (
 	"bytes"
-	"context"
 	"sync/atomic"
 	"testing"
 
@@ -53,26 +52,6 @@ func makeFakeDDB(t *testing.T) *fakeDDB {
 	}
 }
 
-func (m *fakeDDB) readerForTable(ctx context.Context, name addr) (chunkReader, error) {
-	if i, present := m.data[fmtTableName(name)]; present {
-		buff, ok := i.([]byte)
-		assert.True(m.t, ok)
-		ti, err := parseTableIndex(ctx, buff, &UnlimitedQuotaProvider{})
-
-		if err != nil {
-			return nil, err
-		}
-
-		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
-		if err != nil {
-			return nil, err
-		}
-
-		return tr, nil
-	}
-	return nil, nil
-}
-
 func (m *fakeDDB) GetItemWithContext(ctx aws.Context, input *dynamodb.GetItemInput, opts ...request.Option) (*dynamodb.GetItemOutput, error) {
 	key := input.Key[dbAttr].S
 	assert.NotNil(m.t, key, "key should have been a String: %+v", input.Key[dbAttr])
@@ -92,8 +71,6 @@ func (m *fakeDDB) GetItemWithContext(ctx aws.Context, input *dynamodb.GetItemInp
 			if e.appendix != "" {
 				item[appendixAttr] = &dynamodb.AttributeValue{S: aws.String(e.appendix)}
 			}
-		case []byte:
-			item[dataAttr] = &dynamodb.AttributeValue{B: e}
 		}
 	}
 	atomic.AddInt64(&m.numGets, 1)
@@ -112,12 +89,6 @@ func (m *fakeDDB) PutItemWithContext(ctx aws.Context, input *dynamodb.PutItemInp
 	assert.NotNil(m.t, input.Item[dbAttr], "%s should have been present", dbAttr)
 	assert.NotNil(m.t, input.Item[dbAttr].S, "key should have been a String: %+v", input.Item[dbAttr])
 	key := *input.Item[dbAttr].S
-
-	if input.Item[dataAttr] != nil {
-		assert.NotNil(m.t, input.Item[dataAttr].B, "data should have been a blob: %+v", input.Item[dataAttr])
-		m.putData(key, input.Item[dataAttr].B)
-		return &dynamodb.PutItemOutput{}, nil
-	}
 
 	assert.NotNil(m.t, input.Item[nbsVersAttr], "%s should have been present", nbsVersAttr)
 	assert.NotNil(m.t, input.Item[nbsVersAttr].S, "nbsVers should have been a String: %+v", input.Item[nbsVersAttr])

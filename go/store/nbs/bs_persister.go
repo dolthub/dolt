@@ -178,13 +178,7 @@ func (bsp *blobstorePersister) Path() string {
 	return ""
 }
 
-func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.ReadCloser, name string, fileSz uint64, chunkCount uint32) (err error) {
-	defer func() {
-		if cerr := r.Close(); cerr != nil {
-			err = cerr
-		}
-	}()
-
+func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, name string, fileSz uint64, chunkCount uint32) error {
 	// sanity check file size
 	if fileSz < indexSize(chunkCount)+footerSize {
 		return fmt.Errorf("table file size %d too small for chunk count %d", fileSz, chunkCount)
@@ -197,36 +191,36 @@ func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.ReadClose
 	rr, ok := r.(io.ReaderAt)
 	if !ok {
 		// sequentially write chunk records then tail
-		if _, err = bsp.bs.Put(ctx, name+tableRecordsExt, lr); err != nil {
+		if _, err := bsp.bs.Put(ctx, name+tableRecordsExt, lr); err != nil {
 			return err
 		}
-		if _, err = bsp.bs.Put(ctx, name+tableTailExt, r); err != nil {
+		if _, err := bsp.bs.Put(ctx, name+tableTailExt, r); err != nil {
 			return err
 		}
 	} else {
 		// on the push path, we expect to Put concurrently
 		// see BufferedFileByteSink in byte_sink.go
 		eg, ectx := errgroup.WithContext(ctx)
-		eg.Go(func() (err error) {
+		eg.Go(func() error {
 			buf := make([]byte, indexSize(chunkCount)+footerSize)
-			if _, err = rr.ReadAt(buf, off); err != nil {
+			if _, err := rr.ReadAt(buf, off); err != nil {
 				return err
 			}
-			_, err = bsp.bs.Put(ectx, name+tableTailExt, bytes.NewBuffer(buf))
-			return
+			_, err := bsp.bs.Put(ectx, name+tableTailExt, bytes.NewBuffer(buf))
+			return err
 		})
-		eg.Go(func() (err error) {
-			_, err = bsp.bs.Put(ectx, name+tableRecordsExt, lr)
-			return
+		eg.Go(func() error {
+			_, err := bsp.bs.Put(ectx, name+tableRecordsExt, lr)
+			return err
 		})
-		if err = eg.Wait(); err != nil {
+		if err := eg.Wait(); err != nil {
 			return err
 		}
 	}
 
 	// finally concatenate into the complete table
-	_, err = bsp.bs.Concatenate(ctx, name, []string{name + tableRecordsExt, name + tableTailExt})
-	return
+	_, err := bsp.bs.Concatenate(ctx, name, []string{name + tableRecordsExt, name + tableTailExt})
+	return err
 }
 
 type bsTableReaderAt struct {

@@ -29,7 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func makeTestChunkJournal(t *testing.T) *chunkJournal {
+func makeTestChunkJournal(t *testing.T) *ChunkJournal {
 	cacheOnce.Do(makeGlobalCaches)
 	ctx := context.Background()
 	dir, err := os.MkdirTemp("", "")

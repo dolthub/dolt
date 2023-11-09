@@ -155,17 +155,17 @@ func TestRoundTripProllyFields(t *testing.T) {
 		},
 		{
 			name:  "point",
-			typ:   val.Type{Enc: val.GeometryEnc},
+			typ:   val.Type{Enc: val.GeomAddrEnc},
 			value: mustParseGeometryType(t, "POINT(1 2)"),
 		},
 		{
 			name:  "linestring",
-			typ:   val.Type{Enc: val.GeometryEnc},
+			typ:   val.Type{Enc: val.GeomAddrEnc},
 			value: mustParseGeometryType(t, "LINESTRING(1 2,3 4)"),
 		},
 		{
 			name:  "polygon",
-			typ:   val.Type{Enc: val.GeometryEnc},
+			typ:   val.Type{Enc: val.GeomAddrEnc},
 			value: mustParseGeometryType(t, "POLYGON((0 0,1 1,1 0,0 0))"),
 		},
 		{
@@ -243,4 +243,50 @@ func mustParseTime(t *testing.T, s string) types.Timespan {
 func dateFromTime(t time.Time) time.Time {
 	y, m, d := t.Year(), t.Month(), t.Day()
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+}
+
+// TestGeometryEncoding contains tests that ensure backwards compatibility with the old geometry encoding.
+//
+//	Initially, Geometries were stored in line, but now they are stored out of band as BLOBs.
+func TestGeometryEncoding(t *testing.T) {
+	tests := []struct {
+		name  string
+		value interface{}
+	}{
+		{
+			name:  "point",
+			value: mustParseGeometryType(t, "POINT(1 2)"),
+		},
+		{
+			name:  "linestring",
+			value: mustParseGeometryType(t, "LINESTRING(1 2,3 4)"),
+		},
+		{
+			name:  "polygon",
+			value: mustParseGeometryType(t, "POLYGON((0 0,1 1,1 0,0 0))"),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ns := tree.NewTestNodeStore()
+			oldDesc := val.NewTupleDescriptor(val.Type{Enc: val.GeometryEnc})
+			builder := val.NewTupleBuilder(oldDesc)
+			b := serializeGeometry(test.value)
+			builder.PutGeometry(0, b)
+			tup := builder.Build(testPool)
+
+			var v interface{}
+			var err error
+
+			v, err = GetField(context.Background(), oldDesc, 0, tup, ns)
+			assert.NoError(t, err)
+			assert.Equal(t, test.value, v)
+
+			newDesc := val.NewTupleDescriptor(val.Type{Enc: val.GeometryEnc})
+			v, err = GetField(context.Background(), newDesc, 0, tup, ns)
+			assert.NoError(t, err)
+			assert.Equal(t, test.value, v)
+		})
+	}
 }

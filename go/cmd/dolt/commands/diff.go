@@ -864,6 +864,8 @@ func getTableSchemaAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName s
 	return sch, createStmt, nil
 }
 
+// schemaFromCreateTableStmt returns a schema for the CREATE TABLE statement given
+// TODO: this is substantially incorrect, doesn't handle primary key ordering, probably other things too
 func schemaFromCreateTableStmt(createTableStmt string) (schema.Schema, error) {
 	parsed, err := ast.Parse(createTableStmt)
 	if err != nil {
@@ -900,15 +902,17 @@ func schemaFromCreateTableStmt(createTableStmt string) (schema.Schema, error) {
 		if col.Type.Comment != nil {
 			comment = col.Type.Comment.String()
 		}
-		sCol, err := schema.NewColumnWithTypeInfo(
-			col.Name.String(),
-			0,
-			typeInfo,
-			primaryCols[col.Name.Lowered()],
-			defBuf.String(),
-			col.Type.Autoincrement == true,
-			comment,
-		)
+		sCol := schema.Column{
+			Name:          col.Name.String(),
+			Kind:          typeInfo.NomsKind(),
+			IsPartOfPK:    primaryCols[col.Name.Lowered()],
+			TypeInfo:      typeInfo,
+			Default:       defBuf.String(),
+			Generated:     "",    // TODO
+			Virtual:       false, // TODO
+			AutoIncrement: col.Type.Autoincrement == true,
+			Comment:       comment,
+		}
 		cols = append(cols, sCol)
 	}
 

@@ -273,6 +273,10 @@ func (w *prollyTableWriter) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return ret, nil
 }
 
+func (w *prollyTableWriter) PreciseMatch() bool {
+	return true
+}
+
 // IndexedAccess implements sql.IndexAddressableTable.
 func (w *prollyTableWriter) IndexedAccess(i sql.IndexLookup) sql.IndexedTable {
 	idx := index.DoltIndexFromSqlIndex(i.Index)
@@ -377,14 +381,12 @@ func ordinalMappingsFromSchema(from sql.Schema, to schema.Schema) (km, vm val.Or
 }
 
 func makeOrdinalMapping(from sql.Schema, to *schema.ColCollection) (m val.OrdinalMapping) {
-	m = make(val.OrdinalMapping, len(to.GetColumns()))
+	m = make(val.OrdinalMapping, to.StoredSize())
 	for i := range m {
-		name := to.GetByIndex(i).Name
-		for j, col := range from {
-			if col.Name == name {
-				m[i] = j
-			}
-		}
+		col := to.GetByStoredIndex(i)
+		name := col.Name
+		colIdx := from.IndexOfColName(name)
+		m[i] = colIdx
 	}
 	return
 }
