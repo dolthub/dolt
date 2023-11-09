@@ -268,24 +268,25 @@ var columnAddDropTests = []schemaMergeTest{
 				skip:         true,
 			},
 			{
-				// Skipped because the differ currently doesn't try to merge the dropped column.
-				// (https://github.com/dolthub/dolt/issues/6747)
 				name:         "one side sets to non-NULL, other drops NULL, plus data change",
 				ancestor:     singleRow(1, 2, nil),
 				left:         singleRow(1, 3),
 				right:        singleRow(1, 2, 3),
 				dataConflict: true,
-				skip:         true,
 			},
 			{
-				// Skipped because the differ currently doesn't try to merge the dropped column.
-				// (https://github.com/dolthub/dolt/issues/6747)
 				name:         "one side sets to non-NULL, other drops non-NULL",
 				ancestor:     singleRow(1, 2, 3),
 				left:         singleRow(1, 2),
 				right:        singleRow(1, 2, 4),
 				dataConflict: true,
-				skip:         true,
+			},
+			{
+				name:     "one side drops column, other deletes row",
+				ancestor: []sql.Row{row(1, 2, 3), row(4, 5, 6)},
+				left:     []sql.Row{row(1, 2), row(4, 5)},
+				right:    []sql.Row{row(1, 2, 3)},
+				merged:   []sql.Row{row(1, 2)},
 			},
 		},
 	},
@@ -304,54 +305,39 @@ var columnAddDropTests = []schemaMergeTest{
 				merged:   singleRow(1, 3),
 			},
 			{
-				// Skipped because the differ currently doesn't try to merge the dropped column.
-				// (https://github.com/dolthub/dolt/issues/6747)
 				name:         "one side sets to NULL, other drops non-NULL",
 				ancestor:     singleRow(1, 2, 3),
 				left:         singleRow(1, 3),
 				right:        singleRow(1, nil, 3),
 				dataConflict: true,
-				skip:         true,
 			},
 			{
-				// Skipped because the differ currently doesn't try to merge the dropped column.
-				// (https://github.com/dolthub/dolt/issues/6747)
 				name:         "one side sets to NULL, other drops non-NULL, plus data change",
 				ancestor:     singleRow(1, 2, 4),
 				left:         singleRow(1, 3),
 				right:        singleRow(1, nil, 4),
 				dataConflict: true,
-				skip:         true,
 			},
 			{
-				// Skipped because the differ currently doesn't try to merge the dropped column.
-				// (https://github.com/dolthub/dolt/issues/6747)
 				name:         "one side sets to non-NULL, other drops NULL, plus data change",
 				ancestor:     singleRow(1, nil, 3),
 				left:         singleRow(1, 3),
 				right:        singleRow(1, 2, 3),
 				dataConflict: true,
-				skip:         true,
 			},
 			{
-				// Skipped because the differ currently doesn't try to merge the dropped column.
-				// (https://github.com/dolthub/dolt/issues/6747)
 				name:         "one side sets to non-NULL, other drops NULL, plus data change",
 				ancestor:     singleRow(1, nil, 3),
 				left:         singleRow(1, 4),
 				right:        singleRow(1, 2, 3),
 				dataConflict: true,
-				skip:         true,
 			},
 			{
-				// Skipped because the differ currently doesn't try to merge the dropped column.
-				// (https://github.com/dolthub/dolt/issues/6747)
 				name:         "one side sets to non-NULL, other drops non-NULL",
 				ancestor:     singleRow(1, 2, 3),
 				left:         singleRow(1, 3),
 				right:        singleRow(1, 4, 3),
 				dataConflict: true,
-				skip:         true,
 			},
 		},
 	},
