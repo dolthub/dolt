@@ -364,7 +364,27 @@ func (s *SqlServer) Restart(newargs *[]string, newenvs *[]string) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		io.Copy(io.MultiWriter(os.Stdout, s.Output), stdout)
+		reader := bufio.NewReader(stdout)
+		multiOut := io.MultiWriter(os.Stdout, s.Output)
+		wantsPrefix := true
+		for {
+			line, isPrefix, err := reader.ReadLine()
+			if err != nil {
+				return
+			}
+			if wantsPrefix && s.Name != "" {
+				os.Stdout.Write([]byte("["))
+				os.Stdout.Write([]byte(s.Name))
+				os.Stdout.Write([]byte("] "))
+			}
+			multiOut.Write(line)
+			if isPrefix {
+				wantsPrefix = false
+			} else {
+				multiOut.Write([]byte("\n"))
+				wantsPrefix = true
+			}
+		}
 	}()
 	s.Done = make(chan struct{})
 	go func() {
