@@ -59,7 +59,7 @@ func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads, orig
 
 			var er env.Remote
 			var ok bool
-			if er, ok = remotes[r.Name()]; ok {
+			if er, ok = remotes.Get(r.Name()); ok {
 				if er.Url != remoteUrl {
 					return fmt.Errorf("invalid remote (%s) for cluster replication found in database %s: expect url %s but the existing remote had url %s", r.Name(), name, remoteUrl, er.Url)
 				}

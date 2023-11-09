@@ -1,6 +1,8 @@
 package concurrentmap
 
-import "sync"
+import (
+	"sync"
+)
 
 func New[K comparable, V any]() *Map[K, V] {
 	return &Map[K, V]{m: make(map[K]V)}
@@ -47,6 +49,16 @@ func (cm *Map[K, V]) DeepCopy() *Map[K, V] {
 		newMap[k] = v
 	}
 	return &Map[K, V]{m: newMap}
+}
+
+func (cm *Map[K, V]) Range(f func(key K, value V) bool) {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	for k, v := range cm.m {
+		if !f(k, v) {
+			break
+		}
+	}
 }
 
 func (cm *Map[K, V]) Snapshot() map[K]V {

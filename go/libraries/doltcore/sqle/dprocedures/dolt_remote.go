@@ -118,7 +118,7 @@ func removeRemote(ctx *sql.Context, dbd env.DbData, apr *argparser.ArgParseResul
 		return err
 	}
 
-	remote, ok := remotes[old]
+	remote, ok := remotes.Get(old)
 	if !ok {
 		return fmt.Errorf("error: unknown remote: '%s'", old)
 	}

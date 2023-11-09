@@ -30,7 +30,7 @@ import (
 type RepoStateReader interface {
 	CWBHeadRef() (ref.DoltRef, error)
 	CWBHeadSpec() (*doltdb.CommitSpec, error)
-	GetRemotes() (map[string]Remote, error)
+	GetRemotes() (*concurrentmap.Map[string, Remote], error)
 	GetBackups() (map[string]Remote, error)
 	GetBranches() (map[string]BranchConfig, error)
 }

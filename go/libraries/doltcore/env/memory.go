@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -207,8 +208,8 @@ func (m MemoryRepoState) SetCWBHeadRef(_ context.Context, r ref.MarshalableRef) 
 	return
 }
 
-func (m MemoryRepoState) GetRemotes() (map[string]Remote, error) {
-	return make(map[string]Remote), nil
+func (m MemoryRepoState) GetRemotes() (*concurrentmap.Map[string, Remote], error) {
+	return &concurrentmap.Map[string, Remote]{}, nil
 }
 
 func (m MemoryRepoState) AddRemote(r Remote) error {

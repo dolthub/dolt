@@ -121,12 +121,12 @@ func NewRemoteItr(ctx *sql.Context, ddb *doltdb.DoltDB) (*RemoteItr, error) {
 	if err != nil {
 		return nil, err
 	}
-	remotes := make([]env.Remote, len(remoteMap))
-	i := 0
-	for _, r := range remoteMap {
-		remotes[i] = r
-		i++
-	}
+	remotes := []env.Remote{}
+
+	remoteMap.Range(func(key string, val env.Remote) bool {
+		remotes = append(remotes, val)
+		return true
+	})
 
 	return &RemoteItr{remotes, 0}, nil
 }
