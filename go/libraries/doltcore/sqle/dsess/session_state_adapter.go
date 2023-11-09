@@ -165,7 +165,7 @@ func (s SessionStateAdapter) AddBackup(backup env.Remote) error {
 	}
 
 	// no conflicting remote or backup addresses
-	if bac, found := env.CheckRemoteAddressConflict(backup.Url, repoState.Remotes, repoState.Backups); found {
+	if bac, found := env.CheckRemoteAddressConflict(backup.Url, repoState.Remotes.Snapshot(), repoState.Backups); found {
 		return fmt.Errorf("%w: '%s' -> %s", env.ErrRemoteAddressConflict, bac.Name, bac.Url)
 	}
 
@@ -191,12 +191,12 @@ func (s SessionStateAdapter) RemoveRemote(_ context.Context, name string) error 
 		return err
 	}
 
-	remote, ok = repoState.Remotes[name]
+	remote, ok = repoState.Remotes.Get(name)
 	if !ok {
 		// sanity check
 		return env.ErrRemoteNotFound
 	}
-	delete(repoState.Remotes, name)
+	repoState.Remotes.Delete(name)
 	return repoState.Save(fs)
 }
 
