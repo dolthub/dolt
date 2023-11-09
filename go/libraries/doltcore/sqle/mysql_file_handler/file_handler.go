@@ -17,8 +17,8 @@ package mysql_file_handler
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -59,7 +59,7 @@ func (p *Persister) Persist(ctx *sql.Context, data []byte) error {
 	}
 
 	dir := filepath.Dir(p.privsFilePath)
-	f, err := os.CreateTemp(dir, filepath.Base(p.privsFilePath) + "-*")
+	f, err := os.CreateTemp(dir, filepath.Base(p.privsFilePath)+"-*")
 	if err != nil {
 		return err
 	}
