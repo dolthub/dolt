@@ -413,6 +413,7 @@ func (lb *coveringLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition
 		valMap:    lb.valMap,
 		ordMap:    lb.ordMap,
 		sqlSch:    lb.sch.Schema,
+		projections: lb.projections,
 		ns:        lb.ns,
 	}, nil
 }
@@ -446,6 +447,7 @@ func (lb *nonCoveringLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partit
 		valMap:    lb.valMap,
 		ordMap:    lb.ordMap,
 		sqlSch:    lb.sch.Schema,
+		projections: lb.projections,
 	}, nil
 }
 

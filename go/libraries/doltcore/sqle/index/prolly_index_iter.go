@@ -44,6 +44,7 @@ type prollyIndexIter struct {
 	keyMap, valMap val.OrdinalMapping
 	//ordMap are output ordinals for |keyMap| and |valMap|
 	ordMap val.OrdinalMapping
+	projections []uint64
 	sqlSch sql.Schema
 }
 
@@ -79,6 +80,7 @@ func newProllyIndexIter(
 		keyMap:    keyProj,
 		valMap:    valProj,
 		ordMap:    ordProj,
+		projections: projections,
 		sqlSch:    pkSch.Schema,
 	}
 
@@ -97,7 +99,7 @@ func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 	pk := p.pkBld.Build(sharePool)
 
-	r := make(sql.Row, len(p.keyMap)+len(p.valMap))
+	r := make(sql.Row, len(p.projections))
 	err = p.primary.Get(ctx, pk, func(key, value val.Tuple) error {
 		return p.rowFromTuples(ctx, key, value, r)
 	})
@@ -167,6 +169,7 @@ type prollyCoveringIndexIter struct {
 
 	// |keyMap| and |valMap| are both of len ==
 	keyMap, valMap, ordMap val.OrdinalMapping
+	projections  []uint64
 	sqlSch                 sql.Schema
 }
 
@@ -214,7 +217,7 @@ func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	r := make(sql.Row, len(p.keyMap)+len(p.valMap))
+	r := make(sql.Row, len(p.projections))
 	if err := p.writeRowFromTuples(ctx, k, v, r); err != nil {
 		return nil, err
 	}
