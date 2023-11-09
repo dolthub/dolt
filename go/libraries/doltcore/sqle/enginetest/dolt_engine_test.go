@@ -196,20 +196,20 @@ func TestSingleMergeScript(t *testing.T) {
 	// t.Skip()
 	var scripts = []MergeScriptTest{
 		{
-			Name: "adding columns to a table with a virtual column",
+			Name: "adding generated column to one side, non-generated column to other side",
 			AncSetUpScript: []string{
-				"create table t (pk int primary key, col1 int as (pk + 1));",
-				"insert into t (pk) values (1);",
-				"alter table t add index idx1 (col1, pk);",
-				"alter table t add index idx2 (col1);",
+				"create table t (pk int primary key);",
+				"insert into t values (1), (2);",
 			},
 			RightSetUpScript: []string{
-				"alter table t add column col2 int;",
-				"alter table t add column col3 int;",
-				"insert into t (pk, col2, col3) values (2, 2, 2);",
+				"alter table t add column col2 varchar(100);",
+				"insert into t (pk, col2) values (3, '3hello'), (4, '4hello');",
+				"alter table t add index (col2);",
 			},
 			LeftSetUpScript: []string{
-				"insert into t (pk) values (3);",
+				"alter table t add column col1 int default (pk + 100);",
+				"insert into t (pk) values (5), (6);",
+				"alter table t add index (col1);",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
@@ -217,14 +217,52 @@ func TestSingleMergeScript(t *testing.T) {
 					Expected: []sql.Row{{doltCommit, 0, 0}},
 				},
 				{
-					Query:    "select * from t order by pk",
+					Query: "select pk, col1, col2 from t;",
 					Expected: []sql.Row{
-						{1, 1, nil, 2},
-						{2, 2, 2, 3},
-						{3, 3, nil, 4}},
+						{1, 101, nil},
+						{2, 102, nil},
+						{3, 103, "3hello"},
+						{4, 104, "4hello"},
+						{5, 105, nil},
+						{6, 106, nil},
+					},
 				},
 			},
 		},
+		// {
+		// 	Name: "adding generated columns to both sides",
+		// 	AncSetUpScript: []string{
+		// 		"create table t (pk int primary key);",
+		// 		"insert into t values (1), (2);",
+		// 	},
+		// 	RightSetUpScript: []string{
+		// 		"alter table t add column col2 varchar(100) as (concat(pk, 'hello'));",
+		// 		"insert into t (pk) values (3), (4);",
+		// 		"alter table t add index (col2);",
+		// 	},
+		// 	LeftSetUpScript: []string{
+		// 		"alter table t add column col1 int as (pk + 100) stored;",
+		// 		"insert into t (pk) values (5), (6);",
+		// 		"alter table t add index (col1);",
+		// 	},
+		// 	Assertions: []queries.ScriptTestAssertion{
+		// 		{
+		// 			Query:    "call dolt_merge('right');",
+		// 			Expected: []sql.Row{{doltCommit, 0, 0}},
+		// 		},
+		// 		{
+		// 			Query: "select pk, col1, col2 from t;",
+		// 			Expected: []sql.Row{
+		// 				{1, 101, "1hello"},
+		// 				{2, 102, "2hello"},
+		// 				{3, 103, "3hello"},
+		// 				{4, 104, "4hello"},
+		// 				{5, 105, "5hello"},
+		// 				{6, 106, "6hello"},
+		// 			},
+		// 		},
+		// 	},
+		// },
 		// {
 		// 	Name: "adding a column with a literal default value",
 		// 	AncSetUpScript: []string{
@@ -283,9 +321,9 @@ func TestSingleMergeScript(t *testing.T) {
 		// },
 	}
 	for _, test := range scripts {
-		t.Run("merge right into left", func(t *testing.T) {
-			enginetest.TestScript(t, newDoltHarness(t), convertMergeScriptTest(test, false))
-		})
+		// t.Run("merge right into left", func(t *testing.T) {
+		// 	enginetest.TestScript(t, newDoltHarness(t), convertMergeScriptTest(test, false))
+		// })
 		t.Run("merge left into right", func(t *testing.T) {
 			enginetest.TestScript(t, newDoltHarness(t), convertMergeScriptTest(test, true))
 		})

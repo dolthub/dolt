@@ -1041,6 +1041,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 				sourceSch.GetValueDescriptor(),
 				m.valueMerger.rightMapping,
 				m.tableMerger,
+				m.tableMerger.rightSch,
 				m.finalSch,
 				defaults,
 				m.valueMerger.syncPool,
@@ -1071,6 +1072,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 				m.finalSch.GetValueDescriptor(),
 				m.valueMerger.rightMapping,
 				m.tableMerger,
+				m.tableMerger.rightSch,
 				m.finalSch,
 				defaults,
 				m.valueMerger.syncPool,
@@ -1289,6 +1291,7 @@ func remapTupleWithColumnDefaults(
 		valDesc val.TupleDesc,
 		mapping val.OrdinalMapping,
 		tm *TableMerger,
+		rowSch schema.Schema,
 		mergedSch schema.Schema,
 		defaultExprs []sql.Expression,
 		pool pool.BuffPool,
@@ -1334,7 +1337,7 @@ func remapTupleWithColumnDefaults(
 	
 	for _, to := range secondPass {
 		col := mergedSch.GetNonPKCols().GetByStoredIndex(to)
-		err := writeTupleExpression(ctx, keyTuple, valueTuple, defaultExprs[to], col, tm.rightSch, tm, tb, to)
+		err := writeTupleExpression(ctx, keyTuple, valueTuple, defaultExprs[to], col, rowSch, tm, tb, to)
 		if err != nil {
 			return nil, err
 		}
@@ -1567,6 +1570,7 @@ func migrateDataToMergedSchema(ctx *sql.Context, tm *TableMerger, vm *valueMerge
 			valueDescriptor,
 			vm.leftMapping,
 			tm,
+			tm.leftSch,
 			mergedSch,
 			defaults,
 			vm.syncPool,
