@@ -1094,13 +1094,17 @@ func resolveDefaults(ctx *sql.Context, tableName string, mergedSchema schema.Sch
 	// We want a slice of expressions in the order of the merged schema, but with column indexes from the source schema, 
 	// against which they will be evaluated
 	err := mergedSchema.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if col.Default != "" || col.Generated != "" {
+		if col.Virtual {
+			return false, nil
+		}
+		
+		if (col.Default != "" || col.Generated != "") {
 			expr, err := index.ResolveDefaultExpression(ctx, tableName, mergedSchema, col)
 			if err != nil {
 				return true, err
 			}
 			if len(exprs) == 0 {
-				exprs = make([]sql.Expression, mergedSchema.GetNonPKCols().Size())
+				exprs = make([]sql.Expression, mergedSchema.GetNonPKCols().StoredSize())
 			}
 			exprs[i] = expr
 		}
@@ -1329,7 +1333,7 @@ func remapTupleWithColumnDefaults(
 	}
 	
 	for _, to := range secondPass {
-		col := mergedSch.GetNonPKCols().GetByIndex(to)
+		col := mergedSch.GetNonPKCols().GetByStoredIndex(to)
 		err := writeTupleExpression(ctx, keyTuple, valueTuple, defaultExprs[to], col, tm.rightSch, tm, tb, to)
 		if err != nil {
 			return nil, err
