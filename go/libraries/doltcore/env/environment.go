@@ -865,16 +865,18 @@ func (dEnv *DoltEnv) GetRemotes() (*concurrentmap.Map[string, Remote], error) {
 // CheckRemoteAddressConflict checks whether any backups or remotes share the given URL. Returns the first remote if multiple match.
 // Returns NoRemote and false if none match.
 func CheckRemoteAddressConflict(absUrl string, remotes *concurrentmap.Map[string, Remote], backups map[string]Remote) (Remote, bool) {
-	var rm *Remote
-	remotes.Range(func(key string, value Remote) bool {
-		if value.Url == absUrl {
-			rm = &value
-			return false
+	if remotes != nil {
+		var rm *Remote
+		remotes.Range(func(key string, value Remote) bool {
+			if value.Url == absUrl {
+				rm = &value
+				return false
+			}
+			return true
+		})
+		if rm != nil {
+			return *rm, true
 		}
-		return true
-	})
-	if rm != nil {
-		return *rm, true
 	}
 
 	for _, r := range backups {
