@@ -14,7 +14,7 @@ jobs:
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: benchmark-latency
-          client-payload: '{"from_server": "mysql", "from_version": "8.0.28", "to_server": "dolt", "to_version": "${{ github.sha }}", "mode": "nightly", "actor": "${{ github.actor }}", "template_script": "./.github/scripts/performance-benchmarking/get-mysql-dolt-job-json.sh"}'
+          client-payload: '{"from_server": "mysql", "from_version": "8.0.35", "to_server": "dolt", "to_version": "${{ github.sha }}", "mode": "nightly", "actor": "${{ github.actor }}", "template_script": "./.github/scripts/performance-benchmarking/get-mysql-dolt-job-json.sh"}'
       - uses: peter-evans/repository-dispatch@v2.0.0
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
