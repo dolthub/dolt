@@ -42,7 +42,7 @@ type prollyIndexIter struct {
 	// keyMap and valMap transform tuples from
 	// primary row storage into sql.Row's
 	keyMap, valMap val.OrdinalMapping
-	//ordMap are output ordinals for |keyMap| and |valMap|
+	// ordMap are output ordinals for |keyMap| and |valMap| concatenated
 	ordMap val.OrdinalMapping
 	projections []uint64
 	sqlSch sql.Schema
