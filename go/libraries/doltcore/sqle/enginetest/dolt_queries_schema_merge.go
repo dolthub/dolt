@@ -2159,38 +2159,38 @@ var SchemaChangeTestsGeneratedColumns = []MergeScriptTest{
 	// 		},
 	// 	},
 	// },
-	// {
-	// 	Name: "adding a virtual column to one side",
-	// 	AncSetUpScript: []string{
-	// 		"create table t (pk int primary key);",
-	// 		"insert into t (pk) values (1);",
-	// 		"alter table t add index idx1 (col1, pk);",
-	// 		"alter table t add index idx2 (col1);",
-	// 	},
-	// 	RightSetUpScript: []string{
-	// 		"alter table t add column col1 int as (pk + 1)",
-	// 		"insert into t (pk) values (3);",
-	// 	},
-	// 	LeftSetUpScript: []string{
-	// 		"alter table t add column col2 int;",
-	// 		"alter table t add column col3 int;",
-	// 		"insert into t (pk, col2, col3) values (2, 4, 5);",
-	// 	},
-	// 	Assertions: []queries.ScriptTestAssertion{
-	// 		{
-	// 			Query:    "call dolt_merge('right');",
-	// 			Expected: []sql.Row{{doltCommit, 0, 0}},
-	// 		},
-	// 		{
-	// 			Query:    "select * from t;",
-	// 			Expected: []sql.Row{
-	// 				{1, 3, nil, nil},
-	// 				{2, 3, 4, 5},
-	// 				{3, 4, nil, nil},
-	// 			},
-	// 		},
-	// 	},
-	// },
+	{
+		Name: "adding a virtual column to one side",
+		AncSetUpScript: []string{
+			"create table t (pk int primary key);",
+			"insert into t (pk) values (1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col1 int as (pk + 1)",
+			"insert into t (pk) values (3);",
+			"alter table t add index idx1 (col1, pk);",
+			"alter table t add index idx2 (col1);",
+		},
+		LeftSetUpScript: []string{
+			"alter table t add column col2 int;",
+			"alter table t add column col3 int;",
+			"insert into t (pk, col2, col3) values (2, 4, 5);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query:    "select pk, col1, col2, col3 from t;",
+				Expected: []sql.Row{
+					{1, 2, nil, nil},
+					{2, 3, 4, 5},
+					{3, 4, nil, nil},
+				},
+			},
+		},
+	},
 	{
 		Name: "adding generated columns to both sides",
 		AncSetUpScript: []string{
