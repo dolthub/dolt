@@ -204,7 +204,7 @@ func (fs *localFS) OpenForWriteAppend(fp string, perm os.FileMode) (io.WriteClos
 
 // WriteFile writes the entire data buffer to a given file.  The file will be created if it does not exist,
 // and if it does exist it will be overwritten.
-func (fs *localFS) WriteFile(fp string, data []byte) error {
+func (fs *localFS) WriteFile(fp string, data []byte, perms os.FileMode) error {
 	fullpath, err := fs.Abs(fp)
 	if err != nil {
 		return err
@@ -236,7 +236,7 @@ func (fs *localFS) WriteFile(fp string, data []byte) error {
 		return err
 	}
 
-	err = os.Chmod(f.Name(), os.ModePerm)
+	err = os.Chmod(f.Name(), perms)
 	if err != nil {
 		os.Remove(f.Name())
 		return err

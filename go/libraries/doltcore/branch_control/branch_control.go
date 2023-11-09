@@ -210,7 +210,7 @@ func (controller *Controller) SaveData(ctx context.Context, fs filesys.Filesys) 
 	b.FinishWithFileIdentifier(root, []byte(serial.BranchControlFileID))
 	data := b.Bytes[b.Head()-serial.MessagePrefixSz:]
 
-	err := fs.WriteFile(controller.branchControlFilePath, data)
+	err := fs.WriteFile(controller.branchControlFilePath, data, 0660)
 	if err != nil {
 		return err
 	}

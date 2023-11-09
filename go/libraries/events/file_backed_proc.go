@@ -134,7 +134,7 @@ func NewFileBackedProc(fs filesys.Filesys, userHomeDir string, doltDir string, n
 	exists, _ := fs.Exists(lp)
 
 	if !exists {
-		if err := fs.WriteFile(lp, []byte("lockfile for dolt \n")); err != nil {
+		if err := fs.WriteFile(lp, []byte("lockfile for dolt \n"), os.ModePerm); err != nil {
 			panic(err)
 		}
 	}
