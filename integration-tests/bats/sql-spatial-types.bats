@@ -84,6 +84,61 @@ teardown() {
     [[ "$output" =~ "1" ]] || false
 }
 
+@test "sql-spatial-types: geometry survives dolt gc" {
+    # create geometry table
+    run dolt sql -q "create table geom_tbl (g geometry)"
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ] || false
+
+    # inserting point
+    run dolt sql -q "insert into geom_tbl values (point(1,2))"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Query OK" ]] || false
+
+    run dolt sql -q "select st_aswkt(g) from geom_tbl"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "POINT(1 2)" ]] || false
+
+    run dolt gc
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "select st_aswkt(g) from geom_tbl"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "POINT(1 2)" ]] || false
+}
+
+@test "sql-spatial-types: geometry survives dolt push" {
+    # create geometry table
+    run dolt sql -q "create table geom_tbl (g geometry)"
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ] || false
+
+    # inserting point
+    run dolt sql -q "insert into geom_tbl values (point(1,2))"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Query OK" ]] || false
+
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt commit -m "creating geometry table"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "select st_aswkt(g) from geom_tbl"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "POINT(1 2)" ]] || false
+
+    mkdir rem1
+    dolt remote add origin file://rem1
+    dolt push origin main
+
+    dolt clone file://rem1 repo2
+    cd repo2
+
+    run dolt sql -q "select st_aswkt(g) from geom_tbl"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "POINT(1 2)" ]] || false
+}
+
 @test "sql-spatial-types: create geometry table and insert existing spatial types" {
 
     # create geometry table

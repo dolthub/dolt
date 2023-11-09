@@ -125,6 +125,11 @@ func (ftp *fsTablePersister) CopyTableFile(ctx context.Context, r io.Reader, fil
 			return "", cleanup, err
 		}
 
+		err = temp.Sync()
+		if err != nil {
+			return "", cleanup, err
+		}
+
 		return temp.Name(), cleanup, nil
 	}()
 	defer f()
@@ -185,6 +190,11 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data [
 			return "", cleanup, ferr
 		}
 
+		ferr = temp.Sync()
+		if ferr != nil {
+			return "", cleanup, ferr
+		}
+
 		return temp.Name(), cleanup, nil
 	}()
 	defer f()
@@ -236,7 +246,6 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 
 		defer func() {
 			closeErr := temp.Close()
-
 			if ferr == nil {
 				ferr = closeErr
 			}
@@ -268,6 +277,11 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 
 		_, ferr = temp.Write(plan.mergedIndex)
 
+		if ferr != nil {
+			return "", cleanup, ferr
+		}
+
+		ferr = temp.Sync()
 		if ferr != nil {
 			return "", cleanup, ferr
 		}
