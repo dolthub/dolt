@@ -206,7 +206,11 @@ func (fs *localFS) OpenForWriteAppend(fp string, perm os.FileMode) (io.WriteClos
 // WriteFile writes the entire data buffer to a given file.  The file will be created if it does not exist,
 // and if it does exist it will be overwritten.
 func (fs *localFS) WriteFile(fp string, data []byte, perms os.FileMode) error {
-	return file.WriteFileAtomically(fp, bytes.NewReader(data), perms)
+	abs, err := fs.Abs(fp)
+	if err != nil {
+		return err
+	}
+	return file.WriteFileAtomically(abs, bytes.NewReader(data), perms)
 }
 
 // MkDirs creates a folder and all the parent folders that are necessary to create it.
