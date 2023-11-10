@@ -15,10 +15,10 @@
 package mysql_file_handler
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
-	"path/filepath"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -58,44 +58,7 @@ func (p *Persister) Persist(ctx *sql.Context, data []byte) error {
 		}
 	}
 
-	dir := filepath.Dir(p.privsFilePath)
-	f, err := os.CreateTemp(dir, filepath.Base(p.privsFilePath)+"-*")
-	if err != nil {
-		return err
-	}
-	_, err = f.Write(data)
-	if err != nil {
-		f.Close()
-		os.Remove(f.Name())
-		return err
-	}
-
-	err = f.Sync()
-	if err != nil {
-		f.Close()
-		os.Remove(f.Name())
-		return err
-	}
-
-	err = f.Close()
-	if err != nil {
-		os.Remove(f.Name())
-		return err
-	}
-
-	err = os.Chmod(f.Name(), PermsFileMode)
-	if err != nil {
-		os.Remove(f.Name())
-		return err
-	}
-
-	err = os.Rename(f.Name(), p.privsFilePath)
-	if err != nil {
-		os.Remove(f.Name())
-		return err
-	}
-
-	return file.SyncDirectoryHandle(filepath.Dir(f.Name()))
+	return file.WriteFileAtomically(p.privsFilePath, bytes.NewReader(data), PermsFileMode)
 }
 
 // LoadData reads the mysql.db file, returns nil if empty or not found

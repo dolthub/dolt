@@ -15,6 +15,7 @@
 package filesys
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -205,50 +206,11 @@ func (fs *localFS) OpenForWriteAppend(fp string, perm os.FileMode) (io.WriteClos
 // WriteFile writes the entire data buffer to a given file.  The file will be created if it does not exist,
 // and if it does exist it will be overwritten.
 func (fs *localFS) WriteFile(fp string, data []byte, perms os.FileMode) error {
-	fullpath, err := fs.Abs(fp)
+	abs, err := fs.Abs(fp)
 	if err != nil {
 		return err
 	}
-
-	dir := filepath.Dir(fullpath)
-	f, err := os.CreateTemp(dir, filepath.Base(fullpath)+"-*")
-	if err != nil {
-		return err
-	}
-
-	_, err = f.Write(data)
-	if err != nil {
-		f.Close()
-		os.Remove(f.Name())
-		return err
-	}
-
-	err = f.Sync()
-	if err != nil {
-		f.Close()
-		os.Remove(f.Name())
-		return err
-	}
-
-	err = f.Close()
-	if err != nil {
-		os.Remove(f.Name())
-		return err
-	}
-
-	err = os.Chmod(f.Name(), perms)
-	if err != nil {
-		os.Remove(f.Name())
-		return err
-	}
-
-	err = os.Rename(f.Name(), fullpath)
-	if err != nil {
-		os.Remove(f.Name())
-		return err
-	}
-
-	return file.SyncDirectoryHandle(dir)
+	return file.WriteFileAtomically(abs, bytes.NewReader(data), perms)
 }
 
 // MkDirs creates a folder and all the parent folders that are necessary to create it.
