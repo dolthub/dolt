@@ -37,7 +37,7 @@ import (
 // NewSecondaryKeyBuilder creates a new SecondaryKeyBuilder instance that can build keys for the secondary index |def|.
 // The schema of the source table is defined in |sch|, and |idxDesc| describes the tuple layout for the index's keys
 // (index value tuples are not used).
-func NewSecondaryKeyBuilder(ctx context.Context, tableName string, sch schema.Schema, def schema.Index, idxDesc val.TupleDesc, p pool.BuffPool, nodeStore tree.NodeStore) (SecondaryKeyBuilder, error) {
+func NewSecondaryKeyBuilder(ctx *sql.Context, tableName string, sch schema.Schema, def schema.Index, idxDesc val.TupleDesc, p pool.BuffPool, nodeStore tree.NodeStore) (SecondaryKeyBuilder, error) {
 	b := SecondaryKeyBuilder{
 		builder:   val.NewTupleBuilder(idxDesc),
 		pool:      p,
@@ -64,12 +64,8 @@ func NewSecondaryKeyBuilder(ctx context.Context, tableName string, sch schema.Sc
 				if len(virtualExpressions) == 0 {
 					virtualExpressions = make([]sql.Expression, len(def.AllTags()))
 				}
-				sqlCtx, ok := ctx.(*sql.Context)
-				if !ok {
-					sqlCtx = sql.NewContext(ctx)
-				}
 
-				expr, err := ResolveDefaultExpression(sqlCtx, tableName, sch, col)
+				expr, err := ResolveDefaultExpression(ctx, tableName, sch, col)
 				if err != nil {
 					return SecondaryKeyBuilder{}, err
 				}

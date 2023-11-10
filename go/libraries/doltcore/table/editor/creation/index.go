@@ -43,7 +43,7 @@ type CreateIndexReturn struct {
 
 // CreateIndex creates the given index on the given table with the given schema. Returns the updated table, updated schema, and created index.
 func CreateIndex(
-	ctx context.Context,
+	ctx *sql.Context,
 	table *doltdb.Table,
 	tableName, indexName string,
 	columns []string,
@@ -131,7 +131,7 @@ func CreateIndex(
 	}, nil
 }
 
-func BuildSecondaryIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Index, tableName string, opts editor.Options) (durable.Index, error) {
+func BuildSecondaryIndex(ctx *sql.Context, tbl *doltdb.Table, idx schema.Index, tableName string, opts editor.Options) (durable.Index, error) {
 	switch tbl.Format() {
 	case types.Format_LD_1:
 		m, err := editor.RebuildIndex(ctx, tbl, idx.Name(), opts)
@@ -160,7 +160,7 @@ func BuildSecondaryIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Inde
 // BuildSecondaryProllyIndex builds secondary index data for the given primary
 // index row data |primary|. |sch| is the current schema of the table.
 func BuildSecondaryProllyIndex(
-	ctx context.Context,
+	ctx *sql.Context,
 	vrw types.ValueReadWriter,
 	ns tree.NodeStore,
 	sch schema.Schema,
@@ -250,7 +250,7 @@ type DupEntryCb func(ctx context.Context, existingKey, newKey val.Tuple) error
 // data. If any duplicate entries are found, they are passed to |cb|. If |cb|
 // returns a non-nil error then the process is stopped.
 func BuildUniqueProllyIndex(
-	ctx context.Context,
+	ctx *sql.Context,
 	vrw types.ValueReadWriter,
 	ns tree.NodeStore,
 	sch schema.Schema,

@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // mergeProllySecondaryIndexes merges the secondary indexes of the given |tbl|,
@@ -35,7 +36,7 @@ import (
 // changes from the other side of the merge to have been merged in before this
 // function was called. This is safer, but less efficient.
 func mergeProllySecondaryIndexes(
-	ctx context.Context,
+	ctx *sql.Context,
 	tm *TableMerger,
 	leftSet, rightSet durable.IndexSet,
 	finalSch schema.Schema,
@@ -104,7 +105,7 @@ func mergeProllySecondaryIndexes(
 }
 
 func buildIndex(
-	ctx context.Context,
+	ctx *sql.Context,
 	vrw types.ValueReadWriter,
 	ns tree.NodeStore,
 	postMergeSchema schema.Schema,

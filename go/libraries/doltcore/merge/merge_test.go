@@ -311,21 +311,23 @@ func TestMergeCommits(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tbl, _, err := root.GetTable(context.Background(), tableName)
+	ctx := sql.NewEmptyContext()
+
+	tbl, _, err := root.GetTable(ctx, tableName)
 	assert.NoError(t, err)
-	sch, err := tbl.GetSchema(context.Background())
+	sch, err := tbl.GetSchema(ctx)
 	assert.NoError(t, err)
-	expected, err := doltdb.NewTable(context.Background(), vrw, ns, sch, expectedRows, nil, nil)
+	expected, err := doltdb.NewTable(ctx, vrw, ns, sch, expectedRows, nil, nil)
 	assert.NoError(t, err)
-	expected, err = rebuildAllProllyIndexes(context.Background(), expected)
+	expected, err = rebuildAllProllyIndexes(ctx, expected)
 	assert.NoError(t, err)
-	expected, err = expected.SetArtifacts(context.Background(), durable.ArtifactIndexFromProllyMap(expectedArtifacts))
+	expected, err = expected.SetArtifacts(ctx, durable.ArtifactIndexFromProllyMap(expectedArtifacts))
 	require.NoError(t, err)
 
-	mergedRows, err := merged.table.GetRowData(context.Background())
+	mergedRows, err := merged.table.GetRowData(ctx)
 	assert.NoError(t, err)
 
-	artIdx, err := merged.table.GetArtifacts(context.Background())
+	artIdx, err := merged.table.GetArtifacts(ctx)
 	require.NoError(t, err)
 	artifacts := durable.ProllyMapFromArtifactIndex(artIdx)
 	MustEqualArtifactMap(t, expectedArtifacts, artifacts)
@@ -333,9 +335,9 @@ func TestMergeCommits(t *testing.T) {
 	MustEqualProlly(t, tableName, durable.ProllyMapFromIndex(expectedRows), durable.ProllyMapFromIndex(mergedRows))
 
 	for _, index := range sch.Indexes().AllIndexes() {
-		mergedIndexRows, err := merged.table.GetIndexRowData(context.Background(), index.Name())
+		mergedIndexRows, err := merged.table.GetIndexRowData(ctx, index.Name())
 		require.NoError(t, err)
-		expectedIndexRows, err := expected.GetIndexRowData(context.Background(), index.Name())
+		expectedIndexRows, err := expected.GetIndexRowData(ctx, index.Name())
 		require.NoError(t, err)
 		MustEqualProlly(t, index.Name(), durable.ProllyMapFromIndex(expectedIndexRows), durable.ProllyMapFromIndex(mergedIndexRows))
 	}
@@ -466,29 +468,31 @@ func setupMergeTest(t *testing.T) (*doltdb.DoltDB, types.ValueReadWriter, tree.N
 		}
 	}
 
-	updatedRows, err := leftMut.Map(context.Background())
+	ctx := sql.NewEmptyContext()
+
+	updatedRows, err := leftMut.Map(ctx)
 	require.NoError(t, err)
-	mergeRows, err := rightMut.Map(context.Background())
+	mergeRows, err := rightMut.Map(ctx)
+	require.NoError(t, err)
+	
+	rootTbl, err := doltdb.NewTable(ctx, vrw, ns, sch, durable.IndexFromProllyMap(updatedRows), nil, nil)
+	require.NoError(t, err)
+	rootTbl, err = rebuildAllProllyIndexes(ctx, rootTbl)
 	require.NoError(t, err)
 
-	rootTbl, err := doltdb.NewTable(context.Background(), vrw, ns, sch, durable.IndexFromProllyMap(updatedRows), nil, nil)
+	mergeTbl, err := doltdb.NewTable(ctx, vrw, ns, sch, durable.IndexFromProllyMap(mergeRows), nil, nil)
 	require.NoError(t, err)
-	rootTbl, err = rebuildAllProllyIndexes(context.Background(), rootTbl)
-	require.NoError(t, err)
-
-	mergeTbl, err := doltdb.NewTable(context.Background(), vrw, ns, sch, durable.IndexFromProllyMap(mergeRows), nil, nil)
-	require.NoError(t, err)
-	mergeTbl, err = rebuildAllProllyIndexes(context.Background(), mergeTbl)
+	mergeTbl, err = rebuildAllProllyIndexes(ctx, mergeTbl)
 	require.NoError(t, err)
 
-	ancTbl, err := doltdb.NewTable(context.Background(), vrw, ns, sch, durable.IndexFromProllyMap(initialRows), nil, nil)
+	ancTbl, err := doltdb.NewTable(ctx, vrw, ns, sch, durable.IndexFromProllyMap(initialRows), nil, nil)
 	require.NoError(t, err)
-	ancTbl, err = rebuildAllProllyIndexes(context.Background(), ancTbl)
+	ancTbl, err = rebuildAllProllyIndexes(ctx, ancTbl)
 	require.NoError(t, err)
 
 	rightCm, baseCm, root, mergeRoot, ancRoot := buildLeftRightAncCommitsAndBranches(t, ddb, rootTbl, mergeTbl, ancTbl)
 
-	artifactMap, err := prolly.NewArtifactMapFromTuples(context.Background(), ns, kD)
+	artifactMap, err := prolly.NewArtifactMapFromTuples(ctx, ns, kD)
 	require.NoError(t, err)
 	artEditor := artifactMap.Editor()
 
@@ -505,12 +509,12 @@ func setupMergeTest(t *testing.T) (*doltdb.DoltDB, types.ValueReadWriter, tree.N
 
 	for _, testCase := range testRows {
 		if testCase.conflict {
-			err = artEditor.Add(context.Background(), key(testCase.key), rightCmHash, prolly.ArtifactTypeConflict, d)
+			err = artEditor.Add(ctx, key(testCase.key), rightCmHash, prolly.ArtifactTypeConflict, d)
 			require.NoError(t, err)
 		}
 	}
 
-	expectedArtifacts, err := artEditor.Flush(context.Background())
+	expectedArtifacts, err := artEditor.Flush(ctx)
 	require.NoError(t, err)
 
 	return ddb, vrw, ns, rightCm, baseCm, root, mergeRoot, ancRoot, durable.IndexFromProllyMap(expectedRows), expectedArtifacts
@@ -605,7 +609,7 @@ func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, tree.NodeStore, do
 
 // rebuildAllProllyIndexes builds the data for the secondary indexes in |tbl|'s
 // schema.
-func rebuildAllProllyIndexes(ctx context.Context, tbl *doltdb.Table) (*doltdb.Table, error) {
+func rebuildAllProllyIndexes(ctx *sql.Context, tbl *doltdb.Table) (*doltdb.Table, error) {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err

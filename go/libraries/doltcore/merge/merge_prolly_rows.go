@@ -495,7 +495,7 @@ type uniqValidator struct {
 	tm          *TableMerger
 }
 
-func newUniqValidator(ctx context.Context, sch schema.Schema, tm *TableMerger, vm *valueMerger, edits *prolly.ArtifactsEditor) (uniqValidator, error) {
+func newUniqValidator(ctx *sql.Context, sch schema.Schema, tm *TableMerger, vm *valueMerger, edits *prolly.ArtifactsEditor) (uniqValidator, error) {
 	srcHash, err := tm.rightSrc.HashOf()
 	if err != nil {
 		return uniqValidator{}, err
@@ -682,7 +682,7 @@ type uniqIndex struct {
 	clusteredKeyDesc val.TupleDesc
 }
 
-func newUniqIndex(ctx context.Context, sch schema.Schema, tableName string, def schema.Index, clustered, secondary prolly.Map) (uniqIndex, error) {
+func newUniqIndex(ctx *sql.Context, sch schema.Schema, tableName string, def schema.Index, clustered, secondary prolly.Map) (uniqIndex, error) {
 	meta, err := makeUniqViolMeta(sch, def)
 	if err != nil {
 		return uniqIndex{}, err
@@ -1182,7 +1182,7 @@ type secondaryMerger struct {
 
 const secondaryMergerPendingSize = 650_000
 
-func newSecondaryMerger(ctx context.Context, tm *TableMerger, valueMerger *valueMerger, mergedSchema schema.Schema) (*secondaryMerger, error) {
+func newSecondaryMerger(ctx *sql.Context, tm *TableMerger, valueMerger *valueMerger, mergedSchema schema.Schema) (*secondaryMerger, error) {
 	ls, err := tm.leftTbl.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err

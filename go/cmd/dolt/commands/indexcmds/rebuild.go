@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 var rebuildDocs = cli.CommandDocumentationContent{
@@ -102,7 +103,7 @@ func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string
 	if idxSch == nil {
 		return HandleErr(errhand.BuildDError("the index `%s` does not exist on table `%s`", indexName, tableName).Build(), nil)
 	}
-	indexRowData, err := creation.BuildSecondaryIndex(ctx, table, idxSch, tableName, opts)
+	indexRowData, err := creation.BuildSecondaryIndex(sql.NewContext(ctx), table, idxSch, tableName, opts)
 	if err != nil {
 		return HandleErr(errhand.BuildDError("Unable to rebuild index `%s` on table `%s`.", indexName, tableName).AddCause(err).Build(), nil)
 	}
