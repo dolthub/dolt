@@ -15,6 +15,7 @@
 package rowconv
 
 import (
+	"os"
 	"reflect"
 	"testing"
 
@@ -78,7 +79,7 @@ func TestFieldMapping(t *testing.T) {
 		mappingFile := ""
 		if test.mappingJSON != "" {
 			mappingFile = "mapping.json"
-			fs.WriteFile(mappingFile, []byte(test.mappingJSON))
+			fs.WriteFile(mappingFile, []byte(test.mappingJSON), os.ModePerm)
 		}
 
 		var mapping *FieldMapping
