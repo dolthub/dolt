@@ -1227,8 +1227,24 @@ func (m *secondaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, source
 					return fmt.Errorf("cannot merge keyless tables with reordered columns")
 				}
 			} else {
-				tempTupleValue, err := remapTupleWithColumnDefaults(ctx, diff.Key, diff.Right, sourceSch.GetValueDescriptor(),
-					m.valueMerger.rightMapping, m.tableMerger, m.mergedSchema, m.valueMerger.syncPool, true)
+				defaults, err := resolveDefaults(ctx, m.tableMerger.name, m.mergedSchema, m.tableMerger.rightSch)
+				if err != nil {
+					return err
+				}
+
+				tempTupleValue, err := remapTupleWithColumnDefaults(
+					ctx,
+					diff.Key,
+					diff.Right,
+					sourceSch.GetValueDescriptor(),
+					m.valueMerger.rightMapping,
+					m.tableMerger,
+					m.tableMerger.rightSch,
+					m.mergedSchema,
+					defaults,
+					m.valueMerger.syncPool,
+					true,
+				)
 				if err != nil {
 					return err
 				}
