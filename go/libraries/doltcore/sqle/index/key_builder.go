@@ -18,13 +18,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/store/pool"
-	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
@@ -32,6 +25,14 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/transform"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // NewSecondaryKeyBuilder creates a new SecondaryKeyBuilder instance that can build keys for the secondary index |def|.
@@ -73,7 +74,7 @@ func NewSecondaryKeyBuilder(ctx context.Context, tableName string, sch schema.Sc
 				if err != nil {
 					return SecondaryKeyBuilder{}, err
 				}
-				
+
 				virtualExpressions[i] = expr
 				j = -1
 			} else if keyless {
@@ -85,7 +86,7 @@ func NewSecondaryKeyBuilder(ctx context.Context, tableName string, sch schema.Sc
 		}
 		b.mapping[i] = j
 	}
-	
+
 	b.virtualExpressions = virtualExpressions
 
 	if keyless {
@@ -95,7 +96,7 @@ func NewSecondaryKeyBuilder(ctx context.Context, tableName string, sch schema.Sc
 	return b, nil
 }
 
-// ResolveDefaultExpression returns a sql.Expression for the column default or generated expression for the 
+// ResolveDefaultExpression returns a sql.Expression for the column default or generated expression for the
 // column provided
 func ResolveDefaultExpression(ctx *sql.Context, tableName string, sch schema.Schema, col schema.Column) (sql.Expression, error) {
 	ct, err := parseCreateTable(ctx, tableName, sch)
@@ -133,7 +134,7 @@ func ResolveCheckExpression(ctx *sql.Context, tableName string, sch schema.Schem
 			return check.Expr, nil
 		}
 	}
-	
+
 	return nil, fmt.Errorf("unable to find check expression")
 }
 
@@ -142,7 +143,7 @@ func stripTableNamesFromExpression(expr sql.Expression) sql.Expression {
 		if col, ok := e.(*expression.GetField); ok {
 			return col.WithTable(""), transform.NewTree, nil
 		}
-		return e, transform.SameTree, nil	
+		return e, transform.SameTree, nil
 	})
 	return e
 }
@@ -210,12 +211,12 @@ func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx context.Context, k, v val.T
 			if err != nil {
 				return nil, err
 			}
-			
+
 			value, err := expr.Eval(sqlCtx, sqlRow)
 			if err != nil {
 				return nil, err
 			}
-			
+
 			// TODO: type conversion
 			err = PutField(ctx, b.nodeStore, b.builder, to, value)
 			if err != nil {

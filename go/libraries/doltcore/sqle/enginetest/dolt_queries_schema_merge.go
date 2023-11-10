@@ -2151,7 +2151,7 @@ var SchemaChangeTestsGeneratedColumns = []MergeScriptTest{
 				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
-				Query:    "select pk, col1, col2, col3 from t order by pk",
+				Query: "select pk, col1, col2, col3 from t order by pk",
 				Expected: []sql.Row{
 					{1, 2, nil, nil},
 					{2, 3, 4, 5},
@@ -2182,7 +2182,7 @@ var SchemaChangeTestsGeneratedColumns = []MergeScriptTest{
 				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
-				Query:    "select pk, col1, col2, col3 from t;",
+				Query: "select pk, col1, col2, col3 from t;",
 				Expected: []sql.Row{
 					{1, 2, nil, nil},
 					{2, 3, 4, 5},
@@ -2212,7 +2212,7 @@ var SchemaChangeTestsGeneratedColumns = []MergeScriptTest{
 				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
-				Query:    "select pk, col1 from t;",
+				Query: "select pk, col1 from t;",
 				Expected: []sql.Row{
 					{1, 2},
 					{2, 3},
@@ -2242,7 +2242,7 @@ var SchemaChangeTestsGeneratedColumns = []MergeScriptTest{
 				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
-				Query:    "select pk, col1 from t;",
+				Query: "select pk, col1 from t;",
 				Expected: []sql.Row{
 					{1, 2},
 					{2, 3},
@@ -2271,7 +2271,7 @@ var SchemaChangeTestsGeneratedColumns = []MergeScriptTest{
 			{
 				Query:    "call dolt_merge('right');",
 				Expected: []sql.Row{{doltCommit, 0, 0}},
-				Skip: true, // this fails merging right into left
+				Skip:     true, // this fails merging right into left
 			},
 			{
 				Query: "select pk, col1, col2 from t;",
@@ -2311,14 +2311,14 @@ var SchemaChangeTestsGeneratedColumns = []MergeScriptTest{
 				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
-				Query:    "show create table t;",
+				Query: "show create table t;",
 				Expected: []sql.Row{{"t",
 					"CREATE TABLE `t` (\n" +
-					"  `pk` int NOT NULL,\n" +
-					"  `col1` int NOT NULL,\n" +
-					"  `col3` int GENERATED ALWAYS AS ((pk + 1)),\n" +
-					"  PRIMARY KEY (`pk`)\n" +
-					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+						"  `pk` int NOT NULL,\n" +
+						"  `col1` int NOT NULL,\n" +
+						"  `col3` int GENERATED ALWAYS AS ((pk + 1)),\n" +
+						"  PRIMARY KEY (`pk`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
 				Query:    "select * from t;",

@@ -698,7 +698,7 @@ func newUniqIndex(ctx context.Context, sch schema.Schema, tableName string, def 
 	if err != nil {
 		return uniqIndex{}, err
 	}
-	
+
 	clusteredBld := index.NewClusteredKeyBuilder(def, sch, clustered.KeyDesc(), p)
 
 	return uniqIndex{
@@ -1033,7 +1033,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 			if err != nil {
 				return err
 			}
-			
+
 			tempTupleValue, err := remapTupleWithColumnDefaults(
 				ctx,
 				diff.Key,
@@ -1056,7 +1056,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 	case tree.DiffOpRightDelete:
 		return m.mut.Put(ctx, diff.Key, diff.Right)
 	case tree.DiffOpDivergentModifyResolved:
-		// any generated columns need to be re-resolved because their computed values may have changed as a result of 
+		// any generated columns need to be re-resolved because their computed values may have changed as a result of
 		// the merge
 		merged := diff.Merged
 		if hasStoredGeneratedColumns(m.finalSch) {
@@ -1064,7 +1064,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 			if err != nil {
 				return err
 			}
-			
+
 			tempTupleValue, err := remapTupleWithColumnDefaults(
 				ctx,
 				diff.Key,
@@ -1082,7 +1082,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 			}
 			merged = tempTupleValue
 		}
-		
+
 		return m.mut.Put(ctx, diff.Key, merged)
 	default:
 		return fmt.Errorf("unexpected diffOp for editing primary index: %s", diff.Op)
@@ -1093,14 +1093,14 @@ func resolveDefaults(ctx *sql.Context, tableName string, mergedSchema schema.Sch
 	var exprs []sql.Expression
 	i := 0
 
-	// We want a slice of expressions in the order of the merged schema, but with column indexes from the source schema, 
+	// We want a slice of expressions in the order of the merged schema, but with column indexes from the source schema,
 	// against which they will be evaluated
 	err := mergedSchema.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.Virtual {
 			return false, nil
 		}
-		
-		if (col.Default != "" || col.Generated != "") {
+
+		if col.Default != "" || col.Generated != "" {
 			expr, err := index.ResolveDefaultExpression(ctx, tableName, mergedSchema, col)
 			if err != nil {
 				return true, err
@@ -1110,15 +1110,15 @@ func resolveDefaults(ctx *sql.Context, tableName string, mergedSchema schema.Sch
 			}
 			exprs[i] = expr
 		}
-		
+
 		i++
 		return false, nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	
-	// The default expresions always come in the order of the merged schema, but the fields we need to apply them to 
+
+	// The default expresions always come in the order of the merged schema, but the fields we need to apply them to
 	// might have different column indexes in the case of a schema change
 	if len(exprs) > 0 {
 		for i := range exprs {
@@ -1156,7 +1156,7 @@ func hasStoredGeneratedColumns(sch schema.Schema) bool {
 			hasGenerated = true
 			return true, nil
 		}
-		return false, nil 
+		return false, nil
 	})
 	return hasGenerated
 }
@@ -1173,9 +1173,9 @@ func (m *primaryMerger) finalize(ctx context.Context) (durable.Index, error) {
 // into secondary index updates.
 type secondaryMerger struct {
 	leftSet      durable.IndexSet
-	rightSet    durable.IndexSet
-	leftIdxes   []MutableSecondaryIdx
-	valueMerger *valueMerger
+	rightSet     durable.IndexSet
+	leftIdxes    []MutableSecondaryIdx
+	valueMerger  *valueMerger
 	mergedSchema schema.Schema
 	tableMerger  *TableMerger
 }
@@ -1300,24 +1300,24 @@ func remapTuple(tuple val.Tuple, desc val.TupleDesc, mapping val.OrdinalMapping)
 // remapTupleWithColumnDefaults takes the given |tuple| (and the |tupleDesc| that describes how to access its fields)
 // and uses |mapping| to map the tuple's data and return a new tuple.
 // |tm| provides high access to the name of the table currently being merged and associated node store.
-// |mergedSch| is the new schema of the table and is used to look up column default values to apply to any existing 
-// rows when a new column is added as part of a merge. 
+// |mergedSch| is the new schema of the table and is used to look up column default values to apply to any existing
+// rows when a new column is added as part of a merge.
 // |pool| is used to allocate memory for the new tuple.
-// |defaultExprs| is a slice of expressions that represent the default or generated values for all columns, with 
-// indexes in the same order as the tuple provided. 
+// |defaultExprs| is a slice of expressions that represent the default or generated values for all columns, with
+// indexes in the same order as the tuple provided.
 // |rightSide| indicates if the tuple came from the right side of the merge; this is needed to determine if the tuple
 // data needs to be converted from the old schema type to a changed schema type.
 func remapTupleWithColumnDefaults(
-		ctx *sql.Context,
-		keyTuple, valueTuple val.Tuple,
-		valDesc val.TupleDesc,
-		mapping val.OrdinalMapping,
-		tm *TableMerger,
-		rowSch schema.Schema,
-		mergedSch schema.Schema,
-		defaultExprs []sql.Expression,
-		pool pool.BuffPool,
-		rightSide bool,
+	ctx *sql.Context,
+	keyTuple, valueTuple val.Tuple,
+	valDesc val.TupleDesc,
+	mapping val.OrdinalMapping,
+	tm *TableMerger,
+	rowSch schema.Schema,
+	mergedSch schema.Schema,
+	defaultExprs []sql.Expression,
+	pool pool.BuffPool,
+	rightSide bool,
 ) (val.Tuple, error) {
 	tb := val.NewTupleBuilder(mergedSch.GetValueDescriptor())
 
@@ -1325,7 +1325,7 @@ func remapTupleWithColumnDefaults(
 	for to, from := range mapping {
 		col := mergedSch.GetNonPKCols().GetByStoredIndex(to)
 		if from == -1 {
-			// If the column is a new column, then look up any default or generated value in a second pass, after the 
+			// If the column is a new column, then look up any default or generated value in a second pass, after the
 			// non-default and non-generated fields have been established. Virtual columns have been excluded, so any
 			// generated column is stored.
 			if col.Default != "" || col.Generated != "" {
@@ -1334,11 +1334,11 @@ func remapTupleWithColumnDefaults(
 		} else {
 			var value any
 			var err error
-			// Generated column values need to be regenerated after the merge 
+			// Generated column values need to be regenerated after the merge
 			if col.Generated != "" {
 				secondPass = append(secondPass, to)
 			}
-			
+
 			value, err = index.GetField(ctx, valDesc, from, valueTuple, tm.ns)
 			if err != nil {
 				return nil, err
@@ -1356,7 +1356,7 @@ func remapTupleWithColumnDefaults(
 			}
 		}
 	}
-	
+
 	for _, to := range secondPass {
 		col := mergedSch.GetNonPKCols().GetByStoredIndex(to)
 		err := writeTupleExpression(ctx, keyTuple, valueTuple, defaultExprs[to], col, rowSch, tm, tb, to)
@@ -1364,22 +1364,22 @@ func remapTupleWithColumnDefaults(
 			return nil, err
 		}
 	}
-	
+
 	return tb.Build(pool), nil
 }
 
-// writeTupleExpression attempts to evaluate the expression string |exprString| against the row provided and write it 
+// writeTupleExpression attempts to evaluate the expression string |exprString| against the row provided and write it
 // to the provided index in the tuple builder. This is necessary for column default values and generated columns.
 func writeTupleExpression(
-		ctx *sql.Context,
-		keyTuple val.Tuple,
-		valueTuple val.Tuple,
-		expr sql.Expression,
-		col schema.Column,
-		sch schema.Schema,
-		tm *TableMerger,
-		tb *val.TupleBuilder,
-		colIdx int,
+	ctx *sql.Context,
+	keyTuple val.Tuple,
+	valueTuple val.Tuple,
+	expr sql.Expression,
+	col schema.Column,
+	sch schema.Schema,
+	tm *TableMerger,
+	tb *val.TupleBuilder,
+	colIdx int,
 ) error {
 	if !expr.Resolved() {
 		return ErrUnableToMergeColumnDefaultValue.New(expr.String(), tm.name)
@@ -1394,12 +1394,12 @@ func writeTupleExpression(
 	if err != nil {
 		return err
 	}
-	
+
 	value, _, err = col.TypeInfo.ToSqlType().Convert(value)
 	if err != nil {
 		return err
 	}
-	
+
 	return index.PutField(ctx, tm.ns, tb, colIdx, value)
 }
 
@@ -1576,7 +1576,7 @@ func migrateDataToMergedSchema(ctx *sql.Context, tm *TableMerger, vm *valueMerge
 	if err != nil {
 		return err
 	}
-	
+
 	for {
 		keyTuple, valueTuple, err := mapIter.Next(ctx)
 		if err == io.EOF {
@@ -1688,7 +1688,7 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 	resultType := m.resultVD.Types[i]
 	resultColumn := m.resultSchema.GetNonPKCols().GetByIndex(i)
 	generatedColumn := resultColumn.Generated != ""
-	
+
 	// We previously asserted that left and right are not nil.
 	// But base can be nil in the event of convergent inserts.
 	if base == nil || !baseColExists {
@@ -1696,7 +1696,7 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 		// - The base row doesn't exist, or
 		// - The column doesn't exist in the base row
 		// Regardless, both left and right are inserts, or one is an insert and the other doesn't exist.
-		
+
 		if !rightColExists {
 			return leftCol, false, nil
 		}
@@ -1714,12 +1714,12 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 			// columns are equal, return either.
 			return leftCol, false, nil
 		}
-		
+
 		// generated columns will be updated as part of the merge later on, so choose either value for now
 		if generatedColumn {
 			return leftCol, false, nil
 		}
-		
+
 		// conflicting inserts
 		return nil, true, nil
 	}
@@ -1741,7 +1741,7 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 			return nil, false, err
 		}
 	}
-	
+
 	var leftModified, rightModified bool
 
 	if leftColIdx == -1 && rightColIdx == -1 {
@@ -1770,7 +1770,7 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 	leftModified = m.resultVD.Comparator().CompareValues(i, leftCol, baseCol, resultType) != 0
 
 	switch {
-	case leftModified && rightModified:	
+	case leftModified && rightModified:
 		// generated columns will be updated as part of the merge later on, so choose either value for now
 		if generatedColumn {
 			return leftCol, false, nil
