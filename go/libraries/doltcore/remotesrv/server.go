@@ -177,7 +177,9 @@ func (s *Server) Serve(listeners Listeners) {
 		go func() {
 			defer s.wg.Done()
 			<-s.stopChan
+			logrus.Traceln("Calling grpcSrv.GracefulStop")
 			s.grpcSrv.GracefulStop()
+			logrus.Traceln("Finished calling grpcSrv.GracefulStop")
 		}()
 	}
 
@@ -190,7 +192,20 @@ func (s *Server) Serve(listeners Listeners) {
 	go func() {
 		defer s.wg.Done()
 		<-s.stopChan
+		logrus.Traceln("Calling httpSrv.Shutdown")
 		s.httpSrv.Shutdown(context.Background())
+		logrus.Traceln("Finished calling httpSrv.Shutdown")
+
+		// If we are multiplexing HTTP and gRPC requests on the same
+		// listener, we need to stop the gRPC server here as well. We
+		// cannot stop it gracefully, but if we stop it forcefully
+		// here, we guarantee all the handler threads are cleaned up
+		// before we return.
+		if listeners.grpc == nil {
+			logrus.Traceln("Calling grpcSrv.Stop")
+			s.grpcSrv.Stop()
+			logrus.Traceln("Finished calling grpcSrv.Stop")
+		}
 	}()
 
 	s.wg.Wait()
