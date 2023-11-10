@@ -76,7 +76,7 @@ func GetMutableSecondaryIdxsWithPending(ctx context.Context, sch schema.Schema, 
 		if err != nil {
 			return nil, err
 		}
-		
+
 		newMutableSecondaryIdx.mut = newMutableSecondaryIdx.mut.WithMaxPending(pendingSize)
 		mods = append(mods, newMutableSecondaryIdx)
 	}
@@ -98,7 +98,7 @@ func NewMutableSecondaryIdx(ctx context.Context, idx prolly.Map, sch schema.Sche
 	if err != nil {
 		return MutableSecondaryIdx{}, err
 	}
-	
+
 	return MutableSecondaryIdx{
 		Name:    def.Name(),
 		mut:     idx.Mutate(),

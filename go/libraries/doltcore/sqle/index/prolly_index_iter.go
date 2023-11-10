@@ -43,9 +43,9 @@ type prollyIndexIter struct {
 	// primary row storage into sql.Row's
 	keyMap, valMap val.OrdinalMapping
 	// ordMap are output ordinals for |keyMap| and |valMap| concatenated
-	ordMap val.OrdinalMapping
+	ordMap      val.OrdinalMapping
 	projections []uint64
-	sqlSch sql.Schema
+	sqlSch      sql.Schema
 }
 
 var _ sql.RowIter = prollyIndexIter{}
@@ -72,16 +72,16 @@ func newProllyIndexIter(
 	keyProj, valProj, ordProj := projectionMappings(idx.Schema(), projections)
 
 	iter := prollyIndexIter{
-		idx:       idx,
-		indexIter: indexIter,
-		primary:   primary,
-		pkBld:     pkBld,
-		pkMap:     pkMap,
-		keyMap:    keyProj,
-		valMap:    valProj,
-		ordMap:    ordProj,
+		idx:         idx,
+		indexIter:   indexIter,
+		primary:     primary,
+		pkBld:       pkBld,
+		pkMap:       pkMap,
+		keyMap:      keyProj,
+		valMap:      valProj,
+		ordMap:      ordProj,
 		projections: projections,
-		sqlSch:    pkSch.Schema,
+		sqlSch:      pkSch.Schema,
 	}
 
 	return iter, nil
@@ -169,7 +169,7 @@ type prollyCoveringIndexIter struct {
 
 	// |keyMap| and |valMap| are both of len ==
 	keyMap, valMap, ordMap val.OrdinalMapping
-	projections  []uint64
+	projections            []uint64
 	sqlSch                 sql.Schema
 }
 
@@ -198,16 +198,16 @@ func newProllyCoveringIndexIter(
 	}
 
 	return prollyCoveringIndexIter{
-		idx:       idx,
-		indexIter: indexIter,
-		keyDesc:   keyDesc,
-		valDesc:   valDesc,
-		keyMap:    keyMap,
-		valMap:    valMap,
-		ordMap:    ordMap,
-		sqlSch:    pkSch.Schema,
+		idx:         idx,
+		indexIter:   indexIter,
+		keyDesc:     keyDesc,
+		valDesc:     valDesc,
+		keyMap:      keyMap,
+		valMap:      valMap,
+		ordMap:      ordMap,
+		sqlSch:      pkSch.Schema,
 		projections: projections,
-		ns:        secondary.NodeStore(),
+		ns:          secondary.NodeStore(),
 	}, nil
 }
 

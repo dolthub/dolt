@@ -43,13 +43,13 @@ type CreateIndexReturn struct {
 
 // CreateIndex creates the given index on the given table with the given schema. Returns the updated table, updated schema, and created index.
 func CreateIndex(
-		ctx context.Context,
-		table *doltdb.Table,
-		tableName, indexName string,
-		columns []string,
-		prefixLengths []uint16,
-		props schema.IndexProperties,
-		opts editor.Options,
+	ctx context.Context,
+	table *doltdb.Table,
+	tableName, indexName string,
+	columns []string,
+	prefixLengths []uint16,
+	props schema.IndexProperties,
+	opts editor.Options,
 ) (*CreateIndexReturn, error) {
 	sch, err := table.GetSchema(ctx)
 	if err != nil {
@@ -160,13 +160,13 @@ func BuildSecondaryIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Inde
 // BuildSecondaryProllyIndex builds secondary index data for the given primary
 // index row data |primary|. |sch| is the current schema of the table.
 func BuildSecondaryProllyIndex(
-		ctx context.Context,
-		vrw types.ValueReadWriter,
-		ns tree.NodeStore,
-		sch schema.Schema,
-		tableName string,
-		idx schema.Index,
-		primary prolly.Map,
+	ctx context.Context,
+	vrw types.ValueReadWriter,
+	ns tree.NodeStore,
+	sch schema.Schema,
+	tableName string,
+	idx schema.Index,
+	primary prolly.Map,
 ) (durable.Index, error) {
 	if idx.IsUnique() {
 		kd := idx.Schema().GetKeyDescriptor()
@@ -250,14 +250,14 @@ type DupEntryCb func(ctx context.Context, existingKey, newKey val.Tuple) error
 // data. If any duplicate entries are found, they are passed to |cb|. If |cb|
 // returns a non-nil error then the process is stopped.
 func BuildUniqueProllyIndex(
-		ctx context.Context,
-		vrw types.ValueReadWriter,
-		ns tree.NodeStore,
-		sch schema.Schema,
-		tableName string,
-		idx schema.Index,
-		primary prolly.Map,
-		cb DupEntryCb,
+	ctx context.Context,
+	vrw types.ValueReadWriter,
+	ns tree.NodeStore,
+	sch schema.Schema,
+	tableName string,
+	idx schema.Index,
+	primary prolly.Map,
+	cb DupEntryCb,
 ) (durable.Index, error) {
 	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, idx.Schema())
 	if err != nil {

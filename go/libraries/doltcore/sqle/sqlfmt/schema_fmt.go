@@ -260,8 +260,8 @@ func AlterTableDropForeignKeyStmt(tableName, fkName string) string {
 	return b.String()
 }
 
-// GenerateCreateTableStatement returns a CREATE TABLE statement for given table. This is a reasonable approximation of 
-// `SHOW CREATE TABLE` in the engine, but may have some differences. Callers are advised to use the engine when 
+// GenerateCreateTableStatement returns a CREATE TABLE statement for given table. This is a reasonable approximation of
+// `SHOW CREATE TABLE` in the engine, but may have some differences. Callers are advised to use the engine when
 // possible.
 func GenerateCreateTableStatement(tblName string, sch schema.Schema, fks []doltdb.ForeignKey, fksParentSch map[string]schema.Schema) (string, error) {
 	colStmts := make([]string, sch.GetAllCols().Size())
