@@ -4292,7 +4292,7 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('branch1')",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
 				Query: "select * from t1 order by id",
@@ -4308,7 +4308,7 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:            "call dolt_merge('branch2')",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
 				Query: "select * from t1 order by id",
@@ -4344,7 +4344,7 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('branch1')",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
 				Query: "select * from t1 order by id",
@@ -4359,7 +4359,7 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:            "call dolt_merge('branch2')",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
 				Query: "select * from t1 order by id",
@@ -4393,7 +4393,7 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('branch1')",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
 				Query: "select * from t1 order by id",
@@ -4432,7 +4432,7 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('branch1')",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
 				Query: "select * from t1 order by id",
@@ -4448,7 +4448,7 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:            "call dolt_merge('branch2')",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
 				Query: "select * from t1 order by id",
@@ -4484,7 +4484,7 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('branch1')",
-				SkipResultsCheck: true,
+				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
 				Query: "select * from t1 order by id",
