@@ -1,6 +1,6 @@
 
 setup_dolt_repo() {
-    REPO_NAME="dolt_repo_$$"
+    REPO_NAME="dolt-repo_$$"
     mkdir $REPO_NAME	
     cd $REPO_NAME
 

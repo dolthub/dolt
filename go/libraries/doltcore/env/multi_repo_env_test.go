@@ -147,7 +147,7 @@ func TestMultiEnvForDirectoryWithMultipleRepos(t *testing.T) {
 	assert.Len(t, mrEnv.envs, 3)
 
 	expected := make(map[string]string)
-	expected["test_name_123"] = dEnv.GetDoltDir()
+	expected["test---name_123"] = dEnv.GetDoltDir()
 	expected["abc"] = subEnv1.GetDoltDir()
 	expected["def"] = subEnv2.GetDoltDir()
 
