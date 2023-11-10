@@ -4292,7 +4292,7 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('branch1')",
-				Expected: []sql.Row{{doltCommit, 0, 0}},
+				Expected: []sql.Row{{doltCommit, 1, 0}},
 			},
 			{
 				Query: "select * from t1 order by id",
@@ -4344,7 +4344,7 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('branch1')",
-				Expected: []sql.Row{{doltCommit, 0, 0}},
+				Expected: []sql.Row{{doltCommit, 1, 0}},
 			},
 			{
 				Query: "select * from t1 order by id",
@@ -4432,7 +4432,7 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:            "call dolt_merge('branch1')",
-				Expected: []sql.Row{{doltCommit, 0, 0}},
+				Expected: []sql.Row{{doltCommit, 1, 0}},
 			},
 			{
 				Query: "select * from t1 order by id",
