@@ -188,6 +188,10 @@ func (t *TempTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return index.DoltIndexesFromTable(ctx, t.dbName, t.tableName, t.table)
 }
 
+func (t *TempTable) PreciseMatch() bool {
+	return true
+}
+
 func (t *TempTable) Name() string {
 	return t.tableName
 }

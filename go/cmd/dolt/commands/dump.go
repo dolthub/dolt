@@ -87,7 +87,7 @@ func (cmd DumpCmd) Description() string {
 	return "Export all tables in the working set into a file."
 }
 
-// CreateMarkdown creates a markdown file containing the help text for the command at the given path
+// Docs returns the documentation for this command, or nil if it's undocumented
 func (cmd DumpCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return cli.NewCommandDocumentation(dumpDocs, ap)
@@ -269,6 +269,7 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.
 	}
 
 	stmtColIdx := sch.IndexOfColName(doltdb.ProceduresTableCreateStmtCol)
+	// Note: 'sql_mode' column of `dolt_procedures` table is not present in databases that were created before this column got added
 	sqlModeIdx := sch.IndexOfColName(doltdb.ProceduresTableSqlModeCol)
 
 	defer func(iter sql.RowIter, context *sql.Context) {
@@ -287,7 +288,7 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.
 		}
 
 		sqlMode := ""
-		if len(row) >= sqlModeIdx {
+		if sqlModeIdx >= 0 {
 			if s, ok := row[sqlModeIdx].(string); ok {
 				sqlMode = s
 			}
@@ -340,6 +341,7 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.Ro
 
 	typeColIdx := sch.IndexOfColName(doltdb.SchemasTablesTypeCol)
 	fragColIdx := sch.IndexOfColName(doltdb.SchemasTablesFragmentCol)
+	// Note: some columns of `dolt_schemas` table are not present in databases that were created before those columns got added
 	sqlModeIdx := sch.IndexOfColName(doltdb.SchemasTablesSqlModeCol)
 
 	defer func(iter sql.RowIter, context *sql.Context) {
@@ -362,8 +364,10 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root *doltdb.Ro
 		}
 
 		sqlMode := ""
-		if s, ok := row[sqlModeIdx].(string); ok {
-			sqlMode = s
+		if sqlModeIdx >= 0 {
+			if s, ok := row[sqlModeIdx].(string); ok {
+				sqlMode = s
+			}
 		}
 
 		modeChanged, err := changeSqlMode(sqlCtx, writer, sqlMode)
@@ -404,6 +408,7 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValu
 	typeColIdx := sch.IndexOfColName(doltdb.SchemasTablesTypeCol)
 	fragColIdx := sch.IndexOfColName(doltdb.SchemasTablesFragmentCol)
 	nameColIdx := sch.IndexOfColName(doltdb.SchemasTablesNameCol)
+	// Note: some columns of `dolt_schemas` table are not present in databases that were created before those columns got added
 	sqlModeIdx := sch.IndexOfColName(doltdb.SchemasTablesSqlModeCol)
 
 	defer func(iter sql.RowIter, context *sql.Context) {
@@ -426,8 +431,10 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root *doltdb.RootValu
 		}
 
 		sqlMode := ""
-		if s, ok := row[sqlModeIdx].(string); ok {
-			sqlMode = s
+		if sqlModeIdx >= 0 {
+			if s, ok := row[sqlModeIdx].(string); ok {
+				sqlMode = s
+			}
 		}
 
 		opts := sql.NewSqlModeFromString(sqlMode).ParserOptions()

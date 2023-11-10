@@ -64,6 +64,7 @@ const (
 	stringAddrEnc ByteSize = hash.ByteLen
 	jsonAddrEnc   ByteSize = hash.ByteLen
 	cellSize      ByteSize = 17
+	geomAddrEnc   ByteSize = hash.ByteLen
 )
 
 type Encoding byte
@@ -94,6 +95,7 @@ const (
 	StringAddrEnc = Encoding(serial.EncodingStringAddr)
 	JSONAddrEnc   = Encoding(serial.EncodingJSONAddr)
 	CellEnc       = Encoding(serial.EncodingCell)
+	GeomAddrEnc   = Encoding(serial.EncodingGeomAddr)
 
 	sentinel Encoding = 127
 )
@@ -153,6 +155,8 @@ func sizeFromType(t Type) (ByteSize, bool) {
 		return stringAddrEnc, true
 	case JSONAddrEnc:
 		return jsonAddrEnc, true
+	case GeomAddrEnc:
+		return geomAddrEnc, true
 	default:
 		return 0, false
 	}

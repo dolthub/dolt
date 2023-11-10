@@ -1177,6 +1177,7 @@ type secondaryMerger struct {
 	leftIdxes   []MutableSecondaryIdx
 	valueMerger *valueMerger
 	mergedSchema schema.Schema
+	tableMerger  *TableMerger
 }
 
 const secondaryMergerPendingSize = 650_000
@@ -1204,10 +1205,11 @@ func newSecondaryMerger(ctx context.Context, tm *TableMerger, valueMerger *value
 		leftIdxes:    lm,
 		valueMerger:  valueMerger,
 		mergedSchema: mergedSchema,
+		tableMerger:  tm,
 	}, nil
 }
 
-func (m *secondaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sourceSch schema.Schema) error {
+func (m *secondaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSch schema.Schema) error {
 	var err error
 	for _, idx := range m.leftIdxes {
 		switch diff.Op {
@@ -1225,8 +1227,12 @@ func (m *secondaryMerger) merge(ctx context.Context, diff tree.ThreeWayDiff, sou
 					return fmt.Errorf("cannot merge keyless tables with reordered columns")
 				}
 			} else {
-				valueMappedToMergeSchema := remapTuple(diff.Right, sourceSch.GetValueDescriptor(), m.valueMerger.rightMapping)
-				newTupleValue = val.NewTuple(m.valueMerger.syncPool, valueMappedToMergeSchema...)
+				tempTupleValue, err := remapTupleWithColumnDefaults(ctx, diff.Key, diff.Right, sourceSch.GetValueDescriptor(),
+					m.valueMerger.rightMapping, m.tableMerger, m.mergedSchema, m.valueMerger.syncPool, true)
+				if err != nil {
+					return err
+				}
+				newTupleValue = tempTupleValue
 			}
 
 			err = applyEdit(ctx, idx, diff.Key, diff.Base, newTupleValue)

@@ -22,7 +22,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/dolthub/swiss"
 	"github.com/sirupsen/logrus"
@@ -162,10 +161,10 @@ type journalWriter struct {
 var _ io.Closer = &journalWriter{}
 
 // bootstrapJournal reads in records from the journal file and the journal index file, initializing
-// the state of the journalWriter. It returns the most recent root hash for the journal, as well as
-// a slice of all root hash strings in reverse chronological order, and a slice of timestamps that
-// indicate the time each returned root was created.
-func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, roots []string, times []time.Time, err error) {
+// the state of the journalWriter. Root hashes read from root update records in the journal are written
+// to |reflogRingBuffer|, which maintains the most recently updated roots which are used to generate the
+// reflog. This function returns the most recent root hash for the journal as well as any error encountered.
+func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer *reflogRingBuffer) (last hash.Hash, err error) {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
 
@@ -173,7 +172,6 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 		wr.maxNovel = journalIndexDefaultMaxNovel
 	}
 	wr.ranges = newRangeIndex()
-	loggedReflogMaxSizeWarning := false
 
 	p := filepath.Join(filepath.Dir(wr.path), journalIndexFileName)
 	var ok bool
@@ -192,7 +190,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 	if ok {
 		var info os.FileInfo
 		if info, err = wr.index.Stat(); err != nil {
-			return hash.Hash{}, nil, nil, err
+			return hash.Hash{}, err
 		}
 
 		// initialize range index with enough capacity to
@@ -254,7 +252,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 			if cerr := wr.corruptIndexRecovery(ctx); cerr != nil {
 				err = fmt.Errorf("error recovering corrupted chunk journal index: %s", err.Error())
 			}
-			return hash.Hash{}, nil, nil, err
+			return hash.Hash{}, err
 		}
 		wr.ranges = wr.ranges.flatten()
 	}
@@ -272,14 +270,11 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 
 		case rootHashJournalRecKind:
 			last = hash.Hash(r.address)
-			if !reflogDisabled {
-				if len(roots) < reflogRecordLimit {
-					roots = append(roots, r.address.String())
-					times = append(times, r.timestamp)
-				} else if !loggedReflogMaxSizeWarning {
-					loggedReflogMaxSizeWarning = true
-					logrus.Warnf("journal writer exceeded reflog record limit (%d)", reflogRecordLimit)
-				}
+			if !reflogDisabled && reflogRingBuffer != nil {
+				reflogRingBuffer.Push(reflogRootHashEntry{
+					root:      r.address.String(),
+					timestamp: r.timestamp,
+				})
 			}
 
 		default:
@@ -288,7 +283,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context) (last hash.Hash, 
 		return nil
 	})
 	if err != nil {
-		return hash.Hash{}, nil, nil, err
+		return hash.Hash{}, err
 	}
 
 	return

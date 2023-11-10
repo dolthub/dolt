@@ -132,6 +132,10 @@ func (dt *CommitDiffTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTabl
 	return &nt
 }
 
+func (dt *CommitDiffTable) PreciseMatch() bool {
+	return false
+}
+
 func (dt *CommitDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	return nil, fmt.Errorf("error querying table %s: %w", dt.Name(), ErrExactlyOneToCommit)
 }

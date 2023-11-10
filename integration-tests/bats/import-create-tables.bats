@@ -180,9 +180,12 @@ DELIM
     run dolt table import -c --pk=id fktest 1pk5col-ints.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "fktest already exists. Use -f to overwrite." ]] || false
-    run dolt table import -c --pk=pk test 1pk5col-ints.csv -f
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ 'it is referenced in foreign key' ]] || false
+    run dolt table import -c -f --pk=pk fktest other.csv
+    [ "$status" -eq 0 ]
+
+    run dolt schema show
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "FOREIGN KEY" ]] || false
 }
 
 @test "import-create-tables: try to create a table with a bad csv" {
@@ -811,4 +814,41 @@ DELIM
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "On branch main" ]
     [ "${lines[1]}" = "nothing to commit, working tree clean" ]
+}
+
+@test "import-create-tables: import null foreign key value does not violate constraint" {
+    cat <<DELIM > test.csv
+id, state_id, data
+1,,poop
+DELIM
+
+    dolt sql <<SQL
+CREATE TABLE states (
+  id int NOT NULL,
+  abbr char(2),
+  PRIMARY KEY (id)
+);
+CREATE TABLE data (
+  id int NOT NULL,
+  state_id int,
+  data varchar(500),
+  PRIMARY KEY (id),
+  KEY state_id (state_id),
+  CONSTRAINT d4jibcjf FOREIGN KEY (state_id) REFERENCES states (id)
+);
+SQL
+
+    run dolt sql -q "insert into data values (0, NULL, 'poop')"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "select * from data"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| 0  | NULL     | poop |" ]] || false
+
+    run dolt table import -u data test.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
+    run dolt sql -q "select * from data"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| 0  | NULL     | poop |" ]] || false
+    [[ "$output" =~ "| 1  | NULL     | poop |" ]] || false
 }

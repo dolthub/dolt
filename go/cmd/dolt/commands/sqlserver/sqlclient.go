@@ -97,7 +97,7 @@ func (cmd SqlClientCmd) RequiresRepo() bool {
 }
 
 func (cmd SqlClientCmd) Hidden() bool {
-	return false
+	return true
 }
 
 func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
@@ -108,6 +108,9 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 	var serverConfig ServerConfig
 	var serverController *ServerController
 	var err error
+
+	cli.Println(color.YellowString("WARNING: This command is being deprecated and is not recommended for general use.\n" +
+		"\t Use dolt sql or any compatible MySQL client instead."))
 
 	if apr.Contains(sqlClientDualFlag) {
 		if !dEnv.Valid() {

@@ -238,7 +238,7 @@ Your terminal will just hang there. This means the server is running. Any errors
 In the new terminal, we will now connect to the running database server using a client. Dolt also ships with a MySQL compatible client. 
 
 ```bash
-% dolt sql-client -u root
+% dolt -u root -p "" sql
 # Welcome to the Dolt MySQL client.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.
