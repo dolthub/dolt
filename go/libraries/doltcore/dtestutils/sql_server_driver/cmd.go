@@ -295,27 +295,7 @@ func runSqlServerCommand(dc DoltCmdable, opts []SqlServerOpt, cmd *exec.Cmd) (*S
 
 	go func() {
 		defer wg.Done()
-		reader := bufio.NewReader(stdout)
-		multiOut := io.MultiWriter(os.Stdout, output)
-		wantsPrefix := true
-		for {
-			line, isPrefix, err := reader.ReadLine()
-			if err != nil {
-				return
-			}
-			if wantsPrefix && server.Name != "" {
-				os.Stdout.Write([]byte("["))
-				os.Stdout.Write([]byte(server.Name))
-				os.Stdout.Write([]byte("] "))
-			}
-			multiOut.Write(line)
-			if isPrefix {
-				wantsPrefix = false
-			} else {
-				multiOut.Write([]byte("\n"))
-				wantsPrefix = true
-			}
-		}
+		multiCopyWithNamePrefix(os.Stdout, output, stdout, server.Name)
 	}()
 
 	server.RecreateCmd = func(args ...string) *exec.Cmd {
@@ -342,6 +322,30 @@ func (s *SqlServer) ErrorStop() error {
 	return s.Cmd.Wait()
 }
 
+func multiCopyWithNamePrefix(stdout, captured io.Writer, in io.Reader, name string) {
+	reader := bufio.NewReader(in)
+	multiOut := io.MultiWriter(stdout, captured)
+	wantsPrefix := true
+	for {
+		line, isPrefix, err := reader.ReadLine()
+		if err != nil {
+			return
+		}
+		if wantsPrefix && name != "" {
+			stdout.Write([]byte("["))
+			stdout.Write([]byte(name))
+			stdout.Write([]byte("] "))
+		}
+		multiOut.Write(line)
+		if isPrefix {
+			wantsPrefix = false
+		} else {
+			multiOut.Write([]byte("\n"))
+			wantsPrefix = true
+		}
+	}
+}
+
 func (s *SqlServer) Restart(newargs *[]string, newenvs *[]string) error {
 	err := s.GracefulStop()
 	if err != nil {
@@ -364,27 +368,7 @@ func (s *SqlServer) Restart(newargs *[]string, newenvs *[]string) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		reader := bufio.NewReader(stdout)
-		multiOut := io.MultiWriter(os.Stdout, s.Output)
-		wantsPrefix := true
-		for {
-			line, isPrefix, err := reader.ReadLine()
-			if err != nil {
-				return
-			}
-			if wantsPrefix && s.Name != "" {
-				os.Stdout.Write([]byte("["))
-				os.Stdout.Write([]byte(s.Name))
-				os.Stdout.Write([]byte("] "))
-			}
-			multiOut.Write(line)
-			if isPrefix {
-				wantsPrefix = false
-			} else {
-				multiOut.Write([]byte("\n"))
-				wantsPrefix = true
-			}
-		}
+		multiCopyWithNamePrefix(os.Stdout, s.Output, stdout, s.Name)
 	}()
 	s.Done = make(chan struct{})
 	go func() {
