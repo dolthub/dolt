@@ -34,8 +34,8 @@ import (
 func TestDirToDBName(t *testing.T) {
 	tests := map[string]string{
 		"irs":                "irs",
-		"corona-virus":       "corona_virus",
-		"  fake - name     ": "fake_name",
+		"corona-virus":       "corona-virus",
+		"  fake - name     ": "fake_-_name",
 	}
 
 	for dirName, expected := range tests {
@@ -116,7 +116,7 @@ func TestMultiEnvForDirectory(t *testing.T) {
 
 	expected := []envCmp{
 		{
-			name:    "test_name_123",
+			name:    "test---name_123",
 			doltDir: dEnv.GetDoltDir(),
 		},
 	}
