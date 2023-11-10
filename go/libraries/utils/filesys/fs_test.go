@@ -87,7 +87,7 @@ func TestFilesystems(t *testing.T) {
 			data := test.RandomData(256 * 1024)
 
 			// Test writing file with random data
-			err = fs.WriteFile(fp, data)
+			err = fs.WriteFile(fp, data, os.ModePerm)
 			require.NoError(t, err)
 
 			// Test that the data can be read back and hasn't changed
@@ -121,7 +121,7 @@ func TestFilesystems(t *testing.T) {
 			require.NoError(t, wrc.Close())
 
 			// Test moving a directory
-			err = fs.WriteFile(subdirFile, []byte("helloworld"))
+			err = fs.WriteFile(subdirFile, []byte("helloworld"), os.ModePerm)
 			require.NoError(t, err)
 			err = fs.MkDirs(newLocation)
 			require.NoError(t, err)
@@ -147,7 +147,7 @@ func TestFilesystems(t *testing.T) {
 			require.False(t, isDir)
 
 			// Test writing/reading random data to tmp file
-			err = fs.WriteFile(fp2, data)
+			err = fs.WriteFile(fp2, data, os.ModePerm)
 			require.NoError(t, err)
 			dataRead, err = fs.ReadFile(fp2)
 			require.NoError(t, err)
@@ -318,7 +318,7 @@ func writeFileAddToExp(expected []string, fs Filesys, root string, pathFromRoot 
 	pathElements := append([]string{root}, pathFromRoot...)
 
 	fp := filepath.Join(pathElements...)
-	fs.WriteFile(fp, []byte(testString))
+	fs.WriteFile(fp, []byte(testString), os.ModePerm)
 	return append(expected, fp)
 }
 

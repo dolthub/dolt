@@ -17,6 +17,7 @@ package json
 import (
 	"context"
 	"io"
+	"os"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/enginetest"
@@ -49,7 +50,7 @@ func TestReader(t *testing.T) {
 	}`
 
 	fs := filesys.EmptyInMemFS("/")
-	require.NoError(t, fs.WriteFile("file.json", []byte(testJSON)))
+	require.NoError(t, fs.WriteFile("file.json", []byte(testJSON), os.ModePerm))
 
 	colColl := schema.NewColCollection(
 		schema.Column{
@@ -132,7 +133,7 @@ func TestReaderBadJson(t *testing.T) {
 }`
 
 	fs := filesys.EmptyInMemFS("/")
-	require.NoError(t, fs.WriteFile("file.json", []byte(testJSON)))
+	require.NoError(t, fs.WriteFile("file.json", []byte(testJSON), os.ModePerm))
 
 	colColl := schema.NewColCollection(
 		schema.Column{

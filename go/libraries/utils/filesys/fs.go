@@ -55,9 +55,9 @@ type WritableFS interface {
 	// append only to that new file. If file exists, it will append to existing file.
 	OpenForWriteAppend(fp string, perm os.FileMode) (io.WriteCloser, error)
 
-	// WriteFile writes the entire data buffer to a given file.  The file will be created if it does not exist,
-	// and if it does exist it will be overwritten.
-	WriteFile(fp string, data []byte) error
+	// WriteFileWithPerms writes the entire data buffer to a given file.  The file will be created if it does not exist,
+	// and if it does exist it will be overwritten. WriteFile attempts to write the file atomically and durably.
+	WriteFile(fp string, data []byte, perm os.FileMode) error
 
 	// MkDirs creates a folder and all the parent folders that are necessary to create it.
 	MkDirs(path string) error

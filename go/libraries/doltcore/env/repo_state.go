@@ -17,6 +17,7 @@ package env
 import (
 	"context"
 	"encoding/json"
+	"os"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -127,7 +128,7 @@ func (rs *repoStateLegacy) save(fs filesys.ReadWriteFS) error {
 		return err
 	}
 
-	return fs.WriteFile(getRepoStateFile(), data)
+	return fs.WriteFile(getRepoStateFile(), data, os.ModePerm)
 }
 
 // LoadRepoState parses the repo state file from the file system given
@@ -199,7 +200,7 @@ func (rs RepoState) Save(fs filesys.ReadWriteFS) error {
 		return err
 	}
 
-	return fs.WriteFile(getRepoStateFile(), data)
+	return fs.WriteFile(getRepoStateFile(), data, os.ModePerm)
 }
 
 func (rs *RepoState) CWBHeadRef() ref.DoltRef {
