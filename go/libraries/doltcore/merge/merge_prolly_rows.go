@@ -1214,6 +1214,7 @@ func (m *secondaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, source
 	for _, idx := range m.leftIdxes {
 		switch diff.Op {
 		case tree.DiffOpDivergentModifyResolved:
+			// TODO: we need to re-resolve values from generated columns here as well
 			err = applyEdit(ctx, idx, diff.Key, diff.Left, diff.Merged)
 		case tree.DiffOpRightAdd, tree.DiffOpRightModify:
 			// Just as with the primary index, we need to map right-side changes to the final, merged schema.

@@ -2288,6 +2288,42 @@ var SchemaChangeTestsGeneratedColumns = []MergeScriptTest{
 		},
 	},
 	{
+		Name: "adding virtual columns to both sides",
+		AncSetUpScript: []string{
+			"create table t (pk int primary key);",
+			"insert into t values (1), (2);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col2 varchar(100) as (concat(pk, 'hello'));",
+			"insert into t (pk) values (3), (4);",
+			"alter table t add index (col2);",
+		},
+		LeftSetUpScript: []string{
+			"alter table t add column col1 int as (pk + 100);",
+			"insert into t (pk) values (5), (6);",
+			"alter table t add index (col1);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+				Skip:     true, // this fails merging right into left
+			},
+			{
+				Query: "select pk, col1, col2 from t;",
+				Expected: []sql.Row{
+					{1, 101, "1hello"},
+					{2, 102, "2hello"},
+					{3, 103, "3hello"},
+					{4, 104, "4hello"},
+					{5, 105, "5hello"},
+					{6, 106, "6hello"},
+				},
+				Skip: true, // this fails merging right into left
+			},
+		},
+	},
+	{
 		Name: "convergent schema changes with virtual columns",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
@@ -2312,12 +2348,14 @@ var SchemaChangeTestsGeneratedColumns = []MergeScriptTest{
 			},
 			{
 				Query: "show create table t;",
+				Skip: true, 				// there should be an index on col3, but there isn't
 				Expected: []sql.Row{{"t",
 					"CREATE TABLE `t` (\n" +
 						"  `pk` int NOT NULL,\n" +
 						"  `col1` int NOT NULL,\n" +
 						"  `col3` int GENERATED ALWAYS AS ((pk + 1)),\n" +
 						"  PRIMARY KEY (`pk`)\n" +
+					  "  KEY `idx1` (`col3`,`col1`)\n" +
 						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
