@@ -20,7 +20,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -154,18 +153,17 @@ func parseCreateTable(ctx *sql.Context, tableName string, sch schema.Schema) (*p
 	}
 
 	query := createTable
-	sqlSch, err := sqlutil.FromDoltSchema("", tableName, sch)
-	if err != nil {
-		return nil, err
-	}
 
 	mockDatabase := memory.NewDatabase("mydb")
-	mockTable := memory.NewLocalTable(mockDatabase.BaseDatabase, tableName, sqlSch, nil)
-	mockDatabase.AddTable(tableName, mockTable)
 	mockProvider := memory.NewDBProvider(mockDatabase)
 	catalog := analyzer.NewCatalog(mockProvider)
+	parseCtx := ctx
+	if ctx.GetCurrentDatabase() == "" {
+		parseCtx = sql.NewEmptyContext()
+		parseCtx.SetCurrentDatabase("mydb")
+	}
 
-	pseudoAnalyzedQuery, err := planbuilder.Parse(ctx, catalog, query)
+	pseudoAnalyzedQuery, err := planbuilder.Parse(parseCtx, catalog, query)
 	if err != nil {
 		return nil, err
 	}
