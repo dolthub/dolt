@@ -51,6 +51,7 @@ func DoltStatsFromSql(stat sql.Statistic) (*DoltStats, error) {
 		return nil, err
 	}
 	return &DoltStats{
+		Qualifier:     stat.Qualifier(),
 		RowCount:      stat.RowCount(),
 		DistinctCount: stat.DistinctCount(),
 		NullCount:     stat.NullCount(),
@@ -60,6 +61,8 @@ func DoltStatsFromSql(stat sql.Statistic) (*DoltStats, error) {
 		Columns:       stat.Columns(),
 		Types:         stat.Types(),
 		IdxClass:      uint8(stat.IndexClass()),
+		fds:           stat.FuncDeps(),
+		colSet:        stat.ColSet(),
 	}, nil
 }
 
@@ -69,9 +72,7 @@ func (s *DoltStats) toSql() sql.Statistic {
 		typStrs[i] = typ.String()
 	}
 	stat := stats.NewStatistic(s.RowCount, s.DistinctCount, s.NullCount, s.AvgSize, s.CreatedAt, s.Qualifier, s.Columns, s.Types, s.Histogram.toSql(), sql.IndexClass(s.IdxClass))
-	stat.SetColSet(s.colSet)
-	stat.SetFuncDeps(s.fds)
-	return stat
+	return stat.WithColSet(s.colSet).WithFuncDeps(s.fds)
 }
 
 type DoltHistogram []DoltBucket
@@ -114,7 +115,7 @@ func DoltHistFromSql(hist sql.Histogram, types []sql.Type) (DoltHistogram, error
 			Mcvs:       mcvs,
 			McvCount:   b.McvCounts(),
 			BoundCount: b.BoundCount(),
-			UpperBound: nil,
+			UpperBound: upperBound,
 		}
 	}
 	return ret, nil
