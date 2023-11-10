@@ -2399,7 +2399,7 @@ func TestStatistics(t *testing.T) {
 func TestStatisticIndexes(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestStatisticIndexes(t, h)
+	enginetest.TestStatisticIndexFilters(t, h)
 }
 
 func TestSpatialQueriesPrepared(t *testing.T) {
