@@ -172,7 +172,7 @@ func newUpdateResult(matched, updated int) gmstypes.OkResult {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleMergeScript(t *testing.T) {
-	// t.Skip()
+	t.Skip()
 	var scripts = []MergeScriptTest{
 		{
 			Name: "adding generated column to one side, non-generated column to other side",
