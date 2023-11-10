@@ -17,6 +17,7 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -128,7 +129,7 @@ func (fc *FileConfig) write() error {
 		return err
 	}
 
-	return fc.fs.WriteFile(fc.Path, data)
+	return fc.fs.WriteFile(fc.Path, data, os.ModePerm)
 }
 
 // Unset removes a configuration parameter from the config

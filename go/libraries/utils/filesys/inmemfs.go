@@ -360,8 +360,8 @@ func (fs *InMemFS) OpenForWriteAppend(fp string, perm os.FileMode) (io.WriteClos
 
 // WriteFile writes the entire data buffer to a given file.  The file will be created if it does not exist,
 // and if it does exist it will be overwritten.
-func (fs *InMemFS) WriteFile(fp string, data []byte) error {
-	w, err := fs.OpenForWrite(fp, os.ModePerm)
+func (fs *InMemFS) WriteFile(fp string, data []byte, perm os.FileMode) error {
+	w, err := fs.OpenForWrite(fp, perm)
 
 	if err != nil {
 		return err

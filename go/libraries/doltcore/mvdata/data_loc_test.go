@@ -59,7 +59,7 @@ func createRootAndFS() (*doltdb.DoltDB, *doltdb.RootValue, filesys.Filesys) {
 	workingDir := "/user/bheni/datasets/states"
 	initialDirs := []string{testHomeDir, workingDir}
 	fs := filesys.NewInMemFS(initialDirs, nil, workingDir)
-	fs.WriteFile(testSchemaFileName, []byte(testSchema))
+	fs.WriteFile(testSchemaFileName, []byte(testSchema), os.ModePerm)
 	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_Default, doltdb.InMemDoltDB, filesys.LocalFS)
 	ddb.WriteEmptyRepo(context.Background(), "master", "billy bob", "bigbillieb@fake.horse")
 
@@ -146,7 +146,7 @@ func TestExists(t *testing.T) {
 			}
 
 			if fileVal, isFile := loc.(FileDataLocation); isFile {
-				err := fs.WriteFile(fileVal.Path, []byte("test"))
+				err := fs.WriteFile(fileVal.Path, []byte("test"), os.ModePerm)
 				assert.NoError(t, err)
 			}
 
@@ -197,7 +197,7 @@ func TestCreateRdWr(t *testing.T) {
 	defer dEnv.DoltDB.Close()
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
-	dEnv.FS.WriteFile(testSchemaFileName, []byte(testSchema))
+	dEnv.FS.WriteFile(testSchemaFileName, []byte(testSchema), os.ModePerm)
 
 	mvOpts := &testDataMoverOptions{}
 

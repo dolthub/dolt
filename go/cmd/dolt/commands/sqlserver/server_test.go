@@ -113,7 +113,7 @@ listener:
 	serverController := NewServerController()
 	go func() {
 
-		dEnv.FS.WriteFile("config.yaml", []byte(yamlConfig))
+		dEnv.FS.WriteFile("config.yaml", []byte(yamlConfig), os.ModePerm)
 		startServer(context.Background(), "0.0.0", "dolt sql-server", []string{
 			"--config", "config.yaml",
 		}, dEnv, serverController)

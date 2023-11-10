@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -1229,6 +1228,7 @@ func LoadDBLockFile(fs filesys.Filesys, lockFilePath string) (lock *DBLock, err 
 	if err != nil {
 		return nil, err
 	}
+	defer rd.Close()
 
 	b := make([]byte, 256)
 	n, err := rd.Read(b)
@@ -1291,18 +1291,7 @@ func WriteLockfile(fs filesys.Filesys, lock *DBLock) error {
 		portStr = "-"
 	}
 
-	if reflect.TypeOf(fs) == reflect.TypeOf(filesys.LocalFS) {
-		_, err := os.Create(lockFile)
-		if err != nil {
-			return err
-		}
-		err = os.Chmod(lockFile, 0600)
-		if err != nil {
-			return err
-		}
-	}
-
-	err = fs.WriteFile(lockFile, []byte(fmt.Sprintf("%d:%s:%s", lock.Pid, portStr, lock.Secret)))
+	err = fs.WriteFile(lockFile, []byte(fmt.Sprintf("%d:%s:%s", lock.Pid, portStr, lock.Secret)), 0600)
 	if err != nil {
 		return err
 	}
