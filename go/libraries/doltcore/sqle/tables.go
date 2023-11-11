@@ -2316,31 +2316,23 @@ func (t *AlterableDoltTable) createIndex(ctx *sql.Context, idx sql.IndexDef, key
 		}
 	}
 
-	ret, err := creation.CreateIndex(
-		ctx,
-		table,
-		idx.Name,
-		columns,
-		allocatePrefixLengths(idx.Columns),
-		schema.IndexProperties{
-			IsUnique:      idx.Constraint == sql.IndexConstraint_Unique,
-			IsSpatial:     idx.Constraint == sql.IndexConstraint_Spatial,
-			IsFullText:    idx.Constraint == sql.IndexConstraint_Fulltext,
-			IsUserDefined: true,
-			Comment:       idx.Comment,
-			FullTextProperties: schema.FullTextProperties{
-				ConfigTable:      tableNames.Config,
-				PositionTable:    tableNames.Position,
-				DocCountTable:    tableNames.DocCount,
-				GlobalCountTable: tableNames.GlobalCount,
-				RowCountTable:    tableNames.RowCount,
-				KeyType:          uint8(keyCols.Type),
-				KeyName:          keyCols.Name,
-				KeyPositions:     keyPositions,
-			},
+	ret, err := creation.CreateIndex(ctx, table, t.Name(), idx.Name, columns, allocatePrefixLengths(idx.Columns), schema.IndexProperties{
+		IsUnique:      idx.Constraint == sql.IndexConstraint_Unique,
+		IsSpatial:     idx.Constraint == sql.IndexConstraint_Spatial,
+		IsFullText:    idx.Constraint == sql.IndexConstraint_Fulltext,
+		IsUserDefined: true,
+		Comment:       idx.Comment,
+		FullTextProperties: schema.FullTextProperties{
+			ConfigTable:      tableNames.Config,
+			PositionTable:    tableNames.Position,
+			DocCountTable:    tableNames.DocCount,
+			GlobalCountTable: tableNames.GlobalCount,
+			RowCountTable:    tableNames.RowCount,
+			KeyType:          uint8(keyCols.Type),
+			KeyName:          keyCols.Name,
+			KeyPositions:     keyPositions,
 		},
-		t.opts,
-	)
+	}, t.opts)
 	if err != nil {
 		return err
 	}
@@ -2636,21 +2628,13 @@ func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, idx sql.
 		return err
 	}
 
-	ret, err := creation.CreateIndex(
-		ctx,
-		table,
-		idx.Name,
-		columns,
-		allocatePrefixLengths(idx.Columns),
-		schema.IndexProperties{
-			IsUnique:      idx.Constraint == sql.IndexConstraint_Unique,
-			IsSpatial:     idx.Constraint == sql.IndexConstraint_Spatial,
-			IsFullText:    idx.Constraint == sql.IndexConstraint_Fulltext,
-			IsUserDefined: false,
-			Comment:       "",
-		},
-		t.opts,
-	)
+	ret, err := creation.CreateIndex(ctx, table, t.Name(), idx.Name, columns, allocatePrefixLengths(idx.Columns), schema.IndexProperties{
+		IsUnique:      idx.Constraint == sql.IndexConstraint_Unique,
+		IsSpatial:     idx.Constraint == sql.IndexConstraint_Spatial,
+		IsFullText:    idx.Constraint == sql.IndexConstraint_Fulltext,
+		IsUserDefined: false,
+		Comment:       "",
+	}, t.opts)
 	if err != nil {
 		return err
 	}

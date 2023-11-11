@@ -101,7 +101,7 @@ func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string,
 	if err != nil {
 		return nil, err
 	}
-	mutIdxs, err := merge.GetMutableSecondaryIdxs(ctx, sch, idxSet)
+	mutIdxs, err := merge.GetMutableSecondaryIdxs(ctx, sch, tblName, idxSet)
 	if err != nil {
 		return nil, err
 	}

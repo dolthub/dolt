@@ -74,7 +74,7 @@ func RowAsInsertStmt(r row.Row, tableName string, tableSch schema.Schema) (strin
 			b.WriteRune(',')
 		}
 		col, _ := tableSch.GetAllCols().GetByTag(tag)
-		sqlString, err := valueAsSqlString(col.TypeInfo, val)
+		sqlString, err := ValueAsSqlString(col.TypeInfo, val)
 		if err != nil {
 			return true, err
 		}
@@ -106,7 +106,7 @@ func RowAsDeleteStmt(r row.Row, tableName string, tableSch schema.Schema) (strin
 			if seenOne {
 				b.WriteString(" AND ")
 			}
-			sqlString, err := valueAsSqlString(col.TypeInfo, val)
+			sqlString, err := ValueAsSqlString(col.TypeInfo, val)
 			if err != nil {
 				return true, err
 			}
@@ -141,7 +141,7 @@ func RowAsUpdateStmt(r row.Row, tableName string, tableSch schema.Schema, colsTo
 			if seenOne {
 				b.WriteRune(',')
 			}
-			sqlString, err := valueAsSqlString(col.TypeInfo, val)
+			sqlString, err := ValueAsSqlString(col.TypeInfo, val)
 			if err != nil {
 				return true, err
 			}
@@ -165,7 +165,7 @@ func RowAsUpdateStmt(r row.Row, tableName string, tableSch schema.Schema, colsTo
 			if seenOne {
 				b.WriteString(" AND ")
 			}
-			sqlString, err := valueAsSqlString(col.TypeInfo, val)
+			sqlString, err := ValueAsSqlString(col.TypeInfo, val)
 			if err != nil {
 				return true, err
 			}
@@ -196,7 +196,7 @@ func RowAsTupleString(r row.Row, tableSch schema.Schema) (string, error) {
 			b.WriteRune(',')
 		}
 		col, _ := tableSch.GetAllCols().GetByTag(tag)
-		sqlString, err := valueAsSqlString(col.TypeInfo, val)
+		sqlString, err := ValueAsSqlString(col.TypeInfo, val)
 		if err != nil {
 			return true, err
 		}
@@ -481,7 +481,7 @@ func SqlRowAsUpdateStmt(r sql.Row, tableName string, tableSch schema.Schema, col
 	return b.String(), nil
 }
 
-func valueAsSqlString(ti typeinfo.TypeInfo, value types.Value) (string, error) {
+func ValueAsSqlString(ti typeinfo.TypeInfo, value types.Value) (string, error) {
 	if types.IsNull(value) {
 		return "NULL", nil
 	}

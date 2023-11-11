@@ -41,6 +41,8 @@ type Server struct {
 	grpcSrv *grpc.Server
 	httpSrv http.Server
 
+	grpcHttpReqsWG sync.WaitGroup
+
 	tlsConfig *tls.Config
 }
 
@@ -102,7 +104,7 @@ func NewServer(args ServerArgs) (*Server, error) {
 		handler = args.HttpInterceptor(handler)
 	}
 	if args.HttpListenAddr == args.GrpcListenAddr {
-		handler = grpcMultiplexHandler(s.grpcSrv, handler)
+		handler = s.grpcMultiplexHandler(s.grpcSrv, handler)
 	} else {
 		s.wg.Add(2)
 	}
@@ -116,10 +118,12 @@ func NewServer(args ServerArgs) (*Server, error) {
 	return s, nil
 }
 
-func grpcMultiplexHandler(grpcSrv *grpc.Server, handler http.Handler) http.Handler {
+func (s *Server) grpcMultiplexHandler(grpcSrv *grpc.Server, handler http.Handler) http.Handler {
 	h2s := &http2.Server{}
 	newHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.ProtoMajor == 2 && strings.HasPrefix(r.Header.Get("Content-Type"), "application/grpc") {
+			s.grpcHttpReqsWG.Add(1)
+			defer s.grpcHttpReqsWG.Done()
 			grpcSrv.ServeHTTP(w, r)
 		} else {
 			handler.ServeHTTP(w, r)
@@ -204,6 +208,7 @@ func (s *Server) Serve(listeners Listeners) {
 		if listeners.grpc == nil {
 			logrus.Traceln("Calling grpcSrv.Stop")
 			s.grpcSrv.Stop()
+			s.grpcHttpReqsWG.Wait()
 			logrus.Traceln("Finished calling grpcSrv.Stop")
 		}
 	}()

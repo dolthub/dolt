@@ -39,24 +39,41 @@ type prollyRowIter struct {
 
 var _ sql.RowIter = prollyRowIter{}
 
-func NewProllyRowIter(sch schema.Schema, rows prolly.Map, iter prolly.MapIter, projections []uint64) (sql.RowIter, error) {
+func NewProllyRowIterForMap(sch schema.Schema, rows prolly.Map, iter prolly.MapIter, projections []uint64) sql.RowIter {
 	if projections == nil {
 		projections = sch.GetAllCols().Tags
 	}
 
-	keyProj, valProj, ordProj := projectionMappings(sch, projections)
 	kd, vd := rows.Descriptors()
+	ns := rows.NodeStore()
 
+	return NewProllyRowIterForSchema(sch, iter, kd, vd, projections, ns)
+}
+
+func NewProllyRowIterForSchema(
+	sch schema.Schema,
+	iter prolly.MapIter,
+	kd val.TupleDesc,
+	vd val.TupleDesc,
+	projections []uint64,
+	ns tree.NodeStore,
+) sql.RowIter {
 	if schema.IsKeyless(sch) {
-		return &prollyKeylessIter{
-			iter:    iter,
-			valDesc: vd,
-			valProj: valProj,
-			ordProj: ordProj,
-			rowLen:  len(projections),
-			ns:      rows.NodeStore(),
-		}, nil
+		return NewKeylessProllyRowIter(sch, iter, vd, projections, ns)
 	}
+
+	return NewKeyedProllyRowIter(sch, iter, kd, vd, projections, ns)
+}
+
+func NewKeyedProllyRowIter(
+	sch schema.Schema,
+	iter prolly.MapIter,
+	kd val.TupleDesc,
+	vd val.TupleDesc,
+	projections []uint64,
+	ns tree.NodeStore,
+) sql.RowIter {
+	keyProj, valProj, ordProj := projectionMappings(sch, projections)
 
 	return prollyRowIter{
 		iter:    iter,
@@ -66,8 +83,27 @@ func NewProllyRowIter(sch schema.Schema, rows prolly.Map, iter prolly.MapIter, p
 		valProj: valProj,
 		ordProj: ordProj,
 		rowLen:  len(projections),
-		ns:      rows.NodeStore(),
-	}, nil
+		ns:      ns,
+	}
+}
+
+func NewKeylessProllyRowIter(
+	sch schema.Schema,
+	iter prolly.MapIter,
+	vd val.TupleDesc,
+	projections []uint64,
+	ns tree.NodeStore,
+) sql.RowIter {
+	_, valProj, ordProj := projectionMappings(sch, projections)
+
+	return &prollyKeylessIter{
+		iter:    iter,
+		valDesc: vd,
+		valProj: valProj,
+		ordProj: ordProj,
+		rowLen:  len(projections),
+		ns:      ns,
+	}
 }
 
 // projectionMappings returns data structures that specify 1) which fields we read
