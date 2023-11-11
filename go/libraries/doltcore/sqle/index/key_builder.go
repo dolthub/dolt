@@ -154,11 +154,8 @@ func parseCreateTable(ctx *sql.Context, tableName string, sch schema.Schema) (*p
 	mockDatabase := memory.NewDatabase("mydb")
 	mockProvider := memory.NewDBProvider(mockDatabase)
 	catalog := analyzer.NewCatalog(mockProvider)
-	parseCtx := ctx
-	if ctx.GetCurrentDatabase() == "" {
-		parseCtx = sql.NewEmptyContext()
-		parseCtx.SetCurrentDatabase("mydb")
-	}
+	parseCtx := sql.NewEmptyContext()
+	parseCtx.SetCurrentDatabase("mydb")
 
 	pseudoAnalyzedQuery, err := planbuilder.Parse(parseCtx, catalog, query)
 	if err != nil {
