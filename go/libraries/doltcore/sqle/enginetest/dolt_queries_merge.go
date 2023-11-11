@@ -4291,7 +4291,7 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:            "call dolt_merge('branch1')",
+				Query:    "call dolt_merge('branch1')",
 				Expected: []sql.Row{{doltCommit, 1, 0}},
 			},
 			{
@@ -4307,7 +4307,7 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{3}},
 			},
 			{
-				Query:            "call dolt_merge('branch2')",
+				Query:    "call dolt_merge('branch2')",
 				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
@@ -4343,7 +4343,7 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:            "call dolt_merge('branch1')",
+				Query:    "call dolt_merge('branch1')",
 				Expected: []sql.Row{{doltCommit, 1, 0}},
 			},
 			{
@@ -4358,7 +4358,7 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{1}},
 			},
 			{
-				Query:            "call dolt_merge('branch2')",
+				Query:    "call dolt_merge('branch2')",
 				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
@@ -4392,7 +4392,7 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:            "call dolt_merge('branch1')",
+				Query:    "call dolt_merge('branch1')",
 				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
@@ -4431,7 +4431,7 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:            "call dolt_merge('branch1')",
+				Query:    "call dolt_merge('branch1')",
 				Expected: []sql.Row{{doltCommit, 1, 0}},
 			},
 			{
@@ -4447,7 +4447,7 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{7}},
 			},
 			{
-				Query:            "call dolt_merge('branch2')",
+				Query:    "call dolt_merge('branch2')",
 				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
@@ -4483,7 +4483,7 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:            "call dolt_merge('branch1')",
+				Query:    "call dolt_merge('branch1')",
 				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{

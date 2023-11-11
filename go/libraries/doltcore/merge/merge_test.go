@@ -474,7 +474,7 @@ func setupMergeTest(t *testing.T) (*doltdb.DoltDB, types.ValueReadWriter, tree.N
 	require.NoError(t, err)
 	mergeRows, err := rightMut.Map(ctx)
 	require.NoError(t, err)
-	
+
 	rootTbl, err := doltdb.NewTable(ctx, vrw, ns, sch, durable.IndexFromProllyMap(updatedRows), nil, nil)
 	require.NoError(t, err)
 	rootTbl, err = rebuildAllProllyIndexes(ctx, rootTbl)

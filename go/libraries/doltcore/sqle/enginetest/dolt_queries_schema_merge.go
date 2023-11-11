@@ -2348,14 +2348,14 @@ var SchemaChangeTestsGeneratedColumns = []MergeScriptTest{
 			},
 			{
 				Query: "show create table t;",
-				Skip: true, 				// there should be an index on col3, but there isn't
+				Skip:  true, // there should be an index on col3, but there isn't
 				Expected: []sql.Row{{"t",
 					"CREATE TABLE `t` (\n" +
 						"  `pk` int NOT NULL,\n" +
 						"  `col1` int NOT NULL,\n" +
 						"  `col3` int GENERATED ALWAYS AS ((pk + 1)),\n" +
 						"  PRIMARY KEY (`pk`)\n" +
-					  "  KEY `idx1` (`col3`,`col1`)\n" +
+						"  KEY `idx1` (`col3`,`col1`)\n" +
 						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
