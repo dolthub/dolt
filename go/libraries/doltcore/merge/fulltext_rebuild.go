@@ -224,5 +224,5 @@ func createRowIterForTable(ctx *sql.Context, t *doltdb.Table, sch schema.Schema)
 		return nil, err
 	}
 
-	return index.NewProllyRowIter(sch, rows, iter, nil)
+	return index.NewProllyRowIterForMap(sch, rows, iter, nil), nil
 }

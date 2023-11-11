@@ -17,6 +17,8 @@ package merge
 import (
 	"context"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
@@ -25,7 +27,7 @@ import (
 )
 
 // GetMutableSecondaryIdxs returns a MutableSecondaryIdx for each secondary index in |indexes|.
-func GetMutableSecondaryIdxs(ctx context.Context, sch schema.Schema, indexes durable.IndexSet) ([]MutableSecondaryIdx, error) {
+func GetMutableSecondaryIdxs(ctx *sql.Context, sch schema.Schema, tableName string, indexes durable.IndexSet) ([]MutableSecondaryIdx, error) {
 	mods := make([]MutableSecondaryIdx, sch.Indexes().Count())
 	for i, index := range sch.Indexes().AllIndexes() {
 		idx, err := indexes.GetIndex(ctx, sch, index.Name())
@@ -36,7 +38,10 @@ func GetMutableSecondaryIdxs(ctx context.Context, sch schema.Schema, indexes dur
 		if schema.IsKeyless(sch) {
 			m = prolly.ConvertToSecondaryKeylessIndex(m)
 		}
-		mods[i] = NewMutableSecondaryIdx(m, sch, index)
+		mods[i], err = NewMutableSecondaryIdx(ctx, m, sch, tableName, index)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return mods, nil
 }
@@ -44,7 +49,7 @@ func GetMutableSecondaryIdxs(ctx context.Context, sch schema.Schema, indexes dur
 // GetMutableSecondaryIdxsWithPending returns a MutableSecondaryIdx for each secondary index in |indexes|. If an index
 // is listed in the given |sch|, but does not exist in the given |indexes|, then it is skipped. This is useful when
 // merging a schema that has a new index, but the index does not exist on the index set being modified.
-func GetMutableSecondaryIdxsWithPending(ctx context.Context, sch schema.Schema, indexes durable.IndexSet, pendingSize int) ([]MutableSecondaryIdx, error) {
+func GetMutableSecondaryIdxsWithPending(ctx *sql.Context, sch schema.Schema, tableName string, indexes durable.IndexSet, pendingSize int) ([]MutableSecondaryIdx, error) {
 	mods := make([]MutableSecondaryIdx, 0, sch.Indexes().Count())
 	for _, index := range sch.Indexes().AllIndexes() {
 
@@ -69,7 +74,11 @@ func GetMutableSecondaryIdxsWithPending(ctx context.Context, sch schema.Schema, 
 		if schema.IsKeyless(sch) {
 			m = prolly.ConvertToSecondaryKeylessIndex(m)
 		}
-		newMutableSecondaryIdx := NewMutableSecondaryIdx(m, sch, index)
+		newMutableSecondaryIdx, err := NewMutableSecondaryIdx(ctx, m, sch, tableName, index)
+		if err != nil {
+			return nil, err
+		}
+
 		newMutableSecondaryIdx.mut = newMutableSecondaryIdx.mut.WithMaxPending(pendingSize)
 		mods = append(mods, newMutableSecondaryIdx)
 	}
@@ -86,13 +95,17 @@ type MutableSecondaryIdx struct {
 }
 
 // NewMutableSecondaryIdx returns a MutableSecondaryIdx. |m| is the secondary idx data.
-func NewMutableSecondaryIdx(idx prolly.Map, sch schema.Schema, def schema.Index) MutableSecondaryIdx {
-	b := index.NewSecondaryKeyBuilder(sch, def, idx.KeyDesc(), idx.Pool(), idx.NodeStore())
+func NewMutableSecondaryIdx(ctx *sql.Context, idx prolly.Map, sch schema.Schema, tableName string, def schema.Index) (MutableSecondaryIdx, error) {
+	b, err := index.NewSecondaryKeyBuilder(ctx, tableName, sch, def, idx.KeyDesc(), idx.Pool(), idx.NodeStore())
+	if err != nil {
+		return MutableSecondaryIdx{}, err
+	}
+
 	return MutableSecondaryIdx{
 		Name:    def.Name(),
 		mut:     idx.Mutate(),
 		builder: b,
-	}
+	}, nil
 }
 
 // InsertEntry inserts a secondary index entry given the key and new value
