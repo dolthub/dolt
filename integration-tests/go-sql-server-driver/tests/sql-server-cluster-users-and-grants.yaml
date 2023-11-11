@@ -264,6 +264,12 @@ tests:
       result:
         columns: ["Level", "Code", "Message"]
         rows: []
+  - on: server2
+    queries:
+    - query: 'show warnings'
+      result:
+        columns: ["Level", "Code", "Message"]
+        rows: []
 - name: users and grants block on write replication
   multi_repos:
   - name: server1
