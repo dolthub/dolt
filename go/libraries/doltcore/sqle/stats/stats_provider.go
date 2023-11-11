@@ -161,33 +161,34 @@ type indexMeta struct {
 	db    string
 	table string
 	index string
+	cols  []string
 }
 
 type statsMeta struct {
 	db    string
 	table string
-	pref  string // comma separated
+	index string
 }
 
 func NewProvider() *Provider {
 	return &Provider{
-		indexToStats: make(map[indexMeta][]statsMeta),
-		stats:        make(map[statsMeta]*DoltStats),
+		//indexToStats: make(map[indexMeta][]statsMeta),
+		stats: make(map[sql.StatQualifier]*DoltStats),
 	}
 }
 
 type Provider struct {
 	latestRootAddr hash.Hash
-	indexToStats   map[indexMeta][]statsMeta
-	stats          map[statsMeta]*DoltStats
+	//indexToStats   map[indexMeta][]statsMeta
+	stats map[sql.StatQualifier]*DoltStats
 }
 
 var _ sql.StatsProvider = (*Provider)(nil)
 
 func (p *Provider) GetTableStats(ctx *sql.Context, db, table string) ([]sql.Statistic, error) {
 	var ret []sql.Statistic
-	for meta, stat := range p.stats {
-		if strings.EqualFold(db, meta.db) && strings.EqualFold(table, meta.table) {
+	for qual, stat := range p.stats {
+		if strings.EqualFold(db, qual.Database) && strings.EqualFold(table, qual.Tab) {
 			ret = append(ret, stat.toSql())
 		}
 	}
@@ -195,45 +196,30 @@ func (p *Provider) GetTableStats(ctx *sql.Context, db, table string) ([]sql.Stat
 }
 
 func (p *Provider) SetStats(ctx *sql.Context, stats sql.Statistic) error {
-	meta := statsMeta{
-		db:    strings.ToLower(stats.Qualifier().Db()),
-		table: strings.ToLower(stats.Qualifier().Table()),
-		pref:  strings.Join(stats.Columns(), ","),
-	}
 	doltStats, err := DoltStatsFromSql(stats)
 	if err != nil {
 		return err
 	}
-	p.stats[meta] = doltStats
+	p.stats[stats.Qualifier()] = doltStats
 	return nil
 }
 
 func (p *Provider) GetStats(ctx *sql.Context, qual sql.StatQualifier, cols []string) (sql.Statistic, bool) {
-	meta := statsMeta{
-		db:    strings.ToLower(qual.Db()),
-		table: strings.ToLower(qual.Table()),
-		pref:  strings.Join(cols, ","),
-	}
-	if s, ok := p.stats[meta]; ok {
+	if s, ok := p.stats[qual]; ok {
 		return s.toSql(), true
 	}
 	return nil, false
 }
 
 func (p *Provider) DropStats(ctx *sql.Context, qual sql.StatQualifier, cols []string) error {
-	meta := statsMeta{
-		db:    strings.ToLower(qual.Db()),
-		table: strings.ToLower(qual.Table()),
-		pref:  strings.Join(cols, ","),
-	}
-	delete(p.stats, meta)
+	delete(p.stats, qual)
 	return nil
 }
 
 func (p *Provider) RowCount(ctx *sql.Context, db, table string) (uint64, error) {
 	var cnt uint64
-	for meta, s := range p.stats {
-		if strings.EqualFold(db, meta.db) && strings.EqualFold(table, meta.table) {
+	for qual, s := range p.stats {
+		if strings.EqualFold(db, qual.Database) && strings.EqualFold(table, qual.Table()) {
 			if s.RowCount > cnt {
 				cnt = s.RowCount
 			}
@@ -242,10 +228,10 @@ func (p *Provider) RowCount(ctx *sql.Context, db, table string) (uint64, error) 
 	return cnt, nil
 }
 
-func (p *Provider) DataLength(ctx *sql.Context, db, table string) (uint64, error) {
+func (p *Provider) DataLength(_ *sql.Context, db, table string) (uint64, error) {
 	var avgSize uint64
 	for meta, s := range p.stats {
-		if strings.EqualFold(db, meta.db) && strings.EqualFold(table, meta.table) {
+		if strings.EqualFold(db, meta.Database) && strings.EqualFold(table, meta.Table()) {
 			if s.AvgSize > avgSize {
 				avgSize = s.AvgSize
 			}
@@ -264,51 +250,30 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 		return err
 	}
 
-	newIndexToStats := make(map[indexMeta][]statsMeta)
 	tablePrefix := fmt.Sprintf("%s.", strings.ToLower(table.Name()))
 	var idxMetas []indexMeta
 	for _, idx := range indexes {
-		idxMeta := indexMeta{
-			db:    db,
-			table: strings.ToLower(table.Name()),
-			index: idx.ID(),
-		}
-		idxMetas = append(idxMetas, idxMeta)
-
 		cols := make([]string, len(idx.Expressions()))
 		for i, c := range idx.Expressions() {
 			cols[i] = strings.TrimPrefix(strings.ToLower(c), tablePrefix)
 		}
 
-		// find all prefixes that don't already have statistics for this index
-		// note: there can currently be duplicated prefixes for overlapping indexes
-		for i := 1; i < len(cols)+1; i++ {
-			pref := cols[:i]
-			statMeta := statsMeta{
-				db:    strings.ToLower(db),
-				table: strings.ToLower(idx.Table()),
-				pref:  strings.Join(pref, ","),
-			}
-			found := false
-			for _, s := range newIndexToStats[idxMeta] {
-				if s == statMeta {
-					found = true
-					break
-				}
-			}
-			if !found {
-				newIndexToStats[idxMeta] = append(newIndexToStats[idxMeta], statMeta)
-			}
+		idxMeta := indexMeta{
+			db:    db,
+			table: strings.ToLower(table.Name()),
+			index: idx.ID(),
+			cols:  cols,
 		}
+		idxMetas = append(idxMetas, idxMeta)
 	}
 
 	// create statistics for |newIndexToStats| lists
-	newStats, err := rebuildStats(ctx, indexes, idxMetas, newIndexToStats)
+	newStats, err := rebuildStats(ctx, indexes, idxMetas)
 	if err != nil {
 		return err
 	}
-	for meta, stats := range newStats {
-		p.stats[meta] = stats
+	for qual, stats := range newStats {
+		p.stats[qual] = stats
 	}
 	return nil
 }

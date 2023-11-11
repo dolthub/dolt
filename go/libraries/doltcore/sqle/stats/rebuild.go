@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -42,7 +41,7 @@ const (
 
 // rebuildStats builds histograms for each index statistic metadata
 // indicated in |newStats|.
-func rebuildStats(ctx *sql.Context, indexes []sql.Index, idxMetas []indexMeta, newStats map[indexMeta][]statsMeta) (map[statsMeta]*DoltStats, error) {
+func rebuildStats(ctx *sql.Context, indexes []sql.Index, idxMetas []indexMeta) (map[sql.StatQualifier]*DoltStats, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	prov := dSess.Provider()
 	db, err := prov.Database(ctx, idxMetas[0].db)
@@ -72,7 +71,7 @@ func rebuildStats(ctx *sql.Context, indexes []sql.Index, idxMetas []indexMeta, n
 		return nil, err
 	}
 
-	ret := make(map[statsMeta]*DoltStats)
+	ret := make(map[sql.StatQualifier]*DoltStats)
 
 	for i, meta := range idxMetas {
 		var idx durable.Index
@@ -104,36 +103,31 @@ func rebuildStats(ctx *sql.Context, indexes []sql.Index, idxMetas []indexMeta, n
 			addrs = append(addrs, n.HashOf())
 		}
 
-		updaters := make([]*bucketBuilder, len(newStats[meta]))
-		for i, statsMeta := range newStats[meta] {
-			cols := strings.Split(statsMeta.pref, ",")
-			updaters[i] = newBucketBuilder(statsMeta, len(cols), prollyMap.KeyDesc())
-			ret[statsMeta] = &DoltStats{
-				level:     levelNodes[0].Level(),
-				chunks:    addrs,
-				CreatedAt: time.Now(),
-				Columns:   cols,
-				Types:     types[:len(cols)],
-			}
+		qual := sql.NewStatQualifier(meta.db, meta.table, meta.index)
+		updater := newBucketBuilder(qual, len(meta.cols), prollyMap.KeyDesc())
+		ret[qual] = &DoltStats{
+			level:     levelNodes[0].Level(),
+			chunks:    addrs,
+			CreatedAt: time.Now(),
+			Columns:   meta.cols,
+			Types:     types,
+			Qualifier: qual,
 		}
 
+		var start, stop uint64
 		// read leaf rows for each bucket
 		for i, _ := range levelNodes {
 			// each node is a bucket
-			for _, u := range updaters {
-				// reset stats updaters for the new bucket
-				u.newBucket()
-			}
+			updater.newBucket()
 
 			// we read exclusive range [node first key, next node first key)
-			var start, stop val.Tuple
-			if i > 0 {
-				start = val.Tuple(levelNodes[i].GetKey(0))
+			start = stop
+			leafCnt, err := levelNodes[i].TreeCount()
+			if err != nil {
+				return nil, err
 			}
-			if i+1 < len(levelNodes) {
-				stop = val.Tuple(levelNodes[i+1].GetKey(0))
-			}
-			iter, err := prollyMap.IterKeyRange(ctx, start, stop)
+			stop = start + uint64(leafCnt)
+			iter, err := prollyMap.IterOrdinalRange(ctx, start, stop)
 			if err != nil {
 				return nil, err
 			}
@@ -150,32 +144,27 @@ func rebuildStats(ctx *sql.Context, indexes []sql.Index, idxMetas []indexMeta, n
 					keyBuilder.PutRaw(i, keyBytes.GetField(i))
 				}
 
-				for _, u := range updaters {
-					// update with prefix of the key
-					u.add(keyBuilder.BuildPrefixNoRecycle(buffPool, u.prefixLen))
-				}
+				updater.add(keyBuilder.BuildPrefixNoRecycle(buffPool, updater.prefixLen))
+
 				keyBuilder.Recycle()
 			}
-			for _, u := range updaters {
-				// finalize the aggregation
-				bucket, err := u.finalize(ctx, prollyMap.NodeStore())
-				if err != nil {
-					return nil, err
-				}
-				ret[u.meta].Histogram = append(ret[u.meta].Histogram, bucket)
+
+			// finalize the aggregation
+			bucket, err := updater.finalize(ctx, prollyMap.NodeStore())
+			if err != nil {
+				return nil, err
 			}
+			ret[updater.qual].Histogram = append(ret[updater.qual].Histogram, bucket)
 		}
-		for _, u := range updaters {
-			ret[u.meta].DistinctCount = uint64(u.globalDistinct)
-			ret[u.meta].RowCount = uint64(u.globalCount)
-		}
+		ret[updater.qual].DistinctCount = uint64(updater.globalDistinct)
+		ret[updater.qual].RowCount = uint64(updater.globalCount)
 	}
 	return ret, nil
 }
 
-func newBucketBuilder(meta statsMeta, prefixLen int, tupleDesc val.TupleDesc) *bucketBuilder {
+func newBucketBuilder(qual sql.StatQualifier, prefixLen int, tupleDesc val.TupleDesc) *bucketBuilder {
 	return &bucketBuilder{
-		meta:      meta,
+		qual:      qual,
 		prefixLen: prefixLen,
 		mcvs:      new(mcvHeap),
 		tupleDesc: tupleDesc.PrefixDesc(prefixLen),
@@ -186,7 +175,7 @@ func newBucketBuilder(meta statsMeta, prefixLen int, tupleDesc val.TupleDesc) *b
 // collect statistics for a single histogram bucket. Distinct is fuzzy,
 // we might double count a key that crosses bucket boundaries.
 type bucketBuilder struct {
-	meta      statsMeta
+	qual      sql.StatQualifier
 	tupleDesc val.TupleDesc
 	prefixLen int
 
@@ -229,10 +218,12 @@ func (u *bucketBuilder) finalize(ctx context.Context, ns tree.NodeStore) (DoltBu
 		return DoltBucket{}, err
 	}
 	upperBound := make(sql.Row, u.prefixLen)
-	for i := 0; i < u.prefixLen; i++ {
-		upperBound[i], err = index.GetField(ctx, u.tupleDesc, i, u.currentKey, ns)
-		if err != nil {
-			return DoltBucket{}, err
+	if u.currentKey != nil {
+		for i := 0; i < u.prefixLen; i++ {
+			upperBound[i], err = index.GetField(ctx, u.tupleDesc, i, u.currentKey, ns)
+			if err != nil {
+				return DoltBucket{}, err
+			}
 		}
 	}
 	return DoltBucket{
