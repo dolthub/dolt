@@ -39,7 +39,7 @@ func TestDirToDBName(t *testing.T) {
 	}
 
 	for dirName, expected := range tests {
-		actual := dbfactory.DirToDBName(dirName, true)
+		actual := dbfactory.DirToDBName(dirName, false)
 		assert.Equal(t, expected, actual)
 	}
 
@@ -49,7 +49,7 @@ func TestDirToDBName(t *testing.T) {
 	}
 
 	for dirName, expected := range hyphenTests {
-		actual := dbfactory.DirToDBName(dirName, false)
+		actual := dbfactory.DirToDBName(dirName, true)
 		assert.Equal(t, expected, actual)
 	}
 }
