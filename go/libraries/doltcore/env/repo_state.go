@@ -181,7 +181,7 @@ func CreateRepoState(fs filesys.ReadWriteFS, br string) (*RepoState, error) {
 
 	rs := &RepoState{
 		Head:     ref.MarshalableRef{Ref: headRef},
-		Remotes:  &concurrentmap.Map[string, Remote]{},
+		Remotes:  concurrentmap.New[string, Remote](),
 		Branches: make(map[string]BranchConfig),
 		Backups:  make(map[string]Remote),
 	}

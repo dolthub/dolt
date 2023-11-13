@@ -417,7 +417,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		sess := dsess.DSessFromSess(ctx.Session)
 		adapter := dsess.NewSessionStateAdapter(
 			sess, db.RevisionQualifiedName(),
-			&concurrentmap.Map[string, env.Remote]{},
+			concurrentmap.New[string, env.Remote](),
 			map[string]env.BranchConfig{},
 			map[string]env.Remote{})
 		ws, err := sess.WorkingSet(ctx, db.RevisionQualifiedName())
