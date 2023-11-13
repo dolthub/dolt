@@ -15,6 +15,7 @@
 package concurrentmap
 
 import (
+	"encoding/json"
 	"sync"
 )
 
@@ -83,4 +84,12 @@ func (cm *Map[K, V]) Snapshot() map[K]V {
 		newMap[k] = v
 	}
 	return newMap
+}
+
+func (cm *Map[K, V]) MarshalJSON() ([]byte, error) {
+	return json.Marshal(cm.Snapshot())
+}
+
+func (cm *Map[K, V]) UnmarshalJSON(data []byte) error {
+	return json.Unmarshal(data, &cm.m)
 }
