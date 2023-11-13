@@ -867,7 +867,7 @@ func (dEnv *DoltEnv) GetRemotes() (*concurrentmap.Map[string, Remote], error) {
 func CheckRemoteAddressConflict(absUrl string, remotes *concurrentmap.Map[string, Remote], backups map[string]Remote) (Remote, bool) {
 	if remotes != nil {
 		var rm *Remote
-		remotes.Range(func(key string, value Remote) bool {
+		remotes.Iter(func(key string, value Remote) bool {
 			if value.Url == absUrl {
 				rm = &value
 				return false
@@ -1134,7 +1134,7 @@ func GetDefaultRemote(rsr RepoStateReader) (Remote, error) {
 		return NoRemote, ErrNoRemote
 	} else if remotesLen == 1 {
 		var remote *Remote
-		remotes.Range(func(key string, value Remote) bool {
+		remotes.Iter(func(key string, value Remote) bool {
 			remote = &value
 			return false
 		})

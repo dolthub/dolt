@@ -66,7 +66,7 @@ func (cm *Map[K, V]) DeepCopy() *Map[K, V] {
 	return &Map[K, V]{m: newMap}
 }
 
-func (cm *Map[K, V]) Range(f func(key K, value V) bool) {
+func (cm *Map[K, V]) Iter(f func(key K, value V) bool) {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 	for k, v := range cm.m {
