@@ -287,7 +287,7 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 	}
 
 	b := env.GetDefaultInitBranch(dEnv.Config)
-	pro, err := dsqle.NewDoltDatabaseProviderWithDatabase(b, mrEnv.FileSystem(), db, dEnv.FS)
+	pro, err := dsqle.NewDoltDatabaseProviderWithDatabase(b, mrEnv.FileSystem(), db, dEnv.FS, env.DisableHyphenInDBName(mrEnv.Config()))
 	if err != nil {
 		return nil, nil, err
 	}

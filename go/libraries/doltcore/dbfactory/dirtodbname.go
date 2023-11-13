@@ -21,10 +21,10 @@ import (
 
 // DirToDBName takes the physical directory name, |dirName|, and replaces any unsupported characters to create a
 // valid logical database name. For example, spaces are replaced with underscores.
-func DirToDBName(dirName string) string {
+func DirToDBName(dirName string, disableHyphen bool) string {
 	dbName := strings.TrimSpace(dirName)
 	dbName = strings.Map(func(r rune) rune {
-		if unicode.IsSpace(r) {
+		if unicode.IsSpace(r) || (disableHyphen && r == '-') {
 			return '_'
 		}
 		return r

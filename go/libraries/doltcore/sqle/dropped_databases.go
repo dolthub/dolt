@@ -35,15 +35,17 @@ const droppedDatabaseDirectoryName = ".dolt_dropped_databases"
 // is given a Filesys where all database directories can be found. When dropping a database, instead of deleting the
 // database directory, it will move it to a new ".dolt_dropped_databases" directory where databases can be restored.
 type droppedDatabaseManager struct {
-	fs filesys.Filesys
+	fs            filesys.Filesys
+	disableHyphen bool
 }
 
 // newDroppedDatabaseManager creates a new droppedDatabaseManager instance using the specified |fs| as the location
 // where databases can be found. It will create a new ".dolt_dropped_databases" directory at the root of |fs| where
 // dropped databases will be moved until they are permanently removed.
-func newDroppedDatabaseManager(fs filesys.Filesys) *droppedDatabaseManager {
+func newDroppedDatabaseManager(fs filesys.Filesys, disableHyphen bool) *droppedDatabaseManager {
 	return &droppedDatabaseManager{
-		fs: fs,
+		fs:            fs,
+		disableHyphen: disableHyphen,
 	}
 }
 
@@ -89,7 +91,7 @@ func (dd *droppedDatabaseManager) DropDatabase(ctx *sql.Context, name string, dr
 	// Add the final directory segment and convert any invalid chars so that the physical directory
 	// name matches the current logical/SQL name of the database.
 	dir, base := filepath.Split(destinationDirectory)
-	base = dbfactory.DirToDBName(file)
+	base = dbfactory.DirToDBName(file, dd.disableHyphen)
 	destinationDirectory = filepath.Join(dir, base)
 
 	if err := dd.prepareToMoveDroppedDatabase(ctx, destinationDirectory); err != nil {

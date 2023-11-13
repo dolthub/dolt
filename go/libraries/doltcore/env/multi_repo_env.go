@@ -78,6 +78,8 @@ func MultiEnvForDirectory(
 	var dbName string = "dolt"
 	var newDEnv *DoltEnv = dEnv
 
+	disableHyphen := DisableHyphenInDBName(dEnv.Config)
+
 	// InMemFS is used only for testing.
 	// All other FS Types should get a newly created Environment which will serve as the primary env in the MultiRepoEnv
 	if _, ok := dataDirFS.(*filesys.InMemFS); !ok {
@@ -86,7 +88,7 @@ func MultiEnvForDirectory(
 			return nil, err
 		}
 		envName := getRepoRootDir(path, string(os.PathSeparator))
-		dbName = dbfactory.DirToDBName(envName)
+		dbName = dbfactory.DirToDBName(envName, disableHyphen)
 
 		newDEnv = Load(ctx, GetCurrentUserHomeDir, dataDirFS, doltdb.LocalDirDoltDB, version)
 	}
@@ -125,7 +127,7 @@ func MultiEnvForDirectory(
 
 		newEnv := Load(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, version)
 		if newEnv.Valid() {
-			envSet[dbfactory.DirToDBName(dir)] = newEnv
+			envSet[dbfactory.DirToDBName(dir, disableHyphen)] = newEnv
 		}
 		return false
 	})
@@ -335,6 +337,10 @@ func (mrEnv *MultiRepoEnv) Unlock() error {
 		}
 	}
 	return retErr
+}
+
+func DisableHyphenInDBName(cfg config.ReadableConfig) bool {
+	return cfg.GetStringOrDefault(DisableHyphenInDatabaseName, "false") == "true"
 }
 
 func getRepoRootDir(path, pathSeparator string) string {

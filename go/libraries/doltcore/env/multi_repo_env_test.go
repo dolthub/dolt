@@ -39,7 +39,17 @@ func TestDirToDBName(t *testing.T) {
 	}
 
 	for dirName, expected := range tests {
-		actual := dbfactory.DirToDBName(dirName)
+		actual := dbfactory.DirToDBName(dirName, true)
+		assert.Equal(t, expected, actual)
+	}
+
+	hyphenTests := map[string]string{
+		"corona-virus":       "corona_virus",
+		"  real - name     ": "real_name",
+	}
+
+	for dirName, expected := range hyphenTests {
+		actual := dbfactory.DirToDBName(dirName, false)
 		assert.Equal(t, expected, actual)
 	}
 }
