@@ -15,6 +15,7 @@
 package mysql_file_handler
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -22,7 +23,11 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 )
+
+var PermsFileMode os.FileMode = 0600
 
 type Persister struct {
 	privsFilePath  string
@@ -53,7 +58,7 @@ func (p *Persister) Persist(ctx *sql.Context, data []byte) error {
 		}
 	}
 
-	return os.WriteFile(p.privsFilePath, data, 0777)
+	return file.WriteFileAtomically(p.privsFilePath, bytes.NewReader(data), PermsFileMode)
 }
 
 // LoadData reads the mysql.db file, returns nil if empty or not found

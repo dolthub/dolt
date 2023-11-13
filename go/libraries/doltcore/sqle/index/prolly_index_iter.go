@@ -42,9 +42,10 @@ type prollyIndexIter struct {
 	// keyMap and valMap transform tuples from
 	// primary row storage into sql.Row's
 	keyMap, valMap val.OrdinalMapping
-	//ordMap are output ordinals for |keyMap| and |valMap|
-	ordMap val.OrdinalMapping
-	sqlSch sql.Schema
+	// ordMap are output ordinals for |keyMap| and |valMap| concatenated
+	ordMap      val.OrdinalMapping
+	projections []uint64
+	sqlSch      sql.Schema
 }
 
 var _ sql.RowIter = prollyIndexIter{}
@@ -71,15 +72,16 @@ func newProllyIndexIter(
 	keyProj, valProj, ordProj := projectionMappings(idx.Schema(), projections)
 
 	iter := prollyIndexIter{
-		idx:       idx,
-		indexIter: indexIter,
-		primary:   primary,
-		pkBld:     pkBld,
-		pkMap:     pkMap,
-		keyMap:    keyProj,
-		valMap:    valProj,
-		ordMap:    ordProj,
-		sqlSch:    pkSch.Schema,
+		idx:         idx,
+		indexIter:   indexIter,
+		primary:     primary,
+		pkBld:       pkBld,
+		pkMap:       pkMap,
+		keyMap:      keyProj,
+		valMap:      valProj,
+		ordMap:      ordProj,
+		projections: projections,
+		sqlSch:      pkSch.Schema,
 	}
 
 	return iter, nil
@@ -97,7 +99,7 @@ func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 	pk := p.pkBld.Build(sharePool)
 
-	r := make(sql.Row, len(p.keyMap)+len(p.valMap))
+	r := make(sql.Row, len(p.projections))
 	err = p.primary.Get(ctx, pk, func(key, value val.Tuple) error {
 		return p.rowFromTuples(ctx, key, value, r)
 	})
@@ -167,6 +169,7 @@ type prollyCoveringIndexIter struct {
 
 	// |keyMap| and |valMap| are both of len ==
 	keyMap, valMap, ordMap val.OrdinalMapping
+	projections            []uint64
 	sqlSch                 sql.Schema
 }
 
@@ -195,15 +198,16 @@ func newProllyCoveringIndexIter(
 	}
 
 	return prollyCoveringIndexIter{
-		idx:       idx,
-		indexIter: indexIter,
-		keyDesc:   keyDesc,
-		valDesc:   valDesc,
-		keyMap:    keyMap,
-		valMap:    valMap,
-		ordMap:    ordMap,
-		sqlSch:    pkSch.Schema,
-		ns:        secondary.NodeStore(),
+		idx:         idx,
+		indexIter:   indexIter,
+		keyDesc:     keyDesc,
+		valDesc:     valDesc,
+		keyMap:      keyMap,
+		valMap:      valMap,
+		ordMap:      ordMap,
+		sqlSch:      pkSch.Schema,
+		projections: projections,
+		ns:          secondary.NodeStore(),
 	}, nil
 }
 
@@ -214,7 +218,7 @@ func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	r := make(sql.Row, len(p.keyMap)+len(p.valMap))
+	r := make(sql.Row, len(p.projections))
 	if err := p.writeRowFromTuples(ctx, k, v, r); err != nil {
 		return nil, err
 	}
@@ -250,7 +254,7 @@ func coveringIndexMapping(d DoltIndex, projections []uint64) (keyMap, ordMap val
 	allMap := make(val.OrdinalMapping, len(projections)*2)
 	var i int
 	for _, p := range projections {
-		if idx, ok := idx.TagToIdx[p]; ok {
+		if idx, ok := idx.StoredIndexByTag(p); ok {
 			allMap[i] = idx
 			allMap[len(projections)+i] = i
 			i++

@@ -43,9 +43,9 @@ type CreateIndexReturn struct {
 
 // CreateIndex creates the given index on the given table with the given schema. Returns the updated table, updated schema, and created index.
 func CreateIndex(
-	ctx context.Context,
+	ctx *sql.Context,
 	table *doltdb.Table,
-	indexName string,
+	tableName, indexName string,
 	columns []string,
 	prefixLengths []uint16,
 	props schema.IndexProperties,
@@ -113,7 +113,7 @@ func CreateIndex(
 
 	// TODO: in the case that we're replacing an implicit index with one the user specified, we could do this more
 	//  cheaply in some cases by just renaming it, rather than building it from scratch. But that's harder to get right.
-	indexRows, err := BuildSecondaryIndex(ctx, newTable, index, opts)
+	indexRows, err := BuildSecondaryIndex(ctx, newTable, index, tableName, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +131,7 @@ func CreateIndex(
 	}, nil
 }
 
-func BuildSecondaryIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Index, opts editor.Options) (durable.Index, error) {
+func BuildSecondaryIndex(ctx *sql.Context, tbl *doltdb.Table, idx schema.Index, tableName string, opts editor.Options) (durable.Index, error) {
 	switch tbl.Format() {
 	case types.Format_LD_1:
 		m, err := editor.RebuildIndex(ctx, tbl, idx.Name(), opts)
@@ -150,7 +150,7 @@ func BuildSecondaryIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Inde
 			return nil, err
 		}
 		primary := durable.ProllyMapFromIndex(m)
-		return BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, idx, primary)
+		return BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, tableName, idx, primary)
 
 	default:
 		return nil, fmt.Errorf("unknown NomsBinFormat")
@@ -159,10 +159,18 @@ func BuildSecondaryIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Inde
 
 // BuildSecondaryProllyIndex builds secondary index data for the given primary
 // index row data |primary|. |sch| is the current schema of the table.
-func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, idx schema.Index, primary prolly.Map) (durable.Index, error) {
+func BuildSecondaryProllyIndex(
+	ctx *sql.Context,
+	vrw types.ValueReadWriter,
+	ns tree.NodeStore,
+	sch schema.Schema,
+	tableName string,
+	idx schema.Index,
+	primary prolly.Map,
+) (durable.Index, error) {
 	if idx.IsUnique() {
 		kd := idx.Schema().GetKeyDescriptor()
-		return BuildUniqueProllyIndex(ctx, vrw, ns, sch, idx, primary, func(ctx context.Context, existingKey, newKey val.Tuple) error {
+		return BuildUniqueProllyIndex(ctx, vrw, ns, sch, tableName, idx, primary, func(ctx context.Context, existingKey, newKey val.Tuple) error {
 			msg := FormatKeyForUniqKeyErr(newKey, kd)
 			return sql.NewUniqueKeyErr(msg, false, nil)
 		})
@@ -182,7 +190,10 @@ func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, n
 
 	p := primary.Pool()
 	mut := secondary.Mutate()
-	secondaryBld := index.NewSecondaryKeyBuilder(sch, idx, secondary.KeyDesc(), p, secondary.NodeStore())
+	secondaryBld, err := index.NewSecondaryKeyBuilder(ctx, tableName, sch, idx, secondary.KeyDesc(), p, secondary.NodeStore())
+	if err != nil {
+		return nil, err
+	}
 
 	iter, err := primary.IterAll(ctx)
 	if err != nil {
@@ -238,7 +249,16 @@ type DupEntryCb func(ctx context.Context, existingKey, newKey val.Tuple) error
 // BuildUniqueProllyIndex builds a unique index based on the given |primary| row
 // data. If any duplicate entries are found, they are passed to |cb|. If |cb|
 // returns a non-nil error then the process is stopped.
-func BuildUniqueProllyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, idx schema.Index, primary prolly.Map, cb DupEntryCb) (durable.Index, error) {
+func BuildUniqueProllyIndex(
+	ctx *sql.Context,
+	vrw types.ValueReadWriter,
+	ns tree.NodeStore,
+	sch schema.Schema,
+	tableName string,
+	idx schema.Index,
+	primary prolly.Map,
+	cb DupEntryCb,
+) (durable.Index, error) {
 	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, idx.Schema())
 	if err != nil {
 		return nil, err
@@ -255,7 +275,10 @@ func BuildUniqueProllyIndex(ctx context.Context, vrw types.ValueReadWriter, ns t
 	p := primary.Pool()
 
 	prefixDesc := secondary.KeyDesc().PrefixDesc(idx.Count())
-	secondaryBld := index.NewSecondaryKeyBuilder(sch, idx, secondary.KeyDesc(), p, secondary.NodeStore())
+	secondaryBld, err := index.NewSecondaryKeyBuilder(ctx, tableName, sch, idx, secondary.KeyDesc(), p, secondary.NodeStore())
+	if err != nil {
+		return nil, err
+	}
 
 	mut := secondary.Mutate()
 	for {

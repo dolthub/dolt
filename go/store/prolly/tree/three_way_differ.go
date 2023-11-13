@@ -225,7 +225,7 @@ const (
 	DiffOpConvergentAdd                         //convergentAdd
 	DiffOpConvergentDelete                      //convergentDelete
 	DiffOpConvergentModify                      //convergentModify
-	DiffOpDivergentModifyResolved               //divergenModifytResolved
+	DiffOpDivergentModifyResolved               //divergentModifyResolved
 	DiffOpDivergentDeleteConflict               //divergentDeleteConflict
 	DiffOpDivergentModifyConflict               //divergentModifyConflict
 	DiffOpDivergentDeleteResolved

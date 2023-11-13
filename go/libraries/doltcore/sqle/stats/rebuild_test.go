@@ -176,7 +176,7 @@ func TestBucketBuilder(t *testing.T) {
 	pool := pool.NewBuffPool()
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("build bucket: %s", tt.name), func(t *testing.T) {
-			b := newBucketBuilder(statsMeta{}, tt.keyDesc.Count(), tt.keyDesc)
+			b := newBucketBuilder(sql.StatQualifier{}, tt.keyDesc.Count(), tt.keyDesc)
 			kb := val.NewTupleBuilder(tt.keyDesc)
 			for _, k := range tt.keys {
 				for i, v := range k {
