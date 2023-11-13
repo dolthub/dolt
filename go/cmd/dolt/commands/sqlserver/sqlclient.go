@@ -36,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -182,7 +183,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			cli.PrintErrln(color.RedString(err.Error()))
 			return 1
 		}
-		dbToUse = strings.Replace(filepath.Base(directory), "-", "_", -1)
+		dbToUse = dbfactory.DirToDBName(filepath.Base(directory))
 	}
 	format := engine.FormatTabular
 	if hasResultFormat {
