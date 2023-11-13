@@ -2513,6 +2513,12 @@ func TestStatistics(t *testing.T) {
 	}
 }
 
+func TestStatisticIndexes(t *testing.T) {
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestStatisticIndexFilters(t, h)
+}
+
 func TestSpatialQueriesPrepared(t *testing.T) {
 	skipPreparedTests(t)
 

@@ -458,6 +458,11 @@ type doltTableInterface interface {
 	sql.AutoIncrementTable
 	sql.TruncateableTable
 	sql.ProjectedTable
+	sql.Databaseable
+}
+
+func (t *WritableDoltTable) Database() string {
+	return t.db.baseName
 }
 
 func (t *WritableDoltTable) setRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
