@@ -24,6 +24,7 @@ table WorkingSet {
   timestamp_millis:uint64;
 
   merge_state:MergeState;
+  rebase_state:RebaseState;
 }
 
 table MergeState {
@@ -40,6 +41,14 @@ table MergeState {
   unmergable_tables:[string];
 
   is_cherry_pick:bool;
+}
+
+table RebaseState {
+  // An address for the the working root value before the rebase started.
+  pre_working_root_addr:[ubyte] (required);
+
+  // The commit that we are rebasing onto.
+  onto_commit_addr:[ubyte] (required);
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go

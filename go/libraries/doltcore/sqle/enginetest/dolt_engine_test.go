@@ -116,9 +116,42 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 
-	var scripts = []queries.ScriptTest{}
+	var scripts = []queries.ScriptTest{
+		{
+			Name: "Rebase Prototype Testing",
+			SetUpScript: []string{
+				"create table t (pk int primary key);",
+				"call dolt_commit('-Am', 'creating table t');",
+				"call dolt_commit('--allow-empty', '-m', 'empty commit 1');",
+				"call dolt_commit('--allow-empty', '-m', 'empty commit 2');",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				/*
+				   Test Cases:
+				     - error cases:
+				          - already in a rebase or a merge/cherry-pick/etc
+				          - working set not clean
+				          - wrong number of args
+				          - invalid args
+				          - no database selected
+				*/
+				{
+					Query:    "call dolt_rebase();",
+					Expected: []sql.Row{{0}}, // TODO: Add message: "rebase started"}},
+				},
+				{
+					Query:    "select * from dolt_rebase;",
+					Expected: []sql.Row{{123, doltCommit, "456"}},
+				},
+				{
+					Query:    "call dolt_rebase('--abort');",
+					Expected: []sql.Row{{0}}, // TODO: Add message: "rebase aborted"}},
+				},
+			},
+		},
+	}
 
 	tcc := &testCommitClock{}
 	cleanup := installTestCommitClock(tcc)
@@ -133,8 +166,8 @@ func TestSingleScript(t *testing.T) {
 			if err != nil {
 				panic(err)
 			}
-			engine.EngineAnalyzer().Debug = true
-			engine.EngineAnalyzer().Verbose = true
+			//engine.EngineAnalyzer().Debug = true
+			//engine.EngineAnalyzer().Verbose = true
 
 			enginetest.TestScriptWithEngine(t, engine, harness, script)
 			return nil

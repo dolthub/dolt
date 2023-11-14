@@ -607,7 +607,8 @@ func (db *database) UpdateWorkingSet(ctx context.Context, ds Dataset, workingSet
 		ctx,
 		ds,
 		func(ds Dataset) error {
-			addr, ref, err := newWorkingSet(ctx, db, workingSet.Meta, workingSet.WorkingRoot, workingSet.StagedRoot, workingSet.MergeState)
+			// TODO: Should we just pass WorkingSetSpec?
+			addr, ref, err := newWorkingSet(ctx, db, workingSet.Meta, workingSet.WorkingRoot, workingSet.StagedRoot, workingSet.MergeState, workingSet.RebaseState)
 			if err != nil {
 				return err
 			}
@@ -677,7 +678,8 @@ func (db *database) CommitWithWorkingSet(
 	val types.Value, workingSetSpec WorkingSetSpec,
 	prevWsHash hash.Hash, opts CommitOptions,
 ) (Dataset, Dataset, error) {
-	wsAddr, wsValRef, err := newWorkingSet(ctx, db, workingSetSpec.Meta, workingSetSpec.WorkingRoot, workingSetSpec.StagedRoot, workingSetSpec.MergeState)
+	// TODO: Maybe just pass the entire WorkingSetSpec into newWorkingSet?
+	wsAddr, wsValRef, err := newWorkingSet(ctx, db, workingSetSpec.Meta, workingSetSpec.WorkingRoot, workingSetSpec.StagedRoot, workingSetSpec.MergeState, workingSetSpec.RebaseState)
 	if err != nil {
 		return Dataset{}, Dataset{}, err
 	}

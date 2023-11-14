@@ -197,7 +197,36 @@ func (rcv *WorkingSet) TryMergeState(obj *MergeState) (*MergeState, error) {
 	return nil, nil
 }
 
-const WorkingSetNumFields = 7
+func (rcv *WorkingSet) RebaseState(obj *RebaseState) *RebaseState {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(RebaseState)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
+}
+
+func (rcv *WorkingSet) TryRebaseState(obj *RebaseState) (*RebaseState, error) {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(RebaseState)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		if RebaseStateNumFields < obj.Table().NumFields() {
+			return nil, flatbuffers.ErrTableHasUnknownFields
+		}
+		return obj, nil
+	}
+	return nil, nil
+}
+
+const WorkingSetNumFields = 8
 
 func WorkingSetStart(builder *flatbuffers.Builder) {
 	builder.StartObject(WorkingSetNumFields)
@@ -228,6 +257,9 @@ func WorkingSetAddTimestampMillis(builder *flatbuffers.Builder, timestampMillis 
 }
 func WorkingSetAddMergeState(builder *flatbuffers.Builder, mergeState flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(mergeState), 0)
+}
+func WorkingSetAddRebaseState(builder *flatbuffers.Builder, rebaseState flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(7, flatbuffers.UOffsetT(rebaseState), 0)
 }
 func WorkingSetEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
@@ -412,5 +444,138 @@ func MergeStateAddIsCherryPick(builder *flatbuffers.Builder, isCherryPick bool) 
 	builder.PrependBoolSlot(4, isCherryPick, false)
 }
 func MergeStateEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+	return builder.EndObject()
+}
+
+type RebaseState struct {
+	_tab flatbuffers.Table
+}
+
+func InitRebaseStateRoot(o *RebaseState, buf []byte, offset flatbuffers.UOffsetT) error {
+	n := flatbuffers.GetUOffsetT(buf[offset:])
+	o.Init(buf, n+offset)
+	if RebaseStateNumFields < o.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
+}
+
+func TryGetRootAsRebaseState(buf []byte, offset flatbuffers.UOffsetT) (*RebaseState, error) {
+	x := &RebaseState{}
+	return x, InitRebaseStateRoot(x, buf, offset)
+}
+
+func GetRootAsRebaseState(buf []byte, offset flatbuffers.UOffsetT) *RebaseState {
+	x := &RebaseState{}
+	InitRebaseStateRoot(x, buf, offset)
+	return x
+}
+
+func TryGetSizePrefixedRootAsRebaseState(buf []byte, offset flatbuffers.UOffsetT) (*RebaseState, error) {
+	x := &RebaseState{}
+	return x, InitRebaseStateRoot(x, buf, offset+flatbuffers.SizeUint32)
+}
+
+func GetSizePrefixedRootAsRebaseState(buf []byte, offset flatbuffers.UOffsetT) *RebaseState {
+	x := &RebaseState{}
+	InitRebaseStateRoot(x, buf, offset+flatbuffers.SizeUint32)
+	return x
+}
+
+func (rcv *RebaseState) Init(buf []byte, i flatbuffers.UOffsetT) {
+	rcv._tab.Bytes = buf
+	rcv._tab.Pos = i
+}
+
+func (rcv *RebaseState) Table() flatbuffers.Table {
+	return rcv._tab
+}
+
+func (rcv *RebaseState) PreWorkingRootAddr(j int) byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetByte(a + flatbuffers.UOffsetT(j*1))
+	}
+	return 0
+}
+
+func (rcv *RebaseState) PreWorkingRootAddrLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *RebaseState) PreWorkingRootAddrBytes() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *RebaseState) MutatePreWorkingRootAddr(j int, n byte) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateByte(a+flatbuffers.UOffsetT(j*1), n)
+	}
+	return false
+}
+
+func (rcv *RebaseState) OntoCommitAddr(j int) byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetByte(a + flatbuffers.UOffsetT(j*1))
+	}
+	return 0
+}
+
+func (rcv *RebaseState) OntoCommitAddrLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *RebaseState) OntoCommitAddrBytes() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *RebaseState) MutateOntoCommitAddr(j int, n byte) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateByte(a+flatbuffers.UOffsetT(j*1), n)
+	}
+	return false
+}
+
+const RebaseStateNumFields = 2
+
+func RebaseStateStart(builder *flatbuffers.Builder) {
+	builder.StartObject(RebaseStateNumFields)
+}
+func RebaseStateAddPreWorkingRootAddr(builder *flatbuffers.Builder, preWorkingRootAddr flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(preWorkingRootAddr), 0)
+}
+func RebaseStateStartPreWorkingRootAddrVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(1, numElems, 1)
+}
+func RebaseStateAddOntoCommitAddr(builder *flatbuffers.Builder, ontoCommitAddr flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(ontoCommitAddr), 0)
+}
+func RebaseStateStartOntoCommitAddrVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(1, numElems, 1)
+}
+func RebaseStateEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }

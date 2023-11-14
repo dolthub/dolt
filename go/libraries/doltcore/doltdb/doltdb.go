@@ -1248,7 +1248,7 @@ func (ddb *DoltDB) UpdateWorkingSet(
 		return err
 	}
 
-	workingRootRef, stagedRef, mergeState, err := workingSet.writeValues(ctx, ddb)
+	workingRootRef, stagedRef, mergeState, rebaseState, err := workingSet.writeValues(ctx, ddb)
 	if err != nil {
 		return err
 	}
@@ -1258,6 +1258,7 @@ func (ddb *DoltDB) UpdateWorkingSet(
 		WorkingRoot: workingRootRef,
 		StagedRoot:  stagedRef,
 		MergeState:  mergeState,
+		RebaseState: rebaseState,
 	}, prevHash)
 
 	return err
@@ -1285,7 +1286,7 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 		return nil, err
 	}
 
-	workingRootRef, stagedRef, mergeState, err := workingSet.writeValues(ctx, ddb)
+	workingRootRef, stagedRef, mergeState, rebaseState, err := workingSet.writeValues(ctx, ddb)
 	if err != nil {
 		return nil, err
 	}
@@ -1296,6 +1297,7 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 			WorkingRoot: workingRootRef,
 			StagedRoot:  stagedRef,
 			MergeState:  mergeState,
+			RebaseState: rebaseState,
 		}, prevHash, commit.CommitOptions)
 
 	if err != nil {

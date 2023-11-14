@@ -28,6 +28,11 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+type RebaseState struct {
+	preRebaseWorking *RootValue
+	ontoCommit       *Commit
+}
+
 type MergeState struct {
 	// the source commit
 	commit *Commit
@@ -166,6 +171,7 @@ type WorkingSet struct {
 	workingRoot *RootValue
 	stagedRoot  *RootValue
 	mergeState  *MergeState
+	rebaseState *RebaseState
 }
 
 var _ Rootish = &WorkingSet{}
@@ -192,6 +198,11 @@ func (ws WorkingSet) WithMergeState(mergeState *MergeState) *WorkingSet {
 	return &ws
 }
 
+func (ws WorkingSet) WithRebaseState(rebaseState *RebaseState) *WorkingSet {
+	ws.rebaseState = rebaseState
+	return &ws
+}
+
 func (ws WorkingSet) WithUnmergableTables(tables []string) *WorkingSet {
 	ws.mergeState.unmergableTables = tables
 	return &ws
@@ -207,6 +218,15 @@ func (ws WorkingSet) StartMerge(commit *Commit, commitSpecStr string) *WorkingSe
 		commit:          commit,
 		commitSpecStr:   commitSpecStr,
 		preMergeWorking: ws.workingRoot,
+	}
+
+	return &ws
+}
+
+func (ws WorkingSet) StartRebase(commit *Commit) *WorkingSet {
+	ws.rebaseState = &RebaseState{
+		ontoCommit:       commit,
+		preRebaseWorking: ws.workingRoot,
 	}
 
 	return &ws
@@ -233,8 +253,20 @@ func (ws WorkingSet) AbortMerge() *WorkingSet {
 	return &ws
 }
 
+func (ws WorkingSet) AbortRebase() *WorkingSet {
+	ws.workingRoot = ws.rebaseState.preRebaseWorking
+	ws.stagedRoot = ws.workingRoot
+	ws.rebaseState = nil
+	return &ws
+}
+
 func (ws WorkingSet) ClearMerge() *WorkingSet {
 	ws.mergeState = nil
+	return &ws
+}
+
+func (ws WorkingSet) ClearRebase() *WorkingSet {
+	ws.rebaseState = nil
 	return &ws
 }
 
@@ -252,6 +284,10 @@ func (ws *WorkingSet) MergeState() *MergeState {
 
 func (ws *WorkingSet) MergeActive() bool {
 	return ws.mergeState != nil
+}
+
+func (ws *WorkingSet) RebaseActive() bool {
+	return ws.rebaseState != nil
 }
 
 // MergeCommitParents returns true if there is an active merge in progress and
@@ -358,6 +394,40 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 		}
 	}
 
+	var rebaseState *RebaseState
+	if dsws.RebaseState != nil {
+		preRebaseWorkingAddr, err := dsws.RebaseState.PreRebaseWorkingAddr(ctx, vrw)
+		if err != nil {
+			return nil, err
+		}
+
+		preRebaseWorkingV, err := vrw.ReadValue(ctx, preRebaseWorkingAddr)
+		if err != nil {
+			return nil, err
+		}
+
+		preRebaseWorkingRoot, err := newRootValue(vrw, ns, preRebaseWorkingV)
+		if err != nil {
+			return nil, err
+		}
+
+		ontoCommit, err := dsws.RebaseState.OntoCommit(ctx, vrw)
+		if err != nil {
+			return nil, err
+		}
+
+		// TODO: rename
+		ontoCommit2, err := NewCommit(ctx, vrw, ns, ontoCommit)
+		if err != nil {
+			return nil, err
+		}
+
+		rebaseState = &RebaseState{
+			preRebaseWorking: preRebaseWorkingRoot,
+			ontoCommit:       ontoCommit2,
+		}
+	}
+
 	addr, _ := ds.MaybeHeadAddr()
 
 	return &WorkingSet{
@@ -367,6 +437,7 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 		workingRoot: workingRoot,
 		stagedRoot:  stagedRoot,
 		mergeState:  mergeState,
+		rebaseState: rebaseState,
 	}, nil
 }
 
@@ -394,46 +465,67 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB) (
 	workingRoot types.Ref,
 	stagedRoot types.Ref,
 	mergeState *datas.MergeState,
+	rebaseState *datas.RebaseState,
 	err error,
 ) {
 	if ws.stagedRoot == nil || ws.workingRoot == nil {
-		return types.Ref{}, types.Ref{}, nil, fmt.Errorf("StagedRoot and workingRoot must be set. This is a bug.")
+		return types.Ref{}, types.Ref{}, nil, nil, fmt.Errorf("StagedRoot and workingRoot must be set. This is a bug.")
 	}
 
 	var r *RootValue
 	r, workingRoot, err = db.writeRootValue(ctx, ws.workingRoot)
 	if err != nil {
-		return types.Ref{}, types.Ref{}, nil, err
+		return types.Ref{}, types.Ref{}, nil, nil, err
 	}
 	ws.workingRoot = r
 
 	r, stagedRoot, err = db.writeRootValue(ctx, ws.stagedRoot)
 	if err != nil {
-		return types.Ref{}, types.Ref{}, nil, err
+		return types.Ref{}, types.Ref{}, nil, nil, err
 	}
 	ws.stagedRoot = r
 
 	if ws.mergeState != nil {
 		r, preMergeWorking, err := db.writeRootValue(ctx, ws.mergeState.preMergeWorking)
 		if err != nil {
-			return types.Ref{}, types.Ref{}, nil, err
+			return types.Ref{}, types.Ref{}, nil, nil, err
 		}
 		ws.mergeState.preMergeWorking = r
 
 		h, err := ws.mergeState.commit.HashOf()
 		if err != nil {
-			return types.Ref{}, types.Ref{}, nil, err
+			return types.Ref{}, types.Ref{}, nil, nil, err
 		}
 		dCommit, err := datas.LoadCommitAddr(ctx, db.vrw, h)
 		if err != nil {
-			return types.Ref{}, types.Ref{}, nil, err
+			return types.Ref{}, types.Ref{}, nil, nil, err
 		}
 
 		mergeState, err = datas.NewMergeState(ctx, db.vrw, preMergeWorking, dCommit, ws.mergeState.commitSpecStr, ws.mergeState.unmergableTables, ws.mergeState.isCherryPick)
 		if err != nil {
-			return types.Ref{}, types.Ref{}, nil, err
+			return types.Ref{}, types.Ref{}, nil, nil, err
 		}
 	}
 
-	return workingRoot, stagedRoot, mergeState, nil
+	if ws.rebaseState != nil {
+		r, preRebaseWorking, err := db.writeRootValue(ctx, ws.rebaseState.preRebaseWorking)
+		if err != nil {
+			return types.Ref{}, types.Ref{}, nil, nil, err
+		}
+		ws.rebaseState.preRebaseWorking = r
+
+		h, err := ws.rebaseState.ontoCommit.HashOf()
+		if err != nil {
+			return types.Ref{}, types.Ref{}, nil, nil, err
+		}
+		dCommit, err := datas.LoadCommitAddr(ctx, db.vrw, h)
+		if err != nil {
+			return types.Ref{}, types.Ref{}, nil, nil, err
+		}
+
+		// TODO: is this the right signature for this function?
+		rebaseState = datas.NewRebaseState(preRebaseWorking.TargetHash(), dCommit.Addr())
+	}
+
+	return workingRoot, stagedRoot, mergeState, rebaseState, nil
 }
