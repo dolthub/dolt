@@ -1267,11 +1267,12 @@ func (m *secondaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, leftSc
 					return err
 				}
 
+				// Convert right value to result schema
 				tempTupleValue, err := remapTupleWithColumnDefaults(
 					ctx,
 					diff.Key,
 					diff.Right,
-					finalSchema.GetValueDescriptor(),
+					m.valueMerger.rightSchema.GetValueDescriptor(),
 					m.valueMerger.rightMapping,
 					m.tableMerger,
 					m.tableMerger.rightSch,
@@ -1290,8 +1291,20 @@ func (m *secondaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, leftSc
 						return err
 					}
 
-					baseTupleValue, err = remapTupleWithColumnDefaults(ctx, diff.Key, diff.Base, leftSchema.GetValueDescriptor(), m.valueMerger.rightMapping,
-						tm, m.tableMerger.ancSch, finalSchema, defaults, m.valueMerger.syncPool, false)
+					// Convert base value to result schema
+					baseTupleValue, err = remapTupleWithColumnDefaults(
+						ctx,
+						diff.Key,
+						diff.Base,
+						// Only the right side was modified, so the base schema must be the same as the left schema
+						leftSchema.GetValueDescriptor(),
+						m.valueMerger.baseMapping,
+						tm,
+						m.tableMerger.ancSch,
+						finalSchema,
+						defaults,
+						m.valueMerger.syncPool,
+						false)
 					if err != nil {
 						return err
 					}
@@ -1749,8 +1762,8 @@ func (m *valueMerger) processBaseColumn(ctx context.Context, i int, left, right,
 		rightCol, rightColIdx, rightColExists := getColumn(&right, &m.baseToRightMapping, i)
 
 		if !rightColExists {
-			// Right side deleted the column while left side deleted the row. This is a conflict.
-			return true, nil
+			// Right side deleted the column while left side deleted the row. This is not a conflict..
+			return false, nil
 		}
 		// This is a conflict if the value on the right changed.
 		// But if the right side only changed its representation (from ALTER COLUMN) and still has the same value,
@@ -1769,13 +1782,11 @@ func (m *valueMerger) processBaseColumn(ctx context.Context, i int, left, right,
 
 	if right == nil {
 		// Right side deleted the row. Thus, left side must have modified the row in order for there to be a conflict to resolve.
-		leftCol, _, leftColExists := getColumn(&left, &m.leftMapping, i)
+		leftCol, _, leftColExists := getColumn(&left, &m.baseToLeftMapping, i)
 
 		if !leftColExists {
-			// Left side deleted the column while right side deleted the row. This is a conflict.
-			// TODO: If the rightside deleted the row and the column and the leftside already updated the schema,
-			// then we get it wrong here.
-			return true, nil
+			// Left side deleted the column while right side deleted the row. This is not a conflict.
+			return false, nil
 		}
 		// This is a conflict if the value on the left changed.
 		// But if the left side only changed its representation (from ALTER COLUMN) and still has the same value,
@@ -1826,7 +1837,7 @@ func (m *valueMerger) processBaseColumn(ctx context.Context, i int, left, right,
 		modifiedVD = m.leftVD
 	}
 
-	baseCol, err = convert(ctx, m.baseVD, m.resultVD, modifiedSchema, i, modifiedColIdx, base, baseCol, m.ns)
+	baseCol, err = convert(ctx, m.baseVD, modifiedVD, modifiedSchema, i, modifiedColIdx, base, baseCol, m.ns)
 	if err != nil {
 		return false, err
 	}
