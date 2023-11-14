@@ -1285,9 +1285,9 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 			{
 				Query: "select * from t order by pk;",
 				Expected: []sql.Row{
-					{1, "123"},
-					{2, "12345678901234567890"},
-					{3, "321"},
+					{1, "123", 40},
+					{2, "12345678901234567890", 20},
+					{3, "321", 30},
 				},
 			},
 		},
