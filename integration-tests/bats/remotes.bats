@@ -1836,7 +1836,7 @@ SQL
     # Test cloning from a server remote
     run dolt sql -q "call dolt_clone('http://localhost:50051/test-org/test-repo');"
     [ "$status" -eq 0 ]
-    run dolt sql -q "use test_repo; show tables;"
+    run dolt sql -q "use \`test-repo\`; show tables;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test_table" ]] || false
 }

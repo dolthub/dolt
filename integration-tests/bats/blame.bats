@@ -140,7 +140,7 @@ SQL
 @test "blame: returns an error when the table is not found in the given revision" {
     run dolt blame HEAD~4 blame_test
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "View 'dolt_repo_$$.dolt_blame_blame_test' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them" ]] || false
+    [[ "$output" =~ "View 'dolt-repo-$$.dolt_blame_blame_test' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them" ]] || false
 }
 
 @test "blame: pk ordered output" {

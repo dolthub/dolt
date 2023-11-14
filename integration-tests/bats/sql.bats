@@ -3,6 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
+    dolt config --add database.disablehyphen true
     dolt sql <<SQL
 CREATE TABLE one_pk (
   pk BIGINT NOT NULL,
