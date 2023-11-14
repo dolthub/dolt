@@ -217,6 +217,7 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	if err := validateSqlServerArgs(apr); err != nil {
+		cli.PrintErrln(color.RedString(err.Error()))
 		return 1
 	}
 	serverConfig, err := GetServerConfig(dEnv.FS, apr)
