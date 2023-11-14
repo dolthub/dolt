@@ -12,7 +12,6 @@ setup() {
   #       sql-server starts.
   mkdir ' drop- me-2 ' && cd ' drop- me-2 '
   dolt init && cd ..
-  setup_remote_server
 }
 
 teardown() {
@@ -21,6 +20,7 @@ teardown() {
 }
 
 @test "undrop: undrop error messages" {
+  setup_remote_server
   # When called without any argument, dolt_undrop() returns an error
   # that includes the database names that can be undropped.
   run dolt sql -q "CALL dolt_undrop();"
@@ -52,6 +52,7 @@ teardown() {
 }
 
 @test "undrop: purge error messages" {
+  setup_remote_server
   # Assert that specifying args when calling dolt_purge_dropped_databases() returns an error
   run dolt sql -q "call dolt_purge_dropped_databases('all', 'of', 'the', 'dbs');"
   [ $status -eq 1 ]
@@ -59,11 +60,12 @@ teardown() {
 }
 
 @test "undrop: undrop root database with hyphen replaced in its name" {
+  dolt config --global --add database.disableHyphen true
+  setup_remote_server
   # Create a new Dolt database directory to use as a root database
   # NOTE: We use hyphens here to test how db dirs are renamed.
   mkdir ' test- db-1 ' && cd ' test- db-1 '
   dolt init
-  dolt config --add database.disableHyphen true
   # Create some data and a commit in the database
   dolt sql << EOF
 create table t1 (pk int primary key, c1 varchar(200));
@@ -95,6 +97,7 @@ EOF
 }
 
 @test "undrop: undrop root database with hyphen allowed in its name" {
+  setup_remote_server
   # Create a new Dolt database directory to use as a root database
   # NOTE: We use hyphens here to test how db dirs are renamed.
   mkdir ' test- db-1 ' && cd ' test- db-1 '
@@ -134,6 +137,7 @@ EOF
 # the case of the database name given to dolt_undrop() doesn't match match the original case.
 @test "undrop: undrop non-root database with hyphen replaced in its name" {
   dolt config --add database.disableHyphen true
+  setup_remote_server
   dolt sql << EOF
 use drop_me_2;
 create table t1 (pk int primary key, c1 varchar(200));
@@ -164,6 +168,7 @@ EOF
 # Asserts that a non-root database can be dropped and then restored with dolt_undrop(), even when
 # the case of the database name given to dolt_undrop() doesn't match match the original case.
 @test "undrop: undrop non-root database with hyphen allowed in its name" {
+  setup_remote_server
   dolt sql << EOF
 use \`drop-_me-2\`;
 create table t1 (pk int primary key, c1 varchar(200));
@@ -195,6 +200,7 @@ EOF
 # with the same name and dropped, dolt_undrop will undrop the most
 # recent database with that name.
 @test "undrop: drop database, recreate, and drop again" {
+  setup_remote_server
   # Create a database named test123
   dolt sql << EOF
 create database test123;
@@ -237,6 +243,7 @@ EOF
 # TODO: In the future, it might be useful to allow dolt_undrop() to rename the dropped database to
 #       a new name, but for now, keep it simple and just disallow restoring in this case.
 @test "undrop: undrop conflict" {
+  setup_remote_server
   dolt sql << EOF
 create database dAtAbAsE1;
 use dAtAbAsE1;
@@ -274,6 +281,7 @@ EOF
 }
 
 @test "undrop: purging dropped databases" {
+  setup_remote_server
   # Create a database to keep and a database to purge
   dolt sql << EOF
 create database keepme;

@@ -128,7 +128,7 @@ func NewSqlEngine(
 	}
 
 	b := env.GetDefaultInitBranch(mrEnv.Config())
-	pro, err := dsqle.NewDoltDatabaseProviderWithDatabases(b, mrEnv.FileSystem(), all, locations, mrEnv.Config().GetStringOrDefault(env.DisableHyphenInDatabaseName, "false") == "true")
+	pro, err := dsqle.NewDoltDatabaseProviderWithDatabases(b, mrEnv.FileSystem(), all, locations, env.DisableHyphenInDBName(mrEnv.Config()))
 	if err != nil {
 		return nil, err
 	}
