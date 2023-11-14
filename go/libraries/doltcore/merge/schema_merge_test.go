@@ -1008,6 +1008,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 				runTest(t, test, false)
 			})
 			for _, data := range test.dataTests {
+				test := test
 				test.ancestor.rows = data.ancestor
 				test.left.rows = data.left
 				test.right.rows = data.right
