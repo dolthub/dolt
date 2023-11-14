@@ -35,4 +35,4 @@ jobs:
     - name: Test concurrentmap
       working-directory: ./go
       run: |
-        go test -vet=off -v -race -timeout 30m github.com/dolthub/dolt/go/libraries/utils/concurrentmap
+        go test -vet=off -v -race -timeout 1m github.com/dolthub/dolt/go/libraries/utils/concurrentmap
