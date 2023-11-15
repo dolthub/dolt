@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -30,7 +31,7 @@ import (
 type RepoStateReader interface {
 	CWBHeadRef() (ref.DoltRef, error)
 	CWBHeadSpec() (*doltdb.CommitSpec, error)
-	GetRemotes() (map[string]Remote, error)
+	GetRemotes() (*concurrentmap.Map[string, Remote], error)
 	GetBackups() (map[string]Remote, error)
 	GetBranches() (map[string]BranchConfig, error)
 }
@@ -68,10 +69,10 @@ type BranchConfig struct {
 }
 
 type RepoState struct {
-	Head     ref.MarshalableRef      `json:"head"`
-	Remotes  map[string]Remote       `json:"remotes"`
-	Backups  map[string]Remote       `json:"backups"`
-	Branches map[string]BranchConfig `json:"branches"`
+	Head     ref.MarshalableRef                 `json:"head"`
+	Remotes  *concurrentmap.Map[string, Remote] `json:"remotes"`
+	Backups  map[string]Remote                  `json:"backups"`
+	Branches map[string]BranchConfig            `json:"branches"`
 	// |staged|, |working|, and |merge| are legacy fields left over from when Dolt repos stored this info in the repo
 	// state file, not in the DB directly. They're still here so that we can migrate existing repositories forward to the
 	// new storage format, but they should be used only for this purpose and are no longer written.
@@ -83,13 +84,13 @@ type RepoState struct {
 // repoStateLegacy only exists to unmarshall legacy repo state files, since the JSON marshaller can't work with
 // unexported fields
 type repoStateLegacy struct {
-	Head     ref.MarshalableRef      `json:"head"`
-	Remotes  map[string]Remote       `json:"remotes"`
-	Backups  map[string]Remote       `json:"backups"`
-	Branches map[string]BranchConfig `json:"branches"`
-	Staged   string                  `json:"staged,omitempty"`
-	Working  string                  `json:"working,omitempty"`
-	Merge    *mergeState             `json:"merge,omitempty"`
+	Head     ref.MarshalableRef                 `json:"head"`
+	Remotes  *concurrentmap.Map[string, Remote] `json:"remotes"`
+	Backups  map[string]Remote                  `json:"backups"`
+	Branches map[string]BranchConfig            `json:"branches"`
+	Staged   string                             `json:"staged,omitempty"`
+	Working  string                             `json:"working,omitempty"`
+	Merge    *mergeState                        `json:"merge,omitempty"`
 }
 
 // repoStateLegacyFromRepoState creates a new repoStateLegacy from a RepoState file. Only for testing.
@@ -153,11 +154,13 @@ func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
 func CloneRepoState(fs filesys.ReadWriteFS, r Remote) (*RepoState, error) {
 	init := ref.NewBranchRef(DefaultInitBranch) // best effort
 	hashStr := hash.Hash{}.String()
+	remotes := concurrentmap.New[string, Remote]()
+	remotes.Set(r.Name, r)
 	rs := &RepoState{
 		Head:     ref.MarshalableRef{Ref: init},
 		staged:   hashStr,
 		working:  hashStr,
-		Remotes:  map[string]Remote{r.Name: r},
+		Remotes:  remotes,
 		Branches: make(map[string]BranchConfig),
 		Backups:  make(map[string]Remote),
 	}
@@ -179,7 +182,7 @@ func CreateRepoState(fs filesys.ReadWriteFS, br string) (*RepoState, error) {
 
 	rs := &RepoState{
 		Head:     ref.MarshalableRef{Ref: headRef},
-		Remotes:  make(map[string]Remote),
+		Remotes:  concurrentmap.New[string, Remote](),
 		Branches: make(map[string]BranchConfig),
 		Backups:  make(map[string]Remote),
 	}
@@ -213,11 +216,11 @@ func (rs *RepoState) CWBHeadSpec() *doltdb.CommitSpec {
 }
 
 func (rs *RepoState) AddRemote(r Remote) {
-	rs.Remotes[r.Name] = r
+	rs.Remotes.Set(r.Name, r)
 }
 
 func (rs *RepoState) RemoveRemote(r Remote) {
-	delete(rs.Remotes, r.Name)
+	rs.Remotes.Delete(r.Name)
 }
 
 func (rs *RepoState) AddBackup(r Remote) {

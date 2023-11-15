@@ -229,7 +229,7 @@ func validateBranchMergedIntoUpstream(ctx context.Context, dbdata env.DbData, br
 	if err != nil {
 		return err
 	}
-	remote, ok := remotes[remoteName]
+	remote, ok := remotes.Get(remoteName)
 	if !ok {
 		// TODO: skip error?
 		return fmt.Errorf("remote %s not found", remoteName)

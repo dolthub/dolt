@@ -35,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -113,11 +114,7 @@ func createRepoState(fs filesys.Filesys) (*RepoState, error) {
 
 	// deep copy remotes and backups ¯\_(ツ)_/¯ (see commit c59cbead)
 	if repoState != nil {
-		remotes := make(map[string]Remote, len(repoState.Remotes))
-		for n, r := range repoState.Remotes {
-			remotes[n] = r
-		}
-		repoState.Remotes = remotes
+		repoState.Remotes = repoState.Remotes.DeepCopy()
 
 		backups := make(map[string]Remote, len(repoState.Backups))
 		for n, r := range repoState.Backups {
@@ -856,7 +853,7 @@ func (dEnv *DoltEnv) GetGRPCDialParams(config grpcendpoint.Config) (dbfactory.GR
 	return NewGRPCDialProviderFromDoltEnv(dEnv).GetGRPCDialParams(config)
 }
 
-func (dEnv *DoltEnv) GetRemotes() (map[string]Remote, error) {
+func (dEnv *DoltEnv) GetRemotes() (*concurrentmap.Map[string, Remote], error) {
 	if dEnv.RSLoadErr != nil {
 		return nil, dEnv.RSLoadErr
 	}
@@ -866,12 +863,21 @@ func (dEnv *DoltEnv) GetRemotes() (map[string]Remote, error) {
 
 // CheckRemoteAddressConflict checks whether any backups or remotes share the given URL. Returns the first remote if multiple match.
 // Returns NoRemote and false if none match.
-func CheckRemoteAddressConflict(absUrl string, remotes, backups map[string]Remote) (Remote, bool) {
-	for _, r := range remotes {
-		if r.Url == absUrl {
-			return r, true
+func CheckRemoteAddressConflict(absUrl string, remotes *concurrentmap.Map[string, Remote], backups map[string]Remote) (Remote, bool) {
+	if remotes != nil {
+		var rm *Remote
+		remotes.Iter(func(key string, value Remote) bool {
+			if value.Url == absUrl {
+				rm = &value
+				return false
+			}
+			return true
+		})
+		if rm != nil {
+			return *rm, true
 		}
 	}
+
 	for _, r := range backups {
 		if r.Url == absUrl {
 			return r, true
@@ -881,7 +887,7 @@ func CheckRemoteAddressConflict(absUrl string, remotes, backups map[string]Remot
 }
 
 func (dEnv *DoltEnv) AddRemote(r Remote) error {
-	if _, ok := dEnv.RepoState.Remotes[r.Name]; ok {
+	if _, ok := dEnv.RepoState.Remotes.Get(r.Name); ok {
 		return ErrRemoteAlreadyExists
 	}
 
@@ -937,7 +943,7 @@ func (dEnv *DoltEnv) AddBackup(r Remote) error {
 }
 
 func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
-	remote, ok := dEnv.RepoState.Remotes[name]
+	remote, ok := dEnv.RepoState.Remotes.Get(name)
 	if !ok {
 		return ErrRemoteNotFound
 	}
@@ -1048,7 +1054,7 @@ func (dEnv *DoltEnv) FindRef(ctx context.Context, refStr string) (ref.DoltRef, e
 		slashIdx := strings.IndexRune(refStr, '/')
 		if slashIdx > 0 {
 			remoteName := refStr[:slashIdx]
-			if _, ok := dEnv.RepoState.Remotes[remoteName]; ok {
+			if _, ok := dEnv.RepoState.Remotes.Get(remoteName); ok {
 				remoteRef, err := ref.NewRemoteRefFromPathStr(refStr)
 
 				if err != nil {
@@ -1079,7 +1085,7 @@ func GetRefSpecs(rsr RepoStateReader, remoteName string) ([]ref.RemoteRefSpec, e
 	}
 	if remoteName == "" {
 		remote, err = GetDefaultRemote(rsr)
-	} else if r, ok := remotes[remoteName]; ok {
+	} else if r, ok := remotes.Get(remoteName); ok {
 		remote = r
 	} else {
 		err = ErrInvalidRepository.New(remoteName)
@@ -1122,15 +1128,21 @@ func GetDefaultRemote(rsr RepoStateReader) (Remote, error) {
 		return NoRemote, err
 	}
 
-	if len(remotes) == 0 {
+	remotesLen := remotes.Len()
+	if remotesLen == 0 {
 		return NoRemote, ErrNoRemote
-	} else if len(remotes) == 1 {
-		for _, v := range remotes {
-			return v, nil
+	} else if remotesLen == 1 {
+		var remote *Remote
+		remotes.Iter(func(key string, value Remote) bool {
+			remote = &value
+			return false
+		})
+		if remote != nil {
+			return *remote, nil
 		}
 	}
 
-	if remote, ok := remotes["origin"]; ok {
+	if remote, ok := remotes.Get("origin"); ok {
 		return remote, nil
 	}
 

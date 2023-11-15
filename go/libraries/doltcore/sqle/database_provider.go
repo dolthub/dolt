@@ -37,6 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/lockutil"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -1443,6 +1444,7 @@ func initialStateForTagDb(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.In
 			Rsw: srcDb.DbData().Rsw,
 			Rsr: srcDb.DbData().Rsr,
 		},
+		Remotes: concurrentmap.New[string, env.Remote](),
 		// todo: should we initialize
 		//  - Remotes
 		//  - Branches
@@ -1493,6 +1495,7 @@ func initialStateForCommit(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.I
 			Rsw: srcDb.DbData().Rsw,
 			Rsr: srcDb.DbData().Rsr,
 		},
+		Remotes: concurrentmap.New[string, env.Remote](),
 		// todo: should we initialize
 		//  - Remotes
 		//  - Branches

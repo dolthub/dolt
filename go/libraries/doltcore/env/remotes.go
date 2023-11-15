@@ -222,7 +222,7 @@ func getRemote(rsr RepoStateReader, name string) (Remote, error) {
 		return NoRemote, err
 	}
 
-	remote, ok := remotes[name]
+	remote, ok := remotes.Get(name)
 	if !ok {
 		return NoRemote, ErrInvalidRepository.New(name)
 	}
@@ -383,7 +383,7 @@ func RemoteForFetchArgs(args []string, rsr RepoStateReader) (Remote, []string, e
 		return NoRemote, nil, err
 	}
 
-	if len(remotes) == 0 {
+	if remotes.Len() == 0 {
 		return NoRemote, nil, ErrNoRemote
 	}
 
@@ -395,7 +395,7 @@ func RemoteForFetchArgs(args []string, rsr RepoStateReader) (Remote, []string, e
 		args = args[1:]
 	}
 
-	remote, ok := remotes[remName]
+	remote, ok := remotes.Get(remName)
 	if !ok {
 		msg := "does not appear to be a dolt database. could not read from the remote database. please make sure you have the correct access rights and the database exists"
 		return NoRemote, nil, fmt.Errorf("%w; '%s' %s", ErrUnknownRemote, remName, msg)
@@ -584,7 +584,10 @@ func NewPullSpec(
 	if err != nil {
 		return nil, err
 	}
-	remote := remotes[refSpecs[0].GetRemote()]
+	remote, found := remotes.Get(refSpecs[0].GetRemote())
+	if !found {
+		return nil, ErrPullWithNoRemoteAndNoUpstream
+	}
 
 	var remoteRef ref.DoltRef
 	if remoteRefName == "" {
