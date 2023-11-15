@@ -130,34 +130,6 @@ func Serve(
 		},
 	})
 
-	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
-		{
-			Name:              dsess.DisableDatabaseRenaming,
-			Scope:             sql.SystemVariableScope_Global,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type: types.NewSystemEnumType(dsess.DoltLogLevel,
-				logrus.PanicLevel.String(),
-				logrus.FatalLevel.String(),
-				logrus.ErrorLevel.String(),
-				logrus.WarnLevel.String(),
-				logrus.InfoLevel.String(),
-				logrus.DebugLevel.String(),
-				logrus.TraceLevel.String(),
-			),
-			Default: logrus.GetLevel().String(),
-			NotifyChanged: func(scope sql.SystemVariableScope, v sql.SystemVarValue) error {
-				level, err := logrus.ParseLevel(v.Val.(string))
-				if err != nil {
-					return fmt.Errorf("could not parse requested log level %s as a log level. dolt_log_level variable value and logging behavior will diverge.", v.Val.(string))
-				}
-
-				logrus.SetLevel(level)
-				return nil
-			},
-		},
-	})
-
 	var mrEnv *env.MultiRepoEnv
 	var err error
 	fs := dEnv.FS
