@@ -289,35 +289,6 @@ func Serve(
 	}
 	controller.Register(LockMultiRepoEnv)
 
-	var mySQLServer *server.Server
-	InitSQLServer := &svcs.AnonService{
-		InitF: func(context.Context) (err error) {
-			v, ok := serverConfig.(validatingServerConfig)
-			if ok && v.goldenMysqlConnectionString() != "" {
-				mySQLServer, err = server.NewValidatingServer(
-					serverConf,
-					sqlEngine.GetUnderlyingEngine(),
-					newSessionBuilder(sqlEngine, serverConfig),
-					metListener,
-					v.goldenMysqlConnectionString(),
-				)
-			} else {
-				mySQLServer, err = server.NewServer(
-					serverConf,
-					sqlEngine.GetUnderlyingEngine(),
-					newSessionBuilder(sqlEngine, serverConfig),
-					metListener,
-				)
-			}
-			if errors.Is(err, server.UnixSocketInUseError) {
-				lgr.Warn("unix socket set up failed: file already in use: ", serverConf.Socket)
-				err = nil
-			}
-			return err
-		},
-	}
-	controller.Register(InitSQLServer)
-
 	InitLockSuperUser := &svcs.AnonService{
 		InitF: func(context.Context) error {
 			mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
@@ -500,6 +471,51 @@ func Serve(
 	}
 	controller.Register(RunClusterRemoteSrv)
 
+	// We still have some startup to do from this point, and we do not run
+	// the SQL server until we are fully booted. We also want to stop the
+	// SQL server as the first thing we stop. However, if startup fails
+	// during initialization, we want to shutdown the SQL server cleanly.
+	// So we track whether the server has been shutdown by either service
+	// which is responsible for it and we only do it here if it hasn't
+	// already been Closed.
+
+	var sqlServerClosed bool
+	var mySQLServer *server.Server
+	InitSQLServer := &svcs.AnonService{
+		InitF: func(context.Context) (err error) {
+			v, ok := serverConfig.(validatingServerConfig)
+			if ok && v.goldenMysqlConnectionString() != "" {
+				mySQLServer, err = server.NewValidatingServer(
+					serverConf,
+					sqlEngine.GetUnderlyingEngine(),
+					newSessionBuilder(sqlEngine, serverConfig),
+					metListener,
+					v.goldenMysqlConnectionString(),
+				)
+			} else {
+				mySQLServer, err = server.NewServer(
+					serverConf,
+					sqlEngine.GetUnderlyingEngine(),
+					newSessionBuilder(sqlEngine, serverConfig),
+					metListener,
+				)
+			}
+			if errors.Is(err, server.UnixSocketInUseError) {
+				lgr.Warn("unix socket set up failed: file already in use: ", serverConf.Socket)
+				err = nil
+			}
+			return err
+		},
+		StopF: func() (err error) {
+			if !sqlServerClosed {
+				sqlServerClosed = true
+				return mySQLServer.Close()
+			}
+			return nil
+		},
+	}
+	controller.Register(InitSQLServer)
+
 	RunClusterController := &svcs.AnonService{
 		InitF: func(context.Context) error {
 			if clusterController == nil {
@@ -535,6 +551,7 @@ func Serve(
 			mySQLServer.Start()
 		},
 		StopF: func() error {
+			sqlServerClosed = true
 			return mySQLServer.Close()
 		},
 	}
