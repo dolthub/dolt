@@ -56,8 +56,6 @@ const (
 	DoltClusterRoleVariable         = "dolt_cluster_role"
 	DoltClusterRoleEpochVariable    = "dolt_cluster_role_epoch"
 	DoltClusterAckWritesTimeoutSecs = "dolt_cluster_ack_writes_timeout_secs"
-
-	DisableDatabaseRenaming = "disable_database_renaming"
 )
 
 const URLTemplateDatabasePlaceholder = "{database}"

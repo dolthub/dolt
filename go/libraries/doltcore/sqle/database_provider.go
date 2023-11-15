@@ -73,7 +73,7 @@ var _ dsess.DoltDatabaseProvider = (*DoltDatabaseProvider)(nil)
 
 // NewDoltDatabaseProvider returns a new provider, initialized without any databases, along with any
 // errors that occurred while trying to create the database provider.
-func NewDoltDatabaseProvider(defaultBranch string, fs filesys.Filesys, disableHyphen bool) (*DoltDatabaseProvider, error) {
+func NewDoltDatabaseProvider(defaultBranch string, fs filesys.Filesys) (*DoltDatabaseProvider, error) {
 	return NewDoltDatabaseProviderWithDatabases(defaultBranch, fs, nil, nil)
 }
 

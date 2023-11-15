@@ -425,7 +425,7 @@ func (d *DoltHarness) newProvider() sql.MutableDatabaseProvider {
 	d.multiRepoEnv = mrEnv
 
 	b := env.GetDefaultInitBranch(d.multiRepoEnv.Config())
-	pro, err := sqle.NewDoltDatabaseProvider(b, d.multiRepoEnv.FileSystem(), env.DisableHyphenInDBName(dEnv.Config))
+	pro, err := sqle.NewDoltDatabaseProvider(b, d.multiRepoEnv.FileSystem())
 	require.NoError(d.t, err)
 
 	return pro

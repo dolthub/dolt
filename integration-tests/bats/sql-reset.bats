@@ -318,7 +318,7 @@ SQL
 }
 
 @test "sql-reset: CALL DOLT_RESET soft maintains staged session variable" {
-    dolt config --add database.disablehyphen true
+    export DOLT_DISABLE_DATABASE_RENAMING="false"
     working_hash_var=@@dolt_repo_$$_working
     run dolt sql -q "SELECT $working_hash_var"
     working_hash=$output
