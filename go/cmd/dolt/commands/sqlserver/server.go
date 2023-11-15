@@ -123,9 +123,8 @@ func Serve(
 
 	fs := dEnv.FS
 	InitDataDir := &svcs.Service{
-		Init: func(context.Context) error {
+		Init: func(context.Context) (err error) {
 			if len(serverConfig.DataDir()) > 0 && serverConfig.DataDir() != "." {
-				var err error
 				fs, err = dEnv.FS.WithWorkingDir(serverConfig.DataDir())
 				if err != nil {
 					return err
@@ -139,8 +138,7 @@ func Serve(
 
 	var serverLock *env.DBLock
 	InitGlobalServerLock := &svcs.Service{
-		Init: func(context.Context) error {
-			var err error
+		Init: func(context.Context) (err error) {
 			serverLock, err = acquireGlobalSqlServerLock(serverConfig.Port(), dEnv)
 			return err
 		},
@@ -153,8 +151,7 @@ func Serve(
 
 	var mrEnv *env.MultiRepoEnv
 	InitMultiEnv := &svcs.Service{
-		Init: func(ctx context.Context) error {
-			var err error
+		Init: func(ctx context.Context) (err error) {
 			mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 			return err
 		},
@@ -163,8 +160,7 @@ func Serve(
 
 	var clusterController *cluster.Controller
 	InitClusterController := &svcs.Service{
-		Init: func(context.Context) error {
-			var err error
+		Init: func(context.Context) (err error) {
 			clusterController, err = cluster.NewController(lgr, serverConfig.ClusterConfig(), mrEnv.Config())
 			return err
 		},
@@ -173,8 +169,7 @@ func Serve(
 
 	var serverConf server.Config
 	LoadServerConfig := &svcs.Service{
-		Init: func(context.Context) error {
-			var err error
+		Init: func(context.Context) (err error) {
 			serverConf, err = getConfigFromServerConfig(serverConfig)
 			return err
 		},
@@ -208,8 +203,7 @@ func Serve(
 
 	var esStatus eventscheduler.SchedulerStatus
 	InitEventSchedulerStatus := &svcs.Service{
-		Init: func(context.Context) error {
-			var err error
+		Init: func(context.Context) (err error) {
 			esStatus, err = getEventSchedulerStatus(serverConfig.EventSchedulerStatus())
 			if err != nil {
 				return err
@@ -222,8 +216,7 @@ func Serve(
 
 	var sqlEngine *engine.SqlEngine
 	InitSqlEngine := &svcs.Service{
-		Init: func(ctx context.Context) error {
-			var err error
+		Init: func(ctx context.Context) (err error) {
 			sqlEngine, err = engine.NewSqlEngine(
 				ctx,
 				mrEnv,
@@ -267,9 +260,8 @@ func Serve(
 
 	var listener *metricsListener
 	InitMetricsListener := &svcs.Service{
-		Init: func(context.Context) error {
+		Init: func(context.Context) (err error) {
 			labels := serverConfig.MetricsLabels()
-			var err error
 			listener, err = newMetricsListener(labels, version, clusterController)
 			return err
 		},
@@ -282,8 +274,7 @@ func Serve(
 
 	var mySQLServer *server.Server
 	InitSQLServer := &svcs.Service{
-		Init: func(context.Context) error {
-			var err error
+		Init: func(context.Context) (err error) {
 			v, ok := serverConfig.(validatingServerConfig)
 			if ok && v.goldenMysqlConnectionString() != "" {
 				mySQLServer, err = server.NewValidatingServer(
