@@ -1762,7 +1762,7 @@ func (m *valueMerger) processBaseColumn(ctx context.Context, i int, left, right,
 		rightCol, rightColIdx, rightColExists := getColumn(&right, &m.baseToRightMapping, i)
 
 		if !rightColExists {
-			// Right side deleted the column while left side deleted the row. This is not a conflict..
+			// Right side deleted the column while left side deleted the row. This is not a conflict.
 			return false, nil
 		}
 		// This is a conflict if the value on the right changed.
@@ -1782,7 +1782,7 @@ func (m *valueMerger) processBaseColumn(ctx context.Context, i int, left, right,
 
 	if right == nil {
 		// Right side deleted the row. Thus, left side must have modified the row in order for there to be a conflict to resolve.
-		leftCol, _, leftColExists := getColumn(&left, &m.baseToLeftMapping, i)
+		leftCol, leftColIdx, leftColExists := getColumn(&left, &m.baseToLeftMapping, i)
 
 		if !leftColExists {
 			// Left side deleted the column while right side deleted the row. This is not a conflict.
@@ -1791,17 +1791,11 @@ func (m *valueMerger) processBaseColumn(ctx context.Context, i int, left, right,
 		// This is a conflict if the value on the left changed.
 		// But if the left side only changed its representation (from ALTER COLUMN) and still has the same value,
 		// then this can be resolved.
-		// The left value was already converted to the result schema, so convert the base value too.
-		resultColIdx := m.baseToResultMapping[i]
-		if resultColIdx == -1 {
-			// The left column has already been migrated to the result schema, so if the left column exists, this should too.
-			panic("unreachable")
-		}
-		baseCol, err = convert(ctx, m.baseVD, m.resultVD, m.resultSchema, i, resultColIdx, base, baseCol, m.ns)
+		baseCol, err = convert(ctx, m.baseVD, m.leftVD, m.rightSchema, i, leftColIdx, base, baseCol, m.ns)
 		if err != nil {
 			return false, err
 		}
-		if m.resultVD.Comparator().CompareValues(i, baseCol, leftCol, m.resultVD.Types[resultColIdx]) == 0 {
+		if m.resultVD.Comparator().CompareValues(i, baseCol, leftCol, m.leftVD.Types[leftColIdx]) == 0 {
 			// left column did not change, so there is no conflict.
 			return false, nil
 		}
