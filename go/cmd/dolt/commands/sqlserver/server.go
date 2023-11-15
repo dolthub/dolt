@@ -48,6 +48,7 @@ import (
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
+	"github.com/dolthub/dolt/go/libraries/utils/svcs"
 )
 
 const (
@@ -63,335 +64,470 @@ func Serve(
 	ctx context.Context,
 	version string,
 	serverConfig ServerConfig,
-	serverController *ServerController,
+	controller *svcs.Controller,
 	dEnv *env.DoltEnv,
 ) (startError error, closeError error) {
 	// Code is easier to work through if we assume that serverController is never nil
-	if serverController == nil {
-		serverController = NewServerController()
+	if controller == nil {
+		controller = svcs.NewController()
 	}
 
-	var mySQLServer *server.Server
-	// This guarantees unblocking on any routines with a waiting `ServerController`
-	defer func() {
-		if mySQLServer != nil {
-			serverController.registerCloseFunction(startError, mySQLServer.Close)
-		} else {
-			serverController.registerCloseFunction(startError, func() error { return nil })
-		}
-		serverController.StopServer()
-		serverController.serverStopped(closeError)
-		sqlserver.UnsetRunningServer()
-	}()
-
-	if startError = ValidateConfig(serverConfig); startError != nil {
-		return startError, nil
+	ValidateConfigStep := &svcs.Service{
+		Init: func(context.Context) error {
+			return ValidateConfig(serverConfig)
+		},
 	}
+	controller.Register(ValidateConfigStep)
 
 	lgr := logrus.StandardLogger()
 	lgr.SetOutput(cli.CliErr)
+	InitLogging := &svcs.Service{
+		Init: func(context.Context) error {
+			level, err := logrus.ParseLevel(serverConfig.LogLevel().String())
+			if err != nil {
+				return err
+			}
+			logrus.SetLevel(level)
 
-	if serverConfig.LogLevel() != LogLevel_Info {
-		var level logrus.Level
-		level, startError = logrus.ParseLevel(serverConfig.LogLevel().String())
-		if startError != nil {
-			cli.PrintErr(startError)
-			return
-		}
-		logrus.SetLevel(level)
-	}
-	logrus.SetFormatter(LogFormat{})
+			sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
+				{
+					Name:              dsess.DoltLogLevel,
+					Scope:             sql.SystemVariableScope_Global,
+					Dynamic:           true,
+					SetVarHintApplies: false,
+					Type: types.NewSystemEnumType(dsess.DoltLogLevel,
+						logrus.PanicLevel.String(),
+						logrus.FatalLevel.String(),
+						logrus.ErrorLevel.String(),
+						logrus.WarnLevel.String(),
+						logrus.InfoLevel.String(),
+						logrus.DebugLevel.String(),
+						logrus.TraceLevel.String(),
+					),
+					Default: logrus.GetLevel().String(),
+					NotifyChanged: func(scope sql.SystemVariableScope, v sql.SystemVarValue) error {
+						level, err := logrus.ParseLevel(v.Val.(string))
+						if err != nil {
+							return fmt.Errorf("could not parse requested log level %s as a log level. dolt_log_level variable value and logging behavior will diverge.", v.Val.(string))
+						}
 
-	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
-		{
-			Name:              dsess.DoltLogLevel,
-			Scope:             sql.SystemVariableScope_Global,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type: types.NewSystemEnumType(dsess.DoltLogLevel,
-				logrus.PanicLevel.String(),
-				logrus.FatalLevel.String(),
-				logrus.ErrorLevel.String(),
-				logrus.WarnLevel.String(),
-				logrus.InfoLevel.String(),
-				logrus.DebugLevel.String(),
-				logrus.TraceLevel.String(),
-			),
-			Default: logrus.GetLevel().String(),
-			NotifyChanged: func(scope sql.SystemVariableScope, v sql.SystemVarValue) error {
-				level, err := logrus.ParseLevel(v.Val.(string))
-				if err != nil {
-					return fmt.Errorf("could not parse requested log level %s as a log level. dolt_log_level variable value and logging behavior will diverge.", v.Val.(string))
-				}
-
-				logrus.SetLevel(level)
-				return nil
-			},
+						logrus.SetLevel(level)
+						return nil
+					},
+				},
+			})
+			return nil
 		},
-	})
+	}
+	controller.Register(InitLogging)
+
+	fs := dEnv.FS
+	InitDataDir := &svcs.Service{
+		Init: func(context.Context) error {
+			if len(serverConfig.DataDir()) > 0 && serverConfig.DataDir() != "." {
+				var err error
+				fs, err = dEnv.FS.WithWorkingDir(serverConfig.DataDir())
+				if err != nil {
+					return err
+				}
+				dEnv.FS = fs
+			}
+			return nil
+		},
+	}
+	controller.Register(InitDataDir)
+
+	var serverLock *env.DBLock
+	InitGlobalServerLock := &svcs.Service{
+		Init: func(context.Context) error {
+			var err error
+			serverLock, err = acquireGlobalSqlServerLock(serverConfig.Port(), dEnv)
+			return err
+		},
+		Stop: func() error {
+			dEnv.FS.Delete(dEnv.LockFile(), false)
+			return nil
+		},
+	}
+	controller.Register(InitGlobalServerLock)
 
 	var mrEnv *env.MultiRepoEnv
-	var err error
-	fs := dEnv.FS
-
-	if len(serverConfig.DataDir()) > 0 && serverConfig.DataDir() != "." {
-		fs, err = dEnv.FS.WithWorkingDir(serverConfig.DataDir())
-		if err != nil {
-			return err, nil
-		}
-		dEnv.FS = fs
+	InitMultiEnv := &svcs.Service{
+		Init: func(ctx context.Context) error {
+			var err error
+			mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+			return err
+		},
 	}
+	controller.Register(InitMultiEnv)
 
-	serverLock, startError := acquireGlobalSqlServerLock(serverConfig.Port(), dEnv)
-	if startError != nil {
-		return
+	var clusterController *cluster.Controller
+	InitClusterController := &svcs.Service{
+		Init: func(context.Context) error {
+			var err error
+			clusterController, err = cluster.NewController(lgr, serverConfig.ClusterConfig(), mrEnv.Config())
+			return err
+		},
 	}
-	defer dEnv.FS.Delete(dEnv.LockFile(), false)
+	controller.Register(InitClusterController)
 
-	mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
-	if err != nil {
-		return err, nil
+	var serverConf server.Config
+	LoadServerConfig := &svcs.Service{
+		Init: func(context.Context) error {
+			var err error
+			serverConf, err = getConfigFromServerConfig(serverConfig)
+			return err
+		},
 	}
-
-	clusterController, err := cluster.NewController(lgr, serverConfig.ClusterConfig(), mrEnv.Config())
-	if err != nil {
-		return err, nil
-	}
-
-	serverConf, sErr, cErr := getConfigFromServerConfig(serverConfig)
-	if cErr != nil {
-		return nil, cErr
-	} else if sErr != nil {
-		return sErr, nil
-	}
+	controller.Register(LoadServerConfig)
 
 	// Create SQL Engine with users
-	config := &engine.SqlEngineConfig{
-		IsReadOnly:              serverConfig.ReadOnly(),
-		PrivFilePath:            serverConfig.PrivilegeFilePath(),
-		BranchCtrlFilePath:      serverConfig.BranchControlFilePath(),
-		DoltCfgDirPath:          serverConfig.CfgDir(),
-		ServerUser:              serverConfig.User(),
-		ServerPass:              serverConfig.Password(),
-		ServerHost:              serverConfig.Host(),
-		Autocommit:              serverConfig.AutoCommit(),
-		DoltTransactionCommit:   serverConfig.DoltTransactionCommit(),
-		JwksConfig:              serverConfig.JwksConfig(),
-		SystemVariables:         serverConfig.SystemVars(),
-		ClusterController:       clusterController,
-		BinlogReplicaController: binlogreplication.DoltBinlogReplicaController,
-	}
-	esStatus, err := getEventSchedulerStatus(serverConfig.EventSchedulerStatus())
-	if err != nil {
-		return err, nil
-	}
-	config.EventSchedulerStatus = esStatus
 
-	sqlEngine, err := engine.NewSqlEngine(
-		ctx,
-		mrEnv,
-		config,
-	)
-	if err != nil {
-		return err, nil
+	var config *engine.SqlEngineConfig
+	InitSqlEngineConfig := &svcs.Service{
+		Init: func(context.Context) error {
+			config = &engine.SqlEngineConfig{
+				IsReadOnly:              serverConfig.ReadOnly(),
+				PrivFilePath:            serverConfig.PrivilegeFilePath(),
+				BranchCtrlFilePath:      serverConfig.BranchControlFilePath(),
+				DoltCfgDirPath:          serverConfig.CfgDir(),
+				ServerUser:              serverConfig.User(),
+				ServerPass:              serverConfig.Password(),
+				ServerHost:              serverConfig.Host(),
+				Autocommit:              serverConfig.AutoCommit(),
+				DoltTransactionCommit:   serverConfig.DoltTransactionCommit(),
+				JwksConfig:              serverConfig.JwksConfig(),
+				SystemVariables:         serverConfig.SystemVars(),
+				ClusterController:       clusterController,
+				BinlogReplicaController: binlogreplication.DoltBinlogReplicaController,
+			}
+			return nil
+		},
 	}
-	defer sqlEngine.Close()
+	controller.Register(InitSqlEngineConfig)
+
+	var esStatus eventscheduler.SchedulerStatus
+	InitEventSchedulerStatus := &svcs.Service{
+		Init: func(context.Context) error {
+			var err error
+			esStatus, err = getEventSchedulerStatus(serverConfig.EventSchedulerStatus())
+			if err != nil {
+				return err
+			}
+			config.EventSchedulerStatus = esStatus
+			return nil
+		},
+	}
+	controller.Register(InitEventSchedulerStatus)
+
+	var sqlEngine *engine.SqlEngine
+	InitSqlEngine := &svcs.Service{
+		Init: func(ctx context.Context) error {
+			var err error
+			sqlEngine, err = engine.NewSqlEngine(
+				ctx,
+				mrEnv,
+				config,
+			)
+			return err
+		},
+		Stop: func() error {
+			sqlEngine.Close()
+			return nil
+		},
+	}
+	controller.Register(InitSqlEngine)
 
 	// Add superuser if specified user exists; add root superuser if no user specified and no existing privileges
-	userSpecified := config.ServerUser != ""
+	var userSpecified bool
 
-	mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
-	ed := mysqlDb.Editor()
-	var numUsers int
-	ed.VisitUsers(func(*mysql_db.User) { numUsers += 1 })
-	privsExist := numUsers != 0
-	if userSpecified {
-		superuser := mysqlDb.GetUser(ed, config.ServerUser, "%", false)
-		if userSpecified && superuser == nil {
-			mysqlDb.AddSuperUser(ed, config.ServerUser, "%", config.ServerPass)
-		}
-	} else if !privsExist {
-		mysqlDb.AddSuperUser(ed, defaultUser, "%", defaultPass)
+	InitSuperUser := &svcs.Service{
+		Init: func(context.Context) error {
+			userSpecified = config.ServerUser != ""
+
+			mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
+			ed := mysqlDb.Editor()
+			var numUsers int
+			ed.VisitUsers(func(*mysql_db.User) { numUsers += 1 })
+			privsExist := numUsers != 0
+			if userSpecified {
+				superuser := mysqlDb.GetUser(ed, config.ServerUser, "%", false)
+				if userSpecified && superuser == nil {
+					mysqlDb.AddSuperUser(ed, config.ServerUser, "%", config.ServerPass)
+				}
+			} else if !privsExist {
+				mysqlDb.AddSuperUser(ed, defaultUser, "%", defaultPass)
+			}
+			ed.Close()
+
+			return nil
+		},
 	}
-	ed.Close()
-
-	labels := serverConfig.MetricsLabels()
+	controller.Register(InitSuperUser)
 
 	var listener *metricsListener
-	listener, startError = newMetricsListener(labels, version, clusterController)
-	if startError != nil {
-		cli.Println(startError)
-		return
+	InitMetricsListener := &svcs.Service{
+		Init: func(context.Context) error {
+			labels := serverConfig.MetricsLabels()
+			var err error
+			listener, err = newMetricsListener(labels, version, clusterController)
+			return err
+		},
+		Stop: func() error {
+			listener.Close()
+			return nil
+		},
 	}
-	defer listener.Close()
+	controller.Register(InitMetricsListener)
 
-	v, ok := serverConfig.(validatingServerConfig)
-	if ok && v.goldenMysqlConnectionString() != "" {
-		mySQLServer, startError = server.NewValidatingServer(
-			serverConf,
-			sqlEngine.GetUnderlyingEngine(),
-			newSessionBuilder(sqlEngine, serverConfig),
-			listener,
-			v.goldenMysqlConnectionString(),
-		)
-	} else {
-		mySQLServer, startError = server.NewServer(
-			serverConf,
-			sqlEngine.GetUnderlyingEngine(),
-			newSessionBuilder(sqlEngine, serverConfig),
-			listener,
-		)
+	var mySQLServer *server.Server
+	InitSQLServer := &svcs.Service{
+		Init: func(context.Context) error {
+			var err error
+			v, ok := serverConfig.(validatingServerConfig)
+			if ok && v.goldenMysqlConnectionString() != "" {
+				mySQLServer, err = server.NewValidatingServer(
+					serverConf,
+					sqlEngine.GetUnderlyingEngine(),
+					newSessionBuilder(sqlEngine, serverConfig),
+					listener,
+					v.goldenMysqlConnectionString(),
+				)
+			} else {
+				mySQLServer, err = server.NewServer(
+					serverConf,
+					sqlEngine.GetUnderlyingEngine(),
+					newSessionBuilder(sqlEngine, serverConfig),
+					listener,
+				)
+			}
+			if errors.Is(err, server.UnixSocketInUseError) {
+				lgr.Warn("unix socket set up failed: file already in use: ", serverConf.Socket)
+				err = nil
+			}
+			return err
+		},
 	}
+	controller.Register(InitSQLServer)
 
-	if errors.Is(startError, server.UnixSocketInUseError) {
-		lgr.Warn("unix socket set up failed: file already in use: ", serverConf.Socket)
-		startError = nil
-	} else if startError != nil {
-		cli.PrintErr(startError)
-		return
+	LockMultiRepoEnv := &svcs.Service{
+		Init: func(context.Context) error {
+			if ok, f := mrEnv.IsLocked(); ok {
+				return env.ErrActiveServerLock.New(f)
+			}
+			if err := mrEnv.Lock(serverLock); err != nil {
+				return err
+			}
+			return nil
+		},
+		Stop: func() error {
+			if err := mrEnv.Unlock(); err != nil {
+				cli.PrintErr(err)
+			}
+			return nil
+		},
 	}
+	controller.Register(LockMultiRepoEnv)
 
-	sqlserver.SetRunningServer(mySQLServer, serverLock)
-
-	ed = mysqlDb.Editor()
-	mysqlDb.AddSuperUser(ed, LocalConnectionUser, "localhost", serverLock.Secret)
-	ed.Close()
-	if ExternalDisableUsers {
-		mysqlDb.SetEnabled(false)
+	InitLockSuperUser := &svcs.Service{
+		Init: func(context.Context) error {
+			mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
+			ed := mysqlDb.Editor()
+			mysqlDb.AddSuperUser(ed, LocalConnectionUser, "localhost", serverLock.Secret)
+			ed.Close()
+			return nil
+		},
 	}
+	controller.Register(InitLockSuperUser)
+
+	DisableMySQLDbIfRequired := &svcs.Service{
+		Init: func(context.Context) error {
+			if ExternalDisableUsers {
+				mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
+				mysqlDb.SetEnabled(false)
+			}
+			return nil
+		},
+	}
+	controller.Register(DisableMySQLDbIfRequired)
 
 	var metSrv *http.Server
-	if serverConfig.MetricsHost() != "" && serverConfig.MetricsPort() > 0 {
-		mux := http.NewServeMux()
-		mux.Handle("/metrics", promhttp.Handler())
+	RunMetricsServer := &svcs.Service{
+		Run: func(context.Context) {
+			if serverConfig.MetricsHost() != "" && serverConfig.MetricsPort() > 0 {
+				mux := http.NewServeMux()
+				mux.Handle("/metrics", promhttp.Handler())
 
-		metSrv = &http.Server{
-			Addr:    fmt.Sprintf("%s:%d", serverConfig.MetricsHost(), serverConfig.MetricsPort()),
-			Handler: mux,
-		}
+				metSrv = &http.Server{
+					Addr:    fmt.Sprintf("%s:%d", serverConfig.MetricsHost(), serverConfig.MetricsPort()),
+					Handler: mux,
+				}
 
-		go func() {
-			_ = metSrv.ListenAndServe()
-		}()
+				_ = metSrv.ListenAndServe()
+			}
+		},
+		Stop: func() error {
+			if metSrv != nil {
+				metSrv.Close()
+			}
+			return nil
+		},
 	}
+	controller.Register(RunMetricsServer)
 
 	var remoteSrv *remotesrv.Server
-	if serverConfig.RemotesapiPort() != nil {
-		port := *serverConfig.RemotesapiPort()
-		listenaddr := fmt.Sprintf(":%d", port)
-		args, err := sqle.RemoteSrvServerArgs(sqlEngine.NewDefaultContext, remotesrv.ServerArgs{
-			Logger:         logrus.NewEntry(lgr),
-			ReadOnly:       true,
-			HttpListenAddr: listenaddr,
-			GrpcListenAddr: listenaddr,
-		})
-		if err != nil {
-			lgr.Errorf("error creating SQL engine context for remotesapi server: %v", err)
-			startError = err
-			return
-		}
+	var remoteSrvListeners remotesrv.Listeners
+	RunRemoteSrv := &svcs.Service{
+		Init: func(ctx context.Context) error {
+			if serverConfig.RemotesapiPort() == nil {
+				return nil
+			}
 
-		ctxFactory := func() (*sql.Context, error) { return sqlEngine.NewDefaultContext(ctx) }
-		authenticator := newAuthenticator(ctxFactory, sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb)
-		args = sqle.WithUserPasswordAuth(args, authenticator)
+			port := *serverConfig.RemotesapiPort()
+			listenaddr := fmt.Sprintf(":%d", port)
+			args, err := sqle.RemoteSrvServerArgs(sqlEngine.NewDefaultContext, remotesrv.ServerArgs{
+				Logger:         logrus.NewEntry(lgr),
+				ReadOnly:       true,
+				HttpListenAddr: listenaddr,
+				GrpcListenAddr: listenaddr,
+			})
+			if err != nil {
+				lgr.Errorf("error creating SQL engine context for remotesapi server: %v", err)
+				return err
+			}
 
-		args.TLSConfig = serverConf.TLSConfig
-		remoteSrv, err = remotesrv.NewServer(args)
-		if err != nil {
-			lgr.Errorf("error creating remotesapi server on port %d: %v", port, err)
-			startError = err
-			return
-		}
-		listeners, err := remoteSrv.Listeners()
-		if err != nil {
-			lgr.Errorf("error starting remotesapi server listeners on port %d: %v", port, err)
-			startError = err
-			return
-		} else {
-			go remoteSrv.Serve(listeners)
-		}
+			ctxFactory := func() (*sql.Context, error) { return sqlEngine.NewDefaultContext(ctx) }
+			authenticator := newAuthenticator(ctxFactory, sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb)
+			args = sqle.WithUserPasswordAuth(args, authenticator)
+			args.TLSConfig = serverConf.TLSConfig
+
+			remoteSrv, err = remotesrv.NewServer(args)
+			if err != nil {
+				lgr.Errorf("error creating remotesapi server on port %d: %v", port, err)
+				return err
+			}
+			remoteSrvListeners, err = remoteSrv.Listeners()
+			if err != nil {
+				lgr.Errorf("error starting remotesapi server listeners on port %d: %v", port, err)
+				return err
+			}
+			return nil
+		},
+		Run: func(ctx context.Context) {
+			if remoteSrv == nil {
+				return
+			}
+			remoteSrv.Serve(remoteSrvListeners)
+		},
+		Stop: func() error {
+			if remoteSrv == nil {
+				return nil
+			}
+			remoteSrv.GracefulStop()
+			return nil
+		},
 	}
+	controller.Register(RunRemoteSrv)
 
 	var clusterRemoteSrv *remotesrv.Server
-	if clusterController != nil {
-		args, err := clusterController.RemoteSrvServerArgs(sqlEngine.NewDefaultContext, remotesrv.ServerArgs{
-			Logger: logrus.NewEntry(lgr),
-		})
-		if err != nil {
-			lgr.Errorf("error creating SQL engine context for remotesapi server: %v", err)
-			startError = err
-			return
-		}
+	var clusterRemoteSrvListeners remotesrv.Listeners
+	RunClusterRemoteSrv := &svcs.Service{
+		Init: func(context.Context) error {
+			if clusterController == nil {
+				return nil
+			}
 
-		clusterRemoteSrvTLSConfig, err := LoadClusterTLSConfig(serverConfig.ClusterConfig())
-		if err != nil {
-			lgr.Errorf("error starting remotesapi server for cluster config, could not load tls config: %v", err)
-			startError = err
-			return
-		}
-		args.TLSConfig = clusterRemoteSrvTLSConfig
+			args, err := clusterController.RemoteSrvServerArgs(sqlEngine.NewDefaultContext, remotesrv.ServerArgs{
+				Logger: logrus.NewEntry(lgr),
+			})
+			if err != nil {
+				lgr.Errorf("error creating SQL engine context for remotesapi server: %v", err)
+				return err
+			}
 
-		clusterRemoteSrv, err = remotesrv.NewServer(args)
-		if err != nil {
-			lgr.Errorf("error creating remotesapi server on port %d: %v", *serverConfig.RemotesapiPort(), err)
-			startError = err
-			return
-		}
-		clusterController.RegisterGrpcServices(sqlEngine.NewDefaultContext, clusterRemoteSrv.GrpcServer())
+			clusterRemoteSrvTLSConfig, err := LoadClusterTLSConfig(serverConfig.ClusterConfig())
+			if err != nil {
+				lgr.Errorf("error starting remotesapi server for cluster config, could not load tls config: %v", err)
+				return err
+			}
+			args.TLSConfig = clusterRemoteSrvTLSConfig
 
-		listeners, err := clusterRemoteSrv.Listeners()
-		if err != nil {
-			lgr.Errorf("error starting remotesapi server listeners for cluster config on %s: %v", clusterController.RemoteSrvListenAddr(), err)
-			startError = err
-			return
-		}
+			clusterRemoteSrv, err = remotesrv.NewServer(args)
+			if err != nil {
+				lgr.Errorf("error creating remotesapi server on port %d: %v", *serverConfig.RemotesapiPort(), err)
+				return err
+			}
+			clusterController.RegisterGrpcServices(sqlEngine.NewDefaultContext, clusterRemoteSrv.GrpcServer())
 
-		go clusterRemoteSrv.Serve(listeners)
-		go clusterController.Run()
-
-		clusterController.ManageQueryConnections(
-			mySQLServer.SessionManager().Iter,
-			sqlEngine.GetUnderlyingEngine().ProcessList.Kill,
-			mySQLServer.SessionManager().KillConnection,
-		)
-	}
-
-	if ok, f := mrEnv.IsLocked(); ok {
-		startError = env.ErrActiveServerLock.New(f)
-		return
-	}
-
-	if err = mrEnv.Lock(serverLock); err != nil {
-		startError = err
-		return
-	}
-
-	serverController.registerCloseFunction(startError, func() error {
-		if metSrv != nil {
-			metSrv.Close()
-		}
-		if remoteSrv != nil {
-			remoteSrv.GracefulStop()
-		}
-		if clusterRemoteSrv != nil {
+			clusterRemoteSrvListeners, err = clusterRemoteSrv.Listeners()
+			if err != nil {
+				lgr.Errorf("error starting remotesapi server listeners for cluster config on %s: %v", clusterController.RemoteSrvListenAddr(), err)
+				return err
+			}
+			return nil
+		},
+		Run: func(context.Context) {
+			if clusterRemoteSrv == nil {
+				return
+			}
+			clusterRemoteSrv.Serve(clusterRemoteSrvListeners)
+		},
+		Stop: func() error {
+			if clusterRemoteSrv == nil {
+				return nil
+			}
 			clusterRemoteSrv.GracefulStop()
-		}
-		if clusterController != nil {
+			return nil
+		},
+	}
+	controller.Register(RunClusterRemoteSrv)
+
+	RunClusterController := &svcs.Service{
+		Init: func(context.Context) error {
+			if clusterController == nil {
+				return nil
+			}
+			clusterController.ManageQueryConnections(
+				mySQLServer.SessionManager().Iter,
+				sqlEngine.GetUnderlyingEngine().ProcessList.Kill,
+				mySQLServer.SessionManager().KillConnection,
+			)
+			return nil
+		},
+		Run: func(context.Context) {
+			if clusterController == nil {
+				return
+			}
+			clusterController.Run()
+		},
+		Stop: func() error {
+			if clusterController == nil {
+				return nil
+			}
 			clusterController.GracefulStop()
-		}
-
-		return mySQLServer.Close()
-	})
-
-	closeError = mySQLServer.Start()
-	if closeError != nil {
-		cli.PrintErr(closeError)
+			return nil
+		},
 	}
-	if err := mrEnv.Unlock(); err != nil {
-		cli.PrintErr(err)
-	}
+	controller.Register(RunClusterController)
 
-	return
+	RunSQLServer := &svcs.Service{
+		Run: func(context.Context) {
+			sqlserver.SetRunningServer(mySQLServer, serverLock)
+			defer sqlserver.UnsetRunningServer()
+			mySQLServer.Start()
+		},
+		Stop: func() error {
+			return mySQLServer.Close()
+		},
+	}
+	controller.Register(RunSQLServer)
+
+	go controller.Start(ctx)
+	err := controller.WaitForStart()
+	if err != nil {
+		return err, nil
+	}
+	return nil, controller.WaitForStop()
 }
 
 // acquireGlobalSqlServerLock attempts to acquire a global lock on the SQL server. If no error is returned, then the lock was acquired.
@@ -514,10 +650,10 @@ func newSessionBuilder(se *engine.SqlEngine, config ServerConfig) server.Session
 }
 
 // getConfigFromServerConfig processes ServerConfig and returns server.Config for sql-server.
-func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error, error) {
+func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error) {
 	serverConf, err := handleProtocolAndAddress(serverConfig)
 	if err != nil {
-		return server.Config{}, err, nil
+		return server.Config{}, err
 	}
 
 	serverConf.DisableClientMultiStatements = serverConfig.DisableClientMultiStatements()
@@ -527,7 +663,7 @@ func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error,
 
 	tlsConfig, err := LoadTLSConfig(serverConfig)
 	if err != nil {
-		return server.Config{}, nil, err
+		return server.Config{}, err
 	}
 
 	// if persist is 'load' we use currently set persisted global variable,
@@ -535,12 +671,12 @@ func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error,
 	if serverConfig.PersistenceBehavior() == loadPerisistentGlobals {
 		serverConf, err = serverConf.NewConfig()
 		if err != nil {
-			return server.Config{}, err, nil
+			return server.Config{}, err
 		}
 	} else {
 		err = sql.SystemVariables.SetGlobal("max_connections", serverConfig.MaxConnections())
 		if err != nil {
-			return server.Config{}, err, nil
+			return server.Config{}, err
 		}
 	}
 
@@ -554,7 +690,7 @@ func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error,
 	serverConf.MaxLoggedQueryLen = serverConfig.MaxLoggedQueryLen()
 	serverConf.EncodeLoggedQuery = serverConfig.ShouldEncodeLoggedQuery()
 
-	return serverConf, nil, nil
+	return serverConf, nil
 }
 
 // handleProtocolAndAddress returns new server.Config object with only Protocol and Address defined.

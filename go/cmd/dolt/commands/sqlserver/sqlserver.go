@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/svcs"
 )
 
 const (
@@ -186,12 +187,20 @@ func (cmd SqlServerCmd) RequiresRepo() bool {
 
 // Exec executes the command
 func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-	controller := NewServerController()
+	controller := svcs.NewController()
 	newCtx, cancelF := context.WithCancel(context.Background())
 	go func() {
-		<-ctx.Done()
-		controller.StopServer()
-		cancelF()
+		// Here we only forward along the SIGINT if the server starts
+		// up successfully.  If the service does not start up
+		// successfully, or if WaitForStart() blocks indefinitely, then
+		// startServer() should have returned an error and we do not
+		// need to Stop the running server or deal with our canceled
+		// parent context.
+		if controller.WaitForStart() == nil {
+			<-ctx.Done()
+			controller.Stop()
+			cancelF()
+		}
 	}()
 	return startServer(newCtx, cmd.VersionStr, commandStr, args, dEnv, controller)
 }
@@ -208,7 +217,7 @@ func validateSqlServerArgs(apr *argparser.ArgParseResults) error {
 	return nil
 }
 
-func startServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
+func startServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, controller *svcs.Controller) int {
 	ap := SqlServerCmd{}.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlServerDocs, ap))
 
@@ -222,21 +231,11 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 	}
 	serverConfig, err := GetServerConfig(dEnv.FS, apr)
 	if err != nil {
-		if serverController != nil {
-			serverController.StopServer()
-			serverController.serverStopped(err)
-		}
-
 		cli.PrintErrln(color.RedString("Failed to start server. Bad Configuration"))
 		cli.PrintErrln(err.Error())
 		return 1
 	}
 	if err = SetupDoltConfig(dEnv, apr, serverConfig); err != nil {
-		if serverController != nil {
-			serverController.StopServer()
-			serverController.serverStopped(err)
-		}
-
 		cli.PrintErrln(color.RedString("Failed to start server. Bad Configuration"))
 		cli.PrintErrln(err.Error())
 		return 1
@@ -244,7 +243,7 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 
 	cli.PrintErrf("Starting server with Config %v\n", ConfigInfo(serverConfig))
 
-	if startError, closeError := Serve(ctx, versionStr, serverConfig, serverController, dEnv); startError != nil || closeError != nil {
+	if startError, closeError := Serve(ctx, versionStr, serverConfig, controller, dEnv); startError != nil || closeError != nil {
 		if startError != nil {
 			cli.PrintErrln(startError)
 		}
