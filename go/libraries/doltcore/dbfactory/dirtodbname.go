@@ -15,16 +15,19 @@
 package dbfactory
 
 import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
+	"os"
 	"strings"
 	"unicode"
 )
 
 // DirToDBName takes the physical directory name, |dirName|, and replaces any unsupported characters to create a
 // valid logical database name. For example, spaces are replaced with underscores.
-func DirToDBName(dirName string, disableHyphen bool) string {
+func DirToDBName(dirName string) string {
+	var translateHyphensToUnderscores = os.Getenv(dconfig.EnvDisableDatabaseRenaming) != ""
 	dbName := strings.TrimSpace(dirName)
 	dbName = strings.Map(func(r rune) rune {
-		if unicode.IsSpace(r) || (disableHyphen && r == '-') {
+		if unicode.IsSpace(r) || (translateHyphensToUnderscores && r == '-') {
 			return '_'
 		}
 		return r

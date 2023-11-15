@@ -16,6 +16,7 @@ package env
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"os"
 	"path/filepath"
 	"testing"
@@ -32,24 +33,30 @@ import (
 )
 
 func TestDirToDBName(t *testing.T) {
-	tests := map[string]string{
+	replaceHyphenTests := map[string]string{
+		"corona-virus":       "corona_virus",
+		"  real - name     ": "real_name",
+	}
+
+	err := os.Setenv(dconfig.EnvDisableDatabaseRenaming, "true")
+	require.NoError(t, err)
+
+	for dirName, expected := range replaceHyphenTests {
+		actual := dbfactory.DirToDBName(dirName)
+		assert.Equal(t, expected, actual)
+	}
+
+	allowHyphenTests := map[string]string{
 		"irs":                "irs",
 		"corona-virus":       "corona-virus",
 		"  fake - name     ": "fake_-_name",
 	}
 
-	for dirName, expected := range tests {
-		actual := dbfactory.DirToDBName(dirName, false)
-		assert.Equal(t, expected, actual)
-	}
+	err = os.Setenv(dconfig.EnvDisableDatabaseRenaming, "")
+	require.NoError(t, err)
 
-	hyphenTests := map[string]string{
-		"corona-virus":       "corona_virus",
-		"  real - name     ": "real_name",
-	}
-
-	for dirName, expected := range hyphenTests {
-		actual := dbfactory.DirToDBName(dirName, true)
+	for dirName, expected := range allowHyphenTests {
+		actual := dbfactory.DirToDBName(dirName)
 		assert.Equal(t, expected, actual)
 	}
 }

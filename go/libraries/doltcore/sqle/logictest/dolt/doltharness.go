@@ -292,7 +292,7 @@ func sqlNewEngine(dEnv *env.DoltEnv) (*sqle.Engine, dsess.DoltDatabaseProvider, 
 	}
 
 	b := env.GetDefaultInitBranch(dEnv.Config)
-	pro, err := dsql.NewDoltDatabaseProviderWithDatabase(b, mrEnv.FileSystem(), db, dEnv.FS, env.DisableHyphenInDBName(dEnv.Config))
+	pro, err := dsql.NewDoltDatabaseProviderWithDatabase(b, mrEnv.FileSystem(), db, dEnv.FS)
 	if err != nil {
 		return nil, nil, err
 	}

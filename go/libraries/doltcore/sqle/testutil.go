@@ -126,7 +126,7 @@ func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvid
 // NewTestEngine creates a new default engine, and a *sql.Context and initializes indexes and schema fragments.
 func NewTestEngine(dEnv *env.DoltEnv, ctx context.Context, db dsess.SqlDatabase) (*sqle.Engine, *sql.Context, error) {
 	b := env.GetDefaultInitBranch(dEnv.Config)
-	pro, err := NewDoltDatabaseProviderWithDatabase(b, dEnv.FS, db, dEnv.FS, env.DisableHyphenInDBName(dEnv.Config))
+	pro, err := NewDoltDatabaseProviderWithDatabase(b, dEnv.FS, db, dEnv.FS)
 	if err != nil {
 		return nil, nil, err
 	}

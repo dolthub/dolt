@@ -183,7 +183,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			cli.PrintErrln(color.RedString(err.Error()))
 			return 1
 		}
-		dbToUse = dbfactory.DirToDBName(filepath.Base(directory), env.DisableHyphenInDBName(dEnv.Config))
+		dbToUse = dbfactory.DirToDBName(filepath.Base(directory))
 	}
 	format := engine.FormatTabular
 	if hasResultFormat {

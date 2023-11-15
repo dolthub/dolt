@@ -6,7 +6,7 @@ setup() {
     skiponwindows "Missing dependencies"
 
     setup_common
-    dolt config --add database.disablehyphen true
+    export DOLT_DISABLE_DATABASE_RENAMING="false"
 }
 
 teardown() {

@@ -3,7 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    dolt config --add database.disablehyphen true
+    export DOLT_DISABLE_DATABASE_RENAMING="false"
     database_name=dolt_repo_$$
 
     dolt sql -q "CREATE TABLE test(pk int PRIMARY KEY, color varchar(200))"

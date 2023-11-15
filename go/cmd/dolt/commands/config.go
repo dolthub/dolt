@@ -47,8 +47,6 @@ When writing, the new value is written to the repository local configuration fil
 
 Valid configuration variables:
 
-	- database.disablehyphen - boolean flag replaces hyphens with underscores in database name when true.
-
 	- core.editor - lets you edit 'commit' or 'tag' messages by launching the set editor.
 
 	- creds.add_url - sets the endpoint used to authenticate a client for 'dolt login'.

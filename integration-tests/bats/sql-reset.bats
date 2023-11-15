@@ -54,10 +54,10 @@ teardown() {
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
-@test "sql-reset: CALL DRESET --hard works on unstaged and staged table changes" {
+@test "sql-reset: CALL DOLT_RESET --hard works on unstaged and staged table changes" {
     dolt sql -q "INSERT INTO test VALUES (1)"
 
-    run dolt sql -q "CALL DRESET('--hard')"
+    run dolt sql -q "CALL DOLT_RESET('--hard')"
     [ $status -eq 0 ]
 
     run dolt status
@@ -280,7 +280,7 @@ SQL
 }
 
 @test "sql-reset: CALL DOLT_RESET --hard properly maintains session variables." {
-    dolt config --add database.disablehyphen true
+    export DOLT_DISABLE_DATABASE_RENAMING="false"
     head_variable=@@dolt_repo_$$_head
     head_hash=$(get_head_commit)
     run dolt sql << SQL

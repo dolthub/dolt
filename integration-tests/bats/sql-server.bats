@@ -1788,7 +1788,7 @@ behavior:
 
 @test "sql-server: dropping database with '-' in it but replaced with underscore" {
     skiponwindows "Missing dependencies"
-    dolt config --global --add database.disablehyphen true
+    export DOLT_DISABLE_DATABASE_RENAMING="false"
     mkdir my-db
     cd my-db
     dolt init

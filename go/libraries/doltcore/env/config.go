@@ -52,10 +52,6 @@ const (
 	MetricsInsecure = "metrics.insecure"
 
 	PushAutoSetupRemote = "push.autosetupremote"
-
-	// DisableHyphenInDatabaseName is used whether to allow hyphon in database name. Defaults to false.
-	// If set to true, all hyphens in database name will be replaced with underscore.
-	DisableHyphenInDatabaseName = "database.disablehyphen"
 )
 
 var LocalConfigWhitelist = set.NewStrSet([]string{UserNameKey, UserEmailKey})

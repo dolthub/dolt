@@ -3,7 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    dolt config --add database.disablehyphen true
+    export DOLT_DISABLE_DATABASE_RENAMING="false"
     dolt sql <<SQL
 CREATE TABLE one_pk (
   pk BIGINT NOT NULL,
