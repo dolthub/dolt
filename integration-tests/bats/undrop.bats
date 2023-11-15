@@ -60,7 +60,7 @@ teardown() {
 }
 
 @test "undrop: undrop root database with hyphen replaced in its name" {
-  export DOLT_DISABLE_DATABASE_RENAMING="false"
+  export DOLT_DBNAME_REPLACE_HYPHENS="true"
   setup_remote_server
   # Create a new Dolt database directory to use as a root database
   # NOTE: We use hyphens here to test how db dirs are renamed.
@@ -136,7 +136,7 @@ EOF
 # Asserts that a non-root database can be dropped and then restored with dolt_undrop(), even when
 # the case of the database name given to dolt_undrop() doesn't match match the original case.
 @test "undrop: undrop non-root database with hyphen replaced in its name" {
-  export DOLT_DISABLE_DATABASE_RENAMING="false"
+  export DOLT_DBNAME_REPLACE_HYPHENS="true"
   setup_remote_server
   dolt sql << EOF
 use drop_me_2;

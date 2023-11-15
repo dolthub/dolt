@@ -69,7 +69,7 @@ teardown() {
 
     dolt add .
 
-    run dolt sql -q "CALL DRESET('--hard')"
+    run dolt sql -q "CALL DOLT_RESET('--hard')"
     [ $status -eq 0 ]
 
     run dolt status
@@ -80,7 +80,7 @@ teardown() {
     dolt sql -q "INSERT INTO test VALUES (1)"
 
     # Reset to head results in clean main.
-    run dolt sql -q "CALL DRESET('--hard', 'head');"
+    run dolt sql -q "CALL DOLT_RESET('--hard', 'head');"
     [ "$status" -eq 0 ]
 
     run dolt status
@@ -280,7 +280,7 @@ SQL
 }
 
 @test "sql-reset: CALL DOLT_RESET --hard properly maintains session variables." {
-    export DOLT_DISABLE_DATABASE_RENAMING="false"
+    export DOLT_DBNAME_REPLACE_HYPHENS="true"
     head_variable=@@dolt_repo_$$_head
     head_hash=$(get_head_commit)
     run dolt sql << SQL
@@ -318,7 +318,7 @@ SQL
 }
 
 @test "sql-reset: CALL DOLT_RESET soft maintains staged session variable" {
-    export DOLT_DISABLE_DATABASE_RENAMING="false"
+    export DOLT_DBNAME_REPLACE_HYPHENS="true"
     working_hash_var=@@dolt_repo_$$_working
     run dolt sql -q "SELECT $working_hash_var"
     working_hash=$output

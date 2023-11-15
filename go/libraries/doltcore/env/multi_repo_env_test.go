@@ -38,7 +38,7 @@ func TestDirToDBName(t *testing.T) {
 		"  real - name     ": "real_name",
 	}
 
-	err := os.Setenv(dconfig.EnvDisableDatabaseRenaming, "true")
+	err := os.Setenv(dconfig.EnvEnableDatabaseRenaming, "true")
 	require.NoError(t, err)
 
 	for dirName, expected := range replaceHyphenTests {
@@ -52,7 +52,7 @@ func TestDirToDBName(t *testing.T) {
 		"  fake - name     ": "fake_-_name",
 	}
 
-	err = os.Setenv(dconfig.EnvDisableDatabaseRenaming, "")
+	err = os.Setenv(dconfig.EnvEnableDatabaseRenaming, "")
 	require.NoError(t, err)
 
 	for dirName, expected := range allowHyphenTests {

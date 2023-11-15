@@ -3,7 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    export DOLT_DISABLE_DATABASE_RENAMING="false"
+    export DOLT_DBNAME_REPLACE_HYPHENS="true"
     dolt sql <<SQL
 CREATE TABLE one_pk (
   pk BIGINT NOT NULL,

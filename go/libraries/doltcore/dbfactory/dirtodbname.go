@@ -25,7 +25,8 @@ import (
 // DirToDBName takes the physical directory name, |dirName|, and replaces any unsupported characters to create a
 // valid logical database name. For example, spaces are replaced with underscores.
 func DirToDBName(dirName string) string {
-	var translateHyphensToUnderscores = os.Getenv(dconfig.EnvDisableDatabaseRenaming) != ""
+	// this environment variable is used whether to replace hyphens in the database name with underscores.
+	var translateHyphensToUnderscores = os.Getenv(dconfig.EnvDbNameReplaceHyphens) != ""
 	dbName := strings.TrimSpace(dirName)
 	dbName = strings.Map(func(r rune) rune {
 		if unicode.IsSpace(r) || (translateHyphensToUnderscores && r == '-') {
