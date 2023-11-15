@@ -232,11 +232,9 @@ func Serve(
 	controller.Register(InitSqlEngine)
 
 	// Add superuser if specified user exists; add root superuser if no user specified and no existing privileges
-	var userSpecified bool
-
 	InitSuperUser := &svcs.Service{
 		Init: func(context.Context) error {
-			userSpecified = config.ServerUser != ""
+			userSpecified := config.ServerUser != ""
 
 			mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
 			ed := mysqlDb.Editor()
