@@ -137,6 +137,22 @@ type Listeners struct {
 	grpc net.Listener
 }
 
+func (l Listeners) Close() error {
+	if l.http != nil {
+		err := l.http.Close()
+		if err != nil {
+			if l.grpc != nil {
+				l.grpc.Close()
+			}
+			return err
+		}
+	}
+	if l.grpc != nil {
+		return l.grpc.Close()
+	}
+	return nil
+}
+
 func (s *Server) Listeners() (Listeners, error) {
 	var httpListener net.Listener
 	var grpcListener net.Listener
