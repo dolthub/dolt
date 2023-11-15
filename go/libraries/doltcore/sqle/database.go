@@ -38,6 +38,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
@@ -81,6 +82,7 @@ var _ sql.ViewDatabase = Database{}
 var _ sql.EventDatabase = Database{}
 var _ sql.AliasedDatabase = Database{}
 var _ fulltext.Database = Database{}
+var _ dsess.RebaseableDatabase = Database{}
 
 type ReadOnlyDatabase struct {
 	Database
@@ -105,6 +107,114 @@ func (r ReadOnlyDatabase) WithBranchRevision(requestedName string, branchSpec ds
 
 	r.Database = revDb.(Database)
 	return r, nil
+}
+
+func (db Database) CreateRebasePlan(ctx *sql.Context, ontoCommit *doltdb.Commit) error {
+	// TODO: move me
+	const doltRebaseTableName = "dolt_rebase"
+
+	pkSchema := sql.NewPrimaryKeySchema(dprocedures.DoltRebaseSystemTableSchema, 2)
+	// use createSqlTable, instead of CreateTable to avoid the "dolt_" reserved prefix table name check
+	err := db.createSqlTable(ctx, doltRebaseTableName, pkSchema, sql.Collation_Default)
+	if err != nil {
+		return err
+	}
+
+	table, ok, err := db.GetTableInsensitive(ctx, doltRebaseTableName)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("unable to find %s table", doltRebaseTableName)
+	}
+
+	doltTable, ok := table.(*DoltTable)
+	if !ok {
+		return fmt.Errorf("expected a *sqle.WritableDoltTable, but got %T", table)
+	}
+
+	writeableDoltTable := &WritableDoltTable{DoltTable: doltTable, db: db}
+
+	inserter := writeableDoltTable.Inserter(ctx)
+
+	// TODO: rename terrible name "findCommits" to something better
+	commits, err := db.findCommits(ctx, ontoCommit)
+	if err != nil {
+		return err
+	}
+
+	if len(commits) == 0 {
+		return fmt.Errorf("didn't identify any commits!")
+	}
+
+	for idx := len(commits) - 1; idx >= 0; idx-- {
+		commit := commits[idx]
+		hash, err := commit.HashOf()
+		if err != nil {
+			return err
+		}
+		meta, err := commit.GetCommitMeta(ctx)
+		if err != nil {
+			return err
+		}
+
+		err = inserter.Insert(ctx, sql.Row{
+			uint(len(commits)) - uint(idx),                           // rebase_order
+			uint16(dprocedures.RebaseActionEnumType.IndexOf("pick")), // action // TODO: make this a const for default?
+			hash.String(),    // commit_hash
+			meta.Description, //commit_message
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	err = inserter.Close(ctx)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// TODO: rename and add docs explaining this reverse the order of commits (actually it wouldn't even have to reverse
+//
+//	the order, as long as we know the count)
+func (db Database) findCommits(ctx *sql.Context, stopCommit *doltdb.Commit) (commits []*doltdb.Commit, err error) {
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	headRef, err := doltSession.CWBHeadRef(ctx, db.Name())
+	if err != nil {
+		return nil, err
+	}
+
+	commit1, err := db.ddb.ResolveCommitRef(ctx, headRef)
+	if err != nil {
+		return nil, err
+	}
+
+	commitItr := doltdb.CommitItrForRoots(db.DbData().Ddb, commit1)
+	// TODO: isn't there a filter that will stop at a certain ontoCommit?
+
+	stopCommitHash, err := stopCommit.HashOf()
+	if err != nil {
+		return
+	}
+
+	for {
+		hash, commit, err := commitItr.Next(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		// TODO: Do we include stopCommit? 🤔
+		if hash == stopCommitHash {
+			break
+		}
+
+		commits = append(commits, commit)
+	}
+
+	return commits, err
 }
 
 func (db Database) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {

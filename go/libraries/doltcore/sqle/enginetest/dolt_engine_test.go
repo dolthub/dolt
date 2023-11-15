@@ -142,8 +142,12 @@ func TestSingleScript(t *testing.T) {
 					Expected: []sql.Row{{0}}, // TODO: Add message: "rebase started"}},
 				},
 				{
-					Query:    "select * from dolt_rebase;",
-					Expected: []sql.Row{{123, doltCommit, "456"}},
+					Query: "select * from dolt_rebase order by rebase_order ASC;",
+					Expected: []sql.Row{
+						{uint(1), uint(1), doltCommit, "creating table t"},
+						{uint(2), uint(1), doltCommit, "empty commit 1"},
+						{uint(3), uint(1), doltCommit, "empty commit 2"},
+					},
 				},
 				{
 					Query:    "call dolt_rebase('--abort');",

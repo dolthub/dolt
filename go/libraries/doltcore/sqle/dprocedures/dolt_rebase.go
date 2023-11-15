@@ -16,11 +16,13 @@ package dprocedures
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"strings"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"strings"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 var doltRebaseProcedureSchema = []*sql.Column{
@@ -36,15 +38,18 @@ var doltRebaseProcedureSchema = []*sql.Column{
 	},
 }
 
-var doltRebaseSystemTableSchema = []*sql.Column{
+var RebaseActionEnumType = types.MustCreateEnumType([]string{"pick", "skip", "squash"}, sql.Collation_Default)
+
+var DoltRebaseSystemTableSchema = []*sql.Column{
 	{
+
 		Name:     "rebase_order",
-		Type:     types.Uint64,
+		Type:     types.Uint16,
 		Nullable: false,
 	},
 	{
 		Name:     "action",
-		Type:     types.MustCreateEnumType([]string{"pick", "skip", "squash"}, sql.Collation_Default),
+		Type:     RebaseActionEnumType,
 		Nullable: false,
 	},
 	{
@@ -130,17 +135,46 @@ func startRebase(ctx *sql.Context) error {
 	}
 
 	newWorkingSet := workingSet.StartRebase(commit)
-	return doltSession.SetWorkingSet(ctx, ctx.GetCurrentDatabase(), newWorkingSet)
+	err = doltSession.SetWorkingSet(ctx, ctx.GetCurrentDatabase(), newWorkingSet)
+	if err != nil {
+		return err
+	}
 
 	// TODO: Create dolt_rebase table
 	//         - find all commits between branch HEAD and rebase start commit
 	//         - create dolt_rebase table
+
+	// TODO: What's the right way to create the dolt_reset system table... seems like we want it to be a real table, but
+	//       we don't want to allow it to be checked in and committed, right?
+	//       If it were a traditional, read-only system table, we'd probably regenerate it each time it was queried, which
+	//       isn't the behavior we want. We want it generated once and then let the customer change it. Once we start
+	//       executing the rebase plan, we CANNOT allow it to be changed though.
+
+	dbData, ok = doltSession.GetDbData(ctx, ctx.GetCurrentDatabase())
+	if !ok {
+		panic("database not okay!")
+	}
+
+	db, err := doltSession.Provider().Database(ctx, ctx.GetCurrentDatabase())
+	if err != nil {
+		return err
+	}
+
+	rdb, ok := db.(dsess.RebaseableDatabase)
+	if !ok {
+		return fmt.Errorf("expected a *sqle.Database, but received a %T", db)
+	}
+	err = rdb.CreateRebasePlan(ctx, commit)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func abortRebase(ctx *sql.Context) error {
 	doltSession := dsess.DSessFromSess(ctx.Session)
 
-	// TODO: rebaseState is gone here... something is clearing it out?
 	workingSet, err := doltSession.WorkingSet(ctx, ctx.GetCurrentDatabase())
 	if err != nil {
 		return err
@@ -149,10 +183,14 @@ func abortRebase(ctx *sql.Context) error {
 		return fmt.Errorf("no active rebase")
 	}
 
+	// TODO: remove the dolt_rebase table
+
 	workingSet = workingSet.AbortRebase()
 	return doltSession.SetWorkingSet(ctx, ctx.GetCurrentDatabase(), workingSet)
 }
 
 func continueRebase(ctx *sql.Context) error {
+	// TODO: validate the dolt_rebase table
+
 	return nil
 }

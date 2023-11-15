@@ -133,3 +133,9 @@ type SqlDatabase interface {
 	// DoltDatabases returns all underlying DoltDBs for this database.
 	DoltDatabases() []*doltdb.DoltDB
 }
+
+type RebaseableDatabase interface {
+	SqlDatabase
+
+	CreateRebasePlan(ctx *sql.Context, commit *doltdb.Commit) error
+}
