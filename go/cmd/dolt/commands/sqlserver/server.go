@@ -72,8 +72,8 @@ func Serve(
 		controller = svcs.NewController()
 	}
 
-	ValidateConfigStep := &svcs.Service{
-		Init: func(context.Context) error {
+	ValidateConfigStep := &svcs.AnonService{
+		InitF: func(context.Context) error {
 			return ValidateConfig(serverConfig)
 		},
 	}
@@ -81,8 +81,8 @@ func Serve(
 
 	lgr := logrus.StandardLogger()
 	lgr.SetOutput(cli.CliErr)
-	InitLogging := &svcs.Service{
-		Init: func(context.Context) error {
+	InitLogging := &svcs.AnonService{
+		InitF: func(context.Context) error {
 			level, err := logrus.ParseLevel(serverConfig.LogLevel().String())
 			if err != nil {
 				return err
@@ -122,8 +122,8 @@ func Serve(
 	controller.Register(InitLogging)
 
 	fs := dEnv.FS
-	InitDataDir := &svcs.Service{
-		Init: func(context.Context) (err error) {
+	InitDataDir := &svcs.AnonService{
+		InitF: func(context.Context) (err error) {
 			if len(serverConfig.DataDir()) > 0 && serverConfig.DataDir() != "." {
 				fs, err = dEnv.FS.WithWorkingDir(serverConfig.DataDir())
 				if err != nil {
@@ -137,12 +137,12 @@ func Serve(
 	controller.Register(InitDataDir)
 
 	var serverLock *env.DBLock
-	InitGlobalServerLock := &svcs.Service{
-		Init: func(context.Context) (err error) {
+	InitGlobalServerLock := &svcs.AnonService{
+		InitF: func(context.Context) (err error) {
 			serverLock, err = acquireGlobalSqlServerLock(serverConfig.Port(), dEnv)
 			return err
 		},
-		Stop: func() error {
+		StopF: func() error {
 			dEnv.FS.Delete(dEnv.LockFile(), false)
 			return nil
 		},
@@ -150,8 +150,8 @@ func Serve(
 	controller.Register(InitGlobalServerLock)
 
 	var mrEnv *env.MultiRepoEnv
-	InitMultiEnv := &svcs.Service{
-		Init: func(ctx context.Context) (err error) {
+	InitMultiEnv := &svcs.AnonService{
+		InitF: func(ctx context.Context) (err error) {
 			mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
 			return err
 		},
@@ -159,8 +159,8 @@ func Serve(
 	controller.Register(InitMultiEnv)
 
 	var clusterController *cluster.Controller
-	InitClusterController := &svcs.Service{
-		Init: func(context.Context) (err error) {
+	InitClusterController := &svcs.AnonService{
+		InitF: func(context.Context) (err error) {
 			clusterController, err = cluster.NewController(lgr, serverConfig.ClusterConfig(), mrEnv.Config())
 			return err
 		},
@@ -168,8 +168,8 @@ func Serve(
 	controller.Register(InitClusterController)
 
 	var serverConf server.Config
-	LoadServerConfig := &svcs.Service{
-		Init: func(context.Context) (err error) {
+	LoadServerConfig := &svcs.AnonService{
+		InitF: func(context.Context) (err error) {
 			serverConf, err = getConfigFromServerConfig(serverConfig)
 			return err
 		},
@@ -179,8 +179,8 @@ func Serve(
 	// Create SQL Engine with users
 
 	var config *engine.SqlEngineConfig
-	InitSqlEngineConfig := &svcs.Service{
-		Init: func(context.Context) error {
+	InitSqlEngineConfig := &svcs.AnonService{
+		InitF: func(context.Context) error {
 			config = &engine.SqlEngineConfig{
 				IsReadOnly:              serverConfig.ReadOnly(),
 				PrivFilePath:            serverConfig.PrivilegeFilePath(),
@@ -202,8 +202,8 @@ func Serve(
 	controller.Register(InitSqlEngineConfig)
 
 	var esStatus eventscheduler.SchedulerStatus
-	InitEventSchedulerStatus := &svcs.Service{
-		Init: func(context.Context) (err error) {
+	InitEventSchedulerStatus := &svcs.AnonService{
+		InitF: func(context.Context) (err error) {
 			esStatus, err = getEventSchedulerStatus(serverConfig.EventSchedulerStatus())
 			if err != nil {
 				return err
@@ -215,8 +215,8 @@ func Serve(
 	controller.Register(InitEventSchedulerStatus)
 
 	var sqlEngine *engine.SqlEngine
-	InitSqlEngine := &svcs.Service{
-		Init: func(ctx context.Context) (err error) {
+	InitSqlEngine := &svcs.AnonService{
+		InitF: func(ctx context.Context) (err error) {
 			sqlEngine, err = engine.NewSqlEngine(
 				ctx,
 				mrEnv,
@@ -224,7 +224,7 @@ func Serve(
 			)
 			return err
 		},
-		Stop: func() error {
+		StopF: func() error {
 			sqlEngine.Close()
 			return nil
 		},
@@ -232,8 +232,8 @@ func Serve(
 	controller.Register(InitSqlEngine)
 
 	// Add superuser if specified user exists; add root superuser if no user specified and no existing privileges
-	InitSuperUser := &svcs.Service{
-		Init: func(context.Context) error {
+	InitSuperUser := &svcs.AnonService{
+		InitF: func(context.Context) error {
 			userSpecified := config.ServerUser != ""
 
 			mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
@@ -257,21 +257,21 @@ func Serve(
 	controller.Register(InitSuperUser)
 
 	var metListener *metricsListener
-	InitMetricsListener := &svcs.Service{
-		Init: func(context.Context) (err error) {
+	InitMetricsListener := &svcs.AnonService{
+		InitF: func(context.Context) (err error) {
 			labels := serverConfig.MetricsLabels()
 			metListener, err = newMetricsListener(labels, version, clusterController)
 			return err
 		},
-		Stop: func() error {
+		StopF: func() error {
 			metListener.Close()
 			return nil
 		},
 	}
 	controller.Register(InitMetricsListener)
 
-	LockMultiRepoEnv := &svcs.Service{
-		Init: func(context.Context) error {
+	LockMultiRepoEnv := &svcs.AnonService{
+		InitF: func(context.Context) error {
 			if ok, f := mrEnv.IsLocked(); ok {
 				return env.ErrActiveServerLock.New(f)
 			}
@@ -280,7 +280,7 @@ func Serve(
 			}
 			return nil
 		},
-		Stop: func() error {
+		StopF: func() error {
 			if err := mrEnv.Unlock(); err != nil {
 				cli.PrintErr(err)
 			}
@@ -290,8 +290,8 @@ func Serve(
 	controller.Register(LockMultiRepoEnv)
 
 	var mySQLServer *server.Server
-	InitSQLServer := &svcs.Service{
-		Init: func(context.Context) (err error) {
+	InitSQLServer := &svcs.AnonService{
+		InitF: func(context.Context) (err error) {
 			v, ok := serverConfig.(validatingServerConfig)
 			if ok && v.goldenMysqlConnectionString() != "" {
 				mySQLServer, err = server.NewValidatingServer(
@@ -318,8 +318,8 @@ func Serve(
 	}
 	controller.Register(InitSQLServer)
 
-	InitLockSuperUser := &svcs.Service{
-		Init: func(context.Context) error {
+	InitLockSuperUser := &svcs.AnonService{
+		InitF: func(context.Context) error {
 			mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
 			ed := mysqlDb.Editor()
 			mysqlDb.AddSuperUser(ed, LocalConnectionUser, "localhost", serverLock.Secret)
@@ -329,8 +329,8 @@ func Serve(
 	}
 	controller.Register(InitLockSuperUser)
 
-	DisableMySQLDbIfRequired := &svcs.Service{
-		Init: func(context.Context) error {
+	DisableMySQLDbIfRequired := &svcs.AnonService{
+		InitF: func(context.Context) error {
 			if ExternalDisableUsers {
 				mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
 				mysqlDb.SetEnabled(false)
@@ -340,24 +340,46 @@ func Serve(
 	}
 	controller.Register(DisableMySQLDbIfRequired)
 
-	var metSrv *http.Server
-	RunMetricsServer := &svcs.Service{
-		Run: func(context.Context) {
+	type SQLMetricsService struct {
+		state svcs.ServiceState
+		lis   net.Listener
+		srv   *http.Server
+	}
+
+	var metSrv SQLMetricsService
+
+	RunMetricsServer := &svcs.AnonService{
+		InitF: func(context.Context) (err error) {
 			if serverConfig.MetricsHost() != "" && serverConfig.MetricsPort() > 0 {
+				metSrv.state.Swap(svcs.ServiceState_Init)
+
+				addr := fmt.Sprintf("%s:%d", serverConfig.MetricsHost(), serverConfig.MetricsPort())
+				metSrv.lis, err = net.Listen("tcp", addr)
+				if err != nil {
+					return err
+				}
+
 				mux := http.NewServeMux()
 				mux.Handle("/metrics", promhttp.Handler())
-
-				metSrv = &http.Server{
-					Addr:    fmt.Sprintf("%s:%d", serverConfig.MetricsHost(), serverConfig.MetricsPort()),
+				metSrv.srv = &http.Server{
+					Addr:    addr,
 					Handler: mux,
 				}
 
-				_ = metSrv.ListenAndServe()
+			}
+			return nil
+		},
+		RunF: func(context.Context) {
+			if metSrv.state.CompareAndSwap(svcs.ServiceState_Init, svcs.ServiceState_Run) {
+				_ = metSrv.srv.Serve(metSrv.lis)
 			}
 		},
-		Stop: func() error {
-			if metSrv != nil {
-				metSrv.Close()
+		StopF: func() error {
+			state := metSrv.state.Swap(svcs.ServiceState_Stopped)
+			if state == svcs.ServiceState_Run {
+				metSrv.srv.Close()
+			} else if state == svcs.ServiceState_Init {
+				metSrv.lis.Close()
 			}
 			return nil
 		},
@@ -366,8 +388,8 @@ func Serve(
 
 	var remoteSrv *remotesrv.Server
 	var remoteSrvListeners remotesrv.Listeners
-	RunRemoteSrv := &svcs.Service{
-		Init: func(ctx context.Context) error {
+	RunRemoteSrv := &svcs.AnonService{
+		InitF: func(ctx context.Context) error {
 			if serverConfig.RemotesapiPort() == nil {
 				return nil
 			}
@@ -402,13 +424,13 @@ func Serve(
 			}
 			return nil
 		},
-		Run: func(ctx context.Context) {
+		RunF: func(ctx context.Context) {
 			if remoteSrv == nil {
 				return
 			}
 			remoteSrv.Serve(remoteSrvListeners)
 		},
-		Stop: func() error {
+		StopF: func() error {
 			if remoteSrv == nil {
 				return nil
 			}
@@ -420,8 +442,8 @@ func Serve(
 
 	var clusterRemoteSrv *remotesrv.Server
 	var clusterRemoteSrvListeners remotesrv.Listeners
-	RunClusterRemoteSrv := &svcs.Service{
-		Init: func(context.Context) error {
+	RunClusterRemoteSrv := &svcs.AnonService{
+		InitF: func(context.Context) error {
 			if clusterController == nil {
 				return nil
 			}
@@ -455,13 +477,13 @@ func Serve(
 			}
 			return nil
 		},
-		Run: func(context.Context) {
+		RunF: func(context.Context) {
 			if clusterRemoteSrv == nil {
 				return
 			}
 			clusterRemoteSrv.Serve(clusterRemoteSrvListeners)
 		},
-		Stop: func() error {
+		StopF: func() error {
 			if clusterRemoteSrv == nil {
 				return nil
 			}
@@ -471,8 +493,8 @@ func Serve(
 	}
 	controller.Register(RunClusterRemoteSrv)
 
-	RunClusterController := &svcs.Service{
-		Init: func(context.Context) error {
+	RunClusterController := &svcs.AnonService{
+		InitF: func(context.Context) error {
 			if clusterController == nil {
 				return nil
 			}
@@ -483,13 +505,13 @@ func Serve(
 			)
 			return nil
 		},
-		Run: func(context.Context) {
+		RunF: func(context.Context) {
 			if clusterController == nil {
 				return
 			}
 			clusterController.Run()
 		},
-		Stop: func() error {
+		StopF: func() error {
 			if clusterController == nil {
 				return nil
 			}
@@ -499,13 +521,13 @@ func Serve(
 	}
 	controller.Register(RunClusterController)
 
-	RunSQLServer := &svcs.Service{
-		Run: func(context.Context) {
+	RunSQLServer := &svcs.AnonService{
+		RunF: func(context.Context) {
 			sqlserver.SetRunningServer(mySQLServer, serverLock)
 			defer sqlserver.UnsetRunningServer()
 			mySQLServer.Start()
 		},
-		Stop: func() error {
+		StopF: func() error {
 			return mySQLServer.Close()
 		},
 	}

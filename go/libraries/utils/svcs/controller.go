@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 )
 
 // A Service is a runnable unit of functionality that a Controller can
@@ -26,10 +27,64 @@ import (
 // bring the service up. It has a |Run| function, which will be called in a
 // separate go-routine and should run and provide the functionality associated
 // with the service until the |Stop| function is called.
-type Service struct {
-	Init func(context.Context) error
-	Run  func(context.Context)
-	Stop func() error
+type Service interface {
+	Init(context.Context) error
+	Run(context.Context)
+	Stop() error
+}
+
+// AnonService is a simple struct for building Service instances with lambdas
+// or funcs, instead of creating an interface implementation.
+type AnonService struct {
+	InitF func(context.Context) error
+	RunF  func(context.Context)
+	StopF func() error
+}
+
+func (a AnonService) Init(ctx context.Context) error {
+	if a.InitF == nil {
+		return nil
+	}
+	return a.InitF(ctx)
+}
+
+func (a AnonService) Run(ctx context.Context) {
+	if a.RunF == nil {
+		return
+	}
+	a.RunF(ctx)
+}
+
+func (a AnonService) Stop() error {
+	if a.StopF == nil {
+		return nil
+	}
+	return a.StopF()
+}
+
+// ServiceState is a small abstraction so that a service implementation can
+// easily track what state it is in and can make decisions about what to do
+// based on what state it is coming from. In particular, it's not rare for a
+// |Close| implementation to need to do something different based on whether
+// the service is only init'd or if it is running. It's also not rare for a
+// service to decide it needs to do nothing in Init, in which case it can leave
+// the service in Off, and the Run and Close methods can check that to ensure
+// they do not do anything either.
+type ServiceState uint32
+
+const (
+	ServiceState_Off ServiceState = iota
+	ServiceState_Init
+	ServiceState_Run
+	ServiceState_Stopped
+)
+
+func (ss *ServiceState) Swap(new ServiceState) (old ServiceState) {
+	return ServiceState(atomic.SwapUint32((*uint32)(ss), uint32(new)))
+}
+
+func (ss *ServiceState) CompareAndSwap(old, new ServiceState) (swapped bool) {
+	return atomic.CompareAndSwapUint32((*uint32)(ss), uint32(old), uint32(new))
 }
 
 // A Controller is responsible for initializing a number of registered
@@ -65,7 +120,7 @@ type Service struct {
 // It will return the same error which |Start| returned.
 type Controller struct {
 	mu        sync.Mutex
-	services  []*Service
+	services  []Service
 	initErr   error
 	stopErr   error
 	started   bool
@@ -104,7 +159,7 @@ func (c *Controller) WaitForStop() error {
 	return err
 }
 
-func (c *Controller) Register(svc *Service) error {
+func (c *Controller) Register(svc Service) error {
 	c.mu.Lock()
 	if c.started {
 		c.mu.Unlock()
@@ -138,19 +193,14 @@ func (c *Controller) Start(ctx context.Context) error {
 		return errors.New("Controller: cannot start service controller twice")
 	}
 	c.started = true
-	svcs := make([]*Service, len(c.services))
+	svcs := make([]Service, len(c.services))
 	copy(svcs, c.services)
 	c.mu.Unlock()
 	for i, s := range svcs {
-		if s.Init == nil {
-			continue
-		}
 		err := s.Init(ctx)
 		if err != nil {
 			for j := i - 1; j >= 0; j-- {
-				if svcs[j].Stop != nil {
-					svcs[j].Stop()
-				}
+				svcs[j].Stop()
 			}
 			c.mu.Lock()
 			c.stopped = true
@@ -163,17 +213,11 @@ func (c *Controller) Start(ctx context.Context) error {
 	}
 	close(c.startCh)
 	for _, s := range svcs {
-		if s.Run == nil {
-			continue
-		}
 		go s.Run(ctx)
 	}
 	<-c.stopCh
 	var stopErr error
 	for i := len(svcs) - 1; i >= 0; i-- {
-		if svcs[i].Stop == nil {
-			continue
-		}
 		err := svcs[i].Stop()
 		if err != nil && stopErr == nil {
 			stopErr = err
