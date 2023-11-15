@@ -31,7 +31,10 @@ func TestController(t *testing.T) {
 	t.Run("Stop", func(t *testing.T) {
 		t.Run("CalledBeforeStart", func(t *testing.T) {
 			c := NewController()
-			require.Error(t, c.Stop())
+			c.Stop()
+			require.Error(t, c.Start(context.Background()))
+			require.NoError(t, c.WaitForStart())
+			require.NoError(t, c.WaitForStop())
 		})
 		t.Run("ReturnsFirstError", func(t *testing.T) {
 			c := NewController()
@@ -52,7 +55,7 @@ func TestController(t *testing.T) {
 			go func() {
 				defer wg.Done()
 				require.NoError(t, c.WaitForStart())
-				require.NoError(t, c.Stop())
+				c.Stop()
 			}()
 			require.ErrorIs(t, c.Start(ctx), err)
 			require.ErrorIs(t, c.WaitForStop(), err)
@@ -67,7 +70,7 @@ func TestController(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			require.NoError(t, c.WaitForStart())
-			require.NoError(t, c.Stop())
+			c.Stop()
 		}()
 		require.NoError(t, c.Start(ctx))
 		require.NoError(t, c.WaitForStop())
@@ -87,7 +90,7 @@ func TestController(t *testing.T) {
 					RunF:  func(context.Context) {},
 					StopF: func() error { return nil },
 				}))
-				require.NoError(t, c.Stop())
+				c.Stop()
 			}()
 			require.NoError(t, c.Start(ctx))
 			require.NoError(t, c.WaitForStop())
@@ -128,7 +131,7 @@ func TestController(t *testing.T) {
 			go func() {
 				defer wg.Done()
 				require.NoError(t, c.WaitForStart())
-				require.NoError(t, c.Stop())
+				c.Stop()
 			}()
 			require.NoError(t, c.Start(ctx))
 			require.NoError(t, c.WaitForStop())
@@ -176,7 +179,7 @@ func TestController(t *testing.T) {
 			go func() {
 				defer wg.Done()
 				require.ErrorIs(t, c.WaitForStart(), err)
-				require.NotErrorIs(t, c.Stop(), err)
+				c.Stop()
 			}()
 			require.ErrorIs(t, c.Start(ctx), err)
 			require.ErrorIs(t, c.WaitForStop(), err)
@@ -233,7 +236,7 @@ func TestController(t *testing.T) {
 			go func() {
 				defer wg.Done()
 				require.ErrorIs(t, c.WaitForStart(), err)
-				require.NotErrorIs(t, c.Stop(), err)
+				c.Stop()
 			}()
 			require.ErrorIs(t, c.Start(ctx), err)
 			require.ErrorIs(t, c.WaitForStop(), err)
@@ -260,7 +263,7 @@ func TestController(t *testing.T) {
 			go func() {
 				defer cwg.Done()
 				require.NoError(t, c.WaitForStart())
-				require.NoError(t, c.Stop())
+				c.Stop()
 			}()
 			require.NoError(t, c.Start(ctx))
 			require.NoError(t, c.WaitForStop())
@@ -294,12 +297,52 @@ func TestController(t *testing.T) {
 			go func() {
 				defer cwg.Done()
 				require.NoError(t, c.WaitForStart())
-				require.NoError(t, c.Stop())
+				c.Stop()
 			}()
 			require.ErrorIs(t, c.Start(ctx), err)
 			require.ErrorIs(t, c.WaitForStop(), err)
 			wg.Wait()
 			cwg.Wait()
 		})
+	})
+	t.Run("RunStopsControllerExample", func(t *testing.T) {
+		// |Run| has no way to return an error, but it *can* use the
+		// controller itself to coordinate a shutdown of all the
+		// services and to ensure that an error is returned from its
+		// Service's |Close| method.
+		c := NewController()
+		ctx := context.Background()
+
+		expectedErr := errors.New("error set from run")
+		errCh := make(chan error)
+		var runErr error
+		var runWg sync.WaitGroup
+		runWg.Add(1)
+		failingService := &AnonService{
+			RunF: func(context.Context) {
+				runErr = <-errCh
+				// Do this in the background, since it will block on StopF down below being completed.
+				go c.Stop()
+				runWg.Done()
+			},
+			StopF: func() error {
+				runWg.Wait()
+				return runErr
+			},
+		}
+		c.Register(failingService)
+
+		// See how we do not call |Stop| on the controller here. The
+		// "failing" Run method of the failingService will call it.
+		var cwg sync.WaitGroup
+		cwg.Add(1)
+		go func() {
+			defer cwg.Done()
+			require.ErrorIs(t, c.Start(ctx), expectedErr)
+		}()
+		require.NoError(t, c.WaitForStart())
+		errCh <- expectedErr
+		require.ErrorIs(t, c.WaitForStop(), expectedErr)
+		cwg.Wait()
 	})
 }
