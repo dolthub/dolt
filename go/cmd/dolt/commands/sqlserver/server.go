@@ -258,48 +258,19 @@ func Serve(
 	}
 	controller.Register(InitSuperUser)
 
-	var listener *metricsListener
+	var metListener *metricsListener
 	InitMetricsListener := &svcs.Service{
 		Init: func(context.Context) (err error) {
 			labels := serverConfig.MetricsLabels()
-			listener, err = newMetricsListener(labels, version, clusterController)
+			metListener, err = newMetricsListener(labels, version, clusterController)
 			return err
 		},
 		Stop: func() error {
-			listener.Close()
+			metListener.Close()
 			return nil
 		},
 	}
 	controller.Register(InitMetricsListener)
-
-	var mySQLServer *server.Server
-	InitSQLServer := &svcs.Service{
-		Init: func(context.Context) (err error) {
-			v, ok := serverConfig.(validatingServerConfig)
-			if ok && v.goldenMysqlConnectionString() != "" {
-				mySQLServer, err = server.NewValidatingServer(
-					serverConf,
-					sqlEngine.GetUnderlyingEngine(),
-					newSessionBuilder(sqlEngine, serverConfig),
-					listener,
-					v.goldenMysqlConnectionString(),
-				)
-			} else {
-				mySQLServer, err = server.NewServer(
-					serverConf,
-					sqlEngine.GetUnderlyingEngine(),
-					newSessionBuilder(sqlEngine, serverConfig),
-					listener,
-				)
-			}
-			if errors.Is(err, server.UnixSocketInUseError) {
-				lgr.Warn("unix socket set up failed: file already in use: ", serverConf.Socket)
-				err = nil
-			}
-			return err
-		},
-	}
-	controller.Register(InitSQLServer)
 
 	LockMultiRepoEnv := &svcs.Service{
 		Init: func(context.Context) error {
@@ -319,6 +290,35 @@ func Serve(
 		},
 	}
 	controller.Register(LockMultiRepoEnv)
+
+	var mySQLServer *server.Server
+	InitSQLServer := &svcs.Service{
+		Init: func(context.Context) (err error) {
+			v, ok := serverConfig.(validatingServerConfig)
+			if ok && v.goldenMysqlConnectionString() != "" {
+				mySQLServer, err = server.NewValidatingServer(
+					serverConf,
+					sqlEngine.GetUnderlyingEngine(),
+					newSessionBuilder(sqlEngine, serverConfig),
+					metListener,
+					v.goldenMysqlConnectionString(),
+				)
+			} else {
+				mySQLServer, err = server.NewServer(
+					serverConf,
+					sqlEngine.GetUnderlyingEngine(),
+					newSessionBuilder(sqlEngine, serverConfig),
+					metListener,
+				)
+			}
+			if errors.Is(err, server.UnixSocketInUseError) {
+				lgr.Warn("unix socket set up failed: file already in use: ", serverConf.Socket)
+				err = nil
+			}
+			return err
+		},
+	}
+	controller.Register(InitSQLServer)
 
 	InitLockSuperUser := &svcs.Service{
 		Init: func(context.Context) error {
