@@ -44,8 +44,11 @@ table MergeState {
 }
 
 table RebaseState {
-  // An address for the the working root value before the rebase started.
+  // The address of the the working root value before the rebase started.
   pre_working_root_addr:[ubyte] (required);
+
+  // The branch being rebased.
+  branch:[ubyte] (required);
 
   // The commit that we are rebasing onto.
   onto_commit_addr:[ubyte] (required);

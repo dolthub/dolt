@@ -118,6 +118,22 @@ func TestSingleQuery(t *testing.T) {
 func TestSingleScript(t *testing.T) {
 	//t.Skip()
 
+	/*
+		    Sample Console Test Script:
+
+			create table t (pk int primary key);
+			call dolt_commit('-Am', 'creating table t');
+			insert into t values (1);
+			call dolt_commit('-am', 'inserting row 1');
+			insert into t values (2);
+			call dolt_commit('-am', 'inserting row 2');
+			insert into t values (3);
+			call dolt_commit('-am', 'inserting row 3');
+			--
+			call dolt_rebase();
+			call dolt_rebase('--continue');
+	*/
+
 	var scripts = []queries.ScriptTest{
 		{
 			Name: "Rebase Prototype Testing",
@@ -174,11 +190,16 @@ func TestSingleScript(t *testing.T) {
 				// TODO: When rebase completes, rebase status should be cleared and the dolt_rebase table should be removed
 				{
 					// Assert that the commit history is now composed of different commits
-					// TODO: This isn't working currently, because we aren't rebasing onto the
-					//       ontoCommit – we're still applying new commits at the branch head.
 					Query:    "SELECT hashof('HEAD') = @original_commit_3, hashof('HEAD~') = @original_commit_2, hashof('HEAD~~') = @original_commit_1, hashof('HEAD~~~') = @original_commit_0;",
 					Expected: []sql.Row{{false, false, false, true}},
 				},
+				{
+					// Assert that the commit history is now composed of different commits
+					Query: "select message from dolt_log order by date desc;",
+					Expected: []sql.Row{{"empty commit 2"}, {"empty commit 1"}, {"creating table t"},
+						{"ignoring dolt_rebase table"}, {"Initialize data repository"}},
+				},
+
 				//{
 				//	Query:    "call dolt_rebase('--abort');",
 				//	Expected: []sql.Row{{0}}, // TODO: Add message: "rebase aborted"}},
@@ -194,6 +215,7 @@ func TestSingleScript(t *testing.T) {
 	for _, script := range scripts {
 		sql.RunWithNowFunc(tcc.Now, func() error {
 			harness := newDoltHarness(t)
+			harness.skipSetupCommit = true
 			harness.Setup(setup.MydbData)
 
 			engine, err := harness.NewEngine(t)

@@ -188,9 +188,11 @@ func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *Mer
 	if rebaseState != nil {
 		preRebaseRootAddrOffset := builder.CreateByteVector((*rebaseState.preRebaseWorkingAddr)[:])
 		ontoAddrOffset := builder.CreateByteVector((*rebaseState.ontoCommitAddr)[:])
+		branchOffset := builder.CreateString(rebaseState.branch)
 		serial.RebaseStateStart(builder)
-		serial.MergeStateAddPreWorkingRootAddr(builder, preRebaseRootAddrOffset)
-		serial.MergeStateAddFromCommitAddr(builder, ontoAddrOffset)
+		serial.RebaseStateAddPreWorkingRootAddr(builder, preRebaseRootAddrOffset) // TODO: Is this still needed when we have branch now?
+		serial.RebaseStateAddBranch(builder, branchOffset)
+		serial.RebaseStateAddOntoCommitAddr(builder, ontoAddrOffset)
 		rebaseStateOffset = serial.RebaseStateEnd(builder)
 	}
 
@@ -261,10 +263,11 @@ func NewMergeState(
 	}
 }
 
-func NewRebaseState(preRebaseWorkingRoot hash.Hash, commitAddr hash.Hash) *RebaseState {
+func NewRebaseState(preRebaseWorkingRoot hash.Hash, commitAddr hash.Hash, branch string) *RebaseState {
 	return &RebaseState{
 		preRebaseWorkingAddr: &preRebaseWorkingRoot,
 		ontoCommitAddr:       &commitAddr,
+		branch:               branch,
 	}
 }
 

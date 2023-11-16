@@ -109,7 +109,7 @@ func (r ReadOnlyDatabase) WithBranchRevision(requestedName string, branchSpec ds
 	return r, nil
 }
 
-func (db Database) CreateRebasePlan(ctx *sql.Context, ontoCommit *doltdb.Commit) error {
+func (db Database) CreateRebasePlan(ctx *sql.Context, startCommit, ontoCommit *doltdb.Commit) error {
 	// TODO: move me
 	const doltRebaseTableName = "dolt_rebase"
 
@@ -138,7 +138,7 @@ func (db Database) CreateRebasePlan(ctx *sql.Context, ontoCommit *doltdb.Commit)
 	inserter := writeableDoltTable.Inserter(ctx)
 
 	// TODO: rename terrible name "findCommits" to something better
-	commits, err := db.findCommits(ctx, ontoCommit)
+	commits, err := db.findCommits(ctx, startCommit, ontoCommit)
 	if err != nil {
 		return err
 	}
@@ -180,19 +180,8 @@ func (db Database) CreateRebasePlan(ctx *sql.Context, ontoCommit *doltdb.Commit)
 // TODO: rename and add docs explaining this reverse the order of commits (actually it wouldn't even have to reverse
 //
 //	the order, as long as we know the count)
-func (db Database) findCommits(ctx *sql.Context, stopCommit *doltdb.Commit) (commits []*doltdb.Commit, err error) {
-	doltSession := dsess.DSessFromSess(ctx.Session)
-	headRef, err := doltSession.CWBHeadRef(ctx, db.Name())
-	if err != nil {
-		return nil, err
-	}
-
-	commit1, err := db.ddb.ResolveCommitRef(ctx, headRef)
-	if err != nil {
-		return nil, err
-	}
-
-	commitItr := doltdb.CommitItrForRoots(db.DbData().Ddb, commit1)
+func (db Database) findCommits(ctx *sql.Context, startCommit, stopCommit *doltdb.Commit) (commits []*doltdb.Commit, err error) {
+	commitItr := doltdb.CommitItrForRoots(db.DbData().Ddb, startCommit)
 	// TODO: isn't there a filter that will stop at a certain ontoCommit?
 
 	stopCommitHash, err := stopCommit.HashOf()

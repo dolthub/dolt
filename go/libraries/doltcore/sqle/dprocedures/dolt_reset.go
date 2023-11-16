@@ -109,7 +109,7 @@ func doDoltReset(ctx *sql.Context, args []string) (int, error) {
 		if err != nil {
 			return 1, err
 		}
-		err = dSess.SetWorkingSet(ctx, dbName, ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged).ClearMerge())
+		err = dSess.SetWorkingSet(ctx, dbName, ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged).ClearMerge().ClearRebase())
 		if err != nil {
 			return 1, err
 		}

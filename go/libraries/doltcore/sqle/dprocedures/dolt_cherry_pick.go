@@ -57,21 +57,7 @@ var cherryPickSchema = []*sql.Column{
 
 // doltCherryPick is the stored procedure version for the CLI command `dolt cherry-pick`.
 func doltCherryPick(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	newCommitHash, dataConflicts, schemaConflicts, constraintViolations, err := doDoltCherryPick(ctx, false, args)
-	if err != nil {
-		return nil, err
-	}
-	return rowToIter(newCommitHash, dataConflicts, schemaConflicts, constraintViolations), nil
-}
-
-// TODO: This is a hack to work around cherry pick diffing with the
-//
-//	branch head by default. a better way to handle this might
-//	be to create a temporary "dolt_rebase_<UUID>" branch.
-//	the UUID could be a unique identifier for the dolt rebase
-//	action.
-func doltCherryPick2(ctx *sql.Context, ignoreHead bool, args ...string) (sql.RowIter, error) {
-	newCommitHash, dataConflicts, schemaConflicts, constraintViolations, err := doDoltCherryPick(ctx, ignoreHead, args)
+	newCommitHash, dataConflicts, schemaConflicts, constraintViolations, err := doDoltCherryPick(ctx, args)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +67,7 @@ func doltCherryPick2(ctx *sql.Context, ignoreHead bool, args ...string) (sql.Row
 // doDoltCherryPick attempts to perform a cherry-pick merge based on the arguments specified in |args| and returns
 // the new, created commit hash (if it was successful created), a count of the number of tables with data conflicts,
 // a count of the number of tables with schema conflicts, and a count of the number of tables with constraint violations.
-func doDoltCherryPick(ctx *sql.Context, ignoreHead bool, args []string) (string, int, int, int, error) {
+func doDoltCherryPick(ctx *sql.Context, args []string) (string, int, int, int, error) {
 	// Get the information for the sql context.
 	dbName := ctx.GetCurrentDatabase()
 	if len(dbName) == 0 {
@@ -137,10 +123,6 @@ func doDoltCherryPick(ctx *sql.Context, ignoreHead bool, args []string) (string,
 	roots, ok := dSess.GetRoots(ctx, dbName)
 	if !ok {
 		return "", 0, 0, 0, sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	if ignoreHead {
-		roots.Head = roots.Staged
 	}
 
 	mergeResult, commitMsg, err := cherryPick(ctx, dSess, roots, dbName, cherryStr)

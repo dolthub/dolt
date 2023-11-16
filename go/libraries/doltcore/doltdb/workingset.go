@@ -32,6 +32,11 @@ import (
 type RebaseState struct {
 	preRebaseWorking *RootValue
 	ontoCommit       *Commit
+	branch           string
+}
+
+func (rs RebaseState) Branch() string {
+	return rs.branch
 }
 
 func (rs RebaseState) OntoCommit() *Commit {
@@ -232,10 +237,11 @@ func (ws WorkingSet) StartMerge(commit *Commit, commitSpecStr string) *WorkingSe
 	return &ws
 }
 
-func (ws WorkingSet) StartRebase(ctx *sql.Context, ontoCommit *Commit) (*WorkingSet, error) {
+func (ws WorkingSet) StartRebase(ctx *sql.Context, ontoCommit *Commit, branch string) (*WorkingSet, error) {
 	ws.rebaseState = &RebaseState{
 		ontoCommit:       ontoCommit,
 		preRebaseWorking: ws.workingRoot,
+		branch:           branch,
 	}
 
 	ontoRoot, err := ontoCommit.GetRootValue(ctx)
@@ -445,6 +451,7 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 		rebaseState = &RebaseState{
 			preRebaseWorking: preRebaseWorkingRoot,
 			ontoCommit:       ontoCommit2,
+			branch:           dsws.RebaseState.Branch(ctx),
 		}
 	}
 
@@ -544,7 +551,7 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB) (
 		}
 
 		// TODO: is this the right signature for this function?
-		rebaseState = datas.NewRebaseState(preRebaseWorking.TargetHash(), dCommit.Addr())
+		rebaseState = datas.NewRebaseState(preRebaseWorking.TargetHash(), dCommit.Addr(), ws.rebaseState.branch)
 	}
 
 	return workingRoot, stagedRoot, mergeState, rebaseState, nil

@@ -26,6 +26,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
@@ -117,13 +119,7 @@ func doDoltRebase(ctx *sql.Context, args []string) (int, error) {
 func startRebase(ctx *sql.Context) error {
 	doltSession := dsess.DSessFromSess(ctx.Session)
 
-	workingSet, err := doltSession.WorkingSet(ctx, ctx.GetCurrentDatabase())
-	if err != nil {
-		return err
-	}
-
 	// TODO: For now, just rewind back a couple of commits...
-
 	headRef, err := doltSession.CWBHeadRef(ctx, ctx.GetCurrentDatabase())
 	if err != nil {
 		return err
@@ -131,6 +127,12 @@ func startRebase(ctx *sql.Context) error {
 	dbData, ok := doltSession.GetDbData(ctx, ctx.GetCurrentDatabase())
 	if !ok {
 		panic("not okay getting database!")
+	}
+
+	rebaseBranch := headRef.GetPath()
+	startCommit, err := dbData.Ddb.ResolveCommitRef(ctx, ref.NewBranchRef(rebaseBranch))
+	if err != nil {
+		return err
 	}
 
 	commitSpec, err := doltdb.NewCommitSpec("HEAD~~~")
@@ -142,6 +144,27 @@ func startRebase(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
+
+	// TODO: Use a better API than the stored procedure function :-/
+	rowIter, err := doltBranch(ctx, "dolt_rebase_42", "HEAD~~~")
+	if err != nil {
+		return err
+	}
+	// TODO: handle dolt_branch results
+	if err = drainRowIterator(ctx, rowIter); err != nil {
+		return err
+	}
+
+	// --- Checkout new branch
+	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef("dolt_rebase_42"))
+	if err != nil {
+		return err
+	}
+	err = doltSession.SwitchWorkingSet(ctx, ctx.GetCurrentDatabase(), wsRef)
+	if err != nil {
+		return err
+	}
+	// ---
 
 	// TODO: What's the right way to create the dolt_reset system table... seems like we want it to be a real table, but
 	//       we don't want to allow it to be checked in and committed, right?
@@ -159,7 +182,12 @@ func startRebase(ctx *sql.Context) error {
 		return err
 	}
 
-	newWorkingSet, err := workingSet.StartRebase(ctx, ontoCommit)
+	workingSet, err := doltSession.WorkingSet(ctx, ctx.GetCurrentDatabase())
+	if err != nil {
+		return err
+	}
+
+	newWorkingSet, err := workingSet.StartRebase(ctx, ontoCommit, rebaseBranch)
 	if err != nil {
 		return err
 	}
@@ -175,7 +203,7 @@ func startRebase(ctx *sql.Context) error {
 	if !ok {
 		return fmt.Errorf("expected a *sqle.Database, but received a %T", db)
 	}
-	err = rdb.CreateRebasePlan(ctx, ontoCommit)
+	err = rdb.CreateRebasePlan(ctx, startCommit, ontoCommit)
 	if err != nil {
 		return err
 	}
@@ -198,12 +226,21 @@ func abortRebase(ctx *sql.Context) error {
 
 	// Move HEAD back to the original head
 	rebaseState := workingSet.RebaseState()
-	preRebaseWorkingRoot := rebaseState.PreRebaseWorkingRoot()
 
 	workingSet = workingSet.AbortRebase()
 
-	workingSet = workingSet.WithWorkingRoot(preRebaseWorkingRoot).WithStagedRoot(preRebaseWorkingRoot)
-	return doltSession.SetWorkingSet(ctx, ctx.GetCurrentDatabase(), workingSet)
+	// Switch back to the original branch head
+	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(rebaseState.Branch()))
+	if err != nil {
+		return err
+	}
+
+	err = doltSession.SwitchWorkingSet(ctx, ctx.GetCurrentDatabase(), wsRef)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func continueRebase(ctx *sql.Context) error {
@@ -233,8 +270,6 @@ func continueRebase(ctx *sql.Context) error {
 	// iterate over the rebase plan in dolt_rebase and cherry-pick each commit
 	// Read the contents of the dolt_rebase table...
 
-	//preRebaseWorkingRoot := rebaseState.PreRebaseWorkingRoot()
-
 	table, ok, err := db.GetTableInsensitive(ctx, "dolt_rebase")
 	if err != nil {
 		return err
@@ -254,7 +289,6 @@ func continueRebase(ctx *sql.Context) error {
 
 	iter, err := rowexec.DefaultBuilder.Build(ctx, sort, nil)
 	if err != nil {
-		//return fmt.Errorf("unexpected err2: %v", err.Error())
 		return err
 	}
 
@@ -270,6 +304,78 @@ func continueRebase(ctx *sql.Context) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	// TODO: Make '-i' arg required?
+	// TODO: Make the ontoCommit required?
+
+	// TODO: WHy is the dolt_rebase table not able to be updated?
+	//       - need this soon for next rebase actions! (squash and reordering)
+
+	// checkout the branch being rebased
+	rebaseBranchWorkingSet, err := doltSession.WorkingSet(ctx, ctx.GetCurrentDatabase())
+	if err != nil {
+		return err
+	}
+	previousBranchWorkingSetRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(rebaseBranchWorkingSet.RebaseState().Branch()))
+	if err != nil {
+		return err
+	}
+	err = doltSession.SwitchWorkingSet(ctx, ctx.GetCurrentDatabase(), previousBranchWorkingSetRef)
+	if err != nil {
+		return err
+	}
+	// ---
+
+	// reset the rebaseBranch to point to the same commit as dolt_rebase_42
+	dbData, ok := doltSession.GetDbData(ctx, ctx.GetCurrentDatabase())
+	if !ok {
+		return fmt.Errorf("unable to lookup dbdata")
+	}
+	roots, ok := doltSession.GetRoots(ctx, ctx.GetCurrentDatabase())
+	if !ok {
+		return fmt.Errorf("Could not load database %s", ctx.GetCurrentDatabase())
+	}
+	newHead, roots, err := actions.ResetHardTables(ctx, dbData, "dolt_rebase_42", roots)
+	if err != nil {
+		return err
+	}
+	if newHead != nil {
+		headRef, err := dbData.Rsr.CWBHeadRef()
+		if err != nil {
+			return err
+		}
+		if err := dbData.Ddb.SetHeadToCommit(ctx, headRef, newHead); err != nil {
+			return err
+		}
+	}
+	ws, err := doltSession.WorkingSet(ctx, ctx.GetCurrentDatabase())
+	if err != nil {
+		return err
+	}
+	err = doltSession.SetWorkingSet(ctx, ctx.GetCurrentDatabase(), ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged).ClearMerge().ClearRebase())
+	if err != nil {
+		return err
+	}
+	// ---
+
+	// delete the dolt_rebase_42 branch
+	err = actions.DeleteBranch(ctx, dbData, "dolt_rebase_42", actions.DeleteOptions{
+		Force: true,
+	}, doltSession.Provider(), nil)
+	if err != nil {
+		return err
+	}
+
+	// Clear out rebase state (actually...isn't the state on the branch that was deleted? do we really need this?
+	workingSet, err = doltSession.WorkingSet(ctx, ctx.GetCurrentDatabase())
+	if err != nil {
+		return err
+	}
+	workingSet = workingSet.ClearRebase()
+	err = doltSession.SetWorkingSet(ctx, ctx.GetCurrentDatabase(), workingSet)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -304,21 +410,24 @@ func processRow(ctx *sql.Context, row sql.Row) error {
 	}
 
 	// Perform the cherry-pick
-	resultsIter, err := doltCherryPick2(ctx, true, row[2].(string))
-	if err != nil {
+	resultsIter, err := doltCherryPick(ctx, row[2].(string))
+	// TODO: handle cherry-pick results
+	if err = drainRowIterator(ctx, resultsIter); err != nil {
 		return err
 	}
+
+	return nil
+}
+
+func drainRowIterator(ctx *sql.Context, iter sql.RowIter) error {
 	for {
-		row, err := resultsIter.Next(ctx)
+		row, err := iter.Next(ctx)
 		if err == io.EOF {
-			break
+			return nil
 		} else if err != nil {
 			return err
 		}
 
 		fmt.Printf("cherry-pick result: %v\n", row)
-		// TODO: handle cherry-pick results
 	}
-
-	return nil
 }

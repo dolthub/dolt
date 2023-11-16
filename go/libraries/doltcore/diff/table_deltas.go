@@ -694,6 +694,12 @@ func WorkingSetContainsOnlyIgnoredTables(ctx context.Context, roots doltdb.Roots
 		return false, err
 	}
 
+	// TODO: Hacking this in for now... the dolt_rebase table shouldn't be checked in
+	ignorePatterns = append(ignorePatterns, doltdb.IgnorePattern{
+		Pattern: "dolt_rebase",
+		Ignore:  true,
+	})
+
 	for _, tableDelta := range unstaged {
 		if !(tableDelta.IsAdd()) {
 			return false, nil

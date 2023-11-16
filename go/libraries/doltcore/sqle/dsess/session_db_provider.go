@@ -137,5 +137,5 @@ type SqlDatabase interface {
 type RebaseableDatabase interface {
 	SqlDatabase
 
-	CreateRebasePlan(ctx *sql.Context, commit *doltdb.Commit) error
+	CreateRebasePlan(ctx *sql.Context, startCommit, stopCommit *doltdb.Commit) error
 }

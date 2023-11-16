@@ -166,42 +166,19 @@ type WorkingSetHead struct {
 type RebaseState struct {
 	preRebaseWorkingAddr *hash.Hash
 	ontoCommitAddr       *hash.Hash
+	branch               string
 
 	nomsRebaseStateRef *types.Ref
 	nomsRebaseState    *types.Struct
 }
 
-// Yup! This code is dead as of the storage engine migration!
-//func (rs *RebaseState) loadIfNeeded(ctx context.Context, vr types.ValueReader) error {
-//	// TODO: We don't actually ever use Noms anymore, right?
-//
-//	if rs.nomsRebaseState == nil {
-//		v, err := rs.nomsRebaseStateRef.TargetValue(ctx, vr)
-//		if err != nil {
-//			return err
-//		}
-//		if v == nil {
-//			return errors.New("dangling reference to rebase state")
-//		}
-//		st, ok := v.(types.Struct)
-//		if !ok {
-//			return fmt.Errorf("corrupted RebaseState struct")
-//		}
-//		rs.nomsRebaseState = &st
-//	}
-//	return nil
-//}
-
+// TODO: Take out vr param
 func (rs *RebaseState) PreRebaseWorkingAddr(ctx context.Context, vr types.ValueReader) (hash.Hash, error) {
 	if rs.preRebaseWorkingAddr != nil {
 		return *rs.preRebaseWorkingAddr, nil
 	}
 	if rs.nomsRebaseState == nil {
 		panic("nomsRebaseStat is nil!")
-		//err := rs.loadIfNeeded(ctx, vr)
-		//if err != nil {
-		//	return hash.Hash{}, err
-		//}
 	}
 
 	workingRootRef, ok, err := rs.nomsRebaseState.MaybeGet(rebaseStateWorkingPreMergeField)
@@ -214,16 +191,16 @@ func (rs *RebaseState) PreRebaseWorkingAddr(ctx context.Context, vr types.ValueR
 	return workingRootRef.(types.Ref).TargetHash(), nil
 }
 
+func (rs *RebaseState) Branch(_ context.Context) string {
+	return rs.branch
+}
+
 func (rs *RebaseState) OntoCommit(ctx context.Context, vr types.ValueReader) (*Commit, error) {
 	if rs.ontoCommitAddr != nil {
 		return LoadCommitAddr(ctx, vr, *rs.ontoCommitAddr)
 	}
 	if rs.nomsRebaseState == nil {
 		panic("nomsRebaseState is nil!")
-		//err := rs.loadIfNeeded(ctx, vr)
-		//if err != nil {
-		//	return nil, err
-		//}
 	}
 
 	commitV, ok, err := rs.nomsRebaseState.MaybeGet(rebaseStateCommitField)
@@ -272,10 +249,6 @@ func (ms *MergeState) PreMergeWorkingAddr(ctx context.Context, vr types.ValueRea
 	}
 	if ms.nomsMergeState == nil {
 		panic("nomsMergeState is nil!")
-		//err := ms.loadIfNeeded(ctx, vr)
-		//if err != nil {
-		//	return hash.Hash{}, err
-		//}
 	}
 
 	workingRootRef, ok, err := ms.nomsMergeState.MaybeGet(mergeStateWorkingPreMergeField)
@@ -294,10 +267,6 @@ func (ms *MergeState) FromCommit(ctx context.Context, vr types.ValueReader) (*Co
 	}
 	if ms.nomsMergeState == nil {
 		panic("nomsMergeState is nil!")
-		//err := ms.loadIfNeeded(ctx, vr)
-		//if err != nil {
-		//	return nil, err
-		//}
 	}
 
 	commitV, ok, err := ms.nomsMergeState.MaybeGet(mergeStateCommitField)
@@ -318,10 +287,6 @@ func (ms *MergeState) FromCommitSpec(ctx context.Context, vr types.ValueReader) 
 
 	if ms.nomsMergeState == nil {
 		panic("nomsMergeState is nil!")
-		//err := ms.loadIfNeeded(ctx, vr)
-		//if err != nil {
-		//	return "", err
-		//}
 	}
 
 	commitSpecStr, ok, err := ms.nomsMergeState.MaybeGet(mergeStateCommitSpecField)
@@ -478,7 +443,8 @@ func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
 		// is there a better way to copy these?
 		ret.RebaseState = NewRebaseState(
 			hash.New(rebaseState.PreWorkingRootAddrBytes()),
-			hash.New(rebaseState.OntoCommitAddrBytes()))
+			hash.New(rebaseState.OntoCommitAddrBytes()),
+			string(rebaseState.BranchBytes()))
 	}
 
 	return &ret, nil
@@ -790,6 +756,7 @@ func (h nomsHead) HeadWorkingSet() (*WorkingSetHead, error) {
 	if ok {
 		r := mergeStateRef.(types.Ref)
 		ret.MergeState = &MergeState{
+			// TODO: is this really noms? 🤔
 			nomsMergeStateRef: &r,
 		}
 	}
