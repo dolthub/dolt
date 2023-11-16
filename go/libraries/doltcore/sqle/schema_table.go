@@ -99,7 +99,7 @@ func getOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 		return nil, err
 	}
 	if !found {
-		return nil, sql.ErrTableNotFound.New("dolt_schemas")
+		return nil, sql.ErrTableNotFound.New(doltdb.SchemasTableName)
 	}
 
 	return tbl.(*WritableDoltTable), nil
@@ -171,7 +171,7 @@ func migrateOldSchemasTableToNew(ctx *sql.Context, db Database, schemasTable *Wr
 		return nil, err
 	}
 	if !found {
-		return nil, sql.ErrTableNotFound.New("dolt_schemas")
+		return nil, sql.ErrTableNotFound.New(doltdb.SchemasTableName)
 	}
 
 	inserter := tbl.(*WritableDoltTable).Inserter(ctx)
