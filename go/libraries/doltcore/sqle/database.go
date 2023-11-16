@@ -206,7 +206,7 @@ func (db Database) findCommits(ctx *sql.Context, stopCommit *doltdb.Commit) (com
 			return nil, err
 		}
 
-		// TODO: Do we include stopCommit? 🤔
+		// Don't include stopCommit
 		if hash == stopCommitHash {
 			break
 		}

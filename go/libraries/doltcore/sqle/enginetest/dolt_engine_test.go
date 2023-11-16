@@ -122,10 +122,21 @@ func TestSingleScript(t *testing.T) {
 		{
 			Name: "Rebase Prototype Testing",
 			SetUpScript: []string{
+				// Hack an ignore for the dolt_rebase table; this shouldn't be necessary,
+				// but we can clean it up later. Without this, the cherry-pick errors out,
+				// complaining about
+				"insert into dolt_ignore values ('dolt_rebase', true);",
+				"call dolt_commit('-Am', 'ignoring dolt_rebase table');",
+				"SET @original_commit_0 = hashof('HEAD')",
+
+				// Create some test data
 				"create table t (pk int primary key);",
 				"call dolt_commit('-Am', 'creating table t');",
+				"SET @original_commit_1 = hashof('HEAD')",
 				"call dolt_commit('--allow-empty', '-m', 'empty commit 1');",
+				"SET @original_commit_2 = hashof('HEAD')",
 				"call dolt_commit('--allow-empty', '-m', 'empty commit 2');",
+				"SET @original_commit_3 = hashof('HEAD')",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				/*
@@ -149,10 +160,29 @@ func TestSingleScript(t *testing.T) {
 						{uint(3), uint(1), doltCommit, "empty commit 2"},
 					},
 				},
+				// TODO: Seems like the working set RebaseState will need to keep track of
+				//       where it is in the rebase plan...
+				//       RebaseOrder is probably what makes the most sense to track... we don't
+				//       technically need that until rebasing causes control to stop and go back
+				//       to the user though.
 				{
-					Query:    "call dolt_rebase('--abort');",
-					Expected: []sql.Row{{0}}, // TODO: Add message: "rebase aborted"}},
+					Query:    "call dolt_rebase('--continue');",
+					Expected: []sql.Row{{0}},
+					// TODO: We (eventually) need to return some other sort of status...
+					//       like... rebase completed successfully, or rebase interrupted or something
 				},
+				// TODO: When rebase completes, rebase status should be cleared and the dolt_rebase table should be removed
+				{
+					// Assert that the commit history is now composed of different commits
+					// TODO: This isn't working currently, because we aren't rebasing onto the
+					//       ontoCommit – we're still applying new commits at the branch head.
+					Query:    "SELECT hashof('HEAD') = @original_commit_3, hashof('HEAD~') = @original_commit_2, hashof('HEAD~~') = @original_commit_1, hashof('HEAD~~~') = @original_commit_0;",
+					Expected: []sql.Row{{false, false, false, true}},
+				},
+				//{
+				//	Query:    "call dolt_rebase('--abort');",
+				//	Expected: []sql.Row{{0}}, // TODO: Add message: "rebase aborted"}},
+				//},
 			},
 		},
 	}

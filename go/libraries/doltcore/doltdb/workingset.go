@@ -19,9 +19,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -31,6 +32,14 @@ import (
 type RebaseState struct {
 	preRebaseWorking *RootValue
 	ontoCommit       *Commit
+}
+
+func (rs RebaseState) OntoCommit() *Commit {
+	return rs.ontoCommit
+}
+
+func (rs RebaseState) PreRebaseWorkingRoot() *RootValue {
+	return rs.preRebaseWorking
 }
 
 type MergeState struct {
@@ -223,13 +232,20 @@ func (ws WorkingSet) StartMerge(commit *Commit, commitSpecStr string) *WorkingSe
 	return &ws
 }
 
-func (ws WorkingSet) StartRebase(commit *Commit) *WorkingSet {
+func (ws WorkingSet) StartRebase(ctx *sql.Context, ontoCommit *Commit) (*WorkingSet, error) {
 	ws.rebaseState = &RebaseState{
-		ontoCommit:       commit,
+		ontoCommit:       ontoCommit,
 		preRebaseWorking: ws.workingRoot,
 	}
 
-	return &ws
+	ontoRoot, err := ontoCommit.GetRootValue(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ws.workingRoot = ontoRoot
+	ws.stagedRoot = ontoRoot
+
+	return &ws, nil
 }
 
 // StartCherryPick creates and returns a new working set based off of the current |ws| with the specified |commit|
@@ -280,6 +296,10 @@ func (ws *WorkingSet) StagedRoot() *RootValue {
 
 func (ws *WorkingSet) MergeState() *MergeState {
 	return ws.mergeState
+}
+
+func (ws *WorkingSet) RebaseState() *RebaseState {
+	return ws.rebaseState
 }
 
 func (ws *WorkingSet) MergeActive() bool {
