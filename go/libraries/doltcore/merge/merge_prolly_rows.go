@@ -76,8 +76,12 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 		sqlCtx = sql.NewContext(ctx)
 	}
 
+	schemasDifferentSize := len(tm.leftSch.GetAllCols().GetColumns()) != len(mergedSch.GetAllCols().GetColumns())
+	rebuildPrimaryIndex := rewriteRows || schemasDifferentSize || !valueMerger.leftMapping.IsIdentityMapping()
+	rebuidSecondaryIndexes := rewriteRows
+
 	var stats *MergeStats
-	mergeTbl, stats, err = mergeProllyTableData(sqlCtx, tm, mergedSch, mergeTbl, valueMerger, rewriteRows)
+	mergeTbl, stats, err = mergeProllyTableData(sqlCtx, tm, mergedSch, mergeTbl, valueMerger, rebuildPrimaryIndex, rebuidSecondaryIndexes)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -105,7 +109,7 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 // if not, they are recorded as conflicts in the table's artifacts. If |rebuildIndexes| is set to
 // true, then secondary indexes will be rebuilt, instead of being incrementally merged together. This
 // is less efficient, but safer, especially when type changes have been applied to a table's schema.
-func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Schema, mergeTbl *doltdb.Table, valueMerger *valueMerger, rebuildIndexes bool) (*doltdb.Table, *MergeStats, error) {
+func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Schema, mergeTbl *doltdb.Table, valueMerger *valueMerger, rebuildPrimaryIndex, rebuildSecondaryIndexes bool) (*doltdb.Table, *MergeStats, error) {
 	iter, err := threeWayDiffer(ctx, tm, valueMerger)
 	if err != nil {
 		return nil, nil, err
@@ -188,14 +192,13 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		switch diff.Op {
 		case tree.DiffOpLeftAdd, tree.DiffOpLeftModify:
 			// In the event that the right side introduced a schema change, account for it here.
-			err = pri.merge(ctx, diff, tm.leftSch)
-			if err != nil {
-				return nil, nil, err
+			if rebuildPrimaryIndex {
+				err = pri.merge(ctx, diff, tm.leftSch)
+				if err != nil {
+					return nil, nil, err
+				}
 			}
-			err = sec.merge(ctx, diff, tm.leftSch, tm.leftSch, tm, finalSch)
-			if err != nil {
-				return nil, nil, err
-			}
+
 		case tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict:
 			// In this case, a modification or delete was made to one side, and a conflicting delete or modification
 			// was made to the other side, so these cannot be automatically resolved.
@@ -281,7 +284,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		return nil, nil, err
 	}
 
-	finalIdxs, err := mergeProllySecondaryIndexes(ctx, tm, leftIdxs, rightIdxs, finalSch, finalRows, conflicts.ae, rebuildIndexes)
+	finalIdxs, err := mergeProllySecondaryIndexes(ctx, tm, leftIdxs, rightIdxs, finalSch, finalRows, conflicts.ae, rebuildSecondaryIndexes)
 	if err != nil {
 		return nil, nil, err
 	}
