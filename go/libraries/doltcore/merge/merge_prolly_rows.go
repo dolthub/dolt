@@ -1947,11 +1947,6 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 
 	leftModified = m.resultVD.Comparator().CompareValues(i, leftCol, baseCol, resultType) != 0
 
-	leftCol, err = convert(ctx, m.leftVD, m.resultVD, m.resultSchema, leftColIdx, i, left, leftCol, m.ns)
-	if err != nil {
-		return nil, false, err
-	}
-
 	switch {
 	case leftModified && rightModified:
 		// generated columns will be updated as part of the merge later on, so choose either value for now

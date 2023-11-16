@@ -79,6 +79,12 @@ type Schema interface {
 	// GetKeyDescriptor returns the key tuple descriptor for this schema.
 	GetKeyDescriptor() val.TupleDesc
 
+	// GetKeyDescriptor returns the a descriptor for the columns used in the key.
+	// When `convertAddressColumns` is true, any columns which have types that can't appear in
+	// a key will get converted to equivalent types that can (such as text -> varchar).
+	// This is the same behavior as GetKeyDescriptor.
+	// But when `convertAddressColumns` is false, we don't perform that conversion
+	// and return the columns as they are.
 	GetKeyColumnsDescriptor(convertAddressColumns bool) val.TupleDesc
 
 	// GetValueDescriptor returns the value tuple descriptor for this schema.
