@@ -194,7 +194,7 @@ func (t *DoltTable) DoltTable(ctx *sql.Context) (*doltdb.Table, error) {
 		return nil, err
 	}
 	if !ok {
-		return nil, fmt.Errorf("table not found: %s", t.tableName)
+		return nil, sql.ErrTableNotFound.New(t.tableName)
 	}
 
 	return table, nil

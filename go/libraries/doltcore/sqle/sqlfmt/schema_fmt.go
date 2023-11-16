@@ -72,12 +72,13 @@ func GenerateCreateTableForeignKeyDefinition(fk doltdb.ForeignKey, sch, parentSc
 	}
 
 	var parentCols []string
-	if fk.IsResolved() {
+	if parentSch != nil && fk.IsResolved() {
 		for _, tag := range fk.ReferencedTableColumns {
 			c, _ := parentSch.GetAllCols().GetByTag(tag)
 			parentCols = append(parentCols, c.Name)
 		}
 	} else {
+		// the referenced table is dropped, so the schema is nil or the foreign key is not resolved
 		parentCols = append(parentCols, fk.UnresolvedFKDetails.ReferencedTableColumns...)
 	}
 
