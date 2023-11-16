@@ -19,6 +19,7 @@ import (
 	"encoding/base64"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -34,12 +35,13 @@ type RequestCredentials struct {
 }
 
 type ServerInterceptor struct {
-	Lgr           *logrus.Entry
-	Authenticator Authenticator
+	Lgr              *logrus.Entry
+	AccessController AccessControl
 }
 
-type Authenticator interface {
-	Authenticate(creds *RequestCredentials) bool
+type AccessControl interface {
+	ApiAuthenticate(creds *RequestCredentials, lgr *logrus.Entry) *sql.Context
+	ApiAuthorize(ctx *sql.Context, lgr *logrus.Entry) bool
 }
 
 func (si *ServerInterceptor) Stream() grpc.StreamServerInterceptor {
@@ -69,6 +71,8 @@ func (si *ServerInterceptor) Options() []grpc.ServerOption {
 	}
 }
 
+// authenticate checks the incoming request for authentication credentials and validates them.  If the user is
+// legitimate, an authorization check is performed. If no error is returned, the user should be allowed to proceed.
 func (si *ServerInterceptor) authenticate(ctx context.Context) error {
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		var username string
@@ -98,9 +102,18 @@ func (si *ServerInterceptor) authenticate(ctx context.Context) error {
 			si.Lgr.Info("incoming request had no peer")
 			return status.Error(codes.Unauthenticated, "unauthenticated")
 		}
-		if authed := si.Authenticator.Authenticate(&RequestCredentials{Username: username, Password: password, Address: addr.Addr.String()}); !authed {
+
+		creds := &RequestCredentials{Username: username, Password: password, Address: addr.Addr.String()}
+		sqlCtx := si.AccessController.ApiAuthenticate(creds, si.Lgr)
+		if sqlCtx == nil {
 			return status.Error(codes.Unauthenticated, "unauthenticated")
 		}
+
+		if authorized := si.AccessController.ApiAuthorize(sqlCtx, si.Lgr); !authorized {
+			return status.Error(codes.PermissionDenied, "unauthorized")
+		}
+
+		// Access Granted.
 		return nil
 	}
 
