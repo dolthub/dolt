@@ -418,9 +418,8 @@ func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) 
 	}
 
 	for checkName, checkExpression := range cv.checkExpressions {
-		// If the row came from the right side of the merge, then remap it (if necessary) to the final schema.
-		// This isn't necessary for left-side changes, because we already migrated the primary index data to
-		// the merged schema, and we skip keyless tables, since their value tuples require different mapping
+		// Remap the value to the final schema before checking.
+		// We skip keyless tables, since their value tuples require different mapping
 		// logic and we don't currently support merges to keyless tables that contain schema changes anyway.
 		newTuple := valueTuple
 		if !cv.valueMerger.keyless {
@@ -559,7 +558,6 @@ func (uv uniqValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (
 			value = val.NewTuple(uv.valueMerger.syncPool, modifiedValue...)
 		}
 	case tree.DiffOpLeftAdd, tree.DiffOpLeftModify:
-		// TODO: It may be possible to improve performance by returning early unless we're rebuilding the tree
 		value = diff.Left
 		// Don't remap the value to the merged schema if the table is keyless or if the mapping is an identity mapping.
 		if !uv.valueMerger.keyless && !uv.valueMerger.leftMapping.IsIdentityMapping() {
