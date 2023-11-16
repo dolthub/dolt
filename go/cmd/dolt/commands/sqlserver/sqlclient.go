@@ -42,6 +42,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/dolt/go/libraries/utils/svcs"
 )
 
 const (
@@ -107,7 +108,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	var serverConfig ServerConfig
-	var serverController *ServerController
+	var svcsController *svcs.Controller
 	var err error
 
 	cli.Println(color.YellowString("WARNING: This command is being deprecated and is not recommended for general use.\n" +
@@ -149,11 +150,11 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 		}
 		cli.PrintErrf("Starting server with Config %v\n", ConfigInfo(serverConfig))
 
-		serverController = NewServerController()
+		svcsController = svcs.NewController()
 		go func() {
-			_, _ = Serve(ctx, cmd.VersionStr, serverConfig, serverController, dEnv)
+			_, _ = Serve(ctx, cmd.VersionStr, serverConfig, svcsController, dEnv)
 		}()
-		err = serverController.WaitForStart()
+		err = svcsController.WaitForStart()
 		if err != nil {
 			cli.PrintErrln(err.Error())
 			return 1
@@ -376,8 +377,8 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 		cli.PrintErrln(err.Error())
 	}
 	if apr.Contains(sqlClientDualFlag) {
-		serverController.StopServer()
-		err = serverController.WaitForClose()
+		svcsController.Stop()
+		err = svcsController.WaitForStop()
 		if err != nil {
 			cli.PrintErrln(err.Error())
 		}

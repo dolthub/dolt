@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/svcs"
 )
 
 //TODO: server tests need to expose a higher granularity for server interactions:
@@ -60,7 +61,7 @@ var (
 )
 
 func TestServerArgs(t *testing.T) {
-	serverController := NewServerController()
+	controller := svcs.NewController()
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
@@ -75,16 +76,16 @@ func TestServerArgs(t *testing.T) {
 			"-t", "5",
 			"-l", "info",
 			"-r",
-		}, dEnv, serverController)
+		}, dEnv, controller)
 	}()
-	err = serverController.WaitForStart()
+	err = controller.WaitForStart()
 	require.NoError(t, err)
 	conn, err := dbr.Open("mysql", "username:password@tcp(localhost:15200)/", nil)
 	require.NoError(t, err)
 	err = conn.Close()
 	require.NoError(t, err)
-	serverController.StopServer()
-	err = serverController.WaitForClose()
+	controller.Stop()
+	err = controller.WaitForStop()
 	assert.NoError(t, err)
 }
 
@@ -110,22 +111,22 @@ listener:
 	defer func() {
 		assert.NoError(t, dEnv.DoltDB.Close())
 	}()
-	serverController := NewServerController()
+	controller := svcs.NewController()
 	go func() {
 
 		dEnv.FS.WriteFile("config.yaml", []byte(yamlConfig), os.ModePerm)
 		startServer(context.Background(), "0.0.0", "dolt sql-server", []string{
 			"--config", "config.yaml",
-		}, dEnv, serverController)
+		}, dEnv, controller)
 	}()
-	err = serverController.WaitForStart()
+	err = controller.WaitForStart()
 	require.NoError(t, err)
 	conn, err := dbr.Open("mysql", "username:password@tcp(localhost:15200)/", nil)
 	require.NoError(t, err)
 	err = conn.Close()
 	require.NoError(t, err)
-	serverController.StopServer()
-	err = serverController.WaitForClose()
+	controller.Stop()
+	err = controller.WaitForStop()
 	assert.NoError(t, err)
 }
 
@@ -145,18 +146,15 @@ func TestServerBadArgs(t *testing.T) {
 	}
 
 	for _, test := range tests {
+		test := test
 		t.Run(strings.Join(test, " "), func(t *testing.T) {
-			serverController := NewServerController()
-			go func(serverController *ServerController) {
-				startServer(context.Background(), "test", "dolt sql-server", test, env, serverController)
-			}(serverController)
-
-			// In the event that a test fails, we need to prevent a test from hanging due to a running server
-			err := serverController.WaitForStart()
-			require.Error(t, err)
-			serverController.StopServer()
-			err = serverController.WaitForClose()
-			assert.NoError(t, err)
+			controller := svcs.NewController()
+			go func() {
+				startServer(context.Background(), "test", "dolt sql-server", test, env, controller)
+			}()
+			if !assert.Error(t, controller.WaitForStart()) {
+				controller.Stop()
+			}
 		})
 	}
 }
@@ -186,8 +184,8 @@ func TestServerGoodParams(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(ConfigInfo(test), func(t *testing.T) {
-			sc := NewServerController()
-			go func(config ServerConfig, sc *ServerController) {
+			sc := svcs.NewController()
+			go func(config ServerConfig, sc *svcs.Controller) {
 				_, _ = Serve(context.Background(), "0.0.0", config, sc, env)
 			}(test, sc)
 			err := sc.WaitForStart()
@@ -196,8 +194,8 @@ func TestServerGoodParams(t *testing.T) {
 			require.NoError(t, err)
 			err = conn.Close()
 			require.NoError(t, err)
-			sc.StopServer()
-			err = sc.WaitForClose()
+			sc.Stop()
+			err = sc.WaitForStop()
 			assert.NoError(t, err)
 		})
 	}
@@ -212,8 +210,8 @@ func TestServerSelect(t *testing.T) {
 
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15300)
 
-	sc := NewServerController()
-	defer sc.StopServer()
+	sc := svcs.NewController()
+	defer sc.Stop()
 	go func() {
 		_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, env)
 	}()
@@ -261,7 +259,7 @@ func TestServerSelect(t *testing.T) {
 
 // If a port is already in use, throw error "Port XXXX already in use."
 func TestServerFailsIfPortInUse(t *testing.T) {
-	serverController := NewServerController()
+	controller := svcs.NewController()
 	server := &http.Server{
 		Addr:    ":15200",
 		Handler: http.DefaultServeMux,
@@ -287,10 +285,10 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 			"-t", "5",
 			"-l", "info",
 			"-r",
-		}, dEnv, serverController)
+		}, dEnv, controller)
 	}()
 
-	err = serverController.WaitForStart()
+	err = controller.WaitForStart()
 	require.Error(t, err)
 	server.Close()
 	wg.Wait()
@@ -311,8 +309,8 @@ func TestServerSetDefaultBranch(t *testing.T) {
 
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15302)
 
-	sc := NewServerController()
-	defer sc.StopServer()
+	sc := svcs.NewController()
+	defer sc.Stop()
 	go func() {
 		_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, dEnv)
 	}()
@@ -470,7 +468,7 @@ func TestReadReplica(t *testing.T) {
 	dsess.InitPersistedSystemVars(multiSetup.GetEnv(readReplicaDbName))
 
 	// start server as read replica
-	sc := NewServerController()
+	sc := svcs.NewController()
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15303)
 
 	// set socket to nil to force tcp
@@ -482,7 +480,7 @@ func TestReadReplica(t *testing.T) {
 		require.NoError(t, err)
 	}()
 	require.NoError(t, sc.WaitForStart())
-	defer sc.StopServer()
+	defer sc.Stop()
 
 	replicatedTable := "new_table"
 	multiSetup.CreateTable(ctx, sourceDbName, replicatedTable)
