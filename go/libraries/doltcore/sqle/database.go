@@ -110,30 +110,25 @@ func (r ReadOnlyDatabase) WithBranchRevision(requestedName string, branchSpec ds
 }
 
 func (db Database) CreateRebasePlan(ctx *sql.Context, startCommit, ontoCommit *doltdb.Commit) error {
-	// TODO: move me
-	const doltRebaseTableName = "dolt_rebase"
-
 	pkSchema := sql.NewPrimaryKeySchema(dprocedures.DoltRebaseSystemTableSchema, 2)
 	// use createSqlTable, instead of CreateTable to avoid the "dolt_" reserved prefix table name check
-	err := db.createSqlTable(ctx, doltRebaseTableName, pkSchema, sql.Collation_Default)
+	err := db.createSqlTable(ctx, doltdb.RebaseTableName, pkSchema, sql.Collation_Default)
 	if err != nil {
 		return err
 	}
 
-	table, ok, err := db.GetTableInsensitive(ctx, doltRebaseTableName)
+	table, ok, err := db.GetTableInsensitive(ctx, doltdb.RebaseTableName)
 	if err != nil {
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("unable to find %s table", doltRebaseTableName)
+		return fmt.Errorf("unable to find %s table", doltdb.RebaseTableName)
 	}
 
-	doltTable, ok := table.(*DoltTable)
+	writeableDoltTable, ok := table.(*WritableDoltTable)
 	if !ok {
 		return fmt.Errorf("expected a *sqle.WritableDoltTable, but got %T", table)
 	}
-
-	writeableDoltTable := &WritableDoltTable{DoltTable: doltTable, db: db}
 
 	inserter := writeableDoltTable.Inserter(ctx)
 

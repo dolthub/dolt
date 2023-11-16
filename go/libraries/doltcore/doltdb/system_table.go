@@ -161,6 +161,7 @@ var writeableSystemTables = []string{
 	SchemasTableName,
 	ProceduresTableName,
 	IgnoreTableName,
+	RebaseTableName,
 }
 
 var persistedSystemTables = []string{
@@ -311,6 +312,9 @@ const (
 	TagsTableName = "dolt_tags"
 
 	IgnoreTableName = "dolt_ignore"
+
+	// RebaseTableName is the rebase system table name.
+	RebaseTableName = "dolt_rebase"
 )
 
 const (

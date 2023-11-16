@@ -201,7 +201,7 @@ func startRebase(ctx *sql.Context) error {
 
 	rdb, ok := db.(dsess.RebaseableDatabase)
 	if !ok {
-		return fmt.Errorf("expected a *sqle.Database, but received a %T", db)
+		return fmt.Errorf("expected a dsess.RebaseableDatabase implementation, but received a %T", db)
 	}
 	err = rdb.CreateRebasePlan(ctx, startCommit, ontoCommit)
 	if err != nil {
@@ -270,7 +270,7 @@ func continueRebase(ctx *sql.Context) error {
 	// iterate over the rebase plan in dolt_rebase and cherry-pick each commit
 	// Read the contents of the dolt_rebase table...
 
-	table, ok, err := db.GetTableInsensitive(ctx, "dolt_rebase")
+	table, ok, err := db.GetTableInsensitive(ctx, doltdb.RebaseTableName)
 	if err != nil {
 		return err
 	}

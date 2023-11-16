@@ -176,6 +176,14 @@ func TestSingleScript(t *testing.T) {
 						{uint(3), uint(1), doltCommit, "empty commit 2"},
 					},
 				},
+				{
+					Query: "update dolt_rebase set rebase_order=4 where rebase_order=3;",
+					Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: uint64(1), Info: plan.UpdateInfo{
+						Matched:  1,
+						Updated:  1,
+						Warnings: 0,
+					}}}},
+				},
 				// TODO: Seems like the working set RebaseState will need to keep track of
 				//       where it is in the rebase plan...
 				//       RebaseOrder is probably what makes the most sense to track... we don't
