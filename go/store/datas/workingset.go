@@ -40,11 +40,7 @@ const (
 )
 
 const (
-	rebaseStateName                 = "RebaseState"
-	rebaseStateField                = "rebaseState"
-	rebaseStateCommitSpecField      = "commitSpec"
-	rebaseStateCommitField          = "commit"
-	rebaseStateWorkingPreMergeField = "workingPreRebase"
+	rebaseStateField = "rebaseState"
 )
 
 const (

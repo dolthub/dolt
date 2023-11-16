@@ -422,11 +422,7 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 
 	var rebaseState *RebaseState
 	if dsws.RebaseState != nil {
-		preRebaseWorkingAddr, err := dsws.RebaseState.PreRebaseWorkingAddr(ctx, vrw)
-		if err != nil {
-			return nil, err
-		}
-
+		preRebaseWorkingAddr := dsws.RebaseState.PreRebaseWorkingAddr()
 		preRebaseWorkingV, err := vrw.ReadValue(ctx, preRebaseWorkingAddr)
 		if err != nil {
 			return nil, err

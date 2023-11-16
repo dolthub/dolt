@@ -167,28 +167,14 @@ type RebaseState struct {
 	preRebaseWorkingAddr *hash.Hash
 	ontoCommitAddr       *hash.Hash
 	branch               string
-
-	nomsRebaseStateRef *types.Ref
-	nomsRebaseState    *types.Struct
 }
 
-// TODO: Take out vr param
-func (rs *RebaseState) PreRebaseWorkingAddr(ctx context.Context, vr types.ValueReader) (hash.Hash, error) {
+func (rs *RebaseState) PreRebaseWorkingAddr() hash.Hash {
 	if rs.preRebaseWorkingAddr != nil {
-		return *rs.preRebaseWorkingAddr, nil
+		return *rs.preRebaseWorkingAddr
+	} else {
+		return hash.Hash{}
 	}
-	if rs.nomsRebaseState == nil {
-		panic("nomsRebaseStat is nil!")
-	}
-
-	workingRootRef, ok, err := rs.nomsRebaseState.MaybeGet(rebaseStateWorkingPreMergeField)
-	if err != nil {
-		return hash.Hash{}, err
-	}
-	if !ok {
-		return hash.Hash{}, fmt.Errorf("corrupted RebaseState struct")
-	}
-	return workingRootRef.(types.Ref).TargetHash(), nil
 }
 
 func (rs *RebaseState) Branch(_ context.Context) string {
@@ -199,19 +185,7 @@ func (rs *RebaseState) OntoCommit(ctx context.Context, vr types.ValueReader) (*C
 	if rs.ontoCommitAddr != nil {
 		return LoadCommitAddr(ctx, vr, *rs.ontoCommitAddr)
 	}
-	if rs.nomsRebaseState == nil {
-		panic("nomsRebaseState is nil!")
-	}
-
-	commitV, ok, err := rs.nomsRebaseState.MaybeGet(rebaseStateCommitField)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, fmt.Errorf("corrupted RebaseState struct")
-	}
-
-	return CommitFromValue(vr.Format(), commitV)
+	return nil, nil
 }
 
 type MergeState struct {
@@ -761,14 +735,14 @@ func (h nomsHead) HeadWorkingSet() (*WorkingSetHead, error) {
 		}
 	}
 
-	rebaseStateRef, ok, err := st.MaybeGet(rebaseStateField)
+	_, ok, err = st.MaybeGet(rebaseStateField)
 	if err != nil {
 		return nil, err
 	}
 	if ok {
-		r := rebaseStateRef.(types.Ref)
+		//r := rebaseStateRef.(types.Ref)
 		ret.RebaseState = &RebaseState{
-			nomsRebaseStateRef: &r,
+			//nomsRebaseStateRef: &r,
 		}
 	}
 
