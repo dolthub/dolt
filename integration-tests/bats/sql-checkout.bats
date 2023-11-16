@@ -130,6 +130,7 @@ SQL
 }
 
 @test "sql-checkout: DOLT_CHECKOUT updates the head ref session var" {
+    export DOLT_DBNAME_REPLACE_HYPHENS="true"
     run dolt sql  <<SQL
 call dolt_checkout('-b', 'feature-branch');
 select @@dolt_repo_$$_head_ref;
@@ -140,6 +141,7 @@ SQL
 }
 
 @test "sql-checkout: CALL DOLT_CHECKOUT updates the head ref session var" {
+    export DOLT_DBNAME_REPLACE_HYPHENS="true"
     run dolt sql  <<SQL
 CALL DOLT_CHECKOUT('-b', 'feature-branch');
 select @@dolt_repo_$$_head_ref;
@@ -598,8 +600,4 @@ SQL
 
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | awk '{print $2}'
-}
-
-get_working_hash() {
-  dolt sql -q "select @@dolt_repo_$$_working" | sed -n 4p | sed -e 's/|//' -e 's/|//'  -e 's/ //'
 }

@@ -143,8 +143,8 @@ SQL
 
     # check information_schema.TABLE_CONSTRAINTS table
     run dolt sql -q "select * from information_schema.TABLE_CONSTRAINTS where table_name = 'materials';" -r csv
-    [[ "$output" =~ "def,dolt_repo_$$,PRIMARY,dolt_repo_$$,materials,PRIMARY KEY,YES" ]] || false
-    [[ "$output" =~ "def,dolt_repo_$$,jb6i5huc,dolt_repo_$$,materials,FOREIGN KEY,YES" ]] || false
+    [[ "$output" =~ "def,dolt-repo-$$,PRIMARY,dolt-repo-$$,materials,PRIMARY KEY,YES" ]] || false
+    [[ "$output" =~ "def,dolt-repo-$$,jb6i5huc,dolt-repo-$$,materials,FOREIGN KEY,YES" ]] || false
 
     # check information_schema.TABLE_CONSTRAINTS_EXTENSIONS table
     run dolt sql -q "select constraint_name from information_schema.TABLE_CONSTRAINTS_EXTENSIONS where table_name = 'materials';" -r csv

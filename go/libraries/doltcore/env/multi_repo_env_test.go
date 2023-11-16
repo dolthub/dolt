@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -32,13 +33,29 @@ import (
 )
 
 func TestDirToDBName(t *testing.T) {
-	tests := map[string]string{
-		"irs":                "irs",
+	replaceHyphenTests := map[string]string{
 		"corona-virus":       "corona_virus",
-		"  fake - name     ": "fake_name",
+		"  real - name     ": "real_name",
 	}
 
-	for dirName, expected := range tests {
+	err := os.Setenv(dconfig.EnvDbNameReplaceHyphens, "true")
+	require.NoError(t, err)
+
+	for dirName, expected := range replaceHyphenTests {
+		actual := dbfactory.DirToDBName(dirName)
+		assert.Equal(t, expected, actual)
+	}
+
+	allowHyphenTests := map[string]string{
+		"irs":                "irs",
+		"corona-virus":       "corona-virus",
+		"  fake - name     ": "fake_-_name",
+	}
+
+	err = os.Setenv(dconfig.EnvDbNameReplaceHyphens, "")
+	require.NoError(t, err)
+
+	for dirName, expected := range allowHyphenTests {
 		actual := dbfactory.DirToDBName(dirName)
 		assert.Equal(t, expected, actual)
 	}
@@ -116,7 +133,7 @@ func TestMultiEnvForDirectory(t *testing.T) {
 
 	expected := []envCmp{
 		{
-			name:    "test_name_123",
+			name:    "test---name_123",
 			doltDir: dEnv.GetDoltDir(),
 		},
 	}
@@ -147,7 +164,7 @@ func TestMultiEnvForDirectoryWithMultipleRepos(t *testing.T) {
 	assert.Len(t, mrEnv.envs, 3)
 
 	expected := make(map[string]string)
-	expected["test_name_123"] = dEnv.GetDoltDir()
+	expected["test---name_123"] = dEnv.GetDoltDir()
 	expected["abc"] = subEnv1.GetDoltDir()
 	expected["def"] = subEnv2.GetDoltDir()
 

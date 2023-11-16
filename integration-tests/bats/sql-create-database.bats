@@ -22,7 +22,7 @@ SQL
 
     run dolt sql -q "SHOW DATABASES;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "dolt_repo_$$" ]] || false
+    [[ "$output" =~ "dolt-repo-$$" ]] || false
     [[ "$output" =~ "information_schema" ]] || false
     [[ "$output" =~ "mydb" ]] || false
     
@@ -43,7 +43,7 @@ SQL
 
     run dolt sql -q "SHOW DATABASES;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "dolt_repo_$$" ]] || false
+    [[ "$output" =~ "dolt-repo-$$" ]] || false
     [[ "$output" =~ "information_schema" ]] || false
     [[ "$output" =~ "mydb" ]] || false
 
@@ -65,7 +65,7 @@ SQL
 
     run dolt sql -q "SHOW DATABASES;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "dolt_repo_$$" ]] || false
+    [[ "$output" =~ "dolt-repo-$$" ]] || false
     [[ "$output" =~ "information_schema" ]] || false
     [[ "$output" =~ "mydb" ]] || false
 
@@ -142,7 +142,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "mydb2" ]] || false
     [[ ! "$output" =~ "mydb1" ]] || false
-    [[ ! "$output" =~ "dolt_repo_$$" ]] || false
+    [[ ! "$output" =~ "dolt-repo-$$" ]] || false
 
     # data-dir with abs path
     absdir="/tmp/$$/db_dir"
@@ -221,7 +221,7 @@ SQL
     dolt sql -q "CREATE DATABASE IF NOT EXISTS test;"
     run dolt sql -q "SHOW DATABASES;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "dolt_repo_$$" ]] || false
+    [[ "$output" =~ "dolt-repo-$$" ]] || false
     [[ "$output" =~ "information_schema" ]] || false
     [[ "$output" =~ "test" ]] || false
 
@@ -278,7 +278,7 @@ SQL
     dolt sql -q "CREATE SCHEMA mydb"
 
     run dolt sql -q "SHOW DATABASES;"
-    [[ "$output" =~ "dolt_repo_$$" ]] || false
+    [[ "$output" =~ "dolt-repo-$$" ]] || false
     [[ "$output" =~ "information_schema" ]] || false
     [[ "$output" =~ "mydb" ]] || false    
 }
@@ -311,7 +311,7 @@ SQL
 
     run dolt sql -q "SHOW DATABASES;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "dolt_repo_$$" ]] || false
+    [[ "$output" =~ "dolt-repo-$$" ]] || false
     [[ "$output" =~ "information_schema" ]] || false
     [[ "$output" =~ "metabase" ]] || false
 

@@ -6,6 +6,7 @@ setup() {
     skiponwindows "Missing dependencies"
 
     setup_common
+    export DOLT_DBNAME_REPLACE_HYPHENS="true"
 }
 
 teardown() {

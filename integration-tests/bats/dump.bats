@@ -889,12 +889,12 @@ SQL
     dolt sql < ../doltdump.sql
     [ $status -eq 0 ]
 
-    run dolt sql -q "USE dolt_repo_$$; SHOW TABLES;"
+    run dolt sql -q "USE \`dolt-repo-$$\`; SHOW TABLES;"
     [ $status -eq 0 ]
     [[ $output =~ "table1" ]] || false
     [[ $output =~ "view1" ]] || false
 
-    run dolt sql -r csv -q "USE dolt_repo_$$; CALL procedure1;"
+    run dolt sql -r csv -q "USE \`dolt-repo-$$\`; CALL procedure1;"
     [ $status -eq 0 ]
     [[ $output =~ "pk,col1" ]] || false
     [[ $output =~ "2,1" ]] || false

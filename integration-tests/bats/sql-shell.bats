@@ -59,7 +59,7 @@ teardown() {
 
     # 2 tables are created. 1 from above and 1 in the expect file.
     [[ "$output" =~ "+---------------------" ]] || false
-    [[ "$output" =~ "| Tables_in_dolt_repo_" ]] || false
+    [[ "$output" =~ "| Tables_in_dolt-repo-" ]] || false
     [[ "$output" =~ "+---------------------" ]] || false
     [[ "$output" =~ "| test                " ]] || false
     [[ "$output" =~ "| test_expect         " ]] || false

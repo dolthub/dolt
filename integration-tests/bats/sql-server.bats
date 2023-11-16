@@ -1733,8 +1733,9 @@ behavior:
     stop_sql_server 1
     [ ! -d .dolt ]
 
-    run grep "database not found: mydb" server_log.txt
-    [ "${#lines[@]}" -eq 0 ]
+    run dolt sql -q "SHOW DATABASES"
+    [[ ! "$output" =~ "mydb" ]] || false
+    [[ "$output" =~ "doltdb" ]] || false
 
     # nested databases inside dropped database should still exist
     dolt sql -q "SHOW DATABASES"
@@ -1756,8 +1757,8 @@ behavior:
     start_sql_server >> server_log.txt 2>&1
     dolt sql -q "DROP DATABASE mydb;"
 
-    run grep "database not found: mydb" server_log.txt
-    [ "${#lines[@]}" -eq 0 ]
+    run dolt sql -q "SHOW DATABASES"
+    [[ ! "$output" =~ "mydb" ]] || false
 
     [ ! -d .dolt ]
 
@@ -1786,6 +1787,26 @@ behavior:
     [[ "$output" =~ "mydb1" ]] || false
 }
 
+@test "sql-server: dropping database with '-' in it but replaced with underscore" {
+    skiponwindows "Missing dependencies"
+    export DOLT_DBNAME_REPLACE_HYPHENS="true"
+    mkdir my-db
+    cd my-db
+    dolt init
+    cd ..
+
+    run dolt sql -q "SHOW DATABASES"
+    [[ "$output" =~ "my_db" ]] || false
+
+    start_sql_server >> server_log.txt 2>&1
+    dolt sql -q "DROP DATABASE my_db;"
+
+    run dolt sql -q "SHOW DATABASES"
+    [[ ! "$output" =~ "my_db" ]] || false
+
+    [ ! -d my-db ]
+}
+
 @test "sql-server: dropping database with '-' in it" {
     skiponwindows "Missing dependencies"
 
@@ -1794,11 +1815,14 @@ behavior:
     dolt init
     cd ..
 
-    start_sql_server >> server_log.txt 2>&1
-    dolt sql -q "DROP DATABASE my_db;"
+    run dolt sql -q "SHOW DATABASES"
+    [[ "$output" =~ "my-db" ]] || false
 
-    run grep "database not found: my_db" server_log.txt
-    [ "${#lines[@]}" -eq 0 ]
+    start_sql_server >> server_log.txt 2>&1
+    dolt sql -q "DROP DATABASE \`my-db\`;"
+
+    run dolt sql -q "SHOW DATABASES"
+    [[ ! "$output" =~ "my-db" ]] || false
 
     [ ! -d my-db ]
 }

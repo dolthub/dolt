@@ -212,6 +212,7 @@ SQL
 }
 
 @test "sql-commit: DOLT_COMMIT updates session variables" {
+    export DOLT_DBNAME_REPLACE_HYPHENS="true"
     head_variable=@@dolt_repo_$$_head
     head_commit=$(get_head_commit)
     run dolt sql << SQL
@@ -232,6 +233,7 @@ SQL
 }
 
 @test "sql-commit: CALL DOLT_COMMIT updates session variables" {
+    export DOLT_DBNAME_REPLACE_HYPHENS="true"
     head_variable=@@dolt_repo_$$_head
     head_commit=$(get_head_commit)
     run dolt sql << SQL
@@ -252,6 +254,7 @@ SQL
 }
 
 @test "sql-commit: DOLT_COMMIT with unstaged tables leaves them in the working set" {
+    export DOLT_DBNAME_REPLACE_HYPHENS="true"
     head_variable=@@dolt_repo_$$_head
 
     run dolt sql << SQL
@@ -311,6 +314,7 @@ SQL
 }
 
 @test "sql-commit: CALL DOLT_COMMIT with unstaged tables leaves them in the working set" {
+    export DOLT_DBNAME_REPLACE_HYPHENS="true"
     head_variable=@@dolt_repo_$$_head
 
     run dolt sql << SQL
