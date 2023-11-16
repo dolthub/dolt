@@ -1792,7 +1792,7 @@ func (m *valueMerger) processBaseColumn(ctx context.Context, i int, left, right,
 		// This is a conflict if the value on the left changed.
 		// But if the left side only changed its representation (from ALTER COLUMN) and still has the same value,
 		// then this can be resolved.
-		baseCol, err = convert(ctx, m.baseVD, m.leftVD, m.rightSchema, i, leftColIdx, base, baseCol, m.ns)
+		baseCol, err = convert(ctx, m.baseVD, m.leftVD, m.leftSchema, i, leftColIdx, base, baseCol, m.ns)
 		if err != nil {
 			return false, err
 		}
