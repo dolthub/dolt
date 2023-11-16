@@ -125,10 +125,12 @@ func TestSingleScript(t *testing.T) {
 			call dolt_commit('-Am', 'creating table t');
 			insert into t values (1);
 			call dolt_commit('-am', 'inserting row 1');
-			insert into t values (2);
-			call dolt_commit('-am', 'inserting row 2');
-			insert into t values (3);
-			call dolt_commit('-am', 'inserting row 3');
+			insert into t values (10);
+			call dolt_commit('-am', 'inserting row 10');
+			insert into t values (100);
+			call dolt_commit('-am', 'inserting row 100');
+			insert into t values (1000);
+			call dolt_commit('-am', 'inserting row 1000');
 			--
 			call dolt_rebase();
 			call dolt_rebase('--continue');
@@ -138,20 +140,20 @@ func TestSingleScript(t *testing.T) {
 		{
 			Name: "Rebase Prototype Testing",
 			SetUpScript: []string{
-				// Hack an ignore for the dolt_rebase table; this shouldn't be necessary,
-				// but we can clean it up later. Without this, the cherry-pick errors out,
-				// complaining about
-				"insert into dolt_ignore values ('dolt_rebase', true);",
-				"call dolt_commit('-Am', 'ignoring dolt_rebase table');",
-				"SET @original_commit_0 = hashof('HEAD')",
-
-				// Create some test data
 				"create table t (pk int primary key);",
 				"call dolt_commit('-Am', 'creating table t');",
+				"SET @original_commit_0 = hashof('HEAD')",
+
+				"insert into t values (1);",
+				"call dolt_commit('-am', 'inserting row 1');",
 				"SET @original_commit_1 = hashof('HEAD')",
-				"call dolt_commit('--allow-empty', '-m', 'empty commit 1');",
+
+				"insert into t values (10);",
+				"call dolt_commit('-am', 'inserting row 10');",
 				"SET @original_commit_2 = hashof('HEAD')",
-				"call dolt_commit('--allow-empty', '-m', 'empty commit 2');",
+
+				"insert into t values (100);",
+				"call dolt_commit('-am', 'inserting row 100');",
 				"SET @original_commit_3 = hashof('HEAD')",
 			},
 			Assertions: []queries.ScriptTestAssertion{
@@ -171,9 +173,9 @@ func TestSingleScript(t *testing.T) {
 				{
 					Query: "select * from dolt_rebase order by rebase_order ASC;",
 					Expected: []sql.Row{
-						{uint(1), uint(1), doltCommit, "creating table t"},
-						{uint(2), uint(1), doltCommit, "empty commit 1"},
-						{uint(3), uint(1), doltCommit, "empty commit 2"},
+						{uint(1), uint(1), doltCommit, "inserting row 1"},
+						{uint(2), uint(1), doltCommit, "inserting row 10"},
+						{uint(3), uint(1), doltCommit, "inserting row 100"},
 					},
 				},
 				{
@@ -204,8 +206,8 @@ func TestSingleScript(t *testing.T) {
 				{
 					// Assert that the commit history is now composed of different commits
 					Query: "select message from dolt_log order by date desc;",
-					Expected: []sql.Row{{"empty commit 2"}, {"empty commit 1"}, {"creating table t"},
-						{"ignoring dolt_rebase table"}, {"Initialize data repository"}},
+					Expected: []sql.Row{{"inserting row 100"}, {"inserting row 10"}, {"inserting row 1"},
+						{"creating table t"}, {"Initialize data repository"}},
 				},
 
 				//{

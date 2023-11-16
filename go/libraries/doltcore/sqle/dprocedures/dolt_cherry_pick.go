@@ -145,9 +145,7 @@ func doDoltCherryPick(ctx *sql.Context, args []string) (string, int, int, int, e
 		return "", mergeResult.CountOfTablesWithDataConflicts(),
 			mergeResult.CountOfTablesWithSchemaConflicts(), mergeResult.CountOfTablesWithConstraintViolations(), nil
 	} else {
-		// TODO: Hacking in --allow-empty for rebase testing,
-		//       since we're testing with empty commits.
-		commitHash, _, err := doDoltCommit(ctx, []string{"-m", commitMsg, "--allow-empty"})
+		commitHash, _, err := doDoltCommit(ctx, []string{"-m", commitMsg})
 		return commitHash, 0, 0, 0, err
 	}
 }

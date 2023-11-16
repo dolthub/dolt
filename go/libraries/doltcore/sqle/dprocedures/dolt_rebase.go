@@ -382,41 +382,42 @@ func continueRebase(ctx *sql.Context) error {
 }
 
 func processRow(ctx *sql.Context, row sql.Row) error {
-	fmt.Printf("rebase plan: %v \n", row)
-
-	// TODO: Would be nice if we had a "RebasePlan" type for this...
-	if row[1] != uint16(RebaseActionEnumType.IndexOf("pick")) {
-		i, ok := row[1].(uint16)
-		if !ok {
-			// todo: should be uint, right?
-			panic(fmt.Sprintf("invalid enum value: %v (%T)", row[1], row[1])) // TODO: check for NULL, too
-		}
-		action, ok := RebaseActionEnumType.At(int(i))
-		if !ok {
-			panic("invalid enum value!")
-		}
-		if action != "pick" {
-			return fmt.Errorf("only the 'pick' rebase action is supported, but '%s' was requested", action)
-		}
+	i, ok := row[1].(uint16)
+	if !ok {
+		// TODO: check for NULL, too
+		panic(fmt.Sprintf("invalid enum value: %v (%T)", row[1], row[1]))
+	}
+	rebaseAction, ok := RebaseActionEnumType.At(int(i))
+	if !ok {
+		panic("invalid enum value!")
 	}
 
-	// NOTE: After our first call to cherry-pick, the tx is committed, so a new tx needs to be started
-	doltSession := dsess.DSessFromSess(ctx.Session)
-	if doltSession.GetTransaction() == nil {
-		_, err := doltSession.StartTransaction(ctx, sql.ReadWrite)
+	switch rebaseAction {
+	case "pick":
+		fmt.Printf("cherry-picking commit: %s\n", row[2].(string))
+		// NOTE: After our first call to cherry-pick, the tx is committed, so a new tx needs to be started
+		doltSession := dsess.DSessFromSess(ctx.Session)
+		if doltSession.GetTransaction() == nil {
+			_, err := doltSession.StartTransaction(ctx, sql.ReadWrite)
+			if err != nil {
+				return err
+			}
+		}
+		// Perform the cherry-pick
+		resultsIter, err := doltCherryPick(ctx, row[2].(string))
 		if err != nil {
 			return err
 		}
-	}
+		// TODO: handle cherry-pick results
+		return drainRowIterator(ctx, resultsIter)
 
-	// Perform the cherry-pick
-	resultsIter, err := doltCherryPick(ctx, row[2].(string))
-	// TODO: handle cherry-pick results
-	if err = drainRowIterator(ctx, resultsIter); err != nil {
-		return err
-	}
+	case "skip":
+		fmt.Printf("skipping commit: %s\n", row[2].(string))
+		return nil
 
-	return nil
+	default:
+		return fmt.Errorf("only the 'pick' rebase action is supported, but '%s' was requested", rebaseAction)
+	}
 }
 
 func drainRowIterator(ctx *sql.Context, iter sql.RowIter) error {
