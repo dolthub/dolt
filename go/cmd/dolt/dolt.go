@@ -171,6 +171,7 @@ var commandsWithoutGlobalArgSupport = []cli.Command{
 var commandsWithoutCurrentDirWrites = []cli.Command{
 	commands.VersionCmd{VersionStr: Version},
 	commands.ConfigCmd{},
+	commands.ProfileCmd{},
 }
 
 func initCliContext(commandName string) bool {
