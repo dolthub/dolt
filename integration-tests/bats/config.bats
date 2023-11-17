@@ -287,3 +287,10 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "* vegan-btw" ]] || false
 }
+
+@test "config: config doesn't need write permission in current dir" {
+    chmod 111 .
+    run dolt config --list
+    [ "$status" -eq 0 ]
+    chmod 755 .
+}
