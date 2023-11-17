@@ -43,7 +43,7 @@ type InitialDbState struct {
 	DbData   env.DbData
 	Remotes  *concurrentmap.Map[string, env.Remote]
 	Branches map[string]env.BranchConfig
-	Backups  map[string]env.Remote
+	Backups  *concurrentmap.Map[string, env.Remote]
 
 	// If err is set, this InitialDbState is partially invalid, but may be
 	// usable to initialize a database at a revision specifier, for

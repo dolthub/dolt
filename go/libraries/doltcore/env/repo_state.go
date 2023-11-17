@@ -32,7 +32,7 @@ type RepoStateReader interface {
 	CWBHeadRef() (ref.DoltRef, error)
 	CWBHeadSpec() (*doltdb.CommitSpec, error)
 	GetRemotes() (*concurrentmap.Map[string, Remote], error)
-	GetBackups() (map[string]Remote, error)
+	GetBackups() (*concurrentmap.Map[string, Remote], error)
 	GetBranches() (map[string]BranchConfig, error)
 }
 
@@ -71,7 +71,7 @@ type BranchConfig struct {
 type RepoState struct {
 	Head     ref.MarshalableRef                 `json:"head"`
 	Remotes  *concurrentmap.Map[string, Remote] `json:"remotes"`
-	Backups  map[string]Remote                  `json:"backups"`
+	Backups  *concurrentmap.Map[string, Remote] `json:"backups"`
 	Branches map[string]BranchConfig            `json:"branches"`
 	// |staged|, |working|, and |merge| are legacy fields left over from when Dolt repos stored this info in the repo
 	// state file, not in the DB directly. They're still here so that we can migrate existing repositories forward to the
@@ -86,7 +86,7 @@ type RepoState struct {
 type repoStateLegacy struct {
 	Head     ref.MarshalableRef                 `json:"head"`
 	Remotes  *concurrentmap.Map[string, Remote] `json:"remotes"`
-	Backups  map[string]Remote                  `json:"backups"`
+	Backups  *concurrentmap.Map[string, Remote] `json:"backups"`
 	Branches map[string]BranchConfig            `json:"branches"`
 	Staged   string                             `json:"staged,omitempty"`
 	Working  string                             `json:"working,omitempty"`
@@ -162,7 +162,7 @@ func CloneRepoState(fs filesys.ReadWriteFS, r Remote) (*RepoState, error) {
 		working:  hashStr,
 		Remotes:  remotes,
 		Branches: make(map[string]BranchConfig),
-		Backups:  make(map[string]Remote),
+		Backups:  concurrentmap.New[string, Remote](),
 	}
 
 	err := rs.Save(fs)
@@ -184,7 +184,7 @@ func CreateRepoState(fs filesys.ReadWriteFS, br string) (*RepoState, error) {
 		Head:     ref.MarshalableRef{Ref: headRef},
 		Remotes:  concurrentmap.New[string, Remote](),
 		Branches: make(map[string]BranchConfig),
-		Backups:  make(map[string]Remote),
+		Backups:  concurrentmap.New[string, Remote](),
 	}
 
 	err = rs.Save(fs)
@@ -224,9 +224,9 @@ func (rs *RepoState) RemoveRemote(r Remote) {
 }
 
 func (rs *RepoState) AddBackup(r Remote) {
-	rs.Backups[r.Name] = r
+	rs.Backups.Set(r.Name, r)
 }
 
 func (rs *RepoState) RemoveBackup(r Remote) {
-	delete(rs.Backups, r.Name)
+	rs.Backups.Delete(r.Name)
 }
