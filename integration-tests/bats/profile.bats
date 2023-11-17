@@ -388,3 +388,9 @@ teardown() {
     [[ ! "$output" =~ "defaultTable" ]] || false
     [[ "$output" =~ "altTable" ]] || false
 }
+
+@test "profile: profile doesn't need write permission in current dir" {
+    chmod 111 .
+    dolt profile
+    chmod 755 .
+}

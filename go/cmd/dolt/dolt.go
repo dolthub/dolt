@@ -167,6 +167,13 @@ var commandsWithoutGlobalArgSupport = []cli.Command{
 	commands.ConfigCmd{},
 }
 
+// commands that do not need write access for the current directory
+var commandsWithoutCurrentDirWrites = []cli.Command{
+	commands.VersionCmd{VersionStr: Version},
+	commands.ConfigCmd{},
+	commands.ProfileCmd{},
+}
+
 func initCliContext(commandName string) bool {
 	for _, command := range commandsWithoutCliCtx {
 		if command.Name() == commandName {
@@ -178,6 +185,15 @@ func initCliContext(commandName string) bool {
 
 func supportsGlobalArgs(commandName string) bool {
 	for _, command := range commandsWithoutGlobalArgSupport {
+		if command.Name() == commandName {
+			return false
+		}
+	}
+	return true
+}
+
+func needsWriteAccess(commandName string) bool {
+	for _, command := range commandsWithoutCurrentDirWrites {
 		if command.Name() == commandName {
 			return false
 		}
@@ -432,6 +448,10 @@ func runMain() int {
 		return 1
 	}
 
+	if dEnv.CfgLoadErr != nil {
+		cli.PrintErrln(color.RedString("Failed to load the global config. %v", dEnv.CfgLoadErr))
+		return 1
+	}
 	globalConfig, ok := dEnv.Config.GetConfig(env.GlobalConfig)
 	if !ok {
 		cli.PrintErrln(color.RedString("Failed to get global config"))
@@ -447,25 +467,6 @@ func runMain() int {
 		return 0
 	} else if err != nil {
 		cli.PrintErrln(color.RedString("Failure to parse arguments: %v", err))
-		return 1
-	}
-
-	dataDir, hasDataDir := apr.GetValue(commands.DataDirFlag)
-	if hasDataDir {
-		// If a relative path was provided, this ensures we have an absolute path everywhere.
-		dataDir, err = fs.Abs(dataDir)
-		if err != nil {
-			cli.PrintErrln(color.RedString("Failed to get absolute path for %s: %v", dataDir, err))
-			return 1
-		}
-		if ok, dir := fs.Exists(dataDir); !ok || !dir {
-			cli.Println(color.RedString("Provided data directory does not exist: %s", dataDir))
-			return 1
-		}
-	}
-
-	if dEnv.CfgLoadErr != nil {
-		cli.PrintErrln(color.RedString("Failed to load the global config. %v", dEnv.CfgLoadErr))
 		return 1
 	}
 
@@ -496,8 +497,7 @@ func runMain() int {
 		}
 	}()
 
-	// version does not need write permissions
-	if subcommandName != "version" {
+	if needsWriteAccess(subcommandName) {
 		err = reconfigIfTempFileMoveFails(dEnv)
 
 		if err != nil {
@@ -507,6 +507,20 @@ func runMain() int {
 	}
 
 	defer tempfiles.MovableTempFileProvider.Clean()
+
+	dataDir, hasDataDir := apr.GetValue(commands.DataDirFlag)
+	if hasDataDir {
+		// If a relative path was provided, this ensures we have an absolute path everywhere.
+		dataDir, err = fs.Abs(dataDir)
+		if err != nil {
+			cli.PrintErrln(color.RedString("Failed to get absolute path for %s: %v", dataDir, err))
+			return 1
+		}
+		if ok, dir := fs.Exists(dataDir); !ok || !dir {
+			cli.Println(color.RedString("Provided data directory does not exist: %s", dataDir))
+			return 1
+		}
+	}
 
 	// Find all database names and add global variables for them. This needs to
 	// occur before a call to dsess.InitPersistedSystemVars. Otherwise, database
