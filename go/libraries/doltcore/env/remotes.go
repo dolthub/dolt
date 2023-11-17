@@ -131,6 +131,16 @@ func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsB
 	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, filesys2.LocalFS, params)
 }
 
+func (r Remote) WithParams(params map[string]string) Remote {
+	fetchSpecs := make([]string, len(r.FetchSpecs))
+	copy(fetchSpecs, r.FetchSpecs)
+	for k, v := range r.Params {
+		params[k] = v
+	}
+	r.Params = params
+	return r
+}
+
 // PushOptions contains information needed for push for
 // one or more branches or a tag for a specific remote database.
 type PushOptions struct {

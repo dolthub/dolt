@@ -33,6 +33,7 @@ import (
 )
 
 var GRPCDialProviderParam = "__DOLT__grpc_dial_provider"
+var GRPCUsernameAuthParam = "__DOLT__grpc_username"
 
 type GRPCRemoteConfig struct {
 	Endpoint    string
@@ -100,10 +101,15 @@ func (fact DoltRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFo
 var NoCachingParameter = "__dolt__NO_CACHING"
 
 func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}, dp GRPCDialProvider) (chunks.ChunkStore, error) {
+	var user string
+	if userParam := params[GRPCUsernameAuthParam]; userParam != nil {
+		user = userParam.(string)
+	}
 	cfg, err := dp.GetGRPCDialParams(grpcendpoint.Config{
-		Endpoint:     urlObj.Host,
-		Insecure:     fact.insecure,
-		WithEnvCreds: true,
+		Endpoint:      urlObj.Host,
+		Insecure:      fact.insecure,
+		WithUserCreds: user,
+		WithEnvCreds:  true,
 	})
 	if err != nil {
 		return nil, err

@@ -16,8 +16,10 @@ package env
 
 import (
 	"crypto/tls"
+	"errors"
 	"net"
 	"net/http"
+	"os"
 	"runtime"
 	"strings"
 	"unicode"
@@ -25,7 +27,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/creds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 )
 
@@ -88,7 +92,7 @@ func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfacto
 	if config.Creds != nil {
 		opts = append(opts, grpc.WithPerRPCCredentials(config.Creds))
 	} else if config.WithEnvCreds {
-		rpcCreds, err := p.getRPCCreds(endpoint)
+		rpcCreds, err := p.getRPCCreds(config.WithUserCreds, endpoint)
 		if err != nil {
 			return dbfactory.GRPCRemoteConfig{}, err
 		}
@@ -105,7 +109,19 @@ func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfacto
 
 // getRPCCreds returns any RPC credentials available to this dial provider. If a DoltEnv has been configured
 // in this dial provider, it will be used to load custom user credentials, otherwise nil will be returned.
-func (p GRPCDialProvider) getRPCCreds(endpoint string) (credentials.PerRPCCredentials, error) {
+func (p GRPCDialProvider) getRPCCreds(username string, endpoint string) (credentials.PerRPCCredentials, error) {
+	if username != "" {
+		pass, found := os.LookupEnv(dconfig.EnvDoltRemotePassword)
+		if !found {
+			return nil, errors.New("error: must set DOLT_REMOTE_PASSWORD environment variable to use --user param")
+		}
+		c := creds.DoltCredsForPass{
+			Username: username,
+			Password: pass,
+		}
+		return c.RPCCreds(), nil
+	}
+
 	if p.dEnv == nil {
 		return nil, nil
 	}
