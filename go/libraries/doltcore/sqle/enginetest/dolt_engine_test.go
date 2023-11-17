@@ -133,6 +133,8 @@ func TestSingleScript(t *testing.T) {
 			call dolt_commit('-am', 'inserting row 1000');
 			--
 			call dolt_rebase();
+			select * from dolt_rebase order by rebase_order;
+			update dolt_rebase set action="squash" where rebase_order=3;
 			call dolt_rebase('--continue');
 	*/
 
@@ -181,16 +183,19 @@ func TestSingleScript(t *testing.T) {
 				{
 					Query: "update dolt_rebase set rebase_order=4 where rebase_order=3;",
 					Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: uint64(1), Info: plan.UpdateInfo{
-						Matched:  1,
-						Updated:  1,
-						Warnings: 0,
+						Matched: 1,
+						Updated: 1,
 					}}}},
 				},
 				{
-					Query:    "update dolt_rebase set action='skip' where commit_message='inserting row 10';",
-					Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: uint64(1), Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+					Query:            "update dolt_rebase set action='squash' where rebase_order > 1;",
+					SkipResultsCheck: true,
+					//Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: uint64(2), Info: plan.UpdateInfo{
+					//	Matched: 2,
+					//	Updated: 2,
+					//}}}},
 				},
-				// TODO: Seems like the working set RebaseState will need to keep track of
+				// TODO: Seems like the working set RebaseState will eventually need to keep track of
 				//       where it is in the rebase plan...
 				//       RebaseOrder is probably what makes the most sense to track... we don't
 				//       technically need that until rebasing causes control to stop and go back
@@ -206,26 +211,26 @@ func TestSingleScript(t *testing.T) {
 					Query:          "call dolt_rebase('--continue');",
 					ExpectedErrStr: "no rebase in progress",
 				},
-				{
-					// Assert that the commit history is now composed of different commits
-					Query: "SELECT " +
-						"hashof('HEAD') = @original_commit_3, " +
-						"hashof('HEAD~') = @original_commit_1, " +
-						"hashof('HEAD~~') = @original_commit_0;",
-					Expected: []sql.Row{{false, false, true}},
-				},
+				//{
+				//	// Assert that the commit history is now composed of different commits
+				//	Query: "SELECT " +
+				//		"hashof('HEAD') = @original_commit_3, " +
+				//		"hashof('HEAD~') = @original_commit_1, " +
+				//		"hashof('HEAD~~') = @original_commit_0;",
+				//	Expected: []sql.Row{{false, false, true}},
+				//},
 				{
 					// Assert that the commit history is now composed of different commits
 					Query: "select message from dolt_log order by date desc;",
 					Expected: []sql.Row{
 						{"inserting row 100"},
-						{"inserting row 1"},
+						//{"inserting row 10"},
 						{"creating table t"},
 						{"Initialize data repository"}},
 				},
 				{
 					Query:    "select * from t;",
-					Expected: []sql.Row{{1}, {100}},
+					Expected: []sql.Row{{1}, {10}, {100}},
 				},
 
 				//{

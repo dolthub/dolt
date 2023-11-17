@@ -57,7 +57,19 @@ var cherryPickSchema = []*sql.Column{
 
 // doltCherryPick is the stored procedure version for the CLI command `dolt cherry-pick`.
 func doltCherryPick(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	newCommitHash, dataConflicts, schemaConflicts, constraintViolations, err := doDoltCherryPick(ctx, args)
+	newCommitHash, dataConflicts, schemaConflicts, constraintViolations, err := doDoltCherryPick(ctx, false, args)
+	if err != nil {
+		return nil, err
+	}
+	return rowToIter(newCommitHash, dataConflicts, schemaConflicts, constraintViolations), nil
+}
+
+// TODO: This is a hack to support the squash rebase action. We should clean up the interface to cherry-pick logic
+//
+//	so that we can call this more cleanly. Having a separate action for cherry-pick, that this code would just
+//	call, and that rebase could call, is one way to clean this up.
+func doltCherryPickWithAmend(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+	newCommitHash, dataConflicts, schemaConflicts, constraintViolations, err := doDoltCherryPick(ctx, true, args)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +79,7 @@ func doltCherryPick(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 // doDoltCherryPick attempts to perform a cherry-pick merge based on the arguments specified in |args| and returns
 // the new, created commit hash (if it was successful created), a count of the number of tables with data conflicts,
 // a count of the number of tables with schema conflicts, and a count of the number of tables with constraint violations.
-func doDoltCherryPick(ctx *sql.Context, args []string) (string, int, int, int, error) {
+func doDoltCherryPick(ctx *sql.Context, amend bool, args []string) (string, int, int, int, error) {
 	// Get the information for the sql context.
 	dbName := ctx.GetCurrentDatabase()
 	if len(dbName) == 0 {
@@ -145,7 +157,13 @@ func doDoltCherryPick(ctx *sql.Context, args []string) (string, int, int, int, e
 		return "", mergeResult.CountOfTablesWithDataConflicts(),
 			mergeResult.CountOfTablesWithSchemaConflicts(), mergeResult.CountOfTablesWithConstraintViolations(), nil
 	} else {
-		commitHash, _, err := doDoltCommit(ctx, []string{"-m", commitMsg})
+		// TODO: We need a way to control this commit message for the squash rebase action
+		args := []string{"-m", commitMsg}
+		if amend {
+			args = append(args, "--amend")
+		}
+
+		commitHash, _, err := doDoltCommit(ctx, args)
 		return commitHash, 0, 0, 0, err
 	}
 }
@@ -190,7 +208,10 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 		return nil, "", err
 	}
 	if !wsOnlyHasIgnoredTables {
-		return nil, "", ErrCherryPickUncommittedChanges
+		// TODO: disabling this temporarily for hacking squash rebase support together
+		//       If we extracted the cherry-pick logic to an action, we could have additional arguments that let us
+		//        control this behavior (or this could even be in just the stored procedure code)
+		//	return nil, "", ErrCherryPickUncommittedChanges
 	}
 
 	headRootHash, err := roots.Head.HashOf()

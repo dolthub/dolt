@@ -366,8 +366,29 @@ func processRow(ctx *sql.Context, row sql.Row) error {
 		fmt.Printf("skipping commit: %s\n", row[2].(string))
 		return nil
 
+	case "squash":
+		fmt.Printf("squashing commit: %s\n", row[2].(string))
+		// TODO: validate that squash is NOT the first action!
+
+		// NOTE: After our first call to cherry-pick, the tx is committed, so a new tx needs to be started
+		doltSession := dsess.DSessFromSess(ctx.Session)
+		if doltSession.GetTransaction() == nil {
+			_, err := doltSession.StartTransaction(ctx, sql.ReadWrite)
+			if err != nil {
+				return err
+			}
+		}
+		// Perform the cherry-pick
+		// TODO: Need to combine the commit messages
+		resultsIter, err := doltCherryPickWithAmend(ctx, row[2].(string))
+		if err != nil {
+			return err
+		}
+		// TODO: handle cherry-pick results
+		return drainRowIterator(ctx, resultsIter)
+
 	default:
-		return fmt.Errorf("only the 'pick' rebase action is supported, but '%s' was requested", rebaseAction)
+		return fmt.Errorf("rebase action '%s' is not supported", rebaseAction)
 	}
 }
 
