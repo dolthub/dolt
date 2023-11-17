@@ -29,8 +29,9 @@ type Config struct {
 
 	// If this is non-empty, and WithEnvCreds is true, then the caller is
 	// requesting to use username/password authentication instead of JWT
-	// authentication against the gRPC endpoint.
-	WithUserCreds string
+	// authentication against the gRPC endpoint. Currently, the password
+	// comes from the OS environment variable DOLT_REMOTE_PASSWORD.
+	UserIdForOsEnvAuth string
 
 	// If non-nil, this is used for transport level security in the dial
 	// options, instead of a default option based on `Insecure`.

@@ -106,10 +106,10 @@ func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, nbf *types.Noms
 		user = userParam.(string)
 	}
 	cfg, err := dp.GetGRPCDialParams(grpcendpoint.Config{
-		Endpoint:      urlObj.Host,
-		Insecure:      fact.insecure,
-		WithUserCreds: user,
-		WithEnvCreds:  true,
+		Endpoint:           urlObj.Host,
+		Insecure:           fact.insecure,
+		UserIdForOsEnvAuth: user,
+		WithEnvCreds:       true,
 	})
 	if err != nil {
 		return nil, err
