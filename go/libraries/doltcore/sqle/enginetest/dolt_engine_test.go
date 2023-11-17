@@ -186,6 +186,10 @@ func TestSingleScript(t *testing.T) {
 						Warnings: 0,
 					}}}},
 				},
+				{
+					Query:    "update dolt_rebase set action='skip' where commit_message='inserting row 10';",
+					Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: uint64(1), Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+				},
 				// TODO: Seems like the working set RebaseState will need to keep track of
 				//       where it is in the rebase plan...
 				//       RebaseOrder is probably what makes the most sense to track... we don't
@@ -197,17 +201,31 @@ func TestSingleScript(t *testing.T) {
 					// TODO: We (eventually) need to return some other sort of status...
 					//       like... rebase completed successfully, or rebase interrupted or something
 				},
-				// TODO: When rebase completes, rebase status should be cleared and the dolt_rebase table should be removed
+				{
+					// When rebase completes, rebase status should be cleared and the dolt_rebase table should be removed
+					Query:          "call dolt_rebase('--continue');",
+					ExpectedErrStr: "no rebase in progress",
+				},
 				{
 					// Assert that the commit history is now composed of different commits
-					Query:    "SELECT hashof('HEAD') = @original_commit_3, hashof('HEAD~') = @original_commit_2, hashof('HEAD~~') = @original_commit_1, hashof('HEAD~~~') = @original_commit_0;",
-					Expected: []sql.Row{{false, false, false, true}},
+					Query: "SELECT " +
+						"hashof('HEAD') = @original_commit_3, " +
+						"hashof('HEAD~') = @original_commit_1, " +
+						"hashof('HEAD~~') = @original_commit_0;",
+					Expected: []sql.Row{{false, false, true}},
 				},
 				{
 					// Assert that the commit history is now composed of different commits
 					Query: "select message from dolt_log order by date desc;",
-					Expected: []sql.Row{{"inserting row 100"}, {"inserting row 10"}, {"inserting row 1"},
-						{"creating table t"}, {"Initialize data repository"}},
+					Expected: []sql.Row{
+						{"inserting row 100"},
+						{"inserting row 1"},
+						{"creating table t"},
+						{"Initialize data repository"}},
+				},
+				{
+					Query:    "select * from t;",
+					Expected: []sql.Row{{1}, {100}},
 				},
 
 				//{
