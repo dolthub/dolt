@@ -197,7 +197,7 @@ SQL
 }
 
 @test "sql-merge: DOLT_MERGE correctly returns head and working session variables." {
-    export DOLT_DBNAME_REPLACE_HYPHENS="true"
+    export DOLT_DBNAME_REPLACE="true"
     dolt sql << SQL
 call dolt_commit('-a', '-m', 'Step 1');
 call dolt_checkout('-b', 'feature-branch');
@@ -317,7 +317,7 @@ SQL
 }
 
 @test "sql-merge: DOLT_MERGE -no-ff correctly changes head and working session variables." {
-    export DOLT_DBNAME_REPLACE_HYPHENS="true"
+    export DOLT_DBNAME_REPLACE="true"
     dolt sql << SQL
 call dolt_commit('-a', '-m', 'Step 1');
 call dolt_checkout('-b', 'feature-branch');

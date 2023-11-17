@@ -138,7 +138,7 @@ teardown() {
     make_repo test-dashes
     cd test-dashes
     PORT=$( definePORT )
-    export DOLT_DBNAME_REPLACE_HYPHENS="true"
+    export DOLT_DBNAME_REPLACE="true"
     dolt sql-server --user=root --port=$PORT &
     SERVER_PID=$! # will get killed by teardown_common
     sleep 5 # not using python wait so this works on windows
