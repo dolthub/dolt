@@ -26,6 +26,7 @@ const (
 	CachedFlag           = "cached"
 	CheckoutCreateBranch = "b"
 	CommitFlag           = "commit"
+	ContinueParam        = "continue"
 	CopyFlag             = "copy"
 	DateParam            = "date"
 	DecorateFlag         = "decorate"

@@ -101,6 +101,17 @@ func CreateMergeArgParser() *argparser.ArgParser {
 	return ap
 }
 
+func CreateRebaseArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParserWithMaxArgs("merge", 1)
+	ap.TooManyArgsErrorFunc = func(receivedArgs []string) error {
+		return fmt.Errorf("rebase takes at most one positional argument.")
+	}
+	ap.SupportsFlag(AbortParam, "", "Abort an interactive rebase and return the working set to the pre-rebase state")
+	ap.SupportsFlag(ContinueParam, "", "Continue an interactive rebase after adjusting the rebase plan")
+	ap.SupportsFlag("interactive", "i", "Start an interactive rebase")
+	return ap
+}
+
 func CreatePushArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("push")
 	ap.SupportsFlag(SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less {{.EmphasisLeft}}dolt pull{{.EmphasisRight}} and other commands.")
