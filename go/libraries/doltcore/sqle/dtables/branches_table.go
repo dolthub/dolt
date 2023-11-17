@@ -218,7 +218,7 @@ func (itr *BranchItr) Next(ctx *sql.Context) (sql.Row, error) {
 
 		remoteName := ""
 		branchName := ""
-		branch, ok := branches[name]
+		branch, ok := branches.Get(name)
 		if ok {
 			remoteName = branch.Remote
 			branchName = branch.Merge.Ref.GetPath()

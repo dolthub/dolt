@@ -34,7 +34,7 @@ type SessionStateAdapter struct {
 	dbName   string
 	remotes  *concurrentmap.Map[string, env.Remote]
 	backups  map[string]env.Remote
-	branches map[string]env.BranchConfig
+	branches *concurrentmap.Map[string, env.BranchConfig]
 }
 
 func (s SessionStateAdapter) SetCWBHeadRef(ctx context.Context, newRef ref.MarshalableRef) error {
@@ -45,9 +45,9 @@ var _ env.RepoStateReader = SessionStateAdapter{}
 var _ env.RepoStateWriter = SessionStateAdapter{}
 var _ env.RootsProvider = SessionStateAdapter{}
 
-func NewSessionStateAdapter(session *DoltSession, dbName string, remotes *concurrentmap.Map[string, env.Remote], branches map[string]env.BranchConfig, backups map[string]env.Remote) SessionStateAdapter {
+func NewSessionStateAdapter(session *DoltSession, dbName string, remotes *concurrentmap.Map[string, env.Remote], branches *concurrentmap.Map[string, env.BranchConfig], backups map[string]env.Remote) SessionStateAdapter {
 	if branches == nil {
-		branches = make(map[string]env.BranchConfig)
+		branches = concurrentmap.New[string, env.BranchConfig]()
 	}
 	return SessionStateAdapter{session: session, dbName: dbName, remotes: remotes, branches: branches, backups: backups}
 }
@@ -96,12 +96,12 @@ func (s SessionStateAdapter) GetBackups() (map[string]env.Remote, error) {
 	return s.backups, nil
 }
 
-func (s SessionStateAdapter) GetBranches() (map[string]env.BranchConfig, error) {
+func (s SessionStateAdapter) GetBranches() (*concurrentmap.Map[string, env.BranchConfig], error) {
 	return s.branches, nil
 }
 
 func (s SessionStateAdapter) UpdateBranch(name string, new env.BranchConfig) error {
-	s.branches[name] = new
+	s.branches.Set(name, new)
 
 	fs, err := s.session.Provider().FileSystemForDatabase(s.dbName)
 	if err != nil {
@@ -112,7 +112,7 @@ func (s SessionStateAdapter) UpdateBranch(name string, new env.BranchConfig) err
 	if err != nil {
 		return err
 	}
-	repoState.Branches[name] = new
+	repoState.Branches.Set(name, new)
 
 	return repoState.Save(fs)
 }
