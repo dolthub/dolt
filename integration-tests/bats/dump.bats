@@ -16,6 +16,28 @@ teardown() {
     [[ "$output" =~ "No tables to export." ]] || false
 }
 
+@test "dump: roundtrip on database with leading space character and hyphen" {
+    mkdir ' test-db'
+    cd ' test-db'
+    dolt init
+    create_tables
+    insert_data_into_tables
+
+    run dolt dump
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f doltdump.sql ]
+
+    mkdir roundtrip
+    cd roundtrip
+    dolt init
+
+    dolt sql < ../doltdump.sql
+    run dolt sql -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "|  test-db" ]] || false
+}
+
 @test "dump: SQL type - with multiple tables" {
     dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     dolt sql -q "INSERT INTO new_table VALUES (1);"
