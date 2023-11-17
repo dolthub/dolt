@@ -391,7 +391,6 @@ teardown() {
 
 @test "profile: profile doesn't need write permission in current dir" {
     chmod 111 .
-    run dolt profile
-    [ "$status" -eq 0 ]
+    dolt profile
     chmod 755 .
 }

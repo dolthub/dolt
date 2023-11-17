@@ -290,7 +290,6 @@ teardown() {
 
 @test "config: config doesn't need write permission in current dir" {
     chmod 111 .
-    run dolt config --list
-    [ "$status" -eq 0 ]
+    dolt config --list
     chmod 755 .
 }
