@@ -112,7 +112,7 @@ type mergeState struct {
 }
 
 func (rs *repoStateLegacy) toRepoState() *RepoState {
-	return &RepoState{
+	newRS := &RepoState{
 		Head:     rs.Head,
 		Remotes:  rs.Remotes,
 		Backups:  rs.Backups,
@@ -121,6 +121,15 @@ func (rs *repoStateLegacy) toRepoState() *RepoState {
 		working:  rs.Working,
 		merge:    rs.Merge,
 	}
+
+	if newRS.Remotes == nil {
+		newRS.Remotes = concurrentmap.New[string, Remote]()
+	}
+	if newRS.Backups == nil {
+		newRS.Backups = concurrentmap.New[string, Remote]()
+	}
+
+	return newRS
 }
 
 func (rs *repoStateLegacy) save(fs filesys.ReadWriteFS) error {
