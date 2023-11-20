@@ -60,7 +60,7 @@ teardown() {
 }
 
 @test "undrop: undrop root database with hyphen replaced in its name" {
-  export DOLT_DBNAME_REPLACE_HYPHENS="true"
+  export DOLT_DBNAME_REPLACE="true"
   setup_remote_server
   # Create a new Dolt database directory to use as a root database
   # NOTE: We use hyphens here to test how db dirs are renamed.
@@ -111,24 +111,24 @@ call dolt_commit('-Am', 'creating table t1');
 EOF
   run dolt sql -q "show databases;"
   [ $status -eq 0 ]
-  [[ $output =~ "test-_db-1" ]] || false
+  [[ $output =~ " test- db-1 " ]] || false
 
   # Drop the root database
-  dolt sql -q "drop database \`test-_db-1\`;"
+  dolt sql -q "drop database \` test- db-1 \`;"
   run dolt sql -q "show databases;"
   [ $status -eq 0 ]
-  [[ ! $output =~ "test-_db-1" ]] || false
+  [[ ! $output =~ " test- db-1 " ]] || false
 
-  # Undrop the test-_db-1 database
+  # Undrop the ' test- db-1 ' database
   # NOTE: After being undropped, the database is no longer the root database,
   #       but contained in a subdirectory like a non-root database.
-  dolt sql -q "call dolt_undrop('test-_db-1');"
+  dolt sql -q "call dolt_undrop(' test- db-1 ');"
   run dolt sql -q "show databases;"
   [ $status -eq 0 ]
-  [[ $output =~ "test-_db-1" ]] || false
+  [[ $output =~ " test- db-1 " ]] || false
 
   # Sanity check querying some data
-  run dolt sql -r csv -q "select * from \`test-_db-1\`.t1;"
+  run dolt sql -r csv -q "select * from \` test- db-1 \`.t1;"
   [ $status -eq 0 ]
   [[ $output =~ "1,one" ]] || false
 }
@@ -136,7 +136,7 @@ EOF
 # Asserts that a non-root database can be dropped and then restored with dolt_undrop(), even when
 # the case of the database name given to dolt_undrop() doesn't match match the original case.
 @test "undrop: undrop non-root database with hyphen replaced in its name" {
-  export DOLT_DBNAME_REPLACE_HYPHENS="true"
+  export DOLT_DBNAME_REPLACE="true"
   setup_remote_server
   dolt sql << EOF
 use drop_me_2;
@@ -170,28 +170,28 @@ EOF
 @test "undrop: undrop non-root database with hyphen allowed in its name" {
   setup_remote_server
   dolt sql << EOF
-use \`drop-_me-2\`;
+use \` drop- me-2 \`;
 create table t1 (pk int primary key, c1 varchar(200));
 insert into t1 values (1, "one");
 call dolt_commit('-Am', 'creating table t1');
 EOF
   run dolt sql -q "show databases;"
   [ $status -eq 0 ]
-  [[ $output =~ "drop-_me-2" ]] || false
+  [[ $output =~ " drop- me-2 " ]] || false
 
-  dolt sql -q "drop database \`drop-_me-2\`;"
+  dolt sql -q "drop database \` drop- me-2 \`;"
   run dolt sql -q "show databases;"
   [ $status -eq 0 ]
-  [[ ! $output =~ "drop-_me-2" ]] || false
+  [[ ! $output =~ " drop- me-2 " ]] || false
 
   # Call dolt_undrop() with non-matching case for the database name to
   # ensure dolt_undrop() works with case-insensitive database names.
-  dolt sql -q "call dolt_undrop('DrOp-_mE-2');"
+  dolt sql -q "call dolt_undrop(' DrOp- mE-2 ');"
   run dolt sql -q "show databases;"
   [ $status -eq 0 ]
-  [[ $output =~ "drop-_me-2" ]] || false
+  [[ $output =~ " drop- me-2 " ]] || false
 
-  run dolt sql -r csv -q "select * from \`drop-_me-2\`.t1;"
+  run dolt sql -r csv -q "select * from \` drop- me-2 \`.t1;"
   [ $status -eq 0 ]
   [[ $output =~ "1,one" ]] || false
 }

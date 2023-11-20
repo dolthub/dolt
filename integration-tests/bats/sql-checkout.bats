@@ -130,7 +130,7 @@ SQL
 }
 
 @test "sql-checkout: DOLT_CHECKOUT updates the head ref session var" {
-    export DOLT_DBNAME_REPLACE_HYPHENS="true"
+    export DOLT_DBNAME_REPLACE="true"
     run dolt sql  <<SQL
 call dolt_checkout('-b', 'feature-branch');
 select @@dolt_repo_$$_head_ref;
@@ -141,7 +141,7 @@ SQL
 }
 
 @test "sql-checkout: CALL DOLT_CHECKOUT updates the head ref session var" {
-    export DOLT_DBNAME_REPLACE_HYPHENS="true"
+    export DOLT_DBNAME_REPLACE="true"
     run dolt sql  <<SQL
 CALL DOLT_CHECKOUT('-b', 'feature-branch');
 select @@dolt_repo_$$_head_ref;
