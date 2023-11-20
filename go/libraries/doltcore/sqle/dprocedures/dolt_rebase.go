@@ -224,7 +224,7 @@ func abortRebase(ctx *sql.Context) error {
 		return err
 	}
 	if !workingSet.RebaseActive() {
-		return fmt.Errorf("no active rebase")
+		return fmt.Errorf("no rebase in progress")
 	}
 
 	// TODO: remove the dolt_rebase table
@@ -254,7 +254,13 @@ func continueRebase(ctx *sql.Context) error {
 	//         in the chain between HEAD and ontoCommit
 	//       - make sure the rebase order doesn't have duplicate numbers
 
-	// TODO: How are we going to edit commit messages?
+	// TODO: Seems like the working set RebaseState will eventually need to keep track of
+	//       where it is in the rebase plan...
+	//       RebaseOrder is probably what makes the most sense to track... we don't
+	//       technically need that until rebasing causes control to stop and go back
+	//       to the user though.
+
+	// TODO: How are we going to support editing commit messages?
 
 	// Validate that we are in an interactive rebase
 	doltSession := dsess.DSessFromSess(ctx.Session)

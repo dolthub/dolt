@@ -116,137 +116,9 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	//t.Skip()
+	t.Skip()
 
-	/*
-		    Sample Console Test Script:
-
-			create table t (pk int primary key);
-			call dolt_commit('-Am', 'creating table t');
-			insert into t values (1);
-			call dolt_commit('-am', 'inserting row 1');
-			insert into t values (10);
-			call dolt_commit('-am', 'inserting row 10');
-			insert into t values (100);
-			call dolt_commit('-am', 'inserting row 100');
-			insert into t values (1000);
-			call dolt_commit('-am', 'inserting row 1000');
-			--
-			call dolt_rebase("HEAD~~~");
-			select * from dolt_rebase order by rebase_order;
-			update dolt_rebase set action="squash" where rebase_order=3;
-			call dolt_rebase('--continue');
-	*/
-
-	var scripts = []queries.ScriptTest{
-		{
-			Name: "Rebase Prototype Testing",
-			SetUpScript: []string{
-				"create table t (pk int primary key);",
-				"call dolt_commit('-Am', 'creating table t');",
-
-				"call dolt_branch('branch1');",
-
-				"insert into t values (0);",
-				"call dolt_commit('-am', 'inserting row 0');",
-				"SET @original_commit_0 = hashof('HEAD')",
-
-				"call dolt_checkout('branch1');",
-
-				"insert into t values (1);",
-				"call dolt_commit('-am', 'inserting row 1');",
-				"SET @original_commit_1 = hashof('HEAD')",
-
-				"insert into t values (10);",
-				"call dolt_commit('-am', 'inserting row 10');",
-				"SET @original_commit_2 = hashof('HEAD')",
-
-				"insert into t values (100);",
-				"call dolt_commit('-am', 'inserting row 100');",
-				"SET @original_commit_3 = hashof('HEAD')",
-			},
-			Assertions: []queries.ScriptTestAssertion{
-				/*
-				   Test Cases:
-				     - error cases:
-				          - already in a rebase or a merge/cherry-pick/etc
-				          - working set not clean
-				          - wrong number of args
-				          - invalid args
-				          - no database selected
-				*/
-				{
-					Query:    "call dolt_rebase('main');",
-					Expected: []sql.Row{{0}}, // TODO: Add message: "rebase started"}},
-				},
-				{
-					Query: "select * from dolt_rebase order by rebase_order ASC;",
-					Expected: []sql.Row{
-						{uint(1), uint(1), doltCommit, "inserting row 1"},
-						{uint(2), uint(1), doltCommit, "inserting row 10"},
-						{uint(3), uint(1), doltCommit, "inserting row 100"},
-					},
-				},
-				{
-					Query: "update dolt_rebase set rebase_order=4 where rebase_order=3;",
-					Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: uint64(1), Info: plan.UpdateInfo{
-						Matched: 1,
-						Updated: 1,
-					}}}},
-				},
-				{
-					Query:            "update dolt_rebase set action='squash' where rebase_order > 1;",
-					SkipResultsCheck: true,
-					//Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: uint64(2), Info: plan.UpdateInfo{
-					//	Matched: 2,
-					//	Updated: 2,
-					//}}}},
-				},
-				// TODO: Seems like the working set RebaseState will eventually need to keep track of
-				//       where it is in the rebase plan...
-				//       RebaseOrder is probably what makes the most sense to track... we don't
-				//       technically need that until rebasing causes control to stop and go back
-				//       to the user though.
-				{
-					Query:    "call dolt_rebase('--continue');",
-					Expected: []sql.Row{{0}},
-					// TODO: We (eventually) need to return some other sort of status...
-					//       like... rebase completed successfully, or rebase interrupted or something
-				},
-				{
-					// When rebase completes, rebase status should be cleared and the dolt_rebase table should be removed
-					Query:          "call dolt_rebase('--continue');",
-					ExpectedErrStr: "no rebase in progress",
-				},
-				//{
-				//	// Assert that the commit history is now composed of different commits
-				//	Query: "SELECT " +
-				//		"hashof('HEAD') = @original_commit_3, " +
-				//		"hashof('HEAD~') = @original_commit_1, " +
-				//		"hashof('HEAD~~') = @original_commit_0;",
-				//	Expected: []sql.Row{{false, false, true}},
-				//},
-				{
-					// Assert that the commit history is now composed of different commits
-					Query: "select message from dolt_log order by date desc;",
-					Expected: []sql.Row{
-						{"inserting row 100"},
-						{"inserting row 0"},
-						{"creating table t"},
-						{"Initialize data repository"}},
-				},
-				{
-					Query:    "select * from t;",
-					Expected: []sql.Row{{0}, {1}, {10}, {100}},
-				},
-
-				//{
-				//	Query:    "call dolt_rebase('--abort');",
-				//	Expected: []sql.Row{{0}}, // TODO: Add message: "rebase aborted"}},
-				//},
-			},
-		},
-	}
+	var scripts = []queries.ScriptTest{}
 
 	tcc := &testCommitClock{}
 	cleanup := installTestCommitClock(tcc)
@@ -255,15 +127,14 @@ func TestSingleScript(t *testing.T) {
 	for _, script := range scripts {
 		sql.RunWithNowFunc(tcc.Now, func() error {
 			harness := newDoltHarness(t)
-			harness.skipSetupCommit = true
 			harness.Setup(setup.MydbData)
 
 			engine, err := harness.NewEngine(t)
 			if err != nil {
 				panic(err)
 			}
-			//engine.EngineAnalyzer().Debug = true
-			//engine.EngineAnalyzer().Verbose = true
+			engine.EngineAnalyzer().Debug = true
+			engine.EngineAnalyzer().Verbose = true
 
 			enginetest.TestScriptWithEngine(t, engine, harness, script)
 			return nil
@@ -1666,6 +1537,17 @@ func TestDoltMerge(t *testing.T) {
 			h := newDoltHarness(t)
 			defer h.Close()
 			h.Setup(setup.MydbData)
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func TestDoltRebase(t *testing.T) {
+	for _, script := range DoltRebaseScriptTests {
+		func() {
+			h := newDoltHarness(t)
+			defer h.Close()
+			h.skipSetupCommit = true
 			enginetest.TestScript(t, h, script)
 		}()
 	}
