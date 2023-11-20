@@ -132,7 +132,7 @@ func TestSingleScript(t *testing.T) {
 			insert into t values (1000);
 			call dolt_commit('-am', 'inserting row 1000');
 			--
-			call dolt_rebase();
+			call dolt_rebase("HEAD~~~");
 			select * from dolt_rebase order by rebase_order;
 			update dolt_rebase set action="squash" where rebase_order=3;
 			call dolt_rebase('--continue');
@@ -169,7 +169,7 @@ func TestSingleScript(t *testing.T) {
 				          - no database selected
 				*/
 				{
-					Query:    "call dolt_rebase();",
+					Query:    "call dolt_rebase('HEAD~~~');",
 					Expected: []sql.Row{{0}}, // TODO: Add message: "rebase started"}},
 				},
 				{

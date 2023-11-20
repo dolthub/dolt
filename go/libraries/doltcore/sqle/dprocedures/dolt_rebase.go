@@ -70,6 +70,11 @@ var DoltRebaseSystemTableSchema = []*sql.Column{
 	},
 }
 
+// rebaseWorkingBranch is the name of the temporary branch used when performing a rebase. Normally, a rebase happens
+// in the context of a detatched HEAD, but because Dolt doesn't support that well, we use a temporary branch.
+// TODO: Eventually, we need to change this name so that it uses a UUID or at least the current branch name.
+const rebaseWorkingBranch = "dolt_rebase_42"
+
 func doltRebase(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := doDoltRebase(ctx, args)
 	if err != nil {
@@ -79,33 +84,32 @@ func doltRebase(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 }
 
 func doDoltRebase(ctx *sql.Context, args []string) (int, error) {
-	// TODO: Set working set metadata for active rebase (similar to merge metadata)
-	//       - how does this work for merge again?
+	// TODO: Replace with arg parser usage
+	if len(args) == 0 {
+		return 1, fmt.Errorf("not enough args")
+	}
 
-	if len(args) > 1 {
+	if len(args) > 2 {
 		return 1, fmt.Errorf("too many args")
 	}
 
-	if len(args) == 1 {
-		if strings.ToLower(args[0]) == "--abort" {
-			err := abortRebase(ctx)
-			if err != nil {
-				return 1, err
-			} else {
-				return 0, nil
-			}
-		} else if strings.ToLower(args[0]) == "--continue" {
-			err := continueRebase(ctx)
-			if err != nil {
-				return 1, err
-			} else {
-				return 0, nil
-			}
+	if strings.ToLower(args[0]) == "--abort" {
+		err := abortRebase(ctx)
+		if err != nil {
+			return 1, err
+		} else {
+			return 0, nil
 		}
-	}
-
-	if len(args) == 0 {
-		err := startRebase(ctx)
+	} else if strings.ToLower(args[0]) == "--continue" {
+		err := continueRebase(ctx)
+		if err != nil {
+			return 1, err
+		} else {
+			return 0, nil
+		}
+	} else {
+		// must be start rebase...
+		err := startRebase(ctx, args[0])
 		if err != nil {
 			return 1, err
 		} else {
@@ -116,7 +120,12 @@ func doDoltRebase(ctx *sql.Context, args []string) (int, error) {
 	return 0, nil
 }
 
-func startRebase(ctx *sql.Context) error {
+func startRebase(ctx *sql.Context, upstreamPoint string) error {
+	// TODO: Fallback if empty...
+	if upstreamPoint == "" {
+		upstreamPoint = "HEAD~~~"
+	}
+
 	doltSession := dsess.DSessFromSess(ctx.Session)
 
 	// TODO: For now, just rewind back a couple of commits...
@@ -135,18 +144,18 @@ func startRebase(ctx *sql.Context) error {
 		return err
 	}
 
-	commitSpec, err := doltdb.NewCommitSpec("HEAD~~~")
+	commitSpec, err := doltdb.NewCommitSpec(upstreamPoint)
 	if err != nil {
 		return err
 	}
 
-	ontoCommit, err := dbData.Ddb.Resolve(ctx, commitSpec, headRef)
+	upstreamCommit, err := dbData.Ddb.Resolve(ctx, commitSpec, headRef)
 	if err != nil {
 		return err
 	}
 
 	// TODO: Use a better API than the stored procedure function :-/
-	rowIter, err := doltBranch(ctx, "dolt_rebase_42", "HEAD~~~")
+	rowIter, err := doltBranch(ctx, rebaseWorkingBranch, upstreamPoint)
 	if err != nil {
 		return err
 	}
@@ -156,7 +165,7 @@ func startRebase(ctx *sql.Context) error {
 	}
 
 	// Checkout our new branch
-	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef("dolt_rebase_42"))
+	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(rebaseWorkingBranch))
 	if err != nil {
 		return err
 	}
@@ -186,7 +195,7 @@ func startRebase(ctx *sql.Context) error {
 		return err
 	}
 
-	newWorkingSet, err := workingSet.StartRebase(ctx, ontoCommit, rebaseBranch)
+	newWorkingSet, err := workingSet.StartRebase(ctx, upstreamCommit, rebaseBranch)
 	if err != nil {
 		return err
 	}
@@ -201,7 +210,7 @@ func startRebase(ctx *sql.Context) error {
 	if !ok {
 		return fmt.Errorf("expected a dsess.RebaseableDatabase implementation, but received a %T", db)
 	}
-	err = rdb.CreateRebasePlan(ctx, startCommit, ontoCommit)
+	err = rdb.CreateRebasePlan(ctx, startCommit, upstreamCommit)
 	if err != nil {
 		return err
 	}
@@ -302,7 +311,7 @@ func continueRebase(ctx *sql.Context) error {
 	if !ok {
 		panic("not okay!! !!")
 	}
-	err = copyABranch(ctx, dbData, "dolt_rebase_42", rebaseBranchWorkingSet.RebaseState().Branch(), true, nil)
+	err = copyABranch(ctx, dbData, rebaseWorkingBranch, rebaseBranchWorkingSet.RebaseState().Branch(), true, nil)
 	if err != nil {
 		return err
 	}
@@ -322,7 +331,7 @@ func continueRebase(ctx *sql.Context) error {
 	if !ok {
 		return fmt.Errorf("unable to lookup dbdata")
 	}
-	err = actions.DeleteBranch(ctx, dbData, "dolt_rebase_42", actions.DeleteOptions{
+	err = actions.DeleteBranch(ctx, dbData, rebaseWorkingBranch, actions.DeleteOptions{
 		Force: true,
 	}, doltSession.Provider(), nil)
 	if err != nil {
