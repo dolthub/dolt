@@ -29,11 +29,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 )
 
 var (
@@ -396,4 +397,41 @@ func getFileReaderAt(path string, offset int64, length int64) (io.ReadCloser, in
 
 	r := closerReaderWrapper{io.LimitReader(f, length), f}
 	return r, fSize, nil
+}
+
+// ExtractBasicAuthCreds extracts the username and password from the incoming request. It returns RequestCredentials
+// populated with necessary information to authenticate the request. nil and an error will be returned if any error
+// occurs.
+func ExtractBasicAuthCreds(ctx context.Context) (*RequestCredentials, error) {
+	if md, ok := metadata.FromIncomingContext(ctx); !ok {
+		return nil, errors.New("no metadata in context")
+	} else {
+		var username string
+		var password string
+
+		auths := md.Get("authorization")
+		if len(auths) != 1 {
+			username = "root"
+			password = ""
+		} else {
+			auth := auths[0]
+			if !strings.HasPrefix(auth, "Basic ") {
+				return nil, fmt.Errorf("bad request: authorization header did not start with 'Basic '")
+			}
+			authTrim := strings.TrimPrefix(auth, "Basic ")
+			uDec, err := base64.URLEncoding.DecodeString(authTrim)
+			if err != nil {
+				return nil, fmt.Errorf("incoming request authorization header failed to decode: %v", err)
+			}
+			userPass := strings.Split(string(uDec), ":")
+			username = userPass[0]
+			password = userPass[1]
+		}
+		addr, ok := peer.FromContext(ctx)
+		if !ok {
+			return nil, errors.New("incoming request had no peer")
+		}
+
+		return &RequestCredentials{Username: username, Password: password, Address: addr.Addr.String()}, nil
+	}
 }
