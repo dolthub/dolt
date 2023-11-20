@@ -33,7 +33,7 @@ type SessionStateAdapter struct {
 	session  *DoltSession
 	dbName   string
 	remotes  *concurrentmap.Map[string, env.Remote]
-	backups  map[string]env.Remote
+	backups  *concurrentmap.Map[string, env.Remote]
 	branches map[string]env.BranchConfig
 }
 
@@ -45,7 +45,7 @@ var _ env.RepoStateReader = SessionStateAdapter{}
 var _ env.RepoStateWriter = SessionStateAdapter{}
 var _ env.RootsProvider = SessionStateAdapter{}
 
-func NewSessionStateAdapter(session *DoltSession, dbName string, remotes *concurrentmap.Map[string, env.Remote], branches map[string]env.BranchConfig, backups map[string]env.Remote) SessionStateAdapter {
+func NewSessionStateAdapter(session *DoltSession, dbName string, remotes *concurrentmap.Map[string, env.Remote], branches map[string]env.BranchConfig, backups *concurrentmap.Map[string, env.Remote]) SessionStateAdapter {
 	if branches == nil {
 		branches = make(map[string]env.BranchConfig)
 	}
@@ -92,7 +92,7 @@ func (s SessionStateAdapter) GetRemotes() (*concurrentmap.Map[string, env.Remote
 	return s.remotes, nil
 }
 
-func (s SessionStateAdapter) GetBackups() (map[string]env.Remote, error) {
+func (s SessionStateAdapter) GetBackups() (*concurrentmap.Map[string, env.Remote], error) {
 	return s.backups, nil
 }
 
@@ -147,7 +147,7 @@ func (s SessionStateAdapter) AddRemote(remote env.Remote) error {
 }
 
 func (s SessionStateAdapter) AddBackup(backup env.Remote) error {
-	if _, ok := s.backups[backup.Name]; ok {
+	if _, ok := s.backups.Get(backup.Name); ok {
 		return env.ErrBackupAlreadyExists
 	}
 
@@ -170,7 +170,7 @@ func (s SessionStateAdapter) AddBackup(backup env.Remote) error {
 		return fmt.Errorf("%w: '%s' -> %s", env.ErrRemoteAddressConflict, bac.Name, bac.Url)
 	}
 
-	s.backups[backup.Name] = backup
+	s.backups.Set(backup.Name, backup)
 	repoState.AddBackup(backup)
 	return repoState.Save(fs)
 }
@@ -202,11 +202,11 @@ func (s SessionStateAdapter) RemoveRemote(_ context.Context, name string) error 
 }
 
 func (s SessionStateAdapter) RemoveBackup(_ context.Context, name string) error {
-	backup, ok := s.backups[name]
+	backup, ok := s.backups.Get(name)
 	if !ok {
 		return env.ErrBackupNotFound
 	}
-	delete(s.backups, backup.Name)
+	s.backups.Delete(backup.Name)
 
 	fs, err := s.session.Provider().FileSystemForDatabase(s.dbName)
 	if err != nil {
@@ -218,12 +218,12 @@ func (s SessionStateAdapter) RemoveBackup(_ context.Context, name string) error 
 		return err
 	}
 
-	backup, ok = repoState.Backups[name]
+	backup, ok = repoState.Backups.Get(name)
 	if !ok {
 		// sanity check
 		return env.ErrBackupNotFound
 	}
-	delete(repoState.Backups, name)
+	repoState.Backups.Delete(name)
 	return repoState.Save(fs)
 }
 
