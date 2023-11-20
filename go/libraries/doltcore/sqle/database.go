@@ -188,14 +188,20 @@ func (db Database) findRebaseCommits(ctx *sql.Context, currentBranchCommit, upst
 		return
 	}
 
-	// TODO: Explain the dot-dot revisions iterator usage?
-	commitItr, err := commitwalk.GetDotDotRevisionsIterator(ctx, ddb, []hash.Hash{currentBranchCommitHash}, ddb, []hash.Hash{upstreamBranchCommitHash}, nil)
+	// We use the dot-dot revision iterator because it gives us the behavior we want for rebase – it finds all
+	// commits reachable from |currentBranchCommit| but NOT reachable by |upstreamBranchCommit|.
+	commitItr, err := commitwalk.GetDotDotRevisionsIterator(ctx,
+		ddb, []hash.Hash{currentBranchCommitHash},
+		ddb, []hash.Hash{upstreamBranchCommitHash}, nil)
 	if err != nil {
 		return nil, err
 	}
 
+	// TODO: Currently, we drain the iterator into a slice so that we can see the total
+	// number of commits and use that to set the rebase_order when we create the dolt_rebase
+	// table. This is easier, but could be optimized if we had a way to generate this same
+	// set of commits in reverse order.
 	for {
-		// TODO: Instead of draining the iterator, we should just return it...
 		_, commit, err := commitItr.Next(ctx)
 		if err == io.EOF {
 			return commits, nil

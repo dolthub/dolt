@@ -144,7 +144,14 @@ func TestSingleScript(t *testing.T) {
 			SetUpScript: []string{
 				"create table t (pk int primary key);",
 				"call dolt_commit('-Am', 'creating table t');",
+
+				"call dolt_branch('branch1');",
+
+				"insert into t values (0);",
+				"call dolt_commit('-am', 'inserting row 0');",
 				"SET @original_commit_0 = hashof('HEAD')",
+
+				"call dolt_checkout('branch1');",
 
 				"insert into t values (1);",
 				"call dolt_commit('-am', 'inserting row 1');",
@@ -169,7 +176,7 @@ func TestSingleScript(t *testing.T) {
 				          - no database selected
 				*/
 				{
-					Query:    "call dolt_rebase('HEAD~~~');",
+					Query:    "call dolt_rebase('main');",
 					Expected: []sql.Row{{0}}, // TODO: Add message: "rebase started"}},
 				},
 				{
@@ -224,13 +231,13 @@ func TestSingleScript(t *testing.T) {
 					Query: "select message from dolt_log order by date desc;",
 					Expected: []sql.Row{
 						{"inserting row 100"},
-						//{"inserting row 10"},
+						{"inserting row 0"},
 						{"creating table t"},
 						{"Initialize data repository"}},
 				},
 				{
 					Query:    "select * from t;",
-					Expected: []sql.Row{{1}, {10}, {100}},
+					Expected: []sql.Row{{0}, {1}, {10}, {100}},
 				},
 
 				//{

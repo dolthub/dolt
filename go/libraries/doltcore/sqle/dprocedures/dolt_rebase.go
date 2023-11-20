@@ -121,14 +121,12 @@ func doDoltRebase(ctx *sql.Context, args []string) (int, error) {
 }
 
 func startRebase(ctx *sql.Context, upstreamPoint string) error {
-	// TODO: Fallback if empty...
 	if upstreamPoint == "" {
-		upstreamPoint = "HEAD~~~"
+		return fmt.Errorf("no upstream branch specified")
 	}
 
 	doltSession := dsess.DSessFromSess(ctx.Session)
 
-	// TODO: For now, just rewind back a couple of commits...
 	headRef, err := doltSession.CWBHeadRef(ctx, ctx.GetCurrentDatabase())
 	if err != nil {
 		return err
