@@ -109,7 +109,7 @@ func (r ReadOnlyDatabase) WithBranchRevision(requestedName string, branchSpec ds
 	return r, nil
 }
 
-func (db Database) CreateRebasePlan(ctx *sql.Context, startCommit, ontoCommit *doltdb.Commit) error {
+func (db Database) CreateRebasePlan(ctx *sql.Context, startCommit, upstreamCommit *doltdb.Commit) error {
 	pkSchema := sql.NewPrimaryKeySchema(dprocedures.DoltRebaseSystemTableSchema, 2)
 	// use createSqlTable, instead of CreateTable to avoid the "dolt_" reserved prefix table name check
 	err := db.createSqlTable(ctx, doltdb.RebaseTableName, pkSchema, sql.Collation_Default)
@@ -132,8 +132,7 @@ func (db Database) CreateRebasePlan(ctx *sql.Context, startCommit, ontoCommit *d
 
 	inserter := writeableDoltTable.Inserter(ctx)
 
-	// TODO: rename terrible name "findCommits" to something better
-	commits, err := db.findCommits(ctx, startCommit, ontoCommit)
+	commits, err := db.findRebaseCommits(ctx, startCommit, upstreamCommit)
 	if err != nil {
 		return err
 	}
@@ -172,33 +171,40 @@ func (db Database) CreateRebasePlan(ctx *sql.Context, startCommit, ontoCommit *d
 	return nil
 }
 
-// TODO: rename and add docs explaining this reverse the order of commits (actually it wouldn't even have to reverse
-//
-//	the order, as long as we know the count)
-func (db Database) findCommits(ctx *sql.Context, startCommit, stopCommit *doltdb.Commit) (commits []*doltdb.Commit, err error) {
-	commitItr := doltdb.CommitItrForRoots(db.DbData().Ddb, startCommit)
-	// TODO: isn't there a filter that will stop at a certain ontoCommit?
+func (db Database) findRebaseCommits(ctx *sql.Context, currentBranchCommit, upstreamBranchCommit *doltdb.Commit) (commits []*doltdb.Commit, err error) {
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	ddb, ok := doltSession.GetDoltDB(ctx, ctx.GetCurrentDatabase())
+	if !ok {
+		return nil, fmt.Errorf("unable to load dolt db")
+	}
 
-	stopCommitHash, err := stopCommit.HashOf()
+	currentBranchCommitHash, err := currentBranchCommit.HashOf()
 	if err != nil {
 		return
 	}
 
-	for {
-		hash, commit, err := commitItr.Next(ctx)
-		if err != nil {
-			return nil, err
-		}
+	upstreamBranchCommitHash, err := upstreamBranchCommit.HashOf()
+	if err != nil {
+		return
+	}
 
-		// Don't include stopCommit
-		if hash == stopCommitHash {
-			break
+	// TODO: Explain the dot-dot revisions iterator usage?
+	commitItr, err := commitwalk.GetDotDotRevisionsIterator(ctx, ddb, []hash.Hash{currentBranchCommitHash}, ddb, []hash.Hash{upstreamBranchCommitHash}, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		// TODO: Instead of draining the iterator, we should just return it...
+		_, commit, err := commitItr.Next(ctx)
+		if err == io.EOF {
+			return commits, nil
+		} else if err != nil {
+			return nil, err
 		}
 
 		commits = append(commits, commit)
 	}
-
-	return commits, err
 }
 
 func (db Database) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
