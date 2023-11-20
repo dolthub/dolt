@@ -1008,18 +1008,19 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 				runTest(t, test, false)
 			})
 			for _, data := range test.dataTests {
-				test := test
-				test.ancestor.rows = data.ancestor
-				test.left.rows = data.left
-				test.right.rows = data.right
-				test.merged.rows = data.merged
-				test.skipNewFmt = test.skipNewFmt || data.skip
-				test.skipFlipOnNewFormat = test.skipFlipOnNewFormat || data.skipFlip
+				// Copy the test so that the values from one data test don't affect subsequent data tests.
+				dataDest := test
+				dataDest.ancestor.rows = data.ancestor
+				dataDest.left.rows = data.left
+				dataDest.right.rows = data.right
+				dataDest.merged.rows = data.merged
+				dataDest.skipNewFmt = dataDest.skipNewFmt || data.skip
+				dataDest.skipFlipOnNewFormat = dataDest.skipFlipOnNewFormat || data.skipFlip
 				t.Run(data.name, func(t *testing.T) {
 					if data.skip {
 						t.Skip()
 					}
-					runTest(t, test, data.dataConflict)
+					runTest(t, dataDest, data.dataConflict)
 				})
 			}
 		})
