@@ -409,10 +409,15 @@ func (si *schemaImpl) GetMapDescriptors() (keyDesc, valueDesc val.TupleDesc) {
 
 // GetKeyDescriptor implements the Schema interface.
 func (si *schemaImpl) GetKeyDescriptor() val.TupleDesc {
-	return si.GetKeyColumnsDescriptor(true)
+	return si.getKeyColumnsDescriptor(true)
 }
 
-func (si *schemaImpl) GetKeyColumnsDescriptor(convertAddressColumns bool) val.TupleDesc {
+// GetKeyDescriptorWithNoConversion implements the Schema interface.
+func (si *schemaImpl) GetKeyDescriptorWithNoConversion() val.TupleDesc {
+	return si.getKeyColumnsDescriptor(false)
+}
+
+func (si *schemaImpl) getKeyColumnsDescriptor(convertAddressColumns bool) val.TupleDesc {
 	if IsKeyless(si) {
 		return val.KeylessTupleDesc
 	}

@@ -76,7 +76,7 @@ func GetMutableSecondaryIdxsWithPending(ctx *sql.Context, sch schema.Schema, tab
 		// TODO: This isn't technically required, but correctly handling updating secondary indexes when only some
 		// of the table's rows have been updated is difficult to get right.
 		// Dropping the index is potentially slower but guarenteed to be correct.
-		if !m.KeyDesc().Equals(index.Schema().GetKeyColumnsDescriptor(false)) {
+		if !m.KeyDesc().Equals(index.Schema().GetKeyDescriptorWithNoConversion()) {
 			continue
 		}
 

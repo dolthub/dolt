@@ -77,15 +77,14 @@ type Schema interface {
 	GetMapDescriptors() (keyDesc, valueDesc val.TupleDesc)
 
 	// GetKeyDescriptor returns the key tuple descriptor for this schema.
+	// If a column has a type that can't appear in a key (such as "address" columns),
+	// that column will get converted to equivalent types that can. (Example: text -> varchar)
 	GetKeyDescriptor() val.TupleDesc
 
-	// GetKeyDescriptor returns the a descriptor for the columns used in the key.
-	// When `convertAddressColumns` is true, any columns which have types that can't appear in
-	// a key will get converted to equivalent types that can (such as text -> varchar).
-	// This is the same behavior as GetKeyDescriptor.
-	// But when `convertAddressColumns` is false, we don't perform that conversion
-	// and return the columns as they are.
-	GetKeyColumnsDescriptor(convertAddressColumns bool) val.TupleDesc
+	// GetKeyDescriptorWithNoConversion returns the a descriptor for the columns used in the key.
+	// Unlike `GetKeyDescriptor`, it doesn't attempt to convert columns if they can't appear in a key,
+	// and returns them as they are.
+	GetKeyDescriptorWithNoConversion() val.TupleDesc
 
 	// GetValueDescriptor returns the value tuple descriptor for this schema.
 	GetValueDescriptor() val.TupleDesc
