@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -91,6 +92,12 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 	)
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, err
+	}
+
+	if user, hasUser := apr.GetValue(cli.UserFlag); hasUser {
+		pullSpec.Remote = pullSpec.Remote.WithParams(map[string]string{
+			dbfactory.GRPCUsernameAuthParam: user,
+		})
 	}
 
 	srcDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), pullSpec.Remote, false)

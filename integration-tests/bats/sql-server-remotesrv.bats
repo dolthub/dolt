@@ -162,12 +162,10 @@ select count(*) from vals;
 }
 
 @test "sql-server-remotesrv: clone/fetch/pull from remotesapi port with authentication" {
-    skip "only support authenticating fetch with dolthub for now."
-
     mkdir remote
     cd remote
     dolt init
-    dolt --privilege-file=privs.json sql -q "CREATE USER user IDENTIFIED BY 'pass0'"
+    dolt --privilege-file=privs.json sql -q "CREATE USER user0 IDENTIFIED BY 'pass0'"
     dolt sql -q 'create table vals (i int);'
     dolt sql -q 'insert into vals (i) values (1), (2), (3), (4), (5);'
     dolt add vals
@@ -187,7 +185,7 @@ select count(*) from vals;
     run dolt sql -q 'select count(*) from vals'
     [[ "$output" =~ "5" ]] || false
 
-    dolt --port 3307 --host localhost -u $DOLT_REMOTE_USER -p $DOLT_REMOTE_PASSWORD sql -q "
+    dolt --port 3307 --host localhost --no-tls -u $DOLT_REMOTE_USER -p $DOLT_REMOTE_PASSWORD sql -q "
 use remote;
 call dolt_checkout('-b', 'new_branch');
 insert into vals (i) values (6), (7), (8), (9), (10);
@@ -202,7 +200,7 @@ call dolt_commit('-am', 'add some vals');
     # No auth fetch
     run dolt fetch
     [[ "$status" != 0 ]] || false
-    [[ "$output" =~ "Unauthenticated" ]] || false
+    [[ "$output" =~ "Access denied for user 'root'" ]] || false
 
     # # With auth fetch
     run dolt fetch -u $DOLT_REMOTE_USER
@@ -216,7 +214,7 @@ call dolt_commit('-am', 'add some vals');
     run dolt checkout new_branch
     [[ "$status" -eq 0 ]] || false
 
-    dolt --port 3307 --host localhost -u $DOLT_REMOTE_USER -p $DOLT_REMOTE_PASSWORD sql -q "
+    dolt --port 3307 --host localhost --no-tls -u $DOLT_REMOTE_USER -p $DOLT_REMOTE_PASSWORD sql -q "
 use remote;
 call dolt_checkout('new_branch');
 insert into vals (i) values (11);
@@ -226,7 +224,7 @@ call dolt_commit('-am', 'add one val');
     # No auth pull
     run dolt pull
     [[ "$status" != 0 ]] || false
-    [[ "$output" =~ "Unauthenticated" ]] || false
+    [[ "$output" =~ "Access denied for user 'root'" ]] || false
 
     # With auth pull
     run dolt pull -u $DOLT_REMOTE_USER
@@ -236,8 +234,6 @@ call dolt_commit('-am', 'add one val');
 }
 
 @test "sql-server-remotesrv: clone/fetch/pull from remotesapi port with clone_admin authentication" {
-    skip "only support authenticating fetch with dolthub for now."
-
     mkdir remote
     cd remote
     dolt init
@@ -250,11 +246,12 @@ call dolt_commit('-am', 'add one val');
     srv_pid=$!
     sleep 2 # wait for server to start so we don't lock it out
 
-    run dolt --port 3307 --host localhost -u user0 -p pass0 sql -q "
-CREATE USER clone_admin_user@'%' IDENTIFIED BY 'pass1';
-GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'%';
+    run dolt sql -q "
+CREATE USER clone_admin_user@'localhost' IDENTIFIED BY 'pass1';
+GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
 select user from mysql.user;
 "
+
     [ $status -eq 0 ]
     [[ $output =~ user0 ]] || false
     [[ $output =~ clone_admin_user ]] || false
@@ -268,12 +265,10 @@ select user from mysql.user;
     run dolt sql -q 'select count(*) from vals'
     [[ "$output" =~ "5" ]] || false
 
-    dolt --port 3307 --host localhost -u user0 -p pass0 sql -q "
-use remote;
+    dolt --port 3307 --host localhost -u user0 -p pass0 --no-tls --use-db remote sql -q "
 call dolt_checkout('-b', 'new_branch');
 insert into vals (i) values (6), (7), (8), (9), (10);
-call dolt_commit('-am', 'add some vals');
-"
+call dolt_commit('-am', 'add some vals');"
 
     run dolt branch -v -a
     [ "$status" -eq 0 ]
@@ -283,7 +278,7 @@ call dolt_commit('-am', 'add some vals');
     # No auth fetch
     run dolt fetch
     [[ "$status" != 0 ]] || false
-    [[ "$output" =~ "Unauthenticated" ]] || false
+    [[ "$output" =~ "Access denied for user 'root'" ]] || false
 
     # # With auth fetch
     run dolt fetch -u clone_admin_user
@@ -297,17 +292,15 @@ call dolt_commit('-am', 'add some vals');
     run dolt checkout new_branch
     [[ "$status" -eq 0 ]] || false
 
-    dolt --port 3307 --host localhost -u user0 -p pass0 sql -q "
-use remote;
+    dolt sql -q "
 call dolt_checkout('new_branch');
 insert into vals (i) values (11);
-call dolt_commit('-am', 'add one val');
-"
+call dolt_commit('-am', 'add one val');"
 
     # No auth pull
     run dolt pull
     [[ "$status" != 0 ]] || false
-    [[ "$output" =~ "Unauthenticated" ]] || false
+    [[ "$output" =~ "Access denied for user 'root'" ]] || false
 
     # With auth pull
     run dolt pull -u clone_admin_user
@@ -334,7 +327,7 @@ call dolt_commit('-am', 'add one val');
     cd ../
     run dolt clone http://localhost:50051/remote repo1
     [[ "$status" != 0 ]] || false
-    [[ "$output" =~ "Unauthenticated" ]] || false
+    [[ "$output" =~ "Access denied for user 'root'" ]] || false
 }
 
 @test "sql-server-remotesrv: dolt clone with incorrect authentication returns error" {
@@ -361,10 +354,10 @@ call dolt_commit('-am', 'add one val');
     export DOLT_REMOTE_PASSWORD="wrong-password"
     run dolt clone http://localhost:50051/remote repo1 -u $DOLT_REMOTE_USER
     [[ "$status" != 0 ]] || false
-    [[ "$output" =~ "Unauthenticated" ]] || false
+    [[ "$output" =~ "Access denied for user 'user0'" ]] || false
 
     export DOLT_REMOTE_PASSWORD="pass0"
     run dolt clone http://localhost:50051/remote repo1 -u doesnt_exist
     [[ "$status" != 0 ]] || false
-    [[ "$output" =~ "Unauthenticated" ]] || false
+    [[ "$output" =~ "Access denied for user 'doesnt_exist'" ]] || false
 }

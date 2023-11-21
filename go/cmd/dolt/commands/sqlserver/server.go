@@ -53,6 +53,7 @@ import (
 
 const (
 	LocalConnectionUser = "__dolt_local_user__"
+	ApiSqleContextKey   = "__sqle_context__"
 )
 
 // ExternalDisableUsers is called by implementing applications to disable users. This is not used by Dolt itself,
@@ -384,7 +385,7 @@ func Serve(
 			}
 
 			ctxFactory := func() (*sql.Context, error) { return sqlEngine.NewDefaultContext(ctx) }
-			authenticator := newAuthenticator(ctxFactory, sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb)
+			authenticator := newAccessController(ctxFactory, sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb)
 			args = sqle.WithUserPasswordAuth(args, authenticator)
 			args.TLSConfig = serverConf.TLSConfig
 
@@ -587,29 +588,66 @@ func acquireGlobalSqlServerLock(port int, dEnv *env.DoltEnv) (*env.DBLock, error
 	return &lck, nil
 }
 
+// remotesapiAuth facilitates the implementation remotesrv.AccessControl for the remotesapi server.
 type remotesapiAuth struct {
+	// ctxFactory is a function that returns a new sql.Context. This will create a new conext every time it is called,
+	// so it should be called once per API request.
 	ctxFactory func() (*sql.Context, error)
 	rawDb      *mysql_db.MySQLDb
 }
 
-func newAuthenticator(ctxFactory func() (*sql.Context, error), rawDb *mysql_db.MySQLDb) remotesrv.Authenticator {
+func newAccessController(ctxFactory func() (*sql.Context, error), rawDb *mysql_db.MySQLDb) remotesrv.AccessControl {
 	return &remotesapiAuth{ctxFactory, rawDb}
 }
 
-func (r *remotesapiAuth) Authenticate(creds *remotesrv.RequestCredentials) bool {
-	err := commands.ValidatePasswordWithAuthResponse(r.rawDb, creds.Username, creds.Password)
+// ApiAuthenticate checks the provided credentials against the database and return a SQL context if the credentials are
+// valid. If the credentials are invalid, then a nil context is returned. Failures to authenticate are logged.
+func (r *remotesapiAuth) ApiAuthenticate(ctx context.Context) (context.Context, error) {
+	creds, err := remotesrv.ExtractBasicAuthCreds(ctx)
 	if err != nil {
-		return false
+		return nil, err
 	}
 
-	ctx, err := r.ctxFactory()
+	err = commands.ValidatePasswordWithAuthResponse(r.rawDb, creds.Username, creds.Password)
 	if err != nil {
-		return false
+		return nil, fmt.Errorf("API Authentication Failure: %v", err)
 	}
-	ctx.Session.SetClient(sql.Client{User: creds.Username, Address: creds.Address, Capabilities: 0})
+
+	address := creds.Address
+	if strings.Index(address, ":") > 0 {
+		address, _, err = net.SplitHostPort(creds.Address)
+		if err != nil {
+			return nil, fmt.Errorf("Invlaid Host string for authentication: %s", creds.Address)
+		}
+	}
+
+	sqlCtx, err := r.ctxFactory()
+	if err != nil {
+		return nil, fmt.Errorf("API Runtime error: %v", err)
+	}
+
+	sqlCtx.Session.SetClient(sql.Client{User: creds.Username, Address: address, Capabilities: 0})
+
+	updatedCtx := context.WithValue(ctx, ApiSqleContextKey, sqlCtx)
+
+	return updatedCtx, nil
+}
+
+func (r *remotesapiAuth) ApiAuthorize(ctx context.Context) (bool, error) {
+	sqlCtx, ok := ctx.Value(ApiSqleContextKey).(*sql.Context)
+	if !ok {
+		return false, fmt.Errorf("Runtime error: could not get SQL context from context")
+	}
 
 	privOp := sql.NewDynamicPrivilegedOperation(plan.DynamicPrivilege_CloneAdmin)
-	return r.rawDb.UserHasPrivileges(ctx, privOp)
+
+	authorized := r.rawDb.UserHasPrivileges(sqlCtx, privOp)
+
+	if !authorized {
+		return false, fmt.Errorf("API Authorization Failure: %s has not been granted CLONE_ADMIN access", sqlCtx.Session.Client().User)
+
+	}
+	return true, nil
 }
 
 func LoadClusterTLSConfig(cfg cluster.Config) (*tls.Config, error) {
