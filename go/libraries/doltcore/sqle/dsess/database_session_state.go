@@ -42,8 +42,8 @@ type InitialDbState struct {
 	ReadOnly bool
 	DbData   env.DbData
 	Remotes  *concurrentmap.Map[string, env.Remote]
-	Backups  *concurrentmap.Map[string, env.Remote]
 	Branches *concurrentmap.Map[string, env.BranchConfig]
+	Backups  *concurrentmap.Map[string, env.Remote]
 
 	// If err is set, this InitialDbState is partially invalid, but may be
 	// usable to initialize a database at a revision specifier, for
