@@ -192,6 +192,10 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		switch diff.Op {
 		case tree.DiffOpLeftAdd, tree.DiffOpLeftModify:
 			// In the event that the right side introduced a schema change, account for it here.
+			// We still have to migrate when the diff is `tree.DiffOpLeftModify` because of the corner case where
+			// the right side contains a schema change but the changed column is null, so row bytes don't change.
+			// TODO: If this slows down merges with no schema change, we could precompute whether there's a schema change
+			// and avoid this path.
 			if rebuildPrimaryIndex {
 				err = pri.merge(ctx, diff, tm.leftSch)
 				if err != nil {
@@ -1096,6 +1100,8 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 
 		return m.mut.Put(ctx, diff.Key, merged)
 	case tree.DiffOpLeftAdd, tree.DiffOpLeftModify, tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict:
+		// If the right side has a schema change, then newly added rows from the left must be migrated to the new schema.
+		// Rows with unresolvable conflicts must also be migrated to the new schema so that they can resolved manually.
 		if diff.Left == nil {
 			return m.mut.Put(ctx, diff.Key, nil)
 		}
