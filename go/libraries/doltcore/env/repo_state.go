@@ -128,6 +128,9 @@ func (rs *repoStateLegacy) toRepoState() *RepoState {
 	if newRS.Backups == nil {
 		newRS.Backups = concurrentmap.New[string, Remote]()
 	}
+	if newRS.Branches == nil {
+		newRS.Branches = concurrentmap.New[string, BranchConfig]()
+	}
 
 	return newRS
 }
