@@ -161,7 +161,16 @@ func (d *ThreeWayDiffer[K, O]) Next(ctx context.Context) (ThreeWayDiff, error) {
 			if d.lDiff.To == nil && d.rDiff.To == nil {
 				res = d.newConvergentEdit(d.lDiff.Key, d.lDiff.To, d.lDiff.Type)
 			} else if d.lDiff.To == nil || d.rDiff.To == nil {
-				res = d.newDivergentDeleteConflict(d.lDiff.Key, d.lDiff.From, d.lDiff.To, d.rDiff.To)
+				// Divergent delete. Attempt to resolve.
+				_, ok, err := d.resolveCb(ctx, val.Tuple(d.lDiff.To), val.Tuple(d.rDiff.To), val.Tuple(d.lDiff.From))
+				if err != nil {
+					return ThreeWayDiff{}, err
+				}
+				if !ok {
+					res = d.newDivergentDeleteConflict(d.lDiff.Key, d.lDiff.From, d.lDiff.To, d.rDiff.To)
+				} else {
+					res = d.newDivergentDeleteResolved(d.lDiff.Key, d.lDiff.From, d.lDiff.To, d.rDiff.To)
+				}
 			} else if d.lDiff.Type == d.rDiff.Type && bytes.Equal(d.lDiff.To, d.rDiff.To) {
 				res = d.newConvergentEdit(d.lDiff.Key, d.lDiff.To, d.lDiff.Type)
 			} else {
@@ -209,16 +218,17 @@ type DiffOp uint16
 const (
 	DiffOpLeftAdd                 DiffOp = iota // leftAdd
 	DiffOpRightAdd                              // rightAdd
-	DiffOpLeftDelete                            // leftDelete
-	DiffOpRightDelete                           // rightDelete
-	DiffOpLeftModify                            // leftModify
-	DiffOpRightModify                           // rightModify
-	DiffOpConvergentAdd                         // convergentAdd
-	DiffOpConvergentDelete                      // convergentDelete
-	DiffOpConvergentModify                      // convergentModify
-	DiffOpDivergentModifyResolved               // divergentModifyResolved
-	DiffOpDivergentDeleteConflict               // divergentDeleteConflict
-	DiffOpDivergentModifyConflict               // divergentModifyConflict
+	DiffOpLeftDelete                            //leftDelete
+	DiffOpRightDelete                           //rightDelete
+	DiffOpLeftModify                            //leftModify
+	DiffOpRightModify                           //rightModify
+	DiffOpConvergentAdd                         //convergentAdd
+	DiffOpConvergentDelete                      //convergentDelete
+	DiffOpConvergentModify                      //convergentModify
+	DiffOpDivergentModifyResolved               //divergentModifyResolved
+	DiffOpDivergentDeleteConflict               //divergentDeleteConflict
+	DiffOpDivergentModifyConflict               //divergentModifyConflict
+	DiffOpDivergentDeleteResolved               //divergentDeleteConflict
 )
 
 // ThreeWayDiff is a generic object for encoding a three way diff.
@@ -301,6 +311,16 @@ func (d *ThreeWayDiffer[K, O]) newDivergentResolved(key, left, right, merged Ite
 func (d *ThreeWayDiffer[K, O]) newDivergentDeleteConflict(key, base, left, right Item) ThreeWayDiff {
 	return ThreeWayDiff{
 		Op:    DiffOpDivergentDeleteConflict,
+		Key:   val.Tuple(key),
+		Base:  val.Tuple(base),
+		Left:  val.Tuple(left),
+		Right: val.Tuple(right),
+	}
+}
+
+func (d *ThreeWayDiffer[K, O]) newDivergentDeleteResolved(key, base, left, right Item) ThreeWayDiff {
+	return ThreeWayDiff{
+		Op:    DiffOpDivergentDeleteResolved,
 		Key:   val.Tuple(key),
 		Base:  val.Tuple(base),
 		Left:  val.Tuple(left),

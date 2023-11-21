@@ -209,7 +209,7 @@ func (m MemoryRepoState) SetCWBHeadRef(_ context.Context, r ref.MarshalableRef) 
 }
 
 func (m MemoryRepoState) GetRemotes() (*concurrentmap.Map[string, Remote], error) {
-	return &concurrentmap.Map[string, Remote]{}, nil
+	return concurrentmap.New[string, Remote](), nil
 }
 
 func (m MemoryRepoState) AddRemote(r Remote) error {
@@ -232,7 +232,7 @@ func (m MemoryRepoState) TempTableFilesDir() (string, error) {
 	return os.TempDir(), nil
 }
 
-func (m MemoryRepoState) GetBackups() (map[string]Remote, error) {
+func (m MemoryRepoState) GetBackups() (*concurrentmap.Map[string, Remote], error) {
 	panic("cannot get backups on in memory database")
 }
 

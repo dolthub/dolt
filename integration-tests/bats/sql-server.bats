@@ -1789,7 +1789,7 @@ behavior:
 
 @test "sql-server: dropping database with '-' in it but replaced with underscore" {
     skiponwindows "Missing dependencies"
-    export DOLT_DBNAME_REPLACE_HYPHENS="true"
+    export DOLT_DBNAME_REPLACE="true"
     mkdir my-db
     cd my-db
     dolt init

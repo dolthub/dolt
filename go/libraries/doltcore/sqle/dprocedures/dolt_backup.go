@@ -224,7 +224,7 @@ func syncBackupViaName(ctx *sql.Context, dbData env.DbData, sess *dsess.DoltSess
 		return err
 	}
 
-	b, ok := backups[backupName]
+	b, ok := backups.Get(backupName)
 	if !ok {
 		return fmt.Errorf("error: unknown backup: '%s'; %v", backupName, backups)
 	}

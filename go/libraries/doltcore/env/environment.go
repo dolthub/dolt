@@ -115,12 +115,7 @@ func createRepoState(fs filesys.Filesys) (*RepoState, error) {
 	// deep copy remotes and backups ¯\_(ツ)_/¯ (see commit c59cbead)
 	if repoState != nil {
 		repoState.Remotes = repoState.Remotes.DeepCopy()
-
-		backups := make(map[string]Remote, len(repoState.Backups))
-		for n, r := range repoState.Backups {
-			backups[n] = r
-		}
-		repoState.Backups = backups
+		repoState.Backups = repoState.Backups.DeepCopy()
 	}
 
 	return repoState, rsErr
@@ -863,7 +858,7 @@ func (dEnv *DoltEnv) GetRemotes() (*concurrentmap.Map[string, Remote], error) {
 
 // CheckRemoteAddressConflict checks whether any backups or remotes share the given URL. Returns the first remote if multiple match.
 // Returns NoRemote and false if none match.
-func CheckRemoteAddressConflict(absUrl string, remotes *concurrentmap.Map[string, Remote], backups map[string]Remote) (Remote, bool) {
+func CheckRemoteAddressConflict(absUrl string, remotes *concurrentmap.Map[string, Remote], backups *concurrentmap.Map[string, Remote]) (Remote, bool) {
 	if remotes != nil {
 		var rm *Remote
 		remotes.Iter(func(key string, value Remote) bool {
@@ -878,9 +873,17 @@ func CheckRemoteAddressConflict(absUrl string, remotes *concurrentmap.Map[string
 		}
 	}
 
-	for _, r := range backups {
-		if r.Url == absUrl {
-			return r, true
+	if backups != nil {
+		var rm *Remote
+		backups.Iter(func(key string, value Remote) bool {
+			if value.Url == absUrl {
+				rm = &value
+				return false
+			}
+			return true
+		})
+		if rm != nil {
+			return *rm, true
 		}
 	}
 	return NoRemote, false
@@ -910,7 +913,7 @@ func (dEnv *DoltEnv) AddRemote(r Remote) error {
 	return dEnv.RepoState.Save(dEnv.FS)
 }
 
-func (dEnv *DoltEnv) GetBackups() (map[string]Remote, error) {
+func (dEnv *DoltEnv) GetBackups() (*concurrentmap.Map[string, Remote], error) {
 	if dEnv.RSLoadErr != nil {
 		return nil, dEnv.RSLoadErr
 	}
@@ -919,7 +922,7 @@ func (dEnv *DoltEnv) GetBackups() (map[string]Remote, error) {
 }
 
 func (dEnv *DoltEnv) AddBackup(r Remote) error {
-	if _, ok := dEnv.RepoState.Backups[r.Name]; ok {
+	if _, ok := dEnv.RepoState.Backups.Get(r.Name); ok {
 		return ErrBackupAlreadyExists
 	}
 
@@ -976,7 +979,7 @@ func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
 }
 
 func (dEnv *DoltEnv) RemoveBackup(ctx context.Context, name string) error {
-	backup, ok := dEnv.RepoState.Backups[name]
+	backup, ok := dEnv.RepoState.Backups.Get(name)
 	if !ok {
 		return ErrBackupNotFound
 	}

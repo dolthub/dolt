@@ -16,14 +16,10 @@ package remotesrv
 
 import (
 	"context"
-	"encoding/base64"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 
@@ -34,12 +30,20 @@ type RequestCredentials struct {
 }
 
 type ServerInterceptor struct {
-	Lgr           *logrus.Entry
-	Authenticator Authenticator
+	Lgr              *logrus.Entry
+	AccessController AccessControl
 }
 
-type Authenticator interface {
-	Authenticate(creds *RequestCredentials) bool
+// AccessControl is an interface that provides authentication and authorization for the gRPC server.
+type AccessControl interface {
+	// ApiAuthenticate checks the incoming request for authentication credentials and validates them. If the user's
+	// identity checks out, the returned context will have the sqlContext within it, which contains the user's ID.
+	// If the user is not legitimate, an error is returned.
+	ApiAuthenticate(ctx context.Context) (context.Context, error)
+	// ApiAuthorize checks that the authenticated user has sufficient privileges to perform the requested action.
+	// Currently, CLONE_ADMIN is required. True and a nil error returned if the user is authorized, otherwise false
+	// with an error.
+	ApiAuthorize(ctx context.Context) (bool, error)
 }
 
 func (si *ServerInterceptor) Stream() grpc.StreamServerInterceptor {
@@ -69,40 +73,23 @@ func (si *ServerInterceptor) Options() []grpc.ServerOption {
 	}
 }
 
+// authenticate checks the incoming request for authentication credentials and validates them.  If the user is
+// legitimate, an authorization check is performed. If no error is returned, the user should be allowed to proceed.
 func (si *ServerInterceptor) authenticate(ctx context.Context) error {
-	if md, ok := metadata.FromIncomingContext(ctx); ok {
-		var username string
-		var password string
-
-		auths := md.Get("authorization")
-		if len(auths) != 1 {
-			username = "root"
-		} else {
-			auth := auths[0]
-			if !strings.HasPrefix(auth, "Basic ") {
-				si.Lgr.Info("incoming request had malformed authentication header")
-				return status.Error(codes.Unauthenticated, "unauthenticated")
-			}
-			authTrim := strings.TrimPrefix(auth, "Basic ")
-			uDec, err := base64.URLEncoding.DecodeString(authTrim)
-			if err != nil {
-				si.Lgr.Infof("incoming request authorization header failed to decode: %v", err)
-				return status.Error(codes.Unauthenticated, "unauthenticated")
-			}
-			userPass := strings.Split(string(uDec), ":")
-			username = userPass[0]
-			password = userPass[1]
-		}
-		addr, ok := peer.FromContext(ctx)
-		if !ok {
-			si.Lgr.Info("incoming request had no peer")
-			return status.Error(codes.Unauthenticated, "unauthenticated")
-		}
-		if authed := si.Authenticator.Authenticate(&RequestCredentials{Username: username, Password: password, Address: addr.Addr.String()}); !authed {
-			return status.Error(codes.Unauthenticated, "unauthenticated")
-		}
-		return nil
+	ctx, err := si.AccessController.ApiAuthenticate(ctx)
+	if err != nil {
+		si.Lgr.Warnf("authentication failed: %s", err.Error())
+		status.Error(codes.Unauthenticated, "unauthenticated")
+		return err
 	}
 
-	return status.Error(codes.Unauthenticated, "unauthenticated 1")
+	// Have a valid user in the context.  Check authorization.
+	if authorized, err := si.AccessController.ApiAuthorize(ctx); !authorized {
+		si.Lgr.Warnf("authorization failed: %s", err.Error())
+		status.Error(codes.PermissionDenied, "unauthorized")
+		return err
+	}
+
+	// Access Granted.
+	return nil
 }

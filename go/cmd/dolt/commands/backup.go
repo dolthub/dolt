@@ -208,7 +208,7 @@ func printBackups(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ver
 		return errhand.BuildDError("Unable to get backups from the local directory").AddCause(err).Build()
 	}
 
-	for _, r := range backups {
+	for _, r := range backups.Snapshot() {
 		if apr.Contains(cli.VerboseFlag) {
 			paramStr := make([]byte, 0)
 			if len(r.Params) > 0 {
@@ -256,7 +256,7 @@ func syncBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 		return errhand.BuildDError("Unable to get backups from the local directory").AddCause(err).Build()
 	}
 
-	b, ok := backups[backupName]
+	b, ok := backups.Get(backupName)
 	if !ok {
 		return errhand.BuildDError("error: unknown backup: '%s' ", backupName).Build()
 	}

@@ -3,7 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    export DOLT_DBNAME_REPLACE_HYPHENS="true"
+    export DOLT_DBNAME_REPLACE="true"
     database_name=dolt_repo_$$
 
     dolt sql -q "CREATE TABLE test(pk int PRIMARY KEY, color varchar(200))"

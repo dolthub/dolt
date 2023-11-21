@@ -5335,13 +5335,11 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		SetUpScript: []string{
 			"SET @@autocommit=0;",
 			"create table t (pk int primary key, v varchar(100));",
-			"insert into t values (0, 'zero');",
+			"insert into t values (1, 'one');",
 			"call dolt_commit('-Am', 'create table t');",
 			"call dolt_checkout('-b', 'branch1');",
-			"insert into t values (1, \"one\");",
-			"call dolt_commit('-am', 'adding row 1');",
-			"insert into t values (2, \"two\");",
-			"call dolt_commit('-am', 'adding row 2');",
+			"update t set v=\"uno\" where pk=1;",
+			"call dolt_commit('-Am', 'updating row 1 -> uno');",
 			"alter table t drop column v;",
 			"call dolt_commit('-am', 'drop column v');",
 			"call dolt_checkout('main');",
@@ -5353,13 +5351,12 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
-				Expected: []sql.Row{{"t", uint64(2)}},
+				Expected: []sql.Row{{"t", uint64(1)}},
 			},
 			{
 				Query: "select base_pk, base_v, our_pk, our_diff_type, their_pk, their_diff_type from dolt_conflicts_t;",
 				Expected: []sql.Row{
-					{1, "one", nil, "removed", 1, "modified"},
-					{2, "two", nil, "removed", 2, "modified"},
+					{1, "uno", 1, "modified", 1, "modified"},
 				},
 			},
 			{
@@ -5372,7 +5369,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{0, "zero"}},
+				Expected: []sql.Row{{1, "one"}},
 			},
 		},
 	},
@@ -5382,13 +5379,11 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			"SET @@autocommit=1;",
 			"SET @@dolt_allow_commit_conflicts=1;",
 			"create table t (pk int primary key, v varchar(100));",
-			"insert into t values (0, 'zero');",
+			"insert into t values (1, 'one');",
 			"call dolt_commit('-Am', 'create table t');",
 			"call dolt_checkout('-b', 'branch1');",
-			"insert into t values (1, \"one\");",
-			"call dolt_commit('-am', 'adding row 1');",
-			"insert into t values (2, \"two\");",
-			"call dolt_commit('-am', 'adding row 2');",
+			"update t set v=\"uno\" where pk=1;",
+			"call dolt_commit('-Am', 'updating row 1 -> uno');",
 			"alter table t drop column v;",
 			"call dolt_commit('-am', 'drop column v');",
 			"call dolt_checkout('main');",
@@ -5400,13 +5395,12 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
-				Expected: []sql.Row{{"t", uint64(2)}},
+				Expected: []sql.Row{{"t", uint64(1)}},
 			},
 			{
 				Query: "select base_pk, base_v, our_pk, our_diff_type, their_pk, their_diff_type from dolt_conflicts_t;",
 				Expected: []sql.Row{
-					{1, "one", nil, "removed", 1, "modified"},
-					{2, "two", nil, "removed", 2, "modified"},
+					{1, "uno", 1, "modified", 1, "modified"},
 				},
 			},
 			{
@@ -5419,7 +5413,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{0, "zero"}},
+				Expected: []sql.Row{{1, "one"}},
 			},
 		},
 	},
@@ -5428,13 +5422,11 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		SetUpScript: []string{
 			"SET @@autocommit=0;",
 			"create table t (pk int primary key, v varchar(100));",
-			"insert into t values (0, 'zero');",
+			"insert into t values (1, 'one');",
 			"call dolt_commit('-Am', 'create table t');",
 			"call dolt_checkout('-b', 'branch1');",
-			"insert into t values (1, \"one\");",
-			"call dolt_commit('-am', 'adding row 1');",
-			"insert into t values (2, \"two\");",
-			"call dolt_commit('-am', 'adding row 2');",
+			"update t set v=\"uno\" where pk=1;",
+			"call dolt_commit('-Am', 'updating row 1 -> uno');",
 			"alter table t drop column v;",
 			"call dolt_commit('-am', 'drop column v');",
 			"call dolt_checkout('main');",
@@ -5446,7 +5438,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
-				Expected: []sql.Row{{"t", uint64(2)}},
+				Expected: []sql.Row{{"t", uint64(1)}},
 			},
 			{
 				Query:    "select * from dolt_status",
@@ -5455,8 +5447,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			{
 				Query: "select base_pk, base_v, our_pk, our_diff_type, their_pk, their_diff_type from dolt_conflicts_t;",
 				Expected: []sql.Row{
-					{1, "one", nil, "removed", 1, "modified"},
-					{2, "two", nil, "removed", 2, "modified"},
+					{1, "uno", 1, "modified", 1, "modified"},
 				},
 			},
 			{
@@ -5473,7 +5464,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{1}},
 			},
 			{
 				Query:    "call dolt_commit('-am', 'committing cherry-pick');",
@@ -5563,13 +5554,11 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			"SET @@autocommit=1;",
 			"SET @@dolt_allow_commit_conflicts=1;",
 			"create table t (pk int primary key, v varchar(100));",
-			"insert into t values (0, 'zero');",
+			"insert into t values (1, 'one');",
 			"call dolt_commit('-Am', 'create table t');",
 			"call dolt_checkout('-b', 'branch1');",
-			"insert into t values (1, \"one\");",
-			"call dolt_commit('-am', 'adding row 1');",
-			"insert into t values (2, \"two\");",
-			"call dolt_commit('-am', 'adding row 2');",
+			"update t set v=\"uno\" where pk=1;",
+			"call dolt_commit('-Am', 'updating row 1 -> uno');",
 			"alter table t drop column v;",
 			"call dolt_commit('-am', 'drop column v');",
 			"call dolt_checkout('main');",
@@ -5581,13 +5570,12 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
-				Expected: []sql.Row{{"t", uint64(2)}},
+				Expected: []sql.Row{{"t", uint64(1)}},
 			},
 			{
 				Query: "select base_pk, base_v, our_pk, our_diff_type, their_pk, their_diff_type from dolt_conflicts_t;",
 				Expected: []sql.Row{
-					{1, "one", nil, "removed", 1, "modified"},
-					{2, "two", nil, "removed", 2, "modified"},
+					{1, "uno", 1, "modified", 1, "modified"},
 				},
 			},
 			{
@@ -5600,7 +5588,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from t;",
-				Expected: []sql.Row{{0, "zero"}},
+				Expected: []sql.Row{{1, "one"}},
 			},
 			{
 				Query:    "select * from dolt_status;",

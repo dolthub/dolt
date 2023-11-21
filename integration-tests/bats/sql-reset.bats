@@ -280,7 +280,7 @@ SQL
 }
 
 @test "sql-reset: CALL DOLT_RESET --hard properly maintains session variables." {
-    export DOLT_DBNAME_REPLACE_HYPHENS="true"
+    export DOLT_DBNAME_REPLACE="true"
     head_variable=@@dolt_repo_$$_head
     head_hash=$(get_head_commit)
     run dolt sql << SQL
@@ -318,7 +318,7 @@ SQL
 }
 
 @test "sql-reset: CALL DOLT_RESET soft maintains staged session variable" {
-    export DOLT_DBNAME_REPLACE_HYPHENS="true"
+    export DOLT_DBNAME_REPLACE="true"
     working_hash_var=@@dolt_repo_$$_working
     run dolt sql -q "SELECT $working_hash_var"
     working_hash=$output

@@ -38,7 +38,7 @@ func TestDirToDBName(t *testing.T) {
 		"  real - name     ": "real_name",
 	}
 
-	err := os.Setenv(dconfig.EnvDbNameReplaceHyphens, "true")
+	err := os.Setenv(dconfig.EnvDbNameReplace, "true")
 	require.NoError(t, err)
 
 	for dirName, expected := range replaceHyphenTests {
@@ -49,10 +49,10 @@ func TestDirToDBName(t *testing.T) {
 	allowHyphenTests := map[string]string{
 		"irs":                "irs",
 		"corona-virus":       "corona-virus",
-		"  fake - name     ": "fake_-_name",
+		"  fake - name     ": "  fake - name     ",
 	}
 
-	err = os.Setenv(dconfig.EnvDbNameReplaceHyphens, "")
+	err = os.Setenv(dconfig.EnvDbNameReplace, "")
 	require.NoError(t, err)
 
 	for dirName, expected := range allowHyphenTests {
@@ -133,7 +133,7 @@ func TestMultiEnvForDirectory(t *testing.T) {
 
 	expected := []envCmp{
 		{
-			name:    "test---name_123",
+			name:    " test---name _ 123",
 			doltDir: dEnv.GetDoltDir(),
 		},
 	}
@@ -164,7 +164,7 @@ func TestMultiEnvForDirectoryWithMultipleRepos(t *testing.T) {
 	assert.Len(t, mrEnv.envs, 3)
 
 	expected := make(map[string]string)
-	expected["test---name_123"] = dEnv.GetDoltDir()
+	expected[" test---name _ 123"] = dEnv.GetDoltDir()
 	expected["abc"] = subEnv1.GetDoltDir()
 	expected["def"] = subEnv2.GetDoltDir()
 
