@@ -112,7 +112,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				// Assert that the commit history is now composed of different commits
 				Query: "select message from dolt_log order by date desc;",
 				Expected: []sql.Row{
-					{"inserting row 100"},
+					{"inserting row 1\n\ninserting row 10\n\ninserting row 100"},
 					{"inserting row 0"},
 					{"creating table t"},
 					{"Initialize data repository"}},

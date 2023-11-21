@@ -57,7 +57,7 @@ var cherryPickSchema = []*sql.Column{
 
 // doltCherryPick is the stored procedure version for the CLI command `dolt cherry-pick`.
 func doltCherryPick(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	newCommitHash, dataConflicts, schemaConflicts, constraintViolations, err := doDoltCherryPick(ctx, false, args)
+	newCommitHash, dataConflicts, schemaConflicts, constraintViolations, err := doDoltCherryPick(ctx, false, "", args)
 	if err != nil {
 		return nil, err
 	}
@@ -68,8 +68,8 @@ func doltCherryPick(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 //
 //	so that we can call this more cleanly. Having a separate action for cherry-pick, that this code would just
 //	call, and that rebase could call, is one way to clean this up.
-func doltCherryPickWithAmend(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	newCommitHash, dataConflicts, schemaConflicts, constraintViolations, err := doDoltCherryPick(ctx, true, args)
+func doltCherryPickWithAmendAndCommitMessage(ctx *sql.Context, commitMessage string, args ...string) (sql.RowIter, error) {
+	newCommitHash, dataConflicts, schemaConflicts, constraintViolations, err := doDoltCherryPick(ctx, true, commitMessage, args)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func doltCherryPickWithAmend(ctx *sql.Context, args ...string) (sql.RowIter, err
 // doDoltCherryPick attempts to perform a cherry-pick merge based on the arguments specified in |args| and returns
 // the new, created commit hash (if it was successful created), a count of the number of tables with data conflicts,
 // a count of the number of tables with schema conflicts, and a count of the number of tables with constraint violations.
-func doDoltCherryPick(ctx *sql.Context, amend bool, args []string) (string, int, int, int, error) {
+func doDoltCherryPick(ctx *sql.Context, amend bool, commitMessage string, args []string) (string, int, int, int, error) {
 	// Get the information for the sql context.
 	dbName := ctx.GetCurrentDatabase()
 	if len(dbName) == 0 {
@@ -159,6 +159,9 @@ func doDoltCherryPick(ctx *sql.Context, amend bool, args []string) (string, int,
 	} else {
 		// TODO: We need a way to control this commit message for the squash rebase action
 		args := []string{"-m", commitMsg}
+		if commitMessage != "" {
+			args = []string{"-m", commitMessage}
+		}
 		if amend {
 			args = append(args, "--amend")
 		}

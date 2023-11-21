@@ -385,9 +385,13 @@ func processRow(ctx *sql.Context, row sql.Row) error {
 				return err
 			}
 		}
+
 		// Perform the cherry-pick
-		// TODO: Need to combine the commit messages
-		resultsIter, err := doltCherryPickWithAmend(ctx, row[2].(string))
+		commitMessage, err := squashCommitMessage(ctx, row[2].(string))
+		if err != nil {
+			return err
+		}
+		resultsIter, err := doltCherryPickWithAmendAndCommitMessage(ctx, commitMessage, row[2].(string))
 		if err != nil {
 			return err
 		}
@@ -410,4 +414,42 @@ func drainRowIterator(ctx *sql.Context, iter sql.RowIter) error {
 
 		fmt.Printf("cherry-pick result: %v\n", row)
 	}
+}
+
+// squashCommitMessage looks up the commit at HEAD and the commit identified by |nextCommitHash| and squashes their two
+// commit messages together.
+func squashCommitMessage(ctx *sql.Context, nextCommitHash string) (string, error) {
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	headCommit, err := doltSession.GetHeadCommit(ctx, ctx.GetCurrentDatabase())
+	if err != nil {
+		return "", err
+	}
+	headCommitMeta, err := headCommit.GetCommitMeta(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	ddb, ok := doltSession.GetDoltDB(ctx, ctx.GetCurrentDatabase())
+	if !ok {
+		return "", fmt.Errorf("unable to get doltdb!")
+	}
+	spec, err := doltdb.NewCommitSpec(nextCommitHash)
+	if err != nil {
+		return "", err
+	}
+	headRef, err := doltSession.CWBHeadRef(ctx, ctx.GetCurrentDatabase())
+	if err != nil {
+		return "", err
+	}
+	nextCommit, err := ddb.Resolve(ctx, spec, headRef)
+	if err != nil {
+		return "", err
+	}
+	nextCommitMeta, err := nextCommit.GetCommitMeta(ctx)
+	if err != nil {
+		return "", err
+	}
+	commitMessage := headCommitMeta.Description + "\n\n" + nextCommitMeta.Description
+
+	return commitMessage, nil
 }
