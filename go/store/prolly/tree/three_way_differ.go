@@ -43,18 +43,22 @@ type resolveCb func(context.Context, val.Tuple, val.Tuple, val.Tuple) (val.Tuple
 func NewThreeWayDiffer[K, V ~[]byte, O Ordering[K]](
 	ctx context.Context,
 	ns NodeStore,
-	left, right, base StaticMap[K, V, O],
+	left StaticMap[K, V, O],
+	leftSchemaChanged bool,
+	right StaticMap[K, V, O],
+	rightSchemaChanged bool,
+	base StaticMap[K, V, O],
 	resolveCb resolveCb,
 	keyless bool,
 	order O,
 ) (*ThreeWayDiffer[K, O], error) {
 	// probably compute each of these separately
-	ld, err := DifferFromRoots[K](ctx, ns, ns, base.Root, left.Root, order, false)
+	ld, err := DifferFromRoots[K](ctx, ns, ns, base.Root, left.Root, order, leftSchemaChanged)
 	if err != nil {
 		return nil, err
 	}
 
-	rd, err := DifferFromRoots[K](ctx, ns, ns, base.Root, right.Root, order, false)
+	rd, err := DifferFromRoots[K](ctx, ns, ns, base.Root, right.Root, order, rightSchemaChanged)
 	if err != nil {
 		return nil, err
 	}

@@ -51,7 +51,7 @@ var ErrUnableToMergeColumnDefaultValue = errorkinds.NewKind("unable to automatic
 // table's primary index will also be rewritten. This function merges the table's artifacts (e.g. recorded
 // conflicts), migrates any existing table data to the specified |mergedSch|, and merges table data from both
 // sides of the merge together.
-func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Schema, rewriteRows bool) (*doltdb.Table, *MergeStats, error) {
+func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Schema, mergeInfo MergeInfo) (*doltdb.Table, *MergeStats, error) {
 	mergeTbl, err := mergeTableArtifacts(ctx, tm, tm.leftTbl)
 	if err != nil {
 		return nil, nil, err
@@ -77,11 +77,10 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 	}
 
 	schemasDifferentSize := len(tm.leftSch.GetAllCols().GetColumns()) != len(mergedSch.GetAllCols().GetColumns())
-	rebuildPrimaryIndex := rewriteRows || schemasDifferentSize || !valueMerger.leftMapping.IsIdentityMapping()
-	rebuidSecondaryIndexes := rewriteRows
+	rebuildPrimaryIndex := mergeInfo.TableRewrite || schemasDifferentSize || !valueMerger.leftMapping.IsIdentityMapping()
 
 	var stats *MergeStats
-	mergeTbl, stats, err = mergeProllyTableData(sqlCtx, tm, mergedSch, mergeTbl, valueMerger, rebuildPrimaryIndex, rebuidSecondaryIndexes)
+	mergeTbl, stats, err = mergeProllyTableData(sqlCtx, tm, mergedSch, mergeTbl, valueMerger, mergeInfo, rebuildPrimaryIndex)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -106,13 +105,11 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 // to the right-side, we apply it to the left-side by merging it into the left-side's primary index
 // as well as any secondary indexes, and also checking for unique constraints incrementally. When
 // conflicts are detected, this function attempts to resolve them automatically if possible, and
-// if not, they are recorded as conflicts in the table's artifacts. If |rebuildPrimaryIndex| is set to
-// true, then every row in the primary index will be recomputed. This is usually because the right side
-// introduced a schema change. If |rebuildSecondaryIndexes| is true, then the seconary indexes will be
-// rebuilt instead of being incrementally merged together. This is less efficient, but safer, especially
-// when type changes have been applied to a table's schema.
-func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Schema, mergeTbl *doltdb.Table, valueMerger *valueMerger, rebuildPrimaryIndex, rebuildSecondaryIndexes bool) (*doltdb.Table, *MergeStats, error) {
-	iter, err := threeWayDiffer(ctx, tm, valueMerger)
+// if not, they are recorded as conflicts in the table's artifacts. If |rebuildIndexes| is set to
+// true, then secondary indexes will be rebuilt, instead of being incrementally merged together. This
+// is less efficient, but safer, especially when type changes have been applied to a table's schema.
+func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Schema, mergeTbl *doltdb.Table, valueMerger *valueMerger, mergeInfo MergeInfo, rebuildPrimaryIndex bool) (*doltdb.Table, *MergeStats, error) {
+	iter, err := threeWayDiffer(ctx, tm, valueMerger, mergeInfo)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -288,7 +285,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		return nil, nil, err
 	}
 
-	finalIdxs, err := mergeProllySecondaryIndexes(ctx, tm, leftIdxs, rightIdxs, finalSch, finalRows, conflicts.ae, rebuildSecondaryIndexes)
+	finalIdxs, err := mergeProllySecondaryIndexes(ctx, tm, leftIdxs, rightIdxs, finalSch, finalRows, conflicts.ae, mergeInfo.TableRewrite)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -314,7 +311,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 	return finalTbl, s, nil
 }
 
-func threeWayDiffer(ctx context.Context, tm *TableMerger, valueMerger *valueMerger) (*tree.ThreeWayDiffer[val.Tuple, val.TupleDesc], error) {
+func threeWayDiffer(ctx context.Context, tm *TableMerger, valueMerger *valueMerger, mergeInfo MergeInfo) (*tree.ThreeWayDiffer[val.Tuple, val.TupleDesc], error) {
 	lr, err := tm.leftTbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
@@ -337,7 +334,9 @@ func threeWayDiffer(ctx context.Context, tm *TableMerger, valueMerger *valueMerg
 		ctx,
 		leftRows.NodeStore(),
 		leftRows.Tuples(),
+		mergeInfo.LeftSchemaChange,
 		rightRows.Tuples(),
+		mergeInfo.RightSchemaChange,
 		ancRows.Tuples(),
 		valueMerger.tryMerge,
 		valueMerger.keyless,
