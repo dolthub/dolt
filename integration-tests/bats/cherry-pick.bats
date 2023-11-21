@@ -179,9 +179,10 @@ teardown() {
     dolt commit -am "add row 100 to other (on branch2)"
 
     # This ALTER TABLE statement modifies other rows that aren't included in the cherry-picked
-    # commit – row (100, 200, 300) is modified to (100, 300). This shows up as a conflict
+    # commit – row (100, 200, 300) is modified to (100, 400). This shows up as a conflict
     # in the cherry-pick (modified row on one side, row doesn't exist on the other side).
     dolt sql -q "ALTER TABLE other DROP COLUMN c1;"
+    dolt sql -q "UPDATE other SET c2 = 400 WHERE pk = 100"
     dolt sql -q "INSERT INTO other VALUES (10, 30);"
     dolt sql -q "INSERT INTO test VALUES (100, 'q');"
     dolt commit -am "alter table, add row 10 to other, add row 100 to test (on branch2)"
@@ -203,7 +204,7 @@ teardown() {
     run dolt conflicts cat .
     [ $status -eq 0 ]
     [[ $output =~ "|  -  | ours   | 100 | 200  | 300 |" ]] || false
-    [[ $output =~ "|  *  | theirs | 100 | NULL | 300 |" ]] || false
+    [[ $output =~ "|  *  | theirs | 100 | NULL | 400 |" ]] || false
 
     # Asert the data we expect is in the table
     run dolt sql -r csv -q "SELECT * from other;"
@@ -577,24 +578,14 @@ teardown() {
     dolt commit -am "alter table test drop column v"
 
     # Dropping column v on branch1 modifies all rows in the table, and those rows
-    # don't exist on main, so they are reported as conflicts – the rows were modified in
-    # the target commit, but they don't exist on the target root.
+    # don't exist on main, so they would be a conflict. However, cell-wise merging is able to resolve the conflict.
     dolt checkout main
     run dolt cherry-pick branch1
-    [ $status -eq 1 ]
-    run dolt conflicts cat .
     [ $status -eq 0 ]
-    [[ $output =~ '|     | base   | 1  | a    |' ]] || false
-    [[ $output =~ '|  -  | ours   | 1  | a    |' ]] || false
-    [[ $output =~ '|  *  | theirs | 1  | NULL |' ]] || false
 
-    # Resolve and assert that column v is dropped
-    dolt conflicts resolve --ours .
     run dolt sql -q "SHOW CREATE TABLE test;"
     [ $status -eq 0 ]
     [[ ! $output =~ '`v` varchar(10)' ]] || false
-
-    dolt commit -am "cherry-picked column drop"
 }
 
 @test "cherry-pick: commit with ALTER TABLE rename column" {

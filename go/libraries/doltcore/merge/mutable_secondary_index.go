@@ -71,6 +71,19 @@ func GetMutableSecondaryIdxsWithPending(ctx *sql.Context, sch schema.Schema, tab
 			return nil, err
 		}
 		m := durable.ProllyMapFromIndex(idx)
+
+		// If the schema has changed, don't reuse the index.
+		// TODO: This isn't technically required, but correctly handling updating secondary indexes when only some
+		// of the table's rows have been updated is difficult to get right.
+		// Dropping the index is potentially slower but guarenteed to be correct.
+		if !m.KeyDesc().Equals(index.Schema().GetKeyDescriptorWithNoConversion()) {
+			continue
+		}
+
+		if !m.ValDesc().Equals(index.Schema().GetValueDescriptor()) {
+			continue
+		}
+
 		if schema.IsKeyless(sch) {
 			m = prolly.ConvertToSecondaryKeylessIndex(m)
 		}
