@@ -388,6 +388,8 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 	compatChecker := newTypeCompatabilityCheckerForStorageFormat(format)
 
 	tableRewrite := false
+	ourSchemaChanged := false
+	theirSchemaChanged := false
 
 	// After we've checked for schema conflicts, merge the columns together
 	// TODO: We don't currently preserve all column position changes; the returned merged columns are always based on
@@ -402,18 +404,30 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 		case anc == nil && ours == nil && theirs != nil:
 			// if an ancestor does not exist, and the column exists only on one side, use that side
 			// (if an ancestor DOES exist, this means the column was deleted, so it's a no-op)
+			theirSchemaChanged = true
 			mergedColumns = append(mergedColumns, *theirs)
 		case anc == nil && ours != nil && theirs == nil:
 			// if an ancestor does not exist, and the column exists only on one side, use that side
 			// (if an ancestor DOES exist, this means the column was deleted, so it's a no-op)
+			ourSchemaChanged = true
 			mergedColumns = append(mergedColumns, *ours)
+		case anc != nil && ours == nil && theirs != nil:
+			// The column was dropped by ours
+			ourSchemaChanged = true
+		case anc != nil && ours != nil && theirs == nil:
+			// The column was dropped by theirs
+			theirSchemaChanged = true
 		case ours == nil && theirs == nil:
 			// if the column is deleted on both sides... just let it fall out
+			ourSchemaChanged = true
+			theirSchemaChanged = true
 		case ours != nil && theirs != nil:
 			// otherwise, we have two valid columns and we need to figure out which one to use
 			if anc != nil {
 				oursChanged := !anc.Equals(*ours)
+				ourSchemaChanged = ourSchemaChanged || oursChanged
 				theirsChanged := !anc.Equals(*theirs)
+				theirSchemaChanged = theirSchemaChanged || theirsChanged
 				if oursChanged && theirsChanged {
 					// If both columns changed in the same way, the modifications converge, so accept the column.
 					// If not, don't report a conflict, since this case is already handled in checkForColumnConflicts.
@@ -457,6 +471,9 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 					mergedColumns = append(mergedColumns, *ours)
 				}
 			} else {
+				// The column was added on both branches.
+				ourSchemaChanged = true
+				theirSchemaChanged = true
 				// If both columns changed in the same way, the modifications converge, so accept the column.
 				// If not, don't report a conflict, since this case is already handled in checkForColumnConflicts.
 				if ours.Equals(*theirs) {
