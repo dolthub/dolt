@@ -200,7 +200,7 @@ call dolt_commit('-am', 'add some vals');
     # No auth fetch
     run dolt fetch
     [[ "$status" != 0 ]] || false
-    [[ "$output" =~ "Unauthenticated" ]] || false
+    [[ "$output" =~ "Access denied for user 'root'" ]] || false
 
     # # With auth fetch
     run dolt fetch -u $DOLT_REMOTE_USER
@@ -224,7 +224,7 @@ call dolt_commit('-am', 'add one val');
     # No auth pull
     run dolt pull
     [[ "$status" != 0 ]] || false
-    [[ "$output" =~ "Unauthenticated" ]] || false
+    [[ "$output" =~ "Access denied for user 'root'" ]] || false
 
     # With auth pull
     run dolt pull -u $DOLT_REMOTE_USER
@@ -248,9 +248,10 @@ call dolt_commit('-am', 'add one val');
 
     run dolt sql -q "
 CREATE USER clone_admin_user@'localhost' IDENTIFIED BY 'pass1';
-GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'%';
+GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
 select user from mysql.user;
 "
+
     [ $status -eq 0 ]
     [[ $output =~ user0 ]] || false
     [[ $output =~ clone_admin_user ]] || false
@@ -277,7 +278,7 @@ call dolt_commit('-am', 'add some vals');"
     # No auth fetch
     run dolt fetch
     [[ "$status" != 0 ]] || false
-    [[ "$output" =~ "Unauthenticated" ]] || false
+    [[ "$output" =~ "Access denied for user 'root'" ]] || false
 
     # # With auth fetch
     run dolt fetch -u clone_admin_user
@@ -299,7 +300,7 @@ call dolt_commit('-am', 'add one val');"
     # No auth pull
     run dolt pull
     [[ "$status" != 0 ]] || false
-    [[ "$output" =~ "Unauthenticated" ]] || false
+    [[ "$output" =~ "Access denied for user 'root'" ]] || false
 
     # With auth pull
     run dolt pull -u clone_admin_user
@@ -326,7 +327,7 @@ call dolt_commit('-am', 'add one val');"
     cd ../
     run dolt clone http://localhost:50051/remote repo1
     [[ "$status" != 0 ]] || false
-    [[ "$output" =~ "Unauthenticated" ]] || false
+    [[ "$output" =~ "Access denied for user 'root'" ]] || false
 }
 
 @test "sql-server-remotesrv: dolt clone with incorrect authentication returns error" {
@@ -353,10 +354,10 @@ call dolt_commit('-am', 'add one val');"
     export DOLT_REMOTE_PASSWORD="wrong-password"
     run dolt clone http://localhost:50051/remote repo1 -u $DOLT_REMOTE_USER
     [[ "$status" != 0 ]] || false
-    [[ "$output" =~ "Unauthenticated" ]] || false
+    [[ "$output" =~ "Access denied for user 'user0'" ]] || false
 
     export DOLT_REMOTE_PASSWORD="pass0"
     run dolt clone http://localhost:50051/remote repo1 -u doesnt_exist
     [[ "$status" != 0 ]] || false
-    [[ "$output" =~ "Unauthenticated" ]] || false
+    [[ "$output" =~ "Access denied for user 'doesnt_exist'" ]] || false
 }
