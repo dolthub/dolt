@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	filesys2 "github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -281,7 +282,7 @@ func getPushTargetsAndRemoteFromNoArg(ctx context.Context, rsr RepoStateReader, 
 	}
 }
 
-func getPushTargetsAndRemoteForAllBranches(ctx context.Context, rsrBranches map[string]BranchConfig, currentBranch ref.DoltRef, remote *Remote, ddb *doltdb.DoltDB, force, setUpstream bool) ([]*PushTarget, *Remote, error) {
+func getPushTargetsAndRemoteForAllBranches(ctx context.Context, rsrBranches *concurrentmap.Map[string, BranchConfig], currentBranch ref.DoltRef, remote *Remote, ddb *doltdb.DoltDB, force, setUpstream bool) ([]*PushTarget, *Remote, error) {
 	localBranches, err := ddb.GetBranches(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -293,7 +294,7 @@ func getPushTargetsAndRemoteForAllBranches(ctx context.Context, rsrBranches map[
 	return getPushTargetsAndRemoteForBranchRefs(ctx, rsrBranches, lbNames, currentBranch, remote, ddb, force, setUpstream)
 }
 
-func getPushTargetsAndRemoteForBranchRefs(ctx context.Context, rsrBranches map[string]BranchConfig, localBranches []string, currentBranch ref.DoltRef, remote *Remote, ddb *doltdb.DoltDB, force, setUpstream bool) ([]*PushTarget, *Remote, error) {
+func getPushTargetsAndRemoteForBranchRefs(ctx context.Context, rsrBranches *concurrentmap.Map[string, BranchConfig], localBranches []string, currentBranch ref.DoltRef, remote *Remote, ddb *doltdb.DoltDB, force, setUpstream bool) ([]*PushTarget, *Remote, error) {
 	var pushOptsList []*PushTarget
 	for _, refSpecName := range localBranches {
 		refSpec, err := getRefSpecFromStr(ctx, ddb, refSpecName)
@@ -303,7 +304,7 @@ func getPushTargetsAndRemoteForBranchRefs(ctx context.Context, rsrBranches map[s
 
 		// if the remote of upstream does not match the remote given,
 		// it should push to the given remote creating new remote branch
-		upstream, hasUpstream := rsrBranches[refSpecName]
+		upstream, hasUpstream := rsrBranches.Get(refSpecName)
 		hasUpstream = hasUpstream && upstream.Remote == remote.Name
 
 		opts, err := getPushTargetFromRefSpec(refSpec, currentBranch, remote, force, setUpstream, hasUpstream)
@@ -354,7 +355,7 @@ func getPushTargetFromRefSpec(refSpec ref.RefSpec, currentBranch ref.DoltRef, re
 // If there is no remote specified, the current branch needs to have upstream set to push; otherwise, returns error.
 // This function returns |refSpec| for current branch, name of the remote the branch is associated with and
 // whether the current branch has upstream set.
-func getCurrentBranchRefSpec(ctx context.Context, branches map[string]BranchConfig, rsr RepoStateReader, ddb *doltdb.DoltDB, remoteName string, isDefaultRemote, remoteSpecified, setUpstream, pushAutoSetupRemote bool) (ref.RefSpec, string, bool, error) {
+func getCurrentBranchRefSpec(ctx context.Context, branches *concurrentmap.Map[string, BranchConfig], rsr RepoStateReader, ddb *doltdb.DoltDB, remoteName string, isDefaultRemote, remoteSpecified, setUpstream, pushAutoSetupRemote bool) (ref.RefSpec, string, bool, error) {
 	var refSpec ref.RefSpec
 	currentBranch, err := rsr.CWBHeadRef()
 	if err != nil {
@@ -362,7 +363,7 @@ func getCurrentBranchRefSpec(ctx context.Context, branches map[string]BranchConf
 	}
 
 	currentBranchName := currentBranch.GetPath()
-	upstream, hasUpstream := branches[currentBranchName]
+	upstream, hasUpstream := branches.Get(currentBranchName)
 
 	if remoteSpecified || pushAutoSetupRemote {
 		if isDefaultRemote && !pushAutoSetupRemote {
@@ -610,7 +611,7 @@ func NewPullSpec(
 			return nil, err
 		}
 
-		trackedBranch, hasUpstream := trackedBranches[branch.GetPath()]
+		trackedBranch, hasUpstream := trackedBranches.Get(branch.GetPath())
 		if !hasUpstream {
 			if remoteOnly {
 				return nil, fmt.Errorf(ErrPullWithRemoteNoUpstream.Error(), remoteName)

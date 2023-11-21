@@ -994,7 +994,7 @@ func (dEnv *DoltEnv) RemoveBackup(ctx context.Context, name string) error {
 	return nil
 }
 
-func (dEnv *DoltEnv) GetBranches() (map[string]BranchConfig, error) {
+func (dEnv *DoltEnv) GetBranches() (*concurrentmap.Map[string, BranchConfig], error) {
 	if dEnv.RSLoadErr != nil {
 		return nil, dEnv.RSLoadErr
 	}
@@ -1007,7 +1007,7 @@ func (dEnv *DoltEnv) UpdateBranch(name string, new BranchConfig) error {
 		return dEnv.RSLoadErr
 	}
 
-	dEnv.RepoState.Branches[name] = new
+	dEnv.RepoState.Branches.Set(name, new)
 
 	err := dEnv.RepoState.Save(dEnv.FS)
 	if err != nil {

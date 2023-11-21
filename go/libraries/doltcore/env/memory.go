@@ -216,8 +216,8 @@ func (m MemoryRepoState) AddRemote(r Remote) error {
 	return fmt.Errorf("cannot insert a remote in a memory database")
 }
 
-func (m MemoryRepoState) GetBranches() (map[string]BranchConfig, error) {
-	return make(map[string]BranchConfig), nil
+func (m MemoryRepoState) GetBranches() (*concurrentmap.Map[string, BranchConfig], error) {
+	return concurrentmap.New[string, BranchConfig](), nil
 }
 
 func (m MemoryRepoState) UpdateBranch(name string, new BranchConfig) error {

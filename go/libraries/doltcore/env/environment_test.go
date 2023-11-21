@@ -53,7 +53,7 @@ func createTestEnv(isInitialized bool, hasLocalConfig bool) (*DoltEnv, *filesys.
 		initialDirs = append(initialDirs, doltDataDir)
 
 		mainRef := ref.NewBranchRef(DefaultInitBranch)
-		repoState := &RepoState{Head: ref.MarshalableRef{Ref: mainRef}, Remotes: concurrentmap.New[string, Remote](), Backups: concurrentmap.New[string, Remote]()}
+		repoState := &RepoState{Head: ref.MarshalableRef{Ref: mainRef}, Remotes: concurrentmap.New[string, Remote](), Backups: concurrentmap.New[string, Remote](), Branches: concurrentmap.New[string, BranchConfig]()}
 		repoStateData, err := json.Marshal(repoState)
 
 		if err != nil {
