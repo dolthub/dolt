@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
@@ -31,7 +32,8 @@ import (
 type ReflogTableFunction struct {
 	ctx      *sql.Context
 	database sql.Database
-	refExpr  sql.Expression
+	refName  string
+	showAll  bool
 }
 
 var _ sql.TableFunction = (*ReflogTableFunction)(nil)
@@ -62,20 +64,6 @@ func (rltf *ReflogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 	sqlDb, ok := rltf.database.(dsess.SqlDatabase)
 	if !ok {
 		return nil, fmt.Errorf("unexpected database type: %T", rltf.database)
-	}
-
-	var refName string
-	if rltf.refExpr != nil {
-		target, err := rltf.refExpr.Eval(ctx, row)
-		if err != nil {
-			return nil, fmt.Errorf("error evaluating expression (%s): %s",
-				rltf.refExpr.String(), err.Error())
-		}
-
-		refName, ok = target.(string)
-		if !ok {
-			return nil, fmt.Errorf("argument (%v) is not a string value, but a %T", target, target)
-		}
 	}
 
 	ddb := sqlDb.DbData().Ddb
@@ -109,17 +97,23 @@ func (rltf *ReflogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 			if doltRef.GetType() == ref.InternalRefType {
 				return nil
 			}
+			// skip workspace refs by default
+			if doltRef.GetType() == ref.WorkspaceRefType {
+				if !rltf.showAll {
+					return nil
+				}
+			}
 
 			// If a ref expression to filter on was specified, see if we match the current ref
-			if rltf.refExpr != nil {
+			if rltf.refName != "" {
 				// If the caller has supplied a branch or tag name, without the fully qualified ref path,
 				// take the first match and use that as the canonical ref to filter on
-				if strings.HasSuffix(strings.ToLower(id), "/"+strings.ToLower(refName)) {
-					refName = id
+				if strings.HasSuffix(strings.ToLower(id), "/"+strings.ToLower(rltf.refName)) {
+					rltf.refName = id
 				}
 
 				// Skip refs that don't match the target we're looking for
-				if strings.ToLower(id) != strings.ToLower(refName) {
+				if strings.ToLower(id) != strings.ToLower(rltf.refName) {
 					return nil
 				}
 			}
@@ -172,14 +166,11 @@ func (rltf *ReflogTableFunction) Schema() sql.Schema {
 }
 
 func (rltf *ReflogTableFunction) Resolved() bool {
-	if rltf.refExpr != nil {
-		return rltf.refExpr.Resolved()
-	}
 	return true
 }
 
 func (rltf *ReflogTableFunction) String() string {
-	return fmt.Sprintf("DOLT_REFLOG(%s)", rltf.refExpr.String())
+	return fmt.Sprintf("DOLT_REFLOG(%s)", rltf.refName)
 }
 
 func (rltf *ReflogTableFunction) Children() []sql.Node {
@@ -204,20 +195,25 @@ func (rltf *ReflogTableFunction) IsReadOnly() bool {
 }
 
 func (rltf *ReflogTableFunction) Expressions() []sql.Expression {
-	if rltf.refExpr != nil {
-		return []sql.Expression{rltf.refExpr}
-	}
 	return []sql.Expression{}
 }
 
 func (rltf *ReflogTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
-	if len(expression) > 1 {
-		return nil, sql.ErrInvalidArgumentNumber.New(rltf.Name(), "0 or 1", len(expression))
+	if len(expression) > 2 {
+		return nil, sql.ErrInvalidArgumentNumber.New(rltf.Name(), "0 to 2", len(expression))
 	}
 
 	new := *rltf
-	if len(expression) > 0 {
-		new.refExpr = expression[0]
+	args, err := getDoltArgs(rltf.ctx, expression, rltf.Name())
+	if err != nil {
+		return nil, err
+	}
+	apr, err := cli.CreateReflogArgParser().Parse(args)
+	if apr.NArg() > 0 {
+		new.refName = apr.Arg(0)
+	}
+	if apr.Contains(cli.AllFlag) {
+		new.showAll = true
 	}
 	return &new, nil
 }

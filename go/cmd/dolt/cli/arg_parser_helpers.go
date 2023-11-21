@@ -282,6 +282,7 @@ func CreateCountCommitsArgParser() *argparser.ArgParser {
 
 func CreateReflogArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("reflog", 1)
+	ap.SupportsFlag(AllFlag, "", "Show all refs")
 	return ap
 }
 

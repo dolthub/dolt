@@ -107,12 +107,26 @@ func (cmd ReflogCmd) Exec(ctx context.Context, commandStr string, args []string,
 func constructInterpolatedDoltReflogQuery(apr *argparser.ArgParseResults) (string, error) {
 	var params []interface{}
 	refPlaceholder := ""
+	allFlag := ""
+
 	if apr.NArg() == 1 {
 		params = append(params, apr.Arg(0))
 		refPlaceholder = "?"
 	}
+	if apr.Contains(cli.AllFlag) {
+		allFlag = "'--all'"
+	}
 
-	query := strings.Join([]string{"SELECT ref, commit_hash, commit_message FROM DOLT_REFLOG(", refPlaceholder, ")"}, "")
+	args := ""
+	if refPlaceholder == "" && allFlag != "" {
+		args = allFlag
+	} else if refPlaceholder != "" && allFlag == "" {
+		args = refPlaceholder
+	} else if refPlaceholder != "" && allFlag != "" {
+		args = strings.Join([]string{refPlaceholder, allFlag}, ", ")
+	}
+
+	query := strings.Join([]string{"SELECT ref, commit_hash, commit_message FROM DOLT_REFLOG(", args, ")"}, "")
 	interpolatedQuery, err := dbr.InterpolateForDialect(query, params, dialect.MySQL)
 	if err != nil {
 		return "", err
@@ -183,6 +197,8 @@ func processRefForReflog(fullRef string, curBranch string) string {
 		return fmt.Sprintf("\033[33mtag: %s\033[0m", strings.TrimPrefix(fullRef, "refs/tags/")) // tag in yellow (33m)
 	} else if strings.HasPrefix(fullRef, "refs/remotes/") {
 		return fmt.Sprintf("\033[31;1m%s\033[0m", strings.TrimPrefix(fullRef, "refs/remotes/")) // remote in red (31;1m)
+	} else if strings.HasPrefix(fullRef, "refs/workspaces/") {
+		return fmt.Sprintf("\033[35;1mworkspace: %s\033[0m", strings.TrimPrefix(fullRef, "refs/workspaces/")) // workspace in magenta (35;1m)
 	} else {
 		return fullRef
 	}
