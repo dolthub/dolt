@@ -254,7 +254,6 @@ var columnAddDropTests = []schemaMergeTest{
 				left:         singleRow(1, 2),
 				right:        singleRow(1, 3, nil),
 				dataConflict: true,
-				skip:         true,
 			},
 			{
 				// Skipped because the differ doesn't see left as modified because
@@ -265,7 +264,6 @@ var columnAddDropTests = []schemaMergeTest{
 				left:         singleRow(1, 2),
 				right:        singleRow(1, 2, 3),
 				dataConflict: true,
-				skip:         true,
 			},
 			{
 				name:         "one side sets to non-NULL, other drops NULL, plus data change",
@@ -383,7 +381,6 @@ var columnAddDropTests = []schemaMergeTest{
 				left:         singleRow(1, 2, nil),
 				right:        singleRow(1, 2, 3),
 				dataConflict: true,
-				skip:         true,
 			},
 			{
 				name:         "convergent adds with differing nullness, plus convergent data change",
