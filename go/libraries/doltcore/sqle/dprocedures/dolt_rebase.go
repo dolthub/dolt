@@ -172,12 +172,6 @@ func startRebase(ctx *sql.Context, upstreamPoint string) error {
 		return err
 	}
 
-	// TODO: What's the right way to create the dolt_reset system table... seems like we want it to be a real table, but
-	//       we don't want to allow it to be checked in and committed, right?
-	//       If it were a traditional, read-only system table, we'd probably regenerate it each time it was queried, which
-	//       isn't the behavior we want. We want it generated once and then let the customer change it. Once we start
-	//       executing the rebase plan, we CANNOT allow it to be changed though.
-
 	dbData, ok = doltSession.GetDbData(ctx, ctx.GetCurrentDatabase())
 	if !ok {
 		panic("database not okay!")

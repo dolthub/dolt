@@ -104,6 +104,11 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				ExpectedErrStr: "no rebase in progress",
 			},
 			{
+				// The dolt_rebase table is gone after rebasing completes
+				Query:          "select * from dolt_rebase;",
+				ExpectedErrStr: "table not found: dolt_rebase",
+			},
+			{
 				// Assert that the commit history is now composed of different commits
 				Query: "select message from dolt_log order by date desc;",
 				Expected: []sql.Row{
