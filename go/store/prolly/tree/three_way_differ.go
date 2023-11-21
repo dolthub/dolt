@@ -228,7 +228,7 @@ const (
 	DiffOpDivergentModifyResolved               //divergentModifyResolved
 	DiffOpDivergentDeleteConflict               //divergentDeleteConflict
 	DiffOpDivergentModifyConflict               //divergentModifyConflict
-	DiffOpDivergentDeleteResolved
+	DiffOpDivergentDeleteResolved               //divergentDeleteConflict
 )
 
 // ThreeWayDiff is a generic object for encoding a three way diff.

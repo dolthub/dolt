@@ -1696,6 +1696,36 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "resolving a deleted and modified row handles constraint checks",
+		SetUpScript: []string{
+			"create table test(a int primary key, b int, c int );",
+			"alter table test add check (b < 4);",
+			"insert into test values (1, 2, 3);",
+			"call dolt_add('test');",
+			"call dolt_commit('-m', 'create test table');",
+
+			"call dolt_checkout('-b', 'other');",
+			"alter table test drop column c;",
+			"call dolt_add('test');",
+			"call dolt_commit('-m', 'drop column');",
+
+			"call dolt_checkout('main');",
+			"delete from test;",
+			"call dolt_add('test');",
+			"call dolt_commit('-m', 'remove row');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query:    "select * from test",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
 		Name: "Pk convergent updates to sec diff congruent",
 		SetUpScript: []string{
 			"create table xyz (x int primary key, y int, z int, key y_idx(y), key z_idx(z))",

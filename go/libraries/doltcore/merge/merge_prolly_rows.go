@@ -396,7 +396,7 @@ func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) 
 	var valueTuple val.Tuple
 	var valueDesc val.TupleDesc
 	switch diff.Op {
-	case tree.DiffOpLeftDelete, tree.DiffOpRightDelete, tree.DiffOpConvergentDelete:
+	case tree.DiffOpLeftDelete, tree.DiffOpRightDelete, tree.DiffOpConvergentDelete, tree.DiffOpDivergentDeleteResolved:
 		// no need to validate check constraints for deletes
 		return 0, nil
 	case tree.DiffOpDivergentDeleteConflict, tree.DiffOpDivergentModifyConflict:
@@ -1621,89 +1621,6 @@ func findNonPKColumnMappingByTagOrName(sch schema.Schema, col schema.Column) int
 	} else {
 		return findNonPKColumnMappingByName(sch, col.Name)
 	}
-}
-
-// migrateDataToMergedSchema migrates the data from the left side of the merge of a table to the merged schema. This
-// currently only includes updating the primary index. This is necessary when a schema change is
-// being applied, so that when the new schema is used to pull out data from the table, it will be in the right order.
-func migrateDataToMergedSchema(ctx *sql.Context, tm *TableMerger, vm *valueMerger, mergedSch schema.Schema) error {
-	lr, err := tm.leftTbl.GetRowData(ctx)
-	if err != nil {
-		return err
-	}
-	leftRows := durable.ProllyMapFromIndex(lr)
-	mut := leftRows.Rewriter(mergedSch.GetKeyDescriptor(), mergedSch.GetValueDescriptor())
-	mapIter, err := mut.IterAll(ctx)
-	if err != nil {
-		return err
-	}
-
-	leftSch, err := tm.leftTbl.GetSchema(ctx)
-	if err != nil {
-		return err
-	}
-	valueDescriptor := leftSch.GetValueDescriptor()
-
-	defaults, err := resolveDefaults(ctx, tm.name, mergedSch, tm.leftSch)
-	if err != nil {
-		return err
-	}
-
-	for {
-		keyTuple, valueTuple, err := mapIter.Next(ctx)
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return err
-		}
-
-		newValueTuple, err := remapTupleWithColumnDefaults(
-			ctx,
-			keyTuple,
-			valueTuple,
-			valueDescriptor,
-			vm.leftMapping,
-			tm,
-			tm.leftSch,
-			mergedSch,
-			defaults,
-			vm.syncPool,
-			false,
-		)
-		if err != nil {
-			return err
-		}
-
-		err = mut.Put(ctx, keyTuple, newValueTuple)
-		if err != nil {
-			return err
-		}
-	}
-
-	m, err := mut.Map(ctx)
-	if err != nil {
-		return err
-	}
-
-	newIndex := durable.IndexFromProllyMap(m)
-	newTable, err := tm.leftTbl.UpdateRows(ctx, newIndex)
-	if err != nil {
-		return err
-	}
-	tm.leftTbl = newTable
-
-	// NOTE: We don't handle migrating secondary index data to the new schema here. In most cases, a schema change
-	//       won't affect secondary index data, but there are a few cases where we do rebuild the indexes. Dropping
-	//       a column *should* keep the index, but remove that column from it and rebuild it, but Dolt/GMS currently
-	//       drop the index completely if a used column is removed.
-	//       https://github.com/dolthub/dolt/issues/5641
-	//
-	//       Most of the currently supported type changes for a schema merge don't require rebuilding secondary
-	//       indexes either. The exception is converting a column to BINARY, which requires us to rewrite the data
-	//       and ensure it's right-padded with null bytes, up to the column length. This is handled at the end of
-	//       the table merge. If we detect that the table rows needed to be rewritten, then we'll rebuild all indexes
-	//       on the table, just to be safe.
-	return nil
 }
 
 // tryMerge performs a cell-wise merge given left, right, and base cell value
