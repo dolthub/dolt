@@ -211,10 +211,7 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 		return nil, "", err
 	}
 	if !wsOnlyHasIgnoredTables {
-		// TODO: disabling this temporarily for hacking squash rebase support together
-		//       If we extracted the cherry-pick logic to an action, we could have additional arguments that let us
-		//        control this behavior (or this could even be in just the stored procedure code)
-		//	return nil, "", ErrCherryPickUncommittedChanges
+		return nil, "", ErrCherryPickUncommittedChanges
 	}
 
 	headRootHash, err := roots.Head.HashOf()
