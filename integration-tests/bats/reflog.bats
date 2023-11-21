@@ -217,7 +217,7 @@ SQL
 @test "reflog: too many arguments given" {
     run dolt reflog foo bar
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: reflog has too many positional arguments" ]]
+    [[ "$output" =~ "error: reflog has too many positional arguments" ]] || false
 }
 
 @test "reflog: unknown ref returns nothing" {
