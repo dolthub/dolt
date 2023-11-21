@@ -42,7 +42,8 @@ func DiffOrderedTrees[K, V ~[]byte, O Ordering[K]](
 	from, to StaticMap[K, V, O],
 	cb DiffFn,
 ) error {
-	differ, err := DifferFromRoots[K](ctx, from.NodeStore, to.NodeStore, from.Root, to.Root, from.Order)
+	// TODO: If the schema has changed, do we want every row to be considered changed?
+	differ, err := DifferFromRoots[K](ctx, from.NodeStore, to.NodeStore, from.Root, to.Root, from.Order, false)
 	if err != nil {
 		return err
 	}

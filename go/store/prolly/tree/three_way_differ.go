@@ -48,12 +48,13 @@ func NewThreeWayDiffer[K, V ~[]byte, O Ordering[K]](
 	keyless bool,
 	order O,
 ) (*ThreeWayDiffer[K, O], error) {
-	ld, err := DifferFromRoots[K](ctx, ns, ns, base.Root, left.Root, order)
+	// probably compute each of these separately
+	ld, err := DifferFromRoots[K](ctx, ns, ns, base.Root, left.Root, order, false)
 	if err != nil {
 		return nil, err
 	}
 
-	rd, err := DifferFromRoots[K](ctx, ns, ns, base.Root, right.Root, order)
+	rd, err := DifferFromRoots[K](ctx, ns, ns, base.Root, right.Root, order, false)
 	if err != nil {
 		return nil, err
 	}

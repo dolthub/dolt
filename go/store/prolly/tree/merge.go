@@ -51,12 +51,14 @@ func ThreeWayMerge[K ~[]byte, O Ordering[K], S message.Serializer](
 	serializer S,
 ) (final Node, stats MergeStats, err error) {
 
-	ld, err := DifferFromRoots[K](ctx, ns, ns, base, left, order)
+	// TODO: This function is only ever called to merge artifacts. Is is possible for the tuple desc to change here?
+	// If it does, do we want every row to appear in the diff?
+	ld, err := DifferFromRoots[K](ctx, ns, ns, base, left, order, false)
 	if err != nil {
 		return Node{}, MergeStats{}, err
 	}
 
-	rd, err := DifferFromRoots[K](ctx, ns, ns, base, right, order)
+	rd, err := DifferFromRoots[K](ctx, ns, ns, base, right, order, false)
 	if err != nil {
 		return Node{}, MergeStats{}, err
 	}
