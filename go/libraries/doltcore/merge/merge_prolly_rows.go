@@ -106,9 +106,11 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 // to the right-side, we apply it to the left-side by merging it into the left-side's primary index
 // as well as any secondary indexes, and also checking for unique constraints incrementally. When
 // conflicts are detected, this function attempts to resolve them automatically if possible, and
-// if not, they are recorded as conflicts in the table's artifacts. If |rebuildIndexes| is set to
-// true, then secondary indexes will be rebuilt, instead of being incrementally merged together. This
-// is less efficient, but safer, especially when type changes have been applied to a table's schema.
+// if not, they are recorded as conflicts in the table's artifacts. If |rebuildPrimaryIndex| is set to
+// true, then every row in the primary index will be recomputed. This is usually because the right side
+// introduced a schema change. If |rebuildSecondaryIndexes| is true, then the seconary indexes will be
+// rebuilt instead of being incrementally merged together. This is less efficient, but safer, especially
+// when type changes have been applied to a table's schema.
 func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Schema, mergeTbl *doltdb.Table, valueMerger *valueMerger, rebuildPrimaryIndex, rebuildSecondaryIndexes bool) (*doltdb.Table, *MergeStats, error) {
 	iter, err := threeWayDiffer(ctx, tm, valueMerger)
 	if err != nil {
@@ -194,8 +196,6 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 			// In the event that the right side introduced a schema change, account for it here.
 			// We still have to migrate when the diff is `tree.DiffOpLeftModify` because of the corner case where
 			// the right side contains a schema change but the changed column is null, so row bytes don't change.
-			// TODO: If this slows down merges with no schema change, we could precompute whether there's a schema change
-			// and avoid this path.
 			if rebuildPrimaryIndex {
 				err = pri.merge(ctx, diff, tm.leftSch)
 				if err != nil {
