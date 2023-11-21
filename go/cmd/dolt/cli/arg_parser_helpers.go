@@ -280,6 +280,11 @@ func CreateCountCommitsArgParser() *argparser.ArgParser {
 	return ap
 }
 
+func CreateReflogArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParserWithMaxArgs("reflog", 1)
+	return ap
+}
+
 func CreateGlobalArgParser(name string) *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs(name)
 	if name == "dolt" {

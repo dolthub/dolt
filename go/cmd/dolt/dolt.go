@@ -123,6 +123,7 @@ var doltSubCommands = []cli.Command{
 	&commands.Assist{},
 	commands.ProfileCmd{},
 	commands.QueryDiff{},
+	commands.ReflogCmd{},
 }
 
 var commandsWithoutCliCtx = []cli.Command{
