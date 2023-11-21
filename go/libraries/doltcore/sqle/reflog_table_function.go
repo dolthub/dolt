@@ -209,6 +209,9 @@ func (rltf *ReflogTableFunction) WithExpressions(expression ...sql.Expression) (
 		return nil, err
 	}
 	apr, err := cli.CreateReflogArgParser().Parse(args)
+	if err != nil {
+		return nil, err
+	}
 	if apr.NArg() > 0 {
 		new.refName = apr.Arg(0)
 	}

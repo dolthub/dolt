@@ -4317,15 +4317,15 @@ var DoltReflogTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "select * from dolt_reflog('foo', 'bar');",
-				ExpectedErrStr: "function 'dolt_reflog' expected 0 or 1 arguments, 2 received",
+				ExpectedErrStr: "error: reflog has too many positional arguments. Expected at most 1, found 2: foo, bar",
 			},
 			{
 				Query:          "select * from dolt_reflog(NULL);",
-				ExpectedErrStr: "argument (<nil>) is not a string value, but a <nil>",
+				ExpectedErrStr: "Invalid argument to dolt_reflog: NULL",
 			},
 			{
 				Query:          "select * from dolt_reflog(-100);",
-				ExpectedErrStr: "argument (-100) is not a string value, but a int8",
+				ExpectedErrStr: "Invalid argument to dolt_reflog: -100",
 			},
 		},
 	},
