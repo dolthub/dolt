@@ -47,11 +47,11 @@ var ErrUnableToMergeColumnDefaultValue = errorkinds.NewKind("unable to automatic
 	"in merge: %s for table '%s'; to continue merging, first manually apply the column alteration on this branch")
 
 // mergeProllyTable merges the table specified by |tm| using the specified |mergedSch| and returns the new table
-// instance, along with merge stats and any error. If |rewriteRows| is true, then any existing rows in the
+// instance, along with merge stats and any error. If |diffInfo.RewriteRows| is true, then any existing rows in the
 // table's primary index will also be rewritten. This function merges the table's artifacts (e.g. recorded
 // conflicts), migrates any existing table data to the specified |mergedSch|, and merges table data from both
 // sides of the merge together.
-func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Schema, diffInfo tree.ThreeWayDiffInfo) (*doltdb.Table, *MergeStats, error) {
+func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Schema, diffInfo tree.ThreeWayDiffInfo, rebuildIndexes bool) (*doltdb.Table, *MergeStats, error) {
 	mergeTbl, err := mergeTableArtifacts(ctx, tm, tm.leftTbl)
 	if err != nil {
 		return nil, nil, err
@@ -76,11 +76,8 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 		sqlCtx = sql.NewContext(ctx)
 	}
 
-	schemasDifferentSize := len(tm.leftSch.GetAllCols().GetColumns()) != len(mergedSch.GetAllCols().GetColumns())
-	rebuildPrimaryIndex := diffInfo.TableRewrite || schemasDifferentSize || !valueMerger.leftMapping.IsIdentityMapping()
-
 	var stats *MergeStats
-	mergeTbl, stats, err = mergeProllyTableData(sqlCtx, tm, mergedSch, mergeTbl, valueMerger, diffInfo, rebuildPrimaryIndex)
+	mergeTbl, stats, err = mergeProllyTableData(sqlCtx, tm, mergedSch, mergeTbl, valueMerger, diffInfo, rebuildIndexes)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -106,9 +103,17 @@ func mergeProllyTable(ctx context.Context, tm *TableMerger, mergedSch schema.Sch
 // as well as any secondary indexes, and also checking for unique constraints incrementally. When
 // conflicts are detected, this function attempts to resolve them automatically if possible, and
 // if not, they are recorded as conflicts in the table's artifacts. If |rebuildIndexes| is set to
-// true, then secondary indexes will be rebuilt, instead of being incrementally merged together. This
+// true, then the table indexes will be rebuilt instead of being incrementally merged together. This
 // is less efficient, but safer, especially when type changes have been applied to a table's schema.
-func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Schema, mergeTbl *doltdb.Table, valueMerger *valueMerger, diffInfo tree.ThreeWayDiffInfo, rebuildPrimaryIndex bool) (*doltdb.Table, *MergeStats, error) {
+func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Schema, mergeTbl *doltdb.Table, valueMerger *valueMerger, diffInfo tree.ThreeWayDiffInfo, rebuildIndexes bool) (*doltdb.Table, *MergeStats, error) {
+
+	schemasDifferentSize := len(tm.leftSch.GetAllCols().GetColumns()) != len(finalSch.GetAllCols().GetColumns())
+
+	// If columns were dropped, added, or reordered by the merge, we must rebuild the primary index,
+	// but the secondary indexes are unaffected.
+	rebuildPrimaryIndex := rebuildIndexes || schemasDifferentSize || !valueMerger.leftMapping.IsIdentityMapping()
+	rebuildSecondaryIndexes := rebuildIndexes
+
 	iter, err := threeWayDiffer(ctx, tm, valueMerger, diffInfo)
 	if err != nil {
 		return nil, nil, err
@@ -285,7 +290,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		return nil, nil, err
 	}
 
-	finalIdxs, err := mergeProllySecondaryIndexes(ctx, tm, leftIdxs, rightIdxs, finalSch, finalRows, conflicts.ae, diffInfo.TableRewrite)
+	finalIdxs, err := mergeProllySecondaryIndexes(ctx, tm, leftIdxs, rightIdxs, finalSch, finalRows, conflicts.ae, rebuildSecondaryIndexes)
 	if err != nil {
 		return nil, nil, err
 	}
