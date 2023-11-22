@@ -41,26 +41,31 @@ type ThreeWayDiffer[K ~[]byte, O Ordering[K]] struct {
 
 type resolveCb func(context.Context, val.Tuple, val.Tuple, val.Tuple) (val.Tuple, bool, error)
 
+type ThreeWayDiffInfo struct {
+	TableRewrite              bool
+	LeftSchemaChange          bool
+	RightSchemaChange         bool
+	LeftAndRightSchemasDiffer bool
+}
+
 func NewThreeWayDiffer[K, V ~[]byte, O Ordering[K]](
 	ctx context.Context,
 	ns NodeStore,
 	left StaticMap[K, V, O],
-	leftSchemaChanged bool,
 	right StaticMap[K, V, O],
-	rightSchemaChanged bool,
 	base StaticMap[K, V, O],
 	resolveCb resolveCb,
 	keyless bool,
-	leftAndRightSchemasDiffer bool,
+	diffInfo ThreeWayDiffInfo,
 	order O,
 ) (*ThreeWayDiffer[K, O], error) {
 	// probably compute each of these separately
-	ld, err := DifferFromRoots[K](ctx, ns, ns, base.Root, left.Root, order, leftSchemaChanged)
+	ld, err := DifferFromRoots[K](ctx, ns, ns, base.Root, left.Root, order, diffInfo.LeftSchemaChange)
 	if err != nil {
 		return nil, err
 	}
 
-	rd, err := DifferFromRoots[K](ctx, ns, ns, base.Root, right.Root, order, rightSchemaChanged)
+	rd, err := DifferFromRoots[K](ctx, ns, ns, base.Root, right.Root, order, diffInfo.RightSchemaChange)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +75,7 @@ func NewThreeWayDiffer[K, V ~[]byte, O Ordering[K]](
 		rIter:                     rd,
 		resolveCb:                 resolveCb,
 		keyless:                   keyless,
-		leftAndRightSchemasDiffer: leftAndRightSchemasDiffer,
+		leftAndRightSchemasDiffer: diffInfo.LeftAndRightSchemasDiffer,
 	}, nil
 }
 
