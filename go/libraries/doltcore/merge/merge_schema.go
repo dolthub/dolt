@@ -153,9 +153,10 @@ func (c ChkConflict) String() string {
 var ErrMergeWithDifferentPks = errors.New("error: cannot merge two tables with different primary keys")
 
 type MergeInfo struct {
-	TableRewrite      bool
-	LeftSchemaChange  bool
-	RightSchemaChange bool
+	TableRewrite              bool
+	LeftSchemaChange          bool
+	RightSchemaChange         bool
+	LeftAndRightSchemasDiffer bool
 }
 
 // SchemaMerge performs a three-way merge of |ourSch|, |theirSch|, and |ancSch|, and returns: the merged schema,
@@ -396,6 +397,7 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 	tableRewrite := false
 	ourSchemaChanged := false
 	theirSchemaChanged := false
+	leftAndRightSchemasDiffer := false
 
 	// After we've checked for schema conflicts, merge the columns together
 	// TODO: We don't currently preserve all column position changes; the returned merged columns are always based on
@@ -411,18 +413,22 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 			// if an ancestor does not exist, and the column exists only on one side, use that side
 			// (if an ancestor DOES exist, this means the column was deleted, so it's a no-op)
 			theirSchemaChanged = true
+			leftAndRightSchemasDiffer = true
 			mergedColumns = append(mergedColumns, *theirs)
 		case anc == nil && ours != nil && theirs == nil:
 			// if an ancestor does not exist, and the column exists only on one side, use that side
 			// (if an ancestor DOES exist, this means the column was deleted, so it's a no-op)
 			ourSchemaChanged = true
+			leftAndRightSchemasDiffer = true
 			mergedColumns = append(mergedColumns, *ours)
 		case anc != nil && ours == nil && theirs != nil:
 			// The column was dropped by ours
 			ourSchemaChanged = true
+			leftAndRightSchemasDiffer = true
 		case anc != nil && ours != nil && theirs == nil:
 			// The column was dropped by theirs
 			theirSchemaChanged = true
+			leftAndRightSchemasDiffer = true
 		case ours == nil && theirs == nil:
 			// if the column is deleted on both sides... just let it fall out
 			ourSchemaChanged = true
@@ -439,8 +445,11 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 					// If not, don't report a conflict, since this case is already handled in checkForColumnConflicts.
 					if ours.Equals(*theirs) {
 						mergedColumns = append(mergedColumns, *theirs)
+					} else {
+						leftAndRightSchemasDiffer = true
 					}
 				} else if theirsChanged {
+					leftAndRightSchemasDiffer = true
 					// In this case, only theirsChanged, so we need to check if moving from ours->theirs
 					// is valid, otherwise it's a conflict
 					compatible, rewrite := compatChecker.IsTypeChangeCompatible(ours.TypeInfo, theirs.TypeInfo)
@@ -457,6 +466,7 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 						})
 					}
 				} else if oursChanged {
+					leftAndRightSchemasDiffer = true
 					// In this case, only oursChanged, so we need to check if moving from theirs->ours
 					// is valid, otherwise it's a conflict
 					compatible, rewrite := compatChecker.IsTypeChangeCompatible(theirs.TypeInfo, ours.TypeInfo)
@@ -484,6 +494,8 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 				// If not, don't report a conflict, since this case is already handled in checkForColumnConflicts.
 				if ours.Equals(*theirs) {
 					mergedColumns = append(mergedColumns, *ours)
+				} else {
+					leftAndRightSchemasDiffer = true
 				}
 			}
 		}
@@ -496,9 +508,10 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 	}
 
 	mergeInfo := MergeInfo{
-		TableRewrite:      tableRewrite,
-		LeftSchemaChange:  ourSchemaChanged,
-		RightSchemaChange: theirSchemaChanged,
+		TableRewrite:              tableRewrite,
+		LeftSchemaChange:          ourSchemaChanged,
+		RightSchemaChange:         theirSchemaChanged,
+		LeftAndRightSchemasDiffer: leftAndRightSchemasDiffer,
 	}
 	return schema.NewColCollection(mergedColumns...), nil, mergeInfo, nil
 }

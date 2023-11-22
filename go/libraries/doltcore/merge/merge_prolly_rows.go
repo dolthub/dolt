@@ -340,6 +340,7 @@ func threeWayDiffer(ctx context.Context, tm *TableMerger, valueMerger *valueMerg
 		ancRows.Tuples(),
 		valueMerger.tryMerge,
 		valueMerger.keyless,
+		mergeInfo.LeftAndRightSchemasDiffer,
 		leftRows.Tuples().Order,
 	)
 }

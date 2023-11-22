@@ -236,9 +236,6 @@ var columnAddDropTests = []schemaMergeTest{
 				merged:   singleRow(1, 2),
 			},
 			{
-				// Skipped because the differ currently doesn't see this as a data conflict because
-				// both left and right tuple representations are the same.
-				// (https://github.com/dolthub/dolt/issues/6748)
 				name:         "one side sets to NULL, other drops non-NULL",
 				ancestor:     singleRow(1, 2, 3),
 				left:         singleRow(1, 2),
@@ -247,8 +244,6 @@ var columnAddDropTests = []schemaMergeTest{
 				skip:         true,
 			},
 			{
-				// Skipped because the differ currently doesn't try to merge the dropped column.
-				// (https://github.com/dolthub/dolt/issues/6747)
 				name:         "one side sets to NULL, other drops non-NULL, plus data change",
 				ancestor:     singleRow(1, 2, 3),
 				left:         singleRow(1, 2),
@@ -256,9 +251,6 @@ var columnAddDropTests = []schemaMergeTest{
 				dataConflict: true,
 			},
 			{
-				// Skipped because the differ doesn't see left as modified because
-				// it has the same tuple representation as ancestor.
-				// (https://github.com/dolthub/dolt/issues/6746)
 				name:         "one side sets to non-NULL, other drops NULL",
 				ancestor:     singleRow(1, 2, nil),
 				left:         singleRow(1, 2),
@@ -373,9 +365,6 @@ var columnAddDropTests = []schemaMergeTest{
 				merged:   singleRow(1, 2, nil),
 			},
 			{
-				// Skipped because the differ doesn't see left as modified because
-				// it has the same tuple representation as ancestor.
-				// (https://github.com/dolthub/dolt/issues/6746)
 				name:         "convergent adds with differing nullness",
 				ancestor:     singleRow(1, 2),
 				left:         singleRow(1, 2, nil),

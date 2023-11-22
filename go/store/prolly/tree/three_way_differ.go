@@ -27,13 +27,14 @@ import (
 // ThreeWayDiffer is an iterator that gives an increased level of granularity
 // of diffs between three root values. See diffOp for the classes of diffs.
 type ThreeWayDiffer[K ~[]byte, O Ordering[K]] struct {
-	lIter, rIter Differ[K, O]
-	resolveCb    resolveCb
-	lDiff        Diff
-	rDiff        Diff
-	lDone        bool
-	rDone        bool
-	keyless      bool
+	lIter, rIter              Differ[K, O]
+	resolveCb                 resolveCb
+	lDiff                     Diff
+	rDiff                     Diff
+	lDone                     bool
+	rDone                     bool
+	keyless                   bool
+	leftAndRightSchemasDiffer bool
 }
 
 //var _ DiffIter = (*threeWayDiffer[Item, val.TupleDesc])(nil)
@@ -50,6 +51,7 @@ func NewThreeWayDiffer[K, V ~[]byte, O Ordering[K]](
 	base StaticMap[K, V, O],
 	resolveCb resolveCb,
 	keyless bool,
+	leftAndRightSchemasDiffer bool,
 	order O,
 ) (*ThreeWayDiffer[K, O], error) {
 	// probably compute each of these separately
@@ -64,10 +66,11 @@ func NewThreeWayDiffer[K, V ~[]byte, O Ordering[K]](
 	}
 
 	return &ThreeWayDiffer[K, O]{
-		lIter:     ld,
-		rIter:     rd,
-		resolveCb: resolveCb,
-		keyless:   keyless,
+		lIter:                     ld,
+		rIter:                     rd,
+		resolveCb:                 resolveCb,
+		keyless:                   keyless,
+		leftAndRightSchemasDiffer: leftAndRightSchemasDiffer,
 	}, nil
 }
 
