@@ -1562,7 +1562,7 @@ func newValueMerger(merged, leftSch, rightSch, baseSch schema.Schema, syncPool p
 	baseToLeftMapping, baseToRightMapping, baseToResultMapping := generateSchemaMappings(baseSch, leftSch, rightSch, merged)
 
 	return &valueMerger{
-		numCols:             merged.GetNonPKCols().Size(),
+		numCols:             merged.GetNonPKCols().StoredSize(),
 		baseVD:              baseSch.GetValueDescriptor(),
 		rightVD:             rightSch.GetValueDescriptor(),
 		resultVD:            merged.GetValueDescriptor(),
