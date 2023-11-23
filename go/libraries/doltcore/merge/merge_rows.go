@@ -126,7 +126,7 @@ func (rm *RootMerger) MergeTable(ctx *sql.Context, tblName string, opts editor.O
 	}
 
 	// Calculate a merge of the schemas, but don't apply it yet
-	mergeSch, schConflicts, tableRewrite, err := SchemaMerge(ctx, tm.vrw.Format(), tm.leftSch, tm.rightSch, tm.ancSch, tblName)
+	mergeSch, schConflicts, mergeInfo, err := SchemaMerge(ctx, tm.vrw.Format(), tm.leftSch, tm.rightSch, tm.ancSch, tblName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -148,7 +148,7 @@ func (rm *RootMerger) MergeTable(ctx *sql.Context, tblName string, opts editor.O
 
 	var tbl *doltdb.Table
 	if types.IsFormat_DOLT(tm.vrw.Format()) {
-		tbl, stats, err = mergeProllyTable(ctx, tm, mergeSch, tableRewrite)
+		tbl, stats, err = mergeProllyTable(ctx, tm, mergeSch, mergeInfo)
 	} else {
 		tbl, stats, err = mergeNomsTable(ctx, tm, mergeSch, rm.vrw, opts)
 	}

@@ -155,7 +155,7 @@ var ErrMergeWithDifferentPks = errors.New("error: cannot merge two tables with d
 // SchemaMerge performs a three-way merge of |ourSch|, |theirSch|, and |ancSch|, and returns: the merged schema,
 // any schema conflicts identified, whether moving to the new schema requires a full table rewrite, and any
 // unexpected error encountered while merging the schemas.
-func SchemaMerge(ctx context.Context, format *storetypes.NomsBinFormat, ourSch, theirSch, ancSch schema.Schema, tblName string) (sch schema.Schema, sc SchemaConflict, tableRewrite bool, err error) {
+func SchemaMerge(ctx context.Context, format *storetypes.NomsBinFormat, ourSch, theirSch, ancSch schema.Schema, tblName string) (sch schema.Schema, sc SchemaConflict, mergeInfo MergeInfo, err error) {
 	// (sch - ancSch) ∪ (mergeSch - ancSch) ∪ (sch ∩ mergeSch)
 	sc = SchemaConflict{
 		TableName: tblName,
@@ -164,38 +164,38 @@ func SchemaMerge(ctx context.Context, format *storetypes.NomsBinFormat, ourSch, 
 	// TODO: We'll remove this once it's possible to get diff and merge on different primary key sets
 	// TODO: decide how to merge different orders of PKS
 	if !schema.ArePrimaryKeySetsDiffable(format, ourSch, theirSch) || !schema.ArePrimaryKeySetsDiffable(format, ourSch, ancSch) {
-		return nil, SchemaConflict{}, false, ErrMergeWithDifferentPks
+		return nil, SchemaConflict{}, mergeInfo, ErrMergeWithDifferentPks
 	}
 
 	var mergedCC *schema.ColCollection
-	mergedCC, sc.ColConflicts, tableRewrite, err = mergeColumns(tblName, format, ourSch.GetAllCols(), theirSch.GetAllCols(), ancSch.GetAllCols())
+	mergedCC, sc.ColConflicts, mergeInfo, err = mergeColumns(tblName, format, ourSch.GetAllCols(), theirSch.GetAllCols(), ancSch.GetAllCols())
 	if err != nil {
-		return nil, SchemaConflict{}, false, err
+		return nil, SchemaConflict{}, mergeInfo, err
 	}
 	if len(sc.ColConflicts) > 0 {
-		return nil, sc, tableRewrite, nil
+		return nil, sc, mergeInfo, nil
 	}
 
 	var mergedIdxs schema.IndexCollection
 	mergedIdxs, sc.IdxConflicts = mergeIndexes(mergedCC, ourSch, theirSch, ancSch)
 	if len(sc.IdxConflicts) > 0 {
-		return nil, sc, tableRewrite, nil
+		return nil, sc, mergeInfo, nil
 	}
 
 	sch, err = schema.SchemaFromCols(mergedCC)
 	if err != nil {
-		return nil, sc, false, err
+		return nil, sc, mergeInfo, err
 	}
 
 	sch, err = mergeTableCollation(ctx, tblName, ancSch, ourSch, theirSch, sch)
 	if err != nil {
-		return nil, sc, false, err
+		return nil, sc, mergeInfo, err
 	}
 
 	// TODO: Merge conflict should have blocked any primary key ordinal changes
 	err = sch.SetPkOrdinals(ourSch.GetPkOrdinals())
 	if err != nil {
-		return nil, sc, false, err
+		return nil, sc, mergeInfo, err
 	}
 
 	_ = mergedIdxs.Iter(func(index schema.Index) (stop bool, err error) {
@@ -207,17 +207,17 @@ func SchemaMerge(ctx context.Context, format *storetypes.NomsBinFormat, ourSch, 
 	var mergedChks []schema.Check
 	mergedChks, sc.ChkConflicts, err = mergeChecks(ctx, ourSch.Checks(), theirSch.Checks(), ancSch.Checks())
 	if err != nil {
-		return nil, SchemaConflict{}, false, err
+		return nil, SchemaConflict{}, mergeInfo, err
 	}
 	if len(sc.ChkConflicts) > 0 {
-		return nil, sc, false, nil
+		return nil, sc, mergeInfo, nil
 	}
 
 	// Look for invalid CHECKs
 	for _, chk := range mergedChks {
 		// CONFLICT: a CHECK now references a column that no longer exists in schema
 		if ok, err := isCheckReferenced(sch, chk); err != nil {
-			return nil, sc, false, err
+			return nil, sc, mergeInfo, err
 		} else if !ok {
 			// Append to conflicts
 			sc.ChkConflicts = append(sc.ChkConflicts, ChkConflict{
@@ -232,7 +232,7 @@ func SchemaMerge(ctx context.Context, format *storetypes.NomsBinFormat, ourSch, 
 		sch.Checks().AddCheck(chk.Name(), chk.Expression(), chk.Enforced())
 	}
 
-	return sch, sc, tableRewrite, nil
+	return sch, sc, mergeInfo, nil
 }
 
 // ForeignKeysMerge performs a three-way merge of (ourRoot, theirRoot, ancRoot) and using mergeRoot to validate FKs.
@@ -361,6 +361,12 @@ func checkUnmergeableNewColumns(tblName string, columnMappings columnMappings) e
 	return nil
 }
 
+type MergeInfo struct {
+	LeftNeedsRewrite           bool
+	RightNeedsRewrite          bool
+	InvalidateSecondaryIndexes bool
+}
+
 // mergeColumns merges the columns from |ourCC|, |theirCC| into a single column collection, using the ancestor column
 // definitions in |ancCC| to determine on which side a column has changed. If merging is not possible because of
 // conflicting changes to the columns in |ourCC| and |theirCC|, then a set of ColConflict instances are returned
@@ -369,25 +375,24 @@ func checkUnmergeableNewColumns(tblName string, columnMappings columnMappings) e
 // compatible with the current stored format. The merged columns, any column conflicts, and a boolean value stating if
 // a full table rewrite is needed to align the existing table rows with the new, merged schema. If any unexpected error
 // occurs, then that error is returned and the other response fields should be ignored.
-func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColCollection, []ColConflict, bool, error) {
+func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, theirCC, ancCC *schema.ColCollection) (*schema.ColCollection, []ColConflict, MergeInfo, error) {
+	mergeInfo := MergeInfo{}
 	columnMappings, err := mapColumns(ourCC, theirCC, ancCC)
 	if err != nil {
-		return nil, nil, false, err
+		return nil, nil, mergeInfo, err
 	}
 
 	conflicts, err := checkSchemaConflicts(columnMappings)
 	if err != nil {
-		return nil, nil, false, err
+		return nil, nil, mergeInfo, err
 	}
 
 	err = checkUnmergeableNewColumns(tblName, columnMappings)
 	if err != nil {
-		return nil, nil, false, err
+		return nil, nil, mergeInfo, err
 	}
 
 	compatChecker := newTypeCompatabilityCheckerForStorageFormat(format)
-
-	tableRewrite := false
 
 	// After we've checked for schema conflicts, merge the columns together
 	// TODO: We don't currently preserve all column position changes; the returned merged columns are always based on
@@ -402,11 +407,19 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 		case anc == nil && ours == nil && theirs != nil:
 			// if an ancestor does not exist, and the column exists only on one side, use that side
 			// (if an ancestor DOES exist, this means the column was deleted, so it's a no-op)
+			mergeInfo.LeftNeedsRewrite = true
 			mergedColumns = append(mergedColumns, *theirs)
 		case anc == nil && ours != nil && theirs == nil:
 			// if an ancestor does not exist, and the column exists only on one side, use that side
 			// (if an ancestor DOES exist, this means the column was deleted, so it's a no-op)
+			mergeInfo.RightNeedsRewrite = true
 			mergedColumns = append(mergedColumns, *ours)
+		case anc != nil && ours == nil && theirs != nil:
+			// column was deleted on our side
+			mergeInfo.RightNeedsRewrite = true
+		case anc != nil && ours != nil && theirs == nil:
+			// column was deleted on their side
+			mergeInfo.LeftNeedsRewrite = true
 		case ours == nil && theirs == nil:
 			// if the column is deleted on both sides... just let it fall out
 		case ours != nil && theirs != nil:
@@ -423,9 +436,10 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 				} else if theirsChanged {
 					// In this case, only theirsChanged, so we need to check if moving from ours->theirs
 					// is valid, otherwise it's a conflict
+					mergeInfo.LeftNeedsRewrite = true
 					compatible, rewrite := compatChecker.IsTypeChangeCompatible(ours.TypeInfo, theirs.TypeInfo)
 					if rewrite {
-						tableRewrite = true
+						mergeInfo.InvalidateSecondaryIndexes = true
 					}
 					if compatible {
 						mergedColumns = append(mergedColumns, *theirs)
@@ -439,9 +453,10 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 				} else if oursChanged {
 					// In this case, only oursChanged, so we need to check if moving from theirs->ours
 					// is valid, otherwise it's a conflict
+					mergeInfo.RightNeedsRewrite = true
 					compatible, rewrite := compatChecker.IsTypeChangeCompatible(theirs.TypeInfo, ours.TypeInfo)
 					if rewrite {
-						tableRewrite = true
+						mergeInfo.InvalidateSecondaryIndexes = true
 					}
 					if compatible {
 						mergedColumns = append(mergedColumns, *ours)
@@ -469,10 +484,10 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 	// Check that there are no duplicate column names or tags in the merged column set
 	conflicts = append(conflicts, checkForColumnConflicts(mergedColumns)...)
 	if conflicts != nil {
-		return nil, conflicts, false, nil
+		return nil, conflicts, mergeInfo, nil
 	}
 
-	return schema.NewColCollection(mergedColumns...), nil, tableRewrite, nil
+	return schema.NewColCollection(mergedColumns...), nil, mergeInfo, nil
 }
 
 // checkForColumnConflicts iterates over |mergedColumns|, checks for duplicate column names or column tags, and returns
