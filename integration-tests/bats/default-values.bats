@@ -368,10 +368,10 @@ teardown() {
 }
 
 @test "default-values: TEXT literals" {
-    run dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 TEXT DEFAULT 'hi')"
-    [ "$status" -eq "1" ]
-    run dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 LONGTEXT DEFAULT 'hi')"
-    [ "$status" -eq "1" ]
+    # MySQL doesn't allow literals for TEXT/BLOB/JSON fields, but MariaDB does, so we allow it, too
+    # For more context, see: https://github.com/dolthub/dolt/issues/7033
+    dolt sql -q "CREATE TABLE test1(pk BIGINT PRIMARY KEY, v1 TEXT DEFAULT 'hi')"
+    dolt sql -q "CREATE TABLE test2(pk BIGINT PRIMARY KEY, v1 LONGTEXT DEFAULT 'hi')"
 }
 
 @test "default-values: Other types using NOW/CURRENT_TIMESTAMP literal" {
