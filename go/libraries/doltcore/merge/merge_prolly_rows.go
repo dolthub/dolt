@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/transform"
-	"github.com/dolthub/go-mysql-server/sql/types"
 	errorkinds "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -453,7 +452,7 @@ func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) 
 		// necessary, since check constraint expressions should always
 		// be of a boolean type, but Dolt has allowed this previously.
 		// https://github.com/dolthub/dolt/issues/6411
-		booleanResult, err := types.ConvertToBool(result)
+		booleanResult, err := sql.ConvertToBool(ctx, result)
 		if err != nil {
 			return 0, fmt.Errorf("unable to convert check constraint expression (%s) into boolean value: %v", checkName, err.Error())
 		}
