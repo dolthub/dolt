@@ -85,31 +85,3 @@ func mustValue(v types.Value, err error) types.Value {
 	d.PanicIfError(err)
 	return v
 }
-
-func mustGetValue(v types.Value, ok bool, err error) types.Value {
-	d.PanicIfError(err)
-	d.PanicIfFalse(ok)
-	return v
-}
-
-func mustSet(s types.Set, err error) types.Set {
-	d.PanicIfError(err)
-	return s
-}
-
-func mustList(l types.List, err error) types.List {
-	d.PanicIfError(err)
-	return l
-}
-
-func validate(ctx context.Context, nbf *types.NomsBinFormat, r types.Value) bool {
-	rootType := mustType(types.MakeMapType(types.PrimitiveTypeMap[types.StringKind], mustType(types.MakeRefType(types.PrimitiveTypeMap[types.ValueKind]))))
-	if isSub, err := types.IsValueSubtypeOf(nbf, r, rootType); err != nil {
-		panic(err)
-	} else if !isSub {
-		fmt.Fprintf(os.Stderr, "Root of database must be %s, but you specified: %s\n", mustString(rootType.Describe(ctx)), mustString(mustType(types.TypeOf(r)).Describe(ctx)))
-		return false
-	}
-
-	return true
-}
