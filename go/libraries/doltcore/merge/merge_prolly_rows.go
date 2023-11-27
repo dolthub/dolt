@@ -888,6 +888,7 @@ func (nv nullValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff
 			}
 		}
 		count = len(violations)
+		return
 
 	case tree.DiffOpLeftAdd, tree.DiffOpLeftModify:
 		var violations []string
@@ -930,6 +931,37 @@ func (nv nullValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff
 			}
 		}
 		count = len(violations)
+		return
+	case tree.DiffOpDivergentModifyResolved:
+		var violations []string
+		for to, _ := range nv.leftMap {
+			col := nv.final.GetNonPKCols().GetByIndex(to)
+			if !col.IsNullable() && diff.Merged.FieldIsNull(to) {
+				violations = append(violations, col.Name)
+			}
+		}
+		// for merged NULL violations, we insert a constraint violation and
+		// then must explicitly remove this row from all left-side indexes
+		if len(violations) > 0 {
+			var meta prolly.ConstraintViolationMeta
+			if meta, err = newNotNullViolationMeta(violations, diff.Merged); err != nil {
+				return 0, err
+			}
+			err = nv.artEditor.ReplaceConstraintViolation(ctx, diff.Key, nv.ourRootish, prolly.ArtifactTypeNullViol, meta)
+			if err != nil {
+				return 0, err
+			}
+			if err = nv.leftEditor.Delete(ctx, diff.Key); err != nil {
+				return 0, err
+			}
+			for _, editor := range nv.secEditors {
+				if err = editor.DeleteEntry(ctx, diff.Key, diff.Left); err != nil {
+					return 0, err
+				}
+			}
+		}
+		count = len(violations)
+		return
 	}
 	return
 }
@@ -1922,5 +1954,9 @@ func convert(ctx context.Context, fromDesc, toDesc val.TupleDesc, toSchema schem
 	if err != nil {
 		return nil, err
 	}
-	return index.Serialize(ctx, ns, toDesc.Types[toIndex], convertedCell)
+	typ := toDesc.Types[toIndex]
+	// If a merge results in assigning NULL to a non-null column, don't panic.
+	// Instead we validate the merged tuple before merging it into the table.
+	typ.Nullable = true
+	return index.Serialize(ctx, ns, typ, convertedCell)
 }

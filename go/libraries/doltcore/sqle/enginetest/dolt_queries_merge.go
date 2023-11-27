@@ -1726,6 +1726,38 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "resolving a modified/modified row still checks nullness constraint",
+		SetUpScript: []string{
+			"create table test(a int primary key, b int, c int);",
+			"insert into test values (1, 2, 3);",
+			"call dolt_add('test');",
+			"call dolt_commit('-m', 'create test table');",
+
+			"call dolt_checkout('-b', 'other');",
+			"alter table test modify c int not null;",
+			"update test set b = NULL;",
+			"call dolt_add('test');",
+			"call dolt_commit('-m', 'drop column');",
+
+			"call dolt_checkout('main');",
+			"alter table test modify b int not null",
+			"update test set c = NULL;",
+			"call dolt_add('test');",
+			"call dolt_commit('-m', 'remove row');",
+			"set dolt_force_transaction_commit = on;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{"", 0, 1}},
+			},
+			{
+				Query:    "select a, b, c from dolt_constraint_violations_test;",
+				Expected: []sql.Row{{1, nil, nil}},
+			},
+		},
+	},
+	{
 		Name: "Pk convergent updates to sec diff congruent",
 		SetUpScript: []string{
 			"create table xyz (x int primary key, y int, z int, key y_idx(y), key z_idx(z))",
