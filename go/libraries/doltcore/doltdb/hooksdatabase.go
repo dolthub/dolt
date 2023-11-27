@@ -163,8 +163,8 @@ func (db hooksDatabase) SetHead(ctx context.Context, ds datas.Dataset, newHeadAd
 	return ds, err
 }
 
-func (db hooksDatabase) FastForward(ctx context.Context, ds datas.Dataset, newHeadAddr hash.Hash) (datas.Dataset, error) {
-	ds, err := db.Database.FastForward(ctx, ds, newHeadAddr)
+func (db hooksDatabase) FastForward(ctx context.Context, ds datas.Dataset, newHeadAddr hash.Hash, workingSetPath string) (datas.Dataset, error) {
+	ds, err := db.Database.FastForward(ctx, ds, newHeadAddr, workingSetPath)
 	if err == nil {
 		db.ExecuteCommitHooks(ctx, ds, false)
 	}

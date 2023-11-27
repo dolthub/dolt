@@ -47,6 +47,15 @@ func WorkingSetRefForHead(ref DoltRef) (WorkingSetRef, error) {
 	switch ref.GetType() {
 	case BranchRefType, WorkspaceRefType:
 		return NewWorkingSetRef(path.Join(string(ref.GetType()), ref.GetPath())), nil
+	case RemoteRefType:
+		rmtRef, ok := ref.(RemoteRef)
+		if !ok {
+			return WorkingSetRef{}, fmt.Errorf("%w: %s", ErrWorkingSetUnsupported, ref.GetType())
+		}
+		// NM4 Not sure if that's right AT ALL. Modifying a remote workingSet is apparently something
+		// we've never done before (?)
+		return NewWorkingSetRef(path.Join(string(BranchRefType), rmtRef.GetBranch())), nil
+
 	default:
 		return WorkingSetRef{}, fmt.Errorf("%w: %s", ErrWorkingSetUnsupported, ref.GetType())
 	}

@@ -606,6 +606,25 @@ func GetCommittedValue(ctx context.Context, vr types.ValueReader, cv types.Value
 	return v, err
 }
 
+func GetCommitRootHash(cv types.Value) (hash.Hash, error) {
+	if sm, ok := cv.(types.SerialMessage); ok {
+		data := []byte(sm)
+		if serial.GetFileID(data) != serial.CommitFileID {
+			return hash.Hash{}, errors.New("GetCommitRootHash: provided value is not a commit.")
+		}
+		var cmsg serial.Commit
+		err := serial.InitCommitRoot(&cmsg, data, serial.MessagePrefixSz)
+		if err != nil {
+			return hash.Hash{}, err
+		}
+		var roothash hash.Hash
+		copy(roothash[:], cmsg.RootBytes())
+		return roothash, nil
+	}
+
+	return hash.Hash{}, errors.New("GetCommitRootHash: Only supports modern storage formats.")
+}
+
 func parentsToQueue(ctx context.Context, commits []*Commit, q *CommitByHeightHeap, vr types.ValueReader) error {
 	seen := make(map[hash.Hash]bool)
 	for _, c := range commits {

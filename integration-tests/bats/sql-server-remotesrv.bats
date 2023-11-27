@@ -4,6 +4,7 @@
 # functionality of the remotesapi under sql-server.
 
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
 srv_pid=
 srv_two_pid=
@@ -13,6 +14,7 @@ setup() {
 }
 
 teardown() {
+    stop_sql_server
     teardown_common
     if [ -n "$srv_pid" ]; then
         kill $srv_pid
@@ -48,7 +50,11 @@ insert into vals (i) values (6), (7), (8), (9), (10);
 call dolt_commit('-am', 'add some vals');
 "
 
-    dolt pull
+    run dolt pull
+    echo "------------------------"
+    echo "$output"
+    echo "************************"
+    [[ "$status" -eq 0 ]] || false
 
     run dolt sql -q 'select count(*) from vals;'
     [[ "$output" =~ "10" ]] || false
@@ -83,6 +89,7 @@ call dolt_commit('-m', 'add some vals');
 }
 
 @test "sql-server-remotesrv: the remotesapi server rejects writes" {
+    skip "This will be updated to ensure that if we disable write, they get rejected. NM4"
     mkdir -p db/remote
     cd db/remote
     dolt init
@@ -202,7 +209,7 @@ call dolt_commit('-am', 'add some vals');
     [[ "$output" =~ "Access denied for user 'root'" ]] || false
 
     # # With auth fetch
-    run dolt fetch -u $DOLT_REMOTE_USER
+    run dolt fetch --user $DOLT_REMOTE_USER
     [[ "$status" -eq 0 ]] || false
 
     run dolt branch -v -a
@@ -226,7 +233,7 @@ call dolt_commit('-am', 'add one val');
     [[ "$output" =~ "Access denied for user 'root'" ]] || false
 
     # With auth pull
-    run dolt pull -u $DOLT_REMOTE_USER
+    run dolt pull --user $DOLT_REMOTE_USER
     [[ "$status" -eq 0 ]] || false
     run dolt sql -q 'select count(*) from vals;'
     [[ "$output" =~ "11" ]] || false
@@ -279,7 +286,7 @@ call dolt_commit('-am', 'add some vals');"
     [[ "$output" =~ "Access denied for user 'root'" ]] || false
 
     # # With auth fetch
-    run dolt fetch -u clone_admin_user
+    run dolt fetch --user clone_admin_user
     [[ "$status" -eq 0 ]] || false
 
     run dolt branch -v -a
@@ -301,7 +308,7 @@ call dolt_commit('-am', 'add one val');"
     [[ "$output" =~ "Access denied for user 'root'" ]] || false
 
     # With auth pull
-    run dolt pull -u clone_admin_user
+    run dolt pull --user clone_admin_user
     [[ "$status" -eq 0 ]] || false
     run dolt sql -q 'select count(*) from vals;'
     [[ "$output" =~ "11" ]] || false
@@ -359,3 +366,39 @@ call dolt_commit('-am', 'add one val');"
     [[ "$status" != 0 ]] || false
     [[ "$output" =~ "Access denied for user 'doesnt_exist'" ]] || false
 }
+
+@test "sql-server-remotesrv: push to remotesapi port as super user" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q 'create table names (name varchar(10) primary key);'
+    dolt sql -q 'insert into names (name) values ("abe"), ("betsy"), ("calvin");'
+    dolt add names
+    dolt commit -m 'initial names.'
+
+    APIPORT=$( definePORT )
+    export DOLT_REMOTE_PASSWORD="rootpass"
+    export SQL_USER="root"
+    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT
+
+    cd ../
+    dolt clone http://localhost:$APIPORT/remote cloned_db -u root
+    cd cloned_db
+
+    dolt sql -q 'insert into names values ("dave");'
+    dolt commit -am 'add dave'
+
+    # change this to be `dolt push` NM4
+    run dolt sql -q "call dolt_push('origin', '--user','$SQL_USER', 'main:main')"
+    [[ "$status" -eq 0 ]] || false
+
+    cd ../remote
+    run dolt sql -q 'select * from names;'
+    [[ "$output" =~ "abe" ]] || false
+    [[ "$output" =~ "betsy" ]] || false
+    [[ "$output" =~ "calvin" ]] || false
+    [[ "$output" =~ "dave" ]] || false
+
+    # Currently failing. refs/heads/main gets updates, but refs/workingsets/main does not.
+}
+
