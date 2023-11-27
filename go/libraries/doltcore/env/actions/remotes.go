@@ -75,13 +75,13 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 
 	switch mode {
 	case ref.ForceUpdate:
-		err = destDB.SetHeadToCommit(ctx, destRef, commit)
+		err = destDB.SetHeadAndWorkingSetToCommit(ctx, destRef, commit)
 		if err != nil {
 			return err
 		}
 		err = srcDB.SetHeadToCommit(ctx, remoteRef, commit)
 	case ref.FastForwardOnly:
-		err = destDB.FastForward(ctx, destRef, commit)
+		err = destDB.FastForwardWithWorkspaceCheck(ctx, destRef, commit)
 		if err != nil {
 			return err
 		}
@@ -233,7 +233,7 @@ func PushToRemoteBranch(ctx context.Context, rsr env.RepoStateReader, tempTableD
 	case nil:
 		cli.Println()
 		return nil
-	case doltdb.ErrUpToDate, doltdb.ErrIsAhead, ErrCantFF, datas.ErrMergeNeeded:
+	case doltdb.ErrUpToDate, doltdb.ErrIsAhead, ErrCantFF, datas.ErrMergeNeeded, datas.ErrDirtyWorkspace:
 		return err
 	default:
 		return fmt.Errorf("%w; %s", ErrUnknownPushErr, err.Error())

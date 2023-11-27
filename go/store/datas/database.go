@@ -136,14 +136,18 @@ type Database interface {
 	// All values that have been written to this Database are guaranteed to
 	// be persistent after SetHead(). If the update cannot be performed,
 	// error will be non-nil.
-	SetHead(ctx context.Context, ds Dataset, newHeadAddr hash.Hash) (Dataset, error)
+	// The workingSetPath is the path to the working set that should be used for updating the working set. If one
+	// is not provided, no working set update will be performed.
+	SetHead(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, workingSetPath string) (Dataset, error)
 
 	// FastForward takes a types.Ref to a Commit object and makes it the new
 	// Head of ds iff it is a descendant of the current Head. Intended to be
 	// used e.g. after a call to Pull(). If the update cannot be performed,
 	// e.g., because another process moved the current Head out from under
 	// you, err will be non-nil.
-	FastForward(ctx context.Context, ds Dataset, newHeadAddr hash.Hash) (Dataset, error)
+	// The workingSetPath is the path to the working set that should be used for updating the working set. If one
+	// is not provided, no working set update will be performed.
+	FastForward(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, workingSetPath string) (Dataset, error)
 
 	// Stats may return some kind of struct that reports statistics about the
 	// ChunkStore that backs this Database instance. The type is

@@ -24,8 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
@@ -38,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/types/edits"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 func init() {
@@ -236,7 +235,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitMetaGeneratorAndDefaultBranch(
 		return errors.New("commit without head")
 	}
 
-	_, err = ddb.db.SetHead(ctx, ds, headAddr)
+	_, err = ddb.db.SetHead(ctx, ds, headAddr, "")
 	return err
 }
 
@@ -587,6 +586,30 @@ func (ddb *DoltDB) Commit(ctx context.Context, valHash hash.Hash, dref ref.DoltR
 	return ddb.CommitWithParentSpecs(ctx, valHash, dref, nil, cm)
 }
 
+// FastForwardWithWorkspaceCheck will perform a fast forward update of the branch given to the commit given, but only
+// if the working set is in sync with the head of the branch given. This is used in the course of pushing to a remote.
+// If the target doesn't currently have the working set ref, then no working set change will be made.
+func (ddb *DoltDB) FastForwardWithWorkspaceCheck(ctx context.Context, branch ref.DoltRef, commit *Commit) error {
+	ds, err := ddb.db.GetDataset(ctx, branch.String())
+	if err != nil {
+		return err
+	}
+
+	addr, err := commit.HashOf()
+	if err != nil {
+		return err
+	}
+
+	wsRef, err := ref.WorkingSetRefForHead(branch)
+	if err != nil {
+		return err
+	}
+
+	_, err = ddb.db.FastForward(ctx, ds, addr, wsRef.String())
+
+	return err
+}
+
 // FastForward fast-forwards the branch given to the commit given.
 func (ddb *DoltDB) FastForward(ctx context.Context, branch ref.DoltRef, commit *Commit) error {
 	addr, err := commit.HashOf()
@@ -604,7 +627,7 @@ func (ddb *DoltDB) FastForwardToHash(ctx context.Context, branch ref.DoltRef, ha
 		return err
 	}
 
-	_, err = ddb.db.FastForward(ctx, ds, hash)
+	_, err = ddb.db.FastForward(ctx, ds, hash, "")
 
 	return err
 }
@@ -634,6 +657,28 @@ func (ddb *DoltDB) SetHeadToCommit(ctx context.Context, ref ref.DoltRef, cm *Com
 	return ddb.SetHead(ctx, ref, addr)
 }
 
+// SetHeadAndWorkingSetToCommit sets the given ref to the given commit, and ensures that working is in sync
+// with the head. Used for 'force' pushes.
+func (ddb *DoltDB) SetHeadAndWorkingSetToCommit(ctx context.Context, rf ref.DoltRef, cm *Commit) error {
+	addr, err := cm.HashOf()
+	if err != nil {
+		return err
+	}
+
+	wsRef, err := ref.WorkingSetRefForHead(rf)
+	if err != nil {
+		return err
+	}
+
+	ds, err := ddb.db.GetDataset(ctx, rf.String())
+	if err != nil {
+		return err
+	}
+
+	_, err = ddb.db.SetHead(ctx, ds, addr, wsRef.String())
+	return err
+}
+
 func (ddb *DoltDB) SetHead(ctx context.Context, ref ref.DoltRef, addr hash.Hash) error {
 	ds, err := ddb.db.GetDataset(ctx, ref.String())
 
@@ -641,7 +686,7 @@ func (ddb *DoltDB) SetHead(ctx context.Context, ref ref.DoltRef, addr hash.Hash)
 		return err
 	}
 
-	_, err = ddb.db.SetHead(ctx, ds, addr)
+	_, err = ddb.db.SetHead(ctx, ds, addr, "")
 	return err
 }
 
@@ -1095,7 +1140,7 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 		return err
 	}
 
-	_, err = ddb.db.SetHead(ctx, ds, addr)
+	_, err = ddb.db.SetHead(ctx, ds, addr, "")
 	if err != nil {
 		return err
 	}
@@ -1355,7 +1400,7 @@ func (ddb *DoltDB) NewWorkspaceAtCommit(ctx context.Context, workRef ref.DoltRef
 		return err
 	}
 
-	ds, err = ddb.db.SetHead(ctx, ds, addr)
+	ds, err = ddb.db.SetHead(ctx, ds, addr, "")
 
 	return err
 }

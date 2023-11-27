@@ -379,8 +379,9 @@ func Serve(
 			port := *serverConfig.RemotesapiPort()
 			listenaddr := fmt.Sprintf(":%d", port)
 			args, err := sqle.RemoteSrvServerArgs(sqlEngine.NewDefaultContext, remotesrv.ServerArgs{
-				Logger:         logrus.NewEntry(lgr),
-				ReadOnly:       true,
+				Logger: logrus.NewEntry(lgr),
+				// NM4 - make this configurable. false by default, but can be set to true by the paranoid.
+				ReadOnly:       false,
 				HttpListenAddr: listenaddr,
 				GrpcListenAddr: listenaddr,
 			})

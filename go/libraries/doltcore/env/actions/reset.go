@@ -172,6 +172,7 @@ func ResetHard(
 		return err
 	}
 
+	// TODO - refactor this to ensure the update to the head and working set are transactional.
 	err = doltDb.UpdateWorkingSet(ctx, ws.Ref(), ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged).ClearMerge(), h, &datas.WorkingSetMeta{
 		Name:        username,
 		Email:       email,
