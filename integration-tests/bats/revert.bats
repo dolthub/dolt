@@ -146,38 +146,8 @@ SQL
     [[ "${#lines[@]}" = "3" ]] || false
 }
 
-@test "revert: SQL HEAD dfunc" {
-    dolt sql -q "CALL drevert('HEAD')"
-    run dolt sql -q "SELECT * FROM test" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "pk,v1" ]] || false
-    [[ "$output" =~ "1,1" ]] || false
-    [[ "$output" =~ "2,2" ]] || false
-    [[ "${#lines[@]}" = "3" ]] || false
-}
-
-@test "revert: Stored Procedure HEAD" {
-    dolt sql -q "CALL DOLT_REVERT('HEAD')"
-    run dolt sql -q "SELECT * FROM test" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "pk,v1" ]] || false
-    [[ "$output" =~ "1,1" ]] || false
-    [[ "$output" =~ "2,2" ]] || false
-    [[ "${#lines[@]}" = "3" ]] || false
-}
-
 @test "revert: SQL HEAD~1" {
     dolt sql -q "call dolt_revert('HEAD~1')"
-    run dolt sql -q "SELECT * FROM test" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "pk,v1" ]] || false
-    [[ "$output" =~ "1,1" ]] || false
-    [[ "$output" =~ "3,3" ]] || false
-    [[ "${#lines[@]}" = "3" ]] || false
-}
-
-@test "revert: Stored Procedure HEAD~1" {
-    dolt sql -q "CALL DOLT_REVERT('HEAD~1')"
     run dolt sql -q "SELECT * FROM test" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk,v1" ]] || false
@@ -195,25 +165,9 @@ SQL
     [[ "${#lines[@]}" = "2" ]] || false
 }
 
-@test "revert: Stored Procedure HEAD & HEAD~1" {
-    dolt sql -q "CALL DOLT_REVERT('HEAD', 'HEAD~1')"
-    run dolt sql -q "SELECT * FROM test" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "pk,v1" ]] || false
-    [[ "$output" =~ "1,1" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
-}
-
 @test "revert: SQL has changes in the working set" {
     dolt sql -q "INSERT INTO test VALUES (4, 4)"
     run dolt sql -q "call dolt_revert('HEAD')"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "changes" ]] || false
-}
-
-@test "revert: Stored Procedure has changes in the working set" {
-    dolt sql -q "INSERT INTO test VALUES (4, 4)"
-    run dolt sql -q "CALL DOLT_REVERT('HEAD')"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "changes" ]] || false
 }
@@ -226,18 +180,6 @@ SQL
     dolt add -A
     dolt commit -m "Updated 4"
     run dolt sql -q "call dolt_revert('HEAD~1')"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "conflict" ]] || false
-}
-
-@test "revert: Stored Procedure conflicts" {
-    dolt sql -q "INSERT INTO test VALUES (4, 4)"
-    dolt add -A
-    dolt commit -m "Inserted 4"
-    dolt sql -q "REPLACE INTO test VALUES (4, 5)"
-    dolt add -A
-    dolt commit -m "Updated 4"
-    run dolt sql -q "CALL DOLT_REVERT('HEAD~1')"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "conflict" ]] || false
 }
@@ -262,34 +204,8 @@ SQL
     [[ "$output" =~ "constraint violation" ]] || false
 }
 
-@test "revert: Stored Procedure constraint violations" {
-    dolt sql <<"SQL"
-CREATE TABLE parent (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX(v1));
-CREATE TABLE child (pk BIGINT PRIMARY KEY, v1 BIGINT, CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent (v1));
-INSERT INTO parent VALUES (10, 1), (20, 2);
-INSERT INTO child VALUES (1, 1), (2, 2);
-SQL
-    dolt add -A
-    dolt commit -m "MC1"
-    dolt sql -q "DELETE FROM child WHERE pk = 2"
-    dolt add -A
-    dolt commit -m "MC2"
-    dolt sql -q "DELETE FROM parent WHERE pk = 20"
-    dolt add -A
-    dolt commit -m "MC3"
-    run dolt sql -q "CALL DOLT_REVERT('HEAD~1')"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "constraint violation" ]] || false
-}
-
 @test "revert: SQL too far back" {
     run dolt sql -q "call dolt_revert('HEAD~10')"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "ancestor" ]] || false
-}
-
-@test "revert: Stored Procedure too far back" {
-    run dolt sql -q "CALL DOLT_REVERT('HEAD~10')"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "ancestor" ]] || false
 }
@@ -300,20 +216,8 @@ SQL
     [[ "$output" =~ "cannot revert commit with no parents" ]] || false
 }
 
-@test "revert: Stored Procedure revert init commit" {
-    run dolt sql -q "CALL DOLT_REVERT('HEAD~4')"
-    [ "$status" -ne "0" ]
-    [[ "$output" =~ "cannot revert commit with no parents" ]] || false
-}
-
 @test "revert: SQL invalid hash" {
     run dolt sql -q "call dolt_revert('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "target commit not found" ]] || false
-}
-
-@test "revert: Stored Procedure invalid hash" {
-    run dolt sql -q "CALL DOLT_REVERT('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "target commit not found" ]] || false
 }
@@ -331,33 +235,8 @@ SQL
     [[ "$output" =~ "Author: john doe <johndoe@gmail.com>" ]] || false
 }
 
-@test "revert: Stored Procedure HEAD with author" {
-    dolt sql -q "CALL DOLT_REVERT('HEAD', '--author', 'john doe <johndoe@gmail.com>')"
-    run dolt sql -q "SELECT * FROM test" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "pk,v1" ]] || false
-    [[ "$output" =~ "1,1" ]] || false
-    [[ "$output" =~ "2,2" ]] || false
-    [[ "${#lines[@]}" = "3" ]] || false
-
-    run dolt log -n 1
-    [[ "$output" =~ "Author: john doe <johndoe@gmail.com>" ]] || false
-}
-
 @test "revert: SQL HEAD & HEAD~1 with author" {
     dolt sql -q "call dolt_revert('HEAD', 'HEAD~1', '--author', 'john doe <johndoe@gmail.com>')"
-    run dolt sql -q "SELECT * FROM test" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "pk,v1" ]] || false
-    [[ "$output" =~ "1,1" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
-
-    run dolt log -n 1
-    [[ "$output" =~ "Author: john doe <johndoe@gmail.com>" ]] || false
-}
-
-@test "revert: Stored Procedure HEAD & HEAD~1 with author" {
-    dolt sql -q "CALL DOLT_REVERT('HEAD', 'HEAD~1', '--author', 'john doe <johndoe@gmail.com>')"
     run dolt sql -q "SELECT * FROM test" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk,v1" ]] || false

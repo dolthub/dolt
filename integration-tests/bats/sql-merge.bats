@@ -38,13 +38,6 @@ teardown() {
     log_status_eq 1
 }
 
-@test "sql-merge: CALL DOLT_MERGE with unknown branch name throws an error" {
-    dolt sql -q "CALL DOLT_COMMIT('-a', '-m', 'Step 1');"
-
-    run dolt sql -q "CALL DOLT_MERGE('feature-branch');"
-    log_status_eq 1
-}
-
 @test "sql-merge: DOLT_MERGE works with ff" {
     dolt sql <<SQL
 call dolt_commit('-a', '-m', 'Step 1');
@@ -288,24 +281,6 @@ INSERT INTO test VALUES (3);
 call dolt_commit('-a', '-m', 'update feature-branch');
 call dolt_checkout('main');
 call dolt_merge('feature-branch', '-no-ff', '-m', 'this is a no-ff');
-SELECT COUNT(*) = 4 FROM dolt_log
-SQL
-    log_status_eq 0
-    [[ "$output" =~ "true" ]] || false
-
-    run dolt log -n 1
-    log_status_eq 0
-    [[ "$output" =~ "this is a no-ff" ]] || false
-}
-
-@test "sql-merge: CALL DOLT_MERGE works with no-ff" {
-        run dolt sql << SQL
-CALL DOLT_COMMIT('-a', '-m', 'Step 1');
-CALL DOLT_CHECKOUT('-b', 'feature-branch');
-INSERT INTO test VALUES (3);
-CALL DOLT_COMMIT('-a', '-m', 'update feature-branch');
-CALL DOLT_CHECKOUT('main');
-CALL DOLT_MERGE('feature-branch', '-no-ff', '-m', 'this is a no-ff');
 SELECT COUNT(*) = 4 FROM dolt_log
 SQL
     log_status_eq 0

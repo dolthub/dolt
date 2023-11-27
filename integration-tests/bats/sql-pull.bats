@@ -48,16 +48,6 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
-@test "sql-pull: dpull main" {
-    cd repo2
-    dolt sql -q "CALL dpull('origin')"
-    run dolt sql -q "show tables" -r csv
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
-    [[ "$output" =~ "Table" ]] || false
-    [[ "$output" =~ "t1" ]] || false
-}
-
 @test "sql-pull: dolt_pull custom remote" {
     cd repo2
     dolt sql -q "call dolt_pull('test-remote')"
@@ -203,7 +193,7 @@ SQL
     [[ "$output" =~ "shoe" ]] || false
 }
 
-@test "sql-pull: CALL dolt_pull squash" {
+@test "sql-pull: dolt_pull squash" {
     cd repo2
     dolt sql -q "create table t2 (i int primary key);"
     dolt commit -Am "commit 1"
@@ -244,23 +234,10 @@ SQL
     dolt sql -q "call dolt_pull('')"
 }
 
-@test "sql-pull: empty remote name does not panic on CALL" {
-    cd repo2
-    dolt sql -q "CALL dolt_pull('')"
-}
-
 @test "sql-pull: dolt_pull dirty working set fails" {
     cd repo2
     dolt sql -q "create table t2 (a int)"
     run dolt sql -q "call dolt_pull('origin')"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "cannot merge with uncommitted changes" ]] || false
-}
-
-@test "sql-pull: CALL dolt_pull dirty working set fails" {
-    cd repo2
-    dolt sql -q "create table t2 (a int)"
-    run dolt sql -q "CALL dolt_pull('origin')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "cannot merge with uncommitted changes" ]] || false
 }
@@ -273,19 +250,6 @@ SQL
 
     cd ../repo2
     dolt sql -q "call dolt_pull('origin')"
-    run dolt tag
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "v1" ]] || false
-}
-
-@test "sql-pull: CALL dolt_pull tag" {
-    cd repo1
-    dolt tag v1
-    dolt push origin v1
-    dolt tag
-
-    cd ../repo2
-    dolt sql -q "CALL dolt_pull('origin')"
     run dolt tag
     [ "$status" -eq 0 ]
     [[ "$output" =~ "v1" ]] || false
@@ -307,29 +271,6 @@ SQL
 
     cd ../repo2
     dolt sql -q "call dolt_pull('origin')"
-    run dolt tag
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "v1" ]] || false
-    [[ "$output" =~ "v2" ]] || false
-    [[ ! "$output" =~ "v3" ]] || false
-}
-
-@test "sql-pull: CALL dolt_pull tags only for resolved commits" {
-    cd repo1
-    dolt tag v1 head
-    dolt tag v2 head^
-    dolt push origin v1
-    dolt push origin v2
-
-    dolt checkout feature
-    dolt sql -q "create table t2 (a int)"
-    dolt add .
-    dolt commit -am "feature commit"
-    dolt tag v3
-    dolt push origin v3
-
-    cd ../repo2
-    dolt sql -q "CALL dolt_pull('origin')"
     run dolt tag
     [ "$status" -eq 0 ]
     [[ "$output" =~ "v1" ]] || false
