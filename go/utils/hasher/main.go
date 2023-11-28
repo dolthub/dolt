@@ -18,8 +18,9 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
-import "github.com/dolthub/dolt/go/store/hash"
 
 // hasher is a simple utility for converting between dolt base32 hashes and raw bytes. If you give it one argument,
 // the assumption is that it's a hash:
@@ -51,11 +52,11 @@ func main() {
 		h := hash.Parse(hashStr)
 		fmt.Printf("%v\n", h[:])
 	} else {
-		raw := make([]byte, 20) // always iniiaized to 0s
+		var raw hash.Hash
 
 		bytesGiven := len(os.Args) - 1
 
-		if bytesGiven > 20 {
+		if bytesGiven > hash.ByteLen {
 			fmt.Println("Too many bytes given.")
 			return
 		}
@@ -69,6 +70,6 @@ func main() {
 			raw[i-1] = uint8(val)
 		}
 
-		fmt.Printf("%v\n", hash.New(raw))
+		fmt.Printf("%v\n", raw)
 	}
 }
