@@ -37,13 +37,16 @@ type StaticMap[K, V ~[]byte, O Ordering[K]] struct {
 	Order     O
 }
 
+// DiffOrderedTrees invokes `cb` for each difference between `from` and `to. If `considerAllRowsModified`
+// is true, then a key that exists in both trees will be considered a modification even if the bytes are the same.
+// This is used when `from` and `to` have different schemas.
 func DiffOrderedTrees[K, V ~[]byte, O Ordering[K]](
 	ctx context.Context,
 	from, to StaticMap[K, V, O],
+	considerAllRowsModified bool,
 	cb DiffFn,
 ) error {
-	// TODO: If the schema has changed, do we want every row to be considered changed?
-	differ, err := DifferFromRoots[K](ctx, from.NodeStore, to.NodeStore, from.Root, to.Root, from.Order, false)
+	differ, err := DifferFromRoots[K](ctx, from.NodeStore, to.NodeStore, from.Root, to.Root, from.Order, considerAllRowsModified)
 	if err != nil {
 		return err
 	}
@@ -139,9 +142,10 @@ func MergeOrderedTrees[K, V ~[]byte, O Ordering[K], S message.Serializer](
 	ctx context.Context,
 	l, r, base StaticMap[K, V, O],
 	cb CollisionFn,
+	leftSchemaChanged, rightSchemaChanged bool,
 	serializer S,
 ) (StaticMap[K, V, O], MergeStats, error) {
-	root, stats, err := ThreeWayMerge[K](ctx, base.NodeStore, l.Root, r.Root, base.Root, cb, base.Order, serializer)
+	root, stats, err := ThreeWayMerge[K](ctx, base.NodeStore, l.Root, r.Root, base.Root, cb, leftSchemaChanged, rightSchemaChanged, base.Order, serializer)
 	if err != nil {
 		return StaticMap[K, V, O]{}, MergeStats{}, err
 	}

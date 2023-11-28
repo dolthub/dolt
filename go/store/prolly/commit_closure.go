@@ -174,5 +174,6 @@ func (wr CommitClosureEditor) Flush(ctx context.Context) (CommitClosure, error) 
 }
 
 func DiffCommitClosures(ctx context.Context, from, to CommitClosure, cb tree.DiffFn) error {
-	return tree.DiffOrderedTrees(ctx, from.closure, to.closure, cb)
+	considerAllRowsModified := false
+	return tree.DiffOrderedTrees(ctx, from.closure, to.closure, considerAllRowsModified, cb)
 }

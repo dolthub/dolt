@@ -47,18 +47,16 @@ func ThreeWayMerge[K ~[]byte, O Ordering[K], S message.Serializer](
 	ns NodeStore,
 	left, right, base Node,
 	collide CollisionFn,
+	leftSchemaChange, rightSchemaChange bool,
 	order O,
 	serializer S,
 ) (final Node, stats MergeStats, err error) {
-
-	// TODO: This function is only ever called to merge artifacts. Is is possible for the tuple desc to change here?
-	// If it does, do we want every row to appear in the diff?
-	ld, err := DifferFromRoots[K](ctx, ns, ns, base, left, order, false)
+	ld, err := DifferFromRoots[K](ctx, ns, ns, base, left, order, leftSchemaChange)
 	if err != nil {
 		return Node{}, MergeStats{}, err
 	}
 
-	rd, err := DifferFromRoots[K](ctx, ns, ns, base, right, order, false)
+	rd, err := DifferFromRoots[K](ctx, ns, ns, base, right, order, rightSchemaChange)
 	if err != nil {
 		return Node{}, MergeStats{}, err
 	}
