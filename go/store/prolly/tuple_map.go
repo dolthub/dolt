@@ -111,8 +111,8 @@ func MutateMapWithTupleIter(ctx context.Context, m Map, iter TupleIter) (Map, er
 	}, nil
 }
 
-func DiffMaps(ctx context.Context, from, to Map, cb tree.DiffFn) error {
-	return tree.DiffOrderedTrees(ctx, from.tuples, to.tuples, makeDiffCallBack(from, to, cb))
+func DiffMaps(ctx context.Context, from, to Map, considerAllRowsModified bool, cb tree.DiffFn) error {
+	return tree.DiffOrderedTrees(ctx, from.tuples, to.tuples, considerAllRowsModified, makeDiffCallBack(from, to, cb))
 }
 
 // RangeDiffMaps returns diffs within a Range. See Range for which diffs are
