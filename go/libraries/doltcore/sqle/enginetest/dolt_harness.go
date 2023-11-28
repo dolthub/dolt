@@ -152,8 +152,8 @@ func (d *DoltHarness) resetScripts() []setup.SetupScript {
 			resetCmds = append(resetCmds, setup.SetupScript{createTableStatement.String()})
 		}
 
-		resetCmds = append(resetCmds, setup.SetupScript{"call dclean()"})
-		resetCmds = append(resetCmds, setup.SetupScript{"call dreset('--hard', 'head')"})
+		resetCmds = append(resetCmds, setup.SetupScript{"call dolt_clean()"})
+		resetCmds = append(resetCmds, setup.SetupScript{"call dolt_reset('--hard', 'head')"})
 	}
 
 	resetCmds = append(resetCmds, setup.SetupScript{"SET foreign_key_checks=1;"})
