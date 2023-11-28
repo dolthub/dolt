@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
@@ -81,6 +82,14 @@ func doDoltPush(ctx *sql.Context, args []string) (int, string, error) {
 	if err != nil {
 		return cmdFailure, "", err
 	}
+
+	if user, hasUser := apr.GetValue(cli.UserFlag); hasUser {
+		rmt := (*remote).WithParams(map[string]string{
+			dbfactory.GRPCUsernameAuthParam: user,
+		})
+		remote = &rmt
+	}
+
 	remoteDB, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), *remote, true)
 	if err != nil {
 		return cmdFailure, "", actions.HandleInitRemoteStorageClientErr(remote.Name, remote.Url, err)
