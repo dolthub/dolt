@@ -1004,10 +1004,10 @@ var DoltScripts = []queries.ScriptTest{
 			"CREATE TABLE t(pk varchar(20), val int)",
 			"ALTER TABLE t ADD PRIMARY KEY (pk, val)",
 			"INSERT INTO t VALUES ('zzz',4),('mult',1),('sub',2),('add',5)",
-			"CALL dadd('.');",
-			"CALL dcommit('-am', 'add rows');",
+			"CALL dolt_add('.');",
+			"CALL dolt_commit('-am', 'add rows');",
 			"INSERT INTO t VALUES ('dolt',0),('alt',12),('del',8),('ctl',3)",
-			"CALL dcommit('-am', 'add more rows');",
+			"CALL dolt_commit('-am', 'add more rows');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{

@@ -21,8 +21,8 @@ function checksum_table {
     dolt sql <<SQL
 CREATE TABLE test (pk int primary key, c0 int, c1 int);
 INSERT INTO test VALUES (0,0,0);
-CALL dadd('-A');
-CALL dcommit('-am', 'added table test');
+CALL dolt_add('-A');
+CALL dolt_commit('-am', 'added table test');
 SQL
     CHECKSUM=$(checksum_table test head)
 
@@ -51,8 +51,8 @@ SQL
     dolt sql <<SQL
 CREATE TABLE test (pk int primary key, c0 int, c1 int);
 INSERT INTO test VALUES (0,0,0);
-CALL dadd('-A');
-CALL dcommit('-am', 'added table test');
+CALL dolt_add('-A');
+CALL dolt_commit('-am', 'added table test');
 SQL
 
     mkdir db_one db_two
@@ -83,8 +83,8 @@ SQL
     dolt sql <<SQL
 CREATE TABLE test (pk int primary key, c0 int, c1 int);
 INSERT INTO test VALUES (0,0,0);
-CALL dadd('-A');
-CALL dcommit('-am', 'added table test');
+CALL dolt_add('-A');
+CALL dolt_commit('-am', 'added table test');
 SQL
 
     dolt migrate
@@ -96,20 +96,20 @@ SQL
     dolt sql <<SQL
 CREATE TABLE test (pk int primary key, c0 int, c1 int);
 INSERT INTO test VALUES (0,0,0);
-CALL dadd('-A');
-CALL dcommit('-am', 'added table test');
+CALL dolt_add('-A');
+CALL dolt_commit('-am', 'added table test');
 SQL
     dolt branch one
     dolt branch two
 
     dolt sql <<SQL
-CALL dcheckout('one');
+CALL dolt_checkout('one');
 INSERT INTO test VALUES (1,1,1);
-CALL dcommit('-am', 'row (1,1,1)');
-CALL dcheckout('two');
+CALL dolt_commit('-am', 'row (1,1,1)');
+CALL dolt_checkout('two');
 INSERT INTO test VALUES (2,2,2);
-CALL dcommit('-am', 'row (2,2,2)');
-CALL dmerge('one');
+CALL dolt_commit('-am', 'row (2,2,2)');
+CALL dolt_merge('one');
 SQL
 
     MAIN=$(checksum_table test main)
@@ -135,11 +135,11 @@ SQL
     dolt sql <<SQL
 CREATE TABLE test (pk int primary key, c0 int, c1 int);
 INSERT INTO test VALUES (0,0,0);
-CALL dadd('-A');
-CALL dcommit('-am', 'added table test');
-CALL dtag('tag1', 'head');
+CALL dolt_add('-A');
+CALL dolt_commit('-am', 'added table test');
+CALL dolt_tag('tag1', 'head');
 INSERT INTO test VALUES (1,1,1);
-CALL dcommit('-am', 'added rows');
+CALL dolt_commit('-am', 'added rows');
 INSERT INTO test VALUES (2,2,2);
 SQL
 
@@ -169,8 +169,8 @@ TXT
 CREATE TABLE test (pk int primary key, c0 int, c1 int);
 CREATE VIEW test2 AS SELECT c0, c1 FROM test;
 INSERT INTO test VALUES (0,0,0);
-CALL dadd('-A');
-CALL dcommit('-am', 'added table test');
+CALL dolt_add('-A');
+CALL dolt_commit('-am', 'added table test');
 SQL
     dolt docs upload README.md README.md
     dolt add .
@@ -191,10 +191,10 @@ SQL
     dolt sql <<SQL
 CREATE TABLE keyless (c0 int, c1 int);
 INSERT INTO keyless VALUES (0,0),(1,1);
-CALL dadd('-A');
-CALL dcommit('-am', 'added keyless table');
+CALL dolt_add('-A');
+CALL dolt_commit('-am', 'added keyless table');
 INSERT INTO keyless VALUES (2,2),(3,3);
-CALL dcommit('-am', 'added more rows');
+CALL dolt_commit('-am', 'added more rows');
 SQL
 
     HEAD=$(checksum_table keyless head)
@@ -276,21 +276,21 @@ SQL
     dolt sql <<SQL
 CREATE TABLE test (pk int primary key, c0 int, c1 int);
 INSERT INTO test VALUES (0,0,0);
-CALL dcommit('-Am', 'added table test');
-CALL dcheckout('-b', 'other');
-CALL dbranch('third');
+CALL dolt_commit('-Am', 'added table test');
+CALL dolt_checkout('-b', 'other');
+CALL dolt_branch('third');
 INSERT INTO test VALUES (1, 2, 3);
-CALL dcommit('-am', 'added row on branch other');
-CALL dcheckout('main');
+CALL dolt_commit('-am', 'added row on branch other');
+CALL dolt_checkout('main');
 INSERT INTO test VALUES (1, -2, -3);
-CALL dcommit('-am', 'added row on branch main');
+CALL dolt_commit('-am', 'added row on branch main');
 SET @@dolt_allow_commit_conflicts = 1;
-CALL dmerge('other');
+CALL dolt_merge('other');
 INSERT INTO test VALUES (9,9,9);
 SET @@dolt_allow_commit_conflicts = 1;
 SET @@dolt_force_transaction_commit = 1;
-CALL dcommit( '--force', '-am', 'commit conflicts');
-CALL dcheckout('third');
+CALL dolt_commit( '--force', '-am', 'commit conflicts');
+CALL dolt_checkout('third');
 SQL
     dolt migrate --drop-conflicts
 }
@@ -299,8 +299,8 @@ SQL
     dolt sql <<SQL
 CREATE TABLE test (pk int primary key, c0 int, c1 int);
 INSERT INTO test VALUES (0,0,0);
-CALL dadd('-A');
-CALL dcommit('-am', 'added table test');
+CALL dolt_add('-A');
+CALL dolt_commit('-am', 'added table test');
 SQL
     dolt migrate
     run dolt migrate

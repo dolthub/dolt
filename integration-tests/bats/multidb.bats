@@ -32,10 +32,10 @@ teardown() {
     start_multi_db_server repo1
     dolt sql -q "create database new;
     	 use new;
-    	 call dcheckout('-b', 'feat');
+    	 call dolt_checkout('-b', 'feat');
     	 create table t (x int);
     	 call dolt_add('.');
-    	 call dcommit('-am', 'cm');
+    	 call dolt_commit('-am', 'cm');
     	 set @@global.new_default_branch='feat'"
     dolt sql -q "use repo1"
 }
