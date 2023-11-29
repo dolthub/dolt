@@ -473,28 +473,19 @@ func runMain() int {
 	emitter := events.NewFileEmitter(root, dbfactory.DoltDir)
 
 	defer func() {
-		ces := events.GlobalCollector.Close()
-		// events.WriterEmitter{cli.CliOut}.LogEvents(Version, ces)
-
 		metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")
-
 		disabled, err := strconv.ParseBool(metricsDisabled)
-		if err != nil {
-			// log.Print(err)
+		if err != nil || disabled {
 			return
 		}
 
-		if disabled {
-			return
-		}
+		ces := events.GlobalCollector.Close()
 
 		// write events
 		_ = emitter.LogEvents(Version, ces)
 
 		// flush events
-		if err := processEventsDir(args, dEnv); err != nil {
-			// log.Print(err)
-		}
+		_ = processEventsDir(args, dEnv)
 	}()
 
 	if needsWriteAccess(subcommandName) {
