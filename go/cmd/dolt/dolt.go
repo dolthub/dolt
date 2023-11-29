@@ -680,12 +680,17 @@ If you're interested in running this command against a remote host, hit us up on
 		}
 	}
 
+	usedEnv := targetEnv
+	if usedEnv == nil && useDb != "" {
+	        usedEnv = mrEnv.GetEnv(useDb)
+	}
+
 	// There is no target environment detected. This is allowed for a small number of commands.
 	// We don't expect that number to grow, so we list them here.
 	// It's also allowed when --help is passed.
 	// So we defer the error until the caller tries to use the cli.LateBindQueryist
 	isDoltEnvironmentRequired := subcommandName != "init" && subcommandName != "sql" && subcommandName != "sql-server" && subcommandName != "sql-client"
-	if targetEnv == nil && isDoltEnvironmentRequired {
+	if usedEnv == nil && isDoltEnvironmentRequired {
 		return func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) {
 			return nil, nil, nil, fmt.Errorf("The current directory is not a valid dolt repository.")
 		}, nil
