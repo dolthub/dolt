@@ -547,7 +547,7 @@ func Serve(
 
 	RunSQLServer := &svcs.AnonService{
 		RunF: func(context.Context) {
-			sqlserver.SetRunningServer(mySQLServer, serverLock)
+			sqlserver.SetRunningServer(mySQLServer)
 			defer sqlserver.UnsetRunningServer()
 			mySQLServer.Start()
 		},
@@ -696,7 +696,7 @@ func newSessionBuilder(se *engine.SqlEngine, config ServerConfig) server.Session
 		dsess, err := se.NewDoltSession(ctx, mysqlBaseSess)
 		if err != nil {
 			if goerrors.Is(err, env.ErrFailedToAccessDB) {
-				if server, _ := sqlserver.GetRunningServer(); server != nil {
+				if server := sqlserver.GetRunningServer(); server != nil {
 					_ = server.Close()
 				}
 			}

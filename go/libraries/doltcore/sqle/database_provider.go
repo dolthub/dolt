@@ -705,7 +705,7 @@ func (p *DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, 
 	}
 
 	// If we have a running server, remove it from other sessions as well
-	runningServer, _ := sqlserver.GetRunningServer()
+	runningServer := sqlserver.GetRunningServer()
 	if runningServer != nil {
 		sessionManager := runningServer.SessionManager()
 		err := sessionManager.Iter(func(session sql.Session) (bool, error) {

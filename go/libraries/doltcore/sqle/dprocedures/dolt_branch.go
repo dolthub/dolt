@@ -300,7 +300,7 @@ func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) er
 		return nil
 	}
 
-	runningServer, _ := sqlserver.GetRunningServer()
+	runningServer := sqlserver.GetRunningServer()
 	if runningServer == nil {
 		return nil
 	}
