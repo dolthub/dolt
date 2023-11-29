@@ -677,11 +677,6 @@ func newSessionBuilder(se *engine.SqlEngine, config ServerConfig) server.Session
 
 		dsess, err := se.NewDoltSession(ctx, mysqlBaseSess)
 		if err != nil {
-			if goerrors.Is(err, env.ErrFailedToAccessDB) {
-				if server := sqlserver.GetRunningServer(); server != nil {
-					_ = server.Close()
-				}
-			}
 			return nil, err
 		}
 
