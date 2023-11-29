@@ -30,6 +30,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
+var Application = eventsapi.AppID_APP_DOLT
+
 // Emitter is an interface used for processing a batch of events
 type Emitter interface {
 	// LogEvents takes a batch of events and processes them
@@ -110,7 +112,7 @@ func (em *GrpcEmitter) LogEvents(version string, evts []*eventsapi.ClientEvent) 
 		Version:   version,
 		Platform:  plat,
 		Events:    evts,
-		App:       eventsapi.AppID_APP_DOLT,
+		App:       Application,
 	}
 
 	_, err := em.client.LogEvents(ctx, &req)
