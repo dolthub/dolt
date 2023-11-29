@@ -130,7 +130,12 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 
 	keyless := schema.IsKeyless(tm.leftSch)
 
-	pri, err := newPrimaryMerger(leftEditor, tm, valueMerger, finalSch, mergeInfo)
+	defaults, err := resolveDefaults(ctx, tm.name, finalSch, tm.leftSch)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	pri, err := newPrimaryMerger(leftEditor, tm, valueMerger, finalSch, mergeInfo, defaults)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1044,15 +1049,17 @@ type primaryMerger struct {
 	tableMerger *TableMerger
 	finalSch    schema.Schema
 	mergeInfo   MergeInfo
+	defaults    []sql.Expression
 }
 
-func newPrimaryMerger(leftEditor *prolly.MutableMap, tableMerger *TableMerger, valueMerger *valueMerger, finalSch schema.Schema, mergeInfo MergeInfo) (*primaryMerger, error) {
+func newPrimaryMerger(leftEditor *prolly.MutableMap, tableMerger *TableMerger, valueMerger *valueMerger, finalSch schema.Schema, mergeInfo MergeInfo, defaults []sql.Expression) (*primaryMerger, error) {
 	return &primaryMerger{
 		mut:         leftEditor,
 		valueMerger: valueMerger,
 		tableMerger: tableMerger,
 		finalSch:    finalSch,
 		mergeInfo:   mergeInfo,
+		defaults:    defaults,
 	}, nil
 }
 
@@ -1149,13 +1156,8 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 				return fmt.Errorf("cannot merge keyless tables with reordered columns")
 			}
 		} else {
-			defaults, err := resolveDefaults(ctx, m.tableMerger.name, m.finalSch, m.tableMerger.leftSch)
-			if err != nil {
-				return err
-			}
-
 			tempTupleValue, err := remapTupleWithColumnDefaults(ctx, diff.Key, newTupleValue, sourceSch.GetValueDescriptor(),
-				m.valueMerger.leftMapping, m.tableMerger, m.tableMerger.leftSch, m.finalSch, defaults, m.valueMerger.syncPool, false)
+				m.valueMerger.leftMapping, m.tableMerger, m.tableMerger.leftSch, m.finalSch, m.defaults, m.valueMerger.syncPool, false)
 			if err != nil {
 				return err
 			}
