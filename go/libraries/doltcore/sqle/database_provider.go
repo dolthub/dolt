@@ -665,17 +665,6 @@ func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string
 		return fmt.Errorf("unable to register new database without database provider mutex being locked")
 	}
 
-	// If we're running in a sql-server context, ensure the new database is locked so that it can't
-	// be edited from the CLI. We can't rely on looking for an existing lock file, since this could
-	// be the first db creation if sql-server was started from a bare directory.
-	_, lckDeets := sqlserver.GetRunningServer()
-	if lckDeets != nil {
-		err = newEnv.Lock(lckDeets)
-		if err != nil {
-			ctx.GetLogger().Warnf("Failed to lock newly created database: %s", err.Error())
-		}
-	}
-
 	fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
 	if err != nil {
 		return err
