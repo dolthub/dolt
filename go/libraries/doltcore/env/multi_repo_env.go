@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
-	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -31,8 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
 )
-
-var ErrActiveServerLock = errors.NewKind("database locked by another sql-server; either clone the database to run a second server, or delete the '%s' if no other sql-servers are active")
 
 // EnvNameAndPath is a simple tuple of the name of an environment and the path to where it is on disk
 type EnvNameAndPath struct {
@@ -49,10 +46,10 @@ type NamedEnv struct {
 
 // MultiRepoEnv is a type used to store multiple environments which can be retrieved by name
 type MultiRepoEnv struct {
-	envs           []NamedEnv
-	fs             filesys.Filesys
-	cfg            config.ReadWriteConfig
-	dialProvider   dbfactory.GRPCDialProvider
+	envs         []NamedEnv
+	fs           filesys.Filesys
+	cfg          config.ReadWriteConfig
+	dialProvider dbfactory.GRPCDialProvider
 }
 
 // NewMultiEnv returns a new MultiRepoEnv instance dirived from a root DoltEnv instance.
@@ -88,10 +85,10 @@ func MultiEnvForDirectory(
 	}
 
 	mrEnv := &MultiRepoEnv{
-		envs:           make([]NamedEnv, 0),
-		fs:             dataDirFS,
-		cfg:            config,
-		dialProvider:   NewGRPCDialProviderFromDoltEnv(newDEnv),
+		envs:         make([]NamedEnv, 0),
+		fs:           dataDirFS,
+		cfg:          config,
+		dialProvider: NewGRPCDialProviderFromDoltEnv(newDEnv),
 	}
 
 	envSet := map[string]*DoltEnv{}

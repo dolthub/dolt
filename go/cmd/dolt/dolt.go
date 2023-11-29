@@ -701,23 +701,24 @@ If you're interested in running this command against a remote host, hit us up on
 		targetEnv = rootEnv
 	}
 
-	// TODO: if targetEnv.DoltDB.AccessMode() == ReadOnly...
-	// Need to go looking for local creds to use...
-	var isLocked bool
-	var lock *sqlserver.LocalCreds
-	var err error
-	if err != nil {
-		return nil, err
-	}
-	if isLocked {
-		if verbose {
-			cli.Println("verbose: starting remote mode")
+	// If the loaded environment does not itself have a DoltDB, then we look for a server.
+	// We also look for a server when the loaded environment has a DoltDB but another
+	// running process already has exclusive write access to it.
+	if targetEnv.DoltDB == nil || targetEnv.IsAccessModeReadOnly() {
+		localCreds, err := sqlserver.FindAndLoadLocalCreds(targetEnv.FS)
+		if err != nil {
+			return nil, err
 		}
+		if localCreds != nil {
+			if verbose {
+				cli.Println("verbose: starting remote mode")
+			}
 
-		if !creds.Specified {
-			creds = &cli.UserPassword{Username: sqlserver.LocalConnectionUser, Password: lock.Secret, Specified: false}
+			if !creds.Specified {
+				creds = &cli.UserPassword{Username: sqlserver.LocalConnectionUser, Password: localCreds.Secret, Specified: false}
+			}
+			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", localCreds.Port, false, useDb)
 		}
-		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", lock.Port, false, useDb)
 	}
 
 	if verbose {

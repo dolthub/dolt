@@ -15,8 +15,10 @@
 package sqlserver
 
 import (
-	"os"
+	"errors"
 	"fmt"
+	iofs "io/fs"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -83,8 +85,43 @@ func WriteLocalCreds(fs filesys.Filesys, creds *LocalCreds) error {
 	return fs.WriteFile(credsFile, []byte(fmt.Sprintf("%d:%s:%s", creds.Pid, portStr, creds.Secret)), 0600)
 }
 
-func LoadLocalCreds(fs filesys.Filesys, credsFilePath string) (creds *LocalCreds, err error) {
-	rd, err := fs.OpenForRead(credsFilePath)
+// Starting at `fs`, look for the a ServerLocalCredsFile in the .dolt directory
+// of this directory and every parent directory, until we find one. When we
+// find we, we return its contents if we can open and parse it successfully.
+// Otherwise, we return an error associated with attempting to read it. If we
+// do not find anything all the way up to the root of the filesystem, returns
+// `nil` *LocalCreds and a `nil` error.
+func FindAndLoadLocalCreds(fs filesys.Filesys) (creds *LocalCreds, err error) {
+	root, err := fs.Abs(".")
+	if err != nil {
+		return nil, err
+	}
+	for root != "" && root[len(root)-1] != '/' {
+		creds, err := LoadLocalCreds(fs)
+		if err == nil {
+			return creds, err
+		}
+		// If we have an error that is not ErrNotExist, for example, a
+		// permission error opening the credentials file, or an error
+		// indicating that the contents of the file were malformed, go
+		// ahead and return the error and terminate our search here.
+		if !errors.Is(err, iofs.ErrNotExist) {
+			return nil, err
+		}
+		fs, err = fs.WithWorkingDir("..")
+		if err != nil {
+			return nil, err
+		}
+		root, err = fs.Abs(".")
+		if err != nil {
+			return nil, err
+		}
+	}
+	return nil, nil
+}
+
+func LoadLocalCreds(fs filesys.Filesys) (creds *LocalCreds, err error) {
+	rd, err := fs.OpenForRead(filepath.Join(dbfactory.DoltDir, ServerLocalCredsFile))
 	if err != nil {
 		return nil, err
 	}

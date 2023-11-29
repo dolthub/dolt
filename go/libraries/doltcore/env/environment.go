@@ -35,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -52,8 +53,6 @@ const (
 	DefaultRemotesApiPort = "443"
 
 	tempTablesDir = "temptf"
-
-	ServerLockFile = "sql-server.lock"
 )
 
 var zeroHashStr = (hash.Hash{}).String()
@@ -1182,4 +1181,8 @@ func (dEnv *DoltEnv) BulkDbEaFactory() editor.DbEaFactory {
 		return nil
 	}
 	return editor.NewBulkImportTEAFactory(dEnv.DoltDB.ValueReadWriter(), tmpDir)
+}
+
+func (dEnv *DoltEnv) IsAccessModeReadOnly() bool {
+	return dEnv.DoltDB.AccessMode() == chunks.ExclusiveAccessMode_ReadOnly
 }
