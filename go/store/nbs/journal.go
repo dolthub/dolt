@@ -484,6 +484,13 @@ func (j *ChunkJournal) Close() (err error) {
 	return err
 }
 
+func (j *ChunkJournal) AccessMode() chunks.ExclusiveAccessMode {
+	if j.backing.readOnly() {
+		return chunks.ExclusiveAccessMode_ReadOnly
+	}
+	return chunks.ExclusiveAccessMode_Exclusive
+}
+
 type journalConjoiner struct {
 	child conjoinStrategy
 }

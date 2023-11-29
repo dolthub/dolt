@@ -59,6 +59,10 @@ func (nb nullBlockStore) Version() string {
 	panic("not impl")
 }
 
+func (nb nullBlockStore) AccessMode() chunks.ExclusiveAccessMode {
+	panic("not impl")
+}
+
 func (nb nullBlockStore) Close() error {
 	return nil
 }

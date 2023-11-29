@@ -110,6 +110,10 @@ func (csMW *CSMetricWrapper) Version() string {
 	return csMW.cs.Version()
 }
 
+func (csMW *CSMetricWrapper) AccessMode() ExclusiveAccessMode {
+	return csMW.cs.AccessMode()
+}
+
 // Rebase brings this ChunkStore into sync with the persistent storage's
 // current root.
 func (csMW *CSMetricWrapper) Rebase(ctx context.Context) error {
