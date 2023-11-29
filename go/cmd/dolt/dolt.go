@@ -440,7 +440,9 @@ func runMain() int {
 	var fs filesys.Filesys
 	fs = filesys.LocalFS
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, Version)
-	dEnv.IgnoreLockFile = ignoreLockFile
+
+	// TODO: Decide what we're doing with --ignore-lock-file; does it mean always operate locally?
+	_ = ignoreLockFile
 
 	root, err := env.GetCurrentUserHomeDir()
 	if err != nil {
@@ -550,7 +552,7 @@ func runMain() int {
 	}
 	dEnv.FS = dataDirFS
 
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dataDirFS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dataDirFS, dEnv.Version, dEnv)
 	if err != nil {
 		cli.PrintErrln("failed to load database names")
 		return 1
@@ -699,7 +701,11 @@ If you're interested in running this command against a remote host, hit us up on
 		targetEnv = rootEnv
 	}
 
-	isLocked, lock, err := targetEnv.GetLock()
+	// TODO: if targetEnv.DoltDB.AccessMode() == ReadOnly...
+	// Need to go looking for local creds to use...
+	var isLocked bool
+	var lock *sqlserver.LocalCreds
+	var err error
 	if err != nil {
 		return nil, err
 	}

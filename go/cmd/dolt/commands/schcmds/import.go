@@ -170,9 +170,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
-	if dEnv.IsLocked() {
-		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), usage)
-	}
+	// TODO: Error if dEnv.DoltDB.AccessMode() == ReadOnly?
 
 	return commands.HandleVErrAndExitCode(importSchema(ctx, dEnv, apr), usage)
 }

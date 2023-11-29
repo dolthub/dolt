@@ -21,7 +21,6 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -100,9 +99,7 @@ func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return 1
 	}
 
-	if dEnv.IsLocked() {
-		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
-	}
+	// TODO: Error if dEnv.DoltDB.AccessMode() == ReadOnly?
 
 	err := stashChanges(ctx, dEnv, apr)
 	if err != nil {

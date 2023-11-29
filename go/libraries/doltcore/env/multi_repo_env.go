@@ -53,12 +53,11 @@ type MultiRepoEnv struct {
 	fs             filesys.Filesys
 	cfg            config.ReadWriteConfig
 	dialProvider   dbfactory.GRPCDialProvider
-	ignoreLockFile bool
 }
 
 // NewMultiEnv returns a new MultiRepoEnv instance dirived from a root DoltEnv instance.
 func MultiEnvForSingleEnv(ctx context.Context, env *DoltEnv) (*MultiRepoEnv, error) {
-	return MultiEnvForDirectory(ctx, env.Config.WriteableConfig(), env.FS, env.Version, env.IgnoreLockFile, env)
+	return MultiEnvForDirectory(ctx, env.Config.WriteableConfig(), env.FS, env.Version, env)
 }
 
 // MultiEnvForDirectory returns a MultiRepoEnv for the directory rooted at the file system given. The doltEnv from the
@@ -69,7 +68,6 @@ func MultiEnvForDirectory(
 	config config.ReadWriteConfig,
 	dataDirFS filesys.Filesys,
 	version string,
-	ignoreLockFile bool,
 	dEnv *DoltEnv,
 ) (*MultiRepoEnv, error) {
 	// Load current dataDirFS and put into mr env
@@ -94,7 +92,6 @@ func MultiEnvForDirectory(
 		fs:             dataDirFS,
 		cfg:            config,
 		dialProvider:   NewGRPCDialProviderFromDoltEnv(newDEnv),
-		ignoreLockFile: ignoreLockFile,
 	}
 
 	envSet := map[string]*DoltEnv{}

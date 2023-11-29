@@ -80,9 +80,8 @@ func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []strin
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, stashPopDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
-	if dEnv.IsLocked() {
-		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
-	}
+
+	// TODO: Error if dEnv.DoltDB.AccessMode() == ReadOnly?
 
 	_, sqlCtx, closer, err := cliCtx.QueryEngine(ctx)
 	if err != nil {

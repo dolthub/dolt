@@ -140,7 +140,7 @@ func Serve(
 	var mrEnv *env.MultiRepoEnv
 	InitMultiEnv := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
-			mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+			mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv)
 			return err
 		},
 	}
@@ -154,18 +154,18 @@ func Serve(
 	}
 	controller.Register(AssertNoDatabasesInAccessModeReadOnly)
 
-	var serverLock *env.DBLock
-	InitGlobalServerLock := &svcs.AnonService{
+	var localCreds *LocalCreds
+	InitServerLocalCreds := &svcs.AnonService{
 		InitF: func(context.Context) (err error) {
-			serverLock, err = acquireGlobalSqlServerLock(serverConfig.Port(), dEnv)
+			localCreds, err = persistServerLocalCreds(serverConfig.Port(), dEnv)
 			return err
 		},
 		StopF: func() error {
-			dEnv.FS.Delete(dEnv.LockFile(), false)
+			RemoveLocalCreds(dEnv.FS)
 			return nil
 		},
 	}
-	controller.Register(InitGlobalServerLock)
+	controller.Register(InitServerLocalCreds)
 
 	var clusterController *cluster.Controller
 	InitClusterController := &svcs.AnonService{
@@ -283,7 +283,7 @@ func Serve(
 		InitF: func(context.Context) error {
 			mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
 			ed := mysqlDb.Editor()
-			mysqlDb.AddSuperUser(ed, LocalConnectionUser, "localhost", serverLock.Secret)
+			mysqlDb.AddSuperUser(ed, LocalConnectionUser, "localhost", localCreds.Secret)
 			ed.Close()
 			return nil
 		},
@@ -555,26 +555,13 @@ func Serve(
 	return nil, controller.WaitForStop()
 }
 
-// acquireGlobalSqlServerLock attempts to acquire a global lock on the SQL server. If no error is returned, then the lock was acquired.
-func acquireGlobalSqlServerLock(port int, dEnv *env.DoltEnv) (*env.DBLock, error) {
-	locked, _, err := dEnv.GetLock()
+func persistServerLocalCreds(port int, dEnv *env.DoltEnv) (*LocalCreds, error) {
+	creds := NewLocalCreds(port)
+	err := WriteLocalCreds(dEnv.FS, creds)
 	if err != nil {
 		return nil, err
 	}
-	if locked {
-		lockPath := dEnv.LockFile()
-		err = fmt.Errorf("Database locked by another sql-server; Lock file: %s", lockPath)
-		return nil, err
-	}
-
-	lck := env.NewDBLock(port)
-	err = dEnv.Lock(&lck)
-	if err != nil {
-		err = fmt.Errorf("Server can not start. Failed to acquire lock: %s", err.Error())
-		return nil, err
-	}
-
-	return &lck, nil
+	return creds, err
 }
 
 // remotesapiAuth facilitates the implementation remotesrv.AccessControl for the remotesapi server.
