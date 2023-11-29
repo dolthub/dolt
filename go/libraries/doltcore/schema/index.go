@@ -226,6 +226,7 @@ func (ix *indexImpl) PrimaryKeyTags() []uint64 {
 
 // Schema implements Index.
 func (ix *indexImpl) Schema() Schema {
+	addressEncodedFields := make([]uint64, 0)
 	cols := make([]Column, len(ix.allTags))
 	for i, tag := range ix.allTags {
 		col := ix.indexColl.colColl.TagToCol[tag]
@@ -237,15 +238,25 @@ func (ix *indexImpl) Schema() Schema {
 			TypeInfo:    col.TypeInfo,
 			Constraints: nil,
 		}
+
+		// TODO: This should be explained
+		prefixLength := uint16(0)
+		if len(ix.PrefixLengths()) > i {
+			prefixLength = ix.PrefixLengths()[i]
+		}
+		if ix.IsUnique() && prefixLength == 0 {
+			addressEncodedFields = append(addressEncodedFields, tag)
+		}
 	}
 	allCols := NewColCollection(cols...)
 	nonPkCols := NewColCollection()
 	return &schemaImpl{
-		pkCols:          allCols,
-		nonPKCols:       nonPkCols,
-		allCols:         allCols,
-		indexCollection: NewIndexCollection(nil, nil),
-		checkCollection: NewCheckCollection(),
+		pkCols:               allCols,
+		nonPKCols:            nonPkCols,
+		allCols:              allCols,
+		indexCollection:      NewIndexCollection(nil, nil),
+		checkCollection:      NewCheckCollection(),
+		addressEncodedFields: addressEncodedFields,
 	}
 }
 

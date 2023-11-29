@@ -820,17 +820,17 @@ func (t *WritableDoltTable) truncate(
 	sch schema.Schema,
 	sess *dsess.DoltSession,
 ) (*doltdb.Table, error) {
-	empty, err := durable.NewEmptyIndex(ctx, table.ValueReadWriter(), table.NodeStore(), sch)
-	if err != nil {
-		return nil, err
-	}
-
 	idxSet, err := table.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, idx := range sch.Indexes().AllIndexes() {
+		empty, err := durable.NewEmptyIndex(ctx, table.ValueReadWriter(), table.NodeStore(), idx.Schema())
+		if err != nil {
+			return nil, err
+		}
+
 		idxSet, err = idxSet.PutIndex(ctx, idx.Name(), empty)
 		if err != nil {
 			return nil, err
@@ -848,6 +848,11 @@ func (t *WritableDoltTable) truncate(
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	empty, err := durable.NewEmptyIndex(ctx, table.ValueReadWriter(), table.NodeStore(), sch)
+	if err != nil {
+		return nil, err
 	}
 
 	// truncate table resets auto-increment value

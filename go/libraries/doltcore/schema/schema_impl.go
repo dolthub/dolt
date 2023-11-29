@@ -44,6 +44,7 @@ type schemaImpl struct {
 	checkCollection            CheckCollection
 	pkOrdinals                 []int
 	collation                  Collation
+	addressEncodedFields       []uint64
 }
 
 var _ Schema = (*schemaImpl)(nil)
@@ -422,6 +423,11 @@ func (si *schemaImpl) getKeyColumnsDescriptor(convertAddressColumns bool) val.Tu
 		return val.KeylessTupleDesc
 	}
 
+	addressEncodedFields := make(map[uint64]struct{})
+	for _, tag := range si.addressEncodedFields {
+		addressEncodedFields[tag] = struct{}{}
+	}
+
 	var tt []val.Type
 	useCollations := false // We only use collations if a string exists
 	var collations []sql.CollationID
@@ -429,17 +435,24 @@ func (si *schemaImpl) getKeyColumnsDescriptor(convertAddressColumns bool) val.Tu
 		sqlType := col.TypeInfo.ToSqlType()
 		queryType := sqlType.Type()
 		var t val.Type
-		if convertAddressColumns && queryType == query.Type_BLOB {
+
+		addressEncoded := false
+		if _, ok := addressEncodedFields[tag]; ok {
+			addressEncoded = true
+		}
+
+		if convertAddressColumns && !addressEncoded && queryType == query.Type_BLOB {
 			t = val.Type{
 				Enc:      val.Encoding(EncodingFromSqlType(query.Type_VARBINARY)),
 				Nullable: columnMissingNotNullConstraint(col),
 			}
-		} else if convertAddressColumns && queryType == query.Type_TEXT {
+		} else if convertAddressColumns && !addressEncoded && queryType == query.Type_TEXT {
 			t = val.Type{
 				Enc:      val.Encoding(EncodingFromSqlType(query.Type_VARCHAR)),
 				Nullable: columnMissingNotNullConstraint(col),
 			}
-		} else if convertAddressColumns && queryType == query.Type_GEOMETRY {
+		} else if convertAddressColumns && !addressEncoded && queryType == query.Type_GEOMETRY {
+			// TODO: Is this correct for Geometry types?
 			t = val.Type{
 				Enc:      val.Encoding(serial.EncodingCell),
 				Nullable: columnMissingNotNullConstraint(col),

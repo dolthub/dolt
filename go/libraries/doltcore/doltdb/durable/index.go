@@ -122,6 +122,7 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 // NewEmptyIndex returns an index with no rows.
 func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) (Index, error) {
 	switch vrw.Format() {
+	// TODO: Take another/separate pass and kill Format_LD_1 code!
 	case types.Format_LD_1:
 		m, err := types.NewMap(ctx, vrw)
 		if err != nil {
@@ -490,11 +491,11 @@ func (is doltDevIndexSet) GetIndex(ctx context.Context, sch schema.Schema, name 
 	if addr.IsEmpty() {
 		return nil, fmt.Errorf("index %s not found in IndexSet", name)
 	}
-	idxSch := sch.Indexes().GetByName(name)
-	if idxSch == nil {
+	idx := sch.Indexes().GetByName(name)
+	if idx == nil {
 		return nil, fmt.Errorf("index schema not found: %s", name)
 	}
-	return indexFromAddr(ctx, is.vrw, is.ns, idxSch.Schema(), addr)
+	return indexFromAddr(ctx, is.vrw, is.ns, idx.Schema(), addr)
 }
 
 func (is doltDevIndexSet) PutIndex(ctx context.Context, name string, idx Index) (IndexSet, error) {

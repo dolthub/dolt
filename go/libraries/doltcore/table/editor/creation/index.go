@@ -379,6 +379,9 @@ type prollyUniqueKeyErr struct {
 // Error implements the error interface.
 func (u *prollyUniqueKeyErr) Error() string {
 	keyStr, _ := formatKey(u.k, u.kd)
+	// TODO: formatKey doesn't take into account content hashes being used for keys for non-prefix length
+	//       unique keys for TEXT/BLOB types.
+	// TODO: Why aren't we using sql.ErrUniqueKeyViolation to at least grab the error message instead of copying it?
 	return fmt.Sprintf("duplicate unique key given: %s", keyStr)
 }
 

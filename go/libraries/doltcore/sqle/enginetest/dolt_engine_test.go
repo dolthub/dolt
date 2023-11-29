@@ -116,26 +116,84 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	//t.Skip()
+	// TODO: Take this test and convert it into a test for unique keys
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "physical columns added after virtual one",
+			Name: "https://github.com/dolthub/dolt/issues/7040",
 			SetUpScript: []string{
-				"create table t (pk int primary key, col1 int as (pk + 1));",
-				"insert into t (pk) values (1), (3)",
-				"alter table t add index idx1 (col1, pk);",
-				"alter table t add index idx2 (col1);",
-				"alter table t add column col2 int;",
-				"alter table t add column col3 int;",
-				"insert into t (pk, col2, col3) values (2, 4, 5);",
+				"create table t (pk int primary key, col1 text);",
 			},
 			Assertions: []queries.ScriptTestAssertion{
+				/*
+						Global SQL system var @@strict_mysql_mode where MariaDB extensions are disabled
+
+					    Because the addresses of TEXT/BLOB data are already content-addressed, the address itself can serve
+					    as a hash of the content and thus as a unique key. One part that we don't support yet is the ability
+					    to look up the content and more deeply inspect it to determine if it is really unique when there is
+					    a hash collision.
+				*/
 				{
-					Query: "select * from t where col1 = 2",
+					// MariaDB supports unique keys for text and blob fields
+					// TODO: Should turn off/on STRICT_MYSQL_MODE for this test?
+					//       Or should we require people to opt-in and turn on MARIADB_COMPATIBILITY instead?
+					Query:    "alter table t add unique key k1(col1);",
+					Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
+				},
+				{
+					Query:    "insert into t values (5, '  ');",
+					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+				},
+				{
+					Query:    "insert into t values (4, ''), (8, '.');",
+					Expected: []sql.Row{{gmstypes.NewOkResult(2)}},
+				},
+				{
+					Query:    "insert into t values (1, 'oneasdfasdf');",
+					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+				},
+				{
+					Query:    "insert into t values (3, 'three');",
+					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+				},
+				{
+					Query: "insert into t values (2, 'oneasdfasdf');",
+					// TODO: The error message is not helpful at all... instead of showing the content hash,
+					//       we should show the actual content.
+					ExpectedErrStr: "duplicate unique key given: [\x8f\xa4\xe7\x9a\xf3\at\x8e\xca\x1f\x1e[\xf6\x7f\xef\x12\xe2\xbb\xc8R]",
+				},
+				{
+					Query:              "select col1 from t where col1='oneasdfasdf';",
+					Expected:           []sql.Row{{"oneasdfasdf"}},
+					CheckIndexedAccess: true,
+					ExpectedIndexes:    []string{"k1"},
+				},
+				{
+					Query:    "alter table t modify column col1 TEXT not null;",
+					Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
+				},
+				{
+					Query: "explain select * from t where col1 >= 'one';",
 					Expected: []sql.Row{
-						{1, 2, nil, nil},
-					},
+						{"Filter"},
+						{" ├─ (t.col1 >= 'one')"},
+						{" └─ IndexedTableAccess(t)"},
+						{"     ├─ index: [t.col1]"},
+						{"     ├─ filters: [{[one, ∞)}]"},
+						{"     └─ columns: [pk col1]"}},
+				},
+				{
+					// TODO: How can we confirm that a range scan doesn't use the index?
+					//       Seems like we may want a new test addition to the enginetest framework that
+					//       asserts a specific index was NOT used?
+					// TODO: When we read from an index that has a TEXT/BLOB field... how do we know to look up
+					//       the real content at the address stored in the main table? (since it won't be in the
+					//       index itself).
+					Query:              "select * from t where col1 >= ' ';",
+					CheckIndexedAccess: true,
+					ExpectedIndexes:    []string{"k1"},
+					Expected:           []sql.Row{{5, " "}, {-1, "  "}, {8, "."}, {1, "oneasdfasdf"}, {3, "three"}},
 				},
 			},
 		},
