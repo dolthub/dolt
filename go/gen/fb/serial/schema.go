@@ -427,7 +427,7 @@ func (rcv *Column) MutateVirtual(n bool) bool {
 	return rcv._tab.MutateBoolSlot(28, n)
 }
 
-const ColumnNumFields = 13
+const ColumnNumFields = 14
 
 func ColumnStart(builder *flatbuffers.Builder) {
 	builder.StartObject(ColumnNumFields)
@@ -470,6 +470,9 @@ func ColumnAddGenerated(builder *flatbuffers.Builder, generated bool) {
 }
 func ColumnAddVirtual(builder *flatbuffers.Builder, virtual bool) {
 	builder.PrependBoolSlot(12, virtual, false)
+}
+func ColumnAddOnupdateValue(builder *flatbuffers.Builder, onupdateValue flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(13, flatbuffers.UOffsetT(onupdateValue), 0)
 }
 func ColumnEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
