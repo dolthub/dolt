@@ -137,6 +137,23 @@ func Serve(
 	}
 	controller.Register(InitDataDir)
 
+	var mrEnv *env.MultiRepoEnv
+	InitMultiEnv := &svcs.AnonService{
+		InitF: func(ctx context.Context) (err error) {
+			mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+			return err
+		},
+	}
+	controller.Register(InitMultiEnv)
+
+	AssertNoDatabasesInAccessModeReadOnly := &svcs.AnonService{
+		InitF: func(ctx context.Context) (err error) {
+			// TODO: Iterate mrEnv, assert env.DoltDB.AccessMode() != chunks.ExclusiveAccessMode_ReadOnly
+			return nil
+		},
+	}
+	controller.Register(AssertNoDatabasesInAccessModeReadOnly)
+
 	var serverLock *env.DBLock
 	InitGlobalServerLock := &svcs.AnonService{
 		InitF: func(context.Context) (err error) {
@@ -149,15 +166,6 @@ func Serve(
 		},
 	}
 	controller.Register(InitGlobalServerLock)
-
-	var mrEnv *env.MultiRepoEnv
-	InitMultiEnv := &svcs.AnonService{
-		InitF: func(ctx context.Context) (err error) {
-			mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
-			return err
-		},
-	}
-	controller.Register(InitMultiEnv)
 
 	var clusterController *cluster.Controller
 	InitClusterController := &svcs.AnonService{
@@ -270,25 +278,6 @@ func Serve(
 		},
 	}
 	controller.Register(InitMetricsListener)
-
-	LockMultiRepoEnv := &svcs.AnonService{
-		InitF: func(context.Context) error {
-			if ok, f := mrEnv.IsLocked(); ok {
-				return env.ErrActiveServerLock.New(f)
-			}
-			if err := mrEnv.Lock(serverLock); err != nil {
-				return err
-			}
-			return nil
-		},
-		StopF: func() error {
-			if err := mrEnv.Unlock(); err != nil {
-				cli.PrintErr(err)
-			}
-			return nil
-		},
-	}
-	controller.Register(LockMultiRepoEnv)
 
 	InitLockSuperUser := &svcs.AnonService{
 		InitF: func(context.Context) error {

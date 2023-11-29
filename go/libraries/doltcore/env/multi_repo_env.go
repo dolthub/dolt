@@ -211,57 +211,6 @@ func (mrEnv *MultiRepoEnv) GetFirstDatabase() string {
 	return currentDb
 }
 
-// IsLocked returns true if any env is locked
-func (mrEnv *MultiRepoEnv) IsLocked() (bool, string) {
-	if mrEnv.ignoreLockFile {
-		return false, ""
-	}
-
-	for _, e := range mrEnv.envs {
-		if e.env.IsLocked() {
-			return true, e.env.LockFile()
-		}
-	}
-	return false, ""
-}
-
-// Lock locks all child envs. The DBLock contains the details to write to the lock files. If an error is returned, all
-// child envs will be returned with their initial lock state.
-func (mrEnv *MultiRepoEnv) Lock(lck *DBLock) (err error) {
-	if mrEnv.ignoreLockFile {
-		return nil
-	}
-
-	if ok, f := mrEnv.IsLocked(); ok {
-		return ErrActiveServerLock.New(f)
-	}
-
-	for _, e := range mrEnv.envs {
-		err = e.env.Lock(lck)
-		if err != nil {
-			mrEnv.Unlock()
-			return err
-		}
-	}
-	return nil
-}
-
-// Unlock unlocks all child envs.
-func (mrEnv *MultiRepoEnv) Unlock() error {
-	if mrEnv.ignoreLockFile {
-		return nil
-	}
-
-	var err, retErr error
-	for _, e := range mrEnv.envs {
-		err = e.env.Unlock()
-		if err != nil && retErr == nil {
-			retErr = err
-		}
-	}
-	return retErr
-}
-
 func getRepoRootDir(path, pathSeparator string) string {
 	if pathSeparator != "/" {
 		path = strings.ReplaceAll(path, pathSeparator, "/")

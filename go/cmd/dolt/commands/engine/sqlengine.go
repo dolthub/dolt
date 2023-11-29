@@ -83,10 +83,6 @@ func NewSqlEngine(
 	mrEnv *env.MultiRepoEnv,
 	config *SqlEngineConfig,
 ) (*SqlEngine, error) {
-	if ok, _ := mrEnv.IsLocked(); ok {
-		config.IsServerLocked = true
-	}
-
 	dbs, locations, err := CollectDBs(ctx, mrEnv, config.Bulk)
 	if err != nil {
 		return nil, err
