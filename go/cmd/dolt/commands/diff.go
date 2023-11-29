@@ -909,6 +909,7 @@ func schemaFromCreateTableStmt(createTableStmt string) (schema.Schema, error) {
 			TypeInfo:      typeInfo,
 			Default:       defBuf.String(),
 			Generated:     "",    // TODO
+			OnUpdate:      "",    // TODO
 			Virtual:       false, // TODO
 			AutoIncrement: col.Type.Autoincrement == true,
 			Comment:       comment,

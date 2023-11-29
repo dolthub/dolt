@@ -55,6 +55,9 @@ table Column {
   hidden:bool;
   generated:bool;
   virtual:bool;
+
+  // sql on update value
+  onupdate_value:string;
 }
 
 table Index {

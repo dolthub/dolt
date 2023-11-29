@@ -40,12 +40,15 @@ func FromDoltSchema(dbName, tableName string, sch schema.Schema) (sql.PrimaryKey
 			extra = "auto_increment"
 		}
 
-		var deflt, generated *sql.ColumnDefaultValue
+		var deflt, generated, onUpdate *sql.ColumnDefaultValue
 		if col.Default != "" {
 			deflt = sql.NewUnresolvedColumnDefaultValue(col.Default)
 		}
 		if col.Generated != "" {
 			generated = sql.NewUnresolvedColumnDefaultValue(col.Generated)
+		}
+		if col.OnUpdate != "" {
+			onUpdate = sql.NewUnresolvedColumnDefaultValue(col.OnUpdate)
 		}
 
 		cols[i] = &sql.Column{
@@ -53,6 +56,7 @@ func FromDoltSchema(dbName, tableName string, sch schema.Schema) (sql.PrimaryKey
 			Type:           sqlType,
 			Default:        deflt,
 			Generated:      generated,
+			OnUpdate:       onUpdate,
 			Nullable:       col.IsNullable(),
 			DatabaseSource: dbName,
 			Source:         tableName,
