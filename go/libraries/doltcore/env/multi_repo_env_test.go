@@ -25,7 +25,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/test"
@@ -189,22 +188,4 @@ func initMultiEnv(t *testing.T, testName string, names []string) (string, HomeDi
 	}
 
 	return rootPath, hdp, envs
-}
-
-func TestLoadMultiEnv(t *testing.T) {
-	names := []string{"env 1", " env  2", "env-3"}
-	rootPath, hdp, _ := initMultiEnv(t, "TestLoadMultiEnv", names)
-
-	envNamesAndPaths := make([]EnvNameAndPath, len(names))
-	for i, name := range names {
-		envNamesAndPaths[i] = EnvNameAndPath{name, filepath.Join(rootPath, name)}
-	}
-
-	mrEnv, err := MultiEnvForPaths(context.Background(), hdp, config.NewEmptyMapConfig(), filesys.LocalFS, "test", false, envNamesAndPaths...)
-	require.NoError(t, err)
-
-	for _, name := range names {
-		e := mrEnv.GetEnv(name)
-		assert.NotNil(t, e)
-	}
 }

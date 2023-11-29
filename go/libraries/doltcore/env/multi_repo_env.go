@@ -16,7 +16,6 @@ package env
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -28,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
-	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
@@ -146,79 +144,6 @@ func MultiEnvForDirectory(
 	sort.Strings(sortedKeys)
 	for _, dbName := range sortedKeys {
 		mrEnv.addEnv(dbName, envSet[dbName])
-	}
-
-	return mrEnv, nil
-}
-
-// MultiEnvForPaths takes a variable list of EnvNameAndPath objects loads each of the environments, and returns a new
-// MultiRepoEnv
-func MultiEnvForPaths(
-	ctx context.Context,
-	hdp HomeDirProvider,
-	cfg config.ReadWriteConfig,
-	fs filesys.Filesys,
-	version string,
-	ignoreLockFile bool,
-	envNamesAndPaths ...EnvNameAndPath,
-) (*MultiRepoEnv, error) {
-	nameToPath := make(map[string]string)
-	for _, nameAndPath := range envNamesAndPaths {
-		existingPath, ok := nameToPath[nameAndPath.Name]
-
-		if ok {
-			if existingPath == nameAndPath.Path {
-				continue
-			}
-
-			return nil, fmt.Errorf("databases at paths '%s' and '%s' both attempted to load with the name '%s'", existingPath, nameAndPath.Path, nameAndPath.Name)
-		}
-
-		nameToPath[nameAndPath.Name] = nameAndPath.Path
-	}
-
-	mrEnv := &MultiRepoEnv{
-		envs:           make([]NamedEnv, 0),
-		fs:             fs,
-		cfg:            cfg,
-		ignoreLockFile: ignoreLockFile,
-	}
-
-	envSet := map[string]*DoltEnv{}
-	for name, path := range nameToPath {
-		absPath, err := fs.Abs(path)
-
-		if err != nil {
-			return nil, err
-		}
-
-		fsForEnv, err := filesys.LocalFilesysWithWorkingDir(absPath)
-
-		if err != nil {
-			return nil, err
-		}
-
-		urlStr := earl.FileUrlFromPath(filepath.Join(absPath, dbfactory.DoltDataDir), os.PathSeparator)
-		dEnv := Load(ctx, hdp, fsForEnv, urlStr, version)
-
-		if dEnv.RSLoadErr != nil {
-			return nil, fmt.Errorf("error loading environment '%s' at path '%s': %s", name, absPath, dEnv.RSLoadErr.Error())
-		} else if dEnv.DBLoadError != nil {
-			return nil, fmt.Errorf("error loading environment '%s' at path '%s': %s", name, absPath, dEnv.DBLoadError.Error())
-		} else if dEnv.CfgLoadErr != nil {
-			return nil, fmt.Errorf("error loading environment '%s' at path '%s': %s", name, absPath, dEnv.CfgLoadErr.Error())
-		}
-
-		if mrEnv.dialProvider == nil {
-			mrEnv.dialProvider = NewGRPCDialProviderFromDoltEnv(dEnv)
-		}
-
-		envSet[name] = dEnv
-	}
-
-	enforceSingleFormat(envSet)
-	for dbName, dEnv := range envSet {
-		mrEnv.addEnv(dbName, dEnv)
 	}
 
 	return mrEnv, nil
