@@ -680,10 +680,6 @@ If you're interested in running this command against a remote host, hit us up on
 		}
 	}
 
-	if targetEnv == nil && useDb != "" {
-		targetEnv = mrEnv.GetEnv(useDb)
-	}
-
 	// There is no target environment detected. This is allowed for a small number of commands.
 	// We don't expect that number to grow, so we list them here.
 	// It's also allowed when --help is passed.
@@ -701,10 +697,26 @@ If you're interested in running this command against a remote host, hit us up on
 		targetEnv = rootEnv
 	}
 
-	// If the loaded environment does not itself have a DoltDB, then we look for a server.
-	// We also look for a server when the loaded environment has a DoltDB but another
-	// running process already has exclusive write access to it.
-	if targetEnv.DoltDB == nil || targetEnv.IsAccessModeReadOnly() {
+	var lookForServer bool
+	if targetEnv.DoltDB != nil && targetEnv.IsAccessModeReadOnly() {
+		// If the loaded target environment has a DoltDB and we do not
+		// have access to it, we look for a server.
+		lookForServer = true
+	} else if targetEnv.DoltDB == nil {
+		// If the loaded environment itself does not have a DoltDB, we
+		// may want to look for a server. We do so if all of the
+		// repositories in our MultiEnv are ReadOnly. This includes the
+		// case where there are no repositories in our MultiEnv
+		var allReposAreReadOnly bool = true
+		mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
+			if dEnv.DoltDB != nil {
+				allReposAreReadOnly = allReposAreReadOnly && dEnv.IsAccessModeReadOnly()
+			}
+			return false, nil
+		})
+		lookForServer = allReposAreReadOnly
+	}
+	if lookForServer {
 		localCreds, err := sqlserver.FindAndLoadLocalCreds(targetEnv.FS)
 		if err != nil {
 			return nil, err
