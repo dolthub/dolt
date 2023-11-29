@@ -74,6 +74,28 @@ type PatchTableFunction struct {
 	dotCommitExpr  sql.Expression
 	tableNameExpr  sql.Expression
 	database       sql.Database
+	tabId          sql.TableId
+	colset         sql.ColSet
+}
+
+func (p *PatchTableFunction) WithId(id sql.TableId) sql.TableIdNode {
+	ret := *p
+	ret.tabId = id
+	return &ret
+}
+
+func (p *PatchTableFunction) Id() sql.TableId {
+	return p.tabId
+}
+
+func (p *PatchTableFunction) WithColumns(set sql.ColSet) sql.TableIdNode {
+	ret := *p
+	ret.colset = set
+	return &ret
+}
+
+func (p *PatchTableFunction) Columns() sql.ColSet {
+	return p.colset
 }
 
 func (p *PatchTableFunction) DataLength(ctx *sql.Context) (uint64, error) {

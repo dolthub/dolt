@@ -54,6 +54,29 @@ type DiffTableFunction struct {
 	tableDelta diff.TableDelta
 	fromDate   *types.Timestamp
 	toDate     *types.Timestamp
+
+	tabId  sql.TableId
+	colset sql.ColSet
+}
+
+func (dtf *DiffTableFunction) WithId(id sql.TableId) sql.TableIdNode {
+	ret := *dtf
+	ret.tabId = id
+	return &ret
+}
+
+func (dtf *DiffTableFunction) Id() sql.TableId {
+	return dtf.tabId
+}
+
+func (dtf *DiffTableFunction) WithColumns(set sql.ColSet) sql.TableIdNode {
+	ret := *dtf
+	ret.colset = set
+	return &ret
+}
+
+func (dtf *DiffTableFunction) Columns() sql.ColSet {
+	return dtf.colset
 }
 
 // NewInstance creates a new instance of TableFunction interface
