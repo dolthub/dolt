@@ -654,7 +654,7 @@ If you're interested in running this command against a remote host, hit us up on
 			port = 3306
 		}
 		useTLS := !apr.Contains(cli.NoTLSFlag)
-		return BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, host, port, useTLS, useDb)
+		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, host, port, useTLS, useDb)
 	} else {
 		_, hasPort := apr.GetInt(cli.PortFlag)
 		if hasPort {
@@ -708,7 +708,7 @@ If you're interested in running this command against a remote host, hit us up on
 		if !creds.Specified {
 			creds = &cli.UserPassword{Username: sqlserver.LocalConnectionUser, Password: lock.Secret, Specified: false}
 		}
-		return BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", lock.Port, false, useDb)
+		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", lock.Port, false, useDb)
 	}
 
 	if verbose {
