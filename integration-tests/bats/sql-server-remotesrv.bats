@@ -23,8 +23,8 @@ teardown() {
 }
 
 @test "sql-server-remotesrv: can read from sql-server with --remotesapi-port" {
-    mkdir remote
-    cd remote
+    mkdir -p db/remote
+    cd db/remote
     dolt init
     dolt sql -q 'create table vals (i int);'
     dolt sql -q 'insert into vals (i) values (1), (2), (3), (4), (5);'
@@ -33,9 +33,8 @@ teardown() {
 
     dolt sql-server --remotesapi-port 50051 &
     srv_pid=$!
-    sleep 2
 
-    cd ../
+    cd ../../
     dolt clone http://localhost:50051/remote repo1
     cd repo1
     run dolt ls
@@ -56,12 +55,12 @@ call dolt_commit('-am', 'add some vals');
 }
 
 @test "sql-server-remotesrv: can access a created database from sql-server with --remotesapi-port" {
-    mkdir remote
-    cd remote
+    mkdir -p db/remote
+    cd db/remote
     dolt init
     dolt sql-server --remotesapi-port 50051 &
     srv_pid=$!
-    cd ../
+    cd ../..
 
     # By cloning here, we have a near-at-hand way to wait for the server to be ready.
     dolt clone http://localhost:50051/remote cloned_remote
@@ -84,8 +83,8 @@ call dolt_commit('-m', 'add some vals');
 }
 
 @test "sql-server-remotesrv: the remotesapi server rejects writes" {
-    mkdir remote
-    cd remote
+    mkdir -p db/remote
+    cd db/remote
     dolt init
     dolt sql -q 'create table vals (i int);'
     dolt add vals
@@ -93,7 +92,7 @@ call dolt_commit('-m', 'add some vals');
 
     dolt sql-server --remotesapi-port 50051 &
     srv_pid=$!
-    cd ../
+    cd ../../
 
     dolt clone http://localhost:50051/remote remote_cloned
 
@@ -105,17 +104,17 @@ call dolt_commit('-m', 'add some vals');
 }
 
 @test "sql-server-remotesrv: remotesapi listen error stops process" {
-    mkdir remote_one
-    mkdir remote_two
-    cd remote_one
+    mkdir -p db_one/remote_one
+    mkdir -p db_two/remote_two
+    cd db_one/remote_one
     dolt init
     dolt sql-server --remotesapi-port 50051 &
     srv_pid=$!
 
-    sleep 2
+    cd ../../
     dolt clone http://localhost:50051/remote_one remote_one_cloned
 
-    cd ../remote_two
+    cd db_two/remote_two
     dolt init
     run dolt sql-server --port 3307 --remotesapi-port 50051
     [[ "$status" != 0 ]] || false
@@ -147,7 +146,7 @@ SQL
     srv_two_pid=$!
 
     # move CWD to make sure we don't lock ".../read_replica/db"
-    mkdir tmp && cd tmp
+    cd ../../
 
     dolt -u root --port 3306 --host 127.0.0.1 --no-tls sql -q "
 use db;
@@ -155,7 +154,7 @@ insert into vals values (1), (2), (3), (4), (5);
 call dolt_commit('-am', 'insert 1-5.');
 "
 
-    run dolt --port 3306 --host 127.0.0.1 --no-tls -u root sql -q "
+    run dolt --port 3307 --host 127.0.0.1 --no-tls -u root sql -q "
 use db;
 select count(*) from vals;
 "
@@ -163,8 +162,8 @@ select count(*) from vals;
 }
 
 @test "sql-server-remotesrv: clone/fetch/pull from remotesapi port with authentication" {
-    mkdir remote
-    cd remote
+    mkdir -p db/remote
+    cd db/remote
     dolt init
     dolt --privilege-file=privs.json sql -q "CREATE USER user0 IDENTIFIED BY 'pass0'"
     dolt sql -q 'create table vals (i int);'
@@ -176,9 +175,8 @@ select count(*) from vals;
 
     dolt sql-server --port 3307 -u $DOLT_REMOTE_USER  -p $DOLT_REMOTE_PASSWORD --remotesapi-port 50051 &
     srv_pid=$!
-    sleep 2 # wait for server to start so we don't lock it out
 
-    cd ../
+    cd ../../
     dolt clone http://localhost:50051/remote repo1 -u $DOLT_REMOTE_USER
     cd repo1
     run dolt ls
@@ -235,8 +233,8 @@ call dolt_commit('-am', 'add one val');
 }
 
 @test "sql-server-remotesrv: clone/fetch/pull from remotesapi port with clone_admin authentication" {
-    mkdir remote
-    cd remote
+    mkdir -p db/remote
+    cd db/remote
     dolt init
     dolt sql -q 'create table vals (i int);'
     dolt sql -q 'insert into vals (i) values (1), (2), (3), (4), (5);'
@@ -245,8 +243,7 @@ call dolt_commit('-am', 'add one val');
 
     dolt sql-server --port 3307 -u user0 -p pass0 --remotesapi-port 50051 &
     srv_pid=$!
-    sleep 2 # wait for server to start so we don't lock it out
-
+    sleep 2
     run dolt sql -q "
 CREATE USER clone_admin_user@'localhost' IDENTIFIED BY 'pass1';
 GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
@@ -258,7 +255,7 @@ select user from mysql.user;
     [[ $output =~ clone_admin_user ]] || false
 
     export DOLT_REMOTE_PASSWORD="pass1"
-    cd ../
+    cd ../../
     dolt clone http://localhost:50051/remote repo1 -u clone_admin_user
     cd repo1
     run dolt ls
@@ -311,8 +308,8 @@ call dolt_commit('-am', 'add one val');"
 }
 
 @test "sql-server-remotesrv: dolt clone without authentication returns error" {
-    mkdir remote
-    cd remote
+    mkdir -p db/remote
+    cd db/remote
     dolt init
     dolt --privilege-file=privs.json sql -q "CREATE USER user0 IDENTIFIED BY 'pass0'"
     dolt sql -q 'create table vals (i int);'
@@ -325,15 +322,15 @@ call dolt_commit('-am', 'add one val');"
     dolt sql-server -u $DOLT_REMOTE_USER  -p $DOLT_REMOTE_PASSWORD --remotesapi-port 50051 &
     srv_pid=$!
 
-    cd ../
+    cd ../../
     run dolt clone http://localhost:50051/remote repo1
     [[ "$status" != 0 ]] || false
     [[ "$output" =~ "Access denied for user 'root'" ]] || false
 }
 
 @test "sql-server-remotesrv: dolt clone with incorrect authentication returns error" {
-    mkdir remote
-    cd remote
+    mkdir -p db/remote
+    cd db/remote
     dolt init
     dolt --privilege-file=privs.json sql -q "CREATE USER user0 IDENTIFIED BY 'pass0'"
     dolt sql -q 'create table vals (i int);'
@@ -346,7 +343,7 @@ call dolt_commit('-am', 'add one val');"
     dolt sql-server -u $DOLT_REMOTE_USER  -p $PASSWORD --remotesapi-port 50051 &
     srv_pid=$!
 
-    cd ../
+    cd ../../
 
     run dolt clone http://localhost:50051/remote repo1 -u $DOLT_REMOTE_USER
     [[ "$status" != 0 ]] || false

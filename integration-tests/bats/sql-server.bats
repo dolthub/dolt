@@ -1398,7 +1398,7 @@ data_dir: $DATA_DIR
     [ "$status" -eq 0 ]
 }
 
-@test "sql-server: sql-server lock cleanup" {
+@test "sql-server: sql-server info cleanup" {
     cd repo1
     start_sql_server
     stop_sql_server
@@ -1406,28 +1406,28 @@ data_dir: $DATA_DIR
     stop_sql_server
 }
 
-@test "sql-server: sql-server locks database" {
+@test "sql-server: sql-server info database" {
     cd repo1
     start_sql_server
-    [[ -f "$PWD/.dolt/sql-server.lock" ]] || false
+    [[ -f "$PWD/.dolt/sql-server.info" ]] || false
 
     PORT=$( definePORT )
     run dolt sql-server -P $PORT --socket "dolt.$PORT.sock"
     [ "$status" -eq 1 ]
 }
 
-@test "sql-server: sql-server sets permissions on sql-server.lock" {
+@test "sql-server: sql-server sets permissions on sql-server.info" {
     cd repo1
-    ! [[ -f "$PWD/.dolt/sql-server.lock" ]] || false
+    ! [[ -f "$PWD/.dolt/sql-server.info" ]] || false
     start_sql_server
-    [[ -f "$PWD/.dolt/sql-server.lock" ]] || false
+    [[ -f "$PWD/.dolt/sql-server.info" ]] || false
 
 
     if [[ `uname` == 'Darwin' ]]; then
-      run stat -x "$PWD/.dolt/sql-server.lock"
+      run stat -x "$PWD/.dolt/sql-server.info"
       [[ "$output" =~ "(0600/-rw-------)" ]] || false
     else
-      run stat "$PWD/.dolt/sql-server.lock"
+      run stat "$PWD/.dolt/sql-server.info"
       [[ "$output" =~ "(0600/-rw-------)" ]] || false
     fi
 }
@@ -1580,7 +1580,7 @@ behavior:
     kill -9 $SERVER_PID
 
     run ls .dolt
-    [[ "$output" =~ "sql-server.lock" ]] || false
+    [[ "$output" =~ "sql-server.info" ]] || false
 
     start_sql_server
     run dolt sql -q "select 1 as col1"
