@@ -42,7 +42,7 @@ Dolt's reflog is similar to [Git's reflog](https://git-scm.com/docs/git-reflog),
 - The Dolt reflog currently only supports named references, such as branches and tags, and not any of Git's special refs (e.g. {{.EmphasisLeft}}HEAD{{.EmphasisRight}}, {{.EmphasisLeft}}FETCH-HEAD{{.EmphasisRight}}, {{.EmphasisLeft}}MERGE-HEAD{{.EmphasisRight}}).
 - The Dolt reflog can be queried for the log of references, even after a reference has been deleted. In Git, once a branch or tag is deleted, the reflog for that ref is also deleted and to find the last commit a branch or tag pointed to you have to use Git's special {{.EmphasisLeft}}HEAD{{.EmphasisRight}} reflog to find the commit, which can sometimes be challenging. Dolt makes this much easier by allowing you to see the history for a deleted ref so you can easily see the last commit a branch or tag pointed to before it was deleted.`,
 	Synopsis: []string{
-		`{{.LessThan}}ref{{.GreaterThan}}`,
+		`[--all] {{.LessThan}}ref{{.GreaterThan}}`,
 	},
 }
 
