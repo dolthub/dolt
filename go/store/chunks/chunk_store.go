@@ -32,7 +32,7 @@ import (
 // A ChunkStore's |ExclusiveAccessMode| can indicate to a client what type of
 // exclusive access and concurrency control are support by the ChunkStore, and
 // for a ChunkStore instance which the client is holding, what level of access
-// it has. Typically, a ChunkStore will by Mode_Shared, which means multiple
+// it has. Typically, a ChunkStore will be in Mode_Shared, which means multiple
 // processes can concurrently write to the chunk store and the chunk store can
 // change out from under the process. Other possible modes, currently only used
 // by local ChunkStores using the chunk journal in go/store/nbs are
@@ -42,6 +42,11 @@ import (
 // while this ChunkStore is open.
 type ExclusiveAccessMode uint8
 
+// Note: the order of these constants is relied on in nbs/GenerationalNBS. The
+// order should go from least restricted access to most restricted access. If a
+// client has many stores with different levels of accses, a common question
+// they want to answer is: what is the most restricted access across all of
+// these stores.
 const (
 	ExclusiveAccessMode_Shared = iota
 	ExclusiveAccessMode_Exclusive

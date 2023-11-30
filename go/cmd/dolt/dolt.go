@@ -676,17 +676,20 @@ If you're interested in running this command against a remote host, hit us up on
 		}
 	}
 
-	usedEnv := targetEnv
-	if usedEnv == nil && useDb != "" {
-		usedEnv = mrEnv.GetEnv(useDb)
-	}
+	// If our targetEnv is still |nil| and we don't have an environment
+	// which we will be using based on |useDb|, then our initialization
+	// here did not find a repository we will be operating against.
+	noValidRepository := targetEnv == nil && (useDb == "" || mrEnv.GetEnv(useDb) == nil)
 
-	// There is no target environment detected. This is allowed for a small number of commands.
-	// We don't expect that number to grow, so we list them here.
-	// It's also allowed when --help is passed.
-	// So we defer the error until the caller tries to use the cli.LateBindQueryist
-	isDoltEnvironmentRequired := subcommandName != "init" && subcommandName != "sql" && subcommandName != "sql-server" && subcommandName != "sql-client"
-	if usedEnv == nil && isDoltEnvironmentRequired {
+	// Not having a valid repository as we start to execute a CLI command
+	// implementation is allowed for a small number of commands.  We don't
+	// expect this set of commands to grow, so we list them here.
+	//
+	// This is also allowed when --help is passed. So we defer the error
+	// until the caller tries to use the cli.LateBindQueryist.
+	isValidRepositoryRequired := subcommandName != "init" && subcommandName != "sql" && subcommandName != "sql-server" && subcommandName != "sql-client"
+
+	if noValidRepository && isValidRepositoryRequired {
 		return func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) {
 			return nil, nil, nil, fmt.Errorf("The current directory is not a valid dolt repository.")
 		}, nil
@@ -713,7 +716,7 @@ If you're interested in running this command against a remote host, hit us up on
 			if dEnv.DoltDB != nil {
 				allReposAreReadOnly = allReposAreReadOnly && dEnv.IsAccessModeReadOnly()
 			}
-			return false, nil
+			return !allReposAreReadOnly, nil
 		})
 		lookForServer = allReposAreReadOnly
 	}

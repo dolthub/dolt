@@ -81,8 +81,6 @@ func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []strin
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, stashPopDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	// TODO: Error if dEnv.DoltDB.AccessMode() == ReadOnly?
-
 	_, sqlCtx, closer, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.PrintErrln(err.Error())

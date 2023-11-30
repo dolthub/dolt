@@ -99,8 +99,6 @@ func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return 1
 	}
 
-	// TODO: Error if dEnv.DoltDB.AccessMode() == ReadOnly?
-
 	err := stashChanges(ctx, dEnv, apr)
 	if err != nil {
 		return commands.HandleStageError(err)

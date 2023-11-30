@@ -72,8 +72,6 @@ func (cmd StashListCmd) Exec(ctx context.Context, commandStr string, args []stri
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, stashListDocs, ap))
 	cli.ParseArgsOrDie(ap, args, help)
 
-	// TODO: Error if dEnv.DoltDB.AccessMode() == ReadOnly?
-
 	err := listStashes(ctx, dEnv)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)

@@ -104,8 +104,6 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	// TODO: Assert that dEnv.DoltDB.AccessMode() != ReadOnly
-
 	queryString := apr.GetValueOrDefault(QueryFlag, "")
 	verbose := apr.Contains(cli.VerboseFlag)
 	continueOnErr := apr.Contains(continueFlag)

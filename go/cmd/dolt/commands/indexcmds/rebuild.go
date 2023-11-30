@@ -71,8 +71,6 @@ func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string
 		return HandleErr(errhand.BuildDError("Both the table and index names must be provided.").Build(), usage)
 	}
 
-	// TODO: Error if dEnv.DoltDB.AccessMode() == ReadOnly?
-
 	working, err := dEnv.WorkingRoot(context.Background())
 	if err != nil {
 		return HandleErr(errhand.BuildDError("Unable to get working.").AddCause(err).Build(), nil)

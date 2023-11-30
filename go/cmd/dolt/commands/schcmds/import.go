@@ -170,8 +170,6 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
-	// TODO: Error if dEnv.DoltDB.AccessMode() == ReadOnly?
-
 	return commands.HandleVErrAndExitCode(importSchema(ctx, dEnv, apr), usage)
 }
 

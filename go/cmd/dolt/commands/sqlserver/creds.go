@@ -29,7 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
-const ServerLocalCredsFile = "sql-server.lock"
+const ServerLocalCredsFile = "sql-server.info"
 
 // LocalCreds is a struct that contains information about how to access the
 // locally running server for a CLI process which wants to operate against a
@@ -87,7 +87,7 @@ func WriteLocalCreds(fs filesys.Filesys, creds *LocalCreds) error {
 
 // Starting at `fs`, look for the a ServerLocalCredsFile in the .dolt directory
 // of this directory and every parent directory, until we find one. When we
-// find we, we return its contents if we can open and parse it successfully.
+// find one, we return its contents if we can open and parse it successfully.
 // Otherwise, we return an error associated with attempting to read it. If we
 // do not find anything all the way up to the root of the filesystem, returns
 // `nil` *LocalCreds and a `nil` error.
@@ -136,14 +136,6 @@ func LoadLocalCreds(fs filesys.Filesys) (creds *LocalCreds, err error) {
 	data := strings.TrimSpace(string(b[:n]))
 
 	parts := strings.Split(data, ":")
-	if len(parts) == 1 {
-		// Legacy Lock file. We can remove this code path in a couple of months (6/2023)
-		pid, err := strconv.Atoi(parts[0])
-		if err != nil {
-			return nil, err
-		}
-		return &LocalCreds{Pid: pid, Port: -1, Secret: ""}, nil
-	}
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("invalid lock file format")
 	}

@@ -72,8 +72,6 @@ func (cmd StashClearCmd) Exec(ctx context.Context, commandStr string, args []str
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, stashClearDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	// TODO: Error if dEnv.DoltDB.AccessMode() == ReadOnly?
-
 	if apr.NArg() != 0 {
 		usage()
 		return 1

@@ -28,7 +28,7 @@ import (
 	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
 )
 
-func TestSQLServerLockFile(t *testing.T) {
+func TestSQLServerInfoFile(t *testing.T) {
 	t.Run("With Two Repos", func(t *testing.T) {
 		u, err := driver.NewDoltUser()
 		require.NoError(t, err)
@@ -46,8 +46,8 @@ func TestSQLServerLockFile(t *testing.T) {
 		t.Run("With server running in root", func(t *testing.T) {
 			RunServerUntilEndOfTest(t, rs, &driver.Server{})
 
-			t.Run("sql-server.lock file exists", func(t *testing.T) {
-				location := filepath.Join(rs.Dir, ".dolt/sql-server.lock")
+			t.Run("sql-server.info file exists", func(t *testing.T) {
+				location := filepath.Join(rs.Dir, ".dolt/sql-server.info")
 				f, err := os.Open(location)
 				require.NoError(t, err)
 				require.NoError(t, f.Close())
@@ -98,8 +98,8 @@ func TestSQLServerLockFile(t *testing.T) {
 				require.Regexp(t, "db_two", outstr)
 			})
 		})
-		t.Run("sql-server.lock in root no longer exists", func(t *testing.T) {
-			location := filepath.Join(rs.Dir, ".dolt/sql-server.lock")
+		t.Run("sql-server.info in root no longer exists", func(t *testing.T) {
+			location := filepath.Join(rs.Dir, ".dolt/sql-server.info")
 			f, err := os.Open(location)
 			if f != nil {
 				defer f.Close()
@@ -211,9 +211,9 @@ func TestSQLServerLockFile(t *testing.T) {
 				require.Error(t, err)
 			})
 		})
-		t.Run("With stale sql-server.lock file in root", func(t *testing.T) {
+		t.Run("With stale sql-server.info file in root", func(t *testing.T) {
 			Setup := func(t *testing.T) {
-				path := filepath.Join(rs.Dir, ".dolt/sql-server.lock")
+				path := filepath.Join(rs.Dir, ".dolt/sql-server.info")
 				err := os.WriteFile(path, []byte("1:3306:this_is_not_a_real_secret"), 0600)
 				require.NoError(t, err)
 				t.Cleanup(func() { os.Remove(path) })
@@ -244,9 +244,9 @@ func TestSQLServerLockFile(t *testing.T) {
 				require.Regexp(t, "db_one", outstr)
 			})
 		})
-		t.Run("With malformed sql-server.lock file in root", func(t *testing.T) {
+		t.Run("With malformed sql-server.info file in root", func(t *testing.T) {
 			Setup := func(t *testing.T) {
-				path := filepath.Join(rs.Dir, ".dolt/sql-server.lock")
+				path := filepath.Join(rs.Dir, ".dolt/sql-server.info")
 				err := os.WriteFile(path, []byte("1:3306:this_is_not_a_real_secret:extra:fields:make:it:fail"), 0600)
 				require.NoError(t, err)
 				t.Cleanup(func() { os.Remove(path) })
