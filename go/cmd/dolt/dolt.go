@@ -81,7 +81,6 @@ var doltSubCommands = []cli.Command{
 	commands.SqlCmd{VersionStr: Version},
 	admin.Commands,
 	sqlserver.SqlServerCmd{VersionStr: Version},
-	sqlserver.SqlClientCmd{VersionStr: Version},
 	commands.LogCmd{},
 	commands.ShowCmd{},
 	commands.BranchCmd{},
@@ -128,7 +127,6 @@ var doltSubCommands = []cli.Command{
 var commandsWithoutCliCtx = []cli.Command{
 	admin.Commands,
 	sqlserver.SqlServerCmd{VersionStr: Version},
-	sqlserver.SqlClientCmd{VersionStr: Version},
 	commands.CloneCmd{},
 	commands.RemoteCmd{},
 	commands.BackupCmd{},
@@ -162,7 +160,6 @@ var commandsWithoutGlobalArgSupport = []cli.Command{
 	commands.LoginCmd{},
 	credcmds.Commands,
 	sqlserver.SqlServerCmd{VersionStr: Version},
-	sqlserver.SqlClientCmd{VersionStr: Version},
 	commands.VersionCmd{VersionStr: Version},
 	commands.ConfigCmd{},
 }
