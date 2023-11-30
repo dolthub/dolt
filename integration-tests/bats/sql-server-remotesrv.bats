@@ -112,6 +112,7 @@ call dolt_commit('-m', 'add some vals');
     dolt sql-server --remotesapi-port 50051 &
     srv_pid=$!
 
+    sleep 2
     dolt clone http://localhost:50051/remote_one remote_one_cloned
 
     cd ../remote_two
