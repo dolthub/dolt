@@ -27,42 +27,61 @@ import (
 // ThreeWayDiffer is an iterator that gives an increased level of granularity
 // of diffs between three root values. See diffOp for the classes of diffs.
 type ThreeWayDiffer[K ~[]byte, O Ordering[K]] struct {
-	lIter, rIter Differ[K, O]
-	resolveCb    resolveCb
-	lDiff        Diff
-	rDiff        Diff
-	lDone        bool
-	rDone        bool
-	keyless      bool
+	lIter, rIter              Differ[K, O]
+	resolveCb                 resolveCb
+	lDiff                     Diff
+	rDiff                     Diff
+	lDone                     bool
+	rDone                     bool
+	keyless                   bool
+	leftAndRightSchemasDiffer bool
 }
 
 //var _ DiffIter = (*threeWayDiffer[Item, val.TupleDesc])(nil)
 
 type resolveCb func(context.Context, val.Tuple, val.Tuple, val.Tuple) (val.Tuple, bool, error)
 
+// ThreeWayDiffInfo stores contextual data that can influence the diff.
+// If |LeftSchemaChange| is true, then the left side has a different schema from the base, and every row
+// in both Left and Base should be considered a modification, even if they have the same bytes.
+// If |RightSchemaChange| is true, then the right side has a different schema from the base, and every row
+// in both Right and Base should be considered a modification, even if they have the same bytes.
+// If |LeftAndRightSchemasDiffer| is true, then the left and right sides of the diff have a different schema,
+// so there cannot be any convergent edits, even if two rows in Left and Right have the same bytes.
+type ThreeWayDiffInfo struct {
+	LeftSchemaChange          bool
+	RightSchemaChange         bool
+	LeftAndRightSchemasDiffer bool
+}
+
 func NewThreeWayDiffer[K, V ~[]byte, O Ordering[K]](
 	ctx context.Context,
 	ns NodeStore,
-	left, right, base StaticMap[K, V, O],
+	left StaticMap[K, V, O],
+	right StaticMap[K, V, O],
+	base StaticMap[K, V, O],
 	resolveCb resolveCb,
 	keyless bool,
+	diffInfo ThreeWayDiffInfo,
 	order O,
 ) (*ThreeWayDiffer[K, O], error) {
-	ld, err := DifferFromRoots[K](ctx, ns, ns, base.Root, left.Root, order)
+	// probably compute each of these separately
+	ld, err := DifferFromRoots[K](ctx, ns, ns, base.Root, left.Root, order, diffInfo.LeftSchemaChange)
 	if err != nil {
 		return nil, err
 	}
 
-	rd, err := DifferFromRoots[K](ctx, ns, ns, base.Root, right.Root, order)
+	rd, err := DifferFromRoots[K](ctx, ns, ns, base.Root, right.Root, order, diffInfo.RightSchemaChange)
 	if err != nil {
 		return nil, err
 	}
 
 	return &ThreeWayDiffer[K, O]{
-		lIter:     ld,
-		rIter:     rd,
-		resolveCb: resolveCb,
-		keyless:   keyless,
+		lIter:                     ld,
+		rIter:                     rd,
+		resolveCb:                 resolveCb,
+		keyless:                   keyless,
+		leftAndRightSchemasDiffer: diffInfo.LeftAndRightSchemasDiffer,
 	}, nil
 }
 

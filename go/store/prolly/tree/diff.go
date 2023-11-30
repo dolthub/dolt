@@ -36,10 +36,15 @@ type Diff struct {
 
 type DiffFn func(context.Context, Diff) error
 
+// Differ computes the diff between two prolly trees.
+// If `considerAllRowsModified` is true, it will consider every leaf to be modified and generate a diff for every leaf. (This
+// is useful in cases where the schema has changed and we want to consider a leaf changed even if the byte representation
+// of the leaf is the same.
 type Differ[K ~[]byte, O Ordering[K]] struct {
-	from, to         *cursor
-	fromStop, toStop *cursor
-	order            O
+	from, to                *cursor
+	fromStop, toStop        *cursor
+	order                   O
+	considerAllRowsModified bool
 }
 
 func DifferFromRoots[K ~[]byte, O Ordering[K]](
@@ -47,6 +52,7 @@ func DifferFromRoots[K ~[]byte, O Ordering[K]](
 	fromNs NodeStore, toNs NodeStore,
 	from, to Node,
 	order O,
+	considerAllRowsModified bool,
 ) (Differ[K, O], error) {
 	var fc, tc *cursor
 	var err error
@@ -80,11 +86,12 @@ func DifferFromRoots[K ~[]byte, O Ordering[K]](
 	}
 
 	return Differ[K, O]{
-		from:     fc,
-		to:       tc,
-		fromStop: fs,
-		toStop:   ts,
-		order:    order,
+		from:                    fc,
+		to:                      tc,
+		fromStop:                fs,
+		toStop:                  ts,
+		order:                   order,
+		considerAllRowsModified: considerAllRowsModified,
 	}, nil
 }
 
@@ -135,7 +142,9 @@ func (td Differ[K, O]) Next(ctx context.Context) (diff Diff, err error) {
 			return sendAdded(ctx, td.to)
 
 		case cmp == 0:
-			if !equalcursorValues(td.from, td.to) {
+			// If the cursor schema has changed, then all rows should be considered modified.
+			// If the cursor schema hasn't changed, rows are modified iff their bytes have changed.
+			if td.considerAllRowsModified || !equalcursorValues(td.from, td.to) {
 				return sendModified(ctx, td.from, td.to)
 			}
 
