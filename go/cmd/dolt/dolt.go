@@ -256,7 +256,6 @@ func runMain() int {
 	}
 
 	csMetrics := false
-	ignoreLockFile := false
 	verboseEngineSetup := false
 	if len(args) > 0 {
 		var doneDebugFlags bool
@@ -395,7 +394,7 @@ func runMain() int {
 				args = args[1:]
 
 			case ignoreLocksFlag:
-				ignoreLockFile = true
+				// Ignored -- deprecated option.
 				args = args[1:]
 
 			case featureVersionFlag:
@@ -440,9 +439,6 @@ func runMain() int {
 	var fs filesys.Filesys
 	fs = filesys.LocalFS
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, Version)
-
-	// TODO: Decide what we're doing with --ignore-lock-file; does it mean always operate locally?
-	_ = ignoreLockFile
 
 	root, err := env.GetCurrentUserHomeDir()
 	if err != nil {
