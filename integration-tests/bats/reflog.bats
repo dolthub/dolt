@@ -1,10 +1,6 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
 
-setup() {
-    setup_common
-}
-
 teardown() {
     assert_feature_version
     teardown_common
@@ -13,6 +9,8 @@ teardown() {
 # Asserts that when DOLT_DISABLE_REFLOG is set, dolt reflog returns nothing with no error.
 @test "reflog: disabled with DOLT_DISABLE_REFLOG" {
     export DOLT_DISABLE_REFLOG=true
+    setup_common    # need to set env vars before setup_common for remote tests
+
     dolt sql -q "create table t (i int primary key, j int);"
     dolt sql -q "insert into t values (1, 1), (2, 2), (3, 3)";
     dolt commit -Am "initial commit"
@@ -27,6 +25,8 @@ teardown() {
 # most recent entries and is limited by the env var's value.
 @test "reflog: set DOLT_REFLOG_RECORD_LIMIT" {
     export DOLT_REFLOG_RECORD_LIMIT=2
+    setup_common    # need to set env vars before setup_common for remote tests
+
     dolt sql -q "create table t (i int primary key, j int);"
     dolt sql -q "insert into t values (1, 1), (2, 2), (3, 3)";
     dolt commit -Am "initial commit"
@@ -43,6 +43,8 @@ teardown() {
 }
 
 @test "reflog: simple reflog" {
+    setup_common
+
     dolt sql -q "create table t (i int primary key, j int);"
     dolt sql -q "insert into t values (1, 1), (2, 2), (3, 3)";
     dolt commit -Am "initial commit"
@@ -51,11 +53,13 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
     out=$(echo "$output" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
-    [[ "$out" =~ "(HEAD -> main) HEAD@{0}: initial commit" ]] || false
-    [[ "$out" =~ "HEAD@{1}: Initialize data repository" ]] || false
+    [[ "$out" =~ "(HEAD -> main) initial commit" ]] || false
+    [[ "$out" =~ "Initialize data repository" ]] || false
 }
 
 @test "reflog: reflog with ref given" {
+    setup_common
+
     dolt sql <<SQL
 create table t1(pk int primary key);
 call dolt_commit('-Am', 'creating table t1');
@@ -78,81 +82,81 @@ SQL
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
     out=$(echo "$output" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
-    [[ "$out" =~ "(HEAD -> main) HEAD@{0}: inserting row 1" ]] || false
-    [[ "$out" =~ "HEAD@{1}: creating table t1" ]] || false
-    [[ "$out" =~ "HEAD@{2}: Initialize data repository" ]] || false
+    [[ "$out" =~ "(HEAD -> main) inserting row 1" ]] || false
+    [[ "$out" =~ "creating table t1" ]] || false
+    [[ "$out" =~ "Initialize data repository" ]] || false
 
     # ref is case-insensitive
     run dolt reflog rEFs/heAdS/MAIN
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
     out=$(echo "$output" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
-    [[ "$out" =~ "(HEAD -> main) HEAD@{0}: inserting row 1" ]] || false
-    [[ "$out" =~ "HEAD@{1}: creating table t1" ]] || false
-    [[ "$out" =~ "HEAD@{2}: Initialize data repository" ]] || false
+    [[ "$out" =~ "(HEAD -> main) inserting row 1" ]] || false
+    [[ "$out" =~ "creating table t1" ]] || false
+    [[ "$out" =~ "Initialize data repository" ]] || false
 
     run dolt reflog main
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
     out=$(echo "$output" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
-    [[ "$out" =~ "(HEAD -> main) HEAD@{0}: inserting row 1" ]] || false
-    [[ "$out" =~ "HEAD@{1}: creating table t1" ]] || false
-    [[ "$out" =~ "HEAD@{2}: Initialize data repository" ]] || false
+    [[ "$out" =~ "(HEAD -> main) inserting row 1" ]] || false
+    [[ "$out" =~ "creating table t1" ]] || false
+    [[ "$out" =~ "Initialize data repository" ]] || false
 
     # ref is case-insensitive
     run dolt reflog MaIn
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
     out=$(echo "$output" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
-    [[ "$out" =~ "(HEAD -> main) HEAD@{0}: inserting row 1" ]] || false
-    [[ "$out" =~ "HEAD@{1}: creating table t1" ]] || false
-    [[ "$out" =~ "HEAD@{2}: Initialize data repository" ]] || false
+    [[ "$out" =~ "(HEAD -> main) inserting row 1" ]] || false
+    [[ "$out" =~ "creating table t1" ]] || false
+    [[ "$out" =~ "Initialize data repository" ]] || false
 
     run dolt reflog refs/heads/branch1
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
     out=$(echo "$output" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
-    [[ "$out" =~ "(branch1) HEAD@{0}: inserting row 3" ]] || false
-    [[ "$out" =~ "HEAD@{1}: inserting row 2" ]] || false
-    [[ "$out" =~ "HEAD@{2}: inserting row 1" ]] || false
+    [[ "$out" =~ "(branch1) inserting row 3" ]] || false
+    [[ "$out" =~ "inserting row 2" ]] || false
+    [[ "$out" =~ "inserting row 1" ]] || false
 
     run dolt reflog branch1
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
     out=$(echo "$output" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
-    [[ "$out" =~ "(branch1) HEAD@{0}: inserting row 3" ]] || false
-    [[ "$out" =~ "HEAD@{1}: inserting row 2" ]] || false
-    [[ "$out" =~ "HEAD@{2}: inserting row 1" ]] || false
+    [[ "$out" =~ "(branch1) inserting row 3" ]] || false
+    [[ "$out" =~ "inserting row 2" ]] || false
+    [[ "$out" =~ "inserting row 1" ]] || false
 
     run dolt reflog refs/tags/tag1
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
     out=$(echo "$output" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
-    [[ "$out" =~ "(tag: tag1) HEAD@{0}: inserting row 3" ]] || false
-    [[ "$out" =~ "HEAD@{1}: inserting row 1" ]] || false
+    [[ "$out" =~ "(tag: tag1) inserting row 3" ]] || false
+    [[ "$out" =~ "inserting row 1" ]] || false
 
     # ref is case-insensitive
     run dolt reflog Refs/tAGs/TaG1
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
     out=$(echo "$output" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
-    [[ "$out" =~ "(tag: tag1) HEAD@{0}: inserting row 3" ]] || false
-    [[ "$out" =~ "HEAD@{1}: inserting row 1" ]] || false
+    [[ "$out" =~ "(tag: tag1) inserting row 3" ]] || false
+    [[ "$out" =~ "inserting row 1" ]] || false
 
     run dolt reflog tag1
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
     out=$(echo "$output" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
-    [[ "$out" =~ "(tag: tag1) HEAD@{0}: inserting row 3" ]] || false
-    [[ "$out" =~ "HEAD@{1}: inserting row 1" ]] || false
+    [[ "$out" =~ "(tag: tag1) inserting row 3" ]] || false
+    [[ "$out" =~ "inserting row 1" ]] || false
 
     # ref is case-insensitive
     run dolt reflog TAg1
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
     out=$(echo "$output" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
-    [[ "$out" =~ "(tag: tag1) HEAD@{0}: inserting row 3" ]] || false
-    [[ "$out" =~ "HEAD@{1}: inserting row 1" ]] || false
+    [[ "$out" =~ "(tag: tag1) inserting row 3" ]] || false
+    [[ "$out" =~ "inserting row 1" ]] || false
 
     dolt branch -D branch1
 
@@ -160,25 +164,27 @@ SQL
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
     out=$(echo "$output" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
-    [[ "$out" =~ "(branch1) HEAD@{0}: inserting row 3" ]] || false
-    [[ "$out" =~ "HEAD@{1}: inserting row 2" ]] || false
-    [[ "$out" =~ "HEAD@{2}: inserting row 1" ]] || false
+    [[ "$out" =~ "(branch1) inserting row 3" ]] || false
+    [[ "$out" =~ "inserting row 2" ]] || false
+    [[ "$out" =~ "inserting row 1" ]] || false
 
     dolt tag -d tag1
     run dolt reflog tag1
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
     out=$(echo "$output" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
-    [[ "$out" =~ "(tag: tag1) HEAD@{0}: inserting row 3" ]] || false
-    [[ "$out" =~ "HEAD@{1}: inserting row 1" ]] || false
+    [[ "$out" =~ "(tag: tag1) inserting row 3" ]] || false
+    [[ "$out" =~ "inserting row 1" ]] || false
 }
 
 @test "reflog: garbage collection with no newgen data" {
+    setup_common
+
     run dolt reflog
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
     out=$(echo "$output" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
-    [[ "$out" =~ "(HEAD -> main) HEAD@{0}: Initialize data repository" ]] || false
+    [[ "$out" =~ "(HEAD -> main) Initialize data repository" ]] || false
 
     dolt gc
 
@@ -188,6 +194,8 @@ SQL
 }
 
 @test "reflog: garbage collection with newgen data" {
+    setup_common
+
     dolt sql <<SQL
 create table t1(pk int primary key);
 call dolt_commit('-Am', 'creating table t1');
@@ -202,10 +210,10 @@ SQL
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
     out=$(echo "$output" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
-    [[ "$out" =~ "(HEAD -> main) HEAD@{0}: inserting row 2" ]] || false
-    [[ "$out" =~ "HEAD@{1}: inserting row 1" ]] || false
-    [[ "$out" =~ "HEAD@{2}: creating table t1" ]] || false
-    [[ "$out" =~ "HEAD@{3}: Initialize data repository" ]] || false
+    [[ "$out" =~ "(HEAD -> main) inserting row 2" ]] || false
+    [[ "$out" =~ "inserting row 1" ]] || false
+    [[ "$out" =~ "creating table t1" ]] || false
+    [[ "$out" =~ "Initialize data repository" ]] || false
 
     dolt gc
 
@@ -215,12 +223,16 @@ SQL
 }
 
 @test "reflog: too many arguments given" {
+    setup_common
+
     run dolt reflog foo bar
     [ "$status" -eq 1 ]
     [[ "$output" =~ "error: reflog has too many positional arguments" ]] || false
 }
 
 @test "reflog: unknown ref returns nothing" {
+    setup_common
+
     dolt sql -q "create table t (i int primary key, j int);"
     dolt sql -q "insert into t values (1, 1), (2, 2), (3, 3)";
     dolt commit -Am "initial commit"

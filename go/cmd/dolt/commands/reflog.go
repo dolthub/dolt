@@ -107,27 +107,17 @@ func (cmd ReflogCmd) Exec(ctx context.Context, commandStr string, args []string,
 // Also interpolates this query to prevent sql injection
 func constructInterpolatedDoltReflogQuery(apr *argparser.ArgParseResults) (string, error) {
 	var params []interface{}
-	refPlaceholder := ""
-	allFlag := ""
+	var args []string
 
 	if apr.NArg() == 1 {
 		params = append(params, apr.Arg(0))
-		refPlaceholder = "?"
+		args = append(args, "?")
 	}
 	if apr.Contains(cli.AllFlag) {
-		allFlag = "'--all'"
+		args = append(args, "'--all'")
 	}
 
-	args := ""
-	if refPlaceholder == "" && allFlag != "" {
-		args = allFlag
-	} else if refPlaceholder != "" && allFlag == "" {
-		args = refPlaceholder
-	} else if refPlaceholder != "" && allFlag != "" {
-		args = strings.Join([]string{refPlaceholder, allFlag}, ", ")
-	}
-
-	query := strings.Join([]string{"SELECT ref, commit_hash, commit_message FROM DOLT_REFLOG(", args, ")"}, "")
+	query := fmt.Sprintf("SELECT ref, commit_hash, commit_message FROM DOLT_REFLOG(%s)", strings.Join(args, ", "))
 	interpolatedQuery, err := dbr.InterpolateForDialect(query, params, dialect.MySQL)
 	if err != nil {
 		return "", err
@@ -147,11 +137,12 @@ func printReflog(rows []sql.Row, queryist cli.Queryist, sqlCtx *sql.Context) int
 	var reflogInfo []ReflogInfo
 
 	// Get the current branch
+	curBranch := ""
 	res, err := GetRowsForSql(queryist, sqlCtx, "SELECT active_branch()")
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), nil)
+	if err == nil {
+		// still print the reflog even if we can't get the current branch
+		curBranch = res[0][0].(string)
 	}
-	curBranch := res[0][0].(string)
 
 	for _, row := range rows {
 		ref := row[0].(string)
@@ -174,13 +165,13 @@ func reflogToStdOut(reflogInfo []ReflogInfo, curBranch string) {
 		pager := outputpager.Start()
 		defer pager.Stop()
 
-		for pos, info := range reflogInfo {
+		for _, info := range reflogInfo {
 			// TODO: use short hash instead
 			line := []string{fmt.Sprintf("\033[33m%s\033[0m", info.commitHash)} // commit hash in yellow (33m)
 
 			processedRef := processRefForReflog(info.ref, curBranch)
 			line = append(line, fmt.Sprintf("\033[33m(%s\033[33m)\033[0m", processedRef)) // () in yellow (33m)
-			line = append(line, fmt.Sprintf("HEAD@{%d}: %s\n", pos, info.commitMessage))
+			line = append(line, fmt.Sprintf("%s\n", info.commitMessage))
 			pager.Writer.Write([]byte(strings.Join(line, " ")))
 		}
 	})
@@ -190,7 +181,7 @@ func reflogToStdOut(reflogInfo []ReflogInfo, curBranch string) {
 func processRefForReflog(fullRef string, curBranch string) string {
 	if strings.HasPrefix(fullRef, "refs/heads/") {
 		branch := strings.TrimPrefix(fullRef, "refs/heads/")
-		if branch == curBranch {
+		if curBranch != "" && branch == curBranch {
 			return fmt.Sprintf("\033[36;1mHEAD -> \033[32;1m%s\033[0m", branch) // HEAD in cyan (36;1), branch in green (32;1m)
 		}
 		return fmt.Sprintf("\033[32;1m%s\033[0m", branch) // branch in green (32;1m)

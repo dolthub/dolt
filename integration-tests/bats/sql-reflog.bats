@@ -1,10 +1,6 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
 
-setup() {
-    setup_common
-}
-
 teardown() {
     assert_feature_version
     teardown_common
@@ -14,6 +10,8 @@ teardown() {
 # function returns an empty result set with no error.
 @test "sql-reflog: disabled with DOLT_DISABLE_REFLOG" {
     export DOLT_DISABLE_REFLOG=true
+    setup_common    # need to set env vars before setup_common for remote tests
+
     dolt sql -q "create table t (i int primary key, j int);"
     dolt sql -q "insert into t values (1, 1), (2, 2), (3, 3)";
     dolt commit -Am "initial commit"
@@ -26,6 +24,8 @@ teardown() {
 
 # Sanity check for the most basic case of querying the Dolt reflog
 @test "sql-reflog: enabled by default" {
+    setup_common
+
     dolt sql -q "create table t (i int primary key, j int);"
     dolt sql -q "insert into t values (1, 1), (2, 2), (3, 3)";
     dolt commit -Am "initial commit"
@@ -41,6 +41,8 @@ teardown() {
 # most recent entries and is limited by the env var's value.
 @test "sql-reflog: set DOLT_REFLOG_RECORD_LIMIT" {
     export DOLT_REFLOG_RECORD_LIMIT=2
+    setup_common    # need to set env vars before setup_common for remote tests
+
     dolt sql -q "create table t (i int primary key, j int);"
     dolt sql -q "insert into t values (1, 1), (2, 2), (3, 3)";
     dolt commit -Am "initial commit"
