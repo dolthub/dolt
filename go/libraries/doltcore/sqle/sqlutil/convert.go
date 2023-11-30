@@ -145,12 +145,15 @@ func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 		return schema.Column{}, err
 	}
 
-	defaultVal := ""
-	generatedVal := ""
+	var defaultVal, generatedVal, onUpdateVal string
 	if col.Default != nil {
 		defaultVal = col.Default.String()
 	} else {
 		generatedVal = col.Generated.String()
+	}
+
+	if col.OnUpdate != nil {
+		onUpdateVal = col.OnUpdate.String()
 	}
 
 	c := schema.Column{
@@ -161,6 +164,7 @@ func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 		TypeInfo:      typeInfo,
 		Default:       defaultVal,
 		Generated:     generatedVal,
+		OnUpdate:      onUpdateVal,
 		Virtual:       col.Virtual,
 		AutoIncrement: col.AutoIncrement,
 		Comment:       col.Comment,

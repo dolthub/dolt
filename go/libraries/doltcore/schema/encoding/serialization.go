@@ -204,15 +204,20 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 	// serialize columns in |cols|
 	for i := len(cols) - 1; i >= 0; i-- {
 		col := cols[i]
-		defVal := ""
+		var defVal, onUpdateVal string
 		if col.Default != "" {
 			defVal = col.Default
 		} else {
 			defVal = col.Generated
 		}
 
+		if col.OnUpdate != "" {
+			onUpdateVal = col.OnUpdate
+		}
+
 		co := b.CreateString(col.Comment)
 		do := b.CreateString(defVal)
+		ou := b.CreateString(onUpdateVal)
 		typeString := sqlTypeString(col.TypeInfo)
 		to := b.CreateString(typeString)
 		no := b.CreateString(col.Name)
@@ -231,6 +236,7 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 		serial.ColumnAddNullable(b, col.IsNullable())
 		serial.ColumnAddGenerated(b, col.Generated != "")
 		serial.ColumnAddVirtual(b, col.Virtual)
+		serial.ColumnAddOnupdateValue(b, ou)
 		serial.ColumnAddHidden(b, false)
 		offs[i] = serial.ColumnEnd(b)
 	}
@@ -301,14 +307,17 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 			return nil, err
 		}
 
-		defVal := ""
-		generatedVal := ""
+		var defVal, generatedVal, onUpdateVal string
 		if c.DefaultValue() != nil {
 			if c.Generated() {
 				generatedVal = string(c.DefaultValue())
 			} else {
 				defVal = string(c.DefaultValue())
 			}
+		}
+
+		if c.OnUpdateValue() != nil {
+			onUpdateVal = string(c.OnUpdateValue())
 		}
 
 		cols[i] = schema.Column{
@@ -319,6 +328,7 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 			TypeInfo:      sqlType,
 			Default:       defVal,
 			Generated:     generatedVal,
+			OnUpdate:      onUpdateVal,
 			Virtual:       c.Virtual(),
 			AutoIncrement: c.AutoIncrement(),
 			Comment:       string(c.Comment()),

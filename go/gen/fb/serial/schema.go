@@ -427,6 +427,14 @@ func (rcv *Column) MutateVirtual(n bool) bool {
 	return rcv._tab.MutateBoolSlot(28, n)
 }
 
+func (rcv *Column) OnUpdateValue() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(30))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
 const ColumnNumFields = 14
 
 func ColumnStart(builder *flatbuffers.Builder) {
