@@ -678,7 +678,7 @@ If you're interested in running this command against a remote host, hit us up on
 
 	usedEnv := targetEnv
 	if usedEnv == nil && useDb != "" {
-	        usedEnv = mrEnv.GetEnv(useDb)
+		usedEnv = mrEnv.GetEnv(useDb)
 	}
 
 	// There is no target environment detected. This is allowed for a small number of commands.
