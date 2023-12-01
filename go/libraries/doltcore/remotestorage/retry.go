@@ -46,12 +46,18 @@ func processHttpResp(resp *http.Response, err error) error {
 
 // ProcessGrpcErr converts an error from a Grpc call into a RetriableCallState
 func processGrpcErr(err error) error {
-	st, ok := status.FromError(err)
-	if !ok {
-		return err
+	st, _ := status.FromError(err)
+	if statusCodeIsPermanentError(st) {
+		return backoff.Permanent(err)
 	}
+	return err
+}
 
-	switch st.Code() {
+func statusCodeIsPermanentError(s *status.Status) bool {
+	if s == nil {
+		return false
+	}
+	switch s.Code() {
 	case codes.InvalidArgument,
 		codes.NotFound,
 		codes.AlreadyExists,
@@ -60,8 +66,7 @@ func processGrpcErr(err error) error {
 		codes.Unimplemented,
 		codes.OutOfRange,
 		codes.Unauthenticated:
-		return backoff.Permanent(err)
+		return true
 	}
-
-	return err
+	return false
 }

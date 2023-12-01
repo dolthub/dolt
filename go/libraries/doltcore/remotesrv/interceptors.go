@@ -79,15 +79,13 @@ func (si *ServerInterceptor) authenticate(ctx context.Context) error {
 	ctx, err := si.AccessController.ApiAuthenticate(ctx)
 	if err != nil {
 		si.Lgr.Warnf("authentication failed: %s", err.Error())
-		status.Error(codes.Unauthenticated, "unauthenticated")
-		return err
+		return status.Error(codes.Unauthenticated, err.Error())
 	}
 
 	// Have a valid user in the context.  Check authorization.
 	if authorized, err := si.AccessController.ApiAuthorize(ctx); !authorized {
 		si.Lgr.Warnf("authorization failed: %s", err.Error())
-		status.Error(codes.PermissionDenied, "unauthorized")
-		return err
+		return status.Error(codes.PermissionDenied, err.Error())
 	}
 
 	// Access Granted.
