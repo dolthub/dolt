@@ -29,10 +29,9 @@ import (
 )
 
 type ReflogTableFunction struct {
-	ctx      *sql.Context
-	database sql.Database
-	refExpr  sql.Expression
-	showAll  bool
+	ctx            *sql.Context
+	database       sql.Database
+	refAndArgExprs []sql.Expression
 }
 
 var _ sql.TableFunction = (*ReflogTableFunction)(nil)
@@ -66,16 +65,29 @@ func (rltf *ReflogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 	}
 
 	var refName string
-	if rltf.refExpr != nil {
-		target, err := rltf.refExpr.Eval(ctx, row)
+	showAll := false
+	for _, expr := range rltf.refAndArgExprs {
+		target, err := expr.Eval(ctx, row)
 		if err != nil {
 			return nil, fmt.Errorf("error evaluating expression (%s): %s",
-				rltf.refExpr.String(), err.Error())
+				expr.String(), err.Error())
 		}
-
-		refName, ok = target.(string)
+		targetStr, ok := target.(string)
 		if !ok {
 			return nil, fmt.Errorf("argument (%v) is not a string value, but a %T", target, target)
+		}
+
+		if targetStr == "--all" {
+			if showAll {
+				return nil, fmt.Errorf("error: multiple values provided for `all`")
+			}
+			showAll = true
+		} else {
+			if refName != "" {
+				return nil, fmt.Errorf("error: %s has too many positional arguments. Expected at most %d, found %d: %s",
+					rltf.Name(), 1, 2, rltf.refAndArgExprs)
+			}
+			refName = targetStr
 		}
 	}
 
@@ -112,7 +124,7 @@ func (rltf *ReflogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 			}
 			// skip workspace refs by default
 			if doltRef.GetType() == ref.WorkspaceRefType {
-				if !rltf.showAll {
+				if !showAll {
 					return nil
 				}
 			}
@@ -179,19 +191,17 @@ func (rltf *ReflogTableFunction) Schema() sql.Schema {
 }
 
 func (rltf *ReflogTableFunction) Resolved() bool {
-	if rltf.refExpr != nil {
-		return rltf.refExpr.Resolved()
+	for _, expr := range rltf.refAndArgExprs {
+		return expr.Resolved()
 	}
 	return true
 }
 
 func (rltf *ReflogTableFunction) String() string {
 	var args []string
-	if rltf.showAll {
-		args = append(args, "'--all'")
-	}
-	if rltf.refExpr != nil {
-		args = append(args, rltf.refExpr.String())
+
+	for _, expr := range rltf.refAndArgExprs {
+		args = append(args, expr.String())
 	}
 	return fmt.Sprintf("DOLT_REFLOG(%s)", strings.Join(args, ", "))
 }
@@ -218,10 +228,7 @@ func (rltf *ReflogTableFunction) IsReadOnly() bool {
 }
 
 func (rltf *ReflogTableFunction) Expressions() []sql.Expression {
-	if rltf.refExpr != nil {
-		return []sql.Expression{rltf.refExpr}
-	}
-	return []sql.Expression{}
+	return rltf.refAndArgExprs
 }
 
 func (rltf *ReflogTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
@@ -230,22 +237,7 @@ func (rltf *ReflogTableFunction) WithExpressions(expression ...sql.Expression) (
 	}
 
 	new := *rltf
-
-	if len(expression) == 2 {
-		if expression[0].String() == "'--all'" && expression[1].String() == "'--all'" {
-			return nil, fmt.Errorf("error: multiple values provided for `all`")
-		}
-		if expression[0].String() != "'--all'" && expression[1].String() != "'--all'" {
-			return nil, fmt.Errorf("error: %s has too many positional arguments. Expected at most %d, found %d: %s", rltf.Name(), 1, 2, expression)
-		}
-	}
-	for _, expr := range expression {
-		if expr.String() != "'--all'" {
-			new.refExpr = expr
-		} else {
-			new.showAll = true
-		}
-	}
+	new.refAndArgExprs = expression
 
 	return &new, nil
 }

@@ -241,3 +241,20 @@ SQL
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 0 ]
 }
+
+@test "reflog: 'HEAD -> ' decoration only appears on HEAD entries" {
+    setup_common
+
+    dolt sql -q "create table t (i int primary key, j int);"
+    dolt sql -q "insert into t values (1, 1), (2, 2), (3, 3)";
+    dolt commit -Am "initial commit"
+
+    run dolt reflog
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    line1=$(echo "${lines[0]}" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
+    line2=$(echo "${lines[1]}" | sed -E 's/\x1b\[[0-9;]*m//g') # remove special characters for color
+    [[ "$line1" =~ "(HEAD -> main) initial commit" ]] || false
+    [[ "$line2" =~ "Initialize data repository" ]] || false
+    [[ ! "$line2" =~ "HEAD" ]] || false
+}

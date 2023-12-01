@@ -136,12 +136,12 @@ type ReflogInfo struct {
 func printReflog(rows []sql.Row, queryist cli.Queryist, sqlCtx *sql.Context) int {
 	var reflogInfo []ReflogInfo
 
-	// Get the current branch
-	curBranch := ""
-	res, err := GetRowsForSql(queryist, sqlCtx, "SELECT active_branch()")
+	// Get the hash of HEAD for the `HEAD ->` decoration
+	headHash := ""
+	res, err := GetRowsForSql(queryist, sqlCtx, "SELECT hashof('HEAD')")
 	if err == nil {
-		// still print the reflog even if we can't get the current branch
-		curBranch = res[0][0].(string)
+		// still print the reflog even if we can't get the hash
+		headHash = res[0][0].(string)
 	}
 
 	for _, row := range rows {
@@ -151,13 +151,13 @@ func printReflog(rows []sql.Row, queryist cli.Queryist, sqlCtx *sql.Context) int
 		reflogInfo = append(reflogInfo, ReflogInfo{ref, commitHash, commitMessage})
 	}
 
-	reflogToStdOut(reflogInfo, curBranch)
+	reflogToStdOut(reflogInfo, headHash)
 
 	return 0
 }
 
 // reflogToStdOut takes a list of ReflogInfo and prints the reflog to stdout
-func reflogToStdOut(reflogInfo []ReflogInfo, curBranch string) {
+func reflogToStdOut(reflogInfo []ReflogInfo, headHash string) {
 	if cli.ExecuteWithStdioRestored == nil {
 		return
 	}
@@ -169,8 +169,12 @@ func reflogToStdOut(reflogInfo []ReflogInfo, curBranch string) {
 			// TODO: use short hash instead
 			line := []string{fmt.Sprintf("\033[33m%s\033[0m", info.commitHash)} // commit hash in yellow (33m)
 
-			processedRef := processRefForReflog(info.ref, curBranch)
-			line = append(line, fmt.Sprintf("\033[33m(%s\033[33m)\033[0m", processedRef)) // () in yellow (33m)
+			processedRef := processRefForReflog(info.ref)
+			if headHash != "" && headHash == info.commitHash {
+				line = append(line, fmt.Sprintf("\033[33m(\033[36;1mHEAD -> %s\033[33m)\033[0m", processedRef)) // HEAD in cyan (36;1)
+			} else {
+				line = append(line, fmt.Sprintf("\033[33m(%s\033[33m)\033[0m", processedRef)) // () in yellow (33m)
+			}
 			line = append(line, fmt.Sprintf("%s\n", info.commitMessage))
 			pager.Writer.Write([]byte(strings.Join(line, " ")))
 		}
@@ -178,13 +182,9 @@ func reflogToStdOut(reflogInfo []ReflogInfo, curBranch string) {
 }
 
 // processRefForReflog takes a full ref (e.g. refs/heads/master) or tag name and returns the ref name (e.g. master) with relevant decoration.
-func processRefForReflog(fullRef string, curBranch string) string {
+func processRefForReflog(fullRef string) string {
 	if strings.HasPrefix(fullRef, "refs/heads/") {
-		branch := strings.TrimPrefix(fullRef, "refs/heads/")
-		if curBranch != "" && branch == curBranch {
-			return fmt.Sprintf("\033[36;1mHEAD -> \033[32;1m%s\033[0m", branch) // HEAD in cyan (36;1), branch in green (32;1m)
-		}
-		return fmt.Sprintf("\033[32;1m%s\033[0m", branch) // branch in green (32;1m)
+		return fmt.Sprintf("\033[32;1m%s\033[0m", strings.TrimPrefix(fullRef, "refs/heads/")) // branch in green (32;1m)
 	} else if strings.HasPrefix(fullRef, "refs/tags/") {
 		return fmt.Sprintf("\033[33mtag: %s\033[0m", strings.TrimPrefix(fullRef, "refs/tags/")) // tag in yellow (33m)
 	} else if strings.HasPrefix(fullRef, "refs/remotes/") {
