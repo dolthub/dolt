@@ -109,7 +109,7 @@ func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []st
 		}
 
 		outputToStdio := apr.Contains(outputFlag)
-		err = FlushEvents(ctx, dEnv, userHomeDir, outputToStdio)
+		err = FlushLoggedEvents(ctx, dEnv, userHomeDir, outputToStdio)
 
 		if err != nil {
 			if err == events.ErrFileLocked {
@@ -125,7 +125,8 @@ func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []st
 	return 1
 }
 
-func FlushEvents(ctx context.Context, dEnv *env.DoltEnv, userHomeDir string, outputToStdio bool) error {
+// FlushLoggedEvents flushes any logged events in the directory given to an appropriate event emitter
+func FlushLoggedEvents(ctx context.Context, dEnv *env.DoltEnv, userHomeDir string, outputToStdio bool) error {
 	var flusher events.Flusher
 	if outputToStdio {
 		flusher = events.NewIOFlusher(dEnv.FS, userHomeDir, dbfactory.DoltDir)

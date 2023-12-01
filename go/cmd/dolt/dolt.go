@@ -23,7 +23,6 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"os/exec"
 	"strconv"
 	"time"
 
@@ -437,7 +436,7 @@ func runMain() int {
 	fs = filesys.LocalFS
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, Version)
 
-	root, err := env.GetCurrentUserHomeDir()
+	homeDir, err := env.GetCurrentUserHomeDir()
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to load the HOME directory: %v", err))
 		return 1
@@ -464,9 +463,7 @@ func runMain() int {
 		cli.PrintErrln(color.RedString("Failure to parse arguments: %v", err))
 		return 1
 	}
-
-	emitter := events.NewFileEmitter(root, dbfactory.DoltDir)
-
+	
 	defer func() {
 		metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")
 		disabled, err := strconv.ParseBool(metricsDisabled)
@@ -474,13 +471,14 @@ func runMain() int {
 			return
 		}
 
-		ces := events.GlobalCollector.Close()
-
 		// write events
-		_ = emitter.LogEvents(Version, ces)
+		emitter := events.NewFileEmitter(homeDir, dbfactory.DoltDir)
+		_ = emitter.LogEvents(Version, events.GlobalCollector.Close())
 
 		// flush events
-		_ = processEventsDir(ctx, args, dEnv)
+		if len(args) > 0 && shouldFlushEvents(args[0]) {
+			_ = processEventsDir(ctx, dEnv)
+		}
 	}()
 
 	if needsWriteAccess(subcommandName) {
@@ -751,24 +749,16 @@ func seedGlobalRand() {
 	rand.Seed(int64(binary.LittleEndian.Uint64(bs)))
 }
 
-// processEventsDir runs the dolt send-metrics command in a new process
-func processEventsDir(ctx context.Context, args []string, dEnv *env.DoltEnv) error {
-	if len(args) > 0 {
-		if !shouldFlushEvents(args[0]) {
-			return nil
-		}
-		
+// processEventsDir flushes all logged events to an appropriate event emitter (typically a gRPC client). 
+func processEventsDir(ctx context.Context, dEnv *env.DoltEnv) error {		
 		userHomeDir, err := dEnv.GetUserHomeDir()
 		if err != nil {
 			return err
 		}
 
 		// TODO: handle stdio output
-		_ = commands.FlushEvents(ctx, dEnv, userHomeDir, false)
+		_ = commands.FlushLoggedEvents(ctx, dEnv, userHomeDir, false)
 		return nil
-	}
-
-	return nil
 }
 
 func shouldFlushEvents(command string) bool {
