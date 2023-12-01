@@ -461,7 +461,7 @@ func (cp commitPartitioner) Next(ctx *sql.Context) (sql.Partition, error) {
 
 // Close closes the partitioner
 func (cp commitPartitioner) Close(ctx *sql.Context) error {
-    cp.cmItr.Reset(ctx)
+	cp.cmItr.Reset(ctx)
 	return nil
 }
 
