@@ -214,7 +214,9 @@ func (rltf *ReflogTableFunction) Schema() sql.Schema {
 
 func (rltf *ReflogTableFunction) Resolved() bool {
 	for _, expr := range rltf.refAndArgExprs {
-		return expr.Resolved()
+		if !expr.Resolved() {
+			return false
+		}
 	}
 	return true
 }
