@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
@@ -417,4 +418,8 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, keeper func() 
 
 func (ftp *fsTablePersister) Close() error {
 	return nil
+}
+
+func (ftp *fsTablePersister) AccessMode() chunks.ExclusiveAccessMode {
+	return chunks.ExclusiveAccessMode_Shared
 }

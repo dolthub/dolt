@@ -60,6 +60,9 @@ type SchemaDiffTableFunction struct {
 	tableNameExpr sql.Expression
 
 	database sql.Database
+
+	tabId  sql.TableId
+	colset sql.ColSet
 }
 
 var schemaDiffTableSchema = sql.Schema{
@@ -82,6 +85,25 @@ func (ds *SchemaDiffTableFunction) NewInstance(ctx *sql.Context, db sql.Database
 	}
 
 	return node, nil
+}
+
+func (ds *SchemaDiffTableFunction) WithId(id sql.TableId) sql.TableIdNode {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (ds *SchemaDiffTableFunction) Id() sql.TableId {
+	return ds.tabId
+}
+
+func (ds *SchemaDiffTableFunction) WithColumns(set sql.ColSet) sql.TableIdNode {
+	ret := *ds
+	ds.colset = set
+	return &ret
+}
+
+func (ds *SchemaDiffTableFunction) Columns() sql.ColSet {
+	return ds.colset
 }
 
 func (ds *SchemaDiffTableFunction) DataLength(ctx *sql.Context) (uint64, error) {

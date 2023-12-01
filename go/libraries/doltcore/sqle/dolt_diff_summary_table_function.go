@@ -42,6 +42,8 @@ type DiffSummaryTableFunction struct {
 	dotCommitExpr  sql.Expression
 	tableNameExpr  sql.Expression
 	database       sql.Database
+	tabId          sql.TableId
+	colset         sql.ColSet
 }
 
 var diffSummaryTableSchema = sql.Schema{
@@ -65,6 +67,26 @@ func (ds *DiffSummaryTableFunction) NewInstance(ctx *sql.Context, db sql.Databas
 	}
 
 	return node, nil
+}
+
+func (ds *DiffSummaryTableFunction) WithId(id sql.TableId) sql.TableIdNode {
+	ret := *ds
+	ret.tabId = id
+	return &ret
+}
+
+func (ds *DiffSummaryTableFunction) Id() sql.TableId {
+	return ds.tabId
+}
+
+func (ds *DiffSummaryTableFunction) WithColumns(set sql.ColSet) sql.TableIdNode {
+	ret := *ds
+	ret.colset = set
+	return &ret
+}
+
+func (ds *DiffSummaryTableFunction) Columns() sql.ColSet {
+	return ds.colset
 }
 
 func (ds *DiffSummaryTableFunction) DataLength(ctx *sql.Context) (uint64, error) {

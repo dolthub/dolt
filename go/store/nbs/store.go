@@ -1296,6 +1296,10 @@ func (nbs *NomsBlockStore) Version() string {
 	return nbs.upstream.nbfVers
 }
 
+func (nbs *NomsBlockStore) AccessMode() chunks.ExclusiveAccessMode {
+	return nbs.p.AccessMode()
+}
+
 func (nbs *NomsBlockStore) Close() (err error) {
 	if cerr := nbs.p.Close(); cerr != nil {
 		err = cerr

@@ -45,6 +45,8 @@ type DiffStatTableFunction struct {
 	dotCommitExpr  sql.Expression
 	tableNameExpr  sql.Expression
 	database       sql.Database
+	tabId          sql.TableId
+	colset         sql.ColSet
 }
 
 var diffStatTableSchema = sql.Schema{
@@ -75,6 +77,26 @@ func (ds *DiffStatTableFunction) NewInstance(ctx *sql.Context, db sql.Database, 
 	}
 
 	return node, nil
+}
+
+func (ds *DiffStatTableFunction) WithId(id sql.TableId) sql.TableIdNode {
+	ret := *ds
+	ret.tabId = id
+	return &ret
+}
+
+func (ds *DiffStatTableFunction) Id() sql.TableId {
+	return ds.tabId
+}
+
+func (ds *DiffStatTableFunction) WithColumns(set sql.ColSet) sql.TableIdNode {
+	ret := *ds
+	ds.colset = set
+	return &ret
+}
+
+func (ds *DiffStatTableFunction) Columns() sql.ColSet {
+	return ds.colset
 }
 
 func (ds *DiffStatTableFunction) DataLength(ctx *sql.Context) (uint64, error) {

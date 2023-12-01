@@ -208,6 +208,10 @@ SQL
 }
 
 @test "sql-shell: specify data-dir" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Remote behavior differs"
+    fi
+
     # remove config files
     rm -rf .doltcfg
     rm -rf db_dir
@@ -378,6 +382,10 @@ SQL
 }
 
 @test "sql-shell: specify data-dir and doltcfg-dir" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Remote behavior differs"
+    fi
+
     # remove config files
     rm -rf .doltcfg
     rm -rf db_dir
@@ -477,6 +485,10 @@ SQL
 }
 
 @test "sql-shell: specify data-dir and privilege-file" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Remote behavior differs"
+    fi
+
     # remove config files
     rm -rf .doltcfg
     rm -rf db_dir
@@ -618,6 +630,10 @@ SQL
 }
 
 @test "sql-shell: specify data directory, cfg directory, and privilege file" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Remote behavior differs"
+    fi
+
     # remove config files
     rm -rf .doltcfg
     rm -rf db_dir
@@ -729,6 +745,10 @@ SQL
 
 
 @test "sql-shell: .doltcfg in parent directory errors" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Remote behavior differs"
+    fi
+
     # remove existing directories
     rm -rf .doltcfg
     rm -rf inner_db

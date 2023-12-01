@@ -29,6 +29,30 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
+// A ChunkStore's |ExclusiveAccessMode| can indicate to a client what type of
+// exclusive access and concurrency control are support by the ChunkStore, and
+// for a ChunkStore instance which the client is holding, what level of access
+// it has. Typically, a ChunkStore will be in Mode_Shared, which means multiple
+// processes can concurrently write to the chunk store and the chunk store can
+// change out from under the process. Other possible modes, currently only used
+// by local ChunkStores using the chunk journal in go/store/nbs are
+// Mode_ReadOnly, which means the journal was opened in read only mode and all
+// attempts to write will fail, or Mode_Exclusive, which means the journal was
+// opened successfully in write mode and no other processes will write to it
+// while this ChunkStore is open.
+type ExclusiveAccessMode uint8
+
+// Note: the order of these constants is relied on in nbs/GenerationalNBS. The
+// order should go from least restricted access to most restricted access. If a
+// client has many stores with different levels of accses, a common question
+// they want to answer is: what is the most restricted access across all of
+// these stores.
+const (
+	ExclusiveAccessMode_Shared = iota
+	ExclusiveAccessMode_Exclusive
+	ExclusiveAccessMode_ReadOnly
+)
+
 var ErrNothingToCollect = errors.New("no changes since last gc")
 
 type GetAddrsCb func(ctx context.Context, c Chunk) (hash.HashSet, error)
@@ -62,6 +86,9 @@ type ChunkStore interface {
 
 	// Returns the NomsBinFormat with which this ChunkSource is compatible.
 	Version() string
+
+	// Returns the current access mode for this opened ChunkStore.
+	AccessMode() ExclusiveAccessMode
 
 	// Rebase brings this ChunkStore into sync with the persistent storage's
 	// current root.

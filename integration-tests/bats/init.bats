@@ -261,16 +261,10 @@ teardown() {
 @test "init: Fail when there is anything in the .dolt dir" {
     set_dolt_user "baz", "baz@bash.com"
 
-    mkdir dbdir
+    mkdir -p dbdir/.dolt
     cd dbdir
-    mkdir .dolt
-
-    # Possible real world situation. sql-server crashes and leaves a lock file.
-    # Currently we don't handle this.
-    echo "42:3306:aebf244e-0693-4c36-8b2d-6eb0dfa4fe2d" > .dolt/sql-server.lock
-
+    touch .dolt/config.json
     run dolt init
-
     [ "$status" -eq 1 ]
     [[ "$output" =~ ".dolt directory already exists" ]] || false
 }
