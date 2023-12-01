@@ -1015,9 +1015,11 @@ func (dcs *DoltChunkStore) uploadTableFileWithRetries(ctx context.Context, table
 		req := &remotesapi.GetUploadLocsRequest{RepoId: id, RepoToken: token, RepoPath: dcs.repoPath, TableFileDetails: []*remotesapi.TableFileDetails{tbfd}}
 		resp, err := dcs.csClient.GetUploadLocations(ctx, req)
 		if err != nil {
-			if err != nil {
-				return NewRpcError(err, "GetUploadLocations", dcs.host, req)
+			err := NewRpcError(err, "GetUploadLocations", dcs.host, req)
+			if err.IsPermanent() {
+				return backoff.Permanent(err)
 			}
+			return err
 		}
 
 		if resp.RepoToken != "" {
