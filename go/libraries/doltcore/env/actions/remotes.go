@@ -85,7 +85,10 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 		if err != nil {
 			return err
 		}
-		err = srcDB.FastForward(ctx, remoteRef, commit)
+		// We set the remote ref to the commit here, regardless of its
+		// previous value. It does not need to be a FastForward update
+		// of the local ref for this operation to succeed.
+		err = srcDB.SetHeadToCommit(ctx, remoteRef, commit)
 	}
 
 	return err

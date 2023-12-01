@@ -111,8 +111,8 @@ func MutateMapWithTupleIter(ctx context.Context, m Map, iter TupleIter) (Map, er
 	}, nil
 }
 
-func DiffMaps(ctx context.Context, from, to Map, cb tree.DiffFn) error {
-	return tree.DiffOrderedTrees(ctx, from.tuples, to.tuples, makeDiffCallBack(from, to, cb))
+func DiffMaps(ctx context.Context, from, to Map, considerAllRowsModified bool, cb tree.DiffFn) error {
+	return tree.DiffOrderedTrees(ctx, from.tuples, to.tuples, considerAllRowsModified, makeDiffCallBack(from, to, cb))
 }
 
 // RangeDiffMaps returns diffs within a Range. See Range for which diffs are
@@ -168,7 +168,12 @@ func makeDiffCallBack(from, to Map, innerCb tree.DiffFn) tree.DiffFn {
 
 func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) (Map, tree.MergeStats, error) {
 	serializer := message.NewProllyMapSerializer(left.valDesc, base.NodeStore().Pool())
-	tuples, stats, err := tree.MergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer)
+	// TODO: MergeMaps does not properly detect merge conflicts when one side adds a NULL to the end of its tuple.
+	// To fix this, accurate values of `leftSchemaChanged` and `rightSchemaChanged` must be computed.
+	// However, since `MergeMaps` is not currently called, fixing this is not a priority.
+	leftSchemaChanged := false
+	rightSchemaChanged := false
+	tuples, stats, err := tree.MergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, leftSchemaChanged, rightSchemaChanged, serializer)
 	if err != nil {
 		return Map{}, tree.MergeStats{}, err
 	}

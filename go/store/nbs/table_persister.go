@@ -30,6 +30,8 @@ import (
 	"io"
 	"sort"
 	"time"
+
+	"github.com/dolthub/dolt/go/store/chunks"
 )
 
 var errCacheMiss = errors.New("index cache miss")
@@ -62,6 +64,8 @@ type tablePersister interface {
 	// which are not in the included |keeper| set and have not be written or modified more recently
 	// than the provided |mtime|.
 	PruneTableFiles(ctx context.Context, keeper func() []addr, mtime time.Time) error
+
+	AccessMode() chunks.ExclusiveAccessMode
 
 	io.Closer
 }

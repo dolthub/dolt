@@ -828,6 +828,10 @@ func (dcs *DoltChunkStore) Version() string {
 	return dcs.metadata.NbfVersion
 }
 
+func (dcs *DoltChunkStore) AccessMode() chunks.ExclusiveAccessMode {
+	return chunks.ExclusiveAccessMode_Shared
+}
+
 // Rebase brings this ChunkStore into sync with the persistent storage's
 // current root.
 func (dcs *DoltChunkStore) Rebase(ctx context.Context) error {

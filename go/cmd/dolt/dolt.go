@@ -81,7 +81,6 @@ var doltSubCommands = []cli.Command{
 	commands.SqlCmd{VersionStr: Version},
 	admin.Commands,
 	sqlserver.SqlServerCmd{VersionStr: Version},
-	sqlserver.SqlClientCmd{VersionStr: Version},
 	commands.LogCmd{},
 	commands.ShowCmd{},
 	commands.BranchCmd{},
@@ -128,7 +127,6 @@ var doltSubCommands = []cli.Command{
 var commandsWithoutCliCtx = []cli.Command{
 	admin.Commands,
 	sqlserver.SqlServerCmd{VersionStr: Version},
-	sqlserver.SqlClientCmd{VersionStr: Version},
 	commands.CloneCmd{},
 	commands.RemoteCmd{},
 	commands.BackupCmd{},
@@ -162,7 +160,6 @@ var commandsWithoutGlobalArgSupport = []cli.Command{
 	commands.LoginCmd{},
 	credcmds.Commands,
 	sqlserver.SqlServerCmd{VersionStr: Version},
-	sqlserver.SqlClientCmd{VersionStr: Version},
 	commands.VersionCmd{VersionStr: Version},
 	commands.ConfigCmd{},
 }
@@ -256,7 +253,6 @@ func runMain() int {
 	}
 
 	csMetrics := false
-	ignoreLockFile := false
 	verboseEngineSetup := false
 	if len(args) > 0 {
 		var doneDebugFlags bool
@@ -395,7 +391,7 @@ func runMain() int {
 				args = args[1:]
 
 			case ignoreLocksFlag:
-				ignoreLockFile = true
+				// Ignored -- deprecated option.
 				args = args[1:]
 
 			case featureVersionFlag:
@@ -440,7 +436,6 @@ func runMain() int {
 	var fs filesys.Filesys
 	fs = filesys.LocalFS
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, Version)
-	dEnv.IgnoreLockFile = ignoreLockFile
 
 	root, err := env.GetCurrentUserHomeDir()
 	if err != nil {
@@ -541,7 +536,7 @@ func runMain() int {
 	}
 	dEnv.FS = dataDirFS
 
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dataDirFS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dataDirFS, dEnv.Version, dEnv)
 	if err != nil {
 		cli.PrintErrln("failed to load database names")
 		return 1
@@ -669,16 +664,20 @@ If you're interested in running this command against a remote host, hit us up on
 		}
 	}
 
-	if targetEnv == nil && useDb != "" {
-		targetEnv = mrEnv.GetEnv(useDb)
-	}
+	// If our targetEnv is still |nil| and we don't have an environment
+	// which we will be using based on |useDb|, then our initialization
+	// here did not find a repository we will be operating against.
+	noValidRepository := targetEnv == nil && (useDb == "" || mrEnv.GetEnv(useDb) == nil)
 
-	// There is no target environment detected. This is allowed for a small number of commands.
-	// We don't expect that number to grow, so we list them here.
-	// It's also allowed when --help is passed.
-	// So we defer the error until the caller tries to use the cli.LateBindQueryist
-	isDoltEnvironmentRequired := subcommandName != "init" && subcommandName != "sql" && subcommandName != "sql-server" && subcommandName != "sql-client"
-	if targetEnv == nil && isDoltEnvironmentRequired {
+	// Not having a valid repository as we start to execute a CLI command
+	// implementation is allowed for a small number of commands.  We don't
+	// expect this set of commands to grow, so we list them here.
+	//
+	// This is also allowed when --help is passed. So we defer the error
+	// until the caller tries to use the cli.LateBindQueryist.
+	isValidRepositoryRequired := subcommandName != "init" && subcommandName != "sql" && subcommandName != "sql-server" && subcommandName != "sql-client"
+
+	if noValidRepository && isValidRepositoryRequired {
 		return func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) {
 			return nil, nil, nil, fmt.Errorf("The current directory is not a valid dolt repository.")
 		}, nil
@@ -690,19 +689,40 @@ If you're interested in running this command against a remote host, hit us up on
 		targetEnv = rootEnv
 	}
 
-	isLocked, lock, err := targetEnv.GetLock()
-	if err != nil {
-		return nil, err
+	var lookForServer bool
+	if targetEnv.DoltDB != nil && targetEnv.IsAccessModeReadOnly() {
+		// If the loaded target environment has a DoltDB and we do not
+		// have access to it, we look for a server.
+		lookForServer = true
+	} else if targetEnv.DoltDB == nil {
+		// If the loaded environment itself does not have a DoltDB, we
+		// may want to look for a server. We do so if all of the
+		// repositories in our MultiEnv are ReadOnly. This includes the
+		// case where there are no repositories in our MultiEnv
+		var allReposAreReadOnly bool = true
+		mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
+			if dEnv.DoltDB != nil {
+				allReposAreReadOnly = allReposAreReadOnly && dEnv.IsAccessModeReadOnly()
+			}
+			return !allReposAreReadOnly, nil
+		})
+		lookForServer = allReposAreReadOnly
 	}
-	if isLocked {
-		if verbose {
-			cli.Println("verbose: starting remote mode")
+	if lookForServer {
+		localCreds, err := sqlserver.FindAndLoadLocalCreds(targetEnv.FS)
+		if err != nil {
+			return nil, err
 		}
+		if localCreds != nil {
+			if verbose {
+				cli.Println("verbose: starting remote mode")
+			}
 
-		if !creds.Specified {
-			creds = &cli.UserPassword{Username: sqlserver.LocalConnectionUser, Password: lock.Secret, Specified: false}
+			if !creds.Specified {
+				creds = &cli.UserPassword{Username: sqlserver.LocalConnectionUser, Password: localCreds.Secret, Specified: false}
+			}
+			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", localCreds.Port, false, useDb)
 		}
-		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", lock.Port, false, useDb)
 	}
 
 	if verbose {

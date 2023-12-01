@@ -1052,9 +1052,6 @@ END""")
     [[ $output =~ "information_schema" ]] || false
     [[ $output =~ "test1" ]] ||	false
 
-    # Make sure the sql-server lock file is set for a newly created database
-    [[ -f "$PWD/test1/.dolt/sql-server.lock" ]] || false
-
     dolt sql -q "create table a(x int)"
     dolt sql -q "call dolt_add('.')"
     dolt sql -q "insert into a values (1), (2)"
@@ -1221,9 +1218,6 @@ END""")
     [[ $output =~ "mysql" ]] || false
     [[ $output =~ "information_schema" ]] || false
     [[ $output =~ "test1" ]] || false
-
-    # Make sure the sql-server lock file is set for a newly created database
-    [[ -f "$PWD/db_dir/test1/.dolt/sql-server.lock" ]] || false
 
     dolt --port $PORT --host 0.0.0.0 --no-tls -u dolt --use-db test1 sql -q "create table a(x int)"
     dolt --port $PORT --host 0.0.0.0 --no-tls -u dolt --use-db test1 sql -q "call dolt_add('.')"
@@ -1404,7 +1398,7 @@ data_dir: $DATA_DIR
     [ "$status" -eq 0 ]
 }
 
-@test "sql-server: sql-server lock cleanup" {
+@test "sql-server: sql-server info cleanup" {
     cd repo1
     start_sql_server
     stop_sql_server
@@ -1412,28 +1406,28 @@ data_dir: $DATA_DIR
     stop_sql_server
 }
 
-@test "sql-server: sql-server locks database" {
+@test "sql-server: sql-server info database" {
     cd repo1
     start_sql_server
-    [[ -f "$PWD/.dolt/sql-server.lock" ]] || false
+    [[ -f "$PWD/.dolt/sql-server.info" ]] || false
 
     PORT=$( definePORT )
     run dolt sql-server -P $PORT --socket "dolt.$PORT.sock"
     [ "$status" -eq 1 ]
 }
 
-@test "sql-server: sql-server sets permissions on sql-server.lock" {
+@test "sql-server: sql-server sets permissions on sql-server.info" {
     cd repo1
-    ! [[ -f "$PWD/.dolt/sql-server.lock" ]] || false
+    ! [[ -f "$PWD/.dolt/sql-server.info" ]] || false
     start_sql_server
-    [[ -f "$PWD/.dolt/sql-server.lock" ]] || false
+    [[ -f "$PWD/.dolt/sql-server.info" ]] || false
 
 
     if [[ `uname` == 'Darwin' ]]; then
-      run stat -x "$PWD/.dolt/sql-server.lock"
+      run stat -x "$PWD/.dolt/sql-server.info"
       [[ "$output" =~ "(0600/-rw-------)" ]] || false
     else
-      run stat "$PWD/.dolt/sql-server.lock"
+      run stat "$PWD/.dolt/sql-server.info"
       [[ "$output" =~ "(0600/-rw-------)" ]] || false
     fi
 }
@@ -1459,9 +1453,6 @@ data_dir: $DATA_DIR
     cd repo1
     start_sql_server
     dolt sql -q "create database newdb"
-
-    # Make sure the sql-server lock file is set for the new database
-    [[ -f "$PWD/newdb/.dolt/sql-server.lock" ]] || false
 
     # Verify that we can't start a sql-server from the new database dir
     cd newdb
@@ -1583,86 +1574,19 @@ behavior:
     [ "${#lines[@]}" -eq 1 ]
 }
 
-@test "sql-server: start server multidir creates sql-server.lock file in every rep" {
-    start_sql_server
-    run ls repo1/.dolt
-    [[ "$output" =~ "sql-server.lock" ]] || false
-
-    run ls repo2/.dolt
-    [[ "$output" =~ "sql-server.lock" ]] || false
-
-    stop_sql_server
-    run ls repo1/.dolt
-    ! [[ "$output" =~ "sql-server.lock" ]] || false
-
-    run ls repo2/.dolt
-    ! [[ "$output" =~ "sql-server.lock" ]] || false
-}
-
-@test "sql-server: running a dolt function in the same directory as a running server correctly errors" {
-    start_sql_server
-
-    cd repo1
-    run dolt gc
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
-
-    PORT=$( definePORT )
-    run dolt sql-server --port=$PORT --socket "dolt.$PORT.sock"
-    [ "$status" -eq 1 ]
-
-    [[ "$output" =~ "Database locked by another sql-server" ]] || false
-    stop_sql_server 1
-}
-
 @test "sql-server: sigterm running server and restarting works correctly" {
     start_sql_server
-    run ls repo1/.dolt
-    [[ "$output" =~ "sql-server.lock" ]] || false
-
-    run ls repo2/.dolt
-    [[ "$output" =~ "sql-server.lock" ]] || false
 
     kill -9 $SERVER_PID
 
-    run ls repo1/.dolt
-    [[ "$output" =~ "sql-server.lock" ]] || false
-
-    run ls repo2/.dolt
-    [[ "$output" =~ "sql-server.lock" ]] || false
+    run ls .dolt
+    [[ "$output" =~ "sql-server.info" ]] || false
 
     start_sql_server
     run dolt sql -q "select 1 as col1"
     [ $status -eq 0 ]
     [[ $output =~ col1 ]] || false
     [[ $output =~ " 1 " ]] || false
-    stop_sql_server
-
-    # Try adding fake pid numbers. Could happen via debugger or something
-    echo "423423" > repo1/.dolt/sql-server.lock
-    echo "4123423" > repo2/.dolt/sql-server.lock
-
-    start_sql_server
-    run dolt --port $PORT --host 0.0.0.0 --no-tls -u dolt --use-db repo2 sql -q "select 1 as col1"
-    [ $status -eq 0 ]
-    [[ $output =~ col1 ]] || false
-    [[ $output =~ " 1 " ]] || false
-    stop_sql_server
-
-    # Add malicious text to lockfile and expect to fail
-    echo "iamamaliciousactor" > repo1/.dolt/sql-server.lock
-
-    run start_sql_server
-    [[ "$output" =~ "database locked by another sql-server; either clone the database to run a second server" ]] || false
-    [ "$status" -eq 1 ]
-
-    rm repo1/.dolt/sql-server.lock
-
-    # this test was hanging as the server is stopped from the above error
-    # but stop_sql_server in teardown tries to kill process that is not
-    # running anymore, so start the server again, and it will be stopped in
-    # teardown
-    start_sql_server
 }
 
 @test "sql-server: create a database when no current database is set" {
@@ -1900,18 +1824,6 @@ behavior:
     [[ ! "$output" =~ "other" ]] || false
 }
 
-@test "sql-server: server won't start where another server is running" {
-    baseDir=$(mktemp -d)
-    cd $baseDir
-
-    start_sql_server
-
-    run dolt sql-server
-
-    [ $status -eq 1 ]
-    [[ "$output" =~ "Database locked by another sql-server; Lock file" ]] || false
-}
-
 @test "sql-server: empty server can be connected to using sql with no args" {
     baseDir=$(mktemp -d)
     cd $baseDir
@@ -1936,10 +1848,13 @@ behavior:
     [ $status -eq 0 ]
     [[ "$output" =~ "__dolt_local_user__@localhost" ]] || false
 
+    # We create a database here so that the server has exclusive access to this database.
+    # Starting another server attempting to serve it will fail.
+    dolt --data-dir=$baseDir sql -q "create database mydb"
+
     cd "$baseDir"
     run dolt sql-server
     [ $status -eq 1 ]
-    [[ "$output" =~ "Database locked by another sql-server; Lock file" ]] || false
 
     run dolt sql -q "select current_user"
     [ $status -eq 0 ]
