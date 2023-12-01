@@ -480,7 +480,7 @@ func runMain() int {
 		_ = emitter.LogEvents(Version, ces)
 
 		// flush events
-		_ = processEventsDir(args, dEnv)
+		_ = processEventsDir(ctx, args, dEnv)
 	}()
 
 	if needsWriteAccess(subcommandName) {
@@ -752,31 +752,33 @@ func seedGlobalRand() {
 }
 
 // processEventsDir runs the dolt send-metrics command in a new process
-func processEventsDir(args []string, dEnv *env.DoltEnv) error {
+func processEventsDir(ctx context.Context, args []string, dEnv *env.DoltEnv) error {
 	if len(args) > 0 {
-		ignoreCommands := map[string]struct{}{
-			commands.SendMetricsCommand: {},
-			"init":                      {},
-			"config":                    {},
-		}
-
-		_, ok := ignoreCommands[args[0]]
-
-		if ok {
+		if !shouldFlushEvents(args[0]) {
 			return nil
 		}
-
-		cmd := exec.Command("dolt", commands.SendMetricsCommand)
-
-		if err := cmd.Start(); err != nil {
-			// log.Print(err)
+		
+		userHomeDir, err := dEnv.GetUserHomeDir()
+		if err != nil {
 			return err
 		}
 
+		// TODO: handle stdio output
+		_ = commands.FlushEvents(ctx, dEnv, userHomeDir, false)
 		return nil
 	}
 
 	return nil
+}
+
+func shouldFlushEvents(command string) bool {
+	ignoreCommands := map[string]struct{}{
+		commands.SendMetricsCommand: {},
+		"init":                      {},
+		"config":                    {},
+	}
+	_, ok := ignoreCommands[command]
+	return !ok
 }
 
 func interceptSendMetrics(ctx context.Context, args []string) (bool, int) {

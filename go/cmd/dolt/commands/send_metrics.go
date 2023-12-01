@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/fatih/color"
 	"google.golang.org/grpc"
 
@@ -82,7 +83,7 @@ func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []st
 
 	ap := cmd.ArgParser()
 
-	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cli.CommandDocumentationContent{ShortDesc: sendMetricsShortDesc}, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cli.CommandDocumentationContent{ShortDesc: sendMetricsShortDesc}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")
@@ -102,25 +103,13 @@ func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []st
 		ctx, cancel := context.WithTimeout(ctx, time.Minute)
 		defer cancel()
 
-		root, err := dEnv.GetUserHomeDir()
+		userHomeDir, err := dEnv.GetUserHomeDir()
 		if err != nil {
-			// log.Print(err)
-			return 1
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
 
-		dolt := dbfactory.DoltDir
-
-		var flusher events.Flusher
-
-		if apr.Contains(outputFlag) {
-			flusher = events.NewIOFlusher(dEnv.FS, root, dolt)
-		} else {
-			grpcEmitter := getGRPCEmitter(dEnv)
-
-			flusher = events.NewGrpcEventFlusher(dEnv.FS, root, dolt, grpcEmitter)
-		}
-
-		err = flusher.Flush(ctx)
+		outputToStdio := apr.Contains(outputFlag)
+		err = FlushEvents(ctx, dEnv, userHomeDir, outputToStdio)
 
 		if err != nil {
 			if err == events.ErrFileLocked {
@@ -136,8 +125,20 @@ func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []st
 	return 1
 }
 
-// getGRPCEmitter gets the connection to the events grpc service
-func getGRPCEmitter(dEnv *env.DoltEnv) *events.GrpcEmitter {
+func FlushEvents(ctx context.Context, dEnv *env.DoltEnv, userHomeDir string, outputToStdio bool) error {
+	var flusher events.Flusher
+	if outputToStdio {
+		flusher = events.NewIOFlusher(dEnv.FS, userHomeDir, dbfactory.DoltDir)
+	} else {
+		grpcEmitter := GRPCEventEmitterForEnv(dEnv)
+		flusher = events.NewGrpcEventFlusher(dEnv.FS, userHomeDir, dbfactory.DoltDir, grpcEmitter)
+	}
+
+	return flusher.Flush(ctx)
+}
+
+// GRPCEventEmitterForEnv returns an event emitter for the given environment
+func GRPCEventEmitterForEnv(dEnv *env.DoltEnv) *events.GrpcEmitter {
 	host := dEnv.Config.GetStringOrDefault(env.MetricsHost, env.DefaultMetricsHost)
 	portStr := dEnv.Config.GetStringOrDefault(env.MetricsPort, env.DefaultMetricsPort)
 	insecureStr := dEnv.Config.GetStringOrDefault(env.MetricsInsecure, "false")
