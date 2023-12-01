@@ -1008,6 +1008,21 @@ create_five_remote_branches_main_and_master() {
     [[ "$output" =~ "remotes/origin/branch-two" ]] || false
 }
 
+@test "remotes: clone --single-branch does not create remote refs for all remote branches" {
+    create_three_remote_branches
+    cd dolt-repo-clones
+    dolt clone --single-branch http://localhost:50051/test-org/test-repo
+    cd test-repo
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "* main" ]] || false
+    [[ ! "$output" =~ " branch-one" ]] || false
+    [[ ! "$output" =~ " branch-two" ]] || false
+    [[ "$output" =~ "remotes/origin/main" ]] || false
+    [[ ! "$output" =~ "remotes/origin/branch-one" ]] || false
+    [[ ! "$output" =~ "remotes/origin/branch-two" ]] || false
+}
+
 @test "remotes: fetch creates new remote refs for new remote branches" {
     create_main_remote_branch
 

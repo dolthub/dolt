@@ -125,6 +125,7 @@ func CreateCloneArgParser() *argparser.ArgParser {
 	ap.SupportsString(dbfactory.OSSCredsFileParam, "", "file", "OSS credentials file.")
 	ap.SupportsString(dbfactory.OSSCredsProfile, "", "profile", "OSS profile to use.")
 	ap.SupportsString(UserFlag, "u", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
+	ap.SupportsFlag(SingleBranchFlag, "", "Clone only the history leading to the tip of a single branch, either specified by --branch or the primary branch remote's HEAD points at.")
 	return ap
 }
 

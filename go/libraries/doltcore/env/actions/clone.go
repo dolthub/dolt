@@ -156,7 +156,7 @@ func sortedKeys(m map[string]iohelp.ReadStats) []string {
 	return keys
 }
 
-func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch string, dEnv *env.DoltEnv) error {
+func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch string, singleBranch bool, dEnv *env.DoltEnv) error {
 	eventCh := make(chan pull.TableFileEvent, 128)
 
 	wg := &sync.WaitGroup{}
@@ -215,24 +215,24 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	// create remote refs corresponding to each of them. We delete all of
 	// the local branches except for the one corresponding to |branch|.
 	for _, brnch := range branches {
-		cs, _ := doltdb.NewCommitSpec(brnch.GetPath())
-		cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
-		if err != nil {
-			return fmt.Errorf("%w: %s; %s", ErrFailedToResolveBranchRef, brnch.String(), err.Error())
-
-		}
-
-		remoteRef := ref.NewRemoteRef(remoteName, brnch.GetPath())
-		err = dEnv.DoltDB.SetHeadToCommit(ctx, remoteRef, cm)
-		if err != nil {
-			return fmt.Errorf("%w: %s; %s", ErrFailedToCreateRemoteRef, remoteRef.String(), err.Error())
-
-		}
-
 		if brnch.GetPath() != branch {
 			err := dEnv.DoltDB.DeleteBranch(ctx, brnch, nil)
 			if err != nil {
 				return fmt.Errorf("%w: %s; %s", ErrFailedToDeleteBranch, brnch.String(), err.Error())
+			}
+		} else if !singleBranch || brnch.GetPath() == branch {
+			cs, _ := doltdb.NewCommitSpec(brnch.GetPath())
+			cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
+			if err != nil {
+				return fmt.Errorf("%w: %s; %s", ErrFailedToResolveBranchRef, brnch.String(), err.Error())
+
+			}
+
+			remoteRef := ref.NewRemoteRef(remoteName, brnch.GetPath())
+			err = dEnv.DoltDB.SetHeadToCommit(ctx, remoteRef, cm)
+			if err != nil {
+				return fmt.Errorf("%w: %s; %s", ErrFailedToCreateRemoteRef, remoteRef.String(), err.Error())
+
 			}
 		}
 	}
