@@ -1984,7 +1984,7 @@ func TestBrokenSystemTableQueries(t *testing.T) {
 }
 
 func TestHistorySystemTable(t *testing.T) {
-	harness := newDoltHarness(t).WithParallelism(1)
+	harness := newDoltHarness(t).WithParallelism(2)
 	defer harness.Close()
 	harness.Setup(setup.MydbData)
 	for _, test := range HistorySystemTableScriptTests {
