@@ -16,25 +16,20 @@ package env
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/sirupsen/logrus"
-	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
-	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
 )
-
-var ErrActiveServerLock = errors.NewKind("database locked by another sql-server; either clone the database to run a second server, or delete the '%s' if no other sql-servers are active")
 
 // EnvNameAndPath is a simple tuple of the name of an environment and the path to where it is on disk
 type EnvNameAndPath struct {
@@ -51,16 +46,15 @@ type NamedEnv struct {
 
 // MultiRepoEnv is a type used to store multiple environments which can be retrieved by name
 type MultiRepoEnv struct {
-	envs           []NamedEnv
-	fs             filesys.Filesys
-	cfg            config.ReadWriteConfig
-	dialProvider   dbfactory.GRPCDialProvider
-	ignoreLockFile bool
+	envs         []NamedEnv
+	fs           filesys.Filesys
+	cfg          config.ReadWriteConfig
+	dialProvider dbfactory.GRPCDialProvider
 }
 
 // NewMultiEnv returns a new MultiRepoEnv instance dirived from a root DoltEnv instance.
 func MultiEnvForSingleEnv(ctx context.Context, env *DoltEnv) (*MultiRepoEnv, error) {
-	return MultiEnvForDirectory(ctx, env.Config.WriteableConfig(), env.FS, env.Version, env.IgnoreLockFile, env)
+	return MultiEnvForDirectory(ctx, env.Config.WriteableConfig(), env.FS, env.Version, env)
 }
 
 // MultiEnvForDirectory returns a MultiRepoEnv for the directory rooted at the file system given. The doltEnv from the
@@ -71,7 +65,6 @@ func MultiEnvForDirectory(
 	config config.ReadWriteConfig,
 	dataDirFS filesys.Filesys,
 	version string,
-	ignoreLockFile bool,
 	dEnv *DoltEnv,
 ) (*MultiRepoEnv, error) {
 	// Load current dataDirFS and put into mr env
@@ -92,11 +85,10 @@ func MultiEnvForDirectory(
 	}
 
 	mrEnv := &MultiRepoEnv{
-		envs:           make([]NamedEnv, 0),
-		fs:             dataDirFS,
-		cfg:            config,
-		dialProvider:   NewGRPCDialProviderFromDoltEnv(newDEnv),
-		ignoreLockFile: ignoreLockFile,
+		envs:         make([]NamedEnv, 0),
+		fs:           dataDirFS,
+		cfg:          config,
+		dialProvider: NewGRPCDialProviderFromDoltEnv(newDEnv),
 	}
 
 	envSet := map[string]*DoltEnv{}
@@ -146,79 +138,6 @@ func MultiEnvForDirectory(
 	sort.Strings(sortedKeys)
 	for _, dbName := range sortedKeys {
 		mrEnv.addEnv(dbName, envSet[dbName])
-	}
-
-	return mrEnv, nil
-}
-
-// MultiEnvForPaths takes a variable list of EnvNameAndPath objects loads each of the environments, and returns a new
-// MultiRepoEnv
-func MultiEnvForPaths(
-	ctx context.Context,
-	hdp HomeDirProvider,
-	cfg config.ReadWriteConfig,
-	fs filesys.Filesys,
-	version string,
-	ignoreLockFile bool,
-	envNamesAndPaths ...EnvNameAndPath,
-) (*MultiRepoEnv, error) {
-	nameToPath := make(map[string]string)
-	for _, nameAndPath := range envNamesAndPaths {
-		existingPath, ok := nameToPath[nameAndPath.Name]
-
-		if ok {
-			if existingPath == nameAndPath.Path {
-				continue
-			}
-
-			return nil, fmt.Errorf("databases at paths '%s' and '%s' both attempted to load with the name '%s'", existingPath, nameAndPath.Path, nameAndPath.Name)
-		}
-
-		nameToPath[nameAndPath.Name] = nameAndPath.Path
-	}
-
-	mrEnv := &MultiRepoEnv{
-		envs:           make([]NamedEnv, 0),
-		fs:             fs,
-		cfg:            cfg,
-		ignoreLockFile: ignoreLockFile,
-	}
-
-	envSet := map[string]*DoltEnv{}
-	for name, path := range nameToPath {
-		absPath, err := fs.Abs(path)
-
-		if err != nil {
-			return nil, err
-		}
-
-		fsForEnv, err := filesys.LocalFilesysWithWorkingDir(absPath)
-
-		if err != nil {
-			return nil, err
-		}
-
-		urlStr := earl.FileUrlFromPath(filepath.Join(absPath, dbfactory.DoltDataDir), os.PathSeparator)
-		dEnv := Load(ctx, hdp, fsForEnv, urlStr, version)
-
-		if dEnv.RSLoadErr != nil {
-			return nil, fmt.Errorf("error loading environment '%s' at path '%s': %s", name, absPath, dEnv.RSLoadErr.Error())
-		} else if dEnv.DBLoadError != nil {
-			return nil, fmt.Errorf("error loading environment '%s' at path '%s': %s", name, absPath, dEnv.DBLoadError.Error())
-		} else if dEnv.CfgLoadErr != nil {
-			return nil, fmt.Errorf("error loading environment '%s' at path '%s': %s", name, absPath, dEnv.CfgLoadErr.Error())
-		}
-
-		if mrEnv.dialProvider == nil {
-			mrEnv.dialProvider = NewGRPCDialProviderFromDoltEnv(dEnv)
-		}
-
-		envSet[name] = dEnv
-	}
-
-	enforceSingleFormat(envSet)
-	for dbName, dEnv := range envSet {
-		mrEnv.addEnv(dbName, dEnv)
 	}
 
 	return mrEnv, nil
@@ -284,57 +203,6 @@ func (mrEnv *MultiRepoEnv) GetFirstDatabase() string {
 	})
 
 	return currentDb
-}
-
-// IsLocked returns true if any env is locked
-func (mrEnv *MultiRepoEnv) IsLocked() (bool, string) {
-	if mrEnv.ignoreLockFile {
-		return false, ""
-	}
-
-	for _, e := range mrEnv.envs {
-		if e.env.IsLocked() {
-			return true, e.env.LockFile()
-		}
-	}
-	return false, ""
-}
-
-// Lock locks all child envs. The DBLock contains the details to write to the lock files. If an error is returned, all
-// child envs will be returned with their initial lock state.
-func (mrEnv *MultiRepoEnv) Lock(lck *DBLock) (err error) {
-	if mrEnv.ignoreLockFile {
-		return nil
-	}
-
-	if ok, f := mrEnv.IsLocked(); ok {
-		return ErrActiveServerLock.New(f)
-	}
-
-	for _, e := range mrEnv.envs {
-		err = e.env.Lock(lck)
-		if err != nil {
-			mrEnv.Unlock()
-			return err
-		}
-	}
-	return nil
-}
-
-// Unlock unlocks all child envs.
-func (mrEnv *MultiRepoEnv) Unlock() error {
-	if mrEnv.ignoreLockFile {
-		return nil
-	}
-
-	var err, retErr error
-	for _, e := range mrEnv.envs {
-		err = e.env.Unlock()
-		if err != nil && retErr == nil {
-			retErr = err
-		}
-	}
-	return retErr
 }
 
 func getRepoRootDir(path, pathSeparator string) string {

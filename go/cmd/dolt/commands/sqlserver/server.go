@@ -60,6 +60,8 @@ const (
 // but will break compatibility with implementing applications that do not yet support users.
 var ExternalDisableUsers bool = false
 
+var ErrCouldNotLockDatabase = goerrors.NewKind("database \"%s\" is locked by another dolt process; either clone the database to run a second server, or stop the dolt process which currently holds an exclusive write lock on the database")
+
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
 func Serve(
 	ctx context.Context,
@@ -137,27 +139,39 @@ func Serve(
 	}
 	controller.Register(InitDataDir)
 
-	var serverLock *env.DBLock
-	InitGlobalServerLock := &svcs.AnonService{
-		InitF: func(context.Context) (err error) {
-			serverLock, err = acquireGlobalSqlServerLock(serverConfig.Port(), dEnv)
-			return err
-		},
-		StopF: func() error {
-			dEnv.FS.Delete(dEnv.LockFile(), false)
-			return nil
-		},
-	}
-	controller.Register(InitGlobalServerLock)
-
 	var mrEnv *env.MultiRepoEnv
 	InitMultiEnv := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
-			mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+			mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv)
 			return err
 		},
 	}
 	controller.Register(InitMultiEnv)
+
+	AssertNoDatabasesInAccessModeReadOnly := &svcs.AnonService{
+		InitF: func(ctx context.Context) (err error) {
+			return mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
+				if dEnv.IsAccessModeReadOnly() {
+					return true, ErrCouldNotLockDatabase.New(name)
+				}
+				return false, nil
+			})
+		},
+	}
+	controller.Register(AssertNoDatabasesInAccessModeReadOnly)
+
+	var localCreds *LocalCreds
+	InitServerLocalCreds := &svcs.AnonService{
+		InitF: func(context.Context) (err error) {
+			localCreds, err = persistServerLocalCreds(serverConfig.Port(), dEnv)
+			return err
+		},
+		StopF: func() error {
+			RemoveLocalCreds(dEnv.FS)
+			return nil
+		},
+	}
+	controller.Register(InitServerLocalCreds)
 
 	var clusterController *cluster.Controller
 	InitClusterController := &svcs.AnonService{
@@ -271,30 +285,11 @@ func Serve(
 	}
 	controller.Register(InitMetricsListener)
 
-	LockMultiRepoEnv := &svcs.AnonService{
-		InitF: func(context.Context) error {
-			if ok, f := mrEnv.IsLocked(); ok {
-				return env.ErrActiveServerLock.New(f)
-			}
-			if err := mrEnv.Lock(serverLock); err != nil {
-				return err
-			}
-			return nil
-		},
-		StopF: func() error {
-			if err := mrEnv.Unlock(); err != nil {
-				cli.PrintErr(err)
-			}
-			return nil
-		},
-	}
-	controller.Register(LockMultiRepoEnv)
-
 	InitLockSuperUser := &svcs.AnonService{
 		InitF: func(context.Context) error {
 			mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
 			ed := mysqlDb.Editor()
-			mysqlDb.AddSuperUser(ed, LocalConnectionUser, "localhost", serverLock.Secret)
+			mysqlDb.AddSuperUser(ed, LocalConnectionUser, "localhost", localCreds.Secret)
 			ed.Close()
 			return nil
 		},
@@ -547,7 +542,7 @@ func Serve(
 
 	RunSQLServer := &svcs.AnonService{
 		RunF: func(context.Context) {
-			sqlserver.SetRunningServer(mySQLServer, serverLock)
+			sqlserver.SetRunningServer(mySQLServer)
 			defer sqlserver.UnsetRunningServer()
 			mySQLServer.Start()
 		},
@@ -566,26 +561,13 @@ func Serve(
 	return nil, controller.WaitForStop()
 }
 
-// acquireGlobalSqlServerLock attempts to acquire a global lock on the SQL server. If no error is returned, then the lock was acquired.
-func acquireGlobalSqlServerLock(port int, dEnv *env.DoltEnv) (*env.DBLock, error) {
-	locked, _, err := dEnv.GetLock()
+func persistServerLocalCreds(port int, dEnv *env.DoltEnv) (*LocalCreds, error) {
+	creds := NewLocalCreds(port)
+	err := WriteLocalCreds(dEnv.FS, creds)
 	if err != nil {
 		return nil, err
 	}
-	if locked {
-		lockPath := dEnv.LockFile()
-		err = fmt.Errorf("Database locked by another sql-server; Lock file: %s", lockPath)
-		return nil, err
-	}
-
-	lck := env.NewDBLock(port)
-	err = dEnv.Lock(&lck)
-	if err != nil {
-		err = fmt.Errorf("Server can not start. Failed to acquire lock: %s", err.Error())
-		return nil, err
-	}
-
-	return &lck, nil
+	return creds, err
 }
 
 // remotesapiAuth facilitates the implementation remotesrv.AccessControl for the remotesapi server.
@@ -695,11 +677,6 @@ func newSessionBuilder(se *engine.SqlEngine, config ServerConfig) server.Session
 
 		dsess, err := se.NewDoltSession(ctx, mysqlBaseSess)
 		if err != nil {
-			if goerrors.Is(err, env.ErrFailedToAccessDB) {
-				if server, _ := sqlserver.GetRunningServer(); server != nil {
-					_ = server.Close()
-				}
-			}
 			return nil, err
 		}
 

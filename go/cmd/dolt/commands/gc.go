@@ -88,8 +88,11 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, gcDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	if dEnv.IsLocked() {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
+	// We assert this here simply because the implementation of GC can
+	// delay actually trying to write to the chunk store for a long time
+	// after doing a lot or work. It's better to fail early.
+	if dEnv.IsAccessModeReadOnly() {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrDatabaseIsLocked), help)
 	}
 
 	var err error

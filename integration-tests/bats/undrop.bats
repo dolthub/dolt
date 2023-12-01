@@ -60,6 +60,10 @@ teardown() {
 }
 
 @test "undrop: undrop root database with hyphen replaced in its name" {
+  if [ "$SQL_ENGINE" = "remote-engine" ]; then
+   skip "Remote behavior differs"
+  fi
+
   export DOLT_DBNAME_REPLACE="true"
   setup_remote_server
   # Create a new Dolt database directory to use as a root database
@@ -97,6 +101,10 @@ EOF
 }
 
 @test "undrop: undrop root database with hyphen allowed in its name" {
+  if [ "$SQL_ENGINE" = "remote-engine" ]; then
+   skip "Remote behavior differs"
+  fi
+
   setup_remote_server
   # Create a new Dolt database directory to use as a root database
   # NOTE: We use hyphens here to test how db dirs are renamed.

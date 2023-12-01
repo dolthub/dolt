@@ -151,7 +151,7 @@ func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 // created and locked to disable log ins, and if it does exist, but is missing super privs or is not
 // locked, it will be given super user privs and locked.
 func (d *doltBinlogReplicaController) configureReplicationUser(ctx *sql.Context) error {
-	server, _ := sqlserver.GetRunningServer()
+	server := sqlserver.GetRunningServer()
 	if server == nil {
 		return fmt.Errorf("unable to access a running SQL server")
 	}

@@ -74,9 +74,6 @@ func (cmd StashDropCmd) Exec(ctx context.Context, commandStr string, args []stri
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, stashDropDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
-	if dEnv.IsLocked() {
-		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
-	}
 
 	var idx = 0
 	var err error
