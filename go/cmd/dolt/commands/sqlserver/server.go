@@ -129,8 +129,7 @@ func Serve(
 	}
 	controller.Register(InitLogging)
 
-	emitHeartbeat := newHeartbeatService(version, dEnv)
-	controller.Register(emitHeartbeat)
+	controller.Register(newHeartbeatService(version, dEnv))
 
 	fs := dEnv.FS
 	InitDataDir := &svcs.AnonService{
@@ -569,6 +568,7 @@ func Serve(
 	return nil, controller.WaitForStop()
 }
 
+// heartbeatService is a service that sends a heartbeat event to the metrics server once a day
 type heartbeatService struct {
 	version string
 	cfg     dbfactory.GRPCRemoteConfig
