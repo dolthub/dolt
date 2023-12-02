@@ -463,7 +463,7 @@ func runMain() int {
 		cli.PrintErrln(color.RedString("Failure to parse arguments: %v", err))
 		return 1
 	}
-	
+
 	defer func() {
 		metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")
 		disabled, err := strconv.ParseBool(metricsDisabled)
@@ -749,16 +749,16 @@ func seedGlobalRand() {
 	rand.Seed(int64(binary.LittleEndian.Uint64(bs)))
 }
 
-// processEventsDir flushes all logged events to an appropriate event emitter (typically a gRPC client). 
-func processEventsDir(ctx context.Context, dEnv *env.DoltEnv) error {		
-		userHomeDir, err := dEnv.GetUserHomeDir()
-		if err != nil {
-			return err
-		}
+// processEventsDir flushes all logged events to an appropriate event emitter (typically a gRPC client).
+func processEventsDir(ctx context.Context, dEnv *env.DoltEnv) error {
+	userHomeDir, err := dEnv.GetUserHomeDir()
+	if err != nil {
+		return err
+	}
 
-		// TODO: handle stdio output
-		_ = commands.FlushLoggedEvents(ctx, dEnv, userHomeDir, false)
-		return nil
+	// TODO: handle stdio output
+	_ = commands.FlushLoggedEvents(ctx, dEnv, userHomeDir, false)
+	return nil
 }
 
 func shouldFlushEvents(command string) bool {

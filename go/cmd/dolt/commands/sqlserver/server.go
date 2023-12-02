@@ -26,8 +26,6 @@ import (
 	"strings"
 	"time"
 
-	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/go-mysql-server/eventscheduler"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -42,6 +40,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
+	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -50,6 +49,7 @@ import (
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
+	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
 )
 
@@ -125,7 +125,7 @@ func Serve(
 		},
 	}
 	controller.Register(InitLogging)
-	
+
 	emitHeartbeat := &heartbeatService{
 		dEnv: dEnv,
 	}
@@ -569,7 +569,7 @@ func Serve(
 }
 
 type heartbeatService struct {
-	dEnv *env.DoltEnv
+	dEnv         *env.DoltEnv
 	eventEmitter *events.GrpcEmitter
 }
 
@@ -578,7 +578,7 @@ func (h *heartbeatService) Init(ctx context.Context) error {
 	return nil
 }
 
-func (h *heartbeatService) Stop() error {return nil}
+func (h *heartbeatService) Stop() error { return nil }
 
 func (h *heartbeatService) Run(ctx context.Context) {
 	ticker := time.NewTicker(24 * time.Hour)

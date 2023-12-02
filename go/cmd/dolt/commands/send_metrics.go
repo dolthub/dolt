@@ -21,11 +21,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/fatih/color"
 	"google.golang.org/grpc"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
