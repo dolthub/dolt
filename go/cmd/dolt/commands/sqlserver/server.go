@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/go-mysql-server/eventscheduler"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -33,8 +34,10 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
+	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -126,9 +129,7 @@ func Serve(
 	}
 	controller.Register(InitLogging)
 
-	emitHeartbeat := &heartbeatService{
-		dEnv: dEnv,
-	}
+	emitHeartbeat := newHeartbeatService(version, dEnv)
 	controller.Register(emitHeartbeat)
 
 	fs := dEnv.FS
@@ -569,16 +570,17 @@ func Serve(
 }
 
 type heartbeatService struct {
-	dEnv         *env.DoltEnv
-	eventEmitter *events.GrpcEmitter
+	version string
+	cfg     dbfactory.GRPCRemoteConfig
 }
 
-func (h *heartbeatService) Init(ctx context.Context) error {
-	h.eventEmitter = commands.GRPCEventEmitterForEnv(h.dEnv)
-	return nil
+func newHeartbeatService(version string, dEnv *env.DoltEnv) *heartbeatService {
+	cfg, _ := commands.GRPCEventRemoteConfigForEnv(dEnv)
+	return &heartbeatService{version: version, cfg: cfg}
 }
 
-func (h *heartbeatService) Stop() error { return nil }
+func (h *heartbeatService) Init(ctx context.Context) error { return nil }
+func (h *heartbeatService) Stop() error                    { return nil }
 
 func (h *heartbeatService) Run(ctx context.Context) {
 	ticker := time.NewTicker(24 * time.Hour)
@@ -589,16 +591,23 @@ func (h *heartbeatService) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			h.eventEmitter.LogEvents("TODO", []*eventsapi.ClientEvent{
+			conn, err := grpc.Dial(h.cfg.Endpoint, h.cfg.DialOptions...)
+			if err != nil {
+				continue
+			}
+			
+			eventEmitter := events.NewGrpcEmitter(conn)
+			t := events.NowTimestamp()
+			_ = eventEmitter.LogEvents(h.version, []*eventsapi.ClientEvent{
 				{
-					Id:         "",
-					StartTime:  nil,
-					EndTime:    nil,
+					Id:         uuid.New().String(),
+					StartTime:  t,
+					EndTime:    t,
 					Type:       eventsapi.ClientEventType_SQL_SERVER_HEARTBEAT,
-					Attributes: nil,
-					Metrics:    nil,
 				},
 			})
+			
+			_ = conn.Close()
 		}
 	}
 }

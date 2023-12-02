@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"log"
 	"strconv"
 	"time"
 
@@ -138,36 +137,40 @@ func FlushLoggedEvents(ctx context.Context, dEnv *env.DoltEnv, userHomeDir strin
 	return flusher.Flush(ctx)
 }
 
-// GRPCEventEmitterForEnv returns an event emitter for the given environment
+// GRPCEventEmitterForEnv returns an event emitter for the given environment, or nil if the environment cannot
+// provide one
 func GRPCEventEmitterForEnv(dEnv *env.DoltEnv) *events.GrpcEmitter {
+	cfg, err := GRPCEventRemoteConfigForEnv(dEnv)
+	if err != nil {
+		return nil
+	}
+
+	conn, err := grpc.Dial(cfg.Endpoint, cfg.DialOptions...)
+	if err != nil {
+		return nil
+	}
+	return events.NewGrpcEmitter(conn)
+}
+
+func GRPCEventRemoteConfigForEnv(dEnv *env.DoltEnv) (dbfactory.GRPCRemoteConfig, error) {
 	host := dEnv.Config.GetStringOrDefault(env.MetricsHost, env.DefaultMetricsHost)
 	portStr := dEnv.Config.GetStringOrDefault(env.MetricsPort, env.DefaultMetricsPort)
 	insecureStr := dEnv.Config.GetStringOrDefault(env.MetricsInsecure, "false")
 
 	port, err := strconv.ParseUint(portStr, 10, 16)
-
 	if err != nil {
-		log.Println(color.YellowString("The config value of '%s' is '%s' which is not a valid port.", env.MetricsPort, portStr))
-		return nil
+		return dbfactory.GRPCRemoteConfig{}, nil
 	}
 
-	insecure, err := strconv.ParseBool(insecureStr)
-
-	if err != nil {
-		log.Println(color.YellowString("The config value of '%s' is '%s' which is not a valid true/false value", env.MetricsInsecure, insecureStr))
-	}
-
+	insecure, _ := strconv.ParseBool(insecureStr)
+	
 	hostAndPort := fmt.Sprintf("%s:%d", host, port)
 	cfg, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
 		Endpoint: hostAndPort,
 		Insecure: insecure,
 	})
 	if err != nil {
-		return nil
+		return dbfactory.GRPCRemoteConfig{}, nil
 	}
-	conn, err := grpc.Dial(cfg.Endpoint, cfg.DialOptions...)
-	if err != nil {
-		return nil
-	}
-	return events.NewGrpcEmitter(conn)
+	return cfg, err
 }
