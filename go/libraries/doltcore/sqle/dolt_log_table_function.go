@@ -48,9 +48,6 @@ type LogTableFunction struct {
 	showParents bool
 	decoration  string
 
-	tabId  sql.TableId
-	colset sql.ColSet
-
 	database sql.Database
 }
 
@@ -75,26 +72,6 @@ func (ltf *LogTableFunction) NewInstance(ctx *sql.Context, db sql.Database, expr
 	}
 
 	return node, nil
-}
-
-func (ltf *LogTableFunction) WithId(id sql.TableId) sql.TableIdNode {
-	ret := *ltf
-	ret.tabId = id
-	return &ret
-}
-
-func (ltf *LogTableFunction) Id() sql.TableId {
-	return ltf.tabId
-}
-
-func (ltf *LogTableFunction) WithColumns(set sql.ColSet) sql.TableIdNode {
-	ret := *ltf
-	ret.colset = set
-	return &ret
-}
-
-func (ltf *LogTableFunction) Columns() sql.ColSet {
-	return ltf.colset
 }
 
 // Database implements the sql.Databaser interface

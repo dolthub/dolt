@@ -32,8 +32,6 @@ type ReflogTableFunction struct {
 	ctx      *sql.Context
 	database sql.Database
 	refExpr  sql.Expression
-	tabId    sql.TableId
-	colset   sql.ColSet
 }
 
 var _ sql.TableFunction = (*ReflogTableFunction)(nil)
@@ -58,26 +56,6 @@ func (rltf *ReflogTableFunction) NewInstance(ctx *sql.Context, database sql.Data
 	}
 
 	return node, nil
-}
-
-func (rltf *ReflogTableFunction) WithId(id sql.TableId) sql.TableIdNode {
-	ret := *rltf
-	ret.tabId = id
-	return &ret
-}
-
-func (rltf *ReflogTableFunction) Id() sql.TableId {
-	return rltf.tabId
-}
-
-func (rltf *ReflogTableFunction) WithColumns(set sql.ColSet) sql.TableIdNode {
-	ret := *rltf
-	ret.colset = set
-	return &ret
-}
-
-func (rltf *ReflogTableFunction) Columns() sql.ColSet {
-	return rltf.colset
 }
 
 func (rltf *ReflogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
