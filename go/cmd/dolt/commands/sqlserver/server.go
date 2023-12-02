@@ -26,6 +26,8 @@ import (
 	"strings"
 	"time"
 
+	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/go-mysql-server/eventscheduler"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -123,6 +125,11 @@ func Serve(
 		},
 	}
 	controller.Register(InitLogging)
+	
+	emitHeartbeat := &heartbeatService{
+		dEnv: dEnv,
+	}
+	controller.Register(emitHeartbeat)
 
 	fs := dEnv.FS
 	InitDataDir := &svcs.AnonService{
@@ -560,6 +567,43 @@ func Serve(
 	}
 	return nil, controller.WaitForStop()
 }
+
+type heartbeatService struct {
+	dEnv *env.DoltEnv
+	eventEmitter *events.GrpcEmitter
+}
+
+func (h *heartbeatService) Init(ctx context.Context) error {
+	h.eventEmitter = commands.GRPCEventEmitterForEnv(h.dEnv)
+	return nil
+}
+
+func (h *heartbeatService) Stop() error {return nil}
+
+func (h *heartbeatService) Run(ctx context.Context) {
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			h.eventEmitter.LogEvents("TODO", []*eventsapi.ClientEvent{
+				{
+					Id:         "",
+					StartTime:  nil,
+					EndTime:    nil,
+					Type:       eventsapi.ClientEventType_SQL_SERVER_HEARTBEAT,
+					Attributes: nil,
+					Metrics:    nil,
+				},
+			})
+		}
+	}
+}
+
+var _ svcs.Service = &heartbeatService{}
 
 func persistServerLocalCreds(port int, dEnv *env.DoltEnv) (*LocalCreds, error) {
 	creds := NewLocalCreds(port)
