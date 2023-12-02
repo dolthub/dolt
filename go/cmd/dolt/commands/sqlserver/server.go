@@ -26,7 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/go-mysql-server/eventscheduler"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -44,6 +43,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -590,10 +590,10 @@ func (h *heartbeatService) Stop() error                    { return nil }
 
 func (h *heartbeatService) Run(ctx context.Context) {
 	// Faulty config settings or disabled metrics can cause us to not have a valid endpoint
-	if h.cfg.Endpoint == "" { 
+	if h.cfg.Endpoint == "" {
 		return
 	}
-	
+
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
@@ -606,22 +606,22 @@ func (h *heartbeatService) Run(ctx context.Context) {
 			if err != nil {
 				continue
 			}
-			
+
 			eventEmitter := events.NewGrpcEmitter(conn)
 			t := events.NowTimestamp()
 			err = eventEmitter.LogEvents(h.version, []*eventsapi.ClientEvent{
 				{
-					Id:         uuid.New().String(),
-					StartTime:  t,
-					EndTime:    t,
-					Type:       eventsapi.ClientEventType_SQL_SERVER_HEARTBEAT,
+					Id:        uuid.New().String(),
+					StartTime: t,
+					EndTime:   t,
+					Type:      eventsapi.ClientEventType_SQL_SERVER_HEARTBEAT,
 				},
 			})
-			
+
 			if err != nil {
 				logrus.Debugf("failed to send heartbeat event: %v", err)
 			}
-			
+
 			_ = conn.Close()
 		}
 	}

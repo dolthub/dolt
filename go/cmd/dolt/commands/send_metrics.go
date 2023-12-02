@@ -163,7 +163,7 @@ func GRPCEventRemoteConfigForEnv(dEnv *env.DoltEnv) (dbfactory.GRPCRemoteConfig,
 	}
 
 	insecure, _ := strconv.ParseBool(insecureStr)
-	
+
 	hostAndPort := fmt.Sprintf("%s:%d", host, port)
 	cfg, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
 		Endpoint: hostAndPort,
