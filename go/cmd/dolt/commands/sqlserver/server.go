@@ -575,6 +575,12 @@ type heartbeatService struct {
 }
 
 func newHeartbeatService(version string, dEnv *env.DoltEnv) *heartbeatService {
+	metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")
+	disabled, err := strconv.ParseBool(metricsDisabled)
+	if err != nil || disabled {
+		return &heartbeatService{} // will be defunct on Run()
+	}
+
 	cfg, _ := commands.GRPCEventRemoteConfigForEnv(dEnv)
 	return &heartbeatService{version: version, cfg: cfg}
 }
@@ -583,6 +589,11 @@ func (h *heartbeatService) Init(ctx context.Context) error { return nil }
 func (h *heartbeatService) Stop() error                    { return nil }
 
 func (h *heartbeatService) Run(ctx context.Context) {
+	// Faulty config settings or disabled metrics can cause us to not have a valid endpoint
+	if h.cfg.Endpoint == "" { 
+		return
+	}
+	
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
@@ -598,7 +609,7 @@ func (h *heartbeatService) Run(ctx context.Context) {
 			
 			eventEmitter := events.NewGrpcEmitter(conn)
 			t := events.NowTimestamp()
-			_ = eventEmitter.LogEvents(h.version, []*eventsapi.ClientEvent{
+			err = eventEmitter.LogEvents(h.version, []*eventsapi.ClientEvent{
 				{
 					Id:         uuid.New().String(),
 					StartTime:  t,
@@ -606,6 +617,10 @@ func (h *heartbeatService) Run(ctx context.Context) {
 					Type:       eventsapi.ClientEventType_SQL_SERVER_HEARTBEAT,
 				},
 			})
+			
+			if err != nil {
+				logrus.Debugf("failed to send heartbeat event: %v", err)
+			}
 			
 			_ = conn.Close()
 		}
