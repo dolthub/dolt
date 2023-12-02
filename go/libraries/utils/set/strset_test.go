@@ -48,7 +48,7 @@ func TestStrSet(t *testing.T) {
 		t.Error("Set doesn't match expectation after removes", strSet.AsSlice())
 	}
 
-	strSet.Remove("non-existant string")
+	strSet.Remove("non-existent string")
 
 	if !isAsExpected(strSet, []string{"a", "c", "e"}) {
 		t.Error("Set doesn't match expectation after noop remove", strSet.AsSlice())

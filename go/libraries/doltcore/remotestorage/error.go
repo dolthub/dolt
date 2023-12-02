@@ -38,6 +38,10 @@ func (rpce *RpcError) Error() string {
 	return rpce.originalErrMsg
 }
 
+func (rpce *RpcError) IsPermanent() bool {
+	return statusCodeIsPermanentError(rpce.status)
+}
+
 func (rpce *RpcError) FullDetails() string {
 	jsonStr, _ := GetJsonEncodedRequest(rpce)
 	return rpce.originalErrMsg + "\nhost:" + rpce.host + "\nrpc: " + rpce.rpc + "\nparams:" + jsonStr

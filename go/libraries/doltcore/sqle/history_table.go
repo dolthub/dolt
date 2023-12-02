@@ -419,7 +419,6 @@ func (ht *HistoryTable) Collation() sql.CollationID {
 
 // Partitions returns a PartitionIter which will be used in getting partitions each of which is used to create RowIter.
 func (ht *HistoryTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	// TODO reset ht.cmItr on close
 	iter, err := ht.filterIter(ctx, ht.cmItr)
 	if err != nil {
 		return nil, err
