@@ -23,6 +23,8 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -477,7 +479,7 @@ func runMain() int {
 
 		// flush events
 		if len(args) > 0 && shouldFlushEvents(args[0]) {
-			_ = processEventsDir(ctx, dEnv)
+			_ = processEventsDir()
 		}
 	}()
 
@@ -749,15 +751,25 @@ func seedGlobalRand() {
 	rand.Seed(int64(binary.LittleEndian.Uint64(bs)))
 }
 
-// processEventsDir flushes all logged events to an appropriate event emitter (typically a gRPC client).
-func processEventsDir(ctx context.Context, dEnv *env.DoltEnv) error {
-	userHomeDir, err := dEnv.GetUserHomeDir()
+// processEventsDir flushes all logged events in a separate process.
+// This is done without blocking so that the main process can exit immediately in the case of a slow network.
+func processEventsDir() error {
+	path, err := os.Executable()
 	if err != nil {
 		return err
 	}
 
-	// TODO: handle stdio output
-	_ = commands.FlushLoggedEvents(ctx, dEnv, userHomeDir, false)
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.Command(absPath, commands.SendMetricsCommand)
+
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
