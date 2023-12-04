@@ -1,6 +1,12 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
 
+# This BATS test attempts to detect performance regressions when using standard workflows on large datasets.
+# Please note that this is a rough approach that is not designed to detect all performance issues, merely an extra
+# safeguard against bugs that cause large (order-of-magnitude+) regressions.
+
+# BATS_TEST_TIMEOUT is measured in seconds and is chosen to be high enough that all tests in this suite pass
+# when running on GitHub's CI, but low enough that an order-of magnitude regression will cause them to fail.
 BATS_TEST_TIMEOUT=50
 
 # This function was used to create the dolt repo used for this test. It is not run during testing.
