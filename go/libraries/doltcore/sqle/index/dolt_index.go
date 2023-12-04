@@ -842,11 +842,41 @@ func (di *doltIndex) HandledFilters(filters []sql.Expression) []sql.Expression {
 	return handled
 }
 
+// HasContentHashedField returns true if any of the fields in this index are "content-hashed", meaning that the index
+// stores a hash of the content, instead of the content itself. This is currently limited to unique indexes, which can
+// use this property to store hashes of TEXT or BLOB fields and still efficiently detect uniqueness.
+func (di *doltIndex) HasContentHashedField() bool {
+	// content-hashed fields can currently only be used in unique indexes
+	if !di.IsUnique() {
+		return false
+	}
+
+	contentHashedField := false
+	di.indexSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if sqltypes.IsTextBlob(col.TypeInfo.ToSqlType()) {
+			contentHashedField = true
+			return true, nil
+		}
+
+		return false, nil
+	})
+
+	return contentHashedField
+}
+
 func (di *doltIndex) Order() sql.IndexOrder {
+	if di.HasContentHashedField() {
+		return sql.IndexOrderNone
+	}
+
 	return di.order
 }
 
 func (di *doltIndex) Reversible() bool {
+	if di.HasContentHashedField() {
+		return false
+	}
+
 	return di.doltBinFormat
 }
 
