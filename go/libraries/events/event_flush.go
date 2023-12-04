@@ -17,10 +17,8 @@ package events
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/dolthub/fslock"
-	"github.com/fatih/color"
 	"google.golang.org/protobuf/proto"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -124,7 +122,7 @@ func lockAndFlush(ctx context.Context, fs filesys.Filesys, dirPath string, lockP
 	}()
 
 	if err != nil {
-		if err == fslock.ErrLocked {
+		if errors.Is(err, fslock.ErrLocked) {
 			return ErrFileLocked
 		}
 		return err
@@ -145,126 +143,6 @@ func lockAndFlush(ctx context.Context, fs filesys.Filesys, dirPath string, lockP
 		}
 
 		return nil
-	}
-
-	return nil
-}
-
-// GrpcEventFlusher parses dolt event logs sends the events to the events server
-type GrpcEventFlusher struct {
-	em  *GrpcEmitter
-	fbp *FileBackedProc
-}
-
-// NewGrpcEventFlusher creates a new GrpcEventFlusher
-func NewGrpcEventFlusher(fs filesys.Filesys, userHomeDir string, doltDir string, grpcEmitter *GrpcEmitter) *GrpcEventFlusher {
-	fbp := NewFileBackedProc(fs, userHomeDir, doltDir, MD5FileNamer, CheckFilenameMD5)
-
-	if exists := fbp.EventsDirExists(); !exists {
-		panic(ErrEventsDataDir)
-	}
-
-	return &GrpcEventFlusher{em: grpcEmitter, fbp: fbp}
-}
-
-// flush has the function signature of the flushCb type
-// and sends events data to the events server
-func (egf *GrpcEventFlusher) flush(ctx context.Context, path string) error {
-	fs := egf.fbp.GetFileSys()
-
-	data, err := fs.ReadFile(path)
-	if err != nil {
-		return err
-	}
-
-	isFileValid, err := egf.fbp.CheckingFunc(data, path)
-
-	if isFileValid && err == nil {
-		req := &eventsapi.LogEventsRequest{}
-
-		if err := proto.Unmarshal(data, req); err != nil {
-			return err
-		}
-
-		if err := egf.em.SendLogEventsRequest(ctx, req); err != nil {
-			return err
-		}
-
-		if err := fs.DeleteFile(path); err != nil {
-			return err
-		}
-
-		return nil
-	}
-
-	return errInvalidFile
-}
-
-// Flush satisfies the Flusher interface and calls this Flusher's flush method on each events file
-func (egf *GrpcEventFlusher) Flush(ctx context.Context) error {
-	fs := egf.fbp.GetFileSys()
-
-	evtsDir := egf.fbp.GetEventsDirPath()
-
-	err := lockAndFlush(ctx, fs, evtsDir, egf.fbp.LockPath, egf.flush)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// IOFlusher parses event files and writes them to stdout
-type IOFlusher struct {
-	fbp *FileBackedProc
-}
-
-// NewIOFlusher creates a new IOFlusher
-func NewIOFlusher(fs filesys.Filesys, userHomeDir string, doltDir string) *IOFlusher {
-	fbp := NewFileBackedProc(fs, userHomeDir, doltDir, MD5FileNamer, CheckFilenameMD5)
-
-	if exists := fbp.EventsDirExists(); !exists {
-		panic(ErrEventsDataDir)
-	}
-
-	return &IOFlusher{fbp: fbp}
-}
-
-// flush has the function signature of the flushCb type
-// and writes data to stdout
-func (iof *IOFlusher) flush(ctx context.Context, path string) error {
-	fs := iof.fbp.GetFileSys()
-
-	data, err := fs.ReadFile(path)
-	if err != nil {
-		return err
-	}
-
-	req := &eventsapi.LogEventsRequest{}
-
-	if err := proto.Unmarshal(data, req); err != nil {
-		return err
-	}
-
-	// needed for bats test
-	fmt.Fprintf(color.Output, "%+v\n", req)
-
-	if err := fs.DeleteFile(path); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// Flush satisfies the Flusher interface and calls this Flusher's flush method on each events file
-func (iof *IOFlusher) Flush(ctx context.Context) error {
-	fs := iof.fbp.GetFileSys()
-
-	evtsDir := iof.fbp.GetEventsDirPath()
-
-	err := lockAndFlush(ctx, fs, evtsDir, iof.fbp.LockPath, iof.flush)
-	if err != nil {
-		return err
 	}
 
 	return nil
