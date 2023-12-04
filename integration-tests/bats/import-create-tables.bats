@@ -227,7 +227,7 @@ CSV
     [[ "$output" =~ "reserved" ]] || false
 }
 
-@test "import-create-tables: try to table import with nonexistant --pk arg" {
+@test "import-create-tables: try to table import with nonexistent --pk arg" {
     run dolt table import -c -pk="batmansparents" test 1pk5col-ints.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error determining the output schema." ]] || false
@@ -235,7 +235,7 @@ CSV
     [[ "$output" =~ "column 'batmansparents' not found" ]] || false
 }
 
-@test "import-create-tables: try to table import with one valid and one nonexistant --pk arg" {
+@test "import-create-tables: try to table import with one valid and one nonexistent --pk arg" {
     run dolt table import -c -pk="pk,batmansparents" test 1pk5col-ints.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error determining the output schema." ]] || false

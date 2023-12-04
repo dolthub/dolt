@@ -132,7 +132,7 @@ teardown() {
     [ "$output" = "Already on branch 'main'" ]
 }
 
-@test "empty-repo: dolt checkout non-existant branch" {
+@test "empty-repo: dolt checkout non-existent branch" {
     run dolt checkout foo
     [ "$status" -ne 0 ]
     [ "$output" = "error: could not find foo" ]

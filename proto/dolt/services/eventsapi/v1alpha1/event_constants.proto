@@ -92,7 +92,8 @@ enum ClientEventType {
     STASH_POP = 60;
     SHOW = 61;
     PROFILE = 62;
-    SQL_SERVER_HEARTBEAT = 63;
+    REFLOG = 63;
+    SQL_SERVER_HEARTBEAT = 64;
 }
 
 enum MetricID {

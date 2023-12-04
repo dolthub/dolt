@@ -1270,3 +1270,27 @@ SQL
 
     [[ "$localOutput" == "$remoteOutput" ]] || false
 }
+
+@test "sql-local-remote: verify dolt reflog behavior" {
+    cd altDB
+    dolt sql -q "create table t (i int primary key, j int);"
+    dolt sql -q "insert into t values (1, 1), (2, 2), (3, 3)";
+    dolt commit -Am "initial commit"
+
+    run dolt --verbose-engine-setup reflog
+    [ $status -eq 0 ]
+    [[ "$output" =~ "starting local mode" ]] || false
+    [[ "$output" =~ "initial commit" ]] || false
+    run dolt reflog
+    localOutput=$output
+
+    start_sql_server altDB
+    run dolt --verbose-engine-setup reflog
+    [ $status -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+    [[ "$output" =~ "initial commit" ]] || false
+    run dolt reflog
+    remoteOutput=$output
+
+    [[ "$localOutput" == "$remoteOutput" ]] || false
+}

@@ -9,7 +9,7 @@ teardown() {
     teardown_common
 }
 
-@test "conflict-detection: merge non-existant branch errors" {
+@test "conflict-detection: merge non-existent branch errors" {
     run dolt merge batmans-parents
     [ $status -eq 1 ]
     [[ "$output" =~ "branch not found" ]] || false
