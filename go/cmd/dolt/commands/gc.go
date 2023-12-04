@@ -16,9 +16,6 @@ package commands
 
 import (
 	"context"
-	"errors"
-
-	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -82,48 +79,39 @@ func (cmd GarbageCollectionCmd) EventType() eventsapi.ClientEventType {
 // Version displays the version of the running dolt client
 // Exec executes the command
 func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-	var verr errhand.VerboseError
-
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, gcDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	// We assert this here simply because the implementation of GC can
-	// delay actually trying to write to the chunk store for a long time
-	// after doing a lot or work. It's better to fail early.
-	if dEnv.IsAccessModeReadOnly() {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrDatabaseIsLocked), help)
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	if closeFunc != nil {
+		defer closeFunc()
 	}
 
-	var err error
+	query, err := constructDoltGCQuery(apr)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	_, _, err = queryist.Query(sqlCtx, query)
+	if err != nil && err != chunks.ErrNothingToCollect {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	return HandleVErrAndExitCode(nil, usage)
+}
+
+// constructDoltGCQuery generates the sql query necessary to call DOLT_GC()
+func constructDoltGCQuery(apr *argparser.ArgParseResults) (string, error) {
+	query := "call DOLT_GC("
 	if apr.Contains(cli.ShallowFlag) {
-		err = dEnv.DoltDB.ShallowGC(ctx)
-		if err != nil {
-			if err == chunks.ErrUnsupportedOperation {
-				verr = errhand.BuildDError("this database does not support shallow garbage collection").Build()
-				return HandleVErrAndExitCode(verr, usage)
-			}
-			verr = errhand.BuildDError("an error occurred during garbage collection").AddCause(err).Build()
-		}
-	} else {
-		// full gc
-		dEnv, err = MaybeMigrateEnv(ctx, dEnv)
-		if err != nil {
-			verr = errhand.BuildDError("could not load manifest for gc").AddCause(err).Build()
-			return HandleVErrAndExitCode(verr, usage)
-		}
-
-		err = dEnv.DoltDB.GC(ctx, nil)
-		if err != nil {
-			if errors.Is(err, chunks.ErrNothingToCollect) {
-				cli.PrintErrln(color.YellowString("Nothing to collect."))
-			} else {
-				verr = errhand.BuildDError("an error occurred during garbage collection").AddCause(err).Build()
-			}
-		}
+		query += "'--shallow'"
 	}
-
-	return HandleVErrAndExitCode(verr, usage)
+	query += ")"
+	return query, nil
 }
 
 func MaybeMigrateEnv(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, error) {

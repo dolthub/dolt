@@ -1294,3 +1294,47 @@ SQL
 
     [[ "$localOutput" == "$remoteOutput" ]] || false
 }
+
+@test "sql-local-remote: verify dolt gc behavior" {
+    cd altDB
+    dolt sql <<SQL
+CREATE TABLE test (pk int PRIMARY KEY);
+INSERT INTO test VALUES
+    (1),(2),(3),(4),(5);
+SQL
+    run dolt sql -q 'select count(*) from test' -r csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "5" ]] || false
+
+    run dolt --verbose-engine-setup gc
+    [ $status -eq 0 ]
+    [[ "$output" =~ "starting local mode" ]] || false
+
+    run dolt sql -q 'select count(*) from test' -r csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "5" ]] || false
+
+    start_sql_server altDB
+    dolt sql <<SQL
+CREATE TABLE test2 (pk int PRIMARY KEY);
+INSERT INTO test2 VALUES
+    (1),(2),(3),(4),(5);
+SQL
+    run dolt sql -q 'select count(*) from test' -r csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "5" ]] || false
+    run dolt sql -q 'select count(*) from test2' -r csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "5" ]] || false
+
+    run dolt --verbose-engine-setup gc
+    [ $status -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+
+    run dolt sql -q 'select count(*) from test' -r csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "5" ]] || false
+    run dolt sql -q 'select count(*) from test2' -r csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "5" ]] || false
+}
