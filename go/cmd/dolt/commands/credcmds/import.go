@@ -20,6 +20,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"google.golang.org/grpc"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -149,17 +150,17 @@ func updateProfileWithCredentials(ctx context.Context, dEnv *env.DoltEnv, c cred
 		panic("Should have global config here...")
 	}
 
-	if _, err := gcfg.GetString(env.UserNameKey); err == nil {
+	if _, err := gcfg.GetString(config.UserNameKey); err == nil {
 		// Already has a name...
 		return nil
 	}
-	if _, err := gcfg.GetString(env.UserEmailKey); err == nil {
+	if _, err := gcfg.GetString(config.UserEmailKey); err == nil {
 		// Already has an email...
 		return nil
 	}
 
-	host := dEnv.Config.GetStringOrDefault(env.RemotesApiHostKey, env.DefaultRemotesApiHost)
-	port := dEnv.Config.GetStringOrDefault(env.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
+	host := dEnv.Config.GetStringOrDefault(config.RemotesApiHostKey, env.DefaultRemotesApiHost)
+	port := dEnv.Config.GetStringOrDefault(config.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
 	hostAndPort := fmt.Sprintf("%s:%s", host, port)
 	cfg, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
 		Endpoint: hostAndPort,
@@ -178,8 +179,8 @@ func updateProfileWithCredentials(ctx context.Context, dEnv *env.DoltEnv, c cred
 		return fmt.Errorf("error: unable to call WhoAmI endpoint: %w", err)
 	}
 	userUpdates := map[string]string{
-		env.UserNameKey:  resp.DisplayName,
-		env.UserEmailKey: resp.EmailAddress,
+		config.UserNameKey:  resp.DisplayName,
+		config.UserEmailKey: resp.EmailAddress,
 	}
 	return gcfg.SetStrings(userUpdates)
 }

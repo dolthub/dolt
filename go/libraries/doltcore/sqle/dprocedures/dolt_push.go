@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
@@ -70,7 +71,7 @@ func doDoltPush(ctx *sql.Context, args []string) (int, string, error) {
 		return cmdFailure, "", err
 	}
 
-	autoSetUpRemote := loadConfig(ctx).GetStringOrDefault(env.PushAutoSetupRemote, "false")
+	autoSetUpRemote := loadConfig(ctx).GetStringOrDefault(config.PushAutoSetupRemote, "false")
 	pushAutoSetUpRemote, err := strconv.ParseBool(autoSetUpRemote)
 	if err != nil {
 		return cmdFailure, "", err

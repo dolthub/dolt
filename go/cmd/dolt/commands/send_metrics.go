@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/fatih/color"
 )
 
@@ -81,7 +82,7 @@ func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []st
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cli.CommandDocumentationContent{ShortDesc: sendMetricsShortDesc}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")
+	metricsDisabled := dEnv.Config.GetStringOrDefault(config.MetricsDisabled, "false")
 
 	disabled, err := strconv.ParseBool(metricsDisabled)
 	if err != nil {

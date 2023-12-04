@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/go-mysql-server/eventscheduler"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -575,7 +576,7 @@ type heartbeatService struct {
 }
 
 func newHeartbeatService(version string, dEnv *env.DoltEnv) *heartbeatService {
-	metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")
+	metricsDisabled := dEnv.Config.GetStringOrDefault(config.MetricsDisabled, "false")
 	disabled, err := strconv.ParseBool(metricsDisabled)
 	if err != nil || disabled {
 		return &heartbeatService{} // will be defunct on Run()

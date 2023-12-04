@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -103,8 +104,8 @@ func initRepoWithRelativePath(t *testing.T, envPath string, hdp HomeDirProvider)
 	dEnv := Load(context.Background(), hdp, fs, urlStr, "test")
 	cfg, _ := dEnv.Config.GetConfig(GlobalConfig)
 	cfg.SetStrings(map[string]string{
-		UserNameKey:  name,
-		UserEmailKey: email,
+		config.UserNameKey:  name,
+		config.UserEmailKey: email,
 	})
 
 	err = dEnv.InitRepo(context.Background(), types.Format_Default, name, email, DefaultInitBranch)

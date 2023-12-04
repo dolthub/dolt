@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"google.golang.org/grpc"
@@ -45,6 +44,9 @@ const (
 	EmitterTypeGrpc   = "grpc"
 	EmitterTypeFile   = "file"
 )
+
+const DefaultMetricsHost = "eventsapi.dolthub.com"
+const DefaultMetricsPort = "443"
 
 // Emitter is an interface used for processing a batch of events
 type Emitter interface {
@@ -214,9 +216,9 @@ func GRPCEmitterForConfig(pro EmitterConfigProvider) *GrpcEmitter {
 
 // GRPCEventRemoteConfig returns a GRPCRemoteConfig for the given configuration provider
 func GRPCEventRemoteConfig(pro EmitterConfigProvider) (dbfactory.GRPCRemoteConfig, error) {
-	host := pro.GetConfig().GetStringOrDefault(env.MetricsHost, env.DefaultMetricsHost)
-	portStr := pro.GetConfig().GetStringOrDefault(env.MetricsPort, env.DefaultMetricsPort)
-	insecureStr := pro.GetConfig().GetStringOrDefault(env.MetricsInsecure, "false")
+	host := pro.GetConfig().GetStringOrDefault(config.MetricsHost, DefaultMetricsHost)
+	portStr := pro.GetConfig().GetStringOrDefault(config.MetricsPort, DefaultMetricsPort)
+	insecureStr := pro.GetConfig().GetStringOrDefault(config.MetricsInsecure, "false")
 
 	port, err := strconv.ParseUint(portStr, 10, 16)
 	if err != nil {

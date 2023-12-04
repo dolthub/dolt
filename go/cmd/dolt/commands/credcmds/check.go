@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"google.golang.org/grpc"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -101,8 +102,8 @@ func loadEndpoint(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (string, st
 		return getHostFromEndpoint(earg), earg
 	}
 
-	host := dEnv.Config.GetStringOrDefault(env.RemotesApiHostKey, env.DefaultRemotesApiHost)
-	port := dEnv.Config.GetStringOrDefault(env.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
+	host := dEnv.Config.GetStringOrDefault(config.RemotesApiHostKey, env.DefaultRemotesApiHost)
+	port := dEnv.Config.GetStringOrDefault(config.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
 	return host, fmt.Sprintf("%s:%s", host, port)
 }
 

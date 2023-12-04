@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
@@ -93,8 +94,8 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	if !cli.CheckUserNameAndEmail(cliCtx.Config()) {
 		bdr := errhand.BuildDError("Could not determine name and/or email.")
 		bdr.AddDetails("Log into DoltHub: dolt login")
-		bdr.AddDetails("OR add name to config: dolt config [--global|--local] --add %[1]s \"FIRST LAST\"", env.UserNameKey)
-		bdr.AddDetails("OR add email to config: dolt config [--global|--local] --add %[1]s \"EMAIL_ADDRESS\"", env.UserEmailKey)
+		bdr.AddDetails("OR add name to config: dolt config [--global|--local] --add %[1]s \"FIRST LAST\"", config.UserNameKey)
+		bdr.AddDetails("OR add email to config: dolt config [--global|--local] --add %[1]s \"EMAIL_ADDRESS\"", config.UserEmailKey)
 		return HandleVErrAndExitCode(bdr.Build(), usage)
 	}
 

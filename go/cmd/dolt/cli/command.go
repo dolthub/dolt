@@ -22,6 +22,7 @@ import (
 	"strings"
 	"syscall"
 
+	config "github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 
@@ -293,14 +294,14 @@ fatal: empty ident name not allowed
 
 // CheckUserNameAndEmail returns true if the user name and email are set for this environment, or prints an error and
 // returns false if not.
-func CheckUserNameAndEmail(config *env.DoltCliConfig) bool {
-	_, err := config.GetString(env.UserEmailKey)
+func CheckUserNameAndEmail(cfg *env.DoltCliConfig) bool {
+	_, err := cfg.GetString(config.UserEmailKey)
 	if err != nil {
 		PrintErr(userNameRequiredError)
 		return false
 	}
 
-	_, err = config.GetString(env.UserNameKey)
+	_, err = cfg.GetString(config.UserNameKey)
 	if err != nil {
 		PrintErr(userNameRequiredError)
 		return false

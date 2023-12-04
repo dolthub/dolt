@@ -749,7 +749,7 @@ func seedGlobalRand() {
 // 2. The environment key |DOLT_DISABLE_EVENT_FLUSH| allows writing events to disk but not sending them to the server.
 //    This is mostly used for testing.
 func emitUsageEvents(dEnv *env.DoltEnv, homeDir string, args []string) {
-	metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")
+	metricsDisabled := dEnv.Config.GetStringOrDefault(config.MetricsDisabled, "false")
 	disabled, err := strconv.ParseBool(metricsDisabled)
 	if err != nil || disabled {
 		return

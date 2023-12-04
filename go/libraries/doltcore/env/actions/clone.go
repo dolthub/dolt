@@ -22,6 +22,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dustin/go-humanize"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -267,8 +268,8 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 // InitEmptyClonedRepo inits an empty, newly cloned repo. This would be unnecessary if we properly initialized the
 // storage for a repository when we created it on dolthub. If we do that, this code can be removed.
 func InitEmptyClonedRepo(ctx context.Context, dEnv *env.DoltEnv) error {
-	name := dEnv.Config.GetStringOrDefault(env.UserNameKey, "")
-	email := dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
+	name := dEnv.Config.GetStringOrDefault(config.UserNameKey, "")
+	email := dEnv.Config.GetStringOrDefault(config.UserEmailKey, "")
 	initBranch := env.GetDefaultInitBranch(dEnv.Config)
 
 	if name == "" {
