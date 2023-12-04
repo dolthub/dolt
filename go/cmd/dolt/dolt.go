@@ -209,12 +209,18 @@ Dolt subcommands are in transition to using the flags listed below as global fla
 Not all subcommands use these flags. If your command accepts these flags without error, then they are supported.
 `
 
+const disableEventFlushEnvVar = "DOLT_DISABLE_EVENT_FLUSH"
+var eventFlushDisabled = false
+
 func init() {
 	dumpDocsCommand.DoltCommand = doltCommand
 	dumpDocsCommand.GlobalDocs = globalDocs
 	dumpDocsCommand.GlobalSpecialMsg = globalSpecialMsg
 	dumpZshCommand.DoltCommand = doltCommand
 	dfunctions.VersionString = Version
+	if _, ok := os.LookupEnv(disableEventFlushEnvVar); ok {
+		eventFlushDisabled = true		
+	}
 }
 
 const pprofServerFlag = "--pprof-server"
@@ -466,23 +472,8 @@ func runMain() int {
 		cli.PrintErrln(color.RedString("Failure to parse arguments: %v", err))
 		return 1
 	}
-
-	defer func() {
-		metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")
-		disabled, err := strconv.ParseBool(metricsDisabled)
-		if err != nil || disabled {
-			return
-		}
-
-		// write events
-		emitter := events.NewFileEmitter(homeDir, dbfactory.DoltDir)
-		_ = emitter.LogEvents(Version, events.GlobalCollector.Close())
-
-		// flush events
-		if len(args) > 0 && shouldFlushEvents(args[0]) {
-			_ = processEventsDir()
-		}
-	}()
+	
+	defer emitUsageEvents(dEnv, homeDir, args)
 
 	if needsWriteAccess(subcommandName) {
 		err = reconfigIfTempFileMoveFails(dEnv)
@@ -752,9 +743,31 @@ func seedGlobalRand() {
 	rand.Seed(int64(binary.LittleEndian.Uint64(bs)))
 }
 
-// processEventsDir flushes all logged events in a separate process.
+// emitUsageEvents is called after a command is run to emit usage events and send them to metrics servers.
+// Two controls of this behavior are possible:
+// 1. The config key |metrics.disabled|, when set to |true|, disables all metrics emission
+// 2. The environment key |DOLT_DISABLE_EVENT_FLUSH| allows writing events to disk but not sending them to the server.
+//    This is mostly used for testing.
+func emitUsageEvents(dEnv *env.DoltEnv, homeDir string, args []string) {
+	metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")
+	disabled, err := strconv.ParseBool(metricsDisabled)
+	if err != nil || disabled {
+		return
+	}
+
+	// write events
+	emitter := events.NewFileEmitter(homeDir, dbfactory.DoltDir)
+	_ = emitter.LogEvents(Version, events.GlobalCollector.Close())
+
+	// flush events
+	if !eventFlushDisabled && len(args) > 0 && shouldFlushEvents(args[0]) {
+		_ = flushEventsDir()
+	}
+}
+
+// flushEventsDir flushes all logged events in a separate process.
 // This is done without blocking so that the main process can exit immediately in the case of a slow network.
-func processEventsDir() error {
+func flushEventsDir() error {
 	path, err := os.Executable()
 	if err != nil {
 		return err
