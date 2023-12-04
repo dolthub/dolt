@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -37,14 +38,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -572,7 +571,7 @@ func Serve(
 // heartbeatService is a service that sends a heartbeat event to the metrics server once a day
 type heartbeatService struct {
 	version string
-	cfg     dbfactory.GRPCRemoteConfig
+	eventEmitter events.Emitter
 }
 
 func newHeartbeatService(version string, dEnv *env.DoltEnv) *heartbeatService {
@@ -582,16 +581,25 @@ func newHeartbeatService(version string, dEnv *env.DoltEnv) *heartbeatService {
 		return &heartbeatService{} // will be defunct on Run()
 	}
 
-	cfg, _ := events.GRPCEventRemoteConfig(dEnv)
-	return &heartbeatService{version: version, cfg: cfg}
+	emitterType, ok := os.LookupEnv(events.EmitterTypeEnvVar)
+	if !ok {
+		emitterType = events.EmitterTypeGrpc
+	}
+
+	emitter, err := events.NewEmitter(emitterType, dEnv)
+	if err != nil {
+		return &heartbeatService{} // will be defunct on Run()
+	}
+	
+	return &heartbeatService{version: version, eventEmitter: emitter}
 }
 
 func (h *heartbeatService) Init(ctx context.Context) error { return nil }
 func (h *heartbeatService) Stop() error                    { return nil }
 
 func (h *heartbeatService) Run(ctx context.Context) {
-	// Faulty config settings or disabled metrics can cause us to not have a valid endpoint
-	if h.cfg.Endpoint == "" {
+	// Faulty config settings or disabled metrics can cause us to not have a valid event emitter
+	if h.eventEmitter == nil {
 		return
 	}
 
@@ -603,14 +611,8 @@ func (h *heartbeatService) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			conn, err := grpc.Dial(h.cfg.Endpoint, h.cfg.DialOptions...)
-			if err != nil {
-				continue
-			}
-
-			eventEmitter := events.NewGrpcEmitter(conn)
 			t := events.NowTimestamp()
-			err = eventEmitter.LogEvents(h.version, []*eventsapi.ClientEvent{
+			err := h.eventEmitter.LogEvents(h.version, []*eventsapi.ClientEvent{
 				{
 					Id:        uuid.New().String(),
 					StartTime: t,
@@ -622,8 +624,6 @@ func (h *heartbeatService) Run(ctx context.Context) {
 			if err != nil {
 				logrus.Debugf("failed to send heartbeat event: %v", err)
 			}
-
-			_ = conn.Close()
 		}
 	}
 }

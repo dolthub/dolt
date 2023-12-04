@@ -14,10 +14,6 @@
 
 package config
 
-import (
-	"github.com/dolthub/dolt/go/libraries/utils/set"
-)
-
 const UserEmailKey = "user.email"
 
 const UserNameKey = "user.name"
@@ -45,7 +41,3 @@ const MetricsPort = "metrics.port"
 const MetricsInsecure = "metrics.insecure"
 
 const PushAutoSetupRemote = "push.autosetupremote"
-
-var LocalConfigWhitelist = set.NewStrSet([]string{UserNameKey, UserEmailKey})
-var GlobalConfigWhitelist = set.NewStrSet([]string{UserNameKey, UserEmailKey})
-

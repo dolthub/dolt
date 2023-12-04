@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/fatih/color"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/encoding/prototext"
 
@@ -37,6 +38,8 @@ import (
 
 var Application = eventsapi.AppID_APP_DOLT
 
+// EmitterTypeEnvVar is the environment variable DOLT_EVENTS_EMITTER, which you can set to one of the values below 
+// to change how event emission occurs. This is useful for testing and in some environments.
 const EmitterTypeEnvVar = "DOLT_EVENTS_EMITTER"
 const (
 	EmitterTypeNull   = "null"
@@ -50,8 +53,10 @@ const DefaultMetricsPort = "443"
 
 // Emitter is an interface used for processing a batch of events
 type Emitter interface {
-	// LogEvents takes a batch of events and processes them
+	// LogEvents emits a batch of events
 	LogEvents(version string, evts []*eventsapi.ClientEvent) error
+	// LogEventsRequest emits a batch of events wrapped in a request object, with other metadata
+	LogEventsRequest(ctx context.Context, req *eventsapi.LogEventsRequest) error
 }
 
 // EmitterConfigProvider is an interface used to get the configuration to create an emitter
@@ -66,6 +71,10 @@ type NullEmitter struct{}
 
 // LogEvents takes a batch of events and processes them.  In this case it just drops them
 func (ne NullEmitter) LogEvents(version string, evts []*eventsapi.ClientEvent) error {
+	return nil
+}
+
+func (ne NullEmitter) LogEventsRequest(ctx context.Context, req *eventsapi.LogEventsRequest) error {
 	return nil
 }
 
@@ -105,7 +114,12 @@ func (we WriterEmitter) LogEvents(version string, evts []*eventsapi.ClientEvent)
 	return nil
 }
 
-// GrpcEmitter sends events to a GRPC service implementing the eventsapi
+func (we WriterEmitter) LogEventsRequest(ctx context.Context, req *eventsapi.LogEventsRequest) error {
+	_, err := fmt.Fprintf(color.Output, "%+v\n", req)
+	return err
+}
+
+	// GrpcEmitter sends events to a GRPC service implementing the eventsapi
 type GrpcEmitter struct {
 	client eventsapi.ClientEventsServiceClient
 }
@@ -143,6 +157,10 @@ func (em *GrpcEmitter) LogEvents(version string, evts []*eventsapi.ClientEvent) 
 	return err
 }
 
+func (em *GrpcEmitter) LogEventsRequest(ctx context.Context, req *eventsapi.LogEventsRequest) error {
+	return em.SendLogEventsRequest(ctx, req)
+}
+
 // SendLogEventsRequest sends a request using the grpc client
 func (em *GrpcEmitter) SendLogEventsRequest(ctx context.Context, req *eventsapi.LogEventsRequest) error {
 	_, err := em.client.LogEvents(ctx, req)
@@ -173,15 +191,19 @@ func (fe *FileEmitter) LogEvents(version string, evts []*eventsapi.ClientEvent) 
 	return nil
 }
 
-// NewEmitter returns an emitter for the given configuration provider, keyed off the DOLT_EVENTS_EMITTER environment
-// variable. If it's not set, defaults to a file-based emitter.
-func NewEmitter(pro EmitterConfigProvider) (Emitter, error) {
-	envVarType, ok := os.LookupEnv(EmitterTypeEnvVar)
-	if !ok {
-		envVarType = EmitterTypeFile
+func (fe *FileEmitter) LogEventsRequest(ctx context.Context, req *eventsapi.LogEventsRequest) error {
+	// TODO: we are losing some information here, like the machine id
+	if err := fe.fbp.WriteEvents(req.Version, req.Events); err != nil {
+		return err
 	}
 
-	switch envVarType {
+	return nil
+}
+
+// NewEmitter returns an emitter for the given configuration provider, of the type named. If an empty name is provided, 
+// defaults to a file-based emitter.
+func NewEmitter(emitterType string, pro EmitterConfigProvider) (Emitter, error) {
+	switch emitterType {
 	case EmitterTypeNull:
 		return NullEmitter{}, nil
 	case EmitterTypeWriter:
@@ -195,7 +217,7 @@ func NewEmitter(pro EmitterConfigProvider) (Emitter, error) {
 		}
 		return NewFileEmitter(homeDir, dbfactory.DoltDir), nil
 	default:
-		return nil, fmt.Errorf("unknown emitter type: %s", envVarType)
+		return nil, fmt.Errorf("unknown emitter type: %s", emitterType)
 	}
 }
 

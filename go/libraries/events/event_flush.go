@@ -47,6 +47,69 @@ type Flusher interface {
 	Flush(ctx context.Context) error
 }
 
+type FileFlusher struct {
+	emitter Emitter
+	fbp *FileBackedProc
+}
+
+func NewFileFlusher(fs filesys.Filesys, userHomeDir string, doltDir string, emitter Emitter) *FileFlusher {
+	fbp := NewFileBackedProc(fs, userHomeDir, doltDir, MD5FileNamer, CheckFilenameMD5)
+	
+	if exists := fbp.EventsDirExists(); !exists {
+		panic(ErrEventsDataDir)
+	}
+
+	return &FileFlusher{emitter: emitter, fbp: fbp}
+}
+
+func (f FileFlusher) Flush(ctx context.Context) error {
+	fs := f.fbp.GetFileSys()
+
+	evtsDir := f.fbp.GetEventsDirPath()
+
+	err := lockAndFlush(ctx, fs, evtsDir, f.fbp.LockPath, f.flush)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// flush has the function signature of the flushCb type
+// and sends events data to the events server
+func (f FileFlusher) flush(ctx context.Context, path string) error {
+	fs := f.fbp.GetFileSys()
+
+	data, err := fs.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	isFileValid, err := f.fbp.CheckingFunc(data, path)
+
+	if isFileValid && err == nil {
+		req := &eventsapi.LogEventsRequest{}
+
+		if err := proto.Unmarshal(data, req); err != nil {
+			return err
+		}
+
+		if err := f.emitter.LogEventsRequest(ctx, req); err != nil {
+			return err
+		}
+
+		if err := fs.DeleteFile(path); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	return errInvalidFile
+}
+
+var _ Flusher = &FileFlusher{}
+
 // lockAndFlush locks the given lockPath and passes the flushCB to the filesys' Iter method
 func lockAndFlush(ctx context.Context, fs filesys.Filesys, dirPath string, lockPath string, fcb flushCB) error {
 	fsLock := filesys.CreateFilesysLock(fs, lockPath)

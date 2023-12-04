@@ -32,8 +32,8 @@ import (
 // SendMetricsCommand is the command used for sending metrics
 const (
 	SendMetricsCommand   = "send-metrics"
-	outputFlag           = "output"
-	sendMetricsShortDesc = "Send metrics to the events server or print them to stdout"
+	EventsOutputFormat = "output-format"
+	sendMetricsShortDesc = "Send metrics to the events server (default), or log them in another way"
 )
 
 type SendMetricsCmd struct{}
@@ -65,7 +65,12 @@ func (cmd SendMetricsCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd SendMetricsCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
-	ap.SupportsFlag(outputFlag, "o", "Flush events to stdout.")
+	ap.SupportsString(
+		EventsOutputFormat,
+		"r",
+		"output-format",
+		"Format of the events output. Valid values are null, writer, grpc, and file.",
+	)
 	return ap
 }
 
@@ -103,9 +108,9 @@ func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []st
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
-
-		outputToStdio := apr.Contains(outputFlag)
-		err = FlushLoggedEvents(ctx, dEnv, userHomeDir, outputToStdio)
+		
+		output := apr.GetValueOrDefault(EventsOutputFormat, "grpc")
+		err = FlushLoggedEvents(ctx, dEnv, userHomeDir, output)
 
 		if err != nil {
 			if err == events.ErrFileLocked {
@@ -122,15 +127,13 @@ func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []st
 }
 
 // FlushLoggedEvents flushes any logged events in the directory given to an appropriate event emitter
-func FlushLoggedEvents(ctx context.Context, dEnv *env.DoltEnv, userHomeDir string, outputToStdio bool) error {
-	var flusher events.Flusher
-	if outputToStdio {
-		flusher = events.NewIOFlusher(dEnv.FS, userHomeDir, dbfactory.DoltDir)
-	} else {
-		grpcEmitter := events.GRPCEmitterForConfig(dEnv)
-		flusher = events.NewGrpcEventFlusher(dEnv.FS, userHomeDir, dbfactory.DoltDir, grpcEmitter)
+func FlushLoggedEvents(ctx context.Context, dEnv *env.DoltEnv, userHomeDir string, outputType string) error {
+	emitter, err := events.NewEmitter(outputType, dEnv)
+	if err != nil {
+		return err
 	}
-
+	
+	flusher := events.NewFileFlusher(dEnv.FS, userHomeDir, dbfactory.DoltDir, emitter)
 	return flusher.Flush(ctx)
 }
 
