@@ -581,7 +581,7 @@ func newHeartbeatService(version string, dEnv *env.DoltEnv) *heartbeatService {
 		return &heartbeatService{} // will be defunct on Run()
 	}
 
-	cfg, _ := commands.GRPCEventRemoteConfigForEnv(dEnv)
+	cfg, _ := events.GRPCEventRemoteConfig(dEnv)
 	return &heartbeatService{version: version, cfg: cfg}
 }
 

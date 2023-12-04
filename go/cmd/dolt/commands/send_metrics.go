@@ -16,20 +16,16 @@ package commands
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"time"
-
-	"github.com/fatih/color"
-	"google.golang.org/grpc"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/fatih/color"
 )
 
 // SendMetricsCommand is the command used for sending metrics
@@ -130,47 +126,10 @@ func FlushLoggedEvents(ctx context.Context, dEnv *env.DoltEnv, userHomeDir strin
 	if outputToStdio {
 		flusher = events.NewIOFlusher(dEnv.FS, userHomeDir, dbfactory.DoltDir)
 	} else {
-		grpcEmitter := GRPCEventEmitterForEnv(dEnv)
+		grpcEmitter := events.GRPCEmitterForConfig(dEnv)
 		flusher = events.NewGrpcEventFlusher(dEnv.FS, userHomeDir, dbfactory.DoltDir, grpcEmitter)
 	}
 
 	return flusher.Flush(ctx)
 }
 
-// GRPCEventEmitterForEnv returns an event emitter for the given environment, or nil if the environment cannot
-// provide one
-func GRPCEventEmitterForEnv(dEnv *env.DoltEnv) *events.GrpcEmitter {
-	cfg, err := GRPCEventRemoteConfigForEnv(dEnv)
-	if err != nil {
-		return nil
-	}
-
-	conn, err := grpc.Dial(cfg.Endpoint, cfg.DialOptions...)
-	if err != nil {
-		return nil
-	}
-	return events.NewGrpcEmitter(conn)
-}
-
-func GRPCEventRemoteConfigForEnv(dEnv *env.DoltEnv) (dbfactory.GRPCRemoteConfig, error) {
-	host := dEnv.Config.GetStringOrDefault(env.MetricsHost, env.DefaultMetricsHost)
-	portStr := dEnv.Config.GetStringOrDefault(env.MetricsPort, env.DefaultMetricsPort)
-	insecureStr := dEnv.Config.GetStringOrDefault(env.MetricsInsecure, "false")
-
-	port, err := strconv.ParseUint(portStr, 10, 16)
-	if err != nil {
-		return dbfactory.GRPCRemoteConfig{}, nil
-	}
-
-	insecure, _ := strconv.ParseBool(insecureStr)
-
-	hostAndPort := fmt.Sprintf("%s:%d", host, port)
-	cfg, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
-		Endpoint: hostAndPort,
-		Insecure: insecure,
-	})
-	if err != nil {
-		return dbfactory.GRPCRemoteConfig{}, nil
-	}
-	return cfg, err
-}

@@ -105,6 +105,10 @@ func (dEnv *DoltEnv) GetRemoteDB(ctx context.Context, format *types.NomsBinForma
 	}
 }
 
+func (dEnv *DoltEnv) GetConfig() config.ReadableConfig {
+	return dEnv.Config
+}
+
 func createRepoState(fs filesys.Filesys) (*RepoState, error) {
 	repoState, rsErr := LoadRepoState(fs)
 
