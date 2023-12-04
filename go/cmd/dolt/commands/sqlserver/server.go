@@ -61,6 +61,9 @@ const (
 	ApiSqleContextKey   = "__sqle_context__"
 )
 
+// sqlServerHeartbeatIntervalEnvVar is the duration between heartbeats sent to the remote server, used for testing
+const sqlServerHeartbeatIntervalEnvVar = "DOLT_SQL_SERVER_HEARTBEAT_INTERVAL"
+
 // ExternalDisableUsers is called by implementing applications to disable users. This is not used by Dolt itself,
 // but will break compatibility with implementing applications that do not yet support users.
 var ExternalDisableUsers bool = false
@@ -572,6 +575,7 @@ func Serve(
 type heartbeatService struct {
 	version string
 	eventEmitter events.Emitter
+	interval time.Duration
 }
 
 func newHeartbeatService(version string, dEnv *env.DoltEnv) *heartbeatService {
@@ -591,7 +595,21 @@ func newHeartbeatService(version string, dEnv *env.DoltEnv) *heartbeatService {
 		return &heartbeatService{} // will be defunct on Run()
 	}
 	
-	return &heartbeatService{version: version, eventEmitter: emitter}
+	interval, ok := os.LookupEnv(sqlServerHeartbeatIntervalEnvVar)
+	if !ok {
+		interval = "24h"
+	}
+
+	duration, err := time.ParseDuration(interval)
+	if err != nil {
+		return nil
+	}
+	
+	return &heartbeatService{
+		version: version,
+		eventEmitter: emitter,
+		interval: duration,
+	}
 }
 
 func (h *heartbeatService) Init(ctx context.Context) error { return nil }
@@ -603,7 +621,7 @@ func (h *heartbeatService) Run(ctx context.Context) {
 		return
 	}
 
-	ticker := time.NewTicker(24 * time.Hour)
+	ticker := time.NewTicker(h.interval)
 	defer ticker.Stop()
 
 	for {
