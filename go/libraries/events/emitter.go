@@ -43,7 +43,7 @@ var Application = eventsapi.AppID_APP_DOLT
 const EmitterTypeEnvVar = "DOLT_EVENTS_EMITTER"
 const (
 	EmitterTypeNull   = "null"
-	EmitterTypeWriter = "writer"
+	EmitterTypeStdout = "stdout"
 	EmitterTypeGrpc   = "grpc"
 	EmitterTypeFile   = "file"
 )
@@ -206,7 +206,7 @@ func NewEmitter(emitterType string, pro EmitterConfigProvider) (Emitter, error) 
 	switch emitterType {
 	case EmitterTypeNull:
 		return NullEmitter{}, nil
-	case EmitterTypeWriter:
+	case EmitterTypeStdout:
 		return WriterEmitter{Wr: os.Stdout}, nil
 	case EmitterTypeGrpc:
 		return GRPCEmitterForConfig(pro), nil

@@ -69,7 +69,7 @@ func (cmd SendMetricsCmd) ArgParser() *argparser.ArgParser {
 		EventsOutputFormat,
 		"r",
 		"output-format",
-		"Format of the events output. Valid values are null, writer, grpc, and file.",
+		"Format of the events output. Valid values are null, stdio, grpc, and file.",
 	)
 	return ap
 }
@@ -109,7 +109,7 @@ func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []st
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
 		
-		output := apr.GetValueOrDefault(EventsOutputFormat, "grpc")
+		output := apr.GetValueOrDefault(EventsOutputFormat, events.EmitterTypeGrpc)
 		err = FlushLoggedEvents(ctx, dEnv, userHomeDir, output)
 
 		if err != nil {
