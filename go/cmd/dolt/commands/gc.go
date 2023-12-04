@@ -33,9 +33,7 @@ var gcDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Cleans up unreferenced data from the repository.",
 	LongDesc: `Searches the repository for data that is no longer referenced and no longer needed.
 
-If the {{.EmphasisLeft}}--shallow{{.EmphasisRight}} flag is supplied, a faster but less thorough garbage collection will be performed.
-
-{{.EmphasisLeft}}dolt gc{{.EmphasisRight}} won't work if there is a running server. Use {{.EmphasisLeft}}dolt sql -q 'call dolt_gc()'{{.EmphasisRight}} instead.`,
+If the {{.EmphasisLeft}}--shallow{{.EmphasisRight}} flag is supplied, a faster but less thorough garbage collection will be performed.`,
 	Synopsis: []string{
 		"[--shallow]",
 	},
