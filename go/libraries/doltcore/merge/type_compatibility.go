@@ -170,11 +170,16 @@ func (s stringTypeChangeHandler) canHandle(fromSqlType, toSqlType sql.Type) bool
 func (s stringTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (compatible bool, tableRewrite bool) {
 	fromStringType := fromSqlType.(types.StringType)
 	toStringType := toSqlType.(types.StringType)
-
-	compatible = toStringType.MaxByteLength() >= fromStringType.MaxByteLength() &&
-		toStringType.Collation() == fromStringType.Collation()
-
 	tableRewrite = false
+
+	compatible = toStringType.MaxByteLength() >= fromStringType.MaxByteLength()
+
+	collationChanged := toStringType.Collation() != fromStringType.Collation()
+	// If the collation changed, we will need to rebuild any secondary indexes on this column.
+	if collationChanged {
+		tableRewrite = true
+	}
+
 	if compatible {
 		// Because inline string types (e.g. VARCHAR, CHAR) have the same encoding, the main case
 		// when a table rewrite is required is when moving between an inline string type (e.g. CHAR)
