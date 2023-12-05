@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/fatih/color"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
@@ -153,6 +154,8 @@ func NewEmitter(emitterType string, pro EmitterConfigProvider) (events.Emitter, 
 			return nil, err
 		}
 		return events.NewFileEmitter(homeDir, dbfactory.DoltDir), nil
+	case events.EmitterTypeLogger:
+		return events.NewLoggerEmitter(logrus.DebugLevel), nil
 	default:
 		return nil, fmt.Errorf("unknown emitter type: %s", emitterType)
 	}

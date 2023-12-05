@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/fatih/color"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/encoding/prototext"
 
@@ -34,13 +35,14 @@ import (
 var Application = eventsapi.AppID_APP_DOLT
 
 // EmitterTypeEnvVar is the environment variable DOLT_EVENTS_EMITTER, which you can set to one of the values below 
-// to change how event emission occurs. This is useful for testing and in some environments.
+// to change how event emission occurs. This is useful for the send-metrics command, and in some environments.
 const EmitterTypeEnvVar = "DOLT_EVENTS_EMITTER"
 const (
 	EmitterTypeNull   = "null"
 	EmitterTypeStdout = "stdout"
 	EmitterTypeGrpc   = "grpc"
 	EmitterTypeFile   = "file"
+	EmitterTypeLogger = "logger"
 )
 
 const DefaultMetricsHost = "eventsapi.dolthub.com"
@@ -187,3 +189,60 @@ func (fe *FileEmitter) LogEventsRequest(ctx context.Context, req *eventsapi.LogE
 
 	return nil
 }
+
+type LoggerEmitter struct {
+	logLevel logrus.Level
+}
+
+func (l LoggerEmitter) LogEvents(version string, evts []*eventsapi.ClientEvent) error {
+	sb := &strings.Builder{}
+	wr := WriterEmitter{Wr: sb}
+	err := wr.LogEvents(version, evts)
+	if err != nil {
+		return err
+	}
+
+	eventString := sb.String()
+	return l.logEventString(eventString)
+}
+
+func (l LoggerEmitter) LogEventsRequest(ctx context.Context, req *eventsapi.LogEventsRequest) error {
+	sb := &strings.Builder{}
+	wr := WriterEmitter{Wr: sb}
+	err := wr.LogEventsRequest(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	eventString := sb.String()
+	return l.logEventString(eventString)
+}
+
+func (l LoggerEmitter) logEventString(eventString string) error {
+	switch l.logLevel {
+	case logrus.DebugLevel:
+		logrus.Debug(eventString)
+	case logrus.ErrorLevel:
+		logrus.Error(eventString)
+	case logrus.FatalLevel:
+		logrus.Fatal(eventString)
+	case logrus.InfoLevel:
+		logrus.Info(eventString)
+	case logrus.PanicLevel:
+		logrus.Panic(eventString)
+	case logrus.TraceLevel:
+		logrus.Trace(eventString)
+	case logrus.WarnLevel:
+		logrus.Warn(eventString)
+	default:
+		return fmt.Errorf("unknown log level %v", l.logLevel)
+	}
+	return nil
+}
+
+func NewLoggerEmitter(level logrus.Level) *LoggerEmitter {
+	return &LoggerEmitter{
+		logLevel: level,
+	}
+}
+
