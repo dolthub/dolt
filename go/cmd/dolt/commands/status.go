@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"strings"
 
+	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/fatih/color"
@@ -72,6 +73,7 @@ func (cmd StatusCmd) RequiresRepo() bool {
 }
 
 var _ cli.RepoNotRequiredCommand = StatusCmd{}
+var _ cli.EventMonitoredCommand = StatusCmd{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd StatusCmd) Name() string {
@@ -92,6 +94,10 @@ func (cmd StatusCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsFlag(cli.ShowIgnoredFlag, "", "Show tables that are ignored (according to dolt_ignore)")
 	return ap
+}
+
+func (cmd StatusCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_STATUS
 }
 
 // Exec executes the command

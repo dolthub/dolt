@@ -18,15 +18,10 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/fatih/color"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/encoding/prototext"
@@ -57,13 +52,6 @@ type Emitter interface {
 	LogEvents(version string, evts []*eventsapi.ClientEvent) error
 	// LogEventsRequest emits a batch of events wrapped in a request object, with other metadata
 	LogEventsRequest(ctx context.Context, req *eventsapi.LogEventsRequest) error
-}
-
-// EmitterConfigProvider is an interface used to get the configuration to create an emitter
-type EmitterConfigProvider interface {
-	GetGRPCDialParams(config grpcendpoint.Config) (dbfactory.GRPCRemoteConfig, error)
-	GetConfig() config.ReadableConfig
-	GetUserHomeDir() (string, error)
 }
 
 // NullEmitter is an emitter that drops events
@@ -198,65 +186,4 @@ func (fe *FileEmitter) LogEventsRequest(ctx context.Context, req *eventsapi.LogE
 	}
 
 	return nil
-}
-
-// NewEmitter returns an emitter for the given configuration provider, of the type named. If an empty name is provided, 
-// defaults to a file-based emitter.
-func NewEmitter(emitterType string, pro EmitterConfigProvider) (Emitter, error) {
-	switch emitterType {
-	case EmitterTypeNull:
-		return NullEmitter{}, nil
-	case EmitterTypeStdout:
-		return WriterEmitter{Wr: os.Stdout}, nil
-	case EmitterTypeGrpc:
-		return GRPCEmitterForConfig(pro), nil
-	case EmitterTypeFile:
-		homeDir, err := pro.GetUserHomeDir()
-		if err != nil {
-			return nil, err
-		}
-		return NewFileEmitter(homeDir, dbfactory.DoltDir), nil
-	default:
-		return nil, fmt.Errorf("unknown emitter type: %s", emitterType)
-	}
-}
-
-// GRPCEmitterForConfig returns an event emitter for the given environment, or nil if the environment cannot
-// provide one
-func GRPCEmitterForConfig(pro EmitterConfigProvider) *GrpcEmitter {
-	cfg, err := GRPCEventRemoteConfig(pro)
-	if err != nil {
-		return nil
-	}
-
-	conn, err := grpc.Dial(cfg.Endpoint, cfg.DialOptions...)
-	if err != nil {
-		return nil
-	}
-	return NewGrpcEmitter(conn)
-}
-
-// GRPCEventRemoteConfig returns a GRPCRemoteConfig for the given configuration provider
-func GRPCEventRemoteConfig(pro EmitterConfigProvider) (dbfactory.GRPCRemoteConfig, error) {
-	host := pro.GetConfig().GetStringOrDefault(config.MetricsHost, DefaultMetricsHost)
-	portStr := pro.GetConfig().GetStringOrDefault(config.MetricsPort, DefaultMetricsPort)
-	insecureStr := pro.GetConfig().GetStringOrDefault(config.MetricsInsecure, "false")
-
-	port, err := strconv.ParseUint(portStr, 10, 16)
-	if err != nil {
-		return dbfactory.GRPCRemoteConfig{}, nil
-	}
-
-	insecure, _ := strconv.ParseBool(insecureStr)
-
-	hostAndPort := fmt.Sprintf("%s:%d", host, port)
-	cfg, err := pro.GetGRPCDialParams(grpcendpoint.Config{
-		Endpoint: hostAndPort,
-		Insecure: insecure,
-	})
-	if err != nil {
-		return dbfactory.GRPCRemoteConfig{}, nil
-	}
-	
-	return cfg, nil
 }

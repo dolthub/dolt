@@ -590,11 +590,6 @@ func newHeartbeatService(version string, dEnv *env.DoltEnv) *heartbeatService {
 		emitterType = events.EmitterTypeGrpc
 	}
 
-	emitter, err := events.NewEmitter(emitterType, dEnv)
-	if err != nil {
-		return &heartbeatService{} // will be defunct on Run()
-	}
-	
 	interval, ok := os.LookupEnv(sqlServerHeartbeatIntervalEnvVar)
 	if !ok {
 		interval = "24h"
@@ -602,7 +597,12 @@ func newHeartbeatService(version string, dEnv *env.DoltEnv) *heartbeatService {
 
 	duration, err := time.ParseDuration(interval)
 	if err != nil {
-		return nil
+		return &heartbeatService{} // will be defunct on Run()
+	}
+	
+	emitter, err := commands.NewEmitter(emitterType, dEnv)
+	if err != nil {
+		return &heartbeatService{} // will be defunct on Run()
 	}
 	
 	return &heartbeatService{
