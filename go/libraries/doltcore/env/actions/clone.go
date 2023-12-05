@@ -215,7 +215,7 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	// create remote refs corresponding to each of them. We delete all of
 	// the local branches except for the one corresponding to |branch|.
 	for _, br := range branches {
-		if !singleBranch || (singleBranch && br.GetPath() == branch) {
+		if !singleBranch || br.GetPath() == branch {
 			cs, _ := doltdb.NewCommitSpec(br.GetPath())
 			cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
 			if err != nil {
