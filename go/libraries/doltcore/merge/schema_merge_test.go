@@ -16,6 +16,7 @@ package merge_test
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -50,13 +51,14 @@ type schemaMergeTest struct {
 }
 
 type dataTest struct {
-	name         string
-	ancestor     []sql.Row
-	left, right  []sql.Row
-	merged       []sql.Row
-	dataConflict bool
-	skip         bool
-	skipFlip     bool
+	name                 string
+	ancestor             []sql.Row
+	left, right          []sql.Row
+	merged               []sql.Row
+	constraintViolations []constraintViolation
+	dataConflict         bool
+	skip                 bool
+	skipFlip             bool
 }
 
 type table struct {
@@ -77,6 +79,9 @@ func TestSchemaMerge(t *testing.T) {
 	})
 	t.Run("column default tests", func(t *testing.T) {
 		testSchemaMerge(t, columnDefaultTests)
+	})
+	t.Run("collation tests", func(t *testing.T) {
+		testSchemaMerge(t, collationTests)
 	})
 	t.Run("nullability tests", func(t *testing.T) {
 		testSchemaMerge(t, nullabilityTests)
@@ -218,6 +223,65 @@ var columnAddDropTests = []schemaMergeTest{
 				right:    singleRow(1, 3),
 				merged:   singleRow(1, nil, 3),
 				skipFlip: true,
+			},
+		},
+	},
+	{
+		name:     "left side column drop",
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int, a int)")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int)       ")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int, a int)")),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int)       ")),
+		dataTests: []dataTest{
+			{
+				name:     "no data change",
+				ancestor: singleRow(1, 2, 3),
+				left:     singleRow(1, 2),
+				right:    singleRow(1, 2, 3),
+				merged:   singleRow(1, 2),
+			},
+			{
+				name:         "one side sets to NULL, other drops non-NULL",
+				ancestor:     singleRow(1, 2, 3),
+				left:         singleRow(1, 2),
+				right:        singleRow(1, 2, nil),
+				dataConflict: true,
+				skip:         true,
+			},
+			{
+				name:         "one side sets to NULL, other drops non-NULL, plus data change",
+				ancestor:     singleRow(1, 2, 3),
+				left:         singleRow(1, 2),
+				right:        singleRow(1, 3, nil),
+				dataConflict: true,
+			},
+			{
+				name:         "one side sets to non-NULL, other drops NULL",
+				ancestor:     singleRow(1, 2, nil),
+				left:         singleRow(1, 2),
+				right:        singleRow(1, 2, 3),
+				dataConflict: true,
+			},
+			{
+				name:         "one side sets to non-NULL, other drops NULL, plus data change",
+				ancestor:     singleRow(1, 2, nil),
+				left:         singleRow(1, 3),
+				right:        singleRow(1, 2, 3),
+				dataConflict: true,
+			},
+			{
+				name:         "one side sets to non-NULL, other drops non-NULL",
+				ancestor:     singleRow(1, 2, 3),
+				left:         singleRow(1, 2),
+				right:        singleRow(1, 2, 4),
+				dataConflict: true,
+			},
+			{
+				name:     "one side drops column, other deletes row",
+				ancestor: []sql.Row{row(1, 2, 3), row(4, 5, 6)},
+				left:     []sql.Row{row(1, 2), row(4, 5)},
+				right:    []sql.Row{row(1, 2, 3)},
+				merged:   []sql.Row{row(1, 2)},
 			},
 		},
 	},
@@ -544,6 +608,94 @@ var columnAddDropTests = []schemaMergeTest{
 	},
 }
 
+type constraintViolation struct {
+	violationType merge.CvType
+	key, value    sql.Row
+}
+
+var collationTests = []schemaMergeTest{
+	{
+		name:     "left side changes collation",
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a varchar(10) collate utf8mb4_0900_bin unique)")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a varchar(10) collate utf8mb4_0900_ai_ci unique)")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a varchar(10) collate utf8mb4_0900_bin unique)")),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a varchar(10) collate utf8mb4_0900_ai_ci unique)")),
+		dataTests: []dataTest{
+			{
+				name:     "no data change",
+				ancestor: singleRow(1, "hello"),
+				left:     singleRow(1, "hello"),
+				right:    singleRow(1, "hello"),
+				merged:   singleRow(1, "hello"),
+			},
+			{
+				name:     "right side insert",
+				ancestor: []sql.Row{{1, "hello"}},
+				left:     []sql.Row{{1, "hello"}},
+				right:    []sql.Row{{1, "hello"}, {2, "world"}},
+				merged:   []sql.Row{{1, "hello"}, {2, "world"}},
+			},
+			{
+				name:     "right side delete",
+				ancestor: []sql.Row{{1, "hello"}, {2, "world"}},
+				left:     []sql.Row{{1, "hello"}, {2, "world"}},
+				right:    []sql.Row{{1, "hello"}},
+				merged:   []sql.Row{{1, "hello"}},
+			},
+			{
+				name:     "right side insert causes unique violation",
+				ancestor: []sql.Row{{1, "hello"}},
+				left:     []sql.Row{{1, "hello"}},
+				right:    []sql.Row{{1, "hello"}, {2, "HELLO"}},
+				constraintViolations: []constraintViolation{
+					{merge.CvType_UniqueIndex, sql.Row{int32(1)}, sql.Row{"hello"}},
+					{merge.CvType_UniqueIndex, sql.Row{int32(2)}, sql.Row{"HELLO"}},
+				},
+			},
+		},
+	},
+	{
+		name:     "left side changes table collation",
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a varchar(10) unique) collate utf8mb4_0900_bin")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a varchar(10) unique) collate utf8mb4_0900_ai_ci")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a varchar(10) unique) collate utf8mb4_0900_bin")),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a varchar(10) unique) collate utf8mb4_0900_ai_ci")),
+		dataTests: []dataTest{
+			{
+				name:     "no data change",
+				ancestor: singleRow(1, "hello"),
+				left:     singleRow(1, "hello"),
+				right:    singleRow(1, "hello"),
+				merged:   singleRow(1, "hello"),
+			},
+			{
+				name:     "right side insert",
+				ancestor: []sql.Row{{1, "hello"}},
+				left:     []sql.Row{{1, "hello"}},
+				right:    []sql.Row{{1, "hello"}, {2, "world"}},
+				merged:   []sql.Row{{1, "hello"}, {2, "world"}},
+			},
+			{
+				name:     "right side delete",
+				ancestor: []sql.Row{{1, "hello"}, {2, "world"}},
+				left:     []sql.Row{{1, "hello"}, {2, "world"}},
+				right:    []sql.Row{{1, "hello"}},
+				merged:   []sql.Row{{1, "hello"}},
+			},
+			{
+				name:     "right side insert causes unique violation",
+				ancestor: []sql.Row{{1, "hello"}},
+				left:     []sql.Row{{1, "hello"}},
+				right:    []sql.Row{{1, "hello"}, {2, "HELLO"}},
+				constraintViolations: []constraintViolation{
+					{merge.CvType_UniqueIndex, sql.Row{int32(1)}, sql.Row{"hello"}},
+					{merge.CvType_UniqueIndex, sql.Row{int32(2)}, sql.Row{"HELLO"}},
+				},
+			},
+		},
+	},
+}
+
 var columnDefaultTests = []schemaMergeTest{
 	{
 		name:     "left side add default",
@@ -665,6 +817,99 @@ var typeChangeTests = []schemaMergeTest{
 		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a varchar(20), b int, c varchar(20))")),
 		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a text, b int, c text)")),
 		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a varchar(20), b int, c varchar(20))")),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a text, b int, c text)")),
+		dataTests: []dataTest{
+			{
+				name:     "schema change, no data change",
+				ancestor: singleRow(1, "test", 1, "test"),
+				left:     singleRow(1, "test", 1, "test"),
+				right:    singleRow(1, "test", 1, "test"),
+				merged:   singleRow(1, "test", 1, "test"),
+			},
+			{
+				name:     "insert and schema change on left, no change on right",
+				ancestor: nil,
+				left:     singleRow(1, "test", 1, "test"),
+				right:    nil,
+				merged:   singleRow(1, "test", 1, "test"),
+			},
+			{
+				name:     "insert on right, schema change on left",
+				ancestor: nil,
+				left:     nil,
+				right:    singleRow(1, "test", 1, "test"),
+				merged:   singleRow(1, "test", 1, "test"),
+			},
+			{
+				name:     "data and schema change on left, no change on right",
+				ancestor: singleRow(1, "test", 1, "test"),
+				left:     singleRow(1, "hello world", 1, "hello world"),
+				right:    singleRow(1, "test", 1, "test"),
+				merged:   singleRow(1, "hello world", 1, "hello world"),
+			},
+			{
+				name:     "data change on right, schema change on left",
+				ancestor: singleRow(1, "test", 1, "test"),
+				left:     singleRow(1, "test", 1, "test"),
+				right:    singleRow(1, "hello world", 1, "hello world"),
+				merged:   singleRow(1, "hello world", 1, "hello world"),
+			},
+			{
+				name:     "data set and schema change on left, no change on right",
+				ancestor: singleRow(1, nil, 1, nil),
+				left:     singleRow(1, "hello world", 1, "hello world"),
+				right:    singleRow(1, nil, 1, nil),
+				merged:   singleRow(1, "hello world", 1, "hello world"),
+			},
+			{
+				name:     "data set on right, schema change on left",
+				ancestor: singleRow(1, nil, 1, nil),
+				left:     singleRow(1, nil, 1, nil),
+				right:    singleRow(1, "hello world", 1, "hello world"),
+				merged:   singleRow(1, "hello world", 1, "hello world"),
+			},
+			{
+				name:     "convergent inserts",
+				ancestor: nil,
+				left:     singleRow(1, "test", 1, "test"),
+				right:    singleRow(1, "test", 1, "test"),
+				merged:   singleRow(1, "test", 1, "test"),
+			},
+			{
+				name:         "conflicting inserts",
+				ancestor:     nil,
+				left:         singleRow(1, "test", 1, "test"),
+				right:        singleRow(1, "hello world", 1, "hello world"),
+				dataConflict: true,
+			},
+			{
+				name:     "delete and schema change on left",
+				ancestor: singleRow(1, "test", 1, "test"),
+				left:     nil,
+				right:    singleRow(1, "test", 1, "test"),
+				merged:   nil,
+			},
+			{
+				name:     "schema change on left, delete on right",
+				ancestor: singleRow(1, "test", 1, "test"),
+				left:     singleRow(1, "test", 1, "test"),
+				right:    nil,
+				merged:   nil,
+			},
+			{
+				name:         "schema and value change on left, delete on right",
+				ancestor:     singleRow(1, "test", 1, "test"),
+				left:         singleRow(1, "hello", 1, "hello"),
+				right:        nil,
+				dataConflict: true,
+			},
+		},
+	},
+	{
+		name:     "modify column type on the left side between compatible string types with unique secondary index",
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a varchar(20) unique, b int, c varchar(20) unique)")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a text, b int, c text)")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a varchar(20) unique, b int, c varchar(20) unique)")),
 		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a text, b int, c text)")),
 		dataTests: []dataTest{
 			{
@@ -934,7 +1179,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 		}
 
 		t.Run(test.name, func(t *testing.T) {
-			runTest := func(t *testing.T, test schemaMergeTest, expectDataConflict bool) {
+			runTest := func(t *testing.T, test schemaMergeTest, expectDataConflict bool, expConstraintViolations []constraintViolation) {
 				a, l, r, m := setupSchemaMergeTest(t, test)
 
 				ctx := context.Background()
@@ -980,33 +1225,62 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 							require.NoError(t, err)
 							require.False(t, hasConflict, "Unexpected data conflict")
 
-							if !assert.Equal(t, addr, a) {
-								expTbl, _, err := m.GetTable(ctx, name)
+							numConstraintViolations, err := actTbl.NumConstraintViolations(ctx)
+							require.NoError(t, err)
+							require.EqualValues(t, numConstraintViolations, len(expConstraintViolations))
+
+							if len(expConstraintViolations) > 0 {
+								artifacts, err := actTbl.GetArtifacts(ctx)
 								require.NoError(t, err)
-								t.Logf("expected rows: %s", expTbl.DebugString(ctx))
-								t.Logf("actual rows: %s", actTbl.DebugString(ctx))
+								artifactMap := durable.ProllyMapFromArtifactIndex(artifacts)
+								artifactIter, err := artifactMap.IterAllCVs(ctx)
+								require.NoError(t, err)
+
+								sch, err := actTbl.GetSchema(ctx)
+								require.NoError(t, err)
+
+								kd, vd := sch.GetMapDescriptors()
+
+								// value tuples encoded in ConstraintViolationMeta may
+								// violate the not null constraints assumed by fixed access
+								kd = kd.WithoutFixedAccess()
+								vd = vd.WithoutFixedAccess()
+								for _, expectedViolation := range expConstraintViolations {
+									violationType, key, value, err := merge.NextConstraintViolation(ctx, artifactIter, kd, vd, artifactMap.NodeStore())
+									require.NoError(t, err)
+									require.EqualValues(t, expectedViolation.violationType, violationType)
+									require.EqualValues(t, expectedViolation.key, key)
+									require.EqualValues(t, expectedViolation.value, value)
+								}
+							} else {
+								if !assert.Equal(t, addr, a) {
+									expTbl, _, err := m.GetTable(ctx, name)
+									require.NoError(t, err)
+									t.Logf("expected rows: %s", expTbl.DebugString(ctx))
+									t.Logf("actual rows: %s", actTbl.DebugString(ctx))
+								}
 							}
 						}
 					}
 				}
 			}
 			t.Run("test schema merge", func(t *testing.T) {
-				runTest(t, test, false)
+				runTest(t, test, false, nil)
 			})
 			for _, data := range test.dataTests {
 				// Copy the test so that the values from one data test don't affect subsequent data tests.
-				dataDest := test
-				dataDest.ancestor.rows = data.ancestor
-				dataDest.left.rows = data.left
-				dataDest.right.rows = data.right
-				dataDest.merged.rows = data.merged
-				dataDest.skipNewFmt = dataDest.skipNewFmt || data.skip
-				dataDest.skipFlipOnNewFormat = dataDest.skipFlipOnNewFormat || data.skipFlip
+				dataTest := test
+				dataTest.ancestor.rows = data.ancestor
+				dataTest.left.rows = data.left
+				dataTest.right.rows = data.right
+				dataTest.merged.rows = data.merged
+				dataTest.skipNewFmt = dataTest.skipNewFmt || data.skip
+				dataTest.skipFlipOnNewFormat = dataTest.skipFlipOnNewFormat || data.skipFlip
 				t.Run(data.name, func(t *testing.T) {
 					if data.skip {
 						t.Skip()
 					}
-					runTest(t, dataDest, data.dataConflict)
+					runTest(t, dataTest, data.dataConflict, data.constraintViolations)
 				})
 			}
 		})

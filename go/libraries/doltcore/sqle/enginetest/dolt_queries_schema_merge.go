@@ -635,36 +635,6 @@ var SchemaChangeTestsCollations = []MergeScriptTest{
 			},
 		},
 	},
-	{
-		// TODO: Changing a column's collation may require rewriting the table and any indexes on that column.
-		//       For now, we just detect the schema incompatibility and return schema conflict metadata, but we could
-		//       go further here and automatically convert the data to the new collation.
-		Name: "changing the collation of a column",
-		AncSetUpScript: []string{
-			"set @@autocommit=0;",
-			"create table t (pk int primary key, col1 varchar(32) character set utf8mb4 collate utf8mb4_bin, index col1_idx (col1));",
-			"insert into t values (1, 'ab'), (2, 'Ab');",
-		},
-		RightSetUpScript: []string{
-			"alter table t modify col1 varchar(32) character set utf8mb4 collate utf8mb4_general_ci;",
-		},
-		LeftSetUpScript: []string{
-			"insert into t values (3, 'c');",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "call dolt_merge('right');",
-				Expected: []sql.Row{{"", 0, 1}},
-			},
-			{
-				Query: "select table_name, our_schema, their_schema, base_schema from dolt_schema_conflicts;",
-				Expected: []sql.Row{{"t",
-					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` varchar(32) COLLATE utf8mb4_bin,\n  PRIMARY KEY (`pk`),\n  KEY `col1_idx` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` varchar(32) COLLATE utf8mb4_general_ci,\n  PRIMARY KEY (`pk`),\n  KEY `col1_idx` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
-					"CREATE TABLE `t` (\n  `pk` int NOT NULL,\n  `col1` varchar(32) COLLATE utf8mb4_bin,\n  PRIMARY KEY (`pk`),\n  KEY `col1_idx` (`col1`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"}},
-			},
-		},
-	},
 }
 
 var SchemaChangeTestsConstraints = []MergeScriptTest{
