@@ -135,6 +135,10 @@ func lockAndFlush(ctx context.Context, fs filesys.Filesys, dirPath string, lockP
 	var returnErr error
 	iterErr := fs.Iter(dirPath, false, func(path string, size int64, isDir bool) (stop bool) {
 		if err := fcb(ctx, path); err != nil {
+			if errors.Is(err, errInvalidFile) {
+				// ignore invalid files found in the events directory
+				return false
+			}
 			returnErr = err
 			return true
 		}
