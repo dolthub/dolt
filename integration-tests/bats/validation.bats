@@ -18,5 +18,5 @@ teardown() {
 }
 
 grep_for_testify() {
-    strings `which dolt` | grep testify
+    strings `type -p dolt` | grep testify
 }
