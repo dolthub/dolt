@@ -29,6 +29,14 @@ const (
 	verboseFlag        = "verbose"
 )
 
+var versionDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Displays the version for the Dolt binary.",
+	LongDesc:  `Displays the version for the Dolt binary.`,
+	Synopsis: []string{
+		`[--verbose] [--feature]`,
+	},
+}
+
 type VersionCmd struct {
 	VersionStr string
 }
@@ -40,7 +48,7 @@ func (cmd VersionCmd) Name() string {
 
 // Description returns a description of the command
 func (cmd VersionCmd) Description() string {
-	return "Displays the current Dolt cli version."
+	return versionDocs.ShortDesc
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -50,7 +58,8 @@ func (cmd VersionCmd) RequiresRepo() bool {
 }
 
 func (cmd VersionCmd) Docs() *cli.CommandDocumentation {
-	return nil
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(versionDocs, ap)
 }
 
 func (cmd VersionCmd) ArgParser() *argparser.ArgParser {
@@ -63,11 +72,11 @@ func (cmd VersionCmd) ArgParser() *argparser.ArgParser {
 // Version displays the version of the running dolt client
 // Exec executes the command
 func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-	cli.Println("dolt version", cmd.VersionStr)
-
-	usage := func() {}
 	ap := cmd.ArgParser()
-	apr := cli.ParseArgsOrDie(ap, args, usage)
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, versionDocs, ap))
+	apr := cli.ParseArgsOrDie(ap, args, help)
+
+	cli.Println("dolt version", cmd.VersionStr)
 
 	if apr.Contains(verboseFlag) {
 		if dEnv.HasDoltDir() && dEnv.RSLoadErr == nil && !cli.CheckEnvIsValid(dEnv) {
