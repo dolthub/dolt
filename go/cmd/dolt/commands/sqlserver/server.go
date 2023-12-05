@@ -27,7 +27,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/go-mysql-server/eventscheduler"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -53,6 +52,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/events"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
 )
 
@@ -573,9 +573,9 @@ func Serve(
 
 // heartbeatService is a service that sends a heartbeat event to the metrics server once a day
 type heartbeatService struct {
-	version string
+	version      string
 	eventEmitter events.Emitter
-	interval time.Duration
+	interval     time.Duration
 }
 
 func newHeartbeatService(version string, dEnv *env.DoltEnv) *heartbeatService {
@@ -599,16 +599,16 @@ func newHeartbeatService(version string, dEnv *env.DoltEnv) *heartbeatService {
 	if err != nil {
 		return &heartbeatService{} // will be defunct on Run()
 	}
-	
+
 	emitter, err := commands.NewEmitter(emitterType, dEnv)
 	if err != nil {
 		return &heartbeatService{} // will be defunct on Run()
 	}
-	
+
 	return &heartbeatService{
-		version: version,
+		version:      version,
 		eventEmitter: emitter,
-		interval: duration,
+		interval:     duration,
 	}
 }
 

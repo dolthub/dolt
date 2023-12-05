@@ -34,16 +34,16 @@ import (
 
 var Application = eventsapi.AppID_APP_DOLT
 
-// EmitterTypeEnvVar is the environment variable DOLT_EVENTS_EMITTER, which you can set to one of the values below 
+// EmitterTypeEnvVar is the environment variable DOLT_EVENTS_EMITTER, which you can set to one of the values below
 // to change how event emission occurs. Currently only used for sql-server heartbeat events.
 const EmitterTypeEnvVar = "DOLT_EVENTS_EMITTER"
 
 // Types of emitters. These strings are accepted by the --output-format flag for the send-metrics command.
 const (
-	EmitterTypeNull   = "null" // no output
+	EmitterTypeNull   = "null"   // no output
 	EmitterTypeStdout = "stdout" // output to stdout, used in testing
-	EmitterTypeGrpc   = "grpc" // output to a grpc server, the default for send-metrics
-	EmitterTypeFile   = "file" // output to a file, used to log events during normal execution
+	EmitterTypeGrpc   = "grpc"   // output to a grpc server, the default for send-metrics
+	EmitterTypeFile   = "file"   // output to a file, used to log events during normal execution
 	EmitterTypeLogger = "logger" // output to a logger, used in testing
 )
 
@@ -111,7 +111,7 @@ func (we WriterEmitter) LogEventsRequest(ctx context.Context, req *eventsapi.Log
 	return err
 }
 
-	// GrpcEmitter sends events to a GRPC service implementing the eventsapi
+// GrpcEmitter sends events to a GRPC service implementing the eventsapi
 type GrpcEmitter struct {
 	client eventsapi.ClientEventsServiceClient
 }
@@ -247,4 +247,3 @@ func NewLoggerEmitter(level logrus.Level) *LoggerEmitter {
 		logLevel: level,
 	}
 }
-

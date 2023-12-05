@@ -47,12 +47,12 @@ type Flusher interface {
 
 type FileFlusher struct {
 	emitter Emitter
-	fbp *FileBackedProc
+	fbp     *FileBackedProc
 }
 
 func NewFileFlusher(fs filesys.Filesys, userHomeDir string, doltDir string, emitter Emitter) *FileFlusher {
 	fbp := NewFileBackedProc(fs, userHomeDir, doltDir, MD5FileNamer, CheckFilenameMD5)
-	
+
 	if exists := fbp.EventsDirExists(); !exists {
 		panic(ErrEventsDataDir)
 	}
@@ -145,12 +145,12 @@ func lockAndFlush(ctx context.Context, fs filesys.Filesys, dirPath string, lockP
 
 		return false
 	})
-	
+
 	if iterErr != nil {
 		return iterErr
 	} else if returnErr != nil {
 		return returnErr
 	}
-	
+
 	return nil
 }

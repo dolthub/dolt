@@ -21,7 +21,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/skratchdot/open-golang/open"
 	"google.golang.org/grpc"
 
@@ -34,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 const (

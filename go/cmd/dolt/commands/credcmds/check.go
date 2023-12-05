@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"google.golang.org/grpc"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -31,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 var checkShortDesc = "Check authenticating with a credential keypair against a doltremoteapi."
