@@ -52,7 +52,7 @@ func NewTestClient() *TestClient {
 type flushTester struct {
 	Client  *TestClient
 	Fbp     *FileBackedProc
-	Flusher *GrpcEventFlusher
+	Flusher *FileFlusher
 }
 
 func createFlushTester(fs filesys.Filesys, hdir string, ddir string) *flushTester {
@@ -62,7 +62,7 @@ func createFlushTester(fs filesys.Filesys, hdir string, ddir string) *flushTeste
 
 	fbp := NewFileBackedProc(fs, hdir, ddir, sn.Name, sn.Check)
 
-	gef := &GrpcEventFlusher{em: &GrpcEmitter{client}, fbp: fbp}
+	gef := &FileFlusher{emitter: &GrpcEmitter{client}, fbp: fbp}
 
 	return &flushTester{Client: client, Fbp: fbp, Flusher: gef}
 }
