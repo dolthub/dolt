@@ -110,10 +110,12 @@ teardown() {
 
 @test "send-metrics: sql-server heartbeat" {
     # output all the metrics data to stdout for examination
-    DOLT_EVENTS_EMITTER=stdout DOLT_SQL_SERVER_HEARTBEAT_INTERVAL=1s dolt sql-server > heartbeats.out 2>&1 &
+    DOLT_EVENTS_EMITTER=logger DOLT_SQL_SERVER_HEARTBEAT_INTERVAL=1s dolt sql-server -l debug > heartbeats.out 2>&1 &
     server_pid=$!
     sleep 5
     kill $server_pid
+
+    cat heartbeats.out
 
     wc=`grep SQL_SERVER_HEARTBEAT heartbeats.out | wc -l`
     [ $wc -gt 0 ]
