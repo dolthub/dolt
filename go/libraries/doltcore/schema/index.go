@@ -239,7 +239,9 @@ func (ix *indexImpl) Schema() Schema {
 			Constraints: nil,
 		}
 
-		// TODO: This should be explained
+		// addressEncodedFields is the collection of column tags for columns in a unique index that do
+		// not have a prefix length specified and should be stored as a content hash. This information
+		// is needed to later identify that an index is using content-hashed encoding.
 		prefixLength := uint16(0)
 		if len(ix.PrefixLengths()) > i {
 			prefixLength = ix.PrefixLengths()[i]

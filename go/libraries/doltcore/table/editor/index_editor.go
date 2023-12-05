@@ -42,8 +42,6 @@ type uniqueKeyErr struct {
 // Error implements the error interface.
 func (u *uniqueKeyErr) Error() string {
 	keyStr, _ := formatKey(context.Background(), u.IndexTuple)
-	// TODO: formatKey doesn't take into account content hashes being used for keys for non-prefix length
-	//       unique keys for TEXT/BLOB types.
 	return fmt.Sprintf("duplicate unique key given: %s", keyStr)
 }
 

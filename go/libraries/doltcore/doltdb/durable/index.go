@@ -122,7 +122,6 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 // NewEmptyIndex returns an index with no rows.
 func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema) (Index, error) {
 	switch vrw.Format() {
-	// TODO: Take another/separate pass and kill Format_LD_1 code!
 	case types.Format_LD_1:
 		m, err := types.NewMap(ctx, vrw)
 		if err != nil {

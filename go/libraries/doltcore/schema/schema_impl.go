@@ -452,7 +452,6 @@ func (si *schemaImpl) getKeyColumnsDescriptor(convertAddressColumns bool) val.Tu
 				Nullable: columnMissingNotNullConstraint(col),
 			}
 		} else if convertAddressColumns && !addressEncoded && queryType == query.Type_GEOMETRY {
-			// TODO: Is this correct for Geometry types?
 			t = val.Type{
 				Enc:      val.Encoding(serial.EncodingCell),
 				Nullable: columnMissingNotNullConstraint(col),
