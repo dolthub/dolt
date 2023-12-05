@@ -16,12 +16,14 @@ package commands
 
 import (
 	"context"
+	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/google/go-github/v57/github"
 )
 
 const (
@@ -78,6 +80,19 @@ func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string
 
 	cli.Println("dolt version", cmd.VersionStr)
 
+	var verr errhand.VerboseError
+	// out of date check
+	client := github.NewClient(nil)
+	release, resp, err := client.Repositories.GetLatestRelease(ctx, "dolthub", "dolt")
+	if err != nil || resp.StatusCode != 200 {
+		verr = errhand.BuildDError("error: failed to get latest release").AddCause(err).Build()
+		return HandleVErrAndExitCode(verr, usage)
+	}
+	releaseName := strings.TrimPrefix(*release.TagName, "v")
+	if cmd.VersionStr != releaseName {
+		cli.Printf("Warning: you are on an old version of Dolt. The newest version is %s.\n", releaseName)
+	}
+
 	if apr.Contains(verboseFlag) {
 		if dEnv.HasDoltDir() && dEnv.RSLoadErr == nil && !cli.CheckEnvIsValid(dEnv) {
 			return 2
@@ -87,7 +102,6 @@ func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string
 		}
 	}
 
-	var verr errhand.VerboseError
 	if apr.Contains(featureVersionFlag) {
 		if !cli.CheckEnvIsValid(dEnv) {
 			return 2
