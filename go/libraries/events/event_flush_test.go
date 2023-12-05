@@ -88,7 +88,7 @@ func TestEventFlushing(t *testing.T) {
 
 	// filesystems := []string{"inMemFS", "local"}
 	filesystems := []string{"local"}
-	
+
 	for _, fsName := range filesystems {
 		t.Run(fsName, func(t *testing.T) {
 			for _, test := range tests {
