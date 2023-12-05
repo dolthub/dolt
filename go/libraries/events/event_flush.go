@@ -65,7 +65,7 @@ func (f FileFlusher) Flush(ctx context.Context) error {
 
 	evtsDir := f.fbp.GetEventsDirPath()
 
-	err := lockAndFlush(ctx, fs, evtsDir, f.fbp.LockPath, f.flush)
+	err := f.lockAndFlush(ctx, fs, evtsDir, f.fbp.LockPath)
 	if err != nil {
 		return err
 	}
@@ -109,7 +109,7 @@ func (f FileFlusher) flush(ctx context.Context, path string) error {
 var _ Flusher = &FileFlusher{}
 
 // lockAndFlush locks the given lockPath and passes the flushCB to the filesys' Iter method
-func lockAndFlush(ctx context.Context, fs filesys.Filesys, dirPath string, lockPath string, fcb flushCB) error {
+func (f FileFlusher) lockAndFlush(ctx context.Context, fs filesys.Filesys, dirPath string, lockPath string) error {
 	fsLock := filesys.CreateFilesysLock(fs, lockPath)
 
 	isUnlocked, err := fsLock.TryLock()
@@ -134,7 +134,7 @@ func lockAndFlush(ctx context.Context, fs filesys.Filesys, dirPath string, lockP
 
 	var returnErr error
 	iterErr := fs.Iter(dirPath, false, func(path string, size int64, isDir bool) (stop bool) {
-		if err := fcb(ctx, path); err != nil {
+		if err := f.flush(ctx, path); err != nil {
 			if errors.Is(err, errInvalidFile) {
 				// ignore invalid files found in the events directory
 				return false

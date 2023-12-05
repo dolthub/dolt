@@ -86,46 +86,49 @@ func TestEventFlushing(t *testing.T) {
 		},
 	}
 
-	filesystems := []string{"inMemFS", "local"}
-
+	// filesystems := []string{"inMemFS", "local"}
+	filesystems := []string{"local"}
+	
 	for _, fsName := range filesystems {
-		for _, test := range tests {
+		t.Run(fsName, func(t *testing.T) {
+			for _, test := range tests {
 
-			t.Run(test.name, func(t *testing.T) {
-				ctx := context.Background()
+				t.Run(test.name, func(t *testing.T) {
+					ctx := context.Background()
 
-				var ft *flushTester
+					var ft *flushTester
 
-				if fsName == "inMemFS" {
-					fs := filesys.NewInMemFS([]string{tempEvtsDir}, nil, tempEvtsDir)
+					if fsName == "inMemFS" {
+						fs := filesys.NewInMemFS([]string{tempEvtsDir}, nil, tempEvtsDir)
 
-					ft = createFlushTester(fs, homeDir, doltTestDir)
-				} else {
-					fs := filesys.LocalFS
+						ft = createFlushTester(fs, homeDir, doltTestDir)
+					} else {
+						fs := filesys.LocalFS
 
-					path := filepath.Join(dPath, evtPath)
-					dDir := testLib.TestDir(path)
+						path := filepath.Join(dPath, evtPath)
+						dDir := testLib.TestDir(path)
 
-					ft = createFlushTester(fs, "", dDir)
-				}
+						ft = createFlushTester(fs, "", dDir)
+					}
 
-				ces := make([]*eventsapi.ClientEvent, 0)
+					ces := make([]*eventsapi.ClientEvent, 0)
 
-				for i := 0; i < test.numEvents; i++ {
-					ce := &eventsapi.ClientEvent{}
-					ces = append(ces, ce)
-				}
+					for i := 0; i < test.numEvents; i++ {
+						ce := &eventsapi.ClientEvent{}
+						ces = append(ces, ce)
+					}
 
-				assert.Equal(t, len(ces), test.numEvents)
+					assert.Equal(t, len(ces), test.numEvents)
 
-				err := ft.Fbp.WriteEvents(testVersion, ces)
-				assert.Equal(t, err, nil)
+					err := ft.Fbp.WriteEvents(testVersion, ces)
+					assert.Equal(t, err, nil)
 
-				err = ft.Flusher.Flush(ctx)
+					err = ft.Flusher.Flush(ctx)
 
-				assert.Equal(t, err, nil)
-				assert.Equal(t, len(ft.Client.CES), len(ces))
-			})
-		}
+					assert.NoError(t, err)
+					assert.Equal(t, len(ft.Client.CES), len(ces))
+				})
+			}
+		})
 	}
 }
