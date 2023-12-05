@@ -45,29 +45,6 @@ type QueryDiffTableFunction struct {
 	rowIter2 sql.RowIter
 	schema1  sql.Schema
 	schema2  sql.Schema
-
-	tabId  sql.TableId
-	colset sql.ColSet
-}
-
-func (tf *QueryDiffTableFunction) WithId(id sql.TableId) sql.TableIdNode {
-	ret := *tf
-	ret.tabId = id
-	return &ret
-}
-
-func (tf *QueryDiffTableFunction) Id() sql.TableId {
-	return tf.tabId
-}
-
-func (tf *QueryDiffTableFunction) WithColumns(set sql.ColSet) sql.TableIdNode {
-	ret := *tf
-	ret.colset = set
-	return &ret
-}
-
-func (tf *QueryDiffTableFunction) Columns() sql.ColSet {
-	return tf.colset
 }
 
 // NewInstance creates a new instance of TableFunction interface

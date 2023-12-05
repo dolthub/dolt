@@ -155,6 +155,7 @@ const (
 	ClientEventType_STASH_POP                        ClientEventType = 60
 	ClientEventType_SHOW                             ClientEventType = 61
 	ClientEventType_PROFILE                          ClientEventType = 62
+	ClientEventType_REFLOG                           ClientEventType = 63
 )
 
 // Enum value maps for ClientEventType.

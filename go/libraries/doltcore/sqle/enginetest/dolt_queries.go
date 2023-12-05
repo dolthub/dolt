@@ -4317,7 +4317,7 @@ var DoltReflogTestScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "select * from dolt_reflog('foo', 'bar');",
-				ExpectedErrStr: "function 'dolt_reflog' expected 0 or 1 arguments, 2 received",
+				ExpectedErrStr: "error: dolt_reflog has too many positional arguments. Expected at most 1, found 2: ['foo' 'bar']",
 			},
 			{
 				Query:          "select * from dolt_reflog(NULL);",
