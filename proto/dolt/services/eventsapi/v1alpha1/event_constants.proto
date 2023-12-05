@@ -92,6 +92,7 @@ enum ClientEventType {
     STASH_POP = 60;
     SHOW = 61;
     PROFILE = 62;
+    REFLOG = 63;
 }
 
 enum MetricID {

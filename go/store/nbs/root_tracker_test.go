@@ -648,6 +648,10 @@ func (ftp fakeTablePersister) Close() error {
 	return nil
 }
 
+func (ftp fakeTablePersister) AccessMode() chunks.ExclusiveAccessMode {
+	return chunks.ExclusiveAccessMode_Shared
+}
+
 func extractAllChunks(ctx context.Context, src chunkSource, cb func(rec extractRecord)) (err error) {
 	var index tableIndex
 	if index, err = src.index(); err != nil {

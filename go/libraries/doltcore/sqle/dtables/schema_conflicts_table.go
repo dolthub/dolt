@@ -197,7 +197,7 @@ func getCreateTableStatement(table string, sch schema.Schema, fks []doltdb.Forei
 
 func getSchemaConflictDescription(ctx context.Context, table string, base, ours, theirs schema.Schema) (string, error) {
 	nbf := noms.Format_Default
-	_, conflict, _, err := merge.SchemaMerge(ctx, nbf, ours, theirs, base, table)
+	_, conflict, _, _, err := merge.SchemaMerge(ctx, nbf, ours, theirs, base, table)
 	if err != nil {
 		return "", err
 	}

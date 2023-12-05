@@ -635,7 +635,7 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 
 	otherSch := getSchema(t, dEnv)
 
-	_, actConflicts, mergeInfo, err := merge.SchemaMerge(context.Background(), types.Format_Default, mainSch, otherSch, ancSch, "test")
+	_, actConflicts, mergeInfo, _, err := merge.SchemaMerge(context.Background(), types.Format_Default, mainSch, otherSch, ancSch, "test")
 	assert.False(t, mergeInfo.InvalidateSecondaryIndexes)
 	if test.expectedErr != nil {
 		assert.True(t, errors.Is(err, test.expectedErr))

@@ -67,6 +67,10 @@ func (fb fileBlockStore) Version() string {
 	panic("not impl")
 }
 
+func (fb fileBlockStore) AccessMode() chunks.ExclusiveAccessMode {
+	panic("not impl")
+}
+
 func (fb fileBlockStore) Close() error {
 	fb.w.Close()
 	return nil

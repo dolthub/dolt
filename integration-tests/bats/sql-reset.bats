@@ -54,41 +54,6 @@ teardown() {
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
-@test "sql-reset: CALL DOLT_RESET --hard works on unstaged and staged table changes" {
-    dolt sql -q "INSERT INTO test VALUES (1)"
-
-    run dolt sql -q "CALL DOLT_RESET('--hard')"
-    [ $status -eq 0 ]
-
-    run dolt status
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch main" ]] || false
-    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
-
-    dolt sql -q "INSERT INTO test VALUES (1)"
-
-    dolt add .
-
-    run dolt sql -q "CALL DOLT_RESET('--hard')"
-    [ $status -eq 0 ]
-
-    run dolt status
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch main" ]] || false
-    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
-
-    dolt sql -q "INSERT INTO test VALUES (1)"
-
-    # Reset to head results in clean main.
-    run dolt sql -q "CALL DOLT_RESET('--hard', 'head');"
-    [ "$status" -eq 0 ]
-
-    run dolt status
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch main" ]] || false
-    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
-}
-
 @test "sql-reset: CALL DOLT_RESET --hard does not ignore staged docs" {
     # New docs gets referred as untracked file.
     echo ~license~ > LICENSE.md
@@ -248,31 +213,10 @@ SQL
     [[ "$output" =~ "true" ]] || false
 }
 
-@test "sql-reset: No rows in dolt_diff table after CALL DOLT_RESET('--hard') on committed table." {
-    run dolt sql << SQL
-INSERT INTO test VALUES (1);
-CALL DOLT_RESET('--hard');
-SELECT count(*)=0 FROM dolt_diff_test;
-SQL
-    [ $status -eq 0 ]
-    # Represents that the diff table marks a change from the recent commit.
-    [[ "$output" =~ "true" ]] || false
-}
-
 @test "sql-reset: No rows in dolt_status table after DOLT_RESET('--hard') on committed table." {
       run dolt sql << SQL
 INSERT INTO test VALUES (1);
 call dolt_reset('--hard');
-SELECT count(*)=0 FROM dolt_status;
-SQL
-    [ $status -eq 0 ]
-    [[ "$output" =~ "true" ]] || false
-}
-
-@test "sql-reset: No rows in dolt_status table after CALL DOLT_RESET('--hard') on committed table." {
-      run dolt sql << SQL
-INSERT INTO test VALUES (1);
-CALL DOLT_RESET('--hard');
 SELECT count(*)=0 FROM dolt_status;
 SQL
     [ $status -eq 0 ]
@@ -299,18 +243,6 @@ INSERT INTO test VALUES (1);
 SQL
 
     dolt sql -q "call dolt_reset('test');"
-    run dolt sql -q "SELECT * FROM dolt_status;"
-
-    [ $status -eq 0 ]
-    [[ "$output" =~ "false" ]] || false
-}
-
-@test "sql-reset: dolt_status still has the same information in the face of a CALL DOLT_RESET" {
-    run dolt sql << SQL
-INSERT INTO test VALUES (1);
-SQL
-
-    dolt sql -q "CALL DOLT_RESET('test');"
     run dolt sql -q "SELECT * FROM dolt_status;"
 
     [ $status -eq 0 ]

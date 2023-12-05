@@ -280,6 +280,12 @@ func CreateCountCommitsArgParser() *argparser.ArgParser {
 	return ap
 }
 
+func CreateReflogArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParserWithMaxArgs("reflog", 1)
+	ap.SupportsFlag(AllFlag, "", "Show all refs, including hidden refs, such as DoltHub workspace refs")
+	return ap
+}
+
 func CreateGlobalArgParser(name string) *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs(name)
 	if name == "dolt" {

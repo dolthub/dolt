@@ -20,12 +20,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-	ps "github.com/mitchellh/go-ps"
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -38,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -55,8 +53,6 @@ const (
 	DefaultRemotesApiPort = "443"
 
 	tempTablesDir = "temptf"
-
-	ServerLockFile = "sql-server.lock"
 )
 
 var zeroHashStr = (hash.Hash{}).String()
@@ -79,6 +75,7 @@ var ErrFailedToWriteRepoState = errors.New("failed to write repo state")
 var ErrRemoteAddressConflict = errors.New("address conflict with a remote")
 var ErrDoltRepositoryNotFound = errors.New("can no longer find .dolt dir on disk")
 var ErrFailedToAccessDB = goerrors.NewKind("failed to access '%s' database: can no longer find .dolt dir on disk")
+var ErrDatabaseIsLocked = errors.New("the database is locked by another dolt process")
 
 // DoltEnv holds the state of the current environment used by the cli.
 type DoltEnv struct {
@@ -97,7 +94,6 @@ type DoltEnv struct {
 	urlStr string
 	hdp    HomeDirProvider
 
-	IgnoreLockFile bool
 	UserPassConfig *creds.DoltCredsForPass
 }
 
@@ -1188,163 +1184,6 @@ func (dEnv *DoltEnv) BulkDbEaFactory() editor.DbEaFactory {
 	return editor.NewBulkImportTEAFactory(dEnv.DoltDB.ValueReadWriter(), tmpDir)
 }
 
-func (dEnv *DoltEnv) LockFile() string {
-	f, _ := dEnv.FS.Abs(filepath.Join(dbfactory.DoltDir, ServerLockFile))
-	return f
-}
-
-// IsLocked returns true if this database's lockfile exists and the pid contained in lockfile is alive.
-func (dEnv *DoltEnv) IsLocked() bool {
-	if dEnv.IgnoreLockFile {
-		return false
-	}
-
-	ans, _, _ := fsIsLocked(dEnv.FS)
-	return ans
-}
-
-// GetLock returns the lockfile for this database or nil if the database is not locked
-func (dEnv *DoltEnv) GetLock() (bool, *DBLock, error) {
-	if dEnv.IgnoreLockFile {
-		return false, nil, nil
-	}
-
-	return fsIsLocked(dEnv.FS)
-}
-
-// DBLock is a struct that contains the pid of the process that created the lockfile and the port that the server is running on
-// The secret is used by dolt to ensure that the contents of the lockfile are required to perform a local server connection
-type DBLock struct {
-	Pid    int
-	Port   int
-	Secret string
-}
-
-// DBLock constructor
-func NewDBLock(port int) DBLock {
-	return DBLock{Pid: os.Getpid(), Port: port, Secret: uuid.New().String()}
-}
-
-// Lock writes this database's lockfile with the pid of the calling process or errors if it already exists
-func (dEnv *DoltEnv) Lock(lock *DBLock) error {
-	if dEnv.IgnoreLockFile {
-		return nil
-	}
-
-	if dEnv.IsLocked() {
-		return ErrActiveServerLock.New(dEnv.LockFile())
-	}
-
-	return WriteLockfile(dEnv.FS, lock)
-}
-
-func LoadDBLockFile(fs filesys.Filesys, lockFilePath string) (lock *DBLock, err error) {
-	rd, err := fs.OpenForRead(lockFilePath)
-	if err != nil {
-		return nil, err
-	}
-	defer rd.Close()
-
-	b := make([]byte, 256)
-	n, err := rd.Read(b)
-	if err != nil {
-		return nil, err
-	}
-
-	data := strings.TrimSpace(string(b[:n]))
-
-	parts := strings.Split(data, ":")
-	if len(parts) == 1 {
-		// Legacy Lock file. We can remove this code path in a couple of months (6/2023)
-		pid, err := strconv.Atoi(parts[0])
-		if err != nil {
-			return nil, err
-		}
-		return &DBLock{Pid: pid, Port: -1, Secret: ""}, nil
-	}
-	if len(parts) != 3 {
-		return nil, fmt.Errorf("invalid lock file format")
-	}
-
-	pid, err := strconv.Atoi(parts[0])
-	if err != nil {
-		return nil, err
-	}
-	port := -1
-	if parts[1] != "-" {
-		port, err = strconv.Atoi(parts[1])
-		if err != nil {
-			return nil, err
-		}
-	}
-	secret := parts[2]
-	return &DBLock{Pid: pid, Port: port, Secret: secret}, nil
-}
-
-// Unlock deletes this database's lockfile
-func (dEnv *DoltEnv) Unlock() error {
-	if dEnv.IgnoreLockFile {
-		return nil
-	}
-
-	return dEnv.FS.DeleteFile(dEnv.LockFile())
-}
-
-// WriteLockfile writes a lockfile encoding the pid of the calling process.
-func WriteLockfile(fs filesys.Filesys, lock *DBLock) error {
-	// if the DoltDir doesn't exist, create it.
-	doltDir, _ := fs.Abs(dbfactory.DoltDir)
-	err := fs.MkDirs(doltDir)
-	if err != nil {
-		return err
-	}
-
-	lockFile, _ := fs.Abs(filepath.Join(dbfactory.DoltDir, ServerLockFile))
-
-	portStr := strconv.Itoa(lock.Port)
-	if lock.Port < 0 {
-		portStr = "-"
-	}
-
-	err = fs.WriteFile(lockFile, []byte(fmt.Sprintf("%d:%s:%s", lock.Pid, portStr, lock.Secret)), 0600)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// fsIsLocked returns true if the database in qeustion is locked. Two additional return values are lock and err. In the
-// event that the DB is locked (locked == true), then either the lock or an error is returned. In either case,
-// the caller should not attempt to use the DB. If lock is returned, in some cases you can use it to connect to the
-// server that has locked the DB. If an error is returned, then no further processing should be done.
-func fsIsLocked(fs filesys.Filesys) (locked bool, lock *DBLock, err error) {
-	lockFile, _ := fs.Abs(filepath.Join(dbfactory.DoltDir, ServerLockFile))
-
-	ok, _ := fs.Exists(lockFile)
-	if !ok {
-		return false, nil, nil
-	}
-
-	loadedLock, err := LoadDBLockFile(fs, lockFile)
-	if err != nil { // if there's any error assume that env is locked since the file exists
-		return true, nil, err
-	}
-
-	// If the PID is for this process, then ignore the lock file. This happens frequently with docker containers
-	// https://github.com/dolthub/dolt/issues/6183.
-	if os.Getpid() == loadedLock.Pid {
-		return false, nil, nil
-	}
-
-	// Check whether the pid that spawned the lock file is still running. Ignore it if not.
-	proc, err := ps.FindProcess(loadedLock.Pid)
-	if err != nil {
-		return true, nil, err // This will happen if we can't load the OS processes. Assume locked.
-	}
-	if proc != nil {
-		return true, loadedLock, nil // The process is still running. Return the lock details so the caller can connect to it if appropriate.
-	}
-
-	return false, nil, nil
+func (dEnv *DoltEnv) IsAccessModeReadOnly() bool {
+	return dEnv.DoltDB.AccessMode() == chunks.ExclusiveAccessMode_ReadOnly
 }

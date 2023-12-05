@@ -1,5 +1,6 @@
 const core = require('@actions/core');
-const aws = require('aws-sdk');
+const { SES } = require("@aws-sdk/client-ses");
+
 const fs = require('fs');
 
 const region = core.getInput('region');
@@ -26,9 +27,6 @@ const templated = {
     body,
 };
 
-// Set the region
-aws.config.update({ region });
-
 // Create sendEmail params
 const params = {
     Destination: { /* required */
@@ -44,8 +42,7 @@ const params = {
 console.log(params)
 
 // Create the promise and SES service object
-// const sendPromise = new aws.SES({apiVersion: '2010-12-01'}).sendEmail(params).promise();
-const sendPromise = new aws.SES({apiVersion: '2010-12-01'}).sendTemplatedEmail(params).promise();
+const sendPromise = new SES({region}).sendTemplatedEmail(params);
 
 // Handle promise's fulfilled/rejected states
 sendPromise

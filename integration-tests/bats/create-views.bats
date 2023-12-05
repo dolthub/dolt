@@ -139,7 +139,7 @@ SQL
     [[ "${lines[3]}" =~ ' 4 ' ]] || false
 }
 
-@test "create-views: cannot create view referencing non-existant table" {
+@test "create-views: cannot create view referencing non-existent table" {
     run dolt sql <<SQL
 create view broken as select id from my_users;
 SQL

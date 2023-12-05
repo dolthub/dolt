@@ -15,7 +15,7 @@ require (
 	github.com/dolthub/fslock v0.0.3
 	github.com/dolthub/ishell v0.0.0-20221214210346-d7db0b066488
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
-	github.com/dolthub/vitess v0.0.0-20231109003730-c0fa018b5ef6
+	github.com/dolthub/vitess v0.0.0-20231127171856-2466012fb61f
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.13.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
@@ -59,7 +59,7 @@ require (
 	github.com/cespare/xxhash v1.1.0
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.17.1-0.20231124064438-d503e1b0af9f
+	github.com/dolthub/go-mysql-server v0.17.1-0.20231205001751-ff8437395ac9
 	github.com/dolthub/swiss v0.1.0
 	github.com/goccy/go-json v0.10.2
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
@@ -67,7 +67,6 @@ require (
 	github.com/jmoiron/sqlx v1.3.4
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/kylelemons/godebug v1.1.0
-	github.com/mitchellh/go-ps v1.0.0
 	github.com/prometheus/client_golang v1.13.0
 	github.com/rs/zerolog v1.28.0
 	github.com/shirou/gopsutil/v3 v3.22.1
@@ -144,7 +143,7 @@ require (
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
-	golang.org/x/image v0.5.0 // indirect
+	golang.org/x/image v0.10.0 // indirect
 	golang.org/x/mod v0.12.0 // indirect
 	golang.org/x/oauth2 v0.8.0 // indirect
 	golang.org/x/term v0.13.0 // indirect

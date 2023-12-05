@@ -152,8 +152,8 @@ func (d *DoltHarness) resetScripts() []setup.SetupScript {
 			resetCmds = append(resetCmds, setup.SetupScript{createTableStatement.String()})
 		}
 
-		resetCmds = append(resetCmds, setup.SetupScript{"call dclean()"})
-		resetCmds = append(resetCmds, setup.SetupScript{"call dreset('--hard', 'head')"})
+		resetCmds = append(resetCmds, setup.SetupScript{"call dolt_clean()"})
+		resetCmds = append(resetCmds, setup.SetupScript{"call dolt_reset('--hard', 'head')"})
 	}
 
 	resetCmds = append(resetCmds, setup.SetupScript{"SET foreign_key_checks=1;"})
@@ -420,7 +420,7 @@ func (d *DoltHarness) newProvider() sql.MutableDatabaseProvider {
 	store := dEnv.DoltDB.ValueReadWriter().(*types.ValueStore)
 	store.SetValidateContentAddresses(true)
 
-	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+	mrEnv, err := env.MultiEnvForDirectory(context.Background(), dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv)
 	require.NoError(d.t, err)
 	d.multiRepoEnv = mrEnv
 
