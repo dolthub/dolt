@@ -17,6 +17,7 @@ package events
 import (
 	"context"
 	"errors"
+	"io/fs"
 
 	"github.com/dolthub/fslock"
 	"google.golang.org/protobuf/proto"
@@ -109,8 +110,8 @@ func (f FileFlusher) flush(ctx context.Context, path string) error {
 var _ Flusher = &FileFlusher{}
 
 // lockAndFlush locks the given lockPath and passes the flushCB to the filesys' Iter method
-func (f FileFlusher) lockAndFlush(ctx context.Context, fs filesys.Filesys, dirPath string, lockPath string) error {
-	fsLock := filesys.CreateFilesysLock(fs, lockPath)
+func (f FileFlusher) lockAndFlush(ctx context.Context, fsys filesys.Filesys, dirPath string, lockPath string) error {
+	fsLock := filesys.CreateFilesysLock(fsys, lockPath)
 
 	isUnlocked, err := fsLock.TryLock()
 	defer func() error {
@@ -133,10 +134,14 @@ func (f FileFlusher) lockAndFlush(ctx context.Context, fs filesys.Filesys, dirPa
 	}
 
 	var returnErr error
-	iterErr := fs.Iter(dirPath, false, func(path string, size int64, isDir bool) (stop bool) {
+	iterErr := fsys.Iter(dirPath, false, func(path string, size int64, isDir bool) (stop bool) {
 		if err := f.flush(ctx, path); err != nil {
 			if errors.Is(err, errInvalidFile) {
 				// ignore invalid files found in the events directory
+				return false
+			} else if _, isPathError := err.(*fs.PathError); isPathError {
+				// The lock file on windows has this issue, skip this file
+				// We can't use errors.Is because fs.PathError doesn't implement Is
 				return false
 			}
 			returnErr = err
