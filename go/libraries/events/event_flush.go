@@ -128,22 +128,25 @@ func lockAndFlush(ctx context.Context, fs filesys.Filesys, dirPath string, lockP
 		return err
 	}
 
-	if isUnlocked && err == nil {
-		err := fs.Iter(dirPath, false, func(path string, size int64, isDir bool) (stop bool) {
-			if err := fcb(ctx, path); err != nil {
-				// log.Print(err)
-				return false
-			}
-
-			return false
-		})
-
-		if err != nil {
-			return err
-		}
-
+	if !isUnlocked {
 		return nil
 	}
 
+	var returnErr error
+	iterErr := fs.Iter(dirPath, false, func(path string, size int64, isDir bool) (stop bool) {
+		if err := fcb(ctx, path); err != nil {
+			returnErr = err
+			return true
+		}
+
+		return false
+	})
+	
+	if iterErr != nil {
+		return iterErr
+	} else if returnErr != nil {
+		return returnErr
+	}
+	
 	return nil
 }

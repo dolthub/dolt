@@ -94,7 +94,6 @@ func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []st
 
 	disabled, err := strconv.ParseBool(metricsDisabled)
 	if err != nil {
-		// log.Print(err)
 		return 1
 	}
 
@@ -103,30 +102,28 @@ func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []st
 		return 0
 	}
 
-	if !disabled {
-		ctx, cancel := context.WithTimeout(ctx, time.Minute)
-		defer cancel()
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
 
-		userHomeDir, err := dEnv.GetUserHomeDir()
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
-		
-		output := apr.GetValueOrDefault(EventsOutputFormat, events.EmitterTypeGrpc)
-		err = FlushLoggedEvents(ctx, dEnv, userHomeDir, output)
-
-		if err != nil {
-			if err == events.ErrFileLocked {
-				return 2
-			}
-
-			return 1
-		}
-
-		return 0
+	userHomeDir, err := dEnv.GetUserHomeDir()
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	return 1
+	output := apr.GetValueOrDefault(EventsOutputFormat, events.EmitterTypeGrpc)
+	err = FlushLoggedEvents(ctx, dEnv, userHomeDir, output)
+
+	if err != nil {
+		cli.PrintErrf("Error flushing events: %s\n", err.Error())
+
+		if err == events.ErrFileLocked {
+			return 2
+		}
+		
+		return 1
+	}
+
+	return 0
 }
 
 // FlushLoggedEvents flushes any logged events in the directory given to an appropriate event emitter
@@ -149,7 +146,7 @@ func NewEmitter(emitterType string, pro EmitterConfigProvider) (events.Emitter, 
 	case events.EmitterTypeStdout:
 		return events.WriterEmitter{Wr: os.Stdout}, nil
 	case events.EmitterTypeGrpc:
-		return GRPCEmitterForConfig(pro), nil
+		return GRPCEmitterForConfig(pro)
 	case events.EmitterTypeFile:
 		homeDir, err := pro.GetUserHomeDir()
 		if err != nil {
@@ -163,17 +160,18 @@ func NewEmitter(emitterType string, pro EmitterConfigProvider) (events.Emitter, 
 
 // GRPCEmitterForConfig returns an event emitter for the given environment, or nil if the environment cannot
 // provide one
-func GRPCEmitterForConfig(pro EmitterConfigProvider) *events.GrpcEmitter {
+func GRPCEmitterForConfig(pro EmitterConfigProvider) (*events.GrpcEmitter, error) {
 	cfg, err := GRPCEventRemoteConfig(pro)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	conn, err := grpc.Dial(cfg.Endpoint, cfg.DialOptions...)
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return events.NewGrpcEmitter(conn)
+	
+	return events.NewGrpcEmitter(conn), nil
 }
 
 // GRPCEventRemoteConfig returns a GRPCRemoteConfig for the given configuration provider

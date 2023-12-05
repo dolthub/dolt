@@ -91,3 +91,32 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "$output" == "" ]
 }
+
+@test "send-metrics: grpc smoke test" {
+    DOLT_DISABLE_EVENT_FLUSH=true dolt sql -q "create table t1 (a int primary key, b int)"
+    DOLT_DISABLE_EVENT_FLUSH=true dolt sql -q "insert into t1 values (1, 2)"
+    DOLT_DISABLE_EVENT_FLUSH=true dolt ls
+    DOLT_DISABLE_EVENT_FLUSH=true dolt status
+
+    # output all the metrics data to stdout for examination
+    dolt config --global --add metrics.host "fake.server"
+    run dolt send-metrics
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Error flushing events" ]] || false
+    [[ "$output" =~ "fake.server" ]] || false
+}
+
+# TODO: we need a local metrics server here that we can spin up to verify the send actually works
+@test "send-metrics: sql-server heartbeat" {
+    DOLT_DISABLE_EVENT_FLUSH=true dolt sql -q "create table t1 (a int primary key, b int)"
+    DOLT_DISABLE_EVENT_FLUSH=true dolt sql -q "insert into t1 values (1, 2)"
+    DOLT_DISABLE_EVENT_FLUSH=true dolt ls
+    DOLT_DISABLE_EVENT_FLUSH=true dolt status
+
+    # output all the metrics data to stdout for examination
+    dolt config --global --add metrics.host "fake.server"
+    dolt send-metrics
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Error flushing events" ]] || false
+    [[ "$output" =~ "fake.server" ]] || false
+}
