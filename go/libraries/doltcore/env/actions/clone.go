@@ -22,7 +22,6 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dustin/go-humanize"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -30,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/strhelp"

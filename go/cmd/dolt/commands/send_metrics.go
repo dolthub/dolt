@@ -21,6 +21,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/fatih/color"
+	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -29,15 +33,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
-	"github.com/fatih/color"
-	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
 )
 
 // SendMetricsCommand is the command used for sending metrics
 const (
 	SendMetricsCommand   = "send-metrics"
-	EventsOutputFormat = "output-format"
+	EventsOutputFormat   = "output-format"
 	sendMetricsShortDesc = "Send usage metrics to the events server (default), or log them in another way"
 )
 
@@ -74,7 +75,7 @@ func (cmd SendMetricsCmd) ArgParser() *argparser.ArgParser {
 		EventsOutputFormat,
 		"r",
 		"output-format",
-		"Format of the events output. Valid values are null, stdout, grpc, file, logger. Defaults to grpc.", 
+		"Format of the events output. Valid values are null, stdout, grpc, file, logger. Defaults to grpc.",
 	)
 	return ap
 }
@@ -120,7 +121,7 @@ func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []st
 		if err == events.ErrFileLocked {
 			return 2
 		}
-		
+
 		return 1
 	}
 
@@ -133,12 +134,12 @@ func FlushLoggedEvents(ctx context.Context, dEnv *env.DoltEnv, userHomeDir strin
 	if err != nil {
 		return err
 	}
-	
+
 	flusher := events.NewFileFlusher(dEnv.FS, userHomeDir, dbfactory.DoltDir, emitter)
 	return flusher.Flush(ctx)
 }
 
-// NewEmitter returns an emitter for the given configuration provider, of the type named. If an empty name is provided, 
+// NewEmitter returns an emitter for the given configuration provider, of the type named. If an empty name is provided,
 // defaults to a file-based emitter.
 func NewEmitter(emitterType string, pro EmitterConfigProvider) (events.Emitter, error) {
 	switch emitterType {
@@ -173,7 +174,7 @@ func GRPCEmitterForConfig(pro EmitterConfigProvider) (*events.GrpcEmitter, error
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return events.NewGrpcEmitter(conn), nil
 }
 
@@ -208,4 +209,3 @@ type EmitterConfigProvider interface {
 	GetConfig() config.ReadableConfig
 	GetUserHomeDir() (string, error)
 }
-

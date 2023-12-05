@@ -20,7 +20,6 @@ import (
 	"io"
 	"os"
 
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"google.golang.org/grpc"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -33,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 var importDocs = cli.CommandDocumentationContent{
