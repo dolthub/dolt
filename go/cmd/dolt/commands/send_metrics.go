@@ -38,7 +38,7 @@ import (
 const (
 	SendMetricsCommand   = "send-metrics"
 	EventsOutputFormat = "output-format"
-	sendMetricsShortDesc = "Send metrics to the events server (default), or log them in another way"
+	sendMetricsShortDesc = "Send usage metrics to the events server (default), or log them in another way"
 )
 
 type SendMetricsCmd struct{}
@@ -74,7 +74,7 @@ func (cmd SendMetricsCmd) ArgParser() *argparser.ArgParser {
 		EventsOutputFormat,
 		"r",
 		"output-format",
-		"Format of the events output. Valid values are null, stdio, grpc, and file.",
+		"Format of the events output. Valid values are null, stdout, grpc, file, logger. Defaults to grpc.", 
 	)
 	return ap
 }

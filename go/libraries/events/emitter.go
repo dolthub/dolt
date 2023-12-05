@@ -35,14 +35,16 @@ import (
 var Application = eventsapi.AppID_APP_DOLT
 
 // EmitterTypeEnvVar is the environment variable DOLT_EVENTS_EMITTER, which you can set to one of the values below 
-// to change how event emission occurs. This is useful for the send-metrics command, and in some environments.
+// to change how event emission occurs. Currently only used for sql-server heartbeat events.
 const EmitterTypeEnvVar = "DOLT_EVENTS_EMITTER"
+
+// Types of emitters. These strings are accepted by the --output-format flag for the send-metrics command.
 const (
-	EmitterTypeNull   = "null"
-	EmitterTypeStdout = "stdout"
-	EmitterTypeGrpc   = "grpc"
-	EmitterTypeFile   = "file"
-	EmitterTypeLogger = "logger"
+	EmitterTypeNull   = "null" // no output
+	EmitterTypeStdout = "stdout" // output to stdout, used in testing
+	EmitterTypeGrpc   = "grpc" // output to a grpc server, the default for send-metrics
+	EmitterTypeFile   = "file" // output to a file, used to log events during normal execution
+	EmitterTypeLogger = "logger" // output to a logger, used in testing
 )
 
 const DefaultMetricsHost = "eventsapi.dolthub.com"
