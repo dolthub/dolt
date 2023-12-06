@@ -23,54 +23,43 @@ jobs:
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
     # We only run these as seaparte workflow if we do not have AWS credentials.
-    if: ${{ env.use_credentials != 'true' }}
     steps:
-      - name: Conditionally Set ENV VARS for AWS tests
-        run: |
-          if [[ $use_credentials == true ]]; then
-            echo "AWS_SDK_LOAD_CONFIG=1" >> $GITHUB_ENV
-            echo "AWS_REGION=us-west-2" >> $GITHUB_ENV
-            echo "DOLT_BATS_AWS_TABLE=dolt-ci-bats-manifests-us-west-2" >> $GITHUB_ENV
-            echo "DOLT_BATS_AWS_BUCKET=dolt-ci-bats-chunks-us-west-2" >> $GITHUB_ENV
-            echo "DOLT_BATS_AWS_EXISTING_REPO=aws_remote_bats_tests__dolt__" >> $GITHUB_ENV
-          fi
-      - name: Configure AWS Credentials
-        if: ${{ env.use_credentials == 'true' }}
-        uses: aws-actions/configure-aws-credentials@567d4149d67f15f52b09796bea6573fc32952783
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          role-duration-seconds: 10800 # 3 hours D:
       - name: Setup Go 1.x
+        if: ${{ env.use_credentials != 'true' }}
         uses: actions/setup-go@v3
         with:
           go-version: ^1.21
         id: go
       - name: Setup Python 3.x
+        if: ${{ env.use_credentials != 'true' }}
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
       - uses: actions/checkout@v3
+        if: ${{ env.use_credentials != 'true' }}
       - uses: actions/setup-node@v3
+        if: ${{ env.use_credentials != 'true' }}
         with:
           node-version: ^16
       - name: Create CI Bin
+        if: ${{ env.use_credentials != 'true' }}
         run: |
           mkdir -p ./.ci_bin
           echo "$(pwd)/.ci_bin" >> $GITHUB_PATH
       - name: Install Bats
+        if: ${{ env.use_credentials != 'true' }}
         run: |
           npm i bats
           echo "$(pwd)/node_modules/.bin" >> $GITHUB_PATH
         working-directory: ./.ci_bin
       - name: Install Python Deps
+        if: ${{ env.use_credentials != 'true' }}
         run: |
           pip install mysql-connector-python
           pip install pandas
           pip install pyarrow
       - name: Install Dolt
+        if: ${{ env.use_credentials != 'true' }}
         working-directory: ./go
         run: |
           go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
@@ -78,25 +67,29 @@ jobs:
           go build -mod=readonly -o ../.ci_bin/remotesrv ./utils/remotesrv/.
           go build -mod=readonly -o ../.ci_bin/noms ./store/cmd/noms/.
       - name: Setup Dolt Config
+        if: ${{ env.use_credentials != 'true' }}
         run: |
           dolt config --global --add user.name 'Dolthub Actions'
           dolt config --global --add user.email 'actions@dolthub.com'
       - name: Install expect
-        if: matrix.os == 'ubuntu-22.04'
+        if: matrix.os == 'ubuntu-22.04' && env.use_credentials != 'true'
         run: sudo apt-get install -y expect
       - name: Install Maven
+        if: ${{ env.use_credentials != 'true' }}
         working-directory: ./.ci_bin
         run: |
           curl -LO https://dlcdn.apache.org/maven/maven-3/3.9.4/binaries/apache-maven-3.9.4-bin.tar.gz
           tar -xf apache-maven-3.9.4-bin.tar.gz
           echo "$(pwd)/apache-maven-3.9.4/bin" >> $GITHUB_PATH
       - name: Install Hadoop
+        if: ${{ env.use_credentials != 'true' }}
         working-directory: ./.ci_bin
         run: |
           curl -LO https://downloads.apache.org/hadoop/common/hadoop-3.3.5/hadoop-3.3.5.tar.gz
           tar xvf hadoop-3.3.5.tar.gz
           echo "$(pwd)/hadoop-3.3.5/bin" >> $GITHUB_PATH
       - name: Install parquet-cli
+        if: ${{ env.use_credentials != 'true' }}
         id: parquet_cli
         working-directory: ./.ci_bin
         run: |
@@ -107,8 +100,10 @@ jobs:
           runtime_jar="$(pwd)"/target/parquet-cli-1.12.3-runtime.jar
           echo "runtime_jar=$runtime_jar" >> $GITHUB_OUTPUT
       - name: Check expect
+        if: ${{ env.use_credentials != 'true' }}
         run: expect -v
       - name: Test all Unix
+        if: ${{ env.use_credentials != 'true' }}
         env:
           SQL_ENGINE: "remote-engine"
           PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}
