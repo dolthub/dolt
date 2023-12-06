@@ -122,6 +122,7 @@ var doltSubCommands = []cli.Command{
 	&commands.Assist{},
 	commands.ProfileCmd{},
 	commands.QueryDiff{},
+	commands.ReflogCmd{},
 }
 
 var commandsWithoutCliCtx = []cli.Command{
@@ -138,7 +139,6 @@ var commandsWithoutCliCtx = []cli.Command{
 	commands.MigrateCmd{},
 	indexcmds.Commands,
 	commands.ReadTablesCmd{},
-	commands.GarbageCollectionCmd{},
 	commands.FilterBranchCmd{},
 	commands.RootsCmd{},
 	commands.VersionCmd{VersionStr: Version},
