@@ -35,7 +35,7 @@ jobs:
             echo "DOLT_BATS_AWS_EXISTING_REPO=aws_remote_bats_tests__dolt__" >> $GITHUB_ENV
           fi
       - name: Configure filter tags for lambda bats
-        if: ${{ matrix.os == 'ubuntu-22.04' && use_credentials == 'true'}}
+        if: ${{ matrix.os == 'ubuntu-22.04' && env.use_credentials == 'true' }}
         run: |
           echo "BATS_FILTER=--filter-tags no_lambda" >> $GITHUB_ENV
       - name: Configure AWS Credentials

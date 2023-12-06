@@ -8,7 +8,7 @@ on:
       - 'integration-tests/**'
 
 concurrency:
-  group: ci-bats-unix-${{ github.event.pull_request.number || github.ref }}
+  group: ci-lambdabats-unix-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -22,7 +22,6 @@ jobs:
       fail-fast: true
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
-    if: ${{ env.use_credentials == 'true' }}
     steps:
       - name: Conditionally Set ENV VARS for AWS tests
         if: ${{ env.use_credentials == 'true' }}
@@ -42,18 +41,23 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           role-duration-seconds: 10800 # 3 hours D:
       - uses: actions/checkout@v3
+        if: ${{ env.use_credentials == 'true' }}
       - name: Setup Go 1.x
         uses: actions/setup-go@v3
+        if: ${{ env.use_credentials == 'true' }}
         with:
           go-version: ^1.21
         id: go
       - name: install lambdabats
+        if: ${{ env.use_credentials == 'true' }}
         run: go install github.com/dolthub/lambdabats/lambdabats@latest
       - name: Test all Unix
+        if: ${{ env.use_credentials == 'true' }}
         run: |
           lambdabats -use-aws-environment-credentials -s lambda_skip -F tap .
         working-directory: ./integration-tests/bats
       - name: Test all Unix, SQL_ENGINE=remote-engine
+        if: ${{ env.use_credentials == 'true' }}
         run: |
           lambdabats -env SQL_ENGINE=remote-engine -s lambda_skip -use-aws-environment-credentials -F tap .
         working-directory: ./integration-tests/bats
