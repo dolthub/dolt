@@ -53,19 +53,7 @@ var cherryPickSchema = []*sql.Column{
 
 // doltCherryPick is the stored procedure version for the CLI command `dolt cherry-pick`.
 func doltCherryPick(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	newCommitHash, dataConflicts, schemaConflicts, constraintViolations, err := doDoltCherryPick(ctx, false, "", args)
-	if err != nil {
-		return nil, err
-	}
-	return rowToIter(newCommitHash, dataConflicts, schemaConflicts, constraintViolations), nil
-}
-
-// TODO: This is a hack to support the squash rebase action. We should clean up the interface to cherry-pick logic
-//
-//	so that we can call this more cleanly. Having a separate action for cherry-pick, that this code would just
-//	call, and that rebase could call, is one way to clean this up.
-func doltCherryPickWithAmendAndCommitMessage(ctx *sql.Context, commitMessage string, args ...string) (sql.RowIter, error) {
-	newCommitHash, dataConflicts, schemaConflicts, constraintViolations, err := doDoltCherryPick(ctx, true, commitMessage, args)
+	newCommitHash, dataConflicts, schemaConflicts, constraintViolations, err := doDoltCherryPick(ctx, args)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +63,7 @@ func doltCherryPickWithAmendAndCommitMessage(ctx *sql.Context, commitMessage str
 // doDoltCherryPick attempts to perform a cherry-pick merge based on the arguments specified in |args| and returns
 // the new, created commit hash (if it was successful created), a count of the number of tables with data conflicts,
 // a count of the number of tables with schema conflicts, and a count of the number of tables with constraint violations.
-func doDoltCherryPick(ctx *sql.Context, amend bool, commitMessage string, args []string) (string, int, int, int, error) {
+func doDoltCherryPick(ctx *sql.Context, args []string) (string, int, int, int, error) {
 	// Get the information for the sql context.
 	dbName := ctx.GetCurrentDatabase()
 	if len(dbName) == 0 {
@@ -107,10 +95,7 @@ func doDoltCherryPick(ctx *sql.Context, amend bool, commitMessage string, args [
 		return "", 0, 0, 0, ErrEmptyCherryPick
 	}
 
-	commit, mergeResult, err := cherry_pick.CherryPick(ctx, cherryStr, cherry_pick.CherryPickOptions{
-		Amend:         amend,
-		CommitMessage: commitMessage,
-	})
+	commit, mergeResult, err := cherry_pick.CherryPick(ctx, cherryStr, cherry_pick.CherryPickOptions{})
 	if err != nil {
 		return "", 0, 0, 0, err
 	}

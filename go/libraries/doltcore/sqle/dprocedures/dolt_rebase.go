@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/cherry_pick"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -394,12 +395,15 @@ func processRow(ctx *sql.Context, row sql.Row) error {
 		if err != nil {
 			return err
 		}
-		resultsIter, err := doltCherryPickWithAmendAndCommitMessage(ctx, commitMessage, row[2].(string))
+		newCommit, _, err := cherry_pick.CherryPick(ctx, row[2].(string), cherry_pick.CherryPickOptions{
+			Amend:         true,
+			CommitMessage: commitMessage,
+		})
 		if err != nil {
 			return err
 		}
-		// TODO: handle cherry-pick results
-		return drainRowIterator(ctx, resultsIter)
+		fmt.Printf("created new commit: %s\n", newCommit)
+		return nil
 
 	default:
 		return fmt.Errorf("rebase action '%s' is not supported", rebaseAction)
