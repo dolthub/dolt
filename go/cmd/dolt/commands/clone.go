@@ -98,6 +98,7 @@ func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, 
 func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.VerboseError {
 	remoteName := apr.GetValueOrDefault(cli.RemoteParam, "origin")
 	branch := apr.GetValueOrDefault(cli.BranchParam, "")
+	singleBranch := apr.Contains(cli.SingleBranchFlag)
 	dir, urlStr, verr := parseArgs(apr)
 	if verr != nil {
 		return verr
@@ -143,7 +144,7 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 	// Nil out the old Dolt env so we don't accidentally operate on the wrong database
 	dEnv = nil
 
-	err = actions.CloneRemote(ctx, srcDB, remoteName, branch, clonedEnv)
+	err = actions.CloneRemote(ctx, srcDB, remoteName, branch, singleBranch, clonedEnv)
 	if err != nil {
 		// If we're cloning into a directory that already exists do not erase it. Otherwise
 		// make best effort to delete the directory we created.

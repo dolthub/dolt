@@ -1370,6 +1370,7 @@ data_dir: $DATA_DIR
     dolt --port $PORT --host 0.0.0.0 --no-tls -u dolt --use-db repo1 sql -q "call dolt_fetch()"
 }
 
+# bats test_tags=no_lambda
 @test "sql-server: run mysql from shell" {
     skiponwindows "Has dependencies that are not installed on Windows CI"
     if [[ `uname` == 'Darwin' ]]; then
@@ -1471,12 +1472,14 @@ data_dir: $DATA_DIR
     SERVER_PID=$!
     wait_for_connection $PORT 5000
 
+    cat log.txt
+
     run dolt sql -q "select 1 as col1"
     [ $status -eq 0 ]
     [[ $output =~ col1 ]] || false
     [[ $output =~ " 1 " ]] || false
 
-    run grep '\"/tmp/mysql.sock\"' log.txt
+    run grep '"/tmp/mysql.sock"' log.txt
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
 
@@ -1504,7 +1507,7 @@ data_dir: $DATA_DIR
     [[ $output =~ col1 ]] || false
     [[ $output =~ " 1 " ]] || false
 
-    run grep '\"/tmp/mysql.sock\"' log.txt
+    run grep '"/tmp/mysql.sock"' log.txt
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
 }

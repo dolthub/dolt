@@ -710,6 +710,7 @@ teardown() {
     [[ "$output" =~ "invalid --decorate option" ]] || false
 }
 
+# bats test_tags=no_lambda
 @test "log: check pager" {
     skiponwindows "Need to install expect and make this script work on windows."
     dolt commit --allow-empty -m "commit 1"
