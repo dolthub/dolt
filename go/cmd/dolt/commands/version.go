@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/fatih/color"
 )
 
 const (
@@ -91,7 +92,7 @@ func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string
 	verr = checkAndPrintVersionOutOfDateWarning(cmd.VersionStr, dEnv)
 	if verr != nil {
 		// print error but don't fail
-		cli.Printf("\033[33m%s\033[0m\n", verr)
+		cli.PrintErrf(color.YellowString(verr.Verbose()))
 	}
 
 	if apr.Contains(verboseFlag) {
@@ -172,7 +173,7 @@ func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) 
 	}
 
 	if curVersion != latestRelease {
-		cli.Printf("\033[33mWarning: you are on an old version of Dolt. The newest version is %s.\033[0m\n", latestRelease)
+		cli.Printf(color.YellowString("Warning: you are on an old version of Dolt. The newest version is %s.\n", latestRelease))
 	}
 
 	return nil
