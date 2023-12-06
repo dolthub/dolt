@@ -403,10 +403,9 @@ func (j *ChunkJournal) UpdateGCGen(ctx context.Context, lastLock addr, next mani
 		}
 	}
 
-	// Truncate the in-memory root and root timestamp metadata to the most recent
-	// entry, and double check that it matches the root stored in the manifest.
+	// Truncate the in-memory root and root timestamp metadata
 	if !reflogDisabled {
-		j.reflogRingBuffer.TruncateToLastRecord()
+		j.reflogRingBuffer.Truncate()
 		// TODO: sanity check that j.reflogRingBuffer.Peek matches latest.root ?
 	}
 
