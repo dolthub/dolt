@@ -55,7 +55,7 @@ func (q QueryDiff) Name() string {
 }
 
 func (q QueryDiff) Description() string {
-	return "description"
+	return "Shows table diff between two queries."
 }
 
 func (q QueryDiff) Docs() *cli.CommandDocumentation {
