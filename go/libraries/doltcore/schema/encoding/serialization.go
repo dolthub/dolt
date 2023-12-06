@@ -316,8 +316,8 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 			}
 		}
 
-		if c.OnUpdateValue() != nil {
-			onUpdateVal = string(c.OnUpdateValue())
+		if c.OnupdateValue() != nil {
+			onUpdateVal = string(c.OnupdateValue())
 		}
 
 		cols[i] = schema.Column{
