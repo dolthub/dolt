@@ -224,6 +224,7 @@ func abortRebase(ctx *sql.Context) error {
 	// TODO: remove the dolt_rebase table
 
 	// Move HEAD back to the original head
+	// TODO: preRebaseWorkingRoot isn't used anymore, right? We can remove it?
 	rebaseState := workingSet.RebaseState()
 
 	workingSet = workingSet.AbortRebase()
@@ -241,6 +242,8 @@ func abortRebase(ctx *sql.Context) error {
 
 	return nil
 }
+
+// TODO: Make '-i' arg required?
 
 func continueRebase(ctx *sql.Context) error {
 	// TODO: validate the dolt_rebase table
