@@ -25,6 +25,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/test"
@@ -103,8 +104,8 @@ func initRepoWithRelativePath(t *testing.T, envPath string, hdp HomeDirProvider)
 	dEnv := Load(context.Background(), hdp, fs, urlStr, "test")
 	cfg, _ := dEnv.Config.GetConfig(GlobalConfig)
 	cfg.SetStrings(map[string]string{
-		UserNameKey:  name,
-		UserEmailKey: email,
+		config.UserNameKey:  name,
+		config.UserEmailKey: email,
 	})
 
 	err = dEnv.InitRepo(context.Background(), types.Format_Default, name, email, DefaultInitBranch)

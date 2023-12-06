@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -33,6 +34,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
+	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	goerrors "gopkg.in/src-d/go-errors.v1"
@@ -40,6 +42,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
+	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -48,6 +51,8 @@ import (
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
+	"github.com/dolthub/dolt/go/libraries/events"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
 )
 
@@ -55,6 +60,9 @@ const (
 	LocalConnectionUser = "__dolt_local_user__"
 	ApiSqleContextKey   = "__sqle_context__"
 )
+
+// sqlServerHeartbeatIntervalEnvVar is the duration between heartbeats sent to the remote server, used for testing
+const sqlServerHeartbeatIntervalEnvVar = "DOLT_SQL_SERVER_HEARTBEAT_INTERVAL"
 
 // ExternalDisableUsers is called by implementing applications to disable users. This is not used by Dolt itself,
 // but will break compatibility with implementing applications that do not yet support users.
@@ -123,6 +131,8 @@ func Serve(
 		},
 	}
 	controller.Register(InitLogging)
+
+	controller.Register(newHeartbeatService(version, dEnv))
 
 	fs := dEnv.FS
 	InitDataDir := &svcs.AnonService{
@@ -560,6 +570,83 @@ func Serve(
 	}
 	return nil, controller.WaitForStop()
 }
+
+// heartbeatService is a service that sends a heartbeat event to the metrics server once a day
+type heartbeatService struct {
+	version      string
+	eventEmitter events.Emitter
+	interval     time.Duration
+}
+
+func newHeartbeatService(version string, dEnv *env.DoltEnv) *heartbeatService {
+	metricsDisabled := dEnv.Config.GetStringOrDefault(config.MetricsDisabled, "false")
+	disabled, err := strconv.ParseBool(metricsDisabled)
+	if err != nil || disabled {
+		return &heartbeatService{} // will be defunct on Run()
+	}
+
+	emitterType, ok := os.LookupEnv(events.EmitterTypeEnvVar)
+	if !ok {
+		emitterType = events.EmitterTypeGrpc
+	}
+
+	interval, ok := os.LookupEnv(sqlServerHeartbeatIntervalEnvVar)
+	if !ok {
+		interval = "24h"
+	}
+
+	duration, err := time.ParseDuration(interval)
+	if err != nil {
+		return &heartbeatService{} // will be defunct on Run()
+	}
+
+	emitter, err := commands.NewEmitter(emitterType, dEnv)
+	if err != nil {
+		return &heartbeatService{} // will be defunct on Run()
+	}
+
+	return &heartbeatService{
+		version:      version,
+		eventEmitter: emitter,
+		interval:     duration,
+	}
+}
+
+func (h *heartbeatService) Init(ctx context.Context) error { return nil }
+func (h *heartbeatService) Stop() error                    { return nil }
+
+func (h *heartbeatService) Run(ctx context.Context) {
+	// Faulty config settings or disabled metrics can cause us to not have a valid event emitter
+	if h.eventEmitter == nil {
+		return
+	}
+
+	ticker := time.NewTicker(h.interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			t := events.NowTimestamp()
+			err := h.eventEmitter.LogEvents(h.version, []*eventsapi.ClientEvent{
+				{
+					Id:        uuid.New().String(),
+					StartTime: t,
+					EndTime:   t,
+					Type:      eventsapi.ClientEventType_SQL_SERVER_HEARTBEAT,
+				},
+			})
+
+			if err != nil {
+				logrus.Debugf("failed to send heartbeat event: %v", err)
+			}
+		}
+	}
+}
+
+var _ svcs.Service = &heartbeatService{}
 
 func persistServerLocalCreds(port int, dEnv *env.DoltEnv) (*LocalCreds, error) {
 	creds := NewLocalCreds(port)

@@ -100,9 +100,9 @@ func updateConfigToUseNewCredIfNoExistingCred(dEnv *env.DoltEnv, dCreds creds.Do
 		panic("global config not found.  Should create it here if this is a thing.")
 	}
 
-	_, err := gcfg.GetString(env.UserCreds)
+	_, err := gcfg.GetString(config.UserCreds)
 	if err == config.ErrConfigParamNotFound {
-		return gcfg.SetStrings(map[string]string{env.UserCreds: dCreds.KeyIDBase32Str()})
+		return gcfg.SetStrings(map[string]string{config.UserCreds: dCreds.KeyIDBase32Str()})
 	} else {
 		return err
 	}

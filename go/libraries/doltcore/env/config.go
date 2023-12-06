@@ -22,7 +22,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
@@ -30,32 +29,9 @@ const (
 	localConfigName  = "local"
 	globalConfigName = "global"
 
-	UserEmailKey = "user.email"
-	UserNameKey  = "user.name"
-
 	// should be able to have remote specific creds?
-	UserCreds = "user.creds"
 
-	DoltEditor = "core.editor"
-
-	InitBranchName = "init.defaultbranch"
-
-	RemotesApiHostKey     = "remotes.default_host"
-	RemotesApiHostPortKey = "remotes.default_port"
-
-	AddCredsUrlKey     = "creds.add_url"
-	DoltLabInsecureKey = "doltlab.insecure"
-
-	MetricsDisabled = "metrics.disabled"
-	MetricsHost     = "metrics.host"
-	MetricsPort     = "metrics.port"
-	MetricsInsecure = "metrics.insecure"
-
-	PushAutoSetupRemote = "push.autosetupremote"
 )
-
-var LocalConfigWhitelist = set.NewStrSet([]string{UserNameKey, UserEmailKey})
-var GlobalConfigWhitelist = set.NewStrSet([]string{UserNameKey, UserEmailKey})
 
 // ConfigScope is an enum representing the elements that make up the ConfigHierarchy
 type ConfigScope int
@@ -206,7 +182,7 @@ func GetStringOrDefault(cfg config.ReadableConfig, key, defStr string) string {
 
 // GetNameAndEmail returns the name and email from the supplied config
 func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
-	name, err := cfg.GetString(UserNameKey)
+	name, err := cfg.GetString(config.UserNameKey)
 
 	if err == config.ErrConfigParamNotFound {
 		return "", "", datas.ErrNameNotConfigured
@@ -214,7 +190,7 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 		return "", "", err
 	}
 
-	email, err := cfg.GetString(UserEmailKey)
+	email, err := cfg.GetString(config.UserEmailKey)
 
 	if err == config.ErrConfigParamNotFound {
 		return "", "", datas.ErrEmailNotConfigured
@@ -258,8 +234,8 @@ const (
 )
 
 var DefaultFailsafeConfig = map[string]string{
-	UserEmailKey: DefaultEmail,
-	UserNameKey:  DefaultName,
+	config.UserEmailKey: DefaultEmail,
+	config.UserNameKey:  DefaultName,
 }
 
 func (w writeableLocalDoltCliConfig) SetStrings(updates map[string]string) error {

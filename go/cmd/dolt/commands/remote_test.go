@@ -59,7 +59,7 @@ func TestGetAbsRemoteUrl(t *testing.T) {
 		{
 			"ts/emp",
 			config.NewMapConfig(map[string]string{
-				env.RemotesApiHostKey: "host.dom",
+				config.RemotesApiHostKey: "host.dom",
 			}),
 			"https://host.dom/ts/emp",
 			"https",
@@ -75,7 +75,7 @@ func TestGetAbsRemoteUrl(t *testing.T) {
 		{
 			"https://test.org:443/ts/emp",
 			config.NewMapConfig(map[string]string{
-				env.RemotesApiHostKey: "host.dom",
+				config.RemotesApiHostKey: "host.dom",
 			}),
 			"https://test.org:443/ts/emp",
 			"https",
@@ -84,7 +84,7 @@ func TestGetAbsRemoteUrl(t *testing.T) {
 		{
 			"localhost/ts/emp",
 			config.NewMapConfig(map[string]string{
-				env.RemotesApiHostKey: "host.dom",
+				config.RemotesApiHostKey: "host.dom",
 			}),
 			"https://localhost/ts/emp",
 			"https",

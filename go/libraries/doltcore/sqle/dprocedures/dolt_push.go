@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
@@ -70,7 +71,7 @@ func doDoltPush(ctx *sql.Context, args []string) (int, string, error) {
 		return cmdFailure, "", err
 	}
 
-	autoSetUpRemote := loadConfig(ctx).GetStringOrDefault(env.PushAutoSetupRemote, "false")
+	autoSetUpRemote := loadConfig(ctx).GetStringOrDefault(config.PushAutoSetupRemote, "false")
 	pushAutoSetUpRemote, err := strconv.ParseBool(autoSetUpRemote)
 	if err != nil {
 		return cmdFailure, "", err
