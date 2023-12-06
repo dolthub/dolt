@@ -89,7 +89,8 @@ func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string
 	var verr errhand.VerboseError
 	verr = checkAndPrintVersionOutOfDateWarning(cmd.VersionStr, dEnv)
 	if verr != nil {
-		return HandleVErrAndExitCode(verr, usage)
+		// print error but don't fail
+		cli.Printf("\033[33m%s\033[0m\n", verr)
 	}
 
 	if apr.Contains(verboseFlag) {
@@ -156,15 +157,21 @@ func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) 
 				return errhand.BuildDError("error: failed to parse version check file").AddCause(err).Build()
 			}
 			if lastCheckDate.Before(time.Now().AddDate(0, 0, -7)) {
-				latestRelease, err = getLatestDoltReleaseAndRecord(path, dEnv)
+				latestRelease, verr = getLatestDoltReleaseAndRecord(path, dEnv)
+				if verr != nil {
+					return verr
+				}
 			}
 		}
 	} else {
-		latestRelease, err = getLatestDoltReleaseAndRecord(path, dEnv)
+		latestRelease, verr = getLatestDoltReleaseAndRecord(path, dEnv)
+		if verr != nil {
+			return verr
+		}
 	}
 
 	if curVersion != latestRelease {
-		cli.Printf("Warning: you are on an old version of Dolt. The newest version is %s.\n", latestRelease)
+		cli.Printf("\033[33mWarning: you are on an old version of Dolt. The newest version is %s.\033[0m\n", latestRelease)
 	}
 
 	return nil
@@ -176,7 +183,7 @@ func getLatestDoltReleaseAndRecord(path string, dEnv *env.DoltEnv) (string, errh
 	client := github.NewClient(nil)
 	release, resp, err := client.Repositories.GetLatestRelease(context.Background(), "dolthub", "dolt")
 	if err != nil || resp.StatusCode != 200 {
-		return "", errhand.BuildDError("error: failed to get latest release").AddCause(err).Build()
+		return "", errhand.BuildDError("error: failed to verify latest release").AddCause(err).Build()
 	}
 	releaseName := strings.TrimPrefix(*release.TagName, "v")
 
