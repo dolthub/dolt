@@ -117,7 +117,7 @@ func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, error) {
 			return "", noConflictsOrViolations, threeWayMerge, fmt.Errorf("fatal: There is no merge to abort")
 		}
 
-		ws, err = abortMerge(ctx, ws, roots)
+		ws, err = merge.AbortMerge(ctx, ws, roots)
 		if err != nil {
 			return "", noConflictsOrViolations, threeWayMerge, err
 		}
@@ -276,43 +276,6 @@ func performMerge(
 	}
 
 	return ws, commit, noConflictsOrViolations, threeWayMerge, nil
-}
-
-func abortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Roots) (*doltdb.WorkingSet, error) {
-	tbls, err := doltdb.UnionTableNames(ctx, roots.Working, roots.Staged, roots.Head)
-	if err != nil {
-		return nil, err
-	}
-
-	roots, err = actions.MoveTablesFromHeadToWorking(ctx, roots, tbls)
-	if err != nil {
-		return nil, err
-	}
-
-	preMergeWorkingRoot := workingSet.MergeState().PreMergeWorkingRoot()
-	preMergeWorkingTables, err := preMergeWorkingRoot.GetTableNames(ctx)
-	if err != nil {
-		return nil, err
-	}
-	nonIgnoredTables, err := doltdb.ExcludeIgnoredTables(ctx, roots, preMergeWorkingTables)
-	if err != nil {
-		return nil, err
-	}
-	someTablesAreIgnored := len(nonIgnoredTables) != len(preMergeWorkingTables)
-
-	if someTablesAreIgnored {
-		newWorking, err := actions.MoveTablesBetweenRoots(ctx, nonIgnoredTables, preMergeWorkingRoot, roots.Working)
-		if err != nil {
-			return nil, err
-		}
-		workingSet = workingSet.WithWorkingRoot(newWorking)
-	} else {
-		workingSet = workingSet.WithWorkingRoot(preMergeWorkingRoot)
-	}
-	workingSet = workingSet.WithStagedRoot(workingSet.WorkingRoot())
-	workingSet = workingSet.ClearMerge()
-
-	return workingSet, nil
 }
 
 func executeMerge(

@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -280,4 +281,50 @@ func mergedRootToWorking(
 		return doltdb.ErrUnresolvedConflictsOrViolations
 	}
 	return
+}
+
+// AbortMerge returns a new WorkingSet instance, with the active merge aborted, by clearing and
+// resetting the merge state in |workingSet| and using |roots| to identify the existing tables
+// and reset them, excluding any ignored tables. The caller must then set the new WorkingSet in
+// the session before the aborted merge is finalized. If no merge is in progress, this function
+// returns an error.
+func AbortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Roots) (*doltdb.WorkingSet, error) {
+	if !workingSet.MergeActive() {
+		return nil, fmt.Errorf("there is no merge to abort")
+	}
+
+	tbls, err := doltdb.UnionTableNames(ctx, roots.Working, roots.Staged, roots.Head)
+	if err != nil {
+		return nil, err
+	}
+
+	roots, err = actions.MoveTablesFromHeadToWorking(ctx, roots, tbls)
+	if err != nil {
+		return nil, err
+	}
+
+	preMergeWorkingRoot := workingSet.MergeState().PreMergeWorkingRoot()
+	preMergeWorkingTables, err := preMergeWorkingRoot.GetTableNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nonIgnoredTables, err := doltdb.ExcludeIgnoredTables(ctx, roots, preMergeWorkingTables)
+	if err != nil {
+		return nil, err
+	}
+	someTablesAreIgnored := len(nonIgnoredTables) != len(preMergeWorkingTables)
+
+	if someTablesAreIgnored {
+		newWorking, err := actions.MoveTablesBetweenRoots(ctx, nonIgnoredTables, preMergeWorkingRoot, roots.Working)
+		if err != nil {
+			return nil, err
+		}
+		workingSet = workingSet.WithWorkingRoot(newWorking)
+	} else {
+		workingSet = workingSet.WithWorkingRoot(preMergeWorkingRoot)
+	}
+	workingSet = workingSet.WithStagedRoot(workingSet.WorkingRoot())
+	workingSet = workingSet.ClearMerge()
+
+	return workingSet, nil
 }
