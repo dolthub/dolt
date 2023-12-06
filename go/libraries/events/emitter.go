@@ -32,6 +32,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
+// Application is the application ID used for all events emitted by this application. Other applications (not dolt) 
+// should set this once at initialization.
 var Application = eventsapi.AppID_APP_DOLT
 
 // EmitterTypeEnvVar is the environment variable DOLT_EVENTS_EMITTER, which you can set to one of the values below

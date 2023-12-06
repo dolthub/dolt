@@ -96,7 +96,7 @@ func FindAndLoadLocalCreds(fs filesys.Filesys) (creds *LocalCreds, err error) {
 	if err != nil {
 		return nil, err
 	}
-	for root != "" && root[len(root)-1] != '/' {
+	for root != "" && root[len(root)-1] != filepath.Separator {
 		creds, err := LoadLocalCreds(fs)
 		if err == nil {
 			return creds, err

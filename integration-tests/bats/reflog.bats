@@ -190,7 +190,12 @@ SQL
 
     run dolt reflog
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 0 ]
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      [ "${#lines[@]}" -eq 1 ]
+      [[ "$output" =~ "Initialize data repository" ]] || false
+    else
+      [ "${#lines[@]}" -eq 0 ]
+    fi
 }
 
 @test "reflog: garbage collection with newgen data" {
@@ -219,7 +224,12 @@ SQL
 
     run dolt reflog main
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 0 ]
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      [ "${#lines[@]}" -eq 1 ]
+      [[ "$output" =~ "inserting row 2" ]] || false
+    else
+      [ "${#lines[@]}" -eq 0 ]
+    fi
 }
 
 @test "reflog: too many arguments given" {
