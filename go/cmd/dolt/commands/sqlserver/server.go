@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -33,6 +34,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
+	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	goerrors "gopkg.in/src-d/go-errors.v1"
@@ -40,6 +42,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
+	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -48,6 +51,8 @@ import (
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
+	"github.com/dolthub/dolt/go/libraries/events"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
 )
 
@@ -56,9 +61,14 @@ const (
 	ApiSqleContextKey   = "__sqle_context__"
 )
 
+// sqlServerHeartbeatIntervalEnvVar is the duration between heartbeats sent to the remote server, used for testing
+const sqlServerHeartbeatIntervalEnvVar = "DOLT_SQL_SERVER_HEARTBEAT_INTERVAL"
+
 // ExternalDisableUsers is called by implementing applications to disable users. This is not used by Dolt itself,
 // but will break compatibility with implementing applications that do not yet support users.
 var ExternalDisableUsers bool = false
+
+var ErrCouldNotLockDatabase = goerrors.NewKind("database \"%s\" is locked by another dolt process; either clone the database to run a second server, or stop the dolt process which currently holds an exclusive write lock on the database")
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
 func Serve(
@@ -122,6 +132,8 @@ func Serve(
 	}
 	controller.Register(InitLogging)
 
+	controller.Register(newHeartbeatService(version, dEnv))
+
 	fs := dEnv.FS
 	InitDataDir := &svcs.AnonService{
 		InitF: func(context.Context) (err error) {
@@ -137,27 +149,39 @@ func Serve(
 	}
 	controller.Register(InitDataDir)
 
-	var serverLock *env.DBLock
-	InitGlobalServerLock := &svcs.AnonService{
-		InitF: func(context.Context) (err error) {
-			serverLock, err = acquireGlobalSqlServerLock(serverConfig.Port(), dEnv)
-			return err
-		},
-		StopF: func() error {
-			dEnv.FS.Delete(dEnv.LockFile(), false)
-			return nil
-		},
-	}
-	controller.Register(InitGlobalServerLock)
-
 	var mrEnv *env.MultiRepoEnv
 	InitMultiEnv := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
-			mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+			mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), fs, dEnv.Version, dEnv)
 			return err
 		},
 	}
 	controller.Register(InitMultiEnv)
+
+	AssertNoDatabasesInAccessModeReadOnly := &svcs.AnonService{
+		InitF: func(ctx context.Context) (err error) {
+			return mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
+				if dEnv.IsAccessModeReadOnly() {
+					return true, ErrCouldNotLockDatabase.New(name)
+				}
+				return false, nil
+			})
+		},
+	}
+	controller.Register(AssertNoDatabasesInAccessModeReadOnly)
+
+	var localCreds *LocalCreds
+	InitServerLocalCreds := &svcs.AnonService{
+		InitF: func(context.Context) (err error) {
+			localCreds, err = persistServerLocalCreds(serverConfig.Port(), dEnv)
+			return err
+		},
+		StopF: func() error {
+			RemoveLocalCreds(dEnv.FS)
+			return nil
+		},
+	}
+	controller.Register(InitServerLocalCreds)
 
 	var clusterController *cluster.Controller
 	InitClusterController := &svcs.AnonService{
@@ -271,30 +295,11 @@ func Serve(
 	}
 	controller.Register(InitMetricsListener)
 
-	LockMultiRepoEnv := &svcs.AnonService{
-		InitF: func(context.Context) error {
-			if ok, f := mrEnv.IsLocked(); ok {
-				return env.ErrActiveServerLock.New(f)
-			}
-			if err := mrEnv.Lock(serverLock); err != nil {
-				return err
-			}
-			return nil
-		},
-		StopF: func() error {
-			if err := mrEnv.Unlock(); err != nil {
-				cli.PrintErr(err)
-			}
-			return nil
-		},
-	}
-	controller.Register(LockMultiRepoEnv)
-
 	InitLockSuperUser := &svcs.AnonService{
 		InitF: func(context.Context) error {
 			mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
 			ed := mysqlDb.Editor()
-			mysqlDb.AddSuperUser(ed, LocalConnectionUser, "localhost", serverLock.Secret)
+			mysqlDb.AddSuperUser(ed, LocalConnectionUser, "localhost", localCreds.Secret)
 			ed.Close()
 			return nil
 		},
@@ -547,7 +552,7 @@ func Serve(
 
 	RunSQLServer := &svcs.AnonService{
 		RunF: func(context.Context) {
-			sqlserver.SetRunningServer(mySQLServer, serverLock)
+			sqlserver.SetRunningServer(mySQLServer)
 			defer sqlserver.UnsetRunningServer()
 			mySQLServer.Start()
 		},
@@ -566,26 +571,90 @@ func Serve(
 	return nil, controller.WaitForStop()
 }
 
-// acquireGlobalSqlServerLock attempts to acquire a global lock on the SQL server. If no error is returned, then the lock was acquired.
-func acquireGlobalSqlServerLock(port int, dEnv *env.DoltEnv) (*env.DBLock, error) {
-	locked, _, err := dEnv.GetLock()
+// heartbeatService is a service that sends a heartbeat event to the metrics server once a day
+type heartbeatService struct {
+	version      string
+	eventEmitter events.Emitter
+	interval     time.Duration
+}
+
+func newHeartbeatService(version string, dEnv *env.DoltEnv) *heartbeatService {
+	metricsDisabled := dEnv.Config.GetStringOrDefault(config.MetricsDisabled, "false")
+	disabled, err := strconv.ParseBool(metricsDisabled)
+	if err != nil || disabled {
+		return &heartbeatService{} // will be defunct on Run()
+	}
+
+	emitterType, ok := os.LookupEnv(events.EmitterTypeEnvVar)
+	if !ok {
+		emitterType = events.EmitterTypeGrpc
+	}
+
+	interval, ok := os.LookupEnv(sqlServerHeartbeatIntervalEnvVar)
+	if !ok {
+		interval = "24h"
+	}
+
+	duration, err := time.ParseDuration(interval)
+	if err != nil {
+		return &heartbeatService{} // will be defunct on Run()
+	}
+
+	emitter, err := commands.NewEmitter(emitterType, dEnv)
+	if err != nil {
+		return &heartbeatService{} // will be defunct on Run()
+	}
+
+	return &heartbeatService{
+		version:      version,
+		eventEmitter: emitter,
+		interval:     duration,
+	}
+}
+
+func (h *heartbeatService) Init(ctx context.Context) error { return nil }
+func (h *heartbeatService) Stop() error                    { return nil }
+
+func (h *heartbeatService) Run(ctx context.Context) {
+	// Faulty config settings or disabled metrics can cause us to not have a valid event emitter
+	if h.eventEmitter == nil {
+		return
+	}
+
+	ticker := time.NewTicker(h.interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			t := events.NowTimestamp()
+			err := h.eventEmitter.LogEvents(h.version, []*eventsapi.ClientEvent{
+				{
+					Id:        uuid.New().String(),
+					StartTime: t,
+					EndTime:   t,
+					Type:      eventsapi.ClientEventType_SQL_SERVER_HEARTBEAT,
+				},
+			})
+
+			if err != nil {
+				logrus.Debugf("failed to send heartbeat event: %v", err)
+			}
+		}
+	}
+}
+
+var _ svcs.Service = &heartbeatService{}
+
+func persistServerLocalCreds(port int, dEnv *env.DoltEnv) (*LocalCreds, error) {
+	creds := NewLocalCreds(port)
+	err := WriteLocalCreds(dEnv.FS, creds)
 	if err != nil {
 		return nil, err
 	}
-	if locked {
-		lockPath := dEnv.LockFile()
-		err = fmt.Errorf("Database locked by another sql-server; Lock file: %s", lockPath)
-		return nil, err
-	}
-
-	lck := env.NewDBLock(port)
-	err = dEnv.Lock(&lck)
-	if err != nil {
-		err = fmt.Errorf("Server can not start. Failed to acquire lock: %s", err.Error())
-		return nil, err
-	}
-
-	return &lck, nil
+	return creds, err
 }
 
 // remotesapiAuth facilitates the implementation remotesrv.AccessControl for the remotesapi server.
@@ -695,11 +764,6 @@ func newSessionBuilder(se *engine.SqlEngine, config ServerConfig) server.Session
 
 		dsess, err := se.NewDoltSession(ctx, mysqlBaseSess)
 		if err != nil {
-			if goerrors.Is(err, env.ErrFailedToAccessDB) {
-				if server, _ := sqlserver.GetRunningServer(); server != nil {
-					_ = server.Close()
-				}
-			}
 			return nil, err
 		}
 

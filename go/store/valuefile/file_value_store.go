@@ -207,6 +207,10 @@ func (f *FileValueStore) Version() string {
 	return f.nbf.VersionString()
 }
 
+func (f *FileValueStore) AccessMode() chunks.ExclusiveAccessMode {
+	return chunks.ExclusiveAccessMode_Shared
+}
+
 // Rebase brings this ChunkStore into sync with the persistent storage's current root.  Has no impact here
 func (f *FileValueStore) Rebase(ctx context.Context) error {
 	f.chunkLock.Lock()

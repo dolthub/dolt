@@ -29,9 +29,9 @@ import (
 )
 
 type ReflogTableFunction struct {
-	ctx      *sql.Context
-	database sql.Database
-	refExpr  sql.Expression
+	ctx            *sql.Context
+	database       sql.Database
+	refAndArgExprs []sql.Expression
 }
 
 var _ sql.TableFunction = (*ReflogTableFunction)(nil)
@@ -65,16 +65,29 @@ func (rltf *ReflogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 	}
 
 	var refName string
-	if rltf.refExpr != nil {
-		target, err := rltf.refExpr.Eval(ctx, row)
+	showAll := false
+	for _, expr := range rltf.refAndArgExprs {
+		target, err := expr.Eval(ctx, row)
 		if err != nil {
 			return nil, fmt.Errorf("error evaluating expression (%s): %s",
-				rltf.refExpr.String(), err.Error())
+				expr.String(), err.Error())
 		}
-
-		refName, ok = target.(string)
+		targetStr, ok := target.(string)
 		if !ok {
 			return nil, fmt.Errorf("argument (%v) is not a string value, but a %T", target, target)
+		}
+
+		if targetStr == "--all" {
+			if showAll {
+				return nil, fmt.Errorf("error: multiple values provided for `all`")
+			}
+			showAll = true
+		} else {
+			if refName != "" {
+				return nil, fmt.Errorf("error: %s has too many positional arguments. Expected at most %d, found %d: %s",
+					rltf.Name(), 1, 2, rltf.refAndArgExprs)
+			}
+			refName = targetStr
 		}
 	}
 
@@ -109,9 +122,15 @@ func (rltf *ReflogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 			if doltRef.GetType() == ref.InternalRefType {
 				return nil
 			}
+			// skip workspace refs by default
+			if doltRef.GetType() == ref.WorkspaceRefType {
+				if !showAll {
+					return nil
+				}
+			}
 
 			// If a ref expression to filter on was specified, see if we match the current ref
-			if rltf.refExpr != nil {
+			if refName != "" {
 				// If the caller has supplied a branch or tag name, without the fully qualified ref path,
 				// take the first match and use that as the canonical ref to filter on
 				if strings.HasSuffix(strings.ToLower(id), "/"+strings.ToLower(refName)) {
@@ -172,14 +191,21 @@ func (rltf *ReflogTableFunction) Schema() sql.Schema {
 }
 
 func (rltf *ReflogTableFunction) Resolved() bool {
-	if rltf.refExpr != nil {
-		return rltf.refExpr.Resolved()
+	for _, expr := range rltf.refAndArgExprs {
+		if !expr.Resolved() {
+			return false
+		}
 	}
 	return true
 }
 
 func (rltf *ReflogTableFunction) String() string {
-	return fmt.Sprintf("DOLT_REFLOG(%s)", rltf.refExpr.String())
+	var args []string
+
+	for _, expr := range rltf.refAndArgExprs {
+		args = append(args, expr.String())
+	}
+	return fmt.Sprintf("DOLT_REFLOG(%s)", strings.Join(args, ", "))
 }
 
 func (rltf *ReflogTableFunction) Children() []sql.Node {
@@ -204,21 +230,17 @@ func (rltf *ReflogTableFunction) IsReadOnly() bool {
 }
 
 func (rltf *ReflogTableFunction) Expressions() []sql.Expression {
-	if rltf.refExpr != nil {
-		return []sql.Expression{rltf.refExpr}
-	}
-	return []sql.Expression{}
+	return rltf.refAndArgExprs
 }
 
 func (rltf *ReflogTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
-	if len(expression) > 1 {
-		return nil, sql.ErrInvalidArgumentNumber.New(rltf.Name(), "0 or 1", len(expression))
+	if len(expression) > 2 {
+		return nil, sql.ErrInvalidArgumentNumber.New(rltf.Name(), "0 to 2", len(expression))
 	}
 
 	new := *rltf
-	if len(expression) > 0 {
-		new.refExpr = expression[0]
-	}
+	new.refAndArgExprs = expression
+
 	return &new, nil
 }
 

@@ -192,7 +192,8 @@ func TestThreeWayDiffer(t *testing.T) {
 			left := newTestMap(t, ctx, tt.left, ns, valDesc)
 			right := newTestMap(t, ctx, tt.right, ns, valDesc)
 
-			iter, err := NewThreeWayDiffer(ctx, ns, left, right, base, testResolver(t, ns, valDesc, val.NewTupleBuilder(valDesc)), false, keyDesc)
+			var diffInfo ThreeWayDiffInfo
+			iter, err := NewThreeWayDiffer(ctx, ns, left, right, base, testResolver(t, ns, valDesc, val.NewTupleBuilder(valDesc)), false, diffInfo, keyDesc)
 			require.NoError(t, err)
 
 			var cmp []testDiff

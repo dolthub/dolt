@@ -52,6 +52,7 @@ teardown() {
     [[ "$output" =~ "test" ]] || false
 }
 
+# bats test_tags=no_lambda
 @test "sql-shell: sql shell writes to disk after every iteration (autocommit)" {
     skiponwindows "Need to install expect and make this script work on windows."
     run $BATS_TEST_DIRNAME/sql-shell.expect
@@ -66,11 +67,13 @@ teardown() {
     [[ "$output" =~ "+---------------------" ]] || false
 }
 
+# bats test_tags=no_lambda
 @test "sql-shell: shell works after failing query" {
     skiponwindows "Need to install expect and make this script work on windows."
     $BATS_TEST_DIRNAME/sql-works-after-failing-query.expect
 }
 
+# bats test_tags=no_lambda
 @test "sql-shell: empty DB in prompt is OK" {
     skiponwindows "Need to install expect and make this script work on windows."
     if [ "$SQL_ENGINE" = "remote-engine" ]; then
@@ -128,6 +131,7 @@ SQL
     [[ $output =~ "112,111" ]] || false
 }
 
+# bats test_tags=no_lambda
 @test "sql-shell: delimiter" {
     skiponwindows "Need to install expect and make this script work on windows."
     mkdir doltsql
@@ -154,6 +158,7 @@ SQL
     rm -rf doltsql
 }
 
+# bats test_tags=no_lambda
 @test "sql-shell: use databases" {
     skiponwindows "Need to install expect and make this script work on windows."
     mkdir doltsql
@@ -208,6 +213,10 @@ SQL
 }
 
 @test "sql-shell: specify data-dir" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Remote behavior differs"
+    fi
+
     # remove config files
     rm -rf .doltcfg
     rm -rf db_dir
@@ -378,6 +387,10 @@ SQL
 }
 
 @test "sql-shell: specify data-dir and doltcfg-dir" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Remote behavior differs"
+    fi
+
     # remove config files
     rm -rf .doltcfg
     rm -rf db_dir
@@ -477,6 +490,10 @@ SQL
 }
 
 @test "sql-shell: specify data-dir and privilege-file" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Remote behavior differs"
+    fi
+
     # remove config files
     rm -rf .doltcfg
     rm -rf db_dir
@@ -618,6 +635,10 @@ SQL
 }
 
 @test "sql-shell: specify data directory, cfg directory, and privilege file" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Remote behavior differs"
+    fi
+
     # remove config files
     rm -rf .doltcfg
     rm -rf db_dir
@@ -729,6 +750,10 @@ SQL
 
 
 @test "sql-shell: .doltcfg in parent directory errors" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Remote behavior differs"
+    fi
+
     # remove existing directories
     rm -rf .doltcfg
     rm -rf inner_db

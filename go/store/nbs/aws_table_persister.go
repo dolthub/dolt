@@ -98,6 +98,10 @@ func (s3p awsTablePersister) Path() string {
 	return s3p.bucket
 }
 
+func (s3p awsTablePersister) AccessMode() chunks.ExclusiveAccessMode {
+	return chunks.ExclusiveAccessMode_Shared
+}
+
 type s3UploadedPart struct {
 	idx  int64
 	etag string

@@ -2701,6 +2701,7 @@ SQL
     [[ "$output" =~ "*************************** 14. row ***************************" ]] || false
 }
 
+# bats test_tags=no_lambda
 @test "sql: vertical query format in sql shell" {
     skiponwindows "Need to install expect and make this script work on windows."
 
@@ -2897,11 +2898,4 @@ SQL
 
     mkdir .dolt
     dolt sql -q "select 1"
-
-    # If there is a zombie lock file, sql should delete it.
-    echo "42:3306:aebf244e-0693-4c36-8b2d-6eb0dfa4fe2d" > .dolt/sql-server.lock}
-
-    dolt sql -q "select 1"
-
-    [[ ! -f .dolt/sql-server.lock ]] || false
 }

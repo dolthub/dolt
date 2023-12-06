@@ -104,10 +104,6 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	if dEnv.IsLocked() {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), help)
-	}
-
 	queryString := apr.GetValueOrDefault(QueryFlag, "")
 	verbose := apr.Contains(cli.VerboseFlag)
 	continueOnErr := apr.Contains(continueFlag)
@@ -281,7 +277,7 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 		return nil, nil, err
 	}
 
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv)
 	if err != nil {
 		return nil, nil, err
 	}

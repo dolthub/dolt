@@ -680,7 +680,7 @@ DELIM
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
-@test "1pk5col-ints: dolt schema show on non existant table" {
+@test "1pk5col-ints: dolt schema show on non existent table" {
     run dolt schema show foo
     [ "$status" -eq 0 ]
     [ "$output" = "foo not found" ]

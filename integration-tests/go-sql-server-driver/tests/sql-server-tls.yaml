@@ -11,7 +11,7 @@ tests:
       args: ["--config", "server.yaml"]
       error_matches:
       - "require_secure_transport can only be `true` when a tls_key and tls_cert are provided."
-- name: tls_key non-existant
+- name: tls_key non-existent
   repos:
   - name: repo1
     with_files:
@@ -28,7 +28,7 @@ tests:
       args: ["--config", "server.yaml"]
       error_matches:
       - "no such file or directory"
-- name: tls_cert non-existant
+- name: tls_cert non-existent
   repos:
   - name: repo1
     with_files:

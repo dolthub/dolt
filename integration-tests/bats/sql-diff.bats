@@ -130,7 +130,7 @@ SQL
     [ "$output" = "" ]
 }
 
-@test "sql-diff: output reconciles change to PRIMARY KEY field in row " {
+@test "sql-diff: output reconciles change to PRIMARY KEY field in row" {
     dolt checkout -b firstbranch
     dolt sql <<SQL
 CREATE TABLE test (

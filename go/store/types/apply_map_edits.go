@@ -94,7 +94,7 @@ type AppliedEditStats struct {
 	// Deletions counts the number of items deleted from the map
 	Deletions int64
 
-	// NonexistantDeletes counts the number of items where a deletion was attempted, but the key didn't exist in the map
+	// NonexistentDeletes counts the number of items where a deletion was attempted, but the key didn't exist in the map
 	// so there was no impact
 	NonExistentDeletes int64
 }

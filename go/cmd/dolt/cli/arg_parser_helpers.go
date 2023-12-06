@@ -125,6 +125,7 @@ func CreateCloneArgParser() *argparser.ArgParser {
 	ap.SupportsString(dbfactory.OSSCredsFileParam, "", "file", "OSS credentials file.")
 	ap.SupportsString(dbfactory.OSSCredsProfile, "", "profile", "OSS profile to use.")
 	ap.SupportsString(UserFlag, "u", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
+	ap.SupportsFlag(SingleBranchFlag, "", "Clone only the history leading to the tip of a single branch, either specified by --branch or the remote's HEAD (default).")
 	return ap
 }
 
@@ -277,6 +278,12 @@ func CreateCountCommitsArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("gc", 0)
 	ap.SupportsString("from", "f", "commit id", "commit to start counting from")
 	ap.SupportsString("to", "t", "commit id", "commit to stop counting at")
+	return ap
+}
+
+func CreateReflogArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParserWithMaxArgs("reflog", 1)
+	ap.SupportsFlag(AllFlag, "", "Show all refs, including hidden refs, such as DoltHub workspace refs")
 	return ap
 }
 
