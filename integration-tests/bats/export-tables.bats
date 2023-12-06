@@ -419,7 +419,9 @@ print(df)
 table = pq.read_table('dt.parquet')
 print(table.to_pandas())
 " > arrow_test.py
+
     run python3 arrow_test.py
+
     [ "$output" = "$panda_result" ]
 
     echo "import pandas as pd

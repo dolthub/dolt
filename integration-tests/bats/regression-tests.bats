@@ -52,6 +52,7 @@ SQL
     [[ "${#lines[@]}" = "2" ]] || false
 }
 
+# bats test_tags=no_lambda
 @test "regression-tests: UNIQUE index violations do not break future INSERTs" {
     skiponwindows "Need to install expect and make this script work on windows."
     mkdir doltsql

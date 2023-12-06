@@ -2701,6 +2701,7 @@ SQL
     [[ "$output" =~ "*************************** 14. row ***************************" ]] || false
 }
 
+# bats test_tags=no_lambda
 @test "sql: vertical query format in sql shell" {
     skiponwindows "Need to install expect and make this script work on windows."
 

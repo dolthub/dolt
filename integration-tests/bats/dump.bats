@@ -151,7 +151,7 @@ teardown() {
     [[ "$output" =~ "3,Table" ]] || false
 }
 
-@test "dump: SQL type - compare tables in database with tables imported file " {
+@test "dump: SQL type - compare tables in database with tables imported file" {
     dolt branch new_branch
     dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     dolt sql -q "INSERT INTO new_table VALUES (1);"
@@ -176,7 +176,7 @@ teardown() {
     [[ "$output" = "" ]] || false
 }
 
-@test "dump: SQL type (no-batch) - compare tables in database with tables imported file " {
+@test "dump: SQL type (no-batch) - compare tables in database with tables imported file" {
     dolt branch new_branch
 
     dolt sql -q "CREATE TABLE new_table(pk int primary key);"
@@ -207,7 +207,7 @@ teardown() {
     [[ "$output" = "" ]] || false
 }
 
-@test "dump: SQL type (batch is no-op) - compare tables in database with tables imported file " {
+@test "dump: SQL type (batch is no-op) - compare tables in database with tables imported file" {
   dolt branch new_branch
 
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
@@ -520,7 +520,7 @@ SQL
     [ -f doltdump/warehouse.csv ]
 }
 
-@test "dump: CSV type - compare tables in database with tables imported from corresponding files " {
+@test "dump: CSV type - compare tables in database with tables imported from corresponding files" {
     create_tables
 
     dolt add .
@@ -660,7 +660,7 @@ SQL
     [ -f doltdump/warehouse.json ]
 }
 
-@test "dump: JSON type - compare tables in database with tables imported from corresponding files " {
+@test "dump: JSON type - compare tables in database with tables imported from corresponding files" {
     create_tables
 
     dolt add .
