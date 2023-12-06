@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 var checkShortDesc = "Check authenticating with a credential keypair against a doltremoteapi."
@@ -101,8 +102,8 @@ func loadEndpoint(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (string, st
 		return getHostFromEndpoint(earg), earg
 	}
 
-	host := dEnv.Config.GetStringOrDefault(env.RemotesApiHostKey, env.DefaultRemotesApiHost)
-	port := dEnv.Config.GetStringOrDefault(env.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
+	host := dEnv.Config.GetStringOrDefault(config.RemotesApiHostKey, env.DefaultRemotesApiHost)
+	port := dEnv.Config.GetStringOrDefault(config.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
 	return host, fmt.Sprintf("%s:%s", host, port)
 }
 

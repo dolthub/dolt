@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -76,10 +77,10 @@ func (cmd InitCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd InitCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
-	ap.SupportsString(usernameParamName, "", "name", fmt.Sprintf("The name used in commits to this repo. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config.", env.UserNameKey))
-	ap.SupportsString(emailParamName, "", "email", fmt.Sprintf("The email address used. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config.", env.UserEmailKey))
+	ap.SupportsString(usernameParamName, "", "name", fmt.Sprintf("The name used in commits to this repo. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config.", config.UserNameKey))
+	ap.SupportsString(emailParamName, "", "email", fmt.Sprintf("The email address used. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config.", config.UserEmailKey))
 	ap.SupportsString(cli.DateParam, "", "date", "Specify the date used in the initial commit. If not specified the current system time is used.")
-	ap.SupportsString(initBranchParamName, "b", "branch", fmt.Sprintf("The branch name used to initialize this database. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config. If unset, the default initialized branch will be named '%s'.", env.InitBranchName, env.DefaultInitBranch))
+	ap.SupportsString(initBranchParamName, "b", "branch", fmt.Sprintf("The branch name used to initialize this database. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config. If unset, the default initialized branch will be named '%s'.", config.InitBranchName, env.DefaultInitBranch))
 	ap.SupportsFlag(newFormatFlag, "", fmt.Sprintf("Specify this flag to use the new storage format (%s).", types.Format_DOLT.VersionString()))
 	ap.SupportsFlag(oldFormatFlag, "", fmt.Sprintf("Specify this flag to use the old storage format (%s).", types.Format_LD_1.VersionString()))
 	ap.SupportsFlag(funHashFlag, "", "") // This flag is an easter egg. We can't currently prevent it from being listed in the help, but the description is deliberately left blank.
@@ -123,8 +124,8 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		}
 	}
 
-	name = dEnv.Config.IfEmptyUseConfig(name, env.UserNameKey)
-	email = dEnv.Config.IfEmptyUseConfig(email, env.UserEmailKey)
+	name = dEnv.Config.IfEmptyUseConfig(name, config.UserNameKey)
+	email = dEnv.Config.IfEmptyUseConfig(email, config.UserEmailKey)
 	if initBranch == "" {
 		initBranch = env.GetDefaultInitBranch(dEnv.Config)
 	}
@@ -133,14 +134,14 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		cli.PrintErrln(
 			color.RedString("Could not determine %[1]s. "+
 				"Use the init parameter --name \"FIRST LAST\" to set it for this repo, "+
-				"or dolt config --global --add %[1]s \"FIRST LAST\"", env.UserNameKey))
+				"or dolt config --global --add %[1]s \"FIRST LAST\"", config.UserNameKey))
 		usage()
 		return 1
 	} else if email == "" {
 		cli.PrintErrln(
 			color.RedString("Could not determine %[1]s. "+
 				"Use the init parameter --email \"EMAIL_ADDRESS\" to set it for this repo, "+
-				"or dolt config --global --add %[1]s \"EMAIL_ADDRESS\"", env.UserEmailKey))
+				"or dolt config --global --add %[1]s \"EMAIL_ADDRESS\"", config.UserEmailKey))
 		usage()
 		return 1
 	}
@@ -169,10 +170,10 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	configuration := make(map[string]string)
 	if apr.Contains(usernameParamName) {
-		configuration[env.UserNameKey] = name
+		configuration[config.UserNameKey] = name
 	}
 	if apr.Contains(emailParamName) {
-		configuration[env.UserEmailKey] = email
+		configuration[config.UserEmailKey] = email
 	}
 	if len(configuration) > 0 {
 		err = dEnv.Config.WriteableConfig().SetStrings(configuration)
