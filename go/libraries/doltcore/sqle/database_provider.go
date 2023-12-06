@@ -527,7 +527,7 @@ func (p *DoltDatabaseProvider) cloneDatabaseFromRemote(
 		return nil, err
 	}
 
-	err = actions.CloneRemote(ctx, srcDB, remoteName, branch, dEnv)
+	err = actions.CloneRemote(ctx, srcDB, remoteName, branch, false, dEnv)
 	if err != nil {
 		return nil, err
 	}
