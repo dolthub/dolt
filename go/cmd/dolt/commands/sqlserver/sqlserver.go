@@ -202,7 +202,13 @@ func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []stri
 			cancelF()
 		}
 	}()
-	return startServer(newCtx, cmd.VersionStr, commandStr, args, dEnv, controller)
+	err := StartServer(newCtx, cmd.VersionStr, commandStr, args, dEnv, controller)
+	if err != nil {
+		cli.Println(color.RedString(err.Error()))
+		return 1
+	}
+	
+	return 0
 }
 
 func validateSqlServerArgs(apr *argparser.ArgParseResults) error {
@@ -217,7 +223,8 @@ func validateSqlServerArgs(apr *argparser.ArgParseResults) error {
 	return nil
 }
 
-func startServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, controller *svcs.Controller) int {
+// StartServer starts the sql server with the controller provided and blocks until the server is stopped. 
+func StartServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, controller *svcs.Controller) error {
 	ap := SqlServerCmd{}.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlServerDocs, ap))
 
@@ -227,33 +234,28 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	if err := validateSqlServerArgs(apr); err != nil {
 		cli.PrintErrln(color.RedString(err.Error()))
-		return 1
+		return err
 	}
+	
 	serverConfig, err := GetServerConfig(dEnv.FS, apr)
 	if err != nil {
-		cli.PrintErrln(color.RedString("Failed to start server. Bad Configuration"))
-		cli.PrintErrln(err.Error())
-		return 1
+		return fmt.Errorf("Failed to start server. Bad Configuration: %w", err)
 	}
 	if err = SetupDoltConfig(dEnv, apr, serverConfig); err != nil {
-		cli.PrintErrln(color.RedString("Failed to start server. Bad Configuration"))
-		cli.PrintErrln(err.Error())
-		return 1
+		return fmt.Errorf("Failed to start server. Bad Configuration: %w", err)
 	}
 
 	cli.PrintErrf("Starting server with Config %v\n", ConfigInfo(serverConfig))
 
-	if startError, closeError := Serve(ctx, versionStr, serverConfig, controller, dEnv); startError != nil || closeError != nil {
-		if startError != nil {
-			cli.PrintErrln(startError)
-		}
-		if closeError != nil {
-			cli.PrintErrln(closeError)
-		}
-		return 1
+	startError, closeError := Serve(ctx, versionStr, serverConfig, controller, dEnv)
+	if startError != nil {
+		return startError
+	}
+	if closeError != nil {
+		return closeError
 	}
 
-	return 0
+	return nil
 }
 
 // GetServerConfig returns ServerConfig that is set either from yaml file if given, if not it is set with values defined
