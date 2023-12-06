@@ -86,7 +86,7 @@ setup() {
     BATS_TEST_TIMEOUT=1
 }
 
-
+# bats test_tags=no_lambda
 @test "performance: merge with schema change and no conflict" {
     dolt checkout full
     dolt checkout -b mod2
@@ -118,6 +118,7 @@ setup() {
     log_status_eq 0
 }
 
+# bats test_tags=no_lambda
 @test "performance: merge with schema change and conflict" {
     dolt checkout full
     dolt checkout -b mod2
