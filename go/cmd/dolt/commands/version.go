@@ -16,10 +16,15 @@ package commands
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -29,6 +34,7 @@ import (
 const (
 	featureVersionFlag = "feature"
 	verboseFlag        = "verbose"
+	versionCheckFile   = "version_check.txt"
 )
 
 var versionDocs = cli.CommandDocumentationContent{
@@ -81,16 +87,9 @@ func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string
 	cli.Println("dolt version", cmd.VersionStr)
 
 	var verr errhand.VerboseError
-	// out of date check
-	client := github.NewClient(nil)
-	release, resp, err := client.Repositories.GetLatestRelease(ctx, "dolthub", "dolt")
-	if err != nil || resp.StatusCode != 200 {
-		verr = errhand.BuildDError("error: failed to get latest release").AddCause(err).Build()
+	verr = checkAndPrintVersionOutOfDateWarning(cmd.VersionStr, dEnv)
+	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
-	}
-	releaseName := strings.TrimPrefix(*release.TagName, "v")
-	if cmd.VersionStr != releaseName {
-		cli.Printf("Warning: you are on an old version of Dolt. The newest version is %s.\n", releaseName)
 	}
 
 	if apr.Contains(verboseFlag) {
@@ -123,4 +122,68 @@ func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string
 	}
 
 	return HandleVErrAndExitCode(verr, usage)
+}
+
+// checkAndPrintVersionOutOfDateWarning checks if the current version of Dolt is out of date and prints a warning if it
+// is. Restricts this check to at most once per week.
+func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) errhand.VerboseError {
+	var latestRelease string
+	var verr errhand.VerboseError
+
+	homeDir, err := dEnv.GetUserHomeDir()
+	if err != nil {
+		return errhand.BuildDError("error: failed to get user home directory").AddCause(err).Build()
+	}
+	path := filepath.Join(homeDir, dbfactory.DoltDir, versionCheckFile)
+
+	if exists, _ := dEnv.FS.Exists(path); exists {
+		vCheck, err := dEnv.FS.ReadFile(path)
+		if err != nil {
+			return errhand.BuildDError("error: failed to read version check file").AddCause(err).Build()
+		}
+
+		vCheckData := strings.Split(string(vCheck), ",")
+		if len(vCheckData) != 2 {
+			// formatting or data is wrong, so just overwrite
+			latestRelease, verr = getLatestDoltReleaseAndRecord(path, dEnv)
+			if verr != nil {
+				return verr
+			}
+		} else {
+			latestRelease = vCheckData[0]
+			lastCheckDate, err := time.Parse(time.DateOnly, vCheckData[1])
+			if err != nil {
+				return errhand.BuildDError("error: failed to parse version check file").AddCause(err).Build()
+			}
+			if lastCheckDate.Before(time.Now().AddDate(0, 0, -7)) {
+				latestRelease, err = getLatestDoltReleaseAndRecord(path, dEnv)
+			}
+		}
+	} else {
+		latestRelease, err = getLatestDoltReleaseAndRecord(path, dEnv)
+	}
+
+	if curVersion != latestRelease {
+		cli.Printf("Warning: you are on an old version of Dolt. The newest version is %s.\n", latestRelease)
+	}
+
+	return nil
+}
+
+// getLatestDoltRelease returns the latest release of Dolt from GitHub and records the release and current date in the
+// version check file.
+func getLatestDoltReleaseAndRecord(path string, dEnv *env.DoltEnv) (string, errhand.VerboseError) {
+	client := github.NewClient(nil)
+	release, resp, err := client.Repositories.GetLatestRelease(context.Background(), "dolthub", "dolt")
+	if err != nil || resp.StatusCode != 200 {
+		return "", errhand.BuildDError("error: failed to get latest release").AddCause(err).Build()
+	}
+	releaseName := strings.TrimPrefix(*release.TagName, "v")
+
+	err = dEnv.FS.WriteFile(path, []byte(fmt.Sprintf("%s,%s", releaseName, time.Now().UTC().Format(time.DateOnly))), os.ModePerm)
+	if err != nil {
+		return "", errhand.BuildDError("error: failed to update version check file").AddCause(err).Build()
+	}
+
+	return releaseName, nil
 }
