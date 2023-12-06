@@ -111,7 +111,13 @@ func (h *commithook) run(ctx context.Context) {
 	go h.tick(ctx)
 	<-ctx.Done()
 	h.logger().Tracef("cluster/commithook: background thread: requested shutdown, signaling replication thread.")
+	h.mu.Lock()
+	if h.cancelReplicate != nil {
+		h.cancelReplicate()
+		h.cancelReplicate = nil
+	}
 	h.cond.Signal()
+	h.mu.Unlock()
 	h.wg.Wait()
 	h.logger().Tracef("cluster/commithook: background thread: completed.")
 }
@@ -179,6 +185,17 @@ func (h *commithook) replicate(ctx context.Context) {
 			}
 			if shouldHeartbeat {
 				h.attemptHeartbeat(ctx)
+
+				// attemptHeartbeat releases |h.mu| for part of
+				// its work. We could miss a shutdown signal
+				// here, but the shutdown signal is always
+				// delivered after the shared Context is
+				// canceled. We check the context again here so
+				// that we don't fail to shutdown if we miss a
+				// shutdown signal.
+				if ctx.Err() != nil {
+					continue
+				}
 			} else if caughtUp {
 				shouldHeartbeat = true
 			}
@@ -380,6 +397,12 @@ func (h *commithook) tick(ctx context.Context) {
 
 func (h *commithook) databaseWasDropped() {
 	h.shutdown.Store(true)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.cancelReplicate != nil {
+		h.cancelReplicate()
+		h.cancelReplicate = nil
+	}
 	h.cond.Signal()
 }
 

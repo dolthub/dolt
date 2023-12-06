@@ -131,7 +131,10 @@ func diffProllyTrees(ctx context.Context, ch chan DiffStatProgress, keyless bool
 		}
 	}
 
-	err = prolly.DiffMaps(ctx, f, t, func(ctx context.Context, diff tree.Diff) error {
+	// TODO: Use `vMapping` to determine whether columns have been added or removed. If so, then all rows should
+	// count as modifications in the diff.
+	considerAllRowsModified := false
+	err = prolly.DiffMaps(ctx, f, t, considerAllRowsModified, func(ctx context.Context, diff tree.Diff) error {
 		return rpr(ctx, vMapping, fVD, tVD, diff, ch)
 	})
 	if err != nil && err != io.EOF {

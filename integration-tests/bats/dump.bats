@@ -16,6 +16,28 @@ teardown() {
     [[ "$output" =~ "No tables to export." ]] || false
 }
 
+@test "dump: roundtrip on database with leading space character and hyphen" {
+    mkdir ' test-db'
+    cd ' test-db'
+    dolt init
+    create_tables
+    insert_data_into_tables
+
+    run dolt dump
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f doltdump.sql ]
+
+    mkdir roundtrip
+    cd roundtrip
+    dolt init
+
+    dolt sql < ../doltdump.sql
+    run dolt sql -q "show databases"
+    [ $status -eq 0 ]
+    [[ $output =~ "|  test-db" ]] || false
+}
+
 @test "dump: SQL type - with multiple tables" {
     dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     dolt sql -q "INSERT INTO new_table VALUES (1);"
@@ -129,7 +151,7 @@ teardown() {
     [[ "$output" =~ "3,Table" ]] || false
 }
 
-@test "dump: SQL type - compare tables in database with tables imported file " {
+@test "dump: SQL type - compare tables in database with tables imported file" {
     dolt branch new_branch
     dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     dolt sql -q "INSERT INTO new_table VALUES (1);"
@@ -154,7 +176,7 @@ teardown() {
     [[ "$output" = "" ]] || false
 }
 
-@test "dump: SQL type (no-batch) - compare tables in database with tables imported file " {
+@test "dump: SQL type (no-batch) - compare tables in database with tables imported file" {
     dolt branch new_branch
 
     dolt sql -q "CREATE TABLE new_table(pk int primary key);"
@@ -185,7 +207,7 @@ teardown() {
     [[ "$output" = "" ]] || false
 }
 
-@test "dump: SQL type (batch is no-op) - compare tables in database with tables imported file " {
+@test "dump: SQL type (batch is no-op) - compare tables in database with tables imported file" {
   dolt branch new_branch
 
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
@@ -498,7 +520,7 @@ SQL
     [ -f doltdump/warehouse.csv ]
 }
 
-@test "dump: CSV type - compare tables in database with tables imported from corresponding files " {
+@test "dump: CSV type - compare tables in database with tables imported from corresponding files" {
     create_tables
 
     dolt add .
@@ -638,7 +660,7 @@ SQL
     [ -f doltdump/warehouse.json ]
 }
 
-@test "dump: JSON type - compare tables in database with tables imported from corresponding files " {
+@test "dump: JSON type - compare tables in database with tables imported from corresponding files" {
     create_tables
 
     dolt add .
@@ -889,12 +911,12 @@ SQL
     dolt sql < ../doltdump.sql
     [ $status -eq 0 ]
 
-    run dolt sql -q "USE dolt_repo_$$; SHOW TABLES;"
+    run dolt sql -q "USE \`dolt-repo-$$\`; SHOW TABLES;"
     [ $status -eq 0 ]
     [[ $output =~ "table1" ]] || false
     [[ $output =~ "view1" ]] || false
 
-    run dolt sql -r csv -q "USE dolt_repo_$$; CALL procedure1;"
+    run dolt sql -r csv -q "USE \`dolt-repo-$$\`; CALL procedure1;"
     [ $status -eq 0 ]
     [[ $output =~ "pk,col1" ]] || false
     [[ $output =~ "2,1" ]] || false

@@ -197,7 +197,7 @@ func ProllyRowIterFromPartition(
 		return nil, err
 	}
 
-	return index.NewProllyRowIter(sch, rows, iter, projections)
+	return index.NewProllyRowIterForMap(sch, rows, iter, projections), nil
 }
 
 // SqlTableToRowIter returns a |sql.RowIter| for a full table scan for the given |table|. If
@@ -255,7 +255,7 @@ func DoltTablePartitionToRowIter(ctx *sql.Context, name string, table *doltdb.Ta
 		if err != nil {
 			return nil, nil, err
 		}
-		rowIter, err := index.NewProllyRowIter(sch, idx, iter, nil)
+		rowIter := index.NewProllyRowIterForMap(sch, idx, iter, nil)
 		if err != nil {
 			return nil, nil, err
 		}

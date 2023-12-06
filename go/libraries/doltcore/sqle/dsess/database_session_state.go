@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
 )
 
 // InitialDbState is the initial state of a database, as returned by SessionDatabase.InitialDBState. It is used to
@@ -40,9 +41,9 @@ type InitialDbState struct {
 	HeadRoot *doltdb.RootValue
 	ReadOnly bool
 	DbData   env.DbData
-	Remotes  map[string]env.Remote
-	Branches map[string]env.BranchConfig
-	Backups  map[string]env.Remote
+	Remotes  *concurrentmap.Map[string, env.Remote]
+	Branches *concurrentmap.Map[string, env.BranchConfig]
+	Backups  *concurrentmap.Map[string, env.Remote]
 
 	// If err is set, this InitialDbState is partially invalid, but may be
 	// usable to initialize a database at a revision specifier, for

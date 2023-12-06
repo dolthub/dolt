@@ -35,6 +35,7 @@ var _ sql.UpdatableTable = (*IgnoreTable)(nil)
 var _ sql.DeletableTable = (*IgnoreTable)(nil)
 var _ sql.InsertableTable = (*IgnoreTable)(nil)
 var _ sql.ReplaceableTable = (*IgnoreTable)(nil)
+var _ sql.IndexAddressableTable = (*IgnoreTable)(nil)
 
 // IgnoreTable is the system table that stores patterns for table names that should not be committed.
 type IgnoreTable struct {
@@ -129,6 +130,10 @@ func (it *IgnoreTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
 // GetIndexes implements IndexAddressableTable, but IgnoreTables has no indexes.
 func (it *IgnoreTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return nil, nil
+}
+
+func (i *IgnoreTable) PreciseMatch() bool {
+	return true
 }
 
 var _ sql.RowReplacer = (*ignoreWriter)(nil)

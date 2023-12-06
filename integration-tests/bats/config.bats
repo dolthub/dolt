@@ -36,7 +36,6 @@ teardown() {
     [ "$status" -eq 0 ]
     # Need to make this a regex because of the coloring
     [[ "$output" =~ "Config successfully updated" ]] || false
-    [ -f `nativepath ~/.dolt/config_global.json` ]
     run dolt config --list
     [ "$status" -eq 0 ]
     [ "$output" = "test = test" ]
@@ -286,4 +285,10 @@ teardown() {
     run dolt branch
     [ "$status" -eq 0 ]
     [[ "$output" =~ "* vegan-btw" ]] || false
+}
+
+@test "config: config doesn't need write permission in current dir" {
+    chmod 111 .
+    dolt config --list
+    chmod 755 .
 }

@@ -87,12 +87,12 @@ teardown() {
     dolt sql <<SQL
 create table t (pk int primary key);
 insert into t values (1),(2);
-call dcommit('-Am', 'msg');
+call dolt_commit('-Am', 'msg');
 insert into t values (3);
-call dcommit('-Am', 'three');
-call dtag('myTag');
+call dolt_commit('-Am', 'three');
+call dolt_tag('myTag');
 insert into t values (4);
-call dcommit('-Am', 'four');
+call dolt_commit('-Am', 'four');
 SQL
     run dolt sql -q "select * from t as of 'myTag'" -r csv
     [ "$status" -eq 0 ]
@@ -113,12 +113,12 @@ SQL
     dolt sql <<SQL
 create table t (pk int primary key);
 insert into t values (1),(2);
-call dcommit('-Am', 'msg');
+call dolt_commit('-Am', 'msg');
 insert into t values (3);
-call dcommit('-Am', 'three');
-call dtag('myTag');
+call dolt_commit('-Am', 'three');
+call dolt_tag('myTag');
 insert into t values (4);
-call dcommit('-Am', 'four');
+call dolt_commit('-Am', 'four');
 SQL
     run dolt sql -q "select * from t" -r csv
     [ "$status" -eq 0 ]

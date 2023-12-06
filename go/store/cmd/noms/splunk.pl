@@ -12,11 +12,9 @@ if (! check_exists_command('noms')) {
 
 print "Welcome to the splunk shell for exploring dolt repository storage.\n";
 
-my $manifest = `noms manifest $noms_dir`;
-my $root = get_root($manifest);
+my $root = `noms root $noms_dir`;
 
-my $message = "Currently examining root.\nUse numeric labels to navigate the tree\n.. to back up a level, / to return to root.\nType quit or exit to exit.\n";
-
+my $message = "Currently examining root.\nUse numeric labels to navigate the tree\n.. to back up a level, / to return reload root and return there.\nType quit or exit to exit.\n";
 my $hash = $root;
 my @stack = ($root);
 
@@ -46,6 +44,7 @@ while (true) {
     }
 
     if ($input eq "/") {
+        $root = `noms root $noms_dir`;
         $hash = $root;
         @stack = ($root);
         next;

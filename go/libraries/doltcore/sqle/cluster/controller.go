@@ -299,7 +299,7 @@ func (c *Controller) applyCommitHooks(ctx context.Context, name string, bt *sql.
 	dialprovider := c.gRPCDialProvider(denv)
 	var hooks []*commithook
 	for _, r := range c.cfg.StandbyRemotes() {
-		remote, ok := remotes[r.Name()]
+		remote, ok := remotes.Get(r.Name())
 		if !ok {
 			return nil, fmt.Errorf("sqle: cluster: standby replication: destination remote %s does not exist on database %s", r.Name(), name)
 		}

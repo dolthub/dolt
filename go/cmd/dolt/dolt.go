@@ -24,6 +24,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -64,7 +65,7 @@ import (
 )
 
 const (
-	Version = "1.25.0"
+	Version = "1.29.0"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -81,7 +82,6 @@ var doltSubCommands = []cli.Command{
 	commands.SqlCmd{VersionStr: Version},
 	admin.Commands,
 	sqlserver.SqlServerCmd{VersionStr: Version},
-	sqlserver.SqlClientCmd{VersionStr: Version},
 	commands.LogCmd{},
 	commands.ShowCmd{},
 	commands.BranchCmd{},
@@ -123,12 +123,12 @@ var doltSubCommands = []cli.Command{
 	&commands.Assist{},
 	commands.ProfileCmd{},
 	commands.QueryDiff{},
+	commands.ReflogCmd{},
 }
 
 var commandsWithoutCliCtx = []cli.Command{
 	admin.Commands,
 	sqlserver.SqlServerCmd{VersionStr: Version},
-	sqlserver.SqlClientCmd{VersionStr: Version},
 	commands.CloneCmd{},
 	commands.RemoteCmd{},
 	commands.BackupCmd{},
@@ -140,7 +140,6 @@ var commandsWithoutCliCtx = []cli.Command{
 	commands.MigrateCmd{},
 	indexcmds.Commands,
 	commands.ReadTablesCmd{},
-	commands.GarbageCollectionCmd{},
 	commands.FilterBranchCmd{},
 	commands.RootsCmd{},
 	commands.VersionCmd{VersionStr: Version},
@@ -162,9 +161,15 @@ var commandsWithoutGlobalArgSupport = []cli.Command{
 	commands.LoginCmd{},
 	credcmds.Commands,
 	sqlserver.SqlServerCmd{VersionStr: Version},
-	sqlserver.SqlClientCmd{VersionStr: Version},
 	commands.VersionCmd{VersionStr: Version},
 	commands.ConfigCmd{},
+}
+
+// commands that do not need write access for the current directory
+var commandsWithoutCurrentDirWrites = []cli.Command{
+	commands.VersionCmd{VersionStr: Version},
+	commands.ConfigCmd{},
+	commands.ProfileCmd{},
 }
 
 func initCliContext(commandName string) bool {
@@ -185,6 +190,15 @@ func supportsGlobalArgs(commandName string) bool {
 	return true
 }
 
+func needsWriteAccess(commandName string) bool {
+	for _, command := range commandsWithoutCurrentDirWrites {
+		if command.Name() == commandName {
+			return false
+		}
+	}
+	return true
+}
+
 var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", doltSubCommands)
 var globalArgParser = cli.CreateGlobalArgParser("dolt")
 var globalDocs = cli.CommandDocsForCommandString("dolt", doc, globalArgParser)
@@ -194,12 +208,19 @@ Dolt subcommands are in transition to using the flags listed below as global fla
 Not all subcommands use these flags. If your command accepts these flags without error, then they are supported.
 `
 
+const disableEventFlushEnvVar = "DOLT_DISABLE_EVENT_FLUSH"
+
+var eventFlushDisabled = false
+
 func init() {
 	dumpDocsCommand.DoltCommand = doltCommand
 	dumpDocsCommand.GlobalDocs = globalDocs
 	dumpDocsCommand.GlobalSpecialMsg = globalSpecialMsg
 	dumpZshCommand.DoltCommand = doltCommand
 	dfunctions.VersionString = Version
+	if _, ok := os.LookupEnv(disableEventFlushEnvVar); ok {
+		eventFlushDisabled = true
+	}
 }
 
 const pprofServerFlag = "--pprof-server"
@@ -240,7 +261,6 @@ func runMain() int {
 	}
 
 	csMetrics := false
-	ignoreLockFile := false
 	verboseEngineSetup := false
 	if len(args) > 0 {
 		var doneDebugFlags bool
@@ -379,7 +399,7 @@ func runMain() int {
 				args = args[1:]
 
 			case ignoreLocksFlag:
-				ignoreLockFile = true
+				// Ignored -- deprecated option.
 				args = args[1:]
 
 			case featureVersionFlag:
@@ -424,14 +444,17 @@ func runMain() int {
 	var fs filesys.Filesys
 	fs = filesys.LocalFS
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, Version)
-	dEnv.IgnoreLockFile = ignoreLockFile
 
-	root, err := env.GetCurrentUserHomeDir()
+	homeDir, err := env.GetCurrentUserHomeDir()
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to load the HOME directory: %v", err))
 		return 1
 	}
 
+	if dEnv.CfgLoadErr != nil {
+		cli.PrintErrln(color.RedString("Failed to load the global config. %v", dEnv.CfgLoadErr))
+		return 1
+	}
 	globalConfig, ok := dEnv.Config.GetConfig(env.GlobalConfig)
 	if !ok {
 		cli.PrintErrln(color.RedString("Failed to get global config"))
@@ -450,6 +473,19 @@ func runMain() int {
 		return 1
 	}
 
+	defer emitUsageEvents(dEnv, homeDir, args)
+
+	if needsWriteAccess(subcommandName) {
+		err = reconfigIfTempFileMoveFails(dEnv)
+
+		if err != nil {
+			cli.PrintErrln(color.RedString("Failed to setup the temporary directory. %v`", err))
+			return 1
+		}
+	}
+
+	defer tempfiles.MovableTempFileProvider.Clean()
+
 	dataDir, hasDataDir := apr.GetValue(commands.DataDirFlag)
 	if hasDataDir {
 		// If a relative path was provided, this ensures we have an absolute path everywhere.
@@ -463,50 +499,6 @@ func runMain() int {
 			return 1
 		}
 	}
-
-	if dEnv.CfgLoadErr != nil {
-		cli.PrintErrln(color.RedString("Failed to load the global config. %v", dEnv.CfgLoadErr))
-		return 1
-	}
-
-	emitter := events.NewFileEmitter(root, dbfactory.DoltDir)
-
-	defer func() {
-		ces := events.GlobalCollector.Close()
-		// events.WriterEmitter{cli.CliOut}.LogEvents(Version, ces)
-
-		metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")
-
-		disabled, err := strconv.ParseBool(metricsDisabled)
-		if err != nil {
-			// log.Print(err)
-			return
-		}
-
-		if disabled {
-			return
-		}
-
-		// write events
-		_ = emitter.LogEvents(Version, ces)
-
-		// flush events
-		if err := processEventsDir(args, dEnv); err != nil {
-			// log.Print(err)
-		}
-	}()
-
-	// version does not need write permissions
-	if subcommandName != "version" {
-		err = reconfigIfTempFileMoveFails(dEnv)
-
-		if err != nil {
-			cli.PrintErrln(color.RedString("Failed to setup the temporary directory. %v`", err))
-			return 1
-		}
-	}
-
-	defer tempfiles.MovableTempFileProvider.Clean()
 
 	// Find all database names and add global variables for them. This needs to
 	// occur before a call to dsess.InitPersistedSystemVars. Otherwise, database
@@ -536,7 +528,7 @@ func runMain() int {
 	}
 	dEnv.FS = dataDirFS
 
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dataDirFS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dataDirFS, dEnv.Version, dEnv)
 	if err != nil {
 		cli.PrintErrln("failed to load database names")
 		return 1
@@ -664,16 +656,20 @@ If you're interested in running this command against a remote host, hit us up on
 		}
 	}
 
-	if targetEnv == nil && useDb != "" {
-		targetEnv = mrEnv.GetEnv(useDb)
-	}
+	// If our targetEnv is still |nil| and we don't have an environment
+	// which we will be using based on |useDb|, then our initialization
+	// here did not find a repository we will be operating against.
+	noValidRepository := targetEnv == nil && (useDb == "" || mrEnv.GetEnv(useDb) == nil)
 
-	// There is no target environment detected. This is allowed for a small number of commands.
-	// We don't expect that number to grow, so we list them here.
-	// It's also allowed when --help is passed.
-	// So we defer the error until the caller tries to use the cli.LateBindQueryist
-	isDoltEnvironmentRequired := subcommandName != "init" && subcommandName != "sql" && subcommandName != "sql-server" && subcommandName != "sql-client"
-	if targetEnv == nil && isDoltEnvironmentRequired {
+	// Not having a valid repository as we start to execute a CLI command
+	// implementation is allowed for a small number of commands.  We don't
+	// expect this set of commands to grow, so we list them here.
+	//
+	// This is also allowed when --help is passed. So we defer the error
+	// until the caller tries to use the cli.LateBindQueryist.
+	isValidRepositoryRequired := subcommandName != "init" && subcommandName != "sql" && subcommandName != "sql-server" && subcommandName != "sql-client"
+
+	if noValidRepository && isValidRepositoryRequired {
 		return func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) {
 			return nil, nil, nil, fmt.Errorf("The current directory is not a valid dolt repository.")
 		}, nil
@@ -685,19 +681,40 @@ If you're interested in running this command against a remote host, hit us up on
 		targetEnv = rootEnv
 	}
 
-	isLocked, lock, err := targetEnv.GetLock()
-	if err != nil {
-		return nil, err
+	var lookForServer bool
+	if targetEnv.DoltDB != nil && targetEnv.IsAccessModeReadOnly() {
+		// If the loaded target environment has a DoltDB and we do not
+		// have access to it, we look for a server.
+		lookForServer = true
+	} else if targetEnv.DoltDB == nil {
+		// If the loaded environment itself does not have a DoltDB, we
+		// may want to look for a server. We do so if all of the
+		// repositories in our MultiEnv are ReadOnly. This includes the
+		// case where there are no repositories in our MultiEnv
+		var allReposAreReadOnly bool = true
+		mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
+			if dEnv.DoltDB != nil {
+				allReposAreReadOnly = allReposAreReadOnly && dEnv.IsAccessModeReadOnly()
+			}
+			return !allReposAreReadOnly, nil
+		})
+		lookForServer = allReposAreReadOnly
 	}
-	if isLocked {
-		if verbose {
-			cli.Println("verbose: starting remote mode")
+	if lookForServer {
+		localCreds, err := sqlserver.FindAndLoadLocalCreds(targetEnv.FS)
+		if err != nil {
+			return nil, err
 		}
+		if localCreds != nil {
+			if verbose {
+				cli.Println("verbose: starting remote mode")
+			}
 
-		if !creds.Specified {
-			creds = &cli.UserPassword{Username: sqlserver.LocalConnectionUser, Password: lock.Secret, Specified: false}
+			if !creds.Specified {
+				creds = &cli.UserPassword{Username: sqlserver.LocalConnectionUser, Password: localCreds.Secret, Specified: false}
+			}
+			return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", localCreds.Port, false, useDb)
 		}
-		return sqlserver.BuildConnectionStringQueryist(ctx, cwdFS, creds, apr, "localhost", lock.Port, false, useDb)
 	}
 
 	if verbose {
@@ -726,32 +743,58 @@ func seedGlobalRand() {
 	rand.Seed(int64(binary.LittleEndian.Uint64(bs)))
 }
 
-// processEventsDir runs the dolt send-metrics command in a new process
-func processEventsDir(args []string, dEnv *env.DoltEnv) error {
-	if len(args) > 0 {
-		ignoreCommands := map[string]struct{}{
-			commands.SendMetricsCommand: {},
-			"init":                      {},
-			"config":                    {},
-		}
+// emitUsageEvents is called after a command is run to emit usage events and send them to metrics servers.
+// Two controls of this behavior are possible:
+//  1. The config key |metrics.disabled|, when set to |true|, disables all metrics emission
+//  2. The environment key |DOLT_DISABLE_EVENT_FLUSH| allows writing events to disk but not sending them to the server.
+//     This is mostly used for testing.
+func emitUsageEvents(dEnv *env.DoltEnv, homeDir string, args []string) {
+	metricsDisabled := dEnv.Config.GetStringOrDefault(config.MetricsDisabled, "false")
+	disabled, err := strconv.ParseBool(metricsDisabled)
+	if err != nil || disabled {
+		return
+	}
 
-		_, ok := ignoreCommands[args[0]]
+	// write events
+	emitter := events.NewFileEmitter(homeDir, dbfactory.DoltDir)
+	_ = emitter.LogEvents(Version, events.GlobalCollector.Close())
 
-		if ok {
-			return nil
-		}
+	// flush events
+	if !eventFlushDisabled && len(args) > 0 && shouldFlushEvents(args[0]) {
+		_ = flushEventsDir()
+	}
+}
 
-		cmd := exec.Command("dolt", commands.SendMetricsCommand)
+// flushEventsDir flushes all logged events in a separate process.
+// This is done without blocking so that the main process can exit immediately in the case of a slow network.
+func flushEventsDir() error {
+	path, err := os.Executable()
+	if err != nil {
+		return err
+	}
 
-		if err := cmd.Start(); err != nil {
-			// log.Print(err)
-			return err
-		}
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
 
-		return nil
+	cmd := exec.Command(absPath, commands.SendMetricsCommand)
+
+	if err := cmd.Start(); err != nil {
+		return err
 	}
 
 	return nil
+}
+
+func shouldFlushEvents(command string) bool {
+	ignoreCommands := map[string]struct{}{
+		commands.SendMetricsCommand: {},
+		"init":                      {},
+		"config":                    {},
+	}
+	_, ok := ignoreCommands[command]
+	return !ok
 }
 
 func interceptSendMetrics(ctx context.Context, args []string) (bool, int) {

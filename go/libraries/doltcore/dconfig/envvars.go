@@ -42,4 +42,5 @@ const (
 	EnvDoltAssistAgree               = "DOLT_ASSIST_AGREE"
 	EnvDoltAuthorDate                = "DOLT_AUTHOR_DATE"
 	EnvDoltCommitterDate             = "DOLT_COMMITTER_DATE"
+	EnvDbNameReplace                 = "DOLT_DBNAME_REPLACE"
 )

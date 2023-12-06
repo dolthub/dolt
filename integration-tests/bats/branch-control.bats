@@ -92,7 +92,7 @@ setup_test_user() {
 @test "branch-control: test basic branch write permissions" {
     setup_test_user
 
-    dolt sql -q "insert into dolt_branch_control values ('dolt_repo_$$', 'test-branch', 'test', '%', 'write')"
+    dolt sql -q "insert into dolt_branch_control values ('dolt-repo-$$', 'test-branch', 'test', '%', 'write')"
     dolt branch test-branch
     
     start_sql_server
@@ -120,7 +120,7 @@ setup_test_user() {
     dolt sql -q "create user test2"
     dolt sql -q "grant all on *.* to test2"
 
-    dolt sql -q "insert into dolt_branch_control values ('dolt_repo_$$', 'test-branch', 'test', '%', 'admin')"
+    dolt sql -q "insert into dolt_branch_control values ('dolt-repo-$$', 'test-branch', 'test', '%', 'admin')"
     dolt branch test-branch
 
     start_sql_server
@@ -134,21 +134,21 @@ setup_test_user() {
     dolt -u test sql -q "call dolt_checkout('test-branch'); create table t (c1 int)"
 
     # Admin can make other users
-    dolt -u test sql -q "insert into dolt_branch_control values ('dolt_repo_$$', 'test-branch', 'test2', '%', 'write')"
+    dolt -u test sql -q "insert into dolt_branch_control values ('dolt-repo-$$', 'test-branch', 'test2', '%', 'write')"
     run dolt -u test sql --result-format csv -q "select * from dolt_branch_control"
     [ $status -eq 0 ]
     [ ${lines[0]} = "database,branch,user,host,permissions" ]
-    [ ${lines[1]} = "dolt_repo_$$,test-branch,test,%,admin" ]
-    [ ${lines[2]} = "dolt_repo_$$,test-branch,root,localhost,admin" ]
-    [ ${lines[3]} = "dolt_repo_$$,test-branch,test2,%,write" ]
+    [ ${lines[1]} = "dolt-repo-$$,test-branch,test,%,admin" ]
+    [ ${lines[2]} = "dolt-repo-$$,test-branch,root,localhost,admin" ]
+    [ ${lines[3]} = "dolt-repo-$$,test-branch,test2,%,write" ]
 
     # test2 can see all branch permissions
     run dolt -u test2 sql --result-format csv -q "select * from dolt_branch_control"
     [ $status -eq 0 ]
     [ ${lines[0]} = "database,branch,user,host,permissions" ]
-    [ ${lines[1]} = "dolt_repo_$$,test-branch,test,%,admin" ]
-    [ ${lines[2]} = "dolt_repo_$$,test-branch,root,localhost,admin" ]
-    [ ${lines[3]} = "dolt_repo_$$,test-branch,test2,%,write" ]
+    [ ${lines[1]} = "dolt-repo-$$,test-branch,test,%,admin" ]
+    [ ${lines[2]} = "dolt-repo-$$,test-branch,root,localhost,admin" ]
+    [ ${lines[3]} = "dolt-repo-$$,test-branch,test2,%,write" ]
 
     # test2 now has write permissions on test-branch
     dolt -u test2 sql -q "call dolt_checkout('test-branch'); insert into t values(0)"
@@ -159,7 +159,7 @@ setup_test_user() {
     run dolt -u test sql --result-format csv -q "select * from dolt_branch_control"
     [ $status -eq 0 ]
     [ ${lines[0]} = "database,branch,user,host,permissions" ]
-    [ ${lines[1]} = "dolt_repo_$$,test-branch,test,%,admin" ]
+    [ ${lines[1]} = "dolt-repo-$$,test-branch,test,%,admin" ]
 
     # test2 cannot write to branch
     run dolt -u test2 sql -q "call dolt_checkout('test-branch'); insert into t values(1)"
@@ -170,7 +170,7 @@ setup_test_user() {
 @test "branch-control: creating a branch grants admin permissions" {
     setup_test_user
 
-    dolt sql -q "insert into dolt_branch_control values ('dolt_repo_$$', 'main', 'test', '%', 'write')"
+    dolt sql -q "insert into dolt_branch_control values ('dolt-repo-$$', 'main', 'test', '%', 'write')"
 
     start_sql_server
 
@@ -179,8 +179,8 @@ setup_test_user() {
     run dolt -u test sql --result-format csv -q "select * from dolt_branch_control"
     [ $status -eq 0 ]
     [ ${lines[0]} = "database,branch,user,host,permissions" ]
-    [ ${lines[1]} = "dolt_repo_$$,main,test,%,write" ]
-    [ ${lines[2]} = "dolt_repo_$$,test-branch,test,%,admin" ]
+    [ ${lines[1]} = "dolt-repo-$$,main,test,%,write" ]
+    [ ${lines[2]} = "dolt-repo-$$,test-branch,test,%,admin" ]
 }
 
 @test "branch-control: test branch namespace control" {
@@ -189,16 +189,16 @@ setup_test_user() {
     dolt sql -q "create user test2"
     dolt sql -q "grant all on *.* to test2"
 
-    dolt sql -q "insert into dolt_branch_control values ('dolt_repo_$$', 'test-
+    dolt sql -q "insert into dolt_branch_control values ('dolt-repo-$$', 'test-
 branch', 'test', '%', 'admin')"
-    dolt sql -q "insert into dolt_branch_namespace_control values ('dolt_repo_$$', 'test-%', 'test2', '%')"
+    dolt sql -q "insert into dolt_branch_namespace_control values ('dolt-repo-$$', 'test-%', 'test2', '%')"
 
     start_sql_server
 
     run dolt -u test sql --result-format csv -q "select * from dolt_branch_namespace_control"
     [ $status -eq 0 ]
     [ ${lines[0]} = "database,branch,user,host" ]
-    [ ${lines[1]} = "dolt_repo_$$,test-%,test2,%" ]
+    [ ${lines[1]} = "dolt-repo-$$,test-%,test2,%" ]
 
     # test cannot create test-branch
     run dolt -u test sql -q "call dolt_branch('test-branch')"
@@ -215,8 +215,8 @@ branch', 'test', '%', 'admin')"
     dolt sql -q "create user test2"
     dolt sql -q "grant all on *.* to test2"
 
-    dolt sql -q "insert into dolt_branch_namespace_control values ('dolt_repo_$$', 'test/%', 'test', '%')"
-    dolt sql -q "insert into dolt_branch_namespace_control values ('dolt_repo_$$', 'test2/%', 'test2', '%')"
+    dolt sql -q "insert into dolt_branch_namespace_control values ('dolt-repo-$$', 'test/%', 'test', '%')"
+    dolt sql -q "insert into dolt_branch_namespace_control values ('dolt-repo-$$', 'test2/%', 'test2', '%')"
 
     start_sql_server
 
@@ -238,8 +238,8 @@ branch', 'test', '%', 'admin')"
   dolt sql -q "grant all on *.* to admin"
   dolt sql -q "insert into dolt_branch_control values ('%', '%', 'admin', '%', 'admin')"
 
-  dolt sql -q "insert into dolt_branch_control values ('dolt_repo_$$', 'test-branch', 'test', '%', 'read')"
-  dolt sql -q "insert into dolt_branch_control values ('dolt_repo_$$', '%', 'test', '%', 'write')"
+  dolt sql -q "insert into dolt_branch_control values ('dolt-repo-$$', 'test-branch', 'test', '%', 'read')"
+  dolt sql -q "insert into dolt_branch_control values ('dolt-repo-$$', '%', 'test', '%', 'write')"
   dolt branch test-branch
 
   start_sql_server

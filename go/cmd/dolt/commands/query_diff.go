@@ -33,8 +33,14 @@ import (
 )
 
 var queryDiffDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Shows table diff between two queries",
-	LongDesc:  "Will execute two queries and compare the resulting table sets",
+	ShortDesc: "Calculates table diff between two queries",
+	LongDesc: "Will execute two queries and compare the resulting table sets\n\n" +
+		"`<query1>`: A SQL `SELECT` query to be executed.\n\n" +
+		"`<query2>`: A SQL `SELECT` query to be executed.\n\n" +
+		"**Note**\n\n" +
+		"Query diff is performed brute force and thus, will be slow for large result sets.\n" +
+		"The algorithm is super linear (`n^2`) on the size of the results sets.\n" +
+		"Over time, we will optimize this to use features of the storage engine to improve performance.",
 	Synopsis: []string{
 		`[options] [{{.LessThan}}query1{{.GreaterThan}}] [{{.LessThan}}query2{{.GreaterThan}}]`,
 	},
@@ -49,7 +55,7 @@ func (q QueryDiff) Name() string {
 }
 
 func (q QueryDiff) Description() string {
-	return "description"
+	return "Shows table diff between two queries."
 }
 
 func (q QueryDiff) Docs() *cli.CommandDocumentation {

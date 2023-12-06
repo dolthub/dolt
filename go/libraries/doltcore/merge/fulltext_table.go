@@ -125,6 +125,11 @@ func (table *fulltextTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return table.GMSTable.GetIndexes(ctx)
 }
 
+// PreciseMatch implements the interface fulltext.EditableTable.
+func (table *fulltextTable) PreciseMatch() bool {
+	return false
+}
+
 // ApplyToTable writes the data from the internal GMS table to the internal Dolt table, then returns the updated Dolt
 // table. The updated Dolt table is not stored.
 func (table *fulltextTable) ApplyToTable(ctx *sql.Context) (*doltdb.Table, error) {

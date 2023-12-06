@@ -244,9 +244,9 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "origin" ]] || false
 
-    DATABASE=$(echo $(basename $(pwd)) | tr '-' '_')
+    DATABASE=$(echo $(basename $(pwd)))
     run dolt sql <<SQL
-USE $DATABASE/b1;
+USE \`$DATABASE/b1\`;
 SELECT name FROM dolt_remotes;
 SQL
     [ $status -eq 0 ]

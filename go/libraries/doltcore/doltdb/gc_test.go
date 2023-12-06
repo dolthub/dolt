@@ -154,10 +154,10 @@ func testGarbageCollection(t *testing.T, test gcTest) {
 // In September 2023, we found a failure to handle the `hasCache` in
 // `*NomsBlockStore` appropriately while cleaning up a memtable into which
 // dangling references had been written could result in writing chunks to a
-// database which referenced non-existant chunks.
+// database which referenced non-existent chunks.
 //
 // The general pattern was to get new chunk addresses into the hasCache, but
-// not written to the store, and then to have an incoming chunk add a refenece
+// not written to the store, and then to have an incoming chunk add a reference
 // to missing chunk. At that time, we would clear the memtable, since it had
 // invalid chunks in it, but we wouldn't purge the hasCache. Later writes which
 // attempted to reference the chunks which had made it into the hasCache would

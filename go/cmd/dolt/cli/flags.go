@@ -60,6 +60,7 @@ const (
 	ShallowFlag          = "shallow"
 	ShowIgnoredFlag      = "ignored"
 	SilentFlag           = "silent"
+	SingleBranchFlag     = "single-branch"
 	SkipEmptyFlag        = "skip-empty"
 	SoftResetParam       = "soft"
 	SquashParam          = "squash"

@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -52,7 +53,7 @@ func createTestEnv(isInitialized bool, hasLocalConfig bool) (*DoltEnv, *filesys.
 		initialDirs = append(initialDirs, doltDataDir)
 
 		mainRef := ref.NewBranchRef(DefaultInitBranch)
-		repoState := &RepoState{Head: ref.MarshalableRef{Ref: mainRef}}
+		repoState := &RepoState{Head: ref.MarshalableRef{Ref: mainRef}, Remotes: concurrentmap.New[string, Remote](), Backups: concurrentmap.New[string, Remote](), Branches: concurrentmap.New[string, BranchConfig]()}
 		repoStateData, err := json.Marshal(repoState)
 
 		if err != nil {

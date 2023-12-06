@@ -173,16 +173,6 @@ var testCases = []testCase{
 		true,
 		false,
 	},
-	{
-		"dropping a column should be equivalent to setting a column to null",
-		build(1, 2, 0),
-		build(2, 1),
-		build(1, 1, 1),
-		3, 2, 3,
-		build(2, 2),
-		true,
-		false,
-	},
 	// TODO (dhruv): need to fix this test case for new storage format
 	//{
 	//	"add rows but one holds a new column",

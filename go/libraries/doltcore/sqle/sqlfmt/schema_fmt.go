@@ -15,6 +15,7 @@
 package sqlfmt
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -31,9 +32,12 @@ func GenerateCreateTableColumnDefinition(col schema.Column, tableCollation sql.C
 
 // GenerateCreateTableIndentedColumnDefinition returns column definition for CREATE TABLE statement with no indentation
 func GenerateCreateTableIndentedColumnDefinition(col schema.Column, tableCollation sql.CollationID) string {
-	var defaultVal *sql.ColumnDefaultValue
+	var defaultVal, genVal *sql.ColumnDefaultValue
 	if col.Default != "" {
 		defaultVal = sql.NewUnresolvedColumnDefaultValue(col.Default)
+	}
+	if col.Generated != "" {
+		genVal = sql.NewUnresolvedColumnDefaultValue(col.Generated)
 	}
 
 	return sql.GenerateCreateTableColumnDefinition(
@@ -44,9 +48,8 @@ func GenerateCreateTableIndentedColumnDefinition(col schema.Column, tableCollati
 			AutoIncrement: col.AutoIncrement,
 			Nullable:      col.IsNullable(),
 			Comment:       col.Comment,
-			// TODO
-			// Generated:      nil,
-			// Virtual:        false,
+			Generated:     genVal,
+			Virtual:       col.Virtual,
 		}, col.Default, tableCollation)
 }
 
@@ -69,12 +72,13 @@ func GenerateCreateTableForeignKeyDefinition(fk doltdb.ForeignKey, sch, parentSc
 	}
 
 	var parentCols []string
-	if fk.IsResolved() {
+	if parentSch != nil && fk.IsResolved() {
 		for _, tag := range fk.ReferencedTableColumns {
 			c, _ := parentSch.GetAllCols().GetByTag(tag)
 			parentCols = append(parentCols, c.Name)
 		}
 	} else {
+		// the referenced table is dropped, so the schema is nil or the foreign key is not resolved
 		parentCols = append(parentCols, fk.UnresolvedFKDetails.ReferencedTableColumns...)
 	}
 
@@ -255,4 +259,65 @@ func AlterTableDropForeignKeyStmt(tableName, fkName string) string {
 	b.WriteString(QuoteIdentifier(fkName))
 	b.WriteRune(';')
 	return b.String()
+}
+
+// GenerateCreateTableStatement returns a CREATE TABLE statement for given table. This is a reasonable approximation of
+// `SHOW CREATE TABLE` in the engine, but may have some differences. Callers are advised to use the engine when
+// possible.
+func GenerateCreateTableStatement(tblName string, sch schema.Schema, fks []doltdb.ForeignKey, fksParentSch map[string]schema.Schema) (string, error) {
+	colStmts := make([]string, sch.GetAllCols().Size())
+
+	// Statement creation parts for each column
+	for i, col := range sch.GetAllCols().GetColumns() {
+		colStmts[i] = GenerateCreateTableIndentedColumnDefinition(col, sql.CollationID(sch.GetCollation()))
+	}
+
+	primaryKeyCols := sch.GetPKCols().GetColumnNames()
+	if len(primaryKeyCols) > 0 {
+		primaryKey := sql.GenerateCreateTablePrimaryKeyDefinition(primaryKeyCols)
+		colStmts = append(colStmts, primaryKey)
+	}
+
+	indexes := sch.Indexes().AllIndexes()
+	for _, index := range indexes {
+		// The primary key may or may not be declared as an index by the table. Don't print it twice if it's here.
+		if isPrimaryKeyIndex(index, sch) {
+			continue
+		}
+		colStmts = append(colStmts, GenerateCreateTableIndexDefinition(index))
+	}
+
+	for _, fk := range fks {
+		colStmts = append(colStmts, GenerateCreateTableForeignKeyDefinition(fk, sch, fksParentSch[fk.ReferencedTableName]))
+	}
+
+	for _, check := range sch.Checks().AllChecks() {
+		colStmts = append(colStmts, GenerateCreateTableCheckConstraintClause(check))
+	}
+
+	coll := sql.CollationID(sch.GetCollation())
+	createTableStmt := sql.GenerateCreateTableStatement(tblName, colStmts, coll.CharacterSet().Name(), coll.Name())
+	return fmt.Sprintf("%s;", createTableStmt), nil
+}
+
+// isPrimaryKeyIndex returns whether the index given matches the table's primary key columns. Order is not considered.
+func isPrimaryKeyIndex(index schema.Index, sch schema.Schema) bool {
+	var pks = sch.GetPKCols().GetColumns()
+	var pkMap = make(map[string]struct{})
+	for _, c := range pks {
+		pkMap[c.Name] = struct{}{}
+	}
+
+	indexCols := index.ColumnNames()
+	if len(indexCols) != len(pks) {
+		return false
+	}
+
+	for _, c := range index.ColumnNames() {
+		if _, ok := pkMap[c]; !ok {
+			return false
+		}
+	}
+
+	return true
 }

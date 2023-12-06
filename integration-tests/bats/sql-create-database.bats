@@ -22,7 +22,7 @@ SQL
 
     run dolt sql -q "SHOW DATABASES;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "dolt_repo_$$" ]] || false
+    [[ "$output" =~ "dolt-repo-$$" ]] || false
     [[ "$output" =~ "information_schema" ]] || false
     [[ "$output" =~ "mydb" ]] || false
     
@@ -43,7 +43,7 @@ SQL
 
     run dolt sql -q "SHOW DATABASES;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "dolt_repo_$$" ]] || false
+    [[ "$output" =~ "dolt-repo-$$" ]] || false
     [[ "$output" =~ "information_schema" ]] || false
     [[ "$output" =~ "mydb" ]] || false
 
@@ -65,7 +65,7 @@ SQL
 
     run dolt sql -q "SHOW DATABASES;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "dolt_repo_$$" ]] || false
+    [[ "$output" =~ "dolt-repo-$$" ]] || false
     [[ "$output" =~ "information_schema" ]] || false
     [[ "$output" =~ "mydb" ]] || false
 
@@ -142,7 +142,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "mydb2" ]] || false
     [[ ! "$output" =~ "mydb1" ]] || false
-    [[ ! "$output" =~ "dolt_repo_$$" ]] || false
+    [[ ! "$output" =~ "dolt-repo-$$" ]] || false
 
     # data-dir with abs path
     absdir="/tmp/$$/db_dir"
@@ -221,7 +221,7 @@ SQL
     dolt sql -q "CREATE DATABASE IF NOT EXISTS test;"
     run dolt sql -q "SHOW DATABASES;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "dolt_repo_$$" ]] || false
+    [[ "$output" =~ "dolt-repo-$$" ]] || false
     [[ "$output" =~ "information_schema" ]] || false
     [[ "$output" =~ "test" ]] || false
 
@@ -278,7 +278,7 @@ SQL
     dolt sql -q "CREATE SCHEMA mydb"
 
     run dolt sql -q "SHOW DATABASES;"
-    [[ "$output" =~ "dolt_repo_$$" ]] || false
+    [[ "$output" =~ "dolt-repo-$$" ]] || false
     [[ "$output" =~ "information_schema" ]] || false
     [[ "$output" =~ "mydb" ]] || false    
 }
@@ -311,7 +311,7 @@ SQL
 
     run dolt sql -q "SHOW DATABASES;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "dolt_repo_$$" ]] || false
+    [[ "$output" =~ "dolt-repo-$$" ]] || false
     [[ "$output" =~ "information_schema" ]] || false
     [[ "$output" =~ "metabase" ]] || false
 
@@ -320,4 +320,33 @@ SQL
     run dolt sql -q "select * from information_schema.SCHEMATA where schema_name = 'metabase';" -r csv
     [[ "$output" =~ "def,metabase,utf8mb4,utf8mb4_unicode_ci,,NO" ]] || false
     cd ..
+}
+
+@test "sql-create-database: creating database with hyphen and space characters replaced" {
+    mkdir 'test- dashes'
+    cd 'test- dashes'
+    dolt init
+    export DOLT_DBNAME_REPLACE="true"
+
+    # aliasing with 'a' allows check on the exact length of the database name
+    run dolt sql << SQL
+USE test_dashes;
+SELECT DATABASE() AS a;
+SQL
+    [ $status -eq 0 ]
+    [[ $output =~ "| test_dashes |" ]] || false
+}
+
+@test "sql-create-database: creating database with hyphen and space characters allowed" {
+    mkdir ' test- db _  '
+    cd ' test- db _  '
+    dolt init
+
+    # aliasing with 'a' allows check on the exact length of the database name
+    run dolt sql << SQL
+USE \` test- db _  \`;
+SELECT DATABASE() AS a;
+SQL
+    [ $status -eq 0 ]
+    [[ $output =~ "|  test- db _   |" ]] || false
 }

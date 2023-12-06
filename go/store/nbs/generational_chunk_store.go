@@ -166,6 +166,15 @@ func (gcs *GenerationalNBS) Version() string {
 	return gcs.newGen.Version()
 }
 
+func (gcs *GenerationalNBS) AccessMode() chunks.ExclusiveAccessMode {
+	newGenMode := gcs.newGen.AccessMode()
+	oldGenMode := gcs.oldGen.AccessMode()
+	if oldGenMode > newGenMode {
+		return oldGenMode
+	}
+	return newGenMode
+}
+
 // Rebase brings this ChunkStore into sync with the persistent storage's
 // current root.
 func (gcs *GenerationalNBS) Rebase(ctx context.Context) error {

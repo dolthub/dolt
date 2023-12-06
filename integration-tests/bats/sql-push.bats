@@ -91,19 +91,6 @@ SQL
     [[ "$output" =~ "5,500" ]] || false
 }
 
-@test "sql-push: CALL dpush origin" {
-    cd repo1
-    dolt sql -q "CALL dpush('origin', 'main')"
-
-    cd ../repo2
-    dolt pull origin
-    run dolt sql -q "show tables" -r csv
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
-    [[ "$output" =~ "Table" ]] || false
-    [[ "$output" =~ "t1" ]] || false
-}
-
 @test "sql-push: dolt_push custom remote" {
     cd repo1
     dolt sql -q "call dolt_push('test-remote', 'main')"

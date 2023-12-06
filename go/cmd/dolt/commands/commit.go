@@ -37,6 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -275,17 +276,17 @@ func handleCommitErr(sqlCtx *sql.Context, queryist cli.Queryist, err error, usag
 	}
 
 	if err == datas.ErrNameNotConfigured {
-		bdr := errhand.BuildDError("Could not determine %s.", env.UserNameKey)
+		bdr := errhand.BuildDError("Could not determine %s.", config.UserNameKey)
 		bdr.AddDetails("Log into DoltHub: dolt login")
-		bdr.AddDetails("OR add name to config: dolt config [--global|--local] --add %[1]s \"FIRST LAST\"", env.UserNameKey)
+		bdr.AddDetails("OR add name to config: dolt config [--global|--local] --add %[1]s \"FIRST LAST\"", config.UserNameKey)
 
 		return HandleVErrAndExitCode(bdr.Build(), usage)
 	}
 
 	if err == datas.ErrEmailNotConfigured {
-		bdr := errhand.BuildDError("Could not determine %s.", env.UserEmailKey)
+		bdr := errhand.BuildDError("Could not determine %s.", config.UserEmailKey)
 		bdr.AddDetails("Log into DoltHub: dolt login")
-		bdr.AddDetails("OR add email to config: dolt config [--global|--local] --add %[1]s \"EMAIL_ADDRESS\"", env.UserEmailKey)
+		bdr.AddDetails("OR add email to config: dolt config [--global|--local] --add %[1]s \"EMAIL_ADDRESS\"", config.UserEmailKey)
 
 		return HandleVErrAndExitCode(bdr.Build(), usage)
 	}
@@ -355,7 +356,7 @@ func getCommitMessageFromEditor(sqlCtx *sql.Context, queryist cli.Queryist, sugg
 		backupEd = ed
 	}
 	// try getting Dolt config core.editor
-	editorStr := cliCtx.Config().GetStringOrDefault(env.DoltEditor, backupEd)
+	editorStr := cliCtx.Config().GetStringOrDefault(config.DoltEditor, backupEd)
 
 	cli.ExecuteWithStdioRestored(func() {
 		commitMsg, cErr := editor.OpenCommitEditor(editorStr, initialMsg)

@@ -83,10 +83,6 @@ func NewSqlEngine(
 	mrEnv *env.MultiRepoEnv,
 	config *SqlEngineConfig,
 ) (*SqlEngine, error) {
-	if ok, _ := mrEnv.IsLocked(); ok {
-		config.IsServerLocked = true
-	}
-
 	dbs, locations, err := CollectDBs(ctx, mrEnv, config.Bulk)
 	if err != nil {
 		return nil, err
@@ -411,7 +407,7 @@ func doltSessionFactory(pro *dsqle.DoltDatabaseProvider, config config.ReadWrite
 // NewSqlEngineForEnv returns a SqlEngine configured for the environment provided, with a single root user.
 // Returns the new engine, the first database name, and any error that occurred.
 func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv) (*SqlEngine, string, error) {
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv.IgnoreLockFile, dEnv)
+	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv)
 	if err != nil {
 		return nil, "", err
 	}

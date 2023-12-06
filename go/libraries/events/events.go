@@ -27,7 +27,7 @@ import (
 // EventNowFunc function is used to get the current time and can be overridden for testing.
 var EventNowFunc = time.Now
 
-func nowTimestamp() *timestamppb.Timestamp {
+func NowTimestamp() *timestamppb.Timestamp {
 	now := EventNowFunc()
 	ts := timestamppb.New(now)
 	err := ts.CheckValid()
@@ -51,7 +51,7 @@ func NewEvent(ceType eventsapi.ClientEventType) *Event {
 	return &Event{
 		ce: &eventsapi.ClientEvent{
 			Id:        uuid.New().String(),
-			StartTime: nowTimestamp(),
+			StartTime: NowTimestamp(),
 			Type:      ceType,
 		},
 		m:          &sync.Mutex{},
@@ -83,7 +83,7 @@ func (evt *Event) close() *eventsapi.ClientEvent {
 	evt.m.Lock()
 	defer evt.m.Unlock()
 
-	evt.ce.EndTime = nowTimestamp()
+	evt.ce.EndTime = NowTimestamp()
 
 	for k, v := range evt.attributes {
 		evt.ce.Attributes = append(evt.ce.Attributes, &eventsapi.ClientEventAttribute{Id: k, Value: v})

@@ -17,26 +17,29 @@ package commands
 import (
 	"context"
 	"fmt"
-	"log"
+	"os"
 	"strconv"
 	"time"
 
 	"github.com/fatih/color"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 // SendMetricsCommand is the command used for sending metrics
 const (
 	SendMetricsCommand   = "send-metrics"
-	outputFlag           = "output"
-	sendMetricsShortDesc = "Send metrics to the events server or print them to stdout"
+	EventsOutputFormat   = "output-format"
+	sendMetricsShortDesc = "Send usage metrics to the events server (default), or log them in another way"
 )
 
 type SendMetricsCmd struct{}
@@ -68,12 +71,16 @@ func (cmd SendMetricsCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd SendMetricsCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
-	ap.SupportsFlag(outputFlag, "o", "Flush events to stdout.")
+	ap.SupportsString(
+		EventsOutputFormat,
+		"r",
+		"output-format",
+		"Format of the events output. Valid values are null, stdout, grpc, file, logger. Defaults to grpc.",
+	)
 	return ap
 }
 
 // Exec is the implementation of the command that flushes the events to the grpc service
-// Exec executes the command
 func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	if dEnv.DoltDB != nil { // see go/cmd/dolt/dolt.go:interceptSendMetrics()
 		cli.PrintErrln("expected DoltEnv without DoltDB")
@@ -82,14 +89,13 @@ func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []st
 
 	ap := cmd.ArgParser()
 
-	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cli.CommandDocumentationContent{ShortDesc: sendMetricsShortDesc}, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cli.CommandDocumentationContent{ShortDesc: sendMetricsShortDesc}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")
+	metricsDisabled := dEnv.Config.GetStringOrDefault(config.MetricsDisabled, "false")
 
 	disabled, err := strconv.ParseBool(metricsDisabled)
 	if err != nil {
-		// log.Print(err)
 		return 1
 	}
 
@@ -98,74 +104,108 @@ func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []st
 		return 0
 	}
 
-	if !disabled {
-		ctx, cancel := context.WithTimeout(ctx, time.Minute)
-		defer cancel()
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
 
-		root, err := dEnv.GetUserHomeDir()
-		if err != nil {
-			// log.Print(err)
-			return 1
-		}
-
-		dolt := dbfactory.DoltDir
-
-		var flusher events.Flusher
-
-		if apr.Contains(outputFlag) {
-			flusher = events.NewIOFlusher(dEnv.FS, root, dolt)
-		} else {
-			grpcEmitter := getGRPCEmitter(dEnv)
-
-			flusher = events.NewGrpcEventFlusher(dEnv.FS, root, dolt, grpcEmitter)
-		}
-
-		err = flusher.Flush(ctx)
-
-		if err != nil {
-			if err == events.ErrFileLocked {
-				return 2
-			}
-
-			return 1
-		}
-
-		return 0
+	userHomeDir, err := dEnv.GetUserHomeDir()
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	return 1
+	output := apr.GetValueOrDefault(EventsOutputFormat, events.EmitterTypeGrpc)
+	err = FlushLoggedEvents(ctx, dEnv, userHomeDir, output)
+
+	if err != nil {
+		cli.PrintErrf("Error flushing events: %s\n", err.Error())
+
+		if err == events.ErrFileLocked {
+			return 2
+		}
+
+		return 1
+	}
+
+	return 0
 }
 
-// getGRPCEmitter gets the connection to the events grpc service
-func getGRPCEmitter(dEnv *env.DoltEnv) *events.GrpcEmitter {
-	host := dEnv.Config.GetStringOrDefault(env.MetricsHost, env.DefaultMetricsHost)
-	portStr := dEnv.Config.GetStringOrDefault(env.MetricsPort, env.DefaultMetricsPort)
-	insecureStr := dEnv.Config.GetStringOrDefault(env.MetricsInsecure, "false")
+// FlushLoggedEvents flushes any logged events in the directory given to an appropriate event emitter
+func FlushLoggedEvents(ctx context.Context, dEnv *env.DoltEnv, userHomeDir string, outputType string) error {
+	emitter, err := NewEmitter(outputType, dEnv)
+	if err != nil {
+		return err
+	}
+
+	flusher := events.NewFileFlusher(dEnv.FS, userHomeDir, dbfactory.DoltDir, emitter)
+	return flusher.Flush(ctx)
+}
+
+// NewEmitter returns an emitter for the given configuration provider, of the type named. If an empty name is provided,
+// defaults to a file-based emitter.
+func NewEmitter(emitterType string, pro EmitterConfigProvider) (events.Emitter, error) {
+	switch emitterType {
+	case events.EmitterTypeNull:
+		return events.NullEmitter{}, nil
+	case events.EmitterTypeStdout:
+		return events.WriterEmitter{Wr: os.Stdout}, nil
+	case events.EmitterTypeGrpc:
+		return GRPCEmitterForConfig(pro)
+	case events.EmitterTypeFile:
+		homeDir, err := pro.GetUserHomeDir()
+		if err != nil {
+			return nil, err
+		}
+		return events.NewFileEmitter(homeDir, dbfactory.DoltDir), nil
+	case events.EmitterTypeLogger:
+		return events.NewLoggerEmitter(logrus.DebugLevel), nil
+	default:
+		return nil, fmt.Errorf("unknown emitter type: %s", emitterType)
+	}
+}
+
+// GRPCEmitterForConfig returns an event emitter for the given environment, or nil if the environment cannot
+// provide one
+func GRPCEmitterForConfig(pro EmitterConfigProvider) (*events.GrpcEmitter, error) {
+	cfg, err := GRPCEventRemoteConfig(pro)
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := grpc.Dial(cfg.Endpoint, cfg.DialOptions...)
+	if err != nil {
+		return nil, err
+	}
+
+	return events.NewGrpcEmitter(conn), nil
+}
+
+// GRPCEventRemoteConfig returns a GRPCRemoteConfig for the given configuration provider
+func GRPCEventRemoteConfig(pro EmitterConfigProvider) (dbfactory.GRPCRemoteConfig, error) {
+	host := pro.GetConfig().GetStringOrDefault(config.MetricsHost, events.DefaultMetricsHost)
+	portStr := pro.GetConfig().GetStringOrDefault(config.MetricsPort, events.DefaultMetricsPort)
+	insecureStr := pro.GetConfig().GetStringOrDefault(config.MetricsInsecure, "false")
 
 	port, err := strconv.ParseUint(portStr, 10, 16)
-
 	if err != nil {
-		log.Println(color.YellowString("The config value of '%s' is '%s' which is not a valid port.", env.MetricsPort, portStr))
-		return nil
+		return dbfactory.GRPCRemoteConfig{}, nil
 	}
 
-	insecure, err := strconv.ParseBool(insecureStr)
-
-	if err != nil {
-		log.Println(color.YellowString("The config value of '%s' is '%s' which is not a valid true/false value", env.MetricsInsecure, insecureStr))
-	}
+	insecure, _ := strconv.ParseBool(insecureStr)
 
 	hostAndPort := fmt.Sprintf("%s:%d", host, port)
-	cfg, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
+	cfg, err := pro.GetGRPCDialParams(grpcendpoint.Config{
 		Endpoint: hostAndPort,
 		Insecure: insecure,
 	})
 	if err != nil {
-		return nil
+		return dbfactory.GRPCRemoteConfig{}, nil
 	}
-	conn, err := grpc.Dial(cfg.Endpoint, cfg.DialOptions...)
-	if err != nil {
-		return nil
-	}
-	return events.NewGrpcEmitter(conn)
+
+	return cfg, nil
+}
+
+// EmitterConfigProvider is an interface used to get the configuration to create an emitter
+type EmitterConfigProvider interface {
+	GetGRPCDialParams(config grpcendpoint.Config) (dbfactory.GRPCRemoteConfig, error)
+	GetConfig() config.ReadableConfig
+	GetUserHomeDir() (string, error)
 }

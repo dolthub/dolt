@@ -143,8 +143,8 @@ SQL
 
     # check information_schema.TABLE_CONSTRAINTS table
     run dolt sql -q "select * from information_schema.TABLE_CONSTRAINTS where table_name = 'materials';" -r csv
-    [[ "$output" =~ "def,dolt_repo_$$,PRIMARY,dolt_repo_$$,materials,PRIMARY KEY,YES" ]] || false
-    [[ "$output" =~ "def,dolt_repo_$$,jb6i5huc,dolt_repo_$$,materials,FOREIGN KEY,YES" ]] || false
+    [[ "$output" =~ "def,dolt-repo-$$,PRIMARY,dolt-repo-$$,materials,PRIMARY KEY,YES" ]] || false
+    [[ "$output" =~ "def,dolt-repo-$$,jb6i5huc,dolt-repo-$$,materials,FOREIGN KEY,YES" ]] || false
 
     # check information_schema.TABLE_CONSTRAINTS_EXTENSIONS table
     run dolt sql -q "select constraint_name from information_schema.TABLE_CONSTRAINTS_EXTENSIONS where table_name = 'materials';" -r csv
@@ -2188,4 +2188,24 @@ SQL
 
     run dolt sql -q "update child set b = 1 where a = 101;"
     [ "$status" -eq 0 ]
+}
+
+@test "foreign-keys: foreign key that references dropped table should not panic when using dolt diff {
+    dolt commit -Am "start here"
+    dolt sql <<SQL
+create table parent1(a int primary key, b int);
+create table child1(c int primary key);
+alter table child1 add foreign key (c) references parent1(a);
+call dolt_commit('-Am', 'new tables');
+set foreign_key_checks=0;
+drop table parent1;
+set foreign_key_checks=1;
+SQL
+
+    dolt diff HEAD~
+    run dolt diff HEAD~
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "panic" ]] || false
+    [[ "$output" =~ "CREATE TABLE \`child1\`" ]] || false
+    [[ "$output" =~ "FOREIGN KEY (\`c\`) REFERENCES \`parent1\` (\`a\`)" ]] || false
 }

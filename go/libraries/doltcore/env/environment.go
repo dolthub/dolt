@@ -20,13 +20,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-	ps "github.com/mitchellh/go-ps"
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -36,8 +32,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -48,15 +46,10 @@ const (
 
 	DefaultLoginUrl = "https://dolthub.com/settings/credentials"
 
-	DefaultMetricsHost = "eventsapi.dolthub.com"
-	DefaultMetricsPort = "443"
-
 	DefaultRemotesApiHost = "doltremoteapi.dolthub.com"
 	DefaultRemotesApiPort = "443"
 
 	tempTablesDir = "temptf"
-
-	ServerLockFile = "sql-server.lock"
 )
 
 var zeroHashStr = (hash.Hash{}).String()
@@ -79,6 +72,7 @@ var ErrFailedToWriteRepoState = errors.New("failed to write repo state")
 var ErrRemoteAddressConflict = errors.New("address conflict with a remote")
 var ErrDoltRepositoryNotFound = errors.New("can no longer find .dolt dir on disk")
 var ErrFailedToAccessDB = goerrors.NewKind("failed to access '%s' database: can no longer find .dolt dir on disk")
+var ErrDatabaseIsLocked = errors.New("the database is locked by another dolt process")
 
 // DoltEnv holds the state of the current environment used by the cli.
 type DoltEnv struct {
@@ -97,7 +91,6 @@ type DoltEnv struct {
 	urlStr string
 	hdp    HomeDirProvider
 
-	IgnoreLockFile bool
 	UserPassConfig *creds.DoltCredsForPass
 }
 
@@ -109,22 +102,17 @@ func (dEnv *DoltEnv) GetRemoteDB(ctx context.Context, format *types.NomsBinForma
 	}
 }
 
+func (dEnv *DoltEnv) GetConfig() config.ReadableConfig {
+	return dEnv.Config
+}
+
 func createRepoState(fs filesys.Filesys) (*RepoState, error) {
 	repoState, rsErr := LoadRepoState(fs)
 
 	// deep copy remotes and backups ¯\_(ツ)_/¯ (see commit c59cbead)
 	if repoState != nil {
-		remotes := make(map[string]Remote, len(repoState.Remotes))
-		for n, r := range repoState.Remotes {
-			remotes[n] = r
-		}
-		repoState.Remotes = remotes
-
-		backups := make(map[string]Remote, len(repoState.Backups))
-		for n, r := range repoState.Backups {
-			backups[n] = r
-		}
-		repoState.Backups = backups
+		repoState.Remotes = repoState.Remotes.DeepCopy()
+		repoState.Backups = repoState.Backups.DeepCopy()
 	}
 
 	return repoState, rsErr
@@ -211,7 +199,7 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr s
 }
 
 func GetDefaultInitBranch(cfg config.ReadableConfig) string {
-	return GetStringOrDefault(cfg, InitBranchName, DefaultInitBranch)
+	return GetStringOrDefault(cfg, config.InitBranchName, DefaultInitBranch)
 }
 
 // Valid returns whether this environment has been properly initialized. This is useful because although every command
@@ -823,8 +811,8 @@ func (dEnv *DoltEnv) workingSetMeta() *datas.WorkingSetMeta {
 
 func (dEnv *DoltEnv) NewWorkingSetMeta(message string) *datas.WorkingSetMeta {
 	return &datas.WorkingSetMeta{
-		Name:        dEnv.Config.GetStringOrDefault(UserNameKey, ""),
-		Email:       dEnv.Config.GetStringOrDefault(UserEmailKey, ""),
+		Name:        dEnv.Config.GetStringOrDefault(config.UserNameKey, ""),
+		Email:       dEnv.Config.GetStringOrDefault(config.UserEmailKey, ""),
 		Timestamp:   uint64(time.Now().Unix()),
 		Description: message,
 	}
@@ -835,7 +823,7 @@ func (dEnv *DoltEnv) CredsDir() (string, error) {
 }
 
 func (dEnv *DoltEnv) UserDoltCreds() (creds.DoltCreds, bool, error) {
-	kid, err := dEnv.Config.GetString(UserCreds)
+	kid, err := dEnv.Config.GetString(config.UserCreds)
 
 	if err == nil && kid != "" {
 		dir, err := dEnv.CredsDir()
@@ -857,7 +845,7 @@ func (dEnv *DoltEnv) GetGRPCDialParams(config grpcendpoint.Config) (dbfactory.GR
 	return NewGRPCDialProviderFromDoltEnv(dEnv).GetGRPCDialParams(config)
 }
 
-func (dEnv *DoltEnv) GetRemotes() (map[string]Remote, error) {
+func (dEnv *DoltEnv) GetRemotes() (*concurrentmap.Map[string, Remote], error) {
 	if dEnv.RSLoadErr != nil {
 		return nil, dEnv.RSLoadErr
 	}
@@ -867,22 +855,39 @@ func (dEnv *DoltEnv) GetRemotes() (map[string]Remote, error) {
 
 // CheckRemoteAddressConflict checks whether any backups or remotes share the given URL. Returns the first remote if multiple match.
 // Returns NoRemote and false if none match.
-func CheckRemoteAddressConflict(absUrl string, remotes, backups map[string]Remote) (Remote, bool) {
-	for _, r := range remotes {
-		if r.Url == absUrl {
-			return r, true
+func CheckRemoteAddressConflict(absUrl string, remotes *concurrentmap.Map[string, Remote], backups *concurrentmap.Map[string, Remote]) (Remote, bool) {
+	if remotes != nil {
+		var rm *Remote
+		remotes.Iter(func(key string, value Remote) bool {
+			if value.Url == absUrl {
+				rm = &value
+				return false
+			}
+			return true
+		})
+		if rm != nil {
+			return *rm, true
 		}
 	}
-	for _, r := range backups {
-		if r.Url == absUrl {
-			return r, true
+
+	if backups != nil {
+		var rm *Remote
+		backups.Iter(func(key string, value Remote) bool {
+			if value.Url == absUrl {
+				rm = &value
+				return false
+			}
+			return true
+		})
+		if rm != nil {
+			return *rm, true
 		}
 	}
 	return NoRemote, false
 }
 
 func (dEnv *DoltEnv) AddRemote(r Remote) error {
-	if _, ok := dEnv.RepoState.Remotes[r.Name]; ok {
+	if _, ok := dEnv.RepoState.Remotes.Get(r.Name); ok {
 		return ErrRemoteAlreadyExists
 	}
 
@@ -905,7 +910,7 @@ func (dEnv *DoltEnv) AddRemote(r Remote) error {
 	return dEnv.RepoState.Save(dEnv.FS)
 }
 
-func (dEnv *DoltEnv) GetBackups() (map[string]Remote, error) {
+func (dEnv *DoltEnv) GetBackups() (*concurrentmap.Map[string, Remote], error) {
 	if dEnv.RSLoadErr != nil {
 		return nil, dEnv.RSLoadErr
 	}
@@ -914,7 +919,7 @@ func (dEnv *DoltEnv) GetBackups() (map[string]Remote, error) {
 }
 
 func (dEnv *DoltEnv) AddBackup(r Remote) error {
-	if _, ok := dEnv.RepoState.Backups[r.Name]; ok {
+	if _, ok := dEnv.RepoState.Backups.Get(r.Name); ok {
 		return ErrBackupAlreadyExists
 	}
 
@@ -938,7 +943,7 @@ func (dEnv *DoltEnv) AddBackup(r Remote) error {
 }
 
 func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
-	remote, ok := dEnv.RepoState.Remotes[name]
+	remote, ok := dEnv.RepoState.Remotes.Get(name)
 	if !ok {
 		return ErrRemoteNotFound
 	}
@@ -971,7 +976,7 @@ func (dEnv *DoltEnv) RemoveRemote(ctx context.Context, name string) error {
 }
 
 func (dEnv *DoltEnv) RemoveBackup(ctx context.Context, name string) error {
-	backup, ok := dEnv.RepoState.Backups[name]
+	backup, ok := dEnv.RepoState.Backups.Get(name)
 	if !ok {
 		return ErrBackupNotFound
 	}
@@ -986,7 +991,7 @@ func (dEnv *DoltEnv) RemoveBackup(ctx context.Context, name string) error {
 	return nil
 }
 
-func (dEnv *DoltEnv) GetBranches() (map[string]BranchConfig, error) {
+func (dEnv *DoltEnv) GetBranches() (*concurrentmap.Map[string, BranchConfig], error) {
 	if dEnv.RSLoadErr != nil {
 		return nil, dEnv.RSLoadErr
 	}
@@ -999,7 +1004,7 @@ func (dEnv *DoltEnv) UpdateBranch(name string, new BranchConfig) error {
 		return dEnv.RSLoadErr
 	}
 
-	dEnv.RepoState.Branches[name] = new
+	dEnv.RepoState.Branches.Set(name, new)
 
 	err := dEnv.RepoState.Save(dEnv.FS)
 	if err != nil {
@@ -1049,7 +1054,7 @@ func (dEnv *DoltEnv) FindRef(ctx context.Context, refStr string) (ref.DoltRef, e
 		slashIdx := strings.IndexRune(refStr, '/')
 		if slashIdx > 0 {
 			remoteName := refStr[:slashIdx]
-			if _, ok := dEnv.RepoState.Remotes[remoteName]; ok {
+			if _, ok := dEnv.RepoState.Remotes.Get(remoteName); ok {
 				remoteRef, err := ref.NewRemoteRefFromPathStr(refStr)
 
 				if err != nil {
@@ -1080,7 +1085,7 @@ func GetRefSpecs(rsr RepoStateReader, remoteName string) ([]ref.RemoteRefSpec, e
 	}
 	if remoteName == "" {
 		remote, err = GetDefaultRemote(rsr)
-	} else if r, ok := remotes[remoteName]; ok {
+	} else if r, ok := remotes.Get(remoteName); ok {
 		remote = r
 	} else {
 		err = ErrInvalidRepository.New(remoteName)
@@ -1123,15 +1128,21 @@ func GetDefaultRemote(rsr RepoStateReader) (Remote, error) {
 		return NoRemote, err
 	}
 
-	if len(remotes) == 0 {
+	remotesLen := remotes.Len()
+	if remotesLen == 0 {
 		return NoRemote, ErrNoRemote
-	} else if len(remotes) == 1 {
-		for _, v := range remotes {
-			return v, nil
+	} else if remotesLen == 1 {
+		var remote *Remote
+		remotes.Iter(func(key string, value Remote) bool {
+			remote = &value
+			return false
+		})
+		if remote != nil {
+			return *remote, nil
 		}
 	}
 
-	if remote, ok := remotes["origin"]; ok {
+	if remote, ok := remotes.Get("origin"); ok {
 		return remote, nil
 	}
 
@@ -1174,173 +1185,6 @@ func (dEnv *DoltEnv) BulkDbEaFactory() editor.DbEaFactory {
 	return editor.NewBulkImportTEAFactory(dEnv.DoltDB.ValueReadWriter(), tmpDir)
 }
 
-func (dEnv *DoltEnv) LockFile() string {
-	f, _ := dEnv.FS.Abs(filepath.Join(dbfactory.DoltDir, ServerLockFile))
-	return f
-}
-
-// IsLocked returns true if this database's lockfile exists and the pid contained in lockfile is alive.
-func (dEnv *DoltEnv) IsLocked() bool {
-	if dEnv.IgnoreLockFile {
-		return false
-	}
-
-	ans, _, _ := fsIsLocked(dEnv.FS)
-	return ans
-}
-
-// GetLock returns the lockfile for this database or nil if the database is not locked
-func (dEnv *DoltEnv) GetLock() (bool, *DBLock, error) {
-	if dEnv.IgnoreLockFile {
-		return false, nil, nil
-	}
-
-	return fsIsLocked(dEnv.FS)
-}
-
-// DBLock is a struct that contains the pid of the process that created the lockfile and the port that the server is running on
-// The secret is used by dolt to ensure that the contents of the lockfile are required to perform a local server connection
-type DBLock struct {
-	Pid    int
-	Port   int
-	Secret string
-}
-
-// DBLock constructor
-func NewDBLock(port int) DBLock {
-	return DBLock{Pid: os.Getpid(), Port: port, Secret: uuid.New().String()}
-}
-
-// Lock writes this database's lockfile with the pid of the calling process or errors if it already exists
-func (dEnv *DoltEnv) Lock(lock *DBLock) error {
-	if dEnv.IgnoreLockFile {
-		return nil
-	}
-
-	if dEnv.IsLocked() {
-		return ErrActiveServerLock.New(dEnv.LockFile())
-	}
-
-	return WriteLockfile(dEnv.FS, lock)
-}
-
-func LoadDBLockFile(fs filesys.Filesys, lockFilePath string) (lock *DBLock, err error) {
-	rd, err := fs.OpenForRead(lockFilePath)
-	if err != nil {
-		return nil, err
-	}
-
-	b := make([]byte, 256)
-	n, err := rd.Read(b)
-	if err != nil {
-		return nil, err
-	}
-
-	data := strings.TrimSpace(string(b[:n]))
-
-	parts := strings.Split(data, ":")
-	if len(parts) == 1 {
-		// Legacy Lock file. We can remove this code path in a couple of months (6/2023)
-		pid, err := strconv.Atoi(parts[0])
-		if err != nil {
-			return nil, err
-		}
-		return &DBLock{Pid: pid, Port: -1, Secret: ""}, nil
-	}
-	if len(parts) != 3 {
-		return nil, fmt.Errorf("invalid lock file format")
-	}
-
-	pid, err := strconv.Atoi(parts[0])
-	if err != nil {
-		return nil, err
-	}
-	port := -1
-	if parts[1] != "-" {
-		port, err = strconv.Atoi(parts[1])
-		if err != nil {
-			return nil, err
-		}
-	}
-	secret := parts[2]
-	return &DBLock{Pid: pid, Port: port, Secret: secret}, nil
-}
-
-// Unlock deletes this database's lockfile
-func (dEnv *DoltEnv) Unlock() error {
-	if dEnv.IgnoreLockFile {
-		return nil
-	}
-
-	return dEnv.FS.DeleteFile(dEnv.LockFile())
-}
-
-// WriteLockfile writes a lockfile encoding the pid of the calling process.
-func WriteLockfile(fs filesys.Filesys, lock *DBLock) error {
-	// if the DoltDir doesn't exist, create it.
-	doltDir, _ := fs.Abs(dbfactory.DoltDir)
-	err := fs.MkDirs(doltDir)
-	if err != nil {
-		return err
-	}
-
-	lockFile, _ := fs.Abs(filepath.Join(dbfactory.DoltDir, ServerLockFile))
-
-	portStr := strconv.Itoa(lock.Port)
-	if lock.Port < 0 {
-		portStr = "-"
-	}
-
-	if reflect.TypeOf(fs) == reflect.TypeOf(filesys.LocalFS) {
-		_, err := os.Create(lockFile)
-		if err != nil {
-			return err
-		}
-		err = os.Chmod(lockFile, 0600)
-		if err != nil {
-			return err
-		}
-	}
-
-	err = fs.WriteFile(lockFile, []byte(fmt.Sprintf("%d:%s:%s", lock.Pid, portStr, lock.Secret)))
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// fsIsLocked returns true if the database in qeustion is locked. Two additional return values are lock and err. In the
-// event that the DB is locked (locked == true), then either the lock or an error is returned. In either case,
-// the caller should not attempt to use the DB. If lock is returned, in some cases you can use it to connect to the
-// server that has locked the DB. If an error is returned, then no further processing should be done.
-func fsIsLocked(fs filesys.Filesys) (locked bool, lock *DBLock, err error) {
-	lockFile, _ := fs.Abs(filepath.Join(dbfactory.DoltDir, ServerLockFile))
-
-	ok, _ := fs.Exists(lockFile)
-	if !ok {
-		return false, nil, nil
-	}
-
-	loadedLock, err := LoadDBLockFile(fs, lockFile)
-	if err != nil { // if there's any error assume that env is locked since the file exists
-		return true, nil, err
-	}
-
-	// If the PID is for this process, then ignore the lock file. This happens frequently with docker containers
-	// https://github.com/dolthub/dolt/issues/6183.
-	if os.Getpid() == loadedLock.Pid {
-		return false, nil, nil
-	}
-
-	// Check whether the pid that spawned the lock file is still running. Ignore it if not.
-	proc, err := ps.FindProcess(loadedLock.Pid)
-	if err != nil {
-		return true, nil, err // This will happen if we can't load the OS processes. Assume locked.
-	}
-	if proc != nil {
-		return true, loadedLock, nil // The process is still running. Return the lock details so the caller can connect to it if appropriate.
-	}
-
-	return false, nil, nil
+func (dEnv *DoltEnv) IsAccessModeReadOnly() bool {
+	return dEnv.DoltDB.AccessMode() == chunks.ExclusiveAccessMode_ReadOnly
 }

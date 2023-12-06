@@ -214,7 +214,7 @@ func printRemotes(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ver
 		return errhand.BuildDError("Unable to get remotes from the local directory").AddCause(err).Build()
 	}
 
-	for _, r := range remotes {
+	for _, r := range remotes.Snapshot() {
 		if apr.Contains(cli.VerboseFlag) {
 			paramStr := make([]byte, 0)
 			if len(r.Params) > 0 {

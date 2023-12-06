@@ -95,8 +95,8 @@ func NewDoltSession(
 	conf config.ReadWriteConfig,
 	branchController *branch_control.Controller,
 ) (*DoltSession, error) {
-	username := conf.GetStringOrDefault(env.UserNameKey, "")
-	email := conf.GetStringOrDefault(env.UserEmailKey, "")
+	username := conf.GetStringOrDefault(config.UserNameKey, "")
+	email := conf.GetStringOrDefault(config.UserEmailKey, "")
 	globals := config.NewPrefixConfig(conf, env.SqlServerGlobalsPrefix)
 
 	sess := &DoltSession{

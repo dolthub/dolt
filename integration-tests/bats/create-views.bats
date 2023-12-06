@@ -139,7 +139,7 @@ SQL
     [[ "${lines[3]}" =~ ' 4 ' ]] || false
 }
 
-@test "create-views: cannot create view referencing non-existant table" {
+@test "create-views: cannot create view referencing non-existent table" {
     run dolt sql <<SQL
 create view broken as select id from my_users;
 SQL
@@ -195,7 +195,7 @@ SQL
     # check information_schema.VIEWS table
     # TODO: view_definition should be "select `mybin`.`my_users`.`id` AS `id` from `mybin`.`my_users` order by `mybin`.`my_users`.`id`"
     run dolt sql -q "select * from information_schema.VIEWS;" -r csv
-    [[ "$output" =~ "def,dolt_repo_$$,my_users_view,select id from my_users order by id asc,NONE,YES,root@localhost,DEFINER,utf8mb4,utf8mb4_0900_bin" ]] || false
+    [[ "$output" =~ "def,dolt-repo-$$,my_users_view,select id from my_users order by id asc,NONE,YES,root@localhost,DEFINER,utf8mb4,utf8mb4_0900_bin" ]] || false
 }
 
 @test "create-views: view referencing table selects values inserted after it was created" {
@@ -292,7 +292,7 @@ SQL
     [ "$status" -eq 0 ]
     run dolt sql -q 'select * from all_users'
     [ "$status" -eq 1 ]
-    [[ "${lines[0]}" =~ "View 'dolt_repo_$$.all_users' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them" ]] || false
+    [[ "${lines[0]}" =~ "View 'dolt-repo-$$.all_users' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them" ]] || false
     run dolt sql -q 'drop view all_users'
     [ "$status" -eq 0 ]
 }
@@ -354,7 +354,7 @@ SQL
     [[ "$output" =~ "select * from t1" ]] || false
 
     # should use the view definition from branch named, data from branch named
-    run dolt sql -r csv -q "select * from \`dolt_repo_$$/view\`.v1 order by 1"
+    run dolt sql -r csv -q "select * from \`dolt-repo-$$/view\`.v1 order by 1"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
     [[ "${lines[1]}" =~ "1,1" ]] || false

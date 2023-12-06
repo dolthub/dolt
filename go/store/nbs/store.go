@@ -214,7 +214,10 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 		return
 	}
 
-	nbs.checkAllManifestUpdatesExist(ctx, updates)
+	err = nbs.checkAllManifestUpdatesExist(ctx, updates)
+	if err != nil {
+		return
+	}
 
 	nbs.mm.LockForUpdate()
 	defer func() {
@@ -301,7 +304,10 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 		return
 	}
 
-	nbs.checkAllManifestUpdatesExist(ctx, updates)
+	err = nbs.checkAllManifestUpdatesExist(ctx, updates)
+	if err != nil {
+		return
+	}
 
 	nbs.mm.LockForUpdate()
 	defer func() {
@@ -1288,6 +1294,10 @@ func (nbs *NomsBlockStore) Version() string {
 	nbs.mu.RLock()
 	defer nbs.mu.RUnlock()
 	return nbs.upstream.nbfVers
+}
+
+func (nbs *NomsBlockStore) AccessMode() chunks.ExclusiveAccessMode {
+	return nbs.p.AccessMode()
 }
 
 func (nbs *NomsBlockStore) Close() (err error) {

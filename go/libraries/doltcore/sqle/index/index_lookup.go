@@ -405,15 +405,16 @@ func (lb *coveringLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partition
 		return nil, err
 	}
 	return prollyCoveringIndexIter{
-		idx:       lb.idx,
-		indexIter: rangeIter,
-		keyDesc:   lb.secKd,
-		valDesc:   lb.secVd,
-		keyMap:    lb.keyMap,
-		valMap:    lb.valMap,
-		ordMap:    lb.ordMap,
-		sqlSch:    lb.sch.Schema,
-		ns:        lb.ns,
+		idx:         lb.idx,
+		indexIter:   rangeIter,
+		keyDesc:     lb.secKd,
+		valDesc:     lb.secVd,
+		keyMap:      lb.keyMap,
+		valMap:      lb.valMap,
+		ordMap:      lb.ordMap,
+		sqlSch:      lb.sch.Schema,
+		projections: lb.projections,
+		ns:          lb.ns,
 	}, nil
 }
 
@@ -437,15 +438,16 @@ func (lb *nonCoveringLookupBuilder) NewRowIter(ctx *sql.Context, part sql.Partit
 		return nil, err
 	}
 	return prollyIndexIter{
-		idx:       lb.idx,
-		indexIter: rangeIter,
-		primary:   lb.pri,
-		pkBld:     lb.pkBld,
-		pkMap:     lb.pkMap,
-		keyMap:    lb.keyMap,
-		valMap:    lb.valMap,
-		ordMap:    lb.ordMap,
-		sqlSch:    lb.sch.Schema,
+		idx:         lb.idx,
+		indexIter:   rangeIter,
+		primary:     lb.pri,
+		pkBld:       lb.pkBld,
+		pkMap:       lb.pkMap,
+		keyMap:      lb.keyMap,
+		valMap:      lb.valMap,
+		ordMap:      lb.ordMap,
+		sqlSch:      lb.sch.Schema,
+		projections: lb.projections,
 	}, nil
 }
 

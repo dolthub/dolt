@@ -157,4 +157,26 @@ var RevertScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_revert() automatically resolves some conflicts",
+		SetUpScript: []string{
+			"create table tableA (id int primary key, col1 varchar(255));",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'new table');",
+			"insert into tableA values (1, 'test')",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'new row');",
+			"call dolt_branch('new_row');",
+			"ALTER TABLE tableA MODIFY col1 TEXT",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'change col');",
+			"call dolt_revert('new_row');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from tableA",
+				Expected: []sql.Row{},
+			},
+		},
+	},
 }

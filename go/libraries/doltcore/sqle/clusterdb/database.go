@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
 )
 
 const DoltClusterDbName = "dolt_cluster"
@@ -111,6 +112,7 @@ func (db database) InitialDBState(ctx *sql.Context) (dsess.InitialDbState, error
 			Rsw: noopRepoStateWriter{},
 		},
 		ReadOnly: true,
+		Remotes:  concurrentmap.New[string, env.Remote](),
 	}, nil
 }
 

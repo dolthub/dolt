@@ -25,6 +25,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/blobstore"
+	"github.com/dolthub/dolt/go/store/chunks"
 )
 
 const (
@@ -172,6 +173,10 @@ func (bsp *blobstorePersister) PruneTableFiles(ctx context.Context, keeper func(
 
 func (bsp *blobstorePersister) Close() error {
 	return nil
+}
+
+func (bsp *blobstorePersister) AccessMode() chunks.ExclusiveAccessMode {
+	return chunks.ExclusiveAccessMode_Shared
 }
 
 func (bsp *blobstorePersister) Path() string {

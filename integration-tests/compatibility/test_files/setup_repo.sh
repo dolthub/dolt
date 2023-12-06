@@ -45,6 +45,7 @@ dolt branch init
 dolt branch other
 dolt sql <<SQL
 DELETE FROM abc WHERE pk=1;
+UPDATE abc SET x = 1 WHERE pk = 0;
 INSERT INTO abc VALUES (3, 'data', 1.1, 0, 0);
 ALTER TABLE abc DROP COLUMN w;
 ALTER TABLE abc ADD COLUMN y BIGINT;
@@ -56,6 +57,7 @@ dolt commit -m "made changes to $DEFAULT_BRANCH"
 dolt checkout other
 dolt sql <<SQL
 DELETE FROM abc WHERE pk=2;
+UPDATE abc SET w = 1 WHERE pk = 0;
 INSERT INTO abc VALUES (4, 'data', 1.1, 0, 0);
 ALTER TABLE abc DROP COLUMN x;
 ALTER TABLE abc ADD COLUMN z BIGINT;

@@ -149,7 +149,7 @@ func DeleteBranchOnDB(ctx context.Context, dbdata env.DbData, branchRef ref.Dolt
 			return err
 		}
 
-		trackedBranch, hasUpstream := trackedBranches[branchRef.GetPath()]
+		trackedBranch, hasUpstream := trackedBranches.Get(branchRef.GetPath())
 		if hasUpstream {
 			err = validateBranchMergedIntoUpstream(ctx, dbdata, branchRef, trackedBranch.Remote, pro)
 			if err != nil {
@@ -229,7 +229,7 @@ func validateBranchMergedIntoUpstream(ctx context.Context, dbdata env.DbData, br
 	if err != nil {
 		return err
 	}
-	remote, ok := remotes[remoteName]
+	remote, ok := remotes.Get(remoteName)
 	if !ok {
 		// TODO: skip error?
 		return fmt.Errorf("remote %s not found", remoteName)

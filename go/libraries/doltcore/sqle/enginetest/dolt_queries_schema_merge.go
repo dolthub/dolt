@@ -325,6 +325,30 @@ var SchemaChangeTestsBasicCases = []MergeScriptTest{
 		},
 	},
 	{
+		Name: "right-side adds a column with a default value",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, c1 varchar(100), c2 varchar(100));",
+			"INSERT into t values ('1', 'BAD', 'hello');",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column c3 varchar(100) default (CONCAT(c2, c1, 'default'));",
+			"insert into t values ('2', 'BAD', 'hello', 'hi');",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values ('3', 'BAD', 'hi');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query:    "select * from t order by pk;",
+				Expected: []sql.Row{{1, "BAD", "hello", "helloBADdefault"}, {2, "BAD", "hello", "hi"}, {3, "BAD", "hi", "hiBADdefault"}},
+			},
+		},
+	},
+	{
 		Name: "adding different columns to both sides",
 		AncSetUpScript: []string{
 			"create table t (pk int primary key);",
@@ -353,6 +377,73 @@ var SchemaChangeTestsBasicCases = []MergeScriptTest{
 					{4, nil, "400"},
 					{5, 50, nil},
 					{6, 60, nil},
+				},
+			},
+		},
+	},
+	{
+		Name: "adding columns with default values to both sides",
+		AncSetUpScript: []string{
+			"create table t (pk int primary key);",
+			"insert into t values (1), (2);",
+			"alter table t add index idx1 (pk);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col2 varchar(100) default 'abc'",
+			"insert into t values (3, '300'), (4, '400');",
+		},
+		LeftSetUpScript: []string{
+			"alter table t add column col1 int default 101;",
+			"insert into t values (5, 50), (6, 60);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select pk, col1, col2 from t;",
+				Expected: []sql.Row{
+					{1, 101, "abc"},
+					{2, 101, "abc"},
+					{3, 101, "300"},
+					{4, 101, "400"},
+					{5, 50, "abc"},
+					{6, 60, "abc"},
+				},
+			},
+		},
+	},
+	{
+		Name: "adding indexed columns to both sides",
+		AncSetUpScript: []string{
+			"create table t (pk int primary key);",
+			"insert into t values (1), (2);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col2 varchar(100);",
+			"insert into t (pk, col2) values (3, '3hello'), (4, '4hello');",
+			"alter table t add index (col2);",
+		},
+		LeftSetUpScript: []string{
+			"alter table t add column col1 int default (pk + 100);",
+			"insert into t (pk) values (5), (6);",
+			"alter table t add index (col1);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select pk, col1, col2 from t;",
+				Expected: []sql.Row{
+					{1, 101, nil},
+					{2, 102, nil},
+					{3, 103, "3hello"},
+					{4, 104, "4hello"},
+					{5, 105, nil},
+					{6, 106, nil},
 				},
 			},
 		},
@@ -1171,6 +1262,37 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 		},
 	},
 	{
+		Name: "VARCHAR to TEXT widening with right side modification",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 varchar(10), col2 int);",
+			"INSERT into t values (1, '123', 10);",
+			"alter table t add index idx1 (col1(10));",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 TEXT;",
+			"UPDATE t SET col2 = 40 WHERE col2 = 10",
+			"INSERT into t values (2, '12345678901234567890', 20);",
+		},
+		LeftSetUpScript: []string{
+			"INSERT into t values (3, '321', 30);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select * from t order by pk;",
+				Expected: []sql.Row{
+					{1, "123", 40},
+					{2, "12345678901234567890", 20},
+					{3, "321", 30},
+				},
+			},
+		},
+	},
+	{
 		Name: "VARCHAR to TEXT widening",
 		AncSetUpScript: []string{
 			"set autocommit = 0;",
@@ -1969,6 +2091,45 @@ var SchemaChangeTestsSchemaConflicts = []MergeScriptTest{
 		},
 	},
 	{
+		Name: "adding a not-null constraint and default value to a column, alongside table rewrite",
+		AncSetUpScript: []string{
+			"set dolt_force_transaction_commit = on;",
+			"create table t (pk int primary key, col1 int);",
+			"insert into t values (1, null), (2, null);",
+		},
+		RightSetUpScript: []string{
+			"update t set col1 = 9999 where col1 is null;",
+			"alter table t modify column col1 int not null default 9999;",
+			"alter table t add column col2 int default 100",
+			"insert into t values (3, 30, 200), (4, 40, 300);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t values (5, null), (6, null);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{"", 0, 1}},
+			},
+			{
+				Query: "select * from t;",
+				Expected: []sql.Row{
+					{1, 9999, 100},
+					{2, 9999, 100},
+					{3, 30, 200},
+					{4, 40, 300},
+				},
+			},
+			{
+				Query: "select pk, violation_type from dolt_constraint_violations_t",
+				Expected: []sql.Row{
+					{5, uint16(4)},
+					{6, uint16(4)},
+				},
+			},
+		},
+	},
+	{
 		Name: "adding a not-null constraint to one side",
 		AncSetUpScript: []string{
 			"set dolt_force_transaction_commit = on;",
@@ -1999,6 +2160,277 @@ var SchemaChangeTestsSchemaConflicts = []MergeScriptTest{
 				Expected: []sql.Row{
 					{uint16(4), 3, merge.NullViolationMeta{Columns: []string{"col1"}}},
 				},
+			},
+		},
+	},
+}
+
+var SchemaChangeTestsGeneratedColumns = []MergeScriptTest{
+	{
+		Name: "reordering a column",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key, col1 int, col2 varchar(100) as (concat(col1, 'hello')) stored);",
+			"INSERT into t (pk, col1) values (1, 10), (2, 20);",
+			"alter table t add index idx1 (pk, col1);",
+			"alter table t add index idx2 (col2);",
+			"alter table t add index idx3 (pk, col1, col2);",
+			"alter table t add index idx4 (col1, col2);",
+			"alter table t add index idx5 (col2, col1);",
+			"alter table t add index idx6 (col2, pk, col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify col1 int after col2;",
+			"insert into t (pk, col1) values (3, 30), (4, 40);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t (pk, col1) values (5, 50), (6, 60);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select pk, col1, col2 from t;",
+				Expected: []sql.Row{
+					{1, 10, "10hello"}, {2, 20, "20hello"},
+					{3, 30, "30hello"}, {4, 40, "40hello"},
+					{5, 50, "50hello"}, {6, 60, "60hello"}},
+			},
+		},
+	},
+	{
+		Name: "adding columns to a table with a virtual column",
+		AncSetUpScript: []string{
+			"create table t (pk int primary key, col1 int as (pk + 1));",
+			"insert into t (pk) values (1);",
+			"alter table t add index idx1 (col1, pk);",
+			"alter table t add index idx2 (col1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col2 int;",
+			"alter table t add column col3 int;",
+			"insert into t (pk, col2, col3) values (2, 4, 5);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t (pk) values (3);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select pk, col1, col2, col3 from t order by pk",
+				Expected: []sql.Row{
+					{1, 2, nil, nil},
+					{2, 3, 4, 5},
+					{3, 4, nil, nil}},
+			},
+		},
+	},
+	{
+		Name: "adding a virtual column to one side, regular columns to other side",
+		AncSetUpScript: []string{
+			"create table t (pk int primary key);",
+			"insert into t (pk) values (1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col1 int as (pk + 1)",
+			"insert into t (pk) values (3);",
+			"alter table t add index idx1 (col1, pk);",
+			"alter table t add index idx2 (col1);",
+		},
+		LeftSetUpScript: []string{
+			"alter table t add column col2 int;",
+			"alter table t add column col3 int;",
+			"insert into t (pk, col2, col3) values (2, 4, 5);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select pk, col1, col2, col3 from t;",
+				Expected: []sql.Row{
+					{1, 2, nil, nil},
+					{2, 3, 4, 5},
+					{3, 4, nil, nil},
+				},
+			},
+		},
+	},
+	{
+		Name: "adding a virtual column to one side",
+		AncSetUpScript: []string{
+			"create table t (pk int primary key);",
+			"insert into t (pk) values (1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col1 int as (pk + 1)",
+			"insert into t (pk) values (3);",
+			"alter table t add index idx1 (col1, pk);",
+			"alter table t add index idx2 (col1);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t (pk) values (2);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select pk, col1 from t;",
+				Expected: []sql.Row{
+					{1, 2},
+					{2, 3},
+					{3, 4},
+				},
+			},
+		},
+	},
+	{
+		Name: "adding a stored generated column to one side",
+		AncSetUpScript: []string{
+			"create table t (pk int primary key);",
+			"insert into t (pk) values (1);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col1 int as (pk + 1) stored",
+			"insert into t (pk) values (3);",
+			"alter table t add index idx1 (col1, pk);",
+			"alter table t add index idx2 (col1);",
+		},
+		LeftSetUpScript: []string{
+			"insert into t (pk) values (2);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select pk, col1 from t;",
+				Expected: []sql.Row{
+					{1, 2},
+					{2, 3},
+					{3, 4},
+				},
+			},
+		},
+	},
+	{
+		Name: "adding generated columns to both sides",
+		AncSetUpScript: []string{
+			"create table t (pk int primary key);",
+			"insert into t values (1), (2);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col2 varchar(100) as (concat(pk, 'hello'));",
+			"insert into t (pk) values (3), (4);",
+			"alter table t add index (col2);",
+		},
+		LeftSetUpScript: []string{
+			"alter table t add column col1 int as (pk + 100) stored;",
+			"insert into t (pk) values (5), (6);",
+			"alter table t add index (col1);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+				Skip:     true, // this fails merging right into left
+			},
+			{
+				Query: "select pk, col1, col2 from t;",
+				Expected: []sql.Row{
+					{1, 101, "1hello"},
+					{2, 102, "2hello"},
+					{3, 103, "3hello"},
+					{4, 104, "4hello"},
+					{5, 105, "5hello"},
+					{6, 106, "6hello"},
+				},
+				Skip: true, // this fails merging right into left
+			},
+		},
+	},
+	{
+		Name: "adding virtual columns to both sides",
+		AncSetUpScript: []string{
+			"create table t (pk int primary key);",
+			"insert into t values (1), (2);",
+		},
+		RightSetUpScript: []string{
+			"alter table t add column col2 varchar(100) as (concat(pk, 'hello'));",
+			"insert into t (pk) values (3), (4);",
+			"alter table t add index (col2);",
+		},
+		LeftSetUpScript: []string{
+			"alter table t add column col1 int as (pk + 100);",
+			"insert into t (pk) values (5), (6);",
+			"alter table t add index (col1);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+				Skip:     true, // this fails merging right into left
+			},
+			{
+				Query: "select pk, col1, col2 from t;",
+				Expected: []sql.Row{
+					{1, 101, "1hello"},
+					{2, 102, "2hello"},
+					{3, 103, "3hello"},
+					{4, 104, "4hello"},
+					{5, 105, "5hello"},
+					{6, 106, "6hello"},
+				},
+				Skip: true, // this fails merging right into left
+			},
+		},
+	},
+	{
+		Name: "convergent schema changes with virtual columns",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, col1 int);",
+			"INSERT into t values (1, 10);",
+		},
+		RightSetUpScript: []string{
+			"alter table t modify column col1 int not null;",
+			"alter table t add column col3 int as (pk + 1);",
+			"alter table t add index idx1 (col3, col1);",
+		},
+		LeftSetUpScript: []string{
+			"alter table t modify column col1 int not null;",
+			"alter table t add column col3 int as (pk + 1);",
+			"alter table t add index idx1 (col3, col1);",
+			"update t set col1=-1000 where t.pk = 1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "show create table t;",
+				Skip:  true, // there should be an index on col3, but there isn't
+				Expected: []sql.Row{{"t",
+					"CREATE TABLE `t` (\n" +
+						"  `pk` int NOT NULL,\n" +
+						"  `col1` int NOT NULL,\n" +
+						"  `col3` int GENERATED ALWAYS AS ((pk + 1)),\n" +
+						"  PRIMARY KEY (`pk`)\n" +
+						"  KEY `idx1` (`col3`,`col1`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, -1000, 2}},
 			},
 		},
 	},

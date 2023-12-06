@@ -1038,9 +1038,10 @@ SQL
   dolt sql -q "INSERT INTO other VALUES (100, 200, 300);"
   dolt commit -am "add row 100 to other (on branch2)"
   # This ALTER TABLE statement modifies other rows that aren't included in the cherry-picked
-  # commit – row (100, 200, 300) is modified to (100, 300). This shows up as a conflict
+  # commit – row (100, 200, 300) is modified to (100, 400). This shows up as a conflict
   # in the cherry-pick (modified row on one side, row doesn't exist on the other side).
   dolt sql -q "ALTER TABLE other DROP COLUMN c1;"
+  dolt sql -q "UPDATE other SET c2 = 400 WHERE pk = 100"
   dolt sql -q "INSERT INTO other VALUES (10, 30);"
   dolt sql -q "INSERT INTO test VALUES (100, 'q');"
   dolt commit -am "alter table, add row 10 to other, add row 100 to test (on branch2)"
@@ -1268,4 +1269,72 @@ SQL
     remoteOutput="${lines[1]}"
 
     [[ "$localOutput" == "$remoteOutput" ]] || false
+}
+
+@test "sql-local-remote: verify dolt reflog behavior" {
+    cd altDB
+    dolt sql -q "create table t (i int primary key, j int);"
+    dolt sql -q "insert into t values (1, 1), (2, 2), (3, 3)";
+    dolt commit -Am "initial commit"
+
+    run dolt --verbose-engine-setup reflog
+    [ $status -eq 0 ]
+    [[ "$output" =~ "starting local mode" ]] || false
+    [[ "$output" =~ "initial commit" ]] || false
+    run dolt reflog
+    localOutput=$output
+
+    start_sql_server altDB
+    run dolt --verbose-engine-setup reflog
+    [ $status -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+    [[ "$output" =~ "initial commit" ]] || false
+    run dolt reflog
+    remoteOutput=$output
+
+    [[ "$localOutput" == "$remoteOutput" ]] || false
+}
+
+@test "sql-local-remote: verify dolt gc behavior" {
+    cd altDB
+    dolt sql <<SQL
+CREATE TABLE test (pk int PRIMARY KEY);
+INSERT INTO test VALUES
+    (1),(2),(3),(4),(5);
+SQL
+    run dolt sql -q 'select count(*) from test' -r csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "5" ]] || false
+
+    run dolt --verbose-engine-setup gc
+    [ $status -eq 0 ]
+    [[ "$output" =~ "starting local mode" ]] || false
+
+    run dolt sql -q 'select count(*) from test' -r csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "5" ]] || false
+
+    start_sql_server altDB
+    dolt sql <<SQL
+CREATE TABLE test2 (pk int PRIMARY KEY);
+INSERT INTO test2 VALUES
+    (1),(2),(3),(4),(5);
+SQL
+    run dolt sql -q 'select count(*) from test' -r csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "5" ]] || false
+    run dolt sql -q 'select count(*) from test2' -r csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "5" ]] || false
+
+    run dolt --verbose-engine-setup gc
+    [ $status -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+
+    run dolt sql -q 'select count(*) from test' -r csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "5" ]] || false
+    run dolt sql -q 'select count(*) from test2' -r csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "5" ]] || false
 }

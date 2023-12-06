@@ -48,7 +48,7 @@ func getPushOnWriteHook(ctx context.Context, bThreads *sql.BackgroundThreads, dE
 		return nil, err
 	}
 
-	rem, ok := remotes[remoteName]
+	rem, ok := remotes.Get(remoteName)
 	if !ok {
 		return nil, fmt.Errorf("%w: '%s'", env.ErrRemoteNotFound, remoteName)
 	}

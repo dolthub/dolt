@@ -3,6 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
+    export DOLT_DBNAME_REPLACE="true"
     dolt sql <<SQL
 CREATE TABLE one_pk (
   pk BIGINT NOT NULL,
@@ -2700,6 +2701,7 @@ SQL
     [[ "$output" =~ "*************************** 14. row ***************************" ]] || false
 }
 
+# bats test_tags=no_lambda
 @test "sql: vertical query format in sql shell" {
     skiponwindows "Need to install expect and make this script work on windows."
 
@@ -2896,11 +2898,4 @@ SQL
 
     mkdir .dolt
     dolt sql -q "select 1"
-
-    # If there is a zombie lock file, sql should delete it.
-    echo "42:3306:aebf244e-0693-4c36-8b2d-6eb0dfa4fe2d" > .dolt/sql-server.lock}
-
-    dolt sql -q "select 1"
-
-    [[ ! -f .dolt/sql-server.lock ]] || false
 }

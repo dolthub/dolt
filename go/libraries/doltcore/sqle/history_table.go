@@ -118,6 +118,10 @@ func (ht *HistoryTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
 	return &ret
 }
 
+func (ht *HistoryTable) PreciseMatch() bool {
+	return false
+}
+
 func (ht *HistoryTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	if lookup.Index.ID() == index.CommitHashIndexId {
 		hs, ok := index.LookupToPointSelectStr(lookup)
@@ -456,7 +460,8 @@ func (cp commitPartitioner) Next(ctx *sql.Context) (sql.Partition, error) {
 }
 
 // Close closes the partitioner
-func (cp commitPartitioner) Close(*sql.Context) error {
+func (cp commitPartitioner) Close(ctx *sql.Context) error {
+	cp.cmItr.Reset(ctx)
 	return nil
 }
 

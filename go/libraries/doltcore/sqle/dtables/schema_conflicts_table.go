@@ -22,12 +22,11 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	noms "github.com/dolthub/dolt/go/store/types"
 )
 
@@ -193,16 +192,12 @@ func newSchemaConflict(ctx context.Context, table string, baseRoot *doltdb.RootV
 }
 
 func getCreateTableStatement(table string, sch schema.Schema, fks []doltdb.ForeignKey, parents map[string]schema.Schema) (string, error) {
-	pkSch, err := sqlutil.FromDoltSchema("", table, sch)
-	if err != nil {
-		return "", err
-	}
-	return diff.GenerateCreateTableStatement(table, sch, pkSch, fks, parents)
+	return sqlfmt.GenerateCreateTableStatement(table, sch, fks, parents)
 }
 
 func getSchemaConflictDescription(ctx context.Context, table string, base, ours, theirs schema.Schema) (string, error) {
 	nbf := noms.Format_Default
-	_, conflict, _, err := merge.SchemaMerge(ctx, nbf, ours, theirs, base, table)
+	_, conflict, _, _, err := merge.SchemaMerge(ctx, nbf, ours, theirs, base, table)
 	if err != nil {
 		return "", err
 	}

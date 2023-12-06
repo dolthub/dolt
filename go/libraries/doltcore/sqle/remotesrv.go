@@ -78,10 +78,10 @@ func RemoteSrvServerArgs(ctxFactory func(context.Context) (*sql.Context, error),
 	return args, nil
 }
 
-func WithUserPasswordAuth(args remotesrv.ServerArgs, auth remotesrv.Authenticator) remotesrv.ServerArgs {
+func WithUserPasswordAuth(args remotesrv.ServerArgs, authnz remotesrv.AccessControl) remotesrv.ServerArgs {
 	si := remotesrv.ServerInterceptor{
-		Lgr:           args.Logger,
-		Authenticator: auth,
+		Lgr:              args.Logger,
+		AccessController: authnz,
 	}
 	args.Options = append(args.Options, si.Options()...)
 	return args

@@ -1696,6 +1696,68 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "resolving a deleted and modified row handles constraint checks",
+		SetUpScript: []string{
+			"create table test(a int primary key, b int, c int );",
+			"alter table test add check (b < 4);",
+			"insert into test values (1, 2, 3);",
+			"call dolt_add('test');",
+			"call dolt_commit('-m', 'create test table');",
+
+			"call dolt_checkout('-b', 'other');",
+			"alter table test drop column c;",
+			"call dolt_add('test');",
+			"call dolt_commit('-m', 'drop column');",
+
+			"call dolt_checkout('main');",
+			"delete from test;",
+			"call dolt_add('test');",
+			"call dolt_commit('-m', 'remove row');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query:    "select * from test",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "resolving a modified/modified row still checks nullness constraint",
+		SetUpScript: []string{
+			"create table test(a int primary key, b int, c int);",
+			"insert into test values (1, 2, 3);",
+			"call dolt_add('test');",
+			"call dolt_commit('-m', 'create test table');",
+
+			"call dolt_checkout('-b', 'other');",
+			"alter table test modify c int not null;",
+			"update test set b = NULL;",
+			"call dolt_add('test');",
+			"call dolt_commit('-m', 'drop column');",
+
+			"call dolt_checkout('main');",
+			"alter table test modify b int not null",
+			"update test set c = NULL;",
+			"call dolt_add('test');",
+			"call dolt_commit('-m', 'remove row');",
+			"set dolt_force_transaction_commit = on;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{"", 0, 1}},
+			},
+			{
+				Query:    "select a, b, c from dolt_constraint_violations_test;",
+				Expected: []sql.Row{{1, nil, nil}},
+			},
+		},
+	},
+	{
 		Name: "Pk convergent updates to sec diff congruent",
 		SetUpScript: []string{
 			"create table xyz (x int primary key, y int, z int, key y_idx(y), key z_idx(z))",
@@ -4291,8 +4353,8 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:            "call dolt_merge('branch1')",
-				SkipResultsCheck: true,
+				Query:    "call dolt_merge('branch1')",
+				Expected: []sql.Row{{doltCommit, 1, 0}},
 			},
 			{
 				Query: "select * from t1 order by id",
@@ -4307,8 +4369,8 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{3}},
 			},
 			{
-				Query:            "call dolt_merge('branch2')",
-				SkipResultsCheck: true,
+				Query:    "call dolt_merge('branch2')",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
 				Query: "select * from t1 order by id",
@@ -4322,6 +4384,55 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 			{
 				Query:    "select id from t1 where v3 = 8",
 				Expected: []sql.Row{{4}},
+			},
+		},
+	},
+	{
+		Name: "merge a generated column with non-conflicting changes on both sides",
+		SetUpScript: []string{
+			"create table t1 (id bigint primary key, v1 bigint, v2 bigint, v3 bigint as (v1 + v2) stored)",
+			"insert into t1 (id, v1, v2) values (1, 1, 1), (2, 2, 2)",
+			"call dolt_commit('-Am', 'first commit')",
+			"call dolt_branch('branch1')",
+			"call dolt_branch('branch2')",
+			"call dolt_checkout('branch1')",
+			"update t1 set v1 = 4 where id = 1",
+			"call dolt_commit('-Am', 'branch1 commit')",
+			"call dolt_checkout('branch2')",
+			"update t1 set v2 = 5 where id = 1",
+			"call dolt_commit('-Am', 'branch2 commit')",
+			"call dolt_checkout('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('branch1')",
+				Expected: []sql.Row{{doltCommit, 1, 0}},
+			},
+			{
+				Query: "select * from t1 order by id",
+				Expected: []sql.Row{
+					{1, 4, 1, 5},
+					{2, 2, 2, 4},
+				},
+			},
+			{
+				Query:    "select id from t1 where v3 = 5",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "call dolt_merge('branch2')",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select * from t1 order by id",
+				Expected: []sql.Row{
+					{1, 4, 5, 9},
+					{2, 2, 2, 4},
+				},
+			},
+			{
+				Query:    "select id from t1 where v3 = 9",
+				Expected: []sql.Row{{1}},
 			},
 		},
 	},
@@ -4343,8 +4454,8 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:            "call dolt_merge('branch1')",
-				SkipResultsCheck: true,
+				Query:    "call dolt_merge('branch1')",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
 				Query: "select * from t1 order by id",
@@ -4354,12 +4465,10 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 					{3, 3, 3, 6},
 					{4, 4, 4, 8},
 				},
-				Skip: true,
 			},
 			{
 				Query:    "select id from t1 where v3 = 6",
 				Expected: []sql.Row{{3}},
-				Skip:     true,
 			},
 			{
 				Query:    "select id from t1 where v3 = 8",
@@ -4371,56 +4480,50 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		Name: "merge a virtual column",
 		SetUpScript: []string{
 			"create table t1 (id bigint primary key, v1 bigint, v2 bigint, v3 bigint as (v1 + v2), index (v3))",
-			"insert into t1 (id, v1, v2) values (1, 1, 1), (2, 2, 2)",
+			"insert into t1 (id, v1, v2) values (1, 2, 3), (4, 5, 6)",
 			"call dolt_commit('-Am', 'first commit')",
 			"call dolt_checkout('-b', 'branch1')",
-			"insert into t1 (id, v1, v2) values (3, 3, 3)",
+			"insert into t1 (id, v1, v2) values (7, 8, 9)",
 			"call dolt_commit('-Am', 'branch1 commit')",
 			"call dolt_checkout('main')",
 			"call dolt_checkout('-b', 'branch2')",
-			"insert into t1 (id, v1, v2) values (4, 4, 4)",
+			"insert into t1 (id, v1, v2) values (10, 11, 12)",
 			"call dolt_commit('-Am', 'branch2 commit')",
 			"call dolt_checkout('main')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:            "call dolt_merge('branch1')",
-				SkipResultsCheck: true,
-				Skip:             true,
+				Query:    "call dolt_merge('branch1')",
+				Expected: []sql.Row{{doltCommit, 1, 0}},
 			},
 			{
 				Query: "select * from t1 order by id",
 				Expected: []sql.Row{
-					{1, 1, 1, 2},
-					{2, 2, 2, 4},
-					{3, 3, 3, 6},
+					{1, 2, 3, 5},
+					{4, 5, 6, 11},
+					{7, 8, 9, 17},
 				},
-				Skip: true,
 			},
 			{
-				Query:    "select id from t1 where v3 = 6",
-				Expected: []sql.Row{{3}},
-				Skip:     true,
+				Query:    "select id from t1 where v3 = 17",
+				Expected: []sql.Row{{7}},
 			},
 			{
-				Query:            "call dolt_merge('branch2')",
-				SkipResultsCheck: true,
-				Skip:             true,
+				Query:    "call dolt_merge('branch2')",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
 				Query: "select * from t1 order by id",
 				Expected: []sql.Row{
-					{1, 1, 1, 2},
-					{2, 2, 2, 4},
-					{3, 3, 3, 6},
-					{4, 4, 4, 8},
+					{1, 2, 3, 5},
+					{4, 5, 6, 11},
+					{7, 8, 9, 17},
+					{10, 11, 12, 23},
 				},
-				Skip: true,
 			},
 			{
-				Query:    "select id from t1 where v3 = 8",
-				Expected: []sql.Row{{4}},
-				Skip:     true,
+				Query:    "select id from t1 where v3 = 23",
+				Expected: []sql.Row{{10}},
 			},
 		},
 	},
@@ -4428,57 +4531,39 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		Name: "merge a virtual column created on another branch",
 		SetUpScript: []string{
 			"create table t1 (id bigint primary key, v1 bigint, v2 bigint)",
-			"insert into t1 (id, v1, v2) values (1, 1, 1), (2, 2, 2)",
+			"insert into t1 (id, v1, v2) values (1, 2, 3), (4, 5, 6)",
 			"call dolt_commit('-Am', 'first commit')",
 			"call dolt_branch('branch1')",
-			"insert into t1 (id, v1, v2) values (3, 3, 3)",
+			"insert into t1 (id, v1, v2) values (7, 8, 9)",
 			"call dolt_commit('-Am', 'main commit')",
 			"call dolt_checkout('branch1')",
 			"alter table t1 add column v3 bigint as (v1 + v2)",
 			"alter table t1 add key idx_v3 (v3)",
-			"insert into t1 (id, v1, v2) values (4, 4, 4)",
+			"insert into t1 (id, v1, v2) values (10, 11, 12)",
 			"call dolt_commit('-Am', 'branch1 commit')",
 			"call dolt_checkout('main')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:            "call dolt_merge('branch1')",
-				SkipResultsCheck: true,
-				Skip:             true,
+				Query:    "call dolt_merge('branch1')",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
 			},
 			{
 				Query: "select * from t1 order by id",
 				Expected: []sql.Row{
-					{1, 1, 1, 2},
-					{2, 2, 2, 4},
-					{3, 3, 3, 6},
+					{1, 2, 3, 5},
+					{4, 5, 6, 11},
+					{7, 8, 9, 17},
+					{10, 11, 12, 23},
 				},
-				Skip: true,
 			},
 			{
-				Query:    "select id from t1 where v3 = 6",
-				Expected: []sql.Row{{3}},
-				Skip:     true,
+				Query:    "select id from t1 where v3 = 17",
+				Expected: []sql.Row{{7}},
 			},
 			{
-				Query:            "call dolt_merge('branch2')",
-				SkipResultsCheck: true,
-				Skip:             true,
-			},
-			{
-				Query: "select * from t1 order by id",
-				Expected: []sql.Row{
-					{1, 1, 1, 2},
-					{2, 2, 2, 4},
-					{3, 3, 3, 6},
-					{4, 4, 4, 8},
-				},
-				Skip: true,
-			},
-			{
-				Query:    "select id from t1 where v3 = 8",
-				Expected: []sql.Row{{4}},
-				Skip:     true,
+				Query:    "select id from t1 where v3 = 23",
+				Expected: []sql.Row{{10}},
 			},
 		},
 	},

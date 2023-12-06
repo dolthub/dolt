@@ -267,7 +267,7 @@ var DoltStatsTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    " SELECT column_name from information_schema.column_statistics",
-				Expected: []sql.Row{{"z"}, {"z,x"}},
+				Expected: []sql.Row{{"z,x"}},
 			},
 			{
 				Query:    "SELECT json_length(json_extract(histogram, \"$.statistic.buckets\")) from information_schema.column_statistics where column_name = 'z,x'",

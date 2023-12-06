@@ -92,6 +92,8 @@ enum ClientEventType {
     STASH_POP = 60;
     SHOW = 61;
     PROFILE = 62;
+    REFLOG = 63;
+    SQL_SERVER_HEARTBEAT = 64;
 }
 
 enum MetricID {
@@ -110,4 +112,5 @@ enum AttributeID {
 enum AppID {
     APP_ID_UNSPECIFIED = 0;
     APP_DOLT = 1;
+    APP_DOLTGRES = 2;
 }

@@ -110,6 +110,11 @@ func (dt *CommitAncestorsTable) IndexedAccess(lookup sql.IndexLookup) sql.Indexe
 	return &nt
 }
 
+// PreciseMatch implements sql.IndexAddressable
+func (dt *CommitAncestorsTable) PreciseMatch() bool {
+	return true
+}
+
 func (dt *CommitAncestorsTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	if lookup.Index.ID() == index.CommitHashIndexId {
 		hs, ok := index.LookupToPointSelectStr(lookup)

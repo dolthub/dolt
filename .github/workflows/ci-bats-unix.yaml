@@ -93,9 +93,9 @@ jobs:
       - name: Install Hadoop
         working-directory: ./.ci_bin
         run: |
-          curl -LO https://downloads.apache.org/hadoop/common/hadoop-3.3.4/hadoop-3.3.4.tar.gz
-          tar xvf hadoop-3.3.4.tar.gz
-          echo "$(pwd)/hadoop-3.3.4/bin" >> $GITHUB_PATH
+          curl -LO https://downloads.apache.org/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz
+          tar xvf hadoop-3.3.6.tar.gz
+          echo "$(pwd)/hadoop-3.3.6/bin" >> $GITHUB_PATH
       - name: Install parquet-cli
         id: parquet_cli
         working-directory: ./.ci_bin

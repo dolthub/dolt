@@ -67,7 +67,7 @@ SQL
     [[ ! "$output" =~ "2,x" ]] || false
     [[ ! "$output" =~ "3,c" ]] || false
 
-    run dolt sql -q "CALL DCHERRY_PICK('branch1')"
+    run dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
     [ "$status" -eq "0" ]
 
     run dolt sql -q "SELECT * FROM test" -r csv
@@ -80,8 +80,8 @@ SQL
 
 @test "sql-cherry-pick: too far back" {
     run dolt sql<<SQL
-CALL DCHECKOUT('main');
-CALL DCHERRY_PICK('branch1~10');
+CALL DOLT_CHECKOUT('main');
+CALL DOLT_CHERRY_PICK('branch1~10');
 SQL
     [ "$status" -eq "1" ]
     [[ "$output" =~ "ancestor" ]] || false

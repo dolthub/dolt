@@ -296,7 +296,13 @@ func (m ArtifactMap) iterAllOfTypes(ctx context.Context, artTypes ...ArtifactTyp
 
 func MergeArtifactMaps(ctx context.Context, left, right, base ArtifactMap, cb tree.CollisionFn) (ArtifactMap, error) {
 	serializer := message.NewMergeArtifactSerializer(base.keyDesc, left.tuples.NodeStore.Pool())
-	tuples, _, err := tree.MergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer)
+	// TODO: MergeArtifactMaps does not properly detect merge conflicts when one side adds a NULL to the end of its tuple.
+	// To fix this, accurate values of `leftSchemaChanged` and `rightSchemaChanged` must be computed.
+	// However, currently we do not expect the value of ArtifactMap.valDesc to be different across branches,
+	// so we can safely assume `false` for both parameters.
+	leftSchemaChanged := false
+	rightSchemaChanged := false
+	tuples, _, err := tree.MergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, leftSchemaChanged, rightSchemaChanged, serializer)
 	if err != nil {
 		return ArtifactMap{}, err
 	}

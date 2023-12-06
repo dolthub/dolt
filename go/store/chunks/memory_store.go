@@ -202,6 +202,10 @@ func (ms *MemoryStoreView) Version() string {
 	return ms.version
 }
 
+func (ms *MemoryStoreView) AccessMode() ExclusiveAccessMode {
+	return ExclusiveAccessMode_Shared
+}
+
 func (ms *MemoryStoreView) errorIfDangling(ctx context.Context, addrs hash.HashSet) error {
 	absent := hash.NewHashSet()
 	for h := range addrs {

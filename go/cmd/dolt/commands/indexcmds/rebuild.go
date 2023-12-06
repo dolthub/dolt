@@ -17,8 +17,9 @@ package indexcmds
 import (
 	"context"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -70,10 +71,6 @@ func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string
 		return HandleErr(errhand.BuildDError("Both the table and index names must be provided.").Build(), usage)
 	}
 
-	if dEnv.IsLocked() {
-		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), usage)
-	}
-
 	working, err := dEnv.WorkingRoot(context.Background())
 	if err != nil {
 		return HandleErr(errhand.BuildDError("Unable to get working.").AddCause(err).Build(), nil)
@@ -102,7 +99,7 @@ func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string
 	if idxSch == nil {
 		return HandleErr(errhand.BuildDError("the index `%s` does not exist on table `%s`", indexName, tableName).Build(), nil)
 	}
-	indexRowData, err := creation.BuildSecondaryIndex(ctx, table, idxSch, opts)
+	indexRowData, err := creation.BuildSecondaryIndex(sql.NewContext(ctx), table, idxSch, tableName, opts)
 	if err != nil {
 		return HandleErr(errhand.BuildDError("Unable to rebuild index `%s` on table `%s`.", indexName, tableName).AddCause(err).Build(), nil)
 	}

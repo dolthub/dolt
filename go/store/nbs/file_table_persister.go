@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
@@ -125,6 +126,11 @@ func (ftp *fsTablePersister) CopyTableFile(ctx context.Context, r io.Reader, fil
 			return "", cleanup, err
 		}
 
+		err = temp.Sync()
+		if err != nil {
+			return "", cleanup, err
+		}
+
 		return temp.Name(), cleanup, nil
 	}()
 	defer f()
@@ -185,6 +191,11 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data [
 			return "", cleanup, ferr
 		}
 
+		ferr = temp.Sync()
+		if ferr != nil {
+			return "", cleanup, ferr
+		}
+
 		return temp.Name(), cleanup, nil
 	}()
 	defer f()
@@ -236,7 +247,6 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 
 		defer func() {
 			closeErr := temp.Close()
-
 			if ferr == nil {
 				ferr = closeErr
 			}
@@ -268,6 +278,11 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 
 		_, ferr = temp.Write(plan.mergedIndex)
 
+		if ferr != nil {
+			return "", cleanup, ferr
+		}
+
+		ferr = temp.Sync()
 		if ferr != nil {
 			return "", cleanup, ferr
 		}
@@ -403,4 +418,8 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, keeper func() 
 
 func (ftp *fsTablePersister) Close() error {
 	return nil
+}
+
+func (ftp *fsTablePersister) AccessMode() chunks.ExclusiveAccessMode {
+	return chunks.ExclusiveAccessMode_Shared
 }

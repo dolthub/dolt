@@ -26,14 +26,14 @@ skip_if_no_aws_tests() {
     dolt fetch origin
 }
 
-@test "remotes-aws: fetch with non-existant dynamo table fails" {
+@test "remotes-aws: fetch with non-existent dynamo table fails" {
     skip_if_no_aws_tests
     dolt remote add origin 'aws://['"this_dynamodb_table_does_not_exist_b612c34f055f4b458"':'"$DOLT_BATS_AWS_BUCKET"']/'"$DOLT_BATS_AWS_EXISTING_REPO"
     run dolt fetch origin
     [ "$status" -eq 1 ]
 }
 
-@test "remotes-aws: fetch with non-existant s3 bucket fails" {
+@test "remotes-aws: fetch with non-existent s3 bucket fails" {
     skip_if_no_aws_tests
     dolt remote add origin 'aws://['"$DOLT_BATS_AWS_TABLE"':'"this_s3_bucket_does_not_exist_5883eaaa20a4797bb"']/'"$DOLT_BATS_AWS_EXISTING_REPO"
     run dolt fetch origin

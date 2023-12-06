@@ -236,9 +236,6 @@ var columnAddDropTests = []schemaMergeTest{
 				merged:   singleRow(1, 2),
 			},
 			{
-				// Skipped because the differ currently doesn't see this as a data conflict because
-				// both left and right tuple representations are the same.
-				// (https://github.com/dolthub/dolt/issues/6748)
 				name:         "one side sets to NULL, other drops non-NULL",
 				ancestor:     singleRow(1, 2, 3),
 				left:         singleRow(1, 2),
@@ -247,45 +244,39 @@ var columnAddDropTests = []schemaMergeTest{
 				skip:         true,
 			},
 			{
-				// Skipped because the differ currently doesn't try to merge the dropped column.
-				// (https://github.com/dolthub/dolt/issues/6747)
 				name:         "one side sets to NULL, other drops non-NULL, plus data change",
 				ancestor:     singleRow(1, 2, 3),
 				left:         singleRow(1, 2),
 				right:        singleRow(1, 3, nil),
 				dataConflict: true,
-				skip:         true,
 			},
 			{
-				// Skipped because the differ doesn't see left as modified because
-				// it has the same tuple representation as ancestor.
-				// (https://github.com/dolthub/dolt/issues/6746)
 				name:         "one side sets to non-NULL, other drops NULL",
 				ancestor:     singleRow(1, 2, nil),
 				left:         singleRow(1, 2),
 				right:        singleRow(1, 2, 3),
 				dataConflict: true,
-				skip:         true,
 			},
 			{
-				// Skipped because the differ currently doesn't try to merge the dropped column.
-				// (https://github.com/dolthub/dolt/issues/6747)
 				name:         "one side sets to non-NULL, other drops NULL, plus data change",
 				ancestor:     singleRow(1, 2, nil),
 				left:         singleRow(1, 3),
 				right:        singleRow(1, 2, 3),
 				dataConflict: true,
-				skip:         true,
 			},
 			{
-				// Skipped because the differ currently doesn't try to merge the dropped column.
-				// (https://github.com/dolthub/dolt/issues/6747)
 				name:         "one side sets to non-NULL, other drops non-NULL",
 				ancestor:     singleRow(1, 2, 3),
 				left:         singleRow(1, 2),
 				right:        singleRow(1, 2, 4),
 				dataConflict: true,
-				skip:         true,
+			},
+			{
+				name:     "one side drops column, other deletes row",
+				ancestor: []sql.Row{row(1, 2, 3), row(4, 5, 6)},
+				left:     []sql.Row{row(1, 2), row(4, 5)},
+				right:    []sql.Row{row(1, 2, 3)},
+				merged:   []sql.Row{row(1, 2)},
 			},
 		},
 	},
@@ -304,54 +295,39 @@ var columnAddDropTests = []schemaMergeTest{
 				merged:   singleRow(1, 3),
 			},
 			{
-				// Skipped because the differ currently doesn't try to merge the dropped column.
-				// (https://github.com/dolthub/dolt/issues/6747)
 				name:         "one side sets to NULL, other drops non-NULL",
 				ancestor:     singleRow(1, 2, 3),
 				left:         singleRow(1, 3),
 				right:        singleRow(1, nil, 3),
 				dataConflict: true,
-				skip:         true,
 			},
 			{
-				// Skipped because the differ currently doesn't try to merge the dropped column.
-				// (https://github.com/dolthub/dolt/issues/6747)
 				name:         "one side sets to NULL, other drops non-NULL, plus data change",
 				ancestor:     singleRow(1, 2, 4),
 				left:         singleRow(1, 3),
 				right:        singleRow(1, nil, 4),
 				dataConflict: true,
-				skip:         true,
 			},
 			{
-				// Skipped because the differ currently doesn't try to merge the dropped column.
-				// (https://github.com/dolthub/dolt/issues/6747)
 				name:         "one side sets to non-NULL, other drops NULL, plus data change",
 				ancestor:     singleRow(1, nil, 3),
 				left:         singleRow(1, 3),
 				right:        singleRow(1, 2, 3),
 				dataConflict: true,
-				skip:         true,
 			},
 			{
-				// Skipped because the differ currently doesn't try to merge the dropped column.
-				// (https://github.com/dolthub/dolt/issues/6747)
 				name:         "one side sets to non-NULL, other drops NULL, plus data change",
 				ancestor:     singleRow(1, nil, 3),
 				left:         singleRow(1, 4),
 				right:        singleRow(1, 2, 3),
 				dataConflict: true,
-				skip:         true,
 			},
 			{
-				// Skipped because the differ currently doesn't try to merge the dropped column.
-				// (https://github.com/dolthub/dolt/issues/6747)
 				name:         "one side sets to non-NULL, other drops non-NULL",
 				ancestor:     singleRow(1, 2, 3),
 				left:         singleRow(1, 3),
 				right:        singleRow(1, 4, 3),
 				dataConflict: true,
-				skip:         true,
 			},
 		},
 	},
@@ -389,15 +365,11 @@ var columnAddDropTests = []schemaMergeTest{
 				merged:   singleRow(1, 2, nil),
 			},
 			{
-				// Skipped because the differ doesn't see left as modified because
-				// it has the same tuple representation as ancestor.
-				// (https://github.com/dolthub/dolt/issues/6746)
 				name:         "convergent adds with differing nullness",
 				ancestor:     singleRow(1, 2),
 				left:         singleRow(1, 2, nil),
 				right:        singleRow(1, 2, 3),
 				dataConflict: true,
-				skip:         true,
 			},
 			{
 				name:         "convergent adds with differing nullness, plus convergent data change",
@@ -546,6 +518,29 @@ var columnAddDropTests = []schemaMergeTest{
 		merged:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY)              "), row(1), row(12)),
 		skipNewFmt: true,
 		skipOldFmt: true,
+	},
+	{
+		name:     "right side drops and adds column of same type",
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c int, a int)")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c int, a int)")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c int, b int)")),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c int, b int)")),
+		dataTests: []dataTest{
+			{
+				name:         "left side modifies dropped column",
+				ancestor:     singleRow(1, 1, 2),
+				left:         singleRow(1, 1, 3),
+				right:        singleRow(1, 2, 2),
+				dataConflict: true,
+			},
+		},
+	},
+	{
+		name:     "right side drops and adds column of different type",
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c int, a int)")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c int, a int)")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c int, b text)")),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, c int, b text)")),
 	},
 }
 
@@ -733,6 +728,27 @@ var typeChangeTests = []schemaMergeTest{
 				ancestor:     nil,
 				left:         singleRow(1, "test", 1, "test"),
 				right:        singleRow(1, "hello world", 1, "hello world"),
+				dataConflict: true,
+			},
+			{
+				name:     "delete and schema change on left",
+				ancestor: singleRow(1, "test", 1, "test"),
+				left:     nil,
+				right:    singleRow(1, "test", 1, "test"),
+				merged:   nil,
+			},
+			{
+				name:     "schema change on left, delete on right",
+				ancestor: singleRow(1, "test", 1, "test"),
+				left:     singleRow(1, "test", 1, "test"),
+				right:    nil,
+				merged:   nil,
+			},
+			{
+				name:         "schema and value change on left, delete on right",
+				ancestor:     singleRow(1, "test", 1, "test"),
+				left:         singleRow(1, "hello", 1, "hello"),
+				right:        nil,
 				dataConflict: true,
 			},
 		},
@@ -952,7 +968,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 							require.NoError(t, err)
 							foundDataConflict = foundDataConflict || hasConflict
 						}
-						require.Equal(t, expectDataConflict, foundDataConflict)
+						require.True(t, foundDataConflict, "Expected data conflict, but didn't find one.")
 					} else {
 						for name, addr := range exp {
 							a, ok := act[name]
@@ -978,17 +994,19 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 				runTest(t, test, false)
 			})
 			for _, data := range test.dataTests {
-				test.ancestor.rows = data.ancestor
-				test.left.rows = data.left
-				test.right.rows = data.right
-				test.merged.rows = data.merged
-				test.skipNewFmt = test.skipNewFmt || data.skip
-				test.skipFlipOnNewFormat = test.skipFlipOnNewFormat || data.skipFlip
+				// Copy the test so that the values from one data test don't affect subsequent data tests.
+				dataDest := test
+				dataDest.ancestor.rows = data.ancestor
+				dataDest.left.rows = data.left
+				dataDest.right.rows = data.right
+				dataDest.merged.rows = data.merged
+				dataDest.skipNewFmt = dataDest.skipNewFmt || data.skip
+				dataDest.skipFlipOnNewFormat = dataDest.skipFlipOnNewFormat || data.skipFlip
 				t.Run(data.name, func(t *testing.T) {
 					if data.skip {
 						t.Skip()
 					}
-					runTest(t, test, data.dataConflict)
+					runTest(t, dataDest, data.dataConflict)
 				})
 			}
 		})

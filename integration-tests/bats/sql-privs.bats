@@ -72,7 +72,6 @@ teardown() {
     [[ $output =~ "new_user" ]] || false
 
     stop_sql_server
-    rm -f .dolt/sql-server.lock
 
     # restarting server
     PORT=$( definePORT )
@@ -238,7 +237,6 @@ behavior:
     ! [[ "$output" =~ "\"User\":\"privs_user\"" ]] || false
 
     # Restart server
-    rm -f ./.dolt/sql-server.lock
     stop_sql_server
     start_sql_server_with_args --host 0.0.0.0 --user=dolt --privilege-file=privs.json
 

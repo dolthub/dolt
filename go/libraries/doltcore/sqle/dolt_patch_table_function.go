@@ -219,6 +219,10 @@ func (p *PatchTableFunction) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	}, nil
 }
 
+func (p *PatchTableFunction) PreciseMatch() bool {
+	return true
+}
+
 var patchTableSchema = sql.Schema{
 	&sql.Column{Name: orderColumnName, Type: sqltypes.Uint64, PrimaryKey: true, Nullable: false},
 	&sql.Column{Name: fromColumnName, Type: sqltypes.LongText, Nullable: false},
@@ -528,11 +532,7 @@ func getSchemaSqlPatch(ctx *sql.Context, toRoot *doltdb.RootValue, td diff.Table
 	if td.IsDrop() {
 		ddlStatements = append(ddlStatements, sqlfmt.DropTableStmt(td.FromName))
 	} else if td.IsAdd() {
-		toPkSch, err := sqlutil.FromDoltSchema("", td.ToName, td.ToSch)
-		if err != nil {
-			return nil, err
-		}
-		stmt, err := diff.GenerateCreateTableStatement(td.ToName, td.ToSch, toPkSch, td.ToFks, td.ToFksParentSch)
+		stmt, err := sqlfmt.GenerateCreateTableStatement(td.ToName, td.ToSch, td.ToFks, td.ToFksParentSch)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}

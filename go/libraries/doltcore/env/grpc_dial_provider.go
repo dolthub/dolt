@@ -16,8 +16,10 @@ package env
 
 import (
 	"crypto/tls"
+	"errors"
 	"net"
 	"net/http"
+	"os"
 	"runtime"
 	"strings"
 	"unicode"
@@ -25,7 +27,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/creds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 )
 
@@ -88,9 +92,18 @@ func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfacto
 	if config.Creds != nil {
 		opts = append(opts, grpc.WithPerRPCCredentials(config.Creds))
 	} else if config.WithEnvCreds {
-		rpcCreds, err := p.getRPCCreds(endpoint)
-		if err != nil {
-			return dbfactory.GRPCRemoteConfig{}, err
+		var rpcCreds credentials.PerRPCCredentials
+		var err error
+		if config.UserIdForOsEnvAuth != "" {
+			rpcCreds, err = p.getRPCCredsFromOSEnv(config.UserIdForOsEnvAuth)
+			if err != nil {
+				return dbfactory.GRPCRemoteConfig{}, err
+			}
+		} else {
+			rpcCreds, err = p.getRPCCreds(endpoint)
+			if err != nil {
+				return dbfactory.GRPCRemoteConfig{}, err
+			}
 		}
 		if rpcCreds != nil {
 			opts = append(opts, grpc.WithPerRPCCredentials(rpcCreds))
@@ -101,6 +114,24 @@ func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfacto
 		DialOptions: opts,
 		HTTPFetcher: httpfetcher,
 	}, nil
+}
+
+// getRPCCredsFromOSEnv returns RPC Credentials for the specified username, using the DOLT_REMOTE_PASSWORD
+func (p GRPCDialProvider) getRPCCredsFromOSEnv(username string) (credentials.PerRPCCredentials, error) {
+	if username == "" {
+		return nil, errors.New("Runtime error: username must be provided to getRPCCredsFromOSEnv")
+	}
+
+	pass, found := os.LookupEnv(dconfig.EnvDoltRemotePassword)
+	if !found {
+		return nil, errors.New("error: must set DOLT_REMOTE_PASSWORD environment variable to use --user param")
+	}
+	c := creds.DoltCredsForPass{
+		Username: username,
+		Password: pass,
+	}
+
+	return c.RPCCreds(), nil
 }
 
 // getRPCCreds returns any RPC credentials available to this dial provider. If a DoltEnv has been configured

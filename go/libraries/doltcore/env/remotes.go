@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	filesys2 "github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -131,6 +132,16 @@ func (r *Remote) GetRemoteDBWithoutCaching(ctx context.Context, nbf *types.NomsB
 	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, filesys2.LocalFS, params)
 }
 
+func (r Remote) WithParams(params map[string]string) Remote {
+	fetchSpecs := make([]string, len(r.FetchSpecs))
+	copy(fetchSpecs, r.FetchSpecs)
+	for k, v := range r.Params {
+		params[k] = v
+	}
+	r.Params = params
+	return r
+}
+
 // PushOptions contains information needed for push for
 // one or more branches or a tag for a specific remote database.
 type PushOptions struct {
@@ -222,7 +233,7 @@ func getRemote(rsr RepoStateReader, name string) (Remote, error) {
 		return NoRemote, err
 	}
 
-	remote, ok := remotes[name]
+	remote, ok := remotes.Get(name)
 	if !ok {
 		return NoRemote, ErrInvalidRepository.New(name)
 	}
@@ -271,7 +282,7 @@ func getPushTargetsAndRemoteFromNoArg(ctx context.Context, rsr RepoStateReader, 
 	}
 }
 
-func getPushTargetsAndRemoteForAllBranches(ctx context.Context, rsrBranches map[string]BranchConfig, currentBranch ref.DoltRef, remote *Remote, ddb *doltdb.DoltDB, force, setUpstream bool) ([]*PushTarget, *Remote, error) {
+func getPushTargetsAndRemoteForAllBranches(ctx context.Context, rsrBranches *concurrentmap.Map[string, BranchConfig], currentBranch ref.DoltRef, remote *Remote, ddb *doltdb.DoltDB, force, setUpstream bool) ([]*PushTarget, *Remote, error) {
 	localBranches, err := ddb.GetBranches(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -283,7 +294,7 @@ func getPushTargetsAndRemoteForAllBranches(ctx context.Context, rsrBranches map[
 	return getPushTargetsAndRemoteForBranchRefs(ctx, rsrBranches, lbNames, currentBranch, remote, ddb, force, setUpstream)
 }
 
-func getPushTargetsAndRemoteForBranchRefs(ctx context.Context, rsrBranches map[string]BranchConfig, localBranches []string, currentBranch ref.DoltRef, remote *Remote, ddb *doltdb.DoltDB, force, setUpstream bool) ([]*PushTarget, *Remote, error) {
+func getPushTargetsAndRemoteForBranchRefs(ctx context.Context, rsrBranches *concurrentmap.Map[string, BranchConfig], localBranches []string, currentBranch ref.DoltRef, remote *Remote, ddb *doltdb.DoltDB, force, setUpstream bool) ([]*PushTarget, *Remote, error) {
 	var pushOptsList []*PushTarget
 	for _, refSpecName := range localBranches {
 		refSpec, err := getRefSpecFromStr(ctx, ddb, refSpecName)
@@ -293,7 +304,7 @@ func getPushTargetsAndRemoteForBranchRefs(ctx context.Context, rsrBranches map[s
 
 		// if the remote of upstream does not match the remote given,
 		// it should push to the given remote creating new remote branch
-		upstream, hasUpstream := rsrBranches[refSpecName]
+		upstream, hasUpstream := rsrBranches.Get(refSpecName)
 		hasUpstream = hasUpstream && upstream.Remote == remote.Name
 
 		opts, err := getPushTargetFromRefSpec(refSpec, currentBranch, remote, force, setUpstream, hasUpstream)
@@ -344,7 +355,7 @@ func getPushTargetFromRefSpec(refSpec ref.RefSpec, currentBranch ref.DoltRef, re
 // If there is no remote specified, the current branch needs to have upstream set to push; otherwise, returns error.
 // This function returns |refSpec| for current branch, name of the remote the branch is associated with and
 // whether the current branch has upstream set.
-func getCurrentBranchRefSpec(ctx context.Context, branches map[string]BranchConfig, rsr RepoStateReader, ddb *doltdb.DoltDB, remoteName string, isDefaultRemote, remoteSpecified, setUpstream, pushAutoSetupRemote bool) (ref.RefSpec, string, bool, error) {
+func getCurrentBranchRefSpec(ctx context.Context, branches *concurrentmap.Map[string, BranchConfig], rsr RepoStateReader, ddb *doltdb.DoltDB, remoteName string, isDefaultRemote, remoteSpecified, setUpstream, pushAutoSetupRemote bool) (ref.RefSpec, string, bool, error) {
 	var refSpec ref.RefSpec
 	currentBranch, err := rsr.CWBHeadRef()
 	if err != nil {
@@ -352,7 +363,7 @@ func getCurrentBranchRefSpec(ctx context.Context, branches map[string]BranchConf
 	}
 
 	currentBranchName := currentBranch.GetPath()
-	upstream, hasUpstream := branches[currentBranchName]
+	upstream, hasUpstream := branches.Get(currentBranchName)
 
 	if remoteSpecified || pushAutoSetupRemote {
 		if isDefaultRemote && !pushAutoSetupRemote {
@@ -383,7 +394,7 @@ func RemoteForFetchArgs(args []string, rsr RepoStateReader) (Remote, []string, e
 		return NoRemote, nil, err
 	}
 
-	if len(remotes) == 0 {
+	if remotes.Len() == 0 {
 		return NoRemote, nil, ErrNoRemote
 	}
 
@@ -395,7 +406,7 @@ func RemoteForFetchArgs(args []string, rsr RepoStateReader) (Remote, []string, e
 		args = args[1:]
 	}
 
-	remote, ok := remotes[remName]
+	remote, ok := remotes.Get(remName)
 	if !ok {
 		msg := "does not appear to be a dolt database. could not read from the remote database. please make sure you have the correct access rights and the database exists"
 		return NoRemote, nil, fmt.Errorf("%w; '%s' %s", ErrUnknownRemote, remName, msg)
@@ -584,7 +595,10 @@ func NewPullSpec(
 	if err != nil {
 		return nil, err
 	}
-	remote := remotes[refSpecs[0].GetRemote()]
+	remote, found := remotes.Get(refSpecs[0].GetRemote())
+	if !found {
+		return nil, ErrPullWithNoRemoteAndNoUpstream
+	}
 
 	var remoteRef ref.DoltRef
 	if remoteRefName == "" {
@@ -597,7 +611,7 @@ func NewPullSpec(
 			return nil, err
 		}
 
-		trackedBranch, hasUpstream := trackedBranches[branch.GetPath()]
+		trackedBranch, hasUpstream := trackedBranches.Get(branch.GetPath())
 		if !hasUpstream {
 			if remoteOnly {
 				return nil, fmt.Errorf(ErrPullWithRemoteNoUpstream.Error(), remoteName)
@@ -647,7 +661,7 @@ func GetAbsRemoteUrl(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg stri
 		return dbfactory.HTTPSScheme, "https://" + urlArg, nil
 	}
 
-	hostName, err := cfg.GetString(RemotesApiHostKey)
+	hostName, err := cfg.GetString(config.RemotesApiHostKey)
 
 	if err != nil {
 		if err != config.ErrConfigParamNotFound {

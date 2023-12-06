@@ -131,6 +131,10 @@ func (ddb *DoltDB) NomsRoot(ctx context.Context) (hash.Hash, error) {
 	return datas.ChunkStoreFromDatabase(ddb.db).Root(ctx)
 }
 
+func (ddb *DoltDB) AccessMode() chunks.ExclusiveAccessMode {
+	return datas.ChunkStoreFromDatabase(ddb.db).AccessMode()
+}
+
 // CommitRoot executes a chunkStore commit, atomically swapping the root hash of the database manifest
 func (ddb *DoltDB) CommitRoot(ctx context.Context, last, current hash.Hash) (bool, error) {
 	return datas.ChunkStoreFromDatabase(ddb.db).Commit(ctx, last, current)

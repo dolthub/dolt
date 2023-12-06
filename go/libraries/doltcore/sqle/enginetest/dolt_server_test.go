@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/utils/svcs"
 )
 
 // DoltBranchMultiSessionScriptTests contain tests that need to be run in a multi-session server environment
@@ -539,8 +540,8 @@ func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
 			require.NoError(t, conn1.Close())
 			require.NoError(t, conn2.Close())
 
-			sc.StopServer()
-			err = sc.WaitForClose()
+			sc.Stop()
+			err = sc.WaitForStop()
 			require.NoError(t, err)
 		})
 	}
@@ -595,8 +596,8 @@ func testSerialSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
 
 			require.NoError(t, conn1.Close())
 
-			sc.StopServer()
-			err = sc.WaitForClose()
+			sc.Stop()
+			err = sc.WaitForStop()
 			require.NoError(t, err)
 		})
 	}
@@ -657,7 +658,7 @@ func assertResultsEqual(t *testing.T, expected []sql.Row, rows *gosql.Rows) {
 }
 
 // startServer will start sql-server with given host, unix socket file path and whether to use specific port, which is defined randomly.
-func startServer(t *testing.T, withPort bool, host string, unixSocketPath string) (*env.DoltEnv, *sqlserver.ServerController, sqlserver.ServerConfig) {
+func startServer(t *testing.T, withPort bool, host string, unixSocketPath string) (*env.DoltEnv, *svcs.Controller, sqlserver.ServerConfig) {
 	dEnv := dtestutils.CreateTestEnv()
 	serverConfig := sqlserver.DefaultServerConfig()
 	if withPort {
@@ -676,8 +677,8 @@ func startServer(t *testing.T, withPort bool, host string, unixSocketPath string
 	return dEnv, onEnv, config
 }
 
-func startServerOnEnv(t *testing.T, serverConfig sqlserver.ServerConfig, dEnv *env.DoltEnv) (*sqlserver.ServerController, sqlserver.ServerConfig) {
-	sc := sqlserver.NewServerController()
+func startServerOnEnv(t *testing.T, serverConfig sqlserver.ServerConfig, dEnv *env.DoltEnv) (*svcs.Controller, sqlserver.ServerConfig) {
+	sc := svcs.NewController()
 	go func() {
 		_, _ = sqlserver.Serve(context.Background(), "0.0.0", serverConfig, sc, dEnv)
 	}()
@@ -745,8 +746,8 @@ func TestDoltServerRunningUnixSocket(t *testing.T) {
 	require.NoError(t, localConn.Close())
 
 	// Stopping unix socket server
-	sc.StopServer()
-	err = sc.WaitForClose()
+	sc.Stop()
+	err = sc.WaitForStop()
 	require.NoError(t, err)
 	require.NoFileExists(t, defaultUnixSocketPath)
 
@@ -773,7 +774,7 @@ func TestDoltServerRunningUnixSocket(t *testing.T) {
 	})
 
 	// Stopping TCP socket server
-	tcpSc.StopServer()
-	err = tcpSc.WaitForClose()
+	tcpSc.Stop()
+	err = tcpSc.WaitForStop()
 	require.NoError(t, err)
 }
