@@ -89,7 +89,7 @@ func TestSingleQuery(t *testing.T) {
 	}
 
 	for _, q := range setupQueries {
-		enginetest.RunQuery(t, engine, harness, q)
+		enginetest.RunQueryWithContext(t, engine, harness, nil, q)
 	}
 
 	// engine.EngineAnalyzer().Debug = true
@@ -331,7 +331,7 @@ func TestSingleQueryPrepared(t *testing.T) {
 	}
 
 	for _, q := range setupQueries {
-		enginetest.RunQuery(t, engine, harness, q)
+		enginetest.RunQueryWithContext(t, engine, harness, nil, q)
 	}
 
 	//engine.Analyzer.Debug = true
@@ -2340,7 +2340,7 @@ func TestSystemTableIndexes(t *testing.T) {
 
 		ctx := enginetest.NewContext(harness)
 		for _, q := range stt.setup {
-			enginetest.RunQuery(t, e, harness, q)
+			enginetest.RunQueryWithContext(t, e, harness, ctx, q)
 		}
 
 		for i, c := range []string{"inner", "lookup", "hash", "merge"} {
@@ -2375,7 +2375,7 @@ func TestSystemTableIndexesPrepared(t *testing.T) {
 
 		ctx := enginetest.NewContext(harness)
 		for _, q := range stt.setup {
-			enginetest.RunQuery(t, e, harness, q)
+			enginetest.RunQueryWithContext(t, e, harness, ctx, q)
 		}
 
 		for _, tt := range stt.queries {
