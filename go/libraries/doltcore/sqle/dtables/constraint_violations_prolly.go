@@ -16,7 +16,6 @@ package dtables
 
 import (
 	"encoding/json"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -162,7 +161,7 @@ func (itr prollyCVIter) Next(ctx *sql.Context) (sql.Row, error) {
 
 	r := make(sql.Row, itr.sch.GetAllCols().Size()+3)
 	r[0] = art.SourceRootish.String()
-	r[1] = mapCVType(art.ArtType)
+	r[1] = merge.MapCVType(art.ArtType)
 
 	var meta prolly.ConstraintViolationMeta
 	err = json.Unmarshal(art.Metadata, &meta)
@@ -258,7 +257,7 @@ func (d *prollyCVDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 	d.kb.PutCommitAddr(d.kd.Count()-2, h)
 
 	// Finally the artifact type
-	artType := unmapCVType(merge.CvType(r[1].(uint64)))
+	artType := merge.UnmapCVType(merge.CvType(r[1].(uint64)))
 	d.kb.PutUint8(d.kd.Count()-1, uint8(artType))
 
 	key := d.kb.Build(d.pool)
@@ -305,38 +304,6 @@ func (d *prollyCVDeleter) Close(ctx *sql.Context) error {
 	}
 
 	return d.cvt.rs.SetRoot(ctx, updatedRoot)
-}
-
-func mapCVType(artifactType prolly.ArtifactType) (outType uint64) {
-	switch artifactType {
-	case prolly.ArtifactTypeForeignKeyViol:
-		outType = uint64(merge.CvType_ForeignKey)
-	case prolly.ArtifactTypeUniqueKeyViol:
-		outType = uint64(merge.CvType_UniqueIndex)
-	case prolly.ArtifactTypeChkConsViol:
-		outType = uint64(merge.CvType_CheckConstraint)
-	case prolly.ArtifactTypeNullViol:
-		outType = uint64(merge.CvType_NotNull)
-	default:
-		panic("unhandled cv type")
-	}
-	return
-}
-
-func unmapCVType(in merge.CvType) (out prolly.ArtifactType) {
-	switch in {
-	case merge.CvType_ForeignKey:
-		out = prolly.ArtifactTypeForeignKeyViol
-	case merge.CvType_UniqueIndex:
-		out = prolly.ArtifactTypeUniqueKeyViol
-	case merge.CvType_CheckConstraint:
-		out = prolly.ArtifactTypeChkConsViol
-	case merge.CvType_NotNull:
-		out = prolly.ArtifactTypeNullViol
-	default:
-		panic("unhandled cv type")
-	}
-	return
 }
 
 func (itr prollyCVIter) Close(ctx *sql.Context) error {
