@@ -23,14 +23,10 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
-	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/cherry_pick"
 )
 
 var ErrEmptyCherryPick = errors.New("cannot cherry-pick empty string")
-var ErrCherryPickUncommittedChanges = errors.New("cannot cherry-pick with uncommitted changes")
 
 var cherryPickSchema = []*sql.Column{
 	{
@@ -95,29 +91,8 @@ func doDoltCherryPick(ctx *sql.Context, amend bool, commitMessage string, args [
 		return "", 0, 0, 0, err
 	}
 
-	dSess := dsess.DSessFromSess(ctx.Session)
-
 	if apr.Contains(cli.AbortParam) {
-		ws, err := dSess.WorkingSet(ctx, dbName)
-		if err != nil {
-			return "", 0, 0, 0, fmt.Errorf("fatal: unable to load working set: %v", err)
-		}
-
-		if !ws.MergeActive() {
-			return "", 0, 0, 0, fmt.Errorf("error: There is no cherry-pick merge to abort")
-		}
-
-		roots, ok := dSess.GetRoots(ctx, dbName)
-		if !ok {
-			return "", 0, 0, 0, fmt.Errorf("fatal: unable to load roots for %s", dbName)
-		}
-
-		newWs, err := abortMerge(ctx, ws, roots)
-		if err != nil {
-			return "", 0, 0, 0, fmt.Errorf("fatal: unable to abort merge: %v", err)
-		}
-
-		return "", 0, 0, 0, dSess.SetWorkingSet(ctx, dbName, newWs)
+		return "", 0, 0, 0, cherry_pick.AbortCherryPick(ctx, dbName)
 	}
 
 	// we only support cherry-picking a single commit for now.
@@ -132,191 +107,21 @@ func doDoltCherryPick(ctx *sql.Context, amend bool, commitMessage string, args [
 		return "", 0, 0, 0, ErrEmptyCherryPick
 	}
 
-	roots, ok := dSess.GetRoots(ctx, dbName)
-	if !ok {
-		return "", 0, 0, 0, sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	mergeResult, commitMsg, err := cherryPick(ctx, dSess, roots, dbName, cherryStr)
+	commit, mergeResult, err := cherry_pick.CherryPick(ctx, cherryStr, cherry_pick.CherryPickOptions{
+		Amend:         amend,
+		CommitMessage: commitMessage,
+	})
 	if err != nil {
 		return "", 0, 0, 0, err
 	}
 
-	newWorkingRoot := mergeResult.Root
-	err = dSess.SetRoot(ctx, dbName, newWorkingRoot)
-	if err != nil {
-		return "", 0, 0, 0, err
+	if mergeResult != nil {
+		return "",
+			mergeResult.CountOfTablesWithDataConflicts(),
+			mergeResult.CountOfTablesWithSchemaConflicts(),
+			mergeResult.CountOfTablesWithConstraintViolations(),
+			nil
 	}
 
-	err = stageCherryPickedTables(ctx, mergeResult.Stats)
-	if err != nil {
-		return "", 0, 0, 0, err
-	}
-
-	if mergeResult.HasMergeArtifacts() {
-		return "", mergeResult.CountOfTablesWithDataConflicts(),
-			mergeResult.CountOfTablesWithSchemaConflicts(), mergeResult.CountOfTablesWithConstraintViolations(), nil
-	} else {
-		// TODO: We need a way to control this commit message for the squash rebase action
-		args := []string{"-m", commitMsg}
-		if commitMessage != "" {
-			args = []string{"-m", commitMessage}
-		}
-		if amend {
-			args = append(args, "--amend")
-		}
-
-		commitHash, _, err := doDoltCommit(ctx, args)
-		return commitHash, 0, 0, 0, err
-	}
-}
-
-// stageCherryPickedTables stages the tables from |mergeStats| that don't have any merge artifacts – i.e.
-// tables that don't have any data or schema conflicts and don't have any constraint violations.
-func stageCherryPickedTables(ctx *sql.Context, mergeStats map[string]*merge.MergeStats) error {
-	tablesToAdd := make([]string, 0, len(mergeStats))
-	for tableName, mergeStats := range mergeStats {
-		if mergeStats.HasArtifacts() {
-			continue
-		}
-
-		// Find any tables being deleted and make sure we stage those tables first
-		if mergeStats.Operation == merge.TableRemoved {
-			tablesToAdd = append([]string{tableName}, tablesToAdd...)
-		} else {
-			tablesToAdd = append(tablesToAdd, tableName)
-		}
-	}
-
-	for _, tableName := range tablesToAdd {
-		res, err := doDoltAdd(ctx, []string{tableName})
-		if err != nil {
-			return err
-		}
-		if res != 0 {
-			return fmt.Errorf("dolt add failed")
-		}
-	}
-
-	return nil
-}
-
-// cherryPick checks that the current working set is clean, verifies the cherry-pick commit is not a merge commit
-// or a commit without parent commit, performs merge and returns the new working set root value and
-// the commit message of cherry-picked commit as the commit message of the new commit created during this command.
-func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, dbName, cherryStr string) (*merge.Result, string, error) {
-	// check for clean working set
-	wsOnlyHasIgnoredTables, err := diff.WorkingSetContainsOnlyIgnoredTables(ctx, roots)
-	if err != nil {
-		return nil, "", err
-	}
-	if !wsOnlyHasIgnoredTables {
-		return nil, "", ErrCherryPickUncommittedChanges
-	}
-
-	headRootHash, err := roots.Head.HashOf()
-	if err != nil {
-		return nil, "", err
-	}
-
-	workingRootHash, err := roots.Working.HashOf()
-	if err != nil {
-		return nil, "", err
-	}
-
-	doltDB, ok := dSess.GetDoltDB(ctx, dbName)
-	if !ok {
-		return nil, "", fmt.Errorf("failed to get DoltDB")
-	}
-
-	dbData, ok := dSess.GetDbData(ctx, dbName)
-	if !ok {
-		return nil, "", fmt.Errorf("failed to get dbData")
-	}
-
-	cherryCommitSpec, err := doltdb.NewCommitSpec(cherryStr)
-	if err != nil {
-		return nil, "", err
-	}
-	headRef, err := dbData.Rsr.CWBHeadRef()
-	if err != nil {
-		return nil, "", err
-	}
-	cherryCommit, err := doltDB.Resolve(ctx, cherryCommitSpec, headRef)
-	if err != nil {
-		return nil, "", err
-	}
-
-	if len(cherryCommit.DatasParents()) > 1 {
-		return nil, "", fmt.Errorf("cherry-picking a merge commit is not supported")
-	}
-	if len(cherryCommit.DatasParents()) == 0 {
-		return nil, "", fmt.Errorf("cherry-picking a commit without parents is not supported")
-	}
-
-	cherryRoot, err := cherryCommit.GetRootValue(ctx)
-	if err != nil {
-		return nil, "", err
-	}
-
-	// When cherry-picking, we need to use the parent of the cherry-picked commit as the ancestor. This
-	// ensures that only the delta from the cherry-pick commit is applied.
-	parentCommit, err := doltDB.ResolveParent(ctx, cherryCommit, 0)
-	if err != nil {
-		return nil, "", err
-	}
-	parentRoot, err := parentCommit.GetRootValue(ctx)
-	if err != nil {
-		return nil, "", err
-	}
-
-	dbState, ok, err := dSess.LookupDbState(ctx, dbName)
-	if err != nil {
-		return nil, "", err
-	} else if !ok {
-		return nil, "", sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	mo := merge.MergeOpts{
-		IsCherryPick:        true,
-		KeepSchemaConflicts: false,
-	}
-	result, err := merge.MergeRoots(ctx, roots.Working, cherryRoot, parentRoot, cherryCommit, parentCommit, dbState.EditOpts(), mo)
-	if err != nil {
-		return nil, "", err
-	}
-
-	workingRootHash, err = result.Root.HashOf()
-	if err != nil {
-		return nil, "", err
-	}
-
-	if headRootHash.Equal(workingRootHash) {
-		return nil, "", fmt.Errorf("no changes were made, nothing to commit")
-	}
-
-	cherryCommitMeta, err := cherryCommit.GetCommitMeta(ctx)
-	if err != nil {
-		return nil, "", err
-	}
-
-	// If any of the merge stats show a data or schema conflict or a constraint
-	// violation, record that a merge is in progress.
-	for _, stats := range result.Stats {
-		if stats.HasArtifacts() {
-			ws, err := dSess.WorkingSet(ctx, dbName)
-			if err != nil {
-				return nil, "", err
-			}
-			newWorkingSet := ws.StartCherryPick(cherryCommit, cherryStr)
-			err = dSess.SetWorkingSet(ctx, dbName, newWorkingSet)
-			if err != nil {
-				return nil, "", err
-			}
-
-			break
-		}
-	}
-
-	return result, cherryCommitMeta.Description, nil
+	return commit, 0, 0, 0, nil
 }
