@@ -202,6 +202,10 @@ func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []stri
 			cancelF()
 		}
 	}()
+	
+	// We need a username and password for many SQL commands, so set defaults if they don't exist
+	dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
+
 	err := StartServer(newCtx, cmd.VersionStr, commandStr, args, dEnv, controller)
 	if err != nil {
 		cli.Println(color.RedString(err.Error()))
@@ -225,24 +229,9 @@ func validateSqlServerArgs(apr *argparser.ArgParseResults) error {
 
 // StartServer starts the sql server with the controller provided and blocks until the server is stopped. 
 func StartServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, controller *svcs.Controller) error {
-	ap := SqlServerCmd{}.ArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlServerDocs, ap))
-
-	// We need a username and password for many SQL commands, so set defaults if they don't exist
-	dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
-
-	apr := cli.ParseArgsOrDie(ap, args, help)
-	if err := validateSqlServerArgs(apr); err != nil {
-		cli.PrintErrln(color.RedString(err.Error()))
-		return err
-	}
-	
-	serverConfig, err := GetServerConfig(dEnv.FS, apr)
+	serverConfig, err := ServerConfigFromArgs(commandStr, args, dEnv)
 	if err != nil {
-		return fmt.Errorf("Failed to start server. Bad Configuration: %w", err)
-	}
-	if err = SetupDoltConfig(dEnv, apr, serverConfig); err != nil {
-		return fmt.Errorf("Failed to start server. Bad Configuration: %w", err)
+		return err
 	}
 
 	cli.PrintErrf("Starting server with Config %v\n", ConfigInfo(serverConfig))
@@ -256,6 +245,27 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 	}
 
 	return nil
+}
+
+// ServerConfigFromArgs returns a ServerConfig from the given args
+func ServerConfigFromArgs(commandStr string, args []string, dEnv *env.DoltEnv) (ServerConfig, error) {
+	ap := SqlServerCmd{}.ArgParser()
+	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlServerDocs, ap))
+
+	apr := cli.ParseArgsOrDie(ap, args, help)
+	if err := validateSqlServerArgs(apr); err != nil {
+		cli.PrintErrln(color.RedString(err.Error()))
+		return nil, err
+	}
+
+	serverConfig, err := GetServerConfig(dEnv.FS, apr)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to start server. Bad Configuration: %w", err)
+	}
+	if err = SetupDoltConfig(dEnv, apr, serverConfig); err != nil {
+		return nil, fmt.Errorf("Failed to start server. Bad Configuration: %w", err)
+	}
+	return serverConfig, nil
 }
 
 // GetServerConfig returns ServerConfig that is set either from yaml file if given, if not it is set with values defined
