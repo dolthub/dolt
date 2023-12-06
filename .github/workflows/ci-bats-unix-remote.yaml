@@ -17,13 +17,13 @@ jobs:
     defaults:
       run:
         shell: bash
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: true
-      matrix:
-        os: [ ubuntu-22.04 ]
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
+    # We only run these as seaparte workflow if we do not have AWS credentials.
+    if: ${{ env.use_credentials != 'true' }}
     steps:
       - name: Conditionally Set ENV VARS for AWS tests
         run: |

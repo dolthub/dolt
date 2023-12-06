@@ -1,0 +1,59 @@
+name: Test Bats Unix
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'go/**'
+      - 'integration-tests/**'
+
+concurrency:
+  group: ci-bats-unix-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Bats tests, run with lambdabats
+    defaults:
+      run:
+        shell: bash
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: true
+    env:
+      use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
+    if: ${{ env.use_credentials == 'true' }}
+    steps:
+      - name: Conditionally Set ENV VARS for AWS tests
+        if: ${{ env.use_credentials == 'true' }}
+        run: |
+          echo "AWS_SDK_LOAD_CONFIG=1" >> $GITHUB_ENV
+          echo "AWS_REGION=us-west-2" >> $GITHUB_ENV
+          echo "DOLT_BATS_AWS_TABLE=dolt-ci-bats-manifests-us-west-2" >> $GITHUB_ENV
+          echo "DOLT_BATS_AWS_BUCKET=dolt-ci-bats-chunks-us-west-2" >> $GITHUB_ENV
+          echo "DOLT_BATS_AWS_EXISTING_REPO=aws_remote_bats_tests__dolt__" >> $GITHUB_ENV
+      - name: Configure AWS Credentials
+        if: ${{ env.use_credentials == 'true' }}
+        uses: aws-actions/configure-aws-credentials@v2.2.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-duration-seconds: 10800 # 3 hours D:
+      - uses: actions/checkout@v3
+      - name: Setup Go 1.x
+        uses: actions/setup-go@v3
+        with:
+          go-version: ^1.21
+        id: go
+      - name: install lambdabats
+        run: go install github.com/dolthub/lambdabats/lambdabats@latest
+      - name: Test all Unix
+        run: |
+          lambdabats -use-aws-environment-credentials -s lambda_skip -F tap .
+        working-directory: ./integration-tests/bats
+      - name: Test all Unix, SQL_ENGINE=remote-engine
+        run: |
+          lambdabats -env SQL_ENGINE=remote-engine -s lambda_skip -use-aws-environment-credentials -F tap .
+        working-directory: ./integration-tests/bats
