@@ -44,7 +44,7 @@ type schemaImpl struct {
 	checkCollection            CheckCollection
 	pkOrdinals                 []int
 	collation                  Collation
-	addressEncodedFields       []uint64
+	contentHashedFields        []uint64
 }
 
 var _ Schema = (*schemaImpl)(nil)
@@ -423,9 +423,9 @@ func (si *schemaImpl) getKeyColumnsDescriptor(convertAddressColumns bool) val.Tu
 		return val.KeylessTupleDesc
 	}
 
-	addressEncodedFields := make(map[uint64]struct{})
-	for _, tag := range si.addressEncodedFields {
-		addressEncodedFields[tag] = struct{}{}
+	contentHashedFields := make(map[uint64]struct{})
+	for _, tag := range si.contentHashedFields {
+		contentHashedFields[tag] = struct{}{}
 	}
 
 	var tt []val.Type
@@ -436,22 +436,22 @@ func (si *schemaImpl) getKeyColumnsDescriptor(convertAddressColumns bool) val.Tu
 		queryType := sqlType.Type()
 		var t val.Type
 
-		addressEncoded := false
-		if _, ok := addressEncodedFields[tag]; ok {
-			addressEncoded = true
+		contentHashedField := false
+		if _, ok := contentHashedFields[tag]; ok {
+			contentHashedField = true
 		}
 
-		if convertAddressColumns && !addressEncoded && queryType == query.Type_BLOB {
+		if convertAddressColumns && !contentHashedField && queryType == query.Type_BLOB {
 			t = val.Type{
 				Enc:      val.Encoding(EncodingFromSqlType(query.Type_VARBINARY)),
 				Nullable: columnMissingNotNullConstraint(col),
 			}
-		} else if convertAddressColumns && !addressEncoded && queryType == query.Type_TEXT {
+		} else if convertAddressColumns && !contentHashedField && queryType == query.Type_TEXT {
 			t = val.Type{
 				Enc:      val.Encoding(EncodingFromSqlType(query.Type_VARCHAR)),
 				Nullable: columnMissingNotNullConstraint(col),
 			}
-		} else if convertAddressColumns && !addressEncoded && queryType == query.Type_GEOMETRY {
+		} else if convertAddressColumns && !contentHashedField && queryType == query.Type_GEOMETRY {
 			t = val.Type{
 				Enc:      val.Encoding(serial.EncodingCell),
 				Nullable: columnMissingNotNullConstraint(col),
