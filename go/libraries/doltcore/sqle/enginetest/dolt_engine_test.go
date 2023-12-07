@@ -2346,7 +2346,7 @@ func TestSystemTableIndexes(t *testing.T) {
 
 		ctx := enginetest.NewContext(harness)
 		for _, q := range stt.setup {
-			enginetest.RunQuery(t, e, harness, q)
+			enginetest.RunQueryWithContext(t, e, harness, ctx, q)
 		}
 
 		for i, c := range []string{"inner", "lookup", "hash", "merge"} {
