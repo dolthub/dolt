@@ -22,6 +22,7 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~1pk5col-strings.bats~
 ~sql-tags.bats~
 ~empty-repo.bats~
+~clone-drops.bats~
 ~verify-constraints.bats~
 ~db-revision-specifiers.bats~
 ~ignore.bats~
