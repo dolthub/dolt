@@ -852,8 +852,16 @@ func (di *doltIndex) HasContentHashedField() bool {
 	}
 
 	contentHashedField := false
-	di.indexSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if sqltypes.IsTextBlob(col.TypeInfo.ToSqlType()) {
+
+	indexPkCols := di.indexSch.GetPKCols()
+	indexPkCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		i := indexPkCols.TagToIdx[tag]
+		prefixLength := uint16(0)
+		if len(di.prefixLengths) > i {
+			prefixLength = di.prefixLengths[i]
+		}
+
+		if sqltypes.IsTextBlob(col.TypeInfo.ToSqlType()) && prefixLength == 0 {
 			contentHashedField = true
 			return true, nil
 		}
