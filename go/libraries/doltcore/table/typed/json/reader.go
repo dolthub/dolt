@@ -22,6 +22,8 @@ import (
 
 	"github.com/bcicen/jstream"
 	"github.com/dolthub/go-mysql-server/sql"
+	"golang.org/x/text/encoding/unicode"
+	"golang.org/x/text/transform"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -52,12 +54,17 @@ func OpenJSONReader(vrw types.ValueReadWriter, path string, fs filesys.ReadableF
 	return NewJSONReader(vrw, r, sch)
 }
 
+// The bytes of the supplied reader are treated as UTF-8. If there is a UTF8,
+// UTF16LE or UTF16BE BOM at the first bytes read, then it is stripped and the
+// remaining contents of the reader are treated as that encoding.
 func NewJSONReader(vrw types.ValueReadWriter, r io.ReadCloser, sch schema.Schema) (*JSONReader, error) {
 	if sch == nil {
 		return nil, errors.New("schema must be provided to JsonReader")
 	}
 
-	decoder := jstream.NewDecoder(r, 2) // extract JSON values at a depth level of 1
+	textReader := transform.NewReader(r, unicode.BOMOverride(unicode.UTF8.NewDecoder()))
+
+	decoder := jstream.NewDecoder(textReader, 2) // extract JSON values at a depth level of 1
 
 	return &JSONReader{vrw: vrw, closer: r, sch: sch, jsonStream: decoder}, nil
 }

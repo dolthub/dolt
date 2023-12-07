@@ -32,7 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
-// Application is the application ID used for all events emitted by this application. Other applications (not dolt) 
+// Application is the application ID used for all events emitted by this application. Other applications (not dolt)
 // should set this once at initialization.
 var Application = eventsapi.AppID_APP_DOLT
 
