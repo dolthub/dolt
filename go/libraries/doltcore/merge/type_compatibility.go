@@ -38,7 +38,7 @@ type TypeCompatibilityChecker interface {
 	// For the DOLT storage format, very few cases (outside of the types being exactly identical) are considered
 	// compatible without requiring a full table rewrite. The older LD_1 storage format, has a more forgiving storage
 	// layout, so more type changes are considered compatible, generally as long as they are in the same type family/kind.
-	IsTypeChangeCompatible(from, to typeinfo.TypeInfo) (compatible bool, tableRewrite bool)
+	IsTypeChangeCompatible(from, to typeinfo.TypeInfo) TypeChangeInfo
 }
 
 // newTypeCompatabilityCheckerForStorageFormat returns a new TypeCompatibilityChecker
@@ -63,26 +63,28 @@ var _ TypeCompatibilityChecker = ld1TypeCompatibilityChecker{}
 
 // IsTypeChangeCompatible implements TypeCompatibilityChecker.IsTypeChangeCompatible for the
 // deprecated LD_1 storage format.
-func (l ld1TypeCompatibilityChecker) IsTypeChangeCompatible(from, to typeinfo.TypeInfo) (compatible bool, tableRewrite bool) {
+func (l ld1TypeCompatibilityChecker) IsTypeChangeCompatible(from, to typeinfo.TypeInfo) (res TypeChangeInfo) {
 	// If the types are exactly identical, then they are always compatible
 	fromSqlType := from.ToSqlType()
 	toSqlType := to.ToSqlType()
 	if fromSqlType.Equals(toSqlType) {
-		return true, false
+		res.compatible = true
+		return res
 	}
 
 	// For the older, LD_1 storage format, our compatibility rules are looser
 	if from.NomsKind() != to.NomsKind() {
-		return false, false
+		return res
 	}
 
 	if to.ToSqlType().Type() == query.Type_GEOMETRY {
 		// We need to do this because some spatial type changes require a full table check, but not all.
 		// TODO: This could be narrowed down to a smaller set of spatial type changes
-		return false, false
+		return res
 	}
 
-	return true, false
+	res.compatible = true
+	return res
 }
 
 // doltTypeCompatibilityChecker implements TypeCompatibilityChecker for the DOLT storage
@@ -108,24 +110,36 @@ var _ TypeCompatibilityChecker = (*doltTypeCompatibilityChecker)(nil)
 
 // IsTypeChangeCompatible implements TypeCompatibilityChecker.IsTypeChangeCompatible for the
 // DOLT storage format.
-func (d doltTypeCompatibilityChecker) IsTypeChangeCompatible(from, to typeinfo.TypeInfo) (compatible bool, tableRewrite bool) {
+func (d doltTypeCompatibilityChecker) IsTypeChangeCompatible(from, to typeinfo.TypeInfo) (res TypeChangeInfo) {
 	// If the types are exactly identical, then they are always compatible
 	fromSqlType := from.ToSqlType()
 	toSqlType := to.ToSqlType()
 	if fromSqlType.Equals(toSqlType) {
-		return true, false
+		res.compatible = true
+		return res
 	}
 
 	for _, checker := range d.checkers {
 		if checker.canHandle(fromSqlType, toSqlType) {
-			compatible, requiresRewrite := checker.isCompatible(fromSqlType, toSqlType)
-			if compatible {
-				return compatible, requiresRewrite
+			subcheckerResult := checker.isCompatible(fromSqlType, toSqlType)
+			if subcheckerResult.compatible {
+				return subcheckerResult
 			}
 		}
 	}
 
-	return false, false
+	return res
+}
+
+// TypeChangeInfo contains details about how a column's type changing during the merge impacts the merge.
+// |compatible| stores whether the merge is still possible.
+// |rewriteRows| stores whether the primary index will need to be rewritten.
+// |invalidateSecondaryIndexes| stores whether all secondary indexes will need to be rewritten.
+// Typically adding removing, or changing the type of columns will trigger a rewrite of all indexes, because it is
+// nontrivial to determine which secondary indexes have been invalidated. However, some changes do not affect the
+// primary index, such as collation changes to non-pk columns.
+type TypeChangeInfo struct {
+	compatible, rewriteRows, invalidateSecondaryIndexes bool
 }
 
 // typeChangeHandler has the logic to determine if a specific change from one type to another is a compatible
@@ -137,7 +151,7 @@ type typeChangeHandler interface {
 	// isCompatible returns two booleans – the first boolean response parameter indicates if a type change from
 	// |fromType| to |toType| is compatible and safe to perform automatically. The second boolean response parameter
 	// indicates if the type conversion requires a full table rewrite.
-	isCompatible(fromSqlType, toSqlType sql.Type) (compatible bool, tableRewrite bool)
+	isCompatible(fromSqlType, toSqlType sql.Type) TypeChangeInfo
 }
 
 // stringTypeChangeHandler handles type change compatibility between from string types, i.e. VARCHAR, VARBINARY,
@@ -167,27 +181,28 @@ func (s stringTypeChangeHandler) canHandle(fromSqlType, toSqlType sql.Type) bool
 	}
 }
 
-func (s stringTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (compatible bool, tableRewrite bool) {
+func (s stringTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (res TypeChangeInfo) {
 	fromStringType := fromSqlType.(types.StringType)
 	toStringType := toSqlType.(types.StringType)
-	tableRewrite = false
 
-	compatible = toStringType.MaxByteLength() >= fromStringType.MaxByteLength()
+	res.compatible = toStringType.CharacterSet() == fromStringType.CharacterSet() &&
+		toStringType.MaxByteLength() >= fromStringType.MaxByteLength()
 
 	collationChanged := toStringType.Collation() != fromStringType.Collation()
 	// If the collation changed, we will need to rebuild any secondary indexes on this column.
 	if collationChanged {
-		tableRewrite = true
+		res.invalidateSecondaryIndexes = true
 	}
 
-	if compatible {
+	if res.compatible {
 		// Because inline string types (e.g. VARCHAR, CHAR) have the same encoding, the main case
 		// when a table rewrite is required is when moving between an inline string type (e.g. CHAR)
 		// and an out-of-band string type (e.g. TEXT).
 		fromTypeOutOfBand := outOfBandType(fromSqlType)
 		toTypeOutOfBand := outOfBandType(toSqlType)
 		if fromTypeOutOfBand != toTypeOutOfBand {
-			tableRewrite = true
+			res.rewriteRows = true
+			res.invalidateSecondaryIndexes = true
 		}
 
 		// The exception to this is when converting to a fixed width BINARY(N) field, which requires rewriting the
@@ -195,11 +210,12 @@ func (s stringTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (
 		// or its indexes, need to be right padded up to N bytes. Note that MySQL does NOT do a similar conversion
 		// when converting to VARBINARY(N).
 		if toSqlType.Type() == sqltypes.Binary {
-			tableRewrite = true
+			res.rewriteRows = true
+			res.invalidateSecondaryIndexes = true
 		}
 	}
 
-	return compatible, tableRewrite
+	return res
 }
 
 // outOfBandType returns true if the specified type |t| is stored outside of a table's index file, for example
@@ -225,32 +241,33 @@ func (e enumTypeChangeHandler) canHandle(from, to sql.Type) bool {
 }
 
 // isCompatible implements the typeChangeHandler interface.
-func (e enumTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (compatible bool, tableRewrite bool) {
+func (e enumTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (res TypeChangeInfo) {
 	fromEnumType := fromSqlType.(sql.EnumType)
 	toEnumType := toSqlType.(sql.EnumType)
 	if fromEnumType.NumberOfElements() > toEnumType.NumberOfElements() {
-		return false, false
+		return res
 	}
 
 	// TODO: charset/collation changes may require a table or index rewrite; for now, consider them incompatible
 	fromCharSet, fromCollation := fromEnumType.CharacterSet(), fromEnumType.Collation()
 	toCharSet, toCollation := toEnumType.CharacterSet(), toEnumType.Collation()
 	if fromCharSet != toCharSet || fromCollation != toCollation {
-		return false, false
+		return res
 	}
 
 	// if values have only been added at the end, consider it compatible (i.e. no reordering or removal)
 	toEnumValues := toEnumType.Values()
 	for i, fromEnumValue := range fromEnumType.Values() {
 		if toEnumValues[i] != fromEnumValue {
-			return false, false
+			return res
 		}
 	}
 
 	// MySQL uses 1 byte to store enum values that have <= 255 values, and 2 bytes for > 255 values
 	// The DOLT storage format *always* uses 2 bytes for all enum values, so table data never needs
 	// to be rewritten in this additive case.
-	return true, false
+	res.compatible = true
+	return res
 }
 
 // setTypeChangeHandler handles type change compatibility checking for changes to set types. If a new set value
@@ -266,29 +283,30 @@ func (s setTypeChangeHandler) canHandle(fromType, toType sql.Type) bool {
 }
 
 // isCompatible implements the typeChangeHandler interface.
-func (s setTypeChangeHandler) isCompatible(fromType, toType sql.Type) (compatible bool, tableRewrite bool) {
+func (s setTypeChangeHandler) isCompatible(fromType, toType sql.Type) (res TypeChangeInfo) {
 	fromSetType := fromType.(sql.SetType)
 	toSetType := toType.(sql.SetType)
 	if fromSetType.NumberOfElements() > toSetType.NumberOfElements() {
-		return false, false
+		return res
 	}
 
 	// TODO: charset/collation changes may require a table or index rewrite; for now, consider them incompatible
 	fromCharSet, fromCollation := fromSetType.CharacterSet(), fromSetType.Collation()
 	toCharSet, toCollation := toSetType.CharacterSet(), toSetType.Collation()
 	if fromCharSet != toCharSet || fromCollation != toCollation {
-		return false, false
+		return res
 	}
 
 	// Ensure only new values have been added to the end of the set
 	toSetValues := toSetType.Values()
 	for i, fromSetValue := range fromSetType.Values() {
 		if toSetValues[i] != fromSetValue {
-			return false, false
+			return res
 		}
 	}
 
 	// The DOLT storage format *always* uses 8 bytes for all set values, so the table data never needs
 	// to be rewritten in this additive case.
-	return true, false
+	res.compatible = true
+	return res
 }
