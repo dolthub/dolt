@@ -66,13 +66,13 @@ func indentLines(s string) string {
 var sqlServerDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Start a MySQL-compatible server.",
 	LongDesc: "By default, starts a MySQL-compatible server on the dolt database in the current directory. " +
-		"Databases are named after the directories they appear in, with all non-alphanumeric characters replaced by the _ character. " +
+		"Databases are named after the directories they appear in." +
 		"Parameters can be specified using a yaml configuration file passed to the server via " +
 		"{{.EmphasisLeft}}--config <file>{{.EmphasisRight}}, or by using the supported switches and flags to configure " +
 		"the server directly on the command line. If {{.EmphasisLeft}}--config <file>{{.EmphasisRight}} is provided all" +
 		" other command line arguments are ignored.\n\nThis is an example yaml configuration file showing all supported" +
 		" items and their default values:\n\n" +
-		indentLines(serverConfigAsYAMLConfig(DefaultServerConfig()).String()) + "\n\n" + `
+		indentLines(ServerConfigAsYAMLConfig(DefaultServerConfig()).String()) + "\n\n" + `
 SUPPORTED CONFIG FILE FIELDS:
 
 {{.EmphasisLeft}}data_dir{{.EmphasisRight}}: A directory where the server will load dolt databases to serve, and create new ones. Defaults to the current directory.
