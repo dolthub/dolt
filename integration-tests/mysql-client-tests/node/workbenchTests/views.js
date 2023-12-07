@@ -34,7 +34,7 @@ export const viewsTests = [
         name: "myview",
         fragment: "CREATE VIEW `myview` AS SELECT * FROM test",
         extra: { CreatedAt: 0 },
-        sql_mode: 'STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY',
+        sql_mode: 'NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES',
       },
     ],
   },
