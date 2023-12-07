@@ -355,7 +355,6 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 	var remoteName, remoteBranchName string
 	var startPt = "head"
 	var refSpec ref.RefSpec
-	var createBranchForcibly bool
 
 	if apr.NArg() == 1 {
 		startPt = apr.Arg(0)
@@ -374,11 +373,19 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 			return "", "", err
 		}
 		newBranchName = remoteBranchName
-	} else {
-		// A little wonky behavior here. parseBranchArgs is actually called twice because in this procedure we pass around
-		// the parse results, but we also needed to parse the -b and -B flags in the main procedure. It ended up being
-		// a little cleaner to just call it again here than to pass the results around.
-		newBranchName, createBranchForcibly, err = parseBranchArgs(apr)
+	}
+
+	// A little wonky behavior here. parseBranchArgs is actually called twice because in this procedure we pass around
+	// the parse results, but we also needed to parse the -b and -B flags in the main procedure. It ended up being
+	// a little cleaner to just call it again here than to pass the results around.
+	var createBranchForcibly bool
+	var optionBBranch string
+	optionBBranch, createBranchForcibly, err = parseBranchArgs(apr)
+	if err != nil {
+		return "", "", err
+	}
+	if optionBBranch != "" {
+		newBranchName = optionBBranch
 	}
 
 	err = actions.CreateBranchWithStartPt(ctx, dbData, newBranchName, startPt, createBranchForcibly, rsc)
