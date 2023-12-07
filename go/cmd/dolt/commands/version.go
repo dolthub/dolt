@@ -117,14 +117,16 @@ func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string
 		fv, ok, err := wr.GetFeatureVersion(ctx)
 		if err != nil {
 			verr = errhand.BuildDError("error reading feature version").AddCause(err).Build()
+			return HandleVErrAndExitCode(verr, usage)
 		} else if !ok {
 			verr = errhand.BuildDError("the current head does not have a feature version").Build()
+			return HandleVErrAndExitCode(verr, usage)
 		} else {
 			cli.Println("feature version:", fv)
 		}
 	}
 
-	return HandleVErrAndExitCode(verr, usage)
+	return HandleVErrAndExitCode(nil, usage)
 }
 
 // checkAndPrintVersionOutOfDateWarning checks if the current version of Dolt is out of date and prints a warning if it
