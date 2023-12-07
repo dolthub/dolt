@@ -258,19 +258,21 @@ func ServerConfigFromArgs(commandStr string, args []string, dEnv *env.DoltEnv) (
 		return nil, err
 	}
 
-	serverConfig, err := GetServerConfig(dEnv.FS, apr)
+	serverConfig, err := getServerConfig(dEnv.FS, apr)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to start server. Bad Configuration: %w", err)
+		return nil, fmt.Errorf("bad configuration: %w", err)
 	}
-	if err = SetupDoltConfig(dEnv, apr, serverConfig); err != nil {
-		return nil, fmt.Errorf("Failed to start server. Bad Configuration: %w", err)
+	
+	if err = setupDoltConfig(dEnv, apr, serverConfig); err != nil {
+		return nil, fmt.Errorf("bad configuration: %w", err)
 	}
+	
 	return serverConfig, nil
 }
 
-// GetServerConfig returns ServerConfig that is set either from yaml file if given, if not it is set with values defined
+// getServerConfig returns ServerConfig that is set either from yaml file if given, if not it is set with values defined
 // on command line. Server config variables not defined are set to default values.
-func GetServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults) (ServerConfig, error) {
+func getServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults) (ServerConfig, error) {
 	var yamlCfg YAMLConfig
 	if cfgFile, ok := apr.GetValue(configFileFlag); ok {
 		cfg, err := getYAMLServerConfig(cwdFS, cfgFile)
@@ -299,7 +301,7 @@ func GetServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults) (Ser
 
 // GetClientConfig returns configuration which is sutable for a client to use. The fact that it returns a ServerConfig
 // is a little confusing, but it is because the client and server use the same configuration struct. The main difference
-// between this method and GetServerConfig is that this method required a cli.UserPassword argument. It is created by
+// between this method and getServerConfig is that this method required a cli.UserPassword argument. It is created by
 // prompting the user, and we don't want the server to follow that code path.
 func GetClientConfig(cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argparser.ArgParseResults) (ServerConfig, error) {
 	cfgFile, hasCfgFile := apr.GetValue(configFileFlag)
@@ -329,8 +331,8 @@ func GetClientConfig(cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argpar
 	return yamlCfg, nil
 }
 
-// SetupDoltConfig updates the given server config with where to create .doltcfg directory
-func SetupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config ServerConfig) error {
+// setupDoltConfig updates the given server config with where to create .doltcfg directory
+func setupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config ServerConfig) error {
 	if _, ok := apr.GetValue(configFileFlag); ok {
 		return nil
 	}
