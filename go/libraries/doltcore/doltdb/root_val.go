@@ -50,7 +50,7 @@ type FeatureVersion int64
 
 // DoltFeatureVersion is described in feature_version.md.
 // only variable for testing.
-var DoltFeatureVersion FeatureVersion = 7 // last bumped when fixing bug related to GeomAddrs not getting pushed
+var DoltFeatureVersion FeatureVersion = 8 // last bumped when adding support for on update expressions
 
 // RootValue is the value of the Database and is the committed value in every Dolt commit.
 type RootValue struct {
