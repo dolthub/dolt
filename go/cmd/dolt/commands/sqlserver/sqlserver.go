@@ -202,7 +202,7 @@ func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []stri
 			cancelF()
 		}
 	}()
-	
+
 	// We need a username and password for many SQL commands, so set defaults if they don't exist
 	dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
 
@@ -211,7 +211,7 @@ func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []stri
 		cli.Println(color.RedString(err.Error()))
 		return 1
 	}
-	
+
 	return 0
 }
 
@@ -227,7 +227,7 @@ func validateSqlServerArgs(apr *argparser.ArgParseResults) error {
 	return nil
 }
 
-// StartServer starts the sql server with the controller provided and blocks until the server is stopped. 
+// StartServer starts the sql server with the controller provided and blocks until the server is stopped.
 func StartServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, controller *svcs.Controller) error {
 	serverConfig, err := ServerConfigFromArgs(commandStr, args, dEnv)
 	if err != nil {
@@ -262,11 +262,11 @@ func ServerConfigFromArgs(commandStr string, args []string, dEnv *env.DoltEnv) (
 	if err != nil {
 		return nil, fmt.Errorf("bad configuration: %w", err)
 	}
-	
+
 	if err = setupDoltConfig(dEnv, apr, serverConfig); err != nil {
 		return nil, fmt.Errorf("bad configuration: %w", err)
 	}
-	
+
 	return serverConfig, nil
 }
 

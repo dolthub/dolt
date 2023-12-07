@@ -94,10 +94,10 @@ func Serve(
 }
 
 func ConfigureServices(
-		serverConfig ServerConfig,
-		controller *svcs.Controller,
-		version string,
-		dEnv *env.DoltEnv,
+	serverConfig ServerConfig,
+	controller *svcs.Controller,
+	version string,
+	dEnv *env.DoltEnv,
 ) {
 	ValidateConfigStep := &svcs.AnonService{
 		InitF: func(context.Context) error {
