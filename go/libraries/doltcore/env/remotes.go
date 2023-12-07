@@ -661,7 +661,7 @@ func GetAbsRemoteUrl(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg stri
 		return dbfactory.HTTPSScheme, "https://" + urlArg, nil
 	}
 
-	hostName, err := cfg.GetString(RemotesApiHostKey)
+	hostName, err := cfg.GetString(config.RemotesApiHostKey)
 
 	if err != nil {
 		if err != config.ErrConfigParamNotFound {

@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 const (
@@ -81,7 +82,7 @@ func (cmd LoginCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd LoginCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 1)
-	ap.SupportsString(authEndpointParam, "e", "hostname:port", fmt.Sprintf("Specify the endpoint used to authenticate this client. Must be used with --%s OR set in the configuration file as `%s`", loginURLParam, env.AddCredsUrlKey))
+	ap.SupportsString(authEndpointParam, "e", "hostname:port", fmt.Sprintf("Specify the endpoint used to authenticate this client. Must be used with --%s OR set in the configuration file as `%s`", loginURLParam, config.AddCredsUrlKey))
 	ap.SupportsString(loginURLParam, "url", "url", "Specify the login url where the browser will add credentials.")
 	ap.SupportsFlag(insecureParam, "i", "If set, makes insecure connection to remote authentication server")
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"creds", "A specific credential to use for login. If omitted, new credentials will be generated."})
@@ -100,7 +101,7 @@ func (cmd LoginCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	// use config values over defaults, flag values over config values
-	loginUrl := dEnv.Config.GetStringOrDefault(env.AddCredsUrlKey, env.DefaultLoginUrl)
+	loginUrl := dEnv.Config.GetStringOrDefault(config.AddCredsUrlKey, env.DefaultLoginUrl)
 	loginUrl = apr.GetValueOrDefault(loginURLParam, loginUrl)
 
 	var authHost string
@@ -114,8 +115,8 @@ func (cmd LoginCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		}
 		authEndpoint = fmt.Sprintf("%s:%s", authHost, authPort)
 	} else {
-		authHost = dEnv.Config.GetStringOrDefault(env.RemotesApiHostKey, env.DefaultRemotesApiHost)
-		authPort = dEnv.Config.GetStringOrDefault(env.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
+		authHost = dEnv.Config.GetStringOrDefault(config.RemotesApiHostKey, env.DefaultRemotesApiHost)
+		authPort = dEnv.Config.GetStringOrDefault(config.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
 		authEndpoint = fmt.Sprintf("%s:%s", authHost, authPort)
 	}
 
@@ -128,10 +129,10 @@ func (cmd LoginCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 	var err error
 	if !insecure {
-		insecureStr := dEnv.Config.GetStringOrDefault(env.DoltLabInsecureKey, "false")
+		insecureStr := dEnv.Config.GetStringOrDefault(config.DoltLabInsecureKey, "false")
 		insecure, err = strconv.ParseBool(insecureStr)
 		if err != nil {
-			HandleVErrAndExitCode(errhand.BuildDError(fmt.Sprintf("The config value of '%s' is '%s' which is not a valid true/false value", env.DoltLabInsecureKey, insecureStr)).Build(), usage)
+			HandleVErrAndExitCode(errhand.BuildDError(fmt.Sprintf("The config value of '%s' is '%s' which is not a valid true/false value", config.DoltLabInsecureKey, insecureStr)).Build(), usage)
 		}
 	}
 
@@ -269,9 +270,9 @@ func updateConfig(dEnv *env.DoltEnv, whoAmI *remotesapi.WhoAmIResponse, dCreds c
 		panic("global config not found.  Should create it here if this is a thing.")
 	}
 
-	gcfg.SetStrings(map[string]string{env.UserCreds: dCreds.KeyIDBase32Str()})
+	gcfg.SetStrings(map[string]string{config.UserCreds: dCreds.KeyIDBase32Str()})
 
-	userUpdates := map[string]string{env.UserNameKey: whoAmI.DisplayName, env.UserEmailKey: whoAmI.EmailAddress}
+	userUpdates := map[string]string{config.UserNameKey: whoAmI.DisplayName, config.UserEmailKey: whoAmI.EmailAddress}
 	lcfg, hasLCfg := dEnv.Config.GetConfig(env.LocalConfig)
 
 	if hasLCfg {

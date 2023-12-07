@@ -399,8 +399,8 @@ func CreateTestEnvWithName(envName string) *env.DoltEnv {
 	dEnv := env.Load(context.Background(), homeDirFunc, fs, doltdb.InMemDoltDB+envName, "test")
 	cfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
 	cfg.SetStrings(map[string]string{
-		env.UserNameKey:  name,
-		env.UserEmailKey: email,
+		config2.UserNameKey:  name,
+		config2.UserEmailKey: email,
 	})
 
 	err := dEnv.InitRepo(context.Background(), types.Format_Default, name, email, env.DefaultInitBranch)

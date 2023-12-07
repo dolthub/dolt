@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 var useDocs = cli.CommandDocumentationContent{
@@ -95,7 +96,7 @@ func (cmd UseCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 				if !hasGCfg {
 					panic("global config not found.  Should create it here if this is a thing.")
 				}
-				err := gcfg.SetStrings(map[string]string{env.UserCreds: cred.KeyIDBase32Str()})
+				err := gcfg.SetStrings(map[string]string{config.UserCreds: cred.KeyIDBase32Str()})
 				if err != nil {
 					verr = errhand.BuildDError("error: updating user credentials in config").AddCause(err).Build()
 				}

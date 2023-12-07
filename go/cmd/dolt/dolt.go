@@ -24,6 +24,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -64,7 +65,7 @@ import (
 )
 
 const (
-	Version = "1.29.0"
+	Version = "1.29.1"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -207,12 +208,19 @@ Dolt subcommands are in transition to using the flags listed below as global fla
 Not all subcommands use these flags. If your command accepts these flags without error, then they are supported.
 `
 
+const disableEventFlushEnvVar = "DOLT_DISABLE_EVENT_FLUSH"
+
+var eventFlushDisabled = false
+
 func init() {
 	dumpDocsCommand.DoltCommand = doltCommand
 	dumpDocsCommand.GlobalDocs = globalDocs
 	dumpDocsCommand.GlobalSpecialMsg = globalSpecialMsg
 	dumpZshCommand.DoltCommand = doltCommand
 	dfunctions.VersionString = Version
+	if _, ok := os.LookupEnv(disableEventFlushEnvVar); ok {
+		eventFlushDisabled = true
+	}
 }
 
 const pprofServerFlag = "--pprof-server"
@@ -437,7 +445,7 @@ func runMain() int {
 	fs = filesys.LocalFS
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, Version)
 
-	root, err := env.GetCurrentUserHomeDir()
+	homeDir, err := env.GetCurrentUserHomeDir()
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to load the HOME directory: %v", err))
 		return 1
@@ -465,32 +473,7 @@ func runMain() int {
 		return 1
 	}
 
-	emitter := events.NewFileEmitter(root, dbfactory.DoltDir)
-
-	defer func() {
-		ces := events.GlobalCollector.Close()
-		// events.WriterEmitter{cli.CliOut}.LogEvents(Version, ces)
-
-		metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")
-
-		disabled, err := strconv.ParseBool(metricsDisabled)
-		if err != nil {
-			// log.Print(err)
-			return
-		}
-
-		if disabled {
-			return
-		}
-
-		// write events
-		_ = emitter.LogEvents(Version, ces)
-
-		// flush events
-		if err := processEventsDir(args, dEnv); err != nil {
-			// log.Print(err)
-		}
-	}()
+	defer emitUsageEvents(dEnv, homeDir, args)
 
 	if needsWriteAccess(subcommandName) {
 		err = reconfigIfTempFileMoveFails(dEnv)
@@ -760,32 +743,58 @@ func seedGlobalRand() {
 	rand.Seed(int64(binary.LittleEndian.Uint64(bs)))
 }
 
-// processEventsDir runs the dolt send-metrics command in a new process
-func processEventsDir(args []string, dEnv *env.DoltEnv) error {
-	if len(args) > 0 {
-		ignoreCommands := map[string]struct{}{
-			commands.SendMetricsCommand: {},
-			"init":                      {},
-			"config":                    {},
-		}
+// emitUsageEvents is called after a command is run to emit usage events and send them to metrics servers.
+// Two controls of this behavior are possible:
+//  1. The config key |metrics.disabled|, when set to |true|, disables all metrics emission
+//  2. The environment key |DOLT_DISABLE_EVENT_FLUSH| allows writing events to disk but not sending them to the server.
+//     This is mostly used for testing.
+func emitUsageEvents(dEnv *env.DoltEnv, homeDir string, args []string) {
+	metricsDisabled := dEnv.Config.GetStringOrDefault(config.MetricsDisabled, "false")
+	disabled, err := strconv.ParseBool(metricsDisabled)
+	if err != nil || disabled {
+		return
+	}
 
-		_, ok := ignoreCommands[args[0]]
+	// write events
+	emitter := events.NewFileEmitter(homeDir, dbfactory.DoltDir)
+	_ = emitter.LogEvents(Version, events.GlobalCollector.Close())
 
-		if ok {
-			return nil
-		}
+	// flush events
+	if !eventFlushDisabled && len(args) > 0 && shouldFlushEvents(args[0]) {
+		_ = flushEventsDir()
+	}
+}
 
-		cmd := exec.Command("dolt", commands.SendMetricsCommand)
+// flushEventsDir flushes all logged events in a separate process.
+// This is done without blocking so that the main process can exit immediately in the case of a slow network.
+func flushEventsDir() error {
+	path, err := os.Executable()
+	if err != nil {
+		return err
+	}
 
-		if err := cmd.Start(); err != nil {
-			// log.Print(err)
-			return err
-		}
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
 
-		return nil
+	cmd := exec.Command(absPath, commands.SendMetricsCommand)
+
+	if err := cmd.Start(); err != nil {
+		return err
 	}
 
 	return nil
+}
+
+func shouldFlushEvents(command string) bool {
+	ignoreCommands := map[string]struct{}{
+		commands.SendMetricsCommand: {},
+		"init":                      {},
+		"config":                    {},
+	}
+	_, ok := ignoreCommands[command]
+	return !ok
 }
 
 func interceptSendMetrics(ctx context.Context, args []string) (bool, int) {

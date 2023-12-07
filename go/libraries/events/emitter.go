@@ -22,6 +22,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fatih/color"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/encoding/prototext"
 
@@ -30,10 +32,32 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
+// Application is the application ID used for all events emitted by this application. Other applications (not dolt)
+// should set this once at initialization.
+var Application = eventsapi.AppID_APP_DOLT
+
+// EmitterTypeEnvVar is the environment variable DOLT_EVENTS_EMITTER, which you can set to one of the values below
+// to change how event emission occurs. Currently only used for sql-server heartbeat events.
+const EmitterTypeEnvVar = "DOLT_EVENTS_EMITTER"
+
+// Types of emitters. These strings are accepted by the --output-format flag for the send-metrics command.
+const (
+	EmitterTypeNull   = "null"   // no output
+	EmitterTypeStdout = "stdout" // output to stdout, used in testing
+	EmitterTypeGrpc   = "grpc"   // output to a grpc server, the default for send-metrics
+	EmitterTypeFile   = "file"   // output to a file, used to log events during normal execution
+	EmitterTypeLogger = "logger" // output to a logger, used in testing
+)
+
+const DefaultMetricsHost = "eventsapi.dolthub.com"
+const DefaultMetricsPort = "443"
+
 // Emitter is an interface used for processing a batch of events
 type Emitter interface {
-	// LogEvents takes a batch of events and processes them
+	// LogEvents emits a batch of events
 	LogEvents(version string, evts []*eventsapi.ClientEvent) error
+	// LogEventsRequest emits a batch of events wrapped in a request object, with other metadata
+	LogEventsRequest(ctx context.Context, req *eventsapi.LogEventsRequest) error
 }
 
 // NullEmitter is an emitter that drops events
@@ -41,6 +65,10 @@ type NullEmitter struct{}
 
 // LogEvents takes a batch of events and processes them.  In this case it just drops them
 func (ne NullEmitter) LogEvents(version string, evts []*eventsapi.ClientEvent) error {
+	return nil
+}
+
+func (ne NullEmitter) LogEventsRequest(ctx context.Context, req *eventsapi.LogEventsRequest) error {
 	return nil
 }
 
@@ -80,6 +108,11 @@ func (we WriterEmitter) LogEvents(version string, evts []*eventsapi.ClientEvent)
 	return nil
 }
 
+func (we WriterEmitter) LogEventsRequest(ctx context.Context, req *eventsapi.LogEventsRequest) error {
+	_, err := fmt.Fprintf(color.Output, "%+v\n", req)
+	return err
+}
+
 // GrpcEmitter sends events to a GRPC service implementing the eventsapi
 type GrpcEmitter struct {
 	client eventsapi.ClientEventsServiceClient
@@ -110,12 +143,16 @@ func (em *GrpcEmitter) LogEvents(version string, evts []*eventsapi.ClientEvent) 
 		Version:   version,
 		Platform:  plat,
 		Events:    evts,
-		App:       eventsapi.AppID_APP_DOLT,
+		App:       Application,
 	}
 
 	_, err := em.client.LogEvents(ctx, &req)
 
 	return err
+}
+
+func (em *GrpcEmitter) LogEventsRequest(ctx context.Context, req *eventsapi.LogEventsRequest) error {
+	return em.SendLogEventsRequest(ctx, req)
 }
 
 // SendLogEventsRequest sends a request using the grpc client
@@ -146,4 +183,69 @@ func (fe *FileEmitter) LogEvents(version string, evts []*eventsapi.ClientEvent) 
 	}
 
 	return nil
+}
+
+func (fe *FileEmitter) LogEventsRequest(ctx context.Context, req *eventsapi.LogEventsRequest) error {
+	// TODO: we are losing some information here, like the machine id
+	if err := fe.fbp.WriteEvents(req.Version, req.Events); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type LoggerEmitter struct {
+	logLevel logrus.Level
+}
+
+func (l LoggerEmitter) LogEvents(version string, evts []*eventsapi.ClientEvent) error {
+	sb := &strings.Builder{}
+	wr := WriterEmitter{Wr: sb}
+	err := wr.LogEvents(version, evts)
+	if err != nil {
+		return err
+	}
+
+	eventString := sb.String()
+	return l.logEventString(eventString)
+}
+
+func (l LoggerEmitter) LogEventsRequest(ctx context.Context, req *eventsapi.LogEventsRequest) error {
+	sb := &strings.Builder{}
+	wr := WriterEmitter{Wr: sb}
+	err := wr.LogEventsRequest(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	eventString := sb.String()
+	return l.logEventString(eventString)
+}
+
+func (l LoggerEmitter) logEventString(eventString string) error {
+	switch l.logLevel {
+	case logrus.DebugLevel:
+		logrus.Debug(eventString)
+	case logrus.ErrorLevel:
+		logrus.Error(eventString)
+	case logrus.FatalLevel:
+		logrus.Fatal(eventString)
+	case logrus.InfoLevel:
+		logrus.Info(eventString)
+	case logrus.PanicLevel:
+		logrus.Panic(eventString)
+	case logrus.TraceLevel:
+		logrus.Trace(eventString)
+	case logrus.WarnLevel:
+		logrus.Warn(eventString)
+	default:
+		return fmt.Errorf("unknown log level %v", l.logLevel)
+	}
+	return nil
+}
+
+func NewLoggerEmitter(level logrus.Level) *LoggerEmitter {
+	return &LoggerEmitter{
+		logLevel: level,
+	}
 }

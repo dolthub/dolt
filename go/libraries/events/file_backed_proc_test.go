@@ -42,8 +42,10 @@ func (namer *SequentialNamer) Name(bytes []byte) string {
 }
 
 func (namer *SequentialNamer) Check(data []byte, path string) (bool, error) {
-	// todo
-	return true, nil
+	filename := filepath.Base(path)
+	ext := filepath.Ext(filename)
+
+	return ext == evtDataExt, nil
 }
 
 func (namer *SequentialNamer) GetIdx() int {
