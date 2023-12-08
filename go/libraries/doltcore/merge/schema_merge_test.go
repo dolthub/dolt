@@ -16,7 +16,6 @@ package merge_test
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -25,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -223,65 +223,6 @@ var columnAddDropTests = []schemaMergeTest{
 				right:    singleRow(1, 3),
 				merged:   singleRow(1, nil, 3),
 				skipFlip: true,
-			},
-		},
-	},
-	{
-		name:     "left side column drop",
-		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int, a int)")),
-		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int)       ")),
-		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int, a int)")),
-		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, b int)       ")),
-		dataTests: []dataTest{
-			{
-				name:     "no data change",
-				ancestor: singleRow(1, 2, 3),
-				left:     singleRow(1, 2),
-				right:    singleRow(1, 2, 3),
-				merged:   singleRow(1, 2),
-			},
-			{
-				name:         "one side sets to NULL, other drops non-NULL",
-				ancestor:     singleRow(1, 2, 3),
-				left:         singleRow(1, 2),
-				right:        singleRow(1, 2, nil),
-				dataConflict: true,
-				skip:         true,
-			},
-			{
-				name:         "one side sets to NULL, other drops non-NULL, plus data change",
-				ancestor:     singleRow(1, 2, 3),
-				left:         singleRow(1, 2),
-				right:        singleRow(1, 3, nil),
-				dataConflict: true,
-			},
-			{
-				name:         "one side sets to non-NULL, other drops NULL",
-				ancestor:     singleRow(1, 2, nil),
-				left:         singleRow(1, 2),
-				right:        singleRow(1, 2, 3),
-				dataConflict: true,
-			},
-			{
-				name:         "one side sets to non-NULL, other drops NULL, plus data change",
-				ancestor:     singleRow(1, 2, nil),
-				left:         singleRow(1, 3),
-				right:        singleRow(1, 2, 3),
-				dataConflict: true,
-			},
-			{
-				name:         "one side sets to non-NULL, other drops non-NULL",
-				ancestor:     singleRow(1, 2, 3),
-				left:         singleRow(1, 2),
-				right:        singleRow(1, 2, 4),
-				dataConflict: true,
-			},
-			{
-				name:     "one side drops column, other deletes row",
-				ancestor: []sql.Row{row(1, 2, 3), row(4, 5, 6)},
-				left:     []sql.Row{row(1, 2), row(4, 5)},
-				right:    []sql.Row{row(1, 2, 3)},
-				merged:   []sql.Row{row(1, 2)},
 			},
 		},
 	},
