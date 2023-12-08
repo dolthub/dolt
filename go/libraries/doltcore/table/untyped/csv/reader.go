@@ -27,6 +27,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	textunicode "golang.org/x/text/encoding/unicode"
+	"golang.org/x/text/transform"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -73,6 +75,14 @@ func OpenCSVReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS,
 }
 
 // NewCSVReader creates a CSVReader from a given ReadCloser.  The CSVFileInfo should describe the csv file being read.
+//
+// The interpretation of the bytes of the supplied reader is a little murky. If
+// there is a UTF8, UTF16LE or UTF16BE BOM as the first bytes read, then the
+// BOM is stripped and the remaining contents of the reader are treated as that
+// encoding. If we are not in any of those marked encodings, then some of the
+// bytes go uninterpreted until we get to the SQL layer. It is currently the
+// case that newlines must be encoded as a '0xa' byte and the delimiter must
+// match |info.Delim|.
 func NewCSVReader(nbf *types.NomsBinFormat, r io.ReadCloser, info *CSVFileInfo) (*CSVReader, error) {
 	if len(info.Delim) < 1 {
 		return nil, fmt.Errorf("delimiter '%s' has invalid length", info.Delim)
@@ -81,7 +91,9 @@ func NewCSVReader(nbf *types.NomsBinFormat, r io.ReadCloser, info *CSVFileInfo) 
 		return nil, fmt.Errorf("invalid delimiter: %s", string(info.Delim))
 	}
 
-	br := bufio.NewReaderSize(r, ReadBufSize)
+	textReader := transform.NewReader(r, textunicode.BOMOverride(transform.Nop))
+
+	br := bufio.NewReaderSize(textReader, ReadBufSize)
 	colStrs, err := getColHeaders(br, info)
 
 	if err != nil {
@@ -102,18 +114,6 @@ func NewCSVReader(nbf *types.NomsBinFormat, r io.ReadCloser, info *CSVFileInfo) 
 	}, nil
 }
 
-// trimBOM checks if the given string has the Byte Order Mark, and removes it if it is
-// the BOM is there if the first 3 bytes are xEF\xBB\xBF and indicates that a file is in UTF-8 encoding
-func trimBOM(s string) string {
-	if len(s) < 3 {
-		return s
-	}
-	if s[0] == '\xEF' && s[1] == '\xBB' && s[2] == '\xBF' {
-		return s[3:]
-	}
-	return s
-}
-
 func getColHeaders(br *bufio.Reader, info *CSVFileInfo) ([]string, error) {
 	colStrs := info.Columns
 	if info.HasHeaderLine {
@@ -124,7 +124,6 @@ func getColHeaders(br *bufio.Reader, info *CSVFileInfo) ([]string, error) {
 		} else if strings.TrimSpace(line) == "" {
 			return nil, errors.New("Header line is empty")
 		}
-		line = trimBOM(line)
 		colStrsFromFile, err := csvSplitLine(line, info.Delim, info.EscapeQuotes)
 
 		if err != nil {
