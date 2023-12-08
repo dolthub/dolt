@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -130,7 +131,7 @@ func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string
 }
 
 // checkAndPrintVersionOutOfDateWarning checks if the current version of Dolt is out of date and prints a warning if it
-// is. Restricts this check to at most once per week.
+// is. Restricts this check to at most once per week unless the build version is ahead of the stored latest release verion.
 func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) errhand.VerboseError {
 	var latestRelease string
 	var verr errhand.VerboseError
@@ -147,24 +148,12 @@ func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) 
 			return errhand.BuildDError("error: failed to read version check file").AddCause(err).Build()
 		}
 
-		vCheckData := strings.Split(string(vCheck), ",")
-		if len(vCheckData) != 2 {
-			// formatting or data is wrong, so just overwrite
+		latestRelease = string(vCheck)
+		lastCheckDate, _ := dEnv.FS.LastModified(path)
+		if lastCheckDate.Before(time.Now().AddDate(0, 0, -7)) {
 			latestRelease, verr = getLatestDoltReleaseAndRecord(path, dEnv)
 			if verr != nil {
 				return verr
-			}
-		} else {
-			latestRelease = vCheckData[0]
-			lastCheckDate, err := time.Parse(time.DateOnly, vCheckData[1])
-			if err != nil {
-				return errhand.BuildDError("error: failed to parse version check file").AddCause(err).Build()
-			}
-			if lastCheckDate.Before(time.Now().AddDate(0, 0, -7)) {
-				latestRelease, verr = getLatestDoltReleaseAndRecord(path, dEnv)
-				if verr != nil {
-					return verr
-				}
 			}
 		}
 	} else {
@@ -174,7 +163,12 @@ func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) 
 		}
 	}
 
-	if curVersion != latestRelease {
+	// if there were new releases in the last week, the latestRelease stored might be behind the current version built
+	isOutOfDate, verr := isOutOfDate(curVersion, latestRelease)
+	if verr != nil {
+		return verr
+	}
+	if isOutOfDate {
 		cli.Printf(color.YellowString("Warning: you are on an old version of Dolt. The newest version is %s.\n", latestRelease))
 	}
 
@@ -197,4 +191,29 @@ func getLatestDoltReleaseAndRecord(path string, dEnv *env.DoltEnv) (string, errh
 	}
 
 	return releaseName, nil
+}
+
+// isOutOfDate compares the current version of Dolt to the given latest release version and returns true if the current
+// version is out of date.
+func isOutOfDate(curVersion, latestRelease string) (bool, errhand.VerboseError) {
+	curVersionParts := strings.Split(curVersion, ".")
+	latestReleaseParts := strings.Split(latestRelease, ".")
+
+	for i := 0; i < len(curVersionParts) && i < len(latestReleaseParts); i++ {
+		curPart, err := strconv.Atoi(curVersionParts[i])
+		if err != nil {
+			return false, errhand.BuildDError("error: failed to parse version number").AddCause(err).Build()
+		}
+		latestPart, err := strconv.Atoi(latestReleaseParts[i])
+		if err != nil {
+			return false, errhand.BuildDError("error: failed to parse version number").AddCause(err).Build()
+		}
+		if latestPart > curPart {
+			return true, nil
+		} else if curPart > latestPart {
+			return false, nil
+		}
+	}
+
+	return false, nil
 }
