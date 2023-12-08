@@ -243,7 +243,10 @@ func loginWithCreds(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds, 
 
 func openBrowserForCredsAdd(dc creds.DoltCreds, loginUrl string) {
 	url := fmt.Sprintf("%s#%s", loginUrl, dc.PubKeyBase32Str())
-	cli.Printf("Attempting to automatically open the credentials page in your default browser.\nIf the browser does not open or you wish to use a different device to authorize this request, open the following URL:\n\t%s\nPlease associate your key with your account.\n", url)
+	cli.Println("Attempting to automatically open the credentials page in your default browser.")
+	cli.Println("If the browser does not open or you wish to use a different device to authorize this request, open the following URL:")
+	cli.Printf("\t%s\n", url)
+	cli.Println("Please associate your key with your account.")
 	open.Start(url)
 }
 
