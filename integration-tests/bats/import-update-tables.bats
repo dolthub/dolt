@@ -270,6 +270,84 @@ SQL
     [[ "${lines[6]}" =~ "end date" ]]   || false
 }
 
+@test "import-update-tables: update table with a csv with columns in different order, utf8 with bom" {
+    dolt sql <<SQL
+CREATE TABLE employees (
+  \`id\` varchar(20) NOT NULL COMMENT 'tag:0',
+  \`first name\` LONGTEXT COMMENT 'tag:1',
+  \`last name\` LONGTEXT COMMENT 'tag:2',
+  \`title\` LONGTEXT COMMENT 'tag:3',
+  \`start date\` LONGTEXT COMMENT 'tag:4',
+  \`end date\` LONGTEXT COMMENT 'tag:5',
+  PRIMARY KEY (id)
+);
+SQL
+    run dolt table import -u employees `batshelper employees-tbl-schema-unordered.utf8bom.csv`
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 3, Additions: 3, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+    run dolt schema export employees
+    [[ "$status" -eq 0 ]] || false
+    [[ "${lines[1]}" =~ "id" ]]         || false
+    [[ "${lines[2]}" =~ "first name" ]] || false
+    [[ "${lines[3]}" =~ "last name" ]]  || false
+    [[ "${lines[4]}" =~ "title" ]]      || false
+    [[ "${lines[5]}" =~ "start date" ]] || false
+    [[ "${lines[6]}" =~ "end date" ]]   || false
+}
+
+@test "import-update-tables: update table with a csv with columns in different order, utf16le with bom" {
+    dolt sql <<SQL
+CREATE TABLE employees (
+  \`id\` varchar(20) NOT NULL COMMENT 'tag:0',
+  \`first name\` LONGTEXT COMMENT 'tag:1',
+  \`last name\` LONGTEXT COMMENT 'tag:2',
+  \`title\` LONGTEXT COMMENT 'tag:3',
+  \`start date\` LONGTEXT COMMENT 'tag:4',
+  \`end date\` LONGTEXT COMMENT 'tag:5',
+  PRIMARY KEY (id)
+);
+SQL
+    run dolt table import -u employees `batshelper employees-tbl-schema-unordered.utf16lebom.csv`
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 3, Additions: 3, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+    run dolt schema export employees
+    [[ "$status" -eq 0 ]] || false
+    [[ "${lines[1]}" =~ "id" ]]         || false
+    [[ "${lines[2]}" =~ "first name" ]] || false
+    [[ "${lines[3]}" =~ "last name" ]]  || false
+    [[ "${lines[4]}" =~ "title" ]]      || false
+    [[ "${lines[5]}" =~ "start date" ]] || false
+    [[ "${lines[6]}" =~ "end date" ]]   || false
+}
+
+@test "import-update-tables: update table with a csv with columns in different order, utf16be with bom" {
+    dolt sql <<SQL
+CREATE TABLE employees (
+  \`id\` varchar(20) NOT NULL COMMENT 'tag:0',
+  \`first name\` LONGTEXT COMMENT 'tag:1',
+  \`last name\` LONGTEXT COMMENT 'tag:2',
+  \`title\` LONGTEXT COMMENT 'tag:3',
+  \`start date\` LONGTEXT COMMENT 'tag:4',
+  \`end date\` LONGTEXT COMMENT 'tag:5',
+  PRIMARY KEY (id)
+);
+SQL
+    run dolt table import -u employees `batshelper employees-tbl-schema-unordered.utf16bebom.csv`
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 3, Additions: 3, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+    run dolt schema export employees
+    [[ "$status" -eq 0 ]] || false
+    [[ "${lines[1]}" =~ "id" ]]         || false
+    [[ "${lines[2]}" =~ "first name" ]] || false
+    [[ "${lines[3]}" =~ "last name" ]]  || false
+    [[ "${lines[4]}" =~ "title" ]]      || false
+    [[ "${lines[5]}" =~ "start date" ]] || false
+    [[ "${lines[6]}" =~ "end date" ]]   || false
+}
+
 @test "import-update-tables: updating table by inputting string longer than char column throws an error" {
     cat <<DELIM > 1pk1col-rpt-chars.csv
 pk,c

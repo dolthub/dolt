@@ -60,25 +60,48 @@ teardown() {
     teardown_common
 }
 
-@test "import-create-tables: correctly ignores byte order mark (BOM)" {
-    printf '\xEF\xBB\xBF' > bom.csv
-    cat <<DELIM >> bom.csv
-c1,c2
-1,2
-DELIM
-
-    run dolt table import -c bom bom.csv
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
-    [[ "$output" =~ "Import completed successfully." ]] || false
-
-    run dolt sql -q "select c1 from bom"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "1" ]] || false
-}
-
 @test "import-create-tables: create a table with json import" {
     run dolt table import -c -s `batshelper employees-sch.sql` employees `batshelper employees-tbl.json`
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "employees" ]] || false
+    run dolt sql -q "select * from employees"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "tim" ]] || false
+    [ "${#lines[@]}" -eq 7 ]
+}
+
+@test "import-create-tables: create a table with json import, utf8 with bom" {
+    run dolt table import -c -s `batshelper employees-sch.sql` employees `batshelper employees-tbl.utf8bom.json`
+    echo "$output"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "employees" ]] || false
+    run dolt sql -q "select * from employees"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "tim" ]] || false
+    [ "${#lines[@]}" -eq 7 ]
+}
+
+@test "import-create-tables: create a table with json import, utf16le with bom" {
+    run dolt table import -c -s `batshelper employees-sch.sql` employees `batshelper employees-tbl.utf16lebom.json`
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "employees" ]] || false
+    run dolt sql -q "select * from employees"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "tim" ]] || false
+    [ "${#lines[@]}" -eq 7 ]
+}
+
+@test "import-create-tables: create a table with json import, utf16be with bom" {
+    run dolt table import -c -s `batshelper employees-sch.sql` employees `batshelper employees-tbl.utf16bebom.json`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
