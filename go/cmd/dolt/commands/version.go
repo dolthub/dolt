@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -130,7 +131,7 @@ func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string
 }
 
 // checkAndPrintVersionOutOfDateWarning checks if the current version of Dolt is out of date and prints a warning if it
-// is. Restricts this check to at most once per week.
+// is. Restricts this check to at most once per week unless the build version is ahead of the stored latest release verion.
 func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) errhand.VerboseError {
 	var latestRelease string
 	var verr errhand.VerboseError
@@ -174,6 +175,17 @@ func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) 
 		}
 	}
 
+	// if there were new releases in the last week, the latestRelease stored might be behind the current version built
+	isEarlier, verr := isEarlierRelease(curVersion, latestRelease)
+	if verr != nil {
+		return verr
+	}
+	if isEarlier {
+		latestRelease, verr = getLatestDoltReleaseAndRecord(path, dEnv)
+		if verr != nil {
+			return verr
+		}
+	}
 	if curVersion != latestRelease {
 		cli.Printf(color.YellowString("Warning: you are on an old version of Dolt. The newest version is %s.\n", latestRelease))
 	}
@@ -197,4 +209,29 @@ func getLatestDoltReleaseAndRecord(path string, dEnv *env.DoltEnv) (string, errh
 	}
 
 	return releaseName, nil
+}
+
+// isEarlierRelease compares two release versions and returns true if the given latest release is earlier than the given
+// current version.
+func isEarlierRelease(curVersion, latestRelease string) (bool, errhand.VerboseError) {
+	curVersionParts := strings.Split(curVersion, ".")
+	latestReleaseParts := strings.Split(latestRelease, ".")
+
+	for i := 0; i < len(curVersionParts) && i < len(latestReleaseParts); i++ {
+		curPart, err := strconv.Atoi(curVersionParts[i])
+		if err != nil {
+			return false, errhand.BuildDError("error: failed to parse version number").AddCause(err).Build()
+		}
+		latestPart, err := strconv.Atoi(latestReleaseParts[i])
+		if err != nil {
+			return false, errhand.BuildDError("error: failed to parse version number").AddCause(err).Build()
+		}
+		if latestPart < curPart {
+			return true, nil
+		} else if curPart > latestPart {
+			return false, nil
+		}
+	}
+
+	return false, nil
 }
