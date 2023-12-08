@@ -57,6 +57,7 @@ var point = typeinfo.CreatePointTypeFromSqlPointType(gmstypes.PointType{SRID: ui
 var varchar10 = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.VarChar, 10, sql.Collation_Default))
 var varchar10ci = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.VarChar, 10, sql.Collation_utf8mb4_0900_ai_ci))
 var varchar10bin = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.VarChar, 10, sql.Collation_utf8mb4_0900_bin))
+var varchar10utf16bin = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.VarChar, 10, sql.Collation_utf16_bin))
 var varchar20 = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.VarChar, 20, sql.Collation_Default))
 var varchar300 = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.VarChar, 300, sql.Collation_Default))
 var varchar10BinaryCollation = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.VarChar, 10, sql.Collation_binary))
@@ -200,6 +201,14 @@ func TestDoltIsTypeChangeCompatible(t *testing.T) {
 			name:       "geometry: non-identical types are incompatible",
 			from:       geo,
 			to:         point,
+			compatible: false,
+		},
+
+		// Charset changes
+		{
+			name:       "incompatible: VARCHAR(10) charset change",
+			from:       varchar10bin,
+			to:         varchar10utf16bin,
 			compatible: false,
 		},
 
