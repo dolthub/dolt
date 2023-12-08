@@ -36,7 +36,6 @@ const (
 	usernameParamName   = "name"
 	initBranchParamName = "initial-branch"
 	newFormatFlag       = "new-format"
-	oldFormatFlag       = "old-format"
 	funHashFlag         = "fun"
 )
 
