@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 type initTest struct {
@@ -45,8 +46,8 @@ func TestInit(t *testing.T) {
 			"Global config name and email",
 			[]string{},
 			map[string]string{
-				env.UserNameKey:  "Bill Billerson",
-				env.UserEmailKey: "bigbillieb@fake.horse",
+				config.UserNameKey:  "Bill Billerson",
+				config.UserEmailKey: "bigbillieb@fake.horse",
 			},
 			true,
 		},
@@ -80,8 +81,8 @@ func TestInit(t *testing.T) {
 
 			if test.ExpectSuccess {
 				require.True(t, dEnv.HasDoltDir(), "- .dolt dir should exist after initialization")
-				testLocalConfigValue(t, dEnv, test, usernameParamName, env.UserNameKey)
-				testLocalConfigValue(t, dEnv, test, emailParamName, env.UserEmailKey)
+				testLocalConfigValue(t, dEnv, test, usernameParamName, config.UserNameKey)
+				testLocalConfigValue(t, dEnv, test, emailParamName, config.UserEmailKey)
 			} else {
 				require.False(t, dEnv.HasDoltDir(),
 					"- dolt directory shouldn't exist after failure to initialize")

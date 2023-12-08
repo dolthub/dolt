@@ -46,9 +46,6 @@ const (
 
 	DefaultLoginUrl = "https://dolthub.com/settings/credentials"
 
-	DefaultMetricsHost = "eventsapi.dolthub.com"
-	DefaultMetricsPort = "443"
-
 	DefaultRemotesApiHost = "doltremoteapi.dolthub.com"
 	DefaultRemotesApiPort = "443"
 
@@ -103,6 +100,10 @@ func (dEnv *DoltEnv) GetRemoteDB(ctx context.Context, format *types.NomsBinForma
 	} else {
 		return r.GetRemoteDBWithoutCaching(ctx, format, dEnv)
 	}
+}
+
+func (dEnv *DoltEnv) GetConfig() config.ReadableConfig {
+	return dEnv.Config
 }
 
 func createRepoState(fs filesys.Filesys) (*RepoState, error) {
@@ -198,7 +199,7 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr s
 }
 
 func GetDefaultInitBranch(cfg config.ReadableConfig) string {
-	return GetStringOrDefault(cfg, InitBranchName, DefaultInitBranch)
+	return GetStringOrDefault(cfg, config.InitBranchName, DefaultInitBranch)
 }
 
 // Valid returns whether this environment has been properly initialized. This is useful because although every command
@@ -810,8 +811,8 @@ func (dEnv *DoltEnv) workingSetMeta() *datas.WorkingSetMeta {
 
 func (dEnv *DoltEnv) NewWorkingSetMeta(message string) *datas.WorkingSetMeta {
 	return &datas.WorkingSetMeta{
-		Name:        dEnv.Config.GetStringOrDefault(UserNameKey, ""),
-		Email:       dEnv.Config.GetStringOrDefault(UserEmailKey, ""),
+		Name:        dEnv.Config.GetStringOrDefault(config.UserNameKey, ""),
+		Email:       dEnv.Config.GetStringOrDefault(config.UserEmailKey, ""),
 		Timestamp:   uint64(time.Now().Unix()),
 		Description: message,
 	}
@@ -822,7 +823,7 @@ func (dEnv *DoltEnv) CredsDir() (string, error) {
 }
 
 func (dEnv *DoltEnv) UserDoltCreds() (creds.DoltCreds, bool, error) {
-	kid, err := dEnv.Config.GetString(UserCreds)
+	kid, err := dEnv.Config.GetString(config.UserCreds)
 
 	if err == nil && kid != "" {
 		dir, err := dEnv.CredsDir()

@@ -125,6 +125,7 @@ func CreateCloneArgParser() *argparser.ArgParser {
 	ap.SupportsString(dbfactory.OSSCredsFileParam, "", "file", "OSS credentials file.")
 	ap.SupportsString(dbfactory.OSSCredsProfile, "", "profile", "OSS profile to use.")
 	ap.SupportsString(UserFlag, "u", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
+	ap.SupportsFlag(SingleBranchFlag, "", "Clone only the history leading to the tip of a single branch, either specified by --branch or the remote's HEAD (default).")
 	return ap
 }
 
@@ -149,6 +150,7 @@ func CreateCleanArgParser() *argparser.ArgParser {
 func CreateCheckoutArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("checkout")
 	ap.SupportsString(CheckoutCreateBranch, "", "branch", "Create a new branch named {{.LessThan}}new_branch{{.GreaterThan}} and start it at {{.LessThan}}start_point{{.GreaterThan}}.")
+	ap.SupportsString(CreateResetBranch, "", "branch", "Similar to '-b'. Forcibly resets the branch to {{.LessThan}}start_point{{.GreaterThan}} if it exists.")
 	ap.SupportsFlag(ForceFlag, "f", "If there is any changes in working set, the force flag will wipe out the current changes and checkout the new branch.")
 	ap.SupportsString(TrackFlag, "t", "", "When creating a new branch, set up 'upstream' configuration.")
 	return ap
