@@ -406,7 +406,6 @@ func (j *ChunkJournal) UpdateGCGen(ctx context.Context, lastLock addr, next mani
 	// Truncate the in-memory root and root timestamp metadata
 	if !reflogDisabled {
 		j.reflogRingBuffer.Truncate()
-		// TODO: sanity check that j.reflogRingBuffer.Peek matches latest.root ?
 	}
 
 	return latest, nil
