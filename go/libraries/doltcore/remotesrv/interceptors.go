@@ -17,6 +17,7 @@ package remotesrv
 import (
 	"context"
 
+	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -41,14 +42,15 @@ type AccessControl interface {
 	// If the user is not legitimate, an error is returned.
 	ApiAuthenticate(ctx context.Context) (context.Context, error)
 	// ApiAuthorize checks that the authenticated user has sufficient privileges to perform the requested action.
-	// Currently, CLONE_ADMIN is required. True and a nil error returned if the user is authorized, otherwise false
-	// with an error.
-	ApiAuthorize(ctx context.Context) (bool, error)
+	// Currently, our resource policy is binary currently, a user either is a SuperUser (form Commit) or they have a
+	// CLONE_ADMIN grant for read operations.
+	// More resource aware authorization decisions will be needed in the future, but this is sufficient for now.
+	ApiAuthorize(ctx context.Context, superUserReq bool) (bool, error)
 }
 
 func (si *ServerInterceptor) Stream() grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		if err := si.authenticate(ss.Context()); err != nil {
+		if err := si.authenticate(ss.Context(), false); err != nil {
 			return err
 		}
 
@@ -58,7 +60,9 @@ func (si *ServerInterceptor) Stream() grpc.StreamServerInterceptor {
 
 func (si *ServerInterceptor) Unary() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		if err := si.authenticate(ctx); err != nil {
+		_, needSuperUser := req.(*remotesapi.CommitRequest)
+
+		if err := si.authenticate(ctx, needSuperUser); err != nil {
 			return nil, err
 		}
 
@@ -75,7 +79,7 @@ func (si *ServerInterceptor) Options() []grpc.ServerOption {
 
 // authenticate checks the incoming request for authentication credentials and validates them.  If the user is
 // legitimate, an authorization check is performed. If no error is returned, the user should be allowed to proceed.
-func (si *ServerInterceptor) authenticate(ctx context.Context) error {
+func (si *ServerInterceptor) authenticate(ctx context.Context, needsSuperUser bool) error {
 	ctx, err := si.AccessController.ApiAuthenticate(ctx)
 	if err != nil {
 		si.Lgr.Warnf("authentication failed: %s", err.Error())
@@ -83,7 +87,7 @@ func (si *ServerInterceptor) authenticate(ctx context.Context) error {
 	}
 
 	// Have a valid user in the context.  Check authorization.
-	if authorized, err := si.AccessController.ApiAuthorize(ctx); !authorized {
+	if authorized, err := si.AccessController.ApiAuthorize(ctx, needsSuperUser); !authorized {
 		si.Lgr.Warnf("authorization failed: %s", err.Error())
 		return status.Error(codes.PermissionDenied, err.Error())
 	}
