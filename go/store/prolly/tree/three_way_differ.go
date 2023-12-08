@@ -42,12 +42,14 @@ type ThreeWayDiffer[K ~[]byte, O Ordering[K]] struct {
 type resolveCb func(context.Context, val.Tuple, val.Tuple, val.Tuple) (val.Tuple, bool, error)
 
 // ThreeWayDiffInfo stores contextual data that can influence the diff.
-// If |LeftSchemaChange| is true, then the left side has a different schema from the base, and every row
-// in both Left and Base should be considered a modification, even if they have the same bytes.
-// If |RightSchemaChange| is true, then the right side has a different schema from the base, and every row
-// in both Right and Base should be considered a modification, even if they have the same bytes.
-// If |LeftAndRightSchemasDiffer| is true, then the left and right sides of the diff have a different schema,
-// so there cannot be any convergent edits, even if two rows in Left and Right have the same bytes.
+// If |LeftSchemaChange| is true, then the left side's bytes have a different interpretation from the base,
+// so every row in both Left and Base should be considered a modification, even if they have the same bytes.
+// If |RightSchemaChange| is true, then the right side's bytes have a different interpretation from the base,
+// so every row in both Right and Base should be considered a modification, even if they have the same bytes.
+// Note that these values aren't set for schema changes that have no effect on the meaning of the bytes,
+// such as collation.
+// If |LeftAndRightSchemasDiffer| is true, then the left and right sides of the diff have a different interpretation
+// of their bytes, so there cannot be any convergent edits, even if two rows in Left and Right have the same bytes.
 type ThreeWayDiffInfo struct {
 	LeftSchemaChange          bool
 	RightSchemaChange         bool
