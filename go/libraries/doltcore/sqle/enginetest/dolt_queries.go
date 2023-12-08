@@ -4607,9 +4607,7 @@ var DoltReflogTestScripts = []queries.ScriptTest{
 				// Calling dolt_gc() invalidates the session, so we have to ask this assertion to create a new session
 				NewSession: true,
 				Query:      "select ref, commit_hash, commit_message from dolt_reflog('main')",
-				Expected: []sql.Row{
-					{"refs/heads/main", doltCommit, "Initialize data repository"},
-				},
+				Expected:   []sql.Row{},
 			},
 		},
 	},
@@ -4642,9 +4640,7 @@ var DoltReflogTestScripts = []queries.ScriptTest{
 				// Calling dolt_gc() invalidates the session, so we have to force this test to create a new session
 				NewSession: true,
 				Query:      "select ref, commit_hash, commit_message from dolt_reflog('main')",
-				Expected: []sql.Row{
-					{"refs/heads/main", doltCommit, "inserting row 2"},
-				},
+				Expected:   []sql.Row{},
 			},
 		},
 	},
