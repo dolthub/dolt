@@ -17,11 +17,13 @@ package merge
 import (
 	"context"
 	"encoding/json"
+
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 func NextConstraintViolation(ctx context.Context, itr prolly.ArtifactIter, kd, vd val.TupleDesc, ns tree.NodeStore) (violationType uint64, key sql.Row, value sql.Row, err error) {
