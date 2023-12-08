@@ -140,6 +140,14 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
+@test "no-repo: dolt version prints out of date warning" {
+    echo "2.0.0" > $DOLT_ROOT_PATH/.dolt/version_check.txt
+
+    run dolt version
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Warning: you are on an old version of Dolt" ]] || false
+}
+
 @test "no-repo: dolt version ahead of saved version does not print warning" {
     echo "1.27.0" > $DOLT_ROOT_PATH/.dolt/version_check.txt
 
