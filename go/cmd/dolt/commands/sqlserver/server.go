@@ -703,19 +703,26 @@ func (r *remotesapiAuth) ApiAuthenticate(ctx context.Context) (context.Context, 
 	return updatedCtx, nil
 }
 
-func (r *remotesapiAuth) ApiAuthorize(ctx context.Context) (bool, error) {
+func (r *remotesapiAuth) ApiAuthorize(ctx context.Context, superUserRequired bool) (bool, error) {
 	sqlCtx, ok := ctx.Value(ApiSqleContextKey).(*sql.Context)
 	if !ok {
 		return false, fmt.Errorf("Runtime error: could not get SQL context from context")
 	}
 
 	privOp := sql.NewDynamicPrivilegedOperation(plan.DynamicPrivilege_CloneAdmin)
+	if superUserRequired {
+		database := sqlCtx.GetCurrentDatabase()
+		subject := sql.PrivilegeCheckSubject{Database: database}
+		privOp = sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Super)
+	}
 
 	authorized := r.rawDb.UserHasPrivileges(sqlCtx, privOp)
 
 	if !authorized {
+		if superUserRequired {
+			return false, fmt.Errorf("API Authorization Failure: %s has not been granted SuperUser access", sqlCtx.Session.Client().User)
+		}
 		return false, fmt.Errorf("API Authorization Failure: %s has not been granted CLONE_ADMIN access", sqlCtx.Session.Client().User)
-
 	}
 	return true, nil
 }
