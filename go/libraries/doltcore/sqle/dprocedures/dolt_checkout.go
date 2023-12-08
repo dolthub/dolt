@@ -71,9 +71,14 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 1, "", err
 	}
 
-	branchOrTrack := apr.Contains(cli.CheckoutCreateBranch) || apr.Contains(cli.TrackFlag)
+	newBranch, _, err := parseBranchArgs(apr)
+	if err != nil {
+		return 1, "", err
+	}
+
+	branchOrTrack := newBranch != "" || apr.Contains(cli.TrackFlag)
 	if apr.Contains(cli.TrackFlag) && apr.NArg() > 0 {
-		return 1, "", errors.New("Improper usage.")
+		return 1, "", errors.New("Improper usage. Too many arguments provided.")
 	}
 	if (branchOrTrack && apr.NArg() > 1) || (!branchOrTrack && apr.NArg() == 0) {
 		return 1, "", errors.New("Improper usage.")
@@ -90,7 +95,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	if err != nil {
 		return 1, "", err
 	}
-	if apr.Contains(cli.CheckoutCreateBranch) && readOnlyDatabase {
+	if newBranch != "" && readOnlyDatabase {
 		return 1, "", fmt.Errorf("unable to create new branch in a read-only database")
 	}
 
@@ -197,6 +202,30 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	dsess.WaitForReplicationController(ctx, rsc)
 
 	return 0, successMessage, nil
+}
+
+// parseBranchArgs returns the name of the new branch and whether or not it should be created forcibly. This asserts
+// that the provided branch name may not be empty, so an empty string is returned where no -b or -B flag is provided.
+func parseBranchArgs(apr *argparser.ArgParseResults) (newBranch string, createBranchForcibly bool, err error) {
+	if apr.Contains(cli.CheckoutCreateBranch) && apr.Contains(cli.CreateResetBranch) {
+		return "", false, errors.New("Improper usage. Cannot use both -b and -B.")
+	}
+
+	if newBranch, ok := apr.GetValue(cli.CheckoutCreateBranch); ok {
+		if len(newBranch) == 0 {
+			return "", false, ErrEmptyBranchName
+		}
+		return newBranch, false, nil
+	}
+
+	if newBranch, ok := apr.GetValue(cli.CreateResetBranch); ok {
+		if len(newBranch) == 0 {
+			return "", false, ErrEmptyBranchName
+		}
+		return newBranch, true, nil
+	}
+
+	return "", false, nil
 }
 
 // isReadOnlyDatabase returns true if the named database is a read-only database. An error is returned
@@ -346,14 +375,20 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *
 		newBranchName = remoteBranchName
 	}
 
-	if newBranch, ok := apr.GetValue(cli.CheckoutCreateBranch); ok {
-		if len(newBranch) == 0 {
-			return "", "", ErrEmptyBranchName
-		}
-		newBranchName = newBranch
+	// A little wonky behavior here. parseBranchArgs is actually called twice because in this procedure we pass around
+	// the parse results, but we also needed to parse the -b and -B flags in the main procedure. It ended up being
+	// a little cleaner to just call it again here than to pass the results around.
+	var createBranchForcibly bool
+	var optionBBranch string
+	optionBBranch, createBranchForcibly, err = parseBranchArgs(apr)
+	if err != nil {
+		return "", "", err
+	}
+	if optionBBranch != "" {
+		newBranchName = optionBBranch
 	}
 
-	err = actions.CreateBranchWithStartPt(ctx, dbData, newBranchName, startPt, false, rsc)
+	err = actions.CreateBranchWithStartPt(ctx, dbData, newBranchName, startPt, createBranchForcibly, rsc)
 	if err != nil {
 		return "", "", err
 	}

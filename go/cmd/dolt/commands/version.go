@@ -16,9 +16,18 @@ package commands
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/fatih/color"
+	"github.com/google/go-github/v57/github"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -27,7 +36,16 @@ import (
 const (
 	featureVersionFlag = "feature"
 	verboseFlag        = "verbose"
+	versionCheckFile   = "version_check.txt"
 )
+
+var versionDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Displays the version for the Dolt binary.",
+	LongDesc:  `Displays the version for the Dolt binary.`,
+	Synopsis: []string{
+		`[--verbose] [--feature]`,
+	},
+}
 
 type VersionCmd struct {
 	VersionStr string
@@ -40,7 +58,7 @@ func (cmd VersionCmd) Name() string {
 
 // Description returns a description of the command
 func (cmd VersionCmd) Description() string {
-	return "Displays the current Dolt cli version."
+	return versionDocs.ShortDesc
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -50,7 +68,8 @@ func (cmd VersionCmd) RequiresRepo() bool {
 }
 
 func (cmd VersionCmd) Docs() *cli.CommandDocumentation {
-	return nil
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(versionDocs, ap)
 }
 
 func (cmd VersionCmd) ArgParser() *argparser.ArgParser {
@@ -63,11 +82,18 @@ func (cmd VersionCmd) ArgParser() *argparser.ArgParser {
 // Version displays the version of the running dolt client
 // Exec executes the command
 func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+	ap := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, versionDocs, ap))
+	apr := cli.ParseArgsOrDie(ap, args, help)
+
 	cli.Println("dolt version", cmd.VersionStr)
 
-	usage := func() {}
-	ap := cmd.ArgParser()
-	apr := cli.ParseArgsOrDie(ap, args, usage)
+	var verr errhand.VerboseError
+	verr = checkAndPrintVersionOutOfDateWarning(cmd.VersionStr, dEnv)
+	if verr != nil {
+		// print error but don't fail
+		cli.PrintErrf(color.YellowString(verr.Verbose()))
+	}
 
 	if apr.Contains(verboseFlag) {
 		if dEnv.HasDoltDir() && dEnv.RSLoadErr == nil && !cli.CheckEnvIsValid(dEnv) {
@@ -78,7 +104,6 @@ func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string
 		}
 	}
 
-	var verr errhand.VerboseError
 	if apr.Contains(featureVersionFlag) {
 		if !cli.CheckEnvIsValid(dEnv) {
 			return 2
@@ -92,12 +117,84 @@ func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string
 		fv, ok, err := wr.GetFeatureVersion(ctx)
 		if err != nil {
 			verr = errhand.BuildDError("error reading feature version").AddCause(err).Build()
+			return HandleVErrAndExitCode(verr, usage)
 		} else if !ok {
 			verr = errhand.BuildDError("the current head does not have a feature version").Build()
+			return HandleVErrAndExitCode(verr, usage)
 		} else {
 			cli.Println("feature version:", fv)
 		}
 	}
 
-	return HandleVErrAndExitCode(verr, usage)
+	return HandleVErrAndExitCode(nil, usage)
+}
+
+// checkAndPrintVersionOutOfDateWarning checks if the current version of Dolt is out of date and prints a warning if it
+// is. Restricts this check to at most once per week.
+func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) errhand.VerboseError {
+	var latestRelease string
+	var verr errhand.VerboseError
+
+	homeDir, err := dEnv.GetUserHomeDir()
+	if err != nil {
+		return errhand.BuildDError("error: failed to get user home directory").AddCause(err).Build()
+	}
+	path := filepath.Join(homeDir, dbfactory.DoltDir, versionCheckFile)
+
+	if exists, _ := dEnv.FS.Exists(path); exists {
+		vCheck, err := dEnv.FS.ReadFile(path)
+		if err != nil {
+			return errhand.BuildDError("error: failed to read version check file").AddCause(err).Build()
+		}
+
+		vCheckData := strings.Split(string(vCheck), ",")
+		if len(vCheckData) != 2 {
+			// formatting or data is wrong, so just overwrite
+			latestRelease, verr = getLatestDoltReleaseAndRecord(path, dEnv)
+			if verr != nil {
+				return verr
+			}
+		} else {
+			latestRelease = vCheckData[0]
+			lastCheckDate, err := time.Parse(time.DateOnly, vCheckData[1])
+			if err != nil {
+				return errhand.BuildDError("error: failed to parse version check file").AddCause(err).Build()
+			}
+			if lastCheckDate.Before(time.Now().AddDate(0, 0, -7)) {
+				latestRelease, verr = getLatestDoltReleaseAndRecord(path, dEnv)
+				if verr != nil {
+					return verr
+				}
+			}
+		}
+	} else {
+		latestRelease, verr = getLatestDoltReleaseAndRecord(path, dEnv)
+		if verr != nil {
+			return verr
+		}
+	}
+
+	if curVersion != latestRelease {
+		cli.Printf(color.YellowString("Warning: you are on an old version of Dolt. The newest version is %s.\n", latestRelease))
+	}
+
+	return nil
+}
+
+// getLatestDoltRelease returns the latest release of Dolt from GitHub and records the release and current date in the
+// version check file.
+func getLatestDoltReleaseAndRecord(path string, dEnv *env.DoltEnv) (string, errhand.VerboseError) {
+	client := github.NewClient(nil)
+	release, resp, err := client.Repositories.GetLatestRelease(context.Background(), "dolthub", "dolt")
+	if err != nil || resp.StatusCode != 200 {
+		return "", errhand.BuildDError("error: failed to verify latest release").AddCause(err).Build()
+	}
+	releaseName := strings.TrimPrefix(*release.TagName, "v")
+
+	err = dEnv.FS.WriteFile(path, []byte(fmt.Sprintf("%s,%s", releaseName, time.Now().UTC().Format(time.DateOnly))), os.ModePerm)
+	if err != nil {
+		return "", errhand.BuildDError("error: failed to update version check file").AddCause(err).Build()
+	}
+
+	return releaseName, nil
 }

@@ -59,7 +59,7 @@ teardown() {
     [[ "$output" =~ "gc - Cleans up unreferenced data from the repository." ]] || false
     [[ "$output" =~ "filter-branch - Edits the commit history using the provided query." ]] || false
     [[ "$output" =~ "merge-base - Find the common ancestor of two commits." ]] || false
-    [[ "$output" =~ "version - Displays the current Dolt cli version." ]] || false
+    [[ "$output" =~ "version - Displays the version for the Dolt binary." ]] || false
     [[ "$output" =~ "dump - Export all tables in the working set into a file." ]] || false
 }
 

@@ -88,9 +88,8 @@ func TestSingleQuery(t *testing.T) {
 		// "set @Commit2 = dolt_commit('-am', 'two more rows');",
 	}
 
-	ctx := sql.NewContext(context.Background())
 	for _, q := range setupQueries {
-		enginetest.RunQueryWithContext(t, engine, harness, ctx, q)
+		enginetest.RunQueryWithContext(t, engine, harness, nil, q)
 	}
 
 	// engine.EngineAnalyzer().Debug = true
@@ -331,9 +330,8 @@ func TestSingleQueryPrepared(t *testing.T) {
 		"set @Commit2 = dolt_commit('-am', 'two more rows');",
 	}
 
-	ctx := sql.NewContext(context.Background())
 	for _, q := range setupQueries {
-		enginetest.RunQueryWithContext(t, engine, harness, ctx, q)
+		enginetest.RunQueryWithContext(t, engine, harness, nil, q)
 	}
 
 	//engine.Analyzer.Debug = true
