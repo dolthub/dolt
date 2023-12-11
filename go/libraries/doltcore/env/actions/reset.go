@@ -183,7 +183,7 @@ func ResetHard(
 	}
 
 	if newHead != nil {
-		err = doltDb.SetHeadToCommit(ctx, headRef, newHead)
+		err = doltDb.SetHeadToCommit(ctx, headRef, newHead) // NM4 This one seems like it should have the ws update too... Hope there are tests. TBD.
 		if err != nil {
 			return err
 		}

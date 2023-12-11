@@ -75,7 +75,7 @@ func pushDataset(ctx context.Context, destDB, srcDB datas.Database, ds datas.Dat
 		return err
 	}
 
-	_, err = destDB.SetHead(ctx, ds, addr)
+	_, err = destDB.SetHead(ctx, ds, addr, "")
 	return err
 }
 

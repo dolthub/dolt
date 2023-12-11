@@ -136,7 +136,7 @@ type Database interface {
 	// All values that have been written to this Database are guaranteed to
 	// be persistent after SetHead(). If the update cannot be performed,
 	// error will be non-nil.
-	SetHead(ctx context.Context, ds Dataset, newHeadAddr hash.Hash) (Dataset, error)
+	SetHead(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, workingSetPath string) (Dataset, error) // NM4 - haven't decided on where to insert the new function.
 
 	// FastForward takes a types.Ref to a Commit object and makes it the new
 	// Head of ds iff it is a descendant of the current Head. Intended to be

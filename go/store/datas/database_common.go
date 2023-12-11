@@ -48,6 +48,7 @@ var (
 	ErrOptimisticLockFailed = errors.New("optimistic lock failed on database Root update")
 	ErrMergeNeeded          = errors.New("dataset head is not ancestor of commit")
 	ErrAlreadyCommitted     = errors.New("dataset head already pointing at given commit")
+	ErrDirtyWorkspace       = errors.New("target has uncommitted changes. --force required to overwrite")
 )
 
 // rootTracker is a narrowing of the ChunkStore interface, to keep Database disciplined about working directly with Chunks
@@ -268,11 +269,11 @@ func (db *database) Close() error {
 	return db.ValueStore.Close()
 }
 
-func (db *database) SetHead(ctx context.Context, ds Dataset, newHeadAddr hash.Hash) (Dataset, error) {
-	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doSetHead(ctx, ds, newHeadAddr) })
+func (db *database) SetHead(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, workingSetPath string) (Dataset, error) {
+	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doSetHead(ctx, ds, newHeadAddr, workingSetPath) })
 }
 
-func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) error {
+func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, workingSetPath string) error {
 	newHead, err := db.readHead(ctx, addr)
 	if err != nil {
 		return err
@@ -365,11 +366,61 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 		if err != nil {
 			return prolly.AddressMap{}, err
 		}
+
+		// NM4 - Another edit, if there is a ws on the remote.
+
+		var newWSHash hash.Hash
+		if workingSetPath != "" {
+			hasWS, err := am.Has(ctx, workingSetPath)
+			if err != nil {
+				return prolly.AddressMap{}, err
+			}
+			// If the current root has a working set, update it. Do nothing if it doesn't exist.
+			if hasWS {
+				currWSHash, err := am.Get(ctx, workingSetPath)
+				if err != nil {
+					return prolly.AddressMap{}, err
+				}
+
+				targetCmt, err := db.ReadValue(ctx, currWSHash)
+				if err != nil {
+					return prolly.AddressMap{}, err
+				}
+
+				if _, ok := targetCmt.(types.SerialMessage); ok {
+					cmtRtHsh, err := GetCommitRootHash(newVal)
+					if err != nil {
+						return prolly.AddressMap{}, err
+					}
+
+					// NM4 - what the mergeState and meta supposed to be??
+					updateWS := workingset_flatbuffer(cmtRtHsh, &cmtRtHsh, nil, nil)
+					ref, err := db.WriteValue(ctx, types.SerialMessage(updateWS))
+					if err != nil {
+						return prolly.AddressMap{}, err
+					}
+					newWSHash = ref.TargetHash()
+				} else {
+					// This _should_ never happen. We've already ended up on this code path because we are on
+					// modern storage.
+					return prolly.AddressMap{}, errors.New("Modern Dolt Database required.")
+				}
+			}
+		}
+
 		ae := am.Editor()
 		err = ae.Update(ctx, ds.ID(), h)
 		if err != nil {
 			return prolly.AddressMap{}, err
 		}
+
+		if workingSetPath != "" && newWSHash != (hash.Hash{}) {
+			err = ae.Update(ctx, workingSetPath, newWSHash)
+			if err != nil {
+				return prolly.AddressMap{}, err
+			}
+		}
+
 		return ae.Flush(ctx)
 	})
 }
@@ -465,7 +516,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 						stagedHash := hash.New(msg.StagedRootAddrBytes())
 						workingSetHash := hash.New(msg.WorkingRootAddrBytes())
 						if stagedHash != workingSetHash {
-							return prolly.AddressMap{}, errors.New("working set root and staged root must be equal")
+							return prolly.AddressMap{}, ErrDirtyWorkspace
 						}
 
 						targetHead, err := db.ReadValue(ctx, curr)
@@ -478,7 +529,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 						}
 
 						if stagedHash != targetRootHash {
-							return prolly.AddressMap{}, errors.New("working set root and HEAD root must be equal")
+							return prolly.AddressMap{}, ErrDirtyWorkspace
 						}
 
 						cmtRtHsh, err := GetCommitRootHash(cmtValue)

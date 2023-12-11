@@ -235,7 +235,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitMetaGeneratorAndDefaultBranch(
 		return errors.New("commit without head")
 	}
 
-	_, err = ddb.db.SetHead(ctx, ds, headAddr)
+	_, err = ddb.db.SetHead(ctx, ds, headAddr, "")
 	return err
 }
 
@@ -629,13 +629,34 @@ func (ddb *DoltDB) CanFastForward(ctx context.Context, branch ref.DoltRef, new *
 }
 
 // SetHeadToCommit sets the given ref to point at the given commit. It is used in the course of 'force' updates.
-func (ddb *DoltDB) SetHeadToCommit(ctx context.Context, ref ref.DoltRef, cm *Commit) error {
+func (ddb *DoltDB) SetHeadToCommit(ctx context.Context, ref ref.DoltRef, cm *Commit) error { // NM4
 	addr, err := cm.HashOf()
 	if err != nil {
 		return err
 	}
 
 	return ddb.SetHead(ctx, ref, addr)
+}
+
+// SetHeadAndWorkingSetToCommit sets the given ref to point at the given commit. It is used in the course of 'force' updates.
+func (ddb *DoltDB) SetHeadAndWorkingSetToCommit(ctx context.Context, rf ref.DoltRef, cm *Commit) error { // NM4
+	addr, err := cm.HashOf()
+	if err != nil {
+		return err
+	}
+
+	wsRef, err := ref.WorkingSetRefForHead(rf)
+	if err != nil {
+		return err
+	}
+
+	ds, err := ddb.db.GetDataset(ctx, rf.String())
+	if err != nil {
+		return err
+	}
+
+	_, err = ddb.db.SetHead(ctx, ds, addr, wsRef.String())
+	return err
 }
 
 func (ddb *DoltDB) SetHead(ctx context.Context, ref ref.DoltRef, addr hash.Hash) error {
@@ -645,7 +666,7 @@ func (ddb *DoltDB) SetHead(ctx context.Context, ref ref.DoltRef, addr hash.Hash)
 		return err
 	}
 
-	_, err = ddb.db.SetHead(ctx, ds, addr)
+	_, err = ddb.db.SetHead(ctx, ds, addr, "")
 	return err
 }
 
@@ -1099,7 +1120,7 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 		return err
 	}
 
-	_, err = ddb.db.SetHead(ctx, ds, addr)
+	_, err = ddb.db.SetHead(ctx, ds, addr, "")
 	if err != nil {
 		return err
 	}
@@ -1359,7 +1380,7 @@ func (ddb *DoltDB) NewWorkspaceAtCommit(ctx context.Context, workRef ref.DoltRef
 		return err
 	}
 
-	ds, err = ddb.db.SetHead(ctx, ds, addr)
+	ds, err = ddb.db.SetHead(ctx, ds, addr, "")
 
 	return err
 }
