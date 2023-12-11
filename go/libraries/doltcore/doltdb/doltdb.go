@@ -586,6 +586,28 @@ func (ddb *DoltDB) Commit(ctx context.Context, valHash hash.Hash, dref ref.DoltR
 	return ddb.CommitWithParentSpecs(ctx, valHash, dref, nil, cm)
 }
 
+// FastForwardWithWorkspaceCheck
+func (ddb *DoltDB) FastForwardWithWorkspaceCheck(ctx context.Context, branch ref.DoltRef, commit *Commit) error {
+	ds, err := ddb.db.GetDataset(ctx, branch.String())
+	if err != nil {
+		return err
+	}
+
+	addr, err := commit.HashOf()
+	if err != nil {
+		return err
+	}
+
+	wsRef, err := ref.WorkingSetRefForHead(branch)
+	if err != nil {
+		return err
+	}
+
+	_, err = ddb.db.FastForward(ctx, ds, addr, wsRef.String())
+
+	return err
+}
+
 // FastForward fast-forwards the branch given to the commit given.
 func (ddb *DoltDB) FastForward(ctx context.Context, branch ref.DoltRef, commit *Commit) error {
 	addr, err := commit.HashOf()
@@ -603,12 +625,7 @@ func (ddb *DoltDB) FastForwardToHash(ctx context.Context, branch ref.DoltRef, ha
 		return err
 	}
 
-	wsRef, err := ref.WorkingSetRefForHead(branch)
-	if err != nil {
-		return err
-	}
-
-	_, err = ddb.db.FastForward(ctx, ds, hash, wsRef.String())
+	_, err = ddb.db.FastForward(ctx, ds, hash, "")
 
 	return err
 }

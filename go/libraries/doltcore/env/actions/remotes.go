@@ -81,7 +81,7 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 		}
 		err = srcDB.SetHeadToCommit(ctx, remoteRef, commit)
 	case ref.FastForwardOnly:
-		err = destDB.FastForward(ctx, destRef, commit)
+		err = destDB.FastForwardWithWorkspaceCheck(ctx, destRef, commit)
 		if err != nil {
 			return err
 		}

@@ -51,7 +51,7 @@ call dolt_commit('-am', 'add some vals');
 "
 
     run dolt pull
-    echo "------------------------"
+    echo "------------------------ NM4 "
     echo "$output"
     echo "************************"
     [[ "$status" -eq 0 ]] || false
@@ -206,7 +206,7 @@ call dolt_commit('-am', 'add some vals');
     # No auth fetch
     run dolt fetch
     [[ "$status" != 0 ]] || false
-    [[ "$output" =~ "Access denied for user 'root'" ]] || false
+    [[ "$output" =~ "Access denied for user 'root'" ]] || false # NM4 - why is this the error we get??
 
     # # With auth fetch
     run dolt fetch --user $DOLT_REMOTE_USER
@@ -217,8 +217,7 @@ call dolt_commit('-am', 'add some vals');
     [[ "$output" =~ "remotes/origin/main" ]] || false
     [[ "$output" =~ "remotes/origin/new_branch" ]] || false
 
-    run dolt checkout new_branch
-    [[ "$status" -eq 0 ]] || false
+    dolt checkout new_branch
 
     dolt --port 3307 --host localhost --no-tls -u $DOLT_REMOTE_USER -p $DOLT_REMOTE_PASSWORD sql -q "
 use remote;
@@ -234,6 +233,11 @@ call dolt_commit('-am', 'add one val');
 
     # With auth pull
     run dolt pull --user $DOLT_REMOTE_USER
+
+    echo "--------------------- NM4"
+    echo "$output"
+    echo "*********************"
+
     [[ "$status" -eq 0 ]] || false
     run dolt sql -q 'select count(*) from vals;'
     [[ "$output" =~ "11" ]] || false
@@ -256,7 +260,6 @@ CREATE USER clone_admin_user@'localhost' IDENTIFIED BY 'pass1';
 GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
 select user from mysql.user;
 "
-
     [ $status -eq 0 ]
     [[ $output =~ user0 ]] || false
     [[ $output =~ clone_admin_user ]] || false
@@ -388,9 +391,10 @@ call dolt_commit('-am', 'add one val');"
     dolt sql -q 'insert into names values ("dave");'
     dolt commit -am 'add dave'
 
-    # change this to be `dolt push` NM4
-    run dolt sql -q "call dolt_push('origin', '--user','$SQL_USER', 'main:main')"
+    run dolt push origin --user $SQL_USER main:main
     [[ "$status" -eq 0 ]] || false
+
+    # NM4 - should output validation be done here?
 
     cd ../remote
     run dolt sql -q 'select * from names;'
@@ -398,7 +402,107 @@ call dolt_commit('-am', 'add one val');"
     [[ "$output" =~ "betsy" ]] || false
     [[ "$output" =~ "calvin" ]] || false
     [[ "$output" =~ "dave" ]] || false
+}
 
-    # Currently failing. refs/heads/main gets updates, but refs/workingsets/main does not.
+@test "sql-server-remotesrv: push to dirty workspace as super user" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q 'create table names (name varchar(10) primary key);'
+    dolt sql -q 'insert into names (name) values ("abe"), ("betsy"), ("calvin");'
+    dolt add names
+    dolt commit -m 'initial names.'
+    dolt sql -q 'insert into names (name) values ("zeek");' # dirty the workspace. This won't be cloned
+
+
+    APIPORT=$( definePORT )
+    export DOLT_REMOTE_PASSWORD="rootpass"
+    export SQL_USER="root"
+    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT
+
+    cd ../
+    dolt clone http://localhost:$APIPORT/remote cloned_db -u root
+    cd cloned_db
+
+    dolt sql -q 'insert into names values ("dave");'
+    dolt commit -am 'add dave'
+
+    run dolt push origin --user $SQL_USER main:main
+    [[ "$status" -ne 0 ]] || false
+    [[ "$output" =~ "target has uncommitted changes. --force required to overwrite" ]] || false
+
+    cd ../remote
+    run dolt sql -q 'select * from names;'
+    [[ "$output" =~ "abe" ]] || false
+    [[ "$output" =~ "betsy" ]] || false
+    [[ "$output" =~ "calvin" ]] || false
+    ! [[ "$output" =~ "dave" ]] || false
+    [[ "$output" =~ "zeek" ]] || false
+
+    ## Now try with --force
+    cd ../cloned_db
+    dolt push origin --force --user $SQL_USER main:main
+
+    cd ../remote
+    run dolt sql -q 'select * from names;'
+    [[ "$output" =~ "abe" ]] || false
+    [[ "$output" =~ "betsy" ]] || false
+    [[ "$output" =~ "calvin" ]] || false
+    [[ "$output" =~ "dave" ]] || false
+    ! [[ "$output" =~ "zeek" ]] || false
+}
+
+
+@test "sql-server-remotesrv: push to remotesapi port as super user non-fast-forward" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q 'create table names (name varchar(10) primary key);'
+    dolt sql -q 'insert into names (name) values ("abe"), ("betsy"), ("calvin");'
+    dolt add names
+    dolt commit -m 'initial names.'
+
+    APIPORT=$( definePORT )
+    export DOLT_REMOTE_PASSWORD="rootpass"
+    export SQL_USER="root"
+    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT
+
+    cd ../
+    dolt clone http://localhost:$APIPORT/remote cloned_db -u root
+
+    cd remote
+    dolt sql -q 'insert into names (name) values ("zeek");' # dirty the workspace. This won't be cloned
+    dolt commit -a -m 'add Zeek.'
+
+    cd ../cloned_db
+    dolt sql -q 'insert into names values ("dave");'
+    dolt commit -am 'add dave'
+
+    run dolt push origin --user $SQL_USER main:main
+    [[ "$status" -ne 0 ]] || false
+    [[ "$output" =~ "Updates were rejected because the tip of your current branch is behind" ]] || false
+
+    cd ../remote
+    run dolt sql -q 'select * from names;'
+    [[ "$output" =~ "abe" ]] || false
+    [[ "$output" =~ "betsy" ]] || false
+    [[ "$output" =~ "calvin" ]] || false
+    ! [[ "$output" =~ "dave" ]] || false
+    [[ "$output" =~ "zeek" ]] || false
+
+    ## Now try with --force
+    cd ../cloned_db
+    run dolt push origin --force --user $SQL_USER main:main
+    [[ "$status" -eq 0 ]] || false
+
+    # NM4 - output validation
+
+    cd ../remote
+    run dolt sql -q 'select * from names;'
+    [[ "$output" =~ "abe" ]] || false
+    [[ "$output" =~ "betsy" ]] || false
+    [[ "$output" =~ "calvin" ]] || false
+    [[ "$output" =~ "dave" ]] || false
+    ! [[ "$output" =~ "zeek" ]] || false
 }
 

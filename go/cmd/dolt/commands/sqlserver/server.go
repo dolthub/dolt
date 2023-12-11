@@ -384,6 +384,7 @@ func Serve(
 				ReadOnly:       false,
 				HttpListenAddr: listenaddr,
 				GrpcListenAddr: listenaddr,
+				GrpcReadOnly:   false,
 			})
 			if err != nil {
 				lgr.Errorf("error creating SQL engine context for remotesapi server: %v", err)

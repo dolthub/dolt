@@ -57,6 +57,7 @@ type ServerArgs struct {
 
 	HttpListenAddr string
 	GrpcListenAddr string
+	GrpcReadOnly   bool
 
 	FS       filesys.Filesys
 	DBCache  DBCache
@@ -94,7 +95,7 @@ func NewServer(args ServerArgs) (*Server, error) {
 	s.grpcListenAddr = args.GrpcListenAddr
 	s.grpcSrv = grpc.NewServer(append([]grpc.ServerOption{grpc.MaxRecvMsgSize(128 * 1024 * 1024)}, args.Options...)...)
 	var chnkSt remotesapi.ChunkStoreServiceServer = NewHttpFSBackedChunkStore(args.Logger, args.HttpHost, args.DBCache, args.FS, scheme, sealer)
-	if args.ReadOnly {
+	if args.GrpcReadOnly {
 		chnkSt = ReadOnlyChunkStore{chnkSt}
 	}
 	remotesapi.RegisterChunkStoreServiceServer(s.grpcSrv, chnkSt)
