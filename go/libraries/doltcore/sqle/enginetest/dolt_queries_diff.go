@@ -4623,6 +4623,29 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "json column change",
+		SetUpScript: []string{
+			"create table t (pk int primary key, j json);",
+			`insert into t values (1, '{"test": 123}');`,
+			"call dolt_add('.')",
+			"call dolt_commit('-m', 'commit1');",
+
+			`update t set j = '{"nottest": 321}'`,
+			"call dolt_add('.')",
+			"call dolt_commit('-m', 'commit2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select column_name, diff_type from dolt_column_diff;",
+				Expected: []sql.Row{
+					{"j", "modified"},
+					{"pk", "added"},
+					{"j", "added"},
+				},
+			},
+		},
+	},
 }
 
 var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
