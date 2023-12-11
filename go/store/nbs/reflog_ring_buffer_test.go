@@ -72,32 +72,32 @@ func TestIteration(t *testing.T) {
 	assertExpectedIterationOrder(t, buffer, []string{"tttt", "uuuu", "vvvv", "wwww", "xxxx"})
 }
 
-// TestTruncateToLastRecord asserts that the TruncateToLastRecord works correctly regardless of how much data
+// TestTruncate asserts that the Truncate works correctly regardless of how much data
 // is currently stored in the buffer.
-func TestTruncateToLastRecord(t *testing.T) {
+func TestTruncate(t *testing.T) {
 	buffer := newReflogRingBuffer(5)
 
-	// When the buffer is empty, TruncateToLastRecord is a no-op
-	buffer.TruncateToLastRecord()
+	// When the buffer is empty, Truncate is a no-op
+	buffer.Truncate()
 	assertExpectedIterationOrder(t, buffer, []string{})
-	buffer.TruncateToLastRecord()
+	buffer.Truncate()
 	assertExpectedIterationOrder(t, buffer, []string{})
 
-	// When the buffer contains only a single item, TruncateToLastRecord is a no-op
+	// When the buffer contains a single item
 	insertTestRecord(buffer, "aaaa")
-	buffer.TruncateToLastRecord()
-	assertExpectedIterationOrder(t, buffer, []string{"aaaa"})
-	buffer.TruncateToLastRecord()
-	assertExpectedIterationOrder(t, buffer, []string{"aaaa"})
+	buffer.Truncate()
+	assertExpectedIterationOrder(t, buffer, []string{})
+	buffer.Truncate()
+	assertExpectedIterationOrder(t, buffer, []string{})
 
-	// When the buffer is not full, TruncateToLastRecord reduces the buffer to the most recent logical record
+	// When the buffer is not full, Truncate empties the buffer
 	insertTestRecord(buffer, "bbbb")
 	insertTestRecord(buffer, "cccc")
 	insertTestRecord(buffer, "dddd")
-	buffer.TruncateToLastRecord()
-	assertExpectedIterationOrder(t, buffer, []string{"dddd"})
+	buffer.Truncate()
+	assertExpectedIterationOrder(t, buffer, []string{})
 
-	// When the buffer is full, TruncateToLastRecord reduces the buffer to the most recent logical record
+	// When the buffer is full, Truncate empties the buffer
 	insertTestRecord(buffer, "aaaa")
 	insertTestRecord(buffer, "bbbb")
 	insertTestRecord(buffer, "cccc")
@@ -111,8 +111,8 @@ func TestTruncateToLastRecord(t *testing.T) {
 	insertTestRecord(buffer, "kkkk")
 	insertTestRecord(buffer, "llll")
 	insertTestRecord(buffer, "mmmm")
-	buffer.TruncateToLastRecord()
-	assertExpectedIterationOrder(t, buffer, []string{"mmmm"})
+	buffer.Truncate()
+	assertExpectedIterationOrder(t, buffer, []string{})
 }
 
 // TestIterationConflict asserts that when iterating through a reflog ring buffer and new items are written to the
