@@ -155,6 +155,13 @@ func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) 
 			if verr != nil {
 				return verr
 			}
+		} else {
+			if !isVersionFormattedCorrectly(latestRelease) {
+				latestRelease, verr = getLatestDoltReleaseAndRecord(path, dEnv)
+				if verr != nil {
+					return verr
+				}
+			}
 		}
 	} else {
 		latestRelease, verr = getLatestDoltReleaseAndRecord(path, dEnv)
@@ -216,4 +223,21 @@ func isOutOfDate(curVersion, latestRelease string) (bool, errhand.VerboseError) 
 	}
 
 	return false, nil
+}
+
+// isVersionFormattedCorrectly checks if the given version string is formatted correctly, i.e. is of the form
+// major.minor.patch where each part is an integer.
+func isVersionFormattedCorrectly(version string) bool {
+	versionParts := strings.Split(version, ".")
+	if len(versionParts) != 3 {
+		return false
+	}
+
+	for _, part := range versionParts {
+		if _, err := strconv.Atoi(part); err != nil {
+			return false
+		}
+	}
+
+	return true
 }
