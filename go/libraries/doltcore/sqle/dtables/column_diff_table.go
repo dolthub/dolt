@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"reflect"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -553,7 +554,7 @@ func calculateColDelta(ctx *sql.Context, ddb *doltdb.DoltDB, delta *diff.TableDe
 			toIdx := diffTableCols.TagToIdx[toColTag]
 			fromIdx := diffTableCols.TagToIdx[fromColTag]
 
-			if r[toIdx] != r[fromIdx] {
+			if !reflect.DeepEqual(r[toIdx], r[fromIdx]) {
 				colNamesSet[col] = struct{}{}
 			}
 		}
