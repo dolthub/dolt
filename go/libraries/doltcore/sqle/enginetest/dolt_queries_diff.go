@@ -4637,7 +4637,7 @@ var ColumnDiffSystemTableScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "select column_name, diff_type from dolt_column_diff;",
+				Query: "select column_name, diff_type from dolt_column_diff;",
 				Expected: []sql.Row{
 					{"j", "modified"},
 					{"pk", "added"},
