@@ -148,7 +148,7 @@ func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) 
 			return errhand.BuildDError("error: failed to read version check file").AddCause(err).Build()
 		}
 
-		latestRelease = string(vCheck)
+		latestRelease = strings.ReplaceAll(string(vCheck), "\n", "")
 		lastCheckDate, _ := dEnv.FS.LastModified(path)
 		if lastCheckDate.Before(time.Now().AddDate(0, 0, -7)) {
 			latestRelease, verr = getLatestDoltReleaseAndRecord(path, dEnv)
