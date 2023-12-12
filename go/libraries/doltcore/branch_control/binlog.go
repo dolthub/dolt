@@ -127,9 +127,9 @@ func (binlog *Binlog) Deserialize(fb *serial.BranchControlBinlog) error {
 	for i := 0; i < fb.RowsLength(); i++ {
 		serialBinlogRow := &serial.BranchControlBinlogRow{}
 		_, err := fb.TryRows(serialBinlogRow, i)
-                if err != nil {
+		if err != nil {
 			return fmt.Errorf("cannot deserialize binlog, it was created with a later version of Dolt")
-                }
+		}
 		binlog.rows[i] = BinlogRow{
 			IsInsert:    serialBinlogRow.IsInsert(),
 			Database:    string(serialBinlogRow.Database()),
