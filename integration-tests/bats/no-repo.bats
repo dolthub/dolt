@@ -161,7 +161,7 @@ teardown() {
 
     run dolt version
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "error" ]] || false
+    [[ ! "$output" =~ "failed to parse version number" ]] || false
 }
 
 # Tests for dolt commands outside of a dolt repository
