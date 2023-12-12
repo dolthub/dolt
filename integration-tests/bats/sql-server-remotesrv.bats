@@ -510,3 +510,28 @@ GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
     dolt push origin --user clone_admin_user main:main
 }
 
+@test "sql-server-remotesrv: push to remotesapi fails when server is read only" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q 'create table names (name varchar(10) primary key);'
+    dolt sql -q 'insert into names (name) values ("abe"), ("betsy"), ("calvin");'
+    dolt add names
+    dolt commit -m 'initial names.'
+
+    APIPORT=$( definePORT )
+    export DOLT_REMOTE_PASSWORD="rootpass"
+    export SQL_USER="root"
+    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT --remotesapi-readonly
+
+    cd ../
+    dolt clone http://localhost:$APIPORT/remote cloned_db -u "$SQL_USER"
+    cd cloned_db
+
+    dolt sql -q 'insert into names values ("dave");'
+    dolt commit -am 'add dave'
+
+    run dolt push origin --user "$SQL_USER" main:main
+    [[ "$status" -ne 0 ]] || false
+    [[ "$output" =~ "this server only provides read-only access" ]] || false
+}

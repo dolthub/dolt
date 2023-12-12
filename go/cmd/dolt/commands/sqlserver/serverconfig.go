@@ -163,6 +163,8 @@ type ServerConfig interface {
 	// as a dolt remote for things like `clone`, `fetch` and read
 	// replication.
 	RemotesapiPort() *int
+	// RemotesapiReadOnly is true if the remotesapi interface should be read only.
+	RemotesapiReadOnly() bool
 	// ClusterConfig is the configuration for clustering in this sql-server.
 	ClusterConfig() cluster.Config
 	// EventSchedulerStatus is the configuration for enabling or disabling the event scheduler in this server.
@@ -201,6 +203,7 @@ type commandLineServerConfig struct {
 	allowCleartextPasswords bool
 	socket                  string
 	remotesapiPort          *int
+	remotesapiReadOnly      bool
 	goldenMysqlConn         string
 	eventSchedulerStatus    string
 }
@@ -324,6 +327,10 @@ func (cfg *commandLineServerConfig) MetricsPort() int {
 
 func (cfg *commandLineServerConfig) RemotesapiPort() *int {
 	return cfg.remotesapiPort
+}
+
+func (cfg *commandLineServerConfig) RemotesapiReadOnly() bool {
+	return cfg.remotesapiReadOnly
 }
 
 func (cfg *commandLineServerConfig) ClusterConfig() cluster.Config {
@@ -473,6 +480,11 @@ func (cfg *commandLineServerConfig) WithSocket(sockFilePath string) *commandLine
 func (cfg *commandLineServerConfig) WithRemotesapiPort(port *int) *commandLineServerConfig {
 	cfg.remotesapiPort = port
 	return cfg
+}
+
+func (cfs *commandLineServerConfig) WithRemotesapiReadOnly(readonly bool) *commandLineServerConfig {
+	cfs.remotesapiReadOnly = readonly
+	return cfs
 }
 
 func (cfg *commandLineServerConfig) goldenMysqlConnectionString() string {

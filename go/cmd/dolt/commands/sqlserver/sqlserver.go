@@ -48,6 +48,7 @@ const (
 	allowCleartextPasswordsFlag = "allow-cleartext-passwords"
 	socketFlag                  = "socket"
 	remotesapiPortFlag          = "remotesapi-port"
+	remotesapiReadOnlyFlag      = "remotesapi-readonly"
 	goldenMysqlConn             = "golden"
 	eventSchedulerStatus        = "event-scheduler"
 )
@@ -109,6 +110,8 @@ SUPPORTED CONFIG FILE FIELDS:
 
 {{.EmphasisLeft}}remotesapi.port{{.EmphasisRight}}: A port to listen for remote API operations on. If set to a positive integer, this server will accept connections from clients to clone, pull, etc. databases being served.
 
+{{.EmphasisLeft}}remotesapi.read_only{{.EmphasisRight}}: Boolean flag which disables the ability to perform pushes against the server.
+
 {{.EmphasisLeft}}user_session_vars{{.EmphasisRight}}: A map of user name to a map of session variables to set on connection for each session.
 
 {{.EmphasisLeft}}cluster{{.EmphasisRight}}: Settings related to running this server in a replicated cluster. For information on setting these values, see https://docs.dolthub.com/sql-reference/server/replication
@@ -167,6 +170,7 @@ func (cmd SqlServerCmd) ArgParserWithName(name string) *argparser.ArgParser {
 	ap.SupportsString(allowCleartextPasswordsFlag, "", "allow-cleartext-passwords", "Allows use of cleartext passwords. Defaults to false.")
 	ap.SupportsOptionalString(socketFlag, "", "socket file", "Path for the unix socket file. Defaults to '/tmp/mysql.sock'.")
 	ap.SupportsUint(remotesapiPortFlag, "", "remotesapi port", "Sets the port for a server which can expose the databases in this sql-server over remotesapi, so that clients can clone or pull from this server.")
+	ap.SupportsFlag(remotesapiReadOnlyFlag, "", "Disable writes to the sql-server via the push operations. SQL writes are unaffected by this setting.")
 	ap.SupportsString(goldenMysqlConn, "", "mysql connection string", "Provides a connection string to a MySQL instance to be used to validate query results")
 	ap.SupportsString(eventSchedulerStatus, "", "status", "Determines whether the Event Scheduler is enabled and running on the server. It has one of the following values: 'ON', 'OFF' or 'DISABLED'.")
 	return ap
@@ -430,6 +434,9 @@ func getCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 	if port, ok := apr.GetInt(remotesapiPortFlag); ok {
 		config.WithRemotesapiPort(&port)
 	}
+	if _, ok := apr.GetValue(remotesapiReadOnlyFlag); ok {
+		config.WithRemotesapiReadOnly(true)
+	}
 
 	if persistenceBehavior, ok := apr.GetValue(persistenceBehaviorFlag); ok {
 		config.withPersistenceBehavior(persistenceBehavior)
@@ -456,6 +463,7 @@ func getCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 
 	if _, ok := apr.GetValue(readonlyFlag); ok {
 		config.withReadOnly(true)
+		config.WithRemotesapiReadOnly(true)
 	}
 
 	if logLevel, ok := apr.GetValue(logLevelFlag); ok {

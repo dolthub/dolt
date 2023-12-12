@@ -126,11 +126,16 @@ type MetricsYAMLConfig struct {
 }
 
 type RemotesapiYAMLConfig struct {
-	Port_ *int `yaml:"port"`
+	Port_     *int `yaml:"port"`
+	ReadOnly_ bool `yaml:"read_only"`
 }
 
 func (r RemotesapiYAMLConfig) Port() int {
 	return *r.Port_
+}
+
+func (r RemotesapiYAMLConfig) ReadOnly() bool {
+	return r.ReadOnly_
 }
 
 type UserSessionVars struct {
@@ -214,7 +219,8 @@ func serverConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
 			Port:   intPtr(cfg.MetricsPort()),
 		},
 		RemotesapiConfig: RemotesapiYAMLConfig{
-			Port_: cfg.RemotesapiPort(),
+			Port_:     cfg.RemotesapiPort(),
+			ReadOnly_: cfg.RemotesapiReadOnly(),
 		},
 		ClusterCfg:        clusterConfigAsYAMLConfig(cfg.ClusterConfig()),
 		PrivilegeFile:     strPtr(cfg.PrivilegeFilePath()),
@@ -411,6 +417,10 @@ func (cfg YAMLConfig) MetricsPort() int {
 
 func (cfg YAMLConfig) RemotesapiPort() *int {
 	return cfg.RemotesapiConfig.Port_
+}
+
+func (cfg YAMLConfig) RemotesapiReadOnly() bool {
+	return cfg.RemotesapiConfig.ReadOnly_
 }
 
 // PrivilegeFilePath returns the path to the file which contains all needed privilege information in the form of a
