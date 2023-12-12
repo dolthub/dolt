@@ -50,11 +50,7 @@ insert into vals (i) values (6), (7), (8), (9), (10);
 call dolt_commit('-am', 'add some vals');
 "
 
-    run dolt pull
-    echo "------------------------ NM4 "
-    echo "$output"
-    echo "************************"
-    [[ "$status" -eq 0 ]] || false
+    dolt pull
 
     run dolt sql -q 'select count(*) from vals;'
     [[ "$output" =~ "10" ]] || false
@@ -86,28 +82,6 @@ call dolt_commit('-m', 'add some vals');
     [[ "$output" =~ "vals" ]] || false
     run dolt sql -q 'select count(*) from vals'
     [[ "$output" =~ "5" ]] || false
-}
-
-@test "sql-server-remotesrv: the remotesapi server rejects writes" {
-    skip "This will be updated to ensure that if we disable write, they get rejected. NM4"
-    mkdir -p db/remote
-    cd db/remote
-    dolt init
-    dolt sql -q 'create table vals (i int);'
-    dolt add vals
-    dolt commit -m 'create vals table.'
-
-    dolt sql-server --remotesapi-port 50051 &
-    srv_pid=$!
-    cd ../../
-
-    dolt clone http://localhost:50051/remote remote_cloned
-
-    cd remote_cloned
-    dolt sql -q 'insert into vals values (1), (2), (3), (4), (5);'
-    dolt commit -am 'insert some values'
-    run dolt push origin main:main
-    [[ "$status" != 0 ]] || false
 }
 
 @test "sql-server-remotesrv: remotesapi listen error stops process" {
@@ -206,7 +180,7 @@ call dolt_commit('-am', 'add some vals');
     # No auth fetch
     run dolt fetch
     [[ "$status" != 0 ]] || false
-    [[ "$output" =~ "Access denied for user 'root'" ]] || false # NM4 - why is this the error we get??
+    [[ "$output" =~ "Access denied for user 'root'" ]] || false
 
     # # With auth fetch
     run dolt fetch --user $DOLT_REMOTE_USER
@@ -232,13 +206,8 @@ call dolt_commit('-am', 'add one val');
     [[ "$output" =~ "Access denied for user 'root'" ]] || false
 
     # With auth pull
-    run dolt pull --user $DOLT_REMOTE_USER
+    dolt pull --user $DOLT_REMOTE_USER
 
-    echo "--------------------- NM4"
-    echo "$output"
-    echo "*********************"
-
-    [[ "$status" -eq 0 ]] || false
     run dolt sql -q 'select count(*) from vals;'
     [[ "$output" =~ "11" ]] || false
 }
@@ -394,9 +363,6 @@ call dolt_commit('-am', 'add one val');"
     run dolt push origin --user $SQL_USER main:main
     [[ "$status" -eq 0 ]] || false
 
-    # NM4 - should output validation be done here?
-
-    cd ../remote
     run dolt sql -q 'select * from names;'
     [[ "$output" =~ "abe" ]] || false
     [[ "$output" =~ "betsy" ]] || false
@@ -495,8 +461,6 @@ call dolt_commit('-am', 'add one val');"
     run dolt push origin --force --user $SQL_USER main:main
     [[ "$status" -eq 0 ]] || false
 
-    # NM4 - output validation
-
     cd ../remote
     run dolt sql -q 'select * from names;'
     [[ "$output" =~ "abe" ]] || false
@@ -504,5 +468,45 @@ call dolt_commit('-am', 'add one val');"
     [[ "$output" =~ "calvin" ]] || false
     [[ "$output" =~ "dave" ]] || false
     ! [[ "$output" =~ "zeek" ]] || false
+}
+
+@test "sql-server-remotesrv: push to remoteapi port as non-super user rejected" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q 'create table names (name varchar(10) primary key);'
+    dolt sql -q 'insert into names (name) values ("abe"), ("betsy"), ("calvin");'
+    dolt add names
+    dolt commit -m 'initial names.'
+
+    APIPORT=$( definePORT )
+    export DOLT_REMOTE_PASSWORD="rootpass"
+    export SQL_USER="root"
+    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT
+
+    dolt sql -q "
+CREATE USER clone_admin_user@'localhost' IDENTIFIED BY 'pass1';
+GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
+"
+    export DOLT_REMOTE_PASSWORD="pass1"
+    unset SQL_USER
+
+    cd ../
+    dolt clone --user clone_admin_user http://localhost:$APIPORT/remote cloned_db
+    cd cloned_db
+
+    dolt sql -q 'insert into names values ("dave");'
+    dolt commit -am 'add dave'
+
+    run dolt push origin --user clone_admin_user main:main
+    [[ "$status" -ne 0 ]] || false
+    [[ "$output" =~ "clone_admin_user has not been granted SuperUser access" ]] || false
+
+    # Give that user superpowers.
+    cd ../remote
+    dolt sql -q "GRANT ALL PRIVILEGES ON *.* TO 'clone_admin_user'@'localhost' WITH GRANT OPTION"
+    cd ../cloned_db
+
+    dolt push origin --user clone_admin_user main:main
 }
 
