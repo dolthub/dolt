@@ -343,7 +343,7 @@ func testPuller(t *testing.T, makeDB datasFactory) {
 
 			sinkDS, err := sinkdb.GetDataset(ctx, "ds")
 			require.NoError(t, err)
-			sinkDS, err = sinkdb.FastForward(ctx, sinkDS, rootAddr)
+			sinkDS, err = sinkdb.FastForward(ctx, sinkDS, rootAddr, "")
 			require.NoError(t, err)
 
 			require.NoError(t, err)
