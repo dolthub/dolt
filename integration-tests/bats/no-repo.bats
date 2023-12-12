@@ -161,7 +161,7 @@ teardown() {
 
     run dolt version
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 1 ]
+    [[ ! "$output" =~ "error" ]] || false
 }
 
 # Tests for dolt commands outside of a dolt repository
