@@ -27,6 +27,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/oracle/oci-go-sdk/v65/common"
+	"github.com/oracle/oci-go-sdk/v65/objectstorage"
 	"net/url"
 	"os"
 	"os/user"
@@ -312,6 +314,8 @@ func (sp Spec) NewChunkStore(ctx context.Context) chunks.ChunkStore {
 		return parseAWSSpec(ctx, sp.Href(), sp.Options)
 	case "gs":
 		return parseGCSSpec(ctx, sp.Href(), sp.Options)
+	case "oci":
+		return parseOCISpec(ctx, sp.Href(), sp.Options)
 	case "nbs":
 		cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
 		d.PanicIfError(err)
@@ -392,6 +396,28 @@ func parseGCSSpec(ctx context.Context, gcsURL string, options SpecOptions) chunk
 	return cs
 }
 
+func parseOCISpec(ctx context.Context, ociURL string, options SpecOptions) chunks.ChunkStore {
+	u, err := url.Parse(ociURL)
+	d.PanicIfError(err)
+
+	fmt.Println(u)
+
+	bucket := u.Host
+	path := u.Path
+
+	provider := common.DefaultConfigProvider()
+
+	client, err := objectstorage.NewObjectStorageClientWithConfigurationProvider(provider)
+	if err != nil {
+		panic("Could not create OCIBlobstore")
+	}
+
+	cs, err := nbs.NewOCISStore(ctx, types.Format_Default.VersionString(), bucket, path, provider, client, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
+	d.PanicIfError(err)
+
+	return cs
+}
+
 // GetDataset returns the current Dataset instance for this Spec's Database.
 // GetDataset is live, so if Commit is called on this Spec's Database later, a
 // new up-to-date Dataset will returned on the next call to GetDataset.  If
@@ -423,7 +449,7 @@ func (sp Spec) GetValue(ctx context.Context) (val types.Value, err error) {
 // an empty string.
 func (sp Spec) Href() string {
 	switch proto := sp.Protocol; proto {
-	case "http", "https", "aws", "gs":
+	case "http", "https", "aws", "gs", "oci":
 		return proto + ":" + sp.DatabaseName
 	default:
 		return ""
@@ -449,6 +475,11 @@ func (sp Spec) createDatabase(ctx context.Context) (datas.Database, types.ValueR
 		return datas.NewTypesDatabase(vrw, ns), vrw, ns
 	case "gs":
 		cs := parseGCSSpec(ctx, sp.Href(), sp.Options)
+		ns := tree.NewNodeStore(cs)
+		vrw := types.NewValueStore(cs)
+		return datas.NewTypesDatabase(vrw, ns), vrw, ns
+	case "oci":
+		cs := parseOCISpec(ctx, sp.Href(), sp.Options)
 		ns := tree.NewNodeStore(cs)
 		vrw := types.NewValueStore(cs)
 		return datas.NewTypesDatabase(vrw, ns), vrw, ns
@@ -560,7 +591,7 @@ func parseDatabaseSpec(spec string) (protocol, name string, err error) {
 	case "nbs":
 		protocol, name = parts[0], parts[1]
 
-	case "aws", "gs":
+	case "aws", "gs", "oci":
 		u, perr := url.Parse(spec)
 		if perr != nil {
 			err = perr

@@ -33,6 +33,9 @@ const (
 	// GSScheme
 	GSScheme = "gs"
 
+	// OCIScheme
+	OCIScheme = "oci"
+
 	// FileScheme
 	FileScheme = "file"
 
@@ -69,6 +72,7 @@ var DBFactories = map[string]DBFactory{
 	AWSScheme:     AWSFactory{},
 	OSSScheme:     OSSFactory{},
 	GSScheme:      GSFactory{},
+	OCIScheme:     OCIFactory{},
 	FileScheme:    FileFactory{},
 	MemScheme:     MemFactory{},
 	LocalBSScheme: LocalBSFactory{},

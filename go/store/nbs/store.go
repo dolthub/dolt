@@ -24,6 +24,8 @@ package nbs
 import (
 	"context"
 	"fmt"
+	"github.com/oracle/oci-go-sdk/v65/common"
+	"github.com/oracle/oci-go-sdk/v65/objectstorage"
 	"io"
 	"os"
 	"path/filepath"
@@ -536,6 +538,14 @@ func NewGCSStore(ctx context.Context, nbfVerStr string, bucketName, path string,
 	return NewBSStore(ctx, nbfVerStr, bs, memTableSize, q)
 }
 
+// NewGCSStore returns an nbs implementation backed by a GCSBlobstore
+func NewOCISStore(ctx context.Context, nbfVerStr string, bucketName, path string, provider common.ConfigurationProvider, client objectstorage.ObjectStorageClient, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+	cacheOnce.Do(makeGlobalCaches)
+
+	bs := blobstore.NewOCIBlobstore(provider, client, bucketName, path)
+	return NewNoConjoinBSStore(ctx, nbfVerStr, bs, memTableSize, q)
+}
+
 // NewBSStore returns an nbs implementation backed by a Blobstore
 func NewBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
@@ -544,6 +554,16 @@ func NewBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, m
 
 	p := &blobstorePersister{bs, s3BlockSize, q}
 	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
+}
+
+// NewNoConjoinBSStore returns a nbs implementation backed by a Blobstore
+func NewNoConjoinBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+	cacheOnce.Do(makeGlobalCaches)
+
+	mm := makeManifestManager(blobstoreManifest{bs})
+
+	p := &noConjoinBlobstorePersister{bs, s3BlockSize, q}
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, noopConjoiner{}, memTableSize)
 }
 
 func NewLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
