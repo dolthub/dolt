@@ -1234,10 +1234,10 @@ func TestColumnDefaults(t *testing.T) {
 	enginetest.TestColumnDefaults(t, h)
 }
 
-func TestOnUpdateTimestamp(t *testing.T) {
+func TestOnUpdateExprScripts(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestOnUpdateTimestamp(t, h)
+	enginetest.TestOnUpdateExprScripts(t, h)
 }
 
 func TestAlterTable(t *testing.T) {
