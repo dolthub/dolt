@@ -26,11 +26,7 @@ type BranchControl struct {
 
 func InitBranchControlRoot(o *BranchControl, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	o.Init(buf, n+offset)
-	if BranchControlNumFields < o.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
+	return o.Init(buf, n+offset)
 }
 
 func TryGetRootAsBranchControl(buf []byte, offset flatbuffers.UOffsetT) (*BranchControl, error) {
@@ -38,43 +34,22 @@ func TryGetRootAsBranchControl(buf []byte, offset flatbuffers.UOffsetT) (*Branch
 	return x, InitBranchControlRoot(x, buf, offset)
 }
 
-func GetRootAsBranchControl(buf []byte, offset flatbuffers.UOffsetT) *BranchControl {
-	x := &BranchControl{}
-	InitBranchControlRoot(x, buf, offset)
-	return x
-}
-
 func TryGetSizePrefixedRootAsBranchControl(buf []byte, offset flatbuffers.UOffsetT) (*BranchControl, error) {
 	x := &BranchControl{}
 	return x, InitBranchControlRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsBranchControl(buf []byte, offset flatbuffers.UOffsetT) *BranchControl {
-	x := &BranchControl{}
-	InitBranchControlRoot(x, buf, offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *BranchControl) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *BranchControl) Init(buf []byte, i flatbuffers.UOffsetT) error {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
+	if BranchControlNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
 }
 
 func (rcv *BranchControl) Table() flatbuffers.Table {
 	return rcv._tab
-}
-
-func (rcv *BranchControl) AccessTbl(obj *BranchControlAccess) *BranchControlAccess {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
-	if o != 0 {
-		x := rcv._tab.Indirect(o + rcv._tab.Pos)
-		if obj == nil {
-			obj = new(BranchControlAccess)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		return obj
-	}
-	return nil
 }
 
 func (rcv *BranchControl) TryAccessTbl(obj *BranchControlAccess) (*BranchControlAccess, error) {
@@ -91,19 +66,6 @@ func (rcv *BranchControl) TryAccessTbl(obj *BranchControlAccess) (*BranchControl
 		return obj, nil
 	}
 	return nil, nil
-}
-
-func (rcv *BranchControl) NamespaceTbl(obj *BranchControlNamespace) *BranchControlNamespace {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		x := rcv._tab.Indirect(o + rcv._tab.Pos)
-		if obj == nil {
-			obj = new(BranchControlNamespace)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		return obj
-	}
-	return nil
 }
 
 func (rcv *BranchControl) TryNamespaceTbl(obj *BranchControlNamespace) (*BranchControlNamespace, error) {
@@ -143,11 +105,7 @@ type BranchControlAccess struct {
 
 func InitBranchControlAccessRoot(o *BranchControlAccess, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	o.Init(buf, n+offset)
-	if BranchControlAccessNumFields < o.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
+	return o.Init(buf, n+offset)
 }
 
 func TryGetRootAsBranchControlAccess(buf []byte, offset flatbuffers.UOffsetT) (*BranchControlAccess, error) {
@@ -155,43 +113,22 @@ func TryGetRootAsBranchControlAccess(buf []byte, offset flatbuffers.UOffsetT) (*
 	return x, InitBranchControlAccessRoot(x, buf, offset)
 }
 
-func GetRootAsBranchControlAccess(buf []byte, offset flatbuffers.UOffsetT) *BranchControlAccess {
-	x := &BranchControlAccess{}
-	InitBranchControlAccessRoot(x, buf, offset)
-	return x
-}
-
 func TryGetSizePrefixedRootAsBranchControlAccess(buf []byte, offset flatbuffers.UOffsetT) (*BranchControlAccess, error) {
 	x := &BranchControlAccess{}
 	return x, InitBranchControlAccessRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsBranchControlAccess(buf []byte, offset flatbuffers.UOffsetT) *BranchControlAccess {
-	x := &BranchControlAccess{}
-	InitBranchControlAccessRoot(x, buf, offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *BranchControlAccess) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *BranchControlAccess) Init(buf []byte, i flatbuffers.UOffsetT) error {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
+	if BranchControlAccessNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
 }
 
 func (rcv *BranchControlAccess) Table() flatbuffers.Table {
 	return rcv._tab
-}
-
-func (rcv *BranchControlAccess) Binlog(obj *BranchControlBinlog) *BranchControlBinlog {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
-	if o != 0 {
-		x := rcv._tab.Indirect(o + rcv._tab.Pos)
-		if obj == nil {
-			obj = new(BranchControlBinlog)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		return obj
-	}
-	return nil
 }
 
 func (rcv *BranchControlAccess) TryBinlog(obj *BranchControlBinlog) (*BranchControlBinlog, error) {
@@ -208,18 +145,6 @@ func (rcv *BranchControlAccess) TryBinlog(obj *BranchControlBinlog) (*BranchCont
 		return obj, nil
 	}
 	return nil, nil
-}
-
-func (rcv *BranchControlAccess) Databases(obj *BranchControlMatchExpression, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		x := rcv._tab.Vector(o)
-		x += flatbuffers.UOffsetT(j) * 4
-		x = rcv._tab.Indirect(x)
-		obj.Init(rcv._tab.Bytes, x)
-		return true
-	}
-	return false
 }
 
 func (rcv *BranchControlAccess) TryDatabases(obj *BranchControlMatchExpression, j int) (bool, error) {
@@ -245,18 +170,6 @@ func (rcv *BranchControlAccess) DatabasesLength() int {
 	return 0
 }
 
-func (rcv *BranchControlAccess) Branches(obj *BranchControlMatchExpression, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
-	if o != 0 {
-		x := rcv._tab.Vector(o)
-		x += flatbuffers.UOffsetT(j) * 4
-		x = rcv._tab.Indirect(x)
-		obj.Init(rcv._tab.Bytes, x)
-		return true
-	}
-	return false
-}
-
 func (rcv *BranchControlAccess) TryBranches(obj *BranchControlMatchExpression, j int) (bool, error) {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
@@ -278,18 +191,6 @@ func (rcv *BranchControlAccess) BranchesLength() int {
 		return rcv._tab.VectorLen(o)
 	}
 	return 0
-}
-
-func (rcv *BranchControlAccess) Users(obj *BranchControlMatchExpression, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
-	if o != 0 {
-		x := rcv._tab.Vector(o)
-		x += flatbuffers.UOffsetT(j) * 4
-		x = rcv._tab.Indirect(x)
-		obj.Init(rcv._tab.Bytes, x)
-		return true
-	}
-	return false
 }
 
 func (rcv *BranchControlAccess) TryUsers(obj *BranchControlMatchExpression, j int) (bool, error) {
@@ -315,18 +216,6 @@ func (rcv *BranchControlAccess) UsersLength() int {
 	return 0
 }
 
-func (rcv *BranchControlAccess) Hosts(obj *BranchControlMatchExpression, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
-	if o != 0 {
-		x := rcv._tab.Vector(o)
-		x += flatbuffers.UOffsetT(j) * 4
-		x = rcv._tab.Indirect(x)
-		obj.Init(rcv._tab.Bytes, x)
-		return true
-	}
-	return false
-}
-
 func (rcv *BranchControlAccess) TryHosts(obj *BranchControlMatchExpression, j int) (bool, error) {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
@@ -348,18 +237,6 @@ func (rcv *BranchControlAccess) HostsLength() int {
 		return rcv._tab.VectorLen(o)
 	}
 	return 0
-}
-
-func (rcv *BranchControlAccess) Values(obj *BranchControlAccessValue, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
-	if o != 0 {
-		x := rcv._tab.Vector(o)
-		x += flatbuffers.UOffsetT(j) * 4
-		x = rcv._tab.Indirect(x)
-		obj.Init(rcv._tab.Bytes, x)
-		return true
-	}
-	return false
 }
 
 func (rcv *BranchControlAccess) TryValues(obj *BranchControlAccessValue, j int) (bool, error) {
@@ -433,11 +310,7 @@ type BranchControlAccessValue struct {
 
 func InitBranchControlAccessValueRoot(o *BranchControlAccessValue, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	o.Init(buf, n+offset)
-	if BranchControlAccessValueNumFields < o.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
+	return o.Init(buf, n+offset)
 }
 
 func TryGetRootAsBranchControlAccessValue(buf []byte, offset flatbuffers.UOffsetT) (*BranchControlAccessValue, error) {
@@ -445,26 +318,18 @@ func TryGetRootAsBranchControlAccessValue(buf []byte, offset flatbuffers.UOffset
 	return x, InitBranchControlAccessValueRoot(x, buf, offset)
 }
 
-func GetRootAsBranchControlAccessValue(buf []byte, offset flatbuffers.UOffsetT) *BranchControlAccessValue {
-	x := &BranchControlAccessValue{}
-	InitBranchControlAccessValueRoot(x, buf, offset)
-	return x
-}
-
 func TryGetSizePrefixedRootAsBranchControlAccessValue(buf []byte, offset flatbuffers.UOffsetT) (*BranchControlAccessValue, error) {
 	x := &BranchControlAccessValue{}
 	return x, InitBranchControlAccessValueRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsBranchControlAccessValue(buf []byte, offset flatbuffers.UOffsetT) *BranchControlAccessValue {
-	x := &BranchControlAccessValue{}
-	InitBranchControlAccessValueRoot(x, buf, offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *BranchControlAccessValue) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *BranchControlAccessValue) Init(buf []byte, i flatbuffers.UOffsetT) error {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
+	if BranchControlAccessValueNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
 }
 
 func (rcv *BranchControlAccessValue) Table() flatbuffers.Table {
@@ -545,11 +410,7 @@ type BranchControlNamespace struct {
 
 func InitBranchControlNamespaceRoot(o *BranchControlNamespace, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	o.Init(buf, n+offset)
-	if BranchControlNamespaceNumFields < o.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
+	return o.Init(buf, n+offset)
 }
 
 func TryGetRootAsBranchControlNamespace(buf []byte, offset flatbuffers.UOffsetT) (*BranchControlNamespace, error) {
@@ -557,43 +418,22 @@ func TryGetRootAsBranchControlNamespace(buf []byte, offset flatbuffers.UOffsetT)
 	return x, InitBranchControlNamespaceRoot(x, buf, offset)
 }
 
-func GetRootAsBranchControlNamespace(buf []byte, offset flatbuffers.UOffsetT) *BranchControlNamespace {
-	x := &BranchControlNamespace{}
-	InitBranchControlNamespaceRoot(x, buf, offset)
-	return x
-}
-
 func TryGetSizePrefixedRootAsBranchControlNamespace(buf []byte, offset flatbuffers.UOffsetT) (*BranchControlNamespace, error) {
 	x := &BranchControlNamespace{}
 	return x, InitBranchControlNamespaceRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsBranchControlNamespace(buf []byte, offset flatbuffers.UOffsetT) *BranchControlNamespace {
-	x := &BranchControlNamespace{}
-	InitBranchControlNamespaceRoot(x, buf, offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *BranchControlNamespace) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *BranchControlNamespace) Init(buf []byte, i flatbuffers.UOffsetT) error {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
+	if BranchControlNamespaceNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
 }
 
 func (rcv *BranchControlNamespace) Table() flatbuffers.Table {
 	return rcv._tab
-}
-
-func (rcv *BranchControlNamespace) Binlog(obj *BranchControlBinlog) *BranchControlBinlog {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
-	if o != 0 {
-		x := rcv._tab.Indirect(o + rcv._tab.Pos)
-		if obj == nil {
-			obj = new(BranchControlBinlog)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		return obj
-	}
-	return nil
 }
 
 func (rcv *BranchControlNamespace) TryBinlog(obj *BranchControlBinlog) (*BranchControlBinlog, error) {
@@ -610,18 +450,6 @@ func (rcv *BranchControlNamespace) TryBinlog(obj *BranchControlBinlog) (*BranchC
 		return obj, nil
 	}
 	return nil, nil
-}
-
-func (rcv *BranchControlNamespace) Databases(obj *BranchControlMatchExpression, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		x := rcv._tab.Vector(o)
-		x += flatbuffers.UOffsetT(j) * 4
-		x = rcv._tab.Indirect(x)
-		obj.Init(rcv._tab.Bytes, x)
-		return true
-	}
-	return false
 }
 
 func (rcv *BranchControlNamespace) TryDatabases(obj *BranchControlMatchExpression, j int) (bool, error) {
@@ -647,18 +475,6 @@ func (rcv *BranchControlNamespace) DatabasesLength() int {
 	return 0
 }
 
-func (rcv *BranchControlNamespace) Branches(obj *BranchControlMatchExpression, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
-	if o != 0 {
-		x := rcv._tab.Vector(o)
-		x += flatbuffers.UOffsetT(j) * 4
-		x = rcv._tab.Indirect(x)
-		obj.Init(rcv._tab.Bytes, x)
-		return true
-	}
-	return false
-}
-
 func (rcv *BranchControlNamespace) TryBranches(obj *BranchControlMatchExpression, j int) (bool, error) {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
@@ -680,18 +496,6 @@ func (rcv *BranchControlNamespace) BranchesLength() int {
 		return rcv._tab.VectorLen(o)
 	}
 	return 0
-}
-
-func (rcv *BranchControlNamespace) Users(obj *BranchControlMatchExpression, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
-	if o != 0 {
-		x := rcv._tab.Vector(o)
-		x += flatbuffers.UOffsetT(j) * 4
-		x = rcv._tab.Indirect(x)
-		obj.Init(rcv._tab.Bytes, x)
-		return true
-	}
-	return false
 }
 
 func (rcv *BranchControlNamespace) TryUsers(obj *BranchControlMatchExpression, j int) (bool, error) {
@@ -717,18 +521,6 @@ func (rcv *BranchControlNamespace) UsersLength() int {
 	return 0
 }
 
-func (rcv *BranchControlNamespace) Hosts(obj *BranchControlMatchExpression, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
-	if o != 0 {
-		x := rcv._tab.Vector(o)
-		x += flatbuffers.UOffsetT(j) * 4
-		x = rcv._tab.Indirect(x)
-		obj.Init(rcv._tab.Bytes, x)
-		return true
-	}
-	return false
-}
-
 func (rcv *BranchControlNamespace) TryHosts(obj *BranchControlMatchExpression, j int) (bool, error) {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
@@ -750,18 +542,6 @@ func (rcv *BranchControlNamespace) HostsLength() int {
 		return rcv._tab.VectorLen(o)
 	}
 	return 0
-}
-
-func (rcv *BranchControlNamespace) Values(obj *BranchControlNamespaceValue, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
-	if o != 0 {
-		x := rcv._tab.Vector(o)
-		x += flatbuffers.UOffsetT(j) * 4
-		x = rcv._tab.Indirect(x)
-		obj.Init(rcv._tab.Bytes, x)
-		return true
-	}
-	return false
 }
 
 func (rcv *BranchControlNamespace) TryValues(obj *BranchControlNamespaceValue, j int) (bool, error) {
@@ -835,11 +615,7 @@ type BranchControlNamespaceValue struct {
 
 func InitBranchControlNamespaceValueRoot(o *BranchControlNamespaceValue, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	o.Init(buf, n+offset)
-	if BranchControlNamespaceValueNumFields < o.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
+	return o.Init(buf, n+offset)
 }
 
 func TryGetRootAsBranchControlNamespaceValue(buf []byte, offset flatbuffers.UOffsetT) (*BranchControlNamespaceValue, error) {
@@ -847,26 +623,18 @@ func TryGetRootAsBranchControlNamespaceValue(buf []byte, offset flatbuffers.UOff
 	return x, InitBranchControlNamespaceValueRoot(x, buf, offset)
 }
 
-func GetRootAsBranchControlNamespaceValue(buf []byte, offset flatbuffers.UOffsetT) *BranchControlNamespaceValue {
-	x := &BranchControlNamespaceValue{}
-	InitBranchControlNamespaceValueRoot(x, buf, offset)
-	return x
-}
-
 func TryGetSizePrefixedRootAsBranchControlNamespaceValue(buf []byte, offset flatbuffers.UOffsetT) (*BranchControlNamespaceValue, error) {
 	x := &BranchControlNamespaceValue{}
 	return x, InitBranchControlNamespaceValueRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsBranchControlNamespaceValue(buf []byte, offset flatbuffers.UOffsetT) *BranchControlNamespaceValue {
-	x := &BranchControlNamespaceValue{}
-	InitBranchControlNamespaceValueRoot(x, buf, offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *BranchControlNamespaceValue) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *BranchControlNamespaceValue) Init(buf []byte, i flatbuffers.UOffsetT) error {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
+	if BranchControlNamespaceValueNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
 }
 
 func (rcv *BranchControlNamespaceValue) Table() flatbuffers.Table {
@@ -932,11 +700,7 @@ type BranchControlBinlog struct {
 
 func InitBranchControlBinlogRoot(o *BranchControlBinlog, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	o.Init(buf, n+offset)
-	if BranchControlBinlogNumFields < o.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
+	return o.Init(buf, n+offset)
 }
 
 func TryGetRootAsBranchControlBinlog(buf []byte, offset flatbuffers.UOffsetT) (*BranchControlBinlog, error) {
@@ -944,42 +708,22 @@ func TryGetRootAsBranchControlBinlog(buf []byte, offset flatbuffers.UOffsetT) (*
 	return x, InitBranchControlBinlogRoot(x, buf, offset)
 }
 
-func GetRootAsBranchControlBinlog(buf []byte, offset flatbuffers.UOffsetT) *BranchControlBinlog {
-	x := &BranchControlBinlog{}
-	InitBranchControlBinlogRoot(x, buf, offset)
-	return x
-}
-
 func TryGetSizePrefixedRootAsBranchControlBinlog(buf []byte, offset flatbuffers.UOffsetT) (*BranchControlBinlog, error) {
 	x := &BranchControlBinlog{}
 	return x, InitBranchControlBinlogRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsBranchControlBinlog(buf []byte, offset flatbuffers.UOffsetT) *BranchControlBinlog {
-	x := &BranchControlBinlog{}
-	InitBranchControlBinlogRoot(x, buf, offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *BranchControlBinlog) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *BranchControlBinlog) Init(buf []byte, i flatbuffers.UOffsetT) error {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
+	if BranchControlBinlogNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
 }
 
 func (rcv *BranchControlBinlog) Table() flatbuffers.Table {
 	return rcv._tab
-}
-
-func (rcv *BranchControlBinlog) Rows(obj *BranchControlBinlogRow, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
-	if o != 0 {
-		x := rcv._tab.Vector(o)
-		x += flatbuffers.UOffsetT(j) * 4
-		x = rcv._tab.Indirect(x)
-		obj.Init(rcv._tab.Bytes, x)
-		return true
-	}
-	return false
 }
 
 func (rcv *BranchControlBinlog) TryRows(obj *BranchControlBinlogRow, j int) (bool, error) {
@@ -1026,11 +770,7 @@ type BranchControlBinlogRow struct {
 
 func InitBranchControlBinlogRowRoot(o *BranchControlBinlogRow, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	o.Init(buf, n+offset)
-	if BranchControlBinlogRowNumFields < o.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
+	return o.Init(buf, n+offset)
 }
 
 func TryGetRootAsBranchControlBinlogRow(buf []byte, offset flatbuffers.UOffsetT) (*BranchControlBinlogRow, error) {
@@ -1038,26 +778,18 @@ func TryGetRootAsBranchControlBinlogRow(buf []byte, offset flatbuffers.UOffsetT)
 	return x, InitBranchControlBinlogRowRoot(x, buf, offset)
 }
 
-func GetRootAsBranchControlBinlogRow(buf []byte, offset flatbuffers.UOffsetT) *BranchControlBinlogRow {
-	x := &BranchControlBinlogRow{}
-	InitBranchControlBinlogRowRoot(x, buf, offset)
-	return x
-}
-
 func TryGetSizePrefixedRootAsBranchControlBinlogRow(buf []byte, offset flatbuffers.UOffsetT) (*BranchControlBinlogRow, error) {
 	x := &BranchControlBinlogRow{}
 	return x, InitBranchControlBinlogRowRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsBranchControlBinlogRow(buf []byte, offset flatbuffers.UOffsetT) *BranchControlBinlogRow {
-	x := &BranchControlBinlogRow{}
-	InitBranchControlBinlogRowRoot(x, buf, offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *BranchControlBinlogRow) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *BranchControlBinlogRow) Init(buf []byte, i flatbuffers.UOffsetT) error {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
+	if BranchControlBinlogRowNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
 }
 
 func (rcv *BranchControlBinlogRow) Table() flatbuffers.Table {
@@ -1153,11 +885,7 @@ type BranchControlMatchExpression struct {
 
 func InitBranchControlMatchExpressionRoot(o *BranchControlMatchExpression, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	o.Init(buf, n+offset)
-	if BranchControlMatchExpressionNumFields < o.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
+	return o.Init(buf, n+offset)
 }
 
 func TryGetRootAsBranchControlMatchExpression(buf []byte, offset flatbuffers.UOffsetT) (*BranchControlMatchExpression, error) {
@@ -1165,26 +893,18 @@ func TryGetRootAsBranchControlMatchExpression(buf []byte, offset flatbuffers.UOf
 	return x, InitBranchControlMatchExpressionRoot(x, buf, offset)
 }
 
-func GetRootAsBranchControlMatchExpression(buf []byte, offset flatbuffers.UOffsetT) *BranchControlMatchExpression {
-	x := &BranchControlMatchExpression{}
-	InitBranchControlMatchExpressionRoot(x, buf, offset)
-	return x
-}
-
 func TryGetSizePrefixedRootAsBranchControlMatchExpression(buf []byte, offset flatbuffers.UOffsetT) (*BranchControlMatchExpression, error) {
 	x := &BranchControlMatchExpression{}
 	return x, InitBranchControlMatchExpressionRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsBranchControlMatchExpression(buf []byte, offset flatbuffers.UOffsetT) *BranchControlMatchExpression {
-	x := &BranchControlMatchExpression{}
-	InitBranchControlMatchExpressionRoot(x, buf, offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *BranchControlMatchExpression) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *BranchControlMatchExpression) Init(buf []byte, i flatbuffers.UOffsetT) error {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
+	if BranchControlMatchExpressionNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
 }
 
 func (rcv *BranchControlMatchExpression) Table() flatbuffers.Table {
