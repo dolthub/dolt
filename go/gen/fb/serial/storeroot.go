@@ -26,11 +26,7 @@ type StoreRoot struct {
 
 func InitStoreRootRoot(o *StoreRoot, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	o.Init(buf, n+offset)
-	if StoreRootNumFields < o.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
+	return o.Init(buf, n+offset)
 }
 
 func TryGetRootAsStoreRoot(buf []byte, offset flatbuffers.UOffsetT) (*StoreRoot, error) {
@@ -38,26 +34,18 @@ func TryGetRootAsStoreRoot(buf []byte, offset flatbuffers.UOffsetT) (*StoreRoot,
 	return x, InitStoreRootRoot(x, buf, offset)
 }
 
-func GetRootAsStoreRoot(buf []byte, offset flatbuffers.UOffsetT) *StoreRoot {
-	x := &StoreRoot{}
-	InitStoreRootRoot(x, buf, offset)
-	return x
-}
-
 func TryGetSizePrefixedRootAsStoreRoot(buf []byte, offset flatbuffers.UOffsetT) (*StoreRoot, error) {
 	x := &StoreRoot{}
 	return x, InitStoreRootRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsStoreRoot(buf []byte, offset flatbuffers.UOffsetT) *StoreRoot {
-	x := &StoreRoot{}
-	InitStoreRootRoot(x, buf, offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *StoreRoot) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *StoreRoot) Init(buf []byte, i flatbuffers.UOffsetT) error {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
+	if StoreRootNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
 }
 
 func (rcv *StoreRoot) Table() flatbuffers.Table {
