@@ -247,7 +247,7 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 		serial.ColumnAddNullable(b, col.IsNullable())
 		serial.ColumnAddGenerated(b, col.Generated != "")
 		serial.ColumnAddVirtual(b, col.Virtual)
-		serial.ColumnAddOnupdateValue(b, ou)
+		serial.ColumnAddOnUpdateValue(b, ou)
 		serial.ColumnAddHidden(b, false)
 		offs[i] = serial.ColumnEnd(b)
 	}
@@ -334,8 +334,8 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 			}
 		}
 
-		if c.OnupdateValue() != nil {
-			onUpdateVal = string(c.OnupdateValue())
+		if c.OnUpdateValue() != nil {
+			onUpdateVal = string(c.OnUpdateValue())
 		}
 
 		cols[i] = schema.Column{

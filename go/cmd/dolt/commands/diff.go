@@ -886,7 +886,7 @@ func schemaFromCreateTableStmt(createTableStmt string) (schema.Schema, error) {
 		}
 	}
 
-	cols := []schema.Column{}
+	var cols []schema.Column
 	for _, col := range create.TableSpec.Columns {
 		internalTyp, err := types.ColumnTypeToType(&col.Type)
 		typeInfo, err := typeinfo.FromSqlType(internalTyp)
@@ -898,19 +898,31 @@ func schemaFromCreateTableStmt(createTableStmt string) (schema.Schema, error) {
 		if col.Type.Default != nil {
 			col.Type.Default.Format(defBuf)
 		}
+
+		genBuf := ast.NewTrackedBuffer(nil)
+		if col.Type.GeneratedExpr != nil {
+			col.Type.GeneratedExpr.Format(genBuf)
+		}
+
+		onUpBuf := ast.NewTrackedBuffer(nil)
+		if col.Type.OnUpdate != nil {
+			col.Type.OnUpdate.Format(onUpBuf)
+		}
+
 		var comment string
 		if col.Type.Comment != nil {
 			comment = col.Type.Comment.String()
 		}
+
 		sCol := schema.Column{
 			Name:          col.Name.String(),
 			Kind:          typeInfo.NomsKind(),
 			IsPartOfPK:    primaryCols[col.Name.Lowered()],
 			TypeInfo:      typeInfo,
 			Default:       defBuf.String(),
-			Generated:     "",    // TODO
-			OnUpdate:      "",    // TODO
-			Virtual:       false, // TODO
+			Generated:     genBuf.String(),
+			OnUpdate:      onUpBuf.String(),
+			Virtual:       col.Type.GeneratedExpr != nil,
 			AutoIncrement: col.Type.Autoincrement == true,
 			Comment:       comment,
 		}
