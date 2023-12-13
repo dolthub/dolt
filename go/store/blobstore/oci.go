@@ -106,14 +106,26 @@ func (bs *OCIBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.R
 	if err != nil {
 		return nil, "", err
 	}
-	byteRange := br.asHttpRangeHeader()
-	res, err := bs.client.GetObject(ctx, objectstorage.GetObjectRequest{
+
+	req := objectstorage.GetObjectRequest{
 		NamespaceName: &namespace,
 		BucketName:    &bs.bucketName,
 		ObjectName:    &absKey,
-		Range:         &byteRange,
-	})
-	if err == nil {
+	}
+
+	byteRange := br.asHttpRangeHeader()
+	if byteRange != "" {
+		req.Range = &byteRange
+	}
+
+	res, err := bs.client.GetObject(ctx, req)
+	if err != nil {
+		if serr, ok := common.IsServiceError(err); ok {
+			// handle not found code
+			if serr.GetHTTPStatusCode() == 404 {
+				return nil, "", NotFound{"oci://" + path.Join(bs.bucketName, absKey)}
+			}
+		}
 		return nil, "", err
 	}
 	return res.Content, fmtstr(res.ETag), nil
@@ -152,25 +164,25 @@ func (bs *OCIBlobstore) upload(ctx context.Context, expectedVersion, key string,
 }
 
 func (bs *OCIBlobstore) checkAndPut(ctx context.Context, expectedVersion, key string, contentLength int64, reader io.Reader) (string, error) {
-	conditionalEtag := ""
-	if expectedVersion != "" {
-		conditionalEtag = expectedVersion
-	}
-
 	absKey := path.Join(bs.prefix, key)
 	namespace, err := bs.getNamespace(ctx)
 	if err != nil {
 		return "", err
 	}
 
-	res, err := bs.client.PutObject(ctx, objectstorage.PutObjectRequest{
+	req := objectstorage.PutObjectRequest{
 		NamespaceName: &namespace,
 		BucketName:    &bs.bucketName,
 		ObjectName:    &absKey,
 		ContentLength: &contentLength,
 		PutObjectBody: io.NopCloser(reader),
-		IfMatch:       &conditionalEtag,
-	})
+	}
+
+	if expectedVersion != "" {
+		req.IfMatch = &expectedVersion
+	}
+
+	res, err := bs.client.PutObject(ctx, req)
 	if err != nil {
 		return "", err
 	}
@@ -179,25 +191,25 @@ func (bs *OCIBlobstore) checkAndPut(ctx context.Context, expectedVersion, key st
 }
 
 func (bs *OCIBlobstore) multipartUpload(ctx context.Context, expectedVersion, key string, numParts int, uploadSize int64, reader io.Reader) (string, error) {
-	conditionalEtag := ""
-	if expectedVersion != "" {
-		conditionalEtag = expectedVersion
-	}
-
 	absKey := path.Join(bs.prefix, key)
 	namespace, err := bs.getNamespace(ctx)
 	if err != nil {
 		return "", err
 	}
 
-	startRes, err := bs.client.CreateMultipartUpload(ctx, objectstorage.CreateMultipartUploadRequest{
+	startReq := objectstorage.CreateMultipartUploadRequest{
 		NamespaceName: &namespace,
 		BucketName:    &bs.bucketName,
 		CreateMultipartUploadDetails: objectstorage.CreateMultipartUploadDetails{
 			Object: &absKey,
 		},
-		IfMatch: &conditionalEtag,
-	})
+	}
+
+	if expectedVersion != "" {
+		startReq.IfMatch = &expectedVersion
+	}
+
+	startRes, err := bs.client.CreateMultipartUpload(ctx, startReq)
 	if err != nil {
 		return "", err
 	}
@@ -215,14 +227,19 @@ func (bs *OCIBlobstore) multipartUpload(ctx context.Context, expectedVersion, ke
 		return "", err
 	}
 
-	commitRes, err := bs.client.CommitMultipartUpload(ctx, objectstorage.CommitMultipartUploadRequest{
+	commitReq := objectstorage.CommitMultipartUploadRequest{
 		NamespaceName:                &namespace,
 		BucketName:                   &bs.bucketName,
 		ObjectName:                   &absKey,
 		UploadId:                     startRes.UploadId,
 		CommitMultipartUploadDetails: objectstorage.CommitMultipartUploadDetails{PartsToCommit: parts},
-		IfMatch:                      &conditionalEtag,
-	})
+	}
+
+	if expectedVersion != "" {
+		commitReq.IfMatch = &expectedVersion
+	}
+
+	commitRes, err := bs.client.CommitMultipartUpload(ctx, commitReq)
 	if err != nil {
 		return "", err
 	}
