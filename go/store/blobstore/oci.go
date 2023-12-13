@@ -130,6 +130,8 @@ func (bs *OCIBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key st
 	return bs.upload(ctx, expectedVersion, key, reader)
 }
 
+// At the time of this implementation, Oracle Cloud does not provide a way to create composite objects
+// via their APIs/SDKs.
 func (bs *OCIBlobstore) Concatenate(ctx context.Context, key string, sources []string) (string, error) {
 	panic("concatenate is unimplemented on the oci blobstore")
 }
