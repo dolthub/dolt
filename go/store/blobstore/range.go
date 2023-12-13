@@ -14,6 +14,8 @@
 
 package blobstore
 
+import "fmt"
+
 // BlobRange represents a segment of a blob of data.  Offset is the beginning of
 // the range and Length is the size.  If Length is 0 that means all data beyond
 // offset will be read. Lengths cannot be negative.  Negative offsets indicate
@@ -53,6 +55,16 @@ func (br BlobRange) positiveRange(size int64) BlobRange {
 	}
 
 	return BlobRange{offset, length}
+}
+
+func (br BlobRange) asHttpRangeHeader() string {
+	if br.isAllRange() {
+		return ""
+	}
+	if br.length == 0 || br.offset < 0 {
+		return fmt.Sprintf("bytes=%d", br.offset)
+	}
+	return fmt.Sprintf("bytes=%d-%d", br.offset, br.offset+br.length)
 }
 
 // AllRange is a BlobRange instance covering all values
