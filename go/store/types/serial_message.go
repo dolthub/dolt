@@ -65,22 +65,23 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 	id := serial.GetFileID(sm)
 	switch id {
 	// NOTE: splunk uses a separate path for some printing
+	// NOTE: We ignore the errors from field number checks here...
 	case serial.StoreRootFileID:
-		msg := serial.GetRootAsStoreRoot([]byte(sm), serial.MessagePrefixSz)
+		msg, _ := serial.TryGetRootAsStoreRoot([]byte(sm), serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 		mapbytes := msg.AddressMapBytes()
 		printWithIndendationLevel(level, ret, "StoreRoot{%s}",
 			SerialMessage(mapbytes).humanReadableStringAtIndentationLevel(level+1))
 		return ret.String()
 	case serial.StashListFileID:
-		msg := serial.GetRootAsStashList([]byte(sm), serial.MessagePrefixSz)
+		msg, _ := serial.TryGetRootAsStashList([]byte(sm), serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 		mapbytes := msg.AddressMapBytes()
 		printWithIndendationLevel(level, ret, "StashList{%s}",
 			SerialMessage(mapbytes).humanReadableStringAtIndentationLevel(level+1))
 		return ret.String()
 	case serial.StashFileID:
-		msg := serial.GetRootAsStash(sm, serial.MessagePrefixSz)
+		msg, _ := serial.TryGetRootAsStash(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 		printWithIndendationLevel(level, ret, "{\n")
 		printWithIndendationLevel(level, ret, "\tBranchName: %s\n", msg.BranchName())
@@ -90,7 +91,7 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 		printWithIndendationLevel(level, ret, "}")
 		return ret.String()
 	case serial.TagFileID:
-		msg := serial.GetRootAsTag(sm, serial.MessagePrefixSz)
+		msg, _ := serial.TryGetRootAsTag(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 		printWithIndendationLevel(level, ret, "{\n")
 		printWithIndendationLevel(level, ret, "\tName: %s\n", msg.Name())
@@ -101,7 +102,7 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 		printWithIndendationLevel(level, ret, "}")
 		return ret.String()
 	case serial.WorkingSetFileID:
-		msg := serial.GetRootAsWorkingSet(sm, serial.MessagePrefixSz)
+		msg, _ := serial.TryGetRootAsWorkingSet(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 		printWithIndendationLevel(level, ret, "{\n")
 		printWithIndendationLevel(level, ret, "\tName: %s\n", msg.Name())
@@ -113,7 +114,7 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 		printWithIndendationLevel(level, ret, "}")
 		return ret.String()
 	case serial.CommitFileID:
-		msg := serial.GetRootAsCommit(sm, serial.MessagePrefixSz)
+		msg, _ := serial.TryGetRootAsCommit(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 		printWithIndendationLevel(level, ret, "{\n")
 		printWithIndendationLevel(level, ret, "\tName: %s\n", msg.Name())
@@ -150,7 +151,7 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 		printWithIndendationLevel(level, ret, "}")
 		return ret.String()
 	case serial.RootValueFileID:
-		msg := serial.GetRootAsRootValue(sm, serial.MessagePrefixSz)
+		msg, _ := serial.TryGetRootAsRootValue(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 		printWithIndendationLevel(level, ret, "{\n")
 		printWithIndendationLevel(level, ret, "\tFeatureVersion: %d\n", msg.FeatureVersion())
@@ -160,7 +161,7 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 		printWithIndendationLevel(level, ret, "}")
 		return ret.String()
 	case serial.TableFileID:
-		msg := serial.GetRootAsTable(sm, serial.MessagePrefixSz)
+		msg, _ := serial.TryGetRootAsTable(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
 
 		printWithIndendationLevel(level, ret, "{\n")
@@ -274,7 +275,10 @@ func (sm SerialMessage) WalkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 				return err
 			}
 		}
-		mergeState := msg.MergeState(nil)
+		mergeState, err := msg.TryMergeState(nil)
+		if err != nil {
+			return err
+		}
 		if mergeState != nil {
 			if err = cb(hash.New(mergeState.PreWorkingRootAddrBytes())); err != nil {
 				return err
@@ -310,7 +314,10 @@ func (sm SerialMessage) WalkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 			return err
 		}
 
-		confs := msg.Conflicts(nil)
+		confs, err := msg.TryConflicts(nil)
+		if err != nil {
+			return err
+		}
 		addr := hash.New(confs.DataBytes())
 		if !addr.IsEmpty() {
 			if err = cb(addr); err != nil {
