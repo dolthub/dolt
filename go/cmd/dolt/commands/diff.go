@@ -920,8 +920,8 @@ func schemaFromCreateTableStmt(createTableStmt string) (schema.Schema, error) {
 			IsPartOfPK:    primaryCols[col.Name.Lowered()],
 			TypeInfo:      typeInfo,
 			Default:       defBuf.String(),
-			Generated:     "", // TODO
-			OnUpdate:      "", // TODO
+			Generated:     "",    // TODO
+			OnUpdate:      "",    // TODO
 			Virtual:       false, // TODO
 			AutoIncrement: col.Type.Autoincrement == true,
 			Comment:       comment,
