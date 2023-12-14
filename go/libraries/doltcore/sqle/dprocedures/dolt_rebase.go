@@ -45,8 +45,7 @@ var doltRebaseProcedureSchema = []*sql.Column{
 	},
 }
 
-// TODO: "drop" instead of "skip"?
-var RebaseActionEnumType = types.MustCreateEnumType([]string{"pick", "skip", "squash", "reword"}, sql.Collation_Default)
+var RebaseActionEnumType = types.MustCreateEnumType([]string{"pick", "drop", "squash", "reword"}, sql.Collation_Default)
 
 var DoltRebaseSystemTableSchema = []*sql.Column{
 	{
@@ -381,8 +380,8 @@ func processRow(ctx *sql.Context, row sql.Row) error {
 		fmt.Printf("created new commit: %s\n", newCommit)
 		return nil
 
-	case "skip":
-		fmt.Printf("skipping commit: %s\n", row[2].(string))
+	case "drop":
+		fmt.Printf("dropping commit: %s\n", row[2].(string))
 		return nil
 
 	case "squash":

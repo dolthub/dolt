@@ -108,8 +108,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				}}}},
 			},
 			{
-				// TODO: pretty sure this is "drop" not "skip"
-				Query: "update dolt_rebase set action='skip' where rebase_order = 4;",
+				Query: "update dolt_rebase set action='drop' where rebase_order = 4;",
 				Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: uint64(1), Info: plan.UpdateInfo{
 					Matched: 1,
 					Updated: 1,
