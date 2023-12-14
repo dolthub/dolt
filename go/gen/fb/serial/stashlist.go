@@ -26,11 +26,7 @@ type StashList struct {
 
 func InitStashListRoot(o *StashList, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	o.Init(buf, n+offset)
-	if StashListNumFields < o.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
+	return o.Init(buf, n+offset)
 }
 
 func TryGetRootAsStashList(buf []byte, offset flatbuffers.UOffsetT) (*StashList, error) {
@@ -38,26 +34,18 @@ func TryGetRootAsStashList(buf []byte, offset flatbuffers.UOffsetT) (*StashList,
 	return x, InitStashListRoot(x, buf, offset)
 }
 
-func GetRootAsStashList(buf []byte, offset flatbuffers.UOffsetT) *StashList {
-	x := &StashList{}
-	InitStashListRoot(x, buf, offset)
-	return x
-}
-
 func TryGetSizePrefixedRootAsStashList(buf []byte, offset flatbuffers.UOffsetT) (*StashList, error) {
 	x := &StashList{}
 	return x, InitStashListRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsStashList(buf []byte, offset flatbuffers.UOffsetT) *StashList {
-	x := &StashList{}
-	InitStashListRoot(x, buf, offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *StashList) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *StashList) Init(buf []byte, i flatbuffers.UOffsetT) error {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
+	if StashListNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
 }
 
 func (rcv *StashList) Table() flatbuffers.Table {

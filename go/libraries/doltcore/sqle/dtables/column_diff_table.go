@@ -553,7 +553,12 @@ func calculateColDelta(ctx *sql.Context, ddb *doltdb.DoltDB, delta *diff.TableDe
 			toIdx := diffTableCols.TagToIdx[toColTag]
 			fromIdx := diffTableCols.TagToIdx[fromColTag]
 
-			if r[toIdx] != r[fromIdx] {
+			toCol := delta.ToSch.GetAllCols().GetByIndex(toIdx)
+			cmp, err := toCol.TypeInfo.ToSqlType().Compare(r[toIdx], r[fromIdx])
+			if err != nil {
+				return nil, nil, err
+			}
+			if cmp != 0 {
 				colNamesSet[col] = struct{}{}
 			}
 		}

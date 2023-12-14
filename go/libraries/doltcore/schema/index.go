@@ -226,6 +226,7 @@ func (ix *indexImpl) PrimaryKeyTags() []uint64 {
 
 // Schema implements Index.
 func (ix *indexImpl) Schema() Schema {
+	contentHashedFields := make([]uint64, 0)
 	cols := make([]Column, len(ix.allTags))
 	for i, tag := range ix.allTags {
 		col := ix.indexColl.colColl.TagToCol[tag]
@@ -237,15 +238,27 @@ func (ix *indexImpl) Schema() Schema {
 			TypeInfo:    col.TypeInfo,
 			Constraints: nil,
 		}
+
+		// contentHashedFields is the collection of column tags for columns in a unique index that do
+		// not have a prefix length specified and should be stored as a content hash. This information
+		// is needed to later identify that an index is using content-hashed encoding.
+		prefixLength := uint16(0)
+		if len(ix.PrefixLengths()) > i {
+			prefixLength = ix.PrefixLengths()[i]
+		}
+		if ix.IsUnique() && prefixLength == 0 {
+			contentHashedFields = append(contentHashedFields, tag)
+		}
 	}
 	allCols := NewColCollection(cols...)
 	nonPkCols := NewColCollection()
 	return &schemaImpl{
-		pkCols:          allCols,
-		nonPKCols:       nonPkCols,
-		allCols:         allCols,
-		indexCollection: NewIndexCollection(nil, nil),
-		checkCollection: NewCheckCollection(),
+		pkCols:              allCols,
+		nonPKCols:           nonPkCols,
+		allCols:             allCols,
+		indexCollection:     NewIndexCollection(nil, nil),
+		checkCollection:     NewCheckCollection(),
+		contentHashedFields: contentHashedFields,
 	}
 }
 

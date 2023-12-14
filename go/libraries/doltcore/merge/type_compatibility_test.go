@@ -27,11 +27,12 @@ import (
 )
 
 type typeChangeCompatibilityTest struct {
-	name       string
-	from       typeinfo.TypeInfo
-	to         typeinfo.TypeInfo
-	compatible bool
-	rewrite    bool
+	name                       string
+	from                       typeinfo.TypeInfo
+	to                         typeinfo.TypeInfo
+	compatible                 bool
+	rewrite                    bool
+	invalidateSecondaryIndexes bool
 }
 
 // Enum test data
@@ -54,6 +55,9 @@ var point = typeinfo.CreatePointTypeFromSqlPointType(gmstypes.PointType{SRID: ui
 
 // String type test data
 var varchar10 = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.VarChar, 10, sql.Collation_Default))
+var varchar10ci = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.VarChar, 10, sql.Collation_utf8mb4_0900_ai_ci))
+var varchar10bin = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.VarChar, 10, sql.Collation_utf8mb4_0900_bin))
+var varchar10utf16bin = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.VarChar, 10, sql.Collation_utf16_bin))
 var varchar20 = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.VarChar, 20, sql.Collation_Default))
 var varchar300 = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.VarChar, 300, sql.Collation_Default))
 var varchar10BinaryCollation = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateString(sqltypes.VarChar, 10, sql.Collation_binary))
@@ -200,6 +204,24 @@ func TestDoltIsTypeChangeCompatible(t *testing.T) {
 			compatible: false,
 		},
 
+		// Charset changes
+		{
+			name:       "incompatible: VARCHAR(10) charset change",
+			from:       varchar10bin,
+			to:         varchar10utf16bin,
+			compatible: false,
+		},
+
+		// Collation changes
+		{
+			name:                       "compatible: VARCHAR(10) collation change",
+			from:                       varchar10ci,
+			to:                         varchar10bin,
+			compatible:                 true,
+			rewrite:                    false,
+			invalidateSecondaryIndexes: true,
+		},
+
 		// Type width changes
 		{
 			name:       "type widening: VARCHAR(10) to VARCHAR(20)",
@@ -213,50 +235,55 @@ func TestDoltIsTypeChangeCompatible(t *testing.T) {
 			to:         varchar10,
 			compatible: false,
 		}, {
-			name:       "type widening: VARCHAR to TEXT",
-			from:       varchar10,
-			to:         text,
-			compatible: true,
-			rewrite:    true,
+			name:                       "type widening: VARCHAR to TEXT",
+			from:                       varchar10,
+			to:                         text,
+			compatible:                 true,
+			rewrite:                    true,
+			invalidateSecondaryIndexes: true,
 		}, {
 			name:       "type narrowing: TEXT to VARCHAR(10)",
 			from:       text,
 			to:         varchar10,
 			compatible: false,
 		}, {
-			name:       "type widening: TINYTEXT to VARCHAR(300)",
-			from:       tinyText,
-			to:         varchar300,
-			compatible: true,
-			rewrite:    true,
+			name:                       "type widening: TINYTEXT to VARCHAR(300)",
+			from:                       tinyText,
+			to:                         varchar300,
+			compatible:                 true,
+			rewrite:                    true,
+			invalidateSecondaryIndexes: true,
 		}, {
-			name:       "type widening: varbinary to BLOB",
-			from:       varbinary10,
-			to:         blob,
-			compatible: true,
-			rewrite:    true,
+			name:                       "type widening: varbinary to BLOB",
+			from:                       varbinary10,
+			to:                         blob,
+			compatible:                 true,
+			rewrite:                    true,
+			invalidateSecondaryIndexes: true,
 		}, {
 			name:       "type narrowing: BLOB to varbinary",
 			from:       blob,
 			to:         varbinary10,
 			compatible: false,
 		}, {
-			name:       "type widening: TEXT to MEDIUMTEXT",
-			from:       text,
-			to:         mediumText,
-			compatible: true,
-			rewrite:    false,
+			name:                       "type widening: TEXT to MEDIUMTEXT",
+			from:                       text,
+			to:                         mediumText,
+			compatible:                 true,
+			rewrite:                    false,
+			invalidateSecondaryIndexes: false,
 		}, {
 			name:       "type narrowing: MEDIUMTEXT to TEXT",
 			from:       mediumText,
 			to:         text,
 			compatible: false,
 		}, {
-			name:       "type widening: BLOB to MEDIUMBLOB",
-			from:       blob,
-			to:         mediumBlob,
-			compatible: true,
-			rewrite:    false,
+			name:                       "type widening: BLOB to MEDIUMBLOB",
+			from:                       blob,
+			to:                         mediumBlob,
+			compatible:                 true,
+			rewrite:                    false,
+			invalidateSecondaryIndexes: false,
 		}, {
 			name:       "type narrowing: MEDIUMBLOB to BLOB",
 			from:       mediumBlob,
@@ -292,9 +319,11 @@ func TestDoltIsTypeChangeCompatible(t *testing.T) {
 func runTypeCompatibilityTests(t *testing.T, compatChecker TypeCompatibilityChecker, tests []typeChangeCompatibilityTest) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			compatible, requiresRewrite := compatChecker.IsTypeChangeCompatible(tt.from, tt.to)
-			assert.Equal(t, tt.compatible, compatible, "expected compatible to be %t, but was %t", tt.compatible, compatible)
-			assert.Equal(t, tt.rewrite, requiresRewrite, "expected rewrite required to be %t, but was %t", tt.rewrite, requiresRewrite)
+			compatibilityResults := compatChecker.IsTypeChangeCompatible(tt.from, tt.to)
+			assert.Equal(t, tt.compatible, compatibilityResults.compatible, "expected compatible to be %t, but was %t", tt.compatible, compatibilityResults.compatible)
+			assert.Equal(t, tt.rewrite, compatibilityResults.rewriteRows, "expected rewrite required to be %t, but was %t", tt.rewrite, compatibilityResults.rewriteRows)
+			assert.Equal(t, tt.invalidateSecondaryIndexes, compatibilityResults.invalidateSecondaryIndexes, "expected secondary index rewrite to be %t, but was %t", tt.invalidateSecondaryIndexes, compatibilityResults.invalidateSecondaryIndexes)
+
 		})
 	}
 }
