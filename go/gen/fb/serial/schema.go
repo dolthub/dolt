@@ -149,7 +149,7 @@ func (rcv *TableSchema) MutateCollation(n Collation) bool {
 	return rcv._tab.MutateUint16Slot(12, uint16(n))
 }
 
-func (rcv *TableSchema) HasOnUpdateExprs() bool {
+func (rcv *TableSchema) HasFeaturesAfterTryAccessors() bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
 		return rcv._tab.GetBool(o + rcv._tab.Pos)
@@ -157,7 +157,7 @@ func (rcv *TableSchema) HasOnUpdateExprs() bool {
 	return false
 }
 
-func (rcv *TableSchema) MutateHasOnUpdateExprs(n bool) bool {
+func (rcv *TableSchema) MutateHasFeaturesAfterTryAccessors(n bool) bool {
 	return rcv._tab.MutateBoolSlot(14, n)
 }
 
@@ -190,8 +190,8 @@ func TableSchemaStartChecksVector(builder *flatbuffers.Builder, numElems int) fl
 func TableSchemaAddCollation(builder *flatbuffers.Builder, collation Collation) {
 	builder.PrependUint16Slot(4, uint16(collation), 0)
 }
-func TableSchemaAddHasOnUpdateExprs(builder *flatbuffers.Builder, hasOnUpdateExprs bool) {
-	builder.PrependBoolSlot(5, hasOnUpdateExprs, false)
+func TableSchemaAddHasFeaturesAfterTryAccessors(builder *flatbuffers.Builder, hasFeaturesAfterTryAccessors bool) {
+	builder.PrependBoolSlot(5, hasFeaturesAfterTryAccessors, false)
 }
 func TableSchemaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
