@@ -510,7 +510,11 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 					}
 
 					if sm, ok := targetCmt.(types.SerialMessage); ok {
-						msg := serial.GetRootAsWorkingSet(sm, serial.MessagePrefixSz)
+						msg, err := serial.TryGetRootAsWorkingSet(sm, serial.MessagePrefixSz)
+						if err != nil {
+							return prolly.AddressMap{}, err
+						}
+
 						stagedHash := hash.New(msg.StagedRootAddrBytes())
 						workingSetHash := hash.New(msg.WorkingRootAddrBytes())
 						if stagedHash != workingSetHash {
