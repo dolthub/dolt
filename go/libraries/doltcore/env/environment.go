@@ -106,6 +106,10 @@ func (dEnv *DoltEnv) GetConfig() config.ReadableConfig {
 	return dEnv.Config
 }
 
+func (dEnv *DoltEnv) UrlStr() string {
+	return dEnv.urlStr
+}
+
 func createRepoState(fs filesys.Filesys) (*RepoState, error) {
 	repoState, rsErr := LoadRepoState(fs)
 
