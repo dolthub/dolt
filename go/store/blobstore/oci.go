@@ -128,6 +128,16 @@ func (bs *OCIBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.R
 		}
 		return nil, "", err
 	}
+
+	// handle negative offset and positive length
+	if br.offset < 0 && br.length > 0 {
+		trimmedR, err := trimContent(res, br.length)
+		if err != nil {
+			return nil, "", err
+		}
+		return trimmedR, fmtstr(res.ETag), nil
+	}
+
 	return res.Content, fmtstr(res.ETag), nil
 }
 
@@ -184,7 +194,7 @@ func (bs *OCIBlobstore) checkAndPut(ctx context.Context, expectedVersion, key st
 
 	res, err := bs.client.PutObject(ctx, req)
 	if err != nil {
-		return "", err
+		return "", CheckAndPutError{key, expectedVersion, "unknown (Not supported in OCI implementation)"}
 	}
 
 	return fmtstr(res.ETag), nil
@@ -422,6 +432,20 @@ func getUploadInfo(partSize, maxPartNum int, r io.Reader) (int, int64, io.Reader
 
 	numParts := int(math.Ceil(float64(totalSize) / float64(ps)))
 	return numParts, totalSize, &buf, nil
+}
+
+func trimContent(res objectstorage.GetObjectResponse, length int64) (io.ReadCloser, error) {
+	defer res.Content.Close()
+	var data bytes.Buffer
+	lr := io.LimitReader(res.Content, length)
+	n, err := io.Copy(&data, lr)
+	if err != nil {
+		return nil, err
+	}
+	if n != length {
+		return nil, errors.New("failed to trim response content")
+	}
+	return io.NopCloser(&data), nil
 }
 
 func fmtstr(s *string) string {
