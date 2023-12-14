@@ -240,6 +240,7 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 		co := b.CreateString(col.Comment)
 		do := b.CreateString(defVal)
 		ou := b.CreateString(onUpdateVal)
+
 		typeString := sqlTypeString(col.TypeInfo)
 		to := b.CreateString(typeString)
 		no := b.CreateString(col.Name)
@@ -258,7 +259,9 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 		serial.ColumnAddNullable(b, col.IsNullable())
 		serial.ColumnAddGenerated(b, col.Generated != "")
 		serial.ColumnAddVirtual(b, col.Virtual)
-		serial.ColumnAddOnUpdateValue(b, ou)
+		if onUpdateVal != "" {
+			serial.ColumnAddOnUpdateValue(b, ou)
+		}
 		serial.ColumnAddHidden(b, false)
 		offs[i] = serial.ColumnEnd(b)
 	}
