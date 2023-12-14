@@ -114,6 +114,18 @@ func (rcv *TableSchema) SecondaryIndexesLength() int {
 	return 0
 }
 
+func (rcv *TableSchema) Checks(obj *CheckConstraint, j int) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	if o != 0 {
+		x := rcv._tab.Vector(o)
+		x += flatbuffers.UOffsetT(j) * 4
+		x = rcv._tab.Indirect(x)
+		obj.Init(rcv._tab.Bytes, x)
+		return true
+	}
+	return false
+}
+
 func (rcv *TableSchema) TryChecks(obj *CheckConstraint, j int) (bool, error) {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
@@ -149,7 +161,19 @@ func (rcv *TableSchema) MutateCollation(n Collation) bool {
 	return rcv._tab.MutateUint16Slot(12, uint16(n))
 }
 
-const TableSchemaNumFields = 5
+func (rcv *TableSchema) HasOnUpdateExprs() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *TableSchema) MutateHasOnUpdateExprs(n bool) bool {
+	return rcv._tab.MutateBoolSlot(14, n)
+}
+
+const TableSchemaNumFields = 6
 
 func TableSchemaStart(builder *flatbuffers.Builder) {
 	builder.StartObject(TableSchemaNumFields)
@@ -177,6 +201,9 @@ func TableSchemaStartChecksVector(builder *flatbuffers.Builder, numElems int) fl
 }
 func TableSchemaAddCollation(builder *flatbuffers.Builder, collation Collation) {
 	builder.PrependUint16Slot(4, uint16(collation), 0)
+}
+func TableSchemaAddHasOnUpdateExprs(builder *flatbuffers.Builder, hasOnUpdateExprs bool) {
+	builder.PrependBoolSlot(5, hasOnUpdateExprs, false)
 }
 func TableSchemaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

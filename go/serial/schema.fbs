@@ -24,6 +24,9 @@ table TableSchema {
   secondary_indexes:[Index];
   checks:[CheckConstraint];
   collation:Collation;
+
+  // this field is necessary because older dolt clients weren't using TryAccessor for Columns, but are in TableSchemas
+  has_on_update_exprs:bool;
 }
 
 table Column {

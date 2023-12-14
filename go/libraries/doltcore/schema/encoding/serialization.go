@@ -57,12 +57,23 @@ func serializeSchemaAsFlatbuffer(sch schema.Schema) ([]byte, error) {
 	indexes := serializeSecondaryIndexes(b, sch, sch.Indexes().AllIndexes())
 	checks := serializeChecks(b, sch.Checks().AllChecks())
 
+	var hasOnUpdateExprs bool
+	for _, col := range sch.GetAllCols().GetColumns() {
+		if col.OnUpdate != "" {
+			hasOnUpdateExprs = true
+			break
+		}
+	}
+
 	serial.TableSchemaStart(b)
 	serial.TableSchemaAddClusteredIndex(b, rows)
 	serial.TableSchemaAddColumns(b, columns)
 	serial.TableSchemaAddSecondaryIndexes(b, indexes)
 	serial.TableSchemaAddChecks(b, checks)
 	serial.TableSchemaAddCollation(b, serial.Collation(sch.GetCollation()))
+	if hasOnUpdateExprs {
+		serial.TableSchemaAddHasOnUpdateExprs(b, hasOnUpdateExprs)
+	}
 	root := serial.TableSchemaEnd(b)
 	bs := serial.FinishMessage(b, root, []byte(serial.TableSchemaFileID))
 	return bs, nil
