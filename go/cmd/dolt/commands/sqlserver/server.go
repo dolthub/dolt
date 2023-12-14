@@ -83,6 +83,22 @@ func Serve(
 		controller = svcs.NewController()
 	}
 
+	ConfigureServices(serverConfig, controller, version, dEnv)
+
+	go controller.Start(ctx)
+	err := controller.WaitForStart()
+	if err != nil {
+		return err, nil
+	}
+	return nil, controller.WaitForStop()
+}
+
+func ConfigureServices(
+	serverConfig ServerConfig,
+	controller *svcs.Controller,
+	version string,
+	dEnv *env.DoltEnv,
+) {
 	ValidateConfigStep := &svcs.AnonService{
 		InitF: func(context.Context) error {
 			return ValidateConfig(serverConfig)
@@ -202,7 +218,6 @@ func Serve(
 	controller.Register(LoadServerConfig)
 
 	// Create SQL Engine with users
-
 	var config *engine.SqlEngineConfig
 	InitSqlEngineConfig := &svcs.AnonService{
 		InitF: func(context.Context) error {
@@ -562,13 +577,6 @@ func Serve(
 		},
 	}
 	controller.Register(RunSQLServer)
-
-	go controller.Start(ctx)
-	err := controller.WaitForStart()
-	if err != nil {
-		return err, nil
-	}
-	return nil, controller.WaitForStop()
 }
 
 // heartbeatService is a service that sends a heartbeat event to the metrics server once a day

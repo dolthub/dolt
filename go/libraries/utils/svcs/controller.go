@@ -199,7 +199,7 @@ func (c *Controller) Stop() {
 		return
 	} else if c.state != controllerState_stopping {
 		// We should only do this transition once. We signal to |Start|
-		// by cloing the |stopCh|.
+		// by closing the |stopCh|.
 		close(c.stopCh)
 		c.state = controllerState_stopping
 		c.mu.Unlock()

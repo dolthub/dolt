@@ -68,7 +68,7 @@ func TestServerArgs(t *testing.T) {
 		assert.NoError(t, dEnv.DoltDB.Close())
 	}()
 	go func() {
-		startServer(context.Background(), "0.0.0", "dolt sql-server", []string{
+		StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
 			"-H", "localhost",
 			"-P", "15200",
 			"-u", "username",
@@ -115,7 +115,7 @@ listener:
 	go func() {
 
 		dEnv.FS.WriteFile("config.yaml", []byte(yamlConfig), os.ModePerm)
-		startServer(context.Background(), "0.0.0", "dolt sql-server", []string{
+		StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
 			"--config", "config.yaml",
 		}, dEnv, controller)
 	}()
@@ -150,7 +150,7 @@ func TestServerBadArgs(t *testing.T) {
 		t.Run(strings.Join(test, " "), func(t *testing.T) {
 			controller := svcs.NewController()
 			go func() {
-				startServer(context.Background(), "test", "dolt sql-server", test, env, controller)
+				StartServer(context.Background(), "test", "dolt sql-server", test, env, controller)
 			}()
 			if !assert.Error(t, controller.WaitForStart()) {
 				controller.Stop()
@@ -277,7 +277,7 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 		server.ListenAndServe()
 	}()
 	go func() {
-		startServer(context.Background(), "test", "dolt sql-server", []string{
+		StartServer(context.Background(), "test", "dolt sql-server", []string{
 			"-H", "localhost",
 			"-P", "15200",
 			"-u", "username",
