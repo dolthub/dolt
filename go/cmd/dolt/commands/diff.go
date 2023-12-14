@@ -184,7 +184,10 @@ func (cmd DiffCmd) RequiresRepo() bool {
 func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, diffDocs, ap))
-	apr := cli.ParseArgsOrDie(ap, args, help)
+	apr, err := cli.ParseArgs(ap, args, help)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
 
 	verr := cmd.validateArgs(apr)
 	if verr != nil {

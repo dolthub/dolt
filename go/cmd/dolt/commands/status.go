@@ -105,7 +105,11 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 	// parse arguments
 	ap := cmd.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, statusDocs, ap))
-	apr := cli.ParseArgsOrDie(ap, args, help)
+	apr, err := cli.ParseArgs(ap, args, help)
+	if err != nil {
+		return handleStatusVErr(err)
+	}
+
 	showIgnoredTables := apr.Contains(cli.ShowIgnoredFlag)
 
 	// configure SQL engine

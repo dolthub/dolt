@@ -103,7 +103,10 @@ func generateAddSql(apr *argparser.ArgParseResults) string {
 func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cli.CreateAddArgParser()
 	helpPr, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, addDocs, ap))
-	apr := cli.ParseArgsOrDie(ap, args, helpPr)
+	apr, err := cli.ParseArgs(ap, args, helpPr)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), nil)
+	}
 
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
