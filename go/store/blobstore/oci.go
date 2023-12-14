@@ -190,11 +190,19 @@ func (bs *OCIBlobstore) checkAndPut(ctx context.Context, expectedVersion, key st
 
 	if expectedVersion != "" {
 		req.IfMatch = &expectedVersion
+	} else {
+		star := "*"
+		req.IfNoneMatch = &star
 	}
 
 	res, err := bs.client.PutObject(ctx, req)
 	if err != nil {
-		return "", CheckAndPutError{key, expectedVersion, "unknown (Not supported in OCI implementation)"}
+		if serr, ok := common.IsServiceError(err); ok {
+			if serr.GetHTTPStatusCode() == 412 {
+				return "", CheckAndPutError{key, expectedVersion, "unknown (Not supported in OCI implementation)"}
+			}
+		}
+		return "", err
 	}
 
 	return fmtstr(res.ETag), nil
@@ -215,8 +223,11 @@ func (bs *OCIBlobstore) multipartUpload(ctx context.Context, expectedVersion, ke
 		},
 	}
 
+	star := "*"
 	if expectedVersion != "" {
 		startReq.IfMatch = &expectedVersion
+	} else {
+		startReq.IfNoneMatch = &star
 	}
 
 	startRes, err := bs.client.CreateMultipartUpload(ctx, startReq)
@@ -247,6 +258,8 @@ func (bs *OCIBlobstore) multipartUpload(ctx context.Context, expectedVersion, ke
 
 	if expectedVersion != "" {
 		commitReq.IfMatch = &expectedVersion
+	} else {
+		commitReq.IfNoneMatch = &star
 	}
 
 	commitRes, err := bs.client.CommitMultipartUpload(ctx, commitReq)

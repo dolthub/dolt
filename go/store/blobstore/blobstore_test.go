@@ -116,9 +116,9 @@ func appendLocalTest(tests []BlobstoreTest) []BlobstoreTest {
 
 func newBlobStoreTests() []BlobstoreTest {
 	var tests []BlobstoreTest
-	//tests = append(tests, BlobstoreTest{"inmem", NewInMemoryBlobstore(""), 10, 20})
-	//tests = appendLocalTest(tests)
-	//tests = appendGCSTest(tests)
+	tests = append(tests, BlobstoreTest{"inmem", NewInMemoryBlobstore(""), 10, 20})
+	tests = appendLocalTest(tests)
+	tests = appendGCSTest(tests)
 	tests = appendOCITest(tests)
 
 	return tests
@@ -264,7 +264,6 @@ func readModifyWrite(bs Blobstore, key string, iterations int, doneChan chan int
 		newData[dataSize] = byte(dataSize)
 
 		_, err = CheckAndPutBytes(context.Background(), bs, ver, key, newData)
-
 		if err == nil {
 			updates++
 			failures = 0
@@ -348,8 +347,7 @@ func testGetRange(t *testing.T, bs Blobstore, br BlobRange, expected []byte) {
 		t.Errorf("Get failed: %v.", err)
 	}
 
-	ret := retrieved[:len(expected)]
-	if len(ret) != len(expected) {
+	if len(retrieved) != len(expected) {
 		t.Errorf("Range results are not the right size")
 		return
 	}
@@ -387,17 +385,17 @@ func TestGetRange(t *testing.T) {
 		t.Run(bsTest.bsType, func(t *testing.T) {
 			setupRangeTest(t, bsTest.bs, testData)
 			// test full range
-			//testGetRange(t, bsTest.bs, AllRange, rangeData(0, maxValue))
+			testGetRange(t, bsTest.bs, AllRange, rangeData(0, maxValue))
 			// test first 2048 bytes (1024 shorts)
-			//testGetRange(t, bsTest.bs, NewBlobRange(0, 2048), rangeData(0, 1024))
+			testGetRange(t, bsTest.bs, NewBlobRange(0, 2048), rangeData(0, 1024))
 
-			//// test range of values from 1024 to 2048 stored in bytes 2048 to 4096 of the original testData
-			//testGetRange(t, bsTest.bs, NewBlobRange(2*1024, 2*1024), rangeData(1024, 2048))
-			//
-			//// test the last 2048 bytes of data which will be the last 1024 shorts
-			//testGetRange(t, bsTest.bs, NewBlobRange(-2*1024, 0), rangeData(maxValue-1024, maxValue))
-			//
-			//// test the range beginning 2048 bytes from the end of size 512 which will be shorts 1024 from the end til 768 from the end
+			// test range of values from 1024 to 2048 stored in bytes 2048 to 4096 of the original testData
+			testGetRange(t, bsTest.bs, NewBlobRange(2*1024, 2*1024), rangeData(1024, 2048))
+
+			// test the last 2048 bytes of data which will be the last 1024 shorts
+			testGetRange(t, bsTest.bs, NewBlobRange(-2*1024, 0), rangeData(maxValue-1024, maxValue))
+
+			// test the range beginning 2048 bytes from the end of size 512 which will be shorts 1024 from the end til 768 from the end
 			testGetRange(t, bsTest.bs, NewBlobRange(-2*1024, 512), rangeData(maxValue-1024, maxValue-768))
 		})
 	}
