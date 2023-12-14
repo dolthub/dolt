@@ -114,18 +114,6 @@ func (rcv *TableSchema) SecondaryIndexesLength() int {
 	return 0
 }
 
-func (rcv *TableSchema) Checks(obj *CheckConstraint, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
-	if o != 0 {
-		x := rcv._tab.Vector(o)
-		x += flatbuffers.UOffsetT(j) * 4
-		x = rcv._tab.Indirect(x)
-		obj.Init(rcv._tab.Bytes, x)
-		return true
-	}
-	return false
-}
-
 func (rcv *TableSchema) TryChecks(obj *CheckConstraint, j int) (bool, error) {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
