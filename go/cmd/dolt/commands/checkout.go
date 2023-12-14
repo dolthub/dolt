@@ -87,7 +87,10 @@ func (cmd CheckoutCmd) EventType() eventsapi.ClientEventType {
 func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cli.CreateCheckoutArgParser()
 	helpPrt, usagePrt := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, checkoutDocs, ap))
-	apr := cli.ParseArgsOrDie(ap, args, helpPrt)
+	apr, err := cli.ParseArgs(ap, args, helpPrt)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usagePrt)
+	}
 
 	queryEngine, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {

@@ -105,7 +105,10 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 func performCommit(ctx context.Context, commandStr string, args []string, cliCtx cli.CliContext, temporaryDEnv *env.DoltEnv) (int, bool) {
 	ap := cli.CreateCommitArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, commitDocs, ap))
-	apr := cli.ParseArgsOrDie(ap, args, help)
+	apr, err := cli.ParseArgs(ap, args, help)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage), false
+	}
 
 	if err := cli.VerifyCommitArgs(apr); err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), help), false
