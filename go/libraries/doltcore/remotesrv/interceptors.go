@@ -16,13 +16,12 @@ package remotesrv
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 )
 
 type RequestCredentials struct {
@@ -34,6 +33,22 @@ type RequestCredentials struct {
 type ServerInterceptor struct {
 	Lgr              *logrus.Entry
 	AccessController AccessControl
+}
+
+var SUPER_USER_RPC_METHODS = map[string]bool{
+	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/AddTableFiles":      true,
+	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/Commit":             true,
+	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/GetUploadLocations": true,
+}
+
+var CLONE_ADMIN_RPC_METHODS = map[string]bool{
+	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/GetDownloadLocations":    true,
+	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/GetRepoMetadata":         true,
+	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/HasChunks":               true,
+	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/ListTableFiles":          true,
+	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/RefreshTableFileUrl":     true,
+	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/Root":                    true,
+	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/StreamDownloadLocations": true,
 }
 
 // AccessControl is an interface that provides authentication and authorization for the gRPC server.
@@ -51,7 +66,12 @@ type AccessControl interface {
 
 func (si *ServerInterceptor) Stream() grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		if err := si.authenticate(ss.Context(), false); err != nil {
+		needSuperUser, err := requireSuperUser(info.FullMethod)
+		if err != nil {
+			return err
+		}
+
+		if err := si.authenticate(ss.Context(), needSuperUser); err != nil {
 			return err
 		}
 
@@ -61,7 +81,10 @@ func (si *ServerInterceptor) Stream() grpc.StreamServerInterceptor {
 
 func (si *ServerInterceptor) Unary() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		_, needSuperUser := req.(*remotesapi.CommitRequest)
+		needSuperUser, err := requireSuperUser(info.FullMethod)
+		if err != nil {
+			return nil, err
+		}
 
 		if err := si.authenticate(ctx, needSuperUser); err != nil {
 			return nil, err
@@ -76,6 +99,18 @@ func (si *ServerInterceptor) Options() []grpc.ServerOption {
 		grpc.ChainUnaryInterceptor(si.Unary()),
 		grpc.ChainStreamInterceptor(si.Stream()),
 	}
+}
+
+func requireSuperUser(path string) (bool, error) {
+	if SUPER_USER_RPC_METHODS[path] {
+		return true, nil
+	}
+
+	if CLONE_ADMIN_RPC_METHODS[path] {
+		return false, nil
+	}
+
+	return false, fmt.Errorf("unknown rpc method: %s", path)
 }
 
 // authenticate checks the incoming request for authentication credentials and validates them.  If the user is
