@@ -434,8 +434,9 @@ func getCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 	if port, ok := apr.GetInt(remotesapiPortFlag); ok {
 		config.WithRemotesapiPort(&port)
 	}
-	if _, ok := apr.GetValue(remotesapiReadOnlyFlag); ok {
-		config.WithRemotesapiReadOnly(true)
+	if apr.Contains(remotesapiReadOnlyFlag) {
+		val := true
+		config.WithRemotesapiReadOnly(&val)
 	}
 
 	if persistenceBehavior, ok := apr.GetValue(persistenceBehaviorFlag); ok {
@@ -463,7 +464,8 @@ func getCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 
 	if _, ok := apr.GetValue(readonlyFlag); ok {
 		config.withReadOnly(true)
-		config.WithRemotesapiReadOnly(true)
+		val := true
+		config.WithRemotesapiReadOnly(&val)
 	}
 
 	if logLevel, ok := apr.GetValue(logLevelFlag); ok {

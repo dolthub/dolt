@@ -126,8 +126,8 @@ type MetricsYAMLConfig struct {
 }
 
 type RemotesapiYAMLConfig struct {
-	Port_     *int `yaml:"port"`
-	ReadOnly_ bool `yaml:"read_only"`
+	Port_     *int  `yaml:"port"`
+	ReadOnly_ *bool `yaml:"read_only" minver:"1.30.0"`
 }
 
 func (r RemotesapiYAMLConfig) Port() int {
@@ -135,7 +135,7 @@ func (r RemotesapiYAMLConfig) Port() int {
 }
 
 func (r RemotesapiYAMLConfig) ReadOnly() bool {
-	return r.ReadOnly_
+	return *r.ReadOnly_
 }
 
 type UserSessionVars struct {
@@ -419,7 +419,7 @@ func (cfg YAMLConfig) RemotesapiPort() *int {
 	return cfg.RemotesapiConfig.Port_
 }
 
-func (cfg YAMLConfig) RemotesapiReadOnly() bool {
+func (cfg YAMLConfig) RemotesapiReadOnly() *bool {
 	return cfg.RemotesapiConfig.ReadOnly_
 }
 

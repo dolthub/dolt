@@ -164,7 +164,7 @@ type ServerConfig interface {
 	// replication.
 	RemotesapiPort() *int
 	// RemotesapiReadOnly is true if the remotesapi interface should be read only.
-	RemotesapiReadOnly() bool
+	RemotesapiReadOnly() *bool
 	// ClusterConfig is the configuration for clustering in this sql-server.
 	ClusterConfig() cluster.Config
 	// EventSchedulerStatus is the configuration for enabling or disabling the event scheduler in this server.
@@ -203,7 +203,7 @@ type commandLineServerConfig struct {
 	allowCleartextPasswords bool
 	socket                  string
 	remotesapiPort          *int
-	remotesapiReadOnly      bool
+	remotesapiReadOnly      *bool
 	goldenMysqlConn         string
 	eventSchedulerStatus    string
 }
@@ -329,7 +329,7 @@ func (cfg *commandLineServerConfig) RemotesapiPort() *int {
 	return cfg.remotesapiPort
 }
 
-func (cfg *commandLineServerConfig) RemotesapiReadOnly() bool {
+func (cfg *commandLineServerConfig) RemotesapiReadOnly() *bool {
 	return cfg.remotesapiReadOnly
 }
 
@@ -482,7 +482,7 @@ func (cfg *commandLineServerConfig) WithRemotesapiPort(port *int) *commandLineSe
 	return cfg
 }
 
-func (cfs *commandLineServerConfig) WithRemotesapiReadOnly(readonly bool) *commandLineServerConfig {
+func (cfs *commandLineServerConfig) WithRemotesapiReadOnly(readonly *bool) *commandLineServerConfig {
 	cfs.remotesapiReadOnly = readonly
 	return cfs
 }

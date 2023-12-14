@@ -377,10 +377,16 @@ func Serve(
 			remoteSrv.state.Swap(svcs.ServiceState_Init)
 
 			port := *serverConfig.RemotesapiPort()
+
+			apiReadOnly := false
+			if serverConfig.RemotesapiReadOnly() != nil {
+				apiReadOnly = *serverConfig.RemotesapiReadOnly()
+			}
+
 			listenaddr := fmt.Sprintf(":%d", port)
 			args, err := sqle.RemoteSrvServerArgs(sqlEngine.NewDefaultContext, remotesrv.ServerArgs{
 				Logger:         logrus.NewEntry(lgr),
-				ReadOnly:       serverConfig.RemotesapiReadOnly() || serverConfig.ReadOnly(),
+				ReadOnly:       apiReadOnly || serverConfig.ReadOnly(),
 				HttpListenAddr: listenaddr,
 				GrpcListenAddr: listenaddr,
 			})
