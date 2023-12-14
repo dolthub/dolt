@@ -229,7 +229,10 @@ func validateSqlServerArgs(apr *argparser.ArgParseResults) error {
 
 // StartServer starts the sql server with the controller provided and blocks until the server is stopped.
 func StartServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, controller *svcs.Controller) error {
-	serverConfig, err := ServerConfigFromArgs(commandStr, args, dEnv)
+	ap := SqlServerCmd{}.ArgParser()
+	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlServerDocs, ap))
+	
+	serverConfig, err := ServerConfigFromArgs(ap, help, args, dEnv)
 	if err != nil {
 		return err
 	}
@@ -248,10 +251,7 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 }
 
 // ServerConfigFromArgs returns a ServerConfig from the given args
-func ServerConfigFromArgs(commandStr string, args []string, dEnv *env.DoltEnv) (ServerConfig, error) {
-	ap := SqlServerCmd{}.ArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlServerDocs, ap))
-
+func ServerConfigFromArgs(ap *argparser.ArgParser, help cli.UsagePrinter, args []string, dEnv *env.DoltEnv) (ServerConfig, error) {
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	if err := validateSqlServerArgs(apr); err != nil {
 		cli.PrintErrln(color.RedString(err.Error()))
