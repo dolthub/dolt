@@ -179,7 +179,7 @@ func NewYamlConfig(configFileData []byte) (YAMLConfig, error) {
 	return cfg, err
 }
 
-func serverConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
+func ServerConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
 	return YAMLConfig{
 		LogLevelStr:       strPtr(string(cfg.LogLevel())),
 		MaxQueryLenInLogs: nillableIntPtr(cfg.MaxLoggedQueryLen()),

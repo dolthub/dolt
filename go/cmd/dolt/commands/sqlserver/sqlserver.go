@@ -67,13 +67,13 @@ func indentLines(s string) string {
 var sqlServerDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Start a MySQL-compatible server.",
 	LongDesc: "By default, starts a MySQL-compatible server on the dolt database in the current directory. " +
-		"Databases are named after the directories they appear in, with all non-alphanumeric characters replaced by the _ character. " +
+		"Databases are named after the directories they appear in." +
 		"Parameters can be specified using a yaml configuration file passed to the server via " +
 		"{{.EmphasisLeft}}--config <file>{{.EmphasisRight}}, or by using the supported switches and flags to configure " +
 		"the server directly on the command line. If {{.EmphasisLeft}}--config <file>{{.EmphasisRight}} is provided all" +
 		" other command line arguments are ignored.\n\nThis is an example yaml configuration file showing all supported" +
 		" items and their default values:\n\n" +
-		indentLines(serverConfigAsYAMLConfig(DefaultServerConfig()).String()) + "\n\n" + `
+		indentLines(ServerConfigAsYAMLConfig(DefaultServerConfig()).String()) + "\n\n" + `
 SUPPORTED CONFIG FILE FIELDS:
 
 {{.EmphasisLeft}}data_dir{{.EmphasisRight}}: A directory where the server will load dolt databases to serve, and create new ones. Defaults to the current directory.
@@ -206,7 +206,17 @@ func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []stri
 			cancelF()
 		}
 	}()
-	return startServer(newCtx, cmd.VersionStr, commandStr, args, dEnv, controller)
+
+	// We need a username and password for many SQL commands, so set defaults if they don't exist
+	dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
+
+	err := StartServer(newCtx, cmd.VersionStr, commandStr, args, dEnv, controller)
+	if err != nil {
+		cli.Println(color.RedString(err.Error()))
+		return 1
+	}
+
+	return 0
 }
 
 func validateSqlServerArgs(apr *argparser.ArgParseResults) error {
@@ -221,48 +231,52 @@ func validateSqlServerArgs(apr *argparser.ArgParseResults) error {
 	return nil
 }
 
-func startServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, controller *svcs.Controller) int {
+// StartServer starts the sql server with the controller provided and blocks until the server is stopped.
+func StartServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, controller *svcs.Controller) error {
 	ap := SqlServerCmd{}.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlServerDocs, ap))
 
-	// We need a username and password for many SQL commands, so set defaults if they don't exist
-	dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
-
-	apr := cli.ParseArgsOrDie(ap, args, help)
-	if err := validateSqlServerArgs(apr); err != nil {
-		cli.PrintErrln(color.RedString(err.Error()))
-		return 1
-	}
-	serverConfig, err := GetServerConfig(dEnv.FS, apr)
+	serverConfig, err := ServerConfigFromArgs(ap, help, args, dEnv)
 	if err != nil {
-		cli.PrintErrln(color.RedString("Failed to start server. Bad Configuration"))
-		cli.PrintErrln(err.Error())
-		return 1
-	}
-	if err = SetupDoltConfig(dEnv, apr, serverConfig); err != nil {
-		cli.PrintErrln(color.RedString("Failed to start server. Bad Configuration"))
-		cli.PrintErrln(err.Error())
-		return 1
+		return err
 	}
 
 	cli.PrintErrf("Starting server with Config %v\n", ConfigInfo(serverConfig))
 
-	if startError, closeError := Serve(ctx, versionStr, serverConfig, controller, dEnv); startError != nil || closeError != nil {
-		if startError != nil {
-			cli.PrintErrln(startError)
-		}
-		if closeError != nil {
-			cli.PrintErrln(closeError)
-		}
-		return 1
+	startError, closeError := Serve(ctx, versionStr, serverConfig, controller, dEnv)
+	if startError != nil {
+		return startError
+	}
+	if closeError != nil {
+		return closeError
 	}
 
-	return 0
+	return nil
 }
 
-// GetServerConfig returns ServerConfig that is set either from yaml file if given, if not it is set with values defined
+// ServerConfigFromArgs returns a ServerConfig from the given args
+func ServerConfigFromArgs(ap *argparser.ArgParser, help cli.UsagePrinter, args []string, dEnv *env.DoltEnv) (ServerConfig, error) {
+	apr := cli.ParseArgsOrDie(ap, args, help)
+	if err := validateSqlServerArgs(apr); err != nil {
+		cli.PrintErrln(color.RedString(err.Error()))
+		return nil, err
+	}
+
+	serverConfig, err := getServerConfig(dEnv.FS, apr)
+	if err != nil {
+		return nil, fmt.Errorf("bad configuration: %w", err)
+	}
+
+	if err = setupDoltConfig(dEnv, apr, serverConfig); err != nil {
+		return nil, fmt.Errorf("bad configuration: %w", err)
+	}
+
+	return serverConfig, nil
+}
+
+// getServerConfig returns ServerConfig that is set either from yaml file if given, if not it is set with values defined
 // on command line. Server config variables not defined are set to default values.
-func GetServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults) (ServerConfig, error) {
+func getServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults) (ServerConfig, error) {
 	var yamlCfg YAMLConfig
 	if cfgFile, ok := apr.GetValue(configFileFlag); ok {
 		cfg, err := getYAMLServerConfig(cwdFS, cfgFile)
@@ -291,7 +305,7 @@ func GetServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults) (Ser
 
 // GetClientConfig returns configuration which is sutable for a client to use. The fact that it returns a ServerConfig
 // is a little confusing, but it is because the client and server use the same configuration struct. The main difference
-// between this method and GetServerConfig is that this method required a cli.UserPassword argument. It is created by
+// between this method and getServerConfig is that this method required a cli.UserPassword argument. It is created by
 // prompting the user, and we don't want the server to follow that code path.
 func GetClientConfig(cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argparser.ArgParseResults) (ServerConfig, error) {
 	cfgFile, hasCfgFile := apr.GetValue(configFileFlag)
@@ -321,8 +335,8 @@ func GetClientConfig(cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argpar
 	return yamlCfg, nil
 }
 
-// SetupDoltConfig updates the given server config with where to create .doltcfg directory
-func SetupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config ServerConfig) error {
+// setupDoltConfig updates the given server config with where to create .doltcfg directory
+func setupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config ServerConfig) error {
 	if _, ok := apr.GetValue(configFileFlag); ok {
 		return nil
 	}

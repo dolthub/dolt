@@ -897,7 +897,10 @@ func (t doltDevTable) SetIndexes(ctx context.Context, indexes IndexSet) (Table, 
 }
 
 func (t doltDevTable) GetConflicts(ctx context.Context) (conflict.ConflictSchema, ConflictIndex, error) {
-	conflicts := t.msg.Conflicts(nil)
+	conflicts, err := t.msg.TryConflicts(nil)
+	if err != nil {
+		return conflict.ConflictSchema{}, nil, err
+	}
 
 	ouraddr := hash.New(conflicts.OurSchemaBytes())
 	theiraddr := hash.New(conflicts.TheirSchemaBytes())
@@ -997,7 +1000,10 @@ func (t doltDevTable) SetArtifacts(ctx context.Context, artifacts ArtifactIndex)
 
 func (t doltDevTable) HasConflicts(ctx context.Context) (bool, error) {
 
-	conflicts := t.msg.Conflicts(nil)
+	conflicts, err := t.msg.TryConflicts(nil)
+	if err != nil {
+		return false, err
+	}
 	addr := hash.New(conflicts.OurSchemaBytes())
 	return !addr.IsEmpty(), nil
 }
@@ -1023,7 +1029,10 @@ func (t doltDevTable) SetConflicts(ctx context.Context, sch conflict.ConflictSch
 	}
 
 	msg := t.clone()
-	cmsg := msg.Conflicts(nil)
+	cmsg, err := msg.TryConflicts(nil)
+	if err != nil {
+		return nil, err
+	}
 	copy(cmsg.DataBytes(), conflictsAddr[:])
 	copy(cmsg.OurSchemaBytes(), ouraddr[:])
 	copy(cmsg.TheirSchemaBytes(), theiraddr[:])
@@ -1034,7 +1043,10 @@ func (t doltDevTable) SetConflicts(ctx context.Context, sch conflict.ConflictSch
 
 func (t doltDevTable) ClearConflicts(ctx context.Context) (Table, error) {
 	msg := t.clone()
-	conflicts := msg.Conflicts(nil)
+	conflicts, err := msg.TryConflicts(nil)
+	if err != nil {
+		return nil, err
+	}
 	var emptyhash hash.Hash
 	copy(conflicts.DataBytes(), emptyhash[:])
 	copy(conflicts.OurSchemaBytes(), emptyhash[:])
@@ -1110,7 +1122,10 @@ func (t doltDevTable) fields() (serialTableFields, error) {
 	}
 	ns := t.ns
 
-	conflicts := t.msg.Conflicts(nil)
+	conflicts, err := t.msg.TryConflicts(nil)
+	if err != nil {
+		return serialTableFields{}, err
+	}
 	am, err := prolly.NewAddressMap(node, ns)
 	if err != nil {
 		return serialTableFields{}, err

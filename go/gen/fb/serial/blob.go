@@ -26,11 +26,7 @@ type Blob struct {
 
 func InitBlobRoot(o *Blob, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	o.Init(buf, n+offset)
-	if BlobNumFields < o.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
+	return o.Init(buf, n+offset)
 }
 
 func TryGetRootAsBlob(buf []byte, offset flatbuffers.UOffsetT) (*Blob, error) {
@@ -38,26 +34,18 @@ func TryGetRootAsBlob(buf []byte, offset flatbuffers.UOffsetT) (*Blob, error) {
 	return x, InitBlobRoot(x, buf, offset)
 }
 
-func GetRootAsBlob(buf []byte, offset flatbuffers.UOffsetT) *Blob {
-	x := &Blob{}
-	InitBlobRoot(x, buf, offset)
-	return x
-}
-
 func TryGetSizePrefixedRootAsBlob(buf []byte, offset flatbuffers.UOffsetT) (*Blob, error) {
 	x := &Blob{}
 	return x, InitBlobRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsBlob(buf []byte, offset flatbuffers.UOffsetT) *Blob {
-	x := &Blob{}
-	InitBlobRoot(x, buf, offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *Blob) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *Blob) Init(buf []byte, i flatbuffers.UOffsetT) error {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
+	if BlobNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
 }
 
 func (rcv *Blob) Table() flatbuffers.Table {

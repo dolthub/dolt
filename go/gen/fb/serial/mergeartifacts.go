@@ -26,11 +26,7 @@ type MergeArtifacts struct {
 
 func InitMergeArtifactsRoot(o *MergeArtifacts, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	o.Init(buf, n+offset)
-	if MergeArtifactsNumFields < o.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
+	return o.Init(buf, n+offset)
 }
 
 func TryGetRootAsMergeArtifacts(buf []byte, offset flatbuffers.UOffsetT) (*MergeArtifacts, error) {
@@ -38,26 +34,18 @@ func TryGetRootAsMergeArtifacts(buf []byte, offset flatbuffers.UOffsetT) (*Merge
 	return x, InitMergeArtifactsRoot(x, buf, offset)
 }
 
-func GetRootAsMergeArtifacts(buf []byte, offset flatbuffers.UOffsetT) *MergeArtifacts {
-	x := &MergeArtifacts{}
-	InitMergeArtifactsRoot(x, buf, offset)
-	return x
-}
-
 func TryGetSizePrefixedRootAsMergeArtifacts(buf []byte, offset flatbuffers.UOffsetT) (*MergeArtifacts, error) {
 	x := &MergeArtifacts{}
 	return x, InitMergeArtifactsRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsMergeArtifacts(buf []byte, offset flatbuffers.UOffsetT) *MergeArtifacts {
-	x := &MergeArtifacts{}
-	InitMergeArtifactsRoot(x, buf, offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *MergeArtifacts) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *MergeArtifacts) Init(buf []byte, i flatbuffers.UOffsetT) error {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
+	if MergeArtifactsNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
 }
 
 func (rcv *MergeArtifacts) Table() flatbuffers.Table {

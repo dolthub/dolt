@@ -100,12 +100,18 @@ func getCommitClosureSubtrees(msg serial.Message) ([]uint64, error) {
 		return nil, err
 	}
 	counts := make([]uint64, cnt)
-	m := serial.GetRootAsCommitClosure(msg, serial.MessagePrefixSz)
+	m, err := serial.TryGetRootAsCommitClosure(msg, serial.MessagePrefixSz)
+	if err != nil {
+		return nil, err
+	}
 	return decodeVarints(m.SubtreeCountsBytes(), counts), nil
 }
 
 func walkCommitClosureAddresses(ctx context.Context, msg serial.Message, cb func(ctx context.Context, addr hash.Hash) error) error {
-	m := serial.GetRootAsCommitClosure(msg, serial.MessagePrefixSz)
+	m, err := serial.TryGetRootAsCommitClosure(msg, serial.MessagePrefixSz)
+	if err != nil {
+		return err
+	}
 	arr := m.AddressArrayBytes()
 	for i := 0; i < len(arr)/hash.ByteLen; i++ {
 		addr := hash.New(arr[i*addrSize : (i+1)*addrSize])
