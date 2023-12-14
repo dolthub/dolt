@@ -45,11 +45,11 @@ var doltRebaseProcedureSchema = []*sql.Column{
 	},
 }
 
-var RebaseActionEnumType = types.MustCreateEnumType([]string{"pick", "skip", "squash"}, sql.Collation_Default)
+// TODO: "drop" instead of "skip"?
+var RebaseActionEnumType = types.MustCreateEnumType([]string{"pick", "skip", "squash", "reword"}, sql.Collation_Default)
 
 var DoltRebaseSystemTableSchema = []*sql.Column{
 	{
-
 		Name:     "rebase_order",
 		Type:     types.Uint16,
 		Nullable: false,
@@ -354,24 +354,32 @@ func processRow(ctx *sql.Context, row sql.Row) error {
 		panic("invalid enum value!")
 	}
 
-	switch rebaseAction {
-	case "pick":
-		fmt.Printf("cherry-picking commit: %s\n", row[2].(string))
-		// NOTE: After our first call to cherry-pick, the tx is committed, so a new tx needs to be started
-		doltSession := dsess.DSessFromSess(ctx.Session)
-		if doltSession.GetTransaction() == nil {
-			_, err := doltSession.StartTransaction(ctx, sql.ReadWrite)
-			if err != nil {
-				return err
-			}
-		}
-		// Perform the cherry-pick
-		resultsIter, err := doltCherryPick(ctx, row[2].(string))
+	// Make sure we have a transaction opened for the session
+	// NOTE: After our first call to cherry-pick, the tx is committed, so a new tx needs to be started
+	//       as we process additional rebase actions.
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	if doltSession.GetTransaction() == nil {
+		_, err := doltSession.StartTransaction(ctx, sql.ReadWrite)
 		if err != nil {
 			return err
 		}
-		// TODO: handle cherry-pick results
-		return drainRowIterator(ctx, resultsIter)
+	}
+
+	switch rebaseAction {
+	case "pick", "reword":
+		fmt.Printf("cherry-picking commit: %s\n", row[2].(string))
+
+		// Perform the cherry-pick
+		options := cherry_pick.CherryPickOptions{}
+		if rebaseAction == "reword" {
+			options.CommitMessage = row[3].(string)
+		}
+		newCommit, _, err := cherry_pick.CherryPick(ctx, row[2].(string), options)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("created new commit: %s\n", newCommit)
+		return nil
 
 	case "skip":
 		fmt.Printf("skipping commit: %s\n", row[2].(string))
