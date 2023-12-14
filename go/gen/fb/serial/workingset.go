@@ -26,11 +26,7 @@ type WorkingSet struct {
 
 func InitWorkingSetRoot(o *WorkingSet, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	o.Init(buf, n+offset)
-	if WorkingSetNumFields < o.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
+	return o.Init(buf, n+offset)
 }
 
 func TryGetRootAsWorkingSet(buf []byte, offset flatbuffers.UOffsetT) (*WorkingSet, error) {
@@ -38,26 +34,18 @@ func TryGetRootAsWorkingSet(buf []byte, offset flatbuffers.UOffsetT) (*WorkingSe
 	return x, InitWorkingSetRoot(x, buf, offset)
 }
 
-func GetRootAsWorkingSet(buf []byte, offset flatbuffers.UOffsetT) *WorkingSet {
-	x := &WorkingSet{}
-	InitWorkingSetRoot(x, buf, offset)
-	return x
-}
-
 func TryGetSizePrefixedRootAsWorkingSet(buf []byte, offset flatbuffers.UOffsetT) (*WorkingSet, error) {
 	x := &WorkingSet{}
 	return x, InitWorkingSetRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsWorkingSet(buf []byte, offset flatbuffers.UOffsetT) *WorkingSet {
-	x := &WorkingSet{}
-	InitWorkingSetRoot(x, buf, offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *WorkingSet) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *WorkingSet) Init(buf []byte, i flatbuffers.UOffsetT) error {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
+	if WorkingSetNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
 }
 
 func (rcv *WorkingSet) Table() flatbuffers.Table {
@@ -168,19 +156,6 @@ func (rcv *WorkingSet) MutateTimestampMillis(n uint64) bool {
 	return rcv._tab.MutateUint64Slot(14, n)
 }
 
-func (rcv *WorkingSet) MergeState(obj *MergeState) *MergeState {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
-	if o != 0 {
-		x := rcv._tab.Indirect(o + rcv._tab.Pos)
-		if obj == nil {
-			obj = new(MergeState)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		return obj
-	}
-	return nil
-}
-
 func (rcv *WorkingSet) TryMergeState(obj *MergeState) (*MergeState, error) {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
 	if o != 0 {
@@ -271,11 +246,7 @@ type MergeState struct {
 
 func InitMergeStateRoot(o *MergeState, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	o.Init(buf, n+offset)
-	if MergeStateNumFields < o.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
+	return o.Init(buf, n+offset)
 }
 
 func TryGetRootAsMergeState(buf []byte, offset flatbuffers.UOffsetT) (*MergeState, error) {
@@ -283,26 +254,18 @@ func TryGetRootAsMergeState(buf []byte, offset flatbuffers.UOffsetT) (*MergeStat
 	return x, InitMergeStateRoot(x, buf, offset)
 }
 
-func GetRootAsMergeState(buf []byte, offset flatbuffers.UOffsetT) *MergeState {
-	x := &MergeState{}
-	InitMergeStateRoot(x, buf, offset)
-	return x
-}
-
 func TryGetSizePrefixedRootAsMergeState(buf []byte, offset flatbuffers.UOffsetT) (*MergeState, error) {
 	x := &MergeState{}
 	return x, InitMergeStateRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsMergeState(buf []byte, offset flatbuffers.UOffsetT) *MergeState {
-	x := &MergeState{}
-	InitMergeStateRoot(x, buf, offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *MergeState) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *MergeState) Init(buf []byte, i flatbuffers.UOffsetT) error {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
+	if MergeStateNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
 }
 
 func (rcv *MergeState) Table() flatbuffers.Table {

@@ -233,31 +233,46 @@ func (tbl *Namespace) Deserialize(fb *serial.BranchControlNamespace) error {
 	// Read the databases
 	for i := 0; i < fb.DatabasesLength(); i++ {
 		serialMatchExpr := &serial.BranchControlMatchExpression{}
-		fb.Databases(serialMatchExpr, i)
+		_, err = fb.TryDatabases(serialMatchExpr, i)
+		if err != nil {
+			return err
+		}
 		tbl.Databases[i] = deserializeMatchExpression(serialMatchExpr)
 	}
 	// Read the branches
 	for i := 0; i < fb.BranchesLength(); i++ {
 		serialMatchExpr := &serial.BranchControlMatchExpression{}
-		fb.Branches(serialMatchExpr, i)
+		_, err = fb.TryBranches(serialMatchExpr, i)
+		if err != nil {
+			return err
+		}
 		tbl.Branches[i] = deserializeMatchExpression(serialMatchExpr)
 	}
 	// Read the users
 	for i := 0; i < fb.UsersLength(); i++ {
 		serialMatchExpr := &serial.BranchControlMatchExpression{}
-		fb.Users(serialMatchExpr, i)
+		_, err = fb.TryUsers(serialMatchExpr, i)
+		if err != nil {
+			return err
+		}
 		tbl.Users[i] = deserializeMatchExpression(serialMatchExpr)
 	}
 	// Read the hosts
 	for i := 0; i < fb.HostsLength(); i++ {
 		serialMatchExpr := &serial.BranchControlMatchExpression{}
-		fb.Hosts(serialMatchExpr, i)
+		_, err = fb.TryHosts(serialMatchExpr, i)
+		if err != nil {
+			return err
+		}
 		tbl.Hosts[i] = deserializeMatchExpression(serialMatchExpr)
 	}
 	// Read the values
 	for i := 0; i < fb.ValuesLength(); i++ {
 		serialNamespaceValue := &serial.BranchControlNamespaceValue{}
-		fb.Values(serialNamespaceValue, i)
+		_, err = fb.TryValues(serialNamespaceValue, i)
+		if err != nil {
+			return err
+		}
 		tbl.Values[i] = NamespaceValue{
 			Database: string(serialNamespaceValue.Database()),
 			Branch:   string(serialNamespaceValue.Branch()),

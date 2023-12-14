@@ -1236,7 +1236,7 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		if err != nil {
 			return sql.ViewDefinition{}, false, err
 		}
-		return sql.ViewDefinition{Name: viewName, TextDefinition: blameViewTextDef, CreateViewStatement: fmt.Sprintf("CREATE VIEW %s AS %s", viewName, blameViewTextDef)}, true, nil
+		return sql.ViewDefinition{Name: viewName, TextDefinition: blameViewTextDef, CreateViewStatement: fmt.Sprintf("CREATE VIEW `%s` AS %s", viewName, blameViewTextDef)}, true, nil
 	}
 
 	key, err := doltdb.NewDataCacheKey(root)

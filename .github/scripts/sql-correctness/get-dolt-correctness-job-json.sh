@@ -15,7 +15,7 @@ actorprefix="$5"
 format="$6"
 nomsBinFormat="$7"
 
-precision="4"
+precision="6"
 
 if [ -n "$nomsBinFormat" ]; then
   nomsBinFormat="\"--noms-bin-format=$nomsBinFormat\","

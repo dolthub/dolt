@@ -20,6 +20,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/unicode"
+	"golang.org/x/text/transform"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
@@ -67,6 +72,13 @@ func mustRow(r row.Row, err error) row.Row {
 	return r
 }
 
+func mustEncodeBytes(t *testing.T, bs []byte, enc encoding.Encoding) []byte {
+	ret, n, err := transform.Bytes(enc.NewEncoder(), bs)
+	require.NoError(t, err)
+	require.Equal(t, n, len(bs))
+	return ret
+}
+
 func TestReader(t *testing.T) {
 	colNames := []string{"name", "age", "title"}
 	_, sch := untyped.NewUntypedSchema(colNames...)
@@ -82,33 +94,42 @@ func TestReader(t *testing.T) {
 		mustRow(untyped.NewRowFromStrings(types.Format_Default, sch, []string{"Jack Jackson", "27"})),
 	}
 
+	utf8bomBytes := mustEncodeBytes(t, []byte(PersonDB1), unicode.UTF8BOM)
+	require.Equal(t, utf8bomBytes[0:3], []byte{0xEF, 0xBB, 0xBF})
+	utf16leBytes := mustEncodeBytes(t, []byte(PersonDB1), unicode.UTF16(unicode.LittleEndian, unicode.UseBOM))
+	utf16beBytes := mustEncodeBytes(t, []byte(PersonDB1), unicode.UTF16(unicode.BigEndian, unicode.UseBOM))
+
 	tests := []struct {
-		inputStr     string
+		input        []byte
 		expectedRows []row.Row
 		info         *CSVFileInfo
 	}{
-		{PersonDB1, goodExpectedRows, NewCSVInfo()},
-		{PersonDB2, goodExpectedRows, NewCSVInfo()},
-		{PersonDB3, goodExpectedRows, NewCSVInfo()},
+		{[]byte(PersonDB1), goodExpectedRows, NewCSVInfo()},
+		{[]byte(PersonDB2), goodExpectedRows, NewCSVInfo()},
+		{[]byte(PersonDB3), goodExpectedRows, NewCSVInfo()},
 
-		{PersonDBWithBadRow, badExpectedRows, NewCSVInfo()},
-		{PersonDBWithBadRow2, badExpectedRows, NewCSVInfo()},
-		{PersonDBWithBadRow3, badExpectedRows, NewCSVInfo()},
+		{utf8bomBytes, goodExpectedRows, NewCSVInfo()},
+		{utf16leBytes, goodExpectedRows, NewCSVInfo()},
+		{utf16beBytes, goodExpectedRows, NewCSVInfo()},
+
+		{[]byte(PersonDBWithBadRow), badExpectedRows, NewCSVInfo()},
+		{[]byte(PersonDBWithBadRow2), badExpectedRows, NewCSVInfo()},
+		{[]byte(PersonDBWithBadRow3), badExpectedRows, NewCSVInfo()},
 
 		{
-			PersonDBWithoutHeaders,
+			[]byte(PersonDBWithoutHeaders),
 			goodExpectedRows,
 			NewCSVInfo().SetHasHeaderLine(false).SetColumns(colNames),
 		},
 		{
-			PersonDBDifferentHeaders,
+			[]byte(PersonDBDifferentHeaders),
 			goodExpectedRows,
 			NewCSVInfo().SetHasHeaderLine(true).SetColumns(colNames),
 		},
 	}
 
 	for _, test := range tests {
-		rows, numBad, err := readTestRows(t, test.inputStr, test.info)
+		rows, numBad, err := readTestRows(t, test.input, test.info)
 
 		if err != nil {
 			t.Fatal("Unexpected Error:", err)
@@ -136,11 +157,11 @@ func TestReader(t *testing.T) {
 	}
 }
 
-func readTestRows(t *testing.T, inputStr string, info *CSVFileInfo) ([]row.Row, int, error) {
+func readTestRows(t *testing.T, input []byte, info *CSVFileInfo) ([]row.Row, int, error) {
 	const root = "/"
 	const path = "/file.csv"
 
-	fs := filesys.NewInMemFS(nil, map[string][]byte{path: []byte(inputStr)}, root)
+	fs := filesys.NewInMemFS(nil, map[string][]byte{path: input}, root)
 	csvR, err := OpenCSVReader(types.Format_Default, path, fs, info)
 	defer csvR.Close(context.Background())
 

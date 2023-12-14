@@ -438,10 +438,10 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 			// otherwise, we have two valid columns and we need to figure out which one to use
 			if anc != nil {
 				oursChanged := !anc.Equals(*ours)
-				diffInfo.LeftSchemaChange = diffInfo.LeftSchemaChange || oursChanged
 				theirsChanged := !anc.Equals(*theirs)
-				diffInfo.RightSchemaChange = diffInfo.RightSchemaChange || theirsChanged
 				if oursChanged && theirsChanged {
+					diffInfo.LeftSchemaChange = true
+					diffInfo.RightSchemaChange = true
 					// If both columns changed in the same way, the modifications converge, so accept the column.
 					// If not, don't report a conflict, since this case is already handled in checkForColumnConflicts.
 					if ours.Equals(*theirs) {
@@ -453,12 +453,15 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 					diffInfo.LeftAndRightSchemasDiffer = true
 					// In this case, only theirsChanged, so we need to check if moving from ours->theirs
 					// is valid, otherwise it's a conflict
-					mergeInfo.LeftNeedsRewrite = true
-					compatible, rewrite := compatChecker.IsTypeChangeCompatible(ours.TypeInfo, theirs.TypeInfo)
-					if rewrite {
+					compatibilityInfo := compatChecker.IsTypeChangeCompatible(ours.TypeInfo, theirs.TypeInfo)
+					if compatibilityInfo.invalidateSecondaryIndexes {
 						mergeInfo.InvalidateSecondaryIndexes = true
 					}
-					if compatible {
+					if compatibilityInfo.rewriteRows {
+						mergeInfo.LeftNeedsRewrite = true
+						diffInfo.RightSchemaChange = true
+					}
+					if compatibilityInfo.compatible {
 						mergedColumns = append(mergedColumns, *theirs)
 					} else {
 						conflicts = append(conflicts, ColConflict{
@@ -472,11 +475,15 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 					// In this case, only oursChanged, so we need to check if moving from theirs->ours
 					// is valid, otherwise it's a conflict
 					mergeInfo.RightNeedsRewrite = true
-					compatible, rewrite := compatChecker.IsTypeChangeCompatible(theirs.TypeInfo, ours.TypeInfo)
-					if rewrite {
+					compatibilityInfo := compatChecker.IsTypeChangeCompatible(theirs.TypeInfo, ours.TypeInfo)
+					if compatibilityInfo.invalidateSecondaryIndexes {
 						mergeInfo.InvalidateSecondaryIndexes = true
 					}
-					if compatible {
+					if compatibilityInfo.rewriteRows {
+						mergeInfo.RightNeedsRewrite = true
+						diffInfo.LeftSchemaChange = true
+					}
+					if compatibilityInfo.compatible {
 						mergedColumns = append(mergedColumns, *ours)
 					} else {
 						conflicts = append(conflicts, ColConflict{

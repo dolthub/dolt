@@ -1004,8 +1004,7 @@ var DoltScripts = []queries.ScriptTest{
 			"CREATE TABLE t(pk varchar(20), val int)",
 			"ALTER TABLE t ADD PRIMARY KEY (pk, val)",
 			"INSERT INTO t VALUES ('zzz',4),('mult',1),('sub',2),('add',5)",
-			"CALL dolt_add('.');",
-			"CALL dolt_commit('-am', 'add rows');",
+			"CALL dolt_commit('-Am', 'add rows');",
 			"INSERT INTO t VALUES ('dolt',0),('alt',12),('del',8),('ctl',3)",
 			"CALL dolt_commit('-am', 'add more rows');",
 		},
@@ -1021,6 +1020,25 @@ var DoltScripts = []queries.ScriptTest{
 					{"mult", 1, "add rows"},
 					{"sub", 2, "add rows"},
 					{"zzz", 4, "add rows"},
+				},
+			},
+		},
+	},
+	{
+		Name: "blame: table and pk require identifier quoting",
+		SetUpScript: []string{
+			"create table `t-1` (`p-k` int primary key, col1 varchar(100));",
+			"insert into `t-1` values (1, 'one');",
+			"CALL dolt_commit('-Am', 'adding table t-1');",
+			"insert into `t-1` values (2, 'two');",
+			"CALL dolt_commit('-Am', 'adding another row to t-1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT `p-k`, message FROM `dolt_blame_t-1`;",
+				Expected: []sql.Row{
+					{1, "adding table t-1"},
+					{2, "adding another row to t-1"},
 				},
 			},
 		},
@@ -2388,6 +2406,101 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dolt_checkout with new branch forcefully",
+		SetUpScript: []string{
+			"create table t (s varchar(5) primary key);",
+			"insert into t values ('foo');",
+			"call dolt_commit('-Am', 'commit main~2');", // will be main~2
+			"insert into t values ('bar');",
+			"call dolt_commit('-Am', 'commit main~1');", // will be main~1
+			"insert into t values ('baz');",
+			"call dolt_commit('-Am', 'commit main');", // will be main~1
+			"call dolt_branch('testbr', 'main~1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "call dolt_checkout('-B', 'testbr', 'main~2');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"testbr"}},
+			},
+			{
+				Query:    "select * from t order by s;",
+				Expected: []sql.Row{{"foo"}},
+			},
+			{
+				Query:            "call dolt_checkout('main');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				Query:    "select * from t order by s;",
+				Expected: []sql.Row{{"bar"}, {"baz"}, {"foo"}},
+			},
+			{
+				Query:            "call dolt_checkout('-B', 'testbr', 'main~1');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"testbr"}},
+			},
+			{
+				Query:    "select * from t order by s;",
+				Expected: []sql.Row{{"bar"}, {"foo"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_checkout with new branch forcefully with dirty working set",
+		SetUpScript: []string{
+			"create table t (s varchar(5) primary key);",
+			"insert into t values ('foo');",
+			"call dolt_commit('-Am', 'commit main~2');", // will be main~2
+			"insert into t values ('bar');",
+			"call dolt_commit('-Am', 'commit main~1');", // will be main~1
+			"insert into t values ('baz');",
+			"call dolt_commit('-Am', 'commit main');", // will be main~1
+			"call dolt_checkout('-b', 'testbr', 'main~1');",
+			"insert into t values ('qux');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"testbr"}},
+			},
+			{
+				Query:    "select * from t order by s;",
+				Expected: []sql.Row{{"bar"}, {"foo"}, {"qux"}}, // Dirty working set
+			},
+			{
+				Query:            "call dolt_checkout('main');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select * from t order by s;",
+				Expected: []sql.Row{{"bar"}, {"baz"}, {"foo"}},
+			},
+			{
+				Query:            "call dolt_checkout('-B', 'testbr', 'main~1');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"testbr"}},
+			},
+			{
+				Query:    "select * from t order by s;",
+				Expected: []sql.Row{{"bar"}, {"foo"}}, // Dirty working set was forcefully overwritten
+			},
+		},
+	},
+	{
 		Name: "dolt_checkout mixed with USE statements",
 		SetUpScript: []string{
 			"create table t (a int primary key, b int);",
@@ -2764,6 +2877,15 @@ var DoltCheckoutReadOnlyScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "call dolt_checkout('-b', 'newBranch');",
+				ExpectedErrStr: "unable to create new branch in a read-only database",
+			},
+		},
+	},
+	{
+		Name: "dolt checkout -B returns an error for read-only databases",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_checkout('-B', 'newBranch');",
 				ExpectedErrStr: "unable to create new branch in a read-only database",
 			},
 		},
@@ -4503,9 +4625,7 @@ var DoltReflogTestScripts = []queries.ScriptTest{
 				// Calling dolt_gc() invalidates the session, so we have to ask this assertion to create a new session
 				NewSession: true,
 				Query:      "select ref, commit_hash, commit_message from dolt_reflog('main')",
-				Expected: []sql.Row{
-					{"refs/heads/main", doltCommit, "Initialize data repository"},
-				},
+				Expected:   []sql.Row{},
 			},
 		},
 	},
@@ -4538,9 +4658,7 @@ var DoltReflogTestScripts = []queries.ScriptTest{
 				// Calling dolt_gc() invalidates the session, so we have to force this test to create a new session
 				NewSession: true,
 				Query:      "select ref, commit_hash, commit_message from dolt_reflog('main')",
-				Expected: []sql.Row{
-					{"refs/heads/main", doltCommit, "inserting row 2"},
-				},
+				Expected:   []sql.Row{},
 			},
 		},
 	},

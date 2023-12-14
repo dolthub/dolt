@@ -25,6 +25,7 @@ const (
 	BranchParam          = "branch"
 	CachedFlag           = "cached"
 	CheckoutCreateBranch = "b"
+	CreateResetBranch    = "B"
 	CommitFlag           = "commit"
 	ContinueParam        = "continue"
 	CopyFlag             = "copy"

@@ -362,8 +362,12 @@ type serialWorkingSetHead struct {
 	addr hash.Hash
 }
 
-func newSerialWorkingSetHead(bs []byte, addr hash.Hash) serialWorkingSetHead {
-	return serialWorkingSetHead{serial.GetRootAsWorkingSet(bs, serial.MessagePrefixSz), addr}
+func newSerialWorkingSetHead(bs []byte, addr hash.Hash) (serialWorkingSetHead, error) {
+	fb, err := serial.TryGetRootAsWorkingSet(bs, serial.MessagePrefixSz)
+	if err != nil {
+		return serialWorkingSetHead{}, err
+	}
+	return serialWorkingSetHead{fb, addr}, nil
 }
 
 func (h serialWorkingSetHead) TypeName() string {
@@ -395,7 +399,10 @@ func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
 		ret.StagedAddr = new(hash.Hash)
 		*ret.StagedAddr = hash.New(h.msg.StagedRootAddrBytes())
 	}
-	mergeState := h.msg.MergeState(nil)
+	mergeState, err := h.msg.TryMergeState(nil)
+	if err != nil {
+		return nil, err
+	}
 	if mergeState != nil {
 		// TODO: Why don't we use NewMergeState() here?
 		ret.MergeState = &MergeState{
@@ -533,7 +540,7 @@ func newHead(ctx context.Context, head types.Value, addr hash.Hash) (dsHead, err
 			return newSerialTagHead(data, addr)
 		}
 		if fid == serial.WorkingSetFileID {
-			return newSerialWorkingSetHead(data, addr), nil
+			return newSerialWorkingSetHead(data, addr)
 		}
 		if fid == serial.CommitFileID {
 			return newSerialCommitHead(sm, addr), nil
