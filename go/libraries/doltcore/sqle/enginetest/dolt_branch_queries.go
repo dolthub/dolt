@@ -558,7 +558,7 @@ var BranchPlanTests = []struct {
 		},
 		Queries: []indexQuery{
 			{
-				Query: "select * from t1 t1a join t1 t1b on t1a.b = t1b.b order by 1",
+				Query: "select /*+ LOOKUP_JOIN(t1a,t1b) */ * from t1 t1a join t1 t1b on t1a.b = t1b.b order by 1",
 				Index: true,
 			},
 			{
@@ -569,11 +569,11 @@ var BranchPlanTests = []struct {
 				Query: "use mydb/main",
 			},
 			{
-				Query: "select * from t1 t1a join t1 t1b on t1a.b = t1b.b order by 1",
+				Query: "select /*+ LOOKUP_JOIN(t1a,t1b) */ * from t1 t1a join t1 t1b on t1a.b = t1b.b order by 1",
 				Index: true,
 			},
 			{
-				Query: "select * from `mydb/b1`.t1 t1a join `mydb/b1`.t1 t1b on t1a.b = t1b.b order by 1",
+				Query: "select /*+ LOOKUP_JOIN(t1a,t1b) */ * from `mydb/b1`.t1 t1a join `mydb/b1`.t1 t1b on t1a.b = t1b.b order by 1",
 				Index: true,
 			},
 		},

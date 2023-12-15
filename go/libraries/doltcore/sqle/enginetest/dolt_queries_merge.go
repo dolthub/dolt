@@ -556,7 +556,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				// errors because creating a new branch implicitly commits the current transaction
 				Query:          "CALL DOLT_CHECKOUT('-b', 'other-branch')",
-				ExpectedErrStr: "Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1",
+				ExpectedErrStr: dsess.ErrUnresolvedConflictsCommit.Error(),
 			},
 		},
 	},
@@ -944,7 +944,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:          "CALL DOLT_MERGE('feature-branch')",
-				ExpectedErrStr: dsess.ErrUnresolvedConflictsCommit.Error(),
+				ExpectedErrStr: dsess.ErrUnresolvedConflictsAutoCommit.Error(),
 			},
 			{
 				Query:    "SELECT count(*) from dolt_conflicts_test", // transaction has been rolled back, 0 results
@@ -3486,7 +3486,7 @@ var SchemaConflictScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "call dolt_merge('other')",
-				ExpectedErrStr: "Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1",
+				ExpectedErrStr: dsess.ErrUnresolvedConflictsAutoCommit.Error(),
 			},
 			{
 				Query:    "select * from dolt_schema_conflicts",
