@@ -151,12 +151,13 @@ func startRebase(ctx *sql.Context, upstreamPoint string) error {
 	// rebaseWorkingBranch is the name of the temporary branch used when performing a rebase. In Git, a rebase
 	// happens with a detatched HEAD, but Dolt doesn't support that, we use a temporary branch.
 	rebaseWorkingBranch := "dolt_rebase_" + rebaseBranch
-	rowIter, err := doltBranch(ctx, rebaseWorkingBranch, upstreamPoint)
+	var rsc doltdb.ReplicationStatusController
+	err = actions.CreateBranchWithStartPt(ctx, dbData, rebaseWorkingBranch, upstreamPoint, false, &rsc)
 	if err != nil {
 		return err
 	}
-	// TODO: handle dolt_branch results
-	if err = drainRowIterator(ctx, rowIter); err != nil {
+	err = commitTransaction(ctx, doltSession, &rsc)
+	if err != nil {
 		return err
 	}
 
@@ -414,19 +415,6 @@ func processRow(ctx *sql.Context, row sql.Row) error {
 
 	default:
 		return fmt.Errorf("rebase action '%s' is not supported", rebaseAction)
-	}
-}
-
-func drainRowIterator(ctx *sql.Context, iter sql.RowIter) error {
-	for {
-		row, err := iter.Next(ctx)
-		if err == io.EOF {
-			return nil
-		} else if err != nil {
-			return err
-		}
-
-		fmt.Printf("cherry-pick result: %v\n", row)
 	}
 }
 
