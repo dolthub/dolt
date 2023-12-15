@@ -183,36 +183,6 @@ tests:
       result:
         columns: ["name","url"]
         rows: [["standby","http://localhost:3852/a_new_database"]]
-- name: fails to start if a configured remote is missing
-  multi_repos:
-  - name: server1
-    repos:
-    - name: repo1
-      with_remotes:
-      - name: standby
-        url: http://localhost:3852/repo1
-    - name: repo2
-      with_remotes:
-    with_files:
-    - name: server.yaml
-      contents: |
-        log_level: trace
-        listener:
-          host: 0.0.0.0
-          port: 3309
-        cluster:
-          standby_remotes:
-          - name: standby
-            remote_url_template: http://localhost:3852/{database}
-          bootstrap_role: primary
-          bootstrap_epoch: 10
-          remotesapi:
-            port: 3851
-    server:
-      args: ["--config", "server.yaml"]
-      port: 3309
-      error_matches:
-      - destination remote standby does not exist
 - name: primary comes up and replicates to standby
   multi_repos:
   - name: server1
@@ -1736,3 +1706,110 @@ tests:
   - on: server1
     queries:
     - exec: "call dolt_assume_cluster_role('primary', '3')"
+# Assert that we can add a new standby to an existing server and bring the server up.
+- name: adding new remotes to the config creates those remotes on startup
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: onestandby.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby_one
+            remote_url_template: http://localhost:3852/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3851
+    - name: twostandbys.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby_one
+            remote_url_template: http://localhost:3852/{database}
+          - name: standby_two
+            remote_url_template: http://localhost:3853/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3851
+    server:
+      args: ["--config", "onestandby.yaml"]
+      port: 3309
+  - name: standby_one
+    with_files:
+    - name: config.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3310
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:3851/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3852
+    server:
+      args: ["--config", "config.yaml"]
+      port: 3310
+  - name: standby_two
+    with_files:
+    - name: config.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3311
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:3851/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3853
+    server:
+      args: ["--config", "config.yaml"]
+      port: 3311
+  connections:
+  - on: server1
+    queries:
+    - exec: 'SET @@GLOBAL.dolt_cluster_ack_writes_timeout_secs = 10'
+    - exec: "create database testdb"
+    - exec: "use testdb"
+    - exec: "create table vals (id int primary key)"
+  - on: server1
+    restart_server:
+      args: ["--config", "twostandbys.yaml"]
+  - on: server1
+    queries:
+    - exec: "use testdb"
+    - query: "select count(*) from dolt_remotes"
+      result:
+        columns: ["count(*)"]
+        rows:
+        - ["2"]
+    - exec: 'SET @@GLOBAL.dolt_cluster_ack_writes_timeout_secs = 10'
+    - exec: "insert into vals values (0),(1),(2)"
+    - query: "show warnings"
+      result:
+        columns: ["Level", "Code", "Message"]
+        rows: []
+  - on: standby_two
+    queries:
+    - query: "select count(*) from `testdb`.`vals`"
+      result:
+        columns: ["count(*)"]
+        rows:
+        - ["3"]
