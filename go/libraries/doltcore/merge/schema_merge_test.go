@@ -1194,11 +1194,41 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 									require.EqualValues(t, expectedViolation.value, value)
 								}
 							} else {
-								if !assert.Equal(t, addr, a) {
+								if addr != a {
 									expTbl, _, err := m.GetTable(ctx, name)
 									require.NoError(t, err)
-									t.Logf("expected rows: %s", expTbl.DebugString(ctx))
-									t.Logf("actual rows: %s", actTbl.DebugString(ctx))
+									expRowDataHash, err := expTbl.GetRowDataHash(ctx)
+									require.NoError(t, err)
+									actRowDataHash, err := actTbl.GetRowDataHash(ctx)
+									require.NoError(t, err)
+									if expRowDataHash != actRowDataHash {
+										t.Error("Rows unequal")
+										t.Logf("expected rows: %s", expTbl.DebugString(ctx))
+										t.Logf("actual rows: %s", actTbl.DebugString(ctx))
+									}
+									expIndexSet, err := expTbl.GetIndexSet(ctx)
+									require.NoError(t, err)
+									actIndexSet, err := actTbl.GetIndexSet(ctx)
+									require.NoError(t, err)
+									expSchema, err := expTbl.GetSchema(ctx)
+									require.NoError(t, err)
+									expSchema.Indexes().Iter(func(index schema.Index) (stop bool, err error) {
+										expIndex, err := expIndexSet.GetIndex(ctx, expSchema, index.Name())
+										require.NoError(t, err)
+										actIndex, err := actIndexSet.GetIndex(ctx, expSchema, index.Name())
+										require.NoError(t, err)
+										expIndexHash, err := expIndex.HashOf()
+										require.NoError(t, err)
+										actIndexHash, err := actIndex.HashOf()
+										require.NoError(t, err)
+										if expIndexHash != actIndexHash {
+											t.Errorf("Index %s unequal", index.Name())
+											t.Logf("expected rows: %s", expIndex.DebugString(ctx))
+											t.Logf("actual rows: %s", actIndex.DebugString(ctx))
+										}
+										return false, nil
+									})
+
 								}
 							}
 						}

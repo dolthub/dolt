@@ -691,12 +691,7 @@ func (t doltDevTable) DebugString(ctx context.Context) string {
 		panic(err)
 	}
 
-	m := ProllyMapFromIndex(rows)
-	var b bytes.Buffer
-	m.WalkNodes(ctx, func(ctx context.Context, nd tree.Node) error {
-		return tree.OutputProllyNode(&b, nd)
-	})
-	return b.String()
+	return rows.DebugString(ctx)
 }
 
 var _ Table = doltDevTable{}
