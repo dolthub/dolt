@@ -301,7 +301,7 @@ func continueRebase(ctx *sql.Context) error {
 		} else if err != nil {
 			return err
 		}
-		err = processRow(ctx, row)
+		err = processRebaseAction(ctx, row)
 		if err != nil {
 			return err
 		}
@@ -350,7 +350,8 @@ func continueRebase(ctx *sql.Context) error {
 	return nil
 }
 
-func processRow(ctx *sql.Context, row sql.Row) error {
+// TODO: Change to work with rebase plan type instead of a row directly
+func processRebaseAction(ctx *sql.Context, row sql.Row) error {
 	i, ok := row[1].(uint16)
 	if !ok {
 		// TODO: check for NULL, too
@@ -374,26 +375,18 @@ func processRow(ctx *sql.Context, row sql.Row) error {
 
 	switch rebaseAction {
 	case "pick", "reword":
-		fmt.Printf("cherry-picking commit: %s\n", row[2].(string))
-
 		// Perform the cherry-pick
 		options := cherry_pick.CherryPickOptions{}
 		if rebaseAction == "reword" {
 			options.CommitMessage = row[3].(string)
 		}
-		newCommit, _, err := cherry_pick.CherryPick(ctx, row[2].(string), options)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("created new commit: %s\n", newCommit)
-		return nil
+		_, _, err := cherry_pick.CherryPick(ctx, row[2].(string), options)
+		return err
 
 	case "drop":
-		fmt.Printf("dropping commit: %s\n", row[2].(string))
 		return nil
 
 	case "squash":
-		fmt.Printf("squashing commit: %s\n", row[2].(string))
 		// TODO: validate that squash is NOT the first action!
 		//       would be better to put rebase plan validation into an earlier/separate step,
 		//       instead of mixing it in with execution.
@@ -403,15 +396,11 @@ func processRow(ctx *sql.Context, row sql.Row) error {
 		if err != nil {
 			return err
 		}
-		newCommit, _, err := cherry_pick.CherryPick(ctx, row[2].(string), cherry_pick.CherryPickOptions{
+		_, _, err = cherry_pick.CherryPick(ctx, row[2].(string), cherry_pick.CherryPickOptions{
 			Amend:         true,
 			CommitMessage: commitMessage,
 		})
-		if err != nil {
-			return err
-		}
-		fmt.Printf("created new commit: %s\n", newCommit)
-		return nil
+		return err
 
 	default:
 		return fmt.Errorf("rebase action '%s' is not supported", rebaseAction)
