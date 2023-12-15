@@ -153,7 +153,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     # Sanity Check
-    ! [[ "$output" =~ "Warning: There are fewer columns in the import file's schema than the table's schema" ]] || false
+    ! [[ "$output" =~ "Warning: The import file's schema does not match the table's schema" ]] || false
 
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
@@ -719,7 +719,7 @@ DELIM
 
     run dolt table import -s schema.sql -c subset data.csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Warning: There are fewer columns in the import file's schema than the table's schema" ]] || false
+    [[ "$output" =~ "Warning: The import file's schema does not match the table's schema" ]] || false
 
     # schema argument subsets the data and adds empty column
     run dolt sql -r csv -q "select * from subset ORDER BY pk"
