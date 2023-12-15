@@ -52,7 +52,14 @@ RUN git clone https://github.com/Percona-Lab/sysbench-tpcc.git
 WORKDIR /mysql
 RUN curl -L -O https://dev.mysql.com/get/mysql-apt-config_0.8.22-1_all.deb
 RUN dpkg -i mysql-apt-config_0.8.22-1_all.deb
-RUN apt-get update && apt-get install -y mysql-server
+# On 2023-12-14, the GPG key this repository uses to publish these packages expired. We make it insecure and install it anyway for now.
+# See https://bugs.mysql.com/bug.php?id=113427
+# Hopefully we can remove this soon.
+RUN sed -i.bak \
+  -e 's|^deb |deb [allow-insecure=true allow-weak=true allow-downgrade-to-insecure=true] |' \
+  -e 's|^deb-src |deb-src [allow-insecure=true allow-weak=true allow-downgrade-to-insecure=true] |' \
+  /etc/apt/sources.list.d/mysql.list 
+RUN apt-get update && apt-get install -y --allow-unauthenticated mysql-server
 RUN mysql --version
 
 # Install dolt

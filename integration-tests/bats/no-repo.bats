@@ -59,7 +59,7 @@ teardown() {
     [[ "$output" =~ "gc - Cleans up unreferenced data from the repository." ]] || false
     [[ "$output" =~ "filter-branch - Edits the commit history using the provided query." ]] || false
     [[ "$output" =~ "merge-base - Find the common ancestor of two commits." ]] || false
-    [[ "$output" =~ "version - Displays the current Dolt cli version." ]] || false
+    [[ "$output" =~ "version - Displays the version for the Dolt binary." ]] || false
     [[ "$output" =~ "dump - Export all tables in the working set into a file." ]] || false
 }
 
@@ -138,6 +138,30 @@ teardown() {
     mkdir .dolt
     run dolt version
     [ "$status" -eq 0 ]
+}
+
+@test "no-repo: dolt version prints out of date warning" {
+    echo "2.0.0" > $DOLT_ROOT_PATH/.dolt/version_check.txt
+
+    run dolt version
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Warning: you are on an old version of Dolt" ]] || false
+}
+
+@test "no-repo: dolt version ahead of saved version does not print warning" {
+    echo "1.27.0" > $DOLT_ROOT_PATH/.dolt/version_check.txt
+
+    run dolt version
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "Warning: you are on an old version of Dolt" ]] || false
+}
+
+@test "no-repo: dolt version with bad version_check.txt does not print error" {
+    echo "bad version" > $DOLT_ROOT_PATH/.dolt/version_check.txt
+
+    run dolt version
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "failed to parse version number" ]] || false
 }
 
 # Tests for dolt commands outside of a dolt repository

@@ -88,7 +88,7 @@ jwks:
       field1: a
     fields_to_log:
 `
-	expected := serverConfigAsYAMLConfig(DefaultServerConfig())
+	expected := ServerConfigAsYAMLConfig(DefaultServerConfig())
 
 	expected.BehaviorConfig.DoltTransactionCommit = &trueValue
 	expected.CfgDirStr = nillableStrPtr("")

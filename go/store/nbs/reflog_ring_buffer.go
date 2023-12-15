@@ -118,18 +118,11 @@ func (rb *reflogRingBuffer) Iterate(f func(item reflogRootHashEntry) error) erro
 	return nil
 }
 
-// TruncateToLastRecord resets this ring buffer so that it only exposes the single, most recently written record.
-// If this ring buffer has not already had any records pushed in it, then this is a no-op and the ring buffer
-// remains with a zero item count.
-func (rb *reflogRingBuffer) TruncateToLastRecord() {
+// Truncate resets this ring buffer so that it is empty.
+func (rb *reflogRingBuffer) Truncate() {
 	rb.mu.Lock()
 	defer rb.mu.Unlock()
-
-	if rb.itemCount == 0 {
-		return
-	}
-
-	rb.itemCount = 1
+	rb.itemCount = 0
 }
 
 // getIterationIndexes returns the start (inclusive) and end (exclusive) positions for iterating over the

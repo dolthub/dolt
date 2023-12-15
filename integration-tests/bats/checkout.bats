@@ -314,6 +314,46 @@ SQL
     [[ ! "$output" =~ "4" ]] || false
 }
 
+@test "checkout: -B flag will forcefully reset an existing branch" {
+    dolt sql -q 'create table test (id int primary key);'
+    dolt sql -q 'insert into test (id) values (89012);'
+    dolt commit -Am 'first change.'
+    dolt sql -q 'insert into test (id) values (76543);'
+    dolt commit -Am 'second change.'
+
+    dolt checkout -b testbr main~1
+    run dolt sql -q "select * from test;"
+    [[ "$output" =~ "89012" ]] || false
+    [[ ! "$output" =~ "76543" ]] || false
+
+    # make a change to the branch which we'll lose
+    dolt sql -q 'insert into test (id) values (19283);'
+    dolt commit -Am 'change to testbr.'
+
+    dolt checkout main
+    dolt checkout -B testbr main
+    run dolt sql -q "select * from test;"
+    [[ "$output" =~ "89012" ]] || false
+    [[ "$output" =~ "76543" ]] || false
+    [[ ! "$output" =~ "19283" ]] || false
+}
+
+@test "checkout: -B will create a branch that does not exist" {
+    dolt sql -q 'create table test (id int primary key);'
+    dolt sql -q 'insert into test (id) values (89012);'
+    dolt commit -Am 'first change.'
+    dolt sql -q 'insert into test (id) values (76543);'
+    dolt commit -Am 'second change.'
+
+    dolt checkout -B testbr main~1
+    run dolt sql -q "select * from test;"
+    [[ "$output" =~ "89012" ]] || false
+    [[ ! "$output" =~ "76543" ]] || false
+}
+
+
+
+
 @test "checkout: attempting to checkout a detached head shows a suggestion instead" {
   dolt sql -q "create table test (id int primary key);"
   dolt add .

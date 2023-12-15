@@ -106,15 +106,20 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return 1
 	}
 
-	branchOrTrack := apr.Contains(cli.CheckoutCreateBranch) || apr.Contains(cli.TrackFlag)
+	// Argument validation in the CLI is strictly nice to have. The stored procedure will do the same, but the errors
+	// won't be as nice.
+	branchOrTrack := apr.Contains(cli.CheckoutCreateBranch) || apr.Contains(cli.CreateResetBranch) || apr.Contains(cli.TrackFlag)
 	if (branchOrTrack && apr.NArg() > 1) || (!branchOrTrack && apr.NArg() == 0) {
 		usagePrt()
 		return 1
 	}
 
+	// Branch name retrieval here is strictly for messages. dolt_checkout procedure is the authority on logic around validation.
 	var branchName string
 	if apr.Contains(cli.CheckoutCreateBranch) {
 		branchName, _ = apr.GetValue(cli.CheckoutCreateBranch)
+	} else if apr.Contains(cli.CreateResetBranch) {
+		branchName, _ = apr.GetValue(cli.CreateResetBranch)
 	} else if apr.Contains(cli.TrackFlag) {
 		if apr.NArg() > 0 {
 			usagePrt()

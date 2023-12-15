@@ -216,7 +216,7 @@ func (p *branchControlReplication) Run() {
 	for _, r := range p.replicas {
 		r := r
 		wg.Add(1)
-		func() {
+		go func() {
 			defer wg.Done()
 			r.Run()
 		}()

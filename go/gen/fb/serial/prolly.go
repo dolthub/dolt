@@ -52,11 +52,7 @@ type ProllyTreeNode struct {
 
 func InitProllyTreeNodeRoot(o *ProllyTreeNode, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	o.Init(buf, n+offset)
-	if ProllyTreeNodeNumFields < o.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
+	return o.Init(buf, n+offset)
 }
 
 func TryGetRootAsProllyTreeNode(buf []byte, offset flatbuffers.UOffsetT) (*ProllyTreeNode, error) {
@@ -64,26 +60,18 @@ func TryGetRootAsProllyTreeNode(buf []byte, offset flatbuffers.UOffsetT) (*Proll
 	return x, InitProllyTreeNodeRoot(x, buf, offset)
 }
 
-func GetRootAsProllyTreeNode(buf []byte, offset flatbuffers.UOffsetT) *ProllyTreeNode {
-	x := &ProllyTreeNode{}
-	InitProllyTreeNodeRoot(x, buf, offset)
-	return x
-}
-
 func TryGetSizePrefixedRootAsProllyTreeNode(buf []byte, offset flatbuffers.UOffsetT) (*ProllyTreeNode, error) {
 	x := &ProllyTreeNode{}
 	return x, InitProllyTreeNodeRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsProllyTreeNode(buf []byte, offset flatbuffers.UOffsetT) *ProllyTreeNode {
-	x := &ProllyTreeNode{}
-	InitProllyTreeNodeRoot(x, buf, offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *ProllyTreeNode) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *ProllyTreeNode) Init(buf []byte, i flatbuffers.UOffsetT) error {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
+	if ProllyTreeNodeNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
 }
 
 func (rcv *ProllyTreeNode) Table() flatbuffers.Table {
