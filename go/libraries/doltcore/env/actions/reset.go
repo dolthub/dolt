@@ -172,7 +172,7 @@ func ResetHard(
 		return err
 	}
 
-	err = doltDb.UpdateWorkingSet(ctx, ws.Ref(), ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged).ClearMerge(), h, &datas.WorkingSetMeta{
+	err = doltDb.UpdateWorkingSet(ctx, ws.Ref(), ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged).ClearMerge().ClearRebase(), h, &datas.WorkingSetMeta{
 		Name:        username,
 		Email:       email,
 		Timestamp:   uint64(time.Now().Unix()),
