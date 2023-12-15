@@ -345,3 +345,108 @@ tests:
       result:
         columns: ["Level", "Code", "Message"]
         rows: []
+- name: users and grants and branch control replicate to multiple standbys
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby1
+            remote_url_template: http://localhost:3852/{database}
+          - name: standby2
+            remote_url_template: http://localhost:3853/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3851
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3309
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3310
+        cluster:
+          standby_remotes:
+          - name: standby1
+            remote_url_template: http://localhost:3851/{database}
+          - name: standby2
+            remote_url_template: http://localhost:3853/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3852
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3310
+  - name: server3
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3311
+        cluster:
+          standby_remotes:
+          - name: standby1
+            remote_url_template: http://localhost:3851/{database}
+          - name: standby2
+            remote_url_template: http://localhost:3852/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3853
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3311
+  connections:
+  - on: server1
+    queries:
+    - exec: 'SET @@PERSIST.dolt_cluster_ack_writes_timeout_secs = 10'
+    - exec: 'create database repo1'
+    - exec: "use repo1"
+    - exec: 'create table vals (i int primary key)'
+    - exec: 'insert into vals values (0),(1),(2),(3),(4)'
+    - exec: 'create user "aaron"@"%" IDENTIFIED BY "aaronspassword"'
+    - exec: 'grant ALL ON *.* to "aaron"@"%"'
+    - exec: 'create user "brian"@"%" IDENTIFIED BY "brianpassword"'
+    - exec: 'grant ALL ON *.* to "brian"@"%"'
+    - exec: 'delete from dolt_branch_control'
+    - exec: 'insert into dolt_branch_control values ("repo1", "main", "aaron", "%", "admin")'
+  - on: server2
+    user: 'aaron'
+    password: 'aaronspassword'
+    queries:
+    - exec: "use repo1"
+    - query: 'select count(*) from vals'
+      result:
+        columns: ["count(*)"]
+        rows: [["5"]]
+    - query: 'select count(*) from dolt_branch_control'
+      result:
+        columns: ["count(*)"]
+        rows: [["1"]]
+  - on: server3
+    user: 'aaron'
+    password: 'aaronspassword'
+    queries:
+    - exec: "use repo1"
+    - query: 'select count(*) from vals'
+      result:
+        columns: ["count(*)"]
+        rows: [["5"]]
+    - query: 'select count(*) from dolt_branch_control'
+      result:
+        columns: ["count(*)"]
+        rows: [["1"]]

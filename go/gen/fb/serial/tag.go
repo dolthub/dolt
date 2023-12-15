@@ -26,11 +26,7 @@ type Tag struct {
 
 func InitTagRoot(o *Tag, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	o.Init(buf, n+offset)
-	if TagNumFields < o.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
+	return o.Init(buf, n+offset)
 }
 
 func TryGetRootAsTag(buf []byte, offset flatbuffers.UOffsetT) (*Tag, error) {
@@ -38,26 +34,18 @@ func TryGetRootAsTag(buf []byte, offset flatbuffers.UOffsetT) (*Tag, error) {
 	return x, InitTagRoot(x, buf, offset)
 }
 
-func GetRootAsTag(buf []byte, offset flatbuffers.UOffsetT) *Tag {
-	x := &Tag{}
-	InitTagRoot(x, buf, offset)
-	return x
-}
-
 func TryGetSizePrefixedRootAsTag(buf []byte, offset flatbuffers.UOffsetT) (*Tag, error) {
 	x := &Tag{}
 	return x, InitTagRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsTag(buf []byte, offset flatbuffers.UOffsetT) *Tag {
-	x := &Tag{}
-	InitTagRoot(x, buf, offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *Tag) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *Tag) Init(buf []byte, i flatbuffers.UOffsetT) error {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
+	if TagNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
 }
 
 func (rcv *Tag) Table() flatbuffers.Table {

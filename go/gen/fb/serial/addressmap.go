@@ -26,11 +26,7 @@ type AddressMap struct {
 
 func InitAddressMapRoot(o *AddressMap, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	o.Init(buf, n+offset)
-	if AddressMapNumFields < o.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
+	return o.Init(buf, n+offset)
 }
 
 func TryGetRootAsAddressMap(buf []byte, offset flatbuffers.UOffsetT) (*AddressMap, error) {
@@ -38,26 +34,18 @@ func TryGetRootAsAddressMap(buf []byte, offset flatbuffers.UOffsetT) (*AddressMa
 	return x, InitAddressMapRoot(x, buf, offset)
 }
 
-func GetRootAsAddressMap(buf []byte, offset flatbuffers.UOffsetT) *AddressMap {
-	x := &AddressMap{}
-	InitAddressMapRoot(x, buf, offset)
-	return x
-}
-
 func TryGetSizePrefixedRootAsAddressMap(buf []byte, offset flatbuffers.UOffsetT) (*AddressMap, error) {
 	x := &AddressMap{}
 	return x, InitAddressMapRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsAddressMap(buf []byte, offset flatbuffers.UOffsetT) *AddressMap {
-	x := &AddressMap{}
-	InitAddressMapRoot(x, buf, offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *AddressMap) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *AddressMap) Init(buf []byte, i flatbuffers.UOffsetT) error {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
+	if AddressMapNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
 }
 
 func (rcv *AddressMap) Table() flatbuffers.Table {
