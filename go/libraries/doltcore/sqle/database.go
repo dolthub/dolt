@@ -25,9 +25,11 @@ import (
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/fulltext"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
+	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"gopkg.in/src-d/go-errors.v1"
@@ -112,8 +114,51 @@ func (r ReadOnlyDatabase) WithBranchRevision(requestedName string, branchSpec ds
 }
 
 func (db Database) LoadRebasePlan(ctx *sql.Context) (*doltdb.RebasePlan, error) {
-	//TODO implement me
-	panic("implement me")
+	var rebasePlan doltdb.RebasePlan
+
+	table, ok, err := db.GetTableInsensitive(ctx, doltdb.RebaseTableName)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("unable to find dolt_rebase table")
+	}
+	resolvedTable := plan.NewResolvedTable(table, db, nil)
+	sort := plan.NewSort([]sql.SortField{{
+		Column: expression.NewGetField(0, types.Int64, "rebase_order", false),
+		Order:  sql.Ascending,
+	}}, resolvedTable)
+	iter, err := rowexec.DefaultBuilder.Build(ctx, sort, nil)
+	if err != nil {
+		return nil, err
+	}
+	for {
+		row, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
+
+		i, ok := row[1].(uint16)
+		if !ok {
+			// TODO: check for NULLs, too? (schema shouldn't allow though)
+			panic(fmt.Sprintf("invalid enum value: %v (%T)", row[1], row[1]))
+		}
+		rebaseAction, ok := dprocedures.RebaseActionEnumType.At(int(i))
+		if !ok {
+			panic("invalid enum value!")
+		}
+
+		rebasePlan.Members = append(rebasePlan.Members, doltdb.RebasePlanMember{
+			RebaseOrder: uint(row[0].(uint16)),
+			Action:      rebaseAction,
+			CommitHash:  row[2].(string),
+			CommitMsg:   row[3].(string),
+		})
+	}
+
+	return &rebasePlan, nil
 }
 
 func (db Database) SaveRebasePlan(ctx *sql.Context, plan *doltdb.RebasePlan) error {

@@ -16,13 +16,9 @@ package dprocedures
 
 import (
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression"
-	"github.com/dolthub/go-mysql-server/sql/plan"
-	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/cherry_pick"
@@ -206,12 +202,7 @@ func startRebase(ctx *sql.Context, upstreamPoint string) error {
 	if !ok {
 		return fmt.Errorf("expected a dsess.RebaseableDatabase implementation, but received a %T", db)
 	}
-	err = rdb.SaveRebasePlan(ctx, rebasePlan)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return rdb.SaveRebasePlan(ctx, rebasePlan)
 }
 
 func abortRebase(ctx *sql.Context) error {
@@ -261,8 +252,6 @@ func continueRebase(ctx *sql.Context) error {
 	//       technically need that until rebasing causes control to stop and go back
 	//       to the user though.
 
-	// TODO: How are we going to support editing commit messages?
-
 	// Validate that we are in an interactive rebase
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	workingSet, err := doltSession.WorkingSet(ctx, ctx.GetCurrentDatabase())
@@ -273,35 +262,22 @@ func continueRebase(ctx *sql.Context) error {
 		return fmt.Errorf("no rebase in progress")
 	}
 
-	// iterate over the rebase plan in dolt_rebase and process each commit
 	db, err := doltSession.Provider().Database(ctx, ctx.GetCurrentDatabase())
 	if err != nil {
 		return err
 	}
-	table, ok, err := db.GetTableInsensitive(ctx, doltdb.RebaseTableName)
-	if err != nil {
-		return err
-	}
+
+	rdb, ok := db.(dsess.RebaseableDatabase)
 	if !ok {
-		return fmt.Errorf("unable to find dolt_rebase table")
+		return fmt.Errorf("expected a dsess.RebaseableDatabase implementation, but received a %T", db)
 	}
-	resolvedTable := plan.NewResolvedTable(table, db, nil)
-	sort := plan.NewSort([]sql.SortField{{
-		Column: expression.NewGetField(0, types.Int64, "rebase_order", false),
-		Order:  sql.Ascending,
-	}}, resolvedTable)
-	iter, err := rowexec.DefaultBuilder.Build(ctx, sort, nil)
+	rebasePlan, err := rdb.LoadRebasePlan(ctx)
 	if err != nil {
 		return err
 	}
-	for {
-		row, err := iter.Next(ctx)
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return err
-		}
-		err = processRebaseAction(ctx, row)
+
+	for _, step := range rebasePlan.Members {
+		err = processRebaseAction(ctx, &step)
 		if err != nil {
 			return err
 		}
@@ -350,18 +326,7 @@ func continueRebase(ctx *sql.Context) error {
 	return nil
 }
 
-// TODO: Change to work with rebase plan type instead of a row directly
-func processRebaseAction(ctx *sql.Context, row sql.Row) error {
-	i, ok := row[1].(uint16)
-	if !ok {
-		// TODO: check for NULL, too
-		panic(fmt.Sprintf("invalid enum value: %v (%T)", row[1], row[1]))
-	}
-	rebaseAction, ok := RebaseActionEnumType.At(int(i))
-	if !ok {
-		panic("invalid enum value!")
-	}
-
+func processRebaseAction(ctx *sql.Context, planStep *doltdb.RebasePlanMember) error {
 	// Make sure we have a transaction opened for the session
 	// NOTE: After our first call to cherry-pick, the tx is committed, so a new tx needs to be started
 	//       as we process additional rebase actions.
@@ -373,37 +338,37 @@ func processRebaseAction(ctx *sql.Context, row sql.Row) error {
 		}
 	}
 
-	switch rebaseAction {
-	case "pick", "reword":
-		// Perform the cherry-pick
-		options := cherry_pick.CherryPickOptions{}
-		if rebaseAction == "reword" {
-			options.CommitMessage = row[3].(string)
-		}
-		_, _, err := cherry_pick.CherryPick(ctx, row[2].(string), options)
-		return err
-
-	case "drop":
+	switch planStep.Action {
+	case rebase.RebaseActionDrop:
 		return nil
 
-	case "squash":
+	case rebase.RebaseActionPick, rebase.RebaseActionReword:
+		// Perform the cherry-pick
+		options := cherry_pick.CherryPickOptions{}
+		if planStep.Action == rebase.RebaseActionReword {
+			options.CommitMessage = planStep.CommitMsg
+		}
+		_, _, err := cherry_pick.CherryPick(ctx, planStep.CommitHash, options)
+		return err
+
+	case rebase.RebaseActionSquash:
 		// TODO: validate that squash is NOT the first action!
 		//       would be better to put rebase plan validation into an earlier/separate step,
 		//       instead of mixing it in with execution.
 
 		// Perform the cherry-pick
-		commitMessage, err := squashCommitMessage(ctx, row[2].(string))
+		commitMessage, err := squashCommitMessage(ctx, planStep.CommitHash)
 		if err != nil {
 			return err
 		}
-		_, _, err = cherry_pick.CherryPick(ctx, row[2].(string), cherry_pick.CherryPickOptions{
+		_, _, err = cherry_pick.CherryPick(ctx, planStep.CommitHash, cherry_pick.CherryPickOptions{
 			Amend:         true,
 			CommitMessage: commitMessage,
 		})
 		return err
 
 	default:
-		return fmt.Errorf("rebase action '%s' is not supported", rebaseAction)
+		return fmt.Errorf("rebase action '%s' is not supported", planStep.Action)
 	}
 }
 
