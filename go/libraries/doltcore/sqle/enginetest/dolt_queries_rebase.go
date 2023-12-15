@@ -19,9 +19,24 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
 )
 
 var DoltRebaseScriptTests = []queries.ScriptTest{
+	{
+		Name:        "dolt_rebase errors: basic errors",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_rebase('--abort');",
+				ExpectedErrStr: "no rebase in progress",
+			}, {
+				Query:          "call dolt_rebase('--continue');",
+				ExpectedErrStr: "no rebase in progress",
+			},
+		},
+	},
 	{
 		/*
 		   TODO: Error cases:
@@ -38,20 +53,94 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 		        - merge commits
 		        - conflicts!
 		*/
-		Name:        "dolt_rebase: error cases",
-		SetUpScript: []string{},
+		Name: "dolt_rebase errors: no database selected",
+		SetUpScript: []string{
+			"create database temp;",
+			"use temp;",
+			"drop database temp;",
+		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "call dolt_rebase('--abort');",
-				ExpectedErrStr: "no rebase in progress",
-			}, {
-				Query:          "call dolt_rebase('--continue');",
-				ExpectedErrStr: "no rebase in progress",
+				Query:          "call dolt_rebase('main');",
+				ExpectedErrStr: "no database selected", // TODO: dolt_rebase proc is probably not available
 			},
 		},
 	},
+
+	{
+		// TODO:
+		Name:        "dolt_rebase errors: active cherry-pick or merge",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_rebase('main');",
+				ExpectedErrStr: "no database selected", // TODO: dolt_rebase proc is probably not available
+			},
+		},
+	},
+
+	{
+		Name: "dolt_rebase errors: invalid rebase plans",
+		SetUpScript: []string{
+			// TODO: consider sharing setupscripts for rebase test setups?
+			"create table t (pk int primary key);",
+			"call dolt_commit('-Am', 'creating table t');",
+			"call dolt_branch('branch1');",
+
+			"insert into t values (0);",
+			"call dolt_commit('-am', 'inserting row 0');",
+
+			"call dolt_checkout('branch1');",
+			"insert into t values (1);",
+			"call dolt_commit('-am', 'inserting row 1');",
+			"insert into t values (10);",
+			"call dolt_commit('-am', 'inserting row 10');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			// duplicate rebase_order (this is a PK though... so shouldn't be possible?)
+			// TODO: Test that deleting a row from the rebase plan is equivalent to marking it as a drop
+			{
+				Query:    "call dolt_rebase('main');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query: "update dolt_rebase set action='squash';",
+				Expected: []sql.Row{{gmstypes.OkResult{
+					RowsAffected: 2,
+					InsertID:     0,
+					Info: plan.UpdateInfo{
+						Matched:  2,
+						Updated:  2,
+						Warnings: 0,
+					},
+				}}},
+			},
+			{
+				Query:          "call dolt_rebase('--continue');",
+				ExpectedErrStr: rebase.ErrInvalidRebasePlanSquashFixupWithoutPick.Error(),
+			},
+			{
+				Query: "update dolt_rebase set action='drop' where rebase_order=1;",
+				Expected: []sql.Row{{gmstypes.OkResult{
+					RowsAffected: 1,
+					InsertID:     0,
+					Info: plan.UpdateInfo{
+						Matched:  1,
+						Updated:  1,
+						Warnings: 0,
+					},
+				}}},
+			},
+			{
+				Query:          "call dolt_rebase('--continue');",
+				ExpectedErrStr: rebase.ErrInvalidRebasePlanSquashFixupWithoutPick.Error(),
+			},
+		},
+	},
+
 	/*
 		TODO: Other cases?
+		    - dolt status should show that we're in a rebase
 	*/
 	{
 		Name: "dolt_rebase: basic case",
@@ -80,7 +169,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "call dolt_rebase('main');",
-				// TODO: Add status message: "rebase started"
+				// TODO: Add human readable status message: "rebase started"
 				Expected: []sql.Row{{0}},
 			},
 			{

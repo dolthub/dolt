@@ -130,7 +130,7 @@ func startRebase(ctx *sql.Context, upstreamPoint string) error {
 	}
 	dbData, ok := doltSession.GetDbData(ctx, ctx.GetCurrentDatabase())
 	if !ok {
-		panic("not okay getting database!")
+		return fmt.Errorf("unable to find database %s", ctx.GetCurrentDatabase())
 	}
 
 	rebaseBranch := headRef.GetPath()
@@ -174,7 +174,7 @@ func startRebase(ctx *sql.Context, upstreamPoint string) error {
 
 	dbData, ok = doltSession.GetDbData(ctx, ctx.GetCurrentDatabase())
 	if !ok {
-		panic("database not okay!")
+		return fmt.Errorf("unable to get db datata for database %s", ctx.GetCurrentDatabase())
 	}
 
 	db, err := doltSession.Provider().Database(ctx, ctx.GetCurrentDatabase())
@@ -198,7 +198,7 @@ func startRebase(ctx *sql.Context, upstreamPoint string) error {
 	}
 
 	// Create the rebase plan
-	rebasePlan, err := rebase.CreateRebasePlan(ctx, startCommit, upstreamCommit)
+	rebasePlan, err := rebase.CreateDefaultRebasePlan(ctx, startCommit, upstreamCommit)
 	if err != nil {
 		return err
 	}
@@ -281,6 +281,11 @@ func continueRebase(ctx *sql.Context) error {
 		return err
 	}
 
+	err = rebase.ValidateRebasePlan(ctx, rebasePlan)
+	if err != nil {
+		return err
+	}
+
 	for _, step := range rebasePlan.Members {
 		err = processRebaseAction(ctx, &step)
 		if err != nil {
@@ -295,7 +300,7 @@ func continueRebase(ctx *sql.Context) error {
 	}
 	dbData, ok := doltSession.GetDbData(ctx, ctx.GetCurrentDatabase())
 	if !ok {
-		panic("not okay!! !!")
+		return fmt.Errorf("unable to get db data for database %s", ctx.GetCurrentDatabase())
 	}
 
 	rebaseBranch := rebaseBranchWorkingSet.RebaseState().Branch()

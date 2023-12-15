@@ -32,6 +32,10 @@ const (
 	RebaseActionReword = "reword"
 )
 
+// ErrInvalidRebasePlanSquashFixupWithoutPick is returned when a rebase plan attempts to squash or
+// fixup a commit without first picking or rewording a commit.
+var ErrInvalidRebasePlanSquashFixupWithoutPick = fmt.Errorf("invalid rebase plan: squash and fixup actions must appear after a pick or reword action")
+
 // TODO: These types can't live in here because of an import cycle :-(
 //type RebasePlan struct {
 //	Members []RebasePlanMember
@@ -44,7 +48,12 @@ const (
 //	CommitMsg    string
 //}
 
-func CreateRebasePlan(ctx *sql.Context, startCommit, upstreamCommit *doltdb.Commit) (*doltdb.RebasePlan, error) {
+// CreateDefaultRebasePlan creates and returns the default rebase plan for the commits between
+// |startCommit| and |upstreamCommit|, equivalent to the log of startCommit..upstreamCommit. The
+// default plan includes each of those commits, in the same order they were originally applied, and
+// each step in the plan will have the default, pick, action. If the plan cannot be generated for
+// any reason, such as disconnected or invalid commits specified, then an error is returned.
+func CreateDefaultRebasePlan(ctx *sql.Context, startCommit, upstreamCommit *doltdb.Commit) (*doltdb.RebasePlan, error) {
 	commits, err := findRebaseCommits(ctx, startCommit, upstreamCommit)
 	if err != nil {
 		return nil, err
@@ -67,8 +76,7 @@ func CreateRebasePlan(ctx *sql.Context, startCommit, upstreamCommit *doltdb.Comm
 		}
 
 		plan.Members = append(plan.Members, doltdb.RebasePlanMember{
-			// TODO: Once we have these loaded in to a plan structure, it would be easy to adjust the order, too.
-			RebaseOrder: uint(len(commits)) - uint(idx),
+			RebaseOrder: uint(len(commits) - idx),
 			Action:      RebaseActionPick,
 			CommitHash:  hash.String(), // TODO: Maybe keep as a hash.Hash instance?
 			CommitMsg:   meta.Description,
@@ -76,6 +84,36 @@ func CreateRebasePlan(ctx *sql.Context, startCommit, upstreamCommit *doltdb.Comm
 	}
 
 	return &plan, nil
+}
+
+// ValidateRebasePlan returns a validation error for invalid states in a rebase plan, such as
+// squash or fixup actions appearing in the plan before a pick or reword action.
+func ValidateRebasePlan(_ *sql.Context, plan *doltdb.RebasePlan) error {
+	// TODO: Should we check that rebase order is ascending? It should be from how we load
+	//       the plan from the DB, but if it's not, it might be a good sanity check before
+	//       executing a plan out of order.
+
+	// TODO: Would be good to assert that each commit is valid – if a plan has garbage for a
+	//       commit hash, would be good to fail before we start executing the plan.
+
+	seenPick := false
+	seenReword := false
+	for _, step := range plan.Members {
+		switch step.Action {
+		case RebaseActionPick:
+			seenPick = true
+
+		case RebaseActionReword:
+			seenReword = true
+
+		case RebaseActionFixup, RebaseActionSquash:
+			if !seenPick && !seenReword {
+				return ErrInvalidRebasePlanSquashFixupWithoutPick
+			}
+		}
+	}
+
+	return nil
 }
 
 func findRebaseCommits(ctx *sql.Context, currentBranchCommit, upstreamBranchCommit *doltdb.Commit) (commits []*doltdb.Commit, err error) {
