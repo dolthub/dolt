@@ -1774,7 +1774,7 @@ tests:
     server:
       args: ["--config", "onestandby.yaml"]
       port: 3309
-  - name: standby
+  - name: standby_one
     with_files:
     - name: config.yaml
       contents: |
@@ -1789,13 +1789,33 @@ tests:
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 3853
+            port: 3852
     server:
       args: ["--config", "config.yaml"]
       port: 3310
+  - name: standby_two
+    with_files:
+    - name: config.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3311
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:3851/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3853
+    server:
+      args: ["--config", "config.yaml"]
+      port: 3311
   connections:
   - on: server1
     queries:
+    - exec: 'SET @@GLOBAL.dolt_cluster_ack_writes_timeout_secs = 10'
     - exec: "create database testdb"
   - on: server1
     restart_server:
@@ -1808,14 +1828,14 @@ tests:
         columns: ["count(*)"]
         rows:
         - ["2"]
-    - exec: 'SET @@GLOBAL.dolt_cluster_ack_writes_timeout_secs = 1'
+    - exec: 'SET @@GLOBAL.dolt_cluster_ack_writes_timeout_secs = 10'
     - exec: "create table vals (id int primary key)"
     - query: "show warnings"
       result:
         columns: ["Level", "Code", "Message"]
         rows:
-        - ["Warning", "3024", "Timed out replication of commit to 1 out of 2 replicas."]
-  - on: standby
+        - []
+  - on: standby_two
     queries:
     - query: "select count(*) from `testdb`.`vals`"
       result:
