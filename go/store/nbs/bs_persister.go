@@ -275,6 +275,7 @@ func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off
 }
 
 func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
+	//fmt.Fprintf(color.Output, "newBSChunkSource: name: %s\n", name.String())
 	index, err := loadTableIndex(ctx, stats, chunkCount, q, func(p []byte) error {
 		rc, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-int64(len(p)), 0))
 		if err != nil {
@@ -282,6 +283,7 @@ func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, ch
 		}
 		defer rc.Close()
 
+		//fmt.Fprintf(color.Output, "newBSChunkSource: loadIndexBytesFunc: %s\n", name.String())
 		_, err = io.ReadFull(rc, p)
 		if err != nil {
 			return err

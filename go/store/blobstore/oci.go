@@ -18,6 +18,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"github.com/fatih/color"
 	"github.com/oracle/oci-go-sdk/v65/common"
 	"github.com/oracle/oci-go-sdk/v65/objectstorage"
 	"golang.org/x/sync/errgroup"
@@ -325,6 +327,7 @@ func uploadParts(ctx context.Context, objectName, uploadID string, numParts, con
 
 			batchSize = 0
 			batch = make([]*toUpload, 0)
+			fmt.Fprintf(color.Output, "finished uploading a batch of parts")
 			continue
 		}
 
@@ -338,6 +341,7 @@ func uploadParts(ctx context.Context, objectName, uploadID string, numParts, con
 			return nil, err
 		}
 
+		buf = buf[:n]
 		batchSize += int64(n)
 		batch = append(batch, &toUpload{
 			b:       buf,
@@ -369,7 +373,6 @@ func uploadParts(ctx context.Context, objectName, uploadID string, numParts, con
 		}
 		return *completedParts[i].PartNum < *completedParts[j].PartNum
 	})
-
 	return completedParts, nil
 }
 
@@ -377,6 +380,11 @@ func uploadBatch(ctx context.Context, objectName, uploadID string, batch []*toUp
 	batchChan := make(chan *toUpload, len(batch))
 	eg, egCtx := errgroup.WithContext(ctx)
 
+	fmt.Fprintf(color.Output, "uploading batch\n")
+	for _, b := range batch {
+		fmt.Fprintf(color.Output, "part number:%d\n", b.partNum)
+	}
+	//fmt.Fprintf(color.Output, "uploading batch: %+v\n", batch)
 	for i := 0; i < concurrentListeners; i++ {
 		eg.Go(func() error {
 			for {
@@ -388,11 +396,13 @@ func uploadBatch(ctx context.Context, objectName, uploadID string, batch []*toUp
 						return nil
 					}
 
+					fmt.Fprintf(color.Output, "uploading part number:%d\n", u.partNum)
 					cp, err := uploadF(egCtx, objectName, uploadID, u.partNum, int64(len(u.b)), bytes.NewReader(u.b))
 					if err != nil {
 						return err
 					}
 
+					fmt.Fprintf(color.Output, "completed part number:%d\n", *cp.PartNum)
 					completedPartsChan <- cp
 				}
 			}

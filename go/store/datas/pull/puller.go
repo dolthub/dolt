@@ -305,6 +305,14 @@ func (s *stats) read() Stats {
 func (p *Puller) uploadTempTableFile(ctx context.Context, tmpTblFile tempTblFile) error {
 	fileSize := tmpTblFile.contentLen
 	defer func() {
+		//fmt.Fprintf(color.Output, "tmpTblFile: %s\n", filepath.Join(p.tempDir, tmpTblFile.id))
+		//if _, err := os.Stat(filepath.Join(p.tempDir, tmpTblFile.id)); errors.Is(err, os.ErrNotExist) {
+		//	panic("temp tf does not exist")
+		//}
+		//err := os.Rename(filepath.Join(p.tempDir, tmpTblFile.id), filepath.Join("/Users/dustin/src/dolt/temptfs", tmpTblFile.id))
+		//if err != nil {
+		//	panic(err)
+		//}
 		_ = tmpTblFile.read.Remove()
 	}()
 

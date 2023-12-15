@@ -97,7 +97,11 @@ func ReadTableFooter(rd io.ReadSeeker) (chunkCount uint32, totalUncompressedData
 		return 0, 0, err
 	}
 
+	//fmt.Fprintf(color.Output, "all footer: %s\n", string(footer))
+
 	if string(footer[uint32Size+uint64Size:]) != magicNumber {
+		//fmt.Fprintf(color.Output, "footer string: %s\n", footer)
+		//fmt.Fprintf(color.Output, "magicNumber: %s\n", magicNumber)
 		return 0, 0, ErrInvalidTableFile
 	}
 

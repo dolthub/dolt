@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/fatih/color"
 	"io"
 	"time"
 
@@ -49,6 +50,7 @@ func (bsp *noConjoinBlobstorePersister) Persist(ctx context.Context, mt *memTabl
 
 	eg, ectx := errgroup.WithContext(ctx)
 	eg.Go(func() (err error) {
+		fmt.Fprintf(color.Output, "Persist: bs.Put: name: %s\n", name)
 		_, err = bsp.bs.Put(ectx, name, bytes.NewBuffer(data))
 		return
 	})
@@ -96,6 +98,7 @@ func (bsp *noConjoinBlobstorePersister) CopyTableFile(ctx context.Context, r io.
 		return fmt.Errorf("table file size %d too small for chunk count %d", fileSz, chunkCount)
 	}
 
+	fmt.Fprintf(color.Output, "CopyTableFile: bs.Put: name: %s\n", name)
 	_, err := bsp.bs.Put(ctx, name, r)
 	return err
 }
