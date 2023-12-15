@@ -42,7 +42,12 @@ var doltRebaseProcedureSchema = []*sql.Column{
 	},
 }
 
-var RebaseActionEnumType = types.MustCreateEnumType([]string{"pick", "drop", "squash", "reword"}, sql.Collation_Default)
+var RebaseActionEnumType = types.MustCreateEnumType([]string{
+	rebase.RebaseActionDrop,
+	rebase.RebaseActionPick,
+	rebase.RebaseActionReword,
+	rebase.RebaseActionSquash,
+	rebase.RebaseActionFixup}, sql.Collation_Default)
 
 var DoltRebaseSystemTableSchema = []*sql.Column{
 	{
@@ -343,7 +348,6 @@ func processRebaseAction(ctx *sql.Context, planStep *doltdb.RebasePlanMember) er
 		return nil
 
 	case rebase.RebaseActionPick, rebase.RebaseActionReword:
-		// Perform the cherry-pick
 		options := cherry_pick.CherryPickOptions{}
 		if planStep.Action == rebase.RebaseActionReword {
 			options.CommitMessage = planStep.CommitMsg
@@ -352,12 +356,24 @@ func processRebaseAction(ctx *sql.Context, planStep *doltdb.RebasePlanMember) er
 		return err
 
 	case rebase.RebaseActionSquash:
-		// TODO: validate that squash is NOT the first action!
+		// TODO: validate that squash (or fixup!) is NOT the first action!
 		//       would be better to put rebase plan validation into an earlier/separate step,
 		//       instead of mixing it in with execution.
-
-		// Perform the cherry-pick
 		commitMessage, err := squashCommitMessage(ctx, planStep.CommitHash)
+		if err != nil {
+			return err
+		}
+		_, _, err = cherry_pick.CherryPick(ctx, planStep.CommitHash, cherry_pick.CherryPickOptions{
+			Amend:         true,
+			CommitMessage: commitMessage,
+		})
+		return err
+
+	case rebase.RebaseActionFixup:
+		// TODO: It shouldn't be necessary for us to lookup the previous commit message and
+		//       specify it here. If we specify that we want to cherry pick as an amend, then cherry
+		//       pick should amend the previous commit without overwriting the commit message.
+		commitMessage, err := previousCommitMessage(ctx)
 		if err != nil {
 			return err
 		}
@@ -370,6 +386,22 @@ func processRebaseAction(ctx *sql.Context, planStep *doltdb.RebasePlanMember) er
 	default:
 		return fmt.Errorf("rebase action '%s' is not supported", planStep.Action)
 	}
+}
+
+func previousCommitMessage(ctx *sql.Context) (string, error) {
+	// TODO: Remove this function after we fix the issue with cherry_pick.CherryPick overriding the commit message
+	//       by default when the Amend option is given.
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	headCommit, err := doltSession.GetHeadCommit(ctx, ctx.GetCurrentDatabase())
+	if err != nil {
+		return "", err
+	}
+	headCommitMeta, err := headCommit.GetCommitMeta(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	return headCommitMeta.Description, nil
 }
 
 // squashCommitMessage looks up the commit at HEAD and the commit identified by |nextCommitHash| and squashes their two
