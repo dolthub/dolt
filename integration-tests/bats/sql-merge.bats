@@ -340,7 +340,7 @@ call dolt_checkout('main');
 call dolt_merge('feature-branch');
 SQL
     log_status_eq 1
-    [[ $output =~ "Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1" ]] || false
+    [[ $output =~ "Merge conflict detected, @autocommit transaction rolled back. @autocommit must be disabled so that merge conflicts can be resolved using the dolt_conflicts and dolt_schema_conflicts tables before manually committing the transaction. Alternatively, to commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1" ]] || false
 
     run dolt status
     log_status_eq 0
@@ -391,7 +391,7 @@ call dolt_checkout('main');
 call dolt_merge('feature-branch');
 SQL
     log_status_eq 1
-    [[ $output =~ "Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1" ]] || false
+    [[ $output =~ "Merge conflict detected, @autocommit transaction rolled back. @autocommit must be disabled so that merge conflicts can be resolved using the dolt_conflicts and dolt_schema_conflicts tables before manually committing the transaction. Alternatively, to commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1" ]] || false
 
     # back on the command line, our session state is clean
     run dolt status
