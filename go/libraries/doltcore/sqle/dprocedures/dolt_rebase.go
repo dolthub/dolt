@@ -71,11 +71,6 @@ var DoltRebaseSystemTableSchema = []*sql.Column{
 	},
 }
 
-// rebaseWorkingBranch is the name of the temporary branch used when performing a rebase. Normally, a rebase happens
-// in the context of a detatched HEAD, but because Dolt doesn't support that well, we use a temporary branch.
-// TODO: Eventually, we need to change this name so that it uses a UUID or at least the current branch name.
-const rebaseWorkingBranch = "dolt_rebase_42"
-
 func doltRebase(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := doDoltRebase(ctx, args)
 	if err != nil {
@@ -153,7 +148,9 @@ func startRebase(ctx *sql.Context, upstreamPoint string) error {
 		return err
 	}
 
-	// TODO: Use a better API than the stored procedure function :-/
+	// rebaseWorkingBranch is the name of the temporary branch used when performing a rebase. In Git, a rebase
+	// happens with a detatched HEAD, but Dolt doesn't support that, we use a temporary branch.
+	rebaseWorkingBranch := "dolt_rebase_" + rebaseBranch
 	rowIter, err := doltBranch(ctx, rebaseWorkingBranch, upstreamPoint)
 	if err != nil {
 		return err
@@ -318,7 +315,11 @@ func continueRebase(ctx *sql.Context) error {
 	if !ok {
 		panic("not okay!! !!")
 	}
-	err = copyABranch(ctx, dbData, rebaseWorkingBranch, rebaseBranchWorkingSet.RebaseState().Branch(), true, nil)
+
+	rebaseBranch := rebaseBranchWorkingSet.RebaseState().Branch()
+	rebaseWorkingBranch := "dolt_rebase_" + rebaseBranch
+
+	err = copyABranch(ctx, dbData, rebaseWorkingBranch, rebaseBranch, true, nil)
 	if err != nil {
 		return err
 	}
