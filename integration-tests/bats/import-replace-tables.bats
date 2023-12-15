@@ -348,7 +348,7 @@ DELIM
 
     run dolt table import -r test 1pk5col-ints-updt.csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Warning: There are fewer columns in the import file's schema than the table's schema" ]] || false
+    [[ "$output" =~ "Warning: The import file's schema does not match the table's schema" ]] || false
     [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 
@@ -375,14 +375,45 @@ DELIM
     dolt sql -q "insert into subset values (1000, 100, 1000, 10000)"
 
     run dolt table import -r subset data.csv
-    ! [[ "$output" =~ "Warning: There are fewer columns in the import file's schema than the table's schema" ]] || false
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "Warning: The import file's schema does not match the table's schema" ]] || false
+    [[ "$output" =~ "If unintentional, check for any typos in the import file's header" ]] || false
+    [[ "$output" =~ "Extra columns in import file:" ]] || false
+    [[ "$output" =~ "	c4" ]] || false
 
     # schema argument subsets the data and adds empty column
     run dolt sql -r csv -q "select * from subset ORDER BY pk"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
     [ "${lines[1]}" = "0,1,2,3" ]
+}
+
+@test "import-replace-tables: different schema warning lists differing columns" {
+    cat <<SQL > schema.sql
+CREATE TABLE t (
+    pk INT NOT NULL,
+    c1 INT,
+    c2 INT,
+    c3 INT,
+    PRIMARY KEY (pk)
+);
+SQL
+    cat <<DELIM > data.csv
+pk,c4,c1,c3
+0,4,1,3
+DELIM
+
+    dolt sql < schema.sql
+    dolt sql -q "insert into t values (1000, 100, 1000, 10000)"
+
+    run dolt table import -r t data.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Warning: The import file's schema does not match the table's schema" ]] || false
+    [[ "$output" =~ "If unintentional, check for any typos in the import file's header" ]] || false
+    [[ "$output" =~ "Missing columns in t:" ]] || false
+    [[ "$output" =~ "	c2" ]] || false
+    [[ "$output" =~ "Extra columns in import file:" ]] || false
+    [[ "$output" =~ "	c4" ]] || false
 }
 
 @test "import-replace-tables: Replace that breaks fk constraints correctly errors" {
