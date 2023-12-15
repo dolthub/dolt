@@ -41,7 +41,11 @@ const (
 )
 
 var ErrRetryTransaction = errors.New("this transaction conflicts with a committed transaction from another client")
-var ErrUnresolvedConflictsCommit = errors.New("Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1")
+
+var ErrUnresolvedConflictsCommit = errors.New("Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts and dolt_schema_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1")
+
+var ErrUnresolvedConflictsAutoCommit = errors.New("Merge conflict detected, @autocommit transaction rolled back. @autocommit must be disabled so that merge conflicts can be resolved using the dolt_conflicts and dolt_schema_conflicts tables before manually committing the transaction. Alternatively, to commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1")
+
 var ErrUnresolvedConstraintViolationsCommit = errors.New("Committing this transaction resulted in a working set with constraint violations, transaction rolled back. " +
 	"This constraint violation may be the result of a previous merge or the result of transaction sequencing. " +
 	"Constraint violations from a merge can be resolved using the dolt_constraint_violations table before committing the transaction. " +
@@ -610,7 +614,17 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 				return rollbackErr
 			}
 
-			return ErrUnresolvedConflictsCommit
+			// Return a different error message depending on if @autocommit is enabled or not, to help
+			// users understand what steps to take
+			autocommit, err := isSessionAutocommit(ctx)
+			if err != nil {
+				return err
+			}
+			if autocommit {
+				return ErrUnresolvedConflictsAutoCommit
+			} else {
+				return ErrUnresolvedConflictsCommit
+			}
 		}
 	}
 
@@ -797,4 +811,13 @@ func rootsEqual(left, right *doltdb.RootValue) bool {
 
 func workingAndStagedEqual(left, right *doltdb.WorkingSet) bool {
 	return rootsEqual(left.WorkingRoot(), right.WorkingRoot()) && rootsEqual(left.StagedRoot(), right.StagedRoot())
+}
+
+// isSessionAutocommit returns true if @autocommit is enabled.
+func isSessionAutocommit(ctx *sql.Context) (bool, error) {
+	autoCommitSessionVar, err := ctx.GetSessionVariable(ctx, sql.AutoCommitSessionVar)
+	if err != nil {
+		return false, err
+	}
+	return sql.ConvertToBool(ctx, autoCommitSessionVar)
 }
