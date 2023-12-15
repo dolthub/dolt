@@ -305,7 +305,7 @@ func (c *Controller) applyCommitHooks(ctx context.Context, name string, bt *sql.
 			remote = env.NewRemote(r.Name(), remoteUrl, nil)
 			err := denv.AddRemote(remote)
 			if err != nil {
-				return nil, fmt.Errorf("sqle: cluster: standby replication: could not create remote %s for database %s: %v", r.Name(), name, err)
+				return nil, fmt.Errorf("sqle: cluster: standby replication: could not create remote %s for database %s: %w", r.Name(), name, err)
 			}
 		}
 		commitHook := newCommitHook(c.lgr, r.Name(), remote.Url, name, c.role, func(ctx context.Context) (*doltdb.DoltDB, error) {
