@@ -70,6 +70,18 @@ type RemoteReadReplicaDatabase interface {
 	PullFromRemote(ctx *sql.Context) error
 }
 
+// TODO: Naming: RebasePlanDatabase?
+type RebaseableDatabase interface {
+
+	// TODO: this causes the dsess package to depend on the rebase package, which already needs to
+	//       depend on dsess, and causes an import cycle :-(
+	//SaveRebasePlan(ctx *sql.Context, plan *rebase.RebasePlan) error
+	//LoadRebasePlan(ctx *sql.Context) (*rebase.RebasePlan, error)
+
+	SaveRebasePlan(ctx *sql.Context, plan *doltdb.RebasePlan) error
+	LoadRebasePlan(ctx *sql.Context) (*doltdb.RebasePlan, error)
+}
+
 type DoltDatabaseProvider interface {
 	sql.MutableDatabaseProvider
 	// FileSystem returns the filesystem used by this provider, rooted at the data directory for all databases.
@@ -132,10 +144,4 @@ type SqlDatabase interface {
 	DbData() env.DbData
 	// DoltDatabases returns all underlying DoltDBs for this database.
 	DoltDatabases() []*doltdb.DoltDB
-}
-
-type RebaseableDatabase interface {
-	SqlDatabase
-
-	CreateRebasePlan(ctx *sql.Context, startCommit, stopCommit *doltdb.Commit) error
 }

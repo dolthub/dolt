@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/cherry_pick"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
@@ -197,12 +198,17 @@ func startRebase(ctx *sql.Context, upstreamPoint string) error {
 		return err
 	}
 
-	// Create the rebase plan table
+	// Create the rebase plan
+	rebasePlan, err := rebase.CreateRebasePlan(ctx, startCommit, upstreamCommit)
+	if err != nil {
+		return err
+	}
+
 	rdb, ok := db.(dsess.RebaseableDatabase)
 	if !ok {
 		return fmt.Errorf("expected a dsess.RebaseableDatabase implementation, but received a %T", db)
 	}
-	err = rdb.CreateRebasePlan(ctx, startCommit, upstreamCommit)
+	err = rdb.SaveRebasePlan(ctx, rebasePlan)
 	if err != nil {
 		return err
 	}
@@ -387,15 +393,8 @@ func processRow(ctx *sql.Context, row sql.Row) error {
 	case "squash":
 		fmt.Printf("squashing commit: %s\n", row[2].(string))
 		// TODO: validate that squash is NOT the first action!
-
-		// NOTE: After our first call to cherry-pick, the tx is committed, so a new tx needs to be started
-		doltSession := dsess.DSessFromSess(ctx.Session)
-		if doltSession.GetTransaction() == nil {
-			_, err := doltSession.StartTransaction(ctx, sql.ReadWrite)
-			if err != nil {
-				return err
-			}
-		}
+		//       would be better to put rebase plan validation into an earlier/separate step,
+		//       instead of mixing it in with execution.
 
 		// Perform the cherry-pick
 		commitMessage, err := squashCommitMessage(ctx, row[2].(string))

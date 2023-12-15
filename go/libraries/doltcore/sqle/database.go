@@ -66,6 +66,7 @@ type Database struct {
 }
 
 var _ dsess.SqlDatabase = Database{}
+var _ dsess.RebaseableDatabase = Database{} // TODO: dsess doesn't seem like the right package for this
 var _ dsess.RevisionDatabase = Database{}
 var _ globalstate.GlobalStateProvider = Database{}
 var _ sql.CollatedDatabase = Database{}
@@ -110,7 +111,12 @@ func (r ReadOnlyDatabase) WithBranchRevision(requestedName string, branchSpec ds
 	return r, nil
 }
 
-func (db Database) CreateRebasePlan(ctx *sql.Context, startCommit, upstreamCommit *doltdb.Commit) error {
+func (db Database) LoadRebasePlan(ctx *sql.Context) (*doltdb.RebasePlan, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (db Database) SaveRebasePlan(ctx *sql.Context, plan *doltdb.RebasePlan) error {
 	pkSchema := sql.NewPrimaryKeySchema(dprocedures.DoltRebaseSystemTableSchema, 2)
 	// use createSqlTable, instead of CreateTable to avoid the "dolt_" reserved prefix table name check
 	err := db.createSqlTable(ctx, doltdb.RebaseTableName, pkSchema, sql.Collation_Default)
@@ -132,32 +138,17 @@ func (db Database) CreateRebasePlan(ctx *sql.Context, startCommit, upstreamCommi
 	}
 
 	inserter := writeableDoltTable.Inserter(ctx)
-
-	commits, err := db.findRebaseCommits(ctx, startCommit, upstreamCommit)
-	if err != nil {
-		return err
-	}
-
-	if len(commits) == 0 {
-		return fmt.Errorf("didn't identify any commits!")
-	}
-
-	for idx := len(commits) - 1; idx >= 0; idx-- {
-		commit := commits[idx]
-		hash, err := commit.HashOf()
-		if err != nil {
-			return err
+	for _, planMember := range plan.Members {
+		// TODO: This logic should move into the RebasePlan type
+		actionEnumValue := dprocedures.RebaseActionEnumType.IndexOf(planMember.Action)
+		if actionEnumValue == -1 {
+			return fmt.Errorf("invalid rebase action: %s", planMember.Action)
 		}
-		meta, err := commit.GetCommitMeta(ctx)
-		if err != nil {
-			return err
-		}
-
 		err = inserter.Insert(ctx, sql.Row{
-			uint(len(commits)) - uint(idx),                           // rebase_order
-			uint16(dprocedures.RebaseActionEnumType.IndexOf("pick")), // action // TODO: make this a const for default?
-			hash.String(),    // commit_hash
-			meta.Description, //commit_message
+			planMember.RebaseOrder,
+			uint16(actionEnumValue),
+			planMember.CommitHash,
+			planMember.CommitMsg,
 		})
 		if err != nil {
 			return err
@@ -170,48 +161,6 @@ func (db Database) CreateRebasePlan(ctx *sql.Context, startCommit, upstreamCommi
 	}
 
 	return nil
-}
-
-func (db Database) findRebaseCommits(ctx *sql.Context, currentBranchCommit, upstreamBranchCommit *doltdb.Commit) (commits []*doltdb.Commit, err error) {
-	doltSession := dsess.DSessFromSess(ctx.Session)
-	ddb, ok := doltSession.GetDoltDB(ctx, ctx.GetCurrentDatabase())
-	if !ok {
-		return nil, fmt.Errorf("unable to load dolt db")
-	}
-
-	currentBranchCommitHash, err := currentBranchCommit.HashOf()
-	if err != nil {
-		return
-	}
-
-	upstreamBranchCommitHash, err := upstreamBranchCommit.HashOf()
-	if err != nil {
-		return
-	}
-
-	// We use the dot-dot revision iterator because it gives us the behavior we want for rebase – it finds all
-	// commits reachable from |currentBranchCommit| but NOT reachable by |upstreamBranchCommit|.
-	commitItr, err := commitwalk.GetDotDotRevisionsIterator(ctx,
-		ddb, []hash.Hash{currentBranchCommitHash},
-		ddb, []hash.Hash{upstreamBranchCommitHash}, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO: Currently, we drain the iterator into a slice so that we can see the total
-	// number of commits and use that to set the rebase_order when we create the dolt_rebase
-	// table. This is easier, but could be optimized if we had a way to generate this same
-	// set of commits in reverse order.
-	for {
-		_, commit, err := commitItr.Next(ctx)
-		if err == io.EOF {
-			return commits, nil
-		} else if err != nil {
-			return nil, err
-		}
-
-		commits = append(commits, commit)
-	}
 }
 
 func (db Database) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
