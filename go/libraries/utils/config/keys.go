@@ -41,3 +41,5 @@ const MetricsPort = "metrics.port"
 const MetricsInsecure = "metrics.insecure"
 
 const PushAutoSetupRemote = "push.autosetupremote"
+
+const ProfileKey = "profile"

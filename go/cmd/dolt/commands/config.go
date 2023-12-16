@@ -37,6 +37,24 @@ const (
 	unsetOperationStr = "unset"
 )
 
+var ConfigOptions = map[string]string{
+	config.UserEmailKey:          "",
+	config.UserNameKey:           "",
+	config.UserCreds:             "",
+	config.DoltEditor:            "",
+	config.InitBranchName:        "",
+	config.RemotesApiHostKey:     "",
+	config.RemotesApiHostPortKey: "",
+	config.AddCredsUrlKey:        "",
+	config.DoltLabInsecureKey:    "",
+	config.MetricsDisabled:       "",
+	config.MetricsHost:           "",
+	config.MetricsPort:           "",
+	config.MetricsInsecure:       "",
+	config.PushAutoSetupRemote:   "",
+	config.ProfileKey:            "",
+}
+
 var cfgDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Get and set repository or global options`,
 	LongDesc: `You can query/set/replace/unset options with this command.
@@ -207,7 +225,13 @@ func addOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, usa
 
 	updates := make(map[string]string)
 	for i := 0; i < len(args); i += 2 {
-		updates[strings.ToLower(args[i])] = args[i+1]
+		option := strings.ToLower(args[i])
+		value := args[i+1]
+		if _, ok := ConfigOptions[option]; !ok {
+			cli.Println("error: invalid config option, use dolt config --help to check valid configuration variables")
+			return 1
+		}
+		updates[option] = value
 	}
 
 	var cfgType string
