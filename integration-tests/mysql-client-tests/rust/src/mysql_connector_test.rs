@@ -33,6 +33,19 @@ fn main() {
         let result = conn.query(query);
         let response : Vec<Row> = result.expect("Error: bad response");
         println!("{:?}", response);
+
+        // Assert that row metadata is populated
+        if response.len() > 0 {
+            let row = &response[0];
+            for column in row.columns_ref() {
+                if column.name_str().len() == 0 {
+                    println!("FAIL: Column name is empty");
+                    exit(1);
+                }
+            }
+        }
+
+        // Assert that the expected number of rows are returned
         if response.len() != expected {
             println!("LENGTH: {}", response.len());
             println!("QUERY: {}", query);
