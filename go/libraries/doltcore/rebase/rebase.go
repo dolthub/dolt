@@ -36,24 +36,38 @@ const (
 // fixup a commit without first picking or rewording a commit.
 var ErrInvalidRebasePlanSquashFixupWithoutPick = fmt.Errorf("invalid rebase plan: squash and fixup actions must appear after a pick or reword action")
 
-// TODO: These types can't live in here because of an import cycle :-(
-//type RebasePlan struct {
-//	Members []RebasePlanMember
-//}
-//
-//type RebasePlanMember struct {
-//	RebaseOrder  uint // TODO: If we change the schema to be a DECIMAL(6,2), uint won't work anymore...
-//	Action       string // TODO: how to easily sync up this action with the enum types?
-//	CommitHash   string
-//	CommitMsg    string
-//}
+// RebasePlanDatabase is a database that can save and load a rebase plan.
+type RebasePlanDatabase interface {
+	// SaveRebasePlan saves the given rebase plan to the database.
+	SaveRebasePlan(ctx *sql.Context, plan *RebasePlan) error
+	// LoadRebasePlan loads the rebase plan from the database.
+	LoadRebasePlan(ctx *sql.Context) (*RebasePlan, error)
+}
+
+// RebasePlan describes the plan for a rebase operation, where commits are reordered,
+// or adjusted, and then replayed on top of a base commit to form a new commit history.
+type RebasePlan struct {
+	Members []RebasePlanMember
+}
+
+// RebasePlanMember describes a single step in a rebase plan, such as dropping a
+// commit, squashing a commit into the prevous commit, etc.
+type RebasePlanMember struct {
+	// TODO: If we change the schema to be a DECIMAL(6,2), uint won't work anymore...
+	//       Although... do we even need this field if the ordering is encapsulated
+	//       by this field's position in the Members slice?
+	RebaseOrder uint
+	Action      string // TODO: how to easily sync up this action with the enum types?
+	CommitHash  string
+	CommitMsg   string
+}
 
 // CreateDefaultRebasePlan creates and returns the default rebase plan for the commits between
 // |startCommit| and |upstreamCommit|, equivalent to the log of startCommit..upstreamCommit. The
 // default plan includes each of those commits, in the same order they were originally applied, and
 // each step in the plan will have the default, pick, action. If the plan cannot be generated for
 // any reason, such as disconnected or invalid commits specified, then an error is returned.
-func CreateDefaultRebasePlan(ctx *sql.Context, startCommit, upstreamCommit *doltdb.Commit) (*doltdb.RebasePlan, error) {
+func CreateDefaultRebasePlan(ctx *sql.Context, startCommit, upstreamCommit *doltdb.Commit) (*RebasePlan, error) {
 	commits, err := findRebaseCommits(ctx, startCommit, upstreamCommit)
 	if err != nil {
 		return nil, err
@@ -63,7 +77,7 @@ func CreateDefaultRebasePlan(ctx *sql.Context, startCommit, upstreamCommit *dolt
 		return nil, fmt.Errorf("didn't identify any commits!")
 	}
 
-	plan := doltdb.RebasePlan{}
+	plan := RebasePlan{}
 	for idx := len(commits) - 1; idx >= 0; idx-- {
 		commit := commits[idx]
 		hash, err := commit.HashOf()
@@ -75,7 +89,7 @@ func CreateDefaultRebasePlan(ctx *sql.Context, startCommit, upstreamCommit *dolt
 			return nil, err
 		}
 
-		plan.Members = append(plan.Members, doltdb.RebasePlanMember{
+		plan.Members = append(plan.Members, RebasePlanMember{
 			RebaseOrder: uint(len(commits) - idx),
 			Action:      RebaseActionPick,
 			CommitHash:  hash.String(), // TODO: Maybe keep as a hash.Hash instance?
@@ -88,7 +102,7 @@ func CreateDefaultRebasePlan(ctx *sql.Context, startCommit, upstreamCommit *dolt
 
 // ValidateRebasePlan returns a validation error for invalid states in a rebase plan, such as
 // squash or fixup actions appearing in the plan before a pick or reword action.
-func ValidateRebasePlan(_ *sql.Context, plan *doltdb.RebasePlan) error {
+func ValidateRebasePlan(_ *sql.Context, plan *RebasePlan) error {
 	// TODO: Should we check that rebase order is ascending? It should be from how we load
 	//       the plan from the DB, but if it's not, it might be a good sanity check before
 	//       executing a plan out of order.
@@ -116,6 +130,11 @@ func ValidateRebasePlan(_ *sql.Context, plan *doltdb.RebasePlan) error {
 	return nil
 }
 
+// findRebaseCommits returns the commits that should be included in the default rebase plan when
+// rebasing |upstreamBranchCommit| onto the current branch (specified by commit |currentBranchCommit|).
+// This is defined as the log of |currentBranchCommit|..|upstreamBranchCommit|, or in other words, the
+// commits that are reachable from the current branch HEAD, but are NOT reachable from
+// |upstreamBranchCommit|.
 func findRebaseCommits(ctx *sql.Context, currentBranchCommit, upstreamBranchCommit *doltdb.Commit) (commits []*doltdb.Commit, err error) {
 	doltSession := dsess.DSessFromSess(ctx.Session)
 
