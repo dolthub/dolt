@@ -2970,6 +2970,36 @@ func TestThreeWayMergeWithSchemaChangeScriptsPrepared(t *testing.T) {
 	})
 }
 
+// If CREATE DATABASE has an error within the DatabaseProvider, it should not
+// leave behind intermediate filesystem state.
+func TestCreateDatabaseErrorCleansUp(t *testing.T) {
+	dh := newDoltHarness(t)
+	require.NotNil(t, dh)
+	e, err := dh.NewEngine(t)
+	require.NoError(t, err)
+	require.NotNil(t, e)
+
+	dh.provider.(*sqle.DoltDatabaseProvider).InitDatabaseHook = func(_ *sql.Context, _ *sqle.DoltDatabaseProvider, name string, _ *env.DoltEnv) error {
+		if name == "cannot_create" {
+			return fmt.Errorf("there was an error initializing this database. abort!")
+		}
+		return nil
+	}
+
+	err = dh.provider.CreateDatabase(enginetest.NewContext(dh), "can_create")
+	require.NoError(t, err)
+
+	err = dh.provider.CreateDatabase(enginetest.NewContext(dh), "cannot_create")
+	require.Error(t, err)
+
+	fs := dh.multiRepoEnv.FileSystem()
+	exists, _ := fs.Exists("cannot_create")
+	require.False(t, exists)
+	exists, isDir := fs.Exists("can_create")
+	require.True(t, exists)
+	require.True(t, isDir)
+}
+
 // runMergeScriptTestsInBothDirections creates a new test run, named |name|, and runs the specified merge |tests|
 // in both directions (right to left merge, and left to right merge). If
 // |runAsPrepared| is true then the test scripts will be run using the prepared
