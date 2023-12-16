@@ -38,6 +38,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
+	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
@@ -68,7 +69,6 @@ type Database struct {
 }
 
 var _ dsess.SqlDatabase = Database{}
-var _ dsess.RebasePlanDatabase = Database{} // TODO: dsess doesn't seem like the right package for this
 var _ dsess.RevisionDatabase = Database{}
 var _ globalstate.GlobalStateProvider = Database{}
 var _ sql.CollatedDatabase = Database{}
@@ -86,6 +86,7 @@ var _ sql.ViewDatabase = Database{}
 var _ sql.EventDatabase = Database{}
 var _ sql.AliasedDatabase = Database{}
 var _ fulltext.Database = Database{}
+var _ rebase.RebasePlanDatabase = Database{}
 
 type ReadOnlyDatabase struct {
 	Database
@@ -112,8 +113,8 @@ func (r ReadOnlyDatabase) WithBranchRevision(requestedName string, branchSpec ds
 	return r, nil
 }
 
-func (db Database) LoadRebasePlan(ctx *sql.Context) (*doltdb.RebasePlan, error) {
-	var rebasePlan doltdb.RebasePlan
+func (db Database) LoadRebasePlan(ctx *sql.Context) (*rebase.RebasePlan, error) {
+	var rebasePlan rebase.RebasePlan
 
 	table, ok, err := db.GetTableInsensitive(ctx, doltdb.RebaseTableName)
 	if err != nil {
@@ -149,7 +150,7 @@ func (db Database) LoadRebasePlan(ctx *sql.Context) (*doltdb.RebasePlan, error) 
 			panic("invalid enum value!")
 		}
 
-		rebasePlan.Members = append(rebasePlan.Members, doltdb.RebasePlanMember{
+		rebasePlan.Members = append(rebasePlan.Members, rebase.RebasePlanMember{
 			RebaseOrder: uint(row[0].(uint16)),
 			Action:      rebaseAction,
 			CommitHash:  row[2].(string),
@@ -160,7 +161,7 @@ func (db Database) LoadRebasePlan(ctx *sql.Context) (*doltdb.RebasePlan, error) 
 	return &rebasePlan, nil
 }
 
-func (db Database) SaveRebasePlan(ctx *sql.Context, plan *doltdb.RebasePlan) error {
+func (db Database) SaveRebasePlan(ctx *sql.Context, plan *rebase.RebasePlan) error {
 	pkSchema := sql.NewPrimaryKeySchema(dprocedures.DoltRebaseSystemTableSchema, 2)
 	// use createSqlTable, instead of CreateTable to avoid the "dolt_" reserved prefix table name check
 	err := db.createSqlTable(ctx, doltdb.RebaseTableName, pkSchema, sql.Collation_Default)

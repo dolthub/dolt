@@ -70,17 +70,6 @@ type RemoteReadReplicaDatabase interface {
 	PullFromRemote(ctx *sql.Context) error
 }
 
-type RebasePlanDatabase interface {
-
-	// TODO: this causes the dsess package to depend on the rebase package, which already needs to
-	//       depend on dsess, and causes an import cycle :-(
-	//SaveRebasePlan(ctx *sql.Context, plan *rebase.RebasePlan) error
-	//LoadRebasePlan(ctx *sql.Context) (*rebase.RebasePlan, error)
-
-	SaveRebasePlan(ctx *sql.Context, plan *doltdb.RebasePlan) error
-	LoadRebasePlan(ctx *sql.Context) (*doltdb.RebasePlan, error)
-}
-
 type DoltDatabaseProvider interface {
 	sql.MutableDatabaseProvider
 	// FileSystem returns the filesystem used by this provider, rooted at the data directory for all databases.

@@ -216,7 +216,7 @@ func startRebase(ctx *sql.Context, upstreamPoint string) error {
 		return err
 	}
 
-	rdb, ok := db.(dsess.RebasePlanDatabase)
+	rdb, ok := db.(rebase.RebasePlanDatabase)
 	if !ok {
 		return fmt.Errorf("expected a dsess.RebasePlanDatabase implementation, but received a %T", db)
 	}
@@ -316,7 +316,7 @@ func continueRebase(ctx *sql.Context) error {
 		return err
 	}
 
-	rdb, ok := db.(dsess.RebasePlanDatabase)
+	rdb, ok := db.(rebase.RebasePlanDatabase)
 	if !ok {
 		return fmt.Errorf("expected a dsess.RebasePlanDatabase implementation, but received a %T", db)
 	}
@@ -380,7 +380,7 @@ func continueRebase(ctx *sql.Context) error {
 	return nil
 }
 
-func processRebaseAction(ctx *sql.Context, planStep *doltdb.RebasePlanMember) error {
+func processRebaseAction(ctx *sql.Context, planStep *rebase.RebasePlanMember) error {
 	// Make sure we have a transaction opened for the session
 	// NOTE: After our first call to cherry-pick, the tx is committed, so a new tx needs to be started
 	//       as we process additional rebase actions.
