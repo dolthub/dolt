@@ -461,6 +461,24 @@ func runMain() int {
 		return 1
 	}
 
+	globalConfig.Iter(func(name, val string) (stop bool) {
+		if _, ok := commands.ConfigOptions[name]; !ok {
+			cli.Println(color.YellowString("Warning: Unknown global config option '%s'. Use `dolt config --global --unset %s` to remove.", name, name))
+		}
+		return false
+	})
+
+	// try verifying contents of local config
+	localConfig, ok := dEnv.Config.GetConfig(env.LocalConfig)
+	if ok {
+		localConfig.Iter(func(name, val string) (stop bool) {
+			if _, ok := commands.ConfigOptions[name]; !ok {
+				cli.Println(color.YellowString("Warning: Unknown local config option '%s'. Use `dolt config --local --unset %s` to remove.", name, name))
+			}
+			return false
+		})
+	}
+
 	apr, remainingArgs, subcommandName, err := parseGlobalArgsAndSubCommandName(globalConfig, args)
 	if err == argparser.ErrHelp {
 		doltCommand.PrintUsage("dolt")

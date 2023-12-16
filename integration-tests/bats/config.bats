@@ -53,6 +53,25 @@ teardown() {
     [[ "$output" =~ "Config successfully updated" ]] || false
 }
 
+@test "config: warning on cli commands if config has nonsense variables" {
+    dolt config --global --add user.name steph  # need to create config_global.json first
+    echo '{"global":"foo"}' > $DOLT_ROOT_PATH/.dolt/config_global.json
+    run dolt version
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Warning: Unknown global config option 'global'. Use \`dolt config --global --unset global\` to remove." ]] || false
+
+    dolt config --global --add user.email "you@example.com"
+    dolt config --global --add user.name "Your Name"
+    dolt init
+
+    dolt config --local --add user.name steph  # need to create config.json first
+    echo '{"local":"bar"}' > .dolt/config.json
+    run dolt config --list
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Warning: Unknown global config option 'global'. Use \`dolt config --global --unset global\` to remove." ]] || false
+    [[ "$output" =~ "Warning: Unknown local config option 'local'. Use \`dolt config --local --unset local\` to remove." ]] || false
+}
+
 @test "config: set a global config variable" {
     run dolt config --global --add user.name steph
     [ "$status" -eq 0 ]
