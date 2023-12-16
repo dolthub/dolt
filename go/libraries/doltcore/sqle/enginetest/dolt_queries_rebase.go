@@ -21,10 +21,14 @@ import (
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 )
 
 var DoltRebaseScriptTests = []queries.ScriptTest{
 	{
+		// TODO: Add:
+		//   - wrong number of args
+		//	 - invalid args (non-existent branch/commit/etc)
 		Name:        "dolt_rebase errors: basic errors",
 		SetUpScript: []string{},
 		Assertions: []queries.ScriptTestAssertion{
@@ -38,20 +42,32 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dolt_rebase errors: working set not clean",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"call dolt_commit('-Am', 'creating table t');",
+			"insert into t values (0);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_rebase('main');",
+				ExpectedErrStr: dprocedures.ErrRebaseUncommittedChanges.Error(),
+			},
+			{
+				Query:    "call dolt_add('t');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "call dolt_rebase('main');",
+				ExpectedErrStr: dprocedures.ErrRebaseUncommittedChanges.Error(),
+			},
+		},
+	},
+	{
 		/*
 		   TODO: Error cases:
-		        - already in a rebase or a merge/cherry-pick/etc
-		        - working set not clean
-		        - wrong number of args
-		        - invalid args
-		        - no database selected
-		        - invalid rebase plan:
-		            - first commit is a squash
-		            - new commit hashes added
-		            - other commit hashes removed?
-		            - NULLs in fields? (should be impossible if we defined the schema correctly though...)
-		        - merge commits
-		        - conflicts!
+		        - merge commits - merge commits should be fine, just skipped
+		        - conflicts – e.g. reordering commits in a way that causes a conflict
 		*/
 		Name: "dolt_rebase errors: no database selected",
 		SetUpScript: []string{
@@ -61,24 +77,48 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:    "select database();",
+				Expected: []sql.Row{{nil}},
+			},
+			{
+				// TODO: This test isn't working because AssertErr is called and currently always
+				//       creates a new Context, which is always initialized with mydb as the current
+				//       database. If we changed evaluation.go:126 to use AssertErrWithCtx instead and
+				//       reused the existing Context instance, then we could probably make this work.
+				Skip:           true,
 				Query:          "call dolt_rebase('main');",
-				ExpectedErrStr: "no database selected", // TODO: dolt_rebase proc is probably not available
+				ExpectedErrStr: "no database selected",
 			},
 		},
 	},
-
 	{
-		// TODO:
-		Name:        "dolt_rebase errors: active cherry-pick or merge",
-		SetUpScript: []string{},
+		Name: "dolt_rebase errors: active merge, cherry-pick, or rebase",
+		SetUpScript: []string{
+			"create table t (pk int primary key, col1 varchar(100));",
+			"call dolt_commit('-Am', 'creating table t');",
+			"call dolt_branch('branch1');",
+			"insert into t values (0, 'zero');",
+			"call dolt_commit('-am', 'inserting row 0');",
+
+			"call dolt_checkout('branch1');",
+			"insert into t values (0, 'nada');",
+			"call dolt_commit('-am', 'inserting row 0');",
+
+			"set @@autocommit=0;",
+		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				// Merging main creates a conflict, so we're in an active
+				// merge until we resolve.
+				Query:    "call dolt_merge('main');",
+				Expected: []sql.Row{{"", 0, 1}},
+			},
+			{
 				Query:          "call dolt_rebase('main');",
-				ExpectedErrStr: "no database selected", // TODO: dolt_rebase proc is probably not available
+				ExpectedErrStr: "unable to start rebase while a merge is in progress – abort the current merge before proceeding",
 			},
 		},
 	},
-
 	{
 		Name: "dolt_rebase errors: invalid rebase plans",
 		SetUpScript: []string{
@@ -97,8 +137,12 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			"call dolt_commit('-am', 'inserting row 10');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
-			// duplicate rebase_order (this is a PK though... so shouldn't be possible?)
+			// TODO: More invalid plan tests:
+			//      - NULLs in fields? (should be impossible if we defined the schema correctly though...)
+			//      -  duplicate rebase_order (this is a PK though... so shouldn't be possible?)
+
 			// TODO: Test that deleting a row from the rebase plan is equivalent to marking it as a drop
+			// TODO: Test that new commit hashes can be added
 			{
 				Query:    "call dolt_rebase('main');",
 				Expected: []sql.Row{{0}},
@@ -143,7 +187,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 		    - dolt status should show that we're in a rebase
 	*/
 	{
-		Name: "dolt_rebase: basic case",
+		Name: "dolt_rebase: rebase plan using every action",
 		SetUpScript: []string{
 			"create table t (pk int primary key);",
 			"call dolt_commit('-Am', 'creating table t');",

@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/cherry_pick"
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
@@ -72,6 +73,10 @@ var DoltRebaseSystemTableSchema = []*sql.Column{
 	},
 }
 
+// ErrRebaseUncommittedChanges is used when a rebase is started, but there are uncommitted (and not
+// ignored) changes in the working set.
+var ErrRebaseUncommittedChanges = fmt.Errorf("cannot start a rebase with uncommitted changes")
+
 func doltRebase(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := doDoltRebase(ctx, args)
 	if err != nil {
@@ -81,6 +86,10 @@ func doltRebase(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 }
 
 func doDoltRebase(ctx *sql.Context, args []string) (int, error) {
+	if ctx.GetCurrentDatabase() == "" {
+		return 1, sql.ErrNoDatabaseSelected.New()
+	}
+
 	// TODO: Replace with arg parser usage
 	if len(args) == 0 {
 		return 1, fmt.Errorf("not enough args")
@@ -122,8 +131,12 @@ func startRebase(ctx *sql.Context, upstreamPoint string) error {
 		return fmt.Errorf("no upstream branch specified")
 	}
 
-	doltSession := dsess.DSessFromSess(ctx.Session)
+	err := validateWorkingSetCanStartRebase(ctx)
+	if err != nil {
+		return err
+	}
 
+	doltSession := dsess.DSessFromSess(ctx.Session)
 	headRef, err := doltSession.CWBHeadRef(ctx, ctx.GetCurrentDatabase())
 	if err != nil {
 		return err
@@ -208,6 +221,37 @@ func startRebase(ctx *sql.Context, upstreamPoint string) error {
 		return fmt.Errorf("expected a dsess.RebaseableDatabase implementation, but received a %T", db)
 	}
 	return rdb.SaveRebasePlan(ctx, rebasePlan)
+}
+
+func validateWorkingSetCanStartRebase(ctx *sql.Context) error {
+	doltSession := dsess.DSessFromSess(ctx.Session)
+
+	// Make sure there isn't an active rebase or merge in progress already
+	ws, err := doltSession.WorkingSet(ctx, ctx.GetCurrentDatabase())
+	if err != nil {
+		return err
+	}
+	if ws.MergeActive() {
+		return fmt.Errorf("unable to start rebase while a merge is in progress – abort the current merge before proceeding")
+	}
+	if ws.RebaseActive() {
+		return fmt.Errorf("unable to start rebase while another rebase is in progress – abort the current rebase before proceeding")
+	}
+
+	// Make sure the working set doesn't contain any uncommitted changes
+	roots, ok := doltSession.GetRoots(ctx, ctx.GetCurrentDatabase())
+	if !ok {
+		return fmt.Errorf("unable to get roots for database %s", ctx.GetCurrentDatabase())
+	}
+	wsOnlyHasIgnoredTables, err := diff.WorkingSetContainsOnlyIgnoredTables(ctx, roots)
+	if err != nil {
+		return err
+	}
+	if !wsOnlyHasIgnoredTables {
+		return ErrRebaseUncommittedChanges
+	}
+
+	return nil
 }
 
 func abortRebase(ctx *sql.Context) error {
