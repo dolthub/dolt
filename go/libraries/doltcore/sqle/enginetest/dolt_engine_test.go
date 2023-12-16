@@ -1234,6 +1234,12 @@ func TestColumnDefaults(t *testing.T) {
 	enginetest.TestColumnDefaults(t, h)
 }
 
+func TestOnUpdateExprScripts(t *testing.T) {
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestOnUpdateExprScripts(t, h)
+}
+
 func TestAlterTable(t *testing.T) {
 	// This is a newly added test in GMS that dolt doesn't support yet
 	h := newDoltHarness(t).WithSkippedQueries([]string{"ALTER TABLE t42 ADD COLUMN s varchar(20), drop check check1"})

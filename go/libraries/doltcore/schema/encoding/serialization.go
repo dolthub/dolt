@@ -57,12 +57,23 @@ func serializeSchemaAsFlatbuffer(sch schema.Schema) ([]byte, error) {
 	indexes := serializeSecondaryIndexes(b, sch, sch.Indexes().AllIndexes())
 	checks := serializeChecks(b, sch.Checks().AllChecks())
 
+	var hasFeaturesAfterTryAccessors bool
+	for _, col := range sch.GetAllCols().GetColumns() {
+		if col.OnUpdate != "" {
+			hasFeaturesAfterTryAccessors = true
+			break
+		}
+	}
+
 	serial.TableSchemaStart(b)
 	serial.TableSchemaAddClusteredIndex(b, rows)
 	serial.TableSchemaAddColumns(b, columns)
 	serial.TableSchemaAddSecondaryIndexes(b, indexes)
 	serial.TableSchemaAddChecks(b, checks)
 	serial.TableSchemaAddCollation(b, serial.Collation(sch.GetCollation()))
+	if hasFeaturesAfterTryAccessors {
+		serial.TableSchemaAddHasFeaturesAfterTryAccessors(b, hasFeaturesAfterTryAccessors)
+	}
 	root := serial.TableSchemaEnd(b)
 	bs := serial.FinishMessage(b, root, []byte(serial.TableSchemaFileID))
 	return bs, nil
@@ -215,15 +226,21 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 	// serialize columns in |cols|
 	for i := len(cols) - 1; i >= 0; i-- {
 		col := cols[i]
-		defVal := ""
+		var defVal, onUpdateVal string
 		if col.Default != "" {
 			defVal = col.Default
 		} else {
 			defVal = col.Generated
 		}
 
+		if col.OnUpdate != "" {
+			onUpdateVal = col.OnUpdate
+		}
+
 		co := b.CreateString(col.Comment)
 		do := b.CreateString(defVal)
+		ou := b.CreateString(onUpdateVal)
+
 		typeString := sqlTypeString(col.TypeInfo)
 		to := b.CreateString(typeString)
 		no := b.CreateString(col.Name)
@@ -242,6 +259,9 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 		serial.ColumnAddNullable(b, col.IsNullable())
 		serial.ColumnAddGenerated(b, col.Generated != "")
 		serial.ColumnAddVirtual(b, col.Virtual)
+		if onUpdateVal != "" {
+			serial.ColumnAddOnUpdateValue(b, ou)
+		}
 		serial.ColumnAddHidden(b, false)
 		offs[i] = serial.ColumnEnd(b)
 	}
@@ -319,14 +339,17 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 			return nil, err
 		}
 
-		defVal := ""
-		generatedVal := ""
+		var defVal, generatedVal, onUpdateVal string
 		if c.DefaultValue() != nil {
 			if c.Generated() {
 				generatedVal = string(c.DefaultValue())
 			} else {
 				defVal = string(c.DefaultValue())
 			}
+		}
+
+		if c.OnUpdateValue() != nil {
+			onUpdateVal = string(c.OnUpdateValue())
 		}
 
 		cols[i] = schema.Column{
@@ -337,6 +360,7 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 			TypeInfo:      sqlType,
 			Default:       defVal,
 			Generated:     generatedVal,
+			OnUpdate:      onUpdateVal,
 			Virtual:       c.Virtual(),
 			AutoIncrement: c.AutoIncrement(),
 			Comment:       string(c.Comment()),
