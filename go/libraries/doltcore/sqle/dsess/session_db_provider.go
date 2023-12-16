@@ -70,8 +70,7 @@ type RemoteReadReplicaDatabase interface {
 	PullFromRemote(ctx *sql.Context) error
 }
 
-// TODO: Naming: RebasePlanDatabase?
-type RebaseableDatabase interface {
+type RebasePlanDatabase interface {
 
 	// TODO: this causes the dsess package to depend on the rebase package, which already needs to
 	//       depend on dsess, and causes an import cycle :-(

@@ -68,7 +68,7 @@ type Database struct {
 }
 
 var _ dsess.SqlDatabase = Database{}
-var _ dsess.RebaseableDatabase = Database{} // TODO: dsess doesn't seem like the right package for this
+var _ dsess.RebasePlanDatabase = Database{} // TODO: dsess doesn't seem like the right package for this
 var _ dsess.RevisionDatabase = Database{}
 var _ globalstate.GlobalStateProvider = Database{}
 var _ sql.CollatedDatabase = Database{}
@@ -86,7 +86,6 @@ var _ sql.ViewDatabase = Database{}
 var _ sql.EventDatabase = Database{}
 var _ sql.AliasedDatabase = Database{}
 var _ fulltext.Database = Database{}
-var _ dsess.RebaseableDatabase = Database{}
 
 type ReadOnlyDatabase struct {
 	Database

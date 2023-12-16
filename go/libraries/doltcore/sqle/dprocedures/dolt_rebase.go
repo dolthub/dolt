@@ -216,9 +216,9 @@ func startRebase(ctx *sql.Context, upstreamPoint string) error {
 		return err
 	}
 
-	rdb, ok := db.(dsess.RebaseableDatabase)
+	rdb, ok := db.(dsess.RebasePlanDatabase)
 	if !ok {
-		return fmt.Errorf("expected a dsess.RebaseableDatabase implementation, but received a %T", db)
+		return fmt.Errorf("expected a dsess.RebasePlanDatabase implementation, but received a %T", db)
 	}
 	return rdb.SaveRebasePlan(ctx, rebasePlan)
 }
@@ -316,9 +316,9 @@ func continueRebase(ctx *sql.Context) error {
 		return err
 	}
 
-	rdb, ok := db.(dsess.RebaseableDatabase)
+	rdb, ok := db.(dsess.RebasePlanDatabase)
 	if !ok {
-		return fmt.Errorf("expected a dsess.RebaseableDatabase implementation, but received a %T", db)
+		return fmt.Errorf("expected a dsess.RebasePlanDatabase implementation, but received a %T", db)
 	}
 	rebasePlan, err := rdb.LoadRebasePlan(ctx)
 	if err != nil {
