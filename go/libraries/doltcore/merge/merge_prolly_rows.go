@@ -1861,8 +1861,14 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 		}
 
 		if isEqual(i, leftCol, rightCol, resultType) {
-			// columns are equal, return either.
-			return leftCol, false, nil
+			// Columns are equal, returning either would be correct.
+			// However, for certain types the two columns may have different bytes.
+			// We need to ensure that merges are deterministic regardless of the merge direction.
+			// To achieve this, we sort the two values and return the higher one.
+			if bytes.Compare(leftCol, rightCol) > 0 {
+				return leftCol, false, nil
+			}
+			return rightCol, false, nil
 		}
 
 		// generated columns will be updated as part of the merge later on, so choose either value for now
@@ -1916,8 +1922,14 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 		return nil, true, nil
 	}
 	if isEqual(i, leftCol, rightCol, resultType) {
-		// columns are equal, return either.
-		return leftCol, false, nil
+		// Columns are equal, returning either would be correct.
+		// However, for certain types the two columns may have different bytes.
+		// We need to ensure that merges are deterministic regardless of the merge direction.
+		// To achieve this, we sort the two values and return the higher one.
+		if bytes.Compare(leftCol, rightCol) > 0 {
+			return leftCol, false, nil
+		}
+		return rightCol, false, nil
 	}
 
 	leftModified = !isEqual(i, leftCol, baseCol, resultType)
