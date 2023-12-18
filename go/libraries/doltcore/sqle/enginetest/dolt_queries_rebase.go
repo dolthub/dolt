@@ -26,9 +26,6 @@ import (
 
 var DoltRebaseScriptTests = []queries.ScriptTest{
 	{
-		// TODO: Add:
-		//   - wrong number of args
-		//	 - invalid args (non-existent branch/commit/etc)
 		Name:        "dolt_rebase errors: basic errors",
 		SetUpScript: []string{},
 		Assertions: []queries.ScriptTestAssertion{
@@ -38,6 +35,21 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			}, {
 				Query:          "call dolt_rebase('--continue');",
 				ExpectedErrStr: "no rebase in progress",
+			}, {
+				Query:          "call dolt_rebase('main');",
+				ExpectedErrStr: "non-interactive rebases not currently supported",
+			}, {
+				Query:          "call dolt_rebase('-i');",
+				ExpectedErrStr: "not enough args",
+			}, {
+				Query:          "call dolt_rebase('-i', 'main1', 'main2');",
+				ExpectedErrStr: "rebase takes at most one positional argument.",
+			}, {
+				Query:          "call dolt_rebase('--abrot');",
+				ExpectedErrStr: "error: unknown option `abrot'",
+			}, {
+				Query:          "call dolt_rebase('-i', 'doesnotexist');",
+				ExpectedErrStr: "branch not found: doesnotexist",
 			},
 		},
 	},
@@ -50,7 +62,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "call dolt_rebase('main');",
+				Query:          "call dolt_rebase('-i', 'main');",
 				ExpectedErrStr: dprocedures.ErrRebaseUncommittedChanges.Error(),
 			},
 			{
@@ -58,7 +70,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:          "call dolt_rebase('main');",
+				Query:          "call dolt_rebase('-i', 'main');",
 				ExpectedErrStr: dprocedures.ErrRebaseUncommittedChanges.Error(),
 			},
 		},
@@ -86,7 +98,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				//       database. If we changed evaluation.go:126 to use AssertErrWithCtx instead and
 				//       reused the existing Context instance, then we could probably make this work.
 				Skip:           true,
-				Query:          "call dolt_rebase('main');",
+				Query:          "call dolt_rebase('-i', 'main');",
 				ExpectedErrStr: "no database selected",
 			},
 		},
@@ -114,7 +126,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"", 0, 1}},
 			},
 			{
-				Query:          "call dolt_rebase('main');",
+				Query:          "call dolt_rebase('-i', 'main');",
 				ExpectedErrStr: "unable to start rebase while a merge is in progress – abort the current merge before proceeding",
 			},
 		},
@@ -144,7 +156,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			// TODO: Test that deleting a row from the rebase plan is equivalent to marking it as a drop
 			// TODO: Test that new commit hashes can be added
 			{
-				Query:    "call dolt_rebase('main');",
+				Query:    "call dolt_rebase('-i', 'main');",
 				Expected: []sql.Row{{0}},
 			},
 			{
@@ -212,7 +224,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "call dolt_rebase('main');",
+				Query: "call dolt_rebase('-i', 'main');",
 				// TODO: Add human readable status message: "rebase started"
 				Expected: []sql.Row{{0}},
 			},

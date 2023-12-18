@@ -37,6 +37,7 @@ const (
 	ForceFlag            = "force"
 	HardResetParam       = "hard"
 	HostFlag             = "host"
+	InteractiveFlag      = "interactive"
 	ListFlag             = "list"
 	MergesFlag           = "merges"
 	MessageArg           = "message"

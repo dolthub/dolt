@@ -16,11 +16,10 @@ package dprocedures
 
 import (
 	"fmt"
-	"strings"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/cherry_pick"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -90,37 +89,42 @@ func doDoltRebase(ctx *sql.Context, args []string) (int, error) {
 		return 1, sql.ErrNoDatabaseSelected.New()
 	}
 
-	// TODO: Replace with arg parser usage
-	if len(args) == 0 {
-		return 1, fmt.Errorf("not enough args")
+	apr, err := cli.CreateRebaseArgParser().Parse(args)
+	if err != nil {
+		return 1, err
 	}
 
-	if len(args) > 2 {
-		return 1, fmt.Errorf("too many args")
-	}
-
-	if strings.ToLower(args[0]) == "--abort" {
+	switch {
+	case apr.Contains(cli.AbortParam):
 		err := abortRebase(ctx)
 		if err != nil {
 			return 1, err
 		} else {
 			return 0, nil
 		}
-	} else if strings.ToLower(args[0]) == "--continue" {
+
+	case apr.Contains(cli.ContinueParam):
 		err := continueRebase(ctx)
 		if err != nil {
 			return 1, err
 		} else {
 			return 0, nil
 		}
-	} else {
-		// must be start rebase...
-		err := startRebase(ctx, args[0])
+
+	default:
+		if apr.NArg() == 0 {
+			return 1, fmt.Errorf("not enough args")
+		} else if apr.NArg() > 1 {
+			return 1, fmt.Errorf("too many args")
+		}
+		if !apr.Contains(cli.InteractiveFlag) {
+			return 1, fmt.Errorf("non-interactive rebases not currently supported")
+		}
+		err = startRebase(ctx, apr.Arg(0))
 		if err != nil {
 			return 1, err
-		} else {
-			return 0, nil
 		}
+		return 0, nil
 	}
 }
 
@@ -284,8 +288,6 @@ func abortRebase(ctx *sql.Context) error {
 
 	return nil
 }
-
-// TODO: Make '-i' arg required?
 
 func continueRebase(ctx *sql.Context) error {
 	// TODO: Seems like the working set RebaseState will eventually need to keep track of
