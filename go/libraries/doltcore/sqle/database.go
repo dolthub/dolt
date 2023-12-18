@@ -114,100 +114,6 @@ func (r ReadOnlyDatabase) WithBranchRevision(requestedName string, branchSpec ds
 	return r, nil
 }
 
-func (db Database) LoadRebasePlan(ctx *sql.Context) (*rebase.RebasePlan, error) {
-	var rebasePlan rebase.RebasePlan
-
-	table, ok, err := db.GetTableInsensitive(ctx, doltdb.RebaseTableName)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, fmt.Errorf("unable to find dolt_rebase table")
-	}
-	resolvedTable := plan.NewResolvedTable(table, db, nil)
-	sort := plan.NewSort([]sql.SortField{{
-		Column: expression.NewGetField(0, types.Int64, "rebase_order", false),
-		Order:  sql.Ascending,
-	}}, resolvedTable)
-	iter, err := rowexec.DefaultBuilder.Build(ctx, sort, nil)
-	if err != nil {
-		return nil, err
-	}
-	for {
-		row, err := iter.Next(ctx)
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return nil, err
-		}
-
-		i, ok := row[1].(uint16)
-		if !ok {
-			// TODO: check for NULLs, too? (schema shouldn't allow though)
-			panic(fmt.Sprintf("invalid enum value: %v (%T)", row[1], row[1]))
-		}
-		rebaseAction, ok := dprocedures.RebaseActionEnumType.At(int(i))
-		if !ok {
-			panic("invalid enum value!")
-		}
-
-		rebasePlan.Members = append(rebasePlan.Members, rebase.RebasePlanMember{
-			RebaseOrder: row[0].(decimal.Decimal),
-			Action:      rebaseAction,
-			CommitHash:  row[2].(string),
-			CommitMsg:   row[3].(string),
-		})
-	}
-
-	return &rebasePlan, nil
-}
-
-func (db Database) SaveRebasePlan(ctx *sql.Context, plan *rebase.RebasePlan) error {
-	pkSchema := sql.NewPrimaryKeySchema(dprocedures.DoltRebaseSystemTableSchema, 2)
-	// use createSqlTable, instead of CreateTable to avoid the "dolt_" reserved prefix table name check
-	err := db.createSqlTable(ctx, doltdb.RebaseTableName, pkSchema, sql.Collation_Default)
-	if err != nil {
-		return err
-	}
-
-	table, ok, err := db.GetTableInsensitive(ctx, doltdb.RebaseTableName)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return fmt.Errorf("unable to find %s table", doltdb.RebaseTableName)
-	}
-
-	writeableDoltTable, ok := table.(*WritableDoltTable)
-	if !ok {
-		return fmt.Errorf("expected a *sqle.WritableDoltTable, but got %T", table)
-	}
-
-	inserter := writeableDoltTable.Inserter(ctx)
-	for _, planMember := range plan.Members {
-		actionEnumValue := dprocedures.RebaseActionEnumType.IndexOf(strings.ToLower(planMember.Action))
-		if actionEnumValue == -1 {
-			return fmt.Errorf("invalid rebase action: %s", planMember.Action)
-		}
-		err = inserter.Insert(ctx, sql.Row{
-			planMember.RebaseOrder,
-			uint16(actionEnumValue),
-			planMember.CommitHash,
-			planMember.CommitMsg,
-		})
-		if err != nil {
-			return err
-		}
-	}
-
-	err = inserter.Close(ctx)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (db Database) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
 	db.rsr, db.rsw = branchSpec.RepoState, branchSpec.RepoState
 	db.revision = branchSpec.Branch
@@ -1741,6 +1647,101 @@ func (db Database) SetCollation(ctx *sql.Context, collation sql.CollationID) err
 		return err
 	}
 	return db.SetRoot(ctx, newRoot)
+}
+
+// LoadRebasePlan implements the rebase.RebasePlanDatabase interface
+func (db Database) LoadRebasePlan(ctx *sql.Context) (*rebase.RebasePlan, error) {
+	table, ok, err := db.GetTableInsensitive(ctx, doltdb.RebaseTableName)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("unable to find dolt_rebase table")
+	}
+	resolvedTable := plan.NewResolvedTable(table, db, nil)
+	sort := plan.NewSort([]sql.SortField{{
+		Column: expression.NewGetField(0, types.Int64, "rebase_order", false),
+		Order:  sql.Ascending,
+	}}, resolvedTable)
+	iter, err := rowexec.DefaultBuilder.Build(ctx, sort, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var rebasePlan rebase.RebasePlan
+	for {
+		row, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
+
+		i, ok := row[1].(uint16)
+		if !ok {
+			return nil, fmt.Errorf("invalid enum value in rebase plan: %v (%T)", row[1], row[1])
+		}
+		rebaseAction, ok := dprocedures.RebaseActionEnumType.At(int(i))
+		if !ok {
+			return nil, fmt.Errorf("invalid enum value in rebase plan: %v (%T)", row[1], row[1])
+		}
+
+		rebasePlan.Members = append(rebasePlan.Members, rebase.RebasePlanMember{
+			RebaseOrder: row[0].(decimal.Decimal),
+			Action:      rebaseAction,
+			CommitHash:  row[2].(string),
+			CommitMsg:   row[3].(string),
+		})
+	}
+
+	return &rebasePlan, nil
+}
+
+// SaveRebasePlan implements the rebase.RebasePlanDatabase interface
+func (db Database) SaveRebasePlan(ctx *sql.Context, plan *rebase.RebasePlan) error {
+	pkSchema := sql.NewPrimaryKeySchema(dprocedures.DoltRebaseSystemTableSchema, 2)
+	// we use createSqlTable, instead of CreateTable to avoid the "dolt_" reserved prefix table name check
+	err := db.createSqlTable(ctx, doltdb.RebaseTableName, pkSchema, sql.Collation_Default)
+	if err != nil {
+		return err
+	}
+
+	table, ok, err := db.GetTableInsensitive(ctx, doltdb.RebaseTableName)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("unable to find %s table", doltdb.RebaseTableName)
+	}
+
+	writeableDoltTable, ok := table.(*WritableDoltTable)
+	if !ok {
+		return fmt.Errorf("expected a *sqle.WritableDoltTable, but got %T", table)
+	}
+
+	inserter := writeableDoltTable.Inserter(ctx)
+	for _, planMember := range plan.Members {
+		actionEnumValue := dprocedures.RebaseActionEnumType.IndexOf(strings.ToLower(planMember.Action))
+		if actionEnumValue == -1 {
+			return fmt.Errorf("invalid rebase action: %s", planMember.Action)
+		}
+		err = inserter.Insert(ctx, sql.Row{
+			planMember.RebaseOrder,
+			uint16(actionEnumValue),
+			planMember.CommitHash,
+			planMember.CommitMsg,
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	err = inserter.Close(ctx)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // noopRepoStateWriter is a minimal implementation of RepoStateWriter that does nothing

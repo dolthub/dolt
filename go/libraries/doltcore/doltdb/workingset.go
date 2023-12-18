@@ -29,20 +29,28 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+// RebaseState tracks the state of an in-progress rebase action. It records the name of the branch being rebased, the
+// commit onto which the new commits will be rebased, and the root value of the previous working set, which is used if
+// the rebase is aborted and the working set needs to be restored to its previous state.
 type RebaseState struct {
 	preRebaseWorking *RootValue
 	ontoCommit       *Commit
 	branch           string
 }
 
+// Branch returns the name of the branch being actively rebased. This is the branch that will be updated to point
+// at the new commits created by the rebase operation.
 func (rs RebaseState) Branch() string {
 	return rs.branch
 }
 
+// OntoCommit returns the commit onto which new commits are being rebased by the active rebase operation.
 func (rs RebaseState) OntoCommit() *Commit {
 	return rs.ontoCommit
 }
 
+// PreRebaseWorkingRoot stores the RootValue of the working set immediately before the current rebase operation was
+// started. This value is used when a rebase is aborted, so that the working set can be restored to its previous state.
 func (rs RebaseState) PreRebaseWorkingRoot() *RootValue {
 	return rs.preRebaseWorking
 }
@@ -433,20 +441,19 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 			return nil, err
 		}
 
-		ontoCommit, err := dsws.RebaseState.OntoCommit(ctx, vrw)
+		datasOntoCommit, err := dsws.RebaseState.OntoCommit(ctx, vrw)
 		if err != nil {
 			return nil, err
 		}
 
-		// TODO: rename
-		ontoCommit2, err := NewCommit(ctx, vrw, ns, ontoCommit)
+		ontoCommit, err := NewCommit(ctx, vrw, ns, datasOntoCommit)
 		if err != nil {
 			return nil, err
 		}
 
 		rebaseState = &RebaseState{
 			preRebaseWorking: preRebaseWorkingRoot,
-			ontoCommit:       ontoCommit2,
+			ontoCommit:       ontoCommit,
 			branch:           dsws.RebaseState.Branch(ctx),
 		}
 	}
@@ -546,7 +553,6 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB) (
 			return types.Ref{}, types.Ref{}, nil, nil, err
 		}
 
-		// TODO: is this the right signature for this function?
 		rebaseState = datas.NewRebaseState(preRebaseWorking.TargetHash(), dCommit.Addr(), ws.rebaseState.branch)
 	}
 

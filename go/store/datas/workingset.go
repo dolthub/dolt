@@ -180,13 +180,12 @@ func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *Mer
 		mergeStateOff = serial.MergeStateEnd(builder)
 	}
 
-	// TODO: Will this change to the persisted working set data require a new feature version?
 	if rebaseState != nil {
 		preRebaseRootAddrOffset := builder.CreateByteVector((*rebaseState.preRebaseWorkingAddr)[:])
 		ontoAddrOffset := builder.CreateByteVector((*rebaseState.ontoCommitAddr)[:])
 		branchOffset := builder.CreateString(rebaseState.branch)
 		serial.RebaseStateStart(builder)
-		serial.RebaseStateAddPreWorkingRootAddr(builder, preRebaseRootAddrOffset) // TODO: Is this still needed when we have branch now?
+		serial.RebaseStateAddPreWorkingRootAddr(builder, preRebaseRootAddrOffset)
 		serial.RebaseStateAddBranch(builder, branchOffset)
 		serial.RebaseStateAddOntoCommitAddr(builder, ontoAddrOffset)
 		rebaseStateOffset = serial.RebaseStateEnd(builder)
@@ -241,8 +240,6 @@ func NewMergeState(
 		*ms.fromCommitAddr = commit.Addr()
 		return ms, nil
 	} else {
-		// TODO: The noms codepath for working set data is deprecated with the DOLT storage format, so
-		//       all this code can be removed.
 		v, err := mergeStateTemplate.NewStruct(preMergeWorking.Format(), []types.Value{commit.NomsValue(), types.String(commitSpecStr), preMergeWorking})
 		if err != nil {
 			return nil, err
