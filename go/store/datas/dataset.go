@@ -222,7 +222,10 @@ func (ms *MergeState) PreMergeWorkingAddr(ctx context.Context, vr types.ValueRea
 		return *ms.preMergeWorkingAddr, nil
 	}
 	if ms.nomsMergeState == nil {
-		panic("nomsMergeState is nil!")
+		err := ms.loadIfNeeded(ctx, vr)
+		if err != nil {
+			return hash.Hash{}, err
+		}
 	}
 
 	workingRootRef, ok, err := ms.nomsMergeState.MaybeGet(mergeStateWorkingPreMergeField)
@@ -240,7 +243,10 @@ func (ms *MergeState) FromCommit(ctx context.Context, vr types.ValueReader) (*Co
 		return LoadCommitAddr(ctx, vr, *ms.fromCommitAddr)
 	}
 	if ms.nomsMergeState == nil {
-		panic("nomsMergeState is nil!")
+		err := ms.loadIfNeeded(ctx, vr)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	commitV, ok, err := ms.nomsMergeState.MaybeGet(mergeStateCommitField)
@@ -260,7 +266,10 @@ func (ms *MergeState) FromCommitSpec(ctx context.Context, vr types.ValueReader) 
 	}
 
 	if ms.nomsMergeState == nil {
-		panic("nomsMergeState is nil!")
+		err := ms.loadIfNeeded(ctx, vr)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	commitSpecStr, ok, err := ms.nomsMergeState.MaybeGet(mergeStateCommitSpecField)
@@ -737,7 +746,6 @@ func (h nomsHead) HeadWorkingSet() (*WorkingSetHead, error) {
 	if ok {
 		r := mergeStateRef.(types.Ref)
 		ret.MergeState = &MergeState{
-			// TODO: is this really noms? 🤔
 			nomsMergeStateRef: &r,
 		}
 	}
