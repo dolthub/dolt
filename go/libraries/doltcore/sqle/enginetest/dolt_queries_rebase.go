@@ -259,18 +259,16 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_rebase order by rebase_order ASC;",
 				Expected: []sql.Row{
-					{uint(1), uint(2), doltCommit, "inserting row 1"},
-					{uint(2), uint(2), doltCommit, "inserting row 10"},
-					{uint(3), uint(2), doltCommit, "inserting row 100"},
-					{uint(4), uint(2), doltCommit, "inserting row 1000"},
-					{uint(5), uint(2), doltCommit, "inserting row 10000"},
-					{uint(6), uint(2), doltCommit, "inserting row 100000"},
+					{"1", uint(2), doltCommit, "inserting row 1"},
+					{"2", uint(2), doltCommit, "inserting row 10"},
+					{"3", uint(2), doltCommit, "inserting row 100"},
+					{"4", uint(2), doltCommit, "inserting row 1000"},
+					{"5", uint(2), doltCommit, "inserting row 10000"},
+					{"6", uint(2), doltCommit, "inserting row 100000"},
 				},
 			},
 			{
-				// TODO: Hard to adjust rebase order, when there are conflicts.
-				//       Perhaps this should be a DECIMAL(6,2) field?
-				Query: "update dolt_rebase set rebase_order=7 where rebase_order=6;",
+				Query: "update dolt_rebase set rebase_order=6.1 where rebase_order=6;",
 				Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: uint64(1), Info: plan.UpdateInfo{
 					Matched: 1,
 					Updated: 1,
@@ -298,7 +296,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				}}}},
 			},
 			{
-				Query: "update dolt_rebase set action='fixup' where rebase_order = 7;",
+				Query: "update dolt_rebase set action='fixup' where rebase_order = 6.10;",
 				Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: uint64(1), Info: plan.UpdateInfo{
 					Matched: 1,
 					Updated: 1,

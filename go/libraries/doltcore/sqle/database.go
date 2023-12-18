@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
+	"github.com/shopspring/decimal"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -151,7 +152,7 @@ func (db Database) LoadRebasePlan(ctx *sql.Context) (*rebase.RebasePlan, error) 
 		}
 
 		rebasePlan.Members = append(rebasePlan.Members, rebase.RebasePlanMember{
-			RebaseOrder: uint(row[0].(uint16)),
+			RebaseOrder: row[0].(decimal.Decimal),
 			Action:      rebaseAction,
 			CommitHash:  row[2].(string),
 			CommitMsg:   row[3].(string),
@@ -184,8 +185,7 @@ func (db Database) SaveRebasePlan(ctx *sql.Context, plan *rebase.RebasePlan) err
 
 	inserter := writeableDoltTable.Inserter(ctx)
 	for _, planMember := range plan.Members {
-		// TODO: This logic should move into the RebasePlan type
-		actionEnumValue := dprocedures.RebaseActionEnumType.IndexOf(planMember.Action)
+		actionEnumValue := dprocedures.RebaseActionEnumType.IndexOf(strings.ToLower(planMember.Action))
 		if actionEnumValue == -1 {
 			return fmt.Errorf("invalid rebase action: %s", planMember.Action)
 		}

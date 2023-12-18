@@ -16,12 +16,15 @@ package rebase
 
 import (
 	"fmt"
+	"io"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/shopspring/decimal"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/go-mysql-server/sql"
-	"io"
 )
 
 const (
@@ -51,13 +54,10 @@ type RebasePlan struct {
 }
 
 // RebasePlanMember describes a single step in a rebase plan, such as dropping a
-// commit, squashing a commit into the prevous commit, etc.
+// commit, squashing a commit into the previous commit, etc.
 type RebasePlanMember struct {
-	// TODO: If we change the schema to be a DECIMAL(6,2), uint won't work anymore...
-	//       Although... do we even need this field if the ordering is encapsulated
-	//       by this field's position in the Members slice?
-	RebaseOrder uint
-	Action      string // TODO: how to easily sync up this action with the enum types?
+	RebaseOrder decimal.Decimal
+	Action      string
 	CommitHash  string
 	CommitMsg   string
 }
@@ -90,9 +90,9 @@ func CreateDefaultRebasePlan(ctx *sql.Context, startCommit, upstreamCommit *dolt
 		}
 
 		plan.Members = append(plan.Members, RebasePlanMember{
-			RebaseOrder: uint(len(commits) - idx),
+			RebaseOrder: decimal.NewFromFloat32(float32(len(commits) - idx)),
 			Action:      RebaseActionPick,
-			CommitHash:  hash.String(), // TODO: Maybe keep as a hash.Hash instance?
+			CommitHash:  hash.String(),
 			CommitMsg:   meta.Description,
 		})
 	}
@@ -108,7 +108,7 @@ func ValidateRebasePlan(ctx *sql.Context, plan *RebasePlan) error {
 	for i, step := range plan.Members {
 		// As a sanity check, make sure the rebase order is ascending. This shouldn't EVER happen because the
 		// results are sorted from the database query, but double check while we're validating the plan.
-		if i > 0 && plan.Members[i-1].RebaseOrder >= step.RebaseOrder {
+		if i > 0 && plan.Members[i-1].RebaseOrder.GreaterThanOrEqual(step.RebaseOrder) {
 			return fmt.Errorf("invalid rebase plan: rebase order must be ascending")
 		}
 
@@ -190,10 +190,8 @@ func findRebaseCommits(ctx *sql.Context, currentBranchCommit, upstreamBranchComm
 		return nil, err
 	}
 
-	// TODO: Currently, we drain the iterator into a slice so that we can see the total
-	// number of commits and use that to set the rebase_order when we create the dolt_rebase
-	// table. This is easier, but could be optimized if we had a way to generate this same
-	// set of commits in reverse order.
+	// Drain the iterator into a slice so that we can easily reverse the order of the commits
+	// so that the oldest commit is first in the generated rebase plan.
 	for {
 		_, commit, err := commitItr.Next(ctx)
 		if err == io.EOF {
