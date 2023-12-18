@@ -76,11 +76,6 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		/*
-		   TODO: Error cases:
-		        - merge commits - merge commits should be fine, just skipped
-		        - conflicts – e.g. reordering commits in a way that causes a conflict
-		*/
 		Name: "dolt_rebase errors: no database selected",
 		SetUpScript: []string{
 			"create database temp;",
@@ -103,6 +98,11 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	/*
+	   TODO: Error cases:
+	        - merge commits - merge commits should be fine, just skipped
+	        - conflicts – e.g. reordering commits in a way that causes a conflict
+	*/
 	{
 		Name: "dolt_rebase errors: active merge, cherry-pick, or rebase",
 		SetUpScript: []string{
@@ -149,10 +149,6 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			"call dolt_commit('-am', 'inserting row 10');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
-			// TODO: More invalid plan tests:
-			//      - NULLs in fields? (should be impossible if we defined the schema correctly though...)
-			//      -  duplicate rebase_order (this is a PK though... so shouldn't be possible?)
-
 			// TODO: Test that deleting a row from the rebase plan is equivalent to marking it as a drop
 			// TODO: Test that new commit hashes can be added
 			{
@@ -190,6 +186,38 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			{
 				Query:          "call dolt_rebase('--continue');",
 				ExpectedErrStr: rebase.ErrInvalidRebasePlanSquashFixupWithoutPick.Error(),
+			},
+			{
+				Query: "update dolt_rebase set action='pick', commit_hash='doesnotexist' where rebase_order=1;",
+				Expected: []sql.Row{{gmstypes.OkResult{
+					RowsAffected: 1,
+					InsertID:     0,
+					Info: plan.UpdateInfo{
+						Matched:  1,
+						Updated:  1,
+						Warnings: 0,
+					},
+				}}},
+			},
+			{
+				Query:          "call dolt_rebase('--continue');",
+				ExpectedErrStr: "invalid commit hash: doesnotexist",
+			},
+			{
+				Query: "update dolt_rebase set commit_hash='0123456789abcdef0123456789abcdef' where rebase_order=1;",
+				Expected: []sql.Row{{gmstypes.OkResult{
+					RowsAffected: 1,
+					InsertID:     0,
+					Info: plan.UpdateInfo{
+						Matched:  1,
+						Updated:  1,
+						Warnings: 0,
+					},
+				}}},
+			},
+			{
+				Query:          "call dolt_rebase('--continue');",
+				ExpectedErrStr: "unable to resolve commit hash 0123456789abcdef0123456789abcdef: target commit not found",
 			},
 		},
 	},

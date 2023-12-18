@@ -102,17 +102,16 @@ func CreateDefaultRebasePlan(ctx *sql.Context, startCommit, upstreamCommit *dolt
 
 // ValidateRebasePlan returns a validation error for invalid states in a rebase plan, such as
 // squash or fixup actions appearing in the plan before a pick or reword action.
-func ValidateRebasePlan(_ *sql.Context, plan *RebasePlan) error {
-	// TODO: Should we check that rebase order is ascending? It should be from how we load
-	//       the plan from the DB, but if it's not, it might be a good sanity check before
-	//       executing a plan out of order.
-
-	// TODO: Would be good to assert that each commit is valid – if a plan has garbage for a
-	//       commit hash, would be good to fail before we start executing the plan.
-
+func ValidateRebasePlan(ctx *sql.Context, plan *RebasePlan) error {
 	seenPick := false
 	seenReword := false
-	for _, step := range plan.Members {
+	for i, step := range plan.Members {
+		// As a sanity check, make sure the rebase order is ascending. This shouldn't EVER happen because the
+		// results are sorted from the database query, but double check while we're validating the plan.
+		if i > 0 && plan.Members[i-1].RebaseOrder >= step.RebaseOrder {
+			return fmt.Errorf("invalid rebase plan: rebase order must be ascending")
+		}
+
 		switch step.Action {
 		case RebaseActionPick:
 			seenPick = true
@@ -125,6 +124,35 @@ func ValidateRebasePlan(_ *sql.Context, plan *RebasePlan) error {
 				return ErrInvalidRebasePlanSquashFixupWithoutPick
 			}
 		}
+
+		if err := validateCommit(ctx, step.CommitHash); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// validateCommit returns an error if the specified |commit| is not able to be resolved.
+func validateCommit(ctx *sql.Context, commit string) error {
+	doltSession := dsess.DSessFromSess(ctx.Session)
+
+	ddb, ok := doltSession.GetDoltDB(ctx, ctx.GetCurrentDatabase())
+	if !ok {
+		return fmt.Errorf("unable to load dolt db")
+	}
+
+	if !doltdb.IsValidCommitHash(commit) {
+		return fmt.Errorf("invalid commit hash: %s", commit)
+	}
+
+	commitSpec, err := doltdb.NewCommitSpec(commit)
+	if err != nil {
+		return err
+	}
+	_, err = ddb.Resolve(ctx, commitSpec, nil)
+	if err != nil {
+		return fmt.Errorf("unable to resolve commit hash %s: %w", commit, err)
 	}
 
 	return nil
