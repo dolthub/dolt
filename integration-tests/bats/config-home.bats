@@ -37,41 +37,41 @@ teardown() {
     HOME="$BATS_TMPDIR/config-test$$/homeA"
 
     HOME=$HOME dolt config --global --add metrics.disabled true > /dev/null 2>&1
-    HOME=$HOME run dolt config --global --add test testA
+    HOME=$HOME run dolt config --global --add user.name "Your Name"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Config successfully updated" ]] || false
     HOME=$HOME run dolt config --list
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "test = testA" ]] || false
-    HOME=$HOME run dolt config --get test
+    [[ "$output" =~ "user.name = Your Name" ]] || false
+    HOME=$HOME run dolt config --get user.name
     [ "$status" -eq 0 ]
-    [ "$output" = "testA" ]
+    [ "$output" = "Your Name" ]
 
     mkdir "$BATS_TMPDIR/config-test$$/homeB"
     HOME="$BATS_TMPDIR/config-test$$/homeB"
 
     HOME=$HOME dolt config --global --add metrics.disabled true > /dev/null 2>&1
-    HOME=$HOME run dolt config --global --add test testB
+    HOME=$HOME run dolt config --global --add core.editor foo
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Config successfully updated" ]] || false
     HOME=$HOME run dolt config --list
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "test = testB" ]] || false
-    [[ ! "$output" =~ "test = testA" ]] || false
-    HOME=$HOME run dolt config --get test
+    [[ "$output" =~ "core.editor = foo" ]] || false
+    [[ ! "$output" =~ "user.name = Your Name" ]] || false
+    HOME=$HOME run dolt config --get core.editor
     [ "$status" -eq 0 ]
-    [ "$output" = "testB" ]
+    [ "$output" = "foo" ]
 
     HOME="$BATS_TMPDIR/config-test$$/homeA"
     
-    HOME=$HOME run dolt config --global --add test testA
+    HOME=$HOME run dolt config --global --add user.email "you@example.com"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Config successfully updated" ]] || false
     HOME=$HOME run dolt config --list
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "test = testA" ]] || false
-    [[ ! "$output" =~ "test = testB" ]] || false
-    HOME=$HOME run dolt config --get test
+    [[ "$output" =~ "user.email = you@example.com" ]] || false
+    [[ ! "$output" =~ "core.editor = foo" ]] || false
+    HOME=$HOME run dolt config --get user.email
     [ "$status" -eq 0 ]
-    [ "$output" = "testA" ]
+    [ "$output" = "you@example.com" ]
 }
