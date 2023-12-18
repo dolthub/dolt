@@ -428,7 +428,10 @@ func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
 		ret.MergeState.isCherryPick = mergeState.IsCherryPick()
 	}
 
-	rebaseState := h.msg.RebaseState(nil)
+	rebaseState, err := h.msg.TryRebaseState(nil)
+	if err != nil {
+		return nil, err
+	}
 	if rebaseState != nil {
 		// is there a better way to copy these?
 		ret.RebaseState = NewRebaseState(

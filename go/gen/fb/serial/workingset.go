@@ -172,19 +172,6 @@ func (rcv *WorkingSet) TryMergeState(obj *MergeState) (*MergeState, error) {
 	return nil, nil
 }
 
-func (rcv *WorkingSet) RebaseState(obj *RebaseState) *RebaseState {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
-	if o != 0 {
-		x := rcv._tab.Indirect(o + rcv._tab.Pos)
-		if obj == nil {
-			obj = new(RebaseState)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		return obj
-	}
-	return nil
-}
-
 func (rcv *WorkingSet) TryRebaseState(obj *RebaseState) (*RebaseState, error) {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
 	if o != 0 {
@@ -416,11 +403,7 @@ type RebaseState struct {
 
 func InitRebaseStateRoot(o *RebaseState, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	o.Init(buf, n+offset)
-	if RebaseStateNumFields < o.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
+	return o.Init(buf, n+offset)
 }
 
 func TryGetRootAsRebaseState(buf []byte, offset flatbuffers.UOffsetT) (*RebaseState, error) {
@@ -428,26 +411,18 @@ func TryGetRootAsRebaseState(buf []byte, offset flatbuffers.UOffsetT) (*RebaseSt
 	return x, InitRebaseStateRoot(x, buf, offset)
 }
 
-func GetRootAsRebaseState(buf []byte, offset flatbuffers.UOffsetT) *RebaseState {
-	x := &RebaseState{}
-	InitRebaseStateRoot(x, buf, offset)
-	return x
-}
-
 func TryGetSizePrefixedRootAsRebaseState(buf []byte, offset flatbuffers.UOffsetT) (*RebaseState, error) {
 	x := &RebaseState{}
 	return x, InitRebaseStateRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsRebaseState(buf []byte, offset flatbuffers.UOffsetT) *RebaseState {
-	x := &RebaseState{}
-	InitRebaseStateRoot(x, buf, offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *RebaseState) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *RebaseState) Init(buf []byte, i flatbuffers.UOffsetT) error {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
+	if RebaseStateNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
 }
 
 func (rcv *RebaseState) Table() flatbuffers.Table {
