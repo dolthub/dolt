@@ -1742,7 +1742,7 @@ func (m *valueMerger) processBaseColumn(ctx context.Context, i int, left, right,
 		if err != nil {
 			return false, err
 		}
-		if m.resultVD.Comparator().CompareValues(i, baseCol, rightCol, m.rightVD.Types[rightColIdx]) == 0 {
+		if isEqual(i, baseCol, rightCol, m.rightVD.Types[rightColIdx]) {
 			// right column did not change, so there is no conflict.
 			return false, nil
 		}
@@ -1765,7 +1765,7 @@ func (m *valueMerger) processBaseColumn(ctx context.Context, i int, left, right,
 		if err != nil {
 			return false, err
 		}
-		if m.resultVD.Comparator().CompareValues(i, baseCol, leftCol, m.leftVD.Types[leftColIdx]) == 0 {
+		if isEqual(i, baseCol, leftCol, m.leftVD.Types[leftColIdx]) {
 			// left column did not change, so there is no conflict.
 			return false, nil
 		}
@@ -1854,7 +1854,7 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 			return nil, false, err
 		}
 
-		if m.resultVD.Comparator().CompareValues(i, leftCol, rightCol, resultType) == 0 {
+		if isEqual(i, leftCol, rightCol, resultType) {
 			// columns are equal, return either.
 			return leftCol, false, nil
 		}
@@ -1902,19 +1902,19 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 		if err != nil {
 			return nil, true, nil
 		}
-		rightModified = m.resultVD.Comparator().CompareValues(i, rightCol, baseCol, resultType) != 0
+		rightModified = !isEqual(i, rightCol, baseCol, resultType)
 	}
 
 	leftCol, err = convert(ctx, m.leftVD, m.resultVD, m.resultSchema, leftColIdx, i, left, leftCol, m.ns)
 	if err != nil {
 		return nil, true, nil
 	}
-	if m.resultVD.Comparator().CompareValues(i, leftCol, rightCol, resultType) == 0 {
+	if isEqual(i, leftCol, rightCol, resultType) {
 		// columns are equal, return either.
 		return leftCol, false, nil
 	}
 
-	leftModified = m.resultVD.Comparator().CompareValues(i, leftCol, baseCol, resultType) != 0
+	leftModified = !isEqual(i, leftCol, baseCol, resultType)
 
 	switch {
 	case leftModified && rightModified:
@@ -1929,6 +1929,12 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 	default:
 		return rightCol, false, nil
 	}
+}
+
+func isEqual(i int, left []byte, right []byte, resultType val.Type) bool {
+	// We use a default comparator instead of the comparator in the schema.
+	// This is necessary to force a binary collation for string comparisons.
+	return val.DefaultTupleComparator{}.CompareValues(i, left, right, resultType) == 0
 }
 
 func getColumn(tuple *val.Tuple, mapping *val.OrdinalMapping, idx int) (col []byte, colIndex int, exists bool) {
