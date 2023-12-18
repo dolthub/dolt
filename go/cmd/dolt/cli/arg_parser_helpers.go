@@ -102,8 +102,8 @@ func CreateRebaseArgParser() *argparser.ArgParser {
 		return fmt.Errorf("rebase takes at most one positional argument.")
 	}
 	ap.SupportsFlag(AbortParam, "", "Abort an interactive rebase and return the working set to the pre-rebase state")
-	ap.SupportsFlag(ContinueParam, "", "Continue an interactive rebase after adjusting the rebase plan")
-	ap.SupportsFlag("interactive", "i", "Start an interactive rebase")
+	ap.SupportsFlag(ContinueFlag, "", "Continue an interactive rebase after adjusting the rebase plan")
+	ap.SupportsFlag(InteractiveFlag, "i", "Start an interactive rebase")
 	return ap
 }
 

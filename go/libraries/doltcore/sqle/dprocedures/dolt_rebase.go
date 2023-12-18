@@ -103,7 +103,7 @@ func doDoltRebase(ctx *sql.Context, args []string) (int, error) {
 			return 0, nil
 		}
 
-	case apr.Contains(cli.ContinueParam):
+	case apr.Contains(cli.ContinueFlag):
 		err := continueRebase(ctx)
 		if err != nil {
 			return 1, err

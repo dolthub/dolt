@@ -27,7 +27,7 @@ const (
 	CheckoutCreateBranch = "b"
 	CreateResetBranch    = "B"
 	CommitFlag           = "commit"
-	ContinueParam        = "continue"
+	ContinueFlag         = "continue"
 	CopyFlag             = "copy"
 	DateParam            = "date"
 	DecorateFlag         = "decorate"
