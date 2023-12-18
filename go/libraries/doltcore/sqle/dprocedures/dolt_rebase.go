@@ -122,8 +122,6 @@ func doDoltRebase(ctx *sql.Context, args []string) (int, error) {
 			return 0, nil
 		}
 	}
-
-	return 0, nil
 }
 
 func startRebase(ctx *sql.Context, upstreamPoint string) error {
@@ -290,11 +288,6 @@ func abortRebase(ctx *sql.Context) error {
 // TODO: Make '-i' arg required?
 
 func continueRebase(ctx *sql.Context) error {
-	// TODO: validate the dolt_rebase table
-	//       - ensure the commits are valid, meaning valid commits, and
-	//         in the chain between HEAD and ontoCommit
-	//       - make sure the rebase order doesn't have duplicate numbers
-
 	// TODO: Seems like the working set RebaseState will eventually need to keep track of
 	//       where it is in the rebase plan...
 	//       RebaseOrder is probably what makes the most sense to track... we don't
@@ -405,9 +398,6 @@ func processRebaseAction(ctx *sql.Context, planStep *rebase.RebasePlanMember) er
 		return err
 
 	case rebase.RebaseActionSquash:
-		// TODO: validate that squash (or fixup!) is NOT the first action!
-		//       would be better to put rebase plan validation into an earlier/separate step,
-		//       instead of mixing it in with execution.
 		commitMessage, err := squashCommitMessage(ctx, planStep.CommitHash)
 		if err != nil {
 			return err
