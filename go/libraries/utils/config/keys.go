@@ -14,6 +14,24 @@
 
 package config
 
+var ConfigOptions = map[string]struct{}{
+	UserEmailKey:          {},
+	UserNameKey:           {},
+	UserCreds:             {},
+	DoltEditor:            {},
+	InitBranchName:        {},
+	RemotesApiHostKey:     {},
+	RemotesApiHostPortKey: {},
+	AddCredsUrlKey:        {},
+	DoltLabInsecureKey:    {},
+	MetricsDisabled:       {},
+	MetricsHost:           {},
+	MetricsPort:           {},
+	MetricsInsecure:       {},
+	PushAutoSetupRemote:   {},
+	ProfileKey:            {},
+}
+
 const UserEmailKey = "user.email"
 
 const UserNameKey = "user.name"
