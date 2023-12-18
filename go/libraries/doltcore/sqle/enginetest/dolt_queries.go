@@ -2119,7 +2119,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "select c1 from dolt_history_t;",
 				Expected: []sql.Row{
-					{uint64(1)},
+					{"foo"},
 				},
 			},
 		},
