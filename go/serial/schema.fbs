@@ -24,6 +24,9 @@ table TableSchema {
   secondary_indexes:[Index];
   checks:[CheckConstraint];
   collation:Collation;
+
+  // this field is necessary because older dolt clients weren't using TryAccessor for Columns, but are in TableSchemas
+  has_features_after_try_accessors:bool;
 }
 
 table Column {
@@ -55,6 +58,9 @@ table Column {
   hidden:bool;
   generated:bool;
   virtual:bool;
+
+  // sql on update value
+  on_update_value:string;
 }
 
 table Index {

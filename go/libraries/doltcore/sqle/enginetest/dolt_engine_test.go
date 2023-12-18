@@ -1234,6 +1234,12 @@ func TestColumnDefaults(t *testing.T) {
 	enginetest.TestColumnDefaults(t, h)
 }
 
+func TestOnUpdateExprScripts(t *testing.T) {
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestOnUpdateExprScripts(t, h)
+}
+
 func TestAlterTable(t *testing.T) {
 	// This is a newly added test in GMS that dolt doesn't support yet
 	h := newDoltHarness(t).WithSkippedQueries([]string{"ALTER TABLE t42 ADD COLUMN s varchar(20), drop check check1"})
@@ -2979,6 +2985,36 @@ func TestThreeWayMergeWithSchemaChangeScriptsPrepared(t *testing.T) {
 			}()
 		}
 	})
+}
+
+// If CREATE DATABASE has an error within the DatabaseProvider, it should not
+// leave behind intermediate filesystem state.
+func TestCreateDatabaseErrorCleansUp(t *testing.T) {
+	dh := newDoltHarness(t)
+	require.NotNil(t, dh)
+	e, err := dh.NewEngine(t)
+	require.NoError(t, err)
+	require.NotNil(t, e)
+
+	dh.provider.(*sqle.DoltDatabaseProvider).InitDatabaseHook = func(_ *sql.Context, _ *sqle.DoltDatabaseProvider, name string, _ *env.DoltEnv) error {
+		if name == "cannot_create" {
+			return fmt.Errorf("there was an error initializing this database. abort!")
+		}
+		return nil
+	}
+
+	err = dh.provider.CreateDatabase(enginetest.NewContext(dh), "can_create")
+	require.NoError(t, err)
+
+	err = dh.provider.CreateDatabase(enginetest.NewContext(dh), "cannot_create")
+	require.Error(t, err)
+
+	fs := dh.multiRepoEnv.FileSystem()
+	exists, _ := fs.Exists("cannot_create")
+	require.False(t, exists)
+	exists, isDir := fs.Exists("can_create")
+	require.True(t, exists)
+	require.True(t, isDir)
 }
 
 // runMergeScriptTestsInBothDirections creates a new test run, named |name|, and runs the specified merge |tests|

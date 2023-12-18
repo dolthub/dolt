@@ -482,6 +482,8 @@ func newImportSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, rdSchema sc
 		return nil, dmce
 	}
 
+	tableSchemaDiff := tableSchema.GetAllCols().NameToCol
+	var rowOperationDiff []string
 	// construct the schema of the set of column to be updated.
 	rowOperationColColl := schema.NewColCollection()
 	rdSchema.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
@@ -489,6 +491,9 @@ func newImportSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, rdSchema sc
 		wrCol, ok := tableSchema.GetAllCols().GetByName(wrColName)
 		if ok {
 			rowOperationColColl = rowOperationColColl.Append(wrCol)
+			delete(tableSchemaDiff, wrColName)
+		} else {
+			rowOperationDiff = append(rowOperationDiff, wrColName)
 		}
 
 		return false, nil
@@ -499,10 +504,22 @@ func newImportSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, rdSchema sc
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 	}
 
-	// Leave a warning if the import operation is operating on fewer columns than the relevant table's schema.
+	// Leave a warning if the import operation has a different schema than the relevant table's schema.
 	// This can certainly be intentional, but it is often due to typos in the header of a csv file.
-	if rowOperationSchema.GetAllCols().Size() < tableSchema.GetAllCols().Size() {
-		cli.PrintErrln(color.YellowString("Warning: There are fewer columns in the import file's schema than the table's schema.\nIf unintentional, check for any typos in the import file's header."))
+	if len(tableSchemaDiff) != 0 || len(rowOperationDiff) != 0 {
+		cli.PrintErrln(color.YellowString("Warning: The import file's schema does not match the table's schema.\nIf unintentional, check for any typos in the import file's header."))
+		if len(tableSchemaDiff) != 0 {
+			cli.Printf("Missing columns in %s:\n", imOpts.destTableName)
+			for _, col := range tableSchemaDiff {
+				cli.Println("\t" + col.Name)
+			}
+		}
+		if len(rowOperationDiff) != 0 {
+			cli.Println("Extra columns in import file:")
+			for _, col := range rowOperationDiff {
+				cli.Println("\t" + col)
+			}
+		}
 	}
 
 	mv, err := mvdata.NewSqlEngineTableWriter(ctx, dEnv, tableSchema, rowOperationSchema, moveOps, importStatsCB)
