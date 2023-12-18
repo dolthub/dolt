@@ -149,7 +149,19 @@ func (rcv *TableSchema) MutateCollation(n Collation) bool {
 	return rcv._tab.MutateUint16Slot(12, uint16(n))
 }
 
-const TableSchemaNumFields = 5
+func (rcv *TableSchema) HasFeaturesAfterTryAccessors() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *TableSchema) MutateHasFeaturesAfterTryAccessors(n bool) bool {
+	return rcv._tab.MutateBoolSlot(14, n)
+}
+
+const TableSchemaNumFields = 6
 
 func TableSchemaStart(builder *flatbuffers.Builder) {
 	builder.StartObject(TableSchemaNumFields)
@@ -177,6 +189,9 @@ func TableSchemaStartChecksVector(builder *flatbuffers.Builder, numElems int) fl
 }
 func TableSchemaAddCollation(builder *flatbuffers.Builder, collation Collation) {
 	builder.PrependUint16Slot(4, uint16(collation), 0)
+}
+func TableSchemaAddHasFeaturesAfterTryAccessors(builder *flatbuffers.Builder, hasFeaturesAfterTryAccessors bool) {
+	builder.PrependBoolSlot(5, hasFeaturesAfterTryAccessors, false)
 }
 func TableSchemaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
@@ -354,7 +369,15 @@ func (rcv *Column) MutateVirtual(n bool) bool {
 	return rcv._tab.MutateBoolSlot(28, n)
 }
 
-const ColumnNumFields = 13
+func (rcv *Column) OnUpdateValue() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(30))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+const ColumnNumFields = 14
 
 func ColumnStart(builder *flatbuffers.Builder) {
 	builder.StartObject(ColumnNumFields)
@@ -397,6 +420,9 @@ func ColumnAddGenerated(builder *flatbuffers.Builder, generated bool) {
 }
 func ColumnAddVirtual(builder *flatbuffers.Builder, virtual bool) {
 	builder.PrependBoolSlot(12, virtual, false)
+}
+func ColumnAddOnUpdateValue(builder *flatbuffers.Builder, onUpdateValue flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(13, flatbuffers.UOffsetT(onUpdateValue), 0)
 }
 func ColumnEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

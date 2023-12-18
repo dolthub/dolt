@@ -362,7 +362,7 @@ func (p *DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) err
 	return p.CreateCollatedDatabase(ctx, name, sql.Collation_Default)
 }
 
-func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name string, collation sql.CollationID) error {
+func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name string, collation sql.CollationID) (err error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -373,10 +373,17 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 		return fmt.Errorf("Cannot create DB, file exists at %s", name)
 	}
 
-	err := p.fs.MkDirs(name)
+	err = p.fs.MkDirs(name)
 	if err != nil {
 		return err
 	}
+	defer func() {
+		// We do not want to leave this directory behind if we do not
+		// successfully create the database.
+		if err != nil {
+			p.fs.Delete(name, true /* force / recursive */)
+		}
+	}()
 
 	newFs, err := p.fs.WithWorkingDir(name)
 	if err != nil {

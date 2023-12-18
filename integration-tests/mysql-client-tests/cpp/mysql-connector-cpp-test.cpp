@@ -3,7 +3,6 @@
 #include <sstream>
 #include <stdexcept>
 
-
 #include "mysql_driver.h"
 #include "mysql_connection.h"
 #include "mysql_error.h"
@@ -64,10 +63,19 @@ int main(int argc, char **argv) {
       sql::Statement *stmt = con->createStatement();
 
       if ( is_update[i] ) {
-	int affected_rows = stmt->executeUpdate(queries[i]);
+        int affected_rows = stmt->executeUpdate(queries[i]);
       } else {
-	sql::ResultSet *res = stmt->executeQuery(queries[i]);
-	delete res;
+        sql::ResultSet *res = stmt->executeQuery(queries[i]);
+
+        // Assert that all columns have colum name metadata populated
+        sql::ResultSetMetaData* metadata = res->getMetaData();
+        const uint columnCount = metadata->getColumnCount();
+        for (uint columnIndex = 1; columnIndex <= columnCount; ++columnIndex) {
+            sql::SQLString columnName = metadata->getColumnName(columnIndex);
+            assert(columnName.length() > 0);
+        }
+
+        delete res;
       }
     
       delete stmt;

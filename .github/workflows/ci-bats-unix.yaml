@@ -34,6 +34,10 @@ jobs:
             echo "DOLT_BATS_AWS_BUCKET=dolt-ci-bats-chunks-us-west-2" >> $GITHUB_ENV
             echo "DOLT_BATS_AWS_EXISTING_REPO=aws_remote_bats_tests__dolt__" >> $GITHUB_ENV
           fi
+      - name: Configure filter tags for lambda bats
+        if: ${{ matrix.os == 'ubuntu-22.04' && env.use_credentials == 'true' }}
+        run: |
+          echo "BATS_FILTER=--filter-tags no_lambda" >> $GITHUB_ENV
       - name: Configure AWS Credentials
         if: ${{ env.use_credentials == 'true' }}
         uses: aws-actions/configure-aws-credentials@v2.2.0
@@ -114,5 +118,15 @@ jobs:
           PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}
           BATS_TEST_RETRIES: "3"
         run: |
-          bats --tap .
+          bats --tap $BATS_FILTER .
+        working-directory: ./integration-tests/bats
+      - name: Test all Unix, SQL_ENGINE=remote-engine
+        # If we have AWS credentials, we run these remote-engine tests here instead of in the separate job.
+        if: ${{ env.use_credentials == 'true' && matrix.os == 'ubuntu-22.04' }}
+        env:
+          SQL_ENGINE: "remote-engine"
+          PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}
+          BATS_TEST_RETRIES: "3"
+        run: |
+          bats --tap $BATS_FILTER .
         working-directory: ./integration-tests/bats
