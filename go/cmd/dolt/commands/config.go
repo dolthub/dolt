@@ -227,7 +227,7 @@ func addOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, usa
 	for i := 0; i < len(args); i += 2 {
 		option := strings.ToLower(args[i])
 		value := args[i+1]
-		if _, ok := ConfigOptions[option]; !ok {
+		if _, ok := ConfigOptions[option]; !ok && !strings.HasPrefix(option, env.SqlServerGlobalsPrefix) {
 			cli.Println("error: invalid config option, use dolt config --help to check valid configuration variables")
 			return 1
 		}

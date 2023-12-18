@@ -26,6 +26,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -462,7 +463,7 @@ func runMain() int {
 	}
 
 	globalConfig.Iter(func(name, val string) (stop bool) {
-		if _, ok := commands.ConfigOptions[name]; !ok {
+		if _, ok := commands.ConfigOptions[name]; !ok && !strings.HasPrefix(name, env.SqlServerGlobalsPrefix) {
 			cli.Println(color.YellowString("Warning: Unknown global config option '%s'. Use `dolt config --global --unset %s` to remove.", name, name))
 		}
 		return false
@@ -472,7 +473,7 @@ func runMain() int {
 	localConfig, ok := dEnv.Config.GetConfig(env.LocalConfig)
 	if ok {
 		localConfig.Iter(func(name, val string) (stop bool) {
-			if _, ok := commands.ConfigOptions[name]; !ok {
+			if _, ok := commands.ConfigOptions[name]; !ok && !strings.HasPrefix(name, env.SqlServerGlobalsPrefix) {
 				cli.Println(color.YellowString("Warning: Unknown local config option '%s'. Use `dolt config --local --unset %s` to remove.", name, name))
 			}
 			return false
