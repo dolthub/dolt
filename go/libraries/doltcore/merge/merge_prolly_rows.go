@@ -1367,6 +1367,12 @@ func (m *secondaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, leftSc
 			err = applyEdit(ctx, idx, diff.Key, baseTupleValue, newTupleValue)
 		case tree.DiffOpRightDelete:
 			err = applyEdit(ctx, idx, diff.Key, diff.Base, diff.Right)
+		case tree.DiffOpDivergentDeleteResolved:
+			// If the left-side has the delete, the index is already correct and no work needs to be done.
+			// If the right-side has the delete, remove the key from the index.
+			if diff.Right == nil {
+				err = applyEdit(ctx, idx, diff.Key, diff.Base, nil)
+			}
 		default:
 			// Any changes to the left-side of the merge are not needed, since we currently
 			// always default to using the left side of the merge as the final result, so all
