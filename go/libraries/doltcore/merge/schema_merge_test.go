@@ -16,6 +16,7 @@ package merge_test
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -632,6 +633,50 @@ var collationTests = []schemaMergeTest{
 					{merge.CvType_UniqueIndex, sql.Row{int32(1)}, sql.Row{"hello"}},
 					{merge.CvType_UniqueIndex, sql.Row{int32(2)}, sql.Row{"HELLO"}},
 				},
+			},
+		},
+	},
+	{
+		name:     "no collation changes",
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int, c varchar(10) collate utf8mb4_0900_ai_ci unique, d decimal(5,3) unique)")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int, c varchar(10) collate utf8mb4_0900_ai_ci unique, d decimal(5,3) unique)")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int, c varchar(10) collate utf8mb4_0900_ai_ci unique, d decimal(5,3) unique)")),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int, c varchar(10) collate utf8mb4_0900_ai_ci unique, d decimal(5,3) unique)")),
+		dataTests: []dataTest{
+			{
+				name:     "no data change",
+				ancestor: singleRow(1, 1, 1, "foo", decimal.New(8, 0)),
+				left:     singleRow(1, 1, 2, "foo", decimal.New(8, 0)),
+				right:    singleRow(1, 2, 1, "foo", decimal.New(8, 0)),
+				merged:   singleRow(1, 2, 2, "foo", decimal.New(8, 0)),
+			},
+			{
+				name:     "replace varchar with equal replacement",
+				ancestor: singleRow(1, 1, 1, "foo", decimal.New(100, 0)),
+				left:     singleRow(1, 1, 2, "FOO", decimal.New(100, 0)),
+				right:    singleRow(1, 2, 1, "foo", decimal.New(100, 0)),
+				merged:   singleRow(1, 2, 2, "FOO", decimal.New(100, 0)),
+			},
+			{
+				name:         "conflict removal and replace varchar with equal replacement",
+				ancestor:     singleRow(1, 1, 1, "foo", decimal.New(100, 0)),
+				left:         singleRow(1, 1, 2, "FOO", decimal.New(100, 0)),
+				right:        nil,
+				dataConflict: true,
+			},
+			{
+				name:     "replace decimal with equal replacement",
+				ancestor: singleRow(1, 1, 1, "foo", decimal.New(100, 0)),
+				left:     singleRow(1, 1, 2, "foo", decimal.New(1, 2)),
+				right:    singleRow(1, 2, 1, "foo", decimal.New(100, 0)),
+				merged:   singleRow(1, 2, 2, "foo", decimal.New(1, 2)),
+			},
+			{
+				name:     "conflict removal and replace decimal with equal replacement",
+				ancestor: singleRow(1, 1, 1, "foo", decimal.New(100, 0)),
+				left:     singleRow(1, 1, 1, "foo", decimal.New(1, 2)),
+				right:    nil,
+				merged:   nil,
 			},
 		},
 	},
