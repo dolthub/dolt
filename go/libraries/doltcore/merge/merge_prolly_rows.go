@@ -1104,6 +1104,10 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 	case tree.DiffOpRightDelete:
 		return m.mut.Put(ctx, diff.Key, diff.Right)
 	case tree.DiffOpDivergentDeleteResolved:
+		// WARNING: In theory, we should only have to call MutableMap::Delete if the key is actually being deleted
+		// from the left branch. However, because of https://github.com/dolthub/dolt/issues/7192,
+		// if the left side of the merge is an empty table and we don't attempt to modify the map,
+		// the table will have an unexpected root hash.
 		return m.mut.Delete(ctx, diff.Key)
 	case tree.DiffOpDivergentModifyResolved:
 		// any generated columns need to be re-resolved because their computed values may have changed as a result of
