@@ -535,3 +535,100 @@ GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
     [[ "$status" -ne 0 ]] || false
     [[ "$output" =~ "this server only provides read-only access" ]] || false
 }
+
+@test "sql-server-remotesrv: delete remote branch from remotesapi port as super user" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q 'create table names (name varchar(10) primary key);'
+    dolt sql -q 'insert into names (name) values ("abe"), ("betsy"), ("calvin");'
+    dolt add names
+    dolt commit -m 'initial names.'
+    dolt branch new_branch HEAD
+
+    APIPORT=$( definePORT )
+    export DOLT_REMOTE_PASSWORD="rootpass"
+    export SQL_USER="root"
+    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT
+
+    cd ../
+    dolt clone http://localhost:$APIPORT/remote cloned_db -u $SQL_USER
+    cd cloned_db
+
+    run dolt push origin --user $SQL_USER :new_branch
+    [[ "$status" -eq 0 ]] || false
+
+    # TODO - verify output. Currently we always print "new branch"
+    # To https://doltremoteapi.dolthub.com/dolthub/macneale-remote-test
+    # * [new branch]          HEAD -> main
+    # [[ "$output" =~ "[deleted] new_branch" ]] || false
+
+    cd ../remote
+    run dolt branch -a
+    ! [[ "$output" =~ "new_branch" ]] || false
+    [[ "$output" =~ "main" ]] || false
+}
+
+@test "sql-server-remotesrv: delete remote dirty branch from remotesapi requires force" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q 'create table names (name varchar(10) primary key);'
+    dolt sql -q 'insert into names (name) values ("abe"), ("betsy"), ("calvin");'
+    dolt add names
+    dolt commit -m 'initial names.'
+    dolt checkout -b new_branch HEAD
+    dolt sql -q 'insert into names (name) values ("zeek");' # dirty the workspace
+    dolt checkout main
+
+    APIPORT=$(definePORT)
+    export DOLT_REMOTE_PASSWORD="rootpass"
+    export SQL_USER="root"
+    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT
+
+    cd ../
+    dolt clone http://localhost:$APIPORT/remote cloned_db -u $SQL_USER
+    cd cloned_db
+
+    run dolt push origin --force --user $SQL_USER :new_branch
+    [[ "$status" -eq 0 ]] || false
+
+    # TODO - verify output. Currently we always print "new branch"
+    # To https://doltremoteapi.dolthub.com/dolthub/macneale-remote-test
+    # * [new branch]          HEAD -> main
+    # [[ "$output" =~ "[deleted] new_branch" ]] || false
+
+    cd ../remote
+    run dolt branch -a
+    ! [[ "$output" =~ "new_branch" ]] || false
+    [[ "$output" =~ "main" ]] || false
+}
+
+@test "sql-server-remotesrv: push to non-existent database fails" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q 'create table names (name varchar(10) primary key);'
+    dolt sql -q 'insert into names (name) values ("abe"), ("betsy"), ("calvin");'
+    dolt add names
+    dolt commit -m 'initial names.'
+
+    APIPORT=$(definePORT)
+    export DOLT_REMOTE_PASSWORD="rootpass"
+    export SQL_USER="root"
+    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT
+
+    cd ../
+    dolt clone http://localhost:$APIPORT/remote cloned_db -u $SQL_USER
+    cd cloned_db
+
+    dolt remote add nodb http://localhost:$APIPORT/nodb
+
+    run dolt push nodb --user $SQL_USER main:new_branch
+    [[ "$status" -ne 0 ]] || false
+    [[ "$output" =~ "database not found: nodb" ]] || false # NM4
+
+    run dolt push --force nodb --user $SQL_USER main:new_branch
+    [[ "$status" -ne 0 ]] || false
+    [[ "$output" =~ "database not found: nodb" ]] || false # NM4
+}

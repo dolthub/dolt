@@ -688,6 +688,7 @@ func (c *Controller) RemoteSrvServerArgs(ctxFactory func(context.Context) (*sql.
 	if err != nil {
 		return remotesrv.ServerArgs{}, err
 	}
+	args.CreateUnknownDatabases = true
 	args.DBCache = remotesrvStoreCache{args.DBCache, c}
 	c.remoteSrvDBCache = args.DBCache
 
