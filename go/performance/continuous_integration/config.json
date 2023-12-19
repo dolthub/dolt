@@ -18,6 +18,22 @@
     }
   ],
   "ScriptDir":"/sysbench-lua-scripts",
+  "Tests": [
+    {
+      "Name":"covering_index_scan",
+      "N" : 1,
+      "FromScript": true
+    },
+    {
+      "Name":"index_join",
+      "N" : 1,
+      "FromScript": true
+    },
+    {
+      "Name":"groupby_scan",
+      "N" : 1,
+      "FromScript": true
+    }],
   "TestOptions": ["--rand-seed=1", "--table-size=30"],
   "InitBigRepo": true
 }
