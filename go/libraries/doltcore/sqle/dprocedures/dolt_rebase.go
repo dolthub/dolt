@@ -267,13 +267,32 @@ func abortRebase(ctx *sql.Context) error {
 		return fmt.Errorf("no rebase in progress")
 	}
 
-	// TODO: remove the dolt_rebase table
-
-	// Move HEAD back to the original head
-	// TODO: preRebaseWorkingRoot isn't used anymore, right? We can remove it?
+	// TODO: preRebaseWorkingRoot isn't used anymore, right? We can remove it???
+	// Clear the rebase state (even though we're going to delete this branch next)
 	rebaseState := workingSet.RebaseState()
-
 	workingSet = workingSet.AbortRebase()
+	err = doltSession.SetWorkingSet(ctx, ctx.GetCurrentDatabase(), workingSet)
+	if err != nil {
+		return err
+	}
+
+	// Delete the working branch
+	var rsc doltdb.ReplicationStatusController
+	dbData, ok := doltSession.GetDbData(ctx, ctx.GetCurrentDatabase())
+	if !ok {
+		return fmt.Errorf("unable to get DbData for database %s", ctx.GetCurrentDatabase())
+	}
+	headRef, err := doltSession.CWBHeadRef(ctx, ctx.GetCurrentDatabase())
+	if err != nil {
+		return err
+	}
+	err = actions.DeleteBranch(ctx, dbData, headRef.GetPath(), actions.DeleteOptions{
+		Force:                      true,
+		AllowDeletingCurrentBranch: true,
+	}, doltSession.Provider(), &rsc)
+	if err != nil {
+		return err
+	}
 
 	// Switch back to the original branch head
 	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(rebaseState.Branch()))

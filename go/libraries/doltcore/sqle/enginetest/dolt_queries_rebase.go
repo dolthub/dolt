@@ -223,9 +223,59 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 	},
 
 	/*
-		TODO: Other cases?
-		    - dolt status should show that we're in a rebase
+			TODO: Other cases?
+			    - CLI: dolt status should show that we're in a rebase
+		        - TEST: If the `dolt_rebase_<branchname>` branch already exists... what do we do? Warn the user that a rebase may be in progress by another user. Have them manually delete the rebase branch if they really want to (or some force option?)
+		        - TEST: If another session updates the branch being rebased while a rebase operation is in progress, then the rebase should fail
 	*/
+	{
+		Name: "dolt_rebase: abort properly cleans up",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"call dolt_commit('-Am', 'creating table t');",
+			"call dolt_branch('branch1');",
+
+			"insert into t values (0);",
+			"call dolt_commit('-am', 'inserting row 0');",
+
+			"call dolt_checkout('branch1');",
+			"insert into t values (1);",
+			"call dolt_commit('-am', 'inserting row 1');",
+			"insert into t values (10);",
+			"call dolt_commit('-am', 'inserting row 10');",
+			"insert into t values (100);",
+			"call dolt_commit('-am', 'inserting row 100');",
+			"insert into t values (1000);",
+			"call dolt_commit('-am', 'inserting row 1000');",
+			"insert into t values (10000);",
+			"call dolt_commit('-am', 'inserting row 10000');",
+			"insert into t values (100000);",
+			"call dolt_commit('-am', 'inserting row 100000');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "call dolt_rebase('-i', 'main');",
+				// TODO: Add human readable status message: "rebase started"
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"dolt_rebase_branch1"}},
+			},
+			{
+				Query:    "call dolt_rebase('--abort');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"branch1"}},
+			},
+			{
+				Query:    "select name from dolt_branches",
+				Expected: []sql.Row{{"main"}, {"branch1"}},
+			},
+		},
+	},
 	{
 		Name: "dolt_rebase: rebase plan using every action",
 		SetUpScript: []string{
