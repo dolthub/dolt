@@ -153,7 +153,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			// TODO: Test that new commit hashes can be added
 			{
 				Query:    "call dolt_rebase('-i', 'main');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "interactive rebase started"}},
 			},
 			{
 				Query: "update dolt_rebase set action='squash';",
@@ -254,9 +254,8 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "call dolt_rebase('-i', 'main');",
-				// TODO: Add human readable status message: "rebase started"
-				Expected: []sql.Row{{0}},
+				Query:    "call dolt_rebase('-i', 'main');",
+				Expected: []sql.Row{{0, "interactive rebase started"}},
 			},
 			{
 				Query:    "select active_branch();",
@@ -264,7 +263,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_rebase('--abort');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, "interactive rebase aborted"}},
 			},
 			{
 				Query:    "select active_branch();",
@@ -302,9 +301,8 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "call dolt_rebase('-i', 'main');",
-				// TODO: Add human readable status message: "rebase started"
-				Expected: []sql.Row{{0}},
+				Query:    "call dolt_rebase('-i', 'main');",
+				Expected: []sql.Row{{0, "interactive rebase started"}},
 			},
 			{
 				Query: "select * from dolt_rebase order by rebase_order ASC;",
@@ -353,9 +351,8 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				}}}},
 			},
 			{
-				Query: "call dolt_rebase('--continue');",
-				// TODO: Return a human readable status (e.g. rebase completed successfully)
-				Expected: []sql.Row{{0}},
+				Query:    "call dolt_rebase('--continue');",
+				Expected: []sql.Row{{0, "interactive rebase completed"}},
 			},
 			{
 				// When rebase completes, rebase status should be cleared and the dolt_rebase table should be removed

@@ -77,54 +77,54 @@ var DoltRebaseSystemTableSchema = []*sql.Column{
 var ErrRebaseUncommittedChanges = fmt.Errorf("cannot start a rebase with uncommitted changes")
 
 func doltRebase(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	res, err := doDoltRebase(ctx, args)
+	res, message, err := doDoltRebase(ctx, args)
 	if err != nil {
 		return nil, err
 	}
-	return rowToIter(int64(res)), nil
+	return rowToIter(int64(res), message), nil
 }
 
-func doDoltRebase(ctx *sql.Context, args []string) (int, error) {
+func doDoltRebase(ctx *sql.Context, args []string) (int, string, error) {
 	if ctx.GetCurrentDatabase() == "" {
-		return 1, sql.ErrNoDatabaseSelected.New()
+		return 1, "", sql.ErrNoDatabaseSelected.New()
 	}
 
 	apr, err := cli.CreateRebaseArgParser().Parse(args)
 	if err != nil {
-		return 1, err
+		return 1, "", err
 	}
 
 	switch {
 	case apr.Contains(cli.AbortParam):
 		err := abortRebase(ctx)
 		if err != nil {
-			return 1, err
+			return 1, "", err
 		} else {
-			return 0, nil
+			return 0, "interactive rebase aborted", nil
 		}
 
 	case apr.Contains(cli.ContinueFlag):
 		err := continueRebase(ctx)
 		if err != nil {
-			return 1, err
+			return 1, "", err
 		} else {
-			return 0, nil
+			return 0, "interactive rebase completed", nil
 		}
 
 	default:
 		if apr.NArg() == 0 {
-			return 1, fmt.Errorf("not enough args")
+			return 1, "", fmt.Errorf("not enough args")
 		} else if apr.NArg() > 1 {
-			return 1, fmt.Errorf("too many args")
+			return 1, "", fmt.Errorf("too many args")
 		}
 		if !apr.Contains(cli.InteractiveFlag) {
-			return 1, fmt.Errorf("non-interactive rebases not currently supported")
+			return 1, "", fmt.Errorf("non-interactive rebases not currently supported")
 		}
 		err = startRebase(ctx, apr.Arg(0))
 		if err != nil {
-			return 1, err
+			return 1, "", err
 		}
-		return 0, nil
+		return 0, "interactive rebase started", nil
 	}
 }
 
