@@ -822,10 +822,10 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
 				Expected: []sql.Row{
-					{"%", "%", "testuser", "localhost_1", uint64(branch_control.Permissions_Write)},
-					{"%", "%", "testuser", "localhost", uint64(branch_control.Permissions_Write)},
-					{"%", "%", "testuser", "localhost_4", uint64(branch_control.Permissions_Write)},
-					{"%", "%", "testuser", "localhost_5", uint64(branch_control.Permissions_Write)},
+					{"%", "%", "testuser", "localhost_1", "write"},
+					{"%", "%", "testuser", "localhost", "write"},
+					{"%", "%", "testuser", "localhost_4", "write"},
+					{"%", "%", "testuser", "localhost_5", "write"},
 				},
 			},
 			{
@@ -849,9 +849,9 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
 				Expected: []sql.Row{
-					{"%", "%", "testuser", "localhost_1", uint64(branch_control.Permissions_Write)},
-					{"%", "%", "testuser", "localhost", uint64(branch_control.Permissions_Write)},
-					{"%", "%", "testuser", "localhost_4", uint64(branch_control.Permissions_Write)},
+					{"%", "%", "testuser", "localhost_1", "write"},
+					{"%", "%", "testuser", "localhost", "write"},
+					{"%", "%", "testuser", "localhost_4", "write"},
 				},
 			},
 			{
@@ -875,8 +875,8 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
 				Expected: []sql.Row{
-					{"%", "%", "testuser", "localhost", uint64(branch_control.Permissions_Write)},
-					{"%", "%", "testuser", "localhost_4", uint64(branch_control.Permissions_Write)},
+					{"%", "%", "testuser", "localhost", "write"},
+					{"%", "%", "testuser", "localhost_4", "write"},
 				},
 			},
 			{
@@ -900,7 +900,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
 				Expected: []sql.Row{
-					{"%", "%", "testuser", "localhost", uint64(branch_control.Permissions_Write)},
+					{"%", "%", "testuser", "localhost", "write"},
 				},
 			},
 			{
@@ -958,7 +958,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control;",
 				Expected: []sql.Row{
-					{"%", "%", "root", "%", uint64(branch_control.Permissions_Admin)},
+					{"%", "%", "root", "%", "admin"},
 				},
 			},
 		},
@@ -1001,11 +1001,11 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
 				Expected: []sql.Row{
-					{"%", "prefix", "testuser", "localhost", uint64(branch_control.Permissions_Admin)},
-					{"%", "prefix1%", "testuser", "localhost", uint64(branch_control.Permissions_Admin)},
-					{"%", "prefix2_", "testuser", "localhost", uint64(branch_control.Permissions_Admin)},
-					{"%", "prefix2%", "testuser", "localhost", uint64(branch_control.Permissions_Admin)},
-					{"%", "prefix3_", "testuser", "localhost", uint64(branch_control.Permissions_Admin)},
+					{"%", "prefix", "testuser", "localhost", "admin"},
+					{"%", "prefix1%", "testuser", "localhost", "admin"},
+					{"%", "prefix2_", "testuser", "localhost", "admin"},
+					{"%", "prefix2%", "testuser", "localhost", "admin"},
+					{"%", "prefix3_", "testuser", "localhost", "admin"},
 				},
 			},
 			{ // Sanity checks to ensure that straight-up duplicates are also caught
@@ -1031,7 +1031,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'root';",
 				Expected: []sql.Row{
-					{"%", "%", "root", "localhost", uint64(branch_control.Permissions_Admin)},
+					{"%", "%", "root", "localhost", "admin"},
 				},
 			},
 			{
@@ -1045,7 +1045,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'root';",
 				Expected: []sql.Row{
-					{"%", "%", "root", "localhost", uint64(branch_control.Permissions_Admin)},
+					{"%", "%", "root", "localhost", "admin"},
 				},
 			},
 		},
@@ -1076,7 +1076,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
 				Expected: []sql.Row{
-					{"mydb", "otherbranch", "testuser", "localhost", uint64(branch_control.Permissions_Admin)},
+					{"mydb", "otherbranch", "testuser", "localhost", "admin"},
 				},
 			},
 		},
@@ -1097,7 +1097,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
 				Expected: []sql.Row{
-					{"%", "otherbranch", "testuser", "localhost", uint64(branch_control.Permissions_Write)},
+					{"%", "otherbranch", "testuser", "localhost", "write"},
 				},
 			},
 			{
@@ -1117,8 +1117,8 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
 				Expected: []sql.Row{
-					{"%", "otherbranch", "testuser", "localhost", uint64(branch_control.Permissions_Write)},  // Original entry remains
-					{"mydb", "newbranch", "testuser", "localhost", uint64(branch_control.Permissions_Admin)}, // New entry is scoped specifically to db
+					{"%", "otherbranch", "testuser", "localhost", "write"},  // Original entry remains
+					{"mydb", "newbranch", "testuser", "localhost", "admin"}, // New entry is scoped specifically to db
 				},
 			},
 		},
@@ -1156,7 +1156,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
 				Expected: []sql.Row{
-					{"mydb", "newbranch", "testuser", "localhost", uint64(branch_control.Permissions_Admin)},
+					{"mydb", "newbranch", "testuser", "localhost", "admin"},
 				},
 			},
 		},
@@ -1271,7 +1271,7 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control WHERE user = 'testuser';",
 				Expected: []sql.Row{
-					{"mydb", "newbranch", "testuser", "localhost", uint64(branch_control.Permissions_Admin)},
+					{"mydb", "newbranch", "testuser", "localhost", "admin"},
 				},
 			},
 		},
@@ -1353,10 +1353,10 @@ var BranchControlTests = []BranchControlTest{
 				Host:  "localhost",
 				Query: "SELECT * FROM dolt_branch_control;",
 				Expected: []sql.Row{
-					{"%", "%", "root", "localhost", uint64(branch_control.Permissions_Admin)},
-					{"dba", "dummy1", "%", "%", uint64(branch_control.Permissions_Write)},
-					{"dbb", "dummy6", "%", "%", uint64(branch_control.Permissions_Write)},
-					{"db_", "dummy7", "%", "%", uint64(branch_control.Permissions_Write)},
+					{"%", "%", "root", "localhost", "admin"},
+					{"dba", "dummy1", "%", "%", "write"},
+					{"dbb", "dummy6", "%", "%", "write"},
+					{"db_", "dummy7", "%", "%", "write"},
 				},
 			},
 		},

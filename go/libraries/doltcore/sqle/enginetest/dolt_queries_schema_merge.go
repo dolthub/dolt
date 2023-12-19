@@ -821,8 +821,8 @@ var SchemaChangeTestsConstraints = []MergeScriptTest{
 			{
 				Query: "select violation_type, pk, col2, violation_info from dolt_constraint_violations_t;",
 				Expected: []sql.Row{
-					{uint(2), "1", "same", merge.UniqCVMeta{Columns: []string{"col2"}, Name: "unique1"}},
-					{uint(2), "10", "same", merge.UniqCVMeta{Columns: []string{"col2"}, Name: "unique1"}},
+					{"unique index", "1", "same", merge.UniqCVMeta{Columns: []string{"col2"}, Name: "unique1"}},
+					{"unique index", "10", "same", merge.UniqCVMeta{Columns: []string{"col2"}, Name: "unique1"}},
 				},
 			},
 			{
@@ -916,7 +916,7 @@ var SchemaChangeTestsConstraints = []MergeScriptTest{
 			},
 			{
 				Query:    "select violation_type, pk, col1, col2, violation_info like '\\%NOT((col1 = col2))\\%' from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{uint64(3), 1, 4, 4, true}},
+				Expected: []sql.Row{{"check constraint", 1, 4, 4, true}},
 			},
 		},
 	},
@@ -979,7 +979,7 @@ var SchemaChangeTestsConstraints = []MergeScriptTest{
 			},
 			{
 				Query:    "select violation_type, pk, col1, col2, violation_info like '%(col1 + col2)%' from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{uint64(3), 1, 0, 0, true}},
+				Expected: []sql.Row{{"check constraint", 1, 0, 0, true}},
 			},
 		},
 	},
@@ -1009,7 +1009,7 @@ var SchemaChangeTestsConstraints = []MergeScriptTest{
 			},
 			{
 				Query:    "select violation_type, pk, col2, col3, violation_info like '\\%NOT((col2 = col3))\\%' from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{uint64(3), 1, 100, 100, true}},
+				Expected: []sql.Row{{"check constraint", 1, 100, 100, true}},
 			},
 		},
 	},
@@ -1123,7 +1123,7 @@ var SchemaChangeTestsConstraints = []MergeScriptTest{
 			},
 			{
 				Query:    `select violation_type, pk, col1, violation_info like "\%NOT((col1 = concat('he','llo')))\%" from dolt_constraint_violations_t;`,
-				Expected: []sql.Row{{uint64(3), 2, "hello", true}},
+				Expected: []sql.Row{{"check constraint", 2, "hello", true}},
 			},
 		},
 	},
@@ -1152,7 +1152,7 @@ var SchemaChangeTestsConstraints = []MergeScriptTest{
 			},
 			{
 				Query:    `select violation_type, c0, col0, col1, violation_info like "\%NOT((col1 = concat('he','llo')))\%" from dolt_constraint_violations_t;`,
-				Expected: []sql.Row{{uint64(3), 2, "hola", "hello", true}},
+				Expected: []sql.Row{{"check constraint", 2, "hola", "hello", true}},
 			},
 		},
 	},
@@ -1224,9 +1224,9 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 			{
 				Query: "select * from t order by pk;",
 				Expected: []sql.Row{
-					{1, uint64(1), uint64(3)},
-					{2, uint64(2), uint64(3)},
-					{3, uint64(3), uint64(5)},
+					{1, "blue", "blue,green"},
+					{2, "green", "blue,green"},
+					{3, "red", "blue,red"},
 				},
 			},
 		},
@@ -2054,8 +2054,8 @@ var SchemaChangeTestsSchemaConflicts = []MergeScriptTest{
 			{
 				Query: "select pk, violation_type from dolt_constraint_violations_t",
 				Expected: []sql.Row{
-					{5, uint16(4)},
-					{6, uint16(4)},
+					{5, "not null"},
+					{6, "not null"},
 				},
 			},
 		},
@@ -2093,8 +2093,8 @@ var SchemaChangeTestsSchemaConflicts = []MergeScriptTest{
 			{
 				Query: "select pk, violation_type from dolt_constraint_violations_t",
 				Expected: []sql.Row{
-					{5, uint16(4)},
-					{6, uint16(4)},
+					{5, "not null"},
+					{6, "not null"},
 				},
 			},
 		},
@@ -2128,7 +2128,7 @@ var SchemaChangeTestsSchemaConflicts = []MergeScriptTest{
 			{
 				Query: "select violation_type, pk, violation_info from dolt_constraint_violations_t",
 				Expected: []sql.Row{
-					{uint16(4), 3, merge.NullViolationMeta{Columns: []string{"col1"}}},
+					{"not null", 3, merge.NullViolationMeta{Columns: []string{"col1"}}},
 				},
 			},
 		},
