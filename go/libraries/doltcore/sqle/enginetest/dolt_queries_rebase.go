@@ -307,12 +307,12 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_rebase order by rebase_order ASC;",
 				Expected: []sql.Row{
-					{"1", uint(2), doltCommit, "inserting row 1"},
-					{"2", uint(2), doltCommit, "inserting row 10"},
-					{"3", uint(2), doltCommit, "inserting row 100"},
-					{"4", uint(2), doltCommit, "inserting row 1000"},
-					{"5", uint(2), doltCommit, "inserting row 10000"},
-					{"6", uint(2), doltCommit, "inserting row 100000"},
+					{"1", "pick", doltCommit, "inserting row 1"},
+					{"2", "pick", doltCommit, "inserting row 10"},
+					{"3", "pick", doltCommit, "inserting row 100"},
+					{"4", "pick", doltCommit, "inserting row 1000"},
+					{"5", "pick", doltCommit, "inserting row 10000"},
+					{"6", "pick", doltCommit, "inserting row 100000"},
 				},
 			},
 			{
