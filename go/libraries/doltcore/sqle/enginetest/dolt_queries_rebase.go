@@ -355,7 +355,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{0, "interactive rebase completed"}},
 			},
 			{
-				// When rebase completes, rebase status should be cleared and the dolt_rebase table should be removed
+				// When rebase completes, rebase status should be cleared
 				Query:          "call dolt_rebase('--continue');",
 				ExpectedErrStr: "no rebase in progress",
 			},
@@ -363,6 +363,11 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				// The dolt_rebase table is gone after rebasing completes
 				Query:          "select * from dolt_rebase;",
 				ExpectedErrStr: "table not found: dolt_rebase",
+			},
+			{
+				// The working branch for the rebase is deleted after rebasing completes
+				Query:    "select name from dolt_branches",
+				Expected: []sql.Row{{"main"}, {"branch1"}},
 			},
 			{
 				// Assert that the commit history is now composed of different commits
