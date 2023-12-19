@@ -106,8 +106,13 @@ type WorkingSetSpec struct {
 //
 // ```
 // where M is a struct type and R is a ref type.
-// TODO: Why is this called newWorkingSet if it doesn't create and return a new WorkingSet?
-func newWorkingSet(ctx context.Context, db *database, meta *WorkingSetMeta, workingRef, stagedRef types.Ref, mergeState *MergeState, rebaseState *RebaseState) (hash.Hash, types.Ref, error) {
+func newWorkingSet(ctx context.Context, db *database, workingSetSpec WorkingSetSpec) (hash.Hash, types.Ref, error) {
+	meta := workingSetSpec.Meta
+	workingRef := workingSetSpec.WorkingRoot
+	stagedRef := workingSetSpec.StagedRoot
+	mergeState := workingSetSpec.MergeState
+	rebaseState := workingSetSpec.RebaseState
+
 	if db.Format().UsesFlatbuffers() {
 		stagedAddr := stagedRef.TargetHash()
 		data := workingset_flatbuffer(workingRef.TargetHash(), &stagedAddr, mergeState, rebaseState, meta)

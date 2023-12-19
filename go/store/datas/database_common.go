@@ -602,13 +602,12 @@ func (db *database) UpdateStashList(ctx context.Context, ds Dataset, stashListAd
 	})
 }
 
-func (db *database) UpdateWorkingSet(ctx context.Context, ds Dataset, workingSet WorkingSetSpec, prevHash hash.Hash) (Dataset, error) {
+func (db *database) UpdateWorkingSet(ctx context.Context, ds Dataset, workingSetSpec WorkingSetSpec, prevHash hash.Hash) (Dataset, error) {
 	return db.doHeadUpdate(
 		ctx,
 		ds,
 		func(ds Dataset) error {
-			// TODO: Should we just pass WorkingSetSpec?
-			addr, ref, err := newWorkingSet(ctx, db, workingSet.Meta, workingSet.WorkingRoot, workingSet.StagedRoot, workingSet.MergeState, workingSet.RebaseState)
+			addr, ref, err := newWorkingSet(ctx, db, workingSetSpec)
 			if err != nil {
 				return err
 			}
@@ -678,8 +677,7 @@ func (db *database) CommitWithWorkingSet(
 	val types.Value, workingSetSpec WorkingSetSpec,
 	prevWsHash hash.Hash, opts CommitOptions,
 ) (Dataset, Dataset, error) {
-	// TODO: Maybe just pass the entire WorkingSetSpec into newWorkingSet?
-	wsAddr, wsValRef, err := newWorkingSet(ctx, db, workingSetSpec.Meta, workingSetSpec.WorkingRoot, workingSetSpec.StagedRoot, workingSetSpec.MergeState, workingSetSpec.RebaseState)
+	wsAddr, wsValRef, err := newWorkingSet(ctx, db, workingSetSpec)
 	if err != nil {
 		return Dataset{}, Dataset{}, err
 	}

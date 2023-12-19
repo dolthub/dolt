@@ -153,8 +153,6 @@ func validateDatasetIdComponent(refname string) (int, error) {
 	return numChars, nil
 }
 
-// TODO: Test what happens if an older client version tries to read this new data. Will RebaseState just be completely ignored?
-
 type WorkingSetHead struct {
 	Meta        *WorkingSetMeta
 	WorkingAddr hash.Hash
