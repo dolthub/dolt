@@ -94,12 +94,20 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 			if order.Compare(K(newKey), K(cur.CurrentKey())) == 0 {
 				oldValue = cur.currentValue()
 			}
+
+			// check for no-op mutations
+			// this includes comparing the key bytes because two equal keys may have different bytes,
+			// in which case we need to update the index to match the bytes in the table.
+			if equalValues(newValue, oldValue) && bytes.Equal(newKey, cur.CurrentKey()) {
+				newKey, newValue = edits.NextMutation(ctx)
+				continue
+			}
 		}
 
-		// check for no-op mutations
-		if equalValues(newValue, oldValue) {
+		if oldValue == nil && newValue == nil {
+			// Don't try to delete what isn't there.
 			newKey, newValue = edits.NextMutation(ctx)
-			continue // same newValue
+			continue
 		}
 
 		// move |chkr| to the NextMutation mutation point

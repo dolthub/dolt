@@ -15,6 +15,7 @@
 package durable
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -50,6 +51,8 @@ type Index interface {
 	// Returns the serialized bytes of the (top of the) index.
 	// Non-public. Used for flatbuffers Table persistence.
 	bytes() ([]byte, error)
+
+	DebugString(ctx context.Context) string
 }
 
 // IndexSet stores a collection secondary Indexes.
@@ -218,6 +221,10 @@ func (i nomsIndex) AddColumnToRows(ctx context.Context, newCol string, newSchema
 	return i, nil
 }
 
+func (i nomsIndex) DebugString(ctx context.Context) string {
+	panic("Not implemented")
+}
+
 type prollyIndex struct {
 	index prolly.Map
 }
@@ -327,6 +334,14 @@ func (i prollyIndex) AddColumnToRows(ctx context.Context, newCol string, newSche
 	}
 
 	return IndexFromProllyMap(newMap), nil
+}
+
+func (i prollyIndex) DebugString(ctx context.Context) string {
+	var b bytes.Buffer
+	i.index.WalkNodes(ctx, func(ctx context.Context, nd tree.Node) error {
+		return tree.OutputProllyNode(&b, nd)
+	})
+	return b.String()
 }
 
 // NewIndexSet returns an empty IndexSet.
