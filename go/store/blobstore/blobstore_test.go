@@ -28,11 +28,12 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"cloud.google.com/go/storage"
 	"github.com/google/uuid"
+	"github.com/oracle/oci-go-sdk/v65/common"
+	"github.com/oracle/oci-go-sdk/v65/objectstorage"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -42,14 +43,18 @@ const (
 
 var (
 	ctx           context.Context
-	bucket        *storage.BucketHandle
+	gcsBucket     *storage.BucketHandle
 	testGCSBucket string
+	osProvider    common.ConfigurationProvider
+	osClient      objectstorage.ObjectStorageClient
+	testOCIBucket string
 )
 
-const envTestBucket = "TEST_GCS_BUCKET"
+const envTestGSBucket = "TEST_GCS_BUCKET"
+const envTestOCIBucket = "TEST_OCI_BUCKET"
 
 func init() {
-	testGCSBucket = os.Getenv(envTestBucket)
+	testGCSBucket = os.Getenv(envTestGSBucket)
 	if testGCSBucket != "" {
 		ctx = context.Background()
 		gcs, err := storage.NewClient(ctx)
@@ -58,7 +63,18 @@ func init() {
 			panic("Could not create GCSBlobstore")
 		}
 
-		bucket = gcs.Bucket(testGCSBucket)
+		gcsBucket = gcs.Bucket(testGCSBucket)
+	}
+	testOCIBucket = os.Getenv(envTestOCIBucket)
+	if testOCIBucket != "" {
+		osProvider = common.DefaultConfigProvider()
+
+		client, err := objectstorage.NewObjectStorageClientWithConfigurationProvider(osProvider)
+		if err != nil {
+			panic("Could not create OCIBlobstore")
+		}
+
+		osClient = client
 	}
 }
 
@@ -69,9 +85,18 @@ type BlobstoreTest struct {
 	rmwIterations  int
 }
 
+func appendOCITest(tests []BlobstoreTest) []BlobstoreTest {
+	if testOCIBucket != "" {
+		ociTest := BlobstoreTest{"oci", &OCIBlobstore{osProvider, osClient, testOCIBucket, "", uuid.New().String() + "/", 2}, 4, 4}
+		tests = append(tests, ociTest)
+	}
+
+	return tests
+}
+
 func appendGCSTest(tests []BlobstoreTest) []BlobstoreTest {
 	if testGCSBucket != "" {
-		gcsTest := BlobstoreTest{"gcs", &GCSBlobstore{bucket, testGCSBucket, uuid.New().String() + "/"}, 4, 4}
+		gcsTest := BlobstoreTest{"gcs", &GCSBlobstore{gcsBucket, testGCSBucket, uuid.New().String() + "/"}, 4, 4}
 		tests = append(tests, gcsTest)
 	}
 
@@ -93,6 +118,7 @@ func newBlobStoreTests() []BlobstoreTest {
 	tests = append(tests, BlobstoreTest{"inmem", NewInMemoryBlobstore(""), 10, 20})
 	tests = appendLocalTest(tests)
 	tests = appendGCSTest(tests)
+	tests = appendOCITest(tests)
 
 	return tests
 }
@@ -237,7 +263,6 @@ func readModifyWrite(bs Blobstore, key string, iterations int, doneChan chan int
 		newData[dataSize] = byte(dataSize)
 
 		_, err = CheckAndPutBytes(context.Background(), bs, ver, key, newData)
-
 		if err == nil {
 			updates++
 			failures = 0
@@ -388,13 +413,15 @@ func TestPanicOnNegativeRangeLength(t *testing.T) {
 func TestConcatenate(t *testing.T) {
 	tests := newBlobStoreTests()
 	for _, test := range tests {
-		t.Run(test.bsType, func(t *testing.T) {
-			testConcatenate(t, test.bs, 1)
-			testConcatenate(t, test.bs, 4)
-			testConcatenate(t, test.bs, 16)
-			testConcatenate(t, test.bs, 32)
-			testConcatenate(t, test.bs, 64)
-		})
+		if test.bsType != "oci" {
+			t.Run(test.bsType, func(t *testing.T) {
+				testConcatenate(t, test.bs, 1)
+				testConcatenate(t, test.bs, 4)
+				testConcatenate(t, test.bs, 16)
+				testConcatenate(t, test.bs, 32)
+				testConcatenate(t, test.bs, 64)
+			})
+		}
 	}
 }
 
