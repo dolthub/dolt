@@ -99,10 +99,6 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
-	/*
-	   TODO: Error cases:
-	        - merge commits - merge commits should be fine, just skipped
-	*/
 	{
 		Name: "dolt_rebase errors: active merge, cherry-pick, or rebase",
 		SetUpScript: []string{
@@ -128,6 +124,30 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			{
 				Query:          "call dolt_rebase('-i', 'main');",
 				ExpectedErrStr: "unable to start rebase while a merge is in progress – abort the current merge before proceeding",
+			},
+		},
+	},
+	{
+		Name: "dolt_rebase errors: rebase working branch already exists",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"call dolt_commit('-Am', 'creating table t');",
+			"call dolt_branch('branch1');",
+			"call dolt_branch('dolt_rebase_branch1');",
+
+			"insert into t values (0);",
+			"call dolt_commit('-am', 'inserting row 0');",
+
+			"call dolt_checkout('branch1');",
+			"insert into t values (1);",
+			"call dolt_commit('-am', 'inserting row 1');",
+			"insert into t values (10);",
+			"call dolt_commit('-am', 'inserting row 10');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_rebase('-i', 'main');",
+				ExpectedErrStr: "fatal: A branch named 'dolt_rebase_branch1' already exists.",
 			},
 		},
 	},
@@ -223,8 +243,6 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 
 	/*
 			TODO: Other cases?
-			    - CLI: dolt status should show that we're in a rebase
-		        - TEST: If the `dolt_rebase_<branchname>` branch already exists... what do we do? Warn the user that a rebase may be in progress by another user. Have them manually delete the rebase branch if they really want to (or some force option?)
 		        - TEST: If another session updates the branch being rebased while a rebase operation is in progress, then the rebase should fail
 	*/
 	{
@@ -501,6 +519,68 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				// The schema conflicts table should be empty, since the rebase was aborted
 				Query:    "select * from dolt_schema_conflicts;",
 				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		// Merge commits are skipped during a rebase
+		Name: "dolt_rebase: merge commits",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"call dolt_commit('-Am', 'creating table t');",
+			"call dolt_branch('branch1');",
+
+			"insert into t values (0);",
+			"call dolt_commit('-am', 'inserting row 0');",
+
+			"call dolt_checkout('branch1');",
+			"insert into t values (1);",
+			"call dolt_commit('-am', 'inserting row 1');",
+			"insert into t values (2);",
+			"call dolt_commit('-am', 'inserting row 2');",
+			"call dolt_merge('main');",
+			"insert into t values (3);",
+			"call dolt_commit('-am', 'inserting row 3');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select message from dolt_log;",
+				Expected: []sql.Row{
+					{"inserting row 3"},
+					{"Merge branch 'main' into branch1"},
+					{"inserting row 2"},
+					{"inserting row 0"},
+					{"inserting row 1"},
+					{"creating table t"},
+					{"Initialize data repository"},
+				},
+			},
+			{
+				Query:    "call dolt_rebase('-i', 'main');",
+				Expected: []sql.Row{{0, "interactive rebase started"}},
+			},
+			{
+				Query: "select * from dolt_rebase order by rebase_order;",
+				Expected: []sql.Row{
+					{"1", "pick", doltCommit, "inserting row 1"},
+					{"2", "pick", doltCommit, "inserting row 2"},
+					{"3", "pick", doltCommit, "inserting row 3"},
+				},
+			},
+			{
+				Query:    "call dolt_rebase('--continue');",
+				Expected: []sql.Row{{0, "interactive rebase completed"}},
+			},
+			{
+				Query: "select message from dolt_log;",
+				Expected: []sql.Row{
+					{"inserting row 3"},
+					{"inserting row 2"},
+					{"inserting row 1"},
+					{"inserting row 0"},
+					{"creating table t"},
+					{"Initialize data repository"},
+				},
 			},
 		},
 	},

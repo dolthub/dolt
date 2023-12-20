@@ -162,7 +162,7 @@ func validateCommit(ctx *sql.Context, commit string) error {
 // rebasing |upstreamBranchCommit| onto the current branch (specified by commit |currentBranchCommit|).
 // This is defined as the log of |currentBranchCommit|..|upstreamBranchCommit|, or in other words, the
 // commits that are reachable from the current branch HEAD, but are NOT reachable from
-// |upstreamBranchCommit|.
+// |upstreamBranchCommit|. Additionally, any merge commits in that range are NOT included.
 func findRebaseCommits(ctx *sql.Context, currentBranchCommit, upstreamBranchCommit *doltdb.Commit) (commits []*doltdb.Commit, err error) {
 	doltSession := dsess.DSessFromSess(ctx.Session)
 
@@ -200,6 +200,9 @@ func findRebaseCommits(ctx *sql.Context, currentBranchCommit, upstreamBranchComm
 			return nil, err
 		}
 
-		commits = append(commits, commit)
+		// Don't include merge commits in the rebase plan
+		if commit.NumParents() == 1 {
+			commits = append(commits, commit)
+		}
 	}
 }
