@@ -417,48 +417,20 @@ func processRebaseAction(ctx *sql.Context, planStep *rebase.RebasePlanMember) er
 		}
 		return handleRebaseCherryPick(ctx, planStep.CommitHash, options)
 
-	case rebase.RebaseActionSquash:
-		commitMessage, err := squashCommitMessage(ctx, planStep.CommitHash)
-		if err != nil {
-			return err
+	case rebase.RebaseActionSquash, rebase.RebaseActionFixup:
+		options := cherry_pick.CherryPickOptions{Amend: true}
+		if planStep.Action == rebase.RebaseActionSquash {
+			commitMessage, err := squashCommitMessage(ctx, planStep.CommitHash)
+			if err != nil {
+				return err
+			}
+			options.CommitMessage = commitMessage
 		}
-		return handleRebaseCherryPick(ctx, planStep.CommitHash, cherry_pick.CherryPickOptions{
-			Amend:         true,
-			CommitMessage: commitMessage,
-		})
-
-	case rebase.RebaseActionFixup:
-		// TODO: It shouldn't be necessary for us to lookup the previous commit message and
-		//       specify it here. If we specify that we want to cherry pick as an amend, then cherry
-		//       pick should amend the previous commit without overwriting the commit message.
-		commitMessage, err := previousCommitMessage(ctx)
-		if err != nil {
-			return err
-		}
-		return handleRebaseCherryPick(ctx, planStep.CommitHash, cherry_pick.CherryPickOptions{
-			Amend:         true,
-			CommitMessage: commitMessage,
-		})
+		return handleRebaseCherryPick(ctx, planStep.CommitHash, options)
 
 	default:
 		return fmt.Errorf("rebase action '%s' is not supported", planStep.Action)
 	}
-}
-
-func previousCommitMessage(ctx *sql.Context) (string, error) {
-	// TODO: Remove this function after we fix the issue with cherry_pick.CherryPick overriding the commit message
-	//       by default when the Amend option is given.
-	doltSession := dsess.DSessFromSess(ctx.Session)
-	headCommit, err := doltSession.GetHeadCommit(ctx, ctx.GetCurrentDatabase())
-	if err != nil {
-		return "", err
-	}
-	headCommitMeta, err := headCommit.GetCommitMeta(ctx)
-	if err != nil {
-		return "", err
-	}
-
-	return headCommitMeta.Description, nil
 }
 
 // handleRebaseCherryPick runs a cherry-pick for the specified |commitHash|, using the specified

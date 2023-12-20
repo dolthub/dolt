@@ -76,7 +76,8 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "dolt_rebase errors: no database selected",
+		SkipPrepared: true,
+		Name:         "dolt_rebase errors: no database selected",
 		SetUpScript: []string{
 			"create database temp;",
 			"use temp;",
@@ -101,7 +102,6 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 	/*
 	   TODO: Error cases:
 	        - merge commits - merge commits should be fine, just skipped
-	        - conflicts – e.g. reordering commits in a way that causes a conflict
 	*/
 	{
 		Name: "dolt_rebase errors: active merge, cherry-pick, or rebase",
