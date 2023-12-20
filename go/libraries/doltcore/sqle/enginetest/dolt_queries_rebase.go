@@ -134,7 +134,6 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 	{
 		Name: "dolt_rebase errors: invalid rebase plans",
 		SetUpScript: []string{
-			// TODO: consider sharing setupscripts for rebase test setups?
 			"create table t (pk int primary key);",
 			"call dolt_commit('-Am', 'creating table t');",
 			"call dolt_branch('branch1');",
@@ -382,6 +381,126 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			{
 				Query:    "select * from t;",
 				Expected: []sql.Row{{0}, {1}, {10}, {100}, {10000}, {100000}},
+			},
+		},
+	},
+	{
+		Name: "dolt_rebase: data conflicts",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(100));",
+			"call dolt_commit('-Am', 'creating table t');",
+			"call dolt_branch('branch1');",
+
+			"insert into t values (0, 'zero');",
+			"call dolt_commit('-am', 'inserting row 0');",
+
+			"call dolt_checkout('branch1');",
+			"insert into t values (1, 'one');",
+			"call dolt_commit('-am', 'inserting row 1');",
+			"update t set c1='uno' where pk=1;",
+			"call dolt_commit('-am', 'updating row 1');",
+			"update t set c1='ein' where pk=1;",
+			"call dolt_commit('-am', 'updating row 1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_rebase('-i', 'main');",
+				Expected: []sql.Row{{0, "interactive rebase started"}},
+			},
+			{
+				Query: "select * from dolt_rebase order by rebase_order ASC;",
+				Expected: []sql.Row{
+					{"1", "pick", doltCommit, "inserting row 1"},
+					{"2", "pick", doltCommit, "updating row 1"},
+					{"3", "pick", doltCommit, "updating row 1"},
+				},
+			},
+			{
+				Query: "update dolt_rebase set rebase_order=3.5 where rebase_order=1;",
+				Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: uint64(1), Info: plan.UpdateInfo{
+					Matched: 1,
+					Updated: 1,
+				}}}},
+			},
+			{
+				// Encountering a conflict during a rebase returns an error and aborts the rebase
+				Query:       "call dolt_rebase('--continue');",
+				ExpectedErr: dprocedures.ErrRebaseConflict,
+			},
+			{
+				// The rebase state has been cleared after hitting a conflict
+				Query:          "call dolt_rebase('--continue');",
+				ExpectedErrStr: "no rebase in progress",
+			},
+			{
+				// We're back to the original branch
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"branch1"}},
+			},
+			{
+				// The conflicts table should be empty, since the rebase was aborted
+				Query:    "select * from dolt_conflicts;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "dolt_rebase: schema conflicts",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"call dolt_commit('-Am', 'creating table t');",
+			"call dolt_branch('branch1');",
+
+			"insert into t values (0);",
+			"call dolt_commit('-am', 'inserting row 0');",
+
+			"call dolt_checkout('branch1');",
+			"insert into t values (1);",
+			"call dolt_commit('-am', 'inserting row 1');",
+			"alter table t add column c1 varchar(100) NOT NULL;",
+			"call dolt_commit('-am', 'adding column c1');",
+			"alter table t modify column c1 varchar(100) comment 'foo';",
+			"call dolt_commit('-am', 'altering column c1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_rebase('-i', 'main');",
+				Expected: []sql.Row{{0, "interactive rebase started"}},
+			},
+			{
+				Query: "select * from dolt_rebase order by rebase_order ASC;",
+				Expected: []sql.Row{
+					{"1", "pick", doltCommit, "inserting row 1"},
+					{"2", "pick", doltCommit, "adding column c1"},
+					{"3", "pick", doltCommit, "altering column c1"},
+				},
+			},
+			{
+				Query: "update dolt_rebase set rebase_order=3.1 where rebase_order=2;",
+				Expected: []sql.Row{{gmstypes.OkResult{RowsAffected: uint64(1), Info: plan.UpdateInfo{
+					Matched: 1,
+					Updated: 1,
+				}}}},
+			},
+			{
+				// Encountering a conflict during a rebase returns an error and aborts the rebase
+				Query:       "call dolt_rebase('--continue');",
+				ExpectedErr: dprocedures.ErrRebaseConflict,
+			},
+			{
+				// The rebase state has been cleared after hitting a conflict
+				Query:          "call dolt_rebase('--continue');",
+				ExpectedErrStr: "no rebase in progress",
+			},
+			{
+				// We're back to the original branch
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"branch1"}},
+			},
+			{
+				// The schema conflicts table should be empty, since the rebase was aborted
+				Query:    "select * from dolt_schema_conflicts;",
+				Expected: []sql.Row{},
 			},
 		},
 	},

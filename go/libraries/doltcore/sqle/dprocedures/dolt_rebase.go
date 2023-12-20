@@ -15,7 +15,9 @@
 package dprocedures
 
 import (
+	"errors"
 	"fmt"
+	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -25,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -76,6 +79,17 @@ var DoltRebaseSystemTableSchema = []*sql.Column{
 // ErrRebaseUncommittedChanges is used when a rebase is started, but there are uncommitted (and not
 // ignored) changes in the working set.
 var ErrRebaseUncommittedChanges = fmt.Errorf("cannot start a rebase with uncommitted changes")
+
+// ErrRebaseConflict is used when a merge conflict is detected while rebasing a commit.
+var ErrRebaseConflict = goerrors.NewKind(
+	"merge conflict detected while rebasing commit %s. " +
+		"the rebase has been automatically aborted")
+
+// ErrRebaseConflictWithAbortError is used when a merge conflict is detected while rebasing a commit,
+// and we are unable to cleanly abort the rebase.
+var ErrRebaseConflictWithAbortError = goerrors.NewKind(
+	"merge conflict detected while rebasing commit %s. " +
+		"attempted to abort rebase operation, but encountered error: %w")
 
 func doltRebase(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, message, err := doDoltRebase(ctx, args)
@@ -401,19 +415,17 @@ func processRebaseAction(ctx *sql.Context, planStep *rebase.RebasePlanMember) er
 		if planStep.Action == rebase.RebaseActionReword {
 			options.CommitMessage = planStep.CommitMsg
 		}
-		_, _, err := cherry_pick.CherryPick(ctx, planStep.CommitHash, options)
-		return err
+		return handleRebaseCherryPick(ctx, planStep.CommitHash, options)
 
 	case rebase.RebaseActionSquash:
 		commitMessage, err := squashCommitMessage(ctx, planStep.CommitHash)
 		if err != nil {
 			return err
 		}
-		_, _, err = cherry_pick.CherryPick(ctx, planStep.CommitHash, cherry_pick.CherryPickOptions{
+		return handleRebaseCherryPick(ctx, planStep.CommitHash, cherry_pick.CherryPickOptions{
 			Amend:         true,
 			CommitMessage: commitMessage,
 		})
-		return err
 
 	case rebase.RebaseActionFixup:
 		// TODO: It shouldn't be necessary for us to lookup the previous commit message and
@@ -423,11 +435,10 @@ func processRebaseAction(ctx *sql.Context, planStep *rebase.RebasePlanMember) er
 		if err != nil {
 			return err
 		}
-		_, _, err = cherry_pick.CherryPick(ctx, planStep.CommitHash, cherry_pick.CherryPickOptions{
+		return handleRebaseCherryPick(ctx, planStep.CommitHash, cherry_pick.CherryPickOptions{
 			Amend:         true,
 			CommitMessage: commitMessage,
 		})
-		return err
 
 	default:
 		return fmt.Errorf("rebase action '%s' is not supported", planStep.Action)
@@ -448,6 +459,29 @@ func previousCommitMessage(ctx *sql.Context) (string, error) {
 	}
 
 	return headCommitMeta.Description, nil
+}
+
+// handleRebaseCherryPick runs a cherry-pick for the specified |commitHash|, using the specified
+// cherry-pick |options| and checks the results for any errors or merge conflicts. The initial
+// version of rebase doesn't support conflict resolution, so if any conflicts are detected, the
+// rebase is aborted and an error is returned.
+func handleRebaseCherryPick(ctx *sql.Context, commitHash string, options cherry_pick.CherryPickOptions) error {
+	_, mergeResult, err := cherry_pick.CherryPick(ctx, commitHash, options)
+
+	var schemaConflict merge.SchemaConflict
+	isSchemaConflict := errors.As(err, &schemaConflict)
+
+	if (mergeResult != nil && mergeResult.HasMergeArtifacts()) || isSchemaConflict {
+		// TODO: rebase doesn't currently support conflict resolution, but ideally, when a conflict
+		//       is detected, the rebase would be paused and the user would resolve the conflict just
+		//       like any other conflict, and then call dolt_rebase --continue to keep going.
+		abortErr := abortRebase(ctx)
+		if abortErr != nil {
+			return ErrRebaseConflictWithAbortError.New(commitHash, abortErr)
+		}
+		return ErrRebaseConflict.New(commitHash)
+	}
+	return err
 }
 
 // squashCommitMessage looks up the commit at HEAD and the commit identified by |nextCommitHash| and squashes their two

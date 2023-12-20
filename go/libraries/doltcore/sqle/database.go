@@ -1660,7 +1660,7 @@ func (db Database) LoadRebasePlan(ctx *sql.Context) (*rebase.RebasePlan, error) 
 	}
 	resolvedTable := plan.NewResolvedTable(table, db, nil)
 	sort := plan.NewSort([]sql.SortField{{
-		Column: expression.NewGetField(0, types.Int64, "rebase_order", false),
+		Column: expression.NewGetField(0, types.MustCreateDecimalType(6, 2), "rebase_order", false),
 		Order:  sql.Ascending,
 	}}, resolvedTable)
 	iter, err := rowexec.DefaultBuilder.Build(ctx, sort, nil)
