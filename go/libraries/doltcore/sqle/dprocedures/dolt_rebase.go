@@ -213,12 +213,11 @@ func startRebase(ctx *sql.Context, upstreamPoint string) error {
 		return err
 	}
 
-	// Create the rebase plan
+	// Create the rebase plan and save it in the database
 	rebasePlan, err := rebase.CreateDefaultRebasePlan(ctx, startCommit, upstreamCommit)
 	if err != nil {
 		return err
 	}
-
 	rdb, ok := db.(rebase.RebasePlanDatabase)
 	if !ok {
 		return fmt.Errorf("expected a dsess.RebasePlanDatabase implementation, but received a %T", db)
@@ -268,7 +267,6 @@ func abortRebase(ctx *sql.Context) error {
 		return fmt.Errorf("no rebase in progress")
 	}
 
-	// TODO: preRebaseWorkingRoot isn't used anymore, right? We can remove it???
 	// Clear the rebase state (even though we're going to delete this branch next)
 	rebaseState := workingSet.RebaseState()
 	workingSet = workingSet.AbortRebase()
@@ -301,20 +299,12 @@ func abortRebase(ctx *sql.Context) error {
 		return err
 	}
 
-	err = doltSession.SwitchWorkingSet(ctx, ctx.GetCurrentDatabase(), wsRef)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return doltSession.SwitchWorkingSet(ctx, ctx.GetCurrentDatabase(), wsRef)
 }
 
 func continueRebase(ctx *sql.Context) error {
-	// TODO: Seems like the working set RebaseState will eventually need to keep track of
-	//       where it is in the rebase plan...
-	//       RebaseOrder is probably what makes the most sense to track... we don't
-	//       technically need that until rebasing causes control to stop and go back
-	//       to the user though.
+	// TODO: Eventually, when we allow interactive-rebases to be stopped and started (e.g. with the break action,
+	//       or for conflict resolution), we'll need to track what step we're at in the rebase plan.
 
 	// Validate that we are in an interactive rebase
 	doltSession := dsess.DSessFromSess(ctx.Session)
@@ -385,14 +375,9 @@ func continueRebase(ctx *sql.Context) error {
 	if !ok {
 		return fmt.Errorf("unable to lookup dbdata")
 	}
-	err = actions.DeleteBranch(ctx, dbData, rebaseWorkingBranch, actions.DeleteOptions{
+	return actions.DeleteBranch(ctx, dbData, rebaseWorkingBranch, actions.DeleteOptions{
 		Force: true,
 	}, doltSession.Provider(), nil)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func processRebaseAction(ctx *sql.Context, planStep *rebase.RebasePlanMember) error {

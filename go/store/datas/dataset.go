@@ -411,7 +411,6 @@ func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
 		return nil, err
 	}
 	if mergeState != nil {
-		// TODO: Why don't we use NewMergeState() here?
 		ret.MergeState = &MergeState{
 			preMergeWorkingAddr: new(hash.Hash),
 			fromCommitAddr:      new(hash.Hash),
@@ -431,7 +430,6 @@ func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
 		return nil, err
 	}
 	if rebaseState != nil {
-		// is there a better way to copy these?
 		ret.RebaseState = NewRebaseState(
 			hash.New(rebaseState.PreWorkingRootAddrBytes()),
 			hash.New(rebaseState.OntoCommitAddrBytes()),
@@ -748,17 +746,6 @@ func (h nomsHead) HeadWorkingSet() (*WorkingSetHead, error) {
 		r := mergeStateRef.(types.Ref)
 		ret.MergeState = &MergeState{
 			nomsMergeStateRef: &r,
-		}
-	}
-
-	_, ok, err = st.MaybeGet(rebaseStateField)
-	if err != nil {
-		return nil, err
-	}
-	if ok {
-		//r := rebaseStateRef.(types.Ref)
-		ret.RebaseState = &RebaseState{
-			//nomsRebaseStateRef: &r,
 		}
 	}
 

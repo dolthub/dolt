@@ -162,8 +162,7 @@ func newWorkingSet(ctx context.Context, db *database, workingSetSpec WorkingSetS
 	return ref.TargetHash(), ref, nil
 }
 
-// TODO: Add godocs and possibly rename – This function creates a flatbuffer message for a workingset
-// TODO: See if this should just take a different type?
+// workingset_flatbuffer creates a flatbuffer message for working set metadata.
 func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *MergeState, rebaseState *RebaseState, meta *WorkingSetMeta) serial.Message {
 	builder := flatbuffers.NewBuilder(1024)
 	workingoff := builder.CreateByteVector(working[:])
