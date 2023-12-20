@@ -4,7 +4,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 setup() {
     TARGET_NBF="__DOLT__"
     setup_no_dolt_init
-    dolt init --old-format
+    DOLT_DEFAULT_BIN_FORMAT=__LD_1__ dolt init
 }
 
 teardown() {
