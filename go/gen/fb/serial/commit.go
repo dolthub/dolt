@@ -26,11 +26,7 @@ type Commit struct {
 
 func InitCommitRoot(o *Commit, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	o.Init(buf, n+offset)
-	if CommitNumFields < o.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
+	return o.Init(buf, n+offset)
 }
 
 func TryGetRootAsCommit(buf []byte, offset flatbuffers.UOffsetT) (*Commit, error) {
@@ -38,26 +34,18 @@ func TryGetRootAsCommit(buf []byte, offset flatbuffers.UOffsetT) (*Commit, error
 	return x, InitCommitRoot(x, buf, offset)
 }
 
-func GetRootAsCommit(buf []byte, offset flatbuffers.UOffsetT) *Commit {
-	x := &Commit{}
-	InitCommitRoot(x, buf, offset)
-	return x
-}
-
 func TryGetSizePrefixedRootAsCommit(buf []byte, offset flatbuffers.UOffsetT) (*Commit, error) {
 	x := &Commit{}
 	return x, InitCommitRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsCommit(buf []byte, offset flatbuffers.UOffsetT) *Commit {
-	x := &Commit{}
-	InitCommitRoot(x, buf, offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *Commit) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *Commit) Init(buf []byte, i flatbuffers.UOffsetT) error {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
+	if CommitNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
 }
 
 func (rcv *Commit) Table() flatbuffers.Table {

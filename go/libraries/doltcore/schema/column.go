@@ -74,6 +74,9 @@ type Column struct {
 	// Generated is the generated value of this column. This is the string representation of a sql.Expression.
 	Generated string
 
+	// OnUpdate is the on update value of this column. This is the string representation of a sql.Expression.
+	OnUpdate string
+
 	// Virtual is true if this is a virtual column.
 	Virtual bool
 

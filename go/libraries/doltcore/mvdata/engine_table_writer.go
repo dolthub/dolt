@@ -270,7 +270,7 @@ func (s *SqlEngineTableWriter) createTable() error {
 	// upstream to make the dolt schema
 	sqlCols := make([]string, len(s.tableSchema.Schema))
 	for i, c := range s.tableSchema.Schema {
-		sqlCols[i] = sql.GenerateCreateTableColumnDefinition(c, c.Default.String(), sql.Collation_Default)
+		sqlCols[i] = sql.GenerateCreateTableColumnDefinition(c, c.Default.String(), c.OnUpdate.String(), sql.Collation_Default)
 	}
 	var pks string
 	var sep string

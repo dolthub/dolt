@@ -556,7 +556,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				// errors because creating a new branch implicitly commits the current transaction
 				Query:          "CALL DOLT_CHECKOUT('-b', 'other-branch')",
-				ExpectedErrStr: "Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1",
+				ExpectedErrStr: dsess.ErrUnresolvedConflictsCommit.Error(),
 			},
 		},
 	},
@@ -944,7 +944,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:          "CALL DOLT_MERGE('feature-branch')",
-				ExpectedErrStr: dsess.ErrUnresolvedConflictsCommit.Error(),
+				ExpectedErrStr: dsess.ErrUnresolvedConflictsAutoCommit.Error(),
 			},
 			{
 				Query:    "SELECT count(*) from dolt_conflicts_test", // transaction has been rolled back, 0 results
@@ -1114,7 +1114,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{uint64(merge.CvType_ForeignKey), 1, 1}},
+				Expected: []sql.Row{{"foreign key", 1, 1}},
 			},
 		},
 	},
@@ -1190,7 +1190,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, col1 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{uint64(merge.CvType_UniqueIndex), 1, 1}, {uint64(merge.CvType_UniqueIndex), 2, 1}},
+				Expected: []sql.Row{{"unique index", 1, 1}, {"unique index", 2, 1}},
 			},
 			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
@@ -1226,7 +1226,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, col1 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{uint64(merge.CvType_UniqueIndex), 2, 3}, {uint64(merge.CvType_UniqueIndex), 3, 3}},
+				Expected: []sql.Row{{"unique index", 2, 3}, {"unique index", 3, 3}},
 			},
 		},
 	},
@@ -1258,7 +1258,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, col1 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{uint64(merge.CvType_UniqueIndex), 2, 3}, {uint64(merge.CvType_UniqueIndex), 3, 3}},
+				Expected: []sql.Row{{"unique index", 2, 3}, {"unique index", 3, 3}},
 			},
 		},
 	},
@@ -1290,7 +1290,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, col1, col2 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{uint64(merge.CvType_UniqueIndex), 1, 1, 1}, {uint64(merge.CvType_UniqueIndex), 2, 1, 1}},
+				Expected: []sql.Row{{"unique index", 1, 1, 1}, {"unique index", 2, 1, 1}},
 			},
 		},
 	},
@@ -2156,7 +2156,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query: "select violation_type, pk, violation_info from dolt_constraint_violations_test",
 				Expected: []sql.Row{
-					{uint16(4), 2, merge.NullViolationMeta{Columns: []string{"c0"}}},
+					{"not null", 2, merge.NullViolationMeta{Columns: []string{"c0"}}},
 				},
 			},
 		},
@@ -2220,7 +2220,7 @@ var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, col1, col2 from dolt_constraint_violations_t ORDER BY col1 ASC;",
-				Expected: []sql.Row{{uint64(merge.CvType_UniqueIndex), 1, 1}, {uint64(merge.CvType_UniqueIndex), 2, 1}},
+				Expected: []sql.Row{{"unique index", 1, 1}, {"unique index", 2, 1}},
 			},
 			{
 				Query:    "SELECT * from t ORDER BY col1 ASC;",
@@ -2253,7 +2253,7 @@ var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{uint64(merge.CvType_ForeignKey), 1}},
+				Expected: []sql.Row{{"foreign key", 1}},
 			},
 			{
 				Query:    "SELECT * from parent;",
@@ -2983,7 +2983,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT violation_type, pk, fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{uint64(merge.CvType_ForeignKey), 1, 1}},
+				Expected: []sql.Row{{"foreign key", 1, 1}},
 			},
 			{
 				Query:    "SELECT pk, fk from child;",
@@ -2999,7 +2999,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{uint64(merge.CvType_ForeignKey), 2, 2}},
+				Expected: []sql.Row{{"foreign key", 2, 2}},
 			},
 			{
 				Query:    "SELECT pk, fk from child;",
@@ -3016,7 +3016,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			// the commit hashes for the above two violations change in this merge
 			{
 				Query:    "SELECT violation_type, fk, pk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{uint64(merge.CvType_ForeignKey), 1, 1}, {uint64(merge.CvType_ForeignKey), 2, 2}},
+				Expected: []sql.Row{{"foreign key", 1, 1}, {"foreign key", 2, 2}},
 			},
 			{
 				Query:    "SELECT pk, fk from child;",
@@ -3049,10 +3049,10 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			{
 				Query: "SELECT violation_type, pk, fk from dolt_constraint_violations_child;",
 				Expected: []sql.Row{
-					{uint64(merge.CvType_ForeignKey), 1, 1},
-					{uint64(merge.CvType_ForeignKey), 1, 4},
-					{uint64(merge.CvType_ForeignKey), 2, 2},
-					{uint64(merge.CvType_ForeignKey), 2, 4}},
+					{"foreign key", 1, 1},
+					{"foreign key", 1, 4},
+					{"foreign key", 2, 2},
+					{"foreign key", 2, 4}},
 			},
 		},
 	},
@@ -3093,7 +3093,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, col1 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{uint64(merge.CvType_UniqueIndex), 1, 1}, {uint64(merge.CvType_UniqueIndex), 2, 1}},
+				Expected: []sql.Row{{"unique index", 1, 1}, {"unique index", 2, 1}},
 			},
 			{
 				Query:    "CALL DOLT_COMMIT('-afm', 'commit unique key viol');",
@@ -3113,7 +3113,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, col1 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{uint64(merge.CvType_UniqueIndex), 3, 1}, {uint64(merge.CvType_UniqueIndex), 4, 1}},
+				Expected: []sql.Row{{"unique index", 3, 1}, {"unique index", 4, 1}},
 			},
 			{
 				Query:    "CALL DOLT_COMMIT('-afm', 'commit unique key viol');",
@@ -3134,10 +3134,10 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			{
 				Query: "SELECT violation_type, pk, col1 from dolt_constraint_violations_t;",
 				Expected: []sql.Row{
-					{uint64(merge.CvType_UniqueIndex), 1, 1},
-					{uint64(merge.CvType_UniqueIndex), 2, 1},
-					{uint64(merge.CvType_UniqueIndex), 3, 1},
-					{uint64(merge.CvType_UniqueIndex), 4, 1}},
+					{"unique index", 1, 1},
+					{"unique index", 2, 1},
+					{"unique index", 3, 1},
+					{"unique index", 4, 1}},
 			},
 		},
 	},
@@ -3282,7 +3282,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select col1, col2 from dolt_constraint_violations_t;",
-				Expected: []sql.Row{{uint64(1), "first"}, {uint64(1), "second"}},
+				Expected: []sql.Row{{"A", "first"}, {"A", "second"}},
 			},
 		},
 	},
@@ -3486,7 +3486,7 @@ var SchemaConflictScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "call dolt_merge('other')",
-				ExpectedErrStr: "Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1",
+				ExpectedErrStr: dsess.ErrUnresolvedConflictsAutoCommit.Error(),
 			},
 			{
 				Query:    "select * from dolt_schema_conflicts",

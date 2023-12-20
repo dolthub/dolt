@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -635,6 +636,50 @@ var collationTests = []schemaMergeTest{
 			},
 		},
 	},
+	{
+		name:     "no collation changes",
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int, c varchar(10) collate utf8mb4_0900_ai_ci unique, d decimal(5,3) unique)")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int, c varchar(10) collate utf8mb4_0900_ai_ci unique, d decimal(5,3) unique)")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int, c varchar(10) collate utf8mb4_0900_ai_ci unique, d decimal(5,3) unique)")),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int, c varchar(10) collate utf8mb4_0900_ai_ci unique, d decimal(5,3) unique)")),
+		dataTests: []dataTest{
+			{
+				name:     "no data change",
+				ancestor: singleRow(1, 1, 1, "foo", decimal.New(8, 0)),
+				left:     singleRow(1, 1, 2, "foo", decimal.New(8, 0)),
+				right:    singleRow(1, 2, 1, "foo", decimal.New(8, 0)),
+				merged:   singleRow(1, 2, 2, "foo", decimal.New(8, 0)),
+			},
+			{
+				name:     "replace varchar with equal replacement",
+				ancestor: singleRow(1, 1, 1, "foo", decimal.New(100, 0)),
+				left:     singleRow(1, 1, 2, "FOO", decimal.New(100, 0)),
+				right:    singleRow(1, 2, 1, "foo", decimal.New(100, 0)),
+				merged:   singleRow(1, 2, 2, "FOO", decimal.New(100, 0)),
+			},
+			{
+				name:         "conflict removal and replace varchar with equal replacement",
+				ancestor:     singleRow(1, 1, 1, "foo", decimal.New(100, 0)),
+				left:         singleRow(1, 1, 2, "FOO", decimal.New(100, 0)),
+				right:        nil,
+				dataConflict: true,
+			},
+			{
+				name:     "replace decimal with equal replacement",
+				ancestor: singleRow(1, 1, 1, "foo", decimal.New(100, 0)),
+				left:     singleRow(1, 1, 2, "foo", decimal.New(1, 2)),
+				right:    singleRow(1, 2, 1, "foo", decimal.New(100, 0)),
+				merged:   singleRow(1, 2, 2, "foo", decimal.New(1, 2)),
+			},
+			{
+				name:     "conflict removal and replace decimal with equal replacement",
+				ancestor: singleRow(1, 1, 1, "foo", decimal.New(100, 0)),
+				left:     singleRow(1, 1, 1, "foo", decimal.New(1, 2)),
+				right:    nil,
+				merged:   nil,
+			},
+		},
+	},
 }
 
 var columnDefaultTests = []schemaMergeTest{
@@ -1194,11 +1239,41 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 									require.EqualValues(t, expectedViolation.value, value)
 								}
 							} else {
-								if !assert.Equal(t, addr, a) {
+								if addr != a {
 									expTbl, _, err := m.GetTable(ctx, name)
 									require.NoError(t, err)
-									t.Logf("expected rows: %s", expTbl.DebugString(ctx))
-									t.Logf("actual rows: %s", actTbl.DebugString(ctx))
+									expRowDataHash, err := expTbl.GetRowDataHash(ctx)
+									require.NoError(t, err)
+									actRowDataHash, err := actTbl.GetRowDataHash(ctx)
+									require.NoError(t, err)
+									if expRowDataHash != actRowDataHash {
+										t.Error("Rows unequal")
+										t.Logf("expected rows: %s", expTbl.DebugString(ctx))
+										t.Logf("actual rows: %s", actTbl.DebugString(ctx))
+									}
+									expIndexSet, err := expTbl.GetIndexSet(ctx)
+									require.NoError(t, err)
+									actIndexSet, err := actTbl.GetIndexSet(ctx)
+									require.NoError(t, err)
+									expSchema, err := expTbl.GetSchema(ctx)
+									require.NoError(t, err)
+									expSchema.Indexes().Iter(func(index schema.Index) (stop bool, err error) {
+										expIndex, err := expIndexSet.GetIndex(ctx, expSchema, index.Name())
+										require.NoError(t, err)
+										actIndex, err := actIndexSet.GetIndex(ctx, expSchema, index.Name())
+										require.NoError(t, err)
+										expIndexHash, err := expIndex.HashOf()
+										require.NoError(t, err)
+										actIndexHash, err := actIndex.HashOf()
+										require.NoError(t, err)
+										if expIndexHash != actIndexHash {
+											t.Errorf("Index %s unequal", index.Name())
+											t.Logf("expected rows: %s", expIndex.DebugString(ctx))
+											t.Logf("actual rows: %s", actIndex.DebugString(ctx))
+										}
+										return false, nil
+									})
+
 								}
 							}
 						}

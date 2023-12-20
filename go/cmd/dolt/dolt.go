@@ -26,6 +26,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -65,7 +66,7 @@ import (
 )
 
 const (
-	Version = "1.29.2"
+	Version = "1.29.6"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -459,6 +460,26 @@ func runMain() int {
 	if !ok {
 		cli.PrintErrln(color.RedString("Failed to get global config"))
 		return 1
+	}
+
+	globalConfig.Iter(func(name, val string) (stop bool) {
+		option := strings.ToLower(name)
+		if _, ok := config.ConfigOptions[option]; !ok && !strings.HasPrefix(option, env.SqlServerGlobalsPrefix) {
+			cli.Println(color.YellowString("Warning: Unknown global config option '%s'. Use `dolt config --global --unset %s` to remove.", name, name))
+		}
+		return false
+	})
+
+	// try verifying contents of local config
+	localConfig, ok := dEnv.Config.GetConfig(env.LocalConfig)
+	if ok {
+		localConfig.Iter(func(name, val string) (stop bool) {
+			option := strings.ToLower(name)
+			if _, ok := config.ConfigOptions[option]; !ok && !strings.HasPrefix(option, env.SqlServerGlobalsPrefix) {
+				cli.Println(color.YellowString("Warning: Unknown local config option '%s'. Use `dolt config --local --unset %s` to remove.", name, name))
+			}
+			return false
+		})
 	}
 
 	apr, remainingArgs, subcommandName, err := parseGlobalArgsAndSubCommandName(globalConfig, args)

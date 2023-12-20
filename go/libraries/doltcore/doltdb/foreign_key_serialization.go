@@ -100,7 +100,10 @@ func deserializeFlatbufferForeignKeys(msg types.SerialMessage) (*ForeignKeyColle
 
 	var fk serial.ForeignKey
 	for i := 0; i < c.ForeignKeysLength(); i++ {
-		c.ForeignKeys(&fk, i)
+		_, err = c.TryForeignKeys(&fk, i)
+		if err != nil {
+			return nil, err
+		}
 
 		childCols := make([]uint64, fk.ChildTableColumnsLength())
 		for j := range childCols {

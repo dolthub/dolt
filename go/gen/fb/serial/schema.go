@@ -26,11 +26,7 @@ type TableSchema struct {
 
 func InitTableSchemaRoot(o *TableSchema, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	o.Init(buf, n+offset)
-	if TableSchemaNumFields < o.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
+	return o.Init(buf, n+offset)
 }
 
 func TryGetRootAsTableSchema(buf []byte, offset flatbuffers.UOffsetT) (*TableSchema, error) {
@@ -38,42 +34,22 @@ func TryGetRootAsTableSchema(buf []byte, offset flatbuffers.UOffsetT) (*TableSch
 	return x, InitTableSchemaRoot(x, buf, offset)
 }
 
-func GetRootAsTableSchema(buf []byte, offset flatbuffers.UOffsetT) *TableSchema {
-	x := &TableSchema{}
-	InitTableSchemaRoot(x, buf, offset)
-	return x
-}
-
 func TryGetSizePrefixedRootAsTableSchema(buf []byte, offset flatbuffers.UOffsetT) (*TableSchema, error) {
 	x := &TableSchema{}
 	return x, InitTableSchemaRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsTableSchema(buf []byte, offset flatbuffers.UOffsetT) *TableSchema {
-	x := &TableSchema{}
-	InitTableSchemaRoot(x, buf, offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *TableSchema) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *TableSchema) Init(buf []byte, i flatbuffers.UOffsetT) error {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
+	if TableSchemaNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
 }
 
 func (rcv *TableSchema) Table() flatbuffers.Table {
 	return rcv._tab
-}
-
-func (rcv *TableSchema) Columns(obj *Column, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
-	if o != 0 {
-		x := rcv._tab.Vector(o)
-		x += flatbuffers.UOffsetT(j) * 4
-		x = rcv._tab.Indirect(x)
-		obj.Init(rcv._tab.Bytes, x)
-		return true
-	}
-	return false
 }
 
 func (rcv *TableSchema) TryColumns(obj *Column, j int) (bool, error) {
@@ -99,19 +75,6 @@ func (rcv *TableSchema) ColumnsLength() int {
 	return 0
 }
 
-func (rcv *TableSchema) ClusteredIndex(obj *Index) *Index {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		x := rcv._tab.Indirect(o + rcv._tab.Pos)
-		if obj == nil {
-			obj = new(Index)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		return obj
-	}
-	return nil
-}
-
 func (rcv *TableSchema) TryClusteredIndex(obj *Index) (*Index, error) {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
@@ -126,18 +89,6 @@ func (rcv *TableSchema) TryClusteredIndex(obj *Index) (*Index, error) {
 		return obj, nil
 	}
 	return nil, nil
-}
-
-func (rcv *TableSchema) SecondaryIndexes(obj *Index, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
-	if o != 0 {
-		x := rcv._tab.Vector(o)
-		x += flatbuffers.UOffsetT(j) * 4
-		x = rcv._tab.Indirect(x)
-		obj.Init(rcv._tab.Bytes, x)
-		return true
-	}
-	return false
 }
 
 func (rcv *TableSchema) TrySecondaryIndexes(obj *Index, j int) (bool, error) {
@@ -161,18 +112,6 @@ func (rcv *TableSchema) SecondaryIndexesLength() int {
 		return rcv._tab.VectorLen(o)
 	}
 	return 0
-}
-
-func (rcv *TableSchema) Checks(obj *CheckConstraint, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
-	if o != 0 {
-		x := rcv._tab.Vector(o)
-		x += flatbuffers.UOffsetT(j) * 4
-		x = rcv._tab.Indirect(x)
-		obj.Init(rcv._tab.Bytes, x)
-		return true
-	}
-	return false
 }
 
 func (rcv *TableSchema) TryChecks(obj *CheckConstraint, j int) (bool, error) {
@@ -210,7 +149,19 @@ func (rcv *TableSchema) MutateCollation(n Collation) bool {
 	return rcv._tab.MutateUint16Slot(12, uint16(n))
 }
 
-const TableSchemaNumFields = 5
+func (rcv *TableSchema) HasFeaturesAfterTryAccessors() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *TableSchema) MutateHasFeaturesAfterTryAccessors(n bool) bool {
+	return rcv._tab.MutateBoolSlot(14, n)
+}
+
+const TableSchemaNumFields = 6
 
 func TableSchemaStart(builder *flatbuffers.Builder) {
 	builder.StartObject(TableSchemaNumFields)
@@ -239,6 +190,9 @@ func TableSchemaStartChecksVector(builder *flatbuffers.Builder, numElems int) fl
 func TableSchemaAddCollation(builder *flatbuffers.Builder, collation Collation) {
 	builder.PrependUint16Slot(4, uint16(collation), 0)
 }
+func TableSchemaAddHasFeaturesAfterTryAccessors(builder *flatbuffers.Builder, hasFeaturesAfterTryAccessors bool) {
+	builder.PrependBoolSlot(5, hasFeaturesAfterTryAccessors, false)
+}
 func TableSchemaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
@@ -249,11 +203,7 @@ type Column struct {
 
 func InitColumnRoot(o *Column, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	o.Init(buf, n+offset)
-	if ColumnNumFields < o.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
+	return o.Init(buf, n+offset)
 }
 
 func TryGetRootAsColumn(buf []byte, offset flatbuffers.UOffsetT) (*Column, error) {
@@ -261,26 +211,18 @@ func TryGetRootAsColumn(buf []byte, offset flatbuffers.UOffsetT) (*Column, error
 	return x, InitColumnRoot(x, buf, offset)
 }
 
-func GetRootAsColumn(buf []byte, offset flatbuffers.UOffsetT) *Column {
-	x := &Column{}
-	InitColumnRoot(x, buf, offset)
-	return x
-}
-
 func TryGetSizePrefixedRootAsColumn(buf []byte, offset flatbuffers.UOffsetT) (*Column, error) {
 	x := &Column{}
 	return x, InitColumnRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsColumn(buf []byte, offset flatbuffers.UOffsetT) *Column {
-	x := &Column{}
-	InitColumnRoot(x, buf, offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *Column) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *Column) Init(buf []byte, i flatbuffers.UOffsetT) error {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
+	if ColumnNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
 }
 
 func (rcv *Column) Table() flatbuffers.Table {
@@ -427,7 +369,15 @@ func (rcv *Column) MutateVirtual(n bool) bool {
 	return rcv._tab.MutateBoolSlot(28, n)
 }
 
-const ColumnNumFields = 13
+func (rcv *Column) OnUpdateValue() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(30))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+const ColumnNumFields = 14
 
 func ColumnStart(builder *flatbuffers.Builder) {
 	builder.StartObject(ColumnNumFields)
@@ -471,6 +421,9 @@ func ColumnAddGenerated(builder *flatbuffers.Builder, generated bool) {
 func ColumnAddVirtual(builder *flatbuffers.Builder, virtual bool) {
 	builder.PrependBoolSlot(12, virtual, false)
 }
+func ColumnAddOnUpdateValue(builder *flatbuffers.Builder, onUpdateValue flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(13, flatbuffers.UOffsetT(onUpdateValue), 0)
+}
 func ColumnEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
@@ -481,11 +434,7 @@ type Index struct {
 
 func InitIndexRoot(o *Index, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	o.Init(buf, n+offset)
-	if IndexNumFields < o.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
+	return o.Init(buf, n+offset)
 }
 
 func TryGetRootAsIndex(buf []byte, offset flatbuffers.UOffsetT) (*Index, error) {
@@ -493,26 +442,18 @@ func TryGetRootAsIndex(buf []byte, offset flatbuffers.UOffsetT) (*Index, error) 
 	return x, InitIndexRoot(x, buf, offset)
 }
 
-func GetRootAsIndex(buf []byte, offset flatbuffers.UOffsetT) *Index {
-	x := &Index{}
-	InitIndexRoot(x, buf, offset)
-	return x
-}
-
 func TryGetSizePrefixedRootAsIndex(buf []byte, offset flatbuffers.UOffsetT) (*Index, error) {
 	x := &Index{}
 	return x, InitIndexRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsIndex(buf []byte, offset flatbuffers.UOffsetT) *Index {
-	x := &Index{}
-	InitIndexRoot(x, buf, offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *Index) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *Index) Init(buf []byte, i flatbuffers.UOffsetT) error {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
+	if IndexNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
 }
 
 func (rcv *Index) Table() flatbuffers.Table {
@@ -699,19 +640,6 @@ func (rcv *Index) MutateFulltextKey(n bool) bool {
 	return rcv._tab.MutateBoolSlot(24, n)
 }
 
-func (rcv *Index) FulltextInfo(obj *FulltextInfo) *FulltextInfo {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(26))
-	if o != 0 {
-		x := rcv._tab.Indirect(o + rcv._tab.Pos)
-		if obj == nil {
-			obj = new(FulltextInfo)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		return obj
-	}
-	return nil
-}
-
 func (rcv *Index) TryFulltextInfo(obj *FulltextInfo) (*FulltextInfo, error) {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(26))
 	if o != 0 {
@@ -791,11 +719,7 @@ type FulltextInfo struct {
 
 func InitFulltextInfoRoot(o *FulltextInfo, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	o.Init(buf, n+offset)
-	if FulltextInfoNumFields < o.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
+	return o.Init(buf, n+offset)
 }
 
 func TryGetRootAsFulltextInfo(buf []byte, offset flatbuffers.UOffsetT) (*FulltextInfo, error) {
@@ -803,26 +727,18 @@ func TryGetRootAsFulltextInfo(buf []byte, offset flatbuffers.UOffsetT) (*Fulltex
 	return x, InitFulltextInfoRoot(x, buf, offset)
 }
 
-func GetRootAsFulltextInfo(buf []byte, offset flatbuffers.UOffsetT) *FulltextInfo {
-	x := &FulltextInfo{}
-	InitFulltextInfoRoot(x, buf, offset)
-	return x
-}
-
 func TryGetSizePrefixedRootAsFulltextInfo(buf []byte, offset flatbuffers.UOffsetT) (*FulltextInfo, error) {
 	x := &FulltextInfo{}
 	return x, InitFulltextInfoRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsFulltextInfo(buf []byte, offset flatbuffers.UOffsetT) *FulltextInfo {
-	x := &FulltextInfo{}
-	InitFulltextInfoRoot(x, buf, offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *FulltextInfo) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *FulltextInfo) Init(buf []byte, i flatbuffers.UOffsetT) error {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
+	if FulltextInfoNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
 }
 
 func (rcv *FulltextInfo) Table() flatbuffers.Table {
@@ -957,11 +873,7 @@ type CheckConstraint struct {
 
 func InitCheckConstraintRoot(o *CheckConstraint, buf []byte, offset flatbuffers.UOffsetT) error {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	o.Init(buf, n+offset)
-	if CheckConstraintNumFields < o.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
+	return o.Init(buf, n+offset)
 }
 
 func TryGetRootAsCheckConstraint(buf []byte, offset flatbuffers.UOffsetT) (*CheckConstraint, error) {
@@ -969,26 +881,18 @@ func TryGetRootAsCheckConstraint(buf []byte, offset flatbuffers.UOffsetT) (*Chec
 	return x, InitCheckConstraintRoot(x, buf, offset)
 }
 
-func GetRootAsCheckConstraint(buf []byte, offset flatbuffers.UOffsetT) *CheckConstraint {
-	x := &CheckConstraint{}
-	InitCheckConstraintRoot(x, buf, offset)
-	return x
-}
-
 func TryGetSizePrefixedRootAsCheckConstraint(buf []byte, offset flatbuffers.UOffsetT) (*CheckConstraint, error) {
 	x := &CheckConstraint{}
 	return x, InitCheckConstraintRoot(x, buf, offset+flatbuffers.SizeUint32)
 }
 
-func GetSizePrefixedRootAsCheckConstraint(buf []byte, offset flatbuffers.UOffsetT) *CheckConstraint {
-	x := &CheckConstraint{}
-	InitCheckConstraintRoot(x, buf, offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *CheckConstraint) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *CheckConstraint) Init(buf []byte, i flatbuffers.UOffsetT) error {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
+	if CheckConstraintNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
 }
 
 func (rcv *CheckConstraint) Table() flatbuffers.Table {

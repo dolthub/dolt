@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 )
 
 var errUnblameableTable = errors.New("unable to generate blame view for table without primary key")
@@ -41,7 +42,7 @@ const (
 										coalesce(to_commit_date, from_commit_date) DESC
 								) row_num
 				             FROM
-				                 dolt_diff_%s  -- tableName
+				                 ` + "`dolt_diff_%s`" + ` -- tableName
 				            )
 				SELECT
 				    %s  -- pksSelectExpression
@@ -107,10 +108,13 @@ func createDoltBlameViewExpression(tableName string, pks []schema.Column) (strin
 			pksOrderByExpression += ", "
 		}
 
-		allToPks += "to_" + pk.Name
-		pksPartitionByExpression += "coalesce(to_" + pk.Name + ", from_" + pk.Name + ")"
-		pksOrderByExpression += "sd.to_" + pk.Name + " ASC "
-		pksSelectExpression += "sd.to_" + pk.Name + " AS " + pk.Name + ", "
+		toPk := sqlfmt.QuoteIdentifier("to_" + pk.Name)
+		fromPk := sqlfmt.QuoteIdentifier("from_" + pk.Name)
+
+		allToPks += toPk
+		pksPartitionByExpression += fmt.Sprintf("coalesce(%s, %s)", toPk, fromPk)
+		pksOrderByExpression += fmt.Sprintf("sd.%s ASC ", toPk)
+		pksSelectExpression += fmt.Sprintf("sd.%s AS %s, ", toPk, sqlfmt.QuoteIdentifier(pk.Name))
 	}
 
 	return fmt.Sprintf(viewExpressionTemplate, allToPks, pksPartitionByExpression, tableName,

@@ -1004,8 +1004,7 @@ var DoltScripts = []queries.ScriptTest{
 			"CREATE TABLE t(pk varchar(20), val int)",
 			"ALTER TABLE t ADD PRIMARY KEY (pk, val)",
 			"INSERT INTO t VALUES ('zzz',4),('mult',1),('sub',2),('add',5)",
-			"CALL dolt_add('.');",
-			"CALL dolt_commit('-am', 'add rows');",
+			"CALL dolt_commit('-Am', 'add rows');",
 			"INSERT INTO t VALUES ('dolt',0),('alt',12),('del',8),('ctl',3)",
 			"CALL dolt_commit('-am', 'add more rows');",
 		},
@@ -1021,6 +1020,25 @@ var DoltScripts = []queries.ScriptTest{
 					{"mult", 1, "add rows"},
 					{"sub", 2, "add rows"},
 					{"zzz", 4, "add rows"},
+				},
+			},
+		},
+	},
+	{
+		Name: "blame: table and pk require identifier quoting",
+		SetUpScript: []string{
+			"create table `t-1` (`p-k` int primary key, col1 varchar(100));",
+			"insert into `t-1` values (1, 'one');",
+			"CALL dolt_commit('-Am', 'adding table t-1');",
+			"insert into `t-1` values (2, 'two');",
+			"CALL dolt_commit('-Am', 'adding another row to t-1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT `p-k`, message FROM `dolt_blame_t-1`;",
+				Expected: []sql.Row{
+					{1, "adding table t-1"},
+					{2, "adding another row to t-1"},
 				},
 			},
 		},
@@ -2101,7 +2119,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "select c1 from dolt_history_t;",
 				Expected: []sql.Row{
-					{uint64(1)},
+					{"foo"},
 				},
 			},
 		},

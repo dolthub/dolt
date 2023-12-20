@@ -122,8 +122,8 @@ func TestDecimalConvertValueToNomsValue(t *testing.T) {
 		{
 			generateDecimalType(t, 15, 7),
 			true,
-			types.Decimal{},
-			true,
+			types.Decimal(decimal.RequireFromString("1")),
+			false,
 		},
 		{
 			generateDecimalType(t, 20, 5),

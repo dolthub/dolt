@@ -156,6 +156,14 @@ teardown() {
     [[ ! "$output" =~ "Warning: you are on an old version of Dolt" ]] || false
 }
 
+@test "no-repo: dolt version with bad version_check.txt does not print error" {
+    echo "bad version" > $DOLT_ROOT_PATH/.dolt/version_check.txt
+
+    run dolt version
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "failed to parse version number" ]] || false
+}
+
 # Tests for dolt commands outside of a dolt repository
 NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
 @test "no-repo: dolt status outside of a dolt repository" {

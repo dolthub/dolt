@@ -119,7 +119,7 @@ teardown() {
     [[ "$output" =~ "Rows Processed: 2, Additions: 2, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
     # Sanity check
-    ! [[ "$output" =~ "Warning: There are fewer columns in the import file's schema than the table's schema" ]] || false
+    ! [[ "$output" =~ "Warning: The import file's schema does not match the table's schema" ]] || false
 
     # Validate that a successful import with no bad rows does not print the following
     ! [[ "$output" =~ "The following rows were skipped:" ]] || false
@@ -645,7 +645,7 @@ DELIM
 
     run dolt table import -u test 1pk5col-ints-updt.csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Warning: There are fewer columns in the import file's schema than the table's schema" ]] || false
+    [[ "$output" =~ "Warning: The import file's schema does not match the table's schema" ]] || false
     [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 
@@ -656,7 +656,7 @@ DELIM
     [[ "$output" =~ "1" ]] || false
 }
 
-@test "import-update-tables: csv files has less columns that schema -u" {
+@test "import-update-tables: csv file has less columns than schema -u" {
     cat <<DELIM > 1pk5col-ints-updt.csv
 pk,c1,c2,c5,c3
 0,1,2,6,3
@@ -666,7 +666,7 @@ DELIM
 
     run dolt table import -u test 1pk5col-ints-updt.csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Warning: There are fewer columns in the import file's schema than the table's schema" ]] || false
+    [[ "$output" =~ "Warning: The import file's schema does not match the table's schema" ]] || false
     [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 
@@ -689,7 +689,7 @@ DELIM
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
-    ! [[ "$output" =~ "Warning: There are fewer columns in the import file's schema than the table's schema" ]] || false
+    ! [[ "$output" =~ "Warning: The import file's schema does not match the table's schema" ]] || false
 
     run dolt sql -r csv -q "select * from test"
     [ "${lines[1]}" = "0,1,2,3,4,6" ]
@@ -708,12 +708,41 @@ DELIM
 
     run dolt table import -u test 1pk5col-ints-updt.csv
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "Warning: The import file's schema does not match the table's schema" ]] || false
+    [[ "$output" =~ "If unintentional, check for any typos in the import file's header" ]] || false
+    [[ "$output" =~ "Extra columns in import file:" ]] || false
+    [[ "$output" =~ "	c7" ]] || false
     [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
-    ! [[ "$output" =~ "Warning: There are fewer columns in the import file's schema than the table's schema" ]] || false
 
     run dolt sql -r csv -q "select * from test"
     [ "${lines[1]}" = "0,1,2,3,4,6" ]
+
+    run dolt sql -q "select count(*) from test"
+    [[ "$output" =~ "1" ]] || false
+}
+
+@test "import-update-tables: different schema warning lists differing columns" {
+    cat <<DELIM > 1pk5col-ints-updt.csv
+pk,c4,c5,c1,c3,c7
+0,4,6,1,3,100
+DELIM
+
+    dolt sql < 1pk5col-ints-sch.sql
+
+    run dolt table import -u test 1pk5col-ints-updt.csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "Warning: The import file's schema does not match the table's schema" ]] || false
+    [[ "${lines[1]}" =~ "If unintentional, check for any typos in the import file's header" ]] || false
+    [[ "${lines[2]}" =~ "Missing columns in test:" ]] || false
+    [[ "${lines[3]}" =~ "	c2" ]] || false
+    [[ "${lines[4]}" =~ "Extra columns in import file:" ]] || false
+    [[ "${lines[5]}" =~ "	c7" ]] || false
+    [[ "${lines[6]}" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "${lines[7]}" =~ "Import completed successfully." ]] || false
+
+    run dolt sql -r csv -q "select * from test"
+    [ "${lines[1]}" = "0,1,,3,4,6" ]
 
     run dolt sql -q "select count(*) from test"
     [[ "$output" =~ "1" ]] || false
@@ -731,7 +760,7 @@ DELIM
 
     run dolt table import -u test 1pk5col-ints-updt.csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Warning: There are fewer columns in the import file's schema than the table's schema" ]] || false
+    [[ "$output" =~ "Warning: The import file's schema does not match the table's schema" ]] || false
     [[ "$output" =~ "Rows Processed: 1, Additions: 0, Modifications: 1, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 
@@ -771,7 +800,7 @@ DELIM
 
     run dolt table import -u keyless data.csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Warning: There are fewer columns in the import file's schema than the table's schema" ]] || false
+    [[ "$output" =~ "Warning: The import file's schema does not match the table's schema" ]] || false
     [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 
@@ -1302,12 +1331,12 @@ DELIM
     # Add a continue statement
     run dolt table import -u --continue test bad-updates.csv
     [ "$status" -eq 0 ]
-    [[ "${lines[2]}" =~ "The following rows were skipped:" ]] || false
-    [[ "${lines[3]}" =~ '[5,7,5]' ]] || false
-    [[ "${lines[4]}" =~ '[6,5,5]' ]] || false
-    [[ "${lines[5]}" =~ "Rows Processed: 0, Additions: 0, Modifications: 0, Had No Effect: 0" ]] || false
-    [[ "${lines[6]}" =~ "Lines skipped: 2" ]] || false
-    [[ "${lines[7]}" =~ "Import completed successfully." ]] || false
+    [[ "${lines[4]}" =~ "The following rows were skipped:" ]] || false
+    [[ "${lines[5]}" =~ '[5,7,5]' ]] || false
+    [[ "${lines[6]}" =~ '[6,5,5]' ]] || false
+    [[ "${lines[7]}" =~ "Rows Processed: 0, Additions: 0, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "${lines[8]}" =~ "Lines skipped: 2" ]] || false
+    [[ "${lines[9]}" =~ "Import completed successfully." ]] || false
 }
 
 @test "import-update-tables: test error when import bad csv with nulls" {

@@ -40,12 +40,15 @@ func FromDoltSchema(dbName, tableName string, sch schema.Schema) (sql.PrimaryKey
 			extra = "auto_increment"
 		}
 
-		var deflt, generated *sql.ColumnDefaultValue
+		var deflt, generated, onUpdate *sql.ColumnDefaultValue
 		if col.Default != "" {
 			deflt = sql.NewUnresolvedColumnDefaultValue(col.Default)
 		}
 		if col.Generated != "" {
 			generated = sql.NewUnresolvedColumnDefaultValue(col.Generated)
+		}
+		if col.OnUpdate != "" {
+			onUpdate = sql.NewUnresolvedColumnDefaultValue(col.OnUpdate)
 		}
 
 		cols[i] = &sql.Column{
@@ -53,6 +56,7 @@ func FromDoltSchema(dbName, tableName string, sch schema.Schema) (sql.PrimaryKey
 			Type:           sqlType,
 			Default:        deflt,
 			Generated:      generated,
+			OnUpdate:       onUpdate,
 			Nullable:       col.IsNullable(),
 			DatabaseSource: dbName,
 			Source:         tableName,
@@ -141,12 +145,15 @@ func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 		return schema.Column{}, err
 	}
 
-	defaultVal := ""
-	generatedVal := ""
+	var defaultVal, generatedVal, onUpdateVal string
 	if col.Default != nil {
 		defaultVal = col.Default.String()
 	} else {
 		generatedVal = col.Generated.String()
+	}
+
+	if col.OnUpdate != nil {
+		onUpdateVal = col.OnUpdate.String()
 	}
 
 	c := schema.Column{
@@ -157,6 +164,7 @@ func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 		TypeInfo:      typeInfo,
 		Default:       defaultVal,
 		Generated:     generatedVal,
+		OnUpdate:      onUpdateVal,
 		Virtual:       col.Virtual,
 		AutoIncrement: col.AutoIncrement,
 		Comment:       col.Comment,
