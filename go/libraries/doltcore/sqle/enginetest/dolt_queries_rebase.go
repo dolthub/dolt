@@ -168,8 +168,6 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			"call dolt_commit('-am', 'inserting row 10');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
-			// TODO: Test that deleting a row from the rebase plan is equivalent to marking it as a drop
-			// TODO: Test that new commit hashes can be added
 			{
 				Query:    "call dolt_rebase('-i', 'main');",
 				Expected: []sql.Row{{0, "interactive rebase started"}},
@@ -514,6 +512,80 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				// The schema conflicts table should be empty, since the rebase was aborted
 				Query:    "select * from dolt_schema_conflicts;",
 				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		// Tests that the rebase plan can be changed in non-standard ways, such as adding new commits to the plan
+		// and completely removing commits from the plan. These changes are also valid with Git.
+		Name: "dolt_rebase: non-standard plan changes",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"call dolt_commit('-Am', 'creating table t');",
+			"call dolt_branch('branch1');",
+			"call dolt_branch('branch2');",
+
+			"insert into t values (0);",
+			"call dolt_commit('-am', 'inserting row 0');",
+
+			"call dolt_checkout('branch2');",
+			"insert into t values (999);",
+			"call dolt_commit('-am', 'inserting row 999');",
+
+			"call dolt_checkout('branch1');",
+			"insert into t values (1);",
+			"call dolt_commit('-am', 'inserting row 1');",
+			"insert into t values (2);",
+			"call dolt_commit('-am', 'inserting row 2');",
+			"insert into t values (3);",
+			"call dolt_commit('-am', 'inserting row 3');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"branch1"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1}, {2}, {3}},
+			},
+			{
+				Query:    "call dolt_rebase('-i', 'main');",
+				Expected: []sql.Row{{0, "interactive rebase started"}},
+			},
+			{
+				Query: "select * from dolt_rebase order by rebase_order;",
+				Expected: []sql.Row{
+					{"1", "pick", doltCommit, "inserting row 1"},
+					{"2", "pick", doltCommit, "inserting row 2"},
+					{"3", "pick", doltCommit, "inserting row 3"},
+				},
+			},
+			{
+				Query:    "delete from dolt_rebase where rebase_order > 1;",
+				Expected: []sql.Row{{gmstypes.NewOkResult(2)}},
+			},
+			{
+				Query:    "insert into dolt_rebase values (2.12, 'pick', hashof('branch2'), 'inserting row 0');",
+				Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+			},
+			{
+				Query:    "call dolt_rebase('--continue');",
+				Expected: []sql.Row{{0, "interactive rebase completed"}},
+			},
+			{
+				Query: "select message from dolt_log;",
+				Expected: []sql.Row{
+					{"inserting row 999"},
+					{"inserting row 1"},
+					{"inserting row 0"},
+					{"creating table t"},
+					{"Initialize data repository"},
+				},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{0}, {1}, {999}},
 			},
 		},
 	},

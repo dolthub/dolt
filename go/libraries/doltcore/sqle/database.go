@@ -1736,12 +1736,7 @@ func (db Database) SaveRebasePlan(ctx *sql.Context, plan *rebase.RebasePlan) err
 		}
 	}
 
-	err = inserter.Close(ctx)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return inserter.Close(ctx)
 }
 
 // noopRepoStateWriter is a minimal implementation of RepoStateWriter that does nothing
