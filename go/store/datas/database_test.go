@@ -310,7 +310,7 @@ func (suite *DatabaseSuite) TestDatasetsMapType() {
 
 	datasets, err = suite.db.Datasets(context.Background())
 	suite.NoError(err)
-	_, err = suite.db.Delete(context.Background(), ds)
+	_, err = suite.db.Delete(context.Background(), ds, "")
 	suite.NoError(err)
 	dss, err = suite.db.Datasets(context.Background())
 	suite.NoError(err)
@@ -388,7 +388,7 @@ func (suite *DatabaseSuite) TestDatabaseDelete() {
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds2).Equals(b))
 
-	ds1, err = suite.db.Delete(context.Background(), ds1)
+	ds1, err = suite.db.Delete(context.Background(), ds1, "")
 	suite.NoError(err)
 	currDS2, err := suite.db.GetDataset(context.Background(), datasetID2)
 	suite.NoError(err)
@@ -491,7 +491,7 @@ func (suite *DatabaseSuite) TestDeleteWithConcurrentChunkStoreUse() {
 	suite.Require().True(mustHeadValue(iDS).Equals(e))
 
 	// Attempt to delete ds1 via suite.db, which should fail due to the above
-	_, err = suite.db.Delete(context.Background(), ds1)
+	_, err = suite.db.Delete(context.Background(), ds1, "")
 	suite.Require().Error(err)
 
 	// Concurrent change, but to some other dataset. This shouldn't stop changes to ds1.
@@ -505,7 +505,7 @@ func (suite *DatabaseSuite) TestDeleteWithConcurrentChunkStoreUse() {
 	suite.Require().True(mustHeadValue(iDS).Equals(stf))
 
 	// Attempted concurrent delete, which should proceed without a problem
-	ds1, err = suite.db.Delete(context.Background(), ds1)
+	ds1, err = suite.db.Delete(context.Background(), ds1, "")
 	suite.Require().NoError(err)
 	present := ds1.HasHead()
 	suite.False(present, "Dataset %s should not be present", datasetID)
