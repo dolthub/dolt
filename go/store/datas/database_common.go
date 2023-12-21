@@ -949,8 +949,8 @@ func (db *database) CommitWithWorkingSet(
 	return commitDS, workingSetDS, nil
 }
 
-func (db *database) Delete(ctx context.Context, ds Dataset) (Dataset, error) {
-	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doDelete(ctx, ds.ID()) })
+func (db *database) Delete(ctx context.Context, ds Dataset, wsIDStr string) (Dataset, error) {
+	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doDelete(ctx, ds.ID(), wsIDStr) })
 }
 
 func (db *database) update(ctx context.Context,
@@ -1014,12 +1014,10 @@ func (db *database) update(ctx context.Context,
 	return err
 }
 
-func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
-	var first types.Value
-	var firstHash hash.Hash
-
+func (db *database) doDelete(ctx context.Context, datasetIDstr string, workingsetIDstr string) error {
 	datasetID := types.String(datasetIDstr)
 	return db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
+		var first types.Value
 		curr, ok, err := datasets.MaybeGet(ctx, datasetID)
 		if err != nil {
 			return types.Map{}, err
@@ -1035,6 +1033,7 @@ func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
 		}
 		return datasets.Edit().Remove(datasetID).Map(ctx)
 	}, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+		var firstHash hash.Hash
 		curr, err := am.Get(ctx, datasetIDstr)
 		if err != nil {
 			return prolly.AddressMap{}, err
@@ -1045,11 +1044,72 @@ func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
 		if curr != firstHash {
 			return prolly.AddressMap{}, ErrMergeNeeded
 		}
+
+		if workingsetIDstr != "" {
+			// We verify that the working set is clean before deleting the branch. If this block doesn't return,
+			// the implication that it's safe to delete the branch ref and working set.
+			hasWs, err := am.Has(ctx, workingsetIDstr)
+			if err != nil {
+				return prolly.AddressMap{}, err
+			}
+
+			if hasWs {
+				currWSHash, err := am.Get(ctx, workingsetIDstr)
+				if err != nil {
+					return prolly.AddressMap{}, err
+				}
+				targetCmt, err := db.ReadValue(ctx, currWSHash)
+				if err != nil {
+					return prolly.AddressMap{}, err
+				}
+
+				if sm, ok := targetCmt.(types.SerialMessage); ok {
+
+					msg, err := serial.TryGetRootAsWorkingSet(sm, serial.MessagePrefixSz)
+					if err != nil {
+						return prolly.AddressMap{}, err
+					}
+
+					stagedHash := hash.New(msg.StagedRootAddrBytes())
+					workingSetHash := hash.New(msg.WorkingRootAddrBytes())
+					if stagedHash != workingSetHash {
+						return prolly.AddressMap{}, ErrDirtyWorkspace
+					}
+
+					targetHead, err := db.ReadValue(ctx, curr)
+					if err != nil {
+						return prolly.AddressMap{}, err
+					}
+					targetRootHash, err := GetCommitRootHash(targetHead)
+					if err != nil {
+						return prolly.AddressMap{}, err
+					}
+
+					if stagedHash != targetRootHash {
+						return prolly.AddressMap{}, ErrDirtyWorkspace
+					}
+
+					// No reason found to prevent deletion. Continue.
+				} else {
+					// This _should_ never happen. We've already ended up on this code path because we are on
+					// modern storage.
+					return prolly.AddressMap{}, errors.New("Modern Dolt Database required.")
+				}
+			}
+		}
+
 		ae := am.Editor()
 		err = ae.Delete(ctx, datasetIDstr)
 		if err != nil {
 			return prolly.AddressMap{}, err
 		}
+		if workingsetIDstr != "" {
+			err = ae.Delete(ctx, workingsetIDstr)
+			if err != nil {
+				return prolly.AddressMap{}, err
+			}
+		}
+
 		return ae.Flush(ctx)
 	})
 }

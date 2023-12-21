@@ -269,8 +269,12 @@ func DeleteRemoteBranch(ctx context.Context, targetRef ref.BranchRef, remoteRef 
 		return err
 	}
 
+	wsRef, err := ref.WorkingSetRefForHead(remoteRef)
+	if err != nil {
+		return err
+	}
 	if hasRef {
-		err = remoteDB.DeleteBranch(ctx, targetRef, nil)
+		err = remoteDB.DeleteBranchWithWorkspaceCheck(ctx, targetRef, nil, wsRef.String())
 	}
 
 	if err != nil {

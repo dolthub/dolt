@@ -121,11 +121,13 @@ type Database interface {
 
 	// Delete removes the Dataset named ds.ID() from the map at the root of
 	// the Database. If the Dataset is already not present in the map,
-	// returns success.
+	// returns success. If a workinset path is provided, the Delete will also verify that the working set doesn't
+	// have changes which will be lost by the Delete before deleting it as well. If an empty working set path is
+	// provided, then no changes to the working set will be made.
 	//
 	// If the update cannot be performed, e.g., because of a conflict,
 	// Delete returns an 'ErrMergeNeeded' error.
-	Delete(ctx context.Context, ds Dataset) (Dataset, error)
+	Delete(ctx context.Context, ds Dataset, workingSetPath string) (Dataset, error)
 
 	// SetHead ignores any lineage constraints (e.g. the current head being
 	// an ancestor of the new Commit) and force-sets a mapping from

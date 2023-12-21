@@ -171,8 +171,8 @@ func (db hooksDatabase) FastForward(ctx context.Context, ds datas.Dataset, newHe
 	return ds, err
 }
 
-func (db hooksDatabase) Delete(ctx context.Context, ds datas.Dataset) (datas.Dataset, error) {
-	ds, err := db.Database.Delete(ctx, ds)
+func (db hooksDatabase) Delete(ctx context.Context, ds datas.Dataset, workingSetPath string) (datas.Dataset, error) {
+	ds, err := db.Database.Delete(ctx, ds, workingSetPath)
 	if err == nil {
 		db.ExecuteCommitHooks(ctx, datas.NewHeadlessDataset(ds.Database(), ds.ID()), false)
 	}

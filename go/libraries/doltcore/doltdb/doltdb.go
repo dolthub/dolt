@@ -1205,12 +1205,16 @@ func (ddb *DoltDB) CopyWorkingSet(ctx context.Context, fromWSRef ref.WorkingSetR
 	return ddb.UpdateWorkingSet(ctx, toWSRef, ws, currWsHash, TodoWorkingSetMeta(), nil)
 }
 
-// DeleteBranch deletes the branch given, returning an error if it doesn't exist.
-func (ddb *DoltDB) DeleteBranch(ctx context.Context, branch ref.DoltRef, replicationStatus *ReplicationStatusController) error {
-	return ddb.deleteRef(ctx, branch, replicationStatus)
+func (ddb *DoltDB) DeleteBranchWithWorkspaceCheck(ctx context.Context, branch ref.DoltRef, replicationStatus *ReplicationStatusController, wsPath string) error {
+	return ddb.deleteRef(ctx, branch, replicationStatus, wsPath)
 }
 
-func (ddb *DoltDB) deleteRef(ctx context.Context, dref ref.DoltRef, replicationStatus *ReplicationStatusController) error {
+// DeleteBranch deletes the branch given, returning an error if it doesn't exist.
+func (ddb *DoltDB) DeleteBranch(ctx context.Context, branch ref.DoltRef, replicationStatus *ReplicationStatusController) error {
+	return ddb.deleteRef(ctx, branch, replicationStatus, "")
+}
+
+func (ddb *DoltDB) deleteRef(ctx context.Context, dref ref.DoltRef, replicationStatus *ReplicationStatusController, wsPath string) error {
 	ds, err := ddb.db.GetDataset(ctx, dref.String())
 
 	if err != nil {
@@ -1231,7 +1235,7 @@ func (ddb *DoltDB) deleteRef(ctx context.Context, dref ref.DoltRef, replicationS
 		}
 	}
 
-	_, err = ddb.db.withReplicationStatusController(replicationStatus).Delete(ctx, ds)
+	_, err = ddb.db.withReplicationStatusController(replicationStatus).Delete(ctx, ds, wsPath)
 	return err
 }
 
@@ -1375,12 +1379,12 @@ func (ddb *DoltDB) DeleteWorkingSet(ctx context.Context, workingSetRef ref.Worki
 		return err
 	}
 
-	_, err = ddb.db.Delete(ctx, ds)
+	_, err = ddb.db.Delete(ctx, ds, "")
 	return err
 }
 
 func (ddb *DoltDB) DeleteTag(ctx context.Context, tag ref.DoltRef) error {
-	err := ddb.deleteRef(ctx, tag, nil)
+	err := ddb.deleteRef(ctx, tag, nil, "")
 
 	if err == ErrBranchNotFound {
 		return ErrTagNotFound
@@ -1407,7 +1411,7 @@ func (ddb *DoltDB) NewWorkspaceAtCommit(ctx context.Context, workRef ref.DoltRef
 }
 
 func (ddb *DoltDB) DeleteWorkspace(ctx context.Context, workRef ref.DoltRef) error {
-	err := ddb.deleteRef(ctx, workRef, nil)
+	err := ddb.deleteRef(ctx, workRef, nil, "")
 
 	if err == ErrBranchNotFound {
 		return ErrWorkspaceNotFound
@@ -1504,7 +1508,7 @@ func (ddb *DoltDB) pruneUnreferencedDatasets(ctx context.Context) error {
 			return err
 		}
 
-		ds, err = ddb.db.Delete(ctx, ds)
+		ds, err = ddb.db.Delete(ctx, ds, "")
 		if err != nil {
 			return err
 		}
@@ -1748,7 +1752,7 @@ func (ddb *DoltDB) RemoveStashAtIdx(ctx context.Context, idx int) error {
 // RemoveAllStashes removes the stash list Dataset from the database,
 // which equivalent to removing Stash entries from the stash list.
 func (ddb *DoltDB) RemoveAllStashes(ctx context.Context) error {
-	err := ddb.deleteRef(ctx, ref.NewStashRef(), nil)
+	err := ddb.deleteRef(ctx, ref.NewStashRef(), nil, "")
 	if err == ErrBranchNotFound {
 		return nil
 	}
