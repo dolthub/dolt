@@ -1674,6 +1674,8 @@ func TestDoltRebase(t *testing.T) {
 			enginetest.TestScript(t, h, script)
 		}()
 	}
+
+	testMultiSessionScriptTests(t, DoltRebaseMultiSessionScriptTests)
 }
 
 func TestDoltRebasePrepared(t *testing.T) {

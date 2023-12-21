@@ -217,7 +217,12 @@ func startRebase(ctx *sql.Context, upstreamPoint string) error {
 		return err
 	}
 
-	newWorkingSet, err := workingSet.StartRebase(ctx, upstreamCommit, rebaseBranch)
+	branchRoots, err := dbData.Ddb.ResolveBranchRoots(ctx, ref.NewBranchRef(rebaseBranch))
+	if err != nil {
+		return err
+	}
+
+	newWorkingSet, err := workingSet.StartRebase(ctx, upstreamCommit, rebaseBranch, branchRoots.Working)
 	if err != nil {
 		return err
 	}
@@ -237,6 +242,39 @@ func startRebase(ctx *sql.Context, upstreamPoint string) error {
 		return fmt.Errorf("expected a dsess.RebasePlanDatabase implementation, but received a %T", db)
 	}
 	return rdb.SaveRebasePlan(ctx, rebasePlan)
+}
+
+// validateRebaseBranchHasntChanged checks that the branch being rebased hasn't been updated since the rebase started,
+// and returns an error if any changes are detected.
+func validateRebaseBranchHasntChanged(ctx *sql.Context, branch string, rebaseState *doltdb.RebaseState) error {
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	doltDb, ok := doltSession.GetDoltDB(ctx, ctx.GetCurrentDatabase())
+	if !ok {
+		return fmt.Errorf("unable to access DoltDB for database %s", ctx.GetCurrentDatabase())
+	}
+
+	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(branch))
+	if err != nil {
+		return err
+	}
+
+	resolvedWorkingSet, err := doltDb.ResolveWorkingSet(ctx, wsRef)
+	if err != nil {
+		return err
+	}
+	hash2, err := resolvedWorkingSet.StagedRoot().HashOf()
+	if err != nil {
+		return err
+	}
+	hash1, err := rebaseState.PreRebaseWorkingRoot().HashOf()
+	if err != nil {
+		return err
+	}
+	if hash1 != hash2 {
+		return fmt.Errorf("rebase aborted due to changes in branch %s", branch)
+	}
+
+	return nil
 }
 
 func validateWorkingSetCanStartRebase(ctx *sql.Context) error {
@@ -368,6 +406,12 @@ func continueRebase(ctx *sql.Context) error {
 
 	rebaseBranch := rebaseBranchWorkingSet.RebaseState().Branch()
 	rebaseWorkingBranch := "dolt_rebase_" + rebaseBranch
+
+	// Check that the branch being rebased hasn't been updated since the rebase started
+	err = validateRebaseBranchHasntChanged(ctx, rebaseBranch, rebaseBranchWorkingSet.RebaseState())
+	if err != nil {
+		return err
+	}
 
 	err = copyABranch(ctx, dbData, rebaseWorkingBranch, rebaseBranch, true, nil)
 	if err != nil {

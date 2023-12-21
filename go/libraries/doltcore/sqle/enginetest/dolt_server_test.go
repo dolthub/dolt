@@ -527,8 +527,10 @@ func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
 						} else if assertion.Expected != nil {
 							require.NoError(t, err)
 							assertResultsEqual(t, assertion.Expected, rows)
+						} else if assertion.SkipResultsCheck {
+							// no-op
 						} else {
-							require.Fail(t, "unsupported ScriptTestAssertion property: %v", assertion)
+							t.Fatalf("unsupported ScriptTestAssertion property: %v", assertion)
 						}
 						if rows != nil {
 							require.NoError(t, rows.Close())

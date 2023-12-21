@@ -240,11 +240,6 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
-
-	/*
-			TODO: Other cases?
-		        - TEST: If another session updates the branch being rebased while a rebase operation is in progress, then the rebase should fail
-	*/
 	{
 		Name: "dolt_rebase: abort properly cleans up",
 		SetUpScript: []string{
@@ -581,6 +576,54 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 					{"creating table t"},
 					{"Initialize data repository"},
 				},
+			},
+		},
+	},
+}
+
+var DoltRebaseMultiSessionScriptTests = []queries.ScriptTest{
+	{
+		// When the branch HEAD is changed while a rebase is in progress, the rebase should fail
+		Name: "dolt_rebase errors: branch HEAD changed during rebase",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"call dolt_commit('-Am', 'creating table t');",
+			"call dolt_checkout('-b', 'branch1');",
+			"insert into t values (1);",
+			"call dolt_commit('-am', 'inserting row 1');",
+			"insert into t values (2);",
+			"call dolt_commit('-am', 'inserting row 2');",
+			"insert into t values (3);",
+			"call dolt_commit('-am', 'inserting row 3');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ select active_branch();",
+				Expected: []sql.Row{{"branch1"}},
+			},
+			{
+				Query:    "/* client b */ call dolt_checkout('branch1');",
+				Expected: []sql.Row{{0, "Switched to branch 'branch1'"}},
+			},
+			{
+				Query:    "/* client b */ select active_branch();",
+				Expected: []sql.Row{{"branch1"}},
+			},
+			{
+				Query:    "/* client a */ call dolt_rebase('-i', 'main');",
+				Expected: []sql.Row{{0, "interactive rebase started"}},
+			},
+			{
+				Query:    "/* client b */ insert into t values (1000);",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "/* client b */ call dolt_commit('-am', 'inserting row 1000');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:          "/* client a */ call dolt_rebase('--continue');",
+				ExpectedErrStr: "Error 1105 (HY000): rebase aborted due to changes in branch branch1",
 			},
 		},
 	},

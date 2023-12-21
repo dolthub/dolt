@@ -245,10 +245,17 @@ func (ws WorkingSet) StartMerge(commit *Commit, commitSpecStr string) *WorkingSe
 	return &ws
 }
 
-func (ws WorkingSet) StartRebase(ctx *sql.Context, ontoCommit *Commit, branch string) (*WorkingSet, error) {
+// StartRebase adds rebase tracking metadata to a new working set instance and returns it. Callers must then persist
+// the returned working set in a session in order for the new working set to be recorded. |ontoCommit| specifies the
+// commit that serves as the base commit for the new commits that will be created by the rebase process, |branch| is
+// the branch that is being rebased, and |previousRoot| is root value of the branch being rebased. The HEAD and STAGED
+// root values of the branch being rebased must match |previousRoot|; WORKING may be a different root value, but ONLY
+// if it contains only ignored tables.
+func (ws WorkingSet) StartRebase(ctx *sql.Context, ontoCommit *Commit, branch string, previousRoot *RootValue) (*WorkingSet, error) {
+
 	ws.rebaseState = &RebaseState{
 		ontoCommit:       ontoCommit,
-		preRebaseWorking: ws.workingRoot,
+		preRebaseWorking: previousRoot,
 		branch:           branch,
 	}
 
