@@ -252,7 +252,6 @@ func (ws WorkingSet) StartMerge(commit *Commit, commitSpecStr string) *WorkingSe
 // root values of the branch being rebased must match |previousRoot|; WORKING may be a different root value, but ONLY
 // if it contains only ignored tables.
 func (ws WorkingSet) StartRebase(ctx *sql.Context, ontoCommit *Commit, branch string, previousRoot *RootValue) (*WorkingSet, error) {
-
 	ws.rebaseState = &RebaseState{
 		ontoCommit:       ontoCommit,
 		preRebaseWorking: previousRoot,

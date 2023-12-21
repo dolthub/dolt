@@ -1686,7 +1686,7 @@ func (db Database) LoadRebasePlan(ctx *sql.Context) (*rebase.RebasePlan, error) 
 			return nil, fmt.Errorf("invalid enum value in rebase plan: %v (%T)", row[1], row[1])
 		}
 
-		rebasePlan.Members = append(rebasePlan.Members, rebase.RebasePlanMember{
+		rebasePlan.Steps = append(rebasePlan.Steps, rebase.RebasePlanStep{
 			RebaseOrder: row[0].(decimal.Decimal),
 			Action:      rebaseAction,
 			CommitHash:  row[2].(string),
@@ -1720,7 +1720,7 @@ func (db Database) SaveRebasePlan(ctx *sql.Context, plan *rebase.RebasePlan) err
 	}
 
 	inserter := writeableDoltTable.Inserter(ctx)
-	for _, planMember := range plan.Members {
+	for _, planMember := range plan.Steps {
 		actionEnumValue := dprocedures.RebaseActionEnumType.IndexOf(strings.ToLower(planMember.Action))
 		if actionEnumValue == -1 {
 			return fmt.Errorf("invalid rebase action: %s", planMember.Action)

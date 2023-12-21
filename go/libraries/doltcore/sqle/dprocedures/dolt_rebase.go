@@ -387,8 +387,8 @@ func continueRebase(ctx *sql.Context) error {
 		return err
 	}
 
-	for _, step := range rebasePlan.Members {
-		err = processRebaseAction(ctx, &step)
+	for _, step := range rebasePlan.Steps {
+		err = processRebasePlanStep(ctx, &step)
 		if err != nil {
 			return err
 		}
@@ -438,7 +438,7 @@ func continueRebase(ctx *sql.Context) error {
 	}, doltSession.Provider(), nil)
 }
 
-func processRebaseAction(ctx *sql.Context, planStep *rebase.RebasePlanMember) error {
+func processRebasePlanStep(ctx *sql.Context, planStep *rebase.RebasePlanStep) error {
 	// Make sure we have a transaction opened for the session
 	// NOTE: After our first call to cherry-pick, the tx is committed, so a new tx needs to be started
 	//       as we process additional rebase actions.

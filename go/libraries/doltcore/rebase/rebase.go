@@ -50,12 +50,12 @@ type RebasePlanDatabase interface {
 // RebasePlan describes the plan for a rebase operation, where commits are reordered,
 // or adjusted, and then replayed on top of a base commit to form a new commit history.
 type RebasePlan struct {
-	Members []RebasePlanMember
+	Steps []RebasePlanStep
 }
 
-// RebasePlanMember describes a single step in a rebase plan, such as dropping a
+// RebasePlanStep describes a single step in a rebase plan, such as dropping a
 // commit, squashing a commit into the previous commit, etc.
-type RebasePlanMember struct {
+type RebasePlanStep struct {
 	RebaseOrder decimal.Decimal
 	Action      string
 	CommitHash  string
@@ -89,7 +89,7 @@ func CreateDefaultRebasePlan(ctx *sql.Context, startCommit, upstreamCommit *dolt
 			return nil, err
 		}
 
-		plan.Members = append(plan.Members, RebasePlanMember{
+		plan.Steps = append(plan.Steps, RebasePlanStep{
 			RebaseOrder: decimal.NewFromFloat32(float32(len(commits) - idx)),
 			Action:      RebaseActionPick,
 			CommitHash:  hash.String(),
@@ -105,10 +105,10 @@ func CreateDefaultRebasePlan(ctx *sql.Context, startCommit, upstreamCommit *dolt
 func ValidateRebasePlan(ctx *sql.Context, plan *RebasePlan) error {
 	seenPick := false
 	seenReword := false
-	for i, step := range plan.Members {
+	for i, step := range plan.Steps {
 		// As a sanity check, make sure the rebase order is ascending. This shouldn't EVER happen because the
 		// results are sorted from the database query, but double check while we're validating the plan.
-		if i > 0 && plan.Members[i-1].RebaseOrder.GreaterThanOrEqual(step.RebaseOrder) {
+		if i > 0 && plan.Steps[i-1].RebaseOrder.GreaterThanOrEqual(step.RebaseOrder) {
 			return fmt.Errorf("invalid rebase plan: rebase order must be ascending")
 		}
 
