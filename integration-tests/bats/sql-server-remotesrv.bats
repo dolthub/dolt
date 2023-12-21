@@ -590,6 +590,10 @@ GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
     dolt clone http://localhost:$APIPORT/remote cloned_db -u $SQL_USER
     cd cloned_db
 
+    run dolt push origin --user $SQL_USER :new_branch
+    [[ "$status" -ne 0 ]] || false
+    [[ "$output" =~ "target has uncommitted changes. --force required to overwrite" ]] || false
+
     run dolt push origin --force --user $SQL_USER :new_branch
     [[ "$status" -eq 0 ]] || false
 
