@@ -632,3 +632,32 @@ GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
     [[ "$status" -ne 0 ]] || false
     [[ "$output" =~ "database not found: nodb" ]] || false # NM4
 }
+
+@test "sql-server-remotesrv: create remote branch from remotesapi port as super user" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q 'create table names (name varchar(10) primary key);'
+    dolt sql -q 'insert into names (name) values ("abe"), ("betsy"), ("calvin");'
+    dolt add names
+    dolt commit -m 'initial names.'
+
+    APIPORT=$( definePORT )
+    export DOLT_REMOTE_PASSWORD="rootpass"
+    export SQL_USER="root"
+    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT
+
+    cd ../
+    dolt clone http://localhost:$APIPORT/remote cloned_db -u $SQL_USER
+    cd cloned_db
+
+    run dolt push origin --user $SQL_USER main:new_branch
+    [[ "$status" -eq 0 ]] || false
+    [[ "$output" =~ "* [new branch]          main -> new_branch" ]] || false
+
+    cd ../remote
+    run dolt branch -a
+    [[ "$output" =~ "new_branch" ]] || false
+    [[ "$output" =~ "main" ]] || false
+}
+
