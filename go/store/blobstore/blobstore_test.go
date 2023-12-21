@@ -181,7 +181,7 @@ func TestGetMissing(t *testing.T) {
 // in an io.Reader
 func CheckAndPutBytes(ctx context.Context, bs Blobstore, expectedVersion, key string, data []byte) (string, error) {
 	reader := bytes.NewReader(data)
-	return bs.CheckAndPut(ctx, expectedVersion, key, reader)
+	return bs.CheckAndPut(ctx, expectedVersion, key, int64(len(data)), reader)
 }
 
 func testCheckAndPutError(t *testing.T, bs Blobstore) {
@@ -438,7 +438,7 @@ func testConcatenate(t *testing.T, bs Blobstore, cnt int) {
 		b := make([]byte, 64)
 		rand.Read(b)
 		keys[i] = blobName(b)
-		_, err := bs.Put(ctx, keys[i], bytes.NewReader(b))
+		_, err := bs.Put(ctx, keys[i], int64(len(b)), bytes.NewReader(b))
 		require.NoError(t, err)
 		blobs[i] = blob{
 			key:  keys[i],

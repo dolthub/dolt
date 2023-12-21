@@ -131,7 +131,7 @@ func readCloserForFileRange(f *os.File, br BlobRange) (io.ReadCloser, error) {
 }
 
 // Put sets the blob and the version for a key
-func (bs *LocalBlobstore) Put(ctx context.Context, key string, reader io.Reader) (string, error) {
+func (bs *LocalBlobstore) Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (string, error) {
 	// written as temp file and renamed so the file corresponding to this key
 	// never exists in a partially written state
 	tempFile, err := func() (string, error) {
@@ -177,7 +177,7 @@ func fLock(lockFilePath string) (*fslock.Lock, error) {
 
 // CheckAndPut will check the current version of a blob against an expectedVersion, and if the
 // versions match it will update the data and version associated with the key
-func (bs *LocalBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, reader io.Reader) (string, error) {
+func (bs *LocalBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
 	path := filepath.Join(bs.RootDir, key) + bsExt
 	lockFilePath := path + lockExt
 	lck, err := fLock(lockFilePath)
@@ -202,7 +202,7 @@ func (bs *LocalBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key 
 		return "", CheckAndPutError{key, expectedVersion, ver}
 	}
 
-	return bs.Put(ctx, key, reader)
+	return bs.Put(ctx, key, totalSize, reader)
 }
 
 // Exists returns true if a blob exists for the given key, and false if it does not.
@@ -219,15 +219,23 @@ func (bs *LocalBlobstore) Exists(ctx context.Context, key string) (bool, error) 
 }
 
 func (bs *LocalBlobstore) Concatenate(ctx context.Context, key string, sources []string) (ver string, err error) {
+	totalSize := int64(0)
 	readers := make([]io.Reader, len(sources))
 	for i := range readers {
 		path := filepath.Join(bs.RootDir, sources[i]) + bsExt
-		if readers[i], err = os.Open(path); err != nil {
+		f, err := os.Open(path)
+		if err != nil {
 			return "", err
 		}
+		info, err := f.Stat()
+		if err != nil {
+			return "", err
+		}
+		totalSize += info.Size()
+		readers[i] = f
 	}
 
-	ver, err = bs.Put(ctx, key, io.MultiReader(readers...))
+	ver, err = bs.Put(ctx, key, totalSize, io.MultiReader(readers...))
 
 	for i := range readers {
 		if cerr := readers[i].(io.Closer).Close(); err != nil {

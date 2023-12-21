@@ -122,7 +122,13 @@ func (bs *OCIBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 	if err == nil {
 		return true, nil
 	}
-	return false, nil
+	if serr, ok := common.IsServiceError(err); ok {
+		// handle not found code
+		if serr.GetHTTPStatusCode() == 404 {
+			return false, nil
+		}
+	}
+	return false, err
 }
 
 // Get retrieves an io.reader for the portion of a blob specified by br along with its version
@@ -212,14 +218,14 @@ func (bs *OCIBlobstore) getObject(ctx context.Context, absKey, namespace, etag s
 }
 
 // Put sets the blob and the version for a key
-func (bs *OCIBlobstore) Put(ctx context.Context, key string, reader io.Reader) (string, error) {
-	return bs.upload(ctx, "", key, reader)
+func (bs *OCIBlobstore) Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (string, error) {
+	return bs.upload(ctx, "", key, totalSize, reader)
 }
 
 // CheckAndPut will check the current version of a blob against an expectedVersion, and if the
 // versions match it will update the data and version associated with the key
-func (bs *OCIBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, reader io.Reader) (string, error) {
-	return bs.upload(ctx, expectedVersion, key, reader)
+func (bs *OCIBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
+	return bs.upload(ctx, expectedVersion, key, totalSize, reader)
 }
 
 // At the time of this implementation, Oracle Cloud does not provide a way to create composite objects
@@ -228,18 +234,18 @@ func (bs *OCIBlobstore) Concatenate(ctx context.Context, key string, sources []s
 	panic("concatenate is unimplemented on the oci blobstore")
 }
 
-func (bs *OCIBlobstore) upload(ctx context.Context, expectedVersion, key string, reader io.Reader) (string, error) {
-	numParts, totalSize, r, err := getUploadInfo(defaultPartSize, maxPartNum, reader)
-	if err != nil {
-		return "", err
-	}
+type Lenner interface {
+	Len() int
+}
 
+func (bs *OCIBlobstore) upload(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
+	numParts, _ := getNumPartsAndPartSize(totalSize, defaultPartSize, maxPartNum)
 	if totalSize == 0 {
 		return "", errors.New("failed to upload to oci blobstore, no data in reader")
 	} else if totalSize < minPartSize {
-		return bs.checkAndPut(ctx, expectedVersion, key, totalSize, r)
+		return bs.checkAndPut(ctx, expectedVersion, key, totalSize, reader)
 	} else {
-		return bs.multipartUpload(ctx, expectedVersion, key, numParts, totalSize, r)
+		return bs.multipartUpload(ctx, expectedVersion, key, numParts, totalSize, reader)
 	}
 }
 
@@ -742,27 +748,27 @@ func getDownloadInfo(br BlobRange, contentLength *int64) (int64, int64, int64, e
 	return requestedSize, totalSize, offSet, nil
 }
 
-func getUploadInfo(partSize, maxPartNum int, r io.Reader) (int, int64, io.Reader, error) {
-	var buf bytes.Buffer
-	tee := io.TeeReader(r, &buf)
-
-	totalSize := int64(0)
-	for {
-		b := make([]byte, partSize)
-
-		n, err := tee.Read(b)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return 0, 0, nil, err
-		}
-		totalSize += int64(n)
-	}
-
-	numParts, _ := getNumPartsAndPartSize(totalSize, int64(partSize), int64(maxPartNum))
-	return numParts, totalSize, &buf, nil
-}
+//func getUploadInfo(partSize, maxPartNum int, r io.Reader) (int, int64, io.Reader, error) {
+//	var buf bytes.Buffer
+//	tee := io.TeeReader(r, &buf)
+//
+//	totalSize := int64(0)
+//	for {
+//		b := make([]byte, partSize)
+//
+//		n, err := tee.Read(b)
+//		if err != nil {
+//			if err == io.EOF {
+//				break
+//			}
+//			return 0, 0, nil, err
+//		}
+//		totalSize += int64(n)
+//	}
+//
+//	numParts, _ := getNumPartsAndPartSize(totalSize, int64(partSize), int64(maxPartNum))
+//	return numParts, totalSize, &buf, nil
+//}
 
 func getNumPartsAndPartSize(totalSize, partSize, maxPartNum int64) (int, int64) {
 	ps := int64(math.Ceil(float64(totalSize) / float64(maxPartNum)))

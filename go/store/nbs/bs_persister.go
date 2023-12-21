@@ -59,11 +59,11 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver 
 	// first write table records and tail (index+footer) as separate blobs
 	eg, ectx := errgroup.WithContext(ctx)
 	eg.Go(func() (err error) {
-		_, err = bsp.bs.Put(ectx, name+tableRecordsExt, bytes.NewBuffer(records))
+		_, err = bsp.bs.Put(ectx, name+tableRecordsExt, int64(len(records)), bytes.NewBuffer(records))
 		return
 	})
 	eg.Go(func() (err error) {
-		_, err = bsp.bs.Put(ectx, name+tableTailExt, bytes.NewBuffer(tail))
+		_, err = bsp.bs.Put(ectx, name+tableTailExt, int64(len(tail)), bytes.NewBuffer(tail))
 		return
 	})
 	if err = eg.Wait(); err != nil {
@@ -140,7 +140,8 @@ func (bsp *blobstorePersister) getRecordsSubObject(ctx context.Context, cs chunk
 		return "", err
 	}
 	off := tableTailOffset(cs.currentSize(), cnt)
-	rng := blobstore.NewBlobRange(0, int64(off))
+	l := int64(off)
+	rng := blobstore.NewBlobRange(0, l)
 
 	rdr, _, err := bsp.bs.Get(ctx, cs.hash().String(), rng)
 	if err != nil {
@@ -152,7 +153,7 @@ func (bsp *blobstorePersister) getRecordsSubObject(ctx context.Context, cs chunk
 		}
 	}()
 
-	if _, err = bsp.bs.Put(ctx, name, rdr); err != nil {
+	if _, err = bsp.bs.Put(ctx, name, l, rdr); err != nil {
 		return "", err
 	}
 	return name, nil
@@ -196,10 +197,10 @@ func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, n
 	rr, ok := r.(io.ReaderAt)
 	if !ok {
 		// sequentially write chunk records then tail
-		if _, err := bsp.bs.Put(ctx, name+tableRecordsExt, lr); err != nil {
+		if _, err := bsp.bs.Put(ctx, name+tableRecordsExt, off, lr); err != nil {
 			return err
 		}
-		if _, err := bsp.bs.Put(ctx, name+tableTailExt, r); err != nil {
+		if _, err := bsp.bs.Put(ctx, name+tableTailExt, int64(fileSz), r); err != nil {
 			return err
 		}
 	} else {
@@ -211,11 +212,11 @@ func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, n
 			if _, err := rr.ReadAt(buf, off); err != nil {
 				return err
 			}
-			_, err := bsp.bs.Put(ectx, name+tableTailExt, bytes.NewBuffer(buf))
+			_, err := bsp.bs.Put(ectx, name+tableTailExt, int64(len(buf)), bytes.NewBuffer(buf))
 			return err
 		})
 		eg.Go(func() error {
-			_, err := bsp.bs.Put(ectx, name+tableRecordsExt, lr)
+			_, err := bsp.bs.Put(ectx, name+tableRecordsExt, off, lr)
 			return err
 		})
 		if err := eg.Wait(); err != nil {

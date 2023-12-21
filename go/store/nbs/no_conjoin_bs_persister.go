@@ -51,7 +51,7 @@ func (bsp *noConjoinBlobstorePersister) Persist(ctx context.Context, mt *memTabl
 	eg, ectx := errgroup.WithContext(ctx)
 	eg.Go(func() (err error) {
 		fmt.Fprintf(color.Output, "Persist: bs.Put: name: %s\n", name)
-		_, err = bsp.bs.Put(ectx, name, bytes.NewBuffer(data))
+		_, err = bsp.bs.Put(ectx, name, int64(len(data)), bytes.NewBuffer(data))
 		return
 	})
 	if err = eg.Wait(); err != nil {
@@ -64,7 +64,7 @@ func (bsp *noConjoinBlobstorePersister) Persist(ctx context.Context, mt *memTabl
 
 // ConjoinAll implements tablePersister.
 func (bsp *noConjoinBlobstorePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
-	return emptyChunkSource{}, func() {}, nil
+	return emptyChunkSource{}, func() {}, fmt.Errorf("no conjoin blobstore persister does not implement ConjoinAll")
 }
 
 // Open a table named |name|, containing |chunkCount| chunks.
@@ -98,6 +98,6 @@ func (bsp *noConjoinBlobstorePersister) CopyTableFile(ctx context.Context, r io.
 		return fmt.Errorf("table file size %d too small for chunk count %d", fileSz, chunkCount)
 	}
 
-	_, err := bsp.bs.Put(ctx, name, r)
+	_, err := bsp.bs.Put(ctx, name, int64(fileSz), r)
 	return err
 }

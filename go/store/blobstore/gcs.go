@@ -122,7 +122,7 @@ func writeObj(writer *storage.Writer, reader io.Reader) (string, error) {
 }
 
 // Put sets the blob and the version for a key
-func (bs *GCSBlobstore) Put(ctx context.Context, key string, reader io.Reader) (string, error) {
+func (bs *GCSBlobstore) Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (string, error) {
 	absKey := path.Join(bs.prefix, key)
 	oh := bs.bucket.Object(absKey)
 	writer := oh.NewWriter(ctx)
@@ -132,7 +132,7 @@ func (bs *GCSBlobstore) Put(ctx context.Context, key string, reader io.Reader) (
 
 // CheckAndPut will check the current version of a blob against an expectedVersion, and if the
 // versions match it will update the data and version associated with the key
-func (bs *GCSBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, reader io.Reader) (string, error) {
+func (bs *GCSBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
 	absKey := path.Join(bs.prefix, key)
 	oh := bs.bucket.Object(absKey)
 

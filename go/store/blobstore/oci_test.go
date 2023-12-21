@@ -31,36 +31,6 @@ import (
 	"testing"
 )
 
-func TestGetUploadInfo(t *testing.T) {
-	buf := make([]byte, 35*1024)
-	_, err := rand.Read(buf)
-	assert.NoError(t, err)
-
-	r := bytes.NewReader(buf)
-
-	partSize := 55
-	numParts, totalSize, nr, err := getUploadInfo(partSize, maxPartNum, r)
-	assert.NoError(t, err)
-	assert.NotNil(t, nr)
-	assert.NotZero(t, numParts)
-	assert.NotZero(t, totalSize)
-
-	total := 0
-	newBuf := make([]byte, 35*1024)
-	for {
-		n, err := nr.Read(newBuf)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			panic(err)
-		}
-		total += n
-	}
-	assert.Equal(t, total, 35*1024)
-	assert.Equal(t, len(buf), len(newBuf))
-}
-
 func TestGetDownloadInfo(t *testing.T) {
 	tests := []struct {
 		description    string
@@ -162,9 +132,9 @@ func TestUploadParts(t *testing.T) {
 
 	r := bytes.NewReader(buf)
 
-	partSize := 1024
-	numParts, totalSize, nr, err := getUploadInfo(partSize, maxPartNum, r)
-	assert.NoError(t, err)
+	totalSize := int64(len(buf))
+	partSize := int64(1024)
+	numParts, _ := getNumPartsAndPartSize(totalSize, partSize, maxPartNum)
 
 	collector := &uploadCollector{
 		m:              &sync.Mutex{},
@@ -189,7 +159,7 @@ func TestUploadParts(t *testing.T) {
 		return cp, nil
 	}
 
-	completedParts, err := uploadParts(context.Background(), "test-object", "test-upload-id", numParts, 3, totalSize, 55*1024, nr, f)
+	completedParts, err := uploadParts(context.Background(), "test-object", "test-upload-id", numParts, 3, totalSize, 55*1024, r, f)
 	assert.NoError(t, err)
 	assert.NotNil(t, completedParts)
 	assert.Equal(t, len(completedParts), numParts)
