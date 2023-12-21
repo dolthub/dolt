@@ -269,7 +269,7 @@ func DeleteRemoteBranch(ctx context.Context, targetRef ref.BranchRef, remoteRef 
 		return err
 	}
 
-	wsRef, err := ref.WorkingSetRefForHead(remoteRef)
+	wsRef, err := ref.WorkingSetRefForHead(targetRef)
 	if err != nil {
 		return err
 	}
