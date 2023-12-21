@@ -32,12 +32,15 @@ func GenerateCreateTableColumnDefinition(col schema.Column, tableCollation sql.C
 
 // GenerateCreateTableIndentedColumnDefinition returns column definition for CREATE TABLE statement with no indentation
 func GenerateCreateTableIndentedColumnDefinition(col schema.Column, tableCollation sql.CollationID) string {
-	var defaultVal, genVal *sql.ColumnDefaultValue
+	var defaultVal, genVal, onUpdateVal *sql.ColumnDefaultValue
 	if col.Default != "" {
 		defaultVal = sql.NewUnresolvedColumnDefaultValue(col.Default)
 	}
 	if col.Generated != "" {
 		genVal = sql.NewUnresolvedColumnDefaultValue(col.Generated)
+	}
+	if col.OnUpdate != "" {
+		onUpdateVal = sql.NewUnresolvedColumnDefaultValue(col.OnUpdate)
 	}
 
 	return sql.GenerateCreateTableColumnDefinition(
@@ -50,7 +53,8 @@ func GenerateCreateTableIndentedColumnDefinition(col schema.Column, tableCollati
 			Comment:       col.Comment,
 			Generated:     genVal,
 			Virtual:       col.Virtual,
-		}, col.Default, tableCollation)
+			OnUpdate:      onUpdateVal,
+		}, col.Default, col.OnUpdate, tableCollation)
 }
 
 // GenerateCreateTableIndexDefinition returns index definition for CREATE TABLE statement with indentation of 2 spaces
