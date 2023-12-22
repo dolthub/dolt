@@ -121,11 +121,13 @@ type Database interface {
 
 	// Delete removes the Dataset named ds.ID() from the map at the root of
 	// the Database. If the Dataset is already not present in the map,
-	// returns success.
+	// returns success. If a workinset path is provided, the Delete will also verify that the working set doesn't
+	// have changes which will be lost by the Delete before deleting it as well. If an empty working set path is
+	// provided, then no changes to the working set will be made.
 	//
 	// If the update cannot be performed, e.g., because of a conflict,
 	// Delete returns an 'ErrMergeNeeded' error.
-	Delete(ctx context.Context, ds Dataset) (Dataset, error)
+	Delete(ctx context.Context, ds Dataset, workingSetPath string) (Dataset, error)
 
 	// SetHead ignores any lineage constraints (e.g. the current head being
 	// an ancestor of the new Commit) and force-sets a mapping from
@@ -136,14 +138,18 @@ type Database interface {
 	// All values that have been written to this Database are guaranteed to
 	// be persistent after SetHead(). If the update cannot be performed,
 	// error will be non-nil.
-	SetHead(ctx context.Context, ds Dataset, newHeadAddr hash.Hash) (Dataset, error)
+	// The workingSetPath is the path to the working set that should be used for updating the working set. If one
+	// is not provided, no working set update will be performed.
+	SetHead(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, workingSetPath string) (Dataset, error)
 
 	// FastForward takes a types.Ref to a Commit object and makes it the new
 	// Head of ds iff it is a descendant of the current Head. Intended to be
 	// used e.g. after a call to Pull(). If the update cannot be performed,
 	// e.g., because another process moved the current Head out from under
 	// you, err will be non-nil.
-	FastForward(ctx context.Context, ds Dataset, newHeadAddr hash.Hash) (Dataset, error)
+	// The workingSetPath is the path to the working set that should be used for updating the working set. If one
+	// is not provided, no working set update will be performed.
+	FastForward(ctx context.Context, ds Dataset, newHeadAddr hash.Hash, workingSetPath string) (Dataset, error)
 
 	// Stats may return some kind of struct that reports statistics about the
 	// ChunkStore that backs this Database instance. The type is

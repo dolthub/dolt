@@ -236,7 +236,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitMetaGeneratorAndDefaultBranch(
 		return errors.New("commit without head")
 	}
 
-	_, err = ddb.db.SetHead(ctx, ds, headAddr)
+	_, err = ddb.db.SetHead(ctx, ds, headAddr, "")
 	return err
 }
 
@@ -587,6 +587,30 @@ func (ddb *DoltDB) Commit(ctx context.Context, valHash hash.Hash, dref ref.DoltR
 	return ddb.CommitWithParentSpecs(ctx, valHash, dref, nil, cm)
 }
 
+// FastForwardWithWorkspaceCheck will perform a fast forward update of the branch given to the commit given, but only
+// if the working set is in sync with the head of the branch given. This is used in the course of pushing to a remote.
+// If the target doesn't currently have the working set ref, then no working set change will be made.
+func (ddb *DoltDB) FastForwardWithWorkspaceCheck(ctx context.Context, branch ref.DoltRef, commit *Commit) error {
+	ds, err := ddb.db.GetDataset(ctx, branch.String())
+	if err != nil {
+		return err
+	}
+
+	addr, err := commit.HashOf()
+	if err != nil {
+		return err
+	}
+
+	wsRef, err := ref.WorkingSetRefForHead(branch)
+	if err != nil {
+		return err
+	}
+
+	_, err = ddb.db.FastForward(ctx, ds, addr, wsRef.String())
+
+	return err
+}
+
 // FastForward fast-forwards the branch given to the commit given.
 func (ddb *DoltDB) FastForward(ctx context.Context, branch ref.DoltRef, commit *Commit) error {
 	addr, err := commit.HashOf()
@@ -604,7 +628,7 @@ func (ddb *DoltDB) FastForwardToHash(ctx context.Context, branch ref.DoltRef, ha
 		return err
 	}
 
-	_, err = ddb.db.FastForward(ctx, ds, hash)
+	_, err = ddb.db.FastForward(ctx, ds, hash, "")
 
 	return err
 }
@@ -634,6 +658,28 @@ func (ddb *DoltDB) SetHeadToCommit(ctx context.Context, ref ref.DoltRef, cm *Com
 	return ddb.SetHead(ctx, ref, addr)
 }
 
+// SetHeadAndWorkingSetToCommit sets the given ref to the given commit, and ensures that working is in sync
+// with the head. Used for 'force' pushes.
+func (ddb *DoltDB) SetHeadAndWorkingSetToCommit(ctx context.Context, rf ref.DoltRef, cm *Commit) error {
+	addr, err := cm.HashOf()
+	if err != nil {
+		return err
+	}
+
+	wsRef, err := ref.WorkingSetRefForHead(rf)
+	if err != nil {
+		return err
+	}
+
+	ds, err := ddb.db.GetDataset(ctx, rf.String())
+	if err != nil {
+		return err
+	}
+
+	_, err = ddb.db.SetHead(ctx, ds, addr, wsRef.String())
+	return err
+}
+
 func (ddb *DoltDB) SetHead(ctx context.Context, ref ref.DoltRef, addr hash.Hash) error {
 	ds, err := ddb.db.GetDataset(ctx, ref.String())
 
@@ -641,7 +687,7 @@ func (ddb *DoltDB) SetHead(ctx context.Context, ref ref.DoltRef, addr hash.Hash)
 		return err
 	}
 
-	_, err = ddb.db.SetHead(ctx, ds, addr)
+	_, err = ddb.db.SetHead(ctx, ds, addr, "")
 	return err
 }
 
@@ -1095,7 +1141,7 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 		return err
 	}
 
-	_, err = ddb.db.SetHead(ctx, ds, addr)
+	_, err = ddb.db.SetHead(ctx, ds, addr, "")
 	if err != nil {
 		return err
 	}
@@ -1159,12 +1205,16 @@ func (ddb *DoltDB) CopyWorkingSet(ctx context.Context, fromWSRef ref.WorkingSetR
 	return ddb.UpdateWorkingSet(ctx, toWSRef, ws, currWsHash, TodoWorkingSetMeta(), nil)
 }
 
-// DeleteBranch deletes the branch given, returning an error if it doesn't exist.
-func (ddb *DoltDB) DeleteBranch(ctx context.Context, branch ref.DoltRef, replicationStatus *ReplicationStatusController) error {
-	return ddb.deleteRef(ctx, branch, replicationStatus)
+func (ddb *DoltDB) DeleteBranchWithWorkspaceCheck(ctx context.Context, branch ref.DoltRef, replicationStatus *ReplicationStatusController, wsPath string) error {
+	return ddb.deleteRef(ctx, branch, replicationStatus, wsPath)
 }
 
-func (ddb *DoltDB) deleteRef(ctx context.Context, dref ref.DoltRef, replicationStatus *ReplicationStatusController) error {
+// DeleteBranch deletes the branch given, returning an error if it doesn't exist.
+func (ddb *DoltDB) DeleteBranch(ctx context.Context, branch ref.DoltRef, replicationStatus *ReplicationStatusController) error {
+	return ddb.deleteRef(ctx, branch, replicationStatus, "")
+}
+
+func (ddb *DoltDB) deleteRef(ctx context.Context, dref ref.DoltRef, replicationStatus *ReplicationStatusController, wsPath string) error {
 	ds, err := ddb.db.GetDataset(ctx, dref.String())
 
 	if err != nil {
@@ -1185,7 +1235,7 @@ func (ddb *DoltDB) deleteRef(ctx context.Context, dref ref.DoltRef, replicationS
 		}
 	}
 
-	_, err = ddb.db.withReplicationStatusController(replicationStatus).Delete(ctx, ds)
+	_, err = ddb.db.withReplicationStatusController(replicationStatus).Delete(ctx, ds, wsPath)
 	return err
 }
 
@@ -1329,12 +1379,12 @@ func (ddb *DoltDB) DeleteWorkingSet(ctx context.Context, workingSetRef ref.Worki
 		return err
 	}
 
-	_, err = ddb.db.Delete(ctx, ds)
+	_, err = ddb.db.Delete(ctx, ds, "")
 	return err
 }
 
 func (ddb *DoltDB) DeleteTag(ctx context.Context, tag ref.DoltRef) error {
-	err := ddb.deleteRef(ctx, tag, nil)
+	err := ddb.deleteRef(ctx, tag, nil, "")
 
 	if err == ErrBranchNotFound {
 		return ErrTagNotFound
@@ -1355,13 +1405,13 @@ func (ddb *DoltDB) NewWorkspaceAtCommit(ctx context.Context, workRef ref.DoltRef
 		return err
 	}
 
-	ds, err = ddb.db.SetHead(ctx, ds, addr)
+	ds, err = ddb.db.SetHead(ctx, ds, addr, "")
 
 	return err
 }
 
 func (ddb *DoltDB) DeleteWorkspace(ctx context.Context, workRef ref.DoltRef) error {
-	err := ddb.deleteRef(ctx, workRef, nil)
+	err := ddb.deleteRef(ctx, workRef, nil, "")
 
 	if err == ErrBranchNotFound {
 		return ErrWorkspaceNotFound
@@ -1458,7 +1508,7 @@ func (ddb *DoltDB) pruneUnreferencedDatasets(ctx context.Context) error {
 			return err
 		}
 
-		ds, err = ddb.db.Delete(ctx, ds)
+		ds, err = ddb.db.Delete(ctx, ds, "")
 		if err != nil {
 			return err
 		}
@@ -1702,7 +1752,7 @@ func (ddb *DoltDB) RemoveStashAtIdx(ctx context.Context, idx int) error {
 // RemoveAllStashes removes the stash list Dataset from the database,
 // which equivalent to removing Stash entries from the stash list.
 func (ddb *DoltDB) RemoveAllStashes(ctx context.Context) error {
-	err := ddb.deleteRef(ctx, ref.NewStashRef(), nil)
+	err := ddb.deleteRef(ctx, ref.NewStashRef(), nil, "")
 	if err == ErrBranchNotFound {
 		return nil
 	}

@@ -16,6 +16,7 @@ package remotesrv
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -34,6 +35,22 @@ type ServerInterceptor struct {
 	AccessController AccessControl
 }
 
+var SUPER_USER_RPC_METHODS = map[string]bool{
+	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/AddTableFiles":      true,
+	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/Commit":             true,
+	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/GetUploadLocations": true,
+}
+
+var CLONE_ADMIN_RPC_METHODS = map[string]bool{
+	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/GetDownloadLocations":    true,
+	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/GetRepoMetadata":         true,
+	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/HasChunks":               true,
+	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/ListTableFiles":          true,
+	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/RefreshTableFileUrl":     true,
+	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/Root":                    true,
+	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/StreamDownloadLocations": true,
+}
+
 // AccessControl is an interface that provides authentication and authorization for the gRPC server.
 type AccessControl interface {
 	// ApiAuthenticate checks the incoming request for authentication credentials and validates them. If the user's
@@ -41,14 +58,20 @@ type AccessControl interface {
 	// If the user is not legitimate, an error is returned.
 	ApiAuthenticate(ctx context.Context) (context.Context, error)
 	// ApiAuthorize checks that the authenticated user has sufficient privileges to perform the requested action.
-	// Currently, CLONE_ADMIN is required. True and a nil error returned if the user is authorized, otherwise false
-	// with an error.
-	ApiAuthorize(ctx context.Context) (bool, error)
+	// Currently, our resource policy is binary currently, a user either is a SuperUser (form Commit) or they have a
+	// CLONE_ADMIN grant for read operations.
+	// More resource aware authorization decisions will be needed in the future, but this is sufficient for now.
+	ApiAuthorize(ctx context.Context, superUserReq bool) (bool, error)
 }
 
 func (si *ServerInterceptor) Stream() grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		if err := si.authenticate(ss.Context()); err != nil {
+		needSuperUser, err := requireSuperUser(info.FullMethod)
+		if err != nil {
+			return err
+		}
+
+		if err := si.authenticate(ss.Context(), needSuperUser); err != nil {
 			return err
 		}
 
@@ -58,7 +81,12 @@ func (si *ServerInterceptor) Stream() grpc.StreamServerInterceptor {
 
 func (si *ServerInterceptor) Unary() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		if err := si.authenticate(ctx); err != nil {
+		needSuperUser, err := requireSuperUser(info.FullMethod)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := si.authenticate(ctx, needSuperUser); err != nil {
 			return nil, err
 		}
 
@@ -73,9 +101,21 @@ func (si *ServerInterceptor) Options() []grpc.ServerOption {
 	}
 }
 
+func requireSuperUser(path string) (bool, error) {
+	if SUPER_USER_RPC_METHODS[path] {
+		return true, nil
+	}
+
+	if CLONE_ADMIN_RPC_METHODS[path] {
+		return false, nil
+	}
+
+	return false, fmt.Errorf("unknown rpc method: %s", path)
+}
+
 // authenticate checks the incoming request for authentication credentials and validates them.  If the user is
 // legitimate, an authorization check is performed. If no error is returned, the user should be allowed to proceed.
-func (si *ServerInterceptor) authenticate(ctx context.Context) error {
+func (si *ServerInterceptor) authenticate(ctx context.Context, needsSuperUser bool) error {
 	ctx, err := si.AccessController.ApiAuthenticate(ctx)
 	if err != nil {
 		si.Lgr.Warnf("authentication failed: %s", err.Error())
@@ -83,7 +123,7 @@ func (si *ServerInterceptor) authenticate(ctx context.Context) error {
 	}
 
 	// Have a valid user in the context.  Check authorization.
-	if authorized, err := si.AccessController.ApiAuthorize(ctx); !authorized {
+	if authorized, err := si.AccessController.ApiAuthorize(ctx, needsSuperUser); !authorized {
 		si.Lgr.Warnf("authorization failed: %s", err.Error())
 		return status.Error(codes.PermissionDenied, err.Error())
 	}

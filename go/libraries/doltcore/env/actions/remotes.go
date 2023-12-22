@@ -75,13 +75,13 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 
 	switch mode {
 	case ref.ForceUpdate:
-		err = destDB.SetHeadToCommit(ctx, destRef, commit)
+		err = destDB.SetHeadAndWorkingSetToCommit(ctx, destRef, commit)
 		if err != nil {
 			return err
 		}
 		err = srcDB.SetHeadToCommit(ctx, remoteRef, commit)
 	case ref.FastForwardOnly:
-		err = destDB.FastForward(ctx, destRef, commit)
+		err = destDB.FastForwardWithWorkspaceCheck(ctx, destRef, commit)
 		if err != nil {
 			return err
 		}
@@ -137,7 +137,7 @@ func push(ctx context.Context, rsr env.RepoStateReader, tmpDir string, src, dest
 	switch opts.SrcRef.GetType() {
 	case ref.BranchRefType:
 		if opts.SrcRef == ref.EmptyBranchRef {
-			return deleteRemoteBranch(ctx, opts.DestRef, opts.RemoteRef, src, dest, *remote)
+			return deleteRemoteBranch(ctx, opts.DestRef, opts.RemoteRef, src, dest, *remote, opts.Mode.Force)
 		} else {
 			return PushToRemoteBranch(ctx, rsr, tmpDir, opts.Mode, opts.SrcRef, opts.DestRef, opts.RemoteRef, src, dest, *remote, progStarter, progStopper)
 		}
@@ -192,8 +192,8 @@ func PushTag(ctx context.Context, tempTableDir string, destRef ref.TagRef, srcDB
 	return destDB.SetHead(ctx, destRef, addr)
 }
 
-func deleteRemoteBranch(ctx context.Context, toDelete, remoteRef ref.DoltRef, localDB, remoteDB *doltdb.DoltDB, remote env.Remote) error {
-	err := DeleteRemoteBranch(ctx, toDelete.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB)
+func deleteRemoteBranch(ctx context.Context, toDelete, remoteRef ref.DoltRef, localDB, remoteDB *doltdb.DoltDB, remote env.Remote, force bool) error {
+	err := DeleteRemoteBranch(ctx, toDelete.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB, force)
 
 	if err != nil {
 		return fmt.Errorf("%w; '%s' from remote '%s'; %s", ErrFailedToDeleteRemote, toDelete.String(), remote.Name, err)
@@ -233,7 +233,7 @@ func PushToRemoteBranch(ctx context.Context, rsr env.RepoStateReader, tempTableD
 	case nil:
 		cli.Println()
 		return nil
-	case doltdb.ErrUpToDate, doltdb.ErrIsAhead, ErrCantFF, datas.ErrMergeNeeded:
+	case doltdb.ErrUpToDate, doltdb.ErrIsAhead, ErrCantFF, datas.ErrMergeNeeded, datas.ErrDirtyWorkspace:
 		return err
 	default:
 		return fmt.Errorf("%w; %s", ErrUnknownPushErr, err.Error())
@@ -262,15 +262,24 @@ func pushTagToRemote(ctx context.Context, tempTableDir string, srcRef, destRef r
 
 // DeleteRemoteBranch validates targetRef is a branch on the remote database, and then deletes it, then deletes the
 // remote tracking branch from the local database.
-func DeleteRemoteBranch(ctx context.Context, targetRef ref.BranchRef, remoteRef ref.RemoteRef, localDB, remoteDB *doltdb.DoltDB) error {
+func DeleteRemoteBranch(ctx context.Context, targetRef ref.BranchRef, remoteRef ref.RemoteRef, localDB, remoteDB *doltdb.DoltDB, force bool) error {
 	hasRef, err := remoteDB.HasRef(ctx, targetRef)
 
 	if err != nil {
 		return err
 	}
 
+	wsRefStr := ""
+	if !force {
+		wsRef, err := ref.WorkingSetRefForHead(targetRef)
+		if err != nil {
+			return err
+		}
+		wsRefStr = wsRef.String()
+	}
+
 	if hasRef {
-		err = remoteDB.DeleteBranch(ctx, targetRef, nil)
+		err = remoteDB.DeleteBranchWithWorkspaceCheck(ctx, targetRef, nil, wsRefStr)
 	}
 
 	if err != nil {

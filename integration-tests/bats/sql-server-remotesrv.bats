@@ -4,6 +4,7 @@
 # functionality of the remotesapi under sql-server.
 
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
 srv_pid=
 srv_two_pid=
@@ -13,6 +14,7 @@ setup() {
 }
 
 teardown() {
+    stop_sql_server
     teardown_common
     if [ -n "$srv_pid" ]; then
         kill $srv_pid
@@ -80,27 +82,6 @@ call dolt_commit('-m', 'add some vals');
     [[ "$output" =~ "vals" ]] || false
     run dolt sql -q 'select count(*) from vals'
     [[ "$output" =~ "5" ]] || false
-}
-
-@test "sql-server-remotesrv: the remotesapi server rejects writes" {
-    mkdir -p db/remote
-    cd db/remote
-    dolt init
-    dolt sql -q 'create table vals (i int);'
-    dolt add vals
-    dolt commit -m 'create vals table.'
-
-    dolt sql-server --remotesapi-port 50051 &
-    srv_pid=$!
-    cd ../../
-
-    dolt clone http://localhost:50051/remote remote_cloned
-
-    cd remote_cloned
-    dolt sql -q 'insert into vals values (1), (2), (3), (4), (5);'
-    dolt commit -am 'insert some values'
-    run dolt push origin main:main
-    [[ "$status" != 0 ]] || false
 }
 
 @test "sql-server-remotesrv: remotesapi listen error stops process" {
@@ -202,7 +183,7 @@ call dolt_commit('-am', 'add some vals');
     [[ "$output" =~ "Access denied for user 'root'" ]] || false
 
     # # With auth fetch
-    run dolt fetch -u $DOLT_REMOTE_USER
+    run dolt fetch --user $DOLT_REMOTE_USER
     [[ "$status" -eq 0 ]] || false
 
     run dolt branch -v -a
@@ -210,8 +191,7 @@ call dolt_commit('-am', 'add some vals');
     [[ "$output" =~ "remotes/origin/main" ]] || false
     [[ "$output" =~ "remotes/origin/new_branch" ]] || false
 
-    run dolt checkout new_branch
-    [[ "$status" -eq 0 ]] || false
+    dolt checkout new_branch
 
     dolt --port 3307 --host localhost --no-tls -u $DOLT_REMOTE_USER -p $DOLT_REMOTE_PASSWORD sql -q "
 use remote;
@@ -226,8 +206,8 @@ call dolt_commit('-am', 'add one val');
     [[ "$output" =~ "Access denied for user 'root'" ]] || false
 
     # With auth pull
-    run dolt pull -u $DOLT_REMOTE_USER
-    [[ "$status" -eq 0 ]] || false
+    dolt pull --user $DOLT_REMOTE_USER
+
     run dolt sql -q 'select count(*) from vals;'
     [[ "$output" =~ "11" ]] || false
 }
@@ -249,7 +229,6 @@ CREATE USER clone_admin_user@'localhost' IDENTIFIED BY 'pass1';
 GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
 select user from mysql.user;
 "
-
     [ $status -eq 0 ]
     [[ $output =~ user0 ]] || false
     [[ $output =~ clone_admin_user ]] || false
@@ -279,7 +258,7 @@ call dolt_commit('-am', 'add some vals');"
     [[ "$output" =~ "Access denied for user 'root'" ]] || false
 
     # # With auth fetch
-    run dolt fetch -u clone_admin_user
+    run dolt fetch --user clone_admin_user
     [[ "$status" -eq 0 ]] || false
 
     run dolt branch -v -a
@@ -301,7 +280,7 @@ call dolt_commit('-am', 'add one val');"
     [[ "$output" =~ "Access denied for user 'root'" ]] || false
 
     # With auth pull
-    run dolt pull -u clone_admin_user
+    run dolt pull --user clone_admin_user
     [[ "$status" -eq 0 ]] || false
     run dolt sql -q 'select count(*) from vals;'
     [[ "$output" =~ "11" ]] || false
@@ -359,3 +338,328 @@ call dolt_commit('-am', 'add one val');"
     [[ "$status" != 0 ]] || false
     [[ "$output" =~ "Access denied for user 'doesnt_exist'" ]] || false
 }
+
+@test "sql-server-remotesrv: push to remotesapi port as super user" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q 'create table names (name varchar(10) primary key);'
+    dolt sql -q 'insert into names (name) values ("abe"), ("betsy"), ("calvin");'
+    dolt add names
+    dolt commit -m 'initial names.'
+
+    APIPORT=$( definePORT )
+    export DOLT_REMOTE_PASSWORD="rootpass"
+    export SQL_USER="root"
+    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT
+
+    cd ../
+    dolt clone http://localhost:$APIPORT/remote cloned_db -u root
+    cd cloned_db
+
+    dolt sql -q 'insert into names values ("dave");'
+    dolt commit -am 'add dave'
+
+    run dolt push origin --user $SQL_USER main:main
+    [[ "$status" -eq 0 ]] || false
+
+    run dolt sql -q 'select * from names;'
+    [[ "$output" =~ "abe" ]] || false
+    [[ "$output" =~ "betsy" ]] || false
+    [[ "$output" =~ "calvin" ]] || false
+    [[ "$output" =~ "dave" ]] || false
+}
+
+@test "sql-server-remotesrv: push to dirty workspace as super user" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q 'create table names (name varchar(10) primary key);'
+    dolt sql -q 'insert into names (name) values ("abe"), ("betsy"), ("calvin");'
+    dolt add names
+    dolt commit -m 'initial names.'
+    dolt sql -q 'insert into names (name) values ("zeek");' # dirty the workspace. This won't be cloned
+
+
+    APIPORT=$( definePORT )
+    export DOLT_REMOTE_PASSWORD="rootpass"
+    export SQL_USER="root"
+    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT
+
+    cd ../
+    dolt clone http://localhost:$APIPORT/remote cloned_db -u root
+    cd cloned_db
+
+    dolt sql -q 'insert into names values ("dave");'
+    dolt commit -am 'add dave'
+
+    run dolt push origin --user $SQL_USER main:main
+    [[ "$status" -ne 0 ]] || false
+    [[ "$output" =~ "target has uncommitted changes. --force required to overwrite" ]] || false
+
+    cd ../remote
+    run dolt sql -q 'select * from names;'
+    [[ "$output" =~ "abe" ]] || false
+    [[ "$output" =~ "betsy" ]] || false
+    [[ "$output" =~ "calvin" ]] || false
+    ! [[ "$output" =~ "dave" ]] || false
+    [[ "$output" =~ "zeek" ]] || false
+
+    ## Now try with --force
+    cd ../cloned_db
+    dolt push origin --force --user $SQL_USER main:main
+
+    cd ../remote
+    run dolt sql -q 'select * from names;'
+    [[ "$output" =~ "abe" ]] || false
+    [[ "$output" =~ "betsy" ]] || false
+    [[ "$output" =~ "calvin" ]] || false
+    [[ "$output" =~ "dave" ]] || false
+    ! [[ "$output" =~ "zeek" ]] || false
+}
+
+
+@test "sql-server-remotesrv: push to remotesapi port as super user non-fast-forward" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q 'create table names (name varchar(10) primary key);'
+    dolt sql -q 'insert into names (name) values ("abe"), ("betsy"), ("calvin");'
+    dolt add names
+    dolt commit -m 'initial names.'
+
+    APIPORT=$( definePORT )
+    export DOLT_REMOTE_PASSWORD="rootpass"
+    export SQL_USER="root"
+    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT
+
+    cd ../
+    dolt clone http://localhost:$APIPORT/remote cloned_db -u root
+
+    cd remote
+    dolt sql -q 'insert into names (name) values ("zeek");' # dirty the workspace. This won't be cloned
+    dolt commit -a -m 'add Zeek.'
+
+    cd ../cloned_db
+    dolt sql -q 'insert into names values ("dave");'
+    dolt commit -am 'add dave'
+
+    run dolt push origin --user $SQL_USER main:main
+    [[ "$status" -ne 0 ]] || false
+    [[ "$output" =~ "Updates were rejected because the tip of your current branch is behind" ]] || false
+
+    cd ../remote
+    run dolt sql -q 'select * from names;'
+    [[ "$output" =~ "abe" ]] || false
+    [[ "$output" =~ "betsy" ]] || false
+    [[ "$output" =~ "calvin" ]] || false
+    ! [[ "$output" =~ "dave" ]] || false
+    [[ "$output" =~ "zeek" ]] || false
+
+    ## Now try with --force
+    cd ../cloned_db
+    run dolt push origin --force --user $SQL_USER main:main
+    [[ "$status" -eq 0 ]] || false
+
+    cd ../remote
+    run dolt sql -q 'select * from names;'
+    [[ "$output" =~ "abe" ]] || false
+    [[ "$output" =~ "betsy" ]] || false
+    [[ "$output" =~ "calvin" ]] || false
+    [[ "$output" =~ "dave" ]] || false
+    ! [[ "$output" =~ "zeek" ]] || false
+}
+
+@test "sql-server-remotesrv: push to remoteapi port as non-super user rejected" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q 'create table names (name varchar(10) primary key);'
+    dolt sql -q 'insert into names (name) values ("abe"), ("betsy"), ("calvin");'
+    dolt add names
+    dolt commit -m 'initial names.'
+
+    APIPORT=$( definePORT )
+    export DOLT_REMOTE_PASSWORD="rootpass"
+    export SQL_USER="root"
+    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT
+
+    dolt sql -q "
+CREATE USER clone_admin_user@'localhost' IDENTIFIED BY 'pass1';
+GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
+"
+    export DOLT_REMOTE_PASSWORD="pass1"
+    unset SQL_USER
+
+    cd ../
+    dolt clone --user clone_admin_user http://localhost:$APIPORT/remote cloned_db
+    cd cloned_db
+
+    dolt sql -q 'insert into names values ("dave");'
+    dolt commit -am 'add dave'
+
+    run dolt push origin --user clone_admin_user main:main
+    [[ "$status" -ne 0 ]] || false
+    [[ "$output" =~ "clone_admin_user has not been granted SuperUser access" ]] || false
+
+    # Give that user superpowers.
+    cd ../remote
+    dolt sql -q "GRANT ALL PRIVILEGES ON *.* TO 'clone_admin_user'@'localhost' WITH GRANT OPTION"
+    cd ../cloned_db
+
+    dolt push origin --user clone_admin_user main:main
+}
+
+@test "sql-server-remotesrv: push to remotesapi fails when server is read only" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q 'create table names (name varchar(10) primary key);'
+    dolt sql -q 'insert into names (name) values ("abe"), ("betsy"), ("calvin");'
+    dolt add names
+    dolt commit -m 'initial names.'
+
+    APIPORT=$( definePORT )
+    export DOLT_REMOTE_PASSWORD="rootpass"
+    export SQL_USER="root"
+    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT --remotesapi-readonly
+
+    cd ../
+    dolt clone http://localhost:$APIPORT/remote cloned_db -u "$SQL_USER"
+    cd cloned_db
+
+    dolt sql -q 'insert into names values ("dave");'
+    dolt commit -am 'add dave'
+
+    run dolt push origin --user "$SQL_USER" main:main
+    [[ "$status" -ne 0 ]] || false
+    [[ "$output" =~ "this server only provides read-only access" ]] || false
+}
+
+@test "sql-server-remotesrv: delete remote branch from remotesapi port as super user" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q 'create table names (name varchar(10) primary key);'
+    dolt sql -q 'insert into names (name) values ("abe"), ("betsy"), ("calvin");'
+    dolt add names
+    dolt commit -m 'initial names.'
+    dolt branch new_branch HEAD
+
+    APIPORT=$( definePORT )
+    export DOLT_REMOTE_PASSWORD="rootpass"
+    export SQL_USER="root"
+    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT
+
+    cd ../
+    dolt clone http://localhost:$APIPORT/remote cloned_db -u $SQL_USER
+    cd cloned_db
+
+    run dolt push origin --user $SQL_USER :new_branch
+    [[ "$status" -eq 0 ]] || false
+
+    # TODO - verify output. Currently we always print "new branch"
+    # To https://doltremoteapi.dolthub.com/dolthub/macneale-remote-test
+    # * [new branch]          HEAD -> main
+    # [[ "$output" =~ "[deleted] new_branch" ]] || false
+
+    cd ../remote
+    run dolt branch -a
+    ! [[ "$output" =~ "new_branch" ]] || false
+    [[ "$output" =~ "main" ]] || false
+}
+
+@test "sql-server-remotesrv: delete remote dirty branch from remotesapi requires force" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q 'create table names (name varchar(10) primary key);'
+    dolt sql -q 'insert into names (name) values ("abe"), ("betsy"), ("calvin");'
+    dolt add names
+    dolt commit -m 'initial names.'
+    dolt branch new_branch HEAD
+    dolt --use-db=remote/new_branch sql -q 'insert into names (name) values ("zeek");' # dirty the workspace
+
+    APIPORT=$(definePORT)
+    export DOLT_REMOTE_PASSWORD="rootpass"
+    export SQL_USER="root"
+    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT
+
+    cd ../
+    dolt clone http://localhost:$APIPORT/remote cloned_db -u $SQL_USER
+    cd cloned_db
+
+    run dolt push origin --user $SQL_USER :new_branch
+    [[ "$status" -ne 0 ]] || false
+    [[ "$output" =~ "target has uncommitted changes. --force required to overwrite" ]] || false
+
+    dolt push origin --force --user $SQL_USER :new_branch
+
+    # TODO - verify output. Currently we always print "new branch"
+    # To https://doltremoteapi.dolthub.com/dolthub/macneale-remote-test
+    # * [new branch]          HEAD -> main
+    # [[ "$output" =~ "[deleted] new_branch" ]] || false
+
+    cd ../remote
+    run dolt branch -a
+    ! [[ "$output" =~ "new_branch" ]] || false
+    [[ "$output" =~ "main" ]] || false
+}
+
+@test "sql-server-remotesrv: push to non-existent database fails" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q 'create table names (name varchar(10) primary key);'
+    dolt sql -q 'insert into names (name) values ("abe"), ("betsy"), ("calvin");'
+    dolt add names
+    dolt commit -m 'initial names.'
+
+    APIPORT=$(definePORT)
+    export DOLT_REMOTE_PASSWORD="rootpass"
+    export SQL_USER="root"
+    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT
+
+    cd ../
+    dolt clone http://localhost:$APIPORT/remote cloned_db -u $SQL_USER
+    cd cloned_db
+
+    dolt remote add nodb http://localhost:$APIPORT/nodb
+
+    run dolt push nodb --user $SQL_USER main:new_branch
+    [[ "$status" -ne 0 ]] || false
+    [[ "$output" =~ "database not found: nodb" ]] || false # NM4
+
+    run dolt push --force nodb --user $SQL_USER main:new_branch
+    [[ "$status" -ne 0 ]] || false
+    [[ "$output" =~ "database not found: nodb" ]] || false # NM4
+}
+
+@test "sql-server-remotesrv: create remote branch from remotesapi port as super user" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q 'create table names (name varchar(10) primary key);'
+    dolt sql -q 'insert into names (name) values ("abe"), ("betsy"), ("calvin");'
+    dolt add names
+    dolt commit -m 'initial names.'
+
+    APIPORT=$( definePORT )
+    export DOLT_REMOTE_PASSWORD="rootpass"
+    export SQL_USER="root"
+    start_sql_server_with_args -u "$SQL_USER" -p "$DOLT_REMOTE_PASSWORD" --remotesapi-port $APIPORT
+
+    cd ../
+    dolt clone http://localhost:$APIPORT/remote cloned_db -u $SQL_USER
+    cd cloned_db
+
+    run dolt push origin --user $SQL_USER main:new_branch
+    [[ "$status" -eq 0 ]] || false
+    [[ "$output" =~ "* [new branch]          main -> new_branch" ]] || false
+
+    cd ../remote
+    run dolt branch -a
+    [[ "$output" =~ "new_branch" ]] || false
+    [[ "$output" =~ "main" ]] || false
+}
+

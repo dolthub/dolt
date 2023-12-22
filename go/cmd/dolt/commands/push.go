@@ -157,6 +157,12 @@ func constructInterpolatedDoltPushQuery(apr *argparser.ArgParseResults) (string,
 	var params []interface{}
 	var args []string
 
+	if user, hasUser := apr.GetValue(cli.UserFlag); hasUser {
+		args = append(args, "'--user'")
+		args = append(args, "?")
+		params = append(params, user)
+	}
+
 	if setUpstream := apr.Contains(cli.SetUpstreamFlag); setUpstream {
 		args = append(args, "'--set-upstream'")
 	}

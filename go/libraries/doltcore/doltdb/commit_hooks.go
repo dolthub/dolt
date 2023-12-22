@@ -56,7 +56,7 @@ func (ph *PushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db dat
 func pushDataset(ctx context.Context, destDB, srcDB datas.Database, ds datas.Dataset, tmpDir string) error {
 	addr, ok := ds.MaybeHeadAddr()
 	if !ok {
-		_, err := destDB.Delete(ctx, ds)
+		_, err := destDB.Delete(ctx, ds, "")
 		return err
 	}
 
@@ -75,7 +75,7 @@ func pushDataset(ctx context.Context, destDB, srcDB datas.Database, ds datas.Dat
 		return err
 	}
 
-	_, err = destDB.SetHead(ctx, ds, addr)
+	_, err = destDB.SetHead(ctx, ds, addr, "")
 	return err
 }
 

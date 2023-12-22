@@ -310,7 +310,7 @@ func (suite *DatabaseSuite) TestDatasetsMapType() {
 
 	datasets, err = suite.db.Datasets(context.Background())
 	suite.NoError(err)
-	_, err = suite.db.Delete(context.Background(), ds)
+	_, err = suite.db.Delete(context.Background(), ds, "")
 	suite.NoError(err)
 	dss, err = suite.db.Datasets(context.Background())
 	suite.NoError(err)
@@ -388,7 +388,7 @@ func (suite *DatabaseSuite) TestDatabaseDelete() {
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds2).Equals(b))
 
-	ds1, err = suite.db.Delete(context.Background(), ds1)
+	ds1, err = suite.db.Delete(context.Background(), ds1, "")
 	suite.NoError(err)
 	currDS2, err := suite.db.GetDataset(context.Background(), datasetID2)
 	suite.NoError(err)
@@ -491,7 +491,7 @@ func (suite *DatabaseSuite) TestDeleteWithConcurrentChunkStoreUse() {
 	suite.Require().True(mustHeadValue(iDS).Equals(e))
 
 	// Attempt to delete ds1 via suite.db, which should fail due to the above
-	_, err = suite.db.Delete(context.Background(), ds1)
+	_, err = suite.db.Delete(context.Background(), ds1, "")
 	suite.Require().Error(err)
 
 	// Concurrent change, but to some other dataset. This shouldn't stop changes to ds1.
@@ -505,7 +505,7 @@ func (suite *DatabaseSuite) TestDeleteWithConcurrentChunkStoreUse() {
 	suite.Require().True(mustHeadValue(iDS).Equals(stf))
 
 	// Attempted concurrent delete, which should proceed without a problem
-	ds1, err = suite.db.Delete(context.Background(), ds1)
+	ds1, err = suite.db.Delete(context.Background(), ds1, "")
 	suite.Require().NoError(err)
 	present := ds1.HasHead()
 	suite.False(present, "Dataset %s should not be present", datasetID)
@@ -529,11 +529,11 @@ func (suite *DatabaseSuite) TestSetHead() {
 	suite.True(mustHeadValue(ds).Equals(b))
 	bCommitAddr := mustHeadAddr(ds) // To use in FF SetHeadToCommit() below.
 
-	ds, err = suite.db.SetHead(context.Background(), ds, aCommitAddr)
+	ds, err = suite.db.SetHead(context.Background(), ds, aCommitAddr, "")
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(a))
 
-	ds, err = suite.db.SetHead(context.Background(), ds, bCommitAddr)
+	ds, err = suite.db.SetHead(context.Background(), ds, bCommitAddr, "")
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(b))
 }
@@ -561,16 +561,16 @@ func (suite *DatabaseSuite) TestFastForward() {
 	cCommitAddr := mustHeadAddr(ds) // To use in FastForward() below.
 
 	// FastForward should disallow this, as |a| is not a descendant of |c|
-	_, err = suite.db.FastForward(context.Background(), ds, aCommitAddr)
+	_, err = suite.db.FastForward(context.Background(), ds, aCommitAddr, "")
 	suite.Error(err)
 
 	// Move Head back to something earlier in the lineage, so we can test FastForward
-	ds, err = suite.db.SetHead(context.Background(), ds, aCommitAddr)
+	ds, err = suite.db.SetHead(context.Background(), ds, aCommitAddr, "")
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(a))
 
 	// This should succeed, because while |a| is not a direct parent of |c|, it is an ancestor.
-	ds, err = suite.db.FastForward(context.Background(), ds, cCommitAddr)
+	ds, err = suite.db.FastForward(context.Background(), ds, cCommitAddr, "")
 	suite.Require().NoError(err)
 	suite.True(mustHeadValue(ds).Equals(c))
 }
