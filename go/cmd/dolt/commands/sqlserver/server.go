@@ -676,7 +676,7 @@ func persistServerLocalCreds(port int, dEnv *env.DoltEnv) (*LocalCreds, error) {
 type remotesapiAuth struct {
 	// ctxFactory is a function that returns a new sql.Context. This will create a new conext every time it is called,
 	// so it should be called once per API request.
-	ctxFactory func() (*sql.Context, error)
+	ctxFactory func(context.Context) (*sql.Context, error)
 	rawDb      *mysql_db.MySQLDb
 }
 
