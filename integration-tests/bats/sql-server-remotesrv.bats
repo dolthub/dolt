@@ -577,9 +577,8 @@ GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
     dolt sql -q 'insert into names (name) values ("abe"), ("betsy"), ("calvin");'
     dolt add names
     dolt commit -m 'initial names.'
-    dolt checkout -b new_branch HEAD
-    dolt sql -q 'insert into names (name) values ("zeek");' # dirty the workspace
-    dolt checkout main
+    dolt branch new_branch HEAD
+    dolt --use-db=remote/new_branch sql -q 'insert into names (name) values ("zeek");' # dirty the workspace
 
     APIPORT=$(definePORT)
     export DOLT_REMOTE_PASSWORD="rootpass"
@@ -594,8 +593,7 @@ GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
     [[ "$status" -ne 0 ]] || false
     [[ "$output" =~ "target has uncommitted changes. --force required to overwrite" ]] || false
 
-    run dolt push origin --force --user $SQL_USER :new_branch
-    [[ "$status" -eq 0 ]] || false
+    dolt push origin --force --user $SQL_USER :new_branch
 
     # TODO - verify output. Currently we always print "new branch"
     # To https://doltremoteapi.dolthub.com/dolthub/macneale-remote-test

@@ -1015,9 +1015,10 @@ func (db *database) update(ctx context.Context,
 }
 
 func (db *database) doDelete(ctx context.Context, datasetIDstr string, workingsetIDstr string) error {
+	var first types.Value
+	var firstHash hash.Hash
 	datasetID := types.String(datasetIDstr)
 	return db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
-		var first types.Value
 		curr, ok, err := datasets.MaybeGet(ctx, datasetID)
 		if err != nil {
 			return types.Map{}, err
@@ -1033,7 +1034,6 @@ func (db *database) doDelete(ctx context.Context, datasetIDstr string, workingse
 		}
 		return datasets.Edit().Remove(datasetID).Map(ctx)
 	}, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
-		var firstHash hash.Hash
 		curr, err := am.Get(ctx, datasetIDstr)
 		if err != nil {
 			return prolly.AddressMap{}, err
