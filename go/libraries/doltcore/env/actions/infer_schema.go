@@ -181,7 +181,11 @@ func leastPermissiveType(strVal string, floatThreshold float64) typeinfo.TypeInf
 		return typeinfo.BoolType
 	}
 
-	return typeinfo.StringDefaultType
+	if int64(len(strVal)) > typeinfo.MaxVarcharLength {
+		return typeinfo.TextType
+	} else {
+		return typeinfo.StringDefaultType
+	}
 }
 
 func leastPermissiveNumericType(strVal string, floatThreshold float64) (ti typeinfo.TypeInfo) {
@@ -323,7 +327,9 @@ func findCommonType(ts typeInfoSet) typeinfo.TypeInfo {
 
 	// len(ts) > 1
 
-	if setHasType(ts, typeinfo.StringDefaultType) {
+	if setHasType(ts, typeinfo.TextType) {
+		return typeinfo.TextType
+	} else if setHasType(ts, typeinfo.StringDefaultType) {
 		return typeinfo.StringDefaultType
 	}
 
