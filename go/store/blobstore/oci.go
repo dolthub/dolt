@@ -20,6 +20,7 @@ import (
 	"errors"
 	"io"
 	"math"
+	"net/http"
 	"os"
 	"path"
 	"sort"
@@ -85,6 +86,8 @@ func NewOCIBlobstore(provider common.ConfigurationProvider, client objectstorage
 	for len(prefix) > 0 && prefix[0] == '/' {
 		prefix = prefix[1:]
 	}
+	// Disable timeout to support big file upload/download, default is 60s
+	client.HTTPClient = &http.Client{}
 	return &OCIBlobstore{provider, client, bucketName, "", prefix, defaultConcurrentListeners}
 }
 
