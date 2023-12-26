@@ -10,6 +10,11 @@ pk,c1,c2,c3,c4,c5
 1,1,2,3,4,5
 DELIM
 
+    cat <<DELIM > 1pkjson.csv
+pk,j
+0,"{""a"":1,""b"":""value""}"
+DELIM
+
     cat <<DELIM > 1pksupportedtypes.csv
 pk, int, string, boolean, float, uint, uuid
 0, 0, "asdf", TRUE, 0.0, 0, "00000000-0000-0000-0000-000000000000"
@@ -70,6 +75,14 @@ teardown() {
     run dolt ls
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "test" ]] || false
+}
+
+@test "schema-import: import json type" {
+    run dolt schema import --dry-run -c --pks=pk test 1pkjson.csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "${lines[0]}" =~ "test" ]] || false
+    [[ "$output" =~ "\`j\` json" ]] || false
 }
 
 @test "schema-import: with a bunch of types" {

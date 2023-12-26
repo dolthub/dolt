@@ -16,6 +16,7 @@ package actions
 
 import (
 	"context"
+	json2 "encoding/json"
 	"errors"
 	"io"
 	"math"
@@ -179,6 +180,14 @@ func leastPermissiveType(strVal string, floatThreshold float64) typeinfo.TypeInf
 	strVal = strings.ToLower(strVal)
 	if strVal == "true" || strVal == "false" {
 		return typeinfo.BoolType
+	}
+
+	if strings.Contains(strVal, "{") {
+		var json map[string]interface{}
+		err := json2.Unmarshal([]byte(strVal), &json)
+		if err == nil {
+			return typeinfo.JSONType
+		}
 	}
 
 	if int64(len(strVal)) > typeinfo.MaxVarcharLength {
