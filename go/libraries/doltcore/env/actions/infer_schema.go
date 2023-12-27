@@ -182,15 +182,9 @@ func leastPermissiveType(strVal string, floatThreshold float64) typeinfo.TypeInf
 		return typeinfo.BoolType
 	}
 
-	if strings.Contains(strVal, "{") {
-		var jsonMap map[string]interface{}
-		err := json.Unmarshal([]byte(strVal), &jsonMap)
-		if err == nil {
-			return typeinfo.JSONType
-		}
-	} else if strings.Contains(strVal, "[") {
-		var jsonArray []interface{}
-		err := json.Unmarshal([]byte(strVal), &jsonArray)
+	if strings.Contains(strVal, "{") || strings.Contains(strVal, "[") {
+		var j interface{}
+		err := json.Unmarshal([]byte(strVal), &j)
 		if err == nil {
 			return typeinfo.JSONType
 		}
