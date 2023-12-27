@@ -155,24 +155,24 @@ func (db hooksDatabase) WriteCommit(ctx context.Context, ds datas.Dataset, commi
 	return ds, err
 }
 
-func (db hooksDatabase) SetHead(ctx context.Context, ds datas.Dataset, newHeadAddr hash.Hash) (datas.Dataset, error) {
-	ds, err := db.Database.SetHead(ctx, ds, newHeadAddr)
+func (db hooksDatabase) SetHead(ctx context.Context, ds datas.Dataset, newHeadAddr hash.Hash, ws string) (datas.Dataset, error) {
+	ds, err := db.Database.SetHead(ctx, ds, newHeadAddr, ws)
 	if err == nil {
 		db.ExecuteCommitHooks(ctx, ds, false)
 	}
 	return ds, err
 }
 
-func (db hooksDatabase) FastForward(ctx context.Context, ds datas.Dataset, newHeadAddr hash.Hash) (datas.Dataset, error) {
-	ds, err := db.Database.FastForward(ctx, ds, newHeadAddr)
+func (db hooksDatabase) FastForward(ctx context.Context, ds datas.Dataset, newHeadAddr hash.Hash, workingSetPath string) (datas.Dataset, error) {
+	ds, err := db.Database.FastForward(ctx, ds, newHeadAddr, workingSetPath)
 	if err == nil {
 		db.ExecuteCommitHooks(ctx, ds, false)
 	}
 	return ds, err
 }
 
-func (db hooksDatabase) Delete(ctx context.Context, ds datas.Dataset) (datas.Dataset, error) {
-	ds, err := db.Database.Delete(ctx, ds)
+func (db hooksDatabase) Delete(ctx context.Context, ds datas.Dataset, workingSetPath string) (datas.Dataset, error) {
+	ds, err := db.Database.Delete(ctx, ds, workingSetPath)
 	if err == nil {
 		db.ExecuteCommitHooks(ctx, datas.NewHeadlessDataset(ds.Database(), ds.ID()), false)
 	}

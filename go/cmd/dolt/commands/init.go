@@ -36,7 +36,6 @@ const (
 	usernameParamName   = "name"
 	initBranchParamName = "initial-branch"
 	newFormatFlag       = "new-format"
-	oldFormatFlag       = "old-format"
 	funHashFlag         = "fun"
 )
 
@@ -82,7 +81,6 @@ func (cmd InitCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(cli.DateParam, "", "date", "Specify the date used in the initial commit. If not specified the current system time is used.")
 	ap.SupportsString(initBranchParamName, "b", "branch", fmt.Sprintf("The branch name used to initialize this database. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config. If unset, the default initialized branch will be named '%s'.", config.InitBranchName, env.DefaultInitBranch))
 	ap.SupportsFlag(newFormatFlag, "", fmt.Sprintf("Specify this flag to use the new storage format (%s).", types.Format_DOLT.VersionString()))
-	ap.SupportsFlag(oldFormatFlag, "", fmt.Sprintf("Specify this flag to use the old storage format (%s).", types.Format_LD_1.VersionString()))
 	ap.SupportsFlag(funHashFlag, "", "") // This flag is an easter egg. We can't currently prevent it from being listed in the help, but the description is deliberately left blank.
 	return ap
 }
@@ -102,15 +100,8 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		cli.PrintErrln(color.RedString("This directory has already been initialized."))
 		return 1
 	}
-	if apr.Contains(newFormatFlag) && apr.Contains(oldFormatFlag) {
-		e := fmt.Sprintf("options %s and %s are mutually exclusive", newFormatFlag, oldFormatFlag)
-		cli.PrintErrln(color.RedString(e))
-		return 1
-	}
 	if apr.Contains(newFormatFlag) {
 		types.Format_Default = types.Format_DOLT
-	} else if apr.Contains(oldFormatFlag) {
-		types.Format_Default = types.Format_LD_1
 	}
 
 	name, _ := apr.GetValue(usernameParamName)

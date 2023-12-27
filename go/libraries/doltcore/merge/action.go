@@ -25,11 +25,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-var ErrFailedToReadDatabase = errors.New("failed to read database")
 var ErrFailedToDetermineMergeability = errors.New("failed to determine mergeability")
 
 type MergeSpec struct {
@@ -151,136 +149,6 @@ func NewMergeSpec(
 	}
 
 	return spec, nil
-}
-
-func ExecNoFFMerge(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[string]*MergeStats, error) {
-	mergedRoot, err := spec.MergeC.GetRootValue(ctx)
-	if err != nil {
-		return nil, ErrFailedToReadDatabase
-	}
-	result := &Result{Root: mergedRoot, Stats: make(map[string]*MergeStats)}
-
-	err = mergedRootToWorking(ctx, false, dEnv, result, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr)
-
-	return result.Stats, err
-}
-
-func applyChanges(ctx context.Context, root *doltdb.RootValue, workingDiffs map[string]hash.Hash) (*doltdb.RootValue, error) {
-	var err error
-	for tblName, h := range workingDiffs {
-		root, err = root.SetTableHash(ctx, tblName, h)
-
-		if err != nil {
-			return nil, fmt.Errorf("failed to update table; %w", err)
-		}
-	}
-
-	return root, nil
-}
-
-func ExecuteFFMerge(
-	ctx context.Context,
-	dEnv *env.DoltEnv,
-	spec *MergeSpec,
-) error {
-	stagedRoot, err := spec.MergeC.GetRootValue(ctx)
-	if err != nil {
-		return err
-	}
-
-	workingRoot := stagedRoot
-	if len(spec.WorkingDiffs) > 0 {
-		workingRoot, err = applyChanges(ctx, stagedRoot, spec.WorkingDiffs)
-
-		if err != nil {
-			//return errhand.BuildDError("Failed to re-apply working changes.").AddCause(err).Build()
-			return err
-		}
-	}
-
-	if !spec.Squash {
-		headRef, err := dEnv.RepoStateReader().CWBHeadRef()
-		if err != nil {
-			return err
-		}
-		err = dEnv.DoltDB.FastForward(ctx, headRef, spec.MergeC)
-
-		if err != nil {
-			return err
-		}
-	}
-
-	workingSet, err := dEnv.WorkingSet(ctx)
-	if err != nil {
-		return err
-	}
-
-	return dEnv.UpdateWorkingSet(ctx, workingSet.WithWorkingRoot(workingRoot).WithStagedRoot(stagedRoot))
-}
-
-func ExecuteMerge(ctx *sql.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[string]*MergeStats, error) {
-	tmpDir, err := dEnv.TempTableFilesDir()
-	if err != nil {
-		return nil, err
-	}
-	opts := editor.Options{Deaf: dEnv.BulkDbEaFactory(), Tempdir: tmpDir}
-	result, err := MergeCommits(ctx, spec.HeadC, spec.MergeC, opts)
-	if err != nil {
-		switch err {
-		case doltdb.ErrUpToDate:
-			return result.Stats, fmt.Errorf("already up to date; %w", err)
-		case ErrFastForward:
-			panic("fast forward merge")
-		}
-		return nil, err
-	}
-
-	err = mergedRootToWorking(ctx, spec.Squash, dEnv, result, spec.WorkingDiffs, spec.MergeC, spec.MergeCSpecStr)
-	return result.Stats, nil
-}
-
-func mergedRootToWorking(
-	ctx context.Context,
-	squash bool,
-	dEnv *env.DoltEnv,
-	result *Result,
-	workingDiffs map[string]hash.Hash,
-	cm2 *doltdb.Commit,
-	cm2SpecStr string,
-) (err error) {
-	staged, working := result.Root, result.Root
-	if len(workingDiffs) > 0 {
-		working, err = applyChanges(ctx, working, workingDiffs)
-		if err != nil {
-			return err
-		}
-	}
-
-	ws, err := dEnv.WorkingSet(ctx)
-	if err != nil {
-		return err
-	}
-
-	if !squash || result.HasSchemaConflicts() {
-		ws = ws.StartMerge(cm2, cm2SpecStr)
-		tt := SchemaConflictTableNames(result.SchemaConflicts)
-		ws = ws.WithUnmergableTables(tt)
-	}
-
-	ws = ws.WithWorkingRoot(working)
-	if !result.HasMergeArtifacts() {
-		ws = ws.WithStagedRoot(staged)
-	}
-
-	if err = dEnv.UpdateWorkingSet(ctx, ws); err != nil {
-		return err
-	}
-
-	if result.HasMergeArtifacts() {
-		// this error is recoverable in some contexts
-		return doltdb.ErrUnresolvedConflictsOrViolations
-	}
-	return
 }
 
 // AbortMerge returns a new WorkingSet instance, with the active merge aborted, by clearing and

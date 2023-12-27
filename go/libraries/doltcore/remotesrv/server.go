@@ -69,6 +69,10 @@ type ServerArgs struct {
 	// listeners. The scheme used in the URLs returned from the gRPC server
 	// will be https.
 	TLSConfig *tls.Config
+
+	// In the cluster context, we want to create the databases automatically when pushed to. Other contexts we want to
+	// error when the user pushes to a database that doesn't exist.
+	CreateUnknownDatabases bool
 }
 
 func NewServer(args ServerArgs) (*Server, error) {
