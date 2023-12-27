@@ -16,7 +16,7 @@ package actions
 
 import (
 	"context"
-	json2 "encoding/json"
+	"encoding/json"
 	"errors"
 	"io"
 	"math"
@@ -183,8 +183,14 @@ func leastPermissiveType(strVal string, floatThreshold float64) typeinfo.TypeInf
 	}
 
 	if strings.Contains(strVal, "{") {
-		var json map[string]interface{}
-		err := json2.Unmarshal([]byte(strVal), &json)
+		var jsonMap map[string]interface{}
+		err := json.Unmarshal([]byte(strVal), &jsonMap)
+		if err == nil {
+			return typeinfo.JSONType
+		}
+	} else if strings.Contains(strVal, "[") {
+		var jsonArray []interface{}
+		err := json.Unmarshal([]byte(strVal), &jsonArray)
 		if err == nil {
 			return typeinfo.JSONType
 		}
