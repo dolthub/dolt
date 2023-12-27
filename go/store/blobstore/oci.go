@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"sort"
 
 	"github.com/oracle/oci-go-sdk/v65/common"
 	"github.com/oracle/oci-go-sdk/v65/objectstorage"
@@ -121,12 +120,8 @@ func (bs *OCIBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 // Get retrieves an io.reader for the portion of a blob specified by br along with its version
 func (bs *OCIBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, string, error) {
 	absKey := path.Join(bs.prefix, key)
-	return bs.getObject(ctx, absKey, bs.namespace, "", br)
-}
-
-func (bs *OCIBlobstore) getObject(ctx context.Context, absKey, namespace, etag string, br BlobRange) (io.ReadCloser, string, error) {
 	req := objectstorage.GetObjectRequest{
-		NamespaceName: &namespace,
+		NamespaceName: &bs.namespace,
 		BucketName:    &bs.bucketName,
 		ObjectName:    &absKey,
 	}
@@ -134,10 +129,6 @@ func (bs *OCIBlobstore) getObject(ctx context.Context, absKey, namespace, etag s
 	byteRange := br.asHttpRangeHeader()
 	if byteRange != "" {
 		req.Range = &byteRange
-	}
-
-	if etag != "" {
-		req.IfMatch = &etag
 	}
 
 	res, err := bs.client.GetObject(ctx, req)
@@ -310,19 +301,28 @@ func (bs *OCIBlobstore) uploadPart(ctx context.Context, objectName, uploadID str
 }
 
 func uploadParts(ctx context.Context, objectName, uploadID string, numParts, concurrentListeners int, totalSize, maxBatchSize int64, reader io.Reader, uploadF uploadFunc) ([]objectstorage.CommitMultipartUploadPartDetails, error) {
-	completedPartChan := make(chan objectstorage.CommitMultipartUploadPartDetails, numParts)
 	completedParts := make([]objectstorage.CommitMultipartUploadPartDetails, numParts)
 	partSize := int64(math.Ceil(float64(totalSize) / float64(numParts)))
+
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.SetLimit(concurrentListeners)
 
 	batch := make([]*toUpload, 0)
 	batchSize := int64(0)
 	partNum := 1
+
 	for {
 		if batchSize >= maxBatchSize {
-			err := uploadBatch(ctx, objectName, uploadID, batch, completedPartChan, concurrentListeners, uploadF)
-			if err != nil {
-				close(completedPartChan)
-				return nil, err
+			for _, u := range batch {
+				u := u
+				eg.Go(func() error {
+					cp, err := uploadF(egCtx, objectName, uploadID, u.partNum, int64(len(u.b)), bytes.NewReader(u.b))
+					if err != nil {
+						return err
+					}
+					completedParts[u.partNum-1] = cp
+					return nil
+				})
 			}
 
 			batchSize = 0
@@ -336,7 +336,6 @@ func uploadParts(ctx context.Context, objectName, uploadID string, numParts, con
 			if err == io.EOF {
 				break
 			}
-			close(completedPartChan)
 			return nil, err
 		}
 
@@ -351,73 +350,25 @@ func uploadParts(ctx context.Context, objectName, uploadID string, numParts, con
 	}
 
 	if batchSize > 0 && len(batch) > 0 {
-		err := uploadBatch(ctx, objectName, uploadID, batch, completedPartChan, concurrentListeners, uploadF)
-		if err != nil {
-			close(completedPartChan)
-			return nil, err
+		for _, u := range batch {
+			u := u
+			eg.Go(func() error {
+				cp, err := uploadF(egCtx, objectName, uploadID, u.partNum, int64(len(u.b)), bytes.NewReader(u.b))
+				if err != nil {
+					return err
+				}
+				completedParts[u.partNum-1] = cp
+				return nil
+			})
 		}
 	}
 
-	close(completedPartChan)
-
-	idx := 0
-	for cp := range completedPartChan {
-		completedParts[idx] = cp
-		idx++
+	err := eg.Wait()
+	if err != nil {
+		return nil, err
 	}
 
-	sort.Slice(completedParts, func(i, j int) bool {
-		if completedParts[i].PartNum == nil || completedParts[j].PartNum == nil {
-			return false
-		}
-		return *completedParts[i].PartNum < *completedParts[j].PartNum
-	})
 	return completedParts, nil
-}
-
-func uploadBatch(ctx context.Context, objectName, uploadID string, batch []*toUpload, completedPartsChan chan objectstorage.CommitMultipartUploadPartDetails, concurrentListeners int, uploadF uploadFunc) error {
-	batchChan := make(chan *toUpload, len(batch))
-	eg, egCtx := errgroup.WithContext(ctx)
-
-	for i := 0; i < concurrentListeners; i++ {
-		eg.Go(func() error {
-			for {
-				select {
-				case <-egCtx.Done():
-					return nil
-				case u, ok := <-batchChan:
-					if !ok {
-						return nil
-					}
-
-					cp, err := uploadF(egCtx, objectName, uploadID, u.partNum, int64(len(u.b)), bytes.NewReader(u.b))
-					if err != nil {
-						return err
-					}
-
-					completedPartsChan <- cp
-				}
-			}
-		})
-	}
-
-	eg.Go(func() error {
-		defer close(batchChan)
-
-		for {
-			select {
-			case <-egCtx.Done():
-				return nil
-			default:
-				for _, u := range batch {
-					batchChan <- u
-				}
-				return nil
-			}
-		}
-	})
-
-	return eg.Wait()
 }
 
 func getNumPartsAndPartSize(totalSize, partSize, maxPartNum int64) (int, int64) {
