@@ -89,7 +89,7 @@ func (bs *InMemoryBlobstore) Get(ctx context.Context, key string, br BlobRange) 
 }
 
 // Put sets the blob and the version for a key
-func (bs *InMemoryBlobstore) Put(ctx context.Context, key string, reader io.Reader) (string, error) {
+func (bs *InMemoryBlobstore) Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (string, error) {
 	bs.mutex.Lock()
 	defer bs.mutex.Unlock()
 	return bs.put(ctx, key, reader)
@@ -97,7 +97,7 @@ func (bs *InMemoryBlobstore) Put(ctx context.Context, key string, reader io.Read
 
 // CheckAndPut will check the current version of a blob against an expectedVersion, and if the
 // versions match it will update the data and version associated with the key
-func (bs *InMemoryBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, reader io.Reader) (string, error) {
+func (bs *InMemoryBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
 	bs.mutex.Lock()
 	defer bs.mutex.Unlock()
 
@@ -140,7 +140,7 @@ func (bs *InMemoryBlobstore) Concatenate(ctx context.Context, key string, source
 				if err != nil {
 					return err
 				}
-				_, err = bs.Put(ctx, next[idx], bytes.NewReader(blob))
+				_, err = bs.Put(ctx, next[idx], int64(len(blob)), bytes.NewReader(blob))
 				return err
 			})
 		}
@@ -154,7 +154,7 @@ func (bs *InMemoryBlobstore) Concatenate(ctx context.Context, key string, source
 	if err != nil {
 		return "", err
 	}
-	return bs.Put(ctx, key, bytes.NewReader(blob))
+	return bs.Put(ctx, key, int64(len(blob)), bytes.NewReader(blob))
 }
 
 func (bs *InMemoryBlobstore) put(ctx context.Context, key string, reader io.Reader) (string, error) {

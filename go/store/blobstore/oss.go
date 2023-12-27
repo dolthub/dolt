@@ -94,7 +94,7 @@ func (ob *OSSBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.R
 	return reader, ob.getVersion(meta), nil
 }
 
-func (ob *OSSBlobstore) Put(ctx context.Context, key string, reader io.Reader) (string, error) {
+func (ob *OSSBlobstore) Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (string, error) {
 	var meta http.Header
 	if err := ob.bucket.PutObject(ob.absKey(key), reader, oss.GetResponseHeader(&meta)); err != nil {
 		return "", err
@@ -102,7 +102,7 @@ func (ob *OSSBlobstore) Put(ctx context.Context, key string, reader io.Reader) (
 	return ob.getVersion(meta), nil
 }
 
-func (ob *OSSBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, reader io.Reader) (string, error) {
+func (ob *OSSBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
 	var options []oss.Option
 	if expectedVersion != "" {
 		options = append(options, oss.VersionId(expectedVersion))
