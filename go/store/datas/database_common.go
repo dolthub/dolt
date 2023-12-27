@@ -392,7 +392,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, w
 					}
 
 					// TODO - construct new meta instance rather than using the default
-					updateWS := workingset_flatbuffer(cmtRtHsh, &cmtRtHsh, nil, nil)
+					updateWS := workingset_flatbuffer(cmtRtHsh, &cmtRtHsh, nil, nil, nil)
 					ref, err := db.WriteValue(ctx, types.SerialMessage(updateWS))
 					if err != nil {
 						return prolly.AddressMap{}, err
@@ -540,7 +540,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 						}
 
 						// TODO - construct new meta instance rather than using the default
-						updateWS := workingset_flatbuffer(cmtRtHsh, &cmtRtHsh, nil, nil)
+						updateWS := workingset_flatbuffer(cmtRtHsh, &cmtRtHsh, nil, nil, nil)
 						ref, err := db.WriteValue(ctx, types.SerialMessage(updateWS))
 						if err != nil {
 							return prolly.AddressMap{}, err
