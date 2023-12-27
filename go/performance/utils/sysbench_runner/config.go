@@ -493,7 +493,7 @@ func getLuaScriptTestsFromDir(dir string) ([]*ConfigTest, error) {
 		if strings.HasSuffix(path, ".lua") && !strings.Contains(path, "_common.lua") {
 
 			// todo: make this work with doltgres
-			if !strings.Contains(path, "postgres") {
+			if !strings.Contains(path, "postgres") && !strings.Contains(path, "dolt_branches.lua") {
 				luaScripts = append(luaScripts, NewConfigTest(path, []string{}, true))
 			}
 		}
