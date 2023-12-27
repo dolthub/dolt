@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2023 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
@@ -42,15 +43,7 @@ type toUpload struct {
 	partNum int
 }
 
-type toDownload struct {
-	path    string
-	partNum int
-	br      BlobRange
-}
-
 type uploadFunc func(ctx context.Context, objectName, uploadID string, partNumber int, contentLength int64, reader io.Reader) (objectstorage.CommitMultipartUploadPartDetails, error)
-
-type downloadFunc func(ctx context.Context, objectName, namespace, etag string, partNumber int, br BlobRange) (*toDownload, error)
 
 type tempLocalObject struct {
 	path string
@@ -74,7 +67,7 @@ type OCIBlobstore struct {
 	provider            common.ConfigurationProvider
 	client              objectstorage.ObjectStorageClient
 	bucketName          string
-	nameSpace           string
+	namespace           string
 	prefix              string
 	concurrentListeners int
 }
@@ -82,30 +75,25 @@ type OCIBlobstore struct {
 var _ Blobstore = &OCIBlobstore{}
 
 // NewOCIBlobstore creates a new instance of a OCIBlobstore
-func NewOCIBlobstore(provider common.ConfigurationProvider, client objectstorage.ObjectStorageClient, bucketName, prefix string) *OCIBlobstore {
+func NewOCIBlobstore(ctx context.Context, provider common.ConfigurationProvider, client objectstorage.ObjectStorageClient, bucketName, prefix string) (*OCIBlobstore, error) {
 	for len(prefix) > 0 && prefix[0] == '/' {
 		prefix = prefix[1:]
 	}
+
 	// Disable timeout to support big file upload/download, default is 60s
 	client.HTTPClient = &http.Client{}
-	return &OCIBlobstore{provider, client, bucketName, "", prefix, defaultConcurrentListeners}
+
+	request := objectstorage.GetNamespaceRequest{}
+	r, err := client.GetNamespace(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+
+	return &OCIBlobstore{provider, client, bucketName, *r.Value, prefix, defaultConcurrentListeners}, nil
 }
 
 func (bs *OCIBlobstore) Path() string {
 	return path.Join(bs.bucketName, bs.prefix)
-}
-
-func (bs *OCIBlobstore) getNamespace(ctx context.Context) (string, error) {
-	if bs.nameSpace != "" {
-		return bs.nameSpace, nil
-	}
-	request := objectstorage.GetNamespaceRequest{}
-	r, err := bs.client.GetNamespace(ctx, request)
-	if err != nil {
-		return "", err
-	}
-	bs.nameSpace = *r.Value
-	return bs.nameSpace, nil
 }
 
 // Exists returns true if a blob exists for the given key, and false if it does not.
@@ -113,12 +101,8 @@ func (bs *OCIBlobstore) getNamespace(ctx context.Context) (string, error) {
 // implementations of this interface can)
 func (bs *OCIBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 	absKey := path.Join(bs.prefix, key)
-	namespace, err := bs.getNamespace(ctx)
-	if err != nil {
-		return false, err
-	}
-	_, err = bs.client.HeadObject(ctx, objectstorage.HeadObjectRequest{
-		NamespaceName: &namespace,
+	_, err := bs.client.HeadObject(ctx, objectstorage.HeadObjectRequest{
+		NamespaceName: &bs.namespace,
 		BucketName:    &bs.bucketName,
 		ObjectName:    &absKey,
 	})
@@ -137,11 +121,7 @@ func (bs *OCIBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 // Get retrieves an io.reader for the portion of a blob specified by br along with its version
 func (bs *OCIBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, string, error) {
 	absKey := path.Join(bs.prefix, key)
-	namespace, err := bs.getNamespace(ctx)
-	if err != nil {
-		return nil, "", err
-	}
-	return bs.getObject(ctx, absKey, namespace, "", br)
+	return bs.getObject(ctx, absKey, bs.namespace, "", br)
 }
 
 func (bs *OCIBlobstore) getObject(ctx context.Context, absKey, namespace, etag string, br BlobRange) (io.ReadCloser, string, error) {
@@ -173,11 +153,8 @@ func (bs *OCIBlobstore) getObject(ctx context.Context, absKey, namespace, etag s
 
 	// handle negative offset and positive length
 	if br.offset < 0 && br.length > 0 {
-		trimmedR, err := trimContent(res, br.length)
-		if err != nil {
-			return nil, "", err
-		}
-		return trimmedR, fmtstr(res.ETag), nil
+		lr := io.LimitReader(res.Content, br.length)
+		return io.NopCloser(lr), fmtstr(res.ETag), nil
 	}
 
 	return res.Content, fmtstr(res.ETag), nil
@@ -197,11 +174,7 @@ func (bs *OCIBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key st
 // At the time of this implementation, Oracle Cloud does not provide a way to create composite objects
 // via their APIs/SDKs.
 func (bs *OCIBlobstore) Concatenate(ctx context.Context, key string, sources []string) (string, error) {
-	panic("concatenate is unimplemented on the oci blobstore")
-}
-
-type Lenner interface {
-	Len() int
+	return "", fmt.Errorf("concatenate is unimplemented on the oci blobstore")
 }
 
 func (bs *OCIBlobstore) upload(ctx context.Context, expectedVersion, key string, totalSize int64, reader io.Reader) (string, error) {
@@ -217,13 +190,9 @@ func (bs *OCIBlobstore) upload(ctx context.Context, expectedVersion, key string,
 
 func (bs *OCIBlobstore) checkAndPut(ctx context.Context, expectedVersion, key string, contentLength int64, reader io.Reader) (string, error) {
 	absKey := path.Join(bs.prefix, key)
-	namespace, err := bs.getNamespace(ctx)
-	if err != nil {
-		return "", err
-	}
 
 	req := objectstorage.PutObjectRequest{
-		NamespaceName: &namespace,
+		NamespaceName: &bs.namespace,
 		BucketName:    &bs.bucketName,
 		ObjectName:    &absKey,
 		ContentLength: &contentLength,
@@ -252,13 +221,9 @@ func (bs *OCIBlobstore) checkAndPut(ctx context.Context, expectedVersion, key st
 
 func (bs *OCIBlobstore) multipartUpload(ctx context.Context, expectedVersion, key string, numParts int, uploadSize int64, reader io.Reader) (string, error) {
 	absKey := path.Join(bs.prefix, key)
-	namespace, err := bs.getNamespace(ctx)
-	if err != nil {
-		return "", err
-	}
 
 	startReq := objectstorage.CreateMultipartUploadRequest{
-		NamespaceName: &namespace,
+		NamespaceName: &bs.namespace,
 		BucketName:    &bs.bucketName,
 		CreateMultipartUploadDetails: objectstorage.CreateMultipartUploadDetails{
 			Object: &absKey,
@@ -281,7 +246,7 @@ func (bs *OCIBlobstore) multipartUpload(ctx context.Context, expectedVersion, ke
 	if err != nil {
 		// ignore this error
 		bs.client.AbortMultipartUpload(ctx, objectstorage.AbortMultipartUploadRequest{
-			NamespaceName:   &namespace,
+			NamespaceName:   &bs.namespace,
 			BucketName:      &bs.bucketName,
 			ObjectName:      &absKey,
 			UploadId:        startRes.UploadId,
@@ -291,7 +256,7 @@ func (bs *OCIBlobstore) multipartUpload(ctx context.Context, expectedVersion, ke
 	}
 
 	commitReq := objectstorage.CommitMultipartUploadRequest{
-		NamespaceName:                &namespace,
+		NamespaceName:                &bs.namespace,
 		BucketName:                   &bs.bucketName,
 		ObjectName:                   &absKey,
 		UploadId:                     startRes.UploadId,
@@ -325,13 +290,8 @@ func (bs *OCIBlobstore) uploadPart(ctx context.Context, objectName, uploadID str
 		return objectstorage.CommitMultipartUploadPartDetails{}, errors.New("upload id required to upload part")
 	}
 
-	namespace, err := bs.getNamespace(ctx)
-	if err != nil {
-		return objectstorage.CommitMultipartUploadPartDetails{}, err
-	}
-
 	res, err := bs.client.UploadPart(ctx, objectstorage.UploadPartRequest{
-		NamespaceName:  &namespace,
+		NamespaceName:  &bs.namespace,
 		BucketName:     &bs.bucketName,
 		ObjectName:     &objectName,
 		UploadId:       &uploadID,
@@ -468,20 +428,6 @@ func getNumPartsAndPartSize(totalSize, partSize, maxPartNum int64) (int, int64) 
 	}
 	numParts := int(math.Ceil(float64(totalSize) / float64(ps)))
 	return numParts, ps
-}
-
-func trimContent(res objectstorage.GetObjectResponse, length int64) (io.ReadCloser, error) {
-	defer res.Content.Close()
-	//var data bytes.Buffer
-	lr := io.LimitReader(res.Content, length)
-	//n, err := io.Copy(&data, lr)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//if n != length {
-	//	return nil, errors.New("failed to trim response content")
-	//}
-	return io.NopCloser(lr), nil
 }
 
 func fmtstr(s *string) string {

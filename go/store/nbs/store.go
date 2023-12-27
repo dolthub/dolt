@@ -542,7 +542,11 @@ func NewGCSStore(ctx context.Context, nbfVerStr string, bucketName, path string,
 func NewOCISStore(ctx context.Context, nbfVerStr string, bucketName, path string, provider common.ConfigurationProvider, client objectstorage.ObjectStorageClient, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 
-	bs := blobstore.NewOCIBlobstore(provider, client, bucketName, path)
+	bs, err := blobstore.NewOCIBlobstore(ctx, provider, client, bucketName, path)
+	if err != nil {
+		return nil, err
+	}
+
 	return NewNoConjoinBSStore(ctx, nbfVerStr, bs, memTableSize, q)
 }
 

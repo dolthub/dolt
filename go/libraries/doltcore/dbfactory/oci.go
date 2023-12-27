@@ -47,7 +47,11 @@ func (fact OCIFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, u
 		return nil, nil, nil, err
 	}
 
-	bs := blobstore.NewOCIBlobstore(provider, client, urlObj.Host, urlObj.Path)
+	bs, err := blobstore.NewOCIBlobstore(ctx, provider, client, urlObj.Host, urlObj.Path)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
 	q := nbs.NewUnlimitedMemQuotaProvider()
 
 	ociStore, err := nbs.NewNoConjoinBSStore(ctx, nbf.VersionString(), bs, defaultMemTableSize, q)
