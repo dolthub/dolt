@@ -144,13 +144,16 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	if err != nil {
 		// In fringe cases the server can't start because the default branch doesn't exist, `dolt checkout <existing branch>`
 		// offers an escape hatch.
-		if !branchOrTrack && strings.Contains(err.Error(), "cannot resolve default branch head for database") {
-			err := saveHeadBranch(dEnv.FS, branchName)
-			if err != nil {
-				cli.PrintErr(err)
-				return 1
+		if dEnv != nil {
+			// NM4 I hate everything about this.
+			if !branchOrTrack && strings.Contains(err.Error(), "cannot resolve default branch head for database") {
+				err := saveHeadBranch(dEnv.FS, branchName)
+				if err != nil {
+					cli.PrintErr(err)
+					return 1
+				}
+				return 0
 			}
-			return 0
 		}
 		return HandleVErrAndExitCode(handleErrors(branchName, err), usagePrt)
 	}
@@ -172,17 +175,19 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		cli.Println(message)
 	}
 
-	if strings.Contains(message, "Switched to branch") {
-		err := saveHeadBranch(dEnv.FS, branchName)
-		if err != nil {
-			cli.PrintErr(err)
-			return 1
-		}
-		// This command doesn't modify `dEnv` which could break tests that call multiple commands in sequence.
-		// We must reload it so that it includes changes to the repo state.
-		err = dEnv.ReloadRepoState()
-		if err != nil {
-			return 1
+	if dEnv != nil {
+		if strings.Contains(message, "Switched to branch") {
+			err := saveHeadBranch(dEnv.FS, branchName)
+			if err != nil {
+				cli.PrintErr(err)
+				return 1
+			}
+			// This command doesn't modify `dEnv` which could break tests that call multiple commands in sequence.
+			// We must reload it so that it includes changes to the repo state.
+			err = dEnv.ReloadRepoState()
+			if err != nil {
+				return 1
+			}
 		}
 	}
 

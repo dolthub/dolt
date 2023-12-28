@@ -759,13 +759,27 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 		matches := re.FindStringSubmatch(query)
 		// If the query starts with a slash, it's a shell command. We don't want to print the query in that case.
 		if len(matches) > 1 {
-			slashCmd := matches[1]
-			err := handleSlashCommand(sqlCtx, slashCmd, cliCtx)
-			if err != nil {
-				shell.Println(color.RedString(err.Error()))
-			}
+			func() {
+				subCtx, stop := signal.NotifyContext(initialCtx, os.Interrupt, syscall.SIGTERM)
+				defer stop()
+				sqlCtx := sql.NewContext(subCtx, sql.WithSession(sqlCtx.Session))
 
-			nextPrompt = fmt.Sprintf("%s> ", sqlCtx.GetCurrentDatabase())
+				slashCmd := matches[1]
+				err := handleSlashCommand(sqlCtx, slashCmd, cliCtx)
+				if err != nil {
+					shell.Println(color.RedString(err.Error()))
+				}
+
+				// NM4 - TODO: move this to a separate function
+				db, branch, ok := getDBBranchFromSession(sqlCtx, qryist)
+				if ok {
+					sqlCtx.SetCurrentDatabase(db)
+				}
+				if branch != "" {
+					dirty, _ = isDirty(sqlCtx, qryist)
+				}
+				nextPrompt, multiPrompt = formattedPrompts(db, branch, dirty)
+			}()
 		} else {
 			closureFormat := format
 
@@ -817,7 +831,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 
 				db, branch, ok := getDBBranchFromSession(sqlCtx, qryist)
 				if ok {
-					sqlCtx.SetCurrentDatabase(db)
+					sqlCtx.SetCurrentDatabase(db) // NM4 - what exactly does this do
 				}
 				if branch != "" {
 					dirty, _ = isDirty(sqlCtx, qryist)
@@ -884,7 +898,6 @@ func parseSlashCmd(cmd string) []string {
 }
 
 func handleSlashCommand(sqlCtx *sql.Context, fullCmd string, cliCtx cli.CliContext) error {
-
 	cliCmd := parseSlashCmd(fullCmd)
 	if len(cliCmd) == 0 {
 		// Print help?? NM4
@@ -980,7 +993,7 @@ func getDBBranchFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string
 // isDirty returns true if the workspace is dirty, false otherwise. This function _assumes_ you are on a database
 // with a branch. If you are not, you will get an error.
 func isDirty(sqlCtx *sql.Context, qryist cli.Queryist) (bool, error) {
-	_, resp, err := qryist.Query(sqlCtx, "select count(table_name) > 0 as dirty from dolt_Status")
+	_, resp, err := qryist.Query(sqlCtx, "select count(table_name) > 0 as dirty from dolt_status")
 
 	if err != nil {
 		cli.Println(color.RedString("Failure to get DB Name for session: " + err.Error()))
