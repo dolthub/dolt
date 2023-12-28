@@ -52,7 +52,7 @@ type Index interface {
 	// Non-public. Used for flatbuffers Table persistence.
 	bytes() ([]byte, error)
 
-	DebugString(ctx context.Context) string
+	DebugString(ctx context.Context, ns tree.NodeStore, schema schema.Schema) string
 }
 
 // IndexSet stores a collection secondary Indexes.
@@ -221,7 +221,7 @@ func (i nomsIndex) AddColumnToRows(ctx context.Context, newCol string, newSchema
 	return i, nil
 }
 
-func (i nomsIndex) DebugString(ctx context.Context) string {
+func (i nomsIndex) DebugString(ctx context.Context, ns tree.NodeStore, schema schema.Schema) string {
 	panic("Not implemented")
 }
 
@@ -336,10 +336,10 @@ func (i prollyIndex) AddColumnToRows(ctx context.Context, newCol string, newSche
 	return IndexFromProllyMap(newMap), nil
 }
 
-func (i prollyIndex) DebugString(ctx context.Context) string {
+func (i prollyIndex) DebugString(ctx context.Context, ns tree.NodeStore, schema schema.Schema) string {
 	var b bytes.Buffer
 	i.index.WalkNodes(ctx, func(ctx context.Context, nd tree.Node) error {
-		return tree.OutputProllyNode(&b, nd)
+		return tree.OutputProllyNode(ctx, &b, nd, ns, schema)
 	})
 	return b.String()
 }

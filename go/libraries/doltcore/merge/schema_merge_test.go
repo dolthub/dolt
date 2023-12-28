@@ -1248,8 +1248,8 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 									require.NoError(t, err)
 									if expRowDataHash != actRowDataHash {
 										t.Error("Rows unequal")
-										t.Logf("expected rows: %s", expTbl.DebugString(ctx))
-										t.Logf("actual rows: %s", actTbl.DebugString(ctx))
+										t.Logf("expected rows: %s", expTbl.DebugString(ctx, m.NodeStore()))
+										t.Logf("actual rows: %s", actTbl.DebugString(ctx, m.NodeStore()))
 									}
 									expIndexSet, err := expTbl.GetIndexSet(ctx)
 									require.NoError(t, err)
@@ -1268,8 +1268,8 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 										require.NoError(t, err)
 										if expIndexHash != actIndexHash {
 											t.Errorf("Index %s unequal", index.Name())
-											t.Logf("expected rows: %s", expIndex.DebugString(ctx))
-											t.Logf("actual rows: %s", actIndex.DebugString(ctx))
+											t.Logf("expected rows: %s", expIndex.DebugString(ctx, m.NodeStore(), expSchema))
+											t.Logf("actual rows: %s", actIndex.DebugString(ctx, m.NodeStore(), expSchema))
 										}
 										return false, nil
 									})

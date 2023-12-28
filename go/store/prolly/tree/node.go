@@ -17,6 +17,8 @@ package tree
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"io"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
@@ -208,7 +210,9 @@ func getLastKey(nd Node) Item {
 // displayed in hex-encoded byte strings, but are delineated into their fields. All nodes have keys displayed in this
 // manner. Interior nodes have their child hash references spelled out, leaf nodes have value tuples delineated like
 // the keys
-func OutputProllyNode(w io.Writer, node Node) error {
+func OutputProllyNode(ctx context.Context, w io.Writer, node Node, ns NodeStore, schema schema.Schema) error {
+	kd := schema.GetKeyDescriptor()
+	vd := schema.GetValueDescriptor()
 	for i := 0; i < int(node.count); i++ {
 		k := node.GetKey(i)
 		kt := val.Tuple(k)
@@ -218,7 +222,22 @@ func OutputProllyNode(w io.Writer, node Node) error {
 			if j > 0 {
 				w.Write([]byte(", "))
 			}
-			w.Write([]byte(hex.EncodeToString(kt.GetField(j))))
+
+			isAddr := val.IsAddrEncoding(kd.Types[i].Enc)
+			if isAddr {
+				w.Write([]byte("#"))
+			}
+			w.Write([]byte(hex.EncodeToString(kd.GetField(j, kt))))
+			if isAddr {
+				w.Write([]byte(" ("))
+				key, err := GetField(ctx, kd, i, kt, ns)
+				if err != nil {
+					return err
+				}
+				w.Write([]byte(fmt.Sprint(key)))
+				w.Write([]byte(")"))
+			}
+
 		}
 
 		if node.IsLeaf() {
@@ -230,7 +249,20 @@ func OutputProllyNode(w io.Writer, node Node) error {
 				if j > 0 {
 					w.Write([]byte(", "))
 				}
-				w.Write([]byte(hex.EncodeToString(vt.GetField(j))))
+				isAddr := val.IsAddrEncoding(vd.Types[j].Enc)
+				if isAddr {
+					w.Write([]byte("#"))
+				}
+				w.Write([]byte(hex.EncodeToString(vd.GetField(j, vt))))
+				if isAddr {
+					w.Write([]byte(" ("))
+					value, err := GetField(ctx, vd, j, vt, ns)
+					if err != nil {
+						return err
+					}
+					w.Write([]byte(fmt.Sprint(value)))
+					w.Write([]byte(")"))
+				}
 			}
 
 			w.Write([]byte(" }"))
