@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package index
+package tree
 
 import (
 	"context"
@@ -28,7 +28,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/pool"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -187,7 +186,7 @@ var testPool = pool.NewBuffPool()
 func testRoundTripProllyFields(t *testing.T, test prollyFieldTest) {
 	desc := val.NewTupleDescriptor(test.typ)
 	builder := val.NewTupleBuilder(desc)
-	ns := tree.NewTestNodeStore()
+	ns := NewTestNodeStore()
 
 	err := PutField(context.Background(), ns, builder, 0, test.value)
 	assert.NoError(t, err)
@@ -269,7 +268,7 @@ func TestGeometryEncoding(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ns := tree.NewTestNodeStore()
+			ns := NewTestNodeStore()
 			oldDesc := val.NewTupleDescriptor(val.Type{Enc: val.GeometryEnc})
 			builder := val.NewTupleBuilder(oldDesc)
 			b := serializeGeometry(test.value)

@@ -16,6 +16,7 @@ package writer
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -161,13 +162,13 @@ func (iter prollyFkPkRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		nextRow := make(sql.Row, len(iter.primary.keyMap)+len(iter.primary.valMap))
 		for from := range iter.primary.keyMap {
 			to := iter.primary.keyMap.MapOrdinal(from)
-			if nextRow[to], err = index.GetField(ctx, iter.primary.keyBld.Desc, from, tblKey, iter.primary.mut.NodeStore()); err != nil {
+			if nextRow[to], err = tree.GetField(ctx, iter.primary.keyBld.Desc, from, tblKey, iter.primary.mut.NodeStore()); err != nil {
 				return nil, err
 			}
 		}
 		for from := range iter.primary.valMap {
 			to := iter.primary.valMap.MapOrdinal(from)
-			if nextRow[to], err = index.GetField(ctx, iter.primary.valBld.Desc, from, tblVal, iter.primary.mut.NodeStore()); err != nil {
+			if nextRow[to], err = tree.GetField(ctx, iter.primary.valBld.Desc, from, tblVal, iter.primary.mut.NodeStore()); err != nil {
 				return nil, err
 			}
 		}
@@ -206,7 +207,7 @@ func (iter prollyFkKeylessRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	err = iter.primary.mut.Get(ctx, primaryKey, func(tblKey, tblVal val.Tuple) error {
 		for from := range iter.primary.valMap {
 			to := iter.primary.valMap.MapOrdinal(from)
-			if nextRow[to], err = index.GetField(ctx, iter.primary.valBld.Desc, from+1, tblVal, iter.primary.mut.NodeStore()); err != nil {
+			if nextRow[to], err = tree.GetField(ctx, iter.primary.valBld.Desc, from+1, tblVal, iter.primary.mut.NodeStore()); err != nil {
 				return err
 			}
 		}

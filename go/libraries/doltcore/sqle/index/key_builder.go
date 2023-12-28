@@ -209,7 +209,7 @@ func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx context.Context, k, v val.T
 			}
 
 			// TODO: type conversion
-			err = PutField(ctx, b.nodeStore, b.builder, to, value)
+			err = tree.PutField(ctx, b.nodeStore, b.builder, to, value)
 			if err != nil {
 				return nil, err
 			}
@@ -229,7 +229,7 @@ func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx context.Context, k, v val.T
 			if b.canCopyRawBytes(to) {
 				b.builder.PutRaw(to, v.GetField(from))
 			} else {
-				value, err := GetField(ctx, b.sch.GetValueDescriptor(), from, v, b.nodeStore)
+				value, err := tree.GetField(ctx, b.sch.GetValueDescriptor(), from, v, b.nodeStore)
 				if err != nil {
 					return nil, err
 				}
@@ -238,7 +238,7 @@ func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx context.Context, k, v val.T
 					value = val.TrimValueToPrefixLength(value, b.indexDef.PrefixLengths()[to])
 				}
 
-				err = PutField(ctx, b.nodeStore, b.builder, to, value)
+				err = tree.PutField(ctx, b.nodeStore, b.builder, to, value)
 				if err != nil {
 					return nil, err
 				}

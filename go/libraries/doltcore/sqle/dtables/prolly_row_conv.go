@@ -16,12 +16,10 @@ package dtables
 
 import (
 	"context"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -117,7 +115,7 @@ func (c ProllyRowConverter) putFields(ctx context.Context, tup val.Tuple, proj v
 		if j == -1 {
 			continue
 		}
-		f, err := index.GetField(ctx, desc, i, tup, c.ns)
+		f, err := tree.GetField(ctx, desc, i, tup, c.ns)
 		if err != nil {
 			return err
 		}

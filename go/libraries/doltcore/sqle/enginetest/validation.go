@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -215,7 +214,7 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 				if err != nil {
 					return err
 				}
-				cell := index.ZCell(geom.(sqltypes.GeometryValue))
+				cell := tree.ZCell(geom.(sqltypes.GeometryValue))
 				field = cell[:]
 			}
 
@@ -310,7 +309,7 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 					if err != nil {
 						return err
 					}
-					cell := index.ZCell(geom.(sqltypes.GeometryValue))
+					cell := tree.ZCell(geom.(sqltypes.GeometryValue))
 					field = cell[:]
 				}
 
@@ -369,7 +368,7 @@ func shouldDereferenceContent(tablePos int, tableValueDescriptor val.TupleDesc, 
 // table, |tablePos| is the field index into the value tuple, and |tuple| is the value tuple from the
 // main table.
 func dereferenceContent(ctx context.Context, tableValueDescriptor val.TupleDesc, tablePos int, tuple val.Tuple, ns tree.NodeStore) ([]byte, error) {
-	v, err := index.GetField(ctx, tableValueDescriptor, tablePos, tuple, ns)
+	v, err := tree.GetField(ctx, tableValueDescriptor, tablePos, tuple, ns)
 	if err != nil {
 		return nil, err
 	}
@@ -392,7 +391,7 @@ func dereferenceContent(ctx context.Context, tableValueDescriptor val.TupleDesc,
 // table, |tablePos| is the field index into the value tuple, and |tuple| is the value tuple from the
 // main table.
 func dereferenceGeometry(ctx context.Context, tableValueDescriptor val.TupleDesc, tablePos int, tuple val.Tuple, ns tree.NodeStore) (interface{}, error) {
-	v, err := index.GetField(ctx, tableValueDescriptor, tablePos, tuple, ns)
+	v, err := tree.GetField(ctx, tableValueDescriptor, tablePos, tuple, ns)
 	if err != nil {
 		return nil, err
 	}

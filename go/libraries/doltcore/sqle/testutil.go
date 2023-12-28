@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"io"
 	"strings"
 
@@ -32,7 +33,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	config2 "github.com/dolthub/dolt/go/libraries/utils/config"
@@ -550,7 +550,7 @@ func sqlRowFromTuples(sch schema.Schema, kd, vd val.TupleDesc, k, v val.Tuple) (
 	for i, col := range sch.GetAllCols().GetColumns() {
 		pos, ok := sch.GetPKCols().TagToIdx[col.Tag]
 		if ok {
-			r[i], err = index.GetField(ctx, kd, pos, k, nil)
+			r[i], err = tree.GetField(ctx, kd, pos, k, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -561,7 +561,7 @@ func sqlRowFromTuples(sch schema.Schema, kd, vd val.TupleDesc, k, v val.Tuple) (
 			pos += 1 // compensate for cardinality field
 		}
 		if ok {
-			r[i], err = index.GetField(ctx, vd, pos, v, nil)
+			r[i], err = tree.GetField(ctx, vd, pos, v, nil)
 			if err != nil {
 				return nil, err
 			}

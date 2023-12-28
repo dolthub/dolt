@@ -20,7 +20,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
@@ -34,7 +33,7 @@ func NextConstraintViolation(ctx context.Context, itr prolly.ArtifactIter, kd, v
 
 	key = make(sql.Row, kd.Count())
 	for i := 0; i < kd.Count(); i++ {
-		key[i], err = index.GetField(ctx, kd, i, art.SourceKey, ns)
+		key[i], err = tree.GetField(ctx, kd, i, art.SourceKey, ns)
 		if err != nil {
 			return
 		}
@@ -48,7 +47,7 @@ func NextConstraintViolation(ctx context.Context, itr prolly.ArtifactIter, kd, v
 
 	value = make(sql.Row, vd.Count())
 	for i := 0; i < vd.Count(); i++ {
-		value[i], err = index.GetField(ctx, vd, i, meta.Value, ns)
+		value[i], err = tree.GetField(ctx, vd, i, meta.Value, ns)
 		if err != nil {
 			return
 		}

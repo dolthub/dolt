@@ -26,7 +26,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -103,9 +102,9 @@ func tuplesToRows(t *testing.T, kvs [][2]val.Tuple) (rows []sql.Row) {
 
 	rows = make([]sql.Row, len(kvs))
 	for i, kv := range kvs {
-		v1, err := index.GetField(context.Background(), kd, 0, kv[0], nil)
+		v1, err := tree.GetField(context.Background(), kd, 0, kv[0], nil)
 		require.NoError(t, err)
-		v2, err := index.GetField(context.Background(), kd, 0, kv[1], nil)
+		v2, err := tree.GetField(context.Background(), kd, 0, kv[1], nil)
 		require.NoError(t, err)
 		rows[i] = sql.Row{v1, v2}
 	}

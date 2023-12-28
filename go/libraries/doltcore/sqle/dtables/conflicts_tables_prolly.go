@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/zeebo/xxh3"
 
@@ -205,7 +204,7 @@ func (itr *prollyConflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 
 	if !itr.keyless {
 		for i := 0; i < itr.kd.Count(); i++ {
-			f, err := index.GetField(ctx, itr.kd, i, c.k, itr.baseRows.NodeStore())
+			f, err := tree.GetField(ctx, itr.kd, i, c.k, itr.baseRows.NodeStore())
 			if err != nil {
 				return nil, err
 			}
@@ -238,7 +237,7 @@ func (itr *prollyConflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 func (itr *prollyConflictRowIter) putConflictRowVals(ctx *sql.Context, c conf, r sql.Row) error {
 	if c.bV != nil {
 		for i := 0; i < itr.baseVD.Count(); i++ {
-			f, err := index.GetField(ctx, itr.baseVD, i, c.bV, itr.baseRows.NodeStore())
+			f, err := tree.GetField(ctx, itr.baseVD, i, c.bV, itr.baseRows.NodeStore())
 			if err != nil {
 				return err
 			}
@@ -248,7 +247,7 @@ func (itr *prollyConflictRowIter) putConflictRowVals(ctx *sql.Context, c conf, r
 
 	if c.oV != nil {
 		for i := 0; i < itr.oursVD.Count(); i++ {
-			f, err := index.GetField(ctx, itr.oursVD, i, c.oV, itr.baseRows.NodeStore())
+			f, err := tree.GetField(ctx, itr.oursVD, i, c.oV, itr.baseRows.NodeStore())
 			if err != nil {
 				return err
 			}
@@ -259,7 +258,7 @@ func (itr *prollyConflictRowIter) putConflictRowVals(ctx *sql.Context, c conf, r
 
 	if c.tV != nil {
 		for i := 0; i < itr.theirsVD.Count(); i++ {
-			f, err := index.GetField(ctx, itr.theirsVD, i, c.tV, itr.baseRows.NodeStore())
+			f, err := tree.GetField(ctx, itr.theirsVD, i, c.tV, itr.baseRows.NodeStore())
 			if err != nil {
 				return err
 			}
@@ -288,13 +287,13 @@ func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, c 
 
 	if c.bV != nil {
 		// Cardinality
-		r[itr.n-3], err = index.GetField(ctx, itr.baseVD, 0, c.bV, ns)
+		r[itr.n-3], err = tree.GetField(ctx, itr.baseVD, 0, c.bV, ns)
 		if err != nil {
 			return err
 		}
 
 		for i := 0; i < itr.baseVD.Count()-1; i++ {
-			f, err := index.GetField(ctx, itr.baseVD, i+1, c.bV, ns)
+			f, err := tree.GetField(ctx, itr.baseVD, i+1, c.bV, ns)
 			if err != nil {
 				return err
 			}
@@ -305,13 +304,13 @@ func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, c 
 	}
 
 	if c.oV != nil {
-		r[itr.n-2], err = index.GetField(ctx, itr.oursVD, 0, c.oV, ns)
+		r[itr.n-2], err = tree.GetField(ctx, itr.oursVD, 0, c.oV, ns)
 		if err != nil {
 			return err
 		}
 
 		for i := 0; i < itr.oursVD.Count()-1; i++ {
-			f, err := index.GetField(ctx, itr.oursVD, i+1, c.oV, ns)
+			f, err := tree.GetField(ctx, itr.oursVD, i+1, c.oV, ns)
 			if err != nil {
 				return err
 			}
@@ -324,13 +323,13 @@ func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, c 
 	r[itr.o+itr.oursVD.Count()-1] = getDiffType(c.bV, c.oV)
 
 	if c.tV != nil {
-		r[itr.n-1], err = index.GetField(ctx, itr.theirsVD, 0, c.tV, ns)
+		r[itr.n-1], err = tree.GetField(ctx, itr.theirsVD, 0, c.tV, ns)
 		if err != nil {
 			return err
 		}
 
 		for i := 0; i < itr.theirsVD.Count()-1; i++ {
-			f, err := index.GetField(ctx, itr.theirsVD, i+1, c.tV, ns)
+			f, err := tree.GetField(ctx, itr.theirsVD, i+1, c.tV, ns)
 			if err != nil {
 				return err
 			}
@@ -617,7 +616,7 @@ func (cd *prollyConflictDeleter) putPrimaryKeys(ctx *sql.Context, r sql.Row) err
 	}()
 
 	for i := 0; i < cd.kd.Count()-2; i++ {
-		err := index.PutField(ctx, cd.ed.NodeStore(), cd.kB, i, r[o+i])
+		err := tree.PutField(ctx, cd.ed.NodeStore(), cd.kB, i, r[o+i])
 
 		if err != nil {
 			return err
@@ -640,7 +639,7 @@ func (cd *prollyConflictDeleter) putKeylessHash(ctx *sql.Context, r sql.Row) err
 	// init cardinality to 0
 	cd.vB.PutUint64(0, 0)
 	for i, v := range rowVals {
-		err := index.PutField(ctx, cd.ed.NodeStore(), cd.vB, i+1, v)
+		err := tree.PutField(ctx, cd.ed.NodeStore(), cd.vB, i+1, v)
 		if err != nil {
 			return err
 		}

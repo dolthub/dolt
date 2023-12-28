@@ -16,6 +16,7 @@ package writer
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"io"
 	"strings"
 
@@ -24,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -110,7 +110,7 @@ func (m prollyIndexWriter) Map(ctx context.Context) (prolly.Map, error) {
 func (m prollyIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, sqlRow[from]); err != nil {
+		if err := tree.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, sqlRow[from]); err != nil {
 			return nil, err
 		}
 	}
@@ -141,7 +141,7 @@ func (m prollyIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 
 	for to := range m.valMap {
 		from := m.valMap.MapOrdinal(to)
-		if err := index.PutField(ctx, m.mut.NodeStore(), m.valBld, to, sqlRow[from]); err != nil {
+		if err := tree.PutField(ctx, m.mut.NodeStore(), m.valBld, to, sqlRow[from]); err != nil {
 			return err
 		}
 	}
@@ -186,7 +186,7 @@ func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sq
 
 	for to := range m.valMap {
 		from := m.valMap.MapOrdinal(to)
-		if err = index.PutField(ctx, m.mut.NodeStore(), m.valBld, to, newRow[from]); err != nil {
+		if err = tree.PutField(ctx, m.mut.NodeStore(), m.valBld, to, newRow[from]); err != nil {
 			return err
 		}
 	}
@@ -225,7 +225,7 @@ func (m prollyIndexWriter) uniqueKeyError(ctx context.Context, keyStr string, ke
 		kd := m.keyBld.Desc
 		for from := range m.keyMap {
 			to := m.keyMap.MapOrdinal(from)
-			if existing[to], err = index.GetField(ctx, kd, from, key, m.mut.NodeStore()); err != nil {
+			if existing[to], err = tree.GetField(ctx, kd, from, key, m.mut.NodeStore()); err != nil {
 				return err
 			}
 		}
@@ -233,7 +233,7 @@ func (m prollyIndexWriter) uniqueKeyError(ctx context.Context, keyStr string, ke
 		vd := m.valBld.Desc
 		for from := range m.valMap {
 			to := m.valMap.MapOrdinal(from)
-			if existing[to], err = index.GetField(ctx, vd, from, value, m.mut.NodeStore()); err != nil {
+			if existing[to], err = tree.GetField(ctx, vd, from, value, m.mut.NodeStore()); err != nil {
 				return err
 			}
 		}
@@ -297,7 +297,7 @@ func (m prollySecondaryIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.R
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
 		keyPart := m.trimKeyPart(to, sqlRow[from])
-		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, keyPart); err != nil {
+		if err := tree.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, keyPart); err != nil {
 			return nil, err
 		}
 	}
@@ -323,7 +323,7 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 			return nil
 		}
 		keyPart := m.trimKeyPart(to, sqlRow[from])
-		if err := index.PutField(ctx, ns, m.keyBld, to, keyPart); err != nil {
+		if err := tree.PutField(ctx, ns, m.keyBld, to, keyPart); err != nil {
 			return err
 		}
 	}

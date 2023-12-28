@@ -1464,7 +1464,7 @@ func remapTupleWithColumnDefaults(
 				secondPass = append(secondPass, to)
 			}
 
-			value, err = index.GetField(ctx, valDesc, from, valueTuple, tm.ns)
+			value, err = tree.GetField(ctx, valDesc, from, valueTuple, tm.ns)
 			if err != nil {
 				return nil, err
 			}
@@ -1475,7 +1475,7 @@ func remapTupleWithColumnDefaults(
 				return nil, err
 			}
 
-			err = index.PutField(ctx, tm.ns, tb, to, value)
+			err = tree.PutField(ctx, tm.ns, tb, to, value)
 			if err != nil {
 				return nil, err
 			}
@@ -1525,7 +1525,7 @@ func writeTupleExpression(
 		return err
 	}
 
-	return index.PutField(ctx, tm.ns, tb, colIdx, value)
+	return tree.PutField(ctx, tm.ns, tb, colIdx, value)
 }
 
 // convertValueToNewType handles converting a value from a previous type into a new type. |value| is the value from
@@ -1976,7 +1976,7 @@ func convert(ctx context.Context, fromDesc, toDesc val.TupleDesc, toSchema schem
 		// No conversion is necessary here.
 		return originalValue, nil
 	}
-	parsedCell, err := index.GetField(ctx, fromDesc, fromIndex, tuple, ns)
+	parsedCell, err := tree.GetField(ctx, fromDesc, fromIndex, tuple, ns)
 	if err != nil {
 		return nil, err
 	}
@@ -1989,5 +1989,5 @@ func convert(ctx context.Context, fromDesc, toDesc val.TupleDesc, toSchema schem
 	// If a merge results in assigning NULL to a non-null column, don't panic.
 	// Instead we validate the merged tuple before merging it into the table.
 	typ.Nullable = true
-	return index.Serialize(ctx, ns, typ, convertedCell)
+	return tree.Serialize(ctx, ns, typ, convertedCell)
 }

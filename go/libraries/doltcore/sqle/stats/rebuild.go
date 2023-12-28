@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
@@ -220,7 +219,7 @@ func (u *bucketBuilder) finalize(ctx context.Context, ns tree.NodeStore) (DoltBu
 	upperBound := make(sql.Row, u.prefixLen)
 	if u.currentKey != nil {
 		for i := 0; i < u.prefixLen; i++ {
-			upperBound[i], err = index.GetField(ctx, u.tupleDesc, i, u.currentKey, ns)
+			upperBound[i], err = tree.GetField(ctx, u.tupleDesc, i, u.currentKey, ns)
 			if err != nil {
 				return DoltBucket{}, err
 			}
@@ -313,7 +312,7 @@ func (m mcvHeap) Values(ctx context.Context, keyDesc val.TupleDesc, ns tree.Node
 		row := make(sql.Row, prefixLen)
 		var err error
 		for i := 0; i < prefixLen; i++ {
-			row[i], err = index.GetField(ctx, keyDesc, i, mcv.val, ns)
+			row[i], err = tree.GetField(ctx, keyDesc, i, mcv.val, ns)
 			if err != nil {
 				return nil, err
 			}
