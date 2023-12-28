@@ -89,11 +89,6 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{nil}},
 			},
 			{
-				// TODO: This test isn't working because AssertErr is called and currently always
-				//       creates a new Context, which is always initialized with mydb as the current
-				//       database. If we changed evaluation.go:126 to use AssertErrWithCtx instead and
-				//       reused the existing Context instance, then we could probably make this work.
-				Skip:           true,
 				Query:          "call dolt_rebase('-i', 'main');",
 				ExpectedErrStr: "no database selected",
 			},
