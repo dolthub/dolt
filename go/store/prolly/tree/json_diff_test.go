@@ -1,0 +1,162 @@
+package tree
+
+import (
+	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"io"
+	"testing"
+)
+
+// Copyright 2023 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+type jsonDiffTest struct {
+	name          string
+	from, to      types.JsonObject
+	expectedDiffs []JsonDiff
+}
+
+var simpleJsonDiffTests = []jsonDiffTest{
+	{
+		name:          "empty object, no modifications",
+		from:          types.JsonObject{},
+		to:            types.JsonObject{},
+		expectedDiffs: nil,
+	},
+	{
+		name: "insert into empty object",
+		from: types.JsonObject{},
+		to:   types.JsonObject{"a": 1},
+		expectedDiffs: []JsonDiff{
+			{
+				Key:  "$.\"a\"",
+				From: nil,
+				To:   &types.JSONDocument{Val: 1},
+				Type: AddedDiff,
+			},
+		},
+	},
+	{
+		name: "delete from object",
+		from: types.JsonObject{"a": 1},
+		to:   types.JsonObject{},
+		expectedDiffs: []JsonDiff{
+			{
+				Key:  "$.\"a\"",
+				From: &types.JSONDocument{Val: 1},
+				To:   nil,
+				Type: RemovedDiff,
+			},
+		},
+	},
+	{
+		name: "modify object",
+		from: types.JsonObject{"a": 1},
+		to:   types.JsonObject{"a": 2},
+		expectedDiffs: []JsonDiff{
+			{
+				Key:  "$.\"a\"",
+				From: &types.JSONDocument{Val: 1},
+				To:   &types.JSONDocument{Val: 2},
+				Type: ModifiedDiff,
+			},
+		},
+	},
+	{
+		name: "nested insert",
+		from: types.JsonObject{"a": types.JsonObject{}},
+		to:   types.JsonObject{"a": types.JsonObject{"b": 1}},
+		expectedDiffs: []JsonDiff{
+			{
+				Key:  "$.\"a\".\"b\"",
+				To:   &types.JSONDocument{Val: 1},
+				Type: AddedDiff,
+			},
+		},
+	},
+	{
+		name: "nested delete",
+		from: types.JsonObject{"a": types.JsonObject{"b": 1}},
+		to:   types.JsonObject{"a": types.JsonObject{}},
+		expectedDiffs: []JsonDiff{
+			{
+				Key:  "$.\"a\".\"b\"",
+				From: &types.JSONDocument{Val: 1},
+				Type: RemovedDiff,
+			},
+		},
+	},
+	{
+		name: "nested modify",
+		from: types.JsonObject{"a": types.JsonObject{"b": 1}},
+		to:   types.JsonObject{"a": types.JsonObject{"b": 2}},
+		expectedDiffs: []JsonDiff{
+			{
+				Key:  "$.\"a\".\"b\"",
+				From: &types.JSONDocument{Val: 1},
+				To:   &types.JSONDocument{Val: 2},
+				Type: ModifiedDiff,
+			},
+		},
+	},
+	{
+		name: "insert escaped double quotes",
+		from: types.JsonObject{"\"a\"": "1"},
+		to:   types.JsonObject{"b": "\"2\""},
+		expectedDiffs: []JsonDiff{
+			{
+				Key:  "$.\"\\\"a\\\"\"",
+				From: &types.JSONDocument{Val: "1"},
+				To:   nil,
+				Type: RemovedDiff,
+			},
+			{
+				Key:  "$.\"b\"",
+				From: nil,
+				To:   &types.JSONDocument{Val: "\"2\""},
+				Type: AddedDiff,
+			},
+		},
+	},
+}
+
+func TestJsonDiff(t *testing.T) {
+	t.Run("simple tests", func(t *testing.T) {
+		runTestBatch(t, simpleJsonDiffTests)
+	})
+}
+
+func runTestBatch(t *testing.T, tests []jsonDiffTest) {
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			runTest(t, test)
+		})
+	}
+}
+
+func runTest(t *testing.T, test jsonDiffTest) {
+	differ := NewJsonDiffer("$", test.from, test.to)
+	var actualDiffs []JsonDiff
+	for {
+		diff, err := differ.Next()
+		if err == io.EOF {
+			break
+		}
+		assert.NoError(t, err)
+		actualDiffs = append(actualDiffs, diff)
+	}
+
+	require.Equal(t, test.expectedDiffs, actualDiffs)
+}
