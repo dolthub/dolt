@@ -465,7 +465,7 @@ func runMain() int {
 	globalConfig.Iter(func(name, val string) (stop bool) {
 		option := strings.ToLower(name)
 		if _, ok := config.ConfigOptions[option]; !ok && !strings.HasPrefix(option, env.SqlServerGlobalsPrefix) {
-			fmt.Fprintf(cli.CliErr, "Warning: Unknown global config option '%s'. Use `dolt config --global --unset %s` to remove.\n", name, name)
+			cli.PrintErrf("Warning: Unknown global config option '%s'. Use `dolt config --global --unset %s` to remove.\n", name, name)
 		}
 		return false
 	})
@@ -476,7 +476,7 @@ func runMain() int {
 		localConfig.Iter(func(name, val string) (stop bool) {
 			option := strings.ToLower(name)
 			if _, ok := config.ConfigOptions[option]; !ok && !strings.HasPrefix(option, env.SqlServerGlobalsPrefix) {
-				fmt.Fprintf(cli.CliErr, "Warning: Unknown local config option '%s'. Use `dolt config --local --unset %s` to remove.", name, name)
+				cli.PrintErrf("Warning: Unknown local config option '%s'. Use `dolt config --local --unset %s` to remove.", name, name)
 			}
 			return false
 		})
