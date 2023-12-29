@@ -413,6 +413,12 @@ func continueRebase(ctx *sql.Context) error {
 		return err
 	}
 
+	// TODO: copyABranch (and the underlying call to doltdb.NewBranchAtCommit) has a race condition
+	//       where another session can set the branch head AFTER doltdb.NewBranchAtCommit updates
+	//       the branch head, but BEFORE doltdb.NewBranchAtCommit retrieves the working set for the
+	//       branch and updates the working root and staged root for the working set. We may be able
+	//       to fix this race condition by changing doltdb.NewBranchAtCommit to use
+	//       database.CommitWithWorkingSet, since it updates a branch head and working set atomically.
 	err = copyABranch(ctx, dbData, rebaseWorkingBranch, rebaseBranch, true, nil)
 	if err != nil {
 		return err
