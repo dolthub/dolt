@@ -164,8 +164,10 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "call dolt_rebase('-i', 'main');",
-				Expected: []sql.Row{{0, "interactive rebase started"}},
+				Query: "call dolt_rebase('-i', 'main');",
+				Expected: []sql.Row{{0, "interactive rebase started on branch dolt_rebase_branch1; " +
+					"adjust the rebase plan in the dolt_rebase table, then " +
+					"continue rebasing by calling dolt_rebase('--continue')"}},
 			},
 			{
 				Query: "update dolt_rebase set action='squash';",
@@ -259,8 +261,10 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "call dolt_rebase('-i', 'main');",
-				Expected: []sql.Row{{0, "interactive rebase started"}},
+				Query: "call dolt_rebase('-i', 'main');",
+				Expected: []sql.Row{{0, "interactive rebase started on branch dolt_rebase_branch1; " +
+					"adjust the rebase plan in the dolt_rebase table, then " +
+					"continue rebasing by calling dolt_rebase('--continue')"}},
 			},
 			{
 				Query:    "select active_branch();",
@@ -306,8 +310,10 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "call dolt_rebase('-i', 'main');",
-				Expected: []sql.Row{{0, "interactive rebase started"}},
+				Query: "call dolt_rebase('-i', 'main');",
+				Expected: []sql.Row{{0, "interactive rebase started on branch dolt_rebase_branch1; " +
+					"adjust the rebase plan in the dolt_rebase table, then " +
+					"continue rebasing by calling dolt_rebase('--continue')"}},
 			},
 			{
 				Query: "select * from dolt_rebase order by rebase_order ASC;",
@@ -410,8 +416,10 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "call dolt_rebase('-i', 'main');",
-				Expected: []sql.Row{{0, "interactive rebase started"}},
+				Query: "call dolt_rebase('-i', 'main');",
+				Expected: []sql.Row{{0, "interactive rebase started on branch dolt_rebase_branch1; " +
+					"adjust the rebase plan in the dolt_rebase table, then " +
+					"continue rebasing by calling dolt_rebase('--continue')"}},
 			},
 			{
 				Query: "select * from dolt_rebase order by rebase_order ASC;",
@@ -470,8 +478,10 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "call dolt_rebase('-i', 'main');",
-				Expected: []sql.Row{{0, "interactive rebase started"}},
+				Query: "call dolt_rebase('-i', 'main');",
+				Expected: []sql.Row{{0, "interactive rebase started on branch dolt_rebase_branch1; " +
+					"adjust the rebase plan in the dolt_rebase table, then " +
+					"continue rebasing by calling dolt_rebase('--continue')"}},
 			},
 			{
 				Query: "select * from dolt_rebase order by rebase_order ASC;",
@@ -545,8 +555,10 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{1}, {2}, {3}},
 			},
 			{
-				Query:    "call dolt_rebase('-i', 'main');",
-				Expected: []sql.Row{{0, "interactive rebase started"}},
+				Query: "call dolt_rebase('-i', 'main');",
+				Expected: []sql.Row{{0, "interactive rebase started on branch dolt_rebase_branch1; " +
+					"adjust the rebase plan in the dolt_rebase table, then " +
+					"continue rebasing by calling dolt_rebase('--continue')"}},
 			},
 			{
 				Query: "select * from dolt_rebase order by rebase_order;",
@@ -618,8 +630,10 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:    "call dolt_rebase('-i', 'main');",
-				Expected: []sql.Row{{0, "interactive rebase started"}},
+				Query: "call dolt_rebase('-i', 'main');",
+				Expected: []sql.Row{{0, "interactive rebase started on branch dolt_rebase_branch1; " +
+					"adjust the rebase plan in the dolt_rebase table, then " +
+					"continue rebasing by calling dolt_rebase('--continue')"}},
 			},
 			{
 				Query: "select * from dolt_rebase order by rebase_order;",
@@ -677,8 +691,10 @@ var DoltRebaseMultiSessionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"branch1"}},
 			},
 			{
-				Query:    "/* client a */ call dolt_rebase('-i', 'main');",
-				Expected: []sql.Row{{0, "interactive rebase started"}},
+				Query: "/* client a */ call dolt_rebase('-i', 'main');",
+				Expected: []sql.Row{{0, "interactive rebase started on branch dolt_rebase_branch1; " +
+					"adjust the rebase plan in the dolt_rebase table, then " +
+					"continue rebasing by calling dolt_rebase('--continue')"}},
 			},
 			{
 				Query:    "/* client b */ insert into t values (1000);",

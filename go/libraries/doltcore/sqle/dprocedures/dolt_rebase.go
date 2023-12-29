@@ -139,7 +139,15 @@ func doDoltRebase(ctx *sql.Context, args []string) (int, string, error) {
 		if err != nil {
 			return 1, "", err
 		}
-		return 0, "interactive rebase started", nil
+
+		currentBranch, err := currentBranch(ctx)
+		if err != nil {
+			return 1, "", err
+		}
+
+		return 0, fmt.Sprintf("interactive rebase started on branch %s; "+
+			"adjust the rebase plan in the dolt_rebase table, then continue rebasing by "+
+			"calling dolt_rebase('--continue')", currentBranch), nil
 	}
 }
 
@@ -163,7 +171,11 @@ func startRebase(ctx *sql.Context, upstreamPoint string) error {
 		return fmt.Errorf("unable to find database %s", ctx.GetCurrentDatabase())
 	}
 
-	rebaseBranch := headRef.GetPath()
+	rebaseBranch, err := currentBranch(ctx)
+	if err != nil {
+		return err
+	}
+
 	startCommit, err := dbData.Ddb.ResolveCommitRef(ctx, ref.NewBranchRef(rebaseBranch))
 	if err != nil {
 		return err
@@ -542,4 +554,14 @@ func squashCommitMessage(ctx *sql.Context, nextCommitHash string) (string, error
 	commitMessage := headCommitMeta.Description + "\n\n" + nextCommitMeta.Description
 
 	return commitMessage, nil
+}
+
+// currentBranch returns the name of the currently checked out branch, or any error if one was encountered.
+func currentBranch(ctx *sql.Context) (string, error) {
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	headRef, err := doltSession.CWBHeadRef(ctx, ctx.GetCurrentDatabase())
+	if err != nil {
+		return "", err
+	}
+	return headRef.GetPath(), nil
 }
