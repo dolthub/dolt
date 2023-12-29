@@ -22,7 +22,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 
 	"github.com/google/uuid"
 )
@@ -76,6 +75,18 @@ var defaultSysbenchTests = []*ConfigTest{
 	NewConfigTest("oltp_read_write", []string{}, false),
 	NewConfigTest("oltp_update_index", []string{}, false),
 	NewConfigTest("oltp_update_non_index", []string{}, false),
+}
+
+var defaultLuaScripts = map[string]string{
+	"covering_index_scan.lua": "covering_index_scan.lua",
+	"groupby_scan.lua":        "groupby_scan.lua",
+	"index_join.lua":          "index_join.lua",
+	"index_join_scan.lua":     "index_join_scan.lua",
+	"index_scan.lua":          "index_scan.lua",
+	"oltp_delete_insert.lua":  "oltp_delete_insert.lua",
+	"table_scan.lua":          "table_scan.lua",
+	"types_delete_insert.lua": "types_delete_insert.lua",
+	"types_table_scan.lua":    "types_table_scan.lua",
 }
 
 type ServerType string
@@ -469,7 +480,7 @@ func getDefaultTests(config *Config) ([]*ConfigTest, error) {
 	defaultTests := make([]*ConfigTest, 0)
 	defaultTests = append(defaultTests, defaultSysbenchTests...)
 	if config.ScriptDir != "" {
-		luaScriptTests, err := getLuaScriptTestsFromDir(config.ScriptDir)
+		luaScriptTests, err := getLuaScriptTestsFromDir(config.ScriptDir, defaultLuaScripts)
 		if err != nil {
 			return nil, err
 		}
@@ -478,7 +489,7 @@ func getDefaultTests(config *Config) ([]*ConfigTest, error) {
 	return defaultTests, nil
 }
 
-func getLuaScriptTestsFromDir(dir string) ([]*ConfigTest, error) {
+func getLuaScriptTestsFromDir(dir string, toInclude map[string]string) ([]*ConfigTest, error) {
 	luaScripts := make([]*ConfigTest, 0)
 	abs, err := filepath.Abs(dir)
 	if err != nil {
@@ -489,13 +500,9 @@ func getLuaScriptTestsFromDir(dir string) ([]*ConfigTest, error) {
 			return err
 		}
 
-		// Append all the lua scripts except for the `_common.lua` scripts which shouldnt be tested directly
-		if strings.HasSuffix(path, ".lua") && !strings.Contains(path, "_common.lua") {
-
-			// todo: make this work with doltgres
-			if !strings.Contains(path, "postgres") && !strings.Contains(path, "dolt_branches.lua") {
-				luaScripts = append(luaScripts, NewConfigTest(path, []string{}, true))
-			}
+		file := filepath.Base(path)
+		if _, ok := toInclude[file]; ok {
+			luaScripts = append(luaScripts, NewConfigTest(path, []string{}, true))
 		}
 		return nil
 	})

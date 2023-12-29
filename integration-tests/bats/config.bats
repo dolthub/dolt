@@ -15,6 +15,14 @@ teardown() {
     stop_sql_server
 }
 
+function no_stderr {
+    "$@" 2>/dev/null
+}
+
+function no_stdout {
+    "$@" 1>/dev/null
+}
+
 @test "config: make sure no dolt configuration for simulated fresh user" {
     run dolt config --list
     [ "$status" -eq 0 ]
@@ -56,9 +64,14 @@ teardown() {
 @test "config: warning on cli commands if config has nonsense variables" {
     dolt config --global --add user.name steph  # need to create config_global.json first
     echo '{"global":"foo"}' > $DOLT_ROOT_PATH/.dolt/config_global.json
-    run dolt version
+    run no_stdout dolt version
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Warning: Unknown global config option 'global'. Use \`dolt config --global --unset global\` to remove." ]] || false
+
+    # warning prints to stderr
+    run no_stderr dolt version
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "Warning: Unknown global config option 'global'. Use \`dolt config --global --unset global\` to remove." ]] || false
 
     dolt config --global --add user.email "you@example.com"
     dolt config --global --add user.name "Your Name"
@@ -66,7 +79,7 @@ teardown() {
 
     dolt config --local --add user.name steph  # need to create config.json first
     echo '{"local":"bar"}' > .dolt/config.json
-    run dolt config --list
+    run no_stdout dolt config --list
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Warning: Unknown global config option 'global'. Use \`dolt config --global --unset global\` to remove." ]] || false
     [[ "$output" =~ "Warning: Unknown local config option 'local'. Use \`dolt config --local --unset local\` to remove." ]] || false

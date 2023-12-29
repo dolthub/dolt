@@ -125,7 +125,7 @@ func updateBSWithChecker(ctx context.Context, bs blobstore.Blobstore, validate m
 			return manifestContents{}, err
 		}
 
-		_, err = bs.CheckAndPut(ctx, ver, manifestFile, buffer)
+		_, err = bs.CheckAndPut(ctx, ver, manifestFile, int64(buffer.Len()), buffer)
 
 		if err != nil {
 			if !blobstore.IsCheckAndPutError(err) {
