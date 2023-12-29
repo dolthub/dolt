@@ -1302,19 +1302,12 @@ func (ddb *DoltDB) UpdateWorkingSet(
 		return err
 	}
 
-	workingRootRef, stagedRef, mergeState, rebaseState, err := workingSet.writeValues(ctx, ddb)
+	wsSpec, err := workingSet.writeValues(ctx, ddb, meta)
 	if err != nil {
 		return err
 	}
 
-	_, err = ddb.db.withReplicationStatusController(replicationStatus).UpdateWorkingSet(ctx, ds, datas.WorkingSetSpec{
-		Meta:        meta,
-		WorkingRoot: workingRootRef,
-		StagedRoot:  stagedRef,
-		MergeState:  mergeState,
-		RebaseState: rebaseState,
-	}, prevHash)
-
+	_, err = ddb.db.withReplicationStatusController(replicationStatus).UpdateWorkingSet(ctx, ds, *wsSpec, prevHash)
 	return err
 }
 
@@ -1340,20 +1333,13 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 		return nil, err
 	}
 
-	workingRootRef, stagedRef, mergeState, rebaseState, err := workingSet.writeValues(ctx, ddb)
+	wsSpec, err := workingSet.writeValues(ctx, ddb, meta)
 	if err != nil {
 		return nil, err
 	}
 
 	commitDataset, _, err := ddb.db.withReplicationStatusController(replicationStatus).
-		CommitWithWorkingSet(ctx, headDs, wsDs, commit.Roots.Staged.nomsValue(), datas.WorkingSetSpec{
-			Meta:        meta,
-			WorkingRoot: workingRootRef,
-			StagedRoot:  stagedRef,
-			MergeState:  mergeState,
-			RebaseState: rebaseState,
-		}, prevHash, commit.CommitOptions)
-
+		CommitWithWorkingSet(ctx, headDs, wsDs, commit.Roots.Staged.nomsValue(), *wsSpec, prevHash, commit.CommitOptions)
 	if err != nil {
 		return nil, err
 	}
