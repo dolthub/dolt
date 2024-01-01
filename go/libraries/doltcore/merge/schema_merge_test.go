@@ -1199,7 +1199,15 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 							require.NoError(t, err)
 							foundDataConflict = foundDataConflict || hasConflict
 						}
-						require.True(t, foundDataConflict, "Expected data conflict, but didn't find one.")
+						if !assert.True(t, foundDataConflict, "Expected data conflict, but didn't find one.") {
+							for name, _ := range exp {
+								table, _, err := result.Root.GetTable(ctx, name)
+								require.NoError(t, err)
+								t.Logf("table %s:", name)
+								t.Log(table.DebugString(ctx, m.NodeStore()))
+							}
+
+						}
 					} else {
 						for name, addr := range exp {
 							a, ok := act[name]
