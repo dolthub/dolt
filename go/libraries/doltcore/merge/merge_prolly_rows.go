@@ -20,13 +20,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression"
-	"github.com/dolthub/go-mysql-server/sql/transform"
-	errorkinds "gopkg.in/src-d/go-errors.v1"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -37,6 +30,13 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/transform"
+	"github.com/dolthub/go-mysql-server/sql/types"
+	"golang.org/x/exp/maps"
+	errorkinds "gopkg.in/src-d/go-errors.v1"
+	"io"
 )
 
 // ErrUnableToMergeColumnDefaultValue is returned when a column's default value cannot be Eval'ed and we are unable to
@@ -1840,6 +1840,8 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 	resultColumn := m.resultSchema.GetNonPKCols().GetByIndex(i)
 	generatedColumn := resultColumn.Generated != ""
 
+	sqlType := m.resultSchema.GetNonPKCols().GetByIndex(i).TypeInfo.ToSqlType()
+
 	// We previously asserted that left and right are not nil.
 	// But base can be nil in the event of convergent inserts.
 	if base == nil || !baseColExists {
@@ -1947,11 +1949,107 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 			return leftCol, false, nil
 		}
 		// concurrent modification
+		// if the result type is JSON, we can attempt to merge the JSON changes.
+		if _, ok := sqlType.(types.JsonType); ok {
+			return m.mergeJSONAddr(ctx, baseCol, leftCol, rightCol)
+		}
+		// otherwise, this is a conflict.
 		return nil, true, nil
 	case leftModified:
 		return leftCol, false, nil
 	default:
 		return rightCol, false, nil
+	}
+}
+
+func (m *valueMerger) mergeJSONAddr(ctx context.Context, baseAddr []byte, leftAddr []byte, rightAddr []byte) (resultAddr []byte, conflict bool, err error) {
+	baseDoc, err := tree.NewJSONDoc(hash.New(baseAddr), m.ns).ToJSONDocument(ctx)
+	if err != nil {
+		return nil, true, err
+	}
+	leftDoc, err := tree.NewJSONDoc(hash.New(leftAddr), m.ns).ToJSONDocument(ctx)
+	if err != nil {
+		return nil, true, err
+	}
+	rightDoc, err := tree.NewJSONDoc(hash.New(rightAddr), m.ns).ToJSONDocument(ctx)
+	if err != nil {
+		return nil, true, err
+	}
+
+	mergedDoc, conflict, err := mergeJSON(baseDoc, leftDoc, rightDoc)
+	if err != nil {
+		return nil, true, err
+	}
+	if conflict {
+		return nil, true, nil
+	}
+
+	mergedBytes, err := json.Marshal(mergedDoc.ToInterface())
+	if err != nil {
+		return nil, true, err
+	}
+	mergedAddr, err := tree.SerializeBytesToAddr(ctx, m.ns, bytes.NewReader(mergedBytes), len(mergedBytes))
+	if err != nil {
+		return nil, true, err
+	}
+	return mergedAddr[:], false, nil
+
+}
+
+func mergeJSON(base types.JSONDocument, left types.JSONDocument, right types.JSONDocument) (resultDoc types.JSONDocument, conflict bool, err error) {
+	// First, deserialize each value into JSON.
+	// We can only merge if the value at all three commits is a JSON object.
+
+	baseObject, baseIsObject := base.Val.(types.JsonObject)
+	leftObject, leftIsObject := left.Val.(types.JsonObject)
+	rightObject, rightIsObject := right.Val.(types.JsonObject)
+
+	if !baseIsObject || !leftIsObject || !rightIsObject {
+		// At least one of the commits does not have a JSON object.
+		// If both left and right have the same value, use that value.
+		// But if they differ, this is an unresolvable merge conflict.
+		cmp, err := left.Compare(right)
+		if err != nil {
+			return types.JSONDocument{}, true, err
+		}
+		if cmp == 0 {
+			//convergent operation.
+			return left, false, nil
+		} else {
+			return types.JSONDocument{}, true, nil
+		}
+	}
+
+	mergedObject := maps.Clone(leftObject)
+	merged := types.JSONDocument{Val: mergedObject}
+
+	threeWayDiffer := NewThreeWayJsonDiffer(baseObject, leftObject, rightObject)
+
+	// Compute the merged object by applying diffs to the left object as needed.
+	for {
+		threeWayDiff, err := threeWayDiffer.Next()
+		if err == io.EOF {
+			return merged, false, nil
+		}
+
+		switch threeWayDiff.Op {
+		case tree.DiffOpRightAdd, tree.DiffOpConvergentAdd, tree.DiffOpRightModify, tree.DiffOpConvergentModify:
+			_, _, err := merged.Set(threeWayDiff.Key, threeWayDiff.Right)
+			if err != nil {
+				return types.JSONDocument{}, true, err
+			}
+		case tree.DiffOpRightDelete, tree.DiffOpConvergentDelete:
+			_, _, err := merged.Remove(threeWayDiff.Key)
+			if err != nil {
+				return types.JSONDocument{}, true, err
+			}
+		case tree.DiffOpLeftAdd, tree.DiffOpLeftModify, tree.DiffOpLeftDelete:
+			// these changes already exist on the left, so do nothing.
+		case tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict:
+			return types.JSONDocument{}, true, nil
+		default:
+			panic("unreachable")
+		}
 	}
 }
 
