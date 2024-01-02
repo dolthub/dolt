@@ -200,7 +200,7 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) err
 			}
 			fmt.Fprintf(w, "\tPrimary Index (rows %d, depth %d) #%s {",
 				c, node.Level()+1, node.HashOf().String())
-			tree.OutputProllyNode(w, node)
+			tree.OutputProllyNodeBytes(w, node)
 			fmt.Fprintf(w, "\t}\n")
 
 			// secondary indexes
@@ -255,7 +255,7 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) err
 			if err != nil {
 				return err
 			}
-			return tree.OutputProllyNode(w, node)
+			return tree.OutputProllyNodeBytes(w, node)
 		default:
 			return types.WriteEncodedValue(ctx, w, value)
 		}
