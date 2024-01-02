@@ -17,10 +17,11 @@ package tree
 import (
 	"bytes"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/types"
 	"io"
 	"reflect"
 	"strings"
+
+	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
 type JsonDiff struct {

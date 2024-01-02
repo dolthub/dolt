@@ -18,8 +18,9 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"io"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"

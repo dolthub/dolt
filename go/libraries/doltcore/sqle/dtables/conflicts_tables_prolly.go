@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/zeebo/xxh3"
 

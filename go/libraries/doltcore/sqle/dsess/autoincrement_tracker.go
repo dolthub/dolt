@@ -16,7 +16,6 @@ package dsess
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"io"
 	"math"
 	"strings"
@@ -30,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 

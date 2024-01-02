@@ -18,7 +18,6 @@ import (
 	"container/heap"
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -26,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 

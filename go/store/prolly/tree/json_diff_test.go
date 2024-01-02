@@ -1,11 +1,12 @@
 package tree
 
 import (
+	"io"
+	"testing"
+
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"io"
-	"testing"
 )
 
 // Copyright 2023 Dolthub, Inc.
