@@ -158,6 +158,32 @@ type WorkingSetHead struct {
 	WorkingAddr hash.Hash
 	StagedAddr  *hash.Hash
 	MergeState  *MergeState
+	RebaseState *RebaseState
+}
+
+type RebaseState struct {
+	preRebaseWorkingAddr *hash.Hash
+	ontoCommitAddr       *hash.Hash
+	branch               string
+}
+
+func (rs *RebaseState) PreRebaseWorkingAddr() hash.Hash {
+	if rs.preRebaseWorkingAddr != nil {
+		return *rs.preRebaseWorkingAddr
+	} else {
+		return hash.Hash{}
+	}
+}
+
+func (rs *RebaseState) Branch(_ context.Context) string {
+	return rs.branch
+}
+
+func (rs *RebaseState) OntoCommit(ctx context.Context, vr types.ValueReader) (*Commit, error) {
+	if rs.ontoCommitAddr != nil {
+		return LoadCommitAddr(ctx, vr, *rs.ontoCommitAddr)
+	}
+	return nil, nil
 }
 
 type MergeState struct {
@@ -398,6 +424,18 @@ func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
 		}
 		ret.MergeState.isCherryPick = mergeState.IsCherryPick()
 	}
+
+	rebaseState, err := h.msg.TryRebaseState(nil)
+	if err != nil {
+		return nil, err
+	}
+	if rebaseState != nil {
+		ret.RebaseState = NewRebaseState(
+			hash.New(rebaseState.PreWorkingRootAddrBytes()),
+			hash.New(rebaseState.OntoCommitAddrBytes()),
+			string(rebaseState.BranchBytes()))
+	}
+
 	return &ret, nil
 }
 

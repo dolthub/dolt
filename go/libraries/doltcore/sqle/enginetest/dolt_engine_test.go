@@ -1665,6 +1665,30 @@ func TestDoltMerge(t *testing.T) {
 	}
 }
 
+func TestDoltRebase(t *testing.T) {
+	for _, script := range DoltRebaseScriptTests {
+		func() {
+			h := newDoltHarness(t)
+			defer h.Close()
+			h.skipSetupCommit = true
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+
+	testMultiSessionScriptTests(t, DoltRebaseMultiSessionScriptTests)
+}
+
+func TestDoltRebasePrepared(t *testing.T) {
+	for _, script := range DoltRebaseScriptTests {
+		func() {
+			h := newDoltHarness(t)
+			defer h.Close()
+			h.skipSetupCommit = true
+			enginetest.TestScriptPrepared(t, h, script)
+		}()
+	}
+}
+
 func TestDoltMergePrepared(t *testing.T) {
 	for _, script := range MergeScripts {
 		// harness can't reset effectively when there are new commits / branches created, so use a new harness for

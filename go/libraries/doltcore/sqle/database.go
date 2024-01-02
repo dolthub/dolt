@@ -25,19 +25,24 @@ import (
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/fulltext"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
+	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
+	"github.com/shopspring/decimal"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
+	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
@@ -82,6 +87,7 @@ var _ sql.ViewDatabase = Database{}
 var _ sql.EventDatabase = Database{}
 var _ sql.AliasedDatabase = Database{}
 var _ fulltext.Database = Database{}
+var _ rebase.RebasePlanDatabase = Database{}
 
 type ReadOnlyDatabase struct {
 	Database
@@ -1641,6 +1647,96 @@ func (db Database) SetCollation(ctx *sql.Context, collation sql.CollationID) err
 		return err
 	}
 	return db.SetRoot(ctx, newRoot)
+}
+
+// LoadRebasePlan implements the rebase.RebasePlanDatabase interface
+func (db Database) LoadRebasePlan(ctx *sql.Context) (*rebase.RebasePlan, error) {
+	table, ok, err := db.GetTableInsensitive(ctx, doltdb.RebaseTableName)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("unable to find dolt_rebase table")
+	}
+	resolvedTable := plan.NewResolvedTable(table, db, nil)
+	sort := plan.NewSort([]sql.SortField{{
+		Column: expression.NewGetField(0, types.MustCreateDecimalType(6, 2), "rebase_order", false),
+		Order:  sql.Ascending,
+	}}, resolvedTable)
+	iter, err := rowexec.DefaultBuilder.Build(ctx, sort, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var rebasePlan rebase.RebasePlan
+	for {
+		row, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
+
+		i, ok := row[1].(uint16)
+		if !ok {
+			return nil, fmt.Errorf("invalid enum value in rebase plan: %v (%T)", row[1], row[1])
+		}
+		rebaseAction, ok := dprocedures.RebaseActionEnumType.At(int(i))
+		if !ok {
+			return nil, fmt.Errorf("invalid enum value in rebase plan: %v (%T)", row[1], row[1])
+		}
+
+		rebasePlan.Steps = append(rebasePlan.Steps, rebase.RebasePlanStep{
+			RebaseOrder: row[0].(decimal.Decimal),
+			Action:      rebaseAction,
+			CommitHash:  row[2].(string),
+			CommitMsg:   row[3].(string),
+		})
+	}
+
+	return &rebasePlan, nil
+}
+
+// SaveRebasePlan implements the rebase.RebasePlanDatabase interface
+func (db Database) SaveRebasePlan(ctx *sql.Context, plan *rebase.RebasePlan) error {
+	pkSchema := sql.NewPrimaryKeySchema(dprocedures.DoltRebaseSystemTableSchema, 2)
+	// we use createSqlTable, instead of CreateTable to avoid the "dolt_" reserved prefix table name check
+	err := db.createSqlTable(ctx, doltdb.RebaseTableName, pkSchema, sql.Collation_Default)
+	if err != nil {
+		return err
+	}
+
+	table, ok, err := db.GetTableInsensitive(ctx, doltdb.RebaseTableName)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("unable to find %s table", doltdb.RebaseTableName)
+	}
+
+	writeableDoltTable, ok := table.(*WritableDoltTable)
+	if !ok {
+		return fmt.Errorf("expected a *sqle.WritableDoltTable, but got %T", table)
+	}
+
+	inserter := writeableDoltTable.Inserter(ctx)
+	for _, planMember := range plan.Steps {
+		actionEnumValue := dprocedures.RebaseActionEnumType.IndexOf(strings.ToLower(planMember.Action))
+		if actionEnumValue == -1 {
+			return fmt.Errorf("invalid rebase action: %s", planMember.Action)
+		}
+		err = inserter.Insert(ctx, sql.Row{
+			planMember.RebaseOrder,
+			uint16(actionEnumValue),
+			planMember.CommitHash,
+			planMember.CommitMsg,
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	return inserter.Close(ctx)
 }
 
 // noopRepoStateWriter is a minimal implementation of RepoStateWriter that does nothing

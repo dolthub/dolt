@@ -211,7 +211,7 @@ func CleanOldWorkingSet(
 	err = doltDb.UpdateWorkingSet(
 		ctx,
 		initialWs.Ref(),
-		initialWs.WithWorkingRoot(newRoots.Working).WithStagedRoot(newRoots.Staged).ClearMerge(),
+		initialWs.WithWorkingRoot(newRoots.Working).WithStagedRoot(newRoots.Staged).ClearMerge().ClearRebase(),
 		h,
 
 		&datas.WorkingSetMeta{
