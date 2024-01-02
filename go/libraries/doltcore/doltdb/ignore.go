@@ -232,6 +232,12 @@ func resolveConflictingPatterns(trueMatches, falseMatches []string, tableName st
 }
 
 func (ip *IgnorePatterns) IsTableNameIgnored(tableName string) (IgnoreResult, error) {
+	// The dolt_rebase table is automatically ignored by Dolt – it shouldn't ever
+	// be checked in to a Dolt database.
+	if strings.ToLower(tableName) == strings.ToLower(RebaseTableName) {
+		return Ignore, nil
+	}
+
 	trueMatches := []string{}
 	falseMatches := []string{}
 	for _, patternIgnore := range *ip {

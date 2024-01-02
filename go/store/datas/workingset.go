@@ -29,14 +29,18 @@ const (
 	workingSetMetaField = "meta"
 	workingRootRefField = "workingRootRef"
 	stagedRootRefField  = "stagedRootRef"
-	mergeStateField     = "mergeState"
 )
 
 const (
 	mergeStateName                 = "MergeState"
+	mergeStateField                = "mergeState"
 	mergeStateCommitSpecField      = "commitSpec"
 	mergeStateCommitField          = "commit"
 	mergeStateWorkingPreMergeField = "workingPreMerge"
+)
+
+const (
+	rebaseStateField = "rebaseState"
 )
 
 const (
@@ -82,9 +86,10 @@ type WorkingSetSpec struct {
 	WorkingRoot types.Ref
 	StagedRoot  types.Ref
 	MergeState  *MergeState
+	RebaseState *RebaseState
 }
 
-// NewWorkingSet creates a new working set object.
+// newWorkingSet creates a new working set object.
 // A working set is a value that has been persisted but is not necessarily referenced by a Commit. As the name implies,
 // it's storage for data changes that have not yet been incorporated into the commit graph but need durable storage.
 //
@@ -101,10 +106,16 @@ type WorkingSetSpec struct {
 //
 // ```
 // where M is a struct type and R is a ref type.
-func newWorkingSet(ctx context.Context, db *database, meta *WorkingSetMeta, workingRef, stagedRef types.Ref, mergeState *MergeState) (hash.Hash, types.Ref, error) {
+func newWorkingSet(ctx context.Context, db *database, workingSetSpec WorkingSetSpec) (hash.Hash, types.Ref, error) {
+	meta := workingSetSpec.Meta
+	workingRef := workingSetSpec.WorkingRoot
+	stagedRef := workingSetSpec.StagedRoot
+	mergeState := workingSetSpec.MergeState
+	rebaseState := workingSetSpec.RebaseState
+
 	if db.Format().UsesFlatbuffers() {
 		stagedAddr := stagedRef.TargetHash()
-		data := workingset_flatbuffer(workingRef.TargetHash(), &stagedAddr, mergeState, meta)
+		data := workingset_flatbuffer(workingRef.TargetHash(), &stagedAddr, mergeState, rebaseState, meta)
 
 		r, err := db.WriteValue(ctx, types.SerialMessage(data))
 		if err != nil {
@@ -151,10 +162,11 @@ func newWorkingSet(ctx context.Context, db *database, meta *WorkingSetMeta, work
 	return ref.TargetHash(), ref, nil
 }
 
-func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *MergeState, meta *WorkingSetMeta) serial.Message {
+// workingset_flatbuffer creates a flatbuffer message for working set metadata.
+func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *MergeState, rebaseState *RebaseState, meta *WorkingSetMeta) serial.Message {
 	builder := flatbuffers.NewBuilder(1024)
 	workingoff := builder.CreateByteVector(working[:])
-	var stagedOff, mergeStateOff flatbuffers.UOffsetT
+	var stagedOff, mergeStateOff, rebaseStateOffset flatbuffers.UOffsetT
 	if staged != nil {
 		stagedOff = builder.CreateByteVector((*staged)[:])
 	}
@@ -172,6 +184,17 @@ func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *Mer
 		mergeStateOff = serial.MergeStateEnd(builder)
 	}
 
+	if rebaseState != nil {
+		preRebaseRootAddrOffset := builder.CreateByteVector((*rebaseState.preRebaseWorkingAddr)[:])
+		ontoAddrOffset := builder.CreateByteVector((*rebaseState.ontoCommitAddr)[:])
+		branchOffset := builder.CreateString(rebaseState.branch)
+		serial.RebaseStateStart(builder)
+		serial.RebaseStateAddPreWorkingRootAddr(builder, preRebaseRootAddrOffset)
+		serial.RebaseStateAddBranch(builder, branchOffset)
+		serial.RebaseStateAddOntoCommitAddr(builder, ontoAddrOffset)
+		rebaseStateOffset = serial.RebaseStateEnd(builder)
+	}
+
 	var nameOff, emailOff, descOff flatbuffers.UOffsetT
 	if meta != nil {
 		nameOff = builder.CreateString(meta.Name)
@@ -187,6 +210,10 @@ func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *Mer
 	if mergeStateOff != 0 {
 		serial.WorkingSetAddMergeState(builder, mergeStateOff)
 	}
+	if rebaseStateOffset != 0 {
+		serial.WorkingSetAddRebaseState(builder, rebaseStateOffset)
+	}
+
 	if meta != nil {
 		serial.WorkingSetAddName(builder, nameOff)
 		serial.WorkingSetAddEmail(builder, emailOff)
@@ -230,6 +257,14 @@ func NewMergeState(
 			nomsMergeStateRef: &ref,
 			nomsMergeState:    &v,
 		}, nil
+	}
+}
+
+func NewRebaseState(preRebaseWorkingRoot hash.Hash, commitAddr hash.Hash, branch string) *RebaseState {
+	return &RebaseState{
+		preRebaseWorkingAddr: &preRebaseWorkingRoot,
+		ontoCommitAddr:       &commitAddr,
+		branch:               branch,
 	}
 }
 

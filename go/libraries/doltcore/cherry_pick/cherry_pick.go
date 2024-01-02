@@ -53,7 +53,16 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 
 	mergeResult, commitMsg, err := cherryPick(ctx, doltSession, roots, dbName, commit)
 	if err != nil {
-		return "", nil, err
+		return "", mergeResult, err
+	}
+
+	// If we're amending the previous commit and a new commit message hasn't been provided,
+	// grab the previous commit message and reuse it.
+	if options.Amend && options.CommitMessage == "" {
+		commitMsg, err = previousCommitMessage(ctx)
+		if err != nil {
+			return "", nil, err
+		}
 	}
 
 	newWorkingRoot := mergeResult.Root
@@ -111,6 +120,20 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 	}
 
 	return h.String(), nil, nil
+}
+
+func previousCommitMessage(ctx *sql.Context) (string, error) {
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	headCommit, err := doltSession.GetHeadCommit(ctx, ctx.GetCurrentDatabase())
+	if err != nil {
+		return "", err
+	}
+	headCommitMeta, err := headCommit.GetCommitMeta(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	return headCommitMeta.Description, nil
 }
 
 // AbortCherryPick aborts a cherry-pick merge, if one is in progress. If unable to abort for any reason
@@ -222,7 +245,7 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 	}
 	result, err := merge.MergeRoots(ctx, roots.Working, cherryRoot, parentRoot, cherryCommit, parentCommit, dbState.EditOpts(), mo)
 	if err != nil {
-		return nil, "", err
+		return result, "", err
 	}
 
 	workingRootHash, err = result.Root.HashOf()

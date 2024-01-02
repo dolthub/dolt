@@ -455,7 +455,6 @@ func checkoutExistingBranch(ctx *sql.Context, dbName string, branchName string, 
 	if apr.Contains(cli.MoveFlag) {
 		return doGlobalCheckout(ctx, branchName, apr.Contains(cli.ForceFlag), false)
 	} else {
-
 		err = dSess.SwitchWorkingSet(ctx, dbName, wsRef)
 		if err != nil {
 			return err
@@ -468,7 +467,6 @@ func checkoutExistingBranch(ctx *sql.Context, dbName string, branchName string, 
 // doGlobalCheckout implements the behavior of the `dolt checkout` command line, moving the working set into
 // the new branch and persisting the checked-out branch into future sessions
 func doGlobalCheckout(ctx *sql.Context, branchName string, isForce bool, isNewBranch bool) error {
-
 	err := MoveWorkingSetToBranch(ctx, branchName, isForce, isNewBranch)
 	if err != nil && err != doltdb.ErrAlreadyOnBranch {
 		return err

@@ -96,6 +96,17 @@ func CreateMergeArgParser() *argparser.ArgParser {
 	return ap
 }
 
+func CreateRebaseArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParserWithMaxArgs("merge", 1)
+	ap.TooManyArgsErrorFunc = func(receivedArgs []string) error {
+		return fmt.Errorf("rebase takes at most one positional argument.")
+	}
+	ap.SupportsFlag(AbortParam, "", "Abort an interactive rebase and return the working set to the pre-rebase state")
+	ap.SupportsFlag(ContinueFlag, "", "Continue an interactive rebase after adjusting the rebase plan")
+	ap.SupportsFlag(InteractiveFlag, "i", "Start an interactive rebase")
+	return ap
+}
+
 func CreatePushArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("push")
 	ap.SupportsString(UserFlag, "", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")

@@ -392,7 +392,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, w
 					}
 
 					// TODO - construct new meta instance rather than using the default
-					updateWS := workingset_flatbuffer(cmtRtHsh, &cmtRtHsh, nil, nil)
+					updateWS := workingset_flatbuffer(cmtRtHsh, &cmtRtHsh, nil, nil, nil)
 					ref, err := db.WriteValue(ctx, types.SerialMessage(updateWS))
 					if err != nil {
 						return prolly.AddressMap{}, err
@@ -540,7 +540,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 						}
 
 						// TODO - construct new meta instance rather than using the default
-						updateWS := workingset_flatbuffer(cmtRtHsh, &cmtRtHsh, nil, nil)
+						updateWS := workingset_flatbuffer(cmtRtHsh, &cmtRtHsh, nil, nil, nil)
 						ref, err := db.WriteValue(ctx, types.SerialMessage(updateWS))
 						if err != nil {
 							return prolly.AddressMap{}, err
@@ -766,12 +766,12 @@ func (db *database) UpdateStashList(ctx context.Context, ds Dataset, stashListAd
 	})
 }
 
-func (db *database) UpdateWorkingSet(ctx context.Context, ds Dataset, workingSet WorkingSetSpec, prevHash hash.Hash) (Dataset, error) {
+func (db *database) UpdateWorkingSet(ctx context.Context, ds Dataset, workingSetSpec WorkingSetSpec, prevHash hash.Hash) (Dataset, error) {
 	return db.doHeadUpdate(
 		ctx,
 		ds,
 		func(ds Dataset) error {
-			addr, ref, err := newWorkingSet(ctx, db, workingSet.Meta, workingSet.WorkingRoot, workingSet.StagedRoot, workingSet.MergeState)
+			addr, ref, err := newWorkingSet(ctx, db, workingSetSpec)
 			if err != nil {
 				return err
 			}
@@ -841,7 +841,7 @@ func (db *database) CommitWithWorkingSet(
 	val types.Value, workingSetSpec WorkingSetSpec,
 	prevWsHash hash.Hash, opts CommitOptions,
 ) (Dataset, Dataset, error) {
-	wsAddr, wsValRef, err := newWorkingSet(ctx, db, workingSetSpec.Meta, workingSetSpec.WorkingRoot, workingSetSpec.StagedRoot, workingSetSpec.MergeState)
+	wsAddr, wsValRef, err := newWorkingSet(ctx, db, workingSetSpec)
 	if err != nil {
 		return Dataset{}, Dataset{}, err
 	}
