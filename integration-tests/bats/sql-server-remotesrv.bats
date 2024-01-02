@@ -557,11 +557,7 @@ GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
 
     run dolt push origin --user $SQL_USER :new_branch
     [[ "$status" -eq 0 ]] || false
-
-    # TODO - verify output. Currently we always print "new branch"
-    # To https://doltremoteapi.dolthub.com/dolthub/macneale-remote-test
-    # * [new branch]          HEAD -> main
-    # [[ "$output" =~ "[deleted] new_branch" ]] || false
+    [[ "$output" =~ "- [deleted]             new_branch" ]] || false
 
     cd ../remote
     run dolt branch -a
@@ -593,12 +589,9 @@ GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
     [[ "$status" -ne 0 ]] || false
     [[ "$output" =~ "target has uncommitted changes. --force required to overwrite" ]] || false
 
-    dolt push origin --force --user $SQL_USER :new_branch
-
-    # TODO - verify output. Currently we always print "new branch"
-    # To https://doltremoteapi.dolthub.com/dolthub/macneale-remote-test
-    # * [new branch]          HEAD -> main
-    # [[ "$output" =~ "[deleted] new_branch" ]] || false
+    run dolt push origin --force --user $SQL_USER :new_branch
+    [[ "$status" -eq 0 ]] || false
+    [[ "$output" =~ "- [deleted]             new_branch" ]] || false
 
     cd ../remote
     run dolt branch -a
@@ -628,11 +621,11 @@ GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
 
     run dolt push nodb --user $SQL_USER main:new_branch
     [[ "$status" -ne 0 ]] || false
-    [[ "$output" =~ "database not found: nodb" ]] || false # NM4
+    [[ "$output" =~ "database not found: nodb" ]] || false
 
     run dolt push --force nodb --user $SQL_USER main:new_branch
     [[ "$status" -ne 0 ]] || false
-    [[ "$output" =~ "database not found: nodb" ]] || false # NM4
+    [[ "$output" =~ "database not found: nodb" ]] || false
 }
 
 @test "sql-server-remotesrv: create remote branch from remotesapi port as super user" {
