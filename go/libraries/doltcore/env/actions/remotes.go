@@ -101,12 +101,16 @@ func DoPush(ctx context.Context, pushMeta *env.PushOptions, progStarter ProgStar
 	for _, targets := range pushMeta.Targets {
 		err = push(ctx, pushMeta.Rsr, pushMeta.TmpDir, pushMeta.SrcDb, pushMeta.DestDb, pushMeta.Remote, targets, progStarter, progStopper)
 		if err == nil {
-			if targets.HasUpstream {
-				// TODO: should add commit hash info for branches with upstream set
-				//  (e.g. 74476cf38..080b073e7  branch1 -> branch1)
+			// TODO: we don't have sufficient information here to know what actually happened in the push. Supporting
+			// git behavior of printing the commit ids updated (e.g. 74476cf38..080b073e7  branch1 -> branch1) isn't
+			// currently possible. We need to plumb through results in the return from the Push(). Having just an error
+			// response is not sufficient, as there are many "success" cases that are not errors.
+			if targets.SrcRef == ref.EmptyBranchRef {
+				successPush = append(successPush, fmt.Sprintf(" - [deleted]             %s", targets.DestRef.GetPath()))
 			} else {
 				successPush = append(successPush, fmt.Sprintf(" * [new branch]          %s -> %s", targets.SrcRef.GetPath(), targets.DestRef.GetPath()))
 			}
+
 		} else if errors.Is(err, doltdb.ErrIsAhead) || errors.Is(err, ErrCantFF) || errors.Is(err, datas.ErrMergeNeeded) {
 			failedPush = append(failedPush, fmt.Sprintf(" ! [rejected]            %s -> %s (non-fast-forward)", targets.SrcRef.GetPath(), targets.DestRef.GetPath()))
 			continue
