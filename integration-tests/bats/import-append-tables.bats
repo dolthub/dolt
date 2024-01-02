@@ -133,3 +133,13 @@ CSV
     [[ "$output" =~ "Extra columns in import file:" ]] || false
     [[ "$output" =~ "	col2" ]] || false
 }
+
+@test "import-append-tables: can't use --all-text with -a" {
+    dolt sql -q "CREATE TABLE t (pk int primary key, col1 int);"
+    run dolt table import -a t --all-text <<CSV
+pk, col1
+1, 1
+CSV
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "fatal: --all-text is only supported for create operations" ]] || false
+}
