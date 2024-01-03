@@ -34,9 +34,7 @@ type jsonKeyPair struct {
 	value interface{}
 }
 
-// Differ computes the diff between two json objects.
-// Once we migrate JSON storage to a format that can be read without being fully deserialized, we should be able to
-// use Differ instead.
+// JsonDiffer computes the diff between two JSON objects.
 type JsonDiffer struct {
 	root                           string
 	currentFromPair, currentToPair *jsonKeyPair

@@ -206,7 +206,7 @@ func getLastKey(nd Node) Item {
 	return nd.GetKey(int(nd.count) - 1)
 }
 
-// OutputProllyNode writes the node given to the writer given in a human-readable format, where values converted to
+// OutputProllyNode writes the node given to the writer given in a human-readable format, with values converted
 // to the type specified by the provided schema. All nodes have keys displayed in this manner. Interior nodes have
 // their child hash references spelled out, leaf nodes have value tuples delineated like the keys
 func OutputProllyNode(ctx context.Context, w io.Writer, node Node, ns NodeStore, schema schema.Schema) error {
@@ -278,7 +278,7 @@ func OutputProllyNode(ctx context.Context, w io.Writer, node Node, ns NodeStore,
 	return nil
 }
 
-// OutputProllyNode writes the node given to the writer given in a semi-human-readable format, where values are still
+// OutputProllyNodeBytes writes the node given to the writer given in a semi-human-readable format, where values are still
 // displayed in hex-encoded byte strings, but are delineated into their fields. All nodes have keys displayed in this
 // manner. Interior nodes have their child hash references spelled out, leaf nodes have value tuples delineated like
 // the keys

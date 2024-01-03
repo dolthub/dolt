@@ -46,7 +46,10 @@ type ThreeWayJsonDiff struct {
 
 func (differ *ThreeWayJsonDiffer) Next() (ThreeWayJsonDiff, error) {
 	for {
-		differ.loadNextDiff()
+		err := differ.loadNextDiff()
+		if err != nil {
+			return ThreeWayJsonDiff{}, err
+		}
 
 		if differ.rightIsDone {
 			// We don't care if there are remaining left diffs because they don't affect the merge.

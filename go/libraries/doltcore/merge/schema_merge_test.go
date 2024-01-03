@@ -103,7 +103,7 @@ func TestSchemaMerge(t *testing.T) {
 		testSchemaMerge(t, simpleConflictTests)
 	})
 	t.Run("json merge tests", func(t *testing.T) {
-		testSchemaMerge(t, jsonMergeTests)
+		testSchemaMerge(t, geTests)
 	})
 }
 
@@ -1315,7 +1315,8 @@ var jsonMergeTests = []schemaMergeTest{
 				dataConflict: true,
 			},
 			{
-				// TODO: Should we be able to merge this?
+				// Which array element should go first?
+				// We avoid making assumptions and flag this as a conflict.
 				name:         "object inside array conflict",
 				ancestor:     singleRow(1, 1, 1, `{ "key1": [ { } ] }`),
 				left:         singleRow(1, 2, 1, `{ "key1": [ { "key2": "value2" } ] }`),
@@ -1323,7 +1324,11 @@ var jsonMergeTests = []schemaMergeTest{
 				dataConflict: true,
 			},
 			{
-				// TODO: Should we be able to merge this?
+				// Did the left branch overwrite the first value in the array?
+				// Or did it remove the last value and insert at the beginning?
+				// Did the right branch overwrite the second value in the array?
+				// Or did it remove the first value and insert at the end?
+				// Diffs on arrays are ambiguous. We avoid making assumptions and flag this as a conflict.
 				name:         "parallel array modification",
 				ancestor:     singleRow(1, 1, 1, `{ "key1": [ 1, 1 ] }`),
 				left:         singleRow(1, 2, 1, `{ "key1": [ 2, 1 ] }`),
