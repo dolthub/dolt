@@ -685,9 +685,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
 
 	db, branch, _ := getDBBranchFromSession(sqlCtx, qryist)
-	initialPrompt := formattedPrompt(db, branch)
-
-	initialMultilinePrompt := fmt.Sprintf(fmt.Sprintf("%%%ds", len(initialPrompt)), "-> ")
+	initialPrompt, initialMultilinePrompt := formattedPrompts(db, branch)
 
 	rlConf := readline.Config{
 		Prompt:                 initialPrompt,
@@ -766,6 +764,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 		}
 
 		var nextPrompt string
+		var multiPrompt string
 		var sqlSch sql.Schema
 		var rowIter sql.RowIter
 
@@ -795,7 +794,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 			if ok {
 				sqlCtx.SetCurrentDatabase(db)
 			}
-			nextPrompt = formattedPrompt(db, branch)
+			nextPrompt, multiPrompt = formattedPrompts(db, branch)
 
 			return true
 		}()
@@ -805,7 +804,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 		}
 
 		shell.SetPrompt(nextPrompt)
-		shell.SetMultiPrompt(fmt.Sprintf(fmt.Sprintf("%%%ds", len(nextPrompt)), "-> "))
+		shell.SetMultiPrompt(multiPrompt)
 	})
 
 	shell.Run()
@@ -814,14 +813,26 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 	return nil
 }
 
-func formattedPrompt(db, branch string) string {
+// formattedPrompts returns the prompt and multiline prompt for the current session. If the db is empty, the prompt will
+// be "> ", otherwise it will be "db> ". If the branch is empty, the multiline prompt will be "-> ", left padded for
+// alignment with the prompt.
+func formattedPrompts(db, branch string) (string, string) {
 	if db == "" {
-		return "> "
+		return "> ", "-> "
 	}
 	if branch == "" {
-		return fmt.Sprintf("%s> ", db)
+		// +2 Allows for the "->" to lineup correctly
+		multi := fmt.Sprintf(fmt.Sprintf("%%%ds", len(db)+2), "-> ")
+		cyanDb := color.CyanString(db)
+		return fmt.Sprintf("%s> ", cyanDb), multi
 	}
-	return fmt.Sprintf("%s/%s> ", db, branch)
+
+	// +3 is for the "/" and "->" to lineup correctly
+	multi := fmt.Sprintf(fmt.Sprintf("%%%ds", len(db)+len(branch)+3), "-> ")
+
+	cyanDb := color.CyanString(db)
+	yellowBr := color.YellowString(branch)
+	return fmt.Sprintf("%s/%s> ", cyanDb, yellowBr), multi
 }
 
 // getDBBranchFromSession returns the current database name for the session, handling all the errors along the way by printing
