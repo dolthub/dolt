@@ -112,6 +112,56 @@ var simpleJsonDiffTests = []jsonDiffTest{
 		},
 	},
 	{
+		name: "insert object",
+		from: types.JsonObject{"a": types.JsonObject{}},
+		to:   types.JsonObject{"a": types.JsonObject{"b": types.JsonObject{"c": 3}}},
+		expectedDiffs: []JsonDiff{
+			{
+				Key:  "$.\"a\".\"b\"",
+				To:   &types.JSONDocument{Val: types.JsonObject{"c": 3}},
+				Type: AddedDiff,
+			},
+		},
+	},
+	{
+		name: "modify to object",
+		from: types.JsonObject{"a": types.JsonObject{"b": 2}},
+		to:   types.JsonObject{"a": types.JsonObject{"b": types.JsonObject{"c": 3}}},
+		expectedDiffs: []JsonDiff{
+			{
+				Key:  "$.\"a\".\"b\"",
+				From: &types.JSONDocument{Val: 2},
+				To:   &types.JSONDocument{Val: types.JsonObject{"c": 3}},
+				Type: ModifiedDiff,
+			},
+		},
+	},
+	{
+		name: "modify from object",
+		from: types.JsonObject{"a": types.JsonObject{"b": 2}},
+		to:   types.JsonObject{"a": 1},
+		expectedDiffs: []JsonDiff{
+			{
+				Key:  "$.\"a\"",
+				From: &types.JSONDocument{Val: types.JsonObject{"b": 2}},
+				To:   &types.JSONDocument{Val: 1},
+				Type: ModifiedDiff,
+			},
+		},
+	},
+	{
+		name: "remove object",
+		from: types.JsonObject{"a": types.JsonObject{"b": types.JsonObject{"c": 3}}},
+		to:   types.JsonObject{"a": types.JsonObject{}},
+		expectedDiffs: []JsonDiff{
+			{
+				Key:  "$.\"a\".\"b\"",
+				From: &types.JSONDocument{Val: types.JsonObject{"c": 3}},
+				Type: RemovedDiff,
+			},
+		},
+	},
+	{
 		name: "insert escaped double quotes",
 		from: types.JsonObject{"\"a\"": "1"},
 		to:   types.JsonObject{"b": "\"2\""},
@@ -126,6 +176,39 @@ var simpleJsonDiffTests = []jsonDiffTest{
 				Key:  "$.\"b\"",
 				From: nil,
 				To:   &types.JSONDocument{Val: "\"2\""},
+				Type: AddedDiff,
+			},
+		},
+	},
+	{
+		name: "modifications returned in lexographic order",
+		from: types.JsonObject{"a": types.JsonObject{"1": "i"}, "aa": 2, "b": 6},
+		to:   types.JsonObject{"": 1, "a": types.JsonObject{}, "aa": 3, "bb": 5},
+		expectedDiffs: []JsonDiff{
+			{
+				Key:  "$.\"\"",
+				To:   &types.JSONDocument{Val: 1},
+				Type: AddedDiff,
+			},
+			{
+				Key:  "$.\"a\".\"1\"",
+				From: &types.JSONDocument{Val: "i"},
+				Type: RemovedDiff,
+			},
+			{
+				Key:  "$.\"aa\"",
+				From: &types.JSONDocument{Val: 2},
+				To:   &types.JSONDocument{Val: 3},
+				Type: ModifiedDiff,
+			},
+			{
+				Key:  "$.\"b\"",
+				From: &types.JSONDocument{Val: 6},
+				Type: RemovedDiff,
+			},
+			{
+				Key:  "$.\"bb\"",
+				To:   &types.JSONDocument{Val: 5},
 				Type: AddedDiff,
 			},
 		},
