@@ -56,7 +56,7 @@ func Run(commitList []string) error {
 	}
 
 	// clone dolt source
-	err = GitCloneBare(parentCtx, tempDir)
+	err = GitCloneBare(parentCtx, tempDir, GithubDolt)
 	if err != nil {
 		return err
 	}
