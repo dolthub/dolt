@@ -55,9 +55,10 @@ var RebaseActionEnumType = types.MustCreateEnumType([]string{
 
 var DoltRebaseSystemTableSchema = []*sql.Column{
 	{
-		Name:     "rebase_order",
-		Type:     types.MustCreateDecimalType(6, 2),
-		Nullable: false,
+		Name:       "rebase_order",
+		Type:       types.MustCreateDecimalType(6, 2),
+		Nullable:   false,
+		PrimaryKey: true,
 	},
 	{
 		Name:     "action",

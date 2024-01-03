@@ -170,6 +170,10 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 					"continue rebasing by calling dolt_rebase('--continue')"}},
 			},
 			{
+				Query:          "update dolt_rebase set rebase_order=1.0 where rebase_order=2.0;",
+				ExpectedErrStr: "duplicate primary key given: [1]",
+			},
+			{
 				Query: "update dolt_rebase set action='squash';",
 				Expected: []sql.Row{{gmstypes.OkResult{
 					RowsAffected: 2,
