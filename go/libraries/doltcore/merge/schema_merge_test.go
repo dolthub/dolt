@@ -103,7 +103,7 @@ func TestSchemaMerge(t *testing.T) {
 		testSchemaMerge(t, simpleConflictTests)
 	})
 	t.Run("json merge tests", func(t *testing.T) {
-		testSchemaMerge(t, geTests)
+		testSchemaMerge(t, jsonMergeTests)
 	})
 }
 
