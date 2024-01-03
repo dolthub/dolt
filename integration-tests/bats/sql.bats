@@ -2567,7 +2567,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "3" ]] || false
 
-    run dolt sql -q "SELECT COUNT(*) from dolt_diff_t where to_commit_date < NOW()"
+    run dolt sql -q "SELECT COUNT(*) from dolt_diff_t where to_commit_date < UTC_TIMESTAMP()"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "3" ]] || false
 }
