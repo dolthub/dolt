@@ -682,9 +682,14 @@ func buildBatchSqlErr(stmtStartLine int, query string, err error) error {
 // be updated by any queries which were processed.
 func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResultFormat) error {
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
-
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
-	initialPrompt := fmt.Sprintf("%s> ", sqlCtx.GetCurrentDatabase())
+
+	initialPrompt := "> "
+	db, branch, ok := getDBBranchFromSession(sqlCtx, qryist)
+	if ok {
+		initialPrompt = fmt.Sprintf("%s/%s> ", db, branch)
+
+	}
 	initialMultilinePrompt := fmt.Sprintf(fmt.Sprintf("%%%ds", len(initialPrompt)), "-> ")
 
 	rlConf := readline.Config{
@@ -789,11 +794,11 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 				}
 			}
 
-			db, ok := getDBFromSession(sqlCtx, qryist)
+			db, branch, ok := getDBBranchFromSession(sqlCtx, qryist)
 			if ok {
 				sqlCtx.SetCurrentDatabase(db)
 			}
-			nextPrompt = fmt.Sprintf("%s> ", sqlCtx.GetCurrentDatabase())
+			nextPrompt = fmt.Sprintf("%s/%s> ", sqlCtx.GetCurrentDatabase(), branch)
 
 			return true
 		}()
@@ -812,30 +817,36 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 	return nil
 }
 
-// getDBFromSession returns the current database name for the session, handling all the errors along the way by printing
-// red error messages to the CLI. If there was an issue getting the db name, the second return value is false.
-func getDBFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string, ok bool) {
-	_, resp, err := qryist.Query(sqlCtx, "select database()")
+// getDBBranchFromSession returns the current database name for the session, handling all the errors along the way by printing
+// red error messages to the CLI. If there was an issue getting the db name, the ok return value will be false.
+func getDBBranchFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string, branch string, ok bool) {
+	_, resp, err := qryist.Query(sqlCtx, "select database() as db, active_branch() as branch")
 	if err != nil {
-		cli.Println(color.RedString("Failure to get DB Name for session" + err.Error()))
-		return db, false
+		cli.Println(color.RedString("Failure to get DB Name for session: " + err.Error()))
+		return db, branch, false
 	}
-	// Expect single row/single column result with the db name.
+	// Expect single row result, with two columns: db name, branch name.
 	row, err := resp.Next(sqlCtx)
 	if err != nil {
-		cli.Println(color.RedString("Failure to get DB Name for session" + err.Error()))
-		return db, false
+		cli.Println(color.RedString("Failure to get DB Name for session: " + err.Error()))
+		return db, branch, false
 	}
-	if len(row) != 1 {
-		cli.Println(color.RedString("Failure to get DB Name for session" + err.Error()))
-		return db, false
+	if len(row) != 2 {
+		cli.Println(color.RedString("Runtime error. Invalid column count."))
+		return db, branch, false
 	}
 	if row[0] == nil {
 		db = ""
 	} else {
 		db = row[0].(string)
 	}
-	return db, true
+	if row[1] == nil {
+		branch = ""
+	} else {
+		branch = row[1].(string)
+	}
+
+	return db, branch, true
 }
 
 // Returns a new auto completer with table names, column names, and SQL keywords.
