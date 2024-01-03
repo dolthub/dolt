@@ -188,7 +188,7 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 					"  `c` int NOT NULL DEFAULT (24),\n" + // Ensure these match setup above.
 					"  `d` int NOT NULL DEFAULT '-108',\n" + //
 					"  `e` int NOT NULL DEFAULT ((7 + 11)),\n" + // Matches MySQL behavior.
-					"  `f` int DEFAULT (NOW()),\n" + // MySql preserves now as lower case.
+					"  `f` int DEFAULT CURRENT_TIMESTAMP,\n" + // MySql preserves now as lower case.
 					"  PRIMARY KEY (`a`),\n" +
 					"  KEY `tbl_bc` (`b`,`c`),\n" +
 					"  UNIQUE KEY `tbl_c` (`c`),\n" +
@@ -217,7 +217,7 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "show create table tbl",
 				Expected: []sql.Row{{"tbl", "CREATE TABLE `tbl` (\n" +
-					"  `a` int NOT NULL DEFAULT (NOW()),\n" + // MySql preserves now as lower case.
+					"  `a` int NOT NULL DEFAULT CURRENT_TIMESTAMP,\n" + // MySql preserves now as lower case.
 					"  `b` int NOT NULL DEFAULT '42',\n" + //
 					"  `c` int NOT NULL DEFAULT (24),\n" + // Ensure these match setup above.
 					"  `d` int NOT NULL DEFAULT '-108',\n" + //
