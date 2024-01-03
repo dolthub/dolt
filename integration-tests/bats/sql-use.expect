@@ -7,7 +7,7 @@ spawn dolt sql
 # error output includes the line of the failed test expectation
 
 expect {
-    "*doltsql> " { send -- "use `doltsql/test`;\r"; }
+    "*doltsql/main> " { send -- "use `doltsql/test`;\r"; }
     timeout { puts "$TESTFAILURE"; }
 }
 
@@ -37,26 +37,26 @@ expect {
 }
 
 expect {
-    -re "|.*db1.*|\r.*db1> " { send -- "select database();\r"; }
+    -re "|.*db1.*|\r.*db1.*> " { send -- "select database();\r"; }
     timeout { puts "$TESTFAILURE"; }
 }
 
 expect {
-    "*db1>" { send -- "use db2;\r"; }
+    "*db1/main>" { send -- "use db2;\r"; }
     timeout { puts "$TESTFAILURE"; }
 }
 
 expect {
-    "*db2> " { send -- "select database();\r"; }
+    "*db2/main> " { send -- "select database();\r"; }
     timeout { puts "$TESTFAILURE"; }
 }
 
 expect {
-    -re "|.*db2.*|.*\rdb2>" { send -- "use mydb;\r"; }
+    -re "|.*db2.*|.*\rdb2/main>" { send -- "use mydb;\r"; }
     timeout { puts "$TESTFAILURE"; }
 }
 
 expect {
-    "mydb> " { send -- "exit ;\r"; }
+    "mydb/main> " { send -- "exit ;\r"; }
     timeout { puts "$TESTFAILURE"; }
 }

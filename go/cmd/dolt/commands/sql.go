@@ -684,12 +684,9 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
 
-	initialPrompt := "> "
-	db, branch, ok := getDBBranchFromSession(sqlCtx, qryist)
-	if ok {
-		initialPrompt = fmt.Sprintf("%s/%s> ", db, branch)
+	db, branch, _ := getDBBranchFromSession(sqlCtx, qryist)
+	initialPrompt := formattedPrompt(db, branch)
 
-	}
 	initialMultilinePrompt := fmt.Sprintf(fmt.Sprintf("%%%ds", len(initialPrompt)), "-> ")
 
 	rlConf := readline.Config{
@@ -798,7 +795,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 			if ok {
 				sqlCtx.SetCurrentDatabase(db)
 			}
-			nextPrompt = fmt.Sprintf("%s/%s> ", sqlCtx.GetCurrentDatabase(), branch)
+			nextPrompt = formattedPrompt(db, branch)
 
 			return true
 		}()
@@ -815,6 +812,16 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 	_ = iohelp.WriteLine(cli.CliOut, "Bye")
 
 	return nil
+}
+
+func formattedPrompt(db, branch string) string {
+	if db == "" {
+		return "> "
+	}
+	if branch == "" {
+		return fmt.Sprintf("%s> ", db)
+	}
+	return fmt.Sprintf("%s/%s> ", db, branch)
 }
 
 // getDBBranchFromSession returns the current database name for the session, handling all the errors along the way by printing
@@ -835,15 +842,22 @@ func getDBBranchFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string
 		cli.Println(color.RedString("Runtime error. Invalid column count."))
 		return db, branch, false
 	}
-	if row[0] == nil {
-		db = ""
-	} else {
-		db = row[0].(string)
-	}
+
 	if row[1] == nil {
 		branch = ""
 	} else {
 		branch = row[1].(string)
+	}
+	if row[0] == nil {
+		db = ""
+	} else {
+		db = row[0].(string)
+
+		// It is possilbe to `use mydb/branch`, and as far as your session is concerned your database is mydb/branch. We
+		// allow that, but also want to show the user the branch name in the prompt. So we munge the DB in this case.
+		if strings.HasSuffix(db, "/"+branch) {
+			db = db[:len(db)-len(branch)-1]
+		}
 	}
 
 	return db, branch, true
