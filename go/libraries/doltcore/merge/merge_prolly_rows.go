@@ -20,6 +20,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/transform"
+	"github.com/dolthub/go-mysql-server/sql/types"
+	"golang.org/x/exp/maps"
+	errorkinds "gopkg.in/src-d/go-errors.v1"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -30,13 +39,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression"
-	"github.com/dolthub/go-mysql-server/sql/transform"
-	"github.com/dolthub/go-mysql-server/sql/types"
-	"golang.org/x/exp/maps"
-	errorkinds "gopkg.in/src-d/go-errors.v1"
-	"io"
 )
 
 // ErrUnableToMergeColumnDefaultValue is returned when a column's default value cannot be Eval'ed and we are unable to

@@ -16,12 +16,12 @@ package writer
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
