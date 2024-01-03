@@ -36,12 +36,18 @@ func NewActiveBranchFunc() sql.Expression {
 // Eval implements the Expression interface.
 func (ab *ActiveBranchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	dbName := ctx.GetCurrentDatabase()
+	if dbName == "" {
+		// it is possible to have no current database in some contexts.
+		// When you first connect to a sql server, which has no databases, for example.
+		return nil, nil
+	}
+
 	dSess := dsess.DSessFromSess(ctx.Session)
 
 	ddb, ok := dSess.GetDoltDB(ctx, dbName)
-
 	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
+		// Not all databases are dolt databases. information_schema and mysql, for example.
+		return nil, nil
 	}
 
 	currentBranchRef, err := dSess.CWBHeadRef(ctx, dbName)
