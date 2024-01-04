@@ -155,7 +155,7 @@ type YAMLConfig struct {
 	DataDirStr        *string               `yaml:"data_dir,omitempty"`
 	CfgDirStr         *string               `yaml:"cfg_dir,omitempty"`
 	MetricsConfig     MetricsYAMLConfig     `yaml:"metrics"`
-	RemotesapiConfig  RemotesapiYAMLConfig  `yaml:"remotesapi,omitempty"`
+	RemotesapiConfig  RemotesapiYAMLConfig  `yaml:"remotesapi"`
 	ClusterCfg        *ClusterYAMLConfig    `yaml:"cluster,omitempty"`
 	PrivilegeFile     *string               `yaml:"privilege_file,omitempty"`
 	BranchControlFile *string               `yaml:"branch_control_file,omitempty"`
