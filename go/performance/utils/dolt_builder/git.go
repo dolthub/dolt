@@ -34,9 +34,9 @@ func GitVersion(ctx context.Context) error {
 	return nil
 }
 
-// GitClone clones the dolt repo into `${dir}/dolt.git`
-func GitCloneBare(ctx context.Context, dir string) error {
-	clone := ExecCommand(ctx, "git", "clone", "--bare", GithubDolt)
+// GitCloneBare clones a repo
+func GitCloneBare(ctx context.Context, dir, url string) error {
+	clone := ExecCommand(ctx, "git", "clone", "--bare", url)
 	clone.Dir = dir
 	return clone.Run()
 }
