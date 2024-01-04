@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
 )
 
@@ -148,35 +147,12 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 
 			rsSeen = true
 
-			cs, _ := doltdb.NewCommitSpec(branchRef.String())
-			srcDBCommit, err := srcDB.Resolve(ctx, cs, nil)
-			if err != nil {
-				return noConflictsOrViolations, threeWayMerge, err
-			}
-
 			headRef, err := dbData.Rsr.CWBHeadRef()
 			if err != nil {
 				return noConflictsOrViolations, threeWayMerge, err
 			}
 
 			msg := fmt.Sprintf("Merge branch '%s' of %s into %s", pullSpec.Branch.GetPath(), pullSpec.Remote.Url, headRef.GetPath())
-
-			// TODO: this could be replaced with a canFF check to test for error
-			err = dbData.Ddb.FastForward(ctx, remoteTrackRef, srcDBCommit)
-			if errors.Is(err, datas.ErrMergeNeeded) {
-				// If the remote tracking branch has diverged from the local copy, we just overwrite it
-				// TODO: none of this is transactional
-				h, err := srcDBCommit.HashOf()
-				if err != nil {
-					return noConflictsOrViolations, threeWayMerge, err
-				}
-				err = dbData.Ddb.SetHead(ctx, remoteTrackRef, h)
-				if err != nil {
-					return noConflictsOrViolations, threeWayMerge, err
-				}
-			} else if err != nil {
-				return noConflictsOrViolations, threeWayMerge, fmt.Errorf("fetch failed; %w", err)
-			}
 
 			roots, ok := sess.GetRoots(ctx, dbName)
 			if !ok {
