@@ -125,6 +125,13 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 			fmt.Errorf("branch %q not found on remote", pullSpec.Branch.GetPath())
 	}
 
+	// Do the mega fetch, like in dolt_fetch.go
+	mode := ref.UpdateMode{Force: true, Prune: false}
+	err = actions.FetchRefSpecs(ctx, dbData, srcDB, pullSpec.RefSpecs, pullSpec.Remote, mode, runProgFuncs, stopProgFuncs)
+	if err != nil {
+		return noConflictsOrViolations, threeWayMerge, fmt.Errorf("fetch failed: %w", err)
+	}
+
 	var conflicts int
 	var fastForward int
 	for _, refSpec := range pullSpec.RefSpecs {
@@ -136,11 +143,17 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 				continue
 			}
 
+			if branchRef != pullSpec.Branch {
+				continue
+			}
+
 			rsSeen = true
 			tmpDir, err := dbData.Rsw.TempTableFilesDir()
 			if err != nil {
 				return noConflictsOrViolations, threeWayMerge, err
 			}
+
+			// TODO - we don't need to fetch again. this is
 			// todo: can we pass nil for either of the channels?
 			srcDBCommit, err := actions.FetchRemoteBranch(ctx, tmpDir, pullSpec.Remote, srcDB, dbData.Ddb, branchRef, runProgFuncs, stopProgFuncs)
 			if err != nil {
@@ -169,11 +182,6 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 				}
 			} else if err != nil {
 				return noConflictsOrViolations, threeWayMerge, fmt.Errorf("fetch failed; %w", err)
-			}
-
-			// Only merge iff branch is current branch and there is an upstream set (pullSpec.Branch is set to nil if there is no upstream)
-			if branchRef != pullSpec.Branch {
-				continue
 			}
 
 			roots, ok := sess.GetRoots(ctx, dbName)
