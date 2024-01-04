@@ -29,9 +29,7 @@ import (
 
 const envDoltBin = "DOLT_BIN"
 
-func Run(commitList []string) error {
-	parentCtx := context.Background()
-
+func Run(parentCtx context.Context, commitList []string) error {
 	doltBin, err := getDoltBin()
 	if err != nil {
 		return err
@@ -56,7 +54,7 @@ func Run(commitList []string) error {
 	}
 
 	// clone dolt source
-	err = GitCloneBare(parentCtx, tempDir)
+	err = GitCloneBare(parentCtx, tempDir, GithubDolt)
 	if err != nil {
 		return err
 	}

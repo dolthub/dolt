@@ -55,9 +55,10 @@ var RebaseActionEnumType = types.MustCreateEnumType([]string{
 
 var DoltRebaseSystemTableSchema = []*sql.Column{
 	{
-		Name:     "rebase_order",
-		Type:     types.MustCreateDecimalType(6, 2),
-		Nullable: false,
+		Name:       "rebase_order",
+		Type:       types.MustCreateDecimalType(6, 2),
+		Nullable:   false,
+		PrimaryKey: true,
 	},
 	{
 		Name:     "action",
@@ -247,6 +248,10 @@ func startRebase(ctx *sql.Context, upstreamPoint string) error {
 	// Create the rebase plan and save it in the database
 	rebasePlan, err := rebase.CreateDefaultRebasePlan(ctx, startCommit, upstreamCommit)
 	if err != nil {
+		abortErr := abortRebase(ctx)
+		if abortErr != nil {
+			return fmt.Errorf("%s: unable to cleanly abort rebase: %s", err.Error(), abortErr.Error())
+		}
 		return err
 	}
 	rdb, ok := db.(rebase.RebasePlanDatabase)

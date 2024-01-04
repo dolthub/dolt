@@ -22,12 +22,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
 type remotesrvStore struct {
 	ctxFactory func(context.Context) (*sql.Context, error)
-	readonly   bool
 	createDBs  bool
 }
 
@@ -41,7 +41,7 @@ func (s remotesrvStore) Get(ctx context.Context, path, nbfVerStr string) (remote
 	sess := dsess.DSessFromSess(sqlCtx.Session)
 	db, err := sess.Provider().Database(sqlCtx, path)
 	if err != nil {
-		if !s.readonly && sql.ErrDatabaseNotFound.Is(err) && s.createDBs {
+		if s.createDBs && sql.ErrDatabaseNotFound.Is(err) {
 			err = sess.Provider().CreateDatabase(sqlCtx, path)
 			if err != nil {
 				return nil, err
@@ -68,15 +68,30 @@ func (s remotesrvStore) Get(ctx context.Context, path, nbfVerStr string) (remote
 	return rss, nil
 }
 
-func RemoteSrvServerArgs(ctxFactory func(context.Context) (*sql.Context, error), args remotesrv.ServerArgs) (remotesrv.ServerArgs, error) {
+// In the SQL context, the database provider that we use to expose the
+// remotesapi interface can choose to either create a newly accessed database
+// on first access or to return NotFound. Currently we allow creation in the
+// cluster replication context, where the replicated database should definitely
+// be made to exist and the accesses are always writes, but we disallow it in
+// the exposed-as-a-remotesapi-endpoint use case, where the requested database
+// may just be a typo or a configuration mistake on the part of the user.
+
+type CreateUnknownDatabasesSetting bool
+
+const CreateUnknownDatabases CreateUnknownDatabasesSetting = true
+const DoNotCreateUnknownDatabases CreateUnknownDatabasesSetting = false
+
+// Considers |args| and returns a new |remotesrv.ServerArgs| instance which
+// will serve databases accessible through |ctxFactory|.
+func RemoteSrvFSAndDBCache(ctxFactory func(context.Context) (*sql.Context, error), createSetting CreateUnknownDatabasesSetting) (filesys.Filesys, remotesrv.DBCache, error) {
 	sqlCtx, err := ctxFactory(context.Background())
 	if err != nil {
-		return remotesrv.ServerArgs{}, err
+		return nil, nil, err
 	}
 	sess := dsess.DSessFromSess(sqlCtx.Session)
-	args.FS = sess.Provider().FileSystem()
-	args.DBCache = remotesrvStore{ctxFactory, args.ReadOnly, args.CreateUnknownDatabases}
-	return args, nil
+	fs := sess.Provider().FileSystem()
+	dbcache := remotesrvStore{ctxFactory, bool(createSetting)}
+	return fs, dbcache, nil
 }
 
 func WithUserPasswordAuth(args remotesrv.ServerArgs, authnz remotesrv.AccessControl) remotesrv.ServerArgs {
