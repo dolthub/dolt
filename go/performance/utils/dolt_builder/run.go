@@ -29,9 +29,7 @@ import (
 
 const envDoltBin = "DOLT_BIN"
 
-func Run(commitList []string) error {
-	parentCtx := context.Background()
-
+func Run(parentCtx context.Context, commitList []string) error {
 	doltBin, err := getDoltBin()
 	if err != nil {
 		return err
