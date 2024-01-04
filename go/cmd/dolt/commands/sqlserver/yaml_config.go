@@ -126,8 +126,8 @@ type MetricsYAMLConfig struct {
 }
 
 type RemotesapiYAMLConfig struct {
-	Port_     *int  `yaml:"port"`
-	ReadOnly_ *bool `yaml:"read_only" minver:"1.30.0"`
+	Port_     *int  `yaml:"port,omitempty"`
+	ReadOnly_ *bool `yaml:"read_only,omitempty" minver:"1.30.0"`
 }
 
 func (r RemotesapiYAMLConfig) Port() int {
