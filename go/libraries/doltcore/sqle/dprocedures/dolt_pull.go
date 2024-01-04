@@ -153,7 +153,7 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 				return noConflictsOrViolations, threeWayMerge, err
 			}
 
-			// TODO - we don't need to fetch again. this is
+			// TODO - we don't need to fetch again. this is hold over from the past to get the srcDBCommit.
 			// todo: can we pass nil for either of the channels?
 			srcDBCommit, err := actions.FetchRemoteBranch(ctx, tmpDir, pullSpec.Remote, srcDB, dbData.Ddb, branchRef, runProgFuncs, stopProgFuncs)
 			if err != nil {
