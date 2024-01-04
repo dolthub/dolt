@@ -148,14 +148,9 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 			}
 
 			rsSeen = true
-			tmpDir, err := dbData.Rsw.TempTableFilesDir()
-			if err != nil {
-				return noConflictsOrViolations, threeWayMerge, err
-			}
 
-			// TODO - we don't need to fetch again. this is hold over from the past to get the srcDBCommit.
-			// todo: can we pass nil for either of the channels?
-			srcDBCommit, err := actions.FetchRemoteBranch(ctx, tmpDir, pullSpec.Remote, srcDB, dbData.Ddb, branchRef, runProgFuncs, stopProgFuncs)
+			cs, _ := doltdb.NewCommitSpec(branchRef.String())
+			srcDBCommit, err := srcDB.Resolve(ctx, cs, nil)
 			if err != nil {
 				return noConflictsOrViolations, threeWayMerge, err
 			}
