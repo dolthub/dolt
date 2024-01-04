@@ -839,8 +839,8 @@ func formattedPrompts(db, branch string, dirty bool) (string, string) {
 	promptLen := len(db) + len(branch) + 3
 	dirtyStr := ""
 	if dirty {
-		dirtyStr = color.RedString(" **")
-		promptLen += 3
+		dirtyStr = color.RedString("*")
+		promptLen += 1
 	}
 
 	multi := fmt.Sprintf(fmt.Sprintf("%%%ds", promptLen), "-> ")
