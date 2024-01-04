@@ -3,32 +3,32 @@
 set timeout 2
 spawn dolt sql
 expect {
-  "doltsql/main> " { send "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT);\r"; }
+  "> " { send "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT);\r"; }
   timeout { exit 1; }
   failed { exit 1; }
 }
 expect {
-  "doltsql/main> " { send "INSERT INTO test VALUES (0,0);\r"; }
+  "> " { send "INSERT INTO test VALUES (0,0);\r"; }
   timeout { exit 1; }
   failed { exit 1; }
 }
 expect {
-  "doltsql/main> " { send "DELIMITER $$\r"; }
+  "> " { send "DELIMITER $$\r"; }
   timeout { exit 1; }
   failed { exit 1; }
 }
 expect {
-  "doltsql/main> " { send "INSERT INTO test VALUES (1,1)$$\r"; }
+  "> " { send "INSERT INTO test VALUES (1,1)$$\r"; }
   timeout { exit 1; }
   failed { exit 1; }
 }
 expect {
-  "doltsql/main> " { send "delimiter #\r"; }
+  "> " { send "delimiter #\r"; }
   timeout { exit 1; }
   failed { exit 1; }
 }
 expect {
-  "doltsql/main> " { send "CREATE TRIGGER tt BEFORE INSERT ON test FOR EACH ROW\r"; }
+  "> " { send "CREATE TRIGGER tt BEFORE INSERT ON test FOR EACH ROW\r"; }
   timeout { exit 1; }
   failed { exit 1; }
 }
@@ -53,7 +53,7 @@ expect {
   failed { exit 1; }
 }
 expect {
-  "doltsql/main> " { send "DeLiMiTeR ;\r"; }
+  "> " { send "DeLiMiTeR ;\r"; }
   timeout { exit 1; }
   failed { exit 1; }
 }

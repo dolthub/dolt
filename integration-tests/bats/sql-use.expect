@@ -7,32 +7,32 @@ spawn dolt sql
 # error output includes the line of the failed test expectation
 
 expect {
-    "*doltsql/main> " { send -- "use `doltsql/test`;\r"; }
+    -re ".*doltsql.*/.*main.*> " { send -- "use `doltsql/test`;\r"; }
     timeout { puts "$TESTFAILURE"; }
 }
 
 expect {
-    "*doltsql/test> " { send -- "show tables;\r"; }
+    -re ".*doltsql.*/.*test.*> " { send -- "show tables;\r"; }
     timeout { puts "$TESTFAILURE"; }
 }
 
 expect {
-    "*doltsql/test> " { send -- "use information_schema;\r"; }
+    -re ".*doltsql.*/.*test.*> " { send -- "use information_schema;\r"; }
     timeout { puts "$TESTFAILURE"; }
 }
 
 expect {
-    "*information_schema> " { send -- "show tables;\r"; }
+    -re ".*information_schema.*> " { send -- "show tables;\r"; }
     timeout { puts "$TESTFAILURE"; }
 }
 
 expect {
-    "*information_schema> " { send -- "CREATE DATABASE mydb;\r"; }
+    -re ".*information_schema.*> " { send -- "CREATE DATABASE mydb;\r"; }
     timeout { puts "$TESTFAILURE"; }
 }
 
 expect {
-    "*information_schema> " { send -- "use db1;\r"; }
+    -re ".*information_schema.*> " { send -- "use db1;\r"; }
     timeout { puts "$TESTFAILURE"; }
 }
 
@@ -42,12 +42,12 @@ expect {
 }
 
 expect {
-    "*db1/main>" { send -- "use db2;\r"; }
+    -re ".*db1.*/.*main.*>" { send -- "use db2;\r"; }
     timeout { puts "$TESTFAILURE"; }
 }
 
 expect {
-    "*db2/main> " { send -- "select database();\r"; }
+    -re ".*db2.*/.*main.*> " { send -- "select database();\r"; }
     timeout { puts "$TESTFAILURE"; }
 }
 
@@ -57,6 +57,6 @@ expect {
 }
 
 expect {
-    "mydb/main> " { send -- "exit ;\r"; }
+    -re ".*mydb.*/.*main.*> " { send -- "exit ;\r"; }
     timeout { puts "$TESTFAILURE"; }
 }

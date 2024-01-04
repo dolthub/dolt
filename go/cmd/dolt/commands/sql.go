@@ -835,8 +835,9 @@ func formattedPrompts(db, branch string) (string, string) {
 	return fmt.Sprintf("%s/%s> ", cyanDb, yellowBr), multi
 }
 
-// getDBBranchFromSession returns the current database name for the session, handling all the errors along the way by printing
-// red error messages to the CLI. If there was an issue getting the db name, the ok return value will be false.
+// getDBBranchFromSession returns the current database name and current branch  for the session, handling all the errors
+// along the way by printing red error messages to the CLI. If there was an issue getting the db name, the ok return
+// value will be false and the strings will be empty.
 func getDBBranchFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string, branch string, ok bool) {
 	_, resp, err := qryist.Query(sqlCtx, "select database() as db, active_branch() as branch")
 	if err != nil {
@@ -864,7 +865,7 @@ func getDBBranchFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string
 	} else {
 		db = row[0].(string)
 
-		// It is possilbe to `use mydb/branch`, and as far as your session is concerned your database is mydb/branch. We
+		// It is possible to `use mydb/branch`, and as far as your session is concerned your database is mydb/branch. We
 		// allow that, but also want to show the user the branch name in the prompt. So we munge the DB in this case.
 		if strings.HasSuffix(db, "/"+branch) {
 			db = db[:len(db)-len(branch)-1]
