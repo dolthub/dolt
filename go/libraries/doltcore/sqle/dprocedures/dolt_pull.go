@@ -125,7 +125,6 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 			fmt.Errorf("branch %q not found on remote", pullSpec.Branch.GetPath())
 	}
 
-	// Do the mega fetch, like in dolt_fetch.go
 	mode := ref.UpdateMode{Force: true, Prune: false}
 	err = actions.FetchRefSpecs(ctx, dbData, srcDB, pullSpec.RefSpecs, pullSpec.Remote, mode, runProgFuncs, stopProgFuncs)
 	if err != nil {
