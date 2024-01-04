@@ -685,7 +685,12 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
 
 	db, branch, _ := getDBBranchFromSession(sqlCtx, qryist)
-	initialPrompt, initialMultilinePrompt := formattedPrompts(db, branch)
+	dirty := false
+	if branch != "" {
+		dirty, _ = isDirty(sqlCtx, qryist)
+	}
+
+	initialPrompt, initialMultilinePrompt := formattedPrompts(db, branch, dirty)
 
 	rlConf := readline.Config{
 		Prompt:                 initialPrompt,
@@ -794,7 +799,10 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 			if ok {
 				sqlCtx.SetCurrentDatabase(db)
 			}
-			nextPrompt, multiPrompt = formattedPrompts(db, branch)
+			if branch != "" {
+				dirty, _ = isDirty(sqlCtx, qryist)
+			}
+			nextPrompt, multiPrompt = formattedPrompts(db, branch, dirty)
 
 			return true
 		}()
@@ -816,7 +824,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 // formattedPrompts returns the prompt and multiline prompt for the current session. If the db is empty, the prompt will
 // be "> ", otherwise it will be "db> ". If the branch is empty, the multiline prompt will be "-> ", left padded for
 // alignment with the prompt.
-func formattedPrompts(db, branch string) (string, string) {
+func formattedPrompts(db, branch string, dirty bool) (string, string) {
 	if db == "" {
 		return "> ", "-> "
 	}
@@ -828,11 +836,18 @@ func formattedPrompts(db, branch string) (string, string) {
 	}
 
 	// +3 is for the "/" and "->" to lineup correctly
-	multi := fmt.Sprintf(fmt.Sprintf("%%%ds", len(db)+len(branch)+3), "-> ")
+	promptLen := len(db) + len(branch) + 3
+	dirtyStr := ""
+	if dirty {
+		dirtyStr = color.RedString(" **")
+		promptLen += 3
+	}
+
+	multi := fmt.Sprintf(fmt.Sprintf("%%%ds", promptLen), "-> ")
 
 	cyanDb := color.CyanString(db)
 	yellowBr := color.YellowString(branch)
-	return fmt.Sprintf("%s/%s> ", cyanDb, yellowBr), multi
+	return fmt.Sprintf("%s/%s%s> ", cyanDb, yellowBr, dirtyStr), multi
 }
 
 // getDBBranchFromSession returns the current database name and current branch  for the session, handling all the errors
@@ -873,6 +888,30 @@ func getDBBranchFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string
 	}
 
 	return db, branch, true
+}
+
+// isDirty returns true if the workspace is dirty, false otherwise. This function _assumes_ you are on a database
+// with a branch. If you are not, you will get an error.
+func isDirty(sqlCtx *sql.Context, qryist cli.Queryist) (bool, error) {
+	_, resp, err := qryist.Query(sqlCtx, "select count(table_name) > 0 as dirty from dolt_Status")
+
+	if err != nil {
+		cli.Println(color.RedString("Failure to get DB Name for session: " + err.Error()))
+		return false, err
+	}
+	// Expect single row result, with one boolean column.
+	row, err := resp.Next(sqlCtx)
+	if err != nil {
+		cli.Println(color.RedString("Failure to get DB Name for session: " + err.Error()))
+		return false, err
+	}
+	if len(row) != 1 {
+		cli.Println(color.RedString("Runtime error. Invalid column count."))
+		return false, fmt.Errorf("invalid column count")
+	}
+
+	foo := row[0].(bool)
+	return foo, nil
 }
 
 // Returns a new auto completer with table names, column names, and SQL keywords.
