@@ -126,8 +126,8 @@ type MetricsYAMLConfig struct {
 }
 
 type RemotesapiYAMLConfig struct {
-	Port_     *int  `yaml:"port"`
-	ReadOnly_ *bool `yaml:"read_only" minver:"1.30.0"`
+	Port_     *int  `yaml:"port,omitempty"`
+	ReadOnly_ *bool `yaml:"read_only,omitempty" minver:"1.30.0"`
 }
 
 func (r RemotesapiYAMLConfig) Port() int {
@@ -155,7 +155,7 @@ type YAMLConfig struct {
 	DataDirStr        *string               `yaml:"data_dir,omitempty"`
 	CfgDirStr         *string               `yaml:"cfg_dir,omitempty"`
 	MetricsConfig     MetricsYAMLConfig     `yaml:"metrics"`
-	RemotesapiConfig  RemotesapiYAMLConfig  `yaml:"remotesapi"`
+	RemotesapiConfig  RemotesapiYAMLConfig  `yaml:"remotesapi,omitempty"`
 	ClusterCfg        *ClusterYAMLConfig    `yaml:"cluster,omitempty"`
 	PrivilegeFile     *string               `yaml:"privilege_file,omitempty"`
 	BranchControlFile *string               `yaml:"branch_control_file,omitempty"`
