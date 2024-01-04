@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -36,7 +37,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	err := builder.Run(commitList)
+	err := builder.Run(context.Background(), commitList)
 	if err != nil {
 		log.Fatal(err)
 	}
