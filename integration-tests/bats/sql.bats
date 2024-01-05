@@ -2899,3 +2899,15 @@ SQL
     mkdir .dolt
     dolt sql -q "select 1"
 }
+
+@test "sql: handle importing files with bom headers" {
+    run dolt sql < $BATS_TEST_DIRNAME/helper/with_utf8_bom.sql
+    [ "$status" -eq 0 ]
+    dolt table rm t1
+    run dolt sql < $BATS_TEST_DIRNAME/helper/with_utf16le_bom.sql
+    [ "$status" -eq 0 ]
+    dolt table rm t1
+    run dolt sql < $BATS_TEST_DIRNAME/helper/with_utf16be_bom.sql
+    [ "$status" -eq 0 ]
+    dolt table rm t1
+}
