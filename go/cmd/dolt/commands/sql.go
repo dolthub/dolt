@@ -687,10 +687,15 @@ func buildBatchSqlErr(stmtStartLine int, query string, err error) error {
 // be updated by any queries which were processed.
 func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResultFormat) error {
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
-
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
-	initialPrompt := fmt.Sprintf("%s> ", sqlCtx.GetCurrentDatabase())
-	initialMultilinePrompt := fmt.Sprintf(fmt.Sprintf("%%%ds", len(initialPrompt)), "-> ")
+
+	db, branch, _ := getDBBranchFromSession(sqlCtx, qryist)
+	dirty := false
+	if branch != "" {
+		dirty, _ = isDirty(sqlCtx, qryist)
+	}
+
+	initialPrompt, initialMultilinePrompt := formattedPrompts(db, branch, dirty)
 
 	rlConf := readline.Config{
 		Prompt:                 initialPrompt,
@@ -769,6 +774,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 		}
 
 		var nextPrompt string
+		var multiPrompt string
 		var sqlSch sql.Schema
 		var rowIter sql.RowIter
 
@@ -794,11 +800,14 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 				}
 			}
 
-			db, ok := getDBFromSession(sqlCtx, qryist)
+			db, branch, ok := getDBBranchFromSession(sqlCtx, qryist)
 			if ok {
 				sqlCtx.SetCurrentDatabase(db)
 			}
-			nextPrompt = fmt.Sprintf("%s> ", sqlCtx.GetCurrentDatabase())
+			if branch != "" {
+				dirty, _ = isDirty(sqlCtx, qryist)
+			}
+			nextPrompt, multiPrompt = formattedPrompts(db, branch, dirty)
 
 			return true
 		}()
@@ -808,7 +817,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 		}
 
 		shell.SetPrompt(nextPrompt)
-		shell.SetMultiPrompt(fmt.Sprintf(fmt.Sprintf("%%%ds", len(nextPrompt)), "-> "))
+		shell.SetMultiPrompt(multiPrompt)
 	})
 
 	shell.Run()
@@ -817,30 +826,96 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 	return nil
 }
 
-// getDBFromSession returns the current database name for the session, handling all the errors along the way by printing
-// red error messages to the CLI. If there was an issue getting the db name, the second return value is false.
-func getDBFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string, ok bool) {
-	_, resp, err := qryist.Query(sqlCtx, "select database()")
-	if err != nil {
-		cli.Println(color.RedString("Failure to get DB Name for session" + err.Error()))
-		return db, false
+// formattedPrompts returns the prompt and multiline prompt for the current session. If the db is empty, the prompt will
+// be "> ", otherwise it will be "db> ". If the branch is empty, the multiline prompt will be "-> ", left padded for
+// alignment with the prompt.
+func formattedPrompts(db, branch string, dirty bool) (string, string) {
+	if db == "" {
+		return "> ", "-> "
 	}
-	// Expect single row/single column result with the db name.
+	if branch == "" {
+		// +2 Allows for the "->" to lineup correctly
+		multi := fmt.Sprintf(fmt.Sprintf("%%%ds", len(db)+2), "-> ")
+		cyanDb := color.CyanString(db)
+		return fmt.Sprintf("%s> ", cyanDb), multi
+	}
+
+	// +3 is for the "/" and "->" to lineup correctly
+	promptLen := len(db) + len(branch) + 3
+	dirtyStr := ""
+	if dirty {
+		dirtyStr = color.RedString("*")
+		promptLen += 1
+	}
+
+	multi := fmt.Sprintf(fmt.Sprintf("%%%ds", promptLen), "-> ")
+
+	cyanDb := color.CyanString(db)
+	yellowBr := color.YellowString(branch)
+	return fmt.Sprintf("%s/%s%s> ", cyanDb, yellowBr, dirtyStr), multi
+}
+
+// getDBBranchFromSession returns the current database name and current branch  for the session, handling all the errors
+// along the way by printing red error messages to the CLI. If there was an issue getting the db name, the ok return
+// value will be false and the strings will be empty.
+func getDBBranchFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string, branch string, ok bool) {
+	_, resp, err := qryist.Query(sqlCtx, "select database() as db, active_branch() as branch")
+	if err != nil {
+		cli.Println(color.RedString("Failure to get DB Name for session: " + err.Error()))
+		return db, branch, false
+	}
+	// Expect single row result, with two columns: db name, branch name.
 	row, err := resp.Next(sqlCtx)
 	if err != nil {
-		cli.Println(color.RedString("Failure to get DB Name for session" + err.Error()))
-		return db, false
+		cli.Println(color.RedString("Failure to get DB Name for session: " + err.Error()))
+		return db, branch, false
 	}
-	if len(row) != 1 {
-		cli.Println(color.RedString("Failure to get DB Name for session" + err.Error()))
-		return db, false
+	if len(row) != 2 {
+		cli.Println(color.RedString("Runtime error. Invalid column count."))
+		return db, branch, false
+	}
+
+	if row[1] == nil {
+		branch = ""
+	} else {
+		branch = row[1].(string)
 	}
 	if row[0] == nil {
 		db = ""
 	} else {
 		db = row[0].(string)
+
+		// It is possible to `use mydb/branch`, and as far as your session is concerned your database is mydb/branch. We
+		// allow that, but also want to show the user the branch name in the prompt. So we munge the DB in this case.
+		if strings.HasSuffix(db, "/"+branch) {
+			db = db[:len(db)-len(branch)-1]
+		}
 	}
-	return db, true
+
+	return db, branch, true
+}
+
+// isDirty returns true if the workspace is dirty, false otherwise. This function _assumes_ you are on a database
+// with a branch. If you are not, you will get an error.
+func isDirty(sqlCtx *sql.Context, qryist cli.Queryist) (bool, error) {
+	_, resp, err := qryist.Query(sqlCtx, "select count(table_name) > 0 as dirty from dolt_Status")
+
+	if err != nil {
+		cli.Println(color.RedString("Failure to get DB Name for session: " + err.Error()))
+		return false, err
+	}
+	// Expect single row result, with one boolean column.
+	row, err := resp.Next(sqlCtx)
+	if err != nil {
+		cli.Println(color.RedString("Failure to get DB Name for session: " + err.Error()))
+		return false, err
+	}
+	if len(row) != 1 {
+		cli.Println(color.RedString("Runtime error. Invalid column count."))
+		return false, fmt.Errorf("invalid column count")
+	}
+
+	return getStrBoolColAsBool(row[0])
 }
 
 // Returns a new auto completer with table names, column names, and SQL keywords.
