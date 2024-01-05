@@ -70,8 +70,12 @@ teardown() {
 # bats test_tags=no_lambda
 @test "sql-shell: sql shell prompt updates" {
     skiponwindows "Need to install expect and make this script work on windows."
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "Presently sql command will not connect to remote server due to lack of lock file where there are not DBs."
+    fi
 
     # start in an empty directory
+    rm -rf .dolt
     mkdir sql_shell_test
     cd sql_shell_test
 
