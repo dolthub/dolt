@@ -1,5 +1,6 @@
 #!/usr/bin/expect
 
+set timeout 5
 spawn dolt sql
 
 expect {
