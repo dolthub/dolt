@@ -910,8 +910,7 @@ func isDirty(sqlCtx *sql.Context, qryist cli.Queryist) (bool, error) {
 		return false, fmt.Errorf("invalid column count")
 	}
 
-	foo := row[0].(bool)
-	return foo, nil
+	return getStrBoolColAsBool(row[0])
 }
 
 // Returns a new auto completer with table names, column names, and SQL keywords.
