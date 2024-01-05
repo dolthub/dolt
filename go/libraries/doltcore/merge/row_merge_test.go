@@ -16,10 +16,10 @@ package merge
 
 import (
 	"context"
-	"github.com/dolthub/go-mysql-server/sql"
 	"strconv"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
