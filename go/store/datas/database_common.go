@@ -373,7 +373,8 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, w
 			if err != nil {
 				return prolly.AddressMap{}, err
 			}
-			// If the current root has a working set, update it. Do nothing if it doesn't exist.
+
+			// If the current root has a working set, perform a sanity check that it's referencing a SerialMessage
 			if hasWS {
 				currWSHash, err := am.Get(ctx, workingSetPath)
 				if err != nil {
@@ -385,25 +386,25 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, w
 					return prolly.AddressMap{}, err
 				}
 
-				if _, ok := targetCmt.(types.SerialMessage); ok {
-					cmtRtHsh, err := GetCommitRootHash(newVal)
-					if err != nil {
-						return prolly.AddressMap{}, err
-					}
-
-					// TODO - construct new meta instance rather than using the default
-					updateWS := workingset_flatbuffer(cmtRtHsh, &cmtRtHsh, nil, nil, nil)
-					ref, err := db.WriteValue(ctx, types.SerialMessage(updateWS))
-					if err != nil {
-						return prolly.AddressMap{}, err
-					}
-					newWSHash = ref.TargetHash()
-				} else {
+				if _, ok := targetCmt.(types.SerialMessage); !ok {
 					// This _should_ never happen. We've already ended up on this code path because we are on
 					// modern storage.
 					return prolly.AddressMap{}, errors.New("Modern Dolt Database required.")
 				}
 			}
+
+			cmtRtHsh, err := GetCommitRootHash(newVal)
+			if err != nil {
+				return prolly.AddressMap{}, err
+			}
+
+			// TODO - construct new meta instance rather than using the default
+			updateWS := workingset_flatbuffer(cmtRtHsh, &cmtRtHsh, nil, nil, nil)
+			ref, err := db.WriteValue(ctx, types.SerialMessage(updateWS))
+			if err != nil {
+				return prolly.AddressMap{}, err
+			}
+			newWSHash = ref.TargetHash()
 		}
 
 		ae := am.Editor()

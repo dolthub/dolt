@@ -1141,37 +1141,37 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 		return err
 	}
 
-	_, err = ddb.db.SetHead(ctx, ds, addr, "")
-	if err != nil {
-		return err
-	}
-
-	// Update the corresponding working set at the same time, either by updating it or creating a new one
-	// TODO: find all the places HEAD can change, update working set too. This is only necessary when we don't already
-	//  update the working set when the head changes.
-	commitRoot, err := commit.GetRootValue(ctx)
-	if err != nil {
-		return err
-	}
+	// TODO: What about replicationStatus?
+	//       The only places that pass in a ReplicationStatusController to this function are:
+	//        - actions.CopyBranchOnDB (env/actions/branch.go:104)
+	//        - actions.CreateBranchOnDB (env/actions/branch.go:323)
+	//
+	//        CopyBranchOnDB:
+	//         - actions.RenameBranch (env/actions/branch.go:42)
+	//            - renameBranch (sqle/dprocedures/dolt_branch.go:160)
+	//               - doDoltBranch(sqle/dprocedures/dolt_branch.go:78)
+	//                  - rsc is ALWAYS an empty struct here
+	//         - copyABranch(sqle/dprocedures/dolt_branch.go:455)
+	//            - copyBranch(sqle/dprocedures/dolt_branch.go:441)
+	//               - doDoltBranch(sqle/dprocedures/dolt_branch.go:76)
+	//                  - rsc is ALWAYS an empty struct here
+	//
+	//        CreateBranchOnDB:
+	//         - createBranch(env/actions/branch.go:336)
+	//            - CreateBranchWithStartPt(env/actions/branch.go:277)
+	//               - createNewBranch(sqle/dprocedures/dolt_branch.go:409)
+	//                  - doDoltBranch(sqle/dprocedures/dolt_branch.go:82)
+	//                     - rsc is ALWAYS an empty struct here
+	//               - checkoutRemoteBranch(sqle/dprocedures/dolt_checkout.go:306)
+	//                  - doDoltCheckout(sqle/dprocedures/dolt_checkout.go:195)
+	//                     - rsc is ALWAYS an empty struct here
+	//               - checkoutNewBranch(sqle/dprocedures/dolt_checkout.go:391)
+	//                  - doDoltCheckout(sqle/dprocedures/dolt_checkout.go:108)
+	//                     - rsc is ALWAYS an empty struct here
 
 	wsRef, _ := ref.WorkingSetRefForHead(branchRef)
-
-	var ws *WorkingSet
-	var currWsHash hash.Hash
-	ws, err = ddb.ResolveWorkingSet(ctx, wsRef)
-	if err == ErrWorkingSetNotFound {
-		ws = EmptyWorkingSet(wsRef)
-	} else if err != nil {
-		return err
-	} else {
-		currWsHash, err = ws.HashOf()
-		if err != nil {
-			return err
-		}
-	}
-
-	ws = ws.WithWorkingRoot(commitRoot).WithStagedRoot(commitRoot)
-	return ddb.UpdateWorkingSet(ctx, wsRef, ws, currWsHash, TodoWorkingSetMeta(), replicationStatus)
+	_, err = ddb.db.SetHead(ctx, ds, addr, wsRef.String())
+	return err
 }
 
 // CopyWorkingSet copies a WorkingSetRef from one ref to another. If `force` is
