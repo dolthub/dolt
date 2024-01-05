@@ -32,6 +32,8 @@ import (
 	"github.com/dolthub/vitess/go/vt/vterrors"
 	"github.com/fatih/color"
 	"github.com/flynn-archive/go-shlex"
+	textunicode "golang.org/x/text/encoding/unicode"
+	"golang.org/x/text/transform"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -238,7 +240,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 		_, continueOnError := apr.GetValue(continueFlag)
 
-		input := os.Stdin
+		var input io.Reader = os.Stdin
 		if fileInput, ok := apr.GetValue(fileInputFlag); ok {
 			isTty = false
 			input, err = os.OpenFile(fileInput, os.O_RDONLY, os.ModePerm)
@@ -249,6 +251,8 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			if err != nil {
 				return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("couldn't get file size %s", fileInput).Build(), usage)
 			}
+
+			input = transform.NewReader(input, textunicode.BOMOverride(transform.Nop))
 
 			// initialize fileReadProg global variable if there is a file to process queries from
 			fileReadProg = &fileReadProgress{bytesRead: 0, totalBytes: info.Size(), printed: 0, displayStrLen: 0}
@@ -261,6 +265,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 				return sqlHandleVErrAndExitCode(queryist, errhand.VerboseErrorFromError(err), usage)
 			}
 		} else {
+			input = transform.NewReader(input, textunicode.BOMOverride(transform.Nop))
 			err := execBatchMode(sqlCtx, queryist, input, continueOnError, format)
 			if err != nil {
 				return sqlHandleVErrAndExitCode(queryist, errhand.VerboseErrorFromError(err), usage)
