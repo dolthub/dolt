@@ -1952,7 +1952,15 @@ func (m *valueMerger) processColumn(ctx *sql.Context, i int, left, right, base v
 		}
 		// concurrent modification
 		// if the result type is JSON, we can attempt to merge the JSON changes.
-		if _, ok := sqlType.(types.JsonType); ok {
+		dontMergeJsonVar, err := ctx.Session.GetSessionVariable(ctx, "dolt_dont_merge_json")
+		if err != nil {
+			return nil, true, err
+		}
+		disallowJsonMerge, err := sql.ConvertToBool(ctx, dontMergeJsonVar)
+		if err != nil {
+			return nil, true, err
+		}
+		if _, ok := sqlType.(types.JsonType); ok && !disallowJsonMerge {
 			return m.mergeJSONAddr(ctx, baseCol, leftCol, rightCol)
 		}
 		// otherwise, this is a conflict.
