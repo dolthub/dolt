@@ -172,15 +172,13 @@ type statsMeta struct {
 
 func NewProvider() *Provider {
 	return &Provider{
-		//indexToStats: make(map[indexMeta][]statsMeta),
 		stats: make(map[sql.StatQualifier]*DoltStats),
 	}
 }
 
 type Provider struct {
 	latestRootAddr hash.Hash
-	//indexToStats   map[indexMeta][]statsMeta
-	stats map[sql.StatQualifier]*DoltStats
+	stats          map[sql.StatQualifier]*DoltStats
 }
 
 var _ sql.StatsProvider = (*Provider)(nil)
