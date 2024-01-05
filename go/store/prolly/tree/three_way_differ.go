@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 
 	"github.com/dolthub/dolt/go/store/val"
@@ -39,7 +40,7 @@ type ThreeWayDiffer[K ~[]byte, O Ordering[K]] struct {
 
 //var _ DiffIter = (*threeWayDiffer[Item, val.TupleDesc])(nil)
 
-type resolveCb func(context.Context, val.Tuple, val.Tuple, val.Tuple) (val.Tuple, bool, error)
+type resolveCb func(*sql.Context, val.Tuple, val.Tuple, val.Tuple) (val.Tuple, bool, error)
 
 // ThreeWayDiffInfo stores contextual data that can influence the diff.
 // If |LeftSchemaChange| is true, then the left side's bytes have a different interpretation from the base,
@@ -100,7 +101,7 @@ const (
 	dsMatchFinalize
 )
 
-func (d *ThreeWayDiffer[K, O]) Next(ctx context.Context) (ThreeWayDiff, error) {
+func (d *ThreeWayDiffer[K, O]) Next(ctx *sql.Context) (ThreeWayDiff, error) {
 	var err error
 	var res ThreeWayDiff
 	nextState := dsInit

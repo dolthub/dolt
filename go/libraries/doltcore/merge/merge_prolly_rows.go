@@ -1693,7 +1693,7 @@ func findNonPKColumnMappingByTagOrName(sch schema.Schema, col schema.Column) int
 // tuples. It returns the merged cell value tuple and a bool indicating if a
 // conflict occurred. tryMerge should only be called if left and right produce
 // non-identical diffs against base.
-func (m *valueMerger) tryMerge(ctx context.Context, left, right, base val.Tuple) (val.Tuple, bool, error) {
+func (m *valueMerger) tryMerge(ctx *sql.Context, left, right, base val.Tuple) (val.Tuple, bool, error) {
 	// If we're merging a keyless table and the keys match, but the values are different,
 	// that means that the row data is the same, but the cardinality has changed, and if the
 	// cardinality has changed in different ways on each merge side, we can't auto resolve.
@@ -1827,7 +1827,7 @@ func (m *valueMerger) processBaseColumn(ctx context.Context, i int, left, right,
 
 // processColumn returns the merged value of column |i| of the merged schema,
 // based on the |left|, |right|, and |base| schema.
-func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, base val.Tuple) (result []byte, conflict bool, err error) {
+func (m *valueMerger) processColumn(ctx *sql.Context, i int, left, right, base val.Tuple) (result []byte, conflict bool, err error) {
 	// missing columns are coerced into NULL column values
 
 	var baseCol []byte

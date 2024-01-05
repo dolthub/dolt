@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 	"testing"
 
@@ -178,7 +179,7 @@ func TestThreeWayDiffer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := sql.NewEmptyContext()
 			ns := NewTestNodeStore()
 
 			var valTypes []val.Type
@@ -216,8 +217,8 @@ func TestThreeWayDiffer(t *testing.T) {
 	}
 }
 
-func testResolver(t *testing.T, ns NodeStore, valDesc val.TupleDesc, valBuilder *val.TupleBuilder) func(context.Context, val.Tuple, val.Tuple, val.Tuple) (val.Tuple, bool, error) {
-	return func(_ context.Context, l, r, b val.Tuple) (val.Tuple, bool, error) {
+func testResolver(t *testing.T, ns NodeStore, valDesc val.TupleDesc, valBuilder *val.TupleBuilder) func(*sql.Context, val.Tuple, val.Tuple, val.Tuple) (val.Tuple, bool, error) {
+	return func(_ *sql.Context, l, r, b val.Tuple) (val.Tuple, bool, error) {
 		for i := range valDesc.Types {
 			var base, left, right int64
 			var ok bool
