@@ -17,8 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	textunicode "golang.org/x/text/encoding/unicode"
-	"golang.org/x/text/transform"
 	"io"
 	"os"
 	"os/signal"
@@ -34,6 +32,8 @@ import (
 	"github.com/dolthub/vitess/go/vt/vterrors"
 	"github.com/fatih/color"
 	"github.com/flynn-archive/go-shlex"
+	textunicode "golang.org/x/text/encoding/unicode"
+	"golang.org/x/text/transform"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
