@@ -16,6 +16,7 @@ package merge
 
 import (
 	"context"
+	"github.com/dolthub/go-mysql-server/sql"
 	"strconv"
 	"testing"
 
@@ -201,7 +202,7 @@ func TestRowMerge(t *testing.T) {
 		t.Skip()
 	}
 
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 
 	tests := make([]rowMergeTest, len(testCases))
 	for i, t := range testCases {
