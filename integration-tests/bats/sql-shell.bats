@@ -68,6 +68,17 @@ teardown() {
 }
 
 # bats test_tags=no_lambda
+@test "sql-shell: sql shell prompt updates" {
+    skiponwindows "Need to install expect and make this script work on windows."
+
+    # start in an empty directory
+    mkdir sql_shell_test
+    cd sql_shell_test
+
+    $BATS_TEST_DIRNAME/sql-shell-prompt.expect
+}
+
+# bats test_tags=no_lambda
 @test "sql-shell: shell works after failing query" {
     skiponwindows "Need to install expect and make this script work on windows."
     $BATS_TEST_DIRNAME/sql-works-after-failing-query.expect
