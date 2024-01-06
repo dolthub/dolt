@@ -3,8 +3,8 @@ package sqlserver
 import (
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/utils/structwalk"
 	"github.com/dolthub/dolt/go/libraries/utils/version"
-	"github.com/dolthub/dolt/go/utils/structwalk"
 	"github.com/stretchr/testify/require"
 	"io"
 	"os"
