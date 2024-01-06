@@ -43,6 +43,16 @@ jobs:
           add: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
           cwd: "."
           pull: "--ff"
+      - name: Set minver TBD to version
+        run: sed -i -e 's/minver:"TBD"/minver:"'"$NEW_VERSION"'"/' "$FILE"
+        env:
+          FILE: ${{ format('{0}/go/cmd/dolt/commands/sqlserver/yaml_config.go', github.workspace) }}
+          NEW_VERSION: ${{ needs.format-version.outputs.version }}
+      - name: update minver_validation.txt
+        run: go run $MAIN_GO $FILE
+        env:
+          MAIN_GO: ${{ format('{0}/go/cmd/dolt/commads/sqlserver/testdata/genminver_validation/main.go', github.workspace) }}
+          FILE: ${{ format('{0}/go/cmd/dolt/commands/sqlserver/testdata/minver_validation.txt', github.workspace) }}
       - name: Build Binaries
         id: build_binaries
         run: |
