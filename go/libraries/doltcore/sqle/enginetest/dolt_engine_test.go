@@ -797,7 +797,7 @@ func TestJoinOps(t *testing.T) {
 
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestJoinOps(t, h)
+	enginetest.TestJoinOps(t, h, enginetest.DefaultJoinOpTests)
 }
 
 func TestJoinPlanning(t *testing.T) {
