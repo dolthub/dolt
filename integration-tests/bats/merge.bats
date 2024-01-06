@@ -1160,3 +1160,33 @@ SQL
 
     [ "$head1" == "$head2" ]
 }
+
+@test "merge: three-way merge with mergible json fails when --dont_merge_json is set" {
+
+    # Base table has a key length of 2. Left and right will both add a column to
+    # the key, and the keys for all rows will differ in the last column.
+    dolt sql <<SQL
+create table t (pk int primary key, j json);
+insert into t values (1, '{}');
+call dolt_commit('-Am', 'new table');
+call dolt_branch('b1');
+call dolt_branch('b2');
+
+call dolt_checkout('b1');
+update t set j = '{"a": 1}';
+call dolt_commit('-Am', 'added key "a"');
+
+call dolt_checkout('b2');
+update t set j = '{"b": 1}';
+call dolt_commit('-Am', 'added key "b"');
+
+SQL
+
+    dolt checkout b2
+
+    run dolt merge --dont_merge_json b1
+    log_status_eq 1
+
+    run dolt merge b1
+    log_status_eq 0
+}
