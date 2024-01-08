@@ -50,7 +50,7 @@ jobs:
       - uses: EndBug/add-and-commit@v9.1.1
         with:
           message: ${{ format('[ga-bump-release] Update Dolt version to {0} and release v{0}', needs.format-version.outputs.version) }}
-          add: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
+          add: ${{ format('["{0}/go/cmd/dolt/dolt.go", "{0}/go/cmd/dolt/commands/sqlserver/yaml_config.go", "{0}/go/cmd/dolt/commands/sqlserver/testdata/minver_validation.txt"]', github.workspace) }}
           cwd: "."
           pull: "--ff"
       - name: Build Binaries
