@@ -164,7 +164,7 @@ type YAMLConfig struct {
 	SystemVars_     *engine.SystemVariables `yaml:"system_variables,omitempty" minver:"1.11.1"`
 	Jwks            []engine.JwksConfig     `yaml:"jwks"`
 	GoldenMysqlConn *string                 `yaml:"golden_mysql_conn,omitempty"`
-	TestField       *string                 `yaml:"test_field,omitempty" minver:"TBD"`
+	TestField       *string                 `yaml:"test_field,omitempty" minver:"test-version-0.0.1"`
 }
 
 var _ ServerConfig = YAMLConfig{}

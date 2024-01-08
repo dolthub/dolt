@@ -62,3 +62,4 @@ Jwks []engine.JwksConfig 0.0.0 jwks
 -Claims map[string]string 0.0.0 claims
 -FieldsToLog []string 0.0.0 fields_to_log
 GoldenMysqlConn *string 0.0.0 golden_mysql_conn,omitempty
+TestField *string test-version-0.0.1 test_field,omitempty
