@@ -141,6 +141,7 @@ type MinVerFieldInfo struct {
 }
 
 func MinVerFieldInfoFromLine(l string) (MinVerFieldInfo, error) {
+	l = strings.TrimSpace(l)
 	tokens := strings.Split(l, " ")
 
 	if len(tokens) != 4 {
