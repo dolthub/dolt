@@ -24,5 +24,11 @@ jobs:
         run: go run -mod=readonly ./utils/genminver_validation/ $FILE
         env:
           FILE: ${{ format('{0}/go/cmd/dolt/commands/sqlserver/testdata/minver_validation.txt', github.workspace) }}
+      - uses: EndBug/add-and-commit@v9.1.1
+        with:
+          message: add and commit
+          add: ${{ format('["{0}/go/cmd/dolt/dolt.go", "{0}/go/cmd/dolt/commands/sqlserver/yaml_config.go", "{0}/go/cmd/dolt/commands/sqlserver/testdata/minver_validation.txt"]', github.workspace) }}
+          cwd: "."
+          pull: "--ff"
       - name: show minver_validation.txt diff
         run: git diff .
