@@ -21,7 +21,7 @@ jobs:
           NEW_VERSION: "test-version-0.0.1"
       - name: update minver_validation.txt
         working-directory: ./go
-        run: go run -mod=readonly ./utils/genminver_validation/
+        run: go run -mod=readonly ./utils/genminver_validation/ $FILE
         env:
           FILE: ${{ format('{0}/go/cmd/dolt/commands/sqlserver/testdata/minver_validation.txt', github.workspace) }}
       - name: show minver_validation.txt diff
