@@ -17,14 +17,16 @@ package sqlserver
 import (
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/utils/structwalk"
-	"github.com/dolthub/dolt/go/libraries/utils/version"
-	"github.com/stretchr/testify/require"
 	"io"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/libraries/utils/structwalk"
+	"github.com/dolthub/dolt/go/libraries/utils/version"
 )
 
 type SubStruct struct {
