@@ -6,14 +6,14 @@ MaxQueryLenInLogs *int 0.0.0 max_logged_query_len,omitempty
 EncodeLoggedQuery *bool 0.0.0 encode_logged_query,omitempty
 BehaviorConfig sqlserver.BehaviorYAMLConfig 0.0.0 behavior
 -ReadOnly *bool 0.0.0 read_only
--AutoCommit *bool 0.0.0 
+-AutoCommit *bool 0.0.0 autocommit
 -PersistenceBehavior *string 0.0.0 persistence_behavior
 -DisableClientMultiStatements *bool 0.0.0 disable_client_multi_statements
 -DoltTransactionCommit *bool 0.0.0 dolt_transaction_commit
 -EventSchedulerStatus *string 1.17.0 event_scheduler,omitempty
 UserConfig sqlserver.UserYAMLConfig 0.0.0 user
--Name *string 0.0.0 
--Password *string 0.0.0 
+-Name *string 0.0.0 name
+-Password *string 0.0.0 password
 ListenerConfig sqlserver.ListenerYAMLConfig 0.0.0 listener
 -HostStr *string 0.0.0 host
 -PortNumber *int 0.0.0 port

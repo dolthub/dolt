@@ -162,7 +162,9 @@ func validateMinVerFunc(field reflect.StructField, depth int) error {
 	}
 
 	yamlTag := field.Tag.Get("yaml")
-	if yamlTag != "" {
+	if yamlTag == "" {
+		return fmt.Errorf("required tag 'yaml' missing on field '%s'", field.Name)
+	} else {
 		vals := strings.Split(yamlTag, ",")
 		for _, val := range vals {
 			if val == "omitempty" {
