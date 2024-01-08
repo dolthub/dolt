@@ -43,10 +43,10 @@ jobs:
           FILE: ${{ format('{0}/go/cmd/dolt/commands/sqlserver/yaml_config.go', github.workspace) }}
           NEW_VERSION: ${{ needs.format-version.outputs.version }}
       - name: update minver_validation.txt
-        run: go run $MAIN_GO $FILE
+        working-directory: ./go
+        run: go run -mod=readonly ./utils/genminver_validation/ $FILE
         env:
-          MAIN_GO: ${{ format('{0}/go/utils/genminver_validation/main.go', github.workspace) }}
-          FILE: ${{ format('{0}/go/utils/minver_validation.txt', github.workspace) }}
+          FILE: ${{ format('{0}/go/cmd/dolt/commands/sqlserver/testdata/minver_validation.txt', github.workspace) }}
       - uses: EndBug/add-and-commit@v9.1.1
         with:
           message: ${{ format('[ga-bump-release] Update Dolt version to {0} and release v{0}', needs.format-version.outputs.version) }}

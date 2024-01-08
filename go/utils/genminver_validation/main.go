@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"reflect"
@@ -35,9 +36,13 @@ func main() {
 
 	fileContents := strings.Join(lines, "\n")
 
-	err = os.WriteFile("../minver_validation.txt", []byte(fileContents), 0644)
+	fmt.Printf("New contents of '%s'\n%s\n", outFile, fileContents)
+
+	err = os.WriteFile(outFile, []byte(fileContents), 0644)
 
 	if err != nil {
 		log.Fatal("Error writing "+outFile+":", err)
 	}
+
+	fmt.Printf("'%s' written successfully", outFile)
 }
