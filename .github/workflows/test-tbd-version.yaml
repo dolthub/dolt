@@ -22,7 +22,7 @@ jobs:
       - name: update minver_validation.txt
         run: go run $MAIN_GO $FILE
         env:
-          MAIN_GO: ${{ format('{0}/go/cmd/dolt/commands/sqlserver/testdata/genminver_validation/main.go', github.workspace) }}
+          MAIN_GO: ${{ format('{0}/go/utils/genminver_validation/main.go', github.workspace) }}
           FILE: ${{ format('{0}/go/cmd/dolt/commands/sqlserver/testdata/minver_validation.txt', github.workspace) }}
       - name: show minver_validation.txt diff
         run: git diff .
