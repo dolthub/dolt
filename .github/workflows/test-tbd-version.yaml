@@ -20,6 +20,7 @@ jobs:
           FILE: ${{ format('{0}/go/cmd/dolt/commands/sqlserver/yaml_config.go', github.workspace) }}
           NEW_VERSION: "test-version-0.0.1"
       - name: update minver_validation.txt
+        working-directory: ./go
         run: go run -mod=readonly ./utils/genminver_validation/
         env:
           FILE: ${{ format('{0}/go/cmd/dolt/commands/sqlserver/testdata/minver_validation.txt', github.workspace) }}
