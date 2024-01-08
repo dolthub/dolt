@@ -1,12 +1,13 @@
 package main
 
 import (
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
-	"github.com/dolthub/dolt/go/libraries/utils/structwalk"
 	"log"
 	"os"
 	"reflect"
 	"strings"
+
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
+	"github.com/dolthub/dolt/go/libraries/utils/structwalk"
 )
 
 func main() {

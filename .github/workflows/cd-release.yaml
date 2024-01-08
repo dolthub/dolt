@@ -37,12 +37,6 @@ jobs:
         env:
           FILE: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
           NEW_VERSION: ${{ needs.format-version.outputs.version }}
-      - uses: EndBug/add-and-commit@v9.1.1
-        with:
-          message: ${{ format('[ga-bump-release] Update Dolt version to {0} and release v{0}', needs.format-version.outputs.version) }}
-          add: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
-          cwd: "."
-          pull: "--ff"
       - name: Set minver TBD to version
         run: sed -i -e 's/minver:"TBD"/minver:"'"$NEW_VERSION"'"/' "$FILE"
         env:
@@ -51,8 +45,14 @@ jobs:
       - name: update minver_validation.txt
         run: go run $MAIN_GO $FILE
         env:
-          MAIN_GO: ${{ format('{0}/go/cmd/dolt/commads/sqlserver/testdata/genminver_validation/main.go', github.workspace) }}
-          FILE: ${{ format('{0}/go/cmd/dolt/commands/sqlserver/testdata/minver_validation.txt', github.workspace) }}
+          MAIN_GO: ${{ format('{0}/go/utils/genminver_validation/main.go', github.workspace) }}
+          FILE: ${{ format('{0}/go/utils/minver_validation.txt', github.workspace) }}
+      - uses: EndBug/add-and-commit@v9.1.1
+        with:
+          message: ${{ format('[ga-bump-release] Update Dolt version to {0} and release v{0}', needs.format-version.outputs.version) }}
+          add: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
+          cwd: "."
+          pull: "--ff"
       - name: Build Binaries
         id: build_binaries
         run: |
