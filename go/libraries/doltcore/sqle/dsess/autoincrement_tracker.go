@@ -29,7 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -332,7 +332,7 @@ func getMaxIndexValue(ctx context.Context, indexData durable.Index) (uint64, err
 		}
 
 		// TODO: is the auto-inc column always the first column in the index?
-		field, err := index.GetField(ctx, kd, 0, k, idx.NodeStore())
+		field, err := tree.GetField(ctx, kd, 0, k, idx.NodeStore())
 		if err != nil {
 			return 0, err
 		}

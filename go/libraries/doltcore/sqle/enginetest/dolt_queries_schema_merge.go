@@ -2405,3 +2405,67 @@ var SchemaChangeTestsGeneratedColumns = []MergeScriptTest{
 		},
 	},
 }
+
+var SchemaChangeTestsForJsonConflicts = []MergeScriptTest{
+	{
+		Name: "json merge succeeds without @@dolt_dont_merge_json",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"CREATE table t (pk int primary key, j json);",
+			"INSERT into t values (1, '{}');",
+		},
+		RightSetUpScript: []string{
+			`update t set j = '{"a": 1}';`,
+		},
+		LeftSetUpScript: []string{
+			`update t set j = '{"b": 2}';`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+			{
+				Query: "select * from t;",
+				Expected: []sql.Row{
+					{
+						1, `{"a": 1, "b": 2}`,
+					},
+				},
+			},
+		},
+	},
+	{
+		Name: "json merge fails with @@dolt_dont_merge_json",
+		AncSetUpScript: []string{
+			"set autocommit = 0;",
+			"set @@dolt_dont_merge_json = 1;",
+			"CREATE table t (pk int primary key, j json);",
+			"INSERT into t values (1, '{}');",
+		},
+		RightSetUpScript: []string{
+			`update t set j = '{"a": 1}';`,
+		},
+		LeftSetUpScript: []string{
+			`update t set j = '{"b": 2}';`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{"", 0, 1}},
+			},
+			{
+				Query:    "select * from dolt_conflicts;",
+				Expected: []sql.Row{{"t", uint(1)}},
+			},
+			{
+				Query: "select base_j, our_j, their_j from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{
+						`{}`, `{"b": 2}`, `{"a": 1}`,
+					},
+				},
+			},
+		},
+	},
+}

@@ -102,6 +102,9 @@ func TestSchemaMerge(t *testing.T) {
 	t.Run("simple conflict tests", func(t *testing.T) {
 		testSchemaMerge(t, simpleConflictTests)
 	})
+	t.Run("json merge tests", func(t *testing.T) {
+		testSchemaMerge(t, jsonMergeTests)
+	})
 }
 
 var columnAddDropTests = []schemaMergeTest{
@@ -1142,6 +1145,200 @@ var simpleConflictTests = []schemaMergeTest{
 	},
 }
 
+var jsonMergeTests = []schemaMergeTest{
+	{
+		name:     "json merge",
+		ancestor: tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int, j json)")),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int, j json)")),
+		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int, j json)")),
+		merged:   tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int, b int, j json)")),
+		dataTests: []dataTest{
+			{
+				name:     "convergent insertion",
+				ancestor: singleRow(1, 1, 1, `{}`),
+				left:     singleRow(1, 2, 1, `{ "key1": "value1" }`),
+				right:    singleRow(1, 1, 2, `{ "key1": "value1" }`),
+				merged:   singleRow(1, 2, 2, `{ "key1": "value1" }`),
+			},
+			{
+				name:     "convergent insertion with escaped quotes in keys",
+				ancestor: singleRow(1, 1, 1, `{}`),
+				left:     singleRow(1, 2, 1, `{ "\"key1\"": "\"value1\"" }`),
+				right:    singleRow(1, 1, 2, `{ "\"key1\"": "\"value1\"" }`),
+				merged:   singleRow(1, 2, 2, `{ "\"key1\"": "\"value1\"" }`),
+			},
+			{
+				name:     `parallel insertion`,
+				ancestor: singleRow(1, 1, 1, `{}`),
+				left:     singleRow(1, 2, 1, `{ "key1": "value1" }`),
+				right:    singleRow(1, 1, 2, `{ "key2": "value2" }`),
+				merged:   singleRow(1, 2, 2, `{ "key1": "value1", "key2": "value2" }`),
+			},
+			{
+				name:     `convergent modification`,
+				ancestor: singleRow(1, 1, 1, `{ "key1": "value1" }`),
+				left:     singleRow(1, 2, 1, `{ "key1": "value2" }`),
+				right:    singleRow(1, 1, 2, `{ "key1": "value2" }`),
+				merged:   singleRow(1, 2, 2, `{ "key1": "value2" }`),
+			},
+			{
+				name:     `parallel modification`,
+				ancestor: singleRow(1, 1, 1, `{ "key1": "value1", "key2": "value2" }`),
+				left:     singleRow(1, 2, 1, `{ "key1": "value3", "key2": "value2" }`),
+				right:    singleRow(1, 1, 2, `{ "key1": "value1", "key2": "value4" }`),
+				merged:   singleRow(1, 2, 2, `{ "key1": "value3", "key2": "value4" }`),
+			},
+			{
+				name:     `parallel deletion`,
+				ancestor: singleRow(1, 1, 1, `{ "key1": "value1" }`),
+				left:     singleRow(1, 2, 1, `{}`),
+				right:    singleRow(1, 1, 2, `{}`),
+				merged:   singleRow(1, 2, 2, `{}`),
+			},
+			{
+				name:     `convergent deletion`,
+				ancestor: singleRow(1, 1, 1, `{ "key1": "value1", "key2": "value2" }`),
+				left:     singleRow(1, 2, 1, `{ "key2": "value2" }`),
+				right:    singleRow(1, 1, 2, `{ "key1": "value1" }`),
+				merged:   singleRow(1, 2, 2, `{}`),
+			},
+			{
+				name:         `divergent insertion`,
+				ancestor:     singleRow(1, 1, 1, `{}`),
+				left:         singleRow(1, 2, 1, `{ "key1": "value1" }`),
+				right:        singleRow(1, 1, 2, `{ "key1": "value2" }`),
+				dataConflict: true,
+			},
+			{
+				name:         `divergent modification`,
+				ancestor:     singleRow(1, 1, 1, `{ "key1": "value1"}`),
+				left:         singleRow(1, 2, 1, `{ "key1": "value2" }`),
+				right:        singleRow(1, 1, 2, `{ "key1": "value3" }`),
+				dataConflict: true,
+			},
+			{
+				name:         `divergent modification and deletion`,
+				ancestor:     singleRow(1, 1, 1, `{ "key1": "value1"}`),
+				left:         singleRow(1, 2, 1, `{ "key1": "value2" }`),
+				right:        singleRow(1, 1, 2, `{}`),
+				dataConflict: true,
+			},
+			{
+				name:     `nested insertion`,
+				ancestor: singleRow(1, 1, 1, `{ "key1": {} }`),
+				left:     singleRow(1, 2, 1, `{ "key1": { "key1a": "value1a" } }`),
+				right:    singleRow(1, 1, 2, `{ "key1": { "key1b": "value1b" } }`),
+				merged:   singleRow(1, 2, 2, `{ "key1": { "key1a": "value1a", "key1b": "value1b" } }`),
+			},
+			{
+				name:     `nested insertion with escaped quotes in keys`,
+				ancestor: singleRow(1, 1, 1, `{ "\"key1\"": {} }`),
+				left:     singleRow(1, 2, 1, `{ "\"key1\"": { "\"key1a\"": "value1a" } }`),
+				right:    singleRow(1, 1, 2, `{ "\"key1\"": { "\"key1b\"": "value1b" } }`),
+				merged:   singleRow(1, 2, 2, `{ "\"key1\"": { "\"key1a\"": "value1a", "\"key1b\"": "value1b" } }`),
+			},
+			{
+				name:     `nested modification`,
+				ancestor: singleRow(1, 1, 1, `{ "key1": { "key1a": "value1a", "key1b": "value1b" } }`),
+				left:     singleRow(1, 2, 1, `{ "key1": { "key1a": "value2a", "key1b": "value1b" } }`),
+				right:    singleRow(1, 1, 2, `{ "key1": { "key1a": "value1a", "key1b": "value2b" } }`),
+				merged:   singleRow(1, 2, 2, `{ "key1": { "key1a": "value2a", "key1b": "value2b" } }`),
+			},
+			{
+				name:     `nested modification with escaped quotes in keys`,
+				ancestor: singleRow(1, 1, 1, `{ "\"key1\"": { "\"key1a\"": "value1a", "\"key1b\"": "value1b" } }`),
+				left:     singleRow(1, 2, 1, `{ "\"key1\"": { "\"key1a\"": "value2a", "\"key1b\"": "value1b" } }`),
+				right:    singleRow(1, 1, 2, `{ "\"key1\"": { "\"key1a\"": "value1a", "\"key1b\"": "value2b" } }`),
+				merged:   singleRow(1, 2, 2, `{ "\"key1\"": { "\"key1a\"": "value2a", "\"key1b\"": "value2b" } }`),
+			},
+			{
+				name:     `nested deletion`,
+				ancestor: singleRow(1, 1, 1, `{ "key1": { "key1a": "value1a", "key1b": "value1b" } }`),
+				left:     singleRow(1, 2, 1, `{ "key1": { "key1a": "value1a" } }`),
+				right:    singleRow(1, 1, 2, `{ "key1": { "key1b": "value1b" } }`),
+				merged:   singleRow(1, 2, 2, `{ "key1": { } }`),
+			},
+			{
+				name:     `nested deletion with escaped quotes in keys`,
+				ancestor: singleRow(1, 1, 1, `{ "\"key1\"": { "\"key1a\"": "value1a", "\"key1b\"": "value1b" } }`),
+				left:     singleRow(1, 2, 1, `{ "\"key1\"": { "\"key1a\"": "value1a" } }`),
+				right:    singleRow(1, 1, 2, `{ "\"key1\"": { "\"key1b\"": "value1b" } }`),
+				merged:   singleRow(1, 2, 2, `{ "\"key1\"": { } }`),
+			},
+			{
+				name:     "complicated nested merge",
+				ancestor: singleRow(1, 1, 1, `{ "removed": 1, "modified": 2, "nested": { "removed": 3, "modified": 4 } }`),
+				left:     singleRow(1, 2, 1, `{ "added": 7, "modified": 2, "nested": { "removed": 3, "modified": 5 } }`),
+				right:    singleRow(1, 1, 2, `{ "removed": 1, "modified": 6, "nested": { "added": 8, "modified": 4 } }`),
+				merged:   singleRow(1, 2, 2, `{ "added": 7, "modified": 6, "nested": { "added": 8, "modified": 5 } }`),
+			},
+			{
+				name:     "object with double quotes in keys",
+				ancestor: singleRow(1, 1, 1, `{ "\"removed\"": 1, "\"modified\"": 2, "\"nested\"": { "\"removed\"": 3, "\"modified\"": 4 } }`),
+				left:     singleRow(1, 2, 1, `{ "\"added\"": 7, "\"modified\"": 2, "\"nested\"": { "\"removed\"": 3, "\"modified\"": 5 } }`),
+				right:    singleRow(1, 1, 2, `{ "\"removed\"": 1, "\"modified\"": 6, "\"nested\"": { "\"added\"": 8, "\"modified\"": 4 } }`),
+				merged:   singleRow(1, 2, 2, `{ "\"added\"": 7, "\"modified\"": 6, "\"nested\"": { "\"added\"": 8, "\"modified\"": 5 } }`),
+			},
+			{
+				name:     "changing types",
+				ancestor: singleRow(1, 1, 1, `{ "key1": {}, "key2": 2 }`),
+				left:     singleRow(1, 2, 1, `{ "key1": [], "key2": 2 }`),
+				right:    singleRow(1, 1, 2, `{ "key1": {}, "key2": true }`),
+				merged:   singleRow(1, 2, 2, `{ "key1": [], "key2": true }`),
+			},
+			{
+				name:         "changing types conflict",
+				ancestor:     singleRow(1, 1, 1, `{ "key1": {} }`),
+				left:         singleRow(1, 2, 1, `{ "key1": [] }`),
+				right:        singleRow(1, 1, 2, `{ "key1": 2 }`),
+				dataConflict: true,
+			},
+			{
+				name:         "object insert and modify conflict",
+				ancestor:     singleRow(1, 1, 1, `{ "key1": {} }`),
+				left:         singleRow(1, 2, 1, `{ "key1": { "key2": 2 } }`),
+				right:        singleRow(1, 1, 2, `{ "key1": 2 }`),
+				dataConflict: true,
+			},
+			{
+				name:         "object insert and delete conflict",
+				ancestor:     singleRow(1, 1, 1, `{ "key1": {} }`),
+				left:         singleRow(1, 2, 1, `{ "key1": { "key2": 2 } }`),
+				right:        singleRow(1, 1, 2, `{ }`),
+				dataConflict: true,
+			},
+			{
+				name:         "changing arrays conflict",
+				ancestor:     singleRow(1, 1, 1, `{ "key1": [1] }`),
+				left:         singleRow(1, 2, 1, `{ "key1": [1, 1] }`),
+				right:        singleRow(1, 1, 2, `{ "key1": [] }`),
+				dataConflict: true,
+			},
+			{
+				// Which array element should go first?
+				// We avoid making assumptions and flag this as a conflict.
+				name:         "object inside array conflict",
+				ancestor:     singleRow(1, 1, 1, `{ "key1": [ { } ] }`),
+				left:         singleRow(1, 2, 1, `{ "key1": [ { "key2": "value2" } ] }`),
+				right:        singleRow(1, 1, 2, `{ "key1": [ { "key3": "value3" } ] }`),
+				dataConflict: true,
+			},
+			{
+				// Did the left branch overwrite the first value in the array?
+				// Or did it remove the last value and insert at the beginning?
+				// Did the right branch overwrite the second value in the array?
+				// Or did it remove the first value and insert at the end?
+				// Diffs on arrays are ambiguous. We avoid making assumptions and flag this as a conflict.
+				name:         "parallel array modification",
+				ancestor:     singleRow(1, 1, 1, `{ "key1": [ 1, 1 ] }`),
+				left:         singleRow(1, 2, 1, `{ "key1": [ 2, 1 ] }`),
+				right:        singleRow(1, 1, 2, `{ "key1": [ 1, 2 ] }`),
+				dataConflict: true,
+			},
+		},
+	},
+}
+
 func testSchemaMerge(t *testing.T, tests []schemaMergeTest) {
 	t.Run("merge left to right", func(t *testing.T) {
 		testSchemaMergeHelper(t, tests, false)
@@ -1199,7 +1396,15 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 							require.NoError(t, err)
 							foundDataConflict = foundDataConflict || hasConflict
 						}
-						require.True(t, foundDataConflict, "Expected data conflict, but didn't find one.")
+						if !assert.True(t, foundDataConflict, "Expected data conflict, but didn't find one.") {
+							for name, _ := range exp {
+								table, _, err := result.Root.GetTable(ctx, name)
+								require.NoError(t, err)
+								t.Logf("table %s:", name)
+								t.Log(table.DebugString(ctx, m.NodeStore()))
+							}
+
+						}
 					} else {
 						for name, addr := range exp {
 							a, ok := act[name]
@@ -1248,8 +1453,8 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 									require.NoError(t, err)
 									if expRowDataHash != actRowDataHash {
 										t.Error("Rows unequal")
-										t.Logf("expected rows: %s", expTbl.DebugString(ctx))
-										t.Logf("actual rows: %s", actTbl.DebugString(ctx))
+										t.Logf("expected rows: %s", expTbl.DebugString(ctx, m.NodeStore()))
+										t.Logf("actual rows: %s", actTbl.DebugString(ctx, m.NodeStore()))
 									}
 									expIndexSet, err := expTbl.GetIndexSet(ctx)
 									require.NoError(t, err)
@@ -1268,8 +1473,8 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 										require.NoError(t, err)
 										if expIndexHash != actIndexHash {
 											t.Errorf("Index %s unequal", index.Name())
-											t.Logf("expected rows: %s", expIndex.DebugString(ctx))
-											t.Logf("actual rows: %s", actIndex.DebugString(ctx))
+											t.Logf("expected rows: %s", expIndex.DebugString(ctx, m.NodeStore(), expSchema))
+											t.Logf("actual rows: %s", actIndex.DebugString(ctx, m.NodeStore(), expSchema))
 										}
 										return false, nil
 									})

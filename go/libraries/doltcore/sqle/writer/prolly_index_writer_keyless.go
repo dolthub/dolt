@@ -20,8 +20,8 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -131,13 +131,13 @@ func (k prollyKeylessWriter) IterRange(ctx context.Context, rng prolly.Range) (p
 
 func (k prollyKeylessWriter) tuplesFromRow(ctx context.Context, sqlRow sql.Row) (hashId, value val.Tuple, err error) {
 	// initialize cardinality to 0
-	if err = index.PutField(ctx, k.mut.NodeStore(), k.valBld, 0, uint64(0)); err != nil {
+	if err = tree.PutField(ctx, k.mut.NodeStore(), k.valBld, 0, uint64(0)); err != nil {
 		return nil, nil, err
 	}
 
 	for to := range k.valMap {
 		from := k.valMap.MapOrdinal(to)
-		if err = index.PutField(ctx, k.mut.NodeStore(), k.valBld, to+1, sqlRow[from]); err != nil {
+		if err = tree.PutField(ctx, k.mut.NodeStore(), k.valBld, to+1, sqlRow[from]); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -161,7 +161,7 @@ func (k prollyKeylessWriter) uniqueKeyError(ctx context.Context, keyStr string, 
 		for from := range k.valMap {
 			to := k.valMap.MapOrdinal(from)
 			// offset from index for keyless rows, as first field is the count
-			if existing[to], err = index.GetField(ctx, vd, from+1, value, k.mut.NodeStore()); err != nil {
+			if existing[to], err = tree.GetField(ctx, vd, from+1, value, k.mut.NodeStore()); err != nil {
 				return err
 			}
 		}
@@ -239,11 +239,11 @@ func (writer prollyKeylessSecondaryWriter) Insert(ctx context.Context, sqlRow sq
 	for to := range writer.keyMap {
 		from := writer.keyMap.MapOrdinal(to)
 		keyPart := writer.trimKeyPart(to, sqlRow[from])
-		if err := index.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, keyPart); err != nil {
+		if err := tree.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, keyPart); err != nil {
 			return err
 		}
 		if to < writer.prefixBld.Desc.Count() {
-			if err := index.PutField(ctx, writer.mut.NodeStore(), writer.prefixBld, to, keyPart); err != nil {
+			if err := tree.PutField(ctx, writer.mut.NodeStore(), writer.prefixBld, to, keyPart); err != nil {
 				return err
 			}
 		}
@@ -313,7 +313,7 @@ func (writer prollyKeylessSecondaryWriter) Delete(ctx context.Context, sqlRow sq
 	for to := range writer.keyMap {
 		from := writer.keyMap.MapOrdinal(to)
 		keyPart := writer.trimKeyPart(to, sqlRow[from])
-		if err := index.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, keyPart); err != nil {
+		if err := tree.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, keyPart); err != nil {
 			return err
 		}
 	}

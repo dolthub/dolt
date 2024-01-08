@@ -180,6 +180,13 @@ func AddDoltSystemVariables() {
 			Type:    types.NewSystemBoolType(dsess.ShowSystemTables),
 			Default: int8(0),
 		},
+		{
+			Name:    "dolt_dont_merge_json",
+			Dynamic: true,
+			Scope:   sql.SystemVariableScope_Both,
+			Type:    types.NewSystemBoolType("dolt_dont_merge_json"),
+			Default: int8(0),
+		},
 	})
 }
 

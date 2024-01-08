@@ -82,6 +82,7 @@ func (cmd CherryPickCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command.
 func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cli.CreateCherryPickArgParser()
+	ap.SupportsFlag(cli.NoJsonMergeFlag, "", "Do not attempt to automatically resolve multiple changes to the same JSON value, report a conflict instead.")
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cherryPickDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
@@ -103,6 +104,14 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 	if apr.Contains(cli.AbortParam) {
 		err = cherryPickAbort(queryist, sqlCtx)
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	if apr.Contains(cli.NoJsonMergeFlag) {
+		_, _, err = queryist.Query(sqlCtx, "set @@session.dolt_dont_merge_json = 1")
+		if err != nil {
+			cli.Println(err.Error())
+			return 1
+		}
 	}
 
 	// TODO : support single commit cherry-pick only for now

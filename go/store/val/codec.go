@@ -100,6 +100,19 @@ const (
 	sentinel Encoding = 127
 )
 
+func IsAddrEncoding(enc Encoding) bool {
+	switch enc {
+	case BytesAddrEnc,
+		CommitAddrEnc,
+		StringAddrEnc,
+		JSONAddrEnc,
+		GeomAddrEnc:
+		return true
+	default:
+		return false
+	}
+}
+
 // Variable Width Encodings
 const (
 	StringEnc     = Encoding(serial.EncodingString)

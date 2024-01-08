@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package index
+package tree
 
 import (
 	"bytes"
@@ -29,14 +29,13 @@ import (
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
 var ErrValueExceededMaxFieldSize = errors.New("value exceeded max field size of 65kb")
 
 // GetField reads the value from the ith field of the Tuple as an interface{}.
-func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tree.NodeStore) (v interface{}, err error) {
+func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns NodeStore) (v interface{}, err error) {
 	var ok bool
 	switch td.Types[i].Enc {
 	case val.Int8Enc:
@@ -109,7 +108,7 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tr
 			var h hash.Hash
 			h, ok = td.GetGeometryAddr(i, tup)
 			if ok {
-				buf, err = tree.NewByteArray(h, ns).ToBytes(ctx)
+				buf, err = NewByteArray(h, ns).ToBytes(ctx)
 				if err != nil {
 					return nil, err
 				}
@@ -122,19 +121,19 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tr
 		var h hash.Hash
 		h, ok = td.GetBytesAddr(i, tup)
 		if ok {
-			v, err = tree.NewByteArray(h, ns).ToBytes(ctx)
+			v, err = NewByteArray(h, ns).ToBytes(ctx)
 		}
 	case val.JSONAddrEnc:
 		var h hash.Hash
 		h, ok = td.GetJSONAddr(i, tup)
 		if ok {
-			v, err = tree.NewJSONDoc(h, ns).ToJSONDocument(ctx)
+			v, err = NewJSONDoc(h, ns).ToJSONDocument(ctx)
 		}
 	case val.StringAddrEnc:
 		var h hash.Hash
 		h, ok = td.GetStringAddr(i, tup)
 		if ok {
-			v, err = tree.NewTextStorage(h, ns).ToString(ctx)
+			v, err = NewTextStorage(h, ns).ToString(ctx)
 		}
 	case val.CommitAddrEnc:
 		v, ok = td.GetCommitAddr(i, tup)
@@ -151,7 +150,7 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tr
 
 // Serialize writes an interface{} into the byte string representation used in val.Tuple, and returns the byte string,
 // and a boolean indicating success.
-func Serialize(ctx context.Context, ns tree.NodeStore, t val.Type, v interface{}) (result []byte, err error) {
+func Serialize(ctx context.Context, ns NodeStore, t val.Type, v interface{}) (result []byte, err error) {
 	newTupleDesc := val.NewTupleDescriptor(t)
 	tb := val.NewTupleBuilder(newTupleDesc)
 	err = PutField(ctx, ns, tb, 0, v)
@@ -162,7 +161,7 @@ func Serialize(ctx context.Context, ns tree.NodeStore, t val.Type, v interface{}
 }
 
 // PutField writes an interface{} to the ith field of the Tuple being built.
-func PutField(ctx context.Context, ns tree.NodeStore, tb *val.TupleBuilder, i int, v interface{}) error {
+func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v interface{}) error {
 	if v == nil {
 		return nil // NULL
 	}
@@ -220,14 +219,14 @@ func PutField(ctx context.Context, ns tree.NodeStore, tb *val.TupleBuilder, i in
 	// TODO: eventually remove GeometryEnc, but in the meantime write them as GeomAddrEnc
 	case val.GeometryEnc:
 		geo := serializeGeometry(v)
-		h, err := serializeBytesToAddr(ctx, ns, bytes.NewReader(geo), len(geo))
+		h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(geo), len(geo))
 		if err != nil {
 			return err
 		}
 		tb.PutGeometryAddr(i, h)
 	case val.GeomAddrEnc:
 		geo := serializeGeometry(v)
-		h, err := serializeBytesToAddr(ctx, ns, bytes.NewReader(geo), len(geo))
+		h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(geo), len(geo))
 		if err != nil {
 			return err
 		}
@@ -237,20 +236,20 @@ func PutField(ctx context.Context, ns tree.NodeStore, tb *val.TupleBuilder, i in
 		if err != nil {
 			return err
 		}
-		h, err := serializeBytesToAddr(ctx, ns, bytes.NewReader(buf), len(buf))
+		h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(buf), len(buf))
 		if err != nil {
 			return err
 		}
 		tb.PutJSONAddr(i, h)
 	case val.BytesAddrEnc:
-		h, err := serializeBytesToAddr(ctx, ns, bytes.NewReader(v.([]byte)), len(v.([]byte)))
+		h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(v.([]byte)), len(v.([]byte)))
 		if err != nil {
 			return err
 		}
 		tb.PutBytesAddr(i, h)
 	case val.StringAddrEnc:
 		//todo: v will be []byte after daylon's changes
-		h, err := serializeBytesToAddr(ctx, ns, bytes.NewReader([]byte(v.(string))), len(v.(string)))
+		h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader([]byte(v.(string))), len(v.(string)))
 		if err != nil {
 			return err
 		}
@@ -360,7 +359,7 @@ func serializeGeometry(v interface{}) []byte {
 	}
 }
 
-func serializeBytesToAddr(ctx context.Context, ns tree.NodeStore, r io.Reader, dataSize int) (hash.Hash, error) {
+func SerializeBytesToAddr(ctx context.Context, ns NodeStore, r io.Reader, dataSize int) (hash.Hash, error) {
 	bb := ns.BlobBuilder()
 	bb.Init(dataSize)
 	_, addr, err := bb.Chunk(ctx, r)

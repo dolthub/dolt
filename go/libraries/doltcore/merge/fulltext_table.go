@@ -25,9 +25,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -154,7 +154,7 @@ func (table *fulltextTable) ApplyToTable(ctx *sql.Context) (*doltdb.Table, error
 	for ; err == nil; sqlRow, err = rowIter.Next(ctx) {
 		for to := range keyMap {
 			from := keyMap.MapOrdinal(to)
-			if err = index.PutField(ctx, mut.NodeStore(), keyBld, to, sqlRow[from]); err != nil {
+			if err = tree.PutField(ctx, mut.NodeStore(), keyBld, to, sqlRow[from]); err != nil {
 				return nil, err
 			}
 		}
@@ -162,7 +162,7 @@ func (table *fulltextTable) ApplyToTable(ctx *sql.Context) (*doltdb.Table, error
 
 		for to := range valMap {
 			from := valMap.MapOrdinal(to)
-			if err = index.PutField(ctx, mut.NodeStore(), valBld, to, sqlRow[from]); err != nil {
+			if err = tree.PutField(ctx, mut.NodeStore(), valBld, to, sqlRow[from]); err != nil {
 				return nil, err
 			}
 		}

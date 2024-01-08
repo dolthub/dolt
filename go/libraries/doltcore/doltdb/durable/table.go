@@ -106,7 +106,7 @@ type Table interface {
 	SetAutoIncrement(ctx context.Context, val uint64) (Table, error)
 
 	// DebugString returns the table contents for debugging purposes
-	DebugString(ctx context.Context) string
+	DebugString(ctx context.Context, ns tree.NodeStore) string
 }
 
 type nomsTable struct {
@@ -615,7 +615,7 @@ func (t nomsTable) SetAutoIncrement(ctx context.Context, val uint64) (Table, err
 	return nomsTable{t.vrw, t.ns, st}, nil
 }
 
-func (t nomsTable) DebugString(ctx context.Context) string {
+func (t nomsTable) DebugString(ctx context.Context, ns tree.NodeStore) string {
 	var buf bytes.Buffer
 	err := types.WriteEncodedValue(ctx, &buf, t.tableStruct)
 	if err != nil {
@@ -685,13 +685,18 @@ type doltDevTable struct {
 	msg *serial.Table
 }
 
-func (t doltDevTable) DebugString(ctx context.Context) string {
+func (t doltDevTable) DebugString(ctx context.Context, ns tree.NodeStore) string {
 	rows, err := t.GetTableRows(ctx)
 	if err != nil {
 		panic(err)
 	}
 
-	return rows.DebugString(ctx)
+	schema, err := t.GetSchema(ctx)
+	if err != nil {
+		panic(err)
+	}
+
+	return rows.DebugString(ctx, ns, schema)
 }
 
 var _ Table = doltDevTable{}

@@ -173,7 +173,7 @@ func (itr prollyCVIter) Next(ctx *sql.Context) (sql.Row, error) {
 	o := 2
 	if !schema.IsKeyless(itr.sch) {
 		for i := 0; i < itr.kd.Count(); i++ {
-			r[o+i], err = index.GetField(ctx, itr.kd, i, art.SourceKey, itr.ns)
+			r[o+i], err = tree.GetField(ctx, itr.kd, i, art.SourceKey, itr.ns)
 			if err != nil {
 				return nil, err
 			}
@@ -181,7 +181,7 @@ func (itr prollyCVIter) Next(ctx *sql.Context) (sql.Row, error) {
 		o += itr.kd.Count()
 
 		for i := 0; i < itr.vd.Count(); i++ {
-			r[o+i], err = index.GetField(ctx, itr.vd, i, meta.Value, itr.ns)
+			r[o+i], err = tree.GetField(ctx, itr.vd, i, meta.Value, itr.ns)
 			if err != nil {
 				return nil, err
 			}
@@ -189,7 +189,7 @@ func (itr prollyCVIter) Next(ctx *sql.Context) (sql.Row, error) {
 		o += itr.vd.Count()
 	} else {
 		for i := 0; i < itr.vd.Count()-1; i++ {
-			r[o+i], err = index.GetField(ctx, itr.vd, i+1, meta.Value, itr.ns)
+			r[o+i], err = tree.GetField(ctx, itr.vd, i+1, meta.Value, itr.ns)
 			if err != nil {
 				return nil, err
 			}
@@ -247,7 +247,7 @@ var _ sql.RowDeleter = (*prollyCVDeleter)(nil)
 func (d *prollyCVDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 	// first part of the artifact key is the keys of the source table
 	for i := 0; i < d.kd.Count()-2; i++ {
-		err := index.PutField(ctx, d.cvt.artM.NodeStore(), d.kb, i, r[i+2])
+		err := tree.PutField(ctx, d.cvt.artM.NodeStore(), d.kb, i, r[i+2])
 		if err != nil {
 			return err
 		}
