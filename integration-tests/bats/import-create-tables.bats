@@ -875,3 +875,26 @@ SQL
     [[ "$output" =~ "| 0  | NULL     | poop |" ]] || false
     [[ "$output" =~ "| 1  | NULL     | poop |" ]] || false
 }
+
+@test "import-create-tables: --all-text imports all columns as text" {
+    cat <<DELIM >test.csv
+id, state, data
+1,WA,"{""a"":1,""b"":""value""}"
+DELIM
+
+    run dolt table import -c --all-text --pk=id test test.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
+
+    run dolt sql -q "describe test"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| id    | varchar(16383) |" ]] || false
+    [[ "$output" =~ "| state | text           |" ]] || false
+    [[ "$output" =~ "| data  | text           |" ]] || false
+}
+
+@test "import-create-tables: --all-text and --schema are mutually exclusive" {
+    run dolt table import -c -s `batshelper employees-sch.sql` --all-text employees `batshelper employees-tbl.json`
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "parameters all-text and schema are mutually exclusive" ]] || false
+}

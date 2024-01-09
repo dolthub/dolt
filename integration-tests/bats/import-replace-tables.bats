@@ -446,3 +446,20 @@ DELIM
     [ "$status" -eq 1 ]
     [[ "$output" =~ "cannot truncate table colors as it is referenced in foreign key" ]] || false
 }
+
+@test "import-replace-tables: can't use --all-text with -r" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt table import -r --all-text test `batshelper 1pk5col-ints.csv`
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "fatal: --all-text is only supported for create operations" ]] || false
+}
