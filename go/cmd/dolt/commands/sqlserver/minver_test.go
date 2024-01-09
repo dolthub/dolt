@@ -150,8 +150,10 @@ func validateMinVerFunc(field reflect.StructField, depth int) error {
 
 	minVerTag := field.Tag.Get("minver")
 	if minVerTag != "" {
-		if _, err := version.Encode(minVerTag); err != nil {
-			return fmt.Errorf("invalid minver tag on field %s '%s': %w", field.Name, minVerTag, err)
+		if minVerTag != "TBD" {
+			if _, err := version.Encode(minVerTag); err != nil {
+				return fmt.Errorf("invalid minver tag on field %s '%s': %w", field.Name, minVerTag, err)
+			}
 		}
 		hasMinVer = true
 	}
@@ -204,8 +206,16 @@ func TestMinVer(t *testing.T) {
 	err = structwalk.Walk(&nullableWithOmitEmpty{}, validateMinVerFunc)
 	require.NoError(t, err)
 
-	// validates the actual config struct
 	err = structwalk.Walk(&YAMLConfig{}, validateMinVerFunc)
+
+	// All new fields must:
+	//  1. Have a yaml tag with a name and omitempty
+	//  2. They must be nullable
+	//  3. They must have a minver tag with a value of TBD which will be replaced with the current version
+	//     as part of the release process
+	//
+	// example:
+	//   FieldName *string `yaml:"field_name,omitempty" minver:"TBD"`
 	require.NoError(t, err)
 }
 
@@ -280,6 +290,8 @@ func TestMinVersionsValid(t *testing.T) {
 		if errors.Is(err, io.EOF) {
 			return fmt.Errorf("new field '%s' added", fi.String())
 		} else {
+			// You are seeing this error because a new config field was added that didn't meet the requirements.
+			// See the comment in "TestMinVer" which covers the requirements of new fields.
 			return fmt.Errorf("expected '%s' but got '%s'", prevFI.String(), fi.String())
 		}
 	})
