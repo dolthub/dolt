@@ -58,6 +58,7 @@ echo '
             ],
             "args": [
               "--schema=/correctness.sql",
+              "--concurrent",
               "--output='$format'",
               "--version='$toVersion'",
               '"$nomsBinFormat"'
