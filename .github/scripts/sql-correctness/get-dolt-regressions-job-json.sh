@@ -22,9 +22,11 @@ if [ -n "$nomsBinFormat" ]; then
   nomsBinFormat="\"--noms-bin-format=$nomsBinFormat\","
 fi
 
-resultCountQuery="select result, count(*) as total from results where result != 'skipped' group by result;"
-testCountQuery="select count(*) as total_tests from results where result != 'skipped';"
-correctnessQuery="select ROUND(100.0 * (cast(ok_results.total as decimal) / (cast(all_results.total as decimal) + .000001)), $precision) as correctness_percentage from (select count(*) as total from results where result = 'ok') as ok_results join (select count(*) as total from results where result != 'skipped') as all_results"
+regressionsCountQuery="select count(*) as from_to_regressions from from_results as f join to_results t on f.test_file = t.test_file and f.line_num = t.line_num and f.result = 'ok' and t.result != 'ok';"
+improvementsCountQuery="select count(*) as from_to_improvements from from_results as f join to_results t on f.test_file = t.test_file and f.line_num = t.line_num and f.result != 'ok' and t.result = 'ok';"
+fromResultsCountQuery="select result as from_version_result, count(*) as from_version_total from from_results where result != 'skipped' group by result;"
+toResultsCountQuery="select result as to_version_result, count(*) as to_version_total from to_results where result != 'skipped' group by result;"
+testCountQuery="select count(*) as total_tests from from_results where result != 'skipped';"
 
 echo '
 {
@@ -63,18 +65,21 @@ echo '
               { "name": "DOLT_DEFAULT_BIN_FORMAT", "value": "'$NOMS_BIN_FORMAT'"}
             ],
             "args": [
-              "--schema=/correctness.sql",
+              "--schema=/regressions.sql",
               "--concurrent",
               "--output='$format'",
-              "--version='$toVersion'",
+              "--to-version='$toVersion'",
+              "--from-version='$fromVersion'",
               '"$nomsBinFormat"'
               "--bucket=sql-correctness-github-actions-results",
               "--region=us-west-2",
               "--results-dir='$timeprefix'",
               "--results-prefix='$actorprefix'",
-              "'"$resultCountQuery"'",
-              "'"$testCountQuery"'",
-              "'"$correctnessQuery"'"
+              "'"$regressionsCountQuery"'",
+              "'"$improvementsCountQuery"'",
+              "'"$fromResultsCountQuery"'",
+              "'"$toResultsCountQuery"'",
+              "'"$testCountQuery"'"
             ]
           }
         ],
