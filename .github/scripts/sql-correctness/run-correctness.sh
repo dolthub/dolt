@@ -35,7 +35,7 @@ if [ -n "$FROM_VERSION" ] && [ -n "$TO_VERSION" ]; then
         exit 1
     fi
 
-    echo "Starting regressions run from: $FROM_VERSION to: $TO_VERSION"
+    echo "Starting regressions run from: $FROM_VERSION to: $TO_VERSION for pull request: $PR_NUMBER"
     is_regressions="true"
 fi
 
@@ -61,7 +61,7 @@ sleep 0.$[ ( $RANDOM % 10 )  + 1 ]s
 timesuffix=`date +%s%N`
 
 jobname=""
-if [ -z "$is_regressions" ]; then
+if [ -n "$is_regressions" ]; then
   jobname="$lowered-$PR_NUMBER"
 else
   jobname="$actorShort-$timesuffix"
