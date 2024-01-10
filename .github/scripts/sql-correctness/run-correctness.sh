@@ -28,6 +28,17 @@ if  [ ! -z "$FROM_VERSION" ] && [ -z "$TO_VERSION" ]; then
   TO_VERSION="$FROM_VERSION"
 fi
 
+is_regressions=""
+if [ -n "$FROM_VERSION" ] && [ -n "$TO_VERSION" ]; then
+    if [ -z "$PR_NUMBER" ]; then
+        echo  "Must set PR_NUMBER for regressions run"
+        exit 1
+    fi
+
+    echo "Starting regressions run from: $FROM_VERSION to: $TO_VERSION"
+    is_regressions="true"
+fi
+
 if [ -z "$ACTOR" ]; then
     echo  "Must set ACTOR"
     exit 1
@@ -49,7 +60,12 @@ sleep 0.$[ ( $RANDOM % 10 )  + 1 ]s
 
 timesuffix=`date +%s%N`
 
-jobname="$actorShort-$timesuffix"
+jobname=""
+if [ -z "$is_regressions" ]; then
+  jobname="$lowered-$PR_NUMBER"
+else
+  jobname="$actorShort-$timesuffix"
+fi
 
 timeprefix=$(date +%Y/%m/%d)
 
@@ -69,6 +85,12 @@ source \
   "$actorprefix" \
   "$format" \
   "$NOMS_BIN_FORMAT" > job.json
+
+# delete existing job with same name if this is a regressions job
+if [ -z "$is_regressions" ]; then
+  out=$(KUBECONFIG="$KUBECONFIG" kubectl delete job/"$jobname" -n sql-correctness || true)
+  echo "Delete regressions job if exists: $out"
+fi
 
 out=$(KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json || true)
 
