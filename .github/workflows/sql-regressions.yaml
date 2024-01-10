@@ -51,9 +51,15 @@ jobs:
     needs: set-version-actor
     name: Trigger SQL Regressions K8s Workflow
     steps:
+      - name: Get pull number
+        uses: actions/github-script@v6
+        id: get_pull_number
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: core.setOutput("pull_number", JSON.stringify(context.issue.number));
       - uses: peter-evans/repository-dispatch@v2.0.0
         if: ${{ needs.set-version-actor.outputs.actor == 'coffeegoddd' }}
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: sql-correctness
-          client-payload: '{"from_version": "${{ needs.set-version-actor.outputs.from_version }}", "to_version": "${{ needs.set-version-actor.outputs.to_version }}", "mode": "release", "actor": "${{ needs.set-version-actor.outputs.actor }}", "actor_email": "${{ needs.set-version-actor.outputs.actor_email }}", "template_script": "./.github/scripts/sql-correctness/get-dolt-regressions-job-json.sh"}'
+          client-payload: '{"issue_number": "${{ steps.get_pull_number.outputs.pull_number }}", "from_version": "${{ needs.set-version-actor.outputs.from_version }}", "to_version": "${{ needs.set-version-actor.outputs.to_version }}", "mode": "release", "actor": "${{ needs.set-version-actor.outputs.actor }}", "actor_email": "${{ needs.set-version-actor.outputs.actor_email }}", "template_script": "./.github/scripts/sql-correctness/get-dolt-regressions-job-json.sh"}'

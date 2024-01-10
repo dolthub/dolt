@@ -76,6 +76,10 @@ if [[ "$MODE" = "release" || "$MODE" = "nightly" ]]; then
   format="html"
 fi
 
+# set value to PR_NUMBER environment variable
+# or default to -1
+issuenumber=${PR_NUMBER:-"-1"}
+
 source \
   "$TEMPLATE_SCRIPT" \
   "$jobname" \
@@ -84,7 +88,8 @@ source \
   "$timeprefix" \
   "$actorprefix" \
   "$format" \
-  "$NOMS_BIN_FORMAT" > job.json
+  "$NOMS_BIN_FORMAT" \
+  "$issuenumber" > job.json
 
 # delete existing job with same name if this is a regressions job
 if [ -z "$is_regressions" ]; then

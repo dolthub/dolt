@@ -3,7 +3,7 @@
 set -e
 
 if [ "$#" -lt 6 ]; then
-    echo  "Usage: ./get-dolt-correctness-job-json.sh <jobname> <fromVersion> <toVersion> <timeprefix> <actorprefix> <format> <nomsBinFormat>"
+    echo  "Usage: ./get-dolt-correctness-job-json.sh <jobname> <fromVersion> <toVersion> <timeprefix> <actorprefix> <format> <nomsBinFormat> <issueNumber>"
     exit 1
 fi
 
@@ -14,6 +14,7 @@ timeprefix="$4"
 actorprefix="$5"
 format="$6"
 nomsBinFormat="$7"
+issueNumber="$8"
 
 precision="6"
 
