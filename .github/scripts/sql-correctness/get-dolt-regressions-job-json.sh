@@ -73,6 +73,7 @@ echo '
               '"$nomsBinFormat"'
               "--bucket=sql-correctness-github-actions-results",
               "--region=us-west-2",
+              "--issue-number='$issueNumber'",
               "--results-dir='$timeprefix'",
               "--results-prefix='$actorprefix'",
               "'"$regressionsCountQuery"'",
