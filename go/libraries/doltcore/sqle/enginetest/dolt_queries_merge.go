@@ -100,10 +100,10 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"aTable", uint64(2)}},
 			},
 			{
-				Query: "SELECT from_root_ish, violation_type, aColumn, bColumn, CAST(violation_info as CHAR) FROM dolt_constraint_violations_aTable;",
+				Query: "SELECT from_root_ish, violation_type, hex(dolt_row_hash), aColumn, bColumn, CAST(violation_info as CHAR) FROM dolt_constraint_violations_aTable;",
 				Expected: []sql.Row{
-					{doltCommit, "unique index", 1, 2, `{"Columns":["aColumn"],"Name":"aColumn_UNIQUE"}`},
-					{doltCommit, "unique index", 1, 3, `{"Columns":["aColumn"],"Name":"aColumn_UNIQUE"}`},
+					{doltCommit, "unique index", "5A1ED8633E1842FCA8EE529E4F1C5944", 1, 2, `{"Columns":["aColumn"],"Name":"aColumn_UNIQUE"}`},
+					{doltCommit, "unique index", "A922BFBF4E5489501A3808BC5CD702C0", 1, 3, `{"Columns":["aColumn"],"Name":"aColumn_UNIQUE"}`},
 				},
 			},
 			{
