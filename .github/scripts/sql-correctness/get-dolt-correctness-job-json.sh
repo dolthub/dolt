@@ -72,7 +72,18 @@ echo '
             ]
           }
         ],
-        "restartPolicy": "Never"
+        "restartPolicy": "Never",
+        "nodeSelector": {
+          "sql-correctness-worker": "true"
+        },
+        "tolerations": [
+          {
+              "effect": "NoSchedule",
+              "key": "dedicated",
+              "operator": "Equal",
+              "value": "sql-correctness-worker"
+          }
+        ]
       }
     }
   }
