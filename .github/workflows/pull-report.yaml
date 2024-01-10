@@ -6,7 +6,7 @@ on:
 
 jobs:
   report-pull-request:
-    name: Report Performance Benchmarks on Pull Request
+    name: Report Performance Benchmarks/Correctness on Pull Request
     runs-on: ubuntu-22.04
     if: ${{ github.event.client_payload.issue_number != -1 }}
     steps:
@@ -18,7 +18,7 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-2
-      - name: Get benchmark results
+      - name: Get benchmark/correctness results
         id: get-results
         run: aws s3api get-object --bucket="$BUCKET" --key="$KEY" results.log
         env:
