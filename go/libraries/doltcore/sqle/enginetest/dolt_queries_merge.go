@@ -67,6 +67,58 @@ var doltCommit = &doltCommitValidator{}
 
 var MergeScripts = []queries.ScriptTest{
 	{
+		// https://github.com/dolthub/dolt/issues/7275
+		Name: "keyless table merge with constraint violations",
+		SetUpScript: []string{
+			"CREATE TABLE aTable (aColumn INT NULL, bColumn INT NULL, UNIQUE INDEX aColumn_UNIQUE (aColumn ASC) VISIBLE, UNIQUE INDEX bColumn_UNIQUE (bColumn ASC) VISIBLE);",
+			"CALL dolt_commit('-Am', 'add tables');",
+			"CALL dolt_checkout('-b', 'side');",
+			"INSERT INTO aTable VALUES (1,2);",
+			"CALL dolt_commit('-am', 'add side data');",
+
+			"CALL dolt_checkout('main');",
+			"INSERT INTO aTable VALUES (1,3);",
+			"CALL dolt_commit('-am', 'add main data');",
+			"CALL dolt_checkout('side');",
+			"SET @@dolt_force_transaction_commit=1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM aTable;",
+				Expected: []sql.Row{{1, 2}},
+			},
+			{
+				Query:    "call dolt_merge('main');",
+				Expected: []sql.Row{{"", 0, 1}},
+			},
+			{
+				Query:    "SELECT * FROM aTable;",
+				Expected: []sql.Row{{1, 2}, {1, 3}},
+			},
+			{
+				Query:    "SELECT * FROM dolt_constraint_violations;",
+				Expected: []sql.Row{{"aTable", uint64(2)}},
+			},
+			{
+				Query: "SELECT from_root_ish, violation_type, aColumn, bColumn, CAST(violation_info as CHAR) FROM dolt_constraint_violations_aTable;",
+				Expected: []sql.Row{
+					{doltCommit, "unique index", 1, 2, `{"Columns":["aColumn"],"Name":"aColumn_UNIQUE"}`},
+					{doltCommit, "unique index", 1, 3, `{"Columns":["aColumn"],"Name":"aColumn_UNIQUE"}`},
+				},
+			},
+			{
+				// Fix the data
+				Query:    "UPDATE aTable SET aColumn = 2 WHERE bColumn = 2;",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: uint64(1), Info: plan.UpdateInfo{Matched: 1, Updated: 1}}}},
+			},
+			{
+				// clear out the violations
+				Query:    "DELETE FROM dolt_constraint_violations_aTable;",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+		},
+	},
+	{
 		// Unique checks should not include the content of deleted rows in checks. Tests two updates: one triggers
 		// going from a smaller key to a higher key, and one going from a higher key to a smaller key (in order to test
 		// delete/insert events in either order). https://github.com/dolthub/dolt/issues/6319
