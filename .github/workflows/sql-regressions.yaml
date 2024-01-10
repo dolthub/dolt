@@ -10,18 +10,25 @@ jobs:
     runs-on: ubuntu-22.04
     outputs:
       to_version: ${{ steps.set-vars.outputs.to_version }}
-      from_version: ${{ steps.set-vars.outputs.from_version }}
+      from_version: ${{ steps.set-from.outputs.from_version }}
       actor: ${{ steps.set-vars.outputs.actor }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.base_ref }}
+      - name: Set From Version
+        id: set-from
+        run: |
+          sha=$(git rev-parse --short HEAD)
+          echo "from_version=$sha" >> $GITHUB_OUTPUT
       - name: Set variables
         id: set-vars
         run: |
-          echo "from_version=$FROM_VERSION" >> $GITHUB_OUTPUT
           echo "to_version=$TO_VERSION" >> $GITHUB_OUTPUT
           echo "actor=$ACTOR" >> $GITHUB_OUTPUT
         env:
-          FROM_VERSION: ${{ github.head_ref }}
-          TO_VERSION: ${{ github.event.inputs.version || github.event.client_payload.version }}
+          TO_VERSION: ${{ github.sha }}
           ACTOR: ${{ github.event.client_payload.actor || github.actor }}
   test:
     runs-on: ubuntu-22.04
