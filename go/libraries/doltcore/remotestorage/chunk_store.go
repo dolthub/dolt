@@ -868,6 +868,14 @@ func (dcs *DoltChunkStore) Root(ctx context.Context) (hash.Hash, error) {
 	return dcs.root, nil
 }
 
+func (dcs *DoltChunkStore) PushConcurrencyControl() chunks.PushConcurrencyControl {
+	if dcs.metadata.PushConcurrencyControl == remotesapi.PushConcurrencyControl_PUSH_CONCURRENCY_CONTROL_ASSERT_WORKING_SET {
+		return chunks.PushConcurrencyControl_AssertWorkingSet
+	}
+	// TODO: if dcs.metadata.PushConcurrencyControl == remotesapi.PushConcurrencyControl_PUSH_CONCURRENCY_CONTROL_UNSPECIFIED && using sql-server auth...we should AssertWorkingSet here.
+	return chunks.PushConcurrencyControl_IgnoreWorkingSet
+}
+
 func (dcs *DoltChunkStore) loadRoot(ctx context.Context) error {
 	id, token := dcs.getRepoId()
 	req := &remotesapi.RootRequest{RepoId: id, RepoToken: token, RepoPath: dcs.repoPath}

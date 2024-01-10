@@ -201,6 +201,12 @@ message GetRepoMetadataRequest {
   string repo_path = 3;
 }
 
+enum PushConcurrencyControl {
+  PUSH_CONCURRENCY_CONTROL_UNSPECIFIED = 0;
+  PUSH_CONCURRENCY_CONTROL_IGNORE_WORKING_SET = 1;
+  PUSH_CONCURRENCY_CONTROL_ASSERT_WORKING_SET = 2;
+}
+
 message GetRepoMetadataResponse {
   // Version string of the noms binary format for this repository.
   // See types.NomsBinFormat.
@@ -213,6 +219,8 @@ message GetRepoMetadataResponse {
   uint64 storage_size = 3;
 
   string repo_token = 4;
+
+  PushConcurrencyControl push_concurrency_control = 5;
 }
 
 message ClientRepoFormat {

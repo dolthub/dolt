@@ -43,6 +43,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -400,10 +401,11 @@ func ConfigureServices(
 
 			listenaddr := fmt.Sprintf(":%d", port)
 			args := remotesrv.ServerArgs{
-				Logger:         logrus.NewEntry(lgr),
-				ReadOnly:       apiReadOnly || serverConfig.ReadOnly(),
-				HttpListenAddr: listenaddr,
-				GrpcListenAddr: listenaddr,
+				Logger:             logrus.NewEntry(lgr),
+				ReadOnly:           apiReadOnly || serverConfig.ReadOnly(),
+				HttpListenAddr:     listenaddr,
+				GrpcListenAddr:     listenaddr,
+				ConcurrencyControl: remotesapi.PushConcurrencyControl_PUSH_CONCURRENCY_CONTROL_ASSERT_WORKING_SET,
 			}
 			var err error
 			args.FS, args.DBCache, err = sqle.RemoteSrvFSAndDBCache(sqlEngine.NewDefaultContext, sqle.DoNotCreateUnknownDatabases)

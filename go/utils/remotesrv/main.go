@@ -22,6 +22,8 @@ import (
 	"os"
 	"os/signal"
 
+	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
@@ -82,12 +84,13 @@ func main() {
 	}
 
 	server, err := remotesrv.NewServer(remotesrv.ServerArgs{
-		HttpHost:       *httpHostParam,
-		HttpListenAddr: fmt.Sprintf(":%d", *httpPortParam),
-		GrpcListenAddr: fmt.Sprintf(":%d", *grpcPortParam),
-		FS:             fs,
-		DBCache:        dbCache,
-		ReadOnly:       *readOnlyParam,
+		HttpHost:           *httpHostParam,
+		HttpListenAddr:     fmt.Sprintf(":%d", *httpPortParam),
+		GrpcListenAddr:     fmt.Sprintf(":%d", *grpcPortParam),
+		FS:                 fs,
+		DBCache:            dbCache,
+		ReadOnly:           *readOnlyParam,
+		ConcurrencyControl: remotesapi.PushConcurrencyControl_PUSH_CONCURRENCY_CONTROL_IGNORE_WORKING_SET,
 	})
 	if err != nil {
 		log.Fatalf("error creating remotesrv Server: %v\n", err)
