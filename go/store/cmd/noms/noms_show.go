@@ -157,6 +157,8 @@ func typeString(value types.Value) string {
 			typeString = "ProllyTreeNode"
 		case serial.AddressMapFileID:
 			typeString = "AddressMap"
+		case serial.CommitClosureFileID:
+			typeString = "CommitClosure"
 		default:
 			t, err := types.TypeOf(value)
 			util.CheckErrorNoUsage(err)
@@ -249,8 +251,6 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) err
 		case serial.ProllyTreeNodeFileID:
 			fallthrough
 		case serial.AddressMapFileID:
-			fallthrough
-		case serial.CommitClosureFileID:
 			node, err := shim.NodeFromValue(value)
 			if err != nil {
 				return err
