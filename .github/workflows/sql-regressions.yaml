@@ -40,9 +40,11 @@ jobs:
         run: |
           echo "FROM_VERSION: $FROM_VERSION"
           echo "TO_VERSION: $TO_VERSION"
+          echo "ACTOR: $ACTOR"
         env:
           FROM_VERSION: ${{ needs.set-version-actor.outputs.from_version }}
           TO_VERSION: ${{ needs.set-version-actor.outputs.to_version }}
+          ACTOR: ${{ needs.set-version-actor.outputs.actor }}
 
   regressions:
     runs-on: ubuntu-22.04
@@ -50,6 +52,7 @@ jobs:
     name: Trigger SQL Regressions K8s Workflow
     steps:
       - uses: peter-evans/repository-dispatch@v2.0.0
+        if: ${{ needs.set-version-actor.outputs.actor == 'coffeegoddd' }}
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: sql-correctness
