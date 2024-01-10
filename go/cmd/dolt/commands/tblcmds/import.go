@@ -91,7 +91,7 @@ var importDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Imports data into a dolt table`,
 	LongDesc: `If {{.EmphasisLeft}}--create-table | -c{{.EmphasisRight}} is given the operation will create {{.LessThan}}table{{.GreaterThan}} and import the contents of file into it.  If a table already exists at this location then the operation will fail, unless the {{.EmphasisLeft}}--force | -f{{.EmphasisRight}} flag is provided. The force flag forces the existing table to be overwritten.
 
-The schema for the new table can be specified explicitly by providing a SQL schema definition file, or will be inferred from the imported file.  All schemas, inferred or explicitly defined must define a primary key.  If the file format being imported does not support defining a primary key, then the {{.EmphasisLeft}}--pk{{.EmphasisRight}} parameter must supply the name of the field that should be used as the primary key.
+The schema for the new table can be specified explicitly by providing a SQL schema definition file, or will be inferred from the imported file.  All schemas, inferred or explicitly defined must define a primary key.  If the file format being imported does not support defining a primary key, then the {{.EmphasisLeft}}--pk{{.EmphasisRight}} parameter must supply the name of the field that should be used as the primary key. If no primary key is explicitly defined, the first column in the import file will be used as the primary key.
 
 If {{.EmphasisLeft}}--update-table | -u{{.EmphasisRight}} is given the operation will update {{.LessThan}}table{{.GreaterThan}} with the contents of file. The table's existing schema will be used, and field names will be used to match file fields with table fields unless a mapping file is specified.
 
@@ -755,7 +755,8 @@ func generateAllTextSchema(rd table.ReadCloser, impOpts *importOptions) (schema.
 	var cols []schema.Column
 	err := rd.GetSchema().GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		var colType typeinfo.TypeInfo
-		if slices.Contains(impOpts.primaryKeys, col.Name) {
+		if slices.Contains(impOpts.primaryKeys, col.Name) || (len(impOpts.primaryKeys) == 0 && len(cols) == 0) {
+			// text type is not supported for primary keys, pk is either explicitly set or is the first column
 			colType = typeinfo.StringDefaultType
 		} else {
 			colType = typeinfo.TextType
