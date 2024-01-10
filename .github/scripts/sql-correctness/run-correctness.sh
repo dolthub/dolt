@@ -92,7 +92,7 @@ source \
   "$issuenumber" > job.json
 
 # delete existing job with same name if this is a regressions job
-if [ -z "$is_regressions" ]; then
+if [ -n "$is_regressions" ]; then
   out=$(KUBECONFIG="$KUBECONFIG" kubectl delete job/"$jobname" -n sql-correctness || true)
   echo "Delete regressions job if exists: $out"
 fi
