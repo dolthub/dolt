@@ -9,11 +9,20 @@ jobs:
     name: Set Version and Actor
     runs-on: ubuntu-22.04
     outputs:
-      to_version: ${{ steps.set-vars.outputs.to_version }}
+      to_version: ${{ steps.set-to.outputs.to_version }}
       from_version: ${{ steps.set-from.outputs.from_version }}
       actor: ${{ steps.set-vars.outputs.actor }}
     steps:
-      - name: Checkout
+      - name: Checkout PR HEAD REF
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.head_ref }}
+      - name: Set To Version
+        id: set-to
+        run: |
+          sha=$(git rev-parse --short HEAD)
+          echo "to_version=$sha" >> $GITHUB_OUTPUT
+      - name: Checkout BASE REF
         uses: actions/checkout@v3
         with:
           ref: ${{ github.base_ref }}
@@ -25,8 +34,6 @@ jobs:
       - name: Set variables
         id: set-vars
         run: |
-          short_to=${TO_VERSION:0:8}
-          echo "to_version=$short_to" >> $GITHUB_OUTPUT
           echo "actor=$ACTOR" >> $GITHUB_OUTPUT
         env:
           TO_VERSION: ${{ github.sha }}
