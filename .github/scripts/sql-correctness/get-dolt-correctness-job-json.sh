@@ -50,6 +50,11 @@ echo '
           {
             "name": "sql-correctness",
             "image": "407903926827.dkr.ecr.us-west-2.amazonaws.com/liquidata/sql-correctness:latest",
+            "resources": {
+              "limits": {
+                "cpu": "7000m"
+              }
+            },
             "env": [
               { "name": "REPO_ACCESS_TOKEN", "value": "'$REPO_ACCESS_TOKEN'"},
               { "name": "ACTOR", "value": "'$ACTOR'"},
