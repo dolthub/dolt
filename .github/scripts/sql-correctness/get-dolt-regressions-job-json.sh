@@ -69,7 +69,7 @@ echo '
             "args": [
               "--schema=/regressions.sql",
               "--concurrent",
-              "--concurrent-limit=25",
+              "--concurrent-limit=100",
               "--output='$format'",
               "--to-version='$toVersion'",
               "--from-version='$fromVersion'",
