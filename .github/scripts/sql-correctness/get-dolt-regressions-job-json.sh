@@ -22,11 +22,13 @@ if [ -n "$nomsBinFormat" ]; then
   nomsBinFormat="\"--noms-bin-format=$nomsBinFormat\","
 fi
 
-regressionsCountQuery="select count(*) as from_to_regressions from from_results as f join to_results t on f.test_file = t.test_file and f.line_num = t.line_num and f.result = 'ok' and t.result != 'ok';"
-improvementsCountQuery="select count(*) as from_to_improvements from from_results as f join to_results t on f.test_file = t.test_file and f.line_num = t.line_num and f.result != 'ok' and t.result = 'ok';"
+regressionsCountQuery="select count(*) as correctness_regressions from from_results as f join to_results t on f.test_file = t.test_file and f.line_num = t.line_num and f.result = 'ok' and t.result != 'ok';"
+improvementsCountQuery="select count(*) as correctness_improvements from from_results as f join to_results t on f.test_file = t.test_file and f.line_num = t.line_num and f.result != 'ok' and t.result = 'ok';"
 fromResultsCountQuery="select result as from_version_result, count(*) as from_version_total from from_results where result != 'skipped' group by result;"
 toResultsCountQuery="select result as to_version_result, count(*) as to_version_total from to_results where result != 'skipped' group by result;"
 testCountQuery="select count(*) as total_tests from from_results where result != 'skipped';"
+fromCorrectnessQuery="select ROUND(100.0 * (cast(ok_results.total as decimal) / (cast(all_results.total as decimal) + .000001)), $precision) as from_correctness_percentage from (select count(*) as total from from_results where result = 'ok') as ok_results join (select count(*) as total from from_results where result != 'skipped') as all_results"
+toCorrectnessQuery="select ROUND(100.0 * (cast(ok_results.total as decimal) / (cast(all_results.total as decimal) + .000001)), $precision) as to_correctness_percentage from (select count(*) as total from to_results where result = 'ok') as ok_results join (select count(*) as total from to_results where result != 'skipped') as all_results"
 
 echo '
 {
@@ -67,6 +69,7 @@ echo '
             "args": [
               "--schema=/regressions.sql",
               "--concurrent",
+              "--concurrent-limit=25"
               "--output='$format'",
               "--to-version='$toVersion'",
               "--from-version='$fromVersion'",
@@ -80,7 +83,9 @@ echo '
               "'"$improvementsCountQuery"'",
               "'"$fromResultsCountQuery"'",
               "'"$toResultsCountQuery"'",
-              "'"$testCountQuery"'"
+              "'"$testCountQuery"'",
+              "'"$fromCorrectnessQuery"'",
+              "'"$toCorrectnessQuery"'"
             ]
           }
         ],
