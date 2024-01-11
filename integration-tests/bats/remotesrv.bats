@@ -91,7 +91,7 @@ stop_remotesrv() {
     dolt sql -q 'create table vals (i int);'
     dolt add vals
     dolt commit -m 'create vals table.'
-    dolt sql -q 'insert into vals values (1),(2),(3)'
+    dolt sql -q 'insert into vals values (38320)' # Dirty the remote.
 
     remotesrv --http-port 1234 --repo-mode &
     remotesrv_pid=$!
@@ -99,16 +99,27 @@ stop_remotesrv() {
     cd ../
     dolt clone http://localhost:50051/test-org/test-repo repo1
     cd repo1
-    dolt sql -q 'insert into vals values (1), (2), (3), (4), (5);'
-    dolt commit -am 'insert some values'
+    dolt sql -q 'insert into vals values (9778), (12433);'
+    dolt commit -am 'insert two unique values'
     dolt push origin main:main
 
     stop_remotesrv
     cd ../remote
-    # Have to reset the working set, which was not updated by the push...
-    dolt reset --hard
-    run dolt sql -q 'select count(*) from vals;'
-    [[ "$output" =~ "5" ]] || false
+
+    # HEAD has the pushed value.
+    run dolt show
+    [[ "$status" -eq 0 ]] || false
+    [[ "$output" =~ "insert two unique values" ]] || false
+
+    # and that working set is still dirty (won't include HEAD values)
+    run dolt diff
+    [[ "$status" -eq 0 ]] || false
+    [[ "$output" =~ "+ | 38320" ]] || false
+
+    run dolt diff --cached
+    [[ "$status" -eq 0 ]] || false
+    [[ "$output" =~ "- | 9778" ]] || false
+    [[ "$output" =~ "- | 12433" ]] || false
 }
 
 @test "remotesrv: read only server rejects writes" {
