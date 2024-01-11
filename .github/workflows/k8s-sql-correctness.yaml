@@ -40,7 +40,7 @@ jobs:
         run: ./.github/scripts/sql-correctness/run-correctness.sh
         env:
           PR_NUMBER: ${{ github.event.client_payload.issue_number }}
-          VERSION: ${{ github.event.client_payload.to_version }}
+          VERSION: ${{ github.event.client_payload.version }}
           MODE: ${{ github.event.client_payload.mode }}
           ACTOR: ${{ github.event.client_payload.actor }}
           ACTOR_EMAIL: ${{ github.event.client_payload.actor_email }}
