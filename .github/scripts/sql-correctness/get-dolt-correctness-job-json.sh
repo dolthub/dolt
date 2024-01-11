@@ -22,7 +22,7 @@ if [ -n "$nomsBinFormat" ]; then
 fi
 
 if [ -n "$issueNumber" ]; then
-  issueNumber="\"--issue-number==$issueNumber\","
+  issueNumber="\"--issue-number=$issueNumber\","
 fi
 
 resultCountQuery="select version, result, count(*) as total from results where result != 'skipped' group by result;"
