@@ -128,7 +128,7 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 		printWithIndendationLevel(level, ret, "\tRootValue: {\n")
 		hashes := msg.RootBytes()
 		for i := 0; i < len(hashes)/hash.ByteLen; i++ {
-			addr := hash.New(hashes[i*20 : (i+1)*20])
+			addr := hash.New(hashes[i*hash.ByteLen : (i+1)*hash.ByteLen])
 			printWithIndendationLevel(level, ret, "\t\t#%s\n", addr.String())
 		}
 		printWithIndendationLevel(level, ret, "\t}\n")
@@ -136,7 +136,7 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 		printWithIndendationLevel(level, ret, "\tParents: {\n")
 		hashes = msg.ParentAddrsBytes()
 		for i := 0; i < msg.ParentAddrsLength()/hash.ByteLen; i++ {
-			addr := hash.New(hashes[i*20 : (i+1)*20])
+			addr := hash.New(hashes[i*hash.ByteLen : (i+1)*hash.ByteLen])
 			printWithIndendationLevel(level, ret, "\t\t#%s\n", addr.String())
 		}
 		printWithIndendationLevel(level, ret, "\t}\n")
@@ -144,7 +144,7 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 		printWithIndendationLevel(level, ret, "\tParentClosure: {\n")
 		hashes = msg.ParentClosureBytes()
 		for i := 0; i < msg.ParentClosureLength()/hash.ByteLen; i++ {
-			addr := hash.New(hashes[i*20 : (i+1)*20])
+			addr := hash.New(hashes[i*hash.ByteLen : (i+1)*hash.ByteLen])
 			printWithIndendationLevel(level, ret, "\t\t#%s\n", addr.String())
 		}
 		printWithIndendationLevel(level, ret, "\t}\n")
@@ -455,11 +455,11 @@ func SerialCommitParentAddrs(nbf *NomsBinFormat, sm SerialMessage) ([]hash.Hash,
 		return nil, err
 	}
 	addrs := msg.ParentAddrsBytes()
-	n := len(addrs) / 20
+	n := len(addrs) / hash.ByteLen
 	ret := make([]hash.Hash, n)
 	for i := 0; i < n; i++ {
-		addr := hash.New(addrs[:20])
-		addrs = addrs[20:]
+		addr := hash.New(addrs[:hash.ByteLen])
+		addrs = addrs[hash.ByteLen:]
 		ret[i] = addr
 	}
 	return ret, nil
