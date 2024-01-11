@@ -1,4 +1,4 @@
-name: Benchmark SQL Regressions
+name: Benchmark SQL Correctness on PR
 
 on:
   pull_request:
@@ -9,54 +9,26 @@ jobs:
     name: Set Version and Actor
     runs-on: ubuntu-22.04
     outputs:
-      to_version: ${{ steps.set-to.outputs.to_version }}
-      from_version: ${{ steps.set-from.outputs.from_version }}
+      version: ${{ steps.set-vars.outputs.version }}
       actor: ${{ steps.set-vars.outputs.actor }}
     steps:
       - name: Checkout PR HEAD REF
         uses: actions/checkout@v3
         with:
           ref: ${{ github.head_ref }}
-      - name: Set To Version
-        id: set-to
-        run: |
-          sha=$(git rev-parse --short HEAD)
-          echo "to_version=$sha" >> $GITHUB_OUTPUT
-      - name: Checkout BASE REF
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ github.base_ref }}
-      - name: Set From Version
-        id: set-from
-        run: |
-          sha=$(git rev-parse --short HEAD)
-          echo "from_version=$sha" >> $GITHUB_OUTPUT
       - name: Set variables
         id: set-vars
         run: |
           echo "actor=$ACTOR" >> $GITHUB_OUTPUT
+          sha=$(git rev-parse --short HEAD)
+          echo "version=$sha" >> $GITHUB_OUTPUT
         env:
-          TO_VERSION: ${{ github.sha }}
           ACTOR: ${{ github.event.client_payload.actor || github.actor }}
-  test:
-    runs-on: ubuntu-22.04
-    needs: set-version-actor
-    name: Test values
-    steps:
-      - name: Echo vals
-        run: |
-          echo "FROM_VERSION: $FROM_VERSION"
-          echo "TO_VERSION: $TO_VERSION"
-          echo "ACTOR: $ACTOR"
-        env:
-          FROM_VERSION: ${{ needs.set-version-actor.outputs.from_version }}
-          TO_VERSION: ${{ needs.set-version-actor.outputs.to_version }}
-          ACTOR: ${{ needs.set-version-actor.outputs.actor }}
 
-  regressions:
+  correctness:
     runs-on: ubuntu-22.04
     needs: set-version-actor
-    name: Trigger SQL Regressions K8s Workflow
+    name: Trigger SQL Correctness K8s Workflow
     steps:
       - name: Get pull number
         uses: actions/github-script@v6
@@ -69,4 +41,4 @@ jobs:
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: sql-correctness
-          client-payload: '{"issue_number": "${{ steps.get_pull_number.outputs.pull_number }}", "from_version": "${{ needs.set-version-actor.outputs.from_version }}", "to_version": "${{ needs.set-version-actor.outputs.to_version }}", "mode": "release", "actor": "${{ needs.set-version-actor.outputs.actor }}", "actor_email": "${{ needs.set-version-actor.outputs.actor_email }}", "template_script": "./.github/scripts/sql-correctness/get-dolt-regressions-job-json.sh"}'
+          client-payload: '{"issue_number": "${{ steps.get_pull_number.outputs.pull_number }}", "version": "${{ needs.set-version-actor.outputs.version }}", "mode": "release", "actor": "${{ needs.set-version-actor.outputs.actor }}", "actor_email": "${{ needs.set-version-actor.outputs.actor_email }}", "template_script": "./.github/scripts/sql-correctness/get-dolt-correctness-job-json.sh"}'
