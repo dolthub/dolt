@@ -66,7 +66,7 @@ func intPtr(n int) *int {
 // BehaviorYAMLConfig contains server configuration regarding how the server should behave
 type BehaviorYAMLConfig struct {
 	ReadOnly   *bool `yaml:"read_only"`
-	AutoCommit *bool `yaml:"autocommit"`
+	AutoCommit *bool
 	// PersistenceBehavior regulates loading persisted system variable configuration.
 	PersistenceBehavior *string `yaml:"persistence_behavior"`
 	// Disable processing CLIENT_MULTI_STATEMENTS support on the
@@ -85,8 +85,14 @@ type BehaviorYAMLConfig struct {
 
 // UserYAMLConfig contains server configuration regarding the user account clients must use to connect
 type UserYAMLConfig struct {
-	Name     *string `yaml:"name"`
-	Password *string `yaml:"password"`
+	Name     *string
+	Password *string
+}
+
+// DatabaseYAMLConfig contains information on a database that this server will provide access to
+type DatabaseYAMLConfig struct {
+	Name string
+	Path string
 }
 
 // ListenerYAMLConfig contains information on the network connection that the server will open
