@@ -591,11 +591,6 @@ func (ddb *DoltDB) Commit(ctx context.Context, valHash hash.Hash, dref ref.DoltR
 // if the working set is in sync with the head of the branch given. This is used in the course of pushing to a remote.
 // If the target doesn't currently have the working set ref, then no working set change will be made.
 func (ddb *DoltDB) FastForwardWithWorkspaceCheck(ctx context.Context, branch ref.DoltRef, commit *Commit) error {
-	pushConcurrencyControl := chunks.GetPushConcurrencyControl(datas.ChunkStoreFromDatabase(ddb.db))
-	if pushConcurrencyControl == chunks.PushConcurrencyControl_IgnoreWorkingSet {
-		return ddb.FastForward(ctx, branch, commit)
-	}
-
 	ds, err := ddb.db.GetDataset(ctx, branch.String())
 	if err != nil {
 		return err
@@ -606,12 +601,17 @@ func (ddb *DoltDB) FastForwardWithWorkspaceCheck(ctx context.Context, branch ref
 		return err
 	}
 
-	wsRef, err := ref.WorkingSetRefForHead(branch)
-	if err != nil {
-		return err
+	ws := ""
+	pushConcurrencyControl := chunks.GetPushConcurrencyControl(datas.ChunkStoreFromDatabase(ddb.db))
+	if pushConcurrencyControl == chunks.PushConcurrencyControl_AssertWorkingSet {
+		wsRef, err := ref.WorkingSetRefForHead(branch)
+		if err != nil {
+			return err
+		}
+		ws = wsRef.String()
 	}
 
-	_, err = ddb.db.FastForward(ctx, ds, addr, wsRef.String())
+	_, err = ddb.db.FastForward(ctx, ds, addr, ws)
 
 	return err
 }
