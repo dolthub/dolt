@@ -119,9 +119,10 @@ type DoltChunkStore struct {
 	concurrency ConcurrencyParams
 	stats       cacheStats
 	logger      chunks.DebugLogger
+	wsValidate  bool
 }
 
-func NewDoltChunkStoreFromPath(ctx context.Context, nbf *types.NomsBinFormat, path, host string, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
+func NewDoltChunkStoreFromPath(ctx context.Context, nbf *types.NomsBinFormat, path, host string, wsval bool, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
 	var repoId *remotesapi.RepoId
 
 	path = strings.Trim(path, "/")
@@ -163,6 +164,7 @@ func NewDoltChunkStoreFromPath(ctx context.Context, nbf *types.NomsBinFormat, pa
 		nbf:         nbf,
 		httpFetcher: globalHttpFetcher,
 		concurrency: defaultConcurrency,
+		wsValidate:  wsval,
 	}
 	err = cs.loadRoot(ctx)
 	if err != nil {
@@ -872,7 +874,13 @@ func (dcs *DoltChunkStore) PushConcurrencyControl() chunks.PushConcurrencyContro
 	if dcs.metadata.PushConcurrencyControl == remotesapi.PushConcurrencyControl_PUSH_CONCURRENCY_CONTROL_ASSERT_WORKING_SET {
 		return chunks.PushConcurrencyControl_AssertWorkingSet
 	}
-	// TODO: if dcs.metadata.PushConcurrencyControl == remotesapi.PushConcurrencyControl_PUSH_CONCURRENCY_CONTROL_UNSPECIFIED && using sql-server auth...we should AssertWorkingSet here.
+
+	if dcs.metadata.PushConcurrencyControl == remotesapi.PushConcurrencyControl_PUSH_CONCURRENCY_CONTROL_UNSPECIFIED {
+		if dcs.wsValidate {
+			return chunks.PushConcurrencyControl_AssertWorkingSet
+		}
+	}
+
 	return chunks.PushConcurrencyControl_IgnoreWorkingSet
 }
 

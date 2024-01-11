@@ -102,8 +102,10 @@ var NoCachingParameter = "__dolt__NO_CACHING"
 
 func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}, dp GRPCDialProvider) (chunks.ChunkStore, error) {
 	var user string
+	wsValidate := false
 	if userParam := params[GRPCUsernameAuthParam]; userParam != nil {
 		user = userParam.(string)
+		wsValidate = true
 	}
 	cfg, err := dp.GetGRPCDialParams(grpcendpoint.Config{
 		Endpoint:           urlObj.Host,
@@ -124,7 +126,7 @@ func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, nbf *types.Noms
 	}
 
 	csClient := remotesapi.NewChunkStoreServiceClient(conn)
-	cs, err := remotestorage.NewDoltChunkStoreFromPath(ctx, nbf, urlObj.Path, urlObj.Host, csClient)
+	cs, err := remotestorage.NewDoltChunkStoreFromPath(ctx, nbf, urlObj.Path, urlObj.Host, wsValidate, csClient)
 	if err != nil {
 		return nil, fmt.Errorf("could not access dolt url '%s': %w", urlObj.String(), err)
 	}
