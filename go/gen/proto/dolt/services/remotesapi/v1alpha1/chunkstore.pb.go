@@ -36,6 +36,23 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// A ChunkStore can request a client to implement a specific concurrency
+// control mechanism when updating a branch HEAD.
+//
+// This exists because passive remotes, like DoltHub, typically do not have
+// meaningful workingSets. When a client requests to push a branch HEAD to a
+// DoltHub remote, they have no visibility into the workingSet/ value for the
+// corresponding branch. It has historically been the case that clients ignore
+// it and just push the branch HEAD.
+//
+// On the other hand, when pushing to a running sql-server, not stomping
+// concurrent transaction is important, and the remote endpoint will want the
+// pushing client to ensure that it both checks that the branch's working set
+// is clean and that it updates the branch's working set appropriately if the
+// push is successful.
+//
+// Servers advertise which concurrency control mechanism they want in their
+// GetRepoMetadataResponse.
 type PushConcurrencyControl int32
 
 const (
