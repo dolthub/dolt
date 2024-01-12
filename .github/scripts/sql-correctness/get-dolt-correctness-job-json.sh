@@ -3,7 +3,7 @@
 set -e
 
 if [ "$#" -lt 5 ]; then
-    echo  "Usage: ./get-dolt-correctness-job-json.sh <jobname> <version> <timeprefix> <actorprefix> <format> <nomsBinFormat> <issueNumber> <regressComp>"
+    echo  "Usage: ./get-dolt-correctness-job-json.sh <jobname> <version> <timeprefix> <actorprefix> <format> <nomsBinFormat> <issueNumber> <regressComp> <branchRef>"
     exit 1
 fi
 
@@ -15,6 +15,7 @@ format="$5"
 nomsBinFormat="$6"
 issueNumber="$7"
 regressComp="$8"
+branchRef="$9"
 
 precision="6"
 
@@ -30,6 +31,7 @@ regressPrec=""
 if [ -n "$regressComp" ]; then
   regressComp="\"--regress-compare=$regressComp\","
   regressPrec="\"--regress-precision=$precision\","
+  branchRef="\"--branch=$branchRef\","
 fi
 
 resultCountQuery="select version, result, count(*) as total from results where result != 'skipped' group by result;"
@@ -81,6 +83,7 @@ echo '
               '"$issueNumber"'
               '"$regressComp"'
               '"$regressPrec"'
+              '"$branchRef"'
               "--bucket=sql-correctness-github-actions-results",
               "--region=us-west-2",
               "--results-dir='$timeprefix'",

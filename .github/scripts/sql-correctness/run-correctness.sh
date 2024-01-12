@@ -37,6 +37,10 @@ if [ -n "$PR_NUMBER" ]; then
     echo "Must set REGRESS_COMP for PR correctness comparisons"
     exit 1
   fi
+  if [ -z "$PR_BRANCH_REF" ]; then
+    echo "Must set PR_BRANCH_REF for PR correctness comparisons"
+    exit 1
+  fi
 fi
 
 # use first 8 characters of VERSION to differentiate
@@ -79,7 +83,8 @@ source \
   "$format" \
   "$NOMS_BIN_FORMAT" \
   "$issuenumber" \
-  "$REGRESS_COMP" > job.json
+  "$REGRESS_COMP" \
+  "$PR_BRANCH_REF" > job.json
 
 # delete existing job with same name if this is a pr job
 if [ -n "$PR_NUMBER" ]; then

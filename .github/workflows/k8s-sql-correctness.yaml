@@ -39,6 +39,7 @@ jobs:
       - name: Create SQL Correctness K8s Job
         run: ./.github/scripts/sql-correctness/run-correctness.sh
         env:
+          PR_BRANCH_REF: $${{ github.event.client_payload.branch_ref }}
           REGRESS_COMP: ${{ github.event.client_payload.regress_comp }}
           PR_NUMBER: ${{ github.event.client_payload.issue_number }}
           VERSION: ${{ github.event.client_payload.version }}
