@@ -87,7 +87,7 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
           LABEL: 'correctness_approved'
       - name: Add Passing Labels if regression detected
-        if: ${{ github.event.client_payload.is_regression !== 'true' && github.event.client_payload.job_type == 'sql-correctness' }}
+        if: ${{ github.event.client_payload.is_regression != 'true' && github.event.client_payload.job_type == 'sql-correctness' }}
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
