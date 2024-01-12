@@ -48,3 +48,27 @@ jobs:
           ACTOR: ${{ github.event.client_payload.actor }}
           ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
           FORMAT: ${{ github.event.client_payload.noms_bin_format }}
+      - name: Remove Passing Labels if regression detected
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { ACTOR, ISSUE_NUMBER, GITHUB_WORKSPACE } = process.env;
+            const issue_number = parseInt(ISSUE_NUMBER, 10);
+            const { owner, repo } = context.repo;
+            try {
+                const labels = github.rest.issues.createComment({
+                issue_number,
+                owner,
+                repo,
+                body: `@${ACTOR} ${FORMAT}\n ${data}`
+              });
+            } catch(e) {
+              console.error(e)
+            }
+        env:
+          ACTOR: ${{ github.event.client_payload.actor }}
+          ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
+      # if this is a regression
+      # first remove all correctness_approved labels from the pr
+      # if this

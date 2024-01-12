@@ -32,6 +32,13 @@ if [ -z "$MODE" ]; then
     exit 1
 fi
 
+if [ -n "$PR_NUMBER" ]; then
+  if [ -z "$REGRESS_COMP" ]; then
+    echo "Must set REGRESS_COMP for PR correctness comparisons"
+    exit 1
+  fi
+fi
+
 # use first 8 characters of VERSION to differentiate
 # jobs
 short=${VERSION:0:8}
@@ -71,7 +78,8 @@ source \
   "$actorprefix" \
   "$format" \
   "$NOMS_BIN_FORMAT" \
-  "$issuenumber" > job.json
+  "$issuenumber" \
+  "$REGRESS_COMP" > job.json
 
 # delete existing job with same name if this is a pr job
 if [ -n "$PR_NUMBER" ]; then

@@ -9,9 +9,20 @@ jobs:
     name: Set Version and Actor
     runs-on: ubuntu-22.04
     outputs:
+      regress_comp: ${{ steps.regress-comp.outputs.regress_comp }}
       version: ${{ steps.set-vars.outputs.version }}
       actor: ${{ steps.set-vars.outputs.actor }}
     steps:
+      - name: Checkout PR HEAD REF
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.base_ref }}
+      - name: Get Current Correctness
+        id: regress-comp
+        working-directory: ./.github/scripts/sql-correctness
+        run: |
+          out=$(cat current_correctness.txt)
+          echo "regress_comp=$out" >> $GITHUB_OUTPUT
       - name: Checkout PR HEAD REF
         uses: actions/checkout@v3
         with:
@@ -41,4 +52,4 @@ jobs:
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: sql-correctness
-          client-payload: '{"issue_number": "${{ steps.get_pull_number.outputs.pull_number }}", "version": "${{ needs.set-version-actor.outputs.version }}", "mode": "release", "actor": "${{ needs.set-version-actor.outputs.actor }}", "actor_email": "${{ needs.set-version-actor.outputs.actor_email }}", "template_script": "./.github/scripts/sql-correctness/get-dolt-correctness-job-json.sh"}'
+          client-payload: '{"issue_number": "${{ steps.get_pull_number.outputs.pull_number }}", "regress_comp": "${{ needs.set-version-actor.outputs.regress_comp }}", "version": "${{ needs.set-version-actor.outputs.version }}", "mode": "release", "actor": "${{ needs.set-version-actor.outputs.actor }}", "actor_email": "${{ needs.set-version-actor.outputs.actor_email }}", "template_script": "./.github/scripts/sql-correctness/get-dolt-correctness-job-json.sh"}'

@@ -1,0 +1,55 @@
+on:
+  push:
+    branches:
+      - 'db/compare'
+
+jobs:
+  report-pull-request:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2.2.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      - name: Remove Passing Labels if regression detected
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { ACTOR, ISSUE_NUMBER, LABEL, GITHUB_WORKSPACE } = process.env;
+            const issue_number = parseInt(ISSUE_NUMBER, 10);
+            const { owner, repo } = context.repo;
+            try {
+                const res = await github.rest.issues.listLabelsOnIssue({
+                  issue_number,
+                  owner,
+                  repo,
+                });
+                
+                if (res.data) {
+                  const labels = res.data;
+                  
+                  for (const label of labels) {
+                    if (label.name === LABEL) {
+                      console.log("found label: ", LABEL)
+                      await github.rest.issues.removeLabel({
+                        issue_number,
+                        owner,
+                        repo,
+                        name: label.name,
+                      });
+                    }
+                  }
+                }
+
+            } catch(e) {
+              console.error(e)
+            }
+        env:
+          ACTOR: ${{ github.event.client_payload.actor }}
+          ISSUE_NUMBER: '7309'
+          LABEL: 'correctness_approved'
