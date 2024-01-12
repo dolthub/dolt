@@ -13,11 +13,12 @@ jobs:
       version: ${{ steps.set-vars.outputs.version }}
       actor: ${{ steps.set-vars.outputs.actor }}
     steps:
-      - name: Checkout PR HEAD REF
+      - name: Checkout BASE REF
         uses: actions/checkout@v3
         with:
           ref: ${{ github.base_ref }}
       - name: Get Current Correctness
+        if: ${{ needs.set-version-actor.outputs.actor == 'coffeegoddd' }}
         id: regress-comp
         working-directory: ./.github/scripts/sql-correctness
         run: |
