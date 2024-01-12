@@ -18,7 +18,6 @@ jobs:
         with:
           ref: ${{ github.base_ref }}
       - name: Get Current Correctness
-        if: ${{ needs.set-version-actor.outputs.actor == 'coffeegoddd' }}
         id: regress-comp
         working-directory: ./.github/scripts/sql-correctness
         run: |
