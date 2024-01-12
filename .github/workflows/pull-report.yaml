@@ -136,9 +136,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.event.client_payload.dolt_version }}
+          ref: ${{ github.event.client_payload.branch_ref }}
           repository: ${{ github.repository }}
-          fetch-depth: 0
           token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
       - name: Write new correctness file
         working-directory: ./.github/scripts/sql-correctness

@@ -52,4 +52,4 @@ jobs:
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: sql-correctness
-          client-payload: '{"issue_number": "${{ steps.get_pull_number.outputs.pull_number }}", "regress_comp": "${{ needs.set-version-actor.outputs.regress_comp }}", "version": "${{ needs.set-version-actor.outputs.version }}", "mode": "release", "actor": "${{ needs.set-version-actor.outputs.actor }}", "actor_email": "${{ needs.set-version-actor.outputs.actor_email }}", "template_script": "./.github/scripts/sql-correctness/get-dolt-correctness-job-json.sh"}'
+          client-payload: '{"issue_number": "${{ steps.get_pull_number.outputs.pull_number }}", "branch_ref": "${{ github.head_ref }}", "regress_comp": "${{ needs.set-version-actor.outputs.regress_comp }}", "version": "${{ needs.set-version-actor.outputs.version }}", "mode": "release", "actor": "${{ needs.set-version-actor.outputs.actor }}", "actor_email": "${{ needs.set-version-actor.outputs.actor_email }}", "template_script": "./.github/scripts/sql-correctness/get-dolt-correctness-job-json.sh"}'
