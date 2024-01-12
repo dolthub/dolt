@@ -129,6 +129,78 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		// When there is a constraint violation for duplicate copies of a row in a keyless table, each row
+		// will violate constraint in exactly the same way. Currently, the dolt_constraint_violations_<table>
+		// system table will only contain one row for each unique violation. In other words, there may be N
+		// duplicate rows in the keyless table that violate the constraint, but only one row is shown in the
+		// constraint system table representing them all.
+		// TODO: We could add a new column to the PK for the constraints table to represent a unique ID/count
+		//       for the duplicate rows, and then we could support a 1:1 mapping of rows in the keyless table
+		//       to rows in the constraint violation system table.
+		Name: "keyless table merge with constraint violation on duplicate rows",
+		SetUpScript: []string{
+			"CREATE TABLE parent (pk INT primary key);",
+			"insert into parent values (1), (2);",
+			"CREATE TABLE aTable (aColumn INT NULL, bColumn INT NULL);",
+			"INSERT INTO aTable VALUES (1, 1);",
+			"CALL dolt_commit('-Am', 'add tables');",
+
+			"CALL dolt_checkout('-b', 'side');",
+			"INSERT INTO aTable VALUES (2, -1), (2, -1);",
+			"CALL dolt_commit('-am', 'add side data');",
+
+			"CALL dolt_checkout('main');",
+			"ALTER TABLE aTable add foreign key (bColumn) references parent(pk);",
+			"CALL dolt_commit('-am', 'add main data');",
+			"CALL dolt_checkout('side');",
+			"SET @@dolt_force_transaction_commit=1;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM aTable ORDER BY aColumn;",
+				Expected: []sql.Row{{1, 1}, {2, -1}, {2, -1}},
+			},
+			{
+				Query:    "call dolt_merge('main');",
+				Expected: []sql.Row{{"", 0, 1}},
+			},
+			{
+				Query:    "SELECT * FROM aTable ORDER BY aColumn;",
+				Expected: []sql.Row{{1, 1}, {2, -1}, {2, -1}},
+			},
+			{
+				Query:    "SELECT * FROM dolt_constraint_violations;",
+				Expected: []sql.Row{{"aTable", uint64(1)}},
+			},
+			{
+				Query: "SELECT from_root_ish, violation_type, hex(dolt_row_hash), aColumn, bColumn, CAST(violation_info as CHAR) FROM dolt_constraint_violations_aTable;",
+				Expected: []sql.Row{
+					{doltCommit, "foreign key", "13F8480978D0556FA9AE6DF5745A7ACA", 2, -1, `{"Columns":["bColumn"],"ForeignKey":"ki7k6iea","Index":"bColumn","OnDelete":"RESTRICT","OnUpdate":"RESTRICT","ReferencedColumns":["pk"],"ReferencedIndex":"","ReferencedTable":"parent","Table":"aTable"}`},
+				},
+			},
+			{
+				// Fix the data
+				Query:    "UPDATE aTable SET bColumn = 2 WHERE bColumn = -1;",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: uint64(2), Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+			},
+			{
+				// clear out the violations
+				Query:    "DELETE FROM dolt_constraint_violations_aTable;",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				// Commit the merge after resolving the constraint violations
+				Query:    "call dolt_commit('-am', 'merging in main and resolving unique constraint violations');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				// Merging again is a no-op
+				Query:    "call dolt_merge('main');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
+		},
+	},
+	{
 		// Unique checks should not include the content of deleted rows in checks. Tests two updates: one triggers
 		// going from a smaller key to a higher key, and one going from a higher key to a smaller key (in order to test
 		// delete/insert events in either order). https://github.com/dolthub/dolt/issues/6319
