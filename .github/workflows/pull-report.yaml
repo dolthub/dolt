@@ -159,7 +159,7 @@ jobs:
       - uses: EndBug/add-and-commit@v9.1.1
         if: ${{ steps.detect-changes.outputs.has-changes == 'true' }}
         with:
-          message: ${{ format('[ga-update-correctness] SQL Correctness updated to {0}', github.event.client_payload.correctness_info.correctness_percentage) }}
+          message: ${{ format('[skip actions] [ga-update-correctness] SQL Correctness updated to {0}', github.event.client_payload.correctness_info.correctness_percentage) }}
           add: "./current_correctness.txt"
           cwd: "./.github/scripts/sql-correctness"
           pull: "--ff"
