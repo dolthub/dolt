@@ -116,6 +116,16 @@ var MergeScripts = []queries.ScriptTest{
 				Query:    "DELETE FROM dolt_constraint_violations_aTable;",
 				Expected: []sql.Row{{types.NewOkResult(2)}},
 			},
+			{
+				// Commit the merge after resolving the constraint violations
+				Query:    "call dolt_commit('-am', 'merging in main and resolving unique constraint violations');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				// Merging again is a no-op
+				Query:    "call dolt_merge('main');",
+				Expected: []sql.Row{{doltCommit, 0, 0}},
+			},
 		},
 	},
 	{
