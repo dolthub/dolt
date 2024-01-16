@@ -1,12 +1,13 @@
 name: Check for correctness_approved label
 on:
   pull_request:
+    paths:
+      - 'go/**'
     branches: [main]
     types: [opened, labeled, unlabeled, synchronize]
 jobs:
   label:
     runs-on: ubuntu-latest
-    if: ${{ github.actor == 'coffeegoddd' }}
     permissions:
       issues: write
       pull-requests: write
