@@ -250,6 +250,10 @@ func main() {
 func runMain() int {
 	args := os.Args[1:]
 
+	if true {
+
+	}
+	
 	start := time.Now()
 
 	if len(args) == 0 {
