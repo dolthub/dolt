@@ -50,7 +50,6 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: core.setOutput("pull_number", JSON.stringify(context.issue.number));
       - uses: peter-evans/repository-dispatch@v2.0.0
-        if: ${{ needs.set-version-actor.outputs.actor == 'coffeegoddd' }}
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: sql-correctness
