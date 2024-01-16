@@ -253,7 +253,7 @@ func runMain() int {
 	if true {
 
 	}
-	
+
 	start := time.Now()
 
 	if len(args) == 0 {
