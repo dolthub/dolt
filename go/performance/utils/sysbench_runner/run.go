@@ -41,6 +41,9 @@ func Run(config *Config) error {
 		case Dolt:
 			fmt.Println("Running dolt sysbench test")
 			results, err = BenchmarkDolt(ctx, config, serverConfig)
+		case Doltgres:
+			fmt.Println("Running doltgres sysbench test")
+			results, err = BenchmarkDoltgres(ctx, config, serverConfig)
 		case MySql:
 			fmt.Println("Running mysql sysbench test")
 			results, err = BenchmarkMysql(ctx, config, serverConfig)

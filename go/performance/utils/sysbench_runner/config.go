@@ -27,8 +27,10 @@ import (
 )
 
 const (
-	Dolt  ServerType = "dolt"
-	MySql ServerType = "mysql"
+	Dolt     ServerType = "dolt"
+	Doltgres ServerType = "doltgres"
+	Postgres ServerType = "postgres"
+	MySql    ServerType = "mysql"
 
 	CsvFormat  = "csv"
 	JsonFormat = "json"
@@ -51,18 +53,18 @@ const (
 var (
 	ErrTestNameNotDefined            = errors.New("test name not defined")
 	ErrNoServersDefined              = errors.New("servers not defined")
+	ErrTooManyServersDefined         = errors.New("too many servers defined, two max")
 	ErrUnsupportedConnectionProtocol = errors.New("unsupported connection protocol")
 )
 
 var defaultSysbenchParams = []string{
-	"--db-driver=mysql",
 	"--db-ps-mode=disable",
 	"--rand-type=uniform",
-	fmt.Sprintf("--mysql-db=%s", dbName),
 }
 
 var defaultDoltServerParams = []string{"sql-server"}
 var defaultMysqlServerParams = []string{"--user=mysql"}
+var defaultDoltgresServerParams = []string{}
 
 var defaultSysbenchTests = []*ConfigTest{
 	NewConfigTest("oltp_read_only", []string{}, false),
@@ -192,17 +194,30 @@ func (ct *ConfigTest) GetTests(serverConfig *ServerConfig, testIdFunc func() str
 func fromConfigTestParams(ct *ConfigTest, serverConfig *ServerConfig) []string {
 	params := make([]string, 0)
 	params = append(params, defaultSysbenchParams...)
-	params = append(params, fmt.Sprintf("--mysql-host=%s", serverConfig.Host))
-	if serverConfig.Port != 0 {
-		params = append(params, fmt.Sprintf("--mysql-port=%d", serverConfig.Port))
+	if serverConfig.Server == MySql || serverConfig.Server == Dolt {
+		params = append(params, fmt.Sprintf("--mysql-db=%s", dbName))
+		params = append(params, "--db-driver=mysql")
+		params = append(params, fmt.Sprintf("--mysql-host=%s", serverConfig.Host))
+		if serverConfig.Port != 0 {
+			params = append(params, fmt.Sprintf("--mysql-port=%d", serverConfig.Port))
+		}
+	} else if serverConfig.Server == Doltgres {
+		params = append(params, "--db-driver=pgsql")
+		params = append(params, fmt.Sprintf("--pgsql-db=%s", dbName))
+		params = append(params, fmt.Sprintf("--pgsql-host=%s", serverConfig.Host))
+		if serverConfig.Port != 0 {
+			params = append(params, fmt.Sprintf("--pgsql-port=%d", serverConfig.Port))
+		}
 	}
 
 	// handle sysbench user for local mysql server
 	if serverConfig.Server == MySql && serverConfig.Host == defaultHost {
 		params = append(params, "--mysql-user=sysbench")
 		params = append(params, fmt.Sprintf("--mysql-password=%s", sysbenchPassLocal))
-	} else {
+	} else if serverConfig.Server == Dolt {
 		params = append(params, "--mysql-user=root")
+	} else if serverConfig.Server == Doltgres {
+		params = append(params, "--pgsql-user=doltgres")
 	}
 
 	params = append(params, ct.Options...)
@@ -236,6 +251,9 @@ type ServerConfig struct {
 	// ServerArgs are the args used to start a server
 	ServerArgs []string
 
+	// ClientArgs are the args used to connect a client to a server
+	ClientArgs []string
+
 	// ConnectionProtocol defines the protocol for connecting to the server
 	ConnectionProtocol string
 
@@ -259,16 +277,31 @@ func (sc *ServerConfig) GetServerArgs() []string {
 		defaultParams = defaultDoltServerParams
 	} else if sc.Server == MySql {
 		defaultParams = defaultMysqlServerParams
+	} else if sc.Server == Doltgres {
+		defaultParams = defaultDoltgresServerParams
 	}
 
 	params = append(params, defaultParams...)
-	if sc.Server == Dolt {
+	if sc.Server == Dolt || sc.Server == Doltgres {
 		params = append(params, fmt.Sprintf("--host=%s", sc.Host))
 	}
 	if sc.Port != 0 {
 		params = append(params, fmt.Sprintf("--port=%d", sc.Port))
 	}
 	params = append(params, sc.ServerArgs...)
+	return params
+}
+
+// GetClientArgs returns the args used to connect a client to a server
+func (sc *ServerConfig) GetClientArgs() []string {
+	params := make([]string, 0)
+	if sc.Server == Dolt || sc.Server == Doltgres {
+		params = append(params, fmt.Sprintf("--host=%s", sc.Host))
+	}
+	if sc.Port != 0 {
+		params = append(params, fmt.Sprintf("--port=%d", sc.Port))
+	}
+	params = append(params, sc.ClientArgs...)
 	return params
 }
 
@@ -308,6 +341,9 @@ func (c *Config) Validate() error {
 	if len(c.Servers) < 1 {
 		return ErrNoServersDefined
 	}
+	if len(c.Servers) > 2 {
+		return ErrTooManyServersDefined
+	}
 	err := c.setDefaults()
 	if err != nil {
 		return err
@@ -319,7 +355,7 @@ func (c *Config) Validate() error {
 func (c *Config) validateServerConfigs() error {
 	portMap := make(map[int]ServerType)
 	for _, s := range c.Servers {
-		if s.Server != Dolt && s.Server != MySql {
+		if s.Server != Dolt && s.Server != MySql && s.Server != Doltgres {
 			return fmt.Errorf("unsupported server type: %s", s.Server)
 		}
 
@@ -344,12 +380,22 @@ func (c *Config) validateServerConfigs() error {
 			return err
 		}
 
-		err = CheckExec(s)
+		err = CheckExec(s.ServerExec)
 		if err != nil {
 			return err
 		}
 	}
+
 	return nil
+}
+
+func (c *Config) Contains(st ServerType) bool {
+	for _, s := range c.Servers {
+		if s.Server == st {
+			return true
+		}
+	}
+	return false
 }
 
 func ValidateRequiredFields(server, version, format string) error {
@@ -413,18 +459,17 @@ func CheckUpdatePortMap(serverConfig *ServerConfig, portMap map[int]ServerType) 
 }
 
 // CheckExec verifies the binary exists
-func CheckExec(serverConfig *ServerConfig) error {
-	if serverConfig.ServerExec == "" {
+func CheckExec(path string) error {
+	if path == "" {
 		return getMustSupplyError("server exec")
 	}
-	abs, err := filepath.Abs(serverConfig.ServerExec)
+	abs, err := filepath.Abs(path)
 	if err != nil {
 		return err
 	}
 	if _, err := os.Stat(abs); os.IsNotExist(err) {
 		return fmt.Errorf("server exec not found: %s", abs)
 	}
-	serverConfig.ServerExec = abs
 	return nil
 }
 
@@ -479,7 +524,7 @@ func getMustSupplyError(name string) error {
 func getDefaultTests(config *Config) ([]*ConfigTest, error) {
 	defaultTests := make([]*ConfigTest, 0)
 	defaultTests = append(defaultTests, defaultSysbenchTests...)
-	if config.ScriptDir != "" {
+	if config.ScriptDir != "" && !config.Contains(Doltgres) {
 		luaScriptTests, err := getLuaScriptTestsFromDir(config.ScriptDir, defaultLuaScripts)
 		if err != nil {
 			return nil, err
