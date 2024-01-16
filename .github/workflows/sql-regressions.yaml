@@ -2,6 +2,8 @@ name: Benchmark SQL Correctness on PR
 
 on:
   pull_request:
+    paths:
+      - 'go/**'
     branches: [ main ]
 
 jobs:
