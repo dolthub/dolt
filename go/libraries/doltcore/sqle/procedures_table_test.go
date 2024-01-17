@@ -41,7 +41,7 @@ func TestProceduresMigration(t *testing.T) {
 
 	timestamp := time.Now().Truncate(time.Minute).UTC()
 
-	ctx, db := newDatabase(t, dEnv, opts, timestamp)
+	ctx, db := newDatabaseWithProcedures(t, dEnv, opts, timestamp)
 
 	t.Run("test migration logic", func(t *testing.T) {
 		// Call the logic to migrate it to the latest schema
@@ -102,7 +102,7 @@ func TestProceduresMigration(t *testing.T) {
 
 }
 
-func newDatabase(t *testing.T, dEnv *env.DoltEnv, opts editor.Options, timestamp time.Time) (*sql.Context, *Database) {
+func newDatabaseWithProcedures(t *testing.T, dEnv *env.DoltEnv, opts editor.Options, timestamp time.Time) (*sql.Context, *Database) {
 	db, err := NewDatabase(context.Background(), "dolt", dEnv.DbData(), opts)
 	require.NoError(t, err)
 
