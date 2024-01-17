@@ -586,11 +586,11 @@ func getCreateTableStatements(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEn
 
 	tables, err := root.GetTableNames(ctx)
 	for _, table := range tables {
-		sch, iter, err := sqlEngine.Query(ctx, fmt.Sprintf("SHOW CREATE TABLE %s", sql.QuoteIdentifier(table)))
+		_, iter, err := sqlEngine.Query(ctx, fmt.Sprintf("SHOW CREATE TABLE %s", sql.QuoteIdentifier(table)))
 		if err != nil {
 			return "", err
 		}
-		rows, err := sql.RowIterToRows(ctx, sch, iter)
+		rows, err := sql.RowIterToRows(ctx, iter)
 		if err != nil {
 			return "", err
 		}

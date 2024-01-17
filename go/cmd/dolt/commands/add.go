@@ -127,13 +127,13 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
-	schema, rowIter, err := queryist.Query(sqlCtx, generateAddSql(apr))
+	_, rowIter, err := queryist.Query(sqlCtx, generateAddSql(apr))
 	if err != nil {
 		cli.PrintErrln(errhand.VerboseErrorFromError(err))
 		return 1
 	}
 
-	_, err = sql.RowIterToRows(sqlCtx, schema, rowIter)
+	_, err = sql.RowIterToRows(sqlCtx, rowIter)
 	if err != nil {
 		cli.PrintErrln(errhand.VerboseErrorFromError(err))
 		return 1

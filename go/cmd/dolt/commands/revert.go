@@ -124,12 +124,12 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
-	schema, rowIter, err := queryist.Query(sqlCtx, query)
+	_, rowIter, err := queryist.Query(sqlCtx, query)
 	if err != nil {
 		cli.Printf("Failure to execute '%s': %s\n", query, err.Error())
 		return 1
 	}
-	_, err = sql.RowIterToRows(sqlCtx, schema, rowIter)
+	_, err = sql.RowIterToRows(sqlCtx, rowIter)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1

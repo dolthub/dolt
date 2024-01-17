@@ -1452,9 +1452,9 @@ func TestBranchControlBlocks(t *testing.T) {
 			addUserQueryResults := []sql.Row{{types.NewOkResult(2)}}
 			enginetest.TestQueryWithContext(t, rootCtx, engine, harness, addUserQuery, addUserQueryResults, nil, nil)
 
-			sch, iter, err := engine.Query(userCtx, test.Query)
+			_, iter, err := engine.Query(userCtx, test.Query)
 			if err == nil {
-				_, err = sql.RowIterToRows(userCtx, sch, iter)
+				_, err = sql.RowIterToRows(userCtx, iter)
 			}
 			assert.NoError(t, err)
 		})
@@ -1500,9 +1500,9 @@ func TestBranchControlBlocks(t *testing.T) {
 			addUserQueryResults = []sql.Row{{types.NewOkResult(1)}}
 			enginetest.TestQueryWithContext(t, rootCtx, engine, harness, addUserQuery, addUserQueryResults, nil, nil)
 
-			sch, iter, err := engine.Query(userCtx, test.Query)
+			_, iter, err := engine.Query(userCtx, test.Query)
 			if err == nil {
-				_, err = sql.RowIterToRows(userCtx, sch, iter)
+				_, err = sql.RowIterToRows(userCtx, iter)
 			}
 			assert.NoError(t, err)
 		})

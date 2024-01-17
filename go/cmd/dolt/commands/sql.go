@@ -1054,7 +1054,7 @@ func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sql
 		if err != nil {
 			return nil, nil, err
 		}
-		_, err = sql.RowIterToRows(ctx, nil, ri)
+		_, err = sql.RowIterToRows(ctx, ri)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1065,7 +1065,7 @@ func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sql
 		if err != nil {
 			return nil, nil, err
 		}
-		_, err = sql.RowIterToRows(ctx, nil, ri)
+		_, err = sql.RowIterToRows(ctx, ri)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1075,7 +1075,7 @@ func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sql
 		if err != nil {
 			return nil, nil, err
 		}
-		_, err = sql.RowIterToRows(ctx, nil, ri)
+		_, err = sql.RowIterToRows(ctx, ri)
 		if err != nil {
 			return nil, nil, err
 		}

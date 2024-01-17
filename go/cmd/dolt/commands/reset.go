@@ -203,11 +203,11 @@ func buildStatRows(rows []sql.Row) []StatRow {
 
 func printNotStaged(sqlCtx *sql.Context, queryist cli.Queryist) {
 	// Printing here is best effort.  Fail silently
-	schema, rowIter, err := queryist.Query(sqlCtx, "select table_name,status from dolt_status where staged = false")
+	_, rowIter, err := queryist.Query(sqlCtx, "select table_name,status from dolt_status where staged = false")
 	if err != nil {
 		return
 	}
-	rows, err := sql.RowIterToRows(sqlCtx, schema, rowIter)
+	rows, err := sql.RowIterToRows(sqlCtx, rowIter)
 	if err != nil {
 		return
 	}

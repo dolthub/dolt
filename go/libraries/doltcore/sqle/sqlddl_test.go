@@ -1081,11 +1081,11 @@ func TestParseCreateTableStatement(t *testing.T) {
 			//eng, dbName, _ := engine.NewSqlEngineForEnv(ctx, dEnv)
 			eng, sqlCtx := newTestEngine(ctx, dEnv)
 
-			testSch, iter, err := eng.Query(sqlCtx, "create database test")
+			_, iter, err := eng.Query(sqlCtx, "create database test")
 			if err != nil {
 				panic(err)
 			}
-			_, _ = sql.RowIterToRows(sqlCtx, testSch, iter)
+			_, _ = sql.RowIterToRows(sqlCtx, iter)
 			sqlCtx.SetCurrentDatabase("test")
 
 			tblName, sch, err := sqlutil.ParseCreateTableStatement(sqlCtx, root, eng, tt.query)

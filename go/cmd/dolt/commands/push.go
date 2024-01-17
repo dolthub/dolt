@@ -105,13 +105,13 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	errChan := make(chan error)
 	go func() {
 		defer close(errChan)
-		schema, rowIter, err := queryist.Query(sqlCtx, query)
+		_, rowIter, err := queryist.Query(sqlCtx, query)
 		if err != nil {
 			errChan <- err
 			return
 		}
 
-		sqlRows, err := sql.RowIterToRows(sqlCtx, schema, rowIter)
+		sqlRows, err := sql.RowIterToRows(sqlCtx, rowIter)
 		if err != nil {
 			errChan <- err
 			return
