@@ -47,6 +47,9 @@ func Run(config *Config) error {
 		case MySql:
 			fmt.Println("Running mysql sysbench test")
 			results, err = BenchmarkMysql(ctx, config, serverConfig)
+		case Postgres:
+			fmt.Println("Running postgres sysbench test")
+			results, err = BenchmarkPostgres(ctx, config, serverConfig)
 		default:
 			panic(fmt.Sprintf("unexpected server type: %s", serverConfig.Server))
 		}

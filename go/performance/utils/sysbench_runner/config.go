@@ -41,11 +41,12 @@ const (
 	defaultHost = "127.0.0.1"
 	defaultPort = 3306
 
-	defaultSocket = "/var/run/mysqld/mysqld.sock"
+	defaultMysqlSocket = "/var/run/mysqld/mysqld.sock"
 
 	tcpProtocol  = "tcp"
 	unixProtocol = "unix"
 
+	sysbenchUsername  = "sysbench"
 	sysbenchUserLocal = "'sysbench'@'localhost'"
 	sysbenchPassLocal = "sysbenchpass"
 )
@@ -65,6 +66,7 @@ var defaultSysbenchParams = []string{
 var defaultDoltServerParams = []string{"sql-server"}
 var defaultMysqlServerParams = []string{"--user=mysql"}
 var defaultDoltgresServerParams = []string{}
+var defaultPostgresServerParams = []string{}
 
 var defaultSysbenchTests = []*ConfigTest{
 	NewConfigTest("oltp_read_only", []string{}, false),
@@ -79,7 +81,7 @@ var defaultSysbenchTests = []*ConfigTest{
 	NewConfigTest("oltp_update_non_index", []string{}, false),
 }
 
-var defaultLuaScripts = map[string]string{
+var defaultDoltLuaScripts = map[string]string{
 	"covering_index_scan.lua": "covering_index_scan.lua",
 	"groupby_scan.lua":        "groupby_scan.lua",
 	"index_join.lua":          "index_join.lua",
@@ -89,6 +91,20 @@ var defaultLuaScripts = map[string]string{
 	"table_scan.lua":          "table_scan.lua",
 	"types_delete_insert.lua": "types_delete_insert.lua",
 	"types_table_scan.lua":    "types_table_scan.lua",
+}
+
+// todo: check expressions need to be supported in doltgres for these
+// todo: postgres does not have geometry types also
+var defaultDoltgresLuaScripts = map[string]string{
+	//"covering_index_scan_postgres.lua": "covering_index_scan_postgres.lua",
+	//"groupby_scan_postgres.lua":        "groupby_scan_postgres.lua",
+	//"index_join_postgres.lua":          "index_join_postgres.lua",
+	//"index_join_scan_postgres.lua":     "index_join_scan_postgres.lua",
+	//"index_scan_postgres.lua":          "index_scan_postgres.lua",
+	//"oltp_delete_insert_postgres.lua":  "oltp_delete_insert_postgres.lua",
+	//"table_scan_postgres.lua":          "table_scan_postgres.lua",
+	//"types_delete_insert_postgres.lua": "types_delete_insert_postgres.lua",
+	//"types_table_scan_postgres.lua":    "types_table_scan_postgres.lua",
 }
 
 type ServerType string
@@ -201,7 +217,7 @@ func fromConfigTestParams(ct *ConfigTest, serverConfig *ServerConfig) []string {
 		if serverConfig.Port != 0 {
 			params = append(params, fmt.Sprintf("--mysql-port=%d", serverConfig.Port))
 		}
-	} else if serverConfig.Server == Doltgres {
+	} else if serverConfig.Server == Doltgres || serverConfig.Server == Postgres {
 		params = append(params, "--db-driver=pgsql")
 		params = append(params, fmt.Sprintf("--pgsql-db=%s", dbName))
 		params = append(params, fmt.Sprintf("--pgsql-host=%s", serverConfig.Host))
@@ -218,6 +234,8 @@ func fromConfigTestParams(ct *ConfigTest, serverConfig *ServerConfig) []string {
 		params = append(params, "--mysql-user=root")
 	} else if serverConfig.Server == Doltgres {
 		params = append(params, "--pgsql-user=doltgres")
+	} else if serverConfig.Server == Postgres {
+		params = append(params, "--pgsql-user=postgres")
 	}
 
 	params = append(params, ct.Options...)
@@ -248,11 +266,11 @@ type ServerConfig struct {
 	// ServerExec is the path to a server executable
 	ServerExec string
 
+	// InitExec is the path to the server init db executable
+	InitExec string
+
 	// ServerArgs are the args used to start a server
 	ServerArgs []string
-
-	// ClientArgs are the args used to connect a client to a server
-	ClientArgs []string
 
 	// ConnectionProtocol defines the protocol for connecting to the server
 	ConnectionProtocol string
@@ -279,6 +297,8 @@ func (sc *ServerConfig) GetServerArgs() []string {
 		defaultParams = defaultMysqlServerParams
 	} else if sc.Server == Doltgres {
 		defaultParams = defaultDoltgresServerParams
+	} else if sc.Server == Postgres {
+		defaultParams = defaultPostgresServerParams
 	}
 
 	params = append(params, defaultParams...)
@@ -289,19 +309,6 @@ func (sc *ServerConfig) GetServerArgs() []string {
 		params = append(params, fmt.Sprintf("--port=%d", sc.Port))
 	}
 	params = append(params, sc.ServerArgs...)
-	return params
-}
-
-// GetClientArgs returns the args used to connect a client to a server
-func (sc *ServerConfig) GetClientArgs() []string {
-	params := make([]string, 0)
-	if sc.Server == Dolt || sc.Server == Doltgres {
-		params = append(params, fmt.Sprintf("--host=%s", sc.Host))
-	}
-	if sc.Port != 0 {
-		params = append(params, fmt.Sprintf("--port=%d", sc.Port))
-	}
-	params = append(params, sc.ClientArgs...)
 	return params
 }
 
@@ -355,7 +362,7 @@ func (c *Config) Validate() error {
 func (c *Config) validateServerConfigs() error {
 	portMap := make(map[int]ServerType)
 	for _, s := range c.Servers {
-		if s.Server != Dolt && s.Server != MySql && s.Server != Doltgres {
+		if s.Server != Dolt && s.Server != MySql && s.Server != Doltgres && s.Server != Postgres {
 			return fmt.Errorf("unsupported server type: %s", s.Server)
 		}
 
@@ -380,9 +387,16 @@ func (c *Config) validateServerConfigs() error {
 			return err
 		}
 
-		err = CheckExec(s.ServerExec)
+		err = CheckExec(s.ServerExec, "server exec")
 		if err != nil {
 			return err
+		}
+
+		if s.Server == Postgres {
+			err = CheckExec(s.InitExec, "initdb exec")
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -459,16 +473,16 @@ func CheckUpdatePortMap(serverConfig *ServerConfig, portMap map[int]ServerType) 
 }
 
 // CheckExec verifies the binary exists
-func CheckExec(path string) error {
+func CheckExec(path, messageIfMissing string) error {
 	if path == "" {
-		return getMustSupplyError("server exec")
+		return getMustSupplyError(messageIfMissing)
 	}
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return err
 	}
 	if _, err := os.Stat(abs); os.IsNotExist(err) {
-		return fmt.Errorf("server exec not found: %s", abs)
+		return fmt.Errorf("exec not found: %s", abs)
 	}
 	return nil
 }
@@ -524,8 +538,14 @@ func getMustSupplyError(name string) error {
 func getDefaultTests(config *Config) ([]*ConfigTest, error) {
 	defaultTests := make([]*ConfigTest, 0)
 	defaultTests = append(defaultTests, defaultSysbenchTests...)
-	if config.ScriptDir != "" && !config.Contains(Doltgres) {
-		luaScriptTests, err := getLuaScriptTestsFromDir(config.ScriptDir, defaultLuaScripts)
+	if config.ScriptDir != "" {
+		var luaScriptTests []*ConfigTest
+		var err error
+		if !config.Contains(Doltgres) && !config.Contains(Postgres) {
+			luaScriptTests, err = getLuaScriptTestsFromDir(config.ScriptDir, defaultDoltLuaScripts)
+		} else {
+			luaScriptTests, err = getLuaScriptTestsFromDir(config.ScriptDir, defaultDoltgresLuaScripts)
+		}
 		if err != nil {
 			return nil, err
 		}

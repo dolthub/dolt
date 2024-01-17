@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"database/sql"
+
 	_ "github.com/lib/pq"
 	"golang.org/x/sync/errgroup"
 )
@@ -38,17 +39,20 @@ func BenchmarkDoltgres(ctx context.Context, config *Config, serverConfig *Server
 		return nil, err
 	}
 
-	serverDir, err := createServerDir()
+	serverDir, err := createServerDir(dbName)
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		cleanupDoltgresServerDir(serverDir)
+	}()
 
 	serverParams = append(serverParams, fmt.Sprintf("--data-dir=%s", serverDir))
 
 	withKeyCtx, cancel := context.WithCancel(ctx)
 	gServer, serverCtx := errgroup.WithContext(withKeyCtx)
 
-	server := getDoltServer(serverCtx, serverConfig, serverDir, serverParams)
+	server := getServer(serverCtx, serverConfig, serverDir, serverParams)
 
 	// handle user interrupt
 	quit := make(chan os.Signal, 1)
@@ -71,7 +75,7 @@ func BenchmarkDoltgres(ctx context.Context, config *Config, serverConfig *Server
 	time.Sleep(5 * time.Second)
 
 	// create the db against the running server
-	err = createDoltgresDb(ctx, serverConfig.Host, fmt.Sprintf("%d", serverConfig.Port), "doltgres", dbName)
+	err = createDb(ctx, serverConfig.Host, fmt.Sprintf("%d", serverConfig.Port), "doltgres", dbName)
 	if err != nil {
 		close(quit)
 		wg.Wait()
@@ -118,15 +122,10 @@ func BenchmarkDoltgres(ctx context.Context, config *Config, serverConfig *Server
 	close(quit)
 	wg.Wait()
 
-	err = cleanupServerDir(serverDir)
-	if err != nil {
-		return nil, err
-	}
-
 	return results, nil
 }
 
-func createDoltgresDb(ctx context.Context, host, port, user, dbname string) error {
+func createDb(ctx context.Context, host, port, user, dbname string) error {
 	psqlconn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", host, port, user, "", dbname)
 
 	// open database
@@ -148,14 +147,14 @@ func createDoltgresDb(ctx context.Context, host, port, user, dbname string) erro
 	return err
 }
 
-// createServerDir creates a server directory for doltgres
-func createServerDir() (string, error) {
+// createServerDir creates a server directory
+func createServerDir(dbName string) (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", err
 	}
 
-	serverDir := filepath.Join(cwd)
+	serverDir := filepath.Join(cwd, dbName)
 	err = os.MkdirAll(serverDir, os.ModePerm)
 	if err != nil {
 		return "", err
@@ -164,8 +163,8 @@ func createServerDir() (string, error) {
 	return serverDir, nil
 }
 
-// cleanupServerDir cleans up the doltgres assets in the provided dir
-func cleanupServerDir(dir string) error {
+// cleanupDoltgresServerDir cleans up the doltgres assets in the provided dir
+func cleanupDoltgresServerDir(dir string) error {
 	dataDir := filepath.Join(dir, ".dolt")
 	defaultDir := filepath.Join(dir, "doltgres")
 	testDir := filepath.Join(dir, dbName)
