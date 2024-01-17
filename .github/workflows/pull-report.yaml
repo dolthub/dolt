@@ -18,6 +18,11 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-2
+      - name: Print Correctness Info
+        run: |
+          echo "correctness info: $INFO"
+        env:
+          INFO: ${{ github.event.client_payload.correctness_info }}
       - name: Get benchmark/correctness results
         id: get-results
         run: aws s3api get-object --bucket="$BUCKET" --key="$KEY" results.log
@@ -86,7 +91,7 @@ jobs:
           ACTOR: ${{ github.event.client_payload.actor }}
           ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
           LABEL: 'correctness_approved'
-      - name: Add Passing Labels if regression detected
+      - name: Add Passing Labels if no regression detected
         if: ${{ github.event.client_payload.correctness_info.is_regression != 'true' && github.event.client_payload.job_type == 'sql-correctness' }}
         uses: actions/github-script@v6
         with:
