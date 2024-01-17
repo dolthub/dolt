@@ -283,11 +283,11 @@ func (s *SqlEngineTableWriter) createTable() error {
 	}
 
 	createTable := sql.GenerateCreateTableStatement(s.tableName, sqlCols, sql.CharacterSet_utf8.String(), sql.Collation_Default.String())
-	sch, iter, err := s.se.Query(s.sqlCtx, createTable)
+	_, iter, err := s.se.Query(s.sqlCtx, createTable)
 	if err != nil {
 		return err
 	}
-	_, err = sql.RowIterToRows(s.sqlCtx, sch, iter)
+	_, err = sql.RowIterToRows(s.sqlCtx, iter)
 	return err
 }
 

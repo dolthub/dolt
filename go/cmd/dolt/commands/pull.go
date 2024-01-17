@@ -129,7 +129,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			errChan <- err
 		}
 
-		schema, rowIter, err := queryist.Query(sqlCtx, query)
+		_, rowIter, err := queryist.Query(sqlCtx, query)
 		if err != nil {
 			errChan <- err
 			return
@@ -140,7 +140,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			errChan <- err
 			return
 		}
-		rows, err := sql.RowIterToRows(sqlCtx, schema, rowIter)
+		rows, err := sql.RowIterToRows(sqlCtx, rowIter)
 		if err != nil {
 			errChan <- err
 			return

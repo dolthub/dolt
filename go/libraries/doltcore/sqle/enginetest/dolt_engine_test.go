@@ -1488,9 +1488,9 @@ func TestDoltRevisionDbScripts(t *testing.T) {
 	_, err = enginetest.RunSetupScripts(ctx, harness.engine, setupScripts, true)
 	require.NoError(t, err)
 
-	sch, iter, err := harness.engine.Query(ctx, "select hashof('HEAD~2');")
+	_, iter, err := harness.engine.Query(ctx, "select hashof('HEAD~2');")
 	require.NoError(t, err)
-	rows, err := sql.RowIterToRows(ctx, sch, iter)
+	rows, err := sql.RowIterToRows(ctx, iter)
 	require.NoError(t, err)
 	assert.Equal(t, 1, len(rows))
 	commithash := rows[0][0].(string)

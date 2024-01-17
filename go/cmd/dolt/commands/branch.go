@@ -486,7 +486,7 @@ func callStoredProcedure(sqlCtx *sql.Context, queryEngine cli.Queryist, args []s
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), nil)
 	}
-	schema, rowIter, err := queryEngine.Query(sqlCtx, query)
+	_, rowIter, err := queryEngine.Query(sqlCtx, query)
 	if err != nil {
 		if strings.Contains(err.Error(), "is not fully merged") {
 			newErrorMessage := fmt.Sprintf("%s. If you are sure you want to delete it, run 'dolt branch -D%s'", err.Error(), generateForceDeleteMessage(args))
@@ -494,7 +494,7 @@ func callStoredProcedure(sqlCtx *sql.Context, queryEngine cli.Queryist, args []s
 		}
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("error: %s", err.Error())), nil)
 	}
-	_, err = sql.RowIterToRows(sqlCtx, schema, rowIter)
+	_, err = sql.RowIterToRows(sqlCtx, rowIter)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to get result rows for query %s", query).AddCause(err).Build(), nil)
 	}

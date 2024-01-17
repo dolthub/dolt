@@ -489,7 +489,7 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, tableName string, 
 	_, iter, err := e.Query(ctx,
 		"CALL DOLT_COMMIT('-Am', 'test commit');")
 	require.NoError(d.t, err)
-	_, err = sql.RowIterToRows(ctx, nil, iter)
+	_, err = sql.RowIterToRows(ctx, iter)
 	require.NoError(d.t, err)
 
 	// Create a new branch at this commit with the given identifier
@@ -499,7 +499,7 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, tableName string, 
 	_, iter, err = e.Query(ctx,
 		query)
 	require.NoError(d.t, err)
-	_, err = sql.RowIterToRows(ctx, nil, iter)
+	_, err = sql.RowIterToRows(ctx, iter)
 	require.NoError(d.t, err)
 
 	return nil

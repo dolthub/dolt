@@ -135,7 +135,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		cli.Println(err.Error())
 		return 1
 	}
-	schema, rowIter, err := queryist.Query(sqlCtx, query)
+	_, rowIter, err := queryist.Query(sqlCtx, query)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
@@ -146,7 +146,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		cli.Println(err.Error())
 		return 1
 	}
-	rows, err := sql.RowIterToRows(sqlCtx, schema, rowIter)
+	rows, err := sql.RowIterToRows(sqlCtx, rowIter)
 	if err != nil {
 		cli.Println("merge finished, but failed to check for fast-forward")
 		cli.Println(err.Error())
