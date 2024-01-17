@@ -1353,12 +1353,12 @@ func (db Database) GetEvents(ctx *sql.Context) (events []sql.EventDefinition, to
 
 // NeedsToReloadEvents implements sql.EventDatabase.
 func (db Database) NeedsToReloadEvents(ctx *sql.Context, token interface{}) (bool, error) {
-	// A nil token means no events in this db. If the dolt_schemas table doesn't exist, it will have a zero hash below 
-	// as well, meaning we don't reload events in that case. 
+	// A nil token means no events in this db. If the dolt_schemas table doesn't exist, it will have a zero hash below
+	// as well, meaning we don't reload events in that case.
 	if token == nil {
 		token = hash.Hash{}
 	}
-	
+
 	hash, ok := token.(hash.Hash)
 	if !ok {
 		return false, fmt.Errorf("expected token to be hash.Hash, but received %T", token)
@@ -1368,7 +1368,7 @@ func (db Database) NeedsToReloadEvents(ctx *sql.Context, token interface{}) (boo
 	if err != nil {
 		return false, err
 	}
-	
+
 	// If the current hash doesn't match what we last loaded, then we
 	// need to reload event definitions
 	return !tableHash.Equal(hash), nil
