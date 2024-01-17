@@ -164,6 +164,7 @@ func (cmd SqlCmd) RequiresRepo() bool {
 func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlDocs, ap))
+	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("broken broken broken")), usage)
 	apr, err := cmd.handleLegacyArguments(ap, commandStr, args)
 	if err != nil {
 		if err == argparser.ErrHelp {
