@@ -20,9 +20,13 @@ jobs:
           aws-region: us-west-2
       - name: Print Correctness Info
         run: |
-          echo "correctness info: $INFO"
+          echo "correctness info: is_regression: $IS_REGRESSION"
+          echo "correctness info: correctness_percentage: $CORRECTNESS_PERCENTAGE"
+          echo "correctness info: branch_ref: $BRANCH_REF"
         env:
-          INFO: ${{ github.event.client_payload.correctness_info }}
+          IS_REGRESSION: ${{ github.event.client_payload.correctness_info.is_regression }}
+          CORRECTNESS_PERCENTAGE: ${{ github.event.client_payload.correctness_info.correctness_percentage }}
+          BRANCH_REF: ${{ github.event.client_payload.correctness_info.branch_ref }}
       - name: Get benchmark/correctness results
         id: get-results
         run: aws s3api get-object --bucket="$BUCKET" --key="$KEY" results.log
