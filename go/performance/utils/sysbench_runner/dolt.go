@@ -61,7 +61,7 @@ func BenchmarkDolt(ctx context.Context, config *Config, serverConfig *ServerConf
 	withKeyCtx, cancel := context.WithCancel(ctx)
 	gServer, serverCtx := errgroup.WithContext(withKeyCtx)
 
-	server := getDoltServer(serverCtx, serverConfig, testRepo, serverParams)
+	server := getServer(serverCtx, serverConfig, testRepo, serverParams)
 
 	// handle user interrupt
 	quit := make(chan os.Signal, 1)
@@ -200,8 +200,8 @@ func checkSetDoltConfig(ctx context.Context, serverExec, key, val string) error 
 	return nil
 }
 
-// getDoltServer returns a exec.Cmd for a dolt server
-func getDoltServer(ctx context.Context, config *ServerConfig, testRepo string, params []string) *exec.Cmd {
+// getServer returns a exec.Cmd for a dolt server
+func getServer(ctx context.Context, config *ServerConfig, testRepo string, params []string) *exec.Cmd {
 	server := ExecCommand(ctx, config.ServerExec, params...)
 	server.Dir = testRepo
 	return server

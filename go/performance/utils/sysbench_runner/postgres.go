@@ -16,7 +16,6 @@ package sysbench_runner
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log"
 	"os"
@@ -26,33 +25,51 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
+	"database/sql"
+
+	_ "github.com/lib/pq"
 	"golang.org/x/sync/errgroup"
 )
 
-type MysqlConfig struct {
+type PostgresConfig struct {
 	Socket             string
 	ConnectionProtocol string
 	Port               int
 	Host               string
 }
 
-// BenchmarkMysql benchmarks mysql based on the provided configurations
-func BenchmarkMysql(ctx context.Context, config *Config, serverConfig *ServerConfig) (Results, error) {
+// BenchmarkPostgres benchmarks postgres based on the provided configurations
+func BenchmarkPostgres(ctx context.Context, config *Config, serverConfig *ServerConfig) (Results, error) {
 	withKeyCtx, cancel := context.WithCancel(ctx)
+
+	var serverDir string
+	defer func() {
+		if serverDir != "" {
+			os.RemoveAll(serverDir)
+		}
+	}()
 
 	var localServer bool
 	var gServer *errgroup.Group
 	var serverCtx context.Context
 	var server *exec.Cmd
+	var err error
 	if serverConfig.Host == defaultHost {
 		log.Println("Launching the default server")
 		localServer = true
+
+		serverDir, err = initPostgresDb(ctx, serverConfig)
+		if err != nil {
+			cancel()
+			return nil, err
+		}
 		gServer, serverCtx = errgroup.WithContext(withKeyCtx)
 		serverParams := serverConfig.GetServerArgs()
+		serverParams = append(serverParams, "-D", serverDir)
 		server = getMysqlServer(serverCtx, serverConfig, serverParams)
+		server.Env = append(server.Env, "LC_ALL=C")
 
-		// launch the mysql server
+		// launch the postgres server
 		gServer.Go(func() error {
 			return server.Run()
 		})
@@ -60,13 +77,14 @@ func BenchmarkMysql(ctx context.Context, config *Config, serverConfig *ServerCon
 		// sleep to allow the server to start
 		time.Sleep(10 * time.Second)
 
-		// setup mysqldb
-		err := SetupDB(ctx, GetMysqlConnectionConfigFromServerConfig(serverConfig), dbName)
+		// setup postgres db
+		err := setupPostgresDB(ctx, serverConfig.Host, fmt.Sprintf("%d", serverConfig.Port), "postgres", dbName)
 		if err != nil {
 			cancel()
 			return nil, err
 		}
-		log.Println("Successfully set up the MySQL database")
+
+		log.Println("Successfully set up the Postgres database")
 	}
 
 	// handle user interrupt
@@ -124,19 +142,26 @@ func BenchmarkMysql(ctx context.Context, config *Config, serverConfig *ServerCon
 	return results, nil
 }
 
-// getMysqlServer returns a exec.Cmd for a dolt server
-func getMysqlServer(ctx context.Context, config *ServerConfig, params []string) *exec.Cmd {
-	return ExecCommand(ctx, config.ServerExec, params...)
-}
-
-func SetupDB(ctx context.Context, mConfig MysqlConfig, databaseName string) (err error) {
-	dsn, err := FormatDsn(mConfig)
+// initPostgresDb initializes a dolt repo and returns the repo path
+func initPostgresDb(ctx context.Context, config *ServerConfig) (string, error) {
+	serverDir, err := createServerDir(dbName)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	// TODO make sure this can work on windows
-	db, err := sql.Open("mysql", dsn)
+	pgInit := ExecCommand(ctx, config.InitExec, fmt.Sprintf("--pgdata=%s", serverDir), "--username=postgres")
+	err = pgInit.Run()
+	if err != nil {
+		return "", err
+	}
+
+	return serverDir, nil
+}
+
+func setupPostgresDB(ctx context.Context, host, port, user, dbname string) (err error) {
+	psqlconn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", host, port, user, "", dbname)
+
+	db, err := sql.Open("postgres", psqlconn)
 	if err != nil {
 		return err
 	}
@@ -146,64 +171,25 @@ func SetupDB(ctx context.Context, mConfig MysqlConfig, databaseName string) (err
 			err = rerr
 		}
 	}()
-	err = db.Ping()
+	err = db.PingContext(ctx)
 	if err != nil {
 		return err
 	}
-	_, err = db.ExecContext(ctx, fmt.Sprintf("DROP DATABASE IF EXISTS %s", databaseName))
+	_, err = db.ExecContext(ctx, fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbname))
 	if err != nil {
 		return err
 	}
-	_, err = db.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE %s", databaseName))
+	_, err = db.ExecContext(ctx, fmt.Sprintf("DROP USER IF EXISTS %s", sysbenchUsername))
 	if err != nil {
 		return err
 	}
-	_, err = db.ExecContext(ctx, fmt.Sprintf("DROP USER IF EXISTS %s", sysbenchUserLocal))
+	_, err = db.ExecContext(ctx, fmt.Sprintf("CREATE USER %s WITH PASSWORD '%s'", sysbenchUsername, sysbenchPassLocal))
 	if err != nil {
 		return err
 	}
-	_, err = db.ExecContext(ctx, fmt.Sprintf("CREATE USER %s IDENTIFIED WITH mysql_native_password BY '%s'", sysbenchUserLocal, sysbenchPassLocal))
+	_, err = db.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE %s WITH OWNER %s", dbname, sysbenchUsername))
 	if err != nil {
 		return err
 	}
-	_, err = db.ExecContext(ctx, fmt.Sprintf("GRANT ALL ON %s.* to %s", databaseName, sysbenchUserLocal))
-	if err != nil {
-		return err
-	}
-	_, err = db.ExecContext(ctx, "SET GLOBAL local_infile = 'ON'")
-	if err != nil {
-		return err
-	}
-	// Required for running groupby_scan.lua without error
-	_, err = db.ExecContext(ctx, "SET GLOBAL sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''));")
-	if err != nil {
-		return err
-	}
-
 	return
-}
-
-func FormatDsn(mConfig MysqlConfig) (string, error) {
-	var socketPath string
-	if mConfig.Socket != "" {
-		socketPath = mConfig.Socket
-	} else {
-		socketPath = defaultMysqlSocket
-	}
-	if mConfig.ConnectionProtocol == tcpProtocol {
-		return fmt.Sprintf("root@tcp(%s:%d)/", mConfig.Host, mConfig.Port), nil
-	} else if mConfig.ConnectionProtocol == unixProtocol {
-		return fmt.Sprintf("root@unix(%s)/", socketPath), nil
-	} else {
-		return "", ErrUnsupportedConnectionProtocol
-	}
-}
-
-func GetMysqlConnectionConfigFromServerConfig(config *ServerConfig) MysqlConfig {
-	return MysqlConfig{
-		Socket:             config.Socket,
-		ConnectionProtocol: config.ConnectionProtocol,
-		Port:               config.Port,
-		Host:               defaultHost,
-	}
 }
