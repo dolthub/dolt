@@ -66,6 +66,7 @@ require (
 	github.com/jmoiron/sqlx v1.3.4
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/kylelemons/godebug v1.1.0
+	github.com/lib/pq v1.10.9
 	github.com/oracle/oci-go-sdk/v65 v65.55.0
 	github.com/prometheus/client_golang v1.13.0
 	github.com/rs/zerolog v1.28.0
@@ -128,7 +129,6 @@ require (
 	github.com/klauspost/compress v1.10.5 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
 	github.com/lestrrat-go/strftime v1.0.4 // indirect
-	github.com/lib/pq v1.10.9 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect

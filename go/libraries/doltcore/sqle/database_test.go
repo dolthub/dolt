@@ -19,12 +19,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/stretchr/testify/require"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func testKeyFunc(t *testing.T, keyFunc func(string) (bool, string), testVal string, expectedIsKey bool, expectedDBName string) {
@@ -57,13 +57,13 @@ func TestNeedsToReloadEvents(t *testing.T) {
 	require.NoError(t, err)
 
 	var token any
-	
+
 	t.Run("empty schema table doesn't need to be reloaded", func(t *testing.T) {
 		needsReload, err := db.NeedsToReloadEvents(ctx, token)
 		require.NoError(t, err)
 		assert.False(t, needsReload)
 	})
-	
+
 	eventDefn := `CREATE EVENT testEvent
 ON SCHEDULE
     EVERY 1 DAY
@@ -72,10 +72,10 @@ DO
 BEGIN
     CALL archive_order_history(DATE_SUB(CURDATE(), INTERVAL 1 YEAR));
 END`
-	
+
 	err = db.addFragToSchemasTable(ctx, "event", "testEvent", eventDefn, timestamp, nil)
 	require.NoError(t, err)
-	
+
 	t.Run("events need to be reloaded after addition", func(t *testing.T) {
 		needsReload, err := db.NeedsToReloadEvents(ctx, token)
 		require.NoError(t, err)
@@ -90,7 +90,7 @@ END`
 		require.NoError(t, err)
 		assert.False(t, needsReload)
 	})
-	
+
 	err = db.dropFragFromSchemasTable(ctx, "event", "testEvent", nil)
 	require.NoError(t, err)
 
