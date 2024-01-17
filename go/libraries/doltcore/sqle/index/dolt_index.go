@@ -1108,15 +1108,15 @@ func (di *doltIndex) prollySpatialRanges(ranges []sql.Range) ([]prolly.Range, er
 	}
 
 	var pRanges []prolly.Range
-	zMin := ZValue(minPoint)
-	zMax := ZValue(maxPoint)
-	zRanges := SplitZRanges(ZRange{zMin, zMax})
+	zMin := tree.ZValue(minPoint)
+	zMax := tree.ZValue(maxPoint)
+	zRanges := tree.SplitZRanges(tree.ZRange{zMin, zMax})
 	for level := byte(0); level < 65; level++ {
 		// For example, at highest level, we'll just look at origin point multiple times
 		var prevMinCell, prevMaxCell val.Cell
 		for i, zRange := range zRanges {
-			minCell := ZMask(level, zRange[0])
-			maxCell := ZMask(level, zRange[1])
+			minCell := tree.ZMask(level, zRange[0])
+			maxCell := tree.ZMask(level, zRange[1])
 			if i != 0 && minCell == prevMinCell && maxCell == prevMaxCell {
 				continue
 			}
@@ -1170,7 +1170,7 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 					return nil, err
 				}
 				nv := di.trimRangeCutValue(j, v)
-				if err = PutField(ctx, ns, tb, j, nv); err != nil {
+				if err = tree.PutField(ctx, ns, tb, j, nv); err != nil {
 					return nil, err
 				}
 				bound := expr.LowerBound.TypeAsLowerBound()
@@ -1197,7 +1197,7 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 					return nil, err
 				}
 				nv := di.trimRangeCutValue(i, v)
-				if err = PutField(ctx, ns, tb, i, nv); err != nil {
+				if err = tree.PutField(ctx, ns, tb, i, nv); err != nil {
 					return nil, err
 				}
 				fields[i].Hi = prolly.Bound{

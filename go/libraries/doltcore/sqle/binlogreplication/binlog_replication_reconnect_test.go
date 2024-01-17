@@ -89,7 +89,7 @@ func testInitialReplicaStatus(t *testing.T) {
 	status := showReplicaStatus(t)
 
 	// Positioning settings
-	require.Equal(t, "true", status["Auto_Position"])
+	require.Equal(t, "1", status["Auto_Position"])
 
 	// Connection settings
 	require.Equal(t, "5", status["Connect_Retry"])

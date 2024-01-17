@@ -170,6 +170,10 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 					"continue rebasing by calling dolt_rebase('--continue')"}},
 			},
 			{
+				Query:          "update dolt_rebase set rebase_order=1.0 where rebase_order=2.0;",
+				ExpectedErrStr: "duplicate primary key given: [1]",
+			},
+			{
 				Query: "update dolt_rebase set action='squash';",
 				Expected: []sql.Row{{gmstypes.OkResult{
 					RowsAffected: 2,
@@ -232,6 +236,51 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			{
 				Query:          "call dolt_rebase('--continue');",
 				ExpectedErrStr: "unable to resolve commit hash 0123456789abcdef0123456789abcdef: target commit not found",
+			},
+		},
+	},
+	{
+		Name: "dolt_rebase: no commits to rebase",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"call dolt_commit('-Am', 'creating table t');",
+			"call dolt_branch('branch1');",
+
+			"insert into t values (0);",
+			"call dolt_commit('-am', 'inserting row 0');",
+
+			"call dolt_checkout('branch1');",
+			"insert into t values (1);",
+			"call dolt_commit('-am', 'inserting row 1');",
+			"insert into t values (10);",
+			"call dolt_commit('-am', 'inserting row 10');",
+			"insert into t values (100);",
+			"call dolt_commit('-am', 'inserting row 100');",
+			"insert into t values (1000);",
+			"call dolt_commit('-am', 'inserting row 1000');",
+			"insert into t values (10000);",
+			"call dolt_commit('-am', 'inserting row 10000');",
+			"insert into t values (100000);",
+			"call dolt_commit('-am', 'inserting row 100000');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"branch1"}},
+			},
+			{
+				Query:          "call dolt_rebase('-i', 'HEAD');",
+				ExpectedErrStr: "didn't identify any commits!",
+			},
+			{
+				// if the rebase doesn't start, then we should remain on the original branch
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"branch1"}},
+			},
+			{
+				// and the rebase working branch shouldn't be present
+				Query:    "select * from dolt_branches where name='dolt_rebase_branch1';",
+				Expected: []sql.Row{},
 			},
 		},
 	},

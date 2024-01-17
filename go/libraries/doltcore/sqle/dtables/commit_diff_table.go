@@ -136,6 +136,11 @@ func (dt *CommitDiffTable) PreciseMatch() bool {
 	return false
 }
 
+// RequiredPredicates implements sql.IndexRequired
+func (dt *CommitDiffTable) RequiredPredicates() []string {
+	return []string{"to_commit", "from_commit"}
+}
+
 func (dt *CommitDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	return nil, fmt.Errorf("error querying table %s: %w", dt.Name(), ErrExactlyOneToCommit)
 }

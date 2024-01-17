@@ -6,7 +6,7 @@ on:
 
 jobs:
   report-pull-request:
-    name: Report Performance Benchmarks on Pull Request
+    name: Report Performance Benchmarks/Correctness on Pull Request
     runs-on: ubuntu-22.04
     if: ${{ github.event.client_payload.issue_number != -1 }}
     steps:
@@ -18,7 +18,16 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-2
-      - name: Get benchmark results
+      - name: Print Correctness Info
+        run: |
+          echo "correctness info: is_regression: $IS_REGRESSION"
+          echo "correctness info: correctness_percentage: $CORRECTNESS_PERCENTAGE"
+          echo "correctness info: branch_ref: $BRANCH_REF"
+        env:
+          IS_REGRESSION: ${{ github.event.client_payload.correctness_info.is_regression }}
+          CORRECTNESS_PERCENTAGE: ${{ github.event.client_payload.correctness_info.correctness_percentage }}
+          BRANCH_REF: ${{ github.event.client_payload.correctness_info.branch_ref }}
+      - name: Get benchmark/correctness results
         id: get-results
         run: aws s3api get-object --bucket="$BUCKET" --key="$KEY" results.log
         env:
@@ -27,7 +36,7 @@ jobs:
       - name: Post results to PR
         uses: actions/github-script@v6
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
             const { ACTOR, FORMAT, ISSUE_NUMBER, GITHUB_WORKSPACE } = process.env;
             const issue_number = parseInt(ISSUE_NUMBER, 10);
@@ -48,3 +57,118 @@ jobs:
           ACTOR: ${{ github.event.client_payload.actor }}
           ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
           FORMAT: ${{ github.event.client_payload.noms_bin_format }}
+      - name: Remove Passing Labels if regression detected
+        if: ${{ github.event.client_payload.correctness_info.is_regression == 'true' && github.event.client_payload.job_type == 'sql-correctness' }}
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
+          script: |
+            const { ACTOR, ISSUE_NUMBER, LABEL, GITHUB_WORKSPACE } = process.env;
+            const issue_number = parseInt(ISSUE_NUMBER, 10);
+            const { owner, repo } = context.repo;
+            try {
+                const res = await github.rest.issues.listLabelsOnIssue({
+                  issue_number,
+                  owner,
+                  repo,
+                });
+            
+                if (res.data) {
+                  const labels = res.data;
+            
+                  for (const label of labels) {
+                    if (label.name === LABEL) {
+                      await github.rest.issues.removeLabel({
+                        issue_number,
+                        owner,
+                        repo,
+                        name: label.name,
+                      });
+                    }
+                  }
+                }
+
+            } catch(e) {
+              console.error(e)
+            }
+        env:
+          ACTOR: ${{ github.event.client_payload.actor }}
+          ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
+          LABEL: 'correctness_approved'
+      - name: Add Passing Labels if no regression detected
+        if: ${{ github.event.client_payload.correctness_info.is_regression != 'true' && github.event.client_payload.job_type == 'sql-correctness' }}
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
+          script: |
+            const { ACTOR, ISSUE_NUMBER, LABEL, GITHUB_WORKSPACE } = process.env;
+            const issue_number = parseInt(ISSUE_NUMBER, 10);
+            const { owner, repo } = context.repo;
+            try {
+                const res = await github.rest.issues.listLabelsOnIssue({
+                  issue_number,
+                  owner,
+                  repo,
+                });
+            
+                if (res.data) {
+                  const labels = res.data;
+            
+                  for (const label of labels) {
+                    if (label.name === LABEL) {
+                      return;
+                    }
+                  }
+                  
+                  await github.rest.issues.addLabels({
+                    issue_number,
+                    owner,
+                    repo,
+                    labels: [LABEL],
+                  });
+                }
+
+            } catch(e) {
+              console.error(e)
+            }
+        env:
+          ACTOR: ${{ github.event.client_payload.actor }}
+          ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
+          LABEL: 'correctness_approved'
+
+  update-correctness-file:
+    name: Update Correctness File
+    needs: report-pull-request
+    runs-on: ubuntu-22.04
+    if: ${{ github.event.client_payload.correctness_info.is_regression != 'true' && github.event.client_payload.job_type == 'sql-correctness' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.client_payload.correctness_info.branch_ref }}
+          repository: ${{ github.repository }}
+          token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
+      - name: Write new correctness file
+        working-directory: ./.github/scripts/sql-correctness
+        env:
+          CORRECTNESS_PERCENTAGE: ${{ github.event.client_payload.correctness_info.correctness_percentage }}
+        run: |
+          if [ -z "$CORRECTNESS_PERCENTAGE" ]; then
+            echo "correctness percentage was empty, something went wrong"
+            exit 1
+          fi
+          echo "$CORRECTNESS_PERCENTAGE" > current_correctness.txt
+      - name: Changes detected
+        id: detect-changes
+        run: |
+          changes=$(git status --porcelain)
+          if [ ! -z "$changes" ]; then
+             echo "has-changes=true" >> $GITHUB_OUTPUT
+          fi
+      - uses: EndBug/add-and-commit@v9.1.1
+        if: ${{ steps.detect-changes.outputs.has-changes == 'true' }}
+        with:
+          message: ${{ format('[skip actions] [ga-update-correctness] SQL Correctness updated to {0}', github.event.client_payload.correctness_info.correctness_percentage) }}
+          add: "./current_correctness.txt"
+          cwd: "./.github/scripts/sql-correctness"
+          pull: "--ff"

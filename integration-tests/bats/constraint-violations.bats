@@ -176,7 +176,6 @@ SQL
     run dolt sql -q "SELECT * FROM dolt_constraint_violations_child" -r=csv
     log_status_eq "0"
     [[ "$output" =~ "violation_type,pk,v1,violation_info" ]] || false
-    echo $output
     [[ "$output" =~ 'foreign key,2,2,"{""Columns"": [""v1""], ""ForeignKey"": ""fk_name"", ""Index"": ""v1"", ""OnDelete"": ""RESTRICT"", ""OnUpdate"": ""RESTRICT"", ""ReferencedColumns"": [""v1""], ""ReferencedIndex"": ""v1"", ""ReferencedTable"": ""parent"", ""Table"": ""child""}"' ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
     run dolt sql -q "SELECT * FROM parent" -r=csv
@@ -2971,4 +2970,55 @@ SQL
 
     run dolt index ls
     [[ "$output" =~ "No indexes in the working set" ]] || false
+}
+
+@test "constraint-violations: keyless table constraint violations" {
+  dolt sql <<"SQL"
+CREATE TABLE aTable (aColumn INT NULL, bColumn INT NULL, UNIQUE INDEX aColumn_UNIQUE (aColumn ASC) VISIBLE, UNIQUE INDEX bColumn_UNIQUE (bColumn ASC) VISIBLE);
+
+CALL dolt_commit('-Am', 'add tables');
+CALL dolt_checkout('-b', 'side');
+INSERT INTO aTable VALUES (1,2);
+CALL dolt_commit('-am', 'add side data');
+
+CALL dolt_checkout('main');
+INSERT INTO aTable VALUES (1,3);
+CALL dolt_commit('-am', 'add main data');
+SET @@dolt_force_transaction_commit=1;
+CALL dolt_checkout('side');
+CALL DOLT_CHERRY_PICK(hashof('main'));
+SQL
+
+    # check the contents of our table
+    dolt checkout side
+    run dolt sql -q "SELECT * FROM aTable" -r=csv
+    log_status_eq "0"
+    [[ "$output" =~ "aColumn,bColumn" ]] || false
+    [[ "$output" =~ "1,2" ]] || false
+    [[ "$output" =~ "1,3" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+
+    # check the contents of the dolt constraint violation tables
+    run dolt sql -q "SELECT * from dolt_constraint_violations" -r=csv
+    log_status_eq "0"
+    [[ "$output" =~ "table,num_violations" ]] || false
+    [[ "$output" =~ "aTable,2" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+
+    run dolt sql -q "SELECT from_root_ish,violation_type,hex(dolt_row_hash) as dolt_row_hash,aColumn,bColumn,violation_info from dolt_constraint_violations_aTable" -r=csv
+    log_status_eq "0"
+    [[ "$output" =~ "from_root_ish,violation_type,dolt_row_hash,aColumn,bColumn,violation_info" ]] || false
+    [[ "$output" =~ ',unique index,5A1ED8633E1842FCA8EE529E4F1C5944,1,2,"{""Columns"": [""aColumn""], ""Name"": ""aColumn_UNIQUE""}"' ]] || false
+    [[ "$output" =~ ',unique index,A922BFBF4E5489501A3808BC5CD702C0,1,3,"{""Columns"": [""aColumn""], ""Name"": ""aColumn_UNIQUE""}"' ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+
+    # Fix the violations and clear out the constraint violations artifacts
+    dolt sql -q "SET @@dolt_force_transaction_commit=1; UPDATE aTable SET aColumn = 2 WHERE bColumn = 3;"
+    dolt sql -q "DELETE FROM dolt_constraint_violations_aTable;"
+
+    run dolt sql -q "SELECT count(*) as count from dolt_constraint_violations_aTable"
+    log_status_eq "0"
+    [[ "$output" =~ "| count |" ]] || false
+    [[ "$output" =~ "| 0     |" ]] || false
+    [[ "${#lines[@]}" = "5" ]] || false
 }

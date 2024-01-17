@@ -188,7 +188,7 @@ func FormatDsn(mConfig MysqlConfig) (string, error) {
 	if mConfig.Socket != "" {
 		socketPath = mConfig.Socket
 	} else {
-		socketPath = defaultSocket
+		socketPath = defaultMysqlSocket
 	}
 	if mConfig.ConnectionProtocol == tcpProtocol {
 		return fmt.Sprintf("root@tcp(%s:%d)/", mConfig.Host, mConfig.Port), nil

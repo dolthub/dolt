@@ -114,7 +114,7 @@ func (p prollyIndexIter) rowFromTuples(ctx context.Context, key, value val.Tuple
 
 	for i, idx := range p.keyMap {
 		outputIdx := p.ordMap[i]
-		r[outputIdx], err = GetField(ctx, keyDesc, idx, key, p.primary.NodeStore())
+		r[outputIdx], err = tree.GetField(ctx, keyDesc, idx, key, p.primary.NodeStore())
 		if err != nil {
 			return err
 		}
@@ -122,7 +122,7 @@ func (p prollyIndexIter) rowFromTuples(ctx context.Context, key, value val.Tuple
 
 	for i, idx := range p.valMap {
 		outputIdx := p.ordMap[len(p.keyMap)+i]
-		r[outputIdx], err = GetField(ctx, valDesc, idx, value, p.primary.NodeStore())
+		r[outputIdx], err = tree.GetField(ctx, valDesc, idx, value, p.primary.NodeStore())
 		if err != nil {
 			return err
 		}
@@ -229,7 +229,7 @@ func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 func (p prollyCoveringIndexIter) writeRowFromTuples(ctx context.Context, key, value val.Tuple, r sql.Row) (err error) {
 	for i, idx := range p.keyMap {
 		outputIdx := p.ordMap[i]
-		r[outputIdx], err = GetField(ctx, p.keyDesc, idx, key, p.ns)
+		r[outputIdx], err = tree.GetField(ctx, p.keyDesc, idx, key, p.ns)
 		if err != nil {
 			return err
 		}
@@ -237,7 +237,7 @@ func (p prollyCoveringIndexIter) writeRowFromTuples(ctx context.Context, key, va
 
 	for i, idx := range p.valMap {
 		outputIdx := p.ordMap[len(p.keyMap)+i]
-		r[outputIdx], err = GetField(ctx, p.valDesc, idx, value, p.ns)
+		r[outputIdx], err = tree.GetField(ctx, p.valDesc, idx, value, p.ns)
 		if err != nil {
 			return err
 		}
@@ -396,7 +396,7 @@ func (p prollyKeylessIndexIter) keylessRowsFromValueTuple(ctx context.Context, n
 
 	for i, idx := range p.valueMap {
 		outputIdx := p.ordMap[i]
-		rows[0][outputIdx], err = GetField(ctx, p.valueDesc, idx, value, ns)
+		rows[0][outputIdx], err = tree.GetField(ctx, p.valueDesc, idx, value, ns)
 		if err != nil {
 			return nil, err
 		}

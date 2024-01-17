@@ -34,6 +34,8 @@ import (
 
 var ErrNoConflictsResolved = errors.New("no conflicts resolved")
 
+const dolt_row_hash_tag = 0
+
 // IsValidTableName checks if name is a valid identifer, and doesn't end with space characters
 func IsValidTableName(name string) bool {
 	if len(name) == 0 || unicode.IsSpace(rune(name[len(name)-1])) {
@@ -354,18 +356,19 @@ func (t *Table) GetConstraintViolationsSchema(ctx context.Context) (schema.Schem
 
 	colColl := schema.NewColCollection()
 
-	if t.Format() == types.Format_DOLT {
-		// the commit hash or working set hash of the right side during merge
-		colColl = colColl.Append(schema.NewColumn("from_root_ish", 0, types.StringKind, false))
-		colColl = colColl.Append(typeCol)
-		colColl = colColl.Append(sch.GetPKCols().GetColumns()...)
-		colColl = colColl.Append(sch.GetNonPKCols().GetColumns()...)
-		colColl = colColl.Append(infoCol)
+	// the commit hash or working set hash of the right side during merge
+	colColl = colColl.Append(schema.NewColumn("from_root_ish", 0, types.StringKind, false))
+	colColl = colColl.Append(typeCol)
+	if schema.IsKeyless(sch) {
+		// If this is a keyless table, we need to add a new column for the keyless table's generated row hash.
+		// We need to add this internal row hash value, in order to guarantee a unique primary key in the
+		// constraint violations table.
+		colColl = colColl.Append(schema.NewColumn("dolt_row_hash", dolt_row_hash_tag, types.BlobKind, true))
 	} else {
-		colColl = colColl.Append(typeCol)
-		colColl = colColl.Append(sch.GetAllCols().GetColumns()...)
-		colColl = colColl.Append(infoCol)
+		colColl = colColl.Append(sch.GetPKCols().GetColumns()...)
 	}
+	colColl = colColl.Append(sch.GetNonPKCols().GetColumns()...)
+	colColl = colColl.Append(infoCol)
 
 	return schema.SchemaFromCols(colColl)
 }
@@ -668,6 +671,6 @@ func (t *Table) AddColumnToRows(ctx context.Context, newCol string, newSchema sc
 	return &Table{table: newTable}, nil
 }
 
-func (t *Table) DebugString(ctx context.Context) string {
-	return t.table.DebugString(ctx)
+func (t *Table) DebugString(ctx context.Context, ns tree.NodeStore) string {
+	return t.table.DebugString(ctx, ns)
 }

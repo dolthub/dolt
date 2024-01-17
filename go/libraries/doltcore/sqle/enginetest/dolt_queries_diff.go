@@ -5507,6 +5507,24 @@ var SystemTableIndexTests = []systabScript{
 		},
 	},
 	{
+		name: "required index lookup in join",
+		setup: append(systabSetup,
+			"set @tag_head = hashof('main^');",
+			"call dolt_tag('t1', concat(@tag_head, '^'));",
+		),
+		queries: []systabQuery{
+			{
+				query: `
+select /*+ HASH_JOIN(t,cd) */ distinct t.tag_name
+from dolt_tags t
+left join dolt_commit_diff_xy cd
+    on cd.to_commit = t.tag_name and
+       cd.from_commit = concat(t.tag_name, '^')`,
+				exp: []sql.Row{{"t1"}},
+			},
+		},
+	},
+	{
 		name: "commit indexing edge cases",
 		setup: append(systabSetup,
 			"call dolt_checkout('-b', 'feat');",

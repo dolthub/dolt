@@ -24,8 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -181,7 +181,7 @@ func TestBucketBuilder(t *testing.T) {
 			for _, k := range tt.keys {
 				for i, v := range k {
 					// |ns| only needed for out of band tuples
-					err := index.PutField(ctx, nil, kb, i, v)
+					err := tree.PutField(ctx, nil, kb, i, v)
 					assert.NoError(t, err)
 				}
 				b.add(kb.Build(pool))

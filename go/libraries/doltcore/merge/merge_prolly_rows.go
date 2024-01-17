@@ -25,6 +25,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/transform"
+	"github.com/dolthub/go-mysql-server/sql/types"
+	"golang.org/x/exp/maps"
 	errorkinds "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -1464,7 +1466,7 @@ func remapTupleWithColumnDefaults(
 				secondPass = append(secondPass, to)
 			}
 
-			value, err = index.GetField(ctx, valDesc, from, valueTuple, tm.ns)
+			value, err = tree.GetField(ctx, valDesc, from, valueTuple, tm.ns)
 			if err != nil {
 				return nil, err
 			}
@@ -1475,7 +1477,7 @@ func remapTupleWithColumnDefaults(
 				return nil, err
 			}
 
-			err = index.PutField(ctx, tm.ns, tb, to, value)
+			err = tree.PutField(ctx, tm.ns, tb, to, value)
 			if err != nil {
 				return nil, err
 			}
@@ -1525,7 +1527,7 @@ func writeTupleExpression(
 		return err
 	}
 
-	return index.PutField(ctx, tm.ns, tb, colIdx, value)
+	return tree.PutField(ctx, tm.ns, tb, colIdx, value)
 }
 
 // convertValueToNewType handles converting a value from a previous type into a new type. |value| is the value from
@@ -1691,7 +1693,7 @@ func findNonPKColumnMappingByTagOrName(sch schema.Schema, col schema.Column) int
 // tuples. It returns the merged cell value tuple and a bool indicating if a
 // conflict occurred. tryMerge should only be called if left and right produce
 // non-identical diffs against base.
-func (m *valueMerger) tryMerge(ctx context.Context, left, right, base val.Tuple) (val.Tuple, bool, error) {
+func (m *valueMerger) tryMerge(ctx *sql.Context, left, right, base val.Tuple) (val.Tuple, bool, error) {
 	// If we're merging a keyless table and the keys match, but the values are different,
 	// that means that the row data is the same, but the cardinality has changed, and if the
 	// cardinality has changed in different ways on each merge side, we can't auto resolve.
@@ -1825,7 +1827,7 @@ func (m *valueMerger) processBaseColumn(ctx context.Context, i int, left, right,
 
 // processColumn returns the merged value of column |i| of the merged schema,
 // based on the |left|, |right|, and |base| schema.
-func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, base val.Tuple) (result []byte, conflict bool, err error) {
+func (m *valueMerger) processColumn(ctx *sql.Context, i int, left, right, base val.Tuple) (result []byte, conflict bool, err error) {
 	// missing columns are coerced into NULL column values
 
 	var baseCol []byte
@@ -1839,6 +1841,8 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 	resultType := m.resultVD.Types[i]
 	resultColumn := m.resultSchema.GetNonPKCols().GetByIndex(i)
 	generatedColumn := resultColumn.Generated != ""
+
+	sqlType := m.resultSchema.GetNonPKCols().GetByIndex(i).TypeInfo.ToSqlType()
 
 	// We previously asserted that left and right are not nil.
 	// But base can be nil in the event of convergent inserts.
@@ -1947,11 +1951,115 @@ func (m *valueMerger) processColumn(ctx context.Context, i int, left, right, bas
 			return leftCol, false, nil
 		}
 		// concurrent modification
+		// if the result type is JSON, we can attempt to merge the JSON changes.
+		dontMergeJsonVar, err := ctx.Session.GetSessionVariable(ctx, "dolt_dont_merge_json")
+		if err != nil {
+			return nil, true, err
+		}
+		disallowJsonMerge, err := sql.ConvertToBool(ctx, dontMergeJsonVar)
+		if err != nil {
+			return nil, true, err
+		}
+		if _, ok := sqlType.(types.JsonType); ok && !disallowJsonMerge {
+			return m.mergeJSONAddr(ctx, baseCol, leftCol, rightCol)
+		}
+		// otherwise, this is a conflict.
 		return nil, true, nil
 	case leftModified:
 		return leftCol, false, nil
 	default:
 		return rightCol, false, nil
+	}
+}
+
+func (m *valueMerger) mergeJSONAddr(ctx context.Context, baseAddr []byte, leftAddr []byte, rightAddr []byte) (resultAddr []byte, conflict bool, err error) {
+	baseDoc, err := tree.NewJSONDoc(hash.New(baseAddr), m.ns).ToJSONDocument(ctx)
+	if err != nil {
+		return nil, true, err
+	}
+	leftDoc, err := tree.NewJSONDoc(hash.New(leftAddr), m.ns).ToJSONDocument(ctx)
+	if err != nil {
+		return nil, true, err
+	}
+	rightDoc, err := tree.NewJSONDoc(hash.New(rightAddr), m.ns).ToJSONDocument(ctx)
+	if err != nil {
+		return nil, true, err
+	}
+
+	mergedDoc, conflict, err := mergeJSON(baseDoc, leftDoc, rightDoc)
+	if err != nil {
+		return nil, true, err
+	}
+	if conflict {
+		return nil, true, nil
+	}
+
+	mergedBytes, err := json.Marshal(mergedDoc.ToInterface())
+	if err != nil {
+		return nil, true, err
+	}
+	mergedAddr, err := tree.SerializeBytesToAddr(ctx, m.ns, bytes.NewReader(mergedBytes), len(mergedBytes))
+	if err != nil {
+		return nil, true, err
+	}
+	return mergedAddr[:], false, nil
+
+}
+
+func mergeJSON(base types.JSONDocument, left types.JSONDocument, right types.JSONDocument) (resultDoc types.JSONDocument, conflict bool, err error) {
+	// First, deserialize each value into JSON.
+	// We can only merge if the value at all three commits is a JSON object.
+
+	baseObject, baseIsObject := base.Val.(types.JsonObject)
+	leftObject, leftIsObject := left.Val.(types.JsonObject)
+	rightObject, rightIsObject := right.Val.(types.JsonObject)
+
+	if !baseIsObject || !leftIsObject || !rightIsObject {
+		// At least one of the commits does not have a JSON object.
+		// If both left and right have the same value, use that value.
+		// But if they differ, this is an unresolvable merge conflict.
+		cmp, err := left.Compare(right)
+		if err != nil {
+			return types.JSONDocument{}, true, err
+		}
+		if cmp == 0 {
+			//convergent operation.
+			return left, false, nil
+		} else {
+			return types.JSONDocument{}, true, nil
+		}
+	}
+
+	mergedObject := maps.Clone(leftObject)
+	merged := types.JSONDocument{Val: mergedObject}
+
+	threeWayDiffer := NewThreeWayJsonDiffer(baseObject, leftObject, rightObject)
+
+	// Compute the merged object by applying diffs to the left object as needed.
+	for {
+		threeWayDiff, err := threeWayDiffer.Next()
+		if err == io.EOF {
+			return merged, false, nil
+		}
+
+		switch threeWayDiff.Op {
+		case tree.DiffOpRightAdd, tree.DiffOpConvergentAdd, tree.DiffOpRightModify, tree.DiffOpConvergentModify:
+			_, _, err := merged.Set(threeWayDiff.Key, threeWayDiff.Right)
+			if err != nil {
+				return types.JSONDocument{}, true, err
+			}
+		case tree.DiffOpRightDelete, tree.DiffOpConvergentDelete:
+			_, _, err := merged.Remove(threeWayDiff.Key)
+			if err != nil {
+				return types.JSONDocument{}, true, err
+			}
+		case tree.DiffOpLeftAdd, tree.DiffOpLeftModify, tree.DiffOpLeftDelete:
+			// these changes already exist on the left, so do nothing.
+		case tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict:
+			return types.JSONDocument{}, true, nil
+		default:
+			panic("unreachable")
+		}
 	}
 }
 
@@ -1976,7 +2084,7 @@ func convert(ctx context.Context, fromDesc, toDesc val.TupleDesc, toSchema schem
 		// No conversion is necessary here.
 		return originalValue, nil
 	}
-	parsedCell, err := index.GetField(ctx, fromDesc, fromIndex, tuple, ns)
+	parsedCell, err := tree.GetField(ctx, fromDesc, fromIndex, tuple, ns)
 	if err != nil {
 		return nil, err
 	}
@@ -1989,5 +2097,5 @@ func convert(ctx context.Context, fromDesc, toDesc val.TupleDesc, toSchema schem
 	// If a merge results in assigning NULL to a non-null column, don't panic.
 	// Instead we validate the merged tuple before merging it into the table.
 	typ.Nullable = true
-	return index.Serialize(ctx, ns, typ, convertedCell)
+	return tree.Serialize(ctx, ns, typ, convertedCell)
 }

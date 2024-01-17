@@ -2,18 +2,20 @@
 
 set -e
 
-if [ "$#" -lt 6 ]; then
-    echo  "Usage: ./get-dolt-correctness-job-json.sh <jobname> <fromVersion> <toVersion> <timeprefix> <actorprefix> <format> <nomsBinFormat>"
+if [ "$#" -lt 5 ]; then
+    echo  "Usage: ./get-dolt-correctness-job-json.sh <jobname> <version> <timeprefix> <actorprefix> <format> <nomsBinFormat> <issueNumber> <regressComp> <branchRef>"
     exit 1
 fi
 
 jobname="$1"
-fromVersion="$2"
-toVersion="$3"
-timeprefix="$4"
-actorprefix="$5"
-format="$6"
-nomsBinFormat="$7"
+version="$2"
+timeprefix="$3"
+actorprefix="$4"
+format="$5"
+nomsBinFormat="$6"
+issueNumber="$7"
+regressComp="$8"
+branchRef="$9"
 
 precision="6"
 
@@ -21,8 +23,19 @@ if [ -n "$nomsBinFormat" ]; then
   nomsBinFormat="\"--noms-bin-format=$nomsBinFormat\","
 fi
 
-resultCountQuery="select result, count(*) as total from results where result != 'skipped' group by result;"
-testCountQuery="select count(*) as total_tests from results where result != 'skipped';"
+if [ -n "$issueNumber" ]; then
+  issueNumber="\"--issue-number=$issueNumber\","
+fi
+
+regressPrec=""
+if [ -n "$regressComp" ]; then
+  regressComp="\"--regress-compare=$regressComp\","
+  regressPrec="\"--regress-precision=$precision\","
+  branchRef="\"--branch=$branchRef\","
+fi
+
+resultCountQuery="select version, result, count(*) as total from results where result != 'skipped' group by result;"
+testCountQuery="select version, count(*) as total_tests from results where result != 'skipped';"
 correctnessQuery="select ROUND(100.0 * (cast(ok_results.total as decimal) / (cast(all_results.total as decimal) + .000001)), $precision) as correctness_percentage from (select count(*) as total from results where result = 'ok') as ok_results join (select count(*) as total from results where result != 'skipped') as all_results"
 
 echo '
@@ -50,6 +63,11 @@ echo '
           {
             "name": "sql-correctness",
             "image": "407903926827.dkr.ecr.us-west-2.amazonaws.com/liquidata/sql-correctness:latest",
+            "resources": {
+              "limits": {
+                "cpu": "7000m"
+              }
+            },
             "env": [
               { "name": "REPO_ACCESS_TOKEN", "value": "'$REPO_ACCESS_TOKEN'"},
               { "name": "ACTOR", "value": "'$ACTOR'"},
@@ -58,9 +76,14 @@ echo '
             ],
             "args": [
               "--schema=/correctness.sql",
+              "--concurrent",
               "--output='$format'",
-              "--version='$toVersion'",
+              "--version='$version'",
               '"$nomsBinFormat"'
+              '"$issueNumber"'
+              '"$regressComp"'
+              '"$regressPrec"'
+              '"$branchRef"'
               "--bucket=sql-correctness-github-actions-results",
               "--region=us-west-2",
               "--results-dir='$timeprefix'",
@@ -71,7 +94,18 @@ echo '
             ]
           }
         ],
-        "restartPolicy": "Never"
+        "restartPolicy": "Never",
+        "nodeSelector": {
+          "sql-correctness-worker": "true"
+        },
+        "tolerations": [
+          {
+              "effect": "NoSchedule",
+              "key": "dedicated",
+              "operator": "Equal",
+              "value": "sql-correctness-worker"
+          }
+        ]
       }
     }
   }

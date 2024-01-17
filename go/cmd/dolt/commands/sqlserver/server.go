@@ -43,6 +43,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -399,19 +400,21 @@ func ConfigureServices(
 			}
 
 			listenaddr := fmt.Sprintf(":%d", port)
-			args, err := sqle.RemoteSrvServerArgs(sqlEngine.NewDefaultContext, remotesrv.ServerArgs{
-				Logger:         logrus.NewEntry(lgr),
-				ReadOnly:       apiReadOnly || serverConfig.ReadOnly(),
-				HttpListenAddr: listenaddr,
-				GrpcListenAddr: listenaddr,
-			})
+			args := remotesrv.ServerArgs{
+				Logger:             logrus.NewEntry(lgr),
+				ReadOnly:           apiReadOnly || serverConfig.ReadOnly(),
+				HttpListenAddr:     listenaddr,
+				GrpcListenAddr:     listenaddr,
+				ConcurrencyControl: remotesapi.PushConcurrencyControl_PUSH_CONCURRENCY_CONTROL_ASSERT_WORKING_SET,
+			}
+			var err error
+			args.FS, args.DBCache, err = sqle.RemoteSrvFSAndDBCache(sqlEngine.NewDefaultContext, sqle.DoNotCreateUnknownDatabases)
 			if err != nil {
 				lgr.Errorf("error creating SQL engine context for remotesapi server: %v", err)
 				return err
 			}
 
-			ctxFactory := func() (*sql.Context, error) { return sqlEngine.NewDefaultContext(ctx) }
-			authenticator := newAccessController(ctxFactory, sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb)
+			authenticator := newAccessController(sqlEngine.NewDefaultContext, sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb)
 			args = sqle.WithUserPasswordAuth(args, authenticator)
 			args.TLSConfig = serverConf.TLSConfig
 
@@ -675,11 +678,11 @@ func persistServerLocalCreds(port int, dEnv *env.DoltEnv) (*LocalCreds, error) {
 type remotesapiAuth struct {
 	// ctxFactory is a function that returns a new sql.Context. This will create a new conext every time it is called,
 	// so it should be called once per API request.
-	ctxFactory func() (*sql.Context, error)
+	ctxFactory func(context.Context) (*sql.Context, error)
 	rawDb      *mysql_db.MySQLDb
 }
 
-func newAccessController(ctxFactory func() (*sql.Context, error), rawDb *mysql_db.MySQLDb) remotesrv.AccessControl {
+func newAccessController(ctxFactory func(context.Context) (*sql.Context, error), rawDb *mysql_db.MySQLDb) remotesrv.AccessControl {
 	return &remotesapiAuth{ctxFactory, rawDb}
 }
 
@@ -704,7 +707,7 @@ func (r *remotesapiAuth) ApiAuthenticate(ctx context.Context) (context.Context, 
 		}
 	}
 
-	sqlCtx, err := r.ctxFactory()
+	sqlCtx, err := r.ctxFactory(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("API Runtime error: %v", err)
 	}

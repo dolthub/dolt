@@ -84,6 +84,44 @@ stop_remotesrv() {
     [[ "$output" =~ "5" ]] || false
 }
 
+@test "remotesrv: can write to remotesrv when repo has a dirty working set" {
+    mkdir remote
+    cd remote
+    dolt init
+    dolt sql -q 'create table vals (i int);'
+    dolt add vals
+    dolt commit -m 'create vals table.'
+    dolt sql -q 'insert into vals values (38320)' # Dirty the remote.
+
+    remotesrv --http-port 1234 --repo-mode &
+    remotesrv_pid=$!
+
+    cd ../
+    dolt clone http://localhost:50051/test-org/test-repo repo1
+    cd repo1
+    dolt sql -q 'insert into vals values (9778), (12433);'
+    dolt commit -am 'insert two unique values'
+    dolt push origin main:main
+
+    stop_remotesrv
+    cd ../remote
+
+    # HEAD has the pushed value.
+    run dolt show
+    [[ "$status" -eq 0 ]] || false
+    [[ "$output" =~ "insert two unique values" ]] || false
+
+    # and that working set is still dirty (won't include HEAD values)
+    run dolt diff
+    [[ "$status" -eq 0 ]] || false
+    [[ "$output" =~ "+ | 38320" ]] || false
+
+    run dolt diff --cached
+    [[ "$status" -eq 0 ]] || false
+    [[ "$output" =~ "- | 9778" ]] || false
+    [[ "$output" =~ "- | 12433" ]] || false
+}
+
 @test "remotesrv: read only server rejects writes" {
     mkdir remote
     cd remote

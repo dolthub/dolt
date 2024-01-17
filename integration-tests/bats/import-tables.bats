@@ -19,9 +19,6 @@ teardown() {
 
 @test "import-tables: error if multiple operations are provided" {
     run dolt table import -c -u -r t test.csv
-
-    echo "$output"
-
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Must specify exactly one of -c, -u, -a, or -r." ]] || false
 }

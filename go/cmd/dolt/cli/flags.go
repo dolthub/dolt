@@ -48,6 +48,7 @@ const (
 	NoFFParam            = "no-ff"
 	NoPrettyFlag         = "no-pretty"
 	NoTLSFlag            = "no-tls"
+	NoJsonMergeFlag      = "dont-merge-json"
 	NotFlag              = "not"
 	NumberFlag           = "number"
 	OneLineFlag          = "oneline"

@@ -157,6 +157,8 @@ func typeString(value types.Value) string {
 			typeString = "ProllyTreeNode"
 		case serial.AddressMapFileID:
 			typeString = "AddressMap"
+		case serial.CommitClosureFileID:
+			typeString = "CommitClosure"
 		default:
 			t, err := types.TypeOf(value)
 			util.CheckErrorNoUsage(err)
@@ -200,7 +202,7 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) err
 			}
 			fmt.Fprintf(w, "\tPrimary Index (rows %d, depth %d) #%s {",
 				c, node.Level()+1, node.HashOf().String())
-			tree.OutputProllyNode(w, node)
+			tree.OutputProllyNodeBytes(w, node)
 			fmt.Fprintf(w, "\t}\n")
 
 			// secondary indexes
@@ -249,13 +251,11 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) err
 		case serial.ProllyTreeNodeFileID:
 			fallthrough
 		case serial.AddressMapFileID:
-			fallthrough
-		case serial.CommitClosureFileID:
 			node, err := shim.NodeFromValue(value)
 			if err != nil {
 				return err
 			}
-			return tree.OutputProllyNode(w, node)
+			return tree.OutputProllyNodeBytes(w, node)
 		default:
 			return types.WriteEncodedValue(ctx, w, value)
 		}

@@ -17,6 +17,7 @@ package types
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"strings"
@@ -195,6 +196,40 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 		b.Write([]byte(strings.Repeat("\t", level)))
 		b.Write([]byte("}"))
 		return b.String()
+	case serial.CommitClosureFileID:
+		msg, _ := serial.TryGetRootAsCommitClosure(sm, serial.MessagePrefixSz)
+
+		ret := &strings.Builder{}
+		printWithIndendationLevel(level, ret, "{\n")
+		level += 1
+
+		printWithIndendationLevel(level, ret, "SubTree {\n")
+		level += 1
+		addresses := msg.AddressArrayBytes()
+		for i := 0; i < len(addresses)/hash.ByteLen; i++ {
+			addr := hash.New(addresses[i*hash.ByteLen : (i+1)*hash.ByteLen])
+			printWithIndendationLevel(level, ret, "#%s\n", addr.String())
+		}
+		level -= 1
+		printWithIndendationLevel(level, ret, "}\n")
+
+		printWithIndendationLevel(level, ret, "Commits {\n")
+		level += 1
+		if msg.TreeLevel() == 0 {
+			// If Level() == 0, we're at the leaf level, so print the key items.
+			keybytes := msg.KeyItemsBytes()
+			// Magic numbers: 8 bytes (uint64) for height, 20 bytes (hash.ByteLen) for address
+			for i := 0; i < len(keybytes); i += 28 {
+				height := binary.LittleEndian.Uint64(keybytes[i : i+8])
+				addr := hash.New(keybytes[(i + 8) : (i+8)+hash.ByteLen])
+				printWithIndendationLevel(level, ret, "#%s (height: %d)\n", addr.String(), height)
+			}
+		}
+		level -= 1
+		printWithIndendationLevel(level, ret, "} \n")
+		level -= 1
+		printWithIndendationLevel(level, ret, "}\n")
+		return ret.String()
 	default:
 		return fmt.Sprintf("SerialMessage (HumanReadableString not implemented), [%v]: %s", id, strings.ToUpper(hex.EncodeToString(sm)))
 	}

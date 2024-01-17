@@ -360,7 +360,7 @@ var BasicInsertTests = []InsertTest{
 		SelectQuery: "select id, first_name, last_name, is_married, age, rating from people where id = 7 ORDER BY id",
 		ExpectedRows: ToSqlRows(
 			CompressSchema(SubsetSchema(PeopleTestSchema, "id", "first_name", "last_name", "is_married", "age", "rating")),
-			NewResultSetRow(types.Int(7), types.String("true"), types.String("Simpson" /*"West"*/), types.Int(0), types.Int(1), types.Float(5.1)),
+			NewResultSetRow(types.Int(7), types.String("1"), types.String("Simpson" /*"West"*/), types.Int(0), types.Int(1), types.Float(5.1)),
 		),
 		ExpectedSchema: CompressSchema(SubsetSchema(PeopleTestSchema, "id", "first_name", "last_name", "is_married", "age", "rating")),
 	},

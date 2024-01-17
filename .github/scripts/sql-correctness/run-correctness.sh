@@ -17,15 +17,9 @@ if [ -z "$NOMS_BIN_FORMAT" ]; then
     exit 1
 fi
 
-if [ -z "$FROM_VERSION" ] && [ -z "$TO_VERSION" ]; then
-    echo  "Must set FROM_VERSION or TO_VERSION for correctness run"
-    echo  "Must set both for regressions run"
+if [ -z "$VERSION" ]; then
+    echo  "Must set VERSION for correctness run"
     exit 1
-fi
-
-if  [ ! -z "$FROM_VERSION" ] && [ -z "$TO_VERSION" ]; then
-  echo "Setting TO_VERSION for correctness run"
-  TO_VERSION="$FROM_VERSION"
 fi
 
 if [ -z "$ACTOR" ]; then
@@ -38,9 +32,20 @@ if [ -z "$MODE" ]; then
     exit 1
 fi
 
-# use first 8 characters of TO_VERSION to differentiate
+if [ -n "$PR_NUMBER" ]; then
+  if [ -z "$REGRESS_COMP" ]; then
+    echo "Must set REGRESS_COMP for PR correctness comparisons"
+    exit 1
+  fi
+  if [ -z "$PR_BRANCH_REF" ]; then
+    echo "Must set PR_BRANCH_REF for PR correctness comparisons"
+    exit 1
+  fi
+fi
+
+# use first 8 characters of VERSION to differentiate
 # jobs
-short=${TO_VERSION:0:8}
+short=${VERSION:0:8}
 lowered=$(echo "$ACTOR" | tr '[:upper:]' '[:lower:]')
 actorShort="$lowered-$short"
 
@@ -49,7 +54,12 @@ sleep 0.$[ ( $RANDOM % 10 )  + 1 ]s
 
 timesuffix=`date +%s%N`
 
-jobname="$actorShort-$timesuffix"
+jobname=""
+if [ -n "$PR_NUMBER" ]; then
+  jobname="$lowered-$PR_NUMBER"
+else
+  jobname="$actorShort-$timesuffix"
+fi
 
 timeprefix=$(date +%Y/%m/%d)
 
@@ -60,15 +70,27 @@ if [[ "$MODE" = "release" || "$MODE" = "nightly" ]]; then
   format="html"
 fi
 
+# set value to PR_NUMBER environment variable
+# or default to -1
+issuenumber=${PR_NUMBER:-"-1"}
+
 source \
   "$TEMPLATE_SCRIPT" \
   "$jobname" \
-  "$FROM_VERSION" \
-  "$TO_VERSION" \
+  "$VERSION" \
   "$timeprefix" \
   "$actorprefix" \
   "$format" \
-  "$NOMS_BIN_FORMAT" > job.json
+  "$NOMS_BIN_FORMAT" \
+  "$issuenumber" \
+  "$REGRESS_COMP" \
+  "$PR_BRANCH_REF" > job.json
+
+# delete existing job with same name if this is a pr job
+if [ -n "$PR_NUMBER" ]; then
+  out=$(KUBECONFIG="$KUBECONFIG" kubectl delete job/"$jobname" -n sql-correctness || true)
+  echo "Delete pr job if exists: $out"
+fi
 
 out=$(KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json || true)
 

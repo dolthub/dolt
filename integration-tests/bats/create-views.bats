@@ -130,8 +130,8 @@ SQL
 @test "create-views: join two views" {
     run dolt sql <<SQL
 create view four as select 2+2 as res from dual;
-create view now as select now() from dual;
-select * from four, now;
+create view curr as select now() from dual;
+select * from four, curr;
 SQL
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]

@@ -1147,7 +1147,7 @@ func (root *RootValue) DebugString(ctx context.Context, transitive bool) string 
 			buf.WriteString(name)
 			buf.WriteString(":\n")
 
-			buf.WriteString(table.DebugString(ctx))
+			buf.WriteString(table.DebugString(ctx, root.ns))
 
 			return false, nil
 		})

@@ -1479,3 +1479,10 @@ DELIM
     [ $status -eq 0 ]
     [[ "$output" = "$expected" ]] || false
 }
+
+@test "import-update-tables: can't use --all-text with -u" {
+    dolt sql < 1pk5col-ints-sch.sql
+    run dolt table import -u --all-text test `batshelper 1pk5col-ints.csv`
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "fatal: --all-text is only supported for create operations" ]] || false
+}

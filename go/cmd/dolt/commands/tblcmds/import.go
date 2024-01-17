@@ -20,6 +20,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -42,6 +43,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -68,6 +70,7 @@ const (
 	quiet             = "quiet"
 	ignoreSkippedRows = "ignore-skipped-rows" // alias for quiet
 	disableFkChecks   = "disable-fk-checks"
+	allTextParam      = "all-text"
 )
 
 var jsonInputFileHelp = "The expected JSON input file format is:" + `
@@ -88,7 +91,7 @@ var importDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Imports data into a dolt table`,
 	LongDesc: `If {{.EmphasisLeft}}--create-table | -c{{.EmphasisRight}} is given the operation will create {{.LessThan}}table{{.GreaterThan}} and import the contents of file into it.  If a table already exists at this location then the operation will fail, unless the {{.EmphasisLeft}}--force | -f{{.EmphasisRight}} flag is provided. The force flag forces the existing table to be overwritten.
 
-The schema for the new table can be specified explicitly by providing a SQL schema definition file, or will be inferred from the imported file.  All schemas, inferred or explicitly defined must define a primary key.  If the file format being imported does not support defining a primary key, then the {{.EmphasisLeft}}--pk{{.EmphasisRight}} parameter must supply the name of the field that should be used as the primary key.
+The schema for the new table can be specified explicitly by providing a SQL schema definition file, or will be inferred from the imported file.  All schemas, inferred or explicitly defined must define a primary key.  If the file format being imported does not support defining a primary key, then the {{.EmphasisLeft}}--pk{{.EmphasisRight}} parameter must supply the name of the field that should be used as the primary key. If no primary key is explicitly defined, the first column in the import file will be used as the primary key.
 
 If {{.EmphasisLeft}}--update-table | -u{{.EmphasisRight}} is given the operation will update {{.LessThan}}table{{.GreaterThan}} with the contents of file. The table's existing schema will be used, and field names will be used to match file fields with table fields unless a mapping file is specified.
 
@@ -109,7 +112,7 @@ During import, if there is an error importing any row, the import will be aborte
 In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not have the expected extension then the {{.EmphasisLeft}}--file-type{{.EmphasisRight}} parameter should be used to explicitly define the format of the file in one of the supported formats (csv, psv, json, xlsx).  For files separated by a delimiter other than a ',' (type csv) or a '|' (type psv), the --delim parameter can be used to specify a delimiter`,
 
 	Synopsis: []string{
-		"-c [-f] [--pk {{.LessThan}}field{{.GreaterThan}}] [--schema {{.LessThan}}file{{.GreaterThan}}] [--map {{.LessThan}}file{{.GreaterThan}}] [--continue]  [--quiet] [--disable-fk-checks] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
+		"-c [-f] [--pk {{.LessThan}}field{{.GreaterThan}}] [--all-text] [--schema {{.LessThan}}file{{.GreaterThan}}] [--map {{.LessThan}}file{{.GreaterThan}}] [--continue]  [--quiet] [--disable-fk-checks] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 		"-u [--map {{.LessThan}}file{{.GreaterThan}}] [--continue] [--quiet] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 		"-a [--map {{.LessThan}}file{{.GreaterThan}}] [--continue] [--quiet] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 		"-r [--map {{.LessThan}}file{{.GreaterThan}}] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
@@ -130,6 +133,7 @@ type importOptions struct {
 	srcOptions      interface{}
 	quiet           bool
 	disableFkChecks bool
+	allText         bool
 }
 
 func (m importOptions) IsBatched() bool {
@@ -193,6 +197,7 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 	contOnErr := apr.Contains(contOnErrParam)
 	quiet := apr.Contains(quiet)
 	disableFks := apr.Contains(disableFkChecks)
+	allText := apr.Contains(allTextParam)
 
 	val, _ := apr.GetValue(primaryKeyParam)
 	pks := funcitr.MapStrings(strings.Split(val, ","), strings.TrimSpace)
@@ -274,6 +279,7 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 		srcOptions:      srcOpts,
 		quiet:           quiet,
 		disableFkChecks: disableFks,
+		allText:         allText,
 	}, nil
 
 }
@@ -297,6 +303,14 @@ func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
 
 	if apr.Contains(schemaParam) && !apr.Contains(createParam) {
 		return errhand.BuildDError("fatal: " + schemaParam + " is not supported for update or replace operations").Build()
+	}
+
+	if apr.Contains(allTextParam) && !apr.Contains(createParam) {
+		return errhand.BuildDError("fatal: --%s is only supported for create operations", allTextParam).Build()
+	}
+
+	if apr.ContainsAll(allTextParam, schemaParam) {
+		return errhand.BuildDError("parameters %s and %s are mutually exclusive", allTextParam, schemaParam).Build()
 	}
 
 	tableName := apr.Arg(0)
@@ -364,8 +378,8 @@ func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(createParam, "c", "Create a new table, or overwrite an existing table (with the -f flag) from the imported data.")
 	ap.SupportsFlag(updateParam, "u", "Update an existing table with the imported data.")
 	ap.SupportsFlag(appendParam, "a", "Require that the operation will not modify any rows in the table.")
-	ap.SupportsFlag(forceParam, "f", "If a create operation is being executed, data already exists in the destination, the force flag will allow the target to be overwritten.")
 	ap.SupportsFlag(replaceParam, "r", "Replace existing table with imported data while preserving the original schema.")
+	ap.SupportsFlag(forceParam, "f", "If a create operation is being executed, data already exists in the destination, the force flag will allow the target to be overwritten.")
 	ap.SupportsFlag(contOnErrParam, "", "Continue importing when row import errors are encountered.")
 	ap.SupportsFlag(quiet, "", "Suppress any warning messages about invalid rows when using the --continue flag.")
 	ap.SupportsAlias(ignoreSkippedRows, quiet)
@@ -375,6 +389,7 @@ func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(primaryKeyParam, "pk", "primary_key", "Explicitly define the name of the field in the schema which should be used as the primary key.")
 	ap.SupportsString(fileTypeParam, "", "file_type", "Explicitly define the type of the file if it can't be inferred from the file extension.")
 	ap.SupportsString(delimParam, "", "delimiter", "Specify a delimiter for a csv style file with a non-comma delimiter.")
+	ap.SupportsFlag(allTextParam, "", "Treats all fields as text. Can only be used when creating a table.")
 	return ap
 }
 
@@ -699,6 +714,14 @@ func getImportSchema(ctx context.Context, dEnv *env.DoltEnv, impOpts *importOpti
 		}
 		defer rd.Close(ctx)
 
+		if impOpts.allText {
+			outSch, err := generateAllTextSchema(rd, impOpts)
+			if err != nil {
+				return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
+			}
+			return outSch, nil
+		}
+
 		if impOpts.srcIsJson() {
 			return rd.GetSchema(), nil
 		}
@@ -724,6 +747,35 @@ func getImportSchema(ctx context.Context, dEnv *env.DoltEnv, impOpts *importOpti
 	defer tblRd.Close(ctx)
 
 	return tblRd.GetSchema(), nil
+}
+
+// generateAllTextSchema returns a schema where each column has a text type. Primary key columns will have type
+// varchar(16383) because text type is not supported for priamry keys.
+func generateAllTextSchema(rd table.ReadCloser, impOpts *importOptions) (schema.Schema, error) {
+	var cols []schema.Column
+	err := rd.GetSchema().GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		var colType typeinfo.TypeInfo
+		if slices.Contains(impOpts.primaryKeys, col.Name) || (len(impOpts.primaryKeys) == 0 && len(cols) == 0) {
+			// text type is not supported for primary keys, pk is either explicitly set or is the first column
+			colType = typeinfo.StringDefaultType
+		} else {
+			colType = typeinfo.TextType
+		}
+
+		col.Kind = colType.NomsKind()
+		col.TypeInfo = colType
+		col.Name = impOpts.ColNameMapper().Map(col.Name)
+		col.Tag = schema.ReservedTagMin + tag
+		// we don't check the file so can't safely add not null constraint
+		col.Constraints = []schema.ColConstraint(nil)
+
+		cols = append(cols, col)
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return schema.SchemaFromCols(schema.NewColCollection(cols...))
 }
 
 func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationError) errhand.VerboseError {

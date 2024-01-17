@@ -187,3 +187,21 @@ type GenerationalCS interface {
 var ErrUnsupportedOperation = errors.New("operation not supported")
 
 var ErrGCGenerationExpired = errors.New("garbage collection generation expired")
+
+type PushConcurrencyControl int8
+
+const (
+	PushConcurrencyControl_IgnoreWorkingSet = iota
+	PushConcurrencyControl_AssertWorkingSet = iota
+)
+
+type ConcurrencyControlChunkStore interface {
+	PushConcurrencyControl() PushConcurrencyControl
+}
+
+func GetPushConcurrencyControl(cs ChunkStore) PushConcurrencyControl {
+	if cs, ok := cs.(ConcurrencyControlChunkStore); ok {
+		return cs.PushConcurrencyControl()
+	}
+	return PushConcurrencyControl_IgnoreWorkingSet
+}

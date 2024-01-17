@@ -797,7 +797,7 @@ func TestJoinOps(t *testing.T) {
 
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestJoinOps(t, h)
+	enginetest.TestJoinOps(t, h, enginetest.DefaultJoinOpTests)
 }
 
 func TestJoinPlanning(t *testing.T) {
@@ -2964,6 +2964,7 @@ func TestThreeWayMergeWithSchemaChangeScripts(t *testing.T) {
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsConstraints, "constraint changes", false)
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsSchemaConflicts, "schema conflicts", false)
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsGeneratedColumns, "generated columns", false)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsForJsonConflicts, "json merge", false)
 
 	// Run non-symmetric schema merge tests in just one direction
 	t.Run("type changes", func(t *testing.T) {
@@ -2986,6 +2987,7 @@ func TestThreeWayMergeWithSchemaChangeScriptsPrepared(t *testing.T) {
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsConstraints, "constraint changes", true)
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsSchemaConflicts, "schema conflicts", true)
 	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsGeneratedColumns, "generated columns", true)
+	runMergeScriptTestsInBothDirections(t, SchemaChangeTestsForJsonConflicts, "json merge", true)
 
 	// Run non-symmetric schema merge tests in just one direction
 	t.Run("type changes", func(t *testing.T) {

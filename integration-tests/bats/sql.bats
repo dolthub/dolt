@@ -2567,7 +2567,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "3" ]] || false
 
-    run dolt sql -q "SELECT COUNT(*) from dolt_diff_t where to_commit_date < UTC_TIMESTAMP()"
+    run dolt sql -q "SELECT COUNT(*) from dolt_diff_t where to_commit_date < UTC_TIMESTAMP(6)"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "3" ]] || false
 }
@@ -2898,4 +2898,13 @@ SQL
 
     mkdir .dolt
     dolt sql -q "select 1"
+}
+
+@test "sql: handle importing files with bom headers" {
+    dolt sql < $BATS_TEST_DIRNAME/helper/with_utf8_bom.sql
+    dolt table rm t1
+    dolt sql < $BATS_TEST_DIRNAME/helper/with_utf16le_bom.sql
+    dolt table rm t1
+    dolt sql < $BATS_TEST_DIRNAME/helper/with_utf16be_bom.sql
+    dolt table rm t1
 }

@@ -1,0 +1,50 @@
+#!/usr/bin/expect
+
+set timeout 5
+spawn dolt sql
+
+expect {
+    -re "> " { send "create database mydb;\r"; }
+    timeout { exit 1; }
+    failed { exit 1; }
+}
+expect {
+    -re "> " { send "use mydb;\r"; }
+    timeout { exit 1; }
+    failed { exit 1; }
+}
+expect {
+    -re ".*mydb.*/.*main.*> " { send "create table tbl (i int);\r"; }
+    timeout { exit 1; }
+    failed { exit 1; }
+}
+
+# Dirty workspace should show in prompt as a "*" before the ">"
+# (all the .* instances here are to account for ansi colors chars.
+expect {
+    -re ".*mydb.*/.*main.*\\*.*> " { send "call dolt_commit('-Am', 'msg');\r"; }
+    timeout { exit 1; }
+    failed { exit 1; }
+}
+
+expect {
+    -re ".*mydb.*/.*main.*> " { send "call dolt_checkout('-b','other','HEAD');\r"; }
+    timeout { exit 1; }
+    failed { exit 1; }
+}
+
+expect {
+    -re ".*mydb.*/.*main.*> " { send "use mysql;\r"; }
+    timeout { exit 1; }
+    failed { exit 1; }
+}
+
+# using a non dolt db should result in a prompt without a slash. The brackets
+# are required to get expect to properly parse this regex.
+expect {
+    -re {.*mysql[^\\/]*> } { send "exit;\r"; }
+    timeout { exit 1; }
+    failed { exit 1; }
+}
+
+expect eof

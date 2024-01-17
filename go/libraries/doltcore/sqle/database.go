@@ -1705,7 +1705,7 @@ func (db Database) LoadRebasePlan(ctx *sql.Context) (*rebase.RebasePlan, error) 
 
 // SaveRebasePlan implements the rebase.RebasePlanDatabase interface
 func (db Database) SaveRebasePlan(ctx *sql.Context, plan *rebase.RebasePlan) error {
-	pkSchema := sql.NewPrimaryKeySchema(dprocedures.DoltRebaseSystemTableSchema, 2)
+	pkSchema := sql.NewPrimaryKeySchema(dprocedures.DoltRebaseSystemTableSchema)
 	// we use createSqlTable, instead of CreateTable to avoid the "dolt_" reserved prefix table name check
 	err := db.createSqlTable(ctx, doltdb.RebaseTableName, pkSchema, sql.Collation_Default)
 	if err != nil {

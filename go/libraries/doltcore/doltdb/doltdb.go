@@ -601,12 +601,17 @@ func (ddb *DoltDB) FastForwardWithWorkspaceCheck(ctx context.Context, branch ref
 		return err
 	}
 
-	wsRef, err := ref.WorkingSetRefForHead(branch)
-	if err != nil {
-		return err
+	ws := ""
+	pushConcurrencyControl := chunks.GetPushConcurrencyControl(datas.ChunkStoreFromDatabase(ddb.db))
+	if pushConcurrencyControl == chunks.PushConcurrencyControl_AssertWorkingSet {
+		wsRef, err := ref.WorkingSetRefForHead(branch)
+		if err != nil {
+			return err
+		}
+		ws = wsRef.String()
 	}
 
-	_, err = ddb.db.FastForward(ctx, ds, addr, wsRef.String())
+	_, err = ddb.db.FastForward(ctx, ds, addr, ws)
 
 	return err
 }

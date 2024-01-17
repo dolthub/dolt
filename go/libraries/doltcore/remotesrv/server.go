@@ -63,16 +63,14 @@ type ServerArgs struct {
 	ReadOnly bool
 	Options  []grpc.ServerOption
 
+	ConcurrencyControl remotesapi.PushConcurrencyControl
+
 	HttpInterceptor func(http.Handler) http.Handler
 
 	// If supplied, the listener(s) returned from Listeners() will be TLS
 	// listeners. The scheme used in the URLs returned from the gRPC server
 	// will be https.
 	TLSConfig *tls.Config
-
-	// In the cluster context, we want to create the databases automatically when pushed to. Other contexts we want to
-	// error when the user pushes to a database that doesn't exist.
-	CreateUnknownDatabases bool
 }
 
 func NewServer(args ServerArgs) (*Server, error) {
@@ -97,7 +95,7 @@ func NewServer(args ServerArgs) (*Server, error) {
 	s.wg.Add(2)
 	s.grpcListenAddr = args.GrpcListenAddr
 	s.grpcSrv = grpc.NewServer(append([]grpc.ServerOption{grpc.MaxRecvMsgSize(128 * 1024 * 1024)}, args.Options...)...)
-	var chnkSt remotesapi.ChunkStoreServiceServer = NewHttpFSBackedChunkStore(args.Logger, args.HttpHost, args.DBCache, args.FS, scheme, sealer)
+	var chnkSt remotesapi.ChunkStoreServiceServer = NewHttpFSBackedChunkStore(args.Logger, args.HttpHost, args.DBCache, args.FS, scheme, args.ConcurrencyControl, sealer)
 	if args.ReadOnly {
 		chnkSt = ReadOnlyChunkStore{chnkSt}
 	}

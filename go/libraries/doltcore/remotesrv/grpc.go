@@ -47,6 +47,8 @@ type RemoteChunkStore struct {
 	HttpHost   string
 	httpScheme string
 
+	concurrencyControl remotesapi.PushConcurrencyControl
+
 	csCache DBCache
 	bucket  string
 	fs      filesys.Filesys
@@ -55,13 +57,17 @@ type RemoteChunkStore struct {
 	remotesapi.UnimplementedChunkStoreServiceServer
 }
 
-func NewHttpFSBackedChunkStore(lgr *logrus.Entry, httpHost string, csCache DBCache, fs filesys.Filesys, scheme string, sealer Sealer) *RemoteChunkStore {
+func NewHttpFSBackedChunkStore(lgr *logrus.Entry, httpHost string, csCache DBCache, fs filesys.Filesys, scheme string, concurrencyControl remotesapi.PushConcurrencyControl, sealer Sealer) *RemoteChunkStore {
+	if concurrencyControl == remotesapi.PushConcurrencyControl_PUSH_CONCURRENCY_CONTROL_UNSPECIFIED {
+		concurrencyControl = remotesapi.PushConcurrencyControl_PUSH_CONCURRENCY_CONTROL_IGNORE_WORKING_SET
+	}
 	return &RemoteChunkStore{
-		HttpHost:   httpHost,
-		httpScheme: scheme,
-		csCache:    csCache,
-		bucket:     "",
-		fs:         fs,
+		HttpHost:           httpHost,
+		httpScheme:         scheme,
+		concurrencyControl: concurrencyControl,
+		csCache:            csCache,
+		bucket:             "",
+		fs:                 fs,
 		lgr: lgr.WithFields(logrus.Fields{
 			"service": "dolt.services.remotesapi.v1alpha1.ChunkStoreServiceServer",
 		}),
@@ -521,9 +527,10 @@ func (rs *RemoteChunkStore) GetRepoMetadata(ctx context.Context, req *remotesapi
 	}
 
 	return &remotesapi.GetRepoMetadataResponse{
-		NbfVersion:  cs.Version(),
-		NbsVersion:  req.ClientRepoFormat.NbsVersion,
-		StorageSize: size,
+		NbfVersion:             cs.Version(),
+		NbsVersion:             req.ClientRepoFormat.NbsVersion,
+		StorageSize:            size,
+		PushConcurrencyControl: rs.concurrencyControl,
 	}, nil
 }
 

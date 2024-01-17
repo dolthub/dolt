@@ -121,7 +121,7 @@ func (c *TpccBenchmarkConfig) validateServerConfigs() error {
 			return err
 		}
 
-		err = sysbench_runner.CheckExec(s)
+		err = sysbench_runner.CheckExec(s.ServerExec, "server exec")
 		if err != nil {
 			return err
 		}

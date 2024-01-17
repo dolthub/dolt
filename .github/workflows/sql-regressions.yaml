@@ -1,0 +1,56 @@
+name: Benchmark SQL Correctness on PR
+
+on:
+  pull_request:
+    paths:
+      - 'go/**'
+    branches: [ main ]
+
+jobs:
+  set-version-actor:
+    name: Set Version and Actor
+    runs-on: ubuntu-22.04
+    outputs:
+      regress_comp: ${{ steps.regress-comp.outputs.regress_comp }}
+      version: ${{ steps.set-vars.outputs.version }}
+      actor: ${{ steps.set-vars.outputs.actor }}
+    steps:
+      - name: Checkout BASE REF
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.base_ref }}
+      - name: Get Current Correctness
+        id: regress-comp
+        working-directory: ./.github/scripts/sql-correctness
+        run: |
+          out=$(cat current_correctness.txt)
+          echo "regress_comp=$out" >> $GITHUB_OUTPUT
+      - name: Checkout PR HEAD REF
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.head_ref }}
+      - name: Set variables
+        id: set-vars
+        run: |
+          echo "actor=$ACTOR" >> $GITHUB_OUTPUT
+          sha=$(git rev-parse --short HEAD)
+          echo "version=$sha" >> $GITHUB_OUTPUT
+        env:
+          ACTOR: ${{ github.event.client_payload.actor || github.actor }}
+
+  correctness:
+    runs-on: ubuntu-22.04
+    needs: set-version-actor
+    name: Trigger SQL Correctness K8s Workflow
+    steps:
+      - name: Get pull number
+        uses: actions/github-script@v6
+        id: get_pull_number
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: core.setOutput("pull_number", JSON.stringify(context.issue.number));
+      - uses: peter-evans/repository-dispatch@v2.0.0
+        with:
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          event-type: sql-correctness
+          client-payload: '{"issue_number": "${{ steps.get_pull_number.outputs.pull_number }}", "branch_ref": "${{ github.head_ref }}", "regress_comp": "${{ needs.set-version-actor.outputs.regress_comp }}", "version": "${{ needs.set-version-actor.outputs.version }}", "mode": "release", "actor": "${{ needs.set-version-actor.outputs.actor }}", "actor_email": "${{ needs.set-version-actor.outputs.actor_email }}", "template_script": "./.github/scripts/sql-correctness/get-dolt-correctness-job-json.sh"}'

@@ -15,7 +15,7 @@ require (
 	github.com/dolthub/fslock v0.0.3
 	github.com/dolthub/ishell v0.0.0-20221214210346-d7db0b066488
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
-	github.com/dolthub/vitess v0.0.0-20231220170902-3729729e89b1
+	github.com/dolthub/vitess v0.0.0-20240110233415-e46007d964c0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/fatih/color v1.13.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
@@ -57,7 +57,7 @@ require (
 	github.com/cespare/xxhash v1.1.0
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.17.1-0.20240102214603-370a08737bbb
+	github.com/dolthub/go-mysql-server v0.17.1-0.20240116235625-e7e445f8a22f
 	github.com/dolthub/swiss v0.1.0
 	github.com/goccy/go-json v0.10.2
 	github.com/google/go-github/v57 v57.0.0
@@ -128,6 +128,7 @@ require (
 	github.com/klauspost/compress v1.10.5 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
 	github.com/lestrrat-go/strftime v1.0.4 // indirect
+	github.com/lib/pq v1.10.9 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
