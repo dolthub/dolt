@@ -28,6 +28,9 @@ jobs:
           is_regression=${{ github.event.client_payload.correctness_info.is_regression == 'true' }}
           echo "is_regression is true: $is_regression"
           
+          is_regression_bool=${{ github.event.client_payload.correctness_info.is_regression == true }}
+          echo "is_regression is true as bool: $is_regression_bool"
+          
           is_correctness=${{ github.event.client_payload.job_type == 'sql-correctness' }}
           echo "job_type is sql-correctness: $is_correctness"
           
