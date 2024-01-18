@@ -174,12 +174,12 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 		// dolt_merge procedure returns the fast-forward status as the column index 1. Not sure if there is an appropriate
 		// place to define this magic number.
-		fastFws := getFastforward(row, 1)
+		fastFwd := getFastforward(row, 1)
 
 		if apr.Contains(cli.NoCommitFlag) {
-			return printMergeStats(fastFws, apr, queryist, sqlCtx, usage, headHash, mergeHash, "HEAD", "STAGED")
+			return printMergeStats(fastFwd, apr, queryist, sqlCtx, usage, headHash, mergeHash, "HEAD", "STAGED")
 		}
-		return printMergeStats(fastFws, apr, queryist, sqlCtx, usage, headHash, mergeHash, "HEAD^1", "HEAD")
+		return printMergeStats(fastFwd, apr, queryist, sqlCtx, usage, headHash, mergeHash, "HEAD^1", "HEAD")
 	}
 
 	return 0
