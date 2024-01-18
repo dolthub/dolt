@@ -24,11 +24,20 @@ jobs:
           echo "correctness info: correctness_percentage: $CORRECTNESS_PERCENTAGE"
           echo "correctness info: branch_ref: $BRANCH_REF"
           echo "job_type: $JOB_TYPE"
+          
+          is_regression=${{ github.event.client_payload.correctness_info.is_regression == 'true' }}
+          echo "is_regression is true: $is_regression"
+          
+          is_correctness=${{ github.event.client_payload.job_type == 'sql-correctness' }}
+          echo "job_type is sql-correctness: $is_correctness"
+          
+          echo "is correctness regression: $CORRECTNESS_REGRESSION"
         env:
           IS_REGRESSION: ${{ github.event.client_payload.correctness_info.is_regression }}
           CORRECTNESS_PERCENTAGE: ${{ github.event.client_payload.correctness_info.correctness_percentage }}
           BRANCH_REF: ${{ github.event.client_payload.correctness_info.branch_ref }}
           JOB_TYPE: ${{ github.event.client_payload.job_type }}
+          CORRECTNESS_REGRESSION: ${{ github.event.client_payload.correctness_info.is_regression == 'true' && github.event.client_payload.job_type == 'sql-correctness' }}
       - name: Get benchmark/correctness results
         id: get-results
         run: aws s3api get-object --bucket="$BUCKET" --key="$KEY" results.log
