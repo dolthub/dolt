@@ -146,7 +146,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			return
 		}
 		if len(rows) != 1 {
-			err = fmt.Errorf("Runtime error: merge operation returned unexpected number of rows: ", len(rows))
+			err = fmt.Errorf("Runtime error: merge operation returned unexpected number of rows: %d", len(rows))
 			errChan <- err
 			return
 		}
