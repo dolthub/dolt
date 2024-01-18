@@ -48,6 +48,10 @@ const (
 	fastForwardMerge = 1
 )
 
+// For callers of dolt_merge(), the index of the FastForward column is needed to print results. If the schema of
+// the result changes, this will need to be updated.
+const MergeProcFFIndex = 1
+
 var ErrUncommittedChanges = goerrors.NewKind("cannot merge with uncommitted changes")
 
 var doltMergeSchema = []*sql.Column{

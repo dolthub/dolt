@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 	"github.com/gocraft/dbr/v2"
@@ -172,9 +173,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			cli.Println(mergeHashErr.Error())
 		}
 
-		// dolt_merge procedure returns the fast-forward status as the column index 1. Not sure if there is an appropriate
-		// place to define this magic number.
-		fastFwd := getFastforward(row, 1)
+		fastFwd := getFastforward(row, dprocedures.MergeProcFFIndex)
 
 		if apr.Contains(cli.NoCommitFlag) {
 			return printMergeStats(fastFwd, apr, queryist, sqlCtx, usage, headHash, mergeHash, "HEAD", "STAGED")

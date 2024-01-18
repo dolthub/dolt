@@ -34,6 +34,10 @@ import (
 	"github.com/dolthub/dolt/go/store/datas/pull"
 )
 
+// For callers of dolt_pull(), the index of the FastForward column is needed to print results. If the schema of
+// the result changes, this will need to be updated.
+const PullProcFFIndex = 0
+
 var doltPullSchema = []*sql.Column{
 	{
 		Name:     "fast_forward",

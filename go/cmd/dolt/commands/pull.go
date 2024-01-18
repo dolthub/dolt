@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
@@ -177,9 +178,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 				})
 			}
 		} else {
-			// dolt_pull procedure returns the fast-forward status as the column index 0. Not sure if there is an appropriate
-			// place to define this magic number.
-			fastFwd := getFastforward(row, 0)
+			fastFwd := getFastforward(row, dprocedures.PullProcFFIndex)
 
 			var success int
 			if apr.Contains(cli.NoCommitFlag) {
