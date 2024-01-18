@@ -153,6 +153,12 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return 0
 	}
 
+	if len(rows) != 1 {
+		cli.Println("Runtime error: merge operation returned unexpected number of rows: ", len(rows))
+		return 1
+	}
+	row := rows[0]
+
 	if !apr.Contains(cli.AbortParam) {
 		//todo: refs with the `remotes/` prefix will fail to get a hash
 		headHash, headHashErr := getHashOf(queryist, sqlCtx, "HEAD")
@@ -165,10 +171,15 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			cli.Println("merge finished, but failed to get hash of merge ref")
 			cli.Println(mergeHashErr.Error())
 		}
+
+		// dolt_merge procedure returns the fast-forward status as the column index 1. Not sure if there is an appropriate
+		// place to define this magic number.
+		fastFws := getFastforward(row, 1)
+
 		if apr.Contains(cli.NoCommitFlag) {
-			return printMergeStats(rows, apr, queryist, sqlCtx, usage, headHash, mergeHash, "HEAD", "STAGED")
+			return printMergeStats(fastFws, apr, queryist, sqlCtx, usage, headHash, mergeHash, "HEAD", "STAGED")
 		}
-		return printMergeStats(rows, apr, queryist, sqlCtx, usage, headHash, mergeHash, "HEAD^1", "HEAD")
+		return printMergeStats(fastFws, apr, queryist, sqlCtx, usage, headHash, mergeHash, "HEAD^1", "HEAD")
 	}
 
 	return 0
@@ -311,21 +322,16 @@ func constructInterpolatedDoltMergeQuery(apr *argparser.ArgParseResults, cliCtx 
 }
 
 // printMergeStats calculates and prints all merge stats and information.
-func printMergeStats(result []sql.Row, apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context, usage cli.UsagePrinter, headHash, mergeHash, fromRef, toRef string) int {
-	// dolt_merge returns hash, fast_forward, conflicts and dolt_pull returns fast_forward, conflicts
-	fastForward := false
-	if result != nil && len(result) > 0 {
-		ffIndex := 0
-		if len(result[0]) == 3 {
-			ffIndex = 1
-		}
-		if ff, ok := result[0][ffIndex].(int64); ok {
-			fastForward = ff == 1
-		} else if ff, ok := result[0][ffIndex].(string); ok {
-			// remote execution returns result as a string
-			fastForward = ff == "1"
-		}
-	}
+func printMergeStats(fastForward bool,
+	apr *argparser.ArgParseResults,
+	queryist cli.Queryist,
+	sqlCtx *sql.Context,
+	usage cli.UsagePrinter,
+	headHash string,
+	mergeHash string,
+	fromRef string,
+	toRef string) int {
+
 	if fastForward {
 		cli.Println("Fast-forward")
 	}

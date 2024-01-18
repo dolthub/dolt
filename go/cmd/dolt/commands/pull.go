@@ -145,6 +145,12 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			errChan <- err
 			return
 		}
+		if len(rows) != 1 {
+			err = fmt.Errorf("Runtime error: merge operation returned unexpected number of rows: ", len(rows))
+			errChan <- err
+			return
+		}
+		row := rows[0]
 
 		remoteHash, remoteRef, err := getRemoteHashForPull(apr, sqlCtx, queryist)
 		if err != nil {
@@ -171,11 +177,15 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 				})
 			}
 		} else {
+			// dolt_pull procedure returns the fast-forward status as the column index 0. Not sure if there is an appropriate
+			// place to define this magic number.
+			fastFwd := getFastforward(row, 0)
+
 			var success int
 			if apr.Contains(cli.NoCommitFlag) {
-				success = printMergeStats(rows, apr, queryist, sqlCtx, usage, headHash, remoteHash, "HEAD", "STAGED")
+				success = printMergeStats(fastFwd, apr, queryist, sqlCtx, usage, headHash, remoteHash, "HEAD", "STAGED")
 			} else {
-				success = printMergeStats(rows, apr, queryist, sqlCtx, usage, headHash, remoteHash, "HEAD", remoteRef)
+				success = printMergeStats(fastFwd, apr, queryist, sqlCtx, usage, headHash, remoteHash, "HEAD", remoteRef)
 			}
 			if success == 1 {
 				errChan <- errors.New(" ") //return a non-nil error for the correct exit code but no further messages to print
