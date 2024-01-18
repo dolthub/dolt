@@ -52,8 +52,11 @@ const (
 	// WorkspaceRefType is a reference to a workspace
 	WorkspaceRefType RefType = "workspaces"
 
-	// StashRefType is a reference to a stashes
+	// StashRefType is a reference to a stash list
 	StashRefType RefType = "stashes"
+
+	// StatsRefType is a reference to a statistics table
+	StatsRefType RefType = "statistics"
 )
 
 // HeadRefTypes are the ref types that point to a HEAD and contain a Commit struct. These are the types that are
@@ -69,6 +72,11 @@ var HeadRefTypes = map[RefType]struct{}{
 
 var StashRefTypes = map[RefType]struct{}{
 	StashRefType: {},
+}
+
+// StatsRefTypes point to a table address hash, not a commit hash.
+var StatsRefTypes = map[RefType]struct{}{
+	StatsRefType: {},
 }
 
 // PrefixForType returns what a reference string for a given type should start with
@@ -191,6 +199,10 @@ func Parse(str string) (DoltRef, error) {
 				panic("unknown type " + rType)
 			}
 		}
+	}
+
+	if prefix := PrefixForType(StatsRefType); strings.HasPrefix(str, prefix) {
+		return NewStashRef(), nil
 	}
 
 	return nil, ErrUnknownRefType

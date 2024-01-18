@@ -16,7 +16,16 @@ package enginetest
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/stats"
+	"github.com/dolthub/dolt/go/store/hash"
+	gms "github.com/dolthub/go-mysql-server"
+	"github.com/dolthub/go-mysql-server/enginetest"
+	"github.com/stretchr/testify/require"
 	"strings"
+	"testing"
 
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -26,7 +35,7 @@ import (
 // fillerVarchar pushes the tree into level 3
 var fillerVarchar = strings.Repeat("x", 500)
 
-var DoltStatsTests = []queries.ScriptTest{
+var DoltHistogramTests = []queries.ScriptTest{
 	{
 		Name: "mcv checking",
 		SetUpScript: []string{
@@ -42,16 +51,18 @@ var DoltStatsTests = []queries.ScriptTest{
 						float64(1),
 						float64(4),
 						float64(1),
+						float64(0),
 					}}},
 				},
 			},
 			{
-				Query: " SELECT mcv from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(mcv JSON path '$.mcvs')) as dt  where table_name = 'xy' and column_name = 'y,z'",
+				Query: " SELECT mcv from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(mcv JSON path '$.mcvs[*]')) as dt  where table_name = 'xy' and column_name = 'y,z'",
 				Expected: []sql.Row{
 					{types.JSONDocument{Val: []interface{}{
 						[]interface{}{float64(1), "a"},
 						[]interface{}{float64(0), "a"},
 						[]interface{}{float64(2), "a"},
+						[]interface{}{},
 					}}},
 				},
 			},
@@ -63,8 +74,6 @@ var DoltStatsTests = []queries.ScriptTest{
 			},
 		},
 	},
-	// test MCV
-	// test bound count
 	{
 		Name: "int pk",
 		SetUpScript: []string{
@@ -292,4 +301,189 @@ var DoltStatsTests = []queries.ScriptTest{
 			},
 		},
 	},
+}
+
+var DoltStatsIOTests = []queries.ScriptTest{
+	{
+		Name: "single-table",
+		SetUpScript: []string{
+			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
+			"insert into xy values (0,0,'a'), (1,0,'a'), (2,0,'a'), (3,0,'a'), (4,1,'a'), (5,2,'a')",
+			"analyze table xy",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select `database`, `table`, `index`, commit_hash, columns, types from dolt_statistics",
+				Expected: []sql.Row{
+					{"mydb", "xy", "PRIMARY", hash.Parse("f6la1u3ku5pucfctgrca2afq9vlr4nrs"), []string{"x"}, []string{"bigint"}},
+					{"mydb", "xy", "yz", hash.Parse("9ec31007jaqtahij0tmlmd7j9t9hl1he"), []string{"y", "z"}, []string{"int", "varchar(500)"}},
+				},
+			},
+			{
+				Query:    fmt.Sprintf("select %s, %s, %s from dolt_statistics", schema.StatsRowCountColName, schema.StatsDistinctCountColName, schema.StatsNullCountColName),
+				Expected: []sql.Row{{uint64(6), uint64(6), uint64(0)}, {uint64(6), uint64(3), uint64(0)}},
+			},
+			{
+				Query: fmt.Sprintf("select %s, %s from dolt_statistics", schema.StatsUpperBoundColName, schema.StatsUpperBoundCntColName),
+				Expected: []sql.Row{
+					{sql.Row{int64(5)}, uint64(1)},
+					{sql.Row{int32(2), "a"}, uint64(1)},
+				},
+			},
+			{
+				Query: fmt.Sprintf("select %s, %s, %s, %s, %s from dolt_statistics", schema.StatsMcv1ColName, schema.StatsMcv2ColName, schema.StatsMcv3ColName, schema.StatsMcv4ColName, schema.StatsMcvCountsColName),
+				Expected: []sql.Row{
+					{sql.Row{int64(5)}, sql.Row{int64(1)}, sql.Row{int64(2)}, (sql.Row)(nil), []uint64{1, 1, 1, 0}},
+					{sql.Row{int32(1), "a"}, sql.Row{int32(0), "a"}, sql.Row{int32(2), "a"}, (sql.Row)(nil), []uint64{1, 4, 1, 0}},
+				},
+			},
+		},
+	},
+	{
+		Name: "multi-table",
+		SetUpScript: []string{
+			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
+			"insert into xy values (0,0,'a'), (1,0,'a'), (2,0,'a'), (3,0,'a'), (4,1,'a'), (5,2,'a')",
+			"CREATE table ab (a bigint primary key, b int, c int, key(b,c));",
+			"insert into ab values (0,0,1), (1,0,1), (2,0,1), (3,0,1), (4,1,1), (5,2,1)",
+			"analyze table xy",
+			"analyze table ab",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select `database`, `table`, `index`, commit_hash, columns, types  from dolt_statistics where `table` = 'xy'",
+				Expected: []sql.Row{
+					{"mydb", "xy", "PRIMARY", hash.Parse("f6la1u3ku5pucfctgrca2afq9vlr4nrs"), []string{"x"}, []string{"bigint"}},
+					{"mydb", "xy", "yz", hash.Parse("9ec31007jaqtahij0tmlmd7j9t9hl1he"), []string{"y", "z"}, []string{"int", "varchar(500)"}},
+				},
+			},
+			{
+				Query:    fmt.Sprintf("select %s, %s, %s from dolt_statistics where `table` = 'xy'", schema.StatsRowCountColName, schema.StatsDistinctCountColName, schema.StatsNullCountColName),
+				Expected: []sql.Row{{uint64(6), uint64(6), uint64(0)}, {uint64(6), uint64(3), uint64(0)}},
+			},
+			{
+				Query: "select `table`, `index` from dolt_statistics",
+				Expected: []sql.Row{
+					{"ab", "PRIMARY"},
+					{"ab", "bc"},
+					{"xy", "PRIMARY"},
+					{"xy", "yz"},
+				},
+			},
+			{
+				Query: "select `database`, `table`, `index`, commit_hash, columns, types  from dolt_statistics where `table` = 'ab'",
+				Expected: []sql.Row{
+					{"mydb", "ab", "PRIMARY", hash.Parse("t6j206v6b9t8vnmhpcc2i57lom8kejk3"), []string{"a"}, []string{"bigint"}},
+					{"mydb", "ab", "bc", hash.Parse("sibnr73868rb5dqa76opfn4pkelhhqna"), []string{"b", "c"}, []string{"int", "int"}},
+				},
+			},
+			{
+				Query:    fmt.Sprintf("select %s, %s, %s from dolt_statistics where `table` = 'ab'", schema.StatsRowCountColName, schema.StatsDistinctCountColName, schema.StatsNullCountColName),
+				Expected: []sql.Row{{uint64(6), uint64(6), uint64(0)}, {uint64(6), uint64(3), uint64(0)}},
+			},
+		},
+	},
+}
+
+// TestProviderReloadScriptWithEngine runs the test script given with the engine provided.
+func TestProviderReloadScriptWithEngine(t *testing.T, e enginetest.QueryEngine, harness enginetest.Harness, script queries.ScriptTest) {
+	ctx := enginetest.NewContext(harness)
+	err := enginetest.CreateNewConnectionForServerEngine(ctx, e)
+	require.NoError(t, err, nil)
+
+	t.Run(script.Name, func(t *testing.T) {
+		for _, statement := range script.SetUpScript {
+			if sh, ok := harness.(enginetest.SkippingHarness); ok {
+				if sh.SkipQueryTest(statement) {
+					t.Skip()
+				}
+			}
+			ctx = ctx.WithQuery(statement)
+			enginetest.RunQueryWithContext(t, e, harness, ctx, statement)
+		}
+
+		assertions := script.Assertions
+		if len(assertions) == 0 {
+			assertions = []queries.ScriptTestAssertion{
+				{
+					Query:           script.Query,
+					Expected:        script.Expected,
+					ExpectedErr:     script.ExpectedErr,
+					ExpectedIndexes: script.ExpectedIndexes,
+				},
+			}
+		}
+
+		{
+			// reload provider, get disk stats
+			eng, ok := e.(*gms.Engine)
+			if !ok {
+				t.Errorf("expected *gms.Engine but found: %T", e)
+			}
+
+			dbProv, ok := eng.Analyzer.Catalog.DbProvider.(*sqle.DoltDatabaseProvider)
+			if !ok {
+				t.Errorf("expected *sqle.DoltDatabaseProvider but found: %T", eng.Analyzer.Catalog.DbProvider)
+			}
+			var doltdbs []*doltdb.DoltDB
+			var dbNames []string
+			for _, db := range dbProv.DoltDatabases() {
+				ddbs := db.DoltDatabases()
+				if len(ddbs) > 0 {
+					dbNames = append(dbNames, strings.ToLower(db.Name()))
+					doltdbs = append(doltdbs, ddbs[0])
+				}
+			}
+
+			newProv := stats.NewProvider()
+			err := newProv.Load(ctx, dbNames, doltdbs)
+			require.NoError(t, err)
+
+			eng.Analyzer.Catalog.StatsProvider = newProv
+		}
+
+		for _, assertion := range assertions {
+			t.Run(assertion.Query, func(t *testing.T) {
+				if assertion.NewSession {
+					th, ok := harness.(enginetest.TransactionHarness)
+					require.True(t, ok, "ScriptTestAssertion requested a NewSession, "+
+						"but harness doesn't implement TransactionHarness")
+					ctx = th.NewSession()
+				}
+
+				if sh, ok := harness.(enginetest.SkippingHarness); ok && sh.SkipQueryTest(assertion.Query) {
+					t.Skip()
+				}
+				if assertion.Skip {
+					t.Skip()
+				}
+
+				if assertion.ExpectedErr != nil {
+					enginetest.AssertErr(t, e, harness, assertion.Query, assertion.ExpectedErr)
+				} else if assertion.ExpectedErrStr != "" {
+					enginetest.AssertErrWithCtx(t, e, harness, ctx, assertion.Query, nil, assertion.ExpectedErrStr)
+				} else if assertion.ExpectedWarning != 0 {
+					enginetest.AssertWarningAndTestQuery(t, e, nil, harness, assertion.Query,
+						assertion.Expected, nil, assertion.ExpectedWarning, assertion.ExpectedWarningsCount,
+						assertion.ExpectedWarningMessageSubstring, assertion.SkipResultsCheck)
+				} else if assertion.SkipResultsCheck {
+					enginetest.RunQueryWithContext(t, e, harness, nil, assertion.Query)
+				} else if assertion.CheckIndexedAccess {
+					enginetest.TestQueryWithIndexCheck(t, ctx, e, harness, assertion.Query, assertion.Expected, assertion.ExpectedColumns, assertion.Bindings)
+				} else {
+					var expected = assertion.Expected
+					if enginetest.IsServerEngine(e) && assertion.SkipResultCheckOnServerEngine {
+						// TODO: remove this check in the future
+						expected = nil
+					}
+					enginetest.TestQueryWithContext(t, ctx, e, harness, assertion.Query, expected, assertion.ExpectedColumns, assertion.Bindings)
+				}
+			})
+		}
+	})
+}
+
+func mustNewStatQual(s string) sql.StatQualifier {
+	qual, _ := sql.NewQualifierFromString(s)
+	return qual
 }

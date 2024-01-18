@@ -34,6 +34,7 @@ fi
   stash.fbs \
   stashlist.fbs \
   storeroot.fbs \
+  stat.fbs \
   table.fbs \
   tag.fbs \
   workingset.fbs

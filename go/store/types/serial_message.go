@@ -277,6 +277,13 @@ func (sm SerialMessage) WalkAddrs(nbf *NomsBinFormat, cb func(addr hash.Hash) er
 			mapbytes := msg.AddressMapBytes()
 			return SerialMessage(mapbytes).WalkAddrs(nbf, cb)
 		}
+	case serial.StatisticFileID:
+		var msg serial.Statistic
+		err := serial.InitStatisticRoot(&msg, []byte(sm), serial.MessagePrefixSz)
+		if err != nil {
+			return err
+		}
+		return cb(hash.New(msg.RootBytes()))
 	case serial.StashFileID:
 		var msg serial.Stash
 		err := serial.InitStashRoot(&msg, []byte(sm), serial.MessagePrefixSz)

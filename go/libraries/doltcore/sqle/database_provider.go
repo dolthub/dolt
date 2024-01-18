@@ -49,6 +49,7 @@ type DoltDatabaseProvider struct {
 	dbLocations        map[string]filesys.Filesys
 	databases          map[string]dsess.SqlDatabase
 	functions          map[string]sql.Function
+	tableFunctions     map[string]sql.TableFunction
 	externalProcedures sql.ExternalStoredProcedureRegistry
 	InitDatabaseHook   InitDatabaseHook
 	DropDatabaseHook   DropDatabaseHook
@@ -62,6 +63,16 @@ type DoltDatabaseProvider struct {
 
 	dbFactoryUrl string
 	isStandby    *bool
+}
+
+func (p *DoltDatabaseProvider) WithTableFunctions(fns ...sql.TableFunction) (sql.TableFunctionProvider, error) {
+	funcs := make(map[string]sql.TableFunction)
+	for _, fn := range fns {
+		funcs[strings.ToLower(fn.Name())] = fn
+	}
+	cp := *p
+	cp.tableFunctions = funcs
+	return &cp, nil
 }
 
 var _ sql.DatabaseProvider = (*DoltDatabaseProvider)(nil)
@@ -1222,6 +1233,10 @@ func (p *DoltDatabaseProvider) TableFunction(_ *sql.Context, name string) (sql.T
 		return &ReflogTableFunction{}, nil
 	case "dolt_query_diff":
 		return &QueryDiffTableFunction{}, nil
+	}
+
+	if fun, ok := p.tableFunctions[name]; ok {
+		return fun, nil
 	}
 
 	return nil, sql.ErrTableFunctionNotFound.New(name)
