@@ -29,28 +29,28 @@ import (
 const DoltMergeBaseFuncName = "dolt_merge_base"
 
 type MergeBase struct {
-	expression.BinaryExpression
+	expression.BinaryExpressionStub
 }
 
 // NewMergeBase returns a MergeBase sql function.
 func NewMergeBase(left, right sql.Expression) sql.Expression {
-	return &MergeBase{expression.BinaryExpression{Left: left, Right: right}}
+	return &MergeBase{expression.BinaryExpressionStub{LeftChild: left, RightChild: right}}
 }
 
 // Eval implements the sql.Expression interface.
 func (d MergeBase) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
-	if _, ok := d.Left.Type().(sql.StringType); !ok {
-		return nil, sql.ErrInvalidType.New(d.Left.Type())
+	if _, ok := d.Left().Type().(sql.StringType); !ok {
+		return nil, sql.ErrInvalidType.New(d.Left().Type())
 	}
-	if _, ok := d.Right.Type().(sql.StringType); !ok {
-		return nil, sql.ErrInvalidType.New(d.Right.Type())
+	if _, ok := d.Right().Type().(sql.StringType); !ok {
+		return nil, sql.ErrInvalidType.New(d.Right().Type())
 	}
 
-	leftSpec, err := d.Left.Eval(ctx, row)
+	leftSpec, err := d.Left().Eval(ctx, row)
 	if err != nil {
 		return nil, err
 	}
-	rightSpec, err := d.Right.Eval(ctx, row)
+	rightSpec, err := d.Right().Eval(ctx, row)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func resolveRefSpecs(ctx *sql.Context, leftSpec, rightSpec string) (left, right 
 
 // String implements the sql.Expression interface.
 func (d MergeBase) String() string {
-	return fmt.Sprintf("DOLT_MERGE_BASE(%s,%s)", d.Left.String(), d.Right.String())
+	return fmt.Sprintf("DOLT_MERGE_BASE(%s,%s)", d.Left().String(), d.Right().String())
 }
 
 // Type implements the sql.Expression interface.
