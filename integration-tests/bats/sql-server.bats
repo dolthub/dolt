@@ -157,7 +157,7 @@ EOF
     start_sql_server
     run dolt --use-db repo1 sql -q "SELECT @@repo1_default_branch;"
     [ $status -eq 0 ]
-    [[ $output =~ "@@SESSION.repo1_default_branch" ]] || false
+    [[ $output =~ "@@repo1_default_branch" ]] || false
     [[ $output =~ "dev" ]] || false
 }
 

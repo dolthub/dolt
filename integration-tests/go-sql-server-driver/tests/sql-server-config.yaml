@@ -86,7 +86,7 @@ tests:
         rows: [["main"]]
     - query: "select @@dolt_replicate_heads"
       result:
-        columns: ["@@SESSION.dolt_replicate_heads"]
+        columns: ["@@dolt_replicate_heads"]
         rows: [["main"]]
 - name: dolt_replicate_all_heads is global variable
   repos:
@@ -114,7 +114,7 @@ tests:
         rows: [["1"]]
     - query: "select @@dolt_replicate_all_heads"
       result:
-        columns: ["@@SESSION.dolt_replicate_all_heads"]
+        columns: ["@@dolt_replicate_all_heads"]
         rows: [["1"]]
 - name: dolt_transaction_commit is global variable
   repos:
@@ -142,7 +142,7 @@ tests:
         rows: [["1"]]
     - query: "select @@dolt_transaction_commit"
       result:
-        columns: ["@@SESSION.dolt_transaction_commit"]
+        columns: ["@@dolt_transaction_commit"]
         rows: [["1"]]
     - query: "select count(*) from dolt_log"
       result:
