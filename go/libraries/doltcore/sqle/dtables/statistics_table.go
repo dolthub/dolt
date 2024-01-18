@@ -17,6 +17,14 @@ package dtables
 import (
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
+	stats2 "github.com/dolthub/go-mysql-server/sql/stats"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
@@ -24,12 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/planbuilder"
-	stats2 "github.com/dolthub/go-mysql-server/sql/stats"
-	"strconv"
-	"strings"
-	"time"
 )
 
 // StatisticsTable is a sql.Table implementation that implements a system table which shows the dolt commit log
