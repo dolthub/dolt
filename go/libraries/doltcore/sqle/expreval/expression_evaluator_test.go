@@ -399,7 +399,7 @@ func TestNewComparisonFunc(t *testing.T) {
 			be: expression.NewEquals(
 				expression.NewGetField(1, gmstypes.Int64, "col1", false),
 				expression.NewGetField(0, gmstypes.Int64, "col0", false),
-		),
+			),
 			expectNewErr: false,
 			testVals: []funcTestVal{
 				{
@@ -469,7 +469,7 @@ func TestNewComparisonFunc(t *testing.T) {
 			be: expression.NewEquals(
 				expression.NewGetField(1, gmstypes.Int64, "col1", false),
 				expression.NewGetField(0, gmstypes.Int64, "unknown", false),
-		),
+			),
 			expectNewErr: true,
 			testVals:     []funcTestVal{},
 		},
@@ -479,7 +479,7 @@ func TestNewComparisonFunc(t *testing.T) {
 			be: expression.NewEquals(
 				expression.NewGetField(0, gmstypes.Int64, "col0", false),
 				expression.NewLiteral("not a number", gmstypes.Text),
-		),
+			),
 			expectNewErr: true,
 			testVals:     []funcTestVal{},
 		},
