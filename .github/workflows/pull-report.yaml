@@ -24,17 +24,6 @@ jobs:
           echo "correctness info: correctness_percentage: $CORRECTNESS_PERCENTAGE"
           echo "correctness info: branch_ref: $BRANCH_REF"
           echo "job_type: $JOB_TYPE"
-          
-          is_regression=${{ github.event.client_payload.correctness_info.is_regression == 'true' }}
-          echo "is_regression is true: $is_regression"
-          
-          is_regression_bool=${{ github.event.client_payload.correctness_info.is_regression == true }}
-          echo "is_regression is true as bool: $is_regression_bool"
-          
-          is_correctness=${{ github.event.client_payload.job_type == 'sql-correctness' }}
-          echo "job_type is sql-correctness: $is_correctness"
-          
-          echo "is correctness regression: $CORRECTNESS_REGRESSION"
         env:
           IS_REGRESSION: ${{ github.event.client_payload.correctness_info.is_regression }}
           CORRECTNESS_PERCENTAGE: ${{ github.event.client_payload.correctness_info.correctness_percentage }}
@@ -72,7 +61,7 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
           FORMAT: ${{ github.event.client_payload.noms_bin_format }}
       - name: Remove Passing Labels if regression detected
-        if: ${{ github.event.client_payload.correctness_info.is_regression == 'true' && github.event.client_payload.job_type == 'sql-correctness' }}
+        if: ${{ github.event.client_payload.correctness_info.is_regression == true && github.event.client_payload.job_type == 'sql-correctness' }}
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
@@ -110,7 +99,7 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
           LABEL: 'correctness_approved'
       - name: Add Passing Labels if no regression detected
-        if: ${{ github.event.client_payload.correctness_info.is_regression != 'true' && github.event.client_payload.job_type == 'sql-correctness' }}
+        if: ${{ github.event.client_payload.correctness_info.is_regression != true && github.event.client_payload.job_type == 'sql-correctness' }}
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
