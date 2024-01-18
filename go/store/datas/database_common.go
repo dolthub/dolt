@@ -744,6 +744,26 @@ func (db *database) doTag(ctx context.Context, datasetID string, tagAddr hash.Ha
 	})
 }
 
+func (db *database) SetStatsRef(ctx context.Context, ds Dataset, mapAddr hash.Hash) (Dataset, error) {
+	statAddr, _, err := newStat(ctx, db, mapAddr)
+	if err != nil {
+		return Dataset{}, err
+	}
+	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error {
+		return db.update(ctx, func(_ context.Context, datasets types.Map) (types.Map, error) {
+			// this is for old format, so this should not happen
+			return datasets, errors.New("SetStatsRef: stash is not supported for old storage format")
+		}, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+			ae := am.Editor()
+			err := ae.Update(ctx, ds.ID(), statAddr)
+			if err != nil {
+				return prolly.AddressMap{}, err
+			}
+			return ae.Flush(ctx)
+		})
+	})
+}
+
 // UpdateStashList updates the stash list dataset only with given address hash to the updated stash list.
 // The new/updated stash list address should be obtained before calling this function depending on
 // whether add or remove a stash actions have been performed. This function does not perform any actions

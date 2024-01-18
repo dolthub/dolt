@@ -16,6 +16,7 @@ package engine
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/stats"
 	"os"
 	"runtime"
 	"strconv"
@@ -34,13 +35,13 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	dblr "github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/stats"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -101,6 +102,16 @@ func NewSqlEngine(
 	dbs, err = dsqle.ApplyReplicationConfig(ctx, bThreads, mrEnv, cli.CliOut, dbs...)
 	if err != nil {
 		return nil, err
+	}
+
+	var doltdbs []*doltdb.DoltDB
+	var dbNames []string
+	for _, db := range dbs {
+		ddbs := db.DoltDatabases()
+		if len(ddbs) > 0 {
+			dbNames = append(dbNames, strings.ToLower(db.Name()))
+			doltdbs = append(doltdbs, ddbs[0])
+		}
 	}
 
 	config.ClusterController.ManageSystemVariables(sql.SystemVariables)
@@ -180,8 +191,13 @@ func NewSqlEngine(
 	})
 
 	engine.Analyzer.ExecBuilder = rowexec.DefaultBuilder
+	sessFactory := doltSessionFactory(pro, mrEnv.Config(), bcController, config.Autocommit)
+	sqlEngine.provider = pro
+	sqlEngine.contextFactory = sqlContextFactory()
+	sqlEngine.dsessFactory = sessFactory
 
 	engine.Analyzer.Catalog.StatsProvider = stats.NewProvider()
+	engine.Analyzer.Catalog.StatsProvider.(*stats.Provider).Load(sql.NewContext(ctx), dbNames, doltdbs)
 
 	// Load MySQL Db information
 	if err = engine.Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), data); err != nil {
@@ -205,8 +221,6 @@ func NewSqlEngine(
 		return nil, err
 	}
 
-	sessFactory := doltSessionFactory(pro, mrEnv.Config(), bcController, config.Autocommit)
-
 	if engine.EventScheduler == nil {
 		err = configureEventScheduler(config, engine, sessFactory, pro)
 		if err != nil {
@@ -226,9 +240,6 @@ func NewSqlEngine(
 		}
 	}
 
-	sqlEngine.provider = pro
-	sqlEngine.contextFactory = sqlContextFactory()
-	sqlEngine.dsessFactory = sessFactory
 	sqlEngine.engine = engine
 
 	return sqlEngine, nil
