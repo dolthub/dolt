@@ -116,6 +116,10 @@ func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []s
 	return schemaString, results, nil
 }
 
+func (h *DoltHarness) GetTimeout() int64 {
+	return 0
+}
+
 func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 	if !dEnv.HasDoltDir() {
 		err := dEnv.InitRepoWithTime(context.Background(), types.Format_Default, name, email, env.DefaultInitBranch, time.Now())
