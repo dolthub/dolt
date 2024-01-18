@@ -4267,7 +4267,7 @@ var DoltTagTestScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_MERGE('v1')",
-				Expected: []sql.Row{{doltCommit, 0, 0}},
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:    "SELECT * FROM test",
@@ -5200,7 +5200,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "CALL dolt_merge('--no-ff', 'branch1');",
-				Expected: []sql.Row{{doltCommit, 0, 0}},
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query:          "CALL dolt_cherry_pick('HEAD');",
