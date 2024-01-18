@@ -478,7 +478,7 @@ func TestDoltDiffQueryPlans(t *testing.T) {
 	defer e.Close()
 
 	for _, tt := range DoltDiffPlanTests {
-		enginetest.TestQueryPlan(t, harness, e, tt.Query, tt.ExpectedPlan, false)
+		enginetest.TestQueryPlan(t, harness, e, tt.Query, tt.ExpectedPlan, sql.DescribeOptions{})
 	}
 }
 
