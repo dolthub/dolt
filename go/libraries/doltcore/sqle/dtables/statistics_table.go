@@ -239,7 +239,7 @@ func (s *statsIter) Next(ctx *sql.Context) (sql.Row, error) {
 		indexName,
 		int(position),
 		version,
-		commit,
+		commit.String(),
 		uint64(rowCount),
 		uint64(distinctCount),
 		uint64(nullCount),

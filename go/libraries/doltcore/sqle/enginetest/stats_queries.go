@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/stats"
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // fillerVarchar pushes the tree into level 3
@@ -314,8 +313,8 @@ var DoltStatsIOTests = []queries.ScriptTest{
 			{
 				Query: "select `database`, `table`, `index`, commit_hash, columns, types from dolt_statistics",
 				Expected: []sql.Row{
-					{"mydb", "xy", "primary", hash.Parse("f6la1u3ku5pucfctgrca2afq9vlr4nrs"), []string{"x"}, []string{"bigint"}},
-					{"mydb", "xy", "yz", hash.Parse("9ec31007jaqtahij0tmlmd7j9t9hl1he"), []string{"y", "z"}, []string{"int", "varchar(500)"}},
+					{"mydb", "xy", "primary", "f6la1u3ku5pucfctgrca2afq9vlr4nrs", []string{"x"}, []string{"bigint"}},
+					{"mydb", "xy", "yz", "9ec31007jaqtahij0tmlmd7j9t9hl1he", []string{"y", "z"}, []string{"int", "varchar(500)"}},
 				},
 			},
 			{
@@ -352,8 +351,8 @@ var DoltStatsIOTests = []queries.ScriptTest{
 			{
 				Query: "select `database`, `table`, `index`, commit_hash, columns, types  from dolt_statistics where `table` = 'xy'",
 				Expected: []sql.Row{
-					{"mydb", "xy", "primary", hash.Parse("f6la1u3ku5pucfctgrca2afq9vlr4nrs"), []string{"x"}, []string{"bigint"}},
-					{"mydb", "xy", "yz", hash.Parse("9ec31007jaqtahij0tmlmd7j9t9hl1he"), []string{"y", "z"}, []string{"int", "varchar(500)"}},
+					{"mydb", "xy", "primary", "f6la1u3ku5pucfctgrca2afq9vlr4nrs", []string{"x"}, []string{"bigint"}},
+					{"mydb", "xy", "yz", "9ec31007jaqtahij0tmlmd7j9t9hl1he", []string{"y", "z"}, []string{"int", "varchar(500)"}},
 				},
 			},
 			{
@@ -372,8 +371,8 @@ var DoltStatsIOTests = []queries.ScriptTest{
 			{
 				Query: "select `database`, `table`, `index`, commit_hash, columns, types  from dolt_statistics where `table` = 'ab'",
 				Expected: []sql.Row{
-					{"mydb", "ab", "primary", hash.Parse("t6j206v6b9t8vnmhpcc2i57lom8kejk3"), []string{"a"}, []string{"bigint"}},
-					{"mydb", "ab", "bc", hash.Parse("sibnr73868rb5dqa76opfn4pkelhhqna"), []string{"b", "c"}, []string{"int", "int"}},
+					{"mydb", "ab", "primary", "t6j206v6b9t8vnmhpcc2i57lom8kejk3", []string{"a"}, []string{"bigint"}},
+					{"mydb", "ab", "bc", "sibnr73868rb5dqa76opfn4pkelhhqna", []string{"b", "c"}, []string{"int", "int"}},
 				},
 			},
 			{
