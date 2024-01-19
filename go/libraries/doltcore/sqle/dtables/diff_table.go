@@ -397,12 +397,18 @@ func (dt *DiffTable) scanHeightForChild(ctx *sql.Context, parent hash.Hash, heig
 func (dt *DiffTable) reverseIterForChild(ctx *sql.Context, parent hash.Hash) (*doltdb.Commit, hash.Hash, error) {
 	iter := doltdb.CommitItrForRoots(dt.ddb, dt.head)
 	for {
-		childHs, childCm, err := iter.Next(ctx)
+		childHs, optCmt, err := iter.Next(ctx)
 		if errors.Is(err, io.EOF) {
 			return nil, hash.Hash{}, nil
 		} else if err != nil {
 			return nil, hash.Hash{}, err
 		}
+
+		childCm, err := optCmt.ToCommit()
+		if err != nil {
+			panic("NM4")
+		}
+
 		phs, err := childCm.ParentHashes(ctx)
 		if err != nil {
 			return nil, hash.Hash{}, err
@@ -506,10 +512,15 @@ func (dt *DiffTable) toCommitLookupPartitions(ctx *sql.Context, hashes []hash.Ha
 		}
 
 		for i, pj := range ph {
-			pc, err := cm.GetParent(ctx, i)
+			optCmt, err := cm.GetParent(ctx, i)
 			if err != nil {
 				return nil, err
 			}
+			pc, err := optCmt.ToCommit()
+			if err != nil {
+				panic("NM4")
+			}
+
 			cmHashToTblInfo[pj] = toCmInfo
 			cmHashToTblInfo[pj] = ti
 			pCommits = append(pCommits, pc)
@@ -786,9 +797,13 @@ func (dps *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm 
 
 func (dps *DiffPartitions) Next(ctx *sql.Context) (sql.Partition, error) {
 	for {
-		cmHash, cm, err := dps.cmItr.Next(ctx)
+		cmHash, optCmt, err := dps.cmItr.Next(ctx)
 		if err != nil {
 			return nil, err
+		}
+		cm, err := optCmt.ToCommit()
+		if err != nil {
+			panic("NM4")
 		}
 
 		root, err := cm.GetRootValue(ctx)

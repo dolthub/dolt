@@ -28,6 +28,7 @@ import (
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/sirupsen/logrus"
 )
 
 type Ref struct {
@@ -243,6 +244,19 @@ func WalkAddrsForChunkStore(cs chunks.ChunkStore) (func(chunks.Chunk, func(h has
 func WalkAddrsForNBF(nbf *NomsBinFormat) func(chunks.Chunk, func(h hash.Hash, isleaf bool) error) error {
 	return func(c chunks.Chunk, cb func(h hash.Hash, isleaf bool) error) error {
 		return walkRefs(c.Data(), nbf, func(r Ref) error {
+			return cb(r.TargetHash(), r.Height() == 1)
+		})
+	}
+}
+
+func WalkAddrsForMacneale(nbf *NomsBinFormat, isIgnoredCommit func(r Ref) bool) func(chunks.Chunk, func(h hash.Hash, isleaf bool) error) error {
+	return func(c chunks.Chunk, cb func(h hash.Hash, isleaf bool) error) error {
+		return walkRefs(c.Data(), nbf, func(r Ref) error {
+			if isIgnoredCommit(r) {
+				logrus.Info("Walk discovered this Ignored commit ID:" + r.TargetHash().String())
+				return nil
+			}
+
 			return cb(r.TargetHash(), r.Height() == 1)
 		})
 	}

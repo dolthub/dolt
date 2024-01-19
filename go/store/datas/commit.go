@@ -74,6 +74,11 @@ func (c *Commit) NomsValue() types.Value {
 	return c.val
 }
 
+func (c *Commit) IsGhost() bool {
+	_, ok := c.val.(types.GhostValue)
+	return ok
+}
+
 func (c *Commit) Height() uint64 {
 	return c.height
 }
@@ -306,6 +311,11 @@ func commitPtr(nbf *types.NomsBinFormat, v types.Value, r *types.Ref) (*Commit, 
 
 // CommitFromValue deserializes a types.Value into a Commit.
 func CommitFromValue(nbf *types.NomsBinFormat, v types.Value) (*Commit, error) {
+	if g, ok := v.(types.GhostValue); ok {
+		// NM4.  We have a ghost commit. Doo stuuufff
+		return &Commit{val: g}, nil
+	}
+
 	isCommit, err := IsCommit(v)
 	if err != nil {
 		return nil, err
@@ -327,6 +337,7 @@ func LoadCommitRef(ctx context.Context, vr types.ValueReader, r types.Ref) (*Com
 	return commitPtr(vr.Format(), v, &r)
 }
 
+// NM4 - not sure if I can use this or not.......
 func LoadCommitAddr(ctx context.Context, vr types.ValueReader, addr hash.Hash) (*Commit, error) {
 	v, err := vr.ReadValue(ctx, addr)
 	if err != nil {
@@ -457,6 +468,7 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 		if err != nil {
 			return nil, err
 		}
+
 		vals, err := vr.ReadManyValues(ctx, addrs)
 		if err != nil {
 			return nil, err
@@ -466,15 +478,24 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 			if v == nil {
 				return nil, fmt.Errorf("GetCommitParents: Did not find parent Commit in ValueReader: %s", addrs[i].String())
 			}
-			var csm serial.Commit
-			err := serial.InitCommitRoot(&csm, []byte(v.(types.SerialMessage)), serial.MessagePrefixSz)
-			if err != nil {
-				return nil, err
-			}
-			res[i] = &Commit{
-				val:    v,
-				height: csm.Height(),
-				addr:   addrs[i],
+
+			if g, ok := v.(types.GhostValue); ok {
+				// We have a ghost commit. Doo stuuufff NM4
+				res[i] = &Commit{
+					val:  g,
+					addr: addrs[i],
+				}
+			} else {
+				var csm serial.Commit
+				err := serial.InitCommitRoot(&csm, []byte(v.(types.SerialMessage)), serial.MessagePrefixSz)
+				if err != nil {
+					return nil, err
+				}
+				res[i] = &Commit{
+					val:    v,
+					height: csm.Height(),
+					addr:   addrs[i],
+				}
 			}
 		}
 		return res, nil

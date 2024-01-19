@@ -150,9 +150,13 @@ func NewCommitsRowItr(ctx *sql.Context, ddb *doltdb.DoltDB) (CommitsRowItr, erro
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
 func (itr CommitsRowItr) Next(ctx *sql.Context) (sql.Row, error) {
-	h, cm, err := itr.itr.Next(ctx)
+	h, optCmt, err := itr.itr.Next(ctx)
 	if err != nil {
 		return nil, err
+	}
+	cm, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
 	}
 
 	meta, err := cm.GetCommitMeta(ctx)

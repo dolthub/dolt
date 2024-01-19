@@ -204,9 +204,13 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 	if err != nil {
 		return nil, "", err
 	}
-	cherryCommit, err := doltDB.Resolve(ctx, cherryCommitSpec, headRef)
+	optCmt, err := doltDB.Resolve(ctx, cherryCommitSpec, headRef)
 	if err != nil {
 		return nil, "", err
+	}
+	cherryCommit, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
 	}
 
 	if len(cherryCommit.DatasParents()) > 1 {
@@ -223,10 +227,15 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 
 	// When cherry-picking, we need to use the parent of the cherry-picked commit as the ancestor. This
 	// ensures that only the delta from the cherry-pick commit is applied.
-	parentCommit, err := doltDB.ResolveParent(ctx, cherryCommit, 0)
+	optCmt, err = doltDB.ResolveParent(ctx, cherryCommit, 0)
 	if err != nil {
 		return nil, "", err
 	}
+	parentCommit, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
+	}
+
 	parentRoot, err := parentCommit.GetRootValue(ctx)
 	if err != nil {
 		return nil, "", err

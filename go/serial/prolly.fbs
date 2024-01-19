@@ -38,6 +38,9 @@ table ProllyTreeNode {
   // offsets for each address (if any) in |value_items|
   // (eg value tuples containing out-of-line BLOB addresses)
   value_address_offsets:[uint16];
+  // Thats how we know what objects that this object depends on
+
+
 
   // array of chunk addresses
   //  - subtree addresses for internal prolly tree nodes

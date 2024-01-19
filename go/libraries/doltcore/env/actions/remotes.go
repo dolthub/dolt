@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -67,7 +68,7 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 		return err
 	}
 
-	err = destDB.PullChunks(ctx, tempTableDir, srcDB, []hash.Hash{h}, statsCh)
+	err = destDB.PullChunks(ctx, tempTableDir, srcDB, []hash.Hash{h}, statsCh, nil)
 
 	if err != nil {
 		return err
@@ -187,7 +188,7 @@ func PushTag(ctx context.Context, tempTableDir string, destRef ref.TagRef, srcDB
 		return err
 	}
 
-	err = destDB.PullChunks(ctx, tempTableDir, srcDB, []hash.Hash{addr}, statsCh)
+	err = destDB.PullChunks(ctx, tempTableDir, srcDB, []hash.Hash{addr}, statsCh, nil)
 
 	if err != nil {
 		return err
@@ -223,9 +224,13 @@ func PushToRemoteBranch(ctx context.Context, rsr env.RepoStateReader, tempTableD
 	if err != nil {
 		return err
 	}
-	cm, err := localDB.Resolve(ctx, cs, headRef)
+	optCmt, err := localDB.Resolve(ctx, cs, headRef)
 	if err != nil {
 		return fmt.Errorf("%w; refspec not found: '%s'; %s", ref.ErrInvalidRefSpec, srcRef.GetPath(), err.Error())
+	}
+	cm, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4") // NM4 not sure how this would happen.
 	}
 
 	newCtx, cancelFunc := context.WithCancel(ctx)
@@ -306,7 +311,7 @@ func FetchCommit(ctx context.Context, tempTablesDir string, srcDB, destDB *doltd
 		return err
 	}
 
-	return destDB.PullChunks(ctx, tempTablesDir, srcDB, []hash.Hash{h}, statsCh)
+	return destDB.PullChunks(ctx, tempTablesDir, srcDB, []hash.Hash{h}, statsCh, nil)
 }
 
 // FetchTag takes a fetches a commit tag and all underlying data from a remote source database to the local destination database.
@@ -316,7 +321,7 @@ func FetchTag(ctx context.Context, tempTableDir string, srcDB, destDB *doltdb.Do
 		return err
 	}
 
-	return destDB.PullChunks(ctx, tempTableDir, srcDB, []hash.Hash{addr}, statsCh)
+	return destDB.PullChunks(ctx, tempTableDir, srcDB, []hash.Hash{addr}, statsCh, nil)
 }
 
 // Clone pulls all data from a remote source database to a local destination database.
@@ -405,10 +410,13 @@ func FetchRemoteBranch(
 	}
 
 	cs, _ := doltdb.NewCommitSpec(srcRef.String())
-	srcDBCommit, err := srcDB.Resolve(ctx, cs, nil)
-
+	optCmt, err := srcDB.Resolve(ctx, cs, nil)
 	if err != nil {
 		return nil, fmt.Errorf("unable to find '%s' on '%s'; %w", srcRef.GetPath(), rem.Name, err)
+	}
+	srcDBCommit, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4") // NM4 This really should never happen. The source db is always expected to have everything.
 	}
 
 	// The code is structured this way (different paths for progress chan v. not) so that the linter can understand there
@@ -457,6 +465,9 @@ func FetchRefSpecs(
 	progStarter ProgStarter,
 	progStopper ProgStopper,
 ) error {
+
+	depth := 0 // NM4 tmp util we pass through somehow.
+
 	var branchRefs []doltdb.RefWithHash
 	err := srcDB.VisitRefsOfType(ctx, ref.HeadRefTypes, func(r ref.DoltRef, addr hash.Hash) error {
 		branchRefs = append(branchRefs, doltdb.RefWithHash{Ref: r, Hash: addr})
@@ -491,12 +502,51 @@ func FetchRefSpecs(
 		}
 	}
 
+	ignoreMe := hash.NewHashSet()
+	if depth != 0 {
+		// if toFetch is more than one, panic.
+		if len(toFetch) > 1 {
+			panic("multi head shallow pulls not implemented")
+		}
+
+		cs, err := doltdb.NewCommitSpec(toFetch[0].String())
+		if err != nil {
+			return err
+		}
+
+		optCmt, err := srcDB.Resolve(ctx, cs, nil)
+		if err != nil {
+			panic(err) // NM4
+		}
+
+		commit, err := optCmt.ToCommit()
+		if err != nil {
+			panic(err) // NM4 This really should never happen. The source db is always expected to have everything.
+		}
+
+		allCommits, err := commit.GetCommitClosure(ctx)
+		if err != nil {
+			panic(err) // NM4
+		}
+
+		closureIter, err := allCommits.IterAllReverse(ctx)
+		if err != nil {
+			panic(err) // NM4
+		}
+
+		key, _, err := closureIter.Next(ctx)
+		for !errors.Is(err, io.EOF) {
+			clsrHash := hash.New(key[8:])
+			ignoreMe.Insert(clsrHash)
+			key, _, err = closureIter.Next(ctx)
+		}
+	}
+
 	// Now we fetch all the new HEADs we need.
 	tmpDir, err := dbData.Rsw.TempTableFilesDir()
 	if err != nil {
 		return err
 	}
-
 	err = func() error {
 		newCtx := ctx
 		var statsCh chan pull.Stats
@@ -509,7 +559,7 @@ func FetchRefSpecs(
 			defer progStopper(cancelFunc, wg, statsCh)
 		}
 
-		err = dbData.Ddb.PullChunks(ctx, tmpDir, srcDB, toFetch, statsCh)
+		err = dbData.Ddb.PullChunks(ctx, tmpDir, srcDB, toFetch, statsCh, ignoreMe)
 		if err == pull.ErrDBUpToDate {
 			err = nil
 		}
@@ -520,10 +570,15 @@ func FetchRefSpecs(
 	}
 
 	for _, newHead := range newHeads {
-		commit, err := dbData.Ddb.ReadCommit(ctx, newHead.Hash)
+		optCmt, err := dbData.Ddb.ReadCommit(ctx, newHead.Hash)
 		if err != nil {
 			return err
 		}
+		commit, err := optCmt.ToCommit()
+		if err != nil {
+			return err
+		}
+
 		remoteTrackRef := newHead.Ref
 
 		if mode.Force {
@@ -733,7 +788,7 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 		// If clone is unsupported, we can fall back to pull.
 	}
 
-	err = destDb.PullChunks(ctx, tempTableDir, srcDb, []hash.Hash{srcRoot}, statsCh)
+	err = destDb.PullChunks(ctx, tempTableDir, srcDb, []hash.Hash{srcRoot}, statsCh, nil)
 	if err != nil {
 		return err
 	}

@@ -158,9 +158,14 @@ func NewCommitAncestorsRowItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB) (*CommitA
 // After retrieving the last row, Close will be automatically closed.
 func (itr *CommitAncestorsRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 	if len(itr.cache) == 0 {
-		ch, cm, err := itr.itr.Next(ctx)
+		ch, optCmt, err := itr.itr.Next(ctx)
 		if err != nil {
 			// When complete itr.Next will return io.EOF
+			return nil, err
+		}
+
+		cm, err := optCmt.ToCommit()
+		if err != nil {
 			return nil, err
 		}
 
@@ -175,7 +180,12 @@ func (itr *CommitAncestorsRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 
 		itr.cache = make([]sql.Row, len(parents))
-		for i, p := range parents {
+		for i, optParent := range parents {
+			p, err := optParent.ToCommit()
+			if err != nil {
+				return nil, err
+			}
+
 			ph, err := p.HashOf()
 			if err != nil {
 				return nil, err

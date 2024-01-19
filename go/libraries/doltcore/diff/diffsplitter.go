@@ -232,9 +232,14 @@ func MaybeResolveRoot(ctx context.Context, rsr env.RepoStateReader, doltDB *dolt
 	if err != nil {
 		return nil, false
 	}
-	cm, err := doltDB.Resolve(ctx, cs, headRef)
+	optCmt, err := doltDB.Resolve(ctx, cs, headRef)
 	if err != nil {
 		return nil, false
+	}
+
+	cm, err := optCmt.ToCommit()
+	if err != nil {
+		return nil, false // NM4 - We should return an error here, gotta change the interface
 	}
 
 	root, err := cm.GetRootValue(ctx)

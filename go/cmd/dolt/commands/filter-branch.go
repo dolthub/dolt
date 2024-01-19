@@ -195,9 +195,13 @@ func getNerf(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResu
 		return nil, err
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs, headRef)
+	optCmt, err := dEnv.DoltDB.Resolve(ctx, cs, headRef)
 	if err != nil {
 		return nil, err
+	}
+	cm, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
 	}
 
 	return rebase.StopAtCommit(cm), nil

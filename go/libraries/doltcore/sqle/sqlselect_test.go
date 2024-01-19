@@ -1561,7 +1561,10 @@ func testSelectDiffQuery(t *testing.T, test SelectTest) {
 	cs, err := doltdb.NewCommitSpec("main")
 	require.NoError(t, err)
 
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
+	optCmt, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
+	require.NoError(t, err)
+
+	cm, err := optCmt.ToCommit()
 	require.NoError(t, err)
 
 	root, err := cm.GetRootValue(ctx)
@@ -1674,7 +1677,10 @@ func initializeWithHistory(t *testing.T, ctx context.Context, dEnv *env.DoltEnv,
 		cs, err := doltdb.NewCommitSpec(env.DefaultInitBranch)
 		require.NoError(t, err)
 
-		cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
+		optCmt, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
+		require.NoError(t, err)
+
+		cm, err := optCmt.ToCommit()
 		require.NoError(t, err)
 
 		processNode(t, ctx, dEnv, node, cm)
@@ -1694,7 +1700,10 @@ func processNode(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, node Hist
 	cs, err := doltdb.NewCommitSpec(branchRef.String())
 	require.NoError(t, err)
 
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
+	optCmt, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
+	require.NoError(t, err)
+
+	cm, err := optCmt.ToCommit()
 	require.NoError(t, err)
 
 	root, err := cm.GetRootValue(ctx)

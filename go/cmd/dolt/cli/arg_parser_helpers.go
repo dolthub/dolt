@@ -182,6 +182,7 @@ func CreateFetchArgParser() *argparser.ArgParser {
 	ap.SupportsString(UserFlag, "", "user", "User name to use when authenticating with the remote. Gets password from the environment variable {{.EmphasisLeft}}DOLT_REMOTE_PASSWORD{{.EmphasisRight}}.")
 	ap.SupportsFlag(PruneFlag, "p", "After fetching, remove any remote-tracking references that don't exist on the remote.")
 	ap.SupportsFlag(SilentFlag, "", "Suppress progress information.")
+	ap.SupportsInt("depth", "", "depth", "Limit fetching to the specified number of commits from the tip of each remote branch history.") // NM4.
 	return ap
 }
 

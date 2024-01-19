@@ -68,7 +68,9 @@ func TestGetDotDotRevisions(t *testing.T) {
 
 	cs, err := doltdb.NewCommitSpec(env.DefaultInitBranch)
 	require.NoError(t, err)
-	commit, err := dEnv.DoltDB.Resolve(context.Background(), cs, nil)
+	opt, err := dEnv.DoltDB.Resolve(context.Background(), cs, nil)
+	require.NoError(t, err)
+	commit, err := opt.ToCommit()
 	require.NoError(t, err)
 
 	rv, err := commit.GetRootValue(context.Background())
@@ -238,8 +240,25 @@ func TestGetDotDotRevisions(t *testing.T) {
 	assertEqualHashes(t, featureCommits[1], res[2])
 }
 
-func assertEqualHashes(t *testing.T, lc, rc *doltdb.Commit) {
-	assert.Equal(t, mustGetHash(t, lc), mustGetHash(t, rc))
+func assertEqualHashes(t *testing.T, lc, rc interface{}) {
+	var err error
+	leftCm, ok := lc.(*doltdb.Commit)
+	if !ok {
+		opt, ok := lc.(*doltdb.OptionalCommit)
+		require.True(t, ok)
+		leftCm, err = opt.ToCommit()
+		require.NoError(t, err)
+	}
+
+	rightCm, ok := rc.(*doltdb.Commit)
+	if !ok {
+		opt, ok := rc.(*doltdb.OptionalCommit)
+		require.True(t, ok)
+		rightCm, err = opt.ToCommit()
+		require.NoError(t, err)
+	}
+
+	assert.Equal(t, mustGetHash(t, leftCm), mustGetHash(t, rightCm))
 }
 
 func mustCreateCommit(t *testing.T, ddb *doltdb.DoltDB, bn string, rvh hash.Hash, parents ...*doltdb.Commit) *doltdb.Commit {
@@ -268,7 +287,7 @@ func mustForkDB(t *testing.T, fromDB *doltdb.DoltDB, bn string, cm *doltdb.Commi
 		for range ps {
 		}
 	}()
-	err = forkEnv.DoltDB.PullChunks(context.Background(), "", fromDB, []hash.Hash{h}, ps)
+	err = forkEnv.DoltDB.PullChunks(context.Background(), "", fromDB, []hash.Hash{h}, ps, nil)
 	if err == pull.ErrDBUpToDate {
 		err = nil
 	}

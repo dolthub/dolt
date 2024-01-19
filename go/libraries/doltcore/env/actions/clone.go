@@ -208,11 +208,14 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	}
 
 	cs, _ := doltdb.NewCommitSpec(branch)
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
-
+	optCmt, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
 	if err != nil {
 		return fmt.Errorf("%w: %s; %s", ErrFailedToGetBranch, branch, err.Error())
+	}
 
+	cm, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4") // Not sure how we'd get here, but should come up with a real error.
 	}
 
 	rootVal, err := cm.GetRootValue(ctx)

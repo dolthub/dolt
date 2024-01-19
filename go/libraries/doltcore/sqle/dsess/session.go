@@ -409,9 +409,13 @@ func (d *DoltSession) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSe
 		return nil, err
 	}
 
-	headCommit, err := dbData.Ddb.Resolve(ctx, headSpec, headRef)
+	optCmt, err := dbData.Ddb.Resolve(ctx, headSpec, headRef)
 	if err != nil {
 		return nil, err
+	}
+	headCommit, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
 	}
 
 	headRoot, err := headCommit.GetRootValue(ctx)
@@ -687,10 +691,15 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, branchState *branchStat
 	} else if props.Amend {
 		numParentsHeadForAmend := headCommit.NumParents()
 		for i := 0; i < numParentsHeadForAmend; i++ {
-			parentCommit, err := headCommit.GetParent(ctx, i)
+			optCmt, err := headCommit.GetParent(ctx, i)
 			if err != nil {
 				return nil, err
 			}
+			parentCommit, err := optCmt.ToCommit()
+			if err != nil {
+				panic("NM4")
+			}
+
 			mergeParentCommits = append(mergeParentCommits, parentCommit)
 		}
 
@@ -882,9 +891,13 @@ func (d *DoltSession) ResolveRootForRef(ctx *sql.Context, dbName, refStr string)
 		return nil, nil, "", err
 	}
 
-	cm, err := dbData.Ddb.Resolve(ctx, cs, headRef)
+	optCmt, err := dbData.Ddb.Resolve(ctx, cs, headRef)
 	if err != nil {
 		return nil, nil, "", err
+	}
+	cm, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
 	}
 
 	root, err = cm.GetRootValue(ctx)

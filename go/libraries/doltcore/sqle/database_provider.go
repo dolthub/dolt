@@ -1078,9 +1078,13 @@ func resolveAncestorSpec(ctx *sql.Context, revSpec string, ddb *doltdb.DoltDB) (
 		return "", err
 	}
 
-	cm, err = cm.GetAncestor(ctx, ancestorSpec)
+	optCmt, err := cm.GetAncestor(ctx, ancestorSpec)
 	if err != nil {
 		return "", err
+	}
+	cm, err = optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
 	}
 
 	hash, err := cm.HashOf()
@@ -1469,9 +1473,13 @@ func initialStateForCommit(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.I
 	if err != nil {
 		return dsess.InitialDbState{}, err
 	}
-	cm, err := srcDb.DbData().Ddb.Resolve(ctx, spec, headRef)
+	optCmt, err := srcDb.DbData().Ddb.Resolve(ctx, spec, headRef)
 	if err != nil {
 		return dsess.InitialDbState{}, err
+	}
+	cm, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
 	}
 
 	init := dsess.InitialDbState{

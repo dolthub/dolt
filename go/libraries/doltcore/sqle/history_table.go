@@ -255,7 +255,12 @@ var historyTableCommitMetaCols = set.NewStrSet([]string{CommitHashCol, CommitDat
 func commitFilterForExprs(ctx *sql.Context, filters []sql.Expression) (doltdb.CommitFilter, error) {
 	filters = transformFilters(ctx, filters...)
 
-	return func(ctx context.Context, h hash.Hash, cm *doltdb.Commit) (filterOut bool, err error) {
+	return func(ctx context.Context, h hash.Hash, optCmt *doltdb.OptionalCommit) (filterOut bool, err error) {
+		cm, err := optCmt.ToCommit()
+		if err != nil {
+			panic("NM4")
+		}
+
 		meta, err := cm.GetCommitMeta(ctx)
 
 		if err != nil {
@@ -450,10 +455,13 @@ type commitPartitioner struct {
 
 // Next returns the next partition and nil, io.EOF when complete
 func (cp commitPartitioner) Next(ctx *sql.Context) (sql.Partition, error) {
-	h, cm, err := cp.cmItr.Next(ctx)
-
+	h, optCmt, err := cp.cmItr.Next(ctx)
 	if err != nil {
 		return nil, err
+	}
+	cm, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
 	}
 
 	return &commitPartition{h, cm}, nil

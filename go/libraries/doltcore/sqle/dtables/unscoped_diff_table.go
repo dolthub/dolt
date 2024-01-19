@@ -331,10 +331,15 @@ func (itr *doltDiffCommitHistoryRowItr) Next(ctx *sql.Context) (sql.Row, error) 
 			}
 			itr.commits = nil
 		} else if itr.child != nil {
-			_, commit, err := itr.child.Next(ctx)
+			_, optCmt, err := itr.child.Next(ctx)
 			if err != nil {
 				return nil, err
 			}
+			commit, err := optCmt.ToCommit()
+			if err != nil {
+				panic("NM4")
+			}
+
 			err = itr.loadTableChanges(ctx, commit)
 			if err != nil {
 				return nil, err
@@ -401,9 +406,13 @@ func (itr *doltDiffCommitHistoryRowItr) calculateTableChanges(ctx context.Contex
 		return nil, err
 	}
 
-	parent, err := itr.ddb.ResolveParent(ctx, commit, 0)
+	optCmt, err := itr.ddb.ResolveParent(ctx, commit, 0)
 	if err != nil {
 		return nil, err
+	}
+	parent, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
 	}
 
 	fromRootValue, err := parent.GetRootValue(ctx)
@@ -453,8 +462,14 @@ func isTableDataEmpty(ctx *sql.Context, table *doltdb.Table) (bool, error) {
 func commitFilterForDiffTableFilterExprs(filters []sql.Expression) (doltdb.CommitFilter, error) {
 	filters = transformFilters(filters...)
 
-	return func(ctx context.Context, h hash.Hash, cm *doltdb.Commit) (filterOut bool, err error) {
+	return func(ctx context.Context, h hash.Hash, optCmt *doltdb.OptionalCommit) (filterOut bool, err error) {
 		sc := sql.NewContext(ctx)
+
+		cm, err := optCmt.ToCommit()
+		if err != nil {
+			return false, err // NM4 Not sure about what to do here.
+		}
+
 		meta, err := cm.GetCommitMeta(ctx)
 		if err != nil {
 			return false, err
@@ -542,9 +557,14 @@ func getCommitFromHash(ctx *sql.Context, ddb *doltdb.DoltDB, val string) *doltdb
 	if err != nil {
 		return nil
 	}
-	cm, err := ddb.Resolve(ctx, cmSpec, headRef)
+	optCmt, err := ddb.Resolve(ctx, cmSpec, headRef)
 	if err != nil {
 		return nil
 	}
+	cm, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
+	}
+
 	return cm
 }

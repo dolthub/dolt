@@ -30,18 +30,20 @@ var _ chunks.GenerationalCS = (*GenerationalNBS)(nil)
 var _ chunks.TableFileStore = (*GenerationalNBS)(nil)
 
 type GenerationalNBS struct {
-	oldGen *NomsBlockStore
-	newGen *NomsBlockStore
+	oldGen  *NomsBlockStore
+	newGen  *NomsBlockStore
+	lostGen *GhostBlockStore
 }
 
-func NewGenerationalCS(oldGen, newGen *NomsBlockStore) *GenerationalNBS {
+func NewGenerationalCS(oldGen, newGen *NomsBlockStore, lostGen *GhostBlockStore) *GenerationalNBS {
 	if oldGen.Version() != "" && oldGen.Version() != newGen.Version() {
 		panic("oldgen and newgen chunkstore versions vary")
 	}
 
 	return &GenerationalNBS{
-		oldGen: oldGen,
-		newGen: newGen,
+		oldGen:  oldGen,
+		newGen:  newGen,
+		lostGen: lostGen,
 	}
 }
 
@@ -62,7 +64,19 @@ func (gcs *GenerationalNBS) Get(ctx context.Context, h hash.Hash) (chunks.Chunk,
 	}
 
 	if c.IsEmpty() {
-		return gcs.newGen.Get(ctx, h)
+		c, err = gcs.newGen.Get(ctx, h)
+	}
+	if err != nil {
+		return chunks.EmptyChunk, err
+	}
+
+	if c.IsEmpty() && gcs.lostGen != nil {
+		if gcs.lostGen != nil {
+			c, err = gcs.lostGen.Get(ctx, h)
+			if err != nil {
+				return chunks.EmptyChunk, err
+			}
+		}
 	}
 
 	return c, nil
@@ -72,12 +86,12 @@ func (gcs *GenerationalNBS) Get(ctx context.Context, h hash.Hash) (chunks.Chunk,
 // which have been found. Any non-present chunks will silently be ignored.
 func (gcs *GenerationalNBS) GetMany(ctx context.Context, hashes hash.HashSet, found func(context.Context, *chunks.Chunk)) error {
 	mu := &sync.Mutex{}
-	notInOldGen := hashes.Copy()
+	notFound := hashes.Copy()
 	err := gcs.oldGen.GetMany(ctx, hashes, func(ctx context.Context, chunk *chunks.Chunk) {
 		func() {
 			mu.Lock()
 			defer mu.Unlock()
-			delete(notInOldGen, chunk.Hash())
+			delete(notFound, chunk.Hash())
 		}()
 
 		found(ctx, chunk)
@@ -87,11 +101,29 @@ func (gcs *GenerationalNBS) GetMany(ctx context.Context, hashes hash.HashSet, fo
 		return err
 	}
 
-	if len(notInOldGen) == 0 {
+	if len(notFound) == 0 {
 		return nil
 	}
 
-	return gcs.newGen.GetMany(ctx, notInOldGen, found)
+	err = gcs.newGen.GetMany(ctx, notFound, func(ctx context.Context, chunk *chunks.Chunk) {
+		func() {
+			mu.Lock()
+			defer mu.Unlock()
+			delete(notFound, chunk.Hash())
+		}()
+
+		found(ctx, chunk)
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// We've been asked for objets which we don't apparently have. Check the lost gen commits that we know about.
+	if gcs.lostGen == nil {
+		return nil
+	}
+	return gcs.lostGen.GetMany(ctx, notFound, found)
 }
 
 func (gcs *GenerationalNBS) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk)) error {
@@ -130,7 +162,19 @@ func (gcs *GenerationalNBS) Has(ctx context.Context, h hash.Hash) (bool, error) 
 		return true, nil
 	}
 
-	return gcs.newGen.Has(ctx, h)
+	has, err = gcs.newGen.Has(ctx, h)
+	if err != nil {
+		return has, err
+	}
+
+	// Possibly a truncated commit.
+	if gcs.lostGen != nil {
+		has, err = gcs.lostGen.Has(ctx, h)
+		if err != nil {
+			return has, err
+		}
+	}
+	return has, nil
 }
 
 // HasMany returns a new HashSet containing any members of |hashes| that are absent from the store.

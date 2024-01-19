@@ -227,10 +227,15 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	if err != nil {
 		return err
 	}
-	commit, err := dEnv.DoltDB.Resolve(ctx, commitSpec, curHeadRef)
+	optCmt, err := dEnv.DoltDB.Resolve(ctx, commitSpec, curHeadRef)
 	if err != nil {
 		return err
 	}
+	commit, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
+	}
+
 	commitMeta, err := commit.GetCommitMeta(ctx)
 	if err != nil {
 		return err

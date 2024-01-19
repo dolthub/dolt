@@ -24,8 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
@@ -39,6 +37,8 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/types/edits"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/sirupsen/logrus"
 )
 
 func init() {
@@ -391,7 +391,7 @@ func (ddb *DoltDB) getHashFromCommitSpec(ctx context.Context, cs *CommitSpec, cw
 
 // Resolve takes a CommitSpec and returns a Commit, or an error if the commit cannot be found.
 // If the CommitSpec is HEAD, Resolve also needs the DoltRef of the current working branch.
-func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef) (*Commit, error) {
+func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef) (*OptionalCommit, error) {
 	if cs == nil {
 		panic("nil commit spec")
 	}
@@ -406,14 +406,21 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 		return nil, err
 	}
 
+	if commitValue.IsGhost() {
+		// NM4 - not sure about the accestor walk here.....
+		return &OptionalCommit{nil}, nil
+	}
+
 	commit, err := NewCommit(ctx, ddb.vrw, ddb.ns, commitValue)
 	if err != nil {
 		return nil, err
 	}
+
+	// This is a little messy. If someone callse HEAD~4, the ghost commit may be in the middle of the range.
 	return commit.GetAncestor(ctx, cs.aSpec)
 }
 
-func (ddb *DoltDB) ResolveByNomsRoot(ctx *sql.Context, cs *CommitSpec, cwb ref.DoltRef, root hash.Hash) (*Commit, error) {
+func (ddb *DoltDB) ResolveByNomsRoot(ctx *sql.Context, cs *CommitSpec, cwb ref.DoltRef, root hash.Hash) (*OptionalCommit, error) {
 	if cs == nil {
 		panic("nil commit spec")
 	}
@@ -584,12 +591,21 @@ func (ddb *DoltDB) ReadRootValue(ctx context.Context, h hash.Hash) (*RootValue, 
 }
 
 // ReadCommit reads the Commit whose hash is |h|, if one exists.
-func (ddb *DoltDB) ReadCommit(ctx context.Context, h hash.Hash) (*Commit, error) {
+func (ddb *DoltDB) ReadCommit(ctx context.Context, h hash.Hash) (*OptionalCommit, error) {
 	c, err := datas.LoadCommitAddr(ctx, ddb.vrw, h)
 	if err != nil {
 		return nil, err
 	}
-	return NewCommit(ctx, ddb.vrw, ddb.ns, c)
+
+	if c.IsGhost() {
+		return &OptionalCommit{nil}, nil
+	}
+
+	newC, err := NewCommit(ctx, ddb.vrw, ddb.ns, c)
+	if err != nil {
+		return nil, err
+	}
+	return &OptionalCommit{newC}, nil
 }
 
 // Commit will update a branch's head value to be that of a previously committed root value hash
@@ -715,7 +731,13 @@ func (ddb *DoltDB) CommitWithParentSpecs(ctx context.Context, valHash hash.Hash,
 		if err != nil {
 			return nil, err
 		}
-		parentCommits = append(parentCommits, cm)
+
+		hardCommit, err := cm.ToCommit()
+		if err != nil {
+			return nil, err
+		}
+
+		parentCommits = append(parentCommits, hardCommit)
 	}
 	return ddb.CommitWithParentCommits(ctx, valHash, dref, parentCommits, cm)
 }
@@ -844,13 +866,13 @@ func (ddb *DoltDB) Format() *types.NomsBinFormat {
 // ResolveParent returns the n-th ancestor of a given commit (direct parent is index 0). error return value will be
 // non-nil in the case that the commit cannot be resolved, there aren't as many ancestors as requested, or the
 // underlying storage cannot be accessed.
-func (ddb *DoltDB) ResolveParent(ctx context.Context, commit *Commit, parentIdx int) (*Commit, error) {
+func (ddb *DoltDB) ResolveParent(ctx context.Context, commit *Commit, parentIdx int) (*OptionalCommit, error) {
 	return commit.GetParent(ctx, parentIdx)
 }
 
-func (ddb *DoltDB) ResolveAllParents(ctx context.Context, commit *Commit) ([]*Commit, error) {
+func (ddb *DoltDB) ResolveAllParents(ctx context.Context, commit *Commit) ([]*OptionalCommit, error) {
 	num := commit.NumParents()
-	resolved := make([]*Commit, num)
+	resolved := make([]*OptionalCommit, num)
 	for i := 0; i < num; i++ {
 		parent, err := ddb.ResolveParent(ctx, commit, i)
 		if err != nil {
@@ -1554,20 +1576,33 @@ func (ddb *DoltDB) PullChunks(
 	srcDB *DoltDB,
 	targetHashes []hash.Hash,
 	statsCh chan pull.Stats,
+	skipHashes hash.HashSet,
 ) error {
-	return pullHash(ctx, ddb.db, srcDB.db, targetHashes, tempDir, statsCh)
+	return pullHash(ctx, ddb.db, srcDB.db, ddb.vrw, srcDB.vrw, targetHashes, tempDir, statsCh, skipHashes)
 }
 
 func pullHash(
 	ctx context.Context,
 	destDB, srcDB datas.Database,
+	destVRW, srcVRW types.ValueReadWriter,
 	targetHashes []hash.Hash,
 	tempDir string,
 	statsCh chan pull.Stats,
+	skipHashes hash.HashSet,
 ) error {
 	srcCS := datas.ChunkStoreFromDatabase(srcDB)
 	destCS := datas.ChunkStoreFromDatabase(destDB)
-	waf := types.WalkAddrsForNBF(srcDB.Format())
+
+	// Address Walker to rule them all NM4.
+	waf := types.WalkAddrsForMacneale(srcDB.Format(), func(r types.Ref) bool {
+		hsh := r.TargetHash()
+
+		if skipHashes != nil && skipHashes.Has(hsh) {
+			logrus.Info("Skipping hash: ", hsh.String())
+			return true
+		}
+		return false
+	})
 
 	if datas.CanUsePuller(srcDB) && datas.CanUsePuller(destDB) {
 		puller, err := pull.NewPuller(ctx, tempDir, defaultChunksPerTF, srcCS, destCS, waf, targetHashes, statsCh)

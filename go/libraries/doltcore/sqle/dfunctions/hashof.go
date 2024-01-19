@@ -85,9 +85,13 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 			hsh, parsed := hash.MaybeParse(name)
 			if parsed {
 				orgErr := err
-				cm, err = ddb.ReadCommit(ctx, hsh)
+				optCmt, err := ddb.ReadCommit(ctx, hsh)
 				if err != nil {
 					return nil, orgErr
+				}
+				cm, err = optCmt.ToCommit()
+				if err != nil {
+					panic("NM4")
 				}
 			} else {
 				return nil, err
@@ -100,9 +104,13 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		}
 	}
 
-	cm, err = cm.GetAncestor(ctx, as)
+	optCmt, err := cm.GetAncestor(ctx, as)
 	if err != nil {
 		return nil, err
+	}
+	cm, err = optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
 	}
 
 	h, err := cm.HashOf()

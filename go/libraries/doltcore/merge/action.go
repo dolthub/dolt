@@ -100,9 +100,13 @@ func NewMergeSpec(
 		return nil, err
 	}
 
-	headCM, err := ddb.Resolve(context.TODO(), headCS, headRef)
+	optCmt, err := ddb.Resolve(ctx, headCS, headRef)
 	if err != nil {
 		return nil, err
+	}
+	headCM, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4") // Should never happen?? better error anyway.
 	}
 
 	mergeCS, err := doltdb.NewCommitSpec(commitSpecStr)
@@ -110,9 +114,13 @@ func NewMergeSpec(
 		return nil, err
 	}
 
-	mergeCM, err := ddb.Resolve(context.TODO(), mergeCS, headRef)
+	optCmt, err = ddb.Resolve(ctx, mergeCS, headRef)
 	if err != nil {
 		return nil, err
+	}
+	mergeCM, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
 	}
 
 	headH, err := headCM.HashOf()

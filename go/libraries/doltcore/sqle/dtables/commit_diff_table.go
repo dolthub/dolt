@@ -261,15 +261,17 @@ func (dt *CommitDiffTable) rootValForHash(ctx *sql.Context, hashStr string) (*do
 		root = dt.workingRoot
 	} else {
 		cs, err := doltdb.NewCommitSpec(hashStr)
-
 		if err != nil {
 			return nil, "", nil, err
 		}
 
-		cm, err := dt.ddb.Resolve(ctx, cs, nil)
-
+		optCmt, err := dt.ddb.Resolve(ctx, cs, nil)
 		if err != nil {
 			return nil, "", nil, err
+		}
+		cm, err := optCmt.ToCommit()
+		if err != nil {
+			panic("NM4")
 		}
 
 		root, err = cm.GetRootValue(ctx)

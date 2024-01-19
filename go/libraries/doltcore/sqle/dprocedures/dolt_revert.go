@@ -98,10 +98,15 @@ func doDoltRevert(ctx *sql.Context, args []string) (int, error) {
 		if err != nil {
 			return 1, err
 		}
-		commit, err := ddb.Resolve(ctx, commitSpec, headRef)
+		optCmt, err := ddb.Resolve(ctx, commitSpec, headRef)
 		if err != nil {
 			return 1, err
 		}
+		commit, err := optCmt.ToCommit()
+		if err != nil {
+			panic("NM4")
+		}
+
 		commits[i] = commit
 	}
 

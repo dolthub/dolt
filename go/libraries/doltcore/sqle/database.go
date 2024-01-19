@@ -505,9 +505,13 @@ func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asO
 		return nil, nil, err
 	}
 
-	cm, err := ddb.Resolve(ctx, cs, head)
+	optCmt, err := ddb.Resolve(ctx, cs, head)
 	if err != nil {
 		return nil, nil, err
+	}
+	cm, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
 	}
 
 	h, err := cm.HashOf()
@@ -521,11 +525,15 @@ func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asO
 	}
 
 	for {
-		_, curr, err := cmItr.Next(ctx)
+		_, optCmt, err := cmItr.Next(ctx)
 		if err == io.EOF {
 			break
 		} else if err != nil {
 			return nil, nil, err
+		}
+		curr, err := optCmt.ToCommit()
+		if err != nil {
+			panic("NM4")
 		}
 
 		meta, err := curr.GetCommitMeta(ctx)
@@ -572,9 +580,13 @@ func resolveAsOfCommitRef(ctx *sql.Context, db Database, head ref.DoltRef, commi
 		return nil, nil, err
 	}
 
-	cm, err := ddb.ResolveByNomsRoot(ctx, cs, head, nomsRoot)
+	optCmt, err := ddb.ResolveByNomsRoot(ctx, cs, head, nomsRoot)
 	if err != nil {
 		return nil, nil, err
+	}
+	cm, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
 	}
 
 	root, err := cm.GetRootValue(ctx)

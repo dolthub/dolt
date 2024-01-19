@@ -278,9 +278,13 @@ func printObjects(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts) error 
 			return err
 		}
 
-		commit, err := dEnv.DoltDB.Resolve(ctx, headSpec, headRef)
+		optCmt, err := dEnv.DoltDB.Resolve(ctx, headSpec, headRef)
 		if err != nil {
 			return err
+		}
+		commit, err := optCmt.ToCommit()
+		if err != nil {
+			panic("NM4")
 		}
 
 		value := commit.Value()

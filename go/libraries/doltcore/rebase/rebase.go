@@ -193,11 +193,16 @@ func findRebaseCommits(ctx *sql.Context, currentBranchCommit, upstreamBranchComm
 	// Drain the iterator into a slice so that we can easily reverse the order of the commits
 	// so that the oldest commit is first in the generated rebase plan.
 	for {
-		_, commit, err := commitItr.Next(ctx)
+		_, optCmt, err := commitItr.Next(ctx)
 		if err == io.EOF {
 			return commits, nil
 		} else if err != nil {
 			return nil, err
+		}
+
+		commit, err := optCmt.ToCommit()
+		if err != nil {
+			panic("NM4")
 		}
 
 		// Don't include merge commits in the rebase plan

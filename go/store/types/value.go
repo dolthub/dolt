@@ -305,3 +305,58 @@ type asValueImpl interface {
 func (v valueImpl) Kind() NomsKind {
 	return NomsKind(v.buff[0])
 }
+
+// GhostValue is a placeholder for a value that has not been pulled from a remote. The structure holds no information,
+// All methods will panic if called.
+type GhostValue struct {
+}
+
+var _ Value = GhostValue{}
+
+func (g GhostValue) Kind() NomsKind {
+	panic("Error: GhostValue.Kind() called.")
+}
+
+func (g GhostValue) Value(ctx context.Context) (Value, error) {
+	panic("Error: GhostValue.Value() called.")
+}
+
+func (g GhostValue) Less(ctx context.Context, nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+	panic("Error: GhostValue.Less() called.")
+}
+
+func (g GhostValue) Equals(other Value) bool {
+	panic("Error: GhostValue.Equals() called.")
+}
+
+func (g GhostValue) Hash(format *NomsBinFormat) (hash.Hash, error) {
+	panic("Error: GhostValue.Hash() called.")
+}
+
+func (g GhostValue) isPrimitive() bool {
+	panic("Error: GhostValue.isPrimitive() called.")
+}
+
+func (g GhostValue) HumanReadableString() string {
+	panic("Error: GhostValue.HumanReadableString() called.")
+}
+
+func (g GhostValue) walkRefs(format *NomsBinFormat, callback RefCallback) error {
+	panic("Error: GhostValue.walkRefs() called.")
+}
+
+func (g GhostValue) typeOf() (*Type, error) {
+	panic("Error: GhostValue.typeOf() called.")
+}
+
+func (g GhostValue) writeTo(writer nomsWriter, format *NomsBinFormat) error {
+	panic("Error: GhostValue.writeTo() called.")
+}
+
+func (g GhostValue) readFrom(format *NomsBinFormat, reader *binaryNomsReader) (Value, error) {
+	panic("Error: GhostValue.readFrom() called.")
+}
+
+func (g GhostValue) skip(format *NomsBinFormat, reader *binaryNomsReader) {
+	panic("Error: GhostValue.skip() called.")
+}

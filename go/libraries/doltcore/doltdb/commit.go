@@ -46,6 +46,17 @@ type Commit struct {
 	dCommit *datas.Commit
 }
 
+type OptionalCommit struct {
+	Commit *Commit
+}
+
+func (cmt *OptionalCommit) ToCommit() (*Commit, error) {
+	if cmt.Commit == nil {
+		return nil, errors.New("commit is nil")
+	}
+	return cmt.Commit, nil
+}
+
 var _ Rootish = &Commit{}
 
 // NewCommit generates a new Commit object that wraps a supplies datas.Commit.
@@ -116,8 +127,15 @@ func (c *Commit) GetRootValue(ctx context.Context) (*RootValue, error) {
 	return newRootValue(c.vrw, c.ns, rootV)
 }
 
-func (c *Commit) GetParent(ctx context.Context, idx int) (*Commit, error) {
-	return NewCommit(ctx, c.vrw, c.ns, c.parents[idx])
+func (c *Commit) GetParent(ctx context.Context, idx int) (*OptionalCommit, error) {
+	cmt, err := NewCommit(ctx, c.vrw, c.ns, c.parents[idx])
+	if err != nil {
+		return nil, err
+	}
+
+	// NM4 - Looks like this method can return nil - we check in places. Should we return an error instead?
+
+	return &OptionalCommit{cmt}, nil
 }
 
 func (c *Commit) GetCommitClosure(ctx context.Context) (prolly.CommitClosure, error) {
@@ -131,7 +149,7 @@ func (c *Commit) GetCommitClosure(ctx context.Context) (prolly.CommitClosure, er
 
 var ErrNoCommonAncestor = errors.New("no common ancestor")
 
-func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
+func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*OptionalCommit, error) {
 	addr, err := getCommitAncestorAddr(ctx, cm1.dCommit, cm2.dCommit, cm1.vrw, cm2.vrw, cm1.ns, cm2.ns)
 	if err != nil {
 		return nil, err
@@ -142,7 +160,15 @@ func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
 		return nil, err
 	}
 
-	return NewCommit(ctx, cm1.vrw, cm1.ns, targetCommit)
+	if targetCommit.IsGhost() {
+		return &OptionalCommit{nil}, nil
+	}
+
+	cmt, err := NewCommit(ctx, cm1.vrw, cm1.ns, targetCommit)
+	if err != nil {
+		return nil, err
+	}
+	return &OptionalCommit{cmt}, nil
 }
 
 func getCommitAncestorAddr(ctx context.Context, c1, c2 *datas.Commit, vrw1, vrw2 types.ValueReadWriter, ns1, ns2 tree.NodeStore) (hash.Hash, error) {
@@ -159,8 +185,11 @@ func getCommitAncestorAddr(ctx context.Context, c1, c2 *datas.Commit, vrw1, vrw2
 }
 
 func (c *Commit) CanFastForwardTo(ctx context.Context, new *Commit) (bool, error) {
-	ancestor, err := GetCommitAncestor(ctx, c, new)
-
+	optAnc, err := GetCommitAncestor(ctx, c, new)
+	if err != nil {
+		return false, err
+	}
+	ancestor, err := optAnc.ToCommit()
 	if err != nil {
 		return false, err
 	} else if ancestor == nil {
@@ -178,8 +207,12 @@ func (c *Commit) CanFastForwardTo(ctx context.Context, new *Commit) (bool, error
 }
 
 func (c *Commit) CanFastReverseTo(ctx context.Context, new *Commit) (bool, error) {
-	ancestor, err := GetCommitAncestor(ctx, c, new)
+	optAnc, err := GetCommitAncestor(ctx, c, new)
+	if err != nil {
+		return false, err
+	}
 
+	ancestor, err := optAnc.ToCommit()
 	if err != nil {
 		return false, err
 	} else if ancestor == nil {
@@ -196,30 +229,33 @@ func (c *Commit) CanFastReverseTo(ctx context.Context, new *Commit) (bool, error
 	return false, nil
 }
 
-func (c *Commit) GetAncestor(ctx context.Context, as *AncestorSpec) (*Commit, error) {
+func (c *Commit) GetAncestor(ctx context.Context, as *AncestorSpec) (*OptionalCommit, error) {
+	optInst := &OptionalCommit{c}
 	if as == nil || len(as.Instructions) == 0 {
-		return c, nil
+		return optInst, nil
 	}
 
-	cur := c
+	hardInst := c
 
 	instructions := as.Instructions
 	for _, inst := range instructions {
-		if inst >= cur.NumParents() {
+		if inst >= hardInst.NumParents() {
 			return nil, ErrInvalidAncestorSpec
 		}
 
 		var err error
-		cur, err = cur.GetParent(ctx, inst)
+		optInst, err = hardInst.GetParent(ctx, inst)
 		if err != nil {
 			return nil, err
 		}
-		if cur == nil {
-			return nil, ErrInvalidAncestorSpec
+
+		hardInst, err = optInst.ToCommit()
+		if err != nil {
+			return nil, err
 		}
 	}
 
-	return cur, nil
+	return optInst, nil
 }
 
 // ResolveRootValue implements Rootish.

@@ -193,9 +193,13 @@ func startRebase(ctx *sql.Context, upstreamPoint string) error {
 		return err
 	}
 
-	upstreamCommit, err := dbData.Ddb.Resolve(ctx, commitSpec, headRef)
+	optCmt, err := dbData.Ddb.Resolve(ctx, commitSpec, headRef)
 	if err != nil {
 		return err
+	}
+	upstreamCommit, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
 	}
 
 	// rebaseWorkingBranch is the name of the temporary branch used when performing a rebase. In Git, a rebase
@@ -554,10 +558,16 @@ func squashCommitMessage(ctx *sql.Context, nextCommitHash string) (string, error
 	if err != nil {
 		return "", err
 	}
-	nextCommit, err := ddb.Resolve(ctx, spec, headRef)
+
+	optCmt, err := ddb.Resolve(ctx, spec, headRef)
 	if err != nil {
 		return "", err
 	}
+	nextCommit, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
+	}
+
 	nextCommitMeta, err := nextCommit.GetCommitMeta(ctx)
 	if err != nil {
 		return "", err

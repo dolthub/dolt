@@ -60,10 +60,15 @@ func Revert(ctx *sql.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue, commit
 		}
 		revertMessage = fmt.Sprintf(`%s "%s"`, revertMessage, baseMeta.Description)
 
-		parentCM, err := ddb.ResolveParent(ctx, baseCommit, 0)
+		optCmt, err := ddb.ResolveParent(ctx, baseCommit, 0)
 		if err != nil {
 			return nil, "", err
 		}
+		parentCM, err := optCmt.ToCommit()
+		if err != nil {
+			panic("NM4")
+		}
+
 		theirRoot, err := parentCM.GetRootValue(ctx)
 		if err != nil {
 			return nil, "", err

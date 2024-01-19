@@ -19,13 +19,12 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 func doltCountCommits(ctx *sql.Context, args ...string) (sql.RowIter, error) {
@@ -77,10 +76,15 @@ func countCommits(ctx *sql.Context, args ...string) (ahead uint64, behind uint64
 	if err != nil {
 		return 0, 0, err
 	}
-	fromCommit, err := ddb.Resolve(ctx, fromSpec, headRef)
+	optCmt, err := ddb.Resolve(ctx, fromSpec, headRef)
 	if err != nil {
 		return 0, 0, err
 	}
+	fromCommit, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
+	}
+
 	fromHash, err := fromCommit.HashOf()
 	if err != nil {
 		return 0, 0, err
@@ -90,19 +94,29 @@ func countCommits(ctx *sql.Context, args ...string) (ahead uint64, behind uint64
 	if err != nil {
 		return 0, 0, err
 	}
-	toCommit, err := ddb.Resolve(ctx, toSpec, headRef)
+	optCmt, err = ddb.Resolve(ctx, toSpec, headRef)
 	if err != nil {
 		return 0, 0, err
 	}
+	toCommit, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
+	}
+
 	toHash, err := toCommit.HashOf()
 	if err != nil {
 		return 0, 0, err
 	}
 
-	ancestor, err := doltdb.GetCommitAncestor(ctx, fromCommit, toCommit)
+	optCmt, err = doltdb.GetCommitAncestor(ctx, fromCommit, toCommit)
 	if err != nil {
 		return 0, 0, err
 	}
+	ancestor, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
+	}
+
 	ancestorHash, err := ancestor.HashOf()
 	if err != nil {
 		return 0, 0, err

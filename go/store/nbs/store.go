@@ -22,6 +22,7 @@
 package nbs
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -109,6 +110,12 @@ type NomsBlockStore struct {
 
 	stats *Stats
 }
+
+type GhostBlockStore struct {
+	skippedRefs hash.HashSet
+}
+
+var _ chunks.ChunkStore = &GhostBlockStore{}
 
 var _ chunks.TableFileStore = &NomsBlockStore{}
 var _ chunks.ChunkStoreGarbageCollector = &NomsBlockStore{}
@@ -1798,4 +1805,97 @@ func CalcReads(nbs *NomsBlockStore, hashes hash.HashSet, blockSize uint64) (read
 	}
 
 	return
+}
+
+func BuildGhostBlockStore() *GhostBlockStore {
+	// Open file /tmp/skiplist.txt
+	f, err := os.Open("/tmp/skiplist.txt")
+	if err != nil {
+		return nil // NM4 fix all dis.
+	}
+	// Read file line by line
+	scanner := bufio.NewScanner(f)
+	skiplist := hash.HashSet{}
+	for scanner.Scan() {
+		skiplist.Insert(hash.Parse(scanner.Text()))
+	}
+	// NM4 - logrus.Info(skiplist) - Test more when we have a better way to store these.
+
+	return &GhostBlockStore{
+		skippedRefs: skiplist,
+	}
+}
+
+func (g GhostBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
+	if g.skippedRefs.Has(h) {
+		return *chunks.NewGhostChunk(h), nil
+	}
+
+	// NM4 - Better message? Actually... Looks like other chunk stores just return an empty chunk with no error. Make Sure.
+	return chunks.EmptyChunk, nil //  errors.New("not found")
+}
+
+func (g GhostBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(context.Context, *chunks.Chunk)) error {
+	for h := range hashes {
+		if g.skippedRefs.Has(h) {
+			found(ctx, chunks.NewGhostChunk(h))
+		}
+	}
+
+	return nil
+}
+
+func (g GhostBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (g GhostBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet, err error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (g GhostBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (g GhostBlockStore) Version() string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (g GhostBlockStore) AccessMode() chunks.ExclusiveAccessMode {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (g GhostBlockStore) Rebase(ctx context.Context) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (g GhostBlockStore) Root(ctx context.Context) (hash.Hash, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (g GhostBlockStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (g GhostBlockStore) Stats() interface{} {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (g GhostBlockStore) StatsSummary() string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (g GhostBlockStore) Close() error {
+	//TODO implement me
+	panic("implement me")
 }

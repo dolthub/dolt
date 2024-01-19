@@ -136,10 +136,15 @@ func traverseTagHistory(ctx context.Context, menv Environment, r ref.TagRef, old
 	if err != nil {
 		return err
 	}
-	cm, err := new.ReadCommit(ctx, newHash)
+	optCmt, err := new.ReadCommit(ctx, newHash)
 	if err != nil {
 		return err
 	}
+	cm, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
+	}
+
 	return new.NewTagAtCommit(ctx, r, cm, t.Meta)
 }
 
@@ -183,7 +188,11 @@ func traverseCommitHistory(ctx context.Context, menv Environment, cm *doltdb.Com
 		if err = prog.Push(ctx, cm); err != nil {
 			return err
 		}
-		cm, err = cm.GetParent(ctx, idx)
+		optCmt, err := cm.GetParent(ctx, idx)
+		if err != nil {
+			return err
+		}
+		cm, err = optCmt.ToCommit()
 		if err != nil {
 			return err
 		}

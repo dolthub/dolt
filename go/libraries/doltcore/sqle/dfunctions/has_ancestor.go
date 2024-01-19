@@ -74,9 +74,13 @@ func (a *HasAncestor) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		headCommit, err = ddb.Resolve(ctx, cs, headRef)
+		optCmt, err := ddb.Resolve(ctx, cs, headRef)
 		if err != nil {
 			return nil, fmt.Errorf("error during has_ancestor check: ref not found '%s'", headStr)
+		}
+		headCommit, err = optCmt.ToCommit()
+		if err != nil {
+			panic("NM4") // Should never happen?? better error anyway.
 		}
 	}
 
@@ -94,9 +98,13 @@ func (a *HasAncestor) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		ancCommit, err = ddb.Resolve(ctx, cs, headRef)
+		optCmt, err := ddb.Resolve(ctx, cs, headRef)
 		if err != nil {
 			return nil, fmt.Errorf("error during has_ancestor check: ref not found '%s'", ancStr)
+		}
+		ancCommit, err = optCmt.ToCommit()
+		if err != nil {
+			panic("NM4")
 		}
 
 	}

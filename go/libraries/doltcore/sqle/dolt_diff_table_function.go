@@ -326,17 +326,21 @@ func resolveRoot(ctx *sql.Context, sess *dsess.DoltSession, dbName, hashStr stri
 }
 
 func resolveCommit(ctx *sql.Context, ddb *doltdb.DoltDB, headRef ref.DoltRef, cSpecStr string) (*doltdb.Commit, error) {
-	rightCs, err := doltdb.NewCommitSpec(cSpecStr)
+	cs, err := doltdb.NewCommitSpec(cSpecStr)
 	if err != nil {
 		return nil, err
 	}
 
-	rightCm, err := ddb.Resolve(ctx, rightCs, headRef)
+	optCmt, err := ddb.Resolve(ctx, cs, headRef)
 	if err != nil {
 		return nil, err
 	}
+	cm, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
+	}
 
-	return rightCm, nil
+	return cm, nil
 }
 
 // WithChildren implements the sql.Node interface

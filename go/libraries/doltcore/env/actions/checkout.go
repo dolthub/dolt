@@ -235,9 +235,14 @@ func BranchHeadRoot(ctx context.Context, db *doltdb.DoltDB, brName string) (*dol
 		return nil, doltdb.RootValueUnreadable{RootType: doltdb.HeadRoot, Cause: err}
 	}
 
-	cm, err := db.Resolve(ctx, cs, nil)
+	optCmt, err := db.Resolve(ctx, cs, nil)
 	if err != nil {
 		return nil, doltdb.RootValueUnreadable{RootType: doltdb.HeadRoot, Cause: err}
+	}
+
+	cm, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4") // Can't create a branch against a ghost.
 	}
 
 	branchRoot, err := cm.GetRootValue(ctx)

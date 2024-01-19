@@ -190,7 +190,7 @@ func pullTableValue(ctx context.Context, dEnv *env.DoltEnv, srcDB *doltdb.DoltDB
 	cli.Println("Retrieving", tblName)
 	runProgFunc := buildProgStarter(language)
 	wg, pullerEventCh := runProgFunc(newCtx)
-	err = dEnv.DoltDB.PullChunks(ctx, tmpDir, srcDB, []hash.Hash{tblHash}, pullerEventCh)
+	err = dEnv.DoltDB.PullChunks(ctx, tmpDir, srcDB, []hash.Hash{tblHash}, pullerEventCh, nil)
 	stopProgFuncs(cancelFunc, wg, pullerEventCh)
 	if err != nil {
 		return nil, errhand.BuildDError("Failed reading chunks for remote table '%s' at '%s'", tblName, commitStr).AddCause(err).Build()
@@ -217,14 +217,16 @@ func getRemoteDBAtCommit(ctx context.Context, remoteUrl string, remoteUrlParams 
 		return nil, nil, errhand.BuildDError("Invalid Commit '%s'", commitStr).Build()
 	}
 
-	cm, err := srcDB.Resolve(ctx, cs, nil)
-
+	optCmt, err := srcDB.Resolve(ctx, cs, nil)
 	if err != nil {
 		return nil, nil, errhand.BuildDError("Failed to find commit '%s'", commitStr).Build()
 	}
+	cm, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
+	}
 
 	srcRoot, err := cm.GetRootValue(ctx)
-
 	if err != nil {
 		return nil, nil, errhand.BuildDError("Failed to read from database").AddCause(err).Build()
 	}

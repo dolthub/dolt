@@ -142,10 +142,15 @@ func applyStashAtIdx(ctx *sql.Context, dEnv *env.DoltEnv, curWorkingRoot *doltdb
 	if err != nil {
 		return false, err
 	}
-	parentCommit, err := dEnv.DoltDB.Resolve(ctx, headCommitSpec, headRef)
+	optCmt, err := dEnv.DoltDB.Resolve(ctx, headCommitSpec, headRef)
 	if err != nil {
 		return false, err
 	}
+	parentCommit, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4")
+	}
+
 	parentRoot, err := parentCommit.GetRootValue(ctx)
 	if err != nil {
 		return false, err

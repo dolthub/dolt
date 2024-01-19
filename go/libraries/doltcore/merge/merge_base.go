@@ -23,9 +23,13 @@ import (
 )
 
 func MergeBase(ctx context.Context, left, right *doltdb.Commit) (base hash.Hash, err error) {
-	ancestor, err := doltdb.GetCommitAncestor(ctx, left, right)
+	optCmt, err := doltdb.GetCommitAncestor(ctx, left, right)
 	if err != nil {
 		return base, err
+	}
+	ancestor, err := optCmt.ToCommit()
+	if err != nil {
+		panic("NM4") // I think getCommitAncestor is going to be an awk one.
 	}
 
 	return ancestor.HashOf()
