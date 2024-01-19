@@ -125,6 +125,7 @@ var doltSubCommands = []cli.Command{
 	commands.ProfileCmd{},
 	commands.QueryDiff{},
 	commands.ReflogCmd{},
+	commands.RebaseCmd{},
 }
 
 var commandsWithoutCliCtx = []cli.Command{
