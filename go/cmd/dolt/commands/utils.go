@@ -721,6 +721,22 @@ func getTagsForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash strin
 	return tags, nil
 }
 
+// getFastforward helper functions which takes a single sql.Row and an index. If that value at that index is 1, TRUE
+// is returned. This is somewhat context specific, but is used to determine if a merge resulted in a fastward, and the
+// procedures which do this return the FF flag in different columns of their results.
+func getFastforward(row sql.Row, index int) bool {
+	fastForward := false
+	if row != nil && len(row) > index {
+		if ff, ok := row[index].(int64); ok {
+			fastForward = ff == 1
+		} else if ff, ok := row[index].(string); ok {
+			// remote execution returns row as a string
+			fastForward = ff == "1"
+		}
+	}
+	return fastForward
+}
+
 func getHashOf(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (string, error) {
 	q, err := dbr.InterpolateForDialect("select hashof(?)", []interface{}{ref}, dialect.MySQL)
 	if err != nil {

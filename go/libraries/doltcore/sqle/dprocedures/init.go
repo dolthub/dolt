@@ -40,7 +40,7 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dolt_gc", Schema: int64Schema("status"), Function: doltGC, ReadOnly: true, AdminOnly: true},
 
 	{Name: "dolt_merge", Schema: doltMergeSchema, Function: doltMerge},
-	{Name: "dolt_pull", Schema: int64Schema("fast_forward", "conflicts"), Function: doltPull, AdminOnly: true},
+	{Name: "dolt_pull", Schema: doltPullSchema, Function: doltPull, AdminOnly: true},
 	{Name: "dolt_push", Schema: doltPushSchema, Function: doltPush, AdminOnly: true},
 	{Name: "dolt_remote", Schema: int64Schema("status"), Function: doltRemote, AdminOnly: true},
 	{Name: "dolt_reset", Schema: int64Schema("status"), Function: doltReset},
