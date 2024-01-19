@@ -17,6 +17,8 @@ package stats
 import (
 	"errors"
 	"io"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -56,28 +58,55 @@ func loadStats(ctx *sql.Context, dbName string, m prolly.Map) (*dbStats, error) 
 		tableName := row[schema.StatsTableTag].(string)
 		indexName := row[schema.StatsIndexTag].(string)
 		_ = row[schema.StatsVersionTag]
-		commit := row[schema.StatsCommitHashTag].(hash.Hash)
+		commit := hash.Parse(row[schema.StatsCommitHashTag].(string))
 		rowCount := row[schema.StatsRowCountTag].(uint64)
 		distinctCount := row[schema.StatsDistinctCountTag].(uint64)
 		nullCount := row[schema.StatsNullCountTag].(uint64)
-		columns := row[schema.StatsColumnsTag].([]string)
-		typs := row[schema.StatsTypesTag].([]string)
-		boundRow := row[schema.StatsUpperBoundTag].(sql.Row)
+		columns := strings.Split(row[schema.StatsColumnsTag].(string), ",")
+		typesStr := row[schema.StatsTypesTag].(string)
+		boundRowStr := row[schema.StatsUpperBoundTag].(string)
 		upperBoundCnt := row[schema.StatsUpperBoundCntTag].(uint64)
 		createdAt := row[schema.StatsCreatedAtTag].(time.Time)
-		mcvs := []sql.Row{
-			row[schema.StatsMcv1Tag].(sql.Row),
-			row[schema.StatsMcv2Tag].(sql.Row),
-			row[schema.StatsMcv3Tag].(sql.Row),
-			row[schema.StatsMcv4Tag].(sql.Row),
+
+		typs := strings.Split(typesStr, ",")
+		for i, t := range typs {
+			typs[i] = strings.TrimSpace(t)
 		}
-		mcvCnts := row[schema.StatsMcvCountsTag].([]uint64)
+
+		numMcvs := schema.StatsMcvCountsTag - schema.StatsMcv1Tag
+
+		mcvCountsStr := strings.Split(row[schema.StatsMcvCountsTag].(string), ",")
+		mcvCnts := make([]uint64, numMcvs)
+		for i, v := range mcvCountsStr {
+			val, err := strconv.Atoi(v)
+			if err != nil {
+				return nil, err
+			}
+			mcvCnts[i] = uint64(val)
+		}
+
+		mcvs := make([]sql.Row, numMcvs)
+		for i, v := range row[schema.StatsMcv1Tag:schema.StatsMcvCountsTag] {
+			if v != nil {
+				row, err := iter.ParseRow(v.(string))
+				if err != nil {
+					return nil, err
+				}
+				mcvs[i] = row
+			}
+		}
+
 		for i, v := range mcvCnts {
 			if v == 0 {
 				mcvs = mcvs[:i]
 				mcvCnts = mcvCnts[:i]
 				break
 			}
+		}
+
+		boundRow, err := iter.ParseRow(boundRowStr)
+		if err != nil {
+			return nil, err
 		}
 
 		qual := sql.NewStatQualifier(dbName, tableName, indexName)

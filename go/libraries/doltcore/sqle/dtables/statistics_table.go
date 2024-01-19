@@ -17,7 +17,6 @@ package dtables
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -114,7 +113,7 @@ func (st *StatisticsTable) PreciseMatch() bool {
 
 var ErrIncompatibleVersion = errors.New("client stats version mismatch")
 
-func NewStatsIter(ctx *sql.Context, m prolly.Map) (sql.RowIter, error) {
+func NewStatsIter(ctx *sql.Context, m prolly.Map) (*statsIter, error) {
 	iter, err := m.IterAll(ctx)
 	if err != nil {
 		return nil, err
@@ -133,6 +132,10 @@ func NewStatsIter(ctx *sql.Context, m prolly.Map) (sql.RowIter, error) {
 	}, nil
 }
 
+// statsIter reads histogram buckets into string-compatible types.
+// Values that are SQL rows should be converted with statsIter.ParseRow.
+// todo: make a JSON compatible container for sql.Row w/ types so that we
+// can eagerly convert to sql.Row without sacrificing string printing.
 type statsIter struct {
 	iter         prolly.MapIter
 	kb, vb       *val.TupleBuilder
@@ -205,32 +208,14 @@ func (s *statsIter) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 	}
 
+	mcvCountsStr := row[schema.StatsMcvCountsTag].(string)
+
 	numMcvs := schema.StatsMcvCountsTag - schema.StatsMcv1Tag
-
-	mcvCountsStr := strings.Split(row[schema.StatsMcvCountsTag].(string), ",")
-	mcvCnts := make([]uint64, numMcvs)
-	for i, v := range mcvCountsStr {
-		val, err := strconv.Atoi(v)
-		if err != nil {
-			return nil, err
-		}
-		mcvCnts[i] = uint64(val)
-	}
-
-	mcvs := make([]sql.Row, numMcvs)
+	mcvs := make([]string, numMcvs)
 	for i, v := range row[schema.StatsMcv1Tag:schema.StatsMcvCountsTag] {
 		if v != nil {
-			row, err := s.parseRow(v.(string))
-			if err != nil {
-				return nil, err
-			}
-			mcvs[i] = row
+			mcvs[i] = v.(string)
 		}
-	}
-
-	boundRow, err := s.parseRow(upperBoundStr)
-	if err != nil {
-		return nil, err
 	}
 
 	return sql.Row{
@@ -243,17 +228,17 @@ func (s *statsIter) Next(ctx *sql.Context) (sql.Row, error) {
 		uint64(rowCount),
 		uint64(distinctCount),
 		uint64(nullCount),
-		strings.Split(columnsStr, ","),
-		typs,
-		boundRow,
+		columnsStr,
+		typesStr,
+		upperBoundStr,
 		uint64(upperBoundCnt),
 		createdAt,
 		mcvs[0], mcvs[1], mcvs[2], mcvs[3],
-		mcvCnts,
+		mcvCountsStr,
 	}, nil
 }
 
-func (s *statsIter) parseRow(rowStr string) (sql.Row, error) {
+func (s *statsIter) ParseRow(rowStr string) (sql.Row, error) {
 	var row sql.Row
 	for i, v := range strings.Split(rowStr, ",") {
 		val, _, err := s.currentTypes[i].Convert(v)

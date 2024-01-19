@@ -2562,6 +2562,9 @@ func TestStatsIO(t *testing.T) {
 }
 
 func TestJoinStats(t *testing.T) {
+	// these are sensitive to cardinality estimates,
+	// particularly the join-filter tests that trade-off
+	// smallest table first vs smallest join first
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestJoinStats(t, h)

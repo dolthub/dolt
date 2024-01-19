@@ -313,8 +313,8 @@ var DoltStatsIOTests = []queries.ScriptTest{
 			{
 				Query: "select `database`, `table`, `index`, commit_hash, columns, types from dolt_statistics",
 				Expected: []sql.Row{
-					{"mydb", "xy", "primary", "f6la1u3ku5pucfctgrca2afq9vlr4nrs", []string{"x"}, []string{"bigint"}},
-					{"mydb", "xy", "yz", "9ec31007jaqtahij0tmlmd7j9t9hl1he", []string{"y", "z"}, []string{"int", "varchar(500)"}},
+					{"mydb", "xy", "primary", "f6la1u3ku5pucfctgrca2afq9vlr4nrs", "x", "bigint"},
+					{"mydb", "xy", "yz", "9ec31007jaqtahij0tmlmd7j9t9hl1he", "y,z", "int,varchar(500)"},
 				},
 			},
 			{
@@ -324,15 +324,15 @@ var DoltStatsIOTests = []queries.ScriptTest{
 			{
 				Query: fmt.Sprintf("select %s, %s from dolt_statistics", schema.StatsUpperBoundColName, schema.StatsUpperBoundCntColName),
 				Expected: []sql.Row{
-					{sql.Row{int64(5)}, uint64(1)},
-					{sql.Row{int32(2), "a"}, uint64(1)},
+					{"5", uint64(1)},
+					{"2,a", uint64(1)},
 				},
 			},
 			{
 				Query: fmt.Sprintf("select %s, %s, %s, %s, %s from dolt_statistics", schema.StatsMcv1ColName, schema.StatsMcv2ColName, schema.StatsMcv3ColName, schema.StatsMcv4ColName, schema.StatsMcvCountsColName),
 				Expected: []sql.Row{
-					{sql.Row{int64(5)}, sql.Row{int64(1)}, sql.Row{int64(2)}, (sql.Row)(nil), []uint64{1, 1, 1, 0}},
-					{sql.Row{int32(1), "a"}, sql.Row{int32(0), "a"}, sql.Row{int32(2), "a"}, (sql.Row)(nil), []uint64{1, 4, 1, 0}},
+					{"5", "1", "2", "", "1,1,1"},
+					{"1,a", "0,a", "2,a", "", "1,4,1"},
 				},
 			},
 		},
@@ -351,8 +351,8 @@ var DoltStatsIOTests = []queries.ScriptTest{
 			{
 				Query: "select `database`, `table`, `index`, commit_hash, columns, types  from dolt_statistics where `table` = 'xy'",
 				Expected: []sql.Row{
-					{"mydb", "xy", "primary", "f6la1u3ku5pucfctgrca2afq9vlr4nrs", []string{"x"}, []string{"bigint"}},
-					{"mydb", "xy", "yz", "9ec31007jaqtahij0tmlmd7j9t9hl1he", []string{"y", "z"}, []string{"int", "varchar(500)"}},
+					{"mydb", "xy", "primary", "f6la1u3ku5pucfctgrca2afq9vlr4nrs", "x", "bigint"},
+					{"mydb", "xy", "yz", "9ec31007jaqtahij0tmlmd7j9t9hl1he", "y,z", "int,varchar(500)"},
 				},
 			},
 			{
@@ -371,8 +371,8 @@ var DoltStatsIOTests = []queries.ScriptTest{
 			{
 				Query: "select `database`, `table`, `index`, commit_hash, columns, types  from dolt_statistics where `table` = 'ab'",
 				Expected: []sql.Row{
-					{"mydb", "ab", "primary", "t6j206v6b9t8vnmhpcc2i57lom8kejk3", []string{"a"}, []string{"bigint"}},
-					{"mydb", "ab", "bc", "sibnr73868rb5dqa76opfn4pkelhhqna", []string{"b", "c"}, []string{"int", "int"}},
+					{"mydb", "ab", "primary", "t6j206v6b9t8vnmhpcc2i57lom8kejk3", "a", "bigint"},
+					{"mydb", "ab", "bc", "sibnr73868rb5dqa76opfn4pkelhhqna", "b,c", "int,int"},
 				},
 			},
 			{
