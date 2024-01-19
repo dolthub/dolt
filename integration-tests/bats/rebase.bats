@@ -129,7 +129,7 @@ teardown() {
 
     run dolt log
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "main commit 2" ]]
+    [[ "$output" =~ "main commit 2" ]] || false
 }
 
 @test "rebase: invalid rebase plan" {
@@ -328,6 +328,11 @@ teardown() {
     dolt sql -q "insert into t2 values (1);"
     dolt commit -am "b1 commit 2"
 
+    dolt checkout main
+    dolt sql -q "insert into t1 values (2,2);"
+    dolt commit -am "main commit 3"
+    dolt checkout b1
+
     run dolt rebase -i main
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Successfully rebased and updated refs/heads/b1" ]] || false
@@ -336,7 +341,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "b1 commit 2" ]] || false
     [[ "$output" =~ "b1 commit 1" ]] || false
-    [[ "$output" =~ "main commit 1" ]] || false
+    [[ "$output" =~ "main commit 3" ]] || false
     ! [[ "$output" =~ "b1 merge commit" ]] || false
 }
 

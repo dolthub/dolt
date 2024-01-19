@@ -325,7 +325,7 @@ func getRebaseAction(col interface{}) (string, bool) {
 	if ok {
 		return action, true
 	} else {
-		return dprocedures.RebaseActionEnumType.At(int(col.(uint16) - 1))
+		return dprocedures.RebaseActionEnumType.At(int(col.(uint16)))
 	}
 }
 
