@@ -52,7 +52,6 @@ var DoltHistogramTests = []queries.ScriptTest{
 						float64(1),
 						float64(4),
 						float64(1),
-						float64(0),
 					}}},
 				},
 			},
@@ -63,7 +62,6 @@ var DoltHistogramTests = []queries.ScriptTest{
 						[]interface{}{float64(1), "a"},
 						[]interface{}{float64(0), "a"},
 						[]interface{}{float64(2), "a"},
-						[]interface{}{},
 					}}},
 				},
 			},
@@ -316,7 +314,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 			{
 				Query: "select `database`, `table`, `index`, commit_hash, columns, types from dolt_statistics",
 				Expected: []sql.Row{
-					{"mydb", "xy", "PRIMARY", hash.Parse("f6la1u3ku5pucfctgrca2afq9vlr4nrs"), []string{"x"}, []string{"bigint"}},
+					{"mydb", "xy", "primary", hash.Parse("f6la1u3ku5pucfctgrca2afq9vlr4nrs"), []string{"x"}, []string{"bigint"}},
 					{"mydb", "xy", "yz", hash.Parse("9ec31007jaqtahij0tmlmd7j9t9hl1he"), []string{"y", "z"}, []string{"int", "varchar(500)"}},
 				},
 			},
@@ -354,7 +352,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 			{
 				Query: "select `database`, `table`, `index`, commit_hash, columns, types  from dolt_statistics where `table` = 'xy'",
 				Expected: []sql.Row{
-					{"mydb", "xy", "PRIMARY", hash.Parse("f6la1u3ku5pucfctgrca2afq9vlr4nrs"), []string{"x"}, []string{"bigint"}},
+					{"mydb", "xy", "primary", hash.Parse("f6la1u3ku5pucfctgrca2afq9vlr4nrs"), []string{"x"}, []string{"bigint"}},
 					{"mydb", "xy", "yz", hash.Parse("9ec31007jaqtahij0tmlmd7j9t9hl1he"), []string{"y", "z"}, []string{"int", "varchar(500)"}},
 				},
 			},
@@ -365,16 +363,16 @@ var DoltStatsIOTests = []queries.ScriptTest{
 			{
 				Query: "select `table`, `index` from dolt_statistics",
 				Expected: []sql.Row{
-					{"ab", "PRIMARY"},
+					{"ab", "primary"},
 					{"ab", "bc"},
-					{"xy", "PRIMARY"},
+					{"xy", "primary"},
 					{"xy", "yz"},
 				},
 			},
 			{
 				Query: "select `database`, `table`, `index`, commit_hash, columns, types  from dolt_statistics where `table` = 'ab'",
 				Expected: []sql.Row{
-					{"mydb", "ab", "PRIMARY", hash.Parse("t6j206v6b9t8vnmhpcc2i57lom8kejk3"), []string{"a"}, []string{"bigint"}},
+					{"mydb", "ab", "primary", hash.Parse("t6j206v6b9t8vnmhpcc2i57lom8kejk3"), []string{"a"}, []string{"bigint"}},
 					{"mydb", "ab", "bc", hash.Parse("sibnr73868rb5dqa76opfn4pkelhhqna"), []string{"b", "c"}, []string{"int", "int"}},
 				},
 			},

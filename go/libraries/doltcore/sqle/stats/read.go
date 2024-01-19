@@ -72,6 +72,13 @@ func loadStats(ctx *sql.Context, dbName string, m prolly.Map) (*dbStats, error) 
 			row[schema.StatsMcv4Tag].(sql.Row),
 		}
 		mcvCnts := row[schema.StatsMcvCountsTag].([]uint64)
+		for i, v := range mcvCnts {
+			if v == 0 {
+				mcvs = mcvs[:i]
+				mcvCnts = mcvCnts[:i]
+				break
+			}
+		}
 
 		qual := sql.NewStatQualifier(dbName, tableName, indexName)
 		if currentStat.Qual.String() != qual.String() {
