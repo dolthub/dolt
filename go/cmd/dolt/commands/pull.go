@@ -30,6 +30,7 @@ import (
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
@@ -145,6 +146,12 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			errChan <- err
 			return
 		}
+		if len(rows) != 1 {
+			err = fmt.Errorf("Runtime error: merge operation returned unexpected number of rows: %d", len(rows))
+			errChan <- err
+			return
+		}
+		row := rows[0]
 
 		remoteHash, remoteRef, err := getRemoteHashForPull(apr, sqlCtx, queryist)
 		if err != nil {
@@ -171,11 +178,13 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 				})
 			}
 		} else {
+			fastFwd := getFastforward(row, dprocedures.PullProcFFIndex)
+
 			var success int
 			if apr.Contains(cli.NoCommitFlag) {
-				success = printMergeStats(rows, apr, queryist, sqlCtx, usage, headHash, remoteHash, "HEAD", "STAGED")
+				success = printMergeStats(fastFwd, apr, queryist, sqlCtx, usage, headHash, remoteHash, "HEAD", "STAGED")
 			} else {
-				success = printMergeStats(rows, apr, queryist, sqlCtx, usage, headHash, remoteHash, "HEAD", remoteRef)
+				success = printMergeStats(fastFwd, apr, queryist, sqlCtx, usage, headHash, remoteHash, "HEAD", remoteRef)
 			}
 			if success == 1 {
 				errChan <- errors.New(" ") //return a non-nil error for the correct exit code but no further messages to print

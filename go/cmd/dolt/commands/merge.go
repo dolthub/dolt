@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2024 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
@@ -153,6 +154,12 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return 0
 	}
 
+	if len(rows) != 1 {
+		cli.Println("Runtime error: merge operation returned unexpected number of rows: ", len(rows))
+		return 1
+	}
+	row := rows[0]
+
 	if !apr.Contains(cli.AbortParam) {
 		//todo: refs with the `remotes/` prefix will fail to get a hash
 		headHash, headHashErr := getHashOf(queryist, sqlCtx, "HEAD")
@@ -165,10 +172,13 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			cli.Println("merge finished, but failed to get hash of merge ref")
 			cli.Println(mergeHashErr.Error())
 		}
+
+		fastFwd := getFastforward(row, dprocedures.MergeProcFFIndex)
+
 		if apr.Contains(cli.NoCommitFlag) {
-			return printMergeStats(rows, apr, queryist, sqlCtx, usage, headHash, mergeHash, "HEAD", "STAGED")
+			return printMergeStats(fastFwd, apr, queryist, sqlCtx, usage, headHash, mergeHash, "HEAD", "STAGED")
 		}
-		return printMergeStats(rows, apr, queryist, sqlCtx, usage, headHash, mergeHash, "HEAD^1", "HEAD")
+		return printMergeStats(fastFwd, apr, queryist, sqlCtx, usage, headHash, mergeHash, "HEAD^1", "HEAD")
 	}
 
 	return 0
@@ -311,21 +321,16 @@ func constructInterpolatedDoltMergeQuery(apr *argparser.ArgParseResults, cliCtx 
 }
 
 // printMergeStats calculates and prints all merge stats and information.
-func printMergeStats(result []sql.Row, apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context, usage cli.UsagePrinter, headHash, mergeHash, fromRef, toRef string) int {
-	// dolt_merge returns hash, fast_forward, conflicts and dolt_pull returns fast_forward, conflicts
-	fastForward := false
-	if result != nil && len(result) > 0 {
-		ffIndex := 0
-		if len(result[0]) == 3 {
-			ffIndex = 1
-		}
-		if ff, ok := result[0][ffIndex].(int64); ok {
-			fastForward = ff == 1
-		} else if ff, ok := result[0][ffIndex].(string); ok {
-			// remote execution returns result as a string
-			fastForward = ff == "1"
-		}
-	}
+func printMergeStats(fastForward bool,
+	apr *argparser.ArgParseResults,
+	queryist cli.Queryist,
+	sqlCtx *sql.Context,
+	usage cli.UsagePrinter,
+	headHash string,
+	mergeHash string,
+	fromRef string,
+	toRef string) int {
+
 	if fastForward {
 		cli.Println("Fast-forward")
 	}
@@ -363,7 +368,7 @@ func printMergeStats(result []sql.Row, apr *argparser.ArgParseResults, queryist 
 		}
 	}
 
-	if !apr.Contains(cli.NoCommitFlag) && !apr.Contains(cli.NoFFParam) && !fastForward {
+	if !apr.Contains(cli.NoCommitFlag) && !apr.Contains(cli.NoFFParam) && !fastForward && noConflicts {
 		commit, err := getCommitInfo(queryist, sqlCtx, "HEAD")
 		if err != nil {
 			cli.Println("merge finished, but failed to get commit info")

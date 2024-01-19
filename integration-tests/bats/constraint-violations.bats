@@ -15,8 +15,7 @@ teardown() {
 CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, UNIQUE INDEX(v1));
 INSERT INTO test VALUES (1, 1), (2, 2);
 SQL
-    dolt add -A
-    dolt commit -m "MC1"
+    dolt commit -Am "MC1"
     dolt branch other
     dolt sql -q "INSERT INTO test VALUES (3, 3)"
     dolt add -A
@@ -35,7 +34,7 @@ SQL
     [[ "$output" =~ "table,num_violations" ]] || false
     [[ "$output" =~ "test,2" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
-    dolt status
+
     run dolt status
     log_status_eq "0"
     [[ "$output" =~ "fix constraint violations" ]] || false
@@ -58,7 +57,6 @@ SQL
     dolt commit -m "this works"
     run dolt merge other
     log_status_eq "0"
-    [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
 @test "constraint-violations: dolt_force_transaction_commit along with dolt_allow_commit_conflicts ignores constraint violations" {

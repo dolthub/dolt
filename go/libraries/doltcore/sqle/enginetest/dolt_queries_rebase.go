@@ -114,7 +114,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 				// Merging main creates a conflict, so we're in an active
 				// merge until we resolve.
 				Query:    "call dolt_merge('main');",
-				Expected: []sql.Row{{"", 0, 1}},
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
 			},
 			{
 				Query:          "call dolt_rebase('-i', 'main');",

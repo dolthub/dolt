@@ -21,10 +21,16 @@ teardown() {
 
 @test "sql-merge: DOLT_MERGE with no-ff displays hash." {
     dolt add .
-    dolt commit -m "dummy commit"
-    oldHead=$(dolt sql -r csv -q "select hashof('HEAD')" | sed -n '2 p')
+    dolt commit -m "commit on main"
+    oldHead=$(dolt merge-base HEAD HEAD)
+    dolt sql -q "INSERT INTO test VALUES (679283);"
+    dolt commit -a -m "2nd commit on main"
+
+    dolt checkout -b branch HEAD~1
+    dolt sql -q "INSERT INTO test VALUES (380989);"
+    dolt commit -a -m "commit on branch"
     mergeHead=$(dolt sql -r csv -q "call dolt_merge('--no-ff', 'main')" | sed -n '2 p' | head -c 32)
-    newHead=$(dolt sql -r csv -q "select hashof('HEAD')" | sed -n '2 p')
+    newHead=$(dolt merge-base HEAD HEAD)
     echo $mergeHead
     echo $newHead
     [ ! "$mergeHead" = "$oldHead" ]
