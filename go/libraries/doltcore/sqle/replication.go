@@ -22,7 +22,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/sirupsen/logrus"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -104,13 +103,10 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 
 	rrd, err := NewReadReplicaDatabase(ctx, db, remoteName, dEnv)
 	if err != nil {
-		err = fmt.Errorf("%w from remote '%s'; %s", ErrFailedToLoadReplicaDB, remoteName, err.Error())
-		if !dsess.IgnoreReplicationErrors() {
-			return ReadReplicaDatabase{}, err
-		}
-		cli.Println(err)
-		return ReadReplicaDatabase{Database: db}, nil
+		err = fmt.Errorf("%s from remote '%s'; %w", ErrFailedToLoadReplicaDB.Error(), remoteName, err)
+		return ReadReplicaDatabase{}, err
 	}
+	
 	return rrd, nil
 }
 
