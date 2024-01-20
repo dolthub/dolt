@@ -315,6 +315,9 @@ const (
 
 	// RebaseTableName is the rebase system table name.
 	RebaseTableName = "dolt_rebase"
+
+	// StatisticsTableName is the statistics system table name
+	StatisticsTableName = "dolt_statistics"
 )
 
 const (

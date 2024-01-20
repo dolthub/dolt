@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -38,9 +39,9 @@ const (
 	mcvCnt       = 3
 )
 
-// rebuildStats builds histograms for each index statistic metadata
+// refreshStats builds histograms for each index statistic metadata
 // indicated in |newStats|.
-func rebuildStats(ctx *sql.Context, indexes []sql.Index, idxMetas []indexMeta) (map[sql.StatQualifier]*DoltStats, error) {
+func refreshStats(ctx *sql.Context, indexes []sql.Index, idxMetas []indexMeta) (map[sql.StatQualifier]*DoltStats, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	prov := dSess.Provider()
 	db, err := prov.Database(ctx, idxMetas[0].db)
@@ -75,7 +76,7 @@ func rebuildStats(ctx *sql.Context, indexes []sql.Index, idxMetas []indexMeta) (
 	for i, meta := range idxMetas {
 		var idx durable.Index
 		var err error
-		if meta.index == "PRIMARY" {
+		if strings.EqualFold(meta.index, "PRIMARY") {
 			idx, err = dTab.GetRowData(ctx)
 		} else {
 			idx, err = dTab.GetIndexRowData(ctx, meta.index)
@@ -86,6 +87,28 @@ func rebuildStats(ctx *sql.Context, indexes []sql.Index, idxMetas []indexMeta) (
 		prollyMap := durable.ProllyMapFromIndex(idx)
 		keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc())
 		buffPool := prollyMap.NodeStore().Pool()
+
+		firstIter, err := prollyMap.IterOrdinalRange(ctx, 0, 1)
+		if err != nil {
+			return nil, err
+		}
+		keyBytes, _, err := firstIter.Next(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for i := range keyBuilder.Desc.Types {
+			keyBuilder.PutRaw(i, keyBytes.GetField(i))
+		}
+
+		prefixLen := len(meta.cols)
+		firstKey := keyBuilder.BuildPrefixNoRecycle(buffPool, prefixLen)
+		firstRow := make(sql.Row, prefixLen)
+		for i := 0; i < prefixLen; i++ {
+			firstRow[i], err = tree.GetField(ctx, prollyMap.KeyDesc(), i, firstKey, prollyMap.NodeStore())
+			if err != nil {
+				return nil, err
+			}
+		}
 
 		var types []sql.Type
 		for _, cet := range indexes[i].ColumnExpressionTypes() {
@@ -110,7 +133,7 @@ func rebuildStats(ctx *sql.Context, indexes []sql.Index, idxMetas []indexMeta) (
 			CreatedAt: time.Now(),
 			Columns:   meta.cols,
 			Types:     types,
-			Qualifier: qual,
+			Qual:      qual,
 		}
 
 		var start, stop uint64
@@ -144,7 +167,6 @@ func rebuildStats(ctx *sql.Context, indexes []sql.Index, idxMetas []indexMeta) (
 				}
 
 				updater.add(keyBuilder.BuildPrefixNoRecycle(buffPool, updater.prefixLen))
-
 				keyBuilder.Recycle()
 			}
 
@@ -153,10 +175,12 @@ func rebuildStats(ctx *sql.Context, indexes []sql.Index, idxMetas []indexMeta) (
 			if err != nil {
 				return nil, err
 			}
+			bucket.Chunk = addrs[i]
 			ret[updater.qual].Histogram = append(ret[updater.qual].Histogram, bucket)
 		}
 		ret[updater.qual].DistinctCount = uint64(updater.globalDistinct)
 		ret[updater.qual].RowCount = uint64(updater.globalCount)
+		ret[updater.qual].LowerBound = firstRow
 	}
 	return ret, nil
 }
@@ -171,7 +195,7 @@ func newBucketBuilder(qual sql.StatQualifier, prefixLen int, tupleDesc val.Tuple
 }
 
 // bucketBuilder performs an aggregation on a sorted series of keys to
-// collect statistics for a single histogram bucket. Distinct is fuzzy,
+// collect statistics for a single histogram bucket. DistinctCount is fuzzy,
 // we might double count a key that crosses bucket boundaries.
 type bucketBuilder struct {
 	qual      sql.StatQualifier
@@ -226,13 +250,13 @@ func (u *bucketBuilder) finalize(ctx context.Context, ns tree.NodeStore) (DoltBu
 		}
 	}
 	return DoltBucket{
-		Count:      uint64(u.count),
-		Distinct:   uint64(u.distinct),
-		BoundCount: uint64(u.currentCnt),
-		Mcvs:       mcvRows,
-		McvCount:   u.mcvs.Counts(),
-		UpperBound: upperBound,
-		Null:       uint64(u.nulls),
+		RowCount:      uint64(u.count),
+		DistinctCount: uint64(u.distinct),
+		BoundCount:    uint64(u.currentCnt),
+		Mcvs:          mcvRows,
+		McvCount:      u.mcvs.Counts(),
+		UpperBound:    upperBound,
+		NullCount:     uint64(u.nulls),
 	}, nil
 }
 
