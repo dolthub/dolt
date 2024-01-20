@@ -108,6 +108,35 @@ teardown() {
     [[ ! "$output" =~ "feature" ]] || false
 }
 
+@test "replication: push tag delete, pull delete on read" {
+    cd repo1
+    dolt tag tag1
+    dolt tag tag2
+    dolt push remote1 tag1
+    dolt push remote1 tag2
+
+    cd ..
+    dolt clone file://./rem1 repo2
+    cd repo2
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote origin
+    dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
+
+    run dolt sql -q "select tag_name from dolt_tags" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "tag1" ]] || false
+    [[ "$output" =~ "tag2" ]] || false
+
+    cd ../repo1
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote remote1
+    dolt tag -d tag1
+
+    cd ../repo2
+    run dolt sql -q "select tag_name from dolt_tags" -r csv
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "tag1" ]] || false
+    [[ "$output" =~ "tag2" ]] || false
+}
+
 @test "replication: pull branch delete on read" {
     cd repo1
     dolt push remote1 feature
@@ -187,14 +216,6 @@ SQL
     dolt sql -q "select count(*) from dolt_diff('HEAD~', 'HEAD', 't1')"
     dolt sql -q "select count(*) from dolt_diff_stat('HEAD', 'HEAD~', 't1')"
     dolt sql -q "select count(*) from dolt_log()"
-}
-
-@test "replication: tag does not trigger replication" {
-    cd repo1
-    dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
-    dolt tag
-
-    [ ! -d "../bac1/.dolt" ] || false
 }
 
 @test "replication: pull on read" {
@@ -568,6 +589,7 @@ SQL
 }
 
 @test "replication: pull all heads pulls tags" {
+
     dolt clone file://./rem1 repo2
     cd repo2
     dolt checkout -b new_feature
@@ -583,6 +605,32 @@ SQL
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
     [[ "$output" =~ "v1" ]] || false
+}
+
+@test "replication: tag is pushed" {
+    cd repo1
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote remote1
+    dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
+    dolt tag tag1
+
+    cd ../
+    dolt clone file://./rem1 repo2
+    cd repo2
+
+    dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote origin
+    run dolt tag
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "tag1" ]] || false
+
+    cd ../repo1
+    dolt sql -q "call dolt_tag('tag2')"
+
+    cd ../repo2
+    run dolt sql -q "select * from dolt_tags"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "tag1" ]] || false
+    [[ "$output" =~ "tag2" ]] || false
 }
 
 @test "replication: pull creates remote tracking branches" {
