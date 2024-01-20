@@ -106,7 +106,7 @@ func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEn
 		err = fmt.Errorf("%s from remote '%s'; %w", ErrFailedToLoadReplicaDB.Error(), remoteName, err)
 		return ReadReplicaDatabase{}, err
 	}
-	
+
 	return rrd, nil
 }
 
