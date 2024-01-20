@@ -62,7 +62,7 @@ func TestLimiter(t *testing.T) {
 				}()
 			}
 
-			// TODO: This is some janky to reduce flakiness.
+			// TODO: This is some jank to reduce flakiness.
 			sema.Acquire(context.Background(), 16)
 			time.Sleep(10 * time.Millisecond)
 			for i := 0; i < 128; i++ {

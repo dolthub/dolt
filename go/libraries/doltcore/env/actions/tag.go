@@ -73,10 +73,6 @@ func CreateTagOnDB(ctx context.Context, ddb *doltdb.DoltDB, tagName, startPoint 
 	return ddb.NewTagAtCommit(ctx, tagRef, cm, meta)
 }
 
-func DeleteTags(ctx context.Context, dEnv *env.DoltEnv, tagNames ...string) error {
-	return DeleteTagsOnDB(ctx, dEnv.DoltDB, tagNames...)
-}
-
 func DeleteTagsOnDB(ctx context.Context, ddb *doltdb.DoltDB, tagNames ...string) error {
 	for _, tn := range tagNames {
 		dref := ref.NewTagRef(tn)
