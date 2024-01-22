@@ -134,6 +134,25 @@ setupCustomEditorScript() {
     [[ "$output" =~ "main commit 2" ]] || false
 }
 
+@test "rebase: failed rebase will abort and clean up" {
+    setupCustomEditorScript "invalidRebasePlan.txt"
+    dolt checkout b1
+
+    touch invalidRebasePlan.txt
+    echo "foo" >> invalidRebasePlan.txt
+    run dolt rebase -i main
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "invalid line 0: foo" ]] || false
+
+    run dolt branch
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "dolt_rebase_b1" ]] || false
+
+    run dolt rebase --continue
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no rebase in progress" ]] || false
+}
+
 @test "rebase: invalid rebase plan" {
     setupCustomEditorScript "invalidRebasePlan.txt"
 
@@ -145,7 +164,6 @@ setupCustomEditorScript() {
     [ "$status" -eq 1 ]
     [[ "$output" =~ "invalid line 0: foo" ]] || false
 
-    dolt branch -D dolt_rebase_b1
     touch invalidRebasePlan.txt
     echo "pick foo main commit 1" >> invalidRebasePlan.txt
     run dolt rebase -i main
