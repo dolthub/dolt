@@ -1254,6 +1254,27 @@ func (ddb *DoltDB) deleteRef(ctx context.Context, dref ref.DoltRef, replicationS
 	return err
 }
 
+// DeleteAllRefs Very destructive, use with caution. Not only does this drop all data, Dolt assume there is always
+// a reference in the DB, so do not call this and walk away. The only use case for this method is the
+// `dolt clone` command which strip everything from the remote's root object - dolt_clone stored procedure doesn't currently
+// use this code path (TODO).
+func (ddb *DoltDB) DeleteAllRefs(ctx context.Context) error {
+	dss, err := ddb.db.Datasets(ctx)
+	if err != nil {
+		return err
+	}
+	err = dss.IterAll(ctx, func(key string, addr hash.Hash) error {
+		ds, e := ddb.db.GetDataset(ctx, key)
+		if e != nil {
+			return e
+		}
+
+		_, e = ddb.db.Delete(ctx, ds, "")
+		return e
+	})
+	return err
+}
+
 // NewTagAtCommit create a new tag at the commit given.
 func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, tagRef ref.DoltRef, c *Commit, meta *datas.TagMeta) error {
 	if !IsValidTagRef(tagRef) {
