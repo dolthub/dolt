@@ -43,33 +43,21 @@ var rebaseDocs = cli.CommandDocumentationContent{
 	LongDesc: `Rewrites commit history for the current branch by replaying commits, allowing the commits to be reordered, 
 squashed, or dropped. The commits included in the rebase plan are the commits reachable by the current branch, but NOT 
 reachable from the branch specified as the argument when starting a rebase (also known as the upstream branch). This is 
-the same as Git and Dolt's ["two dot log" syntax](https://www.dolthub.com/blog/2022-11-11-two-and-three-dot-diff-and-log/#two-dot-log), 
-or |upstreamBranch|..|currentBranch|.
+the same as Git and Dolt's "two dot log" syntax, or |upstreamBranch|..|currentBranch|.
 
-For example, consider the commit graph below, where a {{.EmphasisLeft}}feature{{.EmphasisRight}} branch has branched off of a {{.EmphasisLeft}}main{{.EmphasisRight}} branch, and both branches have added commits:
-
-	A → B → C → D → E → F  main
-			 ↘
-			  G → H → I  feature
-
-If we rebase from the {{.EmphasisLeft}}feature{{.EmphasisRight}} branch using the {{.EmphasisLeft}}main{{.EmphasisRight}} branch as our upstream, the default rebase plan will include commits {{.EmphasisLeft}}G{{.EmphasisRight}}, {{.EmphasisLeft}}H{{.EmphasisRight}}, and {{.EmphasisLeft}}I{{.EmphasisRight}}, since those commits are reachable from our current branch, but NOT reachable from the upstream branch. By default, the changes from those same commits will be reapplied, in the same order, to the tip of the upstream branch {{.EmphasisLeft}}main{{.EmphasisRight}}. The resulting commit graph will then look like:
-	A → B → C → D → E → F  main
-						 ↘
-						  G' → H' → I'  feature
-
-Rebasing is useful to clean and organize your commit history, especially before merging a feature branch back to a shared branch. For example, you can drop commits that contain debugging or test changes, or squash or fixup small commits into a single commit, or reorder commits so that related changes are adjacent in the new commit history.
-
-	CALL DOLT_REBASE('--interactive', 'main');
-	CALL DOLT_REBASE('-i', 'main');
-	CALL DOLT_REBASE('--continue');
-	CALL DOLT_REBASE('--abort');
+Rebasing is useful to clean and organize your commit history, especially before merging a feature branch back to a shared 
+branch. For example, you can drop commits that contain debugging or test changes, or squash or fixup small commits into a 
+single commit, or reorder commits so that related changes are adjacent in the new commit history.
 `,
 	Synopsis: []string{
-		`-i | --interactive [--continue] [--abort]`,
+		`(-i | --interactive) {{.LessThan}}upstream{{.GreaterThan}}`,
+		`(--continue | --abort)`,
 	},
 }
 
 type RebaseCmd struct{}
+
+var _ cli.Command = RebaseCmd{}
 
 // Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd RebaseCmd) Name() string {
@@ -95,10 +83,6 @@ func (cmd RebaseCmd) ArgParser() *argparser.ArgParser {
 	return cli.CreateRebaseArgParser()
 }
 
-func (cmd RebaseCmd) RequiresRepo() bool {
-	return false
-}
-
 // Exec executes the command
 func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
@@ -117,9 +101,8 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	rebaseBranchName := "dolt_rebase_" + branchName
 
-	query, err := constructInterpolatedDoltRebaseQuery(apr, rebaseBranchName)
+	query, err := constructInterpolatedDoltRebaseQuery(apr)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -138,17 +121,18 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 
 	message := rows[0][1].(string)
-	if strings.Contains(message, "interactive rebase completed") {
-		cli.Println("Successfully rebased and updated refs/heads/" + branchName + ".")
-	} else if strings.Contains(message, "interactive rebase aborted") {
-		cli.Println("Interactive rebase aborted.")
+	if strings.Contains(message, dprocedures.SuccessfulRebaseMessage) {
+		cli.Println(dprocedures.SuccessfulRebaseMessage + branchName)
+	} else if strings.Contains(message, dprocedures.RebaseAbortedMessage) {
+		cli.Println(dprocedures.RebaseAbortedMessage)
 	} else {
 		rebasePlan, err := getRebasePlan(cliCtx, sqlCtx, queryist, apr.Arg(0), branchName)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
 
-		if rebasePlan == nil || rebasePlan.Steps == nil {
+		// if all uncommented lines are deleted in the editor, abort the rebase
+		if rebasePlan == nil || rebasePlan.Steps == nil || len(rebasePlan.Steps) == 0 {
 			rows, err := GetRowsForSql(queryist, sqlCtx, "CALL DOLT_REBASE('--abort');")
 			if err != nil {
 				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -161,7 +145,7 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("error: "+rows[0][1].(string))), usage)
 			}
 
-			cli.Println("Interactive rebase aborted.")
+			cli.Println(dprocedures.RebaseAbortedMessage)
 		} else {
 			err = insertRebasePlanIntoDoltRebaseTable(rebasePlan, sqlCtx, queryist)
 			if err != nil {
@@ -180,7 +164,7 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("error: "+rows[0][1].(string))), usage)
 			}
 
-			cli.Println("Successfully rebased and updated refs/heads/" + branchName + ".")
+			cli.Println(dprocedures.SuccessfulRebaseMessage + branchName)
 		}
 	}
 
@@ -189,10 +173,9 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 // constructInterpolatedDoltRebaseQuery generates the sql query necessary to call the DOLT_REBASE() function.
 // Also interpolates this query to prevent sql injection.
-func constructInterpolatedDoltRebaseQuery(apr *argparser.ArgParseResults, rebaseBranchName string) (string, error) {
+func constructInterpolatedDoltRebaseQuery(apr *argparser.ArgParseResults) (string, error) {
 	var params []interface{}
 	var args []string
-	var checkoutQuery string
 
 	if apr.NArg() == 1 {
 		params = append(params, apr.Arg(0))
@@ -208,17 +191,8 @@ func constructInterpolatedDoltRebaseQuery(apr *argparser.ArgParseResults, rebase
 		args = append(args, "'--abort'")
 	}
 
-	/*if apr.ContainsAny(cli.ContinueFlag, cli.AbortParam) {
-		checkoutQuery = fmt.Sprintf("CALL DOLT_CHECKOUT('dolt_rebase_%s'); ", rebaseBranchName)
-	}*/
-
-	query := fmt.Sprintf("%sCALL DOLT_REBASE(%s);", checkoutQuery, strings.Join(args, ", "))
-	interpolatedQuery, err := dbr.InterpolateForDialect(query, params, dialect.MySQL)
-	if err != nil {
-		return "", err
-	}
-
-	return interpolatedQuery, nil
+	query := fmt.Sprintf("CALL DOLT_REBASE(%s);", strings.Join(args, ", "))
+	return dbr.InterpolateForDialect(query, params, dialect.MySQL)
 }
 
 // getRebasePlan opens an editor for users to edit the rebase plan and returns the parsed rebase plan from the editor.
@@ -252,12 +226,7 @@ func getRebasePlan(cliCtx cli.CliContext, sqlCtx *sql.Context, queryist cli.Quer
 		return nil, err
 	}
 
-	rebasePlan, err := parseRebaseMessage(rebaseMsg)
-	if err != nil {
-		return nil, err
-	}
-
-	return rebasePlan, nil
+	return parseRebaseMessage(rebaseMsg)
 }
 
 // buildInitialRebaseMsg builds the initial message to display to the user when they open the rebase plan editor,
@@ -291,14 +260,7 @@ func buildInitialRebaseMsg(sqlCtx *sql.Context, queryist cli.Queryist, rebaseBra
 	if err != nil {
 		return "", err
 	}
-	rows, err = GetRowsForSql(queryist, sqlCtx, "SELECT COUNT(*) FROM dolt_rebase")
-	if err != nil {
-		return "", err
-	}
-	numSteps, err := getInt64ColAsInt64(rows[0][0])
-	if err != nil {
-		return "", err
-	}
+	numSteps := len(rows)
 	buffer.WriteString(fmt.Sprintf("# Rebase %s..%s onto %s (%d commands)\n#\n", rebaseBranchHash, currentBranchHash, rebaseBranchHash, numSteps))
 
 	buffer.WriteString("# Commands:\n")
@@ -334,7 +296,7 @@ func parseRebaseMessage(rebaseMsg string) (*rebase.RebasePlan, error) {
 	plan := &rebase.RebasePlan{}
 	splitMsg := strings.Split(rebaseMsg, "\n")
 	for i, line := range splitMsg {
-		if !strings.HasPrefix(line, "#") && strings.ReplaceAll(line, " ", "") != "" {
+		if !strings.HasPrefix(line, "#") && strings.TrimSpace(line) != "" {
 			rebaseStepParts := strings.SplitN(line, " ", 3)
 			if len(rebaseStepParts) != 3 {
 				return nil, fmt.Errorf("invalid line %d: %s", i, line)

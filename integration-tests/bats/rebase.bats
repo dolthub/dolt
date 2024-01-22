@@ -24,6 +24,17 @@ teardown() {
     teardown_common
 }
 
+setupCustomEditorScript() {
+    touch rebaseScript.sh
+    echo "#!/bin/bash" >> rebaseScript.sh
+    if [ $# -eq 1 ]; then
+      echo "mv $1 \$1" >> rebaseScript.sh
+    fi
+    chmod +x rebaseScript.sh
+    export EDITOR=$PWD/rebaseScript.sh
+    export DOLT_TEST_FORCE_OPEN_EDITOR="1"
+}
+
 @test "rebase: no rebase in progress errors" {
     run dolt rebase --abort
     [ "$status" -eq 1 ]
@@ -90,12 +101,7 @@ teardown() {
 }
 
 @test "rebase: verify custom script" {
-    touch rebaseScript.sh
-    echo "#!/bin/bash" >> rebaseScript.sh
-    echo "mv rebasePlan.txt \$1" >> rebaseScript.sh
-    chmod +x rebaseScript.sh
-    export EDITOR=$PWD/rebaseScript.sh
-    export DOLT_TEST_FORCE_OPEN_EDITOR="1"
+    setupCustomEditorScript "rebasePlan.txt"
 
     dolt checkout b1
     run dolt show head
@@ -116,11 +122,7 @@ teardown() {
 }
 
 @test "rebase: basic rebase" {
-    touch rebaseScript.sh
-    echo "#!/bin/bash" >> rebaseScript.sh
-    chmod +x rebaseScript.sh
-    export EDITOR=$PWD/rebaseScript.sh
-    export DOLT_TEST_FORCE_OPEN_EDITOR="1"
+    setupCustomEditorScript
 
     dolt checkout b1
     run dolt rebase -i main
@@ -133,12 +135,7 @@ teardown() {
 }
 
 @test "rebase: invalid rebase plan" {
-    touch rebaseScript.sh
-    echo "#!/bin/bash" >> rebaseScript.sh
-    echo "mv invalidRebasePlan.txt \$1" >> rebaseScript.sh
-    chmod +x rebaseScript.sh
-    export EDITOR=$PWD/rebaseScript.sh
-    export DOLT_TEST_FORCE_OPEN_EDITOR="1"
+    setupCustomEditorScript "invalidRebasePlan.txt"
 
     dolt checkout b1
 
@@ -149,7 +146,7 @@ teardown() {
     [[ "$output" =~ "invalid line 0: foo" ]] || false
 
     dolt branch -D dolt_rebase_b1
-    > invalidRebasePlan.txt
+    touch invalidRebasePlan.txt
     echo "pick foo main commit 1" >> invalidRebasePlan.txt
     run dolt rebase -i main
     [ "$status" -eq 1 ]
@@ -157,17 +154,10 @@ teardown() {
 }
 
 @test "rebase: empty rebase plan aborts the rebase" {
+    setupCustomEditorScript "emptyRebasePlan.txt"
     touch emptyRebasePlan.txt
     echo "# " >> emptyRebasePlan.txt
     echo "# commented out lines don't count" >> emptyRebasePlan.txt
-
-    touch rebaseScript.sh
-    echo "#!/bin/bash" >> rebaseScript.sh
-    echo "mv emptyRebasePlan.txt \$1" >> rebaseScript.sh
-    chmod +x rebaseScript.sh
-
-    export EDITOR=$PWD/rebaseScript.sh
-    export DOLT_TEST_FORCE_OPEN_EDITOR="1"
 
     dolt checkout b1
     run dolt rebase -i main
@@ -188,12 +178,7 @@ teardown() {
 }
 
 @test "rebase: multi step rebase" {
-    touch rebaseScript.sh
-    echo "#!/bin/bash" >> rebaseScript.sh
-    echo "mv multiStepPlan.txt \$1" >> rebaseScript.sh
-    chmod +x rebaseScript.sh
-    export EDITOR=$PWD/rebaseScript.sh
-    export DOLT_TEST_FORCE_OPEN_EDITOR="1"
+    setupCustomEditorScript "multiStepPlan.txt"
 
     dolt checkout b1
     run dolt show head
@@ -269,12 +254,7 @@ teardown() {
 }
 
 @test "rebase: non-standard plan changes" {
-    touch rebaseScript.sh
-    echo "#!/bin/bash" >> rebaseScript.sh
-    echo "mv nonStandardPlan.txt \$1" >> rebaseScript.sh
-    chmod +x rebaseScript.sh
-    export EDITOR=$PWD/rebaseScript.sh
-    export DOLT_TEST_FORCE_OPEN_EDITOR="1"
+    setupCustomEditorScript "nonStandardPlan.txt"
 
     dolt checkout -b b2
     dolt sql -q "CREATE table t3 (pk int primary key);"
@@ -317,11 +297,7 @@ teardown() {
 }
 
 @test "rebase: rebase skips merge commits" {
-    touch rebaseScript.sh
-    echo "#!/bin/bash" >> rebaseScript.sh
-    chmod +x rebaseScript.sh
-    export EDITOR=$PWD/rebaseScript.sh
-    export DOLT_TEST_FORCE_OPEN_EDITOR="1"
+    setupCustomEditorScript
 
     dolt checkout b1
     dolt merge main -m "b1 merge commit"
@@ -346,11 +322,7 @@ teardown() {
 }
 
 @test "rebase: rebase with data conflicts aborts" {
-    touch rebaseScript.sh
-    echo "#!/bin/bash" >> rebaseScript.sh
-    chmod +x rebaseScript.sh
-    export EDITOR=$PWD/rebaseScript.sh
-    export DOLT_TEST_FORCE_OPEN_EDITOR="1"
+    setupCustomEditorScript
 
     dolt checkout b1
     dolt sql -q "INSERT INTO t1 VALUES (1,2);"
@@ -371,11 +343,7 @@ teardown() {
 }
 
 @test "rebase: rebase with schema conflicts aborts" {
-    touch rebaseScript.sh
-    echo "#!/bin/bash" >> rebaseScript.sh
-    chmod +x rebaseScript.sh
-    export EDITOR=$PWD/rebaseScript.sh
-    export DOLT_TEST_FORCE_OPEN_EDITOR="1"
+    setupCustomEditorScript
 
     dolt checkout b1
     dolt sql -q "ALTER TABLE t1 MODIFY COLUMN c varchar(100);"

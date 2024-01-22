@@ -321,7 +321,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_rebase('--abort');",
-				Expected: []sql.Row{{0, "interactive rebase aborted"}},
+				Expected: []sql.Row{{0, "Interactive rebase aborted"}},
 			},
 			{
 				Query:    "select active_branch();",
@@ -412,7 +412,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_rebase('--continue');",
-				Expected: []sql.Row{{0, "interactive rebase completed"}},
+				Expected: []sql.Row{{0, "Successfully rebased and updated refs/heads/branch1"}},
 			},
 			{
 				// When rebase completes, rebase status should be cleared
@@ -627,7 +627,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_rebase('--continue');",
-				Expected: []sql.Row{{0, "interactive rebase completed"}},
+				Expected: []sql.Row{{0, "Successfully rebased and updated refs/heads/branch1"}},
 			},
 			{
 				Query: "select message from dolt_log;",
@@ -694,7 +694,7 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_rebase('--continue');",
-				Expected: []sql.Row{{0, "interactive rebase completed"}},
+				Expected: []sql.Row{{0, "Successfully rebased and updated refs/heads/branch1"}},
 			},
 			{
 				Query: "select message from dolt_log;",
