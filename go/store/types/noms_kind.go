@@ -71,6 +71,7 @@ const (
 	MultiLineStringKind
 	MultiPolygonKind
 	GeometryCollectionKind
+	CustomInlineKind
 
 	UnknownKind NomsKind = 255
 )
@@ -107,6 +108,7 @@ func init() {
 	KindToType[MultiLineStringKind] = MultiLineString{}
 	KindToType[MultiPolygonKind] = MultiPolygon{}
 	KindToType[GeometryCollectionKind] = GeomColl{}
+	KindToType[CustomInlineKind] = CustomInline{}
 
 	SupportedKinds[BlobKind] = true
 	SupportedKinds[BoolKind] = true
@@ -139,6 +141,7 @@ func init() {
 	SupportedKinds[MultiLineStringKind] = true
 	SupportedKinds[MultiPolygonKind] = true
 	SupportedKinds[GeometryCollectionKind] = true
+	SupportedKinds[CustomInlineKind] = true
 
 	if serial.MessageTypesKind != int(SerialMessageKind) {
 		panic("internal error: serial.MessageTypesKind != SerialMessageKind")
@@ -180,6 +183,7 @@ var KindToString = map[NomsKind]string{
 	MultiLineStringKind:    "MultiLineString",
 	MultiPolygonKind:       "MultiPolygon",
 	GeometryCollectionKind: "GeometryCollection",
+	CustomInlineKind:       "CustomInline",
 }
 
 // String returns the name of the kind.

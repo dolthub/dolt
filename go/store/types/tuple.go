@@ -829,6 +829,18 @@ func (t Tuple) TupleCompare(ctx context.Context, nbf *NomsBinFormat, otherTuple 
 				return 0, err
 			}
 
+		case CustomInlineKind:
+			size, otherSize := uint32(dec.readUint16()), uint32(otherDec.readUint16())
+			start, otherStart := dec.offset, otherDec.offset
+			dec.offset += size
+			otherDec.offset += otherSize
+			v1 := dec.buff[start:dec.offset]
+			v2 := otherDec.buff[otherStart:otherDec.offset]
+			res, err = CustomInline(v1).Compare(CustomInline(v2))
+			if err != nil {
+				return 0, err
+			}
+
 		default:
 			v, err := dec.readValue(nbf)
 

@@ -56,6 +56,8 @@ func GetTypeConverter(ctx context.Context, srcTi TypeInfo, destTi TypeInfo) (tc 
 		return blobStringTypeConverter(ctx, src, destTi)
 	case *boolType:
 		return boolTypeConverter(ctx, src, destTi)
+	case *customType:
+		return customTypeConverter(ctx, src, destTi)
 	case *datetimeType:
 		return datetimeTypeConverter(ctx, src, destTi)
 	case *decimalType:
@@ -132,6 +134,16 @@ func wrapConvertValueToNomsValue(
 			vInt = string(str)
 		case types.Bool:
 			vInt = bool(val)
+		case types.CustomInline:
+			c, ok := val.GetType()
+			if !ok {
+				return nil, fmt.Errorf("unable to find the corresponding custom type")
+			}
+			var err error
+			vInt, err = c.DeserializeValue(val[1:])
+			if err != nil {
+				return nil, err
+			}
 		case types.Decimal:
 			vInt = decimal.Decimal(val).String()
 		case types.Float:

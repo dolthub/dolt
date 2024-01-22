@@ -220,45 +220,46 @@ func validateSchema(existing schema.Schema) error {
 func nomsKindsFromQueryTypes(qt query.Type) []types.NomsKind {
 	switch qt {
 	case query.Type_UINT8:
-		return []types.NomsKind{types.UintKind, types.BoolKind}
+		return []types.NomsKind{types.UintKind, types.BoolKind, types.CustomInlineKind}
 
 	case query.Type_UINT16, query.Type_UINT24,
 		query.Type_UINT32, query.Type_UINT64:
-		return []types.NomsKind{types.UintKind}
+		return []types.NomsKind{types.UintKind, types.CustomInlineKind}
 
 	case query.Type_INT8:
-		return []types.NomsKind{types.IntKind, types.BoolKind}
+		return []types.NomsKind{types.IntKind, types.BoolKind, types.CustomInlineKind}
 
 	case query.Type_INT16, query.Type_INT24,
 		query.Type_INT32, query.Type_INT64:
-		return []types.NomsKind{types.IntKind}
+		return []types.NomsKind{types.IntKind, types.CustomInlineKind}
 
 	case query.Type_YEAR, query.Type_TIME:
-		return []types.NomsKind{types.IntKind}
+		return []types.NomsKind{types.IntKind, types.CustomInlineKind}
 
 	case query.Type_FLOAT32, query.Type_FLOAT64:
-		return []types.NomsKind{types.FloatKind}
+		return []types.NomsKind{types.FloatKind, types.CustomInlineKind}
 
 	case query.Type_TIMESTAMP, query.Type_DATE, query.Type_DATETIME:
-		return []types.NomsKind{types.TimestampKind}
+		return []types.NomsKind{types.TimestampKind, types.CustomInlineKind}
 
 	case query.Type_DECIMAL:
-		return []types.NomsKind{types.DecimalKind}
+		return []types.NomsKind{types.DecimalKind, types.CustomInlineKind}
 
 	case query.Type_TEXT, query.Type_BLOB:
 		return []types.NomsKind{
 			types.BlobKind,
 			types.StringKind,
+			types.CustomInlineKind,
 		}
 
 	case query.Type_VARCHAR, query.Type_CHAR:
-		return []types.NomsKind{types.StringKind}
+		return []types.NomsKind{types.StringKind, types.CustomInlineKind}
 
 	case query.Type_VARBINARY, query.Type_BINARY:
-		return []types.NomsKind{types.InlineBlobKind}
+		return []types.NomsKind{types.InlineBlobKind, types.CustomInlineKind}
 
 	case query.Type_BIT, query.Type_ENUM, query.Type_SET:
-		return []types.NomsKind{types.UintKind}
+		return []types.NomsKind{types.UintKind, types.CustomInlineKind}
 
 	case query.Type_GEOMETRY:
 		return []types.NomsKind{
@@ -270,10 +271,11 @@ func nomsKindsFromQueryTypes(qt query.Type) []types.NomsKind {
 			types.MultiLineStringKind,
 			types.MultiPolygonKind,
 			types.GeometryCollectionKind,
+			types.CustomInlineKind,
 		}
 
 	case query.Type_JSON:
-		return []types.NomsKind{types.JSONKind}
+		return []types.NomsKind{types.JSONKind, types.CustomInlineKind}
 
 	default:
 		panic(fmt.Sprintf("unexpect query.Type %s", qt.String()))

@@ -632,6 +632,10 @@ func sqlTypeString(t typeinfo.TypeInfo) string {
 		return typ.String()
 	}
 
+	if customType, ok := typ.(sqltypes.Custom); ok {
+		return fmt.Sprintf("custom_%d", customType.SerializeType())
+	}
+
 	return typ.String()
 }
 
