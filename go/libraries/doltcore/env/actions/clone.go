@@ -179,7 +179,7 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 		return fmt.Errorf("%w; %s", ErrCloneFailed, err.Error())
 	}
 
-	// Get all the refs from the remote. These branch remotes will be translated to remote branches, tags will
+	// Get all the refs from the remote. These branch refs will be translated to remote branch refs, tags will
 	// be preserved, and all other refs will be ignored.
 	remoteRefHashes, err := dEnv.DoltDB.GetRefsWithHashes(ctx)
 	if err != nil {
