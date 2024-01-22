@@ -26,6 +26,7 @@ stop_remotesrv() {
 
 @test "remotesrv: can read from remotesrv in repo-mode" {
     mkdir remote
+    mkdir cloned
     cd remote
     dolt init
     dolt sql -q 'create table vals (i int);'
@@ -36,7 +37,7 @@ stop_remotesrv() {
     remotesrv --http-port 1234 --repo-mode &
     remotesrv_pid=$!
 
-    cd ../
+    cd ../cloned
     dolt clone http://localhost:50051/test-org/test-repo repo1
     cd repo1
     run dolt ls
@@ -45,14 +46,14 @@ stop_remotesrv() {
     [[ "$output" =~ "5" ]] || false
 
     stop_remotesrv
-    cd ../remote
+    cd ../../remote
     dolt sql -q 'insert into vals (i) values (6), (7), (8), (9), (10);'
     dolt commit -am 'add some vals'
 
     remotesrv --http-port 1234 --repo-mode &
     remotesrv_pid=$!
 
-    cd ../repo1
+    cd ../cloned/repo1
     dolt pull
     run dolt sql -q 'select count(*) from vals;'
     [[ "$output" =~ "10" ]] || false
@@ -60,6 +61,7 @@ stop_remotesrv() {
 
 @test "remotesrv: can write to remotesrv in repo-mode" {
     mkdir remote
+    mkdir cloned
     cd remote
     dolt init
     dolt sql -q 'create table vals (i int);'
@@ -69,7 +71,7 @@ stop_remotesrv() {
     remotesrv --http-port 1234 --repo-mode &
     remotesrv_pid=$!
 
-    cd ../
+    cd ../cloned
     dolt clone http://localhost:50051/test-org/test-repo repo1
     cd repo1
     dolt sql -q 'insert into vals values (1), (2), (3), (4), (5);'
@@ -77,7 +79,7 @@ stop_remotesrv() {
     dolt push origin main:main
 
     stop_remotesrv
-    cd ../remote
+    cd ../../remote
     # Have to reset the working set, which was not updated by the push...
     dolt reset --hard
     run dolt sql -q 'select count(*) from vals;'
@@ -86,6 +88,7 @@ stop_remotesrv() {
 
 @test "remotesrv: can write to remotesrv when repo has a dirty working set" {
     mkdir remote
+    mkdir cloned
     cd remote
     dolt init
     dolt sql -q 'create table vals (i int);'
@@ -96,7 +99,7 @@ stop_remotesrv() {
     remotesrv --http-port 1234 --repo-mode &
     remotesrv_pid=$!
 
-    cd ../
+    cd ../cloned
     dolt clone http://localhost:50051/test-org/test-repo repo1
     cd repo1
     dolt sql -q 'insert into vals values (9778), (12433);'
@@ -104,7 +107,7 @@ stop_remotesrv() {
     dolt push origin main:main
 
     stop_remotesrv
-    cd ../remote
+    cd ../../remote
 
     # HEAD has the pushed value.
     run dolt show
@@ -124,6 +127,7 @@ stop_remotesrv() {
 
 @test "remotesrv: read only server rejects writes" {
     mkdir remote
+    mkdir cloned
     cd remote
     dolt init
     dolt sql -q 'create table vals (i int);'
@@ -133,7 +137,7 @@ stop_remotesrv() {
     remotesrv --http-port 1234 --repo-mode -read-only &
     remotesrv_pid=$!
 
-    cd ../
+    cd ../cloned
     dolt clone http://localhost:50051/test-org/test-repo repo1
     cd repo1
     dolt sql -q 'insert into vals values (1), (2), (3), (4), (5);'
@@ -144,6 +148,7 @@ stop_remotesrv() {
 
 @test "remotesrv: can run grpc and http on same port" {
     mkdir remote
+    mkdir cloned
     cd remote
     dolt init
     dolt sql -q 'create table vals (i int);'
@@ -153,6 +158,6 @@ stop_remotesrv() {
     remotesrv --grpc-port 1234 --http-port 1234 --repo-mode &
     remotesrv_pid=$!
 
-    cd ../
+    cd ../cloned
     dolt clone http://localhost:1234/test-org/test-repo repo1
 }
