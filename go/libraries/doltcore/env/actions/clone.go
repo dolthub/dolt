@@ -181,13 +181,13 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 
 	// Get all the refs from the remote. These branch refs will be translated to remote branch refs, tags will
 	// be preserved, and all other refs will be ignored.
-	remoteRefHashes, err := dEnv.DoltDB.GetRefsWithHashes(ctx)
+	srcRefHashes, err := dEnv.DoltDB.GetRefsWithHashes(ctx)
 	if err != nil {
 		return fmt.Errorf("%w; %s", ErrCloneFailed, err.Error())
 	}
 
-	branches := make([]ref.DoltRef, 0, len(remoteRefHashes))
-	for _, refHash := range remoteRefHashes {
+	branches := make([]ref.DoltRef, 0, len(srcRefHashes))
+	for _, refHash := range srcRefHashes {
 		if refHash.Ref.GetType() == ref.BranchRefType {
 			br := refHash.Ref.(ref.BranchRef)
 			branches = append(branches, br)
@@ -225,7 +225,7 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	}
 
 	// Preserve only branch and tag references from the remote. Branches are translated into remote branches, tags are preserved.
-	for _, refHash := range remoteRefHashes {
+	for _, refHash := range srcRefHashes {
 		if refHash.Ref.GetType() == ref.BranchRefType {
 			br := refHash.Ref.(ref.BranchRef)
 			if !singleBranch || br.GetPath() == branch {
