@@ -177,7 +177,6 @@ func hasLocalChanges(ctx context.Context, dEnv *env.DoltEnv, roots doltdb.Roots,
 }
 
 func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) error {
-
 	roots, err := dEnv.Roots(ctx)
 	if err != nil {
 		return fmt.Errorf("couldn't get working root, cause: %s", err.Error())

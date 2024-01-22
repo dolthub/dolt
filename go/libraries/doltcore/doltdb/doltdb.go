@@ -35,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/types/edits"
@@ -136,8 +137,8 @@ func (ddb *DoltDB) AccessMode() chunks.ExclusiveAccessMode {
 }
 
 // CommitRoot executes a chunkStore commit, atomically swapping the root hash of the database manifest
-func (ddb *DoltDB) CommitRoot(ctx context.Context, last, current hash.Hash) (bool, error) {
-	return datas.ChunkStoreFromDatabase(ddb.db).Commit(ctx, last, current)
+func (ddb *DoltDB) CommitRoot(ctx context.Context, current, last hash.Hash) (bool, error) {
+	return datas.ChunkStoreFromDatabase(ddb.db).Commit(ctx, current, last)
 }
 
 func (ddb *DoltDB) Has(ctx context.Context, h hash.Hash) (bool, error) {
@@ -442,6 +443,15 @@ func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, ref ref.DoltRef) (*Comm
 		return nil, err
 	}
 	return NewCommit(ctx, ddb.vrw, ddb.ns, commitVal)
+}
+
+// ResolveStatsRef takes a StatsRef and returns an address to a table.
+func (ddb *DoltDB) ResolveStatsRef(ctx context.Context) (hash.Hash, bool) {
+	ds, err := ddb.db.GetDataset(ctx, ref.StatsRefName)
+	if err != nil {
+		return hash.Hash{}, false
+	}
+	return ds.MaybeHeadAddr()
 }
 
 // ResolveCommitRefAtRoot takes a DoltRef and returns a Commit, or an error if the commit cannot be found. The ref given must
@@ -1702,6 +1712,36 @@ func (ddb *DoltDB) AddStash(ctx context.Context, head *Commit, stash *RootValue,
 
 	stashesDS, err = ddb.db.UpdateStashList(ctx, stashesDS, stashListAddr)
 	return err
+}
+
+func (ddb *DoltDB) SetStatisics(ctx context.Context, addr hash.Hash) error {
+	statsDs, err := ddb.db.GetDataset(ctx, ref.NewStatsRef().String())
+	if err != nil {
+		return err
+	}
+	_, err = ddb.db.SetStatsRef(ctx, statsDs, addr)
+	return err
+}
+
+var ErrNoStatistics = errors.New("No statistics found.")
+
+// GetStatistics returns the value of the singleton ref.StatsRef for this database
+func (ddb *DoltDB) GetStatistics(ctx context.Context) (prolly.Map, error) {
+	ds, err := ddb.db.GetDataset(ctx, ref.NewStatsRef().String())
+	if err != nil {
+		return prolly.Map{}, err
+	}
+
+	if !ds.HasHead() {
+		return prolly.Map{}, ErrNoStatistics
+	}
+
+	stats, err := datas.LoadStatistics(ctx, ddb.Format(), ddb.NodeStore(), ddb.ValueReadWriter(), ds)
+	if err != nil {
+		return prolly.Map{}, err
+	}
+	return stats.Map(), nil
+
 }
 
 // RemoveStashAtIdx takes and index of a stash to remove from the stash list map.

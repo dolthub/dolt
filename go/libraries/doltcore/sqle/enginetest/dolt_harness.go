@@ -221,6 +221,8 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	d.engine.Analyzer.Catalog.MySQLDb = mysql_db.CreateEmptyMySQLDb()
 	d.engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
 
+	d.engine.Analyzer.Catalog.StatsProvider = stats.NewProvider()
+
 	// Get a fresh session if we are reusing the engine
 	if !initializeEngine {
 		var err error

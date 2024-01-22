@@ -39,6 +39,7 @@ const BlobFileID = "BLOB"
 const BranchControlFileID = "BRCL"
 const StashListFileID = "SLST"
 const StashFileID = "STSH"
+const StatisticFileID = "STAT"
 
 const MessageTypesKind int = 27
 
