@@ -697,7 +697,11 @@ SQL
     run dolt merge feature-branch
 
     log_status_eq 1
-    [[ "$output" =~ "conflict" ]] || false
+    [[ "$output" =~ "CONFLICT (schema):" ]] || false
+
+    run dolt conflicts cat .
+    [[ "$output" =~ "| <deleted>" ]] || false
+    [[ "$output" =~ "| cannot merge a table deletion with schema modification" ]] || false
 }
 
 @test "merge: merge a branch that deletes an edited table" {

@@ -206,14 +206,20 @@ func MergeRoots(
 	var schConflicts []SchemaConflict
 	for _, tblName := range tblNames {
 		mergedTable, stats, err := merger.MergeTable(ctx, tblName, opts, mergeOpts)
-		if err != nil {
+		if errors.Is(ErrTableDeletedAndModified, err) {
 			// If a Full-Text table was both modified and deleted, then we want to ignore the deletion.
 			// If there's a true conflict, then the parent table will catch the conflict.
-			if doltdb.IsFullTextTable(tblName) && errors.Is(ErrTableDeletedAndModified, err) {
+			if doltdb.IsFullTextTable(tblName) {
 				stats = &MergeStats{Operation: TableModified}
 			} else {
-				return nil, err
+				conflict := SchemaConflict{
+					TableName: tblName,
+				}
+				schConflicts = append(schConflicts, conflict)
+				continue
 			}
+		} else if err != nil {
+			return nil, err
 		}
 		if doltdb.IsFullTextTable(tblName) && (stats.Operation == TableModified || stats.Operation == TableRemoved) {
 			// We handle removal and modification later in the rebuilding process, so we'll skip those.
