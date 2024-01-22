@@ -462,22 +462,6 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 		},
 		expectedErr: merge.ErrMergeWithDifferentPks,
 	},
-	{
-		name: "table drop and schema modification",
-		setup: []testCommand{
-			{commands.SqlCmd{}, []string{"-q", "alter table test add column extra int;"}},
-			{commands.AddCmd{}, []string{"."}},
-			{commands.CommitCmd{}, []string{"-m", "alter table test"}},
-			{commands.CheckoutCmd{}, []string{"other"}},
-			{commands.SqlCmd{}, []string{"-q", "drop table test;"}},
-			{commands.AddCmd{}, []string{"."}},
-			{commands.CommitCmd{}, []string{"-m", "drop table test"}},
-		},
-		expConflict: merge.SchemaConflict{
-			TableName: "test",
-			// No expected Column, Index, or Check conflicts.
-		},
-	},
 }
 
 var setupForeignKeyTests = []testCommand{

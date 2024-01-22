@@ -697,7 +697,7 @@ SQL
     run dolt merge feature-branch
 
     log_status_eq 1
-    [[ "$output" =~ "CONFLICT (schema):" ]] || false
+    [[ "$output" =~ "CONFLICT (schema): Merge conflict in test" ]] || false
 
     run dolt conflicts cat .
     [[ "$output" =~ "| <deleted>" ]] || false
