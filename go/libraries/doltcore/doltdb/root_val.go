@@ -617,7 +617,6 @@ func (root *RootValue) ResolveTableName(ctx context.Context, tName string) (stri
 // GetTable will retrieve a table by its case-sensitive name.
 func (root *RootValue) GetTable(ctx context.Context, tName string) (*Table, bool, error) {
 	tableMap, err := root.getTableMap(ctx)
-
 	if err != nil {
 		return nil, false, err
 	}
@@ -626,15 +625,18 @@ func (root *RootValue) GetTable(ctx context.Context, tName string) (*Table, bool
 	if err != nil {
 		return nil, false, err
 	}
+
+	return GetTable(ctx, root, addr)
+}
+
+func GetTable(ctx context.Context, root *RootValue, addr hash.Hash) (*Table, bool, error) {
 	if addr.IsEmpty() {
 		return nil, false, nil
 	}
-
 	table, err := durable.TableFromAddr(ctx, root.VRW(), root.ns, addr)
 	if err != nil {
 		return nil, false, err
 	}
-
 	return &Table{table: table}, true, err
 }
 
@@ -803,12 +805,16 @@ func (root *RootValue) PutTable(ctx context.Context, tName string, table *Table)
 		return nil, err
 	}
 
-	tableRef, err := durable.RefFromNomsTable(ctx, table.table)
+	tableRef, err := RefFromNomsTable(ctx, table)
 	if err != nil {
 		return nil, err
 	}
 
 	return putTable(ctx, root, tName, tableRef)
+}
+
+func RefFromNomsTable(ctx context.Context, table *Table) (types.Ref, error) {
+	return durable.RefFromNomsTable(ctx, table.table)
 }
 
 func putTable(ctx context.Context, root *RootValue, tName string, ref types.Ref) (*RootValue, error) {
@@ -826,12 +832,26 @@ func putTable(ctx context.Context, root *RootValue, tName string, ref types.Ref)
 
 // CreateEmptyTable creates an empty table in this root with the name and schema given, returning the new root value.
 func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch schema.Schema) (*RootValue, error) {
-	empty, err := durable.NewEmptyIndex(ctx, root.vrw, root.ns, sch)
+	tbl, err := CreateEmptyTable(ctx, root.NodeStore(), root.VRW(), sch)
 	if err != nil {
 		return nil, err
 	}
 
-	indexes, err := durable.NewIndexSet(ctx, root.VRW(), root.ns)
+	newRoot, err := root.PutTable(ctx, tName, tbl)
+	if err != nil {
+		return nil, err
+	}
+
+	return newRoot, nil
+}
+
+func CreateEmptyTable(ctx context.Context, ns tree.NodeStore, vrw types.ValueReadWriter, sch schema.Schema) (*Table, error) {
+	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, sch)
+	if err != nil {
+		return nil, err
+	}
+
+	indexes, err := durable.NewIndexSet(ctx, vrw, ns)
 	if err != nil {
 		return nil, err
 	}
@@ -844,17 +864,7 @@ func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch s
 		return nil, err
 	}
 
-	tbl, err := NewTable(ctx, root.VRW(), root.ns, sch, empty, indexes, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	newRoot, err := root.PutTable(ctx, tName, tbl)
-	if err != nil {
-		return nil, err
-	}
-
-	return newRoot, nil
+	return NewTable(ctx, vrw, ns, sch, empty, indexes, nil)
 }
 
 // HashOf gets the hash of the root value

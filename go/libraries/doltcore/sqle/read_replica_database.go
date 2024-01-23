@@ -127,19 +127,13 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 	}
 
 	err := rrd.srcDB.Rebase(ctx)
-	if err != nil && !dsess.IgnoreReplicationErrors() {
+	if err != nil {
 		return err
-	} else if err != nil {
-		dsess.WarnReplicationError(ctx, err)
-		return nil
 	}
 
 	remoteRefs, localRefs, toDelete, err := getReplicationRefs(ctx, rrd)
-	if err != nil && !dsess.IgnoreReplicationErrors() {
+	if err != nil {
 		return err
-	} else if err != nil {
-		dsess.WarnReplicationError(ctx, err)
-		return nil
 	}
 
 	switch {
@@ -194,39 +188,26 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 			}
 
 			err := fmt.Errorf("unable to find %q on %q; branch not found", branch, rrd.remote.Name)
-			if err != nil && !dsess.IgnoreReplicationErrors() {
+			if err != nil {
 				return err
-			} else if err != nil {
-				dsess.WarnReplicationError(ctx, err)
-				return nil
 			}
 		}
 
 		remoteRefs = prunedRefs
 		_, err = pullBranches(ctx, rrd, remoteRefs, localRefs, behavior)
-
-		if err != nil && !dsess.IgnoreReplicationErrors() {
+		if err != nil {
 			return err
-		} else if err != nil {
-			dsess.WarnReplicationError(ctx, err)
-			return nil
 		}
 
 	case allHeads == int8(1):
 		_, err = pullBranches(ctx, rrd, remoteRefs, localRefs, behavior)
-		if err != nil && !dsess.IgnoreReplicationErrors() {
+		if err != nil {
 			return err
-		} else if err != nil {
-			dsess.WarnReplicationError(ctx, err)
-			return nil
 		}
 
 		err = deleteBranches(ctx, rrd, toDelete)
-		if err != nil && !dsess.IgnoreReplicationErrors() {
+		if err != nil {
 			return err
-		} else if err != nil {
-			dsess.WarnReplicationError(ctx, err)
-			return nil
 		}
 	default:
 		ctx.GetLogger().Warnf("must set either @@dolt_replicate_heads or @@dolt_replicate_all_heads, replication disabled")

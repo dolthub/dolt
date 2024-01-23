@@ -471,6 +471,8 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			versionableTable := backingTable.(dtables.VersionableTable)
 			dt, found = dtables.NewDocsTable(ctx, versionableTable), true
 		}
+	case doltdb.StatisticsTableName:
+		dt, found = dtables.NewStatisticsTable(ctx, db.Name(), db.ddb), true
 	}
 
 	if found {

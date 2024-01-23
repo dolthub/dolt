@@ -2534,13 +2534,40 @@ func TestQueriesPrepared(t *testing.T) {
 	enginetest.TestQueriesPrepared(t, h)
 }
 
-func TestStatistics(t *testing.T) {
+func TestStatsHistograms(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	for _, script := range DoltStatsTests {
+	for _, script := range DoltHistogramTests {
 		h.engine = nil
 		enginetest.TestScript(t, h, script)
 	}
+}
+
+// TestStatsIO force a provider reload in-between setup and assertions that
+// forces a round trip of the statistics table before inspecting values.
+func TestStatsIO(t *testing.T) {
+	h := newDoltHarness(t)
+	defer h.Close()
+	for _, script := range append(DoltStatsIOTests, DoltHistogramTests...) {
+		h.engine = nil
+		func() {
+			e := mustNewEngine(t, h)
+			if enginetest.IsServerEngine(e) {
+				return
+			}
+			defer e.Close()
+			TestProviderReloadScriptWithEngine(t, e, h, script)
+		}()
+	}
+}
+
+func TestJoinStats(t *testing.T) {
+	// these are sensitive to cardinality estimates,
+	// particularly the join-filter tests that trade-off
+	// smallest table first vs smallest join first
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestJoinStats(t, h)
 }
 
 func TestStatisticIndexes(t *testing.T) {
@@ -2560,7 +2587,7 @@ func TestSpatialQueriesPrepared(t *testing.T) {
 func TestPreparedStatistics(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	for _, script := range DoltStatsTests {
+	for _, script := range DoltHistogramTests {
 		h.engine = nil
 		enginetest.TestScriptPrepared(t, h, script)
 	}

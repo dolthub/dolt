@@ -36,12 +36,10 @@ type Serializer interface {
 }
 
 func UnpackFields(msg serial.Message) (keys, values ItemAccess, level, count uint16, err error) {
-	id := serial.GetFileID(msg)
-
-	if id == serial.ProllyTreeNodeFileID {
+	switch serial.GetFileID(msg) {
+	case serial.ProllyTreeNodeFileID:
 		return getProllyMapKeysAndValues(msg)
-	}
-	if id == serial.AddressMapFileID {
+	case serial.AddressMapFileID:
 		keys, err = getAddressMapKeys(msg)
 		if err != nil {
 			return
@@ -56,11 +54,9 @@ func UnpackFields(msg serial.Message) (keys, values ItemAccess, level, count uin
 		}
 		count, err = getAddressMapCount(msg)
 		return
-	}
-	if id == serial.MergeArtifactsFileID {
+	case serial.MergeArtifactsFileID:
 		return getArtifactMapKeysAndValues(msg)
-	}
-	if id == serial.CommitClosureFileID {
+	case serial.CommitClosureFileID:
 		keys, err = getCommitClosureKeys(msg)
 		if err != nil {
 			return
@@ -75,8 +71,7 @@ func UnpackFields(msg serial.Message) (keys, values ItemAccess, level, count uin
 		}
 		count, err = getCommitClosureCount(msg)
 		return
-	}
-	if id == serial.BlobFileID {
+	case serial.BlobFileID:
 		keys, err = getBlobKeys(msg)
 		if err != nil {
 			return
@@ -91,8 +86,9 @@ func UnpackFields(msg serial.Message) (keys, values ItemAccess, level, count uin
 		}
 		count, err = getBlobCount(msg)
 		return
+	default:
+		panic(fmt.Sprintf("unknown message id %s", serial.GetFileID(msg)))
 	}
-	panic(fmt.Sprintf("unknown message id %s", id))
 }
 
 func WalkAddresses(ctx context.Context, msg serial.Message, cb func(ctx context.Context, addr hash.Hash) error) error {
