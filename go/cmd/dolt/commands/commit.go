@@ -359,7 +359,7 @@ func getCommitMessageFromEditor(sqlCtx *sql.Context, queryist cli.Queryist, sugg
 	editorStr := cliCtx.Config().GetStringOrDefault(config.DoltEditor, backupEd)
 
 	cli.ExecuteWithStdioRestored(func() {
-		commitMsg, cErr := editor.OpenCommitEditor(editorStr, initialMsg)
+		commitMsg, cErr := editor.OpenTempEditor(editorStr, initialMsg)
 		if cErr != nil {
 			err = cErr
 		}

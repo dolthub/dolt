@@ -92,6 +92,12 @@ var ErrRebaseConflictWithAbortError = goerrors.NewKind(
 	"merge conflict detected while rebasing commit %s. " +
 		"attempted to abort rebase operation, but encountered error: %w")
 
+// SuccessfulRebaseMessage is used when a rebase finishes successfully. The branch that was rebased should be appended
+// to the end of the message.
+var SuccessfulRebaseMessage = "Successfully rebased and updated refs/heads/"
+
+var RebaseAbortedMessage = "Interactive rebase aborted"
+
 func doltRebase(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, message, err := doDoltRebase(ctx, args)
 	if err != nil {
@@ -116,15 +122,15 @@ func doDoltRebase(ctx *sql.Context, args []string) (int, string, error) {
 		if err != nil {
 			return 1, "", err
 		} else {
-			return 0, "interactive rebase aborted", nil
+			return 0, RebaseAbortedMessage, nil
 		}
 
 	case apr.Contains(cli.ContinueFlag):
-		err := continueRebase(ctx)
+		rebaseBranch, err := continueRebase(ctx)
 		if err != nil {
 			return 1, "", err
 		} else {
-			return 0, "interactive rebase completed", nil
+			return 0, SuccessfulRebaseMessage + rebaseBranch, nil
 		}
 
 	default:
@@ -371,7 +377,7 @@ func abortRebase(ctx *sql.Context) error {
 	return doltSession.SwitchWorkingSet(ctx, ctx.GetCurrentDatabase(), wsRef)
 }
 
-func continueRebase(ctx *sql.Context) error {
+func continueRebase(ctx *sql.Context) (string, error) {
 	// TODO: Eventually, when we allow interactive-rebases to be stopped and started (e.g. with the break action,
 	//       or for conflict resolution), we'll need to track what step we're at in the rebase plan.
 
@@ -379,46 +385,46 @@ func continueRebase(ctx *sql.Context) error {
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	workingSet, err := doltSession.WorkingSet(ctx, ctx.GetCurrentDatabase())
 	if err != nil {
-		return err
+		return "", err
 	}
 	if !workingSet.RebaseActive() {
-		return fmt.Errorf("no rebase in progress")
+		return "", fmt.Errorf("no rebase in progress")
 	}
 
 	db, err := doltSession.Provider().Database(ctx, ctx.GetCurrentDatabase())
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	rdb, ok := db.(rebase.RebasePlanDatabase)
 	if !ok {
-		return fmt.Errorf("expected a dsess.RebasePlanDatabase implementation, but received a %T", db)
+		return "", fmt.Errorf("expected a dsess.RebasePlanDatabase implementation, but received a %T", db)
 	}
 	rebasePlan, err := rdb.LoadRebasePlan(ctx)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	err = rebase.ValidateRebasePlan(ctx, rebasePlan)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	for _, step := range rebasePlan.Steps {
 		err = processRebasePlanStep(ctx, &step)
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
 
 	// Update the branch being rebased to point to the same commit as our temporary working branch
 	rebaseBranchWorkingSet, err := doltSession.WorkingSet(ctx, ctx.GetCurrentDatabase())
 	if err != nil {
-		return err
+		return "", err
 	}
 	dbData, ok := doltSession.GetDbData(ctx, ctx.GetCurrentDatabase())
 	if !ok {
-		return fmt.Errorf("unable to get db data for database %s", ctx.GetCurrentDatabase())
+		return "", fmt.Errorf("unable to get db data for database %s", ctx.GetCurrentDatabase())
 	}
 
 	rebaseBranch := rebaseBranchWorkingSet.RebaseState().Branch()
@@ -427,7 +433,7 @@ func continueRebase(ctx *sql.Context) error {
 	// Check that the branch being rebased hasn't been updated since the rebase started
 	err = validateRebaseBranchHasntChanged(ctx, rebaseBranch, rebaseBranchWorkingSet.RebaseState())
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// TODO: copyABranch (and the underlying call to doltdb.NewBranchAtCommit) has a race condition
@@ -438,25 +444,25 @@ func continueRebase(ctx *sql.Context) error {
 	//       database.CommitWithWorkingSet, since it updates a branch head and working set atomically.
 	err = copyABranch(ctx, dbData, rebaseWorkingBranch, rebaseBranch, true, nil)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// Checkout the branch being rebased
 	previousBranchWorkingSetRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(rebaseBranchWorkingSet.RebaseState().Branch()))
 	if err != nil {
-		return err
+		return "", err
 	}
 	err = doltSession.SwitchWorkingSet(ctx, ctx.GetCurrentDatabase(), previousBranchWorkingSetRef)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// delete the temporary working branch
 	dbData, ok = doltSession.GetDbData(ctx, ctx.GetCurrentDatabase())
 	if !ok {
-		return fmt.Errorf("unable to lookup dbdata")
+		return "", fmt.Errorf("unable to lookup dbdata")
 	}
-	return actions.DeleteBranch(ctx, dbData, rebaseWorkingBranch, actions.DeleteOptions{
+	return rebaseBranch, actions.DeleteBranch(ctx, dbData, rebaseWorkingBranch, actions.DeleteOptions{
 		Force: true,
 	}, doltSession.Provider(), nil)
 }
