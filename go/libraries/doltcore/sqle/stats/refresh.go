@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/stats"
 	"io"
 	"strings"
 	"time"
@@ -54,6 +55,11 @@ func refreshStats(ctx *sql.Context, indexes []sql.Index, idxMetas []indexMeta) (
 	}
 	if !ok {
 		return nil, fmt.Errorf("error creating statistics for table: %s; table not found", idxMetas[0].table)
+	}
+
+	nameToIdx := make(map[string]sql.Index)
+	for _, idx := range indexes {
+		nameToIdx[strings.ToLower(idx.ID())] = idx
 	}
 
 	var dTab *doltdb.Table
@@ -178,9 +184,18 @@ func refreshStats(ctx *sql.Context, indexes []sql.Index, idxMetas []indexMeta) (
 			bucket.Chunk = addrs[i]
 			ret[updater.qual].Histogram = append(ret[updater.qual].Histogram, bucket)
 		}
+
+		sqlIdx := nameToIdx[strings.ToLower(qual.Index())]
+		fds, colSet, err := stats.IndexFds(qual.Table(), tab.Schema(), sqlIdx)
+		if err != nil {
+			return nil, err
+		}
+
 		ret[updater.qual].DistinctCount = uint64(updater.globalDistinct)
 		ret[updater.qual].RowCount = uint64(updater.globalCount)
 		ret[updater.qual].LowerBound = firstRow
+		ret[updater.qual].fds = fds
+		ret[updater.qual].colSet = colSet
 	}
 	return ret, nil
 }

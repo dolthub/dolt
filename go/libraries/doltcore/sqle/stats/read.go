@@ -16,6 +16,7 @@ package stats
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -34,8 +35,8 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func loadStats(ctx *sql.Context, dbName string, m prolly.Map) (*dbStats, error) {
-	dbStat := &dbStats{db: dbName, active: make(map[hash.Hash]int), stats: make(map[sql.StatQualifier]*DoltStats)}
+func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (*dbStats, error) {
+	dbStat := &dbStats{db: db.Name(), active: make(map[hash.Hash]int), stats: make(map[sql.StatQualifier]*DoltStats)}
 
 	iter, err := dtables.NewStatsIter(ctx, m)
 	if err != nil {
@@ -111,11 +112,17 @@ func loadStats(ctx *sql.Context, dbName string, m prolly.Map) (*dbStats, error) 
 
 		qual := sql.NewStatQualifier(dbName, tableName, indexName)
 		if currentStat.Qual.String() != qual.String() {
-			if currentStat.Qual.String() != "" {
+			if !currentStat.Qual.Empty() {
 				currentStat.LowerBound, err = loadLowerBound(ctx, currentStat.Qual)
 				if err != nil {
 					return nil, err
 				}
+				fds, colSet, err := loadFuncDeps(ctx, db, currentStat.Qual)
+				if err != nil {
+					return nil, err
+				}
+				currentStat.fds = fds
+				currentStat.colSet = colSet
 				dbStat.stats[currentStat.Qual] = currentStat
 			}
 			currentStat = &DoltStats{Qual: qual, Columns: columns, LowerBound: lowerBound}
@@ -198,4 +205,37 @@ func loadLowerBound(ctx *sql.Context, qual sql.StatQualifier) (sql.Row, error) {
 		}
 	}
 	return firstRow, nil
+}
+
+func loadFuncDeps(ctx *sql.Context, db dsess.SqlDatabase, qual sql.StatQualifier) (*sql.FuncDepSet, sql.ColSet, error) {
+	tab, ok, err := db.GetTableInsensitive(ctx, qual.Table())
+	if err != nil {
+		return nil, sql.ColSet{}, err
+	} else if !ok {
+		return nil, sql.ColSet{}, fmt.Errorf("%w: table not found: '%s'", ErrFailedToLoad, qual.Table())
+	}
+
+	iat, ok := tab.(sql.IndexAddressable)
+	if !ok {
+		return nil, sql.ColSet{}, fmt.Errorf("%w: table does not have indexes: '%s'", ErrFailedToLoad, qual.Table())
+	}
+
+	indexes, err := iat.GetIndexes(ctx)
+	if err != nil {
+		return nil, sql.ColSet{}, err
+	}
+
+	var idx sql.Index
+	for _, i := range indexes {
+		if strings.EqualFold(i.ID(), qual.Index()) {
+			idx = i
+			break
+		}
+	}
+
+	if idx == nil {
+		return nil, sql.ColSet{}, fmt.Errorf("%w: index not found: '%s'", ErrFailedToLoad, qual.Index())
+	}
+
+	return stats.IndexFds(qual.Table(), tab.Schema(), idx)
 }
