@@ -57,7 +57,7 @@ func BenchmarkMysql(ctx context.Context, config *Config, serverConfig *ServerCon
 		log.Println("Launching the default server")
 		localServer = true
 
-		serverDir, err = initMysqlDataDir(ctx, serverConfig)
+		serverDir, err = InitMysqlDataDir(ctx, serverConfig)
 		if err != nil {
 			cancel()
 			return nil, err
@@ -146,8 +146,8 @@ func getMysqlServer(ctx context.Context, config *ServerConfig, params []string) 
 	return ExecCommand(ctx, config.ServerExec, params...)
 }
 
-// initMysqlDataDir initializes a mysql data dir and returns the path
-func initMysqlDataDir(ctx context.Context, config *ServerConfig) (string, error) {
+// InitMysqlDataDir initializes a mysql data dir and returns the path
+func InitMysqlDataDir(ctx context.Context, config *ServerConfig) (string, error) {
 	serverDir, err := createServerDir(dbName)
 	if err != nil {
 		return "", err
