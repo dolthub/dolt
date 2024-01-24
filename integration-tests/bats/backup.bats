@@ -270,9 +270,50 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
+@test "backup: restore existing database fails" {
+    cd repo1
+    dolt backup sync-url file://../bac1
+
+    cd ..
+    mkdir repo2
+    cd repo2
+    dolt init
+
+    # Check in the ".dolt" is in my current directory case...
+    run dolt backup restore file://../bac1 repo2
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "cannot restore backup into repo2. A database with that name already exists" ]] || false
+
+    # Check in the ".dolt" is in a subdirectory case...
+    cd ..
+    run dolt backup restore file://../bac1 repo2
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "cannot restore backup into repo2. A database with that name already exists" ]] || false
+}
+
+@test "backup: restore existing database with --force succeeds" {
+    cd repo1
+    dolt backup sync-url file://../bac1
+
+    cd ..
+    mkdir repo2
+    cd repo2
+    dolt init
+
+    # Check in the ".dolt" is in my current directory case...
+    dolt backup restore --force file://../bac1 repo2
+
+    cd ../repo1
+    dolt commit --allow-empty -m 'another commit'
+    dolt backup sync-url file://../bac1
+
+    # Check in the ".dolt" is in a subdirectory case...
+    cd ..
+    dolt backup restore --force file://./bac1 repo2
+}
+
 @test "backup: sync-url in a non-dolt directory" {
     mkdir newdir && cd newdir
     run dolt backup sync-url file://../bac1
     [ "$status" -ne 0 ]
 }
-
