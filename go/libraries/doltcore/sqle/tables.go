@@ -28,7 +28,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/fulltext"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -1462,7 +1461,6 @@ func (t *AlterableDoltTable) RewriteInserter(
 	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
 		return nil, err
 	}
-	newSchema.Schema = memory.BacktickDefaultColumnValueNames(newSchema.Schema)
 	err := validateSchemaChange(t.Name(), oldSchema, newSchema, oldColumn, newColumn, idxCols)
 	if err != nil {
 		return nil, err

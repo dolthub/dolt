@@ -23,7 +23,6 @@ import (
 	"time"
 
 	sqle "github.com/dolthub/go-mysql-server"
-	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -963,7 +962,6 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Pr
 		return err
 	}
 
-	sch.Schema = memory.BacktickDefaultColumnValueNames(sch.Schema)
 	doltSch, err := sqlutil.ToDoltSchema(ctx, root, tableName, sch, headRoot, collation)
 	if err != nil {
 		return err
