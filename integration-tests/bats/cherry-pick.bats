@@ -118,7 +118,8 @@ teardown() {
     dolt checkout main
     run dolt cherry-pick branch1
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "conflict: table with same name deleted and modified" ]] || false
+    [[ "$output" =~ "merge aborted: schema conflict found for table branch1table" ]] || false
+    [[ "$output" =~ "table was modified in one branch and deleted in the other" ]] || false
 
     run dolt sql -q "SHOW TABLES" -r csv
     [[ ! "$output" =~ "branch1table" ]] || false
@@ -130,7 +131,8 @@ teardown() {
     dolt checkout main
     run dolt cherry-pick branch1
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "conflict: table with same name deleted and modified" ]] || false
+    [[ "$output" =~ "merge aborted: schema conflict found for table branch1table" ]] || false
+    [[ "$output" =~ "table was modified in one branch and deleted in the other" ]] || false
 
     run dolt sql -q "SHOW TABLES" -r csv
     [[ ! "$output" =~ "branch1table" ]] || false
@@ -142,7 +144,8 @@ teardown() {
     dolt checkout main
     run dolt cherry-pick branch1
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "conflict: table with same name deleted and modified" ]] || false
+    [[ "$output" =~ "merge aborted: schema conflict found for table branch1table" ]] || false
+    [[ "$output" =~ "table was modified in one branch and deleted in the other" ]] || false
 
     run dolt sql -q "SHOW TABLES" -r csv
     [[ ! "$output" =~ "branch1table" ]] || false
@@ -154,7 +157,8 @@ teardown() {
     dolt checkout main
     run dolt cherry-pick branch1
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "conflict: table with same name deleted and modified" ]] || false
+    [[ "$output" =~ "merge aborted: schema conflict found for table branch1table" ]] || false
+    [[ "$output" =~ "table was modified in one branch and deleted in the other" ]] || false
 
     run dolt sql -q "SHOW TABLES" -r csv
     [[ ! "$output" =~ "branch1table" ]] || false
@@ -241,9 +245,9 @@ teardown() {
     # Assert that only 'test' is staged for commit ('other' has a constraint violation)
     run dolt sql -q "SELECT * from dolt_status;"
     [ $status -eq 0 ]
-    [[ $output =~ "| other         | false  | modified  |" ]] || false
-    [[ $output =~ "| test          | true   | modified  |" ]] || false
-    [[ $output =~ "| generated_foo | false  | new table |" ]] || false
+    [[ $output =~ "| other         | false  | modified " ]] || false
+    [[ $output =~ "| test          | true   | modified " ]] || false
+    [[ $output =~ "| generated_foo | false  | new table " ]] || false
 
     # Assert the expected constraint violations
     run dolt sql -q "SELECT * FROM dolt_constraint_violations;"

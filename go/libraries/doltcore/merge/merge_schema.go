@@ -49,16 +49,21 @@ var ErrUnmergeableNewColumn = errorkinds.NewKind("Unable to merge new column `%s
 var ErrDefaultCollationConflict = errorkinds.NewKind("Unable to merge table '%s', because its default collation setting has changed on both sides of the merge. Manually change the table's default collation setting on one of the sides of the merge and retry this merge.")
 
 type SchemaConflict struct {
-	TableName    string
-	ColConflicts []ColConflict
-	IdxConflicts []IdxConflict
-	ChkConflicts []ChkConflict
+	TableName            string
+	ColConflicts         []ColConflict
+	IdxConflicts         []IdxConflict
+	ChkConflicts         []ChkConflict
+	ModifyDeleteConflict bool
 }
 
 var _ error = SchemaConflict{}
 
 func (sc SchemaConflict) Count() int {
-	return len(sc.ColConflicts) + len(sc.IdxConflicts) + len(sc.ChkConflicts)
+	count := len(sc.ColConflicts) + len(sc.IdxConflicts) + len(sc.ChkConflicts)
+	if sc.ModifyDeleteConflict {
+		return count + 1
+	}
+	return count
 }
 
 // String implements fmt.Stringer. This method is used to
@@ -90,6 +95,9 @@ func (sc SchemaConflict) messages() (mm []string) {
 	}
 	for _, c := range sc.ChkConflicts {
 		mm = append(mm, c.String())
+	}
+	if sc.ModifyDeleteConflict {
+		mm = append(mm, "table was modified in one branch and deleted in the other")
 	}
 	return
 }
