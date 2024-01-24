@@ -19,8 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/memory"
-"io"
+	"io"
 	"math"
 	"os"
 	"runtime"
@@ -29,6 +28,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/fulltext"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
