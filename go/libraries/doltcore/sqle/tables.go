@@ -19,7 +19,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
+	"github.com/dolthub/go-mysql-server/memory"
+"io"
 	"math"
 	"os"
 	"runtime"
@@ -1461,6 +1462,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
 		return nil, err
 	}
+	newSchema.Schema = memory.BacktickDefaultColumnValueNames(newSchema.Schema)
 	err := validateSchemaChange(t.Name(), oldSchema, newSchema, oldColumn, newColumn, idxCols)
 	if err != nil {
 		return nil, err
