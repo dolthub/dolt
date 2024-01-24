@@ -949,30 +949,75 @@ func getTableDiffStats(queryist cli.Queryist, sqlCtx *sql.Context, tableName, fr
 
 	allStats := []diffStatistics{}
 	for _, row := range rows {
+		rowsUnmodified, err := coallesceNilToUint64(row[1])
+		if err != nil {
+			return nil, err
+		}
+		rowsAdded, err := coallesceNilToUint64(row[2])
+		if err != nil {
+			return nil, err
+		}
+		rowsDeleted, err := coallesceNilToUint64(row[3])
+		if err != nil {
+			return nil, err
+		}
+		rowsModified, err := coallesceNilToUint64(row[4])
+		if err != nil {
+			return nil, err
+		}
+		cellsAdded, err := coallesceNilToUint64(row[5])
+		if err != nil {
+			return nil, err
+		}
+		cellsDeleted, err := coallesceNilToUint64(row[6])
+		if err != nil {
+			return nil, err
+		}
+		cellsModified, err := coallesceNilToUint64(row[7])
+		if err != nil {
+			return nil, err
+		}
+		oldRowCount, err := coallesceNilToUint64(row[8])
+		if err != nil {
+			return nil, err
+		}
+		newRowCount, err := coallesceNilToUint64(row[9])
+		if err != nil {
+			return nil, err
+		}
+		oldCellCount, err := coallesceNilToUint64(row[10])
+		if err != nil {
+			return nil, err
+		}
+		newCellCount, err := coallesceNilToUint64(row[11])
+		if err != nil {
+			return nil, err
+		}
+
 		stats := diffStatistics{
 			TableName:      row[0].(string),
-			RowsUnmodified: coallesceNilToUint64(row[1]),
-			RowsAdded:      coallesceNilToUint64(row[2]),
-			RowsDeleted:    coallesceNilToUint64(row[3]),
-			RowsModified:   coallesceNilToUint64(row[4]),
-			CellsAdded:     coallesceNilToUint64(row[5]),
-			CellsDeleted:   coallesceNilToUint64(row[6]),
-			CellsModified:  coallesceNilToUint64(row[7]),
-			OldRowCount:    coallesceNilToUint64(row[8]),
-			NewRowCount:    coallesceNilToUint64(row[9]),
-			OldCellCount:   coallesceNilToUint64(row[10]),
-			NewCellCount:   coallesceNilToUint64(row[11]),
+			RowsUnmodified: rowsUnmodified,
+			RowsAdded:      rowsAdded,
+			RowsDeleted:    rowsDeleted,
+			RowsModified:   rowsModified,
+			CellsAdded:     cellsAdded,
+			CellsDeleted:   cellsDeleted,
+			CellsModified:  cellsModified,
+			OldRowCount:    oldRowCount,
+			NewRowCount:    newRowCount,
+			OldCellCount:   oldCellCount,
+			NewCellCount:   newCellCount,
 		}
 		allStats = append(allStats, stats)
 	}
 	return allStats, nil
 }
 
-func coallesceNilToUint64(val interface{}) uint64 {
+func coallesceNilToUint64(val interface{}) (uint64, error) {
 	if val == nil {
-		return 0
+		return 0, nil
 	}
-	return uint64(val.(int64))
+	return getUint64ColAsUint64(val)
 }
 
 func diffUserTable(

@@ -368,6 +368,28 @@ func getInt64ColAsInt64(col interface{}) (int64, error) {
 	}
 }
 
+// getUint64ColAsUint64 returns the value of an uint64 column as a string
+// This is necessary because Queryist may return an uint64 column as an uint64 (when using SQLEngine)
+// or as a string (when using ConnectionQueryist).
+func getUint64ColAsUint64(col interface{}) (uint64, error) {
+	switch v := col.(type) {
+	case int:
+		return uint64(v), nil
+	case uint64:
+		return v, nil
+	case int64:
+		return uint64(v), nil
+	case string:
+		uiv, err := strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		return uiv, nil
+	default:
+		return 0, fmt.Errorf("unexpected type %T, was expecting int64, uint64 or string", v)
+	}
+}
+
 // getStringColAsString returns the value of the input as a bool. This is required because depending on if we
 // go over the wire or not we may get a string or a bool when we expect a bool.
 func getStrBoolColAsBool(col interface{}) (bool, error) {
