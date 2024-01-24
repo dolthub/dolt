@@ -278,6 +278,7 @@ func CreateLogArgParser(isTableFunction bool) *argparser.ArgParser {
 		ap.SupportsStringList(TablesFlag, "t", "table", "Restricts the log to commits that modified the specified tables.")
 	} else {
 		ap.SupportsFlag(OneLineFlag, "", "Shows logs in a compact format.")
+		ap.SupportsFlag(StatFlag, "", "Shows the diffstat for each commit.")
 	}
 	return ap
 }

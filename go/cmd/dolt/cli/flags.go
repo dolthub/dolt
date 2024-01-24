@@ -67,6 +67,7 @@ const (
 	SkipEmptyFlag        = "skip-empty"
 	SoftResetParam       = "soft"
 	SquashParam          = "squash"
+	StatFlag             = "stat"
 	SystemFlag           = "system"
 	TablesFlag           = "tables"
 	TheirsFlag           = "theirs"

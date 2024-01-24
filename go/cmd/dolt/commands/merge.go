@@ -435,7 +435,7 @@ func calculateMergeConflicts(queryist cli.Queryist, sqlCtx *sql.Context, mergeSt
 }
 
 // calculateMergeStats calculates the table operations and row operations that occurred during the merge. Returns a map of
-// table name to MergeStats, and a bool indicating whether calculation was successful.
+// table name to MergeStats.
 func calculateMergeStats(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats map[string]*merge.MergeStats, fromRef, toRef string) (map[string]*merge.MergeStats, error) {
 	diffSummaries, err := getDiffSummariesBetweenRefs(queryist, sqlCtx, fromRef, toRef)
 	if err != nil {
@@ -620,7 +620,7 @@ func visualizeChangeTypes(stats *merge.MergeStats, maxMods int) string {
 			delLen = stats.Deletes
 		}
 		delStr := fillStringWithChar('-', delLen)
-		resultStr += color.GreenString(delStr)
+		resultStr += color.RedString(delStr)
 	}
 
 	return resultStr
