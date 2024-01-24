@@ -954,7 +954,11 @@ SQL
 
     run dolt merge merge_branch
     log_status_eq 1
-    [[ "$output" =~ "table with same name deleted and modified" ]] || false
+    [[ "$output" =~ "CONFLICT (schema): Merge conflict in test" ]] || false
+
+    run dolt conflicts cat .
+    [[ "$output" =~ "| <deleted>" ]] || false
+    [[ "$output" =~ "| cannot merge a table deletion with schema modification" ]] || false
 }
 
 @test "merge: ourRoot modifies, theirRoot renames" {
@@ -969,7 +973,10 @@ SQL
 
     run dolt merge merge_branch
     log_status_eq 1
-    [[ "$output" =~ "table with same name deleted and modified" ]] || false
+    [[ "$output" =~ "cannot create column pk on table new_name" ]] || false
+    [[ "$output" =~ "already used in table test1" ]] || false
+
+
 }
 
 @test "merge: dolt merge commits successful non-fast-forward merge" {

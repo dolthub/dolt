@@ -624,7 +624,7 @@ teardown() {
     run dolt stash pop
     [ "$status" -eq 1 ]
     [[ "$output" =~ "The stash entry is kept in case you need it again." ]] || false
-    [[ "$output" =~ "conflict: table with same name deleted and modified " ]] || false
+    [[ "$output" =~ "Your local changes to the following tables would be overwritten by applying stash" ]] || false
 }
 
 @test "stash: popping stash with added table with PK on current head with the exact same table is added already" {
