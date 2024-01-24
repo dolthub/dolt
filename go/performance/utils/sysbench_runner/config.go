@@ -64,7 +64,7 @@ var defaultSysbenchParams = []string{
 }
 
 var defaultDoltServerParams = []string{"sql-server"}
-var defaultMysqlServerParams = []string{"--user=mysql"}
+var defaultMysqlServerParams = []string{}
 var defaultDoltgresServerParams = []string{}
 var defaultPostgresServerParams = []string{}
 
@@ -269,6 +269,12 @@ type ServerConfig struct {
 	// InitExec is the path to the server init db executable
 	InitExec string
 
+	// ServerUser is the user account that should start the server
+	ServerUser string
+
+	// SkipLogBin will skip bin logging
+	SkipLogBin bool
+
 	// ServerArgs are the args used to start a server
 	ServerArgs []string
 
@@ -295,6 +301,12 @@ func (sc *ServerConfig) GetServerArgs() []string {
 		defaultParams = defaultDoltServerParams
 	} else if sc.Server == MySql {
 		defaultParams = defaultMysqlServerParams
+		if sc.ServerUser != "" {
+			params = append(params, fmt.Sprintf("--user=%s", sc.ServerUser))
+		}
+		if sc.SkipLogBin {
+			params = append(params, "--skip-log-bin")
+		}
 	} else if sc.Server == Doltgres {
 		defaultParams = defaultDoltgresServerParams
 	} else if sc.Server == Postgres {
@@ -308,6 +320,7 @@ func (sc *ServerConfig) GetServerArgs() []string {
 	if sc.Port != 0 {
 		params = append(params, fmt.Sprintf("--port=%d", sc.Port))
 	}
+
 	params = append(params, sc.ServerArgs...)
 	return params
 }

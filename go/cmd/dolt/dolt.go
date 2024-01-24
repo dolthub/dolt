@@ -66,7 +66,7 @@ import (
 )
 
 const (
-	Version = "1.32.1"
+	Version = "1.32.2"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -125,6 +125,7 @@ var doltSubCommands = []cli.Command{
 	commands.ProfileCmd{},
 	commands.QueryDiff{},
 	commands.ReflogCmd{},
+	commands.RebaseCmd{},
 }
 
 var commandsWithoutCliCtx = []cli.Command{

@@ -90,6 +90,7 @@ source \
 if [ -n "$PR_NUMBER" ]; then
   out=$(KUBECONFIG="$KUBECONFIG" kubectl delete job/"$jobname" -n sql-correctness || true)
   echo "Delete pr job if exists: $out"
+  sleep 45
 fi
 
 out=$(KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json || true)

@@ -24,8 +24,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// OpenCommitEditor allows user to write/edit commit message in temporary file
-func OpenCommitEditor(ed string, initialContents string) (string, error) {
+// OpenTempEditor allows user to write/edit message in temporary file
+func OpenTempEditor(ed string, initialContents string) (string, error) {
 	filename := filepath.Join(os.TempDir(), uuid.New().String())
 	err := os.WriteFile(filename, []byte(initialContents), os.ModePerm)
 
