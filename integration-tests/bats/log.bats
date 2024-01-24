@@ -806,6 +806,10 @@ teardown() {
 }
 
 @test "log: --stat doesn't print diffstat for merge commits" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "needs checkout which is unsupported for remote-engine"
+    fi
+
     dolt sql -q "create table test (pk int primary key, c int)"
     dolt commit -Am "create table test"
     dolt branch branch1
