@@ -1043,12 +1043,12 @@ func (db Database) createDoltTable(ctx *sql.Context, tableName string, root *dol
 
 	var conflictingTbls []string
 	_ = doltSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		_, tbl, exists, err := root.GetTableByColTag(ctx, tag)
+		_, oldTableName, exists, err := root.GetTableByColTag(ctx, tag)
 		if err != nil {
 			return true, err
 		}
-		if exists && tbl != tableName {
-			errStr := schema.ErrTagPrevUsed(tag, col.Name, tbl).Error()
+		if exists && oldTableName != tableName {
+			errStr := schema.ErrTagPrevUsed(tag, col.Name, tableName, oldTableName).Error()
 			conflictingTbls = append(conflictingTbls, errStr)
 		}
 		return false, nil

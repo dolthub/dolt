@@ -1122,19 +1122,15 @@ func validateTagUniqueness(ctx context.Context, root *RootValue, tableName strin
 		return err
 	}
 
-	var ee []string
 	err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		name, ok := existing.Get(tag)
-		if ok && name != tableName {
-			ee = append(ee, schema.ErrTagPrevUsed(tag, col.Name, name).Error())
+		oldTableName, ok := existing.Get(tag)
+		if ok && oldTableName != tableName {
+			return true, schema.ErrTagPrevUsed(tag, col.Name, tableName, oldTableName)
 		}
 		return false, nil
 	})
 	if err != nil {
 		return err
-	}
-	if len(ee) > 0 {
-		return fmt.Errorf(strings.Join(ee, "\n"))
 	}
 	return nil
 }
