@@ -163,9 +163,15 @@ func newSchemaConflict(ctx context.Context, table string, baseRoot *doltdb.RootV
 	}
 	baseFKs, _ := fkc.KeysForTable(table)
 
-	base, err := getCreateTableStatement(table, baseSch, baseFKs, bs)
-	if err != nil {
-		return schemaConflict{}, err
+	var base string
+	if baseSch != nil {
+		var err error
+		base, err = getCreateTableStatement(table, baseSch, baseFKs, bs)
+		if err != nil {
+			return schemaConflict{}, err
+		}
+	} else {
+		base = "<deleted>"
 	}
 
 	var ours string

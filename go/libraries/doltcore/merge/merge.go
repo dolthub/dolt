@@ -212,8 +212,13 @@ func MergeRoots(
 			if doltdb.IsFullTextTable(tblName) {
 				stats = &MergeStats{Operation: TableModified}
 			} else {
+				tblToStats[tblName] = &MergeStats{
+					Operation:       TableModified,
+					SchemaConflicts: 1,
+				}
 				conflict := SchemaConflict{
-					TableName: tblName,
+					TableName:            tblName,
+					ModifyDeleteConflict: true,
 				}
 				schConflicts = append(schConflicts, conflict)
 				continue
