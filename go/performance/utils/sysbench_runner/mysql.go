@@ -41,15 +41,32 @@ type MysqlConfig struct {
 func BenchmarkMysql(ctx context.Context, config *Config, serverConfig *ServerConfig) (Results, error) {
 	withKeyCtx, cancel := context.WithCancel(ctx)
 
+	var serverDir string
+	defer func() {
+		if serverDir != "" {
+			os.RemoveAll(serverDir)
+		}
+	}()
+
 	var localServer bool
 	var gServer *errgroup.Group
 	var serverCtx context.Context
 	var server *exec.Cmd
+	var err error
 	if serverConfig.Host == defaultHost {
 		log.Println("Launching the default server")
 		localServer = true
+
+		serverDir, err = InitMysqlDataDir(ctx, serverConfig)
+		if err != nil {
+			cancel()
+			return nil, err
+		}
+
 		gServer, serverCtx = errgroup.WithContext(withKeyCtx)
 		serverParams := serverConfig.GetServerArgs()
+		serverParams = append(serverParams, fmt.Sprintf("--datadir=%s", serverDir))
+
 		server = getMysqlServer(serverCtx, serverConfig, serverParams)
 
 		// launch the mysql server
@@ -129,6 +146,22 @@ func getMysqlServer(ctx context.Context, config *ServerConfig, params []string) 
 	return ExecCommand(ctx, config.ServerExec, params...)
 }
 
+// InitMysqlDataDir initializes a mysql data dir and returns the path
+func InitMysqlDataDir(ctx context.Context, config *ServerConfig) (string, error) {
+	serverDir, err := createServerDir(dbName)
+	if err != nil {
+		return "", err
+	}
+
+	msInit := ExecCommand(ctx, config.ServerExec, "--initialize-insecure", fmt.Sprintf("--datadir=%s", serverDir))
+	err = msInit.Run()
+	if err != nil {
+		return "", err
+	}
+
+	return serverDir, nil
+}
+
 func SetupDB(ctx context.Context, mConfig MysqlConfig, databaseName string) (err error) {
 	dsn, err := FormatDsn(mConfig)
 	if err != nil {
@@ -190,6 +223,7 @@ func FormatDsn(mConfig MysqlConfig) (string, error) {
 	} else {
 		socketPath = defaultMysqlSocket
 	}
+
 	if mConfig.ConnectionProtocol == tcpProtocol {
 		return fmt.Sprintf("root@tcp(%s:%d)/", mConfig.Host, mConfig.Port), nil
 	} else if mConfig.ConnectionProtocol == unixProtocol {

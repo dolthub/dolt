@@ -89,6 +89,7 @@ echo '
               "--useDoltHubLuaScriptsRepo",
               "--output='$format'",
               "--mysql-exec=/usr/sbin/mysqld",
+              "--mysql-socket=/home/tester/.mysql/mysqld.sock",
               "--mysql-protocol=unix",
               "--from-server='$fromServer'",
               "--from-version='$fromVersion'",

@@ -58,7 +58,7 @@ func BenchmarkPostgres(ctx context.Context, config *Config, serverConfig *Server
 		log.Println("Launching the default server")
 		localServer = true
 
-		serverDir, err = initPostgresDb(ctx, serverConfig)
+		serverDir, err = initPostgresDataDir(ctx, serverConfig)
 		if err != nil {
 			cancel()
 			return nil, err
@@ -142,8 +142,8 @@ func BenchmarkPostgres(ctx context.Context, config *Config, serverConfig *Server
 	return results, nil
 }
 
-// initPostgresDb initializes a dolt repo and returns the repo path
-func initPostgresDb(ctx context.Context, config *ServerConfig) (string, error) {
+// initPostgresDataDir initializes a postgres data dir and returns the path
+func initPostgresDataDir(ctx context.Context, config *ServerConfig) (string, error) {
 	serverDir, err := createServerDir(dbName)
 	if err != nil {
 		return "", err
