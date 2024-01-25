@@ -165,6 +165,10 @@ func AbortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Ro
 	if err != nil {
 		return nil, err
 	}
+	tbls, err = doltdb.ExcludeIgnoredTables(ctx, roots, tbls)
+	if err != nil {
+		return nil, err
+	}
 
 	roots, err = actions.MoveTablesFromHeadToWorking(ctx, roots, tbls)
 	if err != nil {
