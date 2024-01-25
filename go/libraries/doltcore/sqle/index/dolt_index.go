@@ -852,7 +852,9 @@ func (di *doltIndex) HasContentHashedField() bool {
 	}
 
 	contentHashedField := false
-
+	if di.indexSch == nil {
+		return false
+	}
 	indexPkCols := di.indexSch.GetPKCols()
 	indexPkCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		i := indexPkCols.TagToIdx[tag]
@@ -873,7 +875,7 @@ func (di *doltIndex) HasContentHashedField() bool {
 }
 
 func (di *doltIndex) Order() sql.IndexOrder {
-	if di.HasContentHashedField() {
+	if di.indexSch == nil || di.HasContentHashedField() {
 		return sql.IndexOrderNone
 	}
 
