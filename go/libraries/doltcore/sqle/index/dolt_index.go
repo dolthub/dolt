@@ -842,6 +842,10 @@ func (di *doltIndex) HandledFilters(filters []sql.Expression) []sql.Expression {
 	return handled
 }
 
+func (di *doltIndex) isMockIndex() bool {
+	return di.indexSch == nil
+}
+
 // HasContentHashedField returns true if any of the fields in this index are "content-hashed", meaning that the index
 // stores a hash of the content, instead of the content itself. This is currently limited to unique indexes, which can
 // use this property to store hashes of TEXT or BLOB fields and still efficiently detect uniqueness.
@@ -852,7 +856,9 @@ func (di *doltIndex) HasContentHashedField() bool {
 	}
 
 	contentHashedField := false
-
+	if di.isMockIndex() {
+		return false
+	}
 	indexPkCols := di.indexSch.GetPKCols()
 	indexPkCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		i := indexPkCols.TagToIdx[tag]

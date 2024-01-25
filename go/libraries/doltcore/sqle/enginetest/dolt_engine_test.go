@@ -480,6 +480,9 @@ func TestDoltDiffQueryPlans(t *testing.T) {
 	for _, tt := range DoltDiffPlanTests {
 		enginetest.TestQueryPlan(t, harness, e, tt.Query, tt.ExpectedPlan, sql.DescribeOptions{})
 	}
+	for _, tt := range DoltCommitPlanTests {
+		enginetest.TestQueryPlan(t, harness, e, tt.Query, tt.ExpectedPlan, sql.DescribeOptions{})
+	}
 }
 
 func TestBranchPlans(t *testing.T) {

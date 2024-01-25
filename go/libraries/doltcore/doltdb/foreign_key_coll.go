@@ -216,44 +216,62 @@ func (fk ForeignKey) DeepEquals(other ForeignKey) bool {
 }
 
 // HashOf returns the Noms hash of a ForeignKey.
-func (fk ForeignKey) HashOf() hash.Hash {
-	var bb bytes.Buffer
-	bb.Write([]byte(fk.Name))
-	bb.Write([]byte(fk.TableName))
-	bb.Write([]byte(fk.TableIndex))
+func (fk ForeignKey) HashOf() (hash.Hash, error) {
+	var fields []interface{}
+	fields = append(fields, fk.Name, fk.TableName, fk.TableIndex)
 	for _, t := range fk.TableColumns {
-		_ = binary.Write(&bb, binary.LittleEndian, t)
+		fields = append(fields, t)
 	}
-	bb.Write([]byte(fk.ReferencedTableName))
-	bb.Write([]byte(fk.ReferencedTableIndex))
+	fields = append(fields, fk.ReferencedTableName, fk.ReferencedTableIndex)
 	for _, t := range fk.ReferencedTableColumns {
-		_ = binary.Write(&bb, binary.LittleEndian, t)
+		fields = append(fields, t)
 	}
-	bb.Write([]byte{byte(fk.OnUpdate), byte(fk.OnDelete)})
+	fields = append(fields, []byte{byte(fk.OnUpdate), byte(fk.OnDelete)})
 	for _, col := range fk.UnresolvedFKDetails.TableColumns {
-		_ = binary.Write(&bb, binary.LittleEndian, col)
+		fields = append(fields, col)
 	}
 	for _, col := range fk.UnresolvedFKDetails.ReferencedTableColumns {
-		_ = binary.Write(&bb, binary.LittleEndian, col)
+		fields = append(fields, col)
 	}
 
-	return hash.Of(bb.Bytes())
+	var bb bytes.Buffer
+	for _, field := range fields {
+		var err error
+		switch t := field.(type) {
+		case string:
+			_, err = bb.Write([]byte(t))
+		case []byte:
+			_, err = bb.Write(t)
+		case uint64:
+			err = binary.Write(&bb, binary.LittleEndian, t)
+		default:
+			return hash.Hash{}, fmt.Errorf("unsupported type %T", t)
+		}
+		if err != nil {
+			return hash.Hash{}, err
+		}
+	}
+
+	return hash.Of(bb.Bytes()), nil
 }
 
 // CombinedHash returns a combined hash value for all foreign keys in the slice provided.
 // An empty slice has a zero hash.
-func CombinedHash(fks []ForeignKey) hash.Hash {
+func CombinedHash(fks []ForeignKey) (hash.Hash, error) {
 	if len(fks) == 0 {
-		return hash.Hash{}
+		return hash.Hash{}, nil
 	}
 
 	var bb bytes.Buffer
 	for _, fk := range fks {
-		h := fk.HashOf()
+		h, err := fk.HashOf()
+		if err != nil {
+			return hash.Hash{}, err
+		}
 		bb.Write(h[:])
 	}
 
-	return hash.Of(bb.Bytes())
+	return hash.Of(bb.Bytes()), nil
 }
 
 // IsSelfReferential returns whether the table declaring the foreign key is also referenced by the foreign key.
@@ -330,7 +348,11 @@ func (fkc *ForeignKeyCollection) AddKeys(fks ...ForeignKey) error {
 			// 8 char = 5 base32 bytes, should be collision resistant
 			// TODO: constraint names should be unique, and this isn't guaranteed to be.
 			//  This logic needs to live at the table / DB level.
-			key.Name = key.HashOf().String()[:8]
+			fkHash, err := key.HashOf()
+			if err != nil {
+				return err
+			}
+			key.Name = fkHash.String()[:8]
 		}
 
 		if _, ok := fkc.GetByNameCaseInsensitive(key.Name); ok {
@@ -347,7 +369,11 @@ func (fkc *ForeignKeyCollection) AddKeys(fks ...ForeignKey) error {
 			}
 		}
 
-		fkc.foreignKeys[key.HashOf().String()] = key
+		fkHash, err := key.HashOf()
+		if err != nil {
+			return err
+		}
+		fkc.foreignKeys[fkHash.String()] = key
 	}
 	return nil
 }
@@ -631,7 +657,11 @@ func (fkc *ForeignKeyCollection) RemoveTables(ctx context.Context, tables ...str
 			return fmt.Errorf("unable to remove `%s` since it is referenced from table `%s`", fk.ReferencedTableName, fk.TableName)
 		}
 		if dropChild {
-			delete(fkc.foreignKeys, fk.HashOf().String())
+			fkHash, err := fk.HashOf()
+			if err != nil {
+				return err
+			}
+			delete(fkc.foreignKeys, fkHash.String())
 		}
 	}
 	return nil
@@ -649,7 +679,12 @@ func (fkc *ForeignKeyCollection) RemoveAndUnresolveTables(ctx context.Context, r
 			if !fk.IsResolved() {
 				continue
 			}
-			delete(fkc.foreignKeys, fk.HashOf().String())
+
+			fkHash, err := fk.HashOf()
+			if err != nil {
+				return err
+			}
+			delete(fkc.foreignKeys, fkHash.String())
 
 			fk.UnresolvedFKDetails.TableColumns = make([]string, len(fk.TableColumns))
 			fk.UnresolvedFKDetails.ReferencedTableColumns = make([]string, len(fk.ReferencedTableColumns))
@@ -700,10 +735,19 @@ func (fkc *ForeignKeyCollection) RemoveAndUnresolveTables(ctx context.Context, r
 			fk.ReferencedTableColumns = nil
 			fk.TableIndex = ""
 			fk.ReferencedTableIndex = ""
-			fkc.foreignKeys[fk.HashOf().String()] = fk
+
+			fkHash, err = fk.HashOf()
+			if err != nil {
+				return err
+			}
+			fkc.foreignKeys[fkHash.String()] = fk
 		}
 		if dropChild {
-			delete(fkc.foreignKeys, fk.HashOf().String())
+			fkHash, err := fk.HashOf()
+			if err != nil {
+				return err
+			}
+			delete(fkc.foreignKeys, fkHash.String())
 		}
 	}
 	return nil

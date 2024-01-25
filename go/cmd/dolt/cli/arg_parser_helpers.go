@@ -250,6 +250,7 @@ func CreateBackupArgParser() *argparser.ArgParser {
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"creds-type", "credential type.  Valid options are role, env, and file.  See the help section for additional details."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"profile", "AWS profile to use."})
 	ap.SupportsFlag(VerboseFlag, "v", "When printing the list of backups adds additional details.")
+	ap.SupportsFlag(ForceFlag, "f", "When restoring a backup, overwrite the contents of the existing database with the same name.")
 	ap.SupportsString(dbfactory.AWSRegionParam, "", "region", "")
 	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, dbfactory.AWSCredTypes))
 	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file")
@@ -277,6 +278,7 @@ func CreateLogArgParser(isTableFunction bool) *argparser.ArgParser {
 		ap.SupportsStringList(TablesFlag, "t", "table", "Restricts the log to commits that modified the specified tables.")
 	} else {
 		ap.SupportsFlag(OneLineFlag, "", "Shows logs in a compact format.")
+		ap.SupportsFlag(StatFlag, "", "Shows the diffstat for each commit.")
 	}
 	return ap
 }

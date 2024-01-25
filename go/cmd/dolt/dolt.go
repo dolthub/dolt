@@ -66,7 +66,7 @@ import (
 )
 
 const (
-	Version = "1.32.2"
+	Version = "1.32.3"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
