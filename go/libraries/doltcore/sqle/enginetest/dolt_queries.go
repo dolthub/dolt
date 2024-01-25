@@ -2289,6 +2289,37 @@ WHERE z IN (
 			},
 		},
 	},
+	{
+		Name:        "can sort by dolt_log.commit",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select 'something' from dolt_log order by commit_hash;",
+				Expected: []sql.Row{
+					{"something"},
+					{"something"},
+				},
+			},
+			{
+				Query:    "select 'something' from dolt_diff order by commit_hash;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select 'something' from dolt_commits order by commit_hash;",
+				Expected: []sql.Row{
+					{"something"},
+					{"something"},
+				},
+			},
+			{
+				Query: "select 'something' from dolt_commit_ancestors order by commit_hash;",
+				Expected: []sql.Row{
+					{"something"},
+					{"something"},
+				},
+			},
+		},
+	},
 }
 
 // BrokenHistorySystemTableScriptTests contains tests that work for non-prepared, but don't work
