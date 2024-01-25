@@ -195,7 +195,8 @@ func AbortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Ro
 	} else {
 		workingSet = workingSet.WithWorkingRoot(preMergeWorkingRoot)
 	}
-	workingSet = workingSet.WithStagedRoot(workingSet.WorkingRoot())
+	// Unstage everything by making Staged match Head
+	workingSet = workingSet.WithStagedRoot(roots.Head)
 	workingSet = workingSet.ClearMerge()
 
 	return workingSet, nil
