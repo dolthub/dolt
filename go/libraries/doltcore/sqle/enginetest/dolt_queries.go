@@ -2285,11 +2285,11 @@ WHERE z IN (
 				},
 			},
 			{
-				Query: "select 'something' from dolt_diff order by commit_hash;",
+				Query:    "select 'something' from dolt_diff order by commit_hash;",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "select 'something' from dolt_commits order by commit_hash;",
+				Query: "select 'something' from dolt_commits order by commit_hash;",
 				Expected: []sql.Row{
 					{"something"},
 					{"something"},
