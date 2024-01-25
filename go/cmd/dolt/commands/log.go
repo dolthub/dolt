@@ -315,7 +315,7 @@ func logCompact(pager *outputpager.Pager, apr *argparser.ArgParseResults, commit
 		pager.Writer.Write([]byte(formattedDesc))
 
 		if apr.Contains(cli.StatFlag) {
-			if comm.parentHashes != nil && len(comm.parentHashes) == 1 {
+			if comm.parentHashes != nil && len(comm.parentHashes) == 1 { // don't print stats for merge commits
 				diffStats := make(map[string]*merge.MergeStats)
 				diffStats, _, err := calculateMergeStats(queryist, sqlCtx, diffStats, comm.parentHashes[0], comm.commitHash)
 				if err != nil {
@@ -333,7 +333,7 @@ func logDefault(pager *outputpager.Pager, apr *argparser.ArgParseResults, commit
 	for _, comm := range commits {
 		PrintCommitInfo(pager, apr.GetIntOrDefault(cli.MinParentsFlag, 0), apr.Contains(cli.ParentsFlag), apr.GetValueOrDefault(cli.DecorateFlag, "auto"), &comm)
 		if apr.Contains(cli.StatFlag) {
-			if comm.parentHashes != nil && len(comm.parentHashes) == 1 {
+			if comm.parentHashes != nil && len(comm.parentHashes) == 1 { // don't print stats for merge commits
 				diffStats := make(map[string]*merge.MergeStats)
 				diffStats, _, err := calculateMergeStats(queryist, sqlCtx, diffStats, comm.parentHashes[0], comm.commitHash)
 				if err != nil {

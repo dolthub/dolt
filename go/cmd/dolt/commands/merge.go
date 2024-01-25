@@ -440,7 +440,7 @@ func calculateMergeConflicts(queryist cli.Queryist, sqlCtx *sql.Context, mergeSt
 }
 
 // calculateMergeStats calculates the table operations and row operations that occurred during the merge. Returns a map of
-// table name to MergeStats and a bool representing whether all tables were unmodified.
+// table name to MergeStats and a bool set to TRUE if all tables are unmodified.
 func calculateMergeStats(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats map[string]*merge.MergeStats, fromRef, toRef string) (map[string]*merge.MergeStats, bool, error) {
 	diffSummaries, err := getDiffSummariesBetweenRefs(queryist, sqlCtx, fromRef, toRef)
 	if err != nil {
