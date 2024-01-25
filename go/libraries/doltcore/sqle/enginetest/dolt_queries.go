@@ -5669,10 +5669,14 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		SetUpScript: []string{
 			"INSERT INTO dolt_ignore VALUES ('generated_*', 1);",
 			"CREATE TABLE generated_foo (pk int PRIMARY KEY);",
+			"CREATE TABLE generated_bar (pk int PRIMARY KEY);",
+			"insert into generated_foo values (1);",
+			"insert into generated_bar values (1);",
 			"SET @@autocommit=1;",
 			"SET @@dolt_allow_commit_conflicts=1;",
 			"create table t (pk int primary key, v varchar(100));",
 			"insert into t values (1, 'one');",
+			"call dolt_add('--force', 'generated_bar');",
 			"call dolt_commit('-Am', 'create table t');",
 			"call dolt_checkout('-b', 'branch1');",
 			"update t set v=\"uno\" where pk=1;",
@@ -5697,6 +5701,16 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				},
 			},
 			{
+				Query: "insert into generated_foo values (2);",
+			},
+			/*
+				// TODO: https://github.com/dolthub/dolt/issues/7411
+				// see below
+				{
+					Query: "insert into generated_bar values (2);",
+				},
+			*/
+			{
 				Query:    "call dolt_cherry_pick('--abort');",
 				Expected: []sql.Row{{"", 0, 0, 0}},
 			},
@@ -5709,9 +5723,22 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				Expected: []sql.Row{{1, "one"}},
 			},
 			{
+				// An ignored table should still be present (and unstaged) after aborting the merge.
 				Query:    "select * from dolt_status;",
-				Expected: []sql.Row{},
+				Expected: []sql.Row{{"generated_foo", false, "new table"}},
 			},
+			{
+				// Changes made to the table during the merge should not be reverted.
+				Query:    "select * from generated_foo;",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			/*{
+				// TODO: https://github.com/dolthub/dolt/issues/7411
+				// The table that was force-added should be treated like any other table
+				// and reverted to its state before the merge began.
+				Query:    "select * from generated_bar;",
+				Expected: []sql.Row{{1}},
+			},*/
 		},
 	},
 }
