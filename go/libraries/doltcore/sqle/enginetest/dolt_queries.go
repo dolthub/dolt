@@ -2274,10 +2274,9 @@ WHERE z IN (
 		},
 	},
 	{
-		Name: "can sort by dolt_log.commit",
-		SetUpScript: []string{
-		},
-		Assertions: []queries.ScriptTestAssertion {
+		Name:        "can sort by dolt_log.commit",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select 'something' from dolt_log order by commit_hash;",
 				Expected: []sql.Row{
@@ -2293,7 +2292,7 @@ WHERE z IN (
 				},
 			},
 			{
-				Query: "select 'something' from dolt_commits order by commit_hash;",
+				Query:    "select 'something' from dolt_commits order by commit_hash;",
 				Expected: []sql.Row{},
 			},
 			{
