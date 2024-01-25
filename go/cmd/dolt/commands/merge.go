@@ -356,15 +356,20 @@ func printMergeStats(fastForward bool,
 	}
 
 	if noConflicts {
-		mergeStats, err = calculateMergeStats(queryist, sqlCtx, mergeStats, fromRef, toRef)
+		upToDate := false
+		mergeStats, upToDate, err = calculateMergeStats(queryist, sqlCtx, mergeStats, fromRef, toRef)
 		if err != nil {
-			if err == doltdb.ErrUpToDate || err.Error() == "error: unable to get diff summary from HEAD^1 to HEAD: invalid ancestor spec" {
+			if err.Error() == "error: unable to get diff summary from HEAD^1 to HEAD: invalid ancestor spec" {
 				cli.Println(doltdb.ErrUpToDate.Error())
 				return 0
 			}
 			cli.Println("merge successful, but could not calculate stats")
 			cli.Println(err.Error())
 			return 1
+		}
+		if upToDate {
+			cli.Println(doltdb.ErrUpToDate.Error())
+			return 0
 		}
 	}
 
@@ -435,11 +440,11 @@ func calculateMergeConflicts(queryist cli.Queryist, sqlCtx *sql.Context, mergeSt
 }
 
 // calculateMergeStats calculates the table operations and row operations that occurred during the merge. Returns a map of
-// table name to MergeStats.
-func calculateMergeStats(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats map[string]*merge.MergeStats, fromRef, toRef string) (map[string]*merge.MergeStats, error) {
+// table name to MergeStats and a bool representing whether all tables were unmodified.
+func calculateMergeStats(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats map[string]*merge.MergeStats, fromRef, toRef string) (map[string]*merge.MergeStats, bool, error) {
 	diffSummaries, err := getDiffSummariesBetweenRefs(queryist, sqlCtx, fromRef, toRef)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	diffStats := make(map[string]diffStatistics)
@@ -468,7 +473,7 @@ func calculateMergeStats(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats 
 			}
 			tableStats, err := getTableDiffStats(queryist, sqlCtx, summary.TableName, fromRef, toRef)
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			if tableStats != nil && len(tableStats) > 0 {
 				diffStats[tableStats[0].TableName] = tableStats[0]
@@ -481,7 +486,7 @@ func calculateMergeStats(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats 
 	}
 
 	if allUnmodified {
-		return nil, doltdb.ErrUpToDate
+		return nil, true, nil
 	}
 
 	// get row stats
@@ -491,7 +496,7 @@ func calculateMergeStats(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats 
 		mergeStats[tableName].Modifications = int(diffStat.RowsModified)
 	}
 
-	return mergeStats, nil
+	return mergeStats, false, nil
 }
 
 // printSuccessStats returns whether there are conflicts or constraint violations.
