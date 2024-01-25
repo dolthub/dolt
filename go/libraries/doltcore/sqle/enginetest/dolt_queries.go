@@ -706,6 +706,22 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 // this slice into others with good names as it grows.
 var DoltScripts = []queries.ScriptTest{
 	{
+		// https://github.com/dolthub/dolt/issues/7384
+		Name: "multiple unresolved foreign keys can be created on the same table",
+		SetUpScript: []string{
+			"SET @@FOREIGN_KEY_CHECKS=0;",
+			"create table t1(pk int primary key);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "create table t2 (pk int primary key, c1 int, c2 int, " +
+					"FOREIGN KEY (`c1`) REFERENCES `t1` (`pk`) ON DELETE CASCADE ON UPDATE CASCADE, " +
+					"FOREIGN KEY (`c2`) REFERENCES `t1` (`pk`) ON DELETE CASCADE ON UPDATE CASCADE);",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+		},
+	},
+	{
 		Name: "test has_ancestor",
 		SetUpScript: []string{
 			"create table xy (x int primary key)",

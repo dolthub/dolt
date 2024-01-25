@@ -681,7 +681,7 @@ SQL
 
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  CONSTRAINT \`npsbmr30\` FOREIGN KEY (\`j\`) REFERENCES \`parent\` (\`i\`)" ]] || false
+    [[ "$output" =~ "+  CONSTRAINT \`qvvgfpe7\` FOREIGN KEY (\`j\`) REFERENCES \`parent\` (\`i\`)" ]] || false
 }
 
 @test "diff: new foreign key added without foreign key check, and does not resolve" {
