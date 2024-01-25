@@ -68,6 +68,8 @@ func TestForeignKeyHashOf(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "qiv9l4juuk20buqml2unlbohfvo95mcd", hash1.String())
 
+		// Create a second FK that is identical to fk1, except for the unresolved FK details to
+		// assert that the UnresolvedFKDetails fields are used in the hash.
 		fk2 := doltdb.ForeignKey{
 			Name:                   "",
 			TableName:              "table1",
