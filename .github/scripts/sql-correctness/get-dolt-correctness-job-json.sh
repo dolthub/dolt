@@ -79,6 +79,7 @@ echo '
               "--concurrent",
               "--output='$format'",
               "--version='$version'",
+              "--timeout=600",
               '"$nomsBinFormat"'
               '"$issueNumber"'
               '"$regressComp"'
