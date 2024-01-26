@@ -187,6 +187,27 @@ func AddDoltSystemVariables() {
 			Type:    types.NewSystemBoolType("dolt_dont_merge_json"),
 			Default: int8(0),
 		},
+		{
+			Name:    dsess.DoltStatsAutoRefreshEnabled,
+			Dynamic: false,
+			Scope:   sql.SystemVariableScope_Global,
+			Type:    types.NewSystemBoolType(dsess.DoltStatsAutoRefreshEnabled),
+			Default: int8(0),
+		},
+		{
+			Name:    dsess.DoltStatsAutoRefreshThreshold,
+			Dynamic: false,
+			Scope:   sql.SystemVariableScope_Global,
+			Type:    types.NewSystemDoubleType(dsess.DoltStatsAutoRefreshEnabled, 0, 1),
+			Default: float64(.5),
+		},
+		{
+			Name:    dsess.DoltStatsAutoRefreshInterval,
+			Dynamic: false,
+			Scope:   sql.SystemVariableScope_Global,
+			Type:    types.NewSystemIntType(dsess.DoltStatsAutoRefreshInterval, 1, 1<<10, false),
+			Default: 120,
+		},
 	})
 }
 

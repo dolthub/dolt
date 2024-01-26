@@ -20,6 +20,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/eventscheduler"
@@ -185,8 +186,9 @@ func NewSqlEngine(
 	sqlEngine.contextFactory = sqlContextFactory()
 	sqlEngine.dsessFactory = sessFactory
 
-	engine.Analyzer.Catalog.StatsProvider = stats.NewProvider()
-	engine.Analyzer.Catalog.StatsProvider.(*stats.Provider).Load(sql.NewContext(ctx), dbs)
+	if err = configureStatsProvider(ctx, engine, bThreads, dbs); err != nil {
+		return nil, err
+	}
 
 	// Load MySQL Db information
 	if err = engine.Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), data); err != nil {
@@ -375,6 +377,22 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, sessFa
 		}
 	}
 	return engine.InitializeEventScheduler(getCtxFunc, config.EventSchedulerStatus, eventSchedulerPeriod)
+}
+
+func configureStatsProvider(ctx context.Context, engine *gms.Engine, bThreads *sql.BackgroundThreads, dbs []dsess.SqlDatabase) error {
+	engine.Analyzer.Catalog.StatsProvider = stats.NewProvider()
+	statsProv := engine.Analyzer.Catalog.StatsProvider.(*stats.Provider)
+	if err := statsProv.Load(sql.NewContext(ctx), dbs); err != nil {
+		return err
+	}
+	if _, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshEnabled); enabled == int8(1) {
+		_, threshold, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshThreshold)
+		_, interval, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshInterval)
+		if err := statsProv.ConfigureAutoRefresh(bThreads, time.Second*time.Duration(interval.(int64)), threshold.(float64)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // sqlContextFactory returns a contextFactory that creates a new sql.Context with the initial database provided

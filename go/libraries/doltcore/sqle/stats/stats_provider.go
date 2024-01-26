@@ -17,6 +17,8 @@ package stats
 import (
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"strings"
 	"sync"
 	"time"
@@ -142,10 +144,15 @@ func (s DoltHistogram) toSql() []*stats.Bucket {
 }
 
 type indexMeta struct {
-	db    string
-	table string
-	index string
-	cols  []string
+	db           string
+	table        string
+	index        string
+	cols         []string
+	updateChunks []tree.Node
+	// [start, stop] ordinals for each chunk for update
+	updateOrdinals [][]uint64
+	preexisting    []DoltBucket
+	allAddrs       []hash.Hash
 }
 
 func NewProvider() *Provider {
@@ -167,10 +174,22 @@ type Provider struct {
 // each database has one statistics table that is a collection of the
 // table stats in the database
 type dbStats struct {
-	db         string
-	active     map[hash.Hash]int
-	stats      map[sql.StatQualifier]*DoltStats
-	currentMap prolly.Map
+	db                string
+	active            map[hash.Hash]int
+	stats             map[sql.StatQualifier]*DoltStats
+	currentMap        prolly.Map
+	latestRoot        *doltdb.RootValue
+	latestTableHashes map[string]hash.Hash
+}
+
+func (s *dbStats) updateActive() {
+	newActive := make(map[hash.Hash]int)
+	for _, stat := range s.stats {
+		for i, hash := range stat.chunks {
+			newActive[hash] = i
+		}
+	}
+	s.active = newActive
 }
 
 var _ sql.StatsProvider = (*Provider)(nil)
@@ -318,7 +337,36 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 		idxMetas = append(idxMetas, idxMeta)
 	}
 
-	newStats, err := refreshStats(ctx, indexes, idxMetas)
+	dSess := dsess.DSessFromSess(ctx.Session)
+	prov := dSess.Provider()
+	sqlDb, err := prov.Database(ctx, idxMetas[0].db)
+	if err != nil {
+		return err
+	}
+	sqlTable, ok, err := sqlDb.GetTableInsensitive(ctx, idxMetas[0].table)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("error creating statistics for table: %s; table not found", idxMetas[0].table)
+	}
+
+	var dTab *doltdb.Table
+	switch t := sqlTable.(type) {
+	case *sqle.AlterableDoltTable:
+		dTab, err = t.DoltTable.DoltTable(ctx)
+	case *sqle.WritableDoltTable:
+		dTab, err = t.DoltTable.DoltTable(ctx)
+	case *sqle.DoltTable:
+		dTab, err = t.DoltTable(ctx)
+	default:
+		return fmt.Errorf("failed to unwrap dolt table from type: %T", sqlTable)
+	}
+	if err != nil {
+		return err
+	}
+
+	newStats, err := updateStats(ctx, sqlTable, dTab, indexes, idxMetas)
 	if err != nil {
 		return err
 	}
@@ -350,6 +398,7 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 	}
 
 	p.dbStats[dbName].currentMap = newMap
+	p.dbStats[dbName].updateActive()
 
 	return ddb.SetStatisics(ctx, newMap.HashOf())
 }

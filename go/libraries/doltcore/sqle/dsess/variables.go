@@ -56,6 +56,10 @@ const (
 	DoltClusterRoleVariable         = "dolt_cluster_role"
 	DoltClusterRoleEpochVariable    = "dolt_cluster_role_epoch"
 	DoltClusterAckWritesTimeoutSecs = "dolt_cluster_ack_writes_timeout_secs"
+
+	DoltStatsAutoRefreshEnabled   = "dolt_stats_auto_refresh_enabled"
+	DoltStatsAutoRefreshThreshold = "dolt_stats_auto_refresh_threshold"
+	DoltStatsAutoRefreshInterval  = "dolt_stats_auto_refresh_interval"
 )
 
 const URLTemplateDatabasePlaceholder = "{database}"
