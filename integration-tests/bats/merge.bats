@@ -724,8 +724,17 @@ SQL
     [[ "$output" =~ "CONFLICT (schema): Merge conflict in test" ]] || false
 
     run dolt conflicts cat .
-    [[ "$output" =~ "| <deleted>" ]] || false
-    [[ "$output" =~ "| cannot merge a table deletion with schema modification" ]] || false
+    [[ "$output" =~ "+------------+-------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------------------+" ]] || false
+    [[ "$output" =~ "| our_schema | their_schema                                                      | base_schema                                                       | description                                            |" ]] || false
+    [[ "$output" =~ "+------------+-------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------------------+" ]] || false
+    [[ "$output" =~ '| <deleted>  | CREATE TABLE `test2` (                                            | CREATE TABLE `test2` (                                            | cannot merge a table deletion with schema modification |' ]] || false
+    [[ "$output" =~ '|            |   `pk` int NOT NULL,                                              |   `pk` int NOT NULL,                                              |                                                        |' ]] || false
+    [[ "$output" =~ '|            |   `c1` int,                                                       |   `c1` int,                                                       |                                                        |' ]] || false
+    [[ "$output" =~ '|            |   PRIMARY KEY (`pk`)                                              |   `c2` int,                                                       |                                                        |' ]] || false
+    [[ "$output" =~ '|            | ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin; |   PRIMARY KEY (`pk`)                                              |                                                        |' ]] || false
+    [[ "$output" =~ "|            |                                                                   | ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin; |                                                        |" ]] || false
+    [[ "$output" =~ "+------------+-------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------------------+" ]] || false
+
 }
 
 @test "merge: merge a branch that deletes an edited table" {
@@ -774,8 +783,17 @@ SQL
 
     log_status_eq 1
     run dolt conflicts cat .
-    [[ "$output" =~ "| <deleted>" ]] || false
-    [[ "$output" =~ "| cannot merge a table deletion with schema modification" ]] || false
+    [[ "$output" =~ "+-------------------------------------------------------------------+--------------+-------------------------------------------------------------------+--------------------------------------------------------+" ]] || false
+    [[ "$output" =~ "| our_schema                                                        | their_schema | base_schema                                                       | description                                            |" ]] || false
+    [[ "$output" =~ "+-------------------------------------------------------------------+--------------+-------------------------------------------------------------------+--------------------------------------------------------+" ]] || false
+    [[ "$output" =~ '| CREATE TABLE `test2` (                                            | <deleted>    | CREATE TABLE `test2` (                                            | cannot merge a table deletion with schema modification |' ]] || false
+    [[ "$output" =~ '|   `pk` int NOT NULL,                                              |              |   `pk` int NOT NULL,                                              |                                                        |' ]] || false
+    [[ "$output" =~ '|   `c1` int,                                                       |              |   `c1` int,                                                       |                                                        |' ]] || false
+    [[ "$output" =~ '|   PRIMARY KEY (`pk`)                                              |              |   `c2` int,                                                       |                                                        |' ]] || false
+    [[ "$output" =~ '| ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin; |              |   PRIMARY KEY (`pk`)                                              |                                                        |' ]] || false
+    [[ "$output" =~ "|                                                                   |              | ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin; |                                                        |" ]] || false
+    [[ "$output" =~ "+-------------------------------------------------------------------+--------------+-------------------------------------------------------------------+--------------------------------------------------------+" ]] || false
+
 }
 
 @test "merge: merge a branch that deletes a deleted table" {
@@ -1022,8 +1040,17 @@ SQL
     [[ "$output" =~ "CONFLICT (schema): Merge conflict in test" ]] || false
 
     run dolt conflicts cat .
-    [[ "$output" =~ "| <deleted>" ]] || false
-    [[ "$output" =~ "| cannot merge a table deletion with schema modification" ]] || false
+    [[ "$output" =~ "+------------+-------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------------------+" ]] || false
+    [[ "$output" =~ "| our_schema | their_schema                                                      | base_schema                                                       | description                                            |" ]] || false
+    [[ "$output" =~ "+------------+-------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------------------+" ]] || false
+    [[ "$output" =~ '| <deleted>  | CREATE TABLE `test1` (                                            | CREATE TABLE `test1` (                                            | cannot merge a table deletion with schema modification |' ]] || false
+    [[ "$output" =~ '|            |   `pk` int NOT NULL,                                              |   `pk` int NOT NULL,                                              |                                                        |' ]] || false
+    [[ "$output" =~ '|            |   `c1` int,                                                       |   `c1` int,                                                       |                                                        |' ]] || false
+    [[ "$output" =~ '|            |   PRIMARY KEY (`pk`)                                              |   `c2` int,                                                       |                                                        |' ]] || false
+    [[ "$output" =~ '|            | ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin; |   PRIMARY KEY (`pk`)                                              |                                                        |' ]] || false
+    [[ "$output" =~ "|            |                                                                   | ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin; |                                                        |" ]] || false
+    [[ "$output" =~ "+------------+-------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------------------+" ]] || false
+
 }
 
 @test "merge: ourRoot modifies, theirRoot renames" {
