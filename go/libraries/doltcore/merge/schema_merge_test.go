@@ -772,6 +772,24 @@ var nullabilityTests = []schemaMergeTest{
 		skipOldFmt:          true,
 		skipFlipOnOldFormat: true,
 	},
+	{
+		name:                "table delete plus add not null column to empty table",
+		ancestor:            *tbl(sch("CREATE TABLE t (id int PRIMARY KEY)                              ")),
+		left:                tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int NOT NULL DEFAULT  '19')")),
+		right:               nil,
+		conflict:            true,
+		skipOldFmt:          true,
+		skipFlipOnOldFormat: true,
+	},
+	{
+		name:                "table delete plus add not null column to non-empty table",
+		ancestor:            *tbl(sch("CREATE TABLE t (id int PRIMARY KEY)                              "), row(1)),
+		left:                tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int NOT NULL DEFAULT  '19')"), row(1, 19)),
+		right:               nil,
+		conflict:            true,
+		skipOldFmt:          true,
+		skipFlipOnOldFormat: true,
+	},
 }
 
 var columnReorderingTests = []schemaMergeTest{}
@@ -1086,6 +1104,13 @@ var simpleConflictTests = []schemaMergeTest{
 		ancestor: *tbl(sch("CREATE TABLE t (id int PRIMARY KEY)                "), row(1)),
 		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int NULL)    "), row(1, 2)),
 		right:    tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int NOT NULL)"), row(1, 2)),
+		conflict: true,
+	},
+	{
+		name:     "column add and table drop",
+		ancestor: *tbl(sch("CREATE TABLE t (id int PRIMARY KEY)                "), row(1)),
+		left:     tbl(sch("CREATE TABLE t (id int PRIMARY KEY, a int NULL)    "), row(1, 2)),
+		right:    nil,
 		conflict: true,
 	},
 	{
