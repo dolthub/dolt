@@ -566,7 +566,7 @@ var _ DoltIndex = (*doltIndex)(nil)
 var _ sql.ExtendedIndex = (*doltIndex)(nil)
 
 // CanSupport implements sql.Index
-func (di *doltIndex) CanSupport(...sql.Range) bool {
+func (di *doltIndex) CanSupport(rng ...sql.Range) bool {
 	return true
 }
 
