@@ -94,6 +94,7 @@ enum ClientEventType {
     PROFILE = 62;
     REFLOG = 63;
     SQL_SERVER_HEARTBEAT = 64;
+    REBASE = 65;
 }
 
 enum MetricID {

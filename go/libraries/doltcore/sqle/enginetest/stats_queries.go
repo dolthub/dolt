@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/stats"
@@ -423,18 +422,9 @@ func TestProviderReloadScriptWithEngine(t *testing.T, e enginetest.QueryEngine, 
 			if !ok {
 				t.Errorf("expected *sqle.DoltDatabaseProvider but found: %T", eng.Analyzer.Catalog.DbProvider)
 			}
-			var doltdbs []*doltdb.DoltDB
-			var dbNames []string
-			for _, db := range dbProv.DoltDatabases() {
-				ddbs := db.DoltDatabases()
-				if len(ddbs) > 0 {
-					dbNames = append(dbNames, strings.ToLower(db.Name()))
-					doltdbs = append(doltdbs, ddbs[0])
-				}
-			}
 
 			newProv := stats.NewProvider()
-			err := newProv.Load(ctx, dbNames, doltdbs)
+			err := newProv.Load(ctx, dbProv.DoltDatabases())
 			require.NoError(t, err)
 
 			eng.Analyzer.Catalog.StatsProvider = newProv

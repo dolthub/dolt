@@ -14,7 +14,9 @@
       "Version": "8.0.22",
       "ResultsFormat": "csv",
       "ServerExec": "/usr/sbin/mysqld",
-      "ConnectionProtocol": "unix"
+      "ConnectionProtocol": "unix",
+      "ServerUser": "root",
+      "SkipLogBin": true
     }
   ],
   "ScriptDir":"/sysbench-lua-scripts",

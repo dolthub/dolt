@@ -1338,3 +1338,51 @@ SQL
     [ "$status" -eq "0" ]
     [[ "$output" =~ "5" ]] || false
 }
+
+@test "sql-local-remote: verify dolt rebase behavior" {
+    cd altDB
+
+    dolt sql -q "drop table dolt_ignore;"
+    dolt add .
+
+    dolt branch b1
+    dolt commit -m "main commit 2"
+    dolt checkout b1
+    dolt sql -q "create table t2 (pk int primary key)"
+    dolt add .
+    dolt commit -m "b1 commit 1"
+
+    touch rebaseScript.sh
+    echo "#!/bin/bash" >> rebaseScript.sh
+    chmod +x rebaseScript.sh
+    export EDITOR=$PWD/rebaseScript.sh
+    export DOLT_TEST_FORCE_OPEN_EDITOR="1"
+
+    run dolt --verbose-engine-setup rebase -i main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting local mode" ]] || false
+    [[ "$output" =~ "Successfully rebased and updated refs/heads/b1" ]] || false
+
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "main commit 2" ]] || false
+    [[ "$output" =~ "b1 commit 1" ]] || false
+
+    dolt checkout main
+    dolt sql -q "create table t3 (pk int primary key)"
+    dolt add .
+    dolt commit -m "main commit 3"
+    dolt checkout b1
+
+    start_sql_server altDB
+    run dolt --verbose-engine-setup rebase -i main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "starting remote mode" ]] || false
+    [[ "$output" =~ "Successfully rebased and updated refs/heads/b1" ]] || false
+
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "main commit 3" ]] || false
+    [[ "$output" =~ "main commit 2" ]] || false
+    [[ "$output" =~ "b1 commit 1" ]] || false
+}

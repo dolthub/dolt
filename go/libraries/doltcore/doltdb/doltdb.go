@@ -1761,6 +1761,7 @@ func (ddb *DoltDB) GetStatistics(ctx context.Context) (prolly.Map, error) {
 	if err != nil {
 		return prolly.Map{}, err
 	}
+
 	return stats.Map(), nil
 
 }

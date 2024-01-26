@@ -16,6 +16,7 @@ package tpcc_runner
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -32,14 +33,29 @@ import (
 func BenchmarkMysql(ctx context.Context, config *TpccBenchmarkConfig, serverConfig *sysbench_runner.ServerConfig) (sysbench_runner.Results, error) {
 	withKeyCtx, cancel := context.WithCancel(ctx)
 
+	var serverDir string
+	defer func() {
+		if serverDir != "" {
+			os.RemoveAll(serverDir)
+		}
+	}()
+
 	var localServer bool
 	var gServer *errgroup.Group
 	var serverCtx context.Context
 	var server *exec.Cmd
+	var err error
 	if serverConfig.Host == defaultHost {
 		localServer = true
+		serverDir, err = sysbench_runner.InitMysqlDataDir(ctx, serverConfig)
+		if err != nil {
+			cancel()
+			return nil, err
+		}
+
 		gServer, serverCtx = errgroup.WithContext(withKeyCtx)
 		serverParams := serverConfig.GetServerArgs()
+		serverParams = append(serverParams, fmt.Sprintf("--datadir=%s", serverDir))
 		server = getMysqlServer(serverCtx, serverConfig, serverParams)
 
 		// launch the mysql server

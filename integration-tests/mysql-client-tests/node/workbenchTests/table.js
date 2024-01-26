@@ -127,7 +127,7 @@ export const tableTests = [
       {
         CONSTRAINT_CATALOG: "def",
         CONSTRAINT_SCHEMA: `${dbName}/main`,
-        CONSTRAINT_NAME: "s7utamh8",
+        CONSTRAINT_NAME: "lfbtivir",
         TABLE_CATALOG: "def",
         TABLE_SCHEMA: `${dbName}/main`,
         TABLE_NAME: "test_info",

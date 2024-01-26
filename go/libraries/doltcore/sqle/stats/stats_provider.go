@@ -177,18 +177,18 @@ var _ sql.StatsProvider = (*Provider)(nil)
 
 // Init scans the statistics tables, populating the |stats| attribute.
 // Statistics are not available for reading until we've finished loading.
-func (p *Provider) Load(ctx *sql.Context, dbNames []string, dbs []*doltdb.DoltDB) error {
+func (p *Provider) Load(ctx *sql.Context, dbs []dsess.SqlDatabase) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	for _, name := range dbNames {
+	for _, db := range dbs {
 		// set map keys so concurrent orthogonal writes are OK
-		p.dbStats[name] = &dbStats{db: strings.ToLower(name), stats: make(map[sql.StatQualifier]*DoltStats)}
+		p.dbStats[strings.ToLower(db.Name())] = &dbStats{db: strings.ToLower(db.Name()), stats: make(map[sql.StatQualifier]*DoltStats)}
 	}
 	eg, ctx := ctx.NewErrgroup()
-	for i, db := range dbs {
+	for _, db := range dbs {
 		// copy closure variables
-		dbName := dbNames[i]
+		dbName := strings.ToLower(db.Name())
 		db := db
 		eg.Go(func() (err error) {
 			defer func() {
@@ -203,13 +203,13 @@ func (p *Provider) Load(ctx *sql.Context, dbNames []string, dbs []*doltdb.DoltDB
 				}
 			}()
 
-			m, err := db.GetStatistics(ctx)
+			m, err := db.DbData().Ddb.GetStatistics(ctx)
 			if errors.Is(err, doltdb.ErrNoStatistics) {
 				return nil
 			} else if err != nil {
 				return err
 			}
-			stats, err := loadStats(ctx, dbName, m)
+			stats, err := loadStats(ctx, db, m)
 			if errors.Is(err, dtables.ErrIncompatibleVersion) {
 				ctx.Warn(0, err.Error())
 				return nil

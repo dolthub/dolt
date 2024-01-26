@@ -706,6 +706,22 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 // this slice into others with good names as it grows.
 var DoltScripts = []queries.ScriptTest{
 	{
+		// https://github.com/dolthub/dolt/issues/7384
+		Name: "multiple unresolved foreign keys can be created on the same table",
+		SetUpScript: []string{
+			"SET @@FOREIGN_KEY_CHECKS=0;",
+			"create table t1(pk int primary key);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "create table t2 (pk int primary key, c1 int, c2 int, " +
+					"FOREIGN KEY (`c1`) REFERENCES `t1` (`pk`) ON DELETE CASCADE ON UPDATE CASCADE, " +
+					"FOREIGN KEY (`c2`) REFERENCES `t1` (`pk`) ON DELETE CASCADE ON UPDATE CASCADE);",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+		},
+	},
+	{
 		Name: "test has_ancestor",
 		SetUpScript: []string{
 			"create table xy (x int primary key)",
@@ -2269,6 +2285,37 @@ WHERE z IN (
 					{100},
 					{200},
 					{300},
+				},
+			},
+		},
+	},
+	{
+		Name:        "can sort by dolt_log.commit",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select 'something' from dolt_log order by commit_hash;",
+				Expected: []sql.Row{
+					{"something"},
+					{"something"},
+				},
+			},
+			{
+				Query:    "select 'something' from dolt_diff order by commit_hash;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "select 'something' from dolt_commits order by commit_hash;",
+				Expected: []sql.Row{
+					{"something"},
+					{"something"},
+				},
+			},
+			{
+				Query: "select 'something' from dolt_commit_ancestors order by commit_hash;",
+				Expected: []sql.Row{
+					{"something"},
+					{"something"},
 				},
 			},
 		},
@@ -5669,10 +5716,14 @@ var DoltCherryPickTests = []queries.ScriptTest{
 		SetUpScript: []string{
 			"INSERT INTO dolt_ignore VALUES ('generated_*', 1);",
 			"CREATE TABLE generated_foo (pk int PRIMARY KEY);",
+			"CREATE TABLE generated_bar (pk int PRIMARY KEY);",
+			"insert into generated_foo values (1);",
+			"insert into generated_bar values (1);",
 			"SET @@autocommit=1;",
 			"SET @@dolt_allow_commit_conflicts=1;",
 			"create table t (pk int primary key, v varchar(100));",
 			"insert into t values (1, 'one');",
+			"call dolt_add('--force', 'generated_bar');",
 			"call dolt_commit('-Am', 'create table t');",
 			"call dolt_checkout('-b', 'branch1');",
 			"update t set v=\"uno\" where pk=1;",
@@ -5697,6 +5748,16 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				},
 			},
 			{
+				Query: "insert into generated_foo values (2);",
+			},
+			/*
+				// TODO: https://github.com/dolthub/dolt/issues/7411
+				// see below
+				{
+					Query: "insert into generated_bar values (2);",
+				},
+			*/
+			{
 				Query:    "call dolt_cherry_pick('--abort');",
 				Expected: []sql.Row{{"", 0, 0, 0}},
 			},
@@ -5709,9 +5770,22 @@ var DoltCherryPickTests = []queries.ScriptTest{
 				Expected: []sql.Row{{1, "one"}},
 			},
 			{
+				// An ignored table should still be present (and unstaged) after aborting the merge.
 				Query:    "select * from dolt_status;",
-				Expected: []sql.Row{},
+				Expected: []sql.Row{{"generated_foo", false, "new table"}},
 			},
+			{
+				// Changes made to the table during the merge should not be reverted.
+				Query:    "select * from generated_foo;",
+				Expected: []sql.Row{{1}, {2}},
+			},
+			/*{
+				// TODO: https://github.com/dolthub/dolt/issues/7411
+				// The table that was force-added should be treated like any other table
+				// and reverted to its state before the merge began.
+				Query:    "select * from generated_bar;",
+				Expected: []sql.Row{{1}},
+			},*/
 		},
 	},
 }
