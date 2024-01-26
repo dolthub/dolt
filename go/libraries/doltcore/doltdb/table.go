@@ -405,6 +405,18 @@ func (t *Table) GetSchemaHash(ctx context.Context) (hash.Hash, error) {
 	return t.table.GetSchemaHash(ctx)
 }
 
+func SchemaHashesEqual(ctx context.Context, t1, t2 *Table) (bool, error) {
+	t1Hash, err := t1.GetSchemaHash(ctx)
+	if err != nil {
+		return false, err
+	}
+	t2Hash, err := t2.GetSchemaHash(ctx)
+	if err != nil {
+		return false, err
+	}
+	return t1Hash == t2Hash, nil
+}
+
 // UpdateSchema updates the table with the schema given and returns the updated table. The original table is unchanged.
 // This method only updates the schema of a table; the row data is unchanged. Schema alterations that require rebuilding
 // the table (e.g. adding a column in the middle, adding a new non-null column, adding a column in the middle of a
