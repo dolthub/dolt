@@ -145,6 +145,22 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 				Query:    "/* client c */ SELECT * FROM x ORDER BY y;",
 				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
 			},
+			{
+				Query:    "/* client a */ SET @@dolt_transaction_commit_message='Commit Message 42';",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client a */ create table newTable(pk int primary key);",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "/* client a */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ SELECT message from dolt_log ORDER BY date DESC LIMIT 1;",
+				Expected: []sql.Row{{"Commit Message 42"}},
+			},
 		},
 	})
 	_, err := harness.NewEngine(t)
@@ -161,6 +177,16 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 	commit, err := db.Resolve(context.Background(), cs, headRefs[0])
 	require.NoError(t, err)
 	cm, err := commit.GetCommitMeta(context.Background())
+	require.NoError(t, err)
+	require.Contains(t, cm.Description, "Commit Message 42")
+
+	cs, err = doltdb.NewCommitSpec("HEAD~1")
+	require.NoError(t, err)
+	headRefs, err = db.GetHeadRefs(context.Background())
+	require.NoError(t, err)
+	commit, err = db.Resolve(context.Background(), cs, headRefs[0])
+	require.NoError(t, err)
+	cm, err = commit.GetCommitMeta(context.Background())
 	require.NoError(t, err)
 	require.Contains(t, cm.Description, "Transaction commit")
 
@@ -259,12 +285,20 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 				Expected: []sql.Row{{true}},
 			},
 			{
+				Query:    "/* client b */ SET @@dolt_transaction_commit_message='ClientB Commit';",
+				Expected: []sql.Row{{}},
+			},
+			{
 				Query:    "/* client b */ COMMIT;",
 				Expected: []sql.Row{},
 			},
 			{
 				Query:    "/* client a */ SELECT @@mydb_head like @initial_head;",
 				Expected: []sql.Row{{true}},
+			},
+			{
+				Query:    "/* client a */ SET @@dolt_transaction_commit_message='ClientA Commit';",
+				Expected: []sql.Row{{}},
 			},
 			{
 				Query:    "/* client a */ COMMIT;",
@@ -317,7 +351,7 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 	require.NoError(t, err)
 	cm2, err := commit2.GetCommitMeta(context.Background())
 	require.NoError(t, err)
-	require.Contains(t, cm2.Description, "Transaction commit")
+	require.Contains(t, cm2.Description, "ClientA Commit")
 
 	as, err := doltdb.NewAncestorSpec("~1")
 	require.NoError(t, err)
@@ -325,7 +359,7 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 	require.NoError(t, err)
 	cm1, err := commit1.GetCommitMeta(context.Background())
 	require.NoError(t, err)
-	require.Contains(t, cm1.Description, "Transaction commit")
+	require.Contains(t, cm1.Description, "ClientB Commit")
 
 	commit0, err := commit1.GetAncestor(context.Background(), as)
 	require.NoError(t, err)
@@ -353,6 +387,10 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 			},
 			{
 				Query:    "/* client b */ SET @@dolt_transaction_commit=1;",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client b */ SET @@dolt_transaction_commit_message='ClientB Commit';",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -393,7 +431,7 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 	require.NoError(t, err)
 	headMeta, err := head.GetCommitMeta(context.Background())
 	require.NoError(t, err)
-	require.Contains(t, headMeta.Description, "Transaction commit")
+	require.Contains(t, headMeta.Description, "ClientB Commit")
 
 	ancestorSpec, err := doltdb.NewAncestorSpec("~1")
 	require.NoError(t, err)
