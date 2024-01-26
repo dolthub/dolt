@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	dblr "github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
@@ -102,16 +101,6 @@ func NewSqlEngine(
 	dbs, err = dsqle.ApplyReplicationConfig(ctx, bThreads, mrEnv, cli.CliOut, dbs...)
 	if err != nil {
 		return nil, err
-	}
-
-	var doltdbs []*doltdb.DoltDB
-	var dbNames []string
-	for _, db := range dbs {
-		ddbs := db.DoltDatabases()
-		if len(ddbs) > 0 {
-			dbNames = append(dbNames, strings.ToLower(db.Name()))
-			doltdbs = append(doltdbs, ddbs[0])
-		}
 	}
 
 	config.ClusterController.ManageSystemVariables(sql.SystemVariables)
@@ -197,7 +186,7 @@ func NewSqlEngine(
 	sqlEngine.dsessFactory = sessFactory
 
 	engine.Analyzer.Catalog.StatsProvider = stats.NewProvider()
-	engine.Analyzer.Catalog.StatsProvider.(*stats.Provider).Load(sql.NewContext(ctx), dbNames, doltdbs)
+	engine.Analyzer.Catalog.StatsProvider.(*stats.Provider).Load(sql.NewContext(ctx), dbs)
 
 	// Load MySQL Db information
 	if err = engine.Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), data); err != nil {
