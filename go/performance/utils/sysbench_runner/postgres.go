@@ -58,7 +58,7 @@ func BenchmarkPostgres(ctx context.Context, config *Config, serverConfig *Server
 		log.Println("Launching the default server")
 		localServer = true
 
-		serverDir, err = initPostgresDataDir(ctx, serverConfig)
+		serverDir, err = InitPostgresDataDir(ctx, serverConfig)
 		if err != nil {
 			cancel()
 			return nil, err
@@ -78,7 +78,7 @@ func BenchmarkPostgres(ctx context.Context, config *Config, serverConfig *Server
 		time.Sleep(10 * time.Second)
 
 		// setup postgres db
-		err := setupPostgresDB(ctx, serverConfig.Host, fmt.Sprintf("%d", serverConfig.Port), "postgres", dbName)
+		err := SetupPostgresDB(ctx, serverConfig.Host, fmt.Sprintf("%d", serverConfig.Port), "postgres", dbName)
 		if err != nil {
 			cancel()
 			return nil, err
@@ -142,9 +142,9 @@ func BenchmarkPostgres(ctx context.Context, config *Config, serverConfig *Server
 	return results, nil
 }
 
-// initPostgresDataDir initializes a postgres data dir and returns the path
-func initPostgresDataDir(ctx context.Context, config *ServerConfig) (string, error) {
-	serverDir, err := createServerDir(dbName)
+// InitPostgresDataDir initializes a postgres data dir and returns the path
+func InitPostgresDataDir(ctx context.Context, config *ServerConfig) (string, error) {
+	serverDir, err := CreateDoltgresServerDir(dbName)
 	if err != nil {
 		return "", err
 	}
@@ -158,7 +158,7 @@ func initPostgresDataDir(ctx context.Context, config *ServerConfig) (string, err
 	return serverDir, nil
 }
 
-func setupPostgresDB(ctx context.Context, host, port, user, dbname string) (err error) {
+func SetupPostgresDB(ctx context.Context, host, port, user, dbname string) (err error) {
 	psqlconn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", host, port, user, "", dbname)
 
 	db, err := sql.Open("postgres", psqlconn)

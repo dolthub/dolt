@@ -148,7 +148,7 @@ func getMysqlServer(ctx context.Context, config *ServerConfig, params []string) 
 
 // InitMysqlDataDir initializes a mysql data dir and returns the path
 func InitMysqlDataDir(ctx context.Context, config *ServerConfig) (string, error) {
-	serverDir, err := createServerDir(dbName)
+	serverDir, err := CreateDoltgresServerDir(dbName)
 	if err != nil {
 		return "", err
 	}

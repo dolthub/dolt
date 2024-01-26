@@ -39,12 +39,12 @@ func BenchmarkDoltgres(ctx context.Context, config *Config, serverConfig *Server
 		return nil, err
 	}
 
-	serverDir, err := createServerDir(dbName)
+	serverDir, err := CreateDoltgresServerDir(dbName)
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
-		cleanupDoltgresServerDir(serverDir)
+		CleanupDoltgresServerDir(serverDir)
 	}()
 
 	serverParams = append(serverParams, fmt.Sprintf("--data-dir=%s", serverDir))
@@ -75,7 +75,7 @@ func BenchmarkDoltgres(ctx context.Context, config *Config, serverConfig *Server
 	time.Sleep(5 * time.Second)
 
 	// create the db against the running server
-	err = createDb(ctx, serverConfig.Host, fmt.Sprintf("%d", serverConfig.Port), "doltgres", dbName)
+	err = CreateDoltgresDb(ctx, serverConfig.Host, fmt.Sprintf("%d", serverConfig.Port), "doltgres", dbName)
 	if err != nil {
 		close(quit)
 		wg.Wait()
@@ -125,7 +125,7 @@ func BenchmarkDoltgres(ctx context.Context, config *Config, serverConfig *Server
 	return results, nil
 }
 
-func createDb(ctx context.Context, host, port, user, dbname string) error {
+func CreateDoltgresDb(ctx context.Context, host, port, user, dbname string) error {
 	psqlconn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", host, port, user, "", dbname)
 
 	// open database
@@ -147,8 +147,8 @@ func createDb(ctx context.Context, host, port, user, dbname string) error {
 	return err
 }
 
-// createServerDir creates a server directory
-func createServerDir(dbName string) (string, error) {
+// CreateDoltgresServerDir creates a server directory
+func CreateDoltgresServerDir(dbName string) (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", err
@@ -163,8 +163,8 @@ func createServerDir(dbName string) (string, error) {
 	return serverDir, nil
 }
 
-// cleanupDoltgresServerDir cleans up the doltgres assets in the provided dir
-func cleanupDoltgresServerDir(dir string) error {
+// CleanupDoltgresServerDir cleans up the doltgres assets in the provided dir
+func CleanupDoltgresServerDir(dir string) error {
 	dataDir := filepath.Join(dir, ".dolt")
 	defaultDir := filepath.Join(dir, "doltgres")
 	testDir := filepath.Join(dir, dbName)

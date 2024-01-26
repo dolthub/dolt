@@ -45,6 +45,18 @@ func Run(config *TpccBenchmarkConfig) error {
 			if err != nil {
 				return err
 			}
+		case sysbench_runner.Postgres:
+			fmt.Println("Running Postgres benchmark")
+			results, err = BenchmarkPostgres(ctx, config, serverConfig)
+			if err != nil {
+				return err
+			}
+		case sysbench_runner.Doltgres:
+			fmt.Println("Running Doltgres benchmark")
+			results, err = BenchmarkDoltgres(ctx, config, serverConfig)
+			if err != nil {
+				return err
+			}
 		default:
 			panic(fmt.Sprintf("unexpected server type: %s", serverConfig.Server))
 		}

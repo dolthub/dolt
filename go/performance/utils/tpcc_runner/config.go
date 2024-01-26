@@ -38,11 +38,6 @@ const (
 	tpccPassLocal = "sysbenchpass"
 )
 
-var defaultTpccParams = []string{
-	fmt.Sprintf("--mysql-db=%s", dbName),
-	"--db-driver=mysql",
-}
-
 // TpccBenchmarkConfig represents a configuration for an execution of the TPCC Benchmark. It executes a series of tests
 // against different ServerConfigurations.
 type TpccBenchmarkConfig struct {
@@ -96,7 +91,7 @@ func (c *TpccBenchmarkConfig) updateDefaults() error {
 func (c *TpccBenchmarkConfig) validateServerConfigs() error {
 	portMap := make(map[int]sysbench_runner.ServerType)
 	for _, s := range c.Servers {
-		if s.Server != sysbench_runner.Dolt && s.Server != sysbench_runner.MySql {
+		if s.Server != sysbench_runner.Dolt && s.Server != sysbench_runner.MySql && s.Server != sysbench_runner.Postgres && s.Server != sysbench_runner.Doltgres {
 			return fmt.Errorf("unsupported server type: %s", s.Server)
 		}
 
@@ -114,6 +109,13 @@ func (c *TpccBenchmarkConfig) validateServerConfigs() error {
 
 		if s.Host == "" {
 			s.Host = defaultHost
+		}
+
+		if s.Server == sysbench_runner.Postgres {
+			err = sysbench_runner.CheckExec(s.InitExec, "initdb exec")
+			if err != nil {
+				return err
+			}
 		}
 
 		portMap, err = sysbench_runner.CheckUpdatePortMap(s, portMap)
@@ -205,17 +207,30 @@ func NewTpccTest(name string, params *TpccTestParams) *TpccTest {
 // getArgs returns a test's args for all TPCC steps
 func (t *TpccTest) getArgs(serverConfig *sysbench_runner.ServerConfig) []string {
 	params := make([]string, 0)
-	params = append(params, defaultTpccParams...)
-
-	params = append(params, fmt.Sprintf("--mysql-host=%s", serverConfig.Host))
 
 	// handle sysbench user for local mysql server
-	if serverConfig.Server == sysbench_runner.MySql && serverConfig.Host == defaultHost {
-		params = append(params, fmt.Sprintf("--mysql-user=%s", "sysbench"))
-		params = append(params, fmt.Sprintf("--mysql-password=%s", tpccPassLocal))
-	} else {
-		params = append(params, fmt.Sprintf("--mysql-port=%d", serverConfig.Port))
-		params = append(params, fmt.Sprintf("--mysql-user=%s", defaultUser))
+	if serverConfig.Server == sysbench_runner.MySql || serverConfig.Server == sysbench_runner.Dolt {
+		params = append(params, "--db-driver=mysql")
+		params = append(params, fmt.Sprintf("--mysql-host=%s", serverConfig.Host))
+		params = append(params, fmt.Sprintf("--mysql-db=%s", dbName))
+
+		if serverConfig.Server == sysbench_runner.MySql && serverConfig.Host == defaultHost {
+			params = append(params, fmt.Sprintf("--mysql-user=%s", "sysbench"))
+			params = append(params, fmt.Sprintf("--mysql-password=%s", tpccPassLocal))
+		} else {
+			params = append(params, fmt.Sprintf("--mysql-port=%d", serverConfig.Port))
+			params = append(params, fmt.Sprintf("--mysql-user=%s", defaultUser))
+		}
+	} else if serverConfig.Server == sysbench_runner.Postgres || serverConfig.Server == sysbench_runner.Doltgres {
+		params = append(params, "--db-driver=pgsql")
+		params = append(params, fmt.Sprintf("--pgsql-host=%s", serverConfig.Host))
+		params = append(params, fmt.Sprintf("--pgsql-db=%s", dbName))
+
+		if serverConfig.Server == sysbench_runner.Postgres {
+			params = append(params, "--pgsql-user=postgres")
+		} else {
+			params = append(params, "--pgsql-user=doltgres")
+		}
 	}
 
 	params = append(params, fmt.Sprintf("--time=%d", t.Params.Time))
