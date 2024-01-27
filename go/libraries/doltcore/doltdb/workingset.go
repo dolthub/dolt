@@ -158,19 +158,25 @@ func (m MergeState) IterSchemaConflicts(ctx context.Context, ddb *DoltDB, cb Sch
 
 	for _, name := range m.unmergableTables {
 		var sc SchemaConflict
-		if sc.toTbl, _, err = to.GetTable(ctx, name); err != nil {
+		var hasToTable bool
+		if sc.toTbl, hasToTable, err = to.GetTable(ctx, name); err != nil {
 			return err
 		}
-		// todo: handle schema conflicts for renamed tables
-		if sc.fromTbl, _, err = from.GetTable(ctx, name); err != nil {
-			return err
+		if hasToTable {
+			if sc.ToSch, err = sc.toTbl.GetSchema(ctx); err != nil {
+				return err
+			}
 		}
 
-		if sc.ToSch, err = sc.toTbl.GetSchema(ctx); err != nil {
+		var hasFromTable bool
+		// todo: handle schema conflicts for renamed tables
+		if sc.fromTbl, hasFromTable, err = from.GetTable(ctx, name); err != nil {
 			return err
 		}
-		if sc.FromSch, err = sc.fromTbl.GetSchema(ctx); err != nil {
-			return err
+		if hasFromTable {
+			if sc.FromSch, err = sc.fromTbl.GetSchema(ctx); err != nil {
+				return err
+			}
 		}
 
 		sc.ToFks, _ = toFKs.KeysForTable(name)

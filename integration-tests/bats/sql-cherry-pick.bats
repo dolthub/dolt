@@ -168,7 +168,8 @@ SQL
     dolt checkout main
     run dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "conflict: table with same name deleted and modified" ]] || false
+    [[ "$output" =~ "merge aborted: schema conflict found for table branch1table" ]] || false
+    [[ "$output" =~ "table was modified in one branch and deleted in the other" ]] || false
 
     run dolt sql -q "SHOW TABLES" -r csv
     [[ ! "$output" =~ "branch1table" ]] || false
