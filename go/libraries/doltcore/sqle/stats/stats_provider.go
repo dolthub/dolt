@@ -39,6 +39,7 @@ var ErrFailedToLoad = errors.New("failed to load statistics")
 type DoltStats struct {
 	level         int
 	chunks        []hash.Hash
+	active        map[hash.Hash]int
 	RowCount      uint64
 	DistinctCount uint64
 	NullCount     uint64
@@ -74,6 +75,28 @@ func DoltStatsFromSql(stat sql.Statistic) (*DoltStats, error) {
 		fds:           stat.FuncDeps(),
 		colSet:        stat.ColSet(),
 	}, nil
+}
+
+func (s *DoltStats) updateActive() {
+	newActive := make(map[hash.Hash]int)
+	for i, hash := range s.chunks {
+		newActive[hash] = i
+	}
+	s.active = newActive
+}
+
+func (s *DoltStats) updateCounts() {
+	var newDistinct uint64
+	var newRows uint64
+	var newNulls uint64
+	for _, b := range s.Histogram {
+		newDistinct += b.DistinctCount
+		newRows += b.RowCount
+		newNulls += b.NullCount
+	}
+	s.RowCount = newRows
+	s.DistinctCount = newDistinct
+	s.NullCount = newNulls
 }
 
 func (s *DoltStats) toSql() sql.Statistic {
@@ -147,6 +170,7 @@ type indexMeta struct {
 	db           string
 	table        string
 	index        string
+	qual         sql.StatQualifier
 	cols         []string
 	updateChunks []tree.Node
 	// [start, stop] ordinals for each chunk for update
@@ -175,21 +199,10 @@ type Provider struct {
 // table stats in the database
 type dbStats struct {
 	db                string
-	active            map[hash.Hash]int
 	stats             map[sql.StatQualifier]*DoltStats
 	currentMap        prolly.Map
 	latestRoot        *doltdb.RootValue
 	latestTableHashes map[string]hash.Hash
-}
-
-func (s *dbStats) updateActive() {
-	newActive := make(map[hash.Hash]int)
-	for _, stat := range s.stats {
-		for i, hash := range stat.chunks {
-			newActive[hash] = i
-		}
-	}
-	s.active = newActive
 }
 
 var _ sql.StatsProvider = (*Provider)(nil)
@@ -310,7 +323,9 @@ func (p *Provider) DataLength(_ *sql.Context, db, table string) (uint64, error) 
 }
 
 func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db string) error {
+	tableName := strings.ToLower(table.Name())
 	dbName := strings.ToLower(db)
+
 	iat, ok := table.(sql.IndexAddressableTable)
 	if !ok {
 		return nil
@@ -320,35 +335,18 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 		return err
 	}
 
-	tablePrefix := fmt.Sprintf("%s.", strings.ToLower(table.Name()))
-	var idxMetas []indexMeta
-	for _, idx := range indexes {
-		cols := make([]string, len(idx.Expressions()))
-		for i, c := range idx.Expressions() {
-			cols[i] = strings.TrimPrefix(strings.ToLower(c), tablePrefix)
-		}
-
-		idxMeta := indexMeta{
-			db:    db,
-			table: strings.ToLower(table.Name()),
-			index: strings.ToLower(idx.ID()),
-			cols:  cols,
-		}
-		idxMetas = append(idxMetas, idxMeta)
-	}
-
 	dSess := dsess.DSessFromSess(ctx.Session)
 	prov := dSess.Provider()
-	sqlDb, err := prov.Database(ctx, idxMetas[0].db)
+	sqlDb, err := prov.Database(ctx, dbName)
 	if err != nil {
 		return err
 	}
-	sqlTable, ok, err := sqlDb.GetTableInsensitive(ctx, idxMetas[0].table)
+	sqlTable, ok, err := sqlDb.GetTableInsensitive(ctx, tableName)
 	if err != nil {
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("error creating statistics for table: %s; table not found", idxMetas[0].table)
+		return fmt.Errorf("error creating statistics for table: %s; table not found", tableName)
 	}
 
 	var dTab *doltdb.Table
@@ -366,26 +364,54 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 		return err
 	}
 
-	newStats, err := updateStats(ctx, sqlTable, dTab, indexes, idxMetas)
-	if err != nil {
-		return err
+	curStats, ok := p.dbStats[dbName]
+	if !ok {
+		curStats = &dbStats{db: dbName, stats: make(map[sql.StatQualifier]*DoltStats)}
+		p.dbStats[dbName] = curStats
 	}
 
-	sess := dsess.DSessFromSess(ctx.Session)
-	ddb, ok := sess.GetDoltDB(ctx, dbName)
-	if !ok {
-		return fmt.Errorf("database not found in session for stats update: %s", db)
+	tablePrefix := fmt.Sprintf("%s.", tableName)
+	var idxMetas []indexMeta
+	for _, idx := range indexes {
+		cols := make([]string, len(idx.Expressions()))
+		for i, c := range idx.Expressions() {
+			cols[i] = strings.TrimPrefix(strings.ToLower(c), tablePrefix)
+		}
+
+		qual := sql.NewStatQualifier(db, table.Name(), strings.ToLower(idx.ID()))
+		curStat, ok := curStats.stats[qual]
+		if !ok {
+			curStat = &DoltStats{Qual: qual, active: make(map[hash.Hash]int)}
+		}
+		idxMeta, err := newIdxMeta(ctx, curStat, dTab, idx, cols)
+		if err != nil {
+			return err
+		}
+		idxMetas = append(idxMetas, idxMeta)
+	}
+
+	newTableStats, err := updateStats(ctx, sqlTable, dTab, indexes, idxMetas)
+	if err != nil {
+		return err
 	}
 
 	if _, ok := p.dbStats[dbName]; !ok {
 		p.dbStats[dbName] = &dbStats{db: strings.ToLower(db), stats: make(map[sql.StatQualifier]*DoltStats)}
 	}
-	for qual, stats := range newStats {
-		p.dbStats[dbName].stats[qual] = stats
+
+	// merge new chunks with preexisting chunks
+	newStats := make(map[sql.StatQualifier]*DoltStats)
+	for _, idxMeta := range idxMetas {
+		stat := newTableStats[idxMeta.qual]
+		newStats[idxMeta.qual] = mergeStatUpdates(stat, idxMeta)
 	}
 
 	prevMap := p.dbStats[dbName].currentMap
 	if prevMap.KeyDesc().Count() == 0 {
+		ddb, ok := dSess.GetDoltDB(ctx, dbName)
+		if !ok {
+			return fmt.Errorf("database not found in session for stats update: %s", db)
+		}
 		kd, vd := schema.StatsTableDoltSchema.GetMapDescriptors()
 		prevMap, err = prolly.NewMapFromTuples(ctx, ddb.NodeStore(), kd, vd)
 		if err != nil {
@@ -397,8 +423,17 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 		return err
 	}
 
+	p.mu.Lock()
 	p.dbStats[dbName].currentMap = newMap
-	p.dbStats[dbName].updateActive()
+	for k, v := range newStats {
+		p.dbStats[dbName].stats[k] = v
+	}
+	defer p.mu.Unlock()
+
+	ddb, ok := dSess.GetDoltDB(ctx, dbName)
+	if !ok {
+		return sql.ErrDatabaseNotFound.New(dbName)
+	}
 
 	return ddb.SetStatisics(ctx, newMap.HashOf())
 }

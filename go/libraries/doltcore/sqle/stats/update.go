@@ -96,15 +96,14 @@ func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, index
 			meta.updateOrdinals = offsets
 		}
 
-		qual := sql.NewStatQualifier(meta.db, meta.table, meta.index)
-		updater := newBucketBuilder(qual, len(meta.cols), prollyMap.KeyDesc())
-		ret[qual] = &DoltStats{
+		updater := newBucketBuilder(meta.qual, len(meta.cols), prollyMap.KeyDesc())
+		ret[meta.qual] = &DoltStats{
 			//level:     levelNodes[0].Level(),
 			chunks:    meta.allAddrs,
 			CreatedAt: time.Now(),
 			Columns:   meta.cols,
 			Types:     types,
-			Qual:      qual,
+			Qual:      meta.qual,
 		}
 
 		var start, stop uint64
@@ -150,8 +149,8 @@ func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, index
 			ret[updater.qual].Histogram = append(ret[updater.qual].Histogram, bucket)
 		}
 
-		sqlIdx := nameToIdx[strings.ToLower(qual.Index())]
-		fds, colSet, err := stats.IndexFds(qual.Table(), sqlTable.Schema(), sqlIdx)
+		sqlIdx := nameToIdx[strings.ToLower(meta.qual.Index())]
+		fds, colSet, err := stats.IndexFds(meta.qual.Table(), sqlTable.Schema(), sqlIdx)
 		if err != nil {
 			return nil, err
 		}
@@ -163,6 +162,31 @@ func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, index
 		ret[updater.qual].colSet = colSet
 	}
 	return ret, nil
+}
+
+func mergeStatUpdates(newStats *DoltStats, idxMeta indexMeta) *DoltStats {
+	if len(newStats.Histogram) == len(idxMeta.allAddrs) {
+		newStats.updateActive()
+		return newStats
+	}
+	oldHist := idxMeta.preexisting
+	var mergeHist DoltHistogram
+	newHist := newStats.Histogram
+	var i, j int
+	for _, chunkAddr := range idxMeta.allAddrs {
+		if i < len(oldHist) && oldHist[i].Chunk == chunkAddr {
+			mergeHist = append(mergeHist, oldHist[i])
+			i++
+		} else if j < len(newHist) && newHist[j].Chunk == chunkAddr {
+			mergeHist = append(mergeHist, newHist[i])
+			j++
+		}
+	}
+	newStats.Histogram = mergeHist
+	newStats.chunks = idxMeta.allAddrs
+	newStats.updateActive()
+	newStats.updateCounts()
+	return newStats
 }
 
 func firstRowForIndex(ctx *sql.Context, prollyMap prolly.Map, keyBuilder *val.TupleBuilder, prefixLen int) (sql.Row, error) {

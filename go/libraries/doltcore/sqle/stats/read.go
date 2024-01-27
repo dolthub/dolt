@@ -36,13 +36,13 @@ import (
 )
 
 func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (*dbStats, error) {
-	dbStat := &dbStats{db: db.Name(), active: make(map[hash.Hash]int), stats: make(map[sql.StatQualifier]*DoltStats)}
+	dbStat := &dbStats{db: db.Name(), stats: make(map[sql.StatQualifier]*DoltStats)}
 
 	iter, err := dtables.NewStatsIter(ctx, m)
 	if err != nil {
 		return nil, err
 	}
-	currentStat := &DoltStats{}
+	currentStat := &DoltStats{active: make(map[hash.Hash]int)}
 	var lowerBound sql.Row
 	for {
 		row, err := iter.Next(ctx)
@@ -125,7 +125,7 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (*dbStats, 
 				currentStat.colSet = colSet
 				dbStat.stats[currentStat.Qual] = currentStat
 			}
-			currentStat = &DoltStats{Qual: qual, Columns: columns, LowerBound: lowerBound}
+			currentStat = &DoltStats{Qual: qual, Columns: columns, LowerBound: lowerBound, active: make(map[hash.Hash]int)}
 		}
 
 		if currentStat.Histogram == nil {
@@ -148,7 +148,7 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (*dbStats, 
 			UpperBound:    boundRow,
 		}
 
-		dbStat.active[commit] = position
+		currentStat.active[commit] = position
 		currentStat.Histogram = append(currentStat.Histogram, bucket)
 		currentStat.RowCount += uint64(rowCount)
 		currentStat.DistinctCount += uint64(distinctCount)

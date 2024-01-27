@@ -29,9 +29,15 @@ func (p *Provider) ConfigureAutoRefresh(bThreads *sql.BackgroundThreads, checkIn
 			dSess := dsess.DSessFromSess(sqlCtx.Session)
 			prov := dSess.Provider()
 
-			var newStats map[sql.StatQualifier]*DoltStats
-
+			// Iterate all dbs, tables, indexes. Each db will collect
+			// []indexMeta above refresh threshold. We read and process those
+			// chunks' statistics. We merge updated chunks with precomputed
+			// chunks. The full set of statistics for each database lands
+			// 1) in the provider's most recent set of database statistics, and
+			// 2) on disk in the database's statistics ref'd prolly.Map.
 			for db, curStats := range p.dbStats {
+				var newStats map[sql.StatQualifier]*DoltStats
+
 				ddb, ok := dSess.GetDoltDB(sqlCtx, db)
 				if !ok {
 					sqlCtx.GetLogger().Debugf("statistics refresh error: database not found %s", db)
@@ -88,9 +94,6 @@ func (p *Provider) ConfigureAutoRefresh(bThreads *sql.BackgroundThreads, checkIn
 						// no data changes since last check
 						continue
 					}
-					p.mu.Lock()
-					curStats.latestTableHashes[table] = tableHash
-					p.mu.Unlock()
 
 					iat, ok := sqlTable.(sql.IndexAddressableTable)
 					if !ok {
@@ -104,107 +107,34 @@ func (p *Provider) ConfigureAutoRefresh(bThreads *sql.BackgroundThreads, checkIn
 						continue
 					}
 
+					// collect indexes and ranges to be updated
 					var idxMetas []indexMeta
 					for _, index := range indexes {
-
 						qual := sql.NewStatQualifier(db, table, strings.ToLower(index.ID()))
-						curHist := curStats.stats[qual]
-
-						var idx durable.Index
-						var err error
-						if strings.EqualFold(index.ID(), "PRIMARY") {
-							idx, err = dTab.GetRowData(ctx)
-						} else {
-							idx, err = dTab.GetIndexRowData(ctx, index.ID())
-						}
+						curStat := curStats.stats[qual]
+						idxMeta, err := newIdxMeta(sqlCtx, curStat, dTab, index, curStat.Columns)
 						if err != nil {
 							sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
 							continue
 						}
-
-						prollyMap := durable.ProllyMapFromIndex(idx)
-
-						// get histogram level hashes
-						levelNodes, err := tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
-						if err != nil {
-							sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
-							continue
-						}
-						var addrs []hash.Hash
-						var missingAddrs float64
-						var missingChunks []tree.Node
-						var preservedStats []DoltBucket
-						var missingOffsets [][]uint64
-						var offset uint64
-						for _, n := range levelNodes {
-							// check if hash is in current list
-							treeCnt, err := n.TreeCount()
-							if err != nil {
-								sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
-								continue
-							}
-
-							addrs = append(addrs, n.HashOf())
-							if bucketIdx, ok := curStats.active[n.HashOf()]; !ok {
-								missingChunks = append(missingChunks, n)
-								missingOffsets = append(missingOffsets, []uint64{offset, offset + uint64(treeCnt)})
-								missingAddrs++
-							} else {
-								preservedStats = append(preservedStats, curHist.Histogram[bucketIdx])
-							}
-							offset += uint64(treeCnt)
-						}
-
-						if missingAddrs/float64(len(curStats.active)) > updateThresh {
-							// trigger refresh
-							// todo indexMeta should have the missing chunks attached?
-							// updateStats(sqlCtx, sqlTable, dTab, missingAddrs)
-							idxMetas = append(idxMetas, indexMeta{
-								db:             db,
-								table:          table,
-								index:          strings.ToLower(index.ID()),
-								updateChunks:   missingChunks,
-								updateOrdinals: missingOffsets,
-								preexisting:    preservedStats,
-								allAddrs:       addrs,
-							})
+						if float64(len(idxMeta.updateChunks))/float64(len(curStat.active)) > updateThresh {
+							// mark index for updating
+							idxMetas = append(idxMetas, idxMeta)
+							// update lastest hash if we haven't already
+							curStats.latestTableHashes[table] = tableHash
 						}
 					}
+					// get new buckets for index chunks to update
 					newTableStats, err := updateStats(sqlCtx, sqlTable, dTab, indexes, idxMetas)
 					if err != nil {
 						sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
 						continue
 					}
 
-					// merge old and new buckets
-					for qual, updateStats := range newTableStats {
-						var oldHist []DoltBucket
-						var bucketOrder []hash.Hash
-						for _, idxMeta := range idxMetas {
-							if strings.EqualFold(idxMeta.db, qual.Db()) && strings.EqualFold(idxMeta.table, qual.Table()) && strings.EqualFold(idxMeta.index, qual.Index()) {
-								oldHist = idxMeta.preexisting
-								bucketOrder = idxMeta.allAddrs
-								break
-							}
-						}
-						updateHist := updateStats.Histogram
-
-						var mergeHist DoltHistogram
-						var i, j int
-						for _, chunkAddr := range bucketOrder {
-							if i < len(oldHist) && oldHist[i].Chunk == chunkAddr {
-								mergeHist = append(mergeHist, oldHist[i])
-								i++
-							} else if j < len(updateHist) && updateHist[j].Chunk == chunkAddr {
-								mergeHist = append(mergeHist, updateHist[i])
-								j++
-							}
-						}
-						updateStats.Histogram = mergeHist
-						// todo update counts
-						//newStats[qual] =
-
-						newStats[qual] = updateStats
+					// merge new chunks with preexisting chunks
+					for _, idxMeta := range idxMetas {
+						stat := newTableStats[idxMeta.qual]
+						newStats[idxMeta.qual] = mergeStatUpdates(stat, idxMeta)
 					}
 				}
 
@@ -225,8 +155,69 @@ func (p *Provider) ConfigureAutoRefresh(bThreads *sql.BackgroundThreads, checkIn
 
 				p.mu.Lock()
 				p.dbStats[db].currentMap = newMap
+				err = ddb.SetStatisics(ctx, newMap.HashOf())
 				p.mu.Unlock()
+				if err != nil {
+					sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
+					continue
+				}
 			}
 		}
 	})
+}
+
+func newIdxMeta(ctx *sql.Context, curStats *DoltStats, doltTable *doltdb.Table, sqlIndex sql.Index, cols []string) (indexMeta, error) {
+	var idx durable.Index
+	var err error
+	if strings.EqualFold(sqlIndex.ID(), "PRIMARY") {
+		idx, err = doltTable.GetRowData(ctx)
+	} else {
+		idx, err = doltTable.GetIndexRowData(ctx, sqlIndex.ID())
+	}
+	if err != nil {
+		return indexMeta{}, err
+	}
+
+	prollyMap := durable.ProllyMapFromIndex(idx)
+
+	// get histogram level hashes
+	levelNodes, err := tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
+	if err != nil {
+		return indexMeta{}, err
+	}
+
+	var addrs []hash.Hash
+	var missingAddrs float64
+	var missingChunks []tree.Node
+	var preservedStats []DoltBucket
+	var missingOffsets [][]uint64
+	var offset uint64
+	for _, n := range levelNodes {
+		// check if hash is in current list
+		treeCnt, err := n.TreeCount()
+		if err != nil {
+			return indexMeta{}, err
+		}
+
+		addrs = append(addrs, n.HashOf())
+		if bucketIdx, ok := curStats.active[n.HashOf()]; !ok {
+			missingChunks = append(missingChunks, n)
+			missingOffsets = append(missingOffsets, []uint64{offset, offset + uint64(treeCnt)})
+			missingAddrs++
+		} else {
+			preservedStats = append(preservedStats, curStats.Histogram[bucketIdx])
+		}
+		offset += uint64(treeCnt)
+	}
+	return indexMeta{
+		db:             curStats.Qual.Db(),
+		table:          curStats.Qual.Table(),
+		index:          curStats.Qual.Index(),
+		qual:           curStats.Qual,
+		cols:           cols,
+		updateChunks:   missingChunks,
+		updateOrdinals: missingOffsets,
+		preexisting:    preservedStats,
+		allAddrs:       addrs,
+	}, nil
 }
