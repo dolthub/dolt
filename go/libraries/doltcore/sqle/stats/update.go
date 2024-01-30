@@ -64,14 +64,8 @@ func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, index
 		prollyMap := durable.ProllyMapFromIndex(idx)
 		keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc())
 
-		if cnt, err := prollyMap.Count(); err != nil {
-			return nil, err
-		} else if cnt == 0 {
-			// table is empty
-			continue
-		}
-
-		firstRow, err := firstRowForIndex(ctx, prollyMap, keyBuilder, len(meta.cols))
+		sqlIdx := nameToIdx[strings.ToLower(meta.qual.Index())]
+		fds, colSet, err := stats.IndexFds(meta.qual.Table(), sqlTable.Schema(), sqlIdx)
 		if err != nil {
 			return nil, err
 		}
@@ -79,6 +73,27 @@ func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, index
 		var types []sql.Type
 		for _, cet := range indexes[i].ColumnExpressionTypes() {
 			types = append(types, cet.Type)
+		}
+
+		if cnt, err := prollyMap.Count(); err != nil {
+			return nil, err
+		} else if cnt == 0 {
+			// table is empty
+			ret[meta.qual] = &DoltStats{
+				chunks:    meta.allAddrs,
+				CreatedAt: time.Now(),
+				Columns:   meta.cols,
+				Types:     types,
+				Qual:      meta.qual,
+			}
+			ret[meta.qual].fds = fds
+			ret[meta.qual].colSet = colSet
+			continue
+		}
+
+		firstRow, err := firstRowForIndex(ctx, prollyMap, keyBuilder, len(meta.cols))
+		if err != nil {
+			return nil, err
 		}
 
 		// find level if not exists
@@ -148,12 +163,6 @@ func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, index
 			}
 			bucket.Chunk = chunk.HashOf()
 			ret[updater.qual].Histogram = append(ret[updater.qual].Histogram, bucket)
-		}
-
-		sqlIdx := nameToIdx[strings.ToLower(meta.qual.Index())]
-		fds, colSet, err := stats.IndexFds(meta.qual.Table(), sqlTable.Schema(), sqlIdx)
-		if err != nil {
-			return nil, err
 		}
 
 		ret[updater.qual].DistinctCount = uint64(updater.globalDistinct)

@@ -1744,7 +1744,7 @@ func (ddb *DoltDB) SetStatisics(ctx context.Context, addr hash.Hash) error {
 	return err
 }
 
-var ErrNoStatistics = errors.New("No statistics found.")
+var ErrNoStatistics = errors.New("no statistics found")
 
 // GetStatistics returns the value of the singleton ref.StatsRef for this database
 func (ddb *DoltDB) GetStatistics(ctx context.Context) (prolly.Map, error) {

@@ -50,12 +50,12 @@ teardown() {
     # no statistics error if ref does not exist
     run dolt sql -r csv -q "select database_name, table_name, index_name from dolt_statistics"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "No statistics found" ]] || false
+    [[ "$output" =~ "no statistics found" ]] || false
 
     # setting variables doesn't hang or error
-    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_enabled = 1;"
-    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_threshold = .5"
-    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_interval = 1;"
+    dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_enabled = 1;"
+    dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_threshold = .5"
+    dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_interval = 1;"
 
     # auto refresh can only initialize at server startup
     start_sql_server
@@ -95,9 +95,9 @@ teardown() {
     dolt sql -q "insert into xy select x, 1 from (with recursive inputs(x) as (select 4 union select x+1 from inputs where x < 1000) select * from inputs) dt;"
 
     # setting variables doesn't hang or error
-    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_enabled = 1;"
-    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_threshold = .5"
-    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_interval = 1;"
+    dolt sql -q "set @@persist.dolt_stats_auto_refresh_enabled = 1;"
+    dolt sql -q "set @@persist.dolt_stats_auto_refresh_threshold = .5"
+    dolt sql -q "set @@persist.dolt_stats_auto_refresh_interval = 1;"
 
     start_sql_server
 
@@ -117,6 +117,93 @@ teardown() {
     [ "${lines[1]}" = "4" ]
 }
 
+@test "stats: add/delete table" {
+    cd repo1
+
+    dolt sql -q "insert into ab values (0,0), (1,0), (2,0)"
+
+    # setting variables doesn't hang or error
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_enabled = 1;"
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_threshold = .5"
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_interval = 1;"
+
+    start_sql_server
+
+    sleep 1
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "2" ]
+
+    # add table
+    dolt sql -q "create table xy (x int primary key, y int)"
+    # schema changes don't impact the table hash
+    dolt sql -q "insert into xy values (0,0)"
+
+    sleep 1
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics where table_name = 'xy'"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "1" ]
+
+    dolt sql -q "truncate table xy"
+
+    sleep 1
+
+    dolt sql -q "select * from xy"
+
+    dolt sql -q "select * from dolt_statistics where table_name = 'xy'"
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics where table_name = 'xy'"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "0" ]
+
+    dolt sql -q "drop table xy"
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics where table_name = 'xy'"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "0" ]
+}
+
+@test "stats: add/delete index" {
+    cd repo2
+
+    dolt sql -q "insert into xy values (0,0), (1,0), (2,0)"
+
+    # setting variables doesn't hang or error
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_enabled = 1;"
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_threshold = .5"
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_interval = 1;"
+
+    start_sql_server
+
+    sleep 1
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "2" ]
+
+    # delete secondary
+    dolt sql -q "alter table xy drop index yx"
+    # schema changes don't impact the table hash
+    dolt sql -q "insert into xy values (3,0)"
+
+    sleep 1
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "1" ]
+
+    dolt sql -q "alter table xy add index yx (y,x)"
+    # row change to impact table hash
+    dolt sql -q "insert into xy values (4,0)"
+
+    sleep 1
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "2" ]
+}
 
 @test "stats: most common values" {
     cd repo2
@@ -166,7 +253,7 @@ teardown() {
 
     run dolt sql -r csv -q "select database_name, table_name, index_name from dolt_statistics"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "No statistics found" ]] || false
+    [[ "$output" =~ "no statistics found" ]] || false
 
     dolt sql -q "SET @@persist.dolt_stats_auto_refresh_enabled = 1;"
     dolt sql -q "SET @@persist.dolt_stats_auto_refresh_threshold = 0.5"

@@ -169,6 +169,7 @@ func (p *Provider) ConfigureAutoRefresh(ctxFactory func(ctx context.Context) (*s
 							sqlCtx.GetLogger().Debugf("statistics current: %d, new: %d, delete: %d", int(curCnt), int(updateCnt), int(deleteCnt))
 
 							if curCnt == 0 || (deleteCnt+updateCnt)/curCnt > updateThresh {
+								sqlCtx.GetLogger().Debugf("statistics updating: %s", idxMeta.qual)
 								// mark index for updating
 								idxMetas = append(idxMetas, idxMeta)
 								// update lastest hash if we haven't already
