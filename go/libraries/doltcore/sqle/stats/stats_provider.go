@@ -17,8 +17,6 @@ package stats
 import (
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"strings"
 	"sync"
 	"time"
@@ -28,10 +26,12 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 )
 
 var ErrFailedToLoad = errors.New("failed to load statistics")

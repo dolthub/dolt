@@ -16,7 +16,6 @@ package engine
 
 import (
 	"context"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	"os"
 	"runtime"
 	"strconv"
@@ -30,6 +29,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/sirupsen/logrus"
 

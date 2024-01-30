@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/shopspring/decimal"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,6 +25,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
