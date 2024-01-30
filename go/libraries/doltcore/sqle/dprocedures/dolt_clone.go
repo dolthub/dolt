@@ -17,6 +17,7 @@ package dprocedures
 import (
 	"path"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -49,7 +50,12 @@ func doltClone(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 		return nil, errhand.BuildDError("error: '%s' is not valid.", urlStr).Build()
 	}
 
-	err = sess.Provider().CloneDatabaseFromRemote(ctx, dir, branch, remoteName, remoteUrl, map[string]string{})
+	remoteParms := map[string]string{}
+	if user, hasUser := apr.GetValue(cli.UserFlag); hasUser {
+		remoteParms[dbfactory.GRPCUsernameAuthParam] = user
+	}
+
+	err = sess.Provider().CloneDatabaseFromRemote(ctx, dir, branch, remoteName, remoteUrl, remoteParms)
 	if err != nil {
 		return nil, err
 	}
