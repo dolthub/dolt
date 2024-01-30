@@ -147,7 +147,7 @@ func deleteStats(ctx *sql.Context, prev prolly.Map, quals ...sql.StatQualifier) 
 	} else if cnt == 0 {
 		return prev, nil
 	}
-	
+
 	sch := schema.StatsTableDoltSchema
 	kd, _ := sch.GetMapDescriptors()
 	var m *prolly.MutableMap
