@@ -179,7 +179,7 @@ func mergeStatUpdates(newStats *DoltStats, idxMeta indexMeta) *DoltStats {
 			mergeHist = append(mergeHist, oldHist[i])
 			i++
 		} else if j < len(newHist) && newHist[j].Chunk == chunkAddr {
-			mergeHist = append(mergeHist, newHist[i])
+			mergeHist = append(mergeHist, newHist[j])
 			j++
 		}
 	}

@@ -38,7 +38,8 @@ func newStatsTable(ctx *sql.Context, ns tree.NodeStore, vrw stypes.ValueReadWrit
 func flushStats(ctx *sql.Context, prev prolly.Map, tableStats map[sql.StatQualifier]*DoltStats) (prolly.Map, error) {
 	sch := schema.StatsTableDoltSchema
 	kd, vd := sch.GetMapDescriptors()
-	m := prev.Mutate()
+	var m *prolly.MutableMap
+	m = prev.Mutate()
 	pool := prev.NodeStore().Pool()
 
 	keyBuilder := val.NewTupleBuilder(kd)
@@ -137,5 +138,56 @@ func flushStats(ctx *sql.Context, prev prolly.Map, tableStats map[sql.StatQualif
 		}
 	}
 
+	return m.Map(ctx)
+}
+
+func deleteStats(ctx *sql.Context, prev prolly.Map, quals ...sql.StatQualifier) (prolly.Map, error) {
+	if cnt, err := prev.Count(); err != nil {
+		return prolly.Map{}, err
+	} else if cnt == 0 {
+		return prev, nil
+	}
+	
+	sch := schema.StatsTableDoltSchema
+	kd, _ := sch.GetMapDescriptors()
+	var m *prolly.MutableMap
+	m = prev.Mutate()
+	pool := prev.NodeStore().Pool()
+
+	keyBuilder := val.NewTupleBuilder(kd)
+
+	for _, qual := range quals {
+		// delete previous entries for this index
+		keyBuilder.PutString(0, qual.Database)
+		keyBuilder.PutString(1, qual.Table())
+		keyBuilder.PutString(2, qual.Index())
+		keyBuilder.PutInt64(3, 0)
+		firstKey := keyBuilder.Build(pool)
+		keyBuilder.PutString(0, qual.Database)
+		keyBuilder.PutString(1, qual.Table())
+		keyBuilder.PutString(2, qual.Index())
+		keyBuilder.PutInt64(3, 10000)
+		maxKey := keyBuilder.Build(pool)
+
+		// there is a limit on the number of buckets for a given index, iter
+		// will terminate after we run over.
+		iter, err := prev.IterKeyRange(ctx, firstKey, maxKey)
+		if err != nil {
+			return prolly.Map{}, err
+		}
+
+		for {
+			k, _, err := iter.Next(ctx)
+			if errors.Is(err, io.EOF) {
+				break
+			} else if err != nil {
+				return prolly.Map{}, err
+			}
+			err = m.Put(ctx, k, nil)
+			if err != nil {
+				return prolly.Map{}, err
+			}
+		}
+	}
 	return m.Map(ctx)
 }

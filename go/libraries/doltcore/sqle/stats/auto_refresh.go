@@ -66,6 +66,9 @@ func (p *Provider) ConfigureAutoRefresh(ctxFactory func(ctx context.Context) (*s
 				// 2) on disk in the database's statistics ref'd prolly.Map.
 				for db, curStats := range p.dbStats {
 					newStats := make(map[sql.StatQualifier]*DoltStats)
+					var deletedStats []sql.StatQualifier
+					qualExists := make(map[sql.StatQualifier]bool)
+					tableExistsAndSkipped := make(map[string]bool)
 
 					ddb := dbToDoltDb[strings.ToLower(db)]
 
@@ -117,6 +120,7 @@ func (p *Provider) ConfigureAutoRefresh(ctxFactory func(ctx context.Context) (*s
 
 						if curStats.latestTableHashes[table] == tableHash {
 							// no data changes since last check
+							tableExistsAndSkipped[table] = true
 							sqlCtx.GetLogger().Debugf("statistics refresh: table hash unchanged since last check: %s", tableHash)
 							continue
 						} else {
@@ -139,6 +143,7 @@ func (p *Provider) ConfigureAutoRefresh(ctxFactory func(ctx context.Context) (*s
 						var idxMetas []indexMeta
 						for _, index := range indexes {
 							qual := sql.NewStatQualifier(db, table, strings.ToLower(index.ID()))
+							qualExists[qual] = true
 							curStat := curStats.stats[qual]
 							if curStat == nil {
 								curStat = NewDoltStats()
@@ -186,6 +191,15 @@ func (p *Provider) ConfigureAutoRefresh(ctxFactory func(ctx context.Context) (*s
 						}
 					}
 
+					for _, s := range p.dbStats[db].stats {
+						// table or index delete leaves hole in stats
+						// this is separate from threshold check
+						if !tableExistsAndSkipped[s.Qual.Table()] && !qualExists[s.Qual] {
+							// only delete stats we've verified are deleted
+							deletedStats = append(deletedStats, s.Qual)
+						}
+					}
+
 					prevMap := p.dbStats[db].currentMap
 					if prevMap.KeyDesc().Count() == 0 {
 						kd, vd := schema.StatsTableDoltSchema.GetMapDescriptors()
@@ -195,7 +209,17 @@ func (p *Provider) ConfigureAutoRefresh(ctxFactory func(ctx context.Context) (*s
 							continue
 						}
 					}
-					newMap, err := flushStats(sqlCtx, prevMap, newStats)
+
+					if len(deletedStats) > 0 {
+						sqlCtx.GetLogger().Debugf("statistics refresh: deleting stats %#v", deletedStats)
+					}
+					delMap, err := deleteStats(sqlCtx, prevMap, deletedStats...)
+					if err != nil {
+						sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
+						continue
+					}
+
+					newMap, err := flushStats(sqlCtx, delMap, newStats)
 					if err != nil {
 						sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
 						continue
@@ -204,6 +228,9 @@ func (p *Provider) ConfigureAutoRefresh(ctxFactory func(ctx context.Context) (*s
 					p.mu.Lock()
 					p.dbStats[db].currentMap = newMap
 					err = ddb.SetStatisics(ctx, newMap.HashOf())
+					for q, s := range newStats {
+						p.dbStats[db].stats[q] = s
+					}
 					p.mu.Unlock()
 					if err != nil {
 						sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
