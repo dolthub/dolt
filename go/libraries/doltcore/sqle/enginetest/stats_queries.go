@@ -359,7 +359,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 				Expected: []sql.Row{{uint64(6), uint64(6), uint64(0)}, {uint64(6), uint64(3), uint64(0)}},
 			},
 			{
-				Query: "select `table`, `index` from dolt_statistics",
+				Query: "select `table_name`, `index_name` from dolt_statistics",
 				Expected: []sql.Row{
 					{"ab", "primary"},
 					{"ab", "bc"},
@@ -384,14 +384,14 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		Name: "stats updates",
 		SetUpScript: []string{
 			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
-			"insert into xy values (0,0,'a') (2,0,'a'), (4,1,'a'), (6,2,'a')",
-			"analyze table ab",
-			"insert into xy values  (1,0,'a'), (3,0,'a'), (5,2,'a'),  (7,1,'a'),",
-			"analyze table ab",
+			"insert into xy values (0,0,'a'), (2,0,'a'), (4,1,'a'), (6,2,'a')",
+			"analyze table xy",
+			"insert into xy values (1,0,'a'), (3,0,'a'), (5,2,'a'),  (7,1,'a')",
+			"analyze table xy",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: fmt.Sprintf("select %s, %s, %s from dolt_statistics where table_name = 'ab'", schema.StatsRowCountColName, schema.StatsDistinctCountColName, schema.StatsNullCountColName),
+				Query: fmt.Sprintf("select %s, %s, %s from dolt_statistics where table_name = 'xy'", schema.StatsRowCountColName, schema.StatsDistinctCountColName, schema.StatsNullCountColName),
 				Expected: []sql.Row{
 					{uint64(8), uint64(8), uint64(0)},
 					{uint64(8), uint64(3), uint64(0)},
