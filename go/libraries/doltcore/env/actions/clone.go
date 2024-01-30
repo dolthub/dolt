@@ -157,6 +157,7 @@ func sortedKeys(m map[string]iohelp.ReadStats) []string {
 	return keys
 }
 
+// CloneRemote - common entry point for both dolt_clone() and `dolt clone`
 func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch string, singleBranch bool, dEnv *env.DoltEnv) error {
 	eventCh := make(chan pull.TableFileEvent, 128)
 
