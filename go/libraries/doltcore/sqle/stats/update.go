@@ -52,10 +52,10 @@ func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, index
 	for i, meta := range idxMetas {
 		var idx durable.Index
 		var err error
-		if strings.EqualFold(meta.index, "PRIMARY") {
+		if strings.EqualFold(meta.qual.Index(), "PRIMARY") {
 			idx, err = dTab.GetRowData(ctx)
 		} else {
-			idx, err = dTab.GetIndexRowData(ctx, meta.index)
+			idx, err = dTab.GetIndexRowData(ctx, meta.qual.Index())
 		}
 		if err != nil {
 			return nil, err
@@ -63,6 +63,13 @@ func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, index
 
 		prollyMap := durable.ProllyMapFromIndex(idx)
 		keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc())
+
+		if cnt, err := prollyMap.Count(); err != nil {
+			return nil, err
+		} else if cnt == 0 {
+			// table is empty
+			continue
+		}
 
 		firstRow, err := firstRowForIndex(ctx, prollyMap, keyBuilder, len(meta.cols))
 		if err != nil {
@@ -98,7 +105,6 @@ func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, index
 
 		updater := newBucketBuilder(meta.qual, len(meta.cols), prollyMap.KeyDesc())
 		ret[meta.qual] = &DoltStats{
-			//level:     levelNodes[0].Level(),
 			chunks:    meta.allAddrs,
 			CreatedAt: time.Now(),
 			Columns:   meta.cols,
@@ -114,11 +120,6 @@ func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, index
 
 			// we read exclusive range [node first key, next node first key)
 			start, stop = meta.updateOrdinals[i][0], meta.updateOrdinals[i][1]
-			leafCnt, err := chunk.TreeCount()
-			if err != nil {
-				return nil, err
-			}
-			stop = start + uint64(leafCnt)
 			iter, err := prollyMap.IterOrdinalRange(ctx, start, stop)
 			if err != nil {
 				return nil, err
@@ -182,6 +183,7 @@ func mergeStatUpdates(newStats *DoltStats, idxMeta indexMeta) *DoltStats {
 			j++
 		}
 	}
+
 	newStats.Histogram = mergeHist
 	newStats.chunks = idxMeta.allAddrs
 	newStats.updateActive()

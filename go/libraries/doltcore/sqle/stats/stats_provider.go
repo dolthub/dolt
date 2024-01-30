@@ -55,6 +55,10 @@ type DoltStats struct {
 	colSet        sql.ColSet
 }
 
+func NewDoltStats() *DoltStats {
+	return &DoltStats{active: make(map[hash.Hash]int)}
+}
+
 func DoltStatsFromSql(stat sql.Statistic) (*DoltStats, error) {
 	hist, err := DoltHistFromSql(stat.Histogram(), stat.Types())
 	if err != nil {
@@ -167,9 +171,6 @@ func (s DoltHistogram) toSql() []*stats.Bucket {
 }
 
 type indexMeta struct {
-	db           string
-	table        string
-	index        string
 	qual         sql.StatQualifier
 	cols         []string
 	updateChunks []tree.Node
@@ -205,17 +206,18 @@ type dbStats struct {
 	latestTableHashes map[string]hash.Hash
 }
 
+func newDbStats(dbName string) *dbStats {
+	return &dbStats{db: dbName, stats: make(map[sql.StatQualifier]*DoltStats), latestTableHashes: make(map[string]hash.Hash)}
+}
+
 var _ sql.StatsProvider = (*Provider)(nil)
 
 // Init scans the statistics tables, populating the |stats| attribute.
 // Statistics are not available for reading until we've finished loading.
 func (p *Provider) Load(ctx *sql.Context, dbs []dsess.SqlDatabase) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	for _, db := range dbs {
 		// set map keys so concurrent orthogonal writes are OK
-		p.dbStats[strings.ToLower(db.Name())] = &dbStats{db: strings.ToLower(db.Name()), stats: make(map[sql.StatQualifier]*DoltStats)}
+		p.dbStats[strings.ToLower(db.Name())] = newDbStats(strings.ToLower(db.Name()))
 	}
 	eg, ctx := ctx.NewErrgroup()
 	for _, db := range dbs {
@@ -366,7 +368,7 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 
 	curStats, ok := p.dbStats[dbName]
 	if !ok {
-		curStats = &dbStats{db: dbName, stats: make(map[sql.StatQualifier]*DoltStats)}
+		curStats = newDbStats(dbName)
 		p.dbStats[dbName] = curStats
 	}
 
@@ -396,7 +398,7 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 	}
 
 	if _, ok := p.dbStats[dbName]; !ok {
-		p.dbStats[dbName] = &dbStats{db: strings.ToLower(db), stats: make(map[sql.StatQualifier]*DoltStats)}
+		p.dbStats[dbName] = newDbStats(strings.ToLower(db))
 	}
 
 	// merge new chunks with preexisting chunks

@@ -56,8 +56,8 @@ func flushStats(ctx *sql.Context, prev prolly.Map, tableStats map[sql.StatQualif
 		}
 		return b.String()
 	}
-	var pos int64
 	for qual, stats := range tableStats {
+		var pos int64
 
 		// delete previous entries for this index
 		keyBuilder.PutString(0, qual.Database)

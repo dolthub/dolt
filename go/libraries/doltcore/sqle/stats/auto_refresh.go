@@ -18,148 +18,183 @@ import (
 
 const asyncAutoRefreshStats = "async_auto_refresh_stats"
 
-func (p *Provider) ConfigureAutoRefresh(bThreads *sql.BackgroundThreads, checkInterval time.Duration, updateThresh float64) error {
+func (p *Provider) ConfigureAutoRefresh(ctxFactory func(ctx context.Context) (*sql.Context, error), dbs []dsess.SqlDatabase, prov sql.DatabaseProvider, bThreads *sql.BackgroundThreads, checkInterval time.Duration, updateThresh float64) error {
 	// this is only called after initial statistics are finished loading
 	// launch a thread that periodically checks freshness
+	dbToDoltDb := make(map[string]*doltdb.DoltDB)
+	for _, db := range dbs {
+		dbToDoltDb[strings.ToLower(db.Name())] = db.DbData().Ddb
+	}
 	return bThreads.Add(asyncAutoRefreshStats, func(ctx context.Context) {
-		sqlCtx := sql.NewContext(ctx)
-		for now := range time.Tick(checkInterval) {
-			sqlCtx.GetLogger().Debugf("starting statistics refresh check: %s", now.String())
-
-			dSess := dsess.DSessFromSess(sqlCtx.Session)
-			prov := dSess.Provider()
-
-			// Iterate all dbs, tables, indexes. Each db will collect
-			// []indexMeta above refresh threshold. We read and process those
-			// chunks' statistics. We merge updated chunks with precomputed
-			// chunks. The full set of statistics for each database lands
-			// 1) in the provider's most recent set of database statistics, and
-			// 2) on disk in the database's statistics ref'd prolly.Map.
-			for db, curStats := range p.dbStats {
-				var newStats map[sql.StatQualifier]*DoltStats
-
-				ddb, ok := dSess.GetDoltDB(sqlCtx, db)
-				if !ok {
-					sqlCtx.GetLogger().Debugf("statistics refresh error: database not found %s", db)
-					continue
-				}
-
-				sqlDb, err := prov.Database(sqlCtx, db)
+		timer := time.NewTimer(checkInterval)
+		for {
+			// wake up checker on interval
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+				sqlCtx, err := ctxFactory(ctx)
 				if err != nil {
-					sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
-					continue
+					return
 				}
 
-				// for each table
-				tables, err := sqlDb.GetTableNames(sqlCtx)
-				if err != nil {
-					sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
-					continue
-				}
+				sqlCtx.GetLogger().Debugf("starting statistics refresh check: %s", time.Now().String())
+				timer.Reset(checkInterval)
 
-				for _, table := range tables {
-					sqlTable, ok, err := sqlDb.GetTableInsensitive(sqlCtx, table)
-					if err != nil {
-						sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
-						continue
-					}
-					if !ok {
-						sqlCtx.GetLogger().Debugf("statistics refresh error: table not found %s", table)
-						continue
-					}
+				//dSess := dsess.DSessFromSess(sqlCtx.Session)
+				//prov := dSess.Provider()
 
-					var dTab *doltdb.Table
-					switch t := sqlTable.(type) {
-					case *sqle.AlterableDoltTable:
-						dTab, err = t.DoltTable.DoltTable(sqlCtx)
-					case *sqle.WritableDoltTable:
-						dTab, err = t.DoltTable.DoltTable(sqlCtx)
-					case *sqle.DoltTable:
-						dTab, err = t.DoltTable(sqlCtx)
-					default:
-						err = fmt.Errorf("failed to unwrap dolt table from type: %T", sqlTable)
-					}
+				// Iterate all dbs, tables, indexes. Each db will collect
+				// []indexMeta above refresh threshold. We read and process those
+				// chunks' statistics. We merge updated chunks with precomputed
+				// chunks. The full set of statistics for each database lands
+				// 1) in the provider's most recent set of database statistics, and
+				// 2) on disk in the database's statistics ref'd prolly.Map.
+				for db, curStats := range p.dbStats {
+					newStats := make(map[sql.StatQualifier]*DoltStats)
+
+					ddb := dbToDoltDb[strings.ToLower(db)]
+
+					sqlDb, err := prov.Database(sqlCtx, db)
 					if err != nil {
 						sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
 						continue
 					}
 
-					tableHash, err := dTab.GetRowDataHash(ctx)
+					// for each table
+					tables, err := sqlDb.GetTableNames(sqlCtx)
 					if err != nil {
 						sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
 						continue
 					}
 
-					if curStats.latestTableHashes[table] == tableHash {
-						// no data changes since last check
-						continue
-					}
-
-					iat, ok := sqlTable.(sql.IndexAddressableTable)
-					if !ok {
-						sqlCtx.GetLogger().Debugf("statistics refresh error: table does not support indexes %s", table)
-						continue
-					}
-
-					indexes, err := iat.GetIndexes(sqlCtx)
-					if err != nil {
-						sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
-						continue
-					}
-
-					// collect indexes and ranges to be updated
-					var idxMetas []indexMeta
-					for _, index := range indexes {
-						qual := sql.NewStatQualifier(db, table, strings.ToLower(index.ID()))
-						curStat := curStats.stats[qual]
-						idxMeta, err := newIdxMeta(sqlCtx, curStat, dTab, index, curStat.Columns)
+					for _, table := range tables {
+						sqlTable, ok, err := sqlDb.GetTableInsensitive(sqlCtx, table)
 						if err != nil {
 							sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
 							continue
 						}
-						if float64(len(idxMeta.updateChunks))/float64(len(curStat.active)) > updateThresh {
-							// mark index for updating
-							idxMetas = append(idxMetas, idxMeta)
-							// update lastest hash if we haven't already
-							curStats.latestTableHashes[table] = tableHash
+						if !ok {
+							sqlCtx.GetLogger().Debugf("statistics refresh error: table not found %s", table)
+							continue
+						}
+
+						var dTab *doltdb.Table
+						switch t := sqlTable.(type) {
+						case *sqle.AlterableDoltTable:
+							dTab, err = t.DoltTable.DoltTable(sqlCtx)
+						case *sqle.WritableDoltTable:
+							dTab, err = t.DoltTable.DoltTable(sqlCtx)
+						case *sqle.DoltTable:
+							dTab, err = t.DoltTable(sqlCtx)
+						default:
+							err = fmt.Errorf("failed to unwrap dolt table from type: %T", sqlTable)
+						}
+						if err != nil {
+							sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
+							continue
+						}
+
+						tableHash, err := dTab.GetRowDataHash(ctx)
+						if err != nil {
+							sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
+							continue
+						}
+
+						if curStats.latestTableHashes[table] == tableHash {
+							// no data changes since last check
+							sqlCtx.GetLogger().Debugf("statistics refresh: table hash unchanged since last check: %s", tableHash)
+							continue
+						} else {
+							sqlCtx.GetLogger().Debugf("statistics refresh: new table hash: %s", tableHash)
+						}
+
+						iat, ok := sqlTable.(sql.IndexAddressableTable)
+						if !ok {
+							sqlCtx.GetLogger().Debugf("statistics refresh error: table does not support indexes %s", table)
+							continue
+						}
+
+						indexes, err := iat.GetIndexes(sqlCtx)
+						if err != nil {
+							sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
+							continue
+						}
+
+						// collect indexes and ranges to be updated
+						var idxMetas []indexMeta
+						for _, index := range indexes {
+							qual := sql.NewStatQualifier(db, table, strings.ToLower(index.ID()))
+							curStat := curStats.stats[qual]
+							if curStat == nil {
+								curStat = NewDoltStats()
+								curStat.Qual = qual
+
+								cols := make([]string, len(index.Expressions()))
+								tablePrefix := fmt.Sprintf("%s.", table)
+								for i, c := range index.Expressions() {
+									cols[i] = strings.TrimPrefix(strings.ToLower(c), tablePrefix)
+								}
+								curStat.Columns = cols
+							}
+							sqlCtx.GetLogger().Debugf("statistics refresh index: %s", qual.String())
+
+							idxMeta, err := newIdxMeta(sqlCtx, curStat, dTab, index, curStat.Columns)
+							if err != nil {
+								sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
+								continue
+							}
+							curCnt := float64(len(curStat.active))
+							updateCnt := float64(len(idxMeta.updateChunks))
+							sqlCtx.GetLogger().Debugf("statistics current: %d, new: %d", int(curCnt), int(updateCnt))
+
+							if curCnt == 0 || updateCnt/curCnt > updateThresh {
+								// mark index for updating
+								idxMetas = append(idxMetas, idxMeta)
+								// update lastest hash if we haven't already
+								curStats.latestTableHashes[table] = tableHash
+							}
+						}
+						// get new buckets for index chunks to update
+						newTableStats, err := updateStats(sqlCtx, sqlTable, dTab, indexes, idxMetas)
+						if err != nil {
+							sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
+							continue
+						}
+
+						// merge new chunks with preexisting chunks
+						for _, idxMeta := range idxMetas {
+							stat := newTableStats[idxMeta.qual]
+							if stat != nil {
+								newStats[idxMeta.qual] = mergeStatUpdates(stat, idxMeta)
+							}
 						}
 					}
-					// get new buckets for index chunks to update
-					newTableStats, err := updateStats(sqlCtx, sqlTable, dTab, indexes, idxMetas)
+
+					prevMap := p.dbStats[db].currentMap
+					if prevMap.KeyDesc().Count() == 0 {
+						kd, vd := schema.StatsTableDoltSchema.GetMapDescriptors()
+						prevMap, err = prolly.NewMapFromTuples(ctx, ddb.NodeStore(), kd, vd)
+						if err != nil {
+							sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
+							continue
+						}
+					}
+					newMap, err := flushStats(sqlCtx, prevMap, newStats)
 					if err != nil {
 						sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
 						continue
 					}
 
-					// merge new chunks with preexisting chunks
-					for _, idxMeta := range idxMetas {
-						stat := newTableStats[idxMeta.qual]
-						newStats[idxMeta.qual] = mergeStatUpdates(stat, idxMeta)
-					}
-				}
-
-				prevMap := p.dbStats[db].currentMap
-				if prevMap.KeyDesc().Count() == 0 {
-					kd, vd := schema.StatsTableDoltSchema.GetMapDescriptors()
-					prevMap, err = prolly.NewMapFromTuples(ctx, ddb.NodeStore(), kd, vd)
+					p.mu.Lock()
+					p.dbStats[db].currentMap = newMap
+					err = ddb.SetStatisics(ctx, newMap.HashOf())
+					p.mu.Unlock()
 					if err != nil {
 						sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
 						continue
 					}
-				}
-				newMap, err := flushStats(sqlCtx, prevMap, newStats)
-				if err != nil {
-					sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
-					continue
-				}
-
-				p.mu.Lock()
-				p.dbStats[db].currentMap = newMap
-				err = ddb.SetStatisics(ctx, newMap.HashOf())
-				p.mu.Unlock()
-				if err != nil {
-					sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
-					continue
 				}
 			}
 		}
@@ -210,9 +245,6 @@ func newIdxMeta(ctx *sql.Context, curStats *DoltStats, doltTable *doltdb.Table, 
 		offset += uint64(treeCnt)
 	}
 	return indexMeta{
-		db:             curStats.Qual.Db(),
-		table:          curStats.Qual.Table(),
-		index:          curStats.Qual.Index(),
 		qual:           curStats.Qual,
 		cols:           cols,
 		updateChunks:   missingChunks,

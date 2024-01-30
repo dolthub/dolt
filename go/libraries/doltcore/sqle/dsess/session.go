@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"strconv"
 	"strings"
 	"sync"
@@ -1572,6 +1573,9 @@ func setPersistedValue(conf config.WritableConfig, key string, value interface{}
 		return config.SetFloat(conf, key, float64(v))
 	case float64:
 		return config.SetFloat(conf, key, v)
+	case decimal.Decimal:
+		f64, _ := v.Float64()
+		return config.SetFloat(conf, key, f64)
 	case string:
 		return config.SetString(conf, key, v)
 	case bool:

@@ -1,0 +1,163 @@
+#!/usr/bin/env bats
+load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/query-server-common.bash
+
+setup() {
+    setup_common
+
+    TMPDIRS=$(pwd)/tmpdirs
+    mkdir -p $TMPDIRS/{repo1,repo2}
+
+    ls $TMPDIRS
+    cd $TMPDIRS/repo1
+    dolt init
+
+    dolt sql <<SQL
+create table ab (a int primary key, b int, key (b,a));
+SQL
+
+    cd $TMPDIRS/repo2
+    dolt init
+
+    dolt sql <<SQL
+create table xy (x int primary key, y int, key (y,x));
+create table ab (a int primary key, b int, key (b,a));
+SQL
+
+    cd $TMPDIRS
+}
+
+teardown() {
+    teardown_common
+    stop_sql_server 1
+    rm -rf $TMPDIRS
+    cd $BATS_TMPDIR
+}
+
+@test "stats: empty initial stats" {
+    cd repo2
+
+    dolt sql -q "insert into xy values (0,0), (1,1)"
+
+    start_sql_server
+    sleep 1
+    stop_sql_server
+
+    # no statistics error if ref does not exist
+    run dolt sql -r csv -q "select database_name, table_name, index_name from dolt_statistics"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "No statistics found" ]] || false
+
+    # setting variables doesn't hang or error
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_enabled = 1;"
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_threshold = .5"
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_interval = 1;"
+
+    # auto refresh can only initialize at server startup
+    start_sql_server
+
+    # need to trigger at least one refresh cycle
+    sleep 1
+
+    # only statistics for non-empty tables are collected
+    run dolt sql -r csv -q "select database_name, table_name, index_name from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "database_name,table_name,index_name" ]
+    [ "${lines[1]}" = "repo2,xy,primary" ]
+    [ "${lines[2]}" = "repo2,xy,yx" ]
+
+    # appending new chunks picked up
+    dolt sql -q "insert into xy select x, 1 from (with recursive inputs(x) as (select 4 union select x+1 from inputs where x < 1000) select * from inputs) dt;"
+
+    sleep 1
+
+    run dolt sql -r csv -q "select count(*) from xy"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "999" ]
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "8" ]
+
+    # updates picked up
+    dolt sql -q "update xy set y = 2 where x between 100 and 800"
+
+    sleep 1
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "8" ]
+}
+
+@test "stats: most common values" {
+    cd repo2
+
+    dolt sql -q "alter table xy add index (y)"
+    dolt sql -q "insert into xy values (0,0), (1,0), (2,0), (3,0), (4,0), (5,0)"
+
+    # setting variables doesn't hang or error
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_enabled = 1;"
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_threshold = .5"
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_interval = 1;"
+
+    # auto refresh can only initialize at server startup
+    start_sql_server
+
+    # need to trigger at least one refresh cycle
+    sleep 1
+
+    run dolt sql -r csv -q "select mcv1 from dolt_statistics where index_name = 'y'"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "0" ]
+
+    sleep 1
+
+    dolt sql -q "update xy set y = 2 where x between 0 and 3"
+
+    sleep 1
+
+    run dolt sql -r csv -q "select mcv1 as mcv from dolt_statistics where index_name = 'y' union select mcv2 as mcv from dolt_statistics where index_name = 'y' order by mcv"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "0" ]
+    [ "${lines[2]}" = "2" ]
+}
+
+@test "stats: multi db" {
+    cd repo1
+    dolt sql -q "insert into ab values (0,0), (1,1)"
+
+    cd ../repo2
+    dolt sql -q "insert into ab values (0,0), (1,1)"
+    dolt sql -q "insert into xy values (0,0), (1,1)"
+
+    cd ..
+    start_sql_server
+    sleep 1
+    stop_sql_server
+
+    run dolt sql -r csv -q "select database_name, table_name, index_name from dolt_statistics"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "No statistics found" ]] || false
+
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_enabled = 1;"
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_threshold = 0.5"
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_interval = 1;"
+
+    start_sql_server
+    sleep 1
+
+    dolt sql -q "use repo1"
+    run dolt sql -r csv -q "select database_name, table_name, index_name from dolt_statistics order by index_name"
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "database_name,table_name,index_name" ]
+    [ "${lines[1]}" = "repo1,ab,ba" ]
+    [ "${lines[2]}" = "repo1,ab,primary" ]
+
+    run dolt sql -r csv -q "select database_name, table_name, index_name from repo2.dolt_statistics order by index_name"
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "database_name,table_name,index_name" ]
+    [ "${lines[1]}" = "repo2,ab,ba" ]
+    [ "${lines[2]}" = "repo2,ab,primary" ]
+    [ "${lines[3]}" = "repo2,xy,primary" ]
+    [ "${lines[4]}" = "repo2,xy,yx" ]
+}

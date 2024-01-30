@@ -16,6 +16,7 @@ package engine
 
 import (
 	"context"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	"os"
 	"runtime"
 	"strconv"
@@ -185,8 +186,9 @@ func NewSqlEngine(
 	sqlEngine.provider = pro
 	sqlEngine.contextFactory = sqlContextFactory()
 	sqlEngine.dsessFactory = sessFactory
+	sqlEngine.engine = engine
 
-	if err = configureStatsProvider(ctx, engine, bThreads, dbs); err != nil {
+	if err = configureStatsProvider(ctx, sqlEngine, bThreads, dbs); err != nil {
 		return nil, err
 	}
 
@@ -230,8 +232,6 @@ func NewSqlEngine(
 			return nil, err
 		}
 	}
-
-	sqlEngine.engine = engine
 
 	return sqlEngine, nil
 }
@@ -379,16 +379,21 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, sessFa
 	return engine.InitializeEventScheduler(getCtxFunc, config.EventSchedulerStatus, eventSchedulerPeriod)
 }
 
-func configureStatsProvider(ctx context.Context, engine *gms.Engine, bThreads *sql.BackgroundThreads, dbs []dsess.SqlDatabase) error {
-	engine.Analyzer.Catalog.StatsProvider = stats.NewProvider()
-	statsProv := engine.Analyzer.Catalog.StatsProvider.(*stats.Provider)
-	if err := statsProv.Load(sql.NewContext(ctx), dbs); err != nil {
+func configureStatsProvider(ctx context.Context, sqlEngine *SqlEngine, bThreads *sql.BackgroundThreads, dbs []dsess.SqlDatabase) error {
+	sqlEngine.engine.Analyzer.Catalog.StatsProvider = stats.NewProvider()
+	statsProv := sqlEngine.engine.Analyzer.Catalog.StatsProvider.(*stats.Provider)
+	loadCtx, err := sqlEngine.NewDefaultContext(ctx)
+	if err != nil {
+		return err
+	}
+	if err := statsProv.Load(loadCtx, dbs); err != nil {
 		return err
 	}
 	if _, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshEnabled); enabled == int8(1) {
 		_, threshold, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshThreshold)
 		_, interval, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshInterval)
-		if err := statsProv.ConfigureAutoRefresh(bThreads, time.Second*time.Duration(interval.(int64)), threshold.(float64)); err != nil {
+		interval64, _, _ := types2.Int64.Convert(interval)
+		if err := statsProv.ConfigureAutoRefresh(sqlEngine.NewDefaultContext, dbs, sqlEngine.engine.Analyzer.Catalog.DbProvider, bThreads, time.Second*time.Duration(interval64.(int64)), threshold.(float64)); err != nil {
 			return err
 		}
 	}
