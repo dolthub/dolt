@@ -58,9 +58,6 @@ func (p *Provider) ConfigureAutoRefresh(ctxFactory func(ctx context.Context) (*s
 				sqlCtx.GetLogger().Debugf("starting statistics refresh check: %s", time.Now().String())
 				timer.Reset(checkInterval)
 
-				//dSess := dsess.DSessFromSess(sqlCtx.Session)
-				//prov := dSess.Provider()
-
 				// Iterate all dbs, tables, indexes. Each db will collect
 				// []indexMeta above refresh threshold. We read and process those
 				// chunks' statistics. We merge updated chunks with precomputed
@@ -163,9 +160,10 @@ func (p *Provider) ConfigureAutoRefresh(ctxFactory func(ctx context.Context) (*s
 							}
 							curCnt := float64(len(curStat.active))
 							updateCnt := float64(len(idxMeta.updateChunks))
-							sqlCtx.GetLogger().Debugf("statistics current: %d, new: %d", int(curCnt), int(updateCnt))
+							deleteCnt := float64(len(curStat.active) - len(idxMeta.preexisting))
+							sqlCtx.GetLogger().Debugf("statistics current: %d, new: %d, delete: %d", int(curCnt), int(updateCnt), int(deleteCnt))
 
-							if curCnt == 0 || updateCnt/curCnt > updateThresh {
+							if curCnt == 0 || (deleteCnt+updateCnt)/curCnt > updateThresh {
 								// mark index for updating
 								idxMetas = append(idxMetas, idxMeta)
 								// update lastest hash if we haven't already

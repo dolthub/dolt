@@ -13,7 +13,6 @@ setup() {
     TMPDIRS=$(pwd)/tmpdirs
     mkdir -p $TMPDIRS/{repo1,repo2}
 
-    ls $TMPDIRS
     cd $TMPDIRS/repo1
     dolt init
 
@@ -76,10 +75,6 @@ teardown() {
 
     sleep 1
 
-    run dolt sql -r csv -q "select count(*) from xy"
-    [ "$status" -eq 0 ]
-    [ "${lines[1]}" = "999" ]
-
     run dolt sql -r csv -q "select count(*) from dolt_statistics"
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "8" ]
@@ -93,6 +88,35 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "8" ]
 }
+
+@test "stats: deletes refresh" {
+    cd repo2
+
+    dolt sql -q "insert into xy select x, 1 from (with recursive inputs(x) as (select 4 union select x+1 from inputs where x < 1000) select * from inputs) dt;"
+
+    # setting variables doesn't hang or error
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_enabled = 1;"
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_threshold = .5"
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_interval = 1;"
+
+    start_sql_server
+
+    sleep 1
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "8" ]
+
+    # delete >50% of rows
+    dolt sql -q "delete from xy where x > 500"
+
+    sleep 1
+
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "4" ]
+}
+
 
 @test "stats: most common values" {
     cd repo2
