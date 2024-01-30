@@ -346,6 +346,5 @@ select count(*) from dolt_statistics where database_name = 'repo2';
 SQL
     [ "$status" -eq 0 ]
     [ "${lines[2]}" = "2" ]
-
 }
 

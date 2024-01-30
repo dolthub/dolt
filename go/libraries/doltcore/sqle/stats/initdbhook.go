@@ -16,10 +16,12 @@ package stats
 
 import (
 	"context"
+	"time"
+
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/go-mysql-server/sql"
-	"time"
 )
 
 func NewInitDatabaseHook(statsProv *Provider, ctxFactory func(ctx context.Context) (*sql.Context, error), dbProv sql.DatabaseProvider, bThreads *sql.BackgroundThreads, checkInterval time.Duration, updateThresh float64, orig sqle.InitDatabaseHook) sqle.InitDatabaseHook {
