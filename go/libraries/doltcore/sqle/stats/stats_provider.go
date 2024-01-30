@@ -15,6 +15,7 @@
 package stats
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -182,8 +183,9 @@ type indexMeta struct {
 
 func NewProvider() *Provider {
 	return &Provider{
-		mu:      &sync.Mutex{},
-		dbStats: make(map[string]*dbStats),
+		mu:                &sync.Mutex{},
+		dbStats:           make(map[string]*dbStats),
+		autoRefreshCancel: make(map[string]context.CancelFunc),
 	}
 }
 
@@ -191,9 +193,10 @@ func NewProvider() *Provider {
 // Each database has its own statistics table that all tables/indexes in a db
 // share.
 type Provider struct {
-	mu             *sync.Mutex
-	latestRootAddr hash.Hash
-	dbStats        map[string]*dbStats
+	mu                *sync.Mutex
+	latestRootAddr    hash.Hash
+	dbStats           map[string]*dbStats
+	autoRefreshCancel map[string]context.CancelFunc
 }
 
 // each database has one statistics table that is a collection of the

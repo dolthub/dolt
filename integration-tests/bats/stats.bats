@@ -277,3 +277,75 @@ teardown() {
     [ "${lines[3]}" = "repo2,xy,primary" ]
     [ "${lines[4]}" = "repo2,xy,yx" ]
 }
+
+@test "stats: add/delete database" {
+    cd repo1
+
+    # setting variables doesn't hang or error
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_enabled = 1;"
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_threshold = .5"
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_interval = 1;"
+
+    start_sql_server
+
+    dolt sql -q "insert into ab values (0,0), (1,0), (2,0)"
+    dolt sql <<SQL
+create database repo2;
+create table repo2.xy (x int primary key, y int, key(y,x));
+insert into repo2.xy values (0,0), (1,0), (2,0);
+SQL
+
+    sleep 1
+
+    # specify database_name filter even though can only see active db stats
+    run dolt sql -r csv <<SQL
+use repo2;
+select count(*) from dolt_statistics where database_name  = 'repo2';
+SQL
+    [ "$status" -eq 0 ]
+    [ "${lines[2]}" = "2" ]
+
+    # drop repo2
+    dolt sql -q "drop database repo2"
+
+    sleep 1
+
+    # we can't access repo2 stats, but still try
+    run dolt sql -r csv <<SQL
+select count(*) from dolt_statistics where database_name = 'repo2';
+SQL
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "0" ]
+
+    dolt sql <<SQL
+create database repo2;
+create table repo2.xy (x int primary key, y int, key(y,x));
+SQL
+
+    sleep 1
+
+    # no rows yet
+    run dolt sql -r csv <<SQL
+use repo2;
+select count(*) from dolt_statistics where database_name = 'repo2';
+SQL
+    [ "$status" -eq 0 ]
+    [ "${lines[2]}" = "0" ]
+
+    dolt sql <<SQL
+use repo2;
+insert into xy values (0,0);
+SQL
+
+    sleep 1
+
+    # insert initializes stats
+    run dolt sql -r csv <<SQL
+use repo2;
+select count(*) from dolt_statistics where database_name = 'repo2';
+SQL
+    [ "$status" -eq 0 ]
+    [ "${lines[2]}" = "2" ]
+
+}
+
