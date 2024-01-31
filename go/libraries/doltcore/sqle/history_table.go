@@ -68,10 +68,6 @@ type HistoryTable struct {
 	projectedCols []uint64
 }
 
-func (ht *HistoryTable) Comment() string {
-	return ""
-}
-
 func (ht *HistoryTable) PrimaryKeySchema() sql.PrimaryKeySchema {
 	tableName := ht.Name()
 	basePkSch := ht.doltTable.PrimaryKeySchema()
@@ -419,6 +415,11 @@ func (ht *HistoryTable) Schema() sql.Schema {
 // Collation implements the sql.Table interface.
 func (ht *HistoryTable) Collation() sql.CollationID {
 	return sql.CollationID(ht.doltTable.sch.GetCollation())
+}
+
+// Comment implements the sql.Table interface.
+func (ht *HistoryTable) Comment() string {
+	return ""
 }
 
 // Partitions returns a PartitionIter which will be used in getting partitions each of which is used to create RowIter.

@@ -76,10 +76,6 @@ type PatchTableFunction struct {
 	database       sql.Database
 }
 
-func (p *PatchTableFunction) Comment() string {
-	return ""
-}
-
 func (p *PatchTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
 	numBytesPerRow := schema.SchemaAvgLength(p.Schema())
 	numRows, _, err := p.RowCount(ctx)
@@ -111,6 +107,11 @@ func (p *PatchTableFunction) UnderlyingTable() sql.Table {
 // Collation implements the sql.Table interface.
 func (p *PatchTableFunction) Collation() sql.CollationID {
 	return sql.Collation_Default
+}
+
+// Comment implements the sql.Table interface.
+func (p *PatchTableFunction) Comment() string {
+	return ""
 }
 
 // Partitions is a sql.Table interface function that returns a partition of the data. This data has a single partition.

@@ -30,10 +30,6 @@ type TableOfTablesWithViolations struct {
 	root *doltdb.RootValue
 }
 
-func (totwv *TableOfTablesWithViolations) Comment() string {
-	return ""
-}
-
 var _ sql.Table = (*TableOfTablesWithViolations)(nil)
 
 // NewTableOfTablesConstraintViolations creates a TableOfTablesWithViolations.
@@ -62,6 +58,11 @@ func (totwv *TableOfTablesWithViolations) Schema() sql.Schema {
 // Collation implements the interface sql.Table.
 func (totwv *TableOfTablesWithViolations) Collation() sql.CollationID {
 	return sql.Collation_Default
+}
+
+// Comment implements the interface sql.Table.
+func (totwv *TableOfTablesWithViolations) Comment() string {
+	return ""
 }
 
 // Partitions implements the interface sql.Table.

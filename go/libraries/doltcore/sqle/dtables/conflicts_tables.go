@@ -82,10 +82,6 @@ type ConflictsTable struct {
 	rs      RootSetter
 }
 
-func (ct ConflictsTable) Comment() string {
-	return ""
-}
-
 type RootSetter interface {
 	SetRoot(ctx *sql.Context, root *doltdb.RootValue) error
 }
@@ -108,6 +104,11 @@ func (ct ConflictsTable) Schema() sql.Schema {
 // Collation implements the sql.Table interface.
 func (ct ConflictsTable) Collation() sql.CollationID {
 	return sql.Collation_Default
+}
+
+// Comment implements the sql.Table interface.
+func (ct ConflictsTable) Comment() string {
+	return ""
 }
 
 // Partitions returns a PartitionIter which can be used to get all the data partitions

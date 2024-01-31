@@ -51,10 +51,6 @@ type CommitDiffTable struct {
 	targetSchema      schema.Schema
 }
 
-func (dt *CommitDiffTable) Comment() string {
-	return ""
-}
-
 var _ sql.Table = (*CommitDiffTable)(nil)
 var _ sql.IndexAddressable = (*CommitDiffTable)(nil)
 var _ sql.StatisticsTable = (*CommitDiffTable)(nil)
@@ -123,6 +119,11 @@ func (dt *CommitDiffTable) Schema() sql.Schema {
 // Collation implements the sql.Table interface.
 func (dt *CommitDiffTable) Collation() sql.CollationID {
 	return sql.Collation_Default
+}
+
+// Comment implements the sql.Table interface.
+func (dt *CommitDiffTable) Comment() string {
+	return ""
 }
 
 // GetIndexes implements sql.IndexAddressable

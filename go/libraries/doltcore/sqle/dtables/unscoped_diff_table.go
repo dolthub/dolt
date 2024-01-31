@@ -53,10 +53,6 @@ type UnscopedDiffTable struct {
 	commitCheck      doltdb.CommitFilter
 }
 
-func (dt *UnscopedDiffTable) Comment() string {
-	return ""
-}
-
 var _ sql.Table = (*UnscopedDiffTable)(nil)
 var _ sql.StatisticsTable = (*UnscopedDiffTable)(nil)
 var _ sql.IndexAddressable = (*UnscopedDiffTable)(nil)
@@ -108,6 +104,11 @@ func (dt *UnscopedDiffTable) Schema() sql.Schema {
 // Collation implements the sql.Table interface.
 func (dt *UnscopedDiffTable) Collation() sql.CollationID {
 	return sql.Collation_Default
+}
+
+// Comment implements the sql.Table interface.
+func (dt *UnscopedDiffTable) Comment() string {
+	return ""
 }
 
 // Partitions is a sql.Table interface function that returns a partition of the data. Returns one

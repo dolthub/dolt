@@ -34,10 +34,6 @@ type MergeStatusTable struct {
 	dbName string
 }
 
-func (s MergeStatusTable) Comment() string {
-	return ""
-}
-
 func (s MergeStatusTable) Name() string {
 	return doltdb.MergeStatusTableName
 }
@@ -58,6 +54,10 @@ func (s MergeStatusTable) Schema() sql.Schema {
 
 func (s MergeStatusTable) Collation() sql.CollationID {
 	return sql.Collation_Default
+}
+
+func (s MergeStatusTable) Comment() string {
+	return ""
 }
 
 func (s MergeStatusTable) Partitions(*sql.Context) (sql.PartitionIter, error) {

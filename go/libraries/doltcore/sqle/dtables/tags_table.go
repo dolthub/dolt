@@ -35,10 +35,6 @@ type TagsTable struct {
 	ddb *doltdb.DoltDB
 }
 
-func (dt *TagsTable) Comment() string {
-	return ""
-}
-
 // NewTagsTable creates a TagsTable
 func NewTagsTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
 	return &TagsTable{ddb: ddb}
@@ -84,6 +80,11 @@ func (dt *TagsTable) Schema() sql.Schema {
 // Collation implements the sql.Table interface.
 func (dt *TagsTable) Collation() sql.CollationID {
 	return sql.Collation_Default
+}
+
+// Comment implements the sql.Table interface.
+func (dt *TagsTable) Comment() string {
+	return ""
 }
 
 // Partitions is a sql.Table interface function that returns a partition of the data. Currently, the data is unpartitioned.

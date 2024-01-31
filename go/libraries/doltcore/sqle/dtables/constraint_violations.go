@@ -97,7 +97,6 @@ func (cvt *constraintViolationsTable) Collation() sql.CollationID {
 
 // Comment implements the interface sql.Table.
 func (cvt *constraintViolationsTable) Comment() string {
-	// TODO: Maybe a separate interface makes more sense? Something like sql.CommentedTable?
 	return ""
 }
 

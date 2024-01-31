@@ -48,10 +48,6 @@ type TempTable struct {
 	opts editor.Options
 }
 
-func (t *TempTable) Comment() string {
-	return ""
-}
-
 var _ sql.TemporaryTable = &TempTable{}
 var _ sql.Table = &TempTable{}
 var _ sql.PrimaryKeyTable = &TempTable{}
@@ -214,6 +210,10 @@ func (t *TempTable) Schema() sql.Schema {
 
 func (t *TempTable) Collation() sql.CollationID {
 	return sql.CollationID(t.sch.GetCollation())
+}
+
+func (t *TempTable) Comment() string {
+	return ""
 }
 
 func (t *TempTable) sqlSchema() sql.PrimaryKeySchema {

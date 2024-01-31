@@ -299,10 +299,8 @@ func GenerateCreateTableStatement(tblName string, sch schema.Schema, fks []doltd
 		colStmts = append(colStmts, GenerateCreateTableCheckConstraintClause(check))
 	}
 
-	comment := "" // TODO: ???
-
 	coll := sql.CollationID(sch.GetCollation())
-	createTableStmt := sql.GenerateCreateTableStatement(tblName, colStmts, coll.CharacterSet().Name(), coll.Name(), comment)
+	createTableStmt := sql.GenerateCreateTableStatement(tblName, colStmts, coll.CharacterSet().Name(), coll.Name(), sch.GetComment())
 	return fmt.Sprintf("%s;", createTableStmt), nil
 }
 

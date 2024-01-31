@@ -32,10 +32,6 @@ type TableOfTablesInConflict struct {
 	ddb    *doltdb.DoltDB
 }
 
-func (dt *TableOfTablesInConflict) Comment() string {
-	return ""
-}
-
 // NewTableOfTablesInConflict creates a TableOfTablesInConflict
 func NewTableOfTablesInConflict(_ *sql.Context, dbName string, ddb *doltdb.DoltDB) sql.Table {
 	return &TableOfTablesInConflict{dbName: dbName, ddb: ddb}
@@ -64,6 +60,11 @@ func (dt *TableOfTablesInConflict) Schema() sql.Schema {
 // Collation implements the sql.Table interface.
 func (dt *TableOfTablesInConflict) Collation() sql.CollationID {
 	return sql.Collation_Default
+}
+
+// Comment implements the sql.Table interface.
+func (dt *TableOfTablesInConflict) Comment() string {
+	return ""
 }
 
 type tableInConflict struct {

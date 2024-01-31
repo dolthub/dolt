@@ -39,10 +39,6 @@ type StatisticsTable struct {
 	ddb    *doltdb.DoltDB
 }
 
-func (st *StatisticsTable) Comment() string {
-	return ""
-}
-
 var _ sql.Table = (*StatisticsTable)(nil)
 var _ sql.StatisticsTable = (*StatisticsTable)(nil)
 
@@ -94,6 +90,11 @@ func (st *StatisticsTable) Schema() sql.Schema {
 // Collation implements the sql.Table interface.
 func (st *StatisticsTable) Collation() sql.CollationID {
 	return sql.Collation_Default
+}
+
+// Comment implements the sql.Table interface.
+func (st *StatisticsTable) Comment() string {
+	return ""
 }
 
 // Partitions is a sql.Table interface function that returns a partition of the data.  Currently the data is unpartitioned.

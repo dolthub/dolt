@@ -95,6 +95,12 @@ type Schema interface {
 	// SetCollation sets the table's collation.
 	SetCollation(collation Collation)
 
+	// GetComment returns the table's comment.
+	GetComment() string
+
+	// SetComment sets the table's comment.
+	SetComment(comment string)
+
 	// Copy returns a copy of this Schema that can be safely modified independently.
 	Copy() Schema
 }

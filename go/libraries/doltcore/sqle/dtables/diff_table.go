@@ -83,10 +83,6 @@ type DiffTable struct {
 	joiner *rowconv.Joiner
 }
 
-func (dt *DiffTable) Comment() string {
-	return ""
-}
-
 var PrimaryKeyChangeWarning = "cannot render full diff between commits %s and %s due to primary key set change"
 
 const PrimaryKeyChangeWarningCode int = 1105 // Since this is our own custom warning we'll use 1105, the code for an unknown error
@@ -157,6 +153,10 @@ func (dt *DiffTable) Schema() sql.Schema {
 
 func (dt *DiffTable) Collation() sql.CollationID {
 	return sql.Collation_Default
+}
+
+func (dt *DiffTable) Comment() string {
+	return ""
 }
 
 func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {

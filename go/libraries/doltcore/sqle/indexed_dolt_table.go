@@ -34,12 +34,6 @@ type IndexedDoltTable struct {
 	mu           *sync.Mutex
 }
 
-func (idt *IndexedDoltTable) Comment() string {
-	return ""
-	// TODO:
-	//return idt.table.Comment()
-}
-
 func NewIndexedDoltTable(t *DoltTable, idx index.DoltIndex) *IndexedDoltTable {
 	return &IndexedDoltTable{
 		table:        t,
@@ -69,6 +63,10 @@ func (idt *IndexedDoltTable) Schema() sql.Schema {
 
 func (idt *IndexedDoltTable) Collation() sql.CollationID {
 	return sql.CollationID(idt.table.sch.GetCollation())
+}
+
+func (idt *IndexedDoltTable) Comment() string {
+	return idt.table.Comment()
 }
 
 func (idt *IndexedDoltTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {

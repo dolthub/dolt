@@ -49,10 +49,6 @@ type DocsTable struct {
 	backingTable VersionableTable
 }
 
-func (dt *DocsTable) Comment() string {
-	return ""
-}
-
 func (dt *DocsTable) Name() string {
 	return doltdb.DocTableName
 }
@@ -71,6 +67,10 @@ func (dt *DocsTable) Schema() sql.Schema {
 
 func (dt *DocsTable) Collation() sql.CollationID {
 	return sql.Collation_Default
+}
+
+func (dt *DocsTable) Comment() string {
+	return ""
 }
 
 // Partitions is a sql.Table interface function that returns a partition of the data.

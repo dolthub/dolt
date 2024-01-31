@@ -85,10 +85,6 @@ type ProllyConflictsTable struct {
 	versionMappings           *versionMappings
 }
 
-func (ct ProllyConflictsTable) Comment() string {
-	return ""
-}
-
 var _ sql.UpdatableTable = ProllyConflictsTable{}
 var _ sql.DeletableTable = ProllyConflictsTable{}
 
@@ -106,6 +102,10 @@ func (ct ProllyConflictsTable) Schema() sql.Schema {
 
 func (ct ProllyConflictsTable) Collation() sql.CollationID {
 	return sql.Collation_Default
+}
+
+func (ct ProllyConflictsTable) Comment() string {
+	return ""
 }
 
 func (ct ProllyConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {

@@ -45,6 +45,7 @@ type schemaImpl struct {
 	pkOrdinals                 []int
 	collation                  Collation
 	contentHashedFields        []uint64
+	comment                    string
 }
 
 var _ Schema = (*schemaImpl)(nil)
@@ -262,6 +263,14 @@ func SchemaFromPKAndNonPKCols(pkCols, nonPKCols *ColCollection) (Schema, error) 
 
 	allColColl := NewColCollection(allCols...)
 	return SchemaFromColCollections(allColColl, pkCols, nonPKCols), nil
+}
+
+func (si *schemaImpl) GetComment() string {
+	return si.comment
+}
+
+func (si *schemaImpl) SetComment(comment string) {
+	si.comment = comment
 }
 
 // GetAllCols gets the collection of all columns (pk and non-pk)

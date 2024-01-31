@@ -42,10 +42,6 @@ type RemotesTable struct {
 	ddb *doltdb.DoltDB
 }
 
-func (bt *RemotesTable) Comment() string {
-	return ""
-}
-
 // NewRemotesTable creates a RemotesTable
 func NewRemotesTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
 	return &RemotesTable{ddb}
@@ -89,6 +85,10 @@ func (bt *RemotesTable) Schema() sql.Schema {
 // Collation implements the sql.Table interface.
 func (bt *RemotesTable) Collation() sql.CollationID {
 	return sql.Collation_Default
+}
+
+func (bt *RemotesTable) Comment() string {
+	return ""
 }
 
 // Partitions is a sql.Table interface function that returns a partition of the data.  Currently the data is unpartitioned.

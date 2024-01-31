@@ -92,7 +92,7 @@ func (table *fulltextTable) Collation() sql.CollationID {
 
 // Comment implements the interface fulltext.EditableTable.
 func (table *fulltextTable) Comment() string {
-	return "" // TODO: ???
+	return table.GMSTable.Comment()
 }
 
 // Partitions implements the interface fulltext.EditableTable.

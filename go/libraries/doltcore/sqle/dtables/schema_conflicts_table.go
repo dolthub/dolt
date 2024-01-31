@@ -38,10 +38,6 @@ type SchemaConflictsTable struct {
 	ddb    *doltdb.DoltDB
 }
 
-func (dt *SchemaConflictsTable) Comment() string {
-	return ""
-}
-
 // NewSchemaConflictsTable creates a SchemaConflictsTable
 func NewSchemaConflictsTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB) sql.Table {
 	return &SchemaConflictsTable{dbName: dbName, ddb: ddb}
@@ -73,6 +69,11 @@ func (dt *SchemaConflictsTable) Schema() sql.Schema {
 // Collation implements the sql.Table interface.
 func (dt *SchemaConflictsTable) Collation() sql.CollationID {
 	return sql.Collation_Default
+}
+
+// Comment implements the sql.Table interface.
+func (dt *SchemaConflictsTable) Comment() string {
+	return ""
 }
 
 // Partitions is a sql.Table interface function that returns a partition of the data.  Conflict data for all tables exists in a single partition.

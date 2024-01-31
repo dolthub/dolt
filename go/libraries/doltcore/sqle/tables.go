@@ -93,12 +93,6 @@ type DoltTable struct {
 	opts editor.Options
 }
 
-func (t *DoltTable) Comment() string {
-	return ""
-	// TODO:
-	//return comment
-}
-
 func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db dsess.SqlDatabase, opts editor.Options) (*DoltTable, error) {
 	var autoCol schema.Column
 	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
@@ -366,6 +360,11 @@ func (t *DoltTable) Collation() sql.CollationID {
 	return sql.CollationID(t.sch.GetCollation())
 }
 
+// Comment returns the collation for this table.
+func (t *DoltTable) Comment() string {
+	return t.sch.GetComment()
+}
+
 func (t *DoltTable) sqlSchema() sql.PrimaryKeySchema {
 	// TODO: this should consider projections
 	if len(t.sqlSch.Schema) > 0 {
@@ -451,12 +450,6 @@ type WritableDoltTable struct {
 	*DoltTable
 	db                 Database
 	pinnedWriteSession writer.WriteSession
-}
-
-func (t *WritableDoltTable) Comment() string {
-	return ""
-	// TODO:
-	//return t.DoltTable.Comment()
 }
 
 var _ doltTableInterface = (*WritableDoltTable)(nil)

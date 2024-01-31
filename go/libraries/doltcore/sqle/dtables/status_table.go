@@ -37,10 +37,6 @@ type StatusTable struct {
 	rootsProvider env.RootsProvider
 }
 
-func (s StatusTable) Comment() string {
-	return ""
-}
-
 var _ sql.StatisticsTable = (*StatusTable)(nil)
 
 func (s StatusTable) DataLength(ctx *sql.Context) (uint64, error) {
@@ -74,6 +70,10 @@ func (s StatusTable) Schema() sql.Schema {
 
 func (s StatusTable) Collation() sql.CollationID {
 	return sql.Collation_Default
+}
+
+func (s StatusTable) Comment() string {
+	return ""
 }
 
 func (s StatusTable) Partitions(*sql.Context) (sql.PartitionIter, error) {

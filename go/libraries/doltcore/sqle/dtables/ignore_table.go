@@ -42,10 +42,6 @@ type IgnoreTable struct {
 	backingTable VersionableTable
 }
 
-func (i *IgnoreTable) Comment() string {
-	return ""
-}
-
 func (i *IgnoreTable) Name() string {
 	return doltdb.IgnoreTableName
 }
@@ -64,6 +60,10 @@ func (i *IgnoreTable) Schema() sql.Schema {
 
 func (i *IgnoreTable) Collation() sql.CollationID {
 	return sql.Collation_Default
+}
+
+func (i *IgnoreTable) Comment() string {
+	return ""
 }
 
 // Partitions is a sql.Table interface function that returns a partition of the data.

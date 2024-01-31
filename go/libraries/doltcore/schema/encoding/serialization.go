@@ -56,10 +56,12 @@ func serializeSchemaAsFlatbuffer(sch schema.Schema) ([]byte, error) {
 	rows := serializeClusteredIndex(b, sch)
 	indexes := serializeSecondaryIndexes(b, sch, sch.Indexes().AllIndexes())
 	checks := serializeChecks(b, sch.Checks().AllChecks())
+	comment := b.CreateString(sch.GetComment())
 
 	var hasFeaturesAfterTryAccessors bool
 	for _, col := range sch.GetAllCols().GetColumns() {
 		if col.OnUpdate != "" {
+			// TODO: Do we need to do anything with this for the new schema comment?
 			hasFeaturesAfterTryAccessors = true
 			break
 		}
@@ -71,6 +73,7 @@ func serializeSchemaAsFlatbuffer(sch schema.Schema) ([]byte, error) {
 	serial.TableSchemaAddSecondaryIndexes(b, indexes)
 	serial.TableSchemaAddChecks(b, checks)
 	serial.TableSchemaAddCollation(b, serial.Collation(sch.GetCollation()))
+	serial.TableSchemaAddComment(b, comment)
 	if hasFeaturesAfterTryAccessors {
 		serial.TableSchemaAddHasFeaturesAfterTryAccessors(b, hasFeaturesAfterTryAccessors)
 	}
@@ -123,6 +126,7 @@ func deserializeSchemaFromFlatbuffer(ctx context.Context, buf []byte) (schema.Sc
 	}
 
 	sch.SetCollation(schema.Collation(s.Collation()))
+	sch.SetComment(string(s.Comment()))
 
 	return sch, nil
 }
