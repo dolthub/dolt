@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/sirupsen/logrus"
 )
 
 type database struct {
@@ -850,6 +851,20 @@ func assertDatasetHash(
 		return currHash.IsEmpty(), nil
 	}
 	return curr.(types.Ref).TargetHash().Equal(currHash), nil
+}
+
+func (db *database) WriteDemGhosts(ctx context.Context, ghosts hash.HashSet) error {
+	foooooooo := db.ChunkStore()
+
+	gcs, ok := foooooooo.(chunks.GenerationalCS)
+	if !ok {
+		logrus.Info("WriteDemGhosts: ChunkStore is not a GenerationalCS")
+		return nil
+	}
+
+	err := gcs.GhostGen().GhostTheseRefsBrah(ctx, ghosts)
+
+	return err
 }
 
 // CommitWithWorkingSet updates two Datasets atomically: the working set, and its corresponding HEAD. Uses the same

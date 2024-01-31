@@ -87,7 +87,7 @@ func doDoltFetch(ctx *sql.Context, args []string) (int, error) {
 
 	prune := apr.Contains(cli.PruneFlag)
 	mode := ref.UpdateMode{Force: true, Prune: prune}
-	err = actions.FetchRefSpecs(ctx, dbData, srcDB, refSpecs, remote, mode, runProgFuncs, stopProgFuncs)
+	err = actions.FetchRefSpecs(ctx, dbData, srcDB, refSpecs, &remote, mode, runProgFuncs, stopProgFuncs)
 	if err != nil {
 		return cmdFailure, fmt.Errorf("fetch failed: %w", err)
 	}

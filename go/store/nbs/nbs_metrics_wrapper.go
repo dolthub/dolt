@@ -95,3 +95,7 @@ func (nbsMW *NBSMetricWrapper) GetManyCompressed(ctx context.Context, hashes has
 	atomic.AddInt32(&nbsMW.TotalChunkGets, int32(len(hashes)))
 	return nbsMW.nbs.GetManyCompressed(ctx, hashes, found)
 }
+
+func (nbsMW NBSMetricWrapper) GhostTheseRefsBrah(ctx context.Context, refs hash.HashSet) error {
+	return nbsMW.nbs.GhostTheseRefsBrah(ctx, refs)
+}

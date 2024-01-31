@@ -154,9 +154,9 @@ func (itr CommitsRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 	if err != nil {
 		return nil, err
 	}
-	cm, err := optCmt.ToCommit()
-	if err != nil {
-		panic("NM4")
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, doltdb.ErrUnexpectedGhostCommit // NM4 - NEED TEST.
 	}
 
 	meta, err := cm.GetCommitMeta(ctx)

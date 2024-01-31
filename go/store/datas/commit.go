@@ -459,6 +459,11 @@ func FindClosureCommonAncestor(ctx context.Context, cl CommitClosure, cm *Commit
 
 // GetCommitParents returns |Ref|s to the parents of the commit.
 func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value) ([]*Commit, error) {
+	_, ok := cv.(types.GhostValue)
+	if ok {
+		return nil, errors.New("Ghost Commit used. Never call get commit parents? NM4")
+	}
+
 	if sm, ok := cv.(types.SerialMessage); ok {
 		data := []byte(sm)
 		if serial.GetFileID(data) != serial.CommitFileID {
@@ -480,7 +485,7 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 			}
 
 			if g, ok := v.(types.GhostValue); ok {
-				// We have a ghost commit. Doo stuuufff NM4
+				// We have a ghost commit. Do stuff NM4 --
 				res[i] = &Commit{
 					val:  g,
 					addr: addrs[i],
@@ -500,6 +505,7 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 		}
 		return res, nil
 	}
+
 	c, ok := cv.(types.Struct)
 	if !ok {
 		return nil, errors.New("GetCommitParents: provided value is not a commit.")

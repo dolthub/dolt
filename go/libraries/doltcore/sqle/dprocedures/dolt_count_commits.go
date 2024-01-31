@@ -80,9 +80,9 @@ func countCommits(ctx *sql.Context, args ...string) (ahead uint64, behind uint64
 	if err != nil {
 		return 0, 0, err
 	}
-	fromCommit, err := optCmt.ToCommit()
-	if err != nil {
-		panic("NM4")
+	fromCommit, ok := optCmt.ToCommit()
+	if !ok {
+		return 0, 0, doltdb.ErrUnexpectedGhostCommit // NM4 - Have no idea what this is
 	}
 
 	fromHash, err := fromCommit.HashOf()
@@ -98,9 +98,9 @@ func countCommits(ctx *sql.Context, args ...string) (ahead uint64, behind uint64
 	if err != nil {
 		return 0, 0, err
 	}
-	toCommit, err := optCmt.ToCommit()
-	if err != nil {
-		panic("NM4")
+	toCommit, ok := optCmt.ToCommit()
+	if !ok {
+		return 0, 0, doltdb.ErrUnexpectedGhostCommit // NM4 - Have no idea what this is
 	}
 
 	toHash, err := toCommit.HashOf()
@@ -112,9 +112,9 @@ func countCommits(ctx *sql.Context, args ...string) (ahead uint64, behind uint64
 	if err != nil {
 		return 0, 0, err
 	}
-	ancestor, err := optCmt.ToCommit()
-	if err != nil {
-		panic("NM4")
+	ancestor, ok := optCmt.ToCommit()
+	if !ok {
+		return 0, 0, doltdb.ErrUnexpectedGhostCommit // NM4 - Have no idea what this is
 	}
 
 	ancestorHash, err := ancestor.HashOf()

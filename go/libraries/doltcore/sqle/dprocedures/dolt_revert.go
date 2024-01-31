@@ -102,9 +102,9 @@ func doDoltRevert(ctx *sql.Context, args []string) (int, error) {
 		if err != nil {
 			return 1, err
 		}
-		commit, err := optCmt.ToCommit()
-		if err != nil {
-			panic("NM4")
+		commit, ok := optCmt.ToCommit()
+		if !ok {
+			return 1, doltdb.ErrUnexpectedGhostCommit // NM4 TEST - I think should never happen.
 		}
 
 		commits[i] = commit

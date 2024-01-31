@@ -231,9 +231,9 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	if err != nil {
 		return err
 	}
-	commit, err := optCmt.ToCommit()
-	if err != nil {
-		panic("NM4")
+	commit, ok := optCmt.ToCommit()
+	if !ok {
+		return doltdb.ErrUnexpectedGhostCommit
 	}
 
 	commitMeta, err := commit.GetCommitMeta(ctx)

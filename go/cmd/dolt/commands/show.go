@@ -282,9 +282,9 @@ func printObjects(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts) error 
 		if err != nil {
 			return err
 		}
-		commit, err := optCmt.ToCommit()
-		if err != nil {
-			panic("NM4")
+		commit, ok := optCmt.ToCommit()
+		if !ok {
+			return doltdb.ErrUnexpectedGhostCommit // NM4 - TEST.
 		}
 
 		value := commit.Value()

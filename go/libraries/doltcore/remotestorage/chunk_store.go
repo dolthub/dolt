@@ -122,6 +122,11 @@ type DoltChunkStore struct {
 	wsValidate  bool
 }
 
+func (dcs *DoltChunkStore) GhostTheseRefsBrah(ctx context.Context, refs hash.HashSet) error {
+	//TODO implement me
+	panic("NM4")
+}
+
 func NewDoltChunkStoreFromPath(ctx context.Context, nbf *types.NomsBinFormat, path, host string, wsval bool, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
 	var repoId *remotesapi.RepoId
 

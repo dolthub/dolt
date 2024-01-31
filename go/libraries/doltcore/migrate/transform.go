@@ -125,9 +125,9 @@ func migrateCommit(ctx context.Context, menv Environment, oldCm *doltdb.Commit, 
 	if err != nil {
 		return err
 	}
-	oldParentCm, err := optCmt.ToCommit()
-	if err != nil {
-		panic("NM4")
+	oldParentCm, ok := optCmt.ToCommit()
+	if !ok {
+		return doltdb.ErrUnexpectedGhostCommit
 	}
 
 	oldParentRoot, err := oldParentCm.GetRootValue(ctx)
@@ -154,9 +154,9 @@ func migrateCommit(ctx context.Context, menv Environment, oldCm *doltdb.Commit, 
 	if err != nil {
 		return err
 	}
-	newParentCm, err := optCmt.ToCommit()
-	if err != nil {
-		panic("NM4")
+	newParentCm, ok := optCmt.ToCommit()
+	if !ok {
+		return doltdb.ErrUnexpectedGhostCommit
 	}
 
 	newParentRoot, err := newParentCm.GetRootValue(ctx)

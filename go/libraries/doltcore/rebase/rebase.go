@@ -200,9 +200,9 @@ func findRebaseCommits(ctx *sql.Context, currentBranchCommit, upstreamBranchComm
 			return nil, err
 		}
 
-		commit, err := optCmt.ToCommit()
-		if err != nil {
-			panic("NM4")
+		commit, ok := optCmt.ToCommit()
+		if !ok {
+			return nil, doltdb.ErrUnexpectedGhostCommit // Not sure if we can get this far. commit walk is going to be a bear.
 		}
 
 		// Don't include merge commits in the rebase plan

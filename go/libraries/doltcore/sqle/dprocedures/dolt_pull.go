@@ -152,7 +152,7 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 	}
 
 	mode := ref.UpdateMode{Force: true, Prune: false}
-	err = actions.FetchRefSpecs(ctx, dbData, srcDB, pullSpec.RefSpecs, pullSpec.Remote, mode, runProgFuncs, stopProgFuncs)
+	err = actions.FetchRefSpecs(ctx, dbData, srcDB, pullSpec.RefSpecs, &pullSpec.Remote, mode, runProgFuncs, stopProgFuncs)
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("fetch failed: %w", err)
 	}

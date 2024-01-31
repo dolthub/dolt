@@ -164,9 +164,9 @@ func (itr *CommitAncestorsRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 			return nil, err
 		}
 
-		cm, err := optCmt.ToCommit()
-		if err != nil {
-			return nil, err
+		cm, ok := optCmt.ToCommit()
+		if !ok {
+			return nil, doltdb.ErrUnexpectedGhostCommit // NM4 - I think this will happen plenty. TEST.
 		}
 
 		parents, err := itr.ddb.ResolveAllParents(ctx, cm)
@@ -181,9 +181,9 @@ func (itr *CommitAncestorsRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 
 		itr.cache = make([]sql.Row, len(parents))
 		for i, optParent := range parents {
-			p, err := optParent.ToCommit()
-			if err != nil {
-				return nil, err
+			p, ok := optParent.ToCommit()
+			if !ok {
+				return nil, doltdb.ErrUnexpectedGhostCommit // NM4 - TEST.
 			}
 
 			ph, err := p.HashOf()

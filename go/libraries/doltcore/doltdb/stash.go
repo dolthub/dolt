@@ -62,6 +62,11 @@ func getStashList(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWrit
 		if err != nil {
 			return nil, err
 		}
+
+		if hc.IsGhost() {
+			return nil, ErrUnexpectedGhostCommit
+		}
+
 		headCommit, err := NewCommit(ctx, vrw, ns, hc)
 		if err != nil {
 			return nil, err
@@ -112,6 +117,11 @@ func getStashAtIdx(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWri
 	if err != nil {
 		return nil, nil, nil, err
 	}
+
+	if hc.IsGhost() {
+		return nil, nil, nil, ErrUnexpectedGhostCommit
+	}
+
 	headCommit, err := NewCommit(ctx, vrw, ns, hc)
 	if err != nil {
 		return nil, nil, nil, err

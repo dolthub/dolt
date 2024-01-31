@@ -410,9 +410,9 @@ func (rrd ReadReplicaDatabase) createNewBranchFromRemote(ctx *sql.Context, remot
 	if err != nil {
 		return err
 	}
-	cm, err := optCmt.ToCommit()
-	if err != nil {
-		panic("NM4")
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		return doltdb.ErrUnexpectedGhostCommit // NM4 - TEST.
 	}
 
 	err = rrd.ddb.NewBranchAtCommit(ctx, remoteRef.Ref, cm, nil)

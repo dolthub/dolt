@@ -413,9 +413,9 @@ func (d *DoltSession) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSe
 	if err != nil {
 		return nil, err
 	}
-	headCommit, err := optCmt.ToCommit()
-	if err != nil {
-		panic("NM4")
+	headCommit, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, doltdb.ErrUnexpectedGhostCommit
 	}
 
 	headRoot, err := headCommit.GetRootValue(ctx)
@@ -695,9 +695,9 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, branchState *branchStat
 			if err != nil {
 				return nil, err
 			}
-			parentCommit, err := optCmt.ToCommit()
-			if err != nil {
-				panic("NM4")
+			parentCommit, ok := optCmt.ToCommit()
+			if !ok {
+				return nil, doltdb.ErrUnexpectedGhostCommit // NM4 - TEST THIS PATH.
 			}
 
 			mergeParentCommits = append(mergeParentCommits, parentCommit)
@@ -895,9 +895,9 @@ func (d *DoltSession) ResolveRootForRef(ctx *sql.Context, dbName, refStr string)
 	if err != nil {
 		return nil, nil, "", err
 	}
-	cm, err := optCmt.ToCommit()
-	if err != nil {
-		panic("NM4")
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, nil, "", doltdb.ErrUnexpectedGhostCommit
 	}
 
 	root, err = cm.GetRootValue(ctx)

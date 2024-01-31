@@ -65,10 +65,9 @@ func CreateTagOnDB(ctx context.Context, ddb *doltdb.DoltDB, tagName, startPoint 
 	if err != nil {
 		return err
 	}
-
-	cm, err := optCmt.ToCommit()
-	if err != nil {
-		panic("NM4") // Should never happen?? better error anyway.
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		return doltdb.ErrUnexpectedGhostCommit // NM4 - This probably needs a different message. Need a test for this one.
 	}
 
 	meta := datas.NewTagMeta(props.TaggerName, props.TaggerEmail, props.Description)

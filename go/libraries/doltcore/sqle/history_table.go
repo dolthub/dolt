@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -250,15 +249,13 @@ func substituteWorkingHash(h hash.Hash, f []sql.Expression) []sql.Expression {
 	return ret
 }
 
-var historyTableCommitMetaCols = set.NewStrSet([]string{CommitHashCol, CommitDateCol, CommitterCol})
-
 func commitFilterForExprs(ctx *sql.Context, filters []sql.Expression) (doltdb.CommitFilter, error) {
 	filters = transformFilters(ctx, filters...)
 
 	return func(ctx context.Context, h hash.Hash, optCmt *doltdb.OptionalCommit) (filterOut bool, err error) {
-		cm, err := optCmt.ToCommit()
-		if err != nil {
-			panic("NM4")
+		cm, ok := optCmt.ToCommit()
+		if !ok {
+			return false, nil // NM4 TEST.
 		}
 
 		meta, err := cm.GetCommitMeta(ctx)
@@ -459,9 +456,9 @@ func (cp commitPartitioner) Next(ctx *sql.Context) (sql.Partition, error) {
 	if err != nil {
 		return nil, err
 	}
-	cm, err := optCmt.ToCommit()
-	if err != nil {
-		panic("NM4")
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, doltdb.ErrUnexpectedGhostCommit // NM4 TEST.
 	}
 
 	return &commitPartition{h, cm}, nil

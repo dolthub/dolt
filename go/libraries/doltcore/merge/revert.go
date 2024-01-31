@@ -64,9 +64,9 @@ func Revert(ctx *sql.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue, commit
 		if err != nil {
 			return nil, "", err
 		}
-		parentCM, err := optCmt.ToCommit()
-		if err != nil {
-			panic("NM4")
+		parentCM, ok := optCmt.ToCommit()
+		if !ok {
+			return nil, "", doltdb.ErrUnexpectedGhostCommit // NM4 - TEST THIS PATH.
 		}
 
 		theirRoot, err := parentCM.GetRootValue(ctx)

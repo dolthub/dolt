@@ -103,18 +103,18 @@ func resolveRefSpecs(ctx *sql.Context, leftSpec, rightSpec string) (left, right 
 	if err != nil {
 		return nil, nil, err
 	}
-	left, err = optCmt.ToCommit()
-	if err != nil {
-		panic("NM4")
+	left, ok = optCmt.ToCommit()
+	if !ok {
+		return nil, nil, doltdb.ErrUnexpectedGhostCommit // NM4 - TEST, surely needs a better error.
 	}
 
 	optCmt, err = doltDB.Resolve(ctx, rcs, headRef)
 	if err != nil {
 		return nil, nil, err
 	}
-	right, err = optCmt.ToCommit()
-	if err != nil {
-		panic("NM4")
+	right, ok = optCmt.ToCommit()
+	if !ok {
+		return nil, nil, doltdb.ErrUnexpectedGhostCommit // NM4 - TEST, surely needs a better error.
 	}
 
 	return

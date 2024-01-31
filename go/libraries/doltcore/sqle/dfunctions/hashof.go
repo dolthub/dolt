@@ -89,9 +89,9 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 				if err != nil {
 					return nil, orgErr
 				}
-				cm, err = optCmt.ToCommit()
-				if err != nil {
-					panic("NM4")
+				cm, ok = optCmt.ToCommit()
+				if !ok {
+					return nil, doltdb.ErrUnexpectedGhostCommit // NM4 - TEST this.
 				}
 			} else {
 				return nil, err
@@ -108,9 +108,9 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	cm, err = optCmt.ToCommit()
-	if err != nil {
-		panic("NM4")
+	cm, ok = optCmt.ToCommit()
+	if !ok {
+		return nil, doltdb.ErrUnexpectedGhostCommit
 	}
 
 	h, err := cm.HashOf()

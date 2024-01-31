@@ -52,9 +52,9 @@ func MergeCommits(ctx *sql.Context, commit, mergeCommit *doltdb.Commit, opts edi
 	if err != nil {
 		return nil, err
 	}
-	ancCommit, err := optCmt.ToCommit()
-	if err != nil {
-		panic("NM4")
+	ancCommit, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, doltdb.ErrUnexpectedGhostCommit // NM4 - not sure if we can get to this point. TEST THIS PATH.
 	}
 
 	ourRoot, err := commit.GetRootValue(ctx)

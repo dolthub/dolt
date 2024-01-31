@@ -35,6 +35,16 @@ type GenerationalNBS struct {
 	lostGen *GhostBlockStore
 }
 
+func (gcs *GenerationalNBS) GhostTheseRefsBrah(ctx context.Context, refs hash.HashSet) error {
+	//TODO implement me
+	panic("NM4")
+}
+
+// NM4 - lost in plumbing at this poin. Where should this be??!?!?
+func (gcs *GenerationalNBS) GhostGen() chunks.ChunkStore {
+	return gcs.lostGen
+}
+
 func NewGenerationalCS(oldGen, newGen *NomsBlockStore, lostGen *GhostBlockStore) *GenerationalNBS {
 	if oldGen.Version() != "" && oldGen.Version() != newGen.Version() {
 		panic("oldgen and newgen chunkstore versions vary")
@@ -153,17 +163,12 @@ func (gcs *GenerationalNBS) GetManyCompressed(ctx context.Context, hashes hash.H
 // Has returns true iff the value at the address |h| is contained in the store
 func (gcs *GenerationalNBS) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	has, err := gcs.oldGen.Has(ctx, h)
-
-	if err != nil {
-		return false, err
-	}
-
-	if has {
-		return true, nil
+	if err != nil || has {
+		return has, err
 	}
 
 	has, err = gcs.newGen.Has(ctx, h)
-	if err != nil {
+	if err != nil || has {
 		return has, err
 	}
 
@@ -192,9 +197,26 @@ func (gcs *GenerationalNBS) hasMany(recs []hasRecord) (absent hash.HashSet, err 
 		return absent, nil
 	}
 
-	gcs.oldGen.mu.RLock()
-	defer gcs.oldGen.mu.RUnlock()
-	return gcs.oldGen.hasMany(recs)
+	absent, err = func() (hash.HashSet, error) {
+		gcs.oldGen.mu.RLock()
+		defer gcs.oldGen.mu.RUnlock()
+		return gcs.oldGen.hasMany(recs)
+	}()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(absent) == 0 {
+		return absent, nil
+	}
+
+	if gcs.lostGen != nil {
+		absent, err = gcs.lostGen.hasMany(absent)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return absent, nil
 }
 
 // Put caches c in the ChunkSource. Upon return, c must be visible to

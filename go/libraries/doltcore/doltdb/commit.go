@@ -29,6 +29,11 @@ import (
 var errCommitHasNoMeta = errors.New("commit has no metadata")
 var errHasNoRootValue = errors.New("no root value")
 
+// TODO: Include the commit id in the error. Unfortunately, this message is passed through the SQL layer. The only way we currently
+// have on the client side to match an error is with string matching. We possibly need error codes as a prefix to the error message, but
+// currently there is not standard for doing this in Dolt.
+var ErrUnexpectedGhostCommit = errors.New("Commit not found. You are using a shallow clone which does not contain the requested commit. Please do a full clone.")
+
 // Rootish is an object resolvable to a RootValue.
 type Rootish interface {
 	// ResolveRootValue resolves a Rootish to a RootValue.
@@ -48,19 +53,24 @@ type Commit struct {
 
 type OptionalCommit struct {
 	Commit *Commit
+	Addr   hash.Hash
 }
 
-func (cmt *OptionalCommit) ToCommit() (*Commit, error) {
+// ToCommit unwraps the *Commit contained by the OptionalCommit. If the commit is invalid, it returns (nil, false).
+// Otherwise, it returns (commit, true).
+func (cmt *OptionalCommit) ToCommit() (*Commit, bool) {
 	if cmt.Commit == nil {
-		return nil, errors.New("commit is nil")
+		return nil, false
 	}
-	return cmt.Commit, nil
+	return cmt.Commit, true
 }
 
 var _ Rootish = &Commit{}
 
-// NewCommit generates a new Commit object that wraps a supplies datas.Commit.
+// NewCommit generates a new Commit object that wraps a supplied datas.Commit.
 func NewCommit(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, commit *datas.Commit) (*Commit, error) {
+	commit.IsGhost()
+
 	parents, err := datas.GetCommitParents(ctx, vrw, commit.NomsValue())
 	if err != nil {
 		return nil, err
@@ -128,20 +138,34 @@ func (c *Commit) GetRootValue(ctx context.Context) (*RootValue, error) {
 }
 
 func (c *Commit) GetParent(ctx context.Context, idx int) (*OptionalCommit, error) {
-	cmt, err := NewCommit(ctx, c.vrw, c.ns, c.parents[idx])
+	parent := c.parents[idx]
+	if parent.IsGhost() {
+		return &OptionalCommit{nil, parent.Addr()}, nil
+	}
+
+	cmt, err := NewCommit(ctx, c.vrw, c.ns, parent)
 	if err != nil {
 		return nil, err
 	}
 
 	// NM4 - Looks like this method can return nil - we check in places. Should we return an error instead?
 
-	return &OptionalCommit{cmt}, nil
+	return &OptionalCommit{cmt, parent.Addr()}, nil
 }
 
 func (c *Commit) GetCommitClosure(ctx context.Context) (prolly.CommitClosure, error) {
 	switch v := c.dCommit.NomsValue().(type) {
 	case types.SerialMessage:
 		return datas.NewParentsClosure(ctx, c.dCommit, v, c.vrw, c.ns)
+	default:
+		return prolly.CommitClosure{}, fmt.Errorf("old format lacks commit closure")
+	}
+}
+
+func getCommitClosure(ctx context.Context, cmt *datas.Commit, vrw types.ValueReadWriter, ns tree.NodeStore) (prolly.CommitClosure, error) {
+	switch v := cmt.NomsValue().(type) {
+	case types.SerialMessage:
+		return datas.NewParentsClosure(ctx, cmt, v, vrw, ns)
 	default:
 		return prolly.CommitClosure{}, fmt.Errorf("old format lacks commit closure")
 	}
@@ -161,14 +185,14 @@ func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*OptionalCommit, 
 	}
 
 	if targetCommit.IsGhost() {
-		return &OptionalCommit{nil}, nil
+		return &OptionalCommit{nil, addr}, nil
 	}
 
 	cmt, err := NewCommit(ctx, cm1.vrw, cm1.ns, targetCommit)
 	if err != nil {
 		return nil, err
 	}
-	return &OptionalCommit{cmt}, nil
+	return &OptionalCommit{cmt, addr}, nil
 }
 
 func getCommitAncestorAddr(ctx context.Context, c1, c2 *datas.Commit, vrw1, vrw2 types.ValueReadWriter, ns1, ns2 tree.NodeStore) (hash.Hash, error) {
@@ -189,10 +213,12 @@ func (c *Commit) CanFastForwardTo(ctx context.Context, new *Commit) (bool, error
 	if err != nil {
 		return false, err
 	}
-	ancestor, err := optAnc.ToCommit()
-	if err != nil {
-		return false, err
-	} else if ancestor == nil {
+
+	ancestor, ok := optAnc.ToCommit()
+	if !ok {
+		return false, fmt.Errorf("Unexpected Ghost Commit")
+	}
+	if ancestor == nil {
 		return false, errors.New("cannot perform fast forward merge; commits have no common ancestor")
 	} else if ancestor.dCommit.Addr() == c.dCommit.Addr() {
 		if ancestor.dCommit.Addr() == new.dCommit.Addr() {
@@ -212,10 +238,11 @@ func (c *Commit) CanFastReverseTo(ctx context.Context, new *Commit) (bool, error
 		return false, err
 	}
 
-	ancestor, err := optAnc.ToCommit()
-	if err != nil {
-		return false, err
-	} else if ancestor == nil {
+	ancestor, ok := optAnc.ToCommit()
+	if !ok {
+		return false, ErrUnexpectedGhostCommit
+	}
+	if ancestor == nil {
 		return false, errors.New("cannot perform fast forward merge; commits have no common ancestor")
 	} else if ancestor.dCommit.Addr() == new.dCommit.Addr() {
 		if ancestor.dCommit.Addr() == c.dCommit.Addr() {
@@ -230,13 +257,16 @@ func (c *Commit) CanFastReverseTo(ctx context.Context, new *Commit) (bool, error
 }
 
 func (c *Commit) GetAncestor(ctx context.Context, as *AncestorSpec) (*OptionalCommit, error) {
-	optInst := &OptionalCommit{c}
+	addr, err := c.HashOf()
+	if err != nil {
+		return nil, err
+	}
+	optInst := &OptionalCommit{c, addr}
 	if as == nil || len(as.Instructions) == 0 {
 		return optInst, nil
 	}
 
 	hardInst := c
-
 	instructions := as.Instructions
 	for _, inst := range instructions {
 		if inst >= hardInst.NumParents() {
@@ -249,9 +279,10 @@ func (c *Commit) GetAncestor(ctx context.Context, as *AncestorSpec) (*OptionalCo
 			return nil, err
 		}
 
-		hardInst, err = optInst.ToCommit()
-		if err != nil {
-			return nil, err
+		var ok bool
+		hardInst, ok = optInst.ToCommit()
+		if !ok {
+			return nil, ErrUnexpectedGhostCommit
 		}
 	}
 

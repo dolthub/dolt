@@ -63,10 +63,27 @@ func (q *q) Swap(i, j int) {
 	q.pending[i], q.pending[j] = q.pending[j], q.pending[i]
 }
 
+// Less returns true if the commit at index i is "less" than the commit at index j. It may be the case that you are comparing
+// two resolved commits, two ghost commits, or a resolved commit and a ghost commit. Ghost commits will always be "less" than
+// resolved commits. If both commits are resolved, then the commit with the higher height is "less". If the heights are equal, then
+// the commit with the newer timestamp is "less". Finally if both commits are ghost commits, we don't really have enough
+// information to compare on, so we just compare the hashes to ensure that the results are stable.
 func (q *q) Less(i, j int) bool {
+	_, okI := q.pending[i].commit.ToCommit()
+	_, okJ := q.pending[i].commit.ToCommit()
+
+	if !okI && okJ {
+		return true
+	} else if okI && !okJ {
+		return false
+	} else if !okI && !okJ {
+		return q.pending[i].hash.String() < q.pending[j].hash.String()
+	}
+
 	if q.pending[i].height > q.pending[j].height {
 		return true
 	}
+
 	if q.pending[i].height == q.pending[j].height {
 		return q.pending[i].meta.UserTimestamp > q.pending[j].meta.UserTimestamp
 	}
@@ -132,9 +149,10 @@ func (q *q) Get(ctx context.Context, ddb *doltdb.DoltDB, id hash.Hash) (*c, erro
 		return nil, err
 	}
 
-	commit, err := optCmt.ToCommit()
-	if err != nil {
-		return &c{ddb: ddb, commit: optCmt}, nil
+	commit, ok := optCmt.ToCommit()
+	if !ok {
+		// Preserve the Ghost commit. NM4 - TEST THIS PATH.
+		return &c{ddb: ddb, commit: optCmt, hash: id}, nil
 	}
 
 	h, err := commit.Height()
@@ -146,7 +164,7 @@ func (q *q) Get(ctx context.Context, ddb *doltdb.DoltDB, id hash.Hash) (*c, erro
 		return nil, err
 	}
 
-	c := &c{ddb: ddb, commit: &doltdb.OptionalCommit{commit}, meta: meta, height: h, hash: id}
+	c := &c{ddb: ddb, commit: &doltdb.OptionalCommit{commit, id}, meta: meta, height: h, hash: id}
 	q.loaded[id] = c
 	return c, nil
 }
@@ -228,29 +246,29 @@ func newCommiterator(ctx context.Context, ddb *doltdb.DoltDB, startCommitHashes 
 }
 
 // Next implements doltdb.CommitItr
-func (i *commiterator) Next(ctx context.Context) (hash.Hash, *doltdb.OptionalCommit, error) {
-	if i.q.NumVisiblePending() > 0 {
-		nextC := i.q.PopPending()
+func (iter *commiterator) Next(ctx context.Context) (hash.Hash, *doltdb.OptionalCommit, error) {
+	if iter.q.NumVisiblePending() > 0 {
+		nextC := iter.q.PopPending()
 
-		commit, err := nextC.commit.ToCommit()
-		if err != nil {
-			panic("NM4 - not sure what to do here.")
-		}
-
-		parents, err := commit.ParentHashes(ctx)
-		if err != nil {
-			return hash.Hash{}, nil, err
+		var err error
+		parents := []hash.Hash{}
+		commit, ok := nextC.commit.ToCommit()
+		if ok {
+			parents, err = commit.ParentHashes(ctx)
+			if err != nil {
+				return hash.Hash{}, nil, err
+			}
 		}
 
 		for _, parentID := range parents {
-			if err := i.q.AddPendingIfUnseen(ctx, nextC.ddb, parentID); err != nil {
+			if err := iter.q.AddPendingIfUnseen(ctx, nextC.ddb, parentID); err != nil {
 				return hash.Hash{}, nil, err
 			}
 		}
 
 		matches := true
-		if i.matchFn != nil {
-			matches, err = i.matchFn(nextC.commit)
+		if iter.matchFn != nil {
+			matches, err = iter.matchFn(nextC.commit)
 
 			if err != nil {
 				return hash.Hash{}, nil, err
@@ -258,10 +276,10 @@ func (i *commiterator) Next(ctx context.Context) (hash.Hash, *doltdb.OptionalCom
 		}
 
 		if matches {
-			return nextC.hash, &doltdb.OptionalCommit{commit}, nil
+			return nextC.hash, &doltdb.OptionalCommit{commit, nextC.hash}, nil
 		}
 
-		return i.Next(ctx)
+		return iter.Next(ctx)
 	}
 
 	return hash.Hash{}, nil, io.EOF
@@ -346,9 +364,10 @@ func (i *dotDotCommiterator) Next(ctx context.Context) (hash.Hash, *doltdb.Optio
 	if i.q.NumVisiblePending() > 0 {
 		nextC := i.q.PopPending()
 
-		commit, err := nextC.commit.ToCommit()
-		if err != nil {
-			panic("NM4 - not sure what to do here.")
+		commit, ok := nextC.commit.ToCommit()
+		if !ok {
+			// Preserve the Ghost commit. NM4 - TEST THIS PATH.
+			return nextC.hash, nextC.commit, nil
 		}
 
 		parents, err := commit.ParentHashes(ctx)

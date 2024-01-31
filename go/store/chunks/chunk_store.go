@@ -113,6 +113,9 @@ type ChunkStore interface {
 	// supported.
 	StatsSummary() string
 
+	// NM4 - Continue on my nutty journey
+	GhostTheseRefsBrah(ctx context.Context, refs hash.HashSet) error
+
 	// Close tears down any resources in use by the implementation. After
 	// Close(), the ChunkStore may not be used again. It is NOT SAFE to call
 	// Close() concurrently with any other ChunkStore method; behavior is
@@ -182,6 +185,7 @@ type PrefixChunkStore interface {
 type GenerationalCS interface {
 	NewGen() ChunkStoreGarbageCollector
 	OldGen() ChunkStoreGarbageCollector
+	GhostGen() ChunkStore
 }
 
 var ErrUnsupportedOperation = errors.New("operation not supported")

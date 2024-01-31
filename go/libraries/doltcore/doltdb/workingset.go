@@ -406,6 +406,10 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 			return nil, err
 		}
 
+		if fromDCommit.IsGhost() {
+			return nil, ErrUnexpectedGhostCommit
+		}
+
 		commit, err := NewCommit(ctx, vrw, ns, fromDCommit)
 		if err != nil {
 			return nil, err
@@ -456,6 +460,10 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 		datasOntoCommit, err := dsws.RebaseState.OntoCommit(ctx, vrw)
 		if err != nil {
 			return nil, err
+		}
+
+		if datasOntoCommit.IsGhost() {
+			return nil, ErrUnexpectedGhostCommit
 		}
 
 		ontoCommit, err := NewCommit(ctx, vrw, ns, datasOntoCommit)

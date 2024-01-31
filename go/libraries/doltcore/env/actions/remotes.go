@@ -228,9 +228,9 @@ func PushToRemoteBranch(ctx context.Context, rsr env.RepoStateReader, tempTableD
 	if err != nil {
 		return fmt.Errorf("%w; refspec not found: '%s'; %s", ref.ErrInvalidRefSpec, srcRef.GetPath(), err.Error())
 	}
-	cm, err := optCmt.ToCommit()
-	if err != nil {
-		panic("NM4") // NM4 not sure how this would happen.
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		return doltdb.ErrUnexpectedGhostCommit
 	}
 
 	newCtx, cancelFunc := context.WithCancel(ctx)
@@ -414,9 +414,9 @@ func FetchRemoteBranch(
 	if err != nil {
 		return nil, fmt.Errorf("unable to find '%s' on '%s'; %w", srcRef.GetPath(), rem.Name, err)
 	}
-	srcDBCommit, err := optCmt.ToCommit()
-	if err != nil {
-		panic("NM4") // NM4 This really should never happen. The source db is always expected to have everything.
+	srcDBCommit, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, doltdb.ErrUnexpectedGhostCommit // NM4 This really should never happen. The source db is always expected to have everything.
 	}
 
 	// The code is structured this way (different paths for progress chan v. not) so that the linter can understand there
@@ -452,6 +452,24 @@ func FetchRemoteBranch(
 	return srcDBCommit, nil
 }
 
+// ShallFetchRefSpec fetches the remote refSpec from the source database to the destination database. Currently it is only
+// used for shallow clones.
+func ShallowFetchRefSpec(
+	ctx context.Context,
+	dbData env.DbData,
+	srcDB *doltdb.DoltDB,
+	refSpecs ref.RemoteRefSpec,
+	remote *env.Remote,
+	depth int,
+) error {
+
+	if depth < 1 {
+		return fmt.Errorf("invalid depth: %d", depth)
+	}
+
+	return fetchRefSpecsWithDepth(ctx, dbData, srcDB, []ref.RemoteRefSpec{refSpecs}, remote, ref.ForceUpdate, depth, nil, nil)
+}
+
 // FetchRefSpecs is the common SQL and CLI entrypoint for fetching branches, tags, and heads from a remote.
 // This function takes dbData which is a env.DbData object for handling repoState read and write, and srcDB is
 // a remote *doltdb.DoltDB object that is used to fetch remote branches from.
@@ -460,14 +478,25 @@ func FetchRefSpecs(
 	dbData env.DbData,
 	srcDB *doltdb.DoltDB,
 	refSpecs []ref.RemoteRefSpec,
-	remote env.Remote,
+	remote *env.Remote,
 	mode ref.UpdateMode,
 	progStarter ProgStarter,
 	progStopper ProgStopper,
 ) error {
+	return fetchRefSpecsWithDepth(ctx, dbData, srcDB, refSpecs, remote, mode, -1, progStarter, progStopper)
+}
 
-	depth := 0 // NM4 tmp util we pass through somehow.
-
+func fetchRefSpecsWithDepth(
+	ctx context.Context,
+	dbData env.DbData,
+	srcDB *doltdb.DoltDB,
+	refSpecs []ref.RemoteRefSpec,
+	remote *env.Remote,
+	mode ref.UpdateMode,
+	depth int,
+	progStarter ProgStarter,
+	progStopper ProgStopper,
+) error {
 	var branchRefs []doltdb.RefWithHash
 	err := srcDB.VisitRefsOfType(ctx, ref.HeadRefTypes, func(r ref.DoltRef, addr hash.Hash) error {
 		branchRefs = append(branchRefs, doltdb.RefWithHash{Ref: r, Hash: addr})
@@ -502,9 +531,9 @@ func FetchRefSpecs(
 		}
 	}
 
-	ignoreMe := hash.NewHashSet()
-	if depth != 0 {
-		// if toFetch is more than one, panic.
+	skipCmts := hash.NewHashSet()
+	if depth > 0 {
+		// if toFetch is more than one, panic. NM4 - test this path. shouldn't panic, obviously.
 		if len(toFetch) > 1 {
 			panic("multi head shallow pulls not implemented")
 		}
@@ -514,20 +543,8 @@ func FetchRefSpecs(
 			return err
 		}
 
-		optCmt, err := srcDB.Resolve(ctx, cs, nil)
-		if err != nil {
-			panic(err) // NM4
-		}
-
-		commit, err := optCmt.ToCommit()
-		if err != nil {
-			panic(err) // NM4 This really should never happen. The source db is always expected to have everything.
-		}
-
-		allCommits, err := commit.GetCommitClosure(ctx)
-		if err != nil {
-			panic(err) // NM4
-		}
+		// NM4 - not sure where the CWB is supposed to come from. nil seems to work?
+		allCommits, err := srcDB.BootstrapShallowResolve(ctx, cs, nil)
 
 		closureIter, err := allCommits.IterAllReverse(ctx)
 		if err != nil {
@@ -537,7 +554,7 @@ func FetchRefSpecs(
 		key, _, err := closureIter.Next(ctx)
 		for !errors.Is(err, io.EOF) {
 			clsrHash := hash.New(key[8:])
-			ignoreMe.Insert(clsrHash)
+			skipCmts.Insert(clsrHash)
 			key, _, err = closureIter.Next(ctx)
 		}
 	}
@@ -547,26 +564,74 @@ func FetchRefSpecs(
 	if err != nil {
 		return err
 	}
-	err = func() error {
-		newCtx := ctx
-		var statsCh chan pull.Stats
 
-		if progStarter != nil && progStopper != nil {
-			var cancelFunc func()
-			newCtx, cancelFunc = context.WithCancel(ctx)
-			var wg *sync.WaitGroup
-			wg, statsCh = progStarter(newCtx)
-			defer progStopper(cancelFunc, wg, statsCh)
+	ghostsPersisted := false
+	for {
+		if skipCmts.Size() > 0 || ghostsPersisted {
+			err = dbData.Ddb.PersistGhostCommits(ctx, skipCmts)
+			if err != nil {
+				return err
+			}
+			ghostsPersisted = true
 		}
 
-		err = dbData.Ddb.PullChunks(ctx, tmpDir, srcDB, toFetch, statsCh, ignoreMe)
-		if err == pull.ErrDBUpToDate {
-			err = nil
+		err = func() error {
+			newCtx := ctx
+			var statsCh chan pull.Stats
+
+			if progStarter != nil && progStopper != nil {
+				var cancelFunc func()
+				newCtx, cancelFunc = context.WithCancel(ctx)
+				var wg *sync.WaitGroup
+				wg, statsCh = progStarter(newCtx)
+				defer progStopper(cancelFunc, wg, statsCh)
+			}
+
+			err = dbData.Ddb.PullChunks(ctx, tmpDir, srcDB, toFetch, statsCh, skipCmts)
+			if err == pull.ErrDBUpToDate {
+				err = nil
+			}
+			return err
+		}()
+		if err != nil {
+			return err
 		}
-		return err
-	}()
-	if err != nil {
-		return err
+
+		depth--
+
+		newFetchList := []hash.Hash{}
+
+		if depth > 0 {
+			for _, h := range toFetch {
+				optCmt, err := dbData.Ddb.ReadCommit(ctx, h)
+				if err != nil {
+					return err
+				}
+
+				// NM4 This had better resolve because we just fetched it.
+				commit, ok := optCmt.ToCommit()
+				if !ok {
+					return doltdb.ErrUnexpectedGhostCommit
+				}
+
+				for i := 0; i < commit.NumParents(); i++ {
+					parent, err := commit.GetParent(ctx, i)
+					if err != nil {
+						return err
+					}
+					if skipCmts.Has(parent.Addr) {
+						skipCmts.Remove(parent.Addr)
+						newFetchList = append(newFetchList, parent.Addr)
+					}
+				}
+
+			}
+			toFetch = newFetchList
+		}
+
+		if depth <= 0 || len(toFetch) == 0 {
+			break
+		}
 	}
 
 	for _, newHead := range newHeads {
@@ -574,9 +639,9 @@ func FetchRefSpecs(
 		if err != nil {
 			return err
 		}
-		commit, err := optCmt.ToCommit()
-		if err != nil {
-			return err
+		commit, ok := optCmt.ToCommit()
+		if !ok {
+			return doltdb.ErrUnexpectedGhostCommit // NM4 - This definitely needs it's own error message. TEST THIS PATH.
 		}
 
 		remoteTrackRef := newHead.Ref
@@ -611,7 +676,10 @@ func FetchRefSpecs(
 	}
 
 	if mode.Prune {
-		err = pruneBranches(ctx, dbData, remote, newHeads)
+		if remote == nil { // NM4 - I think this can be reverted. remote should never be nil.
+			return fmt.Errorf("Runtime error: remote is nil")
+		}
+		err = pruneBranches(ctx, dbData, *remote, newHeads)
 		if err != nil {
 			return err
 		}

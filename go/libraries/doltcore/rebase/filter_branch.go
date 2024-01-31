@@ -188,9 +188,9 @@ func rebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, replay ReplayCommi
 	// convert allOptParents to allParents
 	var allParents []*doltdb.Commit
 	for _, optParent := range allOptParents {
-		parent, err := optParent.ToCommit()
-		if err != nil {
-			panic("NM4")
+		parent, ok := optParent.ToCommit()
+		if !ok {
+			return nil, doltdb.ErrUnexpectedGhostCommit // NM4 - TEST, surely needs a better error.
 		}
 		allParents = append(allParents, parent)
 	}

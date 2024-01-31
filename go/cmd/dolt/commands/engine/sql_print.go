@@ -20,6 +20,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
@@ -157,7 +158,7 @@ func writeResultSet(ctx *sql.Context, rowIter sql.RowIter, wr table.SqlRowWriter
 	i := 0
 	for {
 		r, err := rowIter.Next(ctx)
-		if err == io.EOF {
+		if err == io.EOF || err == doltdb.ErrUnexpectedGhostCommit {
 			break
 		} else if err != nil {
 			return 0, err

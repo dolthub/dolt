@@ -15,14 +15,10 @@
 package diff
 
 import (
-	"context"
 	"errors"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
 const (
@@ -219,6 +215,7 @@ func (ds DiffSplitter) SplitDiffResultRow(row sql.Row) (from, to RowDiff, err er
 	return
 }
 
+/*
 // MaybeResolveRoot returns a root value and true if the a commit exists for given spec string; nil and false if it does not exist.
 // todo: distinguish between non-existent CommitSpec and other errors, don't assume non-existent
 func MaybeResolveRoot(ctx context.Context, rsr env.RepoStateReader, doltDB *doltdb.DoltDB, spec string) (*doltdb.RootValue, bool) {
@@ -237,8 +234,8 @@ func MaybeResolveRoot(ctx context.Context, rsr env.RepoStateReader, doltDB *dolt
 		return nil, false
 	}
 
-	cm, err := optCmt.ToCommit()
-	if err != nil {
+	cm, ok := optCmt.ToCommit()
+	if !ok {
 		return nil, false // NM4 - We should return an error here, gotta change the interface
 	}
 
@@ -249,3 +246,4 @@ func MaybeResolveRoot(ctx context.Context, rsr env.RepoStateReader, doltDB *dolt
 
 	return root, true
 }
+*/

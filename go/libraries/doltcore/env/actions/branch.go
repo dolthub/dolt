@@ -100,9 +100,9 @@ func CopyBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, oldBranch, newBranc
 		return err
 	}
 
-	commit, err := cm.ToCommit()
-	if err != nil {
-		panic("NM4") // Need a real commit id that is not a ghost
+	commit, ok := cm.ToCommit()
+	if !ok {
+		return doltdb.ErrUnexpectedGhostCommit
 	}
 	return ddb.NewBranchAtCommit(ctx, newRef, commit, rsc)
 }
@@ -192,9 +192,9 @@ func validateBranchMergedIntoCurrentWorkingBranch(ctx context.Context, dbdata en
 	if err != nil {
 		return err
 	}
-	branchHead, err := optCmt.ToCommit()
-	if err != nil {
-		panic("NM4") // Need a real commit id that is not a ghost
+	branchHead, ok := optCmt.ToCommit()
+	if !ok {
+		return doltdb.ErrUnexpectedGhostCommit
 	}
 
 	cwbCs, err := doltdb.NewCommitSpec("HEAD")
@@ -210,9 +210,9 @@ func validateBranchMergedIntoCurrentWorkingBranch(ctx context.Context, dbdata en
 	if err != nil {
 		return err
 	}
-	cwbHead, err := optCmt.ToCommit()
-	if err != nil {
-		panic("NM4") // Need a real commit id that is not a ghost
+	cwbHead, ok := optCmt.ToCommit()
+	if !ok {
+		return doltdb.ErrUnexpectedGhostCommit
 	}
 
 	isMerged, err := branchHead.CanFastForwardTo(ctx, cwbHead)
@@ -260,18 +260,18 @@ func validateBranchMergedIntoUpstream(ctx context.Context, dbdata env.DbData, br
 	if err != nil {
 		return err
 	}
-	remoteBranchHead, err := optCmt.ToCommit()
-	if err != nil {
-		panic("NM4") // Need a real commit id that is not a ghost
+	remoteBranchHead, ok := optCmt.ToCommit()
+	if !ok {
+		return doltdb.ErrUnexpectedGhostCommit
 	}
 
 	optCmt, err = dbdata.Ddb.Resolve(ctx, cs, nil)
 	if err != nil {
 		return err
 	}
-	localBranchHead, err := optCmt.ToCommit()
-	if err != nil {
-		panic("NM4") // Need a real commit id that is not a ghost
+	localBranchHead, ok := optCmt.ToCommit()
+	if !ok {
+		return doltdb.ErrUnexpectedGhostCommit
 	}
 
 	canFF, err := localBranchHead.CanFastForwardTo(ctx, remoteBranchHead)
@@ -339,9 +339,9 @@ func CreateBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, newBranch, starti
 		return err
 	}
 
-	cm, err := optCmt.ToCommit()
-	if err != nil {
-		panic("NM4") // Need a real commit id that is not a ghost
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		return doltdb.ErrUnexpectedGhostCommit
 	}
 
 	err = ddb.NewBranchAtCommit(ctx, branchRef, cm, rsc)
@@ -383,21 +383,16 @@ func MaybeGetCommit(ctx context.Context, dEnv *env.DoltEnv, str string) (*doltdb
 		if err != nil && errors.Is(err, doltdb.ErrBranchNotFound) {
 			return nil, nil
 		}
+		if err != nil && errors.Is(err, doltdb.ErrHashNotFound) {
+			return nil, nil
+		}
 		if err != nil {
 			return nil, err
 		}
 
-		cm, err := optCmt.ToCommit()
-
-		switch err {
-		case nil:
+		cm, ok := optCmt.ToCommit()
+		if ok {
 			return cm, nil
-
-		case doltdb.ErrHashNotFound, doltdb.ErrBranchNotFound:
-			return nil, nil
-
-		default:
-			return nil, err
 		}
 	}
 

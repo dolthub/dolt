@@ -269,9 +269,9 @@ func (dt *CommitDiffTable) rootValForHash(ctx *sql.Context, hashStr string) (*do
 		if err != nil {
 			return nil, "", nil, err
 		}
-		cm, err := optCmt.ToCommit()
-		if err != nil {
-			panic("NM4")
+		cm, ok := optCmt.ToCommit()
+		if !ok {
+			return nil, "", nil, doltdb.ErrUnexpectedGhostCommit
 		}
 
 		root, err = cm.GetRootValue(ctx)

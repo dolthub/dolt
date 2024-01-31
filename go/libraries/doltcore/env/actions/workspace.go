@@ -67,9 +67,9 @@ func CreateWorkspaceOnDB(ctx context.Context, ddb *doltdb.DoltDB, name, startPoi
 	if err != nil {
 		return err
 	}
-	cm, err := optCmt.ToCommit()
-	if err != nil {
-		panic("NM4") // Should never happen?? better error anyway.
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		return doltdb.ErrUnexpectedGhostCommit // Should never happen?? better error anyway. NM4 - Test?
 	}
 
 	return ddb.NewWorkspaceAtCommit(ctx, workRef, cm)
@@ -80,10 +80,14 @@ func IsWorkspaceOnDB(ctx context.Context, ddb *doltdb.DoltDB, str string) (bool,
 	return ddb.HasRef(ctx, dref)
 }
 
+/*
 func IsWorkspace(ctx context.Context, dEnv *env.DoltEnv, str string) (bool, error) {
 	return IsWorkspaceOnDB(ctx, dEnv.DoltDB, str)
 }
 
+*/
+
+/*
 func DeleteWorkspace(ctx context.Context, dEnv *env.DoltEnv, workspaceName string, opts DeleteOptions) error {
 	var dref ref.DoltRef
 	if opts.Remote {
@@ -105,6 +109,8 @@ func DeleteWorkspace(ctx context.Context, dEnv *env.DoltEnv, workspaceName strin
 
 	return DeleteWorkspaceOnDB(ctx, dEnv, dref, opts)
 }
+
+
 
 func DeleteWorkspaceOnDB(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRef, opts DeleteOptions) error {
 	ddb := dEnv.DoltDB
@@ -156,3 +162,4 @@ func DeleteWorkspaceOnDB(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRe
 
 	return ddb.DeleteWorkspace(ctx, dref)
 }
+*/

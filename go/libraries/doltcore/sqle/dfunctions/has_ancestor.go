@@ -78,9 +78,9 @@ func (a *HasAncestor) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error during has_ancestor check: ref not found '%s'", headStr)
 		}
-		headCommit, err = optCmt.ToCommit()
-		if err != nil {
-			panic("NM4") // Should never happen?? better error anyway.
+		headCommit, ok = optCmt.ToCommit()
+		if !ok {
+			return nil, doltdb.ErrUnexpectedGhostCommit
 		}
 	}
 
@@ -102,9 +102,9 @@ func (a *HasAncestor) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error during has_ancestor check: ref not found '%s'", ancStr)
 		}
-		ancCommit, err = optCmt.ToCommit()
-		if err != nil {
-			panic("NM4")
+		ancCommit, ok = optCmt.ToCommit()
+		if !ok {
+			return nil, doltdb.ErrUnexpectedGhostCommit
 		}
 
 	}

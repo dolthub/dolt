@@ -402,9 +402,9 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 	var commit *doltdb.Commit
 
 	matchFunc := func(optCmt *doltdb.OptionalCommit) (bool, error) {
-		commit, err := optCmt.ToCommit()
-		if err != nil {
-			panic("NM4")
+		commit, ok := optCmt.ToCommit()
+		if !ok {
+			return false, nil
 		}
 
 		return commit.NumParents() >= ltf.minParents, nil
@@ -441,9 +441,9 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		if err != nil {
 			return nil, err
 		}
-		commit, err = optCmt.ToCommit()
+		commit, ok = optCmt.ToCommit()
 		if err != nil {
-			panic("NM4")
+			return nil, doltdb.ErrUnexpectedGhostCommit // NM4 - TEST.
 		}
 
 		commits = append(commits, commit)
@@ -460,9 +460,9 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		if err != nil {
 			return nil, err
 		}
-		notCommit, err := optCmt.ToCommit()
-		if err != nil {
-			panic("NM4")
+		notCommit, ok := optCmt.ToCommit()
+		if !ok {
+			return nil, doltdb.ErrUnexpectedGhostCommit // NM4 - TEST.
 		}
 
 		notCommits = append(notCommits, notCommit)
@@ -484,9 +484,9 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		if err != nil {
 			return nil, err
 		}
-		mergeCommit, err := optCmt.ToCommit()
-		if err != nil {
-			panic("NM4")
+		mergeCommit, ok := optCmt.ToCommit()
+		if !ok {
+			return nil, doltdb.ErrUnexpectedGhostCommit // NM4 - TEST.
 		}
 
 		notCommits = append(notCommits, mergeCommit)
@@ -675,9 +675,10 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		if err != nil {
 			return nil, err
 		}
-		commit, err = optCmt.ToCommit()
-		if err != nil {
-			panic("NM4")
+		ok := false
+		commit, ok = optCmt.ToCommit()
+		if !ok {
+			return nil, doltdb.ErrUnexpectedGhostCommit // NM4 - TEST.
 		}
 
 		if itr.tableNames != nil {
@@ -690,9 +691,9 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 			if err != nil {
 				return nil, err
 			}
-			parent0Cm, err := optCmt.ToCommit()
-			if err != nil {
-				panic("NM4")
+			parent0Cm, ok := optCmt.ToCommit()
+			if !ok {
+				return nil, doltdb.ErrUnexpectedGhostCommit // NM4 - TEST.
 			}
 
 			var parent1Cm *doltdb.Commit
@@ -701,9 +702,9 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 				if err != nil {
 					return nil, err
 				}
-				parent1Cm, err = optCmt.ToCommit()
-				if err != nil {
-					panic("NM4")
+				parent1Cm, ok = optCmt.ToCommit()
+				if !ok {
+					return nil, doltdb.ErrUnexpectedGhostCommit // NM4 - TEST.
 				}
 			}
 

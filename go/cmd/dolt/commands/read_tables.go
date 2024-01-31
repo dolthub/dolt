@@ -221,9 +221,9 @@ func getRemoteDBAtCommit(ctx context.Context, remoteUrl string, remoteUrlParams 
 	if err != nil {
 		return nil, nil, errhand.BuildDError("Failed to find commit '%s'", commitStr).Build()
 	}
-	cm, err := optCmt.ToCommit()
-	if err != nil {
-		panic("NM4")
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, nil, errhand.BuildDError(doltdb.ErrUnexpectedGhostCommit.Error()).Build() // NM4 - TEST??
 	}
 
 	srcRoot, err := cm.GetRootValue(ctx)

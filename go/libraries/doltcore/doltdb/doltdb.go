@@ -408,7 +408,7 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 
 	if commitValue.IsGhost() {
 		// NM4 - not sure about the accestor walk here.....
-		return &OptionalCommit{nil}, nil
+		return &OptionalCommit{nil, *hash}, nil
 	}
 
 	commit, err := NewCommit(ctx, ddb.vrw, ddb.ns, commitValue)
@@ -418,6 +418,34 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 
 	// This is a little messy. If someone callse HEAD~4, the ghost commit may be in the middle of the range.
 	return commit.GetAncestor(ctx, cs.aSpec)
+}
+
+// BootstrapShallowResolve is a special case of Resolve that is used to resolve a commit prior to pulling it's history
+// in a shallow clone. In general, application code should call Resolve and get an OptionalCommit. This is a special case
+// where we need to get the head commit for the commit closure used to determine what commits should skipped.
+func (ddb *DoltDB) BootstrapShallowResolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef) (prolly.CommitClosure, error) {
+	if cs == nil {
+		panic("nil commit spec")
+	}
+
+	hash, err := ddb.getHashFromCommitSpec(ctx, cs, cwb, hash.Hash{})
+	if err != nil {
+		return prolly.CommitClosure{}, err
+	}
+
+	commitValue, err := datas.LoadCommitAddr(ctx, ddb.vrw, *hash)
+	if err != nil {
+		return prolly.CommitClosure{}, err
+	}
+
+	if commitValue.IsGhost() {
+		return prolly.CommitClosure{}, fmt.Errorf("Commit requested as shallow clone tip could not be found. Incomplete clone likely, please reclone")
+	}
+
+	// NM4 - What about the ancestor spec? Not clear if we can get it in a shallow clone. We either need a specific
+	// branch or commit id. ~5 requires walking the history.
+
+	return getCommitClosure(ctx, commitValue, ddb.vrw, ddb.ns)
 }
 
 func (ddb *DoltDB) ResolveByNomsRoot(ctx *sql.Context, cs *CommitSpec, cwb ref.DoltRef, root hash.Hash) (*OptionalCommit, error) {
@@ -435,6 +463,10 @@ func (ddb *DoltDB) ResolveByNomsRoot(ctx *sql.Context, cs *CommitSpec, cwb ref.D
 		return nil, err
 	}
 
+	if commitValue.IsGhost() {
+		return &OptionalCommit{nil, *hash}, nil
+	}
+
 	commit, err := NewCommit(ctx, ddb.vrw, ddb.ns, commitValue)
 	if err != nil {
 		return nil, err
@@ -449,6 +481,11 @@ func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, ref ref.DoltRef) (*Comm
 	if err != nil {
 		return nil, err
 	}
+
+	if commitVal.IsGhost() {
+		return nil, ErrUnexpectedGhostCommit
+	}
+
 	return NewCommit(ctx, ddb.vrw, ddb.ns, commitVal)
 }
 
@@ -468,6 +505,11 @@ func (ddb *DoltDB) ResolveCommitRefAtRoot(ctx context.Context, ref ref.DoltRef, 
 	if err != nil {
 		return nil, err
 	}
+
+	if commitVal.IsGhost() {
+		return nil, ErrUnexpectedGhostCommit
+	}
+
 	return NewCommit(ctx, ddb.vrw, ddb.ns, commitVal)
 }
 
@@ -598,14 +640,14 @@ func (ddb *DoltDB) ReadCommit(ctx context.Context, h hash.Hash) (*OptionalCommit
 	}
 
 	if c.IsGhost() {
-		return &OptionalCommit{nil}, nil
+		return &OptionalCommit{nil, h}, nil
 	}
 
 	newC, err := NewCommit(ctx, ddb.vrw, ddb.ns, c)
 	if err != nil {
 		return nil, err
 	}
-	return &OptionalCommit{newC}, nil
+	return &OptionalCommit{newC, h}, nil
 }
 
 // Commit will update a branch's head value to be that of a previously committed root value hash
@@ -732,9 +774,9 @@ func (ddb *DoltDB) CommitWithParentSpecs(ctx context.Context, valHash hash.Hash,
 			return nil, err
 		}
 
-		hardCommit, err := cm.ToCommit()
-		if err != nil {
-			return nil, err
+		hardCommit, ok := cm.ToCommit()
+		if !ok {
+			return nil, ErrUnexpectedGhostCommit
 		}
 
 		parentCommits = append(parentCommits, hardCommit)
@@ -804,6 +846,10 @@ func (ddb *DoltDB) CommitValue(ctx context.Context, dref ref.DoltRef, val types.
 	dc, err := datas.LoadCommitRef(ctx, ddb.vrw, r)
 	if err != nil {
 		return nil, err
+	}
+
+	if dc.IsGhost() {
+		return nil, ErrUnexpectedGhostCommit
 	}
 
 	return NewCommit(ctx, ddb.vrw, ddb.ns, dc)
@@ -1415,6 +1461,10 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 		return nil, err
 	}
 
+	if dc.IsGhost() {
+		return nil, ErrUnexpectedGhostCommit
+	}
+
 	return NewCommit(ctx, ddb.vrw, ddb.ns, dc)
 }
 
@@ -1900,4 +1950,8 @@ func (ddb *DoltDB) GetStashRootAndHeadCommitAtIdx(ctx context.Context, idx int) 
 	}
 
 	return getStashAtIdx(ctx, ds, ddb.vrw, ddb.NodeStore(), idx)
+}
+
+func (ddb *DoltDB) PersistGhostCommits(ctx context.Context, ghostCommits hash.HashSet) error {
+	return ddb.db.Database.WriteDemGhosts(ctx, ghostCommits)
 }

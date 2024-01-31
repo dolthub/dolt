@@ -148,6 +148,11 @@ type MemoryStoreView struct {
 	storage *MemoryStorage
 }
 
+func (ms *MemoryStoreView) GhostTheseRefsBrah(ctx context.Context, refs hash.HashSet) error {
+	//TODO implement me
+	panic("NM4")
+}
+
 var _ ChunkStore = &MemoryStoreView{}
 var _ ChunkStoreGarbageCollector = &MemoryStoreView{}
 

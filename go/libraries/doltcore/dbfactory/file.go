@@ -169,7 +169,7 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	}
 
 	// NM4 - error handling. Currently, no-op (nil) if there is no hardcoded file.
-	lostGen := nbs.BuildGhostBlockStore()
+	lostGen := nbs.BuildGhostBlockStore(path)
 
 	st := nbs.NewGenerationalCS(oldGenSt, newGenSt, lostGen)
 	// metrics?

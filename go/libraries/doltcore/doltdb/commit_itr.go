@@ -106,7 +106,7 @@ func (cmItr *commitItr) Next(ctx context.Context) (hash.Hash, *OptionalCommit, e
 		if !cmItr.added[h] {
 			cmItr.added[h] = true
 			cmItr.curr = cm
-			return h, &OptionalCommit{cmItr.curr}, nil
+			return h, &OptionalCommit{cmItr.curr, h}, nil
 		}
 
 		cmItr.currentRoot++
@@ -141,7 +141,7 @@ func (cmItr *commitItr) Next(ctx context.Context) (hash.Hash, *OptionalCommit, e
 		return hash.Hash{}, nil, err
 	}
 
-	return next, &OptionalCommit{cmItr.curr}, nil
+	return next, &OptionalCommit{cmItr.curr, next}, nil
 }
 
 func HashToCommit(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, h hash.Hash) (*Commit, error) {
@@ -149,6 +149,11 @@ func HashToCommit(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeSt
 	if err != nil {
 		return nil, err
 	}
+
+	if dc.IsGhost() {
+		return nil, ErrUnexpectedGhostCommit
+	}
+
 	return NewCommit(ctx, vrw, ns, dc)
 }
 
@@ -211,7 +216,7 @@ func (i *CommitSliceIter) Next(ctx context.Context) (hash.Hash, *OptionalCommit,
 		return hash.Hash{}, nil, io.EOF
 	}
 	i.i++
-	return i.h[i.i-1], &OptionalCommit{i.cm[i.i-1]}, nil
+	return i.h[i.i-1], &OptionalCommit{i.cm[i.i-1], i.h[i.i-1]}, nil
 
 }
 
@@ -221,7 +226,7 @@ func (i *CommitSliceIter) Reset(ctx context.Context) error {
 }
 
 func NewOneCommitIter(cm *Commit, h hash.Hash, meta *datas.CommitMeta) *OneCommitIter {
-	return &OneCommitIter{cm: &OptionalCommit{cm}, h: h}
+	return &OneCommitIter{cm: &OptionalCommit{cm, h}, h: h}
 }
 
 type OneCommitIter struct {

@@ -171,6 +171,9 @@ type Database interface {
 	// level detail of the database that should infrequently be needed by
 	// clients.
 	chunkStore() chunks.ChunkStore
+
+	// NM4 - No idea where I'm going with this.
+	WriteDemGhosts(ctx context.Context, ghosts hash.HashSet) error
 }
 
 func NewDatabase(cs chunks.ChunkStore) Database {
