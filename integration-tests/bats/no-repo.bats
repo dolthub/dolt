@@ -164,6 +164,29 @@ teardown() {
     [[ ! "$output" =~ "failed to parse version number" ]] || false
 }
 
+@test "no-repo: disabling version check suppresses out of date warning" {
+    echo "2.0.0" > $DOLT_ROOT_PATH/.dolt/version_check.txt
+    dolt config --global --add versioncheck.disabled true
+
+    run dolt version
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "Warning: you are on an old version of Dolt" ]] || false
+}
+
+@test "no-repo: disable version check warning only appears once" {
+    echo "2.0.0" > $DOLT_ROOT_PATH/.dolt/version_check.txt
+
+    run dolt version
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Warning: you are on an old version of Dolt" ]] || false
+    [[ "$output" =~ "To disable this warning, run 'dolt config --global --add versioncheck.disabled true'" ]] || false
+
+    run dolt version
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Warning: you are on an old version of Dolt" ]] || false
+    [[ ! "$output" =~ "To disable this warning, run 'dolt config --global --add versioncheck.disabled true'" ]] || false
+}
+
 # Tests for dolt commands outside of a dolt repository
 NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
 @test "no-repo: dolt status outside of a dolt repository" {
