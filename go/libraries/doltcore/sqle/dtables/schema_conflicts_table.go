@@ -71,11 +71,6 @@ func (dt *SchemaConflictsTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
-// Comment implements the sql.Table interface.
-func (dt *SchemaConflictsTable) Comment() string {
-	return ""
-}
-
 // Partitions is a sql.Table interface function that returns a partition of the data.  Conflict data for all tables exists in a single partition.
 func (dt *SchemaConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	sess := dsess.DSessFromSess(ctx.Session)

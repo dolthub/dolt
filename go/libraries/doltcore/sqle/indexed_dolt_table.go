@@ -44,6 +44,7 @@ func NewIndexedDoltTable(t *DoltTable, idx index.DoltIndex) *IndexedDoltTable {
 }
 
 var _ sql.IndexedTable = (*IndexedDoltTable)(nil)
+var _ sql.CommentedTable = (*IndexedDoltTable)(nil)
 
 func (idt *IndexedDoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return idt.table.GetIndexes(ctx)

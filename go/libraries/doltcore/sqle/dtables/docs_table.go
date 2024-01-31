@@ -69,10 +69,6 @@ func (dt *DocsTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
-func (dt *DocsTable) Comment() string {
-	return ""
-}
-
 // Partitions is a sql.Table interface function that returns a partition of the data.
 func (dt *DocsTable) Partitions(context *sql.Context) (sql.PartitionIter, error) {
 	if dt.backingTable == nil {

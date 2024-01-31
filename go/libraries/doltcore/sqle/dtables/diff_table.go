@@ -155,10 +155,6 @@ func (dt *DiffTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
-func (dt *DiffTable) Comment() string {
-	return ""
-}
-
 func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	cmItr := doltdb.CommitItrForRoots(dt.ddb, dt.head)
 

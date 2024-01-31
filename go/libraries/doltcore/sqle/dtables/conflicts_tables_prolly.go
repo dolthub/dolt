@@ -104,10 +104,6 @@ func (ct ProllyConflictsTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
-func (ct ProllyConflictsTable) Comment() string {
-	return ""
-}
-
 func (ct ProllyConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	return index.SinglePartitionIterFromNomsMap(nil), nil
 }

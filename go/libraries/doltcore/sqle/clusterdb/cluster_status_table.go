@@ -73,10 +73,6 @@ func (t ClusterStatusTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
-func (t ClusterStatusTable) Comment() string {
-	return ""
-}
-
 func (t ClusterStatusTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 	return sql.PartitionsToPartitionIter((*partition)(nil)), nil
 }

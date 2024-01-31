@@ -87,10 +87,6 @@ func (bt *RemotesTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
-func (bt *RemotesTable) Comment() string {
-	return ""
-}
-
 // Partitions is a sql.Table interface function that returns a partition of the data.  Currently the data is unpartitioned.
 func (bt *RemotesTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 	return index.SinglePartitionIterFromNomsMap(nil), nil

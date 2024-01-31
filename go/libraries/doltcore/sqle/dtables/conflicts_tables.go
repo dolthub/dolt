@@ -106,11 +106,6 @@ func (ct ConflictsTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
-// Comment implements the sql.Table interface.
-func (ct ConflictsTable) Comment() string {
-	return ""
-}
-
 // Partitions returns a PartitionIter which can be used to get all the data partitions
 func (ct ConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	return index.SinglePartitionIterFromNomsMap(nil), nil

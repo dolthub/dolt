@@ -56,10 +56,6 @@ func (s MergeStatusTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
-func (s MergeStatusTable) Comment() string {
-	return ""
-}
-
 func (s MergeStatusTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 	return index.SinglePartitionIterFromNomsMap(nil), nil
 }

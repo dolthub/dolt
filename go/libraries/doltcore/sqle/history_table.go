@@ -417,11 +417,6 @@ func (ht *HistoryTable) Collation() sql.CollationID {
 	return sql.CollationID(ht.doltTable.sch.GetCollation())
 }
 
-// Comment implements the sql.Table interface.
-func (ht *HistoryTable) Comment() string {
-	return ""
-}
-
 // Partitions returns a PartitionIter which will be used in getting partitions each of which is used to create RowIter.
 func (ht *HistoryTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	iter, err := ht.filterIter(ctx, ht.cmItr)

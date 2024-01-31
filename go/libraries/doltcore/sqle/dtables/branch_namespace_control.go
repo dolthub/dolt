@@ -101,11 +101,6 @@ func (tbl BranchNamespaceControlTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
-// Comment implements the interface sql.Table.
-func (tbl BranchNamespaceControlTable) Comment() string {
-	return ""
-}
-
 // Partitions implements the interface sql.Table.
 func (tbl BranchNamespaceControlTable) Partitions(context *sql.Context) (sql.PartitionIter, error) {
 	return index.SinglePartitionIterFromNomsMap(nil), nil

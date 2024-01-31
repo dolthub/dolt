@@ -212,10 +212,6 @@ func (t *TempTable) Collation() sql.CollationID {
 	return sql.CollationID(t.sch.GetCollation())
 }
 
-func (t *TempTable) Comment() string {
-	return ""
-}
-
 func (t *TempTable) sqlSchema() sql.PrimaryKeySchema {
 	return t.pkSch
 }

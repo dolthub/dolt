@@ -95,11 +95,6 @@ func (cvt *constraintViolationsTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
-// Comment implements the interface sql.Table.
-func (cvt *constraintViolationsTable) Comment() string {
-	return ""
-}
-
 // Partitions implements the interface sql.Table.
 func (cvt *constraintViolationsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	return index.SinglePartitionIterFromNomsMap(nil), nil

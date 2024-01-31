@@ -121,11 +121,6 @@ func (dt *CommitDiffTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
-// Comment implements the sql.Table interface.
-func (dt *CommitDiffTable) Comment() string {
-	return ""
-}
-
 // GetIndexes implements sql.IndexAddressable
 func (dt *CommitDiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return []sql.Index{index.DoltToFromCommitIndex(dt.name)}, nil

@@ -62,11 +62,6 @@ func (n *prollyFkIndexer) Collation() sql.CollationID {
 	return sql.CollationID(n.writer.sch.GetCollation())
 }
 
-// Comment implements the interface sql.Table.
-func (n *prollyFkIndexer) Comment() string {
-	return ""
-}
-
 func (n *prollyFkIndexer) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	ranges, err := index.ProllyRangesFromIndexLookup(ctx, lookup)
 	if err != nil {

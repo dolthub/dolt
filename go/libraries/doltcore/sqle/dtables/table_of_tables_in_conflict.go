@@ -62,11 +62,6 @@ func (dt *TableOfTablesInConflict) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
-// Comment implements the sql.Table interface.
-func (dt *TableOfTablesInConflict) Comment() string {
-	return ""
-}
-
 type tableInConflict struct {
 	name string
 	size uint64

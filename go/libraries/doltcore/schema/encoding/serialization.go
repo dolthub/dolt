@@ -61,10 +61,12 @@ func serializeSchemaAsFlatbuffer(sch schema.Schema) ([]byte, error) {
 	var hasFeaturesAfterTryAccessors bool
 	for _, col := range sch.GetAllCols().GetColumns() {
 		if col.OnUpdate != "" {
-			// TODO: Do we need to do anything with this for the new schema comment?
 			hasFeaturesAfterTryAccessors = true
 			break
 		}
+	}
+	if sch.GetComment() != "" {
+		hasFeaturesAfterTryAccessors = true
 	}
 
 	serial.TableSchemaStart(b)

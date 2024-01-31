@@ -97,10 +97,6 @@ func (cvt *prollyConstraintViolationsTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
-func (cvt *prollyConstraintViolationsTable) Comment() string {
-	return ""
-}
-
 // Partitions implements the interface sql.Table.
 func (cvt *prollyConstraintViolationsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	return index.SinglePartitionIterFromNomsMap(nil), nil

@@ -109,11 +109,6 @@ func (p *PatchTableFunction) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
-// Comment implements the sql.Table interface.
-func (p *PatchTableFunction) Comment() string {
-	return ""
-}
-
 // Partitions is a sql.Table interface function that returns a partition of the data. This data has a single partition.
 func (p *PatchTableFunction) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	return dtables.NewSliceOfPartitionsItr([]sql.Partition{
