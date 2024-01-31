@@ -50,6 +50,8 @@ func doltClone(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 		return nil, errhand.BuildDError("error: '%s' is not valid.", urlStr).Build()
 	}
 
+	// There are several remote params (AWS/GCP/OCI paths, creds, etc) which are pulled from the global server using
+	// server config, environment vars and such. The --user flag is the only one that we can override with a command flag.
 	remoteParms := map[string]string{}
 	if user, hasUser := apr.GetValue(cli.UserFlag); hasUser {
 		remoteParms[dbfactory.GRPCUsernameAuthParam] = user
