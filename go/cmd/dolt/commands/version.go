@@ -43,7 +43,9 @@ const (
 
 var versionDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Displays the version for the Dolt binary.",
-	LongDesc:  `Displays the version for the Dolt binary.`,
+	LongDesc: `Displays the version for the Dolt binary.
+
+The out-of-date check can be disabled by running {{.EmphasisLeft}}dolt config --global --add versioncheck.disabled true{{.EmphasisRight}}.`,
 	Synopsis: []string{
 		`[--verbose] [--feature]`,
 	},
