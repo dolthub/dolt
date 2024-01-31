@@ -143,6 +143,10 @@ func (b BinlogTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
+func (b BinlogTable) Comment() string {
+	return ""
+}
+
 // Partitions implements the interface sql.Table.
 func (b BinlogTable) Partitions(context *sql.Context) (sql.PartitionIter, error) {
 	return index.SinglePartitionIterFromNomsMap(nil), nil

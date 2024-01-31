@@ -68,6 +68,10 @@ type HistoryTable struct {
 	projectedCols []uint64
 }
 
+func (ht *HistoryTable) Comment() string {
+	return ""
+}
+
 func (ht *HistoryTable) PrimaryKeySchema() sql.PrimaryKeySchema {
 	tableName := ht.Name()
 	basePkSch := ht.doltTable.PrimaryKeySchema()

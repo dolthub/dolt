@@ -32,6 +32,10 @@ type TableOfTablesInConflict struct {
 	ddb    *doltdb.DoltDB
 }
 
+func (dt *TableOfTablesInConflict) Comment() string {
+	return ""
+}
+
 // NewTableOfTablesInConflict creates a TableOfTablesInConflict
 func NewTableOfTablesInConflict(_ *sql.Context, dbName string, ddb *doltdb.DoltDB) sql.Table {
 	return &TableOfTablesInConflict{dbName: dbName, ddb: ddb}

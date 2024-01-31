@@ -90,6 +90,11 @@ func (table *fulltextTable) Collation() sql.CollationID {
 	return table.GMSTable.Collation()
 }
 
+// Comment implements the interface fulltext.EditableTable.
+func (table *fulltextTable) Comment() string {
+	return "" // TODO: ???
+}
+
 // Partitions implements the interface fulltext.EditableTable.
 func (table *fulltextTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	return table.GMSTable.Partitions(ctx)

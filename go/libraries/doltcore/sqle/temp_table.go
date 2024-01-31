@@ -48,6 +48,10 @@ type TempTable struct {
 	opts editor.Options
 }
 
+func (t *TempTable) Comment() string {
+	return ""
+}
+
 var _ sql.TemporaryTable = &TempTable{}
 var _ sql.Table = &TempTable{}
 var _ sql.PrimaryKeyTable = &TempTable{}

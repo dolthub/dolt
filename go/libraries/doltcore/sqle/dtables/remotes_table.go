@@ -42,6 +42,10 @@ type RemotesTable struct {
 	ddb *doltdb.DoltDB
 }
 
+func (bt *RemotesTable) Comment() string {
+	return ""
+}
+
 // NewRemotesTable creates a RemotesTable
 func NewRemotesTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
 	return &RemotesTable{ddb}

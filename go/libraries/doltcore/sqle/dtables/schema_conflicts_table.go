@@ -38,6 +38,10 @@ type SchemaConflictsTable struct {
 	ddb    *doltdb.DoltDB
 }
 
+func (dt *SchemaConflictsTable) Comment() string {
+	return ""
+}
+
 // NewSchemaConflictsTable creates a SchemaConflictsTable
 func NewSchemaConflictsTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB) sql.Table {
 	return &SchemaConflictsTable{dbName: dbName, ddb: ddb}

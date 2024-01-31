@@ -85,6 +85,10 @@ type ProllyConflictsTable struct {
 	versionMappings           *versionMappings
 }
 
+func (ct ProllyConflictsTable) Comment() string {
+	return ""
+}
+
 var _ sql.UpdatableTable = ProllyConflictsTable{}
 var _ sql.DeletableTable = ProllyConflictsTable{}
 

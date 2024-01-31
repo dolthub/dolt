@@ -37,6 +37,10 @@ type StatusTable struct {
 	rootsProvider env.RootsProvider
 }
 
+func (s StatusTable) Comment() string {
+	return ""
+}
+
 var _ sql.StatisticsTable = (*StatusTable)(nil)
 
 func (s StatusTable) DataLength(ctx *sql.Context) (uint64, error) {

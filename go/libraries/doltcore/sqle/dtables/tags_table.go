@@ -35,6 +35,10 @@ type TagsTable struct {
 	ddb *doltdb.DoltDB
 }
 
+func (dt *TagsTable) Comment() string {
+	return ""
+}
+
 // NewTagsTable creates a TagsTable
 func NewTagsTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
 	return &TagsTable{ddb: ddb}

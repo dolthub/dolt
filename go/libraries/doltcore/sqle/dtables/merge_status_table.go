@@ -34,6 +34,10 @@ type MergeStatusTable struct {
 	dbName string
 }
 
+func (s MergeStatusTable) Comment() string {
+	return ""
+}
+
 func (s MergeStatusTable) Name() string {
 	return doltdb.MergeStatusTableName
 }

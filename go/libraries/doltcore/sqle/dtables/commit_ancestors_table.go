@@ -80,6 +80,11 @@ func (dt *CommitAncestorsTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
+// Comment implements the sql.Table interface.
+func (dt *CommitAncestorsTable) Comment() string {
+	return ""
+}
+
 // Partitions is a sql.Table interface function that returns a partition
 // of the data. Currently the data is unpartitioned.
 func (dt *CommitAncestorsTable) Partitions(*sql.Context) (sql.PartitionIter, error) {

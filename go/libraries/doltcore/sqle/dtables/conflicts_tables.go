@@ -82,6 +82,10 @@ type ConflictsTable struct {
 	rs      RootSetter
 }
 
+func (ct ConflictsTable) Comment() string {
+	return ""
+}
+
 type RootSetter interface {
 	SetRoot(ctx *sql.Context, root *doltdb.RootValue) error
 }

@@ -50,6 +50,10 @@ func (n *nomsFkIndexer) Collation() sql.CollationID {
 	return sql.CollationID(n.writer.sch.GetCollation())
 }
 
+func (n *nomsFkIndexer) Comment() string {
+	return ""
+}
+
 func (n *nomsFkIndexer) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	nrr, err := index.NomsRangesFromIndexLookup(ctx, lookup)
 	if err != nil {

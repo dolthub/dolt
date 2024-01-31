@@ -49,6 +49,10 @@ type DocsTable struct {
 	backingTable VersionableTable
 }
 
+func (dt *DocsTable) Comment() string {
+	return ""
+}
+
 func (dt *DocsTable) Name() string {
 	return doltdb.DocTableName
 }

@@ -134,6 +134,11 @@ func (dt *ColumnDiffTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
+// Comment implements the sql.Table interface.
+func (dt *ColumnDiffTable) Comment() string {
+	return ""
+}
+
 func (dt *ColumnDiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	if lookup.Index.ID() == index.CommitHashIndexId {
 		hs, ok := index.LookupToPointSelectStr(lookup)

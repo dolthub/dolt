@@ -51,6 +51,10 @@ type CommitDiffTable struct {
 	targetSchema      schema.Schema
 }
 
+func (dt *CommitDiffTable) Comment() string {
+	return ""
+}
+
 var _ sql.Table = (*CommitDiffTable)(nil)
 var _ sql.IndexAddressable = (*CommitDiffTable)(nil)
 var _ sql.StatisticsTable = (*CommitDiffTable)(nil)

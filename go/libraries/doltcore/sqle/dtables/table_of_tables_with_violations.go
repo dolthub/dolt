@@ -30,6 +30,10 @@ type TableOfTablesWithViolations struct {
 	root *doltdb.RootValue
 }
 
+func (totwv *TableOfTablesWithViolations) Comment() string {
+	return ""
+}
+
 var _ sql.Table = (*TableOfTablesWithViolations)(nil)
 
 // NewTableOfTablesConstraintViolations creates a TableOfTablesWithViolations.

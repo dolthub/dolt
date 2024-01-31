@@ -40,6 +40,10 @@ type LogTable struct {
 	headCommitClosure *prolly.CommitClosure
 }
 
+func (dt *LogTable) Comment() string {
+	return ""
+}
+
 var _ sql.Table = (*LogTable)(nil)
 var _ sql.StatisticsTable = (*LogTable)(nil)
 var _ sql.IndexAddressable = (*LogTable)(nil)

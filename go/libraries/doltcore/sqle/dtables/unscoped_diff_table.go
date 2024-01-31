@@ -53,6 +53,10 @@ type UnscopedDiffTable struct {
 	commitCheck      doltdb.CommitFilter
 }
 
+func (dt *UnscopedDiffTable) Comment() string {
+	return ""
+}
+
 var _ sql.Table = (*UnscopedDiffTable)(nil)
 var _ sql.StatisticsTable = (*UnscopedDiffTable)(nil)
 var _ sql.IndexAddressable = (*UnscopedDiffTable)(nil)

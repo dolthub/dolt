@@ -42,6 +42,10 @@ type IgnoreTable struct {
 	backingTable VersionableTable
 }
 
+func (i *IgnoreTable) Comment() string {
+	return ""
+}
+
 func (i *IgnoreTable) Name() string {
 	return doltdb.IgnoreTableName
 }

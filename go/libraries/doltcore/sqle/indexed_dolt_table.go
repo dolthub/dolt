@@ -34,6 +34,12 @@ type IndexedDoltTable struct {
 	mu           *sync.Mutex
 }
 
+func (idt *IndexedDoltTable) Comment() string {
+	return ""
+	// TODO:
+	//return idt.table.Comment()
+}
+
 func NewIndexedDoltTable(t *DoltTable, idx index.DoltIndex) *IndexedDoltTable {
 	return &IndexedDoltTable{
 		table:        t,

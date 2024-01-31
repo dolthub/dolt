@@ -886,7 +886,7 @@ func (db Database) removeTableFromAutoIncrementTracker(
 }
 
 // CreateTable creates a table with the name and schema given.
-func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, collation sql.CollationID) error {
+func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, collation sql.CollationID, comment string) error {
 	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
@@ -898,6 +898,7 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 		return ErrInvalidTableName.New(tableName)
 	}
 
+	// TODO: Pass comment through!
 	return db.createSqlTable(ctx, tableName, sch, collation)
 }
 

@@ -76,6 +76,10 @@ type PatchTableFunction struct {
 	database       sql.Database
 }
 
+func (p *PatchTableFunction) Comment() string {
+	return ""
+}
+
 func (p *PatchTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
 	numBytesPerRow := schema.SchemaAvgLength(p.Schema())
 	numRows, _, err := p.RowCount(ctx)

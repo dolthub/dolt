@@ -39,6 +39,10 @@ type StatisticsTable struct {
 	ddb    *doltdb.DoltDB
 }
 
+func (st *StatisticsTable) Comment() string {
+	return ""
+}
+
 var _ sql.Table = (*StatisticsTable)(nil)
 var _ sql.StatisticsTable = (*StatisticsTable)(nil)
 
