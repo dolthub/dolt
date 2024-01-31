@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -49,7 +50,14 @@ func doltClone(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 		return nil, errhand.BuildDError("error: '%s' is not valid.", urlStr).Build()
 	}
 
-	err = sess.Provider().CloneDatabaseFromRemote(ctx, dir, branch, remoteName, remoteUrl, map[string]string{})
+	// There are several remote params (AWS/GCP/OCI paths, creds, etc) which are pulled from the global server using
+	// server config, environment vars and such. The --user flag is the only one that we can override with a command flag.
+	remoteParms := map[string]string{}
+	if user, hasUser := apr.GetValue(cli.UserFlag); hasUser {
+		remoteParms[dbfactory.GRPCUsernameAuthParam] = user
+	}
+
+	err = sess.Provider().CloneDatabaseFromRemote(ctx, dir, branch, remoteName, remoteUrl, remoteParms)
 	if err != nil {
 		return nil, err
 	}

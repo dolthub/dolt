@@ -212,6 +212,34 @@ call dolt_commit('-am', 'add one val');
     [[ "$output" =~ "11" ]] || false
 }
 
+@test "sql-server-remotesrv: dolt_clone from remotesapi port with authentication" {
+    mkdir -p db/remote
+    cd db/remote
+    dolt init
+    dolt --privilege-file=privs.json sql -q "CREATE USER user0 IDENTIFIED BY 'pass0'"
+    dolt sql -q 'create table vals (i int);'
+    dolt sql -q 'insert into vals (i) values (1), (2), (3), (4), (57249);'
+    dolt add vals
+    dolt commit -m 'initial vals.'
+    export DOLT_REMOTE_USER="user0"
+    export DOLT_REMOTE_PASSWORD="pass0"
+
+    dolt sql-server --port 3307 -u $DOLT_REMOTE_USER  -p $DOLT_REMOTE_PASSWORD --remotesapi-port 50051 &
+    srv_pid=$!
+
+    cd ../../
+    mkdir clone
+    cd clone
+
+    run dolt sql -q "call dolt_clone(\"--user\",\"$DOLT_REMOTE_USER\",\"http://localhost:50051/remote\", \"repo1\")"
+
+    cd repo1
+    run dolt ls
+    [[ "$output" =~ "vals" ]] || false
+    run dolt sql -q 'select * from vals'
+    [[ "$output" =~ "57249" ]] || false
+}
+
 @test "sql-server-remotesrv: clone/fetch/pull from remotesapi port with clone_admin authentication" {
     mkdir -p db/remote
     cd db/remote
