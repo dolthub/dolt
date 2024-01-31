@@ -56,7 +56,6 @@ func serializeSchemaAsFlatbuffer(sch schema.Schema) ([]byte, error) {
 	rows := serializeClusteredIndex(b, sch)
 	indexes := serializeSecondaryIndexes(b, sch, sch.Indexes().AllIndexes())
 	checks := serializeChecks(b, sch.Checks().AllChecks())
-	comment := b.CreateString(sch.GetComment())
 
 	var hasFeaturesAfterTryAccessors bool
 	for _, col := range sch.GetAllCols().GetColumns() {
@@ -65,9 +64,6 @@ func serializeSchemaAsFlatbuffer(sch schema.Schema) ([]byte, error) {
 			break
 		}
 	}
-	if sch.GetComment() != "" {
-		hasFeaturesAfterTryAccessors = true
-	}
 
 	serial.TableSchemaStart(b)
 	serial.TableSchemaAddClusteredIndex(b, rows)
@@ -75,7 +71,11 @@ func serializeSchemaAsFlatbuffer(sch schema.Schema) ([]byte, error) {
 	serial.TableSchemaAddSecondaryIndexes(b, indexes)
 	serial.TableSchemaAddChecks(b, checks)
 	serial.TableSchemaAddCollation(b, serial.Collation(sch.GetCollation()))
-	serial.TableSchemaAddComment(b, comment)
+	if sch.GetComment() != "" {
+		comment := b.CreateString(sch.GetComment())
+		serial.TableSchemaAddComment(b, comment)
+		hasFeaturesAfterTryAccessors = true
+	}
 	if hasFeaturesAfterTryAccessors {
 		serial.TableSchemaAddHasFeaturesAfterTryAccessors(b, hasFeaturesAfterTryAccessors)
 	}
