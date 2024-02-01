@@ -183,10 +183,7 @@ func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) 
 	}
 	if isOutOfDate {
 		cli.Printf(color.YellowString("Warning: you are on an old version of Dolt. The newest version is %s.\n", latestRelease))
-		err = printDisableVersionCheckWarning(dEnv, homeDir, curVersion)
-		if err != nil {
-			return errhand.BuildDError("error: failed to print disable version check warning").AddCause(err).Build()
-		}
+		printDisableVersionCheckWarning(dEnv, homeDir, curVersion)
 	}
 
 	return nil
@@ -253,28 +250,21 @@ func isVersionFormattedCorrectly(version string) bool {
 }
 
 // Prints a warning about how to disable the version out-of-date check, limited to once per version.
-func printDisableVersionCheckWarning(dEnv *env.DoltEnv, homeDir, curVersion string) error {
+func printDisableVersionCheckWarning(dEnv *env.DoltEnv, homeDir, curVersion string) {
 	path := filepath.Join(homeDir, dbfactory.DoltDir, disableVersionCheckFile)
 	if exists, _ := dEnv.FS.Exists(path); !exists {
 		cli.Println("To disable this warning, run 'dolt config --global --add versioncheck.disabled true'")
-		err := dEnv.FS.WriteFile(path, []byte(curVersion), os.ModePerm)
-		if err != nil {
-			return errhand.BuildDError("error: failed to update disable version check file").AddCause(err).Build()
-		}
-		return nil
+		dEnv.FS.WriteFile(path, []byte(curVersion), os.ModePerm)
 	} else {
 		lastDisableVersionCheckWarning, err := dEnv.FS.ReadFile(path)
 		if err != nil {
-			return errhand.BuildDError("error: failed to read disable version check file").AddCause(err).Build()
+			return
 		}
 		if string(lastDisableVersionCheckWarning) != curVersion {
 			cli.Println("To disable this warning, run 'dolt config --global --add versioncheck.disabled true'")
-			err := dEnv.FS.WriteFile(path, []byte(curVersion), os.ModePerm)
-			if err != nil {
-				return errhand.BuildDError("error: failed to update disable version check file").AddCause(err).Build()
-			}
+			dEnv.FS.WriteFile(path, []byte(curVersion), os.ModePerm)
 		}
 	}
 
-	return nil
+	return
 }
