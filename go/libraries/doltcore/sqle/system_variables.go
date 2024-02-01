@@ -195,17 +195,24 @@ func AddDoltSystemVariables() {
 			Default: int8(0),
 		},
 		{
+			Name:    dsess.DoltStatsMemoryOnly,
+			Dynamic: true,
+			Scope:   sql.SystemVariableScope_Global,
+			Type:    types.NewSystemBoolType(dsess.DoltStatsMemoryOnly),
+			Default: int8(0),
+		},
+		{
 			Name:    dsess.DoltStatsAutoRefreshThreshold,
 			Dynamic: true,
 			Scope:   sql.SystemVariableScope_Global,
-			Type:    types.NewSystemDoubleType(dsess.DoltStatsAutoRefreshEnabled, 0, 1),
+			Type:    types.NewSystemDoubleType(dsess.DoltStatsAutoRefreshEnabled, 0, 10),
 			Default: float64(.5),
 		},
 		{
 			Name:    dsess.DoltStatsAutoRefreshInterval,
 			Dynamic: true,
 			Scope:   sql.SystemVariableScope_Global,
-			Type:    types.NewSystemIntType(dsess.DoltStatsAutoRefreshInterval, 1, 1<<10, false),
+			Type:    types.NewSystemIntType(dsess.DoltStatsAutoRefreshInterval, 0, 1<<10, false),
 			Default: 120,
 		},
 	})

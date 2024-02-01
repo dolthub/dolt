@@ -39,6 +39,9 @@ func (p *Provider) ConfigureAutoRefresh(ctxFactory func(ctx context.Context) (*s
 
 	// retain handle to cancel on drop database
 	// todo: add Cancel(name) to sql.BackgroundThreads interface
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	dropDbCtx, dbStatsCancel := context.WithCancel(context.Background())
 	p.autoRefreshCancel[dbName] = dbStatsCancel
 
@@ -68,10 +71,9 @@ func (p *Provider) ConfigureAutoRefresh(ctxFactory func(ctx context.Context) (*s
 				// chunks. The full set of statistics for each database lands
 				// 1) in the provider's most recent set of database statistics, and
 				// 2) on disk in the database's statistics ref'd prolly.Map.
-				curStats, ok := p.dbStats[dbName]
-				if !ok {
+				curStats := p.getStats(dbName)
+				if curStats == nil {
 					curStats = newDbStats(dbName)
-					p.dbStats[dbName] = curStats
 				}
 
 				newStats := make(map[sql.StatQualifier]*DoltStats)
@@ -125,7 +127,7 @@ func (p *Provider) ConfigureAutoRefresh(ctxFactory func(ctx context.Context) (*s
 						continue
 					}
 
-					if curStats.latestTableHashes[table] == tableHash {
+					if curStats.getLatestHash(table) == tableHash {
 						// no data changes since last check
 						tableExistsAndSkipped[table] = true
 						sqlCtx.GetLogger().Debugf("statistics refresh: table hash unchanged since last check: %s", tableHash)
@@ -151,7 +153,7 @@ func (p *Provider) ConfigureAutoRefresh(ctxFactory func(ctx context.Context) (*s
 					for _, index := range indexes {
 						qual := sql.NewStatQualifier(dbName, table, strings.ToLower(index.ID()))
 						qualExists[qual] = true
-						curStat := curStats.stats[qual]
+						curStat := curStats.getIndexStats(qual)
 						if curStat == nil {
 							curStat = NewDoltStats()
 							curStat.Qual = qual
@@ -180,7 +182,7 @@ func (p *Provider) ConfigureAutoRefresh(ctxFactory func(ctx context.Context) (*s
 							// mark index for updating
 							idxMetas = append(idxMetas, idxMeta)
 							// update lastest hash if we haven't already
-							curStats.latestTableHashes[table] = tableHash
+							curStats.setLatestHash(table, tableHash)
 						}
 					}
 					// get new buckets for index chunks to update
@@ -208,7 +210,7 @@ func (p *Provider) ConfigureAutoRefresh(ctxFactory func(ctx context.Context) (*s
 					}
 				}
 
-				prevMap := curStats.currentMap
+				prevMap := curStats.getCurrentMap()
 				if prevMap.KeyDesc().Count() == 0 {
 					kd, vd := schema.StatsTableDoltSchema.GetMapDescriptors()
 					prevMap, err = prolly.NewMapFromTuples(ctx, ddb.NodeStore(), kd, vd)
@@ -233,13 +235,12 @@ func (p *Provider) ConfigureAutoRefresh(ctxFactory func(ctx context.Context) (*s
 					continue
 				}
 
-				p.mu.Lock()
-				p.dbStats[dbName].currentMap = newMap
-				err = ddb.SetStatisics(ctx, newMap.HashOf())
+				curStats.setCurrentMap(newMap)
 				for q, s := range newStats {
-					p.dbStats[dbName].stats[q] = s
+					curStats.setIndexStats(q, s)
 				}
-				p.mu.Unlock()
+				p.setStats(dbName, curStats)
+				err = ddb.SetStatisics(ctx, newMap.HashOf())
 				if err != nil {
 					sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
 					continue

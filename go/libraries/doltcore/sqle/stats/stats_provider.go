@@ -38,6 +38,7 @@ import (
 var ErrFailedToLoad = errors.New("failed to load statistics")
 
 type DoltStats struct {
+	mu            *sync.Mutex
 	level         int
 	chunks        []hash.Hash
 	active        map[hash.Hash]int
@@ -57,7 +58,7 @@ type DoltStats struct {
 }
 
 func NewDoltStats() *DoltStats {
-	return &DoltStats{active: make(map[hash.Hash]int)}
+	return &DoltStats{mu: &sync.Mutex{}, active: make(map[hash.Hash]int)}
 }
 
 func DoltStatsFromSql(stat sql.Statistic) (*DoltStats, error) {
@@ -66,6 +67,7 @@ func DoltStatsFromSql(stat sql.Statistic) (*DoltStats, error) {
 		return nil, err
 	}
 	return &DoltStats{
+		mu:            &sync.Mutex{},
 		Qual:          stat.Qualifier(),
 		RowCount:      stat.RowCount(),
 		DistinctCount: stat.DistinctCount(),
@@ -83,6 +85,8 @@ func DoltStatsFromSql(stat sql.Statistic) (*DoltStats, error) {
 }
 
 func (s *DoltStats) updateActive() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	newActive := make(map[hash.Hash]int)
 	for i, hash := range s.chunks {
 		newActive[hash] = i
@@ -91,6 +95,8 @@ func (s *DoltStats) updateActive() {
 }
 
 func (s *DoltStats) updateCounts() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	var newDistinct uint64
 	var newRows uint64
 	var newNulls uint64
@@ -105,6 +111,8 @@ func (s *DoltStats) updateCounts() {
 }
 
 func (s *DoltStats) toSql() sql.Statistic {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	typStrs := make([]string, len(s.Types))
 	for i, typ := range s.Types {
 		typStrs[i] = typ.String()
@@ -202,6 +210,7 @@ type Provider struct {
 // each database has one statistics table that is a collection of the
 // table stats in the database
 type dbStats struct {
+	mu                *sync.Mutex
 	db                string
 	stats             map[sql.StatQualifier]*DoltStats
 	currentMap        prolly.Map
@@ -210,18 +219,77 @@ type dbStats struct {
 }
 
 func newDbStats(dbName string) *dbStats {
-	return &dbStats{db: dbName, stats: make(map[sql.StatQualifier]*DoltStats), latestTableHashes: make(map[string]hash.Hash)}
+	return &dbStats{
+		mu:                &sync.Mutex{},
+		db:                dbName,
+		stats:             make(map[sql.StatQualifier]*DoltStats),
+		latestTableHashes: make(map[string]hash.Hash),
+	}
 }
 
 var _ sql.StatsProvider = (*Provider)(nil)
+
+func (p *Provider) setStats(dbName string, s *dbStats) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.dbStats[dbName] = s
+}
+
+func (p *Provider) getStats(dbName string) *dbStats {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	s, _ := p.dbStats[dbName]
+	return s
+}
+
+func (s *dbStats) getLatestHash(tableName string) hash.Hash {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	h, _ := s.latestTableHashes[tableName]
+	return h
+}
+
+func (s *dbStats) setLatestHash(tableName string, h hash.Hash) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.latestTableHashes[tableName] = h
+}
+
+func (s *dbStats) getCurrentMap() prolly.Map {
+	return s.currentMap
+}
+
+func (s *dbStats) setCurrentMap(m prolly.Map) {
+	s.currentMap = m
+}
+
+func (s *dbStats) getIndexStats(qual sql.StatQualifier) *DoltStats {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	stat, _ := s.stats[qual]
+	return stat
+}
+
+func (s *dbStats) setIndexStats(qual sql.StatQualifier, stat *DoltStats) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.stats[qual] = stat
+}
+
+func (s *dbStats) dropIndexStats(qual sql.StatQualifier) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.stats, qual)
+}
 
 // Init scans the statistics tables, populating the |stats| attribute.
 // Statistics are not available for reading until we've finished loading.
 func (p *Provider) Load(ctx *sql.Context, dbs []dsess.SqlDatabase) error {
 	for _, db := range dbs {
 		// set map keys so concurrent orthogonal writes are OK
-		p.dbStats[strings.ToLower(db.Name())] = newDbStats(strings.ToLower(db.Name()))
+		p.setStats(strings.ToLower(db.Name()), newDbStats(strings.ToLower(db.Name())))
 	}
+
 	eg, ctx := ctx.NewErrgroup()
 	for _, db := range dbs {
 		// copy closure variables
@@ -253,7 +321,7 @@ func (p *Provider) Load(ctx *sql.Context, dbs []dsess.SqlDatabase) error {
 			} else if err != nil {
 				return err
 			}
-			p.dbStats[dbName] = stats
+			p.setStats(dbName, stats)
 			return nil
 		})
 	}
@@ -262,8 +330,10 @@ func (p *Provider) Load(ctx *sql.Context, dbs []dsess.SqlDatabase) error {
 
 func (p *Provider) GetTableStats(ctx *sql.Context, db, table string) ([]sql.Statistic, error) {
 	var ret []sql.Statistic
-	if dbStats := p.dbStats[strings.ToLower(db)]; dbStats != nil {
-		for qual, stat := range p.dbStats[strings.ToLower(db)].stats {
+	if dbStat := p.getStats(strings.ToLower(db)); dbStat != nil {
+		dbStat.mu.Lock()
+		defer dbStat.mu.Unlock()
+		for qual, stat := range dbStat.stats {
 			if strings.EqualFold(db, qual.Database) && strings.EqualFold(table, qual.Tab) {
 				ret = append(ret, stat.toSql())
 			}
@@ -278,33 +348,38 @@ func (p *Provider) SetStats(ctx *sql.Context, stats sql.Statistic) error {
 		return err
 	}
 	dbName := strings.ToLower(stats.Qualifier().Database)
-	if _, ok := p.dbStats[dbName]; !ok {
-		p.dbStats[dbName] = &dbStats{db: dbName, stats: make(map[sql.StatQualifier]*DoltStats)}
+	stat := p.getStats(dbName)
+	if stat == nil {
+		stat = newDbStats(dbName)
 	}
-	p.dbStats[dbName].stats[stats.Qualifier()] = doltStats
+	stat.setIndexStats(stats.Qualifier(), doltStats)
+	p.setStats(dbName, stat)
 	return nil
 }
 
 func (p *Provider) GetStats(ctx *sql.Context, qual sql.StatQualifier, cols []string) (sql.Statistic, bool) {
-	if dbStats := p.dbStats[strings.ToLower(qual.Database)]; dbStats != nil {
-		if s, ok := p.dbStats[strings.ToLower(qual.Database)].stats[qual]; ok {
-			return s.toSql(), true
+	if stat := p.getStats(strings.ToLower(qual.Database)); stat != nil {
+		idxStat := stat.getIndexStats(qual)
+		if idxStat != nil {
+			return idxStat.toSql(), true
 		}
 	}
 	return nil, false
 }
 
 func (p *Provider) DropStats(ctx *sql.Context, qual sql.StatQualifier, cols []string) error {
-	if dbStats := p.dbStats[strings.ToLower(qual.Database)]; dbStats != nil {
-		delete(p.dbStats[strings.ToLower(qual.Database)].stats, qual)
+	if stat := p.getStats(strings.ToLower(qual.Database)); stat != nil {
+		stat.dropIndexStats(qual)
 	}
 	return nil
 }
 
 func (p *Provider) RowCount(ctx *sql.Context, db, table string) (uint64, error) {
 	var cnt uint64
-	if dbStats := p.dbStats[strings.ToLower(db)]; dbStats != nil {
-		for qual, s := range p.dbStats[strings.ToLower(db)].stats {
+	if dbStat := p.getStats(strings.ToLower(db)); dbStat != nil {
+		dbStat.mu.Lock()
+		defer dbStat.mu.Unlock()
+		for qual, s := range dbStat.stats {
 			if strings.EqualFold(db, qual.Database) && strings.EqualFold(table, qual.Table()) {
 				if s.RowCount > cnt {
 					cnt = s.RowCount
@@ -317,10 +392,14 @@ func (p *Provider) RowCount(ctx *sql.Context, db, table string) (uint64, error) 
 
 func (p *Provider) DataLength(_ *sql.Context, db, table string) (uint64, error) {
 	var avgSize uint64
-	for meta, s := range p.dbStats[strings.ToLower(db)].stats {
-		if strings.EqualFold(db, meta.Database) && strings.EqualFold(table, meta.Table()) {
-			if s.AvgSize > avgSize {
-				avgSize = s.AvgSize
+	if dbStat := p.getStats(strings.ToLower(db)); dbStat != nil {
+		dbStat.mu.Lock()
+		defer dbStat.mu.Unlock()
+		for qual, s := range dbStat.stats {
+			if strings.EqualFold(db, qual.Database) && strings.EqualFold(table, qual.Table()) {
+				if s.AvgSize > avgSize {
+					avgSize = s.AvgSize
+				}
 			}
 		}
 	}
@@ -369,10 +448,9 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 		return err
 	}
 
-	curStats, ok := p.dbStats[dbName]
-	if !ok {
+	curStats := p.getStats(dbName)
+	if curStats == nil {
 		curStats = newDbStats(dbName)
-		p.dbStats[dbName] = curStats
 	}
 
 	tablePrefix := fmt.Sprintf("%s.", tableName)
@@ -384,9 +462,10 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 		}
 
 		qual := sql.NewStatQualifier(db, table.Name(), strings.ToLower(idx.ID()))
-		curStat, ok := curStats.stats[qual]
-		if !ok {
-			curStat = &DoltStats{Qual: qual, active: make(map[hash.Hash]int)}
+		curStat := curStats.getIndexStats(qual)
+		if curStat == nil {
+			curStat = NewDoltStats()
+			curStat.Qual = qual
 		}
 		idxMeta, err := newIdxMeta(ctx, curStat, dTab, idx, cols)
 		if err != nil {
@@ -400,10 +479,6 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 		return err
 	}
 
-	if _, ok := p.dbStats[dbName]; !ok {
-		p.dbStats[dbName] = newDbStats(strings.ToLower(db))
-	}
-
 	// merge new chunks with preexisting chunks
 	newStats := make(map[sql.StatQualifier]*DoltStats)
 	for _, idxMeta := range idxMetas {
@@ -411,7 +486,7 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 		newStats[idxMeta.qual] = mergeStatUpdates(stat, idxMeta)
 	}
 
-	prevMap := p.dbStats[dbName].currentMap
+	prevMap := curStats.currentMap
 	if prevMap.KeyDesc().Count() == 0 {
 		ddb, ok := dSess.GetDoltDB(ctx, dbName)
 		if !ok {
@@ -428,12 +503,12 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 		return err
 	}
 
-	p.mu.Lock()
-	p.dbStats[dbName].currentMap = newMap
+	curStats.setCurrentMap(newMap)
 	for k, v := range newStats {
-		p.dbStats[dbName].stats[k] = v
+		curStats.setIndexStats(k, v)
 	}
-	defer p.mu.Unlock()
+
+	p.setStats(dbName, curStats)
 
 	ddb, ok := dSess.GetDoltDB(ctx, dbName)
 	if !ok {

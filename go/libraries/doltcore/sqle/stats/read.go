@@ -126,7 +126,11 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (*dbStats, 
 				currentStat.updateActive()
 				dbStat.stats[currentStat.Qual] = currentStat
 			}
-			currentStat = &DoltStats{Qual: qual, Columns: columns, LowerBound: lowerBound, active: make(map[hash.Hash]int)}
+
+			currentStat = NewDoltStats()
+			currentStat.Qual = qual
+			currentStat.Columns = columns
+			currentStat.LowerBound = lowerBound
 		}
 
 		if currentStat.Histogram == nil {
@@ -158,6 +162,16 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (*dbStats, 
 			currentStat.CreatedAt = createdAt
 		}
 	}
+	currentStat.LowerBound, err = loadLowerBound(ctx, currentStat.Qual)
+	if err != nil {
+		return nil, err
+	}
+	fds, colSet, err := loadFuncDeps(ctx, db, currentStat.Qual)
+	if err != nil {
+		return nil, err
+	}
+	currentStat.fds = fds
+	currentStat.colSet = colSet
 	currentStat.updateActive()
 	dbStat.stats[currentStat.Qual] = currentStat
 	return dbStat, nil

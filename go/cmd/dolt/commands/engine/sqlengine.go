@@ -381,6 +381,9 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, sessFa
 
 func configureStatsProvider(ctx context.Context, sqlEngine *SqlEngine, bThreads *sql.BackgroundThreads, pro *dsqle.DoltDatabaseProvider, dbs []dsess.SqlDatabase) error {
 	sqlEngine.engine.Analyzer.Catalog.StatsProvider = stats.NewProvider()
+	if _, disabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly); disabled == int8(1) {
+		return nil
+	}
 	statsProv := sqlEngine.engine.Analyzer.Catalog.StatsProvider.(*stats.Provider)
 	loadCtx, err := sqlEngine.NewDefaultContext(ctx)
 	if err != nil {

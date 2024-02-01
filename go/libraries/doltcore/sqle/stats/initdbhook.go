@@ -43,6 +43,8 @@ func NewDropDatabaseHook(statsProv *Provider, orig sqle.DropDatabaseHook) sqle.D
 		}
 		if cancel, ok := statsProv.autoRefreshCancel[name]; ok {
 			cancel()
+			statsProv.mu.Lock()
+			defer statsProv.mu.Unlock()
 			delete(statsProv.autoRefreshCancel, name)
 			delete(statsProv.dbStats, name)
 		}

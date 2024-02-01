@@ -17,6 +17,7 @@ package stats
 import (
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"io"
 	"strings"
 
@@ -30,12 +31,19 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+const maxFanout = 200 * 200
+
 func newStatsTable(ctx *sql.Context, ns tree.NodeStore, vrw stypes.ValueReadWriter) (*doltdb.Table, error) {
 	return doltdb.CreateEmptyTable(ctx, ns, vrw, schema.StatsTableDoltSchema)
 }
 
 // flushStats writes a set of table statistics to the given node store, and returns a new prolly.Map
 func flushStats(ctx *sql.Context, prev prolly.Map, tableStats map[sql.StatQualifier]*DoltStats) (prolly.Map, error) {
+	if _, disabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly); disabled == int8(1) {
+		// do not write to disk
+		return prolly.Map{}, nil
+	}
+
 	sch := schema.StatsTableDoltSchema
 	kd, vd := sch.GetMapDescriptors()
 	var m *prolly.MutableMap
@@ -69,7 +77,7 @@ func flushStats(ctx *sql.Context, prev prolly.Map, tableStats map[sql.StatQualif
 		keyBuilder.PutString(0, qual.Database)
 		keyBuilder.PutString(1, qual.Table())
 		keyBuilder.PutString(2, qual.Index())
-		keyBuilder.PutInt64(3, 10000)
+		keyBuilder.PutInt64(3, maxFanout+1)
 		maxKey := keyBuilder.Build(pool)
 
 		// there is a limit on the number of buckets for a given index, iter
@@ -166,7 +174,7 @@ func deleteStats(ctx *sql.Context, prev prolly.Map, quals ...sql.StatQualifier) 
 		keyBuilder.PutString(0, qual.Database)
 		keyBuilder.PutString(1, qual.Table())
 		keyBuilder.PutString(2, qual.Index())
-		keyBuilder.PutInt64(3, 10000)
+		keyBuilder.PutInt64(3, maxFanout+1)
 		maxKey := keyBuilder.Build(pool)
 
 		// there is a limit on the number of buckets for a given index, iter

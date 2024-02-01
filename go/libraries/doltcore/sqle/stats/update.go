@@ -79,13 +79,13 @@ func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, index
 			return nil, err
 		} else if cnt == 0 {
 			// table is empty
-			ret[meta.qual] = &DoltStats{
-				chunks:    meta.allAddrs,
-				CreatedAt: time.Now(),
-				Columns:   meta.cols,
-				Types:     types,
-				Qual:      meta.qual,
-			}
+			ret[meta.qual] = NewDoltStats()
+			ret[meta.qual].chunks = meta.allAddrs
+			ret[meta.qual].CreatedAt = time.Now()
+			ret[meta.qual].Columns = meta.cols
+			ret[meta.qual].Types = types
+			ret[meta.qual].Qual = meta.qual
+
 			ret[meta.qual].fds = fds
 			ret[meta.qual].colSet = colSet
 			continue
@@ -119,13 +119,12 @@ func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, index
 		}
 
 		updater := newBucketBuilder(meta.qual, len(meta.cols), prollyMap.KeyDesc())
-		ret[meta.qual] = &DoltStats{
-			chunks:    meta.allAddrs,
-			CreatedAt: time.Now(),
-			Columns:   meta.cols,
-			Types:     types,
-			Qual:      meta.qual,
-		}
+		ret[meta.qual] = NewDoltStats()
+		ret[meta.qual].chunks = meta.allAddrs
+		ret[meta.qual].CreatedAt = time.Now()
+		ret[meta.qual].Columns = meta.cols
+		ret[meta.qual].Types = types
+		ret[meta.qual].Qual = meta.qual
 
 		var start, stop uint64
 		// read leaf rows for each bucket
