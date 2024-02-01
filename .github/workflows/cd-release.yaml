@@ -168,17 +168,6 @@ jobs:
           event-type: release-notes
           client-payload: '{"version": "${{ needs.format-version.outputs.version }}", "release_id": "${{ needs.create-release.outputs.release_id }}"}'
 
-  homebrew-bump:
-    needs: [format-version, create-release]
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Trigger Bump Homebrew
-        uses: peter-evans/repository-dispatch@v2.0.0
-        with:
-          token: ${{ secrets.REPO_ACCESS_TOKEN }}
-          event-type: bump-homebrew
-          client-payload: '{"version": "${{ needs.format-version.outputs.version }}"}'
-
   trigger-performance-benchmark-email:
     needs: [format-version, create-release]
     runs-on: ubuntu-22.04
