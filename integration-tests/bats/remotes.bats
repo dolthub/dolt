@@ -69,12 +69,12 @@ teardown() {
 
     cd repo2
     dolt remote add test-remote file://../remote
-    dolt push test-remote main
-    dolt checkout -b other
-    dolt push test-remote other
-    dolt branch -a
-    dolt checkout main
-    dolt branch -d other
+    dolt fetch test-remote
+
+    run dolt branch -a
+    [[ "$output" =~ "remotes/origin/other" ]] || false
+    [[ "$output" =~ "remotes/test-remote/other" ]] || false
+
     run dolt branch
     [[ ! "$output" =~ "other" ]] || false
 
