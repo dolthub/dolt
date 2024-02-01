@@ -52,6 +52,15 @@ type ProgStopper func(cancel context.CancelFunc, wg *sync.WaitGroup, statsCh cha
 // source db.
 func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef ref.BranchRef, remoteRef ref.RemoteRef, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, statsCh chan pull.Stats) error {
 	var err error
+	if mode == ref.FastForwardOnly {
+		canFF, err := destDB.CanFastForward(ctx, destRef, commit)
+
+		if err != nil {
+			return err
+		} else if !canFF {
+			return ErrCantFF
+		}
+	}
 
 	h, err := commit.HashOf()
 	if err != nil {
