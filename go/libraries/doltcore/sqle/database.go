@@ -886,7 +886,7 @@ func (db Database) removeTableFromAutoIncrementTracker(
 }
 
 // CreateTable creates a table with the name and schema given.
-func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, collation sql.CollationID) error {
+func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, collation sql.CollationID, comment string) error {
 	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
@@ -898,7 +898,7 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 		return ErrInvalidTableName.New(tableName)
 	}
 
-	return db.createSqlTable(ctx, tableName, sch, collation)
+	return db.createSqlTable(ctx, tableName, sch, collation, comment)
 }
 
 // CreateIndexedTable creates a table with the name and schema given.
@@ -944,7 +944,7 @@ OuterLoop:
 }
 
 // createSqlTable is the private version of CreateTable. It doesn't enforce any table name checks.
-func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, collation sql.CollationID) error {
+func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema, collation sql.CollationID, comment string) error {
 	ws, err := db.GetWorkingSet(ctx)
 	if err != nil {
 		return err
@@ -966,6 +966,7 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Pr
 	if err != nil {
 		return err
 	}
+	doltSch.SetComment(comment)
 
 	// Prevent any tables that use Spatial Types as Primary Key from being created
 	if schema.IsUsingSpatialColAsKey(doltSch) {
@@ -1709,7 +1710,7 @@ func (db Database) LoadRebasePlan(ctx *sql.Context) (*rebase.RebasePlan, error) 
 func (db Database) SaveRebasePlan(ctx *sql.Context, plan *rebase.RebasePlan) error {
 	pkSchema := sql.NewPrimaryKeySchema(dprocedures.DoltRebaseSystemTableSchema)
 	// we use createSqlTable, instead of CreateTable to avoid the "dolt_" reserved prefix table name check
-	err := db.createSqlTable(ctx, doltdb.RebaseTableName, pkSchema, sql.Collation_Default)
+	err := db.createSqlTable(ctx, doltdb.RebaseTableName, pkSchema, sql.Collation_Default, "")
 	if err != nil {
 		return err
 	}

@@ -115,7 +115,7 @@ func newDatabaseWithProcedures(t *testing.T, dEnv *env.DoltEnv, opts editor.Opti
 		{Name: doltdb.ProceduresTableCreateStmtCol, Type: gmstypes.Text, Source: doltdb.ProceduresTableName, PrimaryKey: false},
 		{Name: doltdb.ProceduresTableCreatedAtCol, Type: gmstypes.Timestamp, Source: doltdb.ProceduresTableName, PrimaryKey: false},
 		{Name: doltdb.ProceduresTableModifiedAtCol, Type: gmstypes.Timestamp, Source: doltdb.ProceduresTableName, PrimaryKey: false},
-	}), sql.Collation_Default)
+	}), sql.Collation_Default, "")
 	require.NoError(t, err)
 
 	sqlTbl, found, err := db.GetTableInsensitive(ctx, doltdb.ProceduresTableName)

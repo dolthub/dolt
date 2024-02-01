@@ -448,7 +448,7 @@ func (d *DoltHarness) newTable(db sql.Database, name string, schema sql.PrimaryK
 
 	ctx := enginetest.NewContext(d)
 	ctx.Session.SetCurrentDatabase(db.Name())
-	err := tc.CreateTable(ctx, name, schema, sql.Collation_Default)
+	err := tc.CreateTable(ctx, name, schema, sql.Collation_Default, "")
 	if err != nil {
 		return nil, err
 	}
