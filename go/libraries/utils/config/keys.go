@@ -30,6 +30,7 @@ var ConfigOptions = map[string]struct{}{
 	MetricsInsecure:       {},
 	PushAutoSetupRemote:   {},
 	ProfileKey:            {},
+	VersionCheckDisabled:  {},
 }
 
 const UserEmailKey = "user.email"
@@ -61,3 +62,5 @@ const MetricsInsecure = "metrics.insecure"
 const PushAutoSetupRemote = "push.autosetupremote"
 
 const ProfileKey = "profile"
+
+const VersionCheckDisabled = "versioncheck.disabled"
