@@ -2017,5 +2017,5 @@ SQL
 
     run dolt push origin alt:alt
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "new branch" ]]
+    [[ "$output" =~ "new branch" ]] || false
 }
