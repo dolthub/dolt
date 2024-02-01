@@ -49,7 +49,7 @@ func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, index
 
 	ret := make(map[sql.StatQualifier]*DoltStats)
 
-	for i, meta := range idxMetas {
+	for _, meta := range idxMetas {
 		var idx durable.Index
 		var err error
 		if strings.EqualFold(meta.qual.Index(), "PRIMARY") {
@@ -71,7 +71,7 @@ func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, index
 		}
 
 		var types []sql.Type
-		for _, cet := range indexes[i].ColumnExpressionTypes() {
+		for _, cet := range nameToIdx[strings.ToLower(meta.qual.Index())].ColumnExpressionTypes() {
 			types = append(types, cet.Type)
 		}
 

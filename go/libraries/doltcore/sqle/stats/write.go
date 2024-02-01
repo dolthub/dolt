@@ -109,6 +109,13 @@ func flushStats(ctx *sql.Context, prev prolly.Map, tableStats map[sql.StatQualif
 		}
 		typesStr := typesB.String()
 
+		if len(stats.Types) != len(stats.Columns) {
+			ctx.GetLogger().Println(stats.Qual.String())
+			ctx.GetLogger().Println(typesStr)
+			ctx.GetLogger().Println(strings.Join(stats.Columns, ","))
+			panic("invalid statistic")
+		}
+
 		for _, h := range stats.Histogram {
 			var upperBoundElems []string
 			for _, v := range h.UpperBound {
