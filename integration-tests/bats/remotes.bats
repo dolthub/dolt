@@ -69,12 +69,12 @@ teardown() {
 
     cd repo2
     dolt remote add test-remote file://../remote
-    dolt push test-remote main
-    dolt checkout -b other
-    dolt push test-remote other
-    dolt branch -a
-    dolt checkout main
-    dolt branch -d other
+    dolt fetch test-remote
+
+    run dolt branch -a
+    [[ "$output" =~ "remotes/origin/other" ]] || false
+    [[ "$output" =~ "remotes/test-remote/other" ]] || false
+
     run dolt branch
     [[ ! "$output" =~ "other" ]] || false
 
@@ -1988,4 +1988,34 @@ SQL
     run dolt fetch --prune remote2 'refs/heads/main:refs/remotes/remote2/othermain'
     [ "$status" -ne 0 ]
     [[ "$output" =~ "--prune option cannot be provided with a ref spec" ]] || false
+}
+
+@test "remotes: push ignores local tracking branch" {
+    # https://github.com/dolthub/dolt/issues/7448
+    mkdir remote
+    mkdir cloneA
+
+    cd cloneA
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push origin main:main
+    dolt checkout -b alt
+    dolt commit -m new --allow-empty
+    dolt push origin alt:alt
+
+    cd ..
+    dolt clone file://remote cloneB
+    cd cloneB
+    dolt merge origin/alt
+    dolt push origin main:main
+    dolt push origin :alt
+
+    cd ../cloneA
+    dolt checkout main
+    dolt checkout -B alt
+    dolt commit -m another --allow-empty
+
+    run dolt push origin alt:alt
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new branch" ]] || false
 }
