@@ -326,7 +326,7 @@ SQL
 @test "remotes-push-pull: try to push a remote that is behind tip" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote main
-    cd "dolt-repo-clones"
+    cd dolt-repo-clones
     dolt clone http://localhost:50051/test-org/test-repo
     cd ..
     dolt sql <<SQL
@@ -343,11 +343,7 @@ SQL
     dolt add test
     dolt commit -m "test commit"
     dolt push test-remote main
-    cd "dolt-repo-clones/test-repo"
-    run dolt push origin main
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date" ]] || false
-    dolt fetch
+    cd dolt-repo-clones/test-repo
     run dolt push origin main
     [ "$status" -eq 1 ]
     [[ "$output" =~ " ! [rejected]            main -> main" ]] || false
