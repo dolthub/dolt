@@ -161,7 +161,15 @@ func (rcv *TableSchema) MutateHasFeaturesAfterTryAccessors(n bool) bool {
 	return rcv._tab.MutateBoolSlot(14, n)
 }
 
-const TableSchemaNumFields = 6
+func (rcv *TableSchema) Comment() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+const TableSchemaNumFields = 7
 
 func TableSchemaStart(builder *flatbuffers.Builder) {
 	builder.StartObject(TableSchemaNumFields)
@@ -192,6 +200,9 @@ func TableSchemaAddCollation(builder *flatbuffers.Builder, collation Collation) 
 }
 func TableSchemaAddHasFeaturesAfterTryAccessors(builder *flatbuffers.Builder, hasFeaturesAfterTryAccessors bool) {
 	builder.PrependBoolSlot(5, hasFeaturesAfterTryAccessors, false)
+}
+func TableSchemaAddComment(builder *flatbuffers.Builder, comment flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(comment), 0)
 }
 func TableSchemaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

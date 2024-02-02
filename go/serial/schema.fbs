@@ -27,6 +27,9 @@ table TableSchema {
 
   // this field is necessary because older dolt clients weren't using TryAccessor for Columns, but are in TableSchemas
   has_features_after_try_accessors:bool;
+
+  // table comment
+  comment:string;
 }
 
 table Column {

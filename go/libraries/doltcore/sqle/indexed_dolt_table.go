@@ -44,6 +44,7 @@ func NewIndexedDoltTable(t *DoltTable, idx index.DoltIndex) *IndexedDoltTable {
 }
 
 var _ sql.IndexedTable = (*IndexedDoltTable)(nil)
+var _ sql.CommentedTable = (*IndexedDoltTable)(nil)
 
 func (idt *IndexedDoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return idt.table.GetIndexes(ctx)
@@ -63,6 +64,10 @@ func (idt *IndexedDoltTable) Schema() sql.Schema {
 
 func (idt *IndexedDoltTable) Collation() sql.CollationID {
 	return sql.CollationID(idt.table.sch.GetCollation())
+}
+
+func (idt *IndexedDoltTable) Comment() string {
+	return idt.table.Comment()
 }
 
 func (idt *IndexedDoltTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {

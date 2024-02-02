@@ -172,6 +172,7 @@ type doltReadOnlyTableInterface interface {
 	sql.StatisticsTable
 	sql.CheckTable
 	sql.PrimaryKeyTable
+	sql.CommentedTable
 }
 
 var _ doltReadOnlyTableInterface = (*DoltTable)(nil)
@@ -358,6 +359,11 @@ func (t *DoltTable) Schema() sql.Schema {
 // Collation returns the collation for this table.
 func (t *DoltTable) Collation() sql.CollationID {
 	return sql.CollationID(t.sch.GetCollation())
+}
+
+// Comment returns the comment for this table.
+func (t *DoltTable) Comment() string {
+	return t.sch.GetComment()
 }
 
 func (t *DoltTable) sqlSchema() sql.PrimaryKeySchema {
