@@ -31,7 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-const maxFanout = 200 * 200
+const maxBucketFanout = 200 * 200
 
 func newStatsTable(ctx *sql.Context, ns tree.NodeStore, vrw stypes.ValueReadWriter) (*doltdb.Table, error) {
 	return doltdb.CreateEmptyTable(ctx, ns, vrw, schema.StatsTableDoltSchema)
@@ -68,7 +68,7 @@ func flushStats(ctx *sql.Context, prev prolly.Map, tableStats map[sql.StatQualif
 	for qual, stats := range tableStats {
 		var pos int64
 
-		// delete previous entries for this index
+		// delete previous entries for this index -> (db, table, index, pos)
 		keyBuilder.PutString(0, qual.Database)
 		keyBuilder.PutString(1, qual.Table())
 		keyBuilder.PutString(2, qual.Index())
@@ -77,11 +77,11 @@ func flushStats(ctx *sql.Context, prev prolly.Map, tableStats map[sql.StatQualif
 		keyBuilder.PutString(0, qual.Database)
 		keyBuilder.PutString(1, qual.Table())
 		keyBuilder.PutString(2, qual.Index())
-		keyBuilder.PutInt64(3, maxFanout+1)
+		keyBuilder.PutInt64(3, maxBucketFanout+1)
 		maxKey := keyBuilder.Build(pool)
 
 		// there is a limit on the number of buckets for a given index, iter
-		// will terminate after we run over.
+		// will terminate before maxBucketFanout
 		iter, err := prev.IterKeyRange(ctx, firstKey, maxKey)
 		if err != nil {
 			return prolly.Map{}, err
@@ -172,7 +172,7 @@ func deleteStats(ctx *sql.Context, prev prolly.Map, quals ...sql.StatQualifier) 
 	keyBuilder := val.NewTupleBuilder(kd)
 
 	for _, qual := range quals {
-		// delete previous entries for this index
+		// delete previous entries for this index -> (db, table, index, pos)
 		keyBuilder.PutString(0, qual.Database)
 		keyBuilder.PutString(1, qual.Table())
 		keyBuilder.PutString(2, qual.Index())
@@ -181,11 +181,11 @@ func deleteStats(ctx *sql.Context, prev prolly.Map, quals ...sql.StatQualifier) 
 		keyBuilder.PutString(0, qual.Database)
 		keyBuilder.PutString(1, qual.Table())
 		keyBuilder.PutString(2, qual.Index())
-		keyBuilder.PutInt64(3, maxFanout+1)
+		keyBuilder.PutInt64(3, maxBucketFanout+1)
 		maxKey := keyBuilder.Build(pool)
 
 		// there is a limit on the number of buckets for a given index, iter
-		// will terminate after we run over.
+		// will terminate before maxBucketFanout
 		iter, err := prev.IterKeyRange(ctx, firstKey, maxKey)
 		if err != nil {
 			return prolly.Map{}, err

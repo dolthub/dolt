@@ -24,7 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
-func NewInitDatabaseHook(statsProv *Provider, ctxFactory func(ctx context.Context) (*sql.Context, error), dbProv sql.DatabaseProvider, bThreads *sql.BackgroundThreads, checkInterval time.Duration, updateThresh float64, orig sqle.InitDatabaseHook) sqle.InitDatabaseHook {
+func NewInitDatabaseHook(statsProv *Provider, ctxFactory func(ctx context.Context) (*sql.Context, error), bThreads *sql.BackgroundThreads, checkInterval time.Duration, updateThresh float64, orig sqle.InitDatabaseHook) sqle.InitDatabaseHook {
 	return func(ctx *sql.Context, pro *sqle.DoltDatabaseProvider, name string, denv *env.DoltEnv) error {
 		var err error
 		err = orig(ctx, pro, name, denv)
@@ -36,17 +36,16 @@ func NewInitDatabaseHook(statsProv *Provider, ctxFactory func(ctx context.Contex
 	}
 }
 
-func NewDropDatabaseHook(statsProv *Provider, orig sqle.DropDatabaseHook) sqle.DropDatabaseHook {
+func NewDropDatabaseHook(statsProv *Provider, ctxFactory func(ctx context.Context) (*sql.Context, error), orig sqle.DropDatabaseHook) sqle.DropDatabaseHook {
 	return func(name string) {
 		if orig != nil {
 			orig(name)
 		}
-		if cancel, ok := statsProv.autoRefreshCancel[name]; ok {
-			cancel()
-			statsProv.mu.Lock()
-			defer statsProv.mu.Unlock()
-			delete(statsProv.autoRefreshCancel, name)
-			delete(statsProv.dbStats, name)
+		ctx, err := ctxFactory(context.Background())
+		if err != nil {
+			return
 		}
+		statsProv.CancelRefreshThread(name)
+		statsProv.DropDbStats(ctx, name)
 	}
 }

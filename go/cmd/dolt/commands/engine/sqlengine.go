@@ -181,8 +181,13 @@ func NewSqlEngine(
 		"authentication_dolt_jwt": NewAuthenticateDoltJWTPlugin(config.JwksConfig),
 	})
 
+	// stats ref is dependency of sessionBuilder
+	// initializing stats depends on sessionBuilder
+	statsPro := stats.NewProvider()
+	sqlEngine.engine.Analyzer.Catalog.StatsProvider = statsPro
+
 	engine.Analyzer.ExecBuilder = rowexec.DefaultBuilder
-	sessFactory := doltSessionFactory(pro, mrEnv.Config(), bcController, config.Autocommit)
+	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, config.Autocommit)
 	sqlEngine.provider = pro
 	sqlEngine.contextFactory = sqlContextFactory()
 	sqlEngine.dsessFactory = sessFactory
@@ -380,11 +385,19 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, sessFa
 }
 
 func configureStatsProvider(ctx context.Context, sqlEngine *SqlEngine, bThreads *sql.BackgroundThreads, pro *dsqle.DoltDatabaseProvider, dbs []dsess.SqlDatabase) error {
-	sqlEngine.engine.Analyzer.Catalog.StatsProvider = stats.NewProvider()
 	if _, disabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly); disabled == int8(1) {
 		return nil
 	}
 	statsProv := sqlEngine.engine.Analyzer.Catalog.StatsProvider.(*stats.Provider)
+
+	_, threshold, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshThreshold)
+	_, interval, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshInterval)
+	interval64, _, _ := types2.Int64.Convert(interval)
+	intervalSec := time.Second * time.Duration(interval64.(int64))
+	thresholdf64 := threshold.(float64)
+
+	statsProv.SetStarter(stats.NewInitDatabaseHook(statsProv, sqlEngine.NewDefaultContext, bThreads, intervalSec, thresholdf64, pro.InitDatabaseHook))
+
 	loadCtx, err := sqlEngine.NewDefaultContext(ctx)
 	if err != nil {
 		return err
@@ -393,18 +406,13 @@ func configureStatsProvider(ctx context.Context, sqlEngine *SqlEngine, bThreads 
 		return err
 	}
 	if _, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshEnabled); enabled == int8(1) {
-		_, threshold, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshThreshold)
-		_, interval, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshInterval)
-		interval64, _, _ := types2.Int64.Convert(interval)
-		intervalSec := time.Second * time.Duration(interval64.(int64))
-		thresholdf64 := threshold.(float64)
 		for _, db := range dbs {
 			if err := statsProv.ConfigureAutoRefresh(sqlEngine.NewDefaultContext, db.Name(), db.DbData().Ddb, pro, bThreads, intervalSec, thresholdf64); err != nil {
 				return err
 			}
 		}
-		pro.InitDatabaseHook = stats.NewInitDatabaseHook(statsProv, sqlEngine.NewDefaultContext, pro, bThreads, intervalSec, thresholdf64, pro.InitDatabaseHook)
-		pro.DropDatabaseHook = stats.NewDropDatabaseHook(statsProv, pro.DropDatabaseHook)
+		pro.InitDatabaseHook = stats.NewInitDatabaseHook(statsProv, sqlEngine.NewDefaultContext, bThreads, intervalSec, thresholdf64, pro.InitDatabaseHook)
+		pro.DropDatabaseHook = stats.NewDropDatabaseHook(statsProv, sqlEngine.NewDefaultContext, pro.DropDatabaseHook)
 	}
 	return nil
 }
@@ -418,9 +426,9 @@ func sqlContextFactory() contextFactory {
 }
 
 // doltSessionFactory returns a sessionFactory that creates a new DoltSession
-func doltSessionFactory(pro *dsqle.DoltDatabaseProvider, config config.ReadWriteConfig, bc *branch_control.Controller, autocommit bool) sessionFactory {
+func doltSessionFactory(pro *dsqle.DoltDatabaseProvider, statsPro sql.StatsProvider, config config.ReadWriteConfig, bc *branch_control.Controller, autocommit bool) sessionFactory {
 	return func(mysqlSess *sql.BaseSession, provider sql.DatabaseProvider) (*dsess.DoltSession, error) {
-		doltSession, err := dsess.NewDoltSession(mysqlSess, pro, config, bc)
+		doltSession, err := dsess.NewDoltSession(mysqlSess, pro, config, bc, statsPro)
 		if err != nil {
 			return nil, err
 		}

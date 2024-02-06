@@ -16,6 +16,7 @@ package enginetest
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"strings"
 	"testing"
 
@@ -381,7 +382,8 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "stats updates",
+		// only edited chunks are scanned and re-written
+		Name: "incremental stats updates",
 		SetUpScript: []string{
 			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
 			"insert into xy values (0,0,'a'), (2,0,'a'), (4,1,'a'), (6,2,'a')",
@@ -396,6 +398,84 @@ var DoltStatsIOTests = []queries.ScriptTest{
 					{uint64(8), uint64(8), uint64(0)},
 					{uint64(8), uint64(3), uint64(0)},
 				},
+			},
+		},
+	},
+}
+
+var StatProcTests = []queries.ScriptTest{
+	{
+		Name: "basic start, observe, stop loop",
+		SetUpScript: []string{
+			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
+			"insert into xy values (0,0,'a'), (2,0,'a'), (4,1,'a'), (6,2,'a')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "select count(*) from dolt_statistics",
+				ExpectedErrStr: doltdb.ErrNoStatistics.Error(),
+			},
+			{
+				Query:    "call dolt_stats_status()",
+				Expected: []sql.Row{{"no active stats thread"}},
+			},
+			{
+				Query:    "set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "set @@PERSIST.dolt_stats_auto_refresh_threshold = 0",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query: "call dolt_stats_restart()",
+			},
+			{
+				Query:    "call dolt_stats_status()",
+				Expected: []sql.Row{{"updated to hash"}},
+			},
+			{
+				Query: "call sleep(.2)",
+			},
+			{
+				Query:    "select count(*) from dolt_statistics",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query: "call dolt_stats_stop()",
+			},
+			{
+				Query:    "call dolt_stats_status()",
+				Expected: []sql.Row{{"stopped refresh thread"}},
+			},
+			{
+				Query:    "select count(*) from dolt_statistics",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query: "insert into xy values (1,0,'a'), (3,0,'a'), (5,2,'a'),  (7,1,'a')",
+			},
+			{
+				Query: "analyze table xy",
+			},
+			{
+				Query:    "call dolt_stats_status()",
+				Expected: []sql.Row{{"updated to hash"}},
+			},
+			{
+				Query:    "select count(*) from dolt_statistics",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query: "call dolt_stats_clear()",
+			},
+			{
+				Query:    "call dolt_stats_status()",
+				Expected: []sql.Row{{"dropped"}},
+			},
+			{
+				Query:          "select count(*) from dolt_statistics",
+				ExpectedErrStr: doltdb.ErrNoStatistics.Error(),
 			},
 		},
 	},

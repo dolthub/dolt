@@ -110,8 +110,8 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 	return db.GetRoot(ctx)
 }
 
-func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvider) *sql.Context {
-	s, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, config2.NewMapConfig(make(map[string]string)), branch_control.CreateDefaultController(ctx))
+func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvider, statsPro sql.StatsProvider) *sql.Context {
+	s, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, config2.NewMapConfig(make(map[string]string)), branch_control.CreateDefaultController(ctx), statsPro)
 	if err != nil {
 		panic(err)
 	}
@@ -132,7 +132,8 @@ func NewTestEngine(dEnv *env.DoltEnv, ctx context.Context, db dsess.SqlDatabase)
 	}
 
 	engine := sqle.NewDefault(pro)
-	sqlCtx := NewTestSQLCtxWithProvider(ctx, pro)
+
+	sqlCtx := NewTestSQLCtxWithProvider(ctx, pro, nil)
 	sqlCtx.SetCurrentDatabase(db.Name())
 	return engine, sqlCtx, nil
 }

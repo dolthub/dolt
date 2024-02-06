@@ -43,7 +43,7 @@ func (p *Provider) ConfigureAutoRefresh(ctxFactory func(ctx context.Context) (*s
 	defer p.mu.Unlock()
 
 	dropDbCtx, dbStatsCancel := context.WithCancel(context.Background())
-	p.autoRefreshCancel[dbName] = dbStatsCancel
+	p.cancelers[dbName] = dbStatsCancel
 
 	return bThreads.Add(fmt.Sprintf("%s_%s", asyncAutoRefreshStats, dbName), func(ctx context.Context) {
 		timer := time.NewTimer(checkInterval)
@@ -167,20 +167,20 @@ func (p *Provider) ConfigureAutoRefresh(ctxFactory func(ctx context.Context) (*s
 						}
 						sqlCtx.GetLogger().Debugf("statistics refresh index: %s", qual.String())
 
-						idxMeta, err := newIdxMeta(sqlCtx, curStat, dTab, index, curStat.Columns)
+						updateMeta, err := newIdxMeta(sqlCtx, curStat, dTab, index, curStat.Columns)
 						if err != nil {
 							sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
 							continue
 						}
 						curCnt := float64(len(curStat.active))
-						updateCnt := float64(len(idxMeta.updateChunks))
-						deleteCnt := float64(len(curStat.active) - len(idxMeta.preexisting))
+						updateCnt := float64(len(updateMeta.updateChunks))
+						deleteCnt := float64(len(curStat.active) - len(updateMeta.preexisting))
 						sqlCtx.GetLogger().Debugf("statistics current: %d, new: %d, delete: %d", int(curCnt), int(updateCnt), int(deleteCnt))
 
 						if curCnt == 0 || (deleteCnt+updateCnt)/curCnt > updateThresh {
-							sqlCtx.GetLogger().Debugf("statistics updating: %s", idxMeta.qual)
+							sqlCtx.GetLogger().Debugf("statistics updating: %s", updateMeta.qual)
 							// mark index for updating
-							idxMetas = append(idxMetas, idxMeta)
+							idxMetas = append(idxMetas, updateMeta)
 							// update lastest hash if we haven't already
 							curStats.setLatestHash(table, tableHash)
 						}
@@ -193,22 +193,26 @@ func (p *Provider) ConfigureAutoRefresh(ctxFactory func(ctx context.Context) (*s
 					}
 
 					// merge new chunks with preexisting chunks
-					for _, idxMeta := range idxMetas {
-						stat := newTableStats[idxMeta.qual]
+					for _, updateMeta := range idxMetas {
+						stat := newTableStats[updateMeta.qual]
 						if stat != nil {
-							newStats[idxMeta.qual] = mergeStatUpdates(stat, idxMeta)
+							newStats[updateMeta.qual] = mergeStatUpdates(stat, updateMeta)
 						}
 					}
 				}
 
-				for _, s := range curStats.stats {
-					// table or index delete leaves hole in stats
-					// this is separate from threshold check
-					if !tableExistsAndSkipped[s.Qual.Table()] && !qualExists[s.Qual] {
-						// only delete stats we've verified are deleted
-						deletedStats = append(deletedStats, s.Qual)
+				func() {
+					curStats.mu.Lock()
+					defer curStats.mu.Unlock()
+					for _, s := range curStats.stats {
+						// table or index delete leaves hole in stats
+						// this is separate from threshold check
+						if !tableExistsAndSkipped[s.Qual.Table()] && !qualExists[s.Qual] {
+							// only delete stats we've verified are deleted
+							deletedStats = append(deletedStats, s.Qual)
+						}
 					}
-				}
+				}()
 
 				prevMap := curStats.getCurrentMap()
 				if prevMap.KeyDesc().Count() == 0 {
@@ -264,20 +268,23 @@ func newIdxMeta(ctx *sql.Context, curStats *DoltStats, doltTable *doltdb.Table, 
 
 	prollyMap := durable.ProllyMapFromIndex(idx)
 
-	// get histogram level hashes
+	// get newest histogram target level hashes
 	levelNodes, err := tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
 	if err != nil {
 		return indexMeta{}, err
 	}
 
 	var addrs []hash.Hash
+	var preservedStats []DoltBucket
 	var missingAddrs float64
 	var missingChunks []tree.Node
-	var preservedStats []DoltBucket
 	var missingOffsets [][]uint64
 	var offset uint64
 	for _, n := range levelNodes {
-		// check if hash is in current list
+		// Compare the previous histogram chunks to the newest tree chunks.
+		// Partition the newest chunks into 1) preserved or 2) missing.
+		// Missing chunks will need to be scanned on a stats update, so
+		// track the (start, end) ordinal offsets to simplify the read iter.
 		treeCnt, err := n.TreeCount()
 		if err != nil {
 			return indexMeta{}, err

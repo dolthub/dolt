@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"strings"
 	"sync"
 	"time"
@@ -38,10 +39,14 @@ import (
 var ErrFailedToLoad = errors.New("failed to load statistics")
 
 type DoltStats struct {
-	mu            *sync.Mutex
-	level         int
-	chunks        []hash.Hash
-	active        map[hash.Hash]int
+	mu *sync.Mutex
+	// chunks is a list of addresses for the histogram fanout level
+	chunks []hash.Hash
+	// active maps a chunk/bucket address to its position in
+	// the histogram. 1-indexed to differentiate from an empty
+	// field on disk
+	active map[hash.Hash]int
+
 	RowCount      uint64
 	DistinctCount uint64
 	NullCount     uint64
@@ -191,9 +196,10 @@ type indexMeta struct {
 
 func NewProvider() *Provider {
 	return &Provider{
-		mu:                &sync.Mutex{},
-		dbStats:           make(map[string]*dbStats),
-		autoRefreshCancel: make(map[string]context.CancelFunc),
+		mu:        &sync.Mutex{},
+		dbStats:   make(map[string]*dbStats),
+		cancelers: make(map[string]context.CancelFunc),
+		status:    make(map[string]string),
 	}
 }
 
@@ -201,10 +207,12 @@ func NewProvider() *Provider {
 // Each database has its own statistics table that all tables/indexes in a db
 // share.
 type Provider struct {
-	mu                *sync.Mutex
-	latestRootAddr    hash.Hash
-	dbStats           map[string]*dbStats
-	autoRefreshCancel map[string]context.CancelFunc
+	mu             *sync.Mutex
+	latestRootAddr hash.Hash
+	dbStats        map[string]*dbStats
+	cancelers      map[string]context.CancelFunc
+	starter        sqle.InitDatabaseHook
+	status         map[string]string
 }
 
 // each database has one statistics table that is a collection of the
@@ -229,10 +237,37 @@ func newDbStats(dbName string) *dbStats {
 
 var _ sql.StatsProvider = (*Provider)(nil)
 
+func (p *Provider) StartRefreshThread(ctx *sql.Context, pro dsess.DoltDatabaseProvider, name string, env *env.DoltEnv) error {
+	return p.starter(ctx, pro.(*sqle.DoltDatabaseProvider), name, env)
+}
+
+func (p *Provider) SetStarter(hook sqle.InitDatabaseHook) {
+	p.starter = hook
+}
+
+func (p *Provider) CancelRefreshThread(dbName string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if cancel, ok := p.cancelers[dbName]; ok {
+		cancel()
+		p.status[dbName] = "cancelled"
+	}
+}
+
+func (p *Provider) ThreadStatus(dbName string) string {
+	if msg, ok := p.status[dbName]; ok {
+		return msg
+	}
+	return "no active stats thread"
+}
+
 func (p *Provider) setStats(dbName string, s *dbStats) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.dbStats[dbName] = s
+	if s != nil {
+		p.status[dbName] = fmt.Sprintf("updated to hash: %s", s.currentMap.HashOf())
+	}
 }
 
 func (p *Provider) getStats(dbName string) *dbStats {
@@ -367,11 +402,31 @@ func (p *Provider) GetStats(ctx *sql.Context, qual sql.StatQualifier, cols []str
 	return nil, false
 }
 
+func (p *Provider) DropDbStats(ctx *sql.Context, db string) error {
+	p.setStats(db, nil)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	dSess := dsess.DSessFromSess(ctx.Session)
+	ddb, ok := dSess.GetDoltDB(ctx, db)
+	if !ok {
+		return sql.ErrDatabaseNotFound.New(db)
+	}
+	p.status[db] = "dropped"
+	return ddb.DropStatisics(ctx)
+}
+
 func (p *Provider) DropStats(ctx *sql.Context, qual sql.StatQualifier, cols []string) error {
 	if stat := p.getStats(strings.ToLower(qual.Database)); stat != nil {
 		stat.dropIndexStats(qual)
+		p.UpdateStatus(qual.Db(), fmt.Sprintf("dropped statisic: %s", qual.String()))
 	}
 	return nil
+}
+
+func (p *Provider) UpdateStatus(db string, msg string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.status[db] = msg
 }
 
 func (p *Provider) RowCount(ctx *sql.Context, db, table string) (uint64, error) {

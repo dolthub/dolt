@@ -302,6 +302,7 @@ func sqlNewEngine(dEnv *env.DoltEnv) (*sqle.Engine, dsess.DoltDatabaseProvider, 
 	}
 
 	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
+
 	engine := sqle.NewDefault(pro)
 
 	return engine, pro, nil

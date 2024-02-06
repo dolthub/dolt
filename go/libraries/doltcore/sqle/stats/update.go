@@ -200,8 +200,15 @@ func mergeStatUpdates(newStats *DoltStats, idxMeta indexMeta) *DoltStats {
 }
 
 func firstRowForIndex(ctx *sql.Context, prollyMap prolly.Map, keyBuilder *val.TupleBuilder, prefixLen int) (sql.Row, error) {
+	if cnt, err := prollyMap.Count(); err != nil {
+		return nil, err
+	} else if cnt == 0 {
+		return nil, nil
+	}
+
 	buffPool := prollyMap.NodeStore().Pool()
 
+	// first row is ordinal 0
 	firstIter, err := prollyMap.IterOrdinalRange(ctx, 0, 1)
 	if err != nil {
 		return nil, err
