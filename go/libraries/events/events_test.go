@@ -25,7 +25,7 @@ import (
 func TestEvents(t *testing.T) {
 	remoteUrl := "https://dolthub.com/org/repo"
 
-	collector := NewCollector()
+	collector := NewCollector("invalid", nil)
 	testEvent := NewEvent(eventsapi.ClientEventType_CLONE)
 
 	testEvent.SetAttribute(eventsapi.AttributeID_REMOTE_URL_SCHEME, remoteUrl)
