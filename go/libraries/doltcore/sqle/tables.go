@@ -1945,8 +1945,9 @@ func validateSchemaChange(
 }
 
 func (t *AlterableDoltTable) adjustForeignKeysForDroppedPk(ctx *sql.Context, tbl string, root *doltdb.RootValue) (*doltdb.RootValue, error) {
-	if t.autoIncCol.AutoIncrement {
-		return nil, sql.ErrWrongAutoKey.New()
+	err := sql.ValidatePrimaryKeyDrop(ctx, t, t.PrimaryKeySchema())
+	if err != nil {
+		return nil, err
 	}
 
 	fkc, err := root.GetForeignKeyCollection(ctx)
