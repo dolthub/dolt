@@ -2101,8 +2101,8 @@ func TestStatsFunctions(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
 	harness.Setup(setup.MydbData)
+	harness.configureStats = true
 	for _, test := range StatProcTests {
-		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScript(t, harness, test)
 		})
@@ -3093,7 +3093,6 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 	intervalSec := time.Duration(0)
 	thresholdf64 := 0.
 	bThreads := sql.NewBackgroundThreads()
-	pro := engine.EngineAnalyzer().Catalog.DbProvider
 	statsProv := engine.EngineAnalyzer().Catalog.StatsProvider.(*stats.Provider)
 
 	// it is important to use new sessions for this test, to avoid working root conflicts
@@ -3103,7 +3102,7 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 		return enginetest.NewSession(harness), nil
 	}
 
-	err := statsProv.ConfigureAutoRefresh(newCtx, sqlDb.Name(), sqlDb.DbData().Ddb, pro, bThreads, intervalSec, thresholdf64)
+	err := statsProv.InitAutoRefresh(newCtx, sqlDb.Name(), bThreads, intervalSec, thresholdf64)
 	require.NoError(t, err)
 
 	execQ := func(ctx *sql.Context, q string, id int, tag string) {

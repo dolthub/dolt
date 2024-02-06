@@ -26,8 +26,8 @@ import (
 func statsFunc(name string) func(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	var fn func(*sql.Context) (interface{}, error)
 	switch name {
-	case "clear":
-		fn = statsClear
+	case "drop":
+		fn = statsDrop
 	case "restart":
 		fn = statsRestart
 	case "stop":
@@ -53,28 +53,13 @@ type AutoRefreshStatsProvider interface {
 	ThreadStatus(string) string
 }
 
-func statsClear(ctx *sql.Context) (interface{}, error) {
-	dSess := dsess.DSessFromSess(ctx.Session)
-	pro := dSess.StatsProvider()
-
-	err := pro.DropDbStats(ctx, ctx.GetCurrentDatabase())
-	if err != nil {
-		return nil, fmt.Errorf("failed to clear stats: %w", err)
-	}
-	return fmt.Sprintf("deleted for for %s: %s", ctx.GetCurrentDatabase(), ref.StatsRef{}.String()), nil
-}
-
+// statsRestart tries to stop and then start a refresh thread
 func statsRestart(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	statsPro := dSess.StatsProvider()
 	dbName := strings.ToLower(ctx.GetCurrentDatabase())
 
 	if afp, ok := statsPro.(AutoRefreshStatsProvider); ok {
-		err := statsPro.DropDbStats(ctx, dbName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to stop stats collection: %w", err)
-		}
-
 		pro := dSess.Provider()
 		newFs, err := pro.FileSystem().WithWorkingDir(dbName)
 		if err != nil {
@@ -94,6 +79,7 @@ func statsRestart(ctx *sql.Context) (interface{}, error) {
 	return nil, nil
 }
 
+// statsStatus returns the last update for a stats thread
 func statsStatus(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	dbName := strings.ToLower(ctx.GetCurrentDatabase())
@@ -104,14 +90,32 @@ func statsStatus(ctx *sql.Context) (interface{}, error) {
 	return nil, fmt.Errorf("provider does not implement AutoRefreshStatsProvider")
 }
 
+// statsStop cancels a refresh thread
 func statsStop(ctx *sql.Context) (interface{}, error) {
+	dSess := dsess.DSessFromSess(ctx.Session)
+	statsPro := dSess.StatsProvider()
+	dbName := strings.ToLower(ctx.GetCurrentDatabase())
+
+	if afp, ok := statsPro.(AutoRefreshStatsProvider); ok {
+		afp.CancelRefreshThread(dbName)
+		return fmt.Sprintf("stopped thread: %s", dbName), nil
+	}
+	return nil, fmt.Errorf("provider does not implement AutoRefreshStatsProvider")
+}
+
+// statsDrop deletes the stats ref
+func statsDrop(ctx *sql.Context) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
 	dbName := strings.ToLower(ctx.GetCurrentDatabase())
 
-	err := pro.DropDbStats(ctx, dbName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to clear stats: %w", err)
+	if afp, ok := pro.(AutoRefreshStatsProvider); ok {
+		// currently unsafe to drop stats while running refresh
+		afp.CancelRefreshThread(dbName)
 	}
-	return fmt.Sprintf("deleted for for %s: %s", dbName, ref.StatsRef{}.String()), nil
+	err := pro.DropDbStats(ctx, dbName, true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to drop stats: %w", err)
+	}
+	return fmt.Sprintf("deleted stats ref for %s", dbName), nil
 }

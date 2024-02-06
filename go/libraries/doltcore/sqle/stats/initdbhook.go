@@ -16,6 +16,8 @@ package stats
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -24,15 +26,20 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
-func NewInitDatabaseHook(statsProv *Provider, ctxFactory func(ctx context.Context) (*sql.Context, error), bThreads *sql.BackgroundThreads, checkInterval time.Duration, updateThresh float64, orig sqle.InitDatabaseHook) sqle.InitDatabaseHook {
+func NewInitDatabaseHook(statsProv *Provider, ctxFactory func(ctx context.Context) (*sql.Context, error), bThreads *sql.BackgroundThreads, orig sqle.InitDatabaseHook) sqle.InitDatabaseHook {
 	return func(ctx *sql.Context, pro *sqle.DoltDatabaseProvider, name string, denv *env.DoltEnv) error {
-		var err error
-		err = orig(ctx, pro, name, denv)
-		if err != nil {
-			return err
+		if orig != nil {
+			err := orig(ctx, pro, name, denv)
+			if err != nil {
+				return err
+			}
 		}
-
-		return statsProv.ConfigureAutoRefresh(ctxFactory, name, denv.DoltDB, pro, bThreads, checkInterval, updateThresh)
+		_, threshold, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshThreshold)
+		_, interval, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshInterval)
+		interval64, _, _ := types2.Int64.Convert(interval)
+		intervalSec := time.Second * time.Duration(interval64.(int64))
+		thresholdf64 := threshold.(float64)
+		return statsProv.InitAutoRefresh(ctxFactory, name, bThreads, intervalSec, thresholdf64)
 	}
 }
 
@@ -46,6 +53,6 @@ func NewDropDatabaseHook(statsProv *Provider, ctxFactory func(ctx context.Contex
 			return
 		}
 		statsProv.CancelRefreshThread(name)
-		statsProv.DropDbStats(ctx, name)
+		statsProv.DropDbStats(ctx, name, false)
 	}
 }

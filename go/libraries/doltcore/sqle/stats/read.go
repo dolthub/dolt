@@ -173,6 +173,7 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (*dbStats, 
 	currentStat.fds = fds
 	currentStat.colSet = colSet
 	currentStat.updateActive()
+	dbStat.setIndexStats(currentStat.Qual, currentStat)
 	dbStat.stats[currentStat.Qual] = currentStat
 	return dbStat, nil
 }

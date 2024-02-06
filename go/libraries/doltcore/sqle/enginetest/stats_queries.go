@@ -405,7 +405,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 
 var StatProcTests = []queries.ScriptTest{
 	{
-		Name: "basic start, observe, stop loop",
+		Name: "basic start, status, stop loop",
 		SetUpScript: []string{
 			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
 			"insert into xy values (0,0,'a'), (2,0,'a'), (4,1,'a'), (6,2,'a')",
@@ -419,8 +419,9 @@ var StatProcTests = []queries.ScriptTest{
 				Query:    "call dolt_stats_status()",
 				Expected: []sql.Row{{"no active stats thread"}},
 			},
+			// set refresh interval arbitrarily high to avoid updating when we restart
 			{
-				Query:    "set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
+				Query:    "set @@PERSIST.dolt_stats_auto_refresh_interval = 10000;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -432,42 +433,62 @@ var StatProcTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_stats_status()",
-				Expected: []sql.Row{{"updated to hash"}},
+				Expected: []sql.Row{{"restarted thread: mydb"}},
 			},
 			{
-				Query: "call sleep(.2)",
+				Query:    "set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
+				Expected: []sql.Row{{}},
+			},
+			// new restart picks up 0-interval, will start refreshing immediately
+			{
+				Query: "call dolt_stats_restart()",
+			},
+			{
+				Query: "select sleep(.1)",
+			},
+			{
+				Query:    "call dolt_stats_status()",
+				Expected: []sql.Row{{"updated to hash: vogi4fq0fe8n8rqa80pbsujlmmaljsoo"}},
 			},
 			{
 				Query:    "select count(*) from dolt_statistics",
 				Expected: []sql.Row{{2}},
 			},
+			// kill refresh thread
 			{
 				Query: "call dolt_stats_stop()",
 			},
 			{
 				Query:    "call dolt_stats_status()",
-				Expected: []sql.Row{{"stopped refresh thread"}},
+				Expected: []sql.Row{{"cancelled thread: mydb"}},
 			},
-			{
-				Query:    "select count(*) from dolt_statistics",
-				Expected: []sql.Row{{2}},
-			},
+			// insert without refresh thread will not update stats
 			{
 				Query: "insert into xy values (1,0,'a'), (3,0,'a'), (5,2,'a'),  (7,1,'a')",
 			},
 			{
-				Query: "analyze table xy",
+				Query: "select sleep(.1)",
 			},
 			{
 				Query:    "call dolt_stats_status()",
-				Expected: []sql.Row{{"updated to hash"}},
+				Expected: []sql.Row{{"cancelled thread: mydb"}},
+			},
+			// manual analyze will update stats
+			{
+				Query:    "analyze table xy",
+				Expected: []sql.Row{{"xy", "analyze", "status", "OK"}},
+			},
+			{
+				Query:    "call dolt_stats_status()",
+				Expected: []sql.Row{{"updated to hash: fhnmdo8psvs10od36pqfi0g4cvvu732h"}},
 			},
 			{
 				Query:    "select count(*) from dolt_statistics",
 				Expected: []sql.Row{{2}},
 			},
+			// kill refresh thread and delete stats ref
 			{
-				Query: "call dolt_stats_clear()",
+				Query: "call dolt_stats_drop()",
 			},
 			{
 				Query:    "call dolt_stats_status()",

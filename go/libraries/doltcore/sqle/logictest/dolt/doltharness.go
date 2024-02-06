@@ -17,6 +17,7 @@ package dolt
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/stats"
 	"io"
 	"math/rand"
 	"strconv"
@@ -141,7 +142,7 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	ctx := dsql.NewTestSQLCtxWithProvider(context.Background(), pro)
+	ctx := dsql.NewTestSQLCtxWithProvider(context.Background(), pro, stats.NewProvider())
 	h.sess = ctx.Session.(*dsess.DoltSession)
 
 	dbs := h.engine.Analyzer.Catalog.AllDatabases(ctx)

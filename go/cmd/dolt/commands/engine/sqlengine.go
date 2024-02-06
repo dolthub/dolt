@@ -16,12 +16,6 @@ package engine
 
 import (
 	"context"
-	"os"
-	"runtime"
-	"strconv"
-	"strings"
-	"time"
-
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/eventscheduler"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -29,9 +23,12 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/sirupsen/logrus"
+	"os"
+	"runtime"
+	"strconv"
+	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -181,10 +178,8 @@ func NewSqlEngine(
 		"authentication_dolt_jwt": NewAuthenticateDoltJWTPlugin(config.JwksConfig),
 	})
 
-	// stats ref is dependency of sessionBuilder
-	// initializing stats depends on sessionBuilder
 	statsPro := stats.NewProvider()
-	sqlEngine.engine.Analyzer.Catalog.StatsProvider = statsPro
+	engine.Analyzer.Catalog.StatsProvider = statsPro
 
 	engine.Analyzer.ExecBuilder = rowexec.DefaultBuilder
 	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, config.Autocommit)
@@ -193,7 +188,9 @@ func NewSqlEngine(
 	sqlEngine.dsessFactory = sessFactory
 	sqlEngine.engine = engine
 
-	if err = configureStatsProvider(ctx, sqlEngine, bThreads, pro, dbs); err != nil {
+	// configuring stats depends on sessionBuilder
+	// sessionBuilder needs ref to statsProv
+	if err = statsPro.Configure(ctx, sqlEngine.NewDefaultContext, bThreads, pro, dbs); err != nil {
 		return nil, err
 	}
 
@@ -382,39 +379,6 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, sessFa
 		}
 	}
 	return engine.InitializeEventScheduler(getCtxFunc, config.EventSchedulerStatus, eventSchedulerPeriod)
-}
-
-func configureStatsProvider(ctx context.Context, sqlEngine *SqlEngine, bThreads *sql.BackgroundThreads, pro *dsqle.DoltDatabaseProvider, dbs []dsess.SqlDatabase) error {
-	if _, disabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly); disabled == int8(1) {
-		return nil
-	}
-	statsProv := sqlEngine.engine.Analyzer.Catalog.StatsProvider.(*stats.Provider)
-
-	_, threshold, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshThreshold)
-	_, interval, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshInterval)
-	interval64, _, _ := types2.Int64.Convert(interval)
-	intervalSec := time.Second * time.Duration(interval64.(int64))
-	thresholdf64 := threshold.(float64)
-
-	statsProv.SetStarter(stats.NewInitDatabaseHook(statsProv, sqlEngine.NewDefaultContext, bThreads, intervalSec, thresholdf64, pro.InitDatabaseHook))
-
-	loadCtx, err := sqlEngine.NewDefaultContext(ctx)
-	if err != nil {
-		return err
-	}
-	if err := statsProv.Load(loadCtx, dbs); err != nil {
-		return err
-	}
-	if _, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshEnabled); enabled == int8(1) {
-		for _, db := range dbs {
-			if err := statsProv.ConfigureAutoRefresh(sqlEngine.NewDefaultContext, db.Name(), db.DbData().Ddb, pro, bThreads, intervalSec, thresholdf64); err != nil {
-				return err
-			}
-		}
-		pro.InitDatabaseHook = stats.NewInitDatabaseHook(statsProv, sqlEngine.NewDefaultContext, bThreads, intervalSec, thresholdf64, pro.InitDatabaseHook)
-		pro.DropDatabaseHook = stats.NewDropDatabaseHook(statsProv, sqlEngine.NewDefaultContext, pro.DropDatabaseHook)
-	}
-	return nil
 }
 
 // sqlContextFactory returns a contextFactory that creates a new sql.Context with the initial database provided

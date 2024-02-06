@@ -53,6 +53,7 @@ type DoltHarness struct {
 	resetData           []setup.SetupScript
 	engine              *gms.Engine
 	skipSetupCommit     bool
+	configureStats      bool
 	useLocalFilesystem  bool
 	setupTestProcedures bool
 }
@@ -190,7 +191,8 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		require.True(t, ok)
 		d.provider = doltProvider
 
-		d.statsPro = stats.NewProvider()
+		statsPro := stats.NewProvider()
+		d.statsPro = statsPro
 
 		var err error
 		d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro)
@@ -213,6 +215,22 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		if !d.skipSetupCommit {
 			e, err = enginetest.RunSetupScripts(ctx, e, commitScripts(dbs), d.SupportsNativeIndexCreation())
 			if err != nil {
+				return nil, err
+			}
+		}
+
+		if d.configureStats {
+			bThreads := sql.NewBackgroundThreads()
+			e = e.WithBackgroundThreads(bThreads)
+
+			dSess := dsess.DSessFromSess(ctx.Session)
+			dbCache := dSess.DatabaseCache(ctx)
+
+			dsessDbs := make([]dsess.SqlDatabase, len(dbs))
+			for i, dbName := range dbs {
+				dsessDbs[i], _ = dbCache.GetCachedRevisionDb(fmt.Sprintf("%s/main", dbName), dbName)
+			}
+			if err = statsPro.Configure(ctx, func(context.Context) (*sql.Context, error) { return d.NewSession(), nil }, bThreads, doltProvider, dsessDbs); err != nil {
 				return nil, err
 			}
 		}
@@ -299,7 +317,7 @@ func (d *DoltHarness) newSessionWithClient(client sql.Client) *dsess.DoltSession
 	localConfig := d.multiRepoEnv.Config()
 	pro := d.session.Provider()
 
-	dSession, err := dsess.NewDoltSession(sql.NewBaseSessionWithClientServer("address", client, 1), pro.(dsess.DoltDatabaseProvider), localConfig, d.branchControl, nil)
+	dSession, err := dsess.NewDoltSession(sql.NewBaseSessionWithClientServer("address", client, 1), pro.(dsess.DoltDatabaseProvider), localConfig, d.branchControl, d.statsPro)
 	dSession.SetCurrentDatabase("mydb")
 	require.NoError(d.t, err)
 	return dSession

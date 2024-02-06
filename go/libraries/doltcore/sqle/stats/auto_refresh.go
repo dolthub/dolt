@@ -17,6 +17,8 @@ package stats
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	"strings"
 	"time"
 
@@ -33,7 +35,39 @@ import (
 
 const asyncAutoRefreshStats = "async_auto_refresh_stats"
 
-func (p *Provider) ConfigureAutoRefresh(ctxFactory func(ctx context.Context) (*sql.Context, error), dbName string, ddb *doltdb.DoltDB, prov sql.DatabaseProvider, bThreads *sql.BackgroundThreads, checkInterval time.Duration, updateThresh float64) error {
+func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Context) (*sql.Context, error), bThreads *sql.BackgroundThreads, pro *sqle.DoltDatabaseProvider, dbs []dsess.SqlDatabase) error {
+	p.SetStarter(NewInitDatabaseHook(p, ctxFactory, bThreads, nil))
+
+	if _, disabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly); disabled == int8(1) {
+		return nil
+	}
+
+	loadCtx, err := ctxFactory(ctx)
+	if err != nil {
+		return err
+	}
+	if err := p.Load(loadCtx, dbs); err != nil {
+		return err
+	}
+	if _, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshEnabled); enabled == int8(1) {
+		_, threshold, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshThreshold)
+		_, interval, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshInterval)
+		interval64, _, _ := types2.Int64.Convert(interval)
+		intervalSec := time.Second * time.Duration(interval64.(int64))
+		thresholdf64 := threshold.(float64)
+
+		for _, db := range dbs {
+			if err := p.InitAutoRefresh(ctxFactory, db.Name(), bThreads, intervalSec, thresholdf64); err != nil {
+				return err
+			}
+		}
+		pro.InitDatabaseHook = NewInitDatabaseHook(p, ctxFactory, bThreads, pro.InitDatabaseHook)
+		pro.DropDatabaseHook = NewDropDatabaseHook(p, ctxFactory, pro.DropDatabaseHook)
+	}
+	return nil
+}
+
+func (p *Provider) InitAutoRefresh(ctxFactory func(ctx context.Context) (*sql.Context, error), dbName string, bThreads *sql.BackgroundThreads, checkInterval time.Duration, updateThresh float64) error {
 	// this is only called after initial statistics are finished loading
 	// launch a thread that periodically checks freshness
 
@@ -81,13 +115,20 @@ func (p *Provider) ConfigureAutoRefresh(ctxFactory func(ctx context.Context) (*s
 				qualExists := make(map[sql.StatQualifier]bool)
 				tableExistsAndSkipped := make(map[string]bool)
 
+				// important: update session references every loop
+				dSess := dsess.DSessFromSess(sqlCtx.Session)
+				prov := dSess.Provider()
+				ddb, ok := dSess.GetDoltDB(sqlCtx, dbName)
+				if !ok {
+					sqlCtx.GetLogger().Debugf("statistics refresh error: database not found %s", dbName)
+				}
+
 				sqlDb, err := prov.Database(sqlCtx, dbName)
 				if err != nil {
 					sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
 					continue
 				}
 
-				// for each table
 				tables, err := sqlDb.GetTableNames(sqlCtx)
 				if err != nil {
 					sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
@@ -222,6 +263,10 @@ func (p *Provider) ConfigureAutoRefresh(ctxFactory func(ctx context.Context) (*s
 						sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
 						continue
 					}
+				}
+
+				if len(deletedStats) == 0 && len(newStats) == 0 {
+					continue
 				}
 
 				if len(deletedStats) > 0 {

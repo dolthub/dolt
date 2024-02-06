@@ -238,7 +238,13 @@ func newDbStats(dbName string) *dbStats {
 var _ sql.StatsProvider = (*Provider)(nil)
 
 func (p *Provider) StartRefreshThread(ctx *sql.Context, pro dsess.DoltDatabaseProvider, name string, env *env.DoltEnv) error {
-	return p.starter(ctx, pro.(*sqle.DoltDatabaseProvider), name, env)
+	err := p.starter(ctx, pro.(*sqle.DoltDatabaseProvider), name, env)
+	if err != nil {
+		p.UpdateStatus(name, fmt.Sprintf("error restarting thread %s: %s", name, err.Error()))
+		return err
+	}
+	p.UpdateStatus(name, fmt.Sprintf("restarted thread: %s", name))
+	return nil
 }
 
 func (p *Provider) SetStarter(hook sqle.InitDatabaseHook) {
@@ -250,7 +256,7 @@ func (p *Provider) CancelRefreshThread(dbName string) {
 	defer p.mu.Unlock()
 	if cancel, ok := p.cancelers[dbName]; ok {
 		cancel()
-		p.status[dbName] = "cancelled"
+		p.status[dbName] = fmt.Sprintf("cancelled thread: %s", dbName)
 	}
 }
 
@@ -265,7 +271,7 @@ func (p *Provider) setStats(dbName string, s *dbStats) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.dbStats[dbName] = s
-	if s != nil {
+	if s != nil && len(s.stats) > 0 {
 		p.status[dbName] = fmt.Sprintf("updated to hash: %s", s.currentMap.HashOf())
 	}
 }
@@ -402,17 +408,20 @@ func (p *Provider) GetStats(ctx *sql.Context, qual sql.StatQualifier, cols []str
 	return nil, false
 }
 
-func (p *Provider) DropDbStats(ctx *sql.Context, db string) error {
+func (p *Provider) DropDbStats(ctx *sql.Context, db string, flush bool) error {
 	p.setStats(db, nil)
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	dSess := dsess.DSessFromSess(ctx.Session)
-	ddb, ok := dSess.GetDoltDB(ctx, db)
-	if !ok {
-		return sql.ErrDatabaseNotFound.New(db)
-	}
 	p.status[db] = "dropped"
-	return ddb.DropStatisics(ctx)
+	if flush {
+		dSess := dsess.DSessFromSess(ctx.Session)
+		ddb, ok := dSess.GetDoltDB(ctx, db)
+		if !ok {
+			return nil
+		}
+		return ddb.DropStatisics(ctx)
+	}
+	return nil
 }
 
 func (p *Provider) DropStats(ctx *sql.Context, qual sql.StatQualifier, cols []string) error {
@@ -474,6 +483,7 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 		return err
 	}
 
+	// it's important to update session references every call
 	dSess := dsess.DSessFromSess(ctx.Session)
 	prov := dSess.Provider()
 	sqlDb, err := prov.Database(ctx, dbName)
@@ -541,12 +551,13 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 		newStats[idxMeta.qual] = mergeStatUpdates(stat, idxMeta)
 	}
 
+	ddb, ok := dSess.GetDoltDB(ctx, dbName)
+	if !ok {
+		return fmt.Errorf("database not found in session for stats update: %s", db)
+	}
+
 	prevMap := curStats.currentMap
 	if prevMap.KeyDesc().Count() == 0 {
-		ddb, ok := dSess.GetDoltDB(ctx, dbName)
-		if !ok {
-			return fmt.Errorf("database not found in session for stats update: %s", db)
-		}
 		kd, vd := schema.StatsTableDoltSchema.GetMapDescriptors()
 		prevMap, err = prolly.NewMapFromTuples(ctx, ddb.NodeStore(), kd, vd)
 		if err != nil {
@@ -564,11 +575,6 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 	}
 
 	p.setStats(dbName, curStats)
-
-	ddb, ok := dSess.GetDoltDB(ctx, dbName)
-	if !ok {
-		return sql.ErrDatabaseNotFound.New(dbName)
-	}
 
 	return ddb.SetStatisics(ctx, newMap.HashOf())
 }
