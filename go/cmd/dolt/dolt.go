@@ -287,23 +287,20 @@ func runMain() int {
 				case cpuProf:
 					opts = append(opts, profile.CPUProfile)
 					cli.Println("cpu profiling enabled.")
-					defer profile.Start(opts...).Stop()
 				case memProf:
 					opts = append(opts, profile.MemProfile)
 					cli.Println("mem profiling enabled.")
-					defer profile.Start(opts...).Stop()
 				case blockingProf:
 					opts = append(opts, profile.BlockProfile)
 					cli.Println("block profiling enabled")
-					defer profile.Start(opts...).Stop()
 				case traceProf:
 					opts = append(opts, profile.TraceProfile)
 					cli.Println("trace profiling enabled")
-					defer profile.Start(opts...).Stop()
 				default:
 					panic("Unexpected prof flag: " + args[1])
 				}
 
+				defer profile.Start(opts...).Stop()
 				args = args[argsIdx:]
 
 			case pprofServerFlag:
