@@ -1556,6 +1556,16 @@ func (t *AlterableDoltTable) RewriteInserter(
 		})
 	}
 
+	// Grab the next auto_increment value before we call truncate, since truncate will delete the table
+	// and clear out the auto_increment tracking for this table.
+	var nextAutoIncValue uint64
+	if t.autoIncCol.AutoIncrement {
+		nextAutoIncValue, err = t.PeekNextAutoIncrementValue(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// TODO: test for this when the table is auto increment and exists on another branch
 	dt, err = t.truncate(ctx, dt, newSch, sess)
 	if err != nil {
@@ -1589,6 +1599,14 @@ func (t *AlterableDoltTable) RewriteInserter(
 	}
 
 	newWs := ws.WithWorkingRoot(newRoot)
+
+	// Restore the next auto increment value, since it was cleared when we truncated the table
+	if t.autoIncCol.AutoIncrement {
+		err = t.AutoIncrementSetter(ctx).SetAutoIncrementValue(ctx, nextAutoIncValue)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	opts := dbState.WriteSession().GetOptions()
 	opts.ForeignKeyChecksDisabled = true
