@@ -18,6 +18,7 @@ import (
 	"context"
 	crand "crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -236,6 +237,7 @@ const stdErrFlag = "--stderr"
 const stdOutAndErrFlag = "--out-and-err"
 const ignoreLocksFlag = "--ignore-lock-file"
 const verboseEngineSetupFlag = "--verbose-engine-setup"
+const profilePath = "--prof-path"
 
 const cpuProf = "cpu"
 const memProf = "mem"
@@ -266,25 +268,44 @@ func runMain() int {
 	verboseEngineSetup := false
 	if len(args) > 0 {
 		var doneDebugFlags bool
+		var profileOpts []func(p *profile.Profile)
+		hasUnstartedProfile := false
 		for !doneDebugFlags && len(args) > 0 {
 			switch args[0] {
+			case profilePath:
+				path := args[1]
+				if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+					panic(fmt.Sprintf("profile path does not exist: %s", path))
+				}
+				profileOpts = append(profileOpts, profile.ProfilePath(path))
+				args = args[2:]
 			case profFlag:
+				if hasUnstartedProfile {
+					defer profile.Start(profileOpts...).Stop()
+					profileOpts = nil
+					hasUnstartedProfile = false
+				}
+
+				profileOpts = append(profileOpts, profile.NoShutdownHook)
+				hasUnstartedProfile = true
+
 				switch args[1] {
 				case cpuProf:
+					profileOpts = append(profileOpts, profile.CPUProfile)
 					cli.Println("cpu profiling enabled.")
-					defer profile.Start(profile.CPUProfile, profile.NoShutdownHook).Stop()
 				case memProf:
+					profileOpts = append(profileOpts, profile.MemProfile)
 					cli.Println("mem profiling enabled.")
-					defer profile.Start(profile.MemProfile, profile.NoShutdownHook).Stop()
 				case blockingProf:
+					profileOpts = append(profileOpts, profile.BlockProfile)
 					cli.Println("block profiling enabled")
-					defer profile.Start(profile.BlockProfile, profile.NoShutdownHook).Stop()
 				case traceProf:
+					profileOpts = append(profileOpts, profile.TraceProfile)
 					cli.Println("trace profiling enabled")
-					defer profile.Start(profile.TraceProfile, profile.NoShutdownHook).Stop()
 				default:
 					panic("Unexpected prof flag: " + args[1])
 				}
+
 				args = args[2:]
 
 			case pprofServerFlag:
@@ -426,6 +447,9 @@ func runMain() int {
 			default:
 				doneDebugFlags = true
 			}
+		}
+		if hasUnstartedProfile {
+			defer profile.Start(profileOpts...).Stop()
 		}
 	}
 
