@@ -697,7 +697,44 @@ SQL
     run dolt merge feature-branch
 
     log_status_eq 1
-    [[ "$output" =~ "conflict" ]] || false
+    [[ "$output" =~ "conflict: table with same name deleted and modified" ]] || false
+}
+
+@test "merge: merge a branch that edits the schema of a deleted table" {
+    dolt sql << SQL
+INSERT INTO test2 VALUES (0, 0, 0);
+INSERT INTO test2 VALUES (1, 1, 1);
+SQL
+    dolt add -A && dolt commit -am "add data to test2"
+
+    dolt branch feature-branch
+    dolt sql -q "drop table test2"
+    dolt commit -am "drop table test2"
+
+    dolt checkout feature-branch
+    dolt sql << SQL
+ALTER TABLE test2 DROP COLUMN c2;
+SQL
+    dolt commit -am "add data to test2"
+
+    dolt checkout main
+    run dolt merge feature-branch
+
+    log_status_eq 1
+    [[ "$output" =~ "CONFLICT (schema): Merge conflict in test" ]] || false
+
+    run dolt conflicts cat .
+    [[ "$output" =~ "+------------+-------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------------------+" ]] || false
+    [[ "$output" =~ "| our_schema | their_schema                                                      | base_schema                                                       | description                                            |" ]] || false
+    [[ "$output" =~ "+------------+-------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------------------+" ]] || false
+    [[ "$output" =~ '| <deleted>  | CREATE TABLE `test2` (                                            | CREATE TABLE `test2` (                                            | cannot merge a table deletion with schema modification |' ]] || false
+    [[ "$output" =~ '|            |   `pk` int NOT NULL,                                              |   `pk` int NOT NULL,                                              |                                                        |' ]] || false
+    [[ "$output" =~ '|            |   `c1` int,                                                       |   `c1` int,                                                       |                                                        |' ]] || false
+    [[ "$output" =~ '|            |   PRIMARY KEY (`pk`)                                              |   `c2` int,                                                       |                                                        |' ]] || false
+    [[ "$output" =~ '|            | ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin; |   PRIMARY KEY (`pk`)                                              |                                                        |' ]] || false
+    [[ "$output" =~ "|            |                                                                   | ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin; |                                                        |" ]] || false
+    [[ "$output" =~ "+------------+-------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------------------+" ]] || false
+
 }
 
 @test "merge: merge a branch that deletes an edited table" {
@@ -721,7 +758,42 @@ SQL
     run dolt merge feature-branch
 
     log_status_eq 1
-    [[ "$output" =~ "conflict" ]] || false
+    [[ "$output" =~ "conflict: table with same name deleted and modified" ]] || false
+}
+
+@test "merge: merge a branch that deletes a schema-edited table" {
+    dolt sql << SQL
+INSERT INTO test2 VALUES (0, 0, 0);
+INSERT INTO test2 VALUES (1, 1, 1);
+SQL
+    dolt add -A && dolt commit -am "add data to test2"
+
+    dolt branch feature-branch
+    dolt sql << SQL
+ALTER TABLE test2 DROP COLUMN c2;
+SQL
+    dolt commit -am "add data to test2"
+
+    dolt checkout feature-branch
+    dolt sql -q "drop table test2"
+    dolt commit -am "drop table test2"
+
+    dolt checkout main
+    run dolt merge feature-branch
+
+    log_status_eq 1
+    run dolt conflicts cat .
+    [[ "$output" =~ "+-------------------------------------------------------------------+--------------+-------------------------------------------------------------------+--------------------------------------------------------+" ]] || false
+    [[ "$output" =~ "| our_schema                                                        | their_schema | base_schema                                                       | description                                            |" ]] || false
+    [[ "$output" =~ "+-------------------------------------------------------------------+--------------+-------------------------------------------------------------------+--------------------------------------------------------+" ]] || false
+    [[ "$output" =~ '| CREATE TABLE `test2` (                                            | <deleted>    | CREATE TABLE `test2` (                                            | cannot merge a table deletion with schema modification |' ]] || false
+    [[ "$output" =~ '|   `pk` int NOT NULL,                                              |              |   `pk` int NOT NULL,                                              |                                                        |' ]] || false
+    [[ "$output" =~ '|   `c1` int,                                                       |              |   `c1` int,                                                       |                                                        |' ]] || false
+    [[ "$output" =~ '|   PRIMARY KEY (`pk`)                                              |              |   `c2` int,                                                       |                                                        |' ]] || false
+    [[ "$output" =~ '| ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin; |              |   PRIMARY KEY (`pk`)                                              |                                                        |' ]] || false
+    [[ "$output" =~ "|                                                                   |              | ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin; |                                                        |" ]] || false
+    [[ "$output" =~ "+-------------------------------------------------------------------+--------------+-------------------------------------------------------------------+--------------------------------------------------------+" ]] || false
+
 }
 
 @test "merge: merge a branch that deletes a deleted table" {
@@ -950,7 +1022,35 @@ SQL
 
     run dolt merge merge_branch
     log_status_eq 1
-    [[ "$output" =~ "table with same name deleted and modified" ]] || false
+    [[ "$output" =~ "conflict: table with same name deleted and modified" ]] || false
+}
+
+@test "merge: ourRoot renames, theirRoot modifies the schema" {
+    dolt checkout -b merge_branch
+    dolt sql -q "ALTER TABLE test1 DROP COLUMN c2;"
+    dolt commit -am "modify test1"
+
+    dolt checkout main
+    dolt sql -q "ALTER TABLE test1 RENAME TO new_name"
+    dolt add .
+    dolt commit -am "rename test1"
+
+    run dolt merge merge_branch
+    log_status_eq 1
+    [[ "$output" =~ "CONFLICT (schema): Merge conflict in test" ]] || false
+
+    run dolt conflicts cat .
+    [[ "$output" =~ "+------------+-------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------------------+" ]] || false
+    [[ "$output" =~ "| our_schema | their_schema                                                      | base_schema                                                       | description                                            |" ]] || false
+    [[ "$output" =~ "+------------+-------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------------------+" ]] || false
+    [[ "$output" =~ '| <deleted>  | CREATE TABLE `test1` (                                            | CREATE TABLE `test1` (                                            | cannot merge a table deletion with schema modification |' ]] || false
+    [[ "$output" =~ '|            |   `pk` int NOT NULL,                                              |   `pk` int NOT NULL,                                              |                                                        |' ]] || false
+    [[ "$output" =~ '|            |   `c1` int,                                                       |   `c1` int,                                                       |                                                        |' ]] || false
+    [[ "$output" =~ '|            |   PRIMARY KEY (`pk`)                                              |   `c2` int,                                                       |                                                        |' ]] || false
+    [[ "$output" =~ '|            | ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin; |   PRIMARY KEY (`pk`)                                              |                                                        |' ]] || false
+    [[ "$output" =~ "|            |                                                                   | ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin; |                                                        |" ]] || false
+    [[ "$output" =~ "+------------+-------------------------------------------------------------------+-------------------------------------------------------------------+--------------------------------------------------------+" ]] || false
+
 }
 
 @test "merge: ourRoot modifies, theirRoot renames" {
@@ -965,7 +1065,23 @@ SQL
 
     run dolt merge merge_branch
     log_status_eq 1
-    [[ "$output" =~ "table with same name deleted and modified" ]] || false
+    [[ "$output" =~ "conflict: table with same name deleted and modified" ]] || false
+}
+
+@test "merge: ourRoot modifies the schema, theirRoot renames" {
+    dolt checkout -b merge_branch
+    dolt sql -q "ALTER TABLE test1 RENAME TO new_name"
+    dolt add .
+    dolt commit -am "rename test1"
+
+    dolt checkout main
+    dolt sql -q "ALTER TABLE test1 DROP COLUMN c2;"
+    dolt commit -am "modify test1"
+
+    run dolt merge merge_branch
+    log_status_eq 1
+    [[ "$output" =~ "cannot create column pk on table new_name" ]] || false
+    [[ "$output" =~ "already used in table test1" ]] || false
 }
 
 @test "merge: dolt merge commits successful non-fast-forward merge" {

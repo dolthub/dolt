@@ -533,8 +533,7 @@ func (p *DoltDatabaseProvider) cloneDatabaseFromRemote(
 		return fmt.Errorf("unable to clone remote database; no remote dialer configured")
 	}
 
-	// TODO: params for AWS, others that need them
-	r := env.NewRemote(remoteName, remoteUrl, nil)
+	r := env.NewRemote(remoteName, remoteUrl, remoteParams)
 	srcDB, err := r.GetRemoteDB(ctx, types.Format_Default, p.remoteDialer)
 	if err != nil {
 		return err

@@ -115,6 +115,7 @@ func (dt *SchemaConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partiti
 
 	var conflicts []schemaConflict
 	err = p.state.IterSchemaConflicts(ctx, p.ddb, func(table string, cnf doltdb.SchemaConflict) error {
+
 		c, err := newSchemaConflict(ctx, table, baseRoot, cnf)
 		if err != nil {
 			return err
@@ -162,19 +163,47 @@ func newSchemaConflict(ctx context.Context, table string, baseRoot *doltdb.RootV
 	}
 	baseFKs, _ := fkc.KeysForTable(table)
 
-	base, err := getCreateTableStatement(table, baseSch, baseFKs, bs)
-	if err != nil {
-		return schemaConflict{}, err
+	var base string
+	if baseSch != nil {
+		var err error
+		base, err = getCreateTableStatement(table, baseSch, baseFKs, bs)
+		if err != nil {
+			return schemaConflict{}, err
+		}
+	} else {
+		base = "<deleted>"
 	}
 
-	ours, err := getCreateTableStatement(table, c.ToSch, c.ToFks, c.ToParentSchemas)
-	if err != nil {
-		return schemaConflict{}, err
+	var ours string
+	if c.ToSch != nil {
+		var err error
+		ours, err = getCreateTableStatement(table, c.ToSch, c.ToFks, c.ToParentSchemas)
+		if err != nil {
+			return schemaConflict{}, err
+		}
+	} else {
+		ours = "<deleted>"
 	}
 
-	theirs, err := getCreateTableStatement(table, c.FromSch, c.FromFks, c.FromParentSchemas)
-	if err != nil {
-		return schemaConflict{}, err
+	var theirs string
+	if c.FromSch != nil {
+		var err error
+		theirs, err = getCreateTableStatement(table, c.FromSch, c.FromFks, c.FromParentSchemas)
+		if err != nil {
+			return schemaConflict{}, err
+		}
+	} else {
+		theirs = "<deleted>"
+	}
+
+	if c.ToSch == nil || c.FromSch == nil {
+		return schemaConflict{
+			table:       table,
+			baseSch:     base,
+			ourSch:      ours,
+			theirSch:    theirs,
+			description: "cannot merge a table deletion with schema modification",
+		}, nil
 	}
 
 	desc, err := getSchemaConflictDescription(ctx, table, baseSch, c.ToSch, c.FromSch)

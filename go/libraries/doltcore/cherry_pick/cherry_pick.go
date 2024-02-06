@@ -253,6 +253,13 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 		return nil, "", err
 	}
 
+	// If the cherry-pick modifies a deleted table, we don't have a good way to surface that. Abort.
+	for _, schConflict := range result.SchemaConflicts {
+		if schConflict.ModifyDeleteConflict {
+			return nil, "", schConflict
+		}
+	}
+
 	if headRootHash.Equal(workingRootHash) {
 		return nil, "", fmt.Errorf("no changes were made, nothing to commit")
 	}

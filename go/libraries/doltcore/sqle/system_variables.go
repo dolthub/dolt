@@ -102,6 +102,14 @@ func AddDoltSystemVariables() {
 			Type:              types.NewSystemBoolType(dsess.DoltCommitOnTransactionCommit),
 			Default:           int8(0),
 		},
+		{ // If set, use this message for automatic Dolt commits
+			Name:              dsess.DoltCommitOnTransactionCommitMessage,
+			Scope:             sql.SystemVariableScope_Both,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemStringType(dsess.DoltCommitOnTransactionCommitMessage),
+			Default:           nil,
+		},
 		{
 			Name:              dsess.TransactionsDisabledSysVar,
 			Scope:             sql.SystemVariableScope_Session,

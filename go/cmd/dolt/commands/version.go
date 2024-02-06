@@ -16,7 +16,6 @@ package commands
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -32,17 +31,21 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
 const (
-	featureVersionFlag = "feature"
-	verboseFlag        = "verbose"
-	versionCheckFile   = "version_check.txt"
+	featureVersionFlag      = "feature"
+	verboseFlag             = "verbose"
+	versionCheckFile        = "version_check.txt"
+	disableVersionCheckFile = "disable_version_check.txt"
 )
 
 var versionDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Displays the version for the Dolt binary.",
-	LongDesc:  `Displays the version for the Dolt binary.`,
+	LongDesc: `Displays the version for the Dolt binary.
+
+The out-of-date check can be disabled by running {{.EmphasisLeft}}dolt config --global --add versioncheck.disabled true{{.EmphasisRight}}.`,
 	Synopsis: []string{
 		`[--verbose] [--feature]`,
 	},
@@ -89,11 +92,13 @@ func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string
 
 	cli.Println("dolt version", cmd.VersionStr)
 
-	var verr errhand.VerboseError
-	verr = checkAndPrintVersionOutOfDateWarning(cmd.VersionStr, dEnv)
-	if verr != nil {
-		// print error but don't fail
-		cli.PrintErrf(color.YellowString(verr.Verbose()))
+	versionCheckDisabled := dEnv.Config.GetStringOrDefault(config.VersionCheckDisabled, "false")
+	if versionCheckDisabled == "false" {
+		verr := checkAndPrintVersionOutOfDateWarning(cmd.VersionStr, dEnv)
+		if verr != nil {
+			// print error but don't fail
+			cli.PrintErrf(color.YellowString(verr.Verbose()))
+		}
 	}
 
 	if apr.Contains(verboseFlag) {
@@ -111,16 +116,16 @@ func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string
 		}
 		wr, err := dEnv.WorkingRoot(ctx)
 		if err != nil {
-			verr = errhand.BuildDError("could not read working root").AddCause(err).Build()
+			verr := errhand.BuildDError("could not read working root").AddCause(err).Build()
 			return HandleVErrAndExitCode(verr, usage)
 		}
 
 		fv, ok, err := wr.GetFeatureVersion(ctx)
 		if err != nil {
-			verr = errhand.BuildDError("error reading feature version").AddCause(err).Build()
+			verr := errhand.BuildDError("error reading feature version").AddCause(err).Build()
 			return HandleVErrAndExitCode(verr, usage)
 		} else if !ok {
-			verr = errhand.BuildDError("the current head does not have a feature version").Build()
+			verr := errhand.BuildDError("the current head does not have a feature version").Build()
 			return HandleVErrAndExitCode(verr, usage)
 		} else {
 			cli.Println("feature version:", fv)
@@ -131,7 +136,8 @@ func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string
 }
 
 // checkAndPrintVersionOutOfDateWarning checks if the current version of Dolt is out of date and prints a warning if it
-// is. Restricts this check to at most once per week unless the build version is ahead of the stored latest release verion.
+// is. Restricts this check to at most once per week unless the build version is ahead of the stored latest release version.
+// Also prints a warning about how to disable this check once per version.
 func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) errhand.VerboseError {
 	var latestRelease string
 	var verr errhand.VerboseError
@@ -177,6 +183,7 @@ func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) 
 	}
 	if isOutOfDate {
 		cli.Printf(color.YellowString("Warning: you are on an old version of Dolt. The newest version is %s.\n", latestRelease))
+		printDisableVersionCheckWarning(dEnv, homeDir, curVersion)
 	}
 
 	return nil
@@ -192,7 +199,7 @@ func getLatestDoltReleaseAndRecord(path string, dEnv *env.DoltEnv) (string, errh
 	}
 	releaseName := strings.TrimPrefix(*release.TagName, "v")
 
-	err = dEnv.FS.WriteFile(path, []byte(fmt.Sprintf("%s,%s", releaseName, time.Now().UTC().Format(time.DateOnly))), os.ModePerm)
+	err = dEnv.FS.WriteFile(path, []byte(releaseName), os.ModePerm)
 	if err != nil {
 		return "", errhand.BuildDError("error: failed to update version check file").AddCause(err).Build()
 	}
@@ -240,4 +247,24 @@ func isVersionFormattedCorrectly(version string) bool {
 	}
 
 	return true
+}
+
+// Prints a warning about how to disable the version out-of-date check, limited to once per version.
+func printDisableVersionCheckWarning(dEnv *env.DoltEnv, homeDir, curVersion string) {
+	path := filepath.Join(homeDir, dbfactory.DoltDir, disableVersionCheckFile)
+	if exists, _ := dEnv.FS.Exists(path); !exists {
+		cli.Println("To disable this warning, run 'dolt config --global --add versioncheck.disabled true'")
+		dEnv.FS.WriteFile(path, []byte(curVersion), os.ModePerm)
+	} else {
+		lastDisableVersionCheckWarning, err := dEnv.FS.ReadFile(path)
+		if err != nil {
+			return
+		}
+		if string(lastDisableVersionCheckWarning) != curVersion {
+			cli.Println("To disable this warning, run 'dolt config --global --add versioncheck.disabled true'")
+			dEnv.FS.WriteFile(path, []byte(curVersion), os.ModePerm)
+		}
+	}
+
+	return
 }

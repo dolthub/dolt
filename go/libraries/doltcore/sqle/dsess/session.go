@@ -467,9 +467,25 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 			return err
 		}
 
+		message := "Transaction commit"
+		doltCommitMessageVar, err := d.Session.GetSessionVariable(ctx, DoltCommitOnTransactionCommitMessage)
+		if err != nil {
+			return err
+		}
+
+		doltCommitMessageString, ok := doltCommitMessageVar.(string)
+		if !ok && doltCommitMessageVar != nil {
+			return fmt.Errorf(fmt.Sprintf("Unexpected type for var %s: %T", DoltCommitOnTransactionCommitMessage, doltCommitMessageVar))
+		}
+
+		trimmedString := strings.TrimSpace(doltCommitMessageString)
+		if strings.TrimSpace(doltCommitMessageString) != "" {
+			message = trimmedString
+		}
+
 		var pendingCommit *doltdb.PendingCommit
 		pendingCommit, err = d.PendingCommitAllStaged(ctx, dirtyBranchState, actions.CommitStagedProps{
-			Message:    "Transaction commit",
+			Message:    message,
 			Date:       ctx.QueryTime(),
 			AllowEmpty: false,
 			Force:      false,

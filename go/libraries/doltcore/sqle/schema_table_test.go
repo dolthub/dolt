@@ -46,7 +46,7 @@ func TestSchemaTableMigrationOriginal(t *testing.T) {
 		{Name: doltdb.SchemasTablesTypeCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
 		{Name: doltdb.SchemasTablesNameCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
 		{Name: doltdb.SchemasTablesFragmentCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
-	}), sql.Collation_Default)
+	}), sql.Collation_Default, "")
 	require.NoError(t, err)
 
 	sqlTbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
@@ -105,7 +105,7 @@ func TestSchemaTableMigrationV1(t *testing.T) {
 		{Name: doltdb.SchemasTablesFragmentCol, Type: gmstypes.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
 		{Name: doltdb.SchemasTablesIdCol, Type: gmstypes.Int64, Source: doltdb.SchemasTableName, PrimaryKey: true},
 		{Name: doltdb.SchemasTablesExtraCol, Type: gmstypes.JsonType{}, Source: doltdb.SchemasTableName, PrimaryKey: false, Nullable: true},
-	}), sql.Collation_Default)
+	}), sql.Collation_Default, "")
 	require.NoError(t, err)
 
 	sqlTbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)

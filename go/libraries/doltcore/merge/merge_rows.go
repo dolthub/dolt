@@ -253,9 +253,25 @@ func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm *TableMerger, op
 
 	// Deleted in root or in merge, either a conflict (if any changes in other root) or else a fast-forward
 	if ancExists && (!leftExists || !rightExists) {
-		if (rightExists && mergeHash != ancHash) ||
-			(leftExists && rootHash != ancHash) {
-			return nil, nil, ErrTableDeletedAndModified
+		var childTable *doltdb.Table
+		var childHash hash.Hash
+		if rightExists {
+			childTable = tm.rightTbl
+			childHash = mergeHash
+		} else {
+			childTable = tm.leftTbl
+			childHash = rootHash
+		}
+		if childHash != ancHash {
+			schemasEqual, err := doltdb.SchemaHashesEqual(ctx, childTable, tm.ancTbl)
+			if err != nil {
+				return nil, nil, err
+			}
+			if schemasEqual {
+				return nil, nil, ErrTableDeletedAndModified
+			} else {
+				return nil, nil, ErrTableDeletedAndSchemaModified
+			}
 		}
 		// fast-forward
 		return nil, &MergeStats{Operation: TableRemoved}, nil

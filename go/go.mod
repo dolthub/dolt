@@ -15,7 +15,7 @@ require (
 	github.com/dolthub/fslock v0.0.3
 	github.com/dolthub/ishell v0.0.0-20221214210346-d7db0b066488
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
-	github.com/dolthub/vitess v0.0.0-20240123202932-b7f758ff6078
+	github.com/dolthub/vitess v0.0.0-20240129233432-aec9daef6af7
 	github.com/dustin/go-humanize v1.0.1
 	github.com/fatih/color v1.13.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
@@ -57,7 +57,7 @@ require (
 	github.com/cespare/xxhash v1.1.0
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.17.1-0.20240125221447-e42adc9dbc28
+	github.com/dolthub/go-mysql-server v0.17.1-0.20240205190841-d5876b4e706a
 	github.com/dolthub/swiss v0.1.0
 	github.com/goccy/go-json v0.10.2
 	github.com/google/go-github/v57 v57.0.0
@@ -105,7 +105,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dolthub/go-icu-regex v0.0.0-20230524105445-af7e7991c97e // indirect
-	github.com/dolthub/jsonpath v0.0.2-0.20230525180605-8dc13778fd72 // indirect
+	github.com/dolthub/jsonpath v0.0.2-0.20240201003050-392940944c15 // indirect
 	github.com/dolthub/maphash v0.0.0-20221220182448-74e1e1ea1577 // indirect
 	github.com/go-fonts/liberation v0.2.0 // indirect
 	github.com/go-kit/kit v0.10.0 // indirect

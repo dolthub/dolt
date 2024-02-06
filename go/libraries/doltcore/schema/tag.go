@@ -30,8 +30,8 @@ const (
 	ReservedTagMin uint64 = 1 << 50
 )
 
-func ErrTagPrevUsed(tag uint64, newColName, tableName string) error {
-	return fmt.Errorf("Cannot create column %s, the tag %d was already used in table %s", newColName, tag, tableName)
+func ErrTagPrevUsed(tag uint64, newColName, newTableName, oldTableName string) error {
+	return fmt.Errorf("cannot create column %s on table %s, the tag %d was already used in table %s", newColName, newTableName, tag, oldTableName)
 }
 
 type TagMapping map[uint64]string

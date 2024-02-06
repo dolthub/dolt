@@ -623,8 +623,7 @@ teardown() {
     # if the table is different with the same name, it gives conflict
     run dolt stash pop
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "The stash entry is kept in case you need it again." ]] || false
-    [[ "$output" =~ "conflict: table with same name deleted and modified " ]] || false
+    [[ "$output" =~ "table was modified in one branch and deleted in the other" ]] || false
 }
 
 @test "stash: popping stash with added table with PK on current head with the exact same table is added already" {

@@ -30,6 +30,7 @@ import (
 
 var ErrFastForward = errors.New("fast forward")
 var ErrTableDeletedAndModified = errors.New("conflict: table with same name deleted and modified ")
+var ErrTableDeletedAndSchemaModified = errors.New("conflict: table with same name deleted and its schema modified ")
 var ErrSchemaConflict = goerrors.NewKind("schema conflict found, merge aborted. Please alter schema to prevent schema conflicts before merging: %s")
 
 // ErrCantOverwriteConflicts is returned when there are unresolved conflicts
@@ -206,14 +207,26 @@ func MergeRoots(
 	var schConflicts []SchemaConflict
 	for _, tblName := range tblNames {
 		mergedTable, stats, err := merger.MergeTable(ctx, tblName, opts, mergeOpts)
-		if err != nil {
+		if errors.Is(ErrTableDeletedAndModified, err) && doltdb.IsFullTextTable(tblName) {
 			// If a Full-Text table was both modified and deleted, then we want to ignore the deletion.
 			// If there's a true conflict, then the parent table will catch the conflict.
-			if doltdb.IsFullTextTable(tblName) && errors.Is(ErrTableDeletedAndModified, err) {
-				stats = &MergeStats{Operation: TableModified}
-			} else {
-				return nil, err
+			stats = &MergeStats{Operation: TableModified}
+		} else if errors.Is(ErrTableDeletedAndSchemaModified, err) {
+			tblToStats[tblName] = &MergeStats{
+				Operation:       TableModified,
+				SchemaConflicts: 1,
 			}
+			conflict := SchemaConflict{
+				TableName:            tblName,
+				ModifyDeleteConflict: true,
+			}
+			if !mergeOpts.KeepSchemaConflicts {
+				return nil, conflict
+			}
+			schConflicts = append(schConflicts, conflict)
+			continue
+		} else if err != nil {
+			return nil, err
 		}
 		if doltdb.IsFullTextTable(tblName) && (stats.Operation == TableModified || stats.Operation == TableRemoved) {
 			// We handle removal and modification later in the rebuilding process, so we'll skip those.

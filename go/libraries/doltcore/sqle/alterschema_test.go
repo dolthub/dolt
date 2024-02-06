@@ -211,7 +211,7 @@ func TestAddColumnToTable(t *testing.T) {
 			newColName:  "newCol",
 			colKind:     types.IntKind,
 			nullable:    NotNull,
-			expectedErr: fmt.Sprintf("Cannot create column newCol, the tag %d was already used in table people", dtestutils.AgeTag),
+			expectedErr: fmt.Sprintf("cannot create column newCol on table people, the tag %d was already used in table people", dtestutils.AgeTag),
 		},
 		{
 			name:        "name collision",
