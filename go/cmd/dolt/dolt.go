@@ -18,6 +18,7 @@ import (
 	"context"
 	crand "crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -236,6 +237,7 @@ const stdErrFlag = "--stderr"
 const stdOutAndErrFlag = "--out-and-err"
 const ignoreLocksFlag = "--ignore-lock-file"
 const verboseEngineSetupFlag = "--verbose-engine-setup"
+const profilePath = "--prof-path"
 
 const cpuProf = "cpu"
 const memProf = "mem"
@@ -269,23 +271,40 @@ func runMain() int {
 		for !doneDebugFlags && len(args) > 0 {
 			switch args[0] {
 			case profFlag:
+				opts := []func(p *profile.Profile){profile.NoShutdownHook}
+
+				argsIdx := 2
+				if args[argsIdx] == profilePath {
+					path := args[argsIdx+1]
+					if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+						panic(fmt.Sprintf("profile path does not exist: %s", path))
+					}
+					opts = append(opts, profile.ProfilePath(path))
+					argsIdx = argsIdx + 2
+				}
+
 				switch args[1] {
 				case cpuProf:
+					opts = append(opts, profile.CPUProfile)
 					cli.Println("cpu profiling enabled.")
-					defer profile.Start(profile.CPUProfile, profile.NoShutdownHook).Stop()
+					defer profile.Start(opts...).Stop()
 				case memProf:
+					opts = append(opts, profile.MemProfile)
 					cli.Println("mem profiling enabled.")
-					defer profile.Start(profile.MemProfile, profile.NoShutdownHook).Stop()
+					defer profile.Start(opts...).Stop()
 				case blockingProf:
+					opts = append(opts, profile.BlockProfile)
 					cli.Println("block profiling enabled")
-					defer profile.Start(profile.BlockProfile, profile.NoShutdownHook).Stop()
+					defer profile.Start(opts...).Stop()
 				case traceProf:
+					opts = append(opts, profile.TraceProfile)
 					cli.Println("trace profiling enabled")
-					defer profile.Start(profile.TraceProfile, profile.NoShutdownHook).Stop()
+					defer profile.Start(opts...).Stop()
 				default:
 					panic("Unexpected prof flag: " + args[1])
 				}
-				args = args[2:]
+
+				args = args[argsIdx:]
 
 			case pprofServerFlag:
 				// serve the pprof endpoints setup in the init function run when "net/http/pprof" is imported
