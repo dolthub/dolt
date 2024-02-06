@@ -251,6 +251,10 @@ type emptyRevisionDatabaseProvider struct {
 	sql.DatabaseProvider
 }
 
+func (e emptyRevisionDatabaseProvider) DbFactoryUrl() string {
+	return ""
+}
+
 func (e emptyRevisionDatabaseProvider) UndropDatabase(ctx *sql.Context, dbName string) error {
 	return nil
 }

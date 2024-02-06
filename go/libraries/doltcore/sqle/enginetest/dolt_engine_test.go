@@ -3076,6 +3076,10 @@ func TestCreateDatabaseErrorCleansUp(t *testing.T) {
 	require.True(t, isDir)
 }
 
+// TestStatsAutoRefreshConcurrency tests some common concurrent patterns that stats
+// refresh is subject to -- namely reading/writing the stats objects in (1) DML statements
+// (2) auto refresh threads, and (3) manual ANALYZE statements.
+// todo: the dolt_stat functions should be concurrency tested
 func TestStatsAutoRefreshConcurrency(t *testing.T) {
 	// create engine
 	harness := newDoltHarness(t)

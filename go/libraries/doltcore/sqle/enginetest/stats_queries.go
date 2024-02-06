@@ -421,7 +421,7 @@ var StatProcTests = []queries.ScriptTest{
 			},
 			// set refresh interval arbitrarily high to avoid updating when we restart
 			{
-				Query:    "set @@PERSIST.dolt_stats_auto_refresh_interval = 10000;",
+				Query:    "set @@PERSIST.dolt_stats_auto_refresh_interval = 1000;",
 				Expected: []sql.Row{{}},
 			},
 			{
