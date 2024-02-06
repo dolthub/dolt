@@ -154,7 +154,10 @@ func (r *Result) Stamp(stampFunc func() string) {
 
 // FromConfigsNewResult returns a new result with some fields set based on the provided configs
 func FromConfigsNewResult(config *Config, serverConfig *ServerConfig, t *Test, suiteId string, idFunc func() string) (*Result, error) {
-	serverParams := serverConfig.GetServerArgs()
+	serverParams, err := serverConfig.GetServerArgs()
+	if err != nil {
+		return nil, err
+	}
 
 	var getId func() string
 	if idFunc == nil {

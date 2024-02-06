@@ -64,7 +64,12 @@ func BenchmarkPostgres(ctx context.Context, config *Config, serverConfig *Server
 			return nil, err
 		}
 		gServer, serverCtx = errgroup.WithContext(withKeyCtx)
-		serverParams := serverConfig.GetServerArgs()
+		var serverParams []string
+		serverParams, err = serverConfig.GetServerArgs()
+		if err != nil {
+			cancel()
+			return nil, err
+		}
 		serverParams = append(serverParams, "-D", serverDir)
 		server = getMysqlServer(serverCtx, serverConfig, serverParams)
 		server.Env = append(server.Env, "LC_ALL=C")
