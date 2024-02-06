@@ -268,40 +268,45 @@ func runMain() int {
 	verboseEngineSetup := false
 	if len(args) > 0 {
 		var doneDebugFlags bool
+		var profileOpts []func(p *profile.Profile)
+		hasUnstartedProfile := false
 		for !doneDebugFlags && len(args) > 0 {
 			switch args[0] {
-			case profFlag:
-				opts := []func(p *profile.Profile){profile.NoShutdownHook}
-
-				argsIdx := 2
-				if args[argsIdx] == profilePath {
-					path := args[argsIdx+1]
-					if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-						panic(fmt.Sprintf("profile path does not exist: %s", path))
-					}
-					opts = append(opts, profile.ProfilePath(path))
-					argsIdx = argsIdx + 2
+			case profilePath:
+				path := args[1]
+				if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+					panic(fmt.Sprintf("profile path does not exist: %s", path))
 				}
+				profileOpts = append(profileOpts, profile.ProfilePath(path))
+				args = args[2:]
+			case profFlag:
+				if hasUnstartedProfile {
+					defer profile.Start(profileOpts...).Stop()
+					profileOpts = nil
+					hasUnstartedProfile = false
+				}
+
+				profileOpts = append(profileOpts, profile.NoShutdownHook)
+				hasUnstartedProfile = true
 
 				switch args[1] {
 				case cpuProf:
-					opts = append(opts, profile.CPUProfile)
+					profileOpts = append(profileOpts, profile.CPUProfile)
 					cli.Println("cpu profiling enabled.")
 				case memProf:
-					opts = append(opts, profile.MemProfile)
+					profileOpts = append(profileOpts, profile.MemProfile)
 					cli.Println("mem profiling enabled.")
 				case blockingProf:
-					opts = append(opts, profile.BlockProfile)
+					profileOpts = append(profileOpts, profile.BlockProfile)
 					cli.Println("block profiling enabled")
 				case traceProf:
-					opts = append(opts, profile.TraceProfile)
+					profileOpts = append(profileOpts, profile.TraceProfile)
 					cli.Println("trace profiling enabled")
 				default:
 					panic("Unexpected prof flag: " + args[1])
 				}
 
-				defer profile.Start(opts...).Stop()
-				args = args[argsIdx:]
+				args = args[2:]
 
 			case pprofServerFlag:
 				// serve the pprof endpoints setup in the init function run when "net/http/pprof" is imported
@@ -442,6 +447,9 @@ func runMain() int {
 			default:
 				doneDebugFlags = true
 			}
+		}
+		if hasUnstartedProfile {
+			defer profile.Start(profileOpts...).Stop()
 		}
 	}
 
