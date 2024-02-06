@@ -16,11 +16,13 @@ package dprocedures
 
 import (
 	"fmt"
+	"strings"
+
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/go-mysql-server/sql"
-	"strings"
 )
 
 func statsFunc(name string) func(ctx *sql.Context, args ...string) (sql.RowIter, error) {

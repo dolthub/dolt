@@ -16,6 +16,11 @@ package engine
 
 import (
 	"context"
+	"os"
+	"runtime"
+	"strconv"
+	"strings"
+
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/eventscheduler"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -25,10 +30,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/sirupsen/logrus"
-	"os"
-	"runtime"
-	"strconv"
-	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
