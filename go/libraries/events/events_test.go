@@ -73,6 +73,17 @@ func (failingEmitter) LogEventsRequest(ctx context.Context, req *eventsapi.LogEv
 	return errors.New("i always fail")
 }
 
+type contextAwareEmitter struct {
+}
+
+func (contextAwareEmitter) LogEvents(ctx context.Context, version string, evts []*eventsapi.ClientEvent) error {
+	return ctx.Err()
+}
+
+func (contextAwareEmitter) LogEventsRequest(ctx context.Context, req *eventsapi.LogEventsRequest) error {
+	return ctx.Err()
+}
+
 func TestEventsCollectorEmitting(t *testing.T) {
 	for _, tc := range []struct {
 		Name    string
@@ -82,23 +93,28 @@ func TestEventsCollectorEmitting(t *testing.T) {
 		{
 			"Failing",
 			failingEmitter{},
-			32 * maxBatchedEvents,
+			32 * maxBatchedEvents - 1,
 		},
 		{
 			"Nil",
 			nil,
-			32 * maxBatchedEvents,
+			32 * maxBatchedEvents - 1,
 		},
 		{
 			"Null",
 			NullEmitter{},
 			0,
 		},
+		{
+			"ContextAware",
+			contextAwareEmitter{},
+			maxBatchedEvents - 1,
+		},
 	} {
 		t.Run(tc.Name, func(t *testing.T) {
 			collector := NewCollector("invalid", tc.Emitter)
 
-			for i := 0; i < 32*maxBatchedEvents; i++ {
+			for i := 0; i < 32*maxBatchedEvents - 1; i++ {
 				remoteUrl := "https://dolthub.com/org/repo"
 				testEvent := NewEvent(eventsapi.ClientEventType_CLONE)
 

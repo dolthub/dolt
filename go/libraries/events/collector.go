@@ -63,7 +63,7 @@ func SetGlobalCollector(c *Collector) {
 }
 
 const collChanBufferSize = 32
-const maxBatchedEvents = 1024
+const maxBatchedEvents = 64
 
 // Collector collects and stores Events later to be sent to an Emitter.
 type Collector struct {
@@ -93,8 +93,11 @@ func NewCollector(version string, emitter Emitter) *Collector {
 				c.events = nil
 			}
 		}
-		rest := c.st.stop()
-		c.events = append(rest, c.events...)
+		if len(c.events) > 0 {
+			c.st.batchCh <- c.events
+			c.events = nil
+		}
+		c.events = c.st.stop()
 	}()
 
 	return c
