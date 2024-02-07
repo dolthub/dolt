@@ -66,7 +66,7 @@ func ProfileDolt(ctx context.Context, config *Config, serverConfig *ServerConfig
 	}
 
 	// todo: merge profiles together
-	
+
 	err = os.RemoveAll(testRepo)
 	if err != nil {
 		return err
@@ -87,23 +87,26 @@ func profileTest(ctx context.Context, test *Test, config *Config, serverConfig *
 	profileParams = append(profileParams, serverParams...)
 
 	withKeyCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	gServer, serverCtx := errgroup.WithContext(withKeyCtx)
-	server := getServer(serverCtx, serverConfig, testRepo, serverParams)
+	server := getServer(serverCtx, serverConfig, testRepo, profileParams)
 
 	// handle user interrupt
 	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(quit, os.Interrupt, syscall.SIGINT)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		<-quit
+		s := <-quit
 		defer wg.Done()
+		server.Process.Signal(s)
 		signal.Stop(quit)
-		cancel()
 	}()
 
 	// launch the dolt server
 	gServer.Go(func() error {
+		server.Stdout = os.Stdout
+		server.Stderr = os.Stderr
 		return server.Run()
 	})
 
@@ -118,13 +121,15 @@ func profileTest(ctx context.Context, test *Test, config *Config, serverConfig *
 	}
 
 	// send signal to dolt server
-	quit <- syscall.SIGTERM
+	// must be interrupt signal to complete profile
+	quit <- syscall.SIGINT
 
 	err = gServer.Wait()
 	if err != nil {
 		// we expect a kill error
 		// we only exit in error if this is not the
 		// error
+		fmt.Println("DUSTIN: wait error:", err.Error())
 		if err.Error() != "signal: killed" {
 			fmt.Println(err)
 			close(quit)
@@ -136,6 +141,14 @@ func profileTest(ctx context.Context, test *Test, config *Config, serverConfig *
 	fmt.Println("Successfully killed server")
 	close(quit)
 	wg.Wait()
+
+	info, err := os.Stat(tempProfile)
+	if err != nil {
+		return "", err
+	}
+	if info.Size() < 1 {
+		return "", fmt.Errorf("failed to create profile: file was empty")
+	}
 
 	finalProfile := filepath.Join(profileDir, fmt.Sprintf("%s_%s_%s", serverConfig.Id, test.Name, cpuProfileFilename))
 	err = moveFile(tempProfile, finalProfile)
