@@ -86,9 +86,9 @@ func NewCollector(version string, emitter Emitter) *Collector {
 	c.wg.Add(1)
 	go func() {
 		defer c.wg.Done()
-		for evt := range evtCh {
+		for evt := range c.evtCh {
 			c.events = append(c.events, evt)
-			if len(c.events) > maxBatchedEvents {
+			if len(c.events) >= maxBatchedEvents {
 				c.st.batchCh <- c.events
 				c.events = nil
 			}
@@ -154,10 +154,7 @@ func (s *sendingThread) stop() []*eventsapi.ClientEvent {
 func (s *sendingThread) run() {
 	defer s.wg.Done()
 
-	timer := time.NewTimer(365 * 24 * time.Hour)
-	if !timer.Stop() {
-		<-timer.C
-	}
+	var timer *time.Timer
 
 	bo := backoff.NewExponentialBackOff()
 	bo.InitialInterval = time.Second
@@ -165,23 +162,36 @@ func (s *sendingThread) run() {
 	bo.MaxElapsedTime = 0
 
 	for {
+		var timerCh <-chan time.Time
+		if timer != nil {
+			timerCh = timer.C
+		}
 		select {
 		case batch, ok := <-s.batchCh:
 			if !ok {
+				if s.emitter != nil && len(s.unsent) > 0 {
+					err := s.emitter.LogEvents(s.logCtx, s.version, s.unsent)
+					if err == nil {
+						s.unsent = nil
+					}
+				}
 				return
 			}
 			s.unsent = append(s.unsent, batch...)
-			if !timer.Stop() {
-				<-timer.C
-			}
 			if s.emitter != nil {
-				timer.Reset(0)
+				if timer != nil && !timer.Stop() {
+					<-timer.C
+					timer.Reset(0)
+				} else {
+					timer = time.NewTimer(0)
+				}
 			}
-		case <-timer.C:
+		case <-timerCh:
 			err := s.emitter.LogEvents(s.logCtx, s.version, s.unsent)
 			if err == nil {
 				s.unsent = nil
 				bo.Reset()
+				timer = nil
 			} else {
 				timer.Reset(bo.NextBackOff())
 			}

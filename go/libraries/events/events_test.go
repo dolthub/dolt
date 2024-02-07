@@ -15,6 +15,8 @@
 package events
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -58,4 +60,63 @@ func TestEvents(t *testing.T) {
 	assert.True(t, isCounter)
 	_, isTimer := clientEvents[0].Metrics[1].MetricOneof.(*eventsapi.ClientEventMetric_Duration)
 	assert.True(t, isTimer)
+}
+
+type failingEmitter struct {
+}
+
+func (failingEmitter) LogEvents(ctx context.Context, version string, evts []*eventsapi.ClientEvent) error {
+	return errors.New("i always fail")
+}
+
+func (failingEmitter) LogEventsRequest(ctx context.Context, req *eventsapi.LogEventsRequest) error {
+	return errors.New("i always fail")
+}
+
+func TestEventsCollectorEmitting(t *testing.T) {
+	for _, tc := range []struct {
+		Name    string
+		Emitter Emitter
+		NumLeft int
+	}{
+		{
+			"Failing",
+			failingEmitter{},
+			32 * maxBatchedEvents,
+		},
+		{
+			"Nil",
+			nil,
+			32 * maxBatchedEvents,
+		},
+		{
+			"Null",
+			NullEmitter{},
+			0,
+		},
+	} {
+		t.Run(tc.Name, func(t *testing.T) {
+			collector := NewCollector("invalid", tc.Emitter)
+
+			for i := 0; i < 32*maxBatchedEvents; i++ {
+				remoteUrl := "https://dolthub.com/org/repo"
+				testEvent := NewEvent(eventsapi.ClientEventType_CLONE)
+
+				testEvent.SetAttribute(eventsapi.AttributeID_REMOTE_URL_SCHEME, remoteUrl)
+
+				counter := NewCounter(eventsapi.MetricID_METRIC_UNSPECIFIED)
+				counter.Inc()
+				testEvent.AddMetric(counter)
+
+				timer := NewTimer(eventsapi.MetricID_METRIC_UNSPECIFIED)
+				timer.Stop()
+				testEvent.AddMetric(timer)
+
+				collector.CloseEventAndAdd(testEvent)
+			}
+
+			clientEvents := collector.Close()
+			assert.Len(t, clientEvents, tc.NumLeft)
+		})
+	}
 }
