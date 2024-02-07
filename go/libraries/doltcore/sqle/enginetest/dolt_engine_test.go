@@ -3092,8 +3092,8 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 
 	sqlDb, _ := harness.provider.BaseDatabase(harness.NewContext(), "mydb")
 
-	// auto-refresh with a 0-interval, constant loop
-	// also 0-threshold, constant updates
+	// Setting an interval of 0 and a threshold of 0 will result
+	// in the stats being updated after every operation
 	intervalSec := time.Duration(0)
 	thresholdf64 := 0.
 	bThreads := sql.NewBackgroundThreads()

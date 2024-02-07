@@ -25,18 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
-func statsFunc(name string) func(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	var fn func(*sql.Context) (interface{}, error)
-	switch name {
-	case "drop":
-		fn = statsDrop
-	case "restart":
-		fn = statsRestart
-	case "stop":
-		fn = statsStop
-	case "status":
-		fn = statsStatus
-	}
+func statsFunc(fn func(ctx *sql.Context) (interface{}, error)) func(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	return func(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 		res, err := fn(ctx)
 		if err != nil {
@@ -78,7 +67,7 @@ func statsRestart(ctx *sql.Context) (interface{}, error) {
 		}
 		return fmt.Sprintf("restarted stats collection: %s", ref.StatsRef{}.String()), nil
 	}
-	return nil, nil
+	return nil, fmt.Errorf("provider does not implement AutoRefreshStatsProvider")
 }
 
 // statsStatus returns the last update for a stats thread

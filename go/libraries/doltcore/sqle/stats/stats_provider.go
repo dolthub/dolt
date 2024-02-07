@@ -439,31 +439,25 @@ func (p *Provider) UpdateStatus(db string, msg string) {
 }
 
 func (p *Provider) RowCount(ctx *sql.Context, db, table string) (uint64, error) {
-	var cnt uint64
 	if dbStat := p.getStats(strings.ToLower(db)); dbStat != nil {
 		dbStat.mu.Lock()
 		defer dbStat.mu.Unlock()
 		for qual, s := range dbStat.stats {
-			if strings.EqualFold(db, qual.Database) && strings.EqualFold(table, qual.Table()) {
-				if s.RowCount > cnt {
-					cnt = s.RowCount
-				}
+			if strings.EqualFold(db, qual.Database) && strings.EqualFold(table, qual.Table()) && strings.EqualFold(qual.Index(), "primary") {
+				return s.RowCount, nil
 			}
 		}
 	}
-	return cnt, nil
+	return 0, nil
 }
 
 func (p *Provider) DataLength(_ *sql.Context, db, table string) (uint64, error) {
-	var avgSize uint64
 	if dbStat := p.getStats(strings.ToLower(db)); dbStat != nil {
 		dbStat.mu.Lock()
 		defer dbStat.mu.Unlock()
 		for qual, s := range dbStat.stats {
-			if strings.EqualFold(db, qual.Database) && strings.EqualFold(table, qual.Table()) {
-				if s.AvgSize > avgSize {
-					avgSize = s.AvgSize
-				}
+			if strings.EqualFold(db, qual.Database) && strings.EqualFold(table, qual.Table()) && strings.EqualFold(qual.Index(), "primary") {
+				return s.AvgSize, nil
 			}
 		}
 	}

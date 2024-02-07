@@ -31,6 +31,9 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+// About ~200 20 byte address fit in a ~4k chunk. Chunk sizes
+// are approximate, but certainly shouldn't reach the square
+// of the expected size.
 const maxBucketFanout = 200 * 200
 
 func newStatsTable(ctx *sql.Context, ns tree.NodeStore, vrw stypes.ValueReadWriter) (*doltdb.Table, error) {
