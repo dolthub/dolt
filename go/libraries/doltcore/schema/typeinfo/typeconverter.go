@@ -56,6 +56,8 @@ func GetTypeConverter(ctx context.Context, srcTi TypeInfo, destTi TypeInfo) (tc 
 		return blobStringTypeConverter(ctx, src, destTi)
 	case *boolType:
 		return boolTypeConverter(ctx, src, destTi)
+	case *extendedType:
+		return nil, false, fmt.Errorf("extended types require conversion at a different layer")
 	case *datetimeType:
 		return datetimeTypeConverter(ctx, src, destTi)
 	case *decimalType:
@@ -132,6 +134,8 @@ func wrapConvertValueToNomsValue(
 			vInt = string(str)
 		case types.Bool:
 			vInt = bool(val)
+		case types.Extended:
+			return nil, fmt.Errorf("cannot convert to a extended type")
 		case types.Decimal:
 			vInt = decimal.Decimal(val).String()
 		case types.Float:
