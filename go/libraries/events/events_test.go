@@ -93,12 +93,12 @@ func TestEventsCollectorEmitting(t *testing.T) {
 		{
 			"Failing",
 			failingEmitter{},
-			32 * maxBatchedEvents - 1,
+			32*maxBatchedEvents - 1,
 		},
 		{
 			"Nil",
 			nil,
-			32 * maxBatchedEvents - 1,
+			32*maxBatchedEvents - 1,
 		},
 		{
 			"Null",
@@ -114,7 +114,7 @@ func TestEventsCollectorEmitting(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 			collector := NewCollector("invalid", tc.Emitter)
 
-			for i := 0; i < 32*maxBatchedEvents - 1; i++ {
+			for i := 0; i < 32*maxBatchedEvents-1; i++ {
 				remoteUrl := "https://dolthub.com/org/repo"
 				testEvent := NewEvent(eventsapi.ClientEventType_CLONE)
 
