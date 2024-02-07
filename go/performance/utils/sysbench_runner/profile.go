@@ -55,17 +55,27 @@ func ProfileDolt(ctx context.Context, config *Config, serverConfig *ServerConfig
 		return err
 	}
 
+	tempProfilesDir, err := os.MkdirTemp("", "")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tempProfilesDir)
+
 	for i := 0; i < config.Runs; i++ {
 		for _, test := range tests {
-			profile, err := profileTest(ctx, test, config, serverConfig, serverParams, testRepo, serverConfig.ProfilePath)
+			_, err = profileTest(ctx, test, config, serverConfig, serverParams, testRepo, tempProfilesDir)
 			if err != nil {
 				return err
 			}
-			fmt.Println("DUSTIN: created profile:", profile)
 		}
 	}
 
-	// todo: merge profiles together
+	profile, err := mergeProfiles(ctx, tempProfilesDir, serverConfig.ProfilePath)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Profile created at:", profile)
 
 	err = os.RemoveAll(testRepo)
 	if err != nil {
@@ -80,6 +90,7 @@ func profileTest(ctx context.Context, test *Test, config *Config, serverConfig *
 	if err != nil {
 		return "", err
 	}
+	defer os.RemoveAll(profilePath)
 
 	tempProfile := filepath.Join(profilePath, cpuProfileFilename)
 	profileParams := make([]string, 0)
@@ -105,8 +116,6 @@ func profileTest(ctx context.Context, test *Test, config *Config, serverConfig *
 
 	// launch the dolt server
 	gServer.Go(func() error {
-		server.Stdout = os.Stdout
-		server.Stderr = os.Stderr
 		return server.Run()
 	})
 
@@ -121,7 +130,6 @@ func profileTest(ctx context.Context, test *Test, config *Config, serverConfig *
 	}
 
 	// send signal to dolt server
-	// must be interrupt signal to complete profile
 	quit <- syscall.SIGINT
 
 	err = gServer.Wait()
@@ -129,7 +137,6 @@ func profileTest(ctx context.Context, test *Test, config *Config, serverConfig *
 		// we expect a kill error
 		// we only exit in error if this is not the
 		// error
-		fmt.Println("DUSTIN: wait error:", err.Error())
 		if err.Error() != "signal: killed" {
 			fmt.Println(err)
 			close(quit)
@@ -153,6 +160,26 @@ func profileTest(ctx context.Context, test *Test, config *Config, serverConfig *
 	finalProfile := filepath.Join(profileDir, fmt.Sprintf("%s_%s_%s", serverConfig.Id, test.Name, cpuProfileFilename))
 	err = moveFile(tempProfile, finalProfile)
 	return finalProfile, err
+}
+
+func mergeProfiles(ctx context.Context, sourceProfilesDir, destProfileDir string) (string, error) {
+	tmp, err := os.MkdirTemp("", "final_cpu_pprof")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(tmp)
+	outfile := filepath.Join(tmp, "cpu.pprof")
+
+	merge := ExecCommand(ctx, "/bin/sh", "-c", fmt.Sprintf("go tool pprof -proto *.pprof > %s", outfile))
+	merge.Dir = sourceProfilesDir
+	err = merge.Run()
+	if err != nil {
+		return "", err
+	}
+
+	final := filepath.Join(destProfileDir, "cpu.pprof")
+	err = moveFile(outfile, final)
+	return final, err
 }
 
 func moveFile(sourcePath, destPath string) error {
