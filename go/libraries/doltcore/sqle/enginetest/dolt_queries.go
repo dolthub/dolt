@@ -5204,6 +5204,82 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// Dropping the primary key constraint from a table implicitly truncates the table, which resets the
+		// auto_increment value for the table to 0. These tests assert that the correct auto_increment value is
+		// restored after the drop pk operation.
+		Name: "drop auto_increment primary key",
+		SetUpScript: []string{
+			"create table t (a int primary key auto_increment, b int, key (a))",
+			"call dolt_commit('-Am', 'empty table')",
+			"call dolt_branch('branch1')",
+			"call dolt_branch('branch2')",
+			"insert into t (b) values (1), (2)",
+			"call dolt_commit('-am', 'two values on main')",
+			"call dolt_checkout('branch1')",
+			"insert into t (b) values (3), (4)",
+			"call dolt_commit('-am', 'two values on branch1')",
+			"call dolt_checkout('branch2')",
+			"insert into t (b) values (5), (6)",
+			"call dolt_checkout('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "alter table t drop primary key",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				// highest value in any branch is 6
+				Query:    "insert into t (b) values (7), (8)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 7}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{7, 7},
+					{8, 8},
+				},
+			},
+			{
+				Query:            "call dolt_checkout('branch2')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "insert into t (b) values (9), (10)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 9}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{5, 5},
+					{6, 6},
+					{9, 9},
+					{10, 10},
+				},
+			},
+			{
+				Query:    "alter table t drop primary key",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				Query:    "insert into t (b) values (11), (12)",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 11}}},
+			},
+			{
+				Query: "select * from t order by a",
+				Expected: []sql.Row{
+					{5, 5},
+					{6, 6},
+					{9, 9},
+					{10, 10},
+					{11, 11},
+					{12, 12},
+				},
+			},
+		},
+	},
 }
 
 var DoltCherryPickTests = []queries.ScriptTest{
