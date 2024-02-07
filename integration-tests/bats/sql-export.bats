@@ -89,15 +89,15 @@ teardown() {
     touch exists.out
     run dolt sql -q "select * from t order by i, j, k into outfile './exists.out';"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "already exists" ]]
+    [[ "$output" =~ "already exists" ]] || false
 
     run dolt sql -q "select * from t order by i, j, k limit 1 into dumpfile './exists.out';"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "already exists" ]]
+    [[ "$output" =~ "already exists" ]] || false
 }
 
 @test "sql-export: dumpfile fails with too many rows" {
     run dolt sql -q "select * from t order by i, j, k limit 3 into dumpfile './dumpfile.out';"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Result consisted of more than one row" ]]
+    [[ "$output" =~ "Result consisted of more than one row" ]] || false
 }
