@@ -3157,7 +3157,8 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 		// - drop (write only)
 
 		wg := sync.WaitGroup{}
-
+		wg.Add(2)
+		
 		analyzeAddCtx := enginetest.NewSession(harness)
 		analyzeDropCtx := enginetest.NewSession(harness)
 
