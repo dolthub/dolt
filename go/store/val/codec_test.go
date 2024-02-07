@@ -252,9 +252,9 @@ func TestCompare(t *testing.T) {
 	for _, test := range tests {
 		act := compare(test.typ, test.l, test.r)
 		assert.Equal(t, test.cmp, act, "expected %s %s %s ",
-			formatValue(test.typ.Enc, test.l),
+			TupleDesc{}.formatValue(test.typ.Enc, 0, test.l),
 			fmtComparator(test.cmp),
-			formatValue(test.typ.Enc, test.r))
+			TupleDesc{}.formatValue(test.typ.Enc, 0, test.r))
 	}
 }
 

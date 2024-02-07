@@ -347,6 +347,23 @@ func (tb *TupleBuilder) PutHash128(i int, v []byte) {
 	tb.pos += hash128Size
 }
 
+// PutExtended writes a []byte to the ith field of the Tuple being built.
+func (tb *TupleBuilder) PutExtended(i int, v []byte) {
+	tb.Desc.expectEncoding(i, ExtendedEnc)
+	sz := ByteSize(len(v))
+	tb.ensureCapacity(sz)
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
+	writeExtended(tb.Desc.Handlers[i], tb.fields[i], v)
+	tb.pos += sz
+}
+
+// PutExtendedAddr writes a []byte to the ith field of the Tuple being built.
+func (tb *TupleBuilder) PutExtendedAddr(i int, v hash.Hash) {
+	tb.Desc.expectEncoding(i, ExtendedAddrEnc)
+	tb.ensureCapacity(hash.ByteLen)
+	tb.putAddr(i, v)
+}
+
 // PutRaw writes a []byte to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutRaw(i int, buf []byte) {
 	if buf == nil {

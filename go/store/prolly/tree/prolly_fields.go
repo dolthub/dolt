@@ -139,6 +139,22 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns No
 		v, ok = td.GetCommitAddr(i, tup)
 	case val.CellEnc:
 		v, ok = td.GetCell(i, tup)
+	case val.ExtendedEnc:
+		var b []byte
+		b, ok = td.GetExtended(i, tup)
+		if ok {
+			v, err = td.Handlers[i].DeserializeValue(b)
+		}
+	case val.ExtendedAddrEnc:
+		var h hash.Hash
+		h, ok = td.GetExtendedAddr(i, tup)
+		if ok {
+			var b []byte
+			b, err = NewByteArray(h, ns).ToBytes(ctx)
+			if err == nil {
+				v, err = td.Handlers[i].DeserializeValue(b)
+			}
+		}
 	default:
 		panic("unknown val.encoding")
 	}
@@ -265,6 +281,25 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 			}
 		}
 		tb.PutCell(i, ZCell(v.(types.GeometryValue)))
+	case val.ExtendedEnc:
+		b, err := tb.Desc.Handlers[i].SerializeValue(v)
+		if err != nil {
+			return err
+		}
+		if len(b) > math.MaxUint16 {
+			return ErrValueExceededMaxFieldSize
+		}
+		tb.PutExtended(i, b)
+	case val.ExtendedAddrEnc:
+		b, err := tb.Desc.Handlers[i].SerializeValue(v)
+		if err != nil {
+			return err
+		}
+		h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(b), len(b))
+		if err != nil {
+			return err
+		}
+		tb.PutExtendedAddr(i, h)
 	default:
 		panic(fmt.Sprintf("unknown encoding %v %v", enc, v))
 	}

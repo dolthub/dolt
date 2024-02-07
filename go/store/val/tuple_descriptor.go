@@ -42,18 +42,39 @@ var disableFixedAccess = false
 // Data structures that contain Tuples and algorithms that process Tuples
 // use a TupleDesc's types to interpret the fields of a Tuple.
 type TupleDesc struct {
-	Types []Type
-	cmp   TupleComparator
-	fast  FixedAccess
+	Types    []Type
+	Handlers []TupleTypeHandler
+	cmp      TupleComparator
+	fast     FixedAccess
+}
+
+// TupleTypeHandler is used to specifically handle types that use extended encoding. Such types are declared by GMS, and
+// this is a forward reference for the interface functions that are necessary here.
+type TupleTypeHandler interface {
+	// SerializedCompare compares two byte slices that each represent a serialized value, without first deserializing
+	// the value.
+	SerializedCompare(v1 []byte, v2 []byte) (int, error)
+	// SerializeValue converts the given value into a binary representation.
+	SerializeValue(val any) ([]byte, error)
+	// DeserializeValue converts a binary representation of a value into its canonical type.
+	DeserializeValue(val []byte) (any, error)
+	// FormatValue returns a string version of the value. Primarily intended for display.
+	FormatValue(val any) (string, error)
+}
+
+// TupleDescriptorArgs are a set of optional arguments for TupleDesc creation.
+type TupleDescriptorArgs struct {
+	Comparator TupleComparator
+	Handlers   []TupleTypeHandler
 }
 
 // NewTupleDescriptor makes a TupleDescriptor from |types|.
 func NewTupleDescriptor(types ...Type) TupleDesc {
-	return NewTupleDescriptorWithComparator(DefaultTupleComparator{}, types...)
+	return NewTupleDescriptorWithArgs(TupleDescriptorArgs{}, types...)
 }
 
-// NewTupleDescriptorWithComparator returns a TupleDesc from a slice of Types.
-func NewTupleDescriptorWithComparator(cmp TupleComparator, types ...Type) (td TupleDesc) {
+// NewTupleDescriptorWithArgs returns a TupleDesc based on the given arguments.
+func NewTupleDescriptorWithArgs(args TupleDescriptorArgs, types ...Type) (td TupleDesc) {
 	if len(types) > MaxTupleFields {
 		panic("tuple field maxIdx exceeds maximum")
 	}
@@ -62,12 +83,16 @@ func NewTupleDescriptorWithComparator(cmp TupleComparator, types ...Type) (td Tu
 			panic("invalid encoding")
 		}
 	}
-	cmp = cmp.Validated(types)
+	if args.Comparator == nil {
+		args.Comparator = DefaultTupleComparator{}
+	}
+	args.Comparator = ExtendedTupleComparator{args.Comparator, args.Handlers}.Validated(types)
 
 	td = TupleDesc{
-		Types: types,
-		cmp:   cmp,
-		fast:  makeFixedAccess(types),
+		Types:    types,
+		Handlers: args.Handlers,
+		cmp:      args.Comparator,
+		fast:     makeFixedAccess(types),
 	}
 	return
 }
@@ -115,7 +140,10 @@ func (td TupleDesc) AddressFieldCount() (n int) {
 
 // PrefixDesc returns a descriptor for the first n types.
 func (td TupleDesc) PrefixDesc(n int) TupleDesc {
-	return NewTupleDescriptorWithComparator(td.cmp.Prefix(n), td.Types[:n]...)
+	if len(td.Handlers) == 0 {
+		return NewTupleDescriptorWithArgs(TupleDescriptorArgs{Comparator: td.cmp.Prefix(n)}, td.Types[:n]...)
+	}
+	return NewTupleDescriptorWithArgs(TupleDescriptorArgs{Comparator: td.cmp.Prefix(n), Handlers: td.Handlers[:n]}, td.Types[:n]...)
 }
 
 // GetField returns the ith field of |tup|.
@@ -179,7 +207,7 @@ func (td TupleDesc) GetFixedAccess() FixedAccess {
 
 // WithoutFixedAccess returns a copy of |td| without fixed access metadata.
 func (td TupleDesc) WithoutFixedAccess() TupleDesc {
-	return TupleDesc{Types: td.Types, cmp: td.cmp}
+	return TupleDesc{Types: td.Types, Handlers: td.Handlers, cmp: td.cmp}
 }
 
 // GetBool reads a bool from the ith field of the Tuple.
@@ -456,6 +484,19 @@ func (td TupleDesc) GetHash128(i int, tup Tuple) (v []byte, ok bool) {
 	return
 }
 
+// GetExtended reads a byte slice from the ith field of the Tuple.
+func (td TupleDesc) GetExtended(i int, tup Tuple) ([]byte, bool) {
+	td.expectEncoding(i, ExtendedEnc)
+	v := td.GetField(i, tup)
+	return v, v != nil
+}
+
+// GetExtendedAddr reads a hash from the ith field of the Tuple.
+func (td TupleDesc) GetExtendedAddr(i int, tup Tuple) (hash.Hash, bool) {
+	td.expectEncoding(i, ExtendedAddrEnc)
+	return td.getAddr(i, tup)
+}
+
 func (td TupleDesc) GetJSONAddr(i int, tup Tuple) (hash.Hash, bool) {
 	td.expectEncoding(i, JSONAddrEnc)
 	return td.getAddr(i, tup)
@@ -528,9 +569,10 @@ func (td TupleDesc) FormatValue(i int, value []byte) string {
 	if value == nil {
 		return "NULL"
 	}
-	return formatValue(td.Types[i].Enc, value)
+	return td.formatValue(td.Types[i].Enc, i, value)
 }
-func formatValue(enc Encoding, value []byte) string {
+
+func (td TupleDesc) formatValue(enc Encoding, i int, value []byte) string {
 	switch enc {
 	case Int8Enc:
 		v := readInt8(value)
@@ -597,6 +639,16 @@ func formatValue(enc Encoding, value []byte) string {
 	case CommitAddrEnc:
 		return hex.EncodeToString(value)
 	case CellEnc:
+		return hex.EncodeToString(value)
+	case ExtendedEnc:
+		handler := td.Handlers[i]
+		v := readExtended(handler, value)
+		str, err := handler.FormatValue(v)
+		if err != nil {
+			panic(err)
+		}
+		return str
+	case ExtendedAddrEnc:
 		return hex.EncodeToString(value)
 	default:
 		return string(value)
