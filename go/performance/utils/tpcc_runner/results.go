@@ -25,7 +25,10 @@ import (
 
 // FromConfigsNewResult returns a new result with some fields set based on the provided configs
 func FromConfigsNewResult(config *TpccBenchmarkConfig, serverConfig *sysbench_runner.ServerConfig, test *TpccTest, suiteId string, idFunc func() string) (*sysbench_runner.Result, error) {
-	serverParams := serverConfig.GetServerArgs()
+	serverParams, err := serverConfig.GetServerArgs()
+	if err != nil {
+		return nil, err
+	}
 
 	var getId func() string
 	if idFunc == nil {

@@ -32,9 +32,12 @@ import (
 
 // BenchmarkDoltgres benchmarks doltgres based on the provided configurations
 func BenchmarkDoltgres(ctx context.Context, config *Config, serverConfig *ServerConfig) (Results, error) {
-	serverParams := serverConfig.GetServerArgs()
+	serverParams, err := serverConfig.GetServerArgs()
+	if err != nil {
+		return nil, err
+	}
 
-	err := DoltVersion(ctx, serverConfig.ServerExec)
+	err = DoltVersion(ctx, serverConfig.ServerExec)
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +50,7 @@ func BenchmarkDoltgres(ctx context.Context, config *Config, serverConfig *Server
 		cleanupDoltgresServerDir(serverDir)
 	}()
 
-	serverParams = append(serverParams, fmt.Sprintf("--data-dir=%s", serverDir))
+	serverParams = append(serverParams, fmt.Sprintf("%s=%s", doltgresDataDirFlag, serverDir))
 
 	withKeyCtx, cancel := context.WithCancel(ctx)
 	gServer, serverCtx := errgroup.WithContext(withKeyCtx)
