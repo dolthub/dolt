@@ -25,6 +25,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"sync"
@@ -828,6 +829,9 @@ func (t Tuple) TupleCompare(ctx context.Context, nbf *NomsBinFormat, otherTuple 
 			if err != nil {
 				return 0, err
 			}
+
+		case ExtendedKind:
+			return 0, fmt.Errorf("extended types are not valid in the old format")
 
 		default:
 			v, err := dec.readValue(nbf)

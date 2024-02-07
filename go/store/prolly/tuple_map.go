@@ -437,7 +437,7 @@ func ConvertToSecondaryKeylessIndex(m Map) Map {
 	newTypes := make([]val.Type, len(keyDesc.Types)+1)
 	copy(newTypes, keyDesc.Types)
 	newTypes[len(newTypes)-1] = val.Type{Enc: val.Hash128Enc}
-	newKeyDesc := val.NewTupleDescriptorWithComparator(keyDesc.Comparator(), newTypes...)
+	newKeyDesc := val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Comparator: keyDesc.Comparator()}, newTypes...)
 	newTuples := m.tuples
 	newTuples.Order = newKeyDesc
 	return Map{

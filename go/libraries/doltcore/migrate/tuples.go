@@ -175,6 +175,9 @@ func translateNomsField(ctx context.Context, ns tree.NodeStore, value types.Valu
 	case types.BlobKind:
 		return translateBlobField(ctx, ns, value.(types.Blob), idx, b)
 
+	case types.ExtendedKind:
+		return fmt.Errorf("extended types are invalid during migration")
+
 	default:
 		return fmt.Errorf("encountered unexpected NomsKind %s",
 			types.KindToString[nk])

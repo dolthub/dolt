@@ -41,61 +41,63 @@ const (
 type ByteSize uint16
 
 const (
-	int8Size      ByteSize = 1
-	uint8Size     ByteSize = 1
-	int16Size     ByteSize = 2
-	uint16Size    ByteSize = 2
-	int32Size     ByteSize = 4
-	uint32Size    ByteSize = 4
-	int64Size     ByteSize = 8
-	uint64Size    ByteSize = 8
-	float32Size   ByteSize = 4
-	float64Size   ByteSize = 8
-	bit64Size     ByteSize = 8
-	hash128Size   ByteSize = 16
-	yearSize      ByteSize = 1
-	dateSize      ByteSize = 4
-	timeSize      ByteSize = 8
-	datetimeSize  ByteSize = 8
-	enumSize      ByteSize = 2
-	setSize       ByteSize = 8
-	bytesAddrEnc  ByteSize = hash.ByteLen
-	commitAddrEnc ByteSize = hash.ByteLen
-	stringAddrEnc ByteSize = hash.ByteLen
-	jsonAddrEnc   ByteSize = hash.ByteLen
-	cellSize      ByteSize = 17
-	geomAddrEnc   ByteSize = hash.ByteLen
+	int8Size         ByteSize = 1
+	uint8Size        ByteSize = 1
+	int16Size        ByteSize = 2
+	uint16Size       ByteSize = 2
+	int32Size        ByteSize = 4
+	uint32Size       ByteSize = 4
+	int64Size        ByteSize = 8
+	uint64Size       ByteSize = 8
+	float32Size      ByteSize = 4
+	float64Size      ByteSize = 8
+	bit64Size        ByteSize = 8
+	hash128Size      ByteSize = 16
+	yearSize         ByteSize = 1
+	dateSize         ByteSize = 4
+	timeSize         ByteSize = 8
+	datetimeSize     ByteSize = 8
+	enumSize         ByteSize = 2
+	setSize          ByteSize = 8
+	bytesAddrEnc     ByteSize = hash.ByteLen
+	commitAddrEnc    ByteSize = hash.ByteLen
+	stringAddrEnc    ByteSize = hash.ByteLen
+	jsonAddrEnc      ByteSize = hash.ByteLen
+	cellSize         ByteSize = 17
+	geomAddrEnc      ByteSize = hash.ByteLen
+	extendedAddrSize ByteSize = hash.ByteLen
 )
 
 type Encoding byte
 
 // Fixed Width Encodings
 const (
-	NullEnc       = Encoding(serial.EncodingNull)
-	Int8Enc       = Encoding(serial.EncodingInt8)
-	Uint8Enc      = Encoding(serial.EncodingUint8)
-	Int16Enc      = Encoding(serial.EncodingInt16)
-	Uint16Enc     = Encoding(serial.EncodingUint16)
-	Int32Enc      = Encoding(serial.EncodingInt32)
-	Uint32Enc     = Encoding(serial.EncodingUint32)
-	Int64Enc      = Encoding(serial.EncodingInt64)
-	Uint64Enc     = Encoding(serial.EncodingUint64)
-	Float32Enc    = Encoding(serial.EncodingFloat32)
-	Float64Enc    = Encoding(serial.EncodingFloat64)
-	Bit64Enc      = Encoding(serial.EncodingBit64)
-	Hash128Enc    = Encoding(serial.EncodingHash128)
-	YearEnc       = Encoding(serial.EncodingYear)
-	DateEnc       = Encoding(serial.EncodingDate)
-	TimeEnc       = Encoding(serial.EncodingTime)
-	DatetimeEnc   = Encoding(serial.EncodingDatetime)
-	EnumEnc       = Encoding(serial.EncodingEnum)
-	SetEnc        = Encoding(serial.EncodingSet)
-	BytesAddrEnc  = Encoding(serial.EncodingBytesAddr)
-	CommitAddrEnc = Encoding(serial.EncodingCommitAddr)
-	StringAddrEnc = Encoding(serial.EncodingStringAddr)
-	JSONAddrEnc   = Encoding(serial.EncodingJSONAddr)
-	CellEnc       = Encoding(serial.EncodingCell)
-	GeomAddrEnc   = Encoding(serial.EncodingGeomAddr)
+	NullEnc         = Encoding(serial.EncodingNull)
+	Int8Enc         = Encoding(serial.EncodingInt8)
+	Uint8Enc        = Encoding(serial.EncodingUint8)
+	Int16Enc        = Encoding(serial.EncodingInt16)
+	Uint16Enc       = Encoding(serial.EncodingUint16)
+	Int32Enc        = Encoding(serial.EncodingInt32)
+	Uint32Enc       = Encoding(serial.EncodingUint32)
+	Int64Enc        = Encoding(serial.EncodingInt64)
+	Uint64Enc       = Encoding(serial.EncodingUint64)
+	Float32Enc      = Encoding(serial.EncodingFloat32)
+	Float64Enc      = Encoding(serial.EncodingFloat64)
+	Bit64Enc        = Encoding(serial.EncodingBit64)
+	Hash128Enc      = Encoding(serial.EncodingHash128)
+	YearEnc         = Encoding(serial.EncodingYear)
+	DateEnc         = Encoding(serial.EncodingDate)
+	TimeEnc         = Encoding(serial.EncodingTime)
+	DatetimeEnc     = Encoding(serial.EncodingDatetime)
+	EnumEnc         = Encoding(serial.EncodingEnum)
+	SetEnc          = Encoding(serial.EncodingSet)
+	BytesAddrEnc    = Encoding(serial.EncodingBytesAddr)
+	CommitAddrEnc   = Encoding(serial.EncodingCommitAddr)
+	StringAddrEnc   = Encoding(serial.EncodingStringAddr)
+	JSONAddrEnc     = Encoding(serial.EncodingJSONAddr)
+	CellEnc         = Encoding(serial.EncodingCell)
+	GeomAddrEnc     = Encoding(serial.EncodingGeomAddr)
+	ExtendedAddrEnc = Encoding(serial.EncodingExtendedAddr)
 
 	sentinel Encoding = 127
 )
@@ -106,7 +108,8 @@ func IsAddrEncoding(enc Encoding) bool {
 		CommitAddrEnc,
 		StringAddrEnc,
 		JSONAddrEnc,
-		GeomAddrEnc:
+		GeomAddrEnc,
+		ExtendedAddrEnc:
 		return true
 	default:
 		return false
@@ -120,6 +123,7 @@ const (
 	DecimalEnc    = Encoding(serial.EncodingDecimal)
 	JSONEnc       = Encoding(serial.EncodingJSON)
 	GeometryEnc   = Encoding(serial.EncodingGeometry)
+	ExtendedEnc   = Encoding(serial.EncodingExtended)
 )
 
 func sizeFromType(t Type) (ByteSize, bool) {
@@ -170,6 +174,8 @@ func sizeFromType(t Type) (ByteSize, bool) {
 		return jsonAddrEnc, true
 	case GeomAddrEnc:
 		return geomAddrEnc, true
+	case ExtendedAddrEnc:
+		return extendedAddrSize, true
 	default:
 		return 0, false
 	}
@@ -587,6 +593,19 @@ func writeByteString(buf, val []byte) {
 
 func compareByteString(l, r []byte) int {
 	return bytes.Compare(l, r)
+}
+
+func readExtended(handler TupleTypeHandler, val []byte) any {
+	v, err := handler.DeserializeValue(val)
+	if err != nil {
+		panic(err)
+	}
+	return v
+}
+
+func writeExtended(handler TupleTypeHandler, buf []byte, val []byte) {
+	expectSize(buf, ByteSize(len(val)))
+	copy(buf, val)
 }
 
 func readHash128(val []byte) []byte {
