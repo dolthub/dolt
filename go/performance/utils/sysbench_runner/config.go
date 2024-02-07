@@ -49,6 +49,17 @@ const (
 	sysbenchUsername  = "sysbench"
 	sysbenchUserLocal = "'sysbench'@'localhost'"
 	sysbenchPassLocal = "sysbenchpass"
+
+	userFlag                    = "--user"
+	hostFlag                    = "--host"
+	portFlag                    = "--port"
+	skipBinLogFlag              = "--skip-log-bin"
+	profileFlag                 = "--prof"
+	profilePathFlag             = "--prof-path"
+	cpuProfile                  = "cpu"
+	doltgresDataDirFlag         = "--data-dir"
+	MysqlDataDirFlag            = "--datadir"
+	MysqlInitializeInsecureFlag = "--initialize-insecure"
 )
 
 var (
@@ -64,9 +75,6 @@ var defaultSysbenchParams = []string{
 }
 
 var defaultDoltServerParams = []string{"sql-server"}
-var defaultMysqlServerParams = []string{}
-var defaultDoltgresServerParams = []string{}
-var defaultPostgresServerParams = []string{}
 
 var defaultSysbenchTests = []*ConfigTest{
 	NewConfigTest("oltp_read_only", []string{}, false),
@@ -283,6 +291,12 @@ type ServerConfig struct {
 
 	// Socket is the path to the server socket
 	Socket string
+
+	// ServerProfile specifies the golang profile to take of a Dolt server
+	ServerProfile string
+
+	// ProfilePath path to directory where server profile will be written
+	ProfilePath string
 }
 
 func (sc *ServerConfig) GetId() string {
@@ -293,36 +307,39 @@ func (sc *ServerConfig) GetId() string {
 }
 
 // GetServerArgs returns the args used to start a server
-func (sc *ServerConfig) GetServerArgs() []string {
+func (sc *ServerConfig) GetServerArgs() ([]string, error) {
 	params := make([]string, 0)
 
-	defaultParams := make([]string, 0)
 	if sc.Server == Dolt {
-		defaultParams = defaultDoltServerParams
+		if sc.ServerProfile != "" {
+			if sc.ServerProfile == cpuProfile {
+				params = append(params, profileFlag, cpuProfile)
+			} else {
+				return nil, fmt.Errorf("unsupported server profile: %s", sc.ServerProfile)
+			}
+			if sc.ProfilePath != "" {
+				params = append(params, profilePathFlag, sc.ProfilePath)
+			}
+		}
+		params = append(params, defaultDoltServerParams...)
 	} else if sc.Server == MySql {
-		defaultParams = defaultMysqlServerParams
 		if sc.ServerUser != "" {
-			params = append(params, fmt.Sprintf("--user=%s", sc.ServerUser))
+			params = append(params, fmt.Sprintf("%s=%s", userFlag, sc.ServerUser))
 		}
 		if sc.SkipLogBin {
-			params = append(params, "--skip-log-bin")
+			params = append(params, skipBinLogFlag)
 		}
-	} else if sc.Server == Doltgres {
-		defaultParams = defaultDoltgresServerParams
-	} else if sc.Server == Postgres {
-		defaultParams = defaultPostgresServerParams
 	}
 
-	params = append(params, defaultParams...)
 	if sc.Server == Dolt || sc.Server == Doltgres {
-		params = append(params, fmt.Sprintf("--host=%s", sc.Host))
+		params = append(params, fmt.Sprintf("%s=%s", hostFlag, sc.Host))
 	}
 	if sc.Port != 0 {
-		params = append(params, fmt.Sprintf("--port=%d", sc.Port))
+		params = append(params, fmt.Sprintf("%s=%d", portFlag, sc.Port))
 	}
 
 	params = append(params, sc.ServerArgs...)
-	return params
+	return params, nil
 }
 
 // Config is the configuration for a benchmarking run

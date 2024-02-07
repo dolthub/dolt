@@ -64,8 +64,13 @@ func BenchmarkMysql(ctx context.Context, config *Config, serverConfig *ServerCon
 		}
 
 		gServer, serverCtx = errgroup.WithContext(withKeyCtx)
-		serverParams := serverConfig.GetServerArgs()
-		serverParams = append(serverParams, fmt.Sprintf("--datadir=%s", serverDir))
+		var serverParams []string
+		serverParams, err = serverConfig.GetServerArgs()
+		if err != nil {
+			cancel()
+			return nil, err
+		}
+		serverParams = append(serverParams, fmt.Sprintf("%s=%s", MysqlDataDirFlag, serverDir))
 
 		server = getMysqlServer(serverCtx, serverConfig, serverParams)
 
@@ -153,7 +158,7 @@ func InitMysqlDataDir(ctx context.Context, config *ServerConfig) (string, error)
 		return "", err
 	}
 
-	msInit := ExecCommand(ctx, config.ServerExec, "--initialize-insecure", fmt.Sprintf("--datadir=%s", serverDir))
+	msInit := ExecCommand(ctx, config.ServerExec, MysqlInitializeInsecureFlag, fmt.Sprintf("%s=%s", MysqlDataDirFlag, serverDir))
 	err = msInit.Run()
 	if err != nil {
 		return "", err

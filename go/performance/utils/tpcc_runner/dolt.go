@@ -37,9 +37,12 @@ const (
 
 // BenchmarkDolt executes a set of tpcc tests against a dolt server.
 func BenchmarkDolt(ctx context.Context, tppcConfig *TpccBenchmarkConfig, serverConfig *sysbench_runner.ServerConfig) (sysbench_runner.Results, error) {
-	serverParams := serverConfig.GetServerArgs()
+	serverParams, err := serverConfig.GetServerArgs()
+	if err != nil {
+		return nil, err
+	}
 
-	err := sysbench_runner.UpdateDoltConfig(ctx, serverConfig.ServerExec)
+	err = sysbench_runner.UpdateDoltConfig(ctx, serverConfig.ServerExec)
 	if err != nil {
 		return nil, err
 	}
