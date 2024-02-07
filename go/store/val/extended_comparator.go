@@ -20,7 +20,7 @@ type ExtendedTupleComparator struct {
 	handlers []TupleTypeHandler
 }
 
-//TODO: compare performance of rolling this logic into the DefaultTupleComparator (nil check or generic handlers that call compare)
+// TODO: compare performance of rolling this logic into the DefaultTupleComparator (nil check or generic handlers that call compare)
 var _ TupleComparator = ExtendedTupleComparator{}
 
 // Compare implements the TupleComparator interface.
