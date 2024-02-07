@@ -54,8 +54,13 @@ func BenchmarkMysql(ctx context.Context, config *TpccBenchmarkConfig, serverConf
 		}
 
 		gServer, serverCtx = errgroup.WithContext(withKeyCtx)
-		serverParams := serverConfig.GetServerArgs()
-		serverParams = append(serverParams, fmt.Sprintf("--datadir=%s", serverDir))
+		var serverParams []string
+		serverParams, err = serverConfig.GetServerArgs()
+		if err != nil {
+			cancel()
+			return nil, err
+		}
+		serverParams = append(serverParams, fmt.Sprintf("%s=%s", sysbench_runner.MysqlDataDirFlag, serverDir))
 		server = getMysqlServer(serverCtx, serverConfig, serverParams)
 
 		// launch the mysql server

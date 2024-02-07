@@ -41,9 +41,12 @@ var stampFunc = func() string { return time.Now().UTC().Format(stampFormat) }
 
 // BenchmarkDolt benchmarks dolt based on the provided configurations
 func BenchmarkDolt(ctx context.Context, config *Config, serverConfig *ServerConfig) (Results, error) {
-	serverParams := serverConfig.GetServerArgs()
+	serverParams, err := serverConfig.GetServerArgs()
+	if err != nil {
+		return nil, err
+	}
 
-	err := DoltVersion(ctx, serverConfig.ServerExec)
+	err = DoltVersion(ctx, serverConfig.ServerExec)
 	if err != nil {
 		return nil, err
 	}
