@@ -15,9 +15,11 @@
 package events
 
 import (
+	"context"
 	"sync"
-	"sync/atomic"
+	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/denisbrodbeck/machineid"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -40,34 +42,62 @@ func getMachineID() string {
 }
 
 // GlobalCollector is an instance of a collector where all events should be sent via the CloseEventAndAdd function
-var GlobalCollector = NewCollector()
+var globalCollector = NewCollector("invalid", nil)
+var globalMu *sync.Mutex = &sync.Mutex{}
+
+func GlobalCollector() *Collector {
+	globalMu.Lock()
+	defer globalMu.Unlock()
+	return globalCollector
+}
+
+func SetGlobalCollector(c *Collector) {
+	globalMu.Lock()
+	defer globalMu.Unlock()
+	cur := globalCollector
+	globalCollector = c
+	toTransfer := cur.Close()
+	for _, e := range toTransfer {
+		globalCollector.evtCh <- e
+	}
+}
 
 const collChanBufferSize = 32
+const maxBatchedEvents = 64
 
 // Collector collects and stores Events later to be sent to an Emitter.
 type Collector struct {
-	val   *atomic.Value
-	wg    *sync.WaitGroup
-	evtCh chan *eventsapi.ClientEvent
+	events []*eventsapi.ClientEvent
+	wg     sync.WaitGroup
+	evtCh  chan *eventsapi.ClientEvent
+	st     *sendingThread
 }
 
 // NewCollector creates a new instance of a collector
-func NewCollector() *Collector {
-	wg := &sync.WaitGroup{}
+func NewCollector(version string, emitter Emitter) *Collector {
 	evtCh := make(chan *eventsapi.ClientEvent, collChanBufferSize)
 
-	c := &Collector{&atomic.Value{}, wg, evtCh}
+	c := &Collector{
+		evtCh: evtCh,
+		st:    newSendingThread(version, emitter),
+	}
 
-	wg.Add(1)
+	c.st.start()
+	c.wg.Add(1)
 	go func() {
-		defer wg.Done()
-
-		var events []*eventsapi.ClientEvent
-		for evt := range evtCh {
-			events = append(events, evt)
+		defer c.wg.Done()
+		for evt := range c.evtCh {
+			c.events = append(c.events, evt)
+			if len(c.events) >= maxBatchedEvents {
+				c.st.batchCh <- c.events
+				c.events = nil
+			}
 		}
-
-		c.val.Store(events)
+		if len(c.events) > 0 {
+			c.st.batchCh <- c.events
+			c.events = nil
+		}
+		c.events = c.st.stop()
 	}()
 
 	return c
@@ -85,7 +115,89 @@ func (c *Collector) Close() []*eventsapi.ClientEvent {
 
 	c.wg.Wait()
 
-	interf := c.val.Load()
+	return c.events
+}
 
-	return interf.([]*eventsapi.ClientEvent)
+type sendingThread struct {
+	logCtx  context.Context
+	cancelF func()
+
+	batchCh chan []*eventsapi.ClientEvent
+	unsent  []*eventsapi.ClientEvent
+	version string
+
+	emitter Emitter
+
+	wg sync.WaitGroup
+}
+
+func newSendingThread(version string, emitter Emitter) *sendingThread {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &sendingThread{
+		logCtx:  ctx,
+		cancelF: cancel,
+		batchCh: make(chan []*eventsapi.ClientEvent, 8),
+		version: version,
+		emitter: emitter,
+	}
+}
+
+func (s *sendingThread) start() {
+	s.wg.Add(1)
+	go s.run()
+}
+
+func (s *sendingThread) stop() []*eventsapi.ClientEvent {
+	s.cancelF()
+	close(s.batchCh)
+	s.wg.Wait()
+	return s.unsent
+}
+
+func (s *sendingThread) run() {
+	defer s.wg.Done()
+
+	var timer *time.Timer
+
+	bo := backoff.NewExponentialBackOff()
+	bo.InitialInterval = time.Second
+	bo.MaxInterval = time.Minute
+	bo.MaxElapsedTime = 0
+
+	for {
+		var timerCh <-chan time.Time
+		if timer != nil {
+			timerCh = timer.C
+		}
+		select {
+		case batch, ok := <-s.batchCh:
+			if !ok {
+				if s.emitter != nil && len(s.unsent) > 0 {
+					err := s.emitter.LogEvents(s.logCtx, s.version, s.unsent)
+					if err == nil {
+						s.unsent = nil
+					}
+				}
+				return
+			}
+			s.unsent = append(s.unsent, batch...)
+			if s.emitter != nil {
+				if timer != nil && !timer.Stop() {
+					<-timer.C
+					timer.Reset(0)
+				} else {
+					timer = time.NewTimer(0)
+				}
+			}
+		case <-timerCh:
+			err := s.emitter.LogEvents(s.logCtx, s.version, s.unsent)
+			if err == nil {
+				s.unsent = nil
+				bo.Reset()
+				timer = nil
+			} else {
+				timer.Reset(bo.NextBackOff())
+			}
+		}
+	}
 }

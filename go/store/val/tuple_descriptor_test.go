@@ -23,7 +23,7 @@ import (
 
 func TestTupleDescriptorSize(t *testing.T) {
 	sz := unsafe.Sizeof(TupleDesc{})
-	assert.Equal(t, 64, int(sz))
+	assert.Equal(t, 88, int(sz))
 }
 
 func TestTupleDescriptorAddressTypes(t *testing.T) {

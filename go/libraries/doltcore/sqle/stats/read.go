@@ -36,13 +36,13 @@ import (
 )
 
 func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (*dbStats, error) {
-	dbStat := &dbStats{db: db.Name(), active: make(map[hash.Hash]int), stats: make(map[sql.StatQualifier]*DoltStats)}
+	dbStat := newDbStats(db.Name())
 
 	iter, err := dtables.NewStatsIter(ctx, m)
 	if err != nil {
 		return nil, err
 	}
-	currentStat := &DoltStats{}
+	currentStat := NewDoltStats()
 	var lowerBound sql.Row
 	for {
 		row, err := iter.Next(ctx)
@@ -123,9 +123,14 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (*dbStats, 
 				}
 				currentStat.fds = fds
 				currentStat.colSet = colSet
+				currentStat.updateActive()
 				dbStat.stats[currentStat.Qual] = currentStat
 			}
-			currentStat = &DoltStats{Qual: qual, Columns: columns, LowerBound: lowerBound}
+
+			currentStat = NewDoltStats()
+			currentStat.Qual = qual
+			currentStat.Columns = columns
+			currentStat.LowerBound = lowerBound
 		}
 
 		if currentStat.Histogram == nil {
@@ -148,7 +153,7 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (*dbStats, 
 			UpperBound:    boundRow,
 		}
 
-		dbStat.active[commit] = position
+		currentStat.active[commit] = position
 		currentStat.Histogram = append(currentStat.Histogram, bucket)
 		currentStat.RowCount += uint64(rowCount)
 		currentStat.DistinctCount += uint64(distinctCount)
@@ -157,6 +162,18 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (*dbStats, 
 			currentStat.CreatedAt = createdAt
 		}
 	}
+	currentStat.LowerBound, err = loadLowerBound(ctx, currentStat.Qual)
+	if err != nil {
+		return nil, err
+	}
+	fds, colSet, err := loadFuncDeps(ctx, db, currentStat.Qual)
+	if err != nil {
+		return nil, err
+	}
+	currentStat.fds = fds
+	currentStat.colSet = colSet
+	currentStat.updateActive()
+	dbStat.setIndexStats(currentStat.Qual, currentStat)
 	dbStat.stats[currentStat.Qual] = currentStat
 	return dbStat, nil
 }

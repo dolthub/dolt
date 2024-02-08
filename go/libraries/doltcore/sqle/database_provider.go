@@ -625,6 +625,10 @@ func (p *DoltDatabaseProvider) ListDroppedDatabases(ctx *sql.Context) ([]string,
 	return p.droppedDatabaseManager.ListDroppedDatabases(ctx)
 }
 
+func (p *DoltDatabaseProvider) DbFactoryUrl() string {
+	return p.dbFactoryUrl
+}
+
 func (p *DoltDatabaseProvider) UndropDatabase(ctx *sql.Context, name string) (err error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()

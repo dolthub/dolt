@@ -117,7 +117,7 @@ func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, nbf *types.Noms
 		return nil, err
 	}
 
-	opts := append(cfg.DialOptions, grpc.WithChainUnaryInterceptor(remotestorage.EventsUnaryClientInterceptor(events.GlobalCollector)))
+	opts := append(cfg.DialOptions, grpc.WithChainUnaryInterceptor(remotestorage.EventsUnaryClientInterceptor(events.GlobalCollector())))
 	opts = append(opts, grpc.WithChainUnaryInterceptor(remotestorage.RetryingUnaryClientInterceptor))
 
 	conn, err := grpc.Dial(cfg.Endpoint, opts...)

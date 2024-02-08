@@ -60,6 +60,7 @@ const (
 	doltgresDataDirFlag         = "--data-dir"
 	MysqlDataDirFlag            = "--datadir"
 	MysqlInitializeInsecureFlag = "--initialize-insecure"
+	cpuProfileFilename          = "cpu.pprof"
 )
 
 var (
@@ -311,16 +312,6 @@ func (sc *ServerConfig) GetServerArgs() ([]string, error) {
 	params := make([]string, 0)
 
 	if sc.Server == Dolt {
-		if sc.ServerProfile != "" {
-			if sc.ServerProfile == cpuProfile {
-				params = append(params, profileFlag, cpuProfile)
-			} else {
-				return nil, fmt.Errorf("unsupported server profile: %s", sc.ServerProfile)
-			}
-			if sc.ProfilePath != "" {
-				params = append(params, profilePathFlag, sc.ProfilePath)
-			}
-		}
 		params = append(params, defaultDoltServerParams...)
 	} else if sc.Server == MySql {
 		if sc.ServerUser != "" {
@@ -426,6 +417,23 @@ func (c *Config) validateServerConfigs() error {
 			err = CheckExec(s.InitExec, "initdb exec")
 			if err != nil {
 				return err
+			}
+		}
+
+		if s.Server != Dolt && s.ServerProfile != "" {
+			return fmt.Errorf("profiling can only be done against a dolt server")
+		}
+
+		if s.Server == Dolt && s.ServerProfile != "" {
+			if s.ServerProfile != cpuProfile {
+				return fmt.Errorf("unsupported server profile: %s", s.ServerProfile)
+			}
+			if s.ProfilePath == "" {
+				cwd, err := os.Getwd()
+				if err != nil {
+					return err
+				}
+				s.ProfilePath = cwd
 			}
 		}
 	}

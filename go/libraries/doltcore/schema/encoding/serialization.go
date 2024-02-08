@@ -638,6 +638,15 @@ func sqlTypeString(t typeinfo.TypeInfo) string {
 		return typ.String()
 	}
 
+	// Extended types are string serializable, so we'll just prepend a tag
+	if extendedType, ok := typ.(sqltypes.ExtendedType); ok {
+		serializedType, err := sqltypes.SerializeTypeToString(extendedType)
+		if err != nil {
+			panic(err)
+		}
+		return planbuilder.ExtendedTypeTag + serializedType
+	}
+
 	return typ.String()
 }
 
@@ -650,7 +659,7 @@ func typeinfoFromSqlType(s string) (typeinfo.TypeInfo, error) {
 }
 
 func encodingFromTypeinfo(t typeinfo.TypeInfo) serial.Encoding {
-	return schema.EncodingFromSqlType(t.ToSqlType().Type())
+	return schema.EncodingFromSqlType(t.ToSqlType())
 }
 
 func constraintsFromSerialColumn(col *serial.Column) (cc []schema.ColConstraint) {

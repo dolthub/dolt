@@ -39,6 +39,11 @@ func Run(config *Config) error {
 		var results Results
 		switch serverConfig.Server {
 		case Dolt:
+			// handle a profiling run
+			if serverConfig.ServerProfile != "" {
+				fmt.Println("Profiling dolt while running sysbench tests")
+				return ProfileDolt(ctx, config, serverConfig)
+			}
 			fmt.Println("Running dolt sysbench test")
 			results, err = BenchmarkDolt(ctx, config, serverConfig)
 		case Doltgres:

@@ -245,7 +245,7 @@ func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string
 	ret := cmd.Exec(ctx, commandStr, args, dEnv, cliCtx)
 
 	if evt != nil {
-		events.GlobalCollector.CloseEventAndAdd(evt)
+		events.GlobalCollector().CloseEventAndAdd(evt)
 	}
 
 	return ret

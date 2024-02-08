@@ -55,7 +55,7 @@ const DefaultMetricsPort = "443"
 // Emitter is an interface used for processing a batch of events
 type Emitter interface {
 	// LogEvents emits a batch of events
-	LogEvents(version string, evts []*eventsapi.ClientEvent) error
+	LogEvents(ctx context.Context, version string, evts []*eventsapi.ClientEvent) error
 	// LogEventsRequest emits a batch of events wrapped in a request object, with other metadata
 	LogEventsRequest(ctx context.Context, req *eventsapi.LogEventsRequest) error
 }
@@ -64,7 +64,7 @@ type Emitter interface {
 type NullEmitter struct{}
 
 // LogEvents takes a batch of events and processes them.  In this case it just drops them
-func (ne NullEmitter) LogEvents(version string, evts []*eventsapi.ClientEvent) error {
+func (ne NullEmitter) LogEvents(ctx context.Context, version string, evts []*eventsapi.ClientEvent) error {
 	return nil
 }
 
@@ -80,7 +80,7 @@ type WriterEmitter struct {
 
 // LogEvents takes a batch of events and processes them.  In this case the text encoding of the events is written to
 // the writer
-func (we WriterEmitter) LogEvents(version string, evts []*eventsapi.ClientEvent) error {
+func (we WriterEmitter) LogEvents(ctx context.Context, version string, evts []*eventsapi.ClientEvent) error {
 	for i, evt := range evts {
 		header := fmt.Sprintf("event%03d: <\n", i)
 
@@ -124,8 +124,8 @@ func NewGrpcEmitter(conn *grpc.ClientConn) *GrpcEmitter {
 	return &GrpcEmitter{client}
 }
 
-func (em *GrpcEmitter) LogEvents(version string, evts []*eventsapi.ClientEvent) error {
-	ctx, cnclFn := context.WithDeadline(context.Background(), time.Now().Add(time.Second+500*time.Millisecond))
+func (em *GrpcEmitter) LogEvents(ctx context.Context, version string, evts []*eventsapi.ClientEvent) error {
+	ctx, cnclFn := context.WithDeadline(ctx, time.Now().Add(time.Second+500*time.Millisecond))
 	defer cnclFn()
 
 	var plat eventsapi.Platform
@@ -138,7 +138,7 @@ func (em *GrpcEmitter) LogEvents(version string, evts []*eventsapi.ClientEvent) 
 		plat = eventsapi.Platform_WINDOWS
 	}
 
-	req := eventsapi.LogEventsRequest{
+	req := &eventsapi.LogEventsRequest{
 		MachineId: getMachineID(),
 		Version:   version,
 		Platform:  plat,
@@ -146,17 +146,15 @@ func (em *GrpcEmitter) LogEvents(version string, evts []*eventsapi.ClientEvent) 
 		App:       Application,
 	}
 
-	_, err := em.client.LogEvents(ctx, &req)
-
-	return err
+	return em.sendLogEventsRequest(ctx, req)
 }
 
 func (em *GrpcEmitter) LogEventsRequest(ctx context.Context, req *eventsapi.LogEventsRequest) error {
-	return em.SendLogEventsRequest(ctx, req)
+	return em.sendLogEventsRequest(ctx, req)
 }
 
 // SendLogEventsRequest sends a request using the grpc client
-func (em *GrpcEmitter) SendLogEventsRequest(ctx context.Context, req *eventsapi.LogEventsRequest) error {
+func (em *GrpcEmitter) sendLogEventsRequest(ctx context.Context, req *eventsapi.LogEventsRequest) error {
 	_, err := em.client.LogEvents(ctx, req)
 	if err != nil {
 		return err
@@ -177,7 +175,7 @@ func NewFileEmitter(userHomeDir string, doltDir string) *FileEmitter {
 }
 
 // LogEvents implements the Emitter interface and writes events requests to files
-func (fe *FileEmitter) LogEvents(version string, evts []*eventsapi.ClientEvent) error {
+func (fe *FileEmitter) LogEvents(ctx context.Context, version string, evts []*eventsapi.ClientEvent) error {
 	if err := fe.fbp.WriteEvents(version, evts); err != nil {
 		return err
 	}
@@ -198,10 +196,10 @@ type LoggerEmitter struct {
 	logLevel logrus.Level
 }
 
-func (l LoggerEmitter) LogEvents(version string, evts []*eventsapi.ClientEvent) error {
+func (l LoggerEmitter) LogEvents(ctx context.Context, version string, evts []*eventsapi.ClientEvent) error {
 	sb := &strings.Builder{}
 	wr := WriterEmitter{Wr: sb}
-	err := wr.LogEvents(version, evts)
+	err := wr.LogEvents(ctx, version, evts)
 	if err != nil {
 		return err
 	}

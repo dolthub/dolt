@@ -477,6 +477,16 @@ func runMain() int {
 		return 1
 	}
 
+	strMetricsDisabled := dEnv.Config.GetStringOrDefault(config.MetricsDisabled, "false")
+	var metricsEmitter events.Emitter
+	metricsEmitter = events.NewFileEmitter(homeDir, dbfactory.DoltDir)
+	metricsDisabled, err := strconv.ParseBool(strMetricsDisabled)
+	if err != nil || metricsDisabled {
+		metricsEmitter = events.NullEmitter{}
+	}
+
+	events.SetGlobalCollector(events.NewCollector(Version, metricsEmitter))
+
 	if dEnv.CfgLoadErr != nil {
 		cli.PrintErrln(color.RedString("Failed to load the global config. %v", dEnv.CfgLoadErr))
 		return 1
@@ -519,7 +529,7 @@ func runMain() int {
 		return 1
 	}
 
-	defer emitUsageEvents(dEnv, homeDir, args)
+	defer emitUsageEvents(metricsEmitter, args)
 
 	if needsWriteAccess(subcommandName) {
 		err = reconfigIfTempFileMoveFails(dEnv)
@@ -794,16 +804,11 @@ func seedGlobalRand() {
 //  1. The config key |metrics.disabled|, when set to |true|, disables all metrics emission
 //  2. The environment key |DOLT_DISABLE_EVENT_FLUSH| allows writing events to disk but not sending them to the server.
 //     This is mostly used for testing.
-func emitUsageEvents(dEnv *env.DoltEnv, homeDir string, args []string) {
-	metricsDisabled := dEnv.Config.GetStringOrDefault(config.MetricsDisabled, "false")
-	disabled, err := strconv.ParseBool(metricsDisabled)
-	if err != nil || disabled {
-		return
-	}
-
+func emitUsageEvents(emitter events.Emitter, args []string) {
 	// write events
-	emitter := events.NewFileEmitter(homeDir, dbfactory.DoltDir)
-	_ = emitter.LogEvents(Version, events.GlobalCollector.Close())
+	collector := events.GlobalCollector()
+	ctx := context.Background()
+	_ = emitter.LogEvents(ctx, Version, collector.Close())
 
 	// flush events
 	if !eventFlushDisabled && len(args) > 0 && shouldFlushEvents(args[0]) {

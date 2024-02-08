@@ -622,6 +622,8 @@ func newHeartbeatService(version string, dEnv *env.DoltEnv) *heartbeatService {
 		return &heartbeatService{} // will be defunct on Run()
 	}
 
+	events.SetGlobalCollector(events.NewCollector(version, emitter))
+
 	return &heartbeatService{
 		version:      version,
 		eventEmitter: emitter,
@@ -647,7 +649,7 @@ func (h *heartbeatService) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			t := events.NowTimestamp()
-			err := h.eventEmitter.LogEvents(h.version, []*eventsapi.ClientEvent{
+			err := h.eventEmitter.LogEvents(ctx, h.version, []*eventsapi.ClientEvent{
 				{
 					Id:        uuid.New().String(),
 					StartTime: t,

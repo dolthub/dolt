@@ -18,7 +18,6 @@ import (
 	"container/heap"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"strings"
 	"time"
@@ -28,9 +27,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -40,121 +37,103 @@ const (
 	mcvCnt       = 3
 )
 
-// refreshStats builds histograms for each index statistic metadata
-// indicated in |newStats|.
-func refreshStats(ctx *sql.Context, indexes []sql.Index, idxMetas []indexMeta) (map[sql.StatQualifier]*DoltStats, error) {
-	dSess := dsess.DSessFromSess(ctx.Session)
-	prov := dSess.Provider()
-	db, err := prov.Database(ctx, idxMetas[0].db)
-	if err != nil {
-		return nil, err
-	}
-	tab, ok, err := db.GetTableInsensitive(ctx, idxMetas[0].table)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, fmt.Errorf("error creating statistics for table: %s; table not found", idxMetas[0].table)
-	}
-
+// updateStats builds histograms for a list of index statistic metadata.
+// We only read chunk ranges indicated by |indexMeta.updateOrdinals|. If
+// the returned buckets are a subset of the index the caller is responsible
+// for reconciling the difference.
+func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, indexes []sql.Index, idxMetas []indexMeta) (map[sql.StatQualifier]*DoltStats, error) {
 	nameToIdx := make(map[string]sql.Index)
 	for _, idx := range indexes {
 		nameToIdx[strings.ToLower(idx.ID())] = idx
 	}
 
-	var dTab *doltdb.Table
-	switch t := tab.(type) {
-	case *sqle.AlterableDoltTable:
-		dTab, err = t.DoltTable.DoltTable(ctx)
-	case *sqle.WritableDoltTable:
-		dTab, err = t.DoltTable.DoltTable(ctx)
-	case *sqle.DoltTable:
-		dTab, err = t.DoltTable(ctx)
-	default:
-		return nil, fmt.Errorf("failed to unwrap dolt table from type: %T", tab)
-	}
-	if err != nil {
-		return nil, err
-	}
-
 	ret := make(map[sql.StatQualifier]*DoltStats)
 
-	for i, meta := range idxMetas {
+	for _, meta := range idxMetas {
 		var idx durable.Index
 		var err error
-		if strings.EqualFold(meta.index, "PRIMARY") {
+		if strings.EqualFold(meta.qual.Index(), "PRIMARY") {
 			idx, err = dTab.GetRowData(ctx)
 		} else {
-			idx, err = dTab.GetIndexRowData(ctx, meta.index)
+			idx, err = dTab.GetIndexRowData(ctx, meta.qual.Index())
 		}
 		if err != nil {
 			return nil, err
 		}
+
 		prollyMap := durable.ProllyMapFromIndex(idx)
 		keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc())
-		buffPool := prollyMap.NodeStore().Pool()
 
-		firstIter, err := prollyMap.IterOrdinalRange(ctx, 0, 1)
+		sqlIdx := nameToIdx[strings.ToLower(meta.qual.Index())]
+		fds, colSet, err := stats.IndexFds(meta.qual.Table(), sqlTable.Schema(), sqlIdx)
 		if err != nil {
 			return nil, err
-		}
-		keyBytes, _, err := firstIter.Next(ctx)
-		if err != nil {
-			return nil, err
-		}
-		for i := range keyBuilder.Desc.Types {
-			keyBuilder.PutRaw(i, keyBytes.GetField(i))
-		}
-
-		prefixLen := len(meta.cols)
-		firstKey := keyBuilder.BuildPrefixNoRecycle(buffPool, prefixLen)
-		firstRow := make(sql.Row, prefixLen)
-		for i := 0; i < prefixLen; i++ {
-			firstRow[i], err = tree.GetField(ctx, prollyMap.KeyDesc(), i, firstKey, prollyMap.NodeStore())
-			if err != nil {
-				return nil, err
-			}
 		}
 
 		var types []sql.Type
-		for _, cet := range indexes[i].ColumnExpressionTypes() {
+		for _, cet := range nameToIdx[strings.ToLower(meta.qual.Index())].ColumnExpressionTypes() {
 			types = append(types, cet.Type)
 		}
 
-		// find level
-		levelNodes, err := tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
+		if cnt, err := prollyMap.Count(); err != nil {
+			return nil, err
+		} else if cnt == 0 {
+			// table is empty
+			ret[meta.qual] = NewDoltStats()
+			ret[meta.qual].chunks = meta.allAddrs
+			ret[meta.qual].CreatedAt = time.Now()
+			ret[meta.qual].Columns = meta.cols
+			ret[meta.qual].Types = types
+			ret[meta.qual].Qual = meta.qual
+
+			ret[meta.qual].fds = fds
+			ret[meta.qual].colSet = colSet
+			continue
+		}
+
+		firstRow, err := firstRowForIndex(ctx, prollyMap, keyBuilder, len(meta.cols))
 		if err != nil {
 			return nil, err
 		}
-		var addrs []hash.Hash
-		for _, n := range levelNodes {
-			addrs = append(addrs, n.HashOf())
+
+		// find level if not exists
+		if len(meta.updateChunks) == 0 {
+			levelNodes, err := tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
+			if err != nil {
+				return nil, err
+			}
+			var chunks []tree.Node
+			var offsets [][]uint64
+			var offset uint64
+			for _, n := range levelNodes {
+				chunks = append(chunks, n)
+				treeCnt, err := n.TreeCount()
+				if err != nil {
+					return nil, err
+				}
+				offsets = append(offsets, []uint64{offset, offset + uint64(treeCnt)})
+				offset += uint64(treeCnt)
+			}
+			meta.updateChunks = chunks
+			meta.updateOrdinals = offsets
 		}
 
-		qual := sql.NewStatQualifier(meta.db, meta.table, meta.index)
-		updater := newBucketBuilder(qual, len(meta.cols), prollyMap.KeyDesc())
-		ret[qual] = &DoltStats{
-			level:     levelNodes[0].Level(),
-			chunks:    addrs,
-			CreatedAt: time.Now(),
-			Columns:   meta.cols,
-			Types:     types,
-			Qual:      qual,
-		}
+		updater := newBucketBuilder(meta.qual, len(meta.cols), prollyMap.KeyDesc())
+		ret[meta.qual] = NewDoltStats()
+		ret[meta.qual].chunks = meta.allAddrs
+		ret[meta.qual].CreatedAt = time.Now()
+		ret[meta.qual].Columns = meta.cols
+		ret[meta.qual].Types = types
+		ret[meta.qual].Qual = meta.qual
 
 		var start, stop uint64
 		// read leaf rows for each bucket
-		for i, _ := range levelNodes {
+		for i, chunk := range meta.updateChunks {
 			// each node is a bucket
 			updater.newBucket()
 
 			// we read exclusive range [node first key, next node first key)
-			start = stop
-			leafCnt, err := levelNodes[i].TreeCount()
-			if err != nil {
-				return nil, err
-			}
-			stop = start + uint64(leafCnt)
+			start, stop = meta.updateOrdinals[i][0], meta.updateOrdinals[i][1]
 			iter, err := prollyMap.IterOrdinalRange(ctx, start, stop)
 			if err != nil {
 				return nil, err
@@ -172,7 +151,7 @@ func refreshStats(ctx *sql.Context, indexes []sql.Index, idxMetas []indexMeta) (
 					keyBuilder.PutRaw(i, keyBytes.GetField(i))
 				}
 
-				updater.add(keyBuilder.BuildPrefixNoRecycle(buffPool, updater.prefixLen))
+				updater.add(keyBuilder.BuildPrefixNoRecycle(prollyMap.Pool(), updater.prefixLen))
 				keyBuilder.Recycle()
 			}
 
@@ -181,14 +160,8 @@ func refreshStats(ctx *sql.Context, indexes []sql.Index, idxMetas []indexMeta) (
 			if err != nil {
 				return nil, err
 			}
-			bucket.Chunk = addrs[i]
+			bucket.Chunk = chunk.HashOf()
 			ret[updater.qual].Histogram = append(ret[updater.qual].Histogram, bucket)
-		}
-
-		sqlIdx := nameToIdx[strings.ToLower(qual.Index())]
-		fds, colSet, err := stats.IndexFds(qual.Table(), tab.Schema(), sqlIdx)
-		if err != nil {
-			return nil, err
 		}
 
 		ret[updater.qual].DistinctCount = uint64(updater.globalDistinct)
@@ -198,6 +171,65 @@ func refreshStats(ctx *sql.Context, indexes []sql.Index, idxMetas []indexMeta) (
 		ret[updater.qual].colSet = colSet
 	}
 	return ret, nil
+}
+
+func mergeStatUpdates(newStats *DoltStats, idxMeta indexMeta) *DoltStats {
+	if len(newStats.Histogram) == len(idxMeta.allAddrs) {
+		newStats.updateActive()
+		return newStats
+	}
+	oldHist := idxMeta.preexisting
+	var mergeHist DoltHistogram
+	newHist := newStats.Histogram
+	var i, j int
+	for _, chunkAddr := range idxMeta.allAddrs {
+		if i < len(oldHist) && oldHist[i].Chunk == chunkAddr {
+			mergeHist = append(mergeHist, oldHist[i])
+			i++
+		} else if j < len(newHist) && newHist[j].Chunk == chunkAddr {
+			mergeHist = append(mergeHist, newHist[j])
+			j++
+		}
+	}
+
+	newStats.Histogram = mergeHist
+	newStats.chunks = idxMeta.allAddrs
+	newStats.updateActive()
+	newStats.updateCounts()
+	return newStats
+}
+
+func firstRowForIndex(ctx *sql.Context, prollyMap prolly.Map, keyBuilder *val.TupleBuilder, prefixLen int) (sql.Row, error) {
+	if cnt, err := prollyMap.Count(); err != nil {
+		return nil, err
+	} else if cnt == 0 {
+		return nil, nil
+	}
+
+	buffPool := prollyMap.NodeStore().Pool()
+
+	// first row is ordinal 0
+	firstIter, err := prollyMap.IterOrdinalRange(ctx, 0, 1)
+	if err != nil {
+		return nil, err
+	}
+	keyBytes, _, err := firstIter.Next(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range keyBuilder.Desc.Types {
+		keyBuilder.PutRaw(i, keyBytes.GetField(i))
+	}
+
+	firstKey := keyBuilder.BuildPrefixNoRecycle(buffPool, prefixLen)
+	firstRow := make(sql.Row, prefixLen)
+	for i := 0; i < prefixLen; i++ {
+		firstRow[i], err = tree.GetField(ctx, prollyMap.KeyDesc(), i, firstKey, prollyMap.NodeStore())
+		if err != nil {
+			return nil, err
+		}
+	}
+	return firstRow, nil
 }
 
 func newBucketBuilder(qual sql.StatQualifier, prefixLen int, tupleDesc val.TupleDesc) *bucketBuilder {
