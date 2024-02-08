@@ -24,11 +24,17 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	stypes "github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
+
+// About ~200 20 byte address fit in a ~4k chunk. Chunk sizes
+// are approximate, but certainly shouldn't reach the square
+// of the expected size.
+const maxBucketFanout = 200 * 200
 
 func newStatsTable(ctx *sql.Context, ns tree.NodeStore, vrw stypes.ValueReadWriter) (*doltdb.Table, error) {
 	return doltdb.CreateEmptyTable(ctx, ns, vrw, schema.StatsTableDoltSchema)
@@ -36,9 +42,15 @@ func newStatsTable(ctx *sql.Context, ns tree.NodeStore, vrw stypes.ValueReadWrit
 
 // flushStats writes a set of table statistics to the given node store, and returns a new prolly.Map
 func flushStats(ctx *sql.Context, prev prolly.Map, tableStats map[sql.StatQualifier]*DoltStats) (prolly.Map, error) {
+	if _, disabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly); disabled == int8(1) {
+		// do not write to disk
+		return prolly.Map{}, nil
+	}
+
 	sch := schema.StatsTableDoltSchema
 	kd, vd := sch.GetMapDescriptors()
-	m := prev.Mutate()
+	var m *prolly.MutableMap
+	m = prev.Mutate()
 	pool := prev.NodeStore().Pool()
 
 	keyBuilder := val.NewTupleBuilder(kd)
@@ -56,10 +68,10 @@ func flushStats(ctx *sql.Context, prev prolly.Map, tableStats map[sql.StatQualif
 		}
 		return b.String()
 	}
-	var pos int64
 	for qual, stats := range tableStats {
+		var pos int64
 
-		// delete previous entries for this index
+		// delete previous entries for this index -> (db, table, index, pos)
 		keyBuilder.PutString(0, qual.Database)
 		keyBuilder.PutString(1, qual.Table())
 		keyBuilder.PutString(2, qual.Index())
@@ -68,11 +80,11 @@ func flushStats(ctx *sql.Context, prev prolly.Map, tableStats map[sql.StatQualif
 		keyBuilder.PutString(0, qual.Database)
 		keyBuilder.PutString(1, qual.Table())
 		keyBuilder.PutString(2, qual.Index())
-		keyBuilder.PutInt64(3, 10000)
+		keyBuilder.PutInt64(3, maxBucketFanout+1)
 		maxKey := keyBuilder.Build(pool)
 
 		// there is a limit on the number of buckets for a given index, iter
-		// will terminate after we run over.
+		// will terminate before maxBucketFanout
 		iter, err := prev.IterKeyRange(ctx, firstKey, maxKey)
 		if err != nil {
 			return prolly.Map{}, err
@@ -99,6 +111,13 @@ func flushStats(ctx *sql.Context, prev prolly.Map, tableStats map[sql.StatQualif
 			sep = ","
 		}
 		typesStr := typesB.String()
+
+		if len(stats.Types) != len(stats.Columns) {
+			ctx.GetLogger().Println(stats.Qual.String())
+			ctx.GetLogger().Println(typesStr)
+			ctx.GetLogger().Println(strings.Join(stats.Columns, ","))
+			panic("invalid statistic")
+		}
 
 		for _, h := range stats.Histogram {
 			var upperBoundElems []string
@@ -137,5 +156,56 @@ func flushStats(ctx *sql.Context, prev prolly.Map, tableStats map[sql.StatQualif
 		}
 	}
 
+	return m.Map(ctx)
+}
+
+func deleteStats(ctx *sql.Context, prev prolly.Map, quals ...sql.StatQualifier) (prolly.Map, error) {
+	if cnt, err := prev.Count(); err != nil {
+		return prolly.Map{}, err
+	} else if cnt == 0 {
+		return prev, nil
+	}
+
+	sch := schema.StatsTableDoltSchema
+	kd, _ := sch.GetMapDescriptors()
+	var m *prolly.MutableMap
+	m = prev.Mutate()
+	pool := prev.NodeStore().Pool()
+
+	keyBuilder := val.NewTupleBuilder(kd)
+
+	for _, qual := range quals {
+		// delete previous entries for this index -> (db, table, index, pos)
+		keyBuilder.PutString(0, qual.Database)
+		keyBuilder.PutString(1, qual.Table())
+		keyBuilder.PutString(2, qual.Index())
+		keyBuilder.PutInt64(3, 0)
+		firstKey := keyBuilder.Build(pool)
+		keyBuilder.PutString(0, qual.Database)
+		keyBuilder.PutString(1, qual.Table())
+		keyBuilder.PutString(2, qual.Index())
+		keyBuilder.PutInt64(3, maxBucketFanout+1)
+		maxKey := keyBuilder.Build(pool)
+
+		// there is a limit on the number of buckets for a given index, iter
+		// will terminate before maxBucketFanout
+		iter, err := prev.IterKeyRange(ctx, firstKey, maxKey)
+		if err != nil {
+			return prolly.Map{}, err
+		}
+
+		for {
+			k, _, err := iter.Next(ctx)
+			if errors.Is(err, io.EOF) {
+				break
+			} else if err != nil {
+				return prolly.Map{}, err
+			}
+			err = m.Put(ctx, k, nil)
+			if err != nil {
+				return prolly.Map{}, err
+			}
+		}
+	}
 	return m.Map(ctx)
 }

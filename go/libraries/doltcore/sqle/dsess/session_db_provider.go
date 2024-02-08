@@ -74,6 +74,7 @@ type DoltDatabaseProvider interface {
 	sql.MutableDatabaseProvider
 	// FileSystem returns the filesystem used by this provider, rooted at the data directory for all databases.
 	FileSystem() filesys.Filesys
+	DbFactoryUrl() string
 	// FileSystemForDatabase returns a filesystem, with the working directory set to the root directory
 	// of the requested database. If the requested database isn't found, a database not found error
 	// is returned.

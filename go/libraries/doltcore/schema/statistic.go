@@ -25,9 +25,9 @@ const StatsVersion int64 = 1
 
 const (
 	StatsQualifierColName     = "qualifier"
-	StatsDbColName            = "database"
-	StatsTableColName         = "table"
-	StatsIndexColName         = "index"
+	StatsDbColName            = "database_name"
+	StatsTableColName         = "table_name"
+	StatsIndexColName         = "index_name"
 	StatsPositionColName      = "position"
 	StatsCommitHashColName    = "commit_hash"
 	StatsRowCountColName      = "row_count"

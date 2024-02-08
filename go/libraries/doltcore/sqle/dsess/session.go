@@ -25,6 +25,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -58,6 +59,7 @@ type DoltSession struct {
 	tempTables       map[string][]sql.Table
 	globalsConf      config.ReadWriteConfig
 	branchController *branch_control.Controller
+	statsProv        sql.StatsProvider
 	mu               *sync.Mutex
 	fs               filesys.Filesys
 
@@ -94,6 +96,7 @@ func NewDoltSession(
 	pro DoltDatabaseProvider,
 	conf config.ReadWriteConfig,
 	branchController *branch_control.Controller,
+	statsProvider sql.StatsProvider,
 ) (*DoltSession, error) {
 	username := conf.GetStringOrDefault(config.UserNameKey, "")
 	email := conf.GetStringOrDefault(config.UserEmailKey, "")
@@ -109,6 +112,7 @@ func NewDoltSession(
 		tempTables:       make(map[string][]sql.Table),
 		globalsConf:      globals,
 		branchController: branchController,
+		statsProv:        statsProvider,
 		mu:               &sync.Mutex{},
 		fs:               pro.FileSystem(),
 	}
@@ -119,6 +123,11 @@ func NewDoltSession(
 // Provider returns the RevisionDatabaseProvider for this session.
 func (d *DoltSession) Provider() DoltDatabaseProvider {
 	return d.provider
+}
+
+// StatsProvider returns the sql.StatsProvider for this session.
+func (d *DoltSession) StatsProvider() sql.StatsProvider {
+	return d.statsProv
 }
 
 // DSessFromSess retrieves a dolt session from a standard sql.Session
@@ -1588,6 +1597,9 @@ func setPersistedValue(conf config.WritableConfig, key string, value interface{}
 		return config.SetFloat(conf, key, float64(v))
 	case float64:
 		return config.SetFloat(conf, key, v)
+	case decimal.Decimal:
+		f64, _ := v.Float64()
+		return config.SetFloat(conf, key, f64)
 	case string:
 		return config.SetString(conf, key, v)
 	case bool:
