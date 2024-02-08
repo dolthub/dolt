@@ -577,6 +577,45 @@ func (i *historyIter) Close(ctx *sql.Context) error {
 	return nil
 }
 
+// NOTE: This was forked from rowConverter to handle the logic starting to separate
+func rowConverterByColName(srcSchema, targetSchema sql.Schema, projectedColNames []string) func(row sql.Row) sql.Row {
+	srcToTarget := make(map[int]int)
+	for i, col := range targetSchema {
+		// NOTE: Looks like history table only matches by name?
+		//       because rowConverter works with sql.Schema instances, it doesn't know anything about
+		//       tags. The RowConverter class is probably a better implementation to use.
+
+		srcIdx := srcSchema.IndexOfColName(col.Name)
+		if srcIdx >= 0 {
+			// only add a conversion if the type is the same
+			// TODO: we could do a projection to convert between types in some cases
+			// TODO: Seems like we need to do this conversion for the schema mapping/pinning feature!
+			if srcSchema[srcIdx].Type.Equals(targetSchema[i].Type) {
+				srcToTarget[srcIdx] = i
+			}
+		}
+	}
+
+	return func(row sql.Row) sql.Row {
+		r := make(sql.Row, len(projectedColNames))
+		for i, colName := range projectedColNames {
+			// DEBUG NOTE: this function currently only works with sql.Schemas, so it doesn't know anything about tags.
+			//             the projections are represented as tag values, but we don't have enough information to match
+			//             that up with the correct column, so we just use the first column since there is one projection.
+
+			// First we have to find the index of colName in the src schema
+			idx := srcSchema.IndexOfColName(colName)
+			if idx == -1 {
+				// if the projected column isn't in our original schema, just ignore it and let it be null
+				continue
+			}
+
+			r[i] = row[idx]
+		}
+		return r
+	}
+}
+
 func rowConverter(srcSchema, targetSchema sql.Schema, h hash.Hash, meta *datas.CommitMeta, projections []uint64) func(row sql.Row) sql.Row {
 	srcToTarget := make(map[int]int)
 	for i, col := range targetSchema {

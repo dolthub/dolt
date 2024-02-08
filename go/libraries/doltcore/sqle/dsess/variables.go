@@ -38,6 +38,7 @@ const (
 	TransactionsDisabledSysVar           = "dolt_transactions_disabled"
 	ForceTransactionCommit               = "dolt_force_transaction_commit"
 	CurrentBatchModeKey                  = "batch_mode"
+	DoltOverrideSchema            = "dolt_override_schema"
 	AllowCommitConflicts                 = "dolt_allow_commit_conflicts"
 	ReplicateToRemote                    = "dolt_replicate_to_remote"
 	ReadReplicaRemote                    = "dolt_read_replica_remote"

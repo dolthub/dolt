@@ -612,14 +612,30 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 		return nil, false, fmt.Errorf("no state for database %s", db.RevisionQualifiedName())
 	}
 
-	key, err := doltdb.NewDataCacheKey(root)
+	varValue, err := ctx.GetSessionVariable(ctx, dsess.DoltOverrideSchema)
 	if err != nil {
 		return nil, false, err
 	}
+	useTableCache := true
+	if varValue != nil {
+		// TODO: This should also check to see if varValue.(string) == "" to tell if the variable
+		//       is really set to a meaningful value or not.
+		useTableCache = false
+	}
 
-	cachedTable, ok := dbState.SessionCache().GetCachedTable(key, tableName)
-	if ok {
-		return cachedTable, true, nil
+	if useTableCache {
+		// NOTE: this is the only place where a cached table is loaded from the session cache.
+		//       If we are in a mode where we are mapping tables' schemas, then we don't want to
+		//       use any cached tables or cache any tables.
+		key, err := doltdb.NewDataCacheKey(root)
+		if err != nil {
+			return nil, false, err
+		}
+
+		cachedTable, ok := dbState.SessionCache().GetCachedTable(key, tableName)
+		if ok {
+			return cachedTable, true, nil
+		}
 	}
 
 	tableNames, err := getAllTableNames(ctx, root)
@@ -645,12 +661,65 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 		return nil, false, err
 	}
 
+	if varValue != nil {
+		// TODO: Encapsulate this in a function
+		varString, ok := varValue.(string)
+		if !ok {
+			panic("var value is not a string!")
+		}
+
+		if varString != "" {
+			commitSpec, err := doltdb.NewCommitSpec(varString)
+			if err != nil {
+				panic("bad commit spec: " + err.Error())
+			}
+			doltSession := dsess.DSessFromSess(ctx.Session)
+			headRef, err := doltSession.CWBHeadRef(ctx, db.Name())
+			if err != nil {
+				panic("unable to retrieve current working branch head: " + err.Error())
+			}
+
+			commit, err := db.GetDoltDB().Resolve(ctx, commitSpec, headRef)
+			if err != nil {
+				panic("unable to resolve schema override value: " + err.Error())
+			}
+
+			rootValue, err := commit.GetRootValue(ctx)
+			if err != nil {
+				panic("unable to get root value: " + err.Error())
+			}
+
+			differentTable, _, ok, err := rootValue.GetTableInsensitive(ctx, tableName)
+			if err != nil {
+				panic("unable to find table as overridden root value: " + err.Error())
+			}
+			if !ok {
+				panic("unable to find table as overridden root value")
+			}
+			overriddenSchema, err := differentTable.GetSchema(ctx)
+			if err != nil {
+				panic("unable to get overridden table schema: " + err.Error())
+			}
+
+			err = tbl.OverrideSchema(overriddenSchema)
+			if err != nil {
+				return nil, false, err
+			}
+		}
+	}
+
 	table, err := db.newDoltTable(tableName, sch, tbl)
 	if err != nil {
 		return nil, false, err
 	}
 
-	dbState.SessionCache().CacheTable(key, tableName, table)
+	if useTableCache {
+		key, err := doltdb.NewDataCacheKey(root)
+		if err != nil {
+			return nil, false, err
+		}
+		dbState.SessionCache().CacheTable(key, tableName, table)
+	}
 
 	return table, true, nil
 }

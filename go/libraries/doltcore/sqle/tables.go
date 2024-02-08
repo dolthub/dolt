@@ -36,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -91,6 +92,8 @@ type DoltTable struct {
 	projectedSchema sql.Schema
 
 	opts editor.Options
+
+	overriddenSchema schema.Schema
 }
 
 func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db dsess.SqlDatabase, opts editor.Options) (*DoltTable, error) {
@@ -109,14 +112,15 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db dsess.Sq
 	}
 
 	return &DoltTable{
-		tableName:     name,
-		db:            db,
-		nbf:           tbl.Format(),
-		sch:           sch,
-		sqlSch:        sqlSch,
-		autoIncCol:    autoCol,
-		projectedCols: nil,
-		opts:          opts,
+		tableName:        name,
+		db:               db,
+		nbf:              tbl.Format(),
+		sch:              sch,
+		sqlSch:           sqlSch,
+		autoIncCol:       autoCol,
+		projectedCols:    nil,
+		overriddenSchema: tbl.OverriddenSchema,
+		opts:             opts,
 	}, nil
 }
 
@@ -151,14 +155,15 @@ func (t *DoltTable) LockedToRoot(ctx *sql.Context, root *doltdb.RootValue) (sql.
 	}
 
 	dt := &DoltTable{
-		tableName:    t.tableName,
-		db:           t.db,
-		nbf:          tbl.Format(),
-		sch:          sch,
-		sqlSch:       sqlSch,
-		autoIncCol:   autoCol,
-		opts:         t.opts,
-		lockedToRoot: root,
+		tableName:        t.tableName,
+		db:               t.db,
+		nbf:              tbl.Format(),
+		sch:              sch,
+		sqlSch:           sqlSch,
+		autoIncCol:       autoCol,
+		opts:             t.opts,
+		lockedToRoot:     root,
+		overriddenSchema: t.overriddenSchema,
 	}
 	return dt.WithProjections(t.Projections()).(*DoltTable), nil
 }
@@ -196,6 +201,10 @@ func (t *DoltTable) DoltTable(ctx *sql.Context) (*doltdb.Table, error) {
 	}
 	if !ok {
 		return nil, sql.ErrTableNotFound.New(t.tableName)
+	}
+
+	if t.overriddenSchema != nil {
+		table.OverriddenSchema = t.overriddenSchema
 	}
 
 	return table, nil
@@ -350,9 +359,25 @@ func (t *DoltTable) Format() *types.NomsBinFormat {
 
 // Schema returns the schema for this table.
 func (t *DoltTable) Schema() sql.Schema {
+	// If this table has been set with a specific projection, prefer returning that as the schema. This enables
+	// rules like eraseProjections to operate correctly.
 	if t.projectedSchema != nil {
 		return t.projectedSchema
 	}
+
+	// If there is an overridden schema, prefer that next
+	if t.overriddenSchema != nil {
+		// TODO: This may need to go into the sqlSchema() function instead, otherwise code
+		//       calling sqlSchema() is going to see the wrong schema?
+		sqlSchema, err := sqlutil.FromDoltSchema(t.db.Name(), t.tableName, t.overriddenSchema)
+		if err != nil {
+			// TODO: err handling? We don't have the chance to return an error
+			panic("error converting to sql schema: " + err.Error())
+		}
+		return sqlSchema.Schema
+	}
+
+	// Finally, use the original schema that matches the data if nothing has been overridden
 	return t.sqlSchema().Schema
 }
 
@@ -422,6 +447,19 @@ func (t *DoltTable) RowCount(ctx *sql.Context) (uint64, bool, error) {
 }
 
 func (t *DoltTable) PrimaryKeySchema() sql.PrimaryKeySchema {
+	// TODO: Yup... this is another good sign that we need to move the logic
+	//       for overridden schemas into t.sqlSchema() instead of duplicating it
+	//       in PrimaryKeySchema() and Schema()
+	if t.overriddenSchema != nil {
+		// TODO: This may need to go into the sqlSchema() function instead, otherwise code
+		//       calling sqlSchema() is going to see the wrong schema!
+		doltSchema, err := sqlutil.FromDoltSchema(t.db.Name(), t.tableName, t.overriddenSchema)
+		if err != nil {
+			panic("error converting to sql schema: " + err.Error())
+		}
+		return doltSchema
+	}
+
 	return t.sqlSchema()
 }
 
@@ -432,8 +470,96 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 		return nil, err
 	}
 
-	return partitionRows(ctx, table, t.projectedCols, partition)
+	var rowConvFunc func(row sql.Row) sql.Row
+
+	if t.overriddenSchema != nil {
+		// If there is a schema override, then we need to map the results
+		// from the old schema to the new schema
+		toSch2, err := sqlutil.FromDoltSchema(t.db.Name(), t.tableName, t.overriddenSchema)
+		if err != nil {
+			panic("unable to convert schemas: " + err.Error())
+		}
+
+		var projectedColNames []string
+		for _, tag := range t.projectedCols {
+			column, ok := t.overriddenSchema.GetAllCols().GetByTag(tag)
+			if !ok {
+				panic("uh oh! Couldn't find column with tag " + strconv.FormatUint(tag, 10))
+			}
+			projectedColNames = append(projectedColNames, column.Name)
+		}
+
+		// TODO: the rowConverter function only maps columns by name and requires the
+		//       type to match exactly. It works off of sql.Schema, not schema.Schema,
+		//       so there's no chance of mapping with a column tag.
+		//       The RowConerter class might be a better choice, but it works off of
+		//       row.Row instead of sql.Row.
+		rowConvFunc = rowConverterByColName(t.sqlSch.Schema, toSch2.Schema, projectedColNames)
+	}
+
+	// If we DON'T have an overridden schema, then we can pass in our projected columns as the
+	// ones set in the table that the analyzer has told us need to be projected. This will limit our returned
+	// sql.Row to only the requested projected columns. If we DO have an overridden schema in use, then we need
+	// to pass in the full column projection for the original/data schema so that we get all columns back. Then,
+	// the mappingRowIterator that we apply on top of the original row iterator will take care of mapping the
+	// original row and shrinking it down to the projected columns.
+	projCols := t.projectedCols
+	if t.overriddenSchema != nil {
+		originalSchemaCols := t.sch.GetAllCols().GetColumns()
+		projCols = make([]uint64, len(originalSchemaCols))
+		for i, col := range originalSchemaCols {
+			projCols[i] = col.Tag
+		}
+	}
+
+	originalRowIter, err := partitionRows(ctx, table, projCols, partition)
+	if err != nil {
+		return originalRowIter, err
+	}
+
+	if t.overriddenSchema != nil {
+		newRowIter := mappingRowIter{
+			child:       originalRowIter,
+			rowConvFunc: rowConvFunc,
+		}
+		return &newRowIter, nil
+	} else {
+		return originalRowIter, err
+	}
 }
+
+type mappingRowIter struct {
+	child        sql.RowIter
+	rowConvFunc  func(row sql.Row) sql.Row
+	rowConverter *rowconv.RowConverter
+}
+
+func (m *mappingRowIter) Next(ctx *sql.Context) (sql.Row, error) {
+	next, err := m.child.Next(ctx)
+	if err != nil {
+		return next, err
+	}
+
+	// RowConverter won't work because it works with row.Row instead of sql.Row
+	//if m.rowConverter != nil {
+	//	return m.rowConverter.ConvertWithWarnings(next, nil)
+	//}
+
+	// The rowConverter function doesn't work correctly either because it works with
+	// sql.Schema instead of schema.Schema.
+	if m.rowConvFunc == nil {
+		return next, nil
+	} else {
+		newRow := m.rowConvFunc(next)
+		return newRow, nil
+	}
+}
+
+func (m *mappingRowIter) Close(ctx *sql.Context) error {
+	return m.child.Close(ctx)
+}
+
+var _ sql.RowIter = (*mappingRowIter)(nil)
 
 func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []uint64, partition sql.Partition) (sql.RowIter, error) {
 	switch typedPartition := partition.(type) {
@@ -1133,7 +1259,7 @@ func (t *DoltTable) GetForeignKeyEditor(ctx *sql.Context) sql.ForeignKeyEditor {
 
 // Projections implements sql.ProjectedTable
 func (t *DoltTable) Projections() []string {
-	// The semantics of nil v. empty are important for this inteface, they display differently in explain plans
+	// The semantics of nil v. empty are important for this interface, they display differently in explain plans
 	if t.projectedCols == nil {
 		return nil
 	}
@@ -1168,8 +1294,16 @@ func (t *DoltTable) WithProjections(colNames []string) sql.Table {
 	// requested column list in that case.
 	nt.projectedCols = make([]uint64, 0)
 	nt.projectedSchema = make(sql.Schema, 0)
-	cols := t.sch.GetAllCols()
 	sch := t.Schema()
+	// TODO: Watch out for direct use of t.sch! We should probably audit other places and put direct access of sch
+	//       behind a method call, so that we can consistently apply the overridden schema, although there are
+	//       still times when we must use the original (non-overridden) schema, so we probably need to fiture out
+	//       the right interface to make that clear.
+	schemaSchema := t.sch
+	if t.overriddenSchema != nil {
+		schemaSchema = t.overriddenSchema
+	}
+	cols := schemaSchema.GetAllCols()
 	for i := range colNames {
 		lowerName := strings.ToLower(colNames[i])
 		col, ok := cols.LowerNameToCol[lowerName]
@@ -1302,6 +1436,17 @@ type AlterableDoltTable struct {
 }
 
 func (t *AlterableDoltTable) PrimaryKeySchema() sql.PrimaryKeySchema {
+	if t.overriddenSchema != nil {
+		// TODO: This may need to go into the sqlSchema() function instead, otherwise code
+		//       calling sqlSchema() is going to see the wrong schema!
+		doltSchema, err := sqlutil.FromDoltSchema(t.db.Name(), t.tableName, t.overriddenSchema)
+		// TODO: err handling?
+		if err != nil {
+			panic("error converting to sql schema: " + err.Error())
+		}
+		return doltSchema
+	}
+
 	return t.sqlSch
 }
 
