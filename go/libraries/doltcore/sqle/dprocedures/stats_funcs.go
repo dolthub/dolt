@@ -16,10 +16,10 @@ package dprocedures
 
 import (
 	"fmt"
-	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
