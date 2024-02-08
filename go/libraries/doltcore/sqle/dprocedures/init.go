@@ -48,10 +48,10 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dolt_tag", Schema: int64Schema("status"), Function: doltTag},
 	{Name: "dolt_verify_constraints", Schema: int64Schema("violations"), Function: doltVerifyConstraints},
 
-	{Name: "dolt_stats_drop", Schema: doltMergeSchema, Function: statsFunc(statsDrop)},
-	{Name: "dolt_stats_restart", Schema: doltMergeSchema, Function: statsFunc(statsRestart)},
-	{Name: "dolt_stats_stop", Schema: doltMergeSchema, Function: statsFunc(statsStop)},
-	{Name: "dolt_stats_status", Schema: doltMergeSchema, Function: statsFunc(statsStatus)},
+	{Name: "dolt_stats_drop", Schema: statsFuncSchema, Function: statsFunc(statsDrop)},
+	{Name: "dolt_stats_restart", Schema: statsFuncSchema, Function: statsFunc(statsRestart)},
+	{Name: "dolt_stats_stop", Schema: statsFuncSchema, Function: statsFunc(statsStop)},
+	{Name: "dolt_stats_status", Schema: statsFuncSchema, Function: statsFunc(statsStatus)},
 }
 
 // stringSchema returns a non-nullable schema with all columns as LONGTEXT.
