@@ -19,11 +19,20 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
+
+var statsFuncSchema = []*sql.Column{
+	{
+		Name:     "message",
+		Type:     gmstypes.LongText,
+		Nullable: true,
+	},
+}
 
 func statsFunc(fn func(ctx *sql.Context) (interface{}, error)) func(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	return func(ctx *sql.Context, args ...string) (sql.RowIter, error) {

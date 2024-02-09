@@ -297,10 +297,14 @@ func (s *dbStats) setLatestHash(tableName string, h hash.Hash) {
 }
 
 func (s *dbStats) getCurrentMap() prolly.Map {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.currentMap
 }
 
 func (s *dbStats) setCurrentMap(m prolly.Map) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.currentMap = m
 }
 
