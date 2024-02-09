@@ -55,7 +55,9 @@ func Run(config *Config) error {
 			results, err = b.Benchmark(ctx)
 		case Doltgres:
 			fmt.Println("Running doltgres sysbench test")
-			results, err = BenchmarkDoltgres(ctx, config, serverConfig)
+			b := NewDoltgresBenchmarker(cwd, config, serverConfig)
+			results, err = b.Benchmark(ctx)
+			//results, err = BenchmarkDoltgres(ctx, config, serverConfig)
 		case MySql:
 			fmt.Println("Running mysql sysbench test")
 			results, err = BenchmarkMysql(ctx, config, serverConfig)

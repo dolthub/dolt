@@ -125,7 +125,7 @@ func (b *doltBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
 		return nil, err
 	}
 
-	server := NewDoltServer(ctx, testRepo, b.serverConfig, syscall.SIGTERM, serverParams)
+	server := NewServer(ctx, testRepo, b.serverConfig, syscall.SIGTERM, serverParams)
 	err = server.Start(ctx)
 	if err != nil {
 		return nil, err
