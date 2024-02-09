@@ -15,7 +15,7 @@ require (
 	github.com/dolthub/fslock v0.0.3
 	github.com/dolthub/ishell v0.0.0-20221214210346-d7db0b066488
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
-	github.com/dolthub/vitess v0.0.0-20240207220624-0c2d2128fb7b
+	github.com/dolthub/vitess v0.0.0-20240209125211-6c93b0341608
 	github.com/dustin/go-humanize v1.0.1
 	github.com/fatih/color v1.13.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
@@ -166,7 +166,7 @@ require (
 
 replace (
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
-	github.com/dolthub/go-mysql-server => github.com/seanlaff/go-mysql-server v0.0.0-20240209015054-bf26c410412f
+	github.com/dolthub/go-mysql-server => github.com/seanlaff/go-mysql-server v0.0.0-20240209143109-a28eedb09354
 )
 
 go 1.21
