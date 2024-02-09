@@ -35,6 +35,11 @@ func Run(config *Config) error {
 		return err
 	}
 
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
 	for _, serverConfig := range config.Servers {
 		var results Results
 		switch serverConfig.Server {
@@ -45,7 +50,9 @@ func Run(config *Config) error {
 				return ProfileDolt(ctx, config, serverConfig)
 			}
 			fmt.Println("Running dolt sysbench test")
-			results, err = BenchmarkDolt(ctx, config, serverConfig)
+			//results, err = BenchmarkDolt(ctx, config, serverConfig)
+			b := NewDoltBenchmarker(cwd, config, serverConfig)
+			results, err = b.Benchmark(ctx)
 		case Doltgres:
 			fmt.Println("Running doltgres sysbench test")
 			results, err = BenchmarkDoltgres(ctx, config, serverConfig)
