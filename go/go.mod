@@ -164,6 +164,9 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 )
 
-replace github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
+replace (
+	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
+	github.com/dolthub/go-mysql-server => github.com/seanlaff/go-mysql-server v0.0.0-20240209015054-bf26c410412f
+)
 
 go 1.21
