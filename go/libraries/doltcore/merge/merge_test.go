@@ -718,8 +718,8 @@ func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootT
 	mainHeadSpec, _ := doltdb.NewCommitSpec(env.DefaultInitBranch)
 	optCmt, err := ddb.Resolve(context.Background(), mainHeadSpec, nil)
 	require.NoError(t, err)
-	mainHead, err := optCmt.ToCommit()
-	require.NoError(t, err)
+	mainHead, ok := optCmt.ToCommit()
+	require.True(t, ok)
 
 	mRoot, err := mainHead.GetRootValue(context.Background())
 	require.NoError(t, err)
@@ -760,8 +760,8 @@ func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootT
 
 	optCmt, err = doltdb.GetCommitAncestor(context.Background(), commit, mergeCommit)
 	require.NoError(t, err)
-	ancCm, err := optCmt.ToCommit()
-	require.NoError(t, err)
+	ancCm, ok := optCmt.ToCommit()
+	require.True(t, ok)
 
 	ancRoot, err := ancCm.GetRootValue(context.Background())
 	require.NoError(t, err)

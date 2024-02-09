@@ -183,8 +183,8 @@ func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) (dsess.Initial
 	optCmt, err := dEnv.DoltDB.Resolve(ctx, headSpec, headRef)
 	require.NoError(t, err)
 
-	headCommit, err := optCmt.ToCommit()
-	require.NoError(t, err)
+	headCommit, ok := optCmt.ToCommit()
+	require.True(t, ok)
 
 	ws, err := dEnv.WorkingSet(ctx)
 	require.NoError(t, err)

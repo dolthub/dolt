@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -433,10 +434,8 @@ func (dArgs *diffArgs) applyDiffRoots(queryist cli.Queryist, sqlCtx *sql.Context
 	fromRef := args[0]
 	// treat the first arg as a ref spec
 	_, err := getTableNamesAtRef(queryist, sqlCtx, fromRef)
-	if err == doltdb.ErrUnexpectedGhostCommit {
-		// NM4 - this isn't sustainable.
-		return nil, errhand.BuildDError("Shallow Clone prevents loading requested commit. Perform a full clone and try again.").Build()
-
+	if errors.Is(err, doltdb.ErrUnexpectedGhostCommit) {
+		return nil, err
 	}
 	// if it doesn't resolve, treat it as a table name
 	if err != nil {

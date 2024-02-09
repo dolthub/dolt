@@ -330,7 +330,6 @@ func fullClone(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch str
 		clonePrint(eventCh)
 	}()
 
-	// was Clone()
 	err := srcDB.Clone(ctx, dEnv.DoltDB, eventCh)
 
 	close(eventCh)
@@ -341,61 +340,22 @@ func fullClone(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch str
 }
 
 func shallowClone(ctx context.Context, destData env.DbData, srcDB *doltdb.DoltDB, remoteName, branch string, depth int) error {
-	/*
-		specs, err := env.GetRefSpecs(destData.Rsr, remoteName)
-		if err != nil {
-			return err
-		}
-
-	*/
-	// What should the specs looks like? Verify there is only one? NM4
-
-	// Get the remote
 	remotes, err := destData.Rsr.GetRemotes()
 	if err != nil {
 		return err
 	}
-
 	remote, ok := remotes.Get(remoteName)
 	if !ok {
+		// By the time we get to this point, the remote should be created, so this should never happen.
 		return fmt.Errorf("remote %s not found", remoteName)
 	}
 
 	if branch == "" {
-		branch = "main"
+		branch = env.DefaultInitBranch
 	}
 	specs, err := env.ParseRefSpecs([]string{branch}, destData.Rsr, remote)
 
 	return ShallowFetchRefSpec(ctx, destData, srcDB, specs[0], &remote, depth)
-}
-
-func guessSingleBranch(ctx context.Context, dEnv *env.DoltEnv) (string, error) {
-	// Get all the refs from the remote. These branch refs will be translated to remote branch refs, tags will
-	// be preserved, and all other refs will be ignored.
-	srcRefHashes, err := dEnv.DoltDB.GetRefsWithHashes(ctx)
-	if err != nil {
-		return "", fmt.Errorf("%w; %s", ErrCloneFailed, err.Error())
-	}
-
-	branches := make([]ref.DoltRef, 0, len(srcRefHashes))
-	for _, refHash := range srcRefHashes {
-		if refHash.Ref.GetType() == ref.BranchRefType {
-			br := refHash.Ref.(ref.BranchRef)
-			branches = append(branches, br)
-		}
-	}
-
-	branch := env.GetDefaultBranch(dEnv, branches)
-
-	// If we couldn't find a branch but the repo cloned successfully, it's empty. Initialize it instead of pulling from
-	// the remote.
-	if branch == "" {
-		if err = InitEmptyClonedRepo(ctx, dEnv); err != nil {
-			return "", err
-		}
-		branch = env.GetDefaultInitBranch(dEnv.Config)
-	}
-	return branch, nil
 }
 
 // InitEmptyClonedRepo inits an empty, newly cloned repo. This would be unnecessary if we properly initialized the

@@ -196,7 +196,7 @@ func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 		mr.Errhand(err)
 	}
 
-	err = actions.CloneRemote(ctx, srcDB, r.Name, "", false, dEnv)
+	err = actions.CloneRemote(ctx, srcDB, r.Name, "", false, -1, dEnv)
 	if err != nil {
 		mr.Errhand(err)
 	}

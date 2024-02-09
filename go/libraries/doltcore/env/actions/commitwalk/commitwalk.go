@@ -151,7 +151,6 @@ func (q *q) Get(ctx context.Context, ddb *doltdb.DoltDB, id hash.Hash) (*c, erro
 
 	commit, ok := optCmt.ToCommit()
 	if !ok {
-		// Preserve the Ghost commit. NM4 - TEST THIS PATH.
 		return &c{ddb: ddb, commit: optCmt, hash: id}, nil
 	}
 
@@ -203,17 +202,6 @@ func GetDotDotRevisions(ctx context.Context, includedDB *doltdb.DoltDB, included
 
 	return commitList, nil
 }
-
-/*
-NM4. Kill this?
-
-// GetTopologicalOrderCommits returns the commits reachable from the commits in `startCommitHashes`
-// in reverse topological order, with tiebreaking done by the height of the commit graph -- higher commits
-// appear first. Remaining ties are broken by timestamp; newer commits appear first.
-func GetTopologicalOrderCommits(ctx context.Context, ddb *doltdb.DoltDB, startCommitHashes []hash.Hash) ([]*doltdb.OptionalCommit, error) {
-	return GetTopNTopoOrderedCommitsMatching(ctx, ddb, startCommitHashes, -1, nil)
-}
-*/
 
 // GetTopologicalOrderCommitIterator returns an iterator for commits generated with the same semantics as
 // GetTopologicalOrderCommits
@@ -295,35 +283,6 @@ func (i *commiterator) Reset(ctx context.Context) error {
 	}
 	return nil
 }
-
-/* NM4 - Kill this?
-
-// GetTopNTopoOrderedCommitsMatching returns the first N commits (If N <= 0 then all commits) reachable from the commits in
-// `startCommitHashes` in reverse topological order, with tiebreaking done by the height of the commit graph -- higher
-// commits appear first. Remaining ties are broken by timestamp; newer commits appear first.
-func GetTopNTopoOrderedCommitsMatching(ctx context.Context, ddb *doltdb.DoltDB, startCommitHashes []hash.Hash, n int, matchFn func(*doltdb.OptionalCommit) (bool, error)) ([]*doltdb.OptionalCommit, error) {
-	// NM4 - This is interesting. marking this for later.
-	// This appears to be dead code?!
-	itr, err := GetTopologicalOrderIterator(ctx, ddb, startCommitHashes, matchFn)
-	if err != nil {
-		return nil, err
-	}
-
-	var commitList []*doltdb.OptionalCommit
-	for n < 0 || len(commitList) < n {
-		_, commit, err := itr.Next(ctx)
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return nil, err
-		}
-
-		commitList = append(commitList, commit)
-	}
-
-	return commitList, nil
-}
-*/
 
 // GetDotDotRevisionsIterator returns an iterator for commits generated with the same semantics as
 // GetDotDotRevisions

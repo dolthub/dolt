@@ -147,9 +147,6 @@ func (c *Commit) GetParent(ctx context.Context, idx int) (*OptionalCommit, error
 	if err != nil {
 		return nil, err
 	}
-
-	// NM4 - Looks like this method can return nil - we check in places. Should we return an error instead?
-
 	return &OptionalCommit{cmt, parent.Addr()}, nil
 }
 

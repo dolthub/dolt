@@ -284,7 +284,7 @@ func printObjects(ctx context.Context, dEnv *env.DoltEnv, opts *showOpts) error 
 		}
 		commit, ok := optCmt.ToCommit()
 		if !ok {
-			return doltdb.ErrUnexpectedGhostCommit // NM4 - TEST.
+			return doltdb.ErrUnexpectedGhostCommit
 		}
 
 		value := commit.Value()

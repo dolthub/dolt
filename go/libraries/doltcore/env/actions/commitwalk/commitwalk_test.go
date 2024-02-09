@@ -70,8 +70,8 @@ func TestGetDotDotRevisions(t *testing.T) {
 	require.NoError(t, err)
 	opt, err := dEnv.DoltDB.Resolve(context.Background(), cs, nil)
 	require.NoError(t, err)
-	commit, err := opt.ToCommit()
-	require.NoError(t, err)
+	commit, ok := opt.ToCommit()
+	require.True(t, ok)
 
 	rv, err := commit.GetRootValue(context.Background())
 	require.NoError(t, err)
@@ -241,21 +241,20 @@ func TestGetDotDotRevisions(t *testing.T) {
 }
 
 func assertEqualHashes(t *testing.T, lc, rc interface{}) {
-	var err error
 	leftCm, ok := lc.(*doltdb.Commit)
 	if !ok {
 		opt, ok := lc.(*doltdb.OptionalCommit)
 		require.True(t, ok)
-		leftCm, err = opt.ToCommit()
-		require.NoError(t, err)
+		leftCm, ok = opt.ToCommit()
+		require.True(t, ok)
 	}
 
 	rightCm, ok := rc.(*doltdb.Commit)
 	if !ok {
 		opt, ok := rc.(*doltdb.OptionalCommit)
 		require.True(t, ok)
-		rightCm, err = opt.ToCommit()
-		require.NoError(t, err)
+		rightCm, ok = opt.ToCommit()
+		require.True(t, ok)
 	}
 
 	assert.Equal(t, mustGetHash(t, leftCm), mustGetHash(t, rightCm))

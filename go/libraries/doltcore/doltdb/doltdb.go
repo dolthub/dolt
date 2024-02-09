@@ -38,7 +38,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/types/edits"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/sirupsen/logrus"
 )
 
 func init() {
@@ -407,7 +406,6 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 	}
 
 	if commitValue.IsGhost() {
-		// NM4 - not sure about the accestor walk here.....
 		return &OptionalCommit{nil, *hash}, nil
 	}
 
@@ -416,7 +414,6 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 		return nil, err
 	}
 
-	// This is a little messy. If someone callse HEAD~4, the ghost commit may be in the middle of the range.
 	return commit.GetAncestor(ctx, cs.aSpec)
 }
 
@@ -439,11 +436,8 @@ func (ddb *DoltDB) BootstrapShallowResolve(ctx context.Context, cs *CommitSpec, 
 	}
 
 	if commitValue.IsGhost() {
-		return prolly.CommitClosure{}, fmt.Errorf("Commit requested as shallow clone tip could not be found. Incomplete clone likely, please reclone")
+		return prolly.CommitClosure{}, ErrUnexpectedGhostCommit
 	}
-
-	// NM4 - What about the ancestor spec? Not clear if we can get it in a shallow clone. We either need a specific
-	// branch or commit id. ~5 requires walking the history.
 
 	return getCommitClosure(ctx, commitValue, ddb.vrw, ddb.ns)
 }
@@ -1628,13 +1622,12 @@ func (ddb *DoltDB) PullChunks(
 	statsCh chan pull.Stats,
 	skipHashes hash.HashSet,
 ) error {
-	return pullHash(ctx, ddb.db, srcDB.db, ddb.vrw, srcDB.vrw, targetHashes, tempDir, statsCh, skipHashes)
+	return pullHash(ctx, ddb.db, srcDB.db, targetHashes, tempDir, statsCh, skipHashes)
 }
 
 func pullHash(
 	ctx context.Context,
 	destDB, srcDB datas.Database,
-	destVRW, srcVRW types.ValueReadWriter,
 	targetHashes []hash.Hash,
 	tempDir string,
 	statsCh chan pull.Stats,
@@ -1642,17 +1635,7 @@ func pullHash(
 ) error {
 	srcCS := datas.ChunkStoreFromDatabase(srcDB)
 	destCS := datas.ChunkStoreFromDatabase(destDB)
-
-	// Address Walker to rule them all NM4.
-	waf := types.WalkAddrsForMacneale(srcDB.Format(), func(r types.Ref) bool {
-		hsh := r.TargetHash()
-
-		if skipHashes != nil && skipHashes.Has(hsh) {
-			logrus.Info("Skipping hash: ", hsh.String())
-			return true
-		}
-		return false
-	})
+	waf := types.WalkAddrsForNBF(srcDB.Format(), skipHashes)
 
 	if datas.CanUsePuller(srcDB) && datas.CanUsePuller(destDB) {
 		puller, err := pull.NewPuller(ctx, tempDir, defaultChunksPerTF, srcCS, destCS, waf, targetHashes, statsCh)

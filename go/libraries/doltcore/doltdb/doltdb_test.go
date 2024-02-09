@@ -205,8 +205,8 @@ func TestEmptyInMemoryRepoCreation(t *testing.T) {
 	if err != nil {
 		t.Fatal("Could not find commit")
 	}
-	commit, err := optCmt.ToCommit()
-	assert.NoError(t, err)
+	commit, ok := optCmt.ToCommit()
+	assert.True(t, ok)
 
 	h, err := commit.HashOf()
 	assert.NoError(t, err)
@@ -281,8 +281,8 @@ func TestLDNoms(t *testing.T) {
 		if err != nil {
 			t.Fatal("Couldn't find commit")
 		}
-		commit, err := optCmt.ToCommit()
-		assert.NoError(t, err)
+		commit, ok := optCmt.ToCommit()
+		assert.True(t, ok)
 
 		meta, err := commit.GetCommitMeta(context.Background())
 		assert.NoError(t, err)

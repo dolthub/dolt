@@ -21,6 +21,7 @@ teardown() {
 stop_remotesrv() {
     if [ -n "$remotesrv_pid" ]; then
         kill $remotesrv_pid || :
+        remotesrv_pid=""
     fi
 }
 
@@ -45,6 +46,80 @@ seed_and_start_serial_remote() {
     cd ..
 }
 
+@test "shallow-clone: dolt_clone depth 1" {
+    seed_and_start_serial_remote
+
+    mkdir clones
+    cd clones
+    run dolt sql -q "call dolt_clone('--depth', '1','http://localhost:50051/test-org/test-repo')"
+
+    [ "$status" -eq 0 ]
+
+    run dolt log --oneline --decorate=no
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+
+    run dolt sql -q "select count(*) = 1 from dolt_log()"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "true" ]] || false
+
+    # Verify that the table is complete.
+    run dolt sql -q "select sum(i) from vals"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "15" ]] || false # 1+2+3+4+5 = 15.
+}
+
+@test "shallow-clone: dolt_clone depth 2" {
+    seed_and_start_serial_remote
+
+    mkdir clones
+    cd clones
+    run dolt sql -q "call dolt_clone('--depth', '2','http://localhost:50051/test-org/test-repo')"
+    [ "$status" -eq 0 ]
+
+    run dolt log --oneline --decorate=no
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+
+    run dolt sql -q "select count(*) = 2 from dolt_log()"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "true" ]] || false
+
+    # Verify that the table is complete.
+    run dolt sql -q "select sum(i) from vals"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "15" ]] || false # 1+2+3+4+5 = 15.
+}
+
+@test "shallow-clone: shallow clone with a file path" {
+    seed_and_start_serial_remote
+    stop_remotesrv
+    cd remote
+    dolt remote add origin file://../file-remote
+    dolt push origin main
+    cd ..
+
+    mkdir clones
+    cd clones
+    run dolt sql -q "call dolt_clone('--depth', '1','file://../file-remote')"
+    [ "$status" -eq 0 ]
+
+    run dolt log --oneline --decorate=no
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+
+    run dolt sql -q "select count(*) = 1 from dolt_log()"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "true" ]] || false
+
+    # Verify that the table is complete.
+    run dolt sql -q "select sum(i) from vals"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "15" ]] || false # 1+2+3+4+5 = 15.
+
+
+}
+
 @test "shallow-clone: depth 3 clone of serial history" {
     seed_and_start_serial_remote
 
@@ -52,7 +127,6 @@ seed_and_start_serial_remote() {
     cd clones
 
     run dolt clone --depth 3 http://localhost:50051/test-org/test-repo
-
     [ "$status" -eq 0 ]
 
     cd test-repo
@@ -172,6 +246,13 @@ seed_and_start_serial_remote() {
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Commit not found. You are using a shallow clone" ]] || false
 
+    run dolt revert HEAD~1
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Commit not found. You are using a shallow clone" ]] || false
+
+    run dolt cherry-pick HEAD~1
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Commit not found. You are using a shallow clone" ]] || false
 }
 
 @test "shallow-clone: shallow clone can push" {
@@ -207,6 +288,120 @@ seed_and_start_serial_remote() {
     run dolt sql -q "select sum(i) from vals"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "57" ]] || false # 1+2+3+4+5+42 = 57.
+}
+
+@test "shallow-clone: fetch new changes after shallow clone" {
+    seed_and_start_serial_remote
+
+    mkdir clones
+    cd clones
+
+    # initial clone
+    dolt clone --depth 2 http://localhost:50051/test-org/test-repo
+
+    # clone another copy, and push to remote srv.
+    dolt clone http://localhost:50051/test-org/test-repo full-clone
+    cd full-clone
+
+    dolt sql -q "insert into vals (i,s) values (23, \"val 23\")"
+    dolt commit -a -m "Added Val: 23"
+    run dolt push origin main
+    [ "$status" -eq 0 ]
+
+    # Go to out of date clone, and fetch.
+    cd ../test-repo
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Fast-forward" ]] || false
+
+    run dolt log --oneline --decorate=no
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+
+    dolt show
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Added Val: 23" ]] || false
+}
+
+@test "shallow-clone: fetch connected new branch works after shallow clone" {
+  seed_and_start_serial_remote
+
+  mkdir clones
+  cd clones
+
+  # initial clone
+  dolt clone --depth 2 http://localhost:50051/test-org/test-repo
+
+  # clone another copy, and push new branch to remote srv.
+  dolt clone http://localhost:50051/test-org/test-repo full-clone
+  cd full-clone
+
+  # Create two new commits on top of commit which exists in shallow clone.
+  dolt sql -q "insert into vals (i,s) values (23, \"val 23\")"
+  dolt commit -a -m "Added Val: 23"
+  dolt sql -q "insert into vals (i,s) values (42, \"val 42\")"
+  dolt commit -a -m "Added Val: 42"
+  dolt push origin HEAD:refs/heads/brch
+
+  cd ../test-repo
+
+  dolt fetch # Should pull new branch, and it's history should be length 4.
+  run dolt branch -a
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "remotes/origin/brch" ]] || false
+
+  run dolt log --oneline --decorate=no origin/brch
+  [ "$status" -eq 0 ]
+  [ "${#lines[@]}" -eq 4 ]
+
+  run dolt show origin/brch
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Added Val: 42" ]] || false
+
+  run dolt show origin/brch~1
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Added Val: 23" ]] || falses
+}
+
+@test "shallow-clone: fetch disconnected new branch works after shallow clone" {
+    seed_and_start_serial_remote
+
+    mkdir clones
+    cd clones
+
+    # initial clone
+    dolt clone --depth 2 http://localhost:50051/test-org/test-repo
+
+    # clone another copy, and push new branch to remote srv.
+    dolt clone http://localhost:50051/test-org/test-repo full-clone
+    cd full-clone
+    # Create two new commits rooted from a commit which doesn't exist in the
+    dolt reset --hard HEAD~3 # HEAD~3 == (val 2)
+    dolt sql -q "insert into vals (i,s) values (13, \"val 13\")"
+    dolt commit -a -m "Added Val: 13"
+    dolt sql -q "insert into vals (i,s) values (11, \"val 11\")"
+    dolt commit -a -m "Added Val: 11"
+    dolt push origin HEAD:refs/heads/brch
+
+    cd ../test-repo
+
+    dolt fetch # Should pull new branch, and it's history should be length 2.
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "remotes/origin/brch" ]] || false
+
+    run dolt log --oneline --decorate=no origin/brch
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+
+    run dolt show origin/brch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Added Val: 11" ]] || false
+
+    # Verify that the table is complete.
+    run dolt sql -q "select sum(i) from vals as of 'origin/brch'"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "27" ]] # 1+2+11+13 = 27.
 }
 
 # complex repository is 14 commits with the following dag:
@@ -258,7 +453,6 @@ seed_and_start_complex_remote() {
     cd test-repo
 
     run dolt log --oneline --decorate=no
-
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
 
@@ -376,8 +570,6 @@ seed_and_start_complex_remote() {
 
 
 # Tests to write:
-# - Make a simple change, and push it successfully.
-#   - Cloning the new change works as expected.
 # - Fetch after initial clone
 #   - Fetch when no changes have happened.
 #   - Fetch when there are remote changes on main

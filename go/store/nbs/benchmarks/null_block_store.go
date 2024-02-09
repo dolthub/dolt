@@ -86,3 +86,8 @@ func (nb nullBlockStore) Root(ctx context.Context) (hash.Hash, error) {
 func (nb nullBlockStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
 	return true, nil
 }
+
+// NM4
+func (nb nullBlockStore) GhostTheseRefsBrah(ctx context.Context, refs hash.HashSet) error {
+	panic("not impl")
+}

@@ -88,8 +88,8 @@ func TestPushOnWriteHook(t *testing.T) {
 	if err != nil {
 		t.Fatal("Couldn't find commit")
 	}
-	commit, err := optCmt.ToCommit()
-	assert.NoError(t, err)
+	commit, ok := optCmt.ToCommit()
+	assert.True(t, ok)
 
 	meta, err := commit.GetCommitMeta(context.Background())
 	assert.NoError(t, err)
@@ -145,8 +145,8 @@ func TestPushOnWriteHook(t *testing.T) {
 		cs, _ = NewCommitSpec(defaultBranch)
 		optCmt, err := destDB.Resolve(context.Background(), cs, nil)
 		require.NoError(t, err)
-		destCommit, err := optCmt.ToCommit()
-		require.NoError(t, err)
+		destCommit, ok := optCmt.ToCommit()
+		require.True(t, ok)
 
 		srcHash, _ := srcCommit.HashOf()
 		destHash, _ := destCommit.HashOf()
@@ -236,8 +236,8 @@ func TestAsyncPushOnWrite(t *testing.T) {
 			if err != nil {
 				t.Fatal("Couldn't find commit")
 			}
-			commit, err := optCmt.ToCommit()
-			assert.NoError(t, err)
+			commit, ok := optCmt.ToCommit()
+			assert.True(t, ok)
 
 			meta, err := commit.GetCommitMeta(context.Background())
 			assert.NoError(t, err)
