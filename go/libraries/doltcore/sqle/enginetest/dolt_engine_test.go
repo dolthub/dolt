@@ -1289,6 +1289,12 @@ func TestLoadDataErrors(t *testing.T) {
 	enginetest.TestLoadDataErrors(t, h)
 }
 
+func TestSelectIntoFile(t *testing.T) {
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestSelectIntoFile(t, h)
+}
+
 func TestJsonScripts(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
