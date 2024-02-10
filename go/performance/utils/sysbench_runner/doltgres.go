@@ -39,18 +39,7 @@ func (b *doltgresBenchmarkerImpl) checkInstallation(ctx context.Context) error {
 }
 
 func (b *doltgresBenchmarkerImpl) createServerDir() (string, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-
-	serverDir := filepath.Join(cwd, dbName)
-	err = os.MkdirAll(serverDir, os.ModePerm)
-	if err != nil {
-		return "", err
-	}
-
-	return serverDir, nil
+	return CreateServerDir(dbName)
 }
 
 func (b *doltgresBenchmarkerImpl) cleanupServerDir(dir string) error {
@@ -96,7 +85,7 @@ func (b *doltgresBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error
 		return nil, err
 	}
 
-	serverDir, err := createServerDir(dbName)
+	serverDir, err := CreateServerDir(dbName)
 	if err != nil {
 		return nil, err
 	}

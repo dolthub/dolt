@@ -42,7 +42,7 @@ func BenchmarkDoltgres(ctx context.Context, config *Config, serverConfig *Server
 		return nil, err
 	}
 
-	serverDir, err := createServerDir(dbName)
+	serverDir, err := CreateServerDir(dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -150,8 +150,8 @@ func createDb(ctx context.Context, host, port, user, dbname string) error {
 	return err
 }
 
-// createServerDir creates a server directory
-func createServerDir(dbName string) (string, error) {
+// CreateServerDir creates a server directory
+func CreateServerDir(dbName string) (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", err

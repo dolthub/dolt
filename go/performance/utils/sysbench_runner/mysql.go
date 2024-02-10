@@ -1,164 +1,55 @@
-// Copyright 2019-2022 Dolthub, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package sysbench_runner
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
+	_ "github.com/go-sql-driver/mysql"
 	"log"
 	"os"
-	"os/exec"
-	"os/signal"
-	"sync"
 	"syscall"
-	"time"
-
-	_ "github.com/go-sql-driver/mysql"
-	"golang.org/x/sync/errgroup"
 )
 
-type MysqlConfig struct {
-	Socket             string
-	ConnectionProtocol string
-	Port               int
-	Host               string
+const (
+	mysqlDriverName                  = "mysql"
+	mysqlRootTCPDsnTemplate          = "root@tcp(%s:%d)/"
+	mysqlRootUnixDsnTemplate         = "root@unix(%s)/"
+	mysqlDropDatabaseSqlTemplate     = "DROP DATABASE IF EXISTS %s;"
+	mysqlCreateDatabaseSqlTemplate   = "CREATE DATABASE %s;"
+	mysqlDropUserSqlTemplate         = "DROP USER IF EXISTS %s;"
+	mysqlCreateUserSqlTemplate       = "CREATE USER %s IDENTIFIED WITH mysql_native_password BY '%s';"
+	mysqlGrantPermissionsSqlTemplate = "GRANT ALL ON %s.* to %s;"
+	mysqlSetGlobalLocalInfileSql     = "SET GLOBAL local_infile = 'ON';"
+	mysqlSetGlobalSqlModeSql         = "SET GLOBAL sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''));"
+)
+
+type mysqlBenchmarkerImpl struct {
+	dir          string // cwd
+	config       *Config
+	serverConfig *ServerConfig
 }
 
-// BenchmarkMysql benchmarks mysql based on the provided configurations
-func BenchmarkMysql(ctx context.Context, config *Config, serverConfig *ServerConfig) (Results, error) {
-	withKeyCtx, cancel := context.WithCancel(ctx)
+var _ Benchmarker = &mysqlBenchmarkerImpl{}
 
-	var serverDir string
-	defer func() {
-		if serverDir != "" {
-			os.RemoveAll(serverDir)
-		}
-	}()
-
-	var localServer bool
-	var gServer *errgroup.Group
-	var serverCtx context.Context
-	var server *exec.Cmd
-	var err error
-	if serverConfig.Host == defaultHost {
-		log.Println("Launching the default server")
-		localServer = true
-
-		serverDir, err = InitMysqlDataDir(ctx, serverConfig)
-		if err != nil {
-			cancel()
-			return nil, err
-		}
-
-		gServer, serverCtx = errgroup.WithContext(withKeyCtx)
-		var serverParams []string
-		serverParams, err = serverConfig.GetServerArgs()
-		if err != nil {
-			cancel()
-			return nil, err
-		}
-		serverParams = append(serverParams, fmt.Sprintf("%s=%s", MysqlDataDirFlag, serverDir))
-
-		server = getMysqlServer(serverCtx, serverConfig, serverParams)
-
-		// launch the mysql server
-		gServer.Go(func() error {
-			return server.Run()
-		})
-
-		// sleep to allow the server to start
-		time.Sleep(10 * time.Second)
-
-		// setup mysqldb
-		err := SetupDB(ctx, GetMysqlConnectionConfigFromServerConfig(serverConfig), dbName)
-		if err != nil {
-			cancel()
-			return nil, err
-		}
-		log.Println("Successfully set up the MySQL database")
+func NewMysqlBenchmarker(dir string, config *Config, serverConfig *ServerConfig) *mysqlBenchmarkerImpl {
+	return &mysqlBenchmarkerImpl{
+		dir:          dir,
+		config:       config,
+		serverConfig: serverConfig,
 	}
-
-	// handle user interrupt
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		<-quit
-		defer wg.Done()
-		signal.Stop(quit)
-		cancel()
-	}()
-
-	tests, err := GetTests(config, serverConfig, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	results := make(Results, 0)
-	for i := 0; i < config.Runs; i++ {
-		for _, test := range tests {
-			r, err := benchmark(withKeyCtx, test, config, serverConfig, stampFunc, serverConfig.GetId())
-			if err != nil {
-				close(quit)
-				wg.Wait()
-				return nil, err
-			}
-			results = append(results, r)
-		}
-	}
-
-	// stop local mysql server
-	if localServer {
-		// send signal to server
-		quit <- syscall.SIGTERM
-
-		err = gServer.Wait()
-		if err != nil {
-			// we expect a kill error
-			// we only exit in error if this is not the
-			// error
-			if err.Error() != "signal: killed" {
-				close(quit)
-				wg.Wait()
-				return nil, err
-			}
-		}
-	}
-
-	fmt.Println("Successfully killed server")
-	close(quit)
-	wg.Wait()
-
-	return results, nil
 }
 
-// getMysqlServer returns a exec.Cmd for a dolt server
-func getMysqlServer(ctx context.Context, config *ServerConfig, params []string) *exec.Cmd {
-	return ExecCommand(ctx, config.ServerExec, params...)
+func (b *mysqlBenchmarkerImpl) createServerDir() (string, error) {
+	return CreateServerDir(dbName)
 }
 
-// InitMysqlDataDir initializes a mysql data dir and returns the path
-func InitMysqlDataDir(ctx context.Context, config *ServerConfig) (string, error) {
-	serverDir, err := createServerDir(dbName)
+func (b *mysqlBenchmarkerImpl) initMysqlDataDir(ctx context.Context) (string, error) {
+	serverDir, err := b.createServerDir()
 	if err != nil {
 		return "", err
 	}
 
-	msInit := ExecCommand(ctx, config.ServerExec, MysqlInitializeInsecureFlag, fmt.Sprintf("%s=%s", MysqlDataDirFlag, serverDir))
+	msInit := ExecCommand(ctx, b.serverConfig.ServerExec, MysqlInitializeInsecureFlag, fmt.Sprintf("%s=%s", MysqlDataDirFlag, serverDir))
 	err = msInit.Run()
 	if err != nil {
 		return "", err
@@ -167,16 +58,34 @@ func InitMysqlDataDir(ctx context.Context, config *ServerConfig) (string, error)
 	return serverDir, nil
 }
 
-func SetupDB(ctx context.Context, mConfig MysqlConfig, databaseName string) (err error) {
-	dsn, err := FormatDsn(mConfig)
-	if err != nil {
-		return err
+func (b *mysqlBenchmarkerImpl) getDsn() (string, error) {
+	var socketPath string
+	if b.serverConfig.Socket != "" {
+		socketPath = b.serverConfig.Socket
+	} else {
+		socketPath = defaultMysqlSocket
 	}
 
-	// TODO make sure this can work on windows
-	db, err := sql.Open("mysql", dsn)
+	if b.serverConfig.ConnectionProtocol == tcpProtocol {
+		return fmt.Sprintf(mysqlRootTCPDsnTemplate, b.serverConfig.Host, b.serverConfig.Port), nil
+	} else if b.serverConfig.ConnectionProtocol == unixProtocol {
+		return fmt.Sprintf(mysqlRootUnixDsnTemplate, socketPath), nil
+	} else {
+		return "", ErrUnsupportedConnectionProtocol
+	}
+}
+
+func (b *mysqlBenchmarkerImpl) createTestingDb(ctx context.Context) (err error) {
+	var dsn string
+	dsn, err = b.getDsn()
 	if err != nil {
-		return err
+		return
+	}
+
+	var db *sql.DB
+	db, err = sql.Open(mysqlDriverName, dsn)
+	if err != nil {
+		return
 	}
 	defer func() {
 		rerr := db.Close()
@@ -184,65 +93,78 @@ func SetupDB(ctx context.Context, mConfig MysqlConfig, databaseName string) (err
 			err = rerr
 		}
 	}()
+
 	err = db.Ping()
 	if err != nil {
-		return err
-	}
-	_, err = db.ExecContext(ctx, fmt.Sprintf("DROP DATABASE IF EXISTS %s", databaseName))
-	if err != nil {
-		return err
-	}
-	_, err = db.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE %s", databaseName))
-	if err != nil {
-		return err
-	}
-	_, err = db.ExecContext(ctx, fmt.Sprintf("DROP USER IF EXISTS %s", sysbenchUserLocal))
-	if err != nil {
-		return err
-	}
-	_, err = db.ExecContext(ctx, fmt.Sprintf("CREATE USER %s IDENTIFIED WITH mysql_native_password BY '%s'", sysbenchUserLocal, sysbenchPassLocal))
-	if err != nil {
-		return err
-	}
-	_, err = db.ExecContext(ctx, fmt.Sprintf("GRANT ALL ON %s.* to %s", databaseName, sysbenchUserLocal))
-	if err != nil {
-		return err
-	}
-	_, err = db.ExecContext(ctx, "SET GLOBAL local_infile = 'ON'")
-	if err != nil {
-		return err
-	}
-	// Required for running groupby_scan.lua without error
-	_, err = db.ExecContext(ctx, "SET GLOBAL sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''));")
-	if err != nil {
-		return err
+		return
 	}
 
+	stmts := []string{
+		fmt.Sprintf(mysqlDropDatabaseSqlTemplate, dbName),
+		fmt.Sprintf(mysqlCreateDatabaseSqlTemplate, dbName),
+		fmt.Sprintf(mysqlDropUserSqlTemplate, sysbenchUserLocal),
+		fmt.Sprintf(mysqlCreateUserSqlTemplate, sysbenchUserLocal, sysbenchPassLocal),
+		fmt.Sprintf(mysqlGrantPermissionsSqlTemplate, dbName, sysbenchUserLocal),
+		mysqlSetGlobalLocalInfileSql,
+		mysqlSetGlobalSqlModeSql, // Required for running groupby_scan.lua without error
+	}
+
+	for _, s := range stmts {
+		_, err = db.ExecContext(ctx, s)
+		if err != nil {
+			return
+		}
+	}
+
+	log.Println("Successfully set up the MySQL database")
 	return
 }
 
-func FormatDsn(mConfig MysqlConfig) (string, error) {
-	var socketPath string
-	if mConfig.Socket != "" {
-		socketPath = mConfig.Socket
-	} else {
-		socketPath = defaultMysqlSocket
+func (b *mysqlBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
+	serverDir, err := b.initMysqlDataDir(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	if mConfig.ConnectionProtocol == tcpProtocol {
-		return fmt.Sprintf("root@tcp(%s:%d)/", mConfig.Host, mConfig.Port), nil
-	} else if mConfig.ConnectionProtocol == unixProtocol {
-		return fmt.Sprintf("root@unix(%s)/", socketPath), nil
-	} else {
-		return "", ErrUnsupportedConnectionProtocol
+	serverParams, err := b.serverConfig.GetServerArgs()
+	if err != nil {
+		return nil, err
 	}
-}
+	serverParams = append(serverParams, fmt.Sprintf("%s=%s", MysqlDataDirFlag, serverDir))
 
-func GetMysqlConnectionConfigFromServerConfig(config *ServerConfig) MysqlConfig {
-	return MysqlConfig{
-		Socket:             config.Socket,
-		ConnectionProtocol: config.ConnectionProtocol,
-		Port:               config.Port,
-		Host:               defaultHost,
+	server := NewServer(ctx, serverDir, b.serverConfig, syscall.SIGTERM, serverParams)
+	err = server.Start(ctx)
+	if err != nil {
+		return nil, err
 	}
+
+	err = b.createTestingDb(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tests, err := GetTests(b.config, b.serverConfig, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	results := make(Results, 0)
+	for i := 0; i < b.config.Runs; i++ {
+		for _, test := range tests {
+			tester := NewSysbenchTester(b.config, b.serverConfig, test, stampFunc)
+			r, err := tester.Test(ctx)
+			if err != nil {
+				server.Stop(ctx)
+				return nil, err
+			}
+			results = append(results, r)
+		}
+	}
+
+	err = server.Stop(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return results, os.RemoveAll(serverDir)
 }
