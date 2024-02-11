@@ -533,29 +533,9 @@ func fetchRefSpecsWithDepth(
 
 	skipCmts := hash.NewHashSet()
 	if depth > 0 {
-		// if toFetch is more than one, panic. NM4 - test this path. shouldn't panic, obviously.
-		if len(toFetch) > 1 {
-			panic("multi head shallow pulls not implemented")
-		}
-
-		cs, err := doltdb.NewCommitSpec(toFetch[0].String())
+		skipCmts, err = buildInitialSkipList(ctx, srcDB, toFetch)
 		if err != nil {
 			return err
-		}
-
-		// NM4 - not sure where the CWB is supposed to come from. nil seems to work?
-		allCommits, err := srcDB.BootstrapShallowResolve(ctx, cs, nil)
-
-		closureIter, err := allCommits.IterAllReverse(ctx)
-		if err != nil {
-			panic(err) // NM4
-		}
-
-		key, _, err := closureIter.Next(ctx)
-		for !errors.Is(err, io.EOF) {
-			clsrHash := hash.New(key[8:])
-			skipCmts.Insert(clsrHash)
-			key, _, err = closureIter.Next(ctx)
 		}
 	}
 
@@ -564,8 +544,9 @@ func fetchRefSpecsWithDepth(
 	if err != nil {
 		return err
 	}
-
 	ghostsPersisted := false
+	// We loop on fetching chunks until we've fetched all the new heads we need, or we've reached the depth limit.
+	// In the case where we pull everything (depth < 0), we'll only loop once.
 	for {
 		if skipCmts.Size() > 0 || ghostsPersisted {
 			err = dbData.Ddb.PersistGhostCommits(ctx, skipCmts)
@@ -599,34 +580,11 @@ func fetchRefSpecsWithDepth(
 
 		depth--
 
-		newFetchList := []hash.Hash{}
-
-		if depth > 0 {
-			for _, h := range toFetch {
-				optCmt, err := dbData.Ddb.ReadCommit(ctx, h)
-				if err != nil {
-					return err
-				}
-
-				// NM4 This had better resolve because we just fetched it.
-				commit, ok := optCmt.ToCommit()
-				if !ok {
-					return doltdb.ErrUnexpectedGhostCommit
-				}
-
-				for i := 0; i < commit.NumParents(); i++ {
-					parent, err := commit.GetParent(ctx, i)
-					if err != nil {
-						return err
-					}
-					if skipCmts.Has(parent.Addr) {
-						skipCmts.Remove(parent.Addr)
-						newFetchList = append(newFetchList, parent.Addr)
-					}
-				}
-
+		if skipCmts.Size() > 0 && depth > 0 {
+			toFetch, skipCmts, err = updateSkipList(ctx, srcDB, toFetch, skipCmts)
+			if err != nil {
+				return err
 			}
-			toFetch = newFetchList
 		}
 
 		if depth <= 0 || len(toFetch) == 0 {
@@ -641,7 +599,7 @@ func fetchRefSpecsWithDepth(
 		}
 		commit, ok := optCmt.ToCommit()
 		if !ok {
-			return doltdb.ErrUnexpectedGhostCommit // NM4 - This definitely needs it's own error message. TEST THIS PATH.
+			return doltdb.ErrUnexpectedGhostCommit // NM4 - This definitely needs its own error message. TEST THIS PATH.
 		}
 
 		remoteTrackRef := newHead.Ref
@@ -691,6 +649,74 @@ func fetchRefSpecsWithDepth(
 	}
 
 	return nil
+}
+
+func buildInitialSkipList(ctx context.Context, srcDB *doltdb.DoltDB, toFetch []hash.Hash) (hash.HashSet, error) {
+	// if toFetch is more than one, panic. NM4 - test this path. shouldn't panic, obviously.
+	if len(toFetch) > 1 {
+		panic("multi head shallow pulls not implemented")
+	}
+
+	cs, err := doltdb.NewCommitSpec(toFetch[0].String())
+	if err != nil {
+		return hash.HashSet{}, err
+	}
+
+	allCommits, err := srcDB.BootstrapShallowResolve(ctx, cs)
+
+	closureIter, err := allCommits.IterAllReverse(ctx)
+	if err != nil {
+		return hash.HashSet{}, err
+	}
+
+	skipCmts := hash.NewHashSet()
+	for {
+		key, _, err := closureIter.Next(ctx)
+		if err != nil {
+			{
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				return hash.HashSet{}, err
+			}
+		}
+		clsrHash := hash.New(key[8:])
+		skipCmts.Insert(clsrHash)
+	}
+
+	return skipCmts, nil
+
+}
+
+func updateSkipList(ctx context.Context, srcDB *doltdb.DoltDB, toFetch []hash.Hash, skipCmts hash.HashSet) ([]hash.Hash, hash.HashSet, error) {
+	newSkipList := skipCmts.Copy()
+	newFetchList := []hash.Hash{}
+	for _, h := range toFetch {
+		optCmt, err := srcDB.ReadCommit(ctx, h)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Must resolve because we just fetched it.
+		commit, ok := optCmt.ToCommit()
+		if !ok {
+			return nil, nil, doltdb.ErrUnexpectedGhostCommit
+		}
+
+		for i := 0; i < commit.NumParents(); i++ {
+			parent, err := commit.GetParent(ctx, i)
+			if err != nil {
+				return nil, nil, err
+			}
+			if newSkipList.Has(parent.Addr) {
+				newSkipList.Remove(parent.Addr)
+				newFetchList = append(newFetchList, parent.Addr)
+			}
+		}
+
+	}
+
+	return newFetchList, newSkipList, nil
 }
 
 func pruneBranches(ctx context.Context, dbData env.DbData, remote env.Remote, remoteRefs []doltdb.RefWithHash) error {

@@ -420,12 +420,12 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 // BootstrapShallowResolve is a special case of Resolve that is used to resolve a commit prior to pulling it's history
 // in a shallow clone. In general, application code should call Resolve and get an OptionalCommit. This is a special case
 // where we need to get the head commit for the commit closure used to determine what commits should skipped.
-func (ddb *DoltDB) BootstrapShallowResolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef) (prolly.CommitClosure, error) {
+func (ddb *DoltDB) BootstrapShallowResolve(ctx context.Context, cs *CommitSpec) (prolly.CommitClosure, error) {
 	if cs == nil {
 		panic("nil commit spec")
 	}
 
-	hash, err := ddb.getHashFromCommitSpec(ctx, cs, cwb, hash.Hash{})
+	hash, err := ddb.getHashFromCommitSpec(ctx, cs, nil, hash.Hash{})
 	if err != nil {
 		return prolly.CommitClosure{}, err
 	}
