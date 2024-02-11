@@ -158,7 +158,7 @@ func writeResultSet(ctx *sql.Context, rowIter sql.RowIter, wr table.SqlRowWriter
 	i := 0
 	for {
 		r, err := rowIter.Next(ctx)
-		if err == io.EOF || err == doltdb.ErrUnexpectedGhostCommit {
+		if err == io.EOF || err == doltdb.ErrGhostCommitEncountered {
 			break
 		} else if err != nil {
 			return 0, err

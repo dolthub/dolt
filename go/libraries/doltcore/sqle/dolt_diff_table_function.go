@@ -337,7 +337,7 @@ func resolveCommit(ctx *sql.Context, ddb *doltdb.DoltDB, headRef ref.DoltRef, cS
 	}
 	cm, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, doltdb.ErrUnexpectedGhostCommit // NM4 - NEED TEST.
+		return nil, doltdb.ErrGhostCommitEncountered // NM4 - NEED TEST.
 	}
 
 	return cm, nil

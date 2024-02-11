@@ -201,7 +201,7 @@ func getNerf(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResu
 	}
 	cm, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, doltdb.ErrUnexpectedGhostCommit
+		return nil, doltdb.ErrGhostCommitEncountered
 	}
 
 	return rebase.StopAtCommit(cm), nil

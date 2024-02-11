@@ -80,7 +80,7 @@ func (a *HasAncestor) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		}
 		headCommit, ok = optCmt.ToCommit()
 		if !ok {
-			return nil, doltdb.ErrUnexpectedGhostCommit
+			return nil, doltdb.ErrGhostCommitEncountered
 		}
 	}
 
@@ -104,7 +104,7 @@ func (a *HasAncestor) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		}
 		ancCommit, ok = optCmt.ToCommit()
 		if !ok {
-			return nil, doltdb.ErrUnexpectedGhostCommit
+			return nil, doltdb.ErrGhostCommitEncountered
 		}
 
 	}

@@ -106,7 +106,7 @@ func NewMergeSpec(
 	}
 	headCM, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, doltdb.ErrUnexpectedGhostCommit // NM4 - need better message. TEST THIS PATH.
+		return nil, doltdb.ErrGhostCommitEncountered // NM4 - need better message. TEST THIS PATH.
 	}
 
 	mergeCS, err := doltdb.NewCommitSpec(commitSpecStr)
@@ -120,7 +120,7 @@ func NewMergeSpec(
 	}
 	mergeCM, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, doltdb.ErrUnexpectedGhostCommit // NM4 - need better message. TEST THIS PATH
+		return nil, doltdb.ErrGhostCommitEncountered // NM4 - need better message. TEST THIS PATH
 	}
 
 	headH, err := headCM.HashOf()

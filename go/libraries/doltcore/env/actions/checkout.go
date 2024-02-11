@@ -242,7 +242,7 @@ func BranchHeadRoot(ctx context.Context, db *doltdb.DoltDB, brName string) (*dol
 
 	cm, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, doltdb.ErrUnexpectedGhostCommit
+		return nil, doltdb.ErrGhostCommitEncountered
 	}
 
 	branchRoot, err := cm.GetRootValue(ctx)

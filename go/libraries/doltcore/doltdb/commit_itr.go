@@ -151,7 +151,7 @@ func HashToCommit(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeSt
 	}
 
 	if dc.IsGhost() {
-		return nil, ErrUnexpectedGhostCommit
+		return nil, ErrGhostCommitEncountered
 	}
 
 	return NewCommit(ctx, vrw, ns, dc)

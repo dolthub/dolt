@@ -436,7 +436,7 @@ func (ddb *DoltDB) BootstrapShallowResolve(ctx context.Context, cs *CommitSpec) 
 	}
 
 	if commitValue.IsGhost() {
-		return prolly.CommitClosure{}, ErrUnexpectedGhostCommit
+		return prolly.CommitClosure{}, ErrGhostCommitEncountered
 	}
 
 	return getCommitClosure(ctx, commitValue, ddb.vrw, ddb.ns)
@@ -477,7 +477,7 @@ func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, ref ref.DoltRef) (*Comm
 	}
 
 	if commitVal.IsGhost() {
-		return nil, ErrUnexpectedGhostCommit
+		return nil, ErrGhostCommitEncountered
 	}
 
 	return NewCommit(ctx, ddb.vrw, ddb.ns, commitVal)
@@ -501,7 +501,7 @@ func (ddb *DoltDB) ResolveCommitRefAtRoot(ctx context.Context, ref ref.DoltRef, 
 	}
 
 	if commitVal.IsGhost() {
-		return nil, ErrUnexpectedGhostCommit
+		return nil, ErrGhostCommitEncountered
 	}
 
 	return NewCommit(ctx, ddb.vrw, ddb.ns, commitVal)
@@ -770,7 +770,7 @@ func (ddb *DoltDB) CommitWithParentSpecs(ctx context.Context, valHash hash.Hash,
 
 		hardCommit, ok := cm.ToCommit()
 		if !ok {
-			return nil, ErrUnexpectedGhostCommit
+			return nil, ErrGhostCommitEncountered
 		}
 
 		parentCommits = append(parentCommits, hardCommit)
@@ -843,7 +843,7 @@ func (ddb *DoltDB) CommitValue(ctx context.Context, dref ref.DoltRef, val types.
 	}
 
 	if dc.IsGhost() {
-		return nil, ErrUnexpectedGhostCommit
+		return nil, ErrGhostCommitEncountered
 	}
 
 	return NewCommit(ctx, ddb.vrw, ddb.ns, dc)
@@ -1456,7 +1456,7 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 	}
 
 	if dc.IsGhost() {
-		return nil, ErrUnexpectedGhostCommit
+		return nil, ErrGhostCommitEncountered
 	}
 
 	return NewCommit(ctx, ddb.vrw, ddb.ns, dc)

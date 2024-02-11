@@ -102,7 +102,7 @@ func CopyBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, oldBranch, newBranc
 
 	commit, ok := cm.ToCommit()
 	if !ok {
-		return doltdb.ErrUnexpectedGhostCommit
+		return doltdb.ErrGhostCommitEncountered
 	}
 	return ddb.NewBranchAtCommit(ctx, newRef, commit, rsc)
 }
@@ -194,7 +194,7 @@ func validateBranchMergedIntoCurrentWorkingBranch(ctx context.Context, dbdata en
 	}
 	branchHead, ok := optCmt.ToCommit()
 	if !ok {
-		return doltdb.ErrUnexpectedGhostCommit
+		return doltdb.ErrGhostCommitEncountered
 	}
 
 	cwbCs, err := doltdb.NewCommitSpec("HEAD")
@@ -212,7 +212,7 @@ func validateBranchMergedIntoCurrentWorkingBranch(ctx context.Context, dbdata en
 	}
 	cwbHead, ok := optCmt.ToCommit()
 	if !ok {
-		return doltdb.ErrUnexpectedGhostCommit
+		return doltdb.ErrGhostCommitEncountered
 	}
 
 	isMerged, err := branchHead.CanFastForwardTo(ctx, cwbHead)
@@ -262,7 +262,7 @@ func validateBranchMergedIntoUpstream(ctx context.Context, dbdata env.DbData, br
 	}
 	remoteBranchHead, ok := optCmt.ToCommit()
 	if !ok {
-		return doltdb.ErrUnexpectedGhostCommit
+		return doltdb.ErrGhostCommitEncountered
 	}
 
 	optCmt, err = dbdata.Ddb.Resolve(ctx, cs, nil)
@@ -271,7 +271,7 @@ func validateBranchMergedIntoUpstream(ctx context.Context, dbdata env.DbData, br
 	}
 	localBranchHead, ok := optCmt.ToCommit()
 	if !ok {
-		return doltdb.ErrUnexpectedGhostCommit
+		return doltdb.ErrGhostCommitEncountered
 	}
 
 	canFF, err := localBranchHead.CanFastForwardTo(ctx, remoteBranchHead)
@@ -341,7 +341,7 @@ func CreateBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, newBranch, starti
 
 	cm, ok := optCmt.ToCommit()
 	if !ok {
-		return doltdb.ErrUnexpectedGhostCommit
+		return doltdb.ErrGhostCommitEncountered
 	}
 
 	err = ddb.NewBranchAtCommit(ctx, branchRef, cm, rsc)

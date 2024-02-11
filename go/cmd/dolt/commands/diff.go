@@ -434,7 +434,7 @@ func (dArgs *diffArgs) applyDiffRoots(queryist cli.Queryist, sqlCtx *sql.Context
 	fromRef := args[0]
 	// treat the first arg as a ref spec
 	_, err := getTableNamesAtRef(queryist, sqlCtx, fromRef)
-	if errors.Is(err, doltdb.ErrUnexpectedGhostCommit) {
+	if errors.Is(err, doltdb.ErrGhostCommitEncountered) {
 		return nil, err
 	}
 	// if it doesn't resolve, treat it as a table name

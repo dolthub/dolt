@@ -142,7 +142,7 @@ func traverseTagHistory(ctx context.Context, menv Environment, r ref.TagRef, old
 	}
 	cm, ok := optCmt.ToCommit()
 	if !ok {
-		return doltdb.ErrUnexpectedGhostCommit
+		return doltdb.ErrGhostCommitEncountered
 	}
 
 	return new.NewTagAtCommit(ctx, r, cm, t.Meta)
@@ -194,7 +194,7 @@ func traverseCommitHistory(ctx context.Context, menv Environment, cm *doltdb.Com
 		}
 		cm, ok = optCmt.ToCommit()
 		if !ok {
-			return doltdb.ErrUnexpectedGhostCommit
+			return doltdb.ErrGhostCommitEncountered
 		}
 	}
 }

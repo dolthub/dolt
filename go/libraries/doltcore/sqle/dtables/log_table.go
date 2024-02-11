@@ -238,7 +238,7 @@ func (itr *LogItr) Next(ctx *sql.Context) (sql.Row, error) {
 
 	cm, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, doltdb.ErrUnexpectedGhostCommit // NM4 - NEED TEST.
+		return nil, doltdb.ErrGhostCommitEncountered // NM4 - NEED TEST.
 	}
 
 	meta, err := cm.GetCommitMeta(ctx)

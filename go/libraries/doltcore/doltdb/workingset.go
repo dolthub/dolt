@@ -407,7 +407,7 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 		}
 
 		if fromDCommit.IsGhost() {
-			return nil, ErrUnexpectedGhostCommit
+			return nil, ErrGhostCommitEncountered
 		}
 
 		commit, err := NewCommit(ctx, vrw, ns, fromDCommit)
@@ -463,7 +463,7 @@ func newWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 		}
 
 		if datasOntoCommit.IsGhost() {
-			return nil, ErrUnexpectedGhostCommit
+			return nil, ErrGhostCommitEncountered
 		}
 
 		ontoCommit, err := NewCommit(ctx, vrw, ns, datasOntoCommit)

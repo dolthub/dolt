@@ -150,7 +150,7 @@ func applyStashAtIdx(ctx *sql.Context, dEnv *env.DoltEnv, curWorkingRoot *doltdb
 	if !ok {
 		// Should not be possible to get into this situation. The parent of the stashed commit
 		// Must have been present at the time it was created
-		return false, doltdb.ErrUnexpectedGhostCommit
+		return false, doltdb.ErrGhostCommitEncountered
 	}
 
 	parentRoot, err := parentCommit.GetRootValue(ctx)

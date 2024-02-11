@@ -199,7 +199,7 @@ func startRebase(ctx *sql.Context, upstreamPoint string) error {
 	}
 	upstreamCommit, ok := optCmt.ToCommit()
 	if !ok {
-		return doltdb.ErrUnexpectedGhostCommit // NM4 - prob user input. TEST. message.
+		return doltdb.ErrGhostCommitEncountered // NM4 - prob user input. TEST. message.
 	}
 
 	// rebaseWorkingBranch is the name of the temporary branch used when performing a rebase. In Git, a rebase
@@ -565,7 +565,7 @@ func squashCommitMessage(ctx *sql.Context, nextCommitHash string) (string, error
 	}
 	nextCommit, ok := optCmt.ToCommit()
 	if !ok {
-		return "", doltdb.ErrUnexpectedGhostCommit // NM4 - TEST.
+		return "", doltdb.ErrGhostCommitEncountered // NM4 - TEST.
 	}
 
 	nextCommitMeta, err := nextCommit.GetCommitMeta(ctx)

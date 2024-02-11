@@ -44,7 +44,7 @@ func NewTag(ctx context.Context, name string, ds datas.Dataset, vrw types.ValueR
 	}
 
 	if dc.IsGhost() {
-		return nil, ErrUnexpectedGhostCommit
+		return nil, ErrGhostCommitEncountered
 	}
 
 	commit, err := NewCommit(ctx, vrw, ns, dc)

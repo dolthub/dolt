@@ -32,7 +32,8 @@ var errHasNoRootValue = errors.New("no root value")
 // TODO: Include the commit id in the error. Unfortunately, this message is passed through the SQL layer. The only way we currently
 // have on the client side to match an error is with string matching. We possibly need error codes as a prefix to the error message, but
 // currently there is not standard for doing this in Dolt.
-var ErrUnexpectedGhostCommit = errors.New("Commit not found. You are using a shallow clone which does not contain the requested commit. Please do a full clone.")
+var ErrGhostCommitEncountered = errors.New("Commit not found. You are using a shallow clone which does not contain the requested commit. Please do a full clone.")
+var ErrGhostCommitRuntimeFailure = errors.New("runtime failure: Ghost commit encountered unexpectedly. Please report bug to: https://github.com/dolthub/dolt/issues")
 
 // Rootish is an object resolvable to a RootValue.
 type Rootish interface {
@@ -237,7 +238,7 @@ func (c *Commit) CanFastReverseTo(ctx context.Context, new *Commit) (bool, error
 
 	ancestor, ok := optAnc.ToCommit()
 	if !ok {
-		return false, ErrUnexpectedGhostCommit
+		return false, ErrGhostCommitEncountered
 	}
 	if ancestor == nil {
 		return false, errors.New("cannot perform fast forward merge; commits have no common ancestor")
@@ -279,7 +280,7 @@ func (c *Commit) GetAncestor(ctx context.Context, as *AncestorSpec) (*OptionalCo
 		var ok bool
 		hardInst, ok = optInst.ToCommit()
 		if !ok {
-			return nil, ErrUnexpectedGhostCommit
+			return nil, ErrGhostCommitEncountered
 		}
 	}
 

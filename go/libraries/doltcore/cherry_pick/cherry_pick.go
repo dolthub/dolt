@@ -210,7 +210,7 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 	}
 	cherryCommit, ok := optCmt.ToCommit()
 	if err != nil {
-		return nil, "", doltdb.ErrUnexpectedGhostCommit
+		return nil, "", doltdb.ErrGhostCommitEncountered
 	}
 
 	if len(cherryCommit.DatasParents()) > 1 {
@@ -233,7 +233,7 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 	}
 	parentCommit, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, "", doltdb.ErrUnexpectedGhostCommit
+		return nil, "", doltdb.ErrGhostCommitEncountered
 	}
 
 	parentRoot, err := parentCommit.GetRootValue(ctx)

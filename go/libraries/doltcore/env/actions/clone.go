@@ -264,7 +264,7 @@ func fullClone(ctx context.Context, srcDB *doltdb.DoltDB, dEnv *env.DoltEnv, src
 	}
 	cm, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, doltdb.ErrUnexpectedGhostCommit
+		return nil, doltdb.ErrGhostCommitEncountered
 	}
 
 	err = dEnv.DoltDB.DeleteAllRefs(ctx)

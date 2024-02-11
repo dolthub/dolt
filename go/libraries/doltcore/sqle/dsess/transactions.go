@@ -208,7 +208,7 @@ func doltCommit(ctx *sql.Context,
 	}
 	curHead, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, nil, doltdb.ErrUnexpectedGhostCommit // NM4 - def runtime error.
+		return nil, nil, doltdb.ErrGhostCommitEncountered // NM4 - def runtime error.
 	}
 
 	// We already got a new staged root via merge or ff via the doCommit method, so now apply it to the STAGED value

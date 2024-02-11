@@ -230,7 +230,7 @@ func PushToRemoteBranch(ctx context.Context, rsr env.RepoStateReader, tempTableD
 	}
 	cm, ok := optCmt.ToCommit()
 	if !ok {
-		return doltdb.ErrUnexpectedGhostCommit
+		return doltdb.ErrGhostCommitEncountered
 	}
 
 	newCtx, cancelFunc := context.WithCancel(ctx)
@@ -416,7 +416,8 @@ func FetchRemoteBranch(
 	}
 	srcDBCommit, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, doltdb.ErrUnexpectedGhostCommit // NM4 This really should never happen. The source db is always expected to have everything.
+		// This really should never happen. The source db is always expected to have everything.
+		return nil, doltdb.ErrGhostCommitRuntimeFailure
 	}
 
 	// The code is structured this way (different paths for progress chan v. not) so that the linter can understand there
@@ -599,7 +600,7 @@ func fetchRefSpecsWithDepth(
 		}
 		commit, ok := optCmt.ToCommit()
 		if !ok {
-			return doltdb.ErrUnexpectedGhostCommit // NM4 - This definitely needs its own error message. TEST THIS PATH.
+			return doltdb.ErrGhostCommitEncountered // NM4 - This definitely needs its own error message. TEST THIS PATH.
 		}
 
 		remoteTrackRef := newHead.Ref
@@ -634,9 +635,6 @@ func fetchRefSpecsWithDepth(
 	}
 
 	if mode.Prune {
-		if remote == nil { // NM4 - I think this can be reverted. remote should never be nil.
-			return fmt.Errorf("Runtime error: remote is nil")
-		}
 		err = pruneBranches(ctx, dbData, *remote, newHeads)
 		if err != nil {
 			return err
@@ -700,7 +698,7 @@ func updateSkipList(ctx context.Context, srcDB *doltdb.DoltDB, toFetch []hash.Ha
 		// Must resolve because we just fetched it.
 		commit, ok := optCmt.ToCommit()
 		if !ok {
-			return nil, nil, doltdb.ErrUnexpectedGhostCommit
+			return nil, nil, doltdb.ErrGhostCommitEncountered
 		}
 
 		for i := 0; i < commit.NumParents(); i++ {

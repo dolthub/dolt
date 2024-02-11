@@ -325,7 +325,6 @@ func (i *dotDotCommiterator) Next(ctx context.Context) (hash.Hash, *doltdb.Optio
 
 		commit, ok := nextC.commit.ToCommit()
 		if !ok {
-			// Preserve the Ghost commit. NM4 - TEST THIS PATH.
 			return nextC.hash, nextC.commit, nil
 		}
 

@@ -281,7 +281,7 @@ func mergeStateToMergeState(ctx context.Context, mergeState *mergeState, db *dol
 
 	commit, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, doltdb.ErrUnexpectedGhostCommit
+		return nil, doltdb.ErrGhostCommitEncountered
 	}
 
 	pmwh := hash.Parse(mergeState.PreMergeWorking)

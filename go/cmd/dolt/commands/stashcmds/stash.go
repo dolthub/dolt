@@ -233,7 +233,7 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	}
 	commit, ok := optCmt.ToCommit()
 	if !ok {
-		return doltdb.ErrUnexpectedGhostCommit
+		return doltdb.ErrGhostCommitEncountered
 	}
 
 	commitMeta, err := commit.GetCommitMeta(ctx)

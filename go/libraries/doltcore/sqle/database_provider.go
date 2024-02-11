@@ -1087,7 +1087,7 @@ func resolveAncestorSpec(ctx *sql.Context, revSpec string, ddb *doltdb.DoltDB) (
 	ok := false
 	cm, ok = optCmt.ToCommit()
 	if !ok {
-		return "", doltdb.ErrUnexpectedGhostCommit // NM4 - NEED TEST.
+		return "", doltdb.ErrGhostCommitEncountered // NM4 - NEED TEST.
 	}
 
 	hash, err := cm.HashOf()
@@ -1482,7 +1482,7 @@ func initialStateForCommit(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.I
 	}
 	cm, ok := optCmt.ToCommit()
 	if !ok {
-		return dsess.InitialDbState{}, doltdb.ErrUnexpectedGhostCommit // NM4 - NEED TEST???
+		return dsess.InitialDbState{}, doltdb.ErrGhostCommitEncountered // NM4 - NEED TEST???
 	}
 
 	init := dsess.InitialDbState{

@@ -337,7 +337,7 @@ func (itr *doltDiffCommitHistoryRowItr) Next(ctx *sql.Context) (sql.Row, error) 
 			}
 			commit, ok := optCmt.ToCommit()
 			if !ok {
-				return nil, doltdb.ErrUnexpectedGhostCommit // NM4 - TEST.
+				return nil, doltdb.ErrGhostCommitEncountered // NM4 - TEST.
 			}
 
 			err = itr.loadTableChanges(ctx, commit)
@@ -412,7 +412,7 @@ func (itr *doltDiffCommitHistoryRowItr) calculateTableChanges(ctx context.Contex
 	}
 	parent, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, doltdb.ErrUnexpectedGhostCommit // NM4 - TEST.
+		return nil, doltdb.ErrGhostCommitEncountered // NM4 - TEST.
 	}
 
 	fromRootValue, err := parent.GetRootValue(ctx)

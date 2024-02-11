@@ -29,7 +29,7 @@ func MergeBase(ctx context.Context, left, right *doltdb.Commit) (base hash.Hash,
 	}
 	ancestor, ok := optCmt.ToCommit()
 	if !ok {
-		return base, doltdb.ErrUnexpectedGhostCommit // NM4 - TEST.  I think getCommitAncestor is going to be an awk one.
+		return base, doltdb.ErrGhostCommitEncountered // NM4 - TEST.  I think getCommitAncestor is going to be an awk one.
 	}
 
 	return ancestor.HashOf()
