@@ -39,17 +39,74 @@ func NewMysqlBenchmarker(dir string, config *Config, serverConfig *ServerConfig)
 	}
 }
 
-func (b *mysqlBenchmarkerImpl) createServerDir() (string, error) {
-	return CreateServerDir(dbName)
+func (b *mysqlBenchmarkerImpl) getDsn() (string, error) {
+	return GetMysqlDsn(b.serverConfig.Host, b.serverConfig.Socket, b.serverConfig.ConnectionProtocol, b.serverConfig.Port)
 }
 
-func (b *mysqlBenchmarkerImpl) initMysqlDataDir(ctx context.Context) (string, error) {
-	serverDir, err := b.createServerDir()
+func (b *mysqlBenchmarkerImpl) createTestingDb(ctx context.Context) error {
+	dsn, err := b.getDsn()
+	if err != nil {
+		return err
+	}
+	return CreateMysqlTestingDb(ctx, dsn, dbName)
+}
+
+func (b *mysqlBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
+	serverDir, err := InitMysqlDataDir(ctx, b.serverConfig.ServerExec, dbName)
+	if err != nil {
+		return nil, err
+	}
+
+	serverParams, err := b.serverConfig.GetServerArgs()
+	if err != nil {
+		return nil, err
+	}
+	serverParams = append(serverParams, fmt.Sprintf("%s=%s", MysqlDataDirFlag, serverDir))
+
+	server := NewServer(ctx, serverDir, b.serverConfig, syscall.SIGTERM, serverParams)
+	err = server.Start()
+	if err != nil {
+		return nil, err
+	}
+
+	err = b.createTestingDb(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tests, err := GetTests(b.config, b.serverConfig, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	results := make(Results, 0)
+	for i := 0; i < b.config.Runs; i++ {
+		for _, test := range tests {
+			tester := NewSysbenchTester(b.config, b.serverConfig, test, serverParams, stampFunc)
+			r, err := tester.Test(ctx)
+			if err != nil {
+				server.Stop()
+				return nil, err
+			}
+			results = append(results, r)
+		}
+	}
+
+	err = server.Stop()
+	if err != nil {
+		return nil, err
+	}
+
+	return results, os.RemoveAll(serverDir)
+}
+
+func InitMysqlDataDir(ctx context.Context, serverExec, dbName string) (string, error) {
+	serverDir, err := CreateServerDir(dbName)
 	if err != nil {
 		return "", err
 	}
 
-	msInit := ExecCommand(ctx, b.serverConfig.ServerExec, MysqlInitializeInsecureFlag, fmt.Sprintf("%s=%s", MysqlDataDirFlag, serverDir))
+	msInit := ExecCommand(ctx, serverExec, MysqlInitializeInsecureFlag, fmt.Sprintf("%s=%s", MysqlDataDirFlag, serverDir))
 	err = msInit.Run()
 	if err != nil {
 		return "", err
@@ -58,30 +115,7 @@ func (b *mysqlBenchmarkerImpl) initMysqlDataDir(ctx context.Context) (string, er
 	return serverDir, nil
 }
 
-func (b *mysqlBenchmarkerImpl) getDsn() (string, error) {
-	var socketPath string
-	if b.serverConfig.Socket != "" {
-		socketPath = b.serverConfig.Socket
-	} else {
-		socketPath = defaultMysqlSocket
-	}
-
-	if b.serverConfig.ConnectionProtocol == tcpProtocol {
-		return fmt.Sprintf(mysqlRootTCPDsnTemplate, b.serverConfig.Host, b.serverConfig.Port), nil
-	} else if b.serverConfig.ConnectionProtocol == unixProtocol {
-		return fmt.Sprintf(mysqlRootUnixDsnTemplate, socketPath), nil
-	} else {
-		return "", ErrUnsupportedConnectionProtocol
-	}
-}
-
-func (b *mysqlBenchmarkerImpl) createTestingDb(ctx context.Context) (err error) {
-	var dsn string
-	dsn, err = b.getDsn()
-	if err != nil {
-		return
-	}
-
+func CreateMysqlTestingDb(ctx context.Context, dsn, dbName string) (err error) {
 	var db *sql.DB
 	db, err = sql.Open(mysqlDriverName, dsn)
 	if err != nil {
@@ -119,51 +153,19 @@ func (b *mysqlBenchmarkerImpl) createTestingDb(ctx context.Context) (err error) 
 	return
 }
 
-func (b *mysqlBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
-	serverDir, err := b.initMysqlDataDir(ctx)
-	if err != nil {
-		return nil, err
+func GetMysqlDsn(host, socket, protocol string, port int) (string, error) {
+	var socketPath string
+	if socket != "" {
+		socketPath = socket
+	} else {
+		socketPath = defaultMysqlSocket
 	}
 
-	serverParams, err := b.serverConfig.GetServerArgs()
-	if err != nil {
-		return nil, err
+	if protocol == tcpProtocol {
+		return fmt.Sprintf(mysqlRootTCPDsnTemplate, host, port), nil
+	} else if protocol == unixProtocol {
+		return fmt.Sprintf(mysqlRootUnixDsnTemplate, socketPath), nil
+	} else {
+		return "", ErrUnsupportedConnectionProtocol
 	}
-	serverParams = append(serverParams, fmt.Sprintf("%s=%s", MysqlDataDirFlag, serverDir))
-
-	server := NewServer(ctx, serverDir, b.serverConfig, syscall.SIGTERM, serverParams)
-	err = server.Start()
-	if err != nil {
-		return nil, err
-	}
-
-	err = b.createTestingDb(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	tests, err := GetTests(b.config, b.serverConfig, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	results := make(Results, 0)
-	for i := 0; i < b.config.Runs; i++ {
-		for _, test := range tests {
-			tester := NewSysbenchTester(b.config, b.serverConfig, test, stampFunc)
-			r, err := tester.Test(ctx)
-			if err != nil {
-				server.Stop()
-				return nil, err
-			}
-			results = append(results, r)
-		}
-	}
-
-	err = server.Stop()
-	if err != nil {
-		return nil, err
-	}
-
-	return results, os.RemoveAll(serverDir)
 }

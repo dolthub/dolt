@@ -191,6 +191,39 @@ func FromConfigsNewResult(config *Config, serverConfig *ServerConfig, t *Test, s
 	}, nil
 }
 
+func NewResult(server ServerType, version, testName, testId, suiteId, runtimeOs, runtimeGoArch string, serverParams, testParams []string, idFunc func() string, fromScript bool) *Result {
+	var getId func() string
+	if idFunc == nil {
+		getId = func() string {
+			return uuid.New().String()
+		}
+	} else {
+		getId = idFunc
+	}
+
+	var name string
+	if fromScript {
+		base := filepath.Base(testName)
+		ext := filepath.Ext(base)
+		name = strings.TrimSuffix(base, ext)
+	} else {
+		name = testName
+	}
+
+	return &Result{
+		Id:            getId(),
+		SuiteId:       suiteId,
+		TestId:        testId,
+		RuntimeOS:     runtimeOs,
+		RuntimeGoArch: runtimeGoArch,
+		ServerName:    string(server),
+		ServerVersion: version,
+		ServerParams:  strings.Join(serverParams, " "),
+		TestName:      name,
+		TestParams:    strings.Join(testParams, " "),
+	}
+}
+
 // FromOutputResult accepts raw sysbench run output and returns the Result
 func FromOutputResult(output []byte, config *Config, serverConfig *ServerConfig, test *Test, suiteId string, idFunc func() string) (*Result, error) {
 	result, err := FromConfigsNewResult(config, serverConfig, test, suiteId, idFunc)
@@ -366,6 +399,31 @@ func updateResult(result *Result, key, val string) error {
 		return nil
 	}
 	return nil
+}
+
+func OutputToResult(output []byte, server ServerType, version, testName, testId, suiteId, runtimeOs, runtimeGoArch string, serverParams, testParams []string, idFunc func() string, fromScript bool) (*Result, error) {
+	result := NewResult(server, version, testName, testId, suiteId, runtimeOs, runtimeGoArch, serverParams, testParams, idFunc, fromScript)
+
+	lines := strings.Split(string(output), "\n")
+	var process bool
+	for _, l := range lines {
+		trimmed := strings.TrimSpace(l)
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, SqlStatsPrefix) {
+			process = true
+			continue
+		}
+		if process {
+			err := UpdateResult(result, trimmed)
+			if err != nil {
+				return result, err
+			}
+		}
+	}
+
+	return result, nil
 }
 
 // FromValWithParens takes a string containing parens and

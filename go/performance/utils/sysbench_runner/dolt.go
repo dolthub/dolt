@@ -59,7 +59,7 @@ func (b *doltBenchmarkerImpl) checkInstallation(ctx context.Context) error {
 }
 
 func (b *doltBenchmarkerImpl) initDoltRepo(ctx context.Context) (string, error) {
-	return InitDoltRepo(ctx, b.dir, b.serverConfig.ServerExec, b.config.NomsBinFormat)
+	return InitDoltRepo(ctx, b.dir, b.serverConfig.ServerExec, b.config.NomsBinFormat, dbName)
 }
 
 func (b *doltBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
@@ -98,7 +98,7 @@ func (b *doltBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
 	results := make(Results, 0)
 	for i := 0; i < b.config.Runs; i++ {
 		for _, test := range tests {
-			tester := NewSysbenchTester(b.config, b.serverConfig, test, stampFunc)
+			tester := NewSysbenchTester(b.config, b.serverConfig, test, serverParams, stampFunc)
 			r, err := tester.Test(ctx)
 			if err != nil {
 				server.Stop()
@@ -117,7 +117,7 @@ func (b *doltBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
 }
 
 // InitDoltRepo initializes a dolt database and returns its path
-func InitDoltRepo(ctx context.Context, dir, serverExec, nomsBinFormat string) (string, error) {
+func InitDoltRepo(ctx context.Context, dir, serverExec, nomsBinFormat, dbName string) (string, error) {
 	testRepo := filepath.Join(dir, dbName)
 	if nomsBinFormat == types.Format_LD_1.VersionString() {
 		err := ExecCommand(ctx, serverExec, doltCloneCommand, bigEmptyRepo, dbName).Run()

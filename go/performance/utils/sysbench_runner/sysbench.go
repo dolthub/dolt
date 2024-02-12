@@ -17,24 +17,22 @@ const (
 	luaPath               = "?.lua"
 )
 
-type SysbenchTester interface {
-	Test(ctx context.Context) (*Result, error)
-}
-
 type sysbenchTestImpl struct {
 	test         *Test
 	config       *Config
 	serverConfig *ServerConfig
+	serverParams []string
 	stampFunc    func() string
 	idFunc       func() string
 	suiteId      string
 }
 
-var _ SysbenchTester = &sysbenchTestImpl{}
+var _ Tester = &sysbenchTestImpl{}
 
-func NewSysbenchTester(config *Config, serverConfig *ServerConfig, test *Test, stampFunc func() string) *sysbenchTestImpl {
+func NewSysbenchTester(config *Config, serverConfig *ServerConfig, test *Test, serverParams []string, stampFunc func() string) *sysbenchTestImpl {
 	return &sysbenchTestImpl{
 		config:       config,
+		serverParams: serverParams,
 		serverConfig: serverConfig,
 		test:         test,
 		suiteId:      serverConfig.GetId(),
@@ -80,47 +78,8 @@ func (t *sysbenchTestImpl) newResult() (*Result, error) {
 	}, nil
 }
 
-func (t *sysbenchTestImpl) updateResult(result *Result, line string) error {
-	lineParts := strings.Split(line, ":")
-	key := strings.TrimSpace(lineParts[0])
-
-	if len(lineParts) > 1 {
-		rawVal := strings.TrimSpace(lineParts[1])
-		err := updateResult(result, key, rawVal)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func (t *sysbenchTestImpl) outputToResult(output []byte) (*Result, error) {
-	result, err := t.newResult()
-	if err != nil {
-		return nil, err
-	}
-
-	lines := strings.Split(string(output), "\n")
-	var process bool
-	for _, l := range lines {
-		trimmed := strings.TrimSpace(l)
-		if trimmed == "" {
-			continue
-		}
-		if strings.HasPrefix(trimmed, SqlStatsPrefix) {
-			process = true
-			continue
-		}
-		if process {
-			err := t.updateResult(result, trimmed)
-			if err != nil {
-				return result, err
-			}
-		}
-	}
-
-	return result, nil
+	return OutputToResult(output, t.serverConfig.Server, t.serverConfig.Version, t.test.Name, t.test.id, t.suiteId, t.config.RuntimeOS, t.config.RuntimeGoArch, t.serverParams, t.test.Params, nil, t.test.FromScript)
 }
 
 func (t *sysbenchTestImpl) prepare(ctx context.Context) error {

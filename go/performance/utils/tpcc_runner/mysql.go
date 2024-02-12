@@ -47,7 +47,7 @@ func BenchmarkMysql(ctx context.Context, config *TpccBenchmarkConfig, serverConf
 	var err error
 	if serverConfig.Host == defaultHost {
 		localServer = true
-		serverDir, err = sysbench_runner.InitMysqlDataDir(ctx, serverConfig)
+		serverDir, err = sysbench_runner.InitMysqlDataDir(ctx, serverConfig.ServerExec)
 		if err != nil {
 			cancel()
 			return nil, err

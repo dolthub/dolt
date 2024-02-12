@@ -143,21 +143,21 @@ type MysqlConfig struct {
 //	return ExecCommand(ctx, config.ServerExec, params...)
 //}
 
-// InitMysqlDataDir initializes a mysql data dir and returns the path
-func InitMysqlDataDir(ctx context.Context, config *ServerConfig) (string, error) {
-	serverDir, err := CreateServerDir(dbName)
-	if err != nil {
-		return "", err
-	}
-
-	msInit := ExecCommand(ctx, config.ServerExec, MysqlInitializeInsecureFlag, fmt.Sprintf("%s=%s", MysqlDataDirFlag, serverDir))
-	err = msInit.Run()
-	if err != nil {
-		return "", err
-	}
-
-	return serverDir, nil
-}
+//// InitMysqlDataDir initializes a mysql data dir and returns the path
+//func InitMysqlDataDir(ctx context.Context, config *ServerConfig) (string, error) {
+//	serverDir, err := CreateServerDir(dbName)
+//	if err != nil {
+//		return "", err
+//	}
+//
+//	msInit := ExecCommand(ctx, config.ServerExec, MysqlInitializeInsecureFlag, fmt.Sprintf("%s=%s", MysqlDataDirFlag, serverDir))
+//	err = msInit.Run()
+//	if err != nil {
+//		return "", err
+//	}
+//
+//	return serverDir, nil
+//}
 
 func SetupDB(ctx context.Context, mConfig MysqlConfig, databaseName string) (err error) {
 	dsn, err := FormatDsn(mConfig)
