@@ -22,13 +22,11 @@ import (
 )
 
 // Run runs sysbench runner
-func Run(config *Config) error {
+func Run(ctx context.Context, config *Config) error {
 	err := config.Validate()
 	if err != nil {
 		return err
 	}
-
-	ctx := context.Background()
 
 	err = sysbenchVersion(ctx)
 	if err != nil {

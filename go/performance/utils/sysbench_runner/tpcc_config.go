@@ -16,6 +16,7 @@ package sysbench_runner
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -243,4 +244,20 @@ func addParamsToCmd(cmd *exec.Cmd, scriptDir string) *exec.Cmd {
 	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, fmt.Sprintf("LUA_PATH=%s", lp))
 	return cmd
+}
+
+// FromFileTpccConfig returns a validated Config based on the config file at the configPath
+func FromFileTpccConfig(configPath string) (*TpccBenchmarkConfig, error) {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	config := NewTpccConfig()
+	err = json.Unmarshal(data, config)
+	if err != nil {
+		return nil, err
+	}
+
+	return config, nil
 }

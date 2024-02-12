@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"os"
@@ -23,6 +24,7 @@ import (
 	runner "github.com/dolthub/dolt/go/performance/utils/sysbench_runner"
 )
 
+var tpcc = flag.Bool("tpcc", false, "run tpcc benchmarks")
 var configFile = flag.String("config", "", "path to config file")
 
 func main() {
@@ -40,15 +42,29 @@ func main() {
 		log.Fatal(err)
 	}
 
+	ctx := context.Background()
+	if *tpcc {
+		err = runTpcc(ctx, configPath)
+	} else {
+		err = run(ctx, configPath)
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func runTpcc(ctx context.Context, configPath string) error {
+	config, err := runner.FromFileTpccConfig(configPath)
+	if err != nil {
+		return err
+	}
+	return runner.RunTpcc(ctx, config)
+}
+
+func run(ctx context.Context, configPath string) error {
 	config, err := runner.FromFileConfig(configPath)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-
-	err = runner.Run(config)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	os.Exit(0)
+	return runner.Run(ctx, config)
 }
