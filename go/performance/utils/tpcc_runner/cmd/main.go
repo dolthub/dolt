@@ -14,46 +14,46 @@
 
 package main
 
-import (
-	"flag"
-	"fmt"
-	"log"
-	"os"
-	"path/filepath"
-
-	tpcc_runner "github.com/dolthub/dolt/go/performance/utils/tpcc_runner"
-)
-
-var configFile = flag.String("config", "", "path to config file q")
-
-func main() {
-	fmt.Println("Running the TPCC benchmark.")
-
-	flag.Parse()
-	if *configFile == "" {
-		log.Fatal("Must supply config")
-	}
-
-	configPath, err := filepath.Abs(*configFile)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if _, err = os.Stat(configPath); os.IsNotExist(err) {
-		log.Fatal(err)
-	}
-
-	tpccBenchmarkConfig, err := tpcc_runner.FromFileConfig(configPath)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Run the TPCC test
-	err = tpcc_runner.Run(tpccBenchmarkConfig)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	os.Exit(0)
-}
+//import (
+//	"flag"
+//	"fmt"
+//	"log"
+//	"os"
+//	"path/filepath"
+//
+//	tpcc_runner "github.com/dolthub/dolt/go/performance/utils/tpcc_runner"
+//)
+//
+//var configFile = flag.String("config", "", "path to config file q")
+//
+//func main() {
+//	fmt.Println("Running the TPCC benchmark.")
+//
+//	flag.Parse()
+//	if *configFile == "" {
+//		log.Fatal("Must supply config")
+//	}
+//
+//	configPath, err := filepath.Abs(*configFile)
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//
+//	if _, err = os.Stat(configPath); os.IsNotExist(err) {
+//		log.Fatal(err)
+//	}
+//
+//	tpccBenchmarkConfig, err := tpcc_runner.FromFileConfig(configPath)
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//
+//	// Run the TPCC test
+//	err = tpcc_runner.Run(tpccBenchmarkConfig)
+//	if err != nil {
+//		fmt.Println(err)
+//		os.Exit(1)
+//	}
+//
+//	os.Exit(0)
+//}

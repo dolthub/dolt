@@ -36,7 +36,7 @@ const (
 )
 
 var defaultTpccParams = []string{
-	fmt.Sprintf("--mysql-db=%s", dbName),
+	fmt.Sprintf("--mysql-db=%s", tpccDbName),
 	"--db-driver=mysql",
 }
 

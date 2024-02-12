@@ -42,7 +42,7 @@ func (p *doltProfilerImpl) checkInstallation(ctx context.Context) error {
 }
 
 func (p *doltProfilerImpl) initDoltRepo(ctx context.Context) (string, error) {
-	return InitDoltRepo(ctx, p.dir, p.serverConfig.ServerExec, p.config.NomsBinFormat)
+	return InitDoltRepo(ctx, p.dir, p.serverConfig.ServerExec, p.config.NomsBinFormat, dbName)
 }
 
 func (p *doltProfilerImpl) Profile(ctx context.Context) error {
@@ -92,7 +92,7 @@ func (p *doltProfilerImpl) Profile(ctx context.Context) error {
 	results := make(Results, 0)
 	for i := 0; i < p.config.Runs; i++ {
 		for _, test := range tests {
-			tester := NewSysbenchTester(p.config, p.serverConfig, test, stampFunc)
+			tester := NewSysbenchTester(p.config, p.serverConfig, test, profileParams, stampFunc)
 			r, err := tester.Test(ctx)
 			if err != nil {
 				server.Stop()

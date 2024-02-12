@@ -133,7 +133,7 @@ func (b *postgresBenchmarkerImpl) Benchmark(ctx context.Context) (results Result
 	results = make(Results, 0)
 	for i := 0; i < b.config.Runs; i++ {
 		for _, test := range tests {
-			tester := NewSysbenchTester(b.config, b.serverConfig, test, stampFunc)
+			tester := NewSysbenchTester(b.config, b.serverConfig, test, serverParams, stampFunc)
 			var r *Result
 			r, err = tester.Test(ctx)
 			if err != nil {

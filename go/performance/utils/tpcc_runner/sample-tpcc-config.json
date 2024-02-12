@@ -6,17 +6,17 @@
       "Server": "dolt",
       "Version": "HEAD",
       "ResultsFormat": "csv",
-      "ServerExec": "/Users/vinairachakonda/go/bin/dolt"
+      "ServerExec": "/Users/dustin/go/bin/dolt"
     },
     {
       "Server": "mysql",
       "Version": "8.0.22",
       "ResultsFormat": "csv",
-      "ServerExec": "/usr/local/bin/mysqld",
+      "ServerExec": "/opt/homebrew/bin/mysqld",
       "ConnectionProtocol": "tcp"
     }
   ],
-  "ScriptDir":"/Users/vinairachakonda/go/src/dolthub/sysbench-tpcc",
+  "ScriptDir":"/Users/dustin/src/sysbench-tpcc",
   "ScaleFactors": [1],
   "NomsBinFormat": "__DOLT__"
 }

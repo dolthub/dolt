@@ -14,51 +14,44 @@
 
 package tpcc_runner
 
-import (
-	"context"
-	"fmt"
-
-	"github.com/dolthub/dolt/go/performance/utils/sysbench_runner"
-)
-
-func Run(config *TpccBenchmarkConfig) error {
-	err := config.updateDefaults()
-	if err != nil {
-		return err
-	}
-
-	ctx := context.Background()
-
-	for _, serverConfig := range config.Servers {
-		var results sysbench_runner.Results
-		var err error
-		switch serverConfig.Server {
-		case sysbench_runner.Dolt:
-			fmt.Println("Running Dolt Benchmark")
-			results, err = BenchmarkDolt(ctx, config, serverConfig)
-			if err != nil {
-				return err
-			}
-		case sysbench_runner.MySql:
-			fmt.Println("Running MySQL benchmark")
-			results, err = BenchmarkMysql(ctx, config, serverConfig)
-			if err != nil {
-				return err
-			}
-		default:
-			panic(fmt.Sprintf("unexpected server type: %s", serverConfig.Server))
-		}
-		if err != nil {
-			return err
-		}
-
-		err = sysbench_runner.WriteResults(serverConfig, results)
-		if err != nil {
-			return err
-		}
-
-		fmt.Printf("Successfuly wrote results for %s\n", serverConfig.Server)
-	}
-
-	return nil
-}
+//func Run(config *TpccBenchmarkConfig) error {
+//	err := config.updateDefaults()
+//	if err != nil {
+//		return err
+//	}
+//
+//	ctx := context.Background()
+//
+//	for _, serverConfig := range config.Servers {
+//		var results sysbench_runner.Results
+//		var err error
+//		switch serverConfig.Server {
+//		case sysbench_runner.Dolt:
+//			fmt.Println("Running Dolt Benchmark")
+//			results, err = BenchmarkDolt(ctx, config, serverConfig)
+//			if err != nil {
+//				return err
+//			}
+//		case sysbench_runner.MySql:
+//			fmt.Println("Running MySQL benchmark")
+//			results, err = BenchmarkMysql(ctx, config, serverConfig)
+//			if err != nil {
+//				return err
+//			}
+//		default:
+//			panic(fmt.Sprintf("unexpected server type: %s", serverConfig.Server))
+//		}
+//		if err != nil {
+//			return err
+//		}
+//
+//		err = sysbench_runner.WriteResults(serverConfig, results)
+//		if err != nil {
+//			return err
+//		}
+//
+//		fmt.Printf("Successfuly wrote results for %s\n", serverConfig.Server)
+//	}
+//
+//	return nil
+//}
