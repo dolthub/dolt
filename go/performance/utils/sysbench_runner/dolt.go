@@ -130,7 +130,7 @@ func (b *doltBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
 	}
 
 	server := NewServer(ctx, testRepo, b.serverConfig, syscall.SIGTERM, serverParams)
-	err = server.Start(ctx)
+	err = server.Start()
 	if err != nil {
 		return nil, err
 	}
@@ -146,14 +146,14 @@ func (b *doltBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
 			tester := NewSysbenchTester(b.config, b.serverConfig, test, stampFunc)
 			r, err := tester.Test(ctx)
 			if err != nil {
-				server.Stop(ctx)
+				server.Stop()
 				return nil, err
 			}
 			results = append(results, r)
 		}
 	}
 
-	err = server.Stop(ctx)
+	err = server.Stop()
 	if err != nil {
 		return nil, err
 	}

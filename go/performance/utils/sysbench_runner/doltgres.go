@@ -79,61 +79,69 @@ func (b *doltgresBenchmarkerImpl) createTestingDb(ctx context.Context) error {
 	return err
 }
 
-func (b *doltgresBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
-	err := b.checkInstallation(ctx)
+func (b *doltgresBenchmarkerImpl) Benchmark(ctx context.Context) (results Results, err error) {
+	err = b.checkInstallation(ctx)
 	if err != nil {
-		return nil, err
+		return
 	}
 
-	serverDir, err := CreateServerDir(dbName)
+	var serverDir string
+	serverDir, err = CreateServerDir(dbName)
 	if err != nil {
-		return nil, err
+		return
 	}
 	defer func() {
-		b.cleanupServerDir(serverDir)
+		rerr := b.cleanupServerDir(serverDir)
+		if err == nil {
+			err = rerr
+		}
 	}()
 
-	serverParams, err := b.serverConfig.GetServerArgs()
+	var serverParams []string
+	serverParams, err = b.serverConfig.GetServerArgs()
 	if err != nil {
-		return nil, err
+		return
 	}
+
 	serverParams = append(serverParams, fmt.Sprintf("%s=%s", doltgresDataDirFlag, serverDir))
 
 	server := NewServer(ctx, serverDir, b.serverConfig, syscall.SIGTERM, serverParams)
-	err = server.Start(ctx)
+	err = server.Start()
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	err = b.createTestingDb(ctx)
 	if err != nil {
-		return nil, err
+		return
 	}
 
-	tests, err := GetTests(b.config, b.serverConfig, nil)
+	var tests []*Test
+	tests, err = GetTests(b.config, b.serverConfig, nil)
 	if err != nil {
-		return nil, err
+		return
 	}
 
-	results := make(Results, 0)
+	results = make(Results, 0)
 	for i := 0; i < b.config.Runs; i++ {
 		for _, test := range tests {
 			tester := NewSysbenchTester(b.config, b.serverConfig, test, stampFunc)
-			r, err := tester.Test(ctx)
+			var r *Result
+			r, err = tester.Test(ctx)
 			if err != nil {
-				server.Stop(ctx)
-				return nil, err
+				server.Stop()
+				return
 			}
 			results = append(results, r)
 		}
 	}
 
-	err = server.Stop(ctx)
+	err = server.Stop()
 	if err != nil {
-		return nil, err
+		return
 	}
 
-	return results, nil
+	return
 }
 
 // CreateServerDir creates a server directory

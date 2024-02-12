@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"syscall"
 
 	_ "github.com/lib/pq"
@@ -18,6 +19,8 @@ const (
 	postgresDropUserSqlTemplate       = "DROP USER IF EXISTS %s;"
 	postgresCreateUserSqlTemplate     = "CREATE USER %s WITH PASSWORD '%s';"
 	postgresCreateDatabaseSqlTemplate = "CREATE DATABASE %s WITH OWNER %s;"
+	postgresLcAllEnvVarKey            = "LC_ALL"
+	postgresLcAllEnvVarValue          = "C"
 )
 
 type postgresBenchmarkerImpl struct {
@@ -55,7 +58,7 @@ func (b *postgresBenchmarkerImpl) createTestingDb(ctx context.Context) (err erro
 	psqlconn := fmt.Sprintf(psqlDsnTemplate, b.serverConfig.Host, b.serverConfig.Port, postgresUsername, "", dbName)
 
 	var db *sql.DB
-	db, err = sql.Open("postgres", psqlconn)
+	db, err = sql.Open(postgresDriver, psqlconn)
 	if err != nil {
 		return
 	}
@@ -87,51 +90,64 @@ func (b *postgresBenchmarkerImpl) createTestingDb(ctx context.Context) (err erro
 	return
 }
 
-func (b *postgresBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
-	serverDir, err := b.initDataDir(ctx)
+func (b *postgresBenchmarkerImpl) Benchmark(ctx context.Context) (results Results, err error) {
+	var serverDir string
+	serverDir, err = b.initDataDir(ctx)
 	if err != nil {
-		return nil, err
+		return
+	}
+	defer func() {
+		rerr := os.RemoveAll(serverDir)
+		if err == nil {
+			err = rerr
+		}
+	}()
+
+	var serverParams []string
+	serverParams, err = b.serverConfig.GetServerArgs()
+	if err != nil {
+		return
 	}
 
-	serverParams, err := b.serverConfig.GetServerArgs()
-	if err != nil {
-		return nil, err
-	}
 	serverParams = append(serverParams, postgresDataDirFlag, serverDir)
 
 	server := NewServer(ctx, serverDir, b.serverConfig, syscall.SIGTERM, serverParams)
-	err = server.Start(ctx)
+	server.WithEnv(postgresLcAllEnvVarKey, postgresLcAllEnvVarValue)
+
+	err = server.Start()
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	err = b.createTestingDb(ctx)
 	if err != nil {
-		return nil, err
+		return
 	}
 
-	tests, err := GetTests(b.config, b.serverConfig, nil)
+	var tests []*Test
+	tests, err = GetTests(b.config, b.serverConfig, nil)
 	if err != nil {
-		return nil, err
+		return
 	}
 
-	results := make(Results, 0)
+	results = make(Results, 0)
 	for i := 0; i < b.config.Runs; i++ {
 		for _, test := range tests {
 			tester := NewSysbenchTester(b.config, b.serverConfig, test, stampFunc)
-			r, err := tester.Test(ctx)
+			var r *Result
+			r, err = tester.Test(ctx)
 			if err != nil {
-				server.Stop(ctx)
-				return nil, err
+				server.Stop()
+				return
 			}
 			results = append(results, r)
 		}
 	}
 
-	err = server.Stop(ctx)
+	err = server.Stop()
 	if err != nil {
-		return nil, err
+		return
 	}
 
-	return results, nil
+	return
 }

@@ -17,10 +17,11 @@ package sysbench_runner
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/types"
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (

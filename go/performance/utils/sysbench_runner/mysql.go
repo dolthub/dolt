@@ -132,7 +132,7 @@ func (b *mysqlBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
 	serverParams = append(serverParams, fmt.Sprintf("%s=%s", MysqlDataDirFlag, serverDir))
 
 	server := NewServer(ctx, serverDir, b.serverConfig, syscall.SIGTERM, serverParams)
-	err = server.Start(ctx)
+	err = server.Start()
 	if err != nil {
 		return nil, err
 	}
@@ -153,14 +153,14 @@ func (b *mysqlBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
 			tester := NewSysbenchTester(b.config, b.serverConfig, test, stampFunc)
 			r, err := tester.Test(ctx)
 			if err != nil {
-				server.Stop(ctx)
+				server.Stop()
 				return nil, err
 			}
 			results = append(results, r)
 		}
 	}
 
-	err = server.Stop(ctx)
+	err = server.Stop()
 	if err != nil {
 		return nil, err
 	}

@@ -11,11 +11,17 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+const (
+	expectedServerKilledErrorMessage     = "signal: killed"
+	expectedServerTerminatedErrorMessage = "signal: terminated"
+)
+
 var ErrServerClosed = errors.New("server was previously closed")
 
 type Server interface {
-	Start(ctx context.Context) error
-	Stop(ctx context.Context) error
+	Start() error
+	Stop() error
+	WithEnv(key, value string)
 }
 
 type doltServerImpl struct {
@@ -51,7 +57,13 @@ func NewServer(ctx context.Context, dir string, serverConfig *ServerConfig, kill
 	}
 }
 
-func (s *doltServerImpl) Start(ctx context.Context) error {
+func (s *doltServerImpl) WithEnv(key, val string) {
+	if s.server != nil {
+		s.server.Env = append(s.server.Env, fmt.Sprintf("%s=%s", key, val))
+	}
+}
+
+func (s *doltServerImpl) Start() error {
 	if s.serverEg == nil || s.serverCtx == nil || s.quit == nil {
 		return ErrServerClosed
 	}
@@ -61,8 +73,11 @@ func (s *doltServerImpl) Start(ctx context.Context) error {
 		return s.server.Process.Signal(s.killSignal)
 	})
 
-	// launch the dolt server
 	s.serverEg.Go(func() error {
+		if Debug {
+			s.server.Stdout = os.Stdout
+			s.server.Stderr = os.Stderr
+		}
 		return s.server.Run()
 	})
 
@@ -72,7 +87,7 @@ func (s *doltServerImpl) Start(ctx context.Context) error {
 	return nil
 }
 
-func (s *doltServerImpl) Stop(ctx context.Context) error {
+func (s *doltServerImpl) Stop() error {
 	defer s.serverCtxCancelFunc()
 	if s.serverEg != nil && s.serverCtx != nil && s.quit != nil {
 		// send signal to dolt server
@@ -82,7 +97,7 @@ func (s *doltServerImpl) Stop(ctx context.Context) error {
 			// we expect a kill error
 			// we only exit in error if this is not the
 			// error
-			if err.Error() != "signal: killed" {
+			if err.Error() != expectedServerKilledErrorMessage && err.Error() != expectedServerTerminatedErrorMessage {
 				fmt.Println(err)
 				close(s.quit)
 				return err
