@@ -166,7 +166,7 @@ require (
 
 replace (
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
-	github.com/dolthub/go-mysql-server => github.com/seanlaff/go-mysql-server v0.0.0-20240209143109-a28eedb09354
+	github.com/dolthub/go-mysql-server => github.com/seanlaff/go-mysql-server v0.0.0-20240212143004-7e31feceb337
 )
 
 go 1.21
