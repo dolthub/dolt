@@ -87,7 +87,6 @@ func (nb nullBlockStore) Commit(ctx context.Context, current, last hash.Hash) (b
 	return true, nil
 }
 
-// NM4
-func (nb nullBlockStore) GhostTheseRefsBrah(ctx context.Context, refs hash.HashSet) error {
+func (nb nullBlockStore) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
 	panic("not impl")
 }

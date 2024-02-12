@@ -406,7 +406,8 @@ func (dt *DiffTable) reverseIterForChild(ctx *sql.Context, parent hash.Hash) (*d
 
 		childCm, ok := optCmt.ToCommit()
 		if !ok {
-			return nil, hash.Hash{}, doltdb.ErrGhostCommitEncountered
+			// Should have been caught above from the Next() call on the iter. This is a runtime error.
+			return nil, hash.Hash{}, doltdb.ErrGhostCommitRuntimeFailure
 		}
 
 		phs, err := childCm.ParentHashes(ctx)
@@ -518,7 +519,7 @@ func (dt *DiffTable) toCommitLookupPartitions(ctx *sql.Context, hashes []hash.Ha
 			}
 			pc, ok := optCmt.ToCommit()
 			if !ok {
-				return nil, doltdb.ErrGhostCommitEncountered // NM4 - NEED TEST.
+				return nil, doltdb.ErrGhostCommitEncountered
 			}
 
 			cmHashToTblInfo[pj] = toCmInfo
@@ -803,7 +804,8 @@ func (dps *DiffPartitions) Next(ctx *sql.Context) (sql.Partition, error) {
 		}
 		cm, ok := optCmt.ToCommit()
 		if !ok {
-			return nil, doltdb.ErrGhostCommitEncountered // NM4 - NEED TEST.
+			// Should have been caught above from the Next() call on the iter. This is a runtime error.
+			return nil, doltdb.ErrGhostCommitRuntimeFailure
 		}
 
 		root, err := cm.GetRootValue(ctx)

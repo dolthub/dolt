@@ -511,7 +511,7 @@ func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asO
 	}
 	cm, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, nil, doltdb.ErrGhostCommitEncountered // NM4 - NEED TEST.
+		return nil, nil, doltdb.ErrGhostCommitEncountered
 	}
 
 	h, err := cm.HashOf()
@@ -533,7 +533,7 @@ func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asO
 		}
 		curr, ok := optCmt.ToCommit()
 		if !ok {
-			return nil, nil, doltdb.ErrGhostCommitEncountered // NM4 - NEED TEST.
+			return nil, nil, doltdb.ErrGhostCommitEncountered
 		}
 
 		meta, err := curr.GetCommitMeta(ctx)
@@ -586,7 +586,7 @@ func resolveAsOfCommitRef(ctx *sql.Context, db Database, head ref.DoltRef, commi
 	}
 	cm, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, nil, doltdb.ErrGhostCommitEncountered // NM4 - NEED TEST.
+		return nil, nil, doltdb.ErrGhostCommitEncountered
 	}
 
 	root, err := cm.GetRootValue(ctx)

@@ -96,6 +96,6 @@ func (nbsMW *NBSMetricWrapper) GetManyCompressed(ctx context.Context, hashes has
 	return nbsMW.nbs.GetManyCompressed(ctx, hashes, found)
 }
 
-func (nbsMW NBSMetricWrapper) GhostTheseRefsBrah(ctx context.Context, refs hash.HashSet) error {
-	return nbsMW.nbs.GhostTheseRefsBrah(ctx, refs)
+func (nbsMW NBSMetricWrapper) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
+	return nbsMW.nbs.PersistGhostHashes(ctx, refs)
 }

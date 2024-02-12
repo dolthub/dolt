@@ -166,7 +166,7 @@ func (itr *CommitAncestorsRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 
 		cm, ok := optCmt.ToCommit()
 		if !ok {
-			return nil, doltdb.ErrGhostCommitEncountered // NM4 - I think this will happen plenty. TEST.
+			return nil, doltdb.ErrGhostCommitEncountered
 		}
 
 		parents, err := itr.ddb.ResolveAllParents(ctx, cm)
@@ -183,7 +183,7 @@ func (itr *CommitAncestorsRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 		for i, optParent := range parents {
 			p, ok := optParent.ToCommit()
 			if !ok {
-				return nil, doltdb.ErrGhostCommitEncountered // NM4 - TEST.
+				return nil, doltdb.ErrGhostCommitEncountered
 			}
 
 			ph, err := p.HashOf()

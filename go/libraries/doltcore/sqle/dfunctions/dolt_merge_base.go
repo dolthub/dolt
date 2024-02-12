@@ -105,7 +105,7 @@ func resolveRefSpecs(ctx *sql.Context, leftSpec, rightSpec string) (left, right 
 	}
 	left, ok = optCmt.ToCommit()
 	if !ok {
-		return nil, nil, doltdb.ErrGhostCommitEncountered // NM4 - TEST, surely needs a better error.
+		return nil, nil, doltdb.ErrGhostCommitEncountered
 	}
 
 	optCmt, err = doltDB.Resolve(ctx, rcs, headRef)
@@ -114,7 +114,7 @@ func resolveRefSpecs(ctx *sql.Context, leftSpec, rightSpec string) (left, right 
 	}
 	right, ok = optCmt.ToCommit()
 	if !ok {
-		return nil, nil, doltdb.ErrGhostCommitEncountered // NM4 - TEST, surely needs a better error.
+		return nil, nil, doltdb.ErrGhostCommitEncountered
 	}
 
 	return

@@ -600,7 +600,8 @@ func fetchRefSpecsWithDepth(
 		}
 		commit, ok := optCmt.ToCommit()
 		if !ok {
-			return doltdb.ErrGhostCommitEncountered // NM4 - This definitely needs its own error message. TEST THIS PATH.
+			// Source DB should have everything. If we can't read a commit, something is wrong.
+			return doltdb.ErrGhostCommitRuntimeFailure
 		}
 
 		remoteTrackRef := newHead.Ref
@@ -650,9 +651,8 @@ func fetchRefSpecsWithDepth(
 }
 
 func buildInitialSkipList(ctx context.Context, srcDB *doltdb.DoltDB, toFetch []hash.Hash) (hash.HashSet, error) {
-	// if toFetch is more than one, panic. NM4 - test this path. shouldn't panic, obviously.
 	if len(toFetch) > 1 {
-		panic("multi head shallow pulls not implemented")
+		return hash.HashSet{}, fmt.Errorf("runtime error: multiple refspect not supported in shallow clone")
 	}
 
 	cs, err := doltdb.NewCommitSpec(toFetch[0].String())

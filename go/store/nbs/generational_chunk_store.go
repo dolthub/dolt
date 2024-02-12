@@ -35,12 +35,13 @@ type GenerationalNBS struct {
 	lostGen *GhostBlockStore
 }
 
-func (gcs *GenerationalNBS) GhostTheseRefsBrah(ctx context.Context, refs hash.HashSet) error {
-	//TODO implement me
-	panic("NM4")
+func (gcs *GenerationalNBS) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
+	if gcs.lostGen == nil {
+		return gcs.lostGen.PersistGhostHashes(ctx, refs)
+	}
+	return nil
 }
 
-// NM4 - lost in plumbing at this poin. Where should this be??!?!?
 func (gcs *GenerationalNBS) GhostGen() chunks.ChunkStore {
 	return gcs.lostGen
 }

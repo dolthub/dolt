@@ -443,7 +443,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		}
 		commit, ok = optCmt.ToCommit()
 		if err != nil {
-			return nil, doltdb.ErrGhostCommitEncountered // NM4 - TEST.
+			return nil, doltdb.ErrGhostCommitEncountered
 		}
 
 		commits = append(commits, commit)
@@ -462,7 +462,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		}
 		notCommit, ok := optCmt.ToCommit()
 		if !ok {
-			return nil, doltdb.ErrGhostCommitEncountered // NM4 - TEST.
+			return nil, doltdb.ErrGhostCommitEncountered
 		}
 
 		notCommits = append(notCommits, notCommit)
@@ -486,7 +486,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		}
 		mergeCommit, ok := optCmt.ToCommit()
 		if !ok {
-			return nil, doltdb.ErrGhostCommitEncountered // NM4 - TEST.
+			return nil, doltdb.ErrGhostCommitEncountered
 		}
 
 		notCommits = append(notCommits, mergeCommit)
@@ -678,7 +678,7 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		ok := false
 		commit, ok = optCmt.ToCommit()
 		if !ok {
-			return nil, doltdb.ErrGhostCommitEncountered // NM4 - TEST.
+			return nil, doltdb.ErrGhostCommitEncountered
 		}
 
 		if itr.tableNames != nil {
@@ -693,7 +693,7 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 			}
 			parent0Cm, ok := optCmt.ToCommit()
 			if !ok {
-				return nil, doltdb.ErrGhostCommitEncountered // NM4 - TEST.
+				return nil, doltdb.ErrGhostCommitEncountered
 			}
 
 			var parent1Cm *doltdb.Commit
@@ -704,7 +704,7 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 				}
 				parent1Cm, ok = optCmt.ToCommit()
 				if !ok {
-					return nil, doltdb.ErrGhostCommitEncountered // NM4 - TEST.
+					return nil, doltdb.ErrGhostCommitEncountered
 				}
 			}
 

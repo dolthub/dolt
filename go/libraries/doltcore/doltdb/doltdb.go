@@ -1935,6 +1935,9 @@ func (ddb *DoltDB) GetStashRootAndHeadCommitAtIdx(ctx context.Context, idx int) 
 	return getStashAtIdx(ctx, ds, ddb.vrw, ddb.NodeStore(), idx)
 }
 
+// PersistGhostCommits persists the set of ghost commits to the database. This is how the application layer passes
+// information about ghost commits to the storage layer. This can be called multiple times over the course of performing
+// a shallow clone, but should not be called after the clone is complete.
 func (ddb *DoltDB) PersistGhostCommits(ctx context.Context, ghostCommits hash.HashSet) error {
-	return ddb.db.Database.WriteDemGhosts(ctx, ghostCommits)
+	return ddb.db.Database.PersistGhostCommitIDs(ctx, ghostCommits)
 }

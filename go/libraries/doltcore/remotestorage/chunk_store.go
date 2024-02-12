@@ -122,11 +122,6 @@ type DoltChunkStore struct {
 	wsValidate  bool
 }
 
-func (dcs *DoltChunkStore) GhostTheseRefsBrah(ctx context.Context, refs hash.HashSet) error {
-	//TODO implement me
-	panic("NM4")
-}
-
 func NewDoltChunkStoreFromPath(ctx context.Context, nbf *types.NomsBinFormat, path, host string, wsval bool, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
 	var repoId *remotesapi.RepoId
 
@@ -954,6 +949,10 @@ func (dcs *DoltChunkStore) Stats() interface{} {
 // supported.
 func (dcs *DoltChunkStore) StatsSummary() string {
 	return fmt.Sprintf("CacheHits: %v", dcs.Stats().(CacheStats).CacheHits())
+}
+
+func (dcs *DoltChunkStore) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
+	panic("runtime error: PersistGhostHashes should never be called on a remote chunk store")
 }
 
 // Close tears down any resources in use by the implementation. After

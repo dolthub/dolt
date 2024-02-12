@@ -116,8 +116,6 @@ seed_and_start_serial_remote() {
     run dolt sql -q "select sum(i) from vals"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "15" ]] || false # 1+2+3+4+5 = 15.
-
-
 }
 
 @test "shallow-clone: depth 3 clone of serial history" {
@@ -140,10 +138,34 @@ seed_and_start_serial_remote() {
     [[ "$output" =~ "true" ]] || false
 
 #   NM4 - system table bug.
-#    run dolt sql -q "select count(*) = 2 from dolt_log"
+#    run dolt sql -q "select count(*) = 3 from dolt_log"
 #    [ "$status" -eq 0 ]
 #    [[ "$output" =~ "true" ]] || false
 #
+
+    # dolt_diff table will show two rows, because each row is a delta.
+    run dolt sql -q "select * from dolt_diff"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Added Val: 5 " ]] || false
+    [[ "$output" =~ "Added Val: 4 " ]] || false
+    ! [[ "$output" =~ "Added Val: 3 " ]] || false
+    ! [[ "$output" =~ "Added Val: 2 " ]] || false
+
+    run dolt sql -q "select * from dolt_commits"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Added Val: 5 " ]] || false
+    [[ "$output" =~ "Added Val: 4 " ]] || false
+    [[ "$output" =~ "Added Val: 3 " ]] || false
+    ! [[ "$output" =~ "Added Val: 2 " ]] || false
+
+
+    # NM4 - not sure what dolt_history_{table} should do. Currently errors out every time.
+#    run dolt sql -q "select * from dolt_history_vals"
+#    [ "$status" -eq 0 ]
+#    [[ "$output" =~ "yo mama" ]] || false
+#    [[ "$output" =~ "4 " ]] || false
+#    [[ "$output" =~ "3 " ]] || false
+
     # Verify that the table is complete.
     run dolt sql -q "select sum(i) from vals"
     [ "$status" -eq 0 ]
@@ -201,6 +223,39 @@ seed_and_start_serial_remote() {
     run dolt show HEAD~6
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Initialize data repository" ]] || false
+}
+
+@test "shallow-clone: as of gives decent error message" {
+    seed_and_start_serial_remote
+
+    mkdir clones
+    cd clones
+
+    run dolt clone --depth 3 http://localhost:50051/test-org/test-repo
+    [ "$status" -eq 0 ]
+
+    cd test-repo
+
+    run dolt sql -q "select sum(i) from vals as of 'HEAD~4'"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Commit not found. You are using a shallow clone" ]] || false
+}
+
+@test "shallow-clone: hashof sql function gives an error message" {
+    seed_and_start_serial_remote
+
+    mkdir clones
+    cd clones
+
+    run dolt clone --depth 2 http://localhost:50051/test-org/test-repo
+    [ "$status" -eq 0 ]
+
+    cd test-repo
+
+    run dolt sql -q "select hashof('HEAD~4')"
+
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Commit not found. You are using a shallow clone" ]] || false
 }
 
 @test "shallow-clone: single depth clone of serial history" {
@@ -579,11 +634,10 @@ seed_and_start_complex_remote() {
 #   - Pull when there are remote changes on main
 # - Sensible error when branching/checking out a commit which they don't have.
 # - merge base errors
-# - Cherry pick still works with commits we have. Message when we don't have the commit.
 # - GC works? or gives a decent error message?
 # - reset work to a commit we have, and errors when we don't have the commit.
 # - Sensible error when we attempt to use HEAD~51 or something.
-# - Don't server from a shallow repository
+# - Don't serve from a shallow repository
 #   - remotesrv
 #   - sql-server
 #   - file (stretch?)
@@ -591,5 +645,3 @@ seed_and_start_complex_remote() {
 # - Rebase?
 # - Stash?
 # - Fetch tags which refer to commits we don't have. Punt on tags entirely?
-#
-# - And what about the dolt_clone() stored procedure? Should I do half the tests with `dolt sql -q` ?

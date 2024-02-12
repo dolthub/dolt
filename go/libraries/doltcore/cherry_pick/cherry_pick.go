@@ -209,7 +209,7 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 		return nil, "", err
 	}
 	cherryCommit, ok := optCmt.ToCommit()
-	if err != nil {
+	if !ok {
 		return nil, "", doltdb.ErrGhostCommitEncountered
 	}
 

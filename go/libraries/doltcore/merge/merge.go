@@ -54,7 +54,8 @@ func MergeCommits(ctx *sql.Context, commit, mergeCommit *doltdb.Commit, opts edi
 	}
 	ancCommit, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, doltdb.ErrGhostCommitEncountered // NM4 - not sure if we can get to this point. TEST THIS PATH.
+		// Ancestor commit should have been resolved before getting this far.
+		return nil, doltdb.ErrGhostCommitRuntimeFailure
 	}
 
 	ourRoot, err := commit.GetRootValue(ctx)

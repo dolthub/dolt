@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/sirupsen/logrus"
 )
 
 type database struct {
@@ -853,16 +852,15 @@ func assertDatasetHash(
 	return curr.(types.Ref).TargetHash().Equal(currHash), nil
 }
 
-func (db *database) WriteDemGhosts(ctx context.Context, ghosts hash.HashSet) error {
-	foooooooo := db.ChunkStore()
+func (db *database) PersistGhostCommitIDs(ctx context.Context, ghosts hash.HashSet) error {
+	cs := db.ChunkStore()
 
-	gcs, ok := foooooooo.(chunks.GenerationalCS)
+	gcs, ok := cs.(chunks.GenerationalCS)
 	if !ok {
-		logrus.Info("WriteDemGhosts: ChunkStore is not a GenerationalCS")
-		return nil
+		return errors.New("Generational Chunk Store expected. database does not support shallow clone instances.")
 	}
 
-	err := gcs.GhostGen().GhostTheseRefsBrah(ctx, ghosts)
+	err := gcs.GhostGen().PersistGhostHashes(ctx, ghosts)
 
 	return err
 }

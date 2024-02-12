@@ -1,0 +1,152 @@
+// Copyright 2024 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package nbs
+
+import (
+	"bufio"
+	"context"
+	"os"
+	"path/filepath"
+
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/hash"
+)
+
+type GhostBlockStore struct {
+	skippedRefs      *hash.HashSet
+	ghostObjectsFile string
+}
+
+// We use the Has, HasMany, Get, GetMany, and PersistGhostHashes methods from the ChunkStore interface. All other methods are not supported.
+var _ chunks.ChunkStore = &GhostBlockStore{}
+
+// NewGhostBlockStore returns a new GhostBlockStore instance. Currently the only parameter is the path to the directory
+// where we will create a text file called ghostObjects.txt. This file will contain the hashes of the ghost objects. Creation
+// and use of this file is constrained to this instance.
+func NewGhostBlockStore(nomsPath string) *GhostBlockStore {
+	ghostPath := filepath.Join(nomsPath, "ghostObjects.txt")
+	f, err := os.Open(ghostPath)
+	if err != nil {
+		return &GhostBlockStore{
+			skippedRefs:      &hash.HashSet{},
+			ghostObjectsFile: ghostPath,
+		}
+	}
+	scanner := bufio.NewScanner(f)
+	skiplist := &hash.HashSet{}
+	for scanner.Scan() {
+		skiplist.Insert(hash.Parse(scanner.Text()))
+	}
+
+	return &GhostBlockStore{
+		skippedRefs:      skiplist,
+		ghostObjectsFile: ghostPath,
+	}
+}
+
+// Get returns a ghost chunk if the hash is in the ghostObjectsFile. Otherwise, it returns an empty chunk. Chunks returned
+// by this code will always be ghost chunks, ie chunk.IsGhost() will always return true.
+func (g GhostBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
+	if g.skippedRefs.Has(h) {
+		return *chunks.NewGhostChunk(h), nil
+	}
+	return chunks.EmptyChunk, nil
+}
+
+func (g GhostBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(context.Context, *chunks.Chunk)) error {
+	for h := range hashes {
+		if g.skippedRefs.Has(h) {
+			found(ctx, chunks.NewGhostChunk(h))
+		}
+	}
+	return nil
+}
+
+func (g *GhostBlockStore) PersistGhostHashes(ctx context.Context, hashes hash.HashSet) error {
+	f, err := os.OpenFile(g.ghostObjectsFile, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+
+	for h := range hashes {
+		if _, err := f.WriteString(h.String() + "\n"); err != nil {
+			return err
+		}
+	}
+
+	g.skippedRefs = &hash.HashSet{}
+	for h := range hashes {
+		g.skippedRefs.Insert(h)
+	}
+
+	return nil
+}
+
+func (g GhostBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
+	if g.skippedRefs.Has(h) {
+		return true, nil
+	}
+	return false, nil
+}
+
+func (g GhostBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet, err error) {
+	return g.hasMany(hashes)
+}
+
+func (g GhostBlockStore) hasMany(hashes hash.HashSet) (absent hash.HashSet, err error) {
+	absent = hash.HashSet{}
+	for h := range hashes {
+		if !g.skippedRefs.Has(h) {
+			absent.Insert(h)
+		}
+	}
+	return absent, nil
+}
+
+func (g GhostBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
+	panic("GhostBlockStore does not support Put")
+}
+
+func (g GhostBlockStore) Version() string {
+	panic("GhostBlockStore does not support Version")
+}
+
+func (g GhostBlockStore) AccessMode() chunks.ExclusiveAccessMode {
+	panic("GhostBlockStore does not support AccessMode")
+}
+
+func (g GhostBlockStore) Rebase(ctx context.Context) error {
+	panic("GhostBlockStore does not support Rebase")
+}
+
+func (g GhostBlockStore) Root(ctx context.Context) (hash.Hash, error) {
+	panic("GhostBlockStore does not support Root")
+}
+
+func (g GhostBlockStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
+	panic("GhostBlockStore does not support Commit")
+}
+
+func (g GhostBlockStore) Stats() interface{} {
+	panic("GhostBlockStore does not support Stats")
+}
+
+func (g GhostBlockStore) StatsSummary() string {
+	panic("GhostBlockStore does not support StatsSummary")
+}
+
+func (g GhostBlockStore) Close() error {
+	panic("GhostBlockStore does not support Close")
+}

@@ -136,7 +136,6 @@ func NewPuller(
 		}
 	}
 
-	// NM4 - walk address function (waf) is currently only has one impl.
 	p := &Puller{
 		waf:           walkAddrs,
 		srcChunkStore: srcChunkStore,
@@ -496,8 +495,6 @@ func (p *Puller) getCmp(ctx context.Context, batch, absent, visited hash.HashSet
 				if err != nil {
 					return err
 				}
-
-				// walk address function - new special one?
 				err = p.waf(chnk, func(h hash.Hash, _ bool) error {
 					if !visited.Has(h) {
 						// first sight of |h|

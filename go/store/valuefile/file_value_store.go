@@ -288,7 +288,7 @@ func (f *FileValueStore) iterChunks(cb func(ch chunks.Chunk) error) error {
 	return nil
 }
 
-// NM4
-func (f *FileValueStore) GhostTheseRefsBrah(ctx context.Context, refs hash.HashSet) error {
+func (f *FileValueStore) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
+	// Current unimplemented, but may be useful for testing someday.
 	panic("not implemented")
 }

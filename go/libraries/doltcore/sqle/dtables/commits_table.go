@@ -1,4 +1,4 @@
-// Copyright 2020 Dolthub, Inc.
+// Copyright 2021 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package dtables
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -152,11 +153,15 @@ func NewCommitsRowItr(ctx *sql.Context, ddb *doltdb.DoltDB) (CommitsRowItr, erro
 func (itr CommitsRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 	h, optCmt, err := itr.itr.Next(ctx)
 	if err != nil {
+		if err == doltdb.ErrGhostCommitEncountered {
+			return nil, io.EOF
+		}
+
 		return nil, err
 	}
 	cm, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, doltdb.ErrGhostCommitEncountered // NM4 - NEED TEST.
+		return nil, doltdb.ErrGhostCommitRuntimeFailure
 	}
 
 	meta, err := cm.GetCommitMeta(ctx)

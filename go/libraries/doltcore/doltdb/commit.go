@@ -70,7 +70,9 @@ var _ Rootish = &Commit{}
 
 // NewCommit generates a new Commit object that wraps a supplied datas.Commit.
 func NewCommit(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, commit *datas.Commit) (*Commit, error) {
-	commit.IsGhost()
+	if commit.IsGhost() {
+		return nil, ErrGhostCommitRuntimeFailure
+	}
 
 	parents, err := datas.GetCommitParents(ctx, vrw, commit.NomsValue())
 	if err != nil {
@@ -280,7 +282,7 @@ func (c *Commit) GetAncestor(ctx context.Context, as *AncestorSpec) (*OptionalCo
 		var ok bool
 		hardInst, ok = optInst.ToCommit()
 		if !ok {
-			return nil, ErrGhostCommitEncountered
+			break
 		}
 	}
 

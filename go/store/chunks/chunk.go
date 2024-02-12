@@ -58,6 +58,7 @@ func (c Chunk) IsEmpty() bool {
 	return len(c.data) == 0
 }
 
+// IsGhost returns true if the chunk is a ghost chunk. Ghost chunks have not data, so if IsGhost() returns true, Data() will be an empty slice.
 func (c Chunk) IsGhost() bool {
 	return c.ghost
 }
@@ -73,6 +74,7 @@ func NewChunkWithHash(r hash.Hash, data []byte) Chunk {
 	return Chunk{r, data, false}
 }
 
+// NewGhostChunk creates a new ghost Chunk with a specified hash. The data will
 func NewGhostChunk(r hash.Hash) *Chunk {
 	return &Chunk{r, []byte{}, true}
 }

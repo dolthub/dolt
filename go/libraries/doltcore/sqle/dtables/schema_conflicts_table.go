@@ -109,7 +109,7 @@ func (dt *SchemaConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partiti
 	}
 	base, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, doltdb.ErrGhostCommitEncountered // NM4 - NEED TEST.
+		return nil, doltdb.ErrGhostCommitEncountered
 	}
 
 	baseRoot, err := base.GetRootValue(ctx)

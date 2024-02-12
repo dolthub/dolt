@@ -337,13 +337,17 @@ func (itr *doltDiffCommitHistoryRowItr) Next(ctx *sql.Context) (sql.Row, error) 
 			}
 			commit, ok := optCmt.ToCommit()
 			if !ok {
-				return nil, doltdb.ErrGhostCommitEncountered // NM4 - TEST.
+				return nil, io.EOF
 			}
 
 			err = itr.loadTableChanges(ctx, commit)
+			if err == doltdb.ErrGhostCommitEncountered {
+				return nil, io.EOF
+			}
 			if err != nil {
 				return nil, err
 			}
+
 		} else {
 			return nil, io.EOF
 		}
@@ -412,7 +416,7 @@ func (itr *doltDiffCommitHistoryRowItr) calculateTableChanges(ctx context.Contex
 	}
 	parent, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, doltdb.ErrGhostCommitEncountered // NM4 - TEST.
+		return nil, doltdb.ErrGhostCommitEncountered
 	}
 
 	fromRootValue, err := parent.GetRootValue(ctx)
@@ -458,7 +462,6 @@ func isTableDataEmpty(ctx *sql.Context, table *doltdb.Table) (bool, error) {
 	return rowData.Empty()
 }
 
-/*
 // commitFilterForDiffTableFilterExprs returns CommitFilter used for CommitItr.
 func commitFilterForDiffTableFilterExprs(filters []sql.Expression) (doltdb.CommitFilter, error) {
 	filters = transformFilters(filters...)
@@ -466,9 +469,9 @@ func commitFilterForDiffTableFilterExprs(filters []sql.Expression) (doltdb.Commi
 	return func(ctx context.Context, h hash.Hash, optCmt *doltdb.OptionalCommit) (filterOut bool, err error) {
 		sc := sql.NewContext(ctx)
 
-		cm, err := optCmt.ToCommit()
-		if err != nil {
-			return false, err // NM4 Not sure about what to do here.
+		cm, ok := optCmt.ToCommit()
+		if !ok {
+			return false, doltdb.ErrGhostCommitEncountered
 		}
 
 		meta, err := cm.GetCommitMeta(ctx)
@@ -489,8 +492,6 @@ func commitFilterForDiffTableFilterExprs(filters []sql.Expression) (doltdb.Commi
 		return false, err
 	}, nil
 }
-
-*/
 
 // transformFilters return filter expressions with index specified for rows used in CommitFilter.
 func transformFilters(filters ...sql.Expression) []sql.Expression {

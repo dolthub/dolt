@@ -312,7 +312,6 @@ func commitPtr(nbf *types.NomsBinFormat, v types.Value, r *types.Ref) (*Commit, 
 // CommitFromValue deserializes a types.Value into a Commit.
 func CommitFromValue(nbf *types.NomsBinFormat, v types.Value) (*Commit, error) {
 	if g, ok := v.(types.GhostValue); ok {
-		// NM4.  We have a ghost commit. Doo stuuufff
 		return &Commit{val: g}, nil
 	}
 
@@ -337,7 +336,6 @@ func LoadCommitRef(ctx context.Context, vr types.ValueReader, r types.Ref) (*Com
 	return commitPtr(vr.Format(), v, &r)
 }
 
-// NM4 - not sure if I can use this or not.......
 func LoadCommitAddr(ctx context.Context, vr types.ValueReader, addr hash.Hash) (*Commit, error) {
 	v, err := vr.ReadValue(ctx, addr)
 	if err != nil {
@@ -461,7 +459,8 @@ func FindClosureCommonAncestor(ctx context.Context, cl CommitClosure, cm *Commit
 func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value) ([]*Commit, error) {
 	_, ok := cv.(types.GhostValue)
 	if ok {
-		return nil, errors.New("Ghost Commit used. Never call get commit parents? NM4")
+		// Not using the common error here because they are in the doltdb package which results in a cycle.
+		return nil, fmt.Errorf("runtime exception. GetCommitParents called with GhostCommit.")
 	}
 
 	if sm, ok := cv.(types.SerialMessage); ok {
@@ -485,7 +484,6 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 			}
 
 			if g, ok := v.(types.GhostValue); ok {
-				// We have a ghost commit. Do stuff NM4 --
 				res[i] = &Commit{
 					val:  g,
 					addr: addrs[i],

@@ -148,11 +148,6 @@ type MemoryStoreView struct {
 	storage *MemoryStorage
 }
 
-func (ms *MemoryStoreView) GhostTheseRefsBrah(ctx context.Context, refs hash.HashSet) error {
-	//TODO implement me
-	panic("NM4")
-}
-
 var _ ChunkStore = &MemoryStoreView{}
 var _ ChunkStoreGarbageCollector = &MemoryStoreView{}
 
@@ -391,6 +386,10 @@ func (ms *MemoryStoreView) Stats() interface{} {
 
 func (ms *MemoryStoreView) StatsSummary() string {
 	return "Unsupported"
+}
+
+func (ms *MemoryStoreView) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
+	panic("not implemented")
 }
 
 func (ms *MemoryStoreView) Close() error {
