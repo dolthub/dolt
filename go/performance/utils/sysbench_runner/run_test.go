@@ -15,6 +15,7 @@
 package sysbench_runner
 
 import (
+	"context"
 	"log"
 	"os"
 	"testing"
@@ -52,7 +53,7 @@ func TestRunner(t *testing.T) {
 		InitBigRepo: true,
 	}
 
-	err = Run(conf)
+	err = Run(context.Background(), conf)
 	if err != nil {
 		log.Fatal(err)
 	}
