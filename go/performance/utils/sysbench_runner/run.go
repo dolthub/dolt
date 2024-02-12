@@ -42,6 +42,7 @@ func Run(config *Config) error {
 
 	for _, serverConfig := range config.Servers {
 		var results Results
+		var b Benchmarker
 		switch serverConfig.Server {
 		case Dolt:
 			// handle a profiling run
@@ -49,26 +50,22 @@ func Run(config *Config) error {
 				fmt.Println("Profiling dolt while running sysbench tests")
 				return ProfileDolt(ctx, config, serverConfig)
 			}
-			fmt.Println("Running dolt sysbench test")
-			//results, err = BenchmarkDolt(ctx, config, serverConfig)
-			b := NewDoltBenchmarker(cwd, config, serverConfig)
-			results, err = b.Benchmark(ctx)
+			fmt.Println("Running dolt sysbench tests")
+			b = NewDoltBenchmarker(cwd, config, serverConfig)
 		case Doltgres:
-			fmt.Println("Running doltgres sysbench test")
-			b := NewDoltgresBenchmarker(cwd, config, serverConfig)
-			results, err = b.Benchmark(ctx)
-			//results, err = BenchmarkDoltgres(ctx, config, serverConfig)
+			fmt.Println("Running doltgres sysbench tests")
+			b = NewDoltgresBenchmarker(cwd, config, serverConfig)
 		case MySql:
-			fmt.Println("Running mysql sysbench test")
-			b := NewMysqlBenchmarker(cwd, config, serverConfig)
-			results, err = b.Benchmark(ctx)
-			//results, err = BenchmarkMysql(ctx, config, serverConfig)
+			fmt.Println("Running mysql sysbench tests")
+			b = NewMysqlBenchmarker(cwd, config, serverConfig)
 		case Postgres:
-			fmt.Println("Running postgres sysbench test")
-			results, err = BenchmarkPostgres(ctx, config, serverConfig)
+			fmt.Println("Running postgres sysbench tests")
+			b = NewPostgresBenchmarker(cwd, config, serverConfig)
 		default:
 			panic(fmt.Sprintf("unexpected server type: %s", serverConfig.Server))
 		}
+
+		results, err = b.Benchmark(ctx)
 		if err != nil {
 			return err
 		}

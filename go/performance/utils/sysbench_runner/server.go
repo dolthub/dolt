@@ -2,14 +2,16 @@ package sysbench_runner
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"golang.org/x/sync/errgroup"
 	"os"
 	"os/exec"
-	"os/signal"
-	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
+
+var ErrServerClosed = errors.New("server was previously closed")
 
 type Server interface {
 	Start(ctx context.Context) error
@@ -24,7 +26,6 @@ type doltServerImpl struct {
 	server              *exec.Cmd
 	serverEg            *errgroup.Group
 	quit                chan os.Signal
-	wg                  *sync.WaitGroup
 	killSignal          os.Signal
 }
 
@@ -41,37 +42,39 @@ func NewServer(ctx context.Context, dir string, serverConfig *ServerConfig, kill
 	return &doltServerImpl{
 		dir:                 dir,
 		serverConfig:        serverConfig,
+		serverCtx:           serverCtx,
 		server:              server,
 		serverCtxCancelFunc: cancel,
 		serverEg:            gServer,
 		quit:                quit,
-		wg:                  &sync.WaitGroup{},
 		killSignal:          killSignal,
 	}
 }
 
 func (s *doltServerImpl) Start(ctx context.Context) error {
-	signal.Notify(s.quit, os.Interrupt, s.killSignal)
-	s.wg.Add(1)
-	go func() {
+	if s.serverEg == nil || s.serverCtx == nil || s.quit == nil {
+		return ErrServerClosed
+	}
+
+	s.serverEg.Go(func() error {
 		<-s.quit
-		defer s.wg.Done()
-		signal.Stop(s.quit)
-		// todo: remove this ?? s.serverCtxCancelFunc()
-	}()
+		return s.server.Process.Signal(s.killSignal)
+	})
 
 	// launch the dolt server
 	s.serverEg.Go(func() error {
 		return s.server.Run()
 	})
+
 	// sleep to allow the server to start
 	time.Sleep(10 * time.Second)
+	fmt.Println("Successfully started database server")
 	return nil
 }
 
 func (s *doltServerImpl) Stop(ctx context.Context) error {
 	defer s.serverCtxCancelFunc()
-	if s.wg != nil && s.serverEg != nil && s.serverCtx != nil && s.quit != nil {
+	if s.serverEg != nil && s.serverCtx != nil && s.quit != nil {
 		// send signal to dolt server
 		s.quit <- s.killSignal
 		err := s.serverEg.Wait()
@@ -82,16 +85,13 @@ func (s *doltServerImpl) Stop(ctx context.Context) error {
 			if err.Error() != "signal: killed" {
 				fmt.Println(err)
 				close(s.quit)
-				s.wg.Wait()
 				return err
 			}
 		}
 
-		fmt.Println("Successfully killed server")
+		fmt.Println("Successfully killed database server")
 		close(s.quit)
-		s.wg.Wait()
 
-		s.wg = nil
 		s.quit = nil
 		s.serverCtx = nil
 		s.serverEg = nil

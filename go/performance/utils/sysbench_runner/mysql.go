@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	_ "github.com/go-sql-driver/mysql"
-	"log"
 	"os"
 	"syscall"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 const (
@@ -116,7 +116,6 @@ func (b *mysqlBenchmarkerImpl) createTestingDb(ctx context.Context) (err error) 
 		}
 	}
 
-	log.Println("Successfully set up the MySQL database")
 	return
 }
 

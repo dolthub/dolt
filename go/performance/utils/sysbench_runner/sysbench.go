@@ -3,16 +3,18 @@ package sysbench_runner
 import (
 	"context"
 	"fmt"
-	"github.com/google/uuid"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 const (
 	sysbenchCommand       = "sysbench"
 	luaPathEnvVarTemplate = "LUA_PATH=%s"
+	luaPath               = "?.lua"
 )
 
 type SysbenchTester interface {
@@ -22,7 +24,6 @@ type SysbenchTester interface {
 type sysbenchTestImpl struct {
 	test         *Test
 	config       *Config
-	scriptDir    string
 	serverConfig *ServerConfig
 	stampFunc    func() string
 	idFunc       func() string
@@ -125,7 +126,7 @@ func (t *sysbenchTestImpl) outputToResult(output []byte) (*Result, error) {
 func (t *sysbenchTestImpl) prepare(ctx context.Context) error {
 	cmd := exec.CommandContext(ctx, sysbenchCommand, t.test.Prepare()...)
 	if t.test.FromScript {
-		lp := filepath.Join(t.scriptDir, luaPath)
+		lp := filepath.Join(t.config.ScriptDir, luaPath)
 		cmd.Env = os.Environ()
 		cmd.Env = append(cmd.Env, fmt.Sprintf(luaPathEnvVarTemplate, lp))
 	}
@@ -140,7 +141,7 @@ func (t *sysbenchTestImpl) prepare(ctx context.Context) error {
 func (t *sysbenchTestImpl) run(ctx context.Context) (*Result, error) {
 	cmd := exec.CommandContext(ctx, sysbenchCommand, t.test.Run()...)
 	if t.test.FromScript {
-		lp := filepath.Join(t.scriptDir, luaPath)
+		lp := filepath.Join(t.config.ScriptDir, luaPath)
 		cmd.Env = os.Environ()
 		cmd.Env = append(cmd.Env, fmt.Sprintf(luaPathEnvVarTemplate, lp))
 	}
@@ -168,7 +169,7 @@ func (t *sysbenchTestImpl) run(ctx context.Context) (*Result, error) {
 func (t *sysbenchTestImpl) cleanup(ctx context.Context) error {
 	cmd := ExecCommand(ctx, sysbenchCommand, t.test.Cleanup()...)
 	if t.test.FromScript {
-		lp := filepath.Join(t.scriptDir, luaPath)
+		lp := filepath.Join(t.config.ScriptDir, luaPath)
 		cmd.Env = os.Environ()
 		cmd.Env = append(cmd.Env, fmt.Sprintf(luaPathEnvVarTemplate, lp))
 	}
@@ -181,7 +182,7 @@ func (t *sysbenchTestImpl) Test(ctx context.Context) (*Result, error) {
 		return nil, err
 	}
 
-	fmt.Println("Running test ", t.test.Name)
+	fmt.Println("Running test", t.test.Name)
 
 	rs, err := t.run(ctx)
 	if err != nil {

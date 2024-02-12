@@ -18,16 +18,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
-	"os"
-	"os/exec"
-	"os/signal"
-	"sync"
-	"syscall"
-	"time"
 
 	_ "github.com/go-sql-driver/mysql"
-	"golang.org/x/sync/errgroup"
 )
 
 type MysqlConfig struct {
@@ -37,119 +29,119 @@ type MysqlConfig struct {
 	Host               string
 }
 
-// BenchmarkMysql benchmarks mysql based on the provided configurations
-func BenchmarkMysql(ctx context.Context, config *Config, serverConfig *ServerConfig) (Results, error) {
-	withKeyCtx, cancel := context.WithCancel(ctx)
+//// BenchmarkMysql benchmarks mysql based on the provided configurations
+//func BenchmarkMysql(ctx context.Context, config *Config, serverConfig *ServerConfig) (Results, error) {
+//	withKeyCtx, cancel := context.WithCancel(ctx)
+//
+//	var serverDir string
+//	defer func() {
+//		if serverDir != "" {
+//			os.RemoveAll(serverDir)
+//		}
+//	}()
+//
+//	var localServer bool
+//	var gServer *errgroup.Group
+//	var serverCtx context.Context
+//	var server *exec.Cmd
+//	var err error
+//	if serverConfig.Host == defaultHost {
+//		log.Println("Launching the default server")
+//		localServer = true
+//
+//		serverDir, err = InitMysqlDataDir(ctx, serverConfig)
+//		if err != nil {
+//			cancel()
+//			return nil, err
+//		}
+//
+//		gServer, serverCtx = errgroup.WithContext(withKeyCtx)
+//		var serverParams []string
+//		serverParams, err = serverConfig.GetServerArgs()
+//		if err != nil {
+//			cancel()
+//			return nil, err
+//		}
+//		serverParams = append(serverParams, fmt.Sprintf("%s=%s", MysqlDataDirFlag, serverDir))
+//
+//		server = getMysqlServer(serverCtx, serverConfig, serverParams)
+//
+//		// launch the mysql server
+//		gServer.Go(func() error {
+//			return server.Run()
+//		})
+//
+//		// sleep to allow the server to start
+//		time.Sleep(10 * time.Second)
+//
+//		// setup mysqldb
+//		err := SetupDB(ctx, GetMysqlConnectionConfigFromServerConfig(serverConfig), dbName)
+//		if err != nil {
+//			cancel()
+//			return nil, err
+//		}
+//		log.Println("Successfully set up the MySQL database")
+//	}
+//
+//	// handle user interrupt
+//	quit := make(chan os.Signal, 1)
+//	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+//	var wg sync.WaitGroup
+//	wg.Add(1)
+//	go func() {
+//		<-quit
+//		defer wg.Done()
+//		signal.Stop(quit)
+//		cancel()
+//	}()
+//
+//	tests, err := GetTests(config, serverConfig, nil)
+//	if err != nil {
+//		return nil, err
+//	}
+//
+//	results := make(Results, 0)
+//	for i := 0; i < config.Runs; i++ {
+//		for _, test := range tests {
+//			r, err := benchmark(withKeyCtx, test, config, serverConfig, stampFunc, serverConfig.GetId())
+//			if err != nil {
+//				close(quit)
+//				wg.Wait()
+//				return nil, err
+//			}
+//			results = append(results, r)
+//		}
+//	}
+//
+//	// stop local mysql server
+//	if localServer {
+//		// send signal to server
+//		quit <- syscall.SIGTERM
+//
+//		err = gServer.Wait()
+//		if err != nil {
+//			// we expect a kill error
+//			// we only exit in error if this is not the
+//			// error
+//			if err.Error() != "signal: killed" {
+//				close(quit)
+//				wg.Wait()
+//				return nil, err
+//			}
+//		}
+//	}
+//
+//	fmt.Println("Successfully killed server")
+//	close(quit)
+//	wg.Wait()
+//
+//	return results, nil
+//}
 
-	var serverDir string
-	defer func() {
-		if serverDir != "" {
-			os.RemoveAll(serverDir)
-		}
-	}()
-
-	var localServer bool
-	var gServer *errgroup.Group
-	var serverCtx context.Context
-	var server *exec.Cmd
-	var err error
-	if serverConfig.Host == defaultHost {
-		log.Println("Launching the default server")
-		localServer = true
-
-		serverDir, err = InitMysqlDataDir(ctx, serverConfig)
-		if err != nil {
-			cancel()
-			return nil, err
-		}
-
-		gServer, serverCtx = errgroup.WithContext(withKeyCtx)
-		var serverParams []string
-		serverParams, err = serverConfig.GetServerArgs()
-		if err != nil {
-			cancel()
-			return nil, err
-		}
-		serverParams = append(serverParams, fmt.Sprintf("%s=%s", MysqlDataDirFlag, serverDir))
-
-		server = getMysqlServer(serverCtx, serverConfig, serverParams)
-
-		// launch the mysql server
-		gServer.Go(func() error {
-			return server.Run()
-		})
-
-		// sleep to allow the server to start
-		time.Sleep(10 * time.Second)
-
-		// setup mysqldb
-		err := SetupDB(ctx, GetMysqlConnectionConfigFromServerConfig(serverConfig), dbName)
-		if err != nil {
-			cancel()
-			return nil, err
-		}
-		log.Println("Successfully set up the MySQL database")
-	}
-
-	// handle user interrupt
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		<-quit
-		defer wg.Done()
-		signal.Stop(quit)
-		cancel()
-	}()
-
-	tests, err := GetTests(config, serverConfig, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	results := make(Results, 0)
-	for i := 0; i < config.Runs; i++ {
-		for _, test := range tests {
-			r, err := benchmark(withKeyCtx, test, config, serverConfig, stampFunc, serverConfig.GetId())
-			if err != nil {
-				close(quit)
-				wg.Wait()
-				return nil, err
-			}
-			results = append(results, r)
-		}
-	}
-
-	// stop local mysql server
-	if localServer {
-		// send signal to server
-		quit <- syscall.SIGTERM
-
-		err = gServer.Wait()
-		if err != nil {
-			// we expect a kill error
-			// we only exit in error if this is not the
-			// error
-			if err.Error() != "signal: killed" {
-				close(quit)
-				wg.Wait()
-				return nil, err
-			}
-		}
-	}
-
-	fmt.Println("Successfully killed server")
-	close(quit)
-	wg.Wait()
-
-	return results, nil
-}
-
-// getMysqlServer returns a exec.Cmd for a dolt server
-func getMysqlServer(ctx context.Context, config *ServerConfig, params []string) *exec.Cmd {
-	return ExecCommand(ctx, config.ServerExec, params...)
-}
+//// getMysqlServer returns a exec.Cmd for a dolt server
+//func getMysqlServer(ctx context.Context, config *ServerConfig, params []string) *exec.Cmd {
+//	return ExecCommand(ctx, config.ServerExec, params...)
+//}
 
 // InitMysqlDataDir initializes a mysql data dir and returns the path
 func InitMysqlDataDir(ctx context.Context, config *ServerConfig) (string, error) {

@@ -17,22 +17,20 @@ package sysbench_runner
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/types"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"time"
-
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
-	//dbName       = "test"
-	luaPath = "?.lua"
-	//bigEmptyRepo = "max-hoffman/big-empty"
-	//nbfEnvVar    = "DOLT_DEFAULT_BIN_FORMAT"
+// dbName       = "test"
+// luaPath = "?.lua"
+// bigEmptyRepo = "max-hoffman/big-empty"
+// nbfEnvVar    = "DOLT_DEFAULT_BIN_FORMAT"
 )
 
-var stampFunc = func() string { return time.Now().UTC().Format(stampFormat) }
+//var stampFunc = func() string { return time.Now().UTC().Format(stampFormat) }
 
 //// BenchmarkDolt benchmarks dolt based on the provided configurations
 //func BenchmarkDolt(ctx context.Context, config *Config, serverConfig *ServerConfig) (Results, error) {
@@ -279,13 +277,13 @@ func benchmark(
 	return r, cleanup.Run()
 }
 
-//// fromChannelResults collects all Results from the given channel and returns them
-//func fromChannelResults(rc chan *Result) Results {
-//	results := make(Results, 0)
-//	for r := range rc {
-//		if r != nil {
-//			results = append(results, r)
-//		}
-//	}
-//	return results
-//}
+// fromChannelResults collects all Results from the given channel and returns them
+func fromChannelResults(rc chan *Result) Results {
+	results := make(Results, 0)
+	for r := range rc {
+		if r != nil {
+			results = append(results, r)
+		}
+	}
+	return results
+}

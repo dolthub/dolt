@@ -1,160 +1,48 @@
-// Copyright 2019-2022 Dolthub, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package sysbench_runner
 
 import (
 	"context"
-	"fmt"
-	"log"
-	"os"
-	"os/exec"
-	"os/signal"
-	"sync"
-	"syscall"
-	"time"
-
 	"database/sql"
+	"fmt"
+	"syscall"
 
 	_ "github.com/lib/pq"
-	"golang.org/x/sync/errgroup"
 )
 
-type PostgresConfig struct {
-	Socket             string
-	ConnectionProtocol string
-	Port               int
-	Host               string
+const (
+	postgresInitDbDataDirFlag         = "--pgdata"
+	postgresUsernameFlag              = "--username"
+	postgresUsername                  = "postgres"
+	postgresDataDirFlag               = "-D"
+	postgresDropDatabaseSqlTemplate   = "DROP DATABASE IF EXISTS %s;"
+	postgresDropUserSqlTemplate       = "DROP USER IF EXISTS %s;"
+	postgresCreateUserSqlTemplate     = "CREATE USER %s WITH PASSWORD '%s';"
+	postgresCreateDatabaseSqlTemplate = "CREATE DATABASE %s WITH OWNER %s;"
+)
+
+type postgresBenchmarkerImpl struct {
+	dir          string // cwd
+	config       *Config
+	serverConfig *ServerConfig
 }
 
-// BenchmarkPostgres benchmarks postgres based on the provided configurations
-func BenchmarkPostgres(ctx context.Context, config *Config, serverConfig *ServerConfig) (Results, error) {
-	withKeyCtx, cancel := context.WithCancel(ctx)
+var _ Benchmarker = &postgresBenchmarkerImpl{}
 
-	var serverDir string
-	defer func() {
-		if serverDir != "" {
-			os.RemoveAll(serverDir)
-		}
-	}()
-
-	var localServer bool
-	var gServer *errgroup.Group
-	var serverCtx context.Context
-	var server *exec.Cmd
-	var err error
-	if serverConfig.Host == defaultHost {
-		log.Println("Launching the default server")
-		localServer = true
-
-		serverDir, err = initPostgresDataDir(ctx, serverConfig)
-		if err != nil {
-			cancel()
-			return nil, err
-		}
-		gServer, serverCtx = errgroup.WithContext(withKeyCtx)
-		var serverParams []string
-		serverParams, err = serverConfig.GetServerArgs()
-		if err != nil {
-			cancel()
-			return nil, err
-		}
-		serverParams = append(serverParams, "-D", serverDir)
-		server = getMysqlServer(serverCtx, serverConfig, serverParams)
-		server.Env = append(server.Env, "LC_ALL=C")
-
-		// launch the postgres server
-		gServer.Go(func() error {
-			return server.Run()
-		})
-
-		// sleep to allow the server to start
-		time.Sleep(10 * time.Second)
-
-		// setup postgres db
-		err := setupPostgresDB(ctx, serverConfig.Host, fmt.Sprintf("%d", serverConfig.Port), "postgres", dbName)
-		if err != nil {
-			cancel()
-			return nil, err
-		}
-
-		log.Println("Successfully set up the Postgres database")
+func NewPostgresBenchmarker(dir string, config *Config, serverConfig *ServerConfig) *postgresBenchmarkerImpl {
+	return &postgresBenchmarkerImpl{
+		dir:          dir,
+		config:       config,
+		serverConfig: serverConfig,
 	}
-
-	// handle user interrupt
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		<-quit
-		defer wg.Done()
-		signal.Stop(quit)
-		cancel()
-	}()
-
-	tests, err := GetTests(config, serverConfig, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	results := make(Results, 0)
-	for i := 0; i < config.Runs; i++ {
-		for _, test := range tests {
-			r, err := benchmark(withKeyCtx, test, config, serverConfig, stampFunc, serverConfig.GetId())
-			if err != nil {
-				close(quit)
-				wg.Wait()
-				return nil, err
-			}
-			results = append(results, r)
-		}
-	}
-
-	// stop local mysql server
-	if localServer {
-		// send signal to server
-		quit <- syscall.SIGTERM
-
-		err = gServer.Wait()
-		if err != nil {
-			// we expect a kill error
-			// we only exit in error if this is not the
-			// error
-			if err.Error() != "signal: killed" {
-				close(quit)
-				wg.Wait()
-				return nil, err
-			}
-		}
-	}
-
-	fmt.Println("Successfully killed server")
-	close(quit)
-	wg.Wait()
-
-	return results, nil
 }
 
-// initPostgresDataDir initializes a postgres data dir and returns the path
-func initPostgresDataDir(ctx context.Context, config *ServerConfig) (string, error) {
+func (b *postgresBenchmarkerImpl) initDataDir(ctx context.Context) (string, error) {
 	serverDir, err := CreateServerDir(dbName)
 	if err != nil {
 		return "", err
 	}
 
-	pgInit := ExecCommand(ctx, config.InitExec, fmt.Sprintf("--pgdata=%s", serverDir), "--username=postgres")
+	pgInit := ExecCommand(ctx, b.serverConfig.InitExec, fmt.Sprintf("%s=%s", postgresInitDbDataDirFlag, serverDir), fmt.Sprintf("%s=%s", postgresUsernameFlag, postgresUsername))
 	err = pgInit.Run()
 	if err != nil {
 		return "", err
@@ -163,12 +51,13 @@ func initPostgresDataDir(ctx context.Context, config *ServerConfig) (string, err
 	return serverDir, nil
 }
 
-func setupPostgresDB(ctx context.Context, host, port, user, dbname string) (err error) {
-	psqlconn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", host, port, user, "", dbname)
+func (b *postgresBenchmarkerImpl) createTestingDb(ctx context.Context) (err error) {
+	psqlconn := fmt.Sprintf(psqlDsnTemplate, b.serverConfig.Host, b.serverConfig.Port, postgresUsername, "", dbName)
 
-	db, err := sql.Open("postgres", psqlconn)
+	var db *sql.DB
+	db, err = sql.Open("postgres", psqlconn)
 	if err != nil {
-		return err
+		return
 	}
 	defer func() {
 		rerr := db.Close()
@@ -178,23 +67,71 @@ func setupPostgresDB(ctx context.Context, host, port, user, dbname string) (err 
 	}()
 	err = db.PingContext(ctx)
 	if err != nil {
-		return err
+		return
 	}
-	_, err = db.ExecContext(ctx, fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbname))
-	if err != nil {
-		return err
+
+	stmts := []string{
+		fmt.Sprintf(postgresDropDatabaseSqlTemplate, dbName),
+		fmt.Sprintf(postgresDropUserSqlTemplate, sysbenchUsername),
+		fmt.Sprintf(postgresCreateUserSqlTemplate, sysbenchUsername, sysbenchPassLocal),
+		fmt.Sprintf(postgresCreateDatabaseSqlTemplate, dbName, sysbenchUsername),
 	}
-	_, err = db.ExecContext(ctx, fmt.Sprintf("DROP USER IF EXISTS %s", sysbenchUsername))
-	if err != nil {
-		return err
+
+	for _, s := range stmts {
+		_, err = db.ExecContext(ctx, s)
+		if err != nil {
+			return
+		}
 	}
-	_, err = db.ExecContext(ctx, fmt.Sprintf("CREATE USER %s WITH PASSWORD '%s'", sysbenchUsername, sysbenchPassLocal))
-	if err != nil {
-		return err
-	}
-	_, err = db.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE %s WITH OWNER %s", dbname, sysbenchUsername))
-	if err != nil {
-		return err
-	}
+
 	return
+}
+
+func (b *postgresBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
+	serverDir, err := b.initDataDir(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	serverParams, err := b.serverConfig.GetServerArgs()
+	if err != nil {
+		return nil, err
+	}
+	serverParams = append(serverParams, postgresDataDirFlag, serverDir)
+
+	server := NewServer(ctx, serverDir, b.serverConfig, syscall.SIGTERM, serverParams)
+	err = server.Start(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	err = b.createTestingDb(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tests, err := GetTests(b.config, b.serverConfig, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	results := make(Results, 0)
+	for i := 0; i < b.config.Runs; i++ {
+		for _, test := range tests {
+			tester := NewSysbenchTester(b.config, b.serverConfig, test, stampFunc)
+			r, err := tester.Test(ctx)
+			if err != nil {
+				server.Stop(ctx)
+				return nil, err
+			}
+			results = append(results, r)
+		}
+	}
+
+	err = server.Stop(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
 }

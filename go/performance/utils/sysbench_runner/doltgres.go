@@ -90,7 +90,7 @@ func (b *doltgresBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error
 		return nil, err
 	}
 	defer func() {
-		cleanupDoltgresServerDir(serverDir)
+		b.cleanupServerDir(serverDir)
 	}()
 
 	serverParams, err := b.serverConfig.GetServerArgs()
@@ -134,4 +134,20 @@ func (b *doltgresBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error
 	}
 
 	return results, nil
+}
+
+// CreateServerDir creates a server directory
+func CreateServerDir(dbName string) (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+
+	serverDir := filepath.Join(cwd, dbName)
+	err = os.MkdirAll(serverDir, os.ModePerm)
+	if err != nil {
+		return "", err
+	}
+
+	return serverDir, nil
 }

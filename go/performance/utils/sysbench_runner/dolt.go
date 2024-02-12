@@ -2,10 +2,12 @@ package sysbench_runner
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/store/types"
 	"os"
 	"path/filepath"
 	"syscall"
+	"time"
+
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -25,6 +27,8 @@ const (
 	nbfEnvVar             = "DOLT_DEFAULT_BIN_FORMAT"
 )
 
+var stampFunc = func() string { return time.Now().UTC().Format(stampFormat) }
+
 type doltBenchmarkerImpl struct {
 	dir          string // cwd
 	config       *Config
@@ -42,7 +46,7 @@ func NewDoltBenchmarker(dir string, config *Config, serverConfig *ServerConfig) 
 }
 
 // checkSetDoltConfig checks the output of `dolt config --global --get` and sets the key, val if necessary
-func (b *doltBenchmarkerImpl) checkSetDoltConfig(ctx context.Context, serverExec, key, val string) error {
+func (b *doltBenchmarkerImpl) checkSetDoltConfig(ctx context.Context, key, val string) error {
 	check := ExecCommand(ctx, b.serverConfig.ServerExec, doltConfigCommand, doltConfigGlobalFlag, doltConfigGetFlag, key)
 	err := check.Run()
 	if err != nil {
@@ -50,7 +54,7 @@ func (b *doltBenchmarkerImpl) checkSetDoltConfig(ctx context.Context, serverExec
 		if err.Error() != "exit status 1" {
 			return err
 		}
-		set := ExecCommand(ctx, serverExec, doltConfigCommand, doltConfigGlobalFlag, doltConfigAddFlag, key, val)
+		set := ExecCommand(ctx, b.serverConfig.ServerExec, doltConfigCommand, doltConfigGlobalFlag, doltConfigAddFlag, key, val)
 		err := set.Run()
 		if err != nil {
 			return err
@@ -60,11 +64,11 @@ func (b *doltBenchmarkerImpl) checkSetDoltConfig(ctx context.Context, serverExec
 }
 
 func (b *doltBenchmarkerImpl) updateGlobalConfig(ctx context.Context) error {
-	err := checkSetDoltConfig(ctx, b.serverConfig.ServerExec, doltConfigUsernameKey, doltBenchmarkUser)
+	err := b.checkSetDoltConfig(ctx, doltConfigUsernameKey, doltBenchmarkUser)
 	if err != nil {
 		return err
 	}
-	return checkSetDoltConfig(ctx, b.serverConfig.ServerExec, doltConfigEmailKey, doltBenchmarkEmail)
+	return b.checkSetDoltConfig(ctx, doltConfigEmailKey, doltBenchmarkEmail)
 }
 
 func (b *doltBenchmarkerImpl) checkInstallation(ctx context.Context) error {
