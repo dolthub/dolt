@@ -45,30 +45,12 @@ func NewDoltBenchmarker(dir string, config *Config, serverConfig *ServerConfig) 
 	}
 }
 
-// checkSetDoltConfig checks the output of `dolt config --global --get` and sets the key, val if necessary
-func (b *doltBenchmarkerImpl) checkSetDoltConfig(ctx context.Context, key, val string) error {
-	check := ExecCommand(ctx, b.serverConfig.ServerExec, doltConfigCommand, doltConfigGlobalFlag, doltConfigGetFlag, key)
-	err := check.Run()
-	if err != nil {
-		// config get calls exit with 1 if not set
-		if err.Error() != "exit status 1" {
-			return err
-		}
-		set := ExecCommand(ctx, b.serverConfig.ServerExec, doltConfigCommand, doltConfigGlobalFlag, doltConfigAddFlag, key, val)
-		err := set.Run()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (b *doltBenchmarkerImpl) updateGlobalConfig(ctx context.Context) error {
-	err := b.checkSetDoltConfig(ctx, doltConfigUsernameKey, doltBenchmarkUser)
+	err := CheckSetDoltConfig(ctx, b.serverConfig.ServerExec, doltConfigUsernameKey, doltBenchmarkUser)
 	if err != nil {
 		return err
 	}
-	return b.checkSetDoltConfig(ctx, doltConfigEmailKey, doltBenchmarkEmail)
+	return CheckSetDoltConfig(ctx, b.serverConfig.ServerExec, doltConfigEmailKey, doltBenchmarkEmail)
 }
 
 func (b *doltBenchmarkerImpl) checkInstallation(ctx context.Context) error {
@@ -76,36 +58,8 @@ func (b *doltBenchmarkerImpl) checkInstallation(ctx context.Context) error {
 	return version.Run()
 }
 
-// initDoltRepo initializes a dolt repo and returns the repo path
 func (b *doltBenchmarkerImpl) initDoltRepo(ctx context.Context) (string, error) {
-	testRepo := filepath.Join(b.dir, dbName)
-	if b.config.NomsBinFormat == types.Format_LD_1.VersionString() {
-		err := ExecCommand(ctx, b.serverConfig.ServerExec, doltCloneCommand, bigEmptyRepo, dbName).Run()
-		if err != nil {
-			return "", err
-		}
-		return testRepo, nil
-	}
-
-	err := os.MkdirAll(testRepo, os.ModePerm)
-	if err != nil {
-		return "", err
-	}
-
-	if b.config.NomsBinFormat != "" {
-		if err = os.Setenv(nbfEnvVar, b.config.NomsBinFormat); err != nil {
-			return "", err
-		}
-	}
-
-	doltInit := ExecCommand(ctx, b.serverConfig.ServerExec, doltInitCommand)
-	doltInit.Dir = testRepo
-	err = doltInit.Run()
-	if err != nil {
-		return "", err
-	}
-
-	return testRepo, nil
+	return InitDoltRepo(ctx, b.dir, b.serverConfig.ServerExec, b.config.NomsBinFormat)
 }
 
 func (b *doltBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
@@ -123,6 +77,7 @@ func (b *doltBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer os.RemoveAll(testRepo)
 
 	serverParams, err := b.serverConfig.GetServerArgs()
 	if err != nil {
@@ -158,5 +113,55 @@ func (b *doltBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
 		return nil, err
 	}
 
-	return results, os.RemoveAll(testRepo)
+	return results, nil
+}
+
+// InitDoltRepo initializes a dolt database and returns its path
+func InitDoltRepo(ctx context.Context, dir, serverExec, nomsBinFormat string) (string, error) {
+	testRepo := filepath.Join(dir, dbName)
+	if nomsBinFormat == types.Format_LD_1.VersionString() {
+		err := ExecCommand(ctx, serverExec, doltCloneCommand, bigEmptyRepo, dbName).Run()
+		if err != nil {
+			return "", err
+		}
+		return testRepo, nil
+	}
+
+	err := os.MkdirAll(testRepo, os.ModePerm)
+	if err != nil {
+		return "", err
+	}
+
+	if nomsBinFormat != "" {
+		if err = os.Setenv(nbfEnvVar, nomsBinFormat); err != nil {
+			return "", err
+		}
+	}
+
+	doltInit := ExecCommand(ctx, serverExec, doltInitCommand)
+	doltInit.Dir = testRepo
+	err = doltInit.Run()
+	if err != nil {
+		return "", err
+	}
+
+	return testRepo, nil
+}
+
+// CheckSetDoltConfig checks the output of `dolt config --global --get` and sets the key, val if necessary
+func CheckSetDoltConfig(ctx context.Context, serverExec, key, val string) error {
+	check := ExecCommand(ctx, serverExec, doltConfigCommand, doltConfigGlobalFlag, doltConfigGetFlag, key)
+	err := check.Run()
+	if err != nil {
+		// config get calls exit with 1 if not set
+		if err.Error() != "exit status 1" {
+			return err
+		}
+		set := ExecCommand(ctx, serverExec, doltConfigCommand, doltConfigGlobalFlag, doltConfigAddFlag, key, val)
+		err := set.Run()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

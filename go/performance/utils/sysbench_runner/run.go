@@ -48,7 +48,8 @@ func Run(config *Config) error {
 			// handle a profiling run
 			if serverConfig.ServerProfile != "" {
 				fmt.Println("Profiling dolt while running sysbench tests")
-				return ProfileDolt(ctx, config, serverConfig)
+				p := NewDoltProfiler(cwd, config, serverConfig)
+				return p.Profile(ctx)
 			}
 			fmt.Println("Running dolt sysbench tests")
 			b = NewDoltBenchmarker(cwd, config, serverConfig)
