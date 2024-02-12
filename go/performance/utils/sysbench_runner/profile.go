@@ -86,7 +86,7 @@ func ProfileDolt(ctx context.Context, config *Config, serverConfig *ServerConfig
 }
 
 func profileTest(ctx context.Context, test *Test, config *Config, serverConfig *ServerConfig, serverParams []string, testRepo, profileDir string) (string, error) {
-	profilePath, err := os.MkdirTemp("", test.Name)
+	profilePath, err := os.MkdirTemp("", filepath.Base(test.Name))
 	if err != nil {
 		return "", err
 	}
