@@ -163,7 +163,7 @@ func (q *q) Get(ctx context.Context, ddb *doltdb.DoltDB, id hash.Hash) (*c, erro
 		return nil, err
 	}
 
-	c := &c{ddb: ddb, commit: &doltdb.OptionalCommit{commit, id}, meta: meta, height: h, hash: id}
+	c := &c{ddb: ddb, commit: &doltdb.OptionalCommit{Commit: commit, Addr: id}, meta: meta, height: h, hash: id}
 	q.loaded[id] = c
 	return c, nil
 }
@@ -264,7 +264,7 @@ func (iter *commiterator) Next(ctx context.Context) (hash.Hash, *doltdb.Optional
 		}
 
 		if matches {
-			return nextC.hash, &doltdb.OptionalCommit{commit, nextC.hash}, nil
+			return nextC.hash, &doltdb.OptionalCommit{Commit: commit, Addr: nextC.hash}, nil
 		}
 
 		return iter.Next(ctx)

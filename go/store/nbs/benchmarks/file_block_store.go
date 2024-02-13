@@ -99,5 +99,4 @@ func (fb fileBlockStore) Commit(ctx context.Context, current, last hash.Hash) (b
 
 func (fb fileBlockStore) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
 	panic("not impl")
-	return nil
 }
