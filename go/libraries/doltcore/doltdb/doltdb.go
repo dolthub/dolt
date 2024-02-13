@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
@@ -37,7 +39,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/types/edits"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 func init() {
