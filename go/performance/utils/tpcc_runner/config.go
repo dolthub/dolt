@@ -183,7 +183,7 @@ type TpccTestParams struct {
 // NewDefaultTpccParams returns default TpccTestParams.
 func NewDefaultTpccParams() *TpccTestParams {
 	return &TpccTestParams{
-		NumThreads:     2, // TODO: When ready, expose as command line argument.
+		NumThreads:     1, // TODO: When ready, expose as command line argument.
 		ScaleFactor:    1,
 		Tables:         1,
 		TrxLevel:       "RR",
