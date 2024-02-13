@@ -417,7 +417,7 @@ SQL
     run dolt clone http://localhost:50051/test-org/empty
     [ "$status" -eq 1 ]
     [[ "$output" =~ "clone failed" ]] || false
-    [[ "$output" =~ "branch not found: main" ]] || false # NM4 - Not ideal. Should be "remote at that url contains no Dolt data"
+    [[ "$output" =~ "remote at that url contains no Dolt data" ]] || false
 }
 
 @test "remotes: clone a non-existent remote" {
@@ -426,7 +426,7 @@ SQL
     run dolt clone http://localhost:50051/foo/bar
     [ "$status" -eq 1 ]
     [[ "$output" =~ "clone failed" ]] || false
-    [[ "$output" =~ "branch not found: main" ]] || false #  NM4 - Not ideal. Should be "remote at that url contains no Dolt data"
+    [[ "$output" =~ "remote at that url contains no Dolt data" ]] || false
 }
 
 @test "remotes: clone a different branch than main" {

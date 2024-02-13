@@ -167,7 +167,7 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 
 	srcRefHashes, branch, err := getSrcRefs(ctx, branch, srcDB, dEnv)
 	if err != nil {
-		return fmt.Errorf("%w; %s", ErrFailedToGetBranch, err.Error())
+		return fmt.Errorf("%w; %s", ErrCloneFailed, err.Error())
 	}
 	if remoteName == "" {
 		remoteName = "origin"
@@ -227,6 +227,10 @@ func getSrcRefs(ctx context.Context, branch string, srcDB *doltdb.DoltDB, dEnv *
 	srcRefHashes, err := srcDB.GetRefsWithHashes(ctx)
 	if err != nil {
 		return nil, "", err
+	}
+
+	if len(srcRefHashes) == 0 {
+		return nil, "", ErrNoDataAtRemote
 	}
 
 	branches := make([]ref.DoltRef, 0, len(srcRefHashes))
