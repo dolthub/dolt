@@ -84,7 +84,7 @@ func (sc *mysqlServerConfigImpl) GetServerArgs() ([]string, error) {
 func (sc *mysqlServerConfigImpl) GetTestingArgs(testConfig TestConfig) []string {
 	params := make([]string, 0)
 	params = append(params, defaultSysbenchParams...)
-	params = append(params, fmt.Sprintf("--mysql-db=%s", dbName))
+	params = append(params, fmt.Sprintf("--mysql-db=%s", dbName)) // todo: replace with consts
 	params = append(params, "--db-driver=mysql")
 	params = append(params, fmt.Sprintf("--mysql-host=%s", sc.Host))
 	if sc.Port != 0 {
@@ -134,4 +134,8 @@ func (sc *mysqlServerConfigImpl) GetHost() string {
 
 func (sc *mysqlServerConfigImpl) GetPort() int {
 	return sc.Port
+}
+
+func (sc *mysqlServerConfigImpl) GetVersion() string {
+	return sc.Version
 }

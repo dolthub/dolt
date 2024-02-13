@@ -112,7 +112,6 @@ const (
 	tpccScaleFactorTemplate = "tpcc-scale-factor-%d"
 
 	tpccDbDriverFlag         = "--db-driver"
-	mysqlDriver              = "mysql"
 	tpccMysqlUsername        = "sysbench"
 	tpccMysqlDbFlag          = "--mysql-db"
 	tpccMysqlHostFlag        = "--mysql-host"
@@ -128,4 +127,15 @@ const (
 	tpccReportCsv            = "reportCsv"
 	tpccTransactionLevelRr   = "RR"
 	tpccLuaFilename          = "tpcc.lua"
+
+	mysqlDriverName                  = "mysql"
+	mysqlRootTCPDsnTemplate          = "root@tcp(%s:%d)/"
+	mysqlRootUnixDsnTemplate         = "root@unix(%s)/"
+	mysqlDropDatabaseSqlTemplate     = "DROP DATABASE IF EXISTS %s;"
+	mysqlCreateDatabaseSqlTemplate   = "CREATE DATABASE %s;"
+	mysqlDropUserSqlTemplate         = "DROP USER IF EXISTS %s;"
+	mysqlCreateUserSqlTemplate       = "CREATE USER %s IDENTIFIED WITH mysql_native_password BY '%s';"
+	mysqlGrantPermissionsSqlTemplate = "GRANT ALL ON %s.* to %s;"
+	mysqlSetGlobalLocalInfileSql     = "SET GLOBAL local_infile = 'ON';"
+	mysqlSetGlobalSqlModeSql         = "SET GLOBAL sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''));"
 )

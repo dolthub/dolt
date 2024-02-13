@@ -69,7 +69,7 @@ func (sc *doltgresServerConfigImpl) GetServerArgs() ([]string, error) {
 func (sc *doltgresServerConfigImpl) GetTestingArgs(testConfig TestConfig) []string {
 	params := make([]string, 0)
 	params = append(params, defaultSysbenchParams...)
-	params = append(params, "--db-driver=pgsql")
+	params = append(params, "--db-driver=pgsql") // todo: replace with consts
 	params = append(params, fmt.Sprintf("--pgsql-db=%s", dbName))
 	params = append(params, fmt.Sprintf("--pgsql-host=%s", sc.Host))
 	params = append(params, "--pgsql-user=doltgres")
@@ -114,4 +114,8 @@ func (sc *doltgresServerConfigImpl) GetHost() string {
 
 func (sc *doltgresServerConfigImpl) GetPort() int {
 	return sc.Port
+}
+
+func (sc *doltgresServerConfigImpl) GetVersion() string {
+	return sc.Version
 }

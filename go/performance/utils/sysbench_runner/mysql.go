@@ -10,28 +10,15 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-const (
-	mysqlDriverName                  = "mysql"
-	mysqlRootTCPDsnTemplate          = "root@tcp(%s:%d)/"
-	mysqlRootUnixDsnTemplate         = "root@unix(%s)/"
-	mysqlDropDatabaseSqlTemplate     = "DROP DATABASE IF EXISTS %s;"
-	mysqlCreateDatabaseSqlTemplate   = "CREATE DATABASE %s;"
-	mysqlDropUserSqlTemplate         = "DROP USER IF EXISTS %s;"
-	mysqlCreateUserSqlTemplate       = "CREATE USER %s IDENTIFIED WITH mysql_native_password BY '%s';"
-	mysqlGrantPermissionsSqlTemplate = "GRANT ALL ON %s.* to %s;"
-	mysqlSetGlobalLocalInfileSql     = "SET GLOBAL local_infile = 'ON';"
-	mysqlSetGlobalSqlModeSql         = "SET GLOBAL sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''));"
-)
-
 type mysqlBenchmarkerImpl struct {
 	dir          string // cwd
-	config       *sysbenchRunnerConfigImpl
-	serverConfig *doltServerConfigImpl
+	config       SysbenchConfig
+	serverConfig ProtocolServerConfig
 }
 
 var _ Benchmarker = &mysqlBenchmarkerImpl{}
 
-func NewMysqlBenchmarker(dir string, config *sysbenchRunnerConfigImpl, serverConfig *doltServerConfigImpl) *mysqlBenchmarkerImpl {
+func NewMysqlBenchmarker(dir string, config SysbenchConfig, serverConfig ProtocolServerConfig) *mysqlBenchmarkerImpl {
 	return &mysqlBenchmarkerImpl{
 		dir:          dir,
 		config:       config,
@@ -40,7 +27,7 @@ func NewMysqlBenchmarker(dir string, config *sysbenchRunnerConfigImpl, serverCon
 }
 
 func (b *mysqlBenchmarkerImpl) getDsn() (string, error) {
-	return GetMysqlDsn(b.serverConfig.Host, b.serverConfig.Socket, b.serverConfig.ConnectionProtocol, b.serverConfig.Port)
+	return GetMysqlDsn(b.serverConfig.GetHost(), b.serverConfig.GetSocket(), b.serverConfig.GetConnectionProtocol(), b.serverConfig.GetPort())
 }
 
 func (b *mysqlBenchmarkerImpl) createTestingDb(ctx context.Context) error {
@@ -52,7 +39,7 @@ func (b *mysqlBenchmarkerImpl) createTestingDb(ctx context.Context) error {
 }
 
 func (b *mysqlBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
-	serverDir, err := InitMysqlDataDir(ctx, b.serverConfig.ServerExec, dbName)
+	serverDir, err := InitMysqlDataDir(ctx, b.serverConfig.GetServerExec(), dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -74,13 +61,14 @@ func (b *mysqlBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
 		return nil, err
 	}
 
-	tests, err := GetTests(b.config, b.serverConfig, nil)
+	tests, err := GetTests(b.config, b.serverConfig)
 	if err != nil {
 		return nil, err
 	}
 
 	results := make(Results, 0)
-	for i := 0; i < b.config.Runs; i++ {
+	runs := b.config.GetRuns()
+	for i := 0; i < runs; i++ {
 		for _, test := range tests {
 			tester := NewSysbenchTester(b.config, b.serverConfig, test, serverParams, stampFunc)
 			r, err := tester.Test(ctx)

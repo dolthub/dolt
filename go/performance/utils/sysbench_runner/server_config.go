@@ -11,7 +11,6 @@ type ServerConfig interface {
 	GetServerType() ServerType
 	GetServerArgs() ([]string, error)
 	GetTestingArgs(testConfig TestConfig) []string
-
 	Validate() error
 	SetDefaults() error
 }
@@ -19,6 +18,12 @@ type ServerConfig interface {
 type InitServerConfig interface {
 	ServerConfig
 	GetInitDbExec() string
+}
+
+type ProtocolServerConfig interface {
+	ServerConfig
+	GetConnectionProtocol() string
+	GetSocket() string
 }
 
 type ProfilingServerConfig interface {

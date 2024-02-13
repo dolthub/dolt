@@ -110,7 +110,7 @@ func (sc *doltServerConfigImpl) GetServerArgs() ([]string, error) {
 func (sc *doltServerConfigImpl) GetTestingArgs(testConfig TestConfig) []string {
 	params := make([]string, 0)
 	params = append(params, defaultSysbenchParams...)
-	params = append(params, fmt.Sprintf("--mysql-db=%s", dbName))
+	params = append(params, fmt.Sprintf("--mysql-db=%s", dbName)) // todo: replace these with consts
 	params = append(params, "--db-driver=mysql")
 	params = append(params, fmt.Sprintf("--mysql-host=%s", sc.Host))
 	params = append(params, "--mysql-user=root")

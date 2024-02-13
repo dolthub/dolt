@@ -21,6 +21,11 @@ type SysbenchTest interface {
 }
 
 type TestParams interface {
+	ToSlice() []string
+}
+
+type TpccTestParams interface {
+	TestParams
 	GetNumThreads() int
 	GetScaleFactor() int
 	GetTables() int
@@ -28,5 +33,4 @@ type TestParams interface {
 	GetReportCSV() bool
 	GetReportInterval() int
 	GetTime() int
-	ToSlice() []string
 }

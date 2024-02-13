@@ -19,13 +19,13 @@ const (
 
 type doltgresBenchmarkerImpl struct {
 	dir          string // cwd
-	config       *sysbenchRunnerConfigImpl
-	serverConfig *doltServerConfigImpl
+	config       SysbenchConfig
+	serverConfig ServerConfig
 }
 
 var _ Benchmarker = &doltgresBenchmarkerImpl{}
 
-func NewDoltgresBenchmarker(dir string, config *sysbenchRunnerConfigImpl, serverConfig *doltServerConfigImpl) *doltgresBenchmarkerImpl {
+func NewDoltgresBenchmarker(dir string, config SysbenchConfig, serverConfig ServerConfig) *doltgresBenchmarkerImpl {
 	return &doltgresBenchmarkerImpl{
 		dir:          dir,
 		config:       config,
@@ -34,7 +34,7 @@ func NewDoltgresBenchmarker(dir string, config *sysbenchRunnerConfigImpl, server
 }
 
 func (b *doltgresBenchmarkerImpl) checkInstallation(ctx context.Context) error {
-	version := ExecCommand(ctx, b.serverConfig.ServerExec, doltVersionCommand)
+	version := ExecCommand(ctx, b.serverConfig.GetServerExec(), doltVersionCommand)
 	return version.Run()
 }
 
@@ -58,7 +58,7 @@ func (b *doltgresBenchmarkerImpl) cleanupServerDir(dir string) error {
 }
 
 func (b *doltgresBenchmarkerImpl) createTestingDb(ctx context.Context) error {
-	psqlconn := fmt.Sprintf(psqlDsnTemplate, b.serverConfig.Host, b.serverConfig.Port, doltgresUser, "", dbName)
+	psqlconn := fmt.Sprintf(psqlDsnTemplate, b.serverConfig.GetHost(), b.serverConfig.GetPort(), doltgresUser, "", dbName)
 
 	// open database
 	db, err := sql.Open(postgresDriver, psqlconn)
@@ -116,14 +116,15 @@ func (b *doltgresBenchmarkerImpl) Benchmark(ctx context.Context) (results Result
 		return
 	}
 
-	var tests []*sysbenchTestImpl
-	tests, err = GetTests(b.config, b.serverConfig, nil)
+	var tests []Test
+	tests, err = GetTests(b.config, b.serverConfig)
 	if err != nil {
 		return
 	}
 
 	results = make(Results, 0)
-	for i := 0; i < b.config.Runs; i++ {
+	runs := b.config.GetRuns()
+	for i := 0; i < runs; i++ {
 		for _, test := range tests {
 			tester := NewSysbenchTester(b.config, b.serverConfig, test, serverParams, stampFunc)
 			var r *Result
