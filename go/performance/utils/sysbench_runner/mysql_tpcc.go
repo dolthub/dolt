@@ -10,12 +10,12 @@ import (
 type mysqlTpccBenchmarkerImpl struct {
 	dir          string // cwd
 	config       *TpccBenchmarkConfig
-	serverConfig *ServerConfig
+	serverConfig *doltServerConfigImpl
 }
 
 var _ Benchmarker = &mysqlTpccBenchmarkerImpl{}
 
-func NewMysqlTpccBenchmarker(dir string, config *TpccBenchmarkConfig, serverConfig *ServerConfig) *mysqlTpccBenchmarkerImpl {
+func NewMysqlTpccBenchmarker(dir string, config *TpccBenchmarkConfig, serverConfig *doltServerConfigImpl) *mysqlTpccBenchmarkerImpl {
 	return &mysqlTpccBenchmarkerImpl{
 		dir:          dir,
 		config:       config,

@@ -22,7 +22,7 @@ import (
 )
 
 // Run runs sysbench runner
-func Run(ctx context.Context, config *Config) error {
+func Run(ctx context.Context, config *sysbenchRunnerConfigImpl) error {
 	err := config.Validate()
 	if err != nil {
 		return err
@@ -86,7 +86,7 @@ func sysbenchVersion(ctx context.Context) error {
 	return sysbenchVersion.Run()
 }
 
-func WriteResults(serverConfig *ServerConfig, results Results) error {
+func WriteResults(serverConfig *doltServerConfigImpl, results Results) error {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err

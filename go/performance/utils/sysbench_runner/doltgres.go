@@ -19,13 +19,13 @@ const (
 
 type doltgresBenchmarkerImpl struct {
 	dir          string // cwd
-	config       *Config
-	serverConfig *ServerConfig
+	config       *sysbenchRunnerConfigImpl
+	serverConfig *doltServerConfigImpl
 }
 
 var _ Benchmarker = &doltgresBenchmarkerImpl{}
 
-func NewDoltgresBenchmarker(dir string, config *Config, serverConfig *ServerConfig) *doltgresBenchmarkerImpl {
+func NewDoltgresBenchmarker(dir string, config *sysbenchRunnerConfigImpl, serverConfig *doltServerConfigImpl) *doltgresBenchmarkerImpl {
 	return &doltgresBenchmarkerImpl{
 		dir:          dir,
 		config:       config,
@@ -116,7 +116,7 @@ func (b *doltgresBenchmarkerImpl) Benchmark(ctx context.Context) (results Result
 		return
 	}
 
-	var tests []*Test
+	var tests []*sysbenchTestImpl
 	tests, err = GetTests(b.config, b.serverConfig, nil)
 	if err != nil {
 		return

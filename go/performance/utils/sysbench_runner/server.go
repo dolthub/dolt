@@ -26,7 +26,7 @@ type Server interface {
 
 type doltServerImpl struct {
 	dir                 string
-	serverConfig        *ServerConfig
+	serverConfig        *doltServerConfigImpl
 	serverCtx           context.Context
 	serverCtxCancelFunc context.CancelFunc
 	server              *exec.Cmd
@@ -37,7 +37,7 @@ type doltServerImpl struct {
 
 var _ Server = &doltServerImpl{}
 
-func NewServer(ctx context.Context, dir string, serverConfig *ServerConfig, killSignal os.Signal, serverParams []string) *doltServerImpl {
+func NewServer(ctx context.Context, dir string, serverConfig *doltServerConfigImpl, killSignal os.Signal, serverParams []string) *doltServerImpl {
 	withKeyCtx, cancel := context.WithCancel(ctx)
 	gServer, serverCtx := errgroup.WithContext(withKeyCtx)
 

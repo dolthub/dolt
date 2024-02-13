@@ -30,10 +30,10 @@ func TestRunner(t *testing.T) {
 		log.Fatal(err)
 	}
 
-	conf := &Config{
+	conf := &sysbenchRunnerConfigImpl{
 		Tests: selectTests("oltp_read_write", "oltp_update_index", "oltp_delete_insert"),
 		//Tests: selectTests("oltp_read_write", "oltp_update_index", "oltp_update_non_index", "oltp_insert", "bulk_insert", "oltp_write_only", "oltp_delete"),
-		Servers: []*ServerConfig{
+		Servers: []*doltServerConfigImpl{
 			{
 				Id:            "test",
 				Server:        Dolt,
@@ -59,10 +59,10 @@ func TestRunner(t *testing.T) {
 	}
 }
 
-func selectTests(names ...string) []*ConfigTest {
-	tests := make([]*ConfigTest, len(names))
+func selectTests(names ...string) []*TestConfigImpl {
+	tests := make([]*TestConfigImpl, len(names))
 	for i := range names {
-		tests[i] = &ConfigTest{Name: names[i], FromScript: false}
+		tests[i] = &TestConfigImpl{Name: names[i], FromScript: false}
 	}
 	return tests
 }

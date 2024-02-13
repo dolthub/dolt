@@ -23,31 +23,31 @@ import (
 var testIdFunc = func() string { return "id" }
 
 func TestConfigTestGetTests(t *testing.T) {
-	empty := &ConfigTest{Name: "test_name"}
+	empty := &TestConfigImpl{Name: "test_name"}
 
-	one := &ConfigTest{Name: "test_one", N: 3}
-	two := &ConfigTest{Name: "test_two", N: 2}
-	three := &ConfigTest{Name: "test_three", N: 1}
+	one := &TestConfigImpl{Name: "test_one", N: 3}
+	two := &TestConfigImpl{Name: "test_two", N: 2}
+	three := &TestConfigImpl{Name: "test_three", N: 1}
 
-	opts := &ConfigTest{
+	opts := &TestConfigImpl{
 		Name:    "test_options",
 		N:       1,
 		Options: []string{"--create_secondary=on", "--auto_inc=off"},
 	}
 
-	serverConfig := &ServerConfig{Server: MySql, Version: "test-version", Host: "localhost", ResultsFormat: CsvFormat}
+	serverConfig := &doltServerConfigImpl{Server: MySql, Version: "test-version", Host: "localhost", ResultsFormat: CsvFormat}
 
 	tests := []struct {
 		description   string
-		config        *Config
-		expectedTests []*Test
+		config        *sysbenchRunnerConfigImpl
+		expectedTests []*sysbenchTestImpl
 		expectedError error
 	}{
 		{
 			description: "should error if no test name is defined",
-			config: &Config{
-				Servers: []*ServerConfig{serverConfig},
-				Tests: []*ConfigTest{
+			config: &sysbenchRunnerConfigImpl{
+				Servers: []*doltServerConfigImpl{serverConfig},
+				Tests: []*TestConfigImpl{
 					{Name: ""},
 				},
 			},
@@ -56,11 +56,11 @@ func TestConfigTestGetTests(t *testing.T) {
 		},
 		{
 			description: "should create single test if N is < 1",
-			config: &Config{
-				Servers: []*ServerConfig{serverConfig},
-				Tests:   []*ConfigTest{empty},
+			config: &sysbenchRunnerConfigImpl{
+				Servers: []*doltServerConfigImpl{serverConfig},
+				Tests:   []*TestConfigImpl{empty},
 			},
-			expectedTests: []*Test{
+			expectedTests: []*sysbenchTestImpl{
 				{
 					id:     testIdFunc(),
 					Name:   "test_name",
@@ -69,12 +69,12 @@ func TestConfigTestGetTests(t *testing.T) {
 			},
 		},
 		{
-			description: "should return a test for each N defined on the ConfigTest",
-			config: &Config{
-				Servers: []*ServerConfig{serverConfig},
-				Tests:   []*ConfigTest{one, two, three},
+			description: "should return a test for each N defined on the TestConfigImpl",
+			config: &sysbenchRunnerConfigImpl{
+				Servers: []*doltServerConfigImpl{serverConfig},
+				Tests:   []*TestConfigImpl{one, two, three},
 			},
-			expectedTests: []*Test{
+			expectedTests: []*sysbenchTestImpl{
 				{id: testIdFunc(), Name: "test_one", Params: fromConfigTestParams(one, serverConfig)},
 				{id: testIdFunc(), Name: "test_one", Params: fromConfigTestParams(one, serverConfig)},
 				{id: testIdFunc(), Name: "test_one", Params: fromConfigTestParams(one, serverConfig)},
@@ -85,11 +85,11 @@ func TestConfigTestGetTests(t *testing.T) {
 		},
 		{
 			description: "should apply user options to test params",
-			config: &Config{
-				Servers: []*ServerConfig{serverConfig},
-				Tests:   []*ConfigTest{opts},
+			config: &sysbenchRunnerConfigImpl{
+				Servers: []*doltServerConfigImpl{serverConfig},
+				Tests:   []*TestConfigImpl{opts},
 			},
-			expectedTests: []*Test{
+			expectedTests: []*sysbenchTestImpl{
 				{id: testIdFunc(), Name: "test_options", Params: fromConfigTestParams(opts, serverConfig)},
 			},
 		},

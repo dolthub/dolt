@@ -8,7 +8,7 @@ import (
 type tpccTestImpl struct {
 	test         *TpccTest
 	config       *TpccBenchmarkConfig
-	serverConfig *ServerConfig
+	serverConfig *doltServerConfigImpl
 	serverParams []string
 	stampFunc    func() string
 	idFunc       func() string
@@ -17,7 +17,7 @@ type tpccTestImpl struct {
 
 var _ Tester = &tpccTestImpl{}
 
-func NewTpccTester(config *TpccBenchmarkConfig, serverConfig *ServerConfig, test *TpccTest, serverParams []string, stampFunc func() string) *tpccTestImpl {
+func NewTpccTester(config *TpccBenchmarkConfig, serverConfig *doltServerConfigImpl, test *TpccTest, serverParams []string, stampFunc func() string) *tpccTestImpl {
 	return &tpccTestImpl{
 		config:       config,
 		serverParams: serverParams,

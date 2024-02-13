@@ -15,12 +15,12 @@ const (
 type doltTpccBenchmarkerImpl struct {
 	dir          string // cwd
 	config       *TpccBenchmarkConfig
-	serverConfig *ServerConfig
+	serverConfig *doltServerConfigImpl
 }
 
 var _ Benchmarker = &doltTpccBenchmarkerImpl{}
 
-func NewDoltTpccBenchmarker(dir string, config *TpccBenchmarkConfig, serverConfig *ServerConfig) *doltTpccBenchmarkerImpl {
+func NewDoltTpccBenchmarker(dir string, config *TpccBenchmarkConfig, serverConfig *doltServerConfigImpl) *doltTpccBenchmarkerImpl {
 	return &doltTpccBenchmarkerImpl{
 		dir:          dir,
 		config:       config,

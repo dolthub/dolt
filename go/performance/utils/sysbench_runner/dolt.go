@@ -31,13 +31,13 @@ var stampFunc = func() string { return time.Now().UTC().Format(stampFormat) }
 
 type doltBenchmarkerImpl struct {
 	dir          string // cwd
-	config       *Config
-	serverConfig *ServerConfig
+	config       *sysbenchRunnerConfigImpl
+	serverConfig *doltServerConfigImpl
 }
 
 var _ Benchmarker = &doltBenchmarkerImpl{}
 
-func NewDoltBenchmarker(dir string, config *Config, serverConfig *ServerConfig) *doltBenchmarkerImpl {
+func NewDoltBenchmarker(dir string, config *sysbenchRunnerConfigImpl, serverConfig *doltServerConfigImpl) *doltBenchmarkerImpl {
 	return &doltBenchmarkerImpl{
 		dir:          dir,
 		config:       config,

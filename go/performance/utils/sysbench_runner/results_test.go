@@ -266,26 +266,26 @@ func TestFromOutputResults(t *testing.T) {
 	tests := []struct {
 		description    string
 		output         []byte
-		config         *Config
-		serverConfig   *ServerConfig
-		test           *Test
+		config         *sysbenchRunnerConfigImpl
+		serverConfig   *doltServerConfigImpl
+		test           *sysbenchTestImpl
 		expectedResult *Result
 		expectedError  error
 	}{
 		{
 			description: "should parse output into result",
 			output:      []byte(sampleOutput1),
-			config: &Config{
+			config: &sysbenchRunnerConfigImpl{
 				RuntimeOS:     testOS,
 				RuntimeGoArch: testGoArch,
 			},
-			serverConfig: &ServerConfig{
+			serverConfig: &doltServerConfigImpl{
 				Host:       "localhost",
 				Server:     ServerType(testServer),
 				Version:    testServerVersion,
 				ServerExec: "test-exec",
 			},
-			test: &Test{
+			test: &sysbenchTestImpl{
 				Name:   testTestName,
 				Params: []string{testTestParams},
 			},
@@ -317,9 +317,9 @@ func TestFromOutputResults(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			actual, err := FromOutputResult(test.output, test.config, test.serverConfig, test.test, testSuiteId, func() string {
-				return testId
-			})
+			serverParams, err := test.serverConfig.GetServerArgs()
+			assert.NoError(t, err)
+			actual, err := OutputToResult(test.output, test.serverConfig.Server, test.serverConfig.Version, test.test.Name, test.test.id, testSuiteId, test.config.RuntimeOS, test.config.RuntimeGoArch, serverParams, test.test.Params, func() string { return testId }, test.test.FromScript)
 			assert.Equal(t, test.expectedError, err)
 			assert.Equal(t, test.expectedResult, actual)
 		})

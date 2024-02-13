@@ -14,13 +14,13 @@ type Profiler interface {
 
 type doltProfilerImpl struct {
 	dir          string // cwd
-	config       *Config
-	serverConfig *ServerConfig
+	config       *sysbenchRunnerConfigImpl
+	serverConfig *doltServerConfigImpl
 }
 
 var _ Profiler = &doltProfilerImpl{}
 
-func NewDoltProfiler(dir string, config *Config, serverConfig *ServerConfig) *doltProfilerImpl {
+func NewDoltProfiler(dir string, config *sysbenchRunnerConfigImpl, serverConfig *doltServerConfigImpl) *doltProfilerImpl {
 	return &doltProfilerImpl{
 		dir:          dir,
 		config:       config,

@@ -17,20 +17,20 @@ const (
 	luaPath               = "?.lua"
 )
 
-type sysbenchTestImpl struct {
-	test         *Test
-	config       *Config
-	serverConfig *ServerConfig
+type sysbenchTesterImpl struct {
+	test         *sysbenchTestImpl
+	config       *sysbenchRunnerConfigImpl
+	serverConfig *doltServerConfigImpl
 	serverParams []string
 	stampFunc    func() string
 	idFunc       func() string
 	suiteId      string
 }
 
-var _ Tester = &sysbenchTestImpl{}
+var _ Tester = &sysbenchTesterImpl{}
 
-func NewSysbenchTester(config *Config, serverConfig *ServerConfig, test *Test, serverParams []string, stampFunc func() string) *sysbenchTestImpl {
-	return &sysbenchTestImpl{
+func NewSysbenchTester(config *sysbenchRunnerConfigImpl, serverConfig *doltServerConfigImpl, test *sysbenchTestImpl, serverParams []string, stampFunc func() string) *sysbenchTesterImpl {
+	return &sysbenchTesterImpl{
 		config:       config,
 		serverParams: serverParams,
 		serverConfig: serverConfig,
@@ -40,7 +40,7 @@ func NewSysbenchTester(config *Config, serverConfig *ServerConfig, test *Test, s
 	}
 }
 
-func (t *sysbenchTestImpl) newResult() (*Result, error) {
+func (t *sysbenchTesterImpl) newResult() (*Result, error) {
 	serverParams, err := t.serverConfig.GetServerArgs()
 	if err != nil {
 		return nil, err
@@ -78,11 +78,11 @@ func (t *sysbenchTestImpl) newResult() (*Result, error) {
 	}, nil
 }
 
-func (t *sysbenchTestImpl) outputToResult(output []byte) (*Result, error) {
+func (t *sysbenchTesterImpl) outputToResult(output []byte) (*Result, error) {
 	return OutputToResult(output, t.serverConfig.Server, t.serverConfig.Version, t.test.Name, t.test.id, t.suiteId, t.config.RuntimeOS, t.config.RuntimeGoArch, t.serverParams, t.test.Params, nil, t.test.FromScript)
 }
 
-func (t *sysbenchTestImpl) prepare(ctx context.Context) error {
+func (t *sysbenchTesterImpl) prepare(ctx context.Context) error {
 	cmd := exec.CommandContext(ctx, sysbenchCommand, t.test.Prepare()...)
 	if t.test.FromScript {
 		lp := filepath.Join(t.config.ScriptDir, luaPath)
@@ -97,7 +97,7 @@ func (t *sysbenchTestImpl) prepare(ctx context.Context) error {
 	return nil
 }
 
-func (t *sysbenchTestImpl) run(ctx context.Context) (*Result, error) {
+func (t *sysbenchTesterImpl) run(ctx context.Context) (*Result, error) {
 	cmd := exec.CommandContext(ctx, sysbenchCommand, t.test.Run()...)
 	if t.test.FromScript {
 		lp := filepath.Join(t.config.ScriptDir, luaPath)
@@ -125,7 +125,7 @@ func (t *sysbenchTestImpl) run(ctx context.Context) (*Result, error) {
 	return rs, nil
 }
 
-func (t *sysbenchTestImpl) cleanup(ctx context.Context) error {
+func (t *sysbenchTesterImpl) cleanup(ctx context.Context) error {
 	cmd := ExecCommand(ctx, sysbenchCommand, t.test.Cleanup()...)
 	if t.test.FromScript {
 		lp := filepath.Join(t.config.ScriptDir, luaPath)
@@ -135,7 +135,7 @@ func (t *sysbenchTestImpl) cleanup(ctx context.Context) error {
 	return cmd.Run()
 }
 
-func (t *sysbenchTestImpl) Test(ctx context.Context) (*Result, error) {
+func (t *sysbenchTesterImpl) Test(ctx context.Context) (*Result, error) {
 	err := t.prepare(ctx)
 	if err != nil {
 		return nil, err

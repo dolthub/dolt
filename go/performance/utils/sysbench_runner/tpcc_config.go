@@ -53,7 +53,7 @@ type TpccBenchmarkConfig struct {
 	ScriptDir string
 
 	// Servers are the servers to benchmark.
-	Servers []*ServerConfig
+	Servers []*doltServerConfigImpl
 
 	// ScaleFactors represent the scale at which to run each TpccBenchmark at.
 	ScaleFactors []int
@@ -64,7 +64,7 @@ type TpccBenchmarkConfig struct {
 
 func NewTpccConfig() *TpccBenchmarkConfig {
 	return &TpccBenchmarkConfig{
-		Servers:      make([]*ServerConfig, 0),
+		Servers:      make([]*doltServerConfigImpl, 0),
 		ScaleFactors: make([]int, 0),
 	}
 }
@@ -196,7 +196,7 @@ func NewTpccTest(name string, params *TpccTestParams) *TpccTest {
 }
 
 // getArgs returns a test's args for all TPCC steps
-func (t *TpccTest) getArgs(serverConfig *ServerConfig) []string {
+func (t *TpccTest) getArgs(serverConfig *doltServerConfigImpl) []string {
 	params := make([]string, 0)
 	params = append(params, defaultTpccParams...)
 
@@ -222,19 +222,19 @@ func (t *TpccTest) getArgs(serverConfig *ServerConfig) []string {
 }
 
 // TpccPrepare prepares the command executable for the Prepare step.
-func (t *TpccTest) TpccPrepare(ctx context.Context, serverConfig *ServerConfig, scriptDir string) *exec.Cmd {
+func (t *TpccTest) TpccPrepare(ctx context.Context, serverConfig *doltServerConfigImpl, scriptDir string) *exec.Cmd {
 	cmd := ExecCommand(ctx, scriptDir+"/tpcc.lua", append(t.getArgs(serverConfig), "prepare")...)
 	return addParamsToCmd(cmd, scriptDir)
 }
 
 // TpccRun prepares the command executable for the Run step.
-func (t *TpccTest) TpccRun(ctx context.Context, serverConfig *ServerConfig, scriptDir string) *exec.Cmd {
+func (t *TpccTest) TpccRun(ctx context.Context, serverConfig *doltServerConfigImpl, scriptDir string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, scriptDir+"/tpcc.lua", append(t.getArgs(serverConfig), "run")...)
 	return addParamsToCmd(cmd, scriptDir)
 }
 
 // TpccCleanup prepares the cleanup executable for the Cleanup step.
-func (t *TpccTest) TpccCleanup(ctx context.Context, serverConfig *ServerConfig, scriptDir string) *exec.Cmd {
+func (t *TpccTest) TpccCleanup(ctx context.Context, serverConfig *doltServerConfigImpl, scriptDir string) *exec.Cmd {
 	cmd := ExecCommand(ctx, scriptDir+"/tpcc.lua", append(t.getArgs(serverConfig), "cleanup")...)
 	return addParamsToCmd(cmd, scriptDir)
 }
@@ -246,7 +246,7 @@ func addParamsToCmd(cmd *exec.Cmd, scriptDir string) *exec.Cmd {
 	return cmd
 }
 
-// FromFileTpccConfig returns a validated Config based on the config file at the configPath
+// FromFileTpccConfig returns a validated sysbenchRunnerConfigImpl based on the config file at the configPath
 func FromFileTpccConfig(configPath string) (*TpccBenchmarkConfig, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {

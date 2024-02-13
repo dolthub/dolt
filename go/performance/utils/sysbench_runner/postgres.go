@@ -25,13 +25,13 @@ const (
 
 type postgresBenchmarkerImpl struct {
 	dir          string // cwd
-	config       *Config
-	serverConfig *ServerConfig
+	config       *sysbenchRunnerConfigImpl
+	serverConfig *doltServerConfigImpl
 }
 
 var _ Benchmarker = &postgresBenchmarkerImpl{}
 
-func NewPostgresBenchmarker(dir string, config *Config, serverConfig *ServerConfig) *postgresBenchmarkerImpl {
+func NewPostgresBenchmarker(dir string, config *sysbenchRunnerConfigImpl, serverConfig *doltServerConfigImpl) *postgresBenchmarkerImpl {
 	return &postgresBenchmarkerImpl{
 		dir:          dir,
 		config:       config,
@@ -124,7 +124,7 @@ func (b *postgresBenchmarkerImpl) Benchmark(ctx context.Context) (results Result
 		return
 	}
 
-	var tests []*Test
+	var tests []*sysbenchTestImpl
 	tests, err = GetTests(b.config, b.serverConfig, nil)
 	if err != nil {
 		return

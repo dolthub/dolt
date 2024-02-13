@@ -25,13 +25,13 @@ const (
 
 type mysqlBenchmarkerImpl struct {
 	dir          string // cwd
-	config       *Config
-	serverConfig *ServerConfig
+	config       *sysbenchRunnerConfigImpl
+	serverConfig *doltServerConfigImpl
 }
 
 var _ Benchmarker = &mysqlBenchmarkerImpl{}
 
-func NewMysqlBenchmarker(dir string, config *Config, serverConfig *ServerConfig) *mysqlBenchmarkerImpl {
+func NewMysqlBenchmarker(dir string, config *sysbenchRunnerConfigImpl, serverConfig *doltServerConfigImpl) *mysqlBenchmarkerImpl {
 	return &mysqlBenchmarkerImpl{
 		dir:          dir,
 		config:       config,
