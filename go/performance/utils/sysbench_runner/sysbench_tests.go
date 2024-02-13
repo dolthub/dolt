@@ -1,15 +1,22 @@
 package sysbench_runner
 
-type sysbenchTestParamsImpl []string
-
-func (s *sysbenchTestParamsImpl) ToSlice() []string {
-	if s != nil {
-		return *s
-	}
-	return []string{}
+type sysbenchTestParamsImpl struct {
+	params []string
 }
 
-var _ TestParams = &sysbenchTestParamsImpl{}
+var _ SysbenchTestParams = &sysbenchTestParamsImpl{}
+
+func (s *sysbenchTestParamsImpl) ToSlice() []string {
+	return s.params
+}
+
+func (s *sysbenchTestParamsImpl) Append(params ...string) {
+	s.params = append(s.params, params...)
+}
+
+func NewSysbenchTestParams() *sysbenchTestParamsImpl {
+	return &sysbenchTestParamsImpl{params: make([]string, 0)}
+}
 
 // sysbenchTestImpl is a single sysbench test
 type sysbenchTestImpl struct {

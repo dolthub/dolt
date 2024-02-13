@@ -92,13 +92,13 @@ type tpccTestImpl struct {
 	Name string
 
 	// Params are associated parameters this test runs with
-	Params TestParams
+	Params TpccTestParams
 }
 
 var _ Test = &tpccTestImpl{}
 
 // NewTpccTest instantiates and returns a TPCC test.
-func NewTpccTest(name string, params TestParams) *tpccTestImpl {
+func NewTpccTest(name string, params TpccTestParams) *tpccTestImpl {
 	return &tpccTestImpl{
 		Id:     uuid.New().String(),
 		Name:   name,

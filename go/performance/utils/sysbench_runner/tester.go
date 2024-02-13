@@ -24,6 +24,11 @@ type TestParams interface {
 	ToSlice() []string
 }
 
+type SysbenchTestParams interface {
+	TestParams
+	Append(params ...string)
+}
+
 type TpccTestParams interface {
 	TestParams
 	GetNumThreads() int

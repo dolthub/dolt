@@ -58,6 +58,26 @@ func (sc *postgresServerConfigImpl) GetInitDbExec() string {
 	return sc.InitExec
 }
 
+func (sc *postgresServerConfigImpl) GetId() string {
+	return sc.Id
+}
+
+func (sc *postgresServerConfigImpl) GetHost() string {
+	return sc.Host
+}
+
+func (sc *postgresServerConfigImpl) GetPort() int {
+	return sc.Port
+}
+
+func (sc *postgresServerConfigImpl) GetVersion() string {
+	return sc.Version
+}
+
+func (sc *postgresServerConfigImpl) GetResultsFormat() string {
+	return sc.ResultsFormat
+}
+
 func (sc *postgresServerConfigImpl) GetServerType() ServerType {
 	return Postgres
 }
@@ -71,18 +91,18 @@ func (sc *postgresServerConfigImpl) GetServerArgs() ([]string, error) {
 	return params, nil
 }
 
-func (sc *postgresServerConfigImpl) GetTestingArgs(testConfig TestConfig) []string {
-	params := make([]string, 0)
-	params = append(params, defaultSysbenchParams...)
-	params = append(params, "--db-driver=pgsql")
-	params = append(params, fmt.Sprintf("--pgsql-db=%s", dbName))
-	params = append(params, fmt.Sprintf("--pgsql-host=%s", sc.Host))
-	params = append(params, "--pgsql-user=postgres")
+func (sc *postgresServerConfigImpl) GetTestingParams(testConfig TestConfig) TestParams {
+	params := NewSysbenchTestParams()
+	params.Append(defaultSysbenchParams...)
+	params.Append(fmt.Sprintf("%s=%s", sysbenchDbDriverFlag, sysbenchPostgresDbDriver))
+	params.Append(fmt.Sprintf("%s=%s", sysbenchPostgresDbFlag, dbName))
+	params.Append(fmt.Sprintf("%s=%s", sysbenchPostgresHostFlag, sc.Host))
+	params.Append(fmt.Sprintf("%s=%s", sysbenchPostgresUserFlag, postgresUsername))
 	if sc.Port != 0 {
-		params = append(params, fmt.Sprintf("--pgsql-port=%d", sc.Port))
+		params.Append(fmt.Sprintf("%s=%d", sysbenchPostgresPortFlag, sc.Port))
 	}
-	params = append(params, testConfig.GetOptions()...)
-	params = append(params, testConfig.GetName())
+	params.Append(testConfig.GetOptions()...)
+	params.Append(testConfig.GetName())
 	return params
 }
 
@@ -111,16 +131,4 @@ func (sc *postgresServerConfigImpl) SetDefaults() error {
 		sc.Port = defaultPostgresPort
 	}
 	return nil
-}
-
-func (sc *postgresServerConfigImpl) GetId() string {
-	return sc.Id
-}
-
-func (sc *postgresServerConfigImpl) GetHost() string {
-	return sc.Host
-}
-
-func (sc *postgresServerConfigImpl) GetPort() int {
-	return sc.Port
 }

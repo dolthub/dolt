@@ -24,7 +24,7 @@ import (
 
 var defaultTpccParams = []string{
 	fmt.Sprintf("%s=%s", tpccMysqlDbFlag, tpccDbName),
-	fmt.Sprintf("%s=%s", tpccDbDriverFlag, mysqlDriver),
+	fmt.Sprintf("%s=%s", tpccDbDriverFlag, mysqlDriverName),
 }
 
 // tpccConfigImpl represents a configuration for an execution of the TPCC Benchmark. It executes a series of tests
@@ -89,6 +89,10 @@ func (c *tpccConfigImpl) ContainsServerOfType(st ServerType) bool {
 
 func (c *tpccConfigImpl) GetScaleFactors() []int {
 	return c.ScaleFactors
+}
+
+func (c *tpccConfigImpl) GetServerConfigs() []ServerConfig {
+	return c.Servers
 }
 
 func (c *tpccConfigImpl) setDefaults() {

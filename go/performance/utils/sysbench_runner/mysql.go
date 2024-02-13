@@ -70,7 +70,11 @@ func (b *mysqlBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
 	runs := b.config.GetRuns()
 	for i := 0; i < runs; i++ {
 		for _, test := range tests {
-			tester := NewSysbenchTester(b.config, b.serverConfig, test, serverParams, stampFunc)
+			t, ok := test.(SysbenchTest)
+			if !ok {
+				return nil, ErrNotSysbenchTest
+			}
+			tester := NewSysbenchTester(b.config, b.serverConfig, t, serverParams, stampFunc)
 			r, err := tester.Test(ctx)
 			if err != nil {
 				server.Stop()

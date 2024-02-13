@@ -9,13 +9,13 @@ import (
 
 type mysqlTpccBenchmarkerImpl struct {
 	dir          string // cwd
-	config       *TpccBenchmarkConfig
-	serverConfig *doltServerConfigImpl
+	config       TpccConfig
+	serverConfig ProtocolServerConfig
 }
 
 var _ Benchmarker = &mysqlTpccBenchmarkerImpl{}
 
-func NewMysqlTpccBenchmarker(dir string, config *TpccBenchmarkConfig, serverConfig *doltServerConfigImpl) *mysqlTpccBenchmarkerImpl {
+func NewMysqlTpccBenchmarker(dir string, config TpccConfig, serverConfig ProtocolServerConfig) *mysqlTpccBenchmarkerImpl {
 	return &mysqlTpccBenchmarkerImpl{
 		dir:          dir,
 		config:       config,
@@ -24,7 +24,7 @@ func NewMysqlTpccBenchmarker(dir string, config *TpccBenchmarkConfig, serverConf
 }
 
 func (b *mysqlTpccBenchmarkerImpl) getDsn() (string, error) {
-	return GetMysqlDsn(b.serverConfig.Host, b.serverConfig.Socket, b.serverConfig.ConnectionProtocol, b.serverConfig.Port)
+	return GetMysqlDsn(b.serverConfig.GetHost(), b.serverConfig.GetSocket(), b.serverConfig.GetConnectionProtocol(), b.serverConfig.GetPort())
 }
 
 func (b *mysqlTpccBenchmarkerImpl) createTestingDb(ctx context.Context) error {
@@ -36,7 +36,7 @@ func (b *mysqlTpccBenchmarkerImpl) createTestingDb(ctx context.Context) error {
 }
 
 func (b *mysqlTpccBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
-	serverDir, err := InitMysqlDataDir(ctx, b.serverConfig.ServerExec, tpccDbName)
+	serverDir, err := InitMysqlDataDir(ctx, b.serverConfig.GetServerExec(), tpccDbName)
 	if err != nil {
 		return nil, err
 	}

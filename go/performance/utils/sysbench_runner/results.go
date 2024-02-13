@@ -16,37 +16,13 @@ package sysbench_runner
 
 import (
 	"errors"
+	"github.com/google/uuid"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
-
-	"github.com/google/uuid"
-)
-
-const (
-	stampFormat    = time.RFC3339
-	SqlStatsPrefix = "SQL statistics:"
-	read           = "read"
-	write          = "write"
-	other          = "other"
-	totalQueries   = "total"
-	totalEvents    = "total number of events"
-	min            = "min"
-	avg            = "avg"
-	max            = "max"
-	percentile     = "percentile"
-	sum            = "sum"
-	transactions   = "transactions"
-	queriesPerSec  = "queries"
-	ignoredErrors  = "ignored errors"
-	reconnects     = "reconnects"
-	totalTimeSecs  = "total time"
 )
 
 var (
-	ResultFileTemplate = "%s_%s_%s_sysbench_performance%s"
-
 	ErrUnableToParseOutput    = errors.New("unable to parse output")
 	ErrUnsupportedHeaderField = errors.New("unsupported header field")
 )

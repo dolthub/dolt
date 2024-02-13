@@ -36,7 +36,7 @@ func NewServer(ctx context.Context, dir string, serverConfig ServerConfig, killS
 	withKeyCtx, cancel := context.WithCancel(ctx)
 	gServer, serverCtx := errgroup.WithContext(withKeyCtx)
 
-	server := ExecCommand(serverCtx, serverConfig.ServerExec(), serverParams...)
+	server := ExecCommand(serverCtx, serverConfig.GetServerExec(), serverParams...)
 	server.Dir = dir
 
 	quit := make(chan os.Signal, 1)

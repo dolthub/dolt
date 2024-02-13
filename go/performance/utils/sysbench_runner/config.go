@@ -8,6 +8,7 @@ type Config interface {
 	GetNomsBinFormat() string
 	GetRuntimeOs() string
 	GetRuntimeGoArch() string
+	GetServerConfigs() []ServerConfig
 	Validate(ctx context.Context) error
 	ContainsServerOfType(server ServerType) bool
 }

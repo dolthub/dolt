@@ -16,14 +16,18 @@ package sysbench_runner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 )
 
+var ErrNotProtocolServerConfig = errors.New("protocol server config required")
+var ErrNotInitDbServerConfig = errors.New("init db server config required")
+
 // Run runs sysbench runner
-func Run(ctx context.Context, config *sysbenchRunnerConfigImpl) error {
-	err := config.Validate()
+func Run(ctx context.Context, config SysbenchConfig) error {
+	err := config.Validate(ctx)
 	if err != nil {
 		return err
 	}
@@ -38,30 +42,44 @@ func Run(ctx context.Context, config *sysbenchRunnerConfigImpl) error {
 		return err
 	}
 
-	for _, serverConfig := range config.Servers {
+	svs := config.GetServerConfigs()
+	for _, serverConfig := range svs {
 		var results Results
 		var b Benchmarker
-		switch serverConfig.Server {
+		st := serverConfig.GetServerType()
+		switch st {
 		case Dolt:
 			// handle a profiling run
-			if serverConfig.ServerProfile != "" {
-				fmt.Println("Profiling dolt while running sysbench tests")
-				p := NewDoltProfiler(cwd, config, serverConfig)
-				return p.Profile(ctx)
+			sc, ok := serverConfig.(ProfilingServerConfig)
+			if ok {
+				if string(sc.GetServerProfile()) != "" {
+					fmt.Println("Profiling dolt while running sysbench tests")
+					p := NewDoltProfiler(cwd, config, sc)
+					return p.Profile(ctx)
+				}
 			}
+
 			fmt.Println("Running dolt sysbench tests")
 			b = NewDoltBenchmarker(cwd, config, serverConfig)
 		case Doltgres:
 			fmt.Println("Running doltgres sysbench tests")
 			b = NewDoltgresBenchmarker(cwd, config, serverConfig)
 		case MySql:
+			sc, ok := serverConfig.(ProtocolServerConfig)
+			if !ok {
+				return ErrNotProtocolServerConfig
+			}
 			fmt.Println("Running mysql sysbench tests")
-			b = NewMysqlBenchmarker(cwd, config, serverConfig)
+			b = NewMysqlBenchmarker(cwd, config, sc)
 		case Postgres:
+			sc, ok := serverConfig.(InitServerConfig)
+			if !ok {
+				return ErrNotInitDbServerConfig
+			}
 			fmt.Println("Running postgres sysbench tests")
-			b = NewPostgresBenchmarker(cwd, config, serverConfig)
+			b = NewPostgresBenchmarker(cwd, config, sc)
 		default:
-			panic(fmt.Sprintf("unexpected server type: %s", serverConfig.Server))
+			panic(fmt.Sprintf("unexpected server type: %s", st))
 		}
 
 		results, err = b.Benchmark(ctx)
@@ -69,49 +87,55 @@ func Run(ctx context.Context, config *sysbenchRunnerConfigImpl) error {
 			return err
 		}
 
-		fmt.Printf("Successfuly finished %s\n", serverConfig.Server)
+		fmt.Printf("Successfuly finished %s\n", st)
 
 		err = WriteResults(serverConfig, results)
 		if err != nil {
 			return err
 		}
 
-		fmt.Printf("Successfuly wrote results for %s\n", serverConfig.Server)
+		fmt.Printf("Successfuly wrote results for %s\n", st)
 	}
 	return nil
 }
 
 func sysbenchVersion(ctx context.Context) error {
-	sysbenchVersion := ExecCommand(ctx, "sysbench", "--version")
-	return sysbenchVersion.Run()
+	version := ExecCommand(ctx, sysbenchCommand, sysbenchVersionFlag)
+	return version.Run()
 }
 
-func WriteResults(serverConfig *doltServerConfigImpl, results Results) error {
+func WriteResults(serverConfig ServerConfig, results Results) error {
+	st := serverConfig.GetServerType()
+	version := serverConfig.GetVersion()
+	id := serverConfig.GetId()
+	format := serverConfig.GetResultsFormat()
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err
 	}
-	var writePath string
-	switch serverConfig.ResultsFormat {
+
+	//var writePath string
+	switch format {
 	case CsvFormat, CsvExt:
-		writePath = filepath.Join(
+		writePath := filepath.Join(
 			cwd,
-			"results",
-			string(serverConfig.Server),
-			serverConfig.Version,
-			serverConfig.GetId(),
-			fmt.Sprintf(ResultFileTemplate, serverConfig.GetId(), serverConfig.Server, serverConfig.Version, CsvExt))
+			resultsDirname,
+			string(st),
+			version,
+			id,
+			fmt.Sprintf(ResultFileTemplate, id, st, version, CsvExt))
 		return WriteResultsCsv(writePath, results)
 	case JsonFormat, JsonExt:
-		writePath = filepath.Join(
+		writePath := filepath.Join(
 			cwd,
-			"results",
-			string(serverConfig.Server),
-			serverConfig.Version,
-			serverConfig.GetId(),
-			fmt.Sprintf(ResultFileTemplate, serverConfig.GetId(), serverConfig.Server, serverConfig.Version, JsonExt))
+			resultsDirname,
+			string(st),
+			version,
+			id,
+			fmt.Sprintf(ResultFileTemplate, id, st, version, JsonExt))
 		return WriteResultsJson(writePath, results)
 	default:
+		return fmt.Errorf("unsupported results format: %s", format)
 	}
-	return fmt.Errorf("unsupported results format: %s", serverConfig.ResultsFormat)
 }

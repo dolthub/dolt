@@ -62,8 +62,28 @@ func (sc *mysqlServerConfigImpl) GetServerExec() string {
 	return sc.ServerExec
 }
 
+func (sc *mysqlServerConfigImpl) GetId() string {
+	return sc.Id
+}
+
+func (sc *mysqlServerConfigImpl) GetHost() string {
+	return sc.Host
+}
+
+func (sc *mysqlServerConfigImpl) GetPort() int {
+	return sc.Port
+}
+
+func (sc *mysqlServerConfigImpl) GetVersion() string {
+	return sc.Version
+}
+
 func (sc *mysqlServerConfigImpl) GetServerType() ServerType {
 	return MySql
+}
+
+func (sc *mysqlServerConfigImpl) GetResultsFormat() string {
+	return sc.ResultsFormat
 }
 
 func (sc *mysqlServerConfigImpl) GetServerArgs() ([]string, error) {
@@ -81,19 +101,19 @@ func (sc *mysqlServerConfigImpl) GetServerArgs() ([]string, error) {
 	return params, nil
 }
 
-func (sc *mysqlServerConfigImpl) GetTestingArgs(testConfig TestConfig) []string {
-	params := make([]string, 0)
-	params = append(params, defaultSysbenchParams...)
-	params = append(params, fmt.Sprintf("--mysql-db=%s", dbName)) // todo: replace with consts
-	params = append(params, "--db-driver=mysql")
-	params = append(params, fmt.Sprintf("--mysql-host=%s", sc.Host))
+func (sc *mysqlServerConfigImpl) GetTestingParams(testConfig TestConfig) TestParams {
+	params := NewSysbenchTestParams()
+	params.Append(defaultSysbenchParams...)
+	params.Append(fmt.Sprintf("%s=%s", sysbenchMysqlDbFlag, dbName))
+	params.Append(fmt.Sprintf("%s=%s", sysbenchDbDriverFlag, mysqlDriverName))
+	params.Append(fmt.Sprintf("%s=%s", sysbenchMysqlHostFlag, sc.Host))
 	if sc.Port != 0 {
-		params = append(params, fmt.Sprintf("--mysql-port=%d", sc.Port))
+		params.Append(fmt.Sprintf("%s=%d", sysbenchMysqlPortFlag, sc.Port))
 	}
-	params = append(params, "--mysql-user=sysbench")
-	params = append(params, fmt.Sprintf("--mysql-password=%s", sysbenchPassLocal))
-	params = append(params, testConfig.GetOptions()...)
-	params = append(params, testConfig.GetName())
+	params.Append(fmt.Sprintf("%s=%s", sysbenchMysqlUserFlag, sysbenchCommand))
+	params.Append(fmt.Sprintf("%s=%s", sysbenchMysqlPasswordFlag, sysbenchPassLocal))
+	params.Append(testConfig.GetOptions()...)
+	params.Append(testConfig.GetName())
 	return params
 }
 
@@ -122,20 +142,4 @@ func (sc *mysqlServerConfigImpl) SetDefaults() error {
 		sc.Port = defaultMysqlPort
 	}
 	return nil
-}
-
-func (sc *mysqlServerConfigImpl) GetId() string {
-	return sc.Id
-}
-
-func (sc *mysqlServerConfigImpl) GetHost() string {
-	return sc.Host
-}
-
-func (sc *mysqlServerConfigImpl) GetPort() int {
-	return sc.Port
-}
-
-func (sc *mysqlServerConfigImpl) GetVersion() string {
-	return sc.Version
 }

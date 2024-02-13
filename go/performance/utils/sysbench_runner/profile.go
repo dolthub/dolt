@@ -14,13 +14,13 @@ type Profiler interface {
 
 type doltProfilerImpl struct {
 	dir          string // cwd
-	config       *sysbenchRunnerConfigImpl
-	serverConfig *doltServerConfigImpl
+	config       SysbenchConfig
+	serverConfig ProfilingServerConfig
 }
 
 var _ Profiler = &doltProfilerImpl{}
 
-func NewDoltProfiler(dir string, config *sysbenchRunnerConfigImpl, serverConfig *doltServerConfigImpl) *doltProfilerImpl {
+func NewDoltProfiler(dir string, config SysbenchConfig, serverConfig ProfilingServerConfig) *doltProfilerImpl {
 	return &doltProfilerImpl{
 		dir:          dir,
 		config:       config,
@@ -29,20 +29,20 @@ func NewDoltProfiler(dir string, config *sysbenchRunnerConfigImpl, serverConfig 
 }
 
 func (p *doltProfilerImpl) updateGlobalConfig(ctx context.Context) error {
-	err := CheckSetDoltConfig(ctx, p.serverConfig.ServerExec, doltConfigUsernameKey, doltBenchmarkUser)
+	err := CheckSetDoltConfig(ctx, p.serverConfig.GetServerExec(), doltConfigUsernameKey, doltBenchmarkUser)
 	if err != nil {
 		return err
 	}
-	return CheckSetDoltConfig(ctx, p.serverConfig.ServerExec, doltConfigEmailKey, doltBenchmarkEmail)
+	return CheckSetDoltConfig(ctx, p.serverConfig.GetServerExec(), doltConfigEmailKey, doltBenchmarkEmail)
 }
 
 func (p *doltProfilerImpl) checkInstallation(ctx context.Context) error {
-	version := ExecCommand(ctx, p.serverConfig.ServerExec, doltVersionCommand)
+	version := ExecCommand(ctx, p.serverConfig.GetServerExec(), doltVersionCommand)
 	return version.Run()
 }
 
 func (p *doltProfilerImpl) initDoltRepo(ctx context.Context) (string, error) {
-	return InitDoltRepo(ctx, p.dir, p.serverConfig.ServerExec, p.config.NomsBinFormat, dbName)
+	return InitDoltRepo(ctx, p.dir, p.serverConfig.GetServerExec(), p.config.GetNomsBinFormat(), dbName)
 }
 
 func (p *doltProfilerImpl) Profile(ctx context.Context) error {
@@ -84,15 +84,20 @@ func (p *doltProfilerImpl) Profile(ctx context.Context) error {
 		return err
 	}
 
-	tests, err := GetTests(p.config, p.serverConfig, nil)
+	tests, err := GetTests(p.config, p.serverConfig)
 	if err != nil {
 		return err
 	}
 
 	results := make(Results, 0)
-	for i := 0; i < p.config.Runs; i++ {
+	runs := p.config.GetRuns()
+	for i := 0; i < runs; i++ {
 		for _, test := range tests {
-			tester := NewSysbenchTester(p.config, p.serverConfig, test, profileParams, stampFunc)
+			t, ok := test.(SysbenchTest)
+			if !ok {
+				return ErrNotSysbenchTest
+			}
+			tester := NewSysbenchTester(p.config, p.serverConfig, t, profileParams, stampFunc)
 			r, err := tester.Test(ctx)
 			if err != nil {
 				server.Stop()
@@ -116,6 +121,6 @@ func (p *doltProfilerImpl) Profile(ctx context.Context) error {
 		return fmt.Errorf("failed to create profile: file was empty")
 	}
 
-	finalProfile := filepath.Join(p.serverConfig.ProfilePath, fmt.Sprintf("%s_%s", p.serverConfig.Id, cpuProfileFilename))
+	finalProfile := filepath.Join(p.serverConfig.GetProfilePath(), fmt.Sprintf("%s_%s", p.serverConfig.GetId(), cpuProfileFilename))
 	return os.Rename(tempProfile, finalProfile)
 }

@@ -9,14 +9,6 @@ import (
 	"syscall"
 )
 
-const (
-	postgresDriver         = "postgres"
-	doltgresUser           = "doltgres"
-	doltDataDir            = ".dolt"
-	createDatabaseTemplate = "create database %s;"
-	psqlDsnTemplate        = "host=%s port=%d user=%s password=%s dbname=%s sslmode=disable"
-)
-
 type doltgresBenchmarkerImpl struct {
 	dir          string // cwd
 	config       SysbenchConfig
@@ -126,7 +118,11 @@ func (b *doltgresBenchmarkerImpl) Benchmark(ctx context.Context) (results Result
 	runs := b.config.GetRuns()
 	for i := 0; i < runs; i++ {
 		for _, test := range tests {
-			tester := NewSysbenchTester(b.config, b.serverConfig, test, serverParams, stampFunc)
+			t, ok := test.(SysbenchTest)
+			if !ok {
+				return nil, ErrNotSysbenchTest
+			}
+			tester := NewSysbenchTester(b.config, b.serverConfig, t, serverParams, stampFunc)
 			var r *Result
 			r, err = tester.Test(ctx)
 			if err != nil {

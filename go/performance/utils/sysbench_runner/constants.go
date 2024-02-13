@@ -1,5 +1,7 @@
 package sysbench_runner
 
+import "time"
+
 const (
 	Dolt     ServerType = "dolt"
 	Doltgres ServerType = "doltgres"
@@ -12,6 +14,8 @@ const (
 	CsvExt  = ".csv"
 	JsonExt = ".json"
 
+	CpuServerProfile ServerProfile = "cpu"
+
 	defaultHost         = "127.0.0.1"
 	defaultDoltPort     = 3306
 	defaultMysqlPort    = defaultDoltPort
@@ -23,13 +27,24 @@ const (
 	tcpProtocol  = "tcp"
 	unixProtocol = "unix"
 
-	sysbenchUsername        = "sysbench"
-	sysbenchUserLocal       = "'sysbench'@'localhost'"
-	sysbenchPassLocal       = "sysbenchpass"
-	sysbenchDbPsModeFlag    = "--db-ps-mode"
-	sysbenchDbPsModeDisable = "disable"
-	sysbenchRandTypeFlag    = "--rand-type"
-	sysbenchRandTypeUniform = "uniform"
+	sysbenchUsername          = "sysbench"
+	sysbenchUserLocal         = "'sysbench'@'localhost'"
+	sysbenchPassLocal         = "sysbenchpass"
+	sysbenchDbPsModeFlag      = "--db-ps-mode"
+	sysbenchDbPsModeDisable   = "disable"
+	sysbenchRandTypeFlag      = "--rand-type"
+	sysbenchRandTypeUniform   = "uniform"
+	sysbenchMysqlDbFlag       = "--mysql-db"
+	sysbenchDbDriverFlag      = "--db-driver"
+	sysbenchMysqlHostFlag     = "--mysql-host"
+	sysbenchMysqlPortFlag     = "--mysql-port"
+	sysbenchMysqlUserFlag     = "--mysql-user"
+	sysbenchMysqlPasswordFlag = "--mysql-password"
+	sysbenchPostgresDbDriver  = "pgsql"
+	sysbenchPostgresDbFlag    = "--pgsql-db"
+	sysbenchPostgresHostFlag  = "--pgsql-host"
+	sysbenchPostgresPortFlag  = "--pgsql-port"
+	sysbenchPostgresUserFlag  = "--pgsql-user"
 
 	doltSqlServerCommand = "sql-server"
 
@@ -91,10 +106,17 @@ const (
 	bigEmptyRepo          = "max-hoffman/big-empty"
 	nbfEnvVar             = "DOLT_DEFAULT_BIN_FORMAT"
 
+	postgresDriver         = "postgres"
+	doltgresUser           = "doltgres"
+	doltDataDir            = ".dolt"
+	createDatabaseTemplate = "create database %s;"
+	psqlDsnTemplate        = "host=%s port=%d user=%s password=%s dbname=%s sslmode=disable"
+
 	expectedServerKilledErrorMessage     = "signal: killed"
 	expectedServerTerminatedErrorMessage = "signal: terminated"
 
 	sysbenchCommand        = "sysbench"
+	sysbenchVersionFlag    = "--version"
 	sysbenchPrepareCommand = "prepare"
 	sysbenchRunCommand     = "run"
 	sysbenchCleanupCommand = "cleanup"
@@ -138,4 +160,36 @@ const (
 	mysqlGrantPermissionsSqlTemplate = "GRANT ALL ON %s.* to %s;"
 	mysqlSetGlobalLocalInfileSql     = "SET GLOBAL local_infile = 'ON';"
 	mysqlSetGlobalSqlModeSql         = "SET GLOBAL sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''));"
+
+	postgresInitDbDataDirFlag         = "--pgdata"
+	postgresUsernameFlag              = "--username"
+	postgresUsername                  = "postgres"
+	postgresDataDirFlag               = "-D"
+	postgresDropDatabaseSqlTemplate   = "DROP DATABASE IF EXISTS %s;"
+	postgresDropUserSqlTemplate       = "DROP USER IF EXISTS %s;"
+	postgresCreateUserSqlTemplate     = "CREATE USER %s WITH PASSWORD '%s';"
+	postgresCreateDatabaseSqlTemplate = "CREATE DATABASE %s WITH OWNER %s;"
+	postgresLcAllEnvVarKey            = "LC_ALL"
+	postgresLcAllEnvVarValue          = "C"
+
+	resultsDirname = "results"
+	stampFormat    = time.RFC3339
+	SqlStatsPrefix = "SQL statistics:"
+	read           = "read"
+	write          = "write"
+	other          = "other"
+	totalQueries   = "total"
+	totalEvents    = "total number of events"
+	min            = "min"
+	avg            = "avg"
+	max            = "max"
+	percentile     = "percentile"
+	sum            = "sum"
+	transactions   = "transactions"
+	queriesPerSec  = "queries"
+	ignoredErrors  = "ignored errors"
+	reconnects     = "reconnects"
+	totalTimeSecs  = "total time"
+
+	ResultFileTemplate = "%s_%s_%s_sysbench_performance%s"
 )

@@ -8,9 +8,10 @@ type ServerConfig interface {
 	GetPort() int
 	GetVersion() string
 	GetServerExec() string
+	GetResultsFormat() string
 	GetServerType() ServerType
 	GetServerArgs() ([]string, error)
-	GetTestingArgs(testConfig TestConfig) []string
+	GetTestingParams(testConfig TestConfig) TestParams
 	Validate() error
 	SetDefaults() error
 }

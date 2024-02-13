@@ -20,8 +20,8 @@ import (
 	"os"
 )
 
-func RunTpcc(ctx context.Context, config *TpccBenchmarkConfig) error {
-	err := config.updateDefaults()
+func RunTpcc(ctx context.Context, config TpccConfig) error {
+	err := config.Validate(ctx)
 	if err != nil {
 		return err
 	}
@@ -31,18 +31,25 @@ func RunTpcc(ctx context.Context, config *TpccBenchmarkConfig) error {
 		return err
 	}
 
-	for _, serverConfig := range config.Servers {
+	svs := config.GetServerConfigs()
+	for _, serverConfig := range svs {
 		var b Benchmarker
 		var results Results
-		switch serverConfig.Server {
+		st := serverConfig.GetServerType()
+		switch st {
 		case Dolt:
 			fmt.Println("Running dolt tpcc benchmarks")
 			b = NewDoltTpccBenchmarker(cwd, config, serverConfig)
 		case MySql:
+			sc, ok := serverConfig.(ProtocolServerConfig)
+			if !ok {
+				return ErrNotProtocolServerConfig
+			}
+
 			fmt.Println("Running mysql tpcc benchmarks")
-			b = NewMysqlTpccBenchmarker(cwd, config, serverConfig)
+			b = NewMysqlTpccBenchmarker(cwd, config, sc)
 		default:
-			panic(fmt.Sprintf("unexpected server type: %s", serverConfig.Server))
+			panic(fmt.Sprintf("unexpected server type: %s", st))
 		}
 
 		results, err = b.Benchmark(ctx)
@@ -55,7 +62,7 @@ func RunTpcc(ctx context.Context, config *TpccBenchmarkConfig) error {
 			return err
 		}
 
-		fmt.Printf("Successfuly wrote results for %s\n", serverConfig.Server)
+		fmt.Printf("Successfuly wrote results for %s\n", st)
 	}
 
 	return nil

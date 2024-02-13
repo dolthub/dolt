@@ -61,13 +61,13 @@ func (ct *testConfigImpl) GetTests(serverConfig ServerConfig) ([]Test, error) {
 		ct.N = 1
 	}
 
-	params := serverConfig.GetTestingArgs(ct)
+	params := serverConfig.GetTestingParams(ct)
 	tests := make([]Test, 0)
 
 	for i := 0; i < ct.N; i++ {
-		p := make([]string, len(params))
-		copy(p, params)
-		tests = append(tests, NewSysbenchTest(ct.NewId(), ct.Name, p, ct.FromScript))
+		//p := make([]string, params.Len())
+		//copy(p, params)
+		tests = append(tests, NewSysbenchTest(ct.NewId(), ct.Name, params, ct.FromScript))
 	}
 
 	return tests, nil

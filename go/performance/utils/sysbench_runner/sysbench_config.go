@@ -138,6 +138,10 @@ func (c *sysbenchRunnerConfigImpl) GetTestOptions() []string {
 	return c.TestOptions
 }
 
+func (c *sysbenchRunnerConfigImpl) GetServerConfigs() []ServerConfig {
+	return c.Servers
+}
+
 // Validate checks the config for the required fields and sets defaults
 // where necessary
 func (c *sysbenchRunnerConfigImpl) Validate(ctx context.Context) error {

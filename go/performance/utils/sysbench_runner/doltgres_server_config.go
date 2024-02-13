@@ -54,6 +54,10 @@ func (sc *doltgresServerConfigImpl) GetServerExec() string {
 	return sc.ServerExec
 }
 
+func (sc *doltgresServerConfigImpl) GetResultsFormat() string {
+	return sc.ResultsFormat
+}
+
 func (sc *doltgresServerConfigImpl) GetServerArgs() ([]string, error) {
 	params := make([]string, 0)
 	if sc.Host != "" {
@@ -66,18 +70,18 @@ func (sc *doltgresServerConfigImpl) GetServerArgs() ([]string, error) {
 	return params, nil
 }
 
-func (sc *doltgresServerConfigImpl) GetTestingArgs(testConfig TestConfig) []string {
-	params := make([]string, 0)
-	params = append(params, defaultSysbenchParams...)
-	params = append(params, "--db-driver=pgsql") // todo: replace with consts
-	params = append(params, fmt.Sprintf("--pgsql-db=%s", dbName))
-	params = append(params, fmt.Sprintf("--pgsql-host=%s", sc.Host))
-	params = append(params, "--pgsql-user=doltgres")
+func (sc *doltgresServerConfigImpl) GetTestingParams(testConfig TestConfig) TestParams {
+	params := NewSysbenchTestParams()
+	params.Append(defaultSysbenchParams...)
+	params.Append(fmt.Sprintf("%s=%s", sysbenchDbDriverFlag, sysbenchPostgresDbDriver))
+	params.Append(fmt.Sprintf("%s=%s", sysbenchPostgresDbFlag, dbName))
+	params.Append(fmt.Sprintf("%s=%s", sysbenchPostgresHostFlag, sc.Host))
+	params.Append(fmt.Sprintf("%s=%s", sysbenchPostgresUserFlag, doltgresUser))
 	if sc.Port != 0 {
-		params = append(params, fmt.Sprintf("--pgsql-port=%d", sc.Port))
+		params.Append(fmt.Sprintf("%s=%d", sysbenchPostgresPortFlag, sc.Port))
 	}
-	params = append(params, testConfig.GetOptions()...)
-	params = append(params, testConfig.GetName())
+	params.Append(testConfig.GetOptions()...)
+	params.Append(testConfig.GetName())
 	return params
 }
 

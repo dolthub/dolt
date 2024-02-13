@@ -6,10 +6,6 @@ import (
 	"os"
 )
 
-const (
-	CpuServerProfile = "cpu"
-)
-
 type ServerProfile string
 
 type doltServerConfigImpl struct {
@@ -89,6 +85,10 @@ func (sc *doltServerConfigImpl) GetServerType() ServerType {
 	return Dolt
 }
 
+func (sc *doltServerConfigImpl) GetResultsFormat() string {
+	return sc.ResultsFormat
+}
+
 func (sc *doltServerConfigImpl) GetServerExec() string {
 	return sc.ServerExec
 }
@@ -107,18 +107,18 @@ func (sc *doltServerConfigImpl) GetServerArgs() ([]string, error) {
 	return params, nil
 }
 
-func (sc *doltServerConfigImpl) GetTestingArgs(testConfig TestConfig) []string {
-	params := make([]string, 0)
-	params = append(params, defaultSysbenchParams...)
-	params = append(params, fmt.Sprintf("--mysql-db=%s", dbName)) // todo: replace these with consts
-	params = append(params, "--db-driver=mysql")
-	params = append(params, fmt.Sprintf("--mysql-host=%s", sc.Host))
-	params = append(params, "--mysql-user=root")
+func (sc *doltServerConfigImpl) GetTestingParams(testConfig TestConfig) TestParams {
+	params := NewSysbenchTestParams()
+	params.Append(defaultSysbenchParams...)
+	params.Append(fmt.Sprintf("%s=%s", sysbenchMysqlDbFlag, dbName))
+	params.Append(fmt.Sprintf("%s=%s", sysbenchDbDriverFlag, mysqlDriverName))
+	params.Append(fmt.Sprintf("%s=%s", sysbenchMysqlHostFlag, sc.Host))
+	params.Append(fmt.Sprintf("%s=%s", sysbenchMysqlUserFlag, defaultMysqlUser))
 	if sc.Port != 0 {
-		params = append(params, fmt.Sprintf("--mysql-port=%d", sc.Port))
+		params.Append(fmt.Sprintf("%s=%d", sysbenchMysqlPortFlag, sc.Port))
 	}
-	params = append(params, testConfig.GetOptions()...)
-	params = append(params, testConfig.GetName())
+	params.Append(testConfig.GetOptions()...)
+	params.Append(testConfig.GetName())
 	return params
 }
 

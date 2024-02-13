@@ -26,7 +26,7 @@ import (
 // FromResultCsvHeaders returns supported csv headers for a Result
 func FromResultCsvHeaders() []string {
 	return []string{
-		"id",
+		"id", // todo: replace with constants
 		"suite_id",
 		"test_id",
 		"runtime_os",

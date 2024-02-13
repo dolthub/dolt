@@ -10,28 +10,15 @@ import (
 	_ "github.com/lib/pq"
 )
 
-const (
-	postgresInitDbDataDirFlag         = "--pgdata"
-	postgresUsernameFlag              = "--username"
-	postgresUsername                  = "postgres"
-	postgresDataDirFlag               = "-D"
-	postgresDropDatabaseSqlTemplate   = "DROP DATABASE IF EXISTS %s;"
-	postgresDropUserSqlTemplate       = "DROP USER IF EXISTS %s;"
-	postgresCreateUserSqlTemplate     = "CREATE USER %s WITH PASSWORD '%s';"
-	postgresCreateDatabaseSqlTemplate = "CREATE DATABASE %s WITH OWNER %s;"
-	postgresLcAllEnvVarKey            = "LC_ALL"
-	postgresLcAllEnvVarValue          = "C"
-)
-
 type postgresBenchmarkerImpl struct {
 	dir          string // cwd
-	config       *sysbenchRunnerConfigImpl
-	serverConfig *doltServerConfigImpl
+	config       SysbenchConfig
+	serverConfig InitServerConfig
 }
 
 var _ Benchmarker = &postgresBenchmarkerImpl{}
 
-func NewPostgresBenchmarker(dir string, config *sysbenchRunnerConfigImpl, serverConfig *doltServerConfigImpl) *postgresBenchmarkerImpl {
+func NewPostgresBenchmarker(dir string, config SysbenchConfig, serverConfig InitServerConfig) *postgresBenchmarkerImpl {
 	return &postgresBenchmarkerImpl{
 		dir:          dir,
 		config:       config,
@@ -45,7 +32,7 @@ func (b *postgresBenchmarkerImpl) initDataDir(ctx context.Context) (string, erro
 		return "", err
 	}
 
-	pgInit := ExecCommand(ctx, b.serverConfig.InitExec, fmt.Sprintf("%s=%s", postgresInitDbDataDirFlag, serverDir), fmt.Sprintf("%s=%s", postgresUsernameFlag, postgresUsername))
+	pgInit := ExecCommand(ctx, b.serverConfig.GetInitDbExec(), fmt.Sprintf("%s=%s", postgresInitDbDataDirFlag, serverDir), fmt.Sprintf("%s=%s", postgresUsernameFlag, postgresUsername))
 	err = pgInit.Run()
 	if err != nil {
 		return "", err
@@ -55,7 +42,7 @@ func (b *postgresBenchmarkerImpl) initDataDir(ctx context.Context) (string, erro
 }
 
 func (b *postgresBenchmarkerImpl) createTestingDb(ctx context.Context) (err error) {
-	psqlconn := fmt.Sprintf(psqlDsnTemplate, b.serverConfig.Host, b.serverConfig.Port, postgresUsername, "", dbName)
+	psqlconn := fmt.Sprintf(psqlDsnTemplate, b.serverConfig.GetHost(), b.serverConfig.GetPort(), postgresUsername, "", dbName)
 
 	var db *sql.DB
 	db, err = sql.Open(postgresDriver, psqlconn)
@@ -124,16 +111,21 @@ func (b *postgresBenchmarkerImpl) Benchmark(ctx context.Context) (results Result
 		return
 	}
 
-	var tests []*sysbenchTestImpl
-	tests, err = GetTests(b.config, b.serverConfig, nil)
+	var tests []Test
+	tests, err = GetTests(b.config, b.serverConfig)
 	if err != nil {
 		return
 	}
 
 	results = make(Results, 0)
-	for i := 0; i < b.config.Runs; i++ {
+	runs := b.config.GetRuns()
+	for i := 0; i < runs; i++ {
 		for _, test := range tests {
-			tester := NewSysbenchTester(b.config, b.serverConfig, test, serverParams, stampFunc)
+			t, ok := test.(SysbenchTest)
+			if !ok {
+				return nil, ErrNotSysbenchTest
+			}
+			tester := NewSysbenchTester(b.config, b.serverConfig, t, serverParams, stampFunc)
 			var r *Result
 			r, err = tester.Test(ctx)
 			if err != nil {

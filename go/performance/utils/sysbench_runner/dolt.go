@@ -2,6 +2,7 @@ package sysbench_runner
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/dolthub/dolt/go/store/types"
 )
+
+var ErrNotSysbenchTest = errors.New("sysbench test is required")
 
 var stampFunc = func() string { return time.Now().UTC().Format(stampFormat) }
 
@@ -82,7 +85,11 @@ func (b *doltBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
 	runs := b.config.GetRuns()
 	for i := 0; i < runs; i++ {
 		for _, test := range tests {
-			tester := NewSysbenchTester(b.config, b.serverConfig, test, serverParams, stampFunc)
+			t, ok := test.(SysbenchTest)
+			if !ok {
+				return nil, ErrNotSysbenchTest
+			}
+			tester := NewSysbenchTester(b.config, b.serverConfig, t, serverParams, stampFunc)
 			r, err := tester.Test(ctx)
 			if err != nil {
 				server.Stop()
