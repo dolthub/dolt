@@ -17,6 +17,7 @@ package sysbench_runner
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 	"testing"
 	"time"
 
@@ -266,6 +267,9 @@ func TestFromOutputResults(t *testing.T) {
 	params := NewSysbenchTestParams()
 	params.Append(testTestParams)
 
+	serverParams := defaultDoltServerParams
+	serverParams = append(serverParams, testServerParams)
+
 	tests := []struct {
 		description    string
 		output         []byte
@@ -283,7 +287,6 @@ func TestFromOutputResults(t *testing.T) {
 				RuntimeGoArch: testGoArch,
 			},
 			serverConfig: &doltServerConfigImpl{
-				Host:       "localhost",
 				Version:    testServerVersion,
 				ServerExec: "test-exec",
 			},
@@ -296,7 +299,8 @@ func TestFromOutputResults(t *testing.T) {
 				SuiteId:                  testSuiteId,
 				RuntimeOS:                testOS,
 				RuntimeGoArch:            testGoArch,
-				ServerName:               testServer,
+				ServerName:               string(Dolt),
+				ServerParams:             strings.Join(defaultDoltServerParams, " "),
 				ServerVersion:            testServerVersion,
 				TestName:                 testTestName,
 				TestParams:               testTestParams,
@@ -317,6 +321,7 @@ func TestFromOutputResults(t *testing.T) {
 			},
 		},
 	}
+
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
 			serverParams, err := test.serverConfig.GetServerArgs()
