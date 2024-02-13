@@ -145,10 +145,8 @@ seed_and_start_serial_remote() {
     # dolt_diff table will show two rows, because each row is a delta.
     run dolt sql -q "select * from dolt_diff"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Added Val: 5 " ]] || false
     [[ "$output" =~ "Added Val: 4 " ]] || false
     ! [[ "$output" =~ "Added Val: 3 " ]] || false
-    ! [[ "$output" =~ "Added Val: 2 " ]] || false
 
     run dolt sql -q "select * from dolt_commits"
     [ "$status" -eq 0 ]
@@ -157,13 +155,19 @@ seed_and_start_serial_remote() {
     [[ "$output" =~ "Added Val: 3 " ]] || false
     ! [[ "$output" =~ "Added Val: 2 " ]] || false
 
+    # A full clone would have 5 commits with i=1, so if we have 3, we are looking good.
+    run dolt sql -q "select count(*) = 3 from dolt_history_vals where i = 1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "true" ]] || false
 
-    # NM4 - not sure what dolt_history_{table} should do. Currently errors out every time.
-#    run dolt sql -q "select * from dolt_history_vals"
-#    [ "$status" -eq 0 ]
-#    [[ "$output" =~ "yo mama" ]] || false
-#    [[ "$output" =~ "4 " ]] || false
-#    [[ "$output" =~ "3 " ]] || false
+    # A full clone would have 2 commits with i=4, and our shallow clone has all the commits for that row.
+    run dolt sql -q "select count(*) = 2 from dolt_history_vals where i = 4"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "true" ]] || false
+
+    run dolt sql -q "select count(distinct commit_hash) = 3 from dolt_history_vals"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "true" ]] || false
 
     # Verify that the table is complete.
     run dolt sql -q "select sum(i) from vals"

@@ -458,7 +458,7 @@ func (cp commitPartitioner) Next(ctx *sql.Context) (sql.Partition, error) {
 	}
 	cm, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, doltdb.ErrGhostCommitEncountered // NM4 TEST.
+		return nil, io.EOF
 	}
 
 	return &commitPartition{h, cm}, nil

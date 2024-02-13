@@ -153,15 +153,11 @@ func NewCommitsRowItr(ctx *sql.Context, ddb *doltdb.DoltDB) (CommitsRowItr, erro
 func (itr CommitsRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 	h, optCmt, err := itr.itr.Next(ctx)
 	if err != nil {
-		if err == doltdb.ErrGhostCommitEncountered {
-			return nil, io.EOF
-		}
-
 		return nil, err
 	}
 	cm, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, doltdb.ErrGhostCommitRuntimeFailure
+		return nil, io.EOF
 	}
 
 	meta, err := cm.GetCommitMeta(ctx)

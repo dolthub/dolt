@@ -60,7 +60,6 @@ func pushDataset(ctx context.Context, destDB, srcDB datas.Database, ds datas.Dat
 		return err
 	}
 
-	// NM4 tmp to compile.
 	err := pullHash(ctx, destDB, srcDB, []hash.Hash{addr}, tmpDir, nil, nil)
 	if err != nil {
 		return err

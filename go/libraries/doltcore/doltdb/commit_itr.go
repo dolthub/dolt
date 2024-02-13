@@ -136,9 +136,11 @@ func (cmItr *commitItr) Next(ctx context.Context) (hash.Hash, *OptionalCommit, e
 	next := cmItr.unprocessed[numUnprocessed-1]
 	cmItr.unprocessed = cmItr.unprocessed[:numUnprocessed-1]
 	cmItr.curr, err = HashToCommit(ctx, cmItr.ddb.ValueReadWriter(), cmItr.ddb.ns, next)
-
-	if err != nil {
+	if err != nil && err != ErrGhostCommitEncountered {
 		return hash.Hash{}, nil, err
+	}
+	if err == ErrGhostCommitEncountered {
+		cmItr.curr = nil
 	}
 
 	return next, &OptionalCommit{cmItr.curr, next}, nil

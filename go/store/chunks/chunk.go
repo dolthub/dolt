@@ -58,7 +58,7 @@ func (c Chunk) IsEmpty() bool {
 	return len(c.data) == 0
 }
 
-// IsGhost returns true if the chunk is a ghost chunk. Ghost chunks have not data, so if IsGhost() returns true, Data() will be an empty slice.
+// IsGhost returns true if the chunk is a ghost chunk. Ghost chunks have no data, so if IsGhost() returns true, Data() will be an empty slice.
 func (c Chunk) IsGhost() bool {
 	return c.ghost
 }
