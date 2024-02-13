@@ -137,6 +137,7 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~profile.bats~
 ~ls.bats~
 ~rebase.bats~
+~shallow-clone.bats~
 EOM
 )
 

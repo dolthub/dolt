@@ -51,9 +51,8 @@ seed_and_start_serial_remote() {
 
     mkdir clones
     cd clones
-    run dolt sql -q "call dolt_clone('--depth', '1','http://localhost:50051/test-org/test-repo')"
 
-    [ "$status" -eq 0 ]
+    dolt sql -q "call dolt_clone('--depth', '1','http://localhost:50051/test-org/test-repo')"
 
     run dolt log --oneline --decorate=no
     [ "$status" -eq 0 ]
