@@ -263,12 +263,15 @@ func fromResultSysbenchOutput(r *Result) string {
 }
 
 func TestFromOutputResults(t *testing.T) {
+	params := NewSysbenchTestParams()
+	params.Append(testTestParams)
+
 	tests := []struct {
 		description    string
 		output         []byte
 		config         Config
 		serverConfig   ServerConfig
-		test           Test
+		test           SysbenchTest
 		expectedResult *Result
 		expectedError  error
 	}{
@@ -281,13 +284,12 @@ func TestFromOutputResults(t *testing.T) {
 			},
 			serverConfig: &doltServerConfigImpl{
 				Host:       "localhost",
-				Server:     ServerType(testServer),
 				Version:    testServerVersion,
 				ServerExec: "test-exec",
 			},
 			test: &sysbenchTestImpl{
 				Name:   testTestName,
-				Params: []string{testTestParams},
+				Params: params,
 			},
 			expectedResult: &Result{
 				Id:                       testId,
@@ -319,60 +321,9 @@ func TestFromOutputResults(t *testing.T) {
 		t.Run(test.description, func(t *testing.T) {
 			serverParams, err := test.serverConfig.GetServerArgs()
 			assert.NoError(t, err)
-			actual, err := OutputToResult(test.output, test.serverConfig.GetServerType(), test.serverConfig.GetVersion(), test.test.Name, test.test.id, testSuiteId, test.config.RuntimeOS, test.config.RuntimeGoArch, serverParams, test.test.Params, func() string { return testId }, test.test.FromScript)
+			actual, err := OutputToResult(test.output, test.serverConfig.GetServerType(), test.serverConfig.GetVersion(), test.test.GetName(), test.test.GetId(), testSuiteId, test.config.GetRuntimeOs(), test.config.GetRuntimeGoArch(), serverParams, test.test.GetParamsToSlice(), func() string { return testId }, test.test.GetFromScript())
 			assert.Equal(t, test.expectedError, err)
 			assert.Equal(t, test.expectedResult, actual)
 		})
 	}
 }
-
-type testServerConfigImpl struct{}
-
-func (t testServerConfigImpl) GetId() string {
-	return "test-id"
-}
-
-func (t testServerConfigImpl) GetHost() string {
-	return "test-host"
-}
-
-func (t testServerConfigImpl) GetPort() int {
-	return 1234
-}
-
-func (t testServerConfigImpl) GetVersion() string {
-	return "test-version"
-}
-
-func (t testServerConfigImpl) GetServerExec() string {
-	return "test-server-exec"
-}
-
-func (t testServerConfigImpl) GetResultsFormat() string {
-	return CsvFormat
-}
-
-func (t testServerConfigImpl) GetServerType() ServerType {
-	return ServerType(testServer)
-}
-
-func (t testServerConfigImpl) GetServerArgs() ([]string, error) {
-	return []string{}, nil
-}
-
-func (t testServerConfigImpl) GetTestingArgs(testConfig TestConfig) []string {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (t testServerConfigImpl) Validate() error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (t testServerConfigImpl) SetDefaults() error {
-	//TODO implement me
-	panic("implement me")
-}
-
-var _ ServerConfig = &testServerConfigImpl{}

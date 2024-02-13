@@ -32,7 +32,7 @@ type sysbenchTestImpl struct {
 	FromScript bool
 }
 
-var _ Test = &sysbenchTestImpl{}
+var _ SysbenchTest = &sysbenchTestImpl{}
 
 func NewSysbenchTest(id, name string, params TestParams, fromScript bool) *sysbenchTestImpl {
 	return &sysbenchTestImpl{
@@ -53,6 +53,10 @@ func (t *sysbenchTestImpl) GetName() string {
 
 func (t *sysbenchTestImpl) GetParamsToSlice() []string {
 	return t.Params.ToSlice()
+}
+
+func (t *sysbenchTestImpl) GetFromScript() bool {
+	return t.FromScript
 }
 
 // PrepareArgs returns a test's args for sysbench's prepare step

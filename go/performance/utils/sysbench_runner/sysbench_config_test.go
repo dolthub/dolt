@@ -23,32 +23,32 @@ import (
 var testIdFunc = func() string { return "id" }
 
 func TestConfigTestGetTests(t *testing.T) {
-	empty := &TestConfigImpl{Name: "test_name"}
+	empty := &testConfigImpl{Name: "test_name"}
 
-	one := &TestConfigImpl{Name: "test_one", N: 3}
-	two := &TestConfigImpl{Name: "test_two", N: 2}
-	three := &TestConfigImpl{Name: "test_three", N: 1}
+	one := &testConfigImpl{Name: "test_one", N: 3}
+	two := &testConfigImpl{Name: "test_two", N: 2}
+	three := &testConfigImpl{Name: "test_three", N: 1}
 
-	opts := &TestConfigImpl{
+	opts := &testConfigImpl{
 		Name:    "test_options",
 		N:       1,
 		Options: []string{"--create_secondary=on", "--auto_inc=off"},
 	}
 
-	serverConfig := &doltServerConfigImpl{Server: MySql, Version: "test-version", Host: "localhost", ResultsFormat: CsvFormat}
+	serverConfig := &doltServerConfigImpl{Version: "test-version", Host: "localhost", ResultsFormat: CsvFormat}
 
 	tests := []struct {
 		description   string
-		config        *sysbenchRunnerConfigImpl
-		expectedTests []*sysbenchTestImpl
+		config        SysbenchConfig
+		expectedTests []SysbenchTest
 		expectedError error
 	}{
 		{
 			description: "should error if no test name is defined",
 			config: &sysbenchRunnerConfigImpl{
-				Servers: []*doltServerConfigImpl{serverConfig},
-				Tests: []*TestConfigImpl{
-					{Name: ""},
+				Servers: []ServerConfig{serverConfig},
+				Tests: []TestConfig{
+					&testConfigImpl{Name: ""},
 				},
 			},
 			expectedTests: nil,
@@ -57,47 +57,48 @@ func TestConfigTestGetTests(t *testing.T) {
 		{
 			description: "should create single test if N is < 1",
 			config: &sysbenchRunnerConfigImpl{
-				Servers: []*doltServerConfigImpl{serverConfig},
-				Tests:   []*TestConfigImpl{empty},
+				Servers: []ServerConfig{serverConfig},
+				Tests:   []TestConfig{empty},
 			},
-			expectedTests: []*sysbenchTestImpl{
-				{
+			expectedTests: []SysbenchTest{
+				&sysbenchTestImpl{
 					id:     testIdFunc(),
 					Name:   "test_name",
-					Params: fromConfigTestParams(empty, serverConfig),
+					Params: serverConfig.GetTestingParams(empty),
 				},
 			},
 		},
 		{
 			description: "should return a test for each N defined on the TestConfigImpl",
 			config: &sysbenchRunnerConfigImpl{
-				Servers: []*doltServerConfigImpl{serverConfig},
-				Tests:   []*TestConfigImpl{one, two, three},
+				Servers: []ServerConfig{serverConfig},
+				Tests:   []TestConfig{one, two, three},
 			},
-			expectedTests: []*sysbenchTestImpl{
-				{id: testIdFunc(), Name: "test_one", Params: fromConfigTestParams(one, serverConfig)},
-				{id: testIdFunc(), Name: "test_one", Params: fromConfigTestParams(one, serverConfig)},
-				{id: testIdFunc(), Name: "test_one", Params: fromConfigTestParams(one, serverConfig)},
-				{id: testIdFunc(), Name: "test_two", Params: fromConfigTestParams(two, serverConfig)},
-				{id: testIdFunc(), Name: "test_two", Params: fromConfigTestParams(two, serverConfig)},
-				{id: testIdFunc(), Name: "test_three", Params: fromConfigTestParams(three, serverConfig)},
+			expectedTests: []SysbenchTest{
+				&sysbenchTestImpl{id: testIdFunc(), Name: "test_one", Params: serverConfig.GetTestingParams(one)},
+				&sysbenchTestImpl{id: testIdFunc(), Name: "test_one", Params: serverConfig.GetTestingParams(one)},
+				&sysbenchTestImpl{id: testIdFunc(), Name: "test_one", Params: serverConfig.GetTestingParams(one)},
+				&sysbenchTestImpl{id: testIdFunc(), Name: "test_two", Params: serverConfig.GetTestingParams(two)},
+				&sysbenchTestImpl{id: testIdFunc(), Name: "test_two", Params: serverConfig.GetTestingParams(two)},
+				&sysbenchTestImpl{id: testIdFunc(), Name: "test_three", Params: serverConfig.GetTestingParams(three)},
 			},
 		},
 		{
 			description: "should apply user options to test params",
 			config: &sysbenchRunnerConfigImpl{
-				Servers: []*doltServerConfigImpl{serverConfig},
-				Tests:   []*TestConfigImpl{opts},
+				Servers: []ServerConfig{serverConfig},
+				Tests:   []TestConfig{opts},
 			},
-			expectedTests: []*sysbenchTestImpl{
-				{id: testIdFunc(), Name: "test_options", Params: fromConfigTestParams(opts, serverConfig)},
+			expectedTests: []SysbenchTest{
+				&sysbenchTestImpl{id: testIdFunc(), Name: "test_options", Params: serverConfig.GetTestingParams(opts)},
 			},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
-			for _, s := range test.config.Servers {
-				actual, err := GetTests(test.config, s, testIdFunc)
+			svs := test.config.GetServerConfigs()
+			for _, s := range svs {
+				actual, err := GetTests(test.config, s)
 				assert.Equal(t, test.expectedError, err)
 				assert.Equal(t, len(test.expectedTests), len(actual))
 				assert.ElementsMatch(t, test.expectedTests, actual)
