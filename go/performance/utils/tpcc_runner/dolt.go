@@ -52,6 +52,10 @@ func BenchmarkDolt(ctx context.Context, tppcConfig *TpccBenchmarkConfig, serverC
 		return nil, err
 	}
 
+	if err := configureServer(ctx, serverConfig.ServerExec, testRepo); err != nil {
+		return nil, err
+	}
+
 	withKeyCtx, cancel := context.WithCancel(ctx)
 	gServer, serverCtx := errgroup.WithContext(withKeyCtx)
 
@@ -145,6 +149,22 @@ func initDoltRepo(ctx context.Context, config *sysbench_runner.ServerConfig, nbf
 	}
 
 	return testRepo, nil
+}
+
+func configureServer(ctx context.Context, doltPath, dbPath string) error {
+	queries := []string{
+		"set @@PERSIST.dolt_stats_auto_refresh_enabled = 1;",
+		"set @@PERSIST.dolt_stats_auto_refresh_interval = 2;",
+		"set @@PERSIST.dolt_stats_auto_refresh_threshold = 1.0;",
+	}
+	for _, q := range queries {
+		q := sysbench_runner.ExecCommand(ctx, doltPath, "sql", "-q", q)
+		q.Dir = dbPath
+		if err := q.Run(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // getDoltServer returns a exec.Cmd for a dolt server
