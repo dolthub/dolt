@@ -11,16 +11,10 @@ import (
 	"github.com/google/uuid"
 )
 
-const (
-	sysbenchCommand       = "sysbench"
-	luaPathEnvVarTemplate = "LUA_PATH=%s"
-	luaPath               = "?.lua"
-)
-
 type sysbenchTesterImpl struct {
-	test         *sysbenchTestImpl
-	config       *sysbenchRunnerConfigImpl
-	serverConfig *doltServerConfigImpl
+	test         Test
+	config       Config
+	serverConfig ServerConfig
 	serverParams []string
 	stampFunc    func() string
 	idFunc       func() string
@@ -29,19 +23,19 @@ type sysbenchTesterImpl struct {
 
 var _ Tester = &sysbenchTesterImpl{}
 
-func NewSysbenchTester(config *sysbenchRunnerConfigImpl, serverConfig *doltServerConfigImpl, test *sysbenchTestImpl, serverParams []string, stampFunc func() string) *sysbenchTesterImpl {
+func NewSysbenchTester(config Config, serverConfig ServerConfig, test Test, serverParams []string, stampFunc func() string) *sysbenchTesterImpl {
 	return &sysbenchTesterImpl{
 		config:       config,
 		serverParams: serverParams,
 		serverConfig: serverConfig,
 		test:         test,
-		suiteId:      serverConfig.GetId(),
+		suiteId:      serverConfig.Id(),
 		stampFunc:    stampFunc,
 	}
 }
 
 func (t *sysbenchTesterImpl) newResult() (*Result, error) {
-	serverParams, err := t.serverConfig.GetServerArgs()
+	serverParams, err := t.serverConfig.ServerArgs()
 	if err != nil {
 		return nil, err
 	}
@@ -56,36 +50,36 @@ func (t *sysbenchTesterImpl) newResult() (*Result, error) {
 	}
 
 	var name string
-	if t.test.FromScript {
-		base := filepath.Base(t.test.Name)
+	if t.test.FromScript() {
+		base := filepath.Base(t.test.Name())
 		ext := filepath.Ext(base)
 		name = strings.TrimSuffix(base, ext)
 	} else {
-		name = t.test.Name
+		name = t.test.Name()
 	}
 
 	return &Result{
 		Id:            getId(),
 		SuiteId:       t.suiteId,
-		TestId:        t.test.id,
-		RuntimeOS:     t.config.RuntimeOS,
-		RuntimeGoArch: t.config.RuntimeGoArch,
-		ServerName:    string(t.serverConfig.Server),
-		ServerVersion: t.serverConfig.Version,
+		TestId:        t.test.Id(),
+		RuntimeOS:     t.config.RuntimeOs(),
+		RuntimeGoArch: t.config.RuntimeGoArch(),
+		ServerName:    string(t.serverConfig.ServerType()),
+		ServerVersion: t.serverConfig.Version(),
 		ServerParams:  strings.Join(serverParams, " "),
 		TestName:      name,
-		TestParams:    strings.Join(t.test.Params, " "),
+		TestParams:    strings.Join(t.test.ParamsToSlice(), " "),
 	}, nil
 }
 
 func (t *sysbenchTesterImpl) outputToResult(output []byte) (*Result, error) {
-	return OutputToResult(output, t.serverConfig.Server, t.serverConfig.Version, t.test.Name, t.test.id, t.suiteId, t.config.RuntimeOS, t.config.RuntimeGoArch, t.serverParams, t.test.Params, nil, t.test.FromScript)
+	return OutputToResult(output, t.serverConfig.ServerType(), t.serverConfig.Version(), t.test.Name(), t.test.Id(), t.suiteId, t.config.RuntimeOs(), t.config.RuntimeGoArch(), t.serverParams, t.test.ParamsToSlice(), nil, t.test.FromScript())
 }
 
 func (t *sysbenchTesterImpl) prepare(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, sysbenchCommand, t.test.Prepare()...)
-	if t.test.FromScript {
-		lp := filepath.Join(t.config.ScriptDir, luaPath)
+	cmd := exec.CommandContext(ctx, sysbenchCommand, t.test.PrepareArgs()...)
+	if t.test.FromScript() {
+		lp := filepath.Join(t.config.ScriptDir(), luaPath)
 		cmd.Env = os.Environ()
 		cmd.Env = append(cmd.Env, fmt.Sprintf(luaPathEnvVarTemplate, lp))
 	}
@@ -98,9 +92,9 @@ func (t *sysbenchTesterImpl) prepare(ctx context.Context) error {
 }
 
 func (t *sysbenchTesterImpl) run(ctx context.Context) (*Result, error) {
-	cmd := exec.CommandContext(ctx, sysbenchCommand, t.test.Run()...)
-	if t.test.FromScript {
-		lp := filepath.Join(t.config.ScriptDir, luaPath)
+	cmd := exec.CommandContext(ctx, sysbenchCommand, t.test.RunArgs()...)
+	if t.test.FromScript() {
+		lp := filepath.Join(t.config.ScriptDir(), luaPath)
 		cmd.Env = os.Environ()
 		cmd.Env = append(cmd.Env, fmt.Sprintf(luaPathEnvVarTemplate, lp))
 	}
@@ -126,9 +120,9 @@ func (t *sysbenchTesterImpl) run(ctx context.Context) (*Result, error) {
 }
 
 func (t *sysbenchTesterImpl) cleanup(ctx context.Context) error {
-	cmd := ExecCommand(ctx, sysbenchCommand, t.test.Cleanup()...)
-	if t.test.FromScript {
-		lp := filepath.Join(t.config.ScriptDir, luaPath)
+	cmd := ExecCommand(ctx, sysbenchCommand, t.test.CleanupArgs()...)
+	if t.test.FromScript() {
+		lp := filepath.Join(t.config.ScriptDir(), luaPath)
 		cmd.Env = os.Environ()
 		cmd.Env = append(cmd.Env, fmt.Sprintf(luaPathEnvVarTemplate, lp))
 	}

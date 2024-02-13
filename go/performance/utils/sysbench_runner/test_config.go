@@ -5,6 +5,7 @@ import "github.com/google/uuid"
 type TestConfig interface {
 	GetName() string
 	GetOptions() []string
+	AppendOption(opt string)
 	GetTests(serverConfig ServerConfig) ([]Test, error)
 	NewId() string
 }
@@ -46,6 +47,10 @@ func (ct *testConfigImpl) GetName() string {
 
 func (ct *testConfigImpl) GetOptions() []string {
 	return ct.Options
+}
+
+func (ct *testConfigImpl) AppendOption(opt string) {
+	ct.Options = append(ct.Options, opt)
 }
 
 func (ct *testConfigImpl) GetTests(serverConfig ServerConfig) ([]Test, error) {

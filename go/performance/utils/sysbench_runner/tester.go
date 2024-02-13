@@ -7,7 +7,19 @@ type Tester interface {
 }
 
 type Test interface {
-	PrepareArgs() []string
-	RunArgs() []string
-	CleanupArgs() []string
+	GetId() string
+	GetName() string
+	GetParamsToSlice() []string
+	GetPrepareArgs() []string
+	GetRunArgs() []string
+	GetCleanupArgs() []string
+}
+
+type SysbenchTest interface {
+	Test
+	GetFromScript() bool
+}
+
+type TestParams interface {
+	ToSlice() []string
 }

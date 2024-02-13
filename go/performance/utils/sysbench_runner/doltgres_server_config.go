@@ -98,5 +98,20 @@ func (sc *doltgresServerConfigImpl) SetDefaults() error {
 	if sc.Host == "" {
 		sc.Host = defaultHost
 	}
+	if sc.Port < 1 {
+		sc.Port = defaultDoltgresPort
+	}
 	return nil
+}
+
+func (sc *doltgresServerConfigImpl) GetId() string {
+	return sc.Id
+}
+
+func (sc *doltgresServerConfigImpl) GetHost() string {
+	return sc.Host
+}
+
+func (sc *doltgresServerConfigImpl) GetPort() int {
+	return sc.Port
 }

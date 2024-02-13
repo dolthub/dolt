@@ -25,43 +25,6 @@ import (
 	"runtime"
 )
 
-const (
-	Dolt     ServerType = "dolt"
-	Doltgres ServerType = "doltgres"
-	Postgres ServerType = "postgres"
-	MySql    ServerType = "mysql"
-
-	CsvFormat  = "csv"
-	JsonFormat = "json"
-
-	CsvExt  = ".csv"
-	JsonExt = ".json"
-
-	defaultHost = "127.0.0.1"
-	defaultPort = 3306
-
-	defaultMysqlSocket = "/var/run/mysqld/mysqld.sock"
-
-	tcpProtocol  = "tcp"
-	unixProtocol = "unix"
-
-	sysbenchUsername  = "sysbench"
-	sysbenchUserLocal = "'sysbench'@'localhost'"
-	sysbenchPassLocal = "sysbenchpass"
-
-	userFlag                    = "--user"
-	hostFlag                    = "--host"
-	portFlag                    = "--port"
-	skipBinLogFlag              = "--skip-log-bin"
-	profileFlag                 = "--prof"
-	profilePathFlag             = "--prof-path"
-	cpuProfile                  = "cpu"
-	doltgresDataDirFlag         = "--data-dir"
-	MysqlDataDirFlag            = "--datadir"
-	MysqlInitializeInsecureFlag = "--initialize-insecure"
-	cpuProfileFilename          = "cpu.pprof"
-)
-
 var (
 	ErrTestNameNotDefined            = errors.New("test name not defined")
 	ErrNoServersDefined              = errors.New("servers not defined")
@@ -70,149 +33,50 @@ var (
 )
 
 var defaultSysbenchParams = []string{
-	"--db-ps-mode=disable",
-	"--rand-type=uniform",
+	fmt.Sprintf("%s=%s", sysbenchDbPsModeFlag, sysbenchDbPsModeDisable),
+	fmt.Sprintf("%s=%s", sysbenchRandTypeFlag, sysbenchRandTypeUniform),
 }
 
-var defaultDoltServerParams = []string{"sql-server"}
+var defaultDoltServerParams = []string{doltSqlServerCommand}
 
 var defaultSysbenchTests = []TestConfig{
-	NewTestConfig("oltp_read_only", []string{}, false),
-	NewTestConfig("oltp_insert", []string{}, false),
-	NewTestConfig("bulk_insert", []string{}, false),
-	NewTestConfig("oltp_point_select", []string{}, false),
-	NewTestConfig("select_random_points", []string{}, false),
-	NewTestConfig("select_random_ranges", []string{}, false),
-	NewTestConfig("oltp_write_only", []string{}, false),
-	NewTestConfig("oltp_read_write", []string{}, false),
-	NewTestConfig("oltp_update_index", []string{}, false),
-	NewTestConfig("oltp_update_non_index", []string{}, false),
+	NewTestConfig(sysbenchOltpReadOnlyTestName, []string{}, false),
+	NewTestConfig(sysbenchOltpInsertTestName, []string{}, false),
+	NewTestConfig(sysbenchBulkInsertTestName, []string{}, false),
+	NewTestConfig(sysbenchOltpPointSelectTestName, []string{}, false),
+	NewTestConfig(sysbenchSelectRandomPointsTestName, []string{}, false),
+	NewTestConfig(sysbenchSelectRandomRangesTestName, []string{}, false),
+	NewTestConfig(sysbenchOltpWriteOnlyTestName, []string{}, false),
+	NewTestConfig(sysbenchOltpReadWriteTestName, []string{}, false),
+	NewTestConfig(sysbenchOltpUpdateIndexTestName, []string{}, false),
+	NewTestConfig(sysbenchOltpUpdateNonIndexTestName, []string{}, false),
 }
 
 var defaultDoltLuaScripts = map[string]string{
-	"covering_index_scan.lua": "covering_index_scan.lua",
-	"groupby_scan.lua":        "groupby_scan.lua",
-	"index_join.lua":          "index_join.lua",
-	"index_join_scan.lua":     "index_join_scan.lua",
-	"index_scan.lua":          "index_scan.lua",
-	"oltp_delete_insert.lua":  "oltp_delete_insert.lua",
-	"table_scan.lua":          "table_scan.lua",
-	"types_delete_insert.lua": "types_delete_insert.lua",
-	"types_table_scan.lua":    "types_table_scan.lua",
+	sysbenchCoveringIndexScanLuaTestName: sysbenchCoveringIndexScanLuaTestName,
+	sysbenchGroupByScanLuaTestName:       sysbenchGroupByScanLuaTestName,
+	sysbenchIndexJoinLuaTestName:         sysbenchIndexJoinLuaTestName,
+	sysbenchIndexJoinScanLuaTestName:     sysbenchIndexJoinScanLuaTestName,
+	sysbenchIndexScanLuaTestName:         sysbenchIndexScanLuaTestName,
+	sysbenchOltpDeleteInsertLuaTestName:  sysbenchOltpDeleteInsertLuaTestName,
+	sysbenchTableScanLuaTestName:         sysbenchTableScanLuaTestName,
+	sysbenchTypesDeleteInsertLuaTestName: sysbenchTypesDeleteInsertLuaTestName,
+	sysbenchTypesTableScanLuaTestName:    sysbenchTypesTableScanLuaTestName,
 }
 
 // todo: check expressions need to be supported in doltgres for these
 // todo: postgres does not have geometry types also
 var defaultDoltgresLuaScripts = map[string]string{
-	//"covering_index_scan_postgres.lua": "covering_index_scan_postgres.lua",
-	//"groupby_scan_postgres.lua":        "groupby_scan_postgres.lua",
-	//"index_join_postgres.lua":          "index_join_postgres.lua",
-	//"index_join_scan_postgres.lua":     "index_join_scan_postgres.lua",
-	//"index_scan_postgres.lua":          "index_scan_postgres.lua",
-	//"oltp_delete_insert_postgres.lua":  "oltp_delete_insert_postgres.lua",
-	//"table_scan_postgres.lua":          "table_scan_postgres.lua",
-	//"types_delete_insert_postgres.lua": "types_delete_insert_postgres.lua",
-	//"types_table_scan_postgres.lua":    "types_table_scan_postgres.lua",
+	//sysbenchCoveringIndexScanPostgresLuaTestName: sysbenchCoveringIndexScanPostgresLuaTestName,
+	//sysbenchGroupByScanPostgresLuaTestName:       sysbenchGroupByScanPostgresLuaTestName,
+	//sysbenchIndexJoinPostgresLuaTestName:         sysbenchIndexJoinPostgresLuaTestName,
+	//sysbenchIndexJoinScanPostgresLuaTestName:     sysbenchIndexJoinScanPostgresLuaTestName,
+	//sysbenchIndexScanPostgresLuaTestName:         sysbenchIndexScanPostgresLuaTestName,
+	//sysbenchOltpDeleteInsertPostgresLuaTestName:  sysbenchOltpDeleteInsertPostgresLuaTestName,
+	//sysbenchTableScanPostgresLuaTestName:         sysbenchTableScanPostgresLuaTestName,
+	//sysbenchTypesDeleteInsertPostgresLuaTestName: sysbenchTypesDeleteInsertPostgresLuaTestName,
+	//sysbenchTypesTableScanPostgresLuaTestName:    sysbenchTypesTableScanPostgresLuaTestName,
 }
-
-//// TestConfigImpl provides users a way to define a test for multiple tablesizes
-//type TestConfig struct {
-//	// Name is the test name
-//	Name string
-//
-//	// N is the number of times a test should run
-//	N int
-//
-//	// Options are additional sysbench test options a user can supply to run with this test
-//	Options []string
-//
-//	// FromScript is a boolean indicating that this test is from a lua script
-//	FromScript bool
-//}
-
-//// NewConfigTest returns a TestConfigImpl containing the supplied args
-//func NewConfigTest(name string, opts []string, fromScript bool) *TestConfig {
-//	options := make([]string, 0)
-//	options = append(options, opts...)
-//	return &TestConfig{
-//		Name:       name,
-//		N:          1,
-//		Options:    options,
-//		FromScript: fromScript,
-//	}
-//}
-
-// GetTests returns a slice of Tests
-//func (ct *TestConfig) GetTests(serverConfig *doltServerConfigImpl, testIdFunc func() string) ([]*sysbenchTestImpl, error) {
-//	if ct.Name == "" {
-//		return nil, ErrTestNameNotDefined
-//	}
-//	if ct.N < 1 {
-//		ct.N = 1
-//	}
-//
-//	params := fromConfigTestParams(ct, serverConfig)
-//	tests := make([]*sysbenchTestImpl, 0)
-//
-//	var idFunc func() string
-//	if testIdFunc == nil {
-//		idFunc = func() string {
-//			return uuid.New().String()
-//		}
-//	} else {
-//		idFunc = testIdFunc
-//	}
-//
-//	for i := 0; i < ct.N; i++ {
-//		p := make([]string, len(params))
-//		copy(p, params)
-//		tests = append(tests, &sysbenchTestImpl{
-//			id:         idFunc(),
-//			Name:       ct.Name,
-//			Params:     p,
-//			FromScript: ct.FromScript,
-//		})
-//	}
-//	return tests, nil
-//}
-
-//// fromConfigTestParams returns params formatted for sysbench:
-//// `sysbench [options]... [testname] [command]`
-//func fromConfigTestParams(ct *TestConfig, serverConfig *doltServerConfigImpl) []string {
-//	params := make([]string, 0)
-//	params = append(params, defaultSysbenchParams...)
-//	if serverConfig.Server == MySql || serverConfig.Server == Dolt {
-//		params = append(params, fmt.Sprintf("--mysql-db=%s", dbName))
-//		params = append(params, "--db-driver=mysql")
-//		params = append(params, fmt.Sprintf("--mysql-host=%s", serverConfig.Host))
-//		if serverConfig.Port != 0 {
-//			params = append(params, fmt.Sprintf("--mysql-port=%d", serverConfig.Port))
-//		}
-//	} else if serverConfig.Server == Doltgres || serverConfig.Server == Postgres {
-//		params = append(params, "--db-driver=pgsql")
-//		params = append(params, fmt.Sprintf("--pgsql-db=%s", dbName))
-//		params = append(params, fmt.Sprintf("--pgsql-host=%s", serverConfig.Host))
-//		if serverConfig.Port != 0 {
-//			params = append(params, fmt.Sprintf("--pgsql-port=%d", serverConfig.Port))
-//		}
-//	}
-//
-//	// handle sysbench user for local mysql server
-//	if serverConfig.Server == MySql && serverConfig.Host == defaultHost {
-//		params = append(params, "--mysql-user=sysbench")
-//		params = append(params, fmt.Sprintf("--mysql-password=%s", sysbenchPassLocal))
-//	} else if serverConfig.Server == Dolt {
-//		params = append(params, "--mysql-user=root")
-//	} else if serverConfig.Server == Doltgres {
-//		params = append(params, "--pgsql-user=doltgres")
-//	} else if serverConfig.Server == Postgres {
-//		params = append(params, "--pgsql-user=postgres")
-//	}
-//
-//	params = append(params, ct.Options...)
-//	params = append(params, ct.Name)
-//	return params
-//}
 
 // sysbenchRunnerConfigImpl is the configuration for a benchmarking run
 type sysbenchRunnerConfigImpl struct {
@@ -246,6 +110,34 @@ func NewRunnerConfig() *sysbenchRunnerConfigImpl {
 	}
 }
 
+func (c *sysbenchRunnerConfigImpl) GetRuns() int {
+	return c.Runs
+}
+
+func (c *sysbenchRunnerConfigImpl) GetScriptDir() string {
+	return c.ScriptDir
+}
+
+func (c *sysbenchRunnerConfigImpl) GetNomsBinFormat() string {
+	return c.NomsBinFormat
+}
+
+func (c *sysbenchRunnerConfigImpl) GetRuntimeOs() string {
+	return c.RuntimeOS
+}
+
+func (c *sysbenchRunnerConfigImpl) GetRuntimeGoArch() string {
+	return c.RuntimeGoArch
+}
+
+func (c *sysbenchRunnerConfigImpl) GetTestConfigs() []TestConfig {
+	return c.Tests
+}
+
+func (c *sysbenchRunnerConfigImpl) GetTestOptions() []string {
+	return c.TestOptions
+}
+
 // Validate checks the config for the required fields and sets defaults
 // where necessary
 func (c *sysbenchRunnerConfigImpl) Validate(ctx context.Context) error {
@@ -266,7 +158,7 @@ func (c *sysbenchRunnerConfigImpl) Validate(ctx context.Context) error {
 func (c *sysbenchRunnerConfigImpl) validateServerConfigs() error {
 	portMap := make(map[int]ServerType)
 	for _, s := range c.Servers {
-		st := s.GetServerType()
+		st := s.ServerType()
 		if st != Dolt && st != MySql && st != Doltgres && st != Postgres {
 			return fmt.Errorf("unsupported server type: %s", st)
 		}
@@ -281,55 +173,10 @@ func (c *sysbenchRunnerConfigImpl) validateServerConfigs() error {
 			return err
 		}
 
-		//err := ValidateRequiredFields(string(s.Server), s.Version, s.ResultsFormat)
-		//if err != nil {
-		//	return err
-		//}
-
-		//if s.Server == MySql {
-		//	err = CheckProtocol(s.ConnectionProtocol)
-		//	if err != nil {
-		//		return err
-		//	}
-		//}
-		//
-		//if s.Host == "" {
-		//	s.Host = defaultHost
-		//}
-
 		portMap, err = CheckUpdatePortMap(s, portMap)
 		if err != nil {
 			return err
 		}
-
-		//err = CheckExec(s.ServerExec, "server exec")
-		//if err != nil {
-		//	return err
-		//}
-		//
-		//if s.Server == Postgres {
-		//	err = CheckExec(s.InitExec, "initdb exec")
-		//	if err != nil {
-		//		return err
-		//	}
-		//}
-		//
-		//if s.Server != Dolt && s.ServerProfile != "" {
-		//	return fmt.Errorf("profiling can only be done against a dolt server")
-		//}
-		//
-		//if s.Server == Dolt && s.ServerProfile != "" {
-		//	if s.ServerProfile != cpuProfile {
-		//		return fmt.Errorf("unsupported server profile: %s", s.ServerProfile)
-		//	}
-		//	if s.ProfilePath == "" {
-		//		cwd, err := os.Getwd()
-		//		if err != nil {
-		//			return err
-		//		}
-		//		s.ProfilePath = cwd
-		//	}
-		//}
 	}
 
 	return nil
@@ -337,24 +184,11 @@ func (c *sysbenchRunnerConfigImpl) validateServerConfigs() error {
 
 func (c *sysbenchRunnerConfigImpl) ContainsServerOfType(st ServerType) bool {
 	for _, s := range c.Servers {
-		if s.Server == st {
+		if s.ServerType() == st {
 			return true
 		}
 	}
 	return false
-}
-
-func ValidateRequiredFields(server, version, format string) error {
-	if server == "" {
-		return getMustSupplyError("server")
-	}
-	if version == "" {
-		return getMustSupplyError("version")
-	}
-	if format == "" {
-		return getMustSupplyError("results format")
-	}
-	return nil
 }
 
 // setDefaults sets defaults on the sysbenchRunnerConfigImpl
@@ -377,7 +211,7 @@ func (c *sysbenchRunnerConfigImpl) setDefaults() error {
 			}
 			c.ScriptDir = abs
 		}
-		tests, err := getDefaultTests(c)
+		tests, err := c.getDefaultTests()
 		if err != nil {
 			return err
 		}
@@ -389,17 +223,35 @@ func (c *sysbenchRunnerConfigImpl) setDefaults() error {
 	return nil
 }
 
-// CheckUpdatePortMap returns an error if multiple servers have specified the same port
-func CheckUpdatePortMap(serverConfig *doltServerConfigImpl, portMap map[int]ServerType) (map[int]ServerType, error) {
-	if serverConfig.Port == 0 {
-		serverConfig.Port = defaultPort
+func (c *sysbenchRunnerConfigImpl) getDefaultTests() ([]TestConfig, error) {
+	defaultTests := make([]TestConfig, 0)
+	defaultTests = append(defaultTests, defaultSysbenchTests...)
+	if c.ScriptDir != "" {
+		var luaScriptTests []TestConfig
+		var err error
+		if !c.ContainsServerOfType(Doltgres) && !c.ContainsServerOfType(Postgres) {
+			luaScriptTests, err = getLuaScriptTestsFromDir(c.ScriptDir, defaultDoltLuaScripts)
+		} else {
+			luaScriptTests, err = getLuaScriptTestsFromDir(c.ScriptDir, defaultDoltgresLuaScripts)
+		}
+		if err != nil {
+			return nil, err
+		}
+		defaultTests = append(defaultTests, luaScriptTests...)
 	}
-	srv, ok := portMap[serverConfig.Port]
-	if ok && srv != serverConfig.Server {
-		return nil, fmt.Errorf("servers have port conflict on port: %d\n", serverConfig.Port)
+	return defaultTests, nil
+}
+
+// CheckUpdatePortMap returns an error if multiple servers have specified the same port
+func CheckUpdatePortMap(serverConfig ServerConfig, portMap map[int]ServerType) (map[int]ServerType, error) {
+	port := serverConfig.Port()
+	st := serverConfig.ServerType()
+	srv, ok := portMap[port]
+	if ok && srv != st {
+		return nil, fmt.Errorf("servers have port conflict on port: %d\n", port)
 	}
 	if !ok {
-		portMap[serverConfig.Port] = serverConfig.Server
+		portMap[port] = st
 	}
 	return portMap, nil
 }
@@ -430,15 +282,15 @@ func CheckProtocol(protocol string) error {
 	return ErrUnsupportedConnectionProtocol
 }
 
-// GetTests returns a slice of Tests created from the
-// defined doltServerConfigImpl.Tests
-func GetTests(config *sysbenchRunnerConfigImpl, serverConfig *doltServerConfigImpl, testIdFunc func() string) ([]*sysbenchTestImpl, error) {
-	flattened := make([]*sysbenchTestImpl, 0)
-	for _, t := range config.Tests {
-		if len(config.TestOptions) > 0 {
-			t.Options = append(t.Options, config.TestOptions...)
+// GetTests returns a slice of Tests created from the ServerConfig
+func GetTests(config Config, serverConfig ServerConfig) ([]Test, error) {
+	flattened := make([]Test, 0)
+	for _, t := range config.GetTestConfigs() {
+		opts := config.GetTestOptions()
+		for _, o := range opts {
+			t.AppendOption(o)
 		}
-		tests, err := t.GetTests(serverConfig, testIdFunc)
+		tests, err := t.GetTests(serverConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -467,27 +319,8 @@ func getMustSupplyError(name string) error {
 	return fmt.Errorf("Must supply %s", name)
 }
 
-func getDefaultTests(config *sysbenchRunnerConfigImpl) ([]*TestConfig, error) {
-	defaultTests := make([]*TestConfig, 0)
-	defaultTests = append(defaultTests, defaultSysbenchTests...)
-	if config.ScriptDir != "" {
-		var luaScriptTests []*TestConfig
-		var err error
-		if !config.ContainsServerOfType(Doltgres) && !config.ContainsServerOfType(Postgres) {
-			luaScriptTests, err = getLuaScriptTestsFromDir(config.ScriptDir, defaultDoltLuaScripts)
-		} else {
-			luaScriptTests, err = getLuaScriptTestsFromDir(config.ScriptDir, defaultDoltgresLuaScripts)
-		}
-		if err != nil {
-			return nil, err
-		}
-		defaultTests = append(defaultTests, luaScriptTests...)
-	}
-	return defaultTests, nil
-}
-
-func getLuaScriptTestsFromDir(dir string, toInclude map[string]string) ([]*TestConfig, error) {
-	luaScripts := make([]*TestConfig, 0)
+func getLuaScriptTestsFromDir(dir string, toInclude map[string]string) ([]TestConfig, error) {
+	luaScripts := make([]TestConfig, 0)
 	abs, err := filepath.Abs(dir)
 	if err != nil {
 		return nil, err
@@ -499,7 +332,7 @@ func getLuaScriptTestsFromDir(dir string, toInclude map[string]string) ([]*TestC
 
 		file := filepath.Base(path)
 		if _, ok := toInclude[file]; ok {
-			luaScripts = append(luaScripts, NewConfigTest(path, []string{}, true))
+			luaScripts = append(luaScripts, NewTestConfig(path, []string{}, true))
 		}
 		return nil
 	})

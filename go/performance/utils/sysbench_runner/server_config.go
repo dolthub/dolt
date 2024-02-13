@@ -3,10 +3,15 @@ package sysbench_runner
 type ServerType string
 
 type ServerConfig interface {
+	GetId() string
+	GetHost() string
+	GetPort() int
+	GetVersion() string
 	GetServerExec() string
 	GetServerType() ServerType
 	GetServerArgs() ([]string, error)
 	GetTestingArgs(testConfig TestConfig) []string
+
 	Validate() error
 	SetDefaults() error
 }

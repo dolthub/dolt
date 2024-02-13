@@ -107,5 +107,20 @@ func (sc *postgresServerConfigImpl) SetDefaults() error {
 	if sc.Host == "" {
 		sc.Host = defaultHost
 	}
+	if sc.Port < 1 {
+		sc.Port = defaultPostgresPort
+	}
 	return nil
+}
+
+func (sc *postgresServerConfigImpl) GetId() string {
+	return sc.Id
+}
+
+func (sc *postgresServerConfigImpl) GetHost() string {
+	return sc.Host
+}
+
+func (sc *postgresServerConfigImpl) GetPort() int {
+	return sc.Port
 }

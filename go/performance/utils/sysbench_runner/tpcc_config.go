@@ -126,68 +126,68 @@ func (c *TpccBenchmarkConfig) validateServerConfigs() error {
 	return nil
 }
 
-// TpccTest encapsulates an End to End prepare, run, cleanup test case.
-type TpccTest struct {
-	// Id represents a unique test id
-	Id string
+//// TpccTest encapsulates an End to End prepare, run, cleanup test case.
+//type TpccTest struct {
+//	// Id represents a unique test id
+//	Id string
+//
+//	// Name represents the name of the test case
+//	Name string
+//
+//	// Params are associated parameters this test runs with
+//	Params *TpccTestParams
+//}
 
-	// Name represents the name of the test case
-	Name string
+//type TpccTestParams struct {
+//	// NumThreads represents the number of threads running queries concurrently.
+//	NumThreads int
+//
+//	// ScaleFactor represents the number of warehouse to test this at scale.
+//	ScaleFactor int
+//
+//	// Tables represents the number of tables created per warehouse.
+//	Tables int
+//
+//	// TrxLevel represents what transaction level to use
+//	TrxLevel string
+//
+//	// ReportCSV determines whether to report output as a csv.
+//	ReportCSV bool
+//
+//	// ReportInterval defines how often the tpcc benchmark outputs performance stats.
+//	ReportInterval int
+//
+//	// Time represents how long
+//	Time int
+//}
+//
+//func (t *TpccTestParams) ToSlice() []string {
+//	params := make([]string, 0)
+//	params = append(params, fmt.Sprintf("numThreads=%d", t.NumThreads))
+//	params = append(params, fmt.Sprintf("scaleFactor=%d", t.ScaleFactor))
+//	params = append(params, fmt.Sprintf("tables=%d", t.Tables))
+//	params = append(params, fmt.Sprintf("trxLevel=%s", t.TrxLevel))
+//	params = append(params, fmt.Sprintf("reportCsv=%t", t.ReportCSV))
+//	params = append(params, fmt.Sprintf("reportInterval=%d", t.ReportInterval))
+//	params = append(params, fmt.Sprintf("time=%d", t.Time))
+//	return params
+//}
 
-	// Params are associated parameters this test runs with
-	Params *TpccTestParams
-}
-
-type TpccTestParams struct {
-	// NumThreads represents the number of threads running queries concurrently.
-	NumThreads int
-
-	// ScaleFactor represents the number of warehouse to test this at scale.
-	ScaleFactor int
-
-	// Tables represents the number of tables created per warehouse.
-	Tables int
-
-	// TrxLevel represents what transaction level to use
-	TrxLevel string
-
-	// ReportCSV determines whether to report output as a csv.
-	ReportCSV bool
-
-	// ReportInterval defines how often the tpcc benchmark outputs performance stats.
-	ReportInterval int
-
-	// Time represents how long
-	Time int
-}
-
-func (t *TpccTestParams) ToSlice() []string {
-	params := make([]string, 0)
-	params = append(params, fmt.Sprintf("numThreads=%d", t.NumThreads))
-	params = append(params, fmt.Sprintf("scaleFactor=%d", t.ScaleFactor))
-	params = append(params, fmt.Sprintf("tables=%d", t.Tables))
-	params = append(params, fmt.Sprintf("trxLevel=%s", t.TrxLevel))
-	params = append(params, fmt.Sprintf("reportCsv=%t", t.ReportCSV))
-	params = append(params, fmt.Sprintf("reportInterval=%d", t.ReportInterval))
-	params = append(params, fmt.Sprintf("time=%d", t.Time))
-	return params
-}
-
-// NewDefaultTpccParams returns default TpccTestParams.
-func NewDefaultTpccParams() *TpccTestParams {
-	return &TpccTestParams{
-		NumThreads:     2, // TODO: When ready, expose as command line argument.
-		ScaleFactor:    1,
-		Tables:         1,
-		TrxLevel:       "RR",
-		ReportCSV:      true,
-		ReportInterval: 1,
-		Time:           30,
-	}
-}
+//// NewDefaultTpccParams returns default TpccTestParams.
+//func NewDefaultTpccParams() *TpccTestParams {
+//	return &TpccTestParams{
+//		NumThreads:     2, // TODO: When ready, expose as command line argument.
+//		ScaleFactor:    1,
+//		Tables:         1,
+//		TrxLevel:       "RR",
+//		ReportCSV:      true,
+//		ReportInterval: 1,
+//		Time:           30,
+//	}
+//}
 
 // NewTpccTest instantiates and returns a TPCC test.
-func NewTpccTest(name string, params *TpccTestParams) *TpccTest {
+func NewTpccTest(name string, params *TpccTestParams) Test {
 	return &TpccTest{
 		Id:     uuid.New().String(),
 		Name:   name,

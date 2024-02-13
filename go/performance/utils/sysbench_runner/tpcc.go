@@ -5,20 +5,20 @@ import (
 	"fmt"
 )
 
-type tpccTestImpl struct {
-	test         *TpccTest
-	config       *TpccBenchmarkConfig
-	serverConfig *doltServerConfigImpl
+type tpccTesterImpl struct {
+	test         Test
+	config       Config
+	serverConfig ServerConfig
 	serverParams []string
 	stampFunc    func() string
 	idFunc       func() string
 	suiteId      string
 }
 
-var _ Tester = &tpccTestImpl{}
+var _ Tester = &tpccTesterImpl{}
 
-func NewTpccTester(config *TpccBenchmarkConfig, serverConfig *doltServerConfigImpl, test *TpccTest, serverParams []string, stampFunc func() string) *tpccTestImpl {
-	return &tpccTestImpl{
+func NewTpccTester(config Config, serverConfig ServerConfig, test Test, serverParams []string, stampFunc func() string) *tpccTesterImpl {
+	return &tpccTesterImpl{
 		config:       config,
 		serverParams: serverParams,
 		serverConfig: serverConfig,
@@ -28,12 +28,12 @@ func NewTpccTester(config *TpccBenchmarkConfig, serverConfig *doltServerConfigIm
 	}
 }
 
-func (t *tpccTestImpl) outputToResult(output []byte) (*Result, error) {
-	return OutputToResult(output, t.serverConfig.Server, t.serverConfig.Version, t.test.Name, t.test.Id, t.suiteId, t.config.RuntimeOS, t.config.RuntimeGoArch, t.serverParams, t.test.Params.ToSlice(), nil, false)
+func (t *tpccTesterImpl) outputToResult(output []byte) (*Result, error) {
+	return OutputToResult(output, t.serverConfig.GetServerType(), t.serverConfig.GetVersion(), t.test.GetName(), t.test.GetId(), t.suiteId, t.config.GetRuntimeOs(), t.config.GetRuntimeGoArch(), t.serverParams, t.test.GetParamsToSlice(), nil, false)
 }
 
-func (t *tpccTestImpl) prepare(ctx context.Context) error {
-	cmd := t.test.TpccPrepare(ctx, t.serverConfig, t.config.ScriptDir)
+func (t *tpccTesterImpl) prepare(ctx context.Context) error {
+	cmd := t.test.TpccPrepare(ctx, t.serverConfig, t.config.GetScriptDir())
 	out, err := cmd.Output()
 	if err != nil {
 		fmt.Println(string(out))
@@ -42,8 +42,8 @@ func (t *tpccTestImpl) prepare(ctx context.Context) error {
 	return nil
 }
 
-func (t *tpccTestImpl) run(ctx context.Context) (*Result, error) {
-	cmd := t.test.TpccRun(ctx, t.serverConfig, t.config.ScriptDir)
+func (t *tpccTesterImpl) run(ctx context.Context) (*Result, error) {
+	cmd := t.test.TpccRun(ctx, t.serverConfig, t.config.GetScriptDir())
 	out, err := cmd.Output()
 	if err != nil {
 		fmt.Print(string(out))
@@ -64,18 +64,18 @@ func (t *tpccTestImpl) run(ctx context.Context) (*Result, error) {
 	return rs, nil
 }
 
-func (t *tpccTestImpl) cleanup(ctx context.Context) error {
-	cmd := t.test.TpccCleanup(ctx, t.serverConfig, t.config.ScriptDir)
+func (t *tpccTesterImpl) cleanup(ctx context.Context) error {
+	cmd := t.test.TpccCleanup(ctx, t.serverConfig, t.config.GetScriptDir())
 	return cmd.Run()
 }
 
-func (t *tpccTestImpl) Test(ctx context.Context) (*Result, error) {
+func (t *tpccTesterImpl) Test(ctx context.Context) (*Result, error) {
 	err := t.prepare(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Println("Running test", t.test.Name)
+	fmt.Println("Running test", t.test.GetName())
 
 	rs, err := t.run(ctx)
 	if err != nil {

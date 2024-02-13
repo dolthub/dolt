@@ -61,6 +61,22 @@ func NewDoltServerConfig(version, serverExec, serverUser, host, resultsFormat, p
 	}
 }
 
+func (sc *doltServerConfigImpl) GetId() string {
+	return sc.Id
+}
+
+func (sc *doltServerConfigImpl) GetHost() string {
+	return sc.Host
+}
+
+func (sc *doltServerConfigImpl) GetPort() int {
+	return sc.Port
+}
+
+func (sc *doltServerConfigImpl) GetVersion() string {
+	return sc.Version
+}
+
 func (sc *doltServerConfigImpl) GetProfilePath() string {
 	return sc.ProfilePath
 }
@@ -127,6 +143,9 @@ func (sc *doltServerConfigImpl) Validate() error {
 func (sc *doltServerConfigImpl) SetDefaults() error {
 	if sc.Host == "" {
 		sc.Host = defaultHost
+	}
+	if sc.Port < 1 {
+		sc.Port = defaultDoltPort
 	}
 	if sc.ServerProfile != "" {
 		if sc.ProfilePath == "" {

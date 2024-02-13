@@ -118,5 +118,20 @@ func (sc *mysqlServerConfigImpl) SetDefaults() error {
 	if sc.Host == "" {
 		sc.Host = defaultHost
 	}
+	if sc.Port < 1 {
+		sc.Port = defaultMysqlPort
+	}
 	return nil
+}
+
+func (sc *mysqlServerConfigImpl) GetId() string {
+	return sc.Id
+}
+
+func (sc *mysqlServerConfigImpl) GetHost() string {
+	return sc.Host
+}
+
+func (sc *mysqlServerConfigImpl) GetPort() int {
+	return sc.Port
 }

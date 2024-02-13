@@ -10,34 +10,17 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-const (
-	doltConfigUsernameKey = "user.name"
-	doltConfigEmailKey    = "user.email"
-	doltBenchmarkUser     = "benchmark"
-	doltBenchmarkEmail    = "benchmark@dolthub.com"
-	doltConfigCommand     = "config"
-	doltConfigGlobalFlag  = "--global"
-	doltConfigGetFlag     = "--get"
-	doltConfigAddFlag     = "--add"
-	doltCloneCommand      = "clone"
-	doltVersionCommand    = "version"
-	doltInitCommand       = "init"
-	dbName                = "test"
-	bigEmptyRepo          = "max-hoffman/big-empty"
-	nbfEnvVar             = "DOLT_DEFAULT_BIN_FORMAT"
-)
-
 var stampFunc = func() string { return time.Now().UTC().Format(stampFormat) }
 
 type doltBenchmarkerImpl struct {
 	dir          string // cwd
-	config       *sysbenchRunnerConfigImpl
-	serverConfig *doltServerConfigImpl
+	config       Config
+	serverConfig ServerConfig
 }
 
 var _ Benchmarker = &doltBenchmarkerImpl{}
 
-func NewDoltBenchmarker(dir string, config *sysbenchRunnerConfigImpl, serverConfig *doltServerConfigImpl) *doltBenchmarkerImpl {
+func NewDoltBenchmarker(dir string, config Config, serverConfig ServerConfig) *doltBenchmarkerImpl {
 	return &doltBenchmarkerImpl{
 		dir:          dir,
 		config:       config,
@@ -46,20 +29,20 @@ func NewDoltBenchmarker(dir string, config *sysbenchRunnerConfigImpl, serverConf
 }
 
 func (b *doltBenchmarkerImpl) updateGlobalConfig(ctx context.Context) error {
-	err := CheckSetDoltConfig(ctx, b.serverConfig.ServerExec, doltConfigUsernameKey, doltBenchmarkUser)
+	err := CheckSetDoltConfig(ctx, b.serverConfig.GetServerExec(), doltConfigUsernameKey, doltBenchmarkUser)
 	if err != nil {
 		return err
 	}
-	return CheckSetDoltConfig(ctx, b.serverConfig.ServerExec, doltConfigEmailKey, doltBenchmarkEmail)
+	return CheckSetDoltConfig(ctx, b.serverConfig.GetServerExec(), doltConfigEmailKey, doltBenchmarkEmail)
 }
 
 func (b *doltBenchmarkerImpl) checkInstallation(ctx context.Context) error {
-	version := ExecCommand(ctx, b.serverConfig.ServerExec, doltVersionCommand)
+	version := ExecCommand(ctx, b.serverConfig.GetServerExec(), doltVersionCommand)
 	return version.Run()
 }
 
 func (b *doltBenchmarkerImpl) initDoltRepo(ctx context.Context) (string, error) {
-	return InitDoltRepo(ctx, b.dir, b.serverConfig.ServerExec, b.config.NomsBinFormat, dbName)
+	return InitDoltRepo(ctx, b.dir, b.serverConfig.GetServerExec(), b.config.GetNomsBinFormat(), dbName)
 }
 
 func (b *doltBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
@@ -90,13 +73,14 @@ func (b *doltBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
 		return nil, err
 	}
 
-	tests, err := GetTests(b.config, b.serverConfig, nil)
+	tests, err := GetTests(b.config, b.serverConfig)
 	if err != nil {
 		return nil, err
 	}
 
 	results := make(Results, 0)
-	for i := 0; i < b.config.Runs; i++ {
+	runs := b.config.GetRuns()
+	for i := 0; i < runs; i++ {
 		for _, test := range tests {
 			tester := NewSysbenchTester(b.config, b.serverConfig, test, serverParams, stampFunc)
 			r, err := tester.Test(ctx)

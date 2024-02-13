@@ -7,20 +7,15 @@ import (
 	"syscall"
 )
 
-const (
-	tpccDbName              = "sbt"
-	tpccScaleFactorTemplate = "tpcc-scale-factor-%d"
-)
-
 type doltTpccBenchmarkerImpl struct {
 	dir          string // cwd
-	config       *TpccBenchmarkConfig
-	serverConfig *doltServerConfigImpl
+	config       TpccConfig
+	serverConfig ServerConfig
 }
 
 var _ Benchmarker = &doltTpccBenchmarkerImpl{}
 
-func NewDoltTpccBenchmarker(dir string, config *TpccBenchmarkConfig, serverConfig *doltServerConfigImpl) *doltTpccBenchmarkerImpl {
+func NewDoltTpccBenchmarker(dir string, config TpccConfig, serverConfig ServerConfig) *doltTpccBenchmarkerImpl {
 	return &doltTpccBenchmarkerImpl{
 		dir:          dir,
 		config:       config,
@@ -29,20 +24,20 @@ func NewDoltTpccBenchmarker(dir string, config *TpccBenchmarkConfig, serverConfi
 }
 
 func (b *doltTpccBenchmarkerImpl) updateGlobalConfig(ctx context.Context) error {
-	err := CheckSetDoltConfig(ctx, b.serverConfig.ServerExec, doltConfigUsernameKey, doltBenchmarkUser)
+	err := CheckSetDoltConfig(ctx, b.serverConfig.GetServerExec(), doltConfigUsernameKey, doltBenchmarkUser)
 	if err != nil {
 		return err
 	}
-	return CheckSetDoltConfig(ctx, b.serverConfig.ServerExec, doltConfigEmailKey, doltBenchmarkEmail)
+	return CheckSetDoltConfig(ctx, b.serverConfig.GetServerExec(), doltConfigEmailKey, doltBenchmarkEmail)
 }
 
 func (b *doltTpccBenchmarkerImpl) checkInstallation(ctx context.Context) error {
-	version := ExecCommand(ctx, b.serverConfig.ServerExec, doltVersionCommand)
+	version := ExecCommand(ctx, b.serverConfig.GetServerExec(), doltVersionCommand)
 	return version.Run()
 }
 
 func (b *doltTpccBenchmarkerImpl) initDoltRepo(ctx context.Context) (string, error) {
-	return InitDoltRepo(ctx, b.dir, b.serverConfig.ServerExec, b.config.NomsBinFormat, tpccDbName)
+	return InitDoltRepo(ctx, b.dir, b.serverConfig.GetServerExec(), b.config.GetNomsBinFormat(), tpccDbName)
 }
 
 func (b *doltTpccBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
@@ -95,9 +90,9 @@ func (b *doltTpccBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error
 }
 
 // GetTpccTests creates a set of tests that the server needs to be executed on.
-func GetTpccTests(config *TpccBenchmarkConfig) []*TpccTest {
-	tests := make([]*TpccTest, 0)
-	for _, sf := range config.ScaleFactors {
+func GetTpccTests(config TpccConfig) []Test {
+	tests := make([]Test, 0)
+	for _, sf := range config.GetScaleFactors() {
 		params := NewDefaultTpccParams()
 		params.ScaleFactor = sf
 		test := NewTpccTest(fmt.Sprintf(tpccScaleFactorTemplate, sf), params)
