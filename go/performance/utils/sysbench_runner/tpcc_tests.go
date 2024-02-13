@@ -1,6 +1,9 @@
 package sysbench_runner
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/google/uuid"
+)
 
 type tpccTestParamsImpl struct {
 	// NumThreads represents the number of threads running queries concurrently.
@@ -33,23 +36,50 @@ func NewDefaultTpccParams() *tpccTestParamsImpl {
 		NumThreads:     2, // TODO: When ready, expose as command line argument.
 		ScaleFactor:    1,
 		Tables:         1,
-		TrxLevel:       "RR", // todo: move to constants
+		TrxLevel:       tpccTransactionLevelRr,
 		ReportCSV:      true,
 		ReportInterval: 1,
 		Time:           30,
 	}
 }
 
-// todo: fix all these to match the real flags
+func (t *tpccTestParamsImpl) GetNumThreads() int {
+	return t.NumThreads
+}
+
+func (t *tpccTestParamsImpl) GetScaleFactor() int {
+	return t.ScaleFactor
+}
+
+func (t *tpccTestParamsImpl) GetTables() int {
+	return t.Tables
+}
+
+func (t *tpccTestParamsImpl) GetTrxLevel() string {
+	return t.TrxLevel
+}
+
+func (t *tpccTestParamsImpl) GetReportCSV() bool {
+	return t.ReportCSV
+}
+
+func (t *tpccTestParamsImpl) GetReportInterval() int {
+	return t.ReportInterval
+}
+
+func (t *tpccTestParamsImpl) GetTime() int {
+	return t.Time
+}
+
 func (t *tpccTestParamsImpl) ToSlice() []string {
 	params := make([]string, 0)
-	params = append(params, fmt.Sprintf("numThreads=%d", t.NumThreads))
-	params = append(params, fmt.Sprintf("scaleFactor=%d", t.ScaleFactor))
-	params = append(params, fmt.Sprintf("tables=%d", t.Tables))
-	params = append(params, fmt.Sprintf("trxLevel=%s", t.TrxLevel))
-	params = append(params, fmt.Sprintf("reportCsv=%t", t.ReportCSV))
-	params = append(params, fmt.Sprintf("reportInterval=%d", t.ReportInterval))
-	params = append(params, fmt.Sprintf("time=%d", t.Time))
+	params = append(params, fmt.Sprintf("%s=%d", tpccThreadsFlag, t.NumThreads))
+	params = append(params, fmt.Sprintf("%s=%d", tpccScaleFlag, t.ScaleFactor))
+	params = append(params, fmt.Sprintf("%s=%d", tpccTablesFlag, t.Tables))
+	params = append(params, fmt.Sprintf("%s=%s", tpccTransactionLevelFlag, t.TrxLevel))
+	params = append(params, fmt.Sprintf("%s=%t", tpccReportCsv, t.ReportCSV))
+	params = append(params, fmt.Sprintf("%s=%d", tpccReportIntervalFlag, t.ReportInterval))
+	params = append(params, fmt.Sprintf("%s=%d", tpccTimeFlag, t.Time))
 	return params
 }
 
@@ -67,6 +97,92 @@ type tpccTestImpl struct {
 
 var _ Test = &tpccTestImpl{}
 
+// NewTpccTest instantiates and returns a TPCC test.
+func NewTpccTest(name string, params TestParams) *tpccTestImpl {
+	return &tpccTestImpl{
+		Id:     uuid.New().String(),
+		Name:   name,
+		Params: params,
+	}
+}
+
+func (t *tpccTestImpl) doltArgs(serverConfig ServerConfig) []string {
+	args := make([]string, 0)
+	args = append(args, defaultTpccParams...)
+	args = append(args, fmt.Sprintf("%s=%s", tpccMysqlHostFlag, serverConfig.GetHost()))
+	args = append(args, fmt.Sprintf("%s=%d", tpccMysqlPortFlag, serverConfig.GetPort()))
+	args = append(args, fmt.Sprintf("%s=%s", tpccMysqlUserFlag, defaultMysqlUser))
+	args = append(args, fmt.Sprintf("%s=%d", tpccTimeFlag, t.Params.GetTime()))
+	args = append(args, fmt.Sprintf("%s=%d", tpccThreadsFlag, t.Params.GetNumThreads()))
+	args = append(args, fmt.Sprintf("%s=%d", tpccReportIntervalFlag, t.Params.GetReportInterval()))
+	args = append(args, fmt.Sprintf("%s=%d", tpccTablesFlag, t.Params.GetTables()))
+	args = append(args, fmt.Sprintf("%s=%d", tpccScaleFlag, t.Params.GetScaleFactor()))
+	args = append(args, fmt.Sprintf("%s=%s", tpccTransactionLevelFlag, t.Params.GetTrxLevel()))
+	return args
+}
+
+func (t *tpccTestImpl) mysqlArgs(serverConfig ServerConfig) []string {
+	args := make([]string, 0)
+	args = append(args, defaultTpccParams...)
+	host := serverConfig.GetHost()
+	args = append(args, fmt.Sprintf("%s=%s", tpccMysqlHostFlag, host))
+	if host == defaultHost {
+		args = append(args, fmt.Sprintf("%s=%s", tpccMysqlUserFlag, tpccMysqlUsername))
+		args = append(args, fmt.Sprintf("%s=%s", tpccMysqlPasswordFlag, tpccPassLocal))
+	} else {
+		args = append(args, fmt.Sprintf("%s=%d", tpccMysqlPortFlag, serverConfig.GetPort()))
+		args = append(args, fmt.Sprintf("%s=%s", tpccMysqlUserFlag, defaultMysqlUser))
+	}
+	args = append(args, fmt.Sprintf("%s=%d", tpccTimeFlag, t.Params.GetTime()))
+	args = append(args, fmt.Sprintf("%s=%d", tpccThreadsFlag, t.Params.GetNumThreads()))
+	args = append(args, fmt.Sprintf("%s=%d", tpccReportIntervalFlag, t.Params.GetReportInterval()))
+	args = append(args, fmt.Sprintf("%s=%d", tpccTablesFlag, t.Params.GetTables()))
+	args = append(args, fmt.Sprintf("%s=%d", tpccScaleFlag, t.Params.GetScaleFactor()))
+	args = append(args, fmt.Sprintf("%s=%s", tpccTransactionLevelFlag, t.Params.GetTrxLevel()))
+	return args
+}
+
+func (t *tpccTestImpl) doltgresArgs(serverConfig ServerConfig) []string {
+	args := make([]string, 0)
+	args = append(args, defaultTpccParams...)
+	args = append(args, fmt.Sprintf("%s=%d", tpccTimeFlag, t.Params.GetTime()))
+	args = append(args, fmt.Sprintf("%s=%d", tpccThreadsFlag, t.Params.GetNumThreads()))
+	args = append(args, fmt.Sprintf("%s=%d", tpccReportIntervalFlag, t.Params.GetReportInterval()))
+	args = append(args, fmt.Sprintf("%s=%d", tpccTablesFlag, t.Params.GetTables()))
+	args = append(args, fmt.Sprintf("%s=%d", tpccScaleFlag, t.Params.GetScaleFactor()))
+	args = append(args, fmt.Sprintf("%s=%s", tpccTransactionLevelFlag, t.Params.GetTrxLevel()))
+	return args
+}
+
+func (t *tpccTestImpl) postgresArgs(serverConfig ServerConfig) []string {
+	args := make([]string, 0)
+	args = append(args, defaultTpccParams...)
+	args = append(args, fmt.Sprintf("%s=%d", tpccTimeFlag, t.Params.GetTime()))
+	args = append(args, fmt.Sprintf("%s=%d", tpccThreadsFlag, t.Params.GetNumThreads()))
+	args = append(args, fmt.Sprintf("%s=%d", tpccReportIntervalFlag, t.Params.GetReportInterval()))
+	args = append(args, fmt.Sprintf("%s=%d", tpccTablesFlag, t.Params.GetTables()))
+	args = append(args, fmt.Sprintf("%s=%d", tpccScaleFlag, t.Params.GetScaleFactor()))
+	args = append(args, fmt.Sprintf("%s=%s", tpccTransactionLevelFlag, t.Params.GetTrxLevel()))
+	return args
+}
+
+// getArgs returns a test's args for all TPCC steps
+func (t *tpccTestImpl) getArgs(serverConfig ServerConfig) []string {
+	st := serverConfig.GetServerType()
+	switch st {
+	case Dolt:
+		return t.doltArgs(serverConfig)
+	case Doltgres:
+		return t.doltgresArgs(serverConfig)
+	case Postgres:
+		return t.postgresArgs(serverConfig)
+	case MySql:
+		return t.mysqlArgs(serverConfig)
+	default:
+		panic(fmt.Sprintf("unexpected server type: %s", st))
+	}
+}
+
 func (t *tpccTestImpl) GetId() string {
 	return t.Id
 }
@@ -79,17 +195,26 @@ func (t *tpccTestImpl) GetParamsToSlice() []string {
 	return t.Params.ToSlice()
 }
 
-func (t tpccTestImpl) GetPrepareArgs() []string {
-	//TODO implement me
-	panic("implement me")
+func (t *tpccTestImpl) GetPrepareArgs(serverConfg ServerConfig) []string {
+	args := make([]string, 0)
+	serverArgs := t.getArgs(serverConfg)
+	args = append(args, serverArgs...)
+	args = append(args, sysbenchPrepareCommand)
+	return args
 }
 
-func (t tpccTestImpl) GetRunArgs() []string {
-	//TODO implement me
-	panic("implement me")
+func (t *tpccTestImpl) GetRunArgs(serverConfg ServerConfig) []string {
+	args := make([]string, 0)
+	serverArgs := t.getArgs(serverConfg)
+	args = append(args, serverArgs...)
+	args = append(args, sysbenchRunCommand)
+	return args
 }
 
-func (t tpccTestImpl) GetCleanupArgs() []string {
-	//TODO implement me
-	panic("implement me")
+func (t *tpccTestImpl) GetCleanupArgs(serverConfg ServerConfig) []string {
+	args := make([]string, 0)
+	serverArgs := t.getArgs(serverConfg)
+	args = append(args, serverArgs...)
+	args = append(args, sysbenchCleanupCommand)
+	return args
 }

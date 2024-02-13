@@ -94,10 +94,38 @@ const (
 	expectedServerKilledErrorMessage     = "signal: killed"
 	expectedServerTerminatedErrorMessage = "signal: terminated"
 
-	sysbenchCommand       = "sysbench"
-	luaPathEnvVarTemplate = "LUA_PATH=%s"
-	luaPath               = "?.lua"
+	sysbenchCommand        = "sysbench"
+	sysbenchPrepareCommand = "prepare"
+	sysbenchRunCommand     = "run"
+	sysbenchCleanupCommand = "cleanup"
+	luaPathEnvVarTemplate  = "LUA_PATH=%s"
+	luaPath                = "?.lua"
+
+	defaultMysqlUser = "root"
+
+	// Note this is built for the SysbenchDocker file. If you want to run locally you'll need to override these variables
+	// for your local MySQL setup.
+	tpccUserLocal = "'sysbench'@'localhost'"
+	tpccPassLocal = "sysbenchpass"
 
 	tpccDbName              = "sbt"
 	tpccScaleFactorTemplate = "tpcc-scale-factor-%d"
+
+	tpccDbDriverFlag         = "--db-driver"
+	mysqlDriver              = "mysql"
+	tpccMysqlUsername        = "sysbench"
+	tpccMysqlDbFlag          = "--mysql-db"
+	tpccMysqlHostFlag        = "--mysql-host"
+	tpccMysqlUserFlag        = "--mysql-user"
+	tpccMysqlPasswordFlag    = "--mysql-password"
+	tpccMysqlPortFlag        = "--mysql-port"
+	tpccTimeFlag             = "--time"
+	tpccThreadsFlag          = "--threads"
+	tpccReportIntervalFlag   = "--report_interval"
+	tpccTablesFlag           = "--tables"
+	tpccScaleFlag            = "--scale"
+	tpccTransactionLevelFlag = "--trx_level"
+	tpccReportCsv            = "reportCsv"
+	tpccTransactionLevelRr   = "RR"
+	tpccLuaFilename          = "tpcc.lua"
 )

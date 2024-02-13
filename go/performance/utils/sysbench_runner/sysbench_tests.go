@@ -26,17 +26,17 @@ func NewSysbenchTest(id, name string, params []string, fromScript bool) *sysbenc
 }
 
 // PrepareArgs returns a test's args for sysbench's prepare step
-func (t *sysbenchTestImpl) PrepareArgs() []string {
+func (t *sysbenchTestImpl) GetPrepareArgs(serverConfig ServerConfig) []string {
 	return withCommand(t.Params, "prepare")
 }
 
 // Run returns a test's args for sysbench's run step
-func (t *sysbenchTestImpl) RunArgs() []string {
+func (t *sysbenchTestImpl) GetRunArgs(serverConfig ServerConfig) []string {
 	return withCommand(t.Params, "run")
 }
 
 // Cleanup returns a test's args for sysbench's cleanup step
-func (t *sysbenchTestImpl) CleanupArgs() []string {
+func (t *sysbenchTestImpl) GetCleanupArgs(serverConfig ServerConfig) []string {
 	return withCommand(t.Params, "cleanup")
 }
 

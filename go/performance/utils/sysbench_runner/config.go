@@ -8,11 +8,14 @@ type Config interface {
 	GetNomsBinFormat() string
 	GetRuntimeOs() string
 	GetRuntimeGoArch() string
-	GetTestOptions() []string
-	GetTestConfigs() []TestConfig
-
 	Validate(ctx context.Context) error
 	ContainsServerOfType(server ServerType) bool
+}
+
+type SysbenchConfig interface {
+	Config
+	GetTestOptions() []string
+	GetTestConfigs() []TestConfig
 }
 
 type TpccConfig interface {

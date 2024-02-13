@@ -10,9 +10,9 @@ type Test interface {
 	GetId() string
 	GetName() string
 	GetParamsToSlice() []string
-	GetPrepareArgs() []string
-	GetRunArgs() []string
-	GetCleanupArgs() []string
+	GetPrepareArgs(serverConfig ServerConfig) []string
+	GetRunArgs(serverConfig ServerConfig) []string
+	GetCleanupArgs(serverConfig ServerConfig) []string
 }
 
 type SysbenchTest interface {
@@ -21,5 +21,12 @@ type SysbenchTest interface {
 }
 
 type TestParams interface {
+	GetNumThreads() int
+	GetScaleFactor() int
+	GetTables() int
+	GetTrxLevel() string
+	GetReportCSV() bool
+	GetReportInterval() int
+	GetTime() int
 	ToSlice() []string
 }

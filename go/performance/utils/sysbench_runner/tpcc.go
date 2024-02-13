@@ -3,12 +3,16 @@ package sysbench_runner
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 )
 
 type tpccTesterImpl struct {
 	test         Test
 	config       Config
 	serverConfig ServerConfig
+	tpccCommand  string
 	serverParams []string
 	stampFunc    func() string
 	idFunc       func() string
@@ -17,8 +21,9 @@ type tpccTesterImpl struct {
 
 var _ Tester = &tpccTesterImpl{}
 
-func NewTpccTester(config Config, serverConfig ServerConfig, test Test, serverParams []string, stampFunc func() string) *tpccTesterImpl {
+func NewTpccTester(config TpccConfig, serverConfig ServerConfig, test Test, serverParams []string, stampFunc func() string) *tpccTesterImpl {
 	return &tpccTesterImpl{
+		tpccCommand:  filepath.Join(config.GetScriptDir(), tpccLuaFilename),
 		config:       config,
 		serverParams: serverParams,
 		serverConfig: serverConfig,
@@ -33,7 +38,9 @@ func (t *tpccTesterImpl) outputToResult(output []byte) (*Result, error) {
 }
 
 func (t *tpccTesterImpl) prepare(ctx context.Context) error {
-	cmd := t.test.TpccPrepare(ctx, t.serverConfig, t.config.GetScriptDir())
+	args := t.test.GetPrepareArgs(t.serverConfig)
+	cmd := ExecCommand(ctx, t.tpccCommand, args...)
+	cmd = t.updateCmdEnv(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		fmt.Println(string(out))
@@ -43,7 +50,10 @@ func (t *tpccTesterImpl) prepare(ctx context.Context) error {
 }
 
 func (t *tpccTesterImpl) run(ctx context.Context) (*Result, error) {
-	cmd := t.test.TpccRun(ctx, t.serverConfig, t.config.GetScriptDir())
+	args := t.test.GetRunArgs(t.serverConfig)
+	cmd := ExecCommand(ctx, t.tpccCommand, args...)
+	cmd = t.updateCmdEnv(cmd)
+
 	out, err := cmd.Output()
 	if err != nil {
 		fmt.Print(string(out))
@@ -65,7 +75,9 @@ func (t *tpccTesterImpl) run(ctx context.Context) (*Result, error) {
 }
 
 func (t *tpccTesterImpl) cleanup(ctx context.Context) error {
-	cmd := t.test.TpccCleanup(ctx, t.serverConfig, t.config.GetScriptDir())
+	args := t.test.GetCleanupArgs(t.serverConfig)
+	cmd := ExecCommand(ctx, t.tpccCommand, args...)
+	cmd = t.updateCmdEnv(cmd)
 	return cmd.Run()
 }
 
@@ -83,4 +95,11 @@ func (t *tpccTesterImpl) Test(ctx context.Context) (*Result, error) {
 	}
 
 	return rs, t.cleanup(ctx)
+}
+
+func (t *tpccTesterImpl) updateCmdEnv(cmd *exec.Cmd) *exec.Cmd {
+	lp := filepath.Join(t.config.GetScriptDir(), luaPath)
+	cmd.Env = os.Environ()
+	cmd.Env = append(cmd.Env, fmt.Sprintf(luaPathEnvVarTemplate, lp))
+	return cmd
 }

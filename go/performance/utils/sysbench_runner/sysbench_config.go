@@ -101,7 +101,7 @@ type sysbenchRunnerConfigImpl struct {
 	NomsBinFormat string
 }
 
-var _ Config = &sysbenchRunnerConfigImpl{}
+var _ SysbenchConfig = &sysbenchRunnerConfigImpl{}
 
 // NewRunnerConfig returns a new sysbenchRunnerConfigImpl
 func NewRunnerConfig() *sysbenchRunnerConfigImpl {
@@ -158,7 +158,7 @@ func (c *sysbenchRunnerConfigImpl) Validate(ctx context.Context) error {
 func (c *sysbenchRunnerConfigImpl) validateServerConfigs() error {
 	portMap := make(map[int]ServerType)
 	for _, s := range c.Servers {
-		st := s.ServerType()
+		st := s.GetServerType()
 		if st != Dolt && st != MySql && st != Doltgres && st != Postgres {
 			return fmt.Errorf("unsupported server type: %s", st)
 		}
@@ -184,7 +184,7 @@ func (c *sysbenchRunnerConfigImpl) validateServerConfigs() error {
 
 func (c *sysbenchRunnerConfigImpl) ContainsServerOfType(st ServerType) bool {
 	for _, s := range c.Servers {
-		if s.ServerType() == st {
+		if s.GetServerType() == st {
 			return true
 		}
 	}
@@ -223,6 +223,29 @@ func (c *sysbenchRunnerConfigImpl) setDefaults() error {
 	return nil
 }
 
+func (c *sysbenchRunnerConfigImpl) getLuaScriptTestsFromDir(toInclude map[string]string) ([]TestConfig, error) {
+	luaScripts := make([]TestConfig, 0)
+	abs, err := filepath.Abs(c.ScriptDir)
+	if err != nil {
+		return nil, err
+	}
+	err = filepath.Walk(abs, func(path string, info fs.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		file := filepath.Base(path)
+		if _, ok := toInclude[file]; ok {
+			luaScripts = append(luaScripts, NewTestConfig(path, []string{}, true))
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return luaScripts, nil
+}
+
 func (c *sysbenchRunnerConfigImpl) getDefaultTests() ([]TestConfig, error) {
 	defaultTests := make([]TestConfig, 0)
 	defaultTests = append(defaultTests, defaultSysbenchTests...)
@@ -230,9 +253,9 @@ func (c *sysbenchRunnerConfigImpl) getDefaultTests() ([]TestConfig, error) {
 		var luaScriptTests []TestConfig
 		var err error
 		if !c.ContainsServerOfType(Doltgres) && !c.ContainsServerOfType(Postgres) {
-			luaScriptTests, err = getLuaScriptTestsFromDir(c.ScriptDir, defaultDoltLuaScripts)
+			luaScriptTests, err = c.getLuaScriptTestsFromDir(defaultDoltLuaScripts)
 		} else {
-			luaScriptTests, err = getLuaScriptTestsFromDir(c.ScriptDir, defaultDoltgresLuaScripts)
+			luaScriptTests, err = c.getLuaScriptTestsFromDir(defaultDoltgresLuaScripts)
 		}
 		if err != nil {
 			return nil, err
@@ -244,8 +267,8 @@ func (c *sysbenchRunnerConfigImpl) getDefaultTests() ([]TestConfig, error) {
 
 // CheckUpdatePortMap returns an error if multiple servers have specified the same port
 func CheckUpdatePortMap(serverConfig ServerConfig, portMap map[int]ServerType) (map[int]ServerType, error) {
-	port := serverConfig.Port()
-	st := serverConfig.ServerType()
+	port := serverConfig.GetPort()
+	st := serverConfig.GetServerType()
 	srv, ok := portMap[port]
 	if ok && srv != st {
 		return nil, fmt.Errorf("servers have port conflict on port: %d\n", port)
@@ -282,8 +305,8 @@ func CheckProtocol(protocol string) error {
 	return ErrUnsupportedConnectionProtocol
 }
 
-// GetTests returns a slice of Tests created from the ServerConfig
-func GetTests(config Config, serverConfig ServerConfig) ([]Test, error) {
+// GetTests returns a slice of Tests
+func GetTests(config SysbenchConfig, serverConfig ServerConfig) ([]Test, error) {
 	flattened := make([]Test, 0)
 	for _, t := range config.GetTestConfigs() {
 		opts := config.GetTestOptions()
@@ -300,7 +323,7 @@ func GetTests(config Config, serverConfig ServerConfig) ([]Test, error) {
 }
 
 // FromFileConfig returns a validated sysbenchRunnerConfigImpl based on the config file at the configPath
-func FromFileConfig(configPath string) (*sysbenchRunnerConfigImpl, error) {
+func FromFileConfig(configPath string) (SysbenchConfig, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
@@ -317,27 +340,4 @@ func FromFileConfig(configPath string) (*sysbenchRunnerConfigImpl, error) {
 
 func getMustSupplyError(name string) error {
 	return fmt.Errorf("Must supply %s", name)
-}
-
-func getLuaScriptTestsFromDir(dir string, toInclude map[string]string) ([]TestConfig, error) {
-	luaScripts := make([]TestConfig, 0)
-	abs, err := filepath.Abs(dir)
-	if err != nil {
-		return nil, err
-	}
-	err = filepath.Walk(abs, func(path string, info fs.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		file := filepath.Base(path)
-		if _, ok := toInclude[file]; ok {
-			luaScripts = append(luaScripts, NewTestConfig(path, []string{}, true))
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return luaScripts, nil
 }
