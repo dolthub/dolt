@@ -134,7 +134,7 @@ func (t *sysbenchTesterImpl) run(ctx context.Context) (*Result, error) {
 }
 
 func (t *sysbenchTesterImpl) cleanup(ctx context.Context) error {
-	cmd := ExecCommand(ctx, sysbenchCommand, t.test.GetCleanupArgs(t.serverConfig)...)
+	cmd := exec.CommandContext(ctx, sysbenchCommand, t.test.GetCleanupArgs(t.serverConfig)...)
 	if t.test.GetFromScript() {
 		lp := filepath.Join(t.config.GetScriptDir(), luaPath)
 		cmd.Env = os.Environ()

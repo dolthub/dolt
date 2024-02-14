@@ -53,7 +53,7 @@ func (t *tpccTesterImpl) outputToResult(output []byte) (*Result, error) {
 
 func (t *tpccTesterImpl) prepare(ctx context.Context) error {
 	args := t.test.GetPrepareArgs(t.serverConfig)
-	cmd := ExecCommand(ctx, t.tpccCommand, args...)
+	cmd := exec.CommandContext(ctx, t.tpccCommand, args...)
 	cmd = t.updateCmdEnv(cmd)
 	out, err := cmd.Output()
 	if err != nil {
@@ -65,7 +65,7 @@ func (t *tpccTesterImpl) prepare(ctx context.Context) error {
 
 func (t *tpccTesterImpl) run(ctx context.Context) (*Result, error) {
 	args := t.test.GetRunArgs(t.serverConfig)
-	cmd := ExecCommand(ctx, t.tpccCommand, args...)
+	cmd := exec.CommandContext(ctx, t.tpccCommand, args...)
 	cmd = t.updateCmdEnv(cmd)
 
 	out, err := cmd.Output()
@@ -90,7 +90,7 @@ func (t *tpccTesterImpl) run(ctx context.Context) (*Result, error) {
 
 func (t *tpccTesterImpl) cleanup(ctx context.Context) error {
 	args := t.test.GetCleanupArgs(t.serverConfig)
-	cmd := ExecCommand(ctx, t.tpccCommand, args...)
+	cmd := exec.CommandContext(ctx, t.tpccCommand, args...)
 	cmd = t.updateCmdEnv(cmd)
 	err := cmd.Run()
 	if err != nil {
