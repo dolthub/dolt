@@ -97,6 +97,17 @@ SQL
     [ ! -d mydb ]
 }
 
+@test "sql-create-database: drop and recreate database" {
+    run dolt sql <<SQL
+create database mydb;
+drop database mydb;
+create database mydb;
+SQL
+
+    [ "$status" -eq 0 ]
+    [ ! -d mydb ]
+}
+
 @test "sql-create-database: with data-dir" {
     skiponwindows "failing with file in use error"
 
