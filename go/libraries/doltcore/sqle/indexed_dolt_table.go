@@ -27,7 +27,7 @@ import (
 // DoltTable, but its RowIter function returns values that match a sql.Range, instead of all
 // rows. It's returned by the DoltTable.IndexedAccess function.
 type IndexedDoltTable struct {
-	table        *DoltTable
+	*DoltTable
 	idx          index.DoltIndex
 	lb           index.LookupBuilder
 	isDoltFormat bool
@@ -36,7 +36,7 @@ type IndexedDoltTable struct {
 
 func NewIndexedDoltTable(t *DoltTable, idx index.DoltIndex) *IndexedDoltTable {
 	return &IndexedDoltTable{
-		table:        t,
+		DoltTable:    t,
 		idx:          idx,
 		isDoltFormat: types.IsFormat_DOLT(t.Format()),
 		mu:           &sync.Mutex{},
@@ -46,32 +46,8 @@ func NewIndexedDoltTable(t *DoltTable, idx index.DoltIndex) *IndexedDoltTable {
 var _ sql.IndexedTable = (*IndexedDoltTable)(nil)
 var _ sql.CommentedTable = (*IndexedDoltTable)(nil)
 
-func (idt *IndexedDoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	return idt.table.GetIndexes(ctx)
-}
-
-func (idt *IndexedDoltTable) Name() string {
-	return idt.table.Name()
-}
-
-func (idt *IndexedDoltTable) String() string {
-	return idt.table.String()
-}
-
-func (idt *IndexedDoltTable) Schema() sql.Schema {
-	return idt.table.Schema()
-}
-
-func (idt *IndexedDoltTable) Collation() sql.CollationID {
-	return sql.CollationID(idt.table.sch.GetCollation())
-}
-
-func (idt *IndexedDoltTable) Comment() string {
-	return idt.table.Comment()
-}
-
 func (idt *IndexedDoltTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
-	return index.NewRangePartitionIter(ctx, idt.table, lookup, idt.isDoltFormat)
+	return index.NewRangePartitionIter(ctx, idt.DoltTable, lookup, idt.isDoltFormat)
 }
 
 func (idt *IndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
@@ -81,13 +57,13 @@ func (idt *IndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, er
 func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	idt.mu.Lock()
 	defer idt.mu.Unlock()
-	key, canCache, err := idt.table.DataCacheKey(ctx)
+	key, canCache, err := idt.DoltTable.DataCacheKey(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	if idt.lb == nil || !canCache || idt.lb.Key() != key {
-		idt.lb, err = index.NewLookupBuilder(ctx, idt.table, idt.idx, key, idt.table.projectedCols, idt.table.sqlSch, idt.isDoltFormat)
+		idt.lb, err = index.NewLookupBuilder(ctx, idt.DoltTable, idt.idx, key, idt.DoltTable.projectedCols, idt.DoltTable.sqlSch, idt.isDoltFormat)
 		if err != nil {
 			return nil, err
 		}
@@ -99,22 +75,18 @@ func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition)
 func (idt *IndexedDoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	idt.mu.Lock()
 	defer idt.mu.Unlock()
-	key, canCache, err := idt.table.DataCacheKey(ctx)
+	key, canCache, err := idt.DoltTable.DataCacheKey(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if idt.lb == nil || !canCache || idt.lb.Key() != key {
-		idt.lb, err = index.NewLookupBuilder(ctx, idt.table, idt.idx, key, idt.table.projectedCols, idt.table.sqlSch, idt.isDoltFormat)
+		idt.lb, err = index.NewLookupBuilder(ctx, idt.DoltTable, idt.idx, key, idt.DoltTable.projectedCols, idt.DoltTable.sqlSch, idt.isDoltFormat)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	return idt.lb.NewRowIter(ctx, part)
-}
-
-func (idt *IndexedDoltTable) IsTemporary() bool {
-	return idt.table.IsTemporary()
 }
 
 var _ sql.IndexedTable = (*WritableIndexedDoltTable)(nil)
