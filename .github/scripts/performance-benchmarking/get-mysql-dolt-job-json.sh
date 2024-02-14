@@ -109,7 +109,7 @@ echo '
               "--sysbenchQueries='"$meanMultiplierWritesQuery"'",
               "--sysbenchQueries='"$meanMultiplierOverallQuery"'",
               "--tpccQueries='"$tpccLatencyQuery"'",
-              "--tpccQueries='"$tpccTpsQuery"'"
+              "--tpccQueries='"$tpccTpsQuery"'",
               "--tpccQueries='"$tpccTpsMultiplierQuery"'"
             ]
           }
