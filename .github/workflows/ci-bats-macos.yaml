@@ -1,14 +1,12 @@
-name: Test Bats Unix
+name: Test Bats MacOS
 
 on:
-  pull_request:
-    branches: [ main ]
-    paths:
-      - 'go/**'
-      - 'integration-tests/**'
+  workflow_dispatch:
+  schedule:
+    - cron: '0 1 * * *'
 
 concurrency:
-  group: ci-bats-unix-${{ github.event.pull_request.number || github.ref }}
+  group: ci-bats-mac-nightly
   cancel-in-progress: true
 
 jobs:
@@ -17,11 +15,9 @@ jobs:
     defaults:
       run:
         shell: bash
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-latest
     strategy:
       fail-fast: true
-      matrix:
-        os: [ ubuntu-22.04 ]
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
     steps:
@@ -34,10 +30,6 @@ jobs:
             echo "DOLT_BATS_AWS_BUCKET=dolt-ci-bats-chunks-us-west-2" >> $GITHUB_ENV
             echo "DOLT_BATS_AWS_EXISTING_REPO=aws_remote_bats_tests__dolt__" >> $GITHUB_ENV
           fi
-      - name: Configure filter tags for lambda bats
-        if: ${{ matrix.os == 'ubuntu-22.04' && env.use_credentials == 'true' }}
-        run: |
-          echo "BATS_FILTER=--filter-tags no_lambda" >> $GITHUB_ENV
       - name: Configure AWS Credentials
         if: ${{ env.use_credentials == 'true' }}
         uses: aws-actions/configure-aws-credentials@v2.2.0
@@ -78,16 +70,12 @@ jobs:
         working-directory: ./go
         run: |
           go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
-
           go build -mod=readonly -o ../.ci_bin/remotesrv ./utils/remotesrv/.
           go build -mod=readonly -o ../.ci_bin/noms ./store/cmd/noms/.
       - name: Setup Dolt Config
         run: |
           dolt config --global --add user.name 'Dolthub Actions'
           dolt config --global --add user.email 'actions@dolthub.com'
-      - name: Install expect
-        if: matrix.os == 'ubuntu-22.04'
-        run: sudo apt-get install -y expect
       - name: Install Maven
         working-directory: ./.ci_bin
         run: |
@@ -112,7 +100,7 @@ jobs:
           echo "runtime_jar=$runtime_jar" >> $GITHUB_OUTPUT
       - name: Check expect
         run: expect -v
-      - name: Test all Unix
+      - name: Test all Mac
         env:
           SQL_ENGINE: "local-engine"
           PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}
@@ -120,13 +108,35 @@ jobs:
         run: |
           bats --tap $BATS_FILTER .
         working-directory: ./integration-tests/bats
-      - name: Test all Unix, SQL_ENGINE=remote-engine
-        # If we have AWS credentials, we run these remote-engine tests here instead of in the separate job.
-        if: ${{ env.use_credentials == 'true' && matrix.os == 'ubuntu-22.04' }}
-        env:
-          SQL_ENGINE: "remote-engine"
-          PARQUET_RUNTIME_JAR: ${{ steps.parquet_cli.outputs.runtime_jar }}
-          BATS_TEST_RETRIES: "3"
-        run: |
-          bats --tap $BATS_FILTER .
-        working-directory: ./integration-tests/bats
+
+  report-bats-failure:
+    name: Report Bats MacOS Failure via Email
+    needs: test
+    runs-on: ubuntu-22.04
+    if: always() && (needs.test.result == 'failure')
+    steps:
+      - uses: actions/checkout@v3
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2.2.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      - name: Send Email
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: ./.github/actions/ses-email-action
+        with:
+          region: us-west-2
+          version: ${{ github.ref }}
+          template: 'BatsMacFailureTemplate'
+          toAddresses: '["${{ github.event.inputs.email }}"]'
+          workflowURL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      - name: Send Email
+        if: ${{ github.event_name == 'schedule' }}
+        uses: ./.github/actions/ses-email-action
+        with:
+          region: us-west-2
+          version: ${{ github.event.client_payload.ref }}
+          template: 'BatsMacFailureTemplate'
+          toAddresses: '["dolts@dolthub.com", "tim@dolthub.com"]'
+          workflowURL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
