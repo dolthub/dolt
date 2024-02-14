@@ -51,7 +51,7 @@ type tpccConfigImpl struct {
 
 var _ TpccConfig = &tpccConfigImpl{}
 
-func NewTpccConfig() *tpccConfigImpl {
+func NewTpccRunnerConfig() *tpccConfigImpl {
 	return &tpccConfigImpl{
 		Servers:      make([]ServerConfig, 0),
 		ScaleFactors: make([]int, 0),
@@ -153,7 +153,7 @@ func FromFileTpccConfig(configPath string) (TpccConfig, error) {
 		return nil, err
 	}
 
-	config := NewTpccConfig()
+	config := NewTpccRunnerConfig()
 	err = json.Unmarshal(data, config)
 	if err != nil {
 		return nil, err

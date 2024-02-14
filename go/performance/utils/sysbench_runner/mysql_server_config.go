@@ -40,7 +40,7 @@ type mysqlServerConfigImpl struct {
 	Socket string
 }
 
-var _ ServerConfig = &mysqlServerConfigImpl{}
+var _ ProtocolServerConfig = &mysqlServerConfigImpl{}
 
 func NewMysqlServerConfig(version, serverExec, serverUser, host, resultsFormat, protocol, socket string, port int, serverArgs []string, skipBinLog bool) *mysqlServerConfigImpl {
 	return &mysqlServerConfigImpl{
@@ -84,6 +84,14 @@ func (sc *mysqlServerConfigImpl) GetServerType() ServerType {
 
 func (sc *mysqlServerConfigImpl) GetResultsFormat() string {
 	return sc.ResultsFormat
+}
+
+func (sc *mysqlServerConfigImpl) GetConnectionProtocol() string {
+	return sc.ConnectionProtocol
+}
+
+func (sc *mysqlServerConfigImpl) GetSocket() string {
+	return sc.Socket
 }
 
 func (sc *mysqlServerConfigImpl) GetServerArgs() ([]string, error) {
