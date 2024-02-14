@@ -2,6 +2,7 @@ package sysbench_runner
 
 import (
 	"fmt"
+
 	"github.com/google/uuid"
 )
 

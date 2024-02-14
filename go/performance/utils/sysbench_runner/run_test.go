@@ -213,3 +213,41 @@ func TestDoltProfiler(t *testing.T) {
 		log.Fatal("failed to create dolt cpu profile")
 	}
 }
+
+func TestDoltMysqlTpccRunner(t *testing.T) {
+	t.Skip()
+	dir := t.TempDir()
+	log.Println(dir)
+	err := os.Chdir(dir)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	conf := &tpccConfigImpl{
+		Servers: []ServerConfig{
+			&doltServerConfigImpl{
+				Id:            "test-dolt-tpcc",
+				Version:       "1.33.0",
+				ResultsFormat: CsvFormat,
+				ServerExec:    "/Users/dustin/go/bin/dolt",
+			},
+			&mysqlServerConfigImpl{
+				Id:                 "test-mysql-tpcc",
+				Host:               "127.0.0.1",
+				Port:               3606,
+				Version:            "8.0.35",
+				ResultsFormat:      CsvFormat,
+				ServerExec:         "/opt/homebrew/bin/mysqld",
+				ServerUser:         "root",
+				SkipLogBin:         true,
+				ConnectionProtocol: "tcp",
+			},
+		},
+		ScriptDir: "/Users/dustin/src/sysbench-tpcc",
+	}
+
+	err = RunTpcc(context.Background(), conf)
+	if err != nil {
+		log.Fatal(err)
+	}
+}

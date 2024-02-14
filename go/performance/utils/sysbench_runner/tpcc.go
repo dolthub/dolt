@@ -78,7 +78,11 @@ func (t *tpccTesterImpl) cleanup(ctx context.Context) error {
 	args := t.test.GetCleanupArgs(t.serverConfig)
 	cmd := ExecCommand(ctx, t.tpccCommand, args...)
 	cmd = t.updateCmdEnv(cmd)
-	return cmd.Run()
+	err := cmd.Run()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (t *tpccTesterImpl) Test(ctx context.Context) (*Result, error) {

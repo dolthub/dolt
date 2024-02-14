@@ -2,6 +2,7 @@ package sysbench_runner
 
 import (
 	"fmt"
+
 	"github.com/google/uuid"
 )
 
@@ -110,6 +111,10 @@ func (t *tpccTestImpl) doltArgs(serverConfig ServerConfig) []string {
 	args := make([]string, 0)
 	args = append(args, defaultTpccParams...)
 	args = append(args, fmt.Sprintf("%s=%s", tpccMysqlHostFlag, serverConfig.GetHost()))
+	port := serverConfig.GetPort()
+	if port > 0 {
+		args = append(args, fmt.Sprintf("%s=%d", tpccMysqlPortFlag, serverConfig.GetPort()))
+	}
 	args = append(args, fmt.Sprintf("%s=%d", tpccMysqlPortFlag, serverConfig.GetPort()))
 	args = append(args, fmt.Sprintf("%s=%s", tpccMysqlUserFlag, defaultMysqlUser))
 	args = append(args, fmt.Sprintf("%s=%d", tpccTimeFlag, t.Params.GetTime()))
@@ -125,13 +130,16 @@ func (t *tpccTestImpl) mysqlArgs(serverConfig ServerConfig) []string {
 	args := make([]string, 0)
 	args = append(args, defaultTpccParams...)
 	host := serverConfig.GetHost()
+	port := serverConfig.GetPort()
 	args = append(args, fmt.Sprintf("%s=%s", tpccMysqlHostFlag, host))
 	if host == defaultHost {
 		args = append(args, fmt.Sprintf("%s=%s", tpccMysqlUserFlag, tpccMysqlUsername))
 		args = append(args, fmt.Sprintf("%s=%s", tpccMysqlPasswordFlag, tpccPassLocal))
 	} else {
-		args = append(args, fmt.Sprintf("%s=%d", tpccMysqlPortFlag, serverConfig.GetPort()))
 		args = append(args, fmt.Sprintf("%s=%s", tpccMysqlUserFlag, defaultMysqlUser))
+	}
+	if port > 0 {
+		args = append(args, fmt.Sprintf("%s=%d", tpccMysqlPortFlag, serverConfig.GetPort()))
 	}
 	args = append(args, fmt.Sprintf("%s=%d", tpccTimeFlag, t.Params.GetTime()))
 	args = append(args, fmt.Sprintf("%s=%d", tpccThreadsFlag, t.Params.GetNumThreads()))

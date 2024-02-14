@@ -16,10 +16,11 @@ package sysbench_runner
 
 import (
 	"errors"
-	"github.com/google/uuid"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 var (

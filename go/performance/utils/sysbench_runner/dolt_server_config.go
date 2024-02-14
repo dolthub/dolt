@@ -2,8 +2,9 @@ package sysbench_runner
 
 import (
 	"fmt"
-	"github.com/google/uuid"
 	"os"
+
+	"github.com/google/uuid"
 )
 
 type ServerProfile string
