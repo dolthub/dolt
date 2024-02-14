@@ -115,7 +115,7 @@ func NewSqlEngine(
 		return nil, err
 	}
 
-	all := append(dbs)
+	all := dbs[:]
 
 	clusterDB := config.ClusterController.ClusterDatabase()
 	if clusterDB != nil {
