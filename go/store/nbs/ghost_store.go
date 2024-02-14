@@ -17,6 +17,9 @@ package nbs
 import (
 	"bufio"
 	"context"
+	"errors"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -34,26 +37,36 @@ var _ chunks.ChunkStore = &GhostBlockStore{}
 
 // NewGhostBlockStore returns a new GhostBlockStore instance. Currently the only parameter is the path to the directory
 // where we will create a text file called ghostObjects.txt. This file will contain the hashes of the ghost objects. Creation
-// and use of this file is constrained to this instance.
-func NewGhostBlockStore(nomsPath string) *GhostBlockStore {
+// and use of this file is constrained to this instance. If there is no ghostObjects.txt file, then the GhostBlockStore will
+// be empty - never returning any values from the Has, HasMany, Get, or GetMany methods.
+func NewGhostBlockStore(nomsPath string) (*GhostBlockStore, error) {
 	ghostPath := filepath.Join(nomsPath, "ghostObjects.txt")
 	f, err := os.Open(ghostPath)
 	if err != nil {
-		return &GhostBlockStore{
-			skippedRefs:      &hash.HashSet{},
-			ghostObjectsFile: ghostPath,
+		if errors.Is(err, fs.ErrNotExist) {
+			return &GhostBlockStore{
+				skippedRefs:      &hash.HashSet{},
+				ghostObjectsFile: ghostPath,
+			}, nil
 		}
+		// Other error, permission denied, etc, we want to hear about.
+		return nil, err
 	}
 	scanner := bufio.NewScanner(f)
 	skiplist := &hash.HashSet{}
 	for scanner.Scan() {
-		skiplist.Insert(hash.Parse(scanner.Text()))
+		h := scanner.Text()
+		if hash.IsValid(h) {
+			skiplist.Insert(hash.Parse(h))
+		} else {
+			return nil, fmt.Errorf("invalid hash %s in ghostObjects.txt", h)
+		}
 	}
 
 	return &GhostBlockStore{
 		skippedRefs:      skiplist,
 		ghostObjectsFile: ghostPath,
-	}
+	}, nil
 }
 
 // Get returns a ghost chunk if the hash is in the ghostObjectsFile. Otherwise, it returns an empty chunk. Chunks returned

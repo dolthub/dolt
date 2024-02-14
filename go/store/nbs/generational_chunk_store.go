@@ -30,31 +30,31 @@ var _ chunks.GenerationalCS = (*GenerationalNBS)(nil)
 var _ chunks.TableFileStore = (*GenerationalNBS)(nil)
 
 type GenerationalNBS struct {
-	oldGen  *NomsBlockStore
-	newGen  *NomsBlockStore
-	lostGen *GhostBlockStore
+	oldGen   *NomsBlockStore
+	newGen   *NomsBlockStore
+	ghostGen *GhostBlockStore
 }
 
 func (gcs *GenerationalNBS) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
-	if gcs.lostGen == nil {
-		return gcs.lostGen.PersistGhostHashes(ctx, refs)
+	if gcs.ghostGen == nil {
+		return gcs.ghostGen.PersistGhostHashes(ctx, refs)
 	}
 	return nil
 }
 
 func (gcs *GenerationalNBS) GhostGen() chunks.ChunkStore {
-	return gcs.lostGen
+	return gcs.ghostGen
 }
 
-func NewGenerationalCS(oldGen, newGen *NomsBlockStore, lostGen *GhostBlockStore) *GenerationalNBS {
+func NewGenerationalCS(oldGen, newGen *NomsBlockStore, ghostGen *GhostBlockStore) *GenerationalNBS {
 	if oldGen.Version() != "" && oldGen.Version() != newGen.Version() {
 		panic("oldgen and newgen chunkstore versions vary")
 	}
 
 	return &GenerationalNBS{
-		oldGen:  oldGen,
-		newGen:  newGen,
-		lostGen: lostGen,
+		oldGen:   oldGen,
+		newGen:   newGen,
+		ghostGen: ghostGen,
 	}
 }
 
@@ -81,9 +81,9 @@ func (gcs *GenerationalNBS) Get(ctx context.Context, h hash.Hash) (chunks.Chunk,
 		return chunks.EmptyChunk, err
 	}
 
-	if c.IsEmpty() && gcs.lostGen != nil {
-		if gcs.lostGen != nil {
-			c, err = gcs.lostGen.Get(ctx, h)
+	if c.IsEmpty() && gcs.ghostGen != nil {
+		if gcs.ghostGen != nil {
+			c, err = gcs.ghostGen.Get(ctx, h)
 			if err != nil {
 				return chunks.EmptyChunk, err
 			}
@@ -131,10 +131,10 @@ func (gcs *GenerationalNBS) GetMany(ctx context.Context, hashes hash.HashSet, fo
 	}
 
 	// We've been asked for objets which we don't apparently have. Check the lost gen commits that we know about.
-	if gcs.lostGen == nil {
+	if gcs.ghostGen == nil {
 		return nil
 	}
-	return gcs.lostGen.GetMany(ctx, notFound, found)
+	return gcs.ghostGen.GetMany(ctx, notFound, found)
 }
 
 func (gcs *GenerationalNBS) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk)) error {
@@ -174,8 +174,8 @@ func (gcs *GenerationalNBS) Has(ctx context.Context, h hash.Hash) (bool, error) 
 	}
 
 	// Possibly a truncated commit.
-	if gcs.lostGen != nil {
-		has, err = gcs.lostGen.Has(ctx, h)
+	if gcs.ghostGen != nil {
+		has, err = gcs.ghostGen.Has(ctx, h)
 		if err != nil {
 			return has, err
 		}
@@ -211,8 +211,8 @@ func (gcs *GenerationalNBS) hasMany(recs []hasRecord) (absent hash.HashSet, err 
 		return absent, nil
 	}
 
-	if gcs.lostGen != nil {
-		absent, err = gcs.lostGen.hasMany(absent)
+	if gcs.ghostGen != nil {
+		absent, err = gcs.ghostGen.hasMany(absent)
 		if err != nil {
 			return nil, err
 		}

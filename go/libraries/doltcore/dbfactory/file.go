@@ -163,15 +163,16 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	}
 
 	oldGenSt, err := nbs.NewLocalStore(ctx, newGenSt.Version(), oldgenPath, defaultMemTableSize, q)
-
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	// NM4 - error handling. Currently, no-op (nil) if there is no hardcoded file.
-	lostGen := nbs.NewGhostBlockStore(path)
+	ghostGen, err := nbs.NewGhostBlockStore(path)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
-	st := nbs.NewGenerationalCS(oldGenSt, newGenSt, lostGen)
+	st := nbs.NewGenerationalCS(oldGenSt, newGenSt, ghostGen)
 	// metrics?
 
 	vrw := types.NewValueStore(st)
