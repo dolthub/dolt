@@ -204,11 +204,11 @@ type serverinterceptor struct {
 
 func (si *serverinterceptor) Stream() grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		fromStandby := false
+		fromClusterMember := false
 		if md, ok := metadata.FromIncomingContext(ss.Context()); ok {
-			fromStandby = si.handleRequestHeaders(md)
+			fromClusterMember = si.handleRequestHeaders(md)
 		}
-		if fromStandby {
+		if fromClusterMember {
 			if err := si.authenticate(ss.Context()); err != nil {
 				return err
 			}
@@ -236,11 +236,11 @@ func (si *serverinterceptor) Stream() grpc.StreamServerInterceptor {
 
 func (si *serverinterceptor) Unary() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		fromStandby := false
+		fromClusterMember := false
 		if md, ok := metadata.FromIncomingContext(ctx); ok {
-			fromStandby = si.handleRequestHeaders(md)
+			fromClusterMember = si.handleRequestHeaders(md)
 		}
-		if fromStandby {
+		if fromClusterMember {
 			if err := si.authenticate(ctx); err != nil {
 				return nil, err
 			}
@@ -271,9 +271,9 @@ func (si *serverinterceptor) handleRequestHeaders(header metadata.MD) bool {
 	epochs := header.Get(clusterRoleEpochHeader)
 	roles := header.Get(clusterRoleHeader)
 	if len(epochs) > 0 && len(roles) > 0 {
-		if roles[0] == string(RolePrimary) && role == RolePrimary {
+		if roles[0] == string(RolePrimary) {
 			if reqepoch, err := strconv.Atoi(epochs[0]); err == nil {
-				if reqepoch == epoch {
+				if reqepoch == epoch && role == RolePrimary {
 					// Misconfiguration in the cluster means this
 					// server and its standby are marked as Primary
 					// at the same epoch. We will become standby
@@ -282,13 +282,17 @@ func (si *serverinterceptor) handleRequestHeaders(header metadata.MD) bool {
 					si.lgr.Errorf("cluster: serverinterceptor: this server and its standby replica are both primary at the same epoch. force transitioning to detected_broken_config.")
 					si.roleSetter(string(RoleDetectedBrokenConfig), reqepoch)
 				} else if reqepoch > epoch {
-					// The client replicating to us thinks it is the primary at a higher epoch than us.
-					si.lgr.Warnf("cluster: serverinterceptor: this server is primary at epoch %d. the server replicating to it is primary at epoch %d. force transitioning to standby.", epoch, reqepoch)
+					if role == RolePrimary {
+						// The client replicating to us thinks it is the primary at a higher epoch than us.
+						si.lgr.Warnf("cluster: serverinterceptor: this server is primary at epoch %d. the server replicating to it is primary at epoch %d. force transitioning to standby.", epoch, reqepoch)
+					} else if role == RoleDetectedBrokenConfig {
+						si.lgr.Warnf("cluster: serverinterceptor: this server is detected_broken_config at epoch %d. the server replicating to it is primary at epoch %d. transitioning to standby.", epoch, reqepoch)
+					}
 					si.roleSetter(string(RoleStandby), reqepoch)
 				}
 			}
 		}
-		// returns true if the request was from a standby replica, false otherwise
+		// returns true if the request was from a cluster replica, false otherwise
 		return true
 	}
 	return false

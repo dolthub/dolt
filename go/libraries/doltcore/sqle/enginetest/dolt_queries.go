@@ -862,6 +862,51 @@ var DoltScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "test AS OF indexed queries (https://github.com/dolthub/dolt/issues/7488)",
+		SetUpScript: []string{
+			"create table indexedTable (pk int primary key, c0 int, c1 varchar(255), key c1_idx(c1));",
+			"insert into indexedTable (pk, c1) values (1, 'one');",
+			"call dolt_commit('-Am', 'adding table t with index');",
+			"SET @commit1 = hashof('HEAD');",
+
+			"update indexedTable set c1='two';",
+			"call dolt_commit('-am', 'updating one to two');",
+			"SET @commit2 = hashof('HEAD');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:           "SELECT c1 from indexedTable;",
+				Expected:        []sql.Row{{"two"}},
+				ExpectedIndexes: []string{},
+			},
+			{
+				Query:           "SELECT c1 from indexedTable where c1 > 'o';",
+				Expected:        []sql.Row{{"two"}},
+				ExpectedIndexes: []string{"c1_idx"},
+			},
+			{
+				Query:           "SELECT c1 from indexedTable as of @commit2;",
+				Expected:        []sql.Row{{"two"}},
+				ExpectedIndexes: []string{},
+			},
+			{
+				Query:           "SELECT c1 from indexedTable as of @commit2 where c1 > 'o';",
+				Expected:        []sql.Row{{"two"}},
+				ExpectedIndexes: []string{"c1_idx"},
+			},
+			{
+				Query:           "SELECT c1 from indexedTable as of @commit1;",
+				Expected:        []sql.Row{{"one"}},
+				ExpectedIndexes: []string{},
+			},
+			{
+				Query:           "SELECT c1 from indexedTable as of @commit1 where c1 > 'o';",
+				Expected:        []sql.Row{{"one"}},
+				ExpectedIndexes: []string{"c1_idx"},
+			},
+		},
+	},
+	{
 		Name: "test as of indexed join (https://github.com/dolthub/dolt/issues/2189)",
 		SetUpScript: []string{
 			"create table a (pk int primary key, c1 int)",
