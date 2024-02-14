@@ -48,7 +48,7 @@ var _ TestParams = &tpccTestParamsImpl{}
 // NewDefaultTpccParams returns default TpccTestParams.
 func NewDefaultTpccParams() *tpccTestParamsImpl {
 	return &tpccTestParamsImpl{
-		NumThreads:     2, // TODO: When ready, expose as command line argument.
+		NumThreads:     1, // TODO: When ready, expose as command line argument.
 		ScaleFactor:    1,
 		Tables:         1,
 		TrxLevel:       tpccTransactionLevelRr,
