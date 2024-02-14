@@ -5,8 +5,5 @@ set -o pipefail
 
 dolt version
 # Github Actions ignores the WORKDIR?
-cd ./go/performance/utils/sysbench_runner/cmd
-DEBUG=1 go run . --config=/config.json
-
-cd /dolt/go/performance/utils/tpcc_runner/cmd
-DEBUG=1 go run . --config=/tpcc-config.json
+cd ./go/performance/utils/benchmark_runner
+DEBUG=true RUN_BENCHMARK_RUNNER_TESTS=true go test ./...
