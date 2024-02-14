@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -589,7 +590,7 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	}
 
 	// If this database is re-created, we don't want to return any cached results.
-	err = dbfactory.DeleteFromSingletonCache(dropDbLoc + "/.dolt/noms")
+	err = dbfactory.DeleteFromSingletonCache(filepath.ToSlash(dropDbLoc + "/.dolt/noms"))
 	if err != nil {
 		return err
 	}
