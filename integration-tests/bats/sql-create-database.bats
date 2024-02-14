@@ -105,7 +105,7 @@ create database mydb;
 SQL
 
     [ "$status" -eq 0 ]
-    [ ! -d mydb ]
+    [ -d mydb ]
 }
 
 @test "sql-create-database: with data-dir" {
