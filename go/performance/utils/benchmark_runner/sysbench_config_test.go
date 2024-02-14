@@ -20,8 +20,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var testIdFunc = func() string { return "id" }
-
 func TestConfigTestGetTests(t *testing.T) {
 	empty := &testConfigImpl{Name: "test_name"}
 
@@ -40,7 +38,7 @@ func TestConfigTestGetTests(t *testing.T) {
 	tests := []struct {
 		description   string
 		config        SysbenchConfig
-		expectedTests []SysbenchTest
+		expectedTests []testTest
 		expectedError error
 	}{
 		{
@@ -60,11 +58,12 @@ func TestConfigTestGetTests(t *testing.T) {
 				Servers: []ServerConfig{serverConfig},
 				Tests:   []TestConfig{empty},
 			},
-			expectedTests: []SysbenchTest{
-				&sysbenchTestImpl{
-					id:     testIdFunc(),
-					Name:   "test_name",
-					Params: serverConfig.GetTestingParams(empty),
+			expectedTests: []testTest{
+				&testTestImpl{
+					&sysbenchTestImpl{
+						Name:   "test_name",
+						Params: serverConfig.GetTestingParams(empty),
+					},
 				},
 			},
 		},
@@ -74,13 +73,13 @@ func TestConfigTestGetTests(t *testing.T) {
 				Servers: []ServerConfig{serverConfig},
 				Tests:   []TestConfig{one, two, three},
 			},
-			expectedTests: []SysbenchTest{
-				&sysbenchTestImpl{id: testIdFunc(), Name: "test_one", Params: serverConfig.GetTestingParams(one)},
-				&sysbenchTestImpl{id: testIdFunc(), Name: "test_one", Params: serverConfig.GetTestingParams(one)},
-				&sysbenchTestImpl{id: testIdFunc(), Name: "test_one", Params: serverConfig.GetTestingParams(one)},
-				&sysbenchTestImpl{id: testIdFunc(), Name: "test_two", Params: serverConfig.GetTestingParams(two)},
-				&sysbenchTestImpl{id: testIdFunc(), Name: "test_two", Params: serverConfig.GetTestingParams(two)},
-				&sysbenchTestImpl{id: testIdFunc(), Name: "test_three", Params: serverConfig.GetTestingParams(three)},
+			expectedTests: []testTest{
+				&testTestImpl{&sysbenchTestImpl{Name: "test_one", Params: serverConfig.GetTestingParams(one)}},
+				&testTestImpl{&sysbenchTestImpl{Name: "test_one", Params: serverConfig.GetTestingParams(one)}},
+				&testTestImpl{&sysbenchTestImpl{Name: "test_one", Params: serverConfig.GetTestingParams(one)}},
+				&testTestImpl{&sysbenchTestImpl{Name: "test_two", Params: serverConfig.GetTestingParams(two)}},
+				&testTestImpl{&sysbenchTestImpl{Name: "test_two", Params: serverConfig.GetTestingParams(two)}},
+				&testTestImpl{&sysbenchTestImpl{Name: "test_three", Params: serverConfig.GetTestingParams(three)}},
 			},
 		},
 		{
@@ -89,8 +88,8 @@ func TestConfigTestGetTests(t *testing.T) {
 				Servers: []ServerConfig{serverConfig},
 				Tests:   []TestConfig{opts},
 			},
-			expectedTests: []SysbenchTest{
-				&sysbenchTestImpl{id: testIdFunc(), Name: "test_options", Params: serverConfig.GetTestingParams(opts)},
+			expectedTests: []testTest{
+				&testTestImpl{&sysbenchTestImpl{Name: "test_options", Params: serverConfig.GetTestingParams(opts)}},
 			},
 		},
 	}
@@ -101,8 +100,34 @@ func TestConfigTestGetTests(t *testing.T) {
 				actual, err := GetTests(test.config, s)
 				assert.Equal(t, test.expectedError, err)
 				assert.Equal(t, len(test.expectedTests), len(actual))
-				assert.ElementsMatch(t, test.expectedTests, actual)
+				updatedExpected := make([]SysbenchTest, len(actual))
+				for idx, a := range actual {
+					e := test.expectedTests[idx]
+					e.SetId(a.GetId())
+					updatedExpected[idx] = e.GetSysbenchTest()
+				}
+				assert.ElementsMatch(t, updatedExpected, actual)
 			}
 		})
 	}
 }
+
+type testTest interface {
+	SetId(id string)
+	GetSysbenchTest() SysbenchTest
+	SysbenchTest
+}
+
+type testTestImpl struct {
+	*sysbenchTestImpl
+}
+
+func (t *testTestImpl) GetSysbenchTest() SysbenchTest {
+	return t.sysbenchTestImpl
+}
+
+func (t *testTestImpl) SetId(id string) {
+	t.id = id
+}
+
+var _ testTest = &testTestImpl{}

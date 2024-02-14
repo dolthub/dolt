@@ -24,8 +24,12 @@ import (
 	"testing"
 )
 
+var runTests = os.Getenv("RUN_BENCHMARK_RUNNER_TESTS")
+
 func TestRunner(t *testing.T) {
-	t.Skip()
+	if runTests == "" {
+		t.Skip()
+	}
 	dir := t.TempDir()
 	log.Println(dir)
 	err := os.Chdir(dir)
@@ -70,7 +74,9 @@ func selectTests(names ...string) []TestConfig {
 }
 
 func TestDoltMysqlSysbenchRunner(t *testing.T) {
-	t.Skip()
+	if runTests == "" {
+		t.Skip()
+	}
 	dir := t.TempDir()
 	log.Println(dir)
 	err := os.Chdir(dir)
@@ -121,7 +127,9 @@ func TestDoltMysqlSysbenchRunner(t *testing.T) {
 }
 
 func TestDoltgresPostgresSysbenchRunner(t *testing.T) {
-	t.Skip()
+	if runTests == "" {
+		t.Skip()
+	}
 	dir := t.TempDir()
 	log.Println(dir)
 	err := os.Chdir(dir)
@@ -171,7 +179,9 @@ func TestDoltgresPostgresSysbenchRunner(t *testing.T) {
 }
 
 func TestDoltProfiler(t *testing.T) {
-	t.Skip()
+	if runTests == "" {
+		t.Skip()
+	}
 	dir := t.TempDir()
 	log.Println(dir)
 	err := os.Chdir(dir)
@@ -215,7 +225,9 @@ func TestDoltProfiler(t *testing.T) {
 }
 
 func TestDoltMysqlTpccRunner(t *testing.T) {
-	t.Skip()
+	if runTests == "" {
+		t.Skip()
+	}
 	dir := t.TempDir()
 	log.Println(dir)
 	err := os.Chdir(dir)
