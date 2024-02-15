@@ -8,16 +8,15 @@ cd $script_dir/../..
 
 [ ! -z "$GO_BUILD_VERSION" ] || (echo "Must supply GO_BUILD_VERSION"; exit 1)
 
-cmd='docker run --rm -v '`pwd`':/src -v golang:'"$GO_BUILD_VERSION"'-bookworm /bin/bash -c'
 build_cmd='go build'
-
+profile=""
 if [ -n "$PROFILE" ]; then
   echo "Building PGO binaries"
-  cmd='docker run --rm -v '`pwd`':/src -v '"$PROFILE"':/cpu.pprof golang:'"$GO_BUILD_VERSION"'-bookworm /bin/bash -c'
+  profile='-v '"$PROFILE"':/cpu.pprof'
   build_cmd='go build -pgo=/cpu.pprof'
 fi
 
-eval "$cmd" '
+docker run --rm -v `pwd`:/src "$profile" golang:"$GO_BUILD_VERSION"-bookworm /bin/bash -c '
 set -e
 set -o pipefail
 apt-get update && apt-get install -y p7zip-full pigz

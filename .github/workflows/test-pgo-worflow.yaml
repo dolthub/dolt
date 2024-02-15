@@ -1,0 +1,13 @@
+on:
+  workflow_dispatch:
+
+jobs:
+  test-pgo-workflow:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Trigger PGO build
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          event-type: pgo-release
+          client-payload: '{"version": "1.34.0", "server": "dolt", "bucket": "performance-benchmarking-github-actions-results", "actor": "coffeegoddd", "actor_email": "dustin@dolthub.com", "profile_key": "2024/02/15/release/coffeegoddd/coffeegoddd-1.34.0-1708026697749950412/__DOLT__/cpu.pprof"}'
