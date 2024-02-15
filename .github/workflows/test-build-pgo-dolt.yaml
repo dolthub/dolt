@@ -1,0 +1,58 @@
+on:
+  repository_dispatch:
+    types: [ pgo-release ]
+
+jobs:
+  email-team:
+    runs-on: ubuntu-22.04
+    name: Test Build PGO Dolt
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Go 1.x
+        uses: actions/setup-go@v3
+        with:
+          go-version: ^1.21
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2.2.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      - name: Get Results
+        id: get-results
+        run: aws s3api get-object --bucket="$BUCKET" --key="$KEY" dolt-cpu-profile.pprof
+        env:
+          KEY: ${{ github.event.client_payload.profile_key }}
+          BUCKET: ${{ github.event.client_payload.bucket }}
+
+#      - name: Update dolt version command
+#        run: sed -i -e 's/	Version = ".*"/	Version = "'"$NEW_VERSION"'"/' "$FILE"
+#        env:
+#          FILE: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
+#          NEW_VERSION: ${{ needs.format-version.outputs.version }}
+#      - name: Set minver TBD to version
+#        run: sed -i -e 's/minver:"TBD"/minver:"'"$NEW_VERSION"'"/' "$FILE"
+#        env:
+#          FILE: ${{ format('{0}/go/cmd/dolt/commands/sqlserver/yaml_config.go', github.workspace) }}
+#          NEW_VERSION: ${{ needs.format-version.outputs.version }}
+#      - name: update minver_validation.txt
+#        working-directory: ./go
+#        run: go run -mod=readonly ./utils/genminver_validation/ $FILE
+#        env:
+#          FILE: ${{ format('{0}/go/cmd/dolt/commands/sqlserver/testdata/minver_validation.txt', github.workspace) }}
+#      - uses: EndBug/add-and-commit@v9.1.1
+#        with:
+#          message: ${{ format('[ga-bump-release] Update Dolt version to {0} and release v{0}', needs.format-version.outputs.version) }}
+#          add: ${{ format('["{0}/go/cmd/dolt/dolt.go", "{0}/go/cmd/dolt/commands/sqlserver/yaml_config.go", "{0}/go/cmd/dolt/commands/sqlserver/testdata/minver_validation.txt"]', github.workspace) }}
+#          cwd: "."
+#          pull: "--ff"
+
+      - name: Build Binaries
+        id: build_binaries
+        run: |
+          latest=$(git rev-parse HEAD)
+          echo "commitish=$latest" >> $GITHUB_OUTPUT
+          GO_BUILD_VERSION=1.21 go/utils/publishrelease/buildpgobinaries.sh
+        env:
+          GO_BUILD_VERSION: "1.21"
+          PROFILE: ${{ format('{0}/dolt-cpu-profile.pprof', github.workspace) }}

@@ -17,9 +17,21 @@ if [ -z "$NOMS_BIN_FORMAT" ]; then
     exit 1
 fi
 
-if [ -z "$FROM_SERVER" ] || [ -z "$FROM_VERSION" ] || [ -z "$TO_SERVER" ] || [ -z "$TO_VERSION" ]; then
-    echo  "Must set FROM_SERVER FROM_VERSION TO_SERVER and TO_VERSION"
-    exit 1
+if [ -n "$PROFILE" ]; then
+    if [ -z "$FROM_VERSION" ]; then
+        echo  "Must set FROM_VERSION"
+        exit 1
+    fi
+
+    echo "Setting profile version to $FROM_VERSION"
+else
+  if [ -z "$FROM_SERVER" ] || [ -z "$FROM_VERSION" ] || [ -z "$TO_SERVER" ] || [ -z "$TO_VERSION" ]; then
+      echo  "Must set FROM_SERVER FROM_VERSION TO_SERVER and TO_VERSION"
+      exit 1
+  fi
+
+  echo "Setting from $FROM_SERVER: $FROM_VERSION"
+  echo "Setting to $TO_SERVER: $TO_VERSION"
 fi
 
 if [ -z "$ACTOR" ]; then
@@ -35,9 +47,6 @@ fi
 if [ "$NOMS_BIN_FORMAT" = "__DOLT__" ]; then
   INIT_BIG_REPO="false"
 fi
-
-echo "Setting from $FROM_SERVER: $FROM_VERSION"
-echo "Setting to $TO_SERVER: $TO_VERSION"
 
 # use first 8 characters of TO_VERSION to differentiate
 # jobs
@@ -69,20 +78,32 @@ fi
 # or default to -1
 issuenumber=${ISSUE_NUMBER:-"-1"}
 
+if [ -n "$PROFILE" ]; then
 source \
-  "$TEMPLATE_SCRIPT" \
-  "$jobname"         \
-  "$FROM_SERVER"     \
-  "$FROM_VERSION"    \
-  "$TO_SERVER"       \
-  "$TO_VERSION"      \
-  "$timeprefix"      \
-  "$actorprefix"     \
-  "$format"          \
-  "$issuenumber"     \
-  "$INIT_BIG_REPO"   \
-  "$NOMS_BIN_FORMAT" \
-  "$WITH_TPCC" > job.json
+    "$TEMPLATE_SCRIPT" \
+    "$jobname"         \
+    "$FROM_VERSION"    \
+    "$timeprefix"      \
+    "$actorprefix"     \
+    "$format"          \
+    "$INIT_BIG_REPO"   \
+    "$NOMS_BIN_FORMAT" > job.json
+else
+  source \
+    "$TEMPLATE_SCRIPT" \
+    "$jobname"         \
+    "$FROM_SERVER"     \
+    "$FROM_VERSION"    \
+    "$TO_SERVER"       \
+    "$TO_VERSION"      \
+    "$timeprefix"      \
+    "$actorprefix"     \
+    "$format"          \
+    "$issuenumber"     \
+    "$INIT_BIG_REPO"   \
+    "$NOMS_BIN_FORMAT" \
+    "$WITH_TPCC" > job.json
+fi
 
 out=$(KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json || true)
 
