@@ -7,20 +7,9 @@ script_dir=$(dirname "$0")
 cd $script_dir/../..
 
 [ ! -z "$GO_BUILD_VERSION" ] || (echo "Must supply GO_BUILD_VERSION"; exit 1)
+[ ! -z "$PROFILE" ] || (echo "Must supply PROFILE"; exit 1)
 
-build_cmd='go build'
-profile=""
-if [ -n "$PROFILE" ]; then
-  echo "Building PGO binaries"
-  
-  profile='-v '"$PROFILE"':/cpu.pprof'
-  build_cmd='go build -pgo=/cpu.pprof'
-  
-  echo "profile is: $profile"
-  echo "build_cmd is: $build_cmd"
-fi
-
-docker run --rm -v `pwd`:/src "$profile" golang:"$GO_BUILD_VERSION"-bookworm /bin/bash -c '
+docker run --rm -v `pwd`:/src -v "$PROFILE":/cpu.pprof golang:"$GO_BUILD_VERSION"-bookworm /bin/bash -c '
 set -e
 set -o pipefail
 apt-get update && apt-get install -y p7zip-full pigz
@@ -41,7 +30,7 @@ for tuple in $OS_ARCH_TUPLES; do
     if [ "$os" = windows ]; then
       obin="$bin.exe"
     fi
-    CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" '"$build_cmd"' -trimpath -ldflags="-s -w" -o "$o/bin/$obin" "./cmd/$bin/"
+    CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -pgo=/cpu.pprof -trimpath -ldflags="-s -w" -o "$o/bin/$obin" "./cmd/$bin/"
   done
   if [ "$os" = windows ]; then
     (cd out && 7z a "dolt-$os-$arch.zip" "dolt-$os-$arch" && 7z a "dolt-$os-$arch.7z" "dolt-$os-$arch")
