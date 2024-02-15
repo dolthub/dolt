@@ -12,8 +12,12 @@ build_cmd='go build'
 profile=""
 if [ -n "$PROFILE" ]; then
   echo "Building PGO binaries"
+  
   profile='-v '"$PROFILE"':/cpu.pprof'
   build_cmd='go build -pgo=/cpu.pprof'
+  
+  echo "profile is: $profile"
+  echo "build_cmd is: $build_cmd"
 fi
 
 docker run --rm -v `pwd`:/src "$profile" golang:"$GO_BUILD_VERSION"-bookworm /bin/bash -c '
