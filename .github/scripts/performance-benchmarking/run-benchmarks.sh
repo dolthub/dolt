@@ -66,7 +66,10 @@ timesuffix=`date +%s%N`
 jobname="$actorShort"
 if [ -n "$WITH_TPCC" ]; then
   jobname="$jobname-tpcc"
+elif [ -n "$PROFILE" ]; then
+  jobname="$jobname-profile"
 fi
+
 jobname="$jobname-$timesuffix"
 
 timeprefix=$(date +%Y/%m/%d)
