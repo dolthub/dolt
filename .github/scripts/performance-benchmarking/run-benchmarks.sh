@@ -48,9 +48,13 @@ if [ "$NOMS_BIN_FORMAT" = "__DOLT__" ]; then
   INIT_BIG_REPO="false"
 fi
 
-# use first 8 characters of TO_VERSION to differentiate
+# use first 8 characters of FROM_VERSION | TO_VERSION to differentiate
 # jobs
 short=${TO_VERSION:0:8}
+if [ -n "$PROFILE" ]; then
+  short=${FROM_VERSION:0:8}
+fi
+
 lowered=$(echo "$ACTOR" | tr '[:upper:]' '[:lower:]')
 actorShort="$lowered-$short"
 
