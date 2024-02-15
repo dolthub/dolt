@@ -88,6 +88,10 @@ func (g GhostBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, found
 }
 
 func (g *GhostBlockStore) PersistGhostHashes(ctx context.Context, hashes hash.HashSet) error {
+	if hashes.Size() == 0 {
+		return fmt.Errorf("runtime error. PersistGhostHashes called with empty hash set")
+	}
+
 	f, err := os.OpenFile(g.ghostObjectsFile, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err

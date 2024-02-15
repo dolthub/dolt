@@ -16,6 +16,7 @@ package nbs
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
@@ -39,7 +40,7 @@ func (gcs *GenerationalNBS) PersistGhostHashes(ctx context.Context, refs hash.Ha
 	if gcs.ghostGen == nil {
 		return gcs.ghostGen.PersistGhostHashes(ctx, refs)
 	}
-	return nil
+	return fmt.Errorf("runtime error. ghostGen is nil but an attempt to persist ghost hashes was made")
 }
 
 func (gcs *GenerationalNBS) GhostGen() chunks.ChunkStore {
@@ -82,11 +83,9 @@ func (gcs *GenerationalNBS) Get(ctx context.Context, h hash.Hash) (chunks.Chunk,
 	}
 
 	if c.IsEmpty() && gcs.ghostGen != nil {
-		if gcs.ghostGen != nil {
-			c, err = gcs.ghostGen.Get(ctx, h)
-			if err != nil {
-				return chunks.EmptyChunk, err
-			}
+		c, err = gcs.ghostGen.Get(ctx, h)
+		if err != nil {
+			return chunks.EmptyChunk, err
 		}
 	}
 
@@ -107,11 +106,9 @@ func (gcs *GenerationalNBS) GetMany(ctx context.Context, hashes hash.HashSet, fo
 
 		found(ctx, chunk)
 	})
-
 	if err != nil {
 		return err
 	}
-
 	if len(notFound) == 0 {
 		return nil
 	}
@@ -125,12 +122,15 @@ func (gcs *GenerationalNBS) GetMany(ctx context.Context, hashes hash.HashSet, fo
 
 		found(ctx, chunk)
 	})
-
 	if err != nil {
 		return err
 	}
+	if len(notFound) == 0 {
+		return nil
+	}
 
-	// We've been asked for objets which we don't apparently have. Check the lost gen commits that we know about.
+	// Last ditch effort to see if the requested objects are commits we've decided to ignore. Note the function spec
+	// considers non-present chunks to be silently ignored, so we don't need to return an error here
 	if gcs.ghostGen == nil {
 		return nil
 	}
@@ -207,17 +207,11 @@ func (gcs *GenerationalNBS) hasMany(recs []hasRecord) (absent hash.HashSet, err 
 		return nil, err
 	}
 
-	if len(absent) == 0 {
+	if len(absent) == 0 || gcs.ghostGen == nil {
 		return absent, nil
 	}
 
-	if gcs.ghostGen != nil {
-		absent, err = gcs.ghostGen.hasMany(absent)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return absent, nil
+	return gcs.ghostGen.hasMany(absent)
 }
 
 // Put caches c in the ChunkSource. Upon return, c must be visible to

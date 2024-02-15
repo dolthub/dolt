@@ -342,6 +342,8 @@ func (itr *doltDiffCommitHistoryRowItr) Next(ctx *sql.Context) (sql.Row, error) 
 
 			err = itr.loadTableChanges(ctx, commit)
 			if err == doltdb.ErrGhostCommitEncountered {
+				// When showing the diff table in a shallow clone, we show as much of the dolt_history_{table} as we can,
+				// and don't consider it an error when we hit a ghost commit.
 				return nil, io.EOF
 			}
 			if err != nil {

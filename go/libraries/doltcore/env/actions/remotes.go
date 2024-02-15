@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 	"sync"
 	"time"
@@ -611,7 +610,7 @@ func fetchRefSpecsWithDepth(
 		}
 		commit, ok := optCmt.ToCommit()
 		if !ok {
-			// Source DB should have everything. If we can't read a commit, something is wrong.
+			// Dest DB should have each hash in `newHeads` now. If we can't read a commit, something is wrong.
 			return doltdb.ErrGhostCommitRuntimeFailure
 		}
 
@@ -669,7 +668,7 @@ func fetchRefSpecsWithDepth(
 
 func buildInitialSkipList(ctx context.Context, srcDB *doltdb.DoltDB, toFetch []hash.Hash) (hash.HashSet, error) {
 	if len(toFetch) > 1 {
-		return hash.HashSet{}, fmt.Errorf("runtime error: multiple refspect not supported in shallow clone")
+		return hash.HashSet{}, fmt.Errorf("runtime error: multiple refspecs not supported in shallow clone")
 	}
 
 	cs, err := doltdb.NewCommitSpec(toFetch[0].String())
@@ -679,28 +678,7 @@ func buildInitialSkipList(ctx context.Context, srcDB *doltdb.DoltDB, toFetch []h
 
 	allCommits, err := srcDB.BootstrapShallowResolve(ctx, cs)
 
-	closureIter, err := allCommits.IterAllReverse(ctx)
-	if err != nil {
-		return hash.HashSet{}, err
-	}
-
-	skipCmts := hash.NewHashSet()
-	for {
-		key, _, err := closureIter.Next(ctx)
-		if err != nil {
-			{
-				if errors.Is(err, io.EOF) {
-					break
-				}
-				return hash.HashSet{}, err
-			}
-		}
-		clsrHash := hash.New(key[8:])
-		skipCmts.Insert(clsrHash)
-	}
-
-	return skipCmts, nil
-
+	return allCommits.AsHashSet(ctx)
 }
 
 func updateSkipList(ctx context.Context, srcDB *doltdb.DoltDB, toFetch []hash.Hash, skipCmts hash.HashSet) ([]hash.Hash, hash.HashSet, error) {
@@ -712,7 +690,8 @@ func updateSkipList(ctx context.Context, srcDB *doltdb.DoltDB, toFetch []hash.Ha
 			return nil, nil, err
 		}
 
-		// Must resolve because we just fetched it.
+		// srcDB should always be the fully populated, so if there is a ghost commit here, someone is calling this
+		// function incorrectly.
 		commit, ok := optCmt.ToCommit()
 		if !ok {
 			return nil, nil, doltdb.ErrGhostCommitEncountered

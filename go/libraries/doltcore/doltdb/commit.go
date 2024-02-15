@@ -154,12 +154,7 @@ func (c *Commit) GetParent(ctx context.Context, idx int) (*OptionalCommit, error
 }
 
 func (c *Commit) GetCommitClosure(ctx context.Context) (prolly.CommitClosure, error) {
-	switch v := c.dCommit.NomsValue().(type) {
-	case types.SerialMessage:
-		return datas.NewParentsClosure(ctx, c.dCommit, v, c.vrw, c.ns)
-	default:
-		return prolly.CommitClosure{}, fmt.Errorf("old format lacks commit closure")
-	}
+	return getCommitClosure(ctx, c.dCommit, c.vrw, c.ns)
 }
 
 func getCommitClosure(ctx context.Context, cmt *datas.Commit, vrw types.ValueReadWriter, ns tree.NodeStore) (prolly.CommitClosure, error) {

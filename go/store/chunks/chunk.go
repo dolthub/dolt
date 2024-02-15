@@ -74,7 +74,7 @@ func NewChunkWithHash(r hash.Hash, data []byte) Chunk {
 	return Chunk{r, data, false}
 }
 
-// NewGhostChunk creates a new ghost Chunk with a specified hash. The data will
+// NewGhostChunk creates a new ghost Chunk with a specified hash. The data will be an empty slice.
 func NewGhostChunk(r hash.Hash) *Chunk {
 	return &Chunk{r, []byte{}, true}
 }
