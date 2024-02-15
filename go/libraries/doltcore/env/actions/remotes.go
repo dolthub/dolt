@@ -357,8 +357,17 @@ func FetchFollowTags(ctx context.Context, tempTableDir string, srcDB, destDB *do
 		if err != nil {
 			return true, err
 		}
-		if !has {
-			// neither tag nor commit has been fetched
+		if has {
+			// We _might_ have it. We need to check if it's a ghost, in which case we'll skip this commit.
+			optCmt, err := destDB.ReadCommit(ctx, cmHash)
+			if err != nil {
+				return true, err
+			}
+			_, ok := optCmt.ToCommit()
+			if !ok {
+				return false, nil
+			}
+		} else {
 			return false, nil
 		}
 
@@ -545,6 +554,8 @@ func fetchRefSpecsWithDepth(
 	if err != nil {
 		return err
 	}
+
+	shallowClone := depth > 0
 	ghostsPersisted := false
 	// We loop on fetching chunks until we've fetched all the new heads we need, or we've reached the depth limit.
 	// In the case where we pull everything (depth < 0), we'll only loop once.
@@ -642,9 +653,15 @@ func fetchRefSpecsWithDepth(
 		}
 	}
 
-	err = FetchFollowTags(ctx, tmpDir, srcDB, dbData.Ddb, progStarter, progStopper)
-	if err != nil {
-		return err
+	if !shallowClone {
+		// TODO: Currently shallow clones don't pull any tags, but they could. We need to make FetchFollowTags wise
+		// to the skipped commits list, and then we can remove this conditional. Also, FetchFollowTags assumes that
+		// progStarter and progStopper are always non-nil, which we don't assume elsewhere. Shallow clone has no
+		// progress reporting, and as a result they are nil.
+		err = FetchFollowTags(ctx, tmpDir, srcDB, dbData.Ddb, progStarter, progStopper)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

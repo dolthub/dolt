@@ -40,6 +40,8 @@ seed_and_start_serial_remote() {
        dolt commit -a -m "Added Val: $SEQ"
     done
 
+    dolt tag nonheadtag HEAD~2
+
     remotesrv --http-port 1234 --repo-mode &
     remotesrv_pid=$!
 
@@ -115,6 +117,23 @@ seed_and_start_serial_remote() {
     run dolt sql -q "select sum(i) from vals"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "15" ]] || false # 1+2+3+4+5 = 15.
+}
+
+@test "shallow-clone: push to a new remote should error" {
+    seed_and_start_serial_remote
+
+    mkdir clones
+    cd clones
+
+    dolt clone --depth 1 http://localhost:50051/test-org/test-repo
+    cd test-repo
+
+    dolt remote add altremote file://../file-remote-alt
+
+    run dolt push altremote main
+    [ "$status" -eq 1 ]
+    # NM4 - give a better error message.
+    [[ "$output" =~ "failed to get all chunks" ]] || false
 }
 
 @test "shallow-clone: depth 3 clone of serial history" {
