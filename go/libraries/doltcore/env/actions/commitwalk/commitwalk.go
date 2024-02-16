@@ -290,6 +290,32 @@ func GetDotDotRevisionsIterator(ctx context.Context, includedDdb *doltdb.DoltDB,
 	return newDotDotCommiterator(ctx, includedDdb, startCommitHashes, excludedDdb, excludingCommitHashes, matchFn)
 }
 
+// GetTopNTopoOrderedCommitsMatching returns the first N commits (If N <= 0 then all commits) reachable from the commits in
+// `startCommitHashes` in reverse topological order, with tiebreaking done by the height of the commit graph -- higher
+// commits appear first. Remaining ties are broken by timestamp; newer commits appear first. DO NOT DELETE, USED IN DOLTHUB
+func GetTopNTopoOrderedCommitsMatching(ctx context.Context, ddb *doltdb.DoltDB, startCommitHashes []hash.Hash, n int, matchFn func(commit *doltdb.OptionalCommit) (bool, error)) ([]*doltdb.Commit, error) {
+	itr, err := GetTopologicalOrderIterator(ctx, ddb, startCommitHashes, matchFn)
+	if err != nil {
+		return nil, err
+	}
+
+	var commitList []*doltdb.Commit
+	for n < 0 || len(commitList) < n {
+		_, optCmt, err := itr.Next(ctx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
+		commit, ok := optCmt.ToCommit()
+		if !ok {
+			return nil, doltdb.ErrGhostCommitEncountered
+		}
+		commitList = append(commitList, commit)
+	}
+	return commitList, nil
+}
+
 type dotDotCommiterator struct {
 	includedDdb           *doltdb.DoltDB
 	excludedDdb           *doltdb.DoltDB

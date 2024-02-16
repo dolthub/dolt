@@ -60,6 +60,8 @@ type CSMetricWrapper struct {
 	cs                  ChunkStore
 }
 
+var _ ChunkStore = &CSMetricWrapper{}
+
 // NewCSMetricWrapper returns a new CSMetricWrapper
 func NewCSMetricWrapper(cs ChunkStore) *CSMetricWrapper {
 	return &CSMetricWrapper{
@@ -153,4 +155,8 @@ func (csMW *CSMetricWrapper) StatsSummary() string {
 // undefined and probably crashy.
 func (csMW *CSMetricWrapper) Close() error {
 	return csMW.cs.Close()
+}
+
+func (csMW *CSMetricWrapper) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
+	return csMW.PersistGhostHashes(ctx, refs)
 }
