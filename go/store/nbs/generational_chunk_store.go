@@ -16,6 +16,7 @@ package nbs
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
@@ -30,18 +31,31 @@ var _ chunks.GenerationalCS = (*GenerationalNBS)(nil)
 var _ chunks.TableFileStore = (*GenerationalNBS)(nil)
 
 type GenerationalNBS struct {
-	oldGen *NomsBlockStore
-	newGen *NomsBlockStore
+	oldGen   *NomsBlockStore
+	newGen   *NomsBlockStore
+	ghostGen *GhostBlockStore
 }
 
-func NewGenerationalCS(oldGen, newGen *NomsBlockStore) *GenerationalNBS {
+func (gcs *GenerationalNBS) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
+	if gcs.ghostGen == nil {
+		return gcs.ghostGen.PersistGhostHashes(ctx, refs)
+	}
+	return fmt.Errorf("runtime error. ghostGen is nil but an attempt to persist ghost hashes was made")
+}
+
+func (gcs *GenerationalNBS) GhostGen() chunks.ChunkStore {
+	return gcs.ghostGen
+}
+
+func NewGenerationalCS(oldGen, newGen *NomsBlockStore, ghostGen *GhostBlockStore) *GenerationalNBS {
 	if oldGen.Version() != "" && oldGen.Version() != newGen.Version() {
 		panic("oldgen and newgen chunkstore versions vary")
 	}
 
 	return &GenerationalNBS{
-		oldGen: oldGen,
-		newGen: newGen,
+		oldGen:   oldGen,
+		newGen:   newGen,
+		ghostGen: ghostGen,
 	}
 }
 
@@ -62,7 +76,17 @@ func (gcs *GenerationalNBS) Get(ctx context.Context, h hash.Hash) (chunks.Chunk,
 	}
 
 	if c.IsEmpty() {
-		return gcs.newGen.Get(ctx, h)
+		c, err = gcs.newGen.Get(ctx, h)
+	}
+	if err != nil {
+		return chunks.EmptyChunk, err
+	}
+
+	if c.IsEmpty() && gcs.ghostGen != nil {
+		c, err = gcs.ghostGen.Get(ctx, h)
+		if err != nil {
+			return chunks.EmptyChunk, err
+		}
 	}
 
 	return c, nil
@@ -72,26 +96,45 @@ func (gcs *GenerationalNBS) Get(ctx context.Context, h hash.Hash) (chunks.Chunk,
 // which have been found. Any non-present chunks will silently be ignored.
 func (gcs *GenerationalNBS) GetMany(ctx context.Context, hashes hash.HashSet, found func(context.Context, *chunks.Chunk)) error {
 	mu := &sync.Mutex{}
-	notInOldGen := hashes.Copy()
+	notFound := hashes.Copy()
 	err := gcs.oldGen.GetMany(ctx, hashes, func(ctx context.Context, chunk *chunks.Chunk) {
 		func() {
 			mu.Lock()
 			defer mu.Unlock()
-			delete(notInOldGen, chunk.Hash())
+			delete(notFound, chunk.Hash())
 		}()
 
 		found(ctx, chunk)
 	})
-
 	if err != nil {
 		return err
 	}
-
-	if len(notInOldGen) == 0 {
+	if len(notFound) == 0 {
 		return nil
 	}
 
-	return gcs.newGen.GetMany(ctx, notInOldGen, found)
+	err = gcs.newGen.GetMany(ctx, notFound, func(ctx context.Context, chunk *chunks.Chunk) {
+		func() {
+			mu.Lock()
+			defer mu.Unlock()
+			delete(notFound, chunk.Hash())
+		}()
+
+		found(ctx, chunk)
+	})
+	if err != nil {
+		return err
+	}
+	if len(notFound) == 0 {
+		return nil
+	}
+
+	// Last ditch effort to see if the requested objects are commits we've decided to ignore. Note the function spec
+	// considers non-present chunks to be silently ignored, so we don't need to return an error here
+	if gcs.ghostGen == nil {
+		return nil
+	}
+	return gcs.ghostGen.GetMany(ctx, notFound, found)
 }
 
 func (gcs *GenerationalNBS) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk)) error {
@@ -121,16 +164,23 @@ func (gcs *GenerationalNBS) GetManyCompressed(ctx context.Context, hashes hash.H
 // Has returns true iff the value at the address |h| is contained in the store
 func (gcs *GenerationalNBS) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	has, err := gcs.oldGen.Has(ctx, h)
-
-	if err != nil {
-		return false, err
+	if err != nil || has {
+		return has, err
 	}
 
-	if has {
-		return true, nil
+	has, err = gcs.newGen.Has(ctx, h)
+	if err != nil || has {
+		return has, err
 	}
 
-	return gcs.newGen.Has(ctx, h)
+	// Possibly a truncated commit.
+	if gcs.ghostGen != nil {
+		has, err = gcs.ghostGen.Has(ctx, h)
+		if err != nil {
+			return has, err
+		}
+	}
+	return has, nil
 }
 
 // HasMany returns a new HashSet containing any members of |hashes| that are absent from the store.
@@ -148,9 +198,20 @@ func (gcs *GenerationalNBS) hasMany(recs []hasRecord) (absent hash.HashSet, err 
 		return absent, nil
 	}
 
-	gcs.oldGen.mu.RLock()
-	defer gcs.oldGen.mu.RUnlock()
-	return gcs.oldGen.hasMany(recs)
+	absent, err = func() (hash.HashSet, error) {
+		gcs.oldGen.mu.RLock()
+		defer gcs.oldGen.mu.RUnlock()
+		return gcs.oldGen.hasMany(recs)
+	}()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(absent) == 0 || gcs.ghostGen == nil {
+		return absent, nil
+	}
+
+	return gcs.ghostGen.hasMany(absent)
 }
 
 // Put caches c in the ChunkSource. Upon return, c must be visible to

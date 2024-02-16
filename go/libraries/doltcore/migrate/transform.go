@@ -121,10 +121,15 @@ func migrateCommit(ctx context.Context, menv Environment, oldCm *doltdb.Commit, 
 		return err
 	}
 
-	oldParentCm, err := oldCm.GetParent(ctx, 0)
+	optCmt, err := oldCm.GetParent(ctx, 0)
 	if err != nil {
 		return err
 	}
+	oldParentCm, ok := optCmt.ToCommit()
+	if !ok {
+		return doltdb.ErrGhostCommitEncountered
+	}
+
 	oldParentRoot, err := oldParentCm.GetRootValue(ctx)
 	if err != nil {
 		return err
@@ -145,10 +150,15 @@ func migrateCommit(ctx context.Context, menv Environment, oldCm *doltdb.Commit, 
 	if err != nil {
 		return err
 	}
-	newParentCm, err := new.ReadCommit(ctx, newParentAddr)
+	optCmt, err = new.ReadCommit(ctx, newParentAddr)
 	if err != nil {
 		return err
 	}
+	newParentCm, ok := optCmt.ToCommit()
+	if !ok {
+		return doltdb.ErrGhostCommitEncountered
+	}
+
 	newParentRoot, err := newParentCm.GetRootValue(ctx)
 	if err != nil {
 		return err

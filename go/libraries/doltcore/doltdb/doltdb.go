@@ -391,7 +391,7 @@ func (ddb *DoltDB) getHashFromCommitSpec(ctx context.Context, cs *CommitSpec, cw
 
 // Resolve takes a CommitSpec and returns a Commit, or an error if the commit cannot be found.
 // If the CommitSpec is HEAD, Resolve also needs the DoltRef of the current working branch.
-func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef) (*Commit, error) {
+func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef) (*OptionalCommit, error) {
 	if cs == nil {
 		panic("nil commit spec")
 	}
@@ -406,14 +406,44 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 		return nil, err
 	}
 
+	if commitValue.IsGhost() {
+		return &OptionalCommit{nil, *hash}, nil
+	}
+
 	commit, err := NewCommit(ctx, ddb.vrw, ddb.ns, commitValue)
 	if err != nil {
 		return nil, err
 	}
+
 	return commit.GetAncestor(ctx, cs.aSpec)
 }
 
-func (ddb *DoltDB) ResolveByNomsRoot(ctx *sql.Context, cs *CommitSpec, cwb ref.DoltRef, root hash.Hash) (*Commit, error) {
+// BootstrapShallowResolve is a special case of Resolve that is used to resolve a commit prior to pulling it's history
+// in a shallow clone. In general, application code should call Resolve and get an OptionalCommit. This is a special case
+// where we need to get the head commit for the commit closure used to determine what commits should skipped.
+func (ddb *DoltDB) BootstrapShallowResolve(ctx context.Context, cs *CommitSpec) (prolly.CommitClosure, error) {
+	if cs == nil {
+		panic("nil commit spec")
+	}
+
+	hash, err := ddb.getHashFromCommitSpec(ctx, cs, nil, hash.Hash{})
+	if err != nil {
+		return prolly.CommitClosure{}, err
+	}
+
+	commitValue, err := datas.LoadCommitAddr(ctx, ddb.vrw, *hash)
+	if err != nil {
+		return prolly.CommitClosure{}, err
+	}
+
+	if commitValue.IsGhost() {
+		return prolly.CommitClosure{}, ErrGhostCommitEncountered
+	}
+
+	return getCommitClosure(ctx, commitValue, ddb.vrw, ddb.ns)
+}
+
+func (ddb *DoltDB) ResolveByNomsRoot(ctx *sql.Context, cs *CommitSpec, cwb ref.DoltRef, root hash.Hash) (*OptionalCommit, error) {
 	if cs == nil {
 		panic("nil commit spec")
 	}
@@ -426,6 +456,10 @@ func (ddb *DoltDB) ResolveByNomsRoot(ctx *sql.Context, cs *CommitSpec, cwb ref.D
 	commitValue, err := datas.LoadCommitAddr(ctx, ddb.vrw, *hash)
 	if err != nil {
 		return nil, err
+	}
+
+	if commitValue.IsGhost() {
+		return &OptionalCommit{nil, *hash}, nil
 	}
 
 	commit, err := NewCommit(ctx, ddb.vrw, ddb.ns, commitValue)
@@ -442,6 +476,11 @@ func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, ref ref.DoltRef) (*Comm
 	if err != nil {
 		return nil, err
 	}
+
+	if commitVal.IsGhost() {
+		return nil, ErrGhostCommitEncountered
+	}
+
 	return NewCommit(ctx, ddb.vrw, ddb.ns, commitVal)
 }
 
@@ -461,6 +500,11 @@ func (ddb *DoltDB) ResolveCommitRefAtRoot(ctx context.Context, ref ref.DoltRef, 
 	if err != nil {
 		return nil, err
 	}
+
+	if commitVal.IsGhost() {
+		return nil, ErrGhostCommitEncountered
+	}
+
 	return NewCommit(ctx, ddb.vrw, ddb.ns, commitVal)
 }
 
@@ -584,12 +628,21 @@ func (ddb *DoltDB) ReadRootValue(ctx context.Context, h hash.Hash) (*RootValue, 
 }
 
 // ReadCommit reads the Commit whose hash is |h|, if one exists.
-func (ddb *DoltDB) ReadCommit(ctx context.Context, h hash.Hash) (*Commit, error) {
+func (ddb *DoltDB) ReadCommit(ctx context.Context, h hash.Hash) (*OptionalCommit, error) {
 	c, err := datas.LoadCommitAddr(ctx, ddb.vrw, h)
 	if err != nil {
 		return nil, err
 	}
-	return NewCommit(ctx, ddb.vrw, ddb.ns, c)
+
+	if c.IsGhost() {
+		return &OptionalCommit{nil, h}, nil
+	}
+
+	newC, err := NewCommit(ctx, ddb.vrw, ddb.ns, c)
+	if err != nil {
+		return nil, err
+	}
+	return &OptionalCommit{newC, h}, nil
 }
 
 // Commit will update a branch's head value to be that of a previously committed root value hash
@@ -715,7 +768,13 @@ func (ddb *DoltDB) CommitWithParentSpecs(ctx context.Context, valHash hash.Hash,
 		if err != nil {
 			return nil, err
 		}
-		parentCommits = append(parentCommits, cm)
+
+		hardCommit, ok := cm.ToCommit()
+		if !ok {
+			return nil, ErrGhostCommitEncountered
+		}
+
+		parentCommits = append(parentCommits, hardCommit)
 	}
 	return ddb.CommitWithParentCommits(ctx, valHash, dref, parentCommits, cm)
 }
@@ -784,6 +843,10 @@ func (ddb *DoltDB) CommitValue(ctx context.Context, dref ref.DoltRef, val types.
 		return nil, err
 	}
 
+	if dc.IsGhost() {
+		return nil, ErrGhostCommitEncountered
+	}
+
 	return NewCommit(ctx, ddb.vrw, ddb.ns, dc)
 }
 
@@ -844,13 +907,13 @@ func (ddb *DoltDB) Format() *types.NomsBinFormat {
 // ResolveParent returns the n-th ancestor of a given commit (direct parent is index 0). error return value will be
 // non-nil in the case that the commit cannot be resolved, there aren't as many ancestors as requested, or the
 // underlying storage cannot be accessed.
-func (ddb *DoltDB) ResolveParent(ctx context.Context, commit *Commit, parentIdx int) (*Commit, error) {
+func (ddb *DoltDB) ResolveParent(ctx context.Context, commit *Commit, parentIdx int) (*OptionalCommit, error) {
 	return commit.GetParent(ctx, parentIdx)
 }
 
-func (ddb *DoltDB) ResolveAllParents(ctx context.Context, commit *Commit) ([]*Commit, error) {
+func (ddb *DoltDB) ResolveAllParents(ctx context.Context, commit *Commit) ([]*OptionalCommit, error) {
 	num := commit.NumParents()
-	resolved := make([]*Commit, num)
+	resolved := make([]*OptionalCommit, num)
 	for i := 0; i < num; i++ {
 		parent, err := ddb.ResolveParent(ctx, commit, i)
 		if err != nil {
@@ -1393,6 +1456,10 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 		return nil, err
 	}
 
+	if dc.IsGhost() {
+		return nil, ErrGhostCommitEncountered
+	}
+
 	return NewCommit(ctx, ddb.vrw, ddb.ns, dc)
 }
 
@@ -1554,8 +1621,9 @@ func (ddb *DoltDB) PullChunks(
 	srcDB *DoltDB,
 	targetHashes []hash.Hash,
 	statsCh chan pull.Stats,
+	skipHashes hash.HashSet,
 ) error {
-	return pullHash(ctx, ddb.db, srcDB.db, targetHashes, tempDir, statsCh)
+	return pullHash(ctx, ddb.db, srcDB.db, targetHashes, tempDir, statsCh, skipHashes)
 }
 
 func pullHash(
@@ -1564,10 +1632,11 @@ func pullHash(
 	targetHashes []hash.Hash,
 	tempDir string,
 	statsCh chan pull.Stats,
+	skipHashes hash.HashSet,
 ) error {
 	srcCS := datas.ChunkStoreFromDatabase(srcDB)
 	destCS := datas.ChunkStoreFromDatabase(destDB)
-	waf := types.WalkAddrsForNBF(srcDB.Format())
+	waf := types.WalkAddrsForNBF(srcDB.Format(), skipHashes)
 
 	if datas.CanUsePuller(srcDB) && datas.CanUsePuller(destDB) {
 		puller, err := pull.NewPuller(ctx, tempDir, defaultChunksPerTF, srcCS, destCS, waf, targetHashes, statsCh)
@@ -1865,4 +1934,11 @@ func (ddb *DoltDB) GetStashRootAndHeadCommitAtIdx(ctx context.Context, idx int) 
 	}
 
 	return getStashAtIdx(ctx, ds, ddb.vrw, ddb.NodeStore(), idx)
+}
+
+// PersistGhostCommits persists the set of ghost commits to the database. This is how the application layer passes
+// information about ghost commits to the storage layer. This can be called multiple times over the course of performing
+// a shallow clone, but should not be called after the clone is complete.
+func (ddb *DoltDB) PersistGhostCommits(ctx context.Context, ghostCommits hash.HashSet) error {
+	return ddb.db.Database.PersistGhostCommitIDs(ctx, ghostCommits)
 }

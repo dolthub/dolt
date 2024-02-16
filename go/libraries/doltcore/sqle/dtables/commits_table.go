@@ -1,4 +1,4 @@
-// Copyright 2020 Dolthub, Inc.
+// Copyright 2021 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package dtables
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -150,9 +151,13 @@ func NewCommitsRowItr(ctx *sql.Context, ddb *doltdb.DoltDB) (CommitsRowItr, erro
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
 func (itr CommitsRowItr) Next(ctx *sql.Context) (sql.Row, error) {
-	h, cm, err := itr.itr.Next(ctx)
+	h, optCmt, err := itr.itr.Next(ctx)
 	if err != nil {
 		return nil, err
+	}
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, io.EOF
 	}
 
 	meta, err := cm.GetCommitMeta(ctx)

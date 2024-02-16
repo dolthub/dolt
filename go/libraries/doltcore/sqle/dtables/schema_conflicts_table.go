@@ -103,9 +103,13 @@ func (dt *SchemaConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partiti
 		return nil, errors.New("unexpected partition for schema conflicts table")
 	}
 
-	base, err := doltdb.GetCommitAncestor(ctx, p.head, p.state.Commit())
+	optCmt, err := doltdb.GetCommitAncestor(ctx, p.head, p.state.Commit())
 	if err != nil {
 		return nil, err
+	}
+	base, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, doltdb.ErrGhostCommitEncountered
 	}
 
 	baseRoot, err := base.GetRootValue(ctx)

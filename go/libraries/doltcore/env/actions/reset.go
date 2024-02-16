@@ -46,9 +46,14 @@ func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, ro
 		if err != nil {
 			return nil, doltdb.Roots{}, err
 		}
-		newHead, err = ddb.Resolve(ctx, cs, headRef)
+		optCmt, err := ddb.Resolve(ctx, cs, headRef)
 		if err != nil {
 			return nil, doltdb.Roots{}, err
+		}
+
+		var ok bool
+		if newHead, ok = optCmt.ToCommit(); !ok {
+			return nil, doltdb.Roots{}, doltdb.ErrGhostCommitEncountered
 		}
 
 		roots.Head, err = newHead.GetRootValue(ctx)
@@ -238,9 +243,13 @@ func ResetSoftToRef(ctx context.Context, dbData env.DbData, cSpecStr string) (do
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
-	newHead, err := dbData.Ddb.Resolve(ctx, cs, headRef)
+	optCmt, err := dbData.Ddb.Resolve(ctx, cs, headRef)
 	if err != nil {
 		return doltdb.Roots{}, err
+	}
+	newHead, ok := optCmt.ToCommit()
+	if !ok {
+		return doltdb.Roots{}, doltdb.ErrGhostCommitEncountered
 	}
 
 	foundRoot, err := newHead.GetRootValue(ctx)

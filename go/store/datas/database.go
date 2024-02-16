@@ -166,6 +166,11 @@ type Database interface {
 
 	Format() *types.NomsBinFormat
 
+	// PersistGhostCommitIDs persists the given set of ghost commit IDs to the storage layer of the database. Ghost
+	// commits are commits which are real but have not been replicated to this instance of the database. Currently,
+	// it is only appropriate to use this method during a shallow clone operation.
+	PersistGhostCommitIDs(ctx context.Context, ghosts hash.HashSet) error
+
 	// chunkStore returns the ChunkStore used to read and write
 	// groups of values to the database efficiently. This interface is a low-
 	// level detail of the database that should infrequently be needed by

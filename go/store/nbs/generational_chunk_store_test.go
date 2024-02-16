@@ -147,7 +147,7 @@ func TestGenerationalCS(t *testing.T) {
 
 	putChunks(t, ctx, chnks, oldGen, inOld, 0, 1, 2, 3, 4)
 
-	cs := NewGenerationalCS(oldGen, newGen)
+	cs := NewGenerationalCS(oldGen, newGen, nil) // NM4 - I guess we need more test here.
 	requireChunks(t, ctx, chnks, cs, inOld, inNew)
 
 	putChunks(t, ctx, chnks, cs, inNew, 6, 7, 8, 9)

@@ -163,12 +163,16 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	}
 
 	oldGenSt, err := nbs.NewLocalStore(ctx, newGenSt.Version(), oldgenPath, defaultMemTableSize, q)
-
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	st := nbs.NewGenerationalCS(oldGenSt, newGenSt)
+	ghostGen, err := nbs.NewGhostBlockStore(path)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	st := nbs.NewGenerationalCS(oldGenSt, newGenSt, ghostGen)
 	// metrics?
 
 	vrw := types.NewValueStore(st)

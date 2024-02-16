@@ -57,7 +57,12 @@ func doltClone(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 		remoteParms[dbfactory.GRPCUsernameAuthParam] = user
 	}
 
-	err = sess.Provider().CloneDatabaseFromRemote(ctx, dir, branch, remoteName, remoteUrl, remoteParms)
+	depth, ok := apr.GetInt(cli.DepthFlag)
+	if !ok {
+		depth = -1
+	}
+
+	err = sess.Provider().CloneDatabaseFromRemote(ctx, dir, branch, remoteName, remoteUrl, depth, remoteParms)
 	if err != nil {
 		return nil, err
 	}

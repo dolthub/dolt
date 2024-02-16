@@ -18,6 +18,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
+	"io"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -25,6 +27,9 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
+
+// Closure values are a long (8 bytes) followed by a hash (20 bytes, hash.ByteLen).
+const prefixWidth = 8
 
 type CommitClosureValue []byte
 
@@ -39,7 +44,7 @@ var _ tree.Ordering[CommitClosureKey] = commitClosureKeyOrdering{}
 func (o commitClosureKeyOrdering) Compare(left, right CommitClosureKey) int {
 	lh, rh := left.Height(), right.Height()
 	if lh == rh {
-		return bytes.Compare(left[8:], right[8:])
+		return bytes.Compare(left[prefixWidth:], right[prefixWidth:])
 	} else if lh < rh {
 		return -1
 	}
@@ -113,8 +118,33 @@ func (c CommitClosure) ContainsKey(ctx context.Context, h hash.Hash, height uint
 
 func DecodeCommitClosureKey(key []byte) (height uint64, addr hash.Hash) {
 	height = binary.LittleEndian.Uint64(key)
-	addr = hash.New(key[8:])
+	addr = hash.New(key[prefixWidth:])
+
 	return
+}
+
+func (c CommitClosure) AsHashSet(ctx context.Context) (hash.HashSet, error) {
+	closureIter, err := c.IterAllReverse(ctx)
+	if err != nil {
+		return hash.HashSet{}, err
+	}
+
+	skipCmts := hash.NewHashSet()
+	for {
+		key, _, err := closureIter.Next(ctx)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return hash.HashSet{}, err
+
+		}
+
+		clsrHash := hash.New(key[prefixWidth:])
+		skipCmts.Insert(clsrHash)
+	}
+
+	return skipCmts, nil
 }
 
 type CommitClosureEditor struct {
@@ -126,9 +156,9 @@ type CommitClosureKey []byte
 type CommitClosureIter tree.KvIter[CommitClosureKey, CommitClosureValue]
 
 func NewCommitClosureKey(p pool.BuffPool, height uint64, addr hash.Hash) CommitClosureKey {
-	r := p.Get(8 + 20)
+	r := p.Get(prefixWidth + hash.ByteLen)
 	binary.LittleEndian.PutUint64(r, height)
-	copy(r[8:], addr[:])
+	copy(r[prefixWidth:], addr[:])
 	return CommitClosureKey(r)
 }
 
@@ -137,7 +167,7 @@ func (k CommitClosureKey) Height() uint64 {
 }
 
 func (k CommitClosureKey) Addr() hash.Hash {
-	return hash.New(k[8:])
+	return hash.New(k[prefixWidth:])
 }
 
 func (k CommitClosureKey) Less(other CommitClosureKey) bool {

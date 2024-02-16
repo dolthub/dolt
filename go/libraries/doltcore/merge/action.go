@@ -100,9 +100,14 @@ func NewMergeSpec(
 		return nil, err
 	}
 
-	headCM, err := ddb.Resolve(context.TODO(), headCS, headRef)
+	optCmt, err := ddb.Resolve(ctx, headCS, headRef)
 	if err != nil {
 		return nil, err
+	}
+	headCM, ok := optCmt.ToCommit()
+	if !ok {
+		// HEAD should always resolve to a commit, so this should never happen.
+		return nil, doltdb.ErrGhostCommitRuntimeFailure
 	}
 
 	mergeCS, err := doltdb.NewCommitSpec(commitSpecStr)
@@ -110,9 +115,13 @@ func NewMergeSpec(
 		return nil, err
 	}
 
-	mergeCM, err := ddb.Resolve(context.TODO(), mergeCS, headRef)
+	optCmt, err = ddb.Resolve(ctx, mergeCS, headRef)
 	if err != nil {
 		return nil, err
+	}
+	mergeCM, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, doltdb.ErrGhostCommitEncountered
 	}
 
 	headH, err := headCM.HashOf()

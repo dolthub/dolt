@@ -401,7 +401,12 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 	sess := dsess.DSessFromSess(ctx.Session)
 	var commit *doltdb.Commit
 
-	matchFunc := func(commit *doltdb.Commit) (bool, error) {
+	matchFunc := func(optCmt *doltdb.OptionalCommit) (bool, error) {
+		commit, ok := optCmt.ToCommit()
+		if !ok {
+			return false, nil
+		}
+
 		return commit.NumParents() >= ltf.minParents, nil
 	}
 
@@ -432,10 +437,15 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 			return nil, err
 		}
 
-		commit, err = sqledb.DbData().Ddb.Resolve(ctx, cs, headRef)
+		optCmt, err := sqledb.DbData().Ddb.Resolve(ctx, cs, headRef)
 		if err != nil {
 			return nil, err
 		}
+		commit, ok = optCmt.ToCommit()
+		if err != nil {
+			return nil, doltdb.ErrGhostCommitEncountered
+		}
+
 		commits = append(commits, commit)
 	}
 
@@ -446,10 +456,15 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 			return nil, err
 		}
 
-		notCommit, err := sqledb.DbData().Ddb.Resolve(ctx, cs, headRef)
+		optCmt, err := sqledb.DbData().Ddb.Resolve(ctx, cs, headRef)
 		if err != nil {
 			return nil, err
 		}
+		notCommit, ok := optCmt.ToCommit()
+		if !ok {
+			return nil, doltdb.ErrGhostCommitEncountered
+		}
+
 		notCommits = append(notCommits, notCommit)
 	}
 
@@ -465,9 +480,13 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		}
 
 		// Use merge base as excluding commit
-		mergeCommit, err := sqledb.DbData().Ddb.Resolve(ctx, mergeCs, nil)
+		optCmt, err := sqledb.DbData().Ddb.Resolve(ctx, mergeCs, nil)
 		if err != nil {
 			return nil, err
+		}
+		mergeCommit, ok := optCmt.ToCommit()
+		if !ok {
+			return nil, doltdb.ErrGhostCommitEncountered
 		}
 
 		notCommits = append(notCommits, mergeCommit)
@@ -583,7 +602,7 @@ type logTableFunctionRowIter struct {
 	tableNames []string
 }
 
-func (ltf *LogTableFunction) NewLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, matchFn func(*doltdb.Commit) (bool, error), cHashToRefs map[hash.Hash][]string, tableNames []string) (*logTableFunctionRowIter, error) {
+func (ltf *LogTableFunction) NewLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, matchFn func(*doltdb.OptionalCommit) (bool, error), cHashToRefs map[hash.Hash][]string, tableNames []string) (*logTableFunctionRowIter, error) {
 	h, err := commit.HashOf()
 	if err != nil {
 		return nil, err
@@ -604,7 +623,7 @@ func (ltf *LogTableFunction) NewLogTableFunctionRowIter(ctx *sql.Context, ddb *d
 	}, nil
 }
 
-func (ltf *LogTableFunction) NewDotDotLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commits []*doltdb.Commit, excludingCommits []*doltdb.Commit, matchFn func(*doltdb.Commit) (bool, error), cHashToRefs map[hash.Hash][]string, tableNames []string) (*logTableFunctionRowIter, error) {
+func (ltf *LogTableFunction) NewDotDotLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commits []*doltdb.Commit, excludingCommits []*doltdb.Commit, matchFn func(*doltdb.OptionalCommit) (bool, error), cHashToRefs map[hash.Hash][]string, tableNames []string) (*logTableFunctionRowIter, error) {
 	hashes := make([]hash.Hash, len(commits))
 	for i, commit := range commits {
 		h, err := commit.HashOf()
@@ -649,11 +668,17 @@ func (ltf *LogTableFunction) NewDotDotLogTableFunctionRowIter(ctx *sql.Context, 
 func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	var commitHash hash.Hash
 	var commit *doltdb.Commit
+	var optCmt *doltdb.OptionalCommit
 	var err error
 	for {
-		commitHash, commit, err = itr.child.Next(ctx)
+		commitHash, optCmt, err = itr.child.Next(ctx)
 		if err != nil {
 			return nil, err
+		}
+		ok := false
+		commit, ok = optCmt.ToCommit()
+		if !ok {
+			return nil, doltdb.ErrGhostCommitEncountered
 		}
 
 		if itr.tableNames != nil {
@@ -662,15 +687,24 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 				// we expect EOF to be returned on the next call to Next(), but continue in case there are more commits
 				continue
 			}
-			parent0Cm, err := commit.GetParent(ctx, 0)
+			optCmt, err := commit.GetParent(ctx, 0)
 			if err != nil {
 				return nil, err
 			}
+			parent0Cm, ok := optCmt.ToCommit()
+			if !ok {
+				return nil, doltdb.ErrGhostCommitEncountered
+			}
+
 			var parent1Cm *doltdb.Commit
 			if commit.NumParents() > 1 {
-				parent1Cm, err = commit.GetParent(ctx, 1)
+				optCmt, err = commit.GetParent(ctx, 1)
 				if err != nil {
 					return nil, err
+				}
+				parent1Cm, ok = optCmt.ToCommit()
+				if !ok {
+					return nil, doltdb.ErrGhostCommitEncountered
 				}
 			}
 

@@ -202,9 +202,13 @@ func doltCommit(ctx *sql.Context,
 	}
 
 	headSpec, _ := doltdb.NewCommitSpec("HEAD")
-	curHead, err := doltDb.Resolve(ctx, headSpec, headRef)
+	optCmt, err := doltDb.Resolve(ctx, headSpec, headRef)
 	if err != nil {
 		return nil, nil, err
+	}
+	curHead, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, nil, doltdb.ErrGhostCommitRuntimeFailure
 	}
 
 	// We already got a new staged root via merge or ff via the doCommit method, so now apply it to the STAGED value

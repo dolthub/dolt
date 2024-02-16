@@ -33,6 +33,7 @@ const (
 	DecorateFlag         = "decorate"
 	DeleteFlag           = "delete"
 	DeleteForceFlag      = "D"
+	DepthFlag            = "depth"
 	DryRunFlag           = "dry-run"
 	ForceFlag            = "force"
 	HardResetParam       = "hard"

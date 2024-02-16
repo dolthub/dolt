@@ -63,9 +63,13 @@ func CreateWorkspaceOnDB(ctx context.Context, ddb *doltdb.DoltDB, name, startPoi
 		return err
 	}
 
-	cm, err := ddb.Resolve(ctx, cs, headRef)
+	optCmt, err := ddb.Resolve(ctx, cs, headRef)
 	if err != nil {
 		return err
+	}
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		return doltdb.ErrGhostCommitEncountered
 	}
 
 	return ddb.NewWorkspaceAtCommit(ctx, workRef, cm)
@@ -118,9 +122,13 @@ func DeleteWorkspaceOnDB(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRe
 			return err
 		}
 
-		m, err := ddb.Resolve(ctx, ms, nil)
+		optCmt, err := ddb.Resolve(ctx, ms, nil)
 		if err != nil {
 			return err
+		}
+		m, ok := optCmt.ToCommit()
+		if !ok {
+			return doltdb.ErrGhostCommitEncountered
 		}
 
 		cs, err := doltdb.NewCommitSpec(dref.String())
@@ -128,9 +136,13 @@ func DeleteWorkspaceOnDB(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRe
 			return err
 		}
 
-		cm, err := ddb.Resolve(ctx, cs, nil)
+		optCmt, err = ddb.Resolve(ctx, cs, nil)
 		if err != nil {
 			return err
+		}
+		cm, ok := optCmt.ToCommit()
+		if !ok {
+			return doltdb.ErrGhostCommitEncountered
 		}
 
 		isMerged, _ := m.CanFastReverseTo(ctx, cm)
