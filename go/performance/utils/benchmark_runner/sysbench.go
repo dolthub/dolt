@@ -91,18 +91,13 @@ func (t *sysbenchTesterImpl) outputToResult(output []byte) (*Result, error) {
 }
 
 func (t *sysbenchTesterImpl) prepare(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, sysbenchCommand, t.test.GetPrepareArgs(t.serverConfig)...)
+	cmd := ExecCommand(ctx, sysbenchCommand, t.test.GetPrepareArgs(t.serverConfig)...)
 	if t.test.GetFromScript() {
 		lp := filepath.Join(t.config.GetScriptDir(), luaPath)
 		cmd.Env = os.Environ()
 		cmd.Env = append(cmd.Env, fmt.Sprintf(luaPathEnvVarTemplate, lp))
 	}
-	out, err := cmd.Output()
-	if err != nil {
-		fmt.Println(string(out))
-		return err
-	}
-	return nil
+	return cmd.Run()
 }
 
 func (t *sysbenchTesterImpl) run(ctx context.Context) (*Result, error) {
@@ -134,7 +129,7 @@ func (t *sysbenchTesterImpl) run(ctx context.Context) (*Result, error) {
 }
 
 func (t *sysbenchTesterImpl) cleanup(ctx context.Context) error {
-	cmd := exec.CommandContext(ctx, sysbenchCommand, t.test.GetCleanupArgs(t.serverConfig)...)
+	cmd := ExecCommand(ctx, sysbenchCommand, t.test.GetCleanupArgs(t.serverConfig)...)
 	if t.test.GetFromScript() {
 		lp := filepath.Join(t.config.GetScriptDir(), luaPath)
 		cmd.Env = os.Environ()
