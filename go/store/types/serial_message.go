@@ -91,6 +91,13 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 		printWithIndendationLevel(level, ret, "\tHeadCommitAddr: #%s\n", hash.New(msg.HeadCommitAddrBytes()).String())
 		printWithIndendationLevel(level, ret, "}")
 		return ret.String()
+	case serial.StatisticFileID:
+		msg, _ := serial.TryGetRootAsStatistic(sm, serial.MessagePrefixSz)
+		ret := &strings.Builder{}
+		printWithIndendationLevel(level, ret, "{\n")
+		printWithIndendationLevel(level, ret, "\tStatsRoot: #%s\n", hash.New(msg.RootBytes()).String())
+		printWithIndendationLevel(level, ret, "}")
+		return ret.String()
 	case serial.TagFileID:
 		msg, _ := serial.TryGetRootAsTag(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
