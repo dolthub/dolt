@@ -1,11 +1,11 @@
-# name: Test Benchmark Runner Utility Works
+name: Test Benchmark Runner Utility Works
 
 on:
   pull_request:
     branches: [ main ]
-#    paths:
-#      - 'go/**'
-#      - 'integration-tests/**'
+    paths:
+      - 'go/**'
+      - 'integration-tests/**'
 
 concurrency:
   group: ci-benchmark-runner-tests-${{ github.event.pull_request.number || github.ref }}
@@ -13,7 +13,6 @@ concurrency:
 
 jobs:
   benchmark_runner:
-    if: ${{ github.actor == 'coffeegoddd' }}
     runs-on: ubuntu-22.04
     name: Test Benchmark Runner
     steps:
