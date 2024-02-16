@@ -80,7 +80,6 @@ func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, index
 		} else if cnt == 0 {
 			// table is empty
 			ret[meta.qual] = NewDoltStats()
-			ret[meta.qual].chunks = meta.allAddrs
 			ret[meta.qual].CreatedAt = time.Now()
 			ret[meta.qual].Columns = meta.cols
 			ret[meta.qual].Types = types
@@ -190,6 +189,10 @@ func mergeStatUpdates(newStats *DoltStats, idxMeta indexMeta) *DoltStats {
 			mergeHist = append(mergeHist, newHist[j])
 			j++
 		}
+	}
+
+	if len(mergeHist) == 0 {
+		return newStats
 	}
 
 	newStats.Histogram = mergeHist
