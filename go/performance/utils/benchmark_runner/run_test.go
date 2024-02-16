@@ -25,6 +25,19 @@ import (
 )
 
 var runTests = os.Getenv("RUN_BENCHMARK_RUNNER_TESTS")
+var doltExec = os.Getenv("BENCHMARK_RUNNER_DOLT_EXEC")
+var doltVersion = os.Getenv("BENCHMARK_RUNNER_DOLT_VERSION")
+var mysqlExec = os.Getenv("BENCHMARK_RUNNER_MYSQL_EXEC")
+var mysqlProtocol = os.Getenv("BENCHMARK_RUNNER_MYSQL_PROTOCOL")
+var mysqlSocket = os.Getenv("BENCHMARK_RUNNER_MYSQL_SOCKET")
+var mysqlVersion = os.Getenv("BENCHMARK_RUNNER_MYSQL_VERSION")
+var doltgresExec = os.Getenv("BENCHMARK_RUNNER_DOLTGRES_EXEC")
+var doltgresVersion = os.Getenv("BENCHMARK_RUNNER_DOLTGRES_VERSION")
+var postgresExec = os.Getenv("BENCHMARK_RUNNER_POSTGRES_EXEC")
+var postgresInitExec = os.Getenv("BENCHMARK_RUNNER_POSTGRES_INIT_EXEC")
+var postgresVersion = os.Getenv("BENCHMARK_RUNNER_POSTGRES_VERSION")
+var sysbenchLuaScripts = os.Getenv("BENCHMARK_RUNNER_SYSBENCH_LUA_SCRIPTS")
+var tpccLuaScripts = os.Getenv("BENCHMARK_RUNNER_TPCC_LUA_SCRIPTS")
 
 func TestRunner(t *testing.T) {
 	if runTests == "" {
@@ -47,12 +60,12 @@ func TestRunner(t *testing.T) {
 		Servers: []ServerConfig{
 			&doltServerConfigImpl{
 				Id:            "test",
-				Version:       "HEAD",
+				Version:       doltVersion,
 				ResultsFormat: CsvFormat,
-				ServerExec:    "/usr/local/bin/dolt",
+				ServerExec:    doltExec,
 			},
 		},
-		ScriptDir: "/sysbench-lua-scripts",
+		ScriptDir: sysbenchLuaScripts,
 		TestOptions: []string{
 			"--rand-seed=1",
 			"--table-size=30",
@@ -97,22 +110,23 @@ func TestDoltMysqlSysbenchRunner(t *testing.T) {
 		Servers: []ServerConfig{
 			&doltServerConfigImpl{
 				Id:            "test-dolt",
-				Version:       "HEAD",
+				Version:       doltVersion,
 				ResultsFormat: CsvFormat,
-				ServerExec:    "/usr/local/bin/dolt",
+				ServerExec:    doltExec,
 			},
 			&mysqlServerConfigImpl{
 				Id:                 "test-mysql",
 				Port:               3606,
-				Version:            "8.0.35",
+				Version:            mysqlVersion,
 				ResultsFormat:      CsvFormat,
-				ServerExec:         "/usr/sbin/mysqld",
+				ServerExec:         mysqlExec,
 				ServerUser:         "root",
 				SkipLogBin:         true,
-				ConnectionProtocol: "unix",
+				ConnectionProtocol: mysqlProtocol,
+				Socket:             mysqlSocket,
 			},
 		},
-		ScriptDir: "/sysbench-lua-scripts",
+		ScriptDir: sysbenchLuaScripts,
 		TestOptions: []string{
 			"--rand-seed=1",
 			"--table-size=30",
@@ -149,22 +163,21 @@ func TestDoltgresPostgresSysbenchRunner(t *testing.T) {
 			&postgresServerConfigImpl{
 				Id:            "test-postgres",
 				Host:          "127.0.0.1",
-				Version:       "15.5",
+				Version:       postgresVersion,
 				ResultsFormat: CsvFormat,
-				ServerExec:    "/usr/lib/postgresql/15/bin/postgres",
-				InitExec:      "/usr/lib/postgresql/15/bin/initdb",
+				ServerExec:    postgresExec,
+				InitExec:      postgresInitExec,
 				ServerUser:    "root",
 			},
 			&doltgresServerConfigImpl{
 				Id:            "test-doltgres",
 				Port:          4433,
 				Host:          "127.0.0.1",
-				Version:       "b139dfb",
+				Version:       doltgresVersion,
 				ResultsFormat: CsvFormat,
-				ServerExec:    "doltgres",
+				ServerExec:    doltgresExec,
 			},
 		},
-		ScriptDir: "/sysbench-lua-scripts",
 		TestOptions: []string{
 			"--rand-seed=1",
 			"--table-size=30",
@@ -172,7 +185,6 @@ func TestDoltgresPostgresSysbenchRunner(t *testing.T) {
 			"--time=30",
 			"--percentile=50",
 		},
-		InitBigRepo: true,
 	}
 
 	err = Run(context.Background(), conf)
@@ -200,9 +212,9 @@ func TestDoltProfiler(t *testing.T) {
 		Servers: []ServerConfig{
 			&doltServerConfigImpl{
 				Id:            id,
-				Version:       "HEAD",
+				Version:       doltVersion,
 				ResultsFormat: CsvFormat,
-				ServerExec:    "/usr/local/bin/dolt",
+				ServerExec:    doltExec,
 				ServerProfile: CpuServerProfile,
 				ProfilePath:   dir,
 			},
@@ -242,22 +254,23 @@ func TestDoltMysqlTpccRunner(t *testing.T) {
 		Servers: []ServerConfig{
 			&doltServerConfigImpl{
 				Id:            "test-dolt-tpcc",
-				Version:       "HEAD",
+				Version:       doltVersion,
 				ResultsFormat: CsvFormat,
-				ServerExec:    "/usr/local/bin/dolt",
+				ServerExec:    doltExec,
 			},
 			&mysqlServerConfigImpl{
 				Id:                 "test-mysql-tpcc",
 				Port:               3606,
-				Version:            "8.0.35",
+				Version:            mysqlVersion,
 				ResultsFormat:      CsvFormat,
-				ServerExec:         "/usr/sbin/mysqld",
+				ServerExec:         mysqlExec,
 				ServerUser:         "root",
 				SkipLogBin:         true,
-				ConnectionProtocol: "unix",
+				ConnectionProtocol: mysqlProtocol,
+				Socket:             mysqlSocket,
 			},
 		},
-		ScriptDir: "/sysbench-tpcc",
+		ScriptDir: tpccLuaScripts,
 	}
 
 	err = RunTpcc(context.Background(), conf)
