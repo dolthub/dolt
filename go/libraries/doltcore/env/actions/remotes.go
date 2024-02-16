@@ -540,13 +540,29 @@ func fetchRefSpecsWithDepth(
 		}
 	}
 
+	shallowClone := depth > 0
 	skipCmts := hash.NewHashSet()
-	if depth > 0 {
+	allToFetch := toFetch
+	if shallowClone {
 		skipCmts, err = buildInitialSkipList(ctx, srcDB, toFetch)
 		if err != nil {
 			return err
 		}
+		curToFetch := toFetch
+		var newToFetch []hash.Hash
+		depth--
+		for skipCmts.Size() > 0 && depth > 0 {
+			newToFetch, skipCmts, err = updateSkipList(ctx, srcDB, curToFetch, skipCmts)
+			if err != nil {
+				return err
+			}
+
+			allToFetch = append(allToFetch, newToFetch...)
+			curToFetch = newToFetch
+			depth--
+		}
 	}
+	toFetch = allToFetch
 
 	// Now we fetch all the new HEADs we need.
 	tmpDir, err := dbData.Rsw.TempTableFilesDir()
@@ -554,53 +570,33 @@ func fetchRefSpecsWithDepth(
 		return err
 	}
 
-	shallowClone := depth > 0
-	ghostsPersisted := false
-	// We loop on fetching chunks until we've fetched all the new heads we need, or we've reached the depth limit.
-	// In the case where we pull everything (depth < 0), we'll only loop once.
-	for {
-		if skipCmts.Size() > 0 || ghostsPersisted {
-			err = dbData.Ddb.PersistGhostCommits(ctx, skipCmts)
-			if err != nil {
-				return err
-			}
-			ghostsPersisted = true
-		}
-
-		err = func() error {
-			newCtx := ctx
-			var statsCh chan pull.Stats
-
-			if progStarter != nil && progStopper != nil {
-				var cancelFunc func()
-				newCtx, cancelFunc = context.WithCancel(ctx)
-				var wg *sync.WaitGroup
-				wg, statsCh = progStarter(newCtx)
-				defer progStopper(cancelFunc, wg, statsCh)
-			}
-
-			err = dbData.Ddb.PullChunks(ctx, tmpDir, srcDB, toFetch, statsCh, skipCmts)
-			if err == pull.ErrDBUpToDate {
-				err = nil
-			}
-			return err
-		}()
+	if skipCmts.Size() > 0 {
+		err = dbData.Ddb.PersistGhostCommits(ctx, skipCmts)
 		if err != nil {
 			return err
 		}
+	}
 
-		depth--
+	err = func() error {
+		newCtx := ctx
+		var statsCh chan pull.Stats
 
-		if skipCmts.Size() > 0 && depth > 0 {
-			toFetch, skipCmts, err = updateSkipList(ctx, srcDB, toFetch, skipCmts)
-			if err != nil {
-				return err
-			}
+		if progStarter != nil && progStopper != nil {
+			var cancelFunc func()
+			newCtx, cancelFunc = context.WithCancel(ctx)
+			var wg *sync.WaitGroup
+			wg, statsCh = progStarter(newCtx)
+			defer progStopper(cancelFunc, wg, statsCh)
 		}
 
-		if depth <= 0 || len(toFetch) == 0 {
-			break
+		err = dbData.Ddb.PullChunks(ctx, tmpDir, srcDB, toFetch, statsCh, skipCmts)
+		if err == pull.ErrDBUpToDate {
+			err = nil
 		}
+		return err
+	}()
+	if err != nil {
+		return err
 	}
 
 	for _, newHead := range newHeads {
