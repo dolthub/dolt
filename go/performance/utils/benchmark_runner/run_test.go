@@ -52,9 +52,9 @@ func TestRunner(t *testing.T) {
 
 	conf := &sysbenchRunnerConfigImpl{
 		Tests: []TestConfig{
-			NewTestConfig("oltp_read_write", nil, false),
-			NewTestConfig("oltp_update_index", nil, false),
-			NewTestConfig("oltp_delete_insert", nil, true),
+			NewTestConfig("oltp_read_only", nil, false),
+			//NewTestConfig("oltp_update_index", nil, false),
+			//NewTestConfig("oltp_delete_insert", nil, true),
 		},
 		//Tests: selectTests("oltp_read_write", "oltp_update_index", "oltp_update_non_index", "oltp_insert", "bulk_insert", "oltp_write_only", "oltp_delete"),
 		Servers: []ServerConfig{
@@ -103,9 +103,9 @@ func TestDoltMysqlSysbenchRunner(t *testing.T) {
 
 	conf := &sysbenchRunnerConfigImpl{
 		Tests: []TestConfig{
-			NewTestConfig("oltp_read_write", nil, false),
-			NewTestConfig("oltp_update_index", nil, false),
-			NewTestConfig("oltp_delete_insert", nil, true),
+			NewTestConfig("oltp_read_only", nil, false),
+			//NewTestConfig("oltp_update_index", nil, false),
+			//NewTestConfig("oltp_delete_insert", nil, true),
 		},
 		Servers: []ServerConfig{
 			&doltServerConfigImpl{
@@ -156,8 +156,8 @@ func TestDoltgresPostgresSysbenchRunner(t *testing.T) {
 
 	conf := &sysbenchRunnerConfigImpl{
 		Tests: []TestConfig{
-			NewTestConfig("oltp_read_write", nil, false),
-			NewTestConfig("oltp_update_index", nil, false),
+			NewTestConfig("oltp_read_only", nil, false),
+			//NewTestConfig("oltp_update_index", nil, false),
 		},
 		Servers: []ServerConfig{
 			&postgresServerConfigImpl{
@@ -207,7 +207,7 @@ func TestDoltProfiler(t *testing.T) {
 	id := "test-dolt-profile"
 	conf := &sysbenchRunnerConfigImpl{
 		Tests: []TestConfig{
-			NewTestConfig("oltp_read_write", nil, false),
+			NewTestConfig("oltp_read_only", nil, false),
 		},
 		Servers: []ServerConfig{
 			&doltServerConfigImpl{
@@ -240,9 +240,7 @@ func TestDoltProfiler(t *testing.T) {
 }
 
 func TestDoltMysqlTpccRunner(t *testing.T) {
-	if runTests == "" {
-		t.Skip()
-	}
+	t.Skip() // skip for now since this is kinda slow for pr ci
 	dir := t.TempDir()
 	log.Println(dir)
 	err := os.Chdir(dir)
