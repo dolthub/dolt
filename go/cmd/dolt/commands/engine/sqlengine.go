@@ -16,6 +16,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"runtime"
 	"strconv"
@@ -192,7 +193,7 @@ func NewSqlEngine(
 	// configuring stats depends on sessionBuilder
 	// sessionBuilder needs ref to statsProv
 	if err = statsPro.Configure(ctx, sqlEngine.NewDefaultContext, bThreads, pro, dbs); err != nil {
-		return nil, err
+		fmt.Fprintln(cli.CliErr, err)
 	}
 
 	// Load MySQL Db information
