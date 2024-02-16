@@ -44,6 +44,7 @@ jobs:
           FROM_VERSION: ${{ github.event.client_payload.from_version }}
           TO_SERVER: ${{ github.event.client_payload.to_server }}
           TO_VERSION: ${{ github.event.client_payload.to_version }}
+          TO_PROFILE_KEY: ${{ github.event.client_payload.to_profile_key }}
           MODE: ${{ github.event.client_payload.mode }}
           ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
           ACTOR: ${{ github.event.client_payload.actor }}
