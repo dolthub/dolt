@@ -57,7 +57,7 @@ require (
 	github.com/cespare/xxhash v1.1.0
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.17.1-0.20240216195105-d69d7a2b7183
+	github.com/dolthub/go-mysql-server v0.17.1-0.20240216225302-ee2cccffab61
 	github.com/dolthub/swiss v0.1.0
 	github.com/goccy/go-json v0.10.2
 	github.com/google/go-github/v57 v57.0.0
@@ -132,7 +132,6 @@ require (
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
-	github.com/mitchellh/hashstructure v1.1.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.6 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
