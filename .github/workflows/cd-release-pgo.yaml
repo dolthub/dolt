@@ -41,9 +41,10 @@ jobs:
         with:
           ref: main
       - name: Set up Go 1.x
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
-          go-version: ^1.21
+          go-version-file: go/go.mod
+          check-latest: true
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2.2.0
         with:

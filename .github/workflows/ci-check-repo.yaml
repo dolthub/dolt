@@ -16,9 +16,10 @@ jobs:
       format: ${{ steps.should_format.outputs.format }}
     steps:
       - name: Setup Go 1.x
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
-          go-version: ^1.21
+          go-version-file: go/go.mod
+          check-latest: true
       - uses: actions/checkout@v3
         with:
           submodules: true
@@ -67,9 +68,10 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Setup Go 1.x
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
-          go-version: ^1.21
+          go-version-file: go/go.mod
+          check-latest: true
       - uses: actions/checkout@v3
         with:
           ref: "main"
@@ -96,9 +98,10 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Setup Go 1.x
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
-          go-version: ^1.21
+          go-version-file: go/go.mod
+          check-latest: true
       - uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
