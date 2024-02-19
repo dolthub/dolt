@@ -52,8 +52,8 @@ jobs:
         id: get-results
         run: aws s3api get-object --bucket="$BUCKET" --key="$KEY" dolt-cpu-profile.pprof
         env:
-          KEY: ${{ github.event.client_payload.profile_key }}
-          BUCKET: ${{ github.event.client_payload.bucket }}
+          KEY: ${{ github.event.inputs.profile_key || github.event.client_payload.profile_key }}
+          BUCKET: ${{ github.event.inputs.profile_bucket || github.event.client_payload.bucket }}
       - name: Update dolt version command
         run: sed -i -e 's/	Version = ".*"/	Version = "'"$NEW_VERSION"'"/' "$FILE"
         env:
