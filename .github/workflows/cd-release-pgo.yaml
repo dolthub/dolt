@@ -1,0 +1,194 @@
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'SemVer format release tag, i.e. 0.24.5'
+        required: true
+      profile_bucket:
+        description: 's3 bucket of dolt profile used to build pgo'
+        required: true
+      profile_key:
+        description: 's3 key of dolt profile used to build pgo'
+        required: true
+
+  repository_dispatch:
+    types: [ pgo-release ]
+
+jobs:
+  create-pgo-release:
+    runs-on: ubuntu-22.04
+    name: Release PGO Dolt
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Go 1.x
+        uses: actions/setup-go@v3
+        with:
+          go-version: ^1.21
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2.2.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      - name: Get Results
+        id: get-results
+        run: aws s3api get-object --bucket="$BUCKET" --key="$KEY" dolt-cpu-profile.pprof
+        env:
+          KEY: ${{ github.event.client_payload.profile_key }}
+          BUCKET: ${{ github.event.client_payload.bucket }}
+      - name: Update dolt version command
+        run: sed -i -e 's/	Version = ".*"/	Version = "'"$NEW_VERSION"'"/' "$FILE"
+        env:
+          FILE: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
+          NEW_VERSION: ${{ needs.format-version.outputs.version }}
+      - name: Set minver TBD to version
+        run: sed -i -e 's/minver:"TBD"/minver:"'"$NEW_VERSION"'"/' "$FILE"
+        env:
+          FILE: ${{ format('{0}/go/cmd/dolt/commands/sqlserver/yaml_config.go', github.workspace) }}
+          NEW_VERSION: ${{ needs.format-version.outputs.version }}
+      - name: update minver_validation.txt
+        working-directory: ./go
+        run: go run -mod=readonly ./utils/genminver_validation/ $FILE
+        env:
+          FILE: ${{ format('{0}/go/cmd/dolt/commands/sqlserver/testdata/minver_validation.txt', github.workspace) }}
+      - uses: EndBug/add-and-commit@v9.1.1
+        with:
+          message: ${{ format('[ga-bump-release] Update Dolt version to {0} and release v{0}', needs.format-version.outputs.version) }}
+          add: ${{ format('["{0}/go/cmd/dolt/dolt.go", "{0}/go/cmd/dolt/commands/sqlserver/yaml_config.go", "{0}/go/cmd/dolt/commands/sqlserver/testdata/minver_validation.txt"]', github.workspace) }}
+          cwd: "."
+          pull: "--ff"
+      - name: Build PGO Binaries
+        id: build_binaries
+        run: |
+          latest=$(git rev-parse HEAD)
+          echo "commitish=$latest" >> $GITHUB_OUTPUT
+          GO_BUILD_VERSION=1.21 go/utils/publishrelease/buildpgobinaries.sh
+        env:
+          GO_BUILD_VERSION: "1.21"
+          PROFILE: ${{ format('{0}/dolt-cpu-profile.pprof', github.workspace) }}
+      - name: Create Release
+        id: create_release
+        uses: dolthub/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ needs.format-version.outputs.version }}
+          release_name: ${{ needs.format-version.outputs.version }}
+          draft: false
+          prerelease: false
+          commitish: ${{ steps.build_binaries.outputs.commitish }}
+      - name: Upload Linux AMD64 Distro
+        id: upload-linux-amd64-distro
+        uses: dolthub/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: go/out/dolt-linux-amd64.tar.gz
+          asset_name: dolt-linux-amd64.tar.gz
+          asset_content_type: application/zip
+      - name: Upload Linux ARM64 Distro
+        id: upload-linux-arm64-distro
+        uses: dolthub/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: go/out/dolt-linux-arm64.tar.gz
+          asset_name: dolt-linux-arm64.tar.gz
+          asset_content_type: application/zip
+      - name: Upload OSX AMD64 Distro
+        id: upload-osx-amd64-distro
+        uses: dolthub/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: go/out/dolt-darwin-amd64.tar.gz
+          asset_name: dolt-darwin-amd64.tar.gz
+          asset_content_type: application/zip
+      - name: Upload OSX ARM64 Distro
+        id: upload-osx-arm64-distro
+        uses: dolthub/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: go/out/dolt-darwin-arm64.tar.gz
+          asset_name: dolt-darwin-arm64.tar.gz
+          asset_content_type: application/zip
+      - name: Upload Windows Distro
+        id: upload-windows-distro
+        uses: dolthub/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: go/out/dolt-windows-amd64.zip
+          asset_name: dolt-windows-amd64.zip
+          asset_content_type: application/zip
+      - name: Upload Windows Distro 7z
+        id: upload-windows-distro-7z
+        uses: dolthub/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: go/out/dolt-windows-amd64.7z
+          asset_name: dolt-windows-amd64.7z
+          asset_content_type: application/x-7z-compressed
+      - name: Upload Install Script
+        id: upload-install-script
+        uses: dolthub/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: go/out/install.sh
+          asset_name: install.sh
+          asset_content_type: text/plain
+
+  create-windows-msi:
+    needs: [format-version, create-release]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Trigger Upload MSI
+        uses: peter-evans/repository-dispatch@v2.0.0
+        with:
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          event-type: upload-msi
+          repository: dolthub/windows-msi-creator
+          client-payload: '{"tag": "${{ needs.format-version.outputs.version }}", "release_id": "${{ needs.create-release.outputs.release_id }}", "actor": "${{ github.actor }}", "bucket": "${{ github.event.client_payload.bucket }}", "profile_key": "${{ github.event.client_payload.profile_key }}"}'
+
+  create-release-notes:
+    needs: [format-version, create-release]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Trigger Release Notes
+        uses: peter-evans/repository-dispatch@v2.0.0
+        with:
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          event-type: release-notes
+          client-payload: '{"version": "${{ needs.format-version.outputs.version }}", "release_id": "${{ needs.create-release.outputs.release_id }}"}'
+
+  trigger-performance-benchmark-email:
+    needs: [format-version, create-release]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Trigger Performance Benchmarks
+        uses: peter-evans/repository-dispatch@v2.0.0
+        with:
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          event-type: release-dolt
+          client-payload: '{"version": "${{ needs.format-version.outputs.version }}", "actor": "${{ github.actor }}", "profile_key": "${{ github.event.client_payload.profile_key }}"}'
+
+  docker-image-push:
+    needs: [ format-version, create-release ]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Trigger Push Docker Image
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          event-type: push-docker-image
+          client-payload: '{"version": "${{ needs.format-version.outputs.version }}"}'

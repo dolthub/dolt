@@ -21,6 +21,7 @@ nomsBinFormat="${11}"
 withTpcc="${12}"
 precision="1"
 tpccRegex="tpcc%"
+toProfileKey=""
 
 if [ -n "$initBigRepo" ]; then
   initBigRepo="\"--init-big-repo=$initBigRepo\","
@@ -32,6 +33,10 @@ fi
 
 if [ -n "$withTpcc" ]; then
   withTpcc="\"--withTpcc=$withTpcc\","
+fi
+
+if [ -n "$TO_PROFILE_KEY" ]; then
+  toProfileKey="\"--to-profile-key=$TO_PROFILE_KEY\","
 fi
 
 readTests="('oltp_read_only', 'oltp_point_select', 'select_random_points', 'select_random_ranges', 'covering_index_scan', 'index_scan', 'table_scan', 'groupby_scan', 'index_join_scan', 'types_table_scan', 'index_join')"
@@ -96,6 +101,7 @@ echo '
               "--from-version='$fromVersion'",
               "--to-server='$toServer'",
               "--to-version='$toVersion'",
+              '"$toProfileKey"'
               "--bucket=performance-benchmarking-github-actions-results",
               "--region=us-west-2",
               "--results-dir='$timeprefix'",

@@ -81,6 +81,8 @@ if [[ "$MODE" = "release" || "$MODE" = "nightly" ]]; then
   format="html"
 fi
 
+export TO_PROFILE_KEY
+
 # set value to ISSUE_NUMBER environment variable
 # or default to -1
 issuenumber=${ISSUE_NUMBER:-"-1"}
