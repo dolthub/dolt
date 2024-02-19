@@ -2,18 +2,19 @@
 
 set -e
 
-if [ "$#" -lt 5 ]; then
-    echo  "Usage: ./get-job-json.sh <jobname> <version> <timePrefix> <actorPrefix> <format> <initBigRepo> <nomsBinFormat>"
+if [ "$#" -lt 6 ]; then
+    echo  "Usage: ./get-job-json.sh <jobname> <version> <futureVersion> <timePrefix> <actorPrefix> <format> <initBigRepo> <nomsBinFormat>"
     exit 1
 fi
 
 jobName="$1"
 version="$2"
-timePrefix="$3"
-actorPrefix="$4"
-format="$5"
-initBigRepo="$6"
-nomsBinFormat="$7"
+futureVersion="$3"
+timePrefix="$4"
+actorPrefix="$5"
+format="$6"
+initBigRepo="$7"
+nomsBinFormat="$8"
 
 if [ -n "$initBigRepo" ]; then
   initBigRepo="\"--init-big-repo=$initBigRepo\","
@@ -63,7 +64,8 @@ echo '
             "args": [
               "--schema=/schema.sql",
               "--useDoltHubLuaScriptsRepo",
-              "--profile-version='$version'",
+              "--profile-version='"$version"'",
+              "--future-version='"$futureVersion"'"
               "--bucket=performance-benchmarking-github-actions-results",
               "--region=us-west-2",
               "--results-dir='$timePrefix'",
