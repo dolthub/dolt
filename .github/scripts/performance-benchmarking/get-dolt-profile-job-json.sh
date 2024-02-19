@@ -65,7 +65,7 @@ echo '
               "--schema=/schema.sql",
               "--useDoltHubLuaScriptsRepo",
               "--profile-version='"$version"'",
-              "--future-version='"$futureVersion"'"
+              "--future-version='"$futureVersion"'",
               "--bucket=performance-benchmarking-github-actions-results",
               "--region=us-west-2",
               "--results-dir='$timePrefix'",
