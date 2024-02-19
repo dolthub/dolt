@@ -28,8 +28,16 @@ jobs:
     needs: format-version
     name: Trigger Benchmark Profile K8s Workflows
     steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: main
+      - name: Get sha
+        id: get_sha
+        run: |
+          sha=$(git rev-parse --short HEAD)
+          echo "sha=$sha" >> $GITHUB_OUTPUT
       - uses: peter-evans/repository-dispatch@v2.0.0
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: profile-dolt
-          client-payload: '{"from_version": "${{ needs.format-version.outputs.version }}", "mode": "release", "actor": "${{ github.actor }}", "actor_email": "dustin@dolthub.com", "template_script": "./.github/scripts/performance-benchmarking/get-dolt-profile-job-json.sh"}'
+          client-payload: '{"from_version": "${{ steps.get_sha.outputs.sha }}", "future_version": "${{ needs.format-version.outputs.version }}", "mode": "release", "actor": "${{ github.actor }}", "actor_email": "dustin@dolthub.com", "template_script": "./.github/scripts/performance-benchmarking/get-dolt-profile-job-json.sh"}'

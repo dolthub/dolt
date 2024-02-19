@@ -22,6 +22,10 @@ if [ -n "$PROFILE" ]; then
         echo  "Must set FROM_VERSION"
         exit 1
     fi
+    if [ -z "$FUTURE_VERSION" ]; then
+        echo "Setting FUTURE_VERSION to $FROM_VERSION"
+        export FUTURE_VERSION="$FROM_VERSION"
+    fi
 
     echo "Setting profile version to $FROM_VERSION"
 else
@@ -92,6 +96,7 @@ source \
     "$TEMPLATE_SCRIPT" \
     "$jobname"         \
     "$FROM_VERSION"    \
+    "$FUTURE_VERSION"  \
     "$timeprefix"      \
     "$actorprefix"     \
     "$format"          \

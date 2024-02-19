@@ -38,6 +38,7 @@ jobs:
         run: ./.github/scripts/performance-benchmarking/run-benchmarks.sh
         env:
           PROFILE: "true"
+          FUTURE_VERSION: ${{ github.event.client_payload.future_version }}
           FROM_VERSION: ${{ github.event.client_payload.from_version }}
           MODE: ${{ github.event.client_payload.mode }}
           ACTOR: ${{ github.event.client_payload.actor }}
