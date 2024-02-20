@@ -24,6 +24,8 @@ jobs:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
     # We only run these as seaparte workflow if we do not have AWS credentials.
     steps:
+      - uses: actions/checkout@v3
+        if: ${{ env.use_credentials != 'true' }}
       - name: Setup Go 1.x
         if: ${{ env.use_credentials != 'true' }}
         uses: actions/setup-go@v5
@@ -36,8 +38,6 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
-      - uses: actions/checkout@v3
-        if: ${{ env.use_credentials != 'true' }}
       - uses: actions/setup-node@v3
         if: ${{ env.use_credentials != 'true' }}
         with:

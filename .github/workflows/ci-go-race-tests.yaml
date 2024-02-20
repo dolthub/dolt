@@ -20,13 +20,13 @@ jobs:
         os: [ ubuntu-22.04 ]
         dolt_fmt: [ "__DOLT__" ]
     steps:
+    - uses: actions/checkout@v3
     - name: Set up Go 1.x
       uses: actions/setup-go@v5
       with:
         go-version-file: go/go.mod
         check-latest: true
       id: go
-    - uses: actions/checkout@v3
     - name: Test engine
       working-directory: ./go
       run: |

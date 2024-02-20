@@ -16,6 +16,10 @@ jobs:
       fail-fast: true
     runs-on: ubuntu-latest
     steps:
+    - uses: actions/checkout@v3
+      with:
+        ref: ${{ github.event.client_payload.version }}
+
     - name: Set up Go 1.x
       id: go
       uses: actions/setup-go@v5
@@ -27,10 +31,6 @@ jobs:
       id: version
       run: |
         version=${{ github.event.client_payload.version }}
-
-    - uses: actions/checkout@v3
-      with:
-        ref: ${{ github.event.client_payload.version }}
 
     - name: Install dolt
       working-directory: ./go
