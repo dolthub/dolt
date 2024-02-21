@@ -23,12 +23,13 @@ jobs:
       matrix:
         os: [macos-latest, ubuntu-22.04, windows-latest]
     steps:
-    - name: Set up Go 1.x
-      uses: actions/setup-go@v3
-      with:
-        go-version: ^1.21
-      id: go
     - uses: actions/checkout@v3
+    - name: Set up Go 1.x
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go/go.mod
+        check-latest: true
+      id: go
     - name: Test All
       working-directory: ./go
       run: |
@@ -70,12 +71,13 @@ jobs:
       matrix:
         os: [macos-latest, ubuntu-22.04, windows-latest]
     steps:
-    - name: Set up Go 1.x
-      uses: actions/setup-go@v3
-      with:
-        go-version: ^1.21
-      id: go
     - uses: actions/checkout@v3
+    - name: Set up Go 1.x
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go/go.mod
+        check-latest: true
+      id: go
     - name: Test All
       working-directory: ./go
       run: |
