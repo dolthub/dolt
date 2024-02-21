@@ -90,14 +90,14 @@ func (dt *UnscopedDiffTable) String() string {
 // Schema is a sql.Table interface function that returns the sql.Schema for this system table.
 func (dt *UnscopedDiffTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "commit_hash", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: true},
-		{Name: "table_name", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: true},
-		{Name: "committer", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: false},
-		{Name: "email", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: false},
-		{Name: "date", Type: types.Datetime, Source: doltdb.DiffTableName, PrimaryKey: false},
-		{Name: "message", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: false},
-		{Name: "data_change", Type: types.Boolean, Source: doltdb.DiffTableName, PrimaryKey: false},
-		{Name: "schema_change", Type: types.Boolean, Source: doltdb.DiffTableName, PrimaryKey: false},
+		{Name: "commit_hash", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: true, DatabaseSource: dt.dbName},
+		{Name: "table_name", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: true, DatabaseSource: dt.dbName},
+		{Name: "committer", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "email", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "date", Type: types.Datetime, Source: doltdb.DiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "message", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "data_change", Type: types.Boolean, Source: doltdb.DiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "schema_change", Type: types.Boolean, Source: doltdb.DiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
 	}
 }
 

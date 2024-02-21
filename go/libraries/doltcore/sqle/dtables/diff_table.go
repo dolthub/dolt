@@ -87,7 +87,7 @@ var PrimaryKeyChangeWarning = "cannot render full diff between commits %s and %s
 
 const PrimaryKeyChangeWarningCode int = 1105 // Since this is our own custom warning we'll use 1105, the code for an unknown error
 
-func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue, head *doltdb.Commit) (sql.Table, error) {
+func NewDiffTable(ctx *sql.Context, dbName, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue, head *doltdb.Commit) (sql.Table, error) {
 	diffTblName := doltdb.DoltDiffTablePrefix + tblName
 
 	table, tblName, ok, err := root.GetTableInsensitive(ctx, tblName)
@@ -107,7 +107,7 @@ func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *do
 		return nil, err
 	}
 
-	sqlSch, err := sqlutil.FromDoltSchema("", diffTblName, diffTableSchema)
+	sqlSch, err := sqlutil.FromDoltSchema(dbName, diffTblName, diffTableSchema)
 	if err != nil {
 		return nil, err
 	}
