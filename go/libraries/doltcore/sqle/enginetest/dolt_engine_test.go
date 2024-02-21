@@ -468,7 +468,7 @@ func TestSchemaPinning(t *testing.T) {
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					// use the tip of main for our response schemas
+					// use the tip of main for our response schema (pk, c2)
 					Query:    "SET @@dolt_override_schema=@commit2;",
 					Expected: []sql.Row{{}},
 				},
@@ -490,7 +490,6 @@ func TestSchemaPinning(t *testing.T) {
 					Expected: []sql.Row{{}},
 				},
 				{
-					// TODO: This fails, because rowConverter only maps by column name, not by tag!
 					Query:    "select * from t;",
 					Expected: []sql.Row{{1, "one"}, {2, "two"}},
 					ExpectedColumns: sql.Schema{

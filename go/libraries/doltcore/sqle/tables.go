@@ -475,10 +475,12 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 	if t.overriddenSchema != nil {
 		// If there is a schema override, then we need to map the results
 		// from the old schema to the new schema
-		toSch2, err := sqlutil.FromDoltSchema(t.db.Name(), t.tableName, t.overriddenSchema)
+		workingRoot, err := t.workingRoot(ctx)
 		if err != nil {
-			panic("unable to convert schemas: " + err.Error())
+			return nil, err
 		}
+		// TODO: Should we be passing workingRoot twice? Looks like the second one is supposed to be the root of HEAD?
+		somethingSomethingSchema, err := sqlutil.ToDoltSchema(ctx, workingRoot, t.Name(), t.sqlSch, workingRoot, t.Collation())
 
 		var projectedColNames []string
 		for _, tag := range t.projectedCols {
@@ -489,12 +491,8 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 			projectedColNames = append(projectedColNames, column.Name)
 		}
 
-		// TODO: the rowConverter function only maps columns by name and requires the
-		//       type to match exactly. It works off of sql.Schema, not schema.Schema,
-		//       so there's no chance of mapping with a column tag.
-		//       The RowConerter class might be a better choice, but it works off of
-		//       row.Row instead of sql.Row.
-		rowConvFunc = rowConverterByColName(t.sqlSch.Schema, toSch2.Schema, projectedColNames)
+		// TODO: is "byColName" still the right name for this function? 🤔
+		rowConvFunc = rowConverterByColName(somethingSomethingSchema, t.overriddenSchema, t.projectedCols, projectedColNames)
 	}
 
 	// If we DON'T have an overridden schema, then we can pass in our projected columns as the

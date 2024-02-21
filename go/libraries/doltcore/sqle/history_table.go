@@ -578,39 +578,34 @@ func (i *historyIter) Close(ctx *sql.Context) error {
 }
 
 // NOTE: This was forked from rowConverter to handle the logic starting to separate
-func rowConverterByColName(srcSchema, targetSchema sql.Schema, projectedColNames []string) func(row sql.Row) sql.Row {
+// TODO: Add Godocs; move to another file?
+func rowConverterByColName(srcSchema, targetSchema schema.Schema, projectedTags []uint64, projectedColNames []string) func(row sql.Row) sql.Row {
 	srcToTarget := make(map[int]int)
-	for i, col := range targetSchema {
-		// NOTE: Looks like history table only matches by name?
-		//       because rowConverter works with sql.Schema instances, it doesn't know anything about
-		//       tags. The RowConverter class is probably a better implementation to use.
+	for i, targetColumn := range targetSchema.GetAllCols().GetColumns() {
+		sourceColumn, found := srcSchema.GetAllCols().GetByTag(targetColumn.Tag)
+		if !found {
+			sourceColumn, found = srcSchema.GetAllCols().GetByName(targetColumn.Name)
+		}
 
-		srcIdx := srcSchema.IndexOfColName(col.Name)
-		if srcIdx >= 0 {
-			// only add a conversion if the type is the same
-			// TODO: we could do a projection to convert between types in some cases
-			// TODO: Seems like we need to do this conversion for the schema mapping/pinning feature!
-			if srcSchema[srcIdx].Type.Equals(targetSchema[i].Type) {
-				srcToTarget[srcIdx] = i
-			}
+		if found {
+			// TODO: Do we need to consider any type conversion here?
+			srcToTarget[srcSchema.GetAllCols().IndexOf(sourceColumn.Name)] = i
 		}
 	}
 
 	return func(row sql.Row) sql.Row {
 		r := make(sql.Row, len(projectedColNames))
-		for i, colName := range projectedColNames {
-			// DEBUG NOTE: this function currently only works with sql.Schemas, so it doesn't know anything about tags.
-			//             the projections are represented as tag values, but we don't have enough information to match
-			//             that up with the correct column, so we just use the first column since there is one projection.
-
-			// First we have to find the index of colName in the src schema
-			idx := srcSchema.IndexOfColName(colName)
-			if idx == -1 {
-				// if the projected column isn't in our original schema, just ignore it and let it be null
-				continue
+		for i, tag := range projectedTags {
+			// First try to find the column in the src schema with the matching tag
+			// then fallback to a name match, since type changes will change the tag
+			srcColumn, found := srcSchema.GetAllCols().GetByTag(tag)
+			if !found {
+				srcColumn, found = srcSchema.GetAllCols().GetByName(projectedColNames[i])
 			}
 
-			r[i] = row[idx]
+			if found {
+				r[i] = row[srcSchema.GetAllCols().IndexOf(srcColumn.Name)]
+			}
 		}
 		return r
 	}
