@@ -191,8 +191,8 @@ github.com/dolthub/jsonpath v0.0.2-0.20240201003050-392940944c15 h1:sfTETOpsrNJP
 github.com/dolthub/jsonpath v0.0.2-0.20240201003050-392940944c15/go.mod h1:2/2zjLQ/JOOSbbSboojeg+cAwcRV0fDLzIiWch/lhqI=
 github.com/dolthub/maphash v0.0.0-20221220182448-74e1e1ea1577 h1:SegEguMxToBn045KRHLIUlF2/jR7Y2qD6fF+3tdOfvI=
 github.com/dolthub/maphash v0.0.0-20221220182448-74e1e1ea1577/go.mod h1:gkg4Ch4CdCDu5h6PMriVLawB7koZ+5ijb9puGMV50a4=
-github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81 h1:7/v8q9XGFa6q5Ap4Z/OhNkAMBaK5YeuEzwJt+NZdhiE=
-github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81/go.mod h1:siLfyv2c92W1eN/R4QqG/+RjjX5W2+gCTRjZxBjI3TY=
+github.com/dolthub/sqllogictest/go v0.0.0-20240222182842-573e6a164de8 h1:nFOhaKpwXfts8HgCcHA43KvuYwosXTnk4y4VVxNEgvs=
+github.com/dolthub/sqllogictest/go v0.0.0-20240222182842-573e6a164de8/go.mod h1:e/FIZVvT2IR53HBCAo41NjqgtEnjMJGKca3Y/dAmZaA=
 github.com/dolthub/swiss v0.1.0 h1:EaGQct3AqeP/MjASHLiH6i4TAmgbG/c4rA6a1bzCOPc=
 github.com/dolthub/swiss v0.1.0/go.mod h1:BeucyB08Vb1G9tumVN3Vp/pyY4AMUnr9p7Rz7wJ7kAQ=
 github.com/dolthub/vitess v0.0.0-20240209125211-6c93b0341608 h1:jnInva1KcJJf/QQsxbN9tTJckOZf73EzUen8rrik0Yw=
