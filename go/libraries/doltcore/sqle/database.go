@@ -313,7 +313,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		}
 
 		tableName := tblName[len(doltdb.DoltDiffTablePrefix):]
-		dt, err := dtables.NewDiffTable(ctx, tableName, db.ddb, root, head)
+		dt, err := dtables.NewDiffTable(ctx, db.Name(), tableName, db.ddb, root, head)
 		if err != nil {
 			return nil, false, err
 		}
@@ -321,7 +321,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 
 	case strings.HasPrefix(lwrName, doltdb.DoltCommitDiffTablePrefix):
 		suffix := tblName[len(doltdb.DoltCommitDiffTablePrefix):]
-		dt, err := dtables.NewCommitDiffTable(ctx, suffix, db.ddb, root)
+		dt, err := dtables.NewCommitDiffTable(ctx, db.Name(), suffix, db.ddb, root)
 		if err != nil {
 			return nil, false, err
 		}
@@ -382,7 +382,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			}
 		}
 
-		dt, found = dtables.NewLogTable(ctx, db.RevisionQualifiedName(), db.ddb, head), true
+		dt, found = dtables.NewLogTable(ctx, db.Name(), db.ddb, head), true
 	case doltdb.DiffTableName:
 		if head == nil {
 			var err error
@@ -392,7 +392,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			}
 		}
 
-		dt, found = dtables.NewUnscopedDiffTable(ctx, db.RevisionQualifiedName(), db.ddb, head), true
+		dt, found = dtables.NewUnscopedDiffTable(ctx, db.Name(), db.ddb, head), true
 	case doltdb.ColumnDiffTableName:
 		if head == nil {
 			var err error
@@ -402,7 +402,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			}
 		}
 
-		dt, found = dtables.NewColumnDiffTable(ctx, db.RevisionQualifiedName(), db.ddb, head), true
+		dt, found = dtables.NewColumnDiffTable(ctx, db.Name(), db.ddb, head), true
 	case doltdb.TableOfTablesInConflictName:
 		dt, found = dtables.NewTableOfTablesInConflict(ctx, db.RevisionQualifiedName(), db.ddb), true
 	case doltdb.TableOfTablesWithViolationsName:
@@ -416,9 +416,9 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	case doltdb.RemotesTableName:
 		dt, found = dtables.NewRemotesTable(ctx, db.ddb), true
 	case doltdb.CommitsTableName:
-		dt, found = dtables.NewCommitsTable(ctx, db.RevisionQualifiedName(), db.ddb), true
+		dt, found = dtables.NewCommitsTable(ctx, db.Name(), db.ddb), true
 	case doltdb.CommitAncestorsTableName:
-		dt, found = dtables.NewCommitAncestorsTable(ctx, db.RevisionQualifiedName(), db.ddb), true
+		dt, found = dtables.NewCommitAncestorsTable(ctx, db.Name(), db.ddb), true
 	case doltdb.StatusTableName:
 		sess := dsess.DSessFromSess(ctx.Session)
 		adapter := dsess.NewSessionStateAdapter(

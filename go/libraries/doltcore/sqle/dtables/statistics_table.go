@@ -49,7 +49,7 @@ func NewStatisticsTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB) sql.T
 
 // DataLength implements sql.StatisticsTable
 func (st *StatisticsTable) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(schema.StatsTableSqlSchema.Schema)
+	numBytesPerRow := schema.SchemaAvgLength(schema.StatsTableSqlSchema(st.dbName).Schema)
 	numRows, _, err := st.RowCount(ctx)
 	if err != nil {
 		return 0, err
@@ -84,7 +84,7 @@ func (st *StatisticsTable) String() string {
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
 func (st *StatisticsTable) Schema() sql.Schema {
-	return schema.StatsTableSqlSchema.Schema
+	return schema.StatsTableSqlSchema(st.dbName).Schema
 }
 
 // Collation implements the sql.Table interface.

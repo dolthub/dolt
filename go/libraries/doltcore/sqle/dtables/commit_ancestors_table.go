@@ -69,9 +69,9 @@ func (dt *CommitAncestorsTable) String() string {
 // Schema is a sql.Table interface function that gets the sql.Schema of the commit_ancestors system table.
 func (dt *CommitAncestorsTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "commit_hash", Type: types.Text, Source: doltdb.CommitAncestorsTableName, PrimaryKey: true},
-		{Name: "parent_hash", Type: types.Text, Source: doltdb.CommitAncestorsTableName, PrimaryKey: true},
-		{Name: "parent_index", Type: types.Int32, Source: doltdb.CommitAncestorsTableName, PrimaryKey: true},
+		{Name: "commit_hash", Type: types.Text, Source: doltdb.CommitAncestorsTableName, PrimaryKey: true, DatabaseSource: dt.dbName},
+		{Name: "parent_hash", Type: types.Text, Source: doltdb.CommitAncestorsTableName, PrimaryKey: true, DatabaseSource: dt.dbName},
+		{Name: "parent_index", Type: types.Int32, Source: doltdb.CommitAncestorsTableName, PrimaryKey: true, DatabaseSource: dt.dbName},
 	}
 }
 

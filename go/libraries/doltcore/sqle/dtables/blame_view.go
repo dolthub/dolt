@@ -28,6 +28,7 @@ import (
 var errUnblameableTable = errors.New("unable to generate blame view for table without primary key")
 
 const (
+	// todo: force /*+ JOIN_ORDER(sd,ld) */ for testing consistency
 	viewExpressionTemplate = `
 				WITH sorted_diffs_by_pk
 				         AS (SELECT
