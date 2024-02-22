@@ -880,6 +880,12 @@ func TestCreateTable(t *testing.T) {
 	enginetest.TestCreateTable(t, h)
 }
 
+func TestRowLimit(t *testing.T) {
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestRowLimit(t, h)
+}
+
 func TestBranchDdl(t *testing.T) {
 	for _, script := range DdlBranchTests {
 		func() {

@@ -15,6 +15,7 @@
 package val
 
 import (
+	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -292,13 +293,17 @@ func (tb *TupleBuilder) PutSet(i int, v uint64) {
 }
 
 // PutString writes a string to the ith field of the Tuple being built.
-func (tb *TupleBuilder) PutString(i int, v string) {
+func (tb *TupleBuilder) PutString(i int, v string) error {
 	tb.Desc.expectEncoding(i, StringEnc)
 	sz := ByteSize(len(v)) + 1
+	if int(tb.pos)+len(v) > int(MaxTupleDataSize) {
+		return analyzererrors.ErrInvalidRowLength.New(tb.pos + sz)
+	}
 	tb.ensureCapacity(sz)
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
 	writeString(tb.fields[i], v)
 	tb.pos += sz
+	return nil
 }
 
 // PutByteString writes a []byte to the ith field of the Tuple being built.
