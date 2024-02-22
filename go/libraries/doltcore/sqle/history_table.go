@@ -28,6 +28,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -577,10 +578,18 @@ func (i *historyIter) Close(ctx *sql.Context) error {
 	return nil
 }
 
-// NOTE: This was forked from rowConverter to handle the logic starting to separate
-// TODO: Add Godocs; move to another file?
+// rowConverterByColName returns a function that converts a row from |srcSchema| to |targetSchema| using the
+// specified |projectedTags| and |projectedColNames|. Projected tags and projected column names are both
+// provided so that if a tag changes (such as when a column's type is changed) the mapping can fall back to
+// matching by column name.
+//
+// NOTE: This was forked from the dolt_history system table's rowConverter function, to handle the logic
+// starting to diverge for schema mapping. It would be nice to deduplicate and clean this up.
+//
+// TODO: move to another file; shouldn't be part of the history system table
 func rowConverterByColName(srcSchema, targetSchema schema.Schema, projectedTags []uint64, projectedColNames []string) func(row sql.Row) sql.Row {
-	srcToTarget := make(map[int]int)
+	srcIndexToTargetIndex := make(map[int]int)
+	srcIndexToTargetType := make(map[int]typeinfo.TypeInfo)
 	for i, targetColumn := range targetSchema.GetAllCols().GetColumns() {
 		sourceColumn, found := srcSchema.GetAllCols().GetByTag(targetColumn.Tag)
 		if !found {
@@ -588,8 +597,9 @@ func rowConverterByColName(srcSchema, targetSchema schema.Schema, projectedTags 
 		}
 
 		if found {
-			// TODO: Do we need to consider any type conversion here?
-			srcToTarget[srcSchema.GetAllCols().IndexOf(sourceColumn.Name)] = i
+			srcIndex := srcSchema.GetAllCols().IndexOf(sourceColumn.Name)
+			srcIndexToTargetIndex[srcIndex] = i
+			srcIndexToTargetType[srcIndex] = targetColumn.TypeInfo
 		}
 	}
 
@@ -604,7 +614,16 @@ func rowConverterByColName(srcSchema, targetSchema schema.Schema, projectedTags 
 			}
 
 			if found {
-				r[i] = row[srcSchema.GetAllCols().IndexOf(srcColumn.Name)]
+				srcIndex := srcSchema.GetAllCols().IndexOf(srcColumn.Name)
+				temp := row[srcIndex]
+
+				temp, _, err := srcIndexToTargetType[srcIndex].ToSqlType().Convert(temp)
+				if err != nil {
+					// TODO: This function should return an error so we don't have to panic here
+					panic("unable to convert value: " + err.Error())
+				}
+
+				r[i] = temp
 			}
 		}
 		return r

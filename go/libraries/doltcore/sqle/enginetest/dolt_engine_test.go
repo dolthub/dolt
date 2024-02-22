@@ -121,15 +121,15 @@ func TestSingleQuery(t *testing.T) {
 func TestSchemaPinning(t *testing.T) {
 	var scripts = []queries.ScriptTest{
 
-		// TODO: Test doing a join on tables when the schema is pinned
 		// TODO: Add more tests with different projection changes (no values, PK not at front of row, etc)
-		// NOTE: If we do have to turn off indexes, will that affect other things, like foreign keys, right?
-		// TODO: Test unsetting the schema override var!
+		// TODO: Test unsetting the schema override var
+		// TODO: Test PK changes – they should error out, right?
+		// TODO: Test DDL operations – they should error out
+		//       How do we get into the right point of the analyzer to check for this?
 
 		// TODO:
 		//  - Deleting a column (in the middle of a schema – or perhaps deleting multiple columns, at start, middle, and end?
-		//  - Adding a new column – start, middle, and end of schema? (this is covered pretty well by a test case below!)
-		//  - Modifying columns ???
+		//  - Modifying columns – renaming and changing type
 
 		// BASIC OPERATIONS
 		{
@@ -304,102 +304,6 @@ func TestSchemaPinning(t *testing.T) {
 				},
 			},
 		},
-
-		// TABLE EXISTENCE EDGE CASES
-		{
-			Name: "Table exists in the pinned schema, but not in the data commit",
-			SetUpScript: []string{
-				"SET @commit1 = hashof('HEAD');",
-				"create table t (pk int primary key, c1 varchar(255));",
-				"insert into t values (1, 'one');",
-				"call dolt_commit('-Am', 'adding table t on main');",
-				"SET @commit2 = hashof('HEAD');",
-			},
-			Assertions: []queries.ScriptTestAssertion{
-				{
-					Query:    "SELECT * from t;",
-					Expected: []sql.Row{{1, "one"}},
-				},
-				{
-					Query:    "SET @@dolt_override_schema=@commit2;",
-					Expected: []sql.Row{{}},
-				},
-				{
-					Query:    "SELECT * from t;",
-					Expected: []sql.Row{{1, "one"}},
-				},
-				{
-					// TODO: This table exists in the pinned schema, but not in the data commit.
-					//       We need to update the database type to handle this and somehow return
-					//       an empty table with the pinned schema.
-					Query:    "SELECT * from t as of @commit1;",
-					Expected: []sql.Row{},
-					ExpectedColumns: sql.Schema{
-						{
-							Name: "pk",
-							Type: gmstypes.Int32,
-						}, {
-							Name: "c1",
-							Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
-						},
-					},
-				},
-			},
-		},
-
-		// INDEX TEST CASES
-		{
-			Name: "Index exists in the pinned schema, but not in the data commit",
-			SetUpScript: []string{
-				"create table t (pk int primary key, c1 varchar(255), key c1_idx(c1));",
-				"insert into t values (1, 'one');",
-				"call dolt_commit('-Am', 'adding table t with index on main');",
-				"SET @commit1 = hashof('HEAD');",
-
-				"alter table t drop index c1_idx;",
-				"update t set c1='two';",
-				"call dolt_commit('-Am', 'adding table t with index on main');",
-				"SET @commit2 = hashof('HEAD');",
-			},
-			Assertions: []queries.ScriptTestAssertion{
-				{
-					// Going back to @commit1 with AS OF should use the available index
-					Query:           "SELECT c1 from t as of @commit1 where c1 > 'o';",
-					Expected:        []sql.Row{{"one"}},
-					ExpectedIndexes: []string{"c1_idx"},
-				},
-				{
-					// The tip of HEAD does not have an index
-					Query:           "SELECT c1 from t where c1 > 'o';",
-					Expected:        []sql.Row{{"two"}},
-					ExpectedIndexes: []string{},
-				},
-				{
-					// Set the overridden schema to the point where an index existed
-					Query:    "SET @@dolt_override_schema=@commit1;",
-					Expected: []sql.Row{{}},
-				},
-				{
-					// Using the overridden index, we should still get the latest data, but without using the index
-					Query:           "SELECT c1 from t where c1 > 'o';",
-					Expected:        []sql.Row{{"two"}},
-					ExpectedIndexes: []string{},
-				},
-				{
-					// Set the overridden schema to the point where an index existed
-					Query:    "SET @@dolt_override_schema=@commit2;",
-					Expected: []sql.Row{{}},
-				},
-				{
-					// Going back to @commit1 for data, but using @commit2 for schema
-					Query:           "SELECT c1 from t as of @commit1 where c1 > 'o';",
-					Expected:        []sql.Row{{"one"}},
-					ExpectedIndexes: []string{"c1_idx"},
-				},
-			},
-		},
-
-		// TODO: This should be moved up with the other basic operation tests
 		{
 			// TODO: What other type changes do we need to test/support?
 			// TODO: What happens when the data can't be converted into the mapped schema type? (e.g. -13 -> unsigned int)
@@ -505,7 +409,101 @@ func TestSchemaPinning(t *testing.T) {
 			},
 		},
 
-		// AS OF TESTS
+		// TABLE EXISTENCE EDGE CASES
+		{
+			Name: "Table exists in the pinned schema, but not in the data commit",
+			SetUpScript: []string{
+				"SET @commit1 = hashof('HEAD');",
+				"create table t (pk int primary key, c1 varchar(255));",
+				"insert into t values (1, 'one');",
+				"call dolt_commit('-Am', 'adding table t on main');",
+				"SET @commit2 = hashof('HEAD');",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query:    "SELECT * from t;",
+					Expected: []sql.Row{{1, "one"}},
+				},
+				{
+					Query:    "SET @@dolt_override_schema=@commit2;",
+					Expected: []sql.Row{{}},
+				},
+				{
+					Query:    "SELECT * from t;",
+					Expected: []sql.Row{{1, "one"}},
+				},
+				{
+					// TODO: This table exists in the pinned schema, but not in the data commit.
+					//       We need to update the database type to handle this and somehow return
+					//       an empty table with the pinned schema.
+					Query:    "SELECT * from t as of @commit1;",
+					Expected: []sql.Row{},
+					ExpectedColumns: sql.Schema{
+						{
+							Name: "pk",
+							Type: gmstypes.Int32,
+						}, {
+							Name: "c1",
+							Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+						},
+					},
+				},
+			},
+		},
+
+		// INDEX TEST CASES
+		{
+			Name: "Index exists in the pinned schema, but not in the data commit",
+			SetUpScript: []string{
+				"create table t (pk int primary key, c1 varchar(255), key c1_idx(c1));",
+				"insert into t values (1, 'one');",
+				"call dolt_commit('-Am', 'adding table t with index on main');",
+				"SET @commit1 = hashof('HEAD');",
+
+				"alter table t drop index c1_idx;",
+				"update t set c1='two';",
+				"call dolt_commit('-Am', 'adding table t with index on main');",
+				"SET @commit2 = hashof('HEAD');",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					// Going back to @commit1 with AS OF should use the available index
+					Query:           "SELECT c1 from t as of @commit1 where c1 > 'o';",
+					Expected:        []sql.Row{{"one"}},
+					ExpectedIndexes: []string{"c1_idx"},
+				},
+				{
+					// The tip of HEAD does not have an index
+					Query:           "SELECT c1 from t where c1 > 'o';",
+					Expected:        []sql.Row{{"two"}},
+					ExpectedIndexes: []string{},
+				},
+				{
+					// Set the overridden schema to the point where an index existed
+					Query:    "SET @@dolt_override_schema=@commit1;",
+					Expected: []sql.Row{{}},
+				},
+				{
+					// Using the overridden index, we should still get the latest data, but without using the index
+					Query:           "SELECT c1 from t where c1 > 'o';",
+					Expected:        []sql.Row{{"two"}},
+					ExpectedIndexes: []string{},
+				},
+				{
+					// Set the overridden schema to the point where an index existed
+					Query:    "SET @@dolt_override_schema=@commit2;",
+					Expected: []sql.Row{{}},
+				},
+				{
+					// Going back to @commit1 for data, but using @commit2 for schema
+					Query:           "SELECT c1 from t as of @commit1 where c1 > 'o';",
+					Expected:        []sql.Row{{"one"}},
+					ExpectedIndexes: []string{"c1_idx"},
+				},
+			},
+		},
+
+		// AS OF TEST CASES
 		{
 			Name: "AS OF with schema pinning",
 			SetUpScript: []string{
@@ -572,6 +570,53 @@ func TestSchemaPinning(t *testing.T) {
 						},
 						{
 							Name: "c1",
+							Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+						},
+					},
+				},
+			},
+		},
+
+		// JOIN TEST CASES
+		{
+			Name: "Joining two tables with changed schemas",
+			SetUpScript: []string{
+				"create table t1 (pk int primary key, c1 varchar(255));",
+				"create table t2 (pk int primary key, c1 int, c2 varchar(100));",
+				"insert into t1 values (1, 'one');",
+				"insert into t2 values (100, 1, 'blue');",
+				"call dolt_commit('-Am', 'adding tables t1 and t2 on main');",
+				"SET @commit1 = hashof('HEAD');",
+
+				"alter table t1 rename column c1 to c2;",
+				"alter table t2 modify column c1 varchar(100);",
+				"call dolt_commit('-am', 'modifying columns in t1 and t2 on main');",
+				"SET @commit2 = hashof('HEAD');",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					// use the tip of main for our response schema (pk, c2)
+					Query:    "SET @@dolt_override_schema=@commit1;",
+					Expected: []sql.Row{{}},
+				},
+				{
+					Query:    "SELECT * from t1 JOIN t2 on t1.pk = t2.c1;",
+					Expected: []sql.Row{{1, "one", 100, 1, "blue"}},
+					ExpectedColumns: sql.Schema{
+						{
+							Name: "pk",
+							Type: gmstypes.Int32,
+						}, {
+							Name: "c1",
+							Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+						}, {
+							Name: "pk",
+							Type: gmstypes.Int32,
+						}, {
+							Name: "c1",
+							Type: gmstypes.Int32,
+						}, {
+							Name: "c2",
 							Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
 						},
 					},
