@@ -215,6 +215,24 @@ func (p *DoltDatabaseProvider) Database(ctx *sql.Context, name string) (sql.Data
 		return nil, sql.ErrDatabaseNotFound.New(name)
 	}
 
+	// TODO: Refactor the code that evaluates this session variable
+	//       Seems like we should be able to ask the Dolt session if there is a schema override in place
+	//       And if so, ask for what the overridden schema is? Maybe even resolve that to a commit?
+	sessionVariable, err := ctx.GetSessionVariable(ctx, dsess.DoltOverrideSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: Explain this...
+	// TODO: Guard against a non-string value (probably should go in the )
+	if sessionVariable != nil && sessionVariable.(string) != "" {
+		// TODO: It would be nice if we could set a "read-only reason" for the read only database and let people know
+		//       that the database is read-only because of the @@dolt_schema_override setting and that customers need
+		//       to unset that session variable to get a write query to work. Otherwise it may be confusing why a
+		//       write query isn't working.
+		return ReadOnlyDatabase{database.(Database)}, nil
+	}
+
 	return database, nil
 }
 

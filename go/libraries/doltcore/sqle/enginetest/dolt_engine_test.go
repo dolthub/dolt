@@ -123,9 +123,7 @@ func TestSchemaPinning(t *testing.T) {
 
 		// TODO: Add more tests with different projection changes (no values, PK not at front of row, etc)
 		// TODO: Test unsetting the schema override var
-		// TODO: Test PK changes – they should error out, right?
-		// TODO: Test DDL operations – they should error out
-		//       How do we get into the right point of the analyzer to check for this?
+		// TODO: Test PK changes – they should error out, right? Since we can't map those yet?
 
 		// TODO:
 		//  - Deleting a column (in the middle of a schema – or perhaps deleting multiple columns, at start, middle, and end?
@@ -620,6 +618,54 @@ func TestSchemaPinning(t *testing.T) {
 							Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
 						},
 					},
+				},
+			},
+		},
+
+		// READ-ONLY TEST CASES
+		{
+			// When a schema override is applied, the database is read-only
+			Name: "Write queries are not allowed when the schema is overridden",
+			SetUpScript: []string{
+				"create table t1 (pk int primary key, c1 varchar(5));",
+				"insert into t1 values (1, 'one');",
+				"call dolt_commit('-Am', 'adding tables t1 and t2 on main');",
+				"SET @commit1 = hashof('HEAD');",
+
+				"alter table t1 modify column c1 varchar(100);",
+				"call dolt_commit('-am', 'modifying columns in t1 and t2 on main');",
+				"SET @commit2 = hashof('HEAD');",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					// Before @@dolt_override_schema is applied, we can executed DDL and update/insert statements
+					Query:    "create table t2 (pk int primary key, c1 JSON);",
+					Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
+				},
+				{
+					Query:    "SET @@dolt_override_schema=@commit1;",
+					Expected: []sql.Row{{}},
+				},
+				{
+					// After @@dolt_override_schema is applied, DDL statements error out
+					Query:          "create table t3 (pk int primary key, c1 JSON);",
+					ExpectedErrStr: "Database mydb is read-only.",
+				},
+				{
+					// After @@dolt_override_schema is applied, DDL statements error out
+					Query:          "insert into t1 values (3, NULL);",
+					ExpectedErrStr: "Database mydb is read-only.",
+				},
+				{
+					// Turn off the schema override
+					Query:    "SET @@dolt_override_schema=NULL;",
+					Expected: []sql.Row{{}},
+				},
+				{
+					// TODO: What's the right name for this session variable?
+					// Insert statements work again after turning off the schema override
+					Query:    "insert into t1 values (3, NULL);",
+					Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
 				},
 			},
 		},
