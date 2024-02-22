@@ -587,7 +587,7 @@ func (i *historyIter) Close(ctx *sql.Context) error {
 // starting to diverge for schema mapping. It would be nice to deduplicate and clean this up.
 //
 // TODO: move to another file; shouldn't be part of the history system table
-func rowConverterByColName(srcSchema, targetSchema schema.Schema, projectedTags []uint64, projectedColNames []string) func(row sql.Row) sql.Row {
+func rowConverterByColName(srcSchema, targetSchema schema.Schema, projectedTags []uint64, projectedColNames []string) func(row sql.Row) (sql.Row, error) {
 	srcIndexToTargetIndex := make(map[int]int)
 	srcIndexToTargetType := make(map[int]typeinfo.TypeInfo)
 	for i, targetColumn := range targetSchema.GetAllCols().GetColumns() {
@@ -603,7 +603,7 @@ func rowConverterByColName(srcSchema, targetSchema schema.Schema, projectedTags 
 		}
 	}
 
-	return func(row sql.Row) sql.Row {
+	return func(row sql.Row) (sql.Row, error) {
 		r := make(sql.Row, len(projectedColNames))
 		for i, tag := range projectedTags {
 			// First try to find the column in the src schema with the matching tag
@@ -619,14 +619,13 @@ func rowConverterByColName(srcSchema, targetSchema schema.Schema, projectedTags 
 
 				temp, _, err := srcIndexToTargetType[srcIndex].ToSqlType().Convert(temp)
 				if err != nil {
-					// TODO: This function should return an error so we don't have to panic here
-					panic("unable to convert value: " + err.Error())
+					return nil, fmt.Errorf("unable to convert value to overridden schema: %s", err.Error())
 				}
 
 				r[i] = temp
 			}
 		}
-		return r
+		return r, nil
 	}
 }
 

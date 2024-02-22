@@ -61,9 +61,8 @@ func IsValidIdentifier(name string) bool {
 
 // Table is a struct which holds row data, as well as a reference to its schema.
 type Table struct {
-	table durable.Table
-	// TODO: Should this just be in DoltTable?
-	OverriddenSchema schema.Schema
+	table            durable.Table
+	overriddenSchema schema.Schema
 }
 
 // NewNomsTable creates a noms Struct which stores row data, index data, and schema.
@@ -117,9 +116,15 @@ func (t *Table) NodeStore() tree.NodeStore {
 	return durable.NodeStoreFromTable(t.table)
 }
 
-func (t *Table) OverrideSchema(sch schema.Schema) error {
-	t.OverriddenSchema = sch
-	return nil
+// OverrideSchema sets |sch| as the schema for this table, causing rows from this table to be transformed
+// into that schema when they are read from this table.
+func (t *Table) OverrideSchema(sch schema.Schema) {
+	t.overriddenSchema = sch
+}
+
+// GetOverriddenSchema returns the overridden schema if one has been set, otherwise it returns nil.
+func (t *Table) GetOverriddenSchema() schema.Schema {
+	return t.overriddenSchema
 }
 
 // SetConflicts sets the merge conflicts for this table.

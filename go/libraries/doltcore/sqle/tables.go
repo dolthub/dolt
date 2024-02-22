@@ -36,7 +36,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -119,7 +118,7 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db dsess.Sq
 		sqlSch:           sqlSch,
 		autoIncCol:       autoCol,
 		projectedCols:    nil,
-		overriddenSchema: tbl.OverriddenSchema,
+		overriddenSchema: tbl.GetOverriddenSchema(),
 		opts:             opts,
 	}, nil
 }
@@ -204,7 +203,7 @@ func (t *DoltTable) DoltTable(ctx *sql.Context) (*doltdb.Table, error) {
 	}
 
 	if t.overriddenSchema != nil {
-		table.OverriddenSchema = t.overriddenSchema
+		table.OverrideSchema(t.overriddenSchema)
 	}
 
 	return table, nil
@@ -470,7 +469,7 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 		return nil, err
 	}
 
-	var rowConvFunc func(row sql.Row) sql.Row
+	var rowConvFunc func(row sql.Row) (sql.Row, error)
 
 	if t.overriddenSchema != nil {
 		// If there is a schema override, then we need to map the results
@@ -527,9 +526,8 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 }
 
 type mappingRowIter struct {
-	child        sql.RowIter
-	rowConvFunc  func(row sql.Row) sql.Row
-	rowConverter *rowconv.RowConverter
+	child       sql.RowIter
+	rowConvFunc func(row sql.Row) (sql.Row, error)
 }
 
 func (m *mappingRowIter) Next(ctx *sql.Context) (sql.Row, error) {
@@ -538,18 +536,10 @@ func (m *mappingRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return next, err
 	}
 
-	// RowConverter won't work because it works with row.Row instead of sql.Row
-	//if m.rowConverter != nil {
-	//	return m.rowConverter.ConvertWithWarnings(next, nil)
-	//}
-
-	// The rowConverter function doesn't work correctly either because it works with
-	// sql.Schema instead of schema.Schema.
 	if m.rowConvFunc == nil {
 		return next, nil
 	} else {
-		newRow := m.rowConvFunc(next)
-		return newRow, nil
+		return m.rowConvFunc(next)
 	}
 }
 
