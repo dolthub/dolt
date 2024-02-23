@@ -26,11 +26,10 @@ const (
 
 	// MaxTupleDataSize is the maximum KV length considering the extra
 	// flatbuffer metadata required to serialize the message. This number
-	// is only useful for checking the "last row" per-es, because every field
-	// has offsets but field count, content hash, etc are global properties
-	// of the message.
-	// (uint16) - (2 kv offsets) - (field count) - (content hash) - (node count) - (tree level)
-	MaxTupleDataSize ByteSize = math.MaxUint16 - (4 + 4) - (4) - hash.ByteLen - 8 - 1
+	// implicitly checks the "last row" size that will append chunk level
+	// metadata. Key and value offsets per field are excluded from this number.
+	// (uint16) - (field count) - (content hash) - (node count) - (tree level)
+	MaxTupleDataSize ByteSize = math.MaxUint16 - 4 - hash.ByteLen - 8 - 1
 
 	countSize ByteSize = 2
 )

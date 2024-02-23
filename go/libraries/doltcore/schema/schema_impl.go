@@ -183,7 +183,8 @@ func ValidateForInsert(allCols *ColCollection) error {
 	}
 
 	if rowLen := MaxRowStorageSize(allCols); rowLen > int64(val.MaxTupleDataSize) {
-		// |val.MaxTupleDataSize| is less than |types.MaxRowLength|
+		// |val.MaxTupleDataSize| is less than |types.MaxRowLength| to account for
+		// serial message metadata
 		return analyzererrors.ErrInvalidRowLength.New(val.MaxTupleDataSize, rowLen)
 	}
 
