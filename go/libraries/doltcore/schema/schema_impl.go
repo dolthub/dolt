@@ -215,7 +215,7 @@ func ValidateForInsert(allCols *ColCollection) error {
 	return err
 }
 
-// MaxRowStorageSize returns the storage length for
+// MaxRowStorageSize returns the storage length for Dolt types.
 func MaxRowStorageSize(cols *ColCollection) int64 {
 	var numBytesPerRow int64 = 0
 	for _, col := range cols.cols {
@@ -244,6 +244,8 @@ func MaxRowStorageSize(cols *ColCollection) int64 {
 			numBytesPerRow += 16
 		case sql.YearType:
 			numBytesPerRow += 8
+		default:
+			panic(fmt.Sprintf("unknown type in create table: %s", n.String()))
 		}
 	}
 	return numBytesPerRow
