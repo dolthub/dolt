@@ -23,7 +23,6 @@ import (
 
 var SchemaOverrideTests = []queries.ScriptTest{
 	// TODO: Add more tests with different projection changes (no values, PK not at front of row, etc)
-	// TODO: Test PK changes – they should error out, right? Since we can't map those yet?
 	// TODO: Deleting a column (in the middle of a schema – or perhaps deleting multiple columns, at start, middle, and end?
 
 	// BASIC CASES
@@ -264,6 +263,82 @@ var SchemaOverrideTests = []queries.ScriptTest{
 					}, {
 						Name: "c1",
 						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					},
+				},
+			},
+		},
+	},
+
+	// PK CHANGES
+	{
+		Name: "PK Change: Adding a column to PK",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(255));",
+			"insert into t values (1, 'one');",
+			"call dolt_commit('-Am', 'adding table t on main');",
+			"SET @commit1 = hashof('HEAD');",
+
+			"alter table t add column pk2 int;",
+			"update t set pk2 = 1;",
+			"alter table t drop primary key, add primary key(pk, pk2);",
+			"insert into t values (2, 'two', 2);",
+			"call dolt_commit('-am', 'adding a column to the PK');",
+			"SET @commit2 = hashof('HEAD');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// use the first commit for our response schema (pk, c1)
+				Query:    "SET @@dolt_override_schema=@commit1;",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, "one"}, {2, "two"}},
+				ExpectedColumns: sql.Schema{
+					{
+						Name: "pk",
+						Type: gmstypes.Int32,
+					}, {
+						Name: "c1",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					},
+				},
+			},
+		},
+	},
+	{
+		Name: "PK Change: Dropping a column from PK",
+		SetUpScript: []string{
+			"create table t (pk int, c1 varchar(255), pk2 int, primary key(pk, pk2));",
+			"insert into t values (1, 'one', 1);",
+			"call dolt_commit('-Am', 'adding table t on main');",
+			"SET @commit1 = hashof('HEAD');",
+
+			"alter table t drop primary key, add primary key (pk);",
+			"alter table t drop column pk2;",
+			"insert into t values (2, 'two');",
+			"call dolt_commit('-am', 'dropping a column from the PK');",
+			"SET @commit2 = hashof('HEAD');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// use the first commit for our response schema (pk, c1)
+				Query:    "SET @@dolt_override_schema=@commit1;",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, "one", nil}, {2, "two", nil}},
+				ExpectedColumns: sql.Schema{
+					{
+						Name: "pk",
+						Type: gmstypes.Int32,
+					}, {
+						Name: "c1",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					}, {
+						Name: "pk2",
+						Type: gmstypes.Int32,
 					},
 				},
 			},
