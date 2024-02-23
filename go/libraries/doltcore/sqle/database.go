@@ -242,44 +242,7 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 		return nil, false, err
 	}
 
-	tbl, ok, err := db.getTableInsensitive(ctx, nil, ds, root, tblName)
-	if err != nil {
-		return nil, false, err
-	}
-
-	if !ok {
-		// If we didn't find the table in the data root... check if there is an overridden schema commit
-		schemaRoot, err := resolveOverriddenSchemaRoot(ctx, db)
-		if err != nil {
-			return nil, false, err
-		}
-
-		if schemaRoot != nil {
-			otherTable, _, ok, err := schemaRoot.GetTableInsensitive(ctx, tblName)
-			if err != nil {
-				return nil, false, err
-			}
-
-			if ok {
-				otherSchema, err := otherTable.GetSchema(ctx)
-				if err != nil {
-					return nil, false, err
-				}
-
-				otherSqlSchema, err := sqlutil.FromDoltSchema(db.Name(), tblName, otherSchema)
-				if err != nil {
-					return nil, false, err
-				}
-
-				emptyTable := plan.NewEmptyTableWithSchema(otherSqlSchema.Schema)
-				return emptyTable.(sql.Table), true, nil
-			}
-		}
-
-		return nil, false, nil
-	}
-
-	return tbl, true, nil
+	return db.getTableInsensitive(ctx, nil, ds, root, tblName)
 }
 
 // GetTableInsensitiveAsOf implements sql.VersionedDatabase
@@ -310,17 +273,23 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 		return table, ok, nil
 	}
 
-	versionableTable, ok := table.(dtables.VersionableTable)
-	if !ok {
+	switch t := table.(type) {
+	case dtables.VersionableTable:
+		versionedTable, err := t.LockedToRoot(ctx, root)
+		if err != nil {
+			return nil, false, err
+		}
+		return versionedTable, true, nil
+
+	case *plan.EmptyTable:
+		// getTableInsensitive returns *plan.EmptyTable if the table doesn't exist in the data root, but
+		// schemas have been locked to a commit where the table does exist. Since the table is empty,
+		// there's no need to lock it to a root.
+		return t, true, nil
+
+	default:
 		panic(fmt.Sprintf("unexpected table type %T", table))
 	}
-
-	versionedTable, err := versionableTable.LockedToRoot(ctx, root)
-
-	if err != nil {
-		return nil, false, err
-	}
-	return versionedTable, true, nil
 
 }
 
@@ -508,7 +477,17 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	}
 
 	// TODO: this should reuse the root, not lookup the db state again
-	return db.getTable(ctx, root, tblName)
+	table, found, err := db.getTable(ctx, root, tblName)
+	if err != nil {
+		return nil, false, err
+	}
+	if found {
+		return table, found, err
+	}
+
+	// If the table wasn't found in the specified data root, check if there is an overridden
+	// schema commit that contains it and return an empty table if so.
+	return resolveOverriddenNonexistentTable(ctx, tblName, db)
 }
 
 // resolveAsOf resolves given expression to a commit, if one exists.
@@ -703,86 +682,6 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 	}
 
 	return table, true, nil
-}
-
-// TODO: Should this be in another type/file? Maybe in a schema-override.go file?
-// TODO: Godocs
-func overrideSchemaForTable(ctx *sql.Context, tableName string, tbl *doltdb.Table, overriddenSchemaRoot *doltdb.RootValue) error {
-	differentTable, _, ok, err := overriddenSchemaRoot.GetTableInsensitive(ctx, tableName)
-	if err != nil {
-		return fmt.Errorf("unable to find table at overridden schema root: %s", err.Error())
-	}
-	if !ok {
-		return fmt.Errorf("unable to find table at overridden schema root")
-	}
-	overriddenSchema, err := differentTable.GetSchema(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to find table at overridden schema root: %s", err.Error())
-	}
-
-	tbl.OverrideSchema(overriddenSchema)
-	return nil
-}
-
-// TODO: Should this be in another type/file? Maybe in a schema-override.go file?
-// TODO: Godocs
-func getOverriddenSchemaValue(ctx *sql.Context) (*string, error) {
-	doltSession := dsess.DSessFromSess(ctx.Session)
-	varValue, err := doltSession.GetSessionVariable(ctx, dsess.DoltOverrideSchema)
-	if err != nil {
-		return nil, err
-	}
-
-	if varValue == nil {
-		return nil, nil
-	}
-
-	varString, ok := varValue.(string)
-	if !ok {
-		return nil, fmt.Errorf("value of %s is not a string", dsess.DoltOverrideSchema)
-	}
-
-	if varString == "" {
-		return nil, nil
-	}
-
-	return &varString, nil
-}
-
-// TODO: Should this be in another type/file? Maybe in a schema-override.go file?
-// TODO: Godocs
-func resolveOverriddenSchemaRoot(ctx *sql.Context, db Database) (*doltdb.RootValue, error) {
-	overriddenSchemaValue, err := getOverriddenSchemaValue(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if overriddenSchemaValue == nil {
-		return nil, nil
-	}
-
-	commitSpec, err := doltdb.NewCommitSpec(*overriddenSchemaValue)
-	if err != nil {
-		return nil, fmt.Errorf("invalid commit spec specified in %s: %s", dsess.DoltOverrideSchema, err.Error())
-	}
-
-	doltSession := dsess.DSessFromSess(ctx.Session)
-	headRef, err := doltSession.CWBHeadRef(ctx, db.Name())
-	if err != nil {
-		return nil, fmt.Errorf("unable to retrieve current working branch head: " + err.Error())
-	}
-
-	commit, err := db.GetDoltDB().Resolve(ctx, commitSpec, headRef)
-	if err != nil {
-		return nil, fmt.Errorf("unable to resolve schema override value: " + err.Error())
-	}
-
-	rootValue, err := commit.GetRootValue(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unable to load root value for schema override commit: " + err.Error())
-	}
-
-	return rootValue, nil
 }
 
 // newDoltTable returns a sql.Table wrapping the given underlying dolt table

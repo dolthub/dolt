@@ -418,6 +418,33 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "Table Existence: Table exists in the pinned schema commit, NOT in AS OF data commit",
+		SetUpScript: []string{
+			"create table deletedTable (pk int primary key, c1 varchar(255));",
+			"insert into deletedTable values (1, 'one');",
+			"call dolt_commit('-Am', 'adding table deletedTable on main');",
+			"SET @commit1 = hashof('HEAD');",
+
+			"drop table deletedTable;",
+			"call dolt_commit('-Am', 'deleting table deletedTable on main');",
+			"SET @commit2 = hashof('HEAD');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "SELECT * from deletedTable;",
+				ExpectedErrStr: "table not found: deletedtable",
+			},
+			{
+				Query:    "SET @@dolt_override_schema=@commit1;",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "SELECT * from deletedTable AS OF @commit2;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
 
 	// INDEXES
 	{
