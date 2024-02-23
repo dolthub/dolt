@@ -296,11 +296,8 @@ func (tb *TupleBuilder) PutSet(i int, v uint64) {
 func (tb *TupleBuilder) PutString(i int, v string) error {
 	tb.Desc.expectEncoding(i, StringEnc)
 	sz := ByteSize(len(v)) + 1
-	if newBufSize := int(tb.pos) + len(v); i == 0 && newBufSize > int(MaxTupleDataSize) {
-		return analyzererrors.ErrInvalidRowLength.New(tb.pos + sz)
-	} else if newBufSize+8 > int(MaxTupleDataSize) {
-		// >0 fields encode a key and value offset
-		return analyzererrors.ErrInvalidRowLength.New(tb.pos + sz)
+	if int(tb.pos)+len(v)+int(offsetsSize(i)) > int(MaxTupleDataSize) {
+		return analyzererrors.ErrInvalidRowLength.New(MaxTupleDataSize, int(tb.pos)+len(v)+int(offsetsSize(i)))
 	}
 	tb.ensureCapacity(sz)
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
