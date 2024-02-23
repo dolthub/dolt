@@ -23,7 +23,6 @@ import (
 
 var SchemaOverrideTests = []queries.ScriptTest{
 	// TODO: Add more tests with different projection changes (no values, PK not at front of row, etc)
-	// TODO: Deleting a column (in the middle of a schema – or perhaps deleting multiple columns, at start, middle, and end?
 
 	// BASIC CASES
 	{
@@ -217,6 +216,95 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "Basic Case: Dropping columns",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(10), c2 int NOT NULL, c3 float, c4 text, c5 int, c6 varchar(10), c7 int unsigned);",
+			"insert into t values (1, 'one', 2, 3.0, 'four', 5, 'six', 7);",
+			"call dolt_commit('-Am', 'adding table t');",
+			"SET @commit1 = hashof('HEAD');",
+
+			"alter table t drop column c5;",
+			"call dolt_commit('-am', 'dropping column c5');",
+			"SET @commit2 = hashof('HEAD');",
+
+			"alter table t drop column c2;",
+			"call dolt_commit('-am', 'dropping column c2');",
+			"SET @commit3 = hashof('HEAD');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// use @commit2 response schema (pk, c1, c2, c3, c4, c6, c7)
+				Query:    "SET @@dolt_override_schema=@commit2;",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, "one", nil, 3.0, "four", "six", uint32(7)}},
+				ExpectedColumns: sql.Schema{
+					{
+						Name: "pk",
+						Type: gmstypes.Int32,
+					}, {
+						Name: "c1",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					}, {
+						Name: "c2",
+						Type: gmstypes.Int32,
+					}, {
+						Name: "c3",
+						Type: gmstypes.Float32,
+					}, {
+						Name: "c4",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.Text, 255),
+					}, {
+						Name: "c6",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 10),
+					}, {
+						Name: "c7",
+						Type: gmstypes.Uint32,
+					},
+				},
+			},
+			{
+				// use @commit2 response schema (pk, c1, c2, c3, c4, c5, c6, c7)
+				Query:    "SET @@dolt_override_schema=@commit1;",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, "one", nil, 3.0, "four", nil, "six", uint32(7)}},
+				ExpectedColumns: sql.Schema{
+					{
+						Name: "pk",
+						Type: gmstypes.Int32,
+					}, {
+						Name: "c1",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					}, {
+						Name: "c2",
+						Type: gmstypes.Int32,
+					}, {
+						Name: "c3",
+						Type: gmstypes.Float32,
+					}, {
+						Name: "c4",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.Text, 255),
+					}, {
+						Name: "c5",
+						Type: gmstypes.Int32,
+					}, {
+						Name: "c6",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 10),
+					}, {
+						Name: "c7",
+						Type: gmstypes.Uint32,
+					},
+				},
+			},
+		},
+	},
+
 	{
 		Name: "Basic Case: Renaming a column",
 		SetUpScript: []string{
