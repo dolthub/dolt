@@ -296,7 +296,11 @@ func (tb *TupleBuilder) PutSet(i int, v uint64) {
 func (tb *TupleBuilder) PutString(i int, v string) error {
 	tb.Desc.expectEncoding(i, StringEnc)
 	sz := ByteSize(len(v)) + 1
-	if int(tb.pos)+len(v)+int(offsetsSize(i)) > int(MaxTupleDataSize) {
+	offSz := 0
+	if i > 0 {
+		offSz = 2 * int(uint16Size)
+	}
+	if int(tb.pos)+len(v)+offSz > int(MaxTupleDataSize) {
 		return analyzererrors.ErrInvalidRowLength.New(MaxTupleDataSize, int(tb.pos)+len(v)+int(offsetsSize(i)))
 	}
 	tb.ensureCapacity(sz)
