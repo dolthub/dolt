@@ -17,6 +17,7 @@ package schema
 import (
 	"errors"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
 	"strconv"
 	"strings"
 
@@ -178,6 +179,12 @@ func ValidateForInsert(allCols *ColCollection) error {
 			seenPkCol = true
 			break
 		}
+		c.TypeInfo.ToSqlType()
+	}
+
+	if rowLen := MaxRowStorageSize(allCols); rowLen > int64(val.MaxTupleDataSize) {
+		// |val.MaxTupleDataSize| is less than |types.MaxRowLength|
+		return analyzererrors.ErrInvalidRowLength.New(val.MaxTupleDataSize, rowLen)
 	}
 
 	if !seenPkCol && !FeatureFlagKeylessSchema {
@@ -206,6 +213,40 @@ func ValidateForInsert(allCols *ColCollection) error {
 	})
 
 	return err
+}
+
+// MaxRowStorageSize returns the storage length for
+func MaxRowStorageSize(cols *ColCollection) int64 {
+	var numBytesPerRow int64 = 0
+	for _, col := range cols.cols {
+		switch n := col.TypeInfo.ToSqlType().(type) {
+		case sql.NumberType:
+			numBytesPerRow += 8
+		case sql.StringType:
+			if gmstypes.IsTextBlob(n) {
+				numBytesPerRow += 20
+			} else {
+				numBytesPerRow += n.MaxByteLength()
+			}
+		case gmstypes.BitType:
+			numBytesPerRow += 8
+		case sql.DatetimeType:
+			numBytesPerRow += 8
+		case sql.DecimalType:
+			numBytesPerRow += int64(n.MaximumScale())
+		case sql.EnumType:
+			numBytesPerRow += 2
+		case gmstypes.JsonType:
+			numBytesPerRow += 20
+		case sql.NullType:
+			numBytesPerRow += 1
+		case gmstypes.TimeType:
+			numBytesPerRow += 16
+		case sql.YearType:
+			numBytesPerRow += 8
+		}
+	}
+	return numBytesPerRow
 }
 
 // isAutoIncrementKind returns true is |k| is a numeric kind.
