@@ -379,7 +379,9 @@ func FromKind(kind types.NomsKind) TypeInfo {
 	case types.PolygonKind:
 		return PolygonType
 	case types.StringKind:
-		return StringDefaultType
+		// StringKind is widely used in a way that makes invalid schemas
+		// with the max varchar length.
+		return StringSmallDefaultType
 	case types.TimestampKind:
 		return DatetimeType
 	case types.TupleKind:
