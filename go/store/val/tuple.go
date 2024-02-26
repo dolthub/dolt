@@ -15,8 +15,9 @@
 package val
 
 import (
-	"github.com/dolthub/dolt/go/store/hash"
 	"math"
+
+	"github.com/dolthub/dolt/go/store/hash"
 
 	"github.com/dolthub/dolt/go/store/pool"
 )
