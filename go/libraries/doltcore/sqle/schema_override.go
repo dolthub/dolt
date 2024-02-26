@@ -131,9 +131,15 @@ func resolveOverriddenSchemaRoot(ctx *sql.Context, db Database) (*doltdb.RootVal
 		return nil, fmt.Errorf("unable to retrieve current working branch head: " + err.Error())
 	}
 
-	commit, err := db.GetDoltDB().Resolve(ctx, commitSpec, headRef)
+	optionalCommit, err := db.GetDoltDB().Resolve(ctx, commitSpec, headRef)
 	if err != nil {
 		return nil, fmt.Errorf("unable to resolve schema override value: " + err.Error())
+	}
+
+	commit, ok := optionalCommit.ToCommit()
+	if !ok {
+		return nil, fmt.Errorf("unable to resolve schema override: "+
+			"commit '%s' is not present locally in the commit graph", optionalCommit.Addr.String())
 	}
 
 	rootValue, err := commit.GetRootValue(ctx)
