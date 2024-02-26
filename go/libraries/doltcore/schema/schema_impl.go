@@ -17,11 +17,11 @@ package schema
 import (
 	"errors"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
 	"strconv"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 

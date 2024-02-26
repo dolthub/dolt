@@ -15,9 +15,9 @@
 package val
 
 import (
-	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/store/hash"
