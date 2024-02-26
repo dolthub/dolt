@@ -247,7 +247,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	// Get a fresh session if we are reusing the engine
 	if !initializeEngine {
 		var err error
-		d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, nil)
+		d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro)
 		require.NoError(t, err)
 	}
 

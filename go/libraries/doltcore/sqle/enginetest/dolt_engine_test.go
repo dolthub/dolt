@@ -2110,7 +2110,11 @@ func TestStatsFunctions(t *testing.T) {
 	harness.configureStats = true
 	for _, test := range StatProcTests {
 		t.Run(test.Name, func(t *testing.T) {
-			enginetest.TestScript(t, harness, test)
+			// reset engine so provider statistics are clean
+			harness.engine = nil
+			e := mustNewEngine(t, harness)
+			defer e.Close()
+			enginetest.TestScriptWithEngine(t, e, harness, test)
 		})
 	}
 }

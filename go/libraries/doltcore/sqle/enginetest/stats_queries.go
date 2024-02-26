@@ -405,6 +405,69 @@ var DoltStatsIOTests = []queries.ScriptTest{
 
 var StatProcTests = []queries.ScriptTest{
 	{
+		Name: "deleting stats removes information_schema access point",
+		SetUpScript: []string{
+			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
+			"insert into xy values (0,0,0)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "analyze table xy",
+			},
+			{
+				Query:    "select count(*) from information_schema.column_statistics",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query: "call dolt_stats_drop()",
+			},
+			{
+				Query:    "select count(*) from information_schema.column_statistics",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "restart empty stats panic",
+		SetUpScript: []string{
+			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "analyze table xy",
+			},
+			{
+				Query:    "select count(*) from dolt_statistics",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "set @@GLOBAL.dolt_stats_auto_refresh_threshold = 0",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "set @@GLOBAL.dolt_stats_auto_refresh_interval = 0",
+				Expected: []sql.Row{{}},
+			},
+			{
+				// don't panic
+				Query: "call dolt_stats_restart()",
+			},
+			{
+				Query: "select sleep(.1)",
+			},
+			{
+				Query: "insert into xy values (0,0,0)",
+			},
+			{
+				Query: "select sleep(.1)",
+			},
+			{
+				Query:    "select count(*) from dolt_statistics",
+				Expected: []sql.Row{{2}},
+			},
+		},
+	},
+	{
 		Name: "basic start, status, stop loop",
 		SetUpScript: []string{
 			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
