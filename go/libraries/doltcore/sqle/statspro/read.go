@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package stats
+package statspro
 
 import (
 	"errors"
@@ -30,15 +30,31 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (*dbStats, error) {
+func loadStats(ctx *sql.Context, db dsess.SqlDatabase, statsDb Database) (*dbToStats, error) {
+
+	dSess := dsess.DSessFromSess(ctx.Session)
+
+	ddb, ok := dSess.GetDoltDB(ctx, db.Name())
+
+	branches, err := ddb.GetBranches(ctx)
+
+	for _, branch := range branches {
+		_, err := statsDb.LoadBranch(ctx, branch)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	dbStat := newDbStats(db.Name())
 
-	iter, err := dtables.NewStatsIter(ctx, m)
+	// this is a specific branch
+
+	statsDb.GetAllStats()
+	iter, err := dtables.NewStatsIter(ctx)
 	if err != nil {
 		return nil, err
 	}

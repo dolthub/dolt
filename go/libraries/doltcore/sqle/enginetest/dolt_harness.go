@@ -35,7 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/stats"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -191,7 +191,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		require.True(t, ok)
 		d.provider = doltProvider
 
-		statsPro := stats.NewProvider()
+		statsPro := statspro.NewProvider()
 		d.statsPro = statsPro
 
 		var err error
@@ -230,7 +230,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 			for i, dbName := range dbs {
 				dsessDbs[i], _ = dbCache.GetCachedRevisionDb(fmt.Sprintf("%s/main", dbName), dbName)
 			}
-			if err = statsPro.Configure(ctx, func(context.Context) (*sql.Context, error) { return d.NewSession(), nil }, bThreads, doltProvider, dsessDbs); err != nil {
+			if err = statsPro.Configure(ctx, func(context.Context) (*sql.Context, error) { return d.NewSession(), nil }, bThreads, doltProvider, dsessDbs, nil); err != nil {
 				return nil, err
 			}
 		}
@@ -242,7 +242,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	d.engine.Analyzer.Catalog.MySQLDb = mysql_db.CreateEmptyMySQLDb()
 	d.engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
 
-	d.engine.Analyzer.Catalog.StatsProvider = stats.NewProvider()
+	d.engine.Analyzer.Catalog.StatsProvider = statspro.NewProvider()
 
 	// Get a fresh session if we are reusing the engine
 	if !initializeEngine {
@@ -339,7 +339,7 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	d.closeProvider()
 	d.engine = nil
 	d.provider = nil
-	d.statsPro = stats.NewProvider()
+	d.statsPro = statspro.NewProvider()
 
 	d.branchControl = branch_control.CreateDefaultController(context.Background())
 

@@ -62,6 +62,7 @@ const (
 	DoltStatsAutoRefreshThreshold = "dolt_stats_auto_refresh_threshold"
 	DoltStatsAutoRefreshInterval  = "dolt_stats_auto_refresh_interval"
 	DoltStatsMemoryOnly           = "dolt_stats_memory_only"
+	DoltStatsBranches             = "dolt_stats_branches"
 )
 
 const URLTemplateDatabasePlaceholder = "{database}"

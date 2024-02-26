@@ -14,18 +14,15 @@
 
 package ref
 
-// StatsRefName is a dummy name, and there cannot be more than one stats ref.
-const StatsRefName = "stats"
-
 type StatsRef struct {
 	stats string
 }
 
 var _ DoltRef = StatsRef{}
 
-// NewStatsRef creates a reference to a statses list. There cannot be more than one statsRef.
-func NewStatsRef() StatsRef {
-	return StatsRef{StatsRefName}
+// NewStatsRef creates a reference to a statistic dataset head.
+func NewStatsRef(branch string) StatsRef {
+	return StatsRef{branch}
 }
 
 // GetType will return StatsRefType

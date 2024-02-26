@@ -47,11 +47,15 @@ const (
 	// DataDir is the directory internal to the DoltDir which holds the noms files.
 	DataDir = "noms"
 
+	// StatsDir is the directory in DoltDir that holds the database statistics
+	StatsDir = "stats"
+
 	ChunkJournalParam = "journal"
 )
 
 // DoltDataDir is the directory where noms files will be stored
 var DoltDataDir = filepath.Join(DoltDir, DataDir)
+var DoltStatsDir = filepath.Join(DoltDir, StatsDir)
 
 // FileFactory is a DBFactory implementation for creating local filesys backed databases
 type FileFactory struct {

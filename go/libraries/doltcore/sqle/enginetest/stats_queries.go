@@ -29,7 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/stats"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 )
 
 // fillerVarchar pushes the tree into level 3
@@ -606,8 +606,8 @@ func TestProviderReloadScriptWithEngine(t *testing.T, e enginetest.QueryEngine, 
 				t.Errorf("expected *sqle.DoltDatabaseProvider but found: %T", eng.Analyzer.Catalog.DbProvider)
 			}
 
-			newProv := stats.NewProvider()
-			err := newProv.Load(ctx, dbProv.DoltDatabases())
+			newProv := statspro.NewProvider()
+			err := newProv.Load(ctx, dbProv, nil, []string{"main"})
 			require.NoError(t, err)
 
 			eng.Analyzer.Catalog.StatsProvider = newProv

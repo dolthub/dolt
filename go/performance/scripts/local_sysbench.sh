@@ -2,7 +2,7 @@
 set -e
 set -o pipefail
 
-SYSBENCH_TEST="oltp_point_select"
+SYSBENCH_TEST="oltp_read_write"
 WORKING_DIR=`mktemp -d`
 PPROF=0
 PORT=3366
@@ -100,6 +100,10 @@ sysbench \
 
 # restart server to isolate bench run
 kill -15 "$SERVER_PID"
+
+dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_enabled = 1;"
+dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_threshold = 1"
+dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_interval = 1;"
 
 # maybe run with pprof
 if [ "$PPROF" -eq 1 ]; then

@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package stats
+package statspro
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsdb"
 	"strings"
 	"sync"
 	"time"
@@ -197,7 +198,7 @@ type indexMeta struct {
 func NewProvider() *Provider {
 	return &Provider{
 		mu:        &sync.Mutex{},
-		dbStats:   make(map[string]*dbStats),
+		statDbs:   make(map[string]Database),
 		cancelers: make(map[string]context.CancelFunc),
 		status:    make(map[string]string),
 	}
@@ -207,29 +208,30 @@ func NewProvider() *Provider {
 // Each database has its own statistics table that all tables/indexes in a db
 // share.
 type Provider struct {
-	mu             *sync.Mutex
-	latestRootAddr hash.Hash
-	dbStats        map[string]*dbStats
-	cancelers      map[string]context.CancelFunc
-	starter        sqle.InitDatabaseHook
-	status         map[string]string
+	mu *sync.Mutex
+	//latestRootAddr hash.Hash
+	//dbStats        map[string]*dbToStats
+	statDbs   map[string]Database
+	cancelers map[string]context.CancelFunc
+	starter   sqle.InitDatabaseHook
+	status    map[string]string
 }
 
 // each database has one statistics table that is a collection of the
 // table stats in the database
-type dbStats struct {
+type dbToStats struct {
 	mu                *sync.Mutex
-	db                string
+	dbName            string
 	stats             map[sql.StatQualifier]*DoltStats
-	currentMap        prolly.Map
+	statsDatabase     Database
 	latestRoot        *doltdb.RootValue
 	latestTableHashes map[string]hash.Hash
 }
 
-func newDbStats(dbName string) *dbStats {
-	return &dbStats{
+func newDbStats(dbName string) *dbToStats {
+	return &dbToStats{
 		mu:                &sync.Mutex{},
-		db:                dbName,
+		dbName:            dbName,
 		stats:             make(map[sql.StatQualifier]*DoltStats),
 		latestTableHashes: make(map[string]hash.Hash),
 	}
@@ -267,61 +269,61 @@ func (p *Provider) ThreadStatus(dbName string) string {
 	return "no active stats thread"
 }
 
-func (p *Provider) setStats(dbName string, s *dbStats) {
+func (p *Provider) setStats(dbName string, s *dbToStats) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.dbStats[dbName] = s
 	if s != nil && len(s.stats) > 0 {
-		p.status[dbName] = fmt.Sprintf("updated to hash: %s", s.currentMap.HashOf())
+		p.status[dbName] = fmt.Sprintf("updated to hash: %s", s.statsDatabase.HashOf())
 	}
 }
 
-func (p *Provider) getStats(dbName string) *dbStats {
+func (p *Provider) getStats(dbName string) *dbToStats {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	s, _ := p.dbStats[dbName]
 	return s
 }
 
-func (s *dbStats) getLatestHash(tableName string) hash.Hash {
+func (s *dbToStats) getLatestHash(tableName string) hash.Hash {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	h, _ := s.latestTableHashes[tableName]
 	return h
 }
 
-func (s *dbStats) setLatestHash(tableName string, h hash.Hash) {
+func (s *dbToStats) setLatestHash(tableName string, h hash.Hash) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.latestTableHashes[tableName] = h
 }
 
-func (s *dbStats) getCurrentMap() prolly.Map {
+func (s *dbToStats) getCurrentStatsDb() Database {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.currentMap
+	return s.statsDatabase
 }
 
-func (s *dbStats) setCurrentMap(m prolly.Map) {
+func (s *dbToStats) setCurrentStatsDb(m Database) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.currentMap = m
+	s.statsDatabase = m
 }
 
-func (s *dbStats) getIndexStats(qual sql.StatQualifier) *DoltStats {
+func (s *dbToStats) getIndexStats(qual sql.StatQualifier) *DoltStats {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	stat, _ := s.stats[qual]
 	return stat
 }
 
-func (s *dbStats) setIndexStats(qual sql.StatQualifier, stat *DoltStats) {
+func (s *dbToStats) setIndexStats(qual sql.StatQualifier, stat *DoltStats) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.stats[qual] = stat
 }
 
-func (s *dbStats) dropIndexStats(qual sql.StatQualifier) {
+func (s *dbToStats) dropIndexStats(qual sql.StatQualifier) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.stats, qual)
@@ -329,14 +331,14 @@ func (s *dbStats) dropIndexStats(qual sql.StatQualifier) {
 
 // Init scans the statistics tables, populating the |stats| attribute.
 // Statistics are not available for reading until we've finished loading.
-func (p *Provider) Load(ctx *sql.Context, dbs []dsess.SqlDatabase) error {
-	for _, db := range dbs {
-		// set map keys so concurrent orthogonal writes are OK
-		p.setStats(strings.ToLower(db.Name()), newDbStats(strings.ToLower(db.Name())))
-	}
+func (p *Provider) Load(ctx *sql.Context, pro *sqle.DoltDatabaseProvider, sf statsdb.StatsFactory, branches []string) error {
+	//for _, db := range pro.DoltDatabases() {
+	//	// set map keys so concurrent orthogonal writes are OK
+	//	p.setStats(strings.ToLower(db.Name()), newDbStats(strings.ToLower(db.Name())))
+	//}
 
 	eg, ctx := ctx.NewErrgroup()
-	for _, db := range dbs {
+	for _, db := range pro.DoltDatabases() {
 		// copy closure variables
 		dbName := strings.ToLower(db.Name())
 		db := db
@@ -353,18 +355,31 @@ func (p *Provider) Load(ctx *sql.Context, dbs []dsess.SqlDatabase) error {
 				}
 			}()
 
-			m, err := db.DbData().Ddb.GetStatistics(ctx)
-			if errors.Is(err, doltdb.ErrNoStatistics) {
-				return nil
-			} else if err != nil {
-				return err
-			}
-			if cnt, err := m.Count(); err != nil {
-				return err
-			} else if cnt == 0 {
+			fs, err := pro.FileSystemForDatabase(db.Name())
+
+			// get or create reference to stats db
+			statsDb, err := sf.Init(fs)
+			if err != nil {
+				ctx.Warn(0, err.Error())
 				return nil
 			}
-			stats, err := loadStats(ctx, db, m)
+
+			// initialize branch
+			err = statsDb.Load()
+			if err != nil {
+				ctx.Warn(0, err.Error())
+				return nil
+			}
+
+			p.statDbs[dbName] = statsDb
+
+			//m, err := db.DbData().Ddb.GetStatistics(ctx)
+			//if errors.Is(err, doltdb.ErrNoStatistics) {
+			//	return nil
+			//} else if err != nil {
+			//	return err
+			//}
+			stats, err := loadStats(ctx, db, statsDb)
 			if errors.Is(err, dtables.ErrIncompatibleVersion) {
 				ctx.Warn(0, err.Error())
 				return nil
@@ -428,7 +443,12 @@ func (p *Provider) DropDbStats(ctx *sql.Context, db string, flush bool) error {
 		if !ok {
 			return nil
 		}
-		return ddb.DropStatisics(ctx)
+
+		activeBranch, err := dSess.GetBranch()
+		if err != nil {
+			return err
+		}
+		return ddb.DropStatisics(ctx, activeBranch)
 	}
 	return nil
 }
@@ -559,7 +579,7 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 		return fmt.Errorf("database not found in session for stats update: %s", db)
 	}
 
-	prevMap := curStats.currentMap
+	prevMap := curStats.statsDatabase
 	if prevMap.KeyDesc().Count() == 0 {
 		kd, vd := schema.StatsTableDoltSchema.GetMapDescriptors()
 		prevMap, err = prolly.NewMapFromTuples(ctx, ddb.NodeStore(), kd, vd)
@@ -572,7 +592,7 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 		return err
 	}
 
-	curStats.setCurrentMap(newMap)
+	curStats.setCurrentStatsDb(newMap)
 	for k, v := range newStats {
 		curStats.setIndexStats(k, v)
 	}

@@ -223,6 +223,13 @@ func AddDoltSystemVariables() {
 			Type:    types.NewSystemIntType(dsess.DoltStatsAutoRefreshInterval, 0, 1<<10, false),
 			Default: 120,
 		},
+		{
+			Name:    dsess.DoltStatsBranches,
+			Dynamic: true,
+			Scope:   sql.SystemVariableScope_Global,
+			Type:    types.NewSystemStringType(dsess.DoltStatsBranches),
+			Default: "",
+		},
 	})
 }
 
