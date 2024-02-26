@@ -72,7 +72,7 @@ func UntypeSchema(sch schema.Schema) (schema.Schema, error) {
 	var cols []schema.Column
 	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		col.Kind = types.StringKind
-		col.TypeInfo = typeinfo.StringDefaultType
+		col.TypeInfo = typeinfo.StringSmallDefaultType
 		cols = append(cols, col)
 		return false, nil
 	})

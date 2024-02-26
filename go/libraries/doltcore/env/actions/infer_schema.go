@@ -193,7 +193,7 @@ func leastPermissiveType(strVal string, floatThreshold float64) typeinfo.TypeInf
 	if int64(len(strVal)) > typeinfo.MaxVarcharLength {
 		return typeinfo.TextType
 	} else {
-		return typeinfo.StringDefaultType
+		return typeinfo.StringSmallDefaultType
 	}
 }
 
@@ -234,7 +234,7 @@ func leastPermissiveNumericType(strVal string, floatThreshold float64) (ti typei
 
 	// use string for out of range
 	if errors.Is(err, strconv.ErrRange) {
-		return typeinfo.StringDefaultType
+		return typeinfo.StringSmallDefaultType
 	}
 
 	if err != nil {
@@ -243,7 +243,7 @@ func leastPermissiveNumericType(strVal string, floatThreshold float64) (ti typei
 
 	// handle leading zero case
 	if len(strVal) > 1 && strVal[0] == '0' {
-		return typeinfo.StringDefaultType
+		return typeinfo.StringSmallDefaultType
 	}
 
 	if i >= math.MinInt32 && i <= math.MaxInt32 {
@@ -258,7 +258,7 @@ func leastPermissiveChronoType(strVal string) typeinfo.TypeInfo {
 		return typeinfo.UnknownType
 	}
 
-	dt, err := typeinfo.StringDefaultType.ConvertToType(context.Background(), nil, typeinfo.DatetimeType, types.String(strVal))
+	dt, err := typeinfo.StringSmallDefaultType.ConvertToType(context.Background(), nil, typeinfo.DatetimeType, types.String(strVal))
 	if err == nil {
 		t := time.Time(dt.(types.Timestamp))
 		if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 {
@@ -268,7 +268,7 @@ func leastPermissiveChronoType(strVal string) typeinfo.TypeInfo {
 		return typeinfo.DatetimeType
 	}
 
-	_, err = typeinfo.StringDefaultType.ConvertToType(context.Background(), nil, typeinfo.TimeType, types.String(strVal))
+	_, err = typeinfo.StringSmallDefaultType.ConvertToType(context.Background(), nil, typeinfo.TimeType, types.String(strVal))
 	if err == nil {
 		return typeinfo.TimeType
 	}
@@ -325,7 +325,7 @@ func findCommonType(ts typeInfoSet) typeinfo.TypeInfo {
 
 	if len(ts) == 0 {
 		// use strings if all values were empty
-		return typeinfo.StringDefaultType
+		return typeinfo.StringSmallDefaultType
 	}
 
 	if len(ts) == 1 {
@@ -340,6 +340,8 @@ func findCommonType(ts typeInfoSet) typeinfo.TypeInfo {
 		return typeinfo.TextType
 	} else if setHasType(ts, typeinfo.StringDefaultType) {
 		return typeinfo.StringDefaultType
+	} else if setHasType(ts, typeinfo.StringSmallDefaultType) {
+		return typeinfo.StringSmallDefaultType
 	}
 
 	hasNumeric := false
@@ -381,7 +383,7 @@ func findCommonType(ts typeInfoSet) typeinfo.TypeInfo {
 		if setHasType(ts, nct) {
 			// types in nonChronoTypes have only string
 			// as a common type with any other type
-			return typeinfo.StringDefaultType
+			return typeinfo.StringSmallDefaultType
 		}
 	}
 

@@ -49,9 +49,10 @@ type varStringType struct {
 var _ TypeInfo = (*varStringType)(nil)
 
 var (
-	MaxVarcharLength       = int64(16383)
-	StringDefaultType      = &varStringType{gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, MaxVarcharLength)}
-	StringSmallDefaultType = &varStringType{gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, MaxVarcharLength/4)}
+	MaxVarcharLength  = int64(16383)
+	StringDefaultType = &varStringType{gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, MaxVarcharLength)}
+	// StringSmallDefaultType is about 1k per row, 16 columns per table
+	StringSmallDefaultType = &varStringType{gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, MaxVarcharLength/16)}
 )
 
 func CreateVarStringTypeFromSqlType(stringType sql.StringType) TypeInfo {

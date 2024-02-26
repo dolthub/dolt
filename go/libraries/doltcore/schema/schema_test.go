@@ -43,14 +43,14 @@ const (
 )
 
 var pkCols = []Column{
-	{Name: lnColName, Tag: lnColTag, Kind: types.StringKind, IsPartOfPK: true, TypeInfo: typeinfo.StringDefaultType},
-	{Name: fnColName, Tag: fnColTag, Kind: types.StringKind, IsPartOfPK: true, TypeInfo: typeinfo.StringDefaultType},
+	{Name: lnColName, Tag: lnColTag, Kind: types.StringKind, IsPartOfPK: true, TypeInfo: typeinfo.StringSmallDefaultType},
+	{Name: fnColName, Tag: fnColTag, Kind: types.StringKind, IsPartOfPK: true, TypeInfo: typeinfo.StringSmallDefaultType},
 }
 var nonPkCols = []Column{
 	{Name: addrColName, Tag: addrColTag, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
 	{Name: ageColName, Tag: ageColTag, Kind: types.UintKind, TypeInfo: typeinfo.FromKind(types.UintKind)},
-	{Name: titleColName, Tag: titleColTag, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
-	{Name: reservedColName, Tag: reservedColTag, Kind: types.StringKind, TypeInfo: typeinfo.StringDefaultType},
+	{Name: titleColName, Tag: titleColTag, Kind: types.StringKind, TypeInfo: typeinfo.StringSmallDefaultType},
+	{Name: reservedColName, Tag: reservedColTag, Kind: types.StringKind, TypeInfo: typeinfo.StringSmallDefaultType},
 }
 
 var allCols = append(append([]Column(nil), pkCols...), nonPkCols...)
