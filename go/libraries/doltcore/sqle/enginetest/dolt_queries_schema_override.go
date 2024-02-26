@@ -47,6 +47,13 @@ var SchemaOverrideTests = []queries.ScriptTest{
 				Expected: []sql.Row{{}},
 			},
 			{
+				Query: "describe t;",
+				Expected: []sql.Row{
+					{"pk", "int", "NO", "PRI", "NULL", ""},
+					{"c2", "varchar(255)", "YES", "", "NULL", ""},
+				},
+			},
+			{
 				Query:    "select * from t;",
 				Expected: []sql.Row{{1, nil}, {2, "two"}},
 				ExpectedColumns: sql.Schema{
@@ -867,6 +874,160 @@ var SchemaOverrideTests = []queries.ScriptTest{
 				// Insert statements work again after turning off the schema override
 				Query:    "insert into t1 values (3, NULL);",
 				Expected: []sql.Row{{gmstypes.NewOkResult(1)}},
+			},
+		},
+	},
+
+	// SYSTEM TABLE TEST CASES
+	{
+		Name: "System Tables: schema overrides do not apply to system tables",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(255));",
+			"insert into t (pk, c1) values (1, 'one');",
+			"call dolt_commit('-Am', 'adding table t on main');",
+			"SET @commit1 = hashof('HEAD');",
+
+			"alter table t drop column c1;",
+			"call dolt_commit('-am', 'dropping column c1 on main');",
+			"SET @commit2 = hashof('HEAD');",
+
+			"alter table t add column c2 varchar(255);",
+			"insert into t (pk, c2) values (2, 'two');",
+			"call dolt_commit('-am', 'adding column c2 on main');",
+			"SET @commit3 = hashof('HEAD');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// use the first commit for our schema override (pk, c1)
+				Query:    "SET @@dolt_schema_override_commit=@commit1;",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query: "select pk, commit, committer, message from dolt_blame_t;",
+				Expected: []sql.Row{
+					{1, doltCommit, "root", "dropping column c1 on main"},
+					{2, doltCommit, "root", "adding column c2 on main"},
+				},
+				ExpectedColumns: sql.Schema{
+					{
+						Name: "pk",
+						Type: gmstypes.Int32,
+					},
+					{
+						Name: "commit",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					},
+					{
+						Name: "committer",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.Text, 255),
+					},
+					{
+						Name: "message",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.Text, 255),
+					},
+				},
+			},
+			{
+				Query: "select from_pk, from_c2, to_pk, to_c2, from_commit, to_commit, diff_type from dolt_diff_t;",
+				Expected: []sql.Row{
+					{nil, nil, 2, "two", doltCommit, doltCommit, "added"},
+					{1, nil, 1, nil, doltCommit, doltCommit, "modified"},
+					{nil, nil, 1, nil, doltCommit, doltCommit, "added"},
+				},
+				ExpectedColumns: sql.Schema{
+					{
+						Name: "from_pk",
+						Type: gmstypes.Int32,
+					},
+					{
+						Name: "from_c2",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					},
+					{
+						Name: "to_pk",
+						Type: gmstypes.Int32,
+					},
+					{
+						Name: "to_c2",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					},
+					{
+						Name: "from_commit",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					},
+					{
+						Name: "to_commit",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					},
+					{
+						Name: "diff_type",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					},
+				},
+			},
+			{
+				Query: "select to_pk, to_c2, to_commit, from_pk, from_c2, from_commit, diff_type from dolt_commit_diff_t where from_commit=@commit1 and to_commit=@commit3;",
+				Expected: []sql.Row{
+					{1, nil, doltCommit, 1, nil, doltCommit, "modified"},
+					{2, "two", doltCommit, nil, nil, doltCommit, "added"},
+				},
+				ExpectedColumns: sql.Schema{
+					{
+						Name: "to_pk",
+						Type: gmstypes.Int32,
+					},
+					{
+						Name: "to_c2",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					},
+					{
+						Name: "to_commit",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					},
+					{
+						Name: "from_pk",
+						Type: gmstypes.Int32,
+					},
+					{
+						Name: "from_c2",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					},
+					{
+						Name: "from_commit",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					},
+					{
+						Name: "diff_type",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					},
+				},
+			},
+			{
+				Query: "select pk, c2, commit_hash, committer from dolt_history_t;",
+				Expected: []sql.Row{
+					{1, nil, doltCommit, "root"},
+					{2, "two", doltCommit, "root"},
+					{1, nil, doltCommit, "root"},
+					{1, nil, doltCommit, "root"},
+				},
+				ExpectedColumns: sql.Schema{
+					{
+						Name: "pk",
+						Type: gmstypes.Int32,
+					},
+					{
+						Name: "c2",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					},
+					{
+						Name: "commit_hash",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.Char, 32),
+					},
+					{
+						Name: "committer",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					},
+				},
 			},
 		},
 	},
