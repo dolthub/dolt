@@ -57,15 +57,17 @@ func CreateTagOnDB(ctx context.Context, ddb *doltdb.DoltDB, tagName, startPoint 
 	}
 
 	cs, err := doltdb.NewCommitSpec(startPoint)
-
 	if err != nil {
 		return err
 	}
 
-	cm, err := ddb.Resolve(ctx, cs, headRef)
-
+	optCmt, err := ddb.Resolve(ctx, cs, headRef)
 	if err != nil {
 		return err
+	}
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		return doltdb.ErrGhostCommitEncountered
 	}
 
 	meta := datas.NewTagMeta(props.TaggerName, props.TaggerEmail, props.Description)

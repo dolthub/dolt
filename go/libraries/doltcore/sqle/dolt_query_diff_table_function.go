@@ -199,35 +199,47 @@ func (tf *QueryDiffTableFunction) compareRows(pkOrds []int, row1, row2 sql.Row) 
 // RowIter implements the sql.Node interface
 // TODO: actually implement a row iterator
 func (tf *QueryDiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter, error) {
+	if !tf.schema1.Equals(tf.schema2) {
+		// todo: schema is currently an unreliable source of primary key columns
+		return tf.keylessRowIter()
+	}
+	return tf.pkRowIter()
+}
+
+// keylessRowIter uses the entire row for difference comparison
+func (tf *QueryDiffTableFunction) keylessRowIter() (sql.RowIter, error) {
 	var results []sql.Row
 	var newRow sql.Row
-	if !tf.schema1.Equals(tf.schema2) {
-		nilRow1, nilRow2 := make(sql.Row, len(tf.schema1)), make(sql.Row, len(tf.schema2))
-		for {
-			row, err := tf.rowIter1.Next(tf.ctx)
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			newRow = append(append(row, nilRow2...), "deleted")
-			results = append(results, newRow)
+	nilRow1, nilRow2 := make(sql.Row, len(tf.schema1)), make(sql.Row, len(tf.schema2))
+	for {
+		row, err := tf.rowIter1.Next(tf.ctx)
+		if err == io.EOF {
+			break
 		}
-		for {
-			row, err := tf.rowIter2.Next(tf.ctx)
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			newRow = append(append(nilRow1, row...), "added")
-			results = append(results, newRow)
+		if err != nil {
+			return nil, err
 		}
-		return sql.RowsToRowIter(results...), nil
+		newRow = append(append(row, nilRow2...), "deleted")
+		results = append(results, newRow)
 	}
+	for {
+		row, err := tf.rowIter2.Next(tf.ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		newRow = append(append(nilRow1, row...), "added")
+		results = append(results, newRow)
+	}
+	return sql.RowsToRowIter(results...), nil
+}
 
+// pkRowIter uses primary keys to do an efficient row comparison
+func (tf *QueryDiffTableFunction) pkRowIter() (sql.RowIter, error) {
+	var results []sql.Row
+	var newRow sql.Row
 	row1, err1 := tf.rowIter1.Next(tf.ctx)
 	row2, err2 := tf.rowIter2.Next(tf.ctx)
 	var pkOrds []int

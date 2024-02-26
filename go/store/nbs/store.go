@@ -110,6 +110,10 @@ type NomsBlockStore struct {
 	stats *Stats
 }
 
+func (nbs *NomsBlockStore) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
+	return fmt.Errorf("runtime error: PersistGhostHashes should never be called on the NomsBlockStore")
+}
+
 var _ chunks.TableFileStore = &NomsBlockStore{}
 var _ chunks.ChunkStoreGarbageCollector = &NomsBlockStore{}
 

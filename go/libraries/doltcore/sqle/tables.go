@@ -149,7 +149,7 @@ func (t *DoltTable) LockedToRoot(ctx *sql.Context, root *doltdb.RootValue) (sql.
 		return
 	})
 
-	sqlSch, err := sqlutil.FromDoltSchema("", t.tableName, sch)
+	sqlSch, err := sqlutil.FromDoltSchema(t.db.Name(), t.tableName, sch)
 	if err != nil {
 		return nil, err
 	}

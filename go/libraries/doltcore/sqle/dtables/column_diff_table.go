@@ -85,14 +85,14 @@ func (dt *ColumnDiffTable) String() string {
 // Schema is a sql.Table interface function that returns the sql.Schema for this system table.
 func (dt *ColumnDiffTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "commit_hash", Type: types.Text, Source: doltdb.ColumnDiffTableName, PrimaryKey: true},
-		{Name: "table_name", Type: types.Text, Source: doltdb.ColumnDiffTableName, PrimaryKey: true},
-		{Name: "column_name", Type: types.Text, Source: doltdb.ColumnDiffTableName, PrimaryKey: true},
-		{Name: "committer", Type: types.Text, Source: doltdb.ColumnDiffTableName, PrimaryKey: false},
-		{Name: "email", Type: types.Text, Source: doltdb.ColumnDiffTableName, PrimaryKey: false},
-		{Name: "date", Type: types.Datetime, Source: doltdb.ColumnDiffTableName, PrimaryKey: false},
-		{Name: "message", Type: types.Text, Source: doltdb.ColumnDiffTableName, PrimaryKey: false},
-		{Name: "diff_type", Type: types.Text, Source: doltdb.ColumnDiffTableName, PrimaryKey: false},
+		{Name: "commit_hash", Type: types.Text, Source: doltdb.ColumnDiffTableName, PrimaryKey: true, DatabaseSource: dt.dbName},
+		{Name: "table_name", Type: types.Text, Source: doltdb.ColumnDiffTableName, PrimaryKey: true, DatabaseSource: dt.dbName},
+		{Name: "column_name", Type: types.Text, Source: doltdb.ColumnDiffTableName, PrimaryKey: true, DatabaseSource: dt.dbName},
+		{Name: "committer", Type: types.Text, Source: doltdb.ColumnDiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "email", Type: types.Text, Source: doltdb.ColumnDiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "date", Type: types.Datetime, Source: doltdb.ColumnDiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "message", Type: types.Text, Source: doltdb.ColumnDiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "diff_type", Type: types.Text, Source: doltdb.ColumnDiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
 	}
 }
 
@@ -336,10 +336,15 @@ func (itr *doltColDiffCommitHistoryRowItr) Next(ctx *sql.Context) (sql.Row, erro
 			}
 			itr.commits = nil
 		} else if itr.child != nil {
-			_, commit, err := itr.child.Next(ctx)
+			_, optCmt, err := itr.child.Next(ctx)
 			if err != nil {
 				return nil, err
 			}
+			commit, ok := optCmt.ToCommit()
+			if !ok {
+				return nil, doltdb.ErrGhostCommitEncountered
+			}
+
 			err = itr.loadTableChanges(ctx, commit)
 			if err != nil {
 				return nil, err
@@ -409,9 +414,13 @@ func (itr *doltColDiffCommitHistoryRowItr) calculateTableChanges(ctx context.Con
 		return nil, err
 	}
 
-	parent, err := itr.ddb.ResolveParent(ctx, commit, 0)
+	optCmt, err := itr.ddb.ResolveParent(ctx, commit, 0)
 	if err != nil {
 		return nil, err
+	}
+	parent, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, doltdb.ErrGhostCommitEncountered
 	}
 
 	fromRootValue, err := parent.GetRootValue(ctx)

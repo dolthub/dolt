@@ -716,8 +716,10 @@ func mustMakeEmptyRepo(t *testing.T) *doltdb.DoltDB {
 
 func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootTbl, mergeTbl, ancTbl *doltdb.Table) (doltdb.Rootish, doltdb.Rootish, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue) {
 	mainHeadSpec, _ := doltdb.NewCommitSpec(env.DefaultInitBranch)
-	mainHead, err := ddb.Resolve(context.Background(), mainHeadSpec, nil)
+	optCmt, err := ddb.Resolve(context.Background(), mainHeadSpec, nil)
 	require.NoError(t, err)
+	mainHead, ok := optCmt.ToCommit()
+	require.True(t, ok)
 
 	mRoot, err := mainHead.GetRootValue(context.Background())
 	require.NoError(t, err)
@@ -756,8 +758,10 @@ func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootT
 	root, err := commit.GetRootValue(context.Background())
 	require.NoError(t, err)
 
-	ancCm, err := doltdb.GetCommitAncestor(context.Background(), commit, mergeCommit)
+	optCmt, err = doltdb.GetCommitAncestor(context.Background(), commit, mergeCommit)
 	require.NoError(t, err)
+	ancCm, ok := optCmt.ToCommit()
+	require.True(t, ok)
 
 	ancRoot, err := ancCm.GetRootValue(context.Background())
 	require.NoError(t, err)

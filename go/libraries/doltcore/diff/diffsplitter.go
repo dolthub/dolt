@@ -15,14 +15,10 @@
 package diff
 
 import (
-	"context"
 	"errors"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
 const (
@@ -217,30 +213,4 @@ func (ds DiffSplitter) SplitDiffResultRow(row sql.Row) (from, to RowDiff, err er
 		panic("unknown diff type " + diffType.(string))
 	}
 	return
-}
-
-// MaybeResolveRoot returns a root value and true if the a commit exists for given spec string; nil and false if it does not exist.
-// todo: distinguish between non-existent CommitSpec and other errors, don't assume non-existent
-func MaybeResolveRoot(ctx context.Context, rsr env.RepoStateReader, doltDB *doltdb.DoltDB, spec string) (*doltdb.RootValue, bool) {
-	cs, err := doltdb.NewCommitSpec(spec)
-	if err != nil {
-		// it's non-existent CommitSpec
-		return nil, false
-	}
-
-	headRef, err := rsr.CWBHeadRef()
-	if err != nil {
-		return nil, false
-	}
-	cm, err := doltDB.Resolve(ctx, cs, headRef)
-	if err != nil {
-		return nil, false
-	}
-
-	root, err := cm.GetRootValue(ctx)
-	if err != nil {
-		return nil, false
-	}
-
-	return root, true
 }

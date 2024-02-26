@@ -359,6 +359,11 @@ func (p *Provider) Load(ctx *sql.Context, dbs []dsess.SqlDatabase) error {
 			} else if err != nil {
 				return err
 			}
+			if cnt, err := m.Count(); err != nil {
+				return err
+			} else if cnt == 0 {
+				return nil
+			}
 			stats, err := loadStats(ctx, db, m)
 			if errors.Is(err, dtables.ErrIncompatibleVersion) {
 				ctx.Warn(0, err.Error())

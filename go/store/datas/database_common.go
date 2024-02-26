@@ -852,6 +852,19 @@ func assertDatasetHash(
 	return curr.(types.Ref).TargetHash().Equal(currHash), nil
 }
 
+func (db *database) PersistGhostCommitIDs(ctx context.Context, ghosts hash.HashSet) error {
+	cs := db.ChunkStore()
+
+	gcs, ok := cs.(chunks.GenerationalCS)
+	if !ok {
+		return errors.New("Generational Chunk Store expected. database does not support shallow clone instances.")
+	}
+
+	err := gcs.GhostGen().PersistGhostHashes(ctx, ghosts)
+
+	return err
+}
+
 // CommitWithWorkingSet updates two Datasets atomically: the working set, and its corresponding HEAD. Uses the same
 // global locking mechanism as UpdateWorkingSet.
 // The current dataset head will be filled in as the first parent of the new commit if not already present.

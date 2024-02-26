@@ -91,6 +91,13 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 		printWithIndendationLevel(level, ret, "\tHeadCommitAddr: #%s\n", hash.New(msg.HeadCommitAddrBytes()).String())
 		printWithIndendationLevel(level, ret, "}")
 		return ret.String()
+	case serial.StatisticFileID:
+		msg, _ := serial.TryGetRootAsStatistic(sm, serial.MessagePrefixSz)
+		ret := &strings.Builder{}
+		printWithIndendationLevel(level, ret, "{\n")
+		printWithIndendationLevel(level, ret, "\tStatsRoot: #%s\n", hash.New(msg.RootBytes()).String())
+		printWithIndendationLevel(level, ret, "}")
+		return ret.String()
 	case serial.TagFileID:
 		msg, _ := serial.TryGetRootAsTag(sm, serial.MessagePrefixSz)
 		ret := &strings.Builder{}
@@ -128,7 +135,7 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 		printWithIndendationLevel(level, ret, "\tRootValue: {\n")
 		hashes := msg.RootBytes()
 		for i := 0; i < len(hashes)/hash.ByteLen; i++ {
-			addr := hash.New(hashes[i*20 : (i+1)*20])
+			addr := hash.New(hashes[i*hash.ByteLen : (i+1)*hash.ByteLen])
 			printWithIndendationLevel(level, ret, "\t\t#%s\n", addr.String())
 		}
 		printWithIndendationLevel(level, ret, "\t}\n")
@@ -136,7 +143,7 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 		printWithIndendationLevel(level, ret, "\tParents: {\n")
 		hashes = msg.ParentAddrsBytes()
 		for i := 0; i < msg.ParentAddrsLength()/hash.ByteLen; i++ {
-			addr := hash.New(hashes[i*20 : (i+1)*20])
+			addr := hash.New(hashes[i*hash.ByteLen : (i+1)*hash.ByteLen])
 			printWithIndendationLevel(level, ret, "\t\t#%s\n", addr.String())
 		}
 		printWithIndendationLevel(level, ret, "\t}\n")
@@ -144,7 +151,7 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 		printWithIndendationLevel(level, ret, "\tParentClosure: {\n")
 		hashes = msg.ParentClosureBytes()
 		for i := 0; i < msg.ParentClosureLength()/hash.ByteLen; i++ {
-			addr := hash.New(hashes[i*20 : (i+1)*20])
+			addr := hash.New(hashes[i*hash.ByteLen : (i+1)*hash.ByteLen])
 			printWithIndendationLevel(level, ret, "\t\t#%s\n", addr.String())
 		}
 		printWithIndendationLevel(level, ret, "\t}\n")
@@ -230,7 +237,54 @@ func (sm SerialMessage) humanReadableStringAtIndentationLevel(level int) string 
 		level -= 1
 		printWithIndendationLevel(level, ret, "}\n")
 		return ret.String()
+	case serial.TableSchemaFileID:
+		msg, _ := serial.TryGetRootAsTableSchema(sm, serial.MessagePrefixSz)
+
+		// loop over columns
+		columns := msg.ColumnsLength()
+		ret := &strings.Builder{}
+		printWithIndendationLevel(level, ret, "{\n")
+		level += 1
+		printWithIndendationLevel(level, ret, "Columns: [\n")
+		level += 1
+		for i := 0; i < columns; i++ {
+			printWithIndendationLevel(level, ret, "{\n")
+			level += 1
+			col := serial.Column{}
+			ok, err := msg.TryColumns(&col, i)
+			if err != nil {
+				return fmt.Sprintf("error in HumanReadString(): %s", err)
+			}
+			if !ok {
+				return fmt.Sprintf("error in HumanReadString(): could not get column %d", i)
+			}
+
+			printWithIndendationLevel(level, ret, "Name: %s\n", col.Name())
+			printWithIndendationLevel(level, ret, "SQLType: %s\n", col.SqlType())
+			printWithIndendationLevel(level, ret, "DefaultValue: %s\n", col.DefaultValue())
+			printWithIndendationLevel(level, ret, "Comment: %s\n", col.Comment())
+			printWithIndendationLevel(level, ret, "DisplayOrder: %d\n", col.DisplayOrder())
+			printWithIndendationLevel(level, ret, "Tag: %d\n", col.Tag())
+			printWithIndendationLevel(level, ret, "Encoding: %s\n", col.Encoding())
+			printWithIndendationLevel(level, ret, "Primary Key: %t\n", col.PrimaryKey())
+			printWithIndendationLevel(level, ret, "Nullable: %t\n", col.Nullable())
+			printWithIndendationLevel(level, ret, "Auto Increment: %t\n", col.AutoIncrement())
+			printWithIndendationLevel(level, ret, "Hidden: %t\n", col.Hidden())
+			printWithIndendationLevel(level, ret, "Generated: %t\n", col.Generated())
+			printWithIndendationLevel(level, ret, "Virtual: %t\n", col.Virtual())
+			printWithIndendationLevel(level, ret, "OnUpdateValue: %s\n", col.OnUpdateValue())
+			level -= 1
+			printWithIndendationLevel(level, ret, "}\n")
+
+		}
+		level -= 1
+		printWithIndendationLevel(level, ret, "]\n")
+
+		level -= 1
+		printWithIndendationLevel(level, ret, "}")
+		return ret.String()
 	default:
+
 		return fmt.Sprintf("SerialMessage (HumanReadableString not implemented), [%v]: %s", id, strings.ToUpper(hex.EncodeToString(sm)))
 	}
 }
@@ -455,11 +509,11 @@ func SerialCommitParentAddrs(nbf *NomsBinFormat, sm SerialMessage) ([]hash.Hash,
 		return nil, err
 	}
 	addrs := msg.ParentAddrsBytes()
-	n := len(addrs) / 20
+	n := len(addrs) / hash.ByteLen
 	ret := make([]hash.Hash, n)
 	for i := 0; i < n; i++ {
-		addr := hash.New(addrs[:20])
-		addrs = addrs[20:]
+		addr := hash.New(addrs[:hash.ByteLen])
+		addrs = addrs[hash.ByteLen:]
 		ret[i] = addr
 	}
 	return ret, nil

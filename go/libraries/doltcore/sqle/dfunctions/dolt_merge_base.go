@@ -99,13 +99,22 @@ func resolveRefSpecs(ctx *sql.Context, leftSpec, rightSpec string) (left, right 
 		return nil, nil, err
 	}
 
-	left, err = doltDB.Resolve(ctx, lcs, headRef)
+	optCmt, err := doltDB.Resolve(ctx, lcs, headRef)
 	if err != nil {
 		return nil, nil, err
 	}
-	right, err = doltDB.Resolve(ctx, rcs, headRef)
+	left, ok = optCmt.ToCommit()
+	if !ok {
+		return nil, nil, doltdb.ErrGhostCommitEncountered
+	}
+
+	optCmt, err = doltDB.Resolve(ctx, rcs, headRef)
 	if err != nil {
 		return nil, nil, err
+	}
+	right, ok = optCmt.ToCommit()
+	if !ok {
+		return nil, nil, doltdb.ErrGhostCommitEncountered
 	}
 
 	return

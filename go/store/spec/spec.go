@@ -511,7 +511,7 @@ func (sp Spec) createDatabase(ctx context.Context) (datas.Database, types.ValueR
 		oldGenSt, err := nbs.NewLocalStore(ctx, newGenSt.Version(), oldgenDb, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
 		d.PanicIfError(err)
 
-		cs := nbs.NewGenerationalCS(oldGenSt, newGenSt)
+		cs := nbs.NewGenerationalCS(oldGenSt, newGenSt, nil)
 
 		ns := tree.NewNodeStore(cs)
 		vrw := types.NewValueStore(cs)

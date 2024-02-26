@@ -92,19 +92,20 @@ jobs:
           aws-region: us-west-2
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           role-duration-seconds: 3600
-      - name: Setup Go 1.x
-        uses: actions/setup-go@v3
+      - uses: actions/checkout@v3
+        if: ${{ github.event_name == 'repository_dispatch' }}
         with:
-          go-version: ^1.21
+          ref: ${{ github.event.client_payload.ref }}
+      - name: Setup Go 1.x
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          check-latest: true
         id: go
       - name: Setup Python 3.x
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
-      - uses: actions/checkout@v3
-        if: ${{ github.event_name == 'repository_dispatch' }}
-        with:
-          ref: ${{ github.event.client_payload.ref }}
       - uses: actions/checkout@v3
         if: ${{ github.event_name == 'workflow_dispatch' }}
       - uses: actions/setup-node@v3

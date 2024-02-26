@@ -176,13 +176,23 @@ func rebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, replay ReplayCommi
 		return commit, nil
 	}
 
-	allParents, err := ddb.ResolveAllParents(ctx, commit)
+	allOptParents, err := ddb.ResolveAllParents(ctx, commit)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(allParents) < 1 {
+	if len(allOptParents) < 1 {
 		panic(fmt.Sprintf("commit: %s has no parents", commitHash.String()))
+	}
+
+	// convert allOptParents to allParents
+	var allParents []*doltdb.Commit
+	for _, optParent := range allOptParents {
+		parent, ok := optParent.ToCommit()
+		if !ok {
+			return nil, doltdb.ErrGhostCommitEncountered
+		}
+		allParents = append(allParents, parent)
 	}
 
 	var allRebasedParents []*doltdb.Commit

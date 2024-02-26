@@ -113,6 +113,12 @@ type ChunkStore interface {
 	// supported.
 	StatsSummary() string
 
+	// PersistGhostHashes is used to persist a set of addresses that are known to exist, but
+	// are not currently stored here. Only the GenerationalChunkStore implementation allows use of this method, as
+	// shallow clones are only allowed in local copies currently. Note that at the application level, the only
+	// hashes which can be ghosted are commit ids, but the chunk store doesn't know what those are.
+	PersistGhostHashes(ctx context.Context, refs hash.HashSet) error
+
 	// Close tears down any resources in use by the implementation. After
 	// Close(), the ChunkStore may not be used again. It is NOT SAFE to call
 	// Close() concurrently with any other ChunkStore method; behavior is
@@ -182,6 +188,7 @@ type PrefixChunkStore interface {
 type GenerationalCS interface {
 	NewGen() ChunkStoreGarbageCollector
 	OldGen() ChunkStoreGarbageCollector
+	GhostGen() ChunkStore
 }
 
 var ErrUnsupportedOperation = errors.New("operation not supported")

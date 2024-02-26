@@ -951,6 +951,10 @@ func (dcs *DoltChunkStore) StatsSummary() string {
 	return fmt.Sprintf("CacheHits: %v", dcs.Stats().(CacheStats).CacheHits())
 }
 
+func (dcs *DoltChunkStore) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
+	panic("runtime error: PersistGhostHashes should never be called on a remote chunk store")
+}
+
 // Close tears down any resources in use by the implementation. After
 // Close(), the ChunkStore may not be used again. It is NOT SAFE to call
 // Close() concurrently with any other ChunkStore method; behavior is

@@ -41,7 +41,9 @@ func TestLog(t *testing.T) {
 	}
 
 	cs, _ := doltdb.NewCommitSpec(env.DefaultInitBranch)
-	commit, _ := dEnv.DoltDB.Resolve(context.Background(), cs, nil)
+	opt, _ := dEnv.DoltDB.Resolve(context.Background(), cs, nil)
+	commit, _ := opt.ToCommit()
+
 	meta, _ := commit.GetCommitMeta(context.Background())
 	require.Equal(t, "Bill Billerson", meta.Name)
 }
@@ -60,7 +62,8 @@ func TestLogSigterm(t *testing.T) {
 	}
 
 	cs, _ := doltdb.NewCommitSpec(env.DefaultInitBranch)
-	commit, _ := dEnv.DoltDB.Resolve(context.Background(), cs, nil)
+	optCmt, _ := dEnv.DoltDB.Resolve(context.Background(), cs, nil)
+	commit, _ := optCmt.ToCommit()
 	cMeta, _ := commit.GetCommitMeta(context.Background())
 	cHash, _ := commit.HashOf()
 

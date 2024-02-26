@@ -88,11 +88,11 @@ func (dt *LogTable) String() string {
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
 func (dt *LogTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "commit_hash", Type: types.Text, Source: doltdb.LogTableName, PrimaryKey: true},
-		{Name: "committer", Type: types.Text, Source: doltdb.LogTableName, PrimaryKey: false},
-		{Name: "email", Type: types.Text, Source: doltdb.LogTableName, PrimaryKey: false},
-		{Name: "date", Type: types.Datetime, Source: doltdb.LogTableName, PrimaryKey: false},
-		{Name: "message", Type: types.Text, Source: doltdb.LogTableName, PrimaryKey: false},
+		{Name: "commit_hash", Type: types.Text, Source: doltdb.LogTableName, PrimaryKey: true, DatabaseSource: dt.dbName},
+		{Name: "committer", Type: types.Text, Source: doltdb.LogTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "email", Type: types.Text, Source: doltdb.LogTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "date", Type: types.Datetime, Source: doltdb.LogTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "message", Type: types.Text, Source: doltdb.LogTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
 	}
 }
 
@@ -231,9 +231,15 @@ func NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) (*LogI
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
 func (itr *LogItr) Next(ctx *sql.Context) (sql.Row, error) {
-	h, cm, err := itr.child.Next(ctx)
+	h, optCmt, err := itr.child.Next(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		// Should have been caught by the commit walk.
+		return nil, doltdb.ErrGhostCommitRuntimeFailure
 	}
 
 	meta, err := cm.GetCommitMeta(ctx)

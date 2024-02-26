@@ -20,12 +20,13 @@ jobs:
       matrix:
         os: [ ubuntu-22.04 ]
     steps:
-      - name: Setup Go 1.x
-        uses: actions/setup-go@v3
-        with:
-          go-version: ^1.21
-        id: go
       - uses: actions/checkout@v3
+      - name: Setup Go 1.x
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          check-latest: true
+        id: go
       - uses: actions/setup-node@v3
         with:
           node-version: ^16

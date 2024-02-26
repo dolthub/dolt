@@ -275,7 +275,7 @@ func (s *SqlEngineTableWriter) createTable() error {
 	var pks string
 	var sep string
 	for _, i := range s.tableSchema.PkOrdinals {
-		pks += sep + s.tableSchema.Schema[i].Name
+		pks += sep + sql.QuoteIdentifier(s.tableSchema.Schema[i].Name)
 		sep = ", "
 	}
 	if len(sep) > 0 {
@@ -303,7 +303,7 @@ func (s *SqlEngineTableWriter) getInsertNode(inputChannel chan sql.Row, replace 
 	}
 	sep := ""
 	for _, col := range s.rowOperationSchema.Schema {
-		colNames += fmt.Sprintf("%s`%s`", sep, col.Name)
+		colNames += fmt.Sprintf("%s%s", sep, sql.QuoteIdentifier(col.Name))
 		values += fmt.Sprintf("%s1", sep)
 		if update {
 			duplicate += fmt.Sprintf("%s`%s` = VALUES(`%s`)", sep, col.Name, col.Name)

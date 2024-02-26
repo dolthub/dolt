@@ -58,11 +58,11 @@ func (dt *SchemaConflictsTable) String() string {
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
 func (dt *SchemaConflictsTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "table_name", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: true},
-		{Name: "base_schema", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: false},
-		{Name: "our_schema", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: false},
-		{Name: "their_schema", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: false},
-		{Name: "description", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: false},
+		{Name: "table_name", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: true, DatabaseSource: dt.dbName},
+		{Name: "base_schema", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "our_schema", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "their_schema", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "description", Type: types.Text, Source: doltdb.SchemaConflictsTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
 	}
 }
 
@@ -103,9 +103,13 @@ func (dt *SchemaConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partiti
 		return nil, errors.New("unexpected partition for schema conflicts table")
 	}
 
-	base, err := doltdb.GetCommitAncestor(ctx, p.head, p.state.Commit())
+	optCmt, err := doltdb.GetCommitAncestor(ctx, p.head, p.state.Commit())
 	if err != nil {
 		return nil, err
+	}
+	base, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, doltdb.ErrGhostCommitEncountered
 	}
 
 	baseRoot, err := base.GetRootValue(ctx)

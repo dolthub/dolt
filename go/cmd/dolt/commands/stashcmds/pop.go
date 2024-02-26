@@ -142,10 +142,17 @@ func applyStashAtIdx(ctx *sql.Context, dEnv *env.DoltEnv, curWorkingRoot *doltdb
 	if err != nil {
 		return false, err
 	}
-	parentCommit, err := dEnv.DoltDB.Resolve(ctx, headCommitSpec, headRef)
+	optCmt, err := dEnv.DoltDB.Resolve(ctx, headCommitSpec, headRef)
 	if err != nil {
 		return false, err
 	}
+	parentCommit, ok := optCmt.ToCommit()
+	if !ok {
+		// Should not be possible to get into this situation. The parent of the stashed commit
+		// Must have been present at the time it was created
+		return false, doltdb.ErrGhostCommitEncountered
+	}
+
 	parentRoot, err := parentCommit.GetRootValue(ctx)
 	if err != nil {
 		return false, err

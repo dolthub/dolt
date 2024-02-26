@@ -159,9 +159,9 @@ func (hs HashSet) Insert(hash Hash) {
 }
 
 // Has returns true if the HashSet contains hash.
-func (hs HashSet) Has(hash Hash) (has bool) {
-	_, has = hs[hash]
-	return
+func (hs HashSet) Has(hash Hash) bool {
+	_, has := hs[hash]
+	return has
 }
 
 // Remove removes hash from the HashSet.

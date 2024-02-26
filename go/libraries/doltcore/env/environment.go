@@ -274,9 +274,14 @@ func mergeStateToMergeState(ctx context.Context, mergeState *mergeState, db *dol
 		panic("Corrupted repostate. Active merge state is not valid.")
 	}
 
-	commit, err := db.Resolve(ctx, cs, nil)
+	optCmt, err := db.Resolve(ctx, cs, nil)
 	if err != nil {
 		return nil, err
+	}
+
+	commit, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, doltdb.ErrGhostCommitEncountered
 	}
 
 	pmwh := hash.Parse(mergeState.PreMergeWorking)

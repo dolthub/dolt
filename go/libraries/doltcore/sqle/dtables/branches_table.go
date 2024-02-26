@@ -92,12 +92,12 @@ func (bt *BranchesTable) Schema() sql.Schema {
 	}
 
 	columns := []*sql.Column{
-		{Name: "name", Type: types.Text, Source: tableName, PrimaryKey: true, Nullable: false},
-		{Name: "hash", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: false},
-		{Name: "latest_committer", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: true},
-		{Name: "latest_committer_email", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: true},
-		{Name: "latest_commit_date", Type: types.Datetime, Source: tableName, PrimaryKey: false, Nullable: true},
-		{Name: "latest_commit_message", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: true},
+		{Name: "name", Type: types.Text, Source: tableName, PrimaryKey: true, Nullable: false, DatabaseSource: bt.db.Name()},
+		{Name: "hash", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: false, DatabaseSource: bt.db.Name()},
+		{Name: "latest_committer", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bt.db.Name()},
+		{Name: "latest_committer_email", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bt.db.Name()},
+		{Name: "latest_commit_date", Type: types.Datetime, Source: tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bt.db.Name()},
+		{Name: "latest_commit_message", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bt.db.Name()},
 	}
 	if !bt.remote {
 		columns = append(columns, &sql.Column{Name: "remote", Type: types.Text, Source: tableName, PrimaryKey: false, Nullable: true})

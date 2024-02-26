@@ -141,10 +141,15 @@ func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEn
 		return errhand.VerboseErrorFromError(err)
 	}
 
+	depth, ok := apr.GetInt(cli.DepthFlag)
+	if !ok {
+		depth = -1
+	}
+
 	// Nil out the old Dolt env so we don't accidentally operate on the wrong database
 	dEnv = nil
 
-	err = actions.CloneRemote(ctx, srcDB, remoteName, branch, singleBranch, clonedEnv)
+	err = actions.CloneRemote(ctx, srcDB, remoteName, branch, singleBranch, depth, clonedEnv)
 	if err != nil {
 		// If we're cloning into a directory that already exists do not erase it. Otherwise
 		// make best effort to delete the directory we created.
