@@ -288,7 +288,7 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 		return t, true, nil
 
 	default:
-		panic(fmt.Sprintf("unexpected table type %T", table))
+		return nil, false, fmt.Errorf("unexpected table type %T", table)
 	}
 
 }

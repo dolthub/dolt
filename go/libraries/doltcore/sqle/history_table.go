@@ -28,7 +28,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -576,57 +575,6 @@ func (i *historyIter) Next(ctx *sql.Context) (sql.Row, error) {
 
 func (i *historyIter) Close(ctx *sql.Context) error {
 	return nil
-}
-
-// rowConverterByColName returns a function that converts a row from |srcSchema| to |targetSchema| using the
-// specified |projectedTags| and |projectedColNames|. Projected tags and projected column names are both
-// provided so that if a tag changes (such as when a column's type is changed) the mapping can fall back to
-// matching by column name.
-//
-// NOTE: This was forked from the dolt_history system table's rowConverter function, to handle the logic
-// starting to diverge for schema mapping. It would be nice to deduplicate and clean this up.
-//
-// TODO: move to another file; shouldn't be part of the history system table
-func rowConverterByColName(srcSchema, targetSchema schema.Schema, projectedTags []uint64, projectedColNames []string) func(row sql.Row) (sql.Row, error) {
-	srcIndexToTargetIndex := make(map[int]int)
-	srcIndexToTargetType := make(map[int]typeinfo.TypeInfo)
-	for i, targetColumn := range targetSchema.GetAllCols().GetColumns() {
-		sourceColumn, found := srcSchema.GetAllCols().GetByTag(targetColumn.Tag)
-		if !found {
-			sourceColumn, found = srcSchema.GetAllCols().GetByName(targetColumn.Name)
-		}
-
-		if found {
-			srcIndex := srcSchema.GetAllCols().IndexOf(sourceColumn.Name)
-			srcIndexToTargetIndex[srcIndex] = i
-			srcIndexToTargetType[srcIndex] = targetColumn.TypeInfo
-		}
-	}
-
-	return func(row sql.Row) (sql.Row, error) {
-		r := make(sql.Row, len(projectedColNames))
-		for i, tag := range projectedTags {
-			// First try to find the column in the src schema with the matching tag
-			// then fallback to a name match, since type changes will change the tag
-			srcColumn, found := srcSchema.GetAllCols().GetByTag(tag)
-			if !found {
-				srcColumn, found = srcSchema.GetAllCols().GetByName(projectedColNames[i])
-			}
-
-			if found {
-				srcIndex := srcSchema.GetAllCols().IndexOf(srcColumn.Name)
-				temp := row[srcIndex]
-
-				temp, _, err := srcIndexToTargetType[srcIndex].ToSqlType().Convert(temp)
-				if err != nil {
-					return nil, fmt.Errorf("unable to convert value to overridden schema: %s", err.Error())
-				}
-
-				r[i] = temp
-			}
-		}
-		return r, nil
-	}
 }
 
 func rowConverter(srcSchema, targetSchema sql.Schema, h hash.Hash, meta *datas.CommitMeta, projections []uint64) func(row sql.Row) sql.Row {

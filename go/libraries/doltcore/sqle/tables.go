@@ -92,6 +92,7 @@ type DoltTable struct {
 
 	opts editor.Options
 
+	// overriddenSchema is set when the @@dolt_schema_override_commit system var is in use
 	overriddenSchema schema.Schema
 }
 
@@ -358,19 +359,19 @@ func (t *DoltTable) Format() *types.NomsBinFormat {
 
 // Schema returns the schema for this table.
 func (t *DoltTable) Schema() sql.Schema {
-	// If this table has been set with a specific projection, prefer returning that as the schema. This enables
-	// rules like eraseProjections to operate correctly.
+	// If this table has been set with a specific projection, always prefer returning that as the schema. This
+	// enables rules like eraseProjections to operate correctly.
 	if t.projectedSchema != nil {
 		return t.projectedSchema
 	}
 
 	// If there is an overridden schema, prefer that next
 	if t.overriddenSchema != nil {
-		// TODO: This may need to go into the sqlSchema() function instead, otherwise code
-		//       calling sqlSchema() is going to see the wrong schema?
 		sqlSchema, err := sqlutil.FromDoltSchema(t.db.Name(), t.tableName, t.overriddenSchema)
 		if err != nil {
-			// TODO: err handling? We don't have the chance to return an error
+			// panic'ing isn't ideal, but this method doesn't allow returning an error.
+			// We could log this and return nil, but that will just cause a problem when
+			// the caller tries to use the value, so panic'ing seems appropriate.
 			panic("error converting to sql schema: " + err.Error())
 		}
 		return sqlSchema.Schema
@@ -446,14 +447,12 @@ func (t *DoltTable) RowCount(ctx *sql.Context) (uint64, bool, error) {
 }
 
 func (t *DoltTable) PrimaryKeySchema() sql.PrimaryKeySchema {
-	// TODO: Yup... this is another good sign that we need to move the logic
-	//       for overridden schemas into t.sqlSchema() instead of duplicating it
-	//       in PrimaryKeySchema() and Schema()
 	if t.overriddenSchema != nil {
-		// TODO: This may need to go into the sqlSchema() function instead, otherwise code
-		//       calling sqlSchema() is going to see the wrong schema!
 		doltSchema, err := sqlutil.FromDoltSchema(t.db.Name(), t.tableName, t.overriddenSchema)
 		if err != nil {
+			// panic'ing isn't ideal, but this method doesn't allow returning an error.
+			// We could log this and return nil, but that will just cause a problem when
+			// the caller tries to use the value, so panic'ing seems appropriate.
 			panic("error converting to sql schema: " + err.Error())
 		}
 		return doltSchema
@@ -467,31 +466,6 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 	table, err := t.DoltTable(ctx)
 	if err != nil {
 		return nil, err
-	}
-
-	var rowConvFunc func(row sql.Row) (sql.Row, error)
-
-	if t.overriddenSchema != nil {
-		// If there is a schema override, then we need to map the results
-		// from the old schema to the new schema
-		workingRoot, err := t.workingRoot(ctx)
-		if err != nil {
-			return nil, err
-		}
-		// TODO: Should we be passing workingRoot twice? Looks like the second one is supposed to be the root of HEAD?
-		somethingSomethingSchema, err := sqlutil.ToDoltSchema(ctx, workingRoot, t.Name(), t.sqlSch, workingRoot, t.Collation())
-
-		var projectedColNames []string
-		for _, tag := range t.projectedCols {
-			column, ok := t.overriddenSchema.GetAllCols().GetByTag(tag)
-			if !ok {
-				panic("uh oh! Couldn't find column with tag " + strconv.FormatUint(tag, 10))
-			}
-			projectedColNames = append(projectedColNames, column.Name)
-		}
-
-		// TODO: is "byColName" still the right name for this function? 🤔
-		rowConvFunc = rowConverterByColName(somethingSomethingSchema, t.overriddenSchema, t.projectedCols, projectedColNames)
 	}
 
 	// If we DON'T have an overridden schema, then we can pass in our projected columns as the
@@ -515,39 +489,11 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 	}
 
 	if t.overriddenSchema != nil {
-		newRowIter := mappingRowIter{
-			child:       originalRowIter,
-			rowConvFunc: rowConvFunc,
-		}
-		return &newRowIter, nil
+		return newMappingRowIter(ctx, t, originalRowIter)
 	} else {
 		return originalRowIter, err
 	}
 }
-
-type mappingRowIter struct {
-	child       sql.RowIter
-	rowConvFunc func(row sql.Row) (sql.Row, error)
-}
-
-func (m *mappingRowIter) Next(ctx *sql.Context) (sql.Row, error) {
-	next, err := m.child.Next(ctx)
-	if err != nil {
-		return next, err
-	}
-
-	if m.rowConvFunc == nil {
-		return next, nil
-	} else {
-		return m.rowConvFunc(next)
-	}
-}
-
-func (m *mappingRowIter) Close(ctx *sql.Context) error {
-	return m.child.Close(ctx)
-}
-
-var _ sql.RowIter = (*mappingRowIter)(nil)
 
 func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []uint64, partition sql.Partition) (sql.RowIter, error) {
 	switch typedPartition := partition.(type) {
@@ -1283,10 +1229,6 @@ func (t *DoltTable) WithProjections(colNames []string) sql.Table {
 	nt.projectedCols = make([]uint64, 0)
 	nt.projectedSchema = make(sql.Schema, 0)
 	sch := t.Schema()
-	// TODO: Watch out for direct use of t.sch! We should probably audit other places and put direct access of sch
-	//       behind a method call, so that we can consistently apply the overridden schema, although there are
-	//       still times when we must use the original (non-overridden) schema, so we probably need to fiture out
-	//       the right interface to make that clear.
 	schemaSchema := t.sch
 	if t.overriddenSchema != nil {
 		schemaSchema = t.overriddenSchema
@@ -1425,11 +1367,11 @@ type AlterableDoltTable struct {
 
 func (t *AlterableDoltTable) PrimaryKeySchema() sql.PrimaryKeySchema {
 	if t.overriddenSchema != nil {
-		// TODO: This may need to go into the sqlSchema() function instead, otherwise code
-		//       calling sqlSchema() is going to see the wrong schema!
 		doltSchema, err := sqlutil.FromDoltSchema(t.db.Name(), t.tableName, t.overriddenSchema)
-		// TODO: err handling?
 		if err != nil {
+			// panic'ing isn't ideal, but this method doesn't allow returning an error.
+			// We could log this and return nil, but that will just cause a problem when
+			// the caller tries to use the value, so panic'ing seems appropriate.
 			panic("error converting to sql schema: " + err.Error())
 		}
 		return doltSchema

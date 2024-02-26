@@ -220,7 +220,7 @@ func (p *DoltDatabaseProvider) Database(ctx *sql.Context, name string) (sql.Data
 		return nil, err
 	}
 
-	// If a schema override has been set, then don't allow any write operations to the database
+	// If a schema override has been set, don't allow any write operations to the database
 	if overriddenSchemaValue != nil {
 		// TODO: It would be nice if we could set a "read-only reason" for the read only database and let people know
 		//       that the database is read-only because of the @@dolt_schema_override setting and that customers need
