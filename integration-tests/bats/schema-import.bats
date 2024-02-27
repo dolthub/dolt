@@ -116,7 +116,7 @@ teardown() {
     [[ "${lines[0]}" =~ "test" ]] || false
     [[ "$output" =~ "\`pk\` int" ]] || false
     [[ "$output" =~ "\`int\` int" ]] || false
-    [[ "$output" =~ "\`string\` varchar(16383)" ]] || false
+    [[ "$output" =~ "\`string\` varchar(1023)" ]] || false
     [[ "$output" =~ "\`boolean\` tinyint" ]] || false
     [[ "$output" =~ "\`float\` float" ]] || false
     [[ "$output" =~ "\`uint\` int" ]] || false
@@ -141,7 +141,7 @@ DELIM
     [[ "${lines[0]}" =~ "test" ]] || false
     [[ "$output" =~ "\`pk\` int" ]] || false
     [[ "$output" =~ "\`int\` int" ]] || false
-    [[ "$output" =~ "\`string\` varchar(16383)" ]] || false
+    [[ "$output" =~ "\`string\` varchar(1023)" ]] || false
     [[ "$output" =~ "\`boolean\` tinyint" ]] || false
     [[ "$output" =~ "\`float\` float" ]] || false
     [[ "$output" =~ "\`uint\` int" ]] || false
@@ -201,8 +201,8 @@ DELIM
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 7 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk\` varchar(16383)" ]] || false
-    [[ "$output" =~ "\`headerOne\` varchar(16383)" ]] || false
+    [[ "$output" =~ "\`pk\` varchar(1023)" ]] || false
+    [[ "$output" =~ "\`headerOne\` varchar(1023)" ]] || false
     [[ "$output" =~ "\`headerTwo\` int" ]] || false
 }
 
@@ -227,7 +227,7 @@ DELIM
     [[ "$output" =~ "\`c3\` int" ]] || false
     [[ "$output" =~ "\`c4\` int" ]] || false
     [[ "$output" =~ "\`c5\` int" ]] || false
-    [[ "$output" =~ "\`c6\` varchar(16383)" ]] || false
+    [[ "$output" =~ "\`c6\` varchar(1023)" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
@@ -243,12 +243,12 @@ DELIM
     [ "${#lines[@]}" -eq 11 ]
     [[ "${lines[0]}" =~ "test" ]] || false
     [[ "$output" =~ "\`pk\` int" ]] || false
-    [[ "$output" =~ "\`c1\` varchar(16383)" ]] || false
-    [[ "$output" =~ "\`c2\` varchar(16383)" ]] || false
-    [[ "$output" =~ "\`c3\` varchar(16383)" ]] || false
-    [[ "$output" =~ "\`c4\` varchar(16383)" ]] || false
-    [[ "$output" =~ "\`c5\` varchar(16383)" ]] || false
-    [[ "$output" =~ "\`c6\` varchar(16383)" ]] || false
+    [[ "$output" =~ "\`c1\` varchar(1023)" ]] || false
+    [[ "$output" =~ "\`c2\` varchar(1023)" ]] || false
+    [[ "$output" =~ "\`c3\` varchar(1023)" ]] || false
+    [[ "$output" =~ "\`c4\` varchar(1023)" ]] || false
+    [[ "$output" =~ "\`c5\` varchar(1023)" ]] || false
+    [[ "$output" =~ "\`c6\` varchar(1023)" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
@@ -295,7 +295,7 @@ DELIM
 
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '+  `x` varchar(16383),' ]] || false
+    [[ "$output" =~ '+  `x` varchar(1023),' ]] || false
     [[ "$output" =~ '+  `y` float,' ]] || false
     [[ "$output" =~ '+  `z` int,' ]] || false
     # assert no columns were deleted/replaced
@@ -331,7 +331,7 @@ DELIM
 
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '+  `x` varchar(16383),' ]] || false
+    [[ "$output" =~ '+  `x` varchar(1023),' ]] || false
     [[ "$output" =~ '+  `y` float,' ]] || false
     [[ "$output" =~ '+  `z` int,' ]] || false
     # assert no columns were deleted/replaced
@@ -373,7 +373,7 @@ DELIM
 
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '-  `a` varchar(16383),' ]] || false
+    [[ "$output" =~ '-  `a` varchar(1023),' ]] || false
     [[ "$output" =~ '-  `b` float,' ]] || false
     [[ "$output" =~ '-  `c` tinyint(1),' ]] || false
     # assert no columns were added

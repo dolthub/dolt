@@ -17,7 +17,6 @@ package typeinfo
 import (
 	"context"
 	"fmt"
-	"math"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -363,7 +362,7 @@ func FromKind(kind types.NomsKind) TypeInfo {
 	case types.FloatKind:
 		return Float64Type
 	case types.InlineBlobKind:
-		return &inlineBlobType{gmstypes.MustCreateBinary(sqltypes.VarBinary, math.MaxUint16)}
+		return &inlineBlobType{gmstypes.MustCreateBinary(sqltypes.VarBinary, MaxVarcharLength/16)}
 	case types.IntKind:
 		return Int64Type
 	case types.JSONKind:

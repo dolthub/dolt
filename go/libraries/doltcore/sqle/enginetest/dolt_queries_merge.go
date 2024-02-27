@@ -3414,7 +3414,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 	{
 		Name: "regression test for bad column ordering in schema",
 		SetUpScript: []string{
-			"CREATE TABLE t (col1 enum ('A', 'B'), col2 varchar(max), primary key (col2));",
+			"CREATE TABLE t (col1 enum ('A', 'B'), col2 varchar(100), primary key (col2));",
 			"ALTER TABLE t add unique index (col1);",
 			"call DOLT_COMMIT('-Am', 'initial');",
 

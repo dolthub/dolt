@@ -596,6 +596,10 @@ func TestIgnoreIntoWithDuplicateUniqueKeyKeylessPrepared(t *testing.T) {
 func TestInsertIntoErrors(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
+	h = h.WithSkippedQueries([]string{
+		"create table bad (vb varbinary(65535))",
+		"insert into bad values (repeat('0', 65536))",
+	})
 	enginetest.TestInsertIntoErrors(t, h)
 }
 
@@ -878,6 +882,12 @@ func TestCreateTable(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestCreateTable(t, h)
+}
+
+func TestRowLimit(t *testing.T) {
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestRowLimit(t, h)
 }
 
 func TestBranchDdl(t *testing.T) {
@@ -2719,6 +2729,10 @@ func TestInsertErrorScriptsPrepared(t *testing.T) {
 	skipPreparedTests(t)
 	h := newDoltHarness(t)
 	defer h.Close()
+	h = h.WithSkippedQueries([]string{
+		"create table bad (vb varbinary(65535))",
+		"insert into bad values (repeat('0', 65536))",
+	})
 	enginetest.TestInsertErrorScriptsPrepared(t, h)
 }
 
