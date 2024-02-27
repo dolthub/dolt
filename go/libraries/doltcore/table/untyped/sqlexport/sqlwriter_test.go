@@ -43,11 +43,11 @@ func TestEndToEnd(t *testing.T) {
 	tableName := "people"
 	dropCreateStatement := sqlfmt.DropTableIfExistsStmt(tableName) + "\n" +
 		"CREATE TABLE `people` (\n" +
-		"  `id` varchar(16383) NOT NULL,\n" +
-		"  `name` varchar(16383) NOT NULL,\n" +
+		"  `id` varchar(1023) NOT NULL,\n" +
+		"  `name` varchar(1023) NOT NULL,\n" +
 		"  `age` bigint unsigned NOT NULL,\n" +
 		"  `is_married` bigint NOT NULL,\n" +
-		"  `title` varchar(16383),\n" +
+		"  `title` varchar(1023),\n" +
 		"  PRIMARY KEY (`id`),\n" +
 		"  KEY `idx_name` (`name`),\n" +
 		"  CONSTRAINT `test-check` CHECK ((`age` < 123))\n" +

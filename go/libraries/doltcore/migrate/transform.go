@@ -493,7 +493,7 @@ func migrateSchema(ctx context.Context, tableName string, existing schema.Schema
 			switch c.TypeInfo.ToSqlType().Type() {
 			case query.Type_TEXT:
 				patched = true
-				info := typeinfo.StringSmallDefaultType
+				info := typeinfo.StringDefaultType
 				cols[i], err = schema.NewColumnWithTypeInfo(c.Name, c.Tag, info, c.IsPartOfPK, c.Default, c.AutoIncrement, c.Comment, c.Constraints...)
 			case query.Type_BLOB:
 				patched = true

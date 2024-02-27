@@ -57,10 +57,12 @@ func (dt *DocsTable) String() string {
 	return doltdb.DocTableName
 }
 
+const defaultStringsLen = 16383 / 16
+
 // Schema is a sql.Table interface function that gets the sql.Schema of the dolt_docs system table.
 func (dt *DocsTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: doltdb.DocPkColumnName, Type: sqlTypes.MustCreateString(sqltypes.VarChar, 16383, sql.Collation_Default), Source: doltdb.DocTableName, PrimaryKey: true, Nullable: false},
+		{Name: doltdb.DocPkColumnName, Type: sqlTypes.MustCreateString(sqltypes.VarChar, defaultStringsLen, sql.Collation_Default), Source: doltdb.DocTableName, PrimaryKey: true, Nullable: false},
 		{Name: doltdb.DocTextColumnName, Type: sqlTypes.LongText, Source: doltdb.DocTableName, PrimaryKey: false},
 	}
 }
