@@ -364,7 +364,7 @@ func findCommonType(ts typeInfoSet) typeinfo.TypeInfo {
 	}
 
 	if hasNumeric && hasNonNumeric {
-		return typeinfo.StringDefaultType
+		return typeinfo.StringSmallDefaultType
 	}
 
 	if hasNumeric {
