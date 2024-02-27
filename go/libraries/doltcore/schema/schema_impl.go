@@ -21,7 +21,6 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
@@ -182,12 +181,6 @@ func ValidateForInsert(allCols *ColCollection) error {
 		c.TypeInfo.ToSqlType()
 	}
 
-	if rowLen := MaxRowStorageSize(allCols); rowLen > int64(val.MaxTupleDataSize) {
-		// |val.MaxTupleDataSize| is less than |types.MaxRowLength| to account for
-		// serial message metadata
-		return analyzererrors.ErrInvalidRowLength.New(val.MaxTupleDataSize, rowLen)
-	}
-
 	if !seenPkCol && !FeatureFlagKeylessSchema {
 		return ErrNoPrimaryKeyColumns
 	}
@@ -217,10 +210,10 @@ func ValidateForInsert(allCols *ColCollection) error {
 }
 
 // MaxRowStorageSize returns the storage length for Dolt types.
-func MaxRowStorageSize(cols *ColCollection) int64 {
+func MaxRowStorageSize(sch sql.Schema) int64 {
 	var numBytesPerRow int64 = 0
-	for _, col := range cols.cols {
-		switch n := col.TypeInfo.ToSqlType().(type) {
+	for _, col := range sch {
+		switch n := col.Type.(type) {
 		case sql.NumberType:
 			numBytesPerRow += 8
 		case sql.StringType:

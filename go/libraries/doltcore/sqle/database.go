@@ -18,6 +18,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
 	"io"
 	"strings"
 	"time"
@@ -88,6 +90,7 @@ var _ sql.EventDatabase = Database{}
 var _ sql.AliasedDatabase = Database{}
 var _ fulltext.Database = Database{}
 var _ rebase.RebasePlanDatabase = Database{}
+var _ sql.SchemaValidator = Database{}
 
 type ReadOnlyDatabase struct {
 	Database
@@ -121,6 +124,15 @@ func (db Database) WithBranchRevision(requestedName string, branchSpec dsess.Ses
 	db.requestedName = requestedName
 
 	return db, nil
+}
+
+func (db Database) ValidateSchema(sch sql.Schema) error {
+	if rowLen := schema.MaxRowStorageSize(sch); rowLen > int64(val.MaxTupleDataSize) {
+		// |val.MaxTupleDataSize| is less than |types.MaxRowLength| to account for
+		// serial message metadata
+		return analyzererrors.ErrInvalidRowLength.New(val.MaxTupleDataSize, rowLen)
+	}
+	return nil
 }
 
 // Revision implements dsess.RevisionDatabase
