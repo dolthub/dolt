@@ -9,7 +9,7 @@ import (
 // also need to delete/add specific chunks
 type Database interface {
 	ListStatQuals() []sql.StatQualifier
-	Load() error
+	Load(branch string) error
 	HasStat()
 	GetStat()
 	GetAllStats()

@@ -6,7 +6,7 @@ import "github.com/dolthub/go-mysql-server/sql"
 // also need to delete/add specific chunks
 type Database interface {
 	ListStatQuals() []sql.StatQualifier
-	Load() error
+	Load(string) error
 	HasStat()
 	GetStat()
 	GetAllStats()

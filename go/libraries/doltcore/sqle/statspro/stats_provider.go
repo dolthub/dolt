@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsdb"
 	"strings"
 	"sync"
 	"time"
@@ -31,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -224,7 +222,6 @@ type dbToStats struct {
 	dbName            string
 	stats             map[sql.StatQualifier]*DoltStats
 	statsDatabase     Database
-	latestRoot        *doltdb.RootValue
 	latestTableHashes map[string]hash.Hash
 }
 
@@ -327,70 +324,6 @@ func (s *dbToStats) dropIndexStats(qual sql.StatQualifier) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.stats, qual)
-}
-
-// Init scans the statistics tables, populating the |stats| attribute.
-// Statistics are not available for reading until we've finished loading.
-func (p *Provider) Load(ctx *sql.Context, pro *sqle.DoltDatabaseProvider, sf statsdb.StatsFactory, branches []string) error {
-	//for _, db := range pro.DoltDatabases() {
-	//	// set map keys so concurrent orthogonal writes are OK
-	//	p.setStats(strings.ToLower(db.Name()), newDbStats(strings.ToLower(db.Name())))
-	//}
-
-	eg, ctx := ctx.NewErrgroup()
-	for _, db := range pro.DoltDatabases() {
-		// copy closure variables
-		dbName := strings.ToLower(db.Name())
-		db := db
-		eg.Go(func() (err error) {
-			defer func() {
-				if r := recover(); r != nil {
-					if str, ok := r.(fmt.Stringer); ok {
-						err = fmt.Errorf("%w: %s", ErrFailedToLoad, str.String())
-					} else {
-						err = fmt.Errorf("%w: %v", ErrFailedToLoad, r)
-					}
-
-					return
-				}
-			}()
-
-			fs, err := pro.FileSystemForDatabase(db.Name())
-
-			// get or create reference to stats db
-			statsDb, err := sf.Init(fs)
-			if err != nil {
-				ctx.Warn(0, err.Error())
-				return nil
-			}
-
-			// initialize branch
-			err = statsDb.Load()
-			if err != nil {
-				ctx.Warn(0, err.Error())
-				return nil
-			}
-
-			p.statDbs[dbName] = statsDb
-
-			//m, err := db.DbData().Ddb.GetStatistics(ctx)
-			//if errors.Is(err, doltdb.ErrNoStatistics) {
-			//	return nil
-			//} else if err != nil {
-			//	return err
-			//}
-			stats, err := loadStats(ctx, db, statsDb)
-			if errors.Is(err, dtables.ErrIncompatibleVersion) {
-				ctx.Warn(0, err.Error())
-				return nil
-			} else if err != nil {
-				return err
-			}
-			p.setStats(dbName, stats)
-			return nil
-		})
-	}
-	return eg.Wait()
 }
 
 func (p *Provider) GetTableStats(ctx *sql.Context, db, table string) ([]sql.Statistic, error) {

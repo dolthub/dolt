@@ -2,8 +2,11 @@ package statspro
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsdb"
 	"github.com/dolthub/go-mysql-server/sql"
 	types2 "github.com/dolthub/go-mysql-server/sql/types"
@@ -57,4 +60,69 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 		pro.DropDatabaseHook = NewDropDatabaseHook(p, ctxFactory, pro.DropDatabaseHook)
 	}
 	return nil
+}
+
+// Load scans the statistics tables, populating the |stats| attribute.
+// Statistics are not available for reading until we've finished loading.
+func (p *Provider) Load(ctx *sql.Context, pro *sqle.DoltDatabaseProvider, sf statsdb.StatsFactory, branches []string) error {
+	//for _, db := range pro.DoltDatabases() {
+	//	// set map keys so concurrent orthogonal writes are OK
+	//	p.setStats(strings.ToLower(db.Name()), newDbStats(strings.ToLower(db.Name())))
+	//}
+
+	eg, ctx := ctx.NewErrgroup()
+	for _, db := range pro.DoltDatabases() {
+		// copy closure variables
+		dbName := strings.ToLower(db.Name())
+		db := db
+		eg.Go(func() (err error) {
+			defer func() {
+				if r := recover(); r != nil {
+					if str, ok := r.(fmt.Stringer); ok {
+						err = fmt.Errorf("%w: %s", ErrFailedToLoad, str.String())
+					} else {
+						err = fmt.Errorf("%w: %v", ErrFailedToLoad, r)
+					}
+
+					return
+				}
+			}()
+
+			fs, err := pro.FileSystemForDatabase(db.Name())
+
+			// get or create reference to stats db
+			statsDb, err := sf.Init(fs)
+			if err != nil {
+				ctx.Warn(0, err.Error())
+				return nil
+			}
+
+			for _, branch := range branches {
+				err = statsDb.Load(branch)
+				if err != nil {
+					ctx.Warn(0, err.Error())
+					continue
+				}
+			}
+
+			p.statDbs[dbName] = statsDb
+
+			//m, err := db.DbData().Ddb.GetStatistics(ctx)
+			//if errors.Is(err, doltdb.ErrNoStatistics) {
+			//	return nil
+			//} else if err != nil {
+			//	return err
+			//}
+			stats, err := loadStats(ctx, db, statsDb)
+			if errors.Is(err, dtables.ErrIncompatibleVersion) {
+				ctx.Warn(0, err.Error())
+				return nil
+			} else if err != nil {
+				return err
+			}
+			p.setStats(dbName, stats)
+			return nil
+		})
+	}
+	return eg.Wait()
 }
