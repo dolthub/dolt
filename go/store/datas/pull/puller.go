@@ -45,7 +45,6 @@ var ErrDBUpToDate = errors.New("the database does not need to be pulled as it's 
 var ErrIncompatibleSourceChunkStore = errors.New("the chunk store of the source database does not implement NBSCompressedChunkStore.")
 
 const (
-	maxChunkWorkers       = 2
 	outstandingTableFiles = 2
 )
 
@@ -251,6 +250,7 @@ func emitStats(s *stats, ch chan Stats) (cancel func()) {
 		defer wg.Done()
 		updateduration := 1 * time.Second
 		ticker := time.NewTicker(updateduration)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
@@ -308,6 +308,11 @@ func (p *Puller) uploadTempTableFile(ctx context.Context, tmpTblFile tempTblFile
 		_ = tmpTblFile.read.Remove()
 	}()
 
+	// So far, we've added all the bytes for the compressed chunk data.
+	// We add the remaining bytes here --- bytes for the index and the
+	// table file footer.
+	atomic.AddUint64(&p.stats.bufferedSendBytes, uint64(fileSize)-tmpTblFile.chunksLen)
+
 	// By tracking the number of bytes uploaded here,
 	// we can add bytes on to our bufferedSendBytes when
 	// we have to retry a table file write.
@@ -318,20 +323,87 @@ func (p *Puller) uploadTempTableFile(ctx context.Context, tmpTblFile tempTblFile
 			return nil, 0, err
 		}
 
-		if localUploaded == 0 {
-			// So far, we've added all the bytes for the compressed chunk data.
-			// We add the remaining bytes here --- bytes for the index and the
-			// table file footer.
-			atomic.AddUint64(&p.stats.bufferedSendBytes, uint64(fileSize)-tmpTblFile.chunksLen)
-		} else {
-			// A retry. We treat it as if what was already uploaded was rebuffered.
-			atomic.AddUint64(&p.stats.bufferedSendBytes, uint64(localUploaded))
-			localUploaded = 0
-		}
+		// If we've ever uploaded anything before, this is a retry. We
+		// treat it as if what was already uploaded was rebuffered.
+		atomic.AddUint64(&p.stats.bufferedSendBytes, uint64(localUploaded))
+		localUploaded = 0
+
 		fWithStats := countingReader{countingReader{rc, &localUploaded}, &p.stats.finishedSendBytes}
 
 		return fWithStats, uint64(fileSize), nil
 	})
+}
+
+// Upload Table Files
+//
+// This runs a goroutine to upload table files it reads off of completedTables.
+// It forwards uploaded tables to to fileIdToNumChunksCh.
+
+type manifestEntry struct {
+	fileID    string
+	numChunks int
+}
+
+func (p *Puller) uploadTableFiles(ctx context.Context, completedTables <-chan FilledWriters, fileIdToNumChunksCh chan<- manifestEntry) error {
+	for {
+		select {
+		case tblFile, ok := <-completedTables:
+			if !ok {
+				return nil
+			}
+			p.tablefileSema.Release(1)
+
+			// content length before we finish the write, which will
+			// add the index and table file footer.
+			chunksLen := tblFile.wr.ContentLength()
+
+			id, err := tblFile.wr.Finish()
+			if err != nil {
+				return err
+			}
+
+			ttf := tempTblFile{
+				id:          id,
+				read:        tblFile.wr,
+				numChunks:   tblFile.wr.ChunkCount(),
+				chunksLen:   chunksLen,
+				contentLen:  tblFile.wr.ContentLength(),
+				contentHash: tblFile.wr.GetMD5(),
+			}
+			err = p.uploadTempTableFile(ctx, ttf)
+			if err != nil {
+				return err
+			}
+
+			select {
+			case fileIdToNumChunksCh <- manifestEntry{ttf.id, ttf.numChunks}:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+// Add Table Files to Manifest
+//
+// At the end, after all table files are uploaded, we add them all to the
+// destination manifest at once.
+
+func (p *Puller) addTableFilesToManifest(ctx context.Context, fileIdToNumChunksCh <-chan manifestEntry) error {
+	fileIdToNumChunks := make(map[string]int)
+	for {
+		select {
+		case entry, ok := <-fileIdToNumChunksCh:
+			if !ok {
+				return p.sinkDBCS.(chunks.TableFileStore).AddTableFilesToManifest(ctx, fileIdToNumChunks)
+			}
+			fileIdToNumChunks[entry.fileID] = entry.numChunks
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 }
 
 func (p *Puller) processCompletedTables(ctx context.Context, completedTables <-chan FilledWriters) error {
@@ -398,35 +470,22 @@ func (p *Puller) Pull(ctx context.Context) error {
 		}
 
 		const batchSize = 64 * 1024
-		// refs are added to |visited| on first sight
-		visited := p.hashes
-		// |absent| are visited, un-batched refs
-		absent := p.hashes.Copy()
-		// |batches| are visited, un-fetched refs
-		batches := make([]hash.HashSet, 0, 64)
+		tracker := NewPullChunkTracker(ctx, p.hashes, TrackerConfig{
+			BatchSize:          batchSize,
+			HasManyThreadCount: 3,
+			Haser:              p.sinkDBCS,
+		})
 
-		for absent.Size() > 0 || len(batches) > 0 {
-			if absent.Size() >= batchSize {
-				var bb []hash.HashSet
-				absent, bb = batchNovel(absent, batchSize)
-				batches = append(batches, bb...)
-			}
-			if len(batches) == 0 {
-				batches = append(batches, absent)
-				absent = make(hash.HashSet)
-			}
-
-			b := batches[len(batches)-1]
-			batches = batches[:len(batches)-1]
-
-			b, err = p.sinkDBCS.HasMany(ctx, b)
+		for {
+			toFetch, hasMore, err := tracker.GetChunksToFetch()
 			if err != nil {
 				return err
-			} else if b.Size() == 0 {
-				continue
+			}
+			if !hasMore {
+				break
 			}
 
-			err = p.getCmp(ctx, b, absent, visited, completedTables)
+			err = p.getCmp(ctx, toFetch, tracker, completedTables)
 			if err != nil {
 				return err
 			}
@@ -460,7 +519,7 @@ func batchNovel(absent hash.HashSet, batch int) (remainder hash.HashSet, batches
 	return
 }
 
-func (p *Puller) getCmp(ctx context.Context, batch, absent, visited hash.HashSet, completedTables chan FilledWriters) error {
+func (p *Puller) getCmp(ctx context.Context, batch hash.HashSet, tracker *PullChunkTracker, completedTables chan FilledWriters) error {
 	found := make(chan nbs.CompressedChunk, 4096)
 	processed := make(chan CmpChnkAndRefs, 4096)
 
@@ -496,11 +555,7 @@ func (p *Puller) getCmp(ctx context.Context, batch, absent, visited hash.HashSet
 					return err
 				}
 				err = p.waf(chnk, func(h hash.Hash, _ bool) error {
-					if !visited.Has(h) {
-						// first sight of |h|
-						visited.Insert(h)
-						absent.Insert(h)
-					}
+					tracker.Seen(h)
 					return nil
 				})
 				if err != nil {
