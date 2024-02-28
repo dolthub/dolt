@@ -82,7 +82,7 @@ func (c ExtendedTupleComparator) Validated(types []Type) TupleComparator {
 		switch types[i].Enc {
 		case ExtendedEnc, ExtendedAddrEnc:
 			if handler == nil {
-				panic("extende encoding requires a handler")
+				panic("extended encoding requires a handler")
 			} else {
 				hasHandler = true
 			}
