@@ -25,6 +25,7 @@ import (
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/fulltext"
 	"github.com/dolthub/go-mysql-server/sql/plan"
@@ -50,6 +51,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 var ErrInvalidTableName = errors.NewKind("Invalid table name %s.")
@@ -88,6 +90,7 @@ var _ sql.EventDatabase = Database{}
 var _ sql.AliasedDatabase = Database{}
 var _ fulltext.Database = Database{}
 var _ rebase.RebasePlanDatabase = Database{}
+var _ sql.SchemaValidator = Database{}
 
 type ReadOnlyDatabase struct {
 	Database
@@ -121,6 +124,15 @@ func (db Database) WithBranchRevision(requestedName string, branchSpec dsess.Ses
 	db.requestedName = requestedName
 
 	return db, nil
+}
+
+func (db Database) ValidateSchema(sch sql.Schema) error {
+	if rowLen := schema.MaxRowStorageSize(sch); rowLen > int64(val.MaxTupleDataSize) {
+		// |val.MaxTupleDataSize| is less than |types.MaxRowLength| to account for
+		// serial message metadata
+		return analyzererrors.ErrInvalidRowLength.New(val.MaxTupleDataSize, rowLen)
+	}
+	return nil
 }
 
 // Revision implements dsess.RevisionDatabase
