@@ -16,14 +16,16 @@ package admin
 
 import (
 	"context"
+	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/nbs"
+	nomscli "github.com/dolthub/dolt/go/store/cmd/noms/util"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -70,11 +72,16 @@ func (cmd TFShellCmd) Exec(ctx context.Context, commandStr string, args []string
 	db := doltdb.HackDatasDatabaseFromDoltDB(dEnv.DoltDB)
 	cs := datas.ChunkStoreFromDatabase(db)
 	shell := nbs.NewShell(cs, func(chunkBytes []byte) string {
+		var sb strings.Builder
 		v, err := types.DecodeValue(chunks.NewChunk(chunkBytes), dEnv.DoltDB.ValueReadWriter())
 		if err != nil {
 			panic(err)
 		}
-		return v.HumanReadableString()
+		err = nomscli.OutputEncodedValue(ctx, &sb, v)
+		if err != nil {
+			panic(err)
+		}
+		return sb.String()
 	})
 	shell.Run()
 	return 0
