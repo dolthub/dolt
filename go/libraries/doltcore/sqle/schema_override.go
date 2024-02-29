@@ -121,11 +121,10 @@ func resolveOverriddenSchemaRoot(ctx *sql.Context, db Database) (*doltdb.RootVal
 		return nil, fmt.Errorf("invalid commit spec specified in %s: %s", dsess.DoltOverrideSchema, err.Error())
 	}
 
+	// Attempt to get a head ref if we can, but don't error out, if we don't. Commit and tag
+	// revision databases won't have a head ref, so it's okay to pass in nil for the head ref.
 	doltSession := dsess.DSessFromSess(ctx.Session)
-	headRef, err := doltSession.CWBHeadRef(ctx, db.Name())
-	if err != nil {
-		return nil, fmt.Errorf("unable to retrieve current working branch head: " + err.Error())
-	}
+	headRef, _ := doltSession.CWBHeadRef(ctx, db.Name())
 
 	optionalCommit, err := db.GetDoltDB().Resolve(ctx, commitSpec, headRef)
 	if err != nil {
