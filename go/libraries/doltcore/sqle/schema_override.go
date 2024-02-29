@@ -83,30 +83,24 @@ func overrideSchemaForTable(ctx *sql.Context, tableName string, tbl *doltdb.Tabl
 	return nil
 }
 
-// getOverriddenSchemaValue returns a pointer to the string value of the Dolt schema override session variable. If the
-// variable is not set (i.e. NULL or empty string) then this function returns nil so that callers can check for any
-// set value by testing against nil.
-func getOverriddenSchemaValue(ctx *sql.Context) (*string, error) {
+// getOverriddenSchemaValue returns a string value of the Dolt schema override session variable. If the
+// variable is not set (i.e. NULL or empty string) then this function returns an empty string.
+func getOverriddenSchemaValue(ctx *sql.Context) (string, error) {
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	varValue, err := doltSession.GetSessionVariable(ctx, dsess.DoltOverrideSchema)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	if varValue == nil {
-		return nil, nil
+		return "", nil
 	}
 
 	varString, ok := varValue.(string)
 	if !ok {
-		return nil, fmt.Errorf("value of %s session variable is not a string", dsess.DoltOverrideSchema)
+		return "", fmt.Errorf("value of %s session variable is not a string", dsess.DoltOverrideSchema)
 	}
-
-	if varString == "" {
-		return nil, nil
-	}
-
-	return &varString, nil
+	return varString, nil
 }
 
 // resolveOverriddenSchemaRoot loads the Dolt schema override session variable, resolves the commit reference, and
@@ -118,11 +112,11 @@ func resolveOverriddenSchemaRoot(ctx *sql.Context, db Database) (*doltdb.RootVal
 		return nil, err
 	}
 
-	if overriddenSchemaValue == nil {
+	if overriddenSchemaValue == "" {
 		return nil, nil
 	}
 
-	commitSpec, err := doltdb.NewCommitSpec(*overriddenSchemaValue)
+	commitSpec, err := doltdb.NewCommitSpec(overriddenSchemaValue)
 	if err != nil {
 		return nil, fmt.Errorf("invalid commit spec specified in %s: %s", dsess.DoltOverrideSchema, err.Error())
 	}

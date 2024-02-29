@@ -221,7 +221,7 @@ func (p *DoltDatabaseProvider) Database(ctx *sql.Context, name string) (sql.Data
 	}
 
 	// If a schema override has been set, don't allow any write operations to the database
-	if overriddenSchemaValue != nil {
+	if overriddenSchemaValue != "" {
 		// TODO: It would be nice if we could set a "read-only reason" for the read only database and let people know
 		//       that the database is read-only because of the @@dolt_schema_override setting and that customers need
 		//       to unset that session variable to get a write query to work. Otherwise it may be confusing why a
