@@ -116,7 +116,7 @@ func TestSingleQuery(t *testing.T) {
 	enginetest.TestQueryWithEngine(t, harness, engine, test)
 }
 
-func TestSchemaPinning(t *testing.T) {
+func TestSchemaOverrides(t *testing.T) {
 	tcc := &testCommitClock{}
 	cleanup := installTestCommitClock(tcc)
 	defer cleanup()

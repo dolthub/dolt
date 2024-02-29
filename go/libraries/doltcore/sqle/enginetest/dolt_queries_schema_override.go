@@ -903,6 +903,24 @@ var SchemaOverrideTests = []queries.ScriptTest{
 				Expected: []sql.Row{{}},
 			},
 			{
+				// sanity check that the schema override is working, before testing the system tables
+				Query: "select * from t;",
+				Expected: []sql.Row{
+					{1, nil},
+					{2, nil},
+				},
+				ExpectedColumns: sql.Schema{
+					{
+						Name: "pk",
+						Type: gmstypes.Int32,
+					},
+					{
+						Name: "c1",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					},
+				},
+			},
+			{
 				Query: "select pk, commit, committer, message from dolt_blame_t;",
 				Expected: []sql.Row{
 					{1, doltCommit, "root", "dropping column c1 on main"},
@@ -1025,6 +1043,25 @@ var SchemaOverrideTests = []queries.ScriptTest{
 					},
 					{
 						Name: "committer",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					},
+				},
+			},
+			{
+				// sanity check that the schema override is still working, after testing the system tables
+				// (system tables don't honor schema overrides, so we make sure they don't disable them either)
+				Query: "select * from t;",
+				Expected: []sql.Row{
+					{1, nil},
+					{2, nil},
+				},
+				ExpectedColumns: sql.Schema{
+					{
+						Name: "pk",
+						Type: gmstypes.Int32,
+					},
+					{
+						Name: "c1",
 						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
 					},
 				},
