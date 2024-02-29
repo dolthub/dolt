@@ -59,7 +59,7 @@ func TestPullChunkTracker(t *testing.T) {
 
 	t.Run("HasNoneInitial", func(t *testing.T) {
 		hs := make(hash.HashSet)
-		for i := byte(0); i < byte(10); i++ {
+		for i := byte(1); i <= byte(10); i++ {
 			var h hash.Hash
 			h[0] = i
 			hs.Insert(h)
@@ -78,7 +78,7 @@ func TestPullChunkTracker(t *testing.T) {
 		assert.False(t, ok)
 		assert.NoError(t, err)
 
-		for i := byte(0); i < byte(10); i++ {
+		for i := byte(1); i <= byte(10); i++ {
 			var h hash.Hash
 			h[1] = i
 			tracker.Seen(h)
@@ -112,6 +112,37 @@ func TestPullChunkTracker(t *testing.T) {
 		})
 		_, _, err := tracker.GetChunksToFetch()
 		assert.Error(t, err)
+		tracker.Close()
+	})
+
+	t.Run("InitialAreSeen", func(t *testing.T) {
+		hs := make(hash.HashSet)
+		for i := byte(0); i < byte(10); i++ {
+			var h hash.Hash
+			h[0] = i
+			hs.Insert(h)
+		}
+		tracker := NewPullChunkTracker(context.Background(), hs, TrackerConfig{
+			BatchSize:          64 * 1024,
+			HasManyThreadCount: 3,
+			Haser:              hasNoneHaser{},
+		})
+		hs, ok, err := tracker.GetChunksToFetch()
+		assert.Len(t, hs, 10)
+		assert.True(t, ok)
+		assert.NoError(t, err)
+
+		for i := byte(0); i < byte(10); i++ {
+			var h hash.Hash
+			h[0] = i
+			tracker.Seen(h)
+		}
+
+		hs, ok, err = tracker.GetChunksToFetch()
+		assert.Len(t, hs, 0)
+		assert.False(t, ok)
+		assert.NoError(t, err)
+
 		tracker.Close()
 	})
 }

@@ -52,6 +52,7 @@ func NewPullChunkTracker(ctx context.Context, initial hash.HashSet, cfg TrackerC
 		uncheckedCh: make(chan hash.Hash),
 		reqCh:       make(chan *trackerGetAbsentReq),
 	}
+	ret.seen.InsertAll(initial)
 	ret.wg.Add(1)
 	go func() {
 		defer ret.wg.Done()
