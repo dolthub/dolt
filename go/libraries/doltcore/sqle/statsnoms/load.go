@@ -1,74 +1,26 @@
-package statsdb
+package statsnoms
 
 import (
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
-	"github.com/dolthub/dolt/go/libraries/utils/earl"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/stats"
 	"io"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 )
 
-type NomsStatsFactory struct{}
-
-var _ StatsFactory = NomsStatsFactory{}
-
-func (sf NomsStatsFactory) Init(fs filesys.Filesys) (Database, error) {
-	absPath, err := fs.Abs(dbfactory.DoltStatsDir)
-	if err != nil {
-		return nil, err
-	}
-
-	urlStr := earl.FileUrlFromPath(filepath.ToSlash(absPath), os.PathSeparator)
-	urlObj, err := earl.Parse(urlStr)
-
-	exists, isDir := fs.Exists(dbfactory.DoltStatsDir)
-	if !exists {
-		// create it
-		dbfactory.DBFactories[urlObj.Scheme].CreateDB()
-	} else if !isDir {
-		return nil, fmt.Errorf("file exists where the dolt stats directory should be")
-	}
-
-	if urlObj.Scheme
-}
-
-/*
-
-stats 
-*/
-type NomsStats struct {
-	
-}
-
-var _ Database = (*NomsStats)(nil)
-
-func (n NomsStats) ListStatQuals() []sql.StatQualifier {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (n NomsStats) Load(branch string) error {
-	// get the ref for this branch
-	// read the map
-	// load the data
-	panic("implement me")
-}
-
-func loadStats(ctx *sql.Context, db dsess.SqlDatabase,  m prolly.Map) (map[sql.StatQualifier]*statspro.DoltStats, error) {
+func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.StatQualifier]*statspro.DoltStats, error) {
 	qualToStats := make(map[sql.StatQualifier]*statspro.DoltStats)
 
 	iter, err := dtables.NewStatsIter(ctx, m)
@@ -154,13 +106,13 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase,  m prolly.Map) (map[sql.S
 				if err != nil {
 					return nil, err
 				}
-				currentStat.fds = fds
-				currentStat.colSet = colSet
-				currentStat.updateActive()
-				dbStat.stats[currentStat.Qual] = currentStat
+				currentStat.Fds = fds
+				currentStat.ColSet = colSet
+				currentStat.UpdateActive()
+				qualToStats[currentStat.Qual] = currentStat
 			}
 
-			currentStat = NewDoltStats()
+			currentStat = statspro.NewDoltStats()
 			currentStat.Qual = qual
 			currentStat.Columns = columns
 			currentStat.LowerBound = lowerBound
@@ -174,7 +126,7 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase,  m prolly.Map) (map[sql.S
 			currentStat.Qual = qual
 		}
 
-		bucket := DoltBucket{
+		bucket := statspro.DoltBucket{
 			Chunk:         commit,
 			RowCount:      uint64(rowCount),
 			DistinctCount: uint64(distinctCount),
@@ -186,7 +138,7 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase,  m prolly.Map) (map[sql.S
 			UpperBound:    boundRow,
 		}
 
-		currentStat.active[commit] = position
+		currentStat.Active[commit] = position
 		currentStat.Histogram = append(currentStat.Histogram, bucket)
 		currentStat.RowCount += uint64(rowCount)
 		currentStat.DistinctCount += uint64(distinctCount)
@@ -203,36 +155,89 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase,  m prolly.Map) (map[sql.S
 	if err != nil {
 		return nil, err
 	}
-	currentStat.fds = fds
-	currentStat.colSet = colSet
-	currentStat.updateActive()
-	dbStat.setIndexStats(currentStat.Qual, currentStat)
-	dbStat.stats[currentStat.Qual] = currentStat
-	return dbStat, nil
+	currentStat.Fds = fds
+	currentStat.ColSet = colSet
+	currentStat.UpdateActive()
+	//dbStat.setIndexStats(currentStat.Qual, currentStat)
+	qualToStats[currentStat.Qual] = currentStat
+	return qualToStats, nil
 }
 
+func loadLowerBound(ctx *sql.Context, qual sql.StatQualifier) (sql.Row, error) {
+	dSess := dsess.DSessFromSess(ctx.Session)
+	roots, ok := dSess.GetRoots(ctx, qual.Database)
+	if !ok {
+		return nil, nil
+	}
 
-func (n NomsStats) HasStat() {
-	//TODO implement me
-	panic("implement me")
+	table, ok, err := roots.Head.GetTable(ctx, qual.Table())
+	if !ok {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	idx, err := table.GetIndexRowData(ctx, qual.Index())
+	if err != nil {
+		return nil, err
+	}
+
+	prollyMap := durable.ProllyMapFromIndex(idx)
+	keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc())
+	buffPool := prollyMap.NodeStore().Pool()
+
+	firstIter, err := prollyMap.IterOrdinalRange(ctx, 0, 1)
+	if err != nil {
+		return nil, err
+	}
+	keyBytes, _, err := firstIter.Next(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range keyBuilder.Desc.Types {
+		keyBuilder.PutRaw(i, keyBytes.GetField(i))
+	}
+
+	firstKey := keyBuilder.Build(buffPool)
+	var firstRow sql.Row
+	for i := 0; i < keyBuilder.Desc.Count(); i++ {
+		firstRow[i], err = tree.GetField(ctx, prollyMap.KeyDesc(), i, firstKey, prollyMap.NodeStore())
+		if err != nil {
+			return nil, err
+		}
+	}
+	return firstRow, nil
 }
 
-func (n NomsStats) GetStat() {
-	//TODO implement me
-	panic("implement me")
-}
+func loadFuncDeps(ctx *sql.Context, db dsess.SqlDatabase, qual sql.StatQualifier) (*sql.FuncDepSet, sql.ColSet, error) {
+	tab, ok, err := db.GetTableInsensitive(ctx, qual.Table())
+	if err != nil {
+		return nil, sql.ColSet{}, err
+	} else if !ok {
+		return nil, sql.ColSet{}, fmt.Errorf("%w: table not found: '%s'", statspro.ErrFailedToLoad, qual.Table())
+	}
 
-func (n NomsStats) GetAllStats() {
-	//TODO implement me
-	panic("implement me")
-}
+	iat, ok := tab.(sql.IndexAddressable)
+	if !ok {
+		return nil, sql.ColSet{}, fmt.Errorf("%w: table does not have indexes: '%s'", statspro.ErrFailedToLoad, qual.Table())
+	}
 
-func (n NomsStats) PutChunk() {
-	//TODO implement me
-	panic("implement me")
-}
+	indexes, err := iat.GetIndexes(ctx)
+	if err != nil {
+		return nil, sql.ColSet{}, err
+	}
 
-func (n NomsStats) DeleteChunk() {
-	//TODO implement me
-	panic("implement me")
+	var idx sql.Index
+	for _, i := range indexes {
+		if strings.EqualFold(i.ID(), qual.Index()) {
+			idx = i
+			break
+		}
+	}
+
+	if idx == nil {
+		return nil, sql.ColSet{}, fmt.Errorf("%w: index not found: '%s'", statspro.ErrFailedToLoad, qual.Index())
+	}
+
+	return stats.IndexFds(qual.Table(), tab.Schema(), idx)
 }

@@ -20,14 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
@@ -88,12 +81,12 @@ func (p *Provider) checkRefresh(ctx *sql.Context, dbName, branch string, updateT
 	// chunks. The full set of statistics for each database lands
 	// 1) in the provider's most recent set of database statistics, and
 	// 2) on disk in the database's statistics ref'd prolly.Map.
-	curStats := p.getStats(dbName)
-	if curStats == nil {
-		curStats = newDbStats(dbName)
+	//curStats := p.getStats(dbName, branch)
+	statDb, ok := p.statDbs[dbName]
+	if !ok {
+		return sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	newStats := make(map[sql.StatQualifier]*DoltStats)
 	var deletedStats []sql.StatQualifier
 	qualExists := make(map[sql.StatQualifier]bool)
 	tableExistsAndSkipped := make(map[string]bool)
@@ -101,10 +94,6 @@ func (p *Provider) checkRefresh(ctx *sql.Context, dbName, branch string, updateT
 	// important: update session references every loop
 	dSess := dsess.DSessFromSess(ctx.Session)
 	prov := dSess.Provider()
-	ddb, ok := dSess.GetDoltDB(ctx, dbName)
-	if !ok {
-		ctx.GetLogger().Debugf("statistics refresh error: database not found %s", dbName)
-	}
 
 	sqlDb, err := prov.Database(ctx, dbName)
 	if err != nil {
@@ -117,37 +106,17 @@ func (p *Provider) checkRefresh(ctx *sql.Context, dbName, branch string, updateT
 	}
 
 	for _, table := range tables {
-		sqlTable, ok, err := sqlDb.GetTableInsensitive(ctx, table)
+		sqlTable, dTab, err := p.getLatestDoltDb(ctx, table, dbName)
 		if err != nil {
 			return err
-		}
-		if !ok {
-			return fmt.Errorf("statistics refresh error: table not found %s", table)
-		}
-
-		var dTab *doltdb.Table
-		switch t := sqlTable.(type) {
-		case *sqle.AlterableDoltTable:
-			dTab, err = t.DoltTable.DoltTable(ctx)
-		case *sqle.WritableDoltTable:
-			dTab, err = t.DoltTable.DoltTable(ctx)
-		case *sqle.DoltTable:
-			dTab, err = t.DoltTable(ctx)
-		default:
-			err = fmt.Errorf("failed to unwrap dolt table from type: %T", sqlTable)
-		}
-		if err != nil {
-			ctx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
-			continue
 		}
 
 		tableHash, err := dTab.GetRowDataHash(ctx)
 		if err != nil {
-			ctx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
-			continue
+			return err
 		}
 
-		if curStats.getLatestHash(table) == tableHash {
+		if statDb.GetLatestHash(branch, table) == tableHash {
 			// no data changes since last check
 			tableExistsAndSkipped[table] = true
 			ctx.GetLogger().Debugf("statistics refresh: table hash unchanged since last check: %s", tableHash)
@@ -158,14 +127,12 @@ func (p *Provider) checkRefresh(ctx *sql.Context, dbName, branch string, updateT
 
 		iat, ok := sqlTable.(sql.IndexAddressableTable)
 		if !ok {
-			ctx.GetLogger().Debugf("statistics refresh error: table does not support indexes %s", table)
-			continue
+			return fmt.Errorf("table does not support indexes %s", table)
 		}
 
 		indexes, err := iat.GetIndexes(ctx)
 		if err != nil {
-			ctx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
-			continue
+			return err
 		}
 
 		// collect indexes and ranges to be updated
@@ -173,8 +140,8 @@ func (p *Provider) checkRefresh(ctx *sql.Context, dbName, branch string, updateT
 		for _, index := range indexes {
 			qual := sql.NewStatQualifier(dbName, table, strings.ToLower(index.ID()))
 			qualExists[qual] = true
-			curStat := curStats.getIndexStats(qual)
-			if curStat == nil {
+			curStat, ok := statDb.GetStat(branch, qual)
+			if !ok {
 				curStat = NewDoltStats()
 				curStat.Qual = qual
 
@@ -192,9 +159,9 @@ func (p *Provider) checkRefresh(ctx *sql.Context, dbName, branch string, updateT
 				ctx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
 				continue
 			}
-			curCnt := float64(len(curStat.active))
-			updateCnt := float64(len(updateMeta.updateChunks))
-			deleteCnt := float64(len(curStat.active) - len(updateMeta.preexisting))
+			curCnt := float64(len(curStat.Active))
+			updateCnt := float64(len(updateMeta.newNodes))
+			deleteCnt := float64(len(curStat.Active) - len(updateMeta.keepChunks))
 			ctx.GetLogger().Debugf("statistics current: %d, new: %d, delete: %d", int(curCnt), int(updateCnt), int(deleteCnt))
 
 			if curCnt == 0 || (deleteCnt+updateCnt)/curCnt > updateThresh {
@@ -202,129 +169,40 @@ func (p *Provider) checkRefresh(ctx *sql.Context, dbName, branch string, updateT
 				// mark index for updating
 				idxMetas = append(idxMetas, updateMeta)
 				// update lastest hash if we haven't already
-				curStats.setLatestHash(table, tableHash)
+				statDb.SetLatestHash(branch, table, tableHash)
 			}
 		}
+
 		// get new buckets for index chunks to update
-		newTableStats, err := updateStats(ctx, sqlTable, dTab, indexes, idxMetas)
-		if err != nil {
-			ctx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
-			continue
-		}
-
-		// merge new chunks with preexisting chunks
-		for _, updateMeta := range idxMetas {
-			stat := newTableStats[updateMeta.qual]
-			if stat != nil {
-				newStats[updateMeta.qual] = mergeStatUpdates(stat, updateMeta)
-			}
-		}
-	}
-
-	func() {
-		curStats.mu.Lock()
-		defer curStats.mu.Unlock()
-		for _, s := range curStats.stats {
-			// table or index delete leaves hole in stats
-			// this is separate from threshold check
-			if !tableExistsAndSkipped[s.Qual.Table()] && !qualExists[s.Qual] {
-				// only delete stats we've verified are deleted
-				deletedStats = append(deletedStats, s.Qual)
-			}
-		}
-	}()
-
-	prevMap := curStats.getCurrentStatsDb()
-	if prevMap.KeyDesc().Count() == 0 {
-		kd, vd := schema.StatsTableDoltSchema.GetMapDescriptors()
-		prevMap, err = prolly.NewMapFromTuples(ctx, ddb.NodeStore(), kd, vd)
+		newTableStats, err := createNewStatsBuckets(ctx, sqlTable, dTab, indexes, idxMetas)
 		if err != nil {
 			return err
 		}
+
+		// merge new chunks with preexisting chunks
+		// TODO move to put chunks
+		for _, updateMeta := range idxMetas {
+			stat := newTableStats[updateMeta.qual]
+			if stat != nil {
+				statDb.ReplaceChunks(ctx, branch, updateMeta.qual, updateMeta.allAddrs, updateMeta.dropChunks, stat.Histogram)
+			}
+		}
 	}
 
-	if len(deletedStats) == 0 && len(newStats) == 0 {
-		return nil
+	for _, q := range statDb.ListStatQuals(branch) {
+		// table or index delete leaves hole in stats
+		// this is separate from threshold check
+		if !tableExistsAndSkipped[q.Table()] && !qualExists[q] {
+			// only delete stats we've verified are deleted
+			deletedStats = append(deletedStats, q)
+		}
 	}
 
-	if len(deletedStats) > 0 {
-		return fmt.Errorf("statistics refresh: deleting stats %#v", deletedStats)
-	}
-	delMap, err := deleteStats(ctx, prevMap, deletedStats...)
-	if err != nil {
-		return err
-	}
+	statDb.DeleteStats(branch, deletedStats...)
 
-	newMap, err := flushStats(ctx, delMap, newStats)
-	if err != nil {
-		return err
-	}
-
-	curStats.setCurrentStatsDb(newMap)
-	for q, s := range newStats {
-		curStats.setIndexStats(q, s)
-	}
-	p.setStats(dbName, curStats)
-	err = ddb.SetStatisics(ctx, branch, newMap.HashOf())
-	if err != nil {
+	if err := statDb.Flush(ctx, branch); err != nil {
 		return err
 	}
 
 	return nil
-}
-
-func newIdxMeta(ctx *sql.Context, curStats *DoltStats, doltTable *doltdb.Table, sqlIndex sql.Index, cols []string) (indexMeta, error) {
-	var idx durable.Index
-	var err error
-	if strings.EqualFold(sqlIndex.ID(), "PRIMARY") {
-		idx, err = doltTable.GetRowData(ctx)
-	} else {
-		idx, err = doltTable.GetIndexRowData(ctx, sqlIndex.ID())
-	}
-	if err != nil {
-		return indexMeta{}, err
-	}
-
-	prollyMap := durable.ProllyMapFromIndex(idx)
-
-	// get newest histogram target level hashes
-	levelNodes, err := tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
-	if err != nil {
-		return indexMeta{}, err
-	}
-
-	var addrs []hash.Hash
-	var preservedStats []DoltBucket
-	var missingAddrs float64
-	var missingChunks []tree.Node
-	var missingOffsets [][]uint64
-	var offset uint64
-	for _, n := range levelNodes {
-		// Compare the previous histogram chunks to the newest tree chunks.
-		// Partition the newest chunks into 1) preserved or 2) missing.
-		// Missing chunks will need to be scanned on a stats update, so
-		// track the (start, end) ordinal offsets to simplify the read iter.
-		treeCnt, err := n.TreeCount()
-		if err != nil {
-			return indexMeta{}, err
-		}
-
-		addrs = append(addrs, n.HashOf())
-		if bucketIdx, ok := curStats.active[n.HashOf()]; !ok {
-			missingChunks = append(missingChunks, n)
-			missingOffsets = append(missingOffsets, []uint64{offset, offset + uint64(treeCnt)})
-			missingAddrs++
-		} else {
-			preservedStats = append(preservedStats, curStats.Histogram[bucketIdx])
-		}
-		offset += uint64(treeCnt)
-	}
-	return indexMeta{
-		qual:           curStats.Qual,
-		cols:           cols,
-		updateChunks:   missingChunks,
-		updateOrdinals: missingOffsets,
-		preexisting:    preservedStats,
-		allAddrs:       addrs,
-	}, nil
 }

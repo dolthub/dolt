@@ -2,19 +2,17 @@ package statspro
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsdb"
 	"github.com/dolthub/go-mysql-server/sql"
 	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	"strings"
 	"time"
 )
 
-func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Context) (*sql.Context, error), bThreads *sql.BackgroundThreads, pro *sqle.DoltDatabaseProvider, dbs []dsess.SqlDatabase, sf statsdb.StatsFactory) error {
+func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Context) (*sql.Context, error), bThreads *sql.BackgroundThreads, pro *sqle.DoltDatabaseProvider, dbs []dsess.SqlDatabase, sf StatsFactory) error {
 	p.SetStarter(NewInitDatabaseHook(p, ctxFactory, bThreads, nil))
 
 	if _, disabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly); disabled == int8(1) {
@@ -64,7 +62,7 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 
 // Load scans the statistics tables, populating the |stats| attribute.
 // Statistics are not available for reading until we've finished loading.
-func (p *Provider) Load(ctx *sql.Context, pro *sqle.DoltDatabaseProvider, sf statsdb.StatsFactory, branches []string) error {
+func (p *Provider) Load(ctx *sql.Context, pro *sqle.DoltDatabaseProvider, sf StatsFactory, branches []string) error {
 	//for _, db := range pro.DoltDatabases() {
 	//	// set map keys so concurrent orthogonal writes are OK
 	//	p.setStats(strings.ToLower(db.Name()), newDbStats(strings.ToLower(db.Name())))
@@ -91,14 +89,14 @@ func (p *Provider) Load(ctx *sql.Context, pro *sqle.DoltDatabaseProvider, sf sta
 			fs, err := pro.FileSystemForDatabase(db.Name())
 
 			// get or create reference to stats db
-			statsDb, err := sf.Init(fs)
+			statsDb, err := sf.Init(ctx, fs, env.GetCurrentUserHomeDir)
 			if err != nil {
 				ctx.Warn(0, err.Error())
 				return nil
 			}
 
 			for _, branch := range branches {
-				err = statsDb.Load(branch)
+				err = statsDb.Load(nil, branch)
 				if err != nil {
 					ctx.Warn(0, err.Error())
 					continue
@@ -113,14 +111,14 @@ func (p *Provider) Load(ctx *sql.Context, pro *sqle.DoltDatabaseProvider, sf sta
 			//} else if err != nil {
 			//	return err
 			//}
-			stats, err := loadStats(ctx, db, statsDb)
-			if errors.Is(err, dtables.ErrIncompatibleVersion) {
-				ctx.Warn(0, err.Error())
-				return nil
-			} else if err != nil {
-				return err
-			}
-			p.setStats(dbName, stats)
+			//stats, err := loadStats(ctx, db, statsDb)
+			//if errors.Is(err, dtables.ErrIncompatibleVersion) {
+			//	ctx.Warn(0, err.Error())
+			//	return nil
+			//} else if err != nil {
+			//	return err
+			//}
+			//p.setStats(dbName, stats)
 			return nil
 		})
 	}

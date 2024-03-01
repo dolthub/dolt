@@ -18,6 +18,7 @@ import (
 	"container/heap"
 	"context"
 	"errors"
+	"github.com/dolthub/dolt/go/store/hash"
 	"io"
 	"strings"
 	"time"
@@ -37,11 +38,11 @@ const (
 	mcvCnt       = 3
 )
 
-// updateStats builds histograms for a list of index statistic metadata.
+// createNewStatsBuckets builds histograms for a list of index statistic metadata.
 // We only read chunk ranges indicated by |indexMeta.updateOrdinals|. If
 // the returned buckets are a subset of the index the caller is responsible
 // for reconciling the difference.
-func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, indexes []sql.Index, idxMetas []indexMeta) (map[sql.StatQualifier]*DoltStats, error) {
+func createNewStatsBuckets(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, indexes []sql.Index, idxMetas []indexMeta) (map[sql.StatQualifier]*DoltStats, error) {
 	nameToIdx := make(map[string]sql.Index)
 	for _, idx := range indexes {
 		nameToIdx[strings.ToLower(idx.ID())] = idx
@@ -85,8 +86,8 @@ func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, index
 			ret[meta.qual].Types = types
 			ret[meta.qual].Qual = meta.qual
 
-			ret[meta.qual].fds = fds
-			ret[meta.qual].colSet = colSet
+			ret[meta.qual].Fds = fds
+			ret[meta.qual].ColSet = colSet
 			continue
 		}
 
@@ -96,30 +97,31 @@ func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, index
 		}
 
 		// find level if not exists
-		if len(meta.updateChunks) == 0 {
-			levelNodes, err := tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
-			if err != nil {
-				return nil, err
-			}
-			var chunks []tree.Node
-			var offsets [][]uint64
-			var offset uint64
-			for _, n := range levelNodes {
-				chunks = append(chunks, n)
-				treeCnt, err := n.TreeCount()
-				if err != nil {
-					return nil, err
-				}
-				offsets = append(offsets, []uint64{offset, offset + uint64(treeCnt)})
-				offset += uint64(treeCnt)
-			}
-			meta.updateChunks = chunks
-			meta.updateOrdinals = offsets
-		}
+		// TODO delete?
+		//if len(meta.updateChunks) == 0 {
+		//	levelNodes, err := tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
+		//	if err != nil {
+		//		return nil, err
+		//	}
+		//	var chunks []tree.Node
+		//	var offsets [][]uint64
+		//	var offset uint64
+		//	for _, n := range levelNodes {
+		//		chunks = append(chunks, n)
+		//		treeCnt, err := n.TreeCount()
+		//		if err != nil {
+		//			return nil, err
+		//		}
+		//		offsets = append(offsets, []uint64{offset, offset + uint64(treeCnt)})
+		//		offset += uint64(treeCnt)
+		//	}
+		//	meta.updateChunks = chunks
+		//	meta.updateOrdinals = offsets
+		//}
 
 		updater := newBucketBuilder(meta.qual, len(meta.cols), prollyMap.KeyDesc())
 		ret[meta.qual] = NewDoltStats()
-		ret[meta.qual].chunks = meta.allAddrs
+		ret[meta.qual].Chunks = meta.allAddrs
 		ret[meta.qual].CreatedAt = time.Now()
 		ret[meta.qual].Columns = meta.cols
 		ret[meta.qual].Types = types
@@ -127,7 +129,7 @@ func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, index
 
 		var start, stop uint64
 		// read leaf rows for each bucket
-		for i, chunk := range meta.updateChunks {
+		for i, chunk := range meta.newNodes {
 			// each node is a bucket
 			updater.newBucket()
 
@@ -166,40 +168,44 @@ func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, index
 		ret[updater.qual].DistinctCount = uint64(updater.globalDistinct)
 		ret[updater.qual].RowCount = uint64(updater.globalCount)
 		ret[updater.qual].LowerBound = firstRow
-		ret[updater.qual].fds = fds
-		ret[updater.qual].colSet = colSet
+		ret[updater.qual].Fds = fds
+		ret[updater.qual].ColSet = colSet
 	}
 	return ret, nil
 }
 
-func mergeStatUpdates(newStats *DoltStats, idxMeta indexMeta) *DoltStats {
-	if len(newStats.Histogram) == len(idxMeta.allAddrs) {
-		newStats.updateActive()
-		return newStats
-	}
-	oldHist := idxMeta.preexisting
-	var mergeHist DoltHistogram
-	newHist := newStats.Histogram
-	var i, j int
-	for _, chunkAddr := range idxMeta.allAddrs {
-		if i < len(oldHist) && oldHist[i].Chunk == chunkAddr {
-			mergeHist = append(mergeHist, oldHist[i])
+// MergeNewChunks combines a set of old and new chunks to create
+// the desired target histogram.
+func MergeNewChunks(targetHashes []hash.Hash, oldChunks, newChunks []DoltBucket) []DoltBucket {
+	var targetBuckets []DoltBucket
+	var i int // oldChunks[i]
+	var j int // newChunks[j]
+	// |targetHashes| either in |oldChunks| or |addChunks|
+	for _, c := range targetHashes {
+		if i >= len(oldChunks) || j > len(newChunks) {
+			break
+		}
+		if oldChunks[i].Chunk == c {
+			targetBuckets = append(targetBuckets, oldChunks[i])
 			i++
-		} else if j < len(newHist) && newHist[j].Chunk == chunkAddr {
-			mergeHist = append(mergeHist, newHist[j])
+		} else if newChunks[j].Chunk == c {
+			targetBuckets = append(targetBuckets, newChunks[j])
 			j++
+		} else {
+			// head of |oldChunks| will be deleted, increment
+			// to find the next valid
+			i++
 		}
 	}
-
-	if len(mergeHist) == 0 {
-		return newStats
+	for i < len(oldChunks) {
+		targetBuckets = append(targetBuckets, oldChunks[i])
+		i++
 	}
-
-	newStats.Histogram = mergeHist
-	newStats.chunks = idxMeta.allAddrs
-	newStats.updateActive()
-	newStats.updateCounts()
-	return newStats
+	for j < len(newChunks) {
+		targetBuckets = append(targetBuckets, newChunks[j])
+		j++
+	}
+	return targetBuckets
 }
 
 func firstRowForIndex(ctx *sql.Context, prollyMap prolly.Map, keyBuilder *val.TupleBuilder, prefixLen int) (sql.Row, error) {
