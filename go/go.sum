@@ -120,6 +120,10 @@ github.com/aws/aws-sdk-go-v2/service/s3 v1.11.1/go.mod h1:XLAGFrEjbvMCLvAtWLLP32
 github.com/aws/aws-sdk-go-v2/service/sso v1.3.1/go.mod h1:J3A3RGUvuCZjvSuZEcOpHDnzZP/sKbhDWV2T1EOzFIM=
 github.com/aws/aws-sdk-go-v2/service/sts v1.6.0/go.mod h1:q7o0j7d7HrJk/vr9uUt3BVRASvcU7gYZB9PUgPiByXg=
 github.com/aws/smithy-go v1.6.0/go.mod h1:SObp3lf9smib00L/v3U2eAKG8FyQ7iLrJnQiAmR5n+E=
+github.com/balacode/go-delta v0.1.0 h1:pwz4CMn06P2bIaIfAx3GSabMPwJp/Ww4if+7SgPYa3I=
+github.com/balacode/go-delta v0.1.0/go.mod h1:wLNrwTI3lHbPBvnLzqbHmA7HVVlm1u22XLvhbeA6t3o=
+github.com/balacode/zr v1.0.0 h1:MCupkEoXvrnCljc4KddiDOhR04ZLUAACgtKuo3o+9vc=
+github.com/balacode/zr v1.0.0/go.mod h1:pLeSAL3DhZ9L0JuiRkUtIX3mLOCtzBLnDhfmykbSmkE=
 github.com/bcicen/jstream v1.0.0 h1:gOi+Sn9mHrpePlENynPKA6Dra/PjLaIpqrTevhfvLAA=
 github.com/bcicen/jstream v1.0.0/go.mod h1:9ielPxqFry7Y4Tg3j4BfjPocfJ3TbsRtXOAYXYmRuAQ=
 github.com/benbjohnson/clock v1.1.0 h1:Q92kusRqC1XV2MjkWETPvjJVqKetz1OzxZB7mHJLju8=
