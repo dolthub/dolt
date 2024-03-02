@@ -17,6 +17,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsnoms"
 	"os"
 	"runtime"
 	"strconv"
@@ -180,7 +181,7 @@ func NewSqlEngine(
 		"authentication_dolt_jwt": NewAuthenticateDoltJWTPlugin(config.JwksConfig),
 	})
 
-	statsPro := statspro.NewProvider()
+	statsPro := statspro.NewProvider(pro, statsnoms.NewNomsStatsFactory(mrEnv.RemoteDialProvider()))
 	engine.Analyzer.Catalog.StatsProvider = statsPro
 
 	engine.Analyzer.ExecBuilder = rowexec.DefaultBuilder
@@ -192,7 +193,7 @@ func NewSqlEngine(
 
 	// configuring stats depends on sessionBuilder
 	// sessionBuilder needs ref to statsProv
-	if err = statsPro.Configure(ctx, sqlEngine.NewDefaultContext, bThreads, pro, dbs, nil); err != nil {
+	if err = statsPro.Configure(ctx, sqlEngine.NewDefaultContext, bThreads, dbs); err != nil {
 		fmt.Fprintln(cli.CliErr, err)
 	}
 

@@ -34,5 +34,5 @@ type StatsFactory interface {
 	// Init gets a reference to the stats database for a dolt database
 	// rooted at the given filesystem. It will create the database if
 	// it does not exist.
-	Init(ctx context.Context, fs filesys.Filesys, hdp env.HomeDirProvider) (Database, error)
+	Init(ctx context.Context, fs filesys.Filesys, urlPath string, hdp env.HomeDirProvider) (Database, error)
 }

@@ -16,6 +16,9 @@ package enginetest
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsnoms"
 	"strings"
 	"testing"
 
@@ -606,8 +609,10 @@ func TestProviderReloadScriptWithEngine(t *testing.T, e enginetest.QueryEngine, 
 				t.Errorf("expected *sqle.DoltDatabaseProvider but found: %T", eng.Analyzer.Catalog.DbProvider)
 			}
 
-			newProv := statspro.NewProvider()
-			err := newProv.Load(ctx, dbProv, nil, []string{"main"})
+			dialProv := env.NewGRPCDialProviderFromDoltEnv(dtestutils.CreateTestEnv())
+			newProv := statspro.NewProvider(dbProv, statsnoms.NewNomsStatsFactory(dialProv))
+
+			err := newProv.Load(ctx, []string{"main"})
 			require.NoError(t, err)
 
 			eng.Analyzer.Catalog.StatsProvider = newProv

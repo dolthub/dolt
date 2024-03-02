@@ -41,8 +41,10 @@ type indexMeta struct {
 	allAddrs       []hash.Hash
 }
 
-func NewProvider() *Provider {
+func NewProvider(pro *sqle.DoltDatabaseProvider, sf StatsFactory) *Provider {
 	return &Provider{
+		pro:       pro,
+		sf:        sf,
 		mu:        &sync.Mutex{},
 		statDbs:   make(map[string]Database),
 		cancelers: make(map[string]context.CancelFunc),
@@ -54,7 +56,9 @@ func NewProvider() *Provider {
 // Each database has its own statistics table that all tables/indexes in a db
 // share.
 type Provider struct {
-	mu *sync.Mutex
+	mu  *sync.Mutex
+	pro *sqle.DoltDatabaseProvider
+	sf  StatsFactory
 	//latestRootAddr hash.Hash
 	//dbStats        map[string]*dbToStats
 	statDbs   map[string]Database
@@ -115,6 +119,18 @@ func (p *Provider) ThreadStatus(dbName string) string {
 }
 
 func (p *Provider) GetTableStats(ctx *sql.Context, db, table string) ([]sql.Statistic, error) {
+	dStats, err := p.GetTableDoltStats(ctx, db, table)
+	if err != nil {
+		return nil, err
+	}
+	var ret []sql.Statistic
+	for _, dStat := range dStats {
+		ret = append(ret, dStat.toSql())
+	}
+	return ret, nil
+}
+
+func (p *Provider) GetTableDoltStats(ctx *sql.Context, db, table string) ([]*DoltStats, error) {
 	statDb, ok := p.statDbs[db]
 	if !ok {
 		return nil, nil
@@ -126,11 +142,11 @@ func (p *Provider) GetTableStats(ctx *sql.Context, db, table string) ([]sql.Stat
 		return nil, nil
 	}
 
-	var ret []sql.Statistic
+	var ret []*DoltStats
 	for _, qual := range statDb.ListStatQuals(branch) {
 		if strings.EqualFold(db, qual.Database) && strings.EqualFold(table, qual.Tab) {
 			stat, _ := statDb.GetStat(branch, qual)
-			ret = append(ret, stat.toSql())
+			ret = append(ret, stat)
 		}
 	}
 

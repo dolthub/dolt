@@ -6,36 +6,38 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 )
 
-type NomsStatsFactory struct{}
+func NewNomsStatsFactory(dialPro dbfactory.GRPCDialProvider) *NomsStatsFactory {
+	return &NomsStatsFactory{dialPro: dialPro}
+}
+
+type NomsStatsFactory struct {
+	dialPro dbfactory.GRPCDialProvider
+}
 
 var _ statspro.StatsFactory = NomsStatsFactory{}
 
-func (sf NomsStatsFactory) Init(ctx context.Context, fs filesys.Filesys, hdp env.HomeDirProvider) (statspro.Database, error) {
-	absPath, err := fs.Abs(dbfactory.DoltStatsDir)
-	if err != nil {
-		return nil, err
-	}
+func (sf NomsStatsFactory) Init(ctx context.Context, fs filesys.Filesys, urlPath string, hdp env.HomeDirProvider) (statspro.Database, error) {
+	params := make(map[string]interface{})
+	params[dbfactory.GRPCDialProviderParam] = sf.dialPro
 
-	exists, isDir := fs.Exists(dbfactory.DoltStatsDir)
+	exists, isDir := fs.Exists(urlPath)
 	if !exists {
-		urlStr := earl.FileUrlFromPath(filepath.ToSlash(absPath), os.PathSeparator)
-		_, _, _, err := dbfactory.CreateDB(ctx, types.Format_Default, urlStr, nil)
+		//urlStr := earl.FileUrlFromPath(filepath.ToSlash(urlPath), os.PathSeparator)
+		_, _, _, err := dbfactory.CreateDB(ctx, types.Format_Default, urlPath, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -44,7 +46,7 @@ func (sf NomsStatsFactory) Init(ctx context.Context, fs filesys.Filesys, hdp env
 	}
 
 	dEnv := env.LoadWithoutDB(ctx, hdp, fs, "")
-	ddb, err := doltdb.LoadDoltDB(ctx, types.Format_Default, dbfactory.DoltStatsDir, fs)
+	ddb, err := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, urlPath, fs, params)
 	if err != nil {
 		return nil, err
 	}
@@ -134,8 +136,29 @@ func (n *NomsStatsDatabase) SetStat(ctx context.Context, branch string, qual sql
 			statsMap = n.dirty[i]
 		}
 	}
+	if statsMap == nil {
+		if err := n.trackBranch(ctx, branch); err != nil {
+			return err
+		}
+		statsMap = n.dirty[len(n.branches)-1]
+		n.stats[len(n.branches)-1][qual] = stats
+	}
 
-	return replaceStats(ctx, statsMap, stats)
+	return n.replaceStats(ctx, statsMap, stats)
+}
+
+func (n *NomsStatsDatabase) trackBranch(ctx context.Context, branch string) error {
+	n.branches = append(n.branches, branch)
+	n.stats = append(n.stats, make(dbStats))
+	n.latestTableRoots = append(n.latestTableRoots, make(map[string]hash.Hash))
+
+	kd, vd := schema.StatsTableDoltSchema.GetMapDescriptors()
+	newMap, err := prolly.NewMapFromTuples(ctx, n.db.DbData().Ddb.NodeStore(), kd, vd)
+	if err != nil {
+		return err
+	}
+	n.dirty = append(n.dirty, newMap.Mutate())
+	return n.db.DbData().Ddb.SetStatisics(ctx, branch, newMap.HashOf())
 }
 
 func (n *NomsStatsDatabase) initMutable(ctx context.Context, i int) error {

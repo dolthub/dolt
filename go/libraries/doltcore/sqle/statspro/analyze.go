@@ -2,8 +2,10 @@ package statspro
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -38,6 +40,15 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 	}
 
 	statDb, ok := p.statDbs[dbName]
+	if !ok {
+		statPath := p.pro.DbFactoryUrl() + dbfactory.StatsDir
+		statDb, err = p.sf.Init(ctx, p.pro.FileSystem(), statPath, env.GetCurrentUserHomeDir)
+		if err != nil {
+			ctx.Warn(0, err.Error())
+			return nil
+		}
+		p.statDbs[dbName] = statDb
+	}
 
 	tablePrefix := fmt.Sprintf("%s.", tableName)
 	var idxMetas []indexMeta
@@ -72,7 +83,9 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 		stat.Chunks = idxMeta.allAddrs
 		stat.Histogram = targetChunks
 		stat.UpdateActive()
-		statDb.SetStat(ctx, branch, idxMeta.qual, stat)
+		if err := statDb.SetStat(ctx, branch, idxMeta.qual, stat); err != nil {
+			return err
+		}
 	}
 
 	return statDb.Flush(ctx, branch)

@@ -17,6 +17,7 @@ package enginetest
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsnoms"
 	"runtime"
 	"strings"
 	"testing"
@@ -191,7 +192,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		require.True(t, ok)
 		d.provider = doltProvider
 
-		statsPro := statspro.NewProvider()
+		statsPro := statspro.NewProvider(d.provider.(*sqle.DoltDatabaseProvider), statsnoms.NewNomsStatsFactory(d.multiRepoEnv.RemoteDialProvider()))
 		d.statsPro = statsPro
 
 		var err error
@@ -230,7 +231,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 			for i, dbName := range dbs {
 				dsessDbs[i], _ = dbCache.GetCachedRevisionDb(fmt.Sprintf("%s/main", dbName), dbName)
 			}
-			if err = statsPro.Configure(ctx, func(context.Context) (*sql.Context, error) { return d.NewSession(), nil }, bThreads, doltProvider, dsessDbs, nil); err != nil {
+			if err = statsPro.Configure(ctx, func(context.Context) (*sql.Context, error) { return d.NewSession(), nil }, bThreads, dsessDbs); err != nil {
 				return nil, err
 			}
 		}
@@ -242,7 +243,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	d.engine.Analyzer.Catalog.MySQLDb = mysql_db.CreateEmptyMySQLDb()
 	d.engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
 
-	d.engine.Analyzer.Catalog.StatsProvider = statspro.NewProvider()
+	d.engine.Analyzer.Catalog.StatsProvider = statspro.NewProvider(d.provider.(*sqle.DoltDatabaseProvider), statsnoms.NewNomsStatsFactory(d.multiRepoEnv.RemoteDialProvider()))
 
 	// Get a fresh session if we are reusing the engine
 	if !initializeEngine {
@@ -339,7 +340,6 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	d.closeProvider()
 	d.engine = nil
 	d.provider = nil
-	d.statsPro = statspro.NewProvider()
 
 	d.branchControl = branch_control.CreateDefaultController(context.Background())
 
@@ -347,6 +347,7 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	doltProvider, ok := pro.(*sqle.DoltDatabaseProvider)
 	require.True(d.t, ok)
 	d.provider = doltProvider
+	d.statsPro = statspro.NewProvider(doltProvider, statsnoms.NewNomsStatsFactory(d.multiRepoEnv.RemoteDialProvider()))
 
 	var err error
 	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), doltProvider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro)

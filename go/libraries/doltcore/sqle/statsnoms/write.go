@@ -9,6 +9,7 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/stats"
 	"io"
 	"strings"
 )
@@ -18,20 +19,7 @@ import (
 // of the expected size.
 const maxBucketFanout = 200 * 200
 
-func stringifyKey(r sql.Row, types []sql.Type) string {
-	b := strings.Builder{}
-	sep := ""
-	for i, v := range r {
-		if v == nil {
-			v = types[i].Zero()
-		}
-		fmt.Fprintf(&b, "%s%v", sep, v)
-		sep = ","
-	}
-	return b.String()
-}
-
-func replaceStats(ctx context.Context, statsMap *prolly.MutableMap, dStats *statspro.DoltStats) error {
+func (n *NomsStatsDatabase) replaceStats(ctx context.Context, statsMap *prolly.MutableMap, dStats *statspro.DoltStats) error {
 	if err := deleteIndexRows(ctx, statsMap, dStats); err != nil {
 		return err
 	}
@@ -119,17 +107,17 @@ func putIndexRows(ctx context.Context, statsMap *prolly.MutableMap, dStats *stat
 		valueBuilder.PutInt64(4, int64(h.NullCount))
 		valueBuilder.PutString(5, strings.Join(dStats.Columns, ","))
 		valueBuilder.PutString(6, typesStr)
-		valueBuilder.PutString(7, stringifyKey(h.UpperBound, dStats.Types))
+		valueBuilder.PutString(7, stats.StringifyKey(h.UpperBound, dStats.Types))
 		valueBuilder.PutInt64(8, int64(h.BoundCount))
 		valueBuilder.PutDatetime(9, h.CreatedAt)
 		for i, r := range h.Mcvs {
-			valueBuilder.PutString(10+i, stringifyKey(r, dStats.Types))
+			valueBuilder.PutString(10+i, stats.StringifyKey(r, dStats.Types))
 		}
 		var mcvCntsRow sql.Row
 		for _, v := range h.McvCount {
 			mcvCntsRow = append(mcvCntsRow, int(v))
 		}
-		valueBuilder.PutString(14, stringifyKey(mcvCntsRow, dStats.Types))
+		valueBuilder.PutString(14, stats.StringifyKey(mcvCntsRow, dStats.Types))
 
 		key := keyBuilder.Build(pool)
 		value := valueBuilder.Build(pool)

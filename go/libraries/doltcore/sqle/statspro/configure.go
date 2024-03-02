@@ -3,8 +3,8 @@ package statspro
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
 	types2 "github.com/dolthub/go-mysql-server/sql/types"
@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Context) (*sql.Context, error), bThreads *sql.BackgroundThreads, pro *sqle.DoltDatabaseProvider, dbs []dsess.SqlDatabase, sf StatsFactory) error {
+func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Context) (*sql.Context, error), bThreads *sql.BackgroundThreads, dbs []dsess.SqlDatabase) error {
 	p.SetStarter(NewInitDatabaseHook(p, ctxFactory, bThreads, nil))
 
 	if _, disabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly); disabled == int8(1) {
@@ -38,7 +38,7 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 		}
 	}
 
-	if err := p.Load(loadCtx, pro, sf, branches); err != nil {
+	if err := p.Load(loadCtx, branches); err != nil {
 		return err
 	}
 
@@ -54,22 +54,22 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 				return err
 			}
 		}
-		pro.InitDatabaseHook = NewInitDatabaseHook(p, ctxFactory, bThreads, pro.InitDatabaseHook)
-		pro.DropDatabaseHook = NewDropDatabaseHook(p, ctxFactory, pro.DropDatabaseHook)
+		p.pro.InitDatabaseHook = NewInitDatabaseHook(p, ctxFactory, bThreads, p.pro.InitDatabaseHook)
+		p.pro.DropDatabaseHook = NewDropDatabaseHook(p, ctxFactory, p.pro.DropDatabaseHook)
 	}
 	return nil
 }
 
 // Load scans the statistics tables, populating the |stats| attribute.
 // Statistics are not available for reading until we've finished loading.
-func (p *Provider) Load(ctx *sql.Context, pro *sqle.DoltDatabaseProvider, sf StatsFactory, branches []string) error {
+func (p *Provider) Load(ctx *sql.Context, branches []string) error {
 	//for _, db := range pro.DoltDatabases() {
 	//	// set map keys so concurrent orthogonal writes are OK
 	//	p.setStats(strings.ToLower(db.Name()), newDbStats(strings.ToLower(db.Name())))
 	//}
 
 	eg, ctx := ctx.NewErrgroup()
-	for _, db := range pro.DoltDatabases() {
+	for _, db := range p.pro.DoltDatabases() {
 		// copy closure variables
 		dbName := strings.ToLower(db.Name())
 		db := db
@@ -86,17 +86,18 @@ func (p *Provider) Load(ctx *sql.Context, pro *sqle.DoltDatabaseProvider, sf Sta
 				}
 			}()
 
-			fs, err := pro.FileSystemForDatabase(db.Name())
+			fs, err := p.pro.FileSystemForDatabase(db.Name())
 
-			// get or create reference to stats db
-			statsDb, err := sf.Init(ctx, fs, env.GetCurrentUserHomeDir)
+			// |statPath| is either file://./stat or mem://stat
+			statPath := p.pro.DbFactoryUrl() + dbfactory.StatsDir
+			statsDb, err := p.sf.Init(ctx, fs, statPath, env.GetCurrentUserHomeDir)
 			if err != nil {
 				ctx.Warn(0, err.Error())
 				return nil
 			}
 
 			for _, branch := range branches {
-				err = statsDb.Load(nil, branch)
+				err = statsDb.Load(ctx, branch)
 				if err != nil {
 					ctx.Warn(0, err.Error())
 					continue
