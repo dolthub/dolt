@@ -53,8 +53,8 @@ func NewDefaultTpccParams() *tpccTestParamsImpl {
 		Tables:         1,
 		TrxLevel:       tpccTransactionLevelRr,
 		ReportCSV:      true,
-		ReportInterval: 1,
-		Time:           30,
+		ReportInterval: 10,
+		Time:           150,
 	}
 }
 
