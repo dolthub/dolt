@@ -116,7 +116,8 @@ import (
   - Take the Ordinal discovered in Phase one
   - Calculate the Offset of your desired Chunk Record: Sum(Lengths[0]...Lengths[Ordinal-1])
   - Load Lengths[Ordinal] bytes from Table[Offset]
-  - Check the first 4 bytes of the loaded data against the last 4 bytes of your desired Hash. They should match, and the rest of the data is your Chunk data.
+  - Verify that the CRC of the loaded bytes matches the CRC stored in the Chunk Record.
+
 */
 
 const (
