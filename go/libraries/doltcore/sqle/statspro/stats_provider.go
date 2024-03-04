@@ -202,19 +202,19 @@ func (p *Provider) DropDbStats(ctx *sql.Context, db string, flush bool) error {
 		return nil
 	}
 
+	dSess := dsess.DSessFromSess(ctx.Session)
+	branch, err := dSess.GetBranch()
+	if err != nil {
+		return err
+	}
+
 	// remove provider access
-	delete(p.statDbs, db)
+	if err := statDb.DeleteBranchStats(ctx, branch, flush); err != nil {
+		return nil
+	}
+
 	p.status[db] = "dropped"
 
-	if flush {
-		// remove from disk
-		dSess := dsess.DSessFromSess(ctx.Session)
-		branch, err := dSess.GetBranch()
-		if err != nil {
-			return err
-		}
-		statDb.DeleteBranchStats(ctx, branch)
-	}
 	return nil
 }
 

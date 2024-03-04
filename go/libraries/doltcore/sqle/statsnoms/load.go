@@ -50,8 +50,6 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 			return nil, err
 		}
 
-		position := row[schema.StatsPositionTag].(int)
-
 		// deserialize K, V
 		dbName := row[schema.StatsDbTag].(string)
 		tableName := row[schema.StatsTableTag].(string)
@@ -151,7 +149,7 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 			UpperBound:    boundRow,
 		}
 
-		currentStat.Active[commit] = position
+		currentStat.Active[commit] = len(currentStat.Histogram)
 		currentStat.Histogram = append(currentStat.Histogram, bucket)
 		currentStat.RowCount += uint64(rowCount)
 		currentStat.DistinctCount += uint64(distinctCount)

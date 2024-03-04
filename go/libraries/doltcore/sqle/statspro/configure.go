@@ -3,7 +3,6 @@ package statspro
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -60,13 +59,20 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 	return nil
 }
 
+func (p *Provider) LoadStats(ctx *sql.Context, db, branch string) error {
+	if statDb, ok := p.statDbs[db]; ok {
+		return statDb.LoadBranchStats(ctx, branch)
+	}
+	return nil
+}
+
 // Load scans the statistics tables, populating the |stats| attribute.
 // Statistics are not available for reading until we've finished loading.
 func (p *Provider) Load(ctx *sql.Context, branches []string) error {
-	//for _, db := range pro.DoltDatabases() {
-	//	// set map keys so concurrent orthogonal writes are OK
-	//	p.setStats(strings.ToLower(db.Name()), newDbStats(strings.ToLower(db.Name())))
-	//}
+	for _, db := range p.pro.DoltDatabases() {
+		// set map keys so concurrent orthogonal writes are OK
+		p.statDbs[strings.ToLower(db.Name())] = nil
+	}
 
 	eg, ctx := ctx.NewErrgroup()
 	for _, db := range p.pro.DoltDatabases() {
@@ -89,15 +95,14 @@ func (p *Provider) Load(ctx *sql.Context, branches []string) error {
 			fs, err := p.pro.FileSystemForDatabase(db.Name())
 
 			// |statPath| is either file://./stat or mem://stat
-			statPath := p.pro.DbFactoryUrl() + dbfactory.StatsDir
-			statsDb, err := p.sf.Init(ctx, fs, statPath, env.GetCurrentUserHomeDir)
+			statsDb, err := p.sf.Init(ctx, db, p.pro.DbFactoryUrl(), fs, env.GetCurrentUserHomeDir)
 			if err != nil {
 				ctx.Warn(0, err.Error())
 				return nil
 			}
 
 			for _, branch := range branches {
-				err = statsDb.Load(ctx, branch)
+				err = statsDb.LoadBranchStats(ctx, branch)
 				if err != nil {
 					ctx.Warn(0, err.Error())
 					continue

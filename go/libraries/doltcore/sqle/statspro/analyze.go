@@ -2,7 +2,6 @@ package statspro
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -41,8 +40,15 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 
 	statDb, ok := p.statDbs[dbName]
 	if !ok {
-		statPath := p.pro.DbFactoryUrl() + dbfactory.StatsDir
-		statDb, err = p.sf.Init(ctx, p.pro.FileSystem(), statPath, env.GetCurrentUserHomeDir)
+		fs, err := p.pro.FileSystemForDatabase(dbName)
+		if err != nil {
+			return err
+		}
+		sourceDb, ok := p.pro.BaseDatabase(ctx, dbName)
+		if !ok {
+			return sql.ErrDatabaseNotFound.New(dbName)
+		}
+		statDb, err = p.sf.Init(ctx, sourceDb, p.pro.DbFactoryUrl(), fs, env.GetCurrentUserHomeDir)
 		if err != nil {
 			ctx.Warn(0, err.Error())
 			return nil

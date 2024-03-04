@@ -16,6 +16,7 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
+	"path"
 	"strings"
 	"sync"
 )
@@ -30,14 +31,25 @@ type NomsStatsFactory struct {
 
 var _ statspro.StatsFactory = NomsStatsFactory{}
 
-func (sf NomsStatsFactory) Init(ctx context.Context, fs filesys.Filesys, urlPath string, hdp env.HomeDirProvider) (statspro.Database, error) {
+func (sf NomsStatsFactory) Init(ctx context.Context, sourceDb dsess.SqlDatabase, factoryUrl string, fs filesys.Filesys, hdp env.HomeDirProvider) (statspro.Database, error) {
 	params := make(map[string]interface{})
 	params[dbfactory.GRPCDialProviderParam] = sf.dialPro
 
-	exists, isDir := fs.Exists(urlPath)
+	statsPath, err := fs.Abs(path.Join(dbfactory.DoltDir, dbfactory.StatsDir))
+	if err != nil {
+		return nil, err
+	}
+	urlPath := factoryUrl + statsPath
+
+	exists, isDir := fs.Exists(statsPath)
 	if !exists {
+		err := fs.MkDirs(statsPath)
+		if err != nil {
+			return nil, fmt.Errorf("unable to make directory '%s', cause: %s", statsPath, err.Error())
+		}
+
 		//urlStr := earl.FileUrlFromPath(filepath.ToSlash(urlPath), os.PathSeparator)
-		_, _, _, err := dbfactory.CreateDB(ctx, types.Format_Default, urlPath, nil)
+		_, _, _, err = dbfactory.CreateDB(ctx, types.Format_Default, urlPath, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -63,22 +75,23 @@ func (sf NomsStatsFactory) Init(ctx context.Context, fs filesys.Filesys, urlPath
 		Deaf:    deaf,
 		Tempdir: tmpDir,
 	}
-	sqlDb, err := sqle.NewDatabase(ctx, "stats", dEnv.DbData(), opts)
+	statsDb, err := sqle.NewDatabase(ctx, "stats", dEnv.DbData(), opts)
 	if err != nil {
 		return nil, err
 	}
-	return NewNomsStats(sqlDb), nil
+	return NewNomsStats(sourceDb, statsDb), nil
 }
 
-func NewNomsStats(db dsess.SqlDatabase) *NomsStatsDatabase {
-	return &NomsStatsDatabase{mu: &sync.Mutex{}, db: db}
+func NewNomsStats(sourceDb, statsDb dsess.SqlDatabase) *NomsStatsDatabase {
+	return &NomsStatsDatabase{mu: &sync.Mutex{}, destDb: statsDb, sourceDb: sourceDb}
 }
 
 type dbStats map[sql.StatQualifier]*statspro.DoltStats
 
 type NomsStatsDatabase struct {
 	mu               *sync.Mutex
-	db               dsess.SqlDatabase
+	destDb           dsess.SqlDatabase
+	sourceDb         dsess.SqlDatabase
 	stats            []dbStats
 	branches         []string
 	latestTableRoots []map[string]hash.Hash
@@ -87,12 +100,12 @@ type NomsStatsDatabase struct {
 
 var _ statspro.Database = (*NomsStatsDatabase)(nil)
 
-func (n *NomsStatsDatabase) Load(ctx *sql.Context, branch string) error {
-	statsMap, err := n.db.DbData().Ddb.GetStatistics(ctx, branch)
+func (n *NomsStatsDatabase) LoadBranchStats(ctx *sql.Context, branch string) error {
+	statsMap, err := n.destDb.DbData().Ddb.GetStatistics(ctx, branch)
 	if err != nil {
 		return err
 	}
-	doltStats, err := loadStats(ctx, n.db, statsMap)
+	doltStats, err := loadStats(ctx, n.sourceDb, statsMap)
 	if err != nil {
 		return err
 	}
@@ -153,16 +166,16 @@ func (n *NomsStatsDatabase) trackBranch(ctx context.Context, branch string) erro
 	n.latestTableRoots = append(n.latestTableRoots, make(map[string]hash.Hash))
 
 	kd, vd := schema.StatsTableDoltSchema.GetMapDescriptors()
-	newMap, err := prolly.NewMapFromTuples(ctx, n.db.DbData().Ddb.NodeStore(), kd, vd)
+	newMap, err := prolly.NewMapFromTuples(ctx, n.destDb.DbData().Ddb.NodeStore(), kd, vd)
 	if err != nil {
 		return err
 	}
 	n.dirty = append(n.dirty, newMap.Mutate())
-	return n.db.DbData().Ddb.SetStatisics(ctx, branch, newMap.HashOf())
+	return n.destDb.DbData().Ddb.SetStatisics(ctx, branch, newMap.HashOf())
 }
 
 func (n *NomsStatsDatabase) initMutable(ctx context.Context, i int) error {
-	statsMap, err := n.db.DbData().Ddb.GetStatistics(ctx, n.branches[i])
+	statsMap, err := n.destDb.DbData().Ddb.GetStatistics(ctx, n.branches[i])
 	if err != nil {
 		return err
 	}
@@ -175,8 +188,19 @@ func (n *NomsStatsDatabase) DeleteStats(branch string, quals ...sql.StatQualifie
 	panic("implement me")
 }
 
-func (n *NomsStatsDatabase) DeleteBranchStats(ctx context.Context, branch string) error {
-	return n.db.DbData().Ddb.DropStatisics(ctx, branch)
+func (n *NomsStatsDatabase) DeleteBranchStats(ctx context.Context, branch string, flush bool) error {
+	for i, b := range n.branches {
+		if strings.EqualFold(b, branch) {
+			n.branches = append(n.branches[:i], n.branches[i+1:]...)
+			n.dirty = append(n.dirty[:i], n.dirty[i+1:]...)
+			n.stats = append(n.stats[:i], n.stats[i+1:]...)
+			n.latestTableRoots = append(n.latestTableRoots[:i], n.latestTableRoots[i+1:]...)
+		}
+	}
+	if flush {
+		return n.destDb.DbData().Ddb.DropStatisics(ctx, branch)
+	}
+	return nil
 }
 
 func (n *NomsStatsDatabase) ReplaceChunks(ctx context.Context, branch string, qual sql.StatQualifier, targetHashes []hash.Hash, _, newChunks []statspro.DoltBucket) {
@@ -203,7 +227,7 @@ func (n *NomsStatsDatabase) Flush(ctx context.Context, branch string) error {
 				return err
 			}
 			n.dirty[i] = nil
-			n.db.DbData().Ddb.SetStatisics(ctx, branch, flushedMap.HashOf())
+			n.destDb.DbData().Ddb.SetStatisics(ctx, branch, flushedMap.HashOf())
 			return nil
 		}
 	}
