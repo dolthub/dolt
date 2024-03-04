@@ -308,11 +308,6 @@ func (p *Puller) uploadTempTableFile(ctx context.Context, tmpTblFile tempTblFile
 		_ = tmpTblFile.read.Remove()
 	}()
 
-	// So far, we've added all the bytes for the compressed chunk data.
-	// We add the remaining bytes here --- bytes for the index and the
-	// table file footer.
-	atomic.AddUint64(&p.stats.bufferedSendBytes, uint64(fileSize)-tmpTblFile.chunksLen)
-
 	// By tracking the number of bytes uploaded here,
 	// we can add bytes on to our bufferedSendBytes when
 	// we have to retry a table file write.
@@ -323,87 +318,21 @@ func (p *Puller) uploadTempTableFile(ctx context.Context, tmpTblFile tempTblFile
 			return nil, 0, err
 		}
 
-		// If we've ever uploaded anything before, this is a retry. We
-		// treat it as if what was already uploaded was rebuffered.
-		atomic.AddUint64(&p.stats.bufferedSendBytes, uint64(localUploaded))
-		localUploaded = 0
+		if localUploaded == 0 {
+			// So far, we've added all the bytes for the compressed chunk data.
+			// We add the remaining bytes here --- bytes for the index and the
+			// table file footer.
+			atomic.AddUint64(&p.stats.bufferedSendBytes, uint64(fileSize)-tmpTblFile.chunksLen)
+		} else {
+			// A retry. We treat it as if what was already uploaded was rebuffered.
+			atomic.AddUint64(&p.stats.bufferedSendBytes, uint64(localUploaded))
+			localUploaded = 0
+		}
 
 		fWithStats := countingReader{countingReader{rc, &localUploaded}, &p.stats.finishedSendBytes}
 
 		return fWithStats, uint64(fileSize), nil
 	})
-}
-
-// Upload Table Files
-//
-// This runs a goroutine to upload table files it reads off of completedTables.
-// It forwards uploaded tables to to fileIdToNumChunksCh.
-
-type manifestEntry struct {
-	fileID    string
-	numChunks int
-}
-
-func (p *Puller) uploadTableFiles(ctx context.Context, completedTables <-chan FilledWriters, fileIdToNumChunksCh chan<- manifestEntry) error {
-	for {
-		select {
-		case tblFile, ok := <-completedTables:
-			if !ok {
-				return nil
-			}
-			p.tablefileSema.Release(1)
-
-			// content length before we finish the write, which will
-			// add the index and table file footer.
-			chunksLen := tblFile.wr.ContentLength()
-
-			id, err := tblFile.wr.Finish()
-			if err != nil {
-				return err
-			}
-
-			ttf := tempTblFile{
-				id:          id,
-				read:        tblFile.wr,
-				numChunks:   tblFile.wr.ChunkCount(),
-				chunksLen:   chunksLen,
-				contentLen:  tblFile.wr.ContentLength(),
-				contentHash: tblFile.wr.GetMD5(),
-			}
-			err = p.uploadTempTableFile(ctx, ttf)
-			if err != nil {
-				return err
-			}
-
-			select {
-			case fileIdToNumChunksCh <- manifestEntry{ttf.id, ttf.numChunks}:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-}
-
-// Add Table Files to Manifest
-//
-// At the end, after all table files are uploaded, we add them all to the
-// destination manifest at once.
-
-func (p *Puller) addTableFilesToManifest(ctx context.Context, fileIdToNumChunksCh <-chan manifestEntry) error {
-	fileIdToNumChunks := make(map[string]int)
-	for {
-		select {
-		case entry, ok := <-fileIdToNumChunksCh:
-			if !ok {
-				return p.sinkDBCS.(chunks.TableFileStore).AddTableFilesToManifest(ctx, fileIdToNumChunks)
-			}
-			fileIdToNumChunks[entry.fileID] = entry.numChunks
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
 }
 
 func (p *Puller) processCompletedTables(ctx context.Context, completedTables <-chan FilledWriters) error {
