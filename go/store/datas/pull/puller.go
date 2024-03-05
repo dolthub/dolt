@@ -45,7 +45,6 @@ var ErrDBUpToDate = errors.New("the database does not need to be pulled as it's 
 var ErrIncompatibleSourceChunkStore = errors.New("the chunk store of the source database does not implement NBSCompressedChunkStore.")
 
 const (
-	maxChunkWorkers       = 2
 	outstandingTableFiles = 2
 )
 
@@ -251,6 +250,7 @@ func emitStats(s *stats, ch chan Stats) (cancel func()) {
 		defer wg.Done()
 		updateduration := 1 * time.Second
 		ticker := time.NewTicker(updateduration)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
@@ -328,6 +328,7 @@ func (p *Puller) uploadTempTableFile(ctx context.Context, tmpTblFile tempTblFile
 			atomic.AddUint64(&p.stats.bufferedSendBytes, uint64(localUploaded))
 			localUploaded = 0
 		}
+
 		fWithStats := countingReader{countingReader{rc, &localUploaded}, &p.stats.finishedSendBytes}
 
 		return fWithStats, uint64(fileSize), nil
@@ -398,35 +399,21 @@ func (p *Puller) Pull(ctx context.Context) error {
 		}
 
 		const batchSize = 64 * 1024
-		// refs are added to |visited| on first sight
-		visited := p.hashes
-		// |absent| are visited, un-batched refs
-		absent := p.hashes.Copy()
-		// |batches| are visited, un-fetched refs
-		batches := make([]hash.HashSet, 0, 64)
+		tracker := NewPullChunkTracker(ctx, p.hashes, TrackerConfig{
+			BatchSize: batchSize,
+			HasManyer: p.sinkDBCS,
+		})
 
-		for absent.Size() > 0 || len(batches) > 0 {
-			if absent.Size() >= batchSize {
-				var bb []hash.HashSet
-				absent, bb = batchNovel(absent, batchSize)
-				batches = append(batches, bb...)
-			}
-			if len(batches) == 0 {
-				batches = append(batches, absent)
-				absent = make(hash.HashSet)
-			}
-
-			b := batches[len(batches)-1]
-			batches = batches[:len(batches)-1]
-
-			b, err = p.sinkDBCS.HasMany(ctx, b)
+		for {
+			toFetch, hasMore, err := tracker.GetChunksToFetch()
 			if err != nil {
 				return err
-			} else if b.Size() == 0 {
-				continue
+			}
+			if !hasMore {
+				break
 			}
 
-			err = p.getCmp(ctx, b, absent, visited, completedTables)
+			err = p.getCmp(ctx, toFetch, tracker, completedTables)
 			if err != nil {
 				return err
 			}
@@ -460,7 +447,7 @@ func batchNovel(absent hash.HashSet, batch int) (remainder hash.HashSet, batches
 	return
 }
 
-func (p *Puller) getCmp(ctx context.Context, batch, absent, visited hash.HashSet, completedTables chan FilledWriters) error {
+func (p *Puller) getCmp(ctx context.Context, batch hash.HashSet, tracker *PullChunkTracker, completedTables chan FilledWriters) error {
 	found := make(chan nbs.CompressedChunk, 4096)
 	processed := make(chan CmpChnkAndRefs, 4096)
 
@@ -496,11 +483,7 @@ func (p *Puller) getCmp(ctx context.Context, batch, absent, visited hash.HashSet
 					return err
 				}
 				err = p.waf(chnk, func(h hash.Hash, _ bool) error {
-					if !visited.Has(h) {
-						// first sight of |h|
-						visited.Insert(h)
-						absent.Insert(h)
-					}
+					tracker.Seen(h)
 					return nil
 				})
 				if err != nil {
