@@ -194,9 +194,17 @@ func (t *PullChunkTracker) reqRespThread(initial hash.HashSet) {
 				req.hs = absent[0]
 				var i int
 				for i = 1; i < len(absent); i++ {
-					if len(req.hs)+len(absent[i]) < t.cfg.BatchSize {
+					l := len(absent[i])
+					if len(req.hs)+l < t.cfg.BatchSize {
 						req.hs.InsertAll(absent[i])
 					} else {
+						for h := range absent[i] {
+							if len(req.hs) >= t.cfg.BatchSize {
+								break
+							}
+							req.hs.Insert(h)
+							absent[i].Remove(h)
+						}
 						break
 					}
 				}
