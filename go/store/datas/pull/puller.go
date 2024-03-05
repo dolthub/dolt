@@ -400,8 +400,8 @@ func (p *Puller) Pull(ctx context.Context) error {
 
 		const batchSize = 64 * 1024
 		tracker := NewPullChunkTracker(ctx, p.hashes, TrackerConfig{
-			BatchSize:          batchSize,
-			HasManyer:          p.sinkDBCS,
+			BatchSize: batchSize,
+			HasManyer: p.sinkDBCS,
 		})
 
 		for {

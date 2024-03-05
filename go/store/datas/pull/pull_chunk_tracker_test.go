@@ -27,8 +27,8 @@ import (
 func TestPullChunkTracker(t *testing.T) {
 	t.Run("Empty", func(t *testing.T) {
 		tracker := NewPullChunkTracker(context.Background(), make(hash.HashSet), TrackerConfig{
-			BatchSize:          64 * 1024,
-			HasManyer:          nil,
+			BatchSize: 64 * 1024,
+			HasManyer: nil,
 		})
 		hs, ok, err := tracker.GetChunksToFetch()
 		assert.Len(t, hs, 0)
@@ -45,8 +45,8 @@ func TestPullChunkTracker(t *testing.T) {
 			hs.Insert(h)
 		}
 		tracker := NewPullChunkTracker(context.Background(), hs, TrackerConfig{
-			BatchSize:          64 * 1024,
-			HasManyer:          hasAllHaser{},
+			BatchSize: 64 * 1024,
+			HasManyer: hasAllHaser{},
 		})
 		hs, ok, err := tracker.GetChunksToFetch()
 		assert.Len(t, hs, 0)
@@ -63,8 +63,8 @@ func TestPullChunkTracker(t *testing.T) {
 			hs.Insert(h)
 		}
 		tracker := NewPullChunkTracker(context.Background(), hs, TrackerConfig{
-			BatchSize:          64 * 1024,
-			HasManyer:          hasNoneHaser{},
+			BatchSize: 64 * 1024,
+			HasManyer: hasNoneHaser{},
 		})
 		hs, ok, err := tracker.GetChunksToFetch()
 		assert.Len(t, hs, 10)
@@ -103,8 +103,8 @@ func TestPullChunkTracker(t *testing.T) {
 			hs.Insert(h)
 		}
 		tracker := NewPullChunkTracker(context.Background(), hs, TrackerConfig{
-			BatchSize:          64 * 1024,
-			HasManyer:          errHaser{},
+			BatchSize: 64 * 1024,
+			HasManyer: errHaser{},
 		})
 		_, _, err := tracker.GetChunksToFetch()
 		assert.Error(t, err)
@@ -119,8 +119,8 @@ func TestPullChunkTracker(t *testing.T) {
 			hs.Insert(h)
 		}
 		tracker := NewPullChunkTracker(context.Background(), hs, TrackerConfig{
-			BatchSize:          64 * 1024,
-			HasManyer:          hasNoneHaser{},
+			BatchSize: 64 * 1024,
+			HasManyer: hasNoneHaser{},
 		})
 		hs, ok, err := tracker.GetChunksToFetch()
 		assert.Len(t, hs, 10)
@@ -163,8 +163,8 @@ func TestPullChunkTracker(t *testing.T) {
 			hs.Insert(h)
 		}
 		tracker := NewPullChunkTracker(context.Background(), hs, TrackerConfig{
-			BatchSize:          64 * 1024,
-			HasManyer:          haser,
+			BatchSize: 64 * 1024,
+			HasManyer: haser,
 		})
 
 		// Should get back 03, 04, 05
