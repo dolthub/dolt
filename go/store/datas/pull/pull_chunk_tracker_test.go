@@ -28,8 +28,7 @@ func TestPullChunkTracker(t *testing.T) {
 	t.Run("Empty", func(t *testing.T) {
 		tracker := NewPullChunkTracker(context.Background(), make(hash.HashSet), TrackerConfig{
 			BatchSize:          64 * 1024,
-			HasManyThreadCount: 3,
-			Haser:              nil,
+			HasManyer:          nil,
 		})
 		hs, ok, err := tracker.GetChunksToFetch()
 		assert.Len(t, hs, 0)
@@ -47,8 +46,7 @@ func TestPullChunkTracker(t *testing.T) {
 		}
 		tracker := NewPullChunkTracker(context.Background(), hs, TrackerConfig{
 			BatchSize:          64 * 1024,
-			HasManyThreadCount: 3,
-			Haser:              hasAllHaser{},
+			HasManyer:          hasAllHaser{},
 		})
 		hs, ok, err := tracker.GetChunksToFetch()
 		assert.Len(t, hs, 0)
@@ -66,8 +64,7 @@ func TestPullChunkTracker(t *testing.T) {
 		}
 		tracker := NewPullChunkTracker(context.Background(), hs, TrackerConfig{
 			BatchSize:          64 * 1024,
-			HasManyThreadCount: 3,
-			Haser:              hasNoneHaser{},
+			HasManyer:          hasNoneHaser{},
 		})
 		hs, ok, err := tracker.GetChunksToFetch()
 		assert.Len(t, hs, 10)
@@ -107,8 +104,7 @@ func TestPullChunkTracker(t *testing.T) {
 		}
 		tracker := NewPullChunkTracker(context.Background(), hs, TrackerConfig{
 			BatchSize:          64 * 1024,
-			HasManyThreadCount: 3,
-			Haser:              errHaser{},
+			HasManyer:          errHaser{},
 		})
 		_, _, err := tracker.GetChunksToFetch()
 		assert.Error(t, err)
@@ -124,8 +120,7 @@ func TestPullChunkTracker(t *testing.T) {
 		}
 		tracker := NewPullChunkTracker(context.Background(), hs, TrackerConfig{
 			BatchSize:          64 * 1024,
-			HasManyThreadCount: 3,
-			Haser:              hasNoneHaser{},
+			HasManyer:          hasNoneHaser{},
 		})
 		hs, ok, err := tracker.GetChunksToFetch()
 		assert.Len(t, hs, 10)

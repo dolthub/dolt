@@ -22,17 +22,17 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-type Haser interface {
+type HasManyer interface {
 	HasMany(context.Context, hash.HashSet) (hash.HashSet, error)
 }
 
 type TrackerConfig struct {
 	BatchSize int
 
-	HasManyThreadCount int
-
-	Haser Haser
+	HasManyer HasManyer
 }
+
+const hasManyThreadCount = 3
 
 type PullChunkTracker struct {
 	ctx  context.Context
@@ -105,12 +105,12 @@ func (t *PullChunkTracker) thread(initial hash.HashSet) {
 	hasManyRespCh := make(chan trackerHasManyResp)
 
 	var wg sync.WaitGroup
-	wg.Add(t.cfg.HasManyThreadCount)
+	wg.Add(hasManyThreadCount)
 
-	for i := 0; i < t.cfg.HasManyThreadCount; i++ {
+	for i := 0; i < hasManyThreadCount; i++ {
 		go func() {
 			defer wg.Done()
-			hasManyThread(t.ctx, t.cfg.Haser, hasManyReqCh, hasManyRespCh, doneCh)
+			hasManyThread(t.ctx, t.cfg.HasManyer, hasManyReqCh, hasManyRespCh, doneCh)
 		}()
 	}
 
@@ -201,11 +201,11 @@ func (t *PullChunkTracker) thread(initial hash.HashSet) {
 }
 
 // Run by a PullChunkTracker, calls HasMany on a batch of addresses and delivers the results.
-func hasManyThread(ctx context.Context, haser Haser, reqCh <-chan trackerHasManyReq, respCh chan<- trackerHasManyResp, doneCh <-chan struct{}) {
+func hasManyThread(ctx context.Context, hasManyer HasManyer, reqCh <-chan trackerHasManyReq, respCh chan<- trackerHasManyResp, doneCh <-chan struct{}) {
 	for {
 		select {
 		case req := <-reqCh:
-			hs, err := haser.HasMany(ctx, req.hs)
+			hs, err := hasManyer.HasMany(ctx, req.hs)
 			if err != nil {
 				select {
 				case respCh <- trackerHasManyResp{err: err}:
