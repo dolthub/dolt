@@ -34,6 +34,17 @@ type TrackerConfig struct {
 
 const hasManyThreadCount = 3
 
+// A PullChunkTracker keeps track of seen chunk addresses and returns every
+// seen chunk address which is not already in the destination database exactly
+// once. A Puller instantiantes one of these with the initial set of addresses
+// to pull, and repeatedly calls |GetChunksToFetch|. It passes in all
+// references it finds in the fetched chunks to |Seen|, and continues to call
+// |GetChunksToFetch| and deliver new addresses to |Seen| until
+// |GetChunksToFetch| returns |false| from its |more| return boolean.
+//
+// PullChunkTracker is able to call |HasMany| on the destination database in
+// parallel with other work the Puller does and abstracts out the logic for
+// keeping track of seen, unchecked and to pull hcunk addresses.
 type PullChunkTracker struct {
 	ctx  context.Context
 	seen hash.HashSet
@@ -56,7 +67,7 @@ func NewPullChunkTracker(ctx context.Context, initial hash.HashSet, cfg TrackerC
 	ret.wg.Add(1)
 	go func() {
 		defer ret.wg.Done()
-		ret.thread(initial)
+		ret.reqRespThread(initial)
 	}()
 	return ret
 }
@@ -99,7 +110,9 @@ func (t *PullChunkTracker) GetChunksToFetch() (hash.HashSet, bool, error) {
 	return req.hs, req.ok, req.err
 }
 
-func (t *PullChunkTracker) thread(initial hash.HashSet) {
+// The main logic of the PullChunkTracker, receives requests from other threads
+// and responds to them.
+func (t *PullChunkTracker) reqRespThread(initial hash.HashSet) {
 	doneCh := make(chan struct{})
 	hasManyReqCh := make(chan trackerHasManyReq)
 	hasManyRespCh := make(chan trackerHasManyResp)
