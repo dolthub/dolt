@@ -402,6 +402,98 @@ var DoltStatsIOTests = []queries.ScriptTest{
 	},
 }
 
+var StatBranchTests = []queries.ScriptTest{
+	{
+		Name: "multi branch stats",
+		SetUpScript: []string{
+			"set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
+			"set @@PERSIST.dolt_stats_auto_refresh_threshold = 0;",
+			"set @@PERSIST.dolt_stats_branches = 'main,feat';",
+			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
+			"insert into xy values (0,0,'a'), (1,0,'a'), (2,0,'a'), (3,0,'a'), (4,1,'a'), (5,2,'a')",
+			"call dolt_commit('-Am', 'xy')",
+			"call dolt_checkout('-b','feat')",
+			"CREATE table ab (a bigint primary key, b int, c int, key(b,c));",
+			"insert into ab values (0,0,1), (1,0,1), (2,0,1), (3,0,1), (4,1,1), (5,2,1)",
+			"call dolt_commit('-Am', 'ab')",
+			"call dolt_checkout('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "call dolt_stats_restart()",
+			},
+			{
+				Query: "select sleep(.1)",
+			},
+			{
+				Query: "select table_name, index_name, row_count from dolt_statistics",
+				Expected: []sql.Row{
+					{"xy", "primary", uint64(6)},
+					{"xy", "yz", uint64(6)},
+				},
+			},
+			{
+				Query: "select table_name, index_name, row_count from dolt_statistics as of 'feat'",
+				Expected: []sql.Row{
+					{"ab", "primary", uint64(6)},
+					{"ab", "bc", uint64(6)},
+					{"xy", "primary", uint64(6)},
+					{"xy", "yz", uint64(6)},
+				},
+			},
+			{
+				Query: "select table_name, index_name, row_count from dolt_statistics as of 'main'",
+				Expected: []sql.Row{
+					{"xy", "primary", uint64(6)},
+					{"xy", "yz", uint64(6)},
+				},
+			},
+			{
+				Query: "call dolt_checkout('feat')",
+			},
+			{
+				Query: "insert into xy values ('6',3,'a')",
+			},
+			{
+				Query: "call dolt_commit('-am', 'cm')",
+			},
+			{
+				Query: "select sleep(.1)",
+			},
+			{
+				Query: "select table_name, index_name, row_count from dolt_statistics as of 'feat'",
+				Expected: []sql.Row{
+					{"ab", "primary", uint64(6)},
+					{"ab", "bc", uint64(6)},
+					{"xy", "primary", uint64(7)},
+					{"xy", "yz", uint64(7)},
+				},
+			},
+			{
+				Query: "select table_name, index_name, row_count from dolt_statistics as of 'main'",
+				Expected: []sql.Row{
+					{"xy", "primary", uint64(6)},
+					{"xy", "yz", uint64(6)},
+				},
+			},
+			{
+				Query: "call dolt_checkout('feat')",
+			},
+			{
+				Query: "call dolt_stats_drop()",
+			},
+			{
+				Query:    "select table_name, index_name, row_count from dolt_statistics as of 'feat'",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select table_name, index_name, row_count from dolt_statistics as of 'main'",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+}
+
 var StatProcTests = []queries.ScriptTest{
 	{
 		Name: "deleting stats removes information_schema access point",

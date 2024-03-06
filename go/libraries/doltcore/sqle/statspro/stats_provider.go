@@ -119,34 +119,35 @@ func (p *Provider) ThreadStatus(dbName string) string {
 }
 
 func (p *Provider) GetTableStats(ctx *sql.Context, db, table string) ([]sql.Statistic, error) {
-	dStats, err := p.GetTableDoltStats(ctx, db, table)
-	if err != nil {
-		return nil, err
-	}
-	var ret []sql.Statistic
-	for _, dStat := range dStats {
-		ret = append(ret, dStat.toSql())
-	}
-	return ret, nil
-}
-
-func (p *Provider) GetTableDoltStats(ctx *sql.Context, db, table string) ([]*DoltStats, error) {
-	statDb, ok := p.statDbs[db]
-	if !ok {
-		return nil, nil
-	}
-
 	dSess := dsess.DSessFromSess(ctx.Session)
 	branch, err := dSess.GetBranch()
 	if err != nil {
 		return nil, nil
 	}
 
-	var ret []*DoltStats
+	return p.GetTableDoltStats(ctx, branch, db, table)
+}
+
+func (p *Provider) GetTableDoltStats(ctx *sql.Context, branch, db, table string) ([]sql.Statistic, error) {
+	statDb, ok := p.statDbs[db]
+	if !ok {
+		return nil, nil
+	}
+
+	if branch == "" {
+		dSess := dsess.DSessFromSess(ctx.Session)
+		var err error
+		branch, err = dSess.GetBranch()
+		if err != nil {
+			return nil, nil
+		}
+	}
+
+	var ret []sql.Statistic
 	for _, qual := range statDb.ListStatQuals(branch) {
 		if strings.EqualFold(db, qual.Database) && strings.EqualFold(table, qual.Tab) {
 			stat, _ := statDb.GetStat(branch, qual)
-			ret = append(ret, stat)
+			ret = append(ret, stat.toSql())
 		}
 	}
 

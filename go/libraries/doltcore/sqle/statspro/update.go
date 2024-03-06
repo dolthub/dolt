@@ -96,29 +96,6 @@ func createNewStatsBuckets(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Ta
 			return nil, err
 		}
 
-		// find level if not exists
-		// TODO delete?
-		//if len(meta.updateChunks) == 0 {
-		//	levelNodes, err := tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
-		//	if err != nil {
-		//		return nil, err
-		//	}
-		//	var chunks []tree.Node
-		//	var offsets [][]uint64
-		//	var offset uint64
-		//	for _, n := range levelNodes {
-		//		chunks = append(chunks, n)
-		//		treeCnt, err := n.TreeCount()
-		//		if err != nil {
-		//			return nil, err
-		//		}
-		//		offsets = append(offsets, []uint64{offset, offset + uint64(treeCnt)})
-		//		offset += uint64(treeCnt)
-		//	}
-		//	meta.updateChunks = chunks
-		//	meta.updateOrdinals = offsets
-		//}
-
 		updater := newBucketBuilder(meta.qual, len(meta.cols), prollyMap.KeyDesc())
 		ret[meta.qual] = NewDoltStats()
 		ret[meta.qual].Chunks = meta.allAddrs
@@ -175,20 +152,18 @@ func createNewStatsBuckets(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Ta
 }
 
 // MergeNewChunks combines a set of old and new chunks to create
-// the desired target histogram.
+// the desired target histogram. Undefined behavior if a |targetHash|
+// does not exist in either |oldChunks| or |newChunks|.
 func MergeNewChunks(targetHashes []hash.Hash, oldChunks, newChunks []DoltBucket) []DoltBucket {
 	var targetBuckets []DoltBucket
 	var i int // oldChunks[i]
 	var j int // newChunks[j]
 	// |targetHashes| either in |oldChunks| or |addChunks|
 	for _, c := range targetHashes {
-		if i >= len(oldChunks) || j > len(newChunks) {
-			break
-		}
-		if oldChunks[i].Chunk == c {
+		if i < len(oldChunks) && oldChunks[i].Chunk == c {
 			targetBuckets = append(targetBuckets, oldChunks[i])
 			i++
-		} else if newChunks[j].Chunk == c {
+		} else if j < len(newChunks) && newChunks[j].Chunk == c {
 			targetBuckets = append(targetBuckets, newChunks[j])
 			j++
 		} else {
@@ -196,14 +171,6 @@ func MergeNewChunks(targetHashes []hash.Hash, oldChunks, newChunks []DoltBucket)
 			// to find the next valid
 			i++
 		}
-	}
-	for i < len(oldChunks) {
-		targetBuckets = append(targetBuckets, oldChunks[i])
-		i++
-	}
-	for j < len(newChunks) {
-		targetBuckets = append(targetBuckets, newChunks[j])
-		j++
 	}
 	return targetBuckets
 }

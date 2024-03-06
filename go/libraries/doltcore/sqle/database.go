@@ -242,7 +242,7 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 		return nil, false, err
 	}
 
-	tbl, ok, err := db.getTableInsensitive(ctx, nil, ds, root, tblName)
+	tbl, ok, err := db.getTableInsensitive(ctx, nil, ds, root, tblName, "")
 	if err != nil {
 		return nil, false, err
 	}
@@ -268,7 +268,7 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 
 	sess := dsess.DSessFromSess(ctx.Session)
 
-	table, ok, err := db.getTableInsensitive(ctx, head, sess, root, tableName)
+	table, ok, err := db.getTableInsensitive(ctx, head, sess, root, tableName, asOf)
 	if err != nil {
 		return nil, false, err
 	}
@@ -296,7 +296,7 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 
 }
 
-func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds *dsess.DoltSession, root *doltdb.RootValue, tblName string) (sql.Table, bool, error) {
+func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds *dsess.DoltSession, root *doltdb.RootValue, tblName string, asOf interface{}) (sql.Table, bool, error) {
 	lwrName := strings.ToLower(tblName)
 
 	// TODO: these tables that cache a root value at construction time should not, they need to get it from the session
@@ -349,7 +349,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 
 	case strings.HasPrefix(lwrName, doltdb.DoltConfTablePrefix):
 		suffix := tblName[len(doltdb.DoltConfTablePrefix):]
-		srcTable, ok, err := db.getTableInsensitive(ctx, head, ds, root, suffix)
+		srcTable, ok, err := db.getTableInsensitive(ctx, head, ds, root, suffix, asOf)
 		if err != nil {
 			return nil, false, err
 		} else if !ok {
@@ -472,7 +472,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			dt, found = dtables.NewDocsTable(ctx, versionableTable), true
 		}
 	case doltdb.StatisticsTableName:
-		dt, found = dtables.NewStatisticsTable(ctx, db.Name(), db.ddb), true
+		dt, found = dtables.NewStatisticsTable(ctx, db.Name(), db.ddb, asOf), true
 	}
 
 	if found {

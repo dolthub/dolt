@@ -2103,6 +2103,22 @@ func TestColumnDiffSystemTablePrepared(t *testing.T) {
 	}
 }
 
+func TestStatBranchTests(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	harness.Setup(setup.MydbData)
+	harness.configureStats = true
+	for _, test := range StatBranchTests {
+		t.Run(test.Name, func(t *testing.T) {
+			// reset engine so provider statistics are clean
+			harness.engine = nil
+			e := mustNewEngine(t, harness)
+			defer e.Close()
+			enginetest.TestScriptWithEngine(t, e, harness, test)
+		})
+	}
+}
+
 func TestStatsFunctions(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
@@ -3114,6 +3130,7 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 	intervalSec := time.Duration(0)
 	thresholdf64 := 0.
 	bThreads := sql.NewBackgroundThreads()
+	branches := []string{"main"}
 	statsProv := engine.EngineAnalyzer().Catalog.StatsProvider.(*statspro.Provider)
 
 	// it is important to use new sessions for this test, to avoid working root conflicts
@@ -3123,7 +3140,7 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 		return enginetest.NewSession(harness), nil
 	}
 
-	err := statsProv.InitAutoRefresh(newCtx, sqlDb.Name(), bThreads, intervalSec, thresholdf64)
+	err := statsProv.InitAutoRefresh(newCtx, sqlDb.Name(), bThreads, intervalSec, thresholdf64, branches)
 	require.NoError(t, err)
 
 	execQ := func(ctx *sql.Context, q string, id int, tag string) {

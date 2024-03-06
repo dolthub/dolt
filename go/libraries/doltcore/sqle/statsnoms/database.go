@@ -184,8 +184,13 @@ func (n *NomsStatsDatabase) initMutable(ctx context.Context, i int) error {
 }
 
 func (n *NomsStatsDatabase) DeleteStats(branch string, quals ...sql.StatQualifier) {
-	//TODO implement me
-	panic("implement me")
+	for i, b := range n.branches {
+		if strings.EqualFold(b, branch) {
+			for _, qual := range quals {
+				delete(n.stats[i], qual)
+			}
+		}
+	}
 }
 
 func (n *NomsStatsDatabase) DeleteBranchStats(ctx context.Context, branch string, flush bool) error {
@@ -203,32 +208,48 @@ func (n *NomsStatsDatabase) DeleteBranchStats(ctx context.Context, branch string
 	return nil
 }
 
-func (n *NomsStatsDatabase) ReplaceChunks(ctx context.Context, branch string, qual sql.StatQualifier, targetHashes []hash.Hash, _, newChunks []statspro.DoltBucket) {
+func (n *NomsStatsDatabase) ReplaceChunks(ctx context.Context, branch string, qual sql.StatQualifier, targetHashes []hash.Hash, _, newChunks []statspro.DoltBucket) error {
+	var dbStat dbStats
 	for i, b := range n.branches {
 		if strings.EqualFold(b, branch) {
 			// naive merge the new with old
-			dbStat := n.stats[i][qual]
-			oldChunks := dbStat.Histogram
-			targetBuckets := statspro.MergeNewChunks(targetHashes, oldChunks, newChunks)
-			dbStat.Chunks = targetHashes
-			dbStat.Histogram = targetBuckets
-			dbStat.UpdateActive()
-			// let |n.SetStats| update memory and disk
-			n.SetStat(ctx, branch, qual, dbStat)
+			dbStat = n.stats[i]
 		}
 	}
+
+	if dbStat == nil {
+		if err := n.trackBranch(ctx, branch); err != nil {
+			return err
+		}
+		dbStat = n.stats[len(n.branches)-1]
+	}
+
+	if _, ok := dbStat[qual]; ok {
+		oldChunks := dbStat[qual].Histogram
+		targetBuckets := statspro.MergeNewChunks(targetHashes, oldChunks, newChunks)
+		dbStat[qual].Histogram = targetBuckets
+	} else {
+		dbStat[qual] = statspro.NewDoltStats()
+	}
+	dbStat[qual].Chunks = targetHashes
+	dbStat[qual].UpdateActive()
+
+	// let |n.SetStats| update memory and disk
+	return n.SetStat(ctx, branch, qual, dbStat[qual])
 }
 
 func (n *NomsStatsDatabase) Flush(ctx context.Context, branch string) error {
 	for i, b := range n.branches {
 		if strings.EqualFold(b, branch) {
-			flushedMap, err := n.dirty[i].Map(ctx)
-			if err != nil {
-				return err
+			if n.dirty[i] != nil {
+				flushedMap, err := n.dirty[i].Map(ctx)
+				if err != nil {
+					return err
+				}
+				n.dirty[i] = nil
+				n.destDb.DbData().Ddb.SetStatisics(ctx, branch, flushedMap.HashOf())
+				return nil
 			}
-			n.dirty[i] = nil
-			n.destDb.DbData().Ddb.SetStatisics(ctx, branch, flushedMap.HashOf())
-			return nil
 		}
 	}
 	return nil

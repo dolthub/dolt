@@ -33,7 +33,7 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 	}
 
 	// it's important to update session references every call
-	sqlTable, dTab, err := p.getLatestDoltDb(ctx, tableName, dbName)
+	sqlTable, dTab, err := p.getLatestDoltDb(ctx, tableName, dbName, branch)
 	if err != nil {
 		return err
 	}
@@ -97,7 +97,7 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 	return statDb.Flush(ctx, branch)
 }
 
-func (p *Provider) getLatestDoltDb(ctx *sql.Context, tableName string, dbName string) (sql.Table, *doltdb.Table, error) {
+func (p *Provider) getLatestDoltDb(ctx *sql.Context, tableName string, dbName string, asOf string) (sql.Table, *doltdb.Table, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	prov := dSess.Provider()
 
@@ -105,7 +105,9 @@ func (p *Provider) getLatestDoltDb(ctx *sql.Context, tableName string, dbName st
 	if err != nil {
 		return nil, nil, err
 	}
-	sqlTable, ok, err := sqlDb.GetTableInsensitive(ctx, tableName)
+
+	sqlTable, ok, err := sqlDb.(sqle.Database).GetTableInsensitiveAsOf(ctx, tableName, asOf)
+	//sqlTable, ok, err := sqlDb.GetTableInsensitive(ctx, tableName)
 	if err != nil {
 		return nil, nil, err
 	}

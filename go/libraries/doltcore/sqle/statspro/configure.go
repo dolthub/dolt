@@ -25,7 +25,7 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 
 	dSess := dsess.DSessFromSess(loadCtx.Session)
 	var branches []string
-	if _, bs, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly); bs == "" {
+	if _, bs, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsBranches); bs == "" {
 		defaultBranch, err := dSess.GetBranch()
 		if err != nil {
 			return err
@@ -49,7 +49,7 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 		thresholdf64 := threshold.(float64)
 
 		for _, db := range dbs {
-			if err := p.InitAutoRefresh(ctxFactory, db.Name(), bThreads, intervalSec, thresholdf64); err != nil {
+			if err := p.InitAutoRefresh(ctxFactory, db.Name(), bThreads, intervalSec, thresholdf64, branches); err != nil {
 				return err
 			}
 		}

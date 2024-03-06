@@ -23,7 +23,7 @@ type Database interface {
 	DeleteStats(branch string, quals ...sql.StatQualifier)
 	// ReplaceChunks is an update interface that lets a stats implementation
 	// decide how to edit stats for a stats refresh.
-	ReplaceChunks(ctx context.Context, branch string, qual sql.StatQualifier, targetHashes []hash.Hash, dropChunks, newChunks []DoltBucket)
+	ReplaceChunks(ctx context.Context, branch string, qual sql.StatQualifier, targetHashes []hash.Hash, dropChunks, newChunks []DoltBucket) error
 	// Flush instructs the database to sync any partial state to disk
 	Flush(ctx context.Context, branch string) error
 	SetLatestHash(branch, tableName string, h hash.Hash)

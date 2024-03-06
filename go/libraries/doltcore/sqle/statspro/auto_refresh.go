@@ -26,7 +26,7 @@ import (
 
 const asyncAutoRefreshStats = "async_auto_refresh_stats"
 
-func (p *Provider) InitAutoRefresh(ctxFactory func(ctx context.Context) (*sql.Context, error), dbName string, bThreads *sql.BackgroundThreads, checkInterval time.Duration, updateThresh float64) error {
+func (p *Provider) InitAutoRefresh(ctxFactory func(ctx context.Context) (*sql.Context, error), dbName string, bThreads *sql.BackgroundThreads, checkInterval time.Duration, updateThresh float64, branches []string) error {
 	// this is only called after initial statistics are finished loading
 	// launch a thread that periodically checks freshness
 
@@ -60,12 +60,18 @@ func (p *Provider) InitAutoRefresh(ctxFactory func(ctx context.Context) (*sql.Co
 				if !ok {
 					sqlCtx.GetLogger().Debugf("statistics refresh error: database not found %s", dbName)
 				}
-				branches, err := ddb.GetBranches(sqlCtx)
+				//branches, err := ddb.GetBranches(sqlCtx)
 				for _, branch := range branches {
-					sqlCtx.GetLogger().Debugf("starting statistics refresh check for '%s': %s", dbName, time.Now().String())
-					if err := p.checkRefresh(sqlCtx, dbName, branch.GetPath(), updateThresh); err != nil {
-						sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
-						return
+					if br, ok, err := ddb.HasBranch(ctx, branch); ok {
+						sqlCtx.GetLogger().Debugf("starting statistics refresh check for '%s': %s", dbName, time.Now().String())
+						if err := p.checkRefresh(sqlCtx, dbName, br, updateThresh); err != nil {
+							sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
+							return
+						}
+					} else if err != nil {
+						sqlCtx.GetLogger().Debugf("statistics refresh error: branch check error %s", err.Error())
+					} else {
+						sqlCtx.GetLogger().Debugf("statistics refresh error: branch not found %s")
 					}
 				}
 				timer.Reset(checkInterval)
@@ -92,10 +98,11 @@ func (p *Provider) checkRefresh(ctx *sql.Context, dbName, branch string, updateT
 	tableExistsAndSkipped := make(map[string]bool)
 
 	// important: update session references every loop
+	//ctx.SetCurrentDatabase(fmt.Sprintf("%s/%s", dbName, branch))
 	dSess := dsess.DSessFromSess(ctx.Session)
 	prov := dSess.Provider()
 
-	sqlDb, err := prov.Database(ctx, dbName)
+	sqlDb, err := prov.Database(ctx, fmt.Sprintf("%s/%s", dbName, branch))
 	if err != nil {
 		return err
 	}
@@ -106,7 +113,7 @@ func (p *Provider) checkRefresh(ctx *sql.Context, dbName, branch string, updateT
 	}
 
 	for _, table := range tables {
-		sqlTable, dTab, err := p.getLatestDoltDb(ctx, table, dbName)
+		sqlTable, dTab, err := p.getLatestDoltDb(ctx, table, dbName, branch)
 		if err != nil {
 			return err
 		}
@@ -184,7 +191,15 @@ func (p *Provider) checkRefresh(ctx *sql.Context, dbName, branch string, updateT
 		for _, updateMeta := range idxMetas {
 			stat := newTableStats[updateMeta.qual]
 			if stat != nil {
-				statDb.ReplaceChunks(ctx, branch, updateMeta.qual, updateMeta.allAddrs, updateMeta.dropChunks, stat.Histogram)
+				var err error
+				if _, ok := statDb.GetStat(branch, updateMeta.qual); !ok {
+					err = statDb.SetStat(ctx, branch, updateMeta.qual, stat)
+				} else {
+					err = statDb.ReplaceChunks(ctx, branch, updateMeta.qual, updateMeta.allAddrs, updateMeta.dropChunks, stat.Histogram)
+				}
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
