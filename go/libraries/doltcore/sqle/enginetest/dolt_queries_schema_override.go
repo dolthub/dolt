@@ -787,8 +787,6 @@ var SchemaOverrideTests = []queries.ScriptTest{
 	// REVISION-DB TEST CASES
 	// TODO:
 	//   `database/HEAD~`.`table`
-	//   `database/tag`.`table`
-	//   `database/commitHash`.`table` – this one will be harder to test, because hash values can't be predicted
 	{
 		Name: "Revision DBs: branch revision database with overridden schema",
 		SetUpScript: []string{
@@ -850,6 +848,81 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from `mydb/branch2`.t;",
+				Expected: []sql.Row{{1, nil}},
+				ExpectedColumns: sql.Schema{
+					{
+						Name: "pk",
+						Type: gmstypes.Int32,
+					},
+					{
+						Name: "c1",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					},
+				},
+			},
+		},
+	},
+	{
+		Name: "Revision DBs: read-only tag revision database with overridden schema",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(255));",
+			"insert into t (pk, c1) values (1, 'one');",
+			"call dolt_commit('-Am', 'adding table t on main');",
+			"SET @commit1 = hashof('HEAD');",
+			"call dolt_tag('commit1');",
+
+			"alter table t drop column c1;",
+			"call dolt_commit('-am', 'dropping column c1 on main');",
+			"SET @commit2 = hashof('HEAD');",
+			"call dolt_tag('commit2');",
+
+			"alter table t add column c2 varchar(255);",
+			"insert into t (pk, c2) values (2, 'two');",
+			"call dolt_commit('-am', 'adding column c2 on main');",
+			"SET @commit3 = hashof('HEAD');",
+			"call dolt_tag('commit3');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// use the most recent commit for our response schemas (pk, c2)
+				Query:    "SET @@dolt_schema_override_commit=@commit3;",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "select * from `mydb/commit3`.t as of @commit1;",
+				Expected: []sql.Row{{1, nil}},
+				ExpectedColumns: sql.Schema{
+					{
+						Name: "pk",
+						Type: gmstypes.Int32,
+					},
+					{
+						Name: "c2",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					},
+				},
+			},
+			{
+				// use the first commit from main for our response schemas (pk, c1)
+				Query:    "SET @@dolt_schema_override_commit=@commit1;",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "select * from `mydb/commit3`.t as of @commit2;",
+				Expected: []sql.Row{{1, nil}},
+				ExpectedColumns: sql.Schema{
+					{
+						Name: "pk",
+						Type: gmstypes.Int32,
+					},
+					{
+						Name: "c1",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 255),
+					},
+				},
+			},
+			{
+				Query:    "select * from `mydb/commit2`.t;",
 				Expected: []sql.Row{{1, nil}},
 				ExpectedColumns: sql.Schema{
 					{
