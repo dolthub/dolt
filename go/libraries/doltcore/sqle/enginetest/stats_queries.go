@@ -480,6 +480,9 @@ var StatBranchTests = []queries.ScriptTest{
 				Query: "call dolt_checkout('feat')",
 			},
 			{
+				Query: "call dolt_stats_stop()",
+			},
+			{
 				Query: "call dolt_stats_drop()",
 			},
 			{
@@ -487,8 +490,12 @@ var StatBranchTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "select table_name, index_name, row_count from dolt_statistics as of 'main'",
-				Expected: []sql.Row{},
+				// we dropped 'feat', not 'main'
+				Query: "select table_name, index_name, row_count from dolt_statistics as of 'main'",
+				Expected: []sql.Row{
+					{"xy", "primary", uint64(6)},
+					{"xy", "yz", uint64(6)},
+				},
 			},
 		},
 	},

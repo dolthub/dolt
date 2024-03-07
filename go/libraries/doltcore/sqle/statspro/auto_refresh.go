@@ -46,10 +46,14 @@ func (p *Provider) InitAutoRefresh(ctxFactory func(ctx context.Context) (*sql.Co
 			case <-ctx.Done():
 				timer.Stop()
 				return
-			case <-dropDbCtx.Done():
-				timer.Stop()
-				return
 			case <-timer.C:
+				select {
+				case <-dropDbCtx.Done():
+					timer.Stop()
+					return
+				default:
+				}
+
 				sqlCtx, err := ctxFactory(ctx)
 				if err != nil {
 					return
