@@ -516,6 +516,6 @@ var integrationTests = []struct {
 			"`v25` text collate utf8mb4_0900_bin DEFAULT (\"abc\")," +
 			"`v31` varchar(255) collate utf8mb4_hungarian_ci DEFAULT \"varchar value\"," +
 			"PRIMARY KEY (`pk`)" +
-			") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb3_esperanto_ci;",
+			") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_esperanto_ci;",
 	},
 }
