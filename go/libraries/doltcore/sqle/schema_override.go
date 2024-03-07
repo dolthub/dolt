@@ -51,9 +51,9 @@ func resolveOverriddenNonexistentTable(ctx *sql.Context, tblName string, db Data
 	}
 
 	// Load the overridden schema and convert it to a sql.Schema
-	// TODO: Use the schema cache for this – it's already cached by root, so we can reuse it. Might
-	//       need to refactor how we access the schema cache though.
-	//       Should also profile the performance before/after to understand the impact.
+	// TODO: Loading the schema is an expensive operation, so it would be more
+	//       efficient to use the same schema cache from getTable() here. The
+	//       schemas are cached by root value, so it's safe to use the cache.
 	overriddenSchema, err := t.GetSchema(ctx)
 	if err != nil {
 		return nil, false, err
@@ -79,7 +79,9 @@ func overrideSchemaForTable(ctx *sql.Context, tableName string, tbl *doltdb.Tabl
 		return fmt.Errorf("unable to find table '%s' at overridden schema root", tableName)
 	}
 
-	// TODO: Same comment here as above; use the table cache if we can and profile performance before/after
+	// TODO: Loading the schema is an expensive operation, so it would be more
+	//       efficient to use the same schema cache from getTable() here. The
+	//       schemas are cached by root value, so it's safe to use the cache.
 	overriddenSchema, err := overriddenTable.GetSchema(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to load overridden schema for table '%s': %s", tableName, err.Error())
@@ -93,6 +95,9 @@ func overrideSchemaForTable(ctx *sql.Context, tableName string, tbl *doltdb.Tabl
 // variable is not set (i.e. NULL or empty string) then this function returns an empty string.
 func getOverriddenSchemaValue(ctx *sql.Context) (string, error) {
 	doltSession := dsess.DSessFromSess(ctx.Session)
+	// TODO: Session variable lookups can be surprisingly expensive as well.
+	//       Check out DoltSession.dbSessionVarsStale() to see an example of how
+	//       we can use caching to make this more efficient.
 	varValue, err := doltSession.GetSessionVariable(ctx, dsess.DoltOverrideSchema)
 	if err != nil {
 		return "", err
