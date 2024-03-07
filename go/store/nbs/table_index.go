@@ -320,8 +320,8 @@ func (ti onHeapTableIndex) getIndexEntry(ord uint32) indexEntry {
 	ordOff := ti.offsetAt(ord)
 	length := uint32(ordOff - prevOff)
 	return indexResult{
-		o: prevOff,
-		l: length,
+		offset: prevOff,
+		length: length,
 	}
 }
 
