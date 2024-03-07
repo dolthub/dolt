@@ -18,7 +18,6 @@ import (
 	"container/heap"
 	"context"
 	"errors"
-	"github.com/dolthub/dolt/go/store/hash"
 	"io"
 	"strings"
 	"time"
@@ -28,6 +27,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"

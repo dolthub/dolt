@@ -17,12 +17,13 @@ package statspro
 import (
 	"context"
 	"fmt"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	"strings"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 const asyncAutoRefreshStats = "async_auto_refresh_stats"
@@ -106,7 +107,7 @@ func (p *Provider) InitAutoRefreshWithParams(ctxFactory func(ctx context.Context
 						} else if err != nil {
 							sqlCtx.GetLogger().Debugf("statistics refresh error: branch check error %s", err.Error())
 						} else {
-							sqlCtx.GetLogger().Debugf("statistics refresh error: branch not found %s")
+							sqlCtx.GetLogger().Debugf("statistics refresh error: branch not found %s", br)
 						}
 					}
 				}()

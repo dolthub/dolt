@@ -16,7 +16,6 @@ package enginetest
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"strings"
 	"testing"
 
@@ -28,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 )
 
 // fillerVarchar pushes the tree into level 3

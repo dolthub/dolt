@@ -2,6 +2,10 @@ package statspro
 
 import (
 	"fmt"
+	"strings"
+
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -9,8 +13,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"github.com/dolthub/go-mysql-server/sql"
-	"strings"
 )
 
 func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db string) error {

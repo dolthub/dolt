@@ -4,6 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path"
+	"strings"
+	"sync"
+
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -16,10 +22,6 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/go-mysql-server/sql"
-	"path"
-	"strings"
-	"sync"
 )
 
 func NewNomsStatsFactory(dialPro dbfactory.GRPCDialProvider) *NomsStatsFactory {

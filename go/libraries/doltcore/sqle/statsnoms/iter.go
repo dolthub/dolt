@@ -16,17 +16,19 @@ package statsnoms
 
 import (
 	"fmt"
+	"strings"
+	"time"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
+	"github.com/dolthub/go-mysql-server/sql/stats"
+	"gopkg.in/errgo.v2/errors"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/planbuilder"
-	"github.com/dolthub/go-mysql-server/sql/stats"
-	"gopkg.in/errgo.v2/errors"
-	"strings"
-	"time"
 )
 
 var ErrIncompatibleVersion = errors.New("client stats version mismatch")
