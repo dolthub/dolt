@@ -19,6 +19,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -163,7 +164,7 @@ func resolveOverriddenSchemaRoot(ctx *sql.Context, db Database) (*doltdb.RootVal
 //     type. If a column value is not compatible with the mapped column type (e.g. a 10-char string in a varchar(5)
 //     type), then an error is returned while mapping the schema. This is similar to the behavior of the diff tables
 //     but instead of returning an error, they log a warning and return a NULL value.
-func rowConverterByColTagAndName(srcSchema, targetSchema schema.Schema, projectedTags []uint64, projectedColNames []string) func(row sql.Row) (sql.Row, error) {
+func rowConverterByColTagAndName(srcSchema, targetSchema schema.Schema, projectedTags []uint64, projectedColNames []string) func(ctx *sql.Context, row sql.Row) (sql.Row, error) {
 	srcIndexToTargetIndex := make(map[int]int)
 	srcIndexToTargetType := make(map[int]typeinfo.TypeInfo)
 	for i, targetColumn := range targetSchema.GetAllCols().GetColumns() {
@@ -179,7 +180,7 @@ func rowConverterByColTagAndName(srcSchema, targetSchema schema.Schema, projecte
 		}
 	}
 
-	return func(row sql.Row) (sql.Row, error) {
+	return func(ctx *sql.Context, row sql.Row) (sql.Row, error) {
 		r := make(sql.Row, len(projectedColNames))
 		for i, tag := range projectedTags {
 			// First try to find the column in the src schema with the matching tag
@@ -193,16 +194,40 @@ func rowConverterByColTagAndName(srcSchema, targetSchema schema.Schema, projecte
 				srcIndex := srcSchema.GetAllCols().IndexOf(srcColumn.Name)
 				temp := row[srcIndex]
 
-				temp, _, err := srcIndexToTargetType[srcIndex].ToSqlType().Convert(temp)
+				conversionType := srcIndexToTargetType[srcIndex]
+
+				convertedValue, err := convertWithTruncation(ctx, temp, conversionType)
 				if err != nil {
-					return nil, fmt.Errorf("unable to convert value to overridden schema: %s", err.Error())
+					return nil, err
 				}
 
-				r[i] = temp
+				r[i] = convertedValue
 			}
 		}
 		return r, nil
 	}
+}
+
+// convertWithTruncation attempts to convert |value| to |typ| and returns the converted value. If the value is a string
+// and the type is a VARCHAR, CHAR, or TEXT type and the length of |value| is greater than the allowed lenght of |typ|,
+// then the value is truncated to the allowed length and a warning is logged in the session.
+// If the value is not compatible with |typ|, then an error is
+func convertWithTruncation(ctx *sql.Context, value any, typ typeinfo.TypeInfo) (any, error) {
+	if s, ok := value.(string); ok && gmstypes.IsTextOnly(typ.ToSqlType()) {
+		// For char/varchar/text values, we are more lenient with conversion and truncate the value
+		// if it is too long to fit into the target type.
+		stringType := typ.ToSqlType().(gmstypes.StringType)
+		if int64(len(s)) > stringType.MaxCharacterLength() {
+			value = s[:stringType.MaxCharacterLength()]
+			ctx.Warn(1246, "Value '%s' truncated to fit column of type %s", s, typ.String())
+		}
+	}
+
+	convertedValue, _, err := typ.ToSqlType().Convert(value)
+	if err != nil {
+		return nil, fmt.Errorf("unable to convert value to overridden schema: %s", err.Error())
+	}
+	return convertedValue, nil
 }
 
 // newMappingRowIter returns a RowIter that maps results from |wrappedIter| to the overridden schema on |t|.
@@ -221,7 +246,7 @@ func newMappingRowIter(ctx *sql.Context, t *DoltTable, wrappedIter sql.RowIter) 
 
 // newRowConverterForDoltTable returns a function that converts rows from the original schema of |t| to the overridden
 // schema of |t|.
-func newRowConverterForDoltTable(ctx *sql.Context, t *DoltTable) (func(row sql.Row) (sql.Row, error), error) {
+func newRowConverterForDoltTable(ctx *sql.Context, t *DoltTable) (func(ctx *sql.Context, row sql.Row) (sql.Row, error), error) {
 	// If there is a schema override, then we need to map the results
 	// from the old schema to the new schema
 	doltSession := dsess.DSessFromSess(ctx.Session)
@@ -251,7 +276,7 @@ func newRowConverterForDoltTable(ctx *sql.Context, t *DoltTable) (func(row sql.R
 // mappingRowIter is a RowIter that maps rows from a child RowIter to a new schema using a row conversion function.
 type mappingRowIter struct {
 	child       sql.RowIter
-	rowConvFunc func(row sql.Row) (sql.Row, error)
+	rowConvFunc func(ctx *sql.Context, row sql.Row) (sql.Row, error)
 }
 
 var _ sql.RowIter = (*mappingRowIter)(nil)
@@ -266,7 +291,7 @@ func (m *mappingRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	if m.rowConvFunc == nil {
 		return next, nil
 	} else {
-		return m.rowConvFunc(next)
+		return m.rowConvFunc(ctx, next)
 	}
 }
 

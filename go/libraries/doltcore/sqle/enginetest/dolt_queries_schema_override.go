@@ -535,7 +535,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "Type Change: Incompatible data",
+		Name: "Type Change: Truncated data",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 varchar(5));",
 			"insert into t values (1, 'one');",
@@ -572,8 +572,64 @@ var SchemaOverrideTests = []queries.ScriptTest{
 				Expected: []sql.Row{{}},
 			},
 			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, "one"}, {2, "twotw"}},
+				ExpectedColumns: sql.Schema{
+					{
+						Name: "pk",
+						Type: gmstypes.Int32,
+					}, {
+						Name: "c1",
+						Type: gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 5),
+					},
+				},
+				ExpectedWarning:                 1246,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "Value 'twotwotwotwotwotwo' truncated to fit column",
+			},
+		},
+	},
+	{
+		Name: "Type Change: Incompatible data",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 point);",
+			"insert into t values (1, POINT(1, 1));",
+			"call dolt_commit('-Am', 'adding tables t on main');",
+			"SET @commit1 = hashof('HEAD');",
+
+			"alter table t drop column c1;",
+			"alter table t add column c1 int;",
+			"insert into t values (2, 2);",
+			"call dolt_commit('-am', 'modifying columns in t on main');",
+			"SET @commit2 = hashof('HEAD');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// use the tip of main for our response schemas (int, int)
+				Query:    "SET @@dolt_schema_override_commit=@commit2;",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, nil}, {2, 2}},
+				ExpectedColumns: sql.Schema{
+					{
+						Name: "pk",
+						Type: gmstypes.Int32,
+					}, {
+						Name: "c1",
+						Type: gmstypes.Int32,
+					},
+				},
+			},
+			{
+				// go back to the first commit, where the schema have an incompatible type (int, point)
+				Query:    "SET @@dolt_schema_override_commit=@commit1;",
+				Expected: []sql.Row{{}},
+			},
+			{
 				Query:          "select * from t;",
-				ExpectedErrStr: "unable to convert value to overridden schema: string 'twotwotwotwotwotwo' is too large for column 'varchar(5)'",
+				ExpectedErrStr: "unable to convert value to overridden schema: Cannot get geometry object from data you sent to the GEOMETRY field",
 			},
 		},
 	},
