@@ -221,7 +221,7 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 	case val.SetEnc:
 		tb.PutSet(i, v.(uint64))
 	case val.StringEnc:
-		tb.PutString(i, v.(string))
+		return tb.PutString(i, v.(string))
 	case val.ByteStringEnc:
 		if s, ok := v.(string); ok {
 			if len(s) > math.MaxUint16 {

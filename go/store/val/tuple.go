@@ -17,14 +17,23 @@ package val
 import (
 	"math"
 
+	"github.com/dolthub/dolt/go/store/hash"
+
 	"github.com/dolthub/dolt/go/store/pool"
 )
 
 const (
-	MaxTupleFields            = 4096
-	MaxTupleDataSize ByteSize = math.MaxUint16
+	MaxTupleFields          = 4096
+	countSize      ByteSize = 2
+	nodeCountSize           = uint64Size
+	treeLevelSize           = uint8Size
 
-	countSize ByteSize = 2
+	// MaxTupleDataSize is the maximum KV length considering the extra
+	// flatbuffer metadata required to serialize the message. This number
+	// implicitly checks the "last row" size that will append chunk level
+	// metadata. Key and value offsets per field are excluded from this number.
+	// (uint16) - (field count) - (content hash) - (node count) - (tree level)
+	MaxTupleDataSize ByteSize = math.MaxUint16 - countSize - hash.ByteLen - nodeCountSize - treeLevelSize
 )
 
 // A Tuple is a vector of fields encoded as a byte slice. Key-Value Tuple pairs

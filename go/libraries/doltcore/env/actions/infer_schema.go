@@ -340,6 +340,8 @@ func findCommonType(ts typeInfoSet) typeinfo.TypeInfo {
 		return typeinfo.TextType
 	} else if setHasType(ts, typeinfo.StringDefaultType) {
 		return typeinfo.StringDefaultType
+	} else if setHasType(ts, typeinfo.StringDefaultType) {
+		return typeinfo.StringDefaultType
 	}
 
 	hasNumeric := false

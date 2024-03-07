@@ -178,6 +178,7 @@ func ValidateForInsert(allCols *ColCollection) error {
 			seenPkCol = true
 			break
 		}
+		c.TypeInfo.ToSqlType()
 	}
 
 	if !seenPkCol && !FeatureFlagKeylessSchema {
@@ -206,6 +207,42 @@ func ValidateForInsert(allCols *ColCollection) error {
 	})
 
 	return err
+}
+
+// MaxRowStorageSize returns the storage length for Dolt types.
+func MaxRowStorageSize(sch sql.Schema) int64 {
+	var numBytesPerRow int64 = 0
+	for _, col := range sch {
+		switch n := col.Type.(type) {
+		case sql.NumberType:
+			numBytesPerRow += 8
+		case sql.StringType:
+			if gmstypes.IsTextBlob(n) {
+				numBytesPerRow += 20
+			} else {
+				numBytesPerRow += n.MaxByteLength()
+			}
+		case gmstypes.BitType:
+			numBytesPerRow += 8
+		case sql.DatetimeType:
+			numBytesPerRow += 8
+		case sql.DecimalType:
+			numBytesPerRow += int64(n.MaximumScale())
+		case sql.EnumType:
+			numBytesPerRow += 2
+		case gmstypes.JsonType:
+			numBytesPerRow += 20
+		case sql.NullType:
+			numBytesPerRow += 1
+		case gmstypes.TimeType:
+			numBytesPerRow += 16
+		case sql.YearType:
+			numBytesPerRow += 8
+		default:
+			panic(fmt.Sprintf("unknown type in create table: %s", n.String()))
+		}
+	}
+	return numBytesPerRow
 }
 
 // isAutoIncrementKind returns true is |k| is a numeric kind.

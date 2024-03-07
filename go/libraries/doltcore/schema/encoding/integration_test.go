@@ -260,10 +260,10 @@ var integrationTests = []struct {
 			"`v31` varchar(255) DEFAULT NULL," +
 			"`v32` varbinary(255) DEFAULT NULL," +
 			"`v33` year DEFAULT NULL," +
-			"`v34` datetime(6) DEFAULT current_timestamp," +
-			"`v35` timestamp(6) DEFAULT now()," +
-			"`v36` datetime(3) DEFAULT current_timestamp," +
-			"`v37` timestamp(3) DEFAULT now()," +
+			"`v34` datetime(6) DEFAULT current_timestamp(6)," +
+			"`v35` timestamp(6) DEFAULT now(6)," +
+			"`v36` datetime(3) DEFAULT current_timestamp(3)," +
+			"`v37` timestamp(3) DEFAULT now(3)," +
 			"PRIMARY KEY (`pk`)" +
 			") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 	},
