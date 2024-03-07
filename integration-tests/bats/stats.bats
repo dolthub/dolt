@@ -47,10 +47,9 @@ teardown() {
     sleep 1
     stop_sql_server
 
-    # no statistics error if ref does not exist
-    run dolt sql -r csv -q "select database_name, table_name, index_name from dolt_statistics"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "no statistics found" ]] || false
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "0" ]
 
     # setting variables doesn't hang or error
     dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_enabled = 1;"
@@ -251,9 +250,9 @@ teardown() {
     sleep 1
     stop_sql_server
 
-    run dolt sql -r csv -q "select database_name, table_name, index_name from dolt_statistics"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "no statistics found" ]] || false
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "0" ]
 
     dolt sql -q "SET @@persist.dolt_stats_auto_refresh_enabled = 1;"
     dolt sql -q "SET @@persist.dolt_stats_auto_refresh_threshold = 0.5"

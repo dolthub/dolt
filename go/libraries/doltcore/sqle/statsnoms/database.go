@@ -2,6 +2,7 @@ package statsnoms
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -102,7 +103,9 @@ var _ statspro.Database = (*NomsStatsDatabase)(nil)
 
 func (n *NomsStatsDatabase) LoadBranchStats(ctx *sql.Context, branch string) error {
 	statsMap, err := n.destDb.DbData().Ddb.GetStatistics(ctx, branch)
-	if err != nil {
+	if errors.Is(err, doltdb.ErrNoStatistics) {
+		return nil
+	} else if err != nil {
 		return err
 	}
 	doltStats, err := loadStats(ctx, n.sourceDb, statsMap)

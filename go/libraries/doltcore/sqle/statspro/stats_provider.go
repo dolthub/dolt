@@ -56,11 +56,9 @@ func NewProvider(pro *sqle.DoltDatabaseProvider, sf StatsFactory) *Provider {
 // Each database has its own statistics table that all tables/indexes in a db
 // share.
 type Provider struct {
-	mu  *sync.Mutex
-	pro *sqle.DoltDatabaseProvider
-	sf  StatsFactory
-	//latestRootAddr hash.Hash
-	//dbStats        map[string]*dbToStats
+	mu        *sync.Mutex
+	pro       *sqle.DoltDatabaseProvider
+	sf        StatsFactory
 	statDbs   map[string]Database
 	cancelers map[string]context.CancelFunc
 	starter   sqle.InitDatabaseHook
@@ -90,6 +88,9 @@ var _ sql.StatsProvider = (*Provider)(nil)
 
 func (p *Provider) StartRefreshThread(ctx *sql.Context, pro dsess.DoltDatabaseProvider, name string, env *env.DoltEnv) error {
 	err := p.starter(ctx, pro.(*sqle.DoltDatabaseProvider), name, env)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	if err != nil {
 		p.UpdateStatus(name, fmt.Sprintf("error restarting thread %s: %s", name, err.Error()))
 		return err
@@ -107,11 +108,14 @@ func (p *Provider) CancelRefreshThread(dbName string) {
 	defer p.mu.Unlock()
 	if cancel, ok := p.cancelers[dbName]; ok {
 		cancel()
-		p.status[dbName] = fmt.Sprintf("cancelled thread: %s", dbName)
+		p.UpdateStatus(dbName, fmt.Sprintf("cancelled thread: %s", dbName))
 	}
 }
 
 func (p *Provider) ThreadStatus(dbName string) string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	if msg, ok := p.status[dbName]; ok {
 		return msg
 	}
@@ -129,7 +133,10 @@ func (p *Provider) GetTableStats(ctx *sql.Context, db, table string) ([]sql.Stat
 }
 
 func (p *Provider) GetTableDoltStats(ctx *sql.Context, branch, db, table string) ([]sql.Statistic, error) {
-	statDb, ok := p.statDbs[db]
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	statDb, ok := p.getStatDb(db)
 	if !ok || statDb == nil {
 		return nil, nil
 	}
@@ -154,8 +161,22 @@ func (p *Provider) GetTableDoltStats(ctx *sql.Context, branch, db, table string)
 	return ret, nil
 }
 
+func (p *Provider) setStatDb(name string, db Database) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.statDbs[name] = db
+}
+
+func (p *Provider) getStatDb(name string) (Database, bool) {
+	statDb, ok := p.statDbs[strings.ToLower(name)]
+	return statDb, ok
+}
+
 func (p *Provider) SetStats(ctx *sql.Context, s sql.Statistic) error {
-	statDb, ok := p.statDbs[s.Qualifier().Db()]
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	statDb, ok := p.getStatDb(s.Qualifier().Db())
 	if !ok {
 		return nil
 	}
@@ -171,11 +192,13 @@ func (p *Provider) SetStats(ctx *sql.Context, s sql.Statistic) error {
 		return err
 	}
 
+	p.UpdateStatus(s.Qualifier().Db(), fmt.Sprintf("refreshed %s", s.Qualifier().Db()))
+
 	return statDb.SetStat(ctx, branch, s.Qualifier(), doltStat)
 }
 
 func (p *Provider) getQualStats(ctx *sql.Context, qual sql.StatQualifier) (*DoltStats, bool) {
-	statDb, ok := p.statDbs[qual.Db()]
+	statDb, ok := p.getStatDb(qual.Db())
 	if !ok {
 		return nil, false
 	}
@@ -190,6 +213,9 @@ func (p *Provider) getQualStats(ctx *sql.Context, qual sql.StatQualifier) (*Dolt
 }
 
 func (p *Provider) GetStats(ctx *sql.Context, qual sql.StatQualifier, _ []string) (sql.Statistic, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	stat, ok := p.getQualStats(ctx, qual)
 	if !ok {
 		return nil, false
@@ -198,7 +224,10 @@ func (p *Provider) GetStats(ctx *sql.Context, qual sql.StatQualifier, _ []string
 }
 
 func (p *Provider) DropDbStats(ctx *sql.Context, db string, flush bool) error {
-	statDb, ok := p.statDbs[db]
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	statDb, ok := p.getStatDb(db)
 	if !ok {
 		return nil
 	}
@@ -220,7 +249,10 @@ func (p *Provider) DropDbStats(ctx *sql.Context, db string, flush bool) error {
 }
 
 func (p *Provider) DropStats(ctx *sql.Context, qual sql.StatQualifier, _ []string) error {
-	statDb, ok := p.statDbs[qual.Db()]
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	statDb, ok := p.getStatDb(qual.Db())
 	if !ok {
 		return nil
 	}
@@ -240,13 +272,14 @@ func (p *Provider) DropStats(ctx *sql.Context, qual sql.StatQualifier, _ []strin
 }
 
 func (p *Provider) UpdateStatus(db string, msg string) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
 	p.status[db] = msg
 }
 
 func (p *Provider) RowCount(ctx *sql.Context, db, table string) (uint64, error) {
-	statDb, ok := p.statDbs[db]
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	statDb, ok := p.getStatDb(db)
 	if !ok {
 		return 0, sql.ErrDatabaseNotFound.New(db)
 	}
@@ -266,7 +299,10 @@ func (p *Provider) RowCount(ctx *sql.Context, db, table string) (uint64, error) 
 }
 
 func (p *Provider) DataLength(ctx *sql.Context, db, table string) (uint64, error) {
-	statDb, ok := p.statDbs[db]
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	statDb, ok := p.getStatDb(db)
 	if !ok {
 		return 0, sql.ErrDatabaseNotFound.New(db)
 	}

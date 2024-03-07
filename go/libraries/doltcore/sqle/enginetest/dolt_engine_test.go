@@ -463,7 +463,7 @@ func TestQueryPlans(t *testing.T) {
 
 func TestIntegrationQueryPlans(t *testing.T) {
 	harness := newDoltHarness(t)
-
+	harness.configureStats = true
 	defer harness.Close()
 	enginetest.TestIntegrationPlans(t, harness)
 }
@@ -815,6 +815,7 @@ func TestJoinPlanning(t *testing.T) {
 		t.Skip("DOLT_LD keyless indexes are not sorted")
 	}
 	h := newDoltHarness(t)
+	h.configureStats = true
 	defer h.Close()
 	enginetest.TestJoinPlanning(t, h)
 }
@@ -862,6 +863,7 @@ func TestJSONTableScriptsPrepared(t *testing.T) {
 func TestUserPrivileges(t *testing.T) {
 	h := newDoltHarness(t)
 	h.setupTestProcedures = true
+	h.configureStats = true
 	defer h.Close()
 	enginetest.TestUserPrivileges(t, h)
 }
@@ -2135,6 +2137,7 @@ func TestStatsFunctions(t *testing.T) {
 	defer harness.Close()
 	harness.Setup(setup.MydbData)
 	harness.configureStats = true
+	harness.skipSetupCommit = true
 	for _, test := range StatProcTests {
 		t.Run(test.Name, func(t *testing.T) {
 			// reset engine so provider statistics are clean
@@ -2598,6 +2601,7 @@ func TestQueriesPrepared(t *testing.T) {
 func TestStatsHistograms(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
+	h.configureStats = true
 	for _, script := range DoltHistogramTests {
 		h.engine = nil
 		enginetest.TestScript(t, h, script)
@@ -2608,6 +2612,7 @@ func TestStatsHistograms(t *testing.T) {
 // forces a round trip of the statistics table before inspecting values.
 func TestStatsIO(t *testing.T) {
 	h := newDoltHarness(t)
+	h.configureStats = true
 	defer h.Close()
 	for _, script := range append(DoltStatsIOTests, DoltHistogramTests...) {
 		h.engine = nil
@@ -2628,6 +2633,7 @@ func TestJoinStats(t *testing.T) {
 	// smallest table first vs smallest join first
 	h := newDoltHarness(t)
 	defer h.Close()
+	h.configureStats = true
 	enginetest.TestJoinStats(t, h)
 }
 
@@ -2648,6 +2654,7 @@ func TestSpatialQueriesPrepared(t *testing.T) {
 func TestPreparedStatistics(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
+	h.configureStats = true
 	for _, script := range DoltHistogramTests {
 		h.engine = nil
 		enginetest.TestScriptPrepared(t, h, script)

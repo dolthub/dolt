@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
 
@@ -573,8 +572,8 @@ var StatProcTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "select count(*) from dolt_statistics",
-				ExpectedErrStr: doltdb.ErrNoStatistics.Error(),
+				Query:    "select count(*) from dolt_statistics",
+				Expected: []sql.Row{{0}},
 			},
 			{
 				Query:    "call dolt_stats_status()",
@@ -609,7 +608,7 @@ var StatProcTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_stats_status()",
-				Expected: []sql.Row{{"updated to hash: vogi4fq0fe8n8rqa80pbsujlmmaljsoo"}},
+				Expected: []sql.Row{{"refreshed mydb"}},
 			},
 			{
 				Query:    "select count(*) from dolt_statistics",
@@ -641,7 +640,7 @@ var StatProcTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "call dolt_stats_status()",
-				Expected: []sql.Row{{"updated to hash: fhnmdo8psvs10od36pqfi0g4cvvu732h"}},
+				Expected: []sql.Row{{"refreshed mydb"}},
 			},
 			{
 				Query:    "select count(*) from dolt_statistics",
@@ -656,8 +655,8 @@ var StatProcTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"dropped"}},
 			},
 			{
-				Query:          "select count(*) from dolt_statistics",
-				ExpectedErrStr: doltdb.ErrNoStatistics.Error(),
+				Query:    "select count(*) from dolt_statistics",
+				Expected: []sql.Row{{0}},
 			},
 		},
 	},

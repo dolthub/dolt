@@ -14,6 +14,9 @@ import (
 )
 
 func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	dSess := dsess.DSessFromSess(ctx.Session)
 	branch, err := dSess.GetBranch()
 	if err != nil {
@@ -33,12 +36,13 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 	}
 
 	// it's important to update session references every call
-	sqlTable, dTab, err := p.getLatestDoltDb(ctx, tableName, dbName, branch)
+	// if we pass a non-nil asOf we'll get data from HEAD rather than WORKING
+	sqlTable, dTab, err := p.getLatestTable(ctx, tableName, dbName, branch)
 	if err != nil {
 		return err
 	}
 
-	statDb, ok := p.statDbs[dbName]
+	statDb, ok := p.getStatDb(dbName)
 	if !ok {
 		fs, err := p.pro.FileSystemForDatabase(dbName)
 		if err != nil {
@@ -53,7 +57,7 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 			ctx.Warn(0, err.Error())
 			return nil
 		}
-		p.statDbs[dbName] = statDb
+		p.setStatDb(dbName, statDb)
 	}
 
 	tablePrefix := fmt.Sprintf("%s.", tableName)
@@ -86,6 +90,10 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 	for _, idxMeta := range idxMetas {
 		stat := newTableStats[idxMeta.qual]
 		targetChunks := MergeNewChunks(idxMeta.allAddrs, idxMeta.keepChunks, stat.Histogram)
+		if targetChunks == nil {
+			// empty table
+			continue
+		}
 		stat.Chunks = idxMeta.allAddrs
 		stat.Histogram = targetChunks
 		stat.UpdateActive()
@@ -94,20 +102,22 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 		}
 	}
 
+	p.UpdateStatus(dbName, fmt.Sprintf("refreshed %s", dbName))
 	return statDb.Flush(ctx, branch)
 }
 
-func (p *Provider) getLatestDoltDb(ctx *sql.Context, tableName string, dbName string, asOf string) (sql.Table, *doltdb.Table, error) {
+// getLatestTable will get the WORKING root table for the current database/branch
+func (p *Provider) getLatestTable(ctx *sql.Context, tableName string, dbName string, branch string) (sql.Table, *doltdb.Table, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	prov := dSess.Provider()
 
-	sqlDb, err := prov.Database(ctx, dbName)
+	// database/branch pins the WORKING root
+	sqlDb, err := prov.Database(ctx, fmt.Sprintf("%s/%s", dbName, branch))
 	if err != nil {
 		return nil, nil, err
 	}
 
-	sqlTable, ok, err := sqlDb.(sqle.Database).GetTableInsensitiveAsOf(ctx, tableName, asOf)
-	//sqlTable, ok, err := sqlDb.GetTableInsensitive(ctx, tableName)
+	sqlTable, ok, err := sqlDb.(sqle.Database).GetTableInsensitive(ctx, tableName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -145,6 +155,15 @@ func newIdxMeta(ctx *sql.Context, curStats *DoltStats, doltTable *doltdb.Table, 
 	}
 
 	prollyMap := durable.ProllyMapFromIndex(idx)
+
+	if cnt, err := prollyMap.Count(); err != nil {
+		return indexMeta{}, err
+	} else if cnt == 0 {
+		return indexMeta{
+			qual: curStats.Qual,
+			cols: cols,
+		}, nil
+	}
 
 	// get newest histogram target level hashes
 	levelNodes, err := tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)

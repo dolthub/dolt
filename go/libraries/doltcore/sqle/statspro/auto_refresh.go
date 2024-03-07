@@ -76,37 +76,40 @@ func (p *Provider) InitAutoRefreshWithParams(ctxFactory func(ctx context.Context
 				timer.Stop()
 				return
 			case <-timer.C:
-				select {
-				case <-dropDbCtx.Done():
-					timer.Stop()
-					return
-				default:
-				}
-
-				sqlCtx, err := ctxFactory(ctx)
-				if err != nil {
-					return
-				}
-
-				dSess := dsess.DSessFromSess(sqlCtx.Session)
-				ddb, ok := dSess.GetDoltDB(sqlCtx, dbName)
-				if !ok {
-					sqlCtx.GetLogger().Debugf("statistics refresh error: database not found %s", dbName)
-				}
-				//branches, err := ddb.GetBranches(sqlCtx)
-				for _, branch := range branches {
-					if br, ok, err := ddb.HasBranch(ctx, branch); ok {
-						sqlCtx.GetLogger().Debugf("starting statistics refresh check for '%s': %s", dbName, time.Now().String())
-						if err := p.checkRefresh(sqlCtx, dbName, br, updateThresh); err != nil {
-							sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
-							return
-						}
-					} else if err != nil {
-						sqlCtx.GetLogger().Debugf("statistics refresh error: branch check error %s", err.Error())
-					} else {
-						sqlCtx.GetLogger().Debugf("statistics refresh error: branch not found %s")
+				func() {
+					p.mu.Lock()
+					defer p.mu.Unlock()
+					select {
+					case <-dropDbCtx.Done():
+						timer.Stop()
+						return
+					default:
 					}
-				}
+
+					sqlCtx, err := ctxFactory(ctx)
+					if err != nil {
+						return
+					}
+
+					dSess := dsess.DSessFromSess(sqlCtx.Session)
+					ddb, ok := dSess.GetDoltDB(sqlCtx, dbName)
+					if !ok {
+						sqlCtx.GetLogger().Debugf("statistics refresh error: database not found %s", dbName)
+					}
+					for _, branch := range branches {
+						if br, ok, err := ddb.HasBranch(ctx, branch); ok {
+							sqlCtx.GetLogger().Debugf("starting statistics refresh check for '%s': %s", dbName, time.Now().String())
+							if err := p.checkRefresh(sqlCtx, dbName, br, updateThresh); err != nil {
+								sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
+								return
+							}
+						} else if err != nil {
+							sqlCtx.GetLogger().Debugf("statistics refresh error: branch check error %s", err.Error())
+						} else {
+							sqlCtx.GetLogger().Debugf("statistics refresh error: branch not found %s")
+						}
+					}
+				}()
 				timer.Reset(checkInterval)
 			}
 		}
@@ -120,8 +123,7 @@ func (p *Provider) checkRefresh(ctx *sql.Context, dbName, branch string, updateT
 	// chunks. The full set of statistics for each database lands
 	// 1) in the provider's most recent set of database statistics, and
 	// 2) on disk in the database's statistics ref'd prolly.Map.
-	//curStats := p.getStats(dbName, branch)
-	statDb, ok := p.statDbs[dbName]
+	statDb, ok := p.getStatDb(dbName)
 	if !ok {
 		return sql.ErrDatabaseNotFound.New(dbName)
 	}
@@ -131,10 +133,10 @@ func (p *Provider) checkRefresh(ctx *sql.Context, dbName, branch string, updateT
 	tableExistsAndSkipped := make(map[string]bool)
 
 	// important: update session references every loop
-	//ctx.SetCurrentDatabase(fmt.Sprintf("%s/%s", dbName, branch))
 	dSess := dsess.DSessFromSess(ctx.Session)
 	prov := dSess.Provider()
 
+	// WORKING root database
 	sqlDb, err := prov.Database(ctx, fmt.Sprintf("%s/%s", dbName, branch))
 	if err != nil {
 		return err
@@ -146,7 +148,7 @@ func (p *Provider) checkRefresh(ctx *sql.Context, dbName, branch string, updateT
 	}
 
 	for _, table := range tables {
-		sqlTable, dTab, err := p.getLatestDoltDb(ctx, table, dbName, branch)
+		sqlTable, dTab, err := p.getLatestTable(ctx, table, dbName, branch)
 		if err != nil {
 			return err
 		}
@@ -233,6 +235,7 @@ func (p *Provider) checkRefresh(ctx *sql.Context, dbName, branch string, updateT
 				if err != nil {
 					return err
 				}
+				p.UpdateStatus(dbName, fmt.Sprintf("refreshed %s", dbName))
 			}
 		}
 	}

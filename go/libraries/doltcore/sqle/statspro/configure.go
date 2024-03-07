@@ -60,7 +60,7 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 }
 
 func (p *Provider) LoadStats(ctx *sql.Context, db, branch string) error {
-	if statDb, ok := p.statDbs[db]; ok {
+	if statDb, ok := p.getStatDb(db); ok {
 		return statDb.LoadBranchStats(ctx, branch)
 	}
 	return nil
@@ -69,11 +69,6 @@ func (p *Provider) LoadStats(ctx *sql.Context, db, branch string) error {
 // Load scans the statistics tables, populating the |stats| attribute.
 // Statistics are not available for reading until we've finished loading.
 func (p *Provider) Load(ctx *sql.Context, branches []string) error {
-	for _, db := range p.pro.DoltDatabases() {
-		// set map keys so concurrent orthogonal writes are OK
-		p.statDbs[strings.ToLower(db.Name())] = nil
-	}
-
 	eg, ctx := ctx.NewErrgroup()
 	for _, db := range p.pro.DoltDatabases() {
 		// copy closure variables
@@ -109,22 +104,7 @@ func (p *Provider) Load(ctx *sql.Context, branches []string) error {
 				}
 			}
 
-			p.statDbs[dbName] = statsDb
-
-			//m, err := db.DbData().Ddb.GetStatistics(ctx)
-			//if errors.Is(err, doltdb.ErrNoStatistics) {
-			//	return nil
-			//} else if err != nil {
-			//	return err
-			//}
-			//stats, err := loadStats(ctx, db, statsDb)
-			//if errors.Is(err, dtables.ErrIncompatibleVersion) {
-			//	ctx.Warn(0, err.Error())
-			//	return nil
-			//} else if err != nil {
-			//	return err
-			//}
-			//p.setStats(dbName, stats)
+			p.setStatDb(dbName, statsDb)
 			return nil
 		})
 	}
