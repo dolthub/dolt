@@ -437,6 +437,7 @@ func TestQueryPlans(t *testing.T) {
 	// Parallelism introduces Exchange nodes into the query plans, so disable.
 	// TODO: exchange nodes should really only be part of the explain plan under certain debug settings
 	harness := newDoltHarness(t).WithSkippedQueries(skipped)
+	harness.configureStats = true
 	if !types.IsFormat_DOLT(types.Format_Default) {
 		// only new format supports reverse IndexTableAccess
 		reverseIndexSkip := []string{
@@ -3154,7 +3155,7 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 		return enginetest.NewSession(harness), nil
 	}
 
-	err := statsProv.InitAutoRefresh(newCtx, sqlDb.Name(), bThreads, intervalSec, thresholdf64, branches)
+	err := statsProv.InitAutoRefreshWithParams(newCtx, sqlDb.Name(), bThreads, intervalSec, thresholdf64, branches)
 	require.NoError(t, err)
 
 	execQ := func(ctx *sql.Context, q string, id int, tag string) {

@@ -49,7 +49,7 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 		thresholdf64 := threshold.(float64)
 
 		for _, db := range dbs {
-			if err := p.InitAutoRefresh(ctxFactory, db.Name(), bThreads, intervalSec, thresholdf64, branches); err != nil {
+			if err := p.InitAutoRefreshWithParams(ctxFactory, db.Name(), bThreads, intervalSec, thresholdf64, branches); err != nil {
 				return err
 			}
 		}

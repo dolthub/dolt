@@ -192,8 +192,8 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		require.True(t, ok)
 		d.provider = doltProvider
 
-		statsPro := statspro.NewProvider(d.provider.(*sqle.DoltDatabaseProvider), statsnoms.NewNomsStatsFactory(d.multiRepoEnv.RemoteDialProvider()))
-		d.statsPro = statsPro
+		statsProv := statspro.NewProvider(d.provider.(*sqle.DoltDatabaseProvider), statsnoms.NewNomsStatsFactory(d.multiRepoEnv.RemoteDialProvider()))
+		d.statsPro = statsProv
 
 		var err error
 		d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro)
@@ -231,9 +231,14 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 			for i, dbName := range dbs {
 				dsessDbs[i], _ = dbCache.GetCachedRevisionDb(fmt.Sprintf("%s/main", dbName), dbName)
 			}
-			if err = statsPro.Configure(ctx, func(context.Context) (*sql.Context, error) { return d.NewSession(), nil }, bThreads, dsessDbs); err != nil {
+
+			ctxFact := func(context.Context) (*sql.Context, error) { return d.NewContext(), nil }
+			if err = statsProv.Configure(ctx, ctxFact, bThreads, dsessDbs); err != nil {
 				return nil, err
 			}
+
+			statsOnlyQueries := filterStatsOnlyQueries(d.setupData)
+			e, err = enginetest.RunSetupScripts(ctx, e, statsOnlyQueries, d.SupportsNativeIndexCreation())
 		}
 
 		return e, nil
@@ -256,6 +261,18 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	e, err := enginetest.RunSetupScripts(ctx, d.engine, d.resetScripts(), d.SupportsNativeIndexCreation())
 
 	return e, err
+}
+
+func filterStatsOnlyQueries(scripts []setup.SetupScript) []setup.SetupScript {
+	var ret []string
+	for i := range scripts {
+		for _, s := range scripts[i] {
+			if strings.HasPrefix(s, "analyze table") {
+				ret = append(ret, s)
+			}
+		}
+	}
+	return []setup.SetupScript{ret}
 }
 
 // WithParallelism returns a copy of the harness with parallelism set to the given number of threads. A value of 0 or

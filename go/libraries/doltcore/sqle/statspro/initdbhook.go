@@ -16,15 +16,9 @@ package statspro
 
 import (
 	"context"
-	"strings"
-	"time"
-
-	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 func NewInitDatabaseHook(statsProv *Provider, ctxFactory func(ctx context.Context) (*sql.Context, error), bThreads *sql.BackgroundThreads, orig sqle.InitDatabaseHook) sqle.InitDatabaseHook {
@@ -35,26 +29,7 @@ func NewInitDatabaseHook(statsProv *Provider, ctxFactory func(ctx context.Contex
 				return err
 			}
 		}
-		_, threshold, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshThreshold)
-		_, interval, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshInterval)
-		interval64, _, _ := types2.Int64.Convert(interval)
-		intervalSec := time.Second * time.Duration(interval64.(int64))
-		thresholdf64 := threshold.(float64)
-
-		dSess := dsess.DSessFromSess(ctx.Session)
-		var branches []string
-		if _, bs, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsBranches); bs == "" {
-			defaultBranch, err := dSess.GetBranch()
-			if err != nil {
-				return err
-			}
-			branches = append(branches, defaultBranch)
-		} else {
-			for _, branch := range strings.Split(bs.(string), ",") {
-				branches = append(branches, strings.TrimSpace(branch))
-			}
-		}
-		return statsProv.InitAutoRefresh(ctxFactory, name, bThreads, intervalSec, thresholdf64, branches)
+		return statsProv.InitAutoRefresh(ctxFactory, name, bThreads)
 	}
 }
 

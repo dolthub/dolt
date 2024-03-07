@@ -17,6 +17,7 @@ package statspro
 import (
 	"context"
 	"fmt"
+	types2 "github.com/dolthub/go-mysql-server/sql/types"
 	"strings"
 	"time"
 
@@ -26,7 +27,35 @@ import (
 
 const asyncAutoRefreshStats = "async_auto_refresh_stats"
 
-func (p *Provider) InitAutoRefresh(ctxFactory func(ctx context.Context) (*sql.Context, error), dbName string, bThreads *sql.BackgroundThreads, checkInterval time.Duration, updateThresh float64, branches []string) error {
+func (p *Provider) InitAutoRefresh(ctxFactory func(ctx context.Context) (*sql.Context, error), dbName string, bThreads *sql.BackgroundThreads) error {
+	_, threshold, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshThreshold)
+	_, interval, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshInterval)
+	interval64, _, _ := types2.Int64.Convert(interval)
+	intervalSec := time.Second * time.Duration(interval64.(int64))
+	thresholdf64 := threshold.(float64)
+
+	ctx, err := ctxFactory(context.Background())
+	if err != nil {
+		return err
+	}
+
+	dSess := dsess.DSessFromSess(ctx.Session)
+	var branches []string
+	if _, bs, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsBranches); bs == "" {
+		defaultBranch, err := dSess.GetBranch()
+		if err != nil {
+			return err
+		}
+		branches = append(branches, defaultBranch)
+	} else {
+		for _, branch := range strings.Split(bs.(string), ",") {
+			branches = append(branches, strings.TrimSpace(branch))
+		}
+	}
+	return p.InitAutoRefreshWithParams(ctxFactory, dbName, bThreads, intervalSec, thresholdf64, branches)
+}
+
+func (p *Provider) InitAutoRefreshWithParams(ctxFactory func(ctx context.Context) (*sql.Context, error), dbName string, bThreads *sql.BackgroundThreads, checkInterval time.Duration, updateThresh float64, branches []string) error {
 	// this is only called after initial statistics are finished loading
 	// launch a thread that periodically checks freshness
 
