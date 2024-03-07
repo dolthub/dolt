@@ -705,7 +705,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 				// Going back to @commit1 for data, but using @commit2 for schema
 				Query:           "SELECT c1 from t as of @commit1 where c1 > 'o';",
 				Expected:        []sql.Row{{"one"}},
-				ExpectedIndexes: []string{"c1_idx"},
+				ExpectedIndexes: []string{},
 			},
 		},
 	},
@@ -1010,7 +1010,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 
 	// JOIN TEST CASES
 	{
-		Name: "Joins: Two tables with changed schemas",
+		Name: "Joins: Two tables with changed schemas and renamed primary key",
 		SetUpScript: []string{
 			"create table t1 (pk int primary key, c1 varchar(255));",
 			"create table t2 (pk int primary key, c1 int, c2 varchar(100));",
@@ -1019,6 +1019,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			"call dolt_commit('-Am', 'adding tables t1 and t2 on main');",
 			"SET @commit1 = hashof('HEAD');",
 
+			"alter table t1 rename column pk to newPk;",
 			"alter table t1 rename column c1 to c2;",
 			"alter table t2 modify column c1 varchar(100);",
 			"call dolt_commit('-am', 'modifying columns in t1 and t2 on main');",

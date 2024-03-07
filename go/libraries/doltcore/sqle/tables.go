@@ -243,6 +243,13 @@ func (t *DoltTable) getRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 
 // GetIndexes implements sql.IndexedTable
 func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	// If a schema override is in place, we can't trust that the indexes stored with the data
+	// will match up to the overridden schema, so we disable indexes. We could improve this by
+	// adding schema mapping for the indexes.
+	if t.overriddenSchema != nil {
+		return nil, nil
+	}
+
 	key, tableIsCacheable, err := t.DataCacheKey(ctx)
 	if err != nil {
 		return nil, err
