@@ -99,10 +99,10 @@ const (
 # "exit" or "quit" (or Ctrl-D) to exit.`
 )
 
-// TODO: get rid of me, use a real integration point to define system variables
-func init() {
-	dsqle.AddDoltSystemVariables()
-}
+//// TODO: get rid of me, use a real integration point to define system variables
+//func init() {
+//	dsqle.AddDoltSystemVariables()
+//}
 
 type SqlCmd struct {
 	VersionStr string

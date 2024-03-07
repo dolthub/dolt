@@ -71,8 +71,8 @@ func DefineSystemVariablesForDB(name string) {
 	name, _ = SplitRevisionDbName(name)
 
 	if _, _, ok := sql.SystemVariables.GetGlobal(name + HeadKeySuffix); !ok {
-		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
-			{
+		sql.SystemVariables.AddSystemVariables([]sql.SystemVariableInterface{
+			&sql.SystemVariable{
 				Name:              HeadRefKey(name),
 				Scope:             sql.SystemVariableScope_Session,
 				Dynamic:           true,
@@ -82,7 +82,7 @@ func DefineSystemVariablesForDB(name string) {
 			},
 			// The following variable are Dynamic, but read-only. Their values
 			// can only be updates by the system, not by users.
-			{
+			&sql.SystemVariable{
 				Name:              HeadKey(name),
 				Scope:             sql.SystemVariableScope_Session,
 				Dynamic:           true,
@@ -90,7 +90,7 @@ func DefineSystemVariablesForDB(name string) {
 				Type:              types.NewSystemStringType(HeadKey(name)),
 				Default:           "",
 			},
-			{
+			&sql.SystemVariable{
 				Name:              WorkingKey(name),
 				Scope:             sql.SystemVariableScope_Session,
 				Dynamic:           true,
@@ -98,7 +98,7 @@ func DefineSystemVariablesForDB(name string) {
 				Type:              types.NewSystemStringType(WorkingKey(name)),
 				Default:           "",
 			},
-			{
+			&sql.SystemVariable{
 				Name:              StagedKey(name),
 				Scope:             sql.SystemVariableScope_Session,
 				Dynamic:           true,
@@ -106,7 +106,7 @@ func DefineSystemVariablesForDB(name string) {
 				Type:              types.NewSystemStringType(StagedKey(name)),
 				Default:           "",
 			},
-			{
+			&sql.SystemVariable{
 				Name:              DefaultBranchKey(name),
 				Scope:             sql.SystemVariableScope_Global,
 				Dynamic:           true,

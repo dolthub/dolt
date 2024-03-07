@@ -1431,7 +1431,7 @@ func (d *DoltSession) PersistGlobal(sysVarName string, value interface{}) error 
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return setPersistedValue(d.globalsConf, sysVar.Name, value)
+	return setPersistedValue(d.globalsConf, sysVar.VarName(), value)
 }
 
 // RemovePersistedGlobal implements sql.PersistableSession
@@ -1447,7 +1447,7 @@ func (d *DoltSession) RemovePersistedGlobal(sysVarName string) error {
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.globalsConf.Unset([]string{sysVar.Name})
+	return d.globalsConf.Unset([]string{sysVar.VarName()})
 }
 
 // RemoveAllPersistedGlobals implements sql.PersistableSession
@@ -1479,7 +1479,7 @@ func (d *DoltSession) GetPersistedValue(k string) (interface{}, error) {
 }
 
 // SystemVariablesInConfig returns a list of System Variables associated with the session
-func (d *DoltSession) SystemVariablesInConfig() ([]sql.SystemVariable, error) {
+func (d *DoltSession) SystemVariablesInConfig() ([]sql.SystemVariableInterface, error) {
 	if d.globalsConf == nil {
 		return nil, ErrSessionNotPersistable
 	}
@@ -1533,13 +1533,13 @@ func (d *DoltSession) GetController() *branch_control.Controller {
 }
 
 // validatePersistedSysVar checks whether a system variable exists and is dynamic
-func validatePersistableSysVar(name string) (sql.SystemVariable, interface{}, error) {
+func validatePersistableSysVar(name string) (sql.SystemVariableInterface, interface{}, error) {
 	sysVar, val, ok := sql.SystemVariables.GetGlobal(name)
 	if !ok {
-		return sql.SystemVariable{}, nil, sql.ErrUnknownSystemVariable.New(name)
+		return nil, nil, sql.ErrUnknownSystemVariable.New(name)
 	}
-	if !sysVar.Dynamic {
-		return sql.SystemVariable{}, nil, sql.ErrSystemVariableReadOnly.New(name)
+	if sv, ok := sysVar.(*sql.SystemVariable); ok && !sv.Dynamic {
+		return nil, nil, sql.ErrSystemVariableReadOnly.New(name)
 	}
 	return sysVar, val, nil
 }
@@ -1629,12 +1629,11 @@ func setPersistedValue(conf config.WritableConfig, key string, value interface{}
 // SystemVariablesInConfig returns system variables from the persisted config
 // and a list of persisted keys that have no corresponding definition in
 // |sql.SystemVariables|.
-func SystemVariablesInConfig(conf config.ReadableConfig) ([]sql.SystemVariable, []string, error) {
-	allVars := make([]sql.SystemVariable, conf.Size())
+func SystemVariablesInConfig(conf config.ReadableConfig) ([]sql.SystemVariableInterface, []string, error) {
+	allVars := make([]sql.SystemVariableInterface, conf.Size())
 	var missingKeys []string
 	i := 0
 	var err error
-	var sysVar sql.SystemVariable
 	var def interface{}
 	conf.Iter(func(k, v string) bool {
 		def, err = getPersistedValue(conf, k)
@@ -1648,8 +1647,8 @@ func SystemVariablesInConfig(conf config.ReadableConfig) ([]sql.SystemVariable, 
 			return true
 		}
 		// getPersistedVal already checked for errors
-		sysVar, _, _ = sql.SystemVariables.GetGlobal(k)
-		sysVar.Default = def
+		sysVar, _, _ := sql.SystemVariables.GetGlobal(k)
+		sysVar.SetDefault(def)
 		allVars[i] = sysVar
 		i++
 		return false
