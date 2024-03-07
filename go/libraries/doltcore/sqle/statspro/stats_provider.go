@@ -130,7 +130,7 @@ func (p *Provider) GetTableStats(ctx *sql.Context, db, table string) ([]sql.Stat
 
 func (p *Provider) GetTableDoltStats(ctx *sql.Context, branch, db, table string) ([]sql.Statistic, error) {
 	statDb, ok := p.statDbs[db]
-	if !ok {
+	if !ok || statDb == nil {
 		return nil, nil
 	}
 
