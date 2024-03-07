@@ -116,16 +116,16 @@ type indexEntry interface {
 }
 
 type indexResult struct {
-	o uint64
-	l uint32
+	offset uint64
+	length uint32
 }
 
 func (ir indexResult) Offset() uint64 {
-	return ir.o
+	return ir.offset
 }
 
 func (ir indexResult) Length() uint32 {
-	return ir.l
+	return ir.length
 }
 
 type tableReaderAt interface {
