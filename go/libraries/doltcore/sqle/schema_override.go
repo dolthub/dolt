@@ -51,6 +51,9 @@ func resolveOverriddenNonexistentTable(ctx *sql.Context, tblName string, db Data
 	}
 
 	// Load the overridden schema and convert it to a sql.Schema
+	// TODO: Use the schema cache for this – it's already cached by root, so we can reuse it. Might
+	//       need to refactor how we access the schema cache though.
+	//       Should also profile the performance before/after to understand the impact.
 	overriddenSchema, err := t.GetSchema(ctx)
 	if err != nil {
 		return nil, false, err
@@ -75,6 +78,8 @@ func overrideSchemaForTable(ctx *sql.Context, tableName string, tbl *doltdb.Tabl
 	if !ok {
 		return fmt.Errorf("unable to find table '%s' at overridden schema root", tableName)
 	}
+
+	// TODO: Same comment here as above; use the table cache if we can and profile performance before/after
 	overriddenSchema, err := overriddenTable.GetSchema(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to load overridden schema for table '%s': %s", tableName, err.Error())
@@ -161,8 +166,9 @@ func resolveOverriddenSchemaRoot(ctx *sql.Context, db Database) (*doltdb.RootVal
 //     here they need to be specified by tag and then fallback to column name matching if a tag isn't found.
 //  2. The dolt_history_ system tables will not map columns unless their types are exactly identical. This is too
 //     strict for schema override mapping, so this implementation attempts to convert column values to the target
-//     type. If a column value is not compatible with the mapped column type (e.g. a 10-char string in a varchar(5)
-//     type), then an error is returned while mapping the schema. This is similar to the behavior of the diff tables
+//     type. If a column value is not compatible with the mapped column type, then an error is returned while mapping
+//     the schema. String types are currently the only exception: they will be truncated to fit into narrower types
+//     if necessary, and a warning will be logged in the session. This is similar to the behavior of the diff tables
 //     but instead of returning an error, they log a warning and return a NULL value.
 func rowConverterByColTagAndName(srcSchema, targetSchema schema.Schema, projectedTags []uint64, projectedColNames []string) func(ctx *sql.Context, row sql.Row) (sql.Row, error) {
 	srcIndexToTargetIndex := make(map[int]int)
