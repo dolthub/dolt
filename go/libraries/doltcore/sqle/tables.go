@@ -92,7 +92,7 @@ type DoltTable struct {
 
 	opts editor.Options
 
-	// overriddenSchema is set when the @@dolt_schema_override_commit system var is in use
+	// overriddenSchema is set when the @@dolt_override_schema system var is in use
 	overriddenSchema schema.Schema
 }
 

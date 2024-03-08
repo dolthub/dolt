@@ -43,7 +43,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// use the tip of main for our response schemas
-				Query:    "SET @@dolt_schema_override_commit=@commit3;",
+				Query:    "SET @@dolt_override_schema=@commit3;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -69,7 +69,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				// use the first commit from main for our response schema (pk, c1)
-				Query:    "SET @@dolt_schema_override_commit=@commit1;",
+				Query:    "SET @@dolt_override_schema=@commit1;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -118,7 +118,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				// turn off the schema override
-				Query:    "SET @@dolt_schema_override_commit=NULL;",
+				Query:    "SET @@dolt_override_schema=NULL;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -158,7 +158,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// use the tip of main for our response schema (pk, c1, c2, c3)
-				Query:    "SET @@dolt_schema_override_commit=@commit3;",
+				Query:    "SET @@dolt_override_schema=@commit3;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -182,7 +182,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				// use the previous commit from main for our response schema (pk, c1, c2)
-				Query:    "SET @@dolt_schema_override_commit=@commit2;",
+				Query:    "SET @@dolt_override_schema=@commit2;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -203,7 +203,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				// use the first commit from main for our response schemas (pk, c1)
-				Query:    "SET @@dolt_schema_override_commit=@commit1;",
+				Query:    "SET @@dolt_override_schema=@commit1;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -240,7 +240,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// use @commit2 response schema (pk, c1, c2, c3, c4, c6, c7)
-				Query:    "SET @@dolt_schema_override_commit=@commit2;",
+				Query:    "SET @@dolt_override_schema=@commit2;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -273,7 +273,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				// use @commit2 response schema (pk, c1, c2, c3, c4, c5, c6, c7)
-				Query:    "SET @@dolt_schema_override_commit=@commit1;",
+				Query:    "SET @@dolt_override_schema=@commit1;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -325,7 +325,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// use the tip of main for our response schema (pk, c2)
-				Query:    "SET @@dolt_schema_override_commit=@commit2;",
+				Query:    "SET @@dolt_override_schema=@commit2;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -342,7 +342,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:    "SET @@dolt_schema_override_commit=@commit1;",
+				Query:    "SET @@dolt_override_schema=@commit1;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -382,7 +382,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// Set an invalid commit that can't be resolved
-				Query:    "SET @@dolt_schema_override_commit=doesNotExist;",
+				Query:    "SET @@dolt_override_schema=doesNotExist;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -391,17 +391,17 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				// Set an invalid type
-				Query:          "SET @@dolt_schema_override_commit=POINT(100, 42);",
-				ExpectedErrStr: "Variable 'dolt_schema_override_commit' can't be set to the value of '{0 100 42}'",
+				Query:          "SET @@dolt_override_schema=POINT(100, 42);",
+				ExpectedErrStr: "Variable 'dolt_override_schema' can't be set to the value of '{0 100 42}'",
 			},
 			{
 				// Set an invalid ancestor spec
-				Query:    "SET @@dolt_schema_override_commit='HEA~D~^~~~';",
+				Query:    "SET @@dolt_override_schema='HEA~D~^~~~';",
 				Expected: []sql.Row{{}},
 			},
 			{
 				Query:          "select * from t;",
-				ExpectedErrStr: "invalid commit spec specified in dolt_schema_override_commit: Invalid HEAD spec: ~D~^~~~",
+				ExpectedErrStr: "invalid commit spec specified in dolt_override_schema: Invalid HEAD spec: ~D~^~~~",
 			},
 		},
 	},
@@ -425,7 +425,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// use the first commit for our response schema (pk, c1)
-				Query:    "SET @@dolt_schema_override_commit=@commit1;",
+				Query:    "SET @@dolt_override_schema=@commit1;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -460,7 +460,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// use the first commit for our response schema (pk, c1)
-				Query:    "SET @@dolt_schema_override_commit=@commit1;",
+				Query:    "SET @@dolt_override_schema=@commit1;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -499,7 +499,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// use the tip of main for our response schemas
-				Query:    "SET @@dolt_schema_override_commit=@commit2;",
+				Query:    "SET @@dolt_override_schema=@commit2;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -516,7 +516,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:    "SET @@dolt_schema_override_commit=@commit1;",
+				Query:    "SET @@dolt_override_schema=@commit1;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -550,7 +550,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// use the tip of main for our response schemas (int, varchar(100))
-				Query:    "SET @@dolt_schema_override_commit=@commit2;",
+				Query:    "SET @@dolt_override_schema=@commit2;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -568,7 +568,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				// go back to the first commit, where the schema had a more narrow type (int, varchar(5))
-				Query:    "SET @@dolt_schema_override_commit=@commit1;",
+				Query:    "SET @@dolt_override_schema=@commit1;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -606,7 +606,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// use the tip of main for our response schemas (int, int)
-				Query:    "SET @@dolt_schema_override_commit=@commit2;",
+				Query:    "SET @@dolt_override_schema=@commit2;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -624,7 +624,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				// go back to the first commit, where the schema have an incompatible type (int, point)
-				Query:    "SET @@dolt_schema_override_commit=@commit1;",
+				Query:    "SET @@dolt_override_schema=@commit1;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -650,7 +650,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 				Expected: []sql.Row{{1, "one"}},
 			},
 			{
-				Query:    "SET @@dolt_schema_override_commit=@commit1;",
+				Query:    "SET @@dolt_override_schema=@commit1;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -677,7 +677,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 				ExpectedErrStr: "table not found: deletedtable",
 			},
 			{
-				Query:    "SET @@dolt_schema_override_commit=@commit1;",
+				Query:    "SET @@dolt_override_schema=@commit1;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -704,7 +704,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 				ExpectedErrStr: "table not found: deletedtable",
 			},
 			{
-				Query:    "SET @@dolt_schema_override_commit=@commit1;",
+				Query:    "SET @@dolt_override_schema=@commit1;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -743,7 +743,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				// Set the overridden schema to the point where an index existed
-				Query:    "SET @@dolt_schema_override_commit=@commit1;",
+				Query:    "SET @@dolt_override_schema=@commit1;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -754,7 +754,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				// Set the overridden schema to the point where an index existed
-				Query:    "SET @@dolt_schema_override_commit=@commit2;",
+				Query:    "SET @@dolt_override_schema=@commit2;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -787,7 +787,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// use the tip of main for our response schemas
-				Query:    "SET @@dolt_schema_override_commit=@commit3;",
+				Query:    "SET @@dolt_override_schema=@commit3;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -806,7 +806,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				// use the previous commit from main for our response schemas
-				Query:    "SET @@dolt_schema_override_commit=@commit1;",
+				Query:    "SET @@dolt_override_schema=@commit1;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -864,7 +864,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// use the most recent commit for our response schemas (pk, c2)
-				Query:    "SET @@dolt_schema_override_commit=@commit3;",
+				Query:    "SET @@dolt_override_schema=@commit3;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -883,7 +883,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				// use the first commit from main for our response schemas (pk, c1)
-				Query:    "SET @@dolt_schema_override_commit=@commit1;",
+				Query:    "SET @@dolt_override_schema=@commit1;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -939,7 +939,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// use the most recent commit for our response schemas (pk, c2)
-				Query:    "SET @@dolt_schema_override_commit=@commit3;",
+				Query:    "SET @@dolt_override_schema=@commit3;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -958,7 +958,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				// use the first commit from main for our response schemas (pk, c1)
-				Query:    "SET @@dolt_schema_override_commit=@commit1;",
+				Query:    "SET @@dolt_override_schema=@commit1;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -1011,7 +1011,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// use the most recent commit for our response schemas (pk, c2)
-				Query:    "SET @@dolt_schema_override_commit=@commit3;",
+				Query:    "SET @@dolt_override_schema=@commit3;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -1030,7 +1030,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			},
 			{
 				// use the first commit from main for our response schemas (pk, c1)
-				Query:    "SET @@dolt_schema_override_commit=@commit1;",
+				Query:    "SET @@dolt_override_schema=@commit1;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -1084,7 +1084,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// use the tip of main for our response schema (pk, c2)
-				Query:    "SET @@dolt_schema_override_commit=@commit1;",
+				Query:    "SET @@dolt_override_schema=@commit1;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -1128,27 +1128,27 @@ var SchemaOverrideTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				// Before @@dolt_schema_override_commit is applied, we can executed DDL and update/insert statements
+				// Before @@dolt_override_schema is applied, we can executed DDL and update/insert statements
 				Query:    "create table t2 (pk int primary key, c1 JSON);",
 				Expected: []sql.Row{{gmstypes.NewOkResult(0)}},
 			},
 			{
-				Query:    "SET @@dolt_schema_override_commit=@commit1;",
+				Query:    "SET @@dolt_override_schema=@commit1;",
 				Expected: []sql.Row{{}},
 			},
 			{
-				// After @@dolt_schema_override_commit is applied, DDL statements error out
+				// After @@dolt_override_schema is applied, DDL statements error out
 				Query:          "create table t3 (pk int primary key, c1 JSON);",
 				ExpectedErrStr: "Database mydb is read-only.",
 			},
 			{
-				// After @@dolt_schema_override_commit is applied, DDL statements error out
+				// After @@dolt_override_schema is applied, DDL statements error out
 				Query:          "insert into t1 values (3, NULL);",
 				ExpectedErrStr: "Database mydb is read-only.",
 			},
 			{
 				// Turn off the schema override
-				Query:    "SET @@dolt_schema_override_commit=NULL;",
+				Query:    "SET @@dolt_override_schema=NULL;",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -1180,7 +1180,7 @@ var SchemaOverrideTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// use the first commit for our schema override (pk, c1)
-				Query:    "SET @@dolt_schema_override_commit=@commit1;",
+				Query:    "SET @@dolt_override_schema=@commit1;",
 				Expected: []sql.Row{{}},
 			},
 			{
