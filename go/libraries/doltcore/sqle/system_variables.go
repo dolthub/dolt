@@ -23,10 +23,10 @@ import (
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
 )
 
-//// TODO: get rid of me, use an integration point to define new sysvars
-//func init() {
-//	AddDoltSystemVariables()
-//}
+// TODO: get rid of me, use an integration point to define new sysvars
+func init() {
+	AddDoltSystemVariables()
+}
 
 func AddDoltSystemVariables() {
 	sql.SystemVariables.AddSystemVariables([]sql.SystemVariableInterface{

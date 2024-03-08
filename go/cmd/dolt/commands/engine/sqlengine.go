@@ -145,8 +145,6 @@ func NewSqlEngine(
 		IsServerLocked: config.IsServerLocked,
 	}).WithBackgroundThreads(bThreads)
 
-	dsqle.AddDoltSystemVariables()
-
 	config.ClusterController.SetIsStandbyCallback(func(isStandby bool) {
 		pro.SetIsStandby(isStandby)
 
