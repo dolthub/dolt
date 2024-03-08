@@ -1206,9 +1206,16 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 				if err = tree.PutField(ctx, ns, tb, i, nv); err != nil {
 					return nil, err
 				}
+				if vv, ok := v.([]byte); ok {
+					v = string(vv)
+				}
+				if nvv, ok := nv.([]byte); ok {
+					nv = string(nvv)
+				}
+
 				fields[i].Hi = prolly.Bound{
 					Binding:   true,
-					Inclusive: bound == sql.Closed || nv != v, // TODO (james): this might panic for []byte
+					Inclusive: bound == sql.Closed || nv != v,
 				}
 			} else {
 				fields[i].Hi = prolly.Bound{}
