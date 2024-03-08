@@ -399,6 +399,59 @@ var DoltStatsIOTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "incremental stats deletes manual analyze",
+		SetUpScript: []string{
+			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
+			"insert into xy select x, 1, 1 from (with recursive inputs(x) as (select 4 union select x+1 from inputs where x < 1000) select * from inputs) dt;",
+			"analyze table xy",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from dolt_statistics group by table_name, index_name",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "delete from xy where x > 500",
+			},
+			{
+				Query: "analyze table xy",
+			},
+			{
+				Query:    "select count(*) from dolt_statistics group by table_name, index_name",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "incremental stats deletes auto",
+		SetUpScript: []string{
+			"set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
+			"set @@PERSIST.dolt_stats_auto_refresh_threshold = 0;",
+			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
+			"insert into xy select x, 1, 1 from (with recursive inputs(x) as (select 4 union select x+1 from inputs where x < 1000) select * from inputs) dt;",
+			"analyze table xy",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from dolt_statistics group by table_name, index_name",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "delete from xy where x > 500",
+			},
+			{
+				Query: "call dolt_stats_restart()",
+			},
+			{
+				Query: "select sleep(.1)",
+			},
+			{
+				Query:    "select count(*) from dolt_statistics group by table_name, index_name",
+				Expected: []sql.Row{},
+			},
+		},
+	},
 }
 
 var StatBranchTests = []queries.ScriptTest{
@@ -581,7 +634,7 @@ var StatProcTests = []queries.ScriptTest{
 			},
 			// set refresh interval arbitrarily high to avoid updating when we restart
 			{
-				Query:    "set @@PERSIST.dolt_stats_auto_refresh_interval = 1000;",
+				Query:    "set @@PERSIST.dolt_stats_auto_refresh_interval = 100000;",
 				Expected: []sql.Row{{}},
 			},
 			{

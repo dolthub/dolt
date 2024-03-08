@@ -88,8 +88,8 @@ func newDbStats(dbName string) *dbToStats {
 
 var _ sql.StatsProvider = (*Provider)(nil)
 
-func (p *Provider) StartRefreshThread(ctx *sql.Context, pro dsess.DoltDatabaseProvider, name string, env *env.DoltEnv) error {
-	err := p.starter(ctx, pro.(*sqle.DoltDatabaseProvider), name, env)
+func (p *Provider) StartRefreshThread(ctx *sql.Context, pro dsess.DoltDatabaseProvider, name string, env *env.DoltEnv, db dsess.SqlDatabase) error {
+	err := p.starter(ctx, pro.(*sqle.DoltDatabaseProvider), name, env, db)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 

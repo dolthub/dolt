@@ -1,3 +1,17 @@
+// Copyright 2024 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package statspro
 
 import (
@@ -16,14 +30,20 @@ import (
 )
 
 func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db string) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	dSess := dsess.DSessFromSess(ctx.Session)
 	branch, err := dSess.GetBranch()
 	if err != nil {
 		return err
 	}
+
+	sqlDb, err := dSess.Provider().Database(ctx, fmt.Sprintf("%s/%s", db, branch))
+	if err != nil {
+		return err
+	}
+
+	// lock only after accessing DatabaseProvider
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
 	tableName := strings.ToLower(table.Name())
 	dbName := strings.ToLower(db)
@@ -39,7 +59,7 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 
 	// it's important to update session references every call
 	// if we pass a non-nil asOf we'll get data from HEAD rather than WORKING
-	sqlTable, dTab, err := p.getLatestTable(ctx, tableName, dbName, branch)
+	sqlTable, dTab, err := p.getLatestTable(ctx, tableName, sqlDb)
 	if err != nil {
 		return err
 	}
@@ -54,7 +74,7 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 		if !ok {
 			return sql.ErrDatabaseNotFound.New(dbName)
 		}
-		statDb, err = p.sf.Init(ctx, sourceDb, p.pro.DbFactoryUrl(), fs, env.GetCurrentUserHomeDir)
+		statDb, err = p.sf.Init(ctx, sourceDb, p.pro, fs, env.GetCurrentUserHomeDir)
 		if err != nil {
 			ctx.Warn(0, err.Error())
 			return nil
@@ -109,16 +129,7 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 }
 
 // getLatestTable will get the WORKING root table for the current database/branch
-func (p *Provider) getLatestTable(ctx *sql.Context, tableName string, dbName string, branch string) (sql.Table, *doltdb.Table, error) {
-	dSess := dsess.DSessFromSess(ctx.Session)
-	prov := dSess.Provider()
-
-	// database/branch pins the WORKING root
-	sqlDb, err := prov.Database(ctx, fmt.Sprintf("%s/%s", dbName, branch))
-	if err != nil {
-		return nil, nil, err
-	}
-
+func (p *Provider) getLatestTable(ctx *sql.Context, tableName string, sqlDb sql.Database) (sql.Table, *doltdb.Table, error) {
 	sqlTable, ok, err := sqlDb.(sqle.Database).GetTableInsensitive(ctx, tableName)
 	if err != nil {
 		return nil, nil, err

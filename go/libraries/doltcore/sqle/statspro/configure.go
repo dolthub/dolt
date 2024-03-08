@@ -1,8 +1,23 @@
+// Copyright 2024 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package statspro
 
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"strings"
 	"time"
 
@@ -28,53 +43,38 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 	dSess := dsess.DSessFromSess(loadCtx.Session)
 	var branches []string
 	if _, bs, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsBranches); bs == "" {
-		defaultBranch, err := dSess.GetBranch()
-		if err != nil {
-			return err
+		defaultBranch, _ := dSess.GetBranch()
+		if defaultBranch != "" {
+			branches = append(branches, defaultBranch)
 		}
-		branches = append(branches, defaultBranch)
 	} else {
 		for _, branch := range strings.Split(bs.(string), ",") {
 			branches = append(branches, strings.TrimSpace(branch))
 		}
 	}
 
-	if err := p.Load(loadCtx, branches); err != nil {
-		return err
+	if branches == nil {
+		branches = []string{p.pro.DefaultBranch()}
 	}
 
+	var autoEnabled bool
+	var intervalSec time.Duration
+	var thresholdf64 float64
 	if _, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshEnabled); enabled == int8(1) {
+		autoEnabled = true
 		_, threshold, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshThreshold)
 		_, interval, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshInterval)
 		interval64, _, _ := types2.Int64.Convert(interval)
-		intervalSec := time.Second * time.Duration(interval64.(int64))
-		thresholdf64 := threshold.(float64)
+		intervalSec = time.Millisecond * time.Duration(interval64.(int64))
+		thresholdf64 = threshold.(float64)
 
-		for _, db := range dbs {
-			if err := p.InitAutoRefreshWithParams(ctxFactory, db.Name(), bThreads, intervalSec, thresholdf64, branches); err != nil {
-				return err
-			}
-		}
 		p.pro.InitDatabaseHook = NewInitDatabaseHook(p, ctxFactory, bThreads, p.pro.InitDatabaseHook)
 		p.pro.DropDatabaseHook = NewDropDatabaseHook(p, ctxFactory, p.pro.DropDatabaseHook)
 	}
-	return nil
-}
 
-func (p *Provider) LoadStats(ctx *sql.Context, db, branch string) error {
-	if statDb, ok := p.getStatDb(db); ok {
-		return statDb.LoadBranchStats(ctx, branch)
-	}
-	return nil
-}
-
-// Load scans the statistics tables, populating the |stats| attribute.
-// Statistics are not available for reading until we've finished loading.
-func (p *Provider) Load(ctx *sql.Context, branches []string) error {
-	eg, ctx := ctx.NewErrgroup()
-	for _, db := range p.pro.DoltDatabases() {
+	eg, ctx := loadCtx.NewErrgroup()
+	for _, db := range dbs {
 		// copy closure variables
-		dbName := strings.ToLower(db.Name())
 		db := db
 		eg.Go(func() (err error) {
 			defer func() {
@@ -90,25 +90,47 @@ func (p *Provider) Load(ctx *sql.Context, branches []string) error {
 			}()
 
 			fs, err := p.pro.FileSystemForDatabase(db.Name())
-
-			// |statPath| is either file://./stat or mem://stat
-			statsDb, err := p.sf.Init(ctx, db, p.pro.DbFactoryUrl(), fs, env.GetCurrentUserHomeDir)
 			if err != nil {
-				ctx.Warn(0, err.Error())
-				return nil
+				return err
 			}
 
-			for _, branch := range branches {
-				err = statsDb.LoadBranchStats(ctx, branch)
-				if err != nil {
-					ctx.Warn(0, err.Error())
-					continue
-				}
+			if err := p.Load(loadCtx, fs, db, branches); err != nil {
+				return err
 			}
-
-			p.setStatDb(dbName, statsDb)
+			if autoEnabled {
+				return p.InitAutoRefreshWithParams(ctxFactory, db.Name(), bThreads, intervalSec, thresholdf64, branches)
+			}
 			return nil
 		})
 	}
 	return eg.Wait()
+}
+
+func (p *Provider) LoadStats(ctx *sql.Context, db, branch string) error {
+	if statDb, ok := p.getStatDb(db); ok {
+		return statDb.LoadBranchStats(ctx, branch)
+	}
+	return nil
+}
+
+// Load scans the statistics tables, populating the |stats| attribute.
+// Statistics are not available for reading until we've finished loading.
+func (p *Provider) Load(ctx *sql.Context, fs filesys.Filesys, db dsess.SqlDatabase, branches []string) error {
+	// |statPath| is either file://./stat or mem://stat
+	statsDb, err := p.sf.Init(ctx, db, p.pro, fs, env.GetCurrentUserHomeDir)
+	if err != nil {
+		ctx.Warn(0, err.Error())
+		return nil
+	}
+
+	for _, branch := range branches {
+		err = statsDb.LoadBranchStats(ctx, branch)
+		if err != nil {
+			ctx.Warn(0, err.Error())
+			continue
+		}
+	}
+
+	p.setStatDb(strings.ToLower(db.Name()), statsDb)
+	return nil
 }

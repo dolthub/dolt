@@ -17,7 +17,6 @@ package engine
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsnoms"
 	"os"
 	"runtime"
 	"strconv"
@@ -42,6 +41,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsnoms"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/types"

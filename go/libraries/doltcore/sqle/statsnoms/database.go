@@ -1,9 +1,24 @@
+// Copyright 2024 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package statsnoms
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"path"
 	"strings"
 	"sync"
@@ -34,7 +49,7 @@ type NomsStatsFactory struct {
 
 var _ statspro.StatsFactory = NomsStatsFactory{}
 
-func (sf NomsStatsFactory) Init(ctx context.Context, sourceDb dsess.SqlDatabase, factoryUrl string, fs filesys.Filesys, hdp env.HomeDirProvider) (statspro.Database, error) {
+func (sf NomsStatsFactory) Init(ctx *sql.Context, sourceDb dsess.SqlDatabase, prov *sqle.DoltDatabaseProvider, fs filesys.Filesys, hdp env.HomeDirProvider) (statspro.Database, error) {
 	params := make(map[string]interface{})
 	params[dbfactory.GRPCDialProviderParam] = sf.dialPro
 
@@ -42,8 +57,21 @@ func (sf NomsStatsFactory) Init(ctx context.Context, sourceDb dsess.SqlDatabase,
 	if err != nil {
 		return nil, err
 	}
-	urlPath := factoryUrl + statsPath
 
+	fs, err = fs.WithWorkingDir(statsPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var urlPath string
+	u, err := earl.Parse(prov.DbFactoryUrl())
+	if u.Scheme == dbfactory.MemScheme {
+		urlPath = prov.DbFactoryUrl() + statsPath
+	} else if u.Scheme == dbfactory.FileScheme {
+		urlPath = "file://" + statsPath
+	}
+
+	var dEnv *env.DoltEnv
 	exists, isDir := fs.Exists(statsPath)
 	if !exists {
 		err := fs.MkDirs(statsPath)
@@ -56,11 +84,18 @@ func (sf NomsStatsFactory) Init(ctx context.Context, sourceDb dsess.SqlDatabase,
 		if err != nil {
 			return nil, err
 		}
+		dEnv = env.Load(context.Background(), hdp, fs, prov.DbFactoryUrl(), "test")
+		sess := dsess.DSessFromSess(ctx.Session)
+		err = dEnv.InitRepo(ctx, types.Format_Default, sess.Username(), sess.Email(), prov.DefaultBranch())
+		if err != nil {
+			return nil, err
+		}
 	} else if !isDir {
 		return nil, fmt.Errorf("file exists where the dolt stats directory should be")
+	} else {
+		dEnv = env.LoadWithoutDB(ctx, hdp, fs, "")
 	}
 
-	dEnv := env.LoadWithoutDB(ctx, hdp, fs, "")
 	ddb, err := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, urlPath, fs, params)
 	if err != nil {
 		return nil, err
@@ -116,6 +151,8 @@ func (n *NomsStatsDatabase) LoadBranchStats(ctx *sql.Context, branch string) err
 	}
 	n.branches = append(n.branches, branch)
 	n.stats = append(n.stats, doltStats)
+	n.dirty = append(n.dirty, nil)
+	n.latestTableRoots = append(n.latestTableRoots, make(map[string]hash.Hash))
 	return nil
 }
 
