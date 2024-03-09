@@ -172,6 +172,12 @@ func (ht *HistoryTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLooku
 func NewHistoryTable(table *DoltTable, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
 	cmItr := doltdb.CommitItrForRoots(ddb, head)
 
+	// System tables don't currently use overridden schemas, so if one is set on |table|,
+	// clear it out to make sure we use the correct schema that matches the data being used.
+	if table.overriddenSchema != nil {
+		table.overriddenSchema = nil
+	}
+
 	h := &HistoryTable{
 		doltTable: table,
 		cmItr:     cmItr,
@@ -342,7 +348,6 @@ func (ht *HistoryTable) Projections() []string {
 	for i := range ht.projectedCols {
 		if col, ok := cols.TagToCol[ht.projectedCols[i]]; ok {
 			names[i] = col.Name
-
 		} else {
 			switch ht.projectedCols[i] {
 			case schema.HistoryCommitHashTag:

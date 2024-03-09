@@ -116,6 +116,29 @@ func TestSingleQuery(t *testing.T) {
 	enginetest.TestQueryWithEngine(t, harness, engine, test)
 }
 
+func TestSchemaOverrides(t *testing.T) {
+	tcc := &testCommitClock{}
+	cleanup := installTestCommitClock(tcc)
+	defer cleanup()
+
+	for _, script := range SchemaOverrideTests {
+		sql.RunWithNowFunc(tcc.Now, func() error {
+			harness := newDoltHarness(t)
+			harness.Setup(setup.MydbData)
+
+			engine, err := harness.NewEngine(t)
+			if err != nil {
+				panic(err)
+			}
+			// engine.EngineAnalyzer().Debug = true
+			// engine.EngineAnalyzer().Verbose = true
+
+			enginetest.TestScriptWithEngine(t, engine, harness, script)
+			return nil
+		})
+	}
+}
+
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
 	t.Skip()
