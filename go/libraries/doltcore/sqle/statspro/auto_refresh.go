@@ -107,6 +107,7 @@ func (p *Provider) InitAutoRefreshWithParams(ctxFactory func(ctx context.Context
 						// use WORKING root database
 						sqlDb, err := dSess.Provider().Database(sqlCtx, fmt.Sprintf("%s/%s", dbName, branch))
 						if err != nil {
+							sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
 							return
 						}
 
@@ -114,7 +115,7 @@ func (p *Provider) InitAutoRefreshWithParams(ctxFactory func(ctx context.Context
 							p.mu.Lock()
 							defer p.mu.Unlock()
 
-							if err := p.checkRefresh(sqlCtx, sqlDb, br, updateThresh); err != nil {
+							if err := p.checkRefresh(sqlCtx, sqlDb, dbName, br, updateThresh); err != nil {
 								sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
 								return
 							}
@@ -131,14 +132,13 @@ func (p *Provider) InitAutoRefreshWithParams(ctxFactory func(ctx context.Context
 	})
 }
 
-func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, branch string, updateThresh float64) error {
+func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, branch string, updateThresh float64) error {
 	// Iterate all dbs, tables, indexes. Each db will collect
 	// []indexMeta above refresh threshold. We read and process those
 	// chunks' statistics. We merge updated chunks with precomputed
 	// chunks. The full set of statistics for each database lands
 	// 1) in the provider's most recent set of database statistics, and
 	// 2) on disk in the database's statistics ref'd prolly.Map.
-	dbName := strings.ToLower(sqlDb.Name())
 	statDb, ok := p.getStatDb(dbName)
 	if !ok {
 		return sql.ErrDatabaseNotFound.New(dbName)
@@ -154,7 +154,7 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, branch str
 	}
 
 	for _, table := range tables {
-		sqlTable, dTab, err := p.getLatestTable(ctx, table, sqlDb)
+		sqlTable, dTab, err := GetLatestTable(ctx, table, sqlDb)
 		if err != nil {
 			return err
 		}

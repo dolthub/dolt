@@ -51,10 +51,19 @@ func NewInitDatabaseHook(statsProv *Provider, ctxFactory func(ctx context.Contex
 			branches = []string{pro.DefaultBranch()}
 		}
 
-		if err := statsProv.Load(ctx, denv.FS, db, branches); err != nil {
-			return err
+		// |statPath| is either file://./stat or mem://stat
+		statsDb, err := statsProv.sf.Init(ctx, db, statsProv.pro, denv.FS, env.GetCurrentUserHomeDir)
+		if err != nil {
+			ctx.Warn(0, err.Error())
+			return nil
 		}
+		statsProv.setStatDb(strings.ToLower(db.Name()), statsDb)
 
+		// todo: don't try to load for a new database
+		//if err := statsProv.Load(ctx, denv.FS, db, branches); err != nil {
+		//	return err
+		//}
+		ctx.GetLogger().Debugf("statistics refresh: initialize %s", name)
 		return statsProv.InitAutoRefresh(ctxFactory, name, bThreads)
 	}
 }

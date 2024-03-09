@@ -59,7 +59,7 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 
 	// it's important to update session references every call
 	// if we pass a non-nil asOf we'll get data from HEAD rather than WORKING
-	sqlTable, dTab, err := p.getLatestTable(ctx, tableName, sqlDb)
+	sqlTable, dTab, err := GetLatestTable(ctx, tableName, sqlDb)
 	if err != nil {
 		return err
 	}
@@ -128,8 +128,8 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 	return statDb.Flush(ctx, branch)
 }
 
-// getLatestTable will get the WORKING root table for the current database/branch
-func (p *Provider) getLatestTable(ctx *sql.Context, tableName string, sqlDb sql.Database) (sql.Table, *doltdb.Table, error) {
+// GetLatestTable will get the WORKING root table for the current database/branch
+func GetLatestTable(ctx *sql.Context, tableName string, sqlDb sql.Database) (sql.Table, *doltdb.Table, error) {
 	sqlTable, ok, err := sqlDb.(sqle.Database).GetTableInsensitive(ctx, tableName)
 	if err != nil {
 		return nil, nil, err

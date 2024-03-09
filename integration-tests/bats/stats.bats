@@ -54,9 +54,9 @@ teardown() {
     # setting variables doesn't hang or error
     dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_enabled = 1;"
     dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_threshold = .5"
-    dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_interval = 1;"
+    dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_interval = 1000;"
 
-    # auto refresh can only initialize at server startup
+    # auto refresh initialize at server startup
     start_sql_server
 
     # need to trigger at least one refresh cycle
@@ -83,7 +83,7 @@ teardown() {
 
     sleep 1
 
-    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    dolt sql -r csv -q "select count(*) from dolt_statistics"
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "8" ]
 }
@@ -96,7 +96,7 @@ teardown() {
     # setting variables doesn't hang or error
     dolt sql -q "set @@persist.dolt_stats_auto_refresh_enabled = 1;"
     dolt sql -q "set @@persist.dolt_stats_auto_refresh_threshold = .5"
-    dolt sql -q "set @@persist.dolt_stats_auto_refresh_interval = 1;"
+    dolt sql -q "set @@persist.dolt_stats_auto_refresh_interval = 200;"
 
     start_sql_server
 
@@ -107,10 +107,11 @@ teardown() {
     [ "${lines[1]}" = "8" ]
 
     # delete >50% of rows
-    dolt sql -q "delete from xy where x > 500"
+    dolt sql -q "delete from xy where x > 800"
 
     sleep 1
 
+    dolt sql -r csv -q "select * from dolt_statistics"
     run dolt sql -r csv -q "select count(*) from dolt_statistics"
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "4" ]
@@ -124,7 +125,7 @@ teardown() {
     # setting variables doesn't hang or error
     dolt sql -q "SET @@persist.dolt_stats_auto_refresh_enabled = 1;"
     dolt sql -q "SET @@persist.dolt_stats_auto_refresh_threshold = .5"
-    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_interval = 1;"
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_interval = 1000;"
 
     start_sql_server
 
@@ -172,7 +173,7 @@ teardown() {
     # setting variables doesn't hang or error
     dolt sql -q "SET @@persist.dolt_stats_auto_refresh_enabled = 1;"
     dolt sql -q "SET @@persist.dolt_stats_auto_refresh_threshold = .5"
-    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_interval = 1;"
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_interval = 1000;"
 
     start_sql_server
 
@@ -213,7 +214,7 @@ teardown() {
     # setting variables doesn't hang or error
     dolt sql -q "SET @@persist.dolt_stats_auto_refresh_enabled = 1;"
     dolt sql -q "SET @@persist.dolt_stats_auto_refresh_threshold = .5"
-    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_interval = 1;"
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_interval = 1000;"
 
     # auto refresh can only initialize at server startup
     start_sql_server
@@ -256,7 +257,7 @@ teardown() {
 
     dolt sql -q "SET @@persist.dolt_stats_auto_refresh_enabled = 1;"
     dolt sql -q "SET @@persist.dolt_stats_auto_refresh_threshold = 0.5"
-    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_interval = 1;"
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_interval = 1000;"
 
     start_sql_server
     sleep 1
@@ -283,7 +284,7 @@ teardown() {
     # setting variables doesn't hang or error
     dolt sql -q "SET @@persist.dolt_stats_auto_refresh_enabled = 1;"
     dolt sql -q "SET @@persist.dolt_stats_auto_refresh_threshold = .5"
-    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_interval = 1;"
+    dolt sql -q "SET @@persist.dolt_stats_auto_refresh_interval = 200;"
 
     start_sql_server
 

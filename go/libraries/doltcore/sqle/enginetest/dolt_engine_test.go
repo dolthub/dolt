@@ -3110,7 +3110,7 @@ func TestCreateDatabaseErrorCleansUp(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, e)
 
-	dh.provider.(*sqle.DoltDatabaseProvider).InitDatabaseHook = func(_ *sql.Context, _ *sqle.DoltDatabaseProvider, name string, _ *env.DoltEnv) error {
+	dh.provider.(*sqle.DoltDatabaseProvider).InitDatabaseHook = func(_ *sql.Context, _ *sqle.DoltDatabaseProvider, name string, _ *env.DoltEnv, _ dsess.SqlDatabase) error {
 		if name == "cannot_create" {
 			return fmt.Errorf("there was an error initializing this database. abort!")
 		}
