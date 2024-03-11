@@ -1431,7 +1431,7 @@ func (d *DoltSession) PersistGlobal(sysVarName string, value interface{}) error 
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return setPersistedValue(d.globalsConf, sysVar.VarName(), value)
+	return setPersistedValue(d.globalsConf, sysVar.GetName(), value)
 }
 
 // RemovePersistedGlobal implements sql.PersistableSession
@@ -1447,7 +1447,7 @@ func (d *DoltSession) RemovePersistedGlobal(sysVarName string) error {
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.globalsConf.Unset([]string{sysVar.VarName()})
+	return d.globalsConf.Unset([]string{sysVar.GetName()})
 }
 
 // RemoveAllPersistedGlobals implements sql.PersistableSession

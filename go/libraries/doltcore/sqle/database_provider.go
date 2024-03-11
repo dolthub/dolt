@@ -121,6 +121,8 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		funcs[strings.ToLower(fn.FunctionName())] = fn
 	}
 
+	InitDoltSystemVariables()
+
 	externalProcedures := sql.NewExternalStoredProcedureRegistry()
 	for _, esp := range dprocedures.DoltProcedures {
 		externalProcedures.Register(esp)

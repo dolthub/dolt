@@ -17,14 +17,17 @@ package sqle
 import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/go-mysql-server/sql/variables"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-
-	_ "github.com/dolthub/go-mysql-server/sql/variables"
 )
 
-// TODO: get rid of me, use an integration point to define new sysvars
-func init() {
+// InitDoltSystemVariables initializes the global SystemVariables if it's nil
+// and adds dolt specific system variables.
+func InitDoltSystemVariables() {
+	if sql.SystemVariables == nil {
+		variables.InitSystemVariables()
+	}
 	AddDoltSystemVariables()
 }
 

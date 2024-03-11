@@ -20,7 +20,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/variables"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
@@ -585,15 +585,13 @@ func runMain() int {
 	}
 	dEnv.FS = dataDirFS
 
-	if sql.SystemVariables == nil {
-		variables.InitSystemVariables()
-	}
-
 	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dataDirFS, dEnv.Version, dEnv)
 	if err != nil {
 		cli.PrintErrln("failed to load database names")
 		return 1
 	}
+
+	sqle.InitDoltSystemVariables()
 	_ = mrEnv.Iter(func(dbName string, dEnv *env.DoltEnv) (stop bool, err error) {
 		dsess.DefineSystemVariablesForDB(dbName)
 		return false, nil
