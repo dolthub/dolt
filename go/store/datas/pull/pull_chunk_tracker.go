@@ -209,7 +209,7 @@ func (t *PullChunkTracker) reqRespThread(initial hash.HashSet) {
 					}
 				}
 				copy(absent[:], absent[i:])
-				for j := len(absent)-i; j < len(absent); j++ {
+				for j := len(absent) - i; j < len(absent); j++ {
 					absent[j] = nil
 				}
 				absent = absent[:len(absent)-i]
