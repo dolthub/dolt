@@ -19,7 +19,7 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/variables"
+	_ "github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/src-d/go-errors.v1"
 
@@ -244,7 +244,6 @@ func TestGetPersistedValue(t *testing.T) {
 }
 
 func emptyDatabaseProvider() DoltDatabaseProvider {
-	variables.InitSystemVariables()
 	return emptyRevisionDatabaseProvider{}
 }
 

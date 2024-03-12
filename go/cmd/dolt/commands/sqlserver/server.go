@@ -117,8 +117,8 @@ func ConfigureServices(
 			}
 			logrus.SetLevel(level)
 
-			sql.SystemVariables.AddSystemVariables([]sql.SystemVariableInterface{
-				&sql.SystemVariable{
+			sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
+				&sql.MysqlSystemVariable{
 					Name:              dsess.DoltLogLevel,
 					Scope:             sql.SystemVariableScope_Global,
 					Dynamic:           true,

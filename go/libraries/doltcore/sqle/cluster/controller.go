@@ -112,8 +112,8 @@ type Controller struct {
 }
 
 type sqlvars interface {
-	AddSystemVariables(sysVars []sql.SystemVariableInterface)
-	GetGlobal(name string) (sql.SystemVariableInterface, interface{}, bool)
+	AddSystemVariables(sysVars []sql.SystemVariable)
+	GetGlobal(name string) (sql.SystemVariable, interface{}, bool)
 }
 
 // Our IsStandbyCallback gets called with |true| or |false| when the server
@@ -459,15 +459,15 @@ func (c *Controller) ServerOptions() []grpc.ServerOption {
 
 func (c *Controller) refreshSystemVars() {
 	role, epoch := string(c.role), c.epoch
-	vars := []sql.SystemVariableInterface{
-		&sql.SystemVariable{
+	vars := []sql.SystemVariable{
+		&sql.MysqlSystemVariable{
 			Name:    dsess.DoltClusterRoleVariable,
 			Dynamic: false,
 			Scope:   sql.SystemVariableScope_Persist,
 			Type:    gmstypes.NewSystemStringType(dsess.DoltClusterRoleVariable),
 			Default: role,
 		},
-		&sql.SystemVariable{
+		&sql.MysqlSystemVariable{
 			Name:    dsess.DoltClusterRoleEpochVariable,
 			Dynamic: false,
 			Scope:   sql.SystemVariableScope_Persist,
