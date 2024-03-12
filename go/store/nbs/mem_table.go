@@ -113,6 +113,7 @@ func (mt *memTable) addChunk(h hash.Hash, data []byte) addChunkResult {
 
 func (mt *memTable) addChildRefs(addrs hash.HashSet) {
 	for h := range addrs {
+		h := h
 		mt.pendingRefs = append(mt.pendingRefs, hasRecord{
 			a:      &h,
 			prefix: h.Prefix(),
