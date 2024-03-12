@@ -28,6 +28,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/golang/snappy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -243,7 +244,7 @@ func (o *outOfLineSnappy) Encode(dst, src []byte) []byte {
 
 type chunkReaderGroup []chunkReader
 
-func (crg chunkReaderGroup) has(h addr) (bool, error) {
+func (crg chunkReaderGroup) has(h hash.Hash) (bool, error) {
 	for _, haver := range crg {
 		ok, err := haver.has(h)
 
@@ -258,7 +259,7 @@ func (crg chunkReaderGroup) has(h addr) (bool, error) {
 	return false, nil
 }
 
-func (crg chunkReaderGroup) get(ctx context.Context, h addr, stats *Stats) ([]byte, error) {
+func (crg chunkReaderGroup) get(ctx context.Context, h hash.Hash, stats *Stats) ([]byte, error) {
 	for _, haver := range crg {
 		if data, err := haver.get(ctx, h, stats); err != nil {
 			return nil, err

@@ -22,6 +22,7 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/utils/test"
@@ -166,7 +167,7 @@ func TestIndexTransformer(t *testing.T) {
 	offsetBytes := get64Bytes(offsets)
 
 	tupleBytes := test.RandomData(chunkCount * prefixTupleSize)
-	suffixBytes := test.RandomData(chunkCount * addrSuffixSize)
+	suffixBytes := test.RandomData(chunkCount * hash.SuffixLen)
 
 	var inBytes []byte
 	inBytes = append(inBytes, tupleBytes...)

@@ -21,6 +21,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -36,9 +37,9 @@ func TestParseTableIndex(t *testing.T) {
 	require.NoError(t, err)
 	defer idx.Close()
 	assert.Equal(t, uint32(596), idx.chunkCount())
-	seen := make(map[addr]bool)
+	seen := make(map[hash.Hash]bool)
 	for i := uint32(0); i < idx.chunkCount(); i++ {
-		var onheapaddr addr
+		var onheapaddr hash.Hash
 		e, err := idx.indexEntry(i, &onheapaddr)
 		require.NoError(t, err)
 		if _, ok := seen[onheapaddr]; !ok {
@@ -229,25 +230,24 @@ func TestAmbiguousShortHash(t *testing.T) {
 
 // fakeChunk is chunk with a faked address
 type fakeChunk struct {
-	address addr
+	address hash.Hash
 	data    []byte
 }
 
 var fakeData = []byte("supercalifragilisticexpialidocious")
 
-func addrFromPrefix(prefix string) (a addr) {
+func addrFromPrefix(prefix string) hash.Hash {
 	// create a full length addr from a prefix
-	for i := 0; i < addrSize; i++ {
+	for i := 0; i < hash.ByteLen; i++ {
 		prefix += "0"
 	}
 
 	// base32 decode string
 	h, _ := encoding.DecodeString(prefix)
-	copy(a[:], h)
-	return
+	return hash.New(h[:hash.ByteLen])
 }
 
-func buildFakeChunkTable(chunks []fakeChunk) ([]byte, addr, error) {
+func buildFakeChunkTable(chunks []fakeChunk) ([]byte, hash.Hash, error) {
 	totalData := uint64(0)
 	for _, chunk := range chunks {
 		totalData += uint64(len(chunk.data))
@@ -265,7 +265,7 @@ func buildFakeChunkTable(chunks []fakeChunk) ([]byte, addr, error) {
 	length, blockHash, err := tw.finish()
 
 	if err != nil {
-		return nil, addr{}, err
+		return nil, hash.Hash{}, err
 	}
 
 	return buff[:length], blockHash, nil

@@ -190,12 +190,12 @@ func mustPayload(rec indexRec) []byte {
 
 func makeLookups(cnt int) (lookups []lookup) {
 	lookups = make([]lookup, cnt)
-	buf := make([]byte, cnt*addrSize)
+	buf := make([]byte, cnt*hash.ByteLen)
 	rand.Read(buf)
 	var off uint64
 	for i := range lookups {
 		copy(lookups[i].a[:], buf)
-		buf = buf[addrSize:]
+		buf = buf[hash.ByteLen:]
 		lookups[i].r.Offset = off
 		l := rand.Uint32() % 1024
 		lookups[i].r.Length = l

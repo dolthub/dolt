@@ -446,7 +446,7 @@ func (fm *fakeManifest) Name() string { return fm.name }
 func (fm *fakeManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (bool, manifestContents, error) {
 	fm.mu.RLock()
 	defer fm.mu.RUnlock()
-	if fm.contents.lock != (addr{}) {
+	if fm.contents.lock != (hash.Hash{}) {
 		return true, fm.contents, nil
 	}
 
@@ -458,7 +458,7 @@ func (fm *fakeManifest) ParseIfExists(ctx context.Context, stats *Stats, readHoo
 // to |newLock|, |fm.root| is set to |newRoot|, and the contents of |specs|
 // replace |fm.tableSpecs|. If |lastLock| != |fm.lock|, then the update
 // fails. Regardless of success or failure, the current state is returned.
-func (fm *fakeManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+func (fm *fakeManifest) Update(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
 	fm.mu.Lock()
 	defer fm.mu.Unlock()
 	if fm.contents.lock == lastLock {
@@ -467,7 +467,7 @@ func (fm *fakeManifest) Update(ctx context.Context, lastLock addr, newContents m
 			nbfVers:      newContents.nbfVers,
 			lock:         newContents.lock,
 			root:         newContents.root,
-			gcGen:        addr(hash.Hash{}),
+			gcGen:        hash.Hash{},
 		}
 		fm.contents.specs = make([]tableSpec, len(newContents.specs))
 		copy(fm.contents.specs, newContents.specs)
@@ -479,13 +479,13 @@ func (fm *fakeManifest) Update(ctx context.Context, lastLock addr, newContents m
 	return fm.contents, nil
 }
 
-func (fm *fakeManifest) set(version string, lock addr, root hash.Hash, specs, appendix []tableSpec) {
+func (fm *fakeManifest) set(version string, lock hash.Hash, root hash.Hash, specs, appendix []tableSpec) {
 	fm.contents = manifestContents{
 		manifestVers: StorageVersion,
 		nbfVers:      version,
 		lock:         lock,
 		root:         root,
-		gcGen:        addr(hash.Hash{}),
+		gcGen:        hash.Hash{},
 		specs:        specs,
 		appendix:     appendix,
 	}
@@ -496,14 +496,14 @@ func newFakeTableSet(q MemoryQuotaProvider) tableSet {
 }
 
 func newFakeTablePersister(q MemoryQuotaProvider) fakeTablePersister {
-	return fakeTablePersister{q, map[addr][]byte{}, map[addr]bool{}, map[addr]bool{}, &sync.RWMutex{}}
+	return fakeTablePersister{q, map[hash.Hash][]byte{}, map[hash.Hash]bool{}, map[hash.Hash]bool{}, &sync.RWMutex{}}
 }
 
 type fakeTablePersister struct {
 	q             MemoryQuotaProvider
-	sources       map[addr][]byte
-	sourcesToFail map[addr]bool
-	opened        map[addr]bool
+	sources       map[hash.Hash][]byte
+	sourcesToFail map[hash.Hash]bool
+	opened        map[hash.Hash]bool
 	mu            *sync.RWMutex
 }
 
@@ -561,7 +561,7 @@ func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSourc
 	return chunkSourceAdapter{cs, name}, func() {}, nil
 }
 
-func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunkCount uint32, err error) {
+func compactSourcesToBuffer(sources chunkSources) (name hash.Hash, data []byte, chunkCount uint32, err error) {
 	totalData := uint64(0)
 	for _, src := range sources {
 		chunkCount += mustUint32(src.count())
@@ -599,19 +599,19 @@ func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunk
 	}
 
 	if errString != "" {
-		return addr{}, nil, 0, fmt.Errorf(errString)
+		return hash.Hash{}, nil, 0, fmt.Errorf(errString)
 	}
 
 	tableSize, name, err := tw.finish()
 
 	if err != nil {
-		return addr{}, nil, 0, err
+		return hash.Hash{}, nil, 0, err
 	}
 
 	return name, buff[:tableSize], chunkCount, nil
 }
 
-func (ftp fakeTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {
+func (ftp fakeTablePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
 	ftp.mu.Lock()
 	defer ftp.mu.Unlock()
 
@@ -633,14 +633,14 @@ func (ftp fakeTablePersister) Open(ctx context.Context, name addr, chunkCount ui
 	return chunkSourceAdapter{cs, name}, nil
 }
 
-func (ftp fakeTablePersister) Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error) {
+func (ftp fakeTablePersister) Exists(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (bool, error) {
 	if _, ok := ftp.sourcesToFail[name]; ok {
 		return false, errors.New("intentional failure")
 	}
 	return true, nil
 }
 
-func (ftp fakeTablePersister) PruneTableFiles(_ context.Context, _ func() []addr, _ time.Time) error {
+func (ftp fakeTablePersister) PruneTableFiles(_ context.Context, _ func() []hash.Hash, _ time.Time) error {
 	return chunks.ErrUnsupportedOperation
 }
 
@@ -658,18 +658,18 @@ func extractAllChunks(ctx context.Context, src chunkSource, cb func(rec extractR
 		return err
 	}
 
-	var a addr
 	for i := uint32(0); i < index.chunkCount(); i++ {
-		_, err = index.indexEntry(i, &a)
+		var h hash.Hash
+		_, err = index.indexEntry(i, &h)
 		if err != nil {
 			return err
 		}
 
-		data, err := src.get(ctx, a, nil)
+		data, err := src.get(ctx, h, nil)
 		if err != nil {
 			return err
 		}
-		cb(extractRecord{a: a, data: data})
+		cb(extractRecord{a: h, data: data})
 	}
 	return
 }

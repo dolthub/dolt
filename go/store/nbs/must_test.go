@@ -14,7 +14,10 @@
 
 package nbs
 
-import "github.com/dolthub/dolt/go/store/d"
+import (
+	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/hash"
+)
 
 func mustUint32(val uint32, err error) uint32 {
 	d.PanicIfError(err)
@@ -26,7 +29,7 @@ func mustUint64(val uint64, err error) uint64 {
 	return val
 }
 
-func mustAddr(h addr, err error) addr {
+func mustAddr(h hash.Hash, err error) hash.Hash {
 	d.PanicIfError(err)
 	return h
 }
