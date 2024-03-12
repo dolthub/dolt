@@ -100,7 +100,6 @@ func NewSqlEngine(
 
 	bThreads := sql.NewBackgroundThreads()
 
-	dsqle.InitDoltSystemVariables()
 	dbs, err = dsqle.ApplyReplicationConfig(ctx, bThreads, mrEnv, cli.CliOut, dbs...)
 	if err != nil {
 		return nil, err

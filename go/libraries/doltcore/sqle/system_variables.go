@@ -22,6 +22,11 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
+// TODO: get rid of me, use an integration point to define new sysvars
+func init() {
+	InitDoltSystemVariables()
+}
+
 // InitDoltSystemVariables initializes the global SystemVariables if it's nil
 // and adds dolt specific system variables.
 func InitDoltSystemVariables() {
