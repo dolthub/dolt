@@ -29,6 +29,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"golang.org/x/sync/errgroup"
 
@@ -57,7 +58,7 @@ type tableSet struct {
 	rl              chan struct{}
 }
 
-func (ts tableSet) has(h addr) (bool, error) {
+func (ts tableSet) has(h hash.Hash) (bool, error) {
 	f := func(css chunkSourceSet) (bool, error) {
 		for _, haver := range css {
 			has, err := haver.has(h)
@@ -114,7 +115,7 @@ func (ts tableSet) hasMany(addrs []hasRecord) (bool, error) {
 	return f(ts.upstream)
 }
 
-func (ts tableSet) get(ctx context.Context, h addr, stats *Stats) ([]byte, error) {
+func (ts tableSet) get(ctx context.Context, h hash.Hash, stats *Stats) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -287,7 +288,7 @@ func (ts tableSet) Size() int {
 
 // append adds a memTable to an existing tableSet, compacting |mt| and
 // returning a new tableSet with newly compacted table added.
-func (ts tableSet) append(ctx context.Context, mt *memTable, checker refCheck, hasCache *lru.TwoQueueCache[addr, struct{}], stats *Stats) (tableSet, error) {
+func (ts tableSet) append(ctx context.Context, mt *memTable, checker refCheck, hasCache *lru.TwoQueueCache[hash.Hash, struct{}], stats *Stats) (tableSet, error) {
 	for i := range mt.pendingRefs {
 		if !mt.pendingRefs[i].has && hasCache.Contains(*mt.pendingRefs[i].a) {
 			mt.pendingRefs[i].has = true
@@ -345,7 +346,7 @@ func (ts tableSet) rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 	// deduplicate |specs|
 	orig := specs
 	specs = make([]tableSpec, 0, len(orig))
-	seen := map[addr]struct{}{}
+	seen := map[hash.Hash]struct{}{}
 	for _, spec := range orig {
 		if _, ok := seen[spec.name]; ok {
 			continue

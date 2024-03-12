@@ -54,7 +54,7 @@ func WriteChunks(chunks []chunks.Chunk) (string, []byte, error) {
 
 func writeChunksToMT(mt *memTable, chunks []chunks.Chunk) (string, []byte, error) {
 	for _, chunk := range chunks {
-		res := mt.addChunk(addr(chunk.Hash()), chunk.Data())
+		res := mt.addChunk(chunk.Hash(), chunk.Data())
 		if res == chunkNotAdded {
 			return "", nil, errors.New("didn't create this memory table with enough space to add all the chunks")
 		}
@@ -75,7 +75,7 @@ func writeChunksToMT(mt *memTable, chunks []chunks.Chunk) (string, []byte, error
 }
 
 type memTable struct {
-	chunks             map[addr][]byte
+	chunks             map[hash.Hash][]byte
 	order              []hasRecord // Must maintain the invariant that these are sorted by rec.order
 	pendingRefs        []hasRecord
 	maxData, totalData uint64
@@ -84,10 +84,10 @@ type memTable struct {
 }
 
 func newMemTable(memTableSize uint64) *memTable {
-	return &memTable{chunks: map[addr][]byte{}, maxData: memTableSize}
+	return &memTable{chunks: map[hash.Hash][]byte{}, maxData: memTableSize}
 }
 
-func (mt *memTable) addChunk(h addr, data []byte) addChunkResult {
+func (mt *memTable) addChunk(h hash.Hash, data []byte) addChunkResult {
 	if len(data) == 0 {
 		panic("NBS blocks cannot be zero length")
 	}
@@ -113,10 +113,9 @@ func (mt *memTable) addChunk(h addr, data []byte) addChunkResult {
 
 func (mt *memTable) addChildRefs(addrs hash.HashSet) {
 	for h := range addrs {
-		a := addr(h)
 		mt.pendingRefs = append(mt.pendingRefs, hasRecord{
-			a:      &a,
-			prefix: a.Prefix(),
+			a:      &h,
+			prefix: h.Prefix(),
 			order:  len(mt.pendingRefs),
 		})
 	}
@@ -130,7 +129,7 @@ func (mt *memTable) uncompressedLen() (uint64, error) {
 	return mt.totalData, nil
 }
 
-func (mt *memTable) has(h addr) (bool, error) {
+func (mt *memTable) has(h hash.Hash) (bool, error) {
 	_, has := mt.chunks[h]
 	return has, nil
 }
@@ -157,7 +156,7 @@ func (mt *memTable) hasMany(addrs []hasRecord) (bool, error) {
 	return remaining, nil
 }
 
-func (mt *memTable) get(ctx context.Context, h addr, stats *Stats) ([]byte, error) {
+func (mt *memTable) get(ctx context.Context, h hash.Hash, stats *Stats) ([]byte, error) {
 	return mt.chunks[h], nil
 }
 
@@ -200,10 +199,10 @@ func (mt *memTable) extract(ctx context.Context, chunks chan<- extractRecord) er
 	return nil
 }
 
-func (mt *memTable) write(haver chunkReader, stats *Stats) (name addr, data []byte, count uint32, err error) {
+func (mt *memTable) write(haver chunkReader, stats *Stats) (name hash.Hash, data []byte, count uint32, err error) {
 	numChunks := uint64(len(mt.order))
 	if numChunks == 0 {
-		return addr{}, nil, 0, fmt.Errorf("mem table cannot write with zero chunks")
+		return hash.Hash{}, nil, 0, fmt.Errorf("mem table cannot write with zero chunks")
 	}
 	maxSize := maxTableSize(uint64(len(mt.order)), mt.totalData)
 	// todo: memory quota
@@ -215,7 +214,7 @@ func (mt *memTable) write(haver chunkReader, stats *Stats) (name addr, data []by
 		_, err := haver.hasMany(mt.order)
 
 		if err != nil {
-			return addr{}, nil, 0, err
+			return hash.Hash{}, nil, 0, err
 		}
 
 		sort.Sort(hasRecordByOrder(mt.order)) // restore "insertion" order for write
@@ -231,7 +230,7 @@ func (mt *memTable) write(haver chunkReader, stats *Stats) (name addr, data []by
 	tableSize, name, err := tw.finish()
 
 	if err != nil {
-		return addr{}, nil, 0, err
+		return hash.Hash{}, nil, 0, err
 	}
 
 	if count > 0 {

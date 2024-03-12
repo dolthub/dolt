@@ -18,6 +18,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type gcErrAccum map[string]error
@@ -72,10 +74,9 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context, tfp tableFilePersister
 		_ = gcc.writer.Remove()
 	}()
 
-	var addr addr
-	addr, err = parseAddr(filename)
-	if err != nil {
-		return nil, err
+	addr, ok := hash.MaybeParse(filename)
+	if !ok {
+		return nil, fmt.Errorf("invalid filename: %s", filename)
 	}
 
 	exists, err := tfp.Exists(ctx, addr, uint32(gcc.writer.ChunkCount()), nil)

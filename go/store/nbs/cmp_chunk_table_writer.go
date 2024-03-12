@@ -18,11 +18,12 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"errors"
-	"hash"
+	gohash "hash"
 	"io"
 	"os"
 	"sort"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/golang/snappy"
 )
 
@@ -44,7 +45,7 @@ type CmpChunkTableWriter struct {
 	totalCompressedData   uint64
 	totalUncompressedData uint64
 	prefixes              prefixIndexSlice
-	blockAddr             *addr
+	blockAddr             *hash.Hash
 	path                  string
 }
 
@@ -96,7 +97,7 @@ func (tw *CmpChunkTableWriter) AddCmpChunk(c CompressedChunk) error {
 
 	// Stored in insertion order
 	tw.prefixes = append(tw.prefixes, prefixIndexRec{
-		addr(c.H),
+		c.H,
 		uint32(len(tw.prefixes)),
 		uint32(fullLen),
 	})
@@ -124,9 +125,7 @@ func (tw *CmpChunkTableWriter) Finish() (string, error) {
 
 	var h []byte
 	h = blockHash.Sum(h)
-
-	var blockAddr addr
-	copy(blockAddr[:], h)
+	blockAddr := hash.New(h[:hash.ByteLen])
 
 	tw.blockAddr = &blockAddr
 	return tw.blockAddr.String(), nil
@@ -189,7 +188,7 @@ func containsDuplicates(prefixes prefixIndexSlice) bool {
 	return false
 }
 
-func (tw *CmpChunkTableWriter) writeIndex() (hash.Hash, error) {
+func (tw *CmpChunkTableWriter) writeIndex() (gohash.Hash, error) {
 	sort.Sort(tw.prefixes)
 
 	// We do a sanity check here to assert that we are never writing duplicate chunks into
@@ -198,13 +197,13 @@ func (tw *CmpChunkTableWriter) writeIndex() (hash.Hash, error) {
 		return nil, ErrDuplicateChunkWritten
 	}
 
-	pfxScratch := [addrPrefixSize]byte{}
+	pfxScratch := [hash.PrefixLen]byte{}
 	blockHash := sha512.New()
 
 	numRecords := uint32(len(tw.prefixes))
 	lengthsOffset := lengthsOffset(numRecords)   // skip prefix and ordinal for each record
 	suffixesOffset := suffixesOffset(numRecords) // skip size for each record
-	suffixesLen := uint64(numRecords) * addrSuffixSize
+	suffixesLen := uint64(numRecords) * hash.SuffixLen
 	buff := make([]byte, suffixesLen+suffixesOffset)
 
 	var pos uint64
@@ -213,7 +212,7 @@ func (tw *CmpChunkTableWriter) writeIndex() (hash.Hash, error) {
 
 		// hash prefix
 		n := uint64(copy(buff[pos:], pfxScratch[:]))
-		if n != addrPrefixSize {
+		if n != hash.PrefixLen {
 			return nil, errors.New("failed to copy all data")
 		}
 
@@ -228,10 +227,10 @@ func (tw *CmpChunkTableWriter) writeIndex() (hash.Hash, error) {
 		binary.BigEndian.PutUint32(buff[offset:], pi.size)
 
 		// hash suffix
-		offset = suffixesOffset + uint64(pi.order)*addrSuffixSize
+		offset = suffixesOffset + uint64(pi.order)*hash.SuffixLen
 		n = uint64(copy(buff[offset:], pi.addr.Suffix()))
 
-		if n != addrSuffixSize {
+		if n != hash.SuffixLen {
 			return nil, errors.New("failed to copy all bytes")
 		}
 	}

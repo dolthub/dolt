@@ -25,6 +25,7 @@ import (
 	"context"
 	"crypto/sha512"
 	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 	"time"
@@ -74,7 +75,7 @@ type manifestUpdater interface {
 	// If writeHook is non-nil, it will be invoked while the implementation is
 	// guaranteeing exclusive access to the manifest. This allows for testing
 	// of race conditions.
-	Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error)
+	Update(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error)
 }
 
 type manifestGCGenUpdater interface {
@@ -87,7 +88,7 @@ type manifestGCGenUpdater interface {
 	// If writeHook is non-nil, it will be invoked while the implementation is
 	// guaranteeing exclusive access to the manifest. This allows for testing
 	// of race conditions.
-	UpdateGCGen(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error)
+	UpdateGCGen(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error)
 }
 
 // ManifestInfo is an interface for retrieving data from a manifest outside of this package
@@ -113,9 +114,9 @@ const (
 type manifestContents struct {
 	manifestVers string
 	nbfVers      string
-	lock         addr
+	lock         hash.Hash
 	root         hash.Hash
-	gcGen        addr
+	gcGen        hash.Hash
 	specs        []tableSpec
 
 	// An appendix is a list of |tableSpecs| that track an auxillary collection of
@@ -192,16 +193,16 @@ func (mc manifestContents) removeAppendixSpecs() (manifestContents, []tableSpec)
 	}, removed
 }
 
-func (mc manifestContents) getSpecSet() (ss map[addr]struct{}) {
+func (mc manifestContents) getSpecSet() (ss map[hash.Hash]struct{}) {
 	return toSpecSet(mc.specs)
 }
 
-func (mc manifestContents) getAppendixSet() (ss map[addr]struct{}) {
+func (mc manifestContents) getAppendixSet() (ss map[hash.Hash]struct{}) {
 	return toSpecSet(mc.appendix)
 }
 
-func toSpecSet(specs []tableSpec) (ss map[addr]struct{}) {
-	ss = make(map[addr]struct{}, len(specs))
+func toSpecSet(specs []tableSpec) (ss map[hash.Hash]struct{}) {
+	ss = make(map[hash.Hash]struct{}, len(specs))
 	for _, ts := range specs {
 		ss[ts.name] = struct{}{}
 	}
@@ -209,7 +210,7 @@ func toSpecSet(specs []tableSpec) (ss map[addr]struct{}) {
 }
 
 func (mc manifestContents) size() (size uint64) {
-	size += uint64(len(mc.nbfVers)) + addrSize + hash.ByteLen
+	size += uint64(len(mc.nbfVers)) + hash.ByteLen + hash.ByteLen
 	for _, sp := range mc.specs {
 		size += uint64(len(sp.name)) + uint32Size // for sp.chunkCount
 	}
@@ -292,7 +293,7 @@ func (mm manifestManager) UnlockForUpdate() error {
 	return mm.locks.unlockForUpdate(mm.Name())
 }
 
-func (mm manifestManager) updateWillFail(lastLock addr) (cached manifestContents, doomed bool) {
+func (mm manifestManager) updateWillFail(lastLock hash.Hash) (cached manifestContents, doomed bool) {
 	if upstream, _, hit := mm.cache.Get(mm.Name()); hit {
 		if lastLock != upstream.lock {
 			doomed, cached = true, upstream
@@ -346,7 +347,7 @@ func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (exists bool,
 // Callers MUST protect uses of Update with Lock/UnlockForUpdate.
 // Update does not call Lock/UnlockForUpdate() on its own because it is
 // intended to be used in a larger critical section along with updateWillFail.
-func (mm manifestManager) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (contents manifestContents, err error) {
+func (mm manifestManager) Update(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (contents manifestContents, err error) {
 	if upstream, _, hit := mm.cache.Get(mm.Name()); hit {
 		if lastLock != upstream.lock {
 			return upstream, nil
@@ -385,7 +386,7 @@ func (mm manifestManager) Update(ctx context.Context, lastLock addr, newContents
 
 // UpdateGCGen will update the manifest with a new garbage collection generation.
 // Callers MUST protect uses of UpdateGCGen with Lock/UnlockForUpdate.
-func (mm manifestManager) UpdateGCGen(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (contents manifestContents, err error) {
+func (mm manifestManager) UpdateGCGen(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (contents manifestContents, err error) {
 	updater, ok := mm.m.(manifestGCGenUpdater)
 	if !ok {
 		return manifestContents{}, errors.New("manifest does not support updating gc gen")
@@ -443,7 +444,7 @@ type TableSpecInfo interface {
 }
 
 type tableSpec struct {
-	name       addr
+	name       hash.Hash
 	chunkCount uint32
 }
 
@@ -468,10 +469,10 @@ func parseSpecs(tableInfo []string) ([]tableSpec, error) {
 	specs := make([]tableSpec, len(tableInfo)/2)
 	for i := range specs {
 		var err error
-		specs[i].name, err = parseAddr(tableInfo[2*i])
-
-		if err != nil {
-			return nil, err
+		var ok bool
+		specs[i].name, ok = hash.MaybeParse(tableInfo[2*i])
+		if !ok {
+			return nil, fmt.Errorf("invalid table file name: %s", tableInfo[2*i])
 		}
 
 		c, err := strconv.ParseUint(tableInfo[2*i+1], 10, 32)
@@ -500,7 +501,7 @@ func formatSpecs(specs []tableSpec, tableInfo []string) {
 // persisted manifest against the lock hash it saw last time it loaded the
 // contents of a manifest. If they do not match, the client must not update
 // the persisted manifest.
-func generateLockHash(root hash.Hash, specs []tableSpec, appendix []tableSpec) (lock addr) {
+func generateLockHash(root hash.Hash, specs []tableSpec, appendix []tableSpec) (lock hash.Hash) {
 	blockHash := sha512.New()
 	blockHash.Write(root[:])
 	for _, spec := range appendix {
@@ -512,6 +513,5 @@ func generateLockHash(root hash.Hash, specs []tableSpec, appendix []tableSpec) (
 	}
 	var h []byte
 	h = blockHash.Sum(h) // Appends hash to h
-	copy(lock[:], h)
-	return
+	return hash.New(h[:hash.ByteLen])
 }

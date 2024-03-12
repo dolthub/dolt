@@ -21,6 +21,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/fatih/color"
 	"golang.org/x/sync/errgroup"
 
@@ -68,15 +69,15 @@ func (bsp *noConjoinBlobstorePersister) ConjoinAll(ctx context.Context, sources 
 }
 
 // Open a table named |name|, containing |chunkCount| chunks.
-func (bsp *noConjoinBlobstorePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {
+func (bsp *noConjoinBlobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
 	return newBSChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, stats)
 }
 
-func (bsp *noConjoinBlobstorePersister) Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error) {
+func (bsp *noConjoinBlobstorePersister) Exists(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (bool, error) {
 	return bsp.bs.Exists(ctx, name.String())
 }
 
-func (bsp *noConjoinBlobstorePersister) PruneTableFiles(ctx context.Context, keeper func() []addr, t time.Time) error {
+func (bsp *noConjoinBlobstorePersister) PruneTableFiles(ctx context.Context, keeper func() []hash.Hash, t time.Time) error {
 	return nil
 }
 

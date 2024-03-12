@@ -26,9 +26,11 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
-func tableExistsInChunkSource(ctx context.Context, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (bool, error) {
+func tableExistsInChunkSource(ctx context.Context, s3 *s3ObjectReader, al awsLimits, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (bool, error) {
 	magic := make([]byte, magicNumberSize)
 	n, _, err := s3.ReadFromEnd(ctx, name, magic, stats)
 	if err != nil {
@@ -40,7 +42,7 @@ func tableExistsInChunkSource(ctx context.Context, s3 *s3ObjectReader, al awsLim
 	return bytes.Equal(magic, []byte(magicNumber)), nil
 }
 
-func newAWSChunkSource(ctx context.Context, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
+func newAWSChunkSource(ctx context.Context, s3 *s3ObjectReader, al awsLimits, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
 	var tra tableReaderAt
 	index, err := loadTableIndex(ctx, stats, chunkCount, q, func(p []byte) error {
 		n, _, err := s3.ReadFromEnd(ctx, name, p, stats)

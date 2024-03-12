@@ -14,18 +14,22 @@
 
 package nbs
 
-import "context"
+import (
+	"context"
+
+	"github.com/dolthub/dolt/go/store/hash"
+)
 
 type chunkSourceAdapter struct {
 	tableReader
-	h addr
+	h hash.Hash
 }
 
-func (csa chunkSourceAdapter) hash() addr {
+func (csa chunkSourceAdapter) hash() hash.Hash {
 	return csa.h
 }
 
-func newReaderFromIndexData(ctx context.Context, q MemoryQuotaProvider, idxData []byte, name addr, tra tableReaderAt, blockSize uint64) (cs chunkSource, err error) {
+func newReaderFromIndexData(ctx context.Context, q MemoryQuotaProvider, idxData []byte, name hash.Hash, tra tableReaderAt, blockSize uint64) (cs chunkSource, err error) {
 	index, err := parseTableIndexByCopy(ctx, idxData, q)
 	if err != nil {
 		return nil, err
