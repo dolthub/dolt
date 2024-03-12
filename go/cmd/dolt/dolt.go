@@ -589,7 +589,6 @@ func runMain() int {
 		cli.PrintErrln("failed to load database names")
 		return 1
 	}
-
 	_ = mrEnv.Iter(func(dbName string, dEnv *env.DoltEnv) (stop bool, err error) {
 		dsess.DefineSystemVariablesForDB(dbName)
 		return false, nil
