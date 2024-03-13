@@ -646,6 +646,7 @@ func containsJournalSpec(specs []tableSpec) (ok bool) {
 	for _, spec := range specs {
 		if spec.name == journalAddr {
 			ok = true
+			break
 		}
 	}
 	return
