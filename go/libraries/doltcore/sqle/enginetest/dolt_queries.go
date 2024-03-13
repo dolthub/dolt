@@ -722,6 +722,59 @@ var DoltScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "prepared table functions",
+		SetUpScript: []string{
+			"create table t1 (a int primary key)",
+			"insert into t1 values (0), (1)",
+			"call dolt_add('.');",
+			"set @Commit0 = '';",
+			"call dolt_commit_hash_out(@Commit0, '-am', 'commit 0');",
+			//
+			"alter table t1 add column b int default 1",
+			"call dolt_add('.');",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'commit 1');",
+			//
+			"create table t2 (a int primary key)",
+			"insert into t2 values (0), (1)",
+			"insert into t1 values (2,2), (3,2)",
+			"call dolt_add('.');",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'commit 2');",
+			//
+			"prepare sch_diff from 'select count(*) from dolt_schema_diff(?,?,?)'",
+			"prepare diff_stat from 'select count(*) from dolt_diff_stat(?,?,?)'",
+			"prepare diff_sum from 'select count(*) from dolt_diff_summary(?,?,?)'",
+			//"prepare table_diff from 'select * from dolt_diff(?,?,?)'",
+			"prepare patch from 'select count(*) from dolt_schema_diff(?,?,?)'",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "set @t1_name = 't1';",
+			},
+			{
+				Query:    "execute sch_diff using @Commit0, @Commit1, @t1_name",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "execute diff_stat using @Commit1, @Commit2, @t1_name",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "execute diff_sum using @Commit1, @Commit2, @t1_name",
+				Expected: []sql.Row{{1}},
+			},
+			//{
+			//	Query:    "execute table_diff using @Commit2, @Commit2, @t1_name",
+			//	Expected: []sql.Row{},
+			//},
+			{
+				Query:    "execute patch using @Commit0, @Commit1, @t1_name",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
 		Name: "test has_ancestor",
 		SetUpScript: []string{
 			"create table xy (x int primary key)",

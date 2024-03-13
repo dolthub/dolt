@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"fmt"
+	expression2 "github.com/dolthub/go-mysql-server/sql/expression"
 	"io"
 	"sort"
 	"strings"
@@ -235,20 +236,20 @@ func (ds *DiffSummaryTableFunction) WithExpressions(expression ...sql.Expression
 
 	// validate the expressions
 	if newDstf.dotCommitExpr != nil {
-		if !types.IsText(newDstf.dotCommitExpr.Type()) {
+		if !types.IsText(newDstf.dotCommitExpr.Type()) && !expression2.IsBindVar(newDstf.dotCommitExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.dotCommitExpr.String())
 		}
 	} else {
-		if !types.IsText(newDstf.fromCommitExpr.Type()) {
+		if !types.IsText(newDstf.fromCommitExpr.Type()) && !expression2.IsBindVar(newDstf.fromCommitExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.fromCommitExpr.String())
 		}
-		if !types.IsText(newDstf.toCommitExpr.Type()) {
+		if !types.IsText(newDstf.toCommitExpr.Type()) && !expression2.IsBindVar(newDstf.toCommitExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.toCommitExpr.String())
 		}
 	}
 
 	if newDstf.tableNameExpr != nil {
-		if !types.IsText(newDstf.tableNameExpr.Type()) {
+		if !types.IsText(newDstf.tableNameExpr.Type()) && !expression2.IsBindVar(newDstf.tableNameExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.tableNameExpr.String())
 		}
 	}
