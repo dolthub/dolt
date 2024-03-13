@@ -25,11 +25,13 @@ import "encoding/base32"
 
 var encoding = base32.NewEncoding("0123456789abcdefghijklmnopqrstuv")
 
-func encode(data []byte) string {
+// Encode returns the base32 encoding in the Dolt alphabet.
+func Encode(data []byte) string {
 	return encoding.EncodeToString(data)
 }
 
-func decode(s string) []byte {
+// Decode returns the bytes represented by the Base32 string using the Dolt alphabet.
+func Decode(s string) []byte {
 	slice, _ := encoding.DecodeString(s)
 	return slice
 }

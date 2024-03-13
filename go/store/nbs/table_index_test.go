@@ -243,7 +243,7 @@ func addrFromPrefix(prefix string) hash.Hash {
 	}
 
 	// base32 decode string
-	h, _ := encoding.DecodeString(prefix)
+	h := hash.Decode(prefix)
 	return hash.New(h[:hash.ByteLen])
 }
 

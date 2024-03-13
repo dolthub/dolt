@@ -417,7 +417,7 @@ func Test65k(t *testing.T) {
 // Ensure all addresses share the first 7 bytes. Useful for easily generating tests which have
 // "prefix" collisions.
 func computeAddrCommonPrefix(data []byte) hash.Hash {
-	a := computeAddrDefault(data)
+	a := computeHashDefault(data)
 	a[0] = 0x01
 	a[1] = 0x23
 	a[2] = 0x45
@@ -475,7 +475,7 @@ func Test65kGetMany(t *testing.T) {
 func Test2kGetManyCommonPrefix(t *testing.T) {
 	computeAddr = computeAddrCommonPrefix
 	defer func() {
-		computeAddr = computeAddrDefault
+		computeAddr = computeHashDefault
 	}()
 
 	doTestNGetMany(t, 1<<11)

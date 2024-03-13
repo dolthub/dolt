@@ -25,7 +25,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha512"
-	"encoding/base32"
 	"hash/crc32"
 	"io"
 
@@ -143,36 +142,12 @@ func crc(b []byte) uint32 {
 	return crc32.Update(0, crcTable, b)
 }
 
-// NM4 - change name?
-func computeAddrDefault(data []byte) hash.Hash {
+func computeHashDefault(data []byte) hash.Hash {
 	r := sha512.Sum512(data)
 	return hash.New(r[:hash.ByteLen])
 }
 
-var computeAddr = computeAddrDefault
-
-// type addr [addrSize]byte
-
-var encoding = base32.NewEncoding("0123456789abcdefghijklmnopqrstuv")
-
-/*
-	NM4
-
-	func (a addr) String() string {
-		return encoding.EncodeToString(a[:])
-	}
-
-	func parseAddr(str string) (addr, error) {
-		var h addr
-		_, err := encoding.Decode(h[:], []byte(str))
-		return h, err
-	}
-
-	func ValidateAddr(s string) bool {
-		_, err := encoding.DecodeString(s)
-		return err == nil
-	}
-*/
+var computeAddr = computeHashDefault
 
 type addrSlice []hash.Hash
 

@@ -496,7 +496,7 @@ func (ti onHeapTableIndex) padStringAndDecode(s string, p string) uint64 {
 	}
 
 	// Decode
-	h, _ := encoding.DecodeString(s)
+	h := hash.Decode(s)
 	return binary.BigEndian.Uint64(h)
 }
 
