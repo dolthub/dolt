@@ -101,7 +101,7 @@ func ParseRefSpecForRemote(remote, refSpecStr string) (RefSpec, error) {
 	}
 
 	if fromRef.GetType() == BranchRefType && toRef.GetType() == RemoteRefType {
-		return newLocalToRemoteTrackingRef(remote, fromRef.(BranchRef), toRef.(RemoteRef))
+		return NewLocalToRemoteTrackingRef(remote, fromRef.(BranchRef), toRef.(RemoteRef))
 	} else if fromRef.GetType() == BranchRefType && toRef.GetType() == BranchRefType {
 		return NewBranchToBranchRefSpec(fromRef.(BranchRef), toRef.(BranchRef))
 	} else if fromRef.GetType() == TagRefType && toRef.GetType() == TagRefType {
@@ -206,7 +206,7 @@ type BranchToTrackingBranchRefSpec struct {
 	remRefToLocal branchMapper
 }
 
-func newLocalToRemoteTrackingRef(remote string, srcRef BranchRef, destRef RemoteRef) (RefSpec, error) {
+func NewLocalToRemoteTrackingRef(remote string, srcRef BranchRef, destRef RemoteRef) (RefSpec, error) {
 	srcWCs := strings.Count(srcRef.GetPath(), "*")
 	destWCs := strings.Count(destRef.GetPath(), "*")
 

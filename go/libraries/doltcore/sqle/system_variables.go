@@ -31,6 +31,14 @@ func init() {
 func AddDoltSystemVariables() {
 	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
 		{
+			Name:              dsess.DoltOverrideSchema,
+			Scope:             sql.SystemVariableScope_Both,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemStringType(dsess.DoltOverrideSchema),
+			Default:           "",
+		},
+		{
 			Name:              dsess.ReplicateToRemote,
 			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,
@@ -194,6 +202,34 @@ func AddDoltSystemVariables() {
 			Scope:   sql.SystemVariableScope_Both,
 			Type:    types.NewSystemBoolType("dolt_dont_merge_json"),
 			Default: int8(0),
+		},
+		{
+			Name:    dsess.DoltStatsAutoRefreshEnabled,
+			Dynamic: true,
+			Scope:   sql.SystemVariableScope_Global,
+			Type:    types.NewSystemBoolType(dsess.DoltStatsAutoRefreshEnabled),
+			Default: int8(0),
+		},
+		{
+			Name:    dsess.DoltStatsMemoryOnly,
+			Dynamic: true,
+			Scope:   sql.SystemVariableScope_Global,
+			Type:    types.NewSystemBoolType(dsess.DoltStatsMemoryOnly),
+			Default: int8(0),
+		},
+		{
+			Name:    dsess.DoltStatsAutoRefreshThreshold,
+			Dynamic: true,
+			Scope:   sql.SystemVariableScope_Global,
+			Type:    types.NewSystemDoubleType(dsess.DoltStatsAutoRefreshEnabled, 0, 10),
+			Default: float64(.5),
+		},
+		{
+			Name:    dsess.DoltStatsAutoRefreshInterval,
+			Dynamic: true,
+			Scope:   sql.SystemVariableScope_Global,
+			Type:    types.NewSystemIntType(dsess.DoltStatsAutoRefreshInterval, 0, 1<<10, false),
+			Default: 120,
 		},
 	})
 }

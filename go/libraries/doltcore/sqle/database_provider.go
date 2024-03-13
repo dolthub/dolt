@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -214,6 +215,26 @@ func (p *DoltDatabaseProvider) Database(ctx *sql.Context, name string) (sql.Data
 		return nil, sql.ErrDatabaseNotFound.New(name)
 	}
 
+	overriddenSchemaValue, err := getOverriddenSchemaValue(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// If a schema override is set, ensure we're using a ReadOnlyDatabase
+	if overriddenSchemaValue != "" {
+		// TODO: It would be nice if we could set a "read-only reason" for the read only database and let people know
+		//       that the database is read-only because of the @@dolt_override_schema setting and that customers need
+		//       to unset that session variable to get a write query to work. Otherwise it may be confusing why a
+		//       write query isn't working.
+		if _, ok := database.(ReadOnlyDatabase); !ok {
+			readWriteDatabase, ok := database.(Database)
+			if !ok {
+				return nil, fmt.Errorf("expected an instance of sqle.Database, but found: %T", database)
+			}
+			return ReadOnlyDatabase{readWriteDatabase}, nil
+		}
+	}
+
 	return database, nil
 }
 
@@ -262,7 +283,7 @@ func (p *DoltDatabaseProvider) attemptCloneReplica(ctx *sql.Context, dbName stri
 	// TODO: remote params for AWS, others
 	// TODO: this needs to be robust in the face of the DB not having the default branch
 	// TODO: this treats every database not found error as a clone error, need to tighten
-	err := p.CloneDatabaseFromRemote(ctx, dbName, p.defaultBranch, remoteName, remoteUrl, nil)
+	err := p.CloneDatabaseFromRemote(ctx, dbName, p.defaultBranch, remoteName, remoteUrl, -1, nil)
 	if err != nil {
 		return err
 	}
@@ -491,6 +512,7 @@ func ConfigureReplicationDatabaseHook(ctx *sql.Context, p *DoltDatabaseProvider,
 func (p *DoltDatabaseProvider) CloneDatabaseFromRemote(
 	ctx *sql.Context,
 	dbName, branch, remoteName, remoteUrl string,
+	depth int,
 	remoteParams map[string]string,
 ) error {
 	p.mu.Lock()
@@ -503,7 +525,7 @@ func (p *DoltDatabaseProvider) CloneDatabaseFromRemote(
 		return fmt.Errorf("cannot create DB, file exists at %s", dbName)
 	}
 
-	err := p.cloneDatabaseFromRemote(ctx, dbName, remoteName, branch, remoteUrl, remoteParams)
+	err := p.cloneDatabaseFromRemote(ctx, dbName, remoteName, branch, remoteUrl, depth, remoteParams)
 	if err != nil {
 		// Make a best effort to clean up any artifacts on disk from a failed clone
 		// before we return the error
@@ -527,6 +549,7 @@ func (p *DoltDatabaseProvider) CloneDatabaseFromRemote(
 func (p *DoltDatabaseProvider) cloneDatabaseFromRemote(
 	ctx *sql.Context,
 	dbName, remoteName, branch, remoteUrl string,
+	depth int,
 	remoteParams map[string]string,
 ) error {
 	if p.remoteDialer == nil {
@@ -544,7 +567,7 @@ func (p *DoltDatabaseProvider) cloneDatabaseFromRemote(
 		return err
 	}
 
-	err = actions.CloneRemote(ctx, srcDB, remoteName, branch, false, dEnv)
+	err = actions.CloneRemote(ctx, srcDB, remoteName, branch, false, depth, dEnv)
 	if err != nil {
 		return err
 	}
@@ -589,7 +612,7 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	}
 
 	// If this database is re-created, we don't want to return any cached results.
-	err = dbfactory.DeleteFromSingletonCache(dropDbLoc + "/.dolt/noms")
+	err = dbfactory.DeleteFromSingletonCache(filepath.ToSlash(dropDbLoc + "/.dolt/noms"))
 	if err != nil {
 		return err
 	}
@@ -623,6 +646,10 @@ func (p *DoltDatabaseProvider) ListDroppedDatabases(ctx *sql.Context) ([]string,
 	defer p.mu.Unlock()
 
 	return p.droppedDatabaseManager.ListDroppedDatabases(ctx)
+}
+
+func (p *DoltDatabaseProvider) DbFactoryUrl() string {
+	return p.dbFactoryUrl
 }
 
 func (p *DoltDatabaseProvider) UndropDatabase(ctx *sql.Context, name string) (err error) {
@@ -1074,9 +1101,14 @@ func resolveAncestorSpec(ctx *sql.Context, revSpec string, ddb *doltdb.DoltDB) (
 		return "", err
 	}
 
-	cm, err = cm.GetAncestor(ctx, ancestorSpec)
+	optCmt, err := cm.GetAncestor(ctx, ancestorSpec)
 	if err != nil {
 		return "", err
+	}
+	ok := false
+	cm, ok = optCmt.ToCommit()
+	if !ok {
+		return "", doltdb.ErrGhostCommitEncountered
 	}
 
 	hash, err := cm.HashOf()
@@ -1465,9 +1497,13 @@ func initialStateForCommit(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.I
 	if err != nil {
 		return dsess.InitialDbState{}, err
 	}
-	cm, err := srcDb.DbData().Ddb.Resolve(ctx, spec, headRef)
+	optCmt, err := srcDb.DbData().Ddb.Resolve(ctx, spec, headRef)
 	if err != nil {
 		return dsess.InitialDbState{}, err
+	}
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		return dsess.InitialDbState{}, doltdb.ErrGhostCommitEncountered
 	}
 
 	init := dsess.InitialDbState{

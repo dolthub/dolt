@@ -388,6 +388,10 @@ func (ms *MemoryStoreView) StatsSummary() string {
 	return "Unsupported"
 }
 
+func (ms *MemoryStoreView) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
+	panic("not implemented")
+}
+
 func (ms *MemoryStoreView) Close() error {
 	return nil
 }

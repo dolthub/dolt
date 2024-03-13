@@ -301,7 +301,7 @@ func pullBranches(
 	// back changes which were applied from another thread.
 
 	_, err := rrd.limiter.Run(ctx, "-all", func() (any, error) {
-		pullErr := rrd.ddb.PullChunks(ctx, rrd.tmpDir, rrd.srcDB, remoteHashes, nil)
+		pullErr := rrd.ddb.PullChunks(ctx, rrd.tmpDir, rrd.srcDB, remoteHashes, nil, nil)
 		if pullErr != nil {
 			return nil, pullErr
 		}
@@ -406,9 +406,13 @@ func (rrd ReadReplicaDatabase) createNewBranchFromRemote(ctx *sql.Context, remot
 		return err
 	}
 
-	cm, err := rrd.ddb.Resolve(ctx, spec, nil)
+	optCmt, err := rrd.ddb.Resolve(ctx, spec, nil)
 	if err != nil {
 		return err
+	}
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		return doltdb.ErrGhostCommitEncountered // NM4 - TEST.
 	}
 
 	err = rrd.ddb.NewBranchAtCommit(ctx, remoteRef.Ref, cm, nil)

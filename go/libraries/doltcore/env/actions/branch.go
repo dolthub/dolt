@@ -96,12 +96,15 @@ func CopyBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, oldBranch, newBranc
 
 	cs, _ := doltdb.NewCommitSpec(oldBranch)
 	cm, err := ddb.Resolve(ctx, cs, nil)
-
 	if err != nil {
 		return err
 	}
 
-	return ddb.NewBranchAtCommit(ctx, newRef, cm, rsc)
+	commit, ok := cm.ToCommit()
+	if !ok {
+		return doltdb.ErrGhostCommitEncountered
+	}
+	return ddb.NewBranchAtCommit(ctx, newRef, commit, rsc)
 }
 
 type DeleteOptions struct {
@@ -185,9 +188,13 @@ func validateBranchMergedIntoCurrentWorkingBranch(ctx context.Context, dbdata en
 		return err
 	}
 
-	branchHead, err := dbdata.Ddb.Resolve(ctx, branchSpec, nil)
+	optCmt, err := dbdata.Ddb.Resolve(ctx, branchSpec, nil)
 	if err != nil {
 		return err
+	}
+	branchHead, ok := optCmt.ToCommit()
+	if !ok {
+		return doltdb.ErrGhostCommitEncountered
 	}
 
 	cwbCs, err := doltdb.NewCommitSpec("HEAD")
@@ -199,9 +206,13 @@ func validateBranchMergedIntoCurrentWorkingBranch(ctx context.Context, dbdata en
 	if err != nil {
 		return err
 	}
-	cwbHead, err := dbdata.Ddb.Resolve(ctx, cwbCs, headRef)
+	optCmt, err = dbdata.Ddb.Resolve(ctx, cwbCs, headRef)
 	if err != nil {
 		return err
+	}
+	cwbHead, ok := optCmt.ToCommit()
+	if !ok {
+		return doltdb.ErrGhostCommitEncountered
 	}
 
 	isMerged, err := branchHead.CanFastForwardTo(ctx, cwbHead)
@@ -245,14 +256,22 @@ func validateBranchMergedIntoUpstream(ctx context.Context, dbdata env.DbData, br
 		return err
 	}
 
-	remoteBranchHead, err := remoteDb.Resolve(ctx, cs, nil)
+	optCmt, err := remoteDb.Resolve(ctx, cs, nil)
 	if err != nil {
 		return err
 	}
+	remoteBranchHead, ok := optCmt.ToCommit()
+	if !ok {
+		return doltdb.ErrGhostCommitEncountered
+	}
 
-	localBranchHead, err := dbdata.Ddb.Resolve(ctx, cs, nil)
+	optCmt, err = dbdata.Ddb.Resolve(ctx, cs, nil)
 	if err != nil {
 		return err
+	}
+	localBranchHead, ok := optCmt.ToCommit()
+	if !ok {
+		return doltdb.ErrGhostCommitEncountered
 	}
 
 	canFF, err := localBranchHead.CanFastForwardTo(ctx, remoteBranchHead)
@@ -315,9 +334,14 @@ func CreateBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, newBranch, starti
 		return err
 	}
 
-	cm, err := ddb.Resolve(ctx, cs, headRef)
+	optCmt, err := ddb.Resolve(ctx, cs, headRef)
 	if err != nil {
 		return err
+	}
+
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		return doltdb.ErrGhostCommitEncountered
 	}
 
 	err = ddb.NewBranchAtCommit(ctx, branchRef, cm, rsc)
@@ -355,21 +379,20 @@ func MaybeGetCommit(ctx context.Context, dEnv *env.DoltEnv, str string) (*doltdb
 		if err != nil {
 			return nil, err
 		}
-		cm, err := dEnv.DoltDB.Resolve(ctx, cs, headRef)
-
-		if errors.Is(err, doltdb.ErrBranchNotFound) {
+		optCmt, err := dEnv.DoltDB.Resolve(ctx, cs, headRef)
+		if err != nil && errors.Is(err, doltdb.ErrBranchNotFound) {
 			return nil, nil
 		}
-
-		switch err {
-		case nil:
-			return cm, nil
-
-		case doltdb.ErrHashNotFound, doltdb.ErrBranchNotFound:
+		if err != nil && errors.Is(err, doltdb.ErrHashNotFound) {
 			return nil, nil
-
-		default:
+		}
+		if err != nil {
 			return nil, err
+		}
+
+		cm, ok := optCmt.ToCommit()
+		if ok {
+			return cm, nil
 		}
 	}
 

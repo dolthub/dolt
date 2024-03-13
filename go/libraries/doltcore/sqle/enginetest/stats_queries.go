@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/stats"
@@ -310,7 +311,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "select `database`, `table`, `index`, commit_hash, columns, types from dolt_statistics",
+				Query: "select database_name, table_name, index_name, commit_hash, columns, types from dolt_statistics",
 				Expected: []sql.Row{
 					{"mydb", "xy", "primary", "f6la1u3ku5pucfctgrca2afq9vlr4nrs", "x", "bigint"},
 					{"mydb", "xy", "yz", "9ec31007jaqtahij0tmlmd7j9t9hl1he", "y,z", "int,varchar(500)"},
@@ -348,18 +349,18 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "select `database`, `table`, `index`, commit_hash, columns, types  from dolt_statistics where `table` = 'xy'",
+				Query: "select database_name, table_name, index_name, commit_hash, columns, types  from dolt_statistics where table_name = 'xy'",
 				Expected: []sql.Row{
 					{"mydb", "xy", "primary", "f6la1u3ku5pucfctgrca2afq9vlr4nrs", "x", "bigint"},
 					{"mydb", "xy", "yz", "9ec31007jaqtahij0tmlmd7j9t9hl1he", "y,z", "int,varchar(500)"},
 				},
 			},
 			{
-				Query:    fmt.Sprintf("select %s, %s, %s from dolt_statistics where `table` = 'xy'", schema.StatsRowCountColName, schema.StatsDistinctCountColName, schema.StatsNullCountColName),
+				Query:    fmt.Sprintf("select %s, %s, %s from dolt_statistics where table_name = 'xy'", schema.StatsRowCountColName, schema.StatsDistinctCountColName, schema.StatsNullCountColName),
 				Expected: []sql.Row{{uint64(6), uint64(6), uint64(0)}, {uint64(6), uint64(3), uint64(0)}},
 			},
 			{
-				Query: "select `table`, `index` from dolt_statistics",
+				Query: "select `table_name`, `index_name` from dolt_statistics",
 				Expected: []sql.Row{
 					{"ab", "primary"},
 					{"ab", "bc"},
@@ -368,15 +369,197 @@ var DoltStatsIOTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "select `database`, `table`, `index`, commit_hash, columns, types  from dolt_statistics where `table` = 'ab'",
+				Query: "select database_name, table_name, index_name, commit_hash, columns, types  from dolt_statistics where table_name = 'ab'",
 				Expected: []sql.Row{
 					{"mydb", "ab", "primary", "t6j206v6b9t8vnmhpcc2i57lom8kejk3", "a", "bigint"},
 					{"mydb", "ab", "bc", "sibnr73868rb5dqa76opfn4pkelhhqna", "b,c", "int,int"},
 				},
 			},
 			{
-				Query:    fmt.Sprintf("select %s, %s, %s from dolt_statistics where `table` = 'ab'", schema.StatsRowCountColName, schema.StatsDistinctCountColName, schema.StatsNullCountColName),
+				Query:    fmt.Sprintf("select %s, %s, %s from dolt_statistics where table_name = 'ab'", schema.StatsRowCountColName, schema.StatsDistinctCountColName, schema.StatsNullCountColName),
 				Expected: []sql.Row{{uint64(6), uint64(6), uint64(0)}, {uint64(6), uint64(3), uint64(0)}},
+			},
+		},
+	},
+	{
+		// only edited chunks are scanned and re-written
+		Name: "incremental stats updates",
+		SetUpScript: []string{
+			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
+			"insert into xy values (0,0,'a'), (2,0,'a'), (4,1,'a'), (6,2,'a')",
+			"analyze table xy",
+			"insert into xy values (1,0,'a'), (3,0,'a'), (5,2,'a'),  (7,1,'a')",
+			"analyze table xy",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: fmt.Sprintf("select %s, %s, %s from dolt_statistics where table_name = 'xy'", schema.StatsRowCountColName, schema.StatsDistinctCountColName, schema.StatsNullCountColName),
+				Expected: []sql.Row{
+					{uint64(8), uint64(8), uint64(0)},
+					{uint64(8), uint64(3), uint64(0)},
+				},
+			},
+		},
+	},
+}
+
+var StatProcTests = []queries.ScriptTest{
+	{
+		Name: "deleting stats removes information_schema access point",
+		SetUpScript: []string{
+			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
+			"insert into xy values (0,0,0)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "analyze table xy",
+			},
+			{
+				Query:    "select count(*) from information_schema.column_statistics",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query: "call dolt_stats_drop()",
+			},
+			{
+				Query:    "select count(*) from information_schema.column_statistics",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "restart empty stats panic",
+		SetUpScript: []string{
+			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "analyze table xy",
+			},
+			{
+				Query:    "select count(*) from dolt_statistics",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "set @@GLOBAL.dolt_stats_auto_refresh_threshold = 0",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "set @@GLOBAL.dolt_stats_auto_refresh_interval = 0",
+				Expected: []sql.Row{{}},
+			},
+			{
+				// don't panic
+				Query: "call dolt_stats_restart()",
+			},
+			{
+				Query: "select sleep(.1)",
+			},
+			{
+				Query: "insert into xy values (0,0,0)",
+			},
+			{
+				Query: "select sleep(.1)",
+			},
+			{
+				Query:    "select count(*) from dolt_statistics",
+				Expected: []sql.Row{{2}},
+			},
+		},
+	},
+	{
+		Name: "basic start, status, stop loop",
+		SetUpScript: []string{
+			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
+			"insert into xy values (0,0,'a'), (2,0,'a'), (4,1,'a'), (6,2,'a')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "select count(*) from dolt_statistics",
+				ExpectedErrStr: doltdb.ErrNoStatistics.Error(),
+			},
+			{
+				Query:    "call dolt_stats_status()",
+				Expected: []sql.Row{{"no active stats thread"}},
+			},
+			// set refresh interval arbitrarily high to avoid updating when we restart
+			{
+				Query:    "set @@PERSIST.dolt_stats_auto_refresh_interval = 1000;",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "set @@PERSIST.dolt_stats_auto_refresh_threshold = 0",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query: "call dolt_stats_restart()",
+			},
+			{
+				Query:    "call dolt_stats_status()",
+				Expected: []sql.Row{{"restarted thread: mydb"}},
+			},
+			{
+				Query:    "set @@PERSIST.dolt_stats_auto_refresh_interval = 0;",
+				Expected: []sql.Row{{}},
+			},
+			// new restart picks up 0-interval, will start refreshing immediately
+			{
+				Query: "call dolt_stats_restart()",
+			},
+			{
+				Query: "select sleep(.1)",
+			},
+			{
+				Query:    "call dolt_stats_status()",
+				Expected: []sql.Row{{"updated to hash: vogi4fq0fe8n8rqa80pbsujlmmaljsoo"}},
+			},
+			{
+				Query:    "select count(*) from dolt_statistics",
+				Expected: []sql.Row{{2}},
+			},
+			// kill refresh thread
+			{
+				Query: "call dolt_stats_stop()",
+			},
+			{
+				Query:    "call dolt_stats_status()",
+				Expected: []sql.Row{{"cancelled thread: mydb"}},
+			},
+			// insert without refresh thread will not update stats
+			{
+				Query: "insert into xy values (1,0,'a'), (3,0,'a'), (5,2,'a'),  (7,1,'a')",
+			},
+			{
+				Query: "select sleep(.1)",
+			},
+			{
+				Query:    "call dolt_stats_status()",
+				Expected: []sql.Row{{"cancelled thread: mydb"}},
+			},
+			// manual analyze will update stats
+			{
+				Query:    "analyze table xy",
+				Expected: []sql.Row{{"xy", "analyze", "status", "OK"}},
+			},
+			{
+				Query:    "call dolt_stats_status()",
+				Expected: []sql.Row{{"updated to hash: fhnmdo8psvs10od36pqfi0g4cvvu732h"}},
+			},
+			{
+				Query:    "select count(*) from dolt_statistics",
+				Expected: []sql.Row{{2}},
+			},
+			// kill refresh thread and delete stats ref
+			{
+				Query: "call dolt_stats_drop()",
+			},
+			{
+				Query:    "call dolt_stats_status()",
+				Expected: []sql.Row{{"dropped"}},
+			},
+			{
+				Query:          "select count(*) from dolt_statistics",
+				ExpectedErrStr: doltdb.ErrNoStatistics.Error(),
 			},
 		},
 	},

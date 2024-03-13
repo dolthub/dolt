@@ -90,14 +90,14 @@ func (dt *UnscopedDiffTable) String() string {
 // Schema is a sql.Table interface function that returns the sql.Schema for this system table.
 func (dt *UnscopedDiffTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "commit_hash", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: true},
-		{Name: "table_name", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: true},
-		{Name: "committer", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: false},
-		{Name: "email", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: false},
-		{Name: "date", Type: types.Datetime, Source: doltdb.DiffTableName, PrimaryKey: false},
-		{Name: "message", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: false},
-		{Name: "data_change", Type: types.Boolean, Source: doltdb.DiffTableName, PrimaryKey: false},
-		{Name: "schema_change", Type: types.Boolean, Source: doltdb.DiffTableName, PrimaryKey: false},
+		{Name: "commit_hash", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: true, DatabaseSource: dt.dbName},
+		{Name: "table_name", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: true, DatabaseSource: dt.dbName},
+		{Name: "committer", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "email", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "date", Type: types.Datetime, Source: doltdb.DiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "message", Type: types.Text, Source: doltdb.DiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "data_change", Type: types.Boolean, Source: doltdb.DiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "schema_change", Type: types.Boolean, Source: doltdb.DiffTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
 	}
 }
 
@@ -331,14 +331,25 @@ func (itr *doltDiffCommitHistoryRowItr) Next(ctx *sql.Context) (sql.Row, error) 
 			}
 			itr.commits = nil
 		} else if itr.child != nil {
-			_, commit, err := itr.child.Next(ctx)
+			_, optCmt, err := itr.child.Next(ctx)
 			if err != nil {
 				return nil, err
 			}
+			commit, ok := optCmt.ToCommit()
+			if !ok {
+				return nil, io.EOF
+			}
+
 			err = itr.loadTableChanges(ctx, commit)
+			if err == doltdb.ErrGhostCommitEncountered {
+				// When showing the diff table in a shallow clone, we show as much of the dolt_history_{table} as we can,
+				// and don't consider it an error when we hit a ghost commit.
+				return nil, io.EOF
+			}
 			if err != nil {
 				return nil, err
 			}
+
 		} else {
 			return nil, io.EOF
 		}
@@ -401,9 +412,13 @@ func (itr *doltDiffCommitHistoryRowItr) calculateTableChanges(ctx context.Contex
 		return nil, err
 	}
 
-	parent, err := itr.ddb.ResolveParent(ctx, commit, 0)
+	optCmt, err := itr.ddb.ResolveParent(ctx, commit, 0)
 	if err != nil {
 		return nil, err
+	}
+	parent, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, doltdb.ErrGhostCommitEncountered
 	}
 
 	fromRootValue, err := parent.GetRootValue(ctx)
@@ -453,8 +468,14 @@ func isTableDataEmpty(ctx *sql.Context, table *doltdb.Table) (bool, error) {
 func commitFilterForDiffTableFilterExprs(filters []sql.Expression) (doltdb.CommitFilter, error) {
 	filters = transformFilters(filters...)
 
-	return func(ctx context.Context, h hash.Hash, cm *doltdb.Commit) (filterOut bool, err error) {
+	return func(ctx context.Context, h hash.Hash, optCmt *doltdb.OptionalCommit) (filterOut bool, err error) {
 		sc := sql.NewContext(ctx)
+
+		cm, ok := optCmt.ToCommit()
+		if !ok {
+			return false, doltdb.ErrGhostCommitEncountered
+		}
+
 		meta, err := cm.GetCommitMeta(ctx)
 		if err != nil {
 			return false, err
@@ -542,9 +563,14 @@ func getCommitFromHash(ctx *sql.Context, ddb *doltdb.DoltDB, val string) *doltdb
 	if err != nil {
 		return nil
 	}
-	cm, err := ddb.Resolve(ctx, cmSpec, headRef)
+	optCmt, err := ddb.Resolve(ctx, cmSpec, headRef)
 	if err != nil {
 		return nil
 	}
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		return nil
+	}
+
 	return cm
 }

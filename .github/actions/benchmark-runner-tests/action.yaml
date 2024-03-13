@@ -1,0 +1,5 @@
+name: 'Dolt Benchmark Runner Utility Test'
+description: "Smoke tests for Dolt's benchmark runner utility"
+runs:
+  using: 'docker'
+  image: '../../../SysbenchDockerfile'

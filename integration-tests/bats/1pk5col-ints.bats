@@ -108,7 +108,7 @@ teardown() {
     [[ "$output" =~ "Field 'pk' doesn't have a default value" ]] || false
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5,c6) values (10,1,1,1,1,1,1)"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "invalid column name c6" ]] || false
+    [[ "$output" =~ "Unknown column 'c6' in 'test'" ]] || false
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "duplicate primary key" ]] || false
@@ -117,7 +117,7 @@ teardown() {
 @test "1pk5col-ints: dolt sql insert same column twice" {
     run dolt sql -q "insert into test (pk,c1,c1) values (3,1,2)"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "duplicate column name c1" ]] || false
+    [[ "$output" =~ "column 'c1' specified twice" ]] || false
 }
 
 @test "1pk5col-ints: dolt sql insert no columns specified" {

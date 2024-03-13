@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -173,6 +172,12 @@ func (ht *HistoryTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLooku
 func NewHistoryTable(table *DoltTable, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
 	cmItr := doltdb.CommitItrForRoots(ddb, head)
 
+	// System tables don't currently use overridden schemas, so if one is set on |table|,
+	// clear it out to make sure we use the correct schema that matches the data being used.
+	if table.overriddenSchema != nil {
+		table.overriddenSchema = nil
+	}
+
 	h := &HistoryTable{
 		doltTable: table,
 		cmItr:     cmItr,
@@ -250,12 +255,15 @@ func substituteWorkingHash(h hash.Hash, f []sql.Expression) []sql.Expression {
 	return ret
 }
 
-var historyTableCommitMetaCols = set.NewStrSet([]string{CommitHashCol, CommitDateCol, CommitterCol})
-
 func commitFilterForExprs(ctx *sql.Context, filters []sql.Expression) (doltdb.CommitFilter, error) {
 	filters = transformFilters(ctx, filters...)
 
-	return func(ctx context.Context, h hash.Hash, cm *doltdb.Commit) (filterOut bool, err error) {
+	return func(ctx context.Context, h hash.Hash, optCmt *doltdb.OptionalCommit) (filterOut bool, err error) {
+		cm, ok := optCmt.ToCommit()
+		if !ok {
+			return false, nil // NM4 TEST.
+		}
+
 		meta, err := cm.GetCommitMeta(ctx)
 
 		if err != nil {
@@ -340,7 +348,6 @@ func (ht *HistoryTable) Projections() []string {
 	for i := range ht.projectedCols {
 		if col, ok := cols.TagToCol[ht.projectedCols[i]]; ok {
 			names[i] = col.Name
-
 		} else {
 			switch ht.projectedCols[i] {
 			case schema.HistoryCommitHashTag:
@@ -450,10 +457,13 @@ type commitPartitioner struct {
 
 // Next returns the next partition and nil, io.EOF when complete
 func (cp commitPartitioner) Next(ctx *sql.Context) (sql.Partition, error) {
-	h, cm, err := cp.cmItr.Next(ctx)
-
+	h, optCmt, err := cp.cmItr.Next(ctx)
 	if err != nil {
 		return nil, err
+	}
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, io.EOF
 	}
 
 	return &commitPartition{h, cm}, nil

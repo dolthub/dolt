@@ -69,9 +69,9 @@ func (dt *CommitAncestorsTable) String() string {
 // Schema is a sql.Table interface function that gets the sql.Schema of the commit_ancestors system table.
 func (dt *CommitAncestorsTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "commit_hash", Type: types.Text, Source: doltdb.CommitAncestorsTableName, PrimaryKey: true},
-		{Name: "parent_hash", Type: types.Text, Source: doltdb.CommitAncestorsTableName, PrimaryKey: true},
-		{Name: "parent_index", Type: types.Int32, Source: doltdb.CommitAncestorsTableName, PrimaryKey: true},
+		{Name: "commit_hash", Type: types.Text, Source: doltdb.CommitAncestorsTableName, PrimaryKey: true, DatabaseSource: dt.dbName},
+		{Name: "parent_hash", Type: types.Text, Source: doltdb.CommitAncestorsTableName, PrimaryKey: true, DatabaseSource: dt.dbName},
+		{Name: "parent_index", Type: types.Int32, Source: doltdb.CommitAncestorsTableName, PrimaryKey: true, DatabaseSource: dt.dbName},
 	}
 }
 
@@ -158,10 +158,15 @@ func NewCommitAncestorsRowItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB) (*CommitA
 // After retrieving the last row, Close will be automatically closed.
 func (itr *CommitAncestorsRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 	if len(itr.cache) == 0 {
-		ch, cm, err := itr.itr.Next(ctx)
+		ch, optCmt, err := itr.itr.Next(ctx)
 		if err != nil {
 			// When complete itr.Next will return io.EOF
 			return nil, err
+		}
+
+		cm, ok := optCmt.ToCommit()
+		if !ok {
+			return nil, doltdb.ErrGhostCommitEncountered
 		}
 
 		parents, err := itr.ddb.ResolveAllParents(ctx, cm)
@@ -175,7 +180,12 @@ func (itr *CommitAncestorsRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 
 		itr.cache = make([]sql.Row, len(parents))
-		for i, p := range parents {
+		for i, optParent := range parents {
+			p, ok := optParent.ToCommit()
+			if !ok {
+				return nil, doltdb.ErrGhostCommitEncountered
+			}
+
 			ph, err := p.HashOf()
 			if err != nil {
 				return nil, err

@@ -74,6 +74,7 @@ type DoltDatabaseProvider interface {
 	sql.MutableDatabaseProvider
 	// FileSystem returns the filesystem used by this provider, rooted at the data directory for all databases.
 	FileSystem() filesys.Filesys
+	DbFactoryUrl() string
 	// FileSystemForDatabase returns a filesystem, with the working directory set to the root directory
 	// of the requested database. If the requested database isn't found, a database not found error
 	// is returned.
@@ -87,7 +88,7 @@ type DoltDatabaseProvider interface {
 	// dbName is the name for the new database, branch is an optional parameter indicating which branch to clone
 	// (otherwise all branches are cloned), remoteName is the name for the remote created in the new database, and
 	// remoteUrl is a URL (e.g. "file:///dbs/db1") or an <org>/<database> path indicating a database hosted on DoltHub.
-	CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error
+	CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, depth int, remoteParams map[string]string) error
 	// SessionDatabase returns the SessionDatabase for the specified database, which may name a revision of a base
 	// database.
 	SessionDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool, error)

@@ -44,11 +44,11 @@ func (s MergeStatusTable) String() string {
 
 func (s MergeStatusTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "is_merging", Type: types.Boolean, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: false},
-		{Name: "source", Type: types.Text, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: true},
-		{Name: "source_commit", Type: types.Text, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: true},
-		{Name: "target", Type: types.Text, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: true},
-		{Name: "unmerged_tables", Type: types.Text, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: true},
+		{Name: "is_merging", Type: types.Boolean, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: false, DatabaseSource: s.dbName},
+		{Name: "source", Type: types.Text, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: true, DatabaseSource: s.dbName},
+		{Name: "source_commit", Type: types.Text, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: true, DatabaseSource: s.dbName},
+		{Name: "target", Type: types.Text, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: true, DatabaseSource: s.dbName},
+		{Name: "unmerged_tables", Type: types.Text, Source: doltdb.MergeStatusTableName, PrimaryKey: false, Nullable: true, DatabaseSource: s.dbName},
 	}
 }
 

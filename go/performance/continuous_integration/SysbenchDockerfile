@@ -1,40 +1,27 @@
-FROM --platform=linux/amd64 golang:1.21.2-bullseye
+FROM --platform=linux/amd64 golang:1.21-alpine as gobin
+FROM --platform=linux/amd64 ubuntu:22.04
 
+COPY --from=gobin /usr/local/go/ /go/
+
+ENV GOPATH=$HOME/go
+ENV PATH="/go/bin:${PATH}"
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Get sysbench installed
 RUN apt update
-RUN apt install -y curl
-
-# Install sysbench deps
-RUN apt update -y && apt install -y \
-  automake \
-  libtool \
-  pkg-config \
-  libaio-dev \
-  default-libmysqlclient-dev \
-  libssl-dev
-
-# Build sysbench from source
-RUN git clone https://github.com/akopytov/sysbench.git && \
-  cd sysbench && \
-  git checkout -b 1.0.20 tags/1.0.20 && \
-  ./autogen.sh && \
-  ./configure && \
-  make -j && \
-  make install
+RUN apt install -y curl wget git
 
 # Install sqlite3 from source
 RUN \
   apt-get install -y \
   build-essential \
   tcl \
-  lsb-release \
-  && wget \
+  lsb-release
+
+RUN wget \
     -O sqlite.tar.gz \
     https://www.sqlite.org/src/tarball/sqlite.tar.gz?r=release \
   && tar xvfz sqlite.tar.gz \
-  # Configure and make SQLite3 binary
+   # Configure and make SQLite3 binary
   && ./sqlite/configure --prefix=/usr \
   && make \
   && make install \
@@ -42,29 +29,75 @@ RUN \
   && sqlite3 --version
 
 WORKDIR /
-COPY ./go /dolt/go
-COPY ./config.json /config.json
-COPY ./tpcc-config.json /tpcc-config.json
 COPY ./sysbench-runner-tests-entrypoint.sh /entrypoint.sh
 RUN git clone https://github.com/dolthub/sysbench-lua-scripts.git
 RUN git clone https://github.com/Percona-Lab/sysbench-tpcc.git
 
+# install doltgres
+ENV DOLTGRESQL_VERSION=${DOLTGRESQL_VERSION:-v0.4.0}
+RUN git clone https://github.com/dolthub/doltgresql.git
+RUN cd doltgresql/utils/doltgres_builder/cmd && go run . "$DOLTGRESQL_VERSION"
+ENV PATH="/doltgresql/utils/doltgres_builder/cmd/doltgresBin/$DOLTGRESQL_VERSION:${PATH}"
+RUN doltgres version
+
 WORKDIR /mysql
-RUN curl -L -O https://dev.mysql.com/get/mysql-apt-config_0.8.22-1_all.deb
-RUN dpkg -i mysql-apt-config_0.8.22-1_all.deb
-# On 2023-12-14, the GPG key this repository uses to publish these packages expired. We make it insecure and install it anyway for now.
-# See https://bugs.mysql.com/bug.php?id=113427
-# Hopefully we can remove this soon.
-RUN sed -i.bak \
-  -e 's|^deb |deb [allow-insecure=true allow-weak=true allow-downgrade-to-insecure=true] |' \
-  -e 's|^deb-src |deb-src [allow-insecure=true allow-weak=true allow-downgrade-to-insecure=true] |' \
-  /etc/apt/sources.list.d/mysql.list 
-RUN apt-get update && apt-get install -y --allow-unauthenticated mysql-server
+RUN apt install -y mysql-server
 RUN mysql --version
 
-# Install dolt
-WORKDIR /dolt/go/cmd/dolt
-RUN go build -o /usr/local/bin/dolt .
+# Install sysbench
+RUN apt update
+RUN curl -s https://packagecloud.io/install/repositories/akopytov/sysbench/script.deb.sh | bash
+RUN apt -y install sysbench
 
-WORKDIR /dolt/go/performance/utils/sysbench_runner/cmd
+# Install Postgres 15
+WORKDIR /postgres
+RUN sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+RUN wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
+# currently this command fails, but it succeeds on the the stuff we need
+RUN apt-get update -y || true
+# currently this command fails, but it succeeds on the the stuff we need
+RUN apt-get -y install postgresql-15 || true
+
+ENV PATH="/usr/lib/postgresql/15/bin:${PATH}"
+
+RUN postgres --version
+
+# create new user and add to postgres group so postgres can be run
+ARG UNAME=tester
+RUN useradd -m -u 199 $UNAME
+RUN usermod -aG postgres tester
+COPY ./mysqld.cnf /etc/mysql/mysql.conf.d/mysqld.cnf
+
+# install dolt
+COPY ./go /home/tester/dolt/go
+ENV DOLT_ROOT_PATH=/home/tester
+WORKDIR /home/tester/dolt/go/cmd/dolt
+RUN go build -o /usr/local/bin/dolt .
+RUN go mod tidy
+RUN chown -R tester:tester /go
+USER $UNAME
+
+RUN mkdir -p /home/tester/.cache
+ENV GOCACHE=/home/tester/.cache/
+
+# create directories owned by new user for mysql as well
+RUN mkdir -p /home/tester/.mysql/log
+WORKDIR /home/tester
+
+# supply env vars for tests
+ENV BENCHMARK_RUNNER_DOLT_VERSION="HEAD"
+ENV BENCHMARK_RUNNER_DOLTGRES_VERSION="$DOLTGRESQL_VERSION"
+ENV BENCHMARK_RUNNER_MYSQL_VERSION="8.0.35"
+ENV BENCHMARK_RUNNER_POSTGRES_VERSION="15.5"
+ENV BENCHMARK_RUNNER_DOLT_EXEC="/usr/local/bin/dolt"
+ENV BENCHMARK_RUNNER_MYSQL_EXEC="/usr/sbin/mysqld"
+ENV BENCHMARK_RUNNER_MYSQL_PROTOCOL="unix"
+ENV BENCHMARK_RUNNER_MYSQL_SOCKET="/home/tester/.mysql/mysqld.sock"
+ENV BENCHMARK_RUNNER_DOLTGRES_EXEC="/doltgresql/utils/doltgres_builder/cmd/doltgresBin/$DOLTGRESQL_VERSION/doltgres"
+ENV BENCHMARK_RUNNER_POSTGRES_EXEC="/usr/lib/postgresql/15/bin/postgres"
+ENV BENCHMARK_RUNNER_POSTGRES_INIT_EXEC="/usr/lib/postgresql/15/bin/initdb"
+ENV BENCHMARK_RUNNER_SYSBENCH_LUA_SCRIPTS="/sysbench-lua-scripts"
+ENV BENCHMARK_RUNNER_TPCC_LUA_SCRIPTS="/sysbench-tpcc"
+
+WORKDIR /home/tester/dolt/go/performance/utils/benchmark_runner
 ENTRYPOINT ["/entrypoint.sh"]

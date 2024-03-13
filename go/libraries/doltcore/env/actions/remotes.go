@@ -67,7 +67,7 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 		return err
 	}
 
-	err = destDB.PullChunks(ctx, tempTableDir, srcDB, []hash.Hash{h}, statsCh)
+	err = destDB.PullChunks(ctx, tempTableDir, srcDB, []hash.Hash{h}, statsCh, nil)
 
 	if err != nil {
 		return err
@@ -187,7 +187,7 @@ func PushTag(ctx context.Context, tempTableDir string, destRef ref.TagRef, srcDB
 		return err
 	}
 
-	err = destDB.PullChunks(ctx, tempTableDir, srcDB, []hash.Hash{addr}, statsCh)
+	err = destDB.PullChunks(ctx, tempTableDir, srcDB, []hash.Hash{addr}, statsCh, nil)
 
 	if err != nil {
 		return err
@@ -223,9 +223,13 @@ func PushToRemoteBranch(ctx context.Context, rsr env.RepoStateReader, tempTableD
 	if err != nil {
 		return err
 	}
-	cm, err := localDB.Resolve(ctx, cs, headRef)
+	optCmt, err := localDB.Resolve(ctx, cs, headRef)
 	if err != nil {
 		return fmt.Errorf("%w; refspec not found: '%s'; %s", ref.ErrInvalidRefSpec, srcRef.GetPath(), err.Error())
+	}
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		return doltdb.ErrGhostCommitEncountered
 	}
 
 	newCtx, cancelFunc := context.WithCancel(ctx)
@@ -306,7 +310,7 @@ func FetchCommit(ctx context.Context, tempTablesDir string, srcDB, destDB *doltd
 		return err
 	}
 
-	return destDB.PullChunks(ctx, tempTablesDir, srcDB, []hash.Hash{h}, statsCh)
+	return destDB.PullChunks(ctx, tempTablesDir, srcDB, []hash.Hash{h}, statsCh, nil)
 }
 
 // FetchTag takes a fetches a commit tag and all underlying data from a remote source database to the local destination database.
@@ -316,7 +320,7 @@ func FetchTag(ctx context.Context, tempTableDir string, srcDB, destDB *doltdb.Do
 		return err
 	}
 
-	return destDB.PullChunks(ctx, tempTableDir, srcDB, []hash.Hash{addr}, statsCh)
+	return destDB.PullChunks(ctx, tempTableDir, srcDB, []hash.Hash{addr}, statsCh, nil)
 }
 
 // Clone pulls all data from a remote source database to a local destination database.
@@ -352,8 +356,17 @@ func FetchFollowTags(ctx context.Context, tempTableDir string, srcDB, destDB *do
 		if err != nil {
 			return true, err
 		}
-		if !has {
-			// neither tag nor commit has been fetched
+		if has {
+			// We _might_ have it. We need to check if it's a ghost, in which case we'll skip this commit.
+			optCmt, err := destDB.ReadCommit(ctx, cmHash)
+			if err != nil {
+				return true, err
+			}
+			_, ok := optCmt.ToCommit()
+			if !ok {
+				return false, nil
+			}
+		} else {
 			return false, nil
 		}
 
@@ -405,10 +418,14 @@ func FetchRemoteBranch(
 	}
 
 	cs, _ := doltdb.NewCommitSpec(srcRef.String())
-	srcDBCommit, err := srcDB.Resolve(ctx, cs, nil)
-
+	optCmt, err := srcDB.Resolve(ctx, cs, nil)
 	if err != nil {
 		return nil, fmt.Errorf("unable to find '%s' on '%s'; %w", srcRef.GetPath(), rem.Name, err)
+	}
+	srcDBCommit, ok := optCmt.ToCommit()
+	if !ok {
+		// This really should never happen. The source db is always expected to have everything.
+		return nil, doltdb.ErrGhostCommitRuntimeFailure
 	}
 
 	// The code is structured this way (different paths for progress chan v. not) so that the linter can understand there
@@ -444,6 +461,24 @@ func FetchRemoteBranch(
 	return srcDBCommit, nil
 }
 
+// ShallFetchRefSpec fetches the remote refSpec from the source database to the destination database. Currently it is only
+// used for shallow clones.
+func ShallowFetchRefSpec(
+	ctx context.Context,
+	dbData env.DbData,
+	srcDB *doltdb.DoltDB,
+	refSpecs ref.RemoteRefSpec,
+	remote *env.Remote,
+	depth int,
+) error {
+
+	if depth < 1 {
+		return fmt.Errorf("invalid depth: %d", depth)
+	}
+
+	return fetchRefSpecsWithDepth(ctx, dbData, srcDB, []ref.RemoteRefSpec{refSpecs}, remote, ref.ForceUpdate, depth, nil, nil)
+}
+
 // FetchRefSpecs is the common SQL and CLI entrypoint for fetching branches, tags, and heads from a remote.
 // This function takes dbData which is a env.DbData object for handling repoState read and write, and srcDB is
 // a remote *doltdb.DoltDB object that is used to fetch remote branches from.
@@ -452,8 +487,22 @@ func FetchRefSpecs(
 	dbData env.DbData,
 	srcDB *doltdb.DoltDB,
 	refSpecs []ref.RemoteRefSpec,
-	remote env.Remote,
+	remote *env.Remote,
 	mode ref.UpdateMode,
+	progStarter ProgStarter,
+	progStopper ProgStopper,
+) error {
+	return fetchRefSpecsWithDepth(ctx, dbData, srcDB, refSpecs, remote, mode, -1, progStarter, progStopper)
+}
+
+func fetchRefSpecsWithDepth(
+	ctx context.Context,
+	dbData env.DbData,
+	srcDB *doltdb.DoltDB,
+	refSpecs []ref.RemoteRefSpec,
+	remote *env.Remote,
+	mode ref.UpdateMode,
+	depth int,
 	progStarter ProgStarter,
 	progStopper ProgStopper,
 ) error {
@@ -491,10 +540,41 @@ func FetchRefSpecs(
 		}
 	}
 
+	shallowClone := depth > 0
+	skipCmts := hash.NewHashSet()
+	allToFetch := toFetch
+	if shallowClone {
+		skipCmts, err = buildInitialSkipList(ctx, srcDB, toFetch)
+		if err != nil {
+			return err
+		}
+		curToFetch := toFetch
+		var newToFetch []hash.Hash
+		depth--
+		for skipCmts.Size() > 0 && depth > 0 {
+			newToFetch, skipCmts, err = updateSkipList(ctx, srcDB, curToFetch, skipCmts)
+			if err != nil {
+				return err
+			}
+
+			allToFetch = append(allToFetch, newToFetch...)
+			curToFetch = newToFetch
+			depth--
+		}
+	}
+	toFetch = allToFetch
+
 	// Now we fetch all the new HEADs we need.
 	tmpDir, err := dbData.Rsw.TempTableFilesDir()
 	if err != nil {
 		return err
+	}
+
+	if skipCmts.Size() > 0 {
+		err = dbData.Ddb.PersistGhostCommits(ctx, skipCmts)
+		if err != nil {
+			return err
+		}
 	}
 
 	err = func() error {
@@ -509,7 +589,7 @@ func FetchRefSpecs(
 			defer progStopper(cancelFunc, wg, statsCh)
 		}
 
-		err = dbData.Ddb.PullChunks(ctx, tmpDir, srcDB, toFetch, statsCh)
+		err = dbData.Ddb.PullChunks(ctx, tmpDir, srcDB, toFetch, statsCh, skipCmts)
 		if err == pull.ErrDBUpToDate {
 			err = nil
 		}
@@ -520,10 +600,16 @@ func FetchRefSpecs(
 	}
 
 	for _, newHead := range newHeads {
-		commit, err := dbData.Ddb.ReadCommit(ctx, newHead.Hash)
+		optCmt, err := dbData.Ddb.ReadCommit(ctx, newHead.Hash)
 		if err != nil {
 			return err
 		}
+		commit, ok := optCmt.ToCommit()
+		if !ok {
+			// Dest DB should have each hash in `newHeads` now. If we can't read a commit, something is wrong.
+			return doltdb.ErrGhostCommitRuntimeFailure
+		}
+
 		remoteTrackRef := newHead.Ref
 
 		if mode.Force {
@@ -556,18 +642,71 @@ func FetchRefSpecs(
 	}
 
 	if mode.Prune {
-		err = pruneBranches(ctx, dbData, remote, newHeads)
+		err = pruneBranches(ctx, dbData, *remote, newHeads)
 		if err != nil {
 			return err
 		}
 	}
 
-	err = FetchFollowTags(ctx, tmpDir, srcDB, dbData.Ddb, progStarter, progStopper)
-	if err != nil {
-		return err
+	if !shallowClone {
+		// TODO: Currently shallow clones don't pull any tags, but they could. We need to make FetchFollowTags wise
+		// to the skipped commits list, and then we can remove this conditional. Also, FetchFollowTags assumes that
+		// progStarter and progStopper are always non-nil, which we don't assume elsewhere. Shallow clone has no
+		// progress reporting, and as a result they are nil.
+		err = FetchFollowTags(ctx, tmpDir, srcDB, dbData.Ddb, progStarter, progStopper)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
+}
+
+func buildInitialSkipList(ctx context.Context, srcDB *doltdb.DoltDB, toFetch []hash.Hash) (hash.HashSet, error) {
+	if len(toFetch) > 1 {
+		return hash.HashSet{}, fmt.Errorf("runtime error: multiple refspecs not supported in shallow clone")
+	}
+
+	cs, err := doltdb.NewCommitSpec(toFetch[0].String())
+	if err != nil {
+		return hash.HashSet{}, err
+	}
+
+	allCommits, err := srcDB.BootstrapShallowResolve(ctx, cs)
+
+	return allCommits.AsHashSet(ctx)
+}
+
+func updateSkipList(ctx context.Context, srcDB *doltdb.DoltDB, toFetch []hash.Hash, skipCmts hash.HashSet) ([]hash.Hash, hash.HashSet, error) {
+	newSkipList := skipCmts.Copy()
+	newFetchList := []hash.Hash{}
+	for _, h := range toFetch {
+		optCmt, err := srcDB.ReadCommit(ctx, h)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// srcDB should always be the fully populated, so if there is a ghost commit here, someone is calling this
+		// function incorrectly.
+		commit, ok := optCmt.ToCommit()
+		if !ok {
+			return nil, nil, doltdb.ErrGhostCommitEncountered
+		}
+
+		for i := 0; i < commit.NumParents(); i++ {
+			parent, err := commit.GetParent(ctx, i)
+			if err != nil {
+				return nil, nil, err
+			}
+			if newSkipList.Has(parent.Addr) {
+				newSkipList.Remove(parent.Addr)
+				newFetchList = append(newFetchList, parent.Addr)
+			}
+		}
+
+	}
+
+	return newFetchList, newSkipList, nil
 }
 
 func pruneBranches(ctx context.Context, dbData env.DbData, remote env.Remote, remoteRefs []doltdb.RefWithHash) error {
@@ -733,7 +872,7 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 		// If clone is unsupported, we can fall back to pull.
 	}
 
-	err = destDb.PullChunks(ctx, tempTableDir, srcDb, []hash.Hash{srcRoot}, statsCh)
+	err = destDb.PullChunks(ctx, tempTableDir, srcDb, []hash.Hash{srcRoot}, statsCh, nil)
 	if err != nil {
 		return err
 	}

@@ -587,7 +587,6 @@ type Artifact struct {
 }
 
 func mergeArtifactsDescriptorsFromSource(srcKd val.TupleDesc) (kd, vd val.TupleDesc) {
-
 	// artifact key consists of keys of source schema, followed by target branch
 	// commit hash, and artifact type.
 	keyTypes := srcKd.Types
@@ -601,7 +600,11 @@ func mergeArtifactsDescriptorsFromSource(srcKd val.TupleDesc) (kd, vd val.TupleD
 	// json blob data
 	valTypes := []val.Type{{Enc: val.JSONEnc, Nullable: false}}
 
-	return val.NewTupleDescriptor(keyTypes...), val.NewTupleDescriptor(valTypes...)
+	// Add empty handlers for the new types
+	handlers := make([]val.TupleTypeHandler, len(keyTypes))
+	copy(handlers, srcKd.Handlers)
+
+	return val.NewTupleDescriptorWithArgs(val.TupleDescriptorArgs{Handlers: handlers}, keyTypes...), val.NewTupleDescriptor(valTypes...)
 }
 
 func ArtifactDebugFormat(ctx context.Context, m ArtifactMap) (string, error) {

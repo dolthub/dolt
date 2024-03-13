@@ -87,7 +87,7 @@ var PrimaryKeyChangeWarning = "cannot render full diff between commits %s and %s
 
 const PrimaryKeyChangeWarningCode int = 1105 // Since this is our own custom warning we'll use 1105, the code for an unknown error
 
-func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue, head *doltdb.Commit) (sql.Table, error) {
+func NewDiffTable(ctx *sql.Context, dbName, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue, head *doltdb.Commit) (sql.Table, error) {
 	diffTblName := doltdb.DoltDiffTablePrefix + tblName
 
 	table, tblName, ok, err := root.GetTableInsensitive(ctx, tblName)
@@ -107,7 +107,7 @@ func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *do
 		return nil, err
 	}
 
-	sqlSch, err := sqlutil.FromDoltSchema("", diffTblName, diffTableSchema)
+	sqlSch, err := sqlutil.FromDoltSchema(dbName, diffTblName, diffTableSchema)
 	if err != nil {
 		return nil, err
 	}
@@ -397,12 +397,19 @@ func (dt *DiffTable) scanHeightForChild(ctx *sql.Context, parent hash.Hash, heig
 func (dt *DiffTable) reverseIterForChild(ctx *sql.Context, parent hash.Hash) (*doltdb.Commit, hash.Hash, error) {
 	iter := doltdb.CommitItrForRoots(dt.ddb, dt.head)
 	for {
-		childHs, childCm, err := iter.Next(ctx)
+		childHs, optCmt, err := iter.Next(ctx)
 		if errors.Is(err, io.EOF) {
 			return nil, hash.Hash{}, nil
 		} else if err != nil {
 			return nil, hash.Hash{}, err
 		}
+
+		childCm, ok := optCmt.ToCommit()
+		if !ok {
+			// Should have been caught above from the Next() call on the iter. This is a runtime error.
+			return nil, hash.Hash{}, doltdb.ErrGhostCommitRuntimeFailure
+		}
+
 		phs, err := childCm.ParentHashes(ctx)
 		if err != nil {
 			return nil, hash.Hash{}, err
@@ -506,10 +513,15 @@ func (dt *DiffTable) toCommitLookupPartitions(ctx *sql.Context, hashes []hash.Ha
 		}
 
 		for i, pj := range ph {
-			pc, err := cm.GetParent(ctx, i)
+			optCmt, err := cm.GetParent(ctx, i)
 			if err != nil {
 				return nil, err
 			}
+			pc, ok := optCmt.ToCommit()
+			if !ok {
+				return nil, doltdb.ErrGhostCommitEncountered
+			}
+
 			cmHashToTblInfo[pj] = toCmInfo
 			cmHashToTblInfo[pj] = ti
 			pCommits = append(pCommits, pc)
@@ -786,9 +798,14 @@ func (dps *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm 
 
 func (dps *DiffPartitions) Next(ctx *sql.Context) (sql.Partition, error) {
 	for {
-		cmHash, cm, err := dps.cmItr.Next(ctx)
+		cmHash, optCmt, err := dps.cmItr.Next(ctx)
 		if err != nil {
 			return nil, err
+		}
+		cm, ok := optCmt.ToCommit()
+		if !ok {
+			// Should have been caught above from the Next() call on the iter. This is a runtime error.
+			return nil, doltdb.ErrGhostCommitRuntimeFailure
 		}
 
 		root, err := cm.GetRootValue(ctx)

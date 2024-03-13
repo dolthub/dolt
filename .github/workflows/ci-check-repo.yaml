@@ -15,13 +15,14 @@ jobs:
     outputs:
       format: ${{ steps.should_format.outputs.format }}
     steps:
-      - name: Setup Go 1.x
-        uses: actions/setup-go@v3
-        with:
-          go-version: ^1.21
       - uses: actions/checkout@v3
         with:
           submodules: true
+      - name: Setup Go 1.x
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          check-latest: true
       - name: Check all
         id: should_format
         working-directory: ./go
@@ -66,15 +67,16 @@ jobs:
     name: Get artifacts
     runs-on: ubuntu-22.04
     steps:
-      - name: Setup Go 1.x
-        uses: actions/setup-go@v3
-        with:
-          go-version: ^1.21
       - uses: actions/checkout@v3
         with:
           ref: "main"
           repository: "dolthub/dolt"
           submodules: true
+      - name: Setup Go 1.x
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          check-latest: true
       - name: Copy script
         working-directory: ./go/utils/repofmt
         run: cp format_repo.sh _format_repo.sh
@@ -95,16 +97,17 @@ jobs:
     name: Format PR
     runs-on: ubuntu-22.04
     steps:
-      - name: Setup Go 1.x
-        uses: actions/setup-go@v3
-        with:
-          go-version: ^1.21
       - uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           submodules: true
           token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
+      - name: Setup Go 1.x
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          check-latest: true
       - name: Run go mod tidy
         run: go mod tidy
         working-directory: ./go

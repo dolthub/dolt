@@ -39,6 +39,7 @@ var ErrInvalidCommitDiffTableArgs = errors.New("commit_diff_<table> requires one
 
 type CommitDiffTable struct {
 	name        string
+	dbName      string
 	ddb         *doltdb.DoltDB
 	joiner      *rowconv.Joiner
 	sqlSch      sql.PrimaryKeySchema
@@ -55,7 +56,7 @@ var _ sql.Table = (*CommitDiffTable)(nil)
 var _ sql.IndexAddressable = (*CommitDiffTable)(nil)
 var _ sql.StatisticsTable = (*CommitDiffTable)(nil)
 
-func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue) (sql.Table, error) {
+func NewCommitDiffTable(ctx *sql.Context, dbName, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue) (sql.Table, error) {
 	diffTblName := doltdb.DoltCommitDiffTablePrefix + tblName
 
 	table, _, ok, err := root.GetTableInsensitive(ctx, tblName)
@@ -76,12 +77,13 @@ func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, ro
 		return nil, err
 	}
 
-	sqlSch, err := sqlutil.FromDoltSchema("", diffTblName, diffTableSchema)
+	sqlSch, err := sqlutil.FromDoltSchema(dbName, diffTblName, diffTableSchema)
 	if err != nil {
 		return nil, err
 	}
 
 	return &CommitDiffTable{
+		dbName:       dbName,
 		name:         tblName,
 		ddb:          ddb,
 		workingRoot:  root,
@@ -261,15 +263,17 @@ func (dt *CommitDiffTable) rootValForHash(ctx *sql.Context, hashStr string) (*do
 		root = dt.workingRoot
 	} else {
 		cs, err := doltdb.NewCommitSpec(hashStr)
-
 		if err != nil {
 			return nil, "", nil, err
 		}
 
-		cm, err := dt.ddb.Resolve(ctx, cs, nil)
-
+		optCmt, err := dt.ddb.Resolve(ctx, cs, nil)
 		if err != nil {
 			return nil, "", nil, err
+		}
+		cm, ok := optCmt.ToCommit()
+		if !ok {
+			return nil, "", nil, doltdb.ErrGhostCommitEncountered
 		}
 
 		root, err = cm.GetRootValue(ctx)

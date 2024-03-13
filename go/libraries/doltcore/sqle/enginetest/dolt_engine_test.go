@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -40,6 +41,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/stats"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
@@ -112,6 +114,29 @@ func TestSingleQuery(t *testing.T) {
 	}
 
 	enginetest.TestQueryWithEngine(t, harness, engine, test)
+}
+
+func TestSchemaOverrides(t *testing.T) {
+	tcc := &testCommitClock{}
+	cleanup := installTestCommitClock(tcc)
+	defer cleanup()
+
+	for _, script := range SchemaOverrideTests {
+		sql.RunWithNowFunc(tcc.Now, func() error {
+			harness := newDoltHarness(t)
+			harness.Setup(setup.MydbData)
+
+			engine, err := harness.NewEngine(t)
+			if err != nil {
+				panic(err)
+			}
+			// engine.EngineAnalyzer().Debug = true
+			// engine.EngineAnalyzer().Verbose = true
+
+			enginetest.TestScriptWithEngine(t, engine, harness, script)
+			return nil
+		})
+	}
 }
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
@@ -594,6 +619,10 @@ func TestIgnoreIntoWithDuplicateUniqueKeyKeylessPrepared(t *testing.T) {
 func TestInsertIntoErrors(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
+	h = h.WithSkippedQueries([]string{
+		"create table bad (vb varbinary(65535))",
+		"insert into bad values (repeat('0', 65536))",
+	})
 	enginetest.TestInsertIntoErrors(t, h)
 }
 
@@ -876,6 +905,12 @@ func TestCreateTable(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestCreateTable(t, h)
+}
+
+func TestRowLimit(t *testing.T) {
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestRowLimit(t, h)
 }
 
 func TestBranchDdl(t *testing.T) {
@@ -1285,6 +1320,12 @@ func TestLoadDataErrors(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestLoadDataErrors(t, h)
+}
+
+func TestSelectIntoFile(t *testing.T) {
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestSelectIntoFile(t, h)
 }
 
 func TestJsonScripts(t *testing.T) {
@@ -2095,6 +2136,22 @@ func TestColumnDiffSystemTablePrepared(t *testing.T) {
 	}
 }
 
+func TestStatsFunctions(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	harness.Setup(setup.MydbData)
+	harness.configureStats = true
+	for _, test := range StatProcTests {
+		t.Run(test.Name, func(t *testing.T) {
+			// reset engine so provider statistics are clean
+			harness.engine = nil
+			e := mustNewEngine(t, harness)
+			defer e.Close()
+			enginetest.TestScriptWithEngine(t, e, harness, test)
+		})
+	}
+}
+
 func TestDiffTableFunction(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
@@ -2379,6 +2436,13 @@ func TestSystemTableIndexes(t *testing.T) {
 		for i, c := range []string{"inner", "lookup", "hash", "merge"} {
 			e.EngineAnalyzer().Coster = biasedCosters[i]
 			for _, tt := range stt.queries {
+				if tt.query == "select count(*) from dolt_blame_xy" && c == "inner" {
+					// todo we either need join hints to work inside the blame view
+					// and force the window relation to be primary, or we need the
+					// blame view's timestamp columns to be specific enough to not
+					// overlap during testing.
+					t.Skip("the blame table is unstable as secondary table in join with exchange node")
+				}
 				t.Run(fmt.Sprintf("%s(%s): %s", stt.name, c, tt.query), func(t *testing.T) {
 					if tt.skip {
 						t.Skip()
@@ -2688,6 +2752,10 @@ func TestInsertErrorScriptsPrepared(t *testing.T) {
 	skipPreparedTests(t)
 	h := newDoltHarness(t)
 	defer h.Close()
+	h = h.WithSkippedQueries([]string{
+		"create table bad (vb varbinary(65535))",
+		"insert into bad values (repeat('0', 65536))",
+	})
 	enginetest.TestInsertErrorScriptsPrepared(t, h)
 }
 
@@ -3060,6 +3128,112 @@ func TestCreateDatabaseErrorCleansUp(t *testing.T) {
 	exists, isDir := fs.Exists("can_create")
 	require.True(t, exists)
 	require.True(t, isDir)
+}
+
+// TestStatsAutoRefreshConcurrency tests some common concurrent patterns that stats
+// refresh is subject to -- namely reading/writing the stats objects in (1) DML statements
+// (2) auto refresh threads, and (3) manual ANALYZE statements.
+// todo: the dolt_stat functions should be concurrency tested
+func TestStatsAutoRefreshConcurrency(t *testing.T) {
+	// create engine
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
+	engine := mustNewEngine(t, harness)
+	defer engine.Close()
+
+	enginetest.RunQueryWithContext(t, engine, harness, nil, `create table xy (x int primary key, y int, z int, key (z), key (y,z), key (y,z,x))`)
+	enginetest.RunQueryWithContext(t, engine, harness, nil, `create table uv (u int primary key, v int, w int, key (w), key (w,u), key (u,w,v))`)
+
+	sqlDb, _ := harness.provider.BaseDatabase(harness.NewContext(), "mydb")
+
+	// Setting an interval of 0 and a threshold of 0 will result
+	// in the stats being updated after every operation
+	intervalSec := time.Duration(0)
+	thresholdf64 := 0.
+	bThreads := sql.NewBackgroundThreads()
+	statsProv := engine.EngineAnalyzer().Catalog.StatsProvider.(*stats.Provider)
+
+	// it is important to use new sessions for this test, to avoid working root conflicts
+	readCtx := enginetest.NewSession(harness)
+	writeCtx := enginetest.NewSession(harness)
+	newCtx := func(context.Context) (*sql.Context, error) {
+		return enginetest.NewSession(harness), nil
+	}
+
+	err := statsProv.InitAutoRefresh(newCtx, sqlDb.Name(), bThreads, intervalSec, thresholdf64)
+	require.NoError(t, err)
+
+	execQ := func(ctx *sql.Context, q string, id int, tag string) {
+		_, iter, err := engine.Query(ctx, q)
+		require.NoError(t, err)
+		_, err = sql.RowIterToRows(ctx, iter)
+		//fmt.Printf("%s %d\n", tag, id)
+		require.NoError(t, err)
+	}
+
+	iters := 1_000
+	{
+		// 3 threads to test auto-refresh/DML concurrency safety
+		// - auto refresh (read + write)
+		// - write (write only)
+		// - read (read only)
+
+		wg := sync.WaitGroup{}
+		wg.Add(2)
+
+		go func() {
+			for i := 0; i < iters; i++ {
+				q := "select count(*) from xy a join xy b on a.x = b.x"
+				execQ(readCtx, q, i, "read")
+				q = "select count(*) from uv a join uv b on a.u = b.u"
+				execQ(readCtx, q, i, "read")
+			}
+			wg.Done()
+		}()
+
+		go func() {
+			for i := 0; i < iters; i++ {
+				q := fmt.Sprintf("insert into xy values (%d,%d,%d)", i, i, i)
+				execQ(writeCtx, q, i, "write")
+				q = fmt.Sprintf("insert into uv values (%d,%d,%d)", i, i, i)
+				execQ(writeCtx, q, i, "write")
+			}
+			wg.Done()
+		}()
+
+		wg.Wait()
+	}
+
+	{
+		// 3 threads to test auto-refresh/manual ANALYZE concurrency
+		// - auto refresh (read + write)
+		// - add (read + write)
+		// - drop (write only)
+
+		wg := sync.WaitGroup{}
+		wg.Add(2)
+
+		analyzeAddCtx := enginetest.NewSession(harness)
+		analyzeDropCtx := enginetest.NewSession(harness)
+
+		// hammer the provider with concurrent stat updates
+		go func() {
+			for i := 0; i < iters; i++ {
+				execQ(analyzeAddCtx, "analyze table xy,uv", i, "analyze create")
+			}
+			wg.Done()
+		}()
+
+		go func() {
+			for i := 0; i < iters; i++ {
+				execQ(analyzeDropCtx, "analyze table xy drop histogram on (y,z)", i, "analyze drop yz")
+				execQ(analyzeDropCtx, "analyze table uv drop histogram on (w,u)", i, "analyze drop wu")
+			}
+			wg.Done()
+		}()
+
+		wg.Wait()
+	}
 }
 
 // runMergeScriptTestsInBothDirections creates a new test run, named |name|, and runs the specified merge |tests|

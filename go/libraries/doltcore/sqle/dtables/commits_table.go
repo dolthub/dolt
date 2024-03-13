@@ -1,4 +1,4 @@
-// Copyright 2020 Dolthub, Inc.
+// Copyright 2021 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package dtables
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -71,11 +72,11 @@ func (dt *CommitsTable) String() string {
 // Schema is a sql.Table interface function that gets the sql.Schema of the commits system table.
 func (dt *CommitsTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "commit_hash", Type: types.Text, Source: doltdb.CommitsTableName, PrimaryKey: true},
-		{Name: "committer", Type: types.Text, Source: doltdb.CommitsTableName, PrimaryKey: false},
-		{Name: "email", Type: types.Text, Source: doltdb.CommitsTableName, PrimaryKey: false},
-		{Name: "date", Type: types.Datetime, Source: doltdb.CommitsTableName, PrimaryKey: false},
-		{Name: "message", Type: types.Text, Source: doltdb.CommitsTableName, PrimaryKey: false},
+		{Name: "commit_hash", Type: types.Text, Source: doltdb.CommitsTableName, PrimaryKey: true, DatabaseSource: dt.dbName},
+		{Name: "committer", Type: types.Text, Source: doltdb.CommitsTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "email", Type: types.Text, Source: doltdb.CommitsTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "date", Type: types.Datetime, Source: doltdb.CommitsTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "message", Type: types.Text, Source: doltdb.CommitsTableName, PrimaryKey: false, DatabaseSource: dt.dbName},
 	}
 }
 
@@ -150,9 +151,13 @@ func NewCommitsRowItr(ctx *sql.Context, ddb *doltdb.DoltDB) (CommitsRowItr, erro
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
 func (itr CommitsRowItr) Next(ctx *sql.Context) (sql.Row, error) {
-	h, cm, err := itr.itr.Next(ctx)
+	h, optCmt, err := itr.itr.Next(ctx)
 	if err != nil {
 		return nil, err
+	}
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, io.EOF
 	}
 
 	meta, err := cm.GetCommitMeta(ctx)

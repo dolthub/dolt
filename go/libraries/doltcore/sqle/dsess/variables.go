@@ -38,6 +38,7 @@ const (
 	TransactionsDisabledSysVar           = "dolt_transactions_disabled"
 	ForceTransactionCommit               = "dolt_force_transaction_commit"
 	CurrentBatchModeKey                  = "batch_mode"
+	DoltOverrideSchema                   = "dolt_override_schema"
 	AllowCommitConflicts                 = "dolt_allow_commit_conflicts"
 	ReplicateToRemote                    = "dolt_replicate_to_remote"
 	ReadReplicaRemote                    = "dolt_read_replica_remote"
@@ -57,6 +58,11 @@ const (
 	DoltClusterRoleVariable         = "dolt_cluster_role"
 	DoltClusterRoleEpochVariable    = "dolt_cluster_role_epoch"
 	DoltClusterAckWritesTimeoutSecs = "dolt_cluster_ack_writes_timeout_secs"
+
+	DoltStatsAutoRefreshEnabled   = "dolt_stats_auto_refresh_enabled"
+	DoltStatsAutoRefreshThreshold = "dolt_stats_auto_refresh_threshold"
+	DoltStatsAutoRefreshInterval  = "dolt_stats_auto_refresh_interval"
+	DoltStatsMemoryOnly           = "dolt_stats_memory_only"
 )
 
 const URLTemplateDatabasePlaceholder = "{database}"

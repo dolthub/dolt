@@ -201,11 +201,12 @@ func TestEmptyInMemoryRepoCreation(t *testing.T) {
 	}
 
 	cs, _ := NewCommitSpec("master")
-	commit, err := ddb.Resolve(context.Background(), cs, nil)
-
+	optCmt, err := ddb.Resolve(context.Background(), cs, nil)
 	if err != nil {
 		t.Fatal("Could not find commit")
 	}
+	commit, ok := optCmt.ToCommit()
+	assert.True(t, ok)
 
 	h, err := commit.HashOf()
 	assert.NoError(t, err)
@@ -276,11 +277,12 @@ func TestLDNoms(t *testing.T) {
 	{
 		ddb, _ := LoadDoltDB(context.Background(), types.Format_Default, LocalDirDoltDB, filesys.LocalFS)
 		cs, _ := NewCommitSpec("master")
-		commit, err := ddb.Resolve(context.Background(), cs, nil)
-
+		optCmt, err := ddb.Resolve(context.Background(), cs, nil)
 		if err != nil {
 			t.Fatal("Couldn't find commit")
 		}
+		commit, ok := optCmt.ToCommit()
+		assert.True(t, ok)
 
 		meta, err := commit.GetCommitMeta(context.Background())
 		assert.NoError(t, err)

@@ -25,6 +25,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -58,6 +59,7 @@ type DoltSession struct {
 	tempTables       map[string][]sql.Table
 	globalsConf      config.ReadWriteConfig
 	branchController *branch_control.Controller
+	statsProv        sql.StatsProvider
 	mu               *sync.Mutex
 	fs               filesys.Filesys
 
@@ -94,6 +96,7 @@ func NewDoltSession(
 	pro DoltDatabaseProvider,
 	conf config.ReadWriteConfig,
 	branchController *branch_control.Controller,
+	statsProvider sql.StatsProvider,
 ) (*DoltSession, error) {
 	username := conf.GetStringOrDefault(config.UserNameKey, "")
 	email := conf.GetStringOrDefault(config.UserEmailKey, "")
@@ -109,6 +112,7 @@ func NewDoltSession(
 		tempTables:       make(map[string][]sql.Table),
 		globalsConf:      globals,
 		branchController: branchController,
+		statsProv:        statsProvider,
 		mu:               &sync.Mutex{},
 		fs:               pro.FileSystem(),
 	}
@@ -119,6 +123,11 @@ func NewDoltSession(
 // Provider returns the RevisionDatabaseProvider for this session.
 func (d *DoltSession) Provider() DoltDatabaseProvider {
 	return d.provider
+}
+
+// StatsProvider returns the sql.StatsProvider for this session.
+func (d *DoltSession) StatsProvider() sql.StatsProvider {
+	return d.statsProv
 }
 
 // DSessFromSess retrieves a dolt session from a standard sql.Session
@@ -400,9 +409,13 @@ func (d *DoltSession) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSe
 		return nil, err
 	}
 
-	headCommit, err := dbData.Ddb.Resolve(ctx, headSpec, headRef)
+	optCmt, err := dbData.Ddb.Resolve(ctx, headSpec, headRef)
 	if err != nil {
 		return nil, err
+	}
+	headCommit, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, doltdb.ErrGhostCommitEncountered
 	}
 
 	headRoot, err := headCommit.GetRootValue(ctx)
@@ -678,10 +691,15 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, branchState *branchStat
 	} else if props.Amend {
 		numParentsHeadForAmend := headCommit.NumParents()
 		for i := 0; i < numParentsHeadForAmend; i++ {
-			parentCommit, err := headCommit.GetParent(ctx, i)
+			optCmt, err := headCommit.GetParent(ctx, i)
 			if err != nil {
 				return nil, err
 			}
+			parentCommit, ok := optCmt.ToCommit()
+			if !ok {
+				return nil, doltdb.ErrGhostCommitEncountered
+			}
+
 			mergeParentCommits = append(mergeParentCommits, parentCommit)
 		}
 
@@ -873,9 +891,13 @@ func (d *DoltSession) ResolveRootForRef(ctx *sql.Context, dbName, refStr string)
 		return nil, nil, "", err
 	}
 
-	cm, err := dbData.Ddb.Resolve(ctx, cs, headRef)
+	optCmt, err := dbData.Ddb.Resolve(ctx, cs, headRef)
 	if err != nil {
 		return nil, nil, "", err
+	}
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, nil, "", doltdb.ErrGhostCommitRuntimeFailure
 	}
 
 	root, err = cm.GetRootValue(ctx)
@@ -1588,6 +1610,9 @@ func setPersistedValue(conf config.WritableConfig, key string, value interface{}
 		return config.SetFloat(conf, key, float64(v))
 	case float64:
 		return config.SetFloat(conf, key, v)
+	case decimal.Decimal:
+		f64, _ := v.Float64()
+		return config.SetFloat(conf, key, f64)
 	case string:
 		return config.SetString(conf, key, v)
 	case bool:

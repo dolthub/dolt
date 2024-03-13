@@ -171,12 +171,13 @@ func (dcc *DoltCliConfig) IfEmptyUseConfig(val, key string) string {
 }
 
 func GetStringOrDefault(cfg config.ReadableConfig, key, defStr string) string {
+	if cfg == nil {
+		return defStr
+	}
 	val, err := cfg.GetString(key)
-
 	if err != nil {
 		return defStr
 	}
-
 	return val
 }
 

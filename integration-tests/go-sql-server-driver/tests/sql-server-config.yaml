@@ -347,9 +347,9 @@ tests:
         rows: [["NULL"]]
     - exec: "create table loaded (contents text)"
     - exec: "load data infile \"config.yaml\" into table loaded"
-      error_match: "LOAD DATA is unable to open file: open /dev/null/config.yaml"
+      error_match: "LOAD DATA is unable to open file: The MySQL server is running with the --secure-file-priv option so it cannot execute this statement"
     - exec: "load data infile \"/config.yaml\" into table loaded"
-      error_match: "LOAD DATA is unable to open file: open /dev/null/config.yaml"
+      error_match: "LOAD DATA is unable to open file: The MySQL server is running with the --secure-file-priv option so it cannot execute this statement"
 - name: secure_file_priv set to empty strings allows loading files
   repos:
   - name: repo1

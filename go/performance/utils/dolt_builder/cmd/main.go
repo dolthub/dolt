@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -23,8 +24,14 @@ import (
 	builder "github.com/dolthub/dolt/go/performance/utils/dolt_builder"
 )
 
+var profile = flag.String("profile", "", "path to profile used during build")
+
 func main() {
+	flag.Parse()
 	commitList := os.Args[1:]
+	if *profile != "" {
+		commitList = commitList[2:]
+	}
 	if len(commitList) < 1 {
 		helpStr := "dolt-builder takes Dolt commit shas or tags as arguments\n" +
 			"and builds corresponding binaries to a path specified\n" +
@@ -32,12 +39,16 @@ func main() {
 			"If DOLT_BIN is not set, ./doltBin will be used\n" +
 			"usage: dolt-builder dccba46 4bad226 ...\n" +
 			"usage: dolt-builder v0.19.0 v0.22.6 ...\n" +
-			"set DEBUG=1 to run in debug mode\n"
+			"set DEBUG=1 to run in debug mode\n" +
+			"use the -profile flag to supply a pprof profile\n" +
+			"which will be used to create a PGO build\n" +
+			"usage: dolt-builder -profile /path/to/profile v1.33.0\n" +
+			"only one version may be specified when supplying a profile\n"
 		fmt.Print(helpStr)
 		os.Exit(2)
 	}
 
-	err := builder.Run(context.Background(), commitList)
+	err := builder.Run(context.Background(), commitList, *profile)
 	if err != nil {
 		log.Fatal(err)
 	}

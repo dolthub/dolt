@@ -90,7 +90,7 @@ func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 	return dEnv, nil
 }
 
-func cloneProg(eventCh <-chan pull.TableFileEvent) {
+func clonePrint(eventCh <-chan pull.TableFileEvent) {
 	var (
 		chunksC           int64
 		chunksDownloading int64
@@ -158,20 +158,29 @@ func sortedKeys(m map[string]iohelp.ReadStats) []string {
 }
 
 // CloneRemote - common entry point for both dolt_clone() and `dolt clone`
-func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch string, singleBranch bool, dEnv *env.DoltEnv) error {
-	eventCh := make(chan pull.TableFileEvent, 128)
+// The database must be initialized with a remote before calling this function.
+//
+// The `branch` parameter is the branch to clone. If it is empty, the default branch is used.
+func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch string, singleBranch bool, depth int, dEnv *env.DoltEnv) error {
+	// We support two forms of cloning: full and shallow. These two approaches have little in common, with the exception
+	// of the first and last steps. Determining the branch to check out and setting the working set to the checked out commit.
 
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		cloneProg(eventCh)
-	}()
+	srcRefHashes, branch, err := getSrcRefs(ctx, branch, srcDB, dEnv)
+	if err != nil {
+		return fmt.Errorf("%w; %s", ErrCloneFailed, err.Error())
+	}
+	if remoteName == "" {
+		remoteName = "origin"
+	}
 
-	err := Clone(ctx, srcDB, dEnv.DoltDB, eventCh)
-	close(eventCh)
+	var checkedOutCommit *doltdb.Commit
 
-	wg.Wait()
+	// Step 1) Pull the remote information we care about to a local disk.
+	if depth <= 0 {
+		checkedOutCommit, err = fullClone(ctx, srcDB, dEnv, srcRefHashes, branch, remoteName, singleBranch)
+	} else {
+		checkedOutCommit, err = shallowCloneDataPull(ctx, dEnv.DbData(), srcDB, remoteName, branch, depth)
+	}
 
 	if err != nil {
 		if err == pull.ErrNoData {
@@ -180,83 +189,15 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 		return fmt.Errorf("%w; %s", ErrCloneFailed, err.Error())
 	}
 
-	// Get all the refs from the remote. These branch refs will be translated to remote branch refs, tags will
-	// be preserved, and all other refs will be ignored.
-	srcRefHashes, err := dEnv.DoltDB.GetRefsWithHashes(ctx)
-	if err != nil {
-		return fmt.Errorf("%w; %s", ErrCloneFailed, err.Error())
-	}
-
-	branches := make([]ref.DoltRef, 0, len(srcRefHashes))
-	for _, refHash := range srcRefHashes {
-		if refHash.Ref.GetType() == ref.BranchRefType {
-			br := refHash.Ref.(ref.BranchRef)
-			branches = append(branches, br)
-		}
-	}
-	if branch == "" {
-		branch = env.GetDefaultBranch(dEnv, branches)
-	}
-
-	// If we couldn't find a branch but the repo cloned successfully, it's empty. Initialize it instead of pulling from
-	// the remote.
-	if branch == "" {
-		if err = InitEmptyClonedRepo(ctx, dEnv); err != nil {
-			return nil
-		}
-		branch = env.GetDefaultInitBranch(dEnv.Config)
-	}
-
-	cs, _ := doltdb.NewCommitSpec(branch)
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
-
-	if err != nil {
-		return fmt.Errorf("%w: %s; %s", ErrFailedToGetBranch, branch, err.Error())
-
-	}
-
-	rootVal, err := cm.GetRootValue(ctx)
-	if err != nil {
-		return fmt.Errorf("%w: %s; %s", ErrFailedToGetRootValue, branch, err.Error())
-	}
-
-	err = dEnv.DoltDB.DeleteAllRefs(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Preserve only branch and tag references from the remote. Branches are translated into remote branches, tags are preserved.
-	for _, refHash := range srcRefHashes {
-		if refHash.Ref.GetType() == ref.BranchRefType {
-			br := refHash.Ref.(ref.BranchRef)
-			if !singleBranch || br.GetPath() == branch {
-				remoteRef := ref.NewRemoteRef(remoteName, br.GetPath())
-				err = dEnv.DoltDB.SetHead(ctx, remoteRef, refHash.Hash)
-				if err != nil {
-					return fmt.Errorf("%w: %s; %s", ErrFailedToCreateRemoteRef, remoteRef.String(), err.Error())
-
-				}
-			}
-			if br.GetPath() == branch {
-				// This is the only local branch after the clone is complete.
-				err = dEnv.DoltDB.SetHead(ctx, br, refHash.Hash)
-				if err != nil {
-					return fmt.Errorf("%w: %s; %s", ErrFailedToCreateLocalBranch, br.String(), err.Error())
-				}
-			}
-		} else if refHash.Ref.GetType() == ref.TagRefType {
-			tr := refHash.Ref.(ref.TagRef)
-			err = dEnv.DoltDB.SetHead(ctx, tr, refHash.Hash)
-			if err != nil {
-				return fmt.Errorf("%w: %s; %s", ErrFailedToCreateTagRef, tr.String(), err.Error())
-			}
-		}
-	}
-
 	// TODO: make this interface take a DoltRef and marshal it automatically
 	err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: ref.NewBranchRef(branch)})
 	if err != nil {
 		return err
+	}
+
+	rootVal, err := checkedOutCommit.GetRootValue(ctx)
+	if err != nil {
+		return fmt.Errorf("%w: %s; %s", ErrFailedToGetRootValue, branch, err.Error())
 	}
 
 	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(branch))
@@ -278,6 +219,137 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	}
 
 	return nil
+}
+
+// getSrcRefs returns the refs from the source database and the branch to check out. The input branch is used if it is
+// not empty, otherwise the default branch is determined and returned.
+func getSrcRefs(ctx context.Context, branch string, srcDB *doltdb.DoltDB, dEnv *env.DoltEnv) ([]doltdb.RefWithHash, string, error) {
+	srcRefHashes, err := srcDB.GetRefsWithHashes(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+
+	if len(srcRefHashes) == 0 {
+		return nil, "", ErrNoDataAtRemote
+	}
+
+	branches := make([]ref.DoltRef, 0, len(srcRefHashes))
+	for _, refHash := range srcRefHashes {
+		if refHash.Ref.GetType() == ref.BranchRefType {
+			br := refHash.Ref.(ref.BranchRef)
+			branches = append(branches, br)
+		}
+	}
+	if branch == "" {
+		branch = env.GetDefaultBranch(dEnv, branches)
+	}
+
+	return srcRefHashes, branch, nil
+}
+
+func fullClone(ctx context.Context, srcDB *doltdb.DoltDB, dEnv *env.DoltEnv, srcRefHashes []doltdb.RefWithHash, branch, remoteName string, singleBranch bool) (*doltdb.Commit, error) {
+	eventCh := make(chan pull.TableFileEvent, 128)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		clonePrint(eventCh)
+	}()
+
+	err := srcDB.Clone(ctx, dEnv.DoltDB, eventCh)
+
+	close(eventCh)
+	wg.Wait()
+
+	cs, _ := doltdb.NewCommitSpec(branch)
+	optCmt, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
+	if err != nil {
+		return nil, err
+	}
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, doltdb.ErrGhostCommitEncountered
+	}
+
+	err = dEnv.DoltDB.DeleteAllRefs(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Preserve only branch and tag references from the remote. Branches are translated into remote branches, tags are preserved.
+	for _, refHash := range srcRefHashes {
+		if refHash.Ref.GetType() == ref.BranchRefType {
+			br := refHash.Ref.(ref.BranchRef)
+			if !singleBranch || br.GetPath() == branch {
+				remoteRef := ref.NewRemoteRef(remoteName, br.GetPath())
+				err = dEnv.DoltDB.SetHead(ctx, remoteRef, refHash.Hash)
+				if err != nil {
+					return nil, fmt.Errorf("%w: %s; %s", ErrFailedToCreateRemoteRef, remoteRef.String(), err.Error())
+
+				}
+			}
+			if br.GetPath() == branch {
+				// This is the only local branch after the clone is complete.
+				err = dEnv.DoltDB.SetHead(ctx, br, refHash.Hash)
+				if err != nil {
+					return nil, fmt.Errorf("%w: %s; %s", ErrFailedToCreateLocalBranch, br.String(), err.Error())
+				}
+			}
+		} else if refHash.Ref.GetType() == ref.TagRefType {
+			tr := refHash.Ref.(ref.TagRef)
+			err = dEnv.DoltDB.SetHead(ctx, tr, refHash.Hash)
+			if err != nil {
+				return nil, fmt.Errorf("%w: %s; %s", ErrFailedToCreateTagRef, tr.String(), err.Error())
+			}
+		}
+	}
+
+	return cm, nil
+}
+
+// shallowCloneDataPull is a shallow clone specific helper function to pull only the data required to show the given branch
+// at the depth given.
+func shallowCloneDataPull(ctx context.Context, destData env.DbData, srcDB *doltdb.DoltDB, remoteName, branch string, depth int) (*doltdb.Commit, error) {
+	remotes, err := destData.Rsr.GetRemotes()
+	if err != nil {
+		return nil, err
+	}
+	remote, ok := remotes.Get(remoteName)
+	if !ok {
+		// By the time we get to this point, the remote should be created, so this should never happen.
+		return nil, fmt.Errorf("remote %s not found", remoteName)
+	}
+
+	specs, err := env.ParseRefSpecs([]string{branch}, destData.Rsr, remote)
+	if err != nil {
+		return nil, err
+	}
+
+	err = ShallowFetchRefSpec(ctx, destData, srcDB, specs[0], &remote, depth)
+	if err != nil {
+		return nil, err
+	}
+
+	// After the fetch approach, we just need to create the local branch. The single remote branch already exists.
+	br := ref.NewBranchRef(branch)
+
+	cmt, err := srcDB.ResolveCommitRef(ctx, br)
+	if err != nil {
+		return nil, err
+	}
+
+	hsh, err := cmt.HashOf()
+	if err != nil {
+		return nil, err
+	}
+
+	// This is the only local branch after the clone is complete.
+	err = destData.Ddb.SetHead(ctx, br, hsh)
+	if err != nil {
+		return nil, err
+	}
+
+	return cmt, nil
 }
 
 // InitEmptyClonedRepo inits an empty, newly cloned repo. This would be unnecessary if we properly initialized the

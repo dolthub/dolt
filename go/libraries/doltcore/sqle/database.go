@@ -25,6 +25,7 @@ import (
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/fulltext"
 	"github.com/dolthub/go-mysql-server/sql/plan"
@@ -50,6 +51,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 var ErrInvalidTableName = errors.NewKind("Invalid table name %s.")
@@ -88,6 +90,7 @@ var _ sql.EventDatabase = Database{}
 var _ sql.AliasedDatabase = Database{}
 var _ fulltext.Database = Database{}
 var _ rebase.RebasePlanDatabase = Database{}
+var _ sql.SchemaValidator = Database{}
 
 type ReadOnlyDatabase struct {
 	Database
@@ -121,6 +124,15 @@ func (db Database) WithBranchRevision(requestedName string, branchSpec dsess.Ses
 	db.requestedName = requestedName
 
 	return db, nil
+}
+
+func (db Database) ValidateSchema(sch sql.Schema) error {
+	if rowLen := schema.MaxRowStorageSize(sch); rowLen > int64(val.MaxTupleDataSize) {
+		// |val.MaxTupleDataSize| is less than |types.MaxRowLength| to account for
+		// serial message metadata
+		return analyzererrors.ErrInvalidRowLength.New(val.MaxTupleDataSize, rowLen)
+	}
+	return nil
 }
 
 // Revision implements dsess.RevisionDatabase
@@ -242,16 +254,7 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 		return nil, false, err
 	}
 
-	tbl, ok, err := db.getTableInsensitive(ctx, nil, ds, root, tblName)
-	if err != nil {
-		return nil, false, err
-	}
-
-	if !ok {
-		return nil, false, nil
-	}
-
-	return tbl, true, nil
+	return db.getTableInsensitive(ctx, nil, ds, root, tblName)
 }
 
 // GetTableInsensitiveAsOf implements sql.VersionedDatabase
@@ -282,17 +285,23 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 		return table, ok, nil
 	}
 
-	versionableTable, ok := table.(dtables.VersionableTable)
-	if !ok {
-		panic(fmt.Sprintf("unexpected table type %T", table))
-	}
+	switch t := table.(type) {
+	case dtables.VersionableTable:
+		versionedTable, err := t.LockedToRoot(ctx, root)
+		if err != nil {
+			return nil, false, err
+		}
+		return versionedTable, true, nil
 
-	versionedTable, err := versionableTable.LockedToRoot(ctx, root)
+	case *plan.EmptyTable:
+		// getTableInsensitive returns *plan.EmptyTable if the table doesn't exist in the data root, but
+		// schemas have been locked to a commit where the table does exist. Since the table is empty,
+		// there's no need to lock it to a root.
+		return t, true, nil
 
-	if err != nil {
-		return nil, false, err
+	default:
+		return nil, false, fmt.Errorf("unexpected table type %T", table)
 	}
-	return versionedTable, true, nil
 
 }
 
@@ -313,7 +322,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		}
 
 		tableName := tblName[len(doltdb.DoltDiffTablePrefix):]
-		dt, err := dtables.NewDiffTable(ctx, tableName, db.ddb, root, head)
+		dt, err := dtables.NewDiffTable(ctx, db.Name(), tableName, db.ddb, root, head)
 		if err != nil {
 			return nil, false, err
 		}
@@ -321,7 +330,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 
 	case strings.HasPrefix(lwrName, doltdb.DoltCommitDiffTablePrefix):
 		suffix := tblName[len(doltdb.DoltCommitDiffTablePrefix):]
-		dt, err := dtables.NewCommitDiffTable(ctx, suffix, db.ddb, root)
+		dt, err := dtables.NewCommitDiffTable(ctx, db.Name(), suffix, db.ddb, root)
 		if err != nil {
 			return nil, false, err
 		}
@@ -382,7 +391,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			}
 		}
 
-		dt, found = dtables.NewLogTable(ctx, db.RevisionQualifiedName(), db.ddb, head), true
+		dt, found = dtables.NewLogTable(ctx, db.Name(), db.ddb, head), true
 	case doltdb.DiffTableName:
 		if head == nil {
 			var err error
@@ -392,7 +401,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			}
 		}
 
-		dt, found = dtables.NewUnscopedDiffTable(ctx, db.RevisionQualifiedName(), db.ddb, head), true
+		dt, found = dtables.NewUnscopedDiffTable(ctx, db.Name(), db.ddb, head), true
 	case doltdb.ColumnDiffTableName:
 		if head == nil {
 			var err error
@@ -402,7 +411,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			}
 		}
 
-		dt, found = dtables.NewColumnDiffTable(ctx, db.RevisionQualifiedName(), db.ddb, head), true
+		dt, found = dtables.NewColumnDiffTable(ctx, db.Name(), db.ddb, head), true
 	case doltdb.TableOfTablesInConflictName:
 		dt, found = dtables.NewTableOfTablesInConflict(ctx, db.RevisionQualifiedName(), db.ddb), true
 	case doltdb.TableOfTablesWithViolationsName:
@@ -416,9 +425,9 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	case doltdb.RemotesTableName:
 		dt, found = dtables.NewRemotesTable(ctx, db.ddb), true
 	case doltdb.CommitsTableName:
-		dt, found = dtables.NewCommitsTable(ctx, db.RevisionQualifiedName(), db.ddb), true
+		dt, found = dtables.NewCommitsTable(ctx, db.Name(), db.ddb), true
 	case doltdb.CommitAncestorsTableName:
-		dt, found = dtables.NewCommitAncestorsTable(ctx, db.RevisionQualifiedName(), db.ddb), true
+		dt, found = dtables.NewCommitAncestorsTable(ctx, db.Name(), db.ddb), true
 	case doltdb.StatusTableName:
 		sess := dsess.DSessFromSess(ctx.Session)
 		adapter := dsess.NewSessionStateAdapter(
@@ -480,7 +489,17 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	}
 
 	// TODO: this should reuse the root, not lookup the db state again
-	return db.getTable(ctx, root, tblName)
+	table, found, err := db.getTable(ctx, root, tblName)
+	if err != nil {
+		return nil, false, err
+	}
+	if found {
+		return table, found, err
+	}
+
+	// If the table wasn't found in the specified data root, check if there is an overridden
+	// schema commit that contains it and return an empty table if so.
+	return resolveOverriddenNonexistentTable(ctx, tblName, db)
 }
 
 // resolveAsOf resolves given expression to a commit, if one exists.
@@ -505,9 +524,13 @@ func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asO
 		return nil, nil, err
 	}
 
-	cm, err := ddb.Resolve(ctx, cs, head)
+	optCmt, err := ddb.Resolve(ctx, cs, head)
 	if err != nil {
 		return nil, nil, err
+	}
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, nil, doltdb.ErrGhostCommitEncountered
 	}
 
 	h, err := cm.HashOf()
@@ -521,11 +544,15 @@ func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asO
 	}
 
 	for {
-		_, curr, err := cmItr.Next(ctx)
+		_, optCmt, err := cmItr.Next(ctx)
 		if err == io.EOF {
 			break
 		} else if err != nil {
 			return nil, nil, err
+		}
+		curr, ok := optCmt.ToCommit()
+		if !ok {
+			return nil, nil, doltdb.ErrGhostCommitEncountered
 		}
 
 		meta, err := curr.GetCommitMeta(ctx)
@@ -572,9 +599,13 @@ func resolveAsOfCommitRef(ctx *sql.Context, db Database, head ref.DoltRef, commi
 		return nil, nil, err
 	}
 
-	cm, err := ddb.ResolveByNomsRoot(ctx, cs, head, nomsRoot)
+	optCmt, err := ddb.ResolveByNomsRoot(ctx, cs, head, nomsRoot)
 	if err != nil {
 		return nil, nil, err
+	}
+	cm, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, nil, doltdb.ErrGhostCommitEncountered
 	}
 
 	root, err := cm.GetRootValue(ctx)
@@ -612,14 +643,22 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 		return nil, false, fmt.Errorf("no state for database %s", db.RevisionQualifiedName())
 	}
 
-	key, err := doltdb.NewDataCacheKey(root)
+	overriddenSchemaRoot, err := resolveOverriddenSchemaRoot(ctx, db)
 	if err != nil {
 		return nil, false, err
 	}
 
-	cachedTable, ok := dbState.SessionCache().GetCachedTable(key, tableName)
-	if ok {
-		return cachedTable, true, nil
+	// If schema hasn't been overridden, we can use a cached table if one exists
+	if overriddenSchemaRoot == nil {
+		key, err := doltdb.NewDataCacheKey(root)
+		if err != nil {
+			return nil, false, err
+		}
+
+		cachedTable, ok := dbState.SessionCache().GetCachedTable(key, tableName)
+		if ok {
+			return cachedTable, true, nil
+		}
 	}
 
 	tableNames, err := getAllTableNames(ctx, root)
@@ -645,12 +684,26 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 		return nil, false, err
 	}
 
+	if overriddenSchemaRoot != nil {
+		err = overrideSchemaForTable(ctx, tableName, tbl, overriddenSchemaRoot)
+		if err != nil {
+			return nil, false, err
+		}
+	}
+
 	table, err := db.newDoltTable(tableName, sch, tbl)
 	if err != nil {
 		return nil, false, err
 	}
 
-	dbState.SessionCache().CacheTable(key, tableName, table)
+	// If the schema hasn't been overridden, cache the table
+	if overriddenSchemaRoot == nil {
+		key, err := doltdb.NewDataCacheKey(root)
+		if err != nil {
+			return nil, false, err
+		}
+		dbState.SessionCache().CacheTable(key, tableName, table)
+	}
 
 	return table, true, nil
 }

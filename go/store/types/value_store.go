@@ -197,6 +197,10 @@ func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) (Value, error
 	if err != nil {
 		return nil, err
 	}
+	if chunk.IsGhost() {
+		return GhostValue{}, nil
+	}
+
 	if chunk.IsEmpty() {
 		return nil, nil
 	}
@@ -226,6 +230,10 @@ func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) (Value, error
 func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice) (ValueSlice, error) {
 	lvs.versOnce.Do(lvs.expectVersion)
 	decode := func(h hash.Hash, chunk *chunks.Chunk) (Value, error) {
+		if chunk.IsGhost() {
+			return GhostValue{}, nil
+		}
+
 		v, ferr := DecodeValue(*chunk, lvs)
 
 		if ferr != nil {

@@ -29,6 +29,12 @@ import (
 var errCommitHasNoMeta = errors.New("commit has no metadata")
 var errHasNoRootValue = errors.New("no root value")
 
+// TODO: Include the commit id in the error. Unfortunately, this message is passed through the SQL layer. The only way we currently
+// have on the client side to match an error is with string matching. We possibly need error codes as a prefix to the error message, but
+// currently there is not standard for doing this in Dolt.
+var ErrGhostCommitEncountered = errors.New("Commit not found. You are using a shallow clone which does not contain the requested commit. Please do a full clone.")
+var ErrGhostCommitRuntimeFailure = errors.New("runtime failure: Ghost commit encountered unexpectedly. Please report bug to: https://github.com/dolthub/dolt/issues")
+
 // Rootish is an object resolvable to a RootValue.
 type Rootish interface {
 	// ResolveRootValue resolves a Rootish to a RootValue.
@@ -46,10 +52,28 @@ type Commit struct {
 	dCommit *datas.Commit
 }
 
+type OptionalCommit struct {
+	Commit *Commit
+	Addr   hash.Hash
+}
+
+// ToCommit unwraps the *Commit contained by the OptionalCommit. If the commit is invalid, it returns (nil, false).
+// Otherwise, it returns (commit, true).
+func (cmt *OptionalCommit) ToCommit() (*Commit, bool) {
+	if cmt.Commit == nil {
+		return nil, false
+	}
+	return cmt.Commit, true
+}
+
 var _ Rootish = &Commit{}
 
-// NewCommit generates a new Commit object that wraps a supplies datas.Commit.
+// NewCommit generates a new Commit object that wraps a supplied datas.Commit.
 func NewCommit(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, commit *datas.Commit) (*Commit, error) {
+	if commit.IsGhost() {
+		return nil, ErrGhostCommitRuntimeFailure
+	}
+
 	parents, err := datas.GetCommitParents(ctx, vrw, commit.NomsValue())
 	if err != nil {
 		return nil, err
@@ -116,14 +140,27 @@ func (c *Commit) GetRootValue(ctx context.Context) (*RootValue, error) {
 	return newRootValue(c.vrw, c.ns, rootV)
 }
 
-func (c *Commit) GetParent(ctx context.Context, idx int) (*Commit, error) {
-	return NewCommit(ctx, c.vrw, c.ns, c.parents[idx])
+func (c *Commit) GetParent(ctx context.Context, idx int) (*OptionalCommit, error) {
+	parent := c.parents[idx]
+	if parent.IsGhost() {
+		return &OptionalCommit{nil, parent.Addr()}, nil
+	}
+
+	cmt, err := NewCommit(ctx, c.vrw, c.ns, parent)
+	if err != nil {
+		return nil, err
+	}
+	return &OptionalCommit{cmt, parent.Addr()}, nil
 }
 
 func (c *Commit) GetCommitClosure(ctx context.Context) (prolly.CommitClosure, error) {
-	switch v := c.dCommit.NomsValue().(type) {
+	return getCommitClosure(ctx, c.dCommit, c.vrw, c.ns)
+}
+
+func getCommitClosure(ctx context.Context, cmt *datas.Commit, vrw types.ValueReadWriter, ns tree.NodeStore) (prolly.CommitClosure, error) {
+	switch v := cmt.NomsValue().(type) {
 	case types.SerialMessage:
-		return datas.NewParentsClosure(ctx, c.dCommit, v, c.vrw, c.ns)
+		return datas.NewParentsClosure(ctx, cmt, v, vrw, ns)
 	default:
 		return prolly.CommitClosure{}, fmt.Errorf("old format lacks commit closure")
 	}
@@ -131,7 +168,7 @@ func (c *Commit) GetCommitClosure(ctx context.Context) (prolly.CommitClosure, er
 
 var ErrNoCommonAncestor = errors.New("no common ancestor")
 
-func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
+func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*OptionalCommit, error) {
 	addr, err := getCommitAncestorAddr(ctx, cm1.dCommit, cm2.dCommit, cm1.vrw, cm2.vrw, cm1.ns, cm2.ns)
 	if err != nil {
 		return nil, err
@@ -142,7 +179,15 @@ func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
 		return nil, err
 	}
 
-	return NewCommit(ctx, cm1.vrw, cm1.ns, targetCommit)
+	if targetCommit.IsGhost() {
+		return &OptionalCommit{nil, addr}, nil
+	}
+
+	cmt, err := NewCommit(ctx, cm1.vrw, cm1.ns, targetCommit)
+	if err != nil {
+		return nil, err
+	}
+	return &OptionalCommit{cmt, addr}, nil
 }
 
 func getCommitAncestorAddr(ctx context.Context, c1, c2 *datas.Commit, vrw1, vrw2 types.ValueReadWriter, ns1, ns2 tree.NodeStore) (hash.Hash, error) {
@@ -159,11 +204,16 @@ func getCommitAncestorAddr(ctx context.Context, c1, c2 *datas.Commit, vrw1, vrw2
 }
 
 func (c *Commit) CanFastForwardTo(ctx context.Context, new *Commit) (bool, error) {
-	ancestor, err := GetCommitAncestor(ctx, c, new)
-
+	optAnc, err := GetCommitAncestor(ctx, c, new)
 	if err != nil {
 		return false, err
-	} else if ancestor == nil {
+	}
+
+	ancestor, ok := optAnc.ToCommit()
+	if !ok {
+		return false, fmt.Errorf("Unexpected Ghost Commit")
+	}
+	if ancestor == nil {
 		return false, errors.New("cannot perform fast forward merge; commits have no common ancestor")
 	} else if ancestor.dCommit.Addr() == c.dCommit.Addr() {
 		if ancestor.dCommit.Addr() == new.dCommit.Addr() {
@@ -178,11 +228,16 @@ func (c *Commit) CanFastForwardTo(ctx context.Context, new *Commit) (bool, error
 }
 
 func (c *Commit) CanFastReverseTo(ctx context.Context, new *Commit) (bool, error) {
-	ancestor, err := GetCommitAncestor(ctx, c, new)
-
+	optAnc, err := GetCommitAncestor(ctx, c, new)
 	if err != nil {
 		return false, err
-	} else if ancestor == nil {
+	}
+
+	ancestor, ok := optAnc.ToCommit()
+	if !ok {
+		return false, ErrGhostCommitEncountered
+	}
+	if ancestor == nil {
 		return false, errors.New("cannot perform fast forward merge; commits have no common ancestor")
 	} else if ancestor.dCommit.Addr() == new.dCommit.Addr() {
 		if ancestor.dCommit.Addr() == c.dCommit.Addr() {
@@ -196,30 +251,37 @@ func (c *Commit) CanFastReverseTo(ctx context.Context, new *Commit) (bool, error
 	return false, nil
 }
 
-func (c *Commit) GetAncestor(ctx context.Context, as *AncestorSpec) (*Commit, error) {
+func (c *Commit) GetAncestor(ctx context.Context, as *AncestorSpec) (*OptionalCommit, error) {
+	addr, err := c.HashOf()
+	if err != nil {
+		return nil, err
+	}
+	optInst := &OptionalCommit{c, addr}
 	if as == nil || len(as.Instructions) == 0 {
-		return c, nil
+		return optInst, nil
 	}
 
-	cur := c
-
+	hardInst := c
 	instructions := as.Instructions
 	for _, inst := range instructions {
-		if inst >= cur.NumParents() {
+		if inst >= hardInst.NumParents() {
 			return nil, ErrInvalidAncestorSpec
 		}
 
 		var err error
-		cur, err = cur.GetParent(ctx, inst)
+		optInst, err = hardInst.GetParent(ctx, inst)
 		if err != nil {
 			return nil, err
 		}
-		if cur == nil {
-			return nil, ErrInvalidAncestorSpec
+
+		var ok bool
+		hardInst, ok = optInst.ToCommit()
+		if !ok {
+			break
 		}
 	}
 
-	return cur, nil
+	return optInst, nil
 }
 
 // ResolveRootValue implements Rootish.

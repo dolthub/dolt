@@ -77,10 +77,15 @@ func countCommits(ctx *sql.Context, args ...string) (ahead uint64, behind uint64
 	if err != nil {
 		return 0, 0, err
 	}
-	fromCommit, err := ddb.Resolve(ctx, fromSpec, headRef)
+	optCmt, err := ddb.Resolve(ctx, fromSpec, headRef)
 	if err != nil {
 		return 0, 0, err
 	}
+	fromCommit, ok := optCmt.ToCommit()
+	if !ok {
+		return 0, 0, doltdb.ErrGhostCommitEncountered
+	}
+
 	fromHash, err := fromCommit.HashOf()
 	if err != nil {
 		return 0, 0, err
@@ -90,19 +95,29 @@ func countCommits(ctx *sql.Context, args ...string) (ahead uint64, behind uint64
 	if err != nil {
 		return 0, 0, err
 	}
-	toCommit, err := ddb.Resolve(ctx, toSpec, headRef)
+	optCmt, err = ddb.Resolve(ctx, toSpec, headRef)
 	if err != nil {
 		return 0, 0, err
 	}
+	toCommit, ok := optCmt.ToCommit()
+	if !ok {
+		return 0, 0, doltdb.ErrGhostCommitEncountered
+	}
+
 	toHash, err := toCommit.HashOf()
 	if err != nil {
 		return 0, 0, err
 	}
 
-	ancestor, err := doltdb.GetCommitAncestor(ctx, fromCommit, toCommit)
+	optCmt, err = doltdb.GetCommitAncestor(ctx, fromCommit, toCommit)
 	if err != nil {
 		return 0, 0, err
 	}
+	ancestor, ok := optCmt.ToCommit()
+	if !ok {
+		return 0, 0, doltdb.ErrGhostCommitEncountered
+	}
+
 	ancestorHash, err := ancestor.HashOf()
 	if err != nil {
 		return 0, 0, err

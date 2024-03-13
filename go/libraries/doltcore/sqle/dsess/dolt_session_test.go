@@ -251,6 +251,10 @@ type emptyRevisionDatabaseProvider struct {
 	sql.DatabaseProvider
 }
 
+func (e emptyRevisionDatabaseProvider) DbFactoryUrl() string {
+	return ""
+}
+
 func (e emptyRevisionDatabaseProvider) UndropDatabase(ctx *sql.Context, dbName string) error {
 	return nil
 }
@@ -303,7 +307,7 @@ func (e emptyRevisionDatabaseProvider) FileSystemForDatabase(dbname string) (fil
 	return nil, nil
 }
 
-func (e emptyRevisionDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error {
+func (e emptyRevisionDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, depth int, remoteParams map[string]string) error {
 	return nil
 }
 

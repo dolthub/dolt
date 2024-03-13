@@ -589,7 +589,7 @@ DELIM
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
     [[ "$output" =~ "\`pk\` int" ]] || false
-    [[ "$output" =~ "\`str\` varchar(16383)" ]] || false
+    [[ "$output" =~ "\`str\` varchar(1023)" ]] || false
     [[ "$output" =~ "\`int\` int" ]] || false
     [[ "$output" =~ "\`bool\` tinyint" ]] || false
     [[ "$output" =~ "\`float\` float" ]] || false
@@ -888,9 +888,9 @@ DELIM
 
     run dolt sql -q "describe test"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| id    | varchar(16383) |" ]] || false
-    [[ "$output" =~ "| state | text           |" ]] || false
-    [[ "$output" =~ "| data  | text           |" ]] || false
+    [[ "$output" =~ "| id    | varchar(1023) |" ]] || false
+    [[ "$output" =~ "| state | text          |" ]] || false
+    [[ "$output" =~ "| data  | text          |" ]] || false
 
     # pk defaults to first column if not explicitly defined
     run dolt table import -c --all-text test2 test.csv
@@ -899,9 +899,9 @@ DELIM
 
     run dolt sql -q "describe test2"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| id    | varchar(16383) |" ]] || false
-    [[ "$output" =~ "| state | text           |" ]] || false
-    [[ "$output" =~ "| data  | text           |" ]] || false
+    [[ "$output" =~ "| id    | varchar(1023) |" ]] || false
+    [[ "$output" =~ "| state | text          |" ]] || false
+    [[ "$output" =~ "| data  | text          |" ]] || false
 }
 
 @test "import-create-tables: --all-text and --schema are mutually exclusive" {
