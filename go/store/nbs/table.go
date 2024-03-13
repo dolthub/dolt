@@ -121,8 +121,6 @@ import (
 */
 
 const (
-	//	addrPrefixSize  = 8
-	//	addrSuffixSize  = hash.ByteLen - addrPrefixSize
 	uint64Size      = 8
 	uint32Size      = 4
 	ordinalSize     = uint32Size
