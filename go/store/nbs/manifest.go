@@ -501,7 +501,7 @@ func formatSpecs(specs []tableSpec, tableInfo []string) {
 // persisted manifest against the lock hash it saw last time it loaded the
 // contents of a manifest. If they do not match, the client must not update
 // the persisted manifest.
-func generateLockHash(root hash.Hash, specs []tableSpec, appendix []tableSpec) (lock hash.Hash) {
+func generateLockHash(root hash.Hash, specs []tableSpec, appendix []tableSpec) hash.Hash {
 	blockHash := sha512.New()
 	blockHash.Write(root[:])
 	for _, spec := range appendix {

@@ -22,7 +22,6 @@
 package nbs
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha512"
 	"hash/crc32"
@@ -146,12 +145,6 @@ func computeHashDefault(data []byte) hash.Hash {
 }
 
 var computeAddr = computeHashDefault
-
-type addrSlice []hash.Hash
-
-func (hs addrSlice) Len() int           { return len(hs) }
-func (hs addrSlice) Less(i, j int) bool { return bytes.Compare(hs[i][:], hs[j][:]) < 0 }
-func (hs addrSlice) Swap(i, j int)      { hs[i], hs[j] = hs[j], hs[i] }
 
 type hasRecord struct {
 	a      *hash.Hash

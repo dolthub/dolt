@@ -134,7 +134,7 @@ func TestHasMany(t *testing.T) {
 	require.NoError(t, err)
 	defer tr.close()
 
-	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
+	addrs := hash.HashSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 	hasAddrs := []hasRecord{
 		{&addrs[0], binary.BigEndian.Uint64(addrs[0][:hash.PrefixLen]), 0, false},
 		{&addrs[1], binary.BigEndian.Uint64(addrs[1][:hash.PrefixLen]), 1, false},
@@ -203,7 +203,7 @@ func TestHasManySequentialPrefix(t *testing.T) {
 func BenchmarkHasMany(b *testing.B) {
 	const cnt = 64 * 1024
 	chnks := make([][]byte, cnt)
-	addrs := make(addrSlice, cnt)
+	addrs := make(hash.HashSlice, cnt)
 	hrecs := make([]hasRecord, cnt)
 	sparse := make([]hasRecord, cnt/1024)
 
@@ -279,7 +279,7 @@ func TestGetMany(t *testing.T) {
 	require.NoError(t, err)
 	defer tr.close()
 
-	addrs := addrSlice{computeAddr(data[0]), computeAddr(data[1]), computeAddr(data[2])}
+	addrs := hash.HashSlice{computeAddr(data[0]), computeAddr(data[1]), computeAddr(data[2])}
 	getBatch := []getRecord{
 		{&addrs[0], binary.BigEndian.Uint64(addrs[0][:hash.PrefixLen]), false},
 		{&addrs[1], binary.BigEndian.Uint64(addrs[1][:hash.PrefixLen]), false},
@@ -314,7 +314,7 @@ func TestCalcReads(t *testing.T) {
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), 0)
 	require.NoError(t, err)
 	defer tr.close()
-	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
+	addrs := hash.HashSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 	getBatch := []getRecord{
 		{&addrs[0], binary.BigEndian.Uint64(addrs[0][:hash.PrefixLen]), false},
 		{&addrs[1], binary.BigEndian.Uint64(addrs[1][:hash.PrefixLen]), false},
@@ -354,7 +354,7 @@ func TestExtract(t *testing.T) {
 	require.NoError(t, err)
 	defer tr.close()
 
-	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
+	addrs := hash.HashSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 
 	chunkChan := make(chan extractRecord)
 	go func() {

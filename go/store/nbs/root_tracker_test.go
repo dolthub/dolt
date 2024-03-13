@@ -446,7 +446,7 @@ func (fm *fakeManifest) Name() string { return fm.name }
 func (fm *fakeManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (bool, manifestContents, error) {
 	fm.mu.RLock()
 	defer fm.mu.RUnlock()
-	if fm.contents.lock != (hash.Hash{}) {
+	if !fm.contents.lock.IsEmpty() {
 		return true, fm.contents, nil
 	}
 

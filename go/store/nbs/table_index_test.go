@@ -239,13 +239,14 @@ var fakeData = []byte("supercalifragilisticexpialidocious")
 
 func addrFromPrefix(prefix string) hash.Hash {
 	// create a full length addr from a prefix
-	for i := 0; i < hash.ByteLen; i++ {
-		prefix += "0"
+	for {
+		if len(prefix) < hash.StringLen {
+			prefix += "0"
+		} else {
+			break
+		}
 	}
-
-	// base32 decode string
-	h := hash.Decode(prefix)
-	return hash.New(h[:hash.ByteLen])
+	return hash.Parse(prefix)
 }
 
 func buildFakeChunkTable(chunks []fakeChunk) ([]byte, hash.Hash, error) {

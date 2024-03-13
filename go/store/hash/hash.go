@@ -86,7 +86,7 @@ func (h Hash) IsEmpty() bool {
 
 // String returns a string representation of the hash using Base32 encoding.
 func (h Hash) String() string {
-	return Encode(h[:])
+	return encode(h[:])
 }
 
 // Of computes a new Hash from data.
@@ -112,7 +112,7 @@ func MaybeParse(s string) (Hash, bool) {
 	if match == nil {
 		return emptyHash, false
 	}
-	return New(Decode(s)), true
+	return New(decode(s)), true
 }
 
 // IsValid returns true if the provided string is a valid base32 encoded hash and false if it is not.

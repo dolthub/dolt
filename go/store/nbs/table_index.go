@@ -484,20 +484,21 @@ func (ti onHeapTableIndex) prefixIdxUBound(prefix uint64) (idx uint32) {
 }
 
 func (ti onHeapTableIndex) padStringAndDecode(s string, p string) uint64 {
-	// Pad string
-	if p == "0" {
-		for i := len(s); i < 16; i++ {
-			s = s + p
-		}
-	} else {
-		for i := len(s); i < 16; i++ {
-			s = p + s
+	if len(p) != 1 {
+		panic("pad string must be of length 1") // This is a programmer error that should never get out of PR.
+	}
+
+	for len(s) < hash.StringLen {
+		if p == "0" {
+			s = s + p // Pad on the right side.
+		} else {
+			s = p + s // pad on the left side.
 		}
 	}
 
 	// Decode
-	h := hash.Decode(s)
-	return binary.BigEndian.Uint64(h)
+	h := hash.Parse(s)
+	return binary.BigEndian.Uint64(h[:])
 }
 
 func (ti onHeapTableIndex) chunkCount() uint32 {
