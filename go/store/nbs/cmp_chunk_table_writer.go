@@ -23,8 +23,9 @@ import (
 	"os"
 	"sort"
 
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/golang/snappy"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const defaultTableSinkBlockSize = 2 * 1024 * 1024

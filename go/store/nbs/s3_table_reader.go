@@ -36,9 +36,10 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/jpillora/backoff"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const (

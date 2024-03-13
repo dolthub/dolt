@@ -22,10 +22,10 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/utils/test"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // minByteReader is a copy of smallerByteReader from testing/iotest

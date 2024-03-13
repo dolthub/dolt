@@ -33,9 +33,10 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 func randomChunks(t *testing.T, r *rand.Rand, sz int) [][]byte {

@@ -21,12 +21,12 @@ import (
 	"io"
 	"time"
 
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/fatih/color"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type noConjoinBlobstorePersister struct {

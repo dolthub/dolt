@@ -29,11 +29,11 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/dolthub/dolt/go/store/hash"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // Returned when a chunk with a reference to a non-existence chunk is
