@@ -261,7 +261,7 @@ func (tw *CmpChunkTableWriter) writeFooter() error {
 	}
 
 	// magic number
-	_, err = tw.sink.Write([]byte(magicNumber))
+	_, err = tw.sink.Write([]byte(nomsBetaMagicNumber))
 
 	if err != nil {
 		return err

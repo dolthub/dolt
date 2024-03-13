@@ -39,7 +39,7 @@ func tableExistsInChunkSource(ctx context.Context, s3 *s3ObjectReader, al awsLim
 	if n != len(magic) {
 		return false, errors.New("failed to read all data")
 	}
-	return bytes.Equal(magic, []byte(magicNumber)), nil
+	return bytes.Equal(magic, []byte(nomsBetaMagicNumber)), nil
 }
 
 func newAWSChunkSource(ctx context.Context, s3 *s3ObjectReader, al awsLimits, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {

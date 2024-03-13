@@ -209,7 +209,7 @@ func writeFooter(dst []byte, chunkCount uint32, uncData uint64) (consumed uint64
 	consumed += uint64Size
 
 	// magic number
-	copy(dst[consumed:], magicNumber)
+	copy(dst[consumed:], nomsBetaMagicNumber)
 	consumed += magicNumberSize
 	return
 }

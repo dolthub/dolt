@@ -97,7 +97,7 @@ func ReadTableFooter(rd io.ReadSeeker) (chunkCount uint32, totalUncompressedData
 		return 0, 0, err
 	}
 
-	if string(footer[uint32Size+uint64Size:]) != magicNumber {
+	if string(footer[uint32Size+uint64Size:]) != nomsBetaMagicNumber {
 		return 0, 0, ErrInvalidTableFile
 	}
 

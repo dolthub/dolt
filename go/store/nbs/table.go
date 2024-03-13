@@ -93,10 +93,11 @@ import (
    +----------------------+----------------------------------------+------------------+
 
      -Total Uncompressed Chunk Data is the sum of the uncompressed byte lengths of all contained chunk byte slices.
-     -Magic Number is the first 8 bytes of the SHA256 hash of "https://github.com/attic-labs/nbs".
+     -Magic Number the format indicator for the table file.
+       - NOMS original magic number is the first 8 bytes of the SHA256 hash of "https://github.com/attic-labs/nbs".
+       - DOLT Rev 1 is less magical: []bytes("DOLT___1")
 
     NOTE: Unsigned integer quanities, hashes and hash suffix are all encoded big-endian
-
 
   Looking up Chunks in an NBS Table
   There are two phases to loading chunk data for a given Hash from an NBS Table: Checking for the chunk's presence, and fetching the chunk's bytes. When performing a has-check, only the first phase is necessary.
@@ -126,12 +127,17 @@ const (
 	ordinalSize     = uint32Size
 	lengthSize      = uint32Size
 	offsetSize      = uint64Size
-	magicNumber     = "\xff\xb5\xd8\xc2\x24\x63\xee\x50"
-	magicNumberSize = 8 //len(magicNumber)
 	footerSize      = uint32Size + uint64Size + magicNumberSize
 	prefixTupleSize = hash.PrefixLen + ordinalSize
 	checksumSize    = uint32Size
 	maxChunkSize    = 0xffffffff // Snappy won't compress slices bigger than this
+)
+
+const (
+	magicNumberSize = 8
+	// If there was ever an example of over thinking things, it's this magic number:
+	nomsBetaMagicNumber = "\xff\xb5\xd8\xc2\x24\x63\xee\x50"
+	doltRev1MagicNumber = "DOLT___1"
 )
 
 var crcTable = crc32.MakeTable(crc32.Castagnoli)
