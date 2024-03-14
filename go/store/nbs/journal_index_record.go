@@ -234,11 +234,11 @@ func processIndexRecords(ctx context.Context, r io.ReadSeeker, sz int64, cb func
 }
 
 type lookup struct {
-	a addr
+	a hash.Hash
 	r Range
 }
 
-const lookupSize = addrSize + offsetSize + lengthSize
+const lookupSize = hash.ByteLen + offsetSize + lengthSize
 
 // serializeLookups serializes |lookups| using the table file chunk index format.
 func serializeLookups(lookups []lookup) (index []byte) {
@@ -249,7 +249,7 @@ func serializeLookups(lookups []lookup) (index []byte) {
 	buf := index
 	for _, l := range lookups {
 		copy(buf, l.a[:])
-		buf = buf[addrSize:]
+		buf = buf[hash.ByteLen:]
 		binary.BigEndian.PutUint64(buf, l.r.Offset)
 		buf = buf[offsetSize:]
 		binary.BigEndian.PutUint32(buf, l.r.Length)
@@ -262,7 +262,7 @@ func deserializeLookups(index []byte) (lookups []lookup) {
 	lookups = make([]lookup, len(index)/lookupSize)
 	for i := range lookups {
 		copy(lookups[i].a[:], index)
-		index = index[addrSize:]
+		index = index[hash.ByteLen:]
 		lookups[i].r.Offset = binary.BigEndian.Uint64(index)
 		index = index[offsetSize:]
 		lookups[i].r.Length = binary.BigEndian.Uint32(index)

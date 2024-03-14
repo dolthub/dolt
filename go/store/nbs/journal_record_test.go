@@ -127,11 +127,11 @@ func TestProcessJournalRecords(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func randomMemTable(cnt int) (*memTable, map[addr]chunks.Chunk) {
-	chnx := make(map[addr]chunks.Chunk, cnt)
+func randomMemTable(cnt int) (*memTable, map[hash.Hash]chunks.Chunk) {
+	chnx := make(map[hash.Hash]chunks.Chunk, cnt)
 	for i := 0; i < cnt; i++ {
 		ch := chunks.NewChunk(randBuf(100))
-		chnx[addr(ch.Hash())] = ch
+		chnx[ch.Hash()] = ch
 	}
 	mt := newMemTable(uint64(cnt) * 256)
 	for a, ch := range chnx {
@@ -173,7 +173,7 @@ func makeChunkRecord() (journalRec, []byte) {
 	r := journalRec{
 		length:   uint32(len(buf)),
 		kind:     chunkJournalRecKind,
-		address:  addr(cc.H),
+		address:  cc.H,
 		payload:  payload,
 		checksum: c,
 	}
@@ -181,7 +181,7 @@ func makeChunkRecord() (journalRec, []byte) {
 }
 
 func makeRootHashRecord() (journalRec, []byte) {
-	a := addr(hash.Of(randBuf(8)))
+	a := hash.Of(randBuf(8))
 	var n int
 	buf := make([]byte, rootHashRecordSize())
 	// length

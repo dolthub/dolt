@@ -194,6 +194,61 @@ func TestPullChunkTracker(t *testing.T) {
 
 		tracker.Close()
 	})
+
+	t.Run("SmallBatches", func(t *testing.T) {
+		haser := staticHaser{make(hash.HashSet)}
+		initial := make([]hash.Hash, 4)
+		initial[0][0] = 1
+		initial[1][0] = 2
+		initial[2][0] = 1
+		initial[2][1] = 1
+		initial[3][0] = 1
+		initial[3][1] = 2
+		haser.has.Insert(initial[0])
+		haser.has.Insert(initial[1])
+		haser.has.Insert(initial[2])
+		haser.has.Insert(initial[3])
+
+		hs := make(hash.HashSet)
+		// Start with 1 - 5
+		for i := byte(1); i <= byte(5); i++ {
+			var h hash.Hash
+			h[0] = i
+			hs.Insert(h)
+		}
+		tracker := NewPullChunkTracker(context.Background(), hs, TrackerConfig{
+			BatchSize: 1,
+			HasManyer: haser,
+		})
+
+		// First call doesn't actually respect batch size.
+		hs, ok, err := tracker.GetChunksToFetch()
+		assert.Len(t, hs, 3)
+		assert.True(t, ok)
+		assert.NoError(t, err)
+
+		for i := byte(1); i <= byte(10); i++ {
+			var h hash.Hash
+			h[0] = 1
+			h[1] = i
+			tracker.Seen(h)
+		}
+
+		// Should get back 13, 14, 15, 16, 17, 18, 19, 1(10); one at a time.
+		cnt := 0
+		for {
+			hs, ok, err := tracker.GetChunksToFetch()
+			assert.NoError(t, err)
+			if !ok {
+				break
+			}
+			assert.Len(t, hs, 1)
+			cnt += len(hs)
+		}
+		assert.Equal(t, 8, cnt)
+
+		tracker.Close()
+	})
 }
 
 type hasAllHaser struct {

@@ -31,6 +31,14 @@ func init() {
 func AddDoltSystemVariables() {
 	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
 		{
+			Name:              dsess.DoltOverrideSchema,
+			Scope:             sql.SystemVariableScope_Both,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              types.NewSystemStringType(dsess.DoltOverrideSchema),
+			Default:           "",
+		},
+		{
 			Name:              dsess.ReplicateToRemote,
 			Scope:             sql.SystemVariableScope_Global,
 			Dynamic:           true,
