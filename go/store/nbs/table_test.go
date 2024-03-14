@@ -37,7 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-func buildTable(chunks [][]byte) ([]byte, addr, error) {
+func buildTable(chunks [][]byte) ([]byte, hash.Hash, error) {
 	totalData := uint64(0)
 	for _, chunk := range chunks {
 		totalData += uint64(len(chunk))
@@ -55,7 +55,7 @@ func buildTable(chunks [][]byte) ([]byte, addr, error) {
 	length, blockHash, err := tw.finish()
 
 	if err != nil {
-		return nil, addr{}, err
+		return nil, hash.Hash{}, err
 	}
 
 	return buff[:length], blockHash, nil
@@ -134,11 +134,11 @@ func TestHasMany(t *testing.T) {
 	require.NoError(t, err)
 	defer tr.close()
 
-	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
+	addrs := hash.HashSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 	hasAddrs := []hasRecord{
-		{&addrs[0], binary.BigEndian.Uint64(addrs[0][:addrPrefixSize]), 0, false},
-		{&addrs[1], binary.BigEndian.Uint64(addrs[1][:addrPrefixSize]), 1, false},
-		{&addrs[2], binary.BigEndian.Uint64(addrs[2][:addrPrefixSize]), 2, false},
+		{&addrs[0], binary.BigEndian.Uint64(addrs[0][:hash.PrefixLen]), 0, false},
+		{&addrs[1], binary.BigEndian.Uint64(addrs[1][:hash.PrefixLen]), 1, false},
+		{&addrs[2], binary.BigEndian.Uint64(addrs[2][:hash.PrefixLen]), 2, false},
 	}
 	sort.Sort(hasRecordByPrefix(hasAddrs))
 
@@ -161,9 +161,9 @@ func TestHasManySequentialPrefix(t *testing.T) {
 		"0rfgadopg6h3fk7d253ivbjsij4qo9nv",
 	}
 
-	addrs := make([]addr, len(addrStrings))
+	addrs := make([]hash.Hash, len(addrStrings))
 	for i, s := range addrStrings {
-		addrs[i] = addr(hash.Parse(s))
+		addrs[i] = hash.Parse(s)
 	}
 
 	bogusData := []byte("bogus") // doesn't matter what this is. hasMany() won't check chunkRecords
@@ -203,7 +203,7 @@ func TestHasManySequentialPrefix(t *testing.T) {
 func BenchmarkHasMany(b *testing.B) {
 	const cnt = 64 * 1024
 	chnks := make([][]byte, cnt)
-	addrs := make(addrSlice, cnt)
+	addrs := make(hash.HashSlice, cnt)
 	hrecs := make([]hasRecord, cnt)
 	sparse := make([]hasRecord, cnt/1024)
 
@@ -218,7 +218,7 @@ func BenchmarkHasMany(b *testing.B) {
 	for i := range hrecs {
 		hrecs[i] = hasRecord{
 			a:      &addrs[i],
-			prefix: prefixOf(addrs[i]),
+			prefix: addrs[i].Prefix(),
 			order:  i,
 		}
 	}
@@ -226,7 +226,7 @@ func BenchmarkHasMany(b *testing.B) {
 		j := i * 64
 		hrecs[i] = hasRecord{
 			a:      &addrs[j],
-			prefix: prefixOf(addrs[j]),
+			prefix: addrs[j].Prefix(),
 			order:  j,
 		}
 	}
@@ -261,10 +261,6 @@ func BenchmarkHasMany(b *testing.B) {
 	})
 }
 
-func prefixOf(a addr) uint64 {
-	return binary.BigEndian.Uint64(a[:addrPrefixSize])
-}
-
 func TestGetMany(t *testing.T) {
 	ctx := context.Background()
 	assert := assert.New(t)
@@ -283,11 +279,11 @@ func TestGetMany(t *testing.T) {
 	require.NoError(t, err)
 	defer tr.close()
 
-	addrs := addrSlice{computeAddr(data[0]), computeAddr(data[1]), computeAddr(data[2])}
+	addrs := hash.HashSlice{computeAddr(data[0]), computeAddr(data[1]), computeAddr(data[2])}
 	getBatch := []getRecord{
-		{&addrs[0], binary.BigEndian.Uint64(addrs[0][:addrPrefixSize]), false},
-		{&addrs[1], binary.BigEndian.Uint64(addrs[1][:addrPrefixSize]), false},
-		{&addrs[2], binary.BigEndian.Uint64(addrs[2][:addrPrefixSize]), false},
+		{&addrs[0], binary.BigEndian.Uint64(addrs[0][:hash.PrefixLen]), false},
+		{&addrs[1], binary.BigEndian.Uint64(addrs[1][:hash.PrefixLen]), false},
+		{&addrs[2], binary.BigEndian.Uint64(addrs[2][:hash.PrefixLen]), false},
 	}
 	sort.Sort(getRecordByPrefix(getBatch))
 
@@ -318,11 +314,11 @@ func TestCalcReads(t *testing.T) {
 	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), 0)
 	require.NoError(t, err)
 	defer tr.close()
-	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
+	addrs := hash.HashSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 	getBatch := []getRecord{
-		{&addrs[0], binary.BigEndian.Uint64(addrs[0][:addrPrefixSize]), false},
-		{&addrs[1], binary.BigEndian.Uint64(addrs[1][:addrPrefixSize]), false},
-		{&addrs[2], binary.BigEndian.Uint64(addrs[2][:addrPrefixSize]), false},
+		{&addrs[0], binary.BigEndian.Uint64(addrs[0][:hash.PrefixLen]), false},
+		{&addrs[1], binary.BigEndian.Uint64(addrs[1][:hash.PrefixLen]), false},
+		{&addrs[2], binary.BigEndian.Uint64(addrs[2][:hash.PrefixLen]), false},
 	}
 
 	gb2 := []getRecord{getBatch[0], getBatch[2]}
@@ -358,7 +354,7 @@ func TestExtract(t *testing.T) {
 	require.NoError(t, err)
 	defer tr.close()
 
-	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
+	addrs := hash.HashSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 
 	chunkChan := make(chan extractRecord)
 	go func() {
@@ -420,8 +416,8 @@ func Test65k(t *testing.T) {
 
 // Ensure all addresses share the first 7 bytes. Useful for easily generating tests which have
 // "prefix" collisions.
-func computeAddrCommonPrefix(data []byte) addr {
-	a := computeAddrDefault(data)
+func computeAddrCommonPrefix(data []byte) hash.Hash {
+	a := computeHashDefault(data)
 	a[0] = 0x01
 	a[1] = 0x23
 	a[2] = 0x45
@@ -479,7 +475,7 @@ func Test65kGetMany(t *testing.T) {
 func Test2kGetManyCommonPrefix(t *testing.T) {
 	computeAddr = computeAddrCommonPrefix
 	defer func() {
-		computeAddr = computeAddrDefault
+		computeAddr = computeHashDefault
 	}()
 
 	doTestNGetMany(t, 1<<11)

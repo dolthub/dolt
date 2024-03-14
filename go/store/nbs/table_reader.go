@@ -233,14 +233,14 @@ func (tr tableReader) index() (tableIndex, error) {
 }
 
 // returns true iff |h| can be found in this table.
-func (tr tableReader) has(h addr) (bool, error) {
+func (tr tableReader) has(h hash.Hash) (bool, error) {
 	_, ok, err := tr.idx.lookup(&h)
 	return ok, err
 }
 
 // returns the storage associated with |h|, iff present. Returns nil if absent. On success,
 // the returned byte slice directly references the underlying storage.
-func (tr tableReader) get(ctx context.Context, h addr, stats *Stats) ([]byte, error) {
+func (tr tableReader) get(ctx context.Context, h hash.Hash, stats *Stats) ([]byte, error) {
 	e, found, err := tr.idx.lookup(&h)
 	if err != nil {
 		return nil, err
@@ -283,7 +283,7 @@ func (tr tableReader) get(ctx context.Context, h addr, stats *Stats) ([]byte, er
 }
 
 type offsetRec struct {
-	a      *addr
+	a      *hash.Hash
 	offset uint64
 	length uint32
 }
@@ -639,12 +639,12 @@ func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) 
 
 	var ors offsetRecSlice
 	for i := uint32(0); i < tr.idx.chunkCount(); i++ {
-		a := new(addr)
-		e, err := tr.idx.indexEntry(i, a)
+		h := new(hash.Hash)
+		e, err := tr.idx.indexEntry(i, h)
 		if err != nil {
 			return err
 		}
-		ors = append(ors, offsetRec{a, e.Offset(), e.Length()})
+		ors = append(ors, offsetRec{h, e.Offset(), e.Length()})
 	}
 	sort.Sort(ors)
 	for _, or := range ors {

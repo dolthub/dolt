@@ -28,6 +28,8 @@ import (
 	"time"
 
 	"golang.org/x/sync/errgroup"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type conjoinStrategy interface {
@@ -171,8 +173,8 @@ func conjoin(ctx context.Context, s conjoinStrategy, upstream manifestContents, 
 			upstream, appendixSpecs = upstream.removeAppendixSpecs()
 		}
 
-		conjoineeSet := map[addr]struct{}{}
-		upstreamNames := map[addr]struct{}{}
+		conjoineeSet := map[hash.Hash]struct{}{}
+		upstreamNames := map[hash.Hash]struct{}{}
 		for _, spec := range upstream.specs {
 			upstreamNames[spec.name] = struct{}{}
 		}

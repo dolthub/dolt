@@ -35,6 +35,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 func randomChunks(t *testing.T, r *rand.Rand, sz int) [][]byte {
@@ -160,22 +162,22 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 }
 
 type waitOnStoreTableCache struct {
-	readers map[addr]io.ReaderAt
+	readers map[hash.Hash]io.ReaderAt
 	mu      sync.RWMutex
 	storeWG sync.WaitGroup
 }
 
-func (mtc *waitOnStoreTableCache) checkout(h addr) (io.ReaderAt, error) {
+func (mtc *waitOnStoreTableCache) checkout(h hash.Hash) (io.ReaderAt, error) {
 	mtc.mu.RLock()
 	defer mtc.mu.RUnlock()
 	return mtc.readers[h], nil
 }
 
-func (mtc *waitOnStoreTableCache) checkin(h addr) error {
+func (mtc *waitOnStoreTableCache) checkin(h hash.Hash) error {
 	return nil
 }
 
-func (mtc *waitOnStoreTableCache) store(h addr, data io.Reader, size uint64) error {
+func (mtc *waitOnStoreTableCache) store(h hash.Hash, data io.Reader, size uint64) error {
 	defer mtc.storeWG.Done()
 	mtc.mu.Lock()
 	defer mtc.mu.Unlock()
