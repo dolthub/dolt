@@ -2397,11 +2397,11 @@ func TestDiffSystemTablePrepared(t *testing.T) {
 	}
 }
 
-func TestSchemaDiffSystemTable(t *testing.T) {
+func TestSchemaDiffTableFunction(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
 	harness.Setup(setup.MydbData)
-	for _, test := range SchemaDiffSystemTableScriptTests {
+	for _, test := range SchemaDiffTableFunctionScriptTests {
 		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScript(t, harness, test)
@@ -2409,11 +2409,11 @@ func TestSchemaDiffSystemTable(t *testing.T) {
 	}
 }
 
-func TestSchemaDiffSystemTablePrepared(t *testing.T) {
+func TestSchemaDiffTableFunctionPrepared(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
 	harness.Setup(setup.MydbData)
-	for _, test := range SchemaDiffSystemTableScriptTests {
+	for _, test := range SchemaDiffTableFunctionScriptTests {
 		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScriptPrepared(t, harness, test)
