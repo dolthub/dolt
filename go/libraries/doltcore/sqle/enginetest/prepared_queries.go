@@ -16,6 +16,8 @@ package enginetest
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
@@ -23,7 +25,6 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 // DoltPreparedScripts tests dolt-specific prepared statements through
