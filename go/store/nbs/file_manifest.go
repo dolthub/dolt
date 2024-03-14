@@ -78,8 +78,7 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 	}
 
 	check := func(_, contents manifestContents) error {
-		var empty addr
-		if contents.gcGen != empty {
+		if !contents.gcGen.IsEmpty() {
 			return errors.New("migrating from v4 to v5 should result in a manifest with a 0 gcGen")
 		}
 
@@ -170,7 +169,7 @@ func (fm fileManifest) ParseIfExists(
 	return parseIfExists(ctx, fm.dir, readHook)
 }
 
-func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
+func (fm fileManifest) Update(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
 	t1 := time.Now()
 	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
 
@@ -194,7 +193,7 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 	return updateWithChecker(ctx, fm.dir, fm.mode, checker, lastLock, newContents, writeHook)
 }
 
-func (fm fileManifest) UpdateGCGen(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
+func (fm fileManifest) UpdateGCGen(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
 	t1 := time.Now()
 	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
 
@@ -245,14 +244,14 @@ func parseV5Manifest(r io.Reader) (manifestContents, error) {
 		return manifestContents{}, err
 	}
 
-	lock, err := parseAddr(slices[1])
-	if err != nil {
-		return manifestContents{}, err
+	lock, ok := hash.MaybeParse(slices[1])
+	if !ok {
+		return manifestContents{}, fmt.Errorf("Could not parse lock hash: %s", slices[1])
 	}
 
-	gcGen, err := parseAddr(slices[3])
-	if err != nil {
-		return manifestContents{}, err
+	gcGen, ok := hash.MaybeParse(slices[3])
+	if !ok {
+		return manifestContents{}, fmt.Errorf("Could not parse GC generation hash: %s", slices[3])
 	}
 
 	return manifestContents{
@@ -329,10 +328,9 @@ func parseV4Manifest(r io.Reader) (manifestContents, error) {
 		return manifestContents{}, err
 	}
 
-	ad, err := parseAddr(slices[1])
-
-	if err != nil {
-		return manifestContents{}, err
+	ad, ok := hash.MaybeParse(slices[1])
+	if !ok {
+		return manifestContents{}, fmt.Errorf("Could not parse lock hash: %s", slices[1])
 	}
 
 	return manifestContents{
@@ -373,7 +371,7 @@ func parseIfExists(_ context.Context, dir string, readHook func() error) (exists
 }
 
 // updateWithChecker updates the manifest if |validate| is satisfied, callers must hold the file lock.
-func updateWithChecker(_ context.Context, dir string, mode updateMode, validate manifestChecker, lastLock addr, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {
+func updateWithChecker(_ context.Context, dir string, mode updateMode, validate manifestChecker, lastLock hash.Hash, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {
 	var tempManifestPath string
 
 	// Write a temporary manifest file, to be renamed over manifestFileName upon success.
@@ -450,7 +448,7 @@ func updateWithChecker(_ context.Context, dir string, mode updateMode, validate 
 			return manifestContents{}, ferr
 		}
 
-		if lastLock != (addr{}) {
+		if !lastLock.IsEmpty() {
 			return manifestContents{}, errors.New("new manifest created with non 0 lock")
 		}
 

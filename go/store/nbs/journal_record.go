@@ -47,7 +47,7 @@ import (
 type journalRec struct {
 	length    uint32
 	kind      journalRecKind
-	address   addr
+	address   hash.Hash
 	payload   []byte
 	timestamp time.Time
 	checksum  uint32
@@ -150,7 +150,7 @@ func writeChunkRecord(buf []byte, c CompressedChunk) (n uint32) {
 	return
 }
 
-func writeRootHashRecord(buf []byte, root addr) (n uint32) {
+func writeRootHashRecord(buf []byte, root hash.Hash) (n uint32) {
 	// length
 	l := rootHashRecordSize()
 	writeUint32(buf[:journalRecLenSz], uint32(l))

@@ -34,7 +34,7 @@ import (
 
 type emptyChunkSource struct{}
 
-func (ecs emptyChunkSource) has(h addr) (bool, error) {
+func (ecs emptyChunkSource) has(h hash.Hash) (bool, error) {
 	return false, nil
 }
 
@@ -42,7 +42,7 @@ func (ecs emptyChunkSource) hasMany(addrs []hasRecord) (bool, error) {
 	return true, nil
 }
 
-func (ecs emptyChunkSource) get(ctx context.Context, h addr, stats *Stats) ([]byte, error) {
+func (ecs emptyChunkSource) get(ctx context.Context, h hash.Hash, stats *Stats) ([]byte, error) {
 	return nil, nil
 }
 
@@ -62,8 +62,8 @@ func (ecs emptyChunkSource) uncompressedLen() (uint64, error) {
 	return 0, nil
 }
 
-func (ecs emptyChunkSource) hash() addr {
-	return addr{}
+func (ecs emptyChunkSource) hash() hash.Hash {
+	return hash.Hash{}
 }
 
 func (ecs emptyChunkSource) index() (tableIndex, error) {
