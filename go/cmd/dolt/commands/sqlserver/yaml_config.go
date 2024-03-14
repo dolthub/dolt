@@ -166,14 +166,14 @@ var _ ServerConfig = YAMLConfig{}
 var _ validatingServerConfig = YAMLConfig{}
 var _ WritableServerConfig = &YAMLConfig{}
 
-func NewYamlConfig(configFileData []byte) (YAMLConfig, error) {
+func NewYamlConfig(configFileData []byte) (*YAMLConfig, error) {
 	var cfg YAMLConfig
 	err := yaml.UnmarshalStrict(configFileData, &cfg)
 	if cfg.LogLevelStr != nil {
 		loglevel := strings.ToLower(*cfg.LogLevelStr)
 		cfg.LogLevelStr = &loglevel
 	}
-	return cfg, err
+	return &cfg, err
 }
 
 // YamlConfigFromFile returns server config variables with values defined in yaml file.
@@ -340,11 +340,11 @@ func (cfg YAMLConfig) User() string {
 	return *cfg.UserConfig.Name
 }
 
-func (cfg YAMLConfig) SetUserName(s string) {
+func (cfg *YAMLConfig) SetUserName(s string) {
 	cfg.UserConfig.Name = &s
 }
 
-func (cfg YAMLConfig) SetPassword(s string) {
+func (cfg *YAMLConfig) SetPassword(s string) {
 	cfg.UserConfig.Password = &s
 }
 
