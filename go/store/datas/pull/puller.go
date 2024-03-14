@@ -43,16 +43,6 @@ var ErrDBUpToDate = errors.New("the database does not need to be pulled as it's 
 // the event that the source ChunkStore does not implement `NBSCompressedChunkStore`.
 var ErrIncompatibleSourceChunkStore = errors.New("the chunk store of the source database does not implement NBSCompressedChunkStore.")
 
-const (
-	outstandingTableFiles = 2
-)
-
-// FilledWriters store CmpChunkTableWriter that have been filled and are ready to be flushed.  In the future will likely
-// add the md5 of the data to this structure to be used to verify table upload calls.
-type FilledWriters struct {
-	wr *nbs.CmpChunkTableWriter
-}
-
 type WalkAddrs func(chunks.Chunk, func(hash.Hash, bool) error) error
 
 // Puller is used to sync data between to Databases

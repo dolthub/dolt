@@ -119,9 +119,9 @@ func (w *PullTableFileWriter) AddCompressedChunk(ctx context.Context, chk nbs.Co
 	case w.addChunkCh <- chk:
 		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		return context.Cause(ctx)
 	case <-w.egCtx.Done():
-		return w.egCtx.Err()
+		return w.eg.Wait()
 	}
 }
 
@@ -181,9 +181,9 @@ func (w *PullTableFileWriter) reqRespThread() (err error) {
 
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return eg.Wait()
 		case <-w.egCtx.Done():
-			return w.egCtx.Err()
+			return context.Cause(w.egCtx)
 		case thisReqCh <- pendingUpload:
 			// Keep track of how many responses we need to wait for.
 			outstandingUploads += 1

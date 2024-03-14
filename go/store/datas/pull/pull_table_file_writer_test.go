@@ -149,7 +149,7 @@ func TestPullTableFileWriter(t *testing.T) {
 				assert.NoError(t, err)
 			}
 
-			assert.Error(t, wr.Close())
+			assert.EqualError(t, wr.Close(), "this dest store throws an error")
 			assert.Equal(t, s.addCalled, 0)
 		})
 
@@ -182,7 +182,8 @@ func TestPullTableFileWriter(t *testing.T) {
 				cChk := nbs.ChunkToCompressedChunk(chk)
 				err = wr.AddCompressedChunk(context.Background(), cChk)
 				if err != nil {
-					assert.Error(t, wr.Close())
+					assert.EqualError(t, err, "this dest store throws an error")
+					assert.EqualError(t, wr.Close(), "this dest store throws an error")
 					assert.Equal(t, s.addCalled, 0)
 					return
 				}
@@ -213,7 +214,7 @@ func TestPullTableFileWriter(t *testing.T) {
 			assert.NoError(t, err)
 		}
 
-		assert.Error(t, wr.Close())
+		assert.EqualError(t, wr.Close(), "this dest store throws an error")
 		assert.Equal(t, s.addCalled, 1)
 	})
 
