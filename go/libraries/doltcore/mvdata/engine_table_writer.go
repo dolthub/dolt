@@ -282,7 +282,7 @@ func (s *SqlEngineTableWriter) createTable() error {
 		sqlCols = append(sqlCols, fmt.Sprintf("PRIMARY KEY (%s)", pks))
 	}
 
-	createTable := sql.GenerateCreateTableStatement(s.tableName, sqlCols, sql.CharacterSet_utf8mb4.String(), sql.Collation_Default.String(), "")
+	createTable := sql.GenerateCreateTableStatement(s.tableName, sqlCols, "", sql.CharacterSet_utf8mb4.String(), sql.Collation_Default.String(), "")
 	_, iter, err := s.se.Query(s.sqlCtx, createTable)
 	if err != nil {
 		return err

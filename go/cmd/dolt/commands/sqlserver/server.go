@@ -515,12 +515,11 @@ func ConfigureServices(
 		InitF: func(context.Context) (err error) {
 			v, ok := serverConfig.(validatingServerConfig)
 			if ok && v.goldenMysqlConnectionString() != "" {
-				mySQLServer, err = server.NewValidatingServer(
+				mySQLServer, err = server.NewServer(
 					serverConf,
 					sqlEngine.GetUnderlyingEngine(),
 					newSessionBuilder(sqlEngine, serverConfig),
 					metListener,
-					v.goldenMysqlConnectionString(),
 				)
 			} else {
 				mySQLServer, err = server.NewServer(
@@ -771,6 +770,19 @@ func portInUse(hostPort string) bool {
 	return false
 }
 
+
+func DefaultSessionBuilder(ctx context.Context, c *mysql.Conn, addr string) (sql.Session, error) {
+	host := ""
+	user := ""
+	mysqlConnectionUser, ok := c.UserData.(mysql_db.MysqlConnectionUser)
+	if ok {
+		host = mysqlConnectionUser.Host
+		user = mysqlConnectionUser.User
+	}
+	client := sql.Client{Address: host, User: user, Capabilities: c.Capabilities}
+	return sql.NewBaseSessionWithClientServer(addr, client, c.ConnectionID), nil
+}
+
 func newSessionBuilder(se *engine.SqlEngine, config ServerConfig) server.SessionBuilder {
 	userToSessionVars := make(map[string]map[string]string)
 	userVars := config.UserVars()
@@ -779,7 +791,7 @@ func newSessionBuilder(se *engine.SqlEngine, config ServerConfig) server.Session
 	}
 
 	return func(ctx context.Context, conn *mysql.Conn, addr string) (sql.Session, error) {
-		mysqlSess, err := server.DefaultSessionBuilder(ctx, conn, addr)
+		mysqlSess, err := DefaultSessionBuilder(ctx, conn, addr)
 		if err != nil {
 			return nil, err
 		}
