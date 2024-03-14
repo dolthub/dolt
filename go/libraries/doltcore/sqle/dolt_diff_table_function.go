@@ -364,8 +364,11 @@ func (dtf *DiffTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.Pr
 		sql.NewPrivilegedOperation(subject, sql.PrivilegeType_Select))
 }
 
-// evaluateArguments evaluates the argument expressions to turn them into values this DiffTableFunction
-// can use. Note that this method only evals the expressions, and doesn't validate the values.
+// evaluateArguments evaluates the argument expressions to turn them into
+// values this DiffTableFunction can use. Note that this method only evals
+// the expressions, and doesn't validate the values.
+// TODO: evaluating expression arguments during binding is incompatible
+// with prepared statement support.
 func (dtf *DiffTableFunction) evaluateArguments() (interface{}, interface{}, interface{}, string, error) {
 	if !dtf.Resolved() {
 		return nil, nil, nil, "", nil

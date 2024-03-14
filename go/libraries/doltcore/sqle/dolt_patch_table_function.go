@@ -350,12 +350,12 @@ func (p *PatchTableFunction) Expressions() []sql.Expression {
 }
 
 // WithExpressions implements the sql.Expressioner interface.
-func (p *PatchTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
-	if len(expression) < 1 {
-		return nil, sql.ErrInvalidArgumentNumber.New(p.Name(), "1 to 3", len(expression))
+func (p *PatchTableFunction) WithExpressions(expr ...sql.Expression) (sql.Node, error) {
+	if len(expr) < 1 {
+		return nil, sql.ErrInvalidArgumentNumber.New(p.Name(), "1 to 3", len(expr))
 	}
 
-	for _, expr := range expression {
+	for _, expr := range expr {
 		if !expr.Resolved() {
 			return nil, ErrInvalidNonLiteralArgument.New(p.Name(), expr.String())
 		}
@@ -366,41 +366,41 @@ func (p *PatchTableFunction) WithExpressions(expression ...sql.Expression) (sql.
 	}
 
 	newPtf := *p
-	if strings.Contains(expression[0].String(), "..") {
-		if len(expression) < 1 || len(expression) > 2 {
-			return nil, sql.ErrInvalidArgumentNumber.New(newPtf.Name(), "1 or 2", len(expression))
+	if strings.Contains(expr[0].String(), "..") {
+		if len(expr) < 1 || len(expr) > 2 {
+			return nil, sql.ErrInvalidArgumentNumber.New(newPtf.Name(), "1 or 2", len(expr))
 		}
-		newPtf.dotCommitExpr = expression[0]
-		if len(expression) == 2 {
-			newPtf.tableNameExpr = expression[1]
+		newPtf.dotCommitExpr = expr[0]
+		if len(expr) == 2 {
+			newPtf.tableNameExpr = expr[1]
 		}
 	} else {
-		if len(expression) < 2 || len(expression) > 3 {
-			return nil, sql.ErrInvalidArgumentNumber.New(newPtf.Name(), "2 or 3", len(expression))
+		if len(expr) < 2 || len(expr) > 3 {
+			return nil, sql.ErrInvalidArgumentNumber.New(newPtf.Name(), "2 or 3", len(expr))
 		}
-		newPtf.fromCommitExpr = expression[0]
-		newPtf.toCommitExpr = expression[1]
-		if len(expression) == 3 {
-			newPtf.tableNameExpr = expression[2]
+		newPtf.fromCommitExpr = expr[0]
+		newPtf.toCommitExpr = expr[1]
+		if len(expr) == 3 {
+			newPtf.tableNameExpr = expr[2]
 		}
 	}
 
 	// validate the expressions
 	if newPtf.dotCommitExpr != nil {
-		if !sqltypes.IsText(newPtf.dotCommitExpr.Type()) {
+		if !sqltypes.IsText(newPtf.dotCommitExpr.Type()) && !expression.IsBindVar(newPtf.dotCommitExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newPtf.Name(), newPtf.dotCommitExpr.String())
 		}
 	} else {
-		if !sqltypes.IsText(newPtf.fromCommitExpr.Type()) {
+		if !sqltypes.IsText(newPtf.fromCommitExpr.Type()) && !expression.IsBindVar(newPtf.fromCommitExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newPtf.Name(), newPtf.fromCommitExpr.String())
 		}
-		if !sqltypes.IsText(newPtf.toCommitExpr.Type()) {
+		if !sqltypes.IsText(newPtf.toCommitExpr.Type()) && !expression.IsBindVar(newPtf.toCommitExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newPtf.Name(), newPtf.toCommitExpr.String())
 		}
 	}
 
 	if newPtf.tableNameExpr != nil {
-		if !sqltypes.IsText(newPtf.tableNameExpr.Type()) {
+		if !sqltypes.IsText(newPtf.tableNameExpr.Type()) && !expression.IsBindVar(newPtf.tableNameExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newPtf.Name(), newPtf.tableNameExpr.String())
 		}
 	}
