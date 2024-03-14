@@ -75,6 +75,7 @@ type SqlEngineConfig struct {
 	SystemVariables         SystemVariables
 	ClusterController       *cluster.Controller
 	BinlogReplicaController binlogreplication.BinlogReplicaController
+	BinlogPrimaryController binlogreplication.BinlogPrimaryController
 	EventSchedulerStatus    eventscheduler.SchedulerStatus
 }
 
@@ -237,6 +238,12 @@ func NewSqlEngine(
 		}
 	}
 
+	if config.BinlogPrimaryController != nil {
+		if err := configureBinlogPrimaryController(config, engine); err != nil {
+			return nil, err
+		}
+	}
+
 	return sqlEngine, nil
 }
 
@@ -327,6 +334,12 @@ func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engin
 	dblr.DoltBinlogReplicaController.SetExecutionContext(executionCtx)
 	engine.Analyzer.Catalog.BinlogReplicaController = config.BinlogReplicaController
 
+	return nil
+}
+
+// configureBinlogPrimaryController configures the |engine| to use the binlog primary controller from |config|.
+func configureBinlogPrimaryController(config *SqlEngineConfig, engine *gms.Engine) error {
+	engine.Analyzer.Catalog.BinlogPrimaryController = config.BinlogPrimaryController
 	return nil
 }
 
