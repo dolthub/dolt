@@ -17,12 +17,12 @@ package sqle
 import (
 	"errors"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/expression"
 	"io"
 	"math"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"golang.org/x/sync/errgroup"
 
