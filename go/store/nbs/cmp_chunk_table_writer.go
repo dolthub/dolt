@@ -216,8 +216,7 @@ func (tw *CmpChunkTableWriter) writeIndex() (gohash.Hash, error) {
 		if n != hash.PrefixLen {
 			return nil, errors.New("failed to copy all data")
 		}
-
-		pos += n
+		pos += hash.PrefixLen
 
 		// order
 		binary.BigEndian.PutUint32(buff[pos:], pi.order)
