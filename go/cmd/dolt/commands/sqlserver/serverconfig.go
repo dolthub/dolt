@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // LogLevel defines the available levels of logging for the server.
@@ -169,6 +170,8 @@ type ServerConfig interface {
 	ClusterConfig() cluster.Config
 	// EventSchedulerStatus is the configuration for enabling or disabling the event scheduler in this server.
 	EventSchedulerStatus() string
+	// ApplySystemVariables applies any system variables specified by this config to the global system variables.
+	ApplySystemVariables() error
 }
 
 type validatingServerConfig interface {
@@ -206,6 +209,35 @@ type commandLineServerConfig struct {
 	remotesapiReadOnly      *bool
 	goldenMysqlConn         string
 	eventSchedulerStatus    string
+}
+
+func (cfg *commandLineServerConfig) ApplySystemVariables() error {
+	if cfg.timeout > 0 {
+		err := sql.SystemVariables.SetGlobal("net_read_timeout", cfg.timeout*1000)
+		if err != nil {
+			return fmt.Errorf("failed to set net_read_timeout. Error: %w", err)
+		}
+		err = sql.SystemVariables.SetGlobal("net_write_timeout", cfg.timeout*1000)
+		if err != nil {
+			return fmt.Errorf("failed to set net_write_timeout. Error: %w", err)
+		}
+	}
+
+	if len(cfg.eventSchedulerStatus) > 0 {
+		err := sql.SystemVariables.SetGlobal("event_scheduler", cfg.EventSchedulerStatus())
+		if err != nil {
+			return fmt.Errorf("failed to set event_scheduler. Error: %w", err)
+		}
+	}
+
+	if cfg.maxConnections > 0 {
+		err := sql.SystemVariables.SetGlobal("max_connections", cfg.maxConnections)
+		if err != nil {
+			return fmt.Errorf("failed to set max_connections. Error: %w", err)
+		}
+	}
+
+	return nil
 }
 
 var _ ServerConfig = (*commandLineServerConfig)(nil)
@@ -482,9 +514,9 @@ func (cfg *commandLineServerConfig) WithRemotesapiPort(port *int) *commandLineSe
 	return cfg
 }
 
-func (cfs *commandLineServerConfig) WithRemotesapiReadOnly(readonly *bool) *commandLineServerConfig {
-	cfs.remotesapiReadOnly = readonly
-	return cfs
+func (cfg *commandLineServerConfig) WithRemotesapiReadOnly(readonly *bool) *commandLineServerConfig {
+	cfg.remotesapiReadOnly = readonly
+	return cfg
 }
 
 func (cfg *commandLineServerConfig) goldenMysqlConnectionString() string {

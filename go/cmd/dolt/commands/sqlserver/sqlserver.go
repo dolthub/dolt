@@ -21,7 +21,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -465,15 +464,6 @@ func getCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 		}
 
 		config.withTimeout(timeout * 1000)
-
-		err = sql.SystemVariables.SetGlobal("net_read_timeout", timeout*1000)
-		if err != nil {
-			return nil, fmt.Errorf("failed to set net_read_timeout. Error: %s", err.Error())
-		}
-		err = sql.SystemVariables.SetGlobal("net_write_timeout", timeout*1000)
-		if err != nil {
-			return nil, fmt.Errorf("failed to set net_write_timeout. Error: %s", err.Error())
-		}
 	}
 
 	if _, ok := apr.GetValue(readonlyFlag); ok {
@@ -500,10 +490,6 @@ func getCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 
 	if maxConnections, ok := apr.GetInt(maxConnectionsFlag); ok {
 		config.withMaxConnections(uint64(maxConnections))
-		err := sql.SystemVariables.SetGlobal("max_connections", uint64(maxConnections))
-		if err != nil {
-			return nil, fmt.Errorf("failed to set max_connections. Error: %s", err.Error())
-		}
 	}
 
 	config.autoCommit = !apr.Contains(noAutoCommitFlag)
@@ -517,10 +503,6 @@ func getCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 	if esStatus, ok := apr.GetValue(eventSchedulerStatus); ok {
 		// make sure to assign eventSchedulerStatus first here
 		config.withEventScheduler(strings.ToUpper(esStatus))
-		err := sql.SystemVariables.SetGlobal("event_scheduler", config.EventSchedulerStatus())
-		if err != nil {
-			return nil, fmt.Errorf("failed to set event_scheduler. Error: %s", err.Error())
-		}
 	}
 
 	return config, nil
@@ -537,31 +519,6 @@ func getYAMLServerConfig(fs filesys.Filesys, path string) (ServerConfig, error) 
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse yaml file '%s'. Error: %s", path, err.Error())
 	}
-
-	if cfg.ListenerConfig.MaxConnections != nil {
-		err = sql.SystemVariables.SetGlobal("max_connections", *cfg.ListenerConfig.MaxConnections)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to set max_connections from yaml file '%s'. Error: %s", path, err.Error())
-		}
-	}
-	if cfg.ListenerConfig.ReadTimeoutMillis != nil {
-		err = sql.SystemVariables.SetGlobal("net_read_timeout", *cfg.ListenerConfig.ReadTimeoutMillis)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to set net_read_timeout from yaml file '%s'. Error: %s", path, err.Error())
-		}
-	}
-	if cfg.ListenerConfig.WriteTimeoutMillis != nil {
-		err = sql.SystemVariables.SetGlobal("net_write_timeout", *cfg.ListenerConfig.WriteTimeoutMillis)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to set net_write_timeout from yaml file '%s'. Error: %s", path, err.Error())
-		}
-	}
-	if cfg.BehaviorConfig.EventSchedulerStatus != nil {
-		err = sql.SystemVariables.SetGlobal("event_scheduler", cfg.EventSchedulerStatus())
-		if err != nil {
-			return nil, fmt.Errorf("Failed to set event_scheduler from yaml file '%s'. Error: %s", path, err.Error())
-		}
-	}
-
+	
 	return cfg, nil
 }
