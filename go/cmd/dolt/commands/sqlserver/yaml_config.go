@@ -21,7 +21,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"gopkg.in/yaml.v2"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -160,37 +160,6 @@ type YAMLConfig struct {
 	SystemVars_     *engine.SystemVariables `yaml:"system_variables,omitempty" minver:"1.11.1"`
 	Jwks            []engine.JwksConfig     `yaml:"jwks"`
 	GoldenMysqlConn *string                 `yaml:"golden_mysql_conn,omitempty"`
-	filepath string
-}
-
-func (cfg YAMLConfig) ApplySystemVariables() error {
-	if cfg.ListenerConfig.MaxConnections != nil {
-		err := sql.SystemVariables.SetGlobal("max_connections", *cfg.ListenerConfig.MaxConnections)
-		if err != nil {
-			return fmt.Errorf("Failed to set max_connections from yaml file '%s'. Error: %w", cfg.filepath, err)
-		}
-	}
-	
-	if cfg.ListenerConfig.ReadTimeoutMillis != nil {
-		err := sql.SystemVariables.SetGlobal("net_read_timeout", *cfg.ListenerConfig.ReadTimeoutMillis)
-		if err != nil {
-			return fmt.Errorf("Failed to set net_read_timeout from yaml file '%s'. Error: %w", cfg.filepath, err)
-		}
-	}
-	if cfg.ListenerConfig.WriteTimeoutMillis != nil {
-		err := sql.SystemVariables.SetGlobal("net_write_timeout", *cfg.ListenerConfig.WriteTimeoutMillis)
-		if err != nil {
-			return fmt.Errorf("Failed to set net_write_timeout from yaml file '%s'. Error: %w", cfg.filepath, err)
-		}
-	}
-	if cfg.BehaviorConfig.EventSchedulerStatus != nil {
-		err := sql.SystemVariables.SetGlobal("event_scheduler", cfg.EventSchedulerStatus())
-		if err != nil {
-			return fmt.Errorf("Failed to set event_scheduler from yaml file '%s'. Error: %s", cfg.filepath, err)
-		}
-	}
-	
-	return nil
 }
 
 var _ ServerConfig = YAMLConfig{}
@@ -204,6 +173,21 @@ func NewYamlConfig(configFileData []byte) (YAMLConfig, error) {
 		cfg.LogLevelStr = &loglevel
 	}
 	return cfg, err
+}
+
+// YamlConfigFromFile returns server config variables with values defined in yaml file.
+func YamlConfigFromFile(fs filesys.Filesys, path string) (ServerConfig, error) {
+	data, err := fs.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read file '%s'. Error: %s", path, err.Error())
+	}
+
+	cfg, err := NewYamlConfig(data)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to parse yaml file '%s'. Error: %s", path, err.Error())
+	}
+
+	return cfg, nil
 }
 
 func ServerConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
