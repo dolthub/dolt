@@ -112,17 +112,17 @@ func TestReadRecordRanges(t *testing.T) {
 	require.NoError(t, err)
 
 	for h, rng := range ranges {
-		b, err := jcs.get(ctx, addr(h), &Stats{})
+		b, err := jcs.get(ctx, h, &Stats{})
 		assert.NoError(t, err)
 		ch1 := chunks.NewChunkWithHash(h, b)
-		assert.Equal(t, data[addr(h)], ch1)
+		assert.Equal(t, data[h], ch1)
 
 		start, stop := rng.Offset, uint32(rng.Offset)+rng.Length
 		cc2, err := NewCompressedChunk(h, buf[start:stop])
 		assert.NoError(t, err)
 		ch2, err := cc2.ToChunk()
 		assert.NoError(t, err)
-		assert.Equal(t, data[addr(h)], ch2)
+		assert.Equal(t, data[h], ch2)
 	}
 }
 

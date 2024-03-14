@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const (
@@ -74,7 +75,7 @@ func (bsm blobstoreManifest) ParseIfExists(ctx context.Context, stats *Stats, re
 }
 
 // Update updates the contents of the manifest in the blobstore
-func (bsm blobstoreManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+func (bsm blobstoreManifest) Update(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
 	checker := func(upstream, contents manifestContents) error {
 		if contents.gcGen != upstream.gcGen {
 			return chunks.ErrGCGenerationExpired
@@ -85,7 +86,7 @@ func (bsm blobstoreManifest) Update(ctx context.Context, lastLock addr, newConte
 	return updateBSWithChecker(ctx, bsm.bs, checker, lastLock, newContents, writeHook)
 }
 
-func (bsm blobstoreManifest) UpdateGCGen(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+func (bsm blobstoreManifest) UpdateGCGen(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
 	checker := func(upstream, contents manifestContents) error {
 		if contents.gcGen == upstream.gcGen {
 			return errors.New("UpdateGCGen() must update the garbage collection generation")
@@ -100,7 +101,7 @@ func (bsm blobstoreManifest) UpdateGCGen(ctx context.Context, lastLock addr, new
 	return updateBSWithChecker(ctx, bsm.bs, checker, lastLock, newContents, writeHook)
 }
 
-func updateBSWithChecker(ctx context.Context, bs blobstore.Blobstore, validate manifestChecker, lastLock addr, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {
+func updateBSWithChecker(ctx context.Context, bs blobstore.Blobstore, validate manifestChecker, lastLock hash.Hash, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {
 	if writeHook != nil {
 		panic("Write hooks not supported")
 	}

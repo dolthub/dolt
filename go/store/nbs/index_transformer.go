@@ -18,6 +18,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var (
@@ -27,7 +29,7 @@ var (
 func NewIndexTransformer(src io.Reader, chunkCount int) io.Reader {
 	tuplesSize := chunkCount * prefixTupleSize
 	lengthsSize := chunkCount * lengthSize
-	suffixesSize := chunkCount * addrSuffixSize
+	suffixesSize := chunkCount * hash.SuffixLen
 
 	tupleReader := io.LimitReader(src, int64(tuplesSize))
 	lengthsReader := io.LimitReader(src, int64(lengthsSize))

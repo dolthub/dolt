@@ -29,18 +29,20 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type fileTableReader struct {
 	tableReader
-	h addr
+	h hash.Hash
 }
 
 const (
 	fileBlockSize = 1 << 12
 )
 
-func tableFileExists(ctx context.Context, dir string, h addr) (bool, error) {
+func tableFileExists(ctx context.Context, dir string, h hash.Hash) (bool, error) {
 	path := filepath.Join(dir, h.String())
 	_, err := os.Stat(path)
 
@@ -51,7 +53,7 @@ func tableFileExists(ctx context.Context, dir string, h addr) (bool, error) {
 	return err == nil, err
 }
 
-func newFileTableReader(ctx context.Context, dir string, h addr, chunkCount uint32, q MemoryQuotaProvider) (cs chunkSource, err error) {
+func newFileTableReader(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider) (cs chunkSource, err error) {
 	path := filepath.Join(dir, h.String())
 
 	var f *os.File
@@ -134,7 +136,7 @@ func newFileTableReader(ctx context.Context, dir string, h addr, chunkCount uint
 	}, nil
 }
 
-func (ftr *fileTableReader) hash() addr {
+func (ftr *fileTableReader) hash() hash.Hash {
 	return ftr.h
 }
 
