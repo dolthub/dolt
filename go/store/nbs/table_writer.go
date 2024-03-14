@@ -26,12 +26,13 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"hash"
+	gohash "hash"
 	"sort"
 
 	"github.com/golang/snappy"
 
 	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // tableWriter encodes a collection of byte stream chunks into a nbs table. NOT goroutine safe.
@@ -41,7 +42,7 @@ type tableWriter struct {
 	totalCompressedData   uint64
 	totalUncompressedData uint64
 	prefixes              prefixIndexSlice
-	blockHash             hash.Hash
+	blockHash             gohash.Hash
 
 	snapper snappyEncoder
 }
@@ -61,11 +62,11 @@ func maxTableSize(numChunks, totalData uint64) uint64 {
 	d.Chk.True(avgChunkSize < maxChunkSize)
 	maxSnappySize := snappy.MaxEncodedLen(int(avgChunkSize))
 	d.Chk.True(maxSnappySize > 0)
-	return numChunks*(prefixTupleSize+lengthSize+addrSuffixSize+checksumSize+uint64(maxSnappySize)) + footerSize
+	return numChunks*(prefixTupleSize+lengthSize+hash.SuffixLen+checksumSize+uint64(maxSnappySize)) + footerSize
 }
 
 func indexSize(numChunks uint32) uint64 {
-	return uint64(numChunks) * (addrSuffixSize + lengthSize + prefixTupleSize)
+	return uint64(numChunks) * (hash.SuffixLen + lengthSize + prefixTupleSize)
 }
 
 func lengthsOffset(numChunks uint32) uint64 {
@@ -88,7 +89,7 @@ func newTableWriter(buff []byte, snapper snappyEncoder) *tableWriter {
 	}
 }
 
-func (tw *tableWriter) addChunk(h addr, data []byte) bool {
+func (tw *tableWriter) addChunk(h hash.Hash, data []byte) bool {
 	if len(data) == 0 {
 		panic("NBS blocks cannont be zero length")
 	}
@@ -123,11 +124,11 @@ func (tw *tableWriter) addChunk(h addr, data []byte) bool {
 	return true
 }
 
-func (tw *tableWriter) finish() (uncompressedLength uint64, blockAddr addr, err error) {
+func (tw *tableWriter) finish() (uncompressedLength uint64, blockAddr hash.Hash, err error) {
 	err = tw.writeIndex()
 
 	if err != nil {
-		return 0, addr{}, err
+		return 0, hash.Hash{}, err
 	}
 
 	tw.writeFooter()
@@ -140,20 +141,22 @@ func (tw *tableWriter) finish() (uncompressedLength uint64, blockAddr addr, err 
 }
 
 type prefixIndexRec struct {
-	addr        addr
+	addr        hash.Hash
 	order, size uint32
 }
 
 type prefixIndexSlice []prefixIndexRec
 
-func (hs prefixIndexSlice) Len() int           { return len(hs) }
-func (hs prefixIndexSlice) Less(i, j int) bool { return hs[i].addr.Prefix() < hs[j].addr.Prefix() }
-func (hs prefixIndexSlice) Swap(i, j int)      { hs[i], hs[j] = hs[j], hs[i] }
+func (hs prefixIndexSlice) Len() int { return len(hs) }
+func (hs prefixIndexSlice) Less(i, j int) bool {
+	return hs[i].addr.Prefix() < hs[j].addr.Prefix()
+}
+func (hs prefixIndexSlice) Swap(i, j int) { hs[i], hs[j] = hs[j], hs[i] }
 
 func (tw *tableWriter) writeIndex() error {
 	sort.Sort(tw.prefixes)
 
-	pfxScratch := [addrPrefixSize]byte{}
+	pfxScratch := [hash.PrefixLen]byte{}
 
 	numRecords := uint32(len(tw.prefixes))
 	lengthsOffset := tw.pos + lengthsOffset(numRecords)   // skip prefix and ordinal for each record
@@ -163,7 +166,7 @@ func (tw *tableWriter) writeIndex() error {
 
 		// hash prefix
 		n := uint64(copy(tw.buff[tw.pos:], pfxScratch[:]))
-		if n != addrPrefixSize {
+		if n != hash.PrefixLen {
 			return errors.New("failed to copy all data")
 		}
 
@@ -178,14 +181,14 @@ func (tw *tableWriter) writeIndex() error {
 		binary.BigEndian.PutUint32(tw.buff[offset:], pi.size)
 
 		// hash suffix
-		offset = suffixesOffset + uint64(pi.order)*addrSuffixSize
+		offset = suffixesOffset + uint64(pi.order)*hash.SuffixLen
 		n = uint64(copy(tw.buff[offset:], pi.addr.Suffix()))
 
-		if n != addrSuffixSize {
+		if n != hash.SuffixLen {
 			return errors.New("failed to copy all bytes")
 		}
 	}
-	suffixesLen := uint64(numRecords) * addrSuffixSize
+	suffixesLen := uint64(numRecords) * hash.SuffixLen
 	tw.blockHash.Write(tw.buff[suffixesOffset : suffixesOffset+suffixesLen])
 	tw.pos = suffixesOffset + suffixesLen
 

@@ -30,6 +30,7 @@ import (
 	"testing"
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
+	"github.com/dolthub/dolt/go/store/hash"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -41,23 +42,23 @@ func makeTempDir(t *testing.T) string {
 	return dir
 }
 
-func writeTableData(dir string, chunx ...[]byte) (addr, error) {
+func writeTableData(dir string, chunx ...[]byte) (hash.Hash, error) {
 	tableData, name, err := buildTable(chunx)
 
 	if err != nil {
-		return addr{}, err
+		return hash.Hash{}, err
 	}
 
 	err = os.WriteFile(filepath.Join(dir, name.String()), tableData, 0666)
 
 	if err != nil {
-		return addr{}, err
+		return hash.Hash{}, err
 	}
 
 	return name, nil
 }
 
-func removeTables(dir string, names ...addr) error {
+func removeTables(dir string, names ...hash.Hash) error {
 	for _, name := range names {
 		if err := file.Remove(filepath.Join(dir, name.String())); err != nil {
 			return err

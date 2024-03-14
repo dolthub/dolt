@@ -276,7 +276,7 @@ func (j *ChunkJournal) ConjoinAll(ctx context.Context, sources chunkSources, sta
 }
 
 // Open implements tablePersister.
-func (j *ChunkJournal) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {
+func (j *ChunkJournal) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
 	if name == journalAddr {
 		if err := j.maybeInit(ctx); err != nil {
 			return nil, err
@@ -287,12 +287,12 @@ func (j *ChunkJournal) Open(ctx context.Context, name addr, chunkCount uint32, s
 }
 
 // Exists implements tablePersister.
-func (j *ChunkJournal) Exists(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (bool, error) {
+func (j *ChunkJournal) Exists(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (bool, error) {
 	return j.persister.Exists(ctx, name, chunkCount, stats)
 }
 
 // PruneTableFiles implements tablePersister.
-func (j *ChunkJournal) PruneTableFiles(ctx context.Context, keeper func() []addr, mtime time.Time) error {
+func (j *ChunkJournal) PruneTableFiles(ctx context.Context, keeper func() []hash.Hash, mtime time.Time) error {
 	if j.backing.readOnly() {
 		return errReadOnlyManifest
 	}
@@ -326,7 +326,7 @@ func (j *ChunkJournal) Name() string {
 }
 
 // Update implements manifest.
-func (j *ChunkJournal) Update(ctx context.Context, lastLock addr, next manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+func (j *ChunkJournal) Update(ctx context.Context, lastLock hash.Hash, next manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
 	if j.backing.readOnly() {
 		return j.contents, errReadOnlyManifest
 	}
@@ -372,7 +372,7 @@ func (j *ChunkJournal) Update(ctx context.Context, lastLock addr, next manifestC
 }
 
 // UpdateGCGen implements manifestGCGenUpdater.
-func (j *ChunkJournal) UpdateGCGen(ctx context.Context, lastLock addr, next manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+func (j *ChunkJournal) UpdateGCGen(ctx context.Context, lastLock hash.Hash, next manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
 	if j.backing.readOnly() {
 		return j.contents, errReadOnlyManifest
 	} else if j.wr == nil {
@@ -589,7 +589,7 @@ func (jm *journalManifest) ParseIfExists(ctx context.Context, stats *Stats, read
 }
 
 // Update implements manifest.
-func (jm *journalManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
+func (jm *journalManifest) Update(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
 	if jm.readOnly() {
 		_, mc, err = jm.ParseIfExists(ctx, stats, nil)
 		if err != nil {
@@ -611,7 +611,7 @@ func (jm *journalManifest) Update(ctx context.Context, lastLock addr, newContent
 }
 
 // UpdateGCGen implements manifest.
-func (jm *journalManifest) UpdateGCGen(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
+func (jm *journalManifest) UpdateGCGen(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
 	if jm.readOnly() {
 		_, mc, err = jm.ParseIfExists(ctx, stats, nil)
 		if err != nil {
