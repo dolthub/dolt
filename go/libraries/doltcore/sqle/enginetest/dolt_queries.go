@@ -1701,6 +1701,22 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "history table panic",
+		SetUpScript: []string{
+			"create table t (n int, c varchar(20));",
+			"call dolt_add('.')",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
+			"set @@SESSION.dolt_show_system_tables = 1",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT table_name FROM information_schema.columns WHERE table_name = 'dolt_history_t' group by table_name ORDER BY ORDINAL_POSITION",
+				Expected: []sql.Row{{"dolt_history_t"}},
+			},
+		},
+	},
+	{
 		Name: "keyless table",
 		SetUpScript: []string{
 			"create table foo1 (n int, de varchar(20));",
