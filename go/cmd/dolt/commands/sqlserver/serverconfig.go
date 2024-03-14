@@ -23,6 +23,8 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
@@ -171,11 +173,28 @@ type ServerConfig interface {
 	EventSchedulerStatus() string
 }
 
+// WritableServerConfig is a ServerConfig that support overwriting certain values.
+type WritableServerConfig interface {
+	ServerConfig
+	// SetUserName sets the username for servers with no other auth established
+	SetUserName(string)
+	// SetPassword sets the password for servers with no other auth established
+	SetPassword(string)
+}
+
 type validatingServerConfig interface {
 	ServerConfig
 	// goldenMysqlConnectionString returns a connection string for a mysql
 	// instance that can be used to validate query results
 	goldenMysqlConnectionString() string
+}
+
+// ServerConfigReader is an interface for reading a ServerConfig from a file or command line arguments.
+type ServerConfigReader interface {
+	// ReadConfigFile reads a config file and returns a ServerConfig for it
+	ReadConfigFile(cwdFS filesys.Filesys, file string) (ServerConfig, error)
+	// ReadConfigArgs reads command line arguments and returns a ServerConfig for them
+	ReadConfigArgs(args *argparser.ArgParseResults) (ServerConfig, error)
 }
 
 // ValidateConfig returns an `error` if any field is not valid.
@@ -315,3 +334,16 @@ func LoadTLSConfig(cfg ServerConfig) (*tls.Config, error) {
 	}, nil
 }
 
+// DoltServerConfigReader is the default implementation of ServerConfigReader suitable for parsing Dolt config files
+// and command line options.
+type DoltServerConfigReader struct {}
+
+var _ ServerConfigReader = DoltServerConfigReader{}
+
+func (d DoltServerConfigReader) ReadConfigFile(cwdFS filesys.Filesys, file string) (ServerConfig, error) {
+	return YamlConfigFromFile(cwdFS, file)
+}
+
+func (d DoltServerConfigReader) ReadConfigArgs(args *argparser.ArgParseResults) (ServerConfig, error) {
+	return NewCommandLineConfig(nil, args)
+}

@@ -259,13 +259,24 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 
 // ServerConfigFromArgs returns a ServerConfig from the given args
 func ServerConfigFromArgs(ap *argparser.ArgParser, help cli.UsagePrinter, args []string, dEnv *env.DoltEnv) (ServerConfig, error) {
+	return ServerConfigFromArgsWithReader(ap, help, args, dEnv, DoltServerConfigReader{})
+}
+
+// ServerConfigFromArgsWithReader returns a ServerConfig from the given args, using the provided ServerConfigReader
+func ServerConfigFromArgsWithReader(
+		ap *argparser.ArgParser,
+		help cli.UsagePrinter,
+		args []string,
+		dEnv *env.DoltEnv,
+		reader ServerConfigReader,
+) (ServerConfig, error) {
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	if err := validateSqlServerArgs(apr); err != nil {
 		cli.PrintErrln(color.RedString(err.Error()))
 		return nil, err
 	}
 
-	serverConfig, err := getServerConfig(dEnv.FS, apr)
+	serverConfig, err := getServerConfig(dEnv.FS, apr, reader)
 	if err != nil {
 		return nil, fmt.Errorf("bad configuration: %w", err)
 	}
@@ -279,34 +290,38 @@ func ServerConfigFromArgs(ap *argparser.ArgParser, help cli.UsagePrinter, args [
 
 // getServerConfig returns ServerConfig that is set either from yaml file if given, if not it is set with values defined
 // on command line. Server config variables not defined are set to default values.
-func getServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults) (ServerConfig, error) {
-	var yamlCfg YAMLConfig
+func getServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults, reader ServerConfigReader) (ServerConfig, error) {
+	var cfg ServerConfig
 	if cfgFile, ok := apr.GetValue(configFileFlag); ok {
-		cfg, err := YamlConfigFromFile(cwdFS, cfgFile)
+		var err error
+		cfg, err = reader.ReadConfigFile(cwdFS, cfgFile)
 		if err != nil {
 			return nil, err
 		}
-		yamlCfg = cfg.(YAMLConfig)
 	} else {
-		return NewCommandLineConfig(nil, apr)
+		return reader.ReadConfigArgs(apr)
 	}
 
-	// if command line user argument was given, replace yaml's user and password
+	// if command line user argument was given, override the config file's user and password
 	if user, hasUser := apr.GetValue(commands.UserFlag); hasUser {
-		pass, _ := apr.GetValue(passwordFlag)
-		yamlCfg.UserConfig.Name = &user
-		yamlCfg.UserConfig.Password = &pass
+		if wcfg, ok := cfg.(WritableServerConfig); ok {
+			pass, _ := apr.GetValue(passwordFlag)
+			wcfg.SetUserName(user)
+			wcfg.SetPassword(pass)
+		}
 	}
 
 	if connStr, ok := apr.GetValue(goldenMysqlConn); ok {
-		cli.Println(connStr)
-		yamlCfg.GoldenMysqlConn = &connStr
+		if yamlCfg, ok := cfg.(YAMLConfig); ok {
+			cli.Println(connStr)
+			yamlCfg.GoldenMysqlConn = &connStr
+		}
 	}
 
-	return yamlCfg, nil
+	return cfg, nil
 }
 
-// GetClientConfig returns configuration which is sutable for a client to use. The fact that it returns a ServerConfig
+// GetClientConfig returns configuration which is suitable for a client to use. The fact that it returns a ServerConfig
 // is a little confusing, but it is because the client and server use the same configuration struct. The main difference
 // between this method and getServerConfig is that this method required a cli.UserPassword argument. It is created by
 // prompting the user, and we don't want the server to follow that code path.
