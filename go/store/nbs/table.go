@@ -44,9 +44,15 @@ import (
    +----------------+----------------+-----+----------------+-------+--------+
 
    Chunk Record:
+   The Chunk Record form depends on the version of the table file. The version is determined by the magic number in the footer.
+   NOMS Beta:
    +---------------------------+----------------+
    | (Chunk Length) Chunk Data | (Uint32) CRC32 |
    +---------------------------+----------------+
+   DOLT Rev 1:
+   *-------------------+---------------------------+----------------+
+   | (byte) Chunk Type | (Chunk Length) Chunk Data | (Uint32) CRC32 |
+   +-------------------+---------------------------+----------------+
 
    Index:
    +------------+---------+----------+
@@ -133,12 +139,25 @@ const (
 	maxChunkSize    = 0xffffffff // Snappy won't compress slices bigger than this
 )
 
+// The Magic number is an 8 byte sequence that identifies the file format. The value is converted to a uint8 as
+// a version number internally.
 const (
 	magicNumberSize = 8
 	// If there was ever an example of over thinking things, it's this magic number:
 	nomsBetaMagicNumber = "\xff\xb5\xd8\xc2\x24\x63\xee\x50"
 	doltRev1MagicNumber = "DOLT___1"
 )
+
+const (
+	nomsBetaVersion uint8 = iota
+	doltRev1Version
+)
+
+// nbsVersionMap maps magic numbers to version numbers. Version number bumps should be very uncommon.
+var nbsVersionMap = map[string]uint8{
+	nomsBetaMagicNumber: nomsBetaVersion,
+	doltRev1MagicNumber: doltRev1Version,
+}
 
 var crcTable = crc32.MakeTable(crc32.Castagnoli)
 
@@ -198,7 +217,8 @@ type chunkReader interface {
 	// true if any hasRecord query was not found in this chunkReader.
 	hasMany(addrs []hasRecord) (bool, error)
 
-	// get returns the chunk data for a chunk with addr |h| if present, and nil otherwise.
+	// get returns the chunk data for a chunk with addr |h| if present, and nil otherwise. This is the raw chunk data
+	// after being decompressed (NM4 I THINK?)
 	get(ctx context.Context, h hash.Hash, stats *Stats) ([]byte, error)
 
 	// getMany sets getRecord.found to true, and calls |found| for each present getRecord query.
@@ -219,6 +239,7 @@ type chunkReader interface {
 	close() error
 }
 
+// NM4 - Abstraction that probably shouldn't know about index.
 type chunkSource interface {
 	chunkReader
 

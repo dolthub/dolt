@@ -50,7 +50,8 @@ type CompressedChunk struct {
 	CompressedData []byte
 }
 
-// NewCompressedChunk creates a CompressedChunk
+// NewCompressedChunk creates a CompressedChunk, using the full chunk record bytes, which includes the crc.
+// Will error in the event that the crc does not match the data.
 func NewCompressedChunk(h hash.Hash, buff []byte) (CompressedChunk, error) {
 	dataLen := uint64(len(buff)) - checksumSize
 
@@ -71,6 +72,9 @@ func (cmp CompressedChunk) ToChunk() (chunks.Chunk, error) {
 	if err != nil {
 		return chunks.Chunk{}, err
 	}
+
+	// NM4 - We don't verify the hash?? See comment in NewChunkWithHash which assume the caller trusts the Hash. We
+	// verify the CRC in NewCompressedChunk, but not the hash. This seems like a mistake.
 
 	return chunks.NewChunkWithHash(cmp.H, data), nil
 }
@@ -145,6 +149,9 @@ type tableReader struct {
 	idx       tableIndex
 	r         tableReaderAt
 	blockSize uint64
+
+	// NM4 - maybe this is where the version needs to live???
+	version uint8
 }
 
 // newTableReader parses a valid nbs table byte stream and returns a reader. buff must end with an NBS index
@@ -160,6 +167,7 @@ func newTableReader(index tableIndex, r tableReaderAt, blockSize uint64) (tableR
 		idx:       index,
 		r:         r,
 		blockSize: blockSize,
+		version:   index.nbsVersion(),
 	}, nil
 }
 
@@ -335,6 +343,7 @@ func (tr tableReader) readAtOffsetsWithCB(
 	readLength := rb.End() - rb.Start()
 	buff := make([]byte, readLength)
 
+	// NM4 - ReadAtWithStats may be the thing I need.........
 	n, err := tr.r.ReadAtWithStats(ctx, buff, int64(rb.Start()), stats)
 	if err != nil {
 		return err
@@ -345,7 +354,7 @@ func (tr tableReader) readAtOffsetsWithCB(
 	}
 
 	for i := range rb {
-		cmp, err := rb.ExtractChunkFromRead(buff, i)
+		cmp, err := rb.ExtractChunkFromRead(buff, i, tr.version)
 		if err != nil {
 			return err
 		}
@@ -423,10 +432,22 @@ func (r readBatch) End() uint64 {
 	return last.offset + uint64(last.length)
 }
 
-func (s readBatch) ExtractChunkFromRead(buff []byte, idx int) (CompressedChunk, error) {
+func (s readBatch) ExtractChunkFromRead(buff []byte, idx int, version uint8) (CompressedChunk, error) {
 	rec := s[idx]
-	chunkStart := rec.offset - s.Start()
-	return NewCompressedChunk(hash.Hash(*rec.a), buff[chunkStart:chunkStart+uint64(rec.length)])
+
+	offset := rec.offset
+	length := rec.length
+	if version >= doltRev1Version {
+		if buff[rec.offset-s.Start()] != 0 {
+			panic("not a valid chunk")
+		}
+
+		offset++
+		length--
+	}
+	chunkStart := offset - s.Start()
+
+	return NewCompressedChunk(*rec.a, buff[chunkStart:chunkStart+uint64(length)])
 }
 
 func toReadBatches(offsets offsetRecSlice, blockSize uint64) []readBatch {
@@ -711,5 +732,6 @@ func (tr tableReader) clone() (tableReader, error) {
 		idx:       idx,
 		r:         r,
 		blockSize: tr.blockSize,
+		version:   tr.version,
 	}, nil
 }

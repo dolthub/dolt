@@ -27,12 +27,12 @@ import (
 	"errors"
 	"fmt"
 	gohash "hash"
+	"os"
 	"sort"
-
-	"github.com/golang/snappy"
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/golang/snappy"
 )
 
 // tableWriter encodes a collection of byte stream chunks into a nbs table. NOT goroutine safe.
@@ -45,6 +45,9 @@ type tableWriter struct {
 	blockHash             gohash.Hash
 
 	snapper snappyEncoder
+
+	// NM4 - would be nice to have one place for this.
+	version uint8
 }
 
 type snappyEncoder interface {
@@ -77,15 +80,23 @@ func suffixesOffset(numChunks uint32) uint64 {
 	return uint64(numChunks) * (prefixTupleSize + lengthSize)
 }
 
+// NM4 - need to adjust max size for doltRev1Version
 // len(buff) must be >= maxTableSize(numChunks, totalData)
 func newTableWriter(buff []byte, snapper snappyEncoder) *tableWriter {
 	if snapper == nil {
 		snapper = realSnappyEncoder{}
 	}
+
+	version := nomsBetaVersion
+	if _, ok := os.LookupEnv("DOLT_NBS_EXP"); ok {
+		version = doltRev1Version
+	}
+
 	return &tableWriter{
 		buff:      buff,
 		blockHash: sha512.New(),
 		snapper:   snapper,
+		version:   version, // NM4 - not sure where else to put this.
 	}
 }
 
@@ -98,6 +109,14 @@ func (tw *tableWriter) addChunk(h hash.Hash, data []byte) bool {
 	compressed := tw.snapper.Encode(tw.buff[tw.pos:], data)
 	dataLength := uint64(len(compressed))
 	tw.totalCompressedData += dataLength
+
+	typeByteSize := uint64(0)
+	if tw.version == doltRev1Version {
+		// Write the chunk record type. 0 only for now.
+		tw.buff[tw.pos] = 0
+		tw.pos++
+		typeByteSize++
+	}
 
 	// BUG 3156 indicated that, sometimes, snappy decided that there's not enough space in tw.buff[tw.pos:] to encode into.
 	// This _should never happen anymore be_, because we iterate over all chunks to be added and sum the max amount of space that snappy says it might need.
@@ -118,7 +137,7 @@ func (tw *tableWriter) addChunk(h hash.Hash, data []byte) bool {
 	tw.prefixes = append(tw.prefixes, prefixIndexRec{
 		h,
 		uint32(len(tw.prefixes)),
-		uint32(checksumSize + dataLength),
+		uint32(checksumSize + dataLength + typeByteSize),
 	})
 
 	return true
