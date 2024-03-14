@@ -1538,7 +1538,7 @@ func validatePersistableSysVar(name string) (sql.SystemVariable, interface{}, er
 	if !ok {
 		return nil, nil, sql.ErrUnknownSystemVariable.New(name)
 	}
-	if sv, ok := sysVar.(*sql.MysqlSystemVariable); ok && !sv.Dynamic {
+	if sysVar.IsReadOnly() {
 		return nil, nil, sql.ErrSystemVariableReadOnly.New(name)
 	}
 	return sysVar, val, nil
