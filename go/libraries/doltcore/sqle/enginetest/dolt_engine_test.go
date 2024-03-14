@@ -2788,6 +2788,13 @@ func TestPrepared(t *testing.T) {
 	enginetest.TestPrepared(t, h)
 }
 
+func TestDoltPreparedScripts(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t)
+	defer h.Close()
+	DoltPreparedScripts(t, h)
+}
+
 func TestPreparedInsert(t *testing.T) {
 	skipPreparedTests(t)
 	h := newDoltHarness(t)
