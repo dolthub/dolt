@@ -263,7 +263,7 @@ func (tr tableReader) get(ctx context.Context, h hash.Hash, stats *Stats) ([]byt
 		return nil, errors.New("failed to read all data")
 	}
 
-	cmp, err := NewCompressedChunk(hash.Hash(h), buff)
+	cmp, err := NewCompressedChunk(h, buff)
 
 	if err != nil {
 		return nil, err
@@ -675,7 +675,7 @@ func (tr tableReader) getRecordRanges(requests []getRecord) (map[hash.Hash]Range
 	}
 	ranges := make(map[hash.Hash]Range, len(recs))
 	for _, r := range recs {
-		ranges[hash.Hash(*r.a)] = Range{
+		ranges[*r.a] = Range{
 			Offset: r.offset,
 			Length: r.length,
 		}
