@@ -21,11 +21,11 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"gopkg.in/yaml.v2"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 func strPtr(s string) *string {

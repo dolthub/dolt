@@ -264,11 +264,11 @@ func ServerConfigFromArgs(ap *argparser.ArgParser, help cli.UsagePrinter, args [
 
 // ServerConfigFromArgsWithReader returns a ServerConfig from the given args, using the provided ServerConfigReader
 func ServerConfigFromArgsWithReader(
-		ap *argparser.ArgParser,
-		help cli.UsagePrinter,
-		args []string,
-		dEnv *env.DoltEnv,
-		reader ServerConfigReader,
+	ap *argparser.ArgParser,
+	help cli.UsagePrinter,
+	args []string,
+	dEnv *env.DoltEnv,
+	reader ServerConfigReader,
 ) (ServerConfig, error) {
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	if err := validateSqlServerArgs(apr); err != nil {
@@ -427,4 +427,3 @@ func setupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config S
 
 	return nil
 }
-

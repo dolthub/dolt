@@ -21,11 +21,12 @@ import (
 	"net"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // LogLevel defines the available levels of logging for the server.
@@ -232,21 +233,21 @@ func ApplySystemVariables(cfg ServerConfig) error {
 			return err
 		}
 	}
-	
+
 	if cfg.WriteTimeout() > 0 {
 		err := sql.SystemVariables.SetGlobal("net_write_timeout", cfg.WriteTimeout())
 		if err != nil {
 			return err
 		}
 	}
-	
+
 	if len(cfg.EventSchedulerStatus()) > 0 {
 		err := sql.SystemVariables.SetGlobal("event_scheduler", cfg.EventSchedulerStatus())
 		if err != nil {
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
@@ -336,7 +337,7 @@ func LoadTLSConfig(cfg ServerConfig) (*tls.Config, error) {
 
 // DoltServerConfigReader is the default implementation of ServerConfigReader suitable for parsing Dolt config files
 // and command line options.
-type DoltServerConfigReader struct {}
+type DoltServerConfigReader struct{}
 
 var _ ServerConfigReader = DoltServerConfigReader{}
 
