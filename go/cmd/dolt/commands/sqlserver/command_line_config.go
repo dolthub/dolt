@@ -59,6 +59,124 @@ type commandLineServerConfig struct {
 
 var _ ServerConfig = (*commandLineServerConfig)(nil)
 
+// DefaultServerConfig creates a `*ServerConfig` that has all of the options set to their default values.
+func DefaultServerConfig() *commandLineServerConfig {
+	return &commandLineServerConfig{
+		host:                    defaultHost,
+		port:                    defaultPort,
+		password:                defaultPass,
+		timeout:                 defaultTimeout,
+		readOnly:                defaultReadOnly,
+		logLevel:                defaultLogLevel,
+		autoCommit:              defaultAutoCommit,
+		maxConnections:          defaultMaxConnections,
+		queryParallelism:        defaultQueryParallelism,
+		persistenceBehavior:     defaultPersistenceBahavior,
+		dataDir:                 defaultDataDir,
+		cfgDir:                  filepath.Join(defaultDataDir, defaultCfgDir),
+		privilegeFilePath:       filepath.Join(defaultDataDir, defaultCfgDir, defaultPrivilegeFilePath),
+		branchControlFilePath:   filepath.Join(defaultDataDir, defaultCfgDir, defaultBranchControlFilePath),
+		allowCleartextPasswords: defaultAllowCleartextPasswords,
+		maxLoggedQueryLen:       defaultMaxLoggedQueryLen,
+	}
+}
+
+// NewCommandLineConfig returns server config based on the credentials and command line arguments given.
+func NewCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResults) (ServerConfig, error) {
+	config := DefaultServerConfig()
+
+	if sock, ok := apr.GetValue(socketFlag); ok {
+		// defined without value gets default
+		if sock == "" {
+			sock = defaultUnixSocketFilePath
+		}
+		config.WithSocket(sock)
+	}
+
+	if host, ok := apr.GetValue(hostFlag); ok {
+		config.WithHost(host)
+	}
+
+	if port, ok := apr.GetInt(portFlag); ok {
+		config.WithPort(port)
+	}
+
+	if creds == nil {
+		if user, ok := apr.GetValue(cli.UserFlag); ok {
+			config.withUser(user)
+		}
+		if password, ok := apr.GetValue(cli.PasswordFlag); ok {
+			config.withPassword(password)
+		}
+	} else {
+		config.withUser(creds.Username)
+		config.withPassword(creds.Password)
+	}
+
+	if port, ok := apr.GetInt(remotesapiPortFlag); ok {
+		config.WithRemotesapiPort(&port)
+	}
+	if apr.Contains(remotesapiReadOnlyFlag) {
+		val := true
+		config.WithRemotesapiReadOnly(&val)
+	}
+
+	if persistenceBehavior, ok := apr.GetValue(persistenceBehaviorFlag); ok {
+		config.withPersistenceBehavior(persistenceBehavior)
+	}
+
+	if timeoutStr, ok := apr.GetValue(timeoutFlag); ok {
+		timeout, err := strconv.ParseUint(timeoutStr, 10, 64)
+
+		if err != nil {
+			return nil, fmt.Errorf("invalid value for --timeout '%s'", timeoutStr)
+		}
+
+		config.withTimeout(timeout * 1000)
+	}
+
+	if _, ok := apr.GetValue(readonlyFlag); ok {
+		config.withReadOnly(true)
+		val := true
+		config.WithRemotesapiReadOnly(&val)
+	}
+
+	if logLevel, ok := apr.GetValue(logLevelFlag); ok {
+		config.withLogLevel(LogLevel(strings.ToLower(logLevel)))
+	}
+
+	if dataDir, ok := apr.GetValue(commands.MultiDBDirFlag); ok {
+		config.withDataDir(dataDir)
+	}
+
+	if dataDir, ok := apr.GetValue(commands.DataDirFlag); ok {
+		config.withDataDir(dataDir)
+	}
+
+	if queryParallelism, ok := apr.GetInt(queryParallelismFlag); ok {
+		config.withQueryParallelism(queryParallelism)
+	}
+
+	if maxConnections, ok := apr.GetInt(maxConnectionsFlag); ok {
+		config.withMaxConnections(uint64(maxConnections))
+	}
+
+	config.autoCommit = !apr.Contains(noAutoCommitFlag)
+	config.allowCleartextPasswords = apr.Contains(allowCleartextPasswordsFlag)
+
+	if connStr, ok := apr.GetValue(goldenMysqlConn); ok {
+		cli.Println(connStr)
+		config.withGoldenMysqlConnectionString(connStr)
+	}
+
+	if esStatus, ok := apr.GetValue(eventSchedulerStatus); ok {
+		// make sure to assign eventSchedulerStatus first here
+		config.withEventScheduler(strings.ToUpper(esStatus))
+	}
+
+	return config, nil
+}
+
 // Host returns the domain that the server will run on. Accepts an IPv4 or IPv6 address, in addition to localhost.
 func (cfg *commandLineServerConfig) Host() string {
 	return cfg.host
@@ -359,122 +477,4 @@ func (cfg *commandLineServerConfig) EventSchedulerStatus() string {
 func (cfg *commandLineServerConfig) withEventScheduler(es string) *commandLineServerConfig {
 	cfg.eventSchedulerStatus = es
 	return cfg
-}
-
-// DefaultServerConfig creates a `*ServerConfig` that has all of the options set to their default values.
-func DefaultServerConfig() *commandLineServerConfig {
-	return &commandLineServerConfig{
-		host:                    defaultHost,
-		port:                    defaultPort,
-		password:                defaultPass,
-		timeout:                 defaultTimeout,
-		readOnly:                defaultReadOnly,
-		logLevel:                defaultLogLevel,
-		autoCommit:              defaultAutoCommit,
-		maxConnections:          defaultMaxConnections,
-		queryParallelism:        defaultQueryParallelism,
-		persistenceBehavior:     defaultPersistenceBahavior,
-		dataDir:                 defaultDataDir,
-		cfgDir:                  filepath.Join(defaultDataDir, defaultCfgDir),
-		privilegeFilePath:       filepath.Join(defaultDataDir, defaultCfgDir, defaultPrivilegeFilePath),
-		branchControlFilePath:   filepath.Join(defaultDataDir, defaultCfgDir, defaultBranchControlFilePath),
-		allowCleartextPasswords: defaultAllowCleartextPasswords,
-		maxLoggedQueryLen:       defaultMaxLoggedQueryLen,
-	}
-}
-
-// NewCommandLineConfig returns server config based on the credentials and command line arguments given.
-func NewCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResults) (ServerConfig, error) {
-	config := DefaultServerConfig()
-
-	if sock, ok := apr.GetValue(socketFlag); ok {
-		// defined without value gets default
-		if sock == "" {
-			sock = defaultUnixSocketFilePath
-		}
-		config.WithSocket(sock)
-	}
-
-	if host, ok := apr.GetValue(hostFlag); ok {
-		config.WithHost(host)
-	}
-
-	if port, ok := apr.GetInt(portFlag); ok {
-		config.WithPort(port)
-	}
-
-	if creds == nil {
-		if user, ok := apr.GetValue(cli.UserFlag); ok {
-			config.withUser(user)
-		}
-		if password, ok := apr.GetValue(cli.PasswordFlag); ok {
-			config.withPassword(password)
-		}
-	} else {
-		config.withUser(creds.Username)
-		config.withPassword(creds.Password)
-	}
-
-	if port, ok := apr.GetInt(remotesapiPortFlag); ok {
-		config.WithRemotesapiPort(&port)
-	}
-	if apr.Contains(remotesapiReadOnlyFlag) {
-		val := true
-		config.WithRemotesapiReadOnly(&val)
-	}
-
-	if persistenceBehavior, ok := apr.GetValue(persistenceBehaviorFlag); ok {
-		config.withPersistenceBehavior(persistenceBehavior)
-	}
-
-	if timeoutStr, ok := apr.GetValue(timeoutFlag); ok {
-		timeout, err := strconv.ParseUint(timeoutStr, 10, 64)
-
-		if err != nil {
-			return nil, fmt.Errorf("invalid value for --timeout '%s'", timeoutStr)
-		}
-
-		config.withTimeout(timeout * 1000)
-	}
-
-	if _, ok := apr.GetValue(readonlyFlag); ok {
-		config.withReadOnly(true)
-		val := true
-		config.WithRemotesapiReadOnly(&val)
-	}
-
-	if logLevel, ok := apr.GetValue(logLevelFlag); ok {
-		config.withLogLevel(LogLevel(strings.ToLower(logLevel)))
-	}
-
-	if dataDir, ok := apr.GetValue(commands.MultiDBDirFlag); ok {
-		config.withDataDir(dataDir)
-	}
-
-	if dataDir, ok := apr.GetValue(commands.DataDirFlag); ok {
-		config.withDataDir(dataDir)
-	}
-
-	if queryParallelism, ok := apr.GetInt(queryParallelismFlag); ok {
-		config.withQueryParallelism(queryParallelism)
-	}
-
-	if maxConnections, ok := apr.GetInt(maxConnectionsFlag); ok {
-		config.withMaxConnections(uint64(maxConnections))
-	}
-
-	config.autoCommit = !apr.Contains(noAutoCommitFlag)
-	config.allowCleartextPasswords = apr.Contains(allowCleartextPasswordsFlag)
-
-	if connStr, ok := apr.GetValue(goldenMysqlConn); ok {
-		cli.Println(connStr)
-		config.withGoldenMysqlConnectionString(connStr)
-	}
-
-	if esStatus, ok := apr.GetValue(eventSchedulerStatus); ok {
-		// make sure to assign eventSchedulerStatus first here
-		config.withEventScheduler(strings.ToUpper(esStatus))
-	}
-
-	return config, nil
 }

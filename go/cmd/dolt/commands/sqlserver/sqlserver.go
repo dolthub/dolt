@@ -239,6 +239,11 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 		return err
 	}
 
+	err = ApplySystemVariables(serverConfig)
+	if err != nil {
+		return err
+	}
+
 	cli.PrintErrf("Starting server with Config %v\n", ConfigInfo(serverConfig))
 
 	startError, closeError := Serve(ctx, versionStr, serverConfig, controller, dEnv)
