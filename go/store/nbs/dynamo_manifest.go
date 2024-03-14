@@ -146,7 +146,7 @@ func validateManifest(item map[string]*dynamodb.AttributeValue) (valid, hasSpecs
 	return false, false, false
 }
 
-func (dm dynamoManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+func (dm dynamoManifest) Update(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
 	t1 := time.Now()
 	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
 
@@ -174,7 +174,7 @@ func (dm dynamoManifest) Update(ctx context.Context, lastLock addr, newContents 
 	}
 
 	expr := valueEqualsExpression
-	if lastLock == (addr{}) {
+	if lastLock.IsEmpty() {
 		expr = valueNotExistsOrEqualsExpression
 	}
 

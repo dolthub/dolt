@@ -234,7 +234,7 @@ func TestJournalWriterBootstrap(t *testing.T) {
 	}
 }
 
-func validateAllLookups(t *testing.T, j *journalWriter, data map[addr]CompressedChunk) {
+func validateAllLookups(t *testing.T, j *journalWriter, data map[hash.Hash]CompressedChunk) {
 	// move |data| to addr16-keyed map
 	prefixMap := make(map[addr16]CompressedChunk, len(data))
 	var prefix addr16
@@ -249,7 +249,7 @@ func validateAllLookups(t *testing.T, j *journalWriter, data map[addr]Compressed
 }
 
 func iterRangeIndex(idx rangeIndex, cb func(addr16, Range) (stop bool)) {
-	idx.novel.Iter(func(a addr, r Range) (stop bool) {
+	idx.novel.Iter(func(a hash.Hash, r Range) (stop bool) {
 		return cb(toAddr16(a), r)
 	})
 	idx.cached.Iter(cb)
@@ -285,7 +285,7 @@ func newTestFilePath(t *testing.T) string {
 func TestJournalIndexBootstrap(t *testing.T) {
 	// potentially indexed region of a journal
 	type epoch struct {
-		records map[addr]CompressedChunk
+		records map[hash.Hash]CompressedChunk
 		last    hash.Hash
 	}
 
@@ -396,8 +396,8 @@ func TestJournalIndexBootstrap(t *testing.T) {
 	}
 }
 
-func randomCompressedChunks(cnt int) (compressed map[addr]CompressedChunk) {
-	compressed = make(map[addr]CompressedChunk)
+func randomCompressedChunks(cnt int) (compressed map[hash.Hash]CompressedChunk) {
+	compressed = make(map[hash.Hash]CompressedChunk)
 	var buf []byte
 	for i := 0; i < cnt; i++ {
 		k := rand.Intn(51) + 50
@@ -407,7 +407,7 @@ func randomCompressedChunks(cnt int) (compressed map[addr]CompressedChunk) {
 		}
 		c := chunks.NewChunk(buf[:k])
 		buf = buf[k:]
-		compressed[addr(c.Hash())] = ChunkToCompressedChunk(c)
+		compressed[c.Hash()] = ChunkToCompressedChunk(c)
 	}
 	return
 }
@@ -427,10 +427,10 @@ func TestRangeIndex(t *testing.T) {
 	data := randomCompressedChunks(1024)
 	idx := newRangeIndex()
 	for _, c := range data {
-		idx.put(addr(c.Hash()), Range{})
+		idx.put(c.Hash(), Range{})
 	}
 	for _, c := range data {
-		_, ok := idx.get(addr(c.Hash()))
+		_, ok := idx.get(c.Hash())
 		assert.True(t, ok)
 	}
 	assert.Equal(t, len(data), idx.novelCount())

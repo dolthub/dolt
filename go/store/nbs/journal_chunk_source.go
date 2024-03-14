@@ -35,7 +35,7 @@ type journalChunkSource struct {
 
 var _ chunkSource = journalChunkSource{}
 
-func (s journalChunkSource) has(h addr) (bool, error) {
+func (s journalChunkSource) has(h hash.Hash) (bool, error) {
 	return s.journal.hasAddr(h), nil
 }
 
@@ -51,11 +51,11 @@ func (s journalChunkSource) hasMany(addrs []hasRecord) (missing bool, err error)
 	return
 }
 
-func (s journalChunkSource) getCompressed(_ context.Context, h addr, _ *Stats) (CompressedChunk, error) {
+func (s journalChunkSource) getCompressed(_ context.Context, h hash.Hash, _ *Stats) (CompressedChunk, error) {
 	return s.journal.getCompressedChunk(h)
 }
 
-func (s journalChunkSource) get(_ context.Context, h addr, _ *Stats) ([]byte, error) {
+func (s journalChunkSource) get(_ context.Context, h hash.Hash, _ *Stats) ([]byte, error) {
 	cc, err := s.journal.getCompressedChunk(h)
 	if err != nil {
 		return nil, err
@@ -118,7 +118,7 @@ func (s journalChunkSource) uncompressedLen() (uint64, error) {
 	return s.journal.uncompressedSize(), nil
 }
 
-func (s journalChunkSource) hash() addr {
+func (s journalChunkSource) hash() hash.Hash {
 	return journalAddr
 }
 
@@ -170,7 +170,7 @@ func equalSpecs(left, right []tableSpec) bool {
 	if len(left) != len(right) {
 		return false
 	}
-	l := make(map[addr]struct{}, len(left))
+	l := make(map[hash.Hash]struct{}, len(left))
 	for _, s := range left {
 		l[s.name] = struct{}{}
 	}
@@ -180,9 +180,4 @@ func equalSpecs(left, right []tableSpec) bool {
 		}
 	}
 	return true
-}
-
-func emptyAddr(a addr) bool {
-	var b addr
-	return a == b
 }

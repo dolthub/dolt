@@ -52,11 +52,11 @@ const (
 )
 
 var (
-	journalAddr = addr(hash.Parse(chunkJournalAddr))
+	journalAddr = hash.Parse(chunkJournalAddr)
 )
 
-func isJournalAddr(a addr) bool {
-	return a == journalAddr
+func isJournalAddr(h hash.Hash) bool {
+	return h == journalAddr
 }
 
 func fileExists(path string) (bool, error) {
@@ -315,7 +315,7 @@ func (wr *journalWriter) corruptIndexRecovery(ctx context.Context) (err error) {
 }
 
 // hasAddr returns true if the journal contains a chunk with addr |h|.
-func (wr *journalWriter) hasAddr(h addr) (ok bool) {
+func (wr *journalWriter) hasAddr(h hash.Hash) (ok bool) {
 	wr.lock.RLock()
 	defer wr.lock.RUnlock()
 	_, ok = wr.ranges.get(h)
@@ -323,7 +323,7 @@ func (wr *journalWriter) hasAddr(h addr) (ok bool) {
 }
 
 // getCompressedChunk reads the CompressedChunks with addr |h|.
-func (wr *journalWriter) getCompressedChunk(h addr) (CompressedChunk, error) {
+func (wr *journalWriter) getCompressedChunk(h hash.Hash) (CompressedChunk, error) {
 	wr.lock.RLock()
 	defer wr.lock.RUnlock()
 	r, ok := wr.ranges.get(h)
@@ -338,7 +338,7 @@ func (wr *journalWriter) getCompressedChunk(h addr) (CompressedChunk, error) {
 }
 
 // getRange returns a Range for the chunk with addr |h|.
-func (wr *journalWriter) getRange(h addr) (rng Range, ok bool, err error) {
+func (wr *journalWriter) getRange(h hash.Hash) (rng Range, ok bool, err error) {
 	// callers will use |rng| to read directly from the
 	// journal file, so we must flush here
 	if err = wr.maybeFlush(); err != nil {
@@ -365,7 +365,7 @@ func (wr *journalWriter) writeCompressedChunk(cc CompressedChunk) error {
 	}
 	wr.unsyncd += uint64(recordLen)
 	_ = writeChunkRecord(buf, cc)
-	wr.ranges.put(addr(cc.H), rng)
+	wr.ranges.put(cc.H, rng)
 
 	// To fulfill our durability guarantees, we technically only need to
 	// file.Sync() the journal when we commit a new root chunk. However,
@@ -402,7 +402,7 @@ func (wr *journalWriter) commitRootHashUnlocked(root hash.Hash) error {
 		return err
 	}
 	wr.currentRoot = root
-	n := writeRootHashRecord(buf, addr(root))
+	n := writeRootHashRecord(buf, root)
 	if err = wr.flush(); err != nil {
 		return err
 	}
@@ -582,7 +582,7 @@ type rangeIndex struct {
 	// novel Ranges represent most recent chunks written to
 	// the journal. These Ranges have not yet been written to
 	// a journal index record.
-	novel *swiss.Map[addr, Range]
+	novel *swiss.Map[hash.Hash, Range]
 
 	// cached Ranges are bootstrapped from an out-of-band journal
 	// index file. To save memory, these Ranges are keyed by a 16-byte
@@ -592,14 +592,14 @@ type rangeIndex struct {
 
 type addr16 [16]byte
 
-func toAddr16(full addr) (prefix addr16) {
+func toAddr16(full hash.Hash) (prefix addr16) {
 	copy(prefix[:], full[:])
 	return
 }
 
 func newRangeIndex() rangeIndex {
 	return rangeIndex{
-		novel:  swiss.NewMap[addr, Range](journalIndexDefaultMaxNovel),
+		novel:  swiss.NewMap[hash.Hash, Range](journalIndexDefaultMaxNovel),
 		cached: swiss.NewMap[addr16, Range](0),
 	}
 }
@@ -608,20 +608,20 @@ func estimateRangeCount(info os.FileInfo) uint32 {
 	return uint32(info.Size()/32) + journalIndexDefaultMaxNovel
 }
 
-func (idx rangeIndex) get(a addr) (rng Range, ok bool) {
-	rng, ok = idx.novel.Get(a)
+func (idx rangeIndex) get(h hash.Hash) (rng Range, ok bool) {
+	rng, ok = idx.novel.Get(h)
 	if !ok {
-		rng, ok = idx.cached.Get(toAddr16(a))
+		rng, ok = idx.cached.Get(toAddr16(h))
 	}
 	return
 }
 
-func (idx rangeIndex) put(a addr, rng Range) {
-	idx.novel.Put(a, rng)
+func (idx rangeIndex) put(h hash.Hash, rng Range) {
+	idx.novel.Put(h, rng)
 }
 
-func (idx rangeIndex) putCached(a addr, rng Range) {
-	idx.cached.Put(toAddr16(a), rng)
+func (idx rangeIndex) putCached(h hash.Hash, rng Range) {
+	idx.cached.Put(toAddr16(h), rng)
 }
 
 func (idx rangeIndex) count() uint32 {
@@ -634,7 +634,7 @@ func (idx rangeIndex) novelCount() int {
 
 func (idx rangeIndex) novelLookups() (lookups []lookup) {
 	lookups = make([]lookup, 0, idx.novel.Count())
-	idx.novel.Iter(func(a addr, r Range) (stop bool) {
+	idx.novel.Iter(func(a hash.Hash, r Range) (stop bool) {
 		lookups = append(lookups, lookup{a: a, r: r})
 		return
 	})
@@ -642,10 +642,10 @@ func (idx rangeIndex) novelLookups() (lookups []lookup) {
 }
 
 func (idx rangeIndex) flatten() rangeIndex {
-	idx.novel.Iter(func(a addr, r Range) (stop bool) {
+	idx.novel.Iter(func(a hash.Hash, r Range) (stop bool) {
 		idx.cached.Put(toAddr16(a), r)
 		return
 	})
-	idx.novel = swiss.NewMap[addr, Range](journalIndexDefaultMaxNovel)
+	idx.novel = swiss.NewMap[hash.Hash, Range](journalIndexDefaultMaxNovel)
 	return idx
 }
