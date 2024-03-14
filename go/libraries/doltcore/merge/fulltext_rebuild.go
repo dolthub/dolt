@@ -28,57 +28,34 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
 
-// rebuildFullTextIndexes scans the entire root and rebuilds all of the pseudo-index tables. This is not the most
-// efficient way to go about it, but it at least produces the correct result.
-func rebuildFullTextIndexes(ctx *sql.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+// rebuildableFulltextTable contains a table and schema that should have its Full-Text indexes rebuilt.
+type rebuildableFulltextTable struct {
+	Name   string
+	Table  *doltdb.Table
+	Schema schema.Schema
+}
+
+// rebuildFullTextIndexes scans the mergedRoot and rebuilds all of the pseudo-index tables that were modified by both
+// roots (ours and theirs), or had parents that were modified by both roots.
+func rebuildFullTextIndexes(ctx *sql.Context, mergedRoot, ourRoot, theirRoot *doltdb.RootValue, visitedTables map[string]struct{}) (*doltdb.RootValue, error) {
 	// Grab a list of all tables on the root
-	allTableNames, err := root.GetTableNames(ctx)
+	allTableNames, err := mergedRoot.GetTableNames(ctx)
 	if err != nil {
 		return nil, err
 	}
+	// Contains all of the tables that we need to rebuild indexes on
+	var tablesToRebuild []rebuildableFulltextTable
 	// Create a set that we'll check later to remove any orphaned pseudo-index tables.
 	// These may appear when a table is renamed on another branch and the index was recreated before merging.
-	foundTables := make(map[string]struct{})
-	// We'll purge the data from every Full-Text table so that we may rewrite their contents
-	for _, tblName := range allTableNames {
-		if !doltdb.IsFullTextTable(tblName) {
-			continue
-		} else if strings.HasSuffix(tblName, "config") {
-			// We don't want to purge the config table, we'll just roll with whatever is there for now
-			continue
-		}
-		tbl, ok, err := root.GetTable(ctx, tblName)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, fmt.Errorf("attempted to purge `%s` during Full-Text merge but it could not be found", tblName)
-		}
-		sch, err := tbl.GetSchema(ctx)
-		if err != nil {
-			return nil, err
-		}
-		rows, err := durable.NewEmptyIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch)
-		if err != nil {
-			return nil, err
-		}
-		tbl, err = tbl.UpdateRows(ctx, rows)
-		if err != nil {
-			return nil, err
-		}
-		root, err = root.PutTable(ctx, tblName, tbl)
-		if err != nil {
-			return nil, err
-		}
-	}
-	// Loop again, this time only looking at tables that declare a Full-Text index
+	doNotDeleteTables := make(map[string]struct{})
+	// Loop over all tables and check each one for changes
 	for _, tblName := range allTableNames {
 		if doltdb.IsFullTextTable(tblName) {
 			continue
 		}
-		// Add this table to the found tables, since it's not a pseudo-index table.
-		foundTables[tblName] = struct{}{}
-		tbl, ok, err := root.GetTable(ctx, tblName)
+		// Add this table to the non-deletion set tables, since it's not a pseudo-index table.
+		doNotDeleteTables[tblName] = struct{}{}
+		tbl, ok, err := mergedRoot.GetTable(ctx, tblName)
 		if err != nil {
 			return nil, err
 		}
@@ -92,7 +69,53 @@ func rebuildFullTextIndexes(ctx *sql.Context, root *doltdb.RootValue) (*doltdb.R
 		if !sch.Indexes().ContainsFullTextIndex() {
 			continue
 		}
-		parentTable, err := createFulltextTable(ctx, tblName, root)
+		// Even if the parent table was not visited, we still need to check every pseudo-index table due to potential
+		// name overlapping between roots. This also applies to checking whether both ours and theirs have changes.
+		_, shouldRebuild := visitedTables[tblName]
+		oursChanged, err := tableChangedFromRoot(ctx, tblName, tbl, ourRoot)
+		if err != nil {
+			return nil, err
+		}
+		theirsChanged, err := tableChangedFromRoot(ctx, tblName, tbl, theirRoot)
+		if err != nil {
+			return nil, err
+		}
+		for _, idx := range sch.Indexes().AllIndexes() {
+			if !idx.IsFullText() {
+				continue
+			}
+			props := idx.FullTextProperties()
+			for _, ftTable := range props.TableNameSlice() {
+				// Add all of the pseudo-index tables to the non-deletion set
+				doNotDeleteTables[ftTable] = struct{}{}
+				// Check if the table was visited
+				_, visitedTable := visitedTables[ftTable]
+				shouldRebuild = shouldRebuild || visitedTable
+				// Check if the pseudo-index table changed in both our root and their root
+				oursFTChanged, err := tableChangedBetweenRoots(ctx, tblName, ourRoot, mergedRoot)
+				if err != nil {
+					return nil, err
+				}
+				theirsFTChanged, err := tableChangedBetweenRoots(ctx, tblName, theirRoot, mergedRoot)
+				if err != nil {
+					return nil, err
+				}
+				oursChanged = oursChanged || oursFTChanged
+				theirsChanged = theirsChanged || theirsFTChanged
+			}
+		}
+		// At least one table was visited and was changed in both roots, so we need to rebuild all indexes
+		if shouldRebuild && oursChanged && theirsChanged {
+			tablesToRebuild = append(tablesToRebuild, rebuildableFulltextTable{
+				Name:   tblName,
+				Table:  tbl,
+				Schema: sch,
+			})
+		}
+	}
+	// Now loop over the tables that we were visited and rebuild only if they were modified in both roots
+	for _, tableToRebuild := range tablesToRebuild {
+		parentTable, err := createFulltextTable(ctx, tableToRebuild.Name, mergedRoot)
 		if err != nil {
 			return nil, err
 		}
@@ -100,38 +123,37 @@ func rebuildFullTextIndexes(ctx *sql.Context, root *doltdb.RootValue) (*doltdb.R
 		var configTable *fulltextTable
 		var tableSet []fulltext.TableSet
 		allFTDoltTables := make(map[string]*fulltextTable)
-		for _, idx := range sch.Indexes().AllIndexes() {
+		for _, idx := range tableToRebuild.Schema.Indexes().AllIndexes() {
 			if !idx.IsFullText() {
 				continue
 			}
 			props := idx.FullTextProperties()
-			// Add all of the pseudo-index tables as found tables
-			foundTables[props.ConfigTable] = struct{}{}
-			foundTables[props.PositionTable] = struct{}{}
-			foundTables[props.DocCountTable] = struct{}{}
-			foundTables[props.GlobalCountTable] = struct{}{}
-			foundTables[props.RowCountTable] = struct{}{}
+			// Purge the existing data in each table
+			mergedRoot, err = purgeFulltextTableData(ctx, mergedRoot, props.TableNameSlice()...)
+			if err != nil {
+				return nil, err
+			}
 			// The config table is shared, and it's not written to during this process
 			if configTable == nil {
-				configTable, err = createFulltextTable(ctx, props.ConfigTable, root)
+				configTable, err = createFulltextTable(ctx, props.ConfigTable, mergedRoot)
 				if err != nil {
 					return nil, err
 				}
 				allFTDoltTables[props.ConfigTable] = configTable
 			}
-			positionTable, err := createFulltextTable(ctx, props.PositionTable, root)
+			positionTable, err := createFulltextTable(ctx, props.PositionTable, mergedRoot)
 			if err != nil {
 				return nil, err
 			}
-			docCountTable, err := createFulltextTable(ctx, props.DocCountTable, root)
+			docCountTable, err := createFulltextTable(ctx, props.DocCountTable, mergedRoot)
 			if err != nil {
 				return nil, err
 			}
-			globalCountTable, err := createFulltextTable(ctx, props.GlobalCountTable, root)
+			globalCountTable, err := createFulltextTable(ctx, props.GlobalCountTable, mergedRoot)
 			if err != nil {
 				return nil, err
 			}
-			rowCountTable, err := createFulltextTable(ctx, props.RowCountTable, root)
+			rowCountTable, err := createFulltextTable(ctx, props.RowCountTable, mergedRoot)
 			if err != nil {
 				return nil, err
 			}
@@ -139,7 +161,7 @@ func rebuildFullTextIndexes(ctx *sql.Context, root *doltdb.RootValue) (*doltdb.R
 			allFTDoltTables[props.DocCountTable] = docCountTable
 			allFTDoltTables[props.GlobalCountTable] = globalCountTable
 			allFTDoltTables[props.RowCountTable] = rowCountTable
-			ftIndex, err := index.ConvertFullTextToSql(ctx, "", tblName, sch, idx)
+			ftIndex, err := index.ConvertFullTextToSql(ctx, "", tableToRebuild.Name, tableToRebuild.Schema, idx)
 			if err != nil {
 				return nil, err
 			}
@@ -162,7 +184,7 @@ func rebuildFullTextIndexes(ctx *sql.Context, root *doltdb.RootValue) (*doltdb.R
 			ftEditor.StatementBegin(ctx)
 			defer ftEditor.StatementComplete(ctx)
 
-			rowIter, err := createRowIterForTable(ctx, tbl, sch)
+			rowIter, err := createRowIterForTable(ctx, tableToRebuild.Table, tableToRebuild.Schema)
 			if err != nil {
 				return err
 			}
@@ -189,7 +211,7 @@ func rebuildFullTextIndexes(ctx *sql.Context, root *doltdb.RootValue) (*doltdb.R
 			if err != nil {
 				return nil, err
 			}
-			root, err = root.PutTable(ctx, ftTable.Name(), newTbl)
+			mergedRoot, err = mergedRoot.PutTable(ctx, ftTable.Name(), newTbl)
 			if err != nil {
 				return nil, err
 			}
@@ -197,17 +219,18 @@ func rebuildFullTextIndexes(ctx *sql.Context, root *doltdb.RootValue) (*doltdb.R
 	}
 	// Our last loop removes any orphaned pseudo-index tables
 	for _, tblName := range allTableNames {
-		if _, found := foundTables[tblName]; found || !doltdb.IsFullTextTable(tblName) {
+		if _, doNotDelete := doNotDeleteTables[tblName]; doNotDelete || !doltdb.IsFullTextTable(tblName) {
 			continue
 		}
-		root, err = root.RemoveTables(ctx, true, true, tblName)
+		mergedRoot, err = mergedRoot.RemoveTables(ctx, true, true, tblName)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return root, nil
+	return mergedRoot, nil
 }
 
+// createRowIterForTable creates a sql.RowIter for the given table.
 func createRowIterForTable(ctx *sql.Context, t *doltdb.Table, sch schema.Schema) (sql.RowIter, error) {
 	rowData, err := t.GetRowData(ctx)
 	if err != nil {
@@ -225,4 +248,81 @@ func createRowIterForTable(ctx *sql.Context, t *doltdb.Table, sch schema.Schema)
 	}
 
 	return index.NewProllyRowIterForMap(sch, rows, iter, nil), nil
+}
+
+// purgeFulltextTableData purges all Full-Text tables with the names given. Ignores any tables that are not Full-Text.
+// Also ignores Full-Text config tables. Returns the updated root with the tables purged.
+func purgeFulltextTableData(ctx *sql.Context, root *doltdb.RootValue, tableNames ...string) (*doltdb.RootValue, error) {
+	for _, tableName := range tableNames {
+		if !doltdb.IsFullTextTable(tableName) {
+			continue
+		} else if strings.HasSuffix(tableName, "config") {
+			// We don't want to purge the config table, we'll just roll with whatever is there for now
+			continue
+		}
+		tbl, ok, err := root.GetTable(ctx, tableName)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, fmt.Errorf("attempted to purge `%s` during Full-Text merge but it could not be found", tableName)
+		}
+		sch, err := tbl.GetSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+		rows, err := durable.NewEmptyIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch)
+		if err != nil {
+			return nil, err
+		}
+		tbl, err = tbl.UpdateRows(ctx, rows)
+		if err != nil {
+			return nil, err
+		}
+		root, err = root.PutTable(ctx, tableName, tbl)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return root, nil
+}
+
+// tableChangedBetweenRoots returns whether the given table changed between roots.
+func tableChangedBetweenRoots(ctx *sql.Context, tblName string, fromRoot, toRoot *doltdb.RootValue) (bool, error) {
+	tbl, ok, err := toRoot.GetTable(ctx, tblName)
+	if err != nil {
+		return false, err
+	}
+	if !ok {
+		return tableChangedFromRoot(ctx, tblName, nil, fromRoot)
+	}
+	return tableChangedFromRoot(ctx, tblName, tbl, fromRoot)
+}
+
+// tableChangedFromRoot returns whether the given table has changed compared to the one found in the given root. If the
+// table does not exist in the root, then that counts as a change. A nil `tbl` is valid, which then checks if the table
+// exists in the root.
+func tableChangedFromRoot(ctx *sql.Context, tblName string, tbl *doltdb.Table, root *doltdb.RootValue) (bool, error) {
+	// If `tbl` is nil, then we simply check if the table exists in the root
+	if tbl == nil {
+		return root.HasTable(ctx, tblName)
+	}
+	fromTbl, ok, err := root.GetTable(ctx, tblName)
+	if err != nil {
+		return false, err
+	}
+	if !ok {
+		return true, nil
+	}
+	// If the tables have different hashes, then something has changed. We don't know exactly what has changed, but
+	// we'll be conservative and accept any change.
+	tblHash, err := tbl.HashOf()
+	if err != nil {
+		return false, err
+	}
+	fromHash, err := fromTbl.HashOf()
+	if err != nil {
+		return false, err
+	}
+	return !tblHash.Equal(fromHash), nil
 }
