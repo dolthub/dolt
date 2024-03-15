@@ -64,8 +64,6 @@ func (p *Provider) InitAutoRefreshWithParams(ctxFactory func(ctx context.Context
 	// this is only called after initial statistics are finished loading
 	// launch a thread that periodically checks freshness
 
-	// retain handle to cancel on drop database
-	// todo: add Cancel(name) to sql.BackgroundThreads interface
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -75,7 +73,6 @@ func (p *Provider) InitAutoRefreshWithParams(ctxFactory func(ctx context.Context
 	return bThreads.Add(fmt.Sprintf("%s_%s", asyncAutoRefreshStats, dbName), func(ctx context.Context) {
 		ticker := time.NewTicker(checkInterval + time.Nanosecond)
 		for {
-			// wake up checker on interval
 			select {
 			case <-ctx.Done():
 				ticker.Stop()
@@ -102,7 +99,6 @@ func (p *Provider) InitAutoRefreshWithParams(ctxFactory func(ctx context.Context
 					if br, ok, err := ddb.HasBranch(ctx, branch); ok {
 						sqlCtx.GetLogger().Debugf("starting statistics refresh check for '%s': %s", dbName, time.Now().String())
 
-						// TODO dbProvider access must precede stats lock
 						// important: update session references every loop
 						// use WORKING root database
 						sqlDb, err := dSess.Provider().Database(sqlCtx, fmt.Sprintf("%s/%s", dbName, branch))

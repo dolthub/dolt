@@ -30,22 +30,29 @@ import (
 // Each stats database tracks a user database, with multiple
 // branches potentially each having their own statistics.
 type Database interface {
+	// ListStatQuals returns the list of index statistics for a branch.
 	ListStatQuals(branch string) []sql.StatQualifier
-	// LoadBranchStats calls a startup routine for tracking a specific branch's statistics.
+	// LoadBranchStats starts tracking a specific branch's statistics.
 	LoadBranchStats(ctx *sql.Context, branch string) error
+	// DeleteBranchStats remove references to a set of index statistics,
+	// optionally deleting the data from storage.
 	DeleteBranchStats(ctx context.Context, branch string, flush bool) error
+	// GetStat returns a branch's index statistics.
 	GetStat(branch string, qual sql.StatQualifier) (*DoltStats, bool)
 	//SetStat bulk replaces the statistic, deleting any previous version
 	SetStat(ctx context.Context, branch string, qual sql.StatQualifier, stats *DoltStats) error
+	//DeleteStats deletes a list of index statistics.
 	DeleteStats(branch string, quals ...sql.StatQualifier)
 	// ReplaceChunks is an update interface that lets a stats implementation
 	// decide how to edit stats for a stats refresh.
 	ReplaceChunks(ctx context.Context, branch string, qual sql.StatQualifier, targetHashes []hash.Hash, dropChunks, newChunks []DoltBucket) error
 	// Flush instructs the database to sync any partial state to disk
 	Flush(ctx context.Context, branch string) error
+	// Close finalizes any file references.
+	Close() error
+
 	SetLatestHash(branch, tableName string, h hash.Hash)
 	GetLatestHash(branch, tableName string) hash.Hash
-	Close() error
 }
 
 // StatsFactory instances construct statistic databases.

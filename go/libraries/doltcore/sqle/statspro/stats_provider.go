@@ -36,7 +36,7 @@ type indexMeta struct {
 	qual     sql.StatQualifier
 	cols     []string
 	newNodes []tree.Node
-	// [start, stop] ordinals for each chunk for update
+	// updateOrdinals are [start, stop] tuples for each update chunk
 	updateOrdinals [][]uint64
 	keepChunks     []DoltBucket
 	dropChunks     []DoltBucket

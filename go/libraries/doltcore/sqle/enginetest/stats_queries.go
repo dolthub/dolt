@@ -751,23 +751,11 @@ func TestProviderReloadScriptWithEngine(t *testing.T, e enginetest.QueryEngine, 
 				t.Errorf("expected *gms.Engine but found: %T", e)
 			}
 
-			//dbProv, ok := eng.Analyzer.Catalog.DbProvider.(*sqle.DoltDatabaseProvider)
-			//if !ok {
-			//	t.Errorf("expected *sqle.DoltDatabaseProvider but found: %T", eng.Analyzer.Catalog.DbProvider)
-			//}
-
 			err := eng.Analyzer.Catalog.StatsProvider.DropDbStats(ctx, "mydb", false)
 			require.NoError(t, err)
 
 			err = eng.Analyzer.Catalog.StatsProvider.(*statspro.Provider).LoadStats(ctx, "mydb", "main")
 			require.NoError(t, err)
-
-			//newProv := statspro.NewProvider(dbProv, statsnoms.NewNomsStatsFactory(harness.(*DoltHarness).multiRepoEnv.RemoteDialProvider()))
-
-			//err = eng.Analyzer.Catalog.StatsProvider.(*statspro.Provider).Load(ctx, []string{"main"})
-			//require.NoError(t, err)
-
-			//eng.Analyzer.Catalog.StatsProvider = newProv
 		}
 
 		for _, assertion := range assertions {

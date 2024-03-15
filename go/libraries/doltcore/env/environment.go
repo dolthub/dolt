@@ -453,12 +453,6 @@ func (dEnv *DoltEnv) createDirectories(dir string) (string, error) {
 		return "", fmt.Errorf("unable to make directory '%s', cause: %s", tmpDir, err.Error())
 	}
 
-	//statsDataDir := filepath.Join(absPath, dbfactory.DoltStatsDir)
-	//err = dEnv.FS.MkDirs(statsDataDir)
-	//if err != nil {
-	//	return "", fmt.Errorf("unable to make directory '%s', cause: %s", statsDataDir, err.Error())
-	//}
-
 	return filepath.Join(absPath, dbfactory.DoltDir), nil
 }
 
