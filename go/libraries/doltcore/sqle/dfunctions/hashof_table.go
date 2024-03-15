@@ -24,7 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
-const HashOfTableFuncName = "hashof_table"
+const HashOfTableFuncName = "dolt_hashof_table"
 
 type HashOfTable struct {
 	expression.UnaryExpression
@@ -80,7 +80,7 @@ func (t *HashOfTable) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 
 // String implements the Stringer interface.
 func (t *HashOfTable) String() string {
-	return fmt.Sprintf("HASHOF(%s)", t.Child.String())
+	return fmt.Sprintf("%s(%s)", HashOfTableFuncName, t.Child.String())
 }
 
 // FunctionName implements the FunctionExpression interface
@@ -90,7 +90,7 @@ func (t *HashOfTable) FunctionName() string {
 
 // Description implements the FunctionExpression interface
 func (t *HashOfTable) Description() string {
-	return "returns the commit hash of a branch or other commit spec"
+	return "returns a hash of the contents of a table, typically used for detecting if a table's data has changed"
 }
 
 // IsNullable implements the Expression interface.
