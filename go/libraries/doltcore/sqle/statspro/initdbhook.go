@@ -57,7 +57,9 @@ func NewInitDatabaseHook(statsProv *Provider, ctxFactory func(ctx context.Contex
 			ctx.Warn(0, err.Error())
 			return nil
 		}
+		statsProv.mu.Lock()
 		statsProv.setStatDb(strings.ToLower(db.Name()), statsDb)
+		statsProv.mu.Unlock()
 
 		// todo: don't try to load for a new database
 		//if err := statsProv.Load(ctx, denv.FS, db, branches); err != nil {

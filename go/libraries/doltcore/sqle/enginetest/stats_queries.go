@@ -408,8 +408,8 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "select count(*) from dolt_statistics group by table_name, index_name",
-				Expected: []sql.Row{},
+				Query:    "select count(*) as cnt from dolt_statistics group by table_name, index_name order by cnt",
+				Expected: []sql.Row{{6}, {7}},
 			},
 			{
 				Query: "delete from xy where x > 500",
@@ -419,7 +419,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select count(*) from dolt_statistics group by table_name, index_name",
-				Expected: []sql.Row{},
+				Expected: []sql.Row{{4}, {4}},
 			},
 		},
 	},
@@ -434,8 +434,8 @@ var DoltStatsIOTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "select count(*) from dolt_statistics group by table_name, index_name",
-				Expected: []sql.Row{},
+				Query:    "select count(*) as cnt from dolt_statistics group by table_name, index_name order by cnt",
+				Expected: []sql.Row{{6}, {7}},
 			},
 			{
 				Query: "delete from xy where x > 500",
@@ -448,7 +448,7 @@ var DoltStatsIOTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select count(*) from dolt_statistics group by table_name, index_name",
-				Expected: []sql.Row{},
+				Expected: []sql.Row{{4}, {4}},
 			},
 		},
 	},

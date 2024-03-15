@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1821,16 +1820,7 @@ func (ddb *DoltDB) SetStatisics(ctx context.Context, branch string, addr hash.Ha
 	if err != nil {
 		return err
 	}
-	newDs, err := ddb.db.SetStatsRef(ctx, statsDs, addr)
-
-	println(newDs.HasHead())
-	refs := make(map[ref.RefType]struct{})
-	refs[ref.StatsRefType] = struct{}{}
-	statsRefs, _ := ddb.GetRefsOfType(ctx, refs)
-	for _, ref := range statsRefs {
-		log.Println(ref.GetPath())
-	}
-
+	_, err = ddb.db.SetStatsRef(ctx, statsDs, addr)
 	return err
 }
 

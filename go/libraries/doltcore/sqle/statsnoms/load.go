@@ -111,7 +111,7 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 		qual := sql.NewStatQualifier(dbName, tableName, indexName)
 		if currentStat.Qual.String() != qual.String() {
 			if !currentStat.Qual.Empty() {
-				currentStat.LowerBound, err = loadLowerBound(ctx, db, currentStat.Qual)
+				currentStat.LowerBound, err = loadLowerBound(ctx, currentStat.Qual)
 				if err != nil {
 					return nil, err
 				}
@@ -160,7 +160,7 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 			currentStat.CreatedAt = createdAt
 		}
 	}
-	currentStat.LowerBound, err = loadLowerBound(ctx, db, currentStat.Qual)
+	currentStat.LowerBound, err = loadLowerBound(ctx, currentStat.Qual)
 	if err != nil {
 		return nil, err
 	}
@@ -175,8 +175,20 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.St
 	return qualToStats, nil
 }
 
-func loadLowerBound(ctx *sql.Context, db sql.Database, qual sql.StatQualifier) (sql.Row, error) {
-	_, table, err := statspro.GetLatestTable(ctx, qual.Table(), db)
+func loadLowerBound(ctx *sql.Context, qual sql.StatQualifier) (sql.Row, error) {
+	dSess := dsess.DSessFromSess(ctx.Session)
+	roots, ok := dSess.GetRoots(ctx, qual.Db())
+	if !ok {
+		return nil, nil
+	}
+
+	table, ok, err := roots.Head.GetTable(ctx, qual.Table())
+	if !ok {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
 	idx, err := table.GetIndexRowData(ctx, qual.Index())
 	if err != nil {
 		return nil, err

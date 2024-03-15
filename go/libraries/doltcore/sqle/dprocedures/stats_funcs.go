@@ -49,7 +49,7 @@ func statsFunc(fn func(ctx *sql.Context) (interface{}, error)) func(ctx *sql.Con
 type AutoRefreshStatsProvider interface {
 	sql.StatsProvider
 	CancelRefreshThread(string)
-	StartRefreshThread(*sql.Context, dsess.DoltDatabaseProvider, string, *env.DoltEnv) error
+	StartRefreshThread(*sql.Context, dsess.DoltDatabaseProvider, string, *env.DoltEnv, dsess.SqlDatabase) error
 	ThreadStatus(string) string
 }
 
@@ -68,9 +68,14 @@ func statsRestart(ctx *sql.Context) (interface{}, error) {
 
 		dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, pro.DbFactoryUrl(), "TODO")
 
+		sqlDb, ok := pro.BaseDatabase(ctx, dbName)
+		if !ok {
+			return nil, fmt.Errorf("failed to restart stats collection: database not found: %s", dbName)
+		}
+
 		afp.CancelRefreshThread(dbName)
 
-		err = afp.StartRefreshThread(ctx, pro, dbName, dEnv)
+		err = afp.StartRefreshThread(ctx, pro, dbName, dEnv, sqlDb)
 		if err != nil {
 			return nil, fmt.Errorf("failed to restart collection: %w", err)
 		}

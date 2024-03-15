@@ -79,8 +79,7 @@ func (sf NomsStatsFactory) Init(ctx *sql.Context, sourceDb dsess.SqlDatabase, pr
 			return nil, fmt.Errorf("unable to make directory '%s', cause: %s", statsPath, err.Error())
 		}
 
-		//urlStr := earl.FileUrlFromPath(filepath.ToSlash(urlPath), os.PathSeparator)
-		_, _, _, err = dbfactory.CreateDB(ctx, types.Format_Default, urlPath, nil)
+		_, _, _, err = dbfactory.CreateDB(ctx, sourceDb.DbData().Ddb.Format(), urlPath, nil)
 		if err != nil {
 			return nil, err
 		}

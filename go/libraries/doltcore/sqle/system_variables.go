@@ -17,6 +17,7 @@ package sqle
 import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"math"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 
@@ -228,7 +229,7 @@ func AddDoltSystemVariables() {
 			Name:    dsess.DoltStatsAutoRefreshInterval,
 			Dynamic: true,
 			Scope:   sql.SystemVariableScope_Global,
-			Type:    types.NewSystemIntType(dsess.DoltStatsAutoRefreshInterval, 0, 1<<10, false),
+			Type:    types.NewSystemIntType(dsess.DoltStatsAutoRefreshInterval, 0, math.MaxInt, false),
 			Default: 120,
 		},
 		{

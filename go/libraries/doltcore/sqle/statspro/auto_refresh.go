@@ -73,7 +73,7 @@ func (p *Provider) InitAutoRefreshWithParams(ctxFactory func(ctx context.Context
 	p.cancelers[dbName] = dbStatsCancel
 
 	return bThreads.Add(fmt.Sprintf("%s_%s", asyncAutoRefreshStats, dbName), func(ctx context.Context) {
-		ticker := time.NewTicker(checkInterval)
+		ticker := time.NewTicker(checkInterval + time.Nanosecond)
 		for {
 			// wake up checker on interval
 			select {
