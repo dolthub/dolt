@@ -148,15 +148,24 @@ func (w *PullTableFileWriter) reqRespThread() (err error) {
 		})
 	}
 
+	var curWr *nbs.CmpChunkTableWriter
+
 	defer func() {
 		close(reqCh)
 		egErr := eg.Wait()
 		if err == nil {
 			err = egErr
 		}
-	}()
 
-	var curWr *nbs.CmpChunkTableWriter
+		if curWr != nil {
+			// Cleanup dangling writer, whose contents will never be used.
+			curWr.Finish()
+			rd, _ := curWr.Reader()
+			if rd != nil {
+				rd.Close()
+			}
+		}
+	}()
 
 	for {
 		if closed && len(pendingUploads) == 0 && outstandingUploads == 0 {

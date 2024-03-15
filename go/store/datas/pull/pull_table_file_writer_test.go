@@ -308,6 +308,10 @@ func (s *noopTableFileDestStore) WriteTableFile(ctx context.Context, id string, 
 		time.Sleep(s.writeDelay)
 	}
 	s.writeCalled.Add(1)
+	rd, _, _ := getRd()
+	if rd != nil {
+		rd.Close()
+	}
 	return nil
 }
 
@@ -351,6 +355,10 @@ type errTableFileDestStore struct {
 }
 
 func (s *errTableFileDestStore) WriteTableFile(ctx context.Context, id string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
+	rd, _, _ := getRd()
+	if rd != nil {
+		rd.Close()
+	}
 	if s.onAdd {
 		return nil
 	}
