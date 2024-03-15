@@ -17,7 +17,6 @@ package statspro
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"strings"
 	"time"
 
@@ -26,6 +25,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Context) (*sql.Context, error), bThreads *sql.BackgroundThreads, dbs []dsess.SqlDatabase) error {

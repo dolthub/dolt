@@ -47,8 +47,6 @@ var revisionDatabasePrivilegeScriptNames = []string{
 	"Anonymous User",
 	"IPv4 Loopback == localhost",
 	"information_schema.columns table 'privileges' column gets correct values",
-	"information_schema.column_statistics shows columns with privileges only",
-	"information_schema.statistics shows tables with privileges only",
 	"basic tests on information_schema.SCHEMA_PRIVILEGES table",
 	"basic tests on information_schema.TABLE_PRIVILEGES table",
 }
@@ -74,6 +72,7 @@ func TestRevisionDatabasePrivileges(t *testing.T) {
 
 	for _, script := range scripts {
 		harness := newDoltHarness(t)
+		harness.configureStats = true
 		harness.Setup(setup.MydbData, setup.MytableData)
 		t.Run(script.Name, func(t *testing.T) {
 			engine := mustNewEngine(t, harness)
