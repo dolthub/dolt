@@ -73,17 +73,17 @@ func (p *Provider) InitAutoRefreshWithParams(ctxFactory func(ctx context.Context
 	p.cancelers[dbName] = dbStatsCancel
 
 	return bThreads.Add(fmt.Sprintf("%s_%s", asyncAutoRefreshStats, dbName), func(ctx context.Context) {
-		timer := time.NewTimer(checkInterval)
+		ticker := time.NewTicker(checkInterval)
 		for {
 			// wake up checker on interval
 			select {
 			case <-ctx.Done():
-				timer.Stop()
+				ticker.Stop()
 				return
-			case <-timer.C:
+			case <-ticker.C:
 				select {
 				case <-dropDbCtx.Done():
-					timer.Stop()
+					ticker.Stop()
 					return
 				default:
 				}
@@ -126,7 +126,6 @@ func (p *Provider) InitAutoRefreshWithParams(ctxFactory func(ctx context.Context
 						sqlCtx.GetLogger().Debugf("statistics refresh error: branch not found %s", br)
 					}
 				}
-				timer.Reset(checkInterval)
 			}
 		}
 	})
