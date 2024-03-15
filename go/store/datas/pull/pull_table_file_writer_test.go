@@ -333,6 +333,7 @@ func (s *testDataTableFileDestStore) WriteTableFile(ctx context.Context, id stri
 	if err != nil {
 		return err
 	}
+	defer rd.Close()
 	_, err = io.ReadAll(rd)
 	if err != nil {
 		return err
