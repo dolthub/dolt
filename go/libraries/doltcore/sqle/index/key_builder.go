@@ -99,12 +99,12 @@ func ResolveDefaultExpression(ctx *sql.Context, tableName string, sch schema.Sch
 		return nil, err
 	}
 
-	colIdx := ct.CreateSchema.Schema.IndexOfColName(col.Name)
+	colIdx := ct.PkSchema().Schema.IndexOfColName(col.Name)
 	if colIdx < 0 {
 		return nil, fmt.Errorf("unable to find column %s in analyzed query", col.Name)
 	}
 
-	sqlCol := ct.CreateSchema.Schema[colIdx]
+	sqlCol := ct.PkSchema().Schema[colIdx]
 	expr := sqlCol.Default
 	if expr == nil || expr.Expr == nil {
 		expr = sqlCol.Generated
