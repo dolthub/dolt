@@ -209,6 +209,8 @@ func MergeRoots(
 		return nil, err
 	}
 
+	// visitedTables holds all tables that were added, removed, or modified (basically not "unmodified")
+	visitedTables := make(map[string]struct{})
 	var schConflicts []SchemaConflict
 	for _, tblName := range tblNames {
 		mergedTable, stats, err := merger.MergeTable(ctx, tblName, opts, mergeOpts)
@@ -232,6 +234,10 @@ func MergeRoots(
 			continue
 		} else if err != nil {
 			return nil, err
+		}
+		// If this table was visited during the merge, then we'll add it to the set
+		if stats.Operation != TableUnmodified {
+			visitedTables[tblName] = struct{}{}
 		}
 		if doltdb.IsFullTextTable(tblName) && (stats.Operation == TableModified || stats.Operation == TableRemoved) {
 			// We handle removal and modification later in the rebuilding process, so we'll skip those.
@@ -279,7 +285,7 @@ func MergeRoots(
 		}
 	}
 
-	mergedRoot, err = rebuildFullTextIndexes(ctx, mergedRoot)
+	mergedRoot, err = rebuildFullTextIndexes(ctx, mergedRoot, ourRoot, theirRoot, visitedTables)
 	if err != nil {
 		return nil, err
 	}
