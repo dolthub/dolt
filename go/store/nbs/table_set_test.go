@@ -39,7 +39,7 @@ var hasManyHasAll = func([]hasRecord) (hash.HashSet, error) {
 }
 
 func TestTableSetPrependEmpty(t *testing.T) {
-	hasCache, err := lru.New2Q[addr, struct{}](1024)
+	hasCache, err := lru.New2Q[hash.Hash, struct{}](1024)
 	require.NoError(t, err)
 	ts, err := newFakeTableSet(&UnlimitedQuotaProvider{}).append(context.Background(), newMemTable(testMemTableSize), hasManyHasAll, hasCache, &Stats{})
 	require.NoError(t, err)
@@ -59,7 +59,7 @@ func TestTableSetPrepend(t *testing.T) {
 	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
-	hasCache, err := lru.New2Q[addr, struct{}](1024)
+	hasCache, err := lru.New2Q[hash.Hash, struct{}](1024)
 	require.NoError(t, err)
 	ts, err = ts.append(context.Background(), mt, hasManyHasAll, hasCache, &Stats{})
 	require.NoError(t, err)
@@ -91,7 +91,7 @@ func TestTableSetToSpecsExcludesEmptyTable(t *testing.T) {
 	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
-	hasCache, err := lru.New2Q[addr, struct{}](1024)
+	hasCache, err := lru.New2Q[hash.Hash, struct{}](1024)
 	require.NoError(t, err)
 	ts, err = ts.append(context.Background(), mt, hasManyHasAll, hasCache, &Stats{})
 	require.NoError(t, err)
@@ -122,7 +122,7 @@ func TestTableSetFlattenExcludesEmptyTable(t *testing.T) {
 	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
-	hasCache, err := lru.New2Q[addr, struct{}](1024)
+	hasCache, err := lru.New2Q[hash.Hash, struct{}](1024)
 	require.NoError(t, err)
 	ts, err = ts.append(context.Background(), mt, hasManyHasAll, hasCache, &Stats{})
 	require.NoError(t, err)
@@ -156,7 +156,7 @@ func TestTableSetRebase(t *testing.T) {
 	assert := assert.New(t)
 	q := NewUnlimitedMemQuotaProvider()
 	persister := newFakeTablePersister(q)
-	hasCache, err := lru.New2Q[addr, struct{}](1024)
+	hasCache, err := lru.New2Q[hash.Hash, struct{}](1024)
 	require.NoError(t, err)
 
 	insert := func(ts tableSet, chunks ...[]byte) tableSet {
@@ -211,7 +211,7 @@ func TestTableSetPhysicalLen(t *testing.T) {
 	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
-	hasCache, err := lru.New2Q[addr, struct{}](1024)
+	hasCache, err := lru.New2Q[hash.Hash, struct{}](1024)
 	require.NoError(t, err)
 	ts, err = ts.append(context.Background(), mt, hasManyHasAll, hasCache, &Stats{})
 	require.NoError(t, err)

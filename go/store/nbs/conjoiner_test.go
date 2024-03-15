@@ -111,7 +111,7 @@ func TestConjoin(t *testing.T) {
 
 func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 	stats := &Stats{}
-	setup := func(lock addr, root hash.Hash, sizes []uint32) (fm *fakeManifest, p tablePersister, upstream manifestContents) {
+	setup := func(lock hash.Hash, root hash.Hash, sizes []uint32) (fm *fakeManifest, p tablePersister, upstream manifestContents) {
 		p = factory(t)
 		fm = &fakeManifest{}
 		fm.set(constants.FormatLD1String, lock, root, makeTestTableSpecs(t, sizes, p), nil)
@@ -257,7 +257,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 		}
 	})
 
-	setupAppendix := func(lock addr, root hash.Hash, specSizes, appendixSizes []uint32) (fm *fakeManifest, p tablePersister, upstream manifestContents) {
+	setupAppendix := func(lock hash.Hash, root hash.Hash, specSizes, appendixSizes []uint32) (fm *fakeManifest, p tablePersister, upstream manifestContents) {
 		p = newFakeTablePersister(&UnlimitedQuotaProvider{})
 		fm = &fakeManifest{}
 		fm.set(constants.FormatLD1String, lock, root, makeTestTableSpecs(t, specSizes, p), makeTestTableSpecs(t, appendixSizes, p))
@@ -403,7 +403,7 @@ type updatePreemptManifest struct {
 	preUpdate func()
 }
 
-func (u updatePreemptManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+func (u updatePreemptManifest) Update(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
 	if u.preUpdate != nil {
 		u.preUpdate()
 	}

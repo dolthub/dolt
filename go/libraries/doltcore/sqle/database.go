@@ -254,16 +254,7 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 		return nil, false, err
 	}
 
-	tbl, ok, err := db.getTableInsensitive(ctx, nil, ds, root, tblName)
-	if err != nil {
-		return nil, false, err
-	}
-
-	if !ok {
-		return nil, false, nil
-	}
-
-	return tbl, true, nil
+	return db.getTableInsensitive(ctx, nil, ds, root, tblName)
 }
 
 // GetTableInsensitiveAsOf implements sql.VersionedDatabase
@@ -294,17 +285,23 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 		return table, ok, nil
 	}
 
-	versionableTable, ok := table.(dtables.VersionableTable)
-	if !ok {
-		panic(fmt.Sprintf("unexpected table type %T", table))
-	}
+	switch t := table.(type) {
+	case dtables.VersionableTable:
+		versionedTable, err := t.LockedToRoot(ctx, root)
+		if err != nil {
+			return nil, false, err
+		}
+		return versionedTable, true, nil
 
-	versionedTable, err := versionableTable.LockedToRoot(ctx, root)
+	case *plan.EmptyTable:
+		// getTableInsensitive returns *plan.EmptyTable if the table doesn't exist in the data root, but
+		// schemas have been locked to a commit where the table does exist. Since the table is empty,
+		// there's no need to lock it to a root.
+		return t, true, nil
 
-	if err != nil {
-		return nil, false, err
+	default:
+		return nil, false, fmt.Errorf("unexpected table type %T", table)
 	}
-	return versionedTable, true, nil
 
 }
 
@@ -357,7 +354,14 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			}
 		}
 
-		return NewHistoryTable(baseTable.(*AlterableDoltTable).DoltTable, db.ddb, head), true, nil
+		switch t := baseTable.(type) {
+		case *AlterableDoltTable:
+			return NewHistoryTable(t.DoltTable, db.ddb, head), true, nil
+		case *WritableDoltTable:
+			return NewHistoryTable(t.DoltTable, db.ddb, head), true, nil
+		default:
+			return nil, false, fmt.Errorf("expected Alterable or WritableDoltTable, found %T", baseTable)
+		}
 
 	case strings.HasPrefix(lwrName, doltdb.DoltConfTablePrefix):
 		suffix := tblName[len(doltdb.DoltConfTablePrefix):]
@@ -492,7 +496,17 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	}
 
 	// TODO: this should reuse the root, not lookup the db state again
-	return db.getTable(ctx, root, tblName)
+	table, found, err := db.getTable(ctx, root, tblName)
+	if err != nil {
+		return nil, false, err
+	}
+	if found {
+		return table, found, err
+	}
+
+	// If the table wasn't found in the specified data root, check if there is an overridden
+	// schema commit that contains it and return an empty table if so.
+	return resolveOverriddenNonexistentTable(ctx, tblName, db)
 }
 
 // resolveAsOf resolves given expression to a commit, if one exists.
@@ -636,14 +650,22 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 		return nil, false, fmt.Errorf("no state for database %s", db.RevisionQualifiedName())
 	}
 
-	key, err := doltdb.NewDataCacheKey(root)
+	overriddenSchemaRoot, err := resolveOverriddenSchemaRoot(ctx, db)
 	if err != nil {
 		return nil, false, err
 	}
 
-	cachedTable, ok := dbState.SessionCache().GetCachedTable(key, tableName)
-	if ok {
-		return cachedTable, true, nil
+	// If schema hasn't been overridden, we can use a cached table if one exists
+	if overriddenSchemaRoot == nil {
+		key, err := doltdb.NewDataCacheKey(root)
+		if err != nil {
+			return nil, false, err
+		}
+
+		cachedTable, ok := dbState.SessionCache().GetCachedTable(key, tableName)
+		if ok {
+			return cachedTable, true, nil
+		}
 	}
 
 	tableNames, err := getAllTableNames(ctx, root)
@@ -669,12 +691,26 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 		return nil, false, err
 	}
 
+	if overriddenSchemaRoot != nil {
+		err = overrideSchemaForTable(ctx, tableName, tbl, overriddenSchemaRoot)
+		if err != nil {
+			return nil, false, err
+		}
+	}
+
 	table, err := db.newDoltTable(tableName, sch, tbl)
 	if err != nil {
 		return nil, false, err
 	}
 
-	dbState.SessionCache().CacheTable(key, tableName, table)
+	// If the schema hasn't been overridden, cache the table
+	if overriddenSchemaRoot == nil {
+		key, err := doltdb.NewDataCacheKey(root)
+		if err != nil {
+			return nil, false, err
+		}
+		dbState.SessionCache().CacheTable(key, tableName, table)
+	}
 
 	return table, true, nil
 }
