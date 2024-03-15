@@ -191,8 +191,8 @@ func YamlConfigFromFile(fs filesys.Filesys, path string) (ServerConfig, error) {
 	return cfg, nil
 }
 
-func ServerConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
-	return YAMLConfig{
+func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
+	return &YAMLConfig{
 		LogLevelStr:       strPtr(string(cfg.LogLevel())),
 		MaxQueryLenInLogs: nillableIntPtr(cfg.MaxLoggedQueryLen()),
 		EncodeLoggedQuery: nillableBoolPtr(cfg.ShouldEncodeLoggedQuery()),
