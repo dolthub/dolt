@@ -706,7 +706,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 // this slice into others with good names as it grows.
 var DoltScripts = []queries.ScriptTest{
 	{
-		Name: "hashof_table tests",
+		Name: "dolt_hashof_table tests",
 		SetUpScript: []string{
 			"CREATE TABLE t1 (pk int primary key);",
 		},
@@ -718,7 +718,7 @@ var DoltScripts = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:    "SELECT hashof_table('t1');",
+				Query:    "SELECT dolt_hashof_table('t1');",
 				Expected: []sql.Row{{"0lvgnnqah2lj1p6ilvfg0ssaec1v0jgk"}},
 			},
 			{
@@ -726,11 +726,11 @@ var DoltScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
 			},
 			{
-				Query:    "SELECT hashof_table('t1');",
+				Query:    "SELECT dolt_hashof_table('t1');",
 				Expected: []sql.Row{{"a2vkt9d1mtuhd90opbcseo5gqjae7tv6"}},
 			},
 			{
-				Query:          "SELECT hashof_table('noexist');",
+				Query:          "SELECT dolt_hashof_table('noexist');",
 				ExpectedErrStr: "table not found: noexist",
 			},
 		},
