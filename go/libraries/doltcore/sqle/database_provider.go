@@ -620,6 +620,10 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	if err != nil {
 		return err
 	}
+	err = dbfactory.DeleteFromSingletonCache(filepath.ToSlash(dropDbLoc + "/.dolt/stats/.dolt/noms"))
+	if err != nil {
+		return err
+	}
 
 	err = p.droppedDatabaseManager.DropDatabase(ctx, name, dropDbLoc)
 	if err != nil {

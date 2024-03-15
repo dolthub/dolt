@@ -45,6 +45,7 @@ type Database interface {
 	Flush(ctx context.Context, branch string) error
 	SetLatestHash(branch, tableName string, h hash.Hash)
 	GetLatestHash(branch, tableName string) hash.Hash
+	Close() error
 }
 
 // StatsFactory instances construct statistic databases.

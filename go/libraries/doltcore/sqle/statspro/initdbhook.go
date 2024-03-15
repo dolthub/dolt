@@ -81,5 +81,9 @@ func NewDropDatabaseHook(statsProv *Provider, ctxFactory func(ctx context.Contex
 		}
 		statsProv.CancelRefreshThread(name)
 		statsProv.DropDbStats(ctx, name, false)
+
+		if db, ok := statsProv.getStatDb(name); ok {
+			db.Close()
+		}
 	}
 }

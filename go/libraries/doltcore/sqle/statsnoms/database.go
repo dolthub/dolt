@@ -137,6 +137,16 @@ type NomsStatsDatabase struct {
 
 var _ statspro.Database = (*NomsStatsDatabase)(nil)
 
+func (n *NomsStatsDatabase) Close() error {
+	var ierr error
+	for _, db := range n.destDb.DoltDatabases() {
+		if err := db.Close(); err != nil {
+			ierr = err
+		}
+	}
+	return ierr
+}
+
 func (n *NomsStatsDatabase) LoadBranchStats(ctx *sql.Context, branch string) error {
 	statsMap, err := n.destDb.DbData().Ddb.GetStatistics(ctx, branch)
 	if errors.Is(err, doltdb.ErrNoStatistics) {
