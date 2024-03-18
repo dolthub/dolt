@@ -77,7 +77,7 @@ type fakeS3Multipart struct {
 	etags    []string
 }
 
-func (m *fakeS3) readerForTable(ctx context.Context, name addr) (chunkReader, error) {
+func (m *fakeS3) readerForTable(ctx context.Context, name hash.Hash) (chunkReader, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if buff, present := m.data[name.String()]; present {
@@ -95,7 +95,7 @@ func (m *fakeS3) readerForTable(ctx context.Context, name addr) (chunkReader, er
 	return nil, nil
 }
 
-func (m *fakeS3) readerForTableWithNamespace(ctx context.Context, ns string, name addr) (chunkReader, error) {
+func (m *fakeS3) readerForTableWithNamespace(ctx context.Context, ns string, name hash.Hash) (chunkReader, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	key := name.String()

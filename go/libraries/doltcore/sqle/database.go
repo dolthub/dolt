@@ -354,7 +354,14 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			}
 		}
 
-		return NewHistoryTable(baseTable.(*AlterableDoltTable).DoltTable, db.ddb, head), true, nil
+		switch t := baseTable.(type) {
+		case *AlterableDoltTable:
+			return NewHistoryTable(t.DoltTable, db.ddb, head), true, nil
+		case *WritableDoltTable:
+			return NewHistoryTable(t.DoltTable, db.ddb, head), true, nil
+		default:
+			return nil, false, fmt.Errorf("expected Alterable or WritableDoltTable, found %T", baseTable)
+		}
 
 	case strings.HasPrefix(lwrName, doltdb.DoltConfTablePrefix):
 		suffix := tblName[len(doltdb.DoltConfTablePrefix):]

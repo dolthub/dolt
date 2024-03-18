@@ -105,7 +105,7 @@ type NomsBlockStore struct {
 	mtSize   uint64
 	putCount uint64
 
-	hasCache *lru.TwoQueueCache[addr, struct{}]
+	hasCache *lru.TwoQueueCache[hash.Hash, struct{}]
 
 	stats *Stats
 }
@@ -254,11 +254,9 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 
 		var addCount int
 		for h, count := range updates {
-			a := addr(h)
-
-			if _, ok := currSpecs[a]; !ok {
+			if _, ok := currSpecs[h]; !ok {
 				addCount++
-				contents.specs = append(contents.specs, tableSpec{a, count})
+				contents.specs = append(contents.specs, tableSpec{h, count})
 			}
 		}
 
@@ -346,14 +344,12 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 		appendixSpecs := make([]tableSpec, 0)
 		var addCount int
 		for h, count := range updates {
-			a := addr(h)
-
 			if option == ManifestAppendixOption_Set {
-				appendixSpecs = append(appendixSpecs, tableSpec{a, count})
+				appendixSpecs = append(appendixSpecs, tableSpec{h, count})
 			} else {
-				if _, ok := currAppendixSpecs[a]; !ok {
+				if _, ok := currAppendixSpecs[h]; !ok {
 					addCount++
-					appendixSpecs = append(appendixSpecs, tableSpec{a, count})
+					appendixSpecs = append(appendixSpecs, tableSpec{h, count})
 				}
 			}
 		}
@@ -399,13 +395,12 @@ func (nbs *NomsBlockStore) checkAllManifestUpdatesExist(ctx context.Context, upd
 		h := h
 		c := c
 		eg.Go(func() error {
-			a := addr(h)
-			ok, err := nbs.p.Exists(ctx, a, c, nbs.stats)
+			ok, err := nbs.p.Exists(ctx, h, c, nbs.stats)
 			if err != nil {
 				return err
 			}
 			if !ok {
-				return fmt.Errorf("missing table file referenced in UpdateManifest call: %v", a)
+				return fmt.Errorf("missing table file referenced in UpdateManifest call: %v", h)
 			}
 			return nil
 		})
@@ -475,12 +470,12 @@ func OverwriteStoreManifest(ctx context.Context, store *NomsBlockStore, root has
 	}
 	// Appendix table files should come first in specs
 	for h, c := range appendixTableFiles {
-		s := tableSpec{name: addr(h), chunkCount: c}
+		s := tableSpec{name: h, chunkCount: c}
 		contents.appendix = append(contents.appendix, s)
 		contents.specs = append(contents.specs, s)
 	}
 	for h, c := range tableFiles {
-		s := tableSpec{name: addr(h), chunkCount: c}
+		s := tableSpec{name: h, chunkCount: c}
 		contents.specs = append(contents.specs, s)
 	}
 	contents.lock = generateLockHash(contents.root, contents.specs, contents.appendix)
@@ -640,7 +635,7 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager
 		memTableSize = defaultMemTableSize
 	}
 
-	hasCache, err := lru.New2Q[addr, struct{}](hasCacheSize)
+	hasCache, err := lru.New2Q[hash.Hash, struct{}](hasCacheSize)
 	if err != nil {
 		return nil, err
 	}
@@ -790,9 +785,8 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, addrs 
 		if nbs.mt == nil {
 			nbs.mt = newMemTable(nbs.mtSize)
 		}
-		a := addr(ch.Hash())
 
-		addChunkRes = nbs.mt.addChunk(a, ch.Data())
+		addChunkRes = nbs.mt.addChunk(ch.Hash(), ch.Data())
 		if addChunkRes == chunkNotAdded {
 			ts, err := nbs.tables.append(ctx, nbs.mt, checker, nbs.hasCache, nbs.stats)
 			if err != nil {
@@ -802,7 +796,7 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, addrs 
 			nbs.addPendingRefsToHasCache()
 			nbs.tables = ts
 			nbs.mt = newMemTable(nbs.mtSize)
-			addChunkRes = nbs.mt.addChunk(a, ch.Data())
+			addChunkRes = nbs.mt.addChunk(ch.Hash(), ch.Data())
 		}
 		if addChunkRes == chunkAdded || addChunkRes == chunkExists {
 			if nbs.keeperFunc != nil && nbs.keeperFunc(ch.Hash()) {
@@ -826,18 +820,17 @@ type refCheck func(reqs []hasRecord) (hash.HashSet, error)
 
 func (nbs *NomsBlockStore) errorIfDangling(root hash.Hash, checker refCheck) error {
 	if !root.IsEmpty() {
-		a := addr(root)
-		if _, ok := nbs.hasCache.Get(a); !ok {
+		if _, ok := nbs.hasCache.Get(root); !ok {
 			var hr [1]hasRecord
-			hr[0].a = &a
-			hr[0].prefix = a.Prefix()
+			hr[0].a = &root
+			hr[0].prefix = root.Prefix()
 			absent, err := checker(hr[:])
 			if err != nil {
 				return err
 			} else if absent.Size() > 0 {
 				return fmt.Errorf("%w: found dangling references to %s", ErrDanglingRef, absent.String())
 			}
-			nbs.hasCache.Add(a, struct{}{})
+			nbs.hasCache.Add(root, struct{}{})
 		}
 	}
 	return nil
@@ -853,14 +846,13 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 		nbs.stats.ChunksPerGet.Sample(1)
 	}()
 
-	a := addr(h)
 	data, tables, err := func() ([]byte, chunkReader, error) {
 		var data []byte
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
 		if nbs.mt != nil {
 			var err error
-			data, err = nbs.mt.get(ctx, a, nbs.stats)
+			data, err = nbs.mt.get(ctx, h, nbs.stats)
 
 			if err != nil {
 				return nil, nil, err
@@ -877,7 +869,7 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 		return chunks.NewChunkWithHash(h, data), nil
 	}
 
-	data, err = tables.get(ctx, a, nbs.stats)
+	data, err = tables.get(ctx, h, nbs.stats)
 
 	if err != nil {
 		return chunks.EmptyChunk, err
@@ -954,10 +946,10 @@ func toGetRecords(hashes hash.HashSet) []getRecord {
 	reqs := make([]getRecord, len(hashes))
 	idx := 0
 	for h := range hashes {
-		a := addr(h)
+		h := h
 		reqs[idx] = getRecord{
-			a:      &a,
-			prefix: a.Prefix(),
+			a:      &h,
+			prefix: h.Prefix(),
 		}
 		idx++
 	}
@@ -1001,13 +993,12 @@ func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 		nbs.stats.AddressesPerHas.Sample(1)
 	}()
 
-	a := addr(h)
 	has, tables, err := func() (bool, chunkReader, error) {
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
 
 		if nbs.mt != nil {
-			has, err := nbs.mt.has(a)
+			has, err := nbs.mt.has(h)
 
 			if err != nil {
 				return false, nil, err
@@ -1024,7 +1015,7 @@ func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	}
 
 	if !has {
-		has, err = tables.has(a)
+		has, err = tables.has(h)
 
 		if err != nil {
 			return false, err
@@ -1079,7 +1070,7 @@ func (nbs *NomsBlockStore) hasMany(reqs []hasRecord) (hash.HashSet, error) {
 	absent := hash.HashSet{}
 	for _, r := range reqs {
 		if !r.has {
-			absent.Insert(hash.New(r.a[:]))
+			absent.Insert(*r.a)
 		}
 	}
 	return absent, nil
@@ -1089,10 +1080,10 @@ func toHasRecords(hashes hash.HashSet) []hasRecord {
 	reqs := make([]hasRecord, len(hashes))
 	idx := 0
 	for h := range hashes {
-		a := addr(h)
+		h := h
 		reqs[idx] = hasRecord{
-			a:      &a,
-			prefix: a.Prefix(),
+			a:      &h,
+			prefix: h.Prefix(),
 			order:  idx,
 		}
 		idx++
@@ -1417,7 +1408,7 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []chunks.Tab
 	return contents.GetRoot(), allTableFiles, appendixTableFiles, nil
 }
 
-func getTableFiles(css map[addr]chunkSource, contents manifestContents, numSpecs int, specFunc func(mc manifestContents, idx int) tableSpec) ([]chunks.TableFile, error) {
+func getTableFiles(css map[hash.Hash]chunkSource, contents manifestContents, numSpecs int, specFunc func(mc manifestContents, idx int) tableSpec) ([]chunks.TableFile, error) {
 	tableFiles := make([]chunks.TableFile, 0)
 	if numSpecs == 0 {
 		return tableFiles, nil
@@ -1461,8 +1452,8 @@ func (nbs *NomsBlockStore) Size(ctx context.Context) (uint64, error) {
 	return size, nil
 }
 
-func (nbs *NomsBlockStore) chunkSourcesByAddr() (map[addr]chunkSource, error) {
-	css := make(map[addr]chunkSource, len(nbs.tables.upstream)+len(nbs.tables.novel))
+func (nbs *NomsBlockStore) chunkSourcesByAddr() (map[hash.Hash]chunkSource, error) {
+	css := make(map[hash.Hash]chunkSource, len(nbs.tables.upstream)+len(nbs.tables.novel))
 	for _, cs := range nbs.tables.upstream {
 		css[cs.hash()] = cs
 	}
@@ -1543,10 +1534,10 @@ func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
 func (nbs *NomsBlockStore) pruneTableFiles(ctx context.Context, checker refCheck) (err error) {
 	mtime := time.Now()
 
-	return nbs.p.PruneTableFiles(ctx, func() []addr {
+	return nbs.p.PruneTableFiles(ctx, func() []hash.Hash {
 		nbs.mu.Lock()
 		defer nbs.mu.Unlock()
-		keepers := make([]addr, 0, len(nbs.tables.novel)+len(nbs.tables.upstream))
+		keepers := make([]hash.Hash, 0, len(nbs.tables.novel)+len(nbs.tables.upstream))
 		for a, _ := range nbs.tables.novel {
 			keepers = append(keepers, a)
 		}

@@ -29,6 +29,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/eventscheduler"
 	"github.com/dolthub/go-mysql-server/server"
+	"github.com/dolthub/go-mysql-server/server/golden"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/plan"
@@ -515,11 +516,14 @@ func ConfigureServices(
 		InitF: func(context.Context) (err error) {
 			v, ok := serverConfig.(validatingServerConfig)
 			if ok && v.goldenMysqlConnectionString() != "" {
-				mySQLServer, err = server.NewServer(
+				mySQLServer, err = server.NewServerWithHandler(
 					serverConf,
 					sqlEngine.GetUnderlyingEngine(),
 					newSessionBuilder(sqlEngine, serverConfig),
 					metListener,
+					func(h mysql.Handler) (mysql.Handler, error) {
+						return golden.NewValidatingHandler(h, v.goldenMysqlConnectionString(), logrus.StandardLogger())
+					},
 				)
 			} else {
 				mySQLServer, err = server.NewServer(
@@ -770,19 +774,6 @@ func portInUse(hostPort string) bool {
 	return false
 }
 
-
-func DefaultSessionBuilder(ctx context.Context, c *mysql.Conn, addr string) (sql.Session, error) {
-	host := ""
-	user := ""
-	mysqlConnectionUser, ok := c.UserData.(mysql_db.MysqlConnectionUser)
-	if ok {
-		host = mysqlConnectionUser.Host
-		user = mysqlConnectionUser.User
-	}
-	client := sql.Client{Address: host, User: user, Capabilities: c.Capabilities}
-	return sql.NewBaseSessionWithClientServer(addr, client, c.ConnectionID), nil
-}
-
 func newSessionBuilder(se *engine.SqlEngine, config ServerConfig) server.SessionBuilder {
 	userToSessionVars := make(map[string]map[string]string)
 	userVars := config.UserVars()
@@ -791,16 +782,12 @@ func newSessionBuilder(se *engine.SqlEngine, config ServerConfig) server.Session
 	}
 
 	return func(ctx context.Context, conn *mysql.Conn, addr string) (sql.Session, error) {
-		mysqlSess, err := DefaultSessionBuilder(ctx, conn, addr)
+		baseSession, err := sql.BaseSessionFromConnection(ctx, conn, addr)
 		if err != nil {
 			return nil, err
 		}
-		mysqlBaseSess, ok := mysqlSess.(*sql.BaseSession)
-		if !ok {
-			return nil, fmt.Errorf("unknown GMS base session type")
-		}
 
-		dsess, err := se.NewDoltSession(ctx, mysqlBaseSess)
+		dsess, err := se.NewDoltSession(ctx, baseSession)
 		if err != nil {
 			return nil, err
 		}
