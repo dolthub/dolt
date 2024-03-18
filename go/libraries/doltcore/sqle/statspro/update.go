@@ -147,6 +147,7 @@ func createNewStatsBuckets(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Ta
 		ret[updater.qual].LowerBound = firstRow
 		ret[updater.qual].Fds = fds
 		ret[updater.qual].ColSet = colSet
+		ret[updater.qual].UpdateActive()
 	}
 	return ret, nil
 }
