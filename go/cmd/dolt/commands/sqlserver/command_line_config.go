@@ -79,7 +79,7 @@ func DefaultServerConfig() *commandLineServerConfig {
 		branchControlFilePath:   filepath.Join(defaultDataDir, defaultCfgDir, defaultBranchControlFilePath),
 		allowCleartextPasswords: defaultAllowCleartextPasswords,
 		maxLoggedQueryLen:       defaultMaxLoggedQueryLen,
-		valuesSet: map[string]struct{}{},
+		valuesSet:               map[string]struct{}{},
 	}
 }
 
@@ -486,7 +486,6 @@ func (cfg *commandLineServerConfig) withEventScheduler(es string) *commandLineSe
 }
 
 func (cfg *commandLineServerConfig) ValueSet(value string) bool {
-	_, ok :=  cfg.valuesSet[value]
+	_, ok := cfg.valuesSet[value]
 	return ok
 }
-

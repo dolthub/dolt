@@ -222,9 +222,9 @@ func ValidateConfig(config ServerConfig) error {
 
 const (
 	maxConnectionsKey = "max_connections"
-	readTimeoutKey     = "net_read_timeout"
-	writeTimeoutKey    = "net_write_timeout"
-	eventSchedulerKey  = "event_scheduler"
+	readTimeoutKey    = "net_read_timeout"
+	writeTimeoutKey   = "net_write_timeout"
+	eventSchedulerKey = "event_scheduler"
 )
 
 // ApplySystemVariables sets the global system variables based on the given `ServerConfig`.
