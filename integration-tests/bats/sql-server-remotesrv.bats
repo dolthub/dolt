@@ -528,9 +528,6 @@ GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
 
     run dolt push origin --user clone_admin_user main:main
     [[ "$status" -ne 0 ]] || false
-    echo "got output"
-    echo "$output"
-    echo
     [[ "$output" =~ "clone_admin_user has not been granted SuperUser access" ]] || false
 
     # Give that user superpowers.
