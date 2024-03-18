@@ -353,7 +353,7 @@ func (p *Puller) getCmp(ctx context.Context, batch hash.HashSet, tracker *PullCh
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
 		err := p.srcChunkStore.GetManyCompressed(ctx, batch, func(ctx context.Context, c nbs.CompressedChunk) {
-			atomic.AddUint64(&p.stats.fetchedSourceBytes, uint64(len(c.FullCompressedChunk)))
+			atomic.AddUint64(&p.stats.fetchedSourceBytes, uint64(c.Size()))
 			atomic.AddUint64(&p.stats.fetchedSourceChunks, uint64(1))
 			select {
 			case found <- c:

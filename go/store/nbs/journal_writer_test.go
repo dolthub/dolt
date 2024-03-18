@@ -259,9 +259,9 @@ func validateLookup(t *testing.T, j *journalWriter, r Range, cc CompressedChunk)
 	buf := make([]byte, r.Length)
 	_, err := j.readAt(buf, int64(r.Offset))
 	require.NoError(t, err)
-	act, err := NewCompressedChunk(cc.H, buf)
+	act, err := NewCompressedChunk(cc.H, buf, nomsBetaVersion)
 	assert.NoError(t, err)
-	assert.Equal(t, cc.FullCompressedChunk, act.FullCompressedChunk)
+	assert.Equal(t, cc.WritableData(), act.WritableData())
 }
 
 func TestJournalWriterSyncClose(t *testing.T) {
@@ -292,7 +292,7 @@ func TestJournalIndexBootstrap(t *testing.T) {
 	makeEpoch := func() (e epoch) {
 		e.records = randomCompressedChunks(64)
 		for h := range e.records {
-			e.last = hash.Hash(h)
+			e.last = h
 			break
 		}
 		return
@@ -407,7 +407,7 @@ func randomCompressedChunks(cnt int) (compressed map[hash.Hash]CompressedChunk) 
 		}
 		c := chunks.NewChunk(buf[:k])
 		buf = buf[k:]
-		compressed[c.Hash()] = ChunkToCompressedChunk(c)
+		compressed[c.Hash()] = ChunkToCompressedChunk(c, 0) // NM4
 	}
 	return
 }

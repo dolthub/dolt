@@ -63,7 +63,7 @@ func (mcc *mapChunkCache) Put(chnks []nbs.CompressedChunk) bool {
 			}
 		}
 
-		if mcc.cm.CapacityExceeded(len(c.FullCompressedChunk)) {
+		if mcc.cm.CapacityExceeded(int(c.Size())) {
 			return true
 		}
 
@@ -118,7 +118,7 @@ func (mcc *mapChunkCache) PutChunk(ch nbs.CompressedChunk) bool {
 
 	h := ch.Hash()
 	if existing, ok := mcc.hashToChunk[h]; !ok || existing.IsEmpty() {
-		if mcc.cm.CapacityExceeded(len(ch.FullCompressedChunk)) {
+		if mcc.cm.CapacityExceeded(int(ch.Size())) {
 			return true
 		}
 		mcc.hashToChunk[h] = ch

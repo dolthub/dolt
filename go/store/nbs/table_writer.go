@@ -27,7 +27,6 @@ import (
 	"errors"
 	"fmt"
 	gohash "hash"
-	"os"
 	"sort"
 
 	"github.com/dolthub/dolt/go/store/d"
@@ -47,7 +46,7 @@ type tableWriter struct {
 	snapper snappyEncoder
 
 	// NM4 - would be nice to have one place for this.
-	version uint8
+	nbsVer uint8
 }
 
 type snappyEncoder interface {
@@ -82,21 +81,23 @@ func suffixesOffset(numChunks uint32) uint64 {
 
 // NM4 - need to adjust max size for doltRev1Version
 // len(buff) must be >= maxTableSize(numChunks, totalData)
-func newTableWriter(buff []byte, snapper snappyEncoder) *tableWriter {
+func newTableWriter(buff []byte, nbsVersion uint8, snapper snappyEncoder) *tableWriter {
 	if snapper == nil {
 		snapper = realSnappyEncoder{}
 	}
 
+	/* NM4 Go up a level.
 	version := nomsBetaVersion
 	if _, ok := os.LookupEnv("DOLT_NBS_EXP"); ok {
 		version = doltRev1Version
 	}
+	*/
 
 	return &tableWriter{
 		buff:      buff,
 		blockHash: sha512.New(),
 		snapper:   snapper,
-		version:   version, // NM4 - not sure where else to put this.
+		nbsVer:    nbsVersion, // NM4 - not sure where else to put this.
 	}
 }
 
@@ -105,18 +106,18 @@ func (tw *tableWriter) addChunk(h hash.Hash, data []byte) bool {
 		panic("NBS blocks cannont be zero length")
 	}
 
-	// Compress data straight into tw.buff
-	compressed := tw.snapper.Encode(tw.buff[tw.pos:], data)
-	dataLength := uint64(len(compressed))
-	tw.totalCompressedData += dataLength
-
+	startPos := tw.pos
 	typeByteSize := uint64(0)
-	if tw.version == doltRev1Version {
+	if tw.nbsVer >= doltRev1Version {
 		// Write the chunk record type. 0 only for now.
 		tw.buff[tw.pos] = 0
 		tw.pos++
 		typeByteSize++
 	}
+
+	// Compress data straight into tw.buff
+	compressed := tw.snapper.Encode(tw.buff[tw.pos:], data)
+	dataLength := uint64(len(compressed))
 
 	// BUG 3156 indicated that, sometimes, snappy decided that there's not enough space in tw.buff[tw.pos:] to encode into.
 	// This _should never happen anymore be_, because we iterate over all chunks to be added and sum the max amount of space that snappy says it might need.
@@ -127,17 +128,21 @@ func (tw *tableWriter) addChunk(h hash.Hash, data []byte) bool {
 	}
 
 	tw.pos += dataLength
+
+	dataLength += typeByteSize
+	tw.totalCompressedData += dataLength
 	tw.totalUncompressedData += uint64(len(data))
 
-	// checksum (4 LSBytes, big-endian)
-	binary.BigEndian.PutUint32(tw.buff[tw.pos:], crc(compressed))
+	// checksum (uint32 added at the end)
+	crcVal := crc(tw.buff[startPos:tw.pos])
+	binary.BigEndian.PutUint32(tw.buff[tw.pos:], crcVal)
 	tw.pos += checksumSize
 
 	// Stored in insertion order
 	tw.prefixes = append(tw.prefixes, prefixIndexRec{
 		h,
 		uint32(len(tw.prefixes)),
-		uint32(checksumSize + dataLength + typeByteSize),
+		uint32(checksumSize + dataLength),
 	})
 
 	return true
@@ -215,10 +220,10 @@ func (tw *tableWriter) writeIndex() error {
 }
 
 func (tw *tableWriter) writeFooter() {
-	tw.pos += writeFooter(tw.buff[tw.pos:], uint32(len(tw.prefixes)), tw.totalUncompressedData)
+	tw.pos += writeFooter(tw.buff[tw.pos:], uint32(len(tw.prefixes)), tw.totalUncompressedData, tw.nbsVer)
 }
 
-func writeFooter(dst []byte, chunkCount uint32, uncData uint64) (consumed uint64) {
+func writeFooter(dst []byte, chunkCount uint32, uncData uint64, nbsVersion uint8) (consumed uint64) {
 	// chunk count
 	binary.BigEndian.PutUint32(dst[consumed:], chunkCount)
 	consumed += uint32Size
@@ -228,7 +233,15 @@ func writeFooter(dst []byte, chunkCount uint32, uncData uint64) (consumed uint64
 	consumed += uint64Size
 
 	// magic number
-	copy(dst[consumed:], nomsBetaMagicNumber)
+	switch nbsVersion {
+	case doltRev1Version:
+		copy(dst[consumed:], doltRev1MagicNumber)
+	case nomsBetaVersion:
+		copy(dst[consumed:], nomsBetaMagicNumber)
+	default:
+		err := fmt.Errorf("Runtime Error: unknown nbs version: %d", nbsVersion)
+		panic(err)
+	}
 	consumed += magicNumberSize
 	return
 }

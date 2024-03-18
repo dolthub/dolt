@@ -462,7 +462,7 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, fe
 		// Send the chunk for each range included in GetRange.
 		for i := 0; i < len(gr.Ranges); i++ {
 			s, e := gr.ChunkByteRange(i)
-			cmpChnk, err := nbs.NewCompressedChunk(hash.New(gr.Ranges[i].Hash), comprData[s:e])
+			cmpChnk, err := nbs.NewCompressedChunk(hash.New(gr.Ranges[i].Hash), comprData[s:e], 0) // NM4 - This is f'ed. We need to get the version from somewhere
 			if err != nil {
 				return err
 			}
@@ -767,7 +767,7 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 				absent[currHash] = struct{}{}
 				j++
 			} else {
-				c := nbs.ChunkToCompressedChunk(chunks.NewChunkWithHash(currHash, []byte{}))
+				c := nbs.ChunkToCompressedChunk(chunks.NewChunkWithHash(currHash, []byte{}), 0) // NM4
 				found = append(found, c)
 			}
 		}
@@ -818,7 +818,7 @@ func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chu
 		return err
 	}
 
-	cc := nbs.ChunkToCompressedChunk(c)
+	cc := nbs.ChunkToCompressedChunk(c, 0) // NM4
 	if dcs.cache.Put([]nbs.CompressedChunk{cc}) {
 		return ErrCacheCapacityExceeded
 	}

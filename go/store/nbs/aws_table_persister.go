@@ -116,7 +116,8 @@ func (s3p awsTablePersister) key(k string) string {
 }
 
 func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
-	name, data, chunkCount, err := mt.write(haver, stats)
+	// NM4 - temporary? I guess an AWS file is currently always v1.
+	name, data, chunkCount, err := mt.write(haver, nomsBetaVersion, stats)
 
 	if err != nil {
 		return emptyChunkSource{}, err

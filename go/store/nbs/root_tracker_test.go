@@ -29,12 +29,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestChunkStoreZeroValue(t *testing.T) {
@@ -514,7 +513,7 @@ func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver c
 		return emptyChunkSource{}, nil
 	}
 
-	name, data, chunkCount, err := mt.write(haver, stats)
+	name, data, chunkCount, err := mt.write(haver, nomsBetaVersion, stats)
 	if err != nil {
 		return emptyChunkSource{}, err
 	} else if chunkCount == 0 {
@@ -573,7 +572,7 @@ func compactSourcesToBuffer(sources chunkSources) (name hash.Hash, data []byte, 
 
 	maxSize := maxTableSize(uint64(chunkCount), totalData)
 	buff := make([]byte, maxSize) // This can blow up RAM
-	tw := newTableWriter(buff, nil)
+	tw := newTableWriter(buff, nomsBetaVersion, nil)
 	errString := ""
 
 	ctx := context.Background()

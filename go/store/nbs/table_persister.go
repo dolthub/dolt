@@ -248,7 +248,7 @@ func planConjoin(sources []sourceWithSize, stats *Stats) (plan compactionPlan, e
 		pfxPos += ordinalSize
 	}
 
-	writeFooter(plan.mergedIndex[uint64(len(plan.mergedIndex))-footerSize:], plan.chunkCount, totalUncompressedData)
+	writeFooter(plan.mergedIndex[uint64(len(plan.mergedIndex))-footerSize:], plan.chunkCount, totalUncompressedData, nomsBetaVersion)
 
 	stats.BytesPerConjoin.Sample(uint64(plan.totalCompressedData) + uint64(len(plan.mergedIndex)))
 	return plan, nil

@@ -38,35 +38,78 @@ import (
 // Do not read more than 128MB at a time.
 const maxReadSize = 128 * 1024 * 1024
 
-// CompressedChunk represents a chunk of data in a table file which is still compressed via snappy.
+// CompressedChunk represents a chunk of data in a table file which is still compressed, either raw data compressed with
+// snappy, or delta compressed type info preserved.
 type CompressedChunk struct {
 	// H is the hash of the chunk
 	H hash.Hash
 
 	// FullCompressedChunk is the entirety of the compressed chunk data including the crc
-	FullCompressedChunk []byte
+	fullCompressedChunk []byte
 
 	// CompressedData is just the snappy encoded byte buffer that stores the chunk data
 	CompressedData []byte
+
+	nbsVer uint8 // NM4 - not sure if we want this. Everywhere we use these objects we should have the version near at hand. TBD.
+
+	// The full size of the chunk, including the type byte and the crc. This is how much space the chunk takes up on disk.
+	fullSize uint32
+}
+
+func (cmp CompressedChunk) Size() uint32 {
+	return cmp.fullSize
+}
+
+func (cmp CompressedChunk) WritableData() []byte {
+	return cmp.fullCompressedChunk
 }
 
 // NewCompressedChunk creates a CompressedChunk, using the full chunk record bytes, which includes the crc.
 // Will error in the event that the crc does not match the data.
-func NewCompressedChunk(h hash.Hash, buff []byte) (CompressedChunk, error) {
+func NewCompressedChunk(h hash.Hash, buff []byte, nbsVersion uint8) (CompressedChunk, error) {
+	fullSize := uint32(len(buff))
 	dataLen := uint64(len(buff)) - checksumSize
-
 	chksum := binary.BigEndian.Uint32(buff[dataLen:])
+
+	crcSum := crc(buff[:dataLen])
+
+	fullbuff := buff
+	if nbsVersion >= doltRev1Version {
+		// First byte is indicating metadata about the chunk. It is not part of the compressed payload, but is included
+		// in the CRC calculation.
+		// We don't use yet, but we need to skip it.
+		if buff[0] != 0 {
+			return CompressedChunk{}, errors.New("invalid chunk data - chunk type byte is not 0")
+		}
+
+		dataLen--
+		buff = buff[1:]
+	}
+
 	compressedData := buff[:dataLen]
 
-	if chksum != crc(compressedData) {
+	if chksum != crcSum {
 		return CompressedChunk{}, errors.New("checksum error")
 	}
 
-	return CompressedChunk{H: h, FullCompressedChunk: buff, CompressedData: compressedData}, nil
+	// NM4 - not sure if we want to continue carrying around the originam buff.
+	return CompressedChunk{H: h, fullCompressedChunk: fullbuff, fullSize: fullSize, CompressedData: compressedData, nbsVer: nbsVersion}, nil
 }
 
 // ToChunk snappy decodes the compressed data and returns a chunks.Chunk
 func (cmp CompressedChunk) ToChunk() (chunks.Chunk, error) {
+	/*
+		mungedData := cmp.CompressedData
+		if cmp.nbsVer >= doltRev1Version {
+			if mungedData[0] != 0 {
+				return chunks.Chunk{}, errors.New("invalid chunk data - chunk type byte is not 0")
+			}
+
+			mungedData = mungedData[1:]
+		}
+
+	*/
+
 	data, err := snappy.Decode(nil, cmp.CompressedData)
 
 	if err != nil {
@@ -74,20 +117,29 @@ func (cmp CompressedChunk) ToChunk() (chunks.Chunk, error) {
 	}
 
 	// NM4 - We don't verify the hash?? See comment in NewChunkWithHash which assume the caller trusts the Hash. We
-	// verify the CRC in NewCompressedChunk, but not the hash. This seems like a mistake.
+	// verify the CRC in NewCompressedChunk, but not the hash. I believe this is for per reasons. For my testing, I'd
+	// like to verify the hash here.
 
 	return chunks.NewChunkWithHash(cmp.H, data), nil
 }
 
-func ChunkToCompressedChunk(chunk chunks.Chunk) CompressedChunk {
-	compressed := snappy.Encode(nil, chunk.Data())
-	length := len(compressed)
-	// todo: this append allocates a new buffer and copies |compressed|.
-	//  This is costly, but maybe better, as it allows us to reclaim the
-	//  extra space allocated in snappy.Encode (see snappy.MaxEncodedLen).
-	compressed = append(compressed, []byte{0, 0, 0, 0}...)
-	binary.BigEndian.PutUint32(compressed[length:], crc(compressed[:length]))
-	return CompressedChunk{H: chunk.Hash(), FullCompressedChunk: compressed, CompressedData: compressed[:length]}
+func ChunkToCompressedChunk(chunk chunks.Chunk, nbsVersion uint8) CompressedChunk {
+	// NM4 - need to figure out the optimal allocation strategy for this.
+	// See previous comment in history about snappy.MaxEncodedLen
+	raw := make([]byte, 1+checksumSize+snappy.MaxEncodedLen(chunk.Size()))
+	offset := 0
+
+	if nbsVersion >= doltRev1Version {
+		raw = append(raw, 0)
+		offset++
+	}
+
+	compressed := snappy.Encode(raw[offset:], chunk.Data())
+	offset += len(compressed)
+
+	raw = append(raw, []byte{0, 0, 0, 0}...)
+	binary.BigEndian.PutUint32(raw[offset:], crc(raw[:offset]))
+	return CompressedChunk{H: chunk.Hash(), fullCompressedChunk: raw, CompressedData: raw[:offset], fullSize: uint32(len(raw)), nbsVer: nbsVersion}
 }
 
 // Hash returns the hash of the data
@@ -108,7 +160,7 @@ func (cmp CompressedChunk) CompressedSize() int {
 var EmptyCompressedChunk CompressedChunk
 
 func init() {
-	EmptyCompressedChunk = ChunkToCompressedChunk(chunks.EmptyChunk)
+	EmptyCompressedChunk = ChunkToCompressedChunk(chunks.EmptyChunk, nomsBetaVersion)
 }
 
 // ErrInvalidTableFile is an error returned when a table file is corrupt or invalid.
@@ -150,8 +202,8 @@ type tableReader struct {
 	r         tableReaderAt
 	blockSize uint64
 
-	// NM4 - maybe this is where the version needs to live???
-	version uint8
+	// NM4 - maybe this is where the nbsVer needs to live???
+	nbsVer uint8
 }
 
 // newTableReader parses a valid nbs table byte stream and returns a reader. buff must end with an NBS index
@@ -167,7 +219,7 @@ func newTableReader(index tableIndex, r tableReaderAt, blockSize uint64) (tableR
 		idx:       index,
 		r:         r,
 		blockSize: blockSize,
-		version:   index.nbsVersion(),
+		nbsVer:    index.nbsVersion(),
 	}, nil
 }
 
@@ -271,7 +323,7 @@ func (tr tableReader) get(ctx context.Context, h hash.Hash, stats *Stats) ([]byt
 		return nil, errors.New("failed to read all data")
 	}
 
-	cmp, err := NewCompressedChunk(h, buff)
+	cmp, err := NewCompressedChunk(h, buff, tr.nbsVer)
 
 	if err != nil {
 		return nil, err
@@ -354,7 +406,7 @@ func (tr tableReader) readAtOffsetsWithCB(
 	}
 
 	for i := range rb {
-		cmp, err := rb.ExtractChunkFromRead(buff, i, tr.version)
+		cmp, err := rb.ExtractChunkFromRead(buff, i, tr.nbsVer)
 		if err != nil {
 			return err
 		}
@@ -435,19 +487,9 @@ func (r readBatch) End() uint64 {
 func (s readBatch) ExtractChunkFromRead(buff []byte, idx int, version uint8) (CompressedChunk, error) {
 	rec := s[idx]
 
-	offset := rec.offset
-	length := rec.length
-	if version >= doltRev1Version {
-		if buff[rec.offset-s.Start()] != 0 {
-			panic("not a valid chunk")
-		}
+	chunkStart := rec.offset - s.Start()
 
-		offset++
-		length--
-	}
-	chunkStart := offset - s.Start()
-
-	return NewCompressedChunk(*rec.a, buff[chunkStart:chunkStart+uint64(length)])
+	return NewCompressedChunk(*rec.a, buff[chunkStart:chunkStart+uint64(rec.length)], version)
 }
 
 func toReadBatches(offsets offsetRecSlice, blockSize uint64) []readBatch {
@@ -642,7 +684,7 @@ func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) 
 		if uint32(n) != or.length {
 			return errors.New("did not read all data")
 		}
-		cmp, err := NewCompressedChunk(hash.Hash(*or.a), buff)
+		cmp, err := NewCompressedChunk(hash.Hash(*or.a), buff, tr.nbsVer)
 
 		if err != nil {
 			return err
@@ -732,6 +774,6 @@ func (tr tableReader) clone() (tableReader, error) {
 		idx:       idx,
 		r:         r,
 		blockSize: tr.blockSize,
-		version:   tr.version,
+		nbsVer:    tr.nbsVer,
 	}, nil
 }

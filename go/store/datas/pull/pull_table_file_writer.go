@@ -240,7 +240,7 @@ LOOP:
 			if err != nil {
 				return err
 			}
-			atomic.AddUint64(&w.bufferedSendBytes, uint64(len(newChnk.FullCompressedChunk)))
+			atomic.AddUint64(&w.bufferedSendBytes, uint64(newChnk.Size()))
 		}
 	}
 

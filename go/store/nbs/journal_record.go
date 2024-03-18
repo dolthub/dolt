@@ -109,7 +109,7 @@ func chunkRecordSize(c CompressedChunk) (recordSz, payloadOff uint32) {
 	recordSz += journalRecTagSz + journalRecAddrSz
 	recordSz += journalRecTagSz // payload tag
 	payloadOff = recordSz
-	recordSz += uint32(len(c.FullCompressedChunk))
+	recordSz += c.Size()
 	recordSz += journalRecChecksumSz
 	return
 }
@@ -141,8 +141,8 @@ func writeChunkRecord(buf []byte, c CompressedChunk) (n uint32) {
 	// payload
 	buf[n] = byte(payloadJournalRecTag)
 	n += journalRecTagSz
-	copy(buf[n:], c.FullCompressedChunk)
-	n += uint32(len(c.FullCompressedChunk))
+	copy(buf[n:], c.WritableData())
+	n += c.Size()
 	// checksum
 	writeUint32(buf[n:], crc(buf[:n]))
 	n += journalRecChecksumSz

@@ -46,7 +46,7 @@ var _ tableFilePersister = &blobstorePersister{}
 // Persist makes the contents of mt durable. Chunks already present in
 // |haver| may be dropped in the process.
 func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
-	address, data, chunkCount, err := mt.write(haver, stats)
+	address, data, chunkCount, err := mt.write(haver, nomsBetaVersion, stats)
 	if err != nil {
 		return emptyChunkSource{}, err
 	} else if chunkCount == 0 {

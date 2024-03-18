@@ -259,7 +259,7 @@ func (j *ChunkJournal) Persist(ctx context.Context, mt *memTable, haver chunkRea
 			continue
 		}
 		c := chunks.NewChunkWithHash(hash.Hash(*record.a), mt.chunks[*record.a])
-		err := j.wr.writeCompressedChunk(ChunkToCompressedChunk(c))
+		err := j.wr.writeCompressedChunk(ChunkToCompressedChunk(c, nomsBetaVersion))
 		if err != nil {
 			return nil, err
 		}

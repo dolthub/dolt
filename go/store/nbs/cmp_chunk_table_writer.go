@@ -86,8 +86,8 @@ func (tw *CmpChunkTableWriter) AddCmpChunk(c CompressedChunk) error {
 		return err
 	}
 
-	fullLen := len(c.FullCompressedChunk)
-	_, err = tw.sink.Write(c.FullCompressedChunk)
+	fullLen := c.Size()
+	_, err = tw.sink.Write(c.WritableData())
 
 	if err != nil {
 		return err

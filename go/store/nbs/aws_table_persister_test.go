@@ -504,7 +504,7 @@ func bytesToChunkSource(t *testing.T, bs ...[]byte) chunkSource {
 	}
 	maxSize := maxTableSize(uint64(len(bs)), uint64(sum))
 	buff := make([]byte, maxSize)
-	tw := newTableWriter(buff, nil)
+	tw := newTableWriter(buff, nomsBetaVersion, nil)
 	for _, b := range bs {
 		tw.addChunk(computeAddr(b), b)
 	}

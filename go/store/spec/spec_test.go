@@ -196,7 +196,10 @@ func TestNBSDatabaseSpec(t *testing.T) {
 
 		vrw := spec1.GetVRW(context.Background())
 
-		assert.Equal(s, mustValue(vrw.ReadValue(context.Background(), mustHash(s.Hash(vrw.Format())))))
+		h, err := s.Hash(vrw.Format())
+		v, e := vrw.ReadValue(context.Background(), mustHash(h, err))
+		foobar := mustValue(v, e)
+		assert.Equal(s, foobar)
 
 		// New databases can be created and read/written from.
 		store2 := filepath.Join(tmpDir, "store2")

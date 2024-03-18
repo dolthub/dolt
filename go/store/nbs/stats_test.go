@@ -99,7 +99,7 @@ func TestStats(t *testing.T) {
 	// Now we have write IO
 	assert.Equal(uint64(1), stats(store).PersistLatency.Samples())
 	assert.Equal(uint64(3), stats(store).ChunksPerPersist.Sum())
-	assert.Equal(uint64(131), stats(store).BytesPerPersist.Sum())
+	assert.Equal(uint64(134), stats(store).BytesPerPersist.Sum())
 
 	// Now some gets that will incur read IO
 	_, err = store.Get(context.Background(), c1.Hash())
@@ -109,7 +109,7 @@ func TestStats(t *testing.T) {
 	_, err = store.Get(context.Background(), c3.Hash())
 	require.NoError(t, err)
 	assert.Equal(uint64(3), stats(store).FileReadLatency.Samples())
-	assert.Equal(uint64(27), stats(store).FileBytesPerRead.Sum())
+	assert.Equal(uint64(30), stats(store).FileBytesPerRead.Sum())
 
 	// Try A GetMany
 	chnx := make([]chunks.Chunk, 3)
@@ -129,7 +129,7 @@ func TestStats(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(uint64(4), stats(store).FileReadLatency.Samples())
-	assert.Equal(uint64(54), stats(store).FileBytesPerRead.Sum())
+	assert.Equal(uint64(60), stats(store).FileBytesPerRead.Sum())
 
 	// Force a conjoin
 	store.c = inlineConjoiner{2}

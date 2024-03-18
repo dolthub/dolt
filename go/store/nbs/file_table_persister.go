@@ -85,7 +85,13 @@ func (ftp *fsTablePersister) Persist(ctx context.Context, mt *memTable, haver ch
 	t1 := time.Now()
 	defer stats.PersistLatency.SampleTimeSince(t1)
 
-	name, data, chunkCount, err := mt.write(haver, stats)
+	// NM4 - All fully materialized should use the new version for this test???
+	ver := nomsBetaVersion
+	if _, ok := os.LookupEnv("DOLT_NBS_EXP"); ok {
+		ver = doltRev1Version
+	}
+
+	name, data, chunkCount, err := mt.write(haver, ver, stats)
 	if err != nil {
 		return emptyChunkSource{}, err
 	}
@@ -187,6 +193,7 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name hash.Hash, d
 			}
 		}()
 
+		// NM4 - Wholesale dump of the bytes from the memory table here. This kind of fucks us.
 		_, ferr = io.Copy(temp, bytes.NewReader(data))
 		if ferr != nil {
 			return "", cleanup, ferr
