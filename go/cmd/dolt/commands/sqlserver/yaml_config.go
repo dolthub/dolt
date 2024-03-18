@@ -685,3 +685,17 @@ func (c ClusterRemotesAPIYAMLConfig) ServerNameURLMatches() []string {
 func (c ClusterRemotesAPIYAMLConfig) ServerNameDNSMatches() []string {
 	return c.DNSMatches
 }
+
+func (cfg YAMLConfig) ValueSet(value string) bool {
+	switch value {
+	case readTimeoutKey:
+		return cfg.ListenerConfig.ReadTimeoutMillis != nil
+	case writeTimeoutKey:
+		return cfg.ListenerConfig.WriteTimeoutMillis != nil
+	case maxConnectionsKey:
+		return cfg.ListenerConfig.MaxConnections != nil
+	case eventSchedulerKey:
+		return cfg.BehaviorConfig.EventSchedulerStatus != nil
+	}
+	return false
+}

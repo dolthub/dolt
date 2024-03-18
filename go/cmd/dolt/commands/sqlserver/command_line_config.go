@@ -55,6 +55,7 @@ type commandLineServerConfig struct {
 	remotesapiReadOnly      *bool
 	goldenMysqlConn         string
 	eventSchedulerStatus    string
+	valuesSet               map[string]struct{}
 }
 
 var _ ServerConfig = (*commandLineServerConfig)(nil)
@@ -78,6 +79,7 @@ func DefaultServerConfig() *commandLineServerConfig {
 		branchControlFilePath:   filepath.Join(defaultDataDir, defaultCfgDir, defaultBranchControlFilePath),
 		allowCleartextPasswords: defaultAllowCleartextPasswords,
 		maxLoggedQueryLen:       defaultMaxLoggedQueryLen,
+		valuesSet: map[string]struct{}{},
 	}
 }
 
@@ -374,6 +376,8 @@ func (cfg *commandLineServerConfig) withPassword(password string) *commandLineSe
 // withTimeout updates the timeout and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
 func (cfg *commandLineServerConfig) withTimeout(timeout uint64) *commandLineServerConfig {
 	cfg.timeout = timeout
+	cfg.valuesSet[readTimeoutKey] = struct{}{}
+	cfg.valuesSet[writeTimeoutKey] = struct{}{}
 	return cfg
 }
 
@@ -393,6 +397,7 @@ func (cfg *commandLineServerConfig) withLogLevel(loglevel LogLevel) *commandLine
 // `*commandLineServerConfig`, which is useful for chaining calls.
 func (cfg *commandLineServerConfig) withMaxConnections(maxConnections uint64) *commandLineServerConfig {
 	cfg.maxConnections = maxConnections
+	cfg.valuesSet[maxConnectionsKey] = struct{}{}
 	return cfg
 }
 
@@ -476,5 +481,12 @@ func (cfg *commandLineServerConfig) EventSchedulerStatus() string {
 
 func (cfg *commandLineServerConfig) withEventScheduler(es string) *commandLineServerConfig {
 	cfg.eventSchedulerStatus = es
+	cfg.valuesSet[eventSchedulerKey] = struct{}{}
 	return cfg
 }
+
+func (cfg *commandLineServerConfig) ValueSet(value string) bool {
+	_, ok :=  cfg.valuesSet[value]
+	return ok
+}
+

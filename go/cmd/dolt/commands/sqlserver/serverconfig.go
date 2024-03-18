@@ -172,6 +172,8 @@ type ServerConfig interface {
 	ClusterConfig() cluster.Config
 	// EventSchedulerStatus is the configuration for enabling or disabling the event scheduler in this server.
 	EventSchedulerStatus() string
+	// ValueSet returns whether the value string provided was explicitly set in the config
+	ValueSet(value string) bool
 }
 
 // WritableServerConfig is a ServerConfig that support overwriting certain values.
@@ -218,30 +220,37 @@ func ValidateConfig(config ServerConfig) error {
 	return ValidateClusterConfig(config.ClusterConfig())
 }
 
+const (
+	maxConnectionsKey = "max_connections"
+	readTimeoutKey     = "net_read_timeout"
+	writeTimeoutKey    = "net_write_timeout"
+	eventSchedulerKey  = "event_scheduler"
+)
+
 // ApplySystemVariables sets the global system variables based on the given `ServerConfig`.
 func ApplySystemVariables(cfg ServerConfig) error {
-	if cfg.MaxConnections() > 0 {
+	if cfg.ValueSet(maxConnectionsKey) {
 		err := sql.SystemVariables.SetGlobal("max_connections", cfg.MaxConnections())
 		if err != nil {
 			return err
 		}
 	}
 
-	if cfg.ReadTimeout() > 0 {
+	if cfg.ValueSet(readTimeoutKey) {
 		err := sql.SystemVariables.SetGlobal("net_read_timeout", cfg.ReadTimeout())
 		if err != nil {
 			return err
 		}
 	}
 
-	if cfg.WriteTimeout() > 0 {
+	if cfg.ValueSet(writeTimeoutKey) {
 		err := sql.SystemVariables.SetGlobal("net_write_timeout", cfg.WriteTimeout())
 		if err != nil {
 			return err
 		}
 	}
 
-	if len(cfg.EventSchedulerStatus()) > 0 {
+	if cfg.ValueSet(eventSchedulerKey) {
 		err := sql.SystemVariables.SetGlobal("event_scheduler", cfg.EventSchedulerStatus())
 		if err != nil {
 			return err

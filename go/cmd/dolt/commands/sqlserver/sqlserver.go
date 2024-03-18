@@ -291,15 +291,14 @@ func ServerConfigFromArgsWithReader(
 // getServerConfig returns ServerConfig that is set either from yaml file if given, if not it is set with values defined
 // on command line. Server config variables not defined are set to default values.
 func getServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults, reader ServerConfigReader) (ServerConfig, error) {
-	var cfg ServerConfig
-	if cfgFile, ok := apr.GetValue(configFileFlag); ok {
-		var err error
-		cfg, err = reader.ReadConfigFile(cwdFS, cfgFile)
-		if err != nil {
-			return nil, err
-		}
-	} else {
+	cfgFile, ok := apr.GetValue(configFileFlag)
+	if !ok {
 		return reader.ReadConfigArgs(apr)
+	}
+
+	cfg, err := reader.ReadConfigFile(cwdFS, cfgFile)
+	if err != nil {
+		return nil, err
 	}
 
 	// if command line user argument was given, override the config file's user and password
