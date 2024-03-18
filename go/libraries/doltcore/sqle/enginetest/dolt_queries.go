@@ -706,6 +706,36 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 // this slice into others with good names as it grows.
 var DoltScripts = []queries.ScriptTest{
 	{
+		Name: "dolt_hashof_table tests",
+		SetUpScript: []string{
+			"CREATE TABLE t1 (pk int primary key);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SHOW TABLES;",
+				Expected: []sql.Row{
+					{"t1"},
+				},
+			},
+			{
+				Query:    "SELECT dolt_hashof_table('t1');",
+				Expected: []sql.Row{{"0lvgnnqah2lj1p6ilvfg0ssaec1v0jgk"}},
+			},
+			{
+				Query:    "INSERT INTO t1 VALUES (1);",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:    "SELECT dolt_hashof_table('t1');",
+				Expected: []sql.Row{{"a2vkt9d1mtuhd90opbcseo5gqjae7tv6"}},
+			},
+			{
+				Query:          "SELECT dolt_hashof_table('noexist');",
+				ExpectedErrStr: "table not found: noexist",
+			},
+		},
+	},
+	{
 		// https://github.com/dolthub/dolt/issues/7384
 		Name: "multiple unresolved foreign keys can be created on the same table",
 		SetUpScript: []string{
