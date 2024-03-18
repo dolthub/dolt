@@ -277,7 +277,10 @@ func (n *NomsStatsDatabase) ReplaceChunks(ctx context.Context, branch string, qu
 
 	if _, ok := dbStat[qual]; ok {
 		oldChunks := dbStat[qual].Histogram
-		targetBuckets := statspro.MergeNewChunks(targetHashes, oldChunks, newChunks)
+		targetBuckets, err := statspro.MergeNewChunks(targetHashes, oldChunks, newChunks)
+		if err != nil {
+			return err
+		}
 		dbStat[qual].Histogram = targetBuckets
 	} else {
 		dbStat[qual] = statspro.NewDoltStats()

@@ -111,7 +111,10 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 	// merge new chunks with preexisting chunks
 	for _, idxMeta := range idxMetas {
 		stat := newTableStats[idxMeta.qual]
-		targetChunks := MergeNewChunks(idxMeta.allAddrs, idxMeta.keepChunks, stat.Histogram)
+		targetChunks, err := MergeNewChunks(idxMeta.allAddrs, idxMeta.keepChunks, stat.Histogram)
+		if err != nil {
+			return err
+		}
 		if targetChunks == nil {
 			// empty table
 			continue

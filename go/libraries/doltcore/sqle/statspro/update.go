@@ -18,6 +18,7 @@ import (
 	"container/heap"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"time"
@@ -155,25 +156,30 @@ func createNewStatsBuckets(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Ta
 // MergeNewChunks combines a set of old and new chunks to create
 // the desired target histogram. Undefined behavior if a |targetHash|
 // does not exist in either |oldChunks| or |newChunks|.
-func MergeNewChunks(targetHashes []hash.Hash, oldChunks, newChunks []DoltBucket) []DoltBucket {
-	var targetBuckets []DoltBucket
-	var i int // oldChunks[i]
-	var j int // newChunks[j]
-	// |targetHashes| either in |oldChunks| or |addChunks|
-	for _, c := range targetHashes {
-		if i < len(oldChunks) && oldChunks[i].Chunk == c {
-			targetBuckets = append(targetBuckets, oldChunks[i])
-			i++
-		} else if j < len(newChunks) && newChunks[j].Chunk == c {
-			targetBuckets = append(targetBuckets, newChunks[j])
-			j++
-		} else {
-			// head of |oldChunks| will be deleted, increment
-			// to find the next valid
-			i++
+func MergeNewChunks(inputHashes []hash.Hash, oldChunks, newChunks []DoltBucket) ([]DoltBucket, error) {
+	hashToPos := make(map[hash.Hash]int, len(inputHashes))
+	for i, h := range inputHashes {
+		hashToPos[h] = i
+	}
+
+	var cnt int
+	targetBuckets := make([]DoltBucket, len(inputHashes))
+	for _, c := range oldChunks {
+		if idx, ok := hashToPos[c.Chunk]; ok {
+			cnt++
+			targetBuckets[idx] = c
 		}
 	}
-	return targetBuckets
+	for _, c := range newChunks {
+		if idx, ok := hashToPos[c.Chunk]; ok && targetBuckets[idx].Chunk.IsEmpty() {
+			cnt++
+			targetBuckets[idx] = c
+		}
+	}
+	if cnt != len(inputHashes) {
+		return nil, fmt.Errorf("encountered invalid statistic chunks")
+	}
+	return targetBuckets, nil
 }
 
 func firstRowForIndex(ctx *sql.Context, prollyMap prolly.Map, keyBuilder *val.TupleBuilder, prefixLen int) (sql.Row, error) {
