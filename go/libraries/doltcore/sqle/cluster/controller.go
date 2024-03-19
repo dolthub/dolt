@@ -463,14 +463,14 @@ func (c *Controller) refreshSystemVars() {
 		&sql.MysqlSystemVariable{
 			Name:    dsess.DoltClusterRoleVariable,
 			Dynamic: false,
-			Scope:   sql.SystemVariableScope_Persist,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Persist),
 			Type:    gmstypes.NewSystemStringType(dsess.DoltClusterRoleVariable),
 			Default: role,
 		},
 		&sql.MysqlSystemVariable{
 			Name:    dsess.DoltClusterRoleEpochVariable,
 			Dynamic: false,
-			Scope:   sql.SystemVariableScope_Persist,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Persist),
 			Type:    gmstypes.NewSystemIntType(dsess.DoltClusterRoleEpochVariable, 0, 9223372036854775807, false),
 			Default: epoch,
 		},

@@ -75,7 +75,7 @@ func DefineSystemVariablesForDB(name string) {
 		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
 			&sql.MysqlSystemVariable{
 				Name:              HeadRefKey(name),
-				Scope:             sql.SystemVariableScope_Session,
+				Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),
 				Dynamic:           true,
 				SetVarHintApplies: false,
 				Type:              types.NewSystemStringType(HeadRefKey(name)),
@@ -85,7 +85,7 @@ func DefineSystemVariablesForDB(name string) {
 			// can only be updates by the system, not by users.
 			&sql.MysqlSystemVariable{
 				Name:              HeadKey(name),
-				Scope:             sql.SystemVariableScope_Session,
+				Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),
 				Dynamic:           true,
 				SetVarHintApplies: false,
 				Type:              types.NewSystemStringType(HeadKey(name)),
@@ -93,7 +93,7 @@ func DefineSystemVariablesForDB(name string) {
 			},
 			&sql.MysqlSystemVariable{
 				Name:              WorkingKey(name),
-				Scope:             sql.SystemVariableScope_Session,
+				Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),
 				Dynamic:           true,
 				SetVarHintApplies: false,
 				Type:              types.NewSystemStringType(WorkingKey(name)),
@@ -101,7 +101,7 @@ func DefineSystemVariablesForDB(name string) {
 			},
 			&sql.MysqlSystemVariable{
 				Name:              StagedKey(name),
-				Scope:             sql.SystemVariableScope_Session,
+				Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),
 				Dynamic:           true,
 				SetVarHintApplies: false,
 				Type:              types.NewSystemStringType(StagedKey(name)),
@@ -109,7 +109,7 @@ func DefineSystemVariablesForDB(name string) {
 			},
 			&sql.MysqlSystemVariable{
 				Name:              DefaultBranchKey(name),
-				Scope:             sql.SystemVariableScope_Global,
+				Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Global),
 				Dynamic:           true,
 				SetVarHintApplies: false,
 				Type:              types.NewSystemStringType(DefaultBranchKey(name)),
