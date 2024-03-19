@@ -28,17 +28,26 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-const HashOfFuncName = "hashof"
+const DeprecatedHashOfFuncName = "hashof"
+const HashOfFuncName = "dolt_hashof"
 
 type HashOf struct {
 	expression.UnaryExpression
+	name string
 }
 
 var _ sql.FunctionExpression = (*HashOf)(nil)
 
-// NewHashOf creates a new HashOf expression.
-func NewHashOf(e sql.Expression) sql.Expression {
-	return &HashOf{expression.UnaryExpression{Child: e}}
+// NewHashOfFunc creates a constructor for a Hashof function which will properly initialize the name
+func NewHashOfFunc(name string) sql.CreateFunc1Args {
+	return func(e sql.Expression) sql.Expression {
+		return newHashOf(e, name)
+	}
+}
+
+// newHashOf creates a new HashOf expression.
+func newHashOf(e sql.Expression, name string) sql.Expression {
+	return &HashOf{expression.UnaryExpression{Child: e}, name}
 }
 
 // Eval implements the Expression interface.
@@ -123,12 +132,12 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 
 // String implements the Stringer interface.
 func (t *HashOf) String() string {
-	return fmt.Sprintf("HASHOF(%s)", t.Child.String())
+	return fmt.Sprintf("%s(%s)", t.name, t.Child.String())
 }
 
 // FunctionName implements the FunctionExpression interface
 func (t *HashOf) FunctionName() string {
-	return HashOfFuncName
+	return t.name
 }
 
 // Description implements the FunctionExpression interface
@@ -146,7 +155,7 @@ func (t *HashOf) WithChildren(children ...sql.Expression) (sql.Expression, error
 	if len(children) != 1 {
 		return nil, sql.ErrInvalidChildrenNumber.New(t, len(children), 1)
 	}
-	return NewHashOf(children[0]), nil
+	return newHashOf(children[0], t.name), nil
 }
 
 // Type implements the Expression interface.
