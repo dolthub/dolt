@@ -142,16 +142,6 @@ func (d *DoltHarness) resetScripts() []setup.SetupScript {
 			}
 
 			resetCmds = append(resetCmds, setup.SetupScript{fmt.Sprintf("drop table %s", tableName)})
-
-			ctx := enginetest.NewContext(d)
-			ctx.Session.SetCurrentDatabase(db)
-			_, showCreateResult := enginetest.MustQuery(ctx, d.engine, fmt.Sprintf("show create table %s;", tableName))
-			var createTableStatement strings.Builder
-			for _, row := range showCreateResult {
-				createTableStatement.WriteString(row[1].(string))
-			}
-
-			resetCmds = append(resetCmds, setup.SetupScript{createTableStatement.String()})
 		}
 
 		resetCmds = append(resetCmds, setup.SetupScript{"call dolt_clean()"})
