@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"golang.org/x/sync/errgroup"
-	"golang.org/x/sync/semaphore"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -44,21 +43,6 @@ var ErrDBUpToDate = errors.New("the database does not need to be pulled as it's 
 // the event that the source ChunkStore does not implement `NBSCompressedChunkStore`.
 var ErrIncompatibleSourceChunkStore = errors.New("the chunk store of the source database does not implement NBSCompressedChunkStore.")
 
-const (
-	outstandingTableFiles = 2
-)
-
-// FilledWriters store CmpChunkTableWriter that have been filled and are ready to be flushed.  In the future will likely
-// add the md5 of the data to this structure to be used to verify table upload calls.
-type FilledWriters struct {
-	wr *nbs.CmpChunkTableWriter
-}
-
-// CmpChnkAndRefs holds a CompressedChunk and all of it's references
-type CmpChnkAndRefs struct {
-	cmpChnk nbs.CompressedChunk
-}
-
 type WalkAddrs func(chunks.Chunk, func(hash.Hash, bool) error) error
 
 // Puller is used to sync data between to Databases
@@ -69,10 +53,7 @@ type Puller struct {
 	sinkDBCS      chunks.ChunkStore
 	hashes        hash.HashSet
 
-	wr            *nbs.CmpChunkTableWriter
-	tablefileSema *semaphore.Weighted
-	tempDir       string
-	chunksPerTF   int
+	wr *PullTableFileWriter
 
 	pushLog *log.Logger
 
@@ -119,11 +100,13 @@ func NewPuller(
 		return nil, ErrIncompatibleSourceChunkStore
 	}
 
-	wr, err := nbs.NewCmpChunkTableWriter(tempDir)
-
-	if err != nil {
-		return nil, err
-	}
+	wr := NewPullTableFileWriter(ctx, PullTableFileWriterConfig{
+		ConcurrentUploads:    2,
+		ChunksPerFile:        chunksPerTF,
+		MaximumBufferedFiles: 8,
+		TempDir:              tempDir,
+		DestStore:            sinkCS.(chunks.TableFileStore),
+	})
 
 	var pushLogger *log.Logger
 	if dbg, ok := os.LookupEnv(dconfig.EnvPushLog); ok && strings.ToLower(dbg) == "true" {
@@ -140,13 +123,12 @@ func NewPuller(
 		srcChunkStore: srcChunkStore,
 		sinkDBCS:      sinkCS,
 		hashes:        hash.NewHashSet(hashes...),
-		tablefileSema: semaphore.NewWeighted(outstandingTableFiles),
-		tempDir:       tempDir,
 		wr:            wr,
-		chunksPerTF:   chunksPerTF,
 		pushLog:       pushLogger,
 		statsCh:       statsCh,
-		stats:         &stats{},
+		stats: &stats{
+			wrStatsGetter: wr.GetStats,
+		},
 	}
 
 	if lcs, ok := sinkCS.(chunks.LoggingChunkStore); ok {
@@ -207,7 +189,8 @@ func emitStats(s *stats, ch chan Stats) (cancel func()) {
 		for {
 			select {
 			case <-ticker.C:
-				newSendBytes := atomic.LoadUint64(&s.finishedSendBytes)
+				wrStats := s.wrStatsGetter()
+				newSendBytes := wrStats.FinishedSendBytes
 				newFetchedBytes := atomic.LoadUint64(&s.fetchedSourceBytes)
 				sendBytesDiff := newSendBytes - lastSendBytes
 				fetchedBytesDiff := newFetchedBytes - lastFetchedBytes
@@ -266,9 +249,7 @@ func emitStats(s *stats, ch chan Stats) (cancel func()) {
 }
 
 type stats struct {
-	finishedSendBytes uint64
-	bufferedSendBytes uint64
-	sendBytesPerSec   uint64
+	sendBytesPerSec uint64
 
 	totalSourceChunks        uint64
 	fetchedSourceChunks      uint64
@@ -277,6 +258,8 @@ type stats struct {
 
 	sendBytesPerSecF          float64
 	fetchedSourceBytesPerSecF float64
+
+	wrStatsGetter func() PullTableFileWriterStats
 }
 
 type Stats struct {
@@ -291,91 +274,17 @@ type Stats struct {
 }
 
 func (s *stats) read() Stats {
+	wrStats := s.wrStatsGetter()
+
 	var ret Stats
-	ret.FinishedSendBytes = atomic.LoadUint64(&s.finishedSendBytes)
-	ret.BufferedSendBytes = atomic.LoadUint64(&s.bufferedSendBytes)
+	ret.FinishedSendBytes = wrStats.FinishedSendBytes
+	ret.BufferedSendBytes = wrStats.BufferedSendBytes
 	ret.SendBytesPerSec = math.Float64frombits(atomic.LoadUint64(&s.sendBytesPerSec))
 	ret.TotalSourceChunks = atomic.LoadUint64(&s.totalSourceChunks)
 	ret.FetchedSourceChunks = atomic.LoadUint64(&s.fetchedSourceChunks)
 	ret.FetchedSourceBytes = atomic.LoadUint64(&s.fetchedSourceBytes)
 	ret.FetchedSourceBytesPerSec = math.Float64frombits(atomic.LoadUint64(&s.fetchedSourceBytesPerSec))
 	return ret
-}
-
-func (p *Puller) uploadTempTableFile(ctx context.Context, tmpTblFile tempTblFile) error {
-	fileSize := tmpTblFile.contentLen
-	defer func() {
-		_ = tmpTblFile.read.Remove()
-	}()
-
-	// By tracking the number of bytes uploaded here,
-	// we can add bytes on to our bufferedSendBytes when
-	// we have to retry a table file write.
-	var localUploaded uint64
-	return p.sinkDBCS.(chunks.TableFileStore).WriteTableFile(ctx, tmpTblFile.id, tmpTblFile.numChunks, tmpTblFile.contentHash, func() (io.ReadCloser, uint64, error) {
-		rc, err := tmpTblFile.read.Reader()
-		if err != nil {
-			return nil, 0, err
-		}
-
-		if localUploaded == 0 {
-			// So far, we've added all the bytes for the compressed chunk data.
-			// We add the remaining bytes here --- bytes for the index and the
-			// table file footer.
-			atomic.AddUint64(&p.stats.bufferedSendBytes, uint64(fileSize)-tmpTblFile.chunksLen)
-		} else {
-			// A retry. We treat it as if what was already uploaded was rebuffered.
-			atomic.AddUint64(&p.stats.bufferedSendBytes, uint64(localUploaded))
-			localUploaded = 0
-		}
-
-		fWithStats := countingReader{countingReader{rc, &localUploaded}, &p.stats.finishedSendBytes}
-
-		return fWithStats, uint64(fileSize), nil
-	})
-}
-
-func (p *Puller) processCompletedTables(ctx context.Context, completedTables <-chan FilledWriters) error {
-	fileIdToNumChunks := make(map[string]int)
-
-LOOP:
-	for {
-		select {
-		case tblFile, ok := <-completedTables:
-			if !ok {
-				break LOOP
-			}
-			p.tablefileSema.Release(1)
-
-			// content length before we finish the write, which will
-			// add the index and table file footer.
-			chunksLen := tblFile.wr.ContentLength()
-
-			id, err := tblFile.wr.Finish()
-			if err != nil {
-				return err
-			}
-
-			ttf := tempTblFile{
-				id:          id,
-				read:        tblFile.wr,
-				numChunks:   tblFile.wr.ChunkCount(),
-				chunksLen:   chunksLen,
-				contentLen:  tblFile.wr.ContentLength(),
-				contentHash: tblFile.wr.GetMD5(),
-			}
-			err = p.uploadTempTableFile(ctx, ttf)
-			if err != nil {
-				return err
-			}
-
-			fileIdToNumChunks[id] = ttf.numChunks
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-
-	return p.sinkDBCS.(chunks.TableFileStore).AddTableFilesToManifest(ctx, fileIdToNumChunks)
 }
 
 // Pull executes the sync operation
@@ -387,22 +296,19 @@ func (p *Puller) Pull(ctx context.Context) error {
 
 	eg, ctx := errgroup.WithContext(ctx)
 
-	completedTables := make(chan FilledWriters, 8)
-
-	eg.Go(func() error {
-		return p.processCompletedTables(ctx, completedTables)
-	})
-
 	eg.Go(func() (err error) {
-		if err = p.tablefileSema.Acquire(ctx, 1); err != nil {
-			return err
-		}
-
 		const batchSize = 64 * 1024
 		tracker := NewPullChunkTracker(ctx, p.hashes, TrackerConfig{
 			BatchSize: batchSize,
 			HasManyer: p.sinkDBCS,
 		})
+
+		defer func() {
+			wrErr := p.wr.Close()
+			if err == nil {
+				err = wrErr
+			}
+		}()
 
 		for {
 			toFetch, hasMore, err := tracker.GetChunksToFetch()
@@ -413,20 +319,12 @@ func (p *Puller) Pull(ctx context.Context) error {
 				break
 			}
 
-			err = p.getCmp(ctx, toFetch, tracker, completedTables)
+			err = p.getCmp(ctx, toFetch, tracker)
 			if err != nil {
 				return err
 			}
 		}
 
-		if p.wr != nil && p.wr.ChunkCount() > 0 {
-			select {
-			case completedTables <- FilledWriters{p.wr}:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
-		close(completedTables)
 		return nil
 	})
 
@@ -447,9 +345,9 @@ func batchNovel(absent hash.HashSet, batch int) (remainder hash.HashSet, batches
 	return
 }
 
-func (p *Puller) getCmp(ctx context.Context, batch hash.HashSet, tracker *PullChunkTracker, completedTables chan FilledWriters) error {
+func (p *Puller) getCmp(ctx context.Context, batch hash.HashSet, tracker *PullChunkTracker) error {
 	found := make(chan nbs.CompressedChunk, 4096)
-	processed := make(chan CmpChnkAndRefs, 4096)
+	processed := make(chan nbs.CompressedChunk, 4096)
 
 	atomic.AddUint64(&p.stats.totalSourceChunks, uint64(len(batch)))
 	eg, ctx := errgroup.WithContext(ctx)
@@ -490,7 +388,7 @@ func (p *Puller) getCmp(ctx context.Context, batch hash.HashSet, tracker *PullCh
 					return err
 				}
 				select {
-				case processed <- CmpChnkAndRefs{cmpChnk: cmpChnk}:
+				case processed <- cmpChnk:
 				case <-ctx.Done():
 					return ctx.Err()
 				}
@@ -508,38 +406,16 @@ func (p *Puller) getCmp(ctx context.Context, batch hash.HashSet, tracker *PullCh
 	LOOP:
 		for {
 			select {
-			case cmpAndRef, ok := <-processed:
+			case cmpChnk, ok := <-processed:
 				if !ok {
 					break LOOP
 				}
 				seen++
 
-				err := p.wr.AddCmpChunk(cmpAndRef.cmpChnk)
+				err := p.wr.AddCompressedChunk(ctx, cmpChnk)
 				if err != nil {
 					return err
 				}
-
-				atomic.AddUint64(&p.stats.bufferedSendBytes, uint64(len(cmpAndRef.cmpChnk.FullCompressedChunk)))
-
-				if p.wr.ChunkCount() >= p.chunksPerTF {
-					select {
-					case completedTables <- FilledWriters{p.wr}:
-					case <-ctx.Done():
-						return ctx.Err()
-					}
-					p.wr = nil
-
-					if err := p.tablefileSema.Acquire(ctx, 1); err != nil {
-						return err
-					}
-					p.wr, err = nbs.NewCmpChunkTableWriter(p.tempDir)
-					if err != nil {
-						return err
-					}
-				}
-
-				cmpAndRef.cmpChnk.FullCompressedChunk = nil
-				cmpAndRef.cmpChnk.CompressedData = nil
 			case <-ctx.Done():
 				return ctx.Err()
 			}
