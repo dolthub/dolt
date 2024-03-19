@@ -17,6 +17,7 @@ package pull
 import (
 	"context"
 	"io"
+	"sync"
 	"sync/atomic"
 
 	"golang.org/x/sync/errgroup"
@@ -94,10 +95,10 @@ func NewPullTableFileWriter(ctx context.Context, cfg PullTableFileWriterConfig) 
 	ret := &PullTableFileWriter{
 		cfg:         cfg,
 		addChunkCh:  make(chan nbs.CompressedChunk),
-		newWriterCh: make(chan *nbs.CmpChunkTableWriter),
+		newWriterCh: make(chan *nbs.CmpChunkTableWriter, cfg.MaximumBufferedFiles),
 	}
 	ret.eg, ret.egCtx = errgroup.WithContext(ctx)
-	ret.eg.Go(ret.pendingUploadThread)
+	ret.eg.Go(ret.uploadAndFinalizeThread)
 	ret.eg.Go(ret.addChunkThread)
 	return ret
 }
@@ -128,99 +129,55 @@ func (w *PullTableFileWriter) AddCompressedChunk(ctx context.Context, chk nbs.Co
 	}
 }
 
-// This thread reads completed table files and passes them off to threads which
-// do the actual uploading. When the table files input channel closes, this
-// thread waits for all uploads to complete and then it calls
-// AddTableFilesToManifest before itself completing.
-func (w *PullTableFileWriter) pendingUploadThread() (err error) {
-	var newWriterCh chan *nbs.CmpChunkTableWriter = w.newWriterCh
-
-	reqCh := make(chan uploadReq)
+// This thread coordinates the threads which do the actual uploading. It spawns
+// the appropriate number of upload threads and waits for them all to exit,
+// which they typically do after newWriterCh is closed, but may also do if
+// their context is canceled. This thread reads the response channel from the
+// upload threads and accumulate the manifest updates.
+//
+// When all uploads threads have exited, it finishes reading the response
+// channel, and then, if all upload threads exited successfully, it applies any
+// necessary manifest updates to the DestStore.
+func (w *PullTableFileWriter) uploadAndFinalizeThread() (err error) {
 	respCh := make(chan tempTblFile)
-	manifestUpdates := make(map[string]int)
 
-	// Uploads that haven't been sent to an uploader thread yet.
-	var pendingUploads []uploadReq
-
-	// The count of uploads that have been accepted by uploader threads.
-	// Must reach 0 for uploads to be completed and the manifest update to
-	// proceed.
-	outstandingUploads := 0
-
-	eg, ctx := errgroup.WithContext(w.egCtx)
+	uploadEg, uploadCtx := errgroup.WithContext(w.egCtx)
 	for i := 0; i < w.cfg.ConcurrentUploads; i++ {
-		eg.Go(func() error {
-			return w.uploadThread(ctx, reqCh, respCh)
+		uploadEg.Go(func() error {
+			return w.uploadThread(uploadCtx, w.newWriterCh, respCh)
 		})
 	}
 
-	defer func() {
-		close(reqCh)
-		egErr := eg.Wait()
-		if err == nil {
-			err = egErr
+	// After all upload threads are done, the response channel is closed.
+	go func() {
+		uploadEg.Wait()
+		close(respCh)
+	}()
+
+	// We don't need too much coordination here, since respCh is guaranteed
+	// to always be closed after uploadEg is done and we are going to check
+	// for errors later.
+	manifestUpdates := make(map[string]int)
+	var manifestWg sync.WaitGroup
+	manifestWg.Add(1)
+	go func() {
+		defer manifestWg.Done()
+		for ttf := range respCh {
+			manifestUpdates[ttf.id] = ttf.numChunks
 		}
 	}()
 
-	for {
-		if newWriterCh == nil && len(pendingUploads) == 0 && outstandingUploads == 0 {
-			break
-		}
-
-		// If we have too many pending uploads, stop accepting new files.
-		if len(pendingUploads) > w.cfg.MaximumBufferedFiles {
-			newWriterCh = nil
-		}
-
-		// Send the next pending upload to an upload thread.
-		var thisReqCh chan uploadReq
-		var pendingUpload uploadReq
-		if len(pendingUploads) > 0 {
-			pendingUpload = pendingUploads[len(pendingUploads)-1]
-			thisReqCh = reqCh
-		}
-
-		select {
-		case <-ctx.Done():
-			// The upload thread context is canceled.  Wait until
-			// they all exit and return the error from the upload
-			// thread.
-			return eg.Wait()
-		case <-w.egCtx.Done():
-			eg.Wait()
-			return context.Cause(w.egCtx)
-		case newWriter, ok := <- newWriterCh:
-			if !ok {
-				newWriterCh = nil
-				break
-			}
-			pendingUploads = append(pendingUploads, uploadReq{
-				wr: newWriter,
-			})
-		case thisReqCh <- pendingUpload:
-			// Keep track of how many responses we need to wait for.
-			outstandingUploads += 1
-			// We just sent |pendingUpload| to an upload thread.
-			// We clear it from our |pendingUploads| list so we
-			// don't also retain it.
-			pendingUploads[len(pendingUploads)-1] = uploadReq{}
-			pendingUploads = pendingUploads[:len(pendingUploads)-1]
-			newWriterCh = w.newWriterCh
-		case resp := <-respCh:
-			// A file was uploaded successfully - record it in the pending manifest updates.
-			outstandingUploads -= 1
-			manifestUpdates[resp.id] = resp.numChunks
-		}
+	manifestWg.Wait()
+	err = uploadEg.Wait()
+	if err != nil {
+		return err
 	}
 
 	if len(manifestUpdates) > 0 {
-		err := w.cfg.DestStore.AddTableFilesToManifest(w.egCtx, manifestUpdates)
-		if err != nil {
-			return err
-		}
+		return w.cfg.DestStore.AddTableFilesToManifest(w.egCtx, manifestUpdates)
+	} else {
+		return nil
 	}
-
-	return nil
 }
 
 // This thread reads from addChunkCh and writes the chunks to table files.
@@ -244,48 +201,53 @@ func (w *PullTableFileWriter) addChunkThread() (err error) {
 		}
 	}()
 
-LOOP:
-	for {
-		if curWr != nil && curWr.ChunkCount() >= w.cfg.ChunksPerFile {
-			select {
-			case <-w.egCtx.Done():
-				return context.Cause(w.egCtx)
-			case w.newWriterCh <- curWr:
-				curWr = nil
-			}
-		} else {
-			select {
-			case <-w.egCtx.Done():
-				return context.Cause(w.egCtx)
-			case newChnk, ok := <-w.addChunkCh:
-				if !ok {
-					break LOOP
-				}
-
-				if curWr == nil {
-					curWr, err = nbs.NewCmpChunkTableWriter(w.cfg.TempDir)
-					if err != nil {
-						return err
-					}
-				}
-
-				// Add the chunk to writer.
-				err = curWr.AddCmpChunk(newChnk)
-				if err != nil {
-					return err
-				}
-				atomic.AddUint64(&w.bufferedSendBytes, uint64(len(newChnk.FullCompressedChunk)))
-			}
-		}
-	}
-
-	// Send the last writer, if there is one.
-	if curWr != nil {
+	sendTableFile := func() error {
 		select {
 		case <-w.egCtx.Done():
 			return context.Cause(w.egCtx)
 		case w.newWriterCh <- curWr:
 			curWr = nil
+			return nil
+		}
+	}
+
+LOOP:
+	for {
+		if curWr != nil && curWr.ChunkCount() >= w.cfg.ChunksPerFile {
+			if err := sendTableFile(); err != nil {
+				return err
+			}
+			continue
+		}
+
+		select {
+		case <-w.egCtx.Done():
+			return context.Cause(w.egCtx)
+		case newChnk, ok := <-w.addChunkCh:
+			if !ok {
+				break LOOP
+			}
+
+			if curWr == nil {
+				curWr, err = nbs.NewCmpChunkTableWriter(w.cfg.TempDir)
+				if err != nil {
+					return err
+				}
+			}
+
+			// Add the chunk to writer.
+			err = curWr.AddCmpChunk(newChnk)
+			if err != nil {
+				return err
+			}
+			atomic.AddUint64(&w.bufferedSendBytes, uint64(len(newChnk.FullCompressedChunk)))
+		}
+	}
+
+	// Send the last writer, if there is one.
+	if curWr != nil {
+		if err := sendTableFile(); err != nil {
+			return err
 		}
 	}
 
@@ -304,19 +266,13 @@ func (w *PullTableFileWriter) Close() error {
 	return w.eg.Wait()
 }
 
-type uploadReq struct {
-	wr *nbs.CmpChunkTableWriter
-}
-
-func (w *PullTableFileWriter) uploadThread(ctx context.Context, reqCh chan uploadReq, respCh chan tempTblFile) error {
+func (w *PullTableFileWriter) uploadThread(ctx context.Context, reqCh chan *nbs.CmpChunkTableWriter, respCh chan tempTblFile) error {
 	for {
 		select {
-		case req, ok := <-reqCh:
+		case wr, ok := <-reqCh:
 			if !ok {
 				return nil
 			}
-			wr := req.wr
-
 			// content length before we finish the write, which will
 			// add the index and table file footer.
 			chunksLen := wr.ContentLength()
