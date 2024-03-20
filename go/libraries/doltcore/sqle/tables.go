@@ -2401,7 +2401,7 @@ func (t *AlterableDoltTable) CreateFulltextIndex(ctx *sql.Context, idx sql.Index
 	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
 		return err
 	}
-	if idx.Constraint != sql.IndexConstraint_Fulltext {
+	if !idx.IsFullText() {
 		return fmt.Errorf("attempted to create non-FullText index through FullText interface")
 	}
 
