@@ -25,6 +25,8 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/val"
+
+	trie "github.com/nicktobey/go-succinct-data-structure-trie"
 )
 
 const (
@@ -53,19 +55,35 @@ var _ Serializer = ProllyMapSerializer{}
 
 func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64, level int) serial.Message {
 	var (
-		keyTups, keyOffs fb.UOffsetT
 		valTups, valOffs fb.UOffsetT
 		valAddrOffs      fb.UOffsetT
 		refArr, cardArr  fb.UOffsetT
 	)
 
-	keySz, valSz, bufSz := estimateProllyMapSize(keys, values, subtrees, s.valDesc.AddressFieldCount())
+	_, valSz, bufSz := estimateProllyMapSize(keys, values, subtrees, s.valDesc.AddressFieldCount())
 	b := getFlatbufferBuilder(s.pool, bufSz)
 
-	// serialize keys and offStart
-	keyTups = writeItemBytes(b, keys, keySz)
-	serial.ProllyTreeNodeStartKeyOffsetsVector(b, len(keys)+1)
-	keyOffs = writeItemOffsets(b, keys, keySz)
+	keyTrie := trie.Trie{}
+	keyTrie.Init()
+	for _, key := range keys {
+		keyTrie.Insert(string(key))
+	}
+
+	keyMap := trie.FrozenTrieMap{}
+	keyMap.Create(keyTrie)
+
+	keyBuffer := keyMap.GetBuffer()
+	keyOffsets := keyMap.GetOffsets()
+
+	trieNodes := []byte{byte(keyTrie.GetNodeCount())}
+	keyTups := writeItemBytes(b, [][]byte{keyBuffer}, len(keyBuffer))
+
+	// The flatbuffer schema expects a vector of uint16, but we insert a byte vector instead.
+	// After writing the vector, manually overwrite the vector's length with the correct value.
+	offsetBytes := len(keyOffsets) + 1
+	numShorts := (offsetBytes + 1) / 2
+	keyOffs := writeItemBytes(b, [][]byte{trieNodes, keyOffsets}, numShorts*2)
+	fb.WriteUOffsetT(b.Bytes[b.Head():], fb.UOffsetT(numShorts))
 
 	if level == 0 {
 		// serialize value tuples for leaf nodes
@@ -105,6 +123,7 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 }
 
 func getProllyMapKeysAndValues(msg serial.Message) (keys, values ItemAccess, level, count uint16, err error) {
+	keys.IsTrie = true
 	var pm serial.ProllyTreeNode
 	err = serial.InitProllyTreeNodeRoot(&pm, msg, serial.MessagePrefixSz)
 	if err != nil {
@@ -165,7 +184,7 @@ func getProllyMapCount(msg serial.Message) (uint16, error) {
 	if err != nil {
 		return 0, err
 	}
-	return uint16(pm.KeyOffsetsLength() - 1), nil
+	return uint16(pm.ValueOffsetsLength() - 1), nil
 }
 
 func getProllyMapTreeLevel(msg serial.Message) (int, error) {

@@ -16,6 +16,7 @@ package tree
 
 import (
 	"context"
+	"sort"
 	"sync"
 
 	"github.com/dolthub/dolt/go/store/prolly/message"
@@ -70,10 +71,12 @@ func newNodeBuilder[S message.Serializer](serializer S, level int) (nb *nodeBuil
 }
 
 type nodeBuilder[S message.Serializer] struct {
-	keys, values [][]byte
-	size, level  int
-	subtrees     subtreeCounts
-	serializer   S
+	keys               [][]byte
+	lengthSortedValues map[int][][]byte
+	values             [][]byte
+	size, level        int
+	subtrees           subtreeCounts
+	serializer         S
 }
 
 func (nb *nodeBuilder[S]) hasCapacity(key, value Item) bool {
@@ -84,11 +87,13 @@ func (nb *nodeBuilder[S]) hasCapacity(key, value Item) bool {
 func (nb *nodeBuilder[S]) addItems(key, value Item, subtree uint64) {
 	if nb.keys == nil {
 		nb.keys = getItemSlices()
+		nb.lengthSortedValues = make(map[int][][]byte)
 		nb.values = getItemSlices()
 		nb.subtrees = getSubtreeSlice()
 	}
 	nb.keys = append(nb.keys, key)
 	nb.values = append(nb.values, value)
+	nb.lengthSortedValues[len(key)] = append(nb.lengthSortedValues[len(key)], value)
 	nb.size += len(key) + len(value)
 	nb.subtrees = append(nb.subtrees, subtree)
 }
@@ -98,10 +103,29 @@ func (nb *nodeBuilder[S]) count() int {
 }
 
 func (nb *nodeBuilder[S]) build() (node Node, err error) {
-	msg := nb.serializer.Serialize(nb.keys, nb.values, nb.subtrees, nb.level)
+	var values [][]byte
+	if _, ok := any(nb.serializer).(message.ProllyMapSerializer); ok {
+		var valueLengths []int
+		for length := range nb.lengthSortedValues {
+			valueLengths = append(valueLengths, length)
+		}
+		sort.Ints(valueLengths)
+		for _, length := range valueLengths {
+			values = append(values, nb.lengthSortedValues[length]...)
+		}
+	} else {
+		values = nb.values
+	}
+
+	msg := nb.serializer.Serialize(nb.keys, values, nb.subtrees, nb.level)
 	nb.recycleBuffers()
 	nb.size = 0
-	return NodeFromBytes(msg)
+	node, err = NodeFromBytes(msg)
+	switch any(nb.serializer).(type) {
+	case message.ProllyMapSerializer:
+		node.keys.IsTrie = true
+	}
+	return node, err
 }
 
 func (nb *nodeBuilder[S]) recycleBuffers() {
