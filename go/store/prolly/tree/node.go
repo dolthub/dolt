@@ -204,6 +204,9 @@ func walkAddresses(ctx context.Context, nd Node, cb AddressCb) (err error) {
 }
 
 func getLastKey(nd Node) Item {
+	if nd.keys.IsTrie {
+		return []byte(message.GetTrieMap(nd.keys, nd.msg).Ft.GetLastLexographicKey())
+	}
 	return nd.GetKey(int(nd.count) - 1)
 }
 
