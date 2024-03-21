@@ -52,26 +52,24 @@ var (
 )
 
 func CreateBlobStringTypeFromParams(params map[string]string) (TypeInfo, error) {
-	var length int64
-	var collation sql.CollationID
-	var err error
-	if collationStr, ok := params[blobStringTypeParam_Collate]; ok {
-		collation, err = sql.ParseCollation(nil, &collationStr, false)
-		if err != nil {
-			return nil, err
-		}
-	} else {
+	collationStr, ok := params[blobStringTypeParam_Collate]
+	if !ok {
 		return nil, fmt.Errorf(`create blobstring type info is missing param "%v"`, blobStringTypeParam_Collate)
 	}
-	if maxLengthStr, ok := params[blobStringTypeParam_Length]; ok {
-		length, err = strconv.ParseInt(maxLengthStr, 10, 64)
-		if err != nil {
-			return nil, err
-		}
+	collation, err := sql.ParseCollation("", collationStr, false)
+	if err != nil {
+		return nil, err
+	}
 
-	} else {
+	maxLengthStr, ok := params[blobStringTypeParam_Length]
+	if !ok {
 		return nil, fmt.Errorf(`create blobstring type info is missing param "%v"`, blobStringTypeParam_Length)
 	}
+	length, err := strconv.ParseInt(maxLengthStr, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
 	sqlType, err := gmstypes.CreateString(sqltypes.Text, length, collation)
 	if err != nil {
 		return nil, err
