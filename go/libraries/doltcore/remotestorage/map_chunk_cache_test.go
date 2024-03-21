@@ -27,8 +27,8 @@ import (
 	"github.com/dolthub/dolt/go/store/nbs"
 )
 
-func genRandomChunks(rng *rand.Rand, n int) (hash.HashSet, []nbs.CompressedChunk) {
-	chks := make([]nbs.CompressedChunk, n)
+func genRandomChunks(rng *rand.Rand, n int) (hash.HashSet, []nbs.ChunkRecord) {
+	chks := make([]nbs.ChunkRecord, n)
 	hashes := make(hash.HashSet)
 	for i := 0; i < n; i++ {
 		size := int(rng.Int31n(99) + 1)
@@ -37,7 +37,7 @@ func genRandomChunks(rng *rand.Rand, n int) (hash.HashSet, []nbs.CompressedChunk
 			bytes[j] = byte(rng.Int31n(255))
 		}
 
-		chk := nbs.ChunkToCompressedChunk(chunks.NewChunk(bytes), 0) // NM4
+		chk := nbs.ChunkToChunkRecord(chunks.NewChunk(bytes), 0) // NM4
 		chks[i] = chk
 
 		hashes[chk.Hash()] = struct{}{}
@@ -88,7 +88,7 @@ func TestMapChunkCache(t *testing.T) {
 
 	toFlush = mapChunkCache.GetAndClearChunksToFlush()
 
-	expected := map[hash.Hash]nbs.CompressedChunk{moreChks[0].Hash(): moreChks[0]}
+	expected := map[hash.Hash]nbs.ChunkRecord{moreChks[0].Hash(): moreChks[0]}
 	eq := reflect.DeepEqual(toFlush, expected)
 	assert.True(t, eq, "Missing or unexpected chunks to flush (seed %d)", seed)
 }

@@ -50,7 +50,7 @@ func (ecs emptyChunkSource) getMany(ctx context.Context, eg *errgroup.Group, req
 	return true, nil
 }
 
-func (ecs emptyChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
+func (ecs emptyChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ChunkRecord), stats *Stats) (bool, error) {
 	return true, nil
 }
 

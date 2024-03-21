@@ -24,16 +24,16 @@ import (
 // mapChunkCache is a ChunkCache implementation that stores everything in an in memory map.
 type mapChunkCache struct {
 	mu          *sync.Mutex
-	hashToChunk map[hash.Hash]nbs.CompressedChunk
-	toFlush     map[hash.Hash]nbs.CompressedChunk
+	hashToChunk map[hash.Hash]nbs.ChunkRecord
+	toFlush     map[hash.Hash]nbs.ChunkRecord
 	cm          CapacityMonitor
 }
 
 func newMapChunkCache() *mapChunkCache {
 	return &mapChunkCache{
 		&sync.Mutex{},
-		make(map[hash.Hash]nbs.CompressedChunk),
-		make(map[hash.Hash]nbs.CompressedChunk),
+		make(map[hash.Hash]nbs.ChunkRecord),
+		make(map[hash.Hash]nbs.ChunkRecord),
 		NewUncappedCapacityMonitor(),
 	}
 }
@@ -42,14 +42,14 @@ func newMapChunkCache() *mapChunkCache {
 func NewMapChunkCacheWithMaxCapacity(maxCapacity int64) *mapChunkCache {
 	return &mapChunkCache{
 		&sync.Mutex{},
-		make(map[hash.Hash]nbs.CompressedChunk),
-		make(map[hash.Hash]nbs.CompressedChunk),
+		make(map[hash.Hash]nbs.ChunkRecord),
+		make(map[hash.Hash]nbs.ChunkRecord),
 		NewFixedCapacityMonitor(maxCapacity),
 	}
 }
 
 // Put puts a slice of chunks into the cache.
-func (mcc *mapChunkCache) Put(chnks []nbs.CompressedChunk) bool {
+func (mcc *mapChunkCache) Put(chnks []nbs.ChunkRecord) bool {
 	mcc.mu.Lock()
 	defer mcc.mu.Unlock()
 
@@ -79,8 +79,8 @@ func (mcc *mapChunkCache) Put(chnks []nbs.CompressedChunk) bool {
 
 // Get gets a map of hash to chunk for a set of hashes.  In the event that a chunk is not in the cache, chunks.Empty.
 // is put in it's place
-func (mcc *mapChunkCache) Get(hashes hash.HashSet) map[hash.Hash]nbs.CompressedChunk {
-	hashToChunk := make(map[hash.Hash]nbs.CompressedChunk)
+func (mcc *mapChunkCache) Get(hashes hash.HashSet) map[hash.Hash]nbs.ChunkRecord {
+	hashToChunk := make(map[hash.Hash]nbs.ChunkRecord)
 
 	mcc.mu.Lock()
 	defer mcc.mu.Unlock()
@@ -89,7 +89,7 @@ func (mcc *mapChunkCache) Get(hashes hash.HashSet) map[hash.Hash]nbs.CompressedC
 		if c, ok := mcc.hashToChunk[h]; ok {
 			hashToChunk[h] = c
 		} else {
-			hashToChunk[h] = nbs.EmptyCompressedChunk
+			hashToChunk[h] = nbs.EmptyChunkRecord
 		}
 	}
 
@@ -112,7 +112,7 @@ func (mcc *mapChunkCache) Has(hashes hash.HashSet) (absent hash.HashSet) {
 	return absent
 }
 
-func (mcc *mapChunkCache) PutChunk(ch nbs.CompressedChunk) bool {
+func (mcc *mapChunkCache) PutChunk(ch nbs.ChunkRecord) bool {
 	mcc.mu.Lock()
 	defer mcc.mu.Unlock()
 
@@ -130,8 +130,8 @@ func (mcc *mapChunkCache) PutChunk(ch nbs.CompressedChunk) bool {
 
 // GetAndClearChunksToFlush gets a map of hash to chunk which includes all the chunks that were put in the cache
 // between the last time GetAndClearChunksToFlush was called and now.
-func (mcc *mapChunkCache) GetAndClearChunksToFlush() map[hash.Hash]nbs.CompressedChunk {
-	newToFlush := make(map[hash.Hash]nbs.CompressedChunk)
+func (mcc *mapChunkCache) GetAndClearChunksToFlush() map[hash.Hash]nbs.ChunkRecord {
+	newToFlush := make(map[hash.Hash]nbs.ChunkRecord)
 
 	mcc.mu.Lock()
 	defer mcc.mu.Unlock()

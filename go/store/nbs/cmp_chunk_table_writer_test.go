@@ -48,10 +48,10 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	}
 
 	reqs := toGetRecords(hashes)
-	found := make([]CompressedChunk, 0)
+	found := make([]ChunkRecord, 0)
 
 	eg, egCtx := errgroup.WithContext(ctx)
-	_, err = tr.getManyCompressed(egCtx, eg, reqs, func(ctx context.Context, c CompressedChunk) { found = append(found, c) }, &Stats{})
+	_, err = tr.getManyCompressed(egCtx, eg, reqs, func(ctx context.Context, c ChunkRecord) { found = append(found, c) }, &Stats{})
 	require.NoError(t, err)
 	require.NoError(t, eg.Wait())
 
@@ -59,7 +59,7 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	tw, err := NewCmpChunkTableWriter("", 0) // NM4
 	require.NoError(t, err)
 	for _, cmpChnk := range found {
-		err = tw.AddCmpChunk(cmpChnk)
+		err = tw.AddChunkRecord(cmpChnk)
 		require.NoError(t, err)
 	}
 
@@ -70,9 +70,9 @@ func TestCmpChunkTableWriter(t *testing.T) {
 		tw, err := NewCmpChunkTableWriter("", 0) // NM4
 		require.NoError(t, err)
 		for _, cmpChnk := range found {
-			err = tw.AddCmpChunk(cmpChnk)
+			err = tw.AddChunkRecord(cmpChnk)
 			require.NoError(t, err)
-			err = tw.AddCmpChunk(cmpChnk)
+			err = tw.AddChunkRecord(cmpChnk)
 			require.NoError(t, err)
 		}
 		_, err = tw.Finish()

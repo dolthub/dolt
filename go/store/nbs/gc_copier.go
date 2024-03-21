@@ -55,8 +55,8 @@ func newGarbageCollectionCopier() (*gcCopier, error) {
 	return &gcCopier{writer}, nil
 }
 
-func (gcc *gcCopier) addChunk(ctx context.Context, c CompressedChunk) error {
-	return gcc.writer.AddCmpChunk(c)
+func (gcc *gcCopier) addChunk(ctx context.Context, c ChunkRecord) error {
+	return gcc.writer.AddChunkRecord(c)
 }
 
 func (gcc *gcCopier) copyTablesToDir(ctx context.Context, tfp tableFilePersister) (ts []tableSpec, err error) {

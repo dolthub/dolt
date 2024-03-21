@@ -103,7 +103,7 @@ var journalRecordTimestampGenerator = func() uint64 {
 	return uint64(time.Now().Unix())
 }
 
-func chunkRecordSize(c CompressedChunk) (recordSz, payloadOff uint32) {
+func chunkRecordSize(c ChunkRecord) (recordSz, payloadOff uint32) {
 	recordSz += journalRecLenSz
 	recordSz += journalRecTagSz + journalRecKindSz
 	recordSz += journalRecTagSz + journalRecAddrSz
@@ -123,7 +123,7 @@ func rootHashRecordSize() (recordSz int) {
 	return
 }
 
-func writeChunkRecord(buf []byte, c CompressedChunk) (n uint32) {
+func writeChunkRecord(buf []byte, c ChunkRecord) (n uint32) {
 	// length
 	l, _ := chunkRecordSize(c)
 	writeUint32(buf[:journalRecLenSz], l)

@@ -137,10 +137,10 @@ func (gcs *GenerationalNBS) GetMany(ctx context.Context, hashes hash.HashSet, fo
 	return gcs.ghostGen.GetMany(ctx, notFound, found)
 }
 
-func (gcs *GenerationalNBS) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk)) error {
+func (gcs *GenerationalNBS) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, ChunkRecord)) error {
 	mu := &sync.Mutex{}
 	notInOldGen := hashes.Copy()
-	err := gcs.oldGen.GetManyCompressed(ctx, hashes, func(ctx context.Context, chunk CompressedChunk) {
+	err := gcs.oldGen.GetManyCompressed(ctx, hashes, func(ctx context.Context, chunk ChunkRecord) {
 		func() {
 			mu.Lock()
 			defer mu.Unlock()

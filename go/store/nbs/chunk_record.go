@@ -32,15 +32,15 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-var EmptyCompressedChunk CompressedChunk
+var EmptyChunkRecord ChunkRecord
 
 func init() {
-	EmptyCompressedChunk = ChunkToCompressedChunk(chunks.EmptyChunk, nomsBetaVersion)
+	EmptyChunkRecord = ChunkToChunkRecord(chunks.EmptyChunk, nomsBetaVersion)
 }
 
-// CompressedChunk represents a chunk of data in a table file which is still compressed, either raw data compressed with
+// ChunkRecord represents a chunk of data in a table file which is still compressed, either raw data compressed with
 // snappy, or delta compressed type info preserved.
-type CompressedChunk struct {
+type ChunkRecord struct {
 	// H is the hash of the chunk
 	H hash.Hash
 
@@ -48,32 +48,38 @@ type CompressedChunk struct {
 	fullCompressedChunk []byte
 
 	// CompressedData is just the snappy encoded byte buffer that stores the chunk data
-	CompressedData []byte
+	compressedData []byte
 
 	nbsVer uint8 // NM4 - not sure if we want this. Everywhere we use these objects we should have the version near at hand. TBD.
 
 	// The full size of the chunk, including the type byte and the crc. This is how much space the chunk takes up on disk.
 	fullSize uint32
+
+	rawChunkSize uint32
 }
 
-func (cmp CompressedChunk) Size() uint32 {
+func (cmp ChunkRecord) Size() uint32 {
 	return cmp.fullSize
 }
 
-func (cmp CompressedChunk) WritableData() []byte {
+func (cmp ChunkRecord) RawChunkSize() uint32 {
+	return cmp.rawChunkSize
+}
+
+func (cmp ChunkRecord) WritableData() []byte {
 	return cmp.fullCompressedChunk
 }
 
 // NBSVersion returns the version of the noms data format that this chunk is encoded with. This is required in cases
-// where the origin of the CompressedChunk us unknown, and user of the object must ensure that the data is encoded
+// where the origin of the ChunkRecord us unknown, and user of the object must ensure that the data is encoded
 // in the correct format.
-func (cmp CompressedChunk) NBSVersion() uint8 {
+func (cmp ChunkRecord) NBSVersion() uint8 {
 	return cmp.nbsVer
 }
 
-// NewCompressedChunk creates a CompressedChunk, using the full chunk record bytes, which includes the crc.
+// NewChunkRecord creates a ChunkRecord, using the full chunk record bytes, which includes the crc.
 // Will error in the event that the crc does not match the data.
-func NewCompressedChunk(h hash.Hash, buff []byte, nbsVersion uint8) (CompressedChunk, error) {
+func NewChunkRecord(h hash.Hash, buff []byte, nbsVersion uint8) (ChunkRecord, error) {
 	fullSize := uint32(len(buff))
 	dataLen := uint64(len(buff)) - checksumSize
 	chksum := binary.BigEndian.Uint32(buff[dataLen:])
@@ -86,7 +92,7 @@ func NewCompressedChunk(h hash.Hash, buff []byte, nbsVersion uint8) (CompressedC
 		// in the CRC calculation.
 		// We don't use yet, but we need to skip it.
 		if buff[0] != 0 {
-			return CompressedChunk{}, errors.New("invalid chunk data - chunk type byte is not 0")
+			return ChunkRecord{}, errors.New("invalid chunk data - chunk type byte is not 0")
 		}
 
 		dataLen--
@@ -95,33 +101,44 @@ func NewCompressedChunk(h hash.Hash, buff []byte, nbsVersion uint8) (CompressedC
 
 	compressedData := buff[:dataLen]
 
+	uncLen, err := snappy.DecodedLen(compressedData)
+	if err != nil {
+		return ChunkRecord{}, err
+	}
+
 	if chksum != crcSum {
-		return CompressedChunk{}, errors.New("checksum error")
+		return ChunkRecord{}, errors.New("checksum error")
 	}
 
 	// NM4 - not sure if we want to continue carrying around the originam buff.
-	return CompressedChunk{H: h, fullCompressedChunk: fullbuff, fullSize: fullSize, CompressedData: compressedData, nbsVer: nbsVersion}, nil
+	return ChunkRecord{H: h,
+		fullCompressedChunk: fullbuff,
+		fullSize:            fullSize,
+		rawChunkSize:        uint32(uncLen),
+		compressedData:      compressedData,
+		nbsVer:              nbsVersion}, nil
 }
 
 // ToChunk snappy decodes the compressed data and returns a chunks.Chunk
-func (cmp CompressedChunk) ToChunk() (chunks.Chunk, error) {
-	data, err := snappy.Decode(nil, cmp.CompressedData)
+func (cmp ChunkRecord) ToChunk() (chunks.Chunk, error) {
+	data, err := snappy.Decode(nil, cmp.compressedData)
 
 	if err != nil {
 		return chunks.Chunk{}, err
 	}
 
 	// NM4 - We don't verify the hash?? See comment in NewChunkWithHash which assume the caller trusts the Hash. We
-	// verify the CRC in NewCompressedChunk, but not the hash. I believe this is for per reasons. For my testing, I'd
+	// verify the CRC in NewChunkRecord, but not the hash. I believe this is for per reasons. For my testing, I'd
 	// like to verify the hash here.
 
 	return chunks.NewChunkWithHash(cmp.H, data), nil
 }
 
-func ChunkToCompressedChunk(chunk chunks.Chunk, nbsVersion uint8) CompressedChunk {
+func ChunkToChunkRecord(chunk chunks.Chunk, nbsVersion uint8) ChunkRecord {
 	// NM4 - need to figure out the optimal allocation strategy for this.
 	// See previous comment in history about snappy.MaxEncodedLen
-	raw := make([]byte, 1+checksumSize+snappy.MaxEncodedLen(chunk.Size()))
+	rawChunkSize := chunk.Size()
+	raw := make([]byte, 1+checksumSize+snappy.MaxEncodedLen(rawChunkSize))
 	offset := 0
 
 	if nbsVersion >= doltRev1Version {
@@ -132,22 +149,31 @@ func ChunkToCompressedChunk(chunk chunks.Chunk, nbsVersion uint8) CompressedChun
 	compressed := snappy.Encode(raw[offset:], chunk.Data())
 	offset += len(compressed)
 
+	decodeLen, err := snappy.DecodedLen(compressed)
+	if err != nil {
+		panic(err)
+	}
+
+	if decodeLen != rawChunkSize {
+		panic("snappy encoded length does not match raw chunk size")
+	}
+
 	raw = append(raw, []byte{0, 0, 0, 0}...)
 	binary.BigEndian.PutUint32(raw[offset:], crc(raw[:offset]))
-	return CompressedChunk{H: chunk.Hash(), fullCompressedChunk: raw[:(offset + checksumSize)], CompressedData: raw[:offset], fullSize: uint32(offset + checksumSize), nbsVer: nbsVersion}
+	return ChunkRecord{H: chunk.Hash(),
+		fullCompressedChunk: raw[:(offset + checksumSize)],
+		compressedData:      raw[:offset],
+		fullSize:            uint32(offset + checksumSize),
+		rawChunkSize:        uint32(rawChunkSize),
+		nbsVer:              nbsVersion}
 }
 
 // Hash returns the hash of the data
-func (cmp CompressedChunk) Hash() hash.Hash {
+func (cmp ChunkRecord) Hash() hash.Hash {
 	return cmp.H
 }
 
 // IsEmpty returns true if the chunk contains no data.
-func (cmp CompressedChunk) IsEmpty() bool {
-	return len(cmp.CompressedData) == 0 || (len(cmp.CompressedData) == 1 && cmp.CompressedData[0] == 0)
-}
-
-// CompressedSize returns the size of this CompressedChunk.
-func (cmp CompressedChunk) CompressedSize() int {
-	return len(cmp.CompressedData)
+func (cmp ChunkRecord) IsEmpty() bool {
+	return len(cmp.compressedData) == 0 || (len(cmp.compressedData) == 1 && cmp.compressedData[0] == 0)
 }

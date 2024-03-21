@@ -51,7 +51,7 @@ func (s journalChunkSource) hasMany(addrs []hasRecord) (missing bool, err error)
 	return
 }
 
-func (s journalChunkSource) getCompressed(_ context.Context, h hash.Hash, _ *Stats) (CompressedChunk, error) {
+func (s journalChunkSource) getCompressed(_ context.Context, h hash.Hash, _ *Stats) (ChunkRecord, error) {
 	return s.journal.getCompressedChunk(h)
 }
 
@@ -90,7 +90,7 @@ func (s journalChunkSource) getMany(ctx context.Context, _ *errgroup.Group, reqs
 	return remaining, nil
 }
 
-func (s journalChunkSource) getManyCompressed(ctx context.Context, _ *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
+func (s journalChunkSource) getManyCompressed(ctx context.Context, _ *errgroup.Group, reqs []getRecord, found func(context.Context, ChunkRecord), stats *Stats) (bool, error) {
 	var remaining bool
 	// todo: read planning
 	for i := range reqs {

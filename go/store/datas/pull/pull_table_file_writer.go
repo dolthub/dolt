@@ -53,7 +53,7 @@ import (
 type PullTableFileWriter struct {
 	cfg PullTableFileWriterConfig
 
-	addChunkCh  chan nbs.CompressedChunk
+	addChunkCh  chan nbs.ChunkRecord
 	newWriterCh chan *nbs.CmpChunkTableWriter
 	egCtx       context.Context
 	eg          *errgroup.Group
@@ -94,7 +94,7 @@ type PullTableFileWriterStats struct {
 func NewPullTableFileWriter(ctx context.Context, cfg PullTableFileWriterConfig) *PullTableFileWriter {
 	ret := &PullTableFileWriter{
 		cfg:         cfg,
-		addChunkCh:  make(chan nbs.CompressedChunk),
+		addChunkCh:  make(chan nbs.ChunkRecord),
 		newWriterCh: make(chan *nbs.CmpChunkTableWriter, cfg.MaximumBufferedFiles),
 	}
 	ret.eg, ret.egCtx = errgroup.WithContext(ctx)
@@ -118,7 +118,7 @@ func (w *PullTableFileWriter) GetStats() PullTableFileWriterStats {
 // This method may block for arbitrary amounts of time if there is already a
 // lot of buffered table files and we are waiting for uploads to succeed before
 // creating more table files.
-func (w *PullTableFileWriter) AddCompressedChunk(ctx context.Context, chk nbs.CompressedChunk) error {
+func (w *PullTableFileWriter) AddCompressedChunk(ctx context.Context, chk nbs.ChunkRecord) error {
 	select {
 	case w.addChunkCh <- chk:
 		return nil
@@ -236,7 +236,7 @@ LOOP:
 			}
 
 			// Add the chunk to writer.
-			err = curWr.AddCmpChunk(newChnk)
+			err = curWr.AddChunkRecord(newChnk)
 			if err != nil {
 				return err
 			}

@@ -23,8 +23,6 @@ import (
 	"os"
 	"sort"
 
-	"github.com/golang/snappy"
-
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -42,8 +40,8 @@ var ErrDuplicateChunkWritten = errors.New("duplicate chunks written")
 
 // CmpChunkTableWriter writes CompressedChunks to a table file
 type CmpChunkTableWriter struct {
-	sink                  *HashingByteSink
-	totalCompressedData   uint64
+	sink *HashingByteSink
+	//	totalCompressedData   uint64
 	totalUncompressedData uint64
 	prefixes              prefixIndexSlice
 	blockAddr             *hash.Hash
@@ -58,7 +56,7 @@ func NewCmpChunkTableWriter(tempDir string, nbsVersion uint8) (*CmpChunkTableWri
 		return nil, err
 	}
 
-	return &CmpChunkTableWriter{NewHashingByteSink(s), 0, 0, nil, nil, s.path, nbsVersion}, nil
+	return &CmpChunkTableWriter{NewHashingByteSink(s), 0, nil, nil, s.path, nbsVersion}, nil
 }
 
 func (tw *CmpChunkTableWriter) ChunkCount() int {
@@ -75,42 +73,35 @@ func (tw *CmpChunkTableWriter) GetMD5() []byte {
 	return tw.sink.GetMD5()
 }
 
-// AddCmpChunk adds a compressed chunk
-func (tw *CmpChunkTableWriter) AddCmpChunk(c CompressedChunk) error {
-	if len(c.CompressedData) == 0 {
+// AddChunkRecord adds a chunk record to this table file, converting it to the appropriate nbs version if necessary.
+// A prefix is added to the prefix list as a side effect, to be used during the finalization of the table file.
+func (tw *CmpChunkTableWriter) AddChunkRecord(c ChunkRecord) error {
+	if c.IsEmpty() {
 		panic("NBS blocks cannot be zero length")
 	}
 
+	// NM4 - probably want to restrict the direction this can go. TBD.
 	if c.NBSVersion() != tw.nbsVer {
 		newChk, err := c.ToChunk()
 		if err != nil {
 			return err
 		}
 
-		c = ChunkToCompressedChunk(newChk, tw.nbsVer)
+		c = ChunkToChunkRecord(newChk, tw.nbsVer)
 	}
 
-	uncmpLen, err := snappy.DecodedLen(c.CompressedData)
+	tw.totalUncompressedData += uint64(c.RawChunkSize())
 
+	_, err := tw.sink.Write(c.WritableData())
 	if err != nil {
 		return err
 	}
-
-	fullLen := c.Size()
-	_, err = tw.sink.Write(c.WritableData())
-
-	if err != nil {
-		return err
-	}
-
-	tw.totalCompressedData += uint64(len(c.CompressedData))
-	tw.totalUncompressedData += uint64(uncmpLen)
 
 	// Stored in insertion order
 	tw.prefixes = append(tw.prefixes, prefixIndexRec{
 		c.H,
 		uint32(len(tw.prefixes)),
-		uint32(fullLen),
+		uint32(c.Size()),
 	})
 
 	return nil

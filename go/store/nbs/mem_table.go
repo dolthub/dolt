@@ -177,14 +177,14 @@ func (mt *memTable) getMany(ctx context.Context, eg *errgroup.Group, reqs []getR
 	return remaining, nil
 }
 
-func (mt *memTable) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
+func (mt *memTable) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ChunkRecord), stats *Stats) (bool, error) {
 	var remaining bool
 	for i, r := range reqs {
 		data := mt.chunks[*r.a]
 		if data != nil {
 			c := chunks.NewChunkWithHash(hash.Hash(*r.a), data)
 			reqs[i].found = true
-			found(ctx, ChunkToCompressedChunk(c, nomsBetaVersion))
+			found(ctx, ChunkToChunkRecord(c, nomsBetaVersion))
 		} else {
 			remaining = true
 		}

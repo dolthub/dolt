@@ -293,7 +293,7 @@ func (dcs *DoltChunkStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(context.Context, *chunks.Chunk)) error {
 	ae := atomicerr.New()
 	decompressedSize := uint64(0)
-	err := dcs.GetManyCompressed(ctx, hashes, func(ctx context.Context, cc nbs.CompressedChunk) {
+	err := dcs.GetManyCompressed(ctx, hashes, func(ctx context.Context, cc nbs.ChunkRecord) {
 		if ae.IsSet() {
 			return
 		}
@@ -316,7 +316,7 @@ func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 
 // GetMany gets the Chunks with |hashes| from the store. On return, |foundChunks| will have been fully sent all chunks
 // which have been found. Any non-present chunks will silently be ignored.
-func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, nbs.CompressedChunk)) error {
+func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, nbs.ChunkRecord)) error {
 	ctx, span := tracer.Start(ctx, "remotestorage.GetManyCompressed")
 	defer span.End()
 
@@ -433,7 +433,7 @@ func sortRangesBySize(ranges []*GetRange) {
 
 type resourcePathToUrlFunc func(ctx context.Context, lastError error, resourcePath string) (url string, err error)
 
-func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, fetcher HTTPFetcher, chunkChan chan nbs.CompressedChunk, pathToUrl resourcePathToUrlFunc) func() error {
+func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, fetcher HTTPFetcher, chunkChan chan nbs.ChunkRecord, pathToUrl resourcePathToUrlFunc) func() error {
 	if len(gr.Ranges) == 0 {
 		return func() error { return nil }
 	}
@@ -462,7 +462,7 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, fe
 		// Send the chunk for each range included in GetRange.
 		for i := 0; i < len(gr.Ranges); i++ {
 			s, e := gr.ChunkByteRange(i)
-			cmpChnk, err := nbs.NewCompressedChunk(hash.New(gr.Ranges[i].Hash), comprData[s:e], 0) // NM4 - This is f'ed. We need to get the version from somewhere
+			cmpChnk, err := nbs.NewChunkRecord(hash.New(gr.Ranges[i].Hash), comprData[s:e], 0) // NM4 - This is f'ed. We need to get the version from somewhere
 			if err != nil {
 				return err
 			}
@@ -649,7 +649,7 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (d
 	return res, nil
 }
 
-func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.HashSet, notCached []hash.Hash, found func(context.Context, nbs.CompressedChunk)) error {
+func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.HashSet, notCached []hash.Hash, found func(context.Context, nbs.ChunkRecord)) error {
 	// get the locations where the chunks can be downloaded from
 	dlLocs, err := dcs.getDLLocs(ctx, notCached)
 	if err != nil {
@@ -657,7 +657,7 @@ func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.H
 	}
 
 	// channel to receive chunks on
-	chunkChan := make(chan nbs.CompressedChunk, 128)
+	chunkChan := make(chan nbs.ChunkRecord, 128)
 
 	toSend := make(map[hash.Hash]struct{}, len(notCached))
 	for _, h := range notCached {
@@ -726,7 +726,7 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 	hashSl, byteSl := HashSetToSlices(notCached)
 
 	absent := make(hash.HashSet)
-	var found []nbs.CompressedChunk
+	var found []nbs.ChunkRecord
 	var err error
 
 	batchItr(len(hashSl), maxHasManyBatchSize, func(st, end int) (stop bool) {
@@ -767,7 +767,7 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 				absent[currHash] = struct{}{}
 				j++
 			} else {
-				c := nbs.ChunkToCompressedChunk(chunks.NewChunkWithHash(currHash, []byte{}), 0) // NM4
+				c := nbs.ChunkToChunkRecord(chunks.NewChunkWithHash(currHash, []byte{}), 0) // NM4
 				found = append(found, c)
 			}
 		}
@@ -818,8 +818,8 @@ func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chu
 		return err
 	}
 
-	cc := nbs.ChunkToCompressedChunk(c, 0) // NM4
-	if dcs.cache.Put([]nbs.CompressedChunk{cc}) {
+	cc := nbs.ChunkToChunkRecord(c, 0) // NM4
+	if dcs.cache.Put([]nbs.ChunkRecord{cc}) {
 		return ErrCacheCapacityExceeded
 	}
 	return nil
@@ -1163,7 +1163,7 @@ func logDownloadStats(span trace.Span, originalGets map[string]*GetRange, comput
 
 // creates work functions for each download and executes them in parallel.  The work functions write downloaded chunks
 // to chunkChan
-func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, dlLocs dlLocations, chunkChan chan nbs.CompressedChunk) error {
+func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, dlLocs dlLocations, chunkChan chan nbs.ChunkRecord) error {
 	ctx, span := tracer.Start(ctx, "remotestorage.downloadChunks")
 	defer span.End()
 

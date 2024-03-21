@@ -346,13 +346,13 @@ func batchNovel(absent hash.HashSet, batch int) (remainder hash.HashSet, batches
 }
 
 func (p *Puller) getCmp(ctx context.Context, batch hash.HashSet, tracker *PullChunkTracker) error {
-	found := make(chan nbs.CompressedChunk, 4096)
-	processed := make(chan nbs.CompressedChunk, 4096)
+	found := make(chan nbs.ChunkRecord, 4096)
+	processed := make(chan nbs.ChunkRecord, 4096)
 
 	atomic.AddUint64(&p.stats.totalSourceChunks, uint64(len(batch)))
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
-		err := p.srcChunkStore.GetManyCompressed(ctx, batch, func(ctx context.Context, c nbs.CompressedChunk) {
+		err := p.srcChunkStore.GetManyCompressed(ctx, batch, func(ctx context.Context, c nbs.ChunkRecord) {
 			atomic.AddUint64(&p.stats.fetchedSourceBytes, uint64(c.Size()))
 			atomic.AddUint64(&p.stats.fetchedSourceChunks, uint64(1))
 			select {

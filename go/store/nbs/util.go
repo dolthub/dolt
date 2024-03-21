@@ -47,7 +47,7 @@ func IterChunks(ctx context.Context, rd io.ReadSeeker, cb func(chunk chunks.Chun
 				return err
 			}
 
-			cmpChnk, err := NewCompressedChunk(h, chunkBytes, idx.nbsVersion())
+			cmpChnk, err := NewChunkRecord(h, chunkBytes, idx.nbsVersion())
 			if err != nil {
 				return err
 			}

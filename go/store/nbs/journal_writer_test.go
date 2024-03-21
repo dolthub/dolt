@@ -234,9 +234,9 @@ func TestJournalWriterBootstrap(t *testing.T) {
 	}
 }
 
-func validateAllLookups(t *testing.T, j *journalWriter, data map[hash.Hash]CompressedChunk) {
+func validateAllLookups(t *testing.T, j *journalWriter, data map[hash.Hash]ChunkRecord) {
 	// move |data| to addr16-keyed map
-	prefixMap := make(map[addr16]CompressedChunk, len(data))
+	prefixMap := make(map[addr16]ChunkRecord, len(data))
 	var prefix addr16
 	for a, cc := range data {
 		copy(prefix[:], a[:])
@@ -255,11 +255,11 @@ func iterRangeIndex(idx rangeIndex, cb func(addr16, Range) (stop bool)) {
 	idx.cached.Iter(cb)
 }
 
-func validateLookup(t *testing.T, j *journalWriter, r Range, cc CompressedChunk) {
+func validateLookup(t *testing.T, j *journalWriter, r Range, cc ChunkRecord) {
 	buf := make([]byte, r.Length)
 	_, err := j.readAt(buf, int64(r.Offset))
 	require.NoError(t, err)
-	act, err := NewCompressedChunk(cc.H, buf, nomsBetaVersion)
+	act, err := NewChunkRecord(cc.H, buf, nomsBetaVersion)
 	assert.NoError(t, err)
 	assert.Equal(t, cc.WritableData(), act.WritableData())
 }
@@ -285,7 +285,7 @@ func newTestFilePath(t *testing.T) string {
 func TestJournalIndexBootstrap(t *testing.T) {
 	// potentially indexed region of a journal
 	type epoch struct {
-		records map[hash.Hash]CompressedChunk
+		records map[hash.Hash]ChunkRecord
 		last    hash.Hash
 	}
 
@@ -358,7 +358,7 @@ func TestJournalIndexBootstrap(t *testing.T) {
 				last, err := journal.bootstrapJournal(ctx, nil)
 				assert.NoError(t, err)
 				for _, e := range expected {
-					var act CompressedChunk
+					var act ChunkRecord
 					for a, exp := range e.records {
 						act, err = journal.getCompressedChunk(a)
 						assert.NoError(t, err)
@@ -396,8 +396,8 @@ func TestJournalIndexBootstrap(t *testing.T) {
 	}
 }
 
-func randomCompressedChunks(cnt int) (compressed map[hash.Hash]CompressedChunk) {
-	compressed = make(map[hash.Hash]CompressedChunk)
+func randomCompressedChunks(cnt int) (compressed map[hash.Hash]ChunkRecord) {
+	compressed = make(map[hash.Hash]ChunkRecord)
 	var buf []byte
 	for i := 0; i < cnt; i++ {
 		k := rand.Intn(51) + 50
@@ -407,7 +407,7 @@ func randomCompressedChunks(cnt int) (compressed map[hash.Hash]CompressedChunk) 
 		}
 		c := chunks.NewChunk(buf[:k])
 		buf = buf[k:]
-		compressed[c.Hash()] = ChunkToCompressedChunk(c, 0) // NM4
+		compressed[c.Hash()] = ChunkToChunkRecord(c, 0) // NM4
 	}
 	return
 }

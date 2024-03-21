@@ -323,18 +323,18 @@ func (wr *journalWriter) hasAddr(h hash.Hash) (ok bool) {
 }
 
 // getCompressedChunk reads the CompressedChunks with addr |h|.
-func (wr *journalWriter) getCompressedChunk(h hash.Hash) (CompressedChunk, error) {
+func (wr *journalWriter) getCompressedChunk(h hash.Hash) (ChunkRecord, error) {
 	wr.lock.RLock()
 	defer wr.lock.RUnlock()
 	r, ok := wr.ranges.get(h)
 	if !ok {
-		return CompressedChunk{}, nil
+		return ChunkRecord{}, nil
 	}
 	buf := make([]byte, r.Length)
 	if _, err := wr.readAt(buf, int64(r.Offset)); err != nil {
-		return CompressedChunk{}, nil
+		return ChunkRecord{}, nil
 	}
-	return NewCompressedChunk(hash.Hash(h), buf, nomsBetaVersion)
+	return NewChunkRecord(hash.Hash(h), buf, nomsBetaVersion)
 }
 
 // getRange returns a Range for the chunk with addr |h|.
@@ -351,7 +351,7 @@ func (wr *journalWriter) getRange(h hash.Hash) (rng Range, ok bool, err error) {
 }
 
 // writeCompressedChunk writes |cc| to the journal.
-func (wr *journalWriter) writeCompressedChunk(cc CompressedChunk) error {
+func (wr *journalWriter) writeCompressedChunk(cc ChunkRecord) error {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
 	recordLen, payloadOff := chunkRecordSize(cc)

@@ -21,11 +21,11 @@ import (
 )
 
 func TestCompressedChunkIsEmpty(t *testing.T) {
-	if !EmptyCompressedChunk.IsEmpty() {
+	if !EmptyChunkRecord.IsEmpty() {
 		t.Fatal("EmptyCompressedChunkIsEmpty() should equal true.")
 	}
-	if !(CompressedChunk{}).IsEmpty() {
-		t.Fatal("CompressedChunk{}.IsEmpty() should equal true.")
+	if !(ChunkRecord{}).IsEmpty() {
+		t.Fatal("ChunkRecord{}.IsEmpty() should equal true.")
 	}
 }
 

@@ -299,7 +299,7 @@ func (crg chunkReaderGroup) getMany(ctx context.Context, eg *errgroup.Group, req
 	return true, nil
 }
 
-func (crg chunkReaderGroup) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
+func (crg chunkReaderGroup) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ChunkRecord), stats *Stats) (bool, error) {
 	for _, haver := range crg {
 		remaining, err := haver.getManyCompressed(ctx, eg, reqs, found, stats)
 		if err != nil {
