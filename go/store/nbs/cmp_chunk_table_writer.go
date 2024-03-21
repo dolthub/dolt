@@ -48,16 +48,17 @@ type CmpChunkTableWriter struct {
 	prefixes              prefixIndexSlice
 	blockAddr             *hash.Hash
 	path                  string
+	nbsVer                uint8
 }
 
 // NewCmpChunkTableWriter creates a new CmpChunkTableWriter instance with a default ByteSink
-func NewCmpChunkTableWriter(tempDir string) (*CmpChunkTableWriter, error) {
+func NewCmpChunkTableWriter(tempDir string, nbsVersion uint8) (*CmpChunkTableWriter, error) {
 	s, err := NewBufferedFileByteSink(tempDir, defaultTableSinkBlockSize, defaultChBufferSize)
 	if err != nil {
 		return nil, err
 	}
 
-	return &CmpChunkTableWriter{NewHashingByteSink(s), 0, 0, nil, nil, s.path}, nil
+	return &CmpChunkTableWriter{NewHashingByteSink(s), 0, 0, nil, nil, s.path, nbsVersion}, nil
 }
 
 func (tw *CmpChunkTableWriter) ChunkCount() int {
@@ -78,6 +79,15 @@ func (tw *CmpChunkTableWriter) GetMD5() []byte {
 func (tw *CmpChunkTableWriter) AddCmpChunk(c CompressedChunk) error {
 	if len(c.CompressedData) == 0 {
 		panic("NBS blocks cannot be zero length")
+	}
+
+	if c.NBSVersion() != tw.nbsVer {
+		newChk, err := c.ToChunk()
+		if err != nil {
+			return err
+		}
+
+		c = ChunkToCompressedChunk(newChk, tw.nbsVer)
 	}
 
 	uncmpLen, err := snappy.DecodedLen(c.CompressedData)
@@ -245,6 +255,7 @@ func (tw *CmpChunkTableWriter) writeIndex() (gohash.Hash, error) {
 	return blockHash, nil
 }
 
+// NM4 - This needs to be consolidated with table_writer.go. One uses a stream, the other a buffer. =
 func (tw *CmpChunkTableWriter) writeFooter() error {
 	// chunk count
 	err := binary.Write(tw.sink, binary.BigEndian, uint32(len(tw.prefixes)))
@@ -260,12 +271,14 @@ func (tw *CmpChunkTableWriter) writeFooter() error {
 		return err
 	}
 
-	// magic number
-	_, err = tw.sink.Write([]byte(nomsBetaMagicNumber))
-
-	if err != nil {
-		return err
+	switch tw.nbsVer {
+	case doltRev1Version:
+		_, err = tw.sink.Write([]byte(doltRev1MagicNumber))
+	case nomsBetaVersion:
+		_, err = tw.sink.Write([]byte(nomsBetaMagicNumber))
+	default:
+		panic("unknown nbs version")
 	}
 
-	return nil
+	return err
 }

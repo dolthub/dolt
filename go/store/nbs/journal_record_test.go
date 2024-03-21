@@ -142,8 +142,8 @@ func randomMemTable(cnt int) (*memTable, map[hash.Hash]chunks.Chunk) {
 
 func makeChunkRecord() (journalRec, []byte) {
 	ch := chunks.NewChunk(randBuf(100))
-	cc := ChunkToCompressedChunk(ch)
-	payload := cc.FullCompressedChunk
+	cc := ChunkToCompressedChunk(ch, 0) // NM4
+	payload := cc.WritableData()
 	sz, _ := chunkRecordSize(cc)
 
 	var n int

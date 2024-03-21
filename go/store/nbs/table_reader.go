@@ -64,6 +64,13 @@ func (cmp CompressedChunk) WritableData() []byte {
 	return cmp.fullCompressedChunk
 }
 
+// NBSVersion returns the version of the noms data format that this chunk is encoded with. This is required in cases
+// where the origin of the CompressedChunk us unknown, and user of the object must ensure that the data is encoded
+// in the correct format.
+func (cmp CompressedChunk) NBSVersion() uint8 {
+	return cmp.nbsVer
+}
+
 // NewCompressedChunk creates a CompressedChunk, using the full chunk record bytes, which includes the crc.
 // Will error in the event that the crc does not match the data.
 func NewCompressedChunk(h hash.Hash, buff []byte, nbsVersion uint8) (CompressedChunk, error) {
@@ -98,18 +105,6 @@ func NewCompressedChunk(h hash.Hash, buff []byte, nbsVersion uint8) (CompressedC
 
 // ToChunk snappy decodes the compressed data and returns a chunks.Chunk
 func (cmp CompressedChunk) ToChunk() (chunks.Chunk, error) {
-	/*
-		mungedData := cmp.CompressedData
-		if cmp.nbsVer >= doltRev1Version {
-			if mungedData[0] != 0 {
-				return chunks.Chunk{}, errors.New("invalid chunk data - chunk type byte is not 0")
-			}
-
-			mungedData = mungedData[1:]
-		}
-
-	*/
-
 	data, err := snappy.Decode(nil, cmp.CompressedData)
 
 	if err != nil {
@@ -130,7 +125,7 @@ func ChunkToCompressedChunk(chunk chunks.Chunk, nbsVersion uint8) CompressedChun
 	offset := 0
 
 	if nbsVersion >= doltRev1Version {
-		raw = append(raw, 0)
+		raw = append(raw, 0) // NM4.
 		offset++
 	}
 
@@ -139,7 +134,7 @@ func ChunkToCompressedChunk(chunk chunks.Chunk, nbsVersion uint8) CompressedChun
 
 	raw = append(raw, []byte{0, 0, 0, 0}...)
 	binary.BigEndian.PutUint32(raw[offset:], crc(raw[:offset]))
-	return CompressedChunk{H: chunk.Hash(), fullCompressedChunk: raw, CompressedData: raw[:offset], fullSize: uint32(len(raw)), nbsVer: nbsVersion}
+	return CompressedChunk{H: chunk.Hash(), fullCompressedChunk: raw[:(offset + checksumSize)], CompressedData: raw[:offset], fullSize: uint32(offset + checksumSize), nbsVer: nbsVersion}
 }
 
 // Hash returns the hash of the data
