@@ -43,9 +43,9 @@ type ItemAccess struct {
 }
 
 func GetTrieMap(acc ItemAccess, msg serial.Message) *trie.FrozenTrieMap {
-	nodeCount := msg[acc.offStart]
+	nodeCount := uint16(msg[acc.offStart+2]) + uint16(msg[acc.offStart+3])<<8
 	keysDataLength := (nodeCount + 7) / 8
-	keysDataStart := acc.offStart + 1
+	keysDataStart := acc.offStart + 4
 	keysDataEnd := keysDataStart + uint16(keysDataLength)
 	keysData := msg[keysDataStart:keysDataEnd]
 	keysDirectoryStart := keysDataEnd

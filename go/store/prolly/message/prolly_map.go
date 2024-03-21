@@ -70,19 +70,22 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 	}
 
 	keyMap := trie.FrozenTrieMap{}
-	keyMap.Create(keyTrie)
+	trieEncoding, numKeys := keyTrie.Encode()
+	nodeCount := keyTrie.GetNodeCount()
+	keyMap.Create(trieEncoding, nodeCount)
 
 	keyBuffer := keyMap.GetBuffer()
 	keyOffsets := keyMap.GetOffsets()
 
-	trieNodes := []byte{byte(keyTrie.GetNodeCount())}
+	trieNodes := []byte{byte(nodeCount % (2 << 8)), byte(nodeCount >> 8)}
+	numKeysBytes := []byte{byte(numKeys % (2 << 8)), byte(numKeys >> 8)}
 	keyTups := writeItemBytes(b, [][]byte{keyBuffer}, len(keyBuffer))
 
 	// The flatbuffer schema expects a vector of uint16, but we insert a byte vector instead.
 	// After writing the vector, manually overwrite the vector's length with the correct value.
-	offsetBytes := len(keyOffsets) + 1
+	offsetBytes := len(keyOffsets) + 4
 	numShorts := (offsetBytes + 1) / 2
-	keyOffs := writeItemBytes(b, [][]byte{trieNodes, keyOffsets}, numShorts*2)
+	keyOffs := writeItemBytes(b, [][]byte{numKeysBytes, trieNodes, keyOffsets}, numShorts*2)
 	fb.WriteUOffsetT(b.Bytes[b.Head():], fb.UOffsetT(numShorts))
 
 	if level == 0 {
@@ -134,7 +137,7 @@ func getProllyMapKeysAndValues(msg serial.Message) (keys, values ItemAccess, lev
 	keys.offStart = lookupVectorOffset(prollyMapKeyOffsetsVOffset, pm.Table())
 	keys.offLen = uint16(pm.KeyOffsetsLength() * uint16Size)
 
-	count = (keys.offLen / 2) - 1
+	count = uint16(msg[keys.offStart]) + (uint16(msg[keys.offStart+1]) << 8)
 	level = uint16(pm.TreeLevel())
 
 	vv := pm.ValueItemsBytes()
