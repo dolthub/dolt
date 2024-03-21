@@ -613,7 +613,7 @@ func startReplication(_ *testing.T, port int) {
 	replicaDatabase.MustExec("SET @@GLOBAL.server_id=123;")
 	replicaDatabase.MustExec(
 		fmt.Sprintf("change replication source to SOURCE_HOST='localhost', SOURCE_USER='replicator', "+
-			"SOURCE_PASSWORD='Zqr8_blrGm1!', SOURCE_PORT=%v;", port))
+			"SOURCE_PASSWORD='Zqr8_blrGm1!', SOURCE_PORT=%v, SOURCE_AUTO_POSITION=1;", port))
 
 	replicaDatabase.MustExec("start replica;")
 }

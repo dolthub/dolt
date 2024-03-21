@@ -41,15 +41,16 @@ func TestBinlogPrimary(t *testing.T) {
 	primaryDatabase.MustExec("CREATE USER 'replicator'@'%' IDENTIFIED BY 'Zqr8_blrGm1!';")
 	primaryDatabase.MustExec("GRANT REPLICATION SLAVE ON *.* TO 'replicator'@'%';")
 
-	// TODO: We need to set SOURCE_AUTO_POSITION=1 on the replica!!
-	//       This wasn't required for Dolt, because we defaulted to
-	//       auto positioning, but it is required for MySQL.
-
-	// TODO: Need to set GTID system vars on the Dolt SQL server:
-	//       set @@GLOBAL.GTID_MODE=ON
-	//       set @@GLOBAL.ENFORCE_GTID_CONSISTENCY=ON
-
 	// change replication source to SOURCE_HOST='localhost', SOURCE_USER='root', SOURCE_PASSWORD='', SOURCE_PORT=11229, SOURCE_AUTO_POSITION=1;
+
+	// TODO: Not receiving heartbeats will cause the replica to disconnect eventually, so we specify
+	//       SOURCE_HEARTBEAT_PERIOD=0 to disable them temporarily.
+	// Or... change replication source to SOURCE_HOST='localhost', SOURCE_USER='root', SOURCE_PASSWORD='', SOURCE_PORT=11229, SOURCE_AUTO_POSITION=1, SOURCE_HEARTBEAT_PERIOD=0;
+
+	// For now, we pre-create the table on the replica, so that it can receive an update
+	// TODO: we could just add this as a Query event to the hardcoded events though.
+	createTableStatement := "create table t (pk int primary key, c1 varchar(100))"
+	replicaDatabase.MustExec(createTableStatement)
 
 	startReplication(t, doltPort)
 

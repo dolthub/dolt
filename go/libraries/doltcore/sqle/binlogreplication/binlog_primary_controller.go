@@ -56,12 +56,10 @@ func (d doltBinlogPrimaryController) RegisterReplica(ctx *sql.Context, c *mysql.
 }
 
 func (d doltBinlogPrimaryController) BinlogDumpGtid(ctx *sql.Context, c *mysql.Conn, gtidSet mysql.GTIDSet) error {
-	// TODO: When this method is received, we need to start streaming binlog events to the
-	//       replica on the specified connection.
+	// TODO: Update docs: When this method is received, we need to start streaming binlog events over the specified connection.
 
 	// TODO: How do you stop a binlog dump? Connection just closes from the client side?
 
-	return fmt.Errorf("DOLT: BinlogDumpGtid not implemented yet")
 	return nil
 }
 
