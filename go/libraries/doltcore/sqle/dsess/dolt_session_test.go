@@ -45,8 +45,8 @@ func TestNewPersistedSystemVariables(t *testing.T) {
 	assert.NoError(t, err)
 
 	maxConRes := sysVars[0]
-	assert.Equal(t, "max_connections", maxConRes.Name)
-	assert.Equal(t, int64(1000), maxConRes.Default)
+	assert.Equal(t, "max_connections", maxConRes.GetName())
+	assert.Equal(t, int64(1000), maxConRes.GetDefault())
 }
 
 func TestValidatePeristableSystemVar(t *testing.T) {
@@ -73,7 +73,7 @@ func TestValidatePeristableSystemVar(t *testing.T) {
 			if sysVar, _, err := validatePersistableSysVar(tt.Name); tt.Err != nil {
 				assert.True(t, tt.Err.Is(err))
 			} else {
-				assert.Equal(t, tt.Name, sysVar.Name)
+				assert.Equal(t, tt.Name, sysVar.GetName())
 
 			}
 		})
