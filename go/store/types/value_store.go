@@ -151,10 +151,11 @@ func NewValueStore(cs chunks.ChunkStore) *ValueStore {
 
 func newValueStoreWithCacheAndPending(cs chunks.ChunkStore, cacheSize, pendingMax uint64) *ValueStore {
 	vs := &ValueStore{
-		cs:            cs,
-		decodedChunks: sizecache.New(cacheSize),
-		versOnce:      sync.Once{},
-		gcNewAddrs:    make(hash.HashSet),
+		cs:                  cs,
+		decodedChunks:       sizecache.New(cacheSize),
+		versOnce:            sync.Once{},
+		gcNewAddrs:          make(hash.HashSet),
+		validateContentAddr: true, // NM4 - This should keep us honest while we're working on the new compression.
 	}
 	vs.gcCond = sync.NewCond(&vs.gcMu)
 	return vs
