@@ -136,7 +136,7 @@ func writeChunkRecord(buf []byte, c ChunkRecord) (n uint32) {
 	// address
 	buf[n] = byte(addrJournalRecTag)
 	n += journalRecTagSz
-	copy(buf[n:], c.H[:])
+	copy(buf[n:], c.h[:])
 	n += journalRecAddrSz
 	// payload
 	buf[n] = byte(payloadJournalRecTag)

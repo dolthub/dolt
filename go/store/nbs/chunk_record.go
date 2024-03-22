@@ -41,8 +41,8 @@ func init() {
 // ChunkRecord represents a chunk of data in a table file which is still compressed, either raw data compressed with
 // snappy, or delta compressed type info preserved.
 type ChunkRecord struct {
-	// H is the hash of the chunk
-	H hash.Hash
+	// h is the hash of the chunk
+	h hash.Hash
 
 	// FullCompressedChunk is the entirety of the compressed chunk data including the crc
 	fullCompressedChunk []byte
@@ -50,7 +50,9 @@ type ChunkRecord struct {
 	// CompressedData is just the snappy encoded byte buffer that stores the chunk data
 	compressedData []byte
 
-	nbsVer NbsVersion // NM4 - not sure if we want this. Everywhere we use these objects we should have the version near at hand. TBD.
+	// nbsVer is the version of the nbs format that this chunk is encoded with. This must be set whenever creating
+	// the ChunkRecord because it's necesary to interpret the bytes of the chunk.
+	nbsVer NbsVersion
 
 	// The full size of the chunk, including the type byte and the crc. This is how much space the chunk takes up on disk.
 	fullSize uint32
@@ -77,8 +79,9 @@ func (cmp ChunkRecord) NBSVersion() NbsVersion {
 	return cmp.nbsVer
 }
 
-// NewChunkRecord creates a ChunkRecord, using the full chunk record bytes, which includes the crc.
-// Will error in the event that the crc does not match the data.
+// NewChunkRecord creates a ChunkRecord, using the full chunk record bytes stored in the table file. This includes the crc.
+// Will error in the event that the crc does not match the data. The nbsVersion is required to interpret the bytes of the
+// input appropriately.
 func NewChunkRecord(h hash.Hash, buff []byte, nbsVersion NbsVersion) (ChunkRecord, error) {
 	fullSize := uint32(len(buff))
 	dataLen := uint64(len(buff)) - checksumSize
@@ -111,7 +114,7 @@ func NewChunkRecord(h hash.Hash, buff []byte, nbsVersion NbsVersion) (ChunkRecor
 	}
 
 	// NM4 - not sure if we want to continue carrying around the originam buff.
-	return ChunkRecord{H: h,
+	return ChunkRecord{h: h,
 		fullCompressedChunk: fullbuff,
 		fullSize:            fullSize,
 		rawChunkSize:        uint32(uncLen),
@@ -127,11 +130,7 @@ func (cmp ChunkRecord) ToChunk() (chunks.Chunk, error) {
 		return chunks.Chunk{}, err
 	}
 
-	// NM4 - We don't verify the hash?? See comment in NewChunkWithHash which assume the caller trusts the Hash. We
-	// verify the CRC in NewChunkRecord, but not the hash. I believe this is for per reasons. For my testing, I'd
-	// like to verify the hash here.
-
-	return chunks.NewChunkWithHash(cmp.H, data), nil
+	return chunks.NewChunkWithHash(cmp.h, data), nil
 }
 
 func ChunkToChunkRecord(chunk chunks.Chunk, nbsVersion NbsVersion) ChunkRecord {
@@ -142,25 +141,19 @@ func ChunkToChunkRecord(chunk chunks.Chunk, nbsVersion NbsVersion) ChunkRecord {
 	offset := 0
 
 	if nbsVersion >= Dolt1V {
-		raw = append(raw, 0) // NM4.
+		// Currently the metadata byte is always 0. Will change when we use delta encoding. 0 effectively
+		// gets handled in the same way as legacy data.
+		raw = append(raw, 0)
 		offset++
 	}
 
 	compressed := snappy.Encode(raw[offset:], chunk.Data())
 	offset += len(compressed)
 
-	decodeLen, err := snappy.DecodedLen(compressed)
-	if err != nil {
-		panic(err)
-	}
-
-	if decodeLen != rawChunkSize {
-		panic("snappy encoded length does not match raw chunk size")
-	}
-
 	raw = append(raw, []byte{0, 0, 0, 0}...)
 	binary.BigEndian.PutUint32(raw[offset:], crc(raw[:offset]))
-	return ChunkRecord{H: chunk.Hash(),
+	return ChunkRecord{
+		h:                   chunk.Hash(),
 		fullCompressedChunk: raw[:(offset + checksumSize)],
 		compressedData:      raw[:offset],
 		fullSize:            uint32(offset + checksumSize),
@@ -170,7 +163,7 @@ func ChunkToChunkRecord(chunk chunks.Chunk, nbsVersion NbsVersion) ChunkRecord {
 
 // Hash returns the hash of the data
 func (cmp ChunkRecord) Hash() hash.Hash {
-	return cmp.H
+	return cmp.h
 }
 
 // IsEmpty returns true if the chunk contains no data.

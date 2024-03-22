@@ -365,7 +365,7 @@ func (wr *journalWriter) writeCompressedChunk(cc ChunkRecord) error {
 	}
 	wr.unsyncd += uint64(recordLen)
 	_ = writeChunkRecord(buf, cc)
-	wr.ranges.put(cc.H, rng)
+	wr.ranges.put(cc.h, rng)
 
 	// To fulfill our durability guarantees, we technically only need to
 	// file.Sync() the journal when we commit a new root chunk. However,

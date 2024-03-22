@@ -159,7 +159,7 @@ func makeChunkRecord() (journalRec, []byte) {
 	// address
 	buf[n] = byte(addrJournalRecTag)
 	n += journalRecTagSz
-	copy(buf[n:], cc.H[:])
+	copy(buf[n:], cc.h[:])
 	n += journalRecAddrSz
 	// payload
 	buf[n] = byte(payloadJournalRecTag)
@@ -173,7 +173,7 @@ func makeChunkRecord() (journalRec, []byte) {
 	r := journalRec{
 		length:   uint32(len(buf)),
 		kind:     chunkJournalRecKind,
-		address:  cc.H,
+		address:  cc.h,
 		payload:  payload,
 		checksum: c,
 	}

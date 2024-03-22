@@ -99,7 +99,7 @@ func (tw *CmpChunkTableWriter) AddChunkRecord(c ChunkRecord) error {
 
 	// Stored in insertion order
 	tw.prefixes = append(tw.prefixes, prefixIndexRec{
-		c.H,
+		c.Hash(),
 		uint32(len(tw.prefixes)),
 		uint32(c.Size()),
 	})
