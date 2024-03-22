@@ -60,18 +60,6 @@ type ChunkRecord struct {
 	rawChunkSize uint32
 }
 
-func (cmp ChunkRecord) Size() uint32 {
-	return cmp.fullSize
-}
-
-func (cmp ChunkRecord) RawChunkSize() uint32 {
-	return cmp.rawChunkSize
-}
-
-func (cmp ChunkRecord) WritableData() []byte {
-	return cmp.fullCompressedChunk
-}
-
 // NBSVersion returns the version of the noms data format that this chunk is encoded with. This is required in cases
 // where the origin of the ChunkRecord us unknown, and user of the object must ensure that the data is encoded
 // in the correct format.
@@ -159,6 +147,21 @@ func ChunkToChunkRecord(chunk chunks.Chunk, nbsVersion NbsVersion) ChunkRecord {
 		fullSize:            uint32(offset + checksumSize),
 		rawChunkSize:        uint32(rawChunkSize),
 		nbsVer:              nbsVersion}
+}
+
+// Size returns the bytes that the chunk record takes up in a table file.
+func (cmp ChunkRecord) Size() uint32 {
+	return cmp.fullSize
+}
+
+// RawChunkSize returns the size of the chunk data when it is fully resolved.
+func (cmp ChunkRecord) RawChunkSize() uint32 {
+	return cmp.rawChunkSize
+}
+
+// WritableData returns the full binary ChunkRecord that can be written to a table file.
+func (cmp ChunkRecord) WritableData() []byte {
+	return cmp.fullCompressedChunk
 }
 
 // Hash returns the hash of the data

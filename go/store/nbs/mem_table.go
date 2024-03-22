@@ -59,8 +59,7 @@ func writeChunksToMT(mt *memTable, chunks []chunks.Chunk) (string, []byte, error
 			return "", nil, errors.New("didn't create this memory table with enough space to add all the chunks")
 		}
 	}
-
-	// NM4 - not sure here. I believe this is always writing to the MemTable, which should always be BetaV. Right?
+	
 	var stats Stats
 	name, data, count, err := mt.write(nil, BetaV, &stats)
 
