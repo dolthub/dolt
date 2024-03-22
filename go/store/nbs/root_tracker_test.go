@@ -513,7 +513,7 @@ func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver c
 		return emptyChunkSource{}, nil
 	}
 
-	name, data, chunkCount, err := mt.write(haver, nomsBetaVersion, stats)
+	name, data, chunkCount, err := mt.write(haver, BetaV, stats)
 	if err != nil {
 		return emptyChunkSource{}, err
 	} else if chunkCount == 0 {
@@ -572,7 +572,7 @@ func compactSourcesToBuffer(sources chunkSources) (name hash.Hash, data []byte, 
 
 	maxSize := maxTableSize(uint64(chunkCount), totalData)
 	buff := make([]byte, maxSize) // This can blow up RAM
-	tw := newTableWriter(buff, nomsBetaVersion, nil)
+	tw := newTableWriter(buff, BetaV, nil)
 	errString := ""
 
 	ctx := context.Background()

@@ -258,7 +258,7 @@ func buildFakeChunkTable(chunks []fakeChunk) ([]byte, hash.Hash, error) {
 
 	buff := make([]byte, capacity)
 
-	tw := newTableWriter(buff, nomsBetaVersion, nil)
+	tw := newTableWriter(buff, BetaV, nil)
 
 	for _, chunk := range chunks {
 		tw.addChunk(chunk.address, chunk.data)

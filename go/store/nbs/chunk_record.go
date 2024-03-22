@@ -35,7 +35,7 @@ import (
 var EmptyChunkRecord ChunkRecord
 
 func init() {
-	EmptyChunkRecord = ChunkToChunkRecord(chunks.EmptyChunk, nomsBetaVersion)
+	EmptyChunkRecord = ChunkToChunkRecord(chunks.EmptyChunk, BetaV)
 }
 
 // ChunkRecord represents a chunk of data in a table file which is still compressed, either raw data compressed with
@@ -50,7 +50,7 @@ type ChunkRecord struct {
 	// CompressedData is just the snappy encoded byte buffer that stores the chunk data
 	compressedData []byte
 
-	nbsVer uint8 // NM4 - not sure if we want this. Everywhere we use these objects we should have the version near at hand. TBD.
+	nbsVer NbsVersion // NM4 - not sure if we want this. Everywhere we use these objects we should have the version near at hand. TBD.
 
 	// The full size of the chunk, including the type byte and the crc. This is how much space the chunk takes up on disk.
 	fullSize uint32
@@ -73,13 +73,13 @@ func (cmp ChunkRecord) WritableData() []byte {
 // NBSVersion returns the version of the noms data format that this chunk is encoded with. This is required in cases
 // where the origin of the ChunkRecord us unknown, and user of the object must ensure that the data is encoded
 // in the correct format.
-func (cmp ChunkRecord) NBSVersion() uint8 {
+func (cmp ChunkRecord) NBSVersion() NbsVersion {
 	return cmp.nbsVer
 }
 
 // NewChunkRecord creates a ChunkRecord, using the full chunk record bytes, which includes the crc.
 // Will error in the event that the crc does not match the data.
-func NewChunkRecord(h hash.Hash, buff []byte, nbsVersion uint8) (ChunkRecord, error) {
+func NewChunkRecord(h hash.Hash, buff []byte, nbsVersion NbsVersion) (ChunkRecord, error) {
 	fullSize := uint32(len(buff))
 	dataLen := uint64(len(buff)) - checksumSize
 	chksum := binary.BigEndian.Uint32(buff[dataLen:])
@@ -87,7 +87,7 @@ func NewChunkRecord(h hash.Hash, buff []byte, nbsVersion uint8) (ChunkRecord, er
 	crcSum := crc(buff[:dataLen])
 
 	fullbuff := buff
-	if nbsVersion >= doltRev1Version {
+	if nbsVersion >= Dolt1V {
 		// First byte is indicating metadata about the chunk. It is not part of the compressed payload, but is included
 		// in the CRC calculation.
 		// We don't use yet, but we need to skip it.
@@ -134,14 +134,14 @@ func (cmp ChunkRecord) ToChunk() (chunks.Chunk, error) {
 	return chunks.NewChunkWithHash(cmp.H, data), nil
 }
 
-func ChunkToChunkRecord(chunk chunks.Chunk, nbsVersion uint8) ChunkRecord {
+func ChunkToChunkRecord(chunk chunks.Chunk, nbsVersion NbsVersion) ChunkRecord {
 	// NM4 - need to figure out the optimal allocation strategy for this.
 	// See previous comment in history about snappy.MaxEncodedLen
 	rawChunkSize := chunk.Size()
 	raw := make([]byte, 1+checksumSize+snappy.MaxEncodedLen(rawChunkSize))
 	offset := 0
 
-	if nbsVersion >= doltRev1Version {
+	if nbsVersion >= Dolt1V {
 		raw = append(raw, 0) // NM4.
 		offset++
 	}

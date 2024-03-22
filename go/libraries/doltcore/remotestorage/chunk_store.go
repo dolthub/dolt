@@ -462,7 +462,9 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, fe
 		// Send the chunk for each range included in GetRange.
 		for i := 0; i < len(gr.Ranges); i++ {
 			s, e := gr.ChunkByteRange(i)
-			cmpChnk, err := nbs.NewChunkRecord(hash.New(gr.Ranges[i].Hash), comprData[s:e], 0) // NM4 - This is f'ed. We need to get the version from somewhere
+			// Currently we assume that the data returned from remotes is only using nbs.BetaV. The HTTP response will need to
+			// indicate the version in the future.
+			cmpChnk, err := nbs.NewChunkRecord(hash.New(gr.Ranges[i].Hash), comprData[s:e], nbs.BetaV)
 			if err != nil {
 				return err
 			}
@@ -767,7 +769,7 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 				absent[currHash] = struct{}{}
 				j++
 			} else {
-				c := nbs.ChunkToChunkRecord(chunks.NewChunkWithHash(currHash, []byte{}), 0) // NM4
+				c := nbs.ChunkToChunkRecord(chunks.NewChunkWithHash(currHash, []byte{}), nbs.BetaV)
 				found = append(found, c)
 			}
 		}
@@ -818,7 +820,7 @@ func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chu
 		return err
 	}
 
-	cc := nbs.ChunkToChunkRecord(c, 0) // NM4
+	cc := nbs.ChunkToChunkRecord(c, nbs.BetaV)
 	if dcs.cache.Put([]nbs.ChunkRecord{cc}) {
 		return ErrCacheCapacityExceeded
 	}

@@ -56,7 +56,7 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	require.NoError(t, eg.Wait())
 
 	// for all the chunks we find, write them using the compressed writer
-	tw, err := NewCmpChunkTableWriter("", 0) // NM4
+	tw, err := NewCmpChunkTableWriter("", BetaV)
 	require.NoError(t, err)
 	for _, cmpChnk := range found {
 		err = tw.AddChunkRecord(cmpChnk)
@@ -67,7 +67,7 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("ErrDuplicateChunkWritten", func(t *testing.T) {
-		tw, err := NewCmpChunkTableWriter("", 0) // NM4
+		tw, err := NewCmpChunkTableWriter("", BetaV)
 		require.NoError(t, err)
 		for _, cmpChnk := range found {
 			err = tw.AddChunkRecord(cmpChnk)

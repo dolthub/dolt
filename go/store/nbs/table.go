@@ -148,15 +148,17 @@ const (
 	doltRev1MagicNumber = "DOLT___1"
 )
 
+type NbsVersion uint8
+
 const (
-	nomsBetaVersion uint8 = iota
-	doltRev1Version
+	BetaV NbsVersion = iota
+	Dolt1V
 )
 
 // nbsVersionMap maps magic numbers to version numbers. Version number bumps should be very uncommon.
-var nbsVersionMap = map[string]uint8{
-	nomsBetaMagicNumber: nomsBetaVersion,
-	doltRev1MagicNumber: doltRev1Version,
+var nbsVersionMap = map[string]NbsVersion{
+	nomsBetaMagicNumber: BetaV,
+	doltRev1MagicNumber: Dolt1V,
 }
 
 var crcTable = crc32.MakeTable(crc32.Castagnoli)

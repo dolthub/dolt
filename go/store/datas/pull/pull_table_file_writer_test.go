@@ -60,7 +60,7 @@ func TestPullTableFileWriter(t *testing.T) {
 				_, err := rand.Read(bs)
 				assert.NoError(t, err)
 				chk := chunks.NewChunk(bs)
-				cChk := nbs.ChunkToChunkRecord(chk, 0) // NM4
+				cChk := nbs.ChunkToChunkRecord(chk, nbs.BetaV)
 				err = wr.AddCompressedChunk(context.Background(), cChk)
 				assert.NoError(t, err)
 			}
@@ -86,7 +86,7 @@ func TestPullTableFileWriter(t *testing.T) {
 				_, err := rand.Read(bs)
 				assert.NoError(t, err)
 				chk := chunks.NewChunk(bs)
-				cChk := nbs.ChunkToChunkRecord(chk, 0) // NM4
+				cChk := nbs.ChunkToChunkRecord(chk, nbs.BetaV)
 				err = wr.AddCompressedChunk(context.Background(), cChk)
 				assert.NoError(t, err)
 			}
@@ -116,7 +116,7 @@ func TestPullTableFileWriter(t *testing.T) {
 			_, err := rand.Read(bs)
 			assert.NoError(t, err)
 			chk := chunks.NewChunk(bs)
-			cChk := nbs.ChunkToChunkRecord(chk, 0) // NM4
+			cChk := nbs.ChunkToChunkRecord(chk, nbs.BetaV)
 			err = wr.AddCompressedChunk(context.Background(), cChk)
 			assert.NoError(t, err)
 		}
@@ -144,7 +144,7 @@ func TestPullTableFileWriter(t *testing.T) {
 				_, err := rand.Read(bs)
 				assert.NoError(t, err)
 				chk := chunks.NewChunk(bs)
-				cChk := nbs.ChunkToChunkRecord(chk, 0) // NM4
+				cChk := nbs.ChunkToChunkRecord(chk, nbs.BetaV)
 				err = wr.AddCompressedChunk(context.Background(), cChk)
 				assert.NoError(t, err)
 			}
@@ -168,7 +168,7 @@ func TestPullTableFileWriter(t *testing.T) {
 				_, err := rand.Read(bs)
 				assert.NoError(t, err)
 				chk := chunks.NewChunk(bs)
-				cChk := nbs.ChunkToChunkRecord(chk, 0) // NM4
+				cChk := nbs.ChunkToChunkRecord(chk, nbs.BetaV)
 				err = wr.AddCompressedChunk(context.Background(), cChk)
 				assert.NoError(t, err)
 			}
@@ -179,7 +179,7 @@ func TestPullTableFileWriter(t *testing.T) {
 				_, err := rand.Read(bs)
 				assert.NoError(t, err)
 				chk := chunks.NewChunk(bs)
-				cChk := nbs.ChunkToChunkRecord(chk, 0) // NM4
+				cChk := nbs.ChunkToChunkRecord(chk, nbs.BetaV)
 				err = wr.AddCompressedChunk(context.Background(), cChk)
 				if err != nil {
 					assert.EqualError(t, err, "this dest store throws an error")
@@ -209,7 +209,7 @@ func TestPullTableFileWriter(t *testing.T) {
 			_, err := rand.Read(bs)
 			assert.NoError(t, err)
 			chk := chunks.NewChunk(bs)
-			cChk := nbs.ChunkToChunkRecord(chk, 0) // NM4
+			cChk := nbs.ChunkToChunkRecord(chk, nbs.BetaV)
 			err = wr.AddCompressedChunk(context.Background(), cChk)
 			assert.NoError(t, err)
 		}
@@ -237,7 +237,7 @@ func TestPullTableFileWriter(t *testing.T) {
 			_, err := rand.Read(bs)
 			assert.NoError(t, err)
 			chk := chunks.NewChunk(bs)
-			cChk := nbs.ChunkToChunkRecord(chk, 0) // NM4
+			cChk := nbs.ChunkToChunkRecord(chk, nbs.BetaV)
 			err = wr.AddCompressedChunk(context.Background(), cChk)
 			assert.NoError(t, err)
 		}
@@ -277,7 +277,7 @@ func TestPullTableFileWriter(t *testing.T) {
 			_, err := rand.Read(bs)
 			assert.NoError(t, err)
 			chk := chunks.NewChunk(bs)
-			cChk := nbs.ChunkToChunkRecord(chk, 0) // NM4
+			cChk := nbs.ChunkToChunkRecord(chk, nbs.BetaV)
 			err = wr.AddCompressedChunk(context.Background(), cChk)
 			assert.NoError(t, err)
 		}

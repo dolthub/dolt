@@ -48,7 +48,7 @@ type gcCopier struct {
 }
 
 func newGarbageCollectionCopier() (*gcCopier, error) {
-	writer, err := NewCmpChunkTableWriter("", 0) // NM4 - should this trigger on the env var? probably
+	writer, err := NewCmpChunkTableWriter("", BetaV)
 	if err != nil {
 		return nil, err
 	}

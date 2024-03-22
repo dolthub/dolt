@@ -46,7 +46,7 @@ func buildTable(chunks [][]byte) ([]byte, hash.Hash, error) {
 
 	buff := make([]byte, capacity)
 
-	tw := newTableWriter(buff, nomsBetaVersion, nil)
+	tw := newTableWriter(buff, BetaV, nil)
 
 	for _, chunk := range chunks {
 		tw.addChunk(computeAddr(chunk), chunk)
@@ -171,7 +171,7 @@ func TestHasManySequentialPrefix(t *testing.T) {
 
 	capacity := maxTableSize(uint64(len(addrs)), totalData)
 	buff := make([]byte, capacity)
-	tw := newTableWriter(buff, nomsBetaVersion, nil)
+	tw := newTableWriter(buff, BetaV, nil)
 
 	for _, a := range addrs {
 		tw.addChunk(a, bogusData)
@@ -485,7 +485,7 @@ func TestEmpty(t *testing.T) {
 	assert := assert.New(t)
 
 	buff := make([]byte, footerSize)
-	tw := newTableWriter(buff, nomsBetaVersion, nil)
+	tw := newTableWriter(buff, BetaV, nil)
 	length, _, err := tw.finish()
 	require.NoError(t, err)
 	assert.True(length == footerSize)

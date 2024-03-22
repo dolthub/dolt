@@ -142,7 +142,7 @@ func randomMemTable(cnt int) (*memTable, map[hash.Hash]chunks.Chunk) {
 
 func makeChunkRecord() (journalRec, []byte) {
 	ch := chunks.NewChunk(randBuf(100))
-	cc := ChunkToChunkRecord(ch, 0) // NM4
+	cc := ChunkToChunkRecord(ch, BetaV)
 	payload := cc.WritableData()
 	sz, _ := chunkRecordSize(cc)
 
@@ -238,7 +238,7 @@ func writeCorruptJournalRecord(buf []byte) (n uint32) {
 
 func mustCompressedChunk(rec journalRec) ChunkRecord {
 	d.PanicIfFalse(rec.kind == chunkJournalRecKind)
-	cc, err := NewChunkRecord(rec.address, rec.payload, nomsBetaVersion)
+	cc, err := NewChunkRecord(rec.address, rec.payload, BetaV)
 	d.PanicIfError(err)
 	return cc
 }

@@ -46,11 +46,11 @@ type CmpChunkTableWriter struct {
 	prefixes              prefixIndexSlice
 	blockAddr             *hash.Hash
 	path                  string
-	nbsVer                uint8
+	nbsVer                NbsVersion
 }
 
 // NewCmpChunkTableWriter creates a new CmpChunkTableWriter instance with a default ByteSink
-func NewCmpChunkTableWriter(tempDir string, nbsVersion uint8) (*CmpChunkTableWriter, error) {
+func NewCmpChunkTableWriter(tempDir string, nbsVersion NbsVersion) (*CmpChunkTableWriter, error) {
 	s, err := NewBufferedFileByteSink(tempDir, defaultTableSinkBlockSize, defaultChBufferSize)
 	if err != nil {
 		return nil, err
@@ -263,9 +263,9 @@ func (tw *CmpChunkTableWriter) writeFooter() error {
 	}
 
 	switch tw.nbsVer {
-	case doltRev1Version:
+	case Dolt1V:
 		_, err = tw.sink.Write([]byte(doltRev1MagicNumber))
-	case nomsBetaVersion:
+	case BetaV:
 		_, err = tw.sink.Write([]byte(nomsBetaMagicNumber))
 	default:
 		panic("unknown nbs version")

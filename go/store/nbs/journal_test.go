@@ -118,7 +118,7 @@ func TestReadRecordRanges(t *testing.T) {
 		assert.Equal(t, data[h], ch1)
 
 		start, stop := rng.Offset, uint32(rng.Offset)+rng.Length
-		cc2, err := NewChunkRecord(h, buf[start:stop], nomsBetaVersion)
+		cc2, err := NewChunkRecord(h, buf[start:stop], BetaV)
 		assert.NoError(t, err)
 		ch2, err := cc2.ToChunk()
 		assert.NoError(t, err)

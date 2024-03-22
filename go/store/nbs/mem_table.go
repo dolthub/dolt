@@ -60,9 +60,9 @@ func writeChunksToMT(mt *memTable, chunks []chunks.Chunk) (string, []byte, error
 		}
 	}
 
-	// NM4 - not sure here. I believe this is always writing to the MemTable, which should always be nomsBetaVersion. Right?
+	// NM4 - not sure here. I believe this is always writing to the MemTable, which should always be BetaV. Right?
 	var stats Stats
-	name, data, count, err := mt.write(nil, nomsBetaVersion, &stats)
+	name, data, count, err := mt.write(nil, BetaV, &stats)
 
 	if err != nil {
 		return "", nil, err
@@ -184,7 +184,7 @@ func (mt *memTable) getManyCompressed(ctx context.Context, eg *errgroup.Group, r
 		if data != nil {
 			c := chunks.NewChunkWithHash(hash.Hash(*r.a), data)
 			reqs[i].found = true
-			found(ctx, ChunkToChunkRecord(c, nomsBetaVersion))
+			found(ctx, ChunkToChunkRecord(c, BetaV))
 		} else {
 			remaining = true
 		}
@@ -201,7 +201,7 @@ func (mt *memTable) extract(ctx context.Context, chunks chan<- extractRecord) er
 	return nil
 }
 
-func (mt *memTable) write(haver chunkReader, nbsVersion uint8, stats *Stats) (name hash.Hash, data []byte, count uint32, err error) {
+func (mt *memTable) write(haver chunkReader, nbsVersion NbsVersion, stats *Stats) (name hash.Hash, data []byte, count uint32, err error) {
 	numChunks := uint64(len(mt.order))
 	if numChunks == 0 {
 		return hash.Hash{}, nil, 0, fmt.Errorf("mem table cannot write with zero chunks")

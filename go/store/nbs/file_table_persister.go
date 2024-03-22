@@ -86,9 +86,9 @@ func (ftp *fsTablePersister) Persist(ctx context.Context, mt *memTable, haver ch
 	defer stats.PersistLatency.SampleTimeSince(t1)
 
 	// NM4 - All fully materialized should use the new version for this test???
-	ver := nomsBetaVersion
+	ver := BetaV
 	if _, ok := os.LookupEnv("DOLT_NBS_EXP"); ok {
-		ver = doltRev1Version
+		ver = Dolt1V
 	}
 
 	name, data, chunkCount, err := mt.write(haver, ver, stats)

@@ -334,7 +334,7 @@ func (wr *journalWriter) getCompressedChunk(h hash.Hash) (ChunkRecord, error) {
 	if _, err := wr.readAt(buf, int64(r.Offset)); err != nil {
 		return ChunkRecord{}, nil
 	}
-	return NewChunkRecord(hash.Hash(h), buf, nomsBetaVersion)
+	return NewChunkRecord(hash.Hash(h), buf, BetaV)
 }
 
 // getRange returns a Range for the chunk with addr |h|.

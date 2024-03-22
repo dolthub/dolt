@@ -37,7 +37,7 @@ func genRandomChunks(rng *rand.Rand, n int) (hash.HashSet, []nbs.ChunkRecord) {
 			bytes[j] = byte(rng.Int31n(255))
 		}
 
-		chk := nbs.ChunkToChunkRecord(chunks.NewChunk(bytes), 0) // NM4
+		chk := nbs.ChunkToChunkRecord(chunks.NewChunk(bytes), nbs.BetaV)
 		chks[i] = chk
 
 		hashes[chk.Hash()] = struct{}{}

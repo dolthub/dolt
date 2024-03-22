@@ -259,7 +259,7 @@ func validateLookup(t *testing.T, j *journalWriter, r Range, cc ChunkRecord) {
 	buf := make([]byte, r.Length)
 	_, err := j.readAt(buf, int64(r.Offset))
 	require.NoError(t, err)
-	act, err := NewChunkRecord(cc.H, buf, nomsBetaVersion)
+	act, err := NewChunkRecord(cc.H, buf, BetaV)
 	assert.NoError(t, err)
 	assert.Equal(t, cc.WritableData(), act.WritableData())
 }
@@ -407,7 +407,7 @@ func randomCompressedChunks(cnt int) (compressed map[hash.Hash]ChunkRecord) {
 		}
 		c := chunks.NewChunk(buf[:k])
 		buf = buf[k:]
-		compressed[c.Hash()] = ChunkToChunkRecord(c, 0) // NM4
+		compressed[c.Hash()] = ChunkToChunkRecord(c, BetaV)
 	}
 	return
 }

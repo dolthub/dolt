@@ -76,7 +76,7 @@ type tableReader struct {
 	blockSize uint64
 
 	// NM4 - maybe this is where the nbsVer needs to live???
-	nbsVer uint8
+	nbsVer NbsVersion
 }
 
 // newTableReader parses a valid nbs table byte stream and returns a reader. buff must end with an NBS index
@@ -357,7 +357,7 @@ func (r readBatch) End() uint64 {
 	return last.offset + uint64(last.length)
 }
 
-func (s readBatch) ExtractChunkFromRead(buff []byte, idx int, version uint8) (ChunkRecord, error) {
+func (s readBatch) ExtractChunkFromRead(buff []byte, idx int, version NbsVersion) (ChunkRecord, error) {
 	rec := s[idx]
 
 	chunkStart := rec.offset - s.Start()

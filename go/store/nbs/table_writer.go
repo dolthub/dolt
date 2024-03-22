@@ -46,7 +46,7 @@ type tableWriter struct {
 	snapper snappyEncoder
 
 	// NM4 - would be nice to have one place for this.
-	nbsVer uint8
+	nbsVer NbsVersion
 }
 
 type snappyEncoder interface {
@@ -79,17 +79,17 @@ func suffixesOffset(numChunks uint32) uint64 {
 	return uint64(numChunks) * (prefixTupleSize + lengthSize)
 }
 
-// NM4 - need to adjust max size for doltRev1Version
+// NM4 - need to adjust max size for Dolt1V
 // len(buff) must be >= maxTableSize(numChunks, totalData)
-func newTableWriter(buff []byte, nbsVersion uint8, snapper snappyEncoder) *tableWriter {
+func newTableWriter(buff []byte, nbsVersion NbsVersion, snapper snappyEncoder) *tableWriter {
 	if snapper == nil {
 		snapper = realSnappyEncoder{}
 	}
 
 	/* NM4 Go up a level.
-	version := nomsBetaVersion
+	version := BetaV
 	if _, ok := os.LookupEnv("DOLT_NBS_EXP"); ok {
-		version = doltRev1Version
+		version = Dolt1V
 	}
 	*/
 
@@ -108,7 +108,7 @@ func (tw *tableWriter) addChunk(h hash.Hash, data []byte) bool {
 
 	startPos := tw.pos
 	typeByteSize := uint64(0)
-	if tw.nbsVer >= doltRev1Version {
+	if tw.nbsVer >= Dolt1V {
 		// Write the chunk record type. 0 only for now.
 		tw.buff[tw.pos] = 0
 		tw.pos++
@@ -223,7 +223,7 @@ func (tw *tableWriter) writeFooter() {
 	tw.pos += writeFooter(tw.buff[tw.pos:], uint32(len(tw.prefixes)), tw.totalUncompressedData, tw.nbsVer)
 }
 
-func writeFooter(dst []byte, chunkCount uint32, uncData uint64, nbsVersion uint8) (consumed uint64) {
+func writeFooter(dst []byte, chunkCount uint32, uncData uint64, nbsVersion NbsVersion) (consumed uint64) {
 	// chunk count
 	binary.BigEndian.PutUint32(dst[consumed:], chunkCount)
 	consumed += uint32Size
@@ -234,9 +234,9 @@ func writeFooter(dst []byte, chunkCount uint32, uncData uint64, nbsVersion uint8
 
 	// magic number
 	switch nbsVersion {
-	case doltRev1Version:
+	case Dolt1V:
 		copy(dst[consumed:], doltRev1MagicNumber)
-	case nomsBetaVersion:
+	case BetaV:
 		copy(dst[consumed:], nomsBetaMagicNumber)
 	default:
 		err := fmt.Errorf("Runtime Error: unknown nbs version: %d", nbsVersion)

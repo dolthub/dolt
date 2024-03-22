@@ -76,7 +76,7 @@ type tableIndex interface {
 	totalUncompressedData() uint64
 
 	// Version returns the version of the table file.
-	nbsVersion() uint8
+	nbsVersion() NbsVersion
 
 	// Close releases any resources used by this tableIndex.
 	Close() error
@@ -86,7 +86,7 @@ type tableIndex interface {
 	clone() (tableIndex, error)
 }
 
-func readTableFooter(rd io.ReadSeeker) (chunkCount uint32, totalUncompressedData uint64, version uint8, err error) {
+func readTableFooter(rd io.ReadSeeker) (chunkCount uint32, totalUncompressedData uint64, version NbsVersion, err error) {
 	footerSize := int64(magicNumberSize + uint64Size + uint32Size)
 	_, err = rd.Seek(-footerSize, io.SeekEnd)
 
@@ -220,7 +220,7 @@ type onHeapTableIndex struct {
 
 	// nbsVersion is the version of the table file based on the magic number in the footer. This will impact
 	// the generation and parsing of the table file.
-	nbsVer uint8
+	nbsVer NbsVersion
 }
 
 var _ tableIndex = &onHeapTableIndex{}
@@ -232,7 +232,7 @@ var _ tableIndex = &onHeapTableIndex{}
 // additional space) and the rest into the region of |indexBuff| previously
 // occupied by lengths. |onHeapTableIndex| computes directly on the given
 // |indexBuff| and |offsetsBuff1| buffers.
-func newOnHeapTableIndex(indexBuff []byte, offsetsBuff1 []byte, count uint32, totalUncompressedData uint64, version uint8, q MemoryQuotaProvider) (onHeapTableIndex, error) {
+func newOnHeapTableIndex(indexBuff []byte, offsetsBuff1 []byte, count uint32, totalUncompressedData uint64, version NbsVersion, q MemoryQuotaProvider) (onHeapTableIndex, error) {
 	if len(indexBuff) != int(indexSize(count)+footerSize) {
 		return onHeapTableIndex{}, ErrWrongBufferSize
 	}
@@ -521,7 +521,7 @@ func (ti onHeapTableIndex) totalUncompressedData() uint64 {
 	return ti.uncompressedSz
 }
 
-func (ti onHeapTableIndex) nbsVersion() uint8 {
+func (ti onHeapTableIndex) nbsVersion() NbsVersion {
 	return ti.nbsVer
 }
 

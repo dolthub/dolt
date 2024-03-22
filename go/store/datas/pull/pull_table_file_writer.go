@@ -229,7 +229,7 @@ LOOP:
 			}
 
 			if curWr == nil {
-				curWr, err = nbs.NewCmpChunkTableWriter(w.cfg.TempDir, 0) // NM4 - Until the client can tell us what version to use, we use nomsBetaVersion.
+				curWr, err = nbs.NewCmpChunkTableWriter(w.cfg.TempDir, nbs.BetaV)
 				if err != nil {
 					return err
 				}
