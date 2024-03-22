@@ -238,7 +238,7 @@ func writeCorruptJournalRecord(buf []byte) (n uint32) {
 
 func mustCompressedChunk(rec journalRec) ChunkRecord {
 	d.PanicIfFalse(rec.kind == chunkJournalRecKind)
-	cc, err := NewChunkRecord(rec.address, rec.payload, BetaV)
+	cc, err := DeserializeChunkRecord(rec.address, rec.payload, BetaV)
 	d.PanicIfError(err)
 	return cc
 }

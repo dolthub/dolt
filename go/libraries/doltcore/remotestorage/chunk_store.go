@@ -464,7 +464,7 @@ func (gr *GetRange) GetDownloadFunc(ctx context.Context, stats StatsRecorder, fe
 			s, e := gr.ChunkByteRange(i)
 			// Currently we assume that the data returned from remotes is only using nbs.BetaV. The HTTP response will need to
 			// indicate the version in the future.
-			cmpChnk, err := nbs.NewChunkRecord(hash.New(gr.Ranges[i].Hash), comprData[s:e], nbs.BetaV)
+			cmpChnk, err := nbs.DeserializeChunkRecord(hash.New(gr.Ranges[i].Hash), comprData[s:e], nbs.BetaV)
 			if err != nil {
 				return err
 			}

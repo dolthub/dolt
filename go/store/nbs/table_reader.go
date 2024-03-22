@@ -196,7 +196,7 @@ func (tr tableReader) get(ctx context.Context, h hash.Hash, stats *Stats) ([]byt
 		return nil, errors.New("failed to read all data")
 	}
 
-	cmp, err := NewChunkRecord(h, buff, tr.nbsVer)
+	cmp, err := DeserializeChunkRecord(h, buff, tr.nbsVer)
 
 	if err != nil {
 		return nil, err
@@ -362,7 +362,7 @@ func (s readBatch) ExtractChunkFromRead(buff []byte, idx int, version NbsVersion
 
 	chunkStart := rec.offset - s.Start()
 
-	return NewChunkRecord(*rec.a, buff[chunkStart:chunkStart+uint64(rec.length)], version)
+	return DeserializeChunkRecord(*rec.a, buff[chunkStart:chunkStart+uint64(rec.length)], version)
 }
 
 func toReadBatches(offsets offsetRecSlice, blockSize uint64) []readBatch {
@@ -557,7 +557,7 @@ func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) 
 		if uint32(n) != or.length {
 			return errors.New("did not read all data")
 		}
-		cmp, err := NewChunkRecord(hash.Hash(*or.a), buff, tr.nbsVer)
+		cmp, err := DeserializeChunkRecord(*or.a, buff, tr.nbsVer)
 
 		if err != nil {
 			return err

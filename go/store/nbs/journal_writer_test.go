@@ -259,7 +259,7 @@ func validateLookup(t *testing.T, j *journalWriter, r Range, cc ChunkRecord) {
 	buf := make([]byte, r.Length)
 	_, err := j.readAt(buf, int64(r.Offset))
 	require.NoError(t, err)
-	act, err := NewChunkRecord(cc.h, buf, BetaV)
+	act, err := DeserializeChunkRecord(cc.h, buf, BetaV)
 	assert.NoError(t, err)
 	assert.Equal(t, cc.WritableData(), act.WritableData())
 }

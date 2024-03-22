@@ -44,10 +44,11 @@ type ChunkRecord struct {
 	// h is the hash of the chunk
 	h hash.Hash
 
-	// FullCompressedChunk is the entirety of the compressed chunk data including the crc
+	// fullCompressedChunk is the entirety of the compressed chunk data including the crc
 	fullCompressedChunk []byte
 
-	// CompressedData is just the snappy encoded byte buffer that stores the chunk data
+	// compressedData is just the snappy encoded byte buffer that stores the chunk data. Currently a subslice of
+	// fullCompressedChunk, but that may change in the future.
 	compressedData []byte
 
 	// nbsVer is the version of the nbs format that this chunk is encoded with. This must be set whenever creating
@@ -57,6 +58,7 @@ type ChunkRecord struct {
 	// The full size of the chunk, including the type byte and the crc. This is how much space the chunk takes up on disk.
 	fullSize uint32
 
+	// The size of the chunk data when it is fully resolved.
 	rawChunkSize uint32
 }
 
@@ -67,10 +69,10 @@ func (cmp ChunkRecord) NBSVersion() NbsVersion {
 	return cmp.nbsVer
 }
 
-// NewChunkRecord creates a ChunkRecord, using the full chunk record bytes stored in the table file. This includes the crc.
+// DeserializeChunkRecord creates a ChunkRecord, using the full chunk record bytes stored in the table file. This includes the crc.
 // Will error in the event that the crc does not match the data. The nbsVersion is required to interpret the bytes of the
 // input appropriately.
-func NewChunkRecord(h hash.Hash, buff []byte, nbsVersion NbsVersion) (ChunkRecord, error) {
+func DeserializeChunkRecord(h hash.Hash, buff []byte, nbsVersion NbsVersion) (ChunkRecord, error) {
 	fullSize := uint32(len(buff))
 	dataLen := uint64(len(buff)) - checksumSize
 	chksum := binary.BigEndian.Uint32(buff[dataLen:])
@@ -101,7 +103,6 @@ func NewChunkRecord(h hash.Hash, buff []byte, nbsVersion NbsVersion) (ChunkRecor
 		return ChunkRecord{}, errors.New("checksum error")
 	}
 
-	// NM4 - not sure if we want to continue carrying around the originam buff.
 	return ChunkRecord{h: h,
 		fullCompressedChunk: fullbuff,
 		fullSize:            fullSize,
