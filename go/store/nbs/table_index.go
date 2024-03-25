@@ -189,18 +189,6 @@ func readTableIndexByCopy(ctx context.Context, rd io.ReadSeeker, q MemoryQuotaPr
 	return idx, err
 }
 
-func hashSetFromTableIndex(idx tableIndex) (hash.HashSet, error) {
-	set := hash.NewHashSet()
-	for i := uint32(0); i < idx.chunkCount(); i++ {
-		var h hash.Hash
-		if _, err := idx.indexEntry(i, &h); err != nil {
-			return nil, err
-		}
-		set.Insert(h)
-	}
-	return set, nil
-}
-
 type onHeapTableIndex struct {
 	// prefixTuples is a packed array of 12 byte tuples:
 	// (8 byte addr prefix, 4 byte uint32 ordinal)
@@ -320,8 +308,8 @@ func (ti onHeapTableIndex) getIndexEntry(ord uint32) indexEntry {
 	ordOff := ti.offsetAt(ord)
 	length := uint32(ordOff - prevOff)
 	return indexResult{
-		o: prevOff,
-		l: length,
+		offset: prevOff,
+		length: length,
 	}
 }
 
