@@ -18,10 +18,8 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"strconv"
 	"strings"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -241,6 +239,11 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 		return err
 	}
 
+	err = ApplySystemVariables(serverConfig)
+	if err != nil {
+		return err
+	}
+
 	cli.PrintErrf("Starting server with Config %v\n", ConfigInfo(serverConfig))
 
 	startError, closeError := Serve(ctx, versionStr, serverConfig, controller, dEnv)
@@ -256,13 +259,24 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 
 // ServerConfigFromArgs returns a ServerConfig from the given args
 func ServerConfigFromArgs(ap *argparser.ArgParser, help cli.UsagePrinter, args []string, dEnv *env.DoltEnv) (ServerConfig, error) {
+	return ServerConfigFromArgsWithReader(ap, help, args, dEnv, DoltServerConfigReader{})
+}
+
+// ServerConfigFromArgsWithReader returns a ServerConfig from the given args, using the provided ServerConfigReader
+func ServerConfigFromArgsWithReader(
+	ap *argparser.ArgParser,
+	help cli.UsagePrinter,
+	args []string,
+	dEnv *env.DoltEnv,
+	reader ServerConfigReader,
+) (ServerConfig, error) {
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	if err := validateSqlServerArgs(apr); err != nil {
 		cli.PrintErrln(color.RedString(err.Error()))
 		return nil, err
 	}
 
-	serverConfig, err := getServerConfig(dEnv.FS, apr)
+	serverConfig, err := getServerConfig(dEnv.FS, apr, reader)
 	if err != nil {
 		return nil, fmt.Errorf("bad configuration: %w", err)
 	}
@@ -276,34 +290,37 @@ func ServerConfigFromArgs(ap *argparser.ArgParser, help cli.UsagePrinter, args [
 
 // getServerConfig returns ServerConfig that is set either from yaml file if given, if not it is set with values defined
 // on command line. Server config variables not defined are set to default values.
-func getServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults) (ServerConfig, error) {
-	var yamlCfg YAMLConfig
-	if cfgFile, ok := apr.GetValue(configFileFlag); ok {
-		cfg, err := getYAMLServerConfig(cwdFS, cfgFile)
-		if err != nil {
-			return nil, err
-		}
-		yamlCfg = cfg.(YAMLConfig)
-	} else {
-		return getCommandLineConfig(nil, apr)
+func getServerConfig(cwdFS filesys.Filesys, apr *argparser.ArgParseResults, reader ServerConfigReader) (ServerConfig, error) {
+	cfgFile, ok := apr.GetValue(configFileFlag)
+	if !ok {
+		return reader.ReadConfigArgs(apr)
 	}
 
-	// if command line user argument was given, replace yaml's user and password
+	cfg, err := reader.ReadConfigFile(cwdFS, cfgFile)
+	if err != nil {
+		return nil, err
+	}
+
+	// if command line user argument was given, override the config file's user and password
 	if user, hasUser := apr.GetValue(commands.UserFlag); hasUser {
-		pass, _ := apr.GetValue(passwordFlag)
-		yamlCfg.UserConfig.Name = &user
-		yamlCfg.UserConfig.Password = &pass
+		if wcfg, ok := cfg.(WritableServerConfig); ok {
+			pass, _ := apr.GetValue(passwordFlag)
+			wcfg.SetUserName(user)
+			wcfg.SetPassword(pass)
+		}
 	}
 
 	if connStr, ok := apr.GetValue(goldenMysqlConn); ok {
-		cli.Println(connStr)
-		yamlCfg.GoldenMysqlConn = &connStr
+		if yamlCfg, ok := cfg.(YAMLConfig); ok {
+			cli.Println(connStr)
+			yamlCfg.GoldenMysqlConn = &connStr
+		}
 	}
 
-	return yamlCfg, nil
+	return cfg, nil
 }
 
-// GetClientConfig returns configuration which is sutable for a client to use. The fact that it returns a ServerConfig
+// GetClientConfig returns configuration which is suitable for a client to use. The fact that it returns a ServerConfig
 // is a little confusing, but it is because the client and server use the same configuration struct. The main difference
 // between this method and getServerConfig is that this method required a cli.UserPassword argument. It is created by
 // prompting the user, and we don't want the server to follow that code path.
@@ -311,11 +328,11 @@ func GetClientConfig(cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argpar
 	cfgFile, hasCfgFile := apr.GetValue(configFileFlag)
 
 	if !hasCfgFile {
-		return getCommandLineConfig(creds, apr)
+		return NewCommandLineConfig(creds, apr)
 	}
 
 	var yamlCfg YAMLConfig
-	cfg, err := getYAMLServerConfig(cwdFS, cfgFile)
+	cfg, err := YamlConfigFromFile(cwdFS, cfgFile)
 	if err != nil {
 		return nil, err
 	}
@@ -408,160 +425,4 @@ func setupDoltConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, config S
 	}
 
 	return nil
-}
-
-// getCommandLineConfig sets server config variables and persisted global variables with values defined on command line.
-// If not defined, it sets variables to default values. The creds option is available when building a client config, which
-// is used for most commands. `dolt sql-server` is special, and its user/pwd is pa`ssed in via apr, so creds must be nil
-// to indicate that the user/pwd should be taken from the apr.
-func getCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResults) (ServerConfig, error) {
-	config := DefaultServerConfig()
-
-	if sock, ok := apr.GetValue(socketFlag); ok {
-		// defined without value gets default
-		if sock == "" {
-			sock = defaultUnixSocketFilePath
-		}
-		config.WithSocket(sock)
-	}
-
-	if host, ok := apr.GetValue(hostFlag); ok {
-		config.WithHost(host)
-	}
-
-	if port, ok := apr.GetInt(portFlag); ok {
-		config.WithPort(port)
-	}
-
-	if creds == nil {
-		if user, ok := apr.GetValue(cli.UserFlag); ok {
-			config.withUser(user)
-		}
-		if password, ok := apr.GetValue(cli.PasswordFlag); ok {
-			config.withPassword(password)
-		}
-	} else {
-		config.withUser(creds.Username)
-		config.withPassword(creds.Password)
-	}
-
-	if port, ok := apr.GetInt(remotesapiPortFlag); ok {
-		config.WithRemotesapiPort(&port)
-	}
-	if apr.Contains(remotesapiReadOnlyFlag) {
-		val := true
-		config.WithRemotesapiReadOnly(&val)
-	}
-
-	if persistenceBehavior, ok := apr.GetValue(persistenceBehaviorFlag); ok {
-		config.withPersistenceBehavior(persistenceBehavior)
-	}
-
-	if timeoutStr, ok := apr.GetValue(timeoutFlag); ok {
-		timeout, err := strconv.ParseUint(timeoutStr, 10, 64)
-
-		if err != nil {
-			return nil, fmt.Errorf("invalid value for --timeout '%s'", timeoutStr)
-		}
-
-		config.withTimeout(timeout * 1000)
-
-		err = sql.SystemVariables.SetGlobal("net_read_timeout", timeout*1000)
-		if err != nil {
-			return nil, fmt.Errorf("failed to set net_read_timeout. Error: %s", err.Error())
-		}
-		err = sql.SystemVariables.SetGlobal("net_write_timeout", timeout*1000)
-		if err != nil {
-			return nil, fmt.Errorf("failed to set net_write_timeout. Error: %s", err.Error())
-		}
-	}
-
-	if _, ok := apr.GetValue(readonlyFlag); ok {
-		config.withReadOnly(true)
-		val := true
-		config.WithRemotesapiReadOnly(&val)
-	}
-
-	if logLevel, ok := apr.GetValue(logLevelFlag); ok {
-		config.withLogLevel(LogLevel(strings.ToLower(logLevel)))
-	}
-
-	if dataDir, ok := apr.GetValue(commands.MultiDBDirFlag); ok {
-		config.withDataDir(dataDir)
-	}
-
-	if dataDir, ok := apr.GetValue(commands.DataDirFlag); ok {
-		config.withDataDir(dataDir)
-	}
-
-	if queryParallelism, ok := apr.GetInt(queryParallelismFlag); ok {
-		config.withQueryParallelism(queryParallelism)
-	}
-
-	if maxConnections, ok := apr.GetInt(maxConnectionsFlag); ok {
-		config.withMaxConnections(uint64(maxConnections))
-		err := sql.SystemVariables.SetGlobal("max_connections", uint64(maxConnections))
-		if err != nil {
-			return nil, fmt.Errorf("failed to set max_connections. Error: %s", err.Error())
-		}
-	}
-
-	config.autoCommit = !apr.Contains(noAutoCommitFlag)
-	config.allowCleartextPasswords = apr.Contains(allowCleartextPasswordsFlag)
-
-	if connStr, ok := apr.GetValue(goldenMysqlConn); ok {
-		cli.Println(connStr)
-		config.withGoldenMysqlConnectionString(connStr)
-	}
-
-	if esStatus, ok := apr.GetValue(eventSchedulerStatus); ok {
-		// make sure to assign eventSchedulerStatus first here
-		config.withEventScheduler(strings.ToUpper(esStatus))
-		err := sql.SystemVariables.SetGlobal("event_scheduler", config.EventSchedulerStatus())
-		if err != nil {
-			return nil, fmt.Errorf("failed to set event_scheduler. Error: %s", err.Error())
-		}
-	}
-
-	return config, nil
-}
-
-// getYAMLServerConfig returns server config variables with values defined in yaml file.
-func getYAMLServerConfig(fs filesys.Filesys, path string) (ServerConfig, error) {
-	data, err := fs.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to read file '%s'. Error: %s", path, err.Error())
-	}
-
-	cfg, err := NewYamlConfig(data)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse yaml file '%s'. Error: %s", path, err.Error())
-	}
-
-	if cfg.ListenerConfig.MaxConnections != nil {
-		err = sql.SystemVariables.SetGlobal("max_connections", *cfg.ListenerConfig.MaxConnections)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to set max_connections from yaml file '%s'. Error: %s", path, err.Error())
-		}
-	}
-	if cfg.ListenerConfig.ReadTimeoutMillis != nil {
-		err = sql.SystemVariables.SetGlobal("net_read_timeout", *cfg.ListenerConfig.ReadTimeoutMillis)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to set net_read_timeout from yaml file '%s'. Error: %s", path, err.Error())
-		}
-	}
-	if cfg.ListenerConfig.WriteTimeoutMillis != nil {
-		err = sql.SystemVariables.SetGlobal("net_write_timeout", *cfg.ListenerConfig.WriteTimeoutMillis)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to set net_write_timeout from yaml file '%s'. Error: %s", path, err.Error())
-		}
-	}
-	if cfg.BehaviorConfig.EventSchedulerStatus != nil {
-		err = sql.SystemVariables.SetGlobal("event_scheduler", cfg.EventSchedulerStatus())
-		if err != nil {
-			return nil, fmt.Errorf("Failed to set event_scheduler from yaml file '%s'. Error: %s", path, err.Error())
-		}
-	}
-
-	return cfg, nil
 }
