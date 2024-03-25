@@ -46,24 +46,7 @@ func NewInitDatabaseHook(
 				return err
 			}
 		}
-
-		dSess := dsess.DSessFromSess(ctx.Session)
-		var branches []string
-		if _, bs, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsBranches); bs == "" {
-			defaultBranch, _ := dSess.GetBranch()
-			if defaultBranch != "" {
-				branches = append(branches, defaultBranch)
-			}
-		} else {
-			for _, branch := range strings.Split(bs.(string), ",") {
-				branches = append(branches, strings.TrimSpace(branch))
-			}
-		}
-
-		if branches == nil {
-			branches = []string{pro.DefaultBranch()}
-		}
-
+		
 		statsDb, err := statsProv.sf.Init(ctx, db, statsProv.pro, denv.FS, env.GetCurrentUserHomeDir)
 		if err != nil {
 			ctx.Warn(0, err.Error())

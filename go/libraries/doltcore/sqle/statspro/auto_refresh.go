@@ -40,22 +40,7 @@ func (p *Provider) InitAutoRefresh(ctxFactory func(ctx context.Context) (*sql.Co
 		return err
 	}
 
-	dSess := dsess.DSessFromSess(ctx.Session)
-	var branches []string
-	if _, bs, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsBranches); bs == "" {
-		defaultBranch, _ := dSess.GetBranch()
-		if defaultBranch != "" {
-			branches = append(branches, defaultBranch)
-		}
-	} else {
-		for _, branch := range strings.Split(bs.(string), ",") {
-			branches = append(branches, strings.TrimSpace(branch))
-		}
-	}
-
-	if branches == nil {
-		branches = []string{p.pro.DefaultBranch()}
-	}
+	branches := p.getStatsBranches(ctx)
 
 	return p.InitAutoRefreshWithParams(ctxFactory, dbName, bThreads, intervalSec, thresholdf64, branches)
 }

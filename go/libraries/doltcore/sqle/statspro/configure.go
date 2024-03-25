@@ -40,22 +40,7 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 		return err
 	}
 
-	dSess := dsess.DSessFromSess(loadCtx.Session)
-	var branches []string
-	if _, bs, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsBranches); bs == "" {
-		defaultBranch, _ := dSess.GetBranch()
-		if defaultBranch != "" {
-			branches = append(branches, defaultBranch)
-		}
-	} else {
-		for _, branch := range strings.Split(bs.(string), ",") {
-			branches = append(branches, strings.TrimSpace(branch))
-		}
-	}
-
-	if branches == nil {
-		branches = []string{p.pro.DefaultBranch()}
-	}
+	branches := p.getStatsBranches(loadCtx)
 
 	var autoEnabled bool
 	var intervalSec time.Duration
@@ -94,7 +79,7 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 				return err
 			}
 
-			if err := p.Load(loadCtx, fs, db, branches); err != nil {
+			if p.Load(loadCtx, fs, db, branches); err != nil {
 				return err
 			}
 			if autoEnabled {
@@ -106,6 +91,29 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 	return eg.Wait()
 }
 
+// getStatsBranches returns the set of branches whose statistics are tracked.
+// The order of precedence is (1) global variable, (2) session current branch,
+// (3) engine default branch.
+func (p *Provider) getStatsBranches(ctx *sql.Context) []string {
+	dSess := dsess.DSessFromSess(ctx.Session)
+	var branches []string
+	if _, bs, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsBranches); bs == "" {
+		defaultBranch, _ := dSess.GetBranch()
+		if defaultBranch != "" {
+			branches = append(branches, defaultBranch)
+		}
+	} else {
+		for _, branch := range strings.Split(bs.(string), ",") {
+			branches = append(branches, strings.TrimSpace(branch))
+		}
+	}
+
+	if branches == nil {
+		branches = []string{p.pro.DefaultBranch()}
+	}
+	return branches
+}
+
 func (p *Provider) LoadStats(ctx *sql.Context, db, branch string) error {
 	if statDb, ok := p.getStatDb(db); ok {
 		return statDb.LoadBranchStats(ctx, branch)
@@ -115,17 +123,19 @@ func (p *Provider) LoadStats(ctx *sql.Context, db, branch string) error {
 
 // Load scans the statistics tables, populating the |stats| attribute.
 // Statistics are not available for reading until we've finished loading.
-func (p *Provider) Load(ctx *sql.Context, fs filesys.Filesys, db dsess.SqlDatabase, branches []string) error {
+func (p *Provider) Load(ctx *sql.Context, fs filesys.Filesys, db dsess.SqlDatabase, branches []string) {
 	// |statPath| is either file://./stat or mem://stat
 	statsDb, err := p.sf.Init(ctx, db, p.pro, fs, env.GetCurrentUserHomeDir)
 	if err != nil {
 		ctx.Warn(0, err.Error())
-		return nil
+		return
 	}
 
 	for _, branch := range branches {
 		err = statsDb.LoadBranchStats(ctx, branch)
 		if err != nil {
+			// if branch name is invalid, continue loading rest
+			// TODO: differentiate bad branch name from other errors
 			ctx.Warn(0, err.Error())
 			continue
 		}
@@ -134,5 +144,5 @@ func (p *Provider) Load(ctx *sql.Context, fs filesys.Filesys, db dsess.SqlDataba
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.setStatDb(strings.ToLower(db.Name()), statsDb)
-	return nil
+	return
 }
