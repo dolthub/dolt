@@ -115,7 +115,7 @@ func WalkInsertAddresses(ctx context.Context, msg serial.Message, cb func(ctx co
 	case serial.ProllyTreeNodeFileID:
 		return nil
 	case serial.AddressMapFileID:
-		return nil
+		return walkAddressMapAddresses(ctx, msg, cb)
 	case serial.MergeArtifactsFileID:
 		return walkMergeArtifactAddresses(ctx, msg, cb)
 	case serial.CommitClosureFileID:
