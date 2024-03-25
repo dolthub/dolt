@@ -17,17 +17,20 @@ package dfunctions
 import "github.com/dolthub/go-mysql-server/sql"
 
 var DoltFunctions = []sql.Function{
-	sql.Function1{Name: HashOfFuncName, Fn: NewHashOf},
+	sql.Function1{Name: HashOfFuncName, Fn: NewHashOfFunc(HashOfFuncName)},
+	sql.Function1{Name: DeprecatedHashOfFuncName, Fn: NewHashOfFunc(DeprecatedHashOfFuncName)},
 	sql.Function0{Name: VersionFuncName, Fn: NewVersion},
 	sql.Function0{Name: StorageFormatFuncName, Fn: NewStorageFormat},
 	sql.Function0{Name: ActiveBranchFuncName, Fn: NewActiveBranchFunc},
 	sql.Function2{Name: DoltMergeBaseFuncName, Fn: NewMergeBase},
 	sql.Function2{Name: HasAncestorFuncName, Fn: NewHasAncestor},
+	sql.Function1{Name: HashOfTableFuncName, Fn: NewHashOfTable},
 }
 
 // DolthubApiFunctions are the DoltFunctions that get exposed to Dolthub Api.
 var DolthubApiFunctions = []sql.Function{
-	sql.Function1{Name: HashOfFuncName, Fn: NewHashOf},
+	sql.Function1{Name: HashOfFuncName, Fn: NewHashOfFunc(HashOfFuncName)},
+	sql.Function1{Name: DeprecatedHashOfFuncName, Fn: NewHashOfFunc(DeprecatedHashOfFuncName)},
 	sql.Function0{Name: VersionFuncName, Fn: NewVersion},
 	sql.Function0{Name: StorageFormatFuncName, Fn: NewStorageFormat},
 	sql.Function0{Name: ActiveBranchFuncName, Fn: NewActiveBranchFunc},

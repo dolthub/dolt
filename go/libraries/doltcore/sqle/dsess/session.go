@@ -1431,7 +1431,7 @@ func (d *DoltSession) PersistGlobal(sysVarName string, value interface{}) error 
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return setPersistedValue(d.globalsConf, sysVar.Name, value)
+	return setPersistedValue(d.globalsConf, sysVar.GetName(), value)
 }
 
 // RemovePersistedGlobal implements sql.PersistableSession
@@ -1447,7 +1447,7 @@ func (d *DoltSession) RemovePersistedGlobal(sysVarName string) error {
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.globalsConf.Unset([]string{sysVar.Name})
+	return d.globalsConf.Unset([]string{sysVar.GetName()})
 }
 
 // RemoveAllPersistedGlobals implements sql.PersistableSession
@@ -1536,15 +1536,15 @@ func (d *DoltSession) GetController() *branch_control.Controller {
 func validatePersistableSysVar(name string) (sql.SystemVariable, interface{}, error) {
 	sysVar, val, ok := sql.SystemVariables.GetGlobal(name)
 	if !ok {
-		return sql.SystemVariable{}, nil, sql.ErrUnknownSystemVariable.New(name)
+		return nil, nil, sql.ErrUnknownSystemVariable.New(name)
 	}
-	if !sysVar.Dynamic {
-		return sql.SystemVariable{}, nil, sql.ErrSystemVariableReadOnly.New(name)
+	if sysVar.IsReadOnly() {
+		return nil, nil, sql.ErrSystemVariableReadOnly.New(name)
 	}
 	return sysVar, val, nil
 }
 
-// getPersistedValue reads and converts a config value to the associated SystemVariable type
+// getPersistedValue reads and converts a config value to the associated MysqlSystemVariable type
 func getPersistedValue(conf config.ReadableConfig, k string) (interface{}, error) {
 	v, err := conf.GetString(k)
 	if err != nil {
@@ -1634,7 +1634,6 @@ func SystemVariablesInConfig(conf config.ReadableConfig) ([]sql.SystemVariable, 
 	var missingKeys []string
 	i := 0
 	var err error
-	var sysVar sql.SystemVariable
 	var def interface{}
 	conf.Iter(func(k, v string) bool {
 		def, err = getPersistedValue(conf, k)
@@ -1648,8 +1647,8 @@ func SystemVariablesInConfig(conf config.ReadableConfig) ([]sql.SystemVariable, 
 			return true
 		}
 		// getPersistedVal already checked for errors
-		sysVar, _, _ = sql.SystemVariables.GetGlobal(k)
-		sysVar.Default = def
+		sysVar, _, _ := sql.SystemVariables.GetGlobal(k)
+		sysVar.SetDefault(def)
 		allVars[i] = sysVar
 		i++
 		return false

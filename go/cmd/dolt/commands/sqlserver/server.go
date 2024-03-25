@@ -119,9 +119,9 @@ func ConfigureServices(
 			logrus.SetLevel(level)
 
 			sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
-				{
+				&sql.MysqlSystemVariable{
 					Name:              dsess.DoltLogLevel,
-					Scope:             sql.SystemVariableScope_Global,
+					Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Global),
 					Dynamic:           true,
 					SetVarHintApplies: false,
 					Type: types.NewSystemEnumType(dsess.DoltLogLevel,
@@ -134,7 +134,7 @@ func ConfigureServices(
 						logrus.TraceLevel.String(),
 					),
 					Default: logrus.GetLevel().String(),
-					NotifyChanged: func(scope sql.SystemVariableScope, v sql.SystemVarValue) error {
+					NotifyChanged: func(_ sql.SystemVariableScope, v sql.SystemVarValue) error {
 						level, err := logrus.ParseLevel(v.Val.(string))
 						if err != nil {
 							return fmt.Errorf("could not parse requested log level %s as a log level. dolt_log_level variable value and logging behavior will diverge.", v.Val.(string))

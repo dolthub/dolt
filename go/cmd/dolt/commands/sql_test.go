@@ -612,7 +612,6 @@ func TestCommitHooksNoErrors(t *testing.T) {
 	require.NoError(t, err)
 	defer dEnv.DoltDB.Close()
 
-	sqle.AddDoltSystemVariables()
 	sql.SystemVariables.SetGlobal(dsess.ReplicateToRemote, "unknown")
 	hooks, err := sqle.GetCommitHooks(context.Background(), nil, dEnv, io.Discard)
 	assert.NoError(t, err)

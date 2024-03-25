@@ -1331,7 +1331,10 @@ func TestSelectIntoFile(t *testing.T) {
 func TestJsonScripts(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestJsonScripts(t, h)
+	skippedTests := []string{
+		"round-trip into table", // The current Dolt JSON format does not preserve decimals and unsigneds in JSON.
+	}
+	enginetest.TestJsonScripts(t, h, skippedTests)
 }
 
 func TestTriggers(t *testing.T) {
@@ -2731,7 +2734,10 @@ func TestJsonScriptsPrepared(t *testing.T) {
 	skipPreparedTests(t)
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestJsonScriptsPrepared(t, h)
+	skippedTests := []string{
+		"round-trip into table", // The current Dolt JSON format does not preserve decimals and unsigneds in JSON.
+	}
+	enginetest.TestJsonScriptsPrepared(t, h, skippedTests)
 }
 
 func TestCreateCheckConstraintsScriptsPrepared(t *testing.T) {
@@ -2786,6 +2792,13 @@ func TestPrepared(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestPrepared(t, h)
+}
+
+func TestDoltPreparedScripts(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t)
+	defer h.Close()
+	DoltPreparedScripts(t, h)
 }
 
 func TestPreparedInsert(t *testing.T) {

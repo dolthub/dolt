@@ -179,7 +179,7 @@ jobs:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: upload-msi
           repository: dolthub/windows-msi-creator
-          client-payload: '{"tag": "${{ needs.format-version.outputs.version }}", "release_id": "${{ needs.create-release.outputs.release_id }}", "actor": "${{ github.actor }}", "bucket": "${{ github.event.inputs.profile_bucket || github.event.client_payload.bucket }}", "profile_key": "${{ github.event.inputs.profile_key || github.event.client_payload.profile_key }}"}'
+          client-payload: '{"tag": "${{ needs.format-version.outputs.version }}", "release_id": "${{ needs.create-pgo-release.outputs.release_id }}", "actor": "${{ github.actor }}", "bucket": "${{ github.event.inputs.profile_bucket || github.event.client_payload.bucket }}", "profile_key": "${{ github.event.inputs.profile_key || github.event.client_payload.profile_key }}"}'
 
   create-release-notes:
     needs: [format-version, create-pgo-release]

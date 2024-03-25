@@ -39,12 +39,12 @@ func ParseCreateTableStatement(ctx *sql.Context, root *doltdb.RootValue, engine 
 		return "", nil, fmt.Errorf("expected create table, found %T", create)
 	}
 
-	sch, err := ToDoltSchema(ctx, root, create.Name(), create.CreateSchema, nil, create.Collation)
+	sch, err := ToDoltSchema(ctx, root, create.Name(), create.PkSchema(), nil, create.Collation)
 	if err != nil {
 		return "", nil, err
 	}
 
-	for _, idx := range create.IdxDefs {
+	for _, idx := range create.Indexes() {
 		var prefixes []uint16
 		for _, c := range idx.Columns {
 			prefixes = append(prefixes, uint16(c.Length))
@@ -73,9 +73,9 @@ func ParseCreateTableStatement(ctx *sql.Context, root *doltdb.RootValue, engine 
 	return create.Name(), sch, err
 }
 
-func getIndexName(def *plan.IndexDefinition) string {
-	if def.IndexName != "" {
-		return def.IndexName
+func getIndexName(def *sql.IndexDef) string {
+	if def.Name != "" {
+		return def.Name
 	}
 	return strings.Join(def.ColumnNames(), "_") + "_key"
 }

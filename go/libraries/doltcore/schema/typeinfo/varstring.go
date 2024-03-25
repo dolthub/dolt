@@ -63,7 +63,7 @@ func CreateVarStringTypeFromParams(params map[string]string) (TypeInfo, error) {
 	var collation sql.CollationID
 	var err error
 	if collationStr, ok := params[varStringTypeParam_Collate]; ok {
-		collation, err = sql.ParseCollation(nil, &collationStr, false)
+		collation, err = sql.ParseCollation("", collationStr, false)
 		if err != nil {
 			return nil, err
 		}
