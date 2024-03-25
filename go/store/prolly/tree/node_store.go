@@ -151,7 +151,7 @@ func (ns nodeStore) Write(ctx context.Context, nd Node) (hash.Hash, error) {
 
 	getAddrs := func(ctx context.Context, ch chunks.Chunk) (addrs hash.HashSet, err error) {
 		addrs = hash.NewHashSet()
-		err = message.WalkAddresses(ctx, ch.Data(), func(ctx context.Context, a hash.Hash) error {
+		err = message.WalkInsertAddresses(ctx, ch.Data(), func(ctx context.Context, a hash.Hash) error {
 			addrs.Insert(a)
 			return nil
 		})
