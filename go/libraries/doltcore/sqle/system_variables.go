@@ -228,14 +228,14 @@ func AddDoltSystemVariables() {
 		&sql.MysqlSystemVariable{
 			Name:    dsess.DoltStatsAutoRefreshInterval,
 			Dynamic: true,
-			Scope:   sql.SystemVariableScope_Global,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
 			Type:    types.NewSystemIntType(dsess.DoltStatsAutoRefreshInterval, 0, math.MaxInt, false),
 			Default: 120,
 		},
-		{
+		&sql.MysqlSystemVariable{
 			Name:    dsess.DoltStatsBranches,
 			Dynamic: true,
-			Scope:   sql.SystemVariableScope_Global,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
 			Type:    types.NewSystemStringType(dsess.DoltStatsBranches),
 			Default: "",
 		},
