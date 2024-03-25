@@ -1334,7 +1334,10 @@ func TestSelectIntoFile(t *testing.T) {
 func TestJsonScripts(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestJsonScripts(t, h)
+	skippedTests := []string{
+		"round-trip into table", // The current Dolt JSON format does not preserve decimals and unsigneds in JSON.
+	}
+	enginetest.TestJsonScripts(t, h, skippedTests)
 }
 
 func TestTriggers(t *testing.T) {
@@ -2384,11 +2387,11 @@ func TestDiffSystemTablePrepared(t *testing.T) {
 	}
 }
 
-func TestSchemaDiffSystemTable(t *testing.T) {
+func TestSchemaDiffTableFunction(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
 	harness.Setup(setup.MydbData)
-	for _, test := range SchemaDiffSystemTableScriptTests {
+	for _, test := range SchemaDiffTableFunctionScriptTests {
 		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScript(t, harness, test)
@@ -2396,11 +2399,11 @@ func TestSchemaDiffSystemTable(t *testing.T) {
 	}
 }
 
-func TestSchemaDiffSystemTablePrepared(t *testing.T) {
+func TestSchemaDiffTableFunctionPrepared(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
 	harness.Setup(setup.MydbData)
-	for _, test := range SchemaDiffSystemTableScriptTests {
+	for _, test := range SchemaDiffTableFunctionScriptTests {
 		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScriptPrepared(t, harness, test)
@@ -2755,7 +2758,10 @@ func TestJsonScriptsPrepared(t *testing.T) {
 	skipPreparedTests(t)
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestJsonScriptsPrepared(t, h)
+	skippedTests := []string{
+		"round-trip into table", // The current Dolt JSON format does not preserve decimals and unsigneds in JSON.
+	}
+	enginetest.TestJsonScriptsPrepared(t, h, skippedTests)
 }
 
 func TestCreateCheckConstraintsScriptsPrepared(t *testing.T) {
@@ -2810,6 +2816,13 @@ func TestPrepared(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestPrepared(t, h)
+}
+
+func TestDoltPreparedScripts(t *testing.T) {
+	skipPreparedTests(t)
+	h := newDoltHarness(t)
+	defer h.Close()
+	DoltPreparedScripts(t, h)
 }
 
 func TestPreparedInsert(t *testing.T) {

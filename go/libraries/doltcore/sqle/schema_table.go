@@ -319,9 +319,9 @@ func loadDefaultSqlMode() (string, error) {
 	if !ok {
 		return "", fmt.Errorf("unable to load default @@SQL_MODE")
 	}
-	s, ok := global.Default.(string)
+	s, ok := global.GetDefault().(string)
 	if !ok {
-		return "", fmt.Errorf("unexpected type for @@SQL_MODE default value: %T", global.Default)
+		return "", fmt.Errorf("unexpected type for @@SQL_MODE default value: %T", global.GetDefault())
 	}
 	return s, nil
 }

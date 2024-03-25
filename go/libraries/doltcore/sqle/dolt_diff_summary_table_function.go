@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -198,12 +199,12 @@ func (ds *DiffSummaryTableFunction) Expressions() []sql.Expression {
 }
 
 // WithExpressions implements the sql.Expressioner interface.
-func (ds *DiffSummaryTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
-	if len(expression) < 1 {
-		return nil, sql.ErrInvalidArgumentNumber.New(ds.Name(), "1 to 3", len(expression))
+func (ds *DiffSummaryTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node, error) {
+	if len(exprs) < 1 {
+		return nil, sql.ErrInvalidArgumentNumber.New(ds.Name(), "1 to 3", len(exprs))
 	}
 
-	for _, expr := range expression {
+	for _, expr := range exprs {
 		if !expr.Resolved() {
 			return nil, ErrInvalidNonLiteralArgument.New(ds.Name(), expr.String())
 		}
@@ -214,41 +215,41 @@ func (ds *DiffSummaryTableFunction) WithExpressions(expression ...sql.Expression
 	}
 
 	newDstf := *ds
-	if strings.Contains(expression[0].String(), "..") {
-		if len(expression) < 1 || len(expression) > 2 {
-			return nil, sql.ErrInvalidArgumentNumber.New(newDstf.Name(), "1 or 2", len(expression))
+	if strings.Contains(exprs[0].String(), "..") {
+		if len(exprs) < 1 || len(exprs) > 2 {
+			return nil, sql.ErrInvalidArgumentNumber.New(newDstf.Name(), "1 or 2", len(exprs))
 		}
-		newDstf.dotCommitExpr = expression[0]
-		if len(expression) == 2 {
-			newDstf.tableNameExpr = expression[1]
+		newDstf.dotCommitExpr = exprs[0]
+		if len(exprs) == 2 {
+			newDstf.tableNameExpr = exprs[1]
 		}
 	} else {
-		if len(expression) < 2 || len(expression) > 3 {
-			return nil, sql.ErrInvalidArgumentNumber.New(newDstf.Name(), "2 or 3", len(expression))
+		if len(exprs) < 2 || len(exprs) > 3 {
+			return nil, sql.ErrInvalidArgumentNumber.New(newDstf.Name(), "2 or 3", len(exprs))
 		}
-		newDstf.fromCommitExpr = expression[0]
-		newDstf.toCommitExpr = expression[1]
-		if len(expression) == 3 {
-			newDstf.tableNameExpr = expression[2]
+		newDstf.fromCommitExpr = exprs[0]
+		newDstf.toCommitExpr = exprs[1]
+		if len(exprs) == 3 {
+			newDstf.tableNameExpr = exprs[2]
 		}
 	}
 
 	// validate the expressions
 	if newDstf.dotCommitExpr != nil {
-		if !types.IsText(newDstf.dotCommitExpr.Type()) {
+		if !types.IsText(newDstf.dotCommitExpr.Type()) && !expression.IsBindVar(newDstf.dotCommitExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.dotCommitExpr.String())
 		}
 	} else {
-		if !types.IsText(newDstf.fromCommitExpr.Type()) {
+		if !types.IsText(newDstf.fromCommitExpr.Type()) && !expression.IsBindVar(newDstf.fromCommitExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.fromCommitExpr.String())
 		}
-		if !types.IsText(newDstf.toCommitExpr.Type()) {
+		if !types.IsText(newDstf.toCommitExpr.Type()) && !expression.IsBindVar(newDstf.toCommitExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.toCommitExpr.String())
 		}
 	}
 
 	if newDstf.tableNameExpr != nil {
-		if !types.IsText(newDstf.tableNameExpr.Type()) {
+		if !types.IsText(newDstf.tableNameExpr.Type()) && !expression.IsBindVar(newDstf.tableNameExpr) {
 			return nil, sql.ErrInvalidArgumentDetails.New(newDstf.Name(), newDstf.tableNameExpr.String())
 		}
 	}

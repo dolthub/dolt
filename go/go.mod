@@ -14,8 +14,8 @@ require (
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078
 	github.com/dolthub/fslock v0.0.3
 	github.com/dolthub/ishell v0.0.0-20221214210346-d7db0b066488
-	github.com/dolthub/sqllogictest/go v0.0.0-20240222182842-573e6a164de8
-	github.com/dolthub/vitess v0.0.0-20240312232959-8ee510931c7b
+	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
+	github.com/dolthub/vitess v0.0.0-20240321165217-ad95f0dd1119
 	github.com/dustin/go-humanize v1.0.1
 	github.com/fatih/color v1.13.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
@@ -40,7 +40,7 @@ require (
 	go.uber.org/zap v1.24.0
 	golang.org/x/crypto v0.17.0
 	golang.org/x/net v0.17.0
-	golang.org/x/sync v0.3.0
+	golang.org/x/sync v0.6.0
 	golang.org/x/sys v0.15.0
 	google.golang.org/api v0.126.0
 	google.golang.org/grpc v1.57.1
@@ -57,7 +57,7 @@ require (
 	github.com/cespare/xxhash v1.1.0
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.18.1-0.20240315170707-b6ed14d224cd
+	github.com/dolthub/go-mysql-server v0.18.1-0.20240322215643-a37b5789fdfa
 	github.com/dolthub/swiss v0.1.0
 	github.com/goccy/go-json v0.10.2
 	github.com/google/go-github/v57 v57.0.0
@@ -87,7 +87,6 @@ require (
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
 	golang.org/x/text v0.14.0
 	gonum.org/v1/plot v0.11.0
-	gopkg.in/errgo.v2 v2.1.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 

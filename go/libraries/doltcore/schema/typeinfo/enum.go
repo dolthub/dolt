@@ -43,7 +43,7 @@ func CreateEnumTypeFromParams(params map[string]string) (TypeInfo, error) {
 	var collation sql.CollationID
 	var err error
 	if collationStr, ok := params[enumTypeParam_Collation]; ok {
-		collation, err = sql.ParseCollation(nil, &collationStr, false)
+		collation, err = sql.ParseCollation("", collationStr, false)
 		if err != nil {
 			return nil, err
 		}

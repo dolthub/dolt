@@ -42,6 +42,8 @@ type fulltextTable struct {
 
 var _ fulltext.EditableTable = (*fulltextTable)(nil)
 
+// createFulltextTable creates an in-memory Full-Text table from the given table name on the given root. This table will
+// be used to read/write data from/to the underlying Dolt table.
 func createFulltextTable(ctx *sql.Context, name string, root *doltdb.RootValue) (*fulltextTable, error) {
 	tbl, ok, err := root.GetTable(ctx, name)
 	if err != nil {

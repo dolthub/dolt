@@ -74,9 +74,9 @@ func DefineSystemVariablesForDB(name string) {
 
 	if _, _, ok := sql.SystemVariables.GetGlobal(name + HeadKeySuffix); !ok {
 		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
-			{
+			&sql.MysqlSystemVariable{
 				Name:              HeadRefKey(name),
-				Scope:             sql.SystemVariableScope_Session,
+				Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),
 				Dynamic:           true,
 				SetVarHintApplies: false,
 				Type:              types.NewSystemStringType(HeadRefKey(name)),
@@ -84,33 +84,33 @@ func DefineSystemVariablesForDB(name string) {
 			},
 			// The following variable are Dynamic, but read-only. Their values
 			// can only be updates by the system, not by users.
-			{
+			&sql.MysqlSystemVariable{
 				Name:              HeadKey(name),
-				Scope:             sql.SystemVariableScope_Session,
+				Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),
 				Dynamic:           true,
 				SetVarHintApplies: false,
 				Type:              types.NewSystemStringType(HeadKey(name)),
 				Default:           "",
 			},
-			{
+			&sql.MysqlSystemVariable{
 				Name:              WorkingKey(name),
-				Scope:             sql.SystemVariableScope_Session,
+				Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),
 				Dynamic:           true,
 				SetVarHintApplies: false,
 				Type:              types.NewSystemStringType(WorkingKey(name)),
 				Default:           "",
 			},
-			{
+			&sql.MysqlSystemVariable{
 				Name:              StagedKey(name),
-				Scope:             sql.SystemVariableScope_Session,
+				Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Session),
 				Dynamic:           true,
 				SetVarHintApplies: false,
 				Type:              types.NewSystemStringType(StagedKey(name)),
 				Default:           "",
 			},
-			{
+			&sql.MysqlSystemVariable{
 				Name:              DefaultBranchKey(name),
-				Scope:             sql.SystemVariableScope_Global,
+				Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Global),
 				Dynamic:           true,
 				SetVarHintApplies: false,
 				Type:              types.NewSystemStringType(DefaultBranchKey(name)),

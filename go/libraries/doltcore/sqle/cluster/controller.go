@@ -460,17 +460,17 @@ func (c *Controller) ServerOptions() []grpc.ServerOption {
 func (c *Controller) refreshSystemVars() {
 	role, epoch := string(c.role), c.epoch
 	vars := []sql.SystemVariable{
-		{
+		&sql.MysqlSystemVariable{
 			Name:    dsess.DoltClusterRoleVariable,
 			Dynamic: false,
-			Scope:   sql.SystemVariableScope_Persist,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Persist),
 			Type:    gmstypes.NewSystemStringType(dsess.DoltClusterRoleVariable),
 			Default: role,
 		},
-		{
+		&sql.MysqlSystemVariable{
 			Name:    dsess.DoltClusterRoleEpochVariable,
 			Dynamic: false,
-			Scope:   sql.SystemVariableScope_Persist,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Persist),
 			Type:    gmstypes.NewSystemIntType(dsess.DoltClusterRoleEpochVariable, 0, 9223372036854775807, false),
 			Default: epoch,
 		},
