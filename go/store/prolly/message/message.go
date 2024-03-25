@@ -115,13 +115,13 @@ func WalkInsertAddresses(ctx context.Context, msg serial.Message, cb func(ctx co
 	case serial.ProllyTreeNodeFileID:
 		return nil
 	case serial.AddressMapFileID:
-		return walkAddressMapAddresses(ctx, msg, cb)
+		return nil
 	case serial.MergeArtifactsFileID:
 		return walkMergeArtifactAddresses(ctx, msg, cb)
 	case serial.CommitClosureFileID:
 		return walkCommitClosureAddresses(ctx, msg, cb)
 	case serial.BlobFileID:
-		return walkBlobAddresses(ctx, msg, cb)
+		return nil
 	default:
 		panic(fmt.Sprintf("unknown message id %s", id))
 	}
