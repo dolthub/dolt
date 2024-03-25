@@ -113,7 +113,6 @@ func WalkInsertAddresses(ctx context.Context, msg serial.Message, cb func(ctx co
 	id := serial.GetFileID(msg)
 	switch id {
 	case serial.ProllyTreeNodeFileID:
-		//return walkProllyMapAddresses(ctx, msg, cb)
 		return nil
 	case serial.AddressMapFileID:
 		return walkAddressMapAddresses(ctx, msg, cb)
