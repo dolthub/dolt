@@ -34,8 +34,8 @@ type Database interface {
 	ListStatQuals(branch string) []sql.StatQualifier
 	// LoadBranchStats starts tracking a specific branch's statistics.
 	LoadBranchStats(ctx *sql.Context, branch string) error
-	// DeleteBranchStats remove references to a set of index statistics,
-	// optionally deleting the data from storage.
+	// DeleteBranchStats removes references to in memory index statistics.
+	// If |flush| is true delete the data from storage.
 	DeleteBranchStats(ctx context.Context, branch string, flush bool) error
 	// GetStat returns a branch's index statistics.
 	GetStat(branch string, qual sql.StatQualifier) (*DoltStats, bool)

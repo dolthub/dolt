@@ -57,8 +57,7 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 		return err
 	}
 
-	// it's important to update session references every call
-	// if we pass a non-nil asOf we'll get data from HEAD rather than WORKING
+	// it's important to update WORKING session references every call
 	sqlTable, dTab, err := GetLatestTable(ctx, tableName, sqlDb)
 	if err != nil {
 		return err
@@ -66,6 +65,7 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 
 	statDb, ok := p.getStatDb(dbName)
 	if !ok {
+		// if the stats database does not exist, initialize one
 		fs, err := p.pro.FileSystemForDatabase(dbName)
 		if err != nil {
 			return err
@@ -191,7 +191,7 @@ func newIdxMeta(ctx *sql.Context, curStats *DoltStats, doltTable *doltdb.Table, 
 	var keepChunks []DoltBucket
 	var missingAddrs float64
 	var missingChunks []tree.Node
-	var missingOffsets [][]uint64
+	var missingOffsets []updateOrdinal
 	var offset uint64
 
 	for _, n := range levelNodes {
@@ -207,7 +207,7 @@ func newIdxMeta(ctx *sql.Context, curStats *DoltStats, doltTable *doltdb.Table, 
 		addrs = append(addrs, n.HashOf())
 		if bucketIdx, ok := curStats.Active[n.HashOf()]; !ok {
 			missingChunks = append(missingChunks, n)
-			missingOffsets = append(missingOffsets, []uint64{offset, offset + uint64(treeCnt)})
+			missingOffsets = append(missingOffsets, updateOrdinal{offset, offset + uint64(treeCnt)})
 			missingAddrs++
 		} else {
 			keepChunks = append(keepChunks, curStats.Histogram[bucketIdx])

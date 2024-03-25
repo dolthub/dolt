@@ -98,24 +98,17 @@ func (p *Provider) InitAutoRefreshWithParams(ctxFactory func(ctx context.Context
 				for _, branch := range branches {
 					if br, ok, err := ddb.HasBranch(ctx, branch); ok {
 						sqlCtx.GetLogger().Debugf("starting statistics refresh check for '%s': %s", dbName, time.Now().String())
-
-						// important: update session references every loop
-						// use WORKING root database
+						// update WORKING session references
 						sqlDb, err := dSess.Provider().Database(sqlCtx, fmt.Sprintf("%s/%s", dbName, branch))
 						if err != nil {
 							sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
 							return
 						}
 
-						func() {
-							p.mu.Lock()
-							defer p.mu.Unlock()
-
-							if err := p.checkRefresh(sqlCtx, sqlDb, dbName, br, updateThresh); err != nil {
-								sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
-								return
-							}
-						}()
+						if err := p.checkRefresh(sqlCtx, sqlDb, dbName, br, updateThresh); err != nil {
+							sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
+							return
+						}
 					} else if err != nil {
 						sqlCtx.GetLogger().Debugf("statistics refresh error: branch check error %s", err.Error())
 					} else {
@@ -128,6 +121,9 @@ func (p *Provider) InitAutoRefreshWithParams(ctxFactory func(ctx context.Context
 }
 
 func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, branch string, updateThresh float64) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	// Iterate all dbs, tables, indexes. Each db will collect
 	// []indexMeta above refresh threshold. We read and process those
 	// chunks' statistics. We merge updated chunks with precomputed
@@ -223,7 +219,6 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, br
 		}
 
 		// merge new chunks with preexisting chunks
-		// TODO move to put chunks
 		for _, updateMeta := range idxMetas {
 			stat := newTableStats[updateMeta.qual]
 			if stat != nil {

@@ -112,7 +112,7 @@ func createNewStatsBuckets(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Ta
 			updater.newBucket()
 
 			// we read exclusive range [node first key, next node first key)
-			start, stop = meta.updateOrdinals[i][0], meta.updateOrdinals[i][1]
+			start, stop = meta.updateOrdinals[i].start, meta.updateOrdinals[i].stop
 			iter, err := prollyMap.IterOrdinalRange(ctx, start, stop)
 			if err != nil {
 				return nil, err

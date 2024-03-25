@@ -37,10 +37,14 @@ type indexMeta struct {
 	cols     []string
 	newNodes []tree.Node
 	// updateOrdinals are [start, stop] tuples for each update chunk
-	updateOrdinals [][]uint64
+	updateOrdinals []updateOrdinal
 	keepChunks     []DoltBucket
 	dropChunks     []DoltBucket
 	allAddrs       []hash.Hash
+}
+
+type updateOrdinal struct {
+	start, stop uint64
 }
 
 func NewProvider(pro *sqle.DoltDatabaseProvider, sf StatsFactory) *Provider {
