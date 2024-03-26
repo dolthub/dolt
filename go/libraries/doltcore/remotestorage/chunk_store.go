@@ -347,7 +347,7 @@ func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.Ha
 	}
 
 	if len(notCached) > 0 {
-		err := dcs.readChunksAndCache(ctx, hashes, notCached, found)
+		err := dcs.readChunksAndCache(ctx, notCached, found)
 
 		if err != nil {
 			return err
@@ -659,9 +659,9 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (d
 	return res, nil
 }
 
-func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.HashSet, notCached []hash.Hash, found func(context.Context, nbs.CompressedChunk)) error {
+func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes []hash.Hash, found func(context.Context, nbs.CompressedChunk)) error {
 	// get the locations where the chunks can be downloaded from
-	dlLocs, err := dcs.getDLLocs(ctx, notCached)
+	dlLocs, err := dcs.getDLLocs(ctx, hashes)
 	if err != nil {
 		return err
 	}
@@ -669,8 +669,8 @@ func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.H
 	// channel to receive chunks on
 	chunkChan := make(chan nbs.CompressedChunk, 128)
 
-	toSend := make(map[hash.Hash]struct{}, len(notCached))
-	for _, h := range notCached {
+	toSend := make(map[hash.Hash]struct{}, len(hashes))
+	for _, h := range hashes {
 		toSend[h] = struct{}{}
 	}
 
