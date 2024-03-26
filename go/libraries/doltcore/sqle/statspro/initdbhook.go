@@ -46,7 +46,7 @@ func NewInitDatabaseHook(
 				return err
 			}
 		}
-		
+
 		statsDb, err := statsProv.sf.Init(ctx, db, statsProv.pro, denv.FS, env.GetCurrentUserHomeDir)
 		if err != nil {
 			ctx.Warn(0, err.Error())
