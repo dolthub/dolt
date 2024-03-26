@@ -23,6 +23,102 @@ import (
 	"github.com/dolthub/vitess/go/mysql"
 )
 
+type binlogStreamer struct {
+	quitChan  chan struct{}
+	eventChan chan struct{}
+	ticker    *time.Ticker
+}
+
+// NewBinlogStreamer creates a new binlogStreamer instance.
+func newBinlogStreamer() *binlogStreamer {
+	return &binlogStreamer{
+		quitChan:  make(chan struct{}),
+		eventChan: make(chan struct{}),
+		ticker:    time.NewTicker(45 * time.Second),
+	}
+}
+
+// RemoteReplicaStreamer?
+// RemoteReplicaManager?
+type binlogStreamerManager struct {
+	streamers []*binlogStreamer
+	quitChan  chan struct{}
+	eventChan chan struct{}
+}
+
+// gtidSequence represents the current sequence number for the global transaction identifier (GTID).
+// TODO: This needs locking obviously, and needs to be moved to a different package, and needs to be encapsulated.
+var gtidSequence int64 = 1
+
+var doltBinlogStreamerManager = newBinlogStreamerManager()
+
+// eventChannelBufferSize is the number of events we can buffer in the event channel before we start blocking when
+// adding events to the channel. This is a temporary solution – eventually we will need to switch to a model where
+// we write to a binlog on disk and each streamer reads from that binlog file.
+const eventChannelBufferSize = 50
+
+// NewBinlogStreamerManager creates a new binlogStreamerManager instance.
+func newBinlogStreamerManager() *binlogStreamerManager {
+	manager := &binlogStreamerManager{
+		streamers: make([]*binlogStreamer, 0),
+		quitChan:  make(chan struct{}),
+		eventChan: make(chan struct{}, eventChannelBufferSize),
+	}
+
+	go func() {
+		for {
+			select {
+			case <-manager.quitChan:
+				for _, streamer := range manager.streamers {
+					streamer.quitChan <- struct{}{}
+				}
+				return
+			case <-manager.eventChan:
+				for _, streamer := range manager.streamers {
+					streamer.eventChan <- struct{}{}
+				}
+			}
+		}
+	}()
+
+	return manager
+}
+
+func (m *binlogStreamerManager) StartNewStreamer(ctx *sql.Context, conn *mysql.Conn) error {
+	streamer := newBinlogStreamer()
+	m.streamers = append(m.streamers, streamer)
+
+	binlogFormat := createBinlogFormat()
+	binlogStream, err := createBinlogStream(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err := sendInitialEvents(ctx, conn, binlogFormat, binlogStream); err != nil {
+		return err
+	}
+
+	// TODO: Disable these hardcoded test events after we get real events flowing...
+	if err := sendTestBinlogEvents(ctx, conn, binlogFormat, binlogStream); err != nil {
+		return err
+	}
+
+	for {
+		select {
+		case <-streamer.quitChan:
+			streamer.ticker.Stop()
+			return nil
+		case <-streamer.ticker.C:
+			err := sendHeartbeat(conn, binlogFormat, binlogStream)
+			if err != nil {
+				return err
+			}
+		case <-streamer.eventChan:
+			// TODO: send event
+		}
+	}
+}
+
 var DoltBinlogPrimaryController = newDoltBinlogPrimaryController()
 
 type registeredReplica struct {
@@ -59,12 +155,8 @@ func (d doltBinlogPrimaryController) RegisterReplica(ctx *sql.Context, c *mysql.
 }
 
 // BinlogDumpGtid implements the BinlogPrimaryController interface.
-func (d doltBinlogPrimaryController) BinlogDumpGtid(ctx *sql.Context, c *mysql.Conn, gtidSet mysql.GTIDSet) error {
-	if err := sendTestBinlogEvents(ctx, c); err != nil {
-		return err
-	}
-
-	return nil
+func (d doltBinlogPrimaryController) BinlogDumpGtid(ctx *sql.Context, conn *mysql.Conn, gtidSet mysql.GTIDSet) error {
+	return doltBinlogStreamerManager.StartNewStreamer(ctx, conn)
 }
 
 // ListReplicas implements the BinlogPrimaryController interface.
@@ -82,49 +174,50 @@ func (d doltBinlogPrimaryController) GetBinaryLogStatus(ctx *sql.Context) error 
 	return fmt.Errorf("DOLT: GetBinaryLogStatus not implemented yet")
 }
 
-func getServerUuid(ctx *sql.Context) (string, error) {
-	variable, err := ctx.GetSessionVariable(ctx, "server_uuid")
-	if err != nil {
-		return "", err
-	}
-
-	if s, ok := variable.(string); ok {
-		if len(s) == 0 {
-			return "", fmt.Errorf("@@server_uuid is empty – must be set to a valid UUID")
-		}
-		return s, nil
-	}
-
-	return "", fmt.Errorf("@@server_uuid is not a string – must be set to a valid UUID")
-}
-
-func sendTestBinlogEvents(ctx *sql.Context, conn *mysql.Conn) error {
+// createBinlogFormat returns a new BinlogFormat that describes the format of this binlog stream, which will always
+// be a MySQL 5.6+ compatible binlog format.
+func createBinlogFormat() mysql.BinlogFormat {
 	binlogFormat := mysql.NewMySQL56BinlogFormat()
+
 	// TODO: We should be able to turn checksums back on
 	binlogFormat.ChecksumAlgorithm = mysql.BinlogChecksumAlgOff
-	binlogStream := &mysql.BinlogStream{
-		ServerID:    42, // TODO: Hardcoded – read from @@server_id instead
-		LogPosition: 0,
-		Timestamp:   uint32(time.Now().Unix()),
+
+	return binlogFormat
+}
+
+// createBinlogStream returns a new BinlogStream instance, configured with this server's @@server_id, a zero value for
+// the log position, and the current time for the timestamp. If any errors are encountered while loading @@server_id,
+// this function will return an error.
+func createBinlogStream(ctx *sql.Context) (*mysql.BinlogStream, error) {
+	serverId, err := getServerId(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	// Rotate
+	return &mysql.BinlogStream{
+		ServerID:    serverId,
+		LogPosition: 0,
+		Timestamp:   uint32(time.Now().Unix()),
+	}, nil
+}
+
+// sendInitialEvents sends the initial binlog events (i.e. Rotate, FormatDescription) over a newly established binlog
+// streaming connection.
+func sendInitialEvents(_ *sql.Context, conn *mysql.Conn, binlogFormat mysql.BinlogFormat, binlogStream *mysql.BinlogStream) error {
 	err := sendRotateEvent(conn, binlogFormat, binlogStream)
 	if err != nil {
 		return err
 	}
 
-	// Format Description
 	err = sendFormatDescription(conn, binlogFormat, binlogStream)
 	if err != nil {
 		return err
 	}
 
-	err = conn.FlushBuffer()
-	if err != nil {
-		return err
-	}
+	return conn.FlushBuffer()
+}
 
+func sendTestBinlogEvents(ctx *sql.Context, conn *mysql.Conn, binlogFormat mysql.BinlogFormat, binlogStream *mysql.BinlogStream) error {
 	// TODO: Send Previous GTIDs event? Is this always needed?
 	//binlogEvent = mysql.NewPreviousGTIDsEvent(binlogFormat, binlogStream)
 	//err = conn.WriteBinlogEvent(binlogEvent, false)
@@ -132,11 +225,12 @@ func sendTestBinlogEvents(ctx *sql.Context, conn *mysql.Conn) error {
 	//	return err
 	//}
 
-	// GTID: sequence 1
-	err = sendGtidEvent(ctx, conn, binlogFormat, binlogStream, 1)
+	// GTID
+	err := sendGtidEvent(ctx, conn, binlogFormat, binlogStream, gtidSequence)
 	if err != nil {
 		return err
 	}
+	gtidSequence++
 
 	// Query: CREATE TABLE...
 	err = sendQueryEvent(conn, binlogFormat, binlogStream,
@@ -145,16 +239,12 @@ func sendTestBinlogEvents(ctx *sql.Context, conn *mysql.Conn) error {
 		return err
 	}
 
-	err = conn.FlushBuffer()
+	// GTID
+	err = sendGtidEvent(ctx, conn, binlogFormat, binlogStream, gtidSequence)
 	if err != nil {
 		return err
 	}
-
-	// GTID: sequence 2
-	err = sendGtidEvent(ctx, conn, binlogFormat, binlogStream, 2)
-	if err != nil {
-		return err
-	}
+	gtidSequence++
 
 	// TableMap: db01.t
 	// TODO: Right now, hardcoded to a single table: db01.t, with the schema (int, varchar)
@@ -180,27 +270,7 @@ func sendTestBinlogEvents(ctx *sql.Context, conn *mysql.Conn) error {
 		return err
 	}
 
-	err = conn.FlushBuffer()
-	if err != nil {
-		return err
-	}
-
-	// Sleep for 10 minutes to avoid immediately closing the connection
-	for i := 0; i < 20; i++ {
-		time.Sleep(30 * time.Second)
-
-		err = sendHeartbeat(conn, binlogFormat, binlogStream)
-		if err != nil {
-			return err
-		}
-
-		err = conn.FlushBuffer()
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return conn.FlushBuffer()
 }
 
 func sendRotateEvent(conn *mysql.Conn, binlogFormat mysql.BinlogFormat, binlogStream *mysql.BinlogStream) error {
