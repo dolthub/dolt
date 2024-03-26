@@ -50,7 +50,7 @@ func (p *Provider) Configure(ctx context.Context, ctxFactory func(ctx context.Co
 		_, threshold, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshThreshold)
 		_, interval, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshInterval)
 		interval64, _, _ := types2.Int64.Convert(interval)
-		intervalSec = time.Millisecond * time.Duration(interval64.(int64))
+		intervalSec = time.Second * time.Duration(interval64.(int64))
 		thresholdf64 = threshold.(float64)
 
 		p.pro.InitDatabaseHook = NewInitDatabaseHook(p, ctxFactory, bThreads, p.pro.InitDatabaseHook)

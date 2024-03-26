@@ -74,7 +74,9 @@ func NewDropDatabaseHook(statsProv *Provider, ctxFactory func(ctx context.Contex
 		statsProv.DropDbStats(ctx, name, false)
 
 		if db, ok := statsProv.getStatDb(name); ok {
-			db.Close()
+			if err := db.Close(); err != nil {
+				ctx.GetLogger().Debugf("failed to close stats database: %s", err)
+			}
 		}
 	}
 }

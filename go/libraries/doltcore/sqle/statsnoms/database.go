@@ -53,7 +53,7 @@ func (sf NomsStatsFactory) Init(ctx *sql.Context, sourceDb dsess.SqlDatabase, pr
 	params := make(map[string]interface{})
 	params[dbfactory.GRPCDialProviderParam] = sf.dialPro
 
-	statsPath, err := fs.Abs(path.Join(dbfactory.DoltDir, dbfactory.StatsDir))
+	statsPath, err := fs.Abs(path.Join(dbfactory.DoltDir, dbfactory.StatsDir, dbfactory.DoltDataDir))
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func (sf NomsStatsFactory) Init(ctx *sql.Context, sourceDb dsess.SqlDatabase, pr
 	} else if u.Scheme == dbfactory.FileScheme {
 		urlPath = "file://" + statsPath
 	}
-
+	
 	var dEnv *env.DoltEnv
 	exists, isDir := fs.Exists(statsPath)
 	if !exists {
@@ -138,13 +138,7 @@ type NomsStatsDatabase struct {
 var _ statspro.Database = (*NomsStatsDatabase)(nil)
 
 func (n *NomsStatsDatabase) Close() error {
-	var ierr error
-	for _, db := range n.destDb.DoltDatabases() {
-		if err := db.Close(); err != nil {
-			ierr = err
-		}
-	}
-	return ierr
+	return n.destDb.DbData().Ddb.Close()
 }
 
 func (n *NomsStatsDatabase) LoadBranchStats(ctx *sql.Context, branch string) error {

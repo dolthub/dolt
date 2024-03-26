@@ -32,7 +32,7 @@ func (p *Provider) InitAutoRefresh(ctxFactory func(ctx context.Context) (*sql.Co
 	_, threshold, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshThreshold)
 	_, interval, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshInterval)
 	interval64, _, _ := types2.Int64.Convert(interval)
-	intervalSec := time.Millisecond * time.Duration(interval64.(int64))
+	intervalSec := time.Second * time.Duration(interval64.(int64))
 	thresholdf64 := threshold.(float64)
 
 	ctx, err := ctxFactory(context.Background())
@@ -79,6 +79,7 @@ func (p *Provider) InitAutoRefreshWithParams(ctxFactory func(ctx context.Context
 				ddb, ok := dSess.GetDoltDB(sqlCtx, dbName)
 				if !ok {
 					sqlCtx.GetLogger().Debugf("statistics refresh error: database not found %s", dbName)
+					return
 				}
 				for _, branch := range branches {
 					if br, ok, err := ddb.HasBranch(ctx, branch); ok {
@@ -189,6 +190,9 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, br
 			ctx.GetLogger().Debugf("statistics current: %d, new: %d, delete: %d", int(curCnt), int(updateCnt), int(deleteCnt))
 
 			if curCnt == 0 || (deleteCnt+updateCnt)/curCnt > updateThresh {
+				if curCnt == 0 && updateCnt == 0 {
+					continue
+				}
 				ctx.GetLogger().Debugf("statistics updating: %s", updateMeta.qual)
 				// mark index for updating
 				idxMetas = append(idxMetas, updateMeta)

@@ -63,7 +63,7 @@ teardown() {
     sleep 1
 
     # only statistics for non-empty tables are collected
-    run dolt sql -r csv -q "select database_name, table_name, index_name from dolt_statistics"
+    run dolt sql -r csv -q "select database_name, table_name, index_name from dolt_statistics order by index_name"
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "database_name,table_name,index_name" ]
     [ "${lines[1]}" = "repo2,xy,primary" ]
@@ -107,11 +107,10 @@ teardown() {
     [ "${lines[1]}" = "8" ]
 
     # delete >50% of rows
-    dolt sql -q "delete from xy where x > 800"
+    dolt sql -q "delete from xy where x > 600"
 
     sleep 1
 
-    dolt sql -r csv -q "select * from dolt_statistics"
     run dolt sql -r csv -q "select count(*) from dolt_statistics"
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "4" ]
