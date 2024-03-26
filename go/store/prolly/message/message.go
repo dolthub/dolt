@@ -109,6 +109,24 @@ func WalkAddresses(ctx context.Context, msg serial.Message, cb func(ctx context.
 	}
 }
 
+func WalkInsertAddresses(ctx context.Context, msg serial.Message, cb func(ctx context.Context, addr hash.Hash) error) error {
+	id := serial.GetFileID(msg)
+	switch id {
+	case serial.ProllyTreeNodeFileID:
+		return nil
+	case serial.AddressMapFileID:
+		return walkAddressMapAddresses(ctx, msg, cb)
+	case serial.MergeArtifactsFileID:
+		return walkMergeArtifactAddresses(ctx, msg, cb)
+	case serial.CommitClosureFileID:
+		return walkCommitClosureAddresses(ctx, msg, cb)
+	case serial.BlobFileID:
+		return nil
+	default:
+		panic(fmt.Sprintf("unknown message id %s", id))
+	}
+}
+
 func GetTreeCount(msg serial.Message) (int, error) {
 	id := serial.GetFileID(msg)
 	switch id {
