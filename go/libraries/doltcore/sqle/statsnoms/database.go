@@ -70,7 +70,7 @@ func (sf NomsStatsFactory) Init(ctx *sql.Context, sourceDb dsess.SqlDatabase, pr
 	} else if u.Scheme == dbfactory.FileScheme {
 		urlPath = "file://" + statsPath
 	}
-	
+
 	var dEnv *env.DoltEnv
 	exists, isDir := fs.Exists(statsPath)
 	if !exists {
