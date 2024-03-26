@@ -15,12 +15,16 @@
 package binlogreplication
 
 import (
+	"encoding/binary"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
 	"github.com/dolthub/vitess/go/mysql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 type binlogStreamer struct {
@@ -43,7 +47,16 @@ func newBinlogStreamer() *binlogStreamer {
 type binlogStreamerManager struct {
 	streamers []*binlogStreamer
 	quitChan  chan struct{}
-	eventChan chan struct{}
+}
+
+var _ dsess.TransactionListener = (*binlogStreamerManager)(nil)
+
+func (m *binlogStreamerManager) TransactionCommit() error {
+	for _, streamer := range m.streamers {
+		streamer.eventChan <- struct{}{}
+	}
+
+	return nil
 }
 
 // gtidSequence represents the current sequence number for the global transaction identifier (GTID).
@@ -62,21 +75,19 @@ func newBinlogStreamerManager() *binlogStreamerManager {
 	manager := &binlogStreamerManager{
 		streamers: make([]*binlogStreamer, 0),
 		quitChan:  make(chan struct{}),
-		eventChan: make(chan struct{}, eventChannelBufferSize),
 	}
+
+	dsess.RegisterTransactionListener(manager)
 
 	go func() {
 		for {
 			select {
 			case <-manager.quitChan:
+				// TODO: Since we just have one channel now... might be easier to just use an atomic var
 				for _, streamer := range manager.streamers {
 					streamer.quitChan <- struct{}{}
 				}
 				return
-			case <-manager.eventChan:
-				for _, streamer := range manager.streamers {
-					streamer.eventChan <- struct{}{}
-				}
 			}
 		}
 	}()
@@ -109,12 +120,14 @@ func (m *binlogStreamerManager) StartNewStreamer(ctx *sql.Context, conn *mysql.C
 			streamer.ticker.Stop()
 			return nil
 		case <-streamer.ticker.C:
-			err := sendHeartbeat(conn, binlogFormat, binlogStream)
-			if err != nil {
+			if err := sendHeartbeat(conn, binlogFormat, binlogStream); err != nil {
 				return err
 			}
 		case <-streamer.eventChan:
-			// TODO: send event
+			// For now... just insert a random insert value to do something...
+			if err := sendRandomInsert(ctx, conn, binlogFormat, binlogStream); err != nil {
+				panic(err.Error())
+			}
 		}
 	}
 }
@@ -217,6 +230,42 @@ func sendInitialEvents(_ *sql.Context, conn *mysql.Conn, binlogFormat mysql.Binl
 	return conn.FlushBuffer()
 }
 
+// sendRandomInsert sends a WriteRows event, with some random row data. Used for testing/prototyping.
+func sendRandomInsert(ctx *sql.Context, conn *mysql.Conn, binlogFormat mysql.BinlogFormat, binlogStream *mysql.BinlogStream) error {
+	// GTID
+	err := sendGtidEvent(ctx, conn, binlogFormat, binlogStream, gtidSequence)
+	if err != nil {
+		return err
+	}
+	gtidSequence++
+
+	// TableMap: db01.t
+	// TODO: Right now, hardcoded to a single table: db01.t, with the schema (int, varchar)
+	tableId := uint64(49)
+	err = sendTableMapEvent(conn, binlogFormat, binlogStream, tableId)
+	if err != nil {
+		return err
+	}
+
+	// WriteRows
+	rows, err := createInsertRows(rand.Int(), "xyz")
+	if err != nil {
+		return err
+	}
+	err = sendWriteRowsEvent(conn, binlogFormat, binlogStream, tableId, rows)
+	if err != nil {
+		return err
+	}
+
+	// Send the XID event to commit the transaction
+	err = sendXidEvent(conn, binlogFormat, binlogStream)
+	if err != nil {
+		return err
+	}
+
+	return conn.FlushBuffer()
+}
+
 func sendTestBinlogEvents(ctx *sql.Context, conn *mysql.Conn, binlogFormat mysql.BinlogFormat, binlogStream *mysql.BinlogStream) error {
 	// TODO: Send Previous GTIDs event? Is this always needed?
 	//binlogEvent = mysql.NewPreviousGTIDsEvent(binlogFormat, binlogStream)
@@ -255,7 +304,7 @@ func sendTestBinlogEvents(ctx *sql.Context, conn *mysql.Conn, binlogFormat mysql
 	}
 
 	// WriteRows
-	rows, err := createInsertRows()
+	rows, err := createInsertRows(1076895760, "abcd")
 	if err != nil {
 		return err
 	}
@@ -342,7 +391,13 @@ func sendXidEvent(conn *mysql.Conn, binlogFormat mysql.BinlogFormat, binlogStrea
 	return conn.WriteBinlogEvent(binlogEvent, false)
 }
 
-func createInsertRows() (*mysql.Rows, error) {
+// createInsertRows creates the Rows for a WriteRows binlog event, using |key| and |value| for the data.
+func createInsertRows(key int, value string) (*mysql.Rows, error) {
+	data := make([]byte, 4+2+len(value))
+	binary.LittleEndian.PutUint32(data, uint32(key))
+	binary.LittleEndian.PutUint16(data[4:], uint16(len(value)))
+	copy(data[6:], value)
+
 	rows := mysql.Rows{
 		Flags: 0x1234, // TODO: ???
 		//IdentifyColumns: mysql.NewServerBitmap(2),
@@ -358,14 +413,7 @@ func createInsertRows() (*mysql.Rows, error) {
 				//},
 
 				NullColumns: mysql.NewServerBitmap(2),
-				Data: []byte{
-					// | 1076895760 | abcd       |
-					//   270544960
-					//   1076895760 <-- little endian
-					0x10, 0x20, 0x30, 0x40, // long
-					0x04, 0x00, // len('abcd')
-					'a', 'b', 'c', 'd', // 'abcd'
-				},
+				Data:        data,
 			},
 		},
 	}

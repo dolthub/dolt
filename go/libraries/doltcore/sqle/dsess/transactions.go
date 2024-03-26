@@ -51,6 +51,16 @@ var ErrUnresolvedConstraintViolationsCommit = errors.New("Committing this transa
 	"Constraint violations from a merge can be resolved using the dolt_constraint_violations table before committing the transaction. " +
 	"To allow transactions to be committed with constraint violations from a merge or transaction sequencing set @@dolt_force_transaction_commit=1.")
 
+type TransactionListener interface {
+	TransactionCommit() error
+}
+
+var transactionListeners = make([]TransactionListener, 0)
+
+func RegisterTransactionListener(listener TransactionListener) {
+	transactionListeners = append(transactionListeners, listener)
+}
+
 // TODO: remove this
 func TransactionsDisabled(ctx *sql.Context) bool {
 	enabled, err := ctx.GetSessionVariable(ctx, TransactionsDisabledSysVar)
@@ -362,6 +372,185 @@ func WaitForReplicationController(ctx *sql.Context, rsc doltdb.ReplicationStatus
 	}
 }
 
+type transactionMessage struct {
+	// TODO: Seems like we just need *RootValue, not the full *WorkingSet, right?
+	before *doltdb.WorkingSet
+	after  *doltdb.WorkingSet
+}
+
+var transactionChannel = make(chan transactionMessage)
+
+// TODO: Who's going to call this?
+func StartTransactionListener(ctx *sql.Context) {
+	go func() {
+		// TODO: This binlog format is probably not totally correct
+		binlogFormat := mysql.NewMySQL56BinlogFormat()
+
+		// TODO: We probably don't really need select at first, since we're only reading from the channel and not
+		//       doing any other work, but eventually, we'll want to look for a kill signal or something.
+		select {
+		case msg := <-transactionChannel:
+			// TODO: This is not the right type to use, but it's what we have from Vitess, so, let's start
+			//       with this, figure out how the API works, and then figure out how we want to change it.
+			fakeBinlogStream := mysql.NewFakeBinlogStream()
+
+			// TODO: Where will we get this connection from? Need to clean up the callback interface for replica
+			//       registration in Vitess and GMS
+			var conn *mysql.Conn
+			if conn != nil {
+				// Send FormatDescription Event
+				binlogEvent := mysql.NewFormatDescriptionEvent(binlogFormat, fakeBinlogStream)
+				err := conn.WriteBinlogEvent(binlogEvent, false)
+				if err != nil {
+					panic(err.Error()) // TODO:
+				}
+			}
+
+			fmt.Println("Received message: ", msg)
+			// Take the diff of the before/after values and turn that into a binlog event
+
+			// NOTE: WorkingRoot is correct here, since:
+			//        - HEAD only refers to what's committed to the branch head, which doesn't have
+			//          anything to do with SQL transactions.
+			//        - Staged is in the index of what is staged for a Dolt commit, but again, that's
+			//          not related to a SQL transaction.
+			tableDeltas, err := diff.GetTableDeltas(ctx, msg.before.WorkingRoot(), msg.after.WorkingRoot())
+			if err != nil {
+				// TODO: Clean me up! Probably just log the error, but don't bring down the server or stop replication
+				panic(err.Error())
+			}
+
+			// Shit! Vitess has good support for parsing binlog events, but not for serializing binlog events to
+			// binary. There is some support in the binlog_event_make.go file, but it's mostly intended for use
+			// in test code. Regardless, it does assemble the byte buffers for many messages. One small issue is
+			// that the events are created as MariaDBEvent types (but that shoudl be fine, since it's just a
+			// wrapper around a byte buffer). The bigger issue is that all of that code depends on FakeBinlogStream
+			// which is a struct, not an interface. This type is what contributes the ServerID, LogPosition, and
+			// Timestamp that are all needed when serializing the header for a binlog event. Seems like we could
+			// probably swap in an interface and have FakeBinlogStream just be one implementation?
+
+			for _, tableDelta := range tableDeltas {
+				// TODO: What's the sequence of events for the binlog stream?
+				//       1 - Send FormatDescription event
+				//       2 – then we need to send a TableMap message for each table included
+				//       3 – GTID message (starts a new transaction)
+				//       4 - DELETE_ROWS, WRITE_ROWS, UPDATE_ROWS
+				dataChanged, err := tableDelta.HasDataChanged(ctx)
+				if err != nil {
+					panic(err.Error()) // TODO:
+				}
+				if !dataChanged {
+					// TODO: For now, we are only processing data changes. Eventually, we'll need to figure
+					//       out how to process schema changes, too.
+					continue
+				}
+
+				// TODO: Make sure to not replicate ignored tables? Or do we want to replicate them and
+				//       just exclude them from Dolt commits?
+
+				// TODO: Send a TableMap event for this table
+				// TODO: For now, just use a single, hardcoded table ID
+				tableId := uint64(42)
+
+				// TODO: Right now, restrict to a single table, named db01.t, with the schema (int, varchar)
+				tableMap := &mysql.TableMap{
+					// TODO: What do these flags mean?
+					Flags:    0x8090,
+					Database: "db01",
+					Name:     "t",
+					Types: []byte{
+						mysql.TypeLong,
+						mysql.TypeVarchar,
+					},
+					CanBeNull: mysql.NewServerBitmap(2),
+					// TODO: What is this metadata for?
+					//       https://mariadb.com/kb/en/table_map_event/#optional-metadata-block
+					Metadata: []uint16{
+						0,
+						0, // 384,
+					},
+				}
+				tableMap.CanBeNull.Set(1, true)
+
+				binlogEvent := mysql.NewTableMapEvent(binlogFormat, fakeBinlogStream, tableId, tableMap)
+				if conn != nil {
+					err := conn.WriteBinlogEvent(binlogEvent, false)
+					if err != nil {
+						panic(err.Error()) // TODO:
+					}
+				}
+
+				fromRowData, toRowData, err := tableDelta.GetRowData(ctx)
+				if err != nil {
+					panic(err.Error()) // TODO:
+				}
+				// TODO: calculate what's different between fromRowData and toRowData
+				//       this is probably going to need differ?
+
+				// TODO: Considering limiting to at most one replica supported at a time? Does that help at all?
+
+				fromMap := durable.ProllyMapFromIndex(fromRowData)
+				toMap := durable.ProllyMapFromIndex(toRowData)
+				err = prolly.DiffMaps(ctx, fromMap, toMap, false, func(ctx context.Context, diff tree.Diff) error {
+					switch diff.Type {
+					case tree.AddedDiff:
+						// Send a binlog event for the added row
+						if conn != nil {
+							rows := mysql.Rows{
+								Flags:           0x1234, // TODO:
+								IdentifyColumns: mysql.NewServerBitmap(2),
+								DataColumns:     mysql.NewServerBitmap(2),
+								Rows: []mysql.Row{
+									{
+										NullIdentifyColumns: mysql.NewServerBitmap(2),
+										NullColumns:         mysql.NewServerBitmap(2),
+										Identify: []byte{
+											0x10, 0x20, 0x30, 0x40, // long
+											0x03, 0x00, // len('abc')
+											'a', 'b', 'c', // 'abc'
+										},
+										Data: []byte{
+											0x10, 0x20, 0x30, 0x40, // long
+											0x04, 0x00, // len('abcd')
+											'a', 'b', 'c', 'd', // 'abcd'
+										},
+									},
+								},
+							}
+							// All rows are included, none are NULL.
+							rows.IdentifyColumns.Set(0, true)
+							rows.IdentifyColumns.Set(1, true)
+							rows.DataColumns.Set(0, true)
+							rows.DataColumns.Set(1, true)
+
+							binlogEvent = mysql.NewWriteRowsEvent(binlogFormat, fakeBinlogStream, tableId, rows)
+							err = conn.WriteBinlogEvent(binlogEvent, false)
+							if err != nil {
+								panic(err.Error()) // TODO:
+							}
+						}
+
+					case tree.ModifiedDiff:
+						// TODO: Send a binlog event for the modified row
+					case tree.RemovedDiff:
+						// TODO: Send a binlog event for the removed row
+					default:
+						return fmt.Errorf("unexpected diff type: %v", diff.Type)
+					}
+
+					return nil
+				})
+				if err != nil {
+					panic(err.Error()) // TODO:
+				}
+			}
+
+		default:
+			fmt.Println("No activity")
+		}
+	}()
+}
+
 // doCommit commits this transaction with the write function provided. It takes the same params as DoltCommit
 func (tx *DoltTransaction) doCommit(
 	ctx *sql.Context,
@@ -418,12 +607,30 @@ func (tx *DoltTransaction) doCommit(
 				return nil, nil, err
 			}
 
+			// TODO: When a SQL TX is committed, we need to send a message to a channel that has the previous working root
+			//       and the new working root, And then that code needs to compute the data diff of those two roots
+			//       Then that code will turn that into a mysql binlog event and stream it over a connection if anyone
+			//       is listening. Eventually... we'll want to write the binlog events to file, but right now, we can
+			//       avoid that part.
+
+			// Fire message to listeners
+			// TODO: This looks like slightly the wrong position in the code to send these... should be slightly later
+			//       after we're sure the tx has been written.
+			for _, listener := range transactionListeners {
+				err := listener.TransactionCommit()
+				if err != nil {
+					panic(err.Error())
+				}
+			}
+
 			if newWorkingSet || workingAndStagedEqual(existingWs, startState) {
 				// ff merge
 				err = tx.validateWorkingSetForCommit(ctx, workingSet, isFfMerge)
 				if err != nil {
 					return nil, nil, err
 				}
+
+				// NOTE: First call of writeFn: This one happens for a new working set or when working set and staged are equal
 
 				var newCommit *doltdb.Commit
 				workingSet, newCommit, err = writeFn(ctx, tx, startPoint.db, startState, commit, workingSet, existingWSHash, mergeOpts)
@@ -449,6 +656,8 @@ func (tx *DoltTransaction) doCommit(
 			if err != nil {
 				return nil, nil, err
 			}
+
+			// NOTE: Second call of writeFn:
 
 			var newCommit *doltdb.Commit
 			mergedWorkingSet, newCommit, err = writeFn(ctx, tx, startPoint.db, startState, commit, mergedWorkingSet, existingWSHash, mergeOpts)
