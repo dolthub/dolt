@@ -70,6 +70,9 @@ func TestPullChunkTracker(t *testing.T) {
 		assert.Len(t, hs, 10)
 		assert.True(t, ok)
 		assert.NoError(t, err)
+		for _ = range hs {
+			tracker.TickProcessed()
+		}
 		hs, ok, err = tracker.GetChunksToFetch()
 		assert.Len(t, hs, 0)
 		assert.False(t, ok)
@@ -90,6 +93,9 @@ func TestPullChunkTracker(t *testing.T) {
 				break
 			}
 			cnt += len(hs)
+			for _ = range hs {
+				tracker.TickProcessed()
+			}
 		}
 
 		tracker.Close()
@@ -132,6 +138,9 @@ func TestPullChunkTracker(t *testing.T) {
 			h[0] = i
 			tracker.Seen(h)
 		}
+		for _ = range hs {
+			tracker.TickProcessed()
+		}
 
 		hs, ok, err = tracker.GetChunksToFetch()
 		assert.Len(t, hs, 0)
@@ -172,6 +181,9 @@ func TestPullChunkTracker(t *testing.T) {
 		assert.Len(t, hs, 3)
 		assert.True(t, ok)
 		assert.NoError(t, err)
+		for _ = range hs {
+			tracker.TickProcessed()
+		}
 
 		for i := byte(1); i <= byte(10); i++ {
 			var h hash.Hash
@@ -189,6 +201,9 @@ func TestPullChunkTracker(t *testing.T) {
 				break
 			}
 			cnt += len(hs)
+			for _ = range hs {
+				tracker.TickProcessed()
+			}
 		}
 		assert.Equal(t, 8, cnt)
 
@@ -226,6 +241,9 @@ func TestPullChunkTracker(t *testing.T) {
 		assert.Len(t, hs, 3)
 		assert.True(t, ok)
 		assert.NoError(t, err)
+		for _ = range hs {
+			tracker.TickProcessed()
+		}
 
 		for i := byte(1); i <= byte(10); i++ {
 			var h hash.Hash
@@ -244,6 +262,9 @@ func TestPullChunkTracker(t *testing.T) {
 			}
 			assert.Len(t, hs, 1)
 			cnt += len(hs)
+			for _ = range hs {
+				tracker.TickProcessed()
+			}
 		}
 		assert.Equal(t, 8, cnt)
 

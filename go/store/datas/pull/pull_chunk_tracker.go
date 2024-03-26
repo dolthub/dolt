@@ -52,6 +52,7 @@ type PullChunkTracker struct {
 	wg   sync.WaitGroup
 
 	uncheckedCh chan hash.Hash
+	processedCh chan struct{}
 	reqCh       chan *trackerGetAbsentReq
 }
 
@@ -61,6 +62,7 @@ func NewPullChunkTracker(ctx context.Context, initial hash.HashSet, cfg TrackerC
 		seen:        make(hash.HashSet),
 		cfg:         cfg,
 		uncheckedCh: make(chan hash.Hash),
+		processedCh: make(chan struct{}),
 		reqCh:       make(chan *trackerGetAbsentReq),
 	}
 	ret.seen.InsertAll(initial)
@@ -76,6 +78,17 @@ func (t *PullChunkTracker) Seen(h hash.Hash) {
 	if !t.seen.Has(h) {
 		t.seen.Insert(h)
 		t.addUnchecked(h)
+	}
+}
+
+// Call this for every returned hash that has been successfully processed.
+//
+// GetChunksToFetch() requires a matching |TickProcessed| call for each
+// returned Hash before it will return |hasMany == false|.
+func (t *PullChunkTracker) TickProcessed() {
+	select {
+	case t.processedCh <- struct{}{}:
+	case <-t.ctx.Done():
 	}
 }
 
@@ -137,6 +150,7 @@ func (t *PullChunkTracker) reqRespThread(initial hash.HashSet) {
 
 	var err error
 	outstanding := 0
+	unprocessed := 0
 
 	if len(initial) > 0 {
 		unchecked = append(unchecked, initial)
@@ -145,7 +159,7 @@ func (t *PullChunkTracker) reqRespThread(initial hash.HashSet) {
 
 	for {
 		var thisReqCh = t.reqCh
-		if outstanding != 0 && len(absent) == 0 {
+		if len(absent) == 0 && (outstanding != 0 || unprocessed != 0) {
 			// If we are waiting for a HasMany response and we don't currently have any
 			// absent addresses to return, block any absent requests.
 			thisReqCh = nil
@@ -181,6 +195,8 @@ func (t *PullChunkTracker) reqRespThread(initial hash.HashSet) {
 				unchecked[len(unchecked)-1] = nil
 			}
 			unchecked = unchecked[:len(unchecked)-1]
+		case <-t.processedCh:
+			unprocessed -= 1
 		case req := <-thisReqCh:
 			if err != nil {
 				req.err = err
@@ -213,6 +229,7 @@ func (t *PullChunkTracker) reqRespThread(initial hash.HashSet) {
 					absent[j] = nil
 				}
 				absent = absent[:len(absent)-i]
+				unprocessed += len(req.hs)
 				close(req.ready)
 			}
 		case <-t.ctx.Done():

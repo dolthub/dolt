@@ -54,6 +54,7 @@ type Puller struct {
 	hashes        hash.HashSet
 
 	wr *PullTableFileWriter
+	rd ChunkFetcher
 
 	pushLog *log.Logger
 
@@ -108,6 +109,8 @@ func NewPuller(
 		DestStore:            sinkCS.(chunks.TableFileStore),
 	})
 
+	rd := NewPullChunkFetcher(ctx, srcChunkStore)
+
 	var pushLogger *log.Logger
 	if dbg, ok := os.LookupEnv(dconfig.EnvPushLog); ok && strings.ToLower(dbg) == "true" {
 		logFilePath := filepath.Join(tempDir, "push.log")
@@ -124,6 +127,7 @@ func NewPuller(
 		sinkDBCS:      sinkCS,
 		hashes:        hash.NewHashSet(hashes...),
 		wr:            wr,
+		rd:            rd,
 		pushLog:       pushLogger,
 		statsCh:       statsCh,
 		stats: &stats{
@@ -296,139 +300,82 @@ func (p *Puller) Pull(ctx context.Context) error {
 
 	eg, ctx := errgroup.WithContext(ctx)
 
-	eg.Go(func() (err error) {
-		const batchSize = 64 * 1024
-		tracker := NewPullChunkTracker(ctx, p.hashes, TrackerConfig{
-			BatchSize: batchSize,
-			HasManyer: p.sinkDBCS,
-		})
+	const batchSize = 64 * 1024
+	tracker := NewPullChunkTracker(ctx, p.hashes, TrackerConfig{
+		BatchSize: batchSize,
+		HasManyer: p.sinkDBCS,
+	})
 
-		defer func() {
-			wrErr := p.wr.Close()
-			if err == nil {
-				err = wrErr
-			}
-		}()
-
+	// One thread calls ChunkFetcher.Get on each batch.
+	eg.Go(func() error {
 		for {
 			toFetch, hasMore, err := tracker.GetChunksToFetch()
 			if err != nil {
 				return err
 			}
 			if !hasMore {
-				break
+				return p.rd.CloseSend()
 			}
 
-			err = p.getCmp(ctx, toFetch, tracker)
+			atomic.AddUint64(&p.stats.totalSourceChunks, uint64(len(toFetch)))
+			err = p.rd.Get(ctx, toFetch)
 			if err != nil {
 				return err
 			}
 		}
-
-		return nil
 	})
 
-	return eg.Wait()
-}
-
-// batchNovel returns a slice of |batch| size HashSets and partial |remainder| HashSet.
-func batchNovel(absent hash.HashSet, batch int) (remainder hash.HashSet, batches []hash.HashSet) {
-	curr := make(hash.HashSet, batch)
-	for h := range absent {
-		curr.Insert(h)
-		if curr.Size() >= batch {
-			batches = append(batches, curr)
-			curr = make(hash.HashSet, batch)
-		}
-	}
-	remainder = curr
-	return
-}
-
-func (p *Puller) getCmp(ctx context.Context, batch hash.HashSet, tracker *PullChunkTracker) error {
-	found := make(chan nbs.CompressedChunk, 4096)
-	processed := make(chan nbs.CompressedChunk, 4096)
-
-	atomic.AddUint64(&p.stats.totalSourceChunks, uint64(len(batch)))
-	eg, ctx := errgroup.WithContext(ctx)
+	// One thread reads the received chunks, walks their addresses and writes them to the table file.
 	eg.Go(func() error {
-		err := p.srcChunkStore.GetManyCompressed(ctx, batch, func(ctx context.Context, c nbs.CompressedChunk) {
-			atomic.AddUint64(&p.stats.fetchedSourceBytes, uint64(len(c.FullCompressedChunk)))
+		for {
+			cChk, err := p.rd.Recv(ctx)
+			if err == io.EOF {
+				// This means the requesting thread
+				// successfully saw all chunk addresses and
+				// called CloseSend and that all requested
+				// chunks were successfully delivered to this
+				// thread. Calling wr.Close() here will block
+				// on uploading any table files and will write
+				// the new table files to the destination's
+				// manifest.
+				return p.wr.Close()
+			}
+			if err != nil {
+				return err
+			}
+			if len(cChk.FullCompressedChunk) == 0 {
+				return errors.New("failed to get all chunks.")
+			}
+
+			atomic.AddUint64(&p.stats.fetchedSourceBytes, uint64(len(cChk.FullCompressedChunk)))
 			atomic.AddUint64(&p.stats.fetchedSourceChunks, uint64(1))
-			select {
-			case found <- c:
-			case <-ctx.Done():
+
+			chnk, err := cChk.ToChunk()
+			if err != nil {
+				return err
 			}
-		})
-		if err != nil {
-			return err
-		}
-		close(found)
-		return nil
-	})
+			err = p.waf(chnk, func(h hash.Hash, _ bool) error {
+				tracker.Seen(h)
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+			tracker.TickProcessed()
 
-	eg.Go(func() error {
-	LOOP:
-		for {
-			select {
-			case cmpChnk, ok := <-found:
-				if !ok {
-					break LOOP
-				}
-
-				chnk, err := cmpChnk.ToChunk()
-				if err != nil {
-					return err
-				}
-				err = p.waf(chnk, func(h hash.Hash, _ bool) error {
-					tracker.Seen(h)
-					return nil
-				})
-				if err != nil {
-					return err
-				}
-				select {
-				case processed <- cmpChnk:
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-			case <-ctx.Done():
-				return ctx.Err()
+			err = p.wr.AddCompressedChunk(ctx, cChk)
+			if err != nil {
+				return err
 			}
 		}
-
-		close(processed)
-		return nil
 	})
 
-	eg.Go(func() error {
-		var seen int
-	LOOP:
-		for {
-			select {
-			case cmpChnk, ok := <-processed:
-				if !ok {
-					break LOOP
-				}
-				seen++
-
-				err := p.wr.AddCompressedChunk(ctx, cmpChnk)
-				if err != nil {
-					return err
-				}
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
-		if seen != len(batch) {
-			return errors.New("failed to get all chunks.")
-		}
-		return nil
-	})
-
-	err := eg.Wait()
-	if err != nil {
-		return err
-	}
-	return nil
+	// Always close the reader outside of the errgroup threads above.
+	// Closing the reader will cause Get() to start returning errors, and
+	// we don't need to deliver that error to the Get thread. Both threads
+	// should exit and return any errors they encounter, after which the
+	// errgroup will report the error.
+	wErr := eg.Wait()
+	rErr := p.rd.Close()
+	return errors.Join(wErr, rErr)
 }
