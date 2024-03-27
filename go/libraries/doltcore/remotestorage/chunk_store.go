@@ -571,6 +571,13 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (d
 
 	// channel for receiving results from go routines making grpc calls to get download locations for chunks
 	resCh := make(chan []*remotesapi.DownloadLoc)
+	reqsCh := make(chan *remotesapi.GetDownloadLocsRequest)
+	hashesCh := make(chan hash.HashSet)
+
+	set := make(hash.HashSet)
+	for _, h := range hashes {
+		set.Insert(h)
+	}
 
 	eg, ctx := errgroup.WithContext(ctx)
 
@@ -590,68 +597,18 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (d
 			}
 		}
 	})
-
-	// go routine for batching the get location requests, streaming the requests and streaming the responses.
 	eg.Go(func() error {
-		var reqs []*remotesapi.GetDownloadLocsRequest
-		hashesBytes := HashesToSlices(hashes)
-		batchItr(len(hashesBytes), getLocsBatchSize, func(st, end int) (stop bool) {
-			batch := hashesBytes[st:end]
-			id, token := dcs.getRepoId()
-			req := &remotesapi.GetDownloadLocsRequest{RepoId: id, RepoPath: dcs.repoPath, RepoToken: token, ChunkHashes: batch}
-			reqs = append(reqs, req)
-			return false
-		})
-		op := func() error {
-			seg, ctx := errgroup.WithContext(ctx)
-			stream, err := dcs.csClient.StreamDownloadLocations(ctx)
-			if err != nil {
-				return NewRpcError(err, "StreamDownloadLocations", dcs.host, nil)
-			}
-			completedReqs := 0
-			// Write requests
-			seg.Go(func() error {
-				for i := range reqs {
-					if err := stream.Send(reqs[i]); err != nil {
-						return NewRpcError(err, "StreamDownloadLocations", dcs.host, reqs[i])
-					}
-				}
-				return stream.CloseSend()
-			})
-			// Read responses
-			seg.Go(func() error {
-				for {
-					resp, err := stream.Recv()
-					if err != nil {
-						if err == io.EOF {
-							return nil
-						}
-						var r *remotesapi.GetDownloadLocsRequest
-						if completedReqs < len(reqs) {
-							r = reqs[completedReqs]
-						}
-						return NewRpcError(err, "StreamDownloadLocations", dcs.host, r)
-					}
-					if resp.RepoToken != "" {
-						dcs.repoToken.Store(resp.RepoToken)
-					}
-					select {
-					case resCh <- resp.Locs:
-						completedReqs += 1
-					case <-ctx.Done():
-						return ctx.Err()
-					}
-				}
-			})
-			err = seg.Wait()
-			reqs = reqs[completedReqs:]
-			if len(reqs) == 0 {
-				close(resCh)
-			}
-			return processGrpcErr(err)
-		}
-		return backoff.Retry(op, grpcBackOff(ctx))
+		return fetcherHashSetToGetDlLocsReqsThread(ctx, hashesCh, reqsCh, getLocsBatchSize, dcs.repoPath, dcs.getRepoId)
 	})
+	eg.Go(func() error {
+		return fetcherRPCDownloadLocsThread(ctx, reqsCh, resCh, dcs.csClient)
+	})
+
+	select {
+	case hashesCh <- set:
+	case <-ctx.Done():
+	}
+	close(hashesCh)
 
 	if err := eg.Wait(); err != nil {
 		return dlLocations{}, err
