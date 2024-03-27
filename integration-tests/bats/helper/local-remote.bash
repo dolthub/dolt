@@ -141,6 +141,8 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 EOM
 )
 
+# Starts a remote server in the current working directory for the
+# purposes of running dolt commands against a running sql-server.
 setup_remote_server() {
   script_name=$(basename ${BATS_TEST_FILENAME})
   if [ "$SQL_ENGINE" = "remote-engine" ];

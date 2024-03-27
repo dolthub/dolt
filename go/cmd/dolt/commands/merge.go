@@ -403,10 +403,16 @@ func calculateMergeConflicts(queryist cli.Queryist, sqlCtx *sql.Context, mergeSt
 	}
 	for _, conflict := range dataConflicts {
 		tableName := conflict[0].(string)
+
+		cf, err := getInt64ColAsInt64(conflict[1])
+		if err != nil {
+			return nil, false, err
+		}
+
 		if ok := mergeStats[tableName]; ok != nil {
-			mergeStats[tableName].DataConflicts = int(conflict[1].(uint64))
+			mergeStats[tableName].DataConflicts = int(cf)
 		} else {
-			mergeStats[tableName] = &merge.MergeStats{DataConflicts: int(conflict[1].(uint64))}
+			mergeStats[tableName] = &merge.MergeStats{DataConflicts: int(cf)}
 		}
 	}
 
@@ -429,10 +435,16 @@ func calculateMergeConflicts(queryist cli.Queryist, sqlCtx *sql.Context, mergeSt
 	}
 	for _, conflict := range constraintViolations {
 		tableName := conflict[0].(string)
+
+		cf, err := getInt64ColAsInt64(conflict[1])
+		if err != nil {
+			return nil, false, err
+		}
+
 		if ok := mergeStats[tableName]; ok != nil {
-			mergeStats[tableName].ConstraintViolations = int(conflict[1].(uint64))
+			mergeStats[tableName].ConstraintViolations = int(cf)
 		} else {
-			mergeStats[tableName] = &merge.MergeStats{ConstraintViolations: int(conflict[1].(uint64))}
+			mergeStats[tableName] = &merge.MergeStats{ConstraintViolations: int(cf)}
 		}
 	}
 
