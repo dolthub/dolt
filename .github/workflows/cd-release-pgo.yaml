@@ -44,7 +44,6 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go/go.mod
-          check-latest: true
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2.2.0
         with:

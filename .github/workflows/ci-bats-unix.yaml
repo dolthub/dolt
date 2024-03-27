@@ -52,7 +52,6 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go/go.mod
-          check-latest: true
         id: go
       - name: Setup Python 3.x
         uses: actions/setup-python@v4

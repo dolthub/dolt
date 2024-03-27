@@ -47,7 +47,6 @@ jobs:
         if: ${{ env.use_credentials == 'true' }}
         with:
           go-version-file: go/go.mod
-          check-latest: true
         id: go
       - name: install lambdabats
         if: ${{ env.use_credentials == 'true' }}
