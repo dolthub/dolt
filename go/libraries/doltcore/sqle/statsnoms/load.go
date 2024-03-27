@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package stats
+package statsnoms
 
 import (
 	"errors"
@@ -28,21 +28,21 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (*dbStats, error) {
-	dbStat := newDbStats(db.Name())
+func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (map[sql.StatQualifier]*statspro.DoltStats, error) {
+	qualToStats := make(map[sql.StatQualifier]*statspro.DoltStats)
 
-	iter, err := dtables.NewStatsIter(ctx, m)
+	iter, err := NewStatsIter(ctx, m)
 	if err != nil {
 		return nil, err
 	}
-	currentStat := NewDoltStats()
+	currentStat := statspro.NewDoltStats()
 	var lowerBound sql.Row
 	for {
 		row, err := iter.Next(ctx)
@@ -51,8 +51,6 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (*dbStats, 
 		} else if err != nil {
 			return nil, err
 		}
-
-		position := row[schema.StatsPositionTag].(int)
 
 		// deserialize K, V
 		dbName := row[schema.StatsDbTag].(string)
@@ -121,13 +119,13 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (*dbStats, 
 				if err != nil {
 					return nil, err
 				}
-				currentStat.fds = fds
-				currentStat.colSet = colSet
-				currentStat.updateActive()
-				dbStat.stats[currentStat.Qual] = currentStat
+				currentStat.Fds = fds
+				currentStat.ColSet = colSet
+				currentStat.UpdateActive()
+				qualToStats[currentStat.Qual] = currentStat
 			}
 
-			currentStat = NewDoltStats()
+			currentStat = statspro.NewDoltStats()
 			currentStat.Qual = qual
 			currentStat.Columns = columns
 			currentStat.LowerBound = lowerBound
@@ -141,7 +139,7 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (*dbStats, 
 			currentStat.Qual = qual
 		}
 
-		bucket := DoltBucket{
+		bucket := statspro.DoltBucket{
 			Chunk:         commit,
 			RowCount:      uint64(rowCount),
 			DistinctCount: uint64(distinctCount),
@@ -153,7 +151,6 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (*dbStats, 
 			UpperBound:    boundRow,
 		}
 
-		currentStat.active[commit] = position
 		currentStat.Histogram = append(currentStat.Histogram, bucket)
 		currentStat.RowCount += uint64(rowCount)
 		currentStat.DistinctCount += uint64(distinctCount)
@@ -170,17 +167,16 @@ func loadStats(ctx *sql.Context, db dsess.SqlDatabase, m prolly.Map) (*dbStats, 
 	if err != nil {
 		return nil, err
 	}
-	currentStat.fds = fds
-	currentStat.colSet = colSet
-	currentStat.updateActive()
-	dbStat.setIndexStats(currentStat.Qual, currentStat)
-	dbStat.stats[currentStat.Qual] = currentStat
-	return dbStat, nil
+	currentStat.Fds = fds
+	currentStat.ColSet = colSet
+	currentStat.UpdateActive()
+	qualToStats[currentStat.Qual] = currentStat
+	return qualToStats, nil
 }
 
 func loadLowerBound(ctx *sql.Context, qual sql.StatQualifier) (sql.Row, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
-	roots, ok := dSess.GetRoots(ctx, qual.Database)
+	roots, ok := dSess.GetRoots(ctx, qual.Db())
 	if !ok {
 		return nil, nil
 	}
@@ -229,12 +225,12 @@ func loadFuncDeps(ctx *sql.Context, db dsess.SqlDatabase, qual sql.StatQualifier
 	if err != nil {
 		return nil, sql.ColSet{}, err
 	} else if !ok {
-		return nil, sql.ColSet{}, fmt.Errorf("%w: table not found: '%s'", ErrFailedToLoad, qual.Table())
+		return nil, sql.ColSet{}, fmt.Errorf("%w: table not found: '%s'", statspro.ErrFailedToLoad, qual.Table())
 	}
 
 	iat, ok := tab.(sql.IndexAddressable)
 	if !ok {
-		return nil, sql.ColSet{}, fmt.Errorf("%w: table does not have indexes: '%s'", ErrFailedToLoad, qual.Table())
+		return nil, sql.ColSet{}, fmt.Errorf("%w: table does not have indexes: '%s'", statspro.ErrFailedToLoad, qual.Table())
 	}
 
 	indexes, err := iat.GetIndexes(ctx)
@@ -251,7 +247,7 @@ func loadFuncDeps(ctx *sql.Context, db dsess.SqlDatabase, qual sql.StatQualifier
 	}
 
 	if idx == nil {
-		return nil, sql.ColSet{}, fmt.Errorf("%w: index not found: '%s'", ErrFailedToLoad, qual.Index())
+		return nil, sql.ColSet{}, fmt.Errorf("%w: index not found: '%s'", statspro.ErrFailedToLoad, qual.Index())
 	}
 
 	return stats.IndexFds(qual.Table(), tab.Schema(), idx)

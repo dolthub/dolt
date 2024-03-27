@@ -60,6 +60,7 @@ const (
 
 // LocalDirDoltDB stores the db in the current directory
 var LocalDirDoltDB = "file://./" + dbfactory.DoltDataDir
+var LocalDirStatsDB = "file://./" + dbfactory.DoltStatsDir
 
 // InMemDoltDB stores the DoltDB db in memory and is primarily used for testing
 var InMemDoltDB = "mem://"
@@ -482,15 +483,6 @@ func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, ref ref.DoltRef) (*Comm
 	}
 
 	return NewCommit(ctx, ddb.vrw, ddb.ns, commitVal)
-}
-
-// ResolveStatsRef takes a StatsRef and returns an address to a table.
-func (ddb *DoltDB) ResolveStatsRef(ctx context.Context) (hash.Hash, bool) {
-	ds, err := ddb.db.GetDataset(ctx, ref.StatsRefName)
-	if err != nil {
-		return hash.Hash{}, false
-	}
-	return ds.MaybeHeadAddr()
 }
 
 // ResolveCommitRefAtRoot takes a DoltRef and returns a Commit, or an error if the commit cannot be found. The ref given must
@@ -1804,8 +1796,8 @@ func (ddb *DoltDB) AddStash(ctx context.Context, head *Commit, stash *RootValue,
 	return err
 }
 
-func (ddb *DoltDB) SetStatisics(ctx context.Context, addr hash.Hash) error {
-	statsDs, err := ddb.db.GetDataset(ctx, ref.NewStatsRef().String())
+func (ddb *DoltDB) SetStatisics(ctx context.Context, branch string, addr hash.Hash) error {
+	statsDs, err := ddb.db.GetDataset(ctx, ref.NewStatsRef(branch).String())
 	if err != nil {
 		return err
 	}
@@ -1813,8 +1805,8 @@ func (ddb *DoltDB) SetStatisics(ctx context.Context, addr hash.Hash) error {
 	return err
 }
 
-func (ddb *DoltDB) DropStatisics(ctx context.Context) error {
-	statsDs, err := ddb.db.GetDataset(ctx, ref.NewStatsRef().String())
+func (ddb *DoltDB) DropStatisics(ctx context.Context, branch string) error {
+	statsDs, err := ddb.db.GetDataset(ctx, ref.NewStatsRef(branch).String())
 
 	_, err = ddb.db.Delete(ctx, statsDs, "")
 	if err != nil {
@@ -1826,8 +1818,8 @@ func (ddb *DoltDB) DropStatisics(ctx context.Context) error {
 var ErrNoStatistics = errors.New("no statistics found")
 
 // GetStatistics returns the value of the singleton ref.StatsRef for this database
-func (ddb *DoltDB) GetStatistics(ctx context.Context) (prolly.Map, error) {
-	ds, err := ddb.db.GetDataset(ctx, ref.NewStatsRef().String())
+func (ddb *DoltDB) GetStatistics(ctx context.Context, branch string) (prolly.Map, error) {
+	ds, err := ddb.db.GetDataset(ctx, ref.NewStatsRef(branch).String())
 	if err != nil {
 		return prolly.Map{}, err
 	}

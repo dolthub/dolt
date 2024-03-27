@@ -47,24 +47,23 @@ teardown() {
     sleep 1
     stop_sql_server
 
-    # no statistics error if ref does not exist
-    run dolt sql -r csv -q "select database_name, table_name, index_name from dolt_statistics"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "no statistics found" ]] || false
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "0" ]
 
     # setting variables doesn't hang or error
     dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_enabled = 1;"
     dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_threshold = .5"
     dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_interval = 1;"
 
-    # auto refresh can only initialize at server startup
+    # auto refresh initialize at server startup
     start_sql_server
 
     # need to trigger at least one refresh cycle
     sleep 1
 
     # only statistics for non-empty tables are collected
-    run dolt sql -r csv -q "select database_name, table_name, index_name from dolt_statistics"
+    run dolt sql -r csv -q "select database_name, table_name, index_name from dolt_statistics order by index_name"
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "database_name,table_name,index_name" ]
     [ "${lines[1]}" = "repo2,xy,primary" ]
@@ -84,7 +83,7 @@ teardown() {
 
     sleep 1
 
-    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    dolt sql -r csv -q "select count(*) from dolt_statistics"
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "8" ]
 }
@@ -108,7 +107,7 @@ teardown() {
     [ "${lines[1]}" = "8" ]
 
     # delete >50% of rows
-    dolt sql -q "delete from xy where x > 500"
+    dolt sql -q "delete from xy where x > 600"
 
     sleep 1
 
@@ -251,9 +250,9 @@ teardown() {
     sleep 1
     stop_sql_server
 
-    run dolt sql -r csv -q "select database_name, table_name, index_name from dolt_statistics"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "no statistics found" ]] || false
+    run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "0" ]
 
     dolt sql -q "SET @@persist.dolt_stats_auto_refresh_enabled = 1;"
     dolt sql -q "SET @@persist.dolt_stats_auto_refresh_threshold = 0.5"

@@ -190,6 +190,13 @@ func (mut *MutableMap) IterAll(ctx context.Context) (MapIter, error) {
 	return mut.IterRange(ctx, rng)
 }
 
+// IterKeyRange iterates over a physical key range defined by |start| and
+// |stop|. If |start| and/or |stop| is nil, the range will be open
+// towards that end.
+func (mut *MutableMap) IterKeyRange(ctx context.Context, start, stop val.Tuple) (MapIter, error) {
+	return mut.tuples.Static.IterKeyRange(ctx, start, stop)
+}
+
 // IterRange returns a MapIter that iterates over a Range.
 func (mut *MutableMap) IterRange(ctx context.Context, rng Range) (MapIter, error) {
 	treeIter, err := treeIterFromRange(ctx, mut.tuples.Static.Root, mut.tuples.Static.NodeStore, rng)

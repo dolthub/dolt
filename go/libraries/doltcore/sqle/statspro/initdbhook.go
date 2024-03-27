@@ -12,34 +12,52 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package stats
+package statspro
 
 import (
 	"context"
-	"time"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	types2 "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
-func NewInitDatabaseHook(statsProv *Provider, ctxFactory func(ctx context.Context) (*sql.Context, error), bThreads *sql.BackgroundThreads, orig sqle.InitDatabaseHook) sqle.InitDatabaseHook {
-	return func(ctx *sql.Context, pro *sqle.DoltDatabaseProvider, name string, denv *env.DoltEnv) error {
+func NewInitDatabaseHook(
+	statsProv *Provider,
+	ctxFactory func(ctx context.Context) (*sql.Context, error),
+	bThreads *sql.BackgroundThreads,
+	orig sqle.InitDatabaseHook,
+) sqle.InitDatabaseHook {
+	return func(
+		ctx *sql.Context,
+		pro *sqle.DoltDatabaseProvider,
+		name string,
+		denv *env.DoltEnv,
+		db dsess.SqlDatabase,
+	) error {
+		// We assume there is nothing on disk to read. Probably safe and also
+		// would deadlock with dbProvider if we tried from reading root/session.
 		if orig != nil {
-			err := orig(ctx, pro, name, denv)
+			err := orig(ctx, pro, name, denv, db)
 			if err != nil {
 				return err
 			}
 		}
-		_, threshold, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshThreshold)
-		_, interval, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsAutoRefreshInterval)
-		interval64, _, _ := types2.Int64.Convert(interval)
-		intervalSec := time.Second * time.Duration(interval64.(int64))
-		thresholdf64 := threshold.(float64)
-		return statsProv.InitAutoRefresh(ctxFactory, name, bThreads, intervalSec, thresholdf64)
+
+		statsDb, err := statsProv.sf.Init(ctx, db, statsProv.pro, denv.FS, env.GetCurrentUserHomeDir)
+		if err != nil {
+			ctx.GetLogger().Debugf("statistics load error: %s", err.Error())
+			return nil
+		}
+		statsProv.mu.Lock()
+		statsProv.setStatDb(strings.ToLower(db.Name()), statsDb)
+		statsProv.mu.Unlock()
+
+		ctx.GetLogger().Debugf("statistics refresh: initialize %s", name)
+		return statsProv.InitAutoRefresh(ctxFactory, name, bThreads)
 	}
 }
 
@@ -54,5 +72,11 @@ func NewDropDatabaseHook(statsProv *Provider, ctxFactory func(ctx context.Contex
 		}
 		statsProv.CancelRefreshThread(name)
 		statsProv.DropDbStats(ctx, name, false)
+
+		if db, ok := statsProv.getStatDb(name); ok {
+			if err := db.Close(); err != nil {
+				ctx.GetLogger().Debugf("failed to close stats database: %s", err)
+			}
+		}
 	}
 }

@@ -35,7 +35,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/stats"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsnoms"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -181,8 +182,8 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		require.True(t, ok)
 		d.provider = doltProvider
 
-		statsPro := stats.NewProvider()
-		d.statsPro = statsPro
+		statsProv := statspro.NewProvider(d.provider.(*sqle.DoltDatabaseProvider), statsnoms.NewNomsStatsFactory(d.multiRepoEnv.RemoteDialProvider()))
+		d.statsPro = statsProv
 
 		var err error
 		d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro)
@@ -220,9 +221,14 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 			for i, dbName := range dbs {
 				dsessDbs[i], _ = dbCache.GetCachedRevisionDb(fmt.Sprintf("%s/main", dbName), dbName)
 			}
-			if err = statsPro.Configure(ctx, func(context.Context) (*sql.Context, error) { return d.NewSession(), nil }, bThreads, doltProvider, dsessDbs); err != nil {
+
+			ctxFact := func(context.Context) (*sql.Context, error) { return d.NewContext(), nil }
+			if err = statsProv.Configure(ctx, ctxFact, bThreads, dsessDbs); err != nil {
 				return nil, err
 			}
+
+			statsOnlyQueries := filterStatsOnlyQueries(d.setupData)
+			e, err = enginetest.RunSetupScripts(ctx, e, statsOnlyQueries, d.SupportsNativeIndexCreation())
 		}
 
 		return e, nil
@@ -232,7 +238,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	d.engine.Analyzer.Catalog.MySQLDb = mysql_db.CreateEmptyMySQLDb()
 	d.engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
 
-	d.engine.Analyzer.Catalog.StatsProvider = stats.NewProvider()
+	d.engine.Analyzer.Catalog.StatsProvider = statspro.NewProvider(d.provider.(*sqle.DoltDatabaseProvider), statsnoms.NewNomsStatsFactory(d.multiRepoEnv.RemoteDialProvider()))
 
 	// Get a fresh session if we are reusing the engine
 	if !initializeEngine {
@@ -245,6 +251,18 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	e, err := enginetest.RunSetupScripts(ctx, d.engine, d.resetScripts(), d.SupportsNativeIndexCreation())
 
 	return e, err
+}
+
+func filterStatsOnlyQueries(scripts []setup.SetupScript) []setup.SetupScript {
+	var ret []string
+	for i := range scripts {
+		for _, s := range scripts[i] {
+			if strings.HasPrefix(s, "analyze table") {
+				ret = append(ret, s)
+			}
+		}
+	}
+	return []setup.SetupScript{ret}
 }
 
 // WithParallelism returns a copy of the harness with parallelism set to the given number of threads. A value of 0 or
@@ -329,7 +347,6 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	d.closeProvider()
 	d.engine = nil
 	d.provider = nil
-	d.statsPro = stats.NewProvider()
 
 	d.branchControl = branch_control.CreateDefaultController(context.Background())
 
@@ -337,6 +354,7 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	doltProvider, ok := pro.(*sqle.DoltDatabaseProvider)
 	require.True(d.t, ok)
 	d.provider = doltProvider
+	d.statsPro = statspro.NewProvider(doltProvider, statsnoms.NewNomsStatsFactory(d.multiRepoEnv.RemoteDialProvider()))
 
 	var err error
 	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), doltProvider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro)

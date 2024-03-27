@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package stats
+package statspro
 
 import (
 	"container/heap"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"time"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
@@ -37,11 +39,11 @@ const (
 	mcvCnt       = 3
 )
 
-// updateStats builds histograms for a list of index statistic metadata.
+// createNewStatsBuckets builds histograms for a list of index statistic metadata.
 // We only read chunk ranges indicated by |indexMeta.updateOrdinals|. If
 // the returned buckets are a subset of the index the caller is responsible
 // for reconciling the difference.
-func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, indexes []sql.Index, idxMetas []indexMeta) (map[sql.StatQualifier]*DoltStats, error) {
+func createNewStatsBuckets(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, indexes []sql.Index, idxMetas []indexMeta) (map[sql.StatQualifier]*DoltStats, error) {
 	nameToIdx := make(map[string]sql.Index)
 	for _, idx := range indexes {
 		nameToIdx[strings.ToLower(idx.ID())] = idx
@@ -85,8 +87,8 @@ func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, index
 			ret[meta.qual].Types = types
 			ret[meta.qual].Qual = meta.qual
 
-			ret[meta.qual].fds = fds
-			ret[meta.qual].colSet = colSet
+			ret[meta.qual].Fds = fds
+			ret[meta.qual].ColSet = colSet
 			continue
 		}
 
@@ -95,31 +97,9 @@ func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, index
 			return nil, err
 		}
 
-		// find level if not exists
-		if len(meta.updateChunks) == 0 {
-			levelNodes, err := tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
-			if err != nil {
-				return nil, err
-			}
-			var chunks []tree.Node
-			var offsets [][]uint64
-			var offset uint64
-			for _, n := range levelNodes {
-				chunks = append(chunks, n)
-				treeCnt, err := n.TreeCount()
-				if err != nil {
-					return nil, err
-				}
-				offsets = append(offsets, []uint64{offset, offset + uint64(treeCnt)})
-				offset += uint64(treeCnt)
-			}
-			meta.updateChunks = chunks
-			meta.updateOrdinals = offsets
-		}
-
 		updater := newBucketBuilder(meta.qual, len(meta.cols), prollyMap.KeyDesc())
 		ret[meta.qual] = NewDoltStats()
-		ret[meta.qual].chunks = meta.allAddrs
+		ret[meta.qual].Chunks = meta.allAddrs
 		ret[meta.qual].CreatedAt = time.Now()
 		ret[meta.qual].Columns = meta.cols
 		ret[meta.qual].Types = types
@@ -127,12 +107,12 @@ func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, index
 
 		var start, stop uint64
 		// read leaf rows for each bucket
-		for i, chunk := range meta.updateChunks {
+		for i, chunk := range meta.newNodes {
 			// each node is a bucket
 			updater.newBucket()
 
 			// we read exclusive range [node first key, next node first key)
-			start, stop = meta.updateOrdinals[i][0], meta.updateOrdinals[i][1]
+			start, stop = meta.updateOrdinals[i].start, meta.updateOrdinals[i].stop
 			iter, err := prollyMap.IterOrdinalRange(ctx, start, stop)
 			if err != nil {
 				return nil, err
@@ -166,40 +146,40 @@ func updateStats(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, index
 		ret[updater.qual].DistinctCount = uint64(updater.globalDistinct)
 		ret[updater.qual].RowCount = uint64(updater.globalCount)
 		ret[updater.qual].LowerBound = firstRow
-		ret[updater.qual].fds = fds
-		ret[updater.qual].colSet = colSet
+		ret[updater.qual].Fds = fds
+		ret[updater.qual].ColSet = colSet
+		ret[updater.qual].UpdateActive()
 	}
 	return ret, nil
 }
 
-func mergeStatUpdates(newStats *DoltStats, idxMeta indexMeta) *DoltStats {
-	if len(newStats.Histogram) == len(idxMeta.allAddrs) {
-		newStats.updateActive()
-		return newStats
+// MergeNewChunks combines a set of old and new chunks to create
+// the desired target histogram. Undefined behavior if a |targetHash|
+// does not exist in either |oldChunks| or |newChunks|.
+func MergeNewChunks(inputHashes []hash.Hash, oldChunks, newChunks []DoltBucket) ([]DoltBucket, error) {
+	hashToPos := make(map[hash.Hash]int, len(inputHashes))
+	for i, h := range inputHashes {
+		hashToPos[h] = i
 	}
-	oldHist := idxMeta.preexisting
-	var mergeHist DoltHistogram
-	newHist := newStats.Histogram
-	var i, j int
-	for _, chunkAddr := range idxMeta.allAddrs {
-		if i < len(oldHist) && oldHist[i].Chunk == chunkAddr {
-			mergeHist = append(mergeHist, oldHist[i])
-			i++
-		} else if j < len(newHist) && newHist[j].Chunk == chunkAddr {
-			mergeHist = append(mergeHist, newHist[j])
-			j++
+
+	var cnt int
+	targetBuckets := make([]DoltBucket, len(inputHashes))
+	for _, c := range oldChunks {
+		if idx, ok := hashToPos[c.Chunk]; ok {
+			cnt++
+			targetBuckets[idx] = c
 		}
 	}
-
-	if len(mergeHist) == 0 {
-		return newStats
+	for _, c := range newChunks {
+		if idx, ok := hashToPos[c.Chunk]; ok && targetBuckets[idx].Chunk.IsEmpty() {
+			cnt++
+			targetBuckets[idx] = c
+		}
 	}
-
-	newStats.Histogram = mergeHist
-	newStats.chunks = idxMeta.allAddrs
-	newStats.updateActive()
-	newStats.updateCounts()
-	return newStats
+	if cnt != len(inputHashes) {
+		return nil, fmt.Errorf("encountered invalid statistic chunks")
+	}
+	return targetBuckets, nil
 }
 
 func firstRowForIndex(ctx *sql.Context, prollyMap prolly.Map, keyBuilder *val.TupleBuilder, prefixLen int) (sql.Row, error) {

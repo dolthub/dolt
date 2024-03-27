@@ -66,6 +66,10 @@ type DoltDatabaseProvider struct {
 	isStandby    *bool
 }
 
+func (p *DoltDatabaseProvider) DefaultBranch() string {
+	return p.defaultBranch
+}
+
 func (p *DoltDatabaseProvider) WithTableFunctions(fns ...sql.TableFunction) (sql.TableFunctionProvider, error) {
 	funcs := make(map[string]sql.TableFunction)
 	for _, fn := range fns {
@@ -454,12 +458,12 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 	return p.registerNewDatabase(ctx, name, newEnv)
 }
 
-type InitDatabaseHook func(ctx *sql.Context, pro *DoltDatabaseProvider, name string, env *env.DoltEnv) error
+type InitDatabaseHook func(ctx *sql.Context, pro *DoltDatabaseProvider, name string, env *env.DoltEnv, db dsess.SqlDatabase) error
 type DropDatabaseHook func(name string)
 
 // ConfigureReplicationDatabaseHook sets up replication for a newly created database as necessary
 // TODO: consider the replication heads / all heads setting
-func ConfigureReplicationDatabaseHook(ctx *sql.Context, p *DoltDatabaseProvider, name string, newEnv *env.DoltEnv) error {
+func ConfigureReplicationDatabaseHook(ctx *sql.Context, p *DoltDatabaseProvider, name string, newEnv *env.DoltEnv, _ dsess.SqlDatabase) error {
 	_, replicationRemoteName, _ := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
 	if replicationRemoteName == "" {
 		return nil
@@ -616,6 +620,10 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	if err != nil {
 		return err
 	}
+	err = dbfactory.DeleteFromSingletonCache(filepath.ToSlash(dropDbLoc + "/.dolt/stats/.dolt/noms"))
+	if err != nil {
+		return err
+	}
 
 	err = p.droppedDatabaseManager.DropDatabase(ctx, name, dropDbLoc)
 	if err != nil {
@@ -702,7 +710,7 @@ func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string
 	// If we have an initialization hook, invoke it.  By default, this will
 	// be ConfigureReplicationDatabaseHook, which will setup replication
 	// for the new database if a remote url template is set.
-	err = p.InitDatabaseHook(ctx, p, name, newEnv)
+	err = p.InitDatabaseHook(ctx, p, name, newEnv, db)
 	if err != nil {
 		return err
 	}
