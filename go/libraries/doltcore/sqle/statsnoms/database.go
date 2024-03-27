@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path"
 	"strings"
 	"sync"
 
@@ -55,7 +56,7 @@ func (sf NomsStatsFactory) Init(ctx *sql.Context, sourceDb dsess.SqlDatabase, pr
 	var urlPath string
 	u, err := earl.Parse(prov.DbFactoryUrl())
 	if u.Scheme == dbfactory.MemScheme {
-		urlPath = prov.DbFactoryUrl() + dbfactory.DoltDataDir
+		urlPath = path.Join(prov.DbFactoryUrl(), dbfactory.DoltDataDir)
 	} else if u.Scheme == dbfactory.FileScheme {
 		urlPath = doltdb.LocalDirDoltDB
 	}
