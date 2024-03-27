@@ -49,7 +49,7 @@ func NewInitDatabaseHook(
 
 		statsDb, err := statsProv.sf.Init(ctx, db, statsProv.pro, denv.FS, env.GetCurrentUserHomeDir)
 		if err != nil {
-			ctx.Warn(0, err.Error())
+			ctx.GetLogger().Debugf("statistics load error: %s", err.Error())
 			return nil
 		}
 		statsProv.mu.Lock()

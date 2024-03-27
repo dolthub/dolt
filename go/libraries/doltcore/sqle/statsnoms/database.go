@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path"
 	"strings"
 	"sync"
 
@@ -53,37 +52,28 @@ func (sf NomsStatsFactory) Init(ctx *sql.Context, sourceDb dsess.SqlDatabase, pr
 	params := make(map[string]interface{})
 	params[dbfactory.GRPCDialProviderParam] = sf.dialPro
 
-	statsPath, err := fs.Abs(path.Join(dbfactory.DoltDir, dbfactory.StatsDir, dbfactory.DoltDataDir))
-	if err != nil {
-		return nil, err
-	}
-
-	fs, err = fs.WithWorkingDir(statsPath)
-	if err != nil {
-		return nil, err
-	}
-
 	var urlPath string
 	u, err := earl.Parse(prov.DbFactoryUrl())
 	if u.Scheme == dbfactory.MemScheme {
-		urlPath = prov.DbFactoryUrl() + statsPath
+		urlPath = prov.DbFactoryUrl() + dbfactory.DoltDataDir
 	} else if u.Scheme == dbfactory.FileScheme {
-		urlPath = "file://" + statsPath
+		urlPath = doltdb.LocalDirDoltDB
 	}
-	
+
+	statsFs, err := fs.WithWorkingDir(dbfactory.DoltStatsDir)
+	if err != nil {
+		return nil, err
+	}
+
 	var dEnv *env.DoltEnv
-	exists, isDir := fs.Exists(statsPath)
+	exists, isDir := statsFs.Exists("")
 	if !exists {
-		err := fs.MkDirs(statsPath)
+		err := statsFs.MkDirs("")
 		if err != nil {
-			return nil, fmt.Errorf("unable to make directory '%s', cause: %s", statsPath, err.Error())
+			return nil, fmt.Errorf("unable to make directory '%s', cause: %s", dbfactory.DoltStatsDir, err.Error())
 		}
 
-		_, _, _, err = dbfactory.CreateDB(ctx, sourceDb.DbData().Ddb.Format(), urlPath, nil)
-		if err != nil {
-			return nil, err
-		}
-		dEnv = env.Load(context.Background(), hdp, fs, prov.DbFactoryUrl(), "test")
+		dEnv = env.Load(context.Background(), hdp, statsFs, urlPath, "test")
 		sess := dsess.DSessFromSess(ctx.Session)
 		err = dEnv.InitRepo(ctx, types.Format_Default, sess.Username(), sess.Email(), prov.DefaultBranch())
 		if err != nil {
@@ -92,10 +82,10 @@ func (sf NomsStatsFactory) Init(ctx *sql.Context, sourceDb dsess.SqlDatabase, pr
 	} else if !isDir {
 		return nil, fmt.Errorf("file exists where the dolt stats directory should be")
 	} else {
-		dEnv = env.LoadWithoutDB(ctx, hdp, fs, "")
+		dEnv = env.LoadWithoutDB(ctx, hdp, statsFs, "")
 	}
 
-	ddb, err := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, urlPath, fs, params)
+	ddb, err := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, urlPath, statsFs, params)
 	if err != nil {
 		return nil, err
 	}

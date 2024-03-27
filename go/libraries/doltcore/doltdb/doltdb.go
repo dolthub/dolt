@@ -119,25 +119,6 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 			params = make(map[string]any)
 		}
 		params[dbfactory.ChunkJournalParam] = struct{}{}
-	} else if urlStr == LocalDirStatsDB {
-		exists, isDir := fs.Exists(dbfactory.DoltStatsDir)
-		if !exists {
-			return nil, errors.New("missing dolt stats directory")
-		} else if !isDir {
-			return nil, errors.New("file exists where the dolt data directory should be")
-		}
-
-		absPath, err := fs.Abs(dbfactory.DoltStatsDir)
-		if err != nil {
-			return nil, err
-		}
-
-		urlStr = earl.FileUrlFromPath(filepath.ToSlash(absPath), os.PathSeparator)
-
-		if params == nil {
-			params = make(map[string]any)
-		}
-		params[dbfactory.ChunkJournalParam] = struct{}{}
 	}
 
 	db, vrw, ns, err := dbfactory.CreateDB(ctx, nbf, urlStr, params)
