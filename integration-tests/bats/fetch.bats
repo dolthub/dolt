@@ -2,7 +2,9 @@
 load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
-    setup_common
+    # See pull.bats. Can't use common remote server setup since we have multiple databases.
+    setup_no_dolt_init
+
     TESTDIRS=$(pwd)/testdirs
     mkdir -p $TESTDIRS/{rem1,repo1}
 
@@ -38,6 +40,9 @@ teardown() {
 
 @test "fetch: basic fetch" {
     cd repo2
+
+    setup_remote_server
+
     dolt fetch
 
     run dolt diff main origin/main
@@ -52,6 +57,9 @@ teardown() {
 
 @test "fetch: fetch origin" {
     cd repo2
+
+    setup_remote_server
+
     dolt fetch origin
 
     run dolt diff main origin/main
@@ -74,6 +82,9 @@ teardown() {
     cd ..
 
     cd repo2
+
+    setup_remote_server
+
     dolt fetch origin main
 
     run dolt diff main origin/main
@@ -99,6 +110,9 @@ teardown() {
     dolt push test-remote main
 
     cd ../repo2
+
+    setup_remote_server
+
     dolt fetch test-remote
 
    run dolt diff main test-remote/main
@@ -120,6 +134,9 @@ teardown() {
     dolt push test-remote main
 
     cd ../repo2
+
+    setup_remote_server
+
     dolt fetch test-remote refs/heads/main:refs/remotes/test-remote/main
 
     run dolt diff main test-remote/main
@@ -142,6 +159,9 @@ teardown() {
     dolt push origin feature
 
     cd ../repo2
+
+    setup_remote_server
+
     dolt fetch origin feature
 
     run dolt diff main origin/feature
@@ -161,6 +181,9 @@ teardown() {
     dolt push origin v1
 
     cd ../repo2
+
+    setup_remote_server
+
     dolt fetch origin main
 
     run dolt diff main v1
@@ -180,6 +203,9 @@ teardown() {
     dolt push origin v1
 
     cd ../repo2
+
+    setup_remote_server
+
     dolt fetch origin refs/tags/v1:refs/tags/v1
 
     run dolt diff main origin/v1
@@ -194,6 +220,9 @@ teardown() {
 
 @test "fetch: fetch rename ref" {
     cd repo2
+
+    setup_remote_server
+
     dolt fetch test-remote refs/heads/main:refs/remotes/test-remote/other
 
     run dolt diff main test-remote/other
@@ -209,6 +238,8 @@ teardown() {
 @test "fetch: fetch override local branch" {
     skip "todo more flexible refspec support"
     cd repo2
+    setup_remote_server
+
     dolt fetch origin main:refs/heads/main
 
     dolt diff main origin/main
@@ -230,6 +261,8 @@ teardown() {
     dolt push --force origin main
     cd ../repo1
 
+    setup_remote_server
+
     run dolt fetch origin main
     [ "$status" -eq 0 ]
 
@@ -244,6 +277,10 @@ teardown() {
 }
 
 @test "fetch: fetch --prune deletes remote refs not on remote" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+       skip "https://github.com/dolthub/dolt/issues/7657"
+    fi
+
     mkdir firstRepo
     mkdir secondRepo
 
@@ -304,6 +341,9 @@ teardown() {
 @test "fetch: fetch unknown remote fails" {
     cd repo2
     dolt remote remove origin
+
+    setup_remote_server
+
     run dolt fetch unknown
     [ "$status" -eq 1 ]
     [[ "$output" =~ "unknown remote" ]] || false
@@ -312,6 +352,9 @@ teardown() {
 @test "fetch: fetch unknown remote with fetchspec fails" {
     cd repo2
     dolt remote remove origin
+
+    setup_remote_server
+
     run dolt fetch unknown main
     [ "$status" -eq 1 ]
     [[ "$output" =~ "unknown remote" ]] || false
@@ -319,6 +362,9 @@ teardown() {
 
 @test "fetch: fetch unknown ref fails" {
     cd repo2
+
+    setup_remote_server
+
     run dolt fetch origin unknown
     [ "$status" -eq 1 ]
     [[ "$output" =~ "invalid ref spec: 'unknown'" ]] || false
@@ -327,6 +373,9 @@ teardown() {
 @test "fetch: fetch empty remote fails" {
     cd repo2
     dolt remote remove origin
+
+    setup_remote_server
+
     run dolt fetch
     [ "$status" -eq 1 ]
     [[ "$output" =~ "unknown remote" ]] || false
@@ -334,6 +383,9 @@ teardown() {
 
 @test "fetch: fetch empty ref fails" {
     cd repo2
+
+    setup_remote_server
+
     run dolt fetch origin ""
     [ "$status" -eq 1 ]
     [[ "$output" =~ "invalid fetch spec: ''" ]] || false
@@ -354,6 +406,9 @@ teardown() {
 
 @test "fetch: output" {
     cd repo2
+
+    setup_remote_server
+
     run dolt fetch
     [ "$status" -eq 0 ]
     # fetch should print some kind of status message
@@ -362,6 +417,9 @@ teardown() {
 
 @test "fetch: --silent suppresses progress message" {
     cd repo2
+
+    setup_remote_server
+
     run dolt fetch --silent
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "Fetching..." ]] || false
