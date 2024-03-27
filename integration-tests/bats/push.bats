@@ -2,7 +2,8 @@
 load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
-    setup_common
+    # See pull.bats. Can't use common remote server setup since we have multiple databases.
+    setup_no_dolt_init
 
     TESTDIRS=$(pwd)/testdirs
     mkdir -p $TESTDIRS/{rem1,repo1}
@@ -37,6 +38,8 @@ teardown() {
 
 @test "push: push origin" {
     cd repo1
+    setup_remote_server
+
     dolt push origin main
 
     cd ../repo2
@@ -50,6 +53,7 @@ teardown() {
 
 @test "push: push custom remote" {
     cd repo1
+    setup_remote_server
     dolt push test-remote main
 
     cd ../repo2
@@ -63,6 +67,8 @@ teardown() {
 
 @test "push: push without repository defined throws error" {
     cd repo1
+    setup_remote_server
+
     run dolt push main    # should push to origin
     [ "$status" -eq 1 ]
     [[ "$output" =~ "fatal: remote 'main' not found." ]] || false
@@ -99,6 +105,8 @@ teardown() {
 @test "push: push feature branch" {
     cd repo1
     dolt checkout -b feature
+
+    setup_remote_server
     dolt push origin feature
 
     cd ../repo2
@@ -114,6 +122,8 @@ teardown() {
 @test "push: can set upstream branch with different name" {
     cd repo1
     dolt checkout -b other
+
+    setup_remote_server
     dolt push -u origin other:remote-other
 
     run dolt branch -r
@@ -124,6 +134,8 @@ teardown() {
 @test "push: push aborts if nothing specified, upstream has different name" {
     cd repo1
     dolt checkout -b other
+
+    setup_remote_server
     dolt push -u origin other:remote-other
 
     run dolt push
@@ -134,6 +146,8 @@ teardown() {
 @test "push: push --set-upstream persists" {
     cd repo1
     dolt checkout -b other
+
+    setup_remote_server
     run dolt push
     [ "$status" -eq 1 ]
     [[ "$output" =~ "The current branch other has no upstream branch." ]] || false
@@ -147,8 +161,13 @@ teardown() {
 }
 
 @test "push: push without --set-upstream persists when push.autoSetupRemote is set to true" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+       skip "local config change required for test"
+    fi
+
     cd repo1
     dolt checkout -b other
+
     run dolt push
     [ "$status" -eq 1 ]
     [[ "$output" =~ "The current branch other has no upstream branch." ]] || false
@@ -163,6 +182,10 @@ teardown() {
 }
 
 @test "push: push without --set-upstream persists when push.autoSetupRemote is set to all capital TRUE" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+       skip "local config change required for test"
+    fi
+
     cd repo1
     dolt checkout -b other
     run dolt push
@@ -186,6 +209,9 @@ teardown() {
     dolt push origin main
 
     cd ../repo1
+
+    setup_remote_server
+
     run dolt push origin main
     [ "$status" -eq 1 ]
     [[ "$output" =~ "hint: Updates were rejected because the tip of your current branch is behind" ]] || false
@@ -195,6 +221,9 @@ teardown() {
 
 @test "push: push to unknown remote" {
     cd repo1
+
+    setup_remote_server
+
     run dolt push unknown main
     [ "$status" -eq 1 ]
     [[ "$output" =~ "fatal: remote 'unknown' not found" ]] || false
@@ -202,6 +231,9 @@ teardown() {
 
 @test "push: push unknown branch" {
     cd repo1
+
+    setup_remote_server
+
     run dolt push origin unknown
     [ "$status" -eq 1 ]
     [[ "$output" =~ "refspec not found: 'unknown'" ]] || false
@@ -209,6 +241,9 @@ teardown() {
 
 @test "push: not specifying a branch throws an error" {
     cd repo1
+
+    setup_remote_server
+
     run dolt push -u origin
     [ "$status" -eq 1 ]
     [[ "$output" =~ "fatal: The current branch main has no upstream branch." ]] || false
@@ -216,6 +251,9 @@ teardown() {
 
 @test "push: pushing empty branch does not panic" {
     cd repo1
+
+    setup_remote_server
+
     run dolt push origin ''
     [ "$status" -eq 1 ]
     [[ "$output" =~ "invalid ref spec: ''" ]] || false
@@ -223,6 +261,9 @@ teardown() {
 
 @test "push: --silent suppresses progress message" {
     cd repo1
+
+    setup_remote_server
+
     run dolt push origin main --silent
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "Uploading..." ]] || false
