@@ -31,7 +31,7 @@ In reverse order, since that's how we read it
 
 Footer:
    +----------------------+-------------------------+----------------------+--------------------+--------------------+
-   | (Uint64) IndexLength | (Uint32) ByteSpan Count | (Uint32) Chunk Count | (1) Format Version | (7) File Signature |
+   | (Uint32) IndexLength | (Uint32) ByteSpan Count | (Uint32) Chunk Count | (1) Format Version | (7) File Signature |
    +----------------------+-------------------------+----------------------+--------------------+--------------------+
    - Index Length: The length of the Index in bytes.
    - ByteSpan Count: (N) The number of ByteSpans in the Archive. (does not include the null ByteSpan)
