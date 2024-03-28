@@ -44,7 +44,6 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go/go.mod
-          check-latest: true
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2.2.0
         with:
@@ -83,9 +82,9 @@ jobs:
         run: |
           latest=$(git rev-parse HEAD)
           echo "commitish=$latest" >> $GITHUB_OUTPUT
-          GO_BUILD_VERSION=1.21 go/utils/publishrelease/buildpgobinaries.sh
+          GO_BUILD_VERSION=1.22 go/utils/publishrelease/buildpgobinaries.sh
         env:
-          GO_BUILD_VERSION: "1.21"
+          GO_BUILD_VERSION: "1.22"
           PROFILE: ${{ format('{0}/dolt-cpu-profile.pprof', github.workspace) }}
       - name: Create Release
         id: create_release

@@ -25,7 +25,6 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go/go.mod
-          check-latest: true
         id: go
       - uses: actions/setup-node@v3
         with:
