@@ -303,8 +303,8 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 			return hash.Hash{}, nil, errors.New("data corrupted")
 		}
 
-		err = store.Put(ctx, ch, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
-			return nil, nil
+		err = store.Put(ctx, ch, func(c chunks.Chunk) chunks.GetAddrsCurry {
+			return func(_ context.Context, _ hash.HashSet) error { return nil }
 		})
 
 		if err != nil {

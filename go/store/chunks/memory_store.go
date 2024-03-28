@@ -229,7 +229,9 @@ func (ms *MemoryStoreView) Put(ctx context.Context, c Chunk, getAddrs GetAddrsCb
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	addrs, err := getAddrs(ctx, c)
+
+	addrs := hash.NewHashSet()
+	err := getAddrs(c)(ctx, addrs)
 	if err != nil {
 		return err
 	}

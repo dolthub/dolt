@@ -55,7 +55,8 @@ const (
 
 var ErrNothingToCollect = errors.New("no changes since last gc")
 
-type GetAddrsCb func(ctx context.Context, c Chunk) (hash.HashSet, error)
+type GetAddrsCb func(c Chunk) GetAddrsCurry
+type GetAddrsCurry func(ctx context.Context, addrs hash.HashSet) error
 
 // ChunkStore is the core storage abstraction in noms. We can put data
 // anyplace we have a ChunkStore implementation for.
