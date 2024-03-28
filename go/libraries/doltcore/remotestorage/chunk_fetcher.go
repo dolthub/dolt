@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"math"
 	"sync"
 	"time"
 
@@ -48,10 +49,11 @@ type ChunkFetcher struct {
 	toGetCh chan hash.HashSet
 	resCh   chan nbs.CompressedChunk
 
-	doneCh chan struct{}
+	abortCh chan struct{}
+	stats   StatsRecorder
 }
 
-func NewChunkFetcher(ctx context.Context) *ChunkFetcher {
+func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
 	eg, ctx := errgroup.WithContext(ctx)
 	ret := &ChunkFetcher{
 		eg:    eg,
@@ -60,8 +62,28 @@ func NewChunkFetcher(ctx context.Context) *ChunkFetcher {
 		toGetCh: make(chan hash.HashSet),
 		resCh:   make(chan nbs.CompressedChunk),
 
-		doneCh: make(chan struct{}),
+		abortCh: make(chan struct{}),
+		stats:   StatsFactory(),
 	}
+
+	locsReqCh := make(chan *remotesapi.GetDownloadLocsRequest)
+	downloadLocCh := make(chan []*remotesapi.DownloadLoc)
+	locDoneCh := make(chan struct{})
+	fetchReqCh := make(chan fetchReq)
+
+	eg.Go(func() error {
+		return fetcherHashSetToGetDlLocsReqsThread(ctx, ret.toGetCh, ret.abortCh, locsReqCh, getLocsBatchSize, dcs.repoPath, dcs.getRepoId)
+	})
+        eg.Go(func() error {
+                return fetcherRPCDownloadLocsThread(ctx, locsReqCh, downloadLocCh, dcs.csClient)
+        })
+        eg.Go(func() error {
+		return fetcherDownloadRangesThread(ctx, downloadLocCh, fetchReqCh, locDoneCh)
+	})
+	eg.Go(func() error {
+		return fetcherDownloadURLThreads(ctx, fetchReqCh, locDoneCh, ret.resCh, dcs.csClient, ret.stats, dcs.httpFetcher, uint64(dcs.concurrency.LargeFetchSize), dcs.concurrency.ConcurrentSmallFetches, dcs.concurrency.ConcurrentLargeFetches)
+	})
+
 	return ret
 }
 
@@ -96,14 +118,15 @@ func (f *ChunkFetcher) Recv(ctx context.Context) (nbs.CompressedChunk, error) {
 }
 
 func (f *ChunkFetcher) Close() error {
-	close(f.doneCh)
+	defer StatsFlusher(f.stats)
+	close(f.abortCh)
 	return f.eg.Wait()
 }
 
 // Reads HashSets from reqCh and batches all the received addresses
 // into |GetDownloadLocsRequest| messages with up to |batchSize| chunk hashes
 // in them. It delivers the messages to be send on |resCh|.
-func fetcherHashSetToGetDlLocsReqsThread(ctx context.Context, reqCh chan hash.HashSet, resCh chan *remotesapi.GetDownloadLocsRequest, batchSize int, repoPath string, idFunc func() (*remotesapi.RepoId, string)) error {
+func fetcherHashSetToGetDlLocsReqsThread(ctx context.Context, reqCh chan hash.HashSet, abortCh chan struct{}, resCh chan *remotesapi.GetDownloadLocsRequest, batchSize int, repoPath string, idFunc func() (*remotesapi.RepoId, string)) error {
 	var addrs [][]byte
 	var outbound [][]byte
 	for {
@@ -145,6 +168,8 @@ func fetcherHashSetToGetDlLocsReqsThread(ctx context.Context, reqCh chan hash.Ha
 			outbound = nil
 		case <-ctx.Done():
 			return context.Cause(ctx)
+		case <-abortCh:
+			return errors.New("early shutdown before all chunks fetched")
 		}
 	}
 }
@@ -433,5 +458,135 @@ func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.Ge
 			return nil
 		}
 		curState = nextState
+	}
+}
+
+type fetchResp struct {
+	get     *GetRange
+	refresh func(ctx context.Context, err error, client remotesapi.ChunkStoreServiceClient) (string, error)
+}
+
+type fetchReq struct {
+	respCh chan fetchResp
+	minSz  uint64
+	maxSz  uint64
+}
+
+// Reads off |locCh| and assembles DownloadLocs into download ranges.
+func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.DownloadLoc, fetchReqCh chan fetchReq, doneCh chan struct{}) error {
+	locs := newDlLocations()
+	pending := make([]fetchReq, 0)
+	for {
+		numGaps := 0
+		sent := true
+		for sent {
+			sent = false
+			for j := range pending {
+				for path, gr := range locs.ranges {
+					split := gr.SplitAtGaps(chunkAggDistance)
+					numGaps += len(split)
+					var i int
+					for i = 0; i < len(split); i++ {
+						l := split[i].RangeLen()
+						if l >= pending[j].minSz && l < pending[j].maxSz {
+							refresh := locs.refreshes[path]
+							select {
+							case pending[j].respCh <- fetchResp{
+								get: split[i],
+								refresh: func(ctx context.Context, err error, client remotesapi.ChunkStoreServiceClient) (string, error) {
+									return refresh.GetURL(ctx, err, client)
+								},
+							}:
+							case <-ctx.Done():
+								return context.Cause(ctx)
+							}
+							pending[j].respCh = nil
+							sent = true
+							break
+						}
+					}
+					if i != len(split) {
+						newranges := make([]*remotesapi.RangeChunk, 0, len(gr.Ranges)-len(split[i].Ranges))
+						for j := 0; j < len(split); j++ {
+							if j == i {
+								continue
+							}
+							newranges = append(newranges, split[j].Ranges...)
+						}
+						gr.Ranges = newranges
+						break
+					}
+				}
+			}
+			newpending := make([]fetchReq, 0)
+			for i := range pending {
+				if pending[i].respCh != nil {
+					newpending = append(newpending, pending[i])
+				}
+			}
+			pending = newpending
+		}
+
+		select {
+		case req, ok := <-locCh:
+			if !ok {
+				close(doneCh)
+				return nil
+			}
+			for _, loc := range req {
+				locs.Add(loc)
+			}
+		case req := <-fetchReqCh:
+			pending = append(pending, req)
+		case <-ctx.Done():
+			return context.Cause(ctx)
+		}
+	}
+}
+
+func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, doneCh chan struct {}, chunkCh chan nbs.CompressedChunk, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, fetcher HTTPFetcher, largeFetchSz uint64, smallFetches, largeFetches int) error {
+	eg, ctx := errgroup.WithContext(ctx)
+	for i := 0; i < smallFetches; i++ {
+		eg.Go(func() error {
+			return fetcherDownloadURLThread(ctx, fetchReqCh, doneCh, chunkCh, 0, largeFetchSz, client, stats, fetcher)
+		})
+	}
+	for i := 0; i < largeFetches; i++ {
+		eg.Go(func() error {
+			return fetcherDownloadURLThread(ctx, fetchReqCh, doneCh, chunkCh, largeFetchSz, math.MaxUint64, client, stats, fetcher)
+		})
+	}
+	err := eg.Wait()
+	if err != nil {
+		return err
+	}
+	close(chunkCh)
+	return nil
+}
+
+func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, doneCh chan struct {}, chunkCh chan nbs.CompressedChunk, minSz, maxSz uint64, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, fetcher HTTPFetcher) error {
+	respCh := make(chan fetchResp)
+	for {
+		select {
+		case <-ctx.Done():
+			return context.Cause(ctx)
+		case <-doneCh:
+			return nil
+		case fetchReqCh <- fetchReq{ respCh: respCh, minSz: minSz, maxSz: maxSz}:
+			select {
+			case <-doneCh:
+				return nil
+			case <-ctx.Done():
+				return context.Cause(ctx)
+			case fetchResp := <-respCh:
+				f := fetchResp.get.GetDownloadFunc(ctx, stats, fetcher, chunkCh, func(ctx context.Context, lastError error, resourcePath string) (string, error) {
+					return fetchResp.refresh(ctx, lastError, client)
+				})
+				err := f()
+				if err != nil {
+					return err
+				}
+			}
+		}
 	}
 }

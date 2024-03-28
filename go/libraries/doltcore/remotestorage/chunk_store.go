@@ -285,6 +285,10 @@ type CacheStats interface {
 	CacheHits() uint32
 }
 
+func (dcs *DoltChunkStore) ChunkFetcher(ctx context.Context) nbs.ChunkFetcher {
+	return NewChunkFetcher(ctx, dcs)
+}
+
 // Get the Chunk for the value of the hash in the store. If the hash is absent from the store EmptyChunk is returned.
 func (dcs *DoltChunkStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
 	hashes := hash.HashSet{h: struct{}{}}
@@ -598,7 +602,7 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (d
 		}
 	})
 	eg.Go(func() error {
-		return fetcherHashSetToGetDlLocsReqsThread(ctx, hashesCh, reqsCh, getLocsBatchSize, dcs.repoPath, dcs.getRepoId)
+		return fetcherHashSetToGetDlLocsReqsThread(ctx, hashesCh, nil, reqsCh, getLocsBatchSize, dcs.repoPath, dcs.getRepoId)
 	})
 	eg.Go(func() error {
 		return fetcherRPCDownloadLocsThread(ctx, reqsCh, resCh, dcs.csClient)

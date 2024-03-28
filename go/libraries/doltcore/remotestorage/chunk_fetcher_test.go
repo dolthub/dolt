@@ -32,7 +32,7 @@ func TestFetcherHashSetToGetDlLocsReqsThread(t *testing.T) {
 
 		resCh := make(chan *remotesapi.GetDownloadLocsRequest)
 
-		err := fetcherHashSetToGetDlLocsReqsThread(context.Background(), reqCh, resCh, 32, "", testIdFunc)
+		err := fetcherHashSetToGetDlLocsReqsThread(context.Background(), reqCh, nil, resCh, 32, "", testIdFunc)
 		assert.NoError(t, err)
 		_, ok := <-resCh
 		assert.False(t, ok)
@@ -45,7 +45,7 @@ func TestFetcherHashSetToGetDlLocsReqsThread(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		err := fetcherHashSetToGetDlLocsReqsThread(ctx, reqCh, resCh, 32, "", testIdFunc)
+		err := fetcherHashSetToGetDlLocsReqsThread(ctx, reqCh, nil, resCh, 32, "", testIdFunc)
 		assert.Error(t, err)
 	})
 
@@ -55,7 +55,7 @@ func TestFetcherHashSetToGetDlLocsReqsThread(t *testing.T) {
 
 		eg, ctx := errgroup.WithContext(context.Background())
 		eg.Go(func() error {
-			return fetcherHashSetToGetDlLocsReqsThread(ctx, reqCh, resCh, 8, "", testIdFunc)
+			return fetcherHashSetToGetDlLocsReqsThread(ctx, reqCh, nil, resCh, 8, "", testIdFunc)
 		})
 
 		// First send a batch of 16 hashes.
