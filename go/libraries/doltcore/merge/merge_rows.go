@@ -34,9 +34,15 @@ import (
 type MergeOpts struct {
 	// IsCherryPick is set for cherry-pick operations.
 	IsCherryPick bool
-	// KeepSchemaConflicts if schema conflicts should be
-	// stored, otherwise we end the merge with an error.
+	// KeepSchemaConflicts is set when schema conflicts should be stored,
+	// otherwise the merge errors out when schema conflicts are detected.
 	KeepSchemaConflicts bool
+	// ReverifyAllConstraints is set to indicate that a merge should not rely on existing
+	// constraint violation artifacts and should instead ensure that all constraints are
+	// verified. When this option is not set, merge will use optimizations to short circuit
+	// some calculations that aren't needed for merge correctness, but are still needed to
+	// correctly verify all constraints.
+	ReverifyAllConstraints bool
 }
 
 type TableMerger struct {
@@ -167,34 +173,50 @@ func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string) (*Tab
 		ns:          rm.ns,
 	}
 
-	var ok bool
 	var err error
+	var leftSideTableExists, rightSideTableExists, ancTableExists bool
 
-	tm.leftTbl, ok, err = rm.left.GetTable(ctx, tblName)
+	tm.leftTbl, leftSideTableExists, err = rm.left.GetTable(ctx, tblName)
 	if err != nil {
 		return nil, err
 	}
-	if ok {
+	if leftSideTableExists {
 		if tm.leftSch, err = tm.leftTbl.GetSchema(ctx); err != nil {
 			return nil, err
 		}
 	}
 
-	tm.rightTbl, ok, err = rm.right.GetTable(ctx, tblName)
+	tm.rightTbl, rightSideTableExists, err = rm.right.GetTable(ctx, tblName)
 	if err != nil {
 		return nil, err
 	}
-	if ok {
+	if rightSideTableExists {
 		if tm.rightSch, err = tm.rightTbl.GetSchema(ctx); err != nil {
 			return nil, err
 		}
 	}
 
-	tm.ancTbl, ok, err = rm.anc.GetTable(ctx, tblName)
+	if !leftSideTableExists && rightSideTableExists {
+		// if left side doesn't have the table... stub it out with an empty table from the right side...
+		tm.leftSch = tm.rightSch
+		tm.leftTbl, err = doltdb.NewEmptyTable(ctx, rm.vrw, rm.ns, tm.leftSch)
+		if err != nil {
+			return nil, err
+		}
+	} else if !rightSideTableExists && leftSideTableExists {
+		// if left side doesn't have the table... stub it out with an empty table from the right side...
+		tm.rightSch = tm.leftSch
+		tm.rightTbl, err = doltdb.NewEmptyTable(ctx, rm.vrw, rm.ns, tm.rightSch)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	tm.ancTbl, ancTableExists, err = rm.anc.GetTable(ctx, tblName)
 	if err != nil {
 		return nil, err
 	}
-	if ok {
+	if ancTableExists {
 		if tm.ancSch, err = tm.ancTbl.GetSchema(ctx); err != nil {
 			return nil, err
 		}
@@ -211,6 +233,10 @@ func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string) (*Tab
 }
 
 func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm *TableMerger, opts MergeOpts) (*doltdb.Table, *MergeStats, error) {
+	if opts.ReverifyAllConstraints {
+		return nil, nil, nil
+	}
+
 	rootHash, mergeHash, ancHash, err := tm.tableHashes()
 	if err != nil {
 		return nil, nil, err
