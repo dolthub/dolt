@@ -16,9 +16,11 @@ package nbs
 
 import (
 	"encoding/binary"
+	"hash/crc32"
 	"io"
 
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/gozstd"
 )
 
 type archiveIndex struct {
@@ -158,22 +160,108 @@ func loadFooter(reader io.ReaderAt, fileSize uint64) (indexSize, byteSpanCount, 
 	return
 }
 
-func (ai archiveIndex) has(hash hash.Hash) bool {
+func (ai archiveIndex) search(hash hash.Hash) (bool, int) {
 	prefix := hash.Prefix()
 	matchingIndexes := findMatchingPrefixes(ai.prefixes, prefix)
 	if len(matchingIndexes) == 0 {
-		return false
+		return false, 0
 	}
 
 	targetSfx := hash.Suffix()
 
 	for _, idx := range matchingIndexes {
 		if ai.suffixes[idx] == suffix(targetSfx) {
-			return true
+			return true, idx
 		}
 	}
 
-	return false
+	return false, 0
+}
+
+func (ai archiveIndex) has(hash hash.Hash) bool {
+	found, _ := ai.search(hash)
+	return found
+}
+
+// get returns the decompressed data for the given hash. If the hash is not found, nil is returned (not an error)
+func (ai archiveIndex) get(hash hash.Hash) ([]byte, error) {
+	dict, data, err := ai.getRaw(hash)
+	if err != nil || data == nil {
+		return nil, err
+	}
+
+	var result []byte
+	if dict == nil {
+		result, err = gozstd.Decompress(nil, data)
+	} else {
+		dDict, err := gozstd.NewDDict(dict)
+		if err != nil {
+			return nil, err
+		}
+		result, err = gozstd.DecompressDict(nil, data, dDict)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// getRaw returns the raw data for the given hash. If the hash is not found, nil is returned for both slices. Also,
+// no error is returned in this case. Errors will only be returned if there is an io error.
+//
+// The data returned is still compressed, regardless of the dictionary being present or not.
+func (ai archiveIndex) getRaw(hash hash.Hash) (dict, data []byte, err error) {
+	found, idx := ai.search(hash)
+	if !found {
+		return nil, nil, nil
+	}
+
+	chunkRef := ai.chunkRefs[idx]
+	if chunkRef.dict != 0 {
+		byteSpan := ai.byteSpans[chunkRef.dict]
+		dict = make([]byte, byteSpan.length)
+		read, err := ai.reader.ReadAt(dict, int64(byteSpan.offset))
+		if err != nil {
+			return nil, nil, err
+		}
+		if uint64(read) != byteSpan.length {
+			return nil, nil, io.ErrUnexpectedEOF
+		}
+		dict, err = verifyAndStripCRC(dict)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	byteSpan := ai.byteSpans[chunkRef.data]
+	data = make([]byte, byteSpan.length)
+	read, err := ai.reader.ReadAt(data, int64(byteSpan.offset))
+	if err != nil {
+		return nil, nil, err
+	}
+	if uint64(read) != byteSpan.length {
+		return nil, nil, io.ErrUnexpectedEOF
+	}
+	data, err = verifyAndStripCRC(data)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return
+}
+
+func verifyAndStripCRC(data []byte) ([]byte, error) {
+	if len(data) < crc32.Size {
+		return nil, io.ErrUnexpectedEOF
+	}
+
+	crcVal := binary.BigEndian.Uint32(data[len(data)-crc32.Size:])
+	crcCalc := crc(data[:len(data)-crc32.Size])
+	if crcVal != crcCalc {
+		return nil, ErrCRCMismatch
+	}
+
+	return data[:len(data)-crc32.Size], nil
 }
 
 // findMatchingPrefixes returns all indexes of the input slice that have a prefix that matches the target prefix.
@@ -199,6 +287,7 @@ func findMatchingPrefixes(slice []uint64, target uint64) []int {
 	return matchingIndexes
 }
 
+// binarySearch returns the index of the target in the input slice. If the target is not found, -1 is returned.
 func binarySearch(prefixes []uint64, target uint64) int {
 	low := 0
 	high := len(prefixes) - 1
