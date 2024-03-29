@@ -137,6 +137,7 @@ var ErrInvalidChunkRange = errors.New("invalid chunk range")
 var ErrInvalidDictionaryRange = errors.New("invalid dictionary range")
 var ErrInvalidFileSignature = errors.New("invalid file signature")
 var ErrInvalidFormatVersion = errors.New("invalid format version")
+var ErrCRCMismatch = errors.New("CRC mismatch")
 
 type stagedByteSpan struct {
 	offset uint64
