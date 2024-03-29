@@ -168,12 +168,15 @@ func DoltStatsFromSql(stat sql.Statistic) (*DoltStats, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &DoltStats{
+	ret := &DoltStats{
 		mu:        &sync.Mutex{},
 		Hist:      hist,
 		Statistic: stats.NewStatistic(stat.RowCount(), stat.DistinctCount(), stat.NullCount(), stat.AvgSize(), stat.CreatedAt(), stat.Qualifier(), stat.Columns(), stat.Types(), nil, stat.IndexClass(), stat.LowerBound()),
 		Active:    make(map[hash.Hash]int),
-	}, nil
+	}
+	ret.Statistic.Fds = stat.FuncDeps()
+	ret.Statistic.Colset = stat.ColSet()
+	return ret, nil
 }
 
 func (s *DoltStats) UpdateActive() {
