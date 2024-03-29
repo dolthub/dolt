@@ -16,10 +16,11 @@ package statspro
 
 import (
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/stats"
 	"sync"
 	"time"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/stats"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
