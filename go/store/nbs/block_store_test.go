@@ -116,8 +116,10 @@ func (suite *BlockStoreSuite) TestChunkStoreNotDir() {
 	suite.Error(err)
 }
 
-func noopGetAddrs(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
-	return nil, nil
+func noopGetAddrs(c chunks.Chunk) chunks.GetAddrsCurry {
+	return func(ctx context.Context, addrs hash.HashSet) error {
+		return nil
+	}
 }
 
 func (suite *BlockStoreSuite) TestChunkStorePut() {
@@ -159,8 +161,11 @@ func (suite *BlockStoreSuite) TestChunkStorePut() {
 
 	// Put chunk with dangling ref should error on Commit
 	nc := chunks.NewChunk([]byte("bcd"))
-	err = suite.store.Put(context.Background(), nc, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
-		return hash.NewHashSet(hash.Of([]byte("lorem ipsum"))), nil
+	err = suite.store.Put(context.Background(), nc, func(c chunks.Chunk) chunks.GetAddrsCurry {
+		return func(ctx context.Context, addrs hash.HashSet) error {
+			addrs.Insert(hash.Of([]byte("lorem ipsum")))
+			return nil
+		}
 	})
 	suite.NoError(err)
 	root, err := suite.store.Root(context.Background())

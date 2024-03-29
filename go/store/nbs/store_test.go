@@ -204,7 +204,13 @@ func TestNBSPruneTableFiles(t *testing.T) {
 
 	// add a chunk and flush to trigger a conjoin
 	c := chunks.NewChunk([]byte("it's a boy!"))
-	ok, err := st.addChunk(ctx, c, hash.NewHashSet(), st.hasMany)
+	addrs := hash.NewHashSet()
+	ok, err := st.addChunk(ctx, c, func(c chunks.Chunk) chunks.GetAddrsCurry {
+		return func(ctx context.Context, _ hash.HashSet) error {
+			addrs.Insert(c.Hash())
+			return nil
+		}
+	}, st.hasMany)
 	require.NoError(t, err)
 	require.True(t, ok)
 	ok, err = st.Commit(ctx, st.upstream.root, st.upstream.root)
