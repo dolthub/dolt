@@ -102,7 +102,7 @@ func (f *FileValueStore) WriteValue(ctx context.Context, v types.Value) (types.R
 			return types.Ref{}, err
 		}
 
-		err = f.Put(ctx, c, func(c chunks.Chunk) chunks.GetAddrsCurry {
+		err = f.Put(ctx, c, func(c chunks.Chunk) chunks.GetAddrsCb {
 			return func(ctx context.Context, addrs hash.HashSet) error {
 				return types.AddrsFromNomsValue(c, f.nbf, addrs)
 			}
@@ -186,7 +186,7 @@ func (f *FileValueStore) errorIfDangling(ctx context.Context, addrs hash.HashSet
 }
 
 // Put puts a chunk into the store
-func (f *FileValueStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
+func (f *FileValueStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCurry) error {
 	addrs := hash.NewHashSet()
 	err := getAddrs(c)(ctx, addrs)
 	if err != nil {

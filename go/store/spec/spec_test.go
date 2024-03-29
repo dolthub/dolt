@@ -475,7 +475,7 @@ func (t *testProtocol) NewDatabase(sp Spec) (datas.Database, error) {
 	return datas.NewDatabase(cs), nil
 }
 
-func noopGetAddrs(c chunks.Chunk) chunks.GetAddrsCurry {
+func noopGetAddrs(c chunks.Chunk) chunks.GetAddrsCb {
 	return func(ctx context.Context, addrs hash.HashSet) error {
 		return nil
 	}

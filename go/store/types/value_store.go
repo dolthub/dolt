@@ -111,7 +111,7 @@ func AddrsFromNomsValue(c chunks.Chunk, nbf *NomsBinFormat, addrs hash.HashSet) 
 	return
 }
 
-func (lvs *ValueStore) getAddrs(c chunks.Chunk) chunks.GetAddrsCurry {
+func (lvs *ValueStore) getAddrs(c chunks.Chunk) chunks.GetAddrsCb {
 	return func(ctx context.Context, addrs hash.HashSet) error {
 		return AddrsFromNomsValue(c, lvs.nbf, addrs)
 	}

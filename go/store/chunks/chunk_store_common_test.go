@@ -36,7 +36,7 @@ type ChunkStoreTestSuite struct {
 	Factory *memoryStoreFactory
 }
 
-func noopGetAddrs(c Chunk) GetAddrsCurry {
+func noopGetAddrs(c Chunk) GetAddrsCb {
 	return func(ctx context.Context, addrs hash.HashSet) error {
 		return nil
 	}
@@ -57,7 +57,7 @@ func (suite *ChunkStoreTestSuite) TestChunkStorePut() {
 	// Put chunk with dangling ref should error on Commit
 	data := []byte("bcd")
 	nc := NewChunk(data)
-	err = store.Put(ctx, nc, func(c Chunk) GetAddrsCurry {
+	err = store.Put(ctx, nc, func(c Chunk) GetAddrsCb {
 		return func(ctx context.Context, addrs hash.HashSet) error {
 			addrs.Insert(hash.Of([]byte("nonsense")))
 			return nil

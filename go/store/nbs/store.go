@@ -717,11 +717,11 @@ func (nbs *NomsBlockStore) waitForGC(ctx context.Context) error {
 	return ctx.Err()
 }
 
-func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
+func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCurry) error {
 	return nbs.putChunk(ctx, c, getAddrs, nbs.hasMany)
 }
 
-func (nbs *NomsBlockStore) putChunk(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb, checker refCheck) error {
+func (nbs *NomsBlockStore) putChunk(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCurry, checker refCheck) error {
 	t1 := time.Now()
 
 	success, err := nbs.addChunk(ctx, c, getAddrs, checker)
@@ -767,7 +767,7 @@ func (nbs *NomsBlockStore) addPendingRefsToHasCache() {
 	}
 }
 
-func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, getAddrs chunks.GetAddrsCb, checker refCheck) (bool, error) {
+func (nbs *NomsBlockStore) addChunk(ctx context.Context, ch chunks.Chunk, getAddrs chunks.GetAddrsCurry, checker refCheck) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}

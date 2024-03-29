@@ -808,7 +808,7 @@ func (dcs *DoltChunkStore) errorIfDangling(ctx context.Context, addrs hash.HashS
 // subsequent Get and Has calls, but must not be persistent until a call
 // to Flush(). Put may be called concurrently with other calls to Put(),
 // Get(), GetMany(), Has() and HasMany().
-func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
+func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCurry) error {
 	addrs := hash.NewHashSet()
 	err := getAddrs(c)(ctx, addrs)
 	if err != nil {
