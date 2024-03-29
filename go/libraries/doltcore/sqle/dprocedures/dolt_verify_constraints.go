@@ -87,11 +87,6 @@ func doDoltConstraintsVerify(ctx *sql.Context, args []string) (int, error) {
 		return 1, err
 	}
 
-	if tablesWithViolations.Size() == 0 {
-		// no violations were found
-		return 0, nil
-	}
-
 	if !outputOnly {
 		err = dSess.SetRoot(ctx, dbName, newRoot)
 		if err != nil {
@@ -99,8 +94,15 @@ func doDoltConstraintsVerify(ctx *sql.Context, args []string) (int, error) {
 		}
 	}
 
+	if tablesWithViolations.Size() == 0 {
+		// no violations were found
+		return 0, nil
+	}
+
 	// TODO: We only return 1 or 0 to indicate if there were any constraint violations or not. This isn't
-	//       super useful to customers, and not how the CLI command works.
+	//       super useful to customers, and not how the CLI command works. It would be better to return
+	//       results that indicate the total number of violations found for the specified tables, and
+	//       potentially also a human readable message.
 	return 1, nil
 }
 
