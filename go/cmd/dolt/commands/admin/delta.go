@@ -52,7 +52,6 @@ func (cmd DeltaCmd) Hidden() bool {
 }
 
 func (cmd DeltaCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-
 	db := doltdb.HackDatasDatabaseFromDoltDB(dEnv.DoltDB)
 	cs := datas.ChunkStoreFromDatabase(db)
 	if _, ok := cs.(*nbs.GenerationalNBS); !ok {
