@@ -100,7 +100,9 @@ type NomsBlockStore struct {
 
 	cond         *sync.Cond
 	gcInProgress bool
-	keeperFunc   func(hash.Hash) bool
+	// keeperFunc is set when |gcInProgress| and appends to the GC sweep queue
+	// or blocks on GC finalize
+	keeperFunc func(hash.Hash) bool
 
 	mtSize   uint64
 	putCount uint64

@@ -162,7 +162,7 @@ type ChunkStoreGarbageCollector interface {
 	BeginGC(addChunk func(hash.Hash) bool) error
 
 	// EndGC indicates that the GC is over. The previously provided
-	// addChunk function must not be called after this function function.
+	// addChunk function must not be called after this function.
 	EndGC()
 
 	// MarkAndSweepChunks is expected to read chunk addresses off of

@@ -48,7 +48,7 @@ func deleteIndexRows(ctx context.Context, statsMap *prolly.MutableMap, dStats *s
 
 	keyBuilder := val.NewTupleBuilder(kd)
 
-	qual := dStats.Qual
+	qual := dStats.Qualifier()
 	pool := statsMap.NodeStore().Pool()
 
 	// delete previous entries for this index -> (db, table, index, pos)
@@ -92,22 +92,22 @@ func putIndexRows(ctx context.Context, statsMap *prolly.MutableMap, dStats *stat
 	keyBuilder := val.NewTupleBuilder(kd)
 	valueBuilder := val.NewTupleBuilder(vd)
 
-	qual := dStats.Qual
+	qual := dStats.Qualifier()
 	pool := statsMap.NodeStore().Pool()
 
 	// now add new buckets
 	typesB := strings.Builder{}
 	sep := ""
-	for _, t := range dStats.Types {
+	for _, t := range dStats.Statistic.Typs {
 		typesB.WriteString(sep + t.String())
 		sep = ","
 	}
 	typesStr := typesB.String()
 
 	var pos int64
-	for _, h := range dStats.Histogram {
+	for _, h := range dStats.Hist {
 		var upperBoundElems []string
-		for _, v := range h.UpperBound {
+		for _, v := range h.UpperBound() {
 			upperBoundElems = append(upperBoundElems, fmt.Sprintf("%v", v))
 		}
 
@@ -117,23 +117,23 @@ func putIndexRows(ctx context.Context, statsMap *prolly.MutableMap, dStats *stat
 		keyBuilder.PutInt64(3, pos)
 
 		valueBuilder.PutInt64(0, schema.StatsVersion)
-		valueBuilder.PutString(1, h.Chunk.String())
-		valueBuilder.PutInt64(2, int64(h.RowCount))
-		valueBuilder.PutInt64(3, int64(h.DistinctCount))
-		valueBuilder.PutInt64(4, int64(h.NullCount))
-		valueBuilder.PutString(5, strings.Join(dStats.Columns, ","))
+		valueBuilder.PutString(1, statspro.DoltBucketChunk(h).String())
+		valueBuilder.PutInt64(2, int64(h.RowCount()))
+		valueBuilder.PutInt64(3, int64(h.DistinctCount()))
+		valueBuilder.PutInt64(4, int64(h.NullCount()))
+		valueBuilder.PutString(5, strings.Join(dStats.Columns(), ","))
 		valueBuilder.PutString(6, typesStr)
-		valueBuilder.PutString(7, stats.StringifyKey(h.UpperBound, dStats.Types))
-		valueBuilder.PutInt64(8, int64(h.BoundCount))
-		valueBuilder.PutDatetime(9, h.CreatedAt)
-		for i, r := range h.Mcvs {
-			valueBuilder.PutString(10+i, stats.StringifyKey(r, dStats.Types))
+		valueBuilder.PutString(7, stats.StringifyKey(h.UpperBound(), dStats.Statistic.Typs))
+		valueBuilder.PutInt64(8, int64(h.BoundCount()))
+		valueBuilder.PutDatetime(9, statspro.DoltBucketCreated(h))
+		for i, r := range h.Mcvs() {
+			valueBuilder.PutString(10+i, stats.StringifyKey(r, dStats.Statistic.Typs))
 		}
 		var mcvCntsRow sql.Row
-		for _, v := range h.McvCount {
+		for _, v := range h.McvCounts() {
 			mcvCntsRow = append(mcvCntsRow, int(v))
 		}
-		valueBuilder.PutString(14, stats.StringifyKey(mcvCntsRow, dStats.Types))
+		valueBuilder.PutString(14, stats.StringifyKey(mcvCntsRow, dStats.Statistic.Typs))
 
 		key := keyBuilder.Build(pool)
 		value := valueBuilder.Build(pool)

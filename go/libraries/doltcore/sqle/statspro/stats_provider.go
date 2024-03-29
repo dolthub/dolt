@@ -38,8 +38,8 @@ type indexMeta struct {
 	newNodes []tree.Node
 	// updateOrdinals are [start, stop] tuples for each update chunk
 	updateOrdinals []updateOrdinal
-	keepChunks     []DoltBucket
-	dropChunks     []DoltBucket
+	keepChunks     []sql.HistogramBucket
+	dropChunks     []sql.HistogramBucket
 	allAddrs       []hash.Hash
 }
 
@@ -160,7 +160,7 @@ func (p *Provider) GetTableDoltStats(ctx *sql.Context, branch, db, table string)
 	for _, qual := range statDb.ListStatQuals(branch) {
 		if strings.EqualFold(db, qual.Database) && strings.EqualFold(table, qual.Tab) {
 			stat, _ := statDb.GetStat(branch, qual)
-			ret = append(ret, stat.toSql())
+			ret = append(ret, stat)
 		}
 	}
 
@@ -224,7 +224,7 @@ func (p *Provider) GetStats(ctx *sql.Context, qual sql.StatQualifier, _ []string
 	if !ok {
 		return nil, false
 	}
-	return stat.toSql(), true
+	return stat, true
 }
 
 func (p *Provider) DropDbStats(ctx *sql.Context, db string, flush bool) error {
@@ -299,7 +299,7 @@ func (p *Provider) RowCount(ctx *sql.Context, db, table string) (uint64, error) 
 		return 0, nil
 	}
 
-	return priStats.RowCount, nil
+	return priStats.RowCount(), nil
 }
 
 func (p *Provider) DataLength(ctx *sql.Context, db, table string) (uint64, error) {
@@ -322,5 +322,5 @@ func (p *Provider) DataLength(ctx *sql.Context, db, table string) (uint64, error
 		return 0, nil
 	}
 
-	return priStats.AvgSize, nil
+	return priStats.AvgSize(), nil
 }
