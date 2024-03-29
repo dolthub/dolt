@@ -18,6 +18,7 @@ import (
 	"container/heap"
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/stats"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -66,109 +67,109 @@ func TestBucketBuilder(t *testing.T) {
 			name:    "ints",
 			keys:    []sql.Row{{1}, {1}, {1}, {2}, {2}, {2}, {2}, {3}, {3}, {3}, {4}, {4}, {4}, {5}, {5}},
 			keyDesc: val.NewTupleDescriptor(val.Type{Enc: val.Int64Enc, Nullable: false}),
-			bucket: DoltBucket{
-				RowCount:      15,
-				DistinctCount: 5,
-				Mcvs:          []sql.Row{{int64(4)}, {int64(2)}, {int64(3)}},
-				McvCount:      []uint64{3, 4, 3},
-				UpperBound:    sql.Row{int64(5)},
-				BoundCount:    2,
-			},
+			bucket: DoltBucket{Bucket: &stats.Bucket{
+				RowCnt:      15,
+				DistinctCnt: 5,
+				McvVals:     []sql.Row{{int64(4)}, {int64(2)}, {int64(3)}},
+				McvsCnt:     []uint64{3, 4, 3},
+				BoundVal:    sql.Row{int64(5)},
+				BoundCnt:    2,
+			}},
 		},
 		{
 			// technically nulls should be at beginning
 			name:    "ints with middle nulls",
 			keys:    []sql.Row{{1}, {1}, {1}, {2}, {2}, {2}, {2}, {nil}, {nil}, {nil}, {3}, {4}, {4}, {4}, {5}, {5}},
 			keyDesc: val.NewTupleDescriptor(val.Type{Enc: val.Int64Enc, Nullable: true}),
-			bucket: DoltBucket{
-				RowCount:      16,
-				DistinctCount: 6,
-				NullCount:     3,
-				Mcvs:          []sql.Row{{int64(4)}, {int64(2)}, {nil}},
-				McvCount:      []uint64{3, 4, 3},
-				UpperBound:    sql.Row{int64(5)},
-				BoundCount:    2,
-			},
+			bucket: DoltBucket{Bucket: &stats.Bucket{
+				RowCnt:      16,
+				DistinctCnt: 6,
+				NullCnt:     3,
+				McvVals:     []sql.Row{{int64(4)}, {int64(2)}, {nil}},
+				McvsCnt:     []uint64{3, 4, 3},
+				BoundVal:    sql.Row{int64(5)},
+				BoundCnt:    2,
+			}},
 		},
 		{
 			name:    "ints with beginning nulls",
 			keys:    []sql.Row{{nil}, {nil}, {1}, {2}, {2}, {2}, {2}, {3}, {3}, {3}, {4}, {4}, {4}, {5}, {5}},
 			keyDesc: val.NewTupleDescriptor(val.Type{Enc: val.Int64Enc, Nullable: true}),
-			bucket: DoltBucket{
-				RowCount:      15,
-				DistinctCount: 6,
-				NullCount:     2,
-				Mcvs:          []sql.Row{{int64(3)}, {int64(4)}, {int64(2)}},
-				McvCount:      []uint64{3, 3, 4},
-				UpperBound:    sql.Row{int64(5)},
-				BoundCount:    2,
-			},
+			bucket: DoltBucket{Bucket: &stats.Bucket{
+				RowCnt:      15,
+				DistinctCnt: 6,
+				NullCnt:     2,
+				McvVals:     []sql.Row{{int64(3)}, {int64(4)}, {int64(2)}},
+				McvsCnt:     []uint64{3, 3, 4},
+				BoundVal:    sql.Row{int64(5)},
+				BoundCnt:    2,
+			}},
 		},
 		{
 			name:    "more ints",
 			keys:    []sql.Row{{1}, {1}, {1}, {2}, {2}, {2}, {2}, {3}, {3}, {3}, {4}, {4}, {4}, {5}, {5}, {5}, {5}, {6}, {6}, {6}, {6}, {7}},
 			keyDesc: val.NewTupleDescriptor(val.Type{Enc: val.Int64Enc, Nullable: false}),
-			bucket: DoltBucket{
-				RowCount:      22,
-				DistinctCount: 7,
-				BoundCount:    1,
-				Mcvs:          []sql.Row{{int64(2)}, {int64(6)}, {int64(5)}},
-				McvCount:      []uint64{4, 4, 4},
-				UpperBound:    sql.Row{int64(7)},
-			},
+			bucket: DoltBucket{Bucket: &stats.Bucket{
+				RowCnt:      22,
+				DistinctCnt: 7,
+				BoundCnt:    1,
+				McvVals:     []sql.Row{{int64(2)}, {int64(6)}, {int64(5)}},
+				McvsCnt:     []uint64{4, 4, 4},
+				BoundVal:    sql.Row{int64(7)},
+			}},
 		},
 		{
 			name:    "2-ints",
 			keys:    []sql.Row{{1, 1}, {1, 1}, {1, 2}, {2, 1}, {2, 2}, {2, 3}, {2, 3}, {3, 1}, {3, 2}, {3, 3}, {4, 1}, {4, 1}, {4, 1}, {5, 1}, {5, 2}},
 			keyDesc: val.NewTupleDescriptor(val.Type{Enc: val.Int64Enc, Nullable: false}, val.Type{Enc: val.Int64Enc, Nullable: false}),
-			bucket: DoltBucket{
-				RowCount:      15,
-				DistinctCount: 11,
-				Mcvs:          []sql.Row{{int64(1), int64(1)}, {int64(4), int64(1)}, {int64(2), int64(3)}},
-				McvCount:      []uint64{2, 3, 2},
-				UpperBound:    sql.Row{int64(5), int64(2)},
-				BoundCount:    1,
-			},
+			bucket: DoltBucket{Bucket: &stats.Bucket{
+				RowCnt:      15,
+				DistinctCnt: 11,
+				McvVals:     []sql.Row{{int64(1), int64(1)}, {int64(4), int64(1)}, {int64(2), int64(3)}},
+				McvsCnt:     []uint64{2, 3, 2},
+				BoundVal:    sql.Row{int64(5), int64(2)},
+				BoundCnt:    1,
+			}},
 		},
 		{
 			name:    "2-ints with nulls",
 			keys:    []sql.Row{{nil, 1}, {1, nil}, {1, 2}, {2, nil}, {2, 2}},
 			keyDesc: val.NewTupleDescriptor(val.Type{Enc: val.Int64Enc, Nullable: true}, val.Type{Enc: val.Int64Enc, Nullable: true}),
-			bucket: DoltBucket{
-				RowCount:      5,
-				DistinctCount: 5,
-				NullCount:     3,
-				Mcvs:          []sql.Row{{int64(2), int64(2)}, {int64(1), nil}, {int64(1), int64(2)}},
-				McvCount:      []uint64{1, 1, 1},
-				UpperBound:    sql.Row{int64(2), int64(2)},
-				BoundCount:    1,
+			bucket: DoltBucket{Bucket: &stats.Bucket{
+				RowCnt:      5,
+				DistinctCnt: 5,
+				NullCnt:     3,
+				McvVals:     []sql.Row{{int64(2), int64(2)}, {int64(1), nil}, {int64(1), int64(2)}},
+				McvsCnt:     []uint64{1, 1, 1},
+				BoundVal:    sql.Row{int64(2), int64(2)},
+				BoundCnt:    1},
 			},
 		},
 		{
 			name:    "varchars",
 			keys:    []sql.Row{{"a"}, {"b"}, {"c"}, {"d"}, {"e"}, {"e"}, {"f"}, {"g"}, {"g"}, {"g"}, {"h"}, {"h"}, {"h"}, {"i"}, {"i"}},
 			keyDesc: val.NewTupleDescriptor(val.Type{Enc: val.StringEnc, Nullable: false}),
-			bucket: DoltBucket{
-				RowCount:      15,
-				DistinctCount: 9,
-				Mcvs:          []sql.Row{{"i"}, {"h"}, {"g"}},
-				McvCount:      []uint64{2, 3, 3},
-				UpperBound:    sql.Row{"i"},
-				BoundCount:    2,
-			},
+			bucket: DoltBucket{Bucket: &stats.Bucket{
+				RowCnt:      15,
+				DistinctCnt: 9,
+				McvVals:     []sql.Row{{"i"}, {"h"}, {"g"}},
+				McvsCnt:     []uint64{2, 3, 3},
+				BoundVal:    sql.Row{"i"},
+				BoundCnt:    2,
+			}},
 		},
 		{
 			name:    "varchar-ints",
 			keys:    []sql.Row{{"a", 1}, {"b", 1}, {"c", 1}, {"d", 1}, {"e", 1}, {"e", 2}, {"f", 1}, {"g", 1}, {"g", 2}, {"g", 2}, {"h", 1}, {"h", 1}, {"h", 2}, {"i", 1}, {"i", 1}},
 			keyDesc: val.NewTupleDescriptor(val.Type{Enc: val.StringEnc, Nullable: false}, val.Type{Enc: val.Int64Enc, Nullable: false}),
-			bucket: DoltBucket{
-				RowCount:      15,
-				DistinctCount: 12,
-				Mcvs:          []sql.Row{{"i", int64(1)}, {"g", int64(2)}, {"h", int64(1)}},
-				McvCount:      []uint64{2, 2, 2},
-				UpperBound:    sql.Row{"i", int64(1)},
-				BoundCount:    2,
-			},
+			bucket: DoltBucket{Bucket: &stats.Bucket{
+				RowCnt:      15,
+				DistinctCnt: 12,
+				McvVals:     []sql.Row{{"i", int64(1)}, {"g", int64(2)}, {"h", int64(1)}},
+				McvsCnt:     []uint64{2, 2, 2},
+				BoundVal:    sql.Row{"i", int64(1)},
+				BoundCnt:    2,
+			}},
 		},
 	}
 
@@ -190,13 +191,13 @@ func TestBucketBuilder(t *testing.T) {
 			bucket, err := b.finalize(ctx, nil)
 			require.NoError(t, err)
 
-			require.Equal(t, int(tt.bucket.RowCount), int(bucket.RowCount))
-			require.Equal(t, int(tt.bucket.NullCount), int(bucket.NullCount))
-			require.Equal(t, int(tt.bucket.DistinctCount), int(bucket.DistinctCount))
-			require.Equal(t, int(tt.bucket.BoundCount), int(bucket.BoundCount))
-			require.Equal(t, tt.bucket.UpperBound, bucket.UpperBound)
-			require.Equal(t, tt.bucket.McvCount, bucket.McvCount)
-			require.Equal(t, tt.bucket.Mcvs, bucket.Mcvs)
+			require.Equal(t, int(tt.bucket.RowCount()), int(bucket.RowCount()))
+			require.Equal(t, int(tt.bucket.NullCount()), int(bucket.NullCount()))
+			require.Equal(t, int(tt.bucket.DistinctCount()), int(bucket.DistinctCount()))
+			require.Equal(t, int(tt.bucket.BoundCount()), int(bucket.BoundCount()))
+			require.Equal(t, tt.bucket.UpperBound(), bucket.UpperBound())
+			require.Equal(t, tt.bucket.McvsCnt, bucket.McvsCnt)
+			require.Equal(t, tt.bucket.Mcvs(), bucket.Mcvs())
 		})
 	}
 }
