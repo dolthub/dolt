@@ -183,6 +183,10 @@ func (gcs *GenerationalNBS) Has(ctx context.Context, h hash.Hash) (bool, error) 
 	return has, nil
 }
 
+func (gcs *GenerationalNBS) CacheHas(h hash.Hash) bool {
+	return gcs.newGen.CacheHas(h) || gcs.oldGen.CacheHas(h)
+}
+
 // HasMany returns a new HashSet containing any members of |hashes| that are absent from the store.
 func (gcs *GenerationalNBS) HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet, err error) {
 	gcs.newGen.mu.RLock()

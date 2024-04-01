@@ -156,6 +156,11 @@ func (f *FileValueStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	return ok, nil
 }
 
+func (f *FileValueStore) CacheHas(h hash.Hash) bool {
+	_, ok := f.chunks[h]
+	return ok
+}
+
 // HasMany returns the set of hashes that are absent from the store
 func (f *FileValueStore) HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet, err error) {
 	f.chunkLock.Lock()

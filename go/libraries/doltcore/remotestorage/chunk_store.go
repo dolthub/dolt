@@ -712,6 +712,10 @@ func (dcs *DoltChunkStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 
 const maxHasManyBatchSize = 16 * 1024
 
+func (dcs *DoltChunkStore) CacheHas(_ hash.Hash) bool {
+	return false
+}
+
 // Returns a new HashSet containing any members of |hashes| that are
 // absent from the store.
 func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {

@@ -152,7 +152,9 @@ func (ns nodeStore) Write(ctx context.Context, nd Node) (hash.Hash, error) {
 	getAddrs := func(ch chunks.Chunk) chunks.GetAddrsCb {
 		return func(ctx context.Context, addrs hash.HashSet) (err error) {
 			err = message.WalkAddresses(ctx, ch.Data(), func(ctx context.Context, a hash.Hash) error {
-				addrs.Insert(a)
+				if !ns.store.CacheHas(a) {
+					addrs.Insert(a)
+				}
 				return nil
 			})
 			return

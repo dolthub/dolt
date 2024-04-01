@@ -83,6 +83,9 @@ type ChunkStore interface {
 	// absent from the store.
 	HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet, err error)
 
+	// CacheHas is an optimization to skip rewriting common refs
+	CacheHas(h hash.Hash) bool
+
 	// Put caches c in the ChunkSource. Upon return, c must be visible to
 	// subsequent Get and Has calls, but must not be persistent until a call
 	// to Flush(). Put may be called concurrently with other calls to Put(),

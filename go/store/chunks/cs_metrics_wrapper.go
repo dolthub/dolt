@@ -98,6 +98,10 @@ func (csMW *CSMetricWrapper) HasMany(ctx context.Context, hashes hash.HashSet) (
 	return csMW.cs.HasMany(ctx, hashes)
 }
 
+func (csMW *CSMetricWrapper) CacheHas(h hash.Hash) bool {
+	return false
+}
+
 // Put caches c in the ChunkSource. Upon return, c must be visible to
 // subsequent Get and Has calls, but must not be persistent until a call
 // to Flush(). Put may be called concurrently with other calls to Put(),

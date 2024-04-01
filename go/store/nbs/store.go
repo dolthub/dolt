@@ -1021,6 +1021,11 @@ func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	return has, nil
 }
 
+func (nbs *NomsBlockStore) CacheHas(h hash.Hash) bool {
+	_, ok := nbs.hasCache.Get(h)
+	return ok
+}
+
 func (nbs *NomsBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
 	if hashes.Size() == 0 {
 		return nil, nil

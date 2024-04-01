@@ -176,6 +176,10 @@ func (ms *MemoryStoreView) GetMany(ctx context.Context, hashes hash.HashSet, fou
 	return nil
 }
 
+func (ms *MemoryStoreView) CacheHas(_ hash.Hash) bool {
+	return false
+}
+
 func (ms *MemoryStoreView) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
