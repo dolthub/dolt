@@ -132,7 +132,7 @@ func (g GhostBlockStore) hasMany(hashes hash.HashSet) (absent hash.HashSet, err 
 	return absent, nil
 }
 
-func (g GhostBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
+func (g GhostBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCurry) error {
 	panic("GhostBlockStore does not support Put")
 }
 

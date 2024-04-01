@@ -225,11 +225,13 @@ func (ms *MemoryStoreView) errorIfDangling(ctx context.Context, addrs hash.HashS
 	return nil
 }
 
-func (ms *MemoryStoreView) Put(ctx context.Context, c Chunk, getAddrs GetAddrsCb) error {
+func (ms *MemoryStoreView) Put(ctx context.Context, c Chunk, getAddrs GetAddrsCurry) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	addrs, err := getAddrs(ctx, c)
+
+	addrs := hash.NewHashSet()
+	err := getAddrs(c)(ctx, addrs)
 	if err != nil {
 		return err
 	}
