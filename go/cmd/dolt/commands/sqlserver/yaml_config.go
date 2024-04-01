@@ -157,7 +157,7 @@ type YAMLConfig struct {
 	BranchControlFile *string               `yaml:"branch_control_file,omitempty"`
 	// TODO: Rename to UserVars_
 	Vars            []UserSessionVars       `yaml:"user_session_vars"`
-	SystemVars_     *engine.SystemVariables `yaml:"system_variables,omitempty" minver:"1.11.1"`
+	SystemVars_     *engine.SystemVariables `yaml:"system_variables" minver:"1.11.1"`
 	Jwks            []engine.JwksConfig     `yaml:"jwks"`
 	GoldenMysqlConn *string                 `yaml:"golden_mysql_conn,omitempty"`
 }
@@ -192,6 +192,7 @@ func YamlConfigFromFile(fs filesys.Filesys, path string) (ServerConfig, error) {
 }
 
 func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
+	systemVars := cfg.SystemVars()
 	return &YAMLConfig{
 		LogLevelStr:       strPtr(string(cfg.LogLevel())),
 		MaxQueryLenInLogs: nillableIntPtr(cfg.MaxLoggedQueryLen()),
@@ -237,6 +238,7 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 		ClusterCfg:        clusterConfigAsYAMLConfig(cfg.ClusterConfig()),
 		PrivilegeFile:     strPtr(cfg.PrivilegeFilePath()),
 		BranchControlFile: strPtr(cfg.BranchControlFilePath()),
+		SystemVars_:       &systemVars,
 		Vars:              cfg.UserVars(),
 		Jwks:              cfg.JwksConfig(),
 	}
