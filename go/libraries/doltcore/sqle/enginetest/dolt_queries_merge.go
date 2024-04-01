@@ -4045,6 +4045,19 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 	},
 }
 
+var verifyConstraintsUniqueViolationsSetupScript = []string{
+	"create table otherTable (pk int primary key);",
+	"create table t (pk int primary key, col1 int, unique key (col1));",
+	"call dolt_commit('-Am', 'initial commit');",
+	"call dolt_branch('branch1');",
+	"insert into t (pk, col1) values (1, 1);",
+	"call dolt_commit('-am', 'insert on main');",
+	"call dolt_checkout('branch1');",
+	"insert into t (pk, col1) values (2, 1);",
+	"call dolt_commit('-am', 'insert on branch1');",
+	"set @@autocommit=0;",
+}
+
 var verifyConstraintsFkViolationsSetupScript = []string{
 	"CREATE TABLE parent3 (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX (v1));",
 	"CREATE TABLE child3 (pk BIGINT PRIMARY KEY, v1 BIGINT, CONSTRAINT fk_name1 FOREIGN KEY (v1) REFERENCES parent3 (v1));",
@@ -4341,6 +4354,260 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			},
 		},
 	},
+
+	// Unique Constraint Violations
+	{
+		Name:        "verify-constraints: unique violations: working set",
+		SetUpScript: verifyConstraintsUniqueViolationsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// merge with --squash so that our working set has the constraint violations
+				Query:    "call dolt_merge('main', '--squash');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 1}, {2, 1}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"t", uint64(2)}},
+			},
+			{
+				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
+				Expected: []sql.Row{
+					{"unique index", 1, 1, `{"Columns":["col1"],"Name":"col1"}`},
+					{"unique index", 2, 1, `{"Columns":["col1"],"Name":"col1"}`},
+				},
+			},
+			{
+				Query:    "delete from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				// verify constraints in working set
+				Query:    "call dolt_verify_constraints();",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"t", uint64(2)}},
+			},
+			{
+				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
+				Expected: []sql.Row{
+					{"unique index", 1, 1, `{"Columns":["col1"],"Name":"col1"}`},
+					{"unique index", 2, 1, `{"Columns":["col1"],"Name":"col1"}`},
+				},
+			},
+		},
+	},
+	{
+		Name:        "verify-constraints: unique violations: --all",
+		SetUpScript: verifyConstraintsUniqueViolationsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('main');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "call dolt_commit('-am', 'commiting with conflicts', '--force');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 1}, {2, 1}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"t", uint64(2)}},
+			},
+			{
+				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
+				Expected: []sql.Row{
+					{"unique index", 1, 1, `{"Columns":["col1"],"Name":"col1"}`},
+					{"unique index", 2, 1, `{"Columns":["col1"],"Name":"col1"}`},
+				},
+			},
+			{
+				Query:    "delete from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				// no violations in the working set
+				Query:    "call dolt_verify_constraints();",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				// one unique violation in all the data
+				Query:    "call dolt_verify_constraints('--all');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"t", uint64(2)}},
+			},
+			{
+				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
+				Expected: []sql.Row{
+					{"unique index", 1, 1, `{"Columns":["col1"],"Name":"col1"}`},
+					{"unique index", 2, 1, `{"Columns":["col1"],"Name":"col1"}`},
+				},
+			},
+		},
+	},
+	{
+		Name:        "verify-constraints: unique violations: working set with named table",
+		SetUpScript: verifyConstraintsUniqueViolationsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// merge with --squash so that our working set has the constraint violations
+				Query:    "call dolt_merge('main', '--squash');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 1}, {2, 1}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"t", uint64(2)}},
+			},
+			{
+				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
+				Expected: []sql.Row{
+					{"unique index", 1, 1, `{"Columns":["col1"],"Name":"col1"}`},
+					{"unique index", 2, 1, `{"Columns":["col1"],"Name":"col1"}`},
+				},
+			},
+			{
+				Query:    "delete from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				// verify constraints in working set
+				Query:    "call dolt_verify_constraints('t');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"t", uint64(2)}},
+			},
+			{
+				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
+				Expected: []sql.Row{
+					{"unique index", 1, 1, `{"Columns":["col1"],"Name":"col1"}`},
+					{"unique index", 2, 1, `{"Columns":["col1"],"Name":"col1"}`},
+				},
+			},
+		},
+	},
+	{
+		Name:        "verify-constraints: unique violations: working set with named table with no violation",
+		SetUpScript: verifyConstraintsUniqueViolationsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// merge with --squash so that our working set has the constraint violations
+				Query:    "call dolt_merge('main', '--squash');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 1}, {2, 1}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"t", uint64(2)}},
+			},
+			{
+				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
+				Expected: []sql.Row{
+					{"unique index", 1, 1, `{"Columns":["col1"],"Name":"col1"}`},
+					{"unique index", 2, 1, `{"Columns":["col1"],"Name":"col1"}`},
+				},
+			},
+			{
+				Query:    "delete from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				// verify constraints in working set
+				Query:    "call dolt_verify_constraints('otherTable');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"t", uint64(2)}},
+			},
+			{
+				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
+				Expected: []sql.Row{
+					{"unique index", 1, 1, `{"Columns":["col1"],"Name":"col1"}`},
+					{"unique index", 2, 1, `{"Columns":["col1"],"Name":"col1"}`},
+				},
+			},
+		},
+	},
+	{
+		Name:        "verify-constraints: unique violations: --all --output-only",
+		SetUpScript: verifyConstraintsUniqueViolationsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('main');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "call dolt_commit('-am', 'commiting with conflicts', '--force');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 1}, {2, 1}},
+			},
+			{
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"t", uint64(2)}},
+			},
+			{
+				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
+				Expected: []sql.Row{
+					{"unique index", 1, 1, `{"Columns":["col1"],"Name":"col1"}`},
+					{"unique index", 2, 1, `{"Columns":["col1"],"Name":"col1"}`},
+				},
+			},
+			{
+				Query:    "delete from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				// no violations in the working set
+				Query:    "call dolt_verify_constraints();",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				// one unique violation in all the data
+				Query:    "call dolt_verify_constraints('--all', '--output-only');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				// no output recorded because of --output-only
+				Query:    "select * from dolt_constraint_violations;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+
+	// Check Constraint Violations
+	// TODO: CHECK constraints
+	//     - test with and without --all (i.e. working set changes versus all DB data)
+	//     - test with and without --output-only
+	//     - test with and without tablenames
+
+	// NOTE: We can't check NOT NULL constraint violations, because there isn't a hook to disable NOT NULL constraint
+	//       enforcement (like there is for foreign key constraints), and if you try to merge in a NOT NULL schema
+	//       change to a table that has NULL values, then the NULL values are removed and listed in the
+	//       dolt_constraint_violation table, but running dolt_verify_constraints again wouldn't find those violations
+	//       since the NULL values aren't in the table anymore.
 }
 
 var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
