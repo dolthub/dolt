@@ -110,6 +110,8 @@ SUPPORTED CONFIG FILE FIELDS:
 
 {{.EmphasisLeft}}remotesapi.read_only{{.EmphasisRight}}: Boolean flag which disables the ability to perform pushes against the server.
 
+{{.EmphasisLeft}}system_variables{{.EmphasisRight}}: A map of system variable name to desired value for all system variable values to override.
+
 {{.EmphasisLeft}}user_session_vars{{.EmphasisRight}}: A map of user name to a map of session variables to set on connection for each session.
 
 {{.EmphasisLeft}}cluster{{.EmphasisRight}}: Settings related to running this server in a replicated cluster. For information on setting these values, see https://docs.dolthub.com/sql-reference/server/replication

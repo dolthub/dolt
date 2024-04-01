@@ -192,6 +192,7 @@ func YamlConfigFromFile(fs filesys.Filesys, path string) (ServerConfig, error) {
 }
 
 func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
+	systemVars := cfg.SystemVars()
 	return &YAMLConfig{
 		LogLevelStr:       strPtr(string(cfg.LogLevel())),
 		MaxQueryLenInLogs: nillableIntPtr(cfg.MaxLoggedQueryLen()),
@@ -237,6 +238,7 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 		ClusterCfg:        clusterConfigAsYAMLConfig(cfg.ClusterConfig()),
 		PrivilegeFile:     strPtr(cfg.PrivilegeFilePath()),
 		BranchControlFile: strPtr(cfg.BranchControlFilePath()),
+		SystemVars_:       &systemVars,
 		Vars:              cfg.UserVars(),
 		Jwks:              cfg.JwksConfig(),
 	}
