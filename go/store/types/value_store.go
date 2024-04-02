@@ -95,8 +95,7 @@ const (
 	gcState_Finalizing
 )
 
-func AddrsFromNomsValue(ctx context.Context, c chunks.Chunk, nbf *NomsBinFormat) (addrs hash.HashSet, err error) {
-	addrs = hash.NewHashSet()
+func AddrsFromNomsValue(c chunks.Chunk, nbf *NomsBinFormat, addrs hash.HashSet) (err error) {
 	if NomsKind(c.Data()[0]) == SerialMessageKind {
 		err = SerialMessage(c.Data()).WalkAddrs(nbf, func(a hash.Hash) error {
 			addrs.Insert(a)
@@ -112,8 +111,10 @@ func AddrsFromNomsValue(ctx context.Context, c chunks.Chunk, nbf *NomsBinFormat)
 	return
 }
 
-func (lvs *ValueStore) getAddrs(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
-	return AddrsFromNomsValue(ctx, c, lvs.nbf)
+func (lvs *ValueStore) getAddrs(c chunks.Chunk) chunks.GetAddrsCb {
+	return func(ctx context.Context, addrs hash.HashSet) error {
+		return AddrsFromNomsValue(c, lvs.nbf, addrs)
+	}
 }
 
 const (

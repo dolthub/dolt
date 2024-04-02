@@ -60,9 +60,7 @@ func TestChunkStoreVersion(t *testing.T) {
 
 	assert.Equal(constants.FormatLD1String, store.Version())
 	newChunk := chunks.NewChunk([]byte("new root"))
-	require.NoError(t, store.Put(context.Background(), newChunk, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
-		return nil, nil
-	}))
+	require.NoError(t, store.Put(context.Background(), newChunk, noopGetAddrs))
 	newRoot := newChunk.Hash()
 
 	if assert.True(store.Commit(context.Background(), newRoot, hash.Hash{})) {
@@ -213,9 +211,7 @@ func TestChunkStoreCommitOptimisticLockFail(t *testing.T) {
 	require.NoError(t, err)
 
 	newChunk := chunks.NewChunk([]byte("new root 2"))
-	require.NoError(t, store.Put(context.Background(), newChunk, func(ctx context.Context, c chunks.Chunk) (hash.HashSet, error) {
-		return nil, nil
-	}))
+	require.NoError(t, store.Put(context.Background(), newChunk, noopGetAddrs))
 	newRoot2 := newChunk.Hash()
 	success, err := store.Commit(context.Background(), newRoot2, hash.Hash{})
 	require.NoError(t, err)

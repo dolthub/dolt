@@ -78,6 +78,7 @@ type memTable struct {
 	chunks             map[hash.Hash][]byte
 	order              []hasRecord // Must maintain the invariant that these are sorted by rec.order
 	pendingRefs        []hasRecord
+	getChildAddrs      []chunks.GetAddrsCb
 	maxData, totalData uint64
 
 	snapper snappyEncoder
@@ -109,6 +110,10 @@ func (mt *memTable) addChunk(h hash.Hash, data []byte) addChunkResult {
 		false,
 	})
 	return chunkAdded
+}
+
+func (mt *memTable) addGetChildRefs(getAddrs chunks.GetAddrsCb) {
+	mt.getChildAddrs = append(mt.getChildAddrs, getAddrs)
 }
 
 func (mt *memTable) addChildRefs(addrs hash.HashSet) {
