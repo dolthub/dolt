@@ -37,7 +37,7 @@ type ChunkStoreTestSuite struct {
 }
 
 func noopGetAddrs(c Chunk) GetAddrsCb {
-	return func(ctx context.Context, addrs hash.HashSet) error {
+	return func(ctx context.Context, addrs hash.HashSet, _ PendingRefExists) error {
 		return nil
 	}
 }
@@ -58,7 +58,7 @@ func (suite *ChunkStoreTestSuite) TestChunkStorePut() {
 	data := []byte("bcd")
 	nc := NewChunk(data)
 	err = store.Put(ctx, nc, func(c Chunk) GetAddrsCb {
-		return func(ctx context.Context, addrs hash.HashSet) error {
+		return func(ctx context.Context, addrs hash.HashSet, _ PendingRefExists) error {
 			addrs.Insert(hash.Of([]byte("nonsense")))
 			return nil
 		}
