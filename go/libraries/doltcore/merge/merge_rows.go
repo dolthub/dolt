@@ -16,6 +16,7 @@ package merge
 
 import (
 	"context"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -43,6 +44,14 @@ type MergeOpts struct {
 	// some calculations that aren't needed for merge correctness, but are still needed to
 	// correctly verify all constraints.
 	ReverifyAllConstraints bool
+	// RecordViolationsForTables is an optional map that allows the caller to control which
+	// tables will have constraint violations recorded as artifacts in the merged tables. When
+	// this field is nil or an empty map, constraint violations will be recorded for all tables,
+	// but if the map is populated with any (case-insensitive) table names, then only those tables
+	// will have constraint violations recorded. This functionality is primarily used by the
+	// dolt_verify_constraints() stored procedure to allow callers to verify constraints for a
+	// subset of tables.
+	RecordViolationsForTables map[string]struct{}
 }
 
 type TableMerger struct {
@@ -61,6 +70,12 @@ type TableMerger struct {
 
 	vrw types.ValueReadWriter
 	ns  tree.NodeStore
+
+	// recordViolations controls whether constraint violations should be recorded as table
+	// artifacts when merging this table. In almost all cases, this should be set to true. The
+	// exception is for the dolt_verify_constraints() stored procedure, which allows callers to
+	// only record constraint violations for a specified subset of tables.
+	recordViolations bool
 }
 
 func (tm TableMerger) tableHashes() (left, right, anc hash.Hash, err error) {
@@ -120,7 +135,7 @@ type MergedTable struct {
 // MergeTable merges schema and table data for the table tblName.
 // TODO: this code will loop infinitely when merging certain schema changes
 func (rm *RootMerger) MergeTable(ctx *sql.Context, tblName string, opts editor.Options, mergeOpts MergeOpts) (*MergedTable, *MergeStats, error) {
-	tm, err := rm.makeTableMerger(ctx, tblName)
+	tm, err := rm.makeTableMerger(ctx, tblName, mergeOpts)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -164,13 +179,21 @@ func (rm *RootMerger) MergeTable(ctx *sql.Context, tblName string, opts editor.O
 	return &MergedTable{table: tbl}, stats, nil
 }
 
-func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string) (*TableMerger, error) {
+func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string, mergeOpts MergeOpts) (*TableMerger, error) {
+	recordViolations := true
+	if mergeOpts.RecordViolationsForTables != nil {
+		if _, ok := mergeOpts.RecordViolationsForTables[strings.ToLower(tblName)]; !ok {
+			recordViolations = false
+		}
+	}
+
 	tm := TableMerger{
-		name:        tblName,
-		rightSrc:    rm.rightSrc,
-		ancestorSrc: rm.ancSrc,
-		vrw:         rm.vrw,
-		ns:          rm.ns,
+		name:             tblName,
+		rightSrc:         rm.rightSrc,
+		ancestorSrc:      rm.ancSrc,
+		vrw:              rm.vrw,
+		ns:               rm.ns,
+		recordViolations: recordViolations,
 	}
 
 	var err error

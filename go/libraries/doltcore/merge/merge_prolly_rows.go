@@ -470,13 +470,15 @@ func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) 
 			// https://dev.mysql.com/doc/refman/8.0/en/create-table-check-constraints.html
 			continue
 		} else {
-			conflictCount++
-			meta, err := newCheckCVMeta(cv.sch, checkName)
-			if err != nil {
-				return 0, err
-			}
-			if err = cv.insertArtifact(ctx, diff.Key, newTuple, meta); err != nil {
-				return conflictCount, err
+			if cv.tableMerger.recordViolations {
+				conflictCount++
+				meta, err := newCheckCVMeta(cv.sch, checkName)
+				if err != nil {
+					return 0, err
+				}
+				if err = cv.insertArtifact(ctx, diff.Key, newTuple, meta); err != nil {
+					return conflictCount, err
+				}
 			}
 		}
 	}
@@ -600,13 +602,15 @@ func (uv uniqValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (
 		return uv.clearArtifact(ctx, diff.Key, diff.Base)
 	}
 
-	for _, idx := range uv.indexes {
-		err = idx.findCollisions(ctx, diff.Key, value, func(k, v val.Tuple) error {
-			violations++
-			return uv.insertArtifact(ctx, k, v, idx.meta)
-		})
-		if err != nil {
-			break
+	if uv.tm.recordViolations {
+		for _, idx := range uv.indexes {
+			err = idx.findCollisions(ctx, diff.Key, value, func(k, v val.Tuple) error {
+				violations++
+				return uv.insertArtifact(ctx, k, v, idx.meta)
+			})
+			if err != nil {
+				break
+			}
 		}
 	}
 

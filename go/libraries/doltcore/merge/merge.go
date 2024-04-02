@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -308,7 +309,15 @@ func MergeRoots(
 		return nil, err
 	}
 
-	mergedRoot, _, err = AddForeignKeyViolations(ctx, mergedRoot, ancRoot, nil, h)
+	var tableSet *set.StrSet = nil
+	if mergeOpts.RecordViolationsForTables != nil {
+		tableSet = set.NewCaseInsensitiveStrSet(nil)
+		for tableName, _ := range mergeOpts.RecordViolationsForTables {
+			tableSet.Add(tableName)
+		}
+	}
+
+	mergedRoot, _, err = AddForeignKeyViolations(ctx, mergedRoot, ancRoot, tableSet, h)
 	if err != nil {
 		return nil, err
 	}

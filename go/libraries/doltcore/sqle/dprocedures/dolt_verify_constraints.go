@@ -16,6 +16,7 @@ package dprocedures
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -111,10 +112,20 @@ func doDoltConstraintsVerify(ctx *sql.Context, args []string) (int, error) {
 // Note that constraint violations detected for ALL existing tables will be stored in the dolt_constraint_violations
 // tables, but the returned set of table names will be a subset of |tableSet|.
 func calculateViolations(ctx *sql.Context, workingRoot, comparingRoot *doltdb.RootValue, tableSet *set.StrSet) (*doltdb.RootValue, *set.StrSet, error) {
+	var recordViolationsForTables map[string]struct{} = nil
+	if tableSet.Size() > 0 {
+		recordViolationsForTables = make(map[string]struct{})
+		for _, table := range tableSet.AsSlice() {
+			table = strings.ToLower(table)
+			recordViolationsForTables[table] = struct{}{}
+		}
+	}
+
 	mergeOpts := merge.MergeOpts{
-		IsCherryPick:           false,
-		KeepSchemaConflicts:    true,
-		ReverifyAllConstraints: true,
+		IsCherryPick:              false,
+		KeepSchemaConflicts:       true,
+		ReverifyAllConstraints:    true,
+		RecordViolationsForTables: recordViolationsForTables,
 	}
 	mergeResults, err := merge.MergeRoots(ctx, comparingRoot, workingRoot, comparingRoot, workingRoot, comparingRoot,
 		editor.Options{}, mergeOpts)

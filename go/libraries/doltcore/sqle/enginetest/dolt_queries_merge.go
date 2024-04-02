@@ -4132,22 +4132,16 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				// NOTE: dolt_verify_constraints populates the dolt_constraint_violations table with ALL
-				//       identified constraints regardless of which tables were specified as an argument, but
-				//       only return 1 if violations were found for one of the specified tables.
 				Query:    "SELECT * from dolt_constraint_violations",
-				Expected: []sql.Row{{"child3", uint64(1)}, {"child4", uint64(1)}},
+				Expected: []sql.Row{},
 			},
 			{
 				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('--all', 'child1');",
 				Expected: []sql.Row{{0}},
 			},
 			{
-				// NOTE: dolt_verify_constraints populates the dolt_constraint_violations table with ALL
-				//       identified constraints regardless of which tables were specified as an argument, but
-				//       only return 1 if violations were found for one of the specified tables.
 				Query:    "SELECT * from dolt_constraint_violations",
-				Expected: []sql.Row{{"child3", uint64(2)}, {"child4", uint64(2)}},
+				Expected: []sql.Row{},
 			},
 		},
 	},
@@ -4182,11 +4176,8 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{1}},
 			},
 			{
-				// NOTE: dolt_verify_constraints populates the dolt_constraint_violations table with ALL
-				//       identified constraints regardless of which tables were specified as an argument, but
-				//       only return 1 if violations were found for one of the specified tables.
 				Query:    "SELECT * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"child3", uint64(1)}, {"child4", uint64(1)}},
+				Expected: []sql.Row{{"child3", uint64(1)}},
 			},
 		},
 	},
@@ -4239,11 +4230,8 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{1}},
 			},
 			{
-				// NOTE: dolt_verify_constraints populates the dolt_constraint_violations table with ALL
-				//       identified constraints regardless of which tables were specified as an argument, but
-				//       only return 1 if violations were found for one of the specified tables.
 				Query:    "SELECT * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"child3", uint64(2)}, {"child4", uint64(2)}},
+				Expected: []sql.Row{{"child3", uint64(2)}},
 			},
 		},
 	},
@@ -4550,15 +4538,9 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
+				// Nothing in dolt_constraint_violations because we only verified otherTable
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"t", uint64(2)}},
-			},
-			{
-				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
-				Expected: []sql.Row{
-					{"unique index", 1, 1, `{"Columns":["col1"],"Name":"col1"}`},
-					{"unique index", 2, 1, `{"Columns":["col1"],"Name":"col1"}`},
-				},
+				Expected: []sql.Row{},
 			},
 		},
 	},
@@ -4785,14 +4767,9 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
+				// Nothing in dolt_constraint_violations because we only verify otherTable
 				Query:    "select * from dolt_constraint_violations;",
-				Expected: []sql.Row{{"t", uint64(1)}},
-			},
-			{
-				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
-				Expected: []sql.Row{
-					{"check constraint", 1, 42, `{"Expression":"(NOT((col1 = col2)))","Name":"t_chk_5eebhnk4"}`},
-				},
+				Expected: []sql.Row{},
 			},
 		},
 	},
