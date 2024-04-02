@@ -53,6 +53,7 @@ type DoltHarness struct {
 	setupData           []setup.SetupScript
 	resetData           []setup.SetupScript
 	engine              *gms.Engine
+	setupDbs            map[string]struct{}
 	skipSetupCommit     bool
 	configureStats      bool
 	useLocalFilesystem  bool
@@ -150,6 +151,11 @@ func (d *DoltHarness) resetScripts() []setup.SetupScript {
 	}
 
 	resetCmds = append(resetCmds, setup.SetupScript{"SET foreign_key_checks=1;"})
+	for _, db := range dbs {
+		if _, ok := d.setupDbs[db]; !ok && db != "mydb" {
+			resetCmds = append(resetCmds, setup.SetupScript{fmt.Sprintf("drop database if exists %s", db)})
+		}
+	}
 	resetCmds = append(resetCmds, setup.SetupScript{"use mydb"})
 	return resetCmds
 }
@@ -198,9 +204,12 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 
 		ctx := enginetest.NewContext(d)
 		databases := pro.AllDatabases(ctx)
+		d.setupDbs = make(map[string]struct{})
 		var dbs []string
 		for _, db := range databases {
-			dbs = append(dbs, db.Name())
+			dbName := db.Name()
+			dbs = append(dbs, dbName)
+			d.setupDbs[dbName] = struct{}{}
 		}
 
 		if !d.skipSetupCommit {
@@ -237,7 +246,6 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	// Reset the mysql DB table to a clean state for this new engine
 	d.engine.Analyzer.Catalog.MySQLDb = mysql_db.CreateEmptyMySQLDb()
 	d.engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
-
 	d.engine.Analyzer.Catalog.StatsProvider = statspro.NewProvider(d.provider.(*sqle.DoltDatabaseProvider), statsnoms.NewNomsStatsFactory(d.multiRepoEnv.RemoteDialProvider()))
 
 	// Get a fresh session if we are reusing the engine
