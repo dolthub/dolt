@@ -26,31 +26,142 @@ import (
 )
 
 type DoltStats struct {
-	mu *sync.Mutex
+	Statistic *stats.Statistic
+	mu        *sync.Mutex
 	// Chunks is a list of addresses for the histogram fanout level
 	Chunks []hash.Hash
 	// Active maps a chunk/bucket address to its position in
 	// the histogram. 1-indexed to differentiate from an empty
 	// field on disk
 	Active map[hash.Hash]int
+	Hist   sql.Histogram
+}
 
-	RowCount      uint64
-	DistinctCount uint64
-	NullCount     uint64
-	AvgSize       uint64
-	Qual          sql.StatQualifier
-	CreatedAt     time.Time
-	Histogram     DoltHistogram
-	Columns       []string
-	Types         []sql.Type
-	IdxClass      uint8
-	LowerBound    sql.Row
-	Fds           *sql.FuncDepSet
-	ColSet        sql.ColSet
+var _ sql.Statistic = (*DoltStats)(nil)
+
+func (s *DoltStats) WithColSet(set sql.ColSet) sql.Statistic {
+	ret := *s
+	ret.Statistic = ret.Statistic.WithColSet(set).(*stats.Statistic)
+	return &ret
+}
+
+func (s *DoltStats) WithFuncDeps(set *sql.FuncDepSet) sql.Statistic {
+	ret := *s
+	ret.Statistic = ret.Statistic.WithFuncDeps(set).(*stats.Statistic)
+	return &ret
+}
+
+func (s *DoltStats) WithDistinctCount(u uint64) sql.Statistic {
+	ret := *s
+	ret.Statistic = ret.Statistic.WithDistinctCount(u).(*stats.Statistic)
+	return &ret
+}
+
+func (s *DoltStats) WithRowCount(u uint64) sql.Statistic {
+	ret := *s
+	ret.Statistic = ret.Statistic.WithRowCount(u).(*stats.Statistic)
+	return &ret
+}
+
+func (s *DoltStats) WithNullCount(u uint64) sql.Statistic {
+	ret := *s
+	ret.Statistic = ret.Statistic.WithNullCount(u).(*stats.Statistic)
+	return &ret
+}
+
+func (s *DoltStats) WithAvgSize(u uint64) sql.Statistic {
+	ret := *s
+	ret.Statistic = ret.Statistic.WithAvgSize(u).(*stats.Statistic)
+	return &ret
+}
+
+func (s *DoltStats) WithLowerBound(row sql.Row) sql.Statistic {
+	ret := *s
+	ret.Statistic = ret.Statistic.WithLowerBound(row).(*stats.Statistic)
+	return &ret
+}
+
+func (s *DoltStats) RowCount() uint64 {
+	return s.Statistic.RowCount()
+}
+
+func (s *DoltStats) DistinctCount() uint64 {
+	return s.Statistic.DistinctCount()
+}
+
+func (s *DoltStats) NullCount() uint64 {
+	return s.Statistic.NullCount()
+
+}
+
+func (s *DoltStats) AvgSize() uint64 {
+	return s.Statistic.AvgSize()
+
+}
+
+func (s *DoltStats) CreatedAt() time.Time {
+	return s.Statistic.CreatedAt()
+
+}
+
+func (s *DoltStats) Columns() []string {
+	return s.Statistic.Columns()
+}
+
+func (s *DoltStats) Types() []sql.Type {
+	return s.Statistic.Types()
+}
+
+func (s *DoltStats) Qualifier() sql.StatQualifier {
+	return s.Statistic.Qualifier()
+}
+
+func (s *DoltStats) IndexClass() sql.IndexClass {
+	return s.Statistic.IndexClass()
+}
+
+func (s *DoltStats) FuncDeps() *sql.FuncDepSet {
+	return s.Statistic.FuncDeps()
+}
+
+func (s *DoltStats) ColSet() sql.ColSet {
+	return s.Statistic.ColSet()
+}
+
+func (s *DoltStats) LowerBound() sql.Row {
+	return s.Statistic.LowerBound()
 }
 
 func NewDoltStats() *DoltStats {
-	return &DoltStats{mu: &sync.Mutex{}, Active: make(map[hash.Hash]int)}
+	return &DoltStats{mu: &sync.Mutex{}, Active: make(map[hash.Hash]int), Statistic: &stats.Statistic{}}
+}
+
+func (s *DoltStats) ToInterface() interface{} {
+	ret := s.Statistic.ToInterface().(map[string]interface{})
+
+	var hist sql.Histogram
+	for _, b := range s.Hist {
+		hist = append(hist, b)
+	}
+	ret["statistic"].(map[string]interface{})["buckets"] = hist.ToInterface()
+	return ret
+}
+
+func (s *DoltStats) WithHistogram(h sql.Histogram) (sql.Statistic, error) {
+	ret := *s
+	ret.Hist = nil
+	for _, b := range h {
+		doltB, ok := b.(DoltBucket)
+		if !ok {
+			return nil, fmt.Errorf("invalid bucket type: %T", b)
+		}
+		ret.Hist = append(ret.Hist, doltB)
+	}
+	return &ret, nil
+}
+
+func (s *DoltStats) Histogram() sql.Histogram {
+	return s.Hist
 }
 
 func DoltStatsFromSql(stat sql.Statistic) (*DoltStats, error) {
@@ -58,22 +169,15 @@ func DoltStatsFromSql(stat sql.Statistic) (*DoltStats, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &DoltStats{
-		mu:            &sync.Mutex{},
-		Qual:          stat.Qualifier(),
-		RowCount:      stat.RowCount(),
-		DistinctCount: stat.DistinctCount(),
-		NullCount:     stat.NullCount(),
-		AvgSize:       stat.AvgSize(),
-		CreatedAt:     stat.CreatedAt(),
-		Histogram:     hist,
-		Columns:       stat.Columns(),
-		Types:         stat.Types(),
-		IdxClass:      uint8(stat.IndexClass()),
-		LowerBound:    stat.LowerBound(),
-		Fds:           stat.FuncDeps(),
-		ColSet:        stat.ColSet(),
-	}, nil
+	ret := &DoltStats{
+		mu:        &sync.Mutex{},
+		Hist:      hist,
+		Statistic: stats.NewStatistic(stat.RowCount(), stat.DistinctCount(), stat.NullCount(), stat.AvgSize(), stat.CreatedAt(), stat.Qualifier(), stat.Columns(), stat.Types(), nil, stat.IndexClass(), stat.LowerBound()),
+		Active:    make(map[hash.Hash]int),
+	}
+	ret.Statistic.Fds = stat.FuncDeps()
+	ret.Statistic.Colset = stat.ColSet()
+	return ret, nil
 }
 
 func (s *DoltStats) UpdateActive() {
@@ -86,49 +190,26 @@ func (s *DoltStats) UpdateActive() {
 	s.Active = newActive
 }
 
-func (s *DoltStats) updateCounts() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var newDistinct uint64
-	var newRows uint64
-	var newNulls uint64
-	for _, b := range s.Histogram {
-		newDistinct += b.DistinctCount
-		newRows += b.RowCount
-		newNulls += b.NullCount
-	}
-	s.RowCount = newRows
-	s.DistinctCount = newDistinct
-	s.NullCount = newNulls
-}
-
-func (s *DoltStats) toSql() sql.Statistic {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	typStrs := make([]string, len(s.Types))
-	for i, typ := range s.Types {
-		typStrs[i] = typ.String()
-	}
-	stat := stats.NewStatistic(s.RowCount, s.DistinctCount, s.NullCount, s.AvgSize, s.CreatedAt, s.Qual, s.Columns, s.Types, s.Histogram.toSql(), sql.IndexClass(s.IdxClass), s.LowerBound)
-	return stat.WithColSet(s.ColSet).WithFuncDeps(s.Fds)
-}
-
 type DoltHistogram []DoltBucket
 
 type DoltBucket struct {
-	Chunk         hash.Hash
-	RowCount      uint64
-	DistinctCount uint64
-	NullCount     uint64
-	CreatedAt     time.Time
-	Mcvs          []sql.Row
-	McvCount      []uint64
-	BoundCount    uint64
-	UpperBound    sql.Row
+	*stats.Bucket
+	Chunk   hash.Hash
+	Created time.Time
 }
 
-func DoltHistFromSql(hist sql.Histogram, types []sql.Type) (DoltHistogram, error) {
-	ret := make([]DoltBucket, len(hist))
+func DoltBucketChunk(b sql.HistogramBucket) hash.Hash {
+	return b.(DoltBucket).Chunk
+}
+
+func DoltBucketCreated(b sql.HistogramBucket) time.Time {
+	return b.(DoltBucket).Created
+}
+
+var _ sql.HistogramBucket = (*DoltBucket)(nil)
+
+func DoltHistFromSql(hist sql.Histogram, types []sql.Type) (sql.Histogram, error) {
+	ret := make(sql.Histogram, len(hist))
 	var err error
 	for i, b := range hist {
 		upperBound := make(sql.Row, len(b.UpperBound()))
@@ -149,24 +230,8 @@ func DoltHistFromSql(hist sql.Histogram, types []sql.Type) (DoltHistogram, error
 			}
 		}
 		ret[i] = DoltBucket{
-			RowCount:      b.RowCount(),
-			DistinctCount: b.DistinctCount(),
-			NullCount:     b.NullCount(),
-			Mcvs:          mcvs,
-			McvCount:      b.McvCounts(),
-			BoundCount:    b.BoundCount(),
-			UpperBound:    upperBound,
+			Bucket: stats.NewHistogramBucket(b.RowCount(), b.DistinctCount(), b.NullCount(), b.BoundCount(), upperBound, b.McvCounts(), mcvs),
 		}
 	}
 	return ret, nil
-}
-
-func (s DoltHistogram) toSql() []*stats.Bucket {
-	ret := make([]*stats.Bucket, len(s))
-	for i, b := range s {
-		upperBound := make([]interface{}, len(b.UpperBound))
-		copy(upperBound, b.UpperBound)
-		ret[i] = stats.NewHistogramBucket(b.RowCount, b.DistinctCount, b.NullCount, b.BoundCount, upperBound, b.McvCount, b.Mcvs)
-	}
-	return ret
 }

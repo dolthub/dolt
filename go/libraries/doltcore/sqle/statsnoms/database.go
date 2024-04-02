@@ -244,7 +244,7 @@ func (n *NomsStatsDatabase) DeleteBranchStats(ctx context.Context, branch string
 	return nil
 }
 
-func (n *NomsStatsDatabase) ReplaceChunks(ctx context.Context, branch string, qual sql.StatQualifier, targetHashes []hash.Hash, _, newChunks []statspro.DoltBucket) error {
+func (n *NomsStatsDatabase) ReplaceChunks(ctx context.Context, branch string, qual sql.StatQualifier, targetHashes []hash.Hash, dropChunks, newChunks []sql.HistogramBucket) error {
 	var dbStat dbStats
 	for i, b := range n.branches {
 		if strings.EqualFold(b, branch) {
@@ -261,12 +261,12 @@ func (n *NomsStatsDatabase) ReplaceChunks(ctx context.Context, branch string, qu
 	}
 
 	if _, ok := dbStat[qual]; ok {
-		oldChunks := dbStat[qual].Histogram
+		oldChunks := dbStat[qual].Hist
 		targetBuckets, err := statspro.MergeNewChunks(targetHashes, oldChunks, newChunks)
 		if err != nil {
 			return err
 		}
-		dbStat[qual].Histogram = targetBuckets
+		dbStat[qual].Hist = targetBuckets
 	} else {
 		dbStat[qual] = statspro.NewDoltStats()
 	}

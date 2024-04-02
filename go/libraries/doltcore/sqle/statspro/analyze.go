@@ -94,7 +94,7 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 		curStat, ok := statDb.GetStat(branch, qual)
 		if !ok {
 			curStat = NewDoltStats()
-			curStat.Qual = qual
+			curStat.Statistic.Qual = qual
 		}
 		idxMeta, err := newIdxMeta(ctx, curStat, dTab, idx, cols)
 		if err != nil {
@@ -111,7 +111,7 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 	// merge new chunks with preexisting chunks
 	for _, idxMeta := range idxMetas {
 		stat := newTableStats[idxMeta.qual]
-		targetChunks, err := MergeNewChunks(idxMeta.allAddrs, idxMeta.keepChunks, stat.Histogram)
+		targetChunks, err := MergeNewChunks(idxMeta.allAddrs, idxMeta.keepChunks, stat.Hist)
 		if err != nil {
 			return err
 		}
@@ -120,7 +120,7 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 			continue
 		}
 		stat.Chunks = idxMeta.allAddrs
-		stat.Histogram = targetChunks
+		stat.Hist = targetChunks
 		stat.UpdateActive()
 		if err := statDb.SetStat(ctx, branch, idxMeta.qual, stat); err != nil {
 			return err
@@ -176,7 +176,7 @@ func newIdxMeta(ctx *sql.Context, curStats *DoltStats, doltTable *doltdb.Table, 
 		return indexMeta{}, err
 	} else if cnt == 0 {
 		return indexMeta{
-			qual: curStats.Qual,
+			qual: curStats.Statistic.Qual,
 			cols: cols,
 		}, nil
 	}
@@ -188,7 +188,7 @@ func newIdxMeta(ctx *sql.Context, curStats *DoltStats, doltTable *doltdb.Table, 
 	}
 
 	var addrs []hash.Hash
-	var keepChunks []DoltBucket
+	var keepChunks []sql.HistogramBucket
 	var missingAddrs float64
 	var missingChunks []tree.Node
 	var missingOffsets []updateOrdinal
@@ -210,27 +210,27 @@ func newIdxMeta(ctx *sql.Context, curStats *DoltStats, doltTable *doltdb.Table, 
 			missingOffsets = append(missingOffsets, updateOrdinal{offset, offset + uint64(treeCnt)})
 			missingAddrs++
 		} else {
-			keepChunks = append(keepChunks, curStats.Histogram[bucketIdx])
+			keepChunks = append(keepChunks, curStats.Hist[bucketIdx])
 		}
 		offset += uint64(treeCnt)
 	}
 
-	var dropChunks []DoltBucket
+	var dropChunks []sql.HistogramBucket
 	for _, h := range curStats.Chunks {
 		var match bool
 		for _, b := range keepChunks {
-			if b.Chunk == h {
+			if DoltBucketChunk(b) == h {
 				match = true
 				break
 			}
 		}
 		if !match {
-			dropChunks = append(dropChunks, curStats.Histogram[curStats.Active[h]])
+			dropChunks = append(dropChunks, curStats.Hist[curStats.Active[h]])
 		}
 	}
 
 	return indexMeta{
-		qual:           curStats.Qual,
+		qual:           curStats.Statistic.Qual,
 		cols:           cols,
 		newNodes:       missingChunks,
 		updateOrdinals: missingOffsets,

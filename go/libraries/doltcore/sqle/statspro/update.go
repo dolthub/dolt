@@ -82,13 +82,13 @@ func createNewStatsBuckets(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Ta
 		} else if cnt == 0 {
 			// table is empty
 			ret[meta.qual] = NewDoltStats()
-			ret[meta.qual].CreatedAt = time.Now()
-			ret[meta.qual].Columns = meta.cols
-			ret[meta.qual].Types = types
-			ret[meta.qual].Qual = meta.qual
+			ret[meta.qual].Statistic.Created = time.Now()
+			ret[meta.qual].Statistic.Cols = meta.cols
+			ret[meta.qual].Statistic.Typs = types
+			ret[meta.qual].Statistic.Qual = meta.qual
 
-			ret[meta.qual].Fds = fds
-			ret[meta.qual].ColSet = colSet
+			ret[meta.qual].Statistic.Fds = fds
+			ret[meta.qual].Statistic.Colset = colSet
 			continue
 		}
 
@@ -100,10 +100,10 @@ func createNewStatsBuckets(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Ta
 		updater := newBucketBuilder(meta.qual, len(meta.cols), prollyMap.KeyDesc())
 		ret[meta.qual] = NewDoltStats()
 		ret[meta.qual].Chunks = meta.allAddrs
-		ret[meta.qual].CreatedAt = time.Now()
-		ret[meta.qual].Columns = meta.cols
-		ret[meta.qual].Types = types
-		ret[meta.qual].Qual = meta.qual
+		ret[meta.qual].Statistic.Created = time.Now()
+		ret[meta.qual].Statistic.Cols = meta.cols
+		ret[meta.qual].Statistic.Typs = types
+		ret[meta.qual].Statistic.Qual = meta.qual
 
 		var start, stop uint64
 		// read leaf rows for each bucket
@@ -140,14 +140,14 @@ func createNewStatsBuckets(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Ta
 				return nil, err
 			}
 			bucket.Chunk = chunk.HashOf()
-			ret[updater.qual].Histogram = append(ret[updater.qual].Histogram, bucket)
+			ret[updater.qual].Hist = append(ret[updater.qual].Hist, bucket)
 		}
 
-		ret[updater.qual].DistinctCount = uint64(updater.globalDistinct)
-		ret[updater.qual].RowCount = uint64(updater.globalCount)
-		ret[updater.qual].LowerBound = firstRow
-		ret[updater.qual].Fds = fds
-		ret[updater.qual].ColSet = colSet
+		ret[updater.qual].Statistic.DistinctCnt = uint64(updater.globalDistinct)
+		ret[updater.qual].Statistic.RowCnt = uint64(updater.globalCount)
+		ret[updater.qual].Statistic.LowerBnd = firstRow
+		ret[updater.qual].Statistic.Fds = fds
+		ret[updater.qual].Statistic.Colset = colSet
 		ret[updater.qual].UpdateActive()
 	}
 	return ret, nil
@@ -156,22 +156,22 @@ func createNewStatsBuckets(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Ta
 // MergeNewChunks combines a set of old and new chunks to create
 // the desired target histogram. Undefined behavior if a |targetHash|
 // does not exist in either |oldChunks| or |newChunks|.
-func MergeNewChunks(inputHashes []hash.Hash, oldChunks, newChunks []DoltBucket) ([]DoltBucket, error) {
+func MergeNewChunks(inputHashes []hash.Hash, oldChunks, newChunks []sql.HistogramBucket) ([]sql.HistogramBucket, error) {
 	hashToPos := make(map[hash.Hash]int, len(inputHashes))
 	for i, h := range inputHashes {
 		hashToPos[h] = i
 	}
 
 	var cnt int
-	targetBuckets := make([]DoltBucket, len(inputHashes))
+	targetBuckets := make([]sql.HistogramBucket, len(inputHashes))
 	for _, c := range oldChunks {
-		if idx, ok := hashToPos[c.Chunk]; ok {
+		if idx, ok := hashToPos[DoltBucketChunk(c)]; ok {
 			cnt++
 			targetBuckets[idx] = c
 		}
 	}
 	for _, c := range newChunks {
-		if idx, ok := hashToPos[c.Chunk]; ok && targetBuckets[idx].Chunk.IsEmpty() {
+		if idx, ok := hashToPos[DoltBucketChunk(c)]; ok && targetBuckets[idx] == nil {
 			cnt++
 			targetBuckets[idx] = c
 		}
@@ -280,13 +280,15 @@ func (u *bucketBuilder) finalize(ctx context.Context, ns tree.NodeStore) (DoltBu
 		}
 	}
 	return DoltBucket{
-		RowCount:      uint64(u.count),
-		DistinctCount: uint64(u.distinct),
-		BoundCount:    uint64(u.currentCnt),
-		Mcvs:          mcvRows,
-		McvCount:      u.mcvs.Counts(),
-		UpperBound:    upperBound,
-		NullCount:     uint64(u.nulls),
+		Bucket: &stats.Bucket{
+			RowCnt:      uint64(u.count),
+			DistinctCnt: uint64(u.distinct),
+			BoundCnt:    uint64(u.currentCnt),
+			McvVals:     mcvRows,
+			McvsCnt:     u.mcvs.Counts(),
+			BoundVal:    upperBound,
+			NullCnt:     uint64(u.nulls),
+		},
 	}, nil
 }
 

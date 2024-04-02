@@ -168,18 +168,18 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, br
 			curStat, ok := statDb.GetStat(branch, qual)
 			if !ok {
 				curStat = NewDoltStats()
-				curStat.Qual = qual
+				curStat.Statistic.Qual = qual
 
 				cols := make([]string, len(index.Expressions()))
 				tablePrefix := fmt.Sprintf("%s.", table)
 				for i, c := range index.Expressions() {
 					cols[i] = strings.TrimPrefix(strings.ToLower(c), tablePrefix)
 				}
-				curStat.Columns = cols
+				curStat.Statistic.Cols = cols
 			}
 			ctx.GetLogger().Debugf("statistics refresh index: %s", qual.String())
 
-			updateMeta, err := newIdxMeta(ctx, curStat, dTab, index, curStat.Columns)
+			updateMeta, err := newIdxMeta(ctx, curStat, dTab, index, curStat.Columns())
 			if err != nil {
 				ctx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
 				continue
@@ -215,7 +215,7 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, br
 				if _, ok := statDb.GetStat(branch, updateMeta.qual); !ok {
 					err = statDb.SetStat(ctx, branch, updateMeta.qual, stat)
 				} else {
-					err = statDb.ReplaceChunks(ctx, branch, updateMeta.qual, updateMeta.allAddrs, updateMeta.dropChunks, stat.Histogram)
+					err = statDb.ReplaceChunks(ctx, branch, updateMeta.qual, updateMeta.allAddrs, updateMeta.dropChunks, stat.Hist)
 				}
 				if err != nil {
 					return err
