@@ -51,7 +51,7 @@ type indexRec struct {
 	kind indexRecKind
 
 	// encoded chunk index
-	payload []byte
+	payload []lookup
 
 	// index record crc32 checksum
 	checksum uint32
@@ -84,21 +84,21 @@ const (
 	indexRecChecksumSz = 4
 )
 
-func journalIndexRecordSize(idx []byte) (recordSz uint32) {
+func journalIndexRecordSize(lookups []lookup) (recordSz uint32) {
 	recordSz += indexRecLenSz
 	recordSz += indexRecTagSz + indexRecLastRootSz
 	recordSz += indexRecTagSz + indexRecOffsetSz
 	recordSz += indexRecTagSz + indexRecOffsetSz
 	recordSz += indexRecTagSz + indexRecKindSz
 	recordSz += indexRecTagSz // payload tag
-	recordSz += uint32(len(idx))
+	recordSz += uint32(len(lookups) * lookupSize)
 	recordSz += indexRecChecksumSz
 	return
 }
 
-func writeJournalIndexRecord(buf []byte, root hash.Hash, start, end uint64, idx []byte) (n uint32) {
+func writeJournalIndexRecord(buf []byte, root hash.Hash, size uint32, start, end uint64, lookups []lookup) (n uint32) {
 	// length
-	l := journalIndexRecordSize(idx)
+	l := size
 	writeUint32(buf[:indexRecLenSz], l)
 	n += indexRecLenSz
 	// last root
@@ -124,8 +124,9 @@ func writeJournalIndexRecord(buf []byte, root hash.Hash, start, end uint64, idx 
 	// payload
 	buf[n] = byte(payloadIndexRecTag)
 	n += indexRecTagSz
-	copy(buf[n:], idx)
-	n += uint32(len(idx))
+	serializeLookups(buf[n:], lookups)
+	n += uint32(len(lookups) * lookupSize)
+
 	// checksum
 	writeUint32(buf[n:], crc(buf[:n]))
 	n += indexRecChecksumSz
@@ -154,7 +155,8 @@ func readJournalIndexRecord(buf []byte) (rec indexRec, err error) {
 			buf = buf[indexRecKindSz:]
 		case payloadIndexRecTag:
 			sz := len(buf) - indexRecChecksumSz
-			rec.payload = buf[:sz]
+			// TODO parse these as lookups
+			rec.payload = deserializeLookups(buf[:sz])
 			buf = buf[sz:]
 		case unknownIndexRecTag:
 			fallthrough
@@ -241,12 +243,10 @@ type lookup struct {
 const lookupSize = hash.ByteLen + offsetSize + lengthSize
 
 // serializeLookups serializes |lookups| using the table file chunk index format.
-func serializeLookups(lookups []lookup) (index []byte) {
-	index = make([]byte, len(lookups)*lookupSize)
+func serializeLookups(buf []byte, lookups []lookup) {
 	sort.Slice(lookups, func(i, j int) bool { // sort by addr
 		return bytes.Compare(lookups[i].a[:], lookups[j].a[:]) < 0
 	})
-	buf := index
 	for _, l := range lookups {
 		copy(buf, l.a[:])
 		buf = buf[hash.ByteLen:]

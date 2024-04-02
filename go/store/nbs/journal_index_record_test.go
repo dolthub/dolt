@@ -36,7 +36,7 @@ func TestRoundTripIndexRecords(t *testing.T) {
 			start = end
 			assert.Equal(t, rec.length, uint32(len(buf)))
 			b := make([]byte, rec.length)
-			n := writeJournalIndexRecord(b, rec.lastRoot, rec.start, rec.end, mustPayload(rec))
+			n := writeJournalIndexRecord(b, rec.lastRoot, rec.length, rec.start, rec.end, mustPayload(rec))
 			assert.Equal(t, n, rec.length)
 			assert.Equal(t, buf, b)
 			r, err := readJournalIndexRecord(buf)
@@ -70,7 +70,7 @@ func TestProcessIndexRecords(t *testing.T) {
 		end := start + (rand.Uint64() % 1024)
 		r, b := makeTableIndexRecord(start, end)
 		start = end
-		off += writeJournalIndexRecord(index[off:], r.lastRoot, r.start, r.end, mustPayload(r))
+		off += writeJournalIndexRecord(index[off:], r.lastRoot, r.length, r.start, r.end, mustPayload(r))
 		records[i], buffers[i] = r, b
 	}
 	index = index[:off]
@@ -99,14 +99,18 @@ func TestProcessIndexRecords(t *testing.T) {
 
 func TestRoundTripLookups(t *testing.T) {
 	exp := makeLookups(128)
-	buf := serializeLookups(exp)
+	buf := make([]byte, len(exp)*lookupSize)
+	serializeLookups(buf, exp)
 	act := deserializeLookups(buf)
 	assert.Equal(t, exp, act)
-
 }
 
 func makeTableIndexRecord(start, end uint64) (indexRec, []byte) {
-	payload := randBuf(100)
+	var payload []lookup
+	hashes := randBuf(100)
+	for i := 0; i < 100; i += hash.ByteLen {
+		payload = append(payload, lookup{a: hash.Hash(hashes[i : i+hash.ByteLen]), r: Range{Offset: uint64(i), Length: uint32(hash.ByteLen)}})
+	}
 	sz := journalIndexRecordSize(payload)
 	lastRoot := hash.Of([]byte("fake commit"))
 
@@ -144,8 +148,8 @@ func makeTableIndexRecord(start, end uint64) (indexRec, []byte) {
 	// payload
 	buf[n] = byte(payloadIndexRecTag)
 	n += indexRecTagSz
-	copy(buf[n:], payload)
-	n += len(payload)
+	serializeLookups(buf[n:], payload)
+	n += len(payload) * lookupSize
 
 	// checksum
 	c := crc(buf[:len(buf)-indexRecChecksumSz])
@@ -183,7 +187,7 @@ func appendCorruptIndexRecord(buf []byte) []byte {
 	return append(buf, tail...)
 }
 
-func mustPayload(rec indexRec) []byte {
+func mustPayload(rec indexRec) []lookup {
 	d.PanicIfFalse(rec.kind == tableIndexRecKind)
 	return rec.payload
 }

@@ -225,7 +225,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 					select {
 					case <-ectx.Done():
 						return ectx.Err()
-					case ch <- deserializeLookups(r.payload):
+					case ch <- r.payload:
 						// record a high-water-mark for the indexed portion of the journal
 						wr.indexed = int64(r.end)
 					}
@@ -420,9 +420,11 @@ func (wr *journalWriter) commitRootHashUnlocked(root hash.Hash) error {
 // flushIndexRecord writes a new record to the out-of-band journal index file. Index records
 // accelerate journal bootstrapping by reducing the amount of the journal that must be processed.
 func (wr *journalWriter) flushIndexRecord(root hash.Hash, end int64) (err error) {
-	payload := serializeLookups(wr.ranges.novelLookups())
-	buf := make([]byte, journalIndexRecordSize(payload))
-	writeJournalIndexRecord(buf, root, uint64(wr.indexed), uint64(end), payload)
+	// TODO combine these two, don't make two buffers
+	//payload := serializeLookups(wr.ranges.novelLookups())
+	size := journalIndexRecordSize(wr.ranges.novelLookups())
+	buf := make([]byte, size)
+	writeJournalIndexRecord(buf, root, size, uint64(wr.indexed), uint64(end), wr.ranges.novelLookups())
 	if _, err = wr.index.Write(buf); err != nil {
 		return err
 	}
