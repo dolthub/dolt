@@ -412,7 +412,7 @@ func (wr *journalWriter) commitRootHashUnlocked(root hash.Hash) error {
 	wr.unsyncd = 0
 	if wr.ranges.novelCount() > wr.maxNovel {
 		o := wr.offset() - int64(n) // pre-commit journal offset
-		go wr.flushIndexRecord(root, o)
+		wr.flushIndexRecord(root, o)
 	}
 	return err
 }
