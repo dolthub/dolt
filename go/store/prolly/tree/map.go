@@ -16,6 +16,7 @@ package tree
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -62,6 +63,54 @@ func DiffOrderedTrees[K, V ~[]byte, O Ordering[K]](
 		}
 	}
 	return err
+}
+
+// NM4. gdoc.
+func ChunkAddressDiffOrderedTrees[K, V ~[]byte, O Ordering[K]](
+	ctx context.Context,
+	from, to StaticMap[K, V, O],
+	cb DiffFn,
+) error {
+	differ, err := AddressDifferFromRoots[K](ctx, from.NodeStore, to.NodeStore, from.Root, to.Root, from.Order)
+	if err != nil {
+		return err
+	}
+
+	for {
+		var diff Diff
+		if diff, err = differ.Next(ctx); err != nil {
+			break
+		}
+
+		if err = cb(ctx, diff); err != nil {
+			break
+		}
+	}
+	return err
+}
+
+var ErrShallowTree = errors.New("tree too shallow") // NM4 We can do better than this. TBD.
+func AddressDifferFromRoots[K ~[]byte, O Ordering[K]](
+	ctx context.Context,
+	fromNs NodeStore, toNs NodeStore,
+	from, to Node,
+	order O,
+) (Differ[K, O], error) {
+	orig, err := DifferFromRoots[K, O](ctx, fromNs, toNs, from, to, order, false)
+	if err != nil {
+		return orig, err
+	}
+	// TODO: Handle from.parent == nil || to.parent == nil == NM4, if there are no parents, it's probably too small to bother for compression. TBD.
+	orig.from = orig.from.parent
+	orig.to = orig.to.parent
+	orig.fromStop = orig.fromStop.parent
+	orig.toStop = orig.toStop.parent
+
+	if orig.from == nil || orig.to == nil || orig.fromStop == nil || orig.toStop == nil {
+		return orig, ErrShallowTree
+	}
+
+	return orig, err
 }
 
 func DiffKeyRangeOrderedTrees[K, V ~[]byte, O Ordering[K]](

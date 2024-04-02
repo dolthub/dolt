@@ -34,10 +34,11 @@ import (
 
 const defaultDictionarySize = 1 << 12
 const levensteinThreshold = 0.9
+const dictCompressionThreshold = 0.775
 
 type PrintfFunc func(format string, args ...interface{})
 
-func RunExperiment(cs chunks.ChunkStore, p PrintfFunc) (err error) {
+func RunExperiment(cs chunks.ChunkStore, dagGroups *ChunkRelations, p PrintfFunc) (err error) {
 	if gs, ok := cs.(*GenerationalNBS); ok {
 		oldgen := gs.oldGen.tables.upstream
 
@@ -95,8 +96,10 @@ func RunExperiment(cs chunks.ChunkStore, p PrintfFunc) (err error) {
 
 			lengthGroups := map[uint64][]*chunks.Chunk{}
 
-			ungroupedChunks := map[*chunks.Chunk]struct{}{}
-			groupedChunks := map[*chunks.Chunk]*chunkGroup{}
+			ungroupedChunks := map[hash.Hash]*chunks.Chunk{}
+			preGroupedChunks := map[hash.Hash]*chunks.Chunk{}
+
+			totalChunkCount := 0
 
 			bottleneck := sync.Mutex{}
 			var stats Stats
@@ -104,7 +107,14 @@ func RunExperiment(cs chunks.ChunkStore, p PrintfFunc) (err error) {
 				bottleneck.Lock()
 				defer bottleneck.Unlock()
 
-				ungroupedChunks[c] = struct{}{}
+				totalChunkCount++
+
+				h := c.Hash()
+				if dagGroups.Contains(h) {
+					preGroupedChunks[h] = c
+				} else {
+					ungroupedChunks[h] = c
+				}
 
 				if len(c.Data()) > 10 {
 					b := c.Data()
@@ -124,60 +134,70 @@ func RunExperiment(cs chunks.ChunkStore, p PrintfFunc) (err error) {
 				panic(err)
 			}
 
-			type groupStat struct {
-				id    uint64
-				count int
-			}
-
 			// We have every chunk in memory. noice
 
-			lenStat := []groupStat{}
-			// Loop over lengths, and build an array of the chunk counts then sort them.
-			for k, v := range lengthGroups {
-				lenStat = append(lenStat, groupStat{k, len(v)})
-			}
-			sort.Slice(lenStat, func(i, j int) bool { return lenStat[i].count > lenStat[j].count })
+			cgList := dagGroups.convertToChunkGroups(preGroupedChunks)
 
-			cgList := []*chunkGroup{}
-			for _, v := range lenStat {
-				similarGroups := levensteinGrouping(lengthGroups[v.id], levensteinThreshold)
-				for _, cg := range similarGroups {
-					if cg.cmpRatio > 0.70 {
-						for _, c := range cg.rawChks {
-							delete(ungroupedChunks, c)
-							groupedChunks[c] = cg
-						}
-						cgList = append(cgList, cg)
-					}
+			/*
+				type groupStat struct {
+					id    uint64
+					count int
 				}
-			}
 
-			prefixGroups := map[uint64][]*chunks.Chunk{}
-			for c, _ := range ungroupedChunks {
-				prefixGroups[c.Hash().Prefix()] = append(prefixGroups[c.Hash().Prefix()], c)
-			}
-			perfStats := []groupStat{}
-			for k, v := range prefixGroups {
-				perfStats = append(perfStats, groupStat{k, len(v)})
-			}
-			sort.Slice(perfStats, func(i, j int) bool { return perfStats[i].count > perfStats[j].count })
-			for _, v := range perfStats {
-				similarGroups := levensteinGrouping(prefixGroups[v.id], levensteinThreshold)
-				for _, cg := range similarGroups {
-					if cg.cmpRatio > 0.703 {
-						for _, c := range cg.rawChks {
-							delete(ungroupedChunks, c)
-							groupedChunks[c] = cg
-						}
-						cgList = append(cgList, cg)
+
+					lenStat := []groupStat{}
+					// Loop over lengths, and build an array of the chunk counts then sort them.
+					for k, v := range lengthGroups {
+						lenStat = append(lenStat, groupStat{k, len(v)})
 					}
-				}
-			}
+					sort.Slice(lenStat, func(i, j int) bool { return lenStat[i].count > lenStat[j].count })
+
+					cgList := []*chunkGroup{}
+					for _, v := range lenStat {
+						similarGroups := levensteinGrouping(lengthGroups[v.id], levensteinThreshold)
+						for _, cg := range similarGroups {
+							if cg.cmpRatio > 0.70 {
+								for _, c := range cg.rawChks {
+									delete(ungroupedChunks, c)
+									groupedChunks[c] = cg
+								}
+								cgList = append(cgList, cg)
+							}
+						}
+					}
+
+					prefixGroups := map[uint64][]*chunks.Chunk{}
+					for c, _ := range ungroupedChunks {
+						prefixGroups[c.Hash().Prefix()] = append(prefixGroups[c.Hash().Prefix()], c)
+					}
+					perfStats := []groupStat{}
+					for k, v := range prefixGroups {
+						perfStats = append(perfStats, groupStat{k, len(v)})
+					}
+					sort.Slice(perfStats, func(i, j int) bool { return perfStats[i].count > perfStats[j].count })
+					for _, v := range perfStats {
+						similarGroups := levensteinGrouping(prefixGroups[v.id], levensteinThreshold)
+						for _, cg := range similarGroups {
+							if cg.cmpRatio > 0.703 {
+								for _, c := range cg.rawChks {
+									delete(ungroupedChunks, c)
+									groupedChunks[c] = cg
+								}
+								cgList = append(cgList, cg)
+							}
+						}
+					}
+			*/
 
 			sort.Slice(cgList, func(i, j int) bool { return cgList[i].cmpRatio > cgList[j].cmpRatio })
 			for _, cg := range cgList {
 				cg.print(p)
 			}
+
+			unGroupCount := 0
+			groupCount := 0
+
+			////////////////////// NM4 FILE WRITE..............
 
 			outName := fmt.Sprintf("%s.darc", tf.String())
 			file, err := os.Create(outName)
@@ -187,36 +207,59 @@ func RunExperiment(cs chunks.ChunkStore, p PrintfFunc) (err error) {
 
 			// Create an io.Writer that writes to the file
 			writer := io.Writer(file)
-
 			arcW := newArchiveWriter(writer)
 
-			for c, _ := range ungroupedChunks {
+			for h, c := range ungroupedChunks {
 				compressed := gozstd.Compress(nil, c.Data())
 				id, err := arcW.writeByteSpan(compressed)
 				if err != nil {
 					panic(err)
 				}
-				err = arcW.stageChunk(c.Hash(), 0, id)
-			}
-
-			for _, cg := range cgList {
-				dictId, err := arcW.writeByteSpan(cg.dict)
+				err = arcW.stageChunk(h, 0, id)
 				if err != nil {
 					panic(err)
 				}
+				unGroupCount++
+			}
 
-				dict, err := gozstd.NewCDict(cg.dict)
+			for _, cg := range cgList {
+				if cg.cmpRatio < dictCompressionThreshold {
+					// Not a good group, just write the chunks out individually.
+					for _, c := range cg.rawChks {
+						if !arcW.chunkSeen(c.Hash()) {
+							compressed := gozstd.Compress(nil, c.Data())
+							id, err := arcW.writeByteSpan(compressed)
+							if err != nil {
+								panic(err)
+							}
+							err = arcW.stageChunk(c.Hash(), 0, id)
+							if err != nil {
+								panic(err)
+							}
 
-				for _, c := range cg.rawChks {
-					compressed := gozstd.CompressDict(nil, c.Data(), dict)
-
-					dataId, err := arcW.writeByteSpan(compressed)
+							unGroupCount++
+						}
+					}
+				} else {
+					dictId, err := arcW.writeByteSpan(cg.dict)
 					if err != nil {
 						panic(err)
 					}
-					err = arcW.stageChunk(c.Hash(), dictId, dataId)
-					if err != nil {
-						panic(err)
+
+					for _, c := range cg.rawChks {
+						if !arcW.chunkSeen(c.Hash()) {
+							compressed := gozstd.CompressDict(nil, c.Data(), cg.cDict)
+
+							dataId, err := arcW.writeByteSpan(compressed)
+							if err != nil {
+								panic(err)
+							}
+							err = arcW.stageChunk(c.Hash(), dictId, dataId)
+							if err != nil {
+								panic(err)
+							}
+							groupCount++
+						}
 					}
 				}
 			}
@@ -233,6 +276,14 @@ func RunExperiment(cs chunks.ChunkStore, p PrintfFunc) (err error) {
 			err = file.Close()
 			if err != nil {
 				panic(err)
+			}
+
+			p("grouped: %d\n", groupCount)
+			p("ungrouped: %d\n", unGroupCount)
+
+			if groupCount+unGroupCount != totalChunkCount {
+				missing := totalChunkCount - (groupCount + unGroupCount)
+				panic(fmt.Sprintf("chunk count mismatch. Missing: %d", missing))
 			}
 		}
 	}
@@ -395,12 +446,36 @@ type chunkGroup struct {
 	dict  []byte
 	cDict *gozstd.CDict
 
-	// The chunk which has the highest similarity to the rest of the group. Used to quickly determine if other chunks
-	// could be added to this group.
+	// NM4 The chunk which has the highest similarity to the rest of the group. Used to quickly determine if other chunks
+	// could be added to this group. DEPRECATED.
 	leader  *chunks.Chunk
 	rawChks []*chunks.Chunk
 
 	cmpRatio float64
+}
+
+func buildChunkGroup(leader *chunks.Chunk, chks []*chunks.Chunk) *chunkGroup {
+	var cDict *gozstd.CDict
+	samples := packSamples(chks)
+
+	dict, cDict := buildDictionary(samples)
+
+	result := chunkGroup{dict: dict, leader: leader, rawChks: chks, cmpRatio: -1.0, cDict: cDict}
+	result.calcRatio()
+	return &result
+}
+
+// For whatever reason, we need 7 or more samples to build a dictionary. But in principle we only need 1. So duplicate
+// the samples until we have enough. Note that we need to add each chunk the same number of times do we don't end up
+// with bias in the dictionary.
+func packSamples(chks []*chunks.Chunk) []*chunks.Chunk {
+	samples := []*chunks.Chunk{}
+	for len(samples) < 7 {
+		for _, c := range chks {
+			samples = append(samples, c)
+		}
+	}
+	return samples
 }
 
 func buildDictionary(chks []*chunks.Chunk) (dict []byte, cDict *gozstd.CDict) {
@@ -423,7 +498,6 @@ func buildDictionary(chks []*chunks.Chunk) (dict []byte, cDict *gozstd.CDict) {
 }
 
 func (cg *chunkGroup) calcRatio() {
-	// Now, let's compress all the chunks with that dict.
 	raw := 0
 	cmpSize := 0
 	for _, c := range cg.rawChks {
@@ -439,20 +513,6 @@ func (cg *chunkGroup) calcRatio() {
 	cg.cmpRatio = float64(raw-cmpSize) / float64(raw)
 }
 
-func buildChunkGroup(leader *chunks.Chunk, chks []*chunks.Chunk) chunkGroup {
-	var cDict *gozstd.CDict
-	if len(chks) < 7 {
-		// Not enough samples to build a dict.
-		panic("not enough samples to build a dict")
-	}
-
-	dict, cDict := buildDictionary(chks)
-
-	result := chunkGroup{dict: dict, leader: leader, rawChks: chks, cmpRatio: -1.0, cDict: cDict}
-	result.calcRatio()
-	return result
-}
-
 func (cg *chunkGroup) addChunk(c *chunks.Chunk) {
 	cg.rawChks = append(cg.rawChks, c)
 	cg.dict, cg.cDict = buildDictionary(cg.rawChks)
@@ -460,13 +520,108 @@ func (cg *chunkGroup) addChunk(c *chunks.Chunk) {
 }
 
 func (cg *chunkGroup) print(p PrintfFunc) {
-	p("------------ GROUP ------------------\n")
-	p("leader: %s\n", cg.leader.Hash().String())
-	p("dict: %d\n", len(cg.dict))
-	p("cmpRatio: %f\n", cg.cmpRatio)
-	p("chunks: %d\n", len(cg.rawChks))
+	if cg.cmpRatio > dictCompressionThreshold {
+		p("------------ GROUP ------------------\n")
+		p("leader: %s\n", cg.leader.Hash().String())
+		p("dict: %d\n", len(cg.dict))
+		p("cmpRatio: %f\n", cg.cmpRatio)
+		p("chunks: %d\n", len(cg.rawChks))
+	}
 }
 
+func NewChunkRelations() ChunkRelations {
+	m := make(map[hash.Hash]*hash.HashSet)
+	return ChunkRelations{m}
+}
+
+type ChunkRelations struct {
+	manyToGroup map[hash.Hash]*hash.HashSet
+}
+
+func (cr *ChunkRelations) Count() int {
+	return len(cr.manyToGroup)
+}
+
+func (cr *ChunkRelations) convertToChunkGroups(chks map[hash.Hash]*chunks.Chunk) []*chunkGroup {
+	result := make([]*chunkGroup, 0, cr.Count())
+	// For each group, look up the addresses and build a chunk group.
+	for _, v := range cr.groups() {
+		var c []*chunks.Chunk
+		for h := range v {
+			c = append(c, chks[h])
+		}
+
+		result = append(result, buildChunkGroup(c[0], c))
+	}
+	return result
+}
+
+func (cr *ChunkRelations) groups() []hash.HashSet {
+	seen := map[*hash.HashSet]struct{}{}
+	groups := make([]hash.HashSet, 0, len(cr.manyToGroup))
+	for _, v := range cr.manyToGroup {
+		if _, ok := seen[v]; !ok {
+			groups = append(groups, *v)
+			seen[v] = struct{}{}
+		}
+	}
+	return groups
+}
+
+func (cr *ChunkRelations) Contains(h hash.Hash) bool {
+	_, ok := cr.manyToGroup[h]
+	return ok
+}
+
+func (cr *ChunkRelations) Add(a, b hash.Hash) {
+	aNew := true
+	bNew := true
+	if _, ok := cr.manyToGroup[a]; ok {
+		aNew = false
+	}
+	if _, ok := cr.manyToGroup[b]; ok {
+		bNew = false
+	}
+
+	if aNew && bNew {
+		newGroup := hash.NewHashSet(a, b)
+
+		cr.manyToGroup[a] = &newGroup
+		cr.manyToGroup[b] = &newGroup
+		return
+	}
+
+	if !aNew && bNew {
+		cr.manyToGroup[a].Insert(b)
+		cr.manyToGroup[b] = cr.manyToGroup[a]
+		return
+	}
+
+	if aNew && !bNew {
+		cr.manyToGroup[b].Insert(a)
+		cr.manyToGroup[a] = cr.manyToGroup[b]
+		return
+	}
+
+	// Both are not new, and they are already in the same group.
+	if cr.manyToGroup[a] == cr.manyToGroup[b] {
+		return
+	}
+
+	// Both are not new, and they are in different groups. Merge the groups.
+	merged := hash.NewHashSet()
+	for h := range *cr.manyToGroup[a] {
+		merged.Insert(h)
+	}
+	for h := range *cr.manyToGroup[b] {
+		merged.Insert(h)
+	}
+	for h := range merged {
+		cr.manyToGroup[h] = &merged
+	}
+}
+
+/*
 func levensteinGrouping(sims []*chunks.Chunk, scoreThreshold float64) []*chunkGroup {
 	type highScore struct {
 		chunk *chunks.Chunk
@@ -548,7 +703,7 @@ func levensteinGrouping(sims []*chunks.Chunk, scoreThreshold float64) []*chunkGr
 		if leader, ok := leaders[i]; ok {
 			if len(groups[i]) >= 7 {
 				cg := buildChunkGroup(leader, groups[i])
-				result = append(result, &cg)
+				result = append(result, cg)
 			}
 		}
 	}
@@ -608,3 +763,4 @@ func levenshteinDistance(a, b []byte) int {
 
 	return lev
 }
+*/

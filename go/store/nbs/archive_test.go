@@ -295,6 +295,32 @@ func TestArchiveBlockCorruption(t *testing.T) {
 	assert.Nil(t, data)
 }
 
+func TestDuplicateInsertion(t *testing.T) {
+	writer := NewFixedBufferTableSink(make([]byte, 1024))
+	aw := newArchiveWriter(writer)
+	testBlob := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	_, _ = aw.writeByteSpan(testBlob)
+
+	h := hashWithPrefix(t, 23)
+	_ = aw.stageChunk(h, 0, 1)
+	err := aw.stageChunk(h, 0, 1)
+	assert.Equal(t, ErrDuplicateChunkWritten, err)
+}
+
+func TestInsertRanges(t *testing.T) {
+	writer := NewFixedBufferTableSink(make([]byte, 1024))
+	aw := newArchiveWriter(writer)
+	testBlob := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	_, _ = aw.writeByteSpan(testBlob)
+
+	h := hashWithPrefix(t, 23)
+	err := aw.stageChunk(h, 0, 2)
+	assert.Equal(t, ErrInvalidChunkRange, err)
+
+	err = aw.stageChunk(h, 2, 1)
+	assert.Equal(t, ErrInvalidDictionaryRange, err)
+}
+
 func TestPrefixSearch(t *testing.T) {
 	pf := []uint64{2, 3, 4, 4, 4, 5, 6, 7, 10, 10, 11, 12, 13}
 
@@ -313,6 +339,62 @@ func TestPrefixSearch(t *testing.T) {
 	assert.Equal(t, []int{0, 1, 2}, findMatchingPrefixes(pf, 23))
 	assert.Equal(t, []int{}, findMatchingPrefixes(pf, 24)) // Don't run off the end is busted ways.
 	assert.Equal(t, []int{}, findMatchingPrefixes(pf, 22))
+}
+
+func TestChunkRelations(t *testing.T) {
+	cr := NewChunkRelations()
+	assert.Equal(t, 0, cr.Count())
+
+	h1 := hashWithPrefix(t, 1)
+	h2 := hashWithPrefix(t, 2)
+	h3 := hashWithPrefix(t, 3)
+	h4 := hashWithPrefix(t, 4)
+	h5 := hashWithPrefix(t, 5)
+	h6 := hashWithPrefix(t, 6)
+	h7 := hashWithPrefix(t, 7)
+
+	cr.Add(h1, h2)
+	assert.Equal(t, 2, cr.Count())
+	assert.Equal(t, 1, len(cr.groups()))
+
+	cr.Add(h3, h4)
+	assert.Equal(t, 4, cr.Count())
+	assert.Equal(t, 2, len(cr.groups()))
+
+	cr.Add(h5, h6)
+	assert.Equal(t, 6, cr.Count())
+	assert.Equal(t, 3, len(cr.groups()))
+
+	// restart.
+	cr = NewChunkRelations()
+
+	cr.Add(h1, h2)
+	assert.Equal(t, 2, cr.Count())
+	assert.Equal(t, 1, len(cr.groups()))
+
+	cr.Add(h2, h3)
+	assert.Equal(t, 3, cr.Count())
+	assert.Equal(t, 1, len(cr.groups()))
+
+	cr.Add(h2, h3) // Adding again should have no effect.
+	assert.Equal(t, 3, cr.Count())
+	assert.Equal(t, 1, len(cr.groups()))
+
+	cr.Add(h4, h5) // New group.
+	assert.Equal(t, 5, cr.Count())
+	assert.Equal(t, 2, len(cr.groups()))
+
+	cr.Add(h6, h7) // New group.
+	assert.Equal(t, 7, cr.Count())
+	assert.Equal(t, 3, len(cr.groups()))
+
+	cr.Add(h1, h7) // Merging groups.
+	assert.Equal(t, 7, cr.Count())
+	assert.Equal(t, 2, len(cr.groups()))
+
+	cr.Add(h2, h5) // Another merge into one mega group.
+	assert.Equal(t, 7, cr.Count())
+	assert.Equal(t, 1, len(cr.groups()))
 }
 
 func hashWithPrefix(t *testing.T, prefix uint64) hash.Hash {

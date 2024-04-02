@@ -156,10 +156,11 @@ type archiveWriter struct {
 	bytesWritten uint64
 	stagedBytes  stagedByteSpanSlice
 	stagedChunks stagedChunkRefSlice
+	seenChunks   hash.HashSet
 }
 
 func newArchiveWriter(output io.Writer) *archiveWriter {
-	return &archiveWriter{output: output}
+	return &archiveWriter{output: output, seenChunks: hash.NewHashSet()}
 }
 
 // writeByteSpan writes a byte span to the archive, returning the ByteSpan ID if the write was successful. Note
@@ -193,10 +194,18 @@ func (aw *archiveWriter) writeByteSpan(b []byte) (uint32, error) {
 	return uint32(len(aw.stagedBytes)), nil
 }
 
+func (aw *archiveWriter) chunkSeen(h hash.Hash) bool {
+	return aw.seenChunks.Has(h)
+}
+
 func (aw *archiveWriter) stageChunk(hash hash.Hash, dictionary, data uint32) error {
 	if data == 0 || data > uint32(len(aw.stagedBytes)) {
 		return ErrInvalidChunkRange
 	}
+	if aw.seenChunks.Has(hash) {
+		return ErrDuplicateChunkWritten
+	}
+	aw.seenChunks.Insert(hash)
 
 	if dictionary > uint32(len(aw.stagedBytes)) {
 		return ErrInvalidDictionaryRange
