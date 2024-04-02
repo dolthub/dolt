@@ -43,7 +43,7 @@ const (
 	journalIndexFileName = "journal.idx"
 
 	// journalIndexDefaultMaxNovel determines how often we flush
-	// records qto the out-of-band journal index file.
+	// records to the out-of-band journal index file.
 	journalIndexDefaultMaxNovel = 16384
 
 	// journalMaybeSyncThreshold determines how much un-syncd written data
@@ -412,7 +412,7 @@ func (wr *journalWriter) commitRootHashUnlocked(root hash.Hash) error {
 	wr.unsyncd = 0
 	if wr.ranges.novelCount() > wr.maxNovel {
 		o := wr.offset() - int64(n) // pre-commit journal offset
-		err = wr.flushIndexRecord(root, o)
+		go wr.flushIndexRecord(root, o)
 	}
 	return err
 }
@@ -420,15 +420,22 @@ func (wr *journalWriter) commitRootHashUnlocked(root hash.Hash) error {
 // flushIndexRecord writes a new record to the out-of-band journal index file. Index records
 // accelerate journal bootstrapping by reducing the amount of the journal that must be processed.
 func (wr *journalWriter) flushIndexRecord(root hash.Hash, end int64) (err error) {
-	payload := serializeLookups(wr.ranges.novelLookups())
-	buf := make([]byte, journalIndexRecordSize(payload))
-	writeJournalIndexRecord(buf, root, uint64(wr.indexed), uint64(end), payload)
-	if _, err = wr.index.Write(buf); err != nil {
-		return err
-	}
+	oldNovel := wr.ranges.novel
 	wr.ranges = wr.ranges.flatten()
 	// set a new high-water-mark for the indexed portion of the journal
 	wr.indexed = end
+
+	go func() {
+		lookups := make([]lookup, 0, oldNovel.Count())
+		oldNovel.Iter(func(a hash.Hash, r Range) (stop bool) {
+			lookups = append(lookups, lookup{a: a, r: r})
+			return
+		})
+		payload := serializeLookups(lookups)
+		buf := make([]byte, journalIndexRecordSize(payload))
+		writeJournalIndexRecord(buf, root, uint64(wr.indexed), uint64(end), payload)
+		wr.index.Write(buf)
+	}()
 	return
 }
 
