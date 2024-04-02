@@ -206,7 +206,7 @@ func TestNBSPruneTableFiles(t *testing.T) {
 	c := chunks.NewChunk([]byte("it's a boy!"))
 	addrs := hash.NewHashSet()
 	ok, err := st.addChunk(ctx, c, func(c chunks.Chunk) chunks.GetAddrsCb {
-		return func(ctx context.Context, _ hash.HashSet) error {
+		return func(ctx context.Context, _ hash.HashSet, _ chunks.PendingRefExists) error {
 			addrs.Insert(c.Hash())
 			return nil
 		}

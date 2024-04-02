@@ -111,10 +111,6 @@ func (g *GhostBlockStore) PersistGhostHashes(ctx context.Context, hashes hash.Ha
 	return nil
 }
 
-func (g GhostBlockStore) CacheHas(_ hash.Hash) bool {
-	return false
-}
-
 func (g GhostBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	if g.skippedRefs.Has(h) {
 		return true, nil

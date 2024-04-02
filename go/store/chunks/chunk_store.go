@@ -61,7 +61,11 @@ var ErrNothingToCollect = errors.New("no changes since last gc")
 type GetAddrsCurry func(c Chunk) GetAddrsCb
 
 // GetAddrsCb adds the refs for a pre-specified chunk to |addrs|
-type GetAddrsCb func(ctx context.Context, addrs hash.HashSet) error
+type GetAddrsCb func(ctx context.Context, addrs hash.HashSet, exists PendingRefExists) error
+
+type PendingRefExists func(hash.Hash) bool
+
+func NoopPendingRefExists(_ hash.Hash) bool { return false }
 
 // ChunkStore is the core storage abstraction in noms. We can put data
 // anyplace we have a ChunkStore implementation for.
@@ -82,9 +86,6 @@ type ChunkStore interface {
 	// Returns a new HashSet containing any members of |hashes| that are
 	// absent from the store.
 	HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet, err error)
-
-	// CacheHas is an optimization to skip rewriting common refs
-	CacheHas(h hash.Hash) bool
 
 	// Put caches c in the ChunkSource. Upon return, c must be visible to
 	// subsequent Get and Has calls, but must not be persistent until a call

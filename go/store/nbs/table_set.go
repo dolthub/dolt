@@ -291,7 +291,7 @@ func (ts tableSet) Size() int {
 func (ts tableSet) append(ctx context.Context, mt *memTable, checker refCheck, hasCache *lru.TwoQueueCache[hash.Hash, struct{}], stats *Stats) (tableSet, error) {
 	addrs := hash.NewHashSet()
 	for _, getAddrs := range mt.getChildAddrs {
-		getAddrs(ctx, addrs)
+		getAddrs(ctx, addrs, func(h hash.Hash) bool { return hasCache.Contains(h) })
 	}
 	mt.addChildRefs(addrs)
 

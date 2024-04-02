@@ -50,10 +50,6 @@ func (fb fileBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, found
 	panic("not impl")
 }
 
-func (fb fileBlockStore) CacheHas(_ hash.Hash) bool {
-	return false
-}
-
 func (fb fileBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	panic("not impl")
 }
@@ -62,7 +58,7 @@ func (fb fileBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (pres
 	panic("not impl")
 }
 
-func (fb fileBlockStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCurry) error {
+func (fb fileBlockStore) Put(ctx context.Context, c chunks.Chunk, _ chunks.GetAddrsCurry) error {
 	_, err := io.Copy(fb.bw, bytes.NewReader(c.Data()))
 	return err
 }

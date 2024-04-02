@@ -112,7 +112,7 @@ func AddrsFromNomsValue(c chunks.Chunk, nbf *NomsBinFormat, addrs hash.HashSet) 
 }
 
 func (lvs *ValueStore) getAddrs(c chunks.Chunk) chunks.GetAddrsCb {
-	return func(ctx context.Context, addrs hash.HashSet) error {
+	return func(ctx context.Context, addrs hash.HashSet, _ chunks.PendingRefExists) error {
 		return AddrsFromNomsValue(c, lvs.nbf, addrs)
 	}
 }
