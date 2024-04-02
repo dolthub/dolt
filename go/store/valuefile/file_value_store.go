@@ -103,7 +103,7 @@ func (f *FileValueStore) WriteValue(ctx context.Context, v types.Value) (types.R
 		}
 
 		err = f.Put(ctx, c, func(c chunks.Chunk) chunks.GetAddrsCb {
-			return func(ctx context.Context, addrs hash.HashSet) error {
+			return func(ctx context.Context, addrs hash.HashSet, _ chunks.PendingRefExists) error {
 				return types.AddrsFromNomsValue(c, f.nbf, addrs)
 			}
 		})
@@ -156,6 +156,11 @@ func (f *FileValueStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	return ok, nil
 }
 
+func (f *FileValueStore) CacheHas(h hash.Hash) bool {
+	_, ok := f.chunks[h]
+	return ok
+}
+
 // HasMany returns the set of hashes that are absent from the store
 func (f *FileValueStore) HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet, err error) {
 	f.chunkLock.Lock()
@@ -188,7 +193,7 @@ func (f *FileValueStore) errorIfDangling(ctx context.Context, addrs hash.HashSet
 // Put puts a chunk into the store
 func (f *FileValueStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCurry) error {
 	addrs := hash.NewHashSet()
-	err := getAddrs(c)(ctx, addrs)
+	err := getAddrs(c)(ctx, addrs, f.CacheHas)
 	if err != nil {
 		return err
 	}

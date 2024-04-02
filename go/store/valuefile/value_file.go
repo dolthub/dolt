@@ -304,7 +304,7 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 		}
 
 		err = store.Put(ctx, ch, func(c chunks.Chunk) chunks.GetAddrsCb {
-			return func(_ context.Context, _ hash.HashSet) error { return nil }
+			return func(_ context.Context, _ hash.HashSet, _ chunks.PendingRefExists) error { return nil }
 		})
 
 		if err != nil {

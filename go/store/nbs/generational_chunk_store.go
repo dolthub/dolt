@@ -307,7 +307,7 @@ func (gcs *GenerationalNBS) copyToOldGen(ctx context.Context, hashes hash.HashSe
 	err = gcs.newGen.GetMany(ctx, notInOldGen, func(ctx context.Context, chunk *chunks.Chunk) {
 		if putErr == nil {
 			putErr = gcs.oldGen.Put(ctx, *chunk, func(c chunks.Chunk) chunks.GetAddrsCb {
-				return func(ctx context.Context, addrs hash.HashSet) error { return nil }
+				return func(ctx context.Context, addrs hash.HashSet, _ chunks.PendingRefExists) error { return nil }
 			})
 		}
 	})

@@ -810,7 +810,7 @@ func (dcs *DoltChunkStore) errorIfDangling(ctx context.Context, addrs hash.HashS
 // Get(), GetMany(), Has() and HasMany().
 func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCurry) error {
 	addrs := hash.NewHashSet()
-	err := getAddrs(c)(ctx, addrs)
+	err := getAddrs(c)(ctx, addrs, func(h hash.Hash) bool { return false })
 	if err != nil {
 		return err
 	}
