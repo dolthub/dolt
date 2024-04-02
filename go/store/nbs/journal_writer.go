@@ -420,8 +420,6 @@ func (wr *journalWriter) commitRootHashUnlocked(root hash.Hash) error {
 // flushIndexRecord writes a new record to the out-of-band journal index file. Index records
 // accelerate journal bootstrapping by reducing the amount of the journal that must be processed.
 func (wr *journalWriter) flushIndexRecord(root hash.Hash, end int64) (err error) {
-	// TODO combine these two, don't make two buffers
-	//payload := serializeLookups(wr.ranges.novelLookups())
 	size := journalIndexRecordSize(wr.ranges.novelLookups())
 	buf := make([]byte, size)
 	writeJournalIndexRecord(buf, root, size, uint64(wr.indexed), uint64(end), wr.ranges.novelLookups())
