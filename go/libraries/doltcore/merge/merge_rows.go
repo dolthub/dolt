@@ -219,19 +219,25 @@ func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string, merge
 		}
 	}
 
-	if !leftSideTableExists && rightSideTableExists {
-		// if left side doesn't have the table... stub it out with an empty table from the right side...
-		tm.leftSch = tm.rightSch
-		tm.leftTbl, err = doltdb.NewEmptyTable(ctx, rm.vrw, rm.ns, tm.leftSch)
-		if err != nil {
-			return nil, err
-		}
-	} else if !rightSideTableExists && leftSideTableExists {
-		// if left side doesn't have the table... stub it out with an empty table from the right side...
-		tm.rightSch = tm.leftSch
-		tm.rightTbl, err = doltdb.NewEmptyTable(ctx, rm.vrw, rm.ns, tm.rightSch)
-		if err != nil {
-			return nil, err
+	// If we need to re-verify all constraints, then we need to stub out tables
+	// that don't exist, so that the diff logic can compare an empty table to
+	// the table containing the real data. This is required by dolt_verify_constraints()
+	// so that we can run the merge logic on all rows in all tables.
+	if mergeOpts.ReverifyAllConstraints {
+		if !leftSideTableExists && rightSideTableExists {
+			// if left side doesn't have the table... stub it out with an empty table from the right side...
+			tm.leftSch = tm.rightSch
+			tm.leftTbl, err = doltdb.NewEmptyTable(ctx, rm.vrw, rm.ns, tm.leftSch)
+			if err != nil {
+				return nil, err
+			}
+		} else if !rightSideTableExists && leftSideTableExists {
+			// if left side doesn't have the table... stub it out with an empty table from the right side...
+			tm.rightSch = tm.leftSch
+			tm.rightTbl, err = doltdb.NewEmptyTable(ctx, rm.vrw, rm.ns, tm.rightSch)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -256,6 +262,8 @@ func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string, merge
 }
 
 func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm *TableMerger, opts MergeOpts) (*doltdb.Table, *MergeStats, error) {
+	// If we need to re-verify all constraints as part of this merge, then we can't short
+	// circuit considering any tables, so return immediately
 	if opts.ReverifyAllConstraints {
 		return nil, nil, nil
 	}
