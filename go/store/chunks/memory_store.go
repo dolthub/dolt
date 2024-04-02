@@ -231,7 +231,7 @@ func (ms *MemoryStoreView) Put(ctx context.Context, c Chunk, getAddrs GetAddrsCu
 	}
 
 	addrs := hash.NewHashSet()
-	err := getAddrs(c)(ctx, addrs)
+	err := getAddrs(c)(ctx, addrs, NoopPendingRefExists)
 	if err != nil {
 		return err
 	}
