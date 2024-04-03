@@ -122,7 +122,7 @@ func GetTpccTests(config TpccConfig) []Test {
 func configureServer(ctx context.Context, doltPath, dbPath string) error {
 	queries := []string{
 		"set @@PERSIST.dolt_stats_auto_refresh_enabled = 1;",
-		"set @@PERSIST.dolt_stats_auto_refresh_interval = 2;",
+		"set @@PERSIST.dolt_stats_auto_refresh_interval = 30;",
 		"set @@PERSIST.dolt_stats_auto_refresh_threshold = 1.0;",
 	}
 	for _, q := range queries {
