@@ -33,10 +33,19 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+type LockMode uint8
+
+var (
+	LockMode_Traditional LockMode = 0
+	LockMode_Concurret   LockMode = 1
+	LockMode_Interleaved LockMode = 2
+)
+
 type AutoIncrementTracker struct {
 	dbName    string
 	sequences *sync.Map // map[string]uint64
 	mm        *mutexmap.MutexMap
+	lockMode  LockMode
 }
 
 var _ globalstate.AutoIncrementTracker = AutoIncrementTracker{}
@@ -45,7 +54,7 @@ var _ globalstate.AutoIncrementTracker = AutoIncrementTracker{}
 // considered because the auto increment value for a table is tracked globally, across all branches.
 // Roots provided should be the working sets when available, or the branches when they are not (e.g. for remote
 // branches that don't have a local working set)
-func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb.Rootish) (AutoIncrementTracker, error) {
+func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb.Rootish) (*AutoIncrementTracker, error) {
 	ait := AutoIncrementTracker{
 		dbName:    dbName,
 		sequences: &sync.Map{},
@@ -111,8 +120,10 @@ func (a AutoIncrementTracker) Next(tbl string, insertVal interface{}) (uint64, e
 		return 0, err
 	}
 
-	unlocker := a.mm.Lock(tbl)
-	defer unlocker.Unlock()
+	if a.lockMode == LockMode_Interleaved {
+		unlocker := a.mm.Lock(tbl)
+		defer unlocker.Unlock()
+	}
 
 	curr := loadAutoIncValue(a.sequences, tbl)
 

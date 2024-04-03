@@ -206,7 +206,7 @@ func (w *prollyTableWriter) GetNextAutoIncrementValue(ctx *sql.Context, insertVa
 	return w.aiTracker.Next(w.tableName, insertVal)
 }
 
-// SetAutoIncrementValue implements TableWriter.
+// SetAutoIncrementValue implements AutoIncrementSetter.
 func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) error {
 	seq, err := w.aiTracker.CoerceAutoIncrementValue(val)
 	if err != nil {
@@ -220,8 +220,13 @@ func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) 
 	return w.flush(ctx)
 }
 
+func (w *prollyTableWriter) AcquireAutoIncrementLockUntilClose(ctx *sql.Context) {
+	w.aiTracker.AcquireLock()
+}
+
 // Close implements Closer
 func (w *prollyTableWriter) Close(ctx *sql.Context) error {
+	w.aiTracker.ReleaseLockIfNotInInterleavedMode()
 	// We discard data changes in DiscardChanges, but this doesn't include schema changes, which we don't want to flush
 	if w.errEncountered == nil {
 		return w.flush(ctx)
