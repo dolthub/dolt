@@ -74,10 +74,10 @@ func NewChunkFetcher(ctx context.Context, dcs *DoltChunkStore) *ChunkFetcher {
 	eg.Go(func() error {
 		return fetcherHashSetToGetDlLocsReqsThread(ctx, ret.toGetCh, ret.abortCh, locsReqCh, getLocsBatchSize, dcs.repoPath, dcs.getRepoId)
 	})
-        eg.Go(func() error {
-                return fetcherRPCDownloadLocsThread(ctx, locsReqCh, downloadLocCh, dcs.csClient)
-        })
-        eg.Go(func() error {
+	eg.Go(func() error {
+		return fetcherRPCDownloadLocsThread(ctx, locsReqCh, downloadLocCh, dcs.csClient)
+	})
+	eg.Go(func() error {
 		return fetcherDownloadRangesThread(ctx, downloadLocCh, fetchReqCh, locDoneCh)
 	})
 	eg.Go(func() error {
@@ -229,6 +229,7 @@ func fetcherHashSetToGetDlLocsReqsThread(ctx context.Context, reqCh chan hash.Ha
 //
 
 type StateFunc func() (StateFunc, error)
+type CtxStateFunc func(context.Context) (CtxStateFunc, error)
 
 func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.GetDownloadLocsRequest, resCh chan []*remotesapi.DownloadLoc, client remotesapi.ChunkStoreServiceClient) error {
 	var state_InitialState StateFunc
@@ -264,7 +265,6 @@ func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.Ge
 		select {
 		case req, ok := <-reqCh:
 			if !ok {
-				close(resCh)
 				return nil, nil
 			}
 			initialReqs = append(initialReqs, req)
@@ -544,7 +544,7 @@ func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.D
 	}
 }
 
-func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, doneCh chan struct {}, chunkCh chan nbs.CompressedChunk, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, fetcher HTTPFetcher, largeFetchSz uint64, smallFetches, largeFetches int) error {
+func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, doneCh chan struct{}, chunkCh chan nbs.CompressedChunk, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, fetcher HTTPFetcher, largeFetchSz uint64, smallFetches, largeFetches int) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	for i := 0; i < smallFetches; i++ {
 		eg.Go(func() error {
@@ -564,7 +564,7 @@ func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, do
 	return nil
 }
 
-func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, doneCh chan struct {}, chunkCh chan nbs.CompressedChunk, minSz, maxSz uint64, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, fetcher HTTPFetcher) error {
+func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, doneCh chan struct{}, chunkCh chan nbs.CompressedChunk, minSz, maxSz uint64, client remotesapi.ChunkStoreServiceClient, stats StatsRecorder, fetcher HTTPFetcher) error {
 	respCh := make(chan fetchResp)
 	for {
 		select {
@@ -572,7 +572,7 @@ func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, don
 			return context.Cause(ctx)
 		case <-doneCh:
 			return nil
-		case fetchReqCh <- fetchReq{ respCh: respCh, minSz: minSz, maxSz: maxSz}:
+		case fetchReqCh <- fetchReq{respCh: respCh, minSz: minSz, maxSz: maxSz}:
 			select {
 			case <-doneCh:
 				return nil

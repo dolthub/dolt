@@ -80,13 +80,13 @@ func TestBuff(t *testing.T) {
 		for i := 0; i < 16; i++ {
 			assert.Equal(t, i, b.Front())
 			b.Pop()
-			b.Push(i+16)
+			b.Push(i + 16)
 			assert.Equal(t, 16, b.Len())
 		}
 		for i := 0; i < 16; i++ {
 			assert.Equal(t, 16+i, b.Len())
-			b.Push((i*2)+32)
-			b.Push((i*2)+33)
+			b.Push((i * 2) + 32)
+			b.Push((i * 2) + 33)
 			assert.Equal(t, i+16, b.Front())
 			b.Pop()
 		}

@@ -42,11 +42,11 @@ import (
 // ChunkStore. A ChunkFetcher is single use and cannot be used effectively
 // after an error is returned.
 type ChunkFetcher interface {
-        Get(ctx context.Context, hashes hash.HashSet) error
+	Get(ctx context.Context, hashes hash.HashSet) error
 
-        CloseSend() error
+	CloseSend() error
 
-        Recv(context.Context) (CompressedChunk, error)
+	Recv(context.Context) (CompressedChunk, error)
 
-        Close() error
+	Close() error
 }

@@ -16,11 +16,11 @@ package circbuff
 
 type Buff[T any] struct {
 	// The backing array.
-	arr   []T
+	arr []T
 	// Front() and Pop() refer to this element.
 	front int
 	// Push() pushes here.
-	back  int
+	back int
 }
 
 func NewBuff[T any](initSz int) Buff[T] {
@@ -55,8 +55,8 @@ func (b *Buff[T]) Pop() {
 }
 
 func (b *Buff[T]) Push(t T) {
-	if b.Len() == len(b.arr) - 1 {
-		newarr := make([]T, len(b.arr) + len(b.arr))
+	if b.Len() == len(b.arr)-1 {
+		newarr := make([]T, len(b.arr)+len(b.arr))
 		var newback int
 		if b.back > b.front {
 			copy(newarr, b.arr[b.front:b.back])
