@@ -397,6 +397,78 @@ func TestChunkRelations(t *testing.T) {
 	assert.Equal(t, 1, len(cr.groups()))
 }
 
+func TestArchiveChunkGroup(t *testing.T) {
+	// This test has a lot of magic numbers. They have been verified at the time of writing, and heavily
+	// depend on the random data generated. If the random data generation changes, these numbers will
+	//
+	// The totalBytesSavedWDict is eyeballed to be correct.
+
+	cg := newChunkGroup(generateSimilarChunks(42, 10))
+	assert.True(t, cg.totalRatioWDict >= 0.862)
+	assert.True(t, cg.totalRatioWDict <= 0.863)
+	assert.Equal(t, 8667, cg.totalBytesSavedWDict)
+	assert.Equal(t, 1004, cg.avgRawChunkSize)
+
+	unsimilar := generateRandomChunk(23, 980) // 20 bytes shorter to effect the average size.
+	assert.False(t, cg.testChunk(unsimilar))
+
+	similar := generateRandomChunk(42, 999)
+	assert.True(t, cg.testChunk(similar))
+
+	cg.addChunk(similar)
+	assert.True(t, cg.totalRatioWDict >= 0.873)
+	assert.True(t, cg.totalRatioWDict <= 0.874)
+	assert.Equal(t, 9647, cg.totalBytesSavedWDict) // 11 chunks.
+	assert.Equal(t, 1004, cg.avgRawChunkSize)
+
+	// Adding unsimilar chunk should change the ratio significantly downward.
+	cg.addChunk(unsimilar)
+	assert.True(t, cg.totalRatioWDict >= 0.802)
+	assert.True(t, cg.totalRatioWDict <= 0.803)
+	assert.Equal(t, 9650, cg.totalBytesSavedWDict) // 12 chunks, with virtually no improvement for the last one.
+	assert.Equal(t, 1002, cg.avgRawChunkSize)
+}
+
+func TestLevenshteinDistance(t *testing.T) {
+	assert.Equal(t, 0, levenshteinDistance([]byte{1}, []byte{1}))
+	assert.Equal(t, 1, levenshteinDistance([]byte{1}, []byte{2}))
+	assert.Equal(t, 1, levenshteinDistance([]byte{1, 2}, []byte{1}))
+	assert.Equal(t, 1, levenshteinDistance([]byte{1}, []byte{1, 2}))
+	assert.Equal(t, 2, levenshteinDistance([]byte{1, 2}, []byte{2, 3}))
+	assert.Equal(t, 3, levenshteinDistance([]byte{1, 2, 3}, []byte{3, 4}))
+	assert.Equal(t, 3, levenshteinDistance([]byte{1, 2, 3}, []byte{4, 5, 6}))
+
+	// NM4 - more tests.
+}
+
+func TestDiffScore(t *testing.T) {
+	b1 := generateRandomBytes(51, 1000)
+	assert.Equal(t, 1.0, similarityScore([]byte{1}, []byte{1})) // Identical input should be 1.0
+	assert.Equal(t, 1.0, similarityScore(b1, b1))
+
+	b2 := generateRandomBytes(51, 1010)
+	assert.True(t, 0.99 < similarityScore(b1, b2))
+
+	b3 := generateRandomBytes(51, 4000)
+	b4 := make([]byte, 4010)
+
+	// B4 is identical with B3, except for 10 bytes in the middle. should result in a very high similarity score.
+	copy(b4[:2000], b3[:2000])
+	copy(b4[2000:2010], b1)
+	copy(b4[2010:], b3[2000:])
+	score := similarityScore(b3, b4)
+	assert.True(t, 0.9975 < score)
+	assert.True(t, 0.9976 > score)
+
+	b5 := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	b6 := []byte{11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
+
+	// Completely different data should result in a score of 0.
+	assert.Equal(t, 0.0, similarityScore(b5, b6))
+	assert.Equal(t, 0.0, similarityScore(b6, []byte{}))
+
+}
+
 func hashWithPrefix(t *testing.T, prefix uint64) hash.Hash {
 	randomBytes := make([]byte, 20)
 	n, err := rand.Read(randomBytes)
@@ -417,14 +489,19 @@ func generateSimilarChunks(seed int64, count int) []*chunks.Chunk {
 }
 
 func generateRandomChunk(seed int64, len int) *chunks.Chunk {
+	c := chunks.NewChunk(generateRandomBytes(seed, len))
+	return &c
+}
+
+func generateRandomBytes(seed int64, len int) []byte {
 	r := rand.NewSource(seed)
 
 	data := make([]byte, len)
 	for i := range data {
 		data[i] = byte(r.Int63())
 	}
-	c := chunks.NewChunk(data)
-	return &c
+
+	return data
 }
 
 func zCompressDict(dst, dict, data []byte) ([]byte, error) {

@@ -22,7 +22,6 @@ import (
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/klauspost/compress/zstd"
-	"github.com/valyala/gozstd"
 )
 
 type archiveIndex struct {
@@ -186,7 +185,7 @@ func (ai archiveIndex) has(hash hash.Hash) bool {
 }
 
 // get returns the decompressed data for the given hash. If the hash is not found, nil is returned (not an error)
-func (ai archiveIndex) get(hash hash.Hash) ([]byte, error) {
+func (ai archiveIndex) get(buff []byte, hash hash.Hash) ([]byte, error) {
 	dict, data, err := ai.getRaw(hash)
 	if err != nil || data == nil {
 		return nil, err
@@ -194,13 +193,17 @@ func (ai archiveIndex) get(hash hash.Hash) ([]byte, error) {
 
 	var result []byte
 	if dict == nil {
-		result, err = gozstd.Decompress(nil, data)
+		result, err = zDecompress(buff, data)
+		//result, err = gozstd.Decompress(buff, data)
 	} else {
-		dDict, err := gozstd.NewDDict(dict)
-		if err != nil {
-			return nil, err
-		}
-		result, err = gozstd.DecompressDict(nil, data, dDict)
+		result, err = zDecompressDict(buff, dict, data)
+		/*
+			dDict, err := gozstd.NewDDict(dict)
+			if err != nil {
+				return nil, err
+			}
+			result, err = gozstd.DecompressDict(buff, data, dDict)
+		*/
 	}
 	if err != nil {
 		return nil, err
