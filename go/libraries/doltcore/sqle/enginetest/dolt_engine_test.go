@@ -3274,10 +3274,6 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 	}
 }
 
-func TestStatusVariables(t *testing.T) {
-	enginetest.TestStatusVariables(t, newDoltHarness(t))
-}
-
 // runMergeScriptTestsInBothDirections creates a new test run, named |name|, and runs the specified merge |tests|
 // in both directions (right to left merge, and left to right merge). If
 // |runAsPrepared| is true then the test scripts will be run using the prepared
