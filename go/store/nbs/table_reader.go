@@ -109,6 +109,7 @@ func init() {
 
 // ErrInvalidTableFile is an error returned when a table file is corrupt or invalid.
 var ErrInvalidTableFile = errors.New("invalid or corrupt table file")
+var ErrUnsupportedTableFileFormat = errors.New("unsupported table file format")
 
 type indexEntry interface {
 	Offset() uint64
