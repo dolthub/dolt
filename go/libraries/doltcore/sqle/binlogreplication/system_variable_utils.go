@@ -19,15 +19,15 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
-// getServerId returns the @@server_id system variable value. If the value of @@server_id is 0 or is not a uint32
-// value, then an error is returned.
-func getServerId(ctx *sql.Context) (uint32, error) {
-	variable, err := ctx.GetSessionVariable(ctx, "server_id")
-	if err != nil {
-		return 0, err
+// getServerId returns the @@server_id global system variable value. If the value of @@server_id is 0 or is not a
+// uint32 value, then an error is returned.
+func getServerId() (uint32, error) {
+	_, value, ok := sql.SystemVariables.GetGlobal("server_id")
+	if !ok {
+		return 0, fmt.Errorf("global variable 'server_id' not found")
 	}
 
-	if i, ok := variable.(uint32); ok {
+	if i, ok := value.(uint32); ok {
 		if i == 0 {
 			return 0, fmt.Errorf("@@server_id is zero – must be set to a non-zero value")
 		}
