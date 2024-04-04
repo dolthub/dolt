@@ -1469,7 +1469,7 @@ func (d *DoltSession) RemoveAllPersistedGlobals() error {
 	return d.globalsConf.Unset(allVars)
 }
 
-// RemoveAllPersistedGlobals implements sql.PersistableSession
+// GetPersistedValue implements sql.PersistableSession
 func (d *DoltSession) GetPersistedValue(k string) (interface{}, error) {
 	if d.globalsConf == nil {
 		return nil, ErrSessionNotPersistable
@@ -1683,6 +1683,28 @@ func InitPersistedSystemVars(dEnv *env.DoltEnv) error {
 		cli.Printf("warning: persisted system variable %s was not loaded since its definition does not exist.\n", k)
 	}
 	sql.SystemVariables.AddSystemVariables(persistedGlobalVars)
+
+	// TODO: For now, we are hardcoding the only system variable that requires us to persist the
+	//       default value – @@server_uuid. To clean this up, we should add a DefaultPersisted
+	//       property to the @@server_uuid system variable definition in GMS, and then update
+	//       this code to find the persisted system variables with that property and do this
+	//       more generically.
+	foundServerUuidSysVar := false
+	for _, persistedGlobalVar := range persistedGlobalVars {
+		if persistedGlobalVar.GetName() == "server_uuid" {
+			foundServerUuidSysVar = true
+		}
+	}
+
+	// if @@server_uuid hasn't been persisted yet, then we need to persist its generated default value
+	if !foundServerUuidSysVar {
+		_, value, ok := sql.SystemVariables.GetGlobal("server_uuid")
+		if !ok {
+			return fmt.Errorf("unable to find @@server_uuid system variable definition")
+		}
+		return setPersistedValue(globals, "server_uuid", value)
+	}
+
 	return nil
 }
 
