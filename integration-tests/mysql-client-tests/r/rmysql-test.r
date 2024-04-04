@@ -32,7 +32,7 @@ for(i in 1:length(queries)) {
     want = responses[[i]]
     if (!is.null(want)) {
         got <- dbGetQuery(conn, q)
-        if (!isTRUE(all.identical(want, got))) {
+        if (!identical(want, got)) {
             print(q)
             print(want)
             print(got)
