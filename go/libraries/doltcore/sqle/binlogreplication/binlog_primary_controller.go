@@ -181,7 +181,7 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, before *dolt
 						},
 					},
 				}
-				// All rows are included, none are NULL yet
+				// All rows are included, none are NULL (TODO: We don't support null values yet)
 				for i := 0; i < len(columns); i++ {
 					rows.DataColumns.Set(i, true)
 				}
@@ -192,8 +192,49 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, before *dolt
 				m.binlogStream.LogPosition += binlogEvent.Length()
 
 			case tree.ModifiedDiff:
-				// TODO: Send a binlog event for the modified row
-				return fmt.Errorf("No support for tree.ModifiedDiff!")
+				schema, err := tableDelta.ToTable.GetSchema(ctx)
+				if err != nil {
+					return err
+				}
+				columns := schema.GetAllCols().GetColumns()
+
+				data, err := serializeRowToBinlogBytes(schema, diff.Key, diff.To)
+				if err != nil {
+					return err
+				}
+				identifyData, err := serializeRowToBinlogBytes(schema, diff.Key, diff.From)
+				if err != nil {
+					return err
+				}
+
+				// Send a binlog event for the modified row
+				rows := mysql.Rows{
+					Flags:       0x1234, // TODO: What are these flags?
+					DataColumns: mysql.NewServerBitmap(len(columns)),
+					// TODO: We should be batching all rows for the same table into the same Rows instance, not one row-per-Rows
+					IdentifyColumns: mysql.NewServerBitmap(len(columns)),
+					Rows: []mysql.Row{
+						{
+							// TODO: Support for NULL values
+							NullColumns:         mysql.NewServerBitmap(len(columns)),
+							Data:                data,
+							NullIdentifyColumns: mysql.NewServerBitmap(len(columns)),
+							Identify:            identifyData,
+						},
+					},
+				}
+				// All rows are included, none are NULL (TODO: We don't support null values yet)
+				for i := 0; i < len(columns); i++ {
+					rows.DataColumns.Set(i, true)
+				}
+				for i := 0; i < len(columns); i++ {
+					rows.IdentifyColumns.Set(i, true)
+				}
+
+				tableId := tablesToId[tableName]
+				binlogEvent := mysql.NewUpdateRowsEvent(m.binlogFormat, m.binlogStream, tableId, rows)
+				binlogEvents = append(binlogEvents, binlogEvent)
+				m.binlogStream.LogPosition += binlogEvent.Length()
 
 			case tree.RemovedDiff:
 				// TODO: If the schema of the talbe has changed between FromTable and ToTable, then this probably breaks
@@ -203,7 +244,7 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, before *dolt
 				}
 				columns := schema.GetAllCols().GetColumns()
 
-				data, err := serializeRowToBinlogBytes(schema, diff.Key, diff.From)
+				identifyData, err := serializeRowToBinlogBytes(schema, diff.Key, diff.From)
 				if err != nil {
 					return err
 				}
@@ -217,11 +258,11 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, before *dolt
 						{
 							// TODO: Support for NULL values
 							NullIdentifyColumns: mysql.NewServerBitmap(len(columns)),
-							Identify:            data,
+							Identify:            identifyData,
 						},
 					},
 				}
-				// All columns are included in the identify data, none are NULL yet
+				// All columns are included in the identifyData, none are NULL yet
 				for i := 0; i < len(columns); i++ {
 					rows.IdentifyColumns.Set(i, true)
 				}
