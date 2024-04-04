@@ -22,7 +22,7 @@ responses = list(NULL,
                     Type = c("int", "int"),
                     Null = c("NO", "YES"),
                     Key = c("PRI", ""),
-                    Default = c(NA, NA),
+                    Default = c(NA_character_, NA_character_),
                     Extra = c("", ""), stringsAsFactors = FALSE),
                  NULL,
                  data.frame(pk = c(0), value = c(0), stringsAsFactors = FALSE))
