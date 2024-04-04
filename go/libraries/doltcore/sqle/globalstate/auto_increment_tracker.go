@@ -39,7 +39,5 @@ type AutoIncrementTracker interface {
 	// given, so the new global maximum is computed without regard for its value in that working set.
 	Set(ctx *sql.Context, tableName string, table *doltdb.Table, ws ref.WorkingSetRef, newAutoIncVal uint64) (*doltdb.Table, error)
 
-	AcquireLock()
-
-	ReleaseLockIfNotInInterleavedMode()
+	AcquireTableLock(ctx *sql.Context, tableName string) (func(), error)
 }

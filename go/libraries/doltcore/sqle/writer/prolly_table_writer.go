@@ -16,7 +16,6 @@ package writer
 
 import (
 	"context"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -220,13 +219,12 @@ func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) 
 	return w.flush(ctx)
 }
 
-func (w *prollyTableWriter) AcquireAutoIncrementLockUntilClose(ctx *sql.Context) {
-	w.aiTracker.AcquireLock()
+func (w *prollyTableWriter) AcquireAutoIncrementLock(ctx *sql.Context) (func(), error) {
+	return w.aiTracker.AcquireTableLock(ctx, w.tableName)
 }
 
 // Close implements Closer
 func (w *prollyTableWriter) Close(ctx *sql.Context) error {
-	w.aiTracker.ReleaseLockIfNotInInterleavedMode()
 	// We discard data changes in DiscardChanges, but this doesn't include schema changes, which we don't want to flush
 	if w.errEncountered == nil {
 		return w.flush(ctx)
