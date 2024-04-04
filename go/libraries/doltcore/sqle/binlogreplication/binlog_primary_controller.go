@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -161,54 +162,11 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, before *dolt
 				if err != nil {
 					return err
 				}
+
 				columns := schema.GetAllCols().GetColumns()
-
-				var data []byte
-				dataLength := 0
-				keyIdx := -1
-				valueIdx := -1
-				keyDesc, valueDesc := schema.GetMapDescriptors()
-				for _, col := range columns {
-					if col.IsPartOfPK {
-						keyIdx++
-					} else {
-						valueIdx++
-					}
-
-					currentPos := dataLength
-
-					typ := col.TypeInfo.ToSqlType()
-					switch typ.Type() {
-					case query.Type_VARCHAR:
-						var value string
-						if col.IsPartOfPK {
-							keyTuple := val.Tuple(diff.Key)
-							value, _ = keyDesc.GetString(keyIdx, keyTuple)
-						} else {
-							valueTuple := val.Tuple(diff.To)
-							value, _ = valueDesc.GetString(valueIdx, valueTuple)
-						}
-						dataLength += 2 + len(value)
-						data = append(data, make([]byte, 2+len(value))...)
-						binary.LittleEndian.PutUint16(data[currentPos:], uint16(len(value)))
-						copy(data[currentPos+2:], value)
-
-					case query.Type_INT32:
-						data = append(data, make([]byte, 4)...)
-						if col.IsPartOfPK {
-							keyTuple := val.Tuple(diff.Key)
-							value, _ := keyDesc.GetInt32(keyIdx, keyTuple)
-							binary.LittleEndian.PutUint32(data[currentPos:], uint32(value))
-						} else {
-							valueTuple := val.Tuple(diff.To)
-							value, _ := valueDesc.GetInt32(valueIdx, valueTuple)
-							binary.LittleEndian.PutUint32(data[currentPos:], uint32(value))
-						}
-						dataLength += 4
-
-					default:
-						panic(fmt.Sprintf("unsupported type: %v \n", typ.String()))
-					}
+				data, err := serializeRowToBinlogBytes(schema, diff.Key, diff.To)
+				if err != nil {
+					return err
 				}
 
 				// Send a binlog event for the added row
@@ -236,9 +194,43 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, before *dolt
 			case tree.ModifiedDiff:
 				// TODO: Send a binlog event for the modified row
 				return fmt.Errorf("No support for tree.ModifiedDiff!")
+
 			case tree.RemovedDiff:
-				// TODO: Send a binlog event for the removed row
-				return fmt.Errorf("No support for tree.RemovedDiff!")
+				// TODO: If the schema of the talbe has changed between FromTable and ToTable, then this probably breaks
+				schema, err := tableDelta.ToTable.GetSchema(ctx)
+				if err != nil {
+					return err
+				}
+				columns := schema.GetAllCols().GetColumns()
+
+				data, err := serializeRowToBinlogBytes(schema, diff.Key, diff.From)
+				if err != nil {
+					return err
+				}
+
+				// Send a binlog event for the added row
+				rows := mysql.Rows{
+					Flags: 0x1234, // TODO: What are these flags?
+					// TODO: We should be batching all rows for the same table into the same Rows instance, not one row-per-Rows
+					IdentifyColumns: mysql.NewServerBitmap(len(columns)),
+					Rows: []mysql.Row{
+						{
+							// TODO: Support for NULL values
+							NullIdentifyColumns: mysql.NewServerBitmap(len(columns)),
+							Identify:            data,
+						},
+					},
+				}
+				// All columns are included in the identify data, none are NULL yet
+				for i := 0; i < len(columns); i++ {
+					rows.IdentifyColumns.Set(i, true)
+				}
+
+				tableId := tablesToId[tableName]
+				binlogEvent := mysql.NewDeleteRowsEvent(m.binlogFormat, m.binlogStream, tableId, rows)
+				binlogEvents = append(binlogEvents, binlogEvent)
+				m.binlogStream.LogPosition += binlogEvent.Length()
+
 			default:
 				return fmt.Errorf("unexpected diff type: %v", diff.Type)
 			}
@@ -260,6 +252,59 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, before *dolt
 	}
 
 	return nil
+}
+
+func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data []byte, err error) {
+	columns := schema.GetAllCols().GetColumns()
+
+	dataLength := 0
+	keyIdx := -1
+	valueIdx := -1
+	keyDesc, valueDesc := schema.GetMapDescriptors()
+	for _, col := range columns {
+		if col.IsPartOfPK {
+			keyIdx++
+		} else {
+			valueIdx++
+		}
+
+		currentPos := dataLength
+
+		typ := col.TypeInfo.ToSqlType()
+		switch typ.Type() {
+		case query.Type_VARCHAR:
+			var value string
+			if col.IsPartOfPK {
+				keyTuple := val.Tuple(key)
+				value, _ = keyDesc.GetString(keyIdx, keyTuple)
+			} else {
+				valueTuple := val.Tuple(value)
+				value, _ = valueDesc.GetString(valueIdx, valueTuple)
+			}
+			dataLength += 2 + len(value)
+			data = append(data, make([]byte, 2+len(value))...)
+			binary.LittleEndian.PutUint16(data[currentPos:], uint16(len(value)))
+			copy(data[currentPos+2:], value)
+
+		case query.Type_INT32:
+			data = append(data, make([]byte, 4)...)
+			if col.IsPartOfPK {
+				keyTuple := val.Tuple(key)
+				value, _ := keyDesc.GetInt32(keyIdx, keyTuple)
+				binary.LittleEndian.PutUint32(data[currentPos:], uint32(value))
+			} else {
+				valueTuple := val.Tuple(value)
+				value, _ := valueDesc.GetInt32(valueIdx, valueTuple)
+				binary.LittleEndian.PutUint32(data[currentPos:], uint32(value))
+			}
+			dataLength += 4
+
+		default:
+			return nil, fmt.Errorf("unsupported type: %v \n", typ.String())
+		}
+	}
+
+	return data, nil
 }
 
 func createTableMapFromDoltTable(ctx *sql.Context, name string, table *doltdb.Table) (*mysql.TableMap, error) {
