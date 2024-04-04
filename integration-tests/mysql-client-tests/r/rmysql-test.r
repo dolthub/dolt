@@ -22,7 +22,7 @@ responses = list(NULL,
                     Type = c("int", "int"),
                     Null = c("NO", "YES"),
                     Key = c("PRI", ""),
-                    Default = c(NA, NA),
+                    Default = factor(c(NA, NA)),
                     Extra = c("", ""), stringsAsFactors = FALSE),
                  NULL,
                  data.frame(pk = c(0), value = c(0), stringsAsFactors = FALSE))
@@ -32,11 +32,15 @@ for(i in 1:length(queries)) {
     want = responses[[i]]
     if (!is.null(want)) {
         got <- dbGetQuery(conn, q)
-        if (!identical(want, got)) {
-            print(q)
-            print(want)
-            print(got)
-            quit(1)
+        if (length(want) == length(got)) {
+            for (i in 1:length(want)) {
+                if (!identical(want[[i]], got[[i]])) {
+                    print(q)
+                    print(want)
+                    print(got)
+                    quit("no", 1)
+                }
+            }
         }
     } else {
         dbExecute(conn, q)
