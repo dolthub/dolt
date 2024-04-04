@@ -33,11 +33,11 @@ for(i in 1:length(queries)) {
     if (!is.null(want)) {
         got <- dbGetQuery(conn, q)
         if (length(want) == length(got)) {
-            for (i in 1:length(want)) {
-                if (!identical(want[[i]], got[[i]])) {
+            for (j in 1:length(want)) {
+                if (!identical(want[[j]], got[[j]])) {
                     print(q)
-                    print(want)
-                    print(got)
+                    print(want[[j]])
+                    print(got[[j]])
                     quit("no", 1)
                 }
             }
