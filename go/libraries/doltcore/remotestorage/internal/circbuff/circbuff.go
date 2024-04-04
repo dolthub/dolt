@@ -19,8 +19,8 @@ type Buff[T any] struct {
 	arr []T
 	// Front() and Pop() refer to this element.
 	front int
-	// Push() pushes here.
-	back int
+	// The number of elements in the buffer. [0, len(arr)).
+	len int
 }
 
 func NewBuff[T any](initSz int) Buff[T] {
@@ -31,20 +31,19 @@ func NewBuff[T any](initSz int) Buff[T] {
 
 // Returns the number of elements currently in Buff.
 func (b *Buff[T]) Len() int {
-	if b.back == b.front {
-		return 0
-	} else if b.back > b.front {
-		return b.back - b.front
-	} else {
-		return b.back - b.front + len(b.arr)
+	return b.len
+}
+
+func (b *Buff[T]) At(i int) T {
+	if i >= b.Len() {
+		panic("At on Buff too small")
 	}
+	j := (b.front + i) % len(b.arr)
+	return b.arr[j]
 }
 
 func (b *Buff[T]) Front() T {
-	if b.Len() == 0 {
-		panic("Front empty Buff")
-	}
-	return b.arr[b.front]
+	return b.At(0)
 }
 
 func (b *Buff[T]) Pop() {
@@ -52,25 +51,27 @@ func (b *Buff[T]) Pop() {
 		panic("Pop empty Buff")
 	}
 	b.front = (b.front + 1) % len(b.arr)
+	b.len -= 1
+}
+
+func (b *Buff[T]) ins() int {
+	return (b.front + b.len) % len(b.arr)
 }
 
 func (b *Buff[T]) Push(t T) {
-	if b.Len() == len(b.arr)-1 {
+	if b.Len() == len(b.arr) {
 		newarr := make([]T, len(b.arr)+len(b.arr))
-		var newback int
-		if b.back > b.front {
-			copy(newarr, b.arr[b.front:b.back])
-			newback = b.back - b.front
+		i := b.ins()
+		if i > b.front {
+			copy(newarr, b.arr[b.front:i])
 		} else {
 			first := b.arr[b.front:]
 			copy(newarr, first)
-			copy(newarr[len(first):], b.arr[:b.back])
-			newback = len(first) + b.back
+			copy(newarr[len(first):], b.arr[:i])
 		}
 		b.arr = newarr
 		b.front = 0
-		b.back = newback
 	}
-	b.arr[b.back] = t
-	b.back = (b.back + 1) % len(b.arr)
+	b.arr[b.ins()] = t
+	b.len += 1
 }
