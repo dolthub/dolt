@@ -36,8 +36,8 @@ for(i in 1:length(queries)) {
             for (j in 1:length(want)) {
                 if (!identical(want[[j]], got[[j]])) {
                     print(q)
-                    print(want[[j]])
-                    print(got[[j]])
+                    print(c("want:", want[[i]], "type: ", typeof(want[[i]])))
+                    print(c("got:", got[[i]], "type: ", typeof(got[[i]])))
                     quit("no", 1)
                 }
             }
