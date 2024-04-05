@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 )
 
@@ -128,6 +129,7 @@ func (b *doltgresBenchmarkerImpl) Benchmark(ctx context.Context) (results Result
 		return
 	}
 
+	testsFailed := make([]string, 0)
 	results = make(Results, 0)
 	runs := b.config.GetRuns()
 	for i := 0; i < runs; i++ {
@@ -140,8 +142,15 @@ func (b *doltgresBenchmarkerImpl) Benchmark(ctx context.Context) (results Result
 			var r *Result
 			r, err = tester.Test(ctx)
 			if err != nil {
+				testsFailed = append(testsFailed, t.GetName())
+				// get new server for the next test
 				server.Stop()
-				return
+				server = NewServer(ctx, serverDir, b.serverConfig, syscall.SIGTERM, serverParams)
+				err = server.Start()
+				if err != nil {
+					return
+				}
+				continue
 			}
 			results = append(results, r)
 		}
@@ -150,6 +159,10 @@ func (b *doltgresBenchmarkerImpl) Benchmark(ctx context.Context) (results Result
 	err = server.Stop()
 	if err != nil {
 		return
+	}
+
+	if len(testsFailed) > 0 {
+		fmt.Printf("Failed test files that were skipped: %s\n", strings.Join(testsFailed, ", "))
 	}
 
 	return
