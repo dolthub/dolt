@@ -63,9 +63,6 @@ type binlogStreamerManager struct {
 
 var _ dsess.TransactionListener = (*binlogStreamerManager)(nil)
 
-// TODO: For now we are hardcoding to database db01; change this to be passed in as a parameter
-const databaseName = "db01"
-
 // TransactionCommit implements the TransactionListener interface. When a transaction is committed, this function
 // generates events for the binary log and sends them to all connected replicas.
 //
@@ -76,15 +73,13 @@ const databaseName = "db01"
 //	- DELETE_ROWS or WRITE_ROWS or UPDATE_ROWS event with the data changes
 //	- XID event (ends the transaction)
 //
-// TODO: This function currently does all its work synchronously, in the same user thread as the transaction commit. We
-//
-//	should split this out to a background routine to process, in order of the commits.
+// TODO: This function currently does all its work synchronously, in the same user thread as the transaction commit.
+// We should split this out to a background routine to process, in order of the commits.
 //
 // TODO: This function currently sends the events to all connected replicas (through a channel). Eventually we need
-//
-//	to change this so that it writes to a binary log file as the intermediate, and then the readers are watching
-//	that log to stream events back to the connected replicas.
-func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, before *doltdb.RootValue, after *doltdb.RootValue) error {
+// to change this so that it writes to a binary log file as the intermediate, and then the readers are watching
+// that log to stream events back to the connected replicas.
+func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, databaseName string, before *doltdb.RootValue, after *doltdb.RootValue) error {
 	tableDeltas, err := diff.GetTableDeltas(ctx, before, after)
 	if err != nil {
 		// TODO: Clean up err handling; Probably just log the error, don't bring down the server or stop replication
@@ -142,7 +137,7 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, before *dolt
 			tableName = tableDelta.FromName
 		}
 		tablesToId[tableName] = tableId
-		tableMap, err := createTableMapFromDoltTable(ctx, tableName, tableDelta.ToTable)
+		tableMap, err := createTableMapFromDoltTable(ctx, databaseName, tableName, tableDelta.ToTable)
 		if err != nil {
 			panic(err.Error())
 		}
@@ -419,7 +414,8 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 	return data, nullBitmap, nil
 }
 
-func createTableMapFromDoltTable(ctx *sql.Context, name string, table *doltdb.Table) (*mysql.TableMap, error) {
+// TODO: godocs
+func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName string, table *doltdb.Table) (*mysql.TableMap, error) {
 	schema, err := table.GetSchema(ctx)
 	if err != nil {
 		return nil, err
@@ -466,7 +462,7 @@ func createTableMapFromDoltTable(ctx *sql.Context, name string, table *doltdb.Ta
 	return &mysql.TableMap{
 		Flags:     0x0001, // TODO: hardcoding to end of statement
 		Database:  databaseName,
-		Name:      name,
+		Name:      tableName,
 		Types:     types,
 		CanBeNull: canBeNullMap,
 		Metadata:  metadata, // https://mariadb.com/kb/en/table_map_event/#optional-metadata-block

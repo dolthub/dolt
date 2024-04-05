@@ -51,8 +51,10 @@ var ErrUnresolvedConstraintViolationsCommit = errors.New("Committing this transa
 	"Constraint violations from a merge can be resolved using the dolt_constraint_violations table before committing the transaction. " +
 	"To allow transactions to be committed with constraint violations from a merge or transaction sequencing set @@dolt_force_transaction_commit=1.")
 
+// TODO: Godocs
 type TransactionListener interface {
-	TransactionCommit(ctx *sql.Context, before *doltdb.RootValue, after *doltdb.RootValue) error
+	// TODO: Godocs
+	TransactionCommit(ctx *sql.Context, databaseName string, before *doltdb.RootValue, after *doltdb.RootValue) error
 }
 
 var transactionListeners = make([]TransactionListener, 0)
@@ -454,7 +456,7 @@ func (tx *DoltTransaction) doCommit(
 
 				// Fire message to listeners
 				for _, listener := range transactionListeners {
-					err := listener.TransactionCommit(ctx, existingWs.WorkingRoot(), workingSet.WorkingRoot())
+					err := listener.TransactionCommit(ctx, dbName, existingWs.WorkingRoot(), workingSet.WorkingRoot())
 					if err != nil {
 						panic(err.Error())
 					}
