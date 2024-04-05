@@ -55,7 +55,7 @@ export const tableTests = [
         Type: "int",
         Null: "NO",
         Key: "PRI",
-        Default: "NULL",
+        Default: null,
         Extra: "",
       },
       {
@@ -63,7 +63,7 @@ export const tableTests = [
         Type: "int",
         Null: "YES",
         Key: "",
-        Default: "NULL",
+        Default: null,
         Extra: "",
       },
     ],

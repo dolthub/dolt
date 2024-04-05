@@ -342,30 +342,30 @@ var DescribeTableAsOfScriptTest = queries.ScriptTest{
 		{
 			Query: "describe a as of @Commit1;",
 			Expected: []sql.Row{
-				{"pk", "int", "NO", "PRI", "NULL", ""},
-				{"c1", "int", "YES", "", "NULL", ""},
+				{"pk", "int", "NO", "PRI", nil, ""},
+				{"c1", "int", "YES", "", nil, ""},
 			},
 		},
 		{
 			Query: "describe a as of @Commit2;",
 			Expected: []sql.Row{
-				{"pk", "int", "NO", "PRI", "NULL", ""},
-				{"c1", "int", "YES", "", "NULL", ""},
-				{"c2", "varchar(20)", "YES", "", "NULL", ""},
+				{"pk", "int", "NO", "PRI", nil, ""},
+				{"c1", "int", "YES", "", nil, ""},
+				{"c2", "varchar(20)", "YES", "", nil, ""},
 			},
 		},
 		{
 			Query: "describe a as of @Commit3;",
 			Expected: []sql.Row{
-				{"pk", "int", "NO", "PRI", "NULL", ""},
-				{"c2", "varchar(20)", "YES", "", "NULL", ""},
+				{"pk", "int", "NO", "PRI", nil, ""},
+				{"c2", "varchar(20)", "YES", "", nil, ""},
 			},
 		},
 		{
 			Query: "describe a as of HEAD;",
 			Expected: []sql.Row{
-				{"pk", "int", "NO", "PRI", "NULL", ""},
-				{"c2", "varchar(20)", "YES", "", "NULL", ""},
+				{"pk", "int", "NO", "PRI", nil, ""},
+				{"c2", "varchar(20)", "YES", "", nil, ""},
 			},
 		},
 	},

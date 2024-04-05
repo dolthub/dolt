@@ -21,7 +21,7 @@ const tests = [
         Type: "int",
         Null: "NO",
         Key: "PRI",
-        Default: "NULL",
+        Default: null,
         Extra: "",
       },
       {
@@ -29,7 +29,7 @@ const tests = [
         Type: "int",
         Null: "YES",
         Key: "",
-        Default: "NULL",
+        Default: null,
         Extra: "",
       },
     ],
