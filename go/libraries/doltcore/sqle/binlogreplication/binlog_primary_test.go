@@ -57,8 +57,9 @@ func TestBinlogPrimary(t *testing.T) {
 	// TODO: We don't support replicating DDL statements yet, so for now, set up the DDL before
 	//       starting up replication.
 	primaryDatabase.MustExec("create database db01;")
-	primaryDatabase.MustExec("create table db01.t (pk int primary key, c1 varchar(10));")
-	replicaDatabase.MustExec("create table db01.t (pk int primary key, c1 varchar(10));")
+	testTableCreateStatement := "create table db01.t (pk int primary key, c1 varchar(10), c2 int, c3 varchar(100));"
+	primaryDatabase.MustExec(testTableCreateStatement)
+	replicaDatabase.MustExec(testTableCreateStatement)
 
 	// Because we have executed other statements, we need to reset GTIDs on the replica
 	replicaDatabase.MustExec("reset binary logs and gtids;")
@@ -68,7 +69,7 @@ func TestBinlogPrimary(t *testing.T) {
 	//       Here we just pause to let the hardcoded binlog events be delivered
 	time.Sleep(250 * time.Millisecond)
 
-	primaryDatabase.MustExec("insert into db01.t values (1, '42');")
+	primaryDatabase.MustExec("insert into db01.t values (1, '42', NULL, NULL);")
 	time.Sleep(450 * time.Millisecond)
 
 	// Sanity check on SHOW REPLICA STATUS
@@ -92,6 +93,8 @@ func TestBinlogPrimary(t *testing.T) {
 	require.NoError(t, rows.Close())
 	require.Equal(t, "1", allRows[0]["pk"])
 	require.Equal(t, "42", allRows[0]["c1"])
+	require.Nil(t, allRows[0]["c2"])
+	require.Nil(t, allRows[0]["c3"])
 
 	// TODO: Now modify some data
 	// TODO: Delete some data

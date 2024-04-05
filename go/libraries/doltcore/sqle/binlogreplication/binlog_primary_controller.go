@@ -178,7 +178,7 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, before *dolt
 				}
 
 				columns := schema.GetAllCols().GetColumns()
-				data, err := serializeRowToBinlogBytes(schema, diff.Key, diff.To)
+				data, nullBitmap, err := serializeRowToBinlogBytes(schema, diff.Key, diff.To)
 				if err != nil {
 					return err
 				}
@@ -190,12 +190,12 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, before *dolt
 					// TODO: We should be batching all rows for the same table into the same Rows instance, not one row-per-Rows
 					Rows: []mysql.Row{
 						{
-							NullColumns: mysql.NewServerBitmap(len(columns)),
+							NullColumns: nullBitmap,
 							Data:        data,
 						},
 					},
 				}
-				// All rows are included, none are NULL (TODO: We don't support null values yet)
+				// All columns are included
 				for i := 0; i < len(columns); i++ {
 					rows.DataColumns.Set(i, true)
 				}
@@ -212,11 +212,11 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, before *dolt
 				}
 				columns := schema.GetAllCols().GetColumns()
 
-				data, err := serializeRowToBinlogBytes(schema, diff.Key, diff.To)
+				data, dataNullBitmap, err := serializeRowToBinlogBytes(schema, diff.Key, diff.To)
 				if err != nil {
 					return err
 				}
-				identifyData, err := serializeRowToBinlogBytes(schema, diff.Key, diff.From)
+				identifyData, identifyNullBitmap, err := serializeRowToBinlogBytes(schema, diff.Key, diff.From)
 				if err != nil {
 					return err
 				}
@@ -229,15 +229,14 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, before *dolt
 					IdentifyColumns: mysql.NewServerBitmap(len(columns)),
 					Rows: []mysql.Row{
 						{
-							// TODO: Support for NULL values
-							NullColumns:         mysql.NewServerBitmap(len(columns)),
+							NullColumns:         dataNullBitmap,
 							Data:                data,
-							NullIdentifyColumns: mysql.NewServerBitmap(len(columns)),
+							NullIdentifyColumns: identifyNullBitmap,
 							Identify:            identifyData,
 						},
 					},
 				}
-				// All rows are included, none are NULL (TODO: We don't support null values yet)
+				// All columns are included for data and identify fields
 				for i := 0; i < len(columns); i++ {
 					rows.DataColumns.Set(i, true)
 				}
@@ -258,7 +257,7 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, before *dolt
 				}
 				columns := schema.GetAllCols().GetColumns()
 
-				identifyData, err := serializeRowToBinlogBytes(schema, diff.Key, diff.From)
+				identifyData, nullBitmap, err := serializeRowToBinlogBytes(schema, diff.Key, diff.From)
 				if err != nil {
 					return err
 				}
@@ -270,13 +269,12 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, before *dolt
 					IdentifyColumns: mysql.NewServerBitmap(len(columns)),
 					Rows: []mysql.Row{
 						{
-							// TODO: Support for NULL values
-							NullIdentifyColumns: mysql.NewServerBitmap(len(columns)),
+							NullIdentifyColumns: nullBitmap,
 							Identify:            identifyData,
 						},
 					},
 				}
-				// All columns are included in the identifyData, none are NULL yet
+				// All columns are included
 				for i := 0; i < len(columns); i++ {
 					rows.IdentifyColumns.Set(i, true)
 				}
@@ -309,14 +307,20 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, before *dolt
 	return nil
 }
 
-func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data []byte, err error) {
+// TODO: godocs
+func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data []byte, nullBitmap mysql.Bitmap, err error) {
 	columns := schema.GetAllCols().GetColumns()
+	nullBitmap = mysql.NewServerBitmap(len(columns))
 
+	keyTuple := val.Tuple(key)
+	valueTuple := val.Tuple(value)
+
+	var notNull bool
 	dataLength := 0
 	keyIdx := -1
 	valueIdx := -1
 	keyDesc, valueDesc := schema.GetMapDescriptors()
-	for _, col := range columns {
+	for rowIdx, col := range columns {
 		if col.IsPartOfPK {
 			keyIdx++
 		} else {
@@ -330,45 +334,50 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 		case query.Type_VARCHAR:
 			var stringVal string
 			if col.IsPartOfPK {
-				keyTuple := val.Tuple(key)
-				stringVal, _ = keyDesc.GetString(keyIdx, keyTuple)
+				stringVal, notNull = keyDesc.GetString(keyIdx, keyTuple)
 			} else {
-				valueTuple := val.Tuple(value)
-				stringVal, _ = valueDesc.GetString(valueIdx, valueTuple)
+				stringVal, notNull = valueDesc.GetString(valueIdx, valueTuple)
 			}
-			// TODO: when the field size is 255 or less, we use one byte to encode the length of the data,
-			//       otherwise we use 2 bytes.
-			numBytesForLength := 1
-			dataLength += numBytesForLength + len(stringVal)
-			data = append(data, make([]byte, numBytesForLength+len(stringVal))...)
-			if numBytesForLength == 1 {
-				data[currentPos] = byte(int8(len(stringVal)))
-			} else if numBytesForLength == 2 {
-				binary.LittleEndian.PutUint16(data[currentPos:], uint16(len(stringVal)))
+
+			if notNull {
+				// TODO: when the field size is 255 or less, we use one byte to encode the length of the data,
+				//       otherwise we use 2 bytes.
+				numBytesForLength := 1
+				dataLength += numBytesForLength + len(stringVal)
+				data = append(data, make([]byte, numBytesForLength+len(stringVal))...)
+				if numBytesForLength == 1 {
+					data[currentPos] = byte(int8(len(stringVal)))
+				} else if numBytesForLength == 2 {
+					binary.LittleEndian.PutUint16(data[currentPos:], uint16(len(stringVal)))
+				} else {
+					panic("this shouldn't happen!") // TODO:
+				}
+				copy(data[currentPos+numBytesForLength:], stringVal)
 			} else {
-				panic("this shouldn't happen!") // TODO:
+				nullBitmap.Set(rowIdx, true)
 			}
-			copy(data[currentPos+numBytesForLength:], stringVal)
 
 		case query.Type_INT32:
-			data = append(data, make([]byte, 4)...)
+			intValue := int32(0)
 			if col.IsPartOfPK {
-				keyTuple := val.Tuple(key)
-				value, _ := keyDesc.GetInt32(keyIdx, keyTuple)
-				binary.LittleEndian.PutUint32(data[currentPos:], uint32(value))
+				intValue, notNull = keyDesc.GetInt32(keyIdx, keyTuple)
 			} else {
-				valueTuple := val.Tuple(value)
-				value, _ := valueDesc.GetInt32(valueIdx, valueTuple)
-				binary.LittleEndian.PutUint32(data[currentPos:], uint32(value))
+				intValue, notNull = valueDesc.GetInt32(valueIdx, valueTuple)
 			}
-			dataLength += 4
+			if notNull {
+				data = append(data, make([]byte, 4)...)
+				dataLength += 4
+				binary.LittleEndian.PutUint32(data[currentPos:], uint32(intValue))
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
 
 		default:
-			return nil, fmt.Errorf("unsupported type: %v \n", typ.String())
+			return nil, nullBitmap, fmt.Errorf("unsupported type: %v \n", typ.String())
 		}
 	}
 
-	return data, nil
+	return data, nullBitmap, nil
 }
 
 func createTableMapFromDoltTable(ctx *sql.Context, name string, table *doltdb.Table) (*mysql.TableMap, error) {
