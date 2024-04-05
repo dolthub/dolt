@@ -57,7 +57,7 @@ func TestBinlogPrimary(t *testing.T) {
 	// TODO: We don't support replicating DDL statements yet, so for now, set up the DDL before
 	//       starting up replication.
 	primaryDatabase.MustExec("create database db01;")
-	testTableCreateStatement := "create table db01.t (pk int primary key, c1 varchar(10), c2 int, c3 varchar(100));"
+	testTableCreateStatement := "create table db01.t (pk int primary key, c1 varchar(10), c2 int, c3 varchar(100), c4 tinyint, c5 smallint, c6 mediumint, c7 bigint);"
 	primaryDatabase.MustExec(testTableCreateStatement)
 	replicaDatabase.MustExec(testTableCreateStatement)
 
@@ -69,7 +69,7 @@ func TestBinlogPrimary(t *testing.T) {
 	//       Here we just pause to let the hardcoded binlog events be delivered
 	time.Sleep(250 * time.Millisecond)
 
-	primaryDatabase.MustExec("insert into db01.t values (1, '42', NULL, NULL);")
+	primaryDatabase.MustExec("insert into db01.t values (1, '42', NULL, NULL, 123, 123, 123, 123);")
 	time.Sleep(450 * time.Millisecond)
 
 	// Sanity check on SHOW REPLICA STATUS
@@ -95,6 +95,10 @@ func TestBinlogPrimary(t *testing.T) {
 	require.Equal(t, "42", allRows[0]["c1"])
 	require.Nil(t, allRows[0]["c2"])
 	require.Nil(t, allRows[0]["c3"])
+	require.Equal(t, "123", allRows[0]["c4"])
+	require.Equal(t, "123", allRows[0]["c5"])
+	require.Equal(t, "123", allRows[0]["c6"])
+	require.Equal(t, "123", allRows[0]["c7"])
 
 	// TODO: Now modify some data
 	// TODO: Delete some data

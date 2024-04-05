@@ -359,12 +359,54 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 				nullBitmap.Set(rowIdx, true)
 			}
 
-		case query.Type_INT32:
+		case query.Type_INT8: // TINYINT
+			intValue, notNull := descriptor.GetInt8(idx, tuple)
+			if notNull {
+				data = append(data, make([]byte, 1)...)
+				dataLength += 1
+				data[currentPos] = byte(intValue)
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
+
+		case query.Type_INT16: // SMALLINT
+			intValue, notNull := descriptor.GetInt16(idx, tuple)
+			if notNull {
+				data = append(data, make([]byte, 2)...)
+				dataLength += 2
+				binary.LittleEndian.PutUint16(data[currentPos:], uint16(intValue))
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
+
+		case query.Type_INT24: // MEDIUMINT
+			intValue, notNull := descriptor.GetInt32(idx, tuple)
+			if notNull {
+				data = append(data, make([]byte, 3)...)
+				dataLength += 3
+				tempBuffer := make([]byte, 4)
+				binary.LittleEndian.PutUint32(tempBuffer, uint32(intValue))
+				copy(data[currentPos:], tempBuffer[0:3])
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
+
+		case query.Type_INT32: // INT
 			intValue, notNull := descriptor.GetInt32(idx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 4)...)
 				dataLength += 4
 				binary.LittleEndian.PutUint32(data[currentPos:], uint32(intValue))
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
+
+		case query.Type_INT64: // BIGINT
+			intValue, notNull := descriptor.GetInt64(idx, tuple)
+			if notNull {
+				data = append(data, make([]byte, 8)...)
+				dataLength += 8
+				binary.LittleEndian.PutUint64(data[currentPos:], uint64(intValue))
 			} else {
 				nullBitmap.Set(rowIdx, true)
 			}
@@ -395,9 +437,23 @@ func createTableMapFromDoltTable(ctx *sql.Context, name string, table *doltdb.Ta
 			types[i] = mysql.TypeVarchar
 			sTyp := typ.(sql.StringType)
 			metadata[i] = uint16(4 * sTyp.Length())
-		case query.Type_INT32:
+
+		case query.Type_INT8: // TINYINT
+			types[i] = mysql.TypeTiny
+			metadata[i] = 0
+		case query.Type_INT16: // SMALLINT
+			types[i] = mysql.TypeShort
+			metadata[i] = 0
+		case query.Type_INT24: // MEDIUMINT
+			types[i] = mysql.TypeInt24
+			metadata[i] = 0
+		case query.Type_INT32: // INT
 			types[i] = mysql.TypeLong
 			metadata[i] = 0
+		case query.Type_INT64: // BIGINT
+			types[i] = mysql.TypeLongLong
+			metadata[i] = 0
+
 		default:
 			panic(fmt.Sprintf("unsupported type: %v \n", typ.String()))
 		}
