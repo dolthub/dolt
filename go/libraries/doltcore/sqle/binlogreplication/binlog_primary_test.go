@@ -37,9 +37,6 @@ func TestBinlogPrimary(t *testing.T) {
 	// Clear out any existing GTID record on the replica
 	replicaDatabase.MustExec("reset binary logs and gtids;")
 
-	// On the Primary, we need to set @@server_uuid to a valid UUID:
-	primaryDatabase.MustExec("set GLOBAL server_uuid='3ab04dd4-8c9e-471e-a223-9712a3b7c37e';")
-
 	// On the Primary, turn on GTID mode
 	// NOTE: Dolt doesn't currently require moving through the GTID_MODE states like this, but
 	//       MySQL does, so we do it here anyway.
@@ -49,6 +46,7 @@ func TestBinlogPrimary(t *testing.T) {
 	primaryDatabase.MustExec("set GLOBAL GTID_MODE='ON';")
 
 	// On the Primary, make sure we have a non-zero SERVER_ID set
+	// TODO: Technically, we should be setting this persistently and we should restart the sql-server
 	primaryDatabase.MustExec("set GLOBAL SERVER_ID=42;")
 
 	// Create the replication user on the Dolt primary server
@@ -56,14 +54,21 @@ func TestBinlogPrimary(t *testing.T) {
 	primaryDatabase.MustExec("CREATE USER 'replicator'@'%' IDENTIFIED BY 'Zqr8_blrGm1!';")
 	primaryDatabase.MustExec("GRANT REPLICATION SLAVE ON *.* TO 'replicator'@'%';")
 
+	// TODO: We don't support replicating DDL statements yet, so for now, set up the DDL before
+	//       starting up replication.
+	primaryDatabase.MustExec("create database db01;")
+	primaryDatabase.MustExec("create table db01.t (pk int primary key, c1 varchar(10));")
+	replicaDatabase.MustExec("create table db01.t (pk int primary key, c1 varchar(10));")
+
+	// Because we have executed other statements, we need to reset GTIDs on the replica
+	replicaDatabase.MustExec("reset binary logs and gtids;")
+
 	startReplication(t, doltPort)
 	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
 	//       Here we just pause to let the hardcoded binlog events be delivered
 	time.Sleep(250 * time.Millisecond)
 
-	primaryDatabase.MustExec("create database db01;")
-	primaryDatabase.MustExec("create table db01.xyz (pk int primary key);")
-	primaryDatabase.MustExec("insert into db01.xyz values (1);")
+	primaryDatabase.MustExec("insert into db01.t values (1, '42');")
 	time.Sleep(450 * time.Millisecond)
 
 	// Sanity check on SHOW REPLICA STATUS
@@ -85,6 +90,9 @@ func TestBinlogPrimary(t *testing.T) {
 	allRows = readAllRows(t, rows)
 	require.Equal(t, 1, len(allRows))
 	require.NoError(t, rows.Close())
-	require.Equal(t, "1076895760", allRows[0]["pk"])
-	require.Equal(t, "abcd", allRows[0]["c1"])
+	require.Equal(t, "1", allRows[0]["pk"])
+	require.Equal(t, "42", allRows[0]["c1"])
+
+	// TODO: Now modify some data
+	// TODO: Delete some data
 }

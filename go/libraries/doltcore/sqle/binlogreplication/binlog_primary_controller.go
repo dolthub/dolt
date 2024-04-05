@@ -63,6 +63,9 @@ type binlogStreamerManager struct {
 
 var _ dsess.TransactionListener = (*binlogStreamerManager)(nil)
 
+// TODO: For now we are hardcoding to database db01; change this to be passed in as a parameter
+const databaseName = "db01"
+
 // TransactionCommit implements the TransactionListener interface. When a transaction is committed, this function
 // generates events for the binary log and sends them to all connected replicas.
 //
@@ -106,6 +109,17 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, before *dolt
 	binlogEvents = append(binlogEvents, binlogEvent)
 	m.binlogStream.LogPosition += binlogEvent.Length()
 	gtidSequence++
+
+	// Send a Query BEGIN event to start the new transaction
+	binlogEvent = mysql.NewQueryEvent(m.binlogFormat, m.binlogStream, mysql.Query{
+		Database: databaseName,
+		Charset:  nil,
+		SQL:      "BEGIN",
+		Options:  0,
+		SqlMode:  0, // TODO:
+	})
+	binlogEvents = append(binlogEvents, binlogEvent)
+	m.binlogStream.LogPosition += binlogEvent.Length()
 
 	for _, tableDelta := range tableDeltas {
 		dataChanged, err := tableDelta.HasDataChanged(ctx)
@@ -171,7 +185,7 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, before *dolt
 
 				// Send a binlog event for the added row
 				rows := mysql.Rows{
-					Flags:       0x1234, // TODO: What are these flags?
+					Flags:       0x0001, // TODO: Hardcoding "end of statement" for now
 					DataColumns: mysql.NewServerBitmap(len(columns)),
 					// TODO: We should be batching all rows for the same table into the same Rows instance, not one row-per-Rows
 					Rows: []mysql.Row{
@@ -314,18 +328,27 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 		typ := col.TypeInfo.ToSqlType()
 		switch typ.Type() {
 		case query.Type_VARCHAR:
-			var value string
+			var stringVal string
 			if col.IsPartOfPK {
 				keyTuple := val.Tuple(key)
-				value, _ = keyDesc.GetString(keyIdx, keyTuple)
+				stringVal, _ = keyDesc.GetString(keyIdx, keyTuple)
 			} else {
 				valueTuple := val.Tuple(value)
-				value, _ = valueDesc.GetString(valueIdx, valueTuple)
+				stringVal, _ = valueDesc.GetString(valueIdx, valueTuple)
 			}
-			dataLength += 2 + len(value)
-			data = append(data, make([]byte, 2+len(value))...)
-			binary.LittleEndian.PutUint16(data[currentPos:], uint16(len(value)))
-			copy(data[currentPos+2:], value)
+			// TODO: when the field size is 255 or less, we use one byte to encode the length of the data,
+			//       otherwise we use 2 bytes.
+			numBytesForLength := 1
+			dataLength += numBytesForLength + len(stringVal)
+			data = append(data, make([]byte, numBytesForLength+len(stringVal))...)
+			if numBytesForLength == 1 {
+				data[currentPos] = byte(int8(len(stringVal)))
+			} else if numBytesForLength == 2 {
+				binary.LittleEndian.PutUint16(data[currentPos:], uint16(len(stringVal)))
+			} else {
+				panic("this shouldn't happen!") // TODO:
+			}
+			copy(data[currentPos+numBytesForLength:], stringVal)
 
 		case query.Type_INT32:
 			data = append(data, make([]byte, 4)...)
@@ -379,8 +402,8 @@ func createTableMapFromDoltTable(ctx *sql.Context, name string, table *doltdb.Ta
 	}
 
 	return &mysql.TableMap{
-		Flags:     0x8090, // TODO: What do these flags mean?
-		Database:  "db01", // TODO: db is still hardcoded to db01
+		Flags:     0x0001, // TODO: hardcoding to end of statement
+		Database:  databaseName,
 		Name:      name,
 		Types:     types,
 		CanBeNull: canBeNullMap,
@@ -399,7 +422,10 @@ func newBinlogStreamerManager() *binlogStreamerManager {
 	binlogFormat := createBinlogFormat()
 	binlogStream, err := createBinlogStream()
 	if err != nil {
-		// TODO: error handling!
+		// TODO: Change this to log an error message, and say that we weren't able to start replication
+		//       because of this error. Make the error message say that the value needs to be set persistently,
+		//       and then the server needs to be restarted before replication will work. We can always
+		//       make that better later, but at least it'll work and will be consistent with dolt replication.
 		panic(err.Error())
 	}
 
