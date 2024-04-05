@@ -361,13 +361,13 @@ func (fkc *ForeignKeyCollection) AddKeys(fks ...ForeignKey) error {
 		if len(key.TableColumns) != len(key.ReferencedTableColumns) {
 			return fmt.Errorf("foreign keys must have the same number of columns declared and referenced")
 		}
-		if key.IsResolved() {
-			if _, ok := fkc.GetByTags(key.TableColumns, key.ReferencedTableColumns); ok {
-				// this differs from MySQL's logic
-				return fmt.Errorf("a foreign key over columns %v and referenced columns %v already exists",
-					key.TableColumns, key.ReferencedTableColumns)
-			}
-		}
+		//if key.IsResolved() {
+		//	if _, ok := fkc.GetByTags(key.TableColumns, key.ReferencedTableColumns); ok {
+		//		// this differs from MySQL's logic
+		//		return fmt.Errorf("a foreign key over columns %v and referenced columns %v already exists",
+		//			key.TableColumns, key.ReferencedTableColumns)
+		//	}
+		//}
 
 		fkHash, err := key.HashOf()
 		if err != nil {

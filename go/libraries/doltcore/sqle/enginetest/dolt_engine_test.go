@@ -141,50 +141,33 @@ func TestSchemaOverrides(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
-
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "physical columns added after virtual one",
+			Name: "delete me",
 			SetUpScript: []string{
-				"create table t (pk int primary key, col1 int as (pk + 1));",
-				"insert into t (pk) values (1), (3)",
-				"alter table t add index idx1 (col1, pk);",
-				"alter table t add index idx2 (col1);",
-				"alter table t add column col2 int;",
-				"alter table t add column col3 int;",
-				"insert into t (pk, col2, col3) values (2, 4, 5);",
+				"create table t (i int, index(i));",
+				"alter table t add index (i)",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "select * from t where col1 = 2",
+					Query: "show create table t",
 					Expected: []sql.Row{
-						{1, 2, nil, nil},
 					},
 				},
 			},
 		},
 	}
 
-	tcc := &testCommitClock{}
-	cleanup := installTestCommitClock(tcc)
-	defer cleanup()
-
 	for _, script := range scripts {
-		sql.RunWithNowFunc(tcc.Now, func() error {
-			harness := newDoltHarness(t)
-			harness.Setup(setup.MydbData)
+		harness := newDoltHarness(t)
+		engine, err := harness.NewEngine(t)
+		if err != nil {
+			panic(err)
+		}
+		// engine.EngineAnalyzer().Debug = true
+		// engine.EngineAnalyzer().Verbose = true
 
-			engine, err := harness.NewEngine(t)
-			if err != nil {
-				panic(err)
-			}
-			// engine.EngineAnalyzer().Debug = true
-			// engine.EngineAnalyzer().Verbose = true
-
-			enginetest.TestScriptWithEngine(t, engine, harness, script)
-			return nil
-		})
+		enginetest.TestScriptWithEngine(t, engine, harness, script)
 	}
 }
 
