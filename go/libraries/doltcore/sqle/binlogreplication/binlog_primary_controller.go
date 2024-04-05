@@ -63,9 +63,6 @@ type binlogStreamerManager struct {
 
 var _ dsess.TransactionListener = (*binlogStreamerManager)(nil)
 
-// TODO: For now we are hardcoding to database db01; change this to be passed in as a parameter
-const databaseName = "db01"
-
 // TransactionCommit implements the TransactionListener interface. When a transaction is committed, this function
 // generates events for the binary log and sends them to all connected replicas.
 //
@@ -76,15 +73,13 @@ const databaseName = "db01"
 //	- DELETE_ROWS or WRITE_ROWS or UPDATE_ROWS event with the data changes
 //	- XID event (ends the transaction)
 //
-// TODO: This function currently does all its work synchronously, in the same user thread as the transaction commit. We
-//
-//	should split this out to a background routine to process, in order of the commits.
+// TODO: This function currently does all its work synchronously, in the same user thread as the transaction commit.
+// We should split this out to a background routine to process, in order of the commits.
 //
 // TODO: This function currently sends the events to all connected replicas (through a channel). Eventually we need
-//
-//	to change this so that it writes to a binary log file as the intermediate, and then the readers are watching
-//	that log to stream events back to the connected replicas.
-func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, before *doltdb.RootValue, after *doltdb.RootValue) error {
+// to change this so that it writes to a binary log file as the intermediate, and then the readers are watching
+// that log to stream events back to the connected replicas.
+func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, databaseName string, before *doltdb.RootValue, after *doltdb.RootValue) error {
 	tableDeltas, err := diff.GetTableDeltas(ctx, before, after)
 	if err != nil {
 		// TODO: Clean up err handling; Probably just log the error, don't bring down the server or stop replication
@@ -142,7 +137,7 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, before *dolt
 			tableName = tableDelta.FromName
 		}
 		tablesToId[tableName] = tableId
-		tableMap, err := createTableMapFromDoltTable(ctx, tableName, tableDelta.ToTable)
+		tableMap, err := createTableMapFromDoltTable(ctx, databaseName, tableName, tableDelta.ToTable)
 		if err != nil {
 			panic(err.Error())
 		}
@@ -369,12 +364,32 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 				nullBitmap.Set(rowIdx, true)
 			}
 
+		case query.Type_UINT8: // TINYINT UNSIGNED
+			intValue, notNull := descriptor.GetUint8(idx, tuple)
+			if notNull {
+				data = append(data, make([]byte, 1)...)
+				dataLength += 1
+				data[currentPos] = intValue
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
+
 		case query.Type_INT16: // SMALLINT
 			intValue, notNull := descriptor.GetInt16(idx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 2)...)
 				dataLength += 2
 				binary.LittleEndian.PutUint16(data[currentPos:], uint16(intValue))
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
+
+		case query.Type_UINT16: // SMALLINT UNSIGNED
+			intValue, notNull := descriptor.GetUint16(idx, tuple)
+			if notNull {
+				data = append(data, make([]byte, 2)...)
+				dataLength += 2
+				binary.LittleEndian.PutUint16(data[currentPos:], intValue)
 			} else {
 				nullBitmap.Set(rowIdx, true)
 			}
@@ -391,12 +406,36 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 				nullBitmap.Set(rowIdx, true)
 			}
 
+		case query.Type_UINT24: // MEDIUMINT UNSIGNED
+			intValue, notNull := descriptor.GetUint32(idx, tuple)
+			if notNull {
+				data = append(data, make([]byte, 3)...)
+				dataLength += 3
+				tempBuffer := make([]byte, 4)
+				binary.LittleEndian.PutUint32(tempBuffer, intValue)
+				copy(data[currentPos:], tempBuffer[0:3])
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
+
+		// TODO: These could probably be broken out into separate structs per datatype, as a cleaner
+		//       way to organize these and then throw them into a separate file
 		case query.Type_INT32: // INT
 			intValue, notNull := descriptor.GetInt32(idx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 4)...)
 				dataLength += 4
 				binary.LittleEndian.PutUint32(data[currentPos:], uint32(intValue))
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
+
+		case query.Type_UINT32: // INT UNSIGNED
+			intValue, notNull := descriptor.GetUint32(idx, tuple)
+			if notNull {
+				data = append(data, make([]byte, 4)...)
+				dataLength += 4
+				binary.LittleEndian.PutUint32(data[currentPos:], intValue)
 			} else {
 				nullBitmap.Set(rowIdx, true)
 			}
@@ -411,15 +450,26 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 				nullBitmap.Set(rowIdx, true)
 			}
 
+		case query.Type_UINT64: // BIGINT UNSIGNED
+			intValue, notNull := descriptor.GetUint64(idx, tuple)
+			if notNull {
+				data = append(data, make([]byte, 8)...)
+				dataLength += 8
+				binary.LittleEndian.PutUint64(data[currentPos:], intValue)
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
+
 		default:
-			return nil, nullBitmap, fmt.Errorf("unsupported type: %v \n", typ.String())
+			return nil, nullBitmap, fmt.Errorf("unsupported type: %v (%d)\n", typ.String(), typ.Type())
 		}
 	}
 
 	return data, nullBitmap, nil
 }
 
-func createTableMapFromDoltTable(ctx *sql.Context, name string, table *doltdb.Table) (*mysql.TableMap, error) {
+// TODO: godocs
+func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName string, table *doltdb.Table) (*mysql.TableMap, error) {
 	schema, err := table.GetSchema(ctx)
 	if err != nil {
 		return nil, err
@@ -432,6 +482,8 @@ func createTableMapFromDoltTable(ctx *sql.Context, name string, table *doltdb.Ta
 
 	for i, col := range columns {
 		typ := col.TypeInfo.ToSqlType()
+		metadata[i] = 0
+
 		switch typ.Type() {
 		case query.Type_VARCHAR:
 			types[i] = mysql.TypeVarchar
@@ -440,19 +492,25 @@ func createTableMapFromDoltTable(ctx *sql.Context, name string, table *doltdb.Ta
 
 		case query.Type_INT8: // TINYINT
 			types[i] = mysql.TypeTiny
-			metadata[i] = 0
 		case query.Type_INT16: // SMALLINT
 			types[i] = mysql.TypeShort
-			metadata[i] = 0
 		case query.Type_INT24: // MEDIUMINT
 			types[i] = mysql.TypeInt24
-			metadata[i] = 0
 		case query.Type_INT32: // INT
 			types[i] = mysql.TypeLong
-			metadata[i] = 0
 		case query.Type_INT64: // BIGINT
 			types[i] = mysql.TypeLongLong
-			metadata[i] = 0
+
+		case query.Type_UINT8: // TINYINT UNSIGNED
+			types[i] = mysql.TypeTiny
+		case query.Type_UINT16: // SMALLINT UNSIGNED
+			types[i] = mysql.TypeShort
+		case query.Type_UINT24: // MEDIUMINT UNSIGNED
+			types[i] = mysql.TypeInt24
+		case query.Type_UINT32: // INT UNSIGNED
+			types[i] = mysql.TypeLong
+		case query.Type_UINT64: // BIGINT UNSIGNED
+			types[i] = mysql.TypeLongLong
 
 		default:
 			panic(fmt.Sprintf("unsupported type: %v \n", typ.String()))
@@ -466,7 +524,7 @@ func createTableMapFromDoltTable(ctx *sql.Context, name string, table *doltdb.Ta
 	return &mysql.TableMap{
 		Flags:     0x0001, // TODO: hardcoding to end of statement
 		Database:  databaseName,
-		Name:      name,
+		Name:      tableName,
 		Types:     types,
 		CanBeNull: canBeNullMap,
 		Metadata:  metadata, // https://mariadb.com/kb/en/table_map_event/#optional-metadata-block

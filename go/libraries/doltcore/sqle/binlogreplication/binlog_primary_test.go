@@ -57,7 +57,8 @@ func TestBinlogPrimary(t *testing.T) {
 	// TODO: We don't support replicating DDL statements yet, so for now, set up the DDL before
 	//       starting up replication.
 	primaryDatabase.MustExec("create database db01;")
-	testTableCreateStatement := "create table db01.t (pk int primary key, c1 varchar(10), c2 int, c3 varchar(100), c4 tinyint, c5 smallint, c6 mediumint, c7 bigint);"
+	testTableCreateStatement := "create table db01.t (pk int primary key, c1 varchar(10), c2 int, c3 varchar(100), " +
+		"c4 tinyint, c5 smallint, c6 mediumint, c7 bigint, uc1 tinyint unsigned, uc2 smallint unsigned, uc3 mediumint unsigned, uc4 int unsigned, uc5 bigint unsigned);"
 	primaryDatabase.MustExec(testTableCreateStatement)
 	replicaDatabase.MustExec(testTableCreateStatement)
 
@@ -69,7 +70,7 @@ func TestBinlogPrimary(t *testing.T) {
 	//       Here we just pause to let the hardcoded binlog events be delivered
 	time.Sleep(250 * time.Millisecond)
 
-	primaryDatabase.MustExec("insert into db01.t values (1, '42', NULL, NULL, 123, 123, 123, 123);")
+	primaryDatabase.MustExec("insert into db01.t values (1, '42', NULL, NULL, 123, 123, 123, 123, 200, 200, 200, 200, 200);")
 	time.Sleep(450 * time.Millisecond)
 
 	// Sanity check on SHOW REPLICA STATUS
@@ -99,6 +100,11 @@ func TestBinlogPrimary(t *testing.T) {
 	require.Equal(t, "123", allRows[0]["c5"])
 	require.Equal(t, "123", allRows[0]["c6"])
 	require.Equal(t, "123", allRows[0]["c7"])
+	require.Equal(t, "200", allRows[0]["uc1"])
+	require.Equal(t, "200", allRows[0]["uc2"])
+	require.Equal(t, "200", allRows[0]["uc3"])
+	require.Equal(t, "200", allRows[0]["uc4"])
+	require.Equal(t, uint64(200), allRows[0]["uc5"]) // TODO: Why don't the test utils convert this value to a string?
 
 	// TODO: Now modify some data
 	// TODO: Delete some data
