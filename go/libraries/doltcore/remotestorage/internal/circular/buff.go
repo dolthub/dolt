@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package circbuff
+package circular
 
 type Buff[T any] struct {
 	// The backing array.
@@ -23,8 +23,8 @@ type Buff[T any] struct {
 	len int
 }
 
-func NewBuff[T any](initSz int) Buff[T] {
-	return Buff[T]{
+func NewBuff[T any](initSz int) *Buff[T] {
+	return &Buff[T]{
 		arr: make([]T, initSz),
 	}
 }

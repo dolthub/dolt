@@ -231,6 +231,26 @@ func fetcherHashSetToGetDlLocsReqsThread(ctx context.Context, reqCh chan hash.Ha
 type StateFunc func() (StateFunc, error)
 type CtxStateFunc func(context.Context) (CtxStateFunc, error)
 
+func fetcherRPCDownloadLocsThread_Two(ctx context.Context, reqCh chan *remotesapi.GetDownloadLocsRequest, resCh chan []*remotesapi.DownloadLoc, client remotesapi.ChunkStoreServiceClient) error {
+	reqs := ackchan.NewChan(reqCh)
+	defer reqs.Close()
+
+	bo := grpcBackOff(ctx)
+
+	// In our initial state, we just want to read a single request before opening the stream...
+	var req *remotesapi.GetDownloadLocsRequest
+	var ok bool
+	select {
+	case req, ok = <-reqs.Recv():
+		if !ok {
+			close(resCh)
+			return nil
+		}
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	}
+}
+
 func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.GetDownloadLocsRequest, resCh chan []*remotesapi.DownloadLoc, client remotesapi.ChunkStoreServiceClient) error {
 	var state_InitialState StateFunc
 	var state_WantsOpenWithRead StateFunc
@@ -244,9 +264,6 @@ func fetcherRPCDownloadLocsThread(ctx context.Context, reqCh chan *remotesapi.Ge
 	var stream remotesapi.ChunkStoreService_StreamDownloadLocationsClient
 	var backoffDuration time.Duration
 	bo := grpcBackOff(ctx)
-
-	var initialReqs []*remotesapi.GetDownloadLocsRequest
-	var initialReqsMu sync.Mutex
 
 	processError := func(err error) (StateFunc, error) {
 		err = processGrpcErr(err)
