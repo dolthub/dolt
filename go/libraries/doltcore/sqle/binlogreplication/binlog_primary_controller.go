@@ -315,16 +315,24 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 	keyTuple := val.Tuple(key)
 	valueTuple := val.Tuple(value)
 
-	var notNull bool
 	dataLength := 0
 	keyIdx := -1
 	valueIdx := -1
 	keyDesc, valueDesc := schema.GetMapDescriptors()
+	var descriptor val.TupleDesc
+	var idx int
+	var tuple val.Tuple
 	for rowIdx, col := range columns {
 		if col.IsPartOfPK {
+			descriptor = keyDesc
 			keyIdx++
+			idx = keyIdx
+			tuple = keyTuple
 		} else {
+			descriptor = valueDesc
 			valueIdx++
+			idx = valueIdx
+			tuple = valueTuple
 		}
 
 		currentPos := dataLength
@@ -332,13 +340,7 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 		typ := col.TypeInfo.ToSqlType()
 		switch typ.Type() {
 		case query.Type_VARCHAR:
-			var stringVal string
-			if col.IsPartOfPK {
-				stringVal, notNull = keyDesc.GetString(keyIdx, keyTuple)
-			} else {
-				stringVal, notNull = valueDesc.GetString(valueIdx, valueTuple)
-			}
-
+			stringVal, notNull := descriptor.GetString(idx, tuple)
 			if notNull {
 				// TODO: when the field size is 255 or less, we use one byte to encode the length of the data,
 				//       otherwise we use 2 bytes.
@@ -358,12 +360,7 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 			}
 
 		case query.Type_INT32:
-			intValue := int32(0)
-			if col.IsPartOfPK {
-				intValue, notNull = keyDesc.GetInt32(keyIdx, keyTuple)
-			} else {
-				intValue, notNull = valueDesc.GetInt32(valueIdx, valueTuple)
-			}
+			intValue, notNull := descriptor.GetInt32(idx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 4)...)
 				dataLength += 4
