@@ -25,7 +25,7 @@ responses = list(NULL,
                     Default = c(NA_character_, NA_character_),
                     Extra = c("", ""), stringsAsFactors = FALSE),
                  NULL,
-                 data.frame(pk = c(0), value = c(0), stringsAsFactors = FALSE))
+                 data.frame(pk = c(as.integer(0)), value = c(as.integer(0)), stringsAsFactors = FALSE))
 
 for(i in 1:length(queries)) {
     q = queries[[i]]
@@ -36,8 +36,8 @@ for(i in 1:length(queries)) {
             for (j in 1:length(want)) {
                 if (!identical(want[[j]], got[[j]])) {
                     print(q)
-                    print(c("want:", want[[i]], "type: ", typeof(want[[i]])))
-                    print(c("got:", got[[i]], "type: ", typeof(got[[i]])))
+                    print(c("want:", want[[j]], "type: ", typeof(want[[j]])))
+                    print(c("got:", got[[j]], "type: ", typeof(got[[j]])))
                     quit("no", 1)
                 }
             }
