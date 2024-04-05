@@ -375,14 +375,14 @@ SQL
     run dolt sql -r csv -q "describe view1"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
-    [[ "${lines[1]}" =~ 'pk,int,NO,"",NULL,""' ]] || false
-    [[ "${lines[2]}" =~ 'val,int,YES,"",NULL,""' ]] || false
+    [[ "${lines[1]}" =~ 'pk,int,NO,"",,""' ]] || false
+    [[ "${lines[2]}" =~ 'val,int,YES,"",,""' ]] || false
 
     dolt sql -q "create view view2 as select pk from t"
     run dolt sql -r csv -q "describe view2"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
-    [[ "${lines[1]}" =~ 'pk,int,NO,"",NULL,""' ]] || false
+    [[ "${lines[1]}" =~ 'pk,int,NO,"",,""' ]] || false
 
     dolt sql -q "create table t2(pk int primary key, val int)"
     dolt sql -q "insert into t values (1,1)"
@@ -392,8 +392,8 @@ SQL
     run dolt sql -r csv -q "describe view3"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
-    [[ "${lines[1]}" =~ 'v1,int,YES,"",NULL,""' ]] || false
-    [[ "${lines[2]}" =~ 'v2,int,YES,"",NULL,""' ]] || false
+    [[ "${lines[1]}" =~ 'v1,int,YES,"",,""' ]] || false
+    [[ "${lines[2]}" =~ 'v2,int,YES,"",,""' ]] || false
 }
 
 @test "create-views: can correctly alter a view" {

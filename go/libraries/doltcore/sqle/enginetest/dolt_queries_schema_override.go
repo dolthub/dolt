@@ -49,8 +49,8 @@ var SchemaOverrideTests = []queries.ScriptTest{
 			{
 				Query: "describe t;",
 				Expected: []sql.Row{
-					{"pk", "int", "NO", "PRI", "NULL", ""},
-					{"c2", "varchar(255)", "YES", "", "NULL", ""},
+					{"pk", "int", "NO", "PRI", nil, ""},
+					{"c2", "varchar(255)", "YES", "", nil, ""},
 				},
 			},
 			{
