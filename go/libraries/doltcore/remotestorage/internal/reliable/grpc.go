@@ -53,7 +53,7 @@ func MakeCall[Req, Resp any](ctx context.Context, opts CallOptions[Req, Resp]) (
 		opts:   opts,
 	}
 	eg.Go(func() error {
-		return ret.thread(ctx, ret.reqCh, ret.respCh)
+		return ret.thread()
 	})
 	return ret, nil
 }
@@ -78,18 +78,18 @@ func (ErrWantBlockForDeliverResp[Resp]) Error() string {
 	return "ErrWantBlockForDeliverResp"
 }
 
-func (c *reliableCall[Req, Resp]) thread(ctx context.Context, reqCh chan Req, respCh chan Resp) error {
+func (c *reliableCall[Req, Resp]) thread() error {
 	var state_Initial CtxStateFunc
 	var state_Open CtxStateFunc
 	var state_Backoff func(time.Duration) CtxStateFunc
 	var state_BlockForDeliverResp func(Resp) CtxStateFunc
 
-	bo := c.opts.BackOffF(ctx)
+	bo := c.opts.BackOffF(c.ctx)
 
-	requests := NewChan(reqCh)
+	requests := NewChan(c.reqCh)
 	defer requests.Close()
 
-	processError := func(err error) (CtxStateFunc, error) {
+	stateForError := func(err error) (CtxStateFunc, error) {
 		err = c.opts.ErrF(err)
 		pe := new(backoff.PermanentError)
 		if errors.As(err, &pe) {
@@ -107,6 +107,7 @@ func (c *reliableCall[Req, Resp]) thread(ctx context.Context, reqCh chan Req, re
 			select {
 			case c.respCh <- resp:
 				requests.Ack()
+				requests.Reset()
 				return state_Initial, nil
 			case <-ctx.Done():
 				return nil, context.Cause(ctx)
@@ -126,12 +127,15 @@ func (c *reliableCall[Req, Resp]) thread(ctx context.Context, reqCh chan Req, re
 	}
 
 	state_Initial = func(ctx context.Context) (CtxStateFunc, error) {
-		defer requests.Reset()
 		select {
 		case _, ok := <-requests.Recv():
 			if !ok {
 				return nil, nil
 			}
+			// The easiest way to drive the just-received request
+			// in the Open state is to just reset the reliable
+			// channel here.
+			requests.Reset()
 			return state_Open, nil
 		case <-ctx.Done():
 			return nil, context.Cause(ctx)
@@ -139,11 +143,10 @@ func (c *reliableCall[Req, Resp]) thread(ctx context.Context, reqCh chan Req, re
 	}
 
 	state_Open = func(ctx context.Context) (CtxStateFunc, error) {
-		defer requests.Reset()
 		eg, sCtx := errgroup.WithContext(ctx)
 		stream, err := c.opts.Open(sCtx, c.opts.GrpcOpts...)
 		if err != nil {
-			return processError(err)
+			return stateForError(err)
 		}
 		var nextState CtxStateFunc
 		// Handle requests
@@ -189,9 +192,12 @@ func (c *reliableCall[Req, Resp]) thread(ctx context.Context, reqCh chan Req, re
 				select {
 				case <-sCtx.Done():
 					return context.Cause(sCtx)
-				case respCh <- resp:
+				case c.respCh <- resp:
 					requests.Ack()
 				case <-timeout.C:
+					// We signal this next state with an error, since we need the
+					// (possibly-blocked-on-network-sending) Send thread to see
+					// failure by having its context canceled.
 					return ErrWantBlockForDeliverResp[Resp]{Resp: resp}
 				}
 			}
@@ -199,18 +205,23 @@ func (c *reliableCall[Req, Resp]) thread(ctx context.Context, reqCh chan Req, re
 		var dre ErrWantBlockForDeliverResp[Resp]
 		err = eg.Wait()
 		if err == nil {
+			requests.Reset()
 			return nextState, nil
 		} else if errors.As(err, &dre) {
+			// We do not reset the reliable Chan of requsets here.
+			// Once this response is delivered, it will be Ackd and
+			// the channel will be reset by the next state.
 			return state_BlockForDeliverResp(dre.Resp), nil
 		} else {
-			return processError(err)
+			requests.Reset()
+			return stateForError(err)
 		}
 	}
 
 	var currentState = state_Initial
 
 	for {
-		nextState, err := currentState(ctx)
+		nextState, err := currentState(c.ctx)
 		if err != nil {
 			return err
 		}

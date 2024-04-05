@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"math/rand/v2"
 	"sync"
 	"testing"
 	"time"
@@ -133,7 +134,7 @@ func TestMakeCall(t *testing.T) {
 				return err
 			},
 			Open: func(ctx context.Context, opts ...grpc.CallOption) (ClientStream[int, int], error) {
-				return newTestStream[int](ctx), nil
+				return newTestStream[int](ctx, 1), nil
 			},
 			BackOffF: func(ctx context.Context) backoff.BackOff {
 				return &backoff.StopBackOff{}
@@ -162,7 +163,7 @@ func TestMakeCall(t *testing.T) {
 			},
 			Open: func(ctx context.Context, opts ...grpc.CallOption) (ClientStream[int, int], error) {
 				if tries >= 3 {
-					return newTestStream[int](ctx), nil
+					return newTestStream[int](ctx, 1), nil
 				} else {
 					tries += 1
 					return nil, errors.New("attempt")
@@ -194,7 +195,7 @@ func TestMakeCall(t *testing.T) {
 				return err
 			},
 			Open: func(ctx context.Context, opts ...grpc.CallOption) (ClientStream[int, int], error) {
-				return newTestStream[int](ctx), nil
+				return newTestStream[int](ctx, 1), nil
 			},
 			BackOffF: func(ctx context.Context) backoff.BackOff {
 				return backoff.NewConstantBackOff(0)
@@ -267,13 +268,13 @@ func TestMakeCall(t *testing.T) {
 				parity = !parity
 				if parity {
 					return &errAfterRecvsStream[int]{
-						stream: newTestStream[int](ctx),
+						stream: newTestStream[int](ctx, 1),
 						recvs:  2,
 						err:    errors.New("an error after recving"),
 					}, nil
 				} else {
 					return &errAfterSendsStream[int]{
-						stream: newTestStream[int](ctx),
+						stream: newTestStream[int](ctx, 1),
 						sends:  2,
 						err:    errors.New("an error after sending"),
 					}, nil
@@ -308,6 +309,90 @@ func TestMakeCall(t *testing.T) {
 		}()
 		wg.Wait()
 	})
+	t.Run("NestErrorStreams", func(t *testing.T) {
+		// This is a somewhat pathological end-to-end test nesting
+		// multiple reliable streams on top of each other, where some
+		// of the streams throw periodic errors.
+
+		errF := func(err error) error {
+			return err
+		}
+		backOffF := func(ctx context.Context) backoff.BackOff {
+			return backoff.NewConstantBackOff(time.Millisecond * time.Duration(rand.IntN(32)))
+		}
+		base := func(ctx context.Context, opts ...grpc.CallOption) (ClientStream[int, int], error) {
+			return MakeCall(ctx, CallOptions[int, int]{
+				ErrF:     errF,
+				BackOffF: backOffF,
+				Open: func(ctx context.Context, opts ...grpc.CallOption) (ClientStream[int, int], error) {
+					return newTestStream[int](ctx, rand.IntN(8)), nil
+				},
+			})
+		}
+		recvError := func(ctx context.Context, opts ...grpc.CallOption) (ClientStream[int, int], error) {
+			return MakeCall(ctx, CallOptions[int, int]{
+				ErrF:     errF,
+				BackOffF: backOffF,
+				Open: func(ctx context.Context, opts ...grpc.CallOption) (ClientStream[int, int], error) {
+					s, err := base(ctx, opts...)
+					if err != nil {
+						return nil, err
+					}
+					return &errAfterRecvsStream[int]{
+						stream: s,
+						recvs:  rand.IntN(8),
+						err:    errors.New("an error after recving"),
+					}, nil
+				},
+			})
+		}
+		sendError := func(ctx context.Context, opts ...grpc.CallOption) (ClientStream[int, int], error) {
+			return MakeCall(ctx, CallOptions[int, int]{
+				ErrF:     errF,
+				BackOffF: backOffF,
+				Open: func(ctx context.Context, opts ...grpc.CallOption) (ClientStream[int, int], error) {
+					s, err := recvError(ctx, opts...)
+					if err != nil {
+						return nil, err
+					}
+					return &errAfterSendsStream[int]{
+						stream: s,
+						sends:  rand.IntN(8),
+						err:    errors.New("an error after recving"),
+					}, nil
+				},
+			})
+		}
+
+		stream, err := MakeCall(context.Background(), CallOptions[int, int]{
+			ErrF:     errF,
+			BackOffF: backOffF,
+			Open:     sendError,
+		})
+		assert.NotNil(t, stream)
+		assert.NoError(t, err)
+
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 128; i++ {
+				assert.NoError(t, stream.Send(i))
+			}
+			assert.NoError(t, stream.CloseSend())
+		}()
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 128; i++ {
+				j, err := stream.Recv()
+				assert.NoError(t, err)
+				assert.Equal(t, i, j)
+			}
+			_, err := stream.Recv()
+			assert.ErrorIs(t, err, io.EOF)
+		}()
+		wg.Wait()
+	})
 	t.Run("StreamReadTimeout", func(t *testing.T) {
 		closeNotify := make(chan struct{})
 		stream, err := MakeCall(context.Background(), CallOptions[int, int]{
@@ -315,7 +400,7 @@ func TestMakeCall(t *testing.T) {
 				return err
 			},
 			Open: func(ctx context.Context, opts ...grpc.CallOption) (ClientStream[int, int], error) {
-				ret := newTestStream[int](ctx)
+				ret := newTestStream[int](ctx, 1)
 				ret.closeNotify = closeNotify
 				return ret, nil
 			},
@@ -350,7 +435,7 @@ func TestMakeCall(t *testing.T) {
 				return err
 			},
 			Open: func(ctx context.Context, opts ...grpc.CallOption) (ClientStream[int, int], error) {
-				ret := newTestStream[int](ctx)
+				ret := newTestStream[int](ctx, 1)
 				go func() {
 					<-ctx.Done()
 					ctxNotify <- struct{}{}
@@ -388,7 +473,7 @@ func TestMakeCall(t *testing.T) {
 				return err
 			},
 			Open: func(ctx context.Context, opts ...grpc.CallOption) (ClientStream[int, int], error) {
-				ret := newTestStream[int](ctx)
+				ret := newTestStream[int](ctx, 1)
 				go func() {
 					<-ctx.Done()
 					ctxNotify <- struct{}{}
@@ -421,10 +506,10 @@ type testStream[T any] struct {
 	closeNotify chan struct{}
 }
 
-func newTestStream[T any](ctx context.Context) *testStream[T] {
+func newTestStream[T any](ctx context.Context, sz int) *testStream[T] {
 	return &testStream[T]{
 		ctx: ctx,
-		ch:  make(chan T, 1),
+		ch:  make(chan T, sz),
 	}
 }
 
