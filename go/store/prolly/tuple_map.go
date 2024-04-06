@@ -278,6 +278,11 @@ func (m Map) IterAll(ctx context.Context) (MapIter, error) {
 	return m.tuples.IterAll(ctx)
 }
 
+// BufferedIterAll returns a MapIter that iterates over the entire Map.
+func (m Map) BufferedIterAll(ctx context.Context) (MapIter, error) {
+	return m.tuples.BufferedIterAll(ctx, 128)
+}
+
 // IterAllReverse returns a MapIter that iterates over the entire Map from the end to the beginning.
 func (m Map) IterAllReverse(ctx context.Context) (MapIter, error) {
 	return m.tuples.IterAllReverse(ctx)

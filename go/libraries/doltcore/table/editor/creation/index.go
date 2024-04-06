@@ -195,7 +195,7 @@ func BuildSecondaryProllyIndex(
 		return nil, err
 	}
 
-	iter, err := primary.IterAll(ctx)
+	iter, err := primary.BufferedIterAll(ctx)
 	if err != nil {
 		return nil, err
 	}
