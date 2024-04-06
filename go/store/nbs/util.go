@@ -33,7 +33,7 @@ func IterChunks(ctx context.Context, rd io.ReadSeeker, cb func(chunk chunks.Chun
 
 	defer idx.Close()
 
-	seen := make(map[hash.Hash]bool)
+	seen := make(map[hash.Hash]struct{})
 	for i := uint32(0); i < idx.chunkCount(); i++ {
 		var h hash.Hash
 		ie, err := idx.indexEntry(i, &h)
@@ -41,7 +41,7 @@ func IterChunks(ctx context.Context, rd io.ReadSeeker, cb func(chunk chunks.Chun
 			return err
 		}
 		if _, ok := seen[h]; !ok {
-			seen[h] = true
+			seen[h] = struct{}{}
 			chunkBytes, err := readNFrom(rd, ie.Offset(), ie.Length())
 			if err != nil {
 				return err

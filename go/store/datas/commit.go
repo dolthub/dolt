@@ -651,12 +651,12 @@ func GetCommitRootHash(cv types.Value) (hash.Hash, error) {
 }
 
 func parentsToQueue(ctx context.Context, commits []*Commit, q *CommitByHeightHeap, vr types.ValueReader) error {
-	seen := make(map[hash.Hash]bool)
+	seen := make(map[hash.Hash]struct{})
 	for _, c := range commits {
 		if _, ok := seen[c.Addr()]; ok {
 			continue
 		}
-		seen[c.Addr()] = true
+		seen[c.Addr()] = struct{}{}
 
 		parents, err := GetCommitParents(ctx, vr, c.NomsValue())
 		if err != nil {
