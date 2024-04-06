@@ -62,6 +62,7 @@ var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables c
 type Database struct {
 	baseName      string
 	requestedName string
+	schemaName    string
 	ddb           *doltdb.DoltDB
 	rsr           env.RepoStateReader
 	rsw           env.RepoStateWriter
@@ -91,6 +92,8 @@ var _ sql.AliasedDatabase = Database{}
 var _ fulltext.Database = Database{}
 var _ rebase.RebasePlanDatabase = Database{}
 var _ sql.SchemaValidator = Database{}
+var _ sql.SchemaDatabase = Database{}
+var _ sql.DatabaseSchema = Database{}
 
 type ReadOnlyDatabase struct {
 	Database
@@ -1145,6 +1148,23 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSc
 	ds := dsess.DSessFromSess(ctx.Session)
 	ds.AddTemporaryTable(ctx, db.Name(), tmp)
 	return nil
+}
+
+// CreateSchema implements sql.SchemaDatabase
+func (db Database) CreateSchema(ctx *sql.Context, schemaName string) error {
+  return nil
+}
+
+// GetSchema implements sql.SchemaDatabase
+func (db Database) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseSchema, bool, error) {
+	db.schemaName = schemaName
+	return db, true, nil 
+}
+
+// AllSchemas implements sql.SchemaDatabase
+func (db Database) AllSchemas(ctx *sql.Context) ([]sql.DatabaseSchema, error) {
+	db.schemaName = "public"
+	return []sql.DatabaseSchema{db}, nil
 }
 
 // RenameTable implements sql.TableRenamer
