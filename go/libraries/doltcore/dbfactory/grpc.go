@@ -128,13 +128,15 @@ func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, nbf *types.Noms
 	csClient := remotesapi.NewChunkStoreServiceClient(conn)
 	cs, err := remotestorage.NewDoltChunkStoreFromPath(ctx, nbf, urlObj.Path, urlObj.Host, wsValidate, csClient)
 	if err != nil {
+		conn.Close()
 		return nil, fmt.Errorf("could not access dolt url '%s': %w", urlObj.String(), err)
 	}
 	cs = cs.WithHTTPFetcher(cfg.HTTPFetcher)
+	cs.SetFinalizer(conn.Close)
 
 	if _, ok := params[NoCachingParameter]; ok {
 		cs = cs.WithNoopChunkCache()
 	}
 
-	return cs, err
+	return cs, nil
 }

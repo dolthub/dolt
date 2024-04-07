@@ -106,6 +106,7 @@ func (r *mysqlDbReplica) Run() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.lgr.Tracef("mysqlDbReplica[%s]: running", r.client.remote)
+	defer r.client.closer()
 	for !r.shutdown {
 		if r.role != RolePrimary {
 			r.wait()
