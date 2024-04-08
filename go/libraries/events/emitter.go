@@ -116,13 +116,12 @@ func (we WriterEmitter) LogEventsRequest(ctx context.Context, req *eventsapi.Log
 // GrpcEmitter sends events to a GRPC service implementing the eventsapi
 type GrpcEmitter struct {
 	client eventsapi.ClientEventsServiceClient
-	conn   *grpc.ClientConn
 }
 
 // NewGrpcEmitter creates a new GrpcEmitter
 func NewGrpcEmitter(conn *grpc.ClientConn) *GrpcEmitter {
 	client := eventsapi.NewClientEventsServiceClient(conn)
-	return &GrpcEmitter{client, conn}
+	return &GrpcEmitter{client}
 }
 
 func (em *GrpcEmitter) LogEvents(ctx context.Context, version string, evts []*eventsapi.ClientEvent) error {
