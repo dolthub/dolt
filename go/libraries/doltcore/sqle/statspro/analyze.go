@@ -36,7 +36,7 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 		return err
 	}
 
-	sqlDb, err := dSess.Provider().Database(ctx, fmt.Sprintf("%s/%s", db, branch))
+	sqlDb, err := dSess.Provider().Database(ctx, p.branchQualifiedDatabase(db, branch))
 	if err != nil {
 		return err
 	}
@@ -129,6 +129,16 @@ func (p *Provider) RefreshTableStats(ctx *sql.Context, table sql.Table, db strin
 
 	p.UpdateStatus(dbName, fmt.Sprintf("refreshed %s", dbName))
 	return statDb.Flush(ctx, branch)
+}
+
+// branchQualifiedDatabase returns a branch qualified database. If the database
+// is already branch suffixed no duplication is applied.
+func (p *Provider) branchQualifiedDatabase(db, branch string) string {
+	suffix := fmt.Sprintf("/%s", branch)
+	if !strings.HasSuffix(db, suffix) {
+		return fmt.Sprintf("%s%s", db, suffix)
+	}
+	return db
 }
 
 // GetLatestTable will get the WORKING root table for the current database/branch
