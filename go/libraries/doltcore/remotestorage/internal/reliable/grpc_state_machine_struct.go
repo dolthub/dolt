@@ -24,7 +24,17 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type stateMachine[Req, Resp any] struct {
+type CtxStateFunc func(context.Context) (CtxStateFunc, error)
+
+type ErrWantBlockForDeliverResp[Resp any] struct {
+	Resp Resp
+}
+
+func (ErrWantBlockForDeliverResp[Resp]) Error() string {
+	return "ErrWantBlockForDeliverResp"
+}
+
+type reliableCallStateMachine[Req, Resp any] struct {
 	call     *reliableCall[Req, Resp]
 	requests *Chan[Req]
 	bo       backoff.BackOff
@@ -36,7 +46,7 @@ type stateMachine[Req, Resp any] struct {
 	resp Resp
 }
 
-func (s *stateMachine[Req, Resp]) run(ctx context.Context) error {
+func (s *reliableCallStateMachine[Req, Resp]) run(ctx context.Context) error {
 	var curState CtxStateFunc = s.initial
 	for {
 		nextState, err := curState(ctx)
@@ -52,7 +62,7 @@ func (s *stateMachine[Req, Resp]) run(ctx context.Context) error {
 	
 }
 
-func (s *stateMachine[Req, Resp]) initial(ctx context.Context) (CtxStateFunc, error) {
+func (s *reliableCallStateMachine[Req, Resp]) initial(ctx context.Context) (CtxStateFunc, error) {
 	select {
 	case _, ok := <-s.requests.Recv():
 		if !ok {
@@ -68,7 +78,7 @@ func (s *stateMachine[Req, Resp]) initial(ctx context.Context) (CtxStateFunc, er
 	}
 }
 
-func (s *stateMachine[Req, Resp]) stateForError(err error) (CtxStateFunc, error) {
+func (s *reliableCallStateMachine[Req, Resp]) stateForError(err error) (CtxStateFunc, error) {
 	err = s.call.opts.ErrF(err)
 	pe := new(backoff.PermanentError)
 	if errors.As(err, &pe) {
@@ -81,7 +91,7 @@ func (s *stateMachine[Req, Resp]) stateForError(err error) (CtxStateFunc, error)
 	return s.backoff, nil
 }
 
-func (s *stateMachine[Req, Resp]) open(ctx context.Context) (CtxStateFunc, error) {
+func (s *reliableCallStateMachine[Req, Resp]) open(ctx context.Context) (CtxStateFunc, error) {
 	eg, sCtx := errgroup.WithContext(ctx)
 	stream, err := s.call.opts.Open(sCtx, s.call.opts.GrpcOpts...)
 	if err != nil {
@@ -158,7 +168,7 @@ func (s *stateMachine[Req, Resp]) open(ctx context.Context) (CtxStateFunc, error
 	}
 }
 
-func (s *stateMachine[Req, Resp]) blockForDeliverResp(ctx context.Context) (CtxStateFunc, error) {
+func (s *reliableCallStateMachine[Req, Resp]) blockForDeliverResp(ctx context.Context) (CtxStateFunc, error) {
 	select {
 	case s.call.respCh <- s.resp:
 		s.requests.Ack()
@@ -169,7 +179,7 @@ func (s *stateMachine[Req, Resp]) blockForDeliverResp(ctx context.Context) (CtxS
 	}
 }
 
-func (s *stateMachine[Req, Resp]) backoff(ctx context.Context) (CtxStateFunc, error) {
+func (s *reliableCallStateMachine[Req, Resp]) backoff(ctx context.Context) (CtxStateFunc, error) {
 	select {
 	case <-time.After(s.duration):
 		return s.initial, nil
