@@ -3474,7 +3474,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL DOLT_MERGE('right');",
-				ExpectedErrStr: "error storing constraint violation for primary key (( 1 )): another violation already exists\nnew violation: {\"Columns\":[\"col2\"],\"ForeignKey\":\"child_ibfk_1\",\"Index\":\"col2\",\"OnDelete\":\"RESTRICT\",\"OnUpdate\":\"RESTRICT\",\"ReferencedColumns\":[\"col2\"],\"ReferencedIndex\":\"par_col2_idx\",\"ReferencedTable\":\"parent\",\"Table\":\"child\"} old violation: ({\"Columns\":[\"col1\"],\"ForeignKey\":\"ut564qa1\",\"Index\":\"col1\",\"OnDelete\":\"RESTRICT\",\"OnUpdate\":\"RESTRICT\",\"ReferencedColumns\":[\"col1\"],\"ReferencedIndex\":\"par_col1_idx\",\"ReferencedTable\":\"parent\",\"Table\":\"child\"})",
+				ExpectedErrStr: "error storing constraint violation for primary key (( 1 )): another violation already exists\nnew violation: {\"Columns\":[\"col1\"],\"ForeignKey\":\"child_ibfk_1\",\"Index\":\"col1\",\"OnDelete\":\"RESTRICT\",\"OnUpdate\":\"RESTRICT\",\"ReferencedColumns\":[\"col1\"],\"ReferencedIndex\":\"par_col1_idx\",\"ReferencedTable\":\"parent\",\"Table\":\"child\"} old violation: ({\"Columns\":[\"col2\"],\"ForeignKey\":\"child_ibfk_2\",\"Index\":\"col2\",\"OnDelete\":\"RESTRICT\",\"OnUpdate\":\"RESTRICT\",\"ReferencedColumns\":[\"col2\"],\"ReferencedIndex\":\"par_col2_idx\",\"ReferencedTable\":\"parent\",\"Table\":\"child\"})",
 			},
 			{
 				Query:    "SELECT * from parent;",
