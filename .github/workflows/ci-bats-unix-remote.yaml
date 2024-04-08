@@ -72,7 +72,7 @@ jobs:
           dolt config --global --add user.name 'Dolthub Actions'
           dolt config --global --add user.email 'actions@dolthub.com'
       - name: Install expect
-        if: ${{ matrix.os == 'ubuntu-22.04' && env.use_credentials != 'true' }}
+        if: ${{ env.use_credentials != 'true' }}
         run: sudo apt-get install -y expect
       - name: Install Maven
         if: ${{ env.use_credentials != 'true' }}
