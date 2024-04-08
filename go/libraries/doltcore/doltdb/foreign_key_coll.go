@@ -28,6 +28,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
+
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // ForeignKeyCollection represents the collection of foreign keys for a root value.
@@ -356,7 +358,7 @@ func (fkc *ForeignKeyCollection) AddKeys(fks ...ForeignKey) error {
 		}
 
 		if _, ok := fkc.GetByNameCaseInsensitive(key.Name); ok {
-			return fmt.Errorf("a foreign key with the name `%s` already exists", key.Name)
+			return sql.ErrForeignKeyDuplicateName.New(key.Name)
 		}
 		if len(key.TableColumns) != len(key.ReferencedTableColumns) {
 			return fmt.Errorf("foreign keys must have the same number of columns declared and referenced")
