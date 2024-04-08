@@ -173,6 +173,7 @@ func updateProfileWithCredentials(ctx context.Context, dEnv *env.DoltEnv, c cred
 	if err != nil {
 		return fmt.Errorf("error: unable to connect to server with credentials: %w", err)
 	}
+	defer conn.Close()
 	grpcClient := remotesapi.NewCredentialsServiceClient(conn)
 	resp, err := grpcClient.WhoAmI(ctx, &remotesapi.WhoAmIRequest{})
 	if err != nil {
