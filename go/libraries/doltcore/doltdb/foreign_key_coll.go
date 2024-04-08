@@ -513,7 +513,6 @@ func (fkc *ForeignKeyCollection) GetMatchingKey(fk ForeignKey, allSchemas map[st
 OuterLoopResolved:
 	for _, existingFk := range fkc.foreignKeys {
 		if existingFk.IsResolved() {
-			// TODO: so just fk.Equals(existingFk) would work??? why is this so complicated?
 			// When both are resolved, we do a standard tag comparison
 			if len(fk.TableColumns) != len(existingFk.TableColumns) ||
 				len(fk.ReferencedTableColumns) != len(existingFk.ReferencedTableColumns) {
