@@ -73,13 +73,16 @@ func TestBinlogPrimary(t *testing.T) {
 	primaryDatabase.MustExec("insert into db01.t values (1, '42', NULL, NULL, 123, 123, 123, 123, 200, 200, 200, 200, 200);")
 	time.Sleep(450 * time.Millisecond)
 
+	// Debugging
+	//outputReplicaApplierStatus(t)
+
 	// Sanity check on SHOW REPLICA STATUS
 	rows, err := replicaDatabase.Queryx("show replica status;")
 	require.NoError(t, err)
 	allRows := readAllRows(t, rows)
 	require.Equal(t, 1, len(allRows))
 	require.NoError(t, rows.Close())
-	fmt.Printf("SHOW REPLICA STATUS: %v\n", allRows)
+	//fmt.Printf("SHOW REPLICA STATUS: %v\n", allRows)
 	//require.Equal(t, "3ab04dd4-8c9e-471e-a223-9712a3b7c37e:1-2", allRows[0]["Executed_Gtid_Set"])
 	require.Equal(t, "", allRows[0]["Last_IO_Error"])
 	require.Equal(t, "", allRows[0]["Last_SQL_Error"])
@@ -108,4 +111,15 @@ func TestBinlogPrimary(t *testing.T) {
 
 	// TODO: Now modify some data
 	// TODO: Delete some data
+}
+
+// outputReplicaApplierStatus prints out the replica applier status information from the
+// performance_schema replication_applier_status_by_worker table. This is useful for debugging
+// replication from a Dolt primary to a MySQL replica, since this often contains more detailed
+// information about why MySQL failed to apply a binlog event.
+func outputReplicaApplierStatus(t *testing.T) {
+	newRows, err := replicaDatabase.Queryx("select * from performance_schema.replication_applier_status_by_worker")
+	require.NoError(t, err)
+	allNewRows := readAllRows(t, newRows)
+	fmt.Printf("\n\nreplication_applier_status_by_worker: %v\n", allNewRows)
 }
