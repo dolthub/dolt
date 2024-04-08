@@ -19,6 +19,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -354,6 +355,103 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 				nullBitmap.Set(rowIdx, true)
 			}
 
+		case query.Type_FLOAT32: // FLOAT
+			floatValue, notNull := descriptor.GetFloat32(idx, tuple)
+			if notNull {
+				data = append(data, make([]byte, 4)...)
+				dataLength += 4
+				bits := math.Float32bits(floatValue)
+				binary.LittleEndian.PutUint32(data[currentPos:], bits)
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
+
+		case query.Type_FLOAT64: // DOUBLE
+			floatValue, notNull := descriptor.GetFloat64(idx, tuple)
+			if notNull {
+				data = append(data, make([]byte, 8)...)
+				dataLength += 8
+				bits := math.Float64bits(floatValue)
+				binary.LittleEndian.PutUint64(data[currentPos:], bits)
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
+
+		case query.Type_YEAR: // YEAR
+			intValue, notNull := descriptor.GetYear(idx, tuple)
+			if notNull {
+				data = append(data, make([]byte, 1)...)
+				dataLength += 1
+				data[currentPos] = byte(intValue - 1900)
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
+
+		case query.Type_DATETIME: // DATETIME
+			timeValue, notNull := descriptor.GetDatetime(idx, tuple)
+			if notNull {
+				year, month, day := timeValue.Date()
+				hour, minute, second := timeValue.Clock()
+				// TODO: fractional second support
+
+				// Calculate year-month (ym), year-month-day (ymd), and hour-minute-second (hms) components
+				ym := uint64((year * 13) + int(month))
+				ymd := (ym << 5) | uint64(day)
+				hms := (uint64(hour) << 12) | (uint64(minute) << 6) | uint64(second)
+
+				// Combine ymd and hms into a single uint64, adjusting with the offset used in the decoding
+				ymdhms := ((ymd << 17) | hms) + uint64(0x8000000000)
+
+				// Grab the last 5 bytes of the uint64 we just packed, and put them into the data buffer. Note that
+				// we do NOT use LittleEndian here, because we are manually packing the bytes in the right format.
+				temp := make([]byte, 8)
+				binary.BigEndian.PutUint64(temp, ymdhms)
+				data = append(data, temp[3:]...)
+				dataLength += 5
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
+
+		case query.Type_TIMESTAMP: // TIMESTAMP
+			timeValue, notNull := descriptor.GetDatetime(idx, tuple)
+			if notNull {
+				data = append(data, make([]byte, 4)...)
+				dataLength += 4
+				binary.LittleEndian.PutUint32(data[currentPos:], uint32(timeValue.Unix()))
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
+
+		case query.Type_DATE: // DATE
+			dateValue, notNull := descriptor.GetDate(idx, tuple)
+			if notNull {
+				buffer := uint32(dateValue.Year())<<9 | uint32(dateValue.Month())<<5 | uint32(dateValue.Day())
+				temp := make([]byte, 4)
+				binary.LittleEndian.PutUint32(temp, buffer)
+				data = append(data, make([]byte, 3)...)
+				dataLength += 3
+				copy(data[currentPos:], temp[:3])
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
+
+		case query.Type_TIME: // TIME
+			// NOTE: MySQL documents two different formats for serializing time data types. This format seems to be
+			//       the "older" format, but the newer format doesn't seem to work when we tried it.
+			epochNanos, notNull := descriptor.GetSqlTime(idx, tuple)
+			timeValue := time.Unix(epochNanos/1_000_000, 0) // TODO: support fractional seconds
+			if notNull {
+				// TODO: Support negative time periods
+				temp := uint32(timeValue.Hour()*10000 + timeValue.Minute()*100 + timeValue.Second())
+				buffer := make([]byte, 4)
+				binary.LittleEndian.PutUint32(buffer, temp)
+				data = append(data, buffer[:3]...)
+				dataLength += 3
+
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
+
 		case query.Type_INT8: // TINYINT
 			intValue, notNull := descriptor.GetInt8(idx, tuple)
 			if notNull {
@@ -485,10 +583,28 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 		metadata[i] = 0
 
 		switch typ.Type() {
+		case query.Type_CHAR:
+			types[i] = mysql.TypeString
 		case query.Type_VARCHAR:
 			types[i] = mysql.TypeVarchar
 			sTyp := typ.(sql.StringType)
 			metadata[i] = uint16(4 * sTyp.Length())
+
+		case query.Type_YEAR:
+			types[i] = mysql.TypeYear
+		case query.Type_DATE:
+			types[i] = mysql.TypeDate
+		case query.Type_DATETIME:
+			// TypeDateTime2 means use the new DateTime format, which was introduced after MySQL 5.6.4,
+			// and has a more efficient binary representation.
+			types[i] = mysql.TypeDateTime2
+			// TODO: length of microseconds in metadata
+		case query.Type_TIMESTAMP:
+			types[i] = mysql.TypeTimestamp
+			// TODO: length of microseconds in metadata
+		case query.Type_TIME:
+			types[i] = mysql.TypeTime
+			// TODO: length of microseconds in metadata
 
 		case query.Type_INT8: // TINYINT
 			types[i] = mysql.TypeTiny

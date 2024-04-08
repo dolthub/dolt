@@ -58,7 +58,7 @@ func TestBinlogPrimary(t *testing.T) {
 	//       starting up replication.
 	primaryDatabase.MustExec("create database db01;")
 	testTableCreateStatement := "create table db01.t (pk int primary key, c1 varchar(10), c2 int, c3 varchar(100), " +
-		"c4 tinyint, c5 smallint, c6 mediumint, c7 bigint, uc1 tinyint unsigned, uc2 smallint unsigned, uc3 mediumint unsigned, uc4 int unsigned, uc5 bigint unsigned);"
+		"c4 tinyint, c5 smallint, c6 mediumint, c7 bigint, uc1 tinyint unsigned, uc2 smallint unsigned, uc3 mediumint unsigned, uc4 int unsigned, uc5 bigint unsigned, t1 year, t2 datetime, t3 timestamp, t4 date, t5 time);"
 	primaryDatabase.MustExec(testTableCreateStatement)
 	replicaDatabase.MustExec(testTableCreateStatement)
 
@@ -70,11 +70,12 @@ func TestBinlogPrimary(t *testing.T) {
 	//       Here we just pause to let the hardcoded binlog events be delivered
 	time.Sleep(250 * time.Millisecond)
 
-	primaryDatabase.MustExec("insert into db01.t values (1, '42', NULL, NULL, 123, 123, 123, 123, 200, 200, 200, 200, 200);")
+	primaryDatabase.MustExec("insert into db01.t values (1, '42', NULL, NULL, 123, 123, 123, 123, 200, 200, 200, 200, 200, " +
+		"1981, '1981-02-16 06:01:02', '2024-04-08 10:30:42', '1981-02-16', '15:34:54');")
 	time.Sleep(450 * time.Millisecond)
 
-	// Debugging
-	//outputReplicaApplierStatus(t)
+	// Debugging output
+	outputReplicaApplierStatus(t)
 
 	// Sanity check on SHOW REPLICA STATUS
 	rows, err := replicaDatabase.Queryx("show replica status;")
@@ -108,6 +109,14 @@ func TestBinlogPrimary(t *testing.T) {
 	require.Equal(t, "200", allRows[0]["uc3"])
 	require.Equal(t, "200", allRows[0]["uc4"])
 	require.Equal(t, uint64(200), allRows[0]["uc5"]) // TODO: Why don't the test utils convert this value to a string?
+
+	require.Equal(t, "1981", allRows[0]["t1"])
+	require.Equal(t, "1981-02-16 06:01:02", allRows[0]["t2"])
+	require.Equal(t, "1981-02-16", allRows[0]["t4"])
+	// TODO: The following two tests depend on the system timezone setting; need to fix how we test this value,
+	//       otherwise this test will fail in different environments, or when DST changes.
+	require.Equal(t, "2024-04-08 03:30:42", allRows[0]["t3"])
+	require.Equal(t, "07:34:54", allRows[0]["t5"])
 
 	// TODO: Now modify some data
 	// TODO: Delete some data
