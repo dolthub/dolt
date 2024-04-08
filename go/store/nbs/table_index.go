@@ -98,6 +98,12 @@ func ReadTableFooter(rd io.ReadSeeker) (chunkCount uint32, totalUncompressedData
 	}
 
 	if string(footer[uint32Size+uint64Size:]) != magicNumber {
+		// Give a nice error message if this is a table file format which we will support in the future.
+		possibleDarc := string(footer[len(footer)-doltMagicSize:])
+		if possibleDarc == doltMagicNumber {
+			return 0, 0, ErrUnsupportedTableFileFormat
+		}
+
 		return 0, 0, ErrInvalidTableFile
 	}
 
