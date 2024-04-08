@@ -163,7 +163,8 @@ func newArchiveWriter(output io.Writer) *archiveWriter {
 }
 
 // writeByteSpan writes a byte span to the archive, returning the ByteSpan ID if the write was successful. Note
-// that writing an empty byte span is a no-op and will return 0.
+// that writing an empty byte span is a no-op and will return 0. Also, the slice passed in is copied, so the caller
+// can reuse the slice after this call.
 func (aw *archiveWriter) writeByteSpan(b []byte) (uint32, error) {
 	if len(b) == 0 {
 		return 0, nil

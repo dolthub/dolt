@@ -16,9 +16,11 @@ package nbs
 
 import (
 	"encoding/binary"
+	"hash/crc32"
 	"io"
 
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/valyala/gozstd"
 )
 
 type archiveIndex struct {
@@ -181,8 +183,33 @@ func (ai archiveIndex) has(hash hash.Hash) bool {
 	return found
 }
 
+// get returns the decompressed data for the given hash. If the hash is not found, nil is returned (not an error)
+func (ai archiveIndex) get(hash hash.Hash) ([]byte, error) {
+	dict, data, err := ai.getRaw(hash)
+	if err != nil || data == nil {
+		return nil, err
+	}
+
+	var result []byte
+	if dict == nil {
+		result, err = gozstd.Decompress(nil, data)
+	} else {
+		dDict, err := gozstd.NewDDict(dict)
+		if err != nil {
+			return nil, err
+		}
+		result, err = gozstd.DecompressDict(nil, data, dDict)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // getRaw returns the raw data for the given hash. If the hash is not found, nil is returned for both slices. Also,
 // no error is returned in this case. Errors will only be returned if there is an io error.
+//
+// The data returned is still compressed, regardless of the dictionary being present or not.
 func (ai archiveIndex) getRaw(hash hash.Hash) (dict, data []byte, err error) {
 	found, idx := ai.search(hash)
 	if !found {
@@ -224,17 +251,17 @@ func (ai archiveIndex) getRaw(hash hash.Hash) (dict, data []byte, err error) {
 }
 
 func verifyAndStripCRC(data []byte) ([]byte, error) {
-	if len(data) < 4 {
+	if len(data) < crc32.Size {
 		return nil, io.ErrUnexpectedEOF
 	}
 
-	crcVal := binary.BigEndian.Uint32(data[len(data)-4:])
-	crcCalc := crc(data[:len(data)-4])
+	crcVal := binary.BigEndian.Uint32(data[len(data)-crc32.Size:])
+	crcCalc := crc(data[:len(data)-crc32.Size])
 	if crcVal != crcCalc {
 		return nil, ErrCRCMismatch
 	}
 
-	return data[:len(data)-4], nil
+	return data[:len(data)-crc32.Size], nil
 }
 
 // findMatchingPrefixes returns all indexes of the input slice that have a prefix that matches the target prefix.
