@@ -150,9 +150,8 @@ func TestSingleScript(t *testing.T) {
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "show create table t",
-					Expected: []sql.Row{
-					},
+					Query:    "show create table t",
+					Expected: []sql.Row{},
 				},
 			},
 		},
