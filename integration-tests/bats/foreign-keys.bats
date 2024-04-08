@@ -134,17 +134,17 @@ SQL
     run dolt sql -q "select constraint_name, table_name, column_name, ordinal_position, position_in_unique_constraint, referenced_table_name, referenced_column_name from information_schema.KEY_COLUMN_USAGE;" -r csv
     [[ "$output" =~ "PRIMARY,colors,id,1,,," ]] || false
     [[ "$output" =~ "PRIMARY,materials,id,1,,," ]] || false
-    [[ "$output" =~ "npjt0g99,materials,color,1,1,colors,color" ]] || false
+    [[ "$output" =~ "materials_ibfk_1,materials,color,1,1,colors,color" ]] || false
     [[ "$output" =~ "PRIMARY,objects,id,1,,," ]] || false
-    [[ "$output" =~ "ootftvit,objects,color,1,1,materials,color" ]] || false
-    [[ "$output" =~ "ootftvit,objects,material,2,2,materials,material" ]] || false
+    [[ "$output" =~ "objects_ibfk_1,objects,color,1,1,materials,color" ]] || false
+    [[ "$output" =~ "objects_ibfk_1,objects,material,2,2,materials,material" ]] || false
     [[ "$output" =~ "PRIMARY,child,id,1,,," ]] || false
     [[ "$output" =~ "PRIMARY,parent,id,1,,," ]] || false
 
     # check information_schema.TABLE_CONSTRAINTS table
     run dolt sql -q "select * from information_schema.TABLE_CONSTRAINTS where table_name = 'materials';" -r csv
     [[ "$output" =~ "def,dolt-repo-$$,PRIMARY,dolt-repo-$$,materials,PRIMARY KEY,YES" ]] || false
-    [[ "$output" =~ "def,dolt-repo-$$,npjt0g99,dolt-repo-$$,materials,FOREIGN KEY,YES" ]] || false
+    [[ "$output" =~ "def,dolt-repo-$$,materials_ibfk_1,dolt-repo-$$,materials,FOREIGN KEY,YES" ]] || false
 
     # check information_schema.TABLE_CONSTRAINTS_EXTENSIONS table
     run dolt sql -q "select constraint_name from information_schema.TABLE_CONSTRAINTS_EXTENSIONS where table_name = 'materials';" -r csv
