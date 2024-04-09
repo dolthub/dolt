@@ -506,5 +506,5 @@ SQL
     dolt checkout main
     run dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
     [ $status -eq 1 ]
-    [[ $output =~ "error: cannot merge two tables with different primary keys" ]] || false
+    [[ $output =~ "error: cannot merge because table t has different primary keys" ]] || false
 }
