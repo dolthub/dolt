@@ -66,12 +66,7 @@ EOF
     wait $!
 
     stop_sql_server
-    dolt sql -r csv -q "select
-          c0,
-          min(pk) = firstId,
-          rowCount = 1024,
-          max(pk) = firstId + rowCount -1
-        from test1 join ranges on test1.c0 = ranges.pk group by c0"
+
     run dolt sql -r csv -q "select
       c0,
       min(pk) = firstId,
