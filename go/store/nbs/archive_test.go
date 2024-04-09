@@ -16,12 +16,14 @@ package nbs
 
 import (
 	"bytes"
-	"crypto/rand"
 	"encoding/binary"
+	"math/rand"
 	"testing"
 
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/stretchr/testify/assert"
+	"github.com/valyala/gozstd"
 )
 
 func TestArchiveSingleChunk(t *testing.T) {
@@ -184,6 +186,51 @@ func TestArchiverMultipleChunksMultipleDictionaries(t *testing.T) {
 	assert.Equal(t, data3, data)
 }
 
+func TestArchiveDictDecompression(t *testing.T) {
+	writer := NewFixedBufferTableSink(make([]byte, 4096))
+
+	// This is 32K worth of data, but it's all very similar. Only fits in 4K if compressed with a dictionary.
+	chks := generateSimilarChunks(42, 32)
+	samples := make([][]byte, len(chks))
+	for i, c := range chks {
+		samples[i] = c.Data()
+	}
+
+	dict := gozstd.BuildDict(samples, 2048)
+	cDict, err := gozstd.NewCDict(dict)
+	assert.NoError(t, err)
+
+	aw := newArchiveWriter(writer)
+
+	dictId, err := aw.writeByteSpan(dict)
+	for _, chk := range chks {
+		cmp := gozstd.CompressDict(nil, chk.Data(), cDict)
+
+		chId, err := aw.writeByteSpan(cmp)
+		assert.NoError(t, err)
+
+		err = aw.stageChunk(chk.Hash(), dictId, chId)
+		assert.NoError(t, err)
+	}
+
+	n, err := aw.writeIndex()
+	assert.NoError(t, err)
+	err = aw.writeFooter(n)
+	assert.NoError(t, err)
+
+	theBytes := writer.buff[:writer.pos]
+	fileSize := uint64(len(theBytes))
+	readerAt := bytes.NewReader(theBytes)
+	aIdx, err := newArchiveIndex(readerAt, fileSize)
+
+	// Now verify that we can look up the chunks by their original addresses, and the data is the same.
+	for _, chk := range chks {
+		roundTripData, err := aIdx.get(chk.Hash())
+		assert.NoError(t, err)
+		assert.Equal(t, chk.Data(), roundTripData)
+	}
+}
+
 func TestArchiveBlockCorruption(t *testing.T) {
 	writer := NewFixedBufferTableSink(make([]byte, 1024))
 	aw := newArchiveWriter(writer)
@@ -239,4 +286,24 @@ func hashWithPrefix(t *testing.T, prefix uint64) hash.Hash {
 
 	binary.BigEndian.PutUint64(randomBytes, prefix)
 	return hash.Hash(randomBytes)
+}
+
+func generateSimilarChunks(seed int64, count int) []*chunks.Chunk {
+	chks := make([]*chunks.Chunk, count)
+	for i := 0; i < count; i++ {
+		chks[i] = generateRandomChunk(seed, 1000+i)
+	}
+
+	return chks
+}
+
+func generateRandomChunk(seed int64, len int) *chunks.Chunk {
+	r := rand.NewSource(seed)
+
+	data := make([]byte, len)
+	for i := range data {
+		data[i] = byte(r.Int63())
+	}
+	c := chunks.NewChunk(data)
+	return &c
 }
