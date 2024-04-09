@@ -316,7 +316,6 @@ teardown() {
 
     run dolt merge test -m "merge other"
     [ "$status" -eq 1 ]
-    "error: cannot merge because table %s has different primary keys in its common ancestor")
 
     [[ "$output" =~ 'error: cannot merge because table t has different primary keys' ]] || false
 }
