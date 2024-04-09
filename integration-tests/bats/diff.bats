@@ -695,7 +695,7 @@ SQL
 
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "+  CONSTRAINT \`npsbmr30\` FOREIGN KEY (\`j\`) REFERENCES \`parent\` (\`i\`)" ]] || false
+    [[ ! "$output" =~ "+  CONSTRAINT \`child_ibfk_1\` FOREIGN KEY (\`j\`) REFERENCES \`parent\` (\`i\`)" ]] || false
 }
 
 @test "diff: existing foreign key that was resolved is deleted" {
