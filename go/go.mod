@@ -73,6 +73,7 @@ require (
 	github.com/shirou/gopsutil/v3 v3.22.1
 	github.com/tidwall/gjson v1.14.4
 	github.com/tidwall/sjson v1.2.5
+	github.com/valyala/gozstd v1.20.1
 	github.com/vbauerster/mpb v3.4.0+incompatible
 	github.com/vbauerster/mpb/v8 v8.0.2
 	github.com/xitongsys/parquet-go v1.6.1
@@ -146,7 +147,6 @@ require (
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tklauser/go-sysconf v0.3.9 // indirect
 	github.com/tklauser/numcpus v0.3.0 // indirect
-	github.com/valyala/gozstd v1.20.1 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect

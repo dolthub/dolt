@@ -20,10 +20,11 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/stretchr/testify/assert"
 	"github.com/valyala/gozstd"
+
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 func TestArchiveSingleChunk(t *testing.T) {

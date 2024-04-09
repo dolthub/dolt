@@ -19,8 +19,9 @@ import (
 	"hash/crc32"
 	"io"
 
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/valyala/gozstd"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type archiveIndex struct {
