@@ -16,8 +16,9 @@ package tree
 
 import (
 	"context"
-	"golang.org/x/sync/errgroup"
 	"io"
+
+	"golang.org/x/sync/errgroup"
 )
 
 // BufferedTreeIter fowards scans a map using a readahead buffer.
