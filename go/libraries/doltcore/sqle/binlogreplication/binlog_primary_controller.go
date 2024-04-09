@@ -155,7 +155,6 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, databaseName
 			panic(err.Error()) // TODO:
 		}
 		// TODO: Considering limiting to at most one replica supported at a time? Does that actually help at all?
-
 		// TODO: If tableDelta.IsDrop(), then we can skip the data transfer and just send the drop table DDL statement
 
 		tableName := tableDelta.ToName
@@ -165,120 +164,57 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, databaseName
 
 		fromMap := durable.ProllyMapFromIndex(fromRowData)
 		toMap := durable.ProllyMapFromIndex(toRowData)
+
+		schema, err := tableDelta.ToTable.GetSchema(ctx)
+		if err != nil {
+			return err
+		}
+
+		columns := schema.GetAllCols().GetColumns()
+		tableId := tablesToId[tableName]
+
+		var tableRowsToWrite []mysql.Row
+		var tableRowsToDelete []mysql.Row
+		var tableRowsToUpdate []mysql.Row
+
 		err = prolly.DiffMaps(ctx, fromMap, toMap, false, func(_ context.Context, diff tree.Diff) error {
 			switch diff.Type {
 			case tree.AddedDiff:
-				schema, err := tableDelta.ToTable.GetSchema(ctx)
-				if err != nil {
-					return err
-				}
-
-				columns := schema.GetAllCols().GetColumns()
 				data, nullBitmap, err := serializeRowToBinlogBytes(schema, diff.Key, diff.To)
 				if err != nil {
 					return err
 				}
-
-				// Send a binlog event for the added row
-				rows := mysql.Rows{
-					Flags:       0x0001, // TODO: Hardcoding "end of statement" for now
-					DataColumns: mysql.NewServerBitmap(len(columns)),
-					// TODO: We should be batching all rows for the same table into the same Rows instance, not one row-per-Rows
-					Rows: []mysql.Row{
-						{
-							NullColumns: nullBitmap,
-							Data:        data,
-						},
-					},
-				}
-				// All columns are included
-				for i := 0; i < len(columns); i++ {
-					rows.DataColumns.Set(i, true)
-				}
-
-				tableId := tablesToId[tableName]
-				binlogEvent := mysql.NewWriteRowsEvent(m.binlogFormat, m.binlogStream, tableId, rows)
-				binlogEvents = append(binlogEvents, binlogEvent)
-				m.binlogStream.LogPosition += binlogEvent.Length()
+				tableRowsToWrite = append(tableRowsToWrite, mysql.Row{
+					NullColumns: nullBitmap,
+					Data:        data,
+				})
 
 			case tree.ModifiedDiff:
-				schema, err := tableDelta.ToTable.GetSchema(ctx)
+				data, nullColumns, err := serializeRowToBinlogBytes(schema, diff.Key, diff.To)
 				if err != nil {
 					return err
 				}
-				columns := schema.GetAllCols().GetColumns()
-
-				data, dataNullBitmap, err := serializeRowToBinlogBytes(schema, diff.Key, diff.To)
+				identify, nullIdentifyColumns, err := serializeRowToBinlogBytes(schema, diff.Key, diff.From)
 				if err != nil {
 					return err
 				}
-				identifyData, identifyNullBitmap, err := serializeRowToBinlogBytes(schema, diff.Key, diff.From)
-				if err != nil {
-					return err
-				}
-
-				// Send a binlog event for the modified row
-				rows := mysql.Rows{
-					Flags:       0x1234, // TODO: What are these flags?
-					DataColumns: mysql.NewServerBitmap(len(columns)),
-					// TODO: We should be batching all rows for the same table into the same Rows instance, not one row-per-Rows
-					IdentifyColumns: mysql.NewServerBitmap(len(columns)),
-					Rows: []mysql.Row{
-						{
-							NullColumns:         dataNullBitmap,
-							Data:                data,
-							NullIdentifyColumns: identifyNullBitmap,
-							Identify:            identifyData,
-						},
-					},
-				}
-				// All columns are included for data and identify fields
-				for i := 0; i < len(columns); i++ {
-					rows.DataColumns.Set(i, true)
-				}
-				for i := 0; i < len(columns); i++ {
-					rows.IdentifyColumns.Set(i, true)
-				}
-
-				tableId := tablesToId[tableName]
-				binlogEvent := mysql.NewUpdateRowsEvent(m.binlogFormat, m.binlogStream, tableId, rows)
-				binlogEvents = append(binlogEvents, binlogEvent)
-				m.binlogStream.LogPosition += binlogEvent.Length()
+				tableRowsToUpdate = append(tableRowsToUpdate, mysql.Row{
+					NullColumns:         nullColumns,
+					Data:                data,
+					NullIdentifyColumns: nullIdentifyColumns,
+					Identify:            identify,
+				})
 
 			case tree.RemovedDiff:
 				// TODO: If the schema of the talbe has changed between FromTable and ToTable, then this probably breaks
-				schema, err := tableDelta.ToTable.GetSchema(ctx)
-				if err != nil {
-					return err
-				}
-				columns := schema.GetAllCols().GetColumns()
-
 				identifyData, nullBitmap, err := serializeRowToBinlogBytes(schema, diff.Key, diff.From)
 				if err != nil {
 					return err
 				}
-
-				// Send a binlog event for the added row
-				rows := mysql.Rows{
-					Flags: 0x1234, // TODO: What are these flags?
-					// TODO: We should be batching all rows for the same table into the same Rows instance, not one row-per-Rows
-					IdentifyColumns: mysql.NewServerBitmap(len(columns)),
-					Rows: []mysql.Row{
-						{
-							NullIdentifyColumns: nullBitmap,
-							Identify:            identifyData,
-						},
-					},
-				}
-				// All columns are included
-				for i := 0; i < len(columns); i++ {
-					rows.IdentifyColumns.Set(i, true)
-				}
-
-				tableId := tablesToId[tableName]
-				binlogEvent := mysql.NewDeleteRowsEvent(m.binlogFormat, m.binlogStream, tableId, rows)
-				binlogEvents = append(binlogEvents, binlogEvent)
-				m.binlogStream.LogPosition += binlogEvent.Length()
+				tableRowsToDelete = append(tableRowsToDelete, mysql.Row{
+					NullIdentifyColumns: nullBitmap,
+					Identify:            identifyData,
+				})
 
 			default:
 				return fmt.Errorf("unexpected diff type: %v", diff.Type)
@@ -288,6 +224,66 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, databaseName
 		})
 		if err != nil && err != io.EOF {
 			panic(err.Error()) // TODO:
+		}
+
+		if tableRowsToWrite != nil {
+			rows := mysql.Rows{
+				DataColumns: mysql.NewServerBitmap(len(columns)),
+				Rows:        tableRowsToWrite,
+			}
+			// All columns are included
+			for i := 0; i < len(columns); i++ {
+				rows.DataColumns.Set(i, true)
+			}
+
+			if tableRowsToDelete == nil && tableRowsToUpdate == nil {
+				rows.Flags |= 0x0001 // End of Statement
+			}
+
+			binlogEvent := mysql.NewWriteRowsEvent(m.binlogFormat, m.binlogStream, tableId, rows)
+			binlogEvents = append(binlogEvents, binlogEvent)
+			m.binlogStream.LogPosition += binlogEvent.Length()
+		}
+
+		// TODO: Ordering – Should we execute all deletes first? Or updates, deletes, then inserts?
+		//       A delete would never delete a row inserted or updated in the same transaction, so it seems like processing those first makes sense
+		if tableRowsToDelete != nil {
+			rows := mysql.Rows{
+				IdentifyColumns: mysql.NewServerBitmap(len(columns)),
+				Rows:            tableRowsToDelete,
+			}
+			// All identity columns are included
+			for i := 0; i < len(columns); i++ {
+				rows.IdentifyColumns.Set(i, true)
+			}
+
+			if tableRowsToUpdate == nil {
+				rows.Flags |= 0x0001 // End of Statement
+			}
+
+			binlogEvent := mysql.NewDeleteRowsEvent(m.binlogFormat, m.binlogStream, tableId, rows)
+			binlogEvents = append(binlogEvents, binlogEvent)
+			m.binlogStream.LogPosition += binlogEvent.Length()
+		}
+
+		if tableRowsToUpdate != nil {
+			rows := mysql.Rows{
+				Flags:           0x0001,
+				DataColumns:     mysql.NewServerBitmap(len(columns)),
+				IdentifyColumns: mysql.NewServerBitmap(len(columns)),
+				Rows:            tableRowsToUpdate,
+			}
+			// All columns are included for data and identify fields
+			for i := 0; i < len(columns); i++ {
+				rows.DataColumns.Set(i, true)
+			}
+			for i := 0; i < len(columns); i++ {
+				rows.IdentifyColumns.Set(i, true)
+			}
+
+			binlogEvent := mysql.NewUpdateRowsEvent(m.binlogFormat, m.binlogStream, tableId, rows)
+			binlogEvents = append(binlogEvents, binlogEvent)
+			m.binlogStream.LogPosition += binlogEvent.Length()
 		}
 	}
 
