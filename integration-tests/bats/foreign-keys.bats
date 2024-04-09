@@ -1289,6 +1289,37 @@ SQL
     [[ "$output" =~ "child,1" ]] || false
 }
 
+@test "foreign-keys: different foreign keys with same name is schema conflict1" {
+    dolt commit -Am "initial commit"
+
+    dolt checkout -b other
+    dolt sql -q "alter table child add foreign key (id) references parent (v1)"
+    dolt commit -Am "other"
+
+    dolt checkout main
+    dolt sql -q "alter table child add foreign key (id) references parent (v2)"
+    dolt commit -Am "main"
+
+    run dolt merge other
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "duplicate foreign key constraint name" ]] || false
+}
+
+@test "foreign-keys: same foreign keys with same name is ok1" {
+    dolt commit -Am "initial commit"
+
+    dolt checkout -b other
+    dolt sql -q "alter table child add foreign key (id) references parent (id)"
+    dolt commit -Am "other"
+
+    dolt checkout main
+    dolt sql -q "alter table child add foreign key (id) references parent (id)"
+    dolt commit -Am "main"
+
+    run dolt merge other
+    [ "$status" -eq "0" ]
+}
+
 @test "foreign-keys: Resolve catches violations" {
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk_v1 FOREIGN KEY (v1) REFERENCES parent(v1);
