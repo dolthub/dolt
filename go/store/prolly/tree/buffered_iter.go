@@ -39,6 +39,7 @@ type BufferedTreeIter[K, V ~[]byte] struct {
 
 	ctx       context.Context
 	cancelCtx context.CancelCauseFunc
+	err       error
 }
 
 func (t StaticMap[K, V, O]) BufferedIterAll(ctx context.Context, batchSize int) (*BufferedTreeIter[K, V], error) {
@@ -84,19 +85,15 @@ func (it *BufferedTreeIter[K, V]) lookaheadThread(ctx context.Context) {
 
 		it.buf <- it.curr.nd
 
-		it.curr.skipToNodeEnd()
-		it.curr.advance(ctx)
+		it.curr.invalidateAtEnd()
 
 		if it.stop(it.curr) {
 			// only nil error return, sets ctx.Err() = context.ContextCanceled
 			return
 		}
 
-		if err = it.curr.parent.advance(ctx); err != nil {
-			return
-		}
-
-		if err = it.curr.fetchNode(ctx); err != nil {
+		if err = it.curr.advance(ctx); err != nil {
+			it.err = err
 			return
 		}
 	}
@@ -105,6 +102,9 @@ func (it *BufferedTreeIter[K, V]) lookaheadThread(ctx context.Context) {
 func (it *BufferedTreeIter[K, V]) Next(ctx context.Context) (K, V, error) {
 	if it.closed {
 		return nil, nil, io.EOF
+	}
+	if it.err != nil {
+		return nil, nil, it.err
 	}
 	var err error
 	for {
@@ -136,6 +136,11 @@ func (it *BufferedTreeIter[K, V]) Next(ctx context.Context) (K, V, error) {
 			//       now finalize
 			select {
 			case <-it.ctx.Done():
+				if len(it.buf) > 0 {
+					// todo: why does runtime choose this path if the
+					// channel is non-empty?
+					continue
+				}
 				err = it.ctx.Err()
 				if errors.Is(err, context.Canceled) {
 					// happy path drained & finalize
