@@ -1289,7 +1289,7 @@ SQL
     [[ "$output" =~ "child,1" ]] || false
 }
 
-@test "foreign-keys: different foreign keys with same name is schema conflict1" {
+@test "foreign-keys: different foreign keys with same name is schema conflict" {
     dolt commit -Am "initial commit"
 
     dolt checkout -b other
@@ -1303,9 +1303,17 @@ SQL
     run dolt merge other
     [ "$status" -eq "1" ]
     [[ "$output" =~ "duplicate foreign key constraint name" ]] || false
+
+    run dolt sql -q "alter table child rename constraint foreign key child_ibfk_1 to child_ibfk_2"
+    [ "$status" -eq "0" ]
+
+    dolt commit -Am "rename"
+
+    run dolt merge other
+    [ "$status" -eq "0" ]
 }
 
-@test "foreign-keys: same foreign keys with same name is ok1" {
+@test "foreign-keys: same foreign keys with same name is ok" {
     dolt commit -Am "initial commit"
 
     dolt checkout -b other
