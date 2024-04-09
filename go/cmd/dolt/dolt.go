@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
@@ -66,10 +67,6 @@ import (
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
-const (
-	Version = "1.35.8"
-)
-
 var dumpDocsCommand = &commands.DumpDocsCmd{}
 var dumpZshCommand = &commands.GenZshCompCmd{}
 
@@ -81,9 +78,9 @@ var doltSubCommands = []cli.Command{
 	commands.ResetCmd{},
 	commands.CleanCmd{},
 	commands.CommitCmd{},
-	commands.SqlCmd{VersionStr: Version},
+	commands.SqlCmd{VersionStr: doltversion.Version},
 	admin.Commands,
-	sqlserver.SqlServerCmd{VersionStr: Version},
+	sqlserver.SqlServerCmd{VersionStr: doltversion.Version},
 	commands.LogCmd{},
 	commands.ShowCmd{},
 	commands.BranchCmd{},
@@ -115,7 +112,7 @@ var doltSubCommands = []cli.Command{
 	commands.FilterBranchCmd{},
 	commands.MergeBaseCmd{},
 	commands.RootsCmd{},
-	commands.VersionCmd{VersionStr: Version},
+	commands.VersionCmd{VersionStr: doltversion.Version},
 	commands.DumpCmd{},
 	commands.InspectCmd{},
 	dumpDocsCommand,
@@ -131,7 +128,7 @@ var doltSubCommands = []cli.Command{
 
 var commandsWithoutCliCtx = []cli.Command{
 	admin.Commands,
-	sqlserver.SqlServerCmd{VersionStr: Version},
+	sqlserver.SqlServerCmd{VersionStr: doltversion.Version},
 	commands.CloneCmd{},
 	commands.RemoteCmd{},
 	commands.BackupCmd{},
@@ -145,7 +142,7 @@ var commandsWithoutCliCtx = []cli.Command{
 	commands.ReadTablesCmd{},
 	commands.FilterBranchCmd{},
 	commands.RootsCmd{},
-	commands.VersionCmd{VersionStr: Version},
+	commands.VersionCmd{VersionStr: doltversion.Version},
 	commands.DumpCmd{},
 	commands.InspectCmd{},
 	dumpDocsCommand,
@@ -163,14 +160,14 @@ var commandsWithoutGlobalArgSupport = []cli.Command{
 	commands.ReadTablesCmd{},
 	commands.LoginCmd{},
 	credcmds.Commands,
-	sqlserver.SqlServerCmd{VersionStr: Version},
-	commands.VersionCmd{VersionStr: Version},
+	sqlserver.SqlServerCmd{VersionStr: doltversion.Version},
+	commands.VersionCmd{VersionStr: doltversion.Version},
 	commands.ConfigCmd{},
 }
 
 // commands that do not need write access for the current directory
 var commandsWithoutCurrentDirWrites = []cli.Command{
-	commands.VersionCmd{VersionStr: Version},
+	commands.VersionCmd{VersionStr: doltversion.Version},
 	commands.ConfigCmd{},
 	commands.ProfileCmd{},
 }
@@ -220,7 +217,7 @@ func init() {
 	dumpDocsCommand.GlobalDocs = globalDocs
 	dumpDocsCommand.GlobalSpecialMsg = globalSpecialMsg
 	dumpZshCommand.DoltCommand = doltCommand
-	dfunctions.VersionString = Version
+	dfunctions.VersionString = doltversion.Version
 	if _, ok := os.LookupEnv(disableEventFlushEnvVar); ok {
 		eventFlushDisabled = true
 	}
@@ -469,7 +466,7 @@ func runMain() int {
 
 	var fs filesys.Filesys
 	fs = filesys.LocalFS
-	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, Version)
+	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, doltversion.Version)
 
 	homeDir, err := env.GetCurrentUserHomeDir()
 	if err != nil {
@@ -485,7 +482,7 @@ func runMain() int {
 		metricsEmitter = events.NullEmitter{}
 	}
 
-	events.SetGlobalCollector(events.NewCollector(Version, metricsEmitter))
+	events.SetGlobalCollector(events.NewCollector(doltversion.Version, metricsEmitter))
 
 	if dEnv.CfgLoadErr != nil {
 		cli.PrintErrln(color.RedString("Failed to load the global config. %v", dEnv.CfgLoadErr))
@@ -817,7 +814,7 @@ func emitUsageEvents(emitter events.Emitter, args []string) {
 	// write events
 	collector := events.GlobalCollector()
 	ctx := context.Background()
-	_ = emitter.LogEvents(ctx, Version, collector.Close())
+	_ = emitter.LogEvents(ctx, doltversion.Version, collector.Close())
 
 	// flush events
 	if !eventFlushDisabled && len(args) > 0 && shouldFlushEvents(args[0]) {
@@ -861,7 +858,7 @@ func interceptSendMetrics(ctx context.Context, args []string) (bool, int) {
 	if len(args) < 1 || args[0] != commands.SendMetricsCommand {
 		return false, 0
 	}
-	dEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, Version)
+	dEnv := env.LoadWithoutDB(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltversion.Version)
 	return true, doltCommand.Exec(ctx, "dolt", args, dEnv, nil)
 }
 
