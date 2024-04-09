@@ -16,33 +16,23 @@ package tree
 
 import (
 	"context"
-	"errors"
+	"golang.org/x/sync/errgroup"
 	"io"
 )
 
-// BufferedTreeIter performs a tablescan while reading |batch|
-// nodes ahead of the current iterator node into a background buf.
+// BufferedTreeIter fowards scans a map using a readahead buffer.
 type BufferedTreeIter[K, V ~[]byte] struct {
-	// current tuple location
-	curr *cursor
-
-	// the function called to moved |curr| forward in the direction of iteration.
-	step func(context.Context) error
-	// should return |true| if the passed in cursor is past the iteration's stopping point.
-	stop func(*cursor) bool
+	outCh chan Node
+	eg    *errgroup.Group
+	close chan struct{}
 
 	curNode Node
 	curIdx  int
-
-	buf    chan Node
-	closed bool
-
-	ctx       context.Context
-	cancelCtx context.CancelCauseFunc
-	err       error
 }
 
 func (t StaticMap[K, V, O]) BufferedIterAll(ctx context.Context, batchSize int) (*BufferedTreeIter[K, V], error) {
+	eg, ctx := errgroup.WithContext(ctx)
+
 	c, err := newCursorAtStart(ctx, t.NodeStore, t.Root)
 	if err != nil {
 		return nil, err
@@ -59,116 +49,72 @@ func (t StaticMap[K, V, O]) BufferedIterAll(ctx context.Context, batchSize int) 
 
 	if stop(c) {
 		// empty range
-		return &BufferedTreeIter[K, V]{curr: nil, closed: true}, nil
+		ret := &BufferedTreeIter[K, V]{eg: eg, outCh: make(chan Node)}
+		close(ret.outCh)
+		return ret, nil
 	}
 
-	bufCtx, cancel := context.WithCancelCause(ctx)
-	bi := &BufferedTreeIter[K, V]{curr: c, stop: stop, step: c.advance, buf: make(chan Node, batchSize), ctx: bufCtx, cancelCtx: cancel}
+	ret := &BufferedTreeIter[K, V]{
+		outCh: make(chan Node, batchSize),
+		close: make(chan struct{}),
+		eg:    eg,
+	}
 
-	go bi.lookaheadThread(ctx)
-
-	return bi, nil
+	eg.Go(func() error { return ret.produce(ctx, c, stop) })
+	return ret, nil
 }
 
-// lookaheadThread reads leaf node chunks into |it.buffer|.
-func (it *BufferedTreeIter[K, V]) lookaheadThread(ctx context.Context) {
-	var err error
-	defer it.cancelCtx(err)
-
+func (b *BufferedTreeIter[K, V]) produce(ctx context.Context, c *cursor, stop func(*cursor) bool) error {
 	for {
 		select {
-		case <-it.ctx.Done():
-			// something killed our context
-			return
-		default:
-		}
-
-		it.buf <- it.curr.nd
-
-		it.curr.invalidateAtEnd()
-
-		if it.stop(it.curr) {
-			// only nil error return, sets ctx.Err() = context.ContextCanceled
-			return
-		}
-
-		if err = it.curr.advance(ctx); err != nil {
-			it.err = err
-			return
+		case b.outCh <- c.nd:
+			c.invalidateAtEnd()
+			if stop(c) {
+				close(b.outCh)
+				return nil
+			}
+			c.advance(ctx)
+		case <-ctx.Done():
+			return context.Cause(ctx)
+		case <-b.close:
+			return nil
 		}
 	}
 }
 
-func (it *BufferedTreeIter[K, V]) Next(ctx context.Context) (K, V, error) {
-	if it.closed {
-		return nil, nil, io.EOF
-	}
-	if it.err != nil {
-		return nil, nil, it.err
-	}
-	var err error
+func (b *BufferedTreeIter[K, V]) Next(ctx context.Context) (K, V, error) {
+	// in order:
+	//  (1) exhaust |it.curNode| key/value pairs
+	//  (2) pull new nodes from |it.buffer|
+	//  (3) stop when last node is exhausted & buffer drained
 	for {
-		// in order:
-		//  (1) exhaust |it.curNode| key/value pairs
-		//  (2) pull new nodes from |it.buffer|
-		//  (3) stop when last node is exhausted & buffer drained
-		if it.curIdx < it.curNode.Count() {
-			key := it.curNode.GetKey(it.curIdx)
-			val := it.curNode.GetValue(it.curIdx)
-			it.curIdx++
+		if !b.curNode.empty() && b.curIdx < b.curNode.Count() {
+			key := b.curNode.GetKey(b.curIdx)
+			val := b.curNode.GetValue(b.curIdx)
+			b.curIdx++
 			return K(key), V(val), nil
 		}
 
 		select {
-		case nd := <-it.buf:
-			// expected case, read new node from buffer
-			it.curNode = nd
-			it.curIdx = 0
-			continue
-		case <-ctx.Done():
-			// execution context failed elsewhere
-			err = ctx.Err()
-		default:
-			// |buffer| is empty. Either:
-			//   (1) the buffer is slow to fill and we should wait
-			//       until we can read next node, or
-			//   (2) we've read all nodes, drained the buffer, and should
-			//       now finalize
-			select {
-			case <-it.ctx.Done():
-				if len(it.buf) > 0 {
-					// todo: why does runtime choose this path if the
-					// channel is non-empty?
-					continue
+		case node, ok := <-b.outCh:
+			if !ok {
+				err := b.eg.Wait()
+				if err != nil {
+					return nil, nil, err
 				}
-				err = it.ctx.Err()
-				if errors.Is(err, context.Canceled) {
-					// happy path drained & finalize
-					err = io.EOF
-				}
-			default:
-				continue
+				return nil, nil, io.EOF
 			}
+			b.curIdx = 0
+			b.curNode = node
+		case <-ctx.Done():
+			return nil, nil, context.Cause(ctx)
+		case <-b.close:
+			panic("don't read from a closed cursor")
 		}
-		defer it.Close()
-		return nil, nil, err
 	}
 }
 
-func (it *BufferedTreeIter[K, V]) Close() {
-	if it.closed {
-		return
-	}
-	it.closed = true
-	it.cancelCtx(nil)
-	close(it.buf)
-}
-
-func (it *BufferedTreeIter[K, V]) Current() (key K, value V) {
-	// |it.curr| is set to nil when its range is exhausted
-	if it.curr != nil && it.curr.Valid() {
-		k, v := currentCursorItems(it.curr)
-		key, value = K(k), V(v)
-	}
-	return
+func (b *BufferedTreeIter[K, V]) Close() error {
+	close(b.close)
+	return b.eg.Wait()
 }
