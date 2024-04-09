@@ -67,7 +67,7 @@ import (
 )
 
 const (
-	Version = "1.35.7"
+	Version = "1.35.8"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -728,7 +728,15 @@ If you're interested in running this command against a remote host, hit us up on
 
 	if noValidRepository && isValidRepositoryRequired {
 		return func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) {
-			return nil, nil, nil, fmt.Errorf("The current directory is not a valid dolt repository.")
+			err := fmt.Errorf("The current directory is not a valid dolt repository.")
+			if errors.Is(rootEnv.DBLoadError, nbs.ErrUnsupportedTableFileFormat) {
+				// This is fairly targeted and specific to allow for better error messaging. We should consider
+				// breaking this out into its own function if we add more conditions.
+
+				err = fmt.Errorf("The data in this database is in an unsupported format. Please upgrade to the latest version of Dolt.")
+			}
+
+			return nil, nil, nil, err
 		}, nil
 	}
 

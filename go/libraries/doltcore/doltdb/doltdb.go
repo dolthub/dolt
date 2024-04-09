@@ -58,6 +58,8 @@ const (
 	defaultChunksPerTF = 256 * 1024
 )
 
+var ErrMissingDoltDataDir = errors.New("missing dolt data directory")
+
 // LocalDirDoltDB stores the db in the current directory
 var LocalDirDoltDB = "file://./" + dbfactory.DoltDataDir
 var LocalDirStatsDB = "file://./" + dbfactory.DoltStatsDir
@@ -103,7 +105,7 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 	if urlStr == LocalDirDoltDB {
 		exists, isDir := fs.Exists(dbfactory.DoltDataDir)
 		if !exists {
-			return nil, errors.New("missing dolt data directory")
+			return nil, ErrMissingDoltDataDir
 		} else if !isDir {
 			return nil, errors.New("file exists where the dolt data directory should be")
 		}

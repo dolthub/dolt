@@ -130,52 +130,52 @@ func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []st
 
 // FlushLoggedEvents flushes any logged events in the directory given to an appropriate event emitter
 func FlushLoggedEvents(ctx context.Context, dEnv *env.DoltEnv, userHomeDir string, outputType string) error {
-	emitter, err := NewEmitter(outputType, dEnv)
+	emitter, closer, err := NewEmitter(outputType, dEnv)
 	if err != nil {
 		return err
 	}
-
+	defer closer()
 	flusher := events.NewFileFlusher(dEnv.FS, userHomeDir, dbfactory.DoltDir, emitter)
 	return flusher.Flush(ctx)
 }
 
 // NewEmitter returns an emitter for the given configuration provider, of the type named. If an empty name is provided,
 // defaults to a file-based emitter.
-func NewEmitter(emitterType string, pro EmitterConfigProvider) (events.Emitter, error) {
+func NewEmitter(emitterType string, pro EmitterConfigProvider) (events.Emitter, func() error, error) {
 	switch emitterType {
 	case events.EmitterTypeNull:
-		return events.NullEmitter{}, nil
+		return events.NullEmitter{}, func() error { return nil }, nil
 	case events.EmitterTypeStdout:
-		return events.WriterEmitter{Wr: os.Stdout}, nil
+		return events.WriterEmitter{Wr: os.Stdout}, func() error { return nil }, nil
 	case events.EmitterTypeGrpc:
 		return GRPCEmitterForConfig(pro)
 	case events.EmitterTypeFile:
 		homeDir, err := pro.GetUserHomeDir()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return events.NewFileEmitter(homeDir, dbfactory.DoltDir), nil
+		return events.NewFileEmitter(homeDir, dbfactory.DoltDir), func() error { return nil }, nil
 	case events.EmitterTypeLogger:
-		return events.NewLoggerEmitter(logrus.DebugLevel), nil
+		return events.NewLoggerEmitter(logrus.DebugLevel), func() error { return nil }, nil
 	default:
-		return nil, fmt.Errorf("unknown emitter type: %s", emitterType)
+		return nil, nil, fmt.Errorf("unknown emitter type: %s", emitterType)
 	}
 }
 
 // GRPCEmitterForConfig returns an event emitter for the given environment, or nil if the environment cannot
 // provide one
-func GRPCEmitterForConfig(pro EmitterConfigProvider) (*events.GrpcEmitter, error) {
+func GRPCEmitterForConfig(pro EmitterConfigProvider) (*events.GrpcEmitter, func() error, error) {
 	cfg, err := GRPCEventRemoteConfig(pro)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	conn, err := grpc.Dial(cfg.Endpoint, cfg.DialOptions...)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return events.NewGrpcEmitter(conn), nil
+	return events.NewGrpcEmitter(conn), conn.Close, nil
 }
 
 // GRPCEventRemoteConfig returns a GRPCRemoteConfig for the given configuration provider
