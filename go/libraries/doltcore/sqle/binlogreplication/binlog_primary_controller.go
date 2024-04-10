@@ -334,15 +334,23 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 		case query.Type_VARCHAR:
 			stringVal, notNull := descriptor.GetString(idx, tuple)
 			if notNull {
-				// TODO: when the field size is 255 or less, we use one byte to encode the length of the data,
-				//       otherwise we use 2 bytes.
+				// When the field size is greater than 255 bytes, the serialization format
+				// requires us to use 2 bytes for the length of the field value.
 				numBytesForLength := 1
-				dataLength += numBytesForLength + len(stringVal)
-				data = append(data, make([]byte, numBytesForLength+len(stringVal))...)
+				stringLength := len(stringVal)
+				if stringType, ok := col.TypeInfo.ToSqlType().(sql.StringType); ok {
+					if stringType.Length()*4 > 255 {
+						numBytesForLength = 2
+					}
+				} else {
+					return nil, nullBitmap, fmt.Errorf("expected string type, got %T", col.TypeInfo.ToSqlType())
+				}
+				dataLength += numBytesForLength + stringLength
+				data = append(data, make([]byte, numBytesForLength+stringLength)...)
 				if numBytesForLength == 1 {
-					data[currentPos] = byte(int8(len(stringVal)))
+					data[currentPos] = uint8(stringLength)
 				} else if numBytesForLength == 2 {
-					binary.LittleEndian.PutUint16(data[currentPos:], uint16(len(stringVal)))
+					binary.LittleEndian.PutUint16(data[currentPos:], uint16(stringLength))
 				} else {
 					panic("this shouldn't happen!") // TODO:
 				}
