@@ -36,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 )
 
 type binlogStreamer struct {
@@ -573,6 +574,21 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 				nullBitmap.Set(rowIdx, true)
 			}
 
+		case query.Type_BIT: // BIT
+			// TODO: why doesn't descriptor.GetBit(idx, tuple) work? Seems like we must not be using the
+			//       BitEnc encoding, and just writing BIT types with the Uint64 methods. The BitEnc has
+			//       the same data encoding, but it would be more descriptive to use it.
+			bitValue, notNull := descriptor.GetUint64(idx, tuple)
+			if notNull {
+				bitType := col.TypeInfo.ToSqlType().(gmstypes.BitType)
+				numBytes := int((bitType.NumberOfBits() + 7) / 8)
+				temp := make([]byte, 8)
+				binary.BigEndian.PutUint64(temp, bitValue)
+				data = append(data, temp[len(temp)-numBytes:]...)
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
+
 		default:
 			return nil, nullBitmap, fmt.Errorf("unsupported type: %v (%d)\n", typ.String(), typ.Type())
 		}
@@ -608,6 +624,7 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 		case query.Type_YEAR:
 			types[i] = mysql.TypeYear
 		case query.Type_DATE:
+			// TODO: Do we need to switch to mysql.TypeNewDate ?
 			types[i] = mysql.TypeDate
 		case query.Type_DATETIME:
 			// TypeDateTime2 means use the new DateTime format, which was introduced after MySQL 5.6.4,
@@ -615,6 +632,7 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 			types[i] = mysql.TypeDateTime2
 			// TODO: length of microseconds in metadata
 		case query.Type_TIMESTAMP:
+			// TODO: Do we need to switch to mysql.TypeTimestamp2 ?
 			types[i] = mysql.TypeTimestamp
 			// TODO: length of microseconds in metadata
 		case query.Type_TIME:
@@ -643,6 +661,23 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 			types[i] = mysql.TypeLong
 		case query.Type_UINT64: // BIGINT UNSIGNED
 			types[i] = mysql.TypeLongLong
+
+		case query.Type_BIT: // BIT
+			types[i] = mysql.TypeBit
+			bitType := typ.(gmstypes.BitType)
+			// bitmap length is in metadata, as:
+			// upper 8 bits: bytes length
+			// lower 8 bits: bit length
+			numBytes := bitType.NumberOfBits() / 8
+			numBits := bitType.NumberOfBits() % 8
+			metadata[i] = uint16(numBytes)<<8 | uint16(numBits)
+
+		// TODO: Decimals look like the most involved type to serialize...
+		//case query.Type_DECIMAL: // DECIMAL
+		//	types[i] = mysql.TypeNewDecimal
+
+		//case query.Type_ENUM: // ENUM
+		//	types[i] = mysql.TypeEnum
 
 		default:
 			panic(fmt.Sprintf("unsupported type: %v \n", typ.String()))
