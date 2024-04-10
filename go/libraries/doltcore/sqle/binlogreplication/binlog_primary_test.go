@@ -49,6 +49,10 @@ func setupForDoltToMySqlReplication() {
 	// TODO: Technically, we should be setting this persistently and we should restart the sql-server
 	// TODO: Do we still need to do this? it would default to 1 and MySQL would fail to replica, right?
 	primaryDatabase.MustExec("set GLOBAL SERVER_ID=42;")
+
+	// Set the session's timezone to UTC, to avoid TIMESTAMP test values changing
+	// when they are converted to UTC for storage.
+	replicaDatabase.MustExec("SET @@time_zone = '+0:00';")
 }
 
 // TestBinlogPrimary runs a simple sanity check that a MySQL replica can connect to a Dolt primary and receive
@@ -75,7 +79,7 @@ func TestBinlogPrimary(t *testing.T) {
 	time.Sleep(250 * time.Millisecond)
 
 	primaryDatabase.MustExec("insert into db01.t values (1, '42', NULL, NULL, 123, 123, 123, 123, 200, 200, 200, 200, 200, " +
-		"1981, '1981-02-16 06:01:02', '2024-04-08 10:30:42', '1981-02-16', '15:34:54');")
+		"1981, '1981-02-16 06:01:02', '2024-04-08 10:30:42', '1981-02-16', '-123:45:30');")
 	time.Sleep(250 * time.Millisecond)
 
 	// Debugging output
@@ -98,13 +102,8 @@ func TestBinlogPrimary(t *testing.T) {
 	requireReplicaResults(t, "select * from db01.t;", [][]any{
 		{"1", "42", nil, nil,
 			"123", "123", "123", "123", "200", "200", "200", "200", "200",
-			// TODO: Some of the following values depend on the system timezone setting; need to fix how we test
-			//       these values, otherwise this test will fail in different environments, or when DST changes.
-			"1981", "1981-02-16 06:01:02", "2024-04-08 03:30:42", "1981-02-16", "07:34:54"},
+			"1981", "1981-02-16 06:01:02", "2024-04-08 10:30:42", "1981-02-16", "-123:45:30"},
 	})
-
-	// TODO: Now modify some data
-	// TODO: Delete some data
 }
 
 func TestBinlogPrimary_InsertUpdateDelete(t *testing.T) {

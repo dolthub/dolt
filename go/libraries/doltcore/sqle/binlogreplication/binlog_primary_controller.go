@@ -440,18 +440,29 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 			}
 
 		case query.Type_TIME: // TIME
-			// NOTE: MySQL documents two different formats for serializing time data types. This format seems to be
-			//       the "older" format, but the newer format doesn't seem to work when we tried it.
-			epochNanos, notNull := descriptor.GetSqlTime(idx, tuple)
-			timeValue := time.Unix(epochNanos/1_000_000, 0) // TODO: support fractional seconds
+			durationInNanoseconds, notNull := descriptor.GetSqlTime(idx, tuple)
 			if notNull {
-				// TODO: Support negative time periods
-				temp := uint32(timeValue.Hour()*10000 + timeValue.Minute()*100 + timeValue.Second())
-				buffer := make([]byte, 4)
-				binary.LittleEndian.PutUint32(buffer, temp)
-				data = append(data, buffer[:3]...)
-				dataLength += 3
+				negative := false
+				if durationInNanoseconds < 0 {
+					negative = true
+					durationInNanoseconds *= -1
+				}
 
+				durationInSeconds := durationInNanoseconds / 1_000_000
+				hours := durationInSeconds / (60 * 60)
+				minutes := durationInSeconds / 60 % 60
+				seconds := durationInSeconds % 60
+				// TODO: support fractional seconds
+				//nanoseconds := durationInNanoseconds % 1_000_000
+
+				buffer := hours<<12 | minutes<<6 | seconds + 0x800000
+				if negative {
+					buffer *= -1
+				}
+				temp := make([]byte, 4)
+				binary.BigEndian.PutUint32(temp, uint32(buffer))
+				data = append(data, temp[1:]...)
+				dataLength += 3
 			} else {
 				nullBitmap.Set(rowIdx, true)
 			}
@@ -607,7 +618,8 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 			types[i] = mysql.TypeTimestamp
 			// TODO: length of microseconds in metadata
 		case query.Type_TIME:
-			types[i] = mysql.TypeTime
+			// TypeTime2 is the newer serialization format for TIME values
+			types[i] = mysql.TypeTime2
 			// TODO: length of microseconds in metadata
 
 		case query.Type_INT8: // TINYINT
