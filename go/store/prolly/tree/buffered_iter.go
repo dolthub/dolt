@@ -16,9 +16,8 @@ package tree
 
 import (
 	"context"
-	"io"
-
 	"golang.org/x/sync/errgroup"
+	"io"
 )
 
 // BufferedTreeIter fowards scans a map using a readahead buffer.
@@ -70,11 +69,11 @@ func (b *BufferedTreeIter[K, V]) produce(ctx context.Context, c *cursor, stop fu
 		select {
 		case b.outCh <- c.nd:
 			c.invalidateAtEnd()
+			c.advance(ctx)
 			if stop(c) {
 				close(b.outCh)
 				return nil
 			}
-			c.advance(ctx)
 		case <-ctx.Done():
 			return context.Cause(ctx)
 		case <-b.close:
