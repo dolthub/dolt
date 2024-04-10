@@ -22,12 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestBinlogPrimary runs a simple sanity check that a MySQL replica can connect to a Dolt primary and receive
-// binlog events.
-func TestBinlogPrimary(t *testing.T) {
-	defer teardown(t)
-	startSqlServers(t)
-
+func setupForDoltToMySqlReplication() {
 	// Swap the replica and primary databases, since we're
 	// replicating in the other direction in this test.
 	var tempDatabase = primaryDatabase
@@ -45,14 +40,23 @@ func TestBinlogPrimary(t *testing.T) {
 	primaryDatabase.MustExec("set GLOBAL ENFORCE_GTID_CONSISTENCY='ON';")
 	primaryDatabase.MustExec("set GLOBAL GTID_MODE='ON';")
 
-	// On the Primary, make sure we have a non-zero SERVER_ID set
-	// TODO: Technically, we should be setting this persistently and we should restart the sql-server
-	primaryDatabase.MustExec("set GLOBAL SERVER_ID=42;")
-
 	// Create the replication user on the Dolt primary server
-	// TODO: this should be done on both as part of the shared setup code
+	// TODO: this should probably be done on both primary and replica as part of the shared setup code
 	primaryDatabase.MustExec("CREATE USER 'replicator'@'%' IDENTIFIED BY 'Zqr8_blrGm1!';")
 	primaryDatabase.MustExec("GRANT REPLICATION SLAVE ON *.* TO 'replicator'@'%';")
+
+	// On the Primary, make sure we have a non-zero SERVER_ID set
+	// TODO: Technically, we should be setting this persistently and we should restart the sql-server
+	// TODO: Do we still need to do this? it would default to 1 and MySQL would fail to replica, right?
+	primaryDatabase.MustExec("set GLOBAL SERVER_ID=42;")
+}
+
+// TestBinlogPrimary runs a simple sanity check that a MySQL replica can connect to a Dolt primary and receive
+// binlog events.
+func TestBinlogPrimary(t *testing.T) {
+	defer teardown(t)
+	startSqlServers(t)
+	setupForDoltToMySqlReplication()
 
 	// TODO: We don't support replicating DDL statements yet, so for now, set up the DDL before
 	//       starting up replication.
@@ -72,7 +76,7 @@ func TestBinlogPrimary(t *testing.T) {
 
 	primaryDatabase.MustExec("insert into db01.t values (1, '42', NULL, NULL, 123, 123, 123, 123, 200, 200, 200, 200, 200, " +
 		"1981, '1981-02-16 06:01:02', '2024-04-08 10:30:42', '1981-02-16', '15:34:54');")
-	time.Sleep(450 * time.Millisecond)
+	time.Sleep(250 * time.Millisecond)
 
 	// Debugging output
 	outputReplicaApplierStatus(t)
