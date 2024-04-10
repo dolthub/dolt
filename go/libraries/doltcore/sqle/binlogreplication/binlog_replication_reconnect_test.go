@@ -191,13 +191,35 @@ func turnOnLimitDataToxic(t *testing.T) {
 // More info at the end of this issue: https://github.com/jmoiron/sqlx/issues/225
 func convertMapScanResultToStrings(m map[string]interface{}) map[string]interface{} {
 	for key, value := range m {
-		if bytes, ok := value.([]uint8); ok {
-			m[key] = string(bytes)
-		}
-		if i, ok := value.(int64); ok {
-			m[key] = strconv.FormatInt(i, 10)
+		switch v := value.(type) {
+		case []uint8:
+			m[key] = string(v)
+		case int64:
+			m[key] = strconv.FormatInt(v, 10)
+		case uint64:
+			m[key] = strconv.FormatUint(v, 10)
 		}
 	}
 
 	return m
+}
+
+// convertSliceScanResultToStrings returns a new slice, formed by converting each value in the slice |ss| into a string.
+// This is necessary because SliceScan doesn't honor (or know about) the correct underlying SQL types –it
+// gets results back as strings, typed as []byte, or as int64 values.
+// More info at the end of this issue: https://github.com/jmoiron/sqlx/issues/225
+func convertSliceScanResultToStrings(ss []any) []any {
+	row := make([]any, len(ss))
+	for i, value := range ss {
+		switch v := value.(type) {
+		case []uint8:
+			row[i] = string(v)
+		case int64:
+			row[i] = strconv.FormatInt(v, 10)
+		case uint64:
+			row[i] = strconv.FormatUint(v, 10)
+		}
+	}
+
+	return row
 }

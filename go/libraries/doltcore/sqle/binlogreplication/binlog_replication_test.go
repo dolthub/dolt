@@ -142,11 +142,9 @@ func TestFlushLogs(t *testing.T) {
 	primaryDatabase.MustExec("insert into t values (1), (2), (3);")
 	waitForReplicaToCatchUp(t)
 
-	rows, err := replicaDatabase.Queryx("select * from db01.t;")
-	require.NoError(t, err)
-	allRows := readAllRows(t, rows)
-	require.Equal(t, 3, len(allRows))
-	require.NoError(t, rows.Close())
+	requireReplicaResults(t, "select * from db01.t;", [][]any{
+		{"1"}, {"2"}, {"3"},
+	})
 }
 
 // TestResetReplica tests that "RESET REPLICA" and "RESET REPLICA ALL" correctly clear out
@@ -365,7 +363,7 @@ func TestDoltCommits(t *testing.T) {
 	// Verify that commit timestamps are unique
 	rows, err = replicaDatabase.Queryx("select distinct date from db01.dolt_log;")
 	require.NoError(t, err)
-	allRows := readAllRows(t, rows)
+	allRows := readAllRowsIntoMaps(t, rows)
 	require.Equal(t, 5, len(allRows)) // 4 transactions + 1 initial commit
 }
 
@@ -541,7 +539,9 @@ func readNextRow(t *testing.T, rows *sqlx.Rows) map[string]interface{} {
 	return row
 }
 
-func readAllRows(t *testing.T, rows *sqlx.Rows) []map[string]interface{} {
+// readAllRowsIntoMaps reads all data from |rows| and returns a slice of maps, where each key
+// in the map is the field name, and each value is the string representation of the field value.
+func readAllRowsIntoMaps(t *testing.T, rows *sqlx.Rows) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0)
 	for {
 		row := make(map[string]interface{})
@@ -551,6 +551,21 @@ func readAllRows(t *testing.T, rows *sqlx.Rows) []map[string]interface{} {
 		err := rows.MapScan(row)
 		require.NoError(t, err)
 		row = convertMapScanResultToStrings(row)
+		result = append(result, row)
+	}
+}
+
+// readAllRowsIntoSlices reads all data from |rows| and returns a slice of slices, with
+// all values converted to strings.
+func readAllRowsIntoSlices(t *testing.T, rows *sqlx.Rows) [][]any {
+	result := make([][]any, 0)
+	for {
+		if rows.Next() == false {
+			return result
+		}
+		row, err := rows.SliceScan()
+		require.NoError(t, err)
+		row = convertSliceScanResultToStrings(row)
 		result = append(result, row)
 	}
 }
@@ -573,6 +588,10 @@ func startSqlServers(t *testing.T) {
 
 	require.NoError(t, err)
 	fmt.Printf("temp dir: %v \n", testDir)
+
+	// TODO: Why did we have to start setting this all of a sudden?
+	os.Setenv("PATH", os.Getenv("PATH")+":/opt/homebrew/bin/")
+	fmt.Printf("PATH: %s\n", os.Getenv("PATH"))
 
 	// Start up primary and replica databases
 	mySqlPort, mySqlProcess, err = startMySqlServer(testDir)

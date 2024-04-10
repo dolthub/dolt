@@ -80,14 +80,14 @@ func TestBinlogPrimary(t *testing.T) {
 
 	// Debugging output
 	outputReplicaApplierStatus(t)
+	outputShowReplicaStatus(t)
 
 	// Sanity check on SHOW REPLICA STATUS
 	rows, err := replicaDatabase.Queryx("show replica status;")
 	require.NoError(t, err)
-	allRows := readAllRows(t, rows)
+	allRows := readAllRowsIntoMaps(t, rows)
 	require.Equal(t, 1, len(allRows))
 	require.NoError(t, rows.Close())
-	//fmt.Printf("SHOW REPLICA STATUS: %v\n", allRows)
 	//require.Equal(t, "3ab04dd4-8c9e-471e-a223-9712a3b7c37e:1-2", allRows[0]["Executed_Gtid_Set"])
 	require.Equal(t, "", allRows[0]["Last_IO_Error"])
 	require.Equal(t, "", allRows[0]["Last_SQL_Error"])
@@ -95,35 +95,85 @@ func TestBinlogPrimary(t *testing.T) {
 	require.Equal(t, "Yes", allRows[0]["Replica_SQL_Running"])
 
 	// Test that the table was created and one row inserted
-	rows, err = replicaDatabase.Queryx("select * from db01.t;")
-	require.NoError(t, err)
-	allRows = readAllRows(t, rows)
-	require.Equal(t, 1, len(allRows))
-	require.NoError(t, rows.Close())
-	require.Equal(t, "1", allRows[0]["pk"])
-	require.Equal(t, "42", allRows[0]["c1"])
-	require.Nil(t, allRows[0]["c2"])
-	require.Nil(t, allRows[0]["c3"])
-	require.Equal(t, "123", allRows[0]["c4"])
-	require.Equal(t, "123", allRows[0]["c5"])
-	require.Equal(t, "123", allRows[0]["c6"])
-	require.Equal(t, "123", allRows[0]["c7"])
-	require.Equal(t, "200", allRows[0]["uc1"])
-	require.Equal(t, "200", allRows[0]["uc2"])
-	require.Equal(t, "200", allRows[0]["uc3"])
-	require.Equal(t, "200", allRows[0]["uc4"])
-	require.Equal(t, uint64(200), allRows[0]["uc5"]) // TODO: Why don't the test utils convert this value to a string?
-
-	require.Equal(t, "1981", allRows[0]["t1"])
-	require.Equal(t, "1981-02-16 06:01:02", allRows[0]["t2"])
-	require.Equal(t, "1981-02-16", allRows[0]["t4"])
-	// TODO: The following two tests depend on the system timezone setting; need to fix how we test this value,
-	//       otherwise this test will fail in different environments, or when DST changes.
-	require.Equal(t, "2024-04-08 03:30:42", allRows[0]["t3"])
-	require.Equal(t, "07:34:54", allRows[0]["t5"])
+	requireReplicaResults(t, "select * from db01.t;", [][]any{
+		{"1", "42", nil, nil,
+			"123", "123", "123", "123", "200", "200", "200", "200", "200",
+			// TODO: Some of the following values depend on the system timezone setting; need to fix how we test
+			//       these values, otherwise this test will fail in different environments, or when DST changes.
+			"1981", "1981-02-16 06:01:02", "2024-04-08 03:30:42", "1981-02-16", "07:34:54"},
+	})
 
 	// TODO: Now modify some data
 	// TODO: Delete some data
+}
+
+func TestBinlogPrimary_InsertUpdateDelete(t *testing.T) {
+	defer teardown(t)
+	startSqlServers(t)
+	setupForDoltToMySqlReplication()
+
+	// TODO: We don't support replicating DDL statements yet, so for now, set up the DDL before
+	//       starting up replication.
+	primaryDatabase.MustExec("create database db01;")
+	testTableCreateStatement := "create table db01.t (pk varchar(100) primary key, c1 int, c2 year);"
+	primaryDatabase.MustExec(testTableCreateStatement)
+	replicaDatabase.MustExec(testTableCreateStatement)
+
+	// Because we have executed other statements, we need to reset GTIDs on the replica
+	replicaDatabase.MustExec("reset binary logs and gtids;")
+
+	startReplication(t, doltPort)
+	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
+	//       Here we just pause to let the hardcoded binlog events be delivered
+	time.Sleep(450 * time.Millisecond)
+
+	// Insert multiple rows
+	primaryDatabase.MustExec("insert into db01.t values ('1', 1, 1981), ('2', 2, 1982), ('3', 3, 1983), ('4', 4, 1984);")
+	time.Sleep(450 * time.Millisecond)
+	outputReplicaApplierStatus(t)
+	requireReplicaResults(t, "select * from db01.t order by pk;", [][]any{
+		{"1", "1", "1981"}, {"2", "2", "1982"}, {"3", "3", "1983"}, {"4", "4", "1984"}})
+
+	// Delete multiple rows
+	primaryDatabase.MustExec("delete from db01.t where pk in ('1', '3');")
+	time.Sleep(250 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t order by pk;", [][]any{
+		{"2", "2", "1982"}, {"4", "4", "1984"}})
+
+	// Update multiple rows
+	primaryDatabase.MustExec("update db01.t set c2 = 1942;")
+	time.Sleep(250 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t order by pk;", [][]any{
+		{"2", "2", "1942"}, {"4", "4", "1942"}})
+
+	// Turn off @@autocommit and mix inserts/updates/deletes in the same transaction
+	primaryDatabase.MustExec("SET @@autocommit=0;")
+	primaryDatabase.MustExec("insert into db01.t values ('10', 10, 2020), ('11', 11, 2021), ('12', 12, 2022), ('13', 13, 2023);")
+	primaryDatabase.MustExec("delete from db01.t where pk in ('11', '13');")
+	primaryDatabase.MustExec("update db01.t set c2 = 2042 where c2 > 2000;")
+	primaryDatabase.MustExec("COMMIT;")
+	time.Sleep(250 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t order by pk;", [][]any{
+		{"10", "10", "2042"}, {"12", "12", "2042"},
+		{"2", "2", "1942"}, {"4", "4", "1942"},
+	})
+}
+
+// requireReplicaResults runs the specified |query| on the replica database and asserts that the results match
+// |expectedResults|. Note that the actual results are converted to string values in almost all cases, due to
+// limitations in the SQL library we use to query the replica database, so |expectedResults| should generally
+// be expressed in strings.
+//
+// TODO: Extract to binlog_test_utils
+func requireReplicaResults(t *testing.T, query string, expectedResults [][]any) {
+	rows, err := replicaDatabase.Queryx(query)
+	require.NoError(t, err)
+	allRows := readAllRowsIntoSlices(t, rows)
+	require.Equal(t, len(expectedResults), len(allRows), "Expected %v, got %v", expectedResults, allRows)
+	for i := range expectedResults {
+		require.Equal(t, expectedResults[i], allRows[i], "Expected %v, got %v", expectedResults[i], allRows[i])
+	}
+	require.NoError(t, rows.Close())
 }
 
 // outputReplicaApplierStatus prints out the replica applier status information from the
@@ -131,8 +181,18 @@ func TestBinlogPrimary(t *testing.T) {
 // replication from a Dolt primary to a MySQL replica, since this often contains more detailed
 // information about why MySQL failed to apply a binlog event.
 func outputReplicaApplierStatus(t *testing.T) {
-	newRows, err := replicaDatabase.Queryx("select * from performance_schema.replication_applier_status_by_worker")
+	newRows, err := replicaDatabase.Queryx("select * from performance_schema.replication_applier_status_by_worker;")
 	require.NoError(t, err)
-	allNewRows := readAllRows(t, newRows)
+	allNewRows := readAllRowsIntoMaps(t, newRows)
 	fmt.Printf("\n\nreplication_applier_status_by_worker: %v\n", allNewRows)
+}
+
+// outputShowReplicaStatus prints out replica status information. This is useful for debugging
+// replication failures in tests since status will show whether the replica is successfully connected,
+// any recent errors, and what GTIDs have been executed.
+func outputShowReplicaStatus(t *testing.T) {
+	newRows, err := replicaDatabase.Queryx("show replica status;")
+	require.NoError(t, err)
+	allNewRows := readAllRowsIntoMaps(t, newRows)
+	fmt.Printf("\n\nSHOW REPLICA STATUS: %v\n", allNewRows)
 }
