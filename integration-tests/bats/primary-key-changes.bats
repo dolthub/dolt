@@ -261,7 +261,7 @@ teardown() {
 
     run dolt merge test -m "merge other"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ 'error: cannot merge two tables with different primary keys' ]] || false
+    [[ "$output" =~ 'error: cannot merge because table t has different primary keys' ]] || false
 }
 
 @test "primary-key-changes: merge on branch with primary key added throws an error" {
@@ -288,7 +288,36 @@ teardown() {
 
     run dolt merge test -m "merge other"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ 'error: cannot merge two tables with different primary keys' ]] || false
+    [[ "$output" =~ 'error: cannot merge because table t has different primary keys' ]] || false
+}
+
+@test "primary-key-changes: merge on branches with different primary key from ancestor throws an error" {
+    dolt sql -q "create table t(pk int, val1 int, val2 int)"
+    dolt add .
+    dolt sql -q "INSERT INTO t values (1,1,1)"
+    dolt commit -am "cm1"
+    dolt checkout -b test
+
+    dolt sql -q "ALTER TABLE t add PRIMARY key (pk)"
+    dolt add .
+
+    run dolt status
+    [[ "$output" =~ 'Changes to be committed' ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*t) ]] || false
+    ! [[ "$output" =~ 'deleted' ]] || false
+    ! [[ "$output" =~ 'new table' ]] || false
+
+    dolt commit -m "cm2"
+    dolt checkout main
+
+    dolt sql -q "ALTER TABLE t add PRIMARY key (pk)"
+    dolt sql -q "INSERT INTO t values (2,2,2)"
+    dolt commit -am "cm3"
+
+    run dolt merge test -m "merge other"
+    [ "$status" -eq 1 ]
+
+    [[ "$output" =~ 'error: cannot merge because table t has different primary keys' ]] || false
 }
 
 @test "primary-key-changes: diff on primary key schema change shows schema level diff but does not show row level diff" {
@@ -527,11 +556,11 @@ SQL
 
     run dolt merge test -m "merge other"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ 'error: cannot merge two tables with different primary keys' ]] || false
+    [[ "$output" =~ 'error: cannot merge because table t has different primary keys' ]] || false
 
     run dolt sql -q "call dolt_merge('test')"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ 'error: cannot merge two tables with different primary keys' ]] || false
+    [[ "$output" =~ 'error: cannot merge because table t has different primary keys' ]] || false
 
     skip "Dolt doesn't correctly store primary key order if it doesn't match the column order"
 }

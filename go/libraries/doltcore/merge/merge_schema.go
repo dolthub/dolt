@@ -16,7 +16,6 @@ package merge
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -159,7 +158,8 @@ func (c ChkConflict) String() string {
 	return ""
 }
 
-var ErrMergeWithDifferentPks = errors.New("error: cannot merge two tables with different primary keys")
+var ErrMergeWithDifferentPks = errorkinds.NewKind("error: cannot merge because table %s has different primary keys")
+var ErrMergeWithDifferentPksFromAncestor = errorkinds.NewKind("error: cannot merge because table %s has different primary keys in its common ancestor")
 
 // SchemaMerge performs a three-way merge of |ourSch|, |theirSch|, and |ancSch|, and returns: the merged schema,
 // any schema conflicts identified, whether moving to the new schema requires a full table rewrite, and any
@@ -172,8 +172,11 @@ func SchemaMerge(ctx context.Context, format *storetypes.NomsBinFormat, ourSch, 
 
 	// TODO: We'll remove this once it's possible to get diff and merge on different primary key sets
 	// TODO: decide how to merge different orders of PKS
-	if !schema.ArePrimaryKeySetsDiffable(format, ourSch, theirSch) || !schema.ArePrimaryKeySetsDiffable(format, ourSch, ancSch) {
-		return nil, SchemaConflict{}, mergeInfo, diffInfo, ErrMergeWithDifferentPks
+	if !schema.ArePrimaryKeySetsDiffable(format, ourSch, theirSch) {
+		return nil, SchemaConflict{}, mergeInfo, diffInfo, ErrMergeWithDifferentPks.New(tblName)
+	}
+	if !schema.ArePrimaryKeySetsDiffable(format, ourSch, ancSch) {
+		return nil, SchemaConflict{}, mergeInfo, diffInfo, ErrMergeWithDifferentPksFromAncestor.New(tblName)
 	}
 
 	var mergedCC *schema.ColCollection
