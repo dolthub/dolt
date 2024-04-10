@@ -425,12 +425,17 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	if err != nil {
 		return nil, err
 	}
-	partitions, err := partitionsFromRows(ctx, rows)
-	if err != nil {
-		return nil, err
+	p := doltTablePartition{
+		end:     NoUpperBound,
+		rowData: rows,
 	}
 
-	return newDoltTablePartitionIter(rows, partitions...), nil
+	//partitions, err := partitionsFromRows(ctx, rows)
+	//if err != nil {
+	//	return nil, err
+	//}
+
+	return newDoltTablePartitionIter(rows, p), nil
 }
 
 func (t *DoltTable) IsTemporary() bool {

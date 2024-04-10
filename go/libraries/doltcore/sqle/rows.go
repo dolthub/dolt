@@ -192,10 +192,11 @@ func ProllyRowIterFromPartition(
 		partition.end = uint64(c)
 	}
 
-	iter, err := rows.FetchOrdinalRange(ctx, partition.start, partition.end)
-	if err != nil {
-		return nil, err
-	}
+	//iter, err := rows.FetchOrdinalRange(ctx, partition.start, partition.end)
+	//if err != nil {
+	//	return nil, err
+	//}
+	iter, err := rows.BufferedIterAll(ctx)
 
 	return index.NewProllyRowIterForMap(sch, rows, iter, projections), nil
 }
