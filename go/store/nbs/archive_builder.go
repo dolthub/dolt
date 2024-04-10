@@ -15,6 +15,7 @@
 package nbs
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -23,8 +24,8 @@ import (
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/klauspost/compress/zstd"
 	"github.com/pkg/errors"
-	"github.com/valyala/gozstd"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -103,7 +104,11 @@ func copyAllChunks(cs chunkSource, idx tableIndex, archivePath string) error {
 		defer bottleneck.Unlock()
 
 		// For the first pass, don't group any chunks. Simply write chunks to the archive.
-		compressed := gozstd.Compress(cmpBuff, c.Data())
+		compressed, err := zCompress(cmpBuff, c.Data())
+		if err != nil {
+			innerErr = err
+			return
+		}
 		id, err := arcW.writeByteSpan(compressed)
 		if err != nil {
 			innerErr = err
@@ -183,4 +188,28 @@ func verifyAllChunks(idx tableIndex, archiveFile string) error {
 		}
 	}
 	return nil
+}
+
+// Compress input to output.
+func zCompress(dst, data []byte) ([]byte, error) {
+	if dst == nil {
+		return nil, errors.New("nil destination buffer")
+	}
+
+	// Create a bytes.Buffer to write compressed data into
+	buf := bytes.NewBuffer(dst)
+	opt1 := zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(3))
+
+	enc, err := zstd.NewWriter(buf, opt1)
+	if err != nil {
+		return nil, err
+	}
+	defer enc.Close()
+
+	dataBuf := bytes.NewBuffer(data)
+	written, err := io.Copy(enc, dataBuf)
+	if err != nil {
+		return nil, err
+	}
+	return dst[:written], nil
 }

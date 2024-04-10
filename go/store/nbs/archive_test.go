@@ -17,13 +17,16 @@ package nbs
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"math/rand"
+	"os"
 	"testing"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/klauspost/compress/dict"
+	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
-	"github.com/valyala/gozstd"
 )
 
 func TestArchiveSingleChunk(t *testing.T) {
@@ -189,6 +192,8 @@ func TestArchiverMultipleChunksMultipleDictionaries(t *testing.T) {
 func TestArchiveDictDecompression(t *testing.T) {
 	writer := NewFixedBufferTableSink(make([]byte, 4096))
 
+	buff := make([]byte, 4096)
+
 	// This is 32K worth of data, but it's all very similar. Only fits in 4K if compressed with a dictionary.
 	chks := generateSimilarChunks(42, 32)
 	samples := make([][]byte, len(chks))
@@ -196,17 +201,19 @@ func TestArchiveDictDecompression(t *testing.T) {
 		samples[i] = c.Data()
 	}
 
-	dict := gozstd.BuildDict(samples, 2048)
-	cDict, err := gozstd.NewCDict(dict)
+	dict, err := buildDict(samples)
 	assert.NoError(t, err)
+	//	cDict, err := gozstd.NewCDict(dict)
+	// assert.NoError(t, err)
 
 	aw := newArchiveWriter(writer)
 
 	dictId, err := aw.writeByteSpan(dict)
 	for _, chk := range chks {
-		cmp := gozstd.CompressDict(nil, chk.Data(), cDict)
+		compressDict, err := zCompressDict(buff, dict, chk.Data())
+		assert.NoError(t, err)
 
-		chId, err := aw.writeByteSpan(cmp)
+		chId, err := aw.writeByteSpan(compressDict)
 		assert.NoError(t, err)
 
 		err = aw.stageChunk(chk.Hash(), dictId, chId)
@@ -229,6 +236,31 @@ func TestArchiveDictDecompression(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, chk.Data(), roundTripData)
 	}
+}
+
+func buildDict(samples [][]byte) ([]byte, error) {
+
+	file, err := os.OpenFile("/tmp/dictionary.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	o := dict.Options{
+		MaxDictSize:    2048, // Make that a param.
+		HashBytes:      4,    // Not sure? try 4, sand measure... something?? NM4.
+		Output:         nil,  // file, // This is just for debugging
+		ZstdDictID:     0,
+		ZstdDictCompat: false, // This is for older version compatibility.
+		ZstdLevel:      4,
+	}
+
+	rawDict, err := dict.BuildZstdDict(samples, o)
+	if err != nil {
+		return nil, err
+	}
+
+	return rawDict, nil
 }
 
 func TestArchiveBlockCorruption(t *testing.T) {
@@ -306,4 +338,20 @@ func generateRandomChunk(seed int64, len int) *chunks.Chunk {
 	}
 	c := chunks.NewChunk(data)
 	return &c
+}
+
+func zCompressDict(dst, dict, data []byte) ([]byte, error) {
+	if dst == nil {
+		return nil, errors.New("nil destination buffer")
+	}
+
+	encoder, err := zstd.NewWriter(nil, zstd.WithEncoderDict(dict), zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(3)))
+	if err != nil {
+		return nil, err
+	}
+	defer encoder.Close()
+
+	result := encoder.EncodeAll(data, dst) // oddly no error returned here
+	return result, nil
+
 }

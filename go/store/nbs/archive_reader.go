@@ -15,12 +15,14 @@
 package nbs
 
 import (
+	"bytes"
 	"encoding/binary"
+	"errors"
 	"hash/crc32"
 	"io"
 
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/valyala/gozstd"
+	"github.com/klauspost/compress/zstd"
 )
 
 type archiveIndex struct {
@@ -190,16 +192,18 @@ func (ai archiveIndex) get(hash hash.Hash) ([]byte, error) {
 		return nil, err
 	}
 
+	dst := make([]byte, 0, len(data)*4)
+
 	var result []byte
 	if dict == nil {
-		result, err = gozstd.Decompress(nil, data)
-	} else {
+		result, err = zDecompress(dst, data)
+	} /* else {
 		dDict, err := gozstd.NewDDict(dict)
 		if err != nil {
 			return nil, err
 		}
 		result, err = gozstd.DecompressDict(nil, data, dDict)
-	}
+	} */
 	if err != nil {
 		return nil, err
 	}
@@ -302,4 +306,25 @@ func binarySearch(prefixes []uint64, target uint64) int {
 		}
 	}
 	return -1 // Not found
+}
+
+func zDecompress(dst, data []byte) ([]byte, error) {
+	if dst == nil {
+		return nil, errors.New("nil destination buffer")
+	}
+
+	// Create a bytes.Buffer to write compressed data into
+	buf := bytes.NewBuffer(dst)
+	decoder, err := zstd.NewReader(buf)
+	if err != nil {
+		return nil, err
+	}
+	defer decoder.Close()
+
+	result, err := decoder.DecodeAll(data, dst)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
