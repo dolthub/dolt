@@ -1,3 +1,5 @@
+name: Release PGO Dolt
+
 on:
   workflow_dispatch:
     inputs:
@@ -59,7 +61,7 @@ jobs:
       - name: Update dolt version command
         run: sed -i -e 's/	Version = ".*"/	Version = "'"$NEW_VERSION"'"/' "$FILE"
         env:
-          FILE: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
+          FILE: ${{ format('{0}/go/cmd/dolt/doltversion/version.go', github.workspace) }}
           NEW_VERSION: ${{ needs.format-version.outputs.version }}
       - name: Set minver TBD to version
         run: sed -i -e 's/minver:"TBD"/minver:"'"$NEW_VERSION"'"/' "$FILE"

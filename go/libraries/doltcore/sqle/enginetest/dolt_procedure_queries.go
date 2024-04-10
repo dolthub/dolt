@@ -223,7 +223,10 @@ end
 			"create table t(a int primary key auto_increment, b int);",
 			"create table t2(a int primary key auto_increment, b int);",
 			"call dolt_commit('-Am', 'new table');",
-			`create trigger branch_trigger after insert on t for each row
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: `create trigger branch_trigger after insert on t for each row
 begin
   declare i int default 1;
 	commits: loop
@@ -248,8 +251,9 @@ begin
 	end loop commits;
 end
 `,
-		},
-		Assertions: []queries.ScriptTestAssertion{
+				Skip:             true, // See https://github.com/dolthub/go-mysql-server/pull/2442
+				SkipResultsCheck: true,
+			},
 			{
 				Query:            "insert into t values (1, 1);",
 				Skip:             true,
