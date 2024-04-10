@@ -61,8 +61,8 @@ system_variables:
   innodb_autoinc_lock_mode: 0
 EOF
     start_sql_server_with_config "" config.yml
-    dolt sql -q "SET @@autocommit=1; INSERT INTO test1 (c0) select 0 from sequence10bit; INSERT INTO ranges VALUES (0, LAST_INSERT_ID(), ROW_COUNT());" &
-    dolt sql -q "SET @@autocommit=1; INSERT INTO test1 (c0) select 1 from sequence10bit; INSERT INTO ranges VALUES (1, LAST_INSERT_ID(), ROW_COUNT());"
+    dolt sql -q "INSERT INTO test1 (c0) select 0 from sequence10bit; INSERT INTO ranges VALUES (0, LAST_INSERT_ID(), ROW_COUNT()); COMMIT;" &
+    dolt sql -q "INSERT INTO test1 (c0) select 1 from sequence10bit; INSERT INTO ranges VALUES (1, LAST_INSERT_ID(), ROW_COUNT()); COMMIT;"
     wait $!
 
     stop_sql_server
