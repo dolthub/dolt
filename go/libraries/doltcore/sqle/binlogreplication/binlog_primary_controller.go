@@ -606,6 +606,20 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 				nullBitmap.Set(rowIdx, true)
 			}
 
+		case query.Type_SET: // SET
+			setValue, notNull := descriptor.GetSet(idx, tuple)
+			if notNull {
+				setType := col.TypeInfo.ToSqlType().(gmstypes.SetType)
+				numElements := setType.NumberOfElements()
+				numBytes := int((numElements + 7) / 8)
+				temp := make([]byte, 8)
+				binary.LittleEndian.PutUint64(temp, setValue)
+				data = append(data, temp[:numBytes]...)
+				dataLength += numBytes
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
+
 		default:
 			return nil, nullBitmap, fmt.Errorf("unsupported type: %v (%d)\n", typ.String(), typ.Type())
 		}
@@ -698,7 +712,13 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 			} else {
 				metadata[i] = mysql.TypeEnum<<8 | 2
 			}
-			logrus.StandardLogger().Errorf("ENUM metadata: %v\n", metadata[i])
+
+		case query.Type_SET: // SET
+			types[i] = mysql.TypeString
+			setType := typ.(gmstypes.SetType)
+			numElements := setType.NumberOfElements()
+			numBytes := (numElements + 7) / 8
+			metadata[i] = mysql.TypeSet<<8 | numBytes
 
 		// TODO: Decimals look like the most involved type to serialize...
 		//case query.Type_DECIMAL: // DECIMAL

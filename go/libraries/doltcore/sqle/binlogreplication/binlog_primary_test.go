@@ -71,7 +71,7 @@ func TestBinlogPrimary(t *testing.T) {
 		"uc1 tinyint unsigned, uc2 smallint unsigned, uc3 mediumint unsigned, uc4 int unsigned, uc5 bigint unsigned, " +
 		"t1 year, t2 datetime, t3 timestamp, t4 date, t5 time, " +
 		"b1 bit(10), " +
-		"e1 enum('blue', 'green', 'red'));"
+		"e1 enum('blue', 'green', 'red'), s1 set('pants','shirt','tie','belt'));"
 	primaryDatabase.MustExec(testTableCreateStatement)
 	replicaDatabase.MustExec(testTableCreateStatement)
 
@@ -88,7 +88,7 @@ func TestBinlogPrimary(t *testing.T) {
 		"'42', NULL, NULL, 123, 123, 123, 123, 200, 200, 200, 200, 200, " +
 		"1981, '1981-02-16 06:01:02', '2024-04-08 10:30:42', '1981-02-16', '-123:45:30', " +
 		"b'0100000011', " +
-		"'green');")
+		"'green', 'pants,tie,belt');")
 	time.Sleep(250 * time.Millisecond)
 
 	// Debugging output
@@ -113,7 +113,7 @@ func TestBinlogPrimary(t *testing.T) {
 			"123", "123", "123", "123", "200", "200", "200", "200", "200",
 			"1981", "1981-02-16 06:01:02", "2024-04-08 10:30:42", "1981-02-16", "-123:45:30",
 			"\x01\x03",
-			"green"},
+			"green", "pants,tie,belt"},
 	})
 }
 
