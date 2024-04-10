@@ -589,8 +589,8 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				Host:  "localhost",
 				Query: "desc test;",
 				Expected: []sql.Row{
-					{"pk", "bigint", "NO", "PRI", "NULL", ""},
-					{"a", "int", "YES", "", "NULL", ""},
+					{"pk", "bigint", "NO", "PRI", nil, ""},
+					{"a", "int", "YES", "", nil, ""},
 				},
 			},
 		},
@@ -641,8 +641,8 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				Host:  "localhost",
 				Query: "desc test;",
 				Expected: []sql.Row{
-					{"pk", "bigint", "NO", "PRI", "NULL", ""},
-					{"a", "int", "YES", "MUL", "NULL", ""},
+					{"pk", "bigint", "NO", "PRI", nil, ""},
+					{"a", "int", "YES", "MUL", nil, ""},
 				},
 			},
 			{
@@ -674,8 +674,8 @@ var DoltOnlyRevisionDbPrivilegeTests = []queries.UserPrivilegeTest{
 				Host:  "localhost",
 				Query: "desc test;",
 				Expected: []sql.Row{
-					{"pk", "bigint", "NO", "PRI", "NULL", ""},
-					{"a", "int", "YES", "", "NULL", ""},
+					{"pk", "bigint", "NO", "PRI", nil, ""},
+					{"a", "int", "YES", "", nil, ""},
 				},
 			},
 		},

@@ -158,6 +158,7 @@ func checkCredAndPrintSuccess(ctx context.Context, dEnv *env.DoltEnv, dc creds.D
 	if err != nil {
 		return errhand.BuildDError("error: unable to connect to server with credentials.").AddCause(err).Build()
 	}
+	defer conn.Close()
 
 	grpcClient := remotesapi.NewCredentialsServiceClient(conn)
 

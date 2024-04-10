@@ -107,7 +107,6 @@ func loadAutoIncValue(sequences *sync.Map, tableName string) uint64 {
 
 // Current returns the next value to be generated in the auto increment sequence for the table named
 func (a AutoIncrementTracker) Current(tableName string) uint64 {
-	tableName = strings.ToLower(tableName)
 	return loadAutoIncValue(a.sequences, tableName)
 }
 
@@ -122,8 +121,8 @@ func (a AutoIncrementTracker) Next(tbl string, insertVal interface{}) (uint64, e
 	}
 
 	if a.lockMode == LockMode_Interleaved {
-		unlocker := a.mm.Lock(tbl)
-		defer unlocker.Unlock()
+		release := a.mm.Lock(tbl)
+		defer release()
 	}
 
 	curr := loadAutoIncValue(a.sequences, tbl)
@@ -173,8 +172,8 @@ func CoerceAutoIncrementValue(val interface{}) (uint64, error) {
 func (a AutoIncrementTracker) Set(ctx *sql.Context, tableName string, table *doltdb.Table, ws ref.WorkingSetRef, newAutoIncVal uint64) (*doltdb.Table, error) {
 	tableName = strings.ToLower(tableName)
 
-	unlocker := a.mm.Lock(tableName)
-	defer unlocker.Unlock()
+	release := a.mm.Lock(tableName)
+	defer release()
 
 	existing := loadAutoIncValue(a.sequences, tableName)
 	if newAutoIncVal > existing {
@@ -381,8 +380,8 @@ func (a AutoIncrementTracker) AddNewTable(tableName string) {
 func (a AutoIncrementTracker) DropTable(ctx *sql.Context, tableName string, wses ...*doltdb.WorkingSet) error {
 	tableName = strings.ToLower(tableName)
 
-	unlocker := a.mm.Lock(tableName)
-	defer unlocker.Unlock()
+	release := a.mm.Lock(tableName)
+	defer release()
 
 	newHighestValue := uint64(1)
 
@@ -426,6 +425,5 @@ func (a *AutoIncrementTracker) AcquireTableLock(ctx *sql.Context, tableName stri
 		panic("Attempted to acquire AutoInc lock for entire insert operation, but lock mode was set to Interleaved")
 	}
 	a.lockMode = lockMode
-	unlocker := a.mm.Lock(tableName)
-	return func() { unlocker.Unlock() }, nil
+	return a.mm.Lock(tableName), nil
 }

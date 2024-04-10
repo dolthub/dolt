@@ -55,7 +55,7 @@ export const tableTests = [
         Type: "int",
         Null: "NO",
         Key: "PRI",
-        Default: "NULL",
+        Default: null,
         Extra: "",
       },
       {
@@ -63,7 +63,7 @@ export const tableTests = [
         Type: "int",
         Null: "YES",
         Key: "",
-        Default: "NULL",
+        Default: null,
         Extra: "",
       },
     ],
@@ -127,7 +127,7 @@ export const tableTests = [
       {
         CONSTRAINT_CATALOG: "def",
         CONSTRAINT_SCHEMA: `${dbName}/main`,
-        CONSTRAINT_NAME: "lfbtivir",
+        CONSTRAINT_NAME: "test_info_ibfk_1",
         TABLE_CATALOG: "def",
         TABLE_SCHEMA: `${dbName}/main`,
         TABLE_NAME: "test_info",
