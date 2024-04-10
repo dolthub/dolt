@@ -1152,7 +1152,22 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSc
 
 // CreateSchema implements sql.SchemaDatabase
 func (db Database) CreateSchema(ctx *sql.Context, schemaName string) error {
-  return nil
+	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
+		return err
+	}
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+	
+	root, err = root.CreateDatabaseSchema(ctx, schema.DatabaseSchema{
+		Name: schemaName,
+	})
+	if err != nil {
+		return err
+	}
+	
+	return db.SetRoot(ctx, root)
 }
 
 // GetSchema implements sql.SchemaDatabase

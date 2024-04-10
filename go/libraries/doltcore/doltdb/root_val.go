@@ -93,10 +93,12 @@ type rvStorage interface {
 	GetTablesMap(ctx context.Context, vr types.ValueReadWriter, ns tree.NodeStore) (tableMap, error)
 	GetForeignKeys(ctx context.Context, vr types.ValueReader) (types.Value, bool, error)
 	GetCollation(ctx context.Context) (schema.Collation, error)
+	GetSchemas(ctx context.Context) ([]schema.DatabaseSchema, error)
 
 	SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, m types.Value) (rvStorage, error)
 	SetFeatureVersion(v FeatureVersion) (rvStorage, error)
 	SetCollation(ctx context.Context, collation schema.Collation) (rvStorage, error)
+	SetSchemas(ctx context.Context, schemas []schema.DatabaseSchema) (rvStorage, error)
 
 	EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit) (rvStorage, error)
 
@@ -244,6 +246,14 @@ func (r nomsRvStorage) SetCollation(ctx context.Context, collation schema.Collat
 		return nomsRvStorage{}, err
 	}
 	return nomsRvStorage{st}, nil
+}
+
+func (r nomsRvStorage) GetSchemas(ctx context.Context) ([]schema.DatabaseSchema, error) {
+	panic("schemas not implemented for nomsRvStorage")
+}
+
+func (r nomsRvStorage) SetSchemas(ctx context.Context, schemas []schema.DatabaseSchema) (rvStorage, error) {
+	panic("schemas not implemented for nomsRvStorage")
 }
 
 func (r nomsRvStorage) DebugString(ctx context.Context) string {
@@ -845,6 +855,27 @@ func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch s
 	return newRoot, nil
 }
 
+func (root *RootValue) CreateDatabaseSchema(ctx context.Context, sch schema.DatabaseSchema) (*RootValue, error) {
+	existingSchemas, err := root.st.GetSchemas(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, s := range existingSchemas {
+		if strings.EqualFold(s.Name, sch.Name) {
+			return nil, fmt.Errorf("A schema with the name %s already exists", sch.Name)
+		}
+	}
+
+	existingSchemas = append(existingSchemas, sch)
+	newRootSt, err := root.st.SetSchemas(ctx, existingSchemas)
+	if err != nil {
+		return nil, err
+	}
+	
+	return root.withStorage(newRootSt), nil
+}
+
 func CreateEmptyTable(ctx context.Context, ns tree.NodeStore, vrw types.ValueReadWriter, sch schema.Schema) (*Table, error) {
 	empty, err := durable.NewEmptyIndex(ctx, vrw, ns, sch)
 	if err != nil {
@@ -1346,6 +1377,49 @@ func (r fbRvStorage) SetCollation(ctx context.Context, collation schema.Collatio
 	ret.srv.MutateCollation(serial.Collation(collation))
 	return ret, nil
 }
+
+func (r fbRvStorage) GetSchemas(ctx context.Context) ([]schema.DatabaseSchema, error) {
+	ret := r.clone()
+	numSchemas := ret.srv.SchemasLength()
+	schemas := make([]schema.DatabaseSchema, numSchemas)
+	for i := 0; i < numSchemas; i++ {
+		var dbSchema *serial.DatabaseSchema
+		_, err := ret.srv.TrySchemas(dbSchema, i)
+		if err != nil {
+			return nil, err
+		}
+		
+		schemas[i] = schema.DatabaseSchema{
+			Name: string(dbSchema.Name()),
+		}
+	}
+	return schemas, nil
+}
+
+func (r fbRvStorage) SetSchemas(ctx context.Context, schemas []schema.DatabaseSchema) (rvStorage, error) {
+	builder := flatbuffers.NewBuilder(80)
+	
+	tablesoff := builder.CreateByteVector(r.srv.TablesBytes())
+	fkoff := builder.CreateByteVector(r.srv.ForeignKeyAddrBytes())
+	
+	serial.RootValueStart(builder)
+	serial.RootValueAddFeatureVersion(builder, r.srv.FeatureVersion())
+	serial.RootValueAddCollation(builder, r.srv.Collation())
+	serial.RootValueAddTables(builder, tablesoff)
+	serial.RootValueAddForeignKeyAddr(builder, fkoff)
+	serial.RootValueStartSchemasVector(builder, len(schemas))
+	for _, databaseSchema := range schemas {
+		builder.CreateString(databaseSchema.Name)
+	}
+
+	bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
+	msg, err := serial.TryGetRootAsRootValue(bs, serial.MessagePrefixSz)
+	if err != nil {
+		return nil, err
+	}
+	return fbRvStorage{msg}, nil
+}
+
 
 func (r fbRvStorage) clone() fbRvStorage {
 	bs := make([]byte, len(r.srv.Table().Bytes))

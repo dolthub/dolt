@@ -1,4 +1,4 @@
-// Copyright 2021 Dolthub, Inc.
+// Copyright 2024 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,29 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-include "prolly.fbs";
-include "collation.fbs";
+package schema
 
-namespace serial;
-
-table RootValue {
-  feature_version:int64;
-
-  tables:[ubyte]; // Serialized AddressMap.
-
-  foreign_key_addr:[ubyte];
-
-  collation:Collation;
-  
-  schemas:[DatabaseSchema];
+type DatabaseSchema struct {
+	Name string
 }
-
-table DatabaseSchema {
-  name:string;
-}
-
-// KEEP THIS IN SYNC WITH fileidentifiers.go
-file_identifier "RTVL";
-
-root_type RootValue;
-
