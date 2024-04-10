@@ -197,13 +197,9 @@ func (ai archiveIndex) get(hash hash.Hash) ([]byte, error) {
 	var result []byte
 	if dict == nil {
 		result, err = zDecompress(dst, data)
-	} /* else {
-		dDict, err := gozstd.NewDDict(dict)
-		if err != nil {
-			return nil, err
-		}
-		result, err = gozstd.DecompressDict(nil, data, dDict)
-	} */
+	} else {
+		result, err = zDecompressDict(dst, dict, data)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -316,6 +312,26 @@ func zDecompress(dst, data []byte) ([]byte, error) {
 	// Create a bytes.Buffer to write compressed data into
 	buf := bytes.NewBuffer(dst)
 	decoder, err := zstd.NewReader(buf)
+	if err != nil {
+		return nil, err
+	}
+	defer decoder.Close()
+
+	result, err := decoder.DecodeAll(data, dst)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+func zDecompressDict(dst, dict, data []byte) ([]byte, error) {
+	if dst == nil {
+		return nil, errors.New("nil destination buffer")
+	}
+
+	// Create a bytes.Buffer to write compressed data into
+	buf := bytes.NewBuffer(dst)
+	decoder, err := zstd.NewReader(buf, zstd.WithDecoderDicts(dict))
 	if err != nil {
 		return nil, err
 	}

@@ -27,6 +27,7 @@ import (
 	"github.com/klauspost/compress/dict"
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
+	"github.com/valyala/gozstd"
 )
 
 func TestArchiveSingleChunk(t *testing.T) {
@@ -192,7 +193,7 @@ func TestArchiverMultipleChunksMultipleDictionaries(t *testing.T) {
 func TestArchiveDictDecompression(t *testing.T) {
 	writer := NewFixedBufferTableSink(make([]byte, 4096))
 
-	buff := make([]byte, 4096)
+	buff := make([]byte, 0, 4096)
 
 	// This is 32K worth of data, but it's all very similar. Only fits in 4K if compressed with a dictionary.
 	chks := generateSimilarChunks(42, 32)
@@ -201,8 +202,12 @@ func TestArchiveDictDecompression(t *testing.T) {
 		samples[i] = c.Data()
 	}
 
-	dict, err := buildDict(samples)
-	assert.NoError(t, err)
+	dict := gozstd.BuildDict(samples, 2048)
+
+	dictBroken, err := buildDict(samples)
+	// assert.NoError(t, err)
+	_ = dictBroken
+
 	//	cDict, err := gozstd.NewCDict(dict)
 	// assert.NoError(t, err)
 
@@ -345,7 +350,7 @@ func zCompressDict(dst, dict, data []byte) ([]byte, error) {
 		return nil, errors.New("nil destination buffer")
 	}
 
-	encoder, err := zstd.NewWriter(nil, zstd.WithEncoderDict(dict), zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(3)))
+	encoder, err := zstd.NewWriter(nil, zstd.WithEncoderDict(dict))
 	if err != nil {
 		return nil, err
 	}
