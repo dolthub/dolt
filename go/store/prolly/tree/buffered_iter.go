@@ -16,6 +16,7 @@ package tree
 
 import (
 	"context"
+	"fmt"
 	"golang.org/x/sync/errgroup"
 	"io"
 )
@@ -109,7 +110,7 @@ func (b *BufferedTreeIter[K, V]) Next(ctx context.Context) (K, V, error) {
 		case <-ctx.Done():
 			return nil, nil, context.Cause(ctx)
 		case <-b.close:
-			panic("don't read from a closed cursor")
+			return nil, nil, fmt.Errorf("don't read from a closed cursor")
 		}
 	}
 }
