@@ -585,6 +585,23 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 				temp := make([]byte, 8)
 				binary.BigEndian.PutUint64(temp, bitValue)
 				data = append(data, temp[len(temp)-numBytes:]...)
+				dataLength += numBytes
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
+
+		case query.Type_ENUM: // ENUM
+			enumValue, notNull := descriptor.GetEnum(idx, tuple)
+			if notNull {
+				enumType := col.TypeInfo.ToSqlType().(gmstypes.EnumType)
+				if enumType.NumberOfElements() <= 0xFF {
+					data = append(data, byte(enumValue))
+					dataLength += 1
+				} else {
+					data = append(data, make([]byte, 2)...)
+					binary.LittleEndian.PutUint16(data[currentPos:], enumValue)
+					dataLength += 2
+				}
 			} else {
 				nullBitmap.Set(rowIdx, true)
 			}
@@ -672,12 +689,20 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 			numBits := bitType.NumberOfBits() % 8
 			metadata[i] = uint16(numBytes)<<8 | uint16(numBits)
 
+		case query.Type_ENUM: // ENUM
+			types[i] = mysql.TypeString
+			enumType := typ.(gmstypes.EnumType)
+			numElements := enumType.NumberOfElements()
+			if numElements <= 0xFF {
+				metadata[i] = mysql.TypeEnum<<8 | 1
+			} else {
+				metadata[i] = mysql.TypeEnum<<8 | 2
+			}
+			logrus.StandardLogger().Errorf("ENUM metadata: %v\n", metadata[i])
+
 		// TODO: Decimals look like the most involved type to serialize...
 		//case query.Type_DECIMAL: // DECIMAL
 		//	types[i] = mysql.TypeNewDecimal
-
-		//case query.Type_ENUM: // ENUM
-		//	types[i] = mysql.TypeEnum
 
 		default:
 			panic(fmt.Sprintf("unsupported type: %v \n", typ.String()))
@@ -694,7 +719,7 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 		Name:      tableName,
 		Types:     types,
 		CanBeNull: canBeNullMap,
-		Metadata:  metadata, // https://mariadb.com/kb/en/table_map_event/#optional-metadata-block
+		Metadata:  metadata,
 	}, nil
 }
 
