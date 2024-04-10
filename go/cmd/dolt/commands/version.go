@@ -52,6 +52,7 @@ The out-of-date check can be disabled by running {{.EmphasisLeft}}dolt config --
 }
 
 type VersionCmd struct {
+	BinaryName string
 	VersionStr string
 }
 
@@ -90,7 +91,15 @@ func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, versionDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	cli.Println("dolt version", cmd.VersionStr)
+	return cmd.ExecWithArgParser(ctx, apr, usage, dEnv)
+}
+
+func (cmd VersionCmd) ExecWithArgParser(ctx context.Context, apr *argparser.ArgParseResults, usage cli.UsagePrinter, dEnv *env.DoltEnv) int {
+	binName := "dolt"
+	if cmd.BinaryName != "" {
+		binName = cmd.BinaryName
+	}
+	cli.Printf("%s version %s\n", binName, cmd.VersionStr)
 
 	versionCheckDisabled := dEnv.Config.GetStringOrDefault(config.VersionCheckDisabled, "false")
 	if versionCheckDisabled == "false" {
