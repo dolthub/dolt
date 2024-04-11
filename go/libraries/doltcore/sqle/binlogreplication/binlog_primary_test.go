@@ -72,7 +72,8 @@ func TestBinlogPrimary(t *testing.T) {
 		"t1 year, t2 datetime, t3 timestamp, t4 date, t5 time, " +
 		"b1 bit(10), " +
 		"e1 enum('blue', 'green', 'red'), s1 set('pants','shirt','tie','belt'), " +
-		"ch1 char(10), ch2 char(255)" +
+		"ch1 char(10), ch2 char(255)," +
+		"d1 decimal(14, 4), d2 decimal(14, 4), d3 decimal(14, 4)" +
 		");"
 	primaryDatabase.MustExec(testTableCreateStatement)
 	replicaDatabase.MustExec(testTableCreateStatement)
@@ -91,7 +92,8 @@ func TestBinlogPrimary(t *testing.T) {
 		"1981, '1981-02-16 06:01:02', '2024-04-08 10:30:42', '1981-02-16', '-123:45:30', " +
 		"b'0100000011', " +
 		"'green', 'pants,tie,belt'," +
-		"'purple', 'abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz'" +
+		"'purple', 'abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz'," +
+		"1234567890.1234, -1234567890.1234, 1234567890.0001" +
 		");")
 	time.Sleep(250 * time.Millisecond)
 
@@ -119,6 +121,7 @@ func TestBinlogPrimary(t *testing.T) {
 			"\x01\x03",
 			"green", "pants,tie,belt",
 			"purple", "abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz",
+			"1234567890.1234", "-1234567890.1234", "1234567890.0001",
 		},
 	})
 }

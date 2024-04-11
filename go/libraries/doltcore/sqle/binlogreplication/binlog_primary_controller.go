@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"strconv"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -620,12 +621,192 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 				nullBitmap.Set(rowIdx, true)
 			}
 
+		case query.Type_DECIMAL: // DECIMAL
+			decimalValue, notNull := descriptor.GetDecimal(idx, tuple)
+			if notNull {
+				decimalType := typ.(sql.DecimalType)
+
+				// Example:
+				//   NNNNNNNNNNNN.MMMMMM
+				//     12 bytes     6 bytes
+				// precision is 18
+				// scale is 6
+				// storage is done by groups of 9 digits:
+				// - 32 bits are used to store groups of 9 digits.
+				// - any leftover digit is stored in:
+				//   - 1 byte for 1 or 2 digits
+				//   - 2 bytes for 3 or 4 digits
+				//   - 3 bytes for 5 or 6 digits
+				//   - 4 bytes for 7 or 8 digits (would also work for 9)
+				// both sides of the dot are stored separately.
+				// In this example, we'd have:
+				// - 2 bytes to store the first 3 full digits.
+				// - 4 bytes to store the next 9 full digits.
+				// - 3 bytes to store the 6 fractional digits.
+				precision := decimalType.Precision() // total number of fractional and full digits
+				scale := decimalType.Scale()         // number of fractional digits
+				numFullDigits := precision - scale
+				numFullDigitUint32s := numFullDigits / 9
+				numFractionalDigitUint32s := decimalType.Scale() / 9
+				numLeftoverFullDigits := numFullDigits - numFullDigitUint32s*9
+				numLeftoverFractionalDigits := decimalType.Scale() - numFractionalDigitUint32s*9
+
+				length := numFullDigitUint32s*4 + digitsToBytes[numLeftoverFullDigits] +
+					numFractionalDigitUint32s*4 + digitsToBytes[numLeftoverFractionalDigits]
+
+				// Ensure the exponent is negative
+				if decimalValue.Exponent() > 0 {
+					// TODO: Turn this into an error
+					panic(fmt.Sprintf("unexpected positive exponent: %d for decimalValue: %s",
+						decimalValue.Exponent(), decimalValue.String()))
+				}
+
+				absStringVal := decimalValue.Abs().String()
+				foo := len(absStringVal) + int(decimalValue.Exponent())
+				stringIntegerVal := absStringVal[:foo-1]
+				stringFractionalVal := absStringVal[foo:]
+
+				buffer := make([]byte, length)
+				bufferPos := 0
+
+				// Fill in leftover digits – these are at the front of the integer component of the decimal
+				writtenBytes, err := encodePartialDecimalBits(stringIntegerVal[:numLeftoverFullDigits], buffer[bufferPos:])
+				if err != nil {
+					panic(err.Error())
+				}
+				bufferPos += int(writtenBytes)
+
+				// Fill in full digits for the integer component of the decimal
+				writtenBytes, remainingString, err := encodeDecimalBits(stringIntegerVal[numLeftoverFullDigits:], buffer[bufferPos:])
+				if err != nil {
+					// TODO: return an error
+					panic(err.Error())
+				}
+				bufferPos += int(writtenBytes)
+
+				if len(remainingString) > 0 {
+					// TODO: Convert to an error
+					panic(fmt.Sprintf("unexpected remaining string after encoding full digits for integer component of decimal value: %s",
+						remainingString))
+				}
+
+				// Fill in full fractional digits
+				writtenBytes, remainingString, err = encodeDecimalBits(stringFractionalVal, buffer[bufferPos:])
+				if err != nil {
+					// TODO: return an error
+					panic(err.Error())
+				}
+				bufferPos += int(writtenBytes)
+
+				// Fill in partial fractional digits – these are at the end of the fractional component
+				writtenBytes, err = encodePartialDecimalBits(remainingString, buffer[bufferPos:])
+				if err != nil {
+					panic(err.Error())
+				}
+				bufferPos += int(writtenBytes)
+
+				if bufferPos != len(buffer) {
+					panic(fmt.Sprintf("unexpected position; bufferPos: %d, len(buffer): %d", bufferPos, len(buffer)))
+				}
+
+				// We always xor the first bit in the first byte to indicate a positive value. If the value is
+				// negative, we xor every bit with 0xff to invert the value.
+				buffer[0] ^= 0x80
+				if decimalValue.IsNegative() {
+					for i := range buffer {
+						buffer[i] ^= 0xff
+					}
+				}
+
+				data = append(data, buffer...)
+				// TODO: Seems like we don't actually need dataLength, right it can be computed by len(data)
+				dataLength += int(length)
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
+
+		//case query.Type_BLOB: // BLOB
+		//	bytes, notNull := descriptor.GetBytes(idx, tuple)
+		//	if notNull {
+		//
+		//	} else {
+		//		nullBitmap.Set(rowIdx, true)
+		//	}
+
 		default:
 			return nil, nullBitmap, fmt.Errorf("unsupported type: %v (%d)\n", typ.String(), typ.Type())
 		}
 	}
 
 	return data, nullBitmap, nil
+}
+
+var digitsToBytes = []uint8{0, 1, 1, 2, 2, 3, 3, 4, 4, 4}
+
+// encodePartialDecimalBits encodes the sequence of digits from |stringVal| as decimal encoded bytes in |buffer|. This
+// function is intended for encoding a partial sequence of digits – i.e. where there are less than 9 digits to encode.
+// For full blocks of 9 digits, the encodeDecimalBits function should be used. The number of bytes written to buffer is
+// returned, along with any error encountered.
+func encodePartialDecimalBits(stringVal string, buffer []byte) (uint, error) {
+	numDigits := len(stringVal)
+	if numDigits == 0 {
+		return 0, nil
+	}
+
+	v, err := strconv.Atoi(stringVal)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	switch digitsToBytes[numDigits] {
+	case 1:
+		// one byte, up to two digits
+		buffer[0] = uint8(v)
+		return 1, nil
+	case 2:
+		// two bytes, up to four digits
+		buffer[0] = uint8(v >> 8)
+		buffer[1] = byte(v & 0xFF)
+		return 2, nil
+	case 3:
+		// three bytes, up to six digits
+		buffer[0] = byte(v >> 16)
+		buffer[1] = byte(v >> 8 & 0xFF)
+		buffer[2] = byte(v & 0xFF)
+		return 3, nil
+	case 4:
+		// four bytes, up to eight digits
+		buffer[0] = byte(v >> 24)
+		buffer[1] = byte(v >> 16 & 0xFF)
+		buffer[2] = byte(v >> 8 & 0xFF)
+		buffer[3] = byte(v & 0xFF)
+		return 4, nil
+	}
+
+	return 0, fmt.Errorf("unexpected number of digits: %d", numDigits)
+}
+
+// encodeDecimalBits encodes full blocks of 9 digits from the sequence of digits in |stringVal| as decimal encoded bytes
+// in |buffer|. This function will encode as many full blocks of 9 digits from |stringVal| as possible, returning the
+// number of bytes written to |buffer| as well as any remaining substring from |stringVal| that did not fit cleanly into
+// a full block of 9 digits. For example, if |stringVal| is "1234567890" the first 9 digits are encoded as 4 bytes in
+// |buffer| and the string "0" is returned to indicate the single remaining digit that did not fit cleanly into a 4 byte
+// block.
+func encodeDecimalBits(stringVal string, buffer []byte) (uint, string, error) {
+	bufferPos := uint(0)
+	stringValPos := uint(0)
+	for len(stringVal[stringValPos:]) >= 9 {
+		v, err := strconv.Atoi(stringVal[stringValPos : stringValPos+9])
+		if err != nil {
+			return 0, "", err
+		}
+		stringValPos += 9
+
+		binary.BigEndian.PutUint32(buffer[bufferPos:], uint32(v))
+		bufferPos += 4
+	}
+
+	return bufferPos, stringVal[stringValPos:], nil
 }
 
 // TODO: godocs
@@ -736,8 +917,21 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 			metadata[i] = mysql.TypeSet<<8 | numBytes
 
 		// TODO: Decimals look like the most involved type to serialize...
-		//case query.Type_DECIMAL: // DECIMAL
-		//	types[i] = mysql.TypeNewDecimal
+		case query.Type_DECIMAL: // DECIMAL
+			types[i] = mysql.TypeNewDecimal
+			decimalType := typ.(sql.DecimalType)
+			metadata[i] = (uint16(decimalType.Precision()) << 8) | uint16(decimalType.Scale())
+
+		case query.Type_JSON: // JSON
+
+		case query.Type_BLOB: // BLOB
+
+		// TODO: Others?
+		case query.Type_GEOMETRY:
+		case query.Type_TEXT:
+		case query.Type_BINARY:
+		case query.Type_VARBINARY:
+		case query.Type_NULL_TYPE: // ???
 
 		default:
 			panic(fmt.Sprintf("unsupported type: %v \n", typ.String()))
