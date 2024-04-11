@@ -1,3 +1,5 @@
+name: Release PGO Dolt
+
 on:
   workflow_dispatch:
     inputs:
