@@ -17,9 +17,11 @@ package tree
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/hash"
-	"golang.org/x/sync/errgroup"
 	"io"
+
+	"golang.org/x/sync/errgroup"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // BufferedTreeIter fowards scans a map using a readahead buffer.
