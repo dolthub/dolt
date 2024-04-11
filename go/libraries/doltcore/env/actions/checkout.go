@@ -46,7 +46,7 @@ func CheckoutTables(ctx context.Context, roots doltdb.Roots, tables []string) (d
 func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls []string) (doltdb.Roots, error) {
 	var unknownTbls []string
 	for _, tblName := range tbls {
-		tbl, ok, err := roots.Staged.GetTable(ctx, tblName)
+		tbl, ok, err := roots.Staged.GetTable(ctx, doltdb.TableName{Name: tblName})
 		if err != nil {
 			return doltdb.Roots{}, err
 		}
@@ -56,7 +56,7 @@ func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls [
 		}
 
 		if !ok {
-			tbl, ok, err = roots.Head.GetTable(ctx, tblName)
+			tbl, ok, err = roots.Head.GetTable(ctx, doltdb.TableName{Name: tblName})
 			if err != nil {
 				return doltdb.Roots{}, err
 			}

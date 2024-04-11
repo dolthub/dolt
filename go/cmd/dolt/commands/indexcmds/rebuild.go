@@ -17,6 +17,7 @@ package indexcmds
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -79,7 +80,7 @@ func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string
 	tableName := apr.Arg(0)
 	indexName := apr.Arg(1)
 
-	table, ok, err := working.GetTable(ctx, tableName)
+	table, ok, err := working.GetTable(ctx, doltdb.TableName{Name: tableName})
 	if err != nil {
 		return HandleErr(errhand.BuildDError("Unable to get table `%s`.", tableName).AddCause(err).Build(), nil)
 	}

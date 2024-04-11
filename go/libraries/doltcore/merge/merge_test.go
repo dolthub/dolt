@@ -313,7 +313,7 @@ func TestMergeCommits(t *testing.T) {
 
 	ctx := sql.NewEmptyContext()
 
-	tbl, _, err := root.GetTable(ctx, tableName)
+	tbl, _, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
 	assert.NoError(t, err)
 	sch, err := tbl.GetSchema(ctx)
 	assert.NoError(t, err)

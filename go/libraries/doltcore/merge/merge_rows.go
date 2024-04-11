@@ -199,7 +199,7 @@ func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string, merge
 	var err error
 	var leftSideTableExists, rightSideTableExists, ancTableExists bool
 
-	tm.leftTbl, leftSideTableExists, err = rm.left.GetTable(ctx, tblName)
+	tm.leftTbl, leftSideTableExists, err = rm.left.GetTable(ctx, doltdb.TableName{Name: tblName})
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +209,7 @@ func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string, merge
 		}
 	}
 
-	tm.rightTbl, rightSideTableExists, err = rm.right.GetTable(ctx, tblName)
+	tm.rightTbl, rightSideTableExists, err = rm.right.GetTable(ctx, doltdb.TableName{Name: tblName})
 	if err != nil {
 		return nil, err
 	}
@@ -241,7 +241,7 @@ func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string, merge
 		}
 	}
 
-	tm.ancTbl, ancTableExists, err = rm.anc.GetTable(ctx, tblName)
+	tm.ancTbl, ancTableExists, err = rm.anc.GetTable(ctx, doltdb.TableName{Name: tblName})
 	if err != nil {
 		return nil, err
 	}

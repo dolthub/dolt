@@ -2900,7 +2900,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 		ws, err := harness.session.WorkingSet(ctx, "mydb")
 		require.NoError(t, err)
 
-		table, ok, err := ws.WorkingRoot().GetTable(ctx, "test")
+		table, ok, err := ws.WorkingRoot().GetTable(ctx, doltdb.TableName{Name: "test"})
 		require.NoError(t, err)
 		require.True(t, ok)
 
@@ -2956,7 +2956,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 		ws, err := harness.session.WorkingSet(ctx, "mydb")
 		require.NoError(t, err)
 
-		table, ok, err := ws.WorkingRoot().GetTable(ctx, "test")
+		table, ok, err := ws.WorkingRoot().GetTable(ctx, doltdb.TableName{Name: "test"})
 		require.NoError(t, err)
 		require.True(t, ok)
 
@@ -3032,7 +3032,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 		ws, err := harness.session.WorkingSet(ctx, "mydb")
 		require.NoError(t, err)
 
-		table, ok, err := ws.WorkingRoot().GetTable(ctx, "test")
+		table, ok, err := ws.WorkingRoot().GetTable(ctx, doltdb.TableName{Name: "test"})
 		require.NoError(t, err)
 		require.True(t, ok)
 

@@ -169,7 +169,7 @@ func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []str
 }
 
 func pullTableValue(ctx context.Context, dEnv *env.DoltEnv, srcDB *doltdb.DoltDB, srcRoot, destRoot *doltdb.RootValue, language progLanguage, tblName, commitStr string) (*doltdb.RootValue, errhand.VerboseError) {
-	tbl, ok, err := srcRoot.GetTable(ctx, tblName)
+	tbl, ok, err := srcRoot.GetTable(ctx, doltdb.TableName{Name: tblName})
 	if !ok {
 		return nil, errhand.BuildDError("No table named '%s' at '%s'", tblName, commitStr).Build()
 	} else if err != nil {

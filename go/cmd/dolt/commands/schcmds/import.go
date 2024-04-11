@@ -208,7 +208,7 @@ func getSchemaImportArgs(ctx context.Context, apr *argparser.ArgParseResults, dE
 		return nil, errhand.BuildDError("error: parameter keep-types not supported for create operations").AddDetails("keep-types parameter is used to keep the existing column types as is without modification.").Build()
 	}
 
-	tbl, tblExists, err := root.GetTable(ctx, tblName)
+	tbl, tblExists, err := root.GetTable(ctx, doltdb.TableName{Name: tblName})
 
 	if err != nil {
 		return nil, errhand.BuildDError("error: failed to read from database.").AddCause(err).Build()
@@ -325,7 +325,7 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 }
 
 func putEmptyTableWithSchema(ctx context.Context, tblName string, root *doltdb.RootValue, sch schema.Schema) (*doltdb.RootValue, errhand.VerboseError) {
-	tbl, tblExists, err := root.GetTable(ctx, tblName)
+	tbl, tblExists, err := root.GetTable(ctx, doltdb.TableName{Name: tblName})
 	if err != nil {
 		return nil, errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
 	}

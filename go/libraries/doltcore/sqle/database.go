@@ -681,7 +681,7 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 		return nil, false, nil
 	}
 
-	tbl, ok, err := root.GetTable(ctx, tableName)
+	tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
 	if err != nil {
 		return nil, false, err
 	} else if !ok {
@@ -867,7 +867,7 @@ func (db Database) dropTable(ctx *sql.Context, tableName string) error {
 	}
 
 	root := ws.WorkingRoot()
-	tbl, tableExists, err := root.GetTable(ctx, tableName)
+	tbl, tableExists, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
 	if err != nil {
 		return err
 	}

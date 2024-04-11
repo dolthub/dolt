@@ -135,7 +135,7 @@ func calculateViolations(ctx *sql.Context, workingRoot, comparingRoot *doltdb.Ro
 
 	tablesWithViolations := set.NewStrSet(nil)
 	for _, tableName := range tableSet.AsSlice() {
-		table, ok, err := mergeResults.Root.GetTable(ctx, tableName)
+		table, ok, err := mergeResults.Root.GetTable(ctx, doltdb.TableName{Name: tableName})
 		if err != nil {
 			return nil, nil, err
 		}

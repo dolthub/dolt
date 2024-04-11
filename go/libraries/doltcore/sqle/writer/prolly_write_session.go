@@ -48,7 +48,7 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, table, db string, 
 		return tw, nil
 	}
 
-	t, ok, err := s.workingSet.WorkingRoot().GetTable(ctx, table)
+	t, ok, err := s.workingSet.WorkingRoot().GetTable(ctx, doltdb.TableName{Name: table})
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +205,7 @@ func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, manualAuto
 func (s *prollyWriteSession) setWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error {
 	root := ws.WorkingRoot()
 	for tableName, tableWriter := range s.tables {
-		t, ok, err := root.GetTable(ctx, tableName)
+		t, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
 		if err != nil {
 			return err
 		}

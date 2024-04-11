@@ -689,7 +689,7 @@ func (fkc *ForeignKeyCollection) RemoveAndUnresolveTables(ctx context.Context, r
 			fk.UnresolvedFKDetails.TableColumns = make([]string, len(fk.TableColumns))
 			fk.UnresolvedFKDetails.ReferencedTableColumns = make([]string, len(fk.ReferencedTableColumns))
 
-			tbl, ok, err := root.GetTable(ctx, fk.TableName)
+			tbl, ok, err := root.GetTable(ctx, TableName{Name: fk.TableName})
 			if err != nil {
 				return err
 			}
@@ -710,7 +710,7 @@ func (fkc *ForeignKeyCollection) RemoveAndUnresolveTables(ctx context.Context, r
 				fk.UnresolvedFKDetails.TableColumns[i] = col.Name
 			}
 
-			refTbl, ok, err := root.GetTable(ctx, fk.ReferencedTableName)
+			refTbl, ok, err := root.GetTable(ctx, TableName{Name: fk.ReferencedTableName})
 			if err != nil {
 				return err
 			}

@@ -233,7 +233,7 @@ func TestAddColumnToTable(t *testing.T) {
 
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
-			tbl, ok, err := root.GetTable(ctx, tableName)
+			tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
 			assert.True(t, ok)
 			assert.NoError(t, err)
 
@@ -477,7 +477,7 @@ func TestDropPks(t *testing.T) {
 					assert.Equal(t, tt.fkIdxName, fk.ReferencedTableIndex)
 				}
 
-				parent, ok, err := root.GetTable(ctx, parentName)
+				parent, ok, err := root.GetTable(ctx, doltdb.TableName{Name: parentName})
 				assert.NoError(t, err)
 				assert.True(t, ok)
 
@@ -753,7 +753,7 @@ func TestModifyColumn(t *testing.T) {
 
 			root, err := dEnv.WorkingRoot(ctx)
 			assert.NoError(t, err)
-			tbl, _, err := root.GetTable(ctx, tableName)
+			tbl, _, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
 			assert.NoError(t, err)
 			updatedTable, err := modifyColumn(ctx, tbl, tt.existingColumn, tt.newColumn, tt.order)
 			if len(tt.expectedErr) > 0 {

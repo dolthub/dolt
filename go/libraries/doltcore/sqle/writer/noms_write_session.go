@@ -96,7 +96,7 @@ func (s *nomsWriteSession) GetTableWriter(ctx *sql.Context, table, db string, se
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
-	t, ok, err := s.workingSet.WorkingRoot().GetTable(ctx, table)
+	t, ok, err := s.workingSet.WorkingRoot().GetTable(ctx, doltdb.TableName{Name: table})
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +238,7 @@ func (s *nomsWriteSession) getTableEditor(ctx context.Context, tableName string,
 
 	root := s.workingSet.WorkingRoot()
 
-	t, ok, err = root.GetTable(ctx, tableName)
+	t, ok, err = root.GetTable(ctx, doltdb.TableName{Name: tableName})
 	if err != nil {
 		return nil, err
 	}
@@ -274,7 +274,7 @@ func (s *nomsWriteSession) setWorkingSet(ctx context.Context, ws *doltdb.Working
 
 	root := ws.WorkingRoot()
 	for tableName, localTableEditor := range s.tables {
-		t, ok, err := root.GetTable(ctx, tableName)
+		t, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
 		if err != nil {
 			return err
 		}

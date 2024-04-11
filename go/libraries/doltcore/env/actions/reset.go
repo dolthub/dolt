@@ -100,7 +100,7 @@ func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, ro
 	}
 
 	for name := range untracked {
-		tbl, _, err := roots.Working.GetTable(ctx, name)
+		tbl, _, err := roots.Working.GetTable(ctx, doltdb.TableName{Name: name})
 		if err != nil {
 			return nil, doltdb.Roots{}, err
 		}
@@ -119,7 +119,7 @@ func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, ro
 	}
 
 	for _, tblName := range wTblNames {
-		untrackedTables[tblName], _, err = roots.Working.GetTable(ctx, tblName)
+		untrackedTables[tblName], _, err = roots.Working.GetTable(ctx, doltdb.TableName{Name: tblName})
 
 		if err != nil {
 			return nil, doltdb.Roots{}, err
@@ -334,7 +334,7 @@ func CleanUntracked(ctx context.Context, roots doltdb.Roots, tables []string, dr
 
 	for i := range tables {
 		name := tables[i]
-		_, _, err = roots.Working.GetTable(ctx, name)
+		_, _, err = roots.Working.GetTable(ctx, doltdb.TableName{Name: name})
 		if err != nil {
 			return doltdb.Roots{}, err
 		}

@@ -258,7 +258,7 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
-		_, exists, err := root.GetTable(ctx, tableName)
+		_, exists, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}

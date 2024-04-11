@@ -81,7 +81,7 @@ func rebuildFullTextIndexes(ctx *sql.Context, mergedRoot, ourRoot, theirRoot *do
 		// Add this table to the non-deletion set tables, since it's not a pseudo-index table.
 		doNotDeleteTables[tblName] = struct{}{}
 
-		tbl, ok, err := mergedRoot.GetTable(ctx, tblName)
+		tbl, ok, err := mergedRoot.GetTable(ctx, doltdb.TableName{Name: tblName})
 		if err != nil {
 			return nil, err
 		}
@@ -318,7 +318,7 @@ func purgeFulltextTableData(ctx *sql.Context, root *doltdb.RootValue, tableNames
 			// We don't want to purge the config table, we'll just roll with whatever is there for now
 			continue
 		}
-		tbl, ok, err := root.GetTable(ctx, tableName)
+		tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
 		if err != nil {
 			return nil, err
 		}
@@ -347,7 +347,7 @@ func purgeFulltextTableData(ctx *sql.Context, root *doltdb.RootValue, tableNames
 
 // tableChangedBetweenRoots returns whether the given table changed between roots.
 func tableChangedBetweenRoots(ctx *sql.Context, tblName string, fromRoot, toRoot *doltdb.RootValue) (bool, error) {
-	tbl, ok, err := toRoot.GetTable(ctx, tblName)
+	tbl, ok, err := toRoot.GetTable(ctx, doltdb.TableName{Name: tblName})
 	if err != nil {
 		return false, err
 	}
@@ -365,7 +365,7 @@ func tableChangedFromRoot(ctx *sql.Context, tblName string, tbl *doltdb.Table, r
 	if tbl == nil {
 		return root.HasTable(ctx, tblName)
 	}
-	fromTbl, ok, err := root.GetTable(ctx, tblName)
+	fromTbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tblName})
 	if err != nil {
 		return false, err
 	}

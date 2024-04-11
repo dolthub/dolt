@@ -59,7 +59,7 @@ type DoltConflictsCatFunc struct {
 
 func getProllyRowMaps(ctx *sql.Context, vrw types.ValueReadWriter, ns tree.NodeStore, hash hash.Hash, tblName string) (prolly.Map, error) {
 	rootVal, err := doltdb.LoadRootValueFromRootIshAddr(ctx, vrw, ns, hash)
-	tbl, ok, err := rootVal.GetTable(ctx, tblName)
+	tbl, ok, err := rootVal.GetTable(ctx, doltdb.TableName{Name: tblName})
 	if err != nil {
 		return prolly.Map{}, err
 	}
@@ -401,7 +401,7 @@ func ResolveSchemaConflicts(ctx *sql.Context, ddb *doltdb.DoltDB, ws *doltdb.Wor
 
 func ResolveDataConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root *doltdb.RootValue, dbName string, ours bool, tblNames []string) error {
 	for _, tblName := range tblNames {
-		tbl, ok, err := root.GetTable(ctx, tblName)
+		tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tblName})
 		if err != nil {
 			return err
 		}

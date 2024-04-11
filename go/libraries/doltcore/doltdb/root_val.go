@@ -517,7 +517,7 @@ func getExistingColumns(
 ) ([]schema.Column, error) {
 
 	var existingCols []schema.Column
-	tbl, found, err := root.GetTable(ctx, tableName)
+	tbl, found, err := root.GetTable(ctx, TableName{Name: tableName})
 	if err != nil {
 		return nil, err
 	}
@@ -532,7 +532,7 @@ func getExistingColumns(
 			return false, nil
 		})
 	} else if headRoot != nil {
-		tbl, found, err := headRoot.GetTable(ctx, tableName)
+		tbl, found, err := headRoot.GetTable(ctx, TableName{Name: tableName})
 		if err != nil {
 			return nil, err
 		}
@@ -625,13 +625,13 @@ func (root *RootValue) ResolveTableName(ctx context.Context, tName string) (stri
 }
 
 // GetTable will retrieve a table by its case-sensitive name.
-func (root *RootValue) GetTable(ctx context.Context, tName string) (*Table, bool, error) {
+func (root *RootValue) GetTable(ctx context.Context, tName TableName) (*Table, bool, error) {
 	tableMap, err := root.getTableMap(ctx)
 	if err != nil {
 		return nil, false, err
 	}
 
-	addr, err := tableMap.Get(ctx, tName)
+	addr, err := tableMap.Get(ctx, tName.Name)
 	if err != nil {
 		return nil, false, err
 	}
@@ -659,7 +659,7 @@ func (root *RootValue) GetTableInsensitive(ctx context.Context, tName string) (*
 	if !ok {
 		return nil, "", false, nil
 	}
-	tbl, ok, err := root.GetTable(ctx, resolvedName)
+	tbl, ok, err := root.GetTable(ctx, TableName{Name: resolvedName})
 	if err != nil {
 		return nil, "", false, err
 	}
@@ -714,7 +714,7 @@ func (root *RootValue) TablesWithDataConflicts(ctx context.Context) ([]string, e
 
 	conflicted := make([]string, 0, len(names))
 	for _, name := range names {
-		tbl, _, err := root.GetTable(ctx, name)
+		tbl, _, err := root.GetTable(ctx, TableName{Name: name})
 		if err != nil {
 			return nil, err
 		}
@@ -740,7 +740,7 @@ func (root *RootValue) TablesWithConstraintViolations(ctx context.Context) ([]st
 
 	violating := make([]string, 0, len(names))
 	for _, name := range names {
-		tbl, _, err := root.GetTable(ctx, name)
+		tbl, _, err := root.GetTable(ctx, TableName{Name: name})
 		if err != nil {
 			return nil, err
 		}
@@ -806,6 +806,11 @@ func (root *RootValue) withStorage(st rvStorage) *RootValue {
 
 func (root *RootValue) nomsValue() types.Value {
 	return root.st.nomsValue()
+}
+
+type TableName struct {
+	Name string
+	Schema string
 }
 
 // PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
@@ -1016,7 +1021,7 @@ func (root *RootValue) ValidateForeignKeysOnSchemas(ctx context.Context) (*RootV
 	}
 	allTablesSet := make(map[string]schema.Schema)
 	for _, tableName := range allTablesSlice {
-		tbl, ok, err := root.GetTable(ctx, tableName)
+		tbl, ok, err := root.GetTable(ctx, TableName{Name: tableName})
 		if err != nil {
 			return nil, err
 		}
@@ -1122,7 +1127,7 @@ func FilterIgnoredTables(ctx context.Context, tables []string, roots Roots) (ign
 
 // validateTagUniqueness checks for tag collisions between the given table and the set of tables in then given root.
 func validateTagUniqueness(ctx context.Context, root *RootValue, tableName string, table *Table) error {
-	prev, ok, err := root.GetTable(ctx, tableName)
+	prev, ok, err := root.GetTable(ctx, TableName{Name: tableName})
 	if err != nil {
 		return err
 	}
@@ -1382,17 +1387,17 @@ func (r fbRvStorage) GetSchemas(ctx context.Context) ([]schema.DatabaseSchema, e
 	ret := r.clone()
 	numSchemas := ret.srv.SchemasLength()
 	schemas := make([]schema.DatabaseSchema, numSchemas)
-	for i := 0; i < numSchemas; i++ {
-		var dbSchema *serial.DatabaseSchema
-		_, err := ret.srv.TrySchemas(dbSchema, i)
-		if err != nil {
-			return nil, err
-		}
-		
-		schemas[i] = schema.DatabaseSchema{
-			Name: string(dbSchema.Name()),
-		}
-	}
+	// for i := 0; i < numSchemas; i++ {
+	// 	var dbSchema *serial.DatabaseSchema
+	// 	_, err := ret.srv.TrySchemas(dbSchema, i)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	
+	// 	schemas[i] = schema.DatabaseSchema{
+	// 		Name: string(dbSchema.Name()),
+	// 	}
+	// }
 	return schemas, nil
 }
 

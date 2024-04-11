@@ -89,7 +89,7 @@ func stageTables(
 // clearEmptyConflicts clears any 0-row conflicts from the tables named, and returns a new root.
 func clearEmptyConflicts(ctx context.Context, tbls []string, working *doltdb.RootValue) (*doltdb.RootValue, error) {
 	for _, tblName := range tbls {
-		tbl, ok, err := working.GetTable(ctx, tblName)
+		tbl, ok, err := working.GetTable(ctx, doltdb.TableName{Name: tblName})
 		if err != nil {
 			return nil, err
 		}

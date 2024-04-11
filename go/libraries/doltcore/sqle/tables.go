@@ -128,7 +128,7 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db dsess.Sq
 // not change as the session's root value changes. Appropriate for AS OF queries, or other use cases where the table's
 // values should not change throughout execution of a session.
 func (t *DoltTable) LockedToRoot(ctx *sql.Context, root *doltdb.RootValue) (sql.IndexAddressableTable, error) {
-	tbl, ok, err := root.GetTable(ctx, t.tableName)
+	tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: t.tableName})
 	if err != nil {
 		return nil, err
 	} else if !ok {
@@ -195,7 +195,7 @@ func (t *DoltTable) DoltTable(ctx *sql.Context) (*doltdb.Table, error) {
 		return nil, err
 	}
 
-	table, ok, err := root.GetTable(ctx, t.tableName)
+	table, ok, err := root.GetTable(ctx, doltdb.TableName{Name: t.tableName})
 	if err != nil {
 		return nil, err
 	}
@@ -1101,7 +1101,7 @@ func (t *DoltTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyCo
 			}
 			continue
 		}
-		parent, ok, err := root.GetTable(ctx, fk.ReferencedTableName)
+		parent, ok, err := root.GetTable(ctx, doltdb.TableName{Name: fk.ReferencedTableName})
 		if err != nil {
 			return nil, err
 		}
@@ -1153,7 +1153,7 @@ func (t *DoltTable) GetReferencedForeignKeys(ctx *sql.Context) ([]sql.ForeignKey
 			}
 			continue
 		}
-		child, ok, err := root.GetTable(ctx, fk.TableName)
+		child, ok, err := root.GetTable(ctx, doltdb.TableName{Name: fk.TableName})
 		if err != nil {
 			return nil, err
 		}
@@ -1417,7 +1417,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		return err
 	}
 
-	table, _, err := root.GetTable(ctx, t.tableName)
+	table, _, err := root.GetTable(ctx, doltdb.TableName{Name: t.tableName})
 	if err != nil {
 		return err
 	}
@@ -2150,7 +2150,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 	}
 	root := ws.WorkingRoot()
 
-	table, _, err := root.GetTable(ctx, t.tableName)
+	table, _, err := root.GetTable(ctx, doltdb.TableName{Name: t.tableName})
 	if err != nil {
 		return err
 	}
@@ -2956,7 +2956,7 @@ func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefin
 		return err
 	}
 
-	updatedTable, _, err := root.GetTable(ctx, t.tableName)
+	updatedTable, _, err := root.GetTable(ctx, doltdb.TableName{Name: t.tableName})
 	if err != nil {
 		return err
 	}
@@ -3012,7 +3012,7 @@ func (t *AlterableDoltTable) DropCheck(ctx *sql.Context, chName string) error {
 		return err
 	}
 
-	updatedTable, _, err := root.GetTable(ctx, t.tableName)
+	updatedTable, _, err := root.GetTable(ctx, doltdb.TableName{Name: t.tableName})
 	if err != nil {
 		return err
 	}
@@ -3062,7 +3062,7 @@ func (t *AlterableDoltTable) ModifyDefaultCollation(ctx *sql.Context, collation 
 	if err != nil {
 		return err
 	}
-	currentTable, _, err := root.GetTable(ctx, t.tableName)
+	currentTable, _, err := root.GetTable(ctx, doltdb.TableName{Name: t.tableName})
 	if err != nil {
 		return err
 	}

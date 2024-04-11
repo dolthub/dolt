@@ -325,7 +325,7 @@ func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newP
 		// diff against an empty table and rewrite everything
 		var parentSch schema.Schema
 
-		oldParentTbl, ok, err := oldParent.GetTable(ctx, name)
+		oldParentTbl, ok, err := oldParent.GetTable(ctx, doltdb.TableName{Name: name})
 		if err != nil {
 			return true, err
 		}
@@ -343,7 +343,7 @@ func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newP
 			}
 		}
 
-		newParentTbl, ok, err := newParent.GetTable(ctx, name)
+		newParentTbl, ok, err := newParent.GetTable(ctx, doltdb.TableName{Name: name})
 		if err != nil {
 			return true, err
 		}

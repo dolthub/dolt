@@ -20135,11 +20135,11 @@ func TestCreateTables(t *testing.T) {
 	root, err = sqle.ExecuteSql(dEnv, root, createTables)
 	require.NoError(t, err)
 
-	table, _, err := root.GetTable(ctx, "daily_summary")
+	table, _, err := root.GetTable(ctx, doltdb.TableName{Name: "daily_summary"})
 	assert.NoError(t, err)
 	assert.NotNil(t, table)
 
-	table, _, err = root.GetTable(ctx, "symbols")
+	table, _, err = root.GetTable(ctx, doltdb.TableName{Name: "symbols"})
 	assert.NoError(t, err)
 	assert.NotNil(t, table)
 }
@@ -20161,13 +20161,13 @@ func TestInserts(t *testing.T) {
 	root, err = sqle.ExecuteSql(dEnv, root, insertRows)
 	require.NoError(t, err)
 
-	table, _, err := root.GetTable(ctx, "daily_summary")
+	table, _, err := root.GetTable(ctx, doltdb.TableName{Name: "daily_summary"})
 	assert.NoError(t, err)
 	rowData, err := table.GetNomsRowData(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(7953), rowData.Len())
 
-	table, _, err = root.GetTable(ctx, "symbols")
+	table, _, err = root.GetTable(ctx, doltdb.TableName{Name: "symbols"})
 	assert.NoError(t, err)
 	rowData, err = table.GetNomsRowData(ctx)
 	assert.NoError(t, err)
@@ -20194,19 +20194,19 @@ func TestInsertsWithIndexes(t *testing.T) {
 	root, err = sqle.ExecuteSql(dEnv, root, insertRows)
 	require.NoError(t, err)
 
-	table, _, err := root.GetTable(ctx, "daily_summary")
+	table, _, err := root.GetTable(ctx, doltdb.TableName{Name: "daily_summary"})
 	require.NoError(t, err)
 	rowData, err := table.GetNomsIndexRowData(ctx, "idx_country")
 	require.NoError(t, err)
 	assert.Equal(t, uint64(7953), rowData.Len())
 
-	table, _, err = root.GetTable(ctx, "symbols")
+	table, _, err = root.GetTable(ctx, doltdb.TableName{Name: "symbols"})
 	require.NoError(t, err)
 	rowData, err = table.GetNomsIndexRowData(ctx, "idx_ipoyear")
 	require.NoError(t, err)
 	assert.Equal(t, uint64(6879), rowData.Len())
 
-	table, _, err = root.GetTable(ctx, "join_result")
+	table, _, err = root.GetTable(ctx, doltdb.TableName{Name: "join_result"})
 	require.NoError(t, err)
 	rowData, err = table.GetNomsIndexRowData(ctx, "idx_country")
 	require.NoError(t, err)

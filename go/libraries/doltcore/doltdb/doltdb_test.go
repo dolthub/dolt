@@ -350,7 +350,7 @@ func TestLDNoms(t *testing.T) {
 		root, err = commit.GetRootValue(context.Background())
 		assert.NoError(t, err)
 
-		readTable, ok, err := root.GetTable(context.Background(), "test")
+		readTable, ok, err := root.GetTable(context.Background(), TableName{Name: "test"})
 		assert.NoError(t, err)
 
 		if !ok {

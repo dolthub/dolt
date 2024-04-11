@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
@@ -87,7 +88,7 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 
 	var output []string
 	for _, tableName := range tableNames {
-		table, ok, err := working.GetTable(ctx, tableName)
+		table, ok, err := working.GetTable(ctx, doltdb.TableName{Name: tableName})
 		if err != nil {
 			return HandleErr(errhand.BuildDError("Unable to get table `%s`.", tableName).AddCause(err).Build(), nil)
 		}

@@ -19,6 +19,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -113,7 +114,7 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	tableName := apr.Arg(0)
 	indexName := apr.Arg(1)
 
-	table, ok, err := working.GetTable(ctx, tableName)
+	table, ok, err := working.GetTable(ctx, doltdb.TableName{Name: tableName})
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to get table `%s`.", tableName).AddCause(err).Build(), nil)
 	}

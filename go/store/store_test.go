@@ -266,7 +266,7 @@ func BenchmarkMapItr(b *testing.B) {
 	root, err := cm.GetRootValue()
 	require.NoError(b, err)
 
-	tbl, ok, err := root.GetTable(ctx, tableName)
+	tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
 	require.NoError(b, err)
 	require.True(b, ok)
 
