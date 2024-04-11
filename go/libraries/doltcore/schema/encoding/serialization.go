@@ -57,6 +57,7 @@ func serializeSchemaAsFlatbuffer(sch schema.Schema) ([]byte, error) {
 	indexes := serializeSecondaryIndexes(b, sch, sch.Indexes().AllIndexes())
 	checks := serializeChecks(b, sch.Checks().AllChecks())
 	comment := b.CreateString(sch.GetComment())
+	// dbSchema := b.C(sch.GetDatabaseSchema())
 
 	var hasFeaturesAfterTryAccessors bool
 	for _, col := range sch.GetAllCols().GetColumns() {

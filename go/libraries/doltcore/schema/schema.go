@@ -100,6 +100,12 @@ type Schema interface {
 
 	// SetComment sets the table's comment.
 	SetComment(comment string)
+	
+	// GetDatabaseSchema returns the table's database schema
+	GetDatabaseSchema() DatabaseSchema
+	
+	// SetDatabaseSchema sets the table's database schema
+	SetDatabaseSchema(dbSchema DatabaseSchema)
 
 	// Copy returns a copy of this Schema that can be safely modified independently.
 	Copy() Schema

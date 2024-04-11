@@ -169,7 +169,23 @@ func (rcv *TableSchema) Comment() []byte {
 	return nil
 }
 
-const TableSchemaNumFields = 7
+func (rcv *TableSchema) TryDatabaseSchema(obj *DatabaseSchema) (*DatabaseSchema, error) {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(DatabaseSchema)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		if DatabaseSchemaNumFields < obj.Table().NumFields() {
+			return nil, flatbuffers.ErrTableHasUnknownFields
+		}
+		return obj, nil
+	}
+	return nil, nil
+}
+
+const TableSchemaNumFields = 8
 
 func TableSchemaStart(builder *flatbuffers.Builder) {
 	builder.StartObject(TableSchemaNumFields)
@@ -204,7 +220,62 @@ func TableSchemaAddHasFeaturesAfterTryAccessors(builder *flatbuffers.Builder, ha
 func TableSchemaAddComment(builder *flatbuffers.Builder, comment flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(comment), 0)
 }
+func TableSchemaAddDatabaseSchema(builder *flatbuffers.Builder, databaseSchema flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(7, flatbuffers.UOffsetT(databaseSchema), 0)
+}
 func TableSchemaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+	return builder.EndObject()
+}
+
+type DatabaseSchema struct {
+	_tab flatbuffers.Table
+}
+
+func InitDatabaseSchemaRoot(o *DatabaseSchema, buf []byte, offset flatbuffers.UOffsetT) error {
+	n := flatbuffers.GetUOffsetT(buf[offset:])
+	return o.Init(buf, n+offset)
+}
+
+func TryGetRootAsDatabaseSchema(buf []byte, offset flatbuffers.UOffsetT) (*DatabaseSchema, error) {
+	x := &DatabaseSchema{}
+	return x, InitDatabaseSchemaRoot(x, buf, offset)
+}
+
+func TryGetSizePrefixedRootAsDatabaseSchema(buf []byte, offset flatbuffers.UOffsetT) (*DatabaseSchema, error) {
+	x := &DatabaseSchema{}
+	return x, InitDatabaseSchemaRoot(x, buf, offset+flatbuffers.SizeUint32)
+}
+
+func (rcv *DatabaseSchema) Init(buf []byte, i flatbuffers.UOffsetT) error {
+	rcv._tab.Bytes = buf
+	rcv._tab.Pos = i
+	if DatabaseSchemaNumFields < rcv.Table().NumFields() {
+		return flatbuffers.ErrTableHasUnknownFields
+	}
+	return nil
+}
+
+func (rcv *DatabaseSchema) Table() flatbuffers.Table {
+	return rcv._tab
+}
+
+func (rcv *DatabaseSchema) Name() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+const DatabaseSchemaNumFields = 1
+
+func DatabaseSchemaStart(builder *flatbuffers.Builder) {
+	builder.StartObject(DatabaseSchemaNumFields)
+}
+func DatabaseSchemaAddName(builder *flatbuffers.Builder, name flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(name), 0)
+}
+func DatabaseSchemaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
 

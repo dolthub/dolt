@@ -30,6 +30,13 @@ table TableSchema {
 
   // table comment
   comment:string;
+  
+  // database schema
+  database_schema:DatabaseSchema;
+}
+
+table DatabaseSchema {
+  name:string;
 }
 
 table Column {

@@ -47,6 +47,7 @@ type schemaImpl struct {
 	collation                  Collation
 	contentHashedFields        []uint64
 	comment                    string
+	dbSchema 									 string
 }
 
 var _ Schema = (*schemaImpl)(nil)
@@ -653,6 +654,17 @@ func columnMissingNotNullConstraint(col Column) bool {
 	}
 	return true
 }
+
+func (si *schemaImpl) GetDatabaseSchema() DatabaseSchema {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (si *schemaImpl) SetDatabaseSchema(dbSchema DatabaseSchema) {
+	// TODO implement me
+	panic("implement me")
+}
+
 
 // Copy creates a copy of this schema safe to be edited independently. Some members, like column collections, are
 // immutable and don't need to be copied. Others, like index and check collections, must be copied.

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 include "prolly.fbs";
+include "schema.fbs";
 include "collation.fbs";
 
 namespace serial;
@@ -27,10 +28,6 @@ table RootValue {
   collation:Collation;
   
   schemas:[DatabaseSchema];
-}
-
-table DatabaseSchema {
-  name:string;
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go
