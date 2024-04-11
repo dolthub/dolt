@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
@@ -707,29 +708,23 @@ func serializeRowToBinlogBytes(ctx *sql.Context, schema schema.Schema, key, valu
 		case query.Type_BLOB: // TINYBLOB, BLOB, MEDIUMBLOB, LONGBLOB
 			addr, notNull := descriptor.GetBytesAddr(idx, tuple)
 			if notNull {
-				if ns == nil {
-					// TODO: return error
-					panic("node store is nil!")
-				}
-				bytes, err := tree.NewByteArray(addr, ns).ToBytes(ctx)
+				bytes, err := encodeBytesFromAddress(ctx, addr, ns, typ)
 				if err != nil {
-					// TODO: return error
+					// TODO: Change to return an error
 					panic(err.Error())
 				}
+				data = append(data, bytes...)
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
 
-				blobType := typ.(sql.StringType)
-				if blobType.MaxByteLength() > 0xFFFFFF {
-					data = append(data, make([]byte, 4)...)
-					binary.LittleEndian.PutUint32(data[currentPos:], uint32(len(bytes)))
-				} else if blobType.MaxByteLength() > 0xFFFF {
-					temp := make([]byte, 4)
-					binary.LittleEndian.PutUint32(temp, uint32(len(bytes)))
-					data = append(data, temp[:3]...)
-				} else if blobType.MaxByteLength() > 0xFF {
-					data = append(data, make([]byte, 2)...)
-					binary.LittleEndian.PutUint16(data[currentPos:], uint16(len(bytes)))
-				} else {
-					data = append(data, uint8(len(bytes)))
+		case query.Type_TEXT: // TINYTEXT, TEXT, MEDIUMTEXT, LONGTEXT
+			addr, notNull := descriptor.GetStringAddr(idx, tuple)
+			if notNull {
+				bytes, err := encodeBytesFromAddress(ctx, addr, ns, typ)
+				if err != nil {
+					// TODO: Change to return an error
+					panic(err.Error())
 				}
 				data = append(data, bytes...)
 			} else {
@@ -742,6 +737,38 @@ func serializeRowToBinlogBytes(ctx *sql.Context, schema schema.Schema, key, valu
 	}
 
 	return data, nullBitmap, nil
+}
+
+// encodeBytesFromAddress loads the out-of-band content from |addr| in |ns| and serializes it into a binary format
+// in the returned |data| slice. The |typ| parameter is used to determine the maximum byte length of the serialized
+// type, in order to determine how many bytes to use for the length prefix.
+func encodeBytesFromAddress(ctx *sql.Context, addr hash.Hash, ns tree.NodeStore, typ sql.Type) (data []byte, err error) {
+	if ns == nil {
+		return nil, fmt.Errorf("nil NodeStore used to encode bytes from address")
+	}
+	bytes, err := tree.NewByteArray(addr, ns).ToBytes(ctx)
+	if err != nil {
+		// TODO: return error
+		panic(err.Error())
+	}
+
+	blobType := typ.(sql.StringType)
+	if blobType.MaxByteLength() > 0xFFFFFF {
+		data = append(data, make([]byte, 4)...)
+		binary.LittleEndian.PutUint32(data, uint32(len(bytes)))
+	} else if blobType.MaxByteLength() > 0xFFFF {
+		temp := make([]byte, 4)
+		binary.LittleEndian.PutUint32(temp, uint32(len(bytes)))
+		data = append(data, temp[:3]...)
+	} else if blobType.MaxByteLength() > 0xFF {
+		data = append(data, make([]byte, 2)...)
+		binary.LittleEndian.PutUint16(data, uint16(len(bytes)))
+	} else {
+		data = append(data, uint8(len(bytes)))
+	}
+	data = append(data, bytes...)
+
+	return data, nil
 }
 
 var digitsToBytes = []uint8{0, 1, 1, 2, 2, 3, 3, 4, 4, 4}
@@ -924,8 +951,8 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 			decimalType := typ.(sql.DecimalType)
 			metadata[i] = (uint16(decimalType.Precision()) << 8) | uint16(decimalType.Scale())
 
-		case query.Type_BLOB: // TINYBLOB, BLOB, MEDIUMBLOB, LONGBLOB
-			// TODO: Text and JSON types, too?
+		case query.Type_BLOB, // TINYBLOB, BLOB, MEDIUMBLOB, LONGBLOB
+			query.Type_TEXT: // TINYTEXT, TEXT, MEDIUMTEXT, LONGTEXT
 			types[i] = mysql.TypeBlob
 			blobType := typ.(sql.StringType)
 			if blobType.MaxByteLength() > 0xFFFFFF {
@@ -940,8 +967,7 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 
 		// TODO: Others?
 		case query.Type_JSON: // JSON
-		case query.Type_TEXT: // TINYTEXT, TEXT, MEDIUMTEXT, LONGTEXT
-		case query.Type_GEOMETRY:
+		case query.Type_GEOMETRY: // GEOMETRY
 		case query.Type_BINARY:
 		case query.Type_VARBINARY:
 		case query.Type_NULL_TYPE: // ???

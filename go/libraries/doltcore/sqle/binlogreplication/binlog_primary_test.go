@@ -74,7 +74,8 @@ func TestBinlogPrimary(t *testing.T) {
 		"e1 enum('blue', 'green', 'red'), s1 set('pants','shirt','tie','belt'), " +
 		"ch1 char(10), ch2 char(255)," +
 		"d1 decimal(14, 4), d2 decimal(14, 4), d3 decimal(14, 4)," +
-		"bl1 blob" +
+		"bl1 blob, " +
+		"tx1 text" +
 		");"
 	primaryDatabase.MustExec(testTableCreateStatement)
 	replicaDatabase.MustExec(testTableCreateStatement)
@@ -95,7 +96,8 @@ func TestBinlogPrimary(t *testing.T) {
 		"'green', 'pants,tie,belt'," +
 		"'purple', 'abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz'," +
 		"1234567890.1234, -1234567890.1234, 1234567890.0001," +
-		"0x010203" +
+		"0x010203," +
+		"'text text text'" +
 		");")
 	time.Sleep(250 * time.Millisecond)
 
@@ -125,6 +127,7 @@ func TestBinlogPrimary(t *testing.T) {
 			"purple", "abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz",
 			"1234567890.1234", "-1234567890.1234", "1234567890.0001",
 			"\x01\x02\x03",
+			"text text text",
 		},
 	})
 }
