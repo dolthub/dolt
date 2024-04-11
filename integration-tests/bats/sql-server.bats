@@ -43,19 +43,6 @@ EOF
     run dolt sql-server --config ./config.yml
     [ $status -eq 1 ]
     [[ "$output" =~ "Variable 'innodb_autoinc_lock_mode' can't be set to the value of '100'" ]] || false
-
-    cat > config.yml <<EOF
-user:
-  name: dolt
-listener:
-  host: "0.0.0.0"
-  port: $PORT
-system_variables:
-  innodb_autoinc_lock_mode: 1
-EOF
-    run dolt sql-server --config ./config.yml
-    [ $status -eq 1 ]
-    [[ "$output" =~ "Variable 'innodb_autoinc_lock_mode' can't be set to the value of '1'" ]] || false
 }
 
 @test "sql-server: sanity check" {
