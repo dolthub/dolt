@@ -69,23 +69,30 @@ func (s journalChunkSource) get(_ context.Context, h hash.Hash, _ *Stats) ([]byt
 	return ch.Data(), nil
 }
 
-func (s journalChunkSource) getMany(ctx context.Context, _ *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error) {
+func (s journalChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error) {
 	var remaining bool
 	// todo: read planning
 	for i := range reqs {
 		if reqs[i].found {
 			continue
 		}
-		data, err := s.get(ctx, *reqs[i].a, stats)
-		if err != nil {
-			return false, err
-		} else if data != nil {
-			reqs[i].found = true
-			ch := chunks.NewChunkWithHash(hash.Hash(*reqs[i].a), data)
-			found(ctx, &ch)
-		} else {
-			remaining = true
-		}
+		eg.Go(func() error {
+			data, err := s.get(ctx, *reqs[i].a, stats)
+			if err != nil {
+				return err
+			} else if data != nil {
+				reqs[i].found = true
+				ch := chunks.NewChunkWithHash(hash.Hash(*reqs[i].a), data)
+				found(ctx, &ch)
+			} else {
+				remaining = true
+			}
+			return nil
+		})
+	}
+	err := eg.Wait()
+	if err != nil {
+		return false, err
 	}
 	return remaining, nil
 }
