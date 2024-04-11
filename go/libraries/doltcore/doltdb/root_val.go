@@ -1397,22 +1397,25 @@ func (r fbRvStorage) GetSchemas(ctx context.Context) ([]schema.DatabaseSchema, e
 }
 
 func (r fbRvStorage) SetSchemas(ctx context.Context, schemas []schema.DatabaseSchema) (rvStorage, error) {
-	builder := flatbuffers.NewBuilder(80)
+	b := flatbuffers.NewBuilder(80)
 	
-	tablesoff := builder.CreateByteVector(r.srv.TablesBytes())
-	fkoff := builder.CreateByteVector(r.srv.ForeignKeyAddrBytes())
+	tablesoff := b.CreateByteVector(r.srv.TablesBytes())
+	fkoff := b.CreateByteVector(r.srv.ForeignKeyAddrBytes())
 	
-	serial.RootValueStart(builder)
-	serial.RootValueAddFeatureVersion(builder, r.srv.FeatureVersion())
-	serial.RootValueAddCollation(builder, r.srv.Collation())
-	serial.RootValueAddTables(builder, tablesoff)
-	serial.RootValueAddForeignKeyAddr(builder, fkoff)
-	serial.RootValueStartSchemasVector(builder, len(schemas))
+	serial.RootValueStart(b)
+	serial.RootValueAddFeatureVersion(b, r.srv.FeatureVersion())
+	serial.RootValueAddCollation(b, r.srv.Collation())
+	serial.RootValueAddTables(b, tablesoff)
+	serial.RootValueAddForeignKeyAddr(b, fkoff)
+	serial.RootValueStartSchemasVector(b, len(schemas))
 	for _, databaseSchema := range schemas {
-		builder.CreateString(databaseSchema.Name)
+		serial.DatabaseSchemaStart(b)
+		nameOff := b.CreateString(databaseSchema.Name)
+		serial.DatabaseSchemaAddName(b, nameOff)
+		serial.DatabaseSchemaEnd(b)
 	}
 
-	bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
+	bs := serial.FinishMessage(b, serial.RootValueEnd(b), []byte(serial.RootValueFileID))
 	msg, err := serial.TryGetRootAsRootValue(bs, serial.MessagePrefixSz)
 	if err != nil {
 		return nil, err
