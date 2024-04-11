@@ -71,8 +71,10 @@ func (s journalChunkSource) get(_ context.Context, h hash.Hash, _ *Stats) ([]byt
 }
 
 type journalRecord struct {
+	// r is the journal range for this chunk
 	r Range
-	i int
+	// idx is the array offset into the shared |reqs|
+	idx int
 }
 
 func (s journalChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error) {
@@ -88,21 +90,22 @@ func (s journalChunkSource) getMany(ctx context.Context, eg *errgroup.Group, req
 			remaining = true
 			continue
 		}
-		jReqs = append(jReqs, journalRecord{r: rang, i: i})
+		jReqs = append(jReqs, journalRecord{r: rang, idx: i})
 	}
 
+	// sort chunks by locality
 	sort.Slice(jReqs, func(i, j int) bool {
 		return jReqs[i].r.Offset < jReqs[j].r.Offset
 	})
 
 	for i := range jReqs {
 		eg.Go(func() error {
-			//data, err := s.get(ctx, *reqs[i].a, stats)
-			buf := make([]byte, jReqs[i].r.Length)
-			if _, err := s.journal.readAt(buf, int64(jReqs[i].r.Offset)); err != nil {
+			rec := jReqs[i]
+			buf := make([]byte, rec.r.Length)
+			if _, err := s.journal.readAt(buf, int64(rec.r.Offset)); err != nil {
 				return err
 			}
-			cc, err := NewCompressedChunk(hash.Hash(*reqs[jReqs[i].i].a), buf)
+			cc, err := NewCompressedChunk(hash.Hash(*reqs[rec.idx].a), buf)
 			ch, err := cc.ToChunk()
 			if err != nil {
 				return err
@@ -111,8 +114,8 @@ func (s journalChunkSource) getMany(ctx context.Context, eg *errgroup.Group, req
 			data := ch.Data()
 
 			if data != nil {
-				reqs[jReqs[i].i].found = true
-				ch := chunks.NewChunkWithHash(hash.Hash(*reqs[jReqs[i].i].a), data)
+				reqs[rec.idx].found = true
+				ch := chunks.NewChunkWithHash(hash.Hash(*reqs[rec.idx].a), data)
 				found(ctx, &ch)
 			} else {
 				remaining = true
