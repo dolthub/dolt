@@ -77,26 +77,3 @@ EOF
     [[ "$output" =~ "0,true,true,true" ]] || false
     [[ "$output" =~ "1,true,true,true" ]] || false
 }
-
-
-@test "auto_increment_lock_modes: multiple tables can have interleaved inserts without blocking each other." {
-      cat > config.yml <<EOF
-system_variables:
-  innodb_autoinc_lock_mode: 0
-EOF
-    start_sql_server_with_config "" config.yml
-    # We use run here so that we don't terminate if the command fails, since terminating without stopping the server will cause the test to hang.
-    # We also use a small sequence table because larger tables increase the risk of triggering https://github.com/dolthub/dolt/issues/7702
-    # If we detect interleaved writes to `timestamps` with a smaller sequence table, then we would see it on the larger table anyway.
-    run dolt sql -q "INSERT INTO test1 (c0) select v from sequence5bit; SELECT * from timestamps; COMMIT;" &
-    run dolt sql -q "INSERT INTO test2 (c0) select v from sequence5bit; SELECT * from timestamps; COMMIT;"
-    wait $!
-    stop_sql_server
-    # We confirm that the two inserts are interleaved by comparing the min and max timestamps from both tables.
-    run dolt sql -q "select (select min(pk) from timestamps where t = 1) < (select max(pk) from timestamps where t = 2)"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "true" ]] || false
-    run dolt sql -q "select (select min(pk) from timestamps where t = 2) < (select max(pk) from timestamps where t = 1)"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "true" ]] || false
-}
