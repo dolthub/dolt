@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sort"
 
 	"golang.org/x/sync/errgroup"
 
@@ -69,20 +70,49 @@ func (s journalChunkSource) get(_ context.Context, h hash.Hash, _ *Stats) ([]byt
 	return ch.Data(), nil
 }
 
+type journalRecord struct {
+	r Range
+	i int
+}
+
 func (s journalChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error) {
 	var remaining bool
 	// todo: read planning
-	for i := range reqs {
-		if reqs[i].found {
+	var jReqs []journalRecord
+	for i, r := range reqs {
+		if r.found {
 			continue
 		}
+		rang, ok := s.journal.ranges.get(*r.a)
+		if !ok {
+			remaining = true
+			continue
+		}
+		jReqs = append(jReqs, journalRecord{r: rang, i: i})
+	}
+
+	sort.Slice(jReqs, func(i, j int) bool {
+		return jReqs[i].r.Offset < jReqs[j].r.Offset
+	})
+
+	for i := range jReqs {
 		eg.Go(func() error {
-			data, err := s.get(ctx, *reqs[i].a, stats)
+			//data, err := s.get(ctx, *reqs[i].a, stats)
+			buf := make([]byte, jReqs[i].r.Length)
+			if _, err := s.journal.readAt(buf, int64(jReqs[i].r.Offset)); err != nil {
+				return err
+			}
+			cc, err := NewCompressedChunk(hash.Hash(*reqs[jReqs[i].i].a), buf)
+			ch, err := cc.ToChunk()
 			if err != nil {
 				return err
-			} else if data != nil {
-				reqs[i].found = true
-				ch := chunks.NewChunkWithHash(hash.Hash(*reqs[i].a), data)
+			}
+
+			data := ch.Data()
+
+			if data != nil {
+				reqs[jReqs[i].i].found = true
+				ch := chunks.NewChunkWithHash(hash.Hash(*reqs[jReqs[i].i].a), data)
 				found(ctx, &ch)
 			} else {
 				remaining = true
