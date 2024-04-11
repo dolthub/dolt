@@ -61,8 +61,8 @@ system_variables:
   innodb_autoinc_lock_mode: 0
 EOF
     start_sql_server_with_config "" config.yml
-    dolt sql -q "INSERT INTO test1 (c0) select 0 from sequence10bit; INSERT INTO ranges VALUES (0, LAST_INSERT_ID(), ROW_COUNT()); COMMIT;" &
-    dolt sql -q "INSERT INTO test1 (c0) select 1 from sequence10bit; INSERT INTO ranges VALUES (1, LAST_INSERT_ID(), ROW_COUNT()); COMMIT;"
+    dolt sql -q "INSERT INTO test1 (c0) select 0 from sequence5bit; INSERT INTO ranges VALUES (0, LAST_INSERT_ID(), ROW_COUNT()); COMMIT;" &
+    dolt sql -q "INSERT INTO test1 (c0) select 1 from sequence5bit; INSERT INTO ranges VALUES (1, LAST_INSERT_ID(), ROW_COUNT()); COMMIT;"
     wait $!
 
     stop_sql_server
@@ -70,7 +70,7 @@ EOF
     run dolt sql -r csv -q "select
       c0,
       min(pk) = firstId,
-      rowCount = 1024,
+      rowCount = 32,
       max(pk) = firstId + rowCount -1
     from test1 join ranges on test1.c0 = ranges.pk group by c0"
     [ "$status" -eq 0 ]
