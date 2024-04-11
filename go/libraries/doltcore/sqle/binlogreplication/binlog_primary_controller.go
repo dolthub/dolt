@@ -332,7 +332,7 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 
 		typ := col.TypeInfo.ToSqlType()
 		switch typ.Type() {
-		case query.Type_VARCHAR:
+		case query.Type_VARCHAR, query.Type_CHAR:
 			stringVal, notNull := descriptor.GetString(idx, tuple)
 			if notNull {
 				// When the field size is greater than 255 bytes, the serialization format
@@ -647,6 +647,21 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 		switch typ.Type() {
 		case query.Type_CHAR:
 			types[i] = mysql.TypeString
+			sTyp := typ.(sql.StringType)
+			maxFieldLength := uint16(4 * sTyp.Length())
+			upperBits := (maxFieldLength >> 8) << 12
+			lowerBits := maxFieldLength & 0xFF
+			// This is one of the less obvious parts of the MySQL serialization protocol... Several types use
+			// mysql.TypeString as their serialization type in binlog events (i.e. SET, ENUM, CHAR), so the first
+			// metadata byte for this serialization type indicates what field type is using this serialization type
+			// (i.e. SET, ENUM, or CHAR), and the second metadata byte indicates the number of bytes needed to serialize
+			// a type value. However, for CHAR, that second byte isn't enough, since it can only represent up to 255
+			// bytes. For sizes larger than that, we need to find two more bits. MySQL does this by reusing the third
+			// and fourth bits from the first metadata byte. By XOR'ing them against the known mysql.TypeString value
+			// in that byte, MySQL is able to reuse those two bits and extend the second metadata byte enough to
+			// account for the max size of CHAR fields (255 chars).
+			metadata[i] = ((mysql.TypeString << 8) ^ upperBits) | lowerBits
+
 		case query.Type_VARCHAR:
 			types[i] = mysql.TypeVarchar
 			sTyp := typ.(sql.StringType)
