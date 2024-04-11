@@ -34,19 +34,28 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+type LockMode int64
+
+var (
+	LockMode_Traditional LockMode = 0
+	LockMode_Concurret   LockMode = 1
+	LockMode_Interleaved LockMode = 2
+)
+
 type AutoIncrementTracker struct {
 	dbName    string
 	sequences *sync.Map // map[string]uint64
 	mm        *mutexmap.MutexMap
+	lockMode  LockMode
 }
 
-var _ globalstate.AutoIncrementTracker = AutoIncrementTracker{}
+var _ globalstate.AutoIncrementTracker = &AutoIncrementTracker{}
 
 // NewAutoIncrementTracker returns a new autoincrement tracker for the roots given. All roots sets must be
 // considered because the auto increment value for a table is tracked globally, across all branches.
 // Roots provided should be the working sets when available, or the branches when they are not (e.g. for remote
 // branches that don't have a local working set)
-func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb.Rootish) (AutoIncrementTracker, error) {
+func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb.Rootish) (*AutoIncrementTracker, error) {
 	ait := AutoIncrementTracker{
 		dbName:    dbName,
 		sequences: &sync.Map{},
@@ -56,7 +65,7 @@ func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb
 	for _, root := range roots {
 		root, err := root.ResolveRootValue(ctx)
 		if err != nil {
-			return AutoIncrementTracker{}, err
+			return &AutoIncrementTracker{}, err
 		}
 
 		err = root.IterTables(ctx, func(tableName string, table *doltdb.Table, sch schema.Schema) (bool, error) {
@@ -81,10 +90,11 @@ func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb
 		})
 
 		if err != nil {
-			return AutoIncrementTracker{}, err
+			return &AutoIncrementTracker{}, err
 		}
 	}
-	return ait, nil
+
+	return &ait, nil
 }
 
 func loadAutoIncValue(sequences *sync.Map, tableName string) uint64 {
@@ -111,8 +121,10 @@ func (a AutoIncrementTracker) Next(tbl string, insertVal interface{}) (uint64, e
 		return 0, err
 	}
 
-	release := a.mm.Lock(tbl)
-	defer release()
+	if a.lockMode == LockMode_Interleaved {
+		release := a.mm.Lock(tbl)
+		defer release()
+	}
 
 	curr := loadAutoIncValue(a.sequences, tbl)
 
@@ -405,4 +417,14 @@ func (a AutoIncrementTracker) DropTable(ctx *sql.Context, tableName string, wses
 	a.sequences.Store(tableName, newHighestValue)
 
 	return nil
+}
+
+func (a *AutoIncrementTracker) AcquireTableLock(ctx *sql.Context, tableName string) (func(), error) {
+	_, i, _ := sql.SystemVariables.GetGlobal("innodb_autoinc_lock_mode")
+	lockMode := LockMode(i.(int64))
+	if lockMode == LockMode_Interleaved {
+		panic("Attempted to acquire AutoInc lock for entire insert operation, but lock mode was set to Interleaved")
+	}
+	a.lockMode = lockMode
+	return a.mm.Lock(tableName), nil
 }

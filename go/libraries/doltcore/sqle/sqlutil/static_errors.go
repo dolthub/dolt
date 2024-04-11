@@ -82,6 +82,10 @@ func (e *StaticErrorEditor) SetAutoIncrementValue(*sql.Context, uint64) error {
 	return e.err
 }
 
+func (e *StaticErrorEditor) AcquireAutoIncrementLock(ctx *sql.Context) (func(), error) {
+	return func() {}, nil
+}
+
 func (e *StaticErrorEditor) StatementBegin(ctx *sql.Context) {}
 
 func (e *StaticErrorEditor) DiscardChanges(ctx *sql.Context, errorEncountered error) error {

@@ -38,18 +38,26 @@ func NewMutexMap() *MutexMap {
 
 func (mm *MutexMap) Lock(key interface{}) func() {
 	mm.mu.Lock()
-	defer mm.mu.Unlock()
 
-	keyedMutex, hasKey := mm.keyedMutexes[key]
-	if !hasKey {
-		keyedMutex = &mapMutex{parent: mm, key: key}
-		mm.keyedMutexes[key] = keyedMutex
-	}
-	keyedMutex.refcount++
+	var keyedMutex *mapMutex
+	func() {
+		// We must release the parent lock before attempting to acquire the child lock, otherwise if the child lock
+		// is currently held it will never be released.
+		defer mm.mu.Unlock()
+		var hasKey bool
+		keyedMutex, hasKey = mm.keyedMutexes[key]
+		if !hasKey {
+			keyedMutex = &mapMutex{parent: mm, key: key}
+			mm.keyedMutexes[key] = keyedMutex
+		}
+		keyedMutex.refcount++
+	}()
 
 	keyedMutex.mu.Lock()
 
-	return func() { keyedMutex.Unlock() }
+	return func() {
+		keyedMutex.Unlock()
+	}
 }
 
 func (mm *mapMutex) Unlock() {

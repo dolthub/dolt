@@ -17,6 +17,7 @@ package enginetest
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 	"sync"
@@ -31,6 +32,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/memo"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/transform"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/stretchr/testify/assert"
@@ -192,6 +194,125 @@ func newUpdateResult(matched, updated int) gmstypes.OkResult {
 	return gmstypes.OkResult{
 		RowsAffected: uint64(updated),
 		Info:         plan.UpdateInfo{Matched: matched, Updated: updated},
+	}
+}
+
+func TestAutoIncrementTrackerLockMode(t *testing.T) {
+	for _, lockMode := range []int64{0, 1, 2} {
+		t.Run(fmt.Sprintf("lock mode %d", lockMode), func(t *testing.T) {
+			testAutoIncrementTrackerWithLockMode(t, lockMode)
+		})
+	}
+}
+
+// testAutoIncrementTrackerWithLockMode tests that interleaved inserts don't cause deadlocks, regardless of the value of innodb_autoinc_lock_mode.
+// In a real use case, these interleaved operations would be happening in different sessions on different threads.
+// In order to make the test behave predictably, we manually interleave the two iterators.
+func testAutoIncrementTrackerWithLockMode(t *testing.T, lockMode int64) {
+
+	err := sql.SystemVariables.AssignValues(map[string]interface{}{"innodb_autoinc_lock_mode": lockMode})
+	require.NoError(t, err)
+
+	setupScripts := []setup.SetupScript{[]string{
+		"CREATE TABLE test1 (pk int NOT NULL PRIMARY KEY AUTO_INCREMENT,c0 int,index t1_c_index (c0));",
+		"CREATE TABLE test2 (pk int NOT NULL PRIMARY KEY AUTO_INCREMENT,c0 int,index t2_c_index (c0));",
+		"CREATE TABLE timestamps (pk int NOT NULL PRIMARY KEY AUTO_INCREMENT, t int);",
+		"CREATE TRIGGER t1 AFTER INSERT ON test1 FOR EACH ROW INSERT INTO timestamps VALUES (0, 1);",
+		"CREATE TRIGGER t2 AFTER INSERT ON test2 FOR EACH ROW INSERT INTO timestamps VALUES (0, 2);",
+		"CREATE VIEW bin AS SELECT 0 AS v UNION ALL SELECT 1;",
+		"CREATE VIEW sequence5bit AS SELECT b1.v + 2*b2.v + 4*b3.v + 8*b4.v + 16*b5.v AS v from bin b1, bin b2, bin b3, bin b4, bin b5;",
+	}}
+
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	harness.Setup(setup.MydbData, setupScripts)
+	e := mustNewEngine(t, harness)
+
+	defer e.Close()
+	ctx := enginetest.NewContext(harness)
+
+	// Confirm that the system variable was correctly set.
+	_, iter, err := e.Query(ctx, "select @@innodb_autoinc_lock_mode")
+	require.NoError(t, err)
+	rows, err := sql.RowIterToRows(ctx, iter)
+	require.NoError(t, err)
+	assert.Equal(t, rows, []sql.Row{{lockMode}})
+
+	// Ordinarily QueryEngine.query manages transactions.
+	// Since we can't use that for this test, we manually start a new transaction.
+	ts := ctx.Session.(sql.TransactionSession)
+	tx, err := ts.StartTransaction(ctx, sql.ReadWrite)
+	require.NoError(t, err)
+	ctx.SetTransaction(tx)
+
+	getTriggerIter := func(query string) sql.RowIter {
+		root, err := e.AnalyzeQuery(ctx, query)
+		require.NoError(t, err)
+
+		var triggerNode *plan.TriggerExecutor
+		transform.Node(root, func(n sql.Node) (sql.Node, transform.TreeIdentity, error) {
+			if triggerNode != nil {
+				return n, transform.SameTree, nil
+			}
+			if t, ok := n.(*plan.TriggerExecutor); ok {
+				triggerNode = t
+			}
+			return n, transform.NewTree, nil
+		})
+		iter, err := e.EngineAnalyzer().ExecBuilder.Build(ctx, triggerNode, nil)
+		require.NoError(t, err)
+		return iter
+	}
+
+	iter1 := getTriggerIter("INSERT INTO test1 (c0) select v from sequence5bit;")
+	iter2 := getTriggerIter("INSERT INTO test2 (c0) select v from sequence5bit;")
+
+	// Alternate the iterators until they're exhausted.
+	var err1 error
+	var err2 error
+	for err1 != io.EOF || err2 != io.EOF {
+		if err1 != io.EOF {
+			var row1 sql.Row
+			require.NoError(t, err1)
+			row1, err1 = iter1.Next(ctx)
+			_ = row1
+		}
+		if err2 != io.EOF {
+			require.NoError(t, err2)
+			_, err2 = iter2.Next(ctx)
+		}
+	}
+	err = iter1.Close(ctx)
+	require.NoError(t, err)
+	err = iter2.Close(ctx)
+	require.NoError(t, err)
+
+	dsess.DSessFromSess(ctx.Session).CommitTransaction(ctx, ctx.GetTransaction())
+
+	// Verify that the inserts are seen by the engine.
+	{
+		_, iter, err := e.Query(ctx, "select count(*) from timestamps")
+		require.NoError(t, err)
+		rows, err := sql.RowIterToRows(ctx, iter)
+		require.NoError(t, err)
+		assert.Equal(t, rows, []sql.Row{{int64(64)}})
+	}
+
+	// Verify that the insert operations are actually interleaved by inspecting the order that values were added to `timestamps`
+	{
+		_, iter, err := e.Query(ctx, "select (select min(pk) from timestamps where t = 1) < (select max(pk) from timestamps where t = 2)")
+		require.NoError(t, err)
+		rows, err := sql.RowIterToRows(ctx, iter)
+		require.NoError(t, err)
+		assert.Equal(t, rows, []sql.Row{{true}})
+	}
+
+	{
+		_, iter, err := e.Query(ctx, "select (select min(pk) from timestamps where t = 2) < (select max(pk) from timestamps where t = 1)")
+		require.NoError(t, err)
+		rows, err := sql.RowIterToRows(ctx, iter)
+		require.NoError(t, err)
+		assert.Equal(t, rows, []sql.Row{{true}})
 	}
 }
 
