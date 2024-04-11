@@ -367,7 +367,7 @@ func TestNomsMergeCommits(t *testing.T) {
 	}
 	assert.Equal(t, expectedStats, stats, "received stats is incorrect")
 
-	tbl, _, err := root.GetTable(context.Background(), tableName)
+	tbl, _, err := root.GetTable(context.Background(), doltdb.TableName{Name: tableName})
 	assert.NoError(t, err)
 	sch, err := tbl.GetSchema(context.Background())
 	assert.NoError(t, err)
