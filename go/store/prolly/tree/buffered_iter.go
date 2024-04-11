@@ -17,6 +17,7 @@ package tree
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/hash"
 	"golang.org/x/sync/errgroup"
 	"io"
 )
@@ -61,23 +62,43 @@ func (t StaticMap[K, V, O]) BufferedIterAll(ctx context.Context, batchSize int) 
 		eg:    eg,
 	}
 
-	eg.Go(func() error { return ret.produce(ctx, c, stop) })
+	if c.parent == nil {
+		ret.outCh <- c.nd
+		close(ret.outCh)
+	} else {
+		c = c.parent
+		s = s.parent
+		eg.Go(func() error { return ret.produce(ctx, c, stop) })
+	}
+
 	return ret, nil
 }
 
 func (b *BufferedTreeIter[K, V]) produce(ctx context.Context, c *cursor, stop func(*cursor) bool) error {
 	for {
-		select {
-		case b.outCh <- c.nd:
-			c.invalidateAtEnd()
-			c.advance(ctx)
-			if stop(c) {
-				close(b.outCh)
+		gets := make(hash.HashSlice, c.nd.Count())
+		for i := 0; i < c.nd.Count(); i++ {
+			gets[i] = c.nd.getAddress(i)
+		}
+
+		nodes, err := c.nrw.ReadMany(ctx, gets)
+		if err != nil {
+			return err
+		}
+		for _, n := range nodes {
+			select {
+			case b.outCh <- n:
+			case <-ctx.Done():
+				return context.Cause(ctx)
+			case <-b.close:
 				return nil
 			}
-		case <-ctx.Done():
-			return context.Cause(ctx)
-		case <-b.close:
+		}
+
+		c.invalidateAtEnd()
+		c.advance(ctx)
+		if stop(c) {
+			close(b.outCh)
 			return nil
 		}
 	}
