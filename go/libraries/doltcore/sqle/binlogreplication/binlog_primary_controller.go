@@ -182,7 +182,8 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, databaseName
 		err = prolly.DiffMaps(ctx, fromMap, toMap, false, func(_ context.Context, diff tree.Diff) error {
 			switch diff.Type {
 			case tree.AddedDiff:
-				data, nullBitmap, err := serializeRowToBinlogBytes(schema, diff.Key, diff.To)
+				data, nullBitmap, err := serializeRowToBinlogBytes(ctx,
+					schema, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
 				if err != nil {
 					return err
 				}
@@ -192,11 +193,13 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, databaseName
 				})
 
 			case tree.ModifiedDiff:
-				data, nullColumns, err := serializeRowToBinlogBytes(schema, diff.Key, diff.To)
+				data, nullColumns, err := serializeRowToBinlogBytes(ctx,
+					schema, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
 				if err != nil {
 					return err
 				}
-				identify, nullIdentifyColumns, err := serializeRowToBinlogBytes(schema, diff.Key, diff.From)
+				identify, nullIdentifyColumns, err := serializeRowToBinlogBytes(ctx,
+					schema, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
 				if err != nil {
 					return err
 				}
@@ -208,8 +211,9 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, databaseName
 				})
 
 			case tree.RemovedDiff:
-				// TODO: If the schema of the talbe has changed between FromTable and ToTable, then this probably breaks
-				identifyData, nullBitmap, err := serializeRowToBinlogBytes(schema, diff.Key, diff.From)
+				// TODO: If the schema of the table has changed between FromTable and ToTable, then this probably breaks
+				identifyData, nullBitmap, err := serializeRowToBinlogBytes(ctx,
+					schema, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
 				if err != nil {
 					return err
 				}
@@ -302,14 +306,13 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, databaseName
 }
 
 // TODO: godocs
-func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data []byte, nullBitmap mysql.Bitmap, err error) {
+func serializeRowToBinlogBytes(ctx *sql.Context, schema schema.Schema, key, value tree.Item, ns tree.NodeStore) (data []byte, nullBitmap mysql.Bitmap, err error) {
 	columns := schema.GetAllCols().GetColumns()
 	nullBitmap = mysql.NewServerBitmap(len(columns))
 
 	keyTuple := val.Tuple(key)
 	valueTuple := val.Tuple(value)
 
-	dataLength := 0
 	keyIdx := -1
 	valueIdx := -1
 	keyDesc, valueDesc := schema.GetMapDescriptors()
@@ -329,8 +332,7 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 			tuple = valueTuple
 		}
 
-		currentPos := dataLength
-
+		currentPos := len(data)
 		typ := col.TypeInfo.ToSqlType()
 		switch typ.Type() {
 		case query.Type_VARCHAR, query.Type_CHAR:
@@ -347,7 +349,6 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 				} else {
 					return nil, nullBitmap, fmt.Errorf("expected string type, got %T", col.TypeInfo.ToSqlType())
 				}
-				dataLength += numBytesForLength + stringLength
 				data = append(data, make([]byte, numBytesForLength+stringLength)...)
 				if numBytesForLength == 1 {
 					data[currentPos] = uint8(stringLength)
@@ -365,7 +366,6 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 			floatValue, notNull := descriptor.GetFloat32(idx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 4)...)
-				dataLength += 4
 				bits := math.Float32bits(floatValue)
 				binary.LittleEndian.PutUint32(data[currentPos:], bits)
 			} else {
@@ -376,7 +376,6 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 			floatValue, notNull := descriptor.GetFloat64(idx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 8)...)
-				dataLength += 8
 				bits := math.Float64bits(floatValue)
 				binary.LittleEndian.PutUint64(data[currentPos:], bits)
 			} else {
@@ -387,7 +386,6 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 			intValue, notNull := descriptor.GetYear(idx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 1)...)
-				dataLength += 1
 				data[currentPos] = byte(intValue - 1900)
 			} else {
 				nullBitmap.Set(rowIdx, true)
@@ -413,7 +411,6 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 				temp := make([]byte, 8)
 				binary.BigEndian.PutUint64(temp, ymdhms)
 				data = append(data, temp[3:]...)
-				dataLength += 5
 			} else {
 				nullBitmap.Set(rowIdx, true)
 			}
@@ -422,7 +419,6 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 			timeValue, notNull := descriptor.GetDatetime(idx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 4)...)
-				dataLength += 4
 				binary.LittleEndian.PutUint32(data[currentPos:], uint32(timeValue.Unix()))
 			} else {
 				nullBitmap.Set(rowIdx, true)
@@ -435,7 +431,6 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 				temp := make([]byte, 4)
 				binary.LittleEndian.PutUint32(temp, buffer)
 				data = append(data, make([]byte, 3)...)
-				dataLength += 3
 				copy(data[currentPos:], temp[:3])
 			} else {
 				nullBitmap.Set(rowIdx, true)
@@ -464,7 +459,6 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 				temp := make([]byte, 4)
 				binary.BigEndian.PutUint32(temp, uint32(buffer))
 				data = append(data, temp[1:]...)
-				dataLength += 3
 			} else {
 				nullBitmap.Set(rowIdx, true)
 			}
@@ -473,7 +467,6 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 			intValue, notNull := descriptor.GetInt8(idx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 1)...)
-				dataLength += 1
 				data[currentPos] = byte(intValue)
 			} else {
 				nullBitmap.Set(rowIdx, true)
@@ -483,7 +476,6 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 			intValue, notNull := descriptor.GetUint8(idx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 1)...)
-				dataLength += 1
 				data[currentPos] = intValue
 			} else {
 				nullBitmap.Set(rowIdx, true)
@@ -493,7 +485,6 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 			intValue, notNull := descriptor.GetInt16(idx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 2)...)
-				dataLength += 2
 				binary.LittleEndian.PutUint16(data[currentPos:], uint16(intValue))
 			} else {
 				nullBitmap.Set(rowIdx, true)
@@ -503,7 +494,6 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 			intValue, notNull := descriptor.GetUint16(idx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 2)...)
-				dataLength += 2
 				binary.LittleEndian.PutUint16(data[currentPos:], intValue)
 			} else {
 				nullBitmap.Set(rowIdx, true)
@@ -513,7 +503,6 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 			intValue, notNull := descriptor.GetInt32(idx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 3)...)
-				dataLength += 3
 				tempBuffer := make([]byte, 4)
 				binary.LittleEndian.PutUint32(tempBuffer, uint32(intValue))
 				copy(data[currentPos:], tempBuffer[0:3])
@@ -525,7 +514,6 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 			intValue, notNull := descriptor.GetUint32(idx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 3)...)
-				dataLength += 3
 				tempBuffer := make([]byte, 4)
 				binary.LittleEndian.PutUint32(tempBuffer, intValue)
 				copy(data[currentPos:], tempBuffer[0:3])
@@ -539,7 +527,6 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 			intValue, notNull := descriptor.GetInt32(idx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 4)...)
-				dataLength += 4
 				binary.LittleEndian.PutUint32(data[currentPos:], uint32(intValue))
 			} else {
 				nullBitmap.Set(rowIdx, true)
@@ -549,7 +536,6 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 			intValue, notNull := descriptor.GetUint32(idx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 4)...)
-				dataLength += 4
 				binary.LittleEndian.PutUint32(data[currentPos:], intValue)
 			} else {
 				nullBitmap.Set(rowIdx, true)
@@ -559,7 +545,6 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 			intValue, notNull := descriptor.GetInt64(idx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 8)...)
-				dataLength += 8
 				binary.LittleEndian.PutUint64(data[currentPos:], uint64(intValue))
 			} else {
 				nullBitmap.Set(rowIdx, true)
@@ -569,7 +554,6 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 			intValue, notNull := descriptor.GetUint64(idx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 8)...)
-				dataLength += 8
 				binary.LittleEndian.PutUint64(data[currentPos:], intValue)
 			} else {
 				nullBitmap.Set(rowIdx, true)
@@ -586,7 +570,6 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 				temp := make([]byte, 8)
 				binary.BigEndian.PutUint64(temp, bitValue)
 				data = append(data, temp[len(temp)-numBytes:]...)
-				dataLength += numBytes
 			} else {
 				nullBitmap.Set(rowIdx, true)
 			}
@@ -597,11 +580,9 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 				enumType := col.TypeInfo.ToSqlType().(gmstypes.EnumType)
 				if enumType.NumberOfElements() <= 0xFF {
 					data = append(data, byte(enumValue))
-					dataLength += 1
 				} else {
 					data = append(data, make([]byte, 2)...)
 					binary.LittleEndian.PutUint16(data[currentPos:], enumValue)
-					dataLength += 2
 				}
 			} else {
 				nullBitmap.Set(rowIdx, true)
@@ -616,7 +597,6 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 				temp := make([]byte, 8)
 				binary.LittleEndian.PutUint64(temp, setValue)
 				data = append(data, temp[:numBytes]...)
-				dataLength += numBytes
 			} else {
 				nullBitmap.Set(rowIdx, true)
 			}
@@ -720,18 +700,41 @@ func serializeRowToBinlogBytes(schema schema.Schema, key, value tree.Item) (data
 
 				data = append(data, buffer...)
 				// TODO: Seems like we don't actually need dataLength, right it can be computed by len(data)
-				dataLength += int(length)
 			} else {
 				nullBitmap.Set(rowIdx, true)
 			}
 
-		//case query.Type_BLOB: // BLOB
-		//	bytes, notNull := descriptor.GetBytes(idx, tuple)
-		//	if notNull {
-		//
-		//	} else {
-		//		nullBitmap.Set(rowIdx, true)
-		//	}
+		case query.Type_BLOB: // TINYBLOB, BLOB, MEDIUMBLOB, LONGBLOB
+			addr, notNull := descriptor.GetBytesAddr(idx, tuple)
+			if notNull {
+				if ns == nil {
+					// TODO: return error
+					panic("node store is nil!")
+				}
+				bytes, err := tree.NewByteArray(addr, ns).ToBytes(ctx)
+				if err != nil {
+					// TODO: return error
+					panic(err.Error())
+				}
+
+				blobType := typ.(sql.StringType)
+				if blobType.MaxByteLength() > 0xFFFFFF {
+					data = append(data, make([]byte, 4)...)
+					binary.LittleEndian.PutUint32(data[currentPos:], uint32(len(bytes)))
+				} else if blobType.MaxByteLength() > 0xFFFF {
+					temp := make([]byte, 4)
+					binary.LittleEndian.PutUint32(temp, uint32(len(bytes)))
+					data = append(data, temp[:3]...)
+				} else if blobType.MaxByteLength() > 0xFF {
+					data = append(data, make([]byte, 2)...)
+					binary.LittleEndian.PutUint16(data[currentPos:], uint16(len(bytes)))
+				} else {
+					data = append(data, uint8(len(bytes)))
+				}
+				data = append(data, bytes...)
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
 
 		default:
 			return nil, nullBitmap, fmt.Errorf("unsupported type: %v (%d)\n", typ.String(), typ.Type())
@@ -916,19 +919,29 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 			numBytes := (numElements + 7) / 8
 			metadata[i] = mysql.TypeSet<<8 | numBytes
 
-		// TODO: Decimals look like the most involved type to serialize...
 		case query.Type_DECIMAL: // DECIMAL
 			types[i] = mysql.TypeNewDecimal
 			decimalType := typ.(sql.DecimalType)
 			metadata[i] = (uint16(decimalType.Precision()) << 8) | uint16(decimalType.Scale())
 
-		case query.Type_JSON: // JSON
-
-		case query.Type_BLOB: // BLOB
+		case query.Type_BLOB: // TINYBLOB, BLOB, MEDIUMBLOB, LONGBLOB
+			// TODO: Text and JSON types, too?
+			types[i] = mysql.TypeBlob
+			blobType := typ.(sql.StringType)
+			if blobType.MaxByteLength() > 0xFFFFFF {
+				metadata[i] = uint16(4)
+			} else if blobType.MaxByteLength() > 0xFFFF {
+				metadata[i] = uint16(3)
+			} else if blobType.MaxByteLength() > 0xFF {
+				metadata[i] = uint16(2)
+			} else {
+				metadata[i] = uint16(1)
+			}
 
 		// TODO: Others?
+		case query.Type_JSON: // JSON
+		case query.Type_TEXT: // TINYTEXT, TEXT, MEDIUMTEXT, LONGTEXT
 		case query.Type_GEOMETRY:
-		case query.Type_TEXT:
 		case query.Type_BINARY:
 		case query.Type_VARBINARY:
 		case query.Type_NULL_TYPE: // ???
