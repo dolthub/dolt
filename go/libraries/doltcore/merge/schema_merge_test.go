@@ -1626,7 +1626,7 @@ func makeRootWithTable(t *testing.T, ddb *doltdb.DoltDB, eo editor.Options, tbl 
 	require.NoError(t, err)
 	dt, err := doltdb.NewEmptyTable(ctx, ddb.ValueReadWriter(), ddb.NodeStore(), tbl.ns.sch)
 	require.NoError(t, err)
-	root, err := ws.WorkingRoot().PutTable(ctx, tbl.ns.name, dt)
+	root, err := ws.WorkingRoot().PutTable(ctx, doltdb.TableName{Name: tbl.ns.name}, dt)
 	require.NoError(t, err)
 	ws = ws.WithWorkingRoot(root)
 

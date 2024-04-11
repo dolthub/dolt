@@ -103,7 +103,7 @@ func NewTempTable(
 		return nil, err
 	}
 
-	newRoot, err := ws.WorkingRoot().PutTable(ctx, name, tbl)
+	newRoot, err := ws.WorkingRoot().PutTable(ctx, doltdb.TableName{Name: name}, tbl)
 	if err != nil {
 		return nil, err
 	}

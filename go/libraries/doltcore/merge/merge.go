@@ -257,7 +257,7 @@ func MergeRoots(
 		if mergedTable.table != nil {
 			tblToStats[tblName] = stats
 
-			mergedRoot, err = mergedRoot.PutTable(ctx, tblName, mergedTable.table)
+			mergedRoot, err = mergedRoot.PutTable(ctx, doltdb.TableName{Name: tblName}, mergedTable.table)
 			if err != nil {
 				return nil, err
 			}
@@ -392,7 +392,7 @@ func mergeCVsWithStash(ctx context.Context, root *doltdb.RootValue, stash *viola
 		if err != nil {
 			return nil, err
 		}
-		updatedRoot, err = root.PutTable(ctx, name, tbl)
+		updatedRoot, err = root.PutTable(ctx, doltdb.TableName{Name: name}, tbl)
 		if err != nil {
 			return nil, err
 		}

@@ -170,7 +170,7 @@ func (s *nomsWriteSession) flush(ctx *sql.Context) (*doltdb.WorkingSet, error) {
 		mu.Lock()
 		defer mu.Unlock()
 		if newRoot != nil {
-			newRoot, err = newRoot.PutTable(ctx, name, table)
+			newRoot, err = newRoot.PutTable(ctx, doltdb.TableName{Name: name}, table)
 		}
 		return err
 	}

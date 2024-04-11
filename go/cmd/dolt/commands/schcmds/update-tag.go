@@ -116,7 +116,7 @@ func (cmd UpdateTagCmd) Exec(ctx context.Context, commandStr string, args []stri
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("failed to update table schema").AddCause(err).Build(), usage)
 	}
 
-	root, err = root.PutTable(ctx, tName, tbl)
+	root, err = root.PutTable(ctx, doltdb.TableName{Name: tName}, tbl)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("failed to put table in root").AddCause(err).Build(), usage)
 	}

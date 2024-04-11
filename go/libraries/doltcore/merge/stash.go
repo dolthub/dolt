@@ -82,7 +82,7 @@ func stashConflicts(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootVa
 		if err != nil {
 			return nil, nil, err
 		}
-		updatedRoot, err = updatedRoot.PutTable(ctx, name, tbl)
+		updatedRoot, err = updatedRoot.PutTable(ctx, doltdb.TableName{Name: name}, tbl)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -110,7 +110,7 @@ func stashViolations(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootV
 		if err != nil {
 			return nil, nil, err
 		}
-		updatedRoot, err = updatedRoot.PutTable(ctx, name, tbl)
+		updatedRoot, err = updatedRoot.PutTable(ctx, doltdb.TableName{Name: name}, tbl)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -136,7 +136,7 @@ func applyConflictStash(ctx context.Context, stash map[string]*conflictData, roo
 		if err != nil {
 			return nil, err
 		}
-		updatedRoot, err = updatedRoot.PutTable(ctx, name, tbl)
+		updatedRoot, err = updatedRoot.PutTable(ctx, doltdb.TableName{Name: name}, tbl)
 		if err != nil {
 			return nil, err
 		}

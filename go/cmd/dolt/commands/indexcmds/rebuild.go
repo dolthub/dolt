@@ -108,7 +108,7 @@ func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string
 	if err != nil {
 		return HandleErr(errhand.BuildDError("Unable to set rebuilt index.").AddCause(err).Build(), nil)
 	}
-	working, err = working.PutTable(ctx, tableName, updatedTable)
+	working, err = working.PutTable(ctx, doltdb.TableName{Name: tableName}, updatedTable)
 	if err != nil {
 		return HandleErr(errhand.BuildDError("Unable to set the table for the rebuilt index.").AddCause(err).Build(), nil)
 	}

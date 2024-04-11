@@ -113,7 +113,7 @@ func clearEmptyConflicts(ctx context.Context, tbls []string, working *doltdb.Roo
 					return nil, err
 				}
 
-				working, err = working.PutTable(ctx, tblName, clrTbl)
+				working, err = working.PutTable(ctx, doltdb.TableName{Name: tblName}, clrTbl)
 				if err != nil {
 					return nil, err
 				}

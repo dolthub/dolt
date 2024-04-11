@@ -296,7 +296,7 @@ func (f *foreignKeyViolationWriter) EndCurrFK(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		f.rootValue, err = f.rootValue.PutTable(ctx, f.currFk.TableName, tbl)
+		f.rootValue, err = f.rootValue.PutTable(ctx, doltdb.TableName{Name: f.currFk.TableName}, tbl)
 		if err != nil {
 			return err
 		}
@@ -311,7 +311,7 @@ func (f *foreignKeyViolationWriter) EndCurrFK(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	f.rootValue, err = f.rootValue.PutTable(ctx, f.currFk.TableName, tbl)
+	f.rootValue, err = f.rootValue.PutTable(ctx, doltdb.TableName{Name: f.currFk.TableName}, tbl)
 	if err != nil {
 		return err
 	}

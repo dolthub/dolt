@@ -281,7 +281,7 @@ func makePeopleTable(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, erro
 	if err != nil {
 		return nil, err
 	}
-	root, err = root.PutTable(ctx, tableName, tbl)
+	root, err = root.PutTable(ctx, doltdb.TableName{Name: tableName}, tbl)
 	if err != nil {
 		return nil, err
 	}

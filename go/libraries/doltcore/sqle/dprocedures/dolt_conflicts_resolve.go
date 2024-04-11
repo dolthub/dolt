@@ -332,7 +332,7 @@ func clearTableAndUpdateRoot(ctx *sql.Context, root *doltdb.RootValue, tbl *dolt
 	if err != nil {
 		return nil, err
 	}
-	newRoot, err := root.PutTable(ctx, tblName, newTbl)
+	newRoot, err := root.PutTable(ctx, doltdb.TableName{Name: tblName}, newTbl)
 	if err != nil {
 		return nil, err
 	}
@@ -381,7 +381,7 @@ func ResolveSchemaConflicts(ctx *sql.Context, ddb *doltdb.DoltDB, ws *doltdb.Wor
 	var merged []string
 	root := ws.WorkingRoot()
 	for name, tbl := range updates {
-		if root, err = root.PutTable(ctx, name, tbl); err != nil {
+		if root, err = root.PutTable(ctx, doltdb.TableName{Name: name}, tbl); err != nil {
 			return nil, err
 		}
 		merged = append(merged, name)

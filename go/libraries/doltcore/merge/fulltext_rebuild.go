@@ -279,7 +279,7 @@ func rebuildFullTextIndexesForTable(ctx *sql.Context, tableToRebuild rebuildable
 		if err != nil {
 			return nil, err
 		}
-		mergedRoot, err = mergedRoot.PutTable(ctx, ftTable.Name(), newTbl)
+		mergedRoot, err = mergedRoot.PutTable(ctx, doltdb.TableName{Name: ftTable.Name()}, newTbl)
 		if err != nil {
 			return nil, err
 		}
@@ -337,7 +337,7 @@ func purgeFulltextTableData(ctx *sql.Context, root *doltdb.RootValue, tableNames
 		if err != nil {
 			return nil, err
 		}
-		root, err = root.PutTable(ctx, tableName, tbl)
+		root, err = root.PutTable(ctx, doltdb.TableName{Name: tableName}, tbl)
 		if err != nil {
 			return nil, err
 		}

@@ -104,7 +104,7 @@ func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, ro
 		if err != nil {
 			return nil, doltdb.Roots{}, err
 		}
-		newWkRoot, err = newWkRoot.PutTable(ctx, name, tbl)
+		newWkRoot, err = newWkRoot.PutTable(ctx, doltdb.TableName{Name: name}, tbl)
 		if err != nil {
 			return nil, doltdb.Roots{}, fmt.Errorf("failed to write table back to database: %s", err)
 		}

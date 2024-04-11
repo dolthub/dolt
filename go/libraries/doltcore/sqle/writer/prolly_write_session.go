@@ -190,7 +190,7 @@ func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, manualAuto
 	var err error
 	flushed := s.workingSet.WorkingRoot()
 	for name, tbl := range tables {
-		flushed, err = flushed.PutTable(ctx, name, tbl)
+		flushed, err = flushed.PutTable(ctx, doltdb.TableName{Name: name}, tbl)
 		if err != nil {
 			return nil, err
 		}

@@ -353,7 +353,7 @@ func putEmptyTableWithSchema(ctx context.Context, tblName string, root *doltdb.R
 		return nil, errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
 	}
 
-	root, err = root.PutTable(ctx, tblName, tbl)
+	root, err = root.PutTable(ctx, doltdb.TableName{Name: tblName}, tbl)
 	if err != nil {
 		return nil, errhand.BuildDError("error: failed to add table.").AddCause(err).Build()
 	}

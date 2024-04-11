@@ -360,7 +360,7 @@ func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newP
 			return true, err
 		}
 
-		migrated, err = migrated.PutTable(ctx, name, mtbl)
+		migrated, err = migrated.PutTable(ctx, doltdb.TableName{Name: name}, mtbl)
 		if err != nil {
 			return true, err
 		}

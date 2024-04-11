@@ -724,13 +724,13 @@ func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootT
 	mRoot, err := mainHead.GetRootValue(context.Background())
 	require.NoError(t, err)
 
-	mRoot, err = mRoot.PutTable(context.Background(), tableName, ancTbl)
+	mRoot, err = mRoot.PutTable(context.Background(), doltdb.TableName{Name: tableName}, ancTbl)
 	require.NoError(t, err)
 
-	updatedRoot, err := mRoot.PutTable(context.Background(), tableName, rootTbl)
+	updatedRoot, err := mRoot.PutTable(context.Background(), doltdb.TableName{Name: tableName}, rootTbl)
 	require.NoError(t, err)
 
-	mergeRoot, err := mRoot.PutTable(context.Background(), tableName, mergeTbl)
+	mergeRoot, err := mRoot.PutTable(context.Background(), doltdb.TableName{Name: tableName}, mergeTbl)
 	require.NoError(t, err)
 
 	r, mainHash, err := ddb.WriteRootValue(context.Background(), mRoot)

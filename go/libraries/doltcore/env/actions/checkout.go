@@ -72,7 +72,7 @@ func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls [
 			}
 		}
 
-		roots.Working, err = roots.Working.PutTable(ctx, tblName, tbl)
+		roots.Working, err = roots.Working.PutTable(ctx, doltdb.TableName{Name: tblName}, tbl)
 		if err != nil {
 			return doltdb.Roots{}, err
 		}
