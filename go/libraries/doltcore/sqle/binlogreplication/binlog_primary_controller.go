@@ -728,6 +728,25 @@ func serializeRowToBinlogBytes(ctx *sql.Context, schema schema.Schema, key, valu
 				nullBitmap.Set(rowIdx, true)
 			}
 
+		case query.Type_GEOMETRY: // GEOMETRY
+			// NOTE: Using descriptor.GetGeometry() here will return the stored bytes, but
+			//       we need to use tree.GetField() so that they get deserialized into WKB
+			//       format bytes for the correct MySQL binlog serialization format.
+			geometry, err := tree.GetField(ctx, descriptor, idx, tuple, ns)
+			if err != nil {
+				return nil, mysql.Bitmap{}, err
+			}
+			if geometry != nil {
+				geoType := geometry.(gmstypes.GeometryValue)
+				bytes := geoType.Serialize()
+				bytesLengthBuffer := make([]byte, 4)
+				binary.LittleEndian.PutUint32(bytesLengthBuffer, uint32(len(bytes)))
+				data = append(data, bytesLengthBuffer...)
+				data = append(data, bytes...)
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
+
 		case query.Type_JSON: // JSON
 			// MySQL uses a custom binary serialization for JSON data when storing it and
 			// when transferring it through binlog events.
@@ -1011,9 +1030,9 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 				metadata[i] = uint16(1)
 			}
 
-		// TODO: Others?
-		case query.Type_NULL_TYPE: // ???
 		case query.Type_GEOMETRY: // GEOMETRY
+			types[i] = mysql.TypeGeometry
+			metadata[i] = uint16(4)
 
 		default:
 			panic(fmt.Sprintf("unsupported type: %v \n", typ.String()))
