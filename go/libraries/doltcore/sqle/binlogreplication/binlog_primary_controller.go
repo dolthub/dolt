@@ -336,29 +336,26 @@ func serializeRowToBinlogBytes(ctx *sql.Context, schema schema.Schema, key, valu
 		currentPos := len(data)
 		typ := col.TypeInfo.ToSqlType()
 		switch typ.Type() {
-		case query.Type_VARCHAR, query.Type_CHAR:
+		case query.Type_CHAR, query.Type_VARCHAR: // CHAR, VARCHAR
 			stringVal, notNull := descriptor.GetString(idx, tuple)
 			if notNull {
-				// When the field size is greater than 255 bytes, the serialization format
-				// requires us to use 2 bytes for the length of the field value.
-				numBytesForLength := 1
-				stringLength := len(stringVal)
-				if stringType, ok := col.TypeInfo.ToSqlType().(sql.StringType); ok {
-					if stringType.Length()*4 > 255 {
-						numBytesForLength = 2
-					}
-				} else {
-					return nil, nullBitmap, fmt.Errorf("expected string type, got %T", col.TypeInfo.ToSqlType())
+				encodedData, err := encodeBytes([]byte(stringVal), col)
+				if err != nil {
+					return nil, mysql.Bitmap{}, err
 				}
-				data = append(data, make([]byte, numBytesForLength+stringLength)...)
-				if numBytesForLength == 1 {
-					data[currentPos] = uint8(stringLength)
-				} else if numBytesForLength == 2 {
-					binary.LittleEndian.PutUint16(data[currentPos:], uint16(stringLength))
-				} else {
-					panic("this shouldn't happen!") // TODO:
+				data = append(data, encodedData...)
+			} else {
+				nullBitmap.Set(rowIdx, true)
+			}
+
+		case query.Type_BINARY, query.Type_VARBINARY: // BINARY, VARBINARY
+			bytes, notNull := descriptor.GetBytes(idx, tuple)
+			if notNull {
+				encodedData, err := encodeBytes(bytes, col)
+				if err != nil {
+					return nil, mysql.Bitmap{}, err
 				}
-				copy(data[currentPos+numBytesForLength:], stringVal)
+				data = append(data, encodedData...)
 			} else {
 				nullBitmap.Set(rowIdx, true)
 			}
@@ -755,6 +752,38 @@ func serializeRowToBinlogBytes(ctx *sql.Context, schema schema.Schema, key, valu
 	return data, nullBitmap, nil
 }
 
+// encodeBytes encodes the bytes from a BINARY, VARBINARY, CHAR, or VARCHAR field, passed in |data|,
+// into the returned byte slice, by first encoding the length of |data| and then encoding the bytes
+// from data. As per MySQL's serialization protocol, the length field is a variable size depending on
+// the maximum size of |col|. Fields using 255 or less bytes use a single byte for the length of the
+// data, and if a field is declared as larger than 255 bytes, then two bytes are used to encode the
+// length of each data value.
+func encodeBytes(data []byte, col schema.Column) ([]byte, error) {
+	// When the field size is greater than 255 bytes, the serialization format
+	// requires us to use 2 bytes for the length of the field value.
+	numBytesForLength := 1
+	dataLength := len(data)
+	if stringType, ok := col.TypeInfo.ToSqlType().(sql.StringType); ok {
+		if stringType.MaxByteLength() > 255 {
+			numBytesForLength = 2
+		}
+	} else {
+		return nil, fmt.Errorf("expected string type, got %T", col.TypeInfo.ToSqlType())
+	}
+
+	buffer := make([]byte, numBytesForLength+dataLength)
+	if numBytesForLength == 1 {
+		buffer[0] = uint8(dataLength)
+	} else if numBytesForLength == 2 {
+		binary.LittleEndian.PutUint16(buffer, uint16(dataLength))
+	} else {
+		return nil, fmt.Errorf("unexpected number of bytes for length: %d", numBytesForLength)
+	}
+	copy(buffer[numBytesForLength:], data)
+
+	return buffer, nil
+}
+
 // encodeBytesFromAddress loads the out-of-band content from |addr| in |ns| and serializes it into a binary format
 // in the returned |data| slice. The |typ| parameter is used to determine the maximum byte length of the serialized
 // type, in order to determine how many bytes to use for the length prefix.
@@ -872,12 +901,12 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 		metadata[i] = 0
 
 		switch typ.Type() {
-		case query.Type_CHAR:
+		case query.Type_CHAR, query.Type_BINARY:
 			types[i] = mysql.TypeString
 			sTyp := typ.(sql.StringType)
-			maxFieldLength := uint16(4 * sTyp.Length())
-			upperBits := (maxFieldLength >> 8) << 12
-			lowerBits := maxFieldLength & 0xFF
+			maxFieldLengthInBytes := uint16(sTyp.MaxByteLength())
+			upperBits := (maxFieldLengthInBytes >> 8) << 12
+			lowerBits := maxFieldLengthInBytes & 0xFF
 			// This is one of the less obvious parts of the MySQL serialization protocol... Several types use
 			// mysql.TypeString as their serialization type in binlog events (i.e. SET, ENUM, CHAR), so the first
 			// metadata byte for this serialization type indicates what field type is using this serialization type
@@ -889,10 +918,11 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 			// account for the max size of CHAR fields (255 chars).
 			metadata[i] = ((mysql.TypeString << 8) ^ upperBits) | lowerBits
 
-		case query.Type_VARCHAR:
+		case query.Type_VARCHAR, query.Type_VARBINARY:
 			types[i] = mysql.TypeVarchar
 			sTyp := typ.(sql.StringType)
-			metadata[i] = uint16(4 * sTyp.Length())
+			maxFieldLengthInBytes := sTyp.MaxByteLength()
+			metadata[i] = uint16(maxFieldLengthInBytes)
 
 		case query.Type_YEAR:
 			types[i] = mysql.TypeYear
@@ -982,10 +1012,8 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 			}
 
 		// TODO: Others?
-		case query.Type_GEOMETRY: // GEOMETRY
-		case query.Type_BINARY:
-		case query.Type_VARBINARY:
 		case query.Type_NULL_TYPE: // ???
+		case query.Type_GEOMETRY: // GEOMETRY
 
 		default:
 			panic(fmt.Sprintf("unsupported type: %v \n", typ.String()))
