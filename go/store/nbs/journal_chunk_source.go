@@ -78,8 +78,21 @@ type journalRecord struct {
 }
 
 func (s journalChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error) {
+	return s.getManyCompressed(ctx, eg, reqs, func(ctx context.Context, cc CompressedChunk) {
+		ch, err := cc.ToChunk()
+		if err != nil {
+			eg.Go(func() error {
+				return err
+			})
+			return
+		}
+		chWHash := chunks.NewChunkWithHash(cc.Hash(), ch.Data())
+		found(ctx, &chWHash)
+	}, stats)
+}
+
+func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
 	var remaining bool
-	// todo: read planning
 	var jReqs []journalRecord
 	for i, r := range reqs {
 		if r.found {
@@ -93,7 +106,7 @@ func (s journalChunkSource) getMany(ctx context.Context, eg *errgroup.Group, req
 		jReqs = append(jReqs, journalRecord{r: rang, idx: i})
 	}
 
-	// sort chunks by locality
+	// sort chunks by journal locality
 	sort.Slice(jReqs, func(i, j int) bool {
 		return jReqs[i].r.Offset < jReqs[j].r.Offset
 	})
@@ -101,51 +114,22 @@ func (s journalChunkSource) getMany(ctx context.Context, eg *errgroup.Group, req
 	for i := range jReqs {
 		eg.Go(func() error {
 			rec := jReqs[i]
-			buf := make([]byte, rec.r.Length)
-			if _, err := s.journal.readAt(buf, int64(rec.r.Offset)); err != nil {
+			a := reqs[rec.idx].a
+			if cc, err := s.journal.getCompressedChunkAtRange(rec.r, *a); err != nil {
 				return err
-			}
-			cc, err := NewCompressedChunk(hash.Hash(*reqs[rec.idx].a), buf)
-			ch, err := cc.ToChunk()
-			if err != nil {
-				return err
-			}
-
-			data := ch.Data()
-
-			if data != nil {
-				reqs[rec.idx].found = true
-				ch := chunks.NewChunkWithHash(hash.Hash(*reqs[rec.idx].a), data)
-				found(ctx, &ch)
-			} else {
+			} else if cc.IsEmpty() {
 				remaining = true
+				return nil
+			} else {
+				reqs[rec.idx].found = true
+				found(ctx, cc)
+				return nil
 			}
-			return nil
 		})
 	}
 	err := eg.Wait()
 	if err != nil {
 		return false, err
-	}
-	return remaining, nil
-}
-
-func (s journalChunkSource) getManyCompressed(ctx context.Context, _ *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
-	var remaining bool
-	// todo: read planning
-	for i := range reqs {
-		if reqs[i].found {
-			continue
-		}
-		cc, err := s.getCompressed(ctx, *reqs[i].a, stats)
-		if err != nil {
-			return false, err
-		} else if cc.IsEmpty() {
-			remaining = true
-		} else {
-			reqs[i].found = true
-			found(ctx, cc)
-		}
 	}
 	return remaining, nil
 }

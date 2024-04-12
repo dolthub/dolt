@@ -337,6 +337,17 @@ func (wr *journalWriter) getCompressedChunk(h hash.Hash) (CompressedChunk, error
 	return NewCompressedChunk(hash.Hash(h), buf)
 }
 
+// getCompressedChunk reads the CompressedChunks with addr |h|.
+func (wr *journalWriter) getCompressedChunkAtRange(r Range, h hash.Hash) (CompressedChunk, error) {
+	wr.lock.RLock()
+	defer wr.lock.RUnlock()
+	buf := make([]byte, r.Length)
+	if _, err := wr.readAt(buf, int64(r.Offset)); err != nil {
+		return CompressedChunk{}, nil
+	}
+	return NewCompressedChunk(hash.Hash(h), buf)
+}
+
 // getRange returns a Range for the chunk with addr |h|.
 func (wr *journalWriter) getRange(h hash.Hash) (rng Range, ok bool, err error) {
 	// callers will use |rng| to read directly from the
