@@ -27,9 +27,9 @@ table RootValue {
 
   collation:Collation;
   
-  // schemas is used for table storage in any non-default database schema. Databases with a single schema 
+  // schema_tables is used for table storage in any non-default database schema. Databases with a single schema 
   // (the default) only use the normal tables field. Entries are stored in sorted order by schema name.
-  schemas:[DatabaseSchemaTableStore];
+  schema_tables:[DatabaseSchemaTableStore];
 }
 
 table DatabaseSchemaTableStore {

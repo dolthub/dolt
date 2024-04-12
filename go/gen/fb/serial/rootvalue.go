@@ -144,7 +144,7 @@ func (rcv *RootValue) MutateCollation(n Collation) bool {
 	return rcv._tab.MutateUint16Slot(10, uint16(n))
 }
 
-func (rcv *RootValue) TrySchemas(obj *DatabaseSchemaTableStore, j int) (bool, error) {
+func (rcv *RootValue) TrySchemaTables(obj *DatabaseSchemaTableStore, j int) (bool, error) {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
@@ -159,7 +159,7 @@ func (rcv *RootValue) TrySchemas(obj *DatabaseSchemaTableStore, j int) (bool, er
 	return false, nil
 }
 
-func (rcv *RootValue) SchemasLength() int {
+func (rcv *RootValue) SchemaTablesLength() int {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
@@ -190,10 +190,10 @@ func RootValueStartForeignKeyAddrVector(builder *flatbuffers.Builder, numElems i
 func RootValueAddCollation(builder *flatbuffers.Builder, collation Collation) {
 	builder.PrependUint16Slot(3, uint16(collation), 0)
 }
-func RootValueAddSchemas(builder *flatbuffers.Builder, schemas flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(schemas), 0)
+func RootValueAddSchemaTables(builder *flatbuffers.Builder, schemaTables flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(schemaTables), 0)
 }
-func RootValueStartSchemasVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+func RootValueStartSchemaTablesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
 func RootValueEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
