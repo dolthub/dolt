@@ -17,6 +17,8 @@ package enginetest
 import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
+
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 )
 
 var DoltProcedureTests = []queries.ScriptTest{
@@ -223,10 +225,7 @@ end
 			"create table t(a int primary key auto_increment, b int);",
 			"create table t2(a int primary key auto_increment, b int);",
 			"call dolt_commit('-Am', 'new table');",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: `create trigger branch_trigger after insert on t for each row
+			`create trigger branch_trigger after insert on t for each row
 begin
   declare i int default 1;
 	commits: loop
@@ -251,23 +250,34 @@ begin
 	end loop commits;
 end
 `,
-				Skip:             true, // See https://github.com/dolthub/go-mysql-server/pull/2442
-				SkipResultsCheck: true,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "insert into t values (1, 1);",
+				Expected: []sql.Row{
+					{gmstypes.OkResult{RowsAffected: 1, InsertID: 1}},
+				},
 			},
 			{
-				Query:            "insert into t values (1, 1);",
-				Skip:             true,
-				SkipResultsCheck: true, // return value is a bit odd, needs investigation
+				Query: "select name from dolt_branches order by 1",
+				Expected: []sql.Row{
+					{"branch1"},
+					{"branch2"},
+					{"branch3"},
+					{"branch4"},
+					{"main"},
+				},
 			},
 			{
-				Query:    "select name from dolt_branches order by 1",
-				Skip:     true,
-				Expected: []sql.Row{{"branch1"}, {"branch2"}, {"branch3"}, {"branch4"}, {"main"}},
-			},
-			{
-				Query:    "select * from t2 order by 1",
-				Skip:     true,
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
+				// For some reason, calling stored procedures disables inserts
+				Skip:  true,
+				Query: "select * from t2 order by 1",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{3, 3},
+					{4, 4},
+				},
 			},
 		},
 	},
