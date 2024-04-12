@@ -225,7 +225,7 @@ end
 			"create table t(a int primary key auto_increment, b int);",
 			"create table t2(a int primary key auto_increment, b int);",
 			"call dolt_commit('-Am', 'new table');",
-`create trigger branch_trigger after insert on t for each row
+			`create trigger branch_trigger after insert on t for each row
 begin
   declare i int default 1;
 	commits: loop
@@ -253,13 +253,13 @@ end
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "insert into t values (1, 1);",
+				Query: "insert into t values (1, 1);",
 				Expected: []sql.Row{
 					{gmstypes.OkResult{RowsAffected: 1, InsertID: 1}},
 				},
 			},
 			{
-				Query:    "select name from dolt_branches order by 1",
+				Query: "select name from dolt_branches order by 1",
 				Expected: []sql.Row{
 					{"branch1"},
 					{"branch2"},
@@ -270,8 +270,8 @@ end
 			},
 			{
 				// For some reason, calling stored procedures disables inserts
-				Skip:     true,
-				Query:    "select * from t2 order by 1",
+				Skip:  true,
+				Query: "select * from t2 order by 1",
 				Expected: []sql.Row{
 					{1, 1},
 					{2, 2},
