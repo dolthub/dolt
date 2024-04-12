@@ -93,6 +93,12 @@ func (s journalChunkSource) getMany(ctx context.Context, eg *errgroup.Group, req
 	}, stats)
 }
 
+// getManyCompressed implements chunkReader. Here we (1) synchronously check
+// the journal index for read ranges, (2) record if the source misses any
+// needed remaining chunks, (3) sort the lookups for efficient disk access,
+// and then (4) asynchronously perform reads. We release the journal read
+// lock after returning when all reads are completed, which can be after the
+// function returns.
 func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
 	var remaining bool
 	var jReqs []journalRecord
@@ -117,6 +123,8 @@ func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.
 	})
 
 	for i := range jReqs {
+		// workers populate the parent error group
+		// record local workers for releasing lock
 		wg.Add(1)
 		eg.Go(func() error {
 			defer wg.Done()
