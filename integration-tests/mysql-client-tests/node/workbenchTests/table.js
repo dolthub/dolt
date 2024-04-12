@@ -12,6 +12,7 @@ export const tableTests = [
       info: "",
       serverStatus: 2,
       warningStatus: 0,
+      changedRows: 0,
     },
   },
   {
@@ -23,6 +24,7 @@ export const tableTests = [
       info: "",
       serverStatus: 2,
       warningStatus: 0,
+      changedRows: 0,
     },
   },
   {
@@ -94,6 +96,7 @@ export const tableTests = [
       info: "",
       serverStatus: 2,
       warningStatus: 0,
+      changedRows: 0,
     },
   },
   {
@@ -105,6 +108,7 @@ export const tableTests = [
       info: "",
       serverStatus: 2,
       warningStatus: 0,
+      changedRows: 0,
     },
   },
   {
@@ -155,6 +159,7 @@ export const tableTests = [
       info: "",
       serverStatus: 2,
       warningStatus: 0,
+      changedRows: 0,
     },
   },
 
@@ -172,6 +177,7 @@ export const tableTests = [
       info: "",
       serverStatus: 2,
       warningStatus: 0,
+      changedRows: 0,
     },
   },
   {
@@ -188,6 +194,7 @@ export const tableTests = [
       info: "",
       serverStatus: 2,
       warningStatus: 0,
+      changedRows: 0,
     },
   },
   {
@@ -224,6 +231,7 @@ export const tableTests = [
       info: "",
       serverStatus: 2,
       warningStatus: 0,
+      changedRows: 0,
     },
   },
   {

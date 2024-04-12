@@ -11,6 +11,7 @@ const tests = [
       info: "",
       serverStatus: 2,
       warningStatus: 0,
+      changedRows: 0,
     },
   },
   {
@@ -44,6 +45,7 @@ const tests = [
       info: "",
       serverStatus: 2,
       warningStatus: 0,
+      changedRows: 0,
     },
   },
   { q: "select * from test", res: [{ pk: 0, value: 0 }] },
@@ -63,6 +65,7 @@ const tests = [
       info: "",
       serverStatus: 2,
       warningStatus: 0,
+      changedRows: 0,
     },
   },
   { q: "call dolt_commit('-a', '-m', 'my commit2')", res: [] },
