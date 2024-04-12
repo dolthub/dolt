@@ -91,7 +91,9 @@ func (s journalChunkSource) getMany(ctx context.Context, eg *errgroup.Group, req
 	}, stats)
 }
 
-func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
+func (s journalChunkSource) getManyCompressed(ctx context.Context, _ *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
+	// todo(max): get rid of |eg| argument, have |found| return error
+	eg, ctx := errgroup.WithContext(ctx)
 	var remaining bool
 	var jReqs []journalRecord
 	for i, r := range reqs {
