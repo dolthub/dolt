@@ -16,9 +16,11 @@ package nbs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sort"
+	"sync"
 
 	"golang.org/x/sync/errgroup"
 
@@ -91,11 +93,11 @@ func (s journalChunkSource) getMany(ctx context.Context, eg *errgroup.Group, req
 	}, stats)
 }
 
-func (s journalChunkSource) getManyCompressed(ctx context.Context, _ *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
-	// todo(max): get rid of |eg| argument, have |found| return error
-	eg, ctx := errgroup.WithContext(ctx)
+func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
 	var remaining bool
 	var jReqs []journalRecord
+	var wg sync.WaitGroup
+	s.journal.lock.RLock()
 	for i, r := range reqs {
 		if r.found {
 			continue
@@ -106,6 +108,7 @@ func (s journalChunkSource) getManyCompressed(ctx context.Context, _ *errgroup.G
 			continue
 		}
 		jReqs = append(jReqs, journalRecord{r: rang, idx: i})
+		reqs[i].found = true
 	}
 
 	// sort chunks by journal locality
@@ -114,25 +117,25 @@ func (s journalChunkSource) getManyCompressed(ctx context.Context, _ *errgroup.G
 	})
 
 	for i := range jReqs {
+		wg.Add(1)
 		eg.Go(func() error {
+			defer wg.Done()
 			rec := jReqs[i]
 			a := reqs[rec.idx].a
 			if cc, err := s.journal.getCompressedChunkAtRange(rec.r, *a); err != nil {
 				return err
 			} else if cc.IsEmpty() {
-				remaining = true
-				return nil
+				return errors.New("chunk in journal index was empty.")
 			} else {
-				reqs[rec.idx].found = true
 				found(ctx, cc)
 				return nil
 			}
 		})
 	}
-	err := eg.Wait()
-	if err != nil {
-		return false, err
-	}
+	go func() {
+		wg.Wait()
+		s.journal.lock.RUnlock()
+	}()
 	return remaining, nil
 }
 
