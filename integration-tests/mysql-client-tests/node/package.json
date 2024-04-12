@@ -12,7 +12,7 @@
   "dependencies": {
     "knex": "^2.4.0",
     "mysql": "^2.18.1",
-    "mysql2": "^2.3.3",
+    "mysql2": "^3.9.4",
     "wtfnode": "^0.9.1",
     "yesql": "^5.0.0"
   }
