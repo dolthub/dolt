@@ -731,6 +731,22 @@ func serializeRowToBinlogBytes(ctx *sql.Context, schema schema.Schema, key, valu
 				nullBitmap.Set(rowIdx, true)
 			}
 
+		case query.Type_JSON: // JSON
+			// MySQL uses a custom binary serialization for JSON data when storing it and
+			// when transferring it through binlog events.
+			//
+			// Docs for MySQL JSON binary format:
+			// https://dev.mysql.com/doc/dev/mysql-server/latest/json__binary_8h.html
+			//
+			// Third-party description of MySQL's json representation
+			// https://lafengnan.gitbooks.io/blog/content/mysql/chapter2.html
+			//
+			// Third-party implementations of deserializing:
+			// https://github.com/shyiko/mysql-binlog-connector-java/pull/119/files
+			// https://github.com/noplay/python-mysql-replication/blob/175df28cc8b536a68522ff9b09dc5440adad6094/pymysqlreplication/packet.py
+			// TODO: Convert to an error
+			panic("JSON types not support for Dolt to MySQL binlog replication")
+
 		default:
 			return nil, nullBitmap, fmt.Errorf("unsupported type: %v (%d)\n", typ.String(), typ.Type())
 		}
@@ -966,7 +982,6 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 			}
 
 		// TODO: Others?
-		case query.Type_JSON: // JSON
 		case query.Type_GEOMETRY: // GEOMETRY
 		case query.Type_BINARY:
 		case query.Type_VARBINARY:
