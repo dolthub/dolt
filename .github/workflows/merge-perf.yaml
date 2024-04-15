@@ -131,10 +131,10 @@ jobs:
         dolt sql -r csv -q "$query" > "$out"
 
         cat "$out"
-        echo "::set-output name=report_path::$out"
+        echo "report_path=$out" >> $GITHUB_OUTPUT
 
         avg=$(dolt sql -r csv -q "$summaryq" | tail -1)
-        echo "::set-output name=avg::$avg"
+        echo "avg=$avg" >> $GITHUB_OUTPUT
 
     - name: Format Results
       id: html
@@ -160,7 +160,7 @@ jobs:
         echo "<table><tr><th>Average</th></tr><tr><td>$avg</tr></td></table>" >> "$out"
 
         cat "$out"
-        echo "::set-output name=html::$(echo $out)"
+        echo "html=$(echo $out)" >> $GITHUB_OUTPUT
 
     - name: Configure AWS Credentials
       if: ${{ github.event.client_payload.email_recipient }} != ""
