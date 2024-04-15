@@ -39,7 +39,7 @@ jobs:
           aws-region: us-west-2
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           role-duration-seconds: 10800 # 3 hours D:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Setup Go 1.x
         uses: actions/setup-go@v5
         with:
@@ -115,7 +115,7 @@ jobs:
     runs-on: ubuntu-22.04
     if: always() && (needs.test.result == 'failure')
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2.2.0
         with:

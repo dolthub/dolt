@@ -16,7 +16,7 @@ jobs:
       actor: ${{ steps.set-vars.outputs.actor }}
     steps:
       - name: Checkout BASE REF
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.base_ref }}
       - name: Get Current Correctness
@@ -26,7 +26,7 @@ jobs:
           out=$(cat current_correctness.txt)
           echo "regress_comp=$out" >> $GITHUB_OUTPUT
       - name: Checkout PR HEAD REF
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.head_ref }}
       - name: Set variables

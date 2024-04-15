@@ -12,7 +12,7 @@ jobs:
     name: Run tests
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Copy go package
         run: cp -r ./go ./integration-tests/go
       - name: Test ORM integrations

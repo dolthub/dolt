@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-22.04
     name: Run Fuzzer
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: azure/setup-kubectl@v3.0
         with:
           version: 'v1.23.6'

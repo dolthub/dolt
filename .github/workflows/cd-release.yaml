@@ -28,7 +28,7 @@ jobs:
     needs: format-version
     name: Trigger Benchmark Profile K8s Workflows
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: main
       - name: Get sha

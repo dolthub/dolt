@@ -28,7 +28,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
       - name: Checkout Release Notes Generator
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: dolthub/release-notes-generator
           token: ${{ secrets.REPO_ACCESS_TOKEN }}

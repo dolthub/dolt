@@ -17,11 +17,11 @@ jobs:
     outputs:
       files: ${{ steps.get_file_list.outputs.files }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         if: ${{ github.event_name == 'repository_dispatch' }}
         with:
           ref: ${{ github.event.client_payload.ref }}
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         if: ${{ github.event_name == 'workflow_dispatch' }}
       - name: Get file list
         id: get_file_list
@@ -92,7 +92,7 @@ jobs:
           aws-region: us-west-2
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           role-duration-seconds: 3600
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         if: ${{ github.event_name == 'repository_dispatch' }}
         with:
           ref: ${{ github.event.client_payload.ref }}
@@ -105,7 +105,7 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         if: ${{ github.event_name == 'workflow_dispatch' }}
       - uses: actions/setup-node@v3
         with:
@@ -157,7 +157,7 @@ jobs:
     runs-on: ubuntu-22.04
     if: always() && (needs.test-per-file.result == 'failure')
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2.2.0
         with:

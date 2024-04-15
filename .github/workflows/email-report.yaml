@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-22.04
     name: Email Team Members
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2.2.0
         with:

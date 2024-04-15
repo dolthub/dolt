@@ -16,7 +16,7 @@ jobs:
       fail-fast: true
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         ref: ${{ github.event.client_payload.version }}
 

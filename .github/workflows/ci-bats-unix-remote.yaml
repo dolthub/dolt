@@ -24,7 +24,7 @@ jobs:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
     # We only run these as seaparte workflow if we do not have AWS credentials.
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         if: ${{ env.use_credentials != 'true' }}
       - name: Setup Go 1.x
         if: ${{ env.use_credentials != 'true' }}
