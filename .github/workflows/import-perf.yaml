@@ -16,7 +16,7 @@ jobs:
       fail-fast: true
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         ref: ${{ github.event.client_payload.version }}
 
@@ -58,7 +58,7 @@ jobs:
           "github.com/dolthub/dolt/${{ env.BENCH_DIR }}/cmd" \
           -test "$testspec" \
           -out "$out"
-        echo "::set-output name=result_path::$out"
+        echo "result_path=$out" >> $GITHUB_OUTPUT
 
     - name: Report
       id: report
@@ -101,10 +101,10 @@ jobs:
         dolt sql -r csv < "$query" > "$out"
 
         cat "$out"
-        echo "::set-output name=report_path::$out"
+        echo "report_path=$out" >> $GITHUB_OUTPUT
 
         avg=$(dolt sql -r csv < "$summaryq" | tail -1)
-        echo "::set-output name=avg::$avg"
+        echo "avg=$avg" >> $GITHUB_OUTPUT
 
     - name: Format HTML
       id: html
@@ -130,11 +130,11 @@ jobs:
         echo "<table><tr><th>Average</th></tr><tr><td>$avg</tr></td></table>" >> "$out"
 
         cat "$out"
-        echo "::set-output name=html::$(echo $out)"
+        echo "html=$(echo $out)" >> $GITHUB_OUTPUT
 
     - name: Configure AWS Credentials
       if: ${{ github.event.client_payload.email_recipient }} != ""
-      uses: aws-actions/configure-aws-credentials@v2.2.0
+      uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -159,7 +159,7 @@ jobs:
 
     - name: Create MD
       if: ${{ github.event.client_payload.issue_id }} != ""
-      uses: petems/csv-to-md-table-action@master
+      uses: dolthub/csv-to-md-table-action@v4
       id: md
       with:
         csvinput: ${{ steps.csv.outputs.content }}

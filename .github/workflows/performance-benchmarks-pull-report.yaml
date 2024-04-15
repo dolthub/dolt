@@ -12,7 +12,7 @@ jobs:
     outputs:
       valid: ${{ steps.set_valid.outputs.valid }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Validate Commentor
         id: set_valid
         run: ./.github/scripts/performance-benchmarking/validate-commentor.sh "$ACTOR"
@@ -28,7 +28,7 @@ jobs:
       comment-body: ${{ steps.set_body.outputs.body }}
     steps:
       - name: Check for Deploy Trigger
-        uses: dolthub/pull-request-comment-trigger@master
+        uses: dolthub/pull-request-comment-trigger@v2
         id: check
         with:
           trigger: '#benchmark'
@@ -52,12 +52,12 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Get pull number
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         id: get_pull_number
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: core.setOutput("pull_number", JSON.stringify(context.issue.number));
-      - uses: peter-evans/repository-dispatch@v2.0.0
+      - uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: benchmark-latency

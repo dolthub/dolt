@@ -33,7 +33,7 @@ jobs:
     steps:
       - name: Get Open Bump PRs
         id: get-stale-prs
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         env:
           LABEL: ${{ needs.get-label.outputs.label }}
         with:
@@ -92,7 +92,7 @@ jobs:
     outputs:
       latest-pr: ${{ steps.latest-pr.outputs.pr_url }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
       - name: Set up Go 1.x
@@ -151,7 +151,7 @@ jobs:
     steps:
       - name: Comment/Close Stale PRs
         id: get-stale-prs
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         env:
           PULL: ${{ toJson(matrix.pull) }}
           SUPERSEDED_BY: ${{ needs.open-bump-pr.outputs.latest-pr }}
