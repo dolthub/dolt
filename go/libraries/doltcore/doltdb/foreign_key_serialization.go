@@ -153,7 +153,7 @@ func deserializeFlatbufferForeignKeys(msg types.SerialMessage) (*ForeignKeyColle
 	return collection, nil
 }
 
-// serializeNomsForeignKeys serializes a ForeignKeyCollection as a types.Map.
+// serializeFlatbufferForeignKeys serializes a ForeignKeyCollection as a types.Map.
 func serializeFlatbufferForeignKeys(fkc *ForeignKeyCollection) types.SerialMessage {
 	foreignKeys := fkc.AllKeys()
 	offsets := make([]fb.UOffsetT, len(foreignKeys))

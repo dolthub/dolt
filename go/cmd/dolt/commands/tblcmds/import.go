@@ -704,7 +704,7 @@ func getImportSchema(ctx context.Context, dEnv *env.DoltEnv, impOpts *importOpti
 
 	if impOpts.operation == mvdata.CreateOp {
 		if impOpts.srcIsStream() {
-			// todo: capture stream data to file so we can use schema inferrence
+			// todo: capture stream data to file so we can use schema inference
 			return nil, nil
 		}
 

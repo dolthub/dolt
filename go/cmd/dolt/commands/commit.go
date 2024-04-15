@@ -322,7 +322,7 @@ func handleCommitErr(sqlCtx *sql.Context, queryist cli.Queryist, err error, usag
 
 	if actions.IsTblInConflict(err) {
 		inConflict := actions.GetTablesForError(err)
-		bdr := errhand.BuildDError(`tables %v have unresolved conflicts from the merge. resolve the conflicts before commiting`, inConflict)
+		bdr := errhand.BuildDError(`tables %v have unresolved conflicts from the merge. resolve the conflicts before committing`, inConflict)
 		return HandleVErrAndExitCode(bdr.Build(), usage)
 	}
 
