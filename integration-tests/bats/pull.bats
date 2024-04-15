@@ -2,7 +2,10 @@
 load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
-    setup_common
+    # We don't use setup_common because we don't want the remote server to run in the top level test directory.
+    # Using multiple databases is kind of inherant to these tests.
+    # Instead, we manualy setup the remote server in the individual tests.
+    setup_no_dolt_init
 
     TESTDIRS=$(pwd)/testdirs
     mkdir -p $TESTDIRS/{rem1,repo1}
@@ -40,6 +43,9 @@ teardown() {
 
 @test "pull: pull main" {
     cd repo2
+
+    setup_remote_server
+
     dolt pull origin
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
@@ -54,6 +60,9 @@ teardown() {
 
 @test "pull: pull custom remote" {
     cd repo2
+
+    setup_remote_server
+
     dolt pull test-remote
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
@@ -69,6 +78,9 @@ teardown() {
 @test "pull: pull default origin" {
     cd repo2
     dolt remote remove test-remote
+
+    setup_remote_server
+
     dolt pull
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
@@ -84,6 +96,9 @@ teardown() {
 @test "pull: pull default custom remote" {
     cd repo2
     dolt remote remove origin
+
+    setup_remote_server
+
     dolt pull
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
@@ -98,6 +113,9 @@ teardown() {
 
 @test "pull: pull up to date does not error" {
     cd repo2
+
+    setup_remote_server
+
     dolt pull origin
     run dolt pull origin
     [ "$status" -eq 0 ]
@@ -112,6 +130,9 @@ teardown() {
 
 @test "pull: pull unknown remote fails" {
     cd repo2
+
+    setup_remote_server
+
     run dolt pull unknown
     [ "$status" -eq 1 ]
     [[ "$output" =~ "fatal: remote 'unknown' not found" ]] || false
@@ -121,6 +142,9 @@ teardown() {
 @test "pull: pull unknown feature branch fails" {
     cd repo2
     dolt checkout feature
+
+    setup_remote_server
+
     run dolt pull origin
     [ "$status" -eq 1 ]
     [[ "$output" =~ "You asked to pull from the remote 'origin', but did not specify a branch" ]] || false
@@ -141,6 +165,9 @@ teardown() {
     dolt push
 
     cd ../repo2
+
+    setup_remote_server
+
     dolt pull origin
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
@@ -199,6 +226,8 @@ SQL
     dolt push origin main
 
     cd ../repo2
+#    setup_remote_server
+
     dolt pull
     dolt sql -q "alter table objects add constraint color FOREIGN KEY (color) REFERENCES colors(color)"
     dolt commit -A -m "Commit2"
@@ -209,11 +238,16 @@ SQL
     dolt push origin main
 
     cd ../repo2
+
+    setup_remote_server
+
     run dolt pull
+
     [ "$status" -eq 1 ]
     [[ "$output" =~ "CONSTRAINT VIOLATION" ]] || false
 
-    dolt merge --abort
+    dolt sql -q "call dolt_merge('--abort')"
+
     run dolt pull --force
     [ "$status" -eq 0 ]
     run dolt sql -q "select * from objects"
@@ -234,6 +268,8 @@ SQL
     dolt sql -q "create table t2 (i int primary key);"
     dolt commit -Am "commit 1"
 
+    setup_remote_server
+
     dolt pull --squash origin
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
@@ -251,6 +287,9 @@ SQL
 
 @test "pull: pull --noff flag" {
     cd repo2
+
+    setup_remote_server
+
     dolt pull --no-ff origin
     dolt status
 
@@ -276,6 +315,9 @@ SQL
 
     cd ../repo2
     dolt sql -q "insert into t1 values (2, 2)"
+
+    setup_remote_server
+
     run dolt pull origin
     [ "$status" -eq 1 ]
     [[ "$output" =~ "cannot merge with uncommitted changes" ]] || false
@@ -288,6 +330,9 @@ SQL
     dolt tag
 
     cd ../repo2
+
+    setup_remote_server
+
     dolt pull origin
     run dolt tag
     [ "$status" -eq 0 ]
@@ -309,6 +354,9 @@ SQL
     dolt push origin v3
 
     cd ../repo2
+
+    setup_remote_server
+
     dolt pull origin
     run dolt tag
     [ "$status" -eq 0 ]
@@ -324,6 +372,8 @@ SQL
     run dolt sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "t1" ]] || false
+
+    setup_remote_server
 
     # Specifying a non-existent remote branch returns an error
     run dolt pull origin doesnotexist

@@ -1,3 +1,5 @@
+name: Release PGO Dolt
+
 on:
   workflow_dispatch:
     inputs:
@@ -44,7 +46,6 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go/go.mod
-          check-latest: true
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2.2.0
         with:
@@ -60,7 +61,7 @@ jobs:
       - name: Update dolt version command
         run: sed -i -e 's/	Version = ".*"/	Version = "'"$NEW_VERSION"'"/' "$FILE"
         env:
-          FILE: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
+          FILE: ${{ format('{0}/go/cmd/dolt/doltversion/version.go', github.workspace) }}
           NEW_VERSION: ${{ needs.format-version.outputs.version }}
       - name: Set minver TBD to version
         run: sed -i -e 's/minver:"TBD"/minver:"'"$NEW_VERSION"'"/' "$FILE"
@@ -83,9 +84,9 @@ jobs:
         run: |
           latest=$(git rev-parse HEAD)
           echo "commitish=$latest" >> $GITHUB_OUTPUT
-          GO_BUILD_VERSION=1.21 go/utils/publishrelease/buildpgobinaries.sh
+          GO_BUILD_VERSION=1.22 go/utils/publishrelease/buildpgobinaries.sh
         env:
-          GO_BUILD_VERSION: "1.21"
+          GO_BUILD_VERSION: "1.22"
           PROFILE: ${{ format('{0}/dolt-cpu-profile.pprof', github.workspace) }}
       - name: Create Release
         id: create_release

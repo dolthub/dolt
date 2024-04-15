@@ -15,7 +15,9 @@
 package nbs
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
@@ -227,6 +229,39 @@ func TestAmbiguousShortHash(t *testing.T) {
 			assert.Len(t, res, test.sz)
 		})
 	}
+}
+
+func TestReadTableFooter(t *testing.T) {
+	// Less than 20 bytes is not enough to read the footer
+	reader := bytes.NewReader(make([]byte, 19))
+	_, _, err := ReadTableFooter(reader)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "negative position")
+
+	data := make([]byte, 20)
+	binary.BigEndian.PutUint32(data[:4], 98765)   // Chunk Count.
+	binary.BigEndian.PutUint64(data[4:12], 12345) // Total Size
+	copy(data[12:], magicNumber)
+	reader = bytes.NewReader(data)
+	chunkCount, totalSize, err := ReadTableFooter(reader)
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(98765), chunkCount)
+	assert.Equal(t, uint64(12345), totalSize)
+
+	// Now with a future magic number
+	data[12] = 0
+	copy(data[13:], doltMagicNumber)
+	reader = bytes.NewReader(data)
+	_, _, err = ReadTableFooter(reader)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported table file format")
+
+	// Now with corrupted info that we don't recognize.
+	copy(data[12:], "DEADBEEF")
+	reader = bytes.NewReader(data)
+	_, _, err = ReadTableFooter(reader)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid or corrupt table file")
 }
 
 // fakeChunk is chunk with a faked address

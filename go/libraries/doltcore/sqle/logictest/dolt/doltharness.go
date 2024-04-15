@@ -33,7 +33,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	dsql "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/stats"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsnoms"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
@@ -142,7 +143,7 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	ctx := dsql.NewTestSQLCtxWithProvider(context.Background(), pro, stats.NewProvider())
+	ctx := dsql.NewTestSQLCtxWithProvider(context.Background(), pro, statspro.NewProvider(pro.(*dsql.DoltDatabaseProvider), statsnoms.NewNomsStatsFactory(env.NewGRPCDialProviderFromDoltEnv(dEnv))))
 	h.sess = ctx.Session.(*dsess.DoltSession)
 
 	dbs := h.engine.Analyzer.Catalog.AllDatabases(ctx)

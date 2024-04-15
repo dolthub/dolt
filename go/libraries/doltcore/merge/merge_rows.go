@@ -16,6 +16,7 @@ package merge
 
 import (
 	"context"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -34,9 +35,23 @@ import (
 type MergeOpts struct {
 	// IsCherryPick is set for cherry-pick operations.
 	IsCherryPick bool
-	// KeepSchemaConflicts if schema conflicts should be
-	// stored, otherwise we end the merge with an error.
+	// KeepSchemaConflicts is set when schema conflicts should be stored,
+	// otherwise the merge errors out when schema conflicts are detected.
 	KeepSchemaConflicts bool
+	// ReverifyAllConstraints is set to indicate that a merge should not rely on existing
+	// constraint violation artifacts and should instead ensure that all constraints are
+	// verified. When this option is not set, merge will use optimizations to short circuit
+	// some calculations that aren't needed for merge correctness, but are still needed to
+	// correctly verify all constraints.
+	ReverifyAllConstraints bool
+	// RecordViolationsForTables is an optional map that allows the caller to control which
+	// tables will have constraint violations recorded as artifacts in the merged tables. When
+	// this field is nil or an empty map, constraint violations will be recorded for all tables,
+	// but if the map is populated with any (case-insensitive) table names, then only those tables
+	// will have constraint violations recorded. This functionality is primarily used by the
+	// dolt_verify_constraints() stored procedure to allow callers to verify constraints for a
+	// subset of tables.
+	RecordViolationsForTables map[string]struct{}
 }
 
 type TableMerger struct {
@@ -55,6 +70,12 @@ type TableMerger struct {
 
 	vrw types.ValueReadWriter
 	ns  tree.NodeStore
+
+	// recordViolations controls whether constraint violations should be recorded as table
+	// artifacts when merging this table. In almost all cases, this should be set to true. The
+	// exception is for the dolt_verify_constraints() stored procedure, which allows callers to
+	// only record constraint violations for a specified subset of tables.
+	recordViolations bool
 }
 
 func (tm TableMerger) tableHashes() (left, right, anc hash.Hash, err error) {
@@ -114,7 +135,7 @@ type MergedTable struct {
 // MergeTable merges schema and table data for the table tblName.
 // TODO: this code will loop infinitely when merging certain schema changes
 func (rm *RootMerger) MergeTable(ctx *sql.Context, tblName string, opts editor.Options, mergeOpts MergeOpts) (*MergedTable, *MergeStats, error) {
-	tm, err := rm.makeTableMerger(ctx, tblName)
+	tm, err := rm.makeTableMerger(ctx, tblName, mergeOpts)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -158,43 +179,73 @@ func (rm *RootMerger) MergeTable(ctx *sql.Context, tblName string, opts editor.O
 	return &MergedTable{table: tbl}, stats, nil
 }
 
-func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string) (*TableMerger, error) {
-	tm := TableMerger{
-		name:        tblName,
-		rightSrc:    rm.rightSrc,
-		ancestorSrc: rm.ancSrc,
-		vrw:         rm.vrw,
-		ns:          rm.ns,
+func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string, mergeOpts MergeOpts) (*TableMerger, error) {
+	recordViolations := true
+	if mergeOpts.RecordViolationsForTables != nil {
+		if _, ok := mergeOpts.RecordViolationsForTables[strings.ToLower(tblName)]; !ok {
+			recordViolations = false
+		}
 	}
 
-	var ok bool
-	var err error
+	tm := TableMerger{
+		name:             tblName,
+		rightSrc:         rm.rightSrc,
+		ancestorSrc:      rm.ancSrc,
+		vrw:              rm.vrw,
+		ns:               rm.ns,
+		recordViolations: recordViolations,
+	}
 
-	tm.leftTbl, ok, err = rm.left.GetTable(ctx, tblName)
+	var err error
+	var leftSideTableExists, rightSideTableExists, ancTableExists bool
+
+	tm.leftTbl, leftSideTableExists, err = rm.left.GetTable(ctx, tblName)
 	if err != nil {
 		return nil, err
 	}
-	if ok {
+	if leftSideTableExists {
 		if tm.leftSch, err = tm.leftTbl.GetSchema(ctx); err != nil {
 			return nil, err
 		}
 	}
 
-	tm.rightTbl, ok, err = rm.right.GetTable(ctx, tblName)
+	tm.rightTbl, rightSideTableExists, err = rm.right.GetTable(ctx, tblName)
 	if err != nil {
 		return nil, err
 	}
-	if ok {
+	if rightSideTableExists {
 		if tm.rightSch, err = tm.rightTbl.GetSchema(ctx); err != nil {
 			return nil, err
 		}
 	}
 
-	tm.ancTbl, ok, err = rm.anc.GetTable(ctx, tblName)
+	// If we need to re-verify all constraints, then we need to stub out tables
+	// that don't exist, so that the diff logic can compare an empty table to
+	// the table containing the real data. This is required by dolt_verify_constraints()
+	// so that we can run the merge logic on all rows in all tables.
+	if mergeOpts.ReverifyAllConstraints {
+		if !leftSideTableExists && rightSideTableExists {
+			// if left side doesn't have the table... stub it out with an empty table from the right side...
+			tm.leftSch = tm.rightSch
+			tm.leftTbl, err = doltdb.NewEmptyTable(ctx, rm.vrw, rm.ns, tm.leftSch)
+			if err != nil {
+				return nil, err
+			}
+		} else if !rightSideTableExists && leftSideTableExists {
+			// if left side doesn't have the table... stub it out with an empty table from the right side...
+			tm.rightSch = tm.leftSch
+			tm.rightTbl, err = doltdb.NewEmptyTable(ctx, rm.vrw, rm.ns, tm.rightSch)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	tm.ancTbl, ancTableExists, err = rm.anc.GetTable(ctx, tblName)
 	if err != nil {
 		return nil, err
 	}
-	if ok {
+	if ancTableExists {
 		if tm.ancSch, err = tm.ancTbl.GetSchema(ctx); err != nil {
 			return nil, err
 		}
@@ -211,6 +262,12 @@ func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName string) (*Tab
 }
 
 func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm *TableMerger, opts MergeOpts) (*doltdb.Table, *MergeStats, error) {
+	// If we need to re-verify all constraints as part of this merge, then we can't short
+	// circuit considering any tables, so return immediately
+	if opts.ReverifyAllConstraints {
+		return nil, nil, nil
+	}
+
 	rootHash, mergeHash, ancHash, err := tm.tableHashes()
 	if err != nil {
 		return nil, nil, err

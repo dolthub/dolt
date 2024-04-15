@@ -202,7 +202,7 @@ func Parse(str string) (DoltRef, error) {
 	}
 
 	if prefix := PrefixForType(StatsRefType); strings.HasPrefix(str, prefix) {
-		return NewStashRef(), nil
+		return NewStatsRef(str[len(prefix):]), nil
 	}
 
 	return nil, ErrUnknownRefType

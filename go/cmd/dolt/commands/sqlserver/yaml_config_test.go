@@ -105,6 +105,7 @@ jwks:
 		},
 	}
 	expected.DataDirStr = strPtr("some nonsense")
+	expected.SystemVars_ = nil
 	expected.Vars = []UserSessionVars{
 		{
 			Name: "user0",

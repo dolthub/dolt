@@ -109,7 +109,7 @@ func main() {
 	chartFmt := "| %6d | %7d | %8d | %9d | %6d | %5d | %6d |\n"
 
 	var optimal, sum int
-	visited := map[hash.Hash]bool{}
+	visited := make(map[hash.Hash]struct{})
 
 	current := hash.HashSlice{root}
 	for numNodes := 1; numNodes > 0; numNodes = len(current) {
@@ -120,7 +120,7 @@ func main() {
 		for i, v := range readValues {
 			h := current[i]
 			currentValues[h] = v
-			visited[h] = true
+			visited[h] = struct{}{}
 		}
 
 		// Iterate all the Values at the current level of the graph IN ORDER (as specified in |current|) and gather up their embedded refs. We'll build two different lists of hash.Hashes during this process:
@@ -132,7 +132,7 @@ func main() {
 		for _, h := range current {
 			_ = types.WalkAddrs(currentValues[h], types.Format_Default, func(h hash.Hash, isleaf bool) error {
 				orderedChildren = append(orderedChildren, h)
-				if !visited[h] && !isleaf {
+				if _, ok := visited[h]; !ok && !isleaf {
 					nextLevel = append(nextLevel, h)
 				}
 				return nil

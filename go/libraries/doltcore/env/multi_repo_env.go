@@ -16,6 +16,7 @@ package env
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -118,6 +119,17 @@ func MultiEnvForDirectory(
 		newEnv := Load(ctx, GetCurrentUserHomeDir, newFs, doltdb.LocalDirDoltDB, version)
 		if newEnv.Valid() {
 			envSet[dbfactory.DirToDBName(dir)] = newEnv
+		} else {
+			dbErr := newEnv.DBLoadError
+			if dbErr != nil {
+				if !errors.Is(dbErr, doltdb.ErrMissingDoltDataDir) {
+					logrus.Warnf("failed to load database at %s with error: %s", path, dbErr.Error())
+				}
+			}
+			cfgErr := newEnv.CfgLoadErr
+			if cfgErr != nil {
+				logrus.Warnf("failed to load database configuration at %s with error: %s", path, cfgErr.Error())
+			}
 		}
 		return false
 	})

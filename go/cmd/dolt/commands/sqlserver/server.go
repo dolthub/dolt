@@ -597,6 +597,7 @@ type heartbeatService struct {
 	version      string
 	eventEmitter events.Emitter
 	interval     time.Duration
+	closer       func() error
 }
 
 func newHeartbeatService(version string, dEnv *env.DoltEnv) *heartbeatService {
@@ -621,7 +622,7 @@ func newHeartbeatService(version string, dEnv *env.DoltEnv) *heartbeatService {
 		return &heartbeatService{} // will be defunct on Run()
 	}
 
-	emitter, err := commands.NewEmitter(emitterType, dEnv)
+	emitter, closer, err := commands.NewEmitter(emitterType, dEnv)
 	if err != nil {
 		return &heartbeatService{} // will be defunct on Run()
 	}
@@ -632,11 +633,18 @@ func newHeartbeatService(version string, dEnv *env.DoltEnv) *heartbeatService {
 		version:      version,
 		eventEmitter: emitter,
 		interval:     duration,
+		closer:       closer,
 	}
 }
 
 func (h *heartbeatService) Init(ctx context.Context) error { return nil }
-func (h *heartbeatService) Stop() error                    { return nil }
+
+func (h *heartbeatService) Stop() error {
+	if h.closer != nil {
+		return h.closer()
+	}
+	return nil
+}
 
 func (h *heartbeatService) Run(ctx context.Context) {
 	// Faulty config settings or disabled metrics can cause us to not have a valid event emitter

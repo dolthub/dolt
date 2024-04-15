@@ -56,6 +56,10 @@ func (s *TestStoreView) GetMany(ctx context.Context, hashes hash.HashSet, found 
 	return s.ChunkStore.GetMany(ctx, hashes, found)
 }
 
+func (s *TestStoreView) CacheHas(_ hash.Hash) bool {
+	return false
+}
+
 func (s *TestStoreView) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	atomic.AddInt32(&s.hases, 1)
 	return s.ChunkStore.Has(ctx, h)
@@ -66,7 +70,7 @@ func (s *TestStoreView) HasMany(ctx context.Context, hashes hash.HashSet) (hash.
 	return s.ChunkStore.HasMany(ctx, hashes)
 }
 
-func (s *TestStoreView) Put(ctx context.Context, c Chunk, getAddrs GetAddrsCb) error {
+func (s *TestStoreView) Put(ctx context.Context, c Chunk, getAddrs GetAddrsCurry) error {
 	atomic.AddInt32(&s.writes, 1)
 	return s.ChunkStore.Put(ctx, c, getAddrs)
 }

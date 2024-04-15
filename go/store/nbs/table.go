@@ -132,6 +132,9 @@ const (
 	prefixTupleSize = hash.PrefixLen + ordinalSize
 	checksumSize    = uint32Size
 	maxChunkSize    = 0xffffffff // Snappy won't compress slices bigger than this
+
+	doltMagicNumber = "DOLTARC" // NBS doesn't support this, but we want to give a reasonable error message if one is encountered.
+	doltMagicSize   = 7         // len(doltMagicNumber)
 )
 
 var crcTable = crc32.MakeTable(crc32.Castagnoli)

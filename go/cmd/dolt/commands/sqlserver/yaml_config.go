@@ -15,6 +15,7 @@
 package sqlserver
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"unicode"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 func strPtr(s string) *string {
@@ -162,19 +164,36 @@ type YAMLConfig struct {
 
 var _ ServerConfig = YAMLConfig{}
 var _ validatingServerConfig = YAMLConfig{}
+var _ WritableServerConfig = &YAMLConfig{}
 
-func NewYamlConfig(configFileData []byte) (YAMLConfig, error) {
+func NewYamlConfig(configFileData []byte) (*YAMLConfig, error) {
 	var cfg YAMLConfig
 	err := yaml.UnmarshalStrict(configFileData, &cfg)
 	if cfg.LogLevelStr != nil {
 		loglevel := strings.ToLower(*cfg.LogLevelStr)
 		cfg.LogLevelStr = &loglevel
 	}
-	return cfg, err
+	return &cfg, err
 }
 
-func ServerConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
-	return YAMLConfig{
+// YamlConfigFromFile returns server config variables with values defined in yaml file.
+func YamlConfigFromFile(fs filesys.Filesys, path string) (ServerConfig, error) {
+	data, err := fs.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read file '%s'. Error: %s", path, err.Error())
+	}
+
+	cfg, err := NewYamlConfig(data)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to parse yaml file '%s'. Error: %s", path, err.Error())
+	}
+
+	return cfg, nil
+}
+
+func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
+	systemVars := cfg.SystemVars()
+	return &YAMLConfig{
 		LogLevelStr:       strPtr(string(cfg.LogLevel())),
 		MaxQueryLenInLogs: nillableIntPtr(cfg.MaxLoggedQueryLen()),
 		EncodeLoggedQuery: nillableBoolPtr(cfg.ShouldEncodeLoggedQuery()),
@@ -219,6 +238,7 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
 		ClusterCfg:        clusterConfigAsYAMLConfig(cfg.ClusterConfig()),
 		PrivilegeFile:     strPtr(cfg.PrivilegeFilePath()),
 		BranchControlFile: strPtr(cfg.BranchControlFilePath()),
+		SystemVars_:       &systemVars,
 		Vars:              cfg.UserVars(),
 		Jwks:              cfg.JwksConfig(),
 	}
@@ -320,6 +340,14 @@ func (cfg YAMLConfig) User() string {
 	}
 
 	return *cfg.UserConfig.Name
+}
+
+func (cfg *YAMLConfig) SetUserName(s string) {
+	cfg.UserConfig.Name = &s
+}
+
+func (cfg *YAMLConfig) SetPassword(s string) {
+	cfg.UserConfig.Password = &s
 }
 
 // Password returns the password that connecting clients must use.
@@ -658,4 +686,18 @@ func (c ClusterRemotesAPIYAMLConfig) ServerNameURLMatches() []string {
 
 func (c ClusterRemotesAPIYAMLConfig) ServerNameDNSMatches() []string {
 	return c.DNSMatches
+}
+
+func (cfg YAMLConfig) ValueSet(value string) bool {
+	switch value {
+	case readTimeoutKey:
+		return cfg.ListenerConfig.ReadTimeoutMillis != nil
+	case writeTimeoutKey:
+		return cfg.ListenerConfig.WriteTimeoutMillis != nil
+	case maxConnectionsKey:
+		return cfg.ListenerConfig.MaxConnections != nil
+	case eventSchedulerKey:
+		return cfg.BehaviorConfig.EventSchedulerStatus != nil
+	}
+	return false
 }

@@ -112,6 +112,7 @@ type DoltChunkStore struct {
 	host        string
 	root        hash.Hash
 	csClient    remotesapi.ChunkStoreServiceClient
+	finalizer   func() error
 	cache       ChunkCache
 	metadata    *remotesapi.GetRepoMetadataResponse
 	nbf         *types.NomsBinFormat
@@ -159,6 +160,7 @@ func NewDoltChunkStoreFromPath(ctx context.Context, nbf *types.NomsBinFormat, pa
 		repoToken:   repoToken,
 		host:        host,
 		csClient:    csClient,
+		finalizer:   func() error { return nil },
 		cache:       newMapChunkCache(),
 		metadata:    metadata,
 		nbf:         nbf,
@@ -181,6 +183,7 @@ func (dcs *DoltChunkStore) WithHTTPFetcher(fetcher HTTPFetcher) *DoltChunkStore 
 		host:        dcs.host,
 		root:        dcs.root,
 		csClient:    dcs.csClient,
+		finalizer:   dcs.finalizer,
 		cache:       dcs.cache,
 		metadata:    dcs.metadata,
 		nbf:         dcs.nbf,
@@ -198,6 +201,7 @@ func (dcs *DoltChunkStore) WithNoopChunkCache() *DoltChunkStore {
 		host:        dcs.host,
 		root:        dcs.root,
 		csClient:    dcs.csClient,
+		finalizer:   dcs.finalizer,
 		cache:       noopChunkCache,
 		metadata:    dcs.metadata,
 		nbf:         dcs.nbf,
@@ -216,6 +220,7 @@ func (dcs *DoltChunkStore) WithChunkCache(cache ChunkCache) *DoltChunkStore {
 		host:        dcs.host,
 		root:        dcs.root,
 		csClient:    dcs.csClient,
+		finalizer:   dcs.finalizer,
 		cache:       cache,
 		metadata:    dcs.metadata,
 		nbf:         dcs.nbf,
@@ -234,6 +239,7 @@ func (dcs *DoltChunkStore) WithDownloadConcurrency(concurrency ConcurrencyParams
 		host:        dcs.host,
 		root:        dcs.root,
 		csClient:    dcs.csClient,
+		finalizer:   dcs.finalizer,
 		cache:       dcs.cache,
 		metadata:    dcs.metadata,
 		nbf:         dcs.nbf,
@@ -246,6 +252,10 @@ func (dcs *DoltChunkStore) WithDownloadConcurrency(concurrency ConcurrencyParams
 
 func (dcs *DoltChunkStore) SetLogger(logger chunks.DebugLogger) {
 	dcs.logger = logger
+}
+
+func (dcs *DoltChunkStore) SetFinalizer(f func() error) {
+	dcs.finalizer = f
 }
 
 func (dcs *DoltChunkStore) logf(fmt string, args ...interface{}) {
@@ -808,8 +818,9 @@ func (dcs *DoltChunkStore) errorIfDangling(ctx context.Context, addrs hash.HashS
 // subsequent Get and Has calls, but must not be persistent until a call
 // to Flush(). Put may be called concurrently with other calls to Put(),
 // Get(), GetMany(), Has() and HasMany().
-func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCb) error {
-	addrs, err := getAddrs(ctx, c)
+func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk, getAddrs chunks.GetAddrsCurry) error {
+	addrs := hash.NewHashSet()
+	err := getAddrs(c)(ctx, addrs, func(h hash.Hash) bool { return false })
 	if err != nil {
 		return err
 	}
@@ -960,7 +971,7 @@ func (dcs *DoltChunkStore) PersistGhostHashes(ctx context.Context, refs hash.Has
 // Close() concurrently with any other ChunkStore method; behavior is
 // undefined and probably crashy.
 func (dcs *DoltChunkStore) Close() error {
-	return nil
+	return dcs.finalizer()
 }
 
 // getting this working using the simplest approach first

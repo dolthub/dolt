@@ -96,18 +96,18 @@ func initMigrationDB(ctx context.Context, existing *env.DoltEnv, src, dest files
 	}
 
 	ierr := src.Iter(doltDir, true, func(path string, size int64, isDir bool) (stop bool) {
+		path, err = filepath.Rel(base, path)
+		if err != nil {
+			stop = true
+			return
+		}
+
 		if isDir {
 			err = dest.MkDirs(path)
 			stop = err != nil
 			return
 		}
 		if strings.Contains(path, nomsDir) {
-			return
-		}
-
-		path, err = filepath.Rel(base, path)
-		if err != nil {
-			stop = true
 			return
 		}
 

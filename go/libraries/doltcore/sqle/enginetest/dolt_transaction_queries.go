@@ -1998,7 +1998,7 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 					"To allow transactions to be committed with constraint violations from a merge or transaction sequencing set @@dolt_force_transaction_commit=1.\n" +
 					"Constraint violations: \n" +
 					"Type: Foreign Key Constraint Violation\n" +
-					"\tForeignKey: r4cf97vs,\n" +
+					"\tForeignKey: child_ibfk_1,\n" +
 					"\tTable: child,\n" +
 					"\tReferencedTable: ,\n" +
 					"\tIndex: parent_fk,\n" +
@@ -2006,7 +2006,7 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ INSERT INTO child VALUES (1, 1);",
-				ExpectedErrStr: "cannot add or update a child row - Foreign key violation on fk: `r4cf97vs`, table: `child`, referenced table: `parent`, key: `[1]`",
+				ExpectedErrStr: "cannot add or update a child row - Foreign key violation on fk: `child_ibfk_1`, table: `child`, referenced table: `parent`, key: `[1]`",
 			},
 		},
 	},

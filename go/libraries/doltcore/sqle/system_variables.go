@@ -15,6 +15,8 @@
 package sqle
 
 import (
+	"math"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
@@ -227,8 +229,15 @@ func AddDoltSystemVariables() {
 			Name:    dsess.DoltStatsAutoRefreshInterval,
 			Dynamic: true,
 			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-			Type:    types.NewSystemIntType(dsess.DoltStatsAutoRefreshInterval, 0, 1<<10, false),
+			Type:    types.NewSystemIntType(dsess.DoltStatsAutoRefreshInterval, 0, math.MaxInt, false),
 			Default: 120,
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltStatsBranches,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
+			Type:    types.NewSystemStringType(dsess.DoltStatsBranches),
+			Default: "",
 		},
 	})
 }

@@ -390,7 +390,7 @@ func getUint64ColAsUint64(col interface{}) (uint64, error) {
 	}
 }
 
-// getStringColAsString returns the value of the input as a bool. This is required because depending on if we
+// getStrBoolColAsBool returns the value of the input as a bool. This is required because depending on if we
 // go over the wire or not we may get a string or a bool when we expect a bool.
 func getStrBoolColAsBool(col interface{}) (bool, error) {
 	switch v := col.(type) {

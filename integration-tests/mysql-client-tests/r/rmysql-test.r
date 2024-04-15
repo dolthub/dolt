@@ -17,20 +17,30 @@ queries = list("create table test (pk int, value int, primary key(pk))",
                "select * from test")
 
 responses = list(NULL,
-                 data.frame(Field = c("pk", "value"), Type = c("int", "int"), Null = c("NO", "YES"), Key = c("PRI", ""), Default = c("NULL", "NULL"), Extra = c("", ""), stringsAsFactors = FALSE),
+                 data.frame(
+                    Field = c("pk", "value"),
+                    Type = c("int", "int"),
+                    Null = c("NO", "YES"),
+                    Key = c("PRI", ""),
+                    Default = c(NA_character_, NA_character_),
+                    Extra = c("", ""), stringsAsFactors = FALSE),
                  NULL,
-                 data.frame(pk = c(0), value = c(0), stringsAsFactors = FALSE))
+                 data.frame(pk = c(as.integer(0)), value = c(as.integer(0)), stringsAsFactors = FALSE))
 
 for(i in 1:length(queries)) {
     q = queries[[i]]
     want = responses[[i]]
     if (!is.null(want)) {
         got <- dbGetQuery(conn, q)
-        if (!isTRUE(all.equal(want, got))) {
-            print(q)
-            print(want)
-            print(got)
-            quit(1)
+        if (length(want) == length(got)) {
+            for (j in 1:length(want)) {
+                if (!identical(want[[j]], got[[j]])) {
+                    print(q)
+                    print(c("want:", want[[j]], "type: ", typeof(want[[j]])))
+                    print(c("got:", got[[j]], "type: ", typeof(got[[j]])))
+                    quit("no", 1)
+                }
+            }
         }
     } else {
         dbExecute(conn, q)

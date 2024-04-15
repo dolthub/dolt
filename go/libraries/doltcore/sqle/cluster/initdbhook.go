@@ -32,9 +32,9 @@ func NewInitDatabaseHook(controller *Controller, bt *sql.BackgroundThreads, orig
 	if controller == nil {
 		return orig
 	}
-	return func(ctx *sql.Context, pro *sqle.DoltDatabaseProvider, name string, denv *env.DoltEnv) error {
+	return func(ctx *sql.Context, pro *sqle.DoltDatabaseProvider, name string, denv *env.DoltEnv, db dsess.SqlDatabase) error {
 		var err error
-		err = orig(ctx, pro, name, denv)
+		err = orig(ctx, pro, name, denv, db)
 		if err != nil {
 			return err
 		}

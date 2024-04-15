@@ -55,7 +55,17 @@ const (
 
 var ErrNothingToCollect = errors.New("no changes since last gc")
 
-type GetAddrsCb func(ctx context.Context, c Chunk) (hash.HashSet, error)
+// GetAddrsCurry returns a function that will add a chunk's child
+// references to a HashSet. The intermediary lets us build a single
+// HashSet per memTable.
+type GetAddrsCurry func(c Chunk) GetAddrsCb
+
+// GetAddrsCb adds the refs for a pre-specified chunk to |addrs|
+type GetAddrsCb func(ctx context.Context, addrs hash.HashSet, exists PendingRefExists) error
+
+type PendingRefExists func(hash.Hash) bool
+
+func NoopPendingRefExists(_ hash.Hash) bool { return false }
 
 // ChunkStore is the core storage abstraction in noms. We can put data
 // anyplace we have a ChunkStore implementation for.
@@ -82,7 +92,7 @@ type ChunkStore interface {
 	// to Flush(). Put may be called concurrently with other calls to Put(),
 	// Get(), GetMany(), Has() and HasMany(). Will return an error if the
 	// addrs returned by `getAddrs` are absent from the chunk store.
-	Put(ctx context.Context, c Chunk, getAddrs GetAddrsCb) error
+	Put(ctx context.Context, c Chunk, getAddrs GetAddrsCurry) error
 
 	// Returns the NomsBinFormat with which this ChunkSource is compatible.
 	Version() string
@@ -162,7 +172,7 @@ type ChunkStoreGarbageCollector interface {
 	BeginGC(addChunk func(hash.Hash) bool) error
 
 	// EndGC indicates that the GC is over. The previously provided
-	// addChunk function must not be called after this function function.
+	// addChunk function must not be called after this function.
 	EndGC()
 
 	// MarkAndSweepChunks is expected to read chunk addresses off of

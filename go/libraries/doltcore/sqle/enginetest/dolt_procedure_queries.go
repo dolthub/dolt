@@ -17,6 +17,8 @@ package enginetest
 import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
+
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 )
 
 var DoltProcedureTests = []queries.ScriptTest{
@@ -251,19 +253,31 @@ end
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:            "insert into t values (1, 1);",
-				Skip:             true,
-				SkipResultsCheck: true, // return value is a bit odd, needs investigation
+				Query: "insert into t values (1, 1);",
+				Expected: []sql.Row{
+					{gmstypes.OkResult{RowsAffected: 1, InsertID: 1}},
+				},
 			},
 			{
-				Query:    "select name from dolt_branches order by 1",
-				Skip:     true,
-				Expected: []sql.Row{{"branch1"}, {"branch2"}, {"branch3"}, {"branch4"}, {"main"}},
+				Query: "select name from dolt_branches order by 1",
+				Expected: []sql.Row{
+					{"branch1"},
+					{"branch2"},
+					{"branch3"},
+					{"branch4"},
+					{"main"},
+				},
 			},
 			{
-				Query:    "select * from t2 order by 1",
-				Skip:     true,
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}, {4, 4}},
+				// For some reason, calling stored procedures disables inserts
+				Skip:  true,
+				Query: "select * from t2 order by 1",
+				Expected: []sql.Row{
+					{1, 1},
+					{2, 2},
+					{3, 3},
+					{4, 4},
+				},
 			},
 		},
 	},

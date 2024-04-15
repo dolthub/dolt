@@ -22,6 +22,7 @@ export const diffTests = [
       info: "",
       serverStatus: 2,
       warningStatus: 0,
+      changedRows: 0,
     },
   },
   {
@@ -197,7 +198,8 @@ export const diffTests = [
         to_name: "myview",
         to_fragment: "CREATE VIEW `myview` AS SELECT * FROM test",
         to_extra: { CreatedAt: 0 },
-        to_sql_mode: 'NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES',
+        to_sql_mode:
+          "NO_ENGINE_SUBSTITUTION,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES",
         to_commit: "WORKING",
         to_commit_date: "2023-03-09T07:56:29.035Z",
         from_type: null,
@@ -272,7 +274,7 @@ export const diffTests = [
           "  `test_pk` int,\n" +
           "  PRIMARY KEY (`id`),\n" +
           "  KEY `test_pk` (`test_pk`),\n" +
-          "  CONSTRAINT `lfbtivir` FOREIGN KEY (`test_pk`) REFERENCES `test` (`pk`)\n" +
+          "  CONSTRAINT `test_info_ibfk_1` FOREIGN KEY (`test_pk`) REFERENCES `test` (`pk`)\n" +
           ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
         to_create_statement: "",
       },
@@ -306,7 +308,7 @@ export const diffTests = [
           "  `test_pk` int,\n" +
           "  PRIMARY KEY (`id`),\n" +
           "  KEY `test_pk` (`test_pk`),\n" +
-          "  CONSTRAINT `lfbtivir` FOREIGN KEY (`test_pk`) REFERENCES `test` (`pk`)\n" +
+          "  CONSTRAINT `test_info_ibfk_1` FOREIGN KEY (`test_pk`) REFERENCES `test` (`pk`)\n" +
           ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
         to_create_statement: "",
       },

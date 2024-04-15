@@ -23,6 +23,7 @@ export const docsTests = [
       info: "",
       serverStatus: 2,
       warningStatus: 0,
+      changedRows: 0,
     },
   },
   {
@@ -40,6 +41,7 @@ export const docsTests = [
       info: "",
       serverStatus: 2,
       warningStatus: 0,
+      changedRows: 0,
     },
   },
   {

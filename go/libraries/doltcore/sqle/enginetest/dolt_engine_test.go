@@ -17,6 +17,7 @@ package enginetest
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 	"sync"
@@ -31,6 +32,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/memo"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/transform"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/stretchr/testify/assert"
@@ -41,7 +43,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/stats"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
@@ -192,6 +194,125 @@ func newUpdateResult(matched, updated int) gmstypes.OkResult {
 	return gmstypes.OkResult{
 		RowsAffected: uint64(updated),
 		Info:         plan.UpdateInfo{Matched: matched, Updated: updated},
+	}
+}
+
+func TestAutoIncrementTrackerLockMode(t *testing.T) {
+	for _, lockMode := range []int64{0, 1, 2} {
+		t.Run(fmt.Sprintf("lock mode %d", lockMode), func(t *testing.T) {
+			testAutoIncrementTrackerWithLockMode(t, lockMode)
+		})
+	}
+}
+
+// testAutoIncrementTrackerWithLockMode tests that interleaved inserts don't cause deadlocks, regardless of the value of innodb_autoinc_lock_mode.
+// In a real use case, these interleaved operations would be happening in different sessions on different threads.
+// In order to make the test behave predictably, we manually interleave the two iterators.
+func testAutoIncrementTrackerWithLockMode(t *testing.T, lockMode int64) {
+
+	err := sql.SystemVariables.AssignValues(map[string]interface{}{"innodb_autoinc_lock_mode": lockMode})
+	require.NoError(t, err)
+
+	setupScripts := []setup.SetupScript{[]string{
+		"CREATE TABLE test1 (pk int NOT NULL PRIMARY KEY AUTO_INCREMENT,c0 int,index t1_c_index (c0));",
+		"CREATE TABLE test2 (pk int NOT NULL PRIMARY KEY AUTO_INCREMENT,c0 int,index t2_c_index (c0));",
+		"CREATE TABLE timestamps (pk int NOT NULL PRIMARY KEY AUTO_INCREMENT, t int);",
+		"CREATE TRIGGER t1 AFTER INSERT ON test1 FOR EACH ROW INSERT INTO timestamps VALUES (0, 1);",
+		"CREATE TRIGGER t2 AFTER INSERT ON test2 FOR EACH ROW INSERT INTO timestamps VALUES (0, 2);",
+		"CREATE VIEW bin AS SELECT 0 AS v UNION ALL SELECT 1;",
+		"CREATE VIEW sequence5bit AS SELECT b1.v + 2*b2.v + 4*b3.v + 8*b4.v + 16*b5.v AS v from bin b1, bin b2, bin b3, bin b4, bin b5;",
+	}}
+
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	harness.Setup(setup.MydbData, setupScripts)
+	e := mustNewEngine(t, harness)
+
+	defer e.Close()
+	ctx := enginetest.NewContext(harness)
+
+	// Confirm that the system variable was correctly set.
+	_, iter, err := e.Query(ctx, "select @@innodb_autoinc_lock_mode")
+	require.NoError(t, err)
+	rows, err := sql.RowIterToRows(ctx, iter)
+	require.NoError(t, err)
+	assert.Equal(t, rows, []sql.Row{{lockMode}})
+
+	// Ordinarily QueryEngine.query manages transactions.
+	// Since we can't use that for this test, we manually start a new transaction.
+	ts := ctx.Session.(sql.TransactionSession)
+	tx, err := ts.StartTransaction(ctx, sql.ReadWrite)
+	require.NoError(t, err)
+	ctx.SetTransaction(tx)
+
+	getTriggerIter := func(query string) sql.RowIter {
+		root, err := e.AnalyzeQuery(ctx, query)
+		require.NoError(t, err)
+
+		var triggerNode *plan.TriggerExecutor
+		transform.Node(root, func(n sql.Node) (sql.Node, transform.TreeIdentity, error) {
+			if triggerNode != nil {
+				return n, transform.SameTree, nil
+			}
+			if t, ok := n.(*plan.TriggerExecutor); ok {
+				triggerNode = t
+			}
+			return n, transform.NewTree, nil
+		})
+		iter, err := e.EngineAnalyzer().ExecBuilder.Build(ctx, triggerNode, nil)
+		require.NoError(t, err)
+		return iter
+	}
+
+	iter1 := getTriggerIter("INSERT INTO test1 (c0) select v from sequence5bit;")
+	iter2 := getTriggerIter("INSERT INTO test2 (c0) select v from sequence5bit;")
+
+	// Alternate the iterators until they're exhausted.
+	var err1 error
+	var err2 error
+	for err1 != io.EOF || err2 != io.EOF {
+		if err1 != io.EOF {
+			var row1 sql.Row
+			require.NoError(t, err1)
+			row1, err1 = iter1.Next(ctx)
+			_ = row1
+		}
+		if err2 != io.EOF {
+			require.NoError(t, err2)
+			_, err2 = iter2.Next(ctx)
+		}
+	}
+	err = iter1.Close(ctx)
+	require.NoError(t, err)
+	err = iter2.Close(ctx)
+	require.NoError(t, err)
+
+	dsess.DSessFromSess(ctx.Session).CommitTransaction(ctx, ctx.GetTransaction())
+
+	// Verify that the inserts are seen by the engine.
+	{
+		_, iter, err := e.Query(ctx, "select count(*) from timestamps")
+		require.NoError(t, err)
+		rows, err := sql.RowIterToRows(ctx, iter)
+		require.NoError(t, err)
+		assert.Equal(t, rows, []sql.Row{{int64(64)}})
+	}
+
+	// Verify that the insert operations are actually interleaved by inspecting the order that values were added to `timestamps`
+	{
+		_, iter, err := e.Query(ctx, "select (select min(pk) from timestamps where t = 1) < (select max(pk) from timestamps where t = 2)")
+		require.NoError(t, err)
+		rows, err := sql.RowIterToRows(ctx, iter)
+		require.NoError(t, err)
+		assert.Equal(t, rows, []sql.Row{{true}})
+	}
+
+	{
+		_, iter, err := e.Query(ctx, "select (select min(pk) from timestamps where t = 2) < (select max(pk) from timestamps where t = 1)")
+		require.NoError(t, err)
+		rows, err := sql.RowIterToRows(ctx, iter)
+		require.NoError(t, err)
+		assert.Equal(t, rows, []sql.Row{{true}})
 	}
 }
 
@@ -460,6 +581,7 @@ func TestQueryPlans(t *testing.T) {
 	// Parallelism introduces Exchange nodes into the query plans, so disable.
 	// TODO: exchange nodes should really only be part of the explain plan under certain debug settings
 	harness := newDoltHarness(t).WithSkippedQueries(skipped)
+	harness.configureStats = true
 	if !types.IsFormat_DOLT(types.Format_Default) {
 		// only new format supports reverse IndexTableAccess
 		reverseIndexSkip := []string{
@@ -485,7 +607,7 @@ func TestQueryPlans(t *testing.T) {
 
 func TestIntegrationQueryPlans(t *testing.T) {
 	harness := newDoltHarness(t)
-
+	harness.configureStats = true
 	defer harness.Close()
 	enginetest.TestIntegrationPlans(t, harness)
 }
@@ -837,6 +959,7 @@ func TestJoinPlanning(t *testing.T) {
 		t.Skip("DOLT_LD keyless indexes are not sorted")
 	}
 	h := newDoltHarness(t)
+	h.configureStats = true
 	defer h.Close()
 	enginetest.TestJoinPlanning(t, h)
 }
@@ -884,6 +1007,7 @@ func TestJSONTableScriptsPrepared(t *testing.T) {
 func TestUserPrivileges(t *testing.T) {
 	h := newDoltHarness(t)
 	h.setupTestProcedures = true
+	h.configureStats = true
 	defer h.Close()
 	enginetest.TestUserPrivileges(t, h)
 }
@@ -2139,11 +2263,28 @@ func TestColumnDiffSystemTablePrepared(t *testing.T) {
 	}
 }
 
+func TestStatBranchTests(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	harness.Setup(setup.MydbData)
+	harness.configureStats = true
+	for _, test := range StatBranchTests {
+		t.Run(test.Name, func(t *testing.T) {
+			// reset engine so provider statistics are clean
+			harness.engine = nil
+			e := mustNewEngine(t, harness)
+			defer e.Close()
+			enginetest.TestScriptWithEngine(t, e, harness, test)
+		})
+	}
+}
+
 func TestStatsFunctions(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
 	harness.Setup(setup.MydbData)
 	harness.configureStats = true
+	harness.skipSetupCommit = true
 	for _, test := range StatProcTests {
 		t.Run(test.Name, func(t *testing.T) {
 			// reset engine so provider statistics are clean
@@ -2607,6 +2748,7 @@ func TestQueriesPrepared(t *testing.T) {
 func TestStatsHistograms(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
+	h.configureStats = true
 	for _, script := range DoltHistogramTests {
 		h.engine = nil
 		enginetest.TestScript(t, h, script)
@@ -2617,6 +2759,7 @@ func TestStatsHistograms(t *testing.T) {
 // forces a round trip of the statistics table before inspecting values.
 func TestStatsIO(t *testing.T) {
 	h := newDoltHarness(t)
+	h.configureStats = true
 	defer h.Close()
 	for _, script := range append(DoltStatsIOTests, DoltHistogramTests...) {
 		h.engine = nil
@@ -2637,6 +2780,7 @@ func TestJoinStats(t *testing.T) {
 	// smallest table first vs smallest join first
 	h := newDoltHarness(t)
 	defer h.Close()
+	h.configureStats = true
 	enginetest.TestJoinStats(t, h)
 }
 
@@ -2657,6 +2801,7 @@ func TestSpatialQueriesPrepared(t *testing.T) {
 func TestPreparedStatistics(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
+	h.configureStats = true
 	for _, script := range DoltHistogramTests {
 		h.engine = nil
 		enginetest.TestScriptPrepared(t, h, script)
@@ -3122,7 +3267,7 @@ func TestCreateDatabaseErrorCleansUp(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, e)
 
-	dh.provider.(*sqle.DoltDatabaseProvider).InitDatabaseHook = func(_ *sql.Context, _ *sqle.DoltDatabaseProvider, name string, _ *env.DoltEnv) error {
+	dh.provider.(*sqle.DoltDatabaseProvider).InitDatabaseHook = func(_ *sql.Context, _ *sqle.DoltDatabaseProvider, name string, _ *env.DoltEnv, _ dsess.SqlDatabase) error {
 		if name == "cannot_create" {
 			return fmt.Errorf("there was an error initializing this database. abort!")
 		}
@@ -3164,7 +3309,8 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 	intervalSec := time.Duration(0)
 	thresholdf64 := 0.
 	bThreads := sql.NewBackgroundThreads()
-	statsProv := engine.EngineAnalyzer().Catalog.StatsProvider.(*stats.Provider)
+	branches := []string{"main"}
+	statsProv := engine.EngineAnalyzer().Catalog.StatsProvider.(*statspro.Provider)
 
 	// it is important to use new sessions for this test, to avoid working root conflicts
 	readCtx := enginetest.NewSession(harness)
@@ -3173,7 +3319,7 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 		return enginetest.NewSession(harness), nil
 	}
 
-	err := statsProv.InitAutoRefresh(newCtx, sqlDb.Name(), bThreads, intervalSec, thresholdf64)
+	err := statsProv.InitAutoRefreshWithParams(newCtx, sqlDb.Name(), bThreads, intervalSec, thresholdf64, branches)
 	require.NoError(t, err)
 
 	execQ := func(ctx *sql.Context, q string, id int, tag string) {
