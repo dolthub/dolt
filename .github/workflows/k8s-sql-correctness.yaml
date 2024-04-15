@@ -13,7 +13,7 @@ jobs:
         dolt_fmt: [ "__DOLT__" ]
     steps:
       - uses: actions/checkout@v4
-      - uses: azure/setup-kubectl@v3.0
+      - uses: azure/setup-kubectl@v4
         with:
           version: 'v1.23.6'
       - name: Configure AWS Credentials
