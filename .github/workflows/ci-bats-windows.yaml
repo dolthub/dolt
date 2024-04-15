@@ -107,7 +107,7 @@ jobs:
           python-version: "3.10"
       - uses: actions/checkout@v4
         if: ${{ github.event_name == 'workflow_dispatch' }}
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         with:
           node-version: ^16
       - name: Create CI Bin
