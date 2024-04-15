@@ -159,7 +159,7 @@ jobs:
 
     - name: Create MD
       if: ${{ github.event.client_payload.issue_id }} != ""
-      uses: petems/csv-to-md-table-action@master
+      uses: dolthub/csv-to-md-table-action@v4
       id: md
       with:
         csvinput: ${{ steps.csv.outputs.content }}
