@@ -37,7 +37,7 @@ jobs:
           KEY: ${{ github.event.client_payload.key }}
           BUCKET: ${{ github.event.client_payload.bucket }}
       - name: Post results to PR
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -62,7 +62,7 @@ jobs:
           FORMAT: ${{ github.event.client_payload.noms_bin_format }}
       - name: Remove Passing Labels if regression detected
         if: ${{ github.event.client_payload.correctness_info.is_regression == true && github.event.client_payload.job_type == 'sql-correctness' }}
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -100,7 +100,7 @@ jobs:
           LABEL: 'correctness_approved'
       - name: Add Passing Labels if no regression detected
         if: ${{ github.event.client_payload.correctness_info.is_regression != true && github.event.client_payload.job_type == 'sql-correctness' }}
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
           script: |

@@ -46,7 +46,7 @@ jobs:
         env:
           TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
       - name: Post Changelog to Release
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           debug: true
           github-token: ${{ secrets.REPO_ACCESS_TOKEN }}
