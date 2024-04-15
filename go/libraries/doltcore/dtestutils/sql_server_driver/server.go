@@ -227,7 +227,7 @@ type Query struct {
 
 // |QueryResult| specifies assertions on the results of a |Query|. Columns must
 // be specified for a |Query| and the query results must fully match. If Rows
-// are ommited, anything is allowed as long as all rows are read successfully.
+// are omitted, anything is allowed as long as all rows are read successfully.
 // All assertions here are string equality.
 type QueryResult struct {
 	Columns []string   `yaml:"columns"`
