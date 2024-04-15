@@ -33,7 +33,7 @@ jobs:
           echo "DOLT_BATS_AWS_EXISTING_REPO=aws_remote_bats_tests__dolt__" >> $GITHUB_ENV
       - name: Configure AWS Credentials
         if: ${{ env.use_credentials == 'true' }}
-        uses: aws-actions/configure-aws-credentials@v2.2.0
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

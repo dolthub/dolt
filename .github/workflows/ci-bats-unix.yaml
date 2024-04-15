@@ -40,7 +40,7 @@ jobs:
           echo "BATS_FILTER=--filter-tags no_lambda" >> $GITHUB_ENV
       - name: Configure AWS Credentials
         if: ${{ env.use_credentials == 'true' }}
-        uses: aws-actions/configure-aws-credentials@v2.2.0
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
