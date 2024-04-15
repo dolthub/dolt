@@ -28,7 +28,7 @@ jobs:
       comment-body: ${{ steps.set_body.outputs.body }}
     steps:
       - name: Check for Deploy Trigger
-        uses: dolthub/pull-request-comment-trigger@master
+        uses: dolthub/pull-request-comment-trigger@v2
         id: check
         with:
           trigger: '#merge-benchmark'
