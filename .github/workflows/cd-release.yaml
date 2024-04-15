@@ -36,7 +36,7 @@ jobs:
         run: |
           sha=$(git rev-parse --short HEAD)
           echo "sha=$sha" >> $GITHUB_OUTPUT
-      - uses: peter-evans/repository-dispatch@v2.0.0
+      - uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: profile-dolt

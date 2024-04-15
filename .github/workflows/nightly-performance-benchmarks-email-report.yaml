@@ -10,17 +10,17 @@ jobs:
     runs-on: ubuntu-22.04
     name: Trigger Benchmark Latency, Benchmark Import, and SQL Correctness K8s Workflows
     steps:
-      - uses: peter-evans/repository-dispatch@v2.0.0
+      - uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: benchmark-latency
           client-payload: '{"from_server": "mysql", "from_version": "8.0.35", "to_server": "dolt", "to_version": "${{ github.sha }}", "mode": "nightly", "actor": "${{ github.actor }}", "template_script": "./.github/scripts/performance-benchmarking/get-mysql-dolt-job-json.sh"}'
-      - uses: peter-evans/repository-dispatch@v2.0.0
+      - uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: sql-correctness
           client-payload: '{"version": "${{ github.sha }}", "mode": "nightly", "actor": "${{ github.actor }}", "template_script": "./.github/scripts/sql-correctness/get-dolt-correctness-job-json.sh"}'
-      - uses: peter-evans/repository-dispatch@v2.0.0
+      - uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: benchmark-import
@@ -34,11 +34,11 @@ jobs:
               "commit_to_branch": "nightly",
               "actor": "${{ github.actor }}"
             }
-      - uses: peter-evans/repository-dispatch@v2.0.0
+      - uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: test-orm-integrations
-      - uses: peter-evans/repository-dispatch@v2.0.0
+      - uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: benchmark-systab
@@ -52,7 +52,7 @@ jobs:
               "commit_to_branch": "nightly",
               "actor": "${{ github.actor }}"
             }
-      - uses: peter-evans/repository-dispatch@v2.0.0
+      - uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: benchmark-merge

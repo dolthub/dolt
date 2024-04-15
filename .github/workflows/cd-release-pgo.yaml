@@ -175,7 +175,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Trigger Upload MSI
-        uses: peter-evans/repository-dispatch@v2.0.0
+        uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: upload-msi
@@ -187,7 +187,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Trigger Release Notes
-        uses: peter-evans/repository-dispatch@v2.0.0
+        uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: release-notes
@@ -198,7 +198,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Trigger Performance Benchmarks
-        uses: peter-evans/repository-dispatch@v2.0.0
+        uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: release-dolt
@@ -209,7 +209,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Trigger Push Docker Image
-        uses: peter-evans/repository-dispatch@v1
+        uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: push-docker-image
