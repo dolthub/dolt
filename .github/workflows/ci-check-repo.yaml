@@ -144,7 +144,7 @@ jobs:
           if [ ! -z "$changes" ]; then
              echo "has-changes=true" >> $GITHUB_OUTPUT
           fi
-      - uses: EndBug/add-and-commit@v9.1.1
+      - uses: EndBug/add-and-commit@v9.1.4
         if: ${{ steps.detect-changes.outputs.has-changes == 'true' }}
         with:
           message: "[ga-format-pr] Run go/utils/repofmt/format_repo.sh and go/Godeps/update.sh"
