@@ -1244,11 +1244,19 @@ func (r fbRvStorage) getSchemaAddressMap(vrw types.ValueReadWriter, ns tree.Node
 }
 
 func (r fbRvStorage) GetTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, databaseSchema string) (tableMap, error) {
-	am, err := r.getAddressMap(vrw, ns)
-	if err != nil {
-		return nil, err
+	if databaseSchema == "" {
+		am, err := r.getAddressMap(vrw, ns)
+		if err != nil {
+			return nil, err
+		}
+		return fbTableMap{am}, nil
+	} else {
+		am, err := r.getSchemaAddressMap(vrw, ns, databaseSchema)
+		if err != nil {
+			return nil, err
+		}
+		return fbTableMap{am}, nil
 	}
-	return fbTableMap{am}, nil
 }
 
 type fbTableMap struct {
