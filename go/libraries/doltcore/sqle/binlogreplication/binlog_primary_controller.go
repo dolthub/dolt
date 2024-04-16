@@ -1195,8 +1195,20 @@ func (d doltBinlogPrimaryController) ListBinaryLogs(ctx *sql.Context) error {
 }
 
 // GetBinaryLogStatus implements the BinlogPrimaryController interface.
-func (d doltBinlogPrimaryController) GetBinaryLogStatus(ctx *sql.Context) error {
-	return fmt.Errorf("DOLT: GetBinaryLogStatus not implemented yet")
+func (d doltBinlogPrimaryController) GetBinaryLogStatus(ctx *sql.Context) ([]binlogreplication.BinaryLogStatus, error) {
+	serverUuid, err := getServerUuid(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: This data is just stubbed out; need to fill in the correct GTID info
+	return []binlogreplication.BinaryLogStatus{{
+		File:          binlogFilename,
+		Position:      uint(doltBinlogStreamerManager.binlogStream.LogPosition),
+		DoDbs:         "",
+		IgnoreDbs:     "",
+		ExecutedGtids: serverUuid + ":1-3",
+	}}, nil
 }
 
 // createBinlogFormat returns a new BinlogFormat that describes the format of this binlog stream, which will always
