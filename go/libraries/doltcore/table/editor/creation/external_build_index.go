@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	batchSize = 1024
+	batchSize = 1024 * 1024
 	fileMax   = 128
 )
 

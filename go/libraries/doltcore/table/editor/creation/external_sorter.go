@@ -95,31 +95,36 @@ func (a *tupleSorter) compact(ctx context.Context) {
 	// write keyFiles into half as many with double length
 	var newFiles []*keyFile
 	wg := sync.WaitGroup{}
+	eg, ctx := errgroup.WithContext(ctx)
 	work := make(chan *keyFile)
-	go func() {
-		select {
-		case newF, ok := <-work:
-			if !ok {
-				close(work)
-				return
+	eg.Go(func() error {
+		for {
+			select {
+			case newF, ok := <-work:
+				if !ok {
+					return nil
+				}
+				newFiles = append(newFiles, newF)
+			case <-ctx.Done():
+				return ctx.Err()
 			}
-			newFiles = append(newFiles, newF)
-		case <-ctx.Done():
-			return
 		}
-	}()
+	})
 	for i := 0; i < len(a.files); i += 2 {
+		i := i
 		wg.Add(1)
-		go func() error {
+		eg.Go(func() error {
 			defer wg.Done()
 			outF := newKeyFile(a.newFile(), a.files[i].batchSize)
 			m := a.newFileMerger(ctx, outF, a.files[i], a.files[i+1])
 			m.run(ctx)
 			work <- outF
 			return nil
-		}()
+		})
 	}
 	wg.Wait()
+	close(work)
+	eg.Wait()
 	a.files = newFiles
 }
 
