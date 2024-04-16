@@ -251,10 +251,6 @@ func (r nomsRvStorage) GetSchemas(ctx context.Context) ([]schema.DatabaseSchema,
 	panic("schemas not implemented for nomsRvStorage")
 }
 
-func (r nomsRvStorage) SetSchemas(ctx context.Context, schemas []schema.DatabaseSchema) (rvStorage, error) {
-	panic("schemas not implemented for nomsRvStorage")
-}
-
 func (r nomsRvStorage) DebugString(ctx context.Context) string {
 	var buf bytes.Buffer
 	err := types.WriteEncodedValue(ctx, &buf, r.valueSt)
@@ -1421,50 +1417,27 @@ func (r fbRvStorage) SetCollation(ctx context.Context, collation schema.Collatio
 }
 
 func (r fbRvStorage) GetSchemas(ctx context.Context) ([]schema.DatabaseSchema, error) {
-	ret := r.clone()
-	numSchemas := ret.srv.SchemasLength()
+	numSchemas := r.srv.SchemaTablesLength()
 	schemas := make([]schema.DatabaseSchema, numSchemas)
-	// for i := 0; i < numSchemas; i++ {
-	// 	var dbSchema *serial.DatabaseSchema
-	// 	_, err := ret.srv.TrySchemas(dbSchema, i)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	
-	// 	schemas[i] = schema.DatabaseSchema{
-	// 		Name: string(dbSchema.Name()),
-	// 	}
-	// }
+	for i := 0; i < numSchemas; i++ {
+		var dbSchemaStore *serial.DatabaseSchemaTableStore
+		_, err := r.srv.TrySchemaTables(dbSchemaStore, i)
+		if err != nil {
+			return nil, err
+		}
+		
+		dbSchema, err := dbSchemaStore.TryDatabaseSchema(nil)
+		if err != nil {
+			return nil, err
+		}
+		
+		schemas[i] = schema.DatabaseSchema{
+			Name: string(dbSchema.Name()),
+		}
+	}
+	
 	return schemas, nil
 }
-
-func (r fbRvStorage) SetSchemas(ctx context.Context, schemas []schema.DatabaseSchema) (rvStorage, error) {
-	b := flatbuffers.NewBuilder(80)
-	
-	tablesoff := b.CreateByteVector(r.srv.TablesBytes())
-	fkoff := b.CreateByteVector(r.srv.ForeignKeyAddrBytes())
-	
-	serial.RootValueStart(b)
-	serial.RootValueAddFeatureVersion(b, r.srv.FeatureVersion())
-	serial.RootValueAddCollation(b, r.srv.Collation())
-	serial.RootValueAddTables(b, tablesoff)
-	serial.RootValueAddForeignKeyAddr(b, fkoff)
-	serial.RootValueStartSchemasVector(b, len(schemas))
-	for _, databaseSchema := range schemas {
-		serial.DatabaseSchemaStart(b)
-		nameOff := b.CreateString(databaseSchema.Name)
-		serial.DatabaseSchemaAddName(b, nameOff)
-		serial.DatabaseSchemaEnd(b)
-	}
-
-	bs := serial.FinishMessage(b, serial.RootValueEnd(b), []byte(serial.RootValueFileID))
-	msg, err := serial.TryGetRootAsRootValue(bs, serial.MessagePrefixSz)
-	if err != nil {
-		return nil, err
-	}
-	return fbRvStorage{msg}, nil
-}
-
 
 func (r fbRvStorage) clone() fbRvStorage {
 	bs := make([]byte, len(r.srv.Table().Bytes))
