@@ -90,7 +90,7 @@ jobs:
           PROFILE: ${{ format('{0}/dolt-cpu-profile.pprof', github.workspace) }}
       - name: Create Release
         id: create_release
-        uses: dolthub/create-release@v2
+        uses: dolthub/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -101,7 +101,7 @@ jobs:
           commitish: ${{ steps.build_binaries.outputs.commitish }}
       - name: Upload Linux AMD64 Distro
         id: upload-linux-amd64-distro
-        uses: dolthub/upload-release-asset@v2
+        uses: dolthub/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -111,7 +111,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload Linux ARM64 Distro
         id: upload-linux-arm64-distro
-        uses: dolthub/upload-release-asset@v2
+        uses: dolthub/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -121,7 +121,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload OSX AMD64 Distro
         id: upload-osx-amd64-distro
-        uses: dolthub/upload-release-asset@v2
+        uses: dolthub/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -131,7 +131,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload OSX ARM64 Distro
         id: upload-osx-arm64-distro
-        uses: dolthub/upload-release-asset@v2
+        uses: dolthub/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -141,7 +141,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload Windows Distro
         id: upload-windows-distro
-        uses: dolthub/upload-release-asset@v2
+        uses: dolthub/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -151,7 +151,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload Windows Distro 7z
         id: upload-windows-distro-7z
-        uses: dolthub/upload-release-asset@v2
+        uses: dolthub/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -161,7 +161,7 @@ jobs:
           asset_content_type: application/x-7z-compressed
       - name: Upload Install Script
         id: upload-install-script
-        uses: dolthub/upload-release-asset@v2
+        uses: dolthub/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
