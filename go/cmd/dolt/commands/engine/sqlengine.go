@@ -77,6 +77,7 @@ type SqlEngineConfig struct {
 	ClusterController       *cluster.Controller
 	BinlogReplicaController binlogreplication.BinlogReplicaController
 	EventSchedulerStatus    eventscheduler.SchedulerStatus
+	SystemSchemaConfig      *sql.SystemSchemaConfig
 }
 
 // NewSqlEngine returns a SqlEngine
@@ -183,6 +184,10 @@ func NewSqlEngine(
 
 	statsPro := statspro.NewProvider(pro, statsnoms.NewNomsStatsFactory(mrEnv.RemoteDialProvider()))
 	engine.Analyzer.Catalog.StatsProvider = statsPro
+
+	if config.SystemSchemaConfig != nil {
+		engine.Analyzer.Catalog.SystemSchemaConfig = config.SystemSchemaConfig
+	}
 
 	engine.Analyzer.ExecBuilder = rowexec.DefaultBuilder
 	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, config.Autocommit)
