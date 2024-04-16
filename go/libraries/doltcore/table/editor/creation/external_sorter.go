@@ -57,8 +57,16 @@ func newTupleSorter(batchSize, fileMax int, keyCmp func(val.Tuple, val.Tuple) bo
 func (a *tupleSorter) flush(ctx context.Context) *keyFile {
 	// k-way merge sort
 	allKeys := newKeyFile(a.newFile(), a.inProg.byteLim)
-	a.flushMem(ctx)
-	m := a.newFileMerger(ctx, allKeys, a.files...)
+
+	// don't flush in-progress, just sort in memory
+	a.inProg.sort(a.keyCmp)
+	var iterables []keyIterable
+
+	iterables = append(iterables, a.inProg)
+	for _, file := range a.files {
+		iterables = append(iterables, file)
+	}
+	m := a.newFileMerger(ctx, allKeys, iterables...)
 	m.run(ctx)
 	return allKeys
 }
@@ -148,8 +156,36 @@ func (k *keyMem) insert(key val.Tuple) bool {
 	return true
 }
 
+func (f *keyMem) iterAll(_ context.Context) keyIter {
+	return &keyMemIter{keys: f.keys}
+}
+
+type keyMemIter struct {
+	keys []val.Tuple
+	i    int
+}
+
+func (i *keyMemIter) next(_ context.Context) (val.Tuple, bool) {
+	if i.i >= len(i.keys) {
+		return nil, false
+	}
+	ret := i.keys[i.i]
+	i.i++
+	return ret, true
+}
+
+func (i *keyMemIter) close() {
+	return
+}
+
 func (k *keyMem) Len() int {
 	return len(k.keys)
+}
+
+func (k *keyMem) sort(cmp func(val.Tuple, val.Tuple) bool) {
+	sort.Slice(k.keys, func(i, j int) bool {
+		return cmp(k.keys[i], k.keys[j])
+	})
 }
 
 func (k *keyMem) flush(cmp func(val.Tuple, val.Tuple) bool) *keyFile {
@@ -179,7 +215,7 @@ type keyFile struct {
 	batchSize int
 }
 
-func (f *keyFile) iterAll(ctx context.Context) fileIter {
+func (f *keyFile) iterAll(ctx context.Context) keyIter {
 	eg, ctx := errgroup.WithContext(ctx)
 	iter := &keyFileReader{f: f.f, eg: eg, batchSize: f.batchSize, buf: make(chan val.Tuple), closed: make(chan struct{})}
 	if f.batchSize == 0 {
@@ -309,19 +345,20 @@ func (r *keyFileReader) next(ctx context.Context) (val.Tuple, bool) {
 
 func (r *keyFileReader) close() {
 	close(r.closed)
-	// interrupt readahead
 	return
 }
 
-type key val.Tuple
+type keyIterable interface {
+	iterAll(context.Context) keyIter
+}
 
-type fileIter interface {
+type keyIter interface {
 	next(ctx context.Context) (val.Tuple, bool)
 	close()
 }
 
 type mergeFileReader struct {
-	file    fileIter
+	file    keyIter
 	root    val.Tuple
 	heapIdx int
 }
@@ -332,7 +369,7 @@ func (r *mergeFileReader) next(ctx context.Context) bool {
 	return ok
 }
 
-func newMergeFileReader(ctx context.Context, iter fileIter, heapIdx int) *mergeFileReader {
+func newMergeFileReader(ctx context.Context, iter keyIter, heapIdx int) *mergeFileReader {
 	root, ok := iter.next(ctx)
 	if !ok {
 		// todo close |closed| here?
@@ -381,7 +418,7 @@ type fileMerger struct {
 	out *keyFile
 }
 
-func (a *tupleSorter) newFileMerger(ctx context.Context, target *keyFile, files ...*keyFile) *fileMerger {
+func (a *tupleSorter) newFileMerger(ctx context.Context, target *keyFile, files ...keyIterable) *fileMerger {
 	// get iterators from the keyFiles
 	// add to the file heap
 	// heapify to get first sorting
