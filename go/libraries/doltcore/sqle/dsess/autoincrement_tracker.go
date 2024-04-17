@@ -151,7 +151,11 @@ func (a *AutoIncrementTracker) Increment(tbl string, insertVal interface{}) erro
 		release := a.mm.Lock(tbl)
 		defer release()
 	}
-	a.sequences.Store(tbl, given+1)
+	curr := loadAutoIncValue(a.sequences, tbl)
+	if given > curr {
+		curr = given
+	}
+	a.sequences.Store(tbl, curr+1)
 	return nil
 }
 
