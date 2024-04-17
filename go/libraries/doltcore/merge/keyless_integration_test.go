@@ -110,7 +110,7 @@ func TestKeylessMerge(t *testing.T) {
 
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
-			root, err = root.CreateEmptyTable(ctx, tblName, keylessSch)
+			root, err = root.CreateEmptyTable(ctx, doltdb.TableName{Name: tblName}, keylessSch)
 			require.NoError(t, err)
 			err = dEnv.UpdateWorkingRoot(ctx, root)
 			require.NoError(t, err)
@@ -245,7 +245,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 	setupTest := func(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, cc []testCommand) {
 		root, err := dEnv.WorkingRoot(ctx)
 		require.NoError(t, err)
-		root, err = root.CreateEmptyTable(ctx, tblName, keylessSch)
+		root, err = root.CreateEmptyTable(ctx, doltdb.TableName{Name: tblName}, keylessSch)
 		require.NoError(t, err)
 		err = dEnv.UpdateWorkingRoot(ctx, root)
 		require.NoError(t, err)

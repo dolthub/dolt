@@ -1122,7 +1122,7 @@ func (db Database) createDoltTable(ctx *sql.Context, tableName string, root *dol
 		return fmt.Errorf(strings.Join(conflictingTbls, "\n"))
 	}
 
-	newRoot, err := root.CreateEmptyTable(ctx, tableName, doltSch)
+	newRoot, err := root.CreateEmptyTable(ctx, doltdb.TableName{Name: tableName}, doltSch)
 	if err != nil {
 		return err
 	}

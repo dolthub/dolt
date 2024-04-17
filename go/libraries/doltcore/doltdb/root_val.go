@@ -586,7 +586,8 @@ func (root *RootValue) SetTableHash(ctx context.Context, tName string, h hash.Ha
 		return nil, err
 	}
 
-	return putTable(ctx, root, tName, ref)
+	// TODO: schema
+	return putTable(ctx, root, TableName{Name: tName}, ref)
 }
 
 // ResolveTableName resolves a case-insensitive name to the exact name as stored in Dolt. Returns false if no matching
@@ -820,19 +821,19 @@ func (root *RootValue) PutTable(ctx context.Context, tName TableName, table *Tab
 		return nil, err
 	}
 
-	return putTable(ctx, root, tName.Name, tableRef)
+	return putTable(ctx, root, tName, tableRef)
 }
 
 func RefFromNomsTable(ctx context.Context, table *Table) (types.Ref, error) {
 	return durable.RefFromNomsTable(ctx, table.table)
 }
 
-func putTable(ctx context.Context, root *RootValue, tName string, ref types.Ref) (*RootValue, error) {
-	if !IsValidTableName(tName) {
+func putTable(ctx context.Context, root *RootValue, tName TableName, ref types.Ref) (*RootValue, error) {
+	if !IsValidTableName(tName.Name) {
 		panic("Don't attempt to put a table with a name that fails the IsValidTableName check")
 	}
 
-	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, []tableEdit{{name: tName, ref: &ref}}, "")
+	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, []tableEdit{{name: tName.Name, ref: &ref}}, tName.Schema)
 	if err != nil {
 		return nil, err
 	}
@@ -841,13 +842,13 @@ func putTable(ctx context.Context, root *RootValue, tName string, ref types.Ref)
 }
 
 // CreateEmptyTable creates an empty table in this root with the name and schema given, returning the new root value.
-func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch schema.Schema) (*RootValue, error) {
+func (root *RootValue) CreateEmptyTable(ctx context.Context, tName TableName, sch schema.Schema) (*RootValue, error) {
 	tbl, err := CreateEmptyTable(ctx, root.NodeStore(), root.VRW(), sch)
 	if err != nil {
 		return nil, err
 	}
 
-	newRoot, err := root.PutTable(ctx, TableName{Name: tName}, tbl)
+	newRoot, err := root.PutTable(ctx, tName, tbl)
 	if err != nil {
 		return nil, err
 	}
@@ -868,7 +869,7 @@ func (root *RootValue) CreateDatabaseSchema(ctx context.Context, sch schema.Data
 	}
 	
 	// Creating a new schema is equivalent to initiating an empty edit against it
-	r, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, nil,"")
+	r, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, nil, sch.Name)
 	if err != nil {
 		return nil, err
 	}

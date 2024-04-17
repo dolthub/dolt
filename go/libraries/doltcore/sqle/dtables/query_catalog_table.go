@@ -125,7 +125,7 @@ func createQueryCatalogIfNotExists(ctx context.Context, root *doltdb.RootValue) 
 	}
 
 	if !ok {
-		return root.CreateEmptyTable(ctx, doltdb.DoltQueryCatalogTableName, DoltQueryCatalogSchema)
+		return root.CreateEmptyTable(ctx, doltdb.TableName{Name: doltdb.DoltQueryCatalogTableName}, DoltQueryCatalogSchema)
 	}
 
 	return root, nil
