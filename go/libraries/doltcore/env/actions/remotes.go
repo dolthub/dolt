@@ -461,7 +461,7 @@ func FetchRemoteBranch(
 	return srcDBCommit, nil
 }
 
-// ShallFetchRefSpec fetches the remote refSpec from the source database to the destination database. Currently it is only
+// ShallowFetchRefSpec fetches the remote refSpec from the source database to the destination database. Currently it is only
 // used for shallow clones.
 func ShallowFetchRefSpec(
 	ctx context.Context,
