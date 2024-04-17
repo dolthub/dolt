@@ -15,10 +15,12 @@
 package creation
 
 import (
+	"errors"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/sort"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
@@ -31,6 +33,9 @@ const (
 	fileMax   = 128
 )
 
+// BuildProllyIndexExternal builds unique and non-unique indexes with a
+// single prolly tree materialization by presorting the index keys in an
+// intermediate file format.
 func BuildProllyIndexExternal(
 	ctx *sql.Context,
 	vrw types.ValueReadWriter,
@@ -62,7 +67,7 @@ func BuildProllyIndexExternal(
 		return nil, err
 	}
 
-	sorter := newTupleSorter(batchSize, fileMax, func(t1, t2 val.Tuple) bool {
+	sorter := sort.NewTupleSorter(batchSize, fileMax, func(t1, t2 val.Tuple) bool {
 		return prefixDesc.Compare(t1, t2) < 0
 	})
 
@@ -83,16 +88,28 @@ func BuildProllyIndexExternal(
 			continue
 		}
 
-		sorter.insert(ctx, idxKey)
+		if err := sorter.Insert(ctx, idxKey); err != nil {
+			return nil, err
+		}
 	}
 
-	sortedKeys := sorter.flush(ctx)
+	sortedKeys, err := sorter.Flush(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	mut := secondary.Mutate()
-	it := sortedKeys.iterAll(ctx)
-	defer it.close()
+	it := sortedKeys.IterAll(ctx)
+	defer it.Close()
 	var lastKey val.Tuple
-	for key, ok := it.next(ctx); ok; key, ok = it.next(ctx) {
+	for {
+		key, err := it.Next(ctx)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, err
+		}
 		if lastKey != nil && prefixDesc.Compare(lastKey, key) == 0 {
 			if uniqCb != nil {
 				// register a constraint violation if |key| collides with |lastKey|
