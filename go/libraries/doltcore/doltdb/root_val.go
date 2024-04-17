@@ -1408,8 +1408,10 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 
 		fkoff := b.CreateByteVector(r.srv.ForeignKeyAddrBytes())
 
+		// TODO: removing an empty address map when the last table is removed
 		numSchemas := r.srv.SchemaTablesLength()
-		dbSchemas := make([]*serial.DatabaseSchemaTableStore, numSchemas)
+		dbSchemas := make([]*serial.DatabaseSchemaTableStore, 0, numSchemas)
+		foundSchema := false
 		for i := 0; i < numSchemas; i++ {
 			var dbSchemaStore *serial.DatabaseSchemaTableStore
 			_, err := r.srv.TrySchemaTables(dbSchemaStore, i)
@@ -1422,29 +1424,27 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 				return nil, err
 			}
 			
-			if string(dbSchema.Name()) != databaseSchema {
-				dbSchemas[i] = dbSchemaStore
+			schemaName := string(dbSchema.Name())
+			if schemaName != databaseSchema {
+				// insert at the appropriate point in the list if necessary
+				if !foundSchema && schemaName > databaseSchema {
+					dbSchemaStore, err := serializeSchemaTableStore(databaseSchema, amUnderEdit)
+					if err != nil {
+						return nil, err
+					}
+
+					dbSchemas = append(dbSchemas, dbSchemaStore)
+					foundSchema = true
+				} 
+				
+				dbSchemas = append(dbSchemas, dbSchemaStore)
 			} else {
-				schemaBuilder := flatbuffers.NewBuilder(80)
-
-				nameOff := b.CreateString(string(dbSchema.Name()))
-				amBytes := tree.ValueFromNode(amUnderEdit.Node()).(types.SerialMessage)
-				tablesOff := b.CreateByteVector(amBytes)
-
-				serial.DatabaseSchemaStart(schemaBuilder)
-				serial.DatabaseSchemaAddName(b, nameOff)
-				schemaOff := serial.DatabaseSchemaEnd(b)
-				
-				serial.DatabaseSchemaTableStoreStart(schemaBuilder)
-				serial.DatabaseSchemaTableStoreAddDatabaseSchema(schemaBuilder, schemaOff)
-				serial.DatabaseSchemaTableStoreAddTables(b, tablesOff)
-				off := serial.DatabaseSchemaTableStoreEnd(b)
-				
-				dbSchemaStore, err = serial.TryGetRootAsDatabaseSchemaTableStore(schemaBuilder.FinishedBytes(), off)
+				foundSchema = true
+				dbSchemaStore, err = serializeSchemaTableStore(databaseSchema, amUnderEdit)
 				if err != nil {
 					return nil, err
 				}
-				
+
 				dbSchemas[i] = dbSchemaStore
 			}
 		}
@@ -1467,8 +1467,32 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 			return nil, err
 		}
 	}
-	
+
 	return fbRvStorage{msg}, nil
+}
+
+func serializeSchemaTableStore(databaseSchema string, amUnderEdit prolly.AddressMap) (*serial.DatabaseSchemaTableStore, error) {
+	sb := flatbuffers.NewBuilder(80)
+
+	nameOff := sb.CreateString(databaseSchema)
+	amBytes := tree.ValueFromNode(amUnderEdit.Node()).(types.SerialMessage)
+	tablesOff := sb.CreateByteVector(amBytes)
+
+	serial.DatabaseSchemaStart(sb)
+	serial.DatabaseSchemaAddName(sb, nameOff)
+	schemaOff := serial.DatabaseSchemaEnd(sb)
+
+	serial.DatabaseSchemaTableStoreStart(sb)
+	serial.DatabaseSchemaTableStoreAddDatabaseSchema(sb, schemaOff)
+	serial.DatabaseSchemaTableStoreAddTables(sb, tablesOff)
+	off := serial.DatabaseSchemaTableStoreEnd(sb)
+
+	dbSchemaStore, err := serial.TryGetRootAsDatabaseSchemaTableStore(sb.FinishedBytes(), off)
+	if err != nil {
+		return nil, err
+	}
+	
+	return dbSchemaStore, nil
 }
 
 func serializeDatabaseSchemaTables(b *flatbuffers.Builder, dbSchemas []*serial.DatabaseSchemaTableStore) (flatbuffers.UOffsetT, error) {
