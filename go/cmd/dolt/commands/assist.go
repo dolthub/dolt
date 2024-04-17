@@ -28,6 +28,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/google/shlex"
 
@@ -584,7 +585,7 @@ func getCreateTableStatements(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEn
 		return "", err
 	}
 
-	tables, err := root.GetTableNames(ctx)
+	tables, err := root.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	for _, table := range tables {
 		_, iter, err := sqlEngine.Query(ctx, fmt.Sprintf("SHOW CREATE TABLE %s", sql.QuoteIdentifier(table)))
 		if err != nil {

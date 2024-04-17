@@ -102,7 +102,7 @@ func TestPushOnWriteHook(t *testing.T) {
 
 	assert.NoError(t, err)
 
-	names, err := root.GetTableNames(context.Background())
+	names, err := root.GetTableNames(context.Background(), doltdb.DefaultSchemaName)
 	assert.NoError(t, err)
 	if len(names) != 0 {
 		t.Fatal("There should be no tables in empty db")

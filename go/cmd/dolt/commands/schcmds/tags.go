@@ -78,7 +78,7 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	if len(tables) == 0 {
 		var err error
-		tables, err = root.GetTableNames(ctx)
+		tables, err = root.GetTableNames(ctx, doltdb.DefaultSchemaName)
 
 		if err != nil {
 			return commands.HandleVErrAndExitCode(errhand.BuildDError("unable to get table names.").AddCause(err).Build(), usage)

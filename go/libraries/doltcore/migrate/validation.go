@@ -54,7 +54,7 @@ func validateBranchMapping(ctx context.Context, old, new *doltdb.DoltDB) error {
 }
 
 func validateRootValue(ctx context.Context, oldParent, old, new *doltdb.RootValue) error {
-	names, err := old.GetTableNames(ctx)
+	names, err := old.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
 		return err
 	}

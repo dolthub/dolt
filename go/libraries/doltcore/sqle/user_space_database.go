@@ -64,7 +64,7 @@ func (db *UserSpaceDatabase) GetTableInsensitive(ctx *sql.Context, tableName str
 }
 
 func (db *UserSpaceDatabase) GetTableNames(ctx *sql.Context) ([]string, error) {
-	tableNames, err := db.RootValue.GetTableNames(ctx)
+	tableNames, err := db.RootValue.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}

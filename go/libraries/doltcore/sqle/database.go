@@ -635,7 +635,7 @@ func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]stri
 		return nil, nil
 	}
 
-	tblNames, err := root.GetTableNames(ctx)
+	tblNames, err := root.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}
@@ -773,7 +773,7 @@ func getAllTableNames(ctx context.Context, root *doltdb.RootValue) ([]string, er
 	if err != nil {
 		return nil, err
 	}
-	result, err := root.GetTableNames(ctx)
+	result, err := root.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	result = append(result, systemTables...)
 	return result, err
 }

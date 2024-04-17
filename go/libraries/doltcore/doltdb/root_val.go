@@ -681,7 +681,7 @@ func (root *RootValue) GetTableByColTag(ctx context.Context, tag uint64) (tbl *T
 }
 
 // GetTableNames retrieves the lists of all tables for a RootValue
-func (root *RootValue) GetTableNames(ctx context.Context) ([]string, error) {
+func (root *RootValue) GetTableNames(ctx context.Context, schemaName string) ([]string, error) {
 	tableMap, err := root.getTableMap(ctx)
 	if err != nil {
 		return nil, err
@@ -703,7 +703,7 @@ func (root *RootValue) getTableMap(ctx context.Context) (tableMap, error) {
 }
 
 func (root *RootValue) TablesWithDataConflicts(ctx context.Context) ([]string, error) {
-	names, err := root.GetTableNames(ctx)
+	names, err := root.GetTableNames(ctx, DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}
@@ -729,7 +729,8 @@ func (root *RootValue) TablesWithDataConflicts(ctx context.Context) ([]string, e
 
 // TablesWithConstraintViolations returns all tables that have constraint violations.
 func (root *RootValue) TablesWithConstraintViolations(ctx context.Context) ([]string, error) {
-	names, err := root.GetTableNames(ctx)
+	// TODO: schema name
+	names, err := root.GetTableNames(ctx, DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}
@@ -1017,7 +1018,9 @@ func (root *RootValue) ValidateForeignKeysOnSchemas(ctx context.Context) (*RootV
 	if err != nil {
 		return nil, err
 	}
-	allTablesSlice, err := root.GetTableNames(ctx)
+	
+	// TODO: schema name
+	allTablesSlice, err := root.GetTableNames(ctx, DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}
@@ -1088,7 +1091,8 @@ func UnionTableNames(ctx context.Context, roots ...*RootValue) ([]string, error)
 	seenTblNamesMap := make(map[string]bool)
 	tblNames := []string{}
 	for _, root := range roots {
-		rootTblNames, err := root.GetTableNames(ctx)
+		// TODO: schema name
+		rootTblNames, err := root.GetTableNames(ctx, DefaultSchemaName)
 		if err != nil {
 			return nil, err
 		}
@@ -1202,7 +1206,8 @@ func (root *RootValue) DebugString(ctx context.Context, transitive bool) string 
 
 // MapTableHashes returns a map of each table name and hash.
 func (root *RootValue) MapTableHashes(ctx context.Context) (map[string]hash.Hash, error) {
-	names, err := root.GetTableNames(ctx)
+	// TODO: schema name
+	names, err := root.GetTableNames(ctx, DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}

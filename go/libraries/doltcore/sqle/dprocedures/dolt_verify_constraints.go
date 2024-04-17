@@ -175,7 +175,7 @@ func parseTablesToCheck(ctx *sql.Context, workingRoot *doltdb.RootValue, apr *ar
 
 	// If no tables were explicitly specified, then check all tables
 	if tableSet.Size() == 0 {
-		names, err := workingRoot.GetTableNames(ctx)
+		names, err := workingRoot.GetTableNames(ctx, doltdb.DefaultSchemaName)
 		if err != nil {
 			return nil, err
 		}

@@ -311,7 +311,7 @@ func resolveNomsConflicts(ctx *sql.Context, opts editor.Options, tbl *doltdb.Tab
 }
 
 func validateConstraintViolations(ctx *sql.Context, before, after *doltdb.RootValue, table string) error {
-	tables, err := after.GetTableNames(ctx)
+	tables, err := after.GetTableNames(ctx, doltdb.DefaultSchemaName)
 	if err != nil {
 		return err
 	}
@@ -498,7 +498,7 @@ func DoDoltConflictsResolve(ctx *sql.Context, args []string) (int, error) {
 	// get all tables in conflict
 	tbls := apr.Args
 	if len(tbls) == 1 && tbls[0] == "." {
-		all, err := ws.WorkingRoot().GetTableNames(ctx)
+		all, err := ws.WorkingRoot().GetTableNames(ctx, doltdb.DefaultSchemaName)
 		if err != nil {
 			return 1, nil
 		}
