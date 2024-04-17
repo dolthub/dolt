@@ -1231,12 +1231,32 @@ func (r fbRvStorage) getAddressMap(vrw types.ValueReadWriter, ns tree.NodeStore)
 }
 
 func (r fbRvStorage) getSchemaAddressMap(vrw types.ValueReadWriter, ns tree.NodeStore, dbSchemaName string) (prolly.AddressMap, error) {
-	tbytes := r.srv.TablesBytes()
-	node, err := shim.NodeFromValue(types.SerialMessage(tbytes))
-	if err != nil {
-		return prolly.AddressMap{}, err
+	numSchemas := r.srv.SchemaTablesLength()
+	for i := 0; i < numSchemas; i++ {
+		var dbSchemaStore *serial.DatabaseSchemaTableStore
+		_, err := r.srv.TrySchemaTables(dbSchemaStore, i)
+		if err != nil {
+			return prolly.AddressMap{}, err
+		}
+
+		dbSchema, err := dbSchemaStore.TryDatabaseSchema(nil)
+		if err != nil {
+			return prolly.AddressMap{}, err
+		}
+
+		if dbSchemaName == string(dbSchema.Name()) {
+			tbytes := dbSchemaStore.TablesBytes()
+			node, err := shim.NodeFromValue(types.SerialMessage(tbytes))
+			if err != nil {
+				return prolly.AddressMap{}, err
+			}
+
+			return prolly.NewAddressMap(node, ns)
+		}
 	}
-	return prolly.NewAddressMap(node, ns)
+
+	// TODO: is this an error?
+	return prolly.AddressMap{}, nil
 }
 
 func (r fbRvStorage) GetTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, databaseSchema string) (tableMap, error) {
@@ -1297,14 +1317,9 @@ func (r fbRvStorage) GetCollation(ctx context.Context) (schema.Collation, error)
 }
 
 func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit, databaseSchema string) (rvStorage, error) {
-	builder := flatbuffers.NewBuilder(80)
-
-	am, err := r.getAddressMap(vrw, ns)
-	if err != nil {
-		return nil, err
-	}
-	var amUnderEdit prolly.AddressMap
 	
+	var amUnderEdit prolly.AddressMap
+	var err error
 	if databaseSchema == "" {
 		amUnderEdit, err = r.getAddressMap(vrw, ns)
 		if err != nil {
@@ -1367,23 +1382,125 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 	if err != nil {
 		return nil, err
 	}
+	
+	var msg *serial.RootValue
+	b := flatbuffers.NewBuilder(80)
+	
+	if databaseSchema == "" {
+		ambytes := []byte(tree.ValueFromNode(amUnderEdit.Node()).(types.SerialMessage))
+		tablesoff := b.CreateByteVector(ambytes)
 
-	ambytes := []byte(tree.ValueFromNode(am.Node()).(types.SerialMessage))
-	tablesoff := builder.CreateByteVector(ambytes)
+		fkoff := b.CreateByteVector(r.srv.ForeignKeyAddrBytes())
+		serial.RootValueStart(b)
+		serial.RootValueAddFeatureVersion(b, r.srv.FeatureVersion())
+		serial.RootValueAddCollation(b, r.srv.Collation())
+		serial.RootValueAddTables(b, tablesoff)
+		serial.RootValueAddForeignKeyAddr(b, fkoff)
 
-	fkoff := builder.CreateByteVector(r.srv.ForeignKeyAddrBytes())
-	serial.RootValueStart(builder)
-	serial.RootValueAddFeatureVersion(builder, r.srv.FeatureVersion())
-	serial.RootValueAddCollation(builder, r.srv.Collation())
-	serial.RootValueAddTables(builder, tablesoff)
-	serial.RootValueAddForeignKeyAddr(builder, fkoff)
+		bs := serial.FinishMessage(b, serial.RootValueEnd(b), []byte(serial.RootValueFileID))
+		msg, err = serial.TryGetRootAsRootValue(bs, serial.MessagePrefixSz)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		tableBytes := r.srv.TablesBytes()
+		tablesoff := b.CreateByteVector(tableBytes)
 
-	bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
-	msg, err := serial.TryGetRootAsRootValue(bs, serial.MessagePrefixSz)
-	if err != nil {
-		return nil, err
+		fkoff := b.CreateByteVector(r.srv.ForeignKeyAddrBytes())
+
+		numSchemas := r.srv.SchemaTablesLength()
+		dbSchemas := make([]*serial.DatabaseSchemaTableStore, numSchemas)
+		for i := 0; i < numSchemas; i++ {
+			var dbSchemaStore *serial.DatabaseSchemaTableStore
+			_, err := r.srv.TrySchemaTables(dbSchemaStore, i)
+			if err != nil {
+				return nil, err
+			}
+
+			dbSchema, err := dbSchemaStore.TryDatabaseSchema(nil)
+			if err != nil {
+				return nil, err
+			}
+			
+			if string(dbSchema.Name()) != databaseSchema {
+				dbSchemas[i] = dbSchemaStore
+			} else {
+				schemaBuilder := flatbuffers.NewBuilder(80)
+
+				nameOff := b.CreateString(string(dbSchema.Name()))
+				amBytes := tree.ValueFromNode(amUnderEdit.Node()).(types.SerialMessage)
+				tablesOff := b.CreateByteVector(amBytes)
+
+				serial.DatabaseSchemaStart(schemaBuilder)
+				serial.DatabaseSchemaAddName(b, nameOff)
+				schemaOff := serial.DatabaseSchemaEnd(b)
+				
+				serial.DatabaseSchemaTableStoreStart(schemaBuilder)
+				serial.DatabaseSchemaTableStoreAddDatabaseSchema(schemaBuilder, schemaOff)
+				serial.DatabaseSchemaTableStoreAddTables(b, tablesOff)
+				off := serial.DatabaseSchemaTableStoreEnd(b)
+				
+				dbSchemaStore, err = serial.TryGetRootAsDatabaseSchemaTableStore(schemaBuilder.FinishedBytes(), off)
+				if err != nil {
+					return nil, err
+				}
+				
+				dbSchemas[i] = dbSchemaStore
+			}
+		}
+
+		dbSchemaTablesOffset, err := serializeDatabaseSchemaTables(b, dbSchemas)
+		if err != nil {
+			return nil, err
+		}
+
+		serial.RootValueStart(b)
+		serial.RootValueAddFeatureVersion(b, r.srv.FeatureVersion())
+		serial.RootValueAddCollation(b, r.srv.Collation())
+		serial.RootValueAddTables(b, tablesoff)
+		serial.RootValueAddForeignKeyAddr(b, fkoff)
+		serial.RootValueAddSchemaTables(b, dbSchemaTablesOffset)
+
+		bs := serial.FinishMessage(b, serial.RootValueEnd(b), []byte(serial.RootValueFileID))
+		msg, err = serial.TryGetRootAsRootValue(bs, serial.MessagePrefixSz)
+		if err != nil {
+			return nil, err
+		}
 	}
+	
 	return fbRvStorage{msg}, nil
+}
+
+func serializeDatabaseSchemaTables(b *flatbuffers.Builder, dbSchemas []*serial.DatabaseSchemaTableStore) (flatbuffers.UOffsetT, error) {
+	offsets := make([]flatbuffers.UOffsetT, len(dbSchemas))
+
+	for i := len(dbSchemas) - 1; i >= 0; i-- {
+		store := dbSchemas[i]
+
+		dbSchema, err := store.TryDatabaseSchema(nil)
+		if err != nil {
+			return 0, err
+		}
+
+		// todo: allow override to be passed in
+		tablesoff := b.CreateByteVector(store.TablesBytes())
+
+		serial.DatabaseSchemaStart(b)
+		nameOff := b.CreateString(string(dbSchema.Name()))
+		serial.DatabaseSchemaAddName(b, nameOff)
+		dbSchemaOffset := serial.DatabaseSchemaEnd(b)
+		
+		serial.DatabaseSchemaTableStoreStart(b)
+		serial.DatabaseSchemaTableStoreAddDatabaseSchema(b, dbSchemaOffset)
+		serial.DatabaseSchemaTableStoreAddTables(b, tablesoff)
+		offsets = append(offsets, serial.DatabaseSchemaTableStoreEnd(b))
+	}
+	
+	serial.RootValueStartSchemaTablesVector(b, len(offsets))
+	for i := len(offsets) - 1; i >= 0; i-- {
+		b.PrependUOffsetT(offsets[i])
+	}
+	return b.EndVector(len(offsets)), nil
 }
 
 func (r fbRvStorage) SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (rvStorage, error) {

@@ -30,6 +30,8 @@ table RootValue {
   // schema_tables is used for table storage in any non-default database schema. Databases with a single schema 
   // (the default) only use the normal tables field. Entries are stored in sorted order by schema name.
   schema_tables:[DatabaseSchemaTableStore];
+  
+  // TODO: the above is probably worse to serialize than just storing schema tables inline with some sort of marker  
 }
 
 table DatabaseSchemaTableStore {
