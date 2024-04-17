@@ -1429,7 +1429,7 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 		dbSchemas := make([]*serial.DatabaseSchemaTableStore, 0, numSchemas)
 		foundSchema := false
 		for i := 0; i < numSchemas; i++ {
-			var dbSchemaStore *serial.DatabaseSchemaTableStore
+			dbSchemaStore := new(serial.DatabaseSchemaTableStore)
 			_, err := r.srv.TrySchemaTables(dbSchemaStore, i)
 			if err != nil {
 				return nil, err
@@ -1628,14 +1628,13 @@ func (r fbRvStorage) nomsValue() types.Value {
 func (r fbRvStorage) hasDatabaseSchema(databaseSchema string) bool {
 	numSchTables := r.srv.SchemaTablesLength()
 	for i := 0; i < numSchTables; i++ {
-		var dbSchemaStorage *serial.DatabaseSchemaTableStore
-		_, err := r.srv.TrySchemaTables(dbSchemaStorage, numSchTables)
+		dbSchemaStorage := new(serial.DatabaseSchemaTableStore)
+		_, err := r.srv.TrySchemaTables(dbSchemaStorage, i)
 		if err != nil {
 			return false
 		}
 		
-		var dbSchema *serial.DatabaseSchema
-		_, err = dbSchemaStorage.TryDatabaseSchema(dbSchema)
+		dbSchema, err := dbSchemaStorage.TryDatabaseSchema(nil)
 		if err != nil {
 			return false
 		}

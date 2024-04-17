@@ -681,7 +681,8 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 		return nil, false, nil
 	}
 
-	tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
+	// TODO: should we short-circuit the schema name for system tables?
+	tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tableName, Schema: db.schemaName})
 	if err != nil {
 		return nil, false, err
 	} else if !ok {
@@ -1253,6 +1254,7 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		return view, ok, nil
 	}
 
+	// TODO: do we need a dolt schemas table in every schema?
 	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
