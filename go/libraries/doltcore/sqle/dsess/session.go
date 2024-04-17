@@ -941,12 +941,12 @@ func (d *DoltSession) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.R
 		return nil
 	}
 
+	existingWorkingSet := branchState.WorkingSet()
+
 	if branchState.readOnly {
 		return fmt.Errorf("cannot set root on read-only session")
 	}
-	branchState.workingSet = branchState.WorkingSet().WithWorkingRoot(newRoot)
-
-	return d.SetWorkingSet(ctx, dbName, branchState.WorkingSet())
+	return d.SetWorkingSet(ctx, dbName, existingWorkingSet.WithWorkingRoot(newRoot))
 }
 
 // SetRoots sets new roots for the session for the database named. Typically clients should only set the working root,
@@ -987,6 +987,7 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 	if ws.Ref() != branchState.WorkingSet().Ref() {
 		return fmt.Errorf("must switch working sets with SwitchWorkingSet")
 	}
+	previousWorkingSet := branchState.WorkingSet()
 	branchState.workingSet = ws
 
 	err = d.setDbSessionVars(ctx, branchState, true)
@@ -997,6 +998,16 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 	err = branchState.WriteSession().SetWorkingSet(ctx, ws)
 	if err != nil {
 		return err
+	}
+
+	if branchState.head == "main" {
+		nonRevisionDbName := branchState.dbState.dbName
+		for _, listener := range transactionListeners {
+			err := listener.TransactionCommit(ctx, nonRevisionDbName, previousWorkingSet.WorkingRoot(), ws.WorkingRoot())
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	branchState.dirty = true

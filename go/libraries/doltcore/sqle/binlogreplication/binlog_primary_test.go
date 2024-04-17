@@ -232,6 +232,104 @@ func TestBinlogsOnlyFromMainBranch(t *testing.T) {
 	requireReplicaResults(t, "select * from db01.t;", [][]any{{"42", "42", "2042"}})
 }
 
+// TestBinlogsFromMerge tests that the binlog is updated when data is merged in from another branch.
+func TestBinlogsFromMerge(t *testing.T) {
+	defer teardown(t)
+	startSqlServers(t)
+	setupForDoltToMySqlReplication()
+
+	// TODO: We don't support replicating DDL statements yet, so for now, set up the DDL before
+	//       starting up replication.
+	primaryDatabase.MustExec("create database db01;")
+	primaryDatabase.MustExec("use db01;")
+	testTableCreateStatement := "create table db01.t (pk varchar(100) primary key, c1 int, c2 year);"
+	primaryDatabase.MustExec(testTableCreateStatement)
+	primaryDatabase.MustExec("call dolt_commit('-Am', 'creating table t');")
+	replicaDatabase.MustExec(testTableCreateStatement)
+
+	startReplication(t, doltPort)
+	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
+	//       Here we just pause to let the hardcoded binlog events be delivered
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t;", [][]any{})
+
+	// No events should be generated when we're not updating the main branch
+	primaryDatabase.MustExec("call dolt_checkout('-b', 'branch1');")
+	primaryDatabase.MustExec("insert into db01.t values('hundred', 100, 2000), ('two-hundred', 200, 2001);")
+	primaryDatabase.MustExec("call dolt_commit('-Am', 'inserting rows 100 and 200 on branch1');")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t;", [][]any{})
+
+	// Make a commit on main, so that we don't get a fast-forward merge later
+	primaryDatabase.MustExec("call dolt_checkout('main');")
+	primaryDatabase.MustExec("insert into db01.t values('42', 42, 2042);")
+	primaryDatabase.MustExec("call dolt_commit('-Am', 'inserting row 42 on main');")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t;", [][]any{{"42", "42", "2042"}})
+
+	// Merge branch1 into main
+	primaryDatabase.MustExec("call dolt_merge('branch1');")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t;", [][]any{
+		{"42", "42", "2042"}, {"hundred", "100", "2000"}, {"two-hundred", "200", "2001"}})
+}
+
+// TestBinlogsFromReset tests that the binlog is updated when a branch head is reset to a different commit.
+func TestBinlogsFromReset(t *testing.T) {
+	defer teardown(t)
+	startSqlServers(t)
+	setupForDoltToMySqlReplication()
+
+	// TODO: We don't support replicating DDL statements yet, so for now, set up the DDL before
+	//       starting up replication.
+	primaryDatabase.MustExec("create database db01;")
+	primaryDatabase.MustExec("use db01;")
+	testTableCreateStatement := "create table db01.t (pk varchar(100) primary key, c1 int);"
+	primaryDatabase.MustExec(testTableCreateStatement)
+	primaryDatabase.MustExec("call dolt_commit('-Am', 'creating table t');")
+	primaryDatabase.MustExec("SET @EmptyTableCommit=dolt_hashof('HEAD');")
+	replicaDatabase.MustExec(testTableCreateStatement)
+
+	startReplication(t, doltPort)
+	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
+	//       Here we just pause to let the hardcoded binlog events be delivered
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t;", [][]any{})
+
+	// Make a couple of commits on main so that we can test resetting to them
+	primaryDatabase.MustExec("insert into db01.t values('01', 1);")
+	primaryDatabase.MustExec("call dolt_commit('-am', 'inserting 01');")
+	primaryDatabase.MustExec("SET @OneRowCommit=dolt_hashof('HEAD');")
+	primaryDatabase.MustExec("insert into db01.t values('02', 2);")
+	primaryDatabase.MustExec("call dolt_commit('-am', 'inserting 02');")
+	primaryDatabase.MustExec("SET @TwoRowsCommit=dolt_hashof('HEAD');")
+	primaryDatabase.MustExec("insert into db01.t values('03', 3);")
+	primaryDatabase.MustExec("call dolt_commit('-am', 'inserting 03');")
+	primaryDatabase.MustExec("SET @ThreeRowsCommit=dolt_hashof('HEAD');")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t;", [][]any{{"01", "1"}, {"02", "2"}, {"03", "3"}})
+
+	// Reset back to the first commit when no rows are present
+	primaryDatabase.MustExec("call dolt_reset('--hard', @EmptyTableCommit);")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t;", [][]any{})
+
+	// Reset back to the second commit when only one row is present
+	primaryDatabase.MustExec("call dolt_reset('--hard', @OneRowCommit);")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t;", [][]any{{"01", "1"}})
+
+	// Reset back to the second commit when only one row is present
+	primaryDatabase.MustExec("call dolt_reset('--hard', @TwoRowsCommit);")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t;", [][]any{{"01", "1"}, {"02", "2"}})
+
+	// Reset back to the second commit when only one row is present
+	primaryDatabase.MustExec("call dolt_reset('--hard', @ThreeRowsCommit);")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t;", [][]any{{"01", "1"}, {"02", "2"}, {"03", "3"}})
+}
+
 // requireReplicaResults runs the specified |query| on the replica database and asserts that the results match
 // |expectedResults|. Note that the actual results are converted to string values in almost all cases, due to
 // limitations in the SQL library we use to query the replica database, so |expectedResults| should generally
