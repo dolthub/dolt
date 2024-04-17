@@ -38,7 +38,7 @@ import (
 // The maximum memory used will be |fileMax| * |batchSize|.
 type tupleSorter struct {
 	keyCmp    func(val.Tuple, val.Tuple) bool
-	files     []*keyFile
+	files     []keyIterable
 	inProg    *keyMem
 	fileMax   int
 	batchSize int
@@ -81,7 +81,7 @@ func (a *tupleSorter) Flush(ctx context.Context) (iter keyIterable, err error) {
 	}
 
 	allKeys := newKeyFile(a.newFile(), a.inProg.byteLim)
-	m := a.newFileMerger(ctx, allKeys, iterables...)
+	m := newFileMerger(ctx, a.keyCmp, allKeys, iterables...)
 	m.run(ctx)
 	return allKeys, nil
 }
@@ -119,7 +119,7 @@ func (a *tupleSorter) newFile() *os.File {
 
 // compact halves the number of files, doubling their size
 func (a *tupleSorter) compact(ctx context.Context) {
-	var newFiles []*keyFile
+	var newFiles []keyIterable
 	wg := sync.WaitGroup{}
 	eg, ctx := errgroup.WithContext(ctx)
 	work := make(chan *keyFile)
@@ -141,8 +141,8 @@ func (a *tupleSorter) compact(ctx context.Context) {
 		wg.Add(1)
 		eg.Go(func() error {
 			defer wg.Done()
-			outF := newKeyFile(a.newFile(), a.files[i].batchSize)
-			m := a.newFileMerger(ctx, outF, a.files[i], a.files[i+1])
+			outF := newKeyFile(a.newFile(), a.batchSize)
+			m := newFileMerger(ctx, a.keyCmp, outF, a.files[i], a.files[i+1])
 			m.run(ctx)
 			work <- outF
 			return nil
@@ -449,7 +449,7 @@ type fileMerger struct {
 	out *keyFile
 }
 
-func (a *tupleSorter) newFileMerger(ctx context.Context, target *keyFile, files ...keyIterable) *fileMerger {
+func newFileMerger(ctx context.Context, keyCmp func(val.Tuple, val.Tuple) bool, target *keyFile, files ...keyIterable) *fileMerger {
 	var fileHeads []*mergeFileReader
 	for i, f := range files {
 		iter := f.IterAll(ctx)
@@ -461,7 +461,7 @@ func (a *tupleSorter) newFileMerger(ctx context.Context, target *keyFile, files 
 		}
 	}
 
-	mq := &mergeQueue{files: fileHeads, keyCmp: a.keyCmp}
+	mq := &mergeQueue{files: fileHeads, keyCmp: keyCmp}
 	heap.Init(mq)
 
 	return &fileMerger{
