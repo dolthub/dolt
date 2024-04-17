@@ -274,6 +274,7 @@ func TestBinlogsFromMerge(t *testing.T) {
 		{"42", "42", "2042"}, {"hundred", "100", "2000"}, {"two-hundred", "200", "2001"}})
 }
 
+// TestBinlogsFromCherrypick tests binlog replication when dolt_cherry_pick() is used to cherry-pick commits.
 func TestBinlogsFromCherrypick(t *testing.T) {
 	defer teardown(t)
 	startSqlServers(t)
@@ -317,6 +318,52 @@ func TestBinlogsFromCherrypick(t *testing.T) {
 	primaryDatabase.MustExec("call dolt_cherry_pick(@RowThreeCommit);")
 	time.Sleep(200 * time.Millisecond)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{{"02", "2"}, {"03", "3"}})
+}
+
+// TestBinlogsFromRevert tests binlog replication when dolt_revert() is used to revert commits.
+func TestBinlogsFromRevert(t *testing.T) {
+	defer teardown(t)
+	startSqlServers(t)
+	setupForDoltToMySqlReplication()
+
+	// TODO: We don't support replicating DDL statements yet, so for now, set up the DDL before
+	//       starting up replication.
+	primaryDatabase.MustExec("create database db01;")
+	primaryDatabase.MustExec("use db01;")
+	testTableCreateStatement := "create table db01.t (pk varchar(100) primary key, c1 int);"
+	primaryDatabase.MustExec(testTableCreateStatement)
+	primaryDatabase.MustExec("call dolt_commit('-Am', 'creating table t');")
+	primaryDatabase.MustExec("SET @EmptyTableCommit=dolt_hashof('HEAD');")
+	replicaDatabase.MustExec(testTableCreateStatement)
+
+	startReplication(t, doltPort)
+	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
+	//       Here we just pause to let the hardcoded binlog events be delivered
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t;", [][]any{})
+
+	// Make a couple of commits on main so that we can revert one
+	primaryDatabase.MustExec("insert into db01.t values('01', 1);")
+	primaryDatabase.MustExec("call dolt_commit('-am', 'inserting 01');")
+	primaryDatabase.MustExec("SET @RowOneCommit=dolt_hashof('HEAD');")
+	primaryDatabase.MustExec("insert into db01.t values('02', 2);")
+	primaryDatabase.MustExec("call dolt_commit('-am', 'inserting 02');")
+	primaryDatabase.MustExec("SET @RowTwoCommit=dolt_hashof('HEAD');")
+	primaryDatabase.MustExec("insert into db01.t values('03', 3);")
+	primaryDatabase.MustExec("call dolt_commit('-am', 'inserting 03');")
+	primaryDatabase.MustExec("SET @RowThreeCommit=dolt_hashof('HEAD');")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t;", [][]any{{"01", "1"}, {"02", "2"}, {"03", "3"}})
+
+	// Revert a commit
+	primaryDatabase.MustExec("call dolt_revert(@RowTwoCommit);")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t;", [][]any{{"01", "1"}, {"03", "3"}})
+
+	// Revert another commit
+	primaryDatabase.MustExec("call dolt_revert(@RowOneCommit);")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t;", [][]any{{"03", "3"}})
 }
 
 // TestBinlogsFromReset tests that the binlog is updated when a branch head is reset to a different commit.
