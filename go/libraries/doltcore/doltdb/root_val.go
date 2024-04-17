@@ -1249,7 +1249,7 @@ func (r fbRvStorage) getAddressMap(vrw types.ValueReadWriter, ns tree.NodeStore)
 func (r fbRvStorage) getSchemaAddressMap(vrw types.ValueReadWriter, ns tree.NodeStore, dbSchemaName string) (prolly.AddressMap, error) {
 	numSchemas := r.srv.SchemaTablesLength()
 	for i := 0; i < numSchemas; i++ {
-		var dbSchemaStore *serial.DatabaseSchemaTableStore
+		dbSchemaStore := new(serial.DatabaseSchemaTableStore)
 		_, err := r.srv.TrySchemaTables(dbSchemaStore, i)
 		if err != nil {
 			return prolly.AddressMap{}, err
@@ -1464,6 +1464,15 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 				dbSchemas[i] = dbSchemaStore
 			}
 		}
+		
+		if !foundSchema {
+			dbSchemaStore, err := serializeSchemaTableStore(databaseSchema, amUnderEdit)
+			if err != nil {
+				return nil, err
+			}
+
+			dbSchemas = append(dbSchemas, dbSchemaStore)
+		}
 
 		dbSchemaTablesOffset, err := serializeDatabaseSchemaTables(b, dbSchemas)
 		if err != nil {
@@ -1502,8 +1511,9 @@ func serializeSchemaTableStore(databaseSchema string, amUnderEdit prolly.Address
 	serial.DatabaseSchemaTableStoreAddDatabaseSchema(sb, schemaOff)
 	serial.DatabaseSchemaTableStoreAddTables(sb, tablesOff)
 	off := serial.DatabaseSchemaTableStoreEnd(sb)
+	sb.Finish(off)
 
-	dbSchemaStore, err := serial.TryGetRootAsDatabaseSchemaTableStore(sb.FinishedBytes(), off)
+	dbSchemaStore, err := serial.TryGetRootAsDatabaseSchemaTableStore(sb.FinishedBytes(), 0)
 	if err != nil {
 		return nil, err
 	}
@@ -1524,16 +1534,16 @@ func serializeDatabaseSchemaTables(b *flatbuffers.Builder, dbSchemas []*serial.D
 
 		// todo: allow override to be passed in
 		tablesoff := b.CreateByteVector(store.TablesBytes())
-
-		serial.DatabaseSchemaStart(b)
+		
 		nameOff := b.CreateString(string(dbSchema.Name()))
+		serial.DatabaseSchemaStart(b)
 		serial.DatabaseSchemaAddName(b, nameOff)
 		dbSchemaOffset := serial.DatabaseSchemaEnd(b)
 		
 		serial.DatabaseSchemaTableStoreStart(b)
 		serial.DatabaseSchemaTableStoreAddDatabaseSchema(b, dbSchemaOffset)
 		serial.DatabaseSchemaTableStoreAddTables(b, tablesoff)
-		offsets = append(offsets, serial.DatabaseSchemaTableStoreEnd(b))
+		offsets[i] = serial.DatabaseSchemaTableStoreEnd(b)
 	}
 	
 	serial.RootValueStartSchemaTablesVector(b, len(offsets))
