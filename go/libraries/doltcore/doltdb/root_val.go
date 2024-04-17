@@ -560,7 +560,8 @@ func (root *RootValue) GetAllSchemas(ctx context.Context) (map[string]schema.Sch
 }
 
 func (root *RootValue) GetTableHash(ctx context.Context, tName string) (hash.Hash, bool, error) {
-	tableMap, err := root.getTableMap(ctx)
+	// TODO: schema
+	tableMap, err := root.getTableMap(ctx, DefaultSchemaName)
 	if err != nil {
 		return hash.Hash{}, false, err
 	}
@@ -593,7 +594,8 @@ func (root *RootValue) SetTableHash(ctx context.Context, tName string, h hash.Ha
 // ResolveTableName resolves a case-insensitive name to the exact name as stored in Dolt. Returns false if no matching
 // name was found.
 func (root *RootValue) ResolveTableName(ctx context.Context, tName string) (string, bool, error) {
-	tableMap, err := root.getTableMap(ctx)
+	// TODO: schema name
+	tableMap, err := root.getTableMap(ctx, DefaultSchemaName)
 	if err != nil {
 		return "", false, err
 	}
@@ -622,7 +624,7 @@ func (root *RootValue) ResolveTableName(ctx context.Context, tName string) (stri
 
 // GetTable will retrieve a table by its case-sensitive name.
 func (root *RootValue) GetTable(ctx context.Context, tName TableName) (*Table, bool, error) {
-	tableMap, err := root.getTableMap(ctx)
+	tableMap, err := root.getTableMap(ctx, tName.Schema)
 	if err != nil {
 		return nil, false, err
 	}
@@ -682,7 +684,7 @@ func (root *RootValue) GetTableByColTag(ctx context.Context, tag uint64) (tbl *T
 
 // GetTableNames retrieves the lists of all tables for a RootValue
 func (root *RootValue) GetTableNames(ctx context.Context, schemaName string) ([]string, error) {
-	tableMap, err := root.getTableMap(ctx)
+	tableMap, err := root.getTableMap(ctx, schemaName)
 	if err != nil {
 		return nil, err
 	}
@@ -698,8 +700,8 @@ func (root *RootValue) GetTableNames(ctx context.Context, schemaName string) ([]
 	return names, nil
 }
 
-func (root *RootValue) getTableMap(ctx context.Context) (tableMap, error) {
-	return root.st.GetTablesMap(ctx, root.vrw, root.ns, "")
+func (root *RootValue) getTableMap(ctx context.Context, schemaName string) (tableMap, error) {
+	return root.st.GetTablesMap(ctx, root.vrw, root.ns, schemaName)
 }
 
 func (root *RootValue) TablesWithDataConflicts(ctx context.Context) ([]string, error) {
@@ -776,7 +778,8 @@ func (root *RootValue) HasConstraintViolations(ctx context.Context) (bool, error
 
 // IterTables calls the callback function cb on each table in this RootValue.
 func (root *RootValue) IterTables(ctx context.Context, cb func(name string, table *Table, sch schema.Schema) (stop bool, err error)) error {
-	tm, err := root.getTableMap(ctx)
+	// TODO: schema name
+	tm, err := root.getTableMap(ctx, DefaultSchemaName)
 	if err != nil {
 		return err
 	}
@@ -929,7 +932,8 @@ func (root *RootValue) RenameTable(ctx context.Context, oldName, newName string)
 }
 
 func (root *RootValue) RemoveTables(ctx context.Context, skipFKHandling bool, allowDroppingFKReferenced bool, tables ...string) (*RootValue, error) {
-	tableMap, err := root.getTableMap(ctx)
+	// TODO: schema name
+	tableMap, err := root.getTableMap(ctx, DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}

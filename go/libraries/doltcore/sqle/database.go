@@ -671,7 +671,7 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 		}
 	}
 
-	tableNames, err := getAllTableNames(ctx, root)
+	tableNames, err := db.getAllTableNames(ctx, root)
 	if err != nil {
 		return nil, true, err
 	}
@@ -765,15 +765,15 @@ func (db Database) GetAllTableNames(ctx *sql.Context) ([]string, error) {
 		return nil, err
 	}
 
-	return getAllTableNames(ctx, root)
+	return db.getAllTableNames(ctx, root)
 }
 
-func getAllTableNames(ctx context.Context, root *doltdb.RootValue) ([]string, error) {
+func (db Database) getAllTableNames(ctx context.Context, root *doltdb.RootValue) ([]string, error) {
 	systemTables, err := doltdb.GetGeneratedSystemTables(ctx, root)
 	if err != nil {
 		return nil, err
 	}
-	result, err := root.GetTableNames(ctx, doltdb.DefaultSchemaName)
+	result, err := root.GetTableNames(ctx, db.schemaName)
 	result = append(result, systemTables...)
 	return result, err
 }
