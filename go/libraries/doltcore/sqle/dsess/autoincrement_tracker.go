@@ -134,7 +134,6 @@ func (a *AutoIncrementTracker) Next(tbl string, insertVal interface{}) (uint64, 
 	}
 
 	if given >= curr {
-		a.sequences.Store(tbl, given)
 		return given, nil
 	}
 
@@ -142,13 +141,18 @@ func (a *AutoIncrementTracker) Next(tbl string, insertVal interface{}) (uint64, 
 	return given, nil
 }
 
-func (a *AutoIncrementTracker) Increment(tbl string) {
+func (a *AutoIncrementTracker) Increment(tbl string, insertVal interface{}) error {
 	tbl = strings.ToLower(tbl)
-	release := a.mm.Lock(tbl)
-	defer release()
-
-	curr := loadAutoIncValue(a.sequences, tbl)
-	a.sequences.Store(tbl, curr+1)
+	given, err := CoerceAutoIncrementValue(insertVal)
+	if err != nil {
+		return err
+	}
+	if a.lockMode == LockMode_Interleaved {
+		release := a.mm.Lock(tbl)
+		defer release()
+	}
+	a.sequences.Store(tbl, given+1)
+	return nil
 }
 
 func (a *AutoIncrementTracker) CoerceAutoIncrementValue(val interface{}) (uint64, error) {

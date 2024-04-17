@@ -166,7 +166,9 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 	}
 
 	w.setAutoIncrement = true
-	w.aiTracker.Increment(w.tableName)
+	if autoIncIdx := w.sqlSch.IndexOf(w.aiCol.Name, w.tableName); autoIncIdx != -1 {
+		w.aiTracker.Increment(w.tableName, sqlRow[autoIncIdx])
+	}
 	return nil
 }
 
