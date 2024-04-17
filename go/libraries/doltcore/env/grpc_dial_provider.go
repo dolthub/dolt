@@ -55,7 +55,7 @@ func NewGRPCDialProviderFromDoltEnv(dEnv *DoltEnv) *GRPCDialProvider {
 	}
 }
 
-// GetGRPCDialParms implements dbfactory.GRPCDialProvider
+// GetGRPCDialParams implements dbfactory.GRPCDialProvider
 func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfactory.GRPCRemoteConfig, error) {
 	endpoint := config.Endpoint
 	if strings.IndexRune(endpoint, ':') == -1 {

@@ -53,9 +53,9 @@ RUN apt -y install sysbench
 WORKDIR /postgres
 RUN sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
 RUN wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
-# currently this command fails, but it succeeds on the the stuff we need
+# currently this command fails, but it succeeds on the stuff we need
 RUN apt-get update -y || true
-# currently this command fails, but it succeeds on the the stuff we need
+# currently this command fails, but it succeeds on the stuff we need
 RUN apt-get -y install postgresql-15 || true
 
 ENV PATH="/usr/lib/postgresql/15/bin:${PATH}"
