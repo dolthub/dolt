@@ -17,13 +17,15 @@ package sort
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"github.com/dolthub/dolt/go/store/util/tempfiles"
-	"github.com/dolthub/dolt/go/store/val"
-	"github.com/stretchr/testify/require"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 func TestFlush(t *testing.T) {
