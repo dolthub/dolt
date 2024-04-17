@@ -49,7 +49,7 @@ const (
 	Ignore                IgnoreResult = iota // The table should be ignored.
 	DontIgnore                                // The table should not be ignored.
 	IgnorePatternConflict                     // The table matched multiple conflicting patterns.
-	ErrorOccurred                             // An error occured.
+	ErrorOccurred                             // An error occurred.
 )
 
 type IgnorePatterns []IgnorePattern

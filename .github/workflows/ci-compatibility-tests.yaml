@@ -20,13 +20,13 @@ jobs:
       matrix:
         os: [ ubuntu-22.04 ]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Setup Go 1.x
         uses: actions/setup-go@v5
         with:
           go-version-file: go/go.mod
         id: go
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         with:
           node-version: ^16
       - name: Create CI Bin

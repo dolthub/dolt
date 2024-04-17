@@ -40,7 +40,7 @@ for tuple in $OS_ARCH_TUPLES; do
 done
 
 render_install_sh() {
-  local parsed=(`grep "Version = " ./cmd/dolt/dolt.go`)
+  local parsed=(`grep "Version = " ./cmd/dolt/doltversion/version.go`)
   local DOLT_VERSION=`eval echo ${parsed[2]}`
   sed '\''s|__DOLT_VERSION__|'\''"$DOLT_VERSION"'\''|'\'' utils/publishrelease/install.sh
 }

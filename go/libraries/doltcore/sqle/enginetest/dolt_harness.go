@@ -231,7 +231,10 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 				dsessDbs[i], _ = dbCache.GetCachedRevisionDb(fmt.Sprintf("%s/main", dbName), dbName)
 			}
 
-			ctxFact := func(context.Context) (*sql.Context, error) { return d.NewContext(), nil }
+			ctxFact := func(context.Context) (*sql.Context, error) {
+				sess := d.newSessionWithClient(sql.Client{Address: "localhost", User: "root"})
+				return sql.NewContext(context.Background(), sql.WithSession(sess)), nil
+			}
 			if err = statsProv.Configure(ctx, ctxFact, bThreads, dsessDbs); err != nil {
 				return nil, err
 			}

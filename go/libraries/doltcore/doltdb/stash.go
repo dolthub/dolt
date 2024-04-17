@@ -82,7 +82,7 @@ func getStashList(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWrit
 	return sl, nil
 }
 
-// getStashList returns hash address only of the stash at given index.
+// getStashHashAtIdx returns hash address only of the stash at given index.
 func getStashHashAtIdx(ctx context.Context, ds datas.Dataset, ns tree.NodeStore, idx int) (hash.Hash, error) {
 	v, ok := ds.MaybeHead()
 	if !ok {
@@ -92,7 +92,7 @@ func getStashHashAtIdx(ctx context.Context, ds datas.Dataset, ns tree.NodeStore,
 	return datas.GetStashAtIdx(ctx, ns, v, idx)
 }
 
-// getStashList returns stash root value and head commit of a stash entry at given index.
+// getStashAtIdx returns stash root value and head commit of a stash entry at given index.
 func getStashAtIdx(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWriter, ns tree.NodeStore, idx int) (*RootValue, *Commit, *datas.StashMeta, error) {
 	v, ok := ds.MaybeHead()
 	if !ok {

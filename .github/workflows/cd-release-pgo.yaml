@@ -39,7 +39,7 @@ jobs:
     outputs:
       release_id: ${{ steps.create_release.outputs.id }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: main
       - name: Set up Go 1.x
@@ -47,7 +47,7 @@ jobs:
         with:
           go-version-file: go/go.mod
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2.2.0
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -73,10 +73,10 @@ jobs:
         run: go run -mod=readonly ./utils/genminver_validation/ $FILE
         env:
           FILE: ${{ format('{0}/go/cmd/dolt/commands/sqlserver/testdata/minver_validation.txt', github.workspace) }}
-      - uses: EndBug/add-and-commit@v9.1.1
+      - uses: EndBug/add-and-commit@v9.1.4
         with:
           message: ${{ format('[ga-bump-release] Update Dolt version to {0} and release v{0}', needs.format-version.outputs.version) }}
-          add: ${{ format('["{0}/go/cmd/dolt/dolt.go", "{0}/go/cmd/dolt/commands/sqlserver/yaml_config.go", "{0}/go/cmd/dolt/commands/sqlserver/testdata/minver_validation.txt"]', github.workspace) }}
+          add: ${{ format('["{0}/go/cmd/dolt/doltversion/version.go", "{0}/go/cmd/dolt/commands/sqlserver/yaml_config.go", "{0}/go/cmd/dolt/commands/sqlserver/testdata/minver_validation.txt"]', github.workspace) }}
           cwd: "."
           pull: "--ff"
       - name: Build PGO Binaries
@@ -90,7 +90,7 @@ jobs:
           PROFILE: ${{ format('{0}/dolt-cpu-profile.pprof', github.workspace) }}
       - name: Create Release
         id: create_release
-        uses: dolthub/create-release@v1
+        uses: dolthub/create-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -101,7 +101,7 @@ jobs:
           commitish: ${{ steps.build_binaries.outputs.commitish }}
       - name: Upload Linux AMD64 Distro
         id: upload-linux-amd64-distro
-        uses: dolthub/upload-release-asset@v1
+        uses: dolthub/upload-release-asset@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -111,7 +111,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload Linux ARM64 Distro
         id: upload-linux-arm64-distro
-        uses: dolthub/upload-release-asset@v1
+        uses: dolthub/upload-release-asset@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -121,7 +121,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload OSX AMD64 Distro
         id: upload-osx-amd64-distro
-        uses: dolthub/upload-release-asset@v1
+        uses: dolthub/upload-release-asset@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -131,7 +131,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload OSX ARM64 Distro
         id: upload-osx-arm64-distro
-        uses: dolthub/upload-release-asset@v1
+        uses: dolthub/upload-release-asset@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -141,7 +141,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload Windows Distro
         id: upload-windows-distro
-        uses: dolthub/upload-release-asset@v1
+        uses: dolthub/upload-release-asset@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -151,7 +151,7 @@ jobs:
           asset_content_type: application/zip
       - name: Upload Windows Distro 7z
         id: upload-windows-distro-7z
-        uses: dolthub/upload-release-asset@v1
+        uses: dolthub/upload-release-asset@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -161,7 +161,7 @@ jobs:
           asset_content_type: application/x-7z-compressed
       - name: Upload Install Script
         id: upload-install-script
-        uses: dolthub/upload-release-asset@v1
+        uses: dolthub/upload-release-asset@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -175,7 +175,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Trigger Upload MSI
-        uses: peter-evans/repository-dispatch@v2.0.0
+        uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: upload-msi
@@ -187,7 +187,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Trigger Release Notes
-        uses: peter-evans/repository-dispatch@v2.0.0
+        uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: release-notes
@@ -198,7 +198,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Trigger Performance Benchmarks
-        uses: peter-evans/repository-dispatch@v2.0.0
+        uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: release-dolt
@@ -209,7 +209,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Trigger Push Docker Image
-        uses: peter-evans/repository-dispatch@v1
+        uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: push-docker-image
