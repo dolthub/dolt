@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/sort"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
 	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/go-mysql-server/sql"
 	"io"
@@ -69,7 +70,7 @@ func BuildProllyIndexExternal(
 
 	sorter := sort.NewTupleSorter(batchSize, fileMax, func(t1, t2 val.Tuple) bool {
 		return prefixDesc.Compare(t1, t2) < 0
-	})
+	}, tempfiles.MovableTempFileProvider)
 
 	for {
 		k, v, err := iter.Next(ctx)

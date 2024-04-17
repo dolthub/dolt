@@ -45,7 +45,7 @@ type tupleSorter struct {
 	tmpProv   tempfiles.TempFileProvider
 }
 
-func NewTupleSorter(batchSize, fileMax int, keyCmp func(val.Tuple, val.Tuple) bool) *tupleSorter {
+func NewTupleSorter(batchSize, fileMax int, keyCmp func(val.Tuple, val.Tuple) bool, tmpProv tempfiles.TempFileProvider) *tupleSorter {
 	if fileMax%2 == 1 {
 		// round down to even
 		// fileMax/2 will be compact parallelism
@@ -55,7 +55,7 @@ func NewTupleSorter(batchSize, fileMax int, keyCmp func(val.Tuple, val.Tuple) bo
 		fileMax:   fileMax,
 		batchSize: batchSize,
 		keyCmp:    keyCmp,
-		tmpProv:   tempfiles.MovableTempFileProvider,
+		tmpProv:   tmpProv,
 	}
 	ret.inProg = newKeyMem(ret.newFile(), batchSize)
 	return ret
@@ -100,9 +100,11 @@ func (a *tupleSorter) Insert(ctx context.Context, k val.Tuple) (err error) {
 
 func (a *tupleSorter) flushMem(ctx context.Context) {
 	// flush and replace |inProg|
-	newFile := a.inProg.flush(a.keyCmp)
-	a.inProg = newKeyMem(a.newFile(), a.batchSize)
-	a.files = append(a.files, newFile)
+	if a.inProg.Len() > 0 {
+		newFile := a.inProg.flush(a.keyCmp)
+		a.inProg = newKeyMem(a.newFile(), a.batchSize)
+		a.files = append(a.files, newFile)
+	}
 	if len(a.files) >= a.fileMax {
 		// merge sort files
 		a.compact(ctx)
@@ -211,9 +213,8 @@ func (k *keyMem) sort(cmp func(val.Tuple, val.Tuple) bool) {
 }
 
 func (k *keyMem) flush(cmp func(val.Tuple, val.Tuple) bool) *keyFile {
-	sort.Slice(k.keys, func(i, j int) bool {
-		return cmp(k.keys[i], k.keys[j])
-	})
+	k.sort(cmp)
+
 	buf := make([]byte, k.byteCnt)
 	i := 0
 	for _, k := range k.keys {

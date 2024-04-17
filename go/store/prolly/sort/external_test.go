@@ -26,15 +26,7 @@ import (
 	"testing"
 )
 
-// todo test merging (two files combine to one with expected size and same values on read)
-// todo test compact (2*n files compact to n, size doubles, reads back to same values)
-// todo test sort (make sure comparison works correctly)
-// todo test mem iter (keys in memory all come back)
-// todo test file round-trip (flush mem, read back through file iter)
-
-// helpers -> tempdir provider, tuples and sort comparison
-
-func TestMemSort(t *testing.T) {
+func TestFlush(t *testing.T) {
 	tests := []struct {
 		td  val.TupleDesc
 		cnt int
@@ -84,31 +76,46 @@ func TestMemSort(t *testing.T) {
 
 	ns := tree.NewTestNodeStore()
 
+	keySize := 100
+
 	for _, tt := range tests {
 		t.Run(name(tt.td, tt.cnt), func(t *testing.T) {
-			km := newKeyMem(mustNewFile(t, tmpProv), tt.cnt)
+			km := newKeyMem(mustNewFile(t, tmpProv), tt.cnt*keySize)
 
 			keys := testTuples(ns, tt.td, tt.cnt)
 			expSize := 0
 			for _, k := range keys {
 				expSize += len(k)
-				km.insert(k)
+				require.True(t, km.insert(k))
 			}
 
 			keyCmp := func(l, r val.Tuple) bool {
 				return tt.td.Compare(l, r) <= 0
 			}
-			km.sort(keyCmp)
-			ensureSorted(t, km.keys, keyCmp)
 
-			cnt, size := drainIterCntSize(km)
-			require.Equal(t, tt.cnt, cnt)
-			require.Equal(t, expSize, size)
+			t.Run("sorting", func(t *testing.T) {
+				km.sort(keyCmp)
+				ensureSorted(t, km.keys, keyCmp)
+			})
+
+			t.Run("mem iter", func(t *testing.T) {
+				cnt, size := drainIterCntSize(km)
+				require.Equal(t, tt.cnt, cnt)
+				require.Equal(t, expSize, size)
+			})
+
+			t.Run("file iter", func(t *testing.T) {
+				kf := km.flush(keyCmp)
+				cnt, size := drainIterCntSize(kf)
+				require.Equal(t, tt.cnt, cnt)
+				require.Equal(t, expSize, size)
+			})
+
 		})
 	}
 }
 
-func TestMemMerge(t *testing.T) {
+func TestMerge(t *testing.T) {
 	tests := []struct {
 		td     val.TupleDesc
 		counts []int
@@ -162,6 +169,7 @@ func TestMemMerge(t *testing.T) {
 	ns := tree.NewTestNodeStore()
 
 	batchSize := 100
+	keySize := 100
 
 	for _, tt := range tests {
 		t.Run(name(tt.td, tt.counts), func(t *testing.T) {
@@ -169,54 +177,145 @@ func TestMemMerge(t *testing.T) {
 				return tt.td.Compare(l, r) <= 0
 			}
 
-			s := NewTupleSorter(batchSize, 0, keyCmp)
-
+			var keyMems []keyIterable
+			var keyFiles []keyIterable
 			expSize := 0
 			expCnt := 0
 			for _, cnt := range tt.counts {
-				km := newKeyMem(mustNewFile(t, tmpProv), batchSize)
+				km := newKeyMem(mustNewFile(t, tmpProv), cnt*keySize)
 				keys := testTuples(ns, tt.td, cnt)
+				for _, k := range keys {
+					expSize += len(k)
+					expCnt++
+					require.True(t, km.insert(k))
+				}
+				keyFiles = append(keyFiles, km.flush(keyCmp))
+				keyMems = append(keyMems, km)
+			}
+
+			t.Run("mem merge", func(t *testing.T) {
+				target := newKeyFile(mustNewFile(t, tmpProv), batchSize)
+
+				ctx := context.Background()
+				m := newFileMerger(ctx, keyCmp, target, keyMems...)
+				m.run(ctx)
+
+				cnt, size := drainIterCntSize(target)
+				require.Equal(t, expCnt, cnt)
+				require.Equal(t, expSize, size)
+			})
+
+			t.Run("file merge", func(t *testing.T) {
+				target := newKeyFile(mustNewFile(t, tmpProv), batchSize)
+
+				ctx := context.Background()
+				m := newFileMerger(ctx, keyCmp, target, keyFiles...)
+				m.run(ctx)
+
+				cnt, size := drainIterCntSize(target)
+				require.Equal(t, expCnt, cnt)
+				require.Equal(t, expSize, size)
+			})
+		})
+	}
+}
+
+func TestCompact(t *testing.T) {
+	// run compact until there's only 1 file
+	// check at each iteration that we halved the file count, cnt and size is still the same
+	tests := []struct {
+		td      val.TupleDesc
+		fileCnt int
+	}{
+		{
+			td: val.NewTupleDescriptor(
+				val.Type{Enc: val.Uint32Enc, Nullable: false},
+			),
+			fileCnt: 16,
+		},
+		{
+			td: val.NewTupleDescriptor(
+				val.Type{Enc: val.Uint32Enc, Nullable: false},
+			),
+			fileCnt: 64,
+		},
+		{
+			td: val.NewTupleDescriptor(
+				val.Type{Enc: val.Uint32Enc, Nullable: false},
+			),
+			fileCnt: 128,
+		},
+
+		{
+			td: val.NewTupleDescriptor(
+				val.Type{Enc: val.StringEnc, Nullable: false},
+			),
+			fileCnt: 128,
+		},
+	}
+
+	name := func(td val.TupleDesc, fileCnt int) string {
+		b := strings.Builder{}
+		sep := ""
+		for _, t := range td.Types {
+			fmt.Fprintf(&b, "%s%s", sep, string(t.Enc))
+			sep = ", "
+		}
+		sep = "_"
+		fmt.Fprintf(&b, "%s%d", sep, fileCnt)
+
+		return b.String()
+	}
+
+	tmpProv := mustNewProv(t)
+	defer os.Remove(tmpProv.GetTempDir())
+	defer tmpProv.Clean()
+
+	ns := tree.NewTestNodeStore()
+
+	batchSize := 100
+
+	for _, tt := range tests {
+		t.Run(name(tt.td, tt.fileCnt), func(t *testing.T) {
+			keyCmp := func(l, r val.Tuple) bool {
+				return tt.td.Compare(l, r) <= 0
+			}
+
+			var keyFiles []keyIterable
+			expSize := 0
+			expCnt := 0
+			for i := 0; i < tt.fileCnt; i++ {
+				km := newKeyMem(mustNewFile(t, tmpProv), batchSize)
+				keys := testTuples(ns, tt.td, batchSize)
 				for _, k := range keys {
 					expSize += len(k)
 					expCnt++
 					km.insert(k)
 				}
-				km.sort(keyCmp)
-				s.files = append(s.files, km)
+				keyFiles = append(keyFiles, km.flush(keyCmp))
 			}
 
-			target := newKeyFile(mustNewFile(t, tmpProv), batchSize)
-
 			ctx := context.Background()
-			m := newFileMerger(ctx, keyCmp, target, s.files...)
-			m.run(ctx)
 
-			cnt, size := drainIterCntSize(target)
-			require.Equal(t, expCnt, cnt)
-			require.Equal(t, expSize, size)
+			t.Run("file compact", func(t *testing.T) {
+				s := NewTupleSorter(batchSize, 1, keyCmp, tmpProv)
+				prevCnt := len(s.files)
+				for len(s.files) > 1 {
+					s.compact(ctx)
+					require.Equal(t, prevCnt/2, len(s.files))
+					prevCnt = prevCnt / 2
+
+					target := newKeyFile(mustNewFile(t, tmpProv), batchSize)
+					m := newFileMerger(ctx, keyCmp, target, keyFiles...)
+					m.run(ctx)
+
+					cnt, size := drainIterCntSize(target)
+					require.Equal(t, expCnt, cnt)
+					require.Equal(t, expSize, size)
+				}
+			})
 		})
 	}
-}
-
-func TestMemCompact(t *testing.T) {
-	// run compact until there's only 1 file
-	// check at each iteration that we halved the file count, cnt and size is still the same
-}
-
-func TestFileRoundtrip(t *testing.T) {
-	// write keyMem, same iter count checking
-}
-
-func TestFileMerge(t *testing.T) {
-	// same as mem merge
-}
-
-func TestCompact(t *testing.T) {
-	// same as mem compact
-}
-
-func TestFileCompact(t *testing.T) {
-	// same as mem compact
 }
 
 func TestFileE2E(t *testing.T) {
@@ -224,6 +323,132 @@ func TestFileE2E(t *testing.T) {
 	// vary batch size and file count so multiple compacts/merges
 	// make the batch size and file size small enough that
 	// we have to spill to disk and compact several times
+	tests := []struct {
+		name      string
+		rows      int
+		batchSize int
+		fileMax   int
+		td        val.TupleDesc
+	}{
+		{
+			name: "uint32",
+			td: val.NewTupleDescriptor(
+				val.Type{Enc: val.Uint32Enc, Nullable: false},
+			),
+			rows:      10_000,
+			batchSize: 10_000,
+			fileMax:   4,
+		},
+		{
+			name: "uint32",
+			td: val.NewTupleDescriptor(
+				val.Type{Enc: val.Uint32Enc, Nullable: false},
+			),
+			rows:      10_000,
+			batchSize: 1000,
+			fileMax:   4,
+		},
+		{
+			name: "uint32",
+			td: val.NewTupleDescriptor(
+				val.Type{Enc: val.Uint32Enc, Nullable: false},
+			),
+			rows:      20_000,
+			batchSize: 500,
+			fileMax:   16,
+		},
+		{
+			name: "int64",
+			td: val.NewTupleDescriptor(
+				val.Type{Enc: val.Int64Enc, Nullable: false},
+			),
+			rows:      7_777,
+			batchSize: 1000,
+			fileMax:   4,
+		},
+		{
+			name: "(string)",
+			td: val.NewTupleDescriptor(
+				val.Type{Enc: val.StringEnc, Nullable: false},
+			),
+			rows:      10_000,
+			batchSize: 100,
+			fileMax:   32,
+		},
+		{
+			name: "(string)",
+			td: val.NewTupleDescriptor(
+				val.Type{Enc: val.StringEnc, Nullable: false},
+			),
+			rows:      10_000,
+			batchSize: 483,
+			fileMax:   31,
+		},
+		{
+			name: "(string)",
+			td: val.NewTupleDescriptor(
+				val.Type{Enc: val.StringEnc, Nullable: false},
+			),
+			rows:      1,
+			batchSize: 100,
+			fileMax:   30,
+		},
+		{
+			name: "(string)",
+			td: val.NewTupleDescriptor(
+				val.Type{Enc: val.StringEnc, Nullable: false},
+			),
+			rows:      0,
+			batchSize: 100,
+			fileMax:   30,
+		},
+	}
+
+	tmpProv := mustNewProv(t)
+	defer os.Remove(tmpProv.GetTempDir())
+	defer tmpProv.Clean()
+
+	ns := tree.NewTestNodeStore()
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%s %d-rows %d-batch %d-files", tt.name, tt.rows, tt.batchSize, tt.fileMax), func(t *testing.T) {
+			keyCmp := func(l, r val.Tuple) bool {
+				return tt.td.Compare(l, r) <= 0
+			}
+
+			ctx := context.Background()
+			keys := testTuples(ns, tt.td, tt.rows)
+			s := NewTupleSorter(tt.batchSize, tt.fileMax, keyCmp, tmpProv)
+			expSize := 0
+			for _, k := range keys {
+				err := s.Insert(ctx, k)
+				require.NoError(t, err)
+				expSize += len(k)
+			}
+
+			iterable, err := s.Flush(ctx)
+			require.NoError(t, err)
+			var cnt, size int
+			iter := iterable.IterAll(ctx)
+			var lastKey val.Tuple
+			for {
+				k, err := iter.Next(ctx)
+				if err != nil {
+					break
+				}
+				if lastKey != nil {
+					require.True(t, keyCmp(lastKey, k))
+				}
+				cnt++
+				size += len(k)
+				lastKey = k
+			}
+
+			require.Equal(t, tt.rows, cnt)
+			require.Equal(t, expSize, size)
+		})
+	}
+
 }
 
 func testTuples(ns tree.NodeStore, kd val.TupleDesc, cnt int) []val.Tuple {
@@ -237,14 +462,6 @@ func testTuples(ns tree.NodeStore, kd val.TupleDesc, cnt int) []val.Tuple {
 	return keys
 }
 
-func testStringTuples() ([]val.Tuple, func(val.Tuple, val.Tuple) bool) {
-
-}
-
-func testkeyFile() *keyFile {
-
-}
-
 func ensureSorted(t *testing.T, keys []val.Tuple, cmp func(val.Tuple, val.Tuple) bool) {
 	for i := 0; i < len(keys)-1; i += 2 {
 		require.True(t, cmp(keys[i], keys[i+1]))
@@ -253,8 +470,8 @@ func ensureSorted(t *testing.T, keys []val.Tuple, cmp func(val.Tuple, val.Tuple)
 
 func mustNewProv(t *testing.T) *tempfiles.TempFileProviderAt {
 	tmpDir := os.TempDir()
-	err := os.Mkdir(tmpDir, os.ModeDir)
-	require.NoError(t, err)
+	//err := os.Mkdir(tmpDir, os.ModeDir)
+	//require.NoError(t, err)
 
 	return tempfiles.NewTempFileProviderAt(tmpDir)
 }
