@@ -190,6 +190,48 @@ func TestBinlogPrimary_InsertUpdateDelete(t *testing.T) {
 	})
 }
 
+// TestBinlogsOnlyFromMainBranch tests that binlog events are only generated for the main branch of a Dolt repository.
+func TestBinlogsOnlyFromMainBranch(t *testing.T) {
+	defer teardown(t)
+	startSqlServers(t)
+	setupForDoltToMySqlReplication()
+
+	// TODO: We don't support replicating DDL statements yet, so for now, set up the DDL before
+	//       starting up replication.
+	primaryDatabase.MustExec("create database db01;")
+	primaryDatabase.MustExec("use db01;")
+	testTableCreateStatement := "create table db01.t (pk varchar(100) primary key, c1 int, c2 year);"
+	primaryDatabase.MustExec(testTableCreateStatement)
+	primaryDatabase.MustExec("call dolt_commit('-Am', 'creating table t');")
+	replicaDatabase.MustExec(testTableCreateStatement)
+
+	// Because we have executed other statements, we need to reset GTIDs on the replica
+	replicaDatabase.MustExec("reset binary logs and gtids;")
+
+	startReplication(t, doltPort)
+	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
+	//       Here we just pause to let the hardcoded binlog events be delivered
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t;", [][]any{})
+
+	// No events should be generated when we're not updating the main branch
+	primaryDatabase.MustExec("call dolt_checkout('-b', 'branch1');")
+	primaryDatabase.MustExec("insert into db01.t values('hundred', 100, 2000);")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t;", [][]any{})
+
+	// Insert another row on branch1 and make sure it doesn't get replicated
+	primaryDatabase.MustExec("insert into db01.t values('two hundred', 200, 2000);")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t;", [][]any{})
+
+	// Events should be generated from the main branch
+	primaryDatabase.MustExec("call dolt_checkout('main');")
+	primaryDatabase.MustExec("insert into db01.t values('42', 42, 2042);")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t;", [][]any{{"42", "42", "2042"}})
+}
+
 // requireReplicaResults runs the specified |query| on the replica database and asserts that the results match
 // |expectedResults|. Note that the actual results are converted to string values in almost all cases, due to
 // limitations in the SQL library we use to query the replica database, so |expectedResults| should generally

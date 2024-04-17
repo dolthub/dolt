@@ -454,12 +454,14 @@ func (tx *DoltTransaction) doCommit(
 					return nil, nil, err
 				}
 
-				// Fire message to listeners
+				// Fire message to listeners (only for the main branch)
 				nonRevisionDbName := branchState.dbState.dbName
-				for _, listener := range transactionListeners {
-					err := listener.TransactionCommit(ctx, nonRevisionDbName, existingWs.WorkingRoot(), workingSet.WorkingRoot())
-					if err != nil {
-						panic(err.Error())
+				if branchState.head == "main" {
+					for _, listener := range transactionListeners {
+						err := listener.TransactionCommit(ctx, nonRevisionDbName, existingWs.WorkingRoot(), workingSet.WorkingRoot())
+						if err != nil {
+							panic(err.Error())
+						}
 					}
 				}
 
