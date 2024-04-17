@@ -86,8 +86,7 @@ var _ dsess.TransactionListener = (*binlogStreamerManager)(nil)
 func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, databaseName string, before *doltdb.RootValue, after *doltdb.RootValue) error {
 	tableDeltas, err := diff.GetTableDeltas(ctx, before, after)
 	if err != nil {
-		// TODO: Clean up err handling; Probably just log the error, don't bring down the server or stop replication
-		panic(err.Error())
+		return err
 	}
 
 	tableId := uint64(42)
@@ -123,7 +122,7 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, databaseName
 	for _, tableDelta := range tableDeltas {
 		dataChanged, err := tableDelta.HasDataChanged(ctx)
 		if err != nil {
-			panic(err.Error()) // TODO:
+			return err
 		}
 		if !dataChanged {
 			// TODO: For now, we are only processing data changes. Eventually, we'll need to figure
@@ -143,7 +142,7 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, databaseName
 		tablesToId[tableName] = tableId
 		tableMap, err := createTableMapFromDoltTable(ctx, databaseName, tableName, tableDelta.ToTable)
 		if err != nil {
-			panic(err.Error())
+			return err
 		}
 
 		binlogEvent := mysql.NewTableMapEvent(m.binlogFormat, m.binlogStream, tableId, tableMap)
@@ -155,7 +154,7 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, databaseName
 	for _, tableDelta := range tableDeltas {
 		fromRowData, toRowData, err := tableDelta.GetRowData(ctx)
 		if err != nil {
-			panic(err.Error()) // TODO:
+			return err
 		}
 		// TODO: Considering limiting to at most one replica supported at a time? Does that actually help at all?
 		// TODO: If tableDelta.IsDrop(), then we can skip the data transfer and just send the drop table DDL statement
@@ -230,7 +229,7 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, databaseName
 			return nil
 		})
 		if err != nil && err != io.EOF {
-			panic(err.Error()) // TODO:
+			return err
 		}
 
 		if tableRowsToWrite != nil {
@@ -306,7 +305,10 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, databaseName
 	return nil
 }
 
-// TODO: godocs
+// serializeRowToBinlogBytes serializes the row formed by |key| and |value| and defined by the |schema| structure, into
+// MySQL binlog binary format. For data stored out of band (e.g. BLOB, TEXT, GEOMETRY, JSON), |ns| is used to load the
+// out-of-band data. This function returns the binary representation of the row, as well as a bitmap that indicates
+// which fields of the row are null (and therefore don't contribute any bytes to the returned binary data).
 func serializeRowToBinlogBytes(ctx *sql.Context, schema schema.Schema, key, value tree.Item, ns tree.NodeStore) (data []byte, nullBitmap mysql.Bitmap, err error) {
 	columns := schema.GetAllCols().GetColumns()
 	nullBitmap = mysql.NewServerBitmap(len(columns))
@@ -634,9 +636,9 @@ func serializeRowToBinlogBytes(ctx *sql.Context, schema schema.Schema, key, valu
 
 				// Ensure the exponent is negative
 				if decimalValue.Exponent() > 0 {
-					// TODO: Turn this into an error
-					panic(fmt.Sprintf("unexpected positive exponent: %d for decimalValue: %s",
-						decimalValue.Exponent(), decimalValue.String()))
+					return nil, mysql.Bitmap{}, fmt.Errorf(
+						"unexpected positive exponent: %d for decimalValue: %s",
+						decimalValue.Exponent(), decimalValue.String())
 				}
 
 				absStringVal := decimalValue.Abs().String()
@@ -650,41 +652,40 @@ func serializeRowToBinlogBytes(ctx *sql.Context, schema schema.Schema, key, valu
 				// Fill in leftover digits – these are at the front of the integer component of the decimal
 				writtenBytes, err := encodePartialDecimalBits(stringIntegerVal[:numLeftoverFullDigits], buffer[bufferPos:])
 				if err != nil {
-					panic(err.Error())
+					return nil, mysql.Bitmap{}, err
 				}
 				bufferPos += int(writtenBytes)
 
 				// Fill in full digits for the integer component of the decimal
 				writtenBytes, remainingString, err := encodeDecimalBits(stringIntegerVal[numLeftoverFullDigits:], buffer[bufferPos:])
 				if err != nil {
-					// TODO: return an error
-					panic(err.Error())
+					return nil, mysql.Bitmap{}, err
 				}
 				bufferPos += int(writtenBytes)
 
 				if len(remainingString) > 0 {
-					// TODO: Convert to an error
-					panic(fmt.Sprintf("unexpected remaining string after encoding full digits for integer component of decimal value: %s",
-						remainingString))
+					return nil, mysql.Bitmap{}, fmt.Errorf(
+						"unexpected remaining string after encoding full digits for integer component of decimal value: %s",
+						remainingString)
 				}
 
 				// Fill in full fractional digits
 				writtenBytes, remainingString, err = encodeDecimalBits(stringFractionalVal, buffer[bufferPos:])
 				if err != nil {
-					// TODO: return an error
-					panic(err.Error())
+					return nil, mysql.Bitmap{}, err
 				}
 				bufferPos += int(writtenBytes)
 
 				// Fill in partial fractional digits – these are at the end of the fractional component
 				writtenBytes, err = encodePartialDecimalBits(remainingString, buffer[bufferPos:])
 				if err != nil {
-					panic(err.Error())
+					return nil, mysql.Bitmap{}, err
 				}
 				bufferPos += int(writtenBytes)
 
 				if bufferPos != len(buffer) {
-					panic(fmt.Sprintf("unexpected position; bufferPos: %d, len(buffer): %d", bufferPos, len(buffer)))
+					return nil, mysql.Bitmap{}, fmt.Errorf(
+						"unexpected position; bufferPos: %d, len(buffer): %d", bufferPos, len(buffer))
 				}
 
 				// We always xor the first bit in the first byte to indicate a positive value. If the value is
@@ -697,7 +698,6 @@ func serializeRowToBinlogBytes(ctx *sql.Context, schema schema.Schema, key, valu
 				}
 
 				data = append(data, buffer...)
-				// TODO: Seems like we don't actually need dataLength, right it can be computed by len(data)
 			} else {
 				nullBitmap.Set(rowIdx, true)
 			}
@@ -707,8 +707,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, schema schema.Schema, key, valu
 			if notNull {
 				bytes, err := encodeBytesFromAddress(ctx, addr, ns, typ)
 				if err != nil {
-					// TODO: Change to return an error
-					panic(err.Error())
+					return nil, mysql.Bitmap{}, err
 				}
 				data = append(data, bytes...)
 			} else {
@@ -720,8 +719,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, schema schema.Schema, key, valu
 			if notNull {
 				bytes, err := encodeBytesFromAddress(ctx, addr, ns, typ)
 				if err != nil {
-					// TODO: Change to return an error
-					panic(err.Error())
+					return nil, mysql.Bitmap{}, err
 				}
 				data = append(data, bytes...)
 			} else {
@@ -760,8 +758,8 @@ func serializeRowToBinlogBytes(ctx *sql.Context, schema schema.Schema, key, valu
 			// Third-party implementations of deserializing:
 			// https://github.com/shyiko/mysql-binlog-connector-java/pull/119/files
 			// https://github.com/noplay/python-mysql-replication/blob/175df28cc8b536a68522ff9b09dc5440adad6094/pymysqlreplication/packet.py
-			// TODO: Convert to an error
-			panic("JSON types not support for Dolt to MySQL binlog replication")
+			return nil, mysql.Bitmap{}, fmt.Errorf(
+				"JSON types not support for Dolt to MySQL binlog replication")
 
 		default:
 			return nil, nullBitmap, fmt.Errorf("unsupported type: %v (%d)\n", typ.String(), typ.Type())
@@ -812,8 +810,7 @@ func encodeBytesFromAddress(ctx *sql.Context, addr hash.Hash, ns tree.NodeStore,
 	}
 	bytes, err := tree.NewByteArray(addr, ns).ToBytes(ctx)
 	if err != nil {
-		// TODO: return error
-		panic(err.Error())
+		return nil, err
 	}
 
 	blobType := typ.(sql.StringType)
@@ -849,7 +846,7 @@ func encodePartialDecimalBits(stringVal string, buffer []byte) (uint, error) {
 
 	v, err := strconv.Atoi(stringVal)
 	if err != nil {
-		panic(err.Error())
+		return 0, err
 	}
 
 	switch digitsToBytes[numDigits] {
@@ -903,7 +900,7 @@ func encodeDecimalBits(stringVal string, buffer []byte) (uint, string, error) {
 	return bufferPos, stringVal[stringValPos:], nil
 }
 
-// TODO: godocs
+// createTableMapFromDoltTable creates a binlog TableMap for the given Dolt table.
 func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName string, table *doltdb.Table) (*mysql.TableMap, error) {
 	schema, err := table.GetSchema(ctx)
 	if err != nil {
@@ -1035,7 +1032,7 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 			metadata[i] = uint16(4)
 
 		default:
-			panic(fmt.Sprintf("unsupported type: %v \n", typ.String()))
+			return nil, fmt.Errorf("unsupported type for binlog replication: %v \n", typ.String())
 		}
 
 		if col.IsNullable() {
@@ -1122,7 +1119,7 @@ func (m *binlogStreamerManager) StartNewStreamer(ctx *sql.Context, conn *mysql.C
 					return err
 				}
 				if err := conn.FlushBuffer(); err != nil {
-					panic("unable to flush: " + err.Error())
+					return fmt.Errorf("unable to flush connection: %s", err.Error())
 				}
 			}
 
@@ -1138,7 +1135,7 @@ func (m *binlogStreamerManager) StartNewStreamer(ctx *sql.Context, conn *mysql.C
 			}
 
 			if err := conn.FlushBuffer(); err != nil {
-				panic("unable to flush: " + err.Error())
+				return fmt.Errorf("unable to flush connection: %s", err.Error())
 			}
 		}
 	}
