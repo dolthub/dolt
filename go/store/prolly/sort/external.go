@@ -20,13 +20,15 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/util/tempfiles"
-	"github.com/dolthub/dolt/go/store/val"
-	"golang.org/x/sync/errgroup"
 	"io"
 	"os"
 	"sort"
 	"sync"
+
+	"golang.org/x/sync/errgroup"
+
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // tupleSorter inputs a series of unsorted tuples and outputs a sorted list
