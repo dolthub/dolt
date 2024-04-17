@@ -26,8 +26,10 @@ import (
 type AutoIncrementTracker interface {
 	// Current returns the current auto increment value for the given table.
 	Current(tableName string) uint64
-	// Next returns the next auto increment value for the given table, and increments the current value.
+	// Next returns the next auto increment value for the given table.
 	Next(tbl string, insertVal interface{}) (uint64, error)
+	// Increment increments the auto increment value for the given table.
+	Increment(tableName string)
 	// AddNewTable adds a new table to the tracker, initializing the auto increment value to 1.
 	AddNewTable(tableName string)
 	// DropTable removes a table from the tracker.
