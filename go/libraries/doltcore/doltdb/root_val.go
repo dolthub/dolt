@@ -804,10 +804,16 @@ func (root *RootValue) nomsValue() types.Value {
 	return root.st.nomsValue()
 }
 
+// TableName identifies a table in a database uniquely.
 type TableName struct {
+	// Name is the name of the table
 	Name string
+	// Schema is the name of the schema that the table belongs to, empty in the case of the default schema.
 	Schema string
 }
+
+// DefaultSchemaName is the name of the default schema.
+const DefaultSchemaName = ""
 
 // PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
 func (root *RootValue) PutTable(ctx context.Context, tName TableName, table *Table) (*RootValue, error) {
