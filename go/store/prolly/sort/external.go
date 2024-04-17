@@ -386,8 +386,6 @@ type mergeFileReader struct {
 	iter keyIter
 	// head is the next tuple in the sorted list
 	head val.Tuple
-	// heapIdx is from default impl, delete?
-	heapIdx int
 }
 
 func (r *mergeFileReader) next(ctx context.Context) bool {
@@ -407,7 +405,7 @@ func newMergeFileReader(ctx context.Context, iter keyIter, heapIdx int) *mergeFi
 	if err != nil {
 		return nil
 	}
-	return &mergeFileReader{iter: iter, head: root, heapIdx: heapIdx}
+	return &mergeFileReader{iter: iter, head: root}
 }
 
 type mergeQueue struct {
@@ -424,14 +422,10 @@ func (mq mergeQueue) Less(i, j int) bool {
 
 func (mq mergeQueue) Swap(i, j int) {
 	mq.files[i], mq.files[j] = mq.files[j], mq.files[i]
-	mq.files[i].heapIdx = i
-	mq.files[j].heapIdx = j
 }
 
 func (mq *mergeQueue) Push(x any) {
-	n := len(mq.files)
 	item := x.(*mergeFileReader)
-	item.heapIdx = n
 	mq.files = append(mq.files, item)
 }
 
@@ -439,8 +433,7 @@ func (mq *mergeQueue) Pop() any {
 	old := mq.files
 	n := len(old)
 	item := old[n-1]
-	old[n-1] = nil    // avoid memory leak
-	item.heapIdx = -1 // for safety
+	old[n-1] = nil // avoid memory leak
 	mq.files = old[0 : n-1]
 	return item
 }
@@ -474,7 +467,7 @@ func newFileMerger(ctx context.Context, keyCmp func(val.Tuple, val.Tuple) bool, 
 func (m *fileMerger) run(ctx context.Context) {
 	for {
 		if m.mq.Len() == 0 {
-			m.finalize()
+			// todo: file sync?
 			return
 		}
 		reader := heap.Pop(m.mq).(*mergeFileReader)
@@ -485,14 +478,6 @@ func (m *fileMerger) run(ctx context.Context) {
 			defer reader.iter.Close()
 		}
 	}
-}
-
-func (m *fileMerger) finalize() {
-	// sync is unnecessary?
-	//if err := m.out.f.Sync(); err != nil {
-	//	newError(err)
-	//}
-	return
 }
 
 func newError(err error) {
