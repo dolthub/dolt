@@ -218,6 +218,8 @@ func convertSliceScanResultToStrings(ss []any) []any {
 			row[i] = strconv.FormatInt(v, 10)
 		case uint64:
 			row[i] = strconv.FormatUint(v, 10)
+		default:
+			row[i] = v
 		}
 	}
 

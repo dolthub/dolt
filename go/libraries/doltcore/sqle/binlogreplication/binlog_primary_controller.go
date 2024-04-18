@@ -453,8 +453,8 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 		case query.Type_FLOAT32: // FLOAT
 			floatValue, notNull := descriptor.GetFloat32(idx, tuple)
 			if notNull {
-				data = append(data, make([]byte, 4)...)
 				bits := math.Float32bits(floatValue)
+				data = append(data, make([]byte, 4)...)
 				binary.LittleEndian.PutUint32(data[currentPos:], bits)
 			} else {
 				nullBitmap.Set(rowIdx, true)
@@ -463,8 +463,8 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 		case query.Type_FLOAT64: // DOUBLE
 			floatValue, notNull := descriptor.GetFloat64(idx, tuple)
 			if notNull {
-				data = append(data, make([]byte, 8)...)
 				bits := math.Float64bits(floatValue)
+				data = append(data, make([]byte, 8)...)
 				binary.LittleEndian.PutUint64(data[currentPos:], bits)
 			} else {
 				nullBitmap.Set(rowIdx, true)
@@ -1068,6 +1068,13 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 			types[i] = mysql.TypeLong
 		case query.Type_UINT64: // BIGINT UNSIGNED
 			types[i] = mysql.TypeLongLong
+
+		case query.Type_FLOAT32: // FLOAT
+			types[i] = mysql.TypeFloat
+			metadata[i] = uint16(4)
+		case query.Type_FLOAT64: // DOUBLE
+			types[i] = mysql.TypeDouble
+			metadata[i] = uint16(8)
 
 		case query.Type_BIT: // BIT
 			types[i] = mysql.TypeBit

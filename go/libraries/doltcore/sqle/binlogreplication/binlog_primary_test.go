@@ -69,6 +69,7 @@ func TestBinlogPrimary(t *testing.T) {
 		"pk int primary key, " +
 		"c1 varchar(10), c2 int, c3 varchar(100), c4 tinyint, c5 smallint, c6 mediumint, c7 bigint, " +
 		"uc1 tinyint unsigned, uc2 smallint unsigned, uc3 mediumint unsigned, uc4 int unsigned, uc5 bigint unsigned, " +
+		"f1 float, f2 double, " +
 		"t1 year, t2 datetime, t3 timestamp, t4 date, t5 time, " +
 		"b1 bit(10), " +
 		"e1 enum('blue', 'green', 'red'), s1 set('pants','shirt','tie','belt'), " +
@@ -93,6 +94,7 @@ func TestBinlogPrimary(t *testing.T) {
 	primaryDatabase.MustExec("insert into db01.t values (" +
 		"1, " +
 		"'42', NULL, NULL, 123, 123, 123, 123, 200, 200, 200, 200, 200, " +
+		"1.010101, 2.02030405060708, " +
 		"1981, '1981-02-16 06:01:02', '2024-04-08 10:30:42', '1981-02-16', '-123:45:30', " +
 		"b'0100000011', " +
 		"'green', 'pants,tie,belt'," +
@@ -123,8 +125,8 @@ func TestBinlogPrimary(t *testing.T) {
 
 	// Test that the table was created and one row inserted
 	requireReplicaResults(t, "select * from db01.t;", [][]any{
-		{"1", "42", nil, nil,
-			"123", "123", "123", "123", "200", "200", "200", "200", "200",
+		{"1", "42", nil, nil, "123", "123", "123", "123", "200", "200", "200", "200", "200",
+			"1.010101", "2.02030405060708",
 			"1981", "1981-02-16 06:01:02", "2024-04-08 10:30:42", "1981-02-16", "-123:45:30",
 			"\x01\x03",
 			"green", "pants,tie,belt",
