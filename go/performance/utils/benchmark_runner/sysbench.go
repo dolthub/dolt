@@ -139,6 +139,8 @@ func (t *sysbenchTesterImpl) cleanup(ctx context.Context) error {
 }
 
 func (t *sysbenchTesterImpl) Test(ctx context.Context) (*Result, error) {
+	defer t.cleanup(ctx)
+
 	err := t.prepare(ctx)
 	if err != nil {
 		return nil, err
@@ -151,5 +153,5 @@ func (t *sysbenchTesterImpl) Test(ctx context.Context) (*Result, error) {
 		return nil, err
 	}
 
-	return rs, t.cleanup(ctx)
+	return rs, nil
 }

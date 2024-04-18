@@ -15,7 +15,7 @@ jobs:
     outputs:
       format: ${{ steps.should_format.outputs.format }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
       - name: Setup Go 1.x
@@ -66,7 +66,7 @@ jobs:
     name: Get artifacts
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: "main"
           repository: "dolthub/dolt"
@@ -95,7 +95,7 @@ jobs:
     name: Format PR
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
@@ -144,7 +144,7 @@ jobs:
           if [ ! -z "$changes" ]; then
              echo "has-changes=true" >> $GITHUB_OUTPUT
           fi
-      - uses: EndBug/add-and-commit@v9.1.1
+      - uses: EndBug/add-and-commit@v9.1.4
         if: ${{ steps.detect-changes.outputs.has-changes == 'true' }}
         with:
           message: "[ga-format-pr] Run go/utils/repofmt/format_repo.sh and go/Godeps/update.sh"

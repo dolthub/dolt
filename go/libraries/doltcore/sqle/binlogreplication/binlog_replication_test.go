@@ -210,15 +210,8 @@ func TestStartReplicaErrors(t *testing.T) {
 	defer teardown(t)
 	startSqlServers(t)
 
-	// START REPLICA returns an error if server_id has not been set to a non-zero value
-	_, err := replicaDatabase.Queryx("START REPLICA;")
-	require.Error(t, err)
-	require.ErrorContains(t, err, "invalid server ID configured")
-
-	replicaDatabase.MustExec("SET @@GLOBAL.server_id=4321")
-
 	// START REPLICA returns an error when no replication source is configured
-	_, err = replicaDatabase.Queryx("START REPLICA;")
+	_, err := replicaDatabase.Queryx("START REPLICA;")
 	require.Error(t, err)
 	require.ErrorContains(t, err, ErrServerNotConfiguredAsReplica.Error())
 

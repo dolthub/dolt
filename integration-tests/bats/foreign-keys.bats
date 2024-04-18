@@ -134,17 +134,17 @@ SQL
     run dolt sql -q "select constraint_name, table_name, column_name, ordinal_position, position_in_unique_constraint, referenced_table_name, referenced_column_name from information_schema.KEY_COLUMN_USAGE;" -r csv
     [[ "$output" =~ "PRIMARY,colors,id,1,,," ]] || false
     [[ "$output" =~ "PRIMARY,materials,id,1,,," ]] || false
-    [[ "$output" =~ "npjt0g99,materials,color,1,1,colors,color" ]] || false
+    [[ "$output" =~ "materials_ibfk_1,materials,color,1,1,colors,color" ]] || false
     [[ "$output" =~ "PRIMARY,objects,id,1,,," ]] || false
-    [[ "$output" =~ "ootftvit,objects,color,1,1,materials,color" ]] || false
-    [[ "$output" =~ "ootftvit,objects,material,2,2,materials,material" ]] || false
+    [[ "$output" =~ "objects_ibfk_1,objects,color,1,1,materials,color" ]] || false
+    [[ "$output" =~ "objects_ibfk_1,objects,material,2,2,materials,material" ]] || false
     [[ "$output" =~ "PRIMARY,child,id,1,,," ]] || false
     [[ "$output" =~ "PRIMARY,parent,id,1,,," ]] || false
 
     # check information_schema.TABLE_CONSTRAINTS table
     run dolt sql -q "select * from information_schema.TABLE_CONSTRAINTS where table_name = 'materials';" -r csv
     [[ "$output" =~ "def,dolt-repo-$$,PRIMARY,dolt-repo-$$,materials,PRIMARY KEY,YES" ]] || false
-    [[ "$output" =~ "def,dolt-repo-$$,npjt0g99,dolt-repo-$$,materials,FOREIGN KEY,YES" ]] || false
+    [[ "$output" =~ "def,dolt-repo-$$,materials_ibfk_1,dolt-repo-$$,materials,FOREIGN KEY,YES" ]] || false
 
     # check information_schema.TABLE_CONSTRAINTS_EXTENSIONS table
     run dolt sql -q "select constraint_name from information_schema.TABLE_CONSTRAINTS_EXTENSIONS where table_name = 'materials';" -r csv
@@ -1287,6 +1287,45 @@ SQL
     [ "$status" -eq "0" ]
     [[ "$output" =~ "table,num_violations" ]] || false
     [[ "$output" =~ "child,1" ]] || false
+}
+
+@test "foreign-keys: different foreign keys with same name is schema conflict" {
+    dolt commit -Am "initial commit"
+
+    dolt checkout -b other
+    dolt sql -q "alter table child add foreign key (id) references parent (v1)"
+    dolt commit -Am "other"
+
+    dolt checkout main
+    dolt sql -q "alter table child add foreign key (id) references parent (v2)"
+    dolt commit -Am "main"
+
+    run dolt merge other
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "duplicate foreign key constraint name" ]] || false
+
+    run dolt sql -q "alter table child rename constraint foreign key child_ibfk_1 to child_ibfk_2"
+    [ "$status" -eq "0" ]
+
+    dolt commit -Am "rename"
+
+    run dolt merge other
+    [ "$status" -eq "0" ]
+}
+
+@test "foreign-keys: same foreign keys with same name is ok" {
+    dolt commit -Am "initial commit"
+
+    dolt checkout -b other
+    dolt sql -q "alter table child add foreign key (id) references parent (id)"
+    dolt commit -Am "other"
+
+    dolt checkout main
+    dolt sql -q "alter table child add foreign key (id) references parent (id)"
+    dolt commit -Am "main"
+
+    run dolt merge other
+    [ "$status" -eq "0" ]
 }
 
 @test "foreign-keys: Resolve catches violations" {

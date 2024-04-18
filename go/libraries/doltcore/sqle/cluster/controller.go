@@ -224,6 +224,9 @@ func (c *Controller) Run() {
 		c.bcReplication.Run()
 	}()
 	wg.Wait()
+	for _, client := range c.replicationClients {
+		client.closer()
+	}
 }
 
 func (c *Controller) GracefulStop() error {
@@ -1127,6 +1130,7 @@ type replicationServiceClient struct {
 	url    string
 	tls    bool
 	client replicationapi.ReplicationServiceClient
+	closer func() error
 }
 
 func (c *Controller) replicationServiceDialOptions() []grpc.DialOption {
@@ -1164,6 +1168,7 @@ func (c *Controller) replicationServiceClients(ctx context.Context) ([]*replicat
 			url:    grpcTarget,
 			tls:    c.tlsCfg != nil,
 			client: client,
+			closer: cc.Close,
 		})
 	}
 	return ret, nil

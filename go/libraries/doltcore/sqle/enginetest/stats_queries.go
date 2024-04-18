@@ -551,6 +551,22 @@ var StatBranchTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "issue #7710: branch connection string errors",
+		SetUpScript: []string{
+			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
+			"insert into xy values (0,0,'a'), (1,0,'a'), (2,0,'a'), (3,0,'a'), (4,1,'a'), (5,2,'a')",
+			"use `mydb/main`",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "analyze table xy",
+				Expected: []sql.Row{
+					{"xy", "analyze", "status", "OK"},
+				},
+			},
+		},
+	},
 }
 
 var StatProcTests = []queries.ScriptTest{

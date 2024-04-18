@@ -422,7 +422,7 @@ func (s nomsIndexSet) GetIndex(ctx context.Context, sch schema.Schema, name stri
 	return indexFromRef(ctx, s.vrw, s.ns, idx.Schema(), v.(types.Ref))
 }
 
-// PutIndex implements IndexSet.
+// PutNomsIndex implements IndexSet.
 func (s nomsIndexSet) PutNomsIndex(ctx context.Context, name string, idx types.Map) (IndexSet, error) {
 	return s.PutIndex(ctx, name, IndexFromNomsMap(idx, s.vrw, s.ns))
 }

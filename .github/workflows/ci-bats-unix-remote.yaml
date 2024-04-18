@@ -24,7 +24,7 @@ jobs:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
     # We only run these as seaparte workflow if we do not have AWS credentials.
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         if: ${{ env.use_credentials != 'true' }}
       - name: Setup Go 1.x
         if: ${{ env.use_credentials != 'true' }}
@@ -34,10 +34,10 @@ jobs:
         id: go
       - name: Setup Python 3.x
         if: ${{ env.use_credentials != 'true' }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         if: ${{ env.use_credentials != 'true' }}
         with:
           node-version: ^16
@@ -72,7 +72,7 @@ jobs:
           dolt config --global --add user.name 'Dolthub Actions'
           dolt config --global --add user.email 'actions@dolthub.com'
       - name: Install expect
-        if: matrix.os == 'ubuntu-22.04' && env.use_credentials != 'true'
+        if: ${{ env.use_credentials != 'true' }}
         run: sudo apt-get install -y expect
       - name: Install Maven
         if: ${{ env.use_credentials != 'true' }}

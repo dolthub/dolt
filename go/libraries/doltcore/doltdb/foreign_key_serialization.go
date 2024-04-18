@@ -83,7 +83,7 @@ func serializeNomsForeignKeys(ctx context.Context, vrw types.ValueReadWriter, fk
 	return fkMapEditor.Map(ctx)
 }
 
-// deserializeNomsForeignKeys returns a new ForeignKeyCollection using the provided map returned previously by GetMap.
+// deserializeFlatbufferForeignKeys returns a new ForeignKeyCollection using the provided map returned previously by GetMap.
 func deserializeFlatbufferForeignKeys(msg types.SerialMessage) (*ForeignKeyCollection, error) {
 	if serial.GetFileID(msg) != serial.ForeignKeyCollectionFileID {
 		return nil, fmt.Errorf("expect Serial Message with ForeignKeyCollectionFileID")
@@ -153,7 +153,7 @@ func deserializeFlatbufferForeignKeys(msg types.SerialMessage) (*ForeignKeyColle
 	return collection, nil
 }
 
-// serializeNomsForeignKeys serializes a ForeignKeyCollection as a types.Map.
+// serializeFlatbufferForeignKeys serializes a ForeignKeyCollection as a types.Map.
 func serializeFlatbufferForeignKeys(fkc *ForeignKeyCollection) types.SerialMessage {
 	foreignKeys := fkc.AllKeys()
 	offsets := make([]fb.UOffsetT, len(foreignKeys))

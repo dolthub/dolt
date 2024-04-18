@@ -709,7 +709,7 @@ func validateDumpArgs(apr *argparser.ArgParseResults) (string, errhand.VerboseEr
 	}
 }
 
-// getDumpArgs returns dumpOptions of result format and dest file location corresponding to the input parameters
+// getDumpOptions returns dumpOptions of result format and dest file location corresponding to the input parameters
 func getDumpOptions(fileName string, rf string, schemaOnly bool) *dumpOptions {
 	fileLoc := getDumpDestination(fileName)
 

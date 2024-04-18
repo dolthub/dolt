@@ -23,7 +23,7 @@ jobs:
       matrix:
         os:  [ ubuntu-22.04 ]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Setup Go 1.x
         uses: actions/setup-go@v5
         with:

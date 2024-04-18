@@ -504,7 +504,7 @@ var foreignKeyTests = []foreignKeyTest{
 		},
 		fks: []doltdb.ForeignKey{
 			{
-				Name:                   "1ncba7pr",
+				Name:                   "child_ibfk_1",
 				TableName:              "child",
 				TableIndex:             "v1_idx",
 				TableColumns:           []uint64{1215},
@@ -529,7 +529,7 @@ var foreignKeyTests = []foreignKeyTest{
 		},
 		fks: []doltdb.ForeignKey{
 			{
-				Name:      "7nt5f9b0",
+				Name:      "new_table_ibfk_1",
 				TableName: "new_table",
 				// unnamed indexes take the column name
 				TableIndex:             "v1",
@@ -555,7 +555,7 @@ var foreignKeyTests = []foreignKeyTest{
 		},
 		fks: []doltdb.ForeignKey{
 			{
-				Name:                   "k48mbatd",
+				Name:                   "child_ibfk_1",
 				TableName:              "child",
 				TableIndex:             "v1v2_idx",
 				TableColumns:           []uint64{1215, 8734},
@@ -581,7 +581,7 @@ var foreignKeyTests = []foreignKeyTest{
 		},
 		fks: []doltdb.ForeignKey{
 			{
-				Name:                   "1ncba7pr",
+				Name:                   "child_ibfk_1",
 				TableName:              "child",
 				TableIndex:             "v1_idx",
 				TableColumns:           []uint64{1215},
@@ -594,7 +594,7 @@ var foreignKeyTests = []foreignKeyTest{
 				},
 			},
 			{
-				Name:                   "8geddp18",
+				Name:                   "child_ibfk_2",
 				TableName:              "child",
 				TableIndex:             "v2_idx",
 				TableColumns:           []uint64{8734},

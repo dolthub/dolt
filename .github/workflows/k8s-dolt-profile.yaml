@@ -10,8 +10,8 @@ jobs:
     name: Profile Dolt while Benchmarking
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
-      - uses: azure/setup-kubectl@v3.0
+        uses: actions/checkout@v4
+      - uses: azure/setup-kubectl@v4
         with:
           version: 'v1.23.6'
       - name: Install aws-iam-authenticator
@@ -21,7 +21,7 @@ jobs:
           sudo cp ./aws-iam-authenticator /usr/local/bin/aws-iam-authenticator
           aws-iam-authenticator version
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2.2.0
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

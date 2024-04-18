@@ -212,7 +212,7 @@ type Query struct {
 	// |Query|.
 	Result QueryResult `yaml:"result"`
 
-	// If this is non-empty, asserts the the |Query| or the |Exec|
+	// If this is non-empty, asserts the |Query| or the |Exec|
 	// generates an error that matches this string.
 	ErrorMatch string `yaml:"error_match"`
 
@@ -227,7 +227,7 @@ type Query struct {
 
 // |QueryResult| specifies assertions on the results of a |Query|. Columns must
 // be specified for a |Query| and the query results must fully match. If Rows
-// are ommited, anything is allowed as long as all rows are read successfully.
+// are omitted, anything is allowed as long as all rows are read successfully.
 // All assertions here are string equality.
 type QueryResult struct {
 	Columns []string   `yaml:"columns"`

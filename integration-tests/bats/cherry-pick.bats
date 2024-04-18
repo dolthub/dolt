@@ -609,5 +609,5 @@ teardown() {
     dolt checkout main
     run dolt cherry-pick branch1
     [ $status -eq 1 ]
-    [[ $output =~ "error: cannot merge two tables with different primary keys" ]] || false
+    [[ $output =~ "error: cannot merge because table test has different primary keys" ]] || false
 }

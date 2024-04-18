@@ -12,14 +12,14 @@ jobs:
     name: Run tests
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Copy go package
         run: cp -r ./go ./integration-tests/go
       - name: Test ORM integrations
         uses: ./.github/actions/orm-tests
       - name: Configure AWS Credentials
         if: ${{ failure() }}
-        uses: aws-actions/configure-aws-credentials@v2.2.0
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

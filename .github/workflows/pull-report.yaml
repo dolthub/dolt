@@ -11,9 +11,9 @@ jobs:
     if: ${{ github.event.client_payload.issue_number != -1 }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2.2.0
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -37,7 +37,7 @@ jobs:
           KEY: ${{ github.event.client_payload.key }}
           BUCKET: ${{ github.event.client_payload.bucket }}
       - name: Post results to PR
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -62,7 +62,7 @@ jobs:
           FORMAT: ${{ github.event.client_payload.noms_bin_format }}
       - name: Remove Passing Labels if regression detected
         if: ${{ github.event.client_payload.correctness_info.is_regression == true && github.event.client_payload.job_type == 'sql-correctness' }}
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -100,7 +100,7 @@ jobs:
           LABEL: 'correctness_approved'
       - name: Add Passing Labels if no regression detected
         if: ${{ github.event.client_payload.correctness_info.is_regression != true && github.event.client_payload.job_type == 'sql-correctness' }}
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -146,7 +146,7 @@ jobs:
     if: ${{ github.event.client_payload.correctness_info.is_regression != 'true' && github.event.client_payload.job_type == 'sql-correctness' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.client_payload.correctness_info.branch_ref }}
           repository: ${{ github.repository }}
@@ -168,7 +168,7 @@ jobs:
           if [ ! -z "$changes" ]; then
              echo "has-changes=true" >> $GITHUB_OUTPUT
           fi
-      - uses: EndBug/add-and-commit@v9.1.1
+      - uses: EndBug/add-and-commit@v9.1.4
         if: ${{ steps.detect-changes.outputs.has-changes == 'true' }}
         with:
           message: ${{ format('[skip actions] [ga-update-correctness] SQL Correctness updated to {0}', github.event.client_payload.correctness_info.correctness_percentage) }}

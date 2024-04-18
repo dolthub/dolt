@@ -28,7 +28,7 @@ table WorkingSet {
 }
 
 table MergeState {
-  // An address for the the working root value before the merge started.
+  // An address for the working root value before the merge started.
   pre_working_root_addr:[ubyte] (required);
 
   // The commit that we are merging.
@@ -44,7 +44,7 @@ table MergeState {
 }
 
 table RebaseState {
-  // The address of the the working root value before the rebase started.
+  // The address of the working root value before the rebase started.
   pre_working_root_addr:[ubyte] (required);
 
   // The branch being rebased.

@@ -305,7 +305,7 @@ func IsValidRef(ctx context.Context, cSpecStr string, ddb *doltdb.DoltDB, rsr en
 	headRef, err := rsr.CWBHeadRef()
 	if err == doltdb.ErrOperationNotSupportedInDetachedHead {
 		// This is safe because ddb.Resolve checks if headRef is nil, but only when the value is actually needed.
-		// Basically, this guarentees that resolving "HEAD" or similar will return an error but other resolves will work.
+		// Basically, this guarantees that resolving "HEAD" or similar will return an error but other resolves will work.
 		headRef = nil
 	} else if err != nil {
 		return false, err
