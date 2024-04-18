@@ -13,7 +13,6 @@
 // limitations under the License.
 
 include "prolly.fbs";
-include "schema.fbs";
 include "collation.fbs";
 
 namespace serial;
@@ -32,6 +31,10 @@ table RootValue {
   schema_tables:[DatabaseSchemaTableStore];
   
   // TODO: the above is probably worse to serialize than just storing schema tables inline with some sort of marker  
+}
+
+table DatabaseSchema {
+  name:string;
 }
 
 table DatabaseSchemaTableStore {
