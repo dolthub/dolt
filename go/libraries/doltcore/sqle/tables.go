@@ -195,7 +195,7 @@ func (t *DoltTable) DoltTable(ctx *sql.Context) (*doltdb.Table, error) {
 		return nil, err
 	}
 
-	table, ok, err := root.GetTable(ctx, doltdb.TableName{Name: t.tableName})
+	table, ok, err := root.GetTable(ctx, doltdb.TableName{Name: t.tableName, Schema: t.db.Schema()})
 	if err != nil {
 		return nil, err
 	}
@@ -581,7 +581,7 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWri
 	}
 
 	setter := ds.SetRoot
-	ed, err = writeSession.GetTableWriter(ctx, t.tableName, t.db.RevisionQualifiedName(), setter)
+	ed, err = writeSession.GetTableWriter(ctx, doltdb.TableName{Name: t.tableName, Schema: t.db.schemaName}, t.db.RevisionQualifiedName(), setter)
 	if err != nil {
 		return nil, err
 	}
@@ -1694,7 +1694,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 	opts.ForeignKeyChecksDisabled = true
 	writeSession := writer.NewWriteSession(dt.Format(), newWs, ait, opts)
 
-	ed, err := writeSession.GetTableWriter(ctx, t.Name(), t.db.RevisionQualifiedName(), sess.SetRoot)
+	ed, err := writeSession.GetTableWriter(ctx, doltdb.TableName{Name: t.Name(), Schema: t.db.schemaName}, t.db.RevisionQualifiedName(), sess.SetRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -1739,7 +1739,7 @@ func fullTextRewriteEditor(
 	opts.ForeignKeyChecksDisabled = true
 	writeSession := writer.NewWriteSession(dt.Format(), newWs, ait, opts)
 
-	parentEditor, err := writeSession.GetTableWriter(ctx, t.Name(), t.db.RevisionQualifiedName(), sess.SetRoot)
+	parentEditor, err := writeSession.GetTableWriter(ctx, doltdb.TableName{Name: t.Name(), Schema: t.db.schemaName}, t.db.RevisionQualifiedName(), sess.SetRoot)
 	if err != nil {
 		return nil, err
 	}

@@ -196,6 +196,10 @@ func (db Database) Name() string {
 	return db.RequestedName()
 }
 
+func (db Database) Schema() string {
+	return db.schemaName
+}
+
 // AliasedName is what allows databases named e.g. `mydb/b1` to work with the grant and info schema tables that expect
 // a base (no revision qualifier) db name
 func (db Database) AliasedName() string {

@@ -255,7 +255,7 @@ func (iw *docsWriter) StatementBegin(ctx *sql.Context) {
 		}
 	}
 
-	tableWriter, err := dbState.WriteSession().GetTableWriter(ctx, doltdb.DocTableName, dbName, dSess.SetRoot)
+	tableWriter, err := dbState.WriteSession().GetTableWriter(ctx, doltdb.TableName{Name: doltdb.DocTableName}, dbName, dSess.SetRoot)
 	if err != nil {
 		iw.errDuringStatementBegin = err
 		return

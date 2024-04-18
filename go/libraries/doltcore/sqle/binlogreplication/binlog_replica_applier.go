@@ -22,6 +22,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/binlogreplication"
@@ -757,7 +758,7 @@ func getTableWriter(ctx *sql.Context, engine *gms.Engine, tableName, databaseNam
 
 	ds := dsess.DSessFromSess(ctx.Session)
 	setter := ds.SetRoot
-	tableWriter, err := writeSession.GetTableWriter(ctx, tableName, databaseName, setter)
+	tableWriter, err := writeSession.GetTableWriter(ctx, doltdb.TableName{Name: tableName}, databaseName, setter)
 	if err != nil {
 		return nil, nil, err
 	}

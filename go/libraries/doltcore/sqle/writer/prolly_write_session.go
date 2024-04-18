@@ -40,15 +40,16 @@ type prollyWriteSession struct {
 var _ WriteSession = &prollyWriteSession{}
 
 // GetTableWriter implemented WriteSession.
-func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, table, db string, setter SessionRootSetter) (TableWriter, error) {
+func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, table doltdb.TableName, db string, setter SessionRootSetter) (TableWriter, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
-	if tw, ok := s.tables[table]; ok {
+	// TODO: need schema as part of key
+	if tw, ok := s.tables[table.Name]; ok {
 		return tw, nil
 	}
 
-	t, ok, err := s.workingSet.WorkingRoot().GetTable(ctx, doltdb.TableName{Name: table})
+	t, ok, err := s.workingSet.WorkingRoot().GetTable(ctx, table)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +61,7 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, table, db string, 
 	if err != nil {
 		return nil, err
 	}
-	pkSch, err := sqlutil.FromDoltSchema("", table, sch)
+	pkSch, err := sqlutil.FromDoltSchema("", table.Name, sch)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +102,7 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, table, db string, 
 		flusher:   s,
 		setter:    setter,
 	}
-	s.tables[table] = twr
+	s.tables[table.Name] = twr
 
 	return twr, nil
 }

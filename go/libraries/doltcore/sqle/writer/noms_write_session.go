@@ -35,7 +35,7 @@ import (
 // It's responsible for creating and managing the lifecycle of TableWriter's.
 type WriteSession interface {
 	// GetTableWriter creates a TableWriter and adds it to the WriteSession.
-	GetTableWriter(ctx *sql.Context, table, db string, setter SessionRootSetter) (TableWriter, error)
+	GetTableWriter(ctx *sql.Context, tableName doltdb.TableName, db string, setter SessionRootSetter) (TableWriter, error)
 
 	// SetWorkingSet modifies the state of the WriteSession. The WorkingSetRef of |ws| must match the existing Ref.
 	SetWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error
@@ -92,11 +92,11 @@ func NewWriteSession(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, aiTracker 
 	}
 }
 
-func (s *nomsWriteSession) GetTableWriter(ctx *sql.Context, table, db string, setter SessionRootSetter) (TableWriter, error) {
+func (s *nomsWriteSession) GetTableWriter(ctx *sql.Context, table doltdb.TableName, db string, setter SessionRootSetter) (TableWriter, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
-	t, ok, err := s.workingSet.WorkingRoot().GetTable(ctx, doltdb.TableName{Name: table})
+	t, ok, err := s.workingSet.WorkingRoot().GetTable(ctx, table)
 	if err != nil {
 		return nil, err
 	}
@@ -109,12 +109,12 @@ func (s *nomsWriteSession) GetTableWriter(ctx *sql.Context, table, db string, se
 	if err != nil {
 		return nil, err
 	}
-	sqlSch, err := sqlutil.FromDoltSchema("", table, sch)
+	sqlSch, err := sqlutil.FromDoltSchema("", table.Name, sch)
 	if err != nil {
 		return nil, err
 	}
 
-	te, err := s.getTableEditor(ctx, table, sch)
+	te, err := s.getTableEditor(ctx, table.Name, sch)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func (s *nomsWriteSession) GetTableWriter(ctx *sql.Context, table, db string, se
 	conv := index.NewKVToSqlRowConverterForCols(t.Format(), sch, nil)
 
 	return &nomsTableWriter{
-		tableName:   table,
+		tableName:   table.Name,
 		dbName:      db,
 		sch:         sch,
 		sqlSch:      sqlSch.Schema,

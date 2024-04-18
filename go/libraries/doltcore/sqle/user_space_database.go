@@ -41,6 +41,10 @@ func (db *UserSpaceDatabase) Name() string {
 	return "dolt"
 }
 
+func (db *UserSpaceDatabase) Schema() string {
+	return ""
+}
+
 func (db *UserSpaceDatabase) GetTableInsensitive(ctx *sql.Context, tableName string) (sql.Table, bool, error) {
 	if doltdb.IsReadOnlySystemTable(tableName) {
 		return nil, false, nil
