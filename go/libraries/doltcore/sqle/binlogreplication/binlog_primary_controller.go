@@ -382,6 +382,68 @@ func extractRowCountAndDiffType(sch schema.Schema, diff tree.Diff) (rowCount uin
 	}
 }
 
+// rowSerializationIter iterates over the columns in a schema and abstracts access to the key and value tuples storing
+// the data for a row, so that callers can ask for the next column information and get the right descriptor, tuple,
+// and tuple index to use to load that column's data.
+type rowSerializationIter struct {
+	sch    schema.Schema // The schema representing the row being serialized
+	colIdx int           // The position in the schema for the current column
+
+	key     val.Tuple     // The key tuple for the row being serialized
+	keyDesc val.TupleDesc // The descriptor for the key tuple
+	keyIdx  int           // The last index in the key tuple used for a column
+
+	value     val.Tuple     // The value tuple for the row being serialized
+	valueDesc val.TupleDesc // The descriptor for the value tuple
+	valueIdx  int           // The last index in the value tuple used for a column
+}
+
+// newRowSerializationIter creates a new rowSerializationIter for the specified |schema| and row data from the
+// |key| and |value| tuples.
+func newRowSerializationIter(sch schema.Schema, key, value tree.Item) *rowSerializationIter {
+	return &rowSerializationIter{
+		sch:       sch,
+		key:       val.Tuple(key),
+		keyDesc:   sch.GetKeyDescriptor(),
+		value:     val.Tuple(value),
+		valueDesc: sch.GetValueDescriptor(),
+		keyIdx:    -1,
+		valueIdx:  -1,
+		colIdx:    0,
+	}
+}
+
+// hasNext returns true if this iterator has more columns to provide and the |nextColumn| method can be called.
+func (rsi *rowSerializationIter) hasNext() bool {
+	return rsi.colIdx < rsi.sch.GetAllCols().Size()
+}
+
+// nextColumn provides the data needed to process the next column in a row, including the column itself, the tuple
+// holding the data, the tuple descriptor for that tuple, and the position index into that tuple where the column
+// is stored. Callers should always call hasNext() before calling nextColumn() to ensure that it is safe to call.
+func (rsi *rowSerializationIter) nextColumn() (schema.Column, val.TupleDesc, val.Tuple, int) {
+	col := rsi.sch.GetAllCols().GetColumns()[rsi.colIdx]
+	rsi.colIdx++
+
+	// For keyless schemas, the key is a single hash column representing the row's unique identity, so we
+	// always use the value descriptor for all columns. Additionally, the first field in the value is a
+	// count of how many times that row appears in the table, so we increment |idx| by one extra field to
+	// skip over that row count field and get to the real data fields.
+	if schema.IsKeyless(rsi.sch) {
+		rsi.valueIdx++
+		return col, rsi.valueDesc, rsi.value, rsi.valueIdx + 1
+	}
+
+	// Otherwise, for primary key tables, we need to check if the next column is stored in the key or value.
+	if col.IsPartOfPK {
+		rsi.keyIdx++
+		return col, rsi.keyDesc, rsi.key, rsi.keyIdx
+	} else {
+		rsi.valueIdx++
+		return col, rsi.valueDesc, rsi.value, rsi.valueIdx
+	}
+}
+
 // serializeRowToBinlogBytes serializes the row formed by |key| and |value| and defined by the |schema| structure, into
 // MySQL binlog binary format. For data stored out of band (e.g. BLOB, TEXT, GEOMETRY, JSON), |ns| is used to load the
 // out-of-band data. This function returns the binary representation of the row, as well as a bitmap that indicates
@@ -390,44 +452,17 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 	columns := sch.GetAllCols().GetColumns()
 	nullBitmap = mysql.NewServerBitmap(len(columns))
 
-	keyTuple := val.Tuple(key)
-	valueTuple := val.Tuple(value)
-
-	keyIdx := -1
-	valueIdx := -1
-	keyDesc, valueDesc := sch.GetMapDescriptors()
-	var descriptor val.TupleDesc
-	var idx int
-	var tuple val.Tuple
-	for rowIdx, col := range columns {
-		if !schema.IsKeyless(sch) {
-			if col.IsPartOfPK {
-				descriptor = keyDesc
-				keyIdx++
-				idx = keyIdx
-				tuple = keyTuple
-			} else {
-				descriptor = valueDesc
-				valueIdx++
-				idx = valueIdx
-				tuple = valueTuple
-			}
-		} else {
-			// For keyless schemas, the key is a single hash column representing the row's unique identity, so we
-			// always use the value descriptor for all columns. Additionally, the first field in the value is a
-			// count of how many times that row appears in the table, so we increment |idx| by one extra field to
-			// skip over that row count field and get to the real data fields.
-			descriptor = valueDesc
-			valueIdx++
-			idx = valueIdx + 1
-			tuple = valueTuple
-		}
+	iter := newRowSerializationIter(sch, key, value)
+	rowIdx := -1
+	for iter.hasNext() {
+		rowIdx++
+		col, descriptor, tuple, tupleIdx := iter.nextColumn()
 
 		currentPos := len(data)
 		typ := col.TypeInfo.ToSqlType()
 		switch typ.Type() {
 		case query.Type_CHAR, query.Type_VARCHAR: // CHAR, VARCHAR
-			stringVal, notNull := descriptor.GetString(idx, tuple)
+			stringVal, notNull := descriptor.GetString(tupleIdx, tuple)
 			if notNull {
 				encodedData, err := encodeBytes([]byte(stringVal), col)
 				if err != nil {
@@ -439,7 +474,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_BINARY, query.Type_VARBINARY: // BINARY, VARBINARY
-			bytes, notNull := descriptor.GetBytes(idx, tuple)
+			bytes, notNull := descriptor.GetBytes(tupleIdx, tuple)
 			if notNull {
 				encodedData, err := encodeBytes(bytes, col)
 				if err != nil {
@@ -451,7 +486,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_FLOAT32: // FLOAT
-			floatValue, notNull := descriptor.GetFloat32(idx, tuple)
+			floatValue, notNull := descriptor.GetFloat32(tupleIdx, tuple)
 			if notNull {
 				bits := math.Float32bits(floatValue)
 				data = append(data, make([]byte, 4)...)
@@ -461,7 +496,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_FLOAT64: // DOUBLE
-			floatValue, notNull := descriptor.GetFloat64(idx, tuple)
+			floatValue, notNull := descriptor.GetFloat64(tupleIdx, tuple)
 			if notNull {
 				bits := math.Float64bits(floatValue)
 				data = append(data, make([]byte, 8)...)
@@ -471,7 +506,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_YEAR: // YEAR
-			intValue, notNull := descriptor.GetYear(idx, tuple)
+			intValue, notNull := descriptor.GetYear(tupleIdx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 1)...)
 				data[currentPos] = byte(intValue - 1900)
@@ -480,7 +515,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_DATETIME: // DATETIME
-			timeValue, notNull := descriptor.GetDatetime(idx, tuple)
+			timeValue, notNull := descriptor.GetDatetime(tupleIdx, tuple)
 			if notNull {
 				year, month, day := timeValue.Date()
 				hour, minute, second := timeValue.Clock()
@@ -504,7 +539,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_TIMESTAMP: // TIMESTAMP
-			timeValue, notNull := descriptor.GetDatetime(idx, tuple)
+			timeValue, notNull := descriptor.GetDatetime(tupleIdx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 4)...)
 				binary.LittleEndian.PutUint32(data[currentPos:], uint32(timeValue.Unix()))
@@ -513,7 +548,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_DATE: // DATE
-			dateValue, notNull := descriptor.GetDate(idx, tuple)
+			dateValue, notNull := descriptor.GetDate(tupleIdx, tuple)
 			if notNull {
 				buffer := uint32(dateValue.Year())<<9 | uint32(dateValue.Month())<<5 | uint32(dateValue.Day())
 				temp := make([]byte, 4)
@@ -525,7 +560,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_TIME: // TIME
-			durationInNanoseconds, notNull := descriptor.GetSqlTime(idx, tuple)
+			durationInNanoseconds, notNull := descriptor.GetSqlTime(tupleIdx, tuple)
 			if notNull {
 				negative := false
 				if durationInNanoseconds < 0 {
@@ -552,7 +587,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_INT8: // TINYINT
-			intValue, notNull := descriptor.GetInt8(idx, tuple)
+			intValue, notNull := descriptor.GetInt8(tupleIdx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 1)...)
 				data[currentPos] = byte(intValue)
@@ -561,7 +596,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_UINT8: // TINYINT UNSIGNED
-			intValue, notNull := descriptor.GetUint8(idx, tuple)
+			intValue, notNull := descriptor.GetUint8(tupleIdx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 1)...)
 				data[currentPos] = intValue
@@ -570,7 +605,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_INT16: // SMALLINT
-			intValue, notNull := descriptor.GetInt16(idx, tuple)
+			intValue, notNull := descriptor.GetInt16(tupleIdx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 2)...)
 				binary.LittleEndian.PutUint16(data[currentPos:], uint16(intValue))
@@ -579,7 +614,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_UINT16: // SMALLINT UNSIGNED
-			intValue, notNull := descriptor.GetUint16(idx, tuple)
+			intValue, notNull := descriptor.GetUint16(tupleIdx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 2)...)
 				binary.LittleEndian.PutUint16(data[currentPos:], intValue)
@@ -588,7 +623,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_INT24: // MEDIUMINT
-			intValue, notNull := descriptor.GetInt32(idx, tuple)
+			intValue, notNull := descriptor.GetInt32(tupleIdx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 3)...)
 				tempBuffer := make([]byte, 4)
@@ -599,7 +634,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_UINT24: // MEDIUMINT UNSIGNED
-			intValue, notNull := descriptor.GetUint32(idx, tuple)
+			intValue, notNull := descriptor.GetUint32(tupleIdx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 3)...)
 				tempBuffer := make([]byte, 4)
@@ -612,7 +647,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 		// TODO: These could probably be broken out into separate structs per datatype, as a cleaner
 		//       way to organize these and then throw them into a separate file
 		case query.Type_INT32: // INT
-			intValue, notNull := descriptor.GetInt32(idx, tuple)
+			intValue, notNull := descriptor.GetInt32(tupleIdx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 4)...)
 				binary.LittleEndian.PutUint32(data[currentPos:], uint32(intValue))
@@ -621,7 +656,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_UINT32: // INT UNSIGNED
-			intValue, notNull := descriptor.GetUint32(idx, tuple)
+			intValue, notNull := descriptor.GetUint32(tupleIdx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 4)...)
 				binary.LittleEndian.PutUint32(data[currentPos:], intValue)
@@ -630,7 +665,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_INT64: // BIGINT
-			intValue, notNull := descriptor.GetInt64(idx, tuple)
+			intValue, notNull := descriptor.GetInt64(tupleIdx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 8)...)
 				binary.LittleEndian.PutUint64(data[currentPos:], uint64(intValue))
@@ -639,7 +674,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_UINT64: // BIGINT UNSIGNED
-			intValue, notNull := descriptor.GetUint64(idx, tuple)
+			intValue, notNull := descriptor.GetUint64(tupleIdx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 8)...)
 				binary.LittleEndian.PutUint64(data[currentPos:], intValue)
@@ -648,10 +683,10 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_BIT: // BIT
-			// TODO: why doesn't descriptor.GetBit(idx, tuple) work? Seems like we must not be using the
-			//       BitEnc encoding, and just writing BIT types with the Uint64 methods. The BitEnc has
-			//       the same data encoding, but it would be more descriptive to use it.
-			bitValue, notNull := descriptor.GetUint64(idx, tuple)
+			// NOTE: descriptor.GetBit(tupleIdx, tuple) doesn't work here. BIT datatypes are described with a Uint64
+			//       encoding, so trying to use GetBit results in an error. At the data level, both are stored with a
+			//       uint64 value, so they are compatible, but we seem to only use Uint64 in the descriptor.
+			bitValue, notNull := descriptor.GetUint64(tupleIdx, tuple)
 			if notNull {
 				bitType := col.TypeInfo.ToSqlType().(gmstypes.BitType)
 				numBytes := int((bitType.NumberOfBits() + 7) / 8)
@@ -663,7 +698,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_ENUM: // ENUM
-			enumValue, notNull := descriptor.GetEnum(idx, tuple)
+			enumValue, notNull := descriptor.GetEnum(tupleIdx, tuple)
 			if notNull {
 				enumType := col.TypeInfo.ToSqlType().(gmstypes.EnumType)
 				if enumType.NumberOfElements() <= 0xFF {
@@ -677,7 +712,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_SET: // SET
-			setValue, notNull := descriptor.GetSet(idx, tuple)
+			setValue, notNull := descriptor.GetSet(tupleIdx, tuple)
 			if notNull {
 				setType := col.TypeInfo.ToSqlType().(gmstypes.SetType)
 				numElements := setType.NumberOfElements()
@@ -690,7 +725,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_DECIMAL: // DECIMAL
-			decimalValue, notNull := descriptor.GetDecimal(idx, tuple)
+			decimalValue, notNull := descriptor.GetDecimal(tupleIdx, tuple)
 			if notNull {
 				decimalType := typ.(sql.DecimalType)
 
@@ -791,7 +826,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_BLOB: // TINYBLOB, BLOB, MEDIUMBLOB, LONGBLOB
-			addr, notNull := descriptor.GetBytesAddr(idx, tuple)
+			addr, notNull := descriptor.GetBytesAddr(tupleIdx, tuple)
 			if notNull {
 				bytes, err := encodeBytesFromAddress(ctx, addr, ns, typ)
 				if err != nil {
@@ -803,7 +838,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_TEXT: // TINYTEXT, TEXT, MEDIUMTEXT, LONGTEXT
-			addr, notNull := descriptor.GetStringAddr(idx, tuple)
+			addr, notNull := descriptor.GetStringAddr(tupleIdx, tuple)
 			if notNull {
 				bytes, err := encodeBytesFromAddress(ctx, addr, ns, typ)
 				if err != nil {
@@ -818,7 +853,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			// NOTE: Using descriptor.GetGeometry() here will return the stored bytes, but
 			//       we need to use tree.GetField() so that they get deserialized into WKB
 			//       format bytes for the correct MySQL binlog serialization format.
-			geometry, err := tree.GetField(ctx, descriptor, idx, tuple, ns)
+			geometry, err := tree.GetField(ctx, descriptor, tupleIdx, tuple, ns)
 			if err != nil {
 				return nil, mysql.Bitmap{}, err
 			}
