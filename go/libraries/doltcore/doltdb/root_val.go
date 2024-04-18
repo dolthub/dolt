@@ -1461,7 +1461,7 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 					return nil, err
 				}
 
-				dbSchemas[i] = dbSchemaStore
+				dbSchemas = append(dbSchemas, dbSchemaStore)
 			}
 		}
 		
