@@ -178,7 +178,7 @@ func (r nomsRvStorage) GetCollation(ctx context.Context) (schema.Collation, erro
 }
 
 func (r nomsRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit, databaseSchema string) (rvStorage, error) {
-	m, err := r.GetTablesMap(ctx, vrw, ns, "")
+	m, err := r.GetTablesMap(ctx, vrw, ns, DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}
@@ -408,7 +408,7 @@ func (root *RootValue) SetCollation(ctx context.Context, collation schema.Collat
 }
 
 func (root *RootValue) HasTable(ctx context.Context, tName string) (bool, error) {
-	tableMap, err := root.st.GetTablesMap(ctx, root.vrw, root.ns, "")
+	tableMap, err := root.st.GetTablesMap(ctx, root.vrw, root.ns, DefaultSchemaName)
 	if err != nil {
 		return false, err
 	}
@@ -701,6 +701,9 @@ func (root *RootValue) GetTableNames(ctx context.Context, schemaName string) ([]
 }
 
 func (root *RootValue) getTableMap(ctx context.Context, schemaName string) (tableMap, error) {
+	if schemaName == "" {
+		schemaName = DefaultSchemaName
+	}
 	return root.st.GetTablesMap(ctx, root.vrw, root.ns, schemaName)
 }
 
@@ -925,7 +928,7 @@ func (root *RootValue) HashOf() (hash.Hash, error) {
 // RenameTable renames a table by changing its string key in the RootValue's table map. In order to preserve
 // column tag information, use this method instead of a table drop + add.
 func (root *RootValue) RenameTable(ctx context.Context, oldName, newName string) (*RootValue, error) {
-	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, []tableEdit{{old_name: oldName, name: newName}}, "")
+	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, []tableEdit{{old_name: oldName, name: newName}}, DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}
@@ -951,7 +954,7 @@ func (root *RootValue) RemoveTables(ctx context.Context, skipFKHandling bool, al
 		edits[i].name = name
 	}
 
-	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, edits, "")
+	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, edits, DefaultSchemaName)
 	if err != nil {
 		return nil, err
 	}
