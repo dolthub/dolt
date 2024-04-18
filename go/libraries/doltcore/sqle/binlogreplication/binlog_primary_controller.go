@@ -730,9 +730,9 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 				}
 
 				absStringVal := decimalValue.Abs().String()
-				foo := len(absStringVal) + int(decimalValue.Exponent())
-				stringIntegerVal := absStringVal[:foo-1]
-				stringFractionalVal := absStringVal[foo:]
+				firstFractionalDigitIdx := len(absStringVal) + int(decimalValue.Exponent())
+				stringIntegerVal := absStringVal[:firstFractionalDigitIdx-1]
+				stringFractionalVal := absStringVal[firstFractionalDigitIdx:]
 
 				buffer := make([]byte, length)
 				bufferPos := 0
