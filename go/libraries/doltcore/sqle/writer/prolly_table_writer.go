@@ -223,7 +223,7 @@ func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) 
 }
 
 func (w *prollyTableWriter) AcquireAutoIncrementLock(ctx *sql.Context) (func(), error) {
-	return w.aiTracker.AcquireTableLock(ctx, w.tableName)
+	return w.aiTracker.AcquireTableLock(ctx, w.tableName.Name)
 }
 
 // Close implements Closer
