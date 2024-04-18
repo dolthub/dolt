@@ -77,7 +77,7 @@ func NewWriteSession(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, aiTracker 
 	if types.IsFormat_DOLT(nbf) {
 		return &prollyWriteSession{
 			workingSet: ws,
-			tables:     make(map[string]*prollyTableWriter),
+			tables:     make(map[doltdb.TableName]*prollyTableWriter),
 			aiTracker:  aiTracker,
 			mut:        &sync.RWMutex{},
 		}

@@ -32,7 +32,7 @@ import (
 // Serves as coordination for SessionedTableEditors.
 type prollyWriteSession struct {
 	workingSet *doltdb.WorkingSet
-	tables     map[string]*prollyTableWriter
+	tables     map[doltdb.TableName]*prollyTableWriter
 	aiTracker  globalstate.AutoIncrementTracker
 	mut        *sync.RWMutex
 }
@@ -44,8 +44,7 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, table doltdb.Table
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
-	// TODO: need schema as part of key
-	if tw, ok := s.tables[table.Name]; ok {
+	if tw, ok := s.tables[table]; ok {
 		return tw, nil
 	}
 
@@ -102,7 +101,7 @@ func (s *prollyWriteSession) GetTableWriter(ctx *sql.Context, table doltdb.Table
 		flusher:   s,
 		setter:    setter,
 	}
-	s.tables[table.Name] = twr
+	s.tables[table] = twr
 
 	return twr, nil
 }
@@ -139,7 +138,7 @@ func (s *prollyWriteSession) SetOptions(opts editor.Options) {
 
 // flush is the inner implementation for Flush that does not acquire any locks
 func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, manualAutoIncrementsSettings map[string]uint64) (*doltdb.WorkingSet, error) {
-	tables := make(map[string]*doltdb.Table, len(s.tables))
+	tables := make(map[doltdb.TableName]*doltdb.Table, len(s.tables))
 	mu := &sync.Mutex{}
 
 	eg, egCtx := errgroup.WithContext(ctx)
@@ -157,8 +156,9 @@ func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, manualAuto
 			// Update this table's auto increment value if it has one. This value comes from the global state unless an
 			// override was specified (e.g. if the next value was set explicitly)
 			if schema.HasAutoIncrement(wr.sch) {
-				autoIncVal := s.aiTracker.Current(name)
-				override, hasManuallySetAi := manualAutoIncrementsSettings[name]
+				// TODO: need schema name for auto increment
+				autoIncVal := s.aiTracker.Current(name.Name)
+				override, hasManuallySetAi := manualAutoIncrementsSettings[name.Name]
 				if hasManuallySetAi {
 					autoIncVal = override
 				}
@@ -166,7 +166,7 @@ func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, manualAuto
 				// Update the table with the new auto-inc value if necessary. If it was set manually via an ALTER TABLE
 				// statement, we defer to the tracker to update the value itself, since this impacts the global state.
 				if hasManuallySetAi {
-					t, err = s.aiTracker.Set(sqlEgCtx, name, t, s.workingSet.Ref(), autoIncVal)
+					t, err = s.aiTracker.Set(sqlEgCtx, name.Name, t, s.workingSet.Ref(), autoIncVal)
 					if err != nil {
 						return err
 					}
@@ -191,7 +191,7 @@ func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, manualAuto
 	var err error
 	flushed := s.workingSet.WorkingRoot()
 	for name, tbl := range tables {
-		flushed, err = flushed.PutTable(ctx, doltdb.TableName{Name: name}, tbl)
+		flushed, err = flushed.PutTable(ctx, name, tbl)
 		if err != nil {
 			return nil, err
 		}
@@ -206,7 +206,7 @@ func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, manualAuto
 func (s *prollyWriteSession) setWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error {
 	root := ws.WorkingRoot()
 	for tableName, tableWriter := range s.tables {
-		t, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tableName})
+		t, ok, err := root.GetTable(ctx, tableName)
 		if err != nil {
 			return err
 		}
