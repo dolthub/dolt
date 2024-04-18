@@ -47,7 +47,6 @@ type schemaImpl struct {
 	collation                  Collation
 	contentHashedFields        []uint64
 	comment                    string
-	dbSchema 									 string
 }
 
 var _ Schema = (*schemaImpl)(nil)
@@ -653,16 +652,6 @@ func columnMissingNotNullConstraint(col Column) bool {
 		}
 	}
 	return true
-}
-
-func (si *schemaImpl) GetDatabaseSchema() DatabaseSchema {
-	return DatabaseSchema{
-		Name: si.dbSchema,
-	}
-}
-
-func (si *schemaImpl) SetDatabaseSchema(dbSchema DatabaseSchema) {
-	si.dbSchema = dbSchema.Name
 }
 
 // Copy creates a copy of this schema safe to be edited independently. Some members, like column collections, are

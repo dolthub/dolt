@@ -53,7 +53,7 @@ func TestSqlIntegration(t *testing.T) {
 			ddb, root := runTestSql(t, ctx, test.setup)
 			defer ddb.Close()
 
-			tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tblName})
+			tbl, ok, err := root.GetTable(ctx, tblName)
 			require.NoError(t, err)
 			require.True(t, ok)
 			sch, err := tbl.GetSchema(ctx)
@@ -90,7 +90,7 @@ func TestSchemaOrdering(t *testing.T) {
 			ddb, root := runTestSql(t, ctx, []string{test.query})
 			defer ddb.Close()
 
-			tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: "t"})
+			tbl, ok, err := root.GetTable(ctx, "t")
 			require.NoError(t, err)
 			require.True(t, ok)
 			sch, err := tbl.GetSchema(ctx)
@@ -152,7 +152,7 @@ func TestGetKeyTags(t *testing.T) {
 			ddb, root := runTestSql(t, ctx, test.setup)
 			defer ddb.Close()
 
-			tbl, ok, err := root.GetTable(ctx, doltdb.TableName{Name: tblName})
+			tbl, ok, err := root.GetTable(ctx, tblName)
 			require.NoError(t, err)
 			require.True(t, ok)
 			sch, err := tbl.GetSchema(ctx)
