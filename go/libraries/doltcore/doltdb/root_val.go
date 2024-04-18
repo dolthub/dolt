@@ -816,8 +816,9 @@ type TableName struct {
 	Schema string
 }
 
-// DefaultSchemaName is the name of the default schema.
-const DefaultSchemaName = ""
+// DefaultSchemaName is the name of the default schema. Tables with this schema name will be stored in the 
+// primary (unnamed) table store in a root.
+var DefaultSchemaName = ""
 
 // PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
 func (root *RootValue) PutTable(ctx context.Context, tName TableName, table *Table) (*RootValue, error) {
@@ -1276,7 +1277,7 @@ func (r fbRvStorage) getSchemaAddressMap(vrw types.ValueReadWriter, ns tree.Node
 }
 
 func (r fbRvStorage) GetTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, databaseSchema string) (tableMap, error) {
-	if databaseSchema == "" {
+	if databaseSchema == DefaultSchemaName {
 		am, err := r.getAddressMap(vrw, ns)
 		if err != nil {
 			return nil, err
@@ -1336,7 +1337,7 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 	
 	var amUnderEdit prolly.AddressMap
 	var err error
-	if databaseSchema == "" {
+	if databaseSchema == DefaultSchemaName {
 		amUnderEdit, err = r.getAddressMap(vrw, ns)
 		if err != nil {
 			return nil, err
@@ -1402,7 +1403,7 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 	var msg *serial.RootValue
 	b := flatbuffers.NewBuilder(80)
 	
-	if databaseSchema == "" {
+	if databaseSchema == DefaultSchemaName {
 		ambytes := []byte(tree.ValueFromNode(amUnderEdit.Node()).(types.SerialMessage))
 		tablesoff := b.CreateByteVector(ambytes)
 
