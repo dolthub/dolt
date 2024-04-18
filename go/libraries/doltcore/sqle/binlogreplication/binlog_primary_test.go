@@ -232,6 +232,51 @@ func TestBinlogsOnlyFromMainBranch(t *testing.T) {
 	requireReplicaResults(t, "select * from db01.t;", [][]any{{"42", "42", "2042"}})
 }
 
+// TestBinlogsForKeylessTables tests that Dolt can replicate changes to keyless tables.
+func TestBinlogsForKeylessTables(t *testing.T) {
+	defer teardown(t)
+	startSqlServers(t)
+	setupForDoltToMySqlReplication()
+
+	// TODO: We don't support replicating DDL statements yet, so for now, set up the DDL before
+	//       starting up replication.
+	primaryDatabase.MustExec("create database db01;")
+	primaryDatabase.MustExec("use db01;")
+	testTableCreateStatement := "create table db01.t (c1 varchar(100), c2 int, c3 int unsigned);"
+	primaryDatabase.MustExec(testTableCreateStatement)
+	primaryDatabase.MustExec("call dolt_commit('-Am', 'creating table t');")
+	replicaDatabase.MustExec(testTableCreateStatement)
+
+	startReplication(t, doltPort)
+	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
+	//       Here we just pause to let the hardcoded binlog events be delivered
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t;", [][]any{})
+
+	// Test inserts
+	primaryDatabase.MustExec("insert into db01.t values('one', 1, 11), ('two', 2, 22);")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t order by c2;", [][]any{{"one", "1", "11"}, {"two", "2", "22"}})
+
+	// Test inserting duplicate rows
+	primaryDatabase.MustExec("insert into db01.t values('one', 1, 11), ('one', 1, 11);")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t order by c2;", [][]any{
+		{"one", "1", "11"}, {"one", "1", "11"}, {"one", "1", "11"}, {"two", "2", "22"}})
+
+	// Test updating multiple rows
+	primaryDatabase.MustExec("update db01.t set c1='uno' where c1='one';")
+	primaryDatabase.MustExec("update db01.t set c1='zwei' where c1='two';")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t order by c2;", [][]any{
+		{"uno", "1", "11"}, {"uno", "1", "11"}, {"uno", "1", "11"}, {"zwei", "2", "22"}})
+
+	// Test deleting multiple rows
+	primaryDatabase.MustExec("delete from db01.t where c1='uno';")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "select * from db01.t order by c2;", [][]any{{"zwei", "2", "22"}})
+}
+
 // TestBinlogsFromMerge tests that the binlog is updated when data is merged in from another branch.
 func TestBinlogsFromMerge(t *testing.T) {
 	defer teardown(t)

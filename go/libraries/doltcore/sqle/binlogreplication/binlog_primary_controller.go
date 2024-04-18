@@ -167,12 +167,12 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, databaseName
 		fromMap := durable.ProllyMapFromIndex(fromRowData)
 		toMap := durable.ProllyMapFromIndex(toRowData)
 
-		schema, err := tableDelta.ToTable.GetSchema(ctx)
+		sch, err := tableDelta.ToTable.GetSchema(ctx)
 		if err != nil {
 			return err
 		}
 
-		columns := schema.GetAllCols().GetColumns()
+		columns := sch.GetAllCols().GetColumns()
 		tableId := tablesToId[tableName]
 
 		var tableRowsToWrite []mysql.Row
@@ -180,47 +180,61 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, databaseName
 		var tableRowsToUpdate []mysql.Row
 
 		err = prolly.DiffMaps(ctx, fromMap, toMap, false, func(_ context.Context, diff tree.Diff) error {
-			switch diff.Type {
+			// Keyless tables encode their fields differently than tables with primary keys, notably, they
+			// include an extra field indicating how many duplicate rows they represent, so we need to
+			// extract that information here before we can serialize these changes to the binlog.
+			rowCount, diffType, err := extractRowCountAndDiffType(sch, diff)
+			if err != nil {
+				return err
+			}
+
+			switch diffType {
 			case tree.AddedDiff:
 				data, nullBitmap, err := serializeRowToBinlogBytes(ctx,
-					schema, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
+					sch, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
 				if err != nil {
 					return err
 				}
-				tableRowsToWrite = append(tableRowsToWrite, mysql.Row{
-					NullColumns: nullBitmap,
-					Data:        data,
-				})
+				for range rowCount {
+					tableRowsToWrite = append(tableRowsToWrite, mysql.Row{
+						NullColumns: nullBitmap,
+						Data:        data,
+					})
+				}
 
 			case tree.ModifiedDiff:
 				data, nullColumns, err := serializeRowToBinlogBytes(ctx,
-					schema, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
+					sch, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
 				if err != nil {
 					return err
 				}
 				identify, nullIdentifyColumns, err := serializeRowToBinlogBytes(ctx,
-					schema, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
+					sch, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
 				if err != nil {
 					return err
 				}
-				tableRowsToUpdate = append(tableRowsToUpdate, mysql.Row{
-					NullColumns:         nullColumns,
-					Data:                data,
-					NullIdentifyColumns: nullIdentifyColumns,
-					Identify:            identify,
-				})
+				for range rowCount {
+					tableRowsToUpdate = append(tableRowsToUpdate, mysql.Row{
+						NullColumns:         nullColumns,
+						Data:                data,
+						NullIdentifyColumns: nullIdentifyColumns,
+						Identify:            identify,
+					})
+				}
 
 			case tree.RemovedDiff:
 				// TODO: If the schema of the table has changed between FromTable and ToTable, then this probably breaks
 				identifyData, nullBitmap, err := serializeRowToBinlogBytes(ctx,
-					schema, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
+					sch, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
 				if err != nil {
 					return err
 				}
-				tableRowsToDelete = append(tableRowsToDelete, mysql.Row{
-					NullIdentifyColumns: nullBitmap,
-					Identify:            identifyData,
-				})
+				for range rowCount {
+					tableRowsToDelete = append(tableRowsToDelete, mysql.Row{
+						NullIdentifyColumns: nullBitmap,
+						Identify:            identifyData,
+					})
+				}
 
 			default:
 				return fmt.Errorf("unexpected diff type: %v", diff.Type)
@@ -305,12 +319,75 @@ func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, databaseName
 	return nil
 }
 
+// extractRowCountAndDiffType uses |sch| and |diff| to determine how many changed rows this
+// diff represents (returned as the |rowCount| param) and what type of change it represents
+// (returned as the |diffType| param). For tables with primary keys, this function will always
+// return a |rowCount| of 1 and a |diffType| directly from |diff.Type|, however, for keyless
+// tables, there is a translation needed due to how keyless tables encode the number of
+// duplicate rows in the table that they represent. For example, a |diff| may show that a
+// row was updated, but if the rowCount for the keyless row in diff.To is 4 and the rowCount
+// for the keyless row in diff.From is 2, then it is translated to a deletion of 2 rows, by
+// returning a |rowCount| of 2 and a |diffType| of tree.RemovedDiff.
+func extractRowCountAndDiffType(sch schema.Schema, diff tree.Diff) (rowCount uint64, diffType tree.DiffType, err error) {
+	// For tables with primary keys, we don't have to worry about duplicate rows or
+	// translating the diff type, so just return immediately
+	if schema.IsKeyless(sch) == false {
+		return 1, diff.Type, nil
+	}
+
+	switch diff.Type {
+	case tree.AddedDiff:
+		toRowCount, notNull := sch.GetValueDescriptor().GetUint64(0, val.Tuple(diff.To))
+		if !notNull {
+			return 0, 0, fmt.Errorf(
+				"row count for a keyless table row cannot be null")
+		}
+		return toRowCount, diff.Type, nil
+
+	case tree.RemovedDiff:
+		fromRowCount, notNull := sch.GetValueDescriptor().GetUint64(0, val.Tuple(diff.From))
+		if !notNull {
+			return 0, 0, fmt.Errorf(
+				"row count for a keyless table row cannot be null")
+		}
+		return fromRowCount, diff.Type, nil
+
+	case tree.ModifiedDiff:
+		toRowCount, notNull := sch.GetValueDescriptor().GetUint64(0, val.Tuple(diff.To))
+		if !notNull {
+			return 0, 0, fmt.Errorf(
+				"row count for a keyless table row cannot be null")
+		}
+
+		fromRowCount, notNull := sch.GetValueDescriptor().GetUint64(0, val.Tuple(diff.From))
+		if !notNull {
+			return 0, 0, fmt.Errorf(
+				"row count for a keyless table row cannot be null")
+		}
+
+		if toRowCount > fromRowCount {
+			return toRowCount - fromRowCount, tree.AddedDiff, nil
+		} else if toRowCount < fromRowCount {
+			return fromRowCount - toRowCount, tree.RemovedDiff, nil
+		} else {
+			// For keyless tables, we will never see a diff where the rowcount is 1 on both the from and
+			// to tuples, because there is no primary key to identify the before and after row as having
+			// the same identity, so this case is always represented as one row added, one row removed.
+			return 0, 0, fmt.Errorf(
+				"row count for a modified row diff cannot be the same on both sides of the diff")
+		}
+
+	default:
+		return 0, 0, fmt.Errorf("unexpected DiffType: %v", diff.Type)
+	}
+}
+
 // serializeRowToBinlogBytes serializes the row formed by |key| and |value| and defined by the |schema| structure, into
 // MySQL binlog binary format. For data stored out of band (e.g. BLOB, TEXT, GEOMETRY, JSON), |ns| is used to load the
 // out-of-band data. This function returns the binary representation of the row, as well as a bitmap that indicates
 // which fields of the row are null (and therefore don't contribute any bytes to the returned binary data).
-func serializeRowToBinlogBytes(ctx *sql.Context, schema schema.Schema, key, value tree.Item, ns tree.NodeStore) (data []byte, nullBitmap mysql.Bitmap, err error) {
-	columns := schema.GetAllCols().GetColumns()
+func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value tree.Item, ns tree.NodeStore) (data []byte, nullBitmap mysql.Bitmap, err error) {
+	columns := sch.GetAllCols().GetColumns()
 	nullBitmap = mysql.NewServerBitmap(len(columns))
 
 	keyTuple := val.Tuple(key)
@@ -318,20 +395,31 @@ func serializeRowToBinlogBytes(ctx *sql.Context, schema schema.Schema, key, valu
 
 	keyIdx := -1
 	valueIdx := -1
-	keyDesc, valueDesc := schema.GetMapDescriptors()
+	keyDesc, valueDesc := sch.GetMapDescriptors()
 	var descriptor val.TupleDesc
 	var idx int
 	var tuple val.Tuple
 	for rowIdx, col := range columns {
-		if col.IsPartOfPK {
-			descriptor = keyDesc
-			keyIdx++
-			idx = keyIdx
-			tuple = keyTuple
+		if !schema.IsKeyless(sch) {
+			if col.IsPartOfPK {
+				descriptor = keyDesc
+				keyIdx++
+				idx = keyIdx
+				tuple = keyTuple
+			} else {
+				descriptor = valueDesc
+				valueIdx++
+				idx = valueIdx
+				tuple = valueTuple
+			}
 		} else {
+			// For keyless schemas, the key is a single hash column representing the row's unique identity, so we
+			// always use the value descriptor for all columns. Additionally, the first field in the value is a
+			// count of how many times that row appears in the table, so we increment |idx| by one extra field to
+			// skip over that row count field and get to the real data fields.
 			descriptor = valueDesc
 			valueIdx++
-			idx = valueIdx
+			idx = valueIdx + 1
 			tuple = valueTuple
 		}
 
