@@ -82,7 +82,7 @@ func TestFlush(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(name(tt.td, tt.cnt), func(t *testing.T) {
-			km := newKeyMem(mustNewFile(t, tmpProv), tt.cnt*keySize)
+			km := newKeyMem(tt.cnt * keySize)
 
 			keys := testTuples(ns, tt.td, tt.cnt)
 			expSize := 0
@@ -101,14 +101,15 @@ func TestFlush(t *testing.T) {
 			})
 
 			t.Run("mem iter", func(t *testing.T) {
-				cnt, size := drainIterCntSize(km)
+				cnt, size := drainIterCntSize(t, km)
 				require.Equal(t, tt.cnt, cnt)
 				require.Equal(t, expSize, size)
 			})
 
 			t.Run("file iter", func(t *testing.T) {
-				kf := km.flush(keyCmp)
-				cnt, size := drainIterCntSize(kf)
+				kf, err := km.flush(mustNewFile(t, tmpProv), keyCmp)
+				require.NoError(t, err)
+				cnt, size := drainIterCntSize(t, kf)
 				require.Equal(t, tt.cnt, cnt)
 				require.Equal(t, expSize, size)
 			})
@@ -170,7 +171,7 @@ func TestMerge(t *testing.T) {
 
 	ns := tree.NewTestNodeStore()
 
-	batchSize := 100
+	batchSize := 4096
 	keySize := 100
 
 	for _, tt := range tests {
@@ -184,14 +185,16 @@ func TestMerge(t *testing.T) {
 			expSize := 0
 			expCnt := 0
 			for _, cnt := range tt.counts {
-				km := newKeyMem(mustNewFile(t, tmpProv), cnt*keySize)
+				km := newKeyMem(cnt * keySize)
 				keys := testTuples(ns, tt.td, cnt)
 				for _, k := range keys {
 					expSize += len(k)
 					expCnt++
 					require.True(t, km.insert(k))
 				}
-				keyFiles = append(keyFiles, km.flush(keyCmp))
+				kf, err := km.flush(mustNewFile(t, tmpProv), keyCmp)
+				require.NoError(t, err)
+				keyFiles = append(keyFiles, kf)
 				keyMems = append(keyMems, km)
 			}
 
@@ -199,10 +202,10 @@ func TestMerge(t *testing.T) {
 				target := newKeyFile(mustNewFile(t, tmpProv), batchSize)
 
 				ctx := context.Background()
-				m := newFileMerger(ctx, keyCmp, target, keyMems...)
+				m, _ := newFileMerger(ctx, keyCmp, target, keyMems...)
 				m.run(ctx)
 
-				cnt, size := drainIterCntSize(target)
+				cnt, size := drainIterCntSize(t, target)
 				require.Equal(t, expCnt, cnt)
 				require.Equal(t, expSize, size)
 			})
@@ -211,10 +214,10 @@ func TestMerge(t *testing.T) {
 				target := newKeyFile(mustNewFile(t, tmpProv), batchSize)
 
 				ctx := context.Background()
-				m := newFileMerger(ctx, keyCmp, target, keyFiles...)
+				m, _ := newFileMerger(ctx, keyCmp, target, keyFiles...)
 				m.run(ctx)
 
-				cnt, size := drainIterCntSize(target)
+				cnt, size := drainIterCntSize(t, target)
 				require.Equal(t, expCnt, cnt)
 				require.Equal(t, expSize, size)
 			})
@@ -275,7 +278,8 @@ func TestCompact(t *testing.T) {
 
 	ns := tree.NewTestNodeStore()
 
-	batchSize := 100
+	batchSize := 10
+	keySize := 100
 
 	for _, tt := range tests {
 		t.Run(name(tt.td, tt.fileCnt), func(t *testing.T) {
@@ -287,34 +291,39 @@ func TestCompact(t *testing.T) {
 			expSize := 0
 			expCnt := 0
 			for i := 0; i < tt.fileCnt; i++ {
-				km := newKeyMem(mustNewFile(t, tmpProv), batchSize)
+				km := newKeyMem(batchSize * keySize)
 				keys := testTuples(ns, tt.td, batchSize)
 				for _, k := range keys {
 					expSize += len(k)
 					expCnt++
-					km.insert(k)
+					require.True(t, km.insert(k))
 				}
-				keyFiles = append(keyFiles, km.flush(keyCmp))
+				kf, err := km.flush(mustNewFile(t, tmpProv), keyCmp)
+				require.NoError(t, err)
+				keyFiles = append(keyFiles, kf)
 			}
 
 			ctx := context.Background()
 
 			t.Run("file compact", func(t *testing.T) {
-				s := NewTupleSorter(batchSize, 1, keyCmp, tmpProv)
-				prevCnt := len(s.files)
-				for len(s.files) > 1 {
-					s.compact(ctx)
-					require.Equal(t, prevCnt/2, len(s.files))
-					prevCnt = prevCnt / 2
+				s := NewTupleSorter(batchSize, tt.fileCnt, keyCmp, tmpProv)
+				s.files = append(s.files, keyFiles)
+				err := s.compact(ctx, 0)
 
-					target := newKeyFile(mustNewFile(t, tmpProv), batchSize)
-					m := newFileMerger(ctx, keyCmp, target, keyFiles...)
-					m.run(ctx)
+				require.NoError(t, err)
+				require.Equal(t, 0, len(s.files[0]))
+				require.Equal(t, 1, len(s.files[1]))
+				require.Equal(t, 2, len(s.files))
 
-					cnt, size := drainIterCntSize(target)
-					require.Equal(t, expCnt, cnt)
-					require.Equal(t, expSize, size)
-				}
+				//target := newKeyFile(mustNewFile(t, tmpProv), batchSize)
+				//m, _ := newFileMerger(ctx, keyCmp, target, keyFiles...)
+				//err = m.run(ctx)
+				//require.NoError(t, err)
+
+				cnt, size := drainIterCntSize(t, s.files[1][0])
+				require.Equal(t, expCnt, cnt)
+				require.Equal(t, expSize, size)
+
 			})
 		})
 	}
@@ -431,7 +440,8 @@ func TestFileE2E(t *testing.T) {
 			iterable, err := s.Flush(ctx)
 			require.NoError(t, err)
 			var cnt, size int
-			iter := iterable.IterAll(ctx)
+			iter, err := iterable.IterAll(ctx)
+			require.NoError(t, err)
 			var lastKey val.Tuple
 			for {
 				k, err := iter.Next(ctx)
@@ -483,9 +493,10 @@ func mustNewFile(t *testing.T, prov tempfiles.TempFileProvider) *os.File {
 	return f
 }
 
-func drainIterCntSize(ki keyIterable) (cnt int, size int) {
+func drainIterCntSize(t *testing.T, ki keyIterable) (cnt int, size int) {
 	ctx := context.Background()
-	iter := ki.IterAll(ctx)
+	iter, err := ki.IterAll(ctx)
+	require.NoError(t, err)
 	for {
 		k, err := iter.Next(ctx)
 		if err != nil {

@@ -102,8 +102,11 @@ func BuildProllyIndexExternal(
 	}
 
 	mut := secondary.Mutate()
-	it := sortedKeys.IterAll(ctx)
+	it, err := sortedKeys.IterAll(ctx)
 	defer it.Close()
+	if err != nil {
+		return nil, err
+	}
 	var lastKey val.Tuple
 	for {
 		key, err := it.Next(ctx)
