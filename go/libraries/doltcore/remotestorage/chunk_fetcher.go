@@ -21,6 +21,9 @@ import (
 	"math"
 	"time"
 
+	"fmt"
+	"github.com/fatih/color"
+
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 
@@ -255,6 +258,8 @@ func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.D
 	pending := make([]fetchReq, 0)
 	for {
 		numGaps := 0
+		numSends := 0
+		lenSends := 0
 		sent := true
 		for sent {
 			sent = false
@@ -279,6 +284,8 @@ func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.D
 							}
 							pending[j].respCh = nil
 							sent = true
+							numSends += 1
+							lenSends += int(l)
 							break
 						}
 					}
@@ -304,6 +311,15 @@ func fetcherDownloadRangesThread(ctx context.Context, locCh chan []*remotesapi.D
 			pending = newpending
 		}
 
+		if numSends > 0 || len(pending) > 0 {
+			numRanges := 0
+			for _, gr := range locs.ranges {
+				numRanges += len(gr.Ranges)
+			}
+	
+			fmt.Fprintf(color.Error, "%v reliable.grpc blockForDeliverResp; len(pending): %v, len(locs): %v, numGaps: %v, numSends: %d, lenSends: %d\n", time.Now(), len(pending), numRanges, numGaps, numSends, lenSends)
+		}
+
 		select {
 		case req, ok := <-locCh:
 			if !ok {
@@ -325,14 +341,14 @@ func fetcherDownloadURLThreads(ctx context.Context, fetchReqCh chan fetchReq, do
 	eg, ctx := errgroup.WithContext(ctx)
 	for i := 0; i < smallFetches; i++ {
 		eg.Go(func() error {
-			return fetcherDownloadURLThread(ctx, fetchReqCh, doneCh, chunkCh, 0, largeFetchSz, client, stats, fetcher)
+			return fetcherDownloadURLThread(ctx, fetchReqCh, doneCh, chunkCh, 0, math.MaxUint64, client, stats, fetcher)
 		})
 	}
-	for i := 0; i < largeFetches; i++ {
-		eg.Go(func() error {
-			return fetcherDownloadURLThread(ctx, fetchReqCh, doneCh, chunkCh, largeFetchSz, math.MaxUint64, client, stats, fetcher)
-		})
-	}
+//	for i := 0; i < largeFetches; i++ {
+//		eg.Go(func() error {
+//			return fetcherDownloadURLThread(ctx, fetchReqCh, doneCh, chunkCh, largeFetchSz, math.MaxUint64, client, stats, fetcher)
+//		})
+//	}
 	err := eg.Wait()
 	if err != nil {
 		return err

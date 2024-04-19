@@ -495,10 +495,12 @@ type locationRefresh struct {
 	RefreshRequest *remotesapi.RefreshTableFileUrlRequest
 	URL            string
 	lastRefresh    time.Time
-	mu             *sync.Mutex
+	mu             sync.Mutex
 }
 
 func (r *locationRefresh) Add(resp *remotesapi.DownloadLoc) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.URL == "" {
 		r.URL = resp.Location.(*remotesapi.DownloadLoc_HttpGetRange).HttpGetRange.Url
 	}
@@ -555,7 +557,7 @@ func (l *dlLocations) Add(resp *remotesapi.DownloadLoc) {
 		l.refreshes[path].Add(resp)
 	} else {
 		l.ranges[path] = gr
-		refresh := &locationRefresh{mu: new(sync.Mutex)}
+		refresh := new(locationRefresh)
 		refresh.Add(resp)
 		l.refreshes[path] = refresh
 	}
