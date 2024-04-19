@@ -32,37 +32,62 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 )
 
-type DeltaCmd struct {
+type ArchiveCmd struct {
 }
 
-func (cmd DeltaCmd) Name() string {
-	return "delta"
+func (cmd ArchiveCmd) Name() string {
+	return "archive"
+}
+
+var docs = cli.CommandDocumentationContent{
+	ShortDesc: "Create archive files using native or cgo compression, then verify.",
+	LongDesc:  `Run this command on a dolt database only after running 'dolt gc'. This command will create an archive file to the CWD. Suffix: .darc. After the new file is generated, it will read every chunk from the new file and verify that the chunk hashes to the correct addr.`,
+
+	Synopsis: []string{
+		`--native | --cgo`,
+		`--cgo --swap-dict`,
+		`--native --no-group`,
+	},
 }
 
 // Description returns a description of the command
-func (cmd DeltaCmd) Description() string {
+func (cmd ArchiveCmd) Description() string {
 	return "Hidden command to kick the tires with the new archive format."
 }
-func (cmd DeltaCmd) RequiresRepo() bool {
+func (cmd ArchiveCmd) RequiresRepo() bool {
 	return true
 }
-func (cmd DeltaCmd) Docs() *cli.CommandDocumentation {
-	return nil
+func (cmd ArchiveCmd) Docs() *cli.CommandDocumentation {
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(docs, ap)
 }
 
-func (cmd DeltaCmd) ArgParser() *argparser.ArgParser {
+func (cmd ArchiveCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
+
+	// Gotta specify one of these three.
+	ap.SupportsFlag("raw", "", "Create an archive file with 0 compression")
+	ap.SupportsFlag("cgo", "", "Use cgo for zstd compression")
+	ap.SupportsFlag("native", "", "Use klauspost/compress for zstd compression")
+
+	ap.SupportsFlag("no-grouping", "", "Do not attempt to group chunks or use dictionaries.")
+	ap.SupportsFlag("swap-dict", "", "If using --cgo, generate the dictionary using native. Opposite for --native")
+
 	return ap
 }
-func (cmd DeltaCmd) Hidden() bool {
+func (cmd ArchiveCmd) Hidden() bool {
 	return true
 }
 
-func (cmd DeltaCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+	ap := cmd.ArgParser()
+	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, docs, ap))
+	apr := cli.ParseArgsOrDie(ap, args, help)
+
 	db := doltdb.HackDatasDatabaseFromDoltDB(dEnv.DoltDB)
 	cs := datas.ChunkStoreFromDatabase(db)
 	if _, ok := cs.(*nbs.GenerationalNBS); !ok {
-		cli.PrintErrln("Delta command requires a GenerationalNBS")
+		cli.PrintErrln("archive command requires a GenerationalNBS")
 	}
 
 	datasets, err := db.Datasets(ctx)
@@ -73,8 +98,6 @@ func (cmd DeltaCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 	hs := hash.NewHashSet()
 	err = datasets.IterAll(ctx, func(id string, hash hash.Hash) error {
-		// NM4 - filter out workingSets
-		// cli.Printf("Dataset: %s -> %s\n", id, hash.String())
 		hs.Insert(hash)
 		return nil
 	})
@@ -91,7 +114,31 @@ func (cmd DeltaCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 	cli.Printf("Found %d possible relations by walking history\n", groupings.Count())
 
-	err = nbs.RunExperiment(cs, &groupings, func(format string, args ...interface{}) {
+	cfg := nbs.ExpConfig{
+		Group: true,
+	}
+	if apr.Contains("raw") {
+		cfg.Cmp = false // noop
+	} else if apr.Contains("cgo") {
+		cfg.Cmp = true
+	} else if apr.Contains("native") {
+		cfg.Cmp = true
+		cfg.NativeEncoder = true
+		cfg.NativeDict = true
+	} else {
+		cli.PrintErrln("Must specify one of --raw, --cgo, or --native")
+		return 1
+	}
+
+	if apr.Contains("swap-dict") {
+		cfg.NativeDict = !cfg.NativeDict
+	}
+
+	if apr.Contains("no-grouping") {
+		cfg.Group = false
+	}
+
+	err = nbs.RunExperiment(cs, &groupings, cfg, func(format string, args ...interface{}) {
 		cli.Printf(format, args...)
 	})
 	if err != nil {
@@ -139,7 +186,7 @@ func historicalFuzzyMatching(ctx context.Context, heads hash.HashSet, groupings 
 func diffCommits(ctx context.Context, h hash.Hash, groupings *nbs.ChunkRelations, db *doltdb.DoltDB) error {
 	oCmt, err := db.ReadCommit(ctx, h)
 	if err != nil {
-		return nil // NM4 - we should filter these before they get here
+		return nil // Only want commits. Skip others.
 	}
 	cmtA, ok := oCmt.ToCommit()
 	if !ok {

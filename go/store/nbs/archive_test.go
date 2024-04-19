@@ -237,7 +237,7 @@ func TestArchiveDictDecompression(t *testing.T) {
 
 	// Now verify that we can look up the chunks by their original addresses, and the data is the same.
 	for _, chk := range chks {
-		roundTripData, err := aIdx.get(chk.Hash())
+		roundTripData, err := aIdx.get(make([]byte, 0, maxChunkSize), chk.Hash())
 		assert.NoError(t, err)
 		assert.Equal(t, chk.Data(), roundTripData)
 	}
@@ -254,7 +254,7 @@ func buildDict(samples [][]byte) ([]byte, error) {
 	o := dict.Options{
 		MaxDictSize:    2048, // Make that a param.
 		HashBytes:      4,    // Not sure? try 4, sand measure... something?? NM4.
-		Output:         nil,  // file, // This is just for debugging
+		Output:         file, // This is just for debugging
 		ZstdDictID:     0,
 		ZstdDictCompat: false, // This is for older version compatibility.
 		ZstdLevel:      4,
@@ -277,7 +277,7 @@ func TestArchiveBlockCorruption(t *testing.T) {
 	h := hashWithPrefix(t, 23)
 	_ = aw.stageChunk(h, 0, 1)
 
-	n, _ := aw.writeIndex()
+	n, _ := aw.writeIndex(
 	_ = aw.writeFooter(n)
 
 	theBytes := writer.buff[:writer.pos]

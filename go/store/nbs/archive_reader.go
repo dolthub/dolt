@@ -15,13 +15,12 @@
 package nbs
 
 import (
-	"bytes"
 	"encoding/binary"
-	"errors"
 	"io"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/klauspost/compress/zstd"
+	"github.com/valyala/gozstd"
 )
 
 type archiveIndex struct {
@@ -193,17 +192,18 @@ func (ai archiveIndex) get(buff []byte, hash hash.Hash) ([]byte, error) {
 
 	var result []byte
 	if dict == nil {
-		result, err = zDecompress(buff, data)
-		//result, err = gozstd.Decompress(buff, data)
+		// result = make([]byte, len(data))
+		// copy(result, data)
+		// result, err = zDecompress(buff, data)
+		result, err = gozstd.Decompress(buff, data)
 	} else {
-		result, err = zDecompressDict(buff, dict, data)
-		/*
-			dDict, err := gozstd.NewDDict(dict)
-			if err != nil {
-				return nil, err
-			}
-			result, err = gozstd.DecompressDict(buff, data, dDict)
-		*/
+		// result, err = zDecompressDict(buff, dict, data)
+
+		dDict, err := gozstd.NewDDict(dict)
+		if err != nil {
+			return nil, err
+		}
+		result, err = gozstd.DecompressDict(buff, data, dDict)
 	}
 	if err != nil {
 		return nil, err
@@ -308,19 +308,13 @@ func binarySearch(prefixes []uint64, target uint64) int {
 }
 
 func zDecompress(dst, data []byte) ([]byte, error) {
-	if dst == nil {
-		return nil, errors.New("nil destination buffer")
-	}
-
-	// Create a bytes.Buffer to write compressed data into
-	buf := bytes.NewBuffer(dst)
-	decoder, err := zstd.NewReader(buf)
+	decoder, err := zstd.NewReader(nil)
 	if err != nil {
 		return nil, err
 	}
 	defer decoder.Close()
 
-	result, err := decoder.DecodeAll(data, dst)
+	result, err := decoder.DecodeAll(data, dst[:0])
 	if err != nil {
 		return nil, err
 	}
@@ -328,19 +322,14 @@ func zDecompress(dst, data []byte) ([]byte, error) {
 	return result, nil
 }
 func zDecompressDict(dst, dict, data []byte) ([]byte, error) {
-	if dst == nil {
-		return nil, errors.New("nil destination buffer")
-	}
 
-	// Create a bytes.Buffer to write compressed data into
-	buf := bytes.NewBuffer(dst)
-	decoder, err := zstd.NewReader(buf, zstd.WithDecoderDicts(dict))
+	decoder, err := zstd.NewReader(nil, zstd.WithDecoderDicts(dict))
 	if err != nil {
 		return nil, err
 	}
 	defer decoder.Close()
 
-	result, err := decoder.DecodeAll(data, dst)
+	result, err := decoder.DecodeAll(data, dst[:0])
 	if err != nil {
 		return nil, err
 	}
