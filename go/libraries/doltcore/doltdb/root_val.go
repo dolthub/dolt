@@ -68,6 +68,7 @@ func (root *RootValue) ResolveRootValue(ctx context.Context) (*RootValue, error)
 var _ Rootish = &RootValue{}
 
 type tableEdit struct {
+	// TODO: needs to be a table name
 	name string
 	ref  *types.Ref
 
@@ -99,7 +100,7 @@ type rvStorage interface {
 	SetFeatureVersion(v FeatureVersion) (rvStorage, error)
 	SetCollation(ctx context.Context, collation schema.Collation) (rvStorage, error)
 
-	EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit, databaseSchema string) (rvStorage, error)
+	EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit) (rvStorage, error)
 
 	DebugString(ctx context.Context) string
 	nomsValue() types.Value
@@ -177,8 +178,8 @@ func (r nomsRvStorage) GetCollation(ctx context.Context) (schema.Collation, erro
 	return schema.Collation(v.(types.Uint)), nil
 }
 
-func (r nomsRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit, databaseSchema string) (rvStorage, error) {
-	m, err := r.GetTablesMap(ctx, vrw, ns, DefaultSchemaName)
+func (r nomsRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit) (rvStorage, error) {
+	m, err := r.GetTablesMap(ctx, vrw, ns, "")
 	if err != nil {
 		return nil, err
 	}
@@ -847,7 +848,7 @@ func putTable(ctx context.Context, root *RootValue, tName TableName, ref types.R
 		panic("Don't attempt to put a table with a name that fails the IsValidTableName check")
 	}
 
-	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, []tableEdit{{name: tName.Name, ref: &ref}}, tName.Schema)
+	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, []tableEdit{{name: tName.Name, ref: &ref}})
 	if err != nil {
 		return nil, err
 	}
@@ -882,8 +883,7 @@ func (root *RootValue) CreateDatabaseSchema(ctx context.Context, sch schema.Data
 		}
 	}
 	
-	// Creating a new schema is equivalent to initiating an empty edit against it
-	r, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, nil, sch.Name)
+	r, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -928,7 +928,7 @@ func (root *RootValue) HashOf() (hash.Hash, error) {
 // RenameTable renames a table by changing its string key in the RootValue's table map. In order to preserve
 // column tag information, use this method instead of a table drop + add.
 func (root *RootValue) RenameTable(ctx context.Context, oldName, newName string) (*RootValue, error) {
-	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, []tableEdit{{old_name: oldName, name: newName}}, DefaultSchemaName)
+	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, []tableEdit{{old_name: oldName, name: newName}})
 	if err != nil {
 		return nil, err
 	}
@@ -954,7 +954,7 @@ func (root *RootValue) RemoveTables(ctx context.Context, skipFKHandling bool, al
 		edits[i].name = name
 	}
 
-	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, edits, DefaultSchemaName)
+	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, edits)
 	if err != nil {
 		return nil, err
 	}
@@ -1250,49 +1250,13 @@ func (r fbRvStorage) getAddressMap(vrw types.ValueReadWriter, ns tree.NodeStore)
 	return prolly.NewAddressMap(node, ns)
 }
 
-func (r fbRvStorage) getSchemaAddressMap(vrw types.ValueReadWriter, ns tree.NodeStore, dbSchemaName string) (prolly.AddressMap, error) {
-	numSchemas := r.srv.SchemaTablesLength()
-	for i := 0; i < numSchemas; i++ {
-		dbSchemaStore := new(serial.DatabaseSchemaTableStore)
-		_, err := r.srv.TrySchemaTables(dbSchemaStore, i)
-		if err != nil {
-			return prolly.AddressMap{}, err
-		}
-
-		dbSchema, err := dbSchemaStore.TryDatabaseSchema(nil)
-		if err != nil {
-			return prolly.AddressMap{}, err
-		}
-
-		if dbSchemaName == string(dbSchema.Name()) {
-			tbytes := dbSchemaStore.TablesBytes()
-			node, err := shim.NodeFromValue(types.SerialMessage(tbytes))
-			if err != nil {
-				return prolly.AddressMap{}, err
-			}
-
-			return prolly.NewAddressMap(node, ns)
-		}
-	}
-
-	// TODO: is this an error?
-	return prolly.AddressMap{}, nil
-}
-
 func (r fbRvStorage) GetTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, databaseSchema string) (tableMap, error) {
-	if databaseSchema == DefaultSchemaName {
-		am, err := r.getAddressMap(vrw, ns)
-		if err != nil {
-			return nil, err
-		}
-		return fbTableMap{am}, nil
-	} else {
-		am, err := r.getSchemaAddressMap(vrw, ns, databaseSchema)
-		if err != nil {
-			return nil, err
-		}
-		return fbTableMap{am}, nil
+	// TODO: restrict to schema
+	am, err := r.getAddressMap(vrw, ns)
+	if err != nil {
+		return nil, err
 	}
+	return fbTableMap{am}, nil
 }
 
 type fbTableMap struct {
@@ -1336,37 +1300,21 @@ func (r fbRvStorage) GetCollation(ctx context.Context) (schema.Collation, error)
 	return schema.Collation(collation), nil
 }
 
-func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit, databaseSchema string) (rvStorage, error) {
-	
-	var amUnderEdit prolly.AddressMap
-	var err error
-	if databaseSchema == DefaultSchemaName {
-		amUnderEdit, err = r.getAddressMap(vrw, ns)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		if !r.hasDatabaseSchema(databaseSchema) {
-			amUnderEdit, err = prolly.NewEmptyAddressMap(ns)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			amUnderEdit, err = r.getSchemaAddressMap(vrw, ns, databaseSchema)
-			if err != nil {
-				return nil, err
-			}
-		}
+func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit) (rvStorage, error) {
+	builder := flatbuffers.NewBuilder(80)
+
+	am, err := r.getAddressMap(vrw, ns)
+	if err != nil {
+		return nil, err
 	}
-	
-	ae := amUnderEdit.Editor()
+	ae := am.Editor()
 	for _, e := range edits {
 		if e.old_name != "" {
-			oldaddr, err := amUnderEdit.Get(ctx, e.old_name)
+			oldaddr, err := am.Get(ctx, e.old_name)
 			if err != nil {
 				return nil, err
 			}
-			newaddr, err := amUnderEdit.Get(ctx, e.name)
+			newaddr, err := am.Get(ctx, e.name)
 			if err != nil {
 				return nil, err
 			}
@@ -1398,163 +1346,27 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 			}
 		}
 	}
-	amUnderEdit, err = ae.Flush(ctx)
+	am, err = ae.Flush(ctx)
 	if err != nil {
 		return nil, err
 	}
-	
-	var msg *serial.RootValue
-	b := flatbuffers.NewBuilder(80)
-	
-	if databaseSchema == DefaultSchemaName {
-		ambytes := []byte(tree.ValueFromNode(amUnderEdit.Node()).(types.SerialMessage))
-		tablesoff := b.CreateByteVector(ambytes)
 
-		fkoff := b.CreateByteVector(r.srv.ForeignKeyAddrBytes())
-		serial.RootValueStart(b)
-		serial.RootValueAddFeatureVersion(b, r.srv.FeatureVersion())
-		serial.RootValueAddCollation(b, r.srv.Collation())
-		serial.RootValueAddTables(b, tablesoff)
-		serial.RootValueAddForeignKeyAddr(b, fkoff)
+	ambytes := []byte(tree.ValueFromNode(am.Node()).(types.SerialMessage))
+	tablesoff := builder.CreateByteVector(ambytes)
 
-		bs := serial.FinishMessage(b, serial.RootValueEnd(b), []byte(serial.RootValueFileID))
-		msg, err = serial.TryGetRootAsRootValue(bs, serial.MessagePrefixSz)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		tableBytes := r.srv.TablesBytes()
-		tablesoff := b.CreateByteVector(tableBytes)
+	fkoff := builder.CreateByteVector(r.srv.ForeignKeyAddrBytes())
+	serial.RootValueStart(builder)
+	serial.RootValueAddFeatureVersion(builder, r.srv.FeatureVersion())
+	serial.RootValueAddCollation(builder, r.srv.Collation())
+	serial.RootValueAddTables(builder, tablesoff)
+	serial.RootValueAddForeignKeyAddr(builder, fkoff)
 
-		fkoff := b.CreateByteVector(r.srv.ForeignKeyAddrBytes())
-
-		// TODO: removing an empty address map when the last table is removed
-		numSchemas := r.srv.SchemaTablesLength()
-		dbSchemas := make([]*serial.DatabaseSchemaTableStore, 0, numSchemas)
-		foundSchema := false
-		for i := 0; i < numSchemas; i++ {
-			dbSchemaStore := new(serial.DatabaseSchemaTableStore)
-			_, err := r.srv.TrySchemaTables(dbSchemaStore, i)
-			if err != nil {
-				return nil, err
-			}
-
-			dbSchema, err := dbSchemaStore.TryDatabaseSchema(nil)
-			if err != nil {
-				return nil, err
-			}
-			
-			schemaName := string(dbSchema.Name())
-			if schemaName != databaseSchema {
-				// insert at the appropriate point in the list if necessary
-				if !foundSchema && schemaName > databaseSchema {
-					dbSchemaStore, err := serializeSchemaTableStore(databaseSchema, amUnderEdit)
-					if err != nil {
-						return nil, err
-					}
-
-					dbSchemas = append(dbSchemas, dbSchemaStore)
-					foundSchema = true
-				} 
-				
-				dbSchemas = append(dbSchemas, dbSchemaStore)
-			} else {
-				foundSchema = true
-				dbSchemaStore, err = serializeSchemaTableStore(databaseSchema, amUnderEdit)
-				if err != nil {
-					return nil, err
-				}
-
-				dbSchemas = append(dbSchemas, dbSchemaStore)
-			}
-		}
-		
-		if !foundSchema {
-			dbSchemaStore, err := serializeSchemaTableStore(databaseSchema, amUnderEdit)
-			if err != nil {
-				return nil, err
-			}
-
-			dbSchemas = append(dbSchemas, dbSchemaStore)
-		}
-
-		dbSchemaTablesOffset, err := serializeDatabaseSchemaTables(b, dbSchemas)
-		if err != nil {
-			return nil, err
-		}
-
-		serial.RootValueStart(b)
-		serial.RootValueAddFeatureVersion(b, r.srv.FeatureVersion())
-		serial.RootValueAddCollation(b, r.srv.Collation())
-		serial.RootValueAddTables(b, tablesoff)
-		serial.RootValueAddForeignKeyAddr(b, fkoff)
-		serial.RootValueAddSchemaTables(b, dbSchemaTablesOffset)
-
-		bs := serial.FinishMessage(b, serial.RootValueEnd(b), []byte(serial.RootValueFileID))
-		msg, err = serial.TryGetRootAsRootValue(bs, serial.MessagePrefixSz)
-		if err != nil {
-			return nil, err
-		}
+	bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
+	msg, err := serial.TryGetRootAsRootValue(bs, serial.MessagePrefixSz)
+	if err != nil {
+		return nil, err
 	}
-
 	return fbRvStorage{msg}, nil
-}
-
-func serializeSchemaTableStore(databaseSchema string, amUnderEdit prolly.AddressMap) (*serial.DatabaseSchemaTableStore, error) {
-	sb := flatbuffers.NewBuilder(80)
-
-	nameOff := sb.CreateString(databaseSchema)
-	amBytes := tree.ValueFromNode(amUnderEdit.Node()).(types.SerialMessage)
-	tablesOff := sb.CreateByteVector(amBytes)
-
-	serial.DatabaseSchemaStart(sb)
-	serial.DatabaseSchemaAddName(sb, nameOff)
-	schemaOff := serial.DatabaseSchemaEnd(sb)
-	
-	serial.DatabaseSchemaTableStoreStart(sb)
-	serial.DatabaseSchemaTableStoreAddDatabaseSchema(sb, schemaOff)
-	serial.DatabaseSchemaTableStoreAddTables(sb, tablesOff)
-	off := serial.DatabaseSchemaTableStoreEnd(sb)
-	sb.Finish(off)
-
-	dbSchemaStore, err := serial.TryGetRootAsDatabaseSchemaTableStore(sb.FinishedBytes(), 0)
-	if err != nil {
-		return nil, err
-	}
-	
-	return dbSchemaStore, nil
-}
-
-func serializeDatabaseSchemaTables(b *flatbuffers.Builder, dbSchemas []*serial.DatabaseSchemaTableStore) (flatbuffers.UOffsetT, error) {
-	offsets := make([]flatbuffers.UOffsetT, len(dbSchemas))
-
-	for i := len(dbSchemas) - 1; i >= 0; i-- {
-		store := dbSchemas[i]
-
-		dbSchema, err := store.TryDatabaseSchema(nil)
-		if err != nil {
-			return 0, err
-		}
-
-		// todo: allow override to be passed in
-		tablesoff := b.CreateByteVector(store.TablesBytes())
-		
-		nameOff := b.CreateString(string(dbSchema.Name()))
-		serial.DatabaseSchemaStart(b)
-		serial.DatabaseSchemaAddName(b, nameOff)
-		dbSchemaOffset := serial.DatabaseSchemaEnd(b)
-		
-		serial.DatabaseSchemaTableStoreStart(b)
-		serial.DatabaseSchemaTableStoreAddDatabaseSchema(b, dbSchemaOffset)
-		serial.DatabaseSchemaTableStoreAddTables(b, tablesoff)
-		offsets[i] = serial.DatabaseSchemaTableStoreEnd(b)
-	}
-	
-	serial.RootValueStartSchemaTablesVector(b, len(offsets))
-	for i := len(offsets) - 1; i >= 0; i-- {
-		b.PrependUOffsetT(offsets[i])
-	}
-	return b.EndVector(len(offsets)), nil
 }
 
 func (r fbRvStorage) SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (rvStorage, error) {
@@ -1588,16 +1400,11 @@ func (r fbRvStorage) SetCollation(ctx context.Context, collation schema.Collatio
 }
 
 func (r fbRvStorage) GetSchemas(ctx context.Context) ([]schema.DatabaseSchema, error) {
-	numSchemas := r.srv.SchemaTablesLength()
+	numSchemas := r.srv.SchemasLength()
 	schemas := make([]schema.DatabaseSchema, numSchemas)
 	for i := 0; i < numSchemas; i++ {
-		var dbSchemaStore *serial.DatabaseSchemaTableStore
-		_, err := r.srv.TrySchemaTables(dbSchemaStore, i)
-		if err != nil {
-			return nil, err
-		}
-		
-		dbSchema, err := dbSchemaStore.TryDatabaseSchema(nil)
+		dbSchema := new(serial.DatabaseSchema)
+		_, err := r.srv.TrySchemas(dbSchema, i)
 		if err != nil {
 			return nil, err
 		}
@@ -1627,27 +1434,6 @@ func (r fbRvStorage) DebugString(ctx context.Context) string {
 
 func (r fbRvStorage) nomsValue() types.Value {
 	return types.SerialMessage(r.srv.Table().Bytes)
-}
-
-func (r fbRvStorage) hasDatabaseSchema(databaseSchema string) bool {
-	numSchTables := r.srv.SchemaTablesLength()
-	for i := 0; i < numSchTables; i++ {
-		dbSchemaStorage := new(serial.DatabaseSchemaTableStore)
-		_, err := r.srv.TrySchemaTables(dbSchemaStorage, i)
-		if err != nil {
-			return false
-		}
-		
-		dbSchema, err := dbSchemaStorage.TryDatabaseSchema(nil)
-		if err != nil {
-			return false
-		}
-		
-		if string(dbSchema.Name()) ==  databaseSchema {
-			return true
-		}
-	}
-	return false
 }
 
 type DataCacheKey struct {
