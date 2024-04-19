@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
@@ -98,6 +99,7 @@ type rvStorage interface {
 	SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, m types.Value) (rvStorage, error)
 	SetFeatureVersion(v FeatureVersion) (rvStorage, error)
 	SetCollation(ctx context.Context, collation schema.Collation) (rvStorage, error)
+	SetSchemas(ctx context.Context, dbSchemas []schema.DatabaseSchema) (rvStorage, error)
 
 	EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit) (rvStorage, error)
 
@@ -248,6 +250,10 @@ func (r nomsRvStorage) SetCollation(ctx context.Context, collation schema.Collat
 }
 
 func (r nomsRvStorage) GetSchemas(ctx context.Context) ([]schema.DatabaseSchema, error) {
+	panic("schemas not implemented for nomsRvStorage")
+}
+
+func (r nomsRvStorage) SetSchemas(ctx context.Context, dbSchemas []schema.DatabaseSchema) (rvStorage, error) {
 	panic("schemas not implemented for nomsRvStorage")
 }
 
@@ -870,19 +876,24 @@ func (root *RootValue) CreateEmptyTable(ctx context.Context, tName TableName, sc
 	return newRoot, nil
 }
 
-func (root *RootValue) CreateDatabaseSchema(ctx context.Context, sch schema.DatabaseSchema) (*RootValue, error) {
+func (root *RootValue) CreateDatabaseSchema(ctx context.Context, dbSchema schema.DatabaseSchema) (*RootValue, error) {
 	existingSchemas, err := root.st.GetSchemas(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, s := range existingSchemas {
-		if strings.EqualFold(s.Name, sch.Name) {
-			return nil, fmt.Errorf("A schema with the name %s already exists", sch.Name)
+		if strings.EqualFold(s.Name, dbSchema.Name) {
+			return nil, fmt.Errorf("A schema with the name %s already exists", dbSchema.Name)
 		}
 	}
-	
-	r, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, nil)
+
+	existingSchemas = append(existingSchemas, dbSchema)
+	sort.Slice(existingSchemas, func(i, j int) bool {
+		return existingSchemas[i].Name < existingSchemas[j].Name
+	})
+
+	r, err := root.st.SetSchemas(ctx, existingSchemas)
 	if err != nil {
 		return nil, err
 	}
@@ -1302,8 +1313,6 @@ func (r fbRvStorage) GetCollation(ctx context.Context) (schema.Collation, error)
 }
 
 func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, edits []tableEdit) (rvStorage, error) {
-	builder := flatbuffers.NewBuilder(80)
-
 	am, err := r.getAddressMap(vrw, ns)
 	if err != nil {
 		return nil, err
@@ -1351,9 +1360,24 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 	if err != nil {
 		return nil, err
 	}
-
+	
 	ambytes := []byte(tree.ValueFromNode(am.Node()).(types.SerialMessage))
-	tablesoff := builder.CreateByteVector(ambytes)
+	dbSchemas, err := r.GetSchemas(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	msg, err := r.serializeRootValue(ambytes, dbSchemas)
+	if err != nil {
+		return nil, err
+	}
+	return fbRvStorage{msg}, nil
+}
+
+func (r fbRvStorage) serializeRootValue(addressMapBytes []byte, dbSchemas []schema.DatabaseSchema) (*serial.RootValue, error) {
+	builder := flatbuffers.NewBuilder(80)
+	tablesoff := builder.CreateByteVector(addressMapBytes)
+	schemasOff := serializeDatabaseSchemas(builder, dbSchemas)
 
 	fkoff := builder.CreateByteVector(r.srv.ForeignKeyAddrBytes())
 	serial.RootValueStart(builder)
@@ -1361,18 +1385,40 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 	serial.RootValueAddCollation(builder, r.srv.Collation())
 	serial.RootValueAddTables(builder, tablesoff)
 	serial.RootValueAddForeignKeyAddr(builder, fkoff)
+	serial.RootValueAddSchemas(builder, schemasOff)
 
 	bs := serial.FinishMessage(builder, serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
 	msg, err := serial.TryGetRootAsRootValue(bs, serial.MessagePrefixSz)
 	if err != nil {
 		return nil, err
 	}
-	return fbRvStorage{msg}, nil
+	return msg, nil
+}
+
+func serializeDatabaseSchemas(b *flatbuffers.Builder, dbSchemas []schema.DatabaseSchema) flatbuffers.UOffsetT {
+	offsets := make([]flatbuffers.UOffsetT, len(dbSchemas))
+
+	for i := len(dbSchemas) - 1; i >= 0; i-- {
+		dbSchema := dbSchemas[i]
+		
+		nameOff := b.CreateString(dbSchema.Name)
+		serial.DatabaseSchemaStart(b)
+		serial.DatabaseSchemaAddName(b, nameOff)
+		offsets[i] = serial.DatabaseSchemaEnd(b)
+	}
+
+	serial.RootValueStartSchemasVector(b, len(offsets))
+	for i := len(offsets) - 1; i >= 0; i-- {
+		b.PrependUOffsetT(offsets[i])
+	}
+	return b.EndVector(len(offsets))
 }
 
 func encodeTableNameForAddressMap(name TableName) string {
-	// TODO: encode schema as well as table name
-	return name.Name
+	if name.Schema == "" {
+		return name.Name
+	}
+	return fmt.Sprintf("\000%s\0000%s", name.Schema, name.Name)
 }
 
 func (r fbRvStorage) SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (rvStorage, error) {
@@ -1421,6 +1467,14 @@ func (r fbRvStorage) GetSchemas(ctx context.Context) ([]schema.DatabaseSchema, e
 	}
 	
 	return schemas, nil
+}
+
+func (r fbRvStorage) SetSchemas(ctx context.Context, dbSchemas []schema.DatabaseSchema) (rvStorage, error) {
+	msg, err := r.serializeRootValue(r.srv.TablesBytes(), dbSchemas)
+	if err != nil {
+		return nil, err
+	}
+	return fbRvStorage{msg}, nil
 }
 
 func (r fbRvStorage) clone() fbRvStorage {
