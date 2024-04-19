@@ -37,7 +37,7 @@ import (
 )
 
 const defaultDictionarySize = 1 << 12
-const levensteinThreshold = 0.9
+const levensteinThreshold = 0.75
 const dictCompressionThreshold = 0.775
 
 type PrintfFunc func(format string, args ...interface{})
@@ -1056,13 +1056,13 @@ func levenshteinDistance(a, b []byte) int {
 			}
 		}
 	} else {
-		matrix := make([][]int, m+1)
-		for i := range matrix {
-			matrix[i] = make([]int, n+1)
-			matrix[i][0] = i
+		mappy := make(map[uint64]int, m+1)
+
+		for i := 0; i <= m+1; i++ {
+			mappy[key(i, 0)] = i
 		}
-		for j := 0; j <= n; j++ {
-			matrix[0][j] = j
+		for j := 0; j <= n+1; j++ {
+			mappy[key(0, j)] = j
 		}
 
 		for i := 1; i <= m; i++ {
@@ -1071,14 +1071,18 @@ func levenshteinDistance(a, b []byte) int {
 				if a[i-1] != b[j-1] {
 					cost = 1
 				}
-				matrix[i][j] = min(matrix[i-1][j]+1, matrix[i][j-1]+1, matrix[i-1][j-1]+cost)
+				mappy[key(i, j)] = min(mappy[key(i-1, j)]+1, mappy[key(i, j-1)]+1, mappy[key(i-1, j-1)]+cost)
 			}
 		}
 
-		lev = matrix[m][n]
+		lev = mappy[key(m, n)]
 	}
 
 	return lev
+}
+
+func key(a, b int) uint64 {
+	return uint64(a)<<32 | uint64(b)
 }
 
 // Compress input to output.
