@@ -68,8 +68,7 @@ func (root *RootValue) ResolveRootValue(ctx context.Context) (*RootValue, error)
 var _ Rootish = &RootValue{}
 
 type tableEdit struct {
-	// TODO: needs to be a table name
-	name string
+	name TableName
 	ref  *types.Ref
 
 	// Used for rename.
@@ -195,19 +194,19 @@ func (r nomsRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWri
 			if !f {
 				return nil, ErrTableNotFound
 			}
-			_, f, err = nm.MaybeGet(ctx, types.String(e.name))
+			_, f, err = nm.MaybeGet(ctx, types.String(e.name.Name))
 			if err != nil {
 				return nil, err
 			}
 			if f {
 				return nil, ErrTableExists
 			}
-			me = me.Remove(types.String(e.old_name)).Set(types.String(e.name), old)
+			me = me.Remove(types.String(e.old_name)).Set(types.String(e.name.Name), old)
 		} else {
 			if e.ref == nil {
-				me = me.Remove(types.String(e.name))
+				me = me.Remove(types.String(e.name.Name))
 			} else {
-				me = me.Set(types.String(e.name), *e.ref)
+				me = me.Set(types.String(e.name.Name), *e.ref)
 			}
 		}
 	}
@@ -848,7 +847,7 @@ func putTable(ctx context.Context, root *RootValue, tName TableName, ref types.R
 		panic("Don't attempt to put a table with a name that fails the IsValidTableName check")
 	}
 
-	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, []tableEdit{{name: tName.Name, ref: &ref}})
+	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, []tableEdit{{name: tName, ref: &ref}})
 	if err != nil {
 		return nil, err
 	}
@@ -928,7 +927,7 @@ func (root *RootValue) HashOf() (hash.Hash, error) {
 // RenameTable renames a table by changing its string key in the RootValue's table map. In order to preserve
 // column tag information, use this method instead of a table drop + add.
 func (root *RootValue) RenameTable(ctx context.Context, oldName, newName string) (*RootValue, error) {
-	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, []tableEdit{{old_name: oldName, name: newName}})
+	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, []tableEdit{{old_name: oldName, name: TableName{Name: newName}}})
 	if err != nil {
 		return nil, err
 	}
@@ -951,7 +950,9 @@ func (root *RootValue) RemoveTables(ctx context.Context, skipFKHandling bool, al
 		if a.IsEmpty() {
 			return nil, fmt.Errorf("%w: '%s'", ErrTableNotFound, name)
 		}
-		edits[i].name = name
+		edits[i].name = TableName{
+			Name: name,
+		}
 	}
 
 	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, root.ns, edits)
@@ -1314,7 +1315,7 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 			if err != nil {
 				return nil, err
 			}
-			newaddr, err := am.Get(ctx, e.name)
+			newaddr, err := am.Get(ctx, encodeTableNameForAddressMap(e.name))
 			if err != nil {
 				return nil, err
 			}
@@ -1328,18 +1329,18 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 			if err != nil {
 				return nil, err
 			}
-			err = ae.Update(ctx, e.name, oldaddr)
+			err = ae.Update(ctx, encodeTableNameForAddressMap(e.name), oldaddr)
 			if err != nil {
 				return nil, err
 			}
 		} else {
 			if e.ref == nil {
-				err := ae.Delete(ctx, e.name)
+				err := ae.Delete(ctx, encodeTableNameForAddressMap(e.name))
 				if err != nil {
 					return nil, err
 				}
 			} else {
-				err := ae.Update(ctx, e.name, e.ref.TargetHash())
+				err := ae.Update(ctx, encodeTableNameForAddressMap(e.name), e.ref.TargetHash())
 				if err != nil {
 					return nil, err
 				}
@@ -1367,6 +1368,11 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 		return nil, err
 	}
 	return fbRvStorage{msg}, nil
+}
+
+func encodeTableNameForAddressMap(name TableName) string {
+	// TODO: encode schema as well as table name
+	return name.Name
 }
 
 func (r fbRvStorage) SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (rvStorage, error) {
