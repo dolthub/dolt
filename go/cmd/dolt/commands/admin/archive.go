@@ -138,7 +138,7 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 		cfg.Group = false
 	}
 
-	err = nbs.RunExperiment(cs, &groupings, cfg, func(format string, args ...interface{}) {
+	err = nbs.RunExperiment(ctx, cs, &groupings, cfg, func(format string, args ...interface{}) {
 		cli.Printf(format, args...)
 	})
 	if err != nil {
