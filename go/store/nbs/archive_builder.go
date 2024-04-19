@@ -206,18 +206,21 @@ func groupAllChunks(ctx context.Context, cs chunkSource, idx tableIndex, dagGrou
 	unGroupCount := 0
 	groupCount := 0
 
-	defaultCDict, err := gozstd.NewCDict(defaultDict)
+	var defaultCDict *gozstd.CDict
+	var defaultDictByteSpanId uint32
 	if defaultDict != nil {
-		p("Default Dict Size: %d\n", len(defaultDict))
+		defaultCDict, err = gozstd.NewCDict(defaultDict)
+		if err != nil {
+			return err
+		}
 
-	}
-
-	defaultDictByteSpanId, err := arcW.writeByteSpan(defaultDict)
-	if err != nil {
-		return err
-	}
-	if defaultDictByteSpanId != 1 {
-		panic("Default Dict should be byte span 1")
+		defaultDictByteSpanId, err = arcW.writeByteSpan(defaultDict)
+		if err != nil {
+			return err
+		}
+		if defaultDictByteSpanId != 1 {
+			panic(fmt.Sprintf("Default Dict should be byte span 1. Is: %d\n", defaultDictByteSpanId))
+		}
 	}
 
 	// Allocate buffer used to compress chunks.

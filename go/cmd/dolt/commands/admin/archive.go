@@ -254,7 +254,7 @@ func diffCommits(ctx context.Context, h hash.Hash, groupings *nbs.ChunkRelations
 
 		err = tree.ChunkAddressDiffOrderedTrees(ctx, f.Tuples(), t.Tuples(), func(ctx context.Context, diff tree.Diff) error {
 			if diff.Type == tree.ModifiedDiff {
-				// cli.Printf("Possible Relation: (%s <-> %s)\n", hash.Hash(diff.From).String(), hash.Hash(diff.To).String())
+				cli.Printf("Possible Relation: (%s <-> %s)\n", hash.Hash(diff.From).String(), hash.Hash(diff.To).String())
 
 				groupings.Add(hash.Hash(diff.From), hash.Hash(diff.To))
 			}
