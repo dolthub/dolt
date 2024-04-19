@@ -64,10 +64,6 @@ func NewTupleSorter(batchSize, fileMax int, keyCmp func(val.Tuple, val.Tuple) bo
 }
 
 func (a *tupleSorter) Flush(ctx context.Context) (iter keyIterable, err error) {
-	defer func() {
-		err = recoverErr()
-	}()
-
 	// don't flush in-progress, just sort in memory
 	a.inProg.sort(a.keyCmp)
 
@@ -84,7 +80,11 @@ func (a *tupleSorter) Flush(ctx context.Context) (iter keyIterable, err error) {
 		}
 	}
 
-	allKeys := newKeyFile(a.newFile(), a.inProg.byteLim)
+	newF, err := a.newFile()
+	if err != nil {
+		return nil, err
+	}
+	allKeys := newKeyFile(newF, a.inProg.byteLim)
 	m, _ := newFileMerger(ctx, a.keyCmp, allKeys, iterables...)
 	if err := m.run(ctx); err != nil {
 		return nil, err
@@ -93,10 +93,6 @@ func (a *tupleSorter) Flush(ctx context.Context) (iter keyIterable, err error) {
 }
 
 func (a *tupleSorter) Insert(ctx context.Context, k val.Tuple) (err error) {
-	defer func() {
-		err = recoverErr()
-	}()
-
 	if !a.inProg.insert(k) {
 		if err := a.flushMem(ctx); err != nil {
 			return err
@@ -109,7 +105,11 @@ func (a *tupleSorter) Insert(ctx context.Context, k val.Tuple) (err error) {
 func (a *tupleSorter) flushMem(ctx context.Context) error {
 	// flush and replace |inProg|
 	if a.inProg.Len() > 0 {
-		newFile, err := a.inProg.flush(a.newFile(), a.keyCmp)
+		newF, err := a.newFile()
+		if err != nil {
+			return err
+		}
+		newFile, err := a.inProg.flush(newF, a.keyCmp)
 		if err != nil {
 			return err
 		}
@@ -129,12 +129,12 @@ func (a *tupleSorter) flushMem(ctx context.Context) error {
 	return nil
 }
 
-func (a *tupleSorter) newFile() *os.File {
+func (a *tupleSorter) newFile() (*os.File, error) {
 	f, err := a.tmpProv.NewFile("", "key_file_")
 	if err != nil {
-		newError(err)
+		return nil, err
 	}
-	return f
+	return f, nil
 }
 
 func (a *tupleSorter) shouldCompact() (int, bool) {
@@ -150,7 +150,11 @@ func (a *tupleSorter) shouldCompact() (int, bool) {
 func (a *tupleSorter) compact(ctx context.Context, level int) error {
 	fileLevel := a.files[level]
 
-	outF := newKeyFile(a.newFile(), a.batchSize)
+	newF, err := a.newFile()
+	if err != nil {
+		return err
+	}
+	outF := newKeyFile(newF, a.batchSize)
 	m, err := newFileMerger(ctx, a.keyCmp, outF, fileLevel[:a.fileMax]...)
 	if err != nil {
 		return err
@@ -250,7 +254,7 @@ type keyFile struct {
 
 func (f *keyFile) IterAll(ctx context.Context) (keyIter, error) {
 	if f.batchSize == 0 {
-		newError(fmt.Errorf("invalid zero batch size"))
+		return nil, fmt.Errorf("invalid zero batch size")
 	}
 	if _, err := f.f.Seek(0, io.SeekStart); err != nil {
 		return nil, err
@@ -356,16 +360,16 @@ type mergeFileReader struct {
 	head val.Tuple
 }
 
-func (r *mergeFileReader) next(ctx context.Context) bool {
+func (r *mergeFileReader) next(ctx context.Context) (bool, error) {
 	var err error
 	r.head, err = r.iter.Next(ctx)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			return false
+			return false, nil
 		}
-		newError(err)
+		return false, err
 	}
-	return true
+	return true, nil
 }
 
 func newMergeFileReader(ctx context.Context, iter keyIter, heapIdx int) (*mergeFileReader, error) {
@@ -453,30 +457,13 @@ func (m *fileMerger) run(ctx context.Context) error {
 		}
 		reader := heap.Pop(m.mq).(*mergeFileReader)
 		m.out.append(reader.head)
-		if ok := reader.next(ctx); ok {
+		if ok, err := reader.next(ctx); ok {
 			heap.Push(m.mq, reader)
 		} else {
 			reader.iter.Close()
+			if err != nil {
+				return err
+			}
 		}
 	}
-}
-
-func newError(err error) {
-	panic(indexBuildErr{err: err})
-}
-
-type indexBuildErr struct {
-	err error
-}
-
-func recoverErr() error {
-	if r := recover(); r != nil {
-		switch r := r.(type) {
-		case indexBuildErr:
-			return r.err
-		default:
-			panic(r)
-		}
-	}
-	return nil
 }
