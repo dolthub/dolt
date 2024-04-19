@@ -1510,7 +1510,7 @@ func serializeSchemaTableStore(databaseSchema string, amUnderEdit prolly.Address
 	serial.DatabaseSchemaStart(sb)
 	serial.DatabaseSchemaAddName(sb, nameOff)
 	schemaOff := serial.DatabaseSchemaEnd(sb)
-
+	
 	serial.DatabaseSchemaTableStoreStart(sb)
 	serial.DatabaseSchemaTableStoreAddDatabaseSchema(sb, schemaOff)
 	serial.DatabaseSchemaTableStoreAddTables(sb, tablesOff)

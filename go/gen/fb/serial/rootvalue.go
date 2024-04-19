@@ -144,14 +144,14 @@ func (rcv *RootValue) MutateCollation(n Collation) bool {
 	return rcv._tab.MutateUint16Slot(10, uint16(n))
 }
 
-func (rcv *RootValue) TrySchemaTables(obj *DatabaseSchemaTableStore, j int) (bool, error) {
+func (rcv *RootValue) TrySchemas(obj *DatabaseSchema, j int) (bool, error) {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
 		x = rcv._tab.Indirect(x)
 		obj.Init(rcv._tab.Bytes, x)
-		if DatabaseSchemaTableStoreNumFields < obj.Table().NumFields() {
+		if DatabaseSchemaNumFields < obj.Table().NumFields() {
 			return false, flatbuffers.ErrTableHasUnknownFields
 		}
 		return true, nil
@@ -159,7 +159,7 @@ func (rcv *RootValue) TrySchemaTables(obj *DatabaseSchemaTableStore, j int) (boo
 	return false, nil
 }
 
-func (rcv *RootValue) SchemaTablesLength() int {
+func (rcv *RootValue) SchemasLength() int {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
@@ -190,10 +190,10 @@ func RootValueStartForeignKeyAddrVector(builder *flatbuffers.Builder, numElems i
 func RootValueAddCollation(builder *flatbuffers.Builder, collation Collation) {
 	builder.PrependUint16Slot(3, uint16(collation), 0)
 }
-func RootValueAddSchemaTables(builder *flatbuffers.Builder, schemaTables flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(schemaTables), 0)
+func RootValueAddSchemas(builder *flatbuffers.Builder, schemas flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(schemas), 0)
 }
-func RootValueStartSchemaTablesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+func RootValueStartSchemasVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
 func RootValueEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
@@ -249,105 +249,5 @@ func DatabaseSchemaAddName(builder *flatbuffers.Builder, name flatbuffers.UOffse
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(name), 0)
 }
 func DatabaseSchemaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	return builder.EndObject()
-}
-
-type DatabaseSchemaTableStore struct {
-	_tab flatbuffers.Table
-}
-
-func InitDatabaseSchemaTableStoreRoot(o *DatabaseSchemaTableStore, buf []byte, offset flatbuffers.UOffsetT) error {
-	n := flatbuffers.GetUOffsetT(buf[offset:])
-	return o.Init(buf, n+offset)
-}
-
-func TryGetRootAsDatabaseSchemaTableStore(buf []byte, offset flatbuffers.UOffsetT) (*DatabaseSchemaTableStore, error) {
-	x := &DatabaseSchemaTableStore{}
-	return x, InitDatabaseSchemaTableStoreRoot(x, buf, offset)
-}
-
-func TryGetSizePrefixedRootAsDatabaseSchemaTableStore(buf []byte, offset flatbuffers.UOffsetT) (*DatabaseSchemaTableStore, error) {
-	x := &DatabaseSchemaTableStore{}
-	return x, InitDatabaseSchemaTableStoreRoot(x, buf, offset+flatbuffers.SizeUint32)
-}
-
-func (rcv *DatabaseSchemaTableStore) Init(buf []byte, i flatbuffers.UOffsetT) error {
-	rcv._tab.Bytes = buf
-	rcv._tab.Pos = i
-	if DatabaseSchemaTableStoreNumFields < rcv.Table().NumFields() {
-		return flatbuffers.ErrTableHasUnknownFields
-	}
-	return nil
-}
-
-func (rcv *DatabaseSchemaTableStore) Table() flatbuffers.Table {
-	return rcv._tab
-}
-
-func (rcv *DatabaseSchemaTableStore) TryDatabaseSchema(obj *DatabaseSchema) (*DatabaseSchema, error) {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
-	if o != 0 {
-		x := rcv._tab.Indirect(o + rcv._tab.Pos)
-		if obj == nil {
-			obj = new(DatabaseSchema)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		if DatabaseSchemaNumFields < obj.Table().NumFields() {
-			return nil, flatbuffers.ErrTableHasUnknownFields
-		}
-		return obj, nil
-	}
-	return nil, nil
-}
-
-func (rcv *DatabaseSchemaTableStore) Tables(j int) byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.GetByte(a + flatbuffers.UOffsetT(j*1))
-	}
-	return 0
-}
-
-func (rcv *DatabaseSchemaTableStore) TablesLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		return rcv._tab.VectorLen(o)
-	}
-	return 0
-}
-
-func (rcv *DatabaseSchemaTableStore) TablesBytes() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		return rcv._tab.ByteVector(o + rcv._tab.Pos)
-	}
-	return nil
-}
-
-func (rcv *DatabaseSchemaTableStore) MutateTables(j int, n byte) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.MutateByte(a+flatbuffers.UOffsetT(j*1), n)
-	}
-	return false
-}
-
-const DatabaseSchemaTableStoreNumFields = 2
-
-func DatabaseSchemaTableStoreStart(builder *flatbuffers.Builder) {
-	builder.StartObject(DatabaseSchemaTableStoreNumFields)
-}
-func DatabaseSchemaTableStoreAddDatabaseSchema(builder *flatbuffers.Builder, databaseSchema flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(databaseSchema), 0)
-}
-func DatabaseSchemaTableStoreAddTables(builder *flatbuffers.Builder, tables flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(tables), 0)
-}
-func DatabaseSchemaTableStoreStartTablesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(1, numElems, 1)
-}
-func DatabaseSchemaTableStoreEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }

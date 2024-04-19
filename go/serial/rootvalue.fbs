@@ -26,21 +26,12 @@ table RootValue {
 
   collation:Collation;
   
-  // schema_tables is used for table storage in any non-default database schema. Databases with a single schema 
-  // (the default) only use the normal tables field. Entries are stored in sorted order by schema name.
-  schema_tables:[DatabaseSchemaTableStore];
-  
-  // TODO: the above is probably worse to serialize than just storing schema tables inline with some sort of marker  
+  // schemas records the schemas in this database, which may be empty for a database with a single default schema
+  schemas:[DatabaseSchema];
 }
 
 table DatabaseSchema {
   name:string;
-}
-
-table DatabaseSchemaTableStore {
-  database_schema:DatabaseSchema;
-  
-  tables:[ubyte]; // Serialized AddressMap
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go
