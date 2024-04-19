@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"os"
 	"sort"
 	"strings"
@@ -119,6 +120,9 @@ func groupAllChunks(ctx context.Context, cs chunkSource, idx tableIndex, dagGrou
 	ungroupedChunks := map[hash.Hash]*chunks.Chunk{}
 	groupedChunks := map[hash.Hash]*chunks.Chunk{}
 
+	defaultSamples := make([]*chunks.Chunk, 0, idx.chunkCount()/1000)
+	rando := rand.New(rand.NewSource(time.Now().UnixNano()))
+
 	totalChunkCount := 0
 	// Allocate buffer used to compress chunks.
 	bottleneck := sync.Mutex{} // This code doesn't cope with parallelism yet.
@@ -128,6 +132,10 @@ func groupAllChunks(ctx context.Context, cs chunkSource, idx tableIndex, dagGrou
 		defer bottleneck.Unlock()
 
 		totalChunkCount++
+
+		if rando.Float64() < 0.001 {
+			defaultSamples = append(defaultSamples, c)
+		}
 
 		h := c.Hash()
 		if dagGroups.Contains(h) {
@@ -145,6 +153,18 @@ func groupAllChunks(ctx context.Context, cs chunkSource, idx tableIndex, dagGrou
 	err = group.Wait()
 	if err != nil {
 		panic(err)
+	}
+
+	var defaultDict []byte
+	if len(defaultSamples) > 25 {
+		defaultDict, err = buildDictionary(defaultSamples, cfg, p)
+		if err != nil {
+			panic(err)
+
+		}
+		p("Default Sample Size: %d\n", len(defaultSamples))
+	} else {
+		p("Skipping default dictionary. Not enough samples.\n")
 	}
 
 	cgList := dagGroups.convertToChunkGroups(groupedChunks, cfg, p)
@@ -186,24 +206,49 @@ func groupAllChunks(ctx context.Context, cs chunkSource, idx tableIndex, dagGrou
 	unGroupCount := 0
 	groupCount := 0
 
+	defaultCDict, err := gozstd.NewCDict(defaultDict)
+	if defaultDict != nil {
+		p("Default Dict Size: %d\n", len(defaultDict))
+
+	}
+
+	defaultDictByteSpanId, err := arcW.writeByteSpan(defaultDict)
+	if err != nil {
+		return err
+	}
+	if defaultDictByteSpanId != 1 {
+		panic("Default Dict should be byte span 1")
+	}
+
 	// Allocate buffer used to compress chunks.
 	cmpBuff := make([]byte, 0, maxChunkSize)
 	for h, c := range ungroupedChunks {
 		var compressed []byte
+		dictId := uint32(0)
 		if cfg.NativeEncoder {
-			compressed, err = zCompress(cmpBuff, c.Data())
+			if defaultDict != nil {
+				compressed, err = zCompressDict(cmpBuff, c.Data(), defaultDict)
+				dictId = defaultDictByteSpanId
+			} else {
+				compressed, err = zCompress(cmpBuff, c.Data())
+			}
 			if err != nil {
 				panic(err)
 			}
 		} else {
-			compressed = gozstd.Compress(cmpBuff, c.Data())
+			if defaultDict != nil {
+				compressed = gozstd.CompressDict(cmpBuff, c.Data(), defaultCDict)
+				dictId = defaultDictByteSpanId
+			} else {
+				compressed = gozstd.Compress(cmpBuff, c.Data())
+			}
 		}
 
 		id, err := arcW.writeByteSpan(compressed)
 		if err != nil {
 			panic(err)
 		}
-		err = arcW.stageChunk(h, 0, id)
+		err = arcW.stageChunk(h, dictId, id)
 		if err != nil {
 			panic(err)
 		}
@@ -217,20 +262,31 @@ func groupAllChunks(ctx context.Context, cs chunkSource, idx tableIndex, dagGrou
 				c := cs.chunk
 				if !arcW.chunkSeen(c.Hash()) {
 					var compressed []byte
+					dictId := uint32(0)
 					if cfg.NativeEncoder {
-						compressed, err = zCompress(cmpBuff, c.Data())
+						if defaultDict != nil {
+							compressed, err = zCompressDict(cmpBuff, c.Data(), defaultDict)
+							dictId = defaultDictByteSpanId
+						} else {
+							compressed, err = zCompress(cmpBuff, c.Data())
+						}
 						if err != nil {
 							panic(err)
 						}
 					} else {
-						compressed = gozstd.Compress(cmpBuff, c.Data())
+						if defaultDict != nil {
+							compressed = gozstd.CompressDict(cmpBuff, c.Data(), defaultCDict)
+							dictId = defaultDictByteSpanId
+						} else {
+							compressed = gozstd.Compress(cmpBuff, c.Data())
+						}
 					}
 
 					id, err := arcW.writeByteSpan(compressed)
 					if err != nil {
 						panic(err)
 					}
-					err = arcW.stageChunk(c.Hash(), 0, id)
+					err = arcW.stageChunk(c.Hash(), dictId, id)
 					if err != nil {
 						panic(err)
 					}
