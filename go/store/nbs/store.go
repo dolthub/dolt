@@ -138,8 +138,8 @@ func (nbs *NomsBlockStore) ChunkJournal() *ChunkJournal {
 	return nil
 }
 
-func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
-	locs, err := nbs.GetChunkLocations(hashes)
+func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(ctx context.Context, hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
+	locs, err := nbs.GetChunkLocations(ctx, hashes)
 	if err != nil {
 		return nil, err
 	}
@@ -150,13 +150,13 @@ func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(hashes hash.HashSet) (map[
 	return toret, nil
 }
 
-func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash]map[hash.Hash]Range, error) {
+func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.HashSet) (map[hash.Hash]map[hash.Hash]Range, error) {
 	gr := toGetRecords(hashes)
 	ranges := make(map[hash.Hash]map[hash.Hash]Range)
 
 	fn := func(css chunkSourceSet) error {
 		for _, cs := range css {
-			rng, err := cs.getRecordRanges(gr)
+			rng, err := cs.getRecordRanges(ctx, gr)
 			if err != nil {
 				return err
 			}

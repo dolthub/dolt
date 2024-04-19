@@ -162,13 +162,13 @@ func TestJournalWriterReadWrite(t *testing.T) {
 					assert.Equal(t, op.buf, act, "operation %d failed", i)
 				case writeOp:
 					var p []byte
-					p, err = j.getBytes(len(op.buf))
+					p, err = j.getBytes(context.Background(), len(op.buf))
 					require.NoError(t, err, "operation %d errored", i)
 					n := copy(p, op.buf)
 					assert.Equal(t, len(op.buf), n, "operation %d failed", i)
 					off += int64(n)
 				case flushOp:
-					err = j.flush()
+					err = j.flush(context.Background())
 					assert.NoError(t, err, "operation %d errored", i)
 				default:
 					t.Fatal("unknown opKind")
@@ -194,7 +194,7 @@ func TestJournalWriterWriteCompressedChunk(t *testing.T) {
 	j := newTestJournalWriter(t, path)
 	data := randomCompressedChunks(1024)
 	for a, cc := range data {
-		err := j.writeCompressedChunk(cc)
+		err := j.writeCompressedChunk(context.Background(), cc)
 		require.NoError(t, err)
 		r, _ := j.ranges.get(a)
 		validateLookup(t, j, r, cc)
@@ -209,11 +209,11 @@ func TestJournalWriterBootstrap(t *testing.T) {
 	data := randomCompressedChunks(1024)
 	var last hash.Hash
 	for _, cc := range data {
-		err := j.writeCompressedChunk(cc)
+		err := j.writeCompressedChunk(ctx, cc)
 		require.NoError(t, err)
 		last = cc.Hash()
 	}
-	require.NoError(t, j.commitRootHash(last))
+	require.NoError(t, j.commitRootHash(ctx, last))
 
 	j, _, err := openJournalWriter(ctx, path)
 	require.NoError(t, err)
@@ -268,10 +268,10 @@ func TestJournalWriterSyncClose(t *testing.T) {
 	path := newTestFilePath(t)
 	j := newTestJournalWriter(t, path)
 	p := []byte("sit")
-	buf, err := j.getBytes(len(p))
+	buf, err := j.getBytes(context.Background(), len(p))
 	require.NoError(t, err)
 	copy(buf, p)
-	j.flush()
+	j.flush(context.Background())
 	assert.Equal(t, 0, len(j.buf))
 	assert.Equal(t, 3, int(j.off))
 }
@@ -337,17 +337,17 @@ func TestJournalIndexBootstrap(t *testing.T) {
 			epochs := append(test.epochs, test.novel)
 			for i, e := range epochs {
 				for _, cc := range e.records {
-					assert.NoError(t, j.writeCompressedChunk(cc))
+					assert.NoError(t, j.writeCompressedChunk(ctx, cc))
 					if rand.Int()%10 == 0 { // periodic commits
-						assert.NoError(t, j.commitRootHash(cc.H))
+						assert.NoError(t, j.commitRootHash(ctx, cc.H))
 					}
 				}
-				o := j.offset()                             // precommit offset
-				assert.NoError(t, j.commitRootHash(e.last)) // commit |e.last|
+				o := j.offset()                                  // precommit offset
+				assert.NoError(t, j.commitRootHash(ctx, e.last)) // commit |e.last|
 				if i == len(epochs)-1 {
 					break // don't index |test.novel|
 				}
-				assert.NoError(t, j.flushIndexRecord(e.last, o)) // write index record
+				assert.NoError(t, j.flushIndexRecord(ctx, e.last, o)) // write index record
 			}
 
 			validateJournal := func(p string, expected []epoch) {
@@ -435,7 +435,7 @@ func TestRangeIndex(t *testing.T) {
 	}
 	assert.Equal(t, len(data), idx.novelCount())
 	assert.Equal(t, len(data), int(idx.count()))
-	idx = idx.flatten()
+	idx = idx.flatten(context.Background())
 	assert.Equal(t, 0, idx.novelCount())
 	assert.Equal(t, len(data), int(idx.count()))
 }

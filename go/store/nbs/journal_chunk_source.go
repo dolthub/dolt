@@ -123,18 +123,18 @@ func (s journalChunkSource) hash() hash.Hash {
 }
 
 // reader implements chunkSource.
-func (s journalChunkSource) reader(context.Context) (io.ReadCloser, uint64, error) {
-	rdr, sz, err := s.journal.snapshot()
+func (s journalChunkSource) reader(ctx context.Context) (io.ReadCloser, uint64, error) {
+	rdr, sz, err := s.journal.snapshot(ctx)
 	return rdr, uint64(sz), err
 }
 
-func (s journalChunkSource) getRecordRanges(requests []getRecord) (map[hash.Hash]Range, error) {
+func (s journalChunkSource) getRecordRanges(ctx context.Context, requests []getRecord) (map[hash.Hash]Range, error) {
 	ranges := make(map[hash.Hash]Range, len(requests))
 	for _, req := range requests {
 		if req.found {
 			continue
 		}
-		rng, ok, err := s.journal.getRange(*req.a)
+		rng, ok, err := s.journal.getRange(ctx, *req.a)
 		if err != nil {
 			return nil, err
 		} else if !ok {

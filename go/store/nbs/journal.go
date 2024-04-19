@@ -161,7 +161,7 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context) (err error) {
 		}
 		if ok {
 			// write the current root hash to the journal file
-			if err = j.wr.commitRootHash(contents.root); err != nil {
+			if err = j.wr.commitRootHash(ctx, contents.root); err != nil {
 				return
 			}
 			j.contents = contents
@@ -259,7 +259,7 @@ func (j *ChunkJournal) Persist(ctx context.Context, mt *memTable, haver chunkRea
 			continue
 		}
 		c := chunks.NewChunkWithHash(hash.Hash(*record.a), mt.chunks[*record.a])
-		err := j.wr.writeCompressedChunk(ChunkToCompressedChunk(c))
+		err := j.wr.writeCompressedChunk(ctx, ChunkToCompressedChunk(c))
 		if err != nil {
 			return nil, err
 		}
@@ -355,7 +355,7 @@ func (j *ChunkJournal) Update(ctx context.Context, lastLock hash.Hash, next mani
 		}
 	}
 
-	if err := j.wr.commitRootHash(next.root); err != nil {
+	if err := j.wr.commitRootHash(ctx, next.root); err != nil {
 		return manifestContents{}, err
 	}
 	j.contents = next

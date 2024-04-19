@@ -401,14 +401,14 @@ func (gcs *GenerationalNBS) SupportedOperations() chunks.TableFileStoreOps {
 	return gcs.newGen.SupportedOperations()
 }
 
-func (gcs *GenerationalNBS) GetChunkLocationsWithPaths(hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
-	res, err := gcs.newGen.GetChunkLocationsWithPaths(hashes)
+func (gcs *GenerationalNBS) GetChunkLocationsWithPaths(ctx context.Context, hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
+	res, err := gcs.newGen.GetChunkLocationsWithPaths(ctx, hashes)
 	if err != nil {
 		return nil, err
 	}
 	if len(hashes) > 0 {
 		prefix := gcs.RelativeOldGenPath()
-		toadd, err := gcs.oldGen.GetChunkLocationsWithPaths(hashes)
+		toadd, err := gcs.oldGen.GetChunkLocationsWithPaths(ctx, hashes)
 		if err != nil {
 			return nil, err
 		}
@@ -419,13 +419,13 @@ func (gcs *GenerationalNBS) GetChunkLocationsWithPaths(hashes hash.HashSet) (map
 	return res, nil
 }
 
-func (gcs *GenerationalNBS) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash]map[hash.Hash]Range, error) {
-	res, err := gcs.newGen.GetChunkLocations(hashes)
+func (gcs *GenerationalNBS) GetChunkLocations(ctx context.Context, hashes hash.HashSet) (map[hash.Hash]map[hash.Hash]Range, error) {
+	res, err := gcs.newGen.GetChunkLocations(ctx, hashes)
 	if err != nil {
 		return nil, err
 	}
 	if len(hashes) > 0 {
-		toadd, err := gcs.oldGen.GetChunkLocations(hashes)
+		toadd, err := gcs.oldGen.GetChunkLocations(ctx, hashes)
 		if err != nil {
 			return nil, err
 		}

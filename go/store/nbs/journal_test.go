@@ -99,7 +99,7 @@ func TestReadRecordRanges(t *testing.T) {
 	jcs, err := j.Persist(ctx, mt, emptyChunkSource{}, &Stats{})
 	require.NoError(t, err)
 
-	rdr, sz, err := jcs.(journalChunkSource).journal.snapshot()
+	rdr, sz, err := jcs.(journalChunkSource).journal.snapshot(context.Background())
 	require.NoError(t, err)
 	defer rdr.Close()
 
@@ -108,7 +108,7 @@ func TestReadRecordRanges(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int(sz), n)
 
-	ranges, err := jcs.getRecordRanges(gets)
+	ranges, err := jcs.getRecordRanges(ctx, gets)
 	require.NoError(t, err)
 
 	for h, rng := range ranges {
