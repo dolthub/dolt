@@ -31,6 +31,7 @@ import (
 	"github.com/klauspost/compress/dict"
 	"github.com/klauspost/compress/zstd"
 	"github.com/pkg/errors"
+
 	"github.com/valyala/gozstd"
 	"golang.org/x/sync/errgroup"
 )
@@ -171,7 +172,7 @@ func groupAllChunks(ctx context.Context, cs chunkSource, idx tableIndex, dagGrou
 	dagGroups.consolidateByProximity(everyChunk, cfg, p)
 	p("Groups after proximity search: %d\n", dagGroups.Count())
 
-	cgList := dagGroups.convertToChunkGroups(everyChunk, cfg, p)
+	cgList := dagGroups.convertToChunkGroups(groupedChunks, cfg, p)
 
 	sort.Slice(cgList, func(i, j int) bool {
 		return cgList[i].totalBytesSavedWDict > cgList[j].totalBytesSavedWDict
@@ -792,16 +793,14 @@ func (cr *ChunkRelations) consolidateByProximity(chunks map[hash.Hash]*chunks.Ch
 	// Walk chunk log, and look at "nearish" neighbors. If they are similar, we add them to the same group.
 	current := cr.latest
 	for current != nil {
-
-		innerCurrent := current
 		// Look at the previous 10 chunks in both directions.
 		for i := 0; i < 10; i++ {
-			if innerCurrent.prev == nil {
+			if current.prev == nil {
 				break
 			}
 
-			lo := innerCurrent.h
-			hi := innerCurrent.prev.h
+			lo := current.h
+			hi := current.prev.h
 			if lo.Compare(hi) < 0 {
 				lo, hi = hi, lo
 			}
@@ -815,9 +814,8 @@ func (cr *ChunkRelations) consolidateByProximity(chunks map[hash.Hash]*chunks.Ch
 				p("Not grouping %s and %s. Score: %f\n", lo.String(), hi.String(), sim)
 			}
 
-			innerCurrent = innerCurrent.prev
+			current = current.prev
 		}
-		current = current.prev
 	}
 }
 
@@ -1033,13 +1031,13 @@ func similarityScore(a, b []byte) float64 {
 
 	maxLen := max(len(a), len(b))
 
-	lev := min(prefixDistance(a, b), suffixDistance(a, b))
+	lev := levenshteinDistance(a, b)
 
 	levScore := float64(maxLen-lev) / float64(maxLen)
 	return levScore
 }
 
-func prefixDistance(a, b []byte) int {
+func levenshteinDistance(a, b []byte) int {
 	m, n := len(a), len(b)
 	if m == 0 {
 		return n
@@ -1050,34 +1048,34 @@ func prefixDistance(a, b []byte) int {
 
 	lev := 0
 
-	minLen := min(m, n)
-
-	for i := 0; i < minLen; i++ {
-		if a[i] != b[i] {
-			lev++
+	if m == n {
+		// If the lengths are the same, we can just compare the bytes. Saves allocation, and turns out to be pretty common.
+		for i := 0; i < m; i++ {
+			if a[i] != b[i] {
+				lev++
+			}
 		}
-	}
+	} else {
+		mappy := make(map[uint64]int, m+1)
 
-	return lev
-}
-
-func suffixDistance(a, b []byte) int {
-	m, n := len(a), len(b)
-	if m == 0 {
-		return n
-	}
-	if n == 0 {
-		return m
-	}
-
-	lev := 0
-
-	minLen := min(m, n)
-
-	for i := 0; i < minLen; i++ {
-		if a[m-i-1] != b[n-i-1] {
-			lev++
+		for i := 0; i <= m+1; i++ {
+			mappy[key(i, 0)] = i
 		}
+		for j := 0; j <= n+1; j++ {
+			mappy[key(0, j)] = j
+		}
+
+		for i := 1; i <= m; i++ {
+			for j := 1; j <= n; j++ {
+				cost := 0
+				if a[i-1] != b[j-1] {
+					cost = 1
+				}
+				mappy[key(i, j)] = min(mappy[key(i-1, j)]+1, mappy[key(i, j-1)]+1, mappy[key(i-1, j-1)]+cost)
+			}
+		}
+
+		lev = mappy[key(m, n)]
 	}
 
 	return lev
