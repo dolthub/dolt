@@ -257,6 +257,12 @@ func diffCommits(ctx context.Context, h hash.Hash, groupings *nbs.ChunkRelations
 				cli.Printf("Possible Relation: (%s <-> %s)\n", hash.Hash(diff.From).String(), hash.Hash(diff.To).String())
 
 				groupings.Add(hash.Hash(diff.From), hash.Hash(diff.To))
+			} else if diff.Type == tree.AddedDiff {
+				groupings.AddWalkLog(hash.Hash(diff.To))
+			} else if diff.Type == tree.RemovedDiff {
+				groupings.AddWalkLog(hash.Hash(diff.From))
+			} else {
+				panic("Unknown diff type")
 			}
 			return nil
 		})

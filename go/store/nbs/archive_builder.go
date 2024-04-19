@@ -117,6 +117,7 @@ func groupAllChunks(ctx context.Context, cs chunkSource, idx tableIndex, dagGrou
 
 	group, ctx := errgroup.WithContext(ctx)
 
+	everyChunk := make(map[hash.Hash]*chunks.Chunk)
 	ungroupedChunks := map[hash.Hash]*chunks.Chunk{}
 	groupedChunks := map[hash.Hash]*chunks.Chunk{}
 
@@ -138,6 +139,7 @@ func groupAllChunks(ctx context.Context, cs chunkSource, idx tableIndex, dagGrou
 		}
 
 		h := c.Hash()
+		everyChunk[h] = c
 		if dagGroups.Contains(h) {
 			groupedChunks[h] = c
 		} else {
@@ -166,6 +168,9 @@ func groupAllChunks(ctx context.Context, cs chunkSource, idx tableIndex, dagGrou
 	} else {
 		p("Skipping default dictionary. Not enough samples.\n")
 	}
+
+	dagGroups.consolidateByProximity(everyChunk, cfg, p)
+	p("Groups after proximity search: %d\n", dagGroups.Count())
 
 	cgList := dagGroups.convertToChunkGroups(groupedChunks, cfg, p)
 
@@ -759,16 +764,59 @@ func (cg *chunkGroup) print(n int, p PrintfFunc) {
 }
 
 func NewChunkRelations() ChunkRelations {
-	m := make(map[hash.Hash]*hash.HashSet)
-	return ChunkRelations{m}
+	return ChunkRelations{make(map[hash.Hash]*hash.HashSet), nil, make(map[hash.Hash]*doubleLinkedNode)}
 }
 
 type ChunkRelations struct {
-	manyToGroup map[hash.Hash]*hash.HashSet
+	manyToGroup   map[hash.Hash]*hash.HashSet
+	latest        *doubleLinkedNode
+	loseRelations map[hash.Hash]*doubleLinkedNode
+}
+
+type doubleLinkedNode struct {
+	prev *doubleLinkedNode
+	next *doubleLinkedNode
+	h    hash.Hash
 }
 
 func (cr *ChunkRelations) Count() int {
 	return len(cr.manyToGroup)
+}
+
+func (cr *ChunkRelations) consolidateByProximity(chunks map[hash.Hash]*chunks.Chunk, cfg ExpConfig, p PrintfFunc) {
+	type pair struct {
+		lo hash.Hash
+		hi hash.Hash
+	}
+	done := map[pair]struct{}{}
+
+	// Walk chunk log, and look at "nearish" neighbors. If they are similar, we add them to the same group.
+	current := cr.latest
+	for current != nil {
+		// Look at the previous 10 chunks in both directions.
+		for i := 0; i < 10; i++ {
+			if current.prev == nil {
+				break
+			}
+
+			lo := current.h
+			hi := current.prev.h
+			if lo.Compare(hi) < 0 {
+				lo, hi = hi, lo
+			}
+			done[pair{lo, hi}] = struct{}{}
+
+			sim := similarityScore(chunks[lo].Data(), chunks[hi].Data())
+			if sim > levensteinThreshold {
+				p("Adding %s and %s to the same group. Score: %f\n", lo.String(), hi.String(), sim)
+				cr.Add(lo, hi)
+			} else {
+				p("Not grouping %s and %s. Score: %f\n", lo.String(), hi.String(), sim)
+			}
+
+			current = current.prev
+		}
+	}
 }
 
 func (cr *ChunkRelations) convertToChunkGroups(chks map[hash.Hash]*chunks.Chunk, cfg ExpConfig, p PrintfFunc) []*chunkGroup {
@@ -874,6 +922,17 @@ func (cr *ChunkRelations) Add(a, b hash.Hash) {
 	for h := range merged {
 		cr.manyToGroup[h] = &merged
 	}
+}
+
+func (cr *ChunkRelations) AddWalkLog(h hash.Hash) {
+	if cr.latest == nil {
+		cr.latest = &doubleLinkedNode{nil, nil, h}
+	} else {
+		n := &doubleLinkedNode{cr.latest, nil, h}
+		cr.latest.next = n
+		cr.latest = n
+	}
+	cr.loseRelations[h] = cr.latest
 }
 
 /*
