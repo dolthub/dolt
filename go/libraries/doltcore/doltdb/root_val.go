@@ -1263,29 +1263,30 @@ func (r fbRvStorage) getAddressMap(vrw types.ValueReadWriter, ns tree.NodeStore)
 }
 
 func (r fbRvStorage) GetTablesMap(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, databaseSchema string) (tableMap, error) {
-	// TODO: restrict to schema
 	am, err := r.getAddressMap(vrw, ns)
 	if err != nil {
 		return nil, err
 	}
-	return fbTableMap{am}, nil
+	return fbTableMap{AddressMap: am, schemaName: databaseSchema}, nil
 }
 
 type fbTableMap struct {
 	prolly.AddressMap
+	schemaName string
 }
 
 func (m fbTableMap) Get(ctx context.Context, name string) (hash.Hash, error) {
-	return m.AddressMap.Get(ctx, name)
+	return m.AddressMap.Get(ctx, encodeTableNameForAddressMap(TableName{Name: name, Schema: m.schemaName}))
 }
 
 func (m fbTableMap) Iter(ctx context.Context, cb func(string, hash.Hash) (bool, error)) error {
 	var stop bool
 	return m.AddressMap.IterAll(ctx, func(n string, a hash.Hash) error {
-		if !stop {
-			var err error
-			stop, err = cb(n, a)
-			return err
+		n, ok := decodeTableNameForAddressMap(n, m.schemaName)
+		if !stop && ok {
+				var err error
+				stop, err = cb(n, a)
+				return err
 		}
 		return nil
 	})
@@ -1418,7 +1419,18 @@ func encodeTableNameForAddressMap(name TableName) string {
 	if name.Schema == "" {
 		return name.Name
 	}
-	return fmt.Sprintf("\000%s\0000%s", name.Schema, name.Name)
+	return fmt.Sprintf("\000%s\000%s", name.Schema, name.Name)
+}
+
+func decodeTableNameForAddressMap(encodedName, schemaName string) (string, bool) {
+	if schemaName == "" && encodedName[0] != 0 {
+		return encodedName, true
+	} else if schemaName != "" && encodedName[0] == 0 && 
+		len(encodedName) > len(schemaName) + 2 && 
+		encodedName[1:len(schemaName)+2] == schemaName {
+		return encodedName[len(schemaName)+2:], true
+	}
+	return "", false
 }
 
 func (r fbRvStorage) SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (rvStorage, error) {
