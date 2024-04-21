@@ -87,7 +87,7 @@ func newConflictSplitter(conflictQuerySch sql.Schema, targetSch sql.Schema) (*co
 	}
 
 	if ourDiffTypeIdx == -1 || theirDiffTypeIdx == -1 {
-		return nil, fmt.Errorf("our_diff_type or their_diff_type missing from conflict sql results")
+		return nil, errors.New("our_diff_type or their_diff_type missing from conflict sql results")
 	}
 
 	return &conflictSplitter{
