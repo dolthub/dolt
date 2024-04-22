@@ -669,7 +669,7 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 			return nil, false, err
 		}
 
-		cachedTable, ok := dbState.SessionCache().GetCachedTable(key, tableName)
+		cachedTable, ok := dbState.SessionCache().GetCachedTable(key, dsess.TableCacheKey{Name: tableName, Schema: db.schemaName})
 		if ok {
 			return cachedTable, true, nil
 		}
@@ -717,7 +717,7 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 		if err != nil {
 			return nil, false, err
 		}
-		dbState.SessionCache().CacheTable(key, tableName, table)
+		dbState.SessionCache().CacheTable(key, dsess.TableCacheKey{Name: tableName, Schema: db.schemaName}, table)
 	}
 
 	return table, true, nil
@@ -1254,7 +1254,7 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 	}
 
 	if dbState.SessionCache().ViewsCached(key) {
-		view, ok := dbState.SessionCache().GetCachedViewDefinition(key, viewName)
+		view, ok := dbState.SessionCache().GetCachedViewDefinition(key, dsess.TableCacheKey{Name: viewName, Schema: db.schemaName})
 		return view, ok, nil
 	}
 
@@ -1264,7 +1264,7 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		return sql.ViewDefinition{}, false, err
 	}
 	if !ok {
-		dbState.SessionCache().CacheViews(key, nil)
+		dbState.SessionCache().CacheViews(key, nil, db.schemaName)
 		return sql.ViewDefinition{}, false, nil
 	}
 
@@ -1273,7 +1273,8 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		return sql.ViewDefinition{}, false, err
 	}
 
-	dbState.SessionCache().CacheViews(key, views)
+	// TODO: only cache views from a single schema here
+	dbState.SessionCache().CacheViews(key, views, db.schemaName)
 
 	return viewDef, found, nil
 }
