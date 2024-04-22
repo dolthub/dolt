@@ -71,7 +71,7 @@ func (b *doltTpccBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error
 	}
 	defer os.RemoveAll(testRepo)
 
-	if err := configureServer(ctx, b.serverConfig.GetServerExec(), testRepo); err != nil {
+	if err := configureStats(ctx, b.serverConfig.GetServerExec(), testRepo); err != nil {
 		return nil, err
 	}
 
@@ -119,11 +119,13 @@ func GetTpccTests(config TpccConfig) []Test {
 	return tests
 }
 
-func configureServer(ctx context.Context, doltPath, dbPath string) error {
+func configureStats(ctx context.Context, doltPath, dbPath string) error {
 	queries := []string{
 		"set @@PERSIST.dolt_stats_auto_refresh_enabled = 1;",
-		"set @@PERSIST.dolt_stats_auto_refresh_interval = 30;",
+		"set @@PERSIST.dolt_stats_auto_refresh_interval = 0",
 		"set @@PERSIST.dolt_stats_auto_refresh_threshold = 1.0;",
+		"select sleep(1)",
+		"set @@PERSIST.dolt_stats_auto_refresh_enabled = 0;",
 	}
 	for _, q := range queries {
 		q := ExecCommand(ctx, doltPath, "sql", "-q", q)
