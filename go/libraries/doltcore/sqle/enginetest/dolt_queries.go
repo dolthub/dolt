@@ -2072,11 +2072,16 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{1, 3}, {4, 6}},
 			},
 			{
-				// When filtering on a column from the original table, we use the primary index here, but because
-				// column tags have changed in previous versions of the table, the index tags don't match up completely.
+				// When filtering on a column from the original table, we use the primary index here, but if column
+				// tags have changed in previous versions of the table, the index tags won't match up completely.
 				// https://github.com/dolthub/dolt/issues/6891
+				// NOTE: {4,5,nil} shows up as a row from the first commit, when c2 was a varchar type. The schema
+				//       for dolt_history_t uses the current table schema, and we can't extract an int from the older
+				//       version's tuple, so it shows up as a NULL. In the future, we could use a different tuple
+				//       descriptor based on the version of the row and pull the data out that way and try to convert
+				//       it to the new type, but it may not actually be worth it.
 				Query:    "select pk, c1, c2 from dolt_history_t where pk=4;",
-				Expected: []sql.Row{{4, 5, 6}},
+				Expected: []sql.Row{{4, 5, 6}, {4, 5, nil}},
 			},
 		},
 	},
