@@ -212,7 +212,7 @@ type Query struct {
 	// |Query|.
 	Result QueryResult `yaml:"result"`
 
-	// If this is non-empty, asserts the the |Query| or the |Exec|
+	// If this is non-empty, asserts the |Query| or the |Exec|
 	// generates an error that matches this string.
 	ErrorMatch string `yaml:"error_match"`
 
