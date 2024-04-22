@@ -2899,12 +2899,30 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name:        "Updating our cols when our, their, and base schemas are not the equal errors",
+		Name:        "Updating our cols after schema change",
 		SetUpScript: append(createConflictsSetupScript, "ALTER TABLE t add column col2 int FIRST;"),
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "update dolt_conflicts_t set base_col1 = 9999, their_col1 = 9999;",
-				ExpectedErrStr: "the source table cannot be automatically updated through the conflict table since the base, our, and their schemas are not equal",
+				Query:    "show create table dolt_conflicts_t;",
+				Expected: []sql.Row{{"dolt_conflicts_t", "CREATE TABLE `dolt_conflicts_t` (\n  `from_root_ish` varchar(1023),\n  `base_pk` int,\n  `base_col1` int,\n  `our_pk` int NOT NULL,\n  `our_col2` int,\n  `our_col1` int,\n  `our_diff_type` varchar(1023),\n  `their_pk` int,\n  `their_col1` int,\n  `their_diff_type` varchar(1023),\n  `dolt_conflict_id` varchar(1023)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query: "select base_pk, base_col1, our_pk, our_col1, our_col2, their_pk, their_col1 from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{nil, nil, 1, -100, nil, 1, 100},
+					{nil, nil, 2, -200, nil, 2, 200},
+				},
+			},
+			{
+				Query:    "update dolt_conflicts_t set our_col2 = their_col1",
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+			},
+			{
+				Query: "select pk, col1, col2 from t;",
+				Expected: []sql.Row{
+					{1, -100, 100},
+					{2, -200, 200},
+				},
 			},
 		},
 	},
