@@ -495,7 +495,6 @@ func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.Table
 		// Get SCHEMA DIFF
 		var schemaStmts []string
 		if includeSchemaDiff {
-
 			schemaStmts, err = getSchemaSqlPatch(ctx, toRefDetails.root, td)
 			if err != nil {
 				return nil, err
@@ -660,6 +659,10 @@ func GetNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas map[str
 			}
 			if cd.Old.Name != cd.New.Name {
 				ddlStatements = append(ddlStatements, sqlfmt.AlterTableRenameColStmt(td.ToName, cd.Old.Name, cd.New.Name))
+			}
+			if cd.Old.TypeInfo != cd.New.TypeInfo {
+				ddlStatements = append(ddlStatements, sqlfmt.AlterTableModifyColStmt(td.ToName,
+					sqlfmt.GenerateCreateTableColumnDefinition(*cd.New, sql.CollationID(td.ToSch.GetCollation()))))
 			}
 		}
 	}

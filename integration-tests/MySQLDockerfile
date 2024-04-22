@@ -13,10 +13,10 @@ RUN apt update -y && \
         software-properties-common && \
     curl -sL https://deb.nodesource.com/setup_14.x | bash - && \
     add-apt-repository ppa:deadsnakes/ppa -y && \
-    curl -OL https://packages.erlang-solutions.com/erlang/debian/pool/esl-erlang_22.3.4.9-1~ubuntu~focal_amd64.deb && \
-    dpkg -i esl-erlang_22.3.4.9-1~ubuntu~focal_amd64.deb && \
-    curl -LO https://packages.erlang-solutions.com/erlang/debian/pool/elixir_1.10.2-1~ubuntu~focal_all.deb && \
-    dpkg -i elixir_1.10.2-1~ubuntu~focal_all.deb
+    curl -OL https://binaries2.erlang-solutions.com/ubuntu/pool/contrib/e/esl-erlang/esl-erlang_25.0-1~ubuntu~focal_amd64.deb && \
+    dpkg -i esl-erlang_25.0-1~ubuntu~focal_amd64.deb && \
+    curl -LO https://binaries2.erlang-solutions.com/ubuntu/pool/contrib/e/elixir/elixir_1.14.3_1_otp_25.3~ubuntu~focal_all.deb && \
+    dpkg -i elixir_1.14.3_1_otp_25.3~ubuntu~focal_all.deb
 RUN apt update -y && \
     apt install -y \
         python3.8 \
