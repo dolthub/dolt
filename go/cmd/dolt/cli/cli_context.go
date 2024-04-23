@@ -16,6 +16,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"

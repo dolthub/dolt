@@ -15,6 +15,7 @@
 package cnfcmds
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
