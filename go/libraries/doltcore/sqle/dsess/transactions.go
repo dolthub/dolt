@@ -51,16 +51,20 @@ var ErrUnresolvedConstraintViolationsCommit = errors.New("Committing this transa
 	"Constraint violations from a merge can be resolved using the dolt_constraint_violations table before committing the transaction. " +
 	"To allow transactions to be committed with constraint violations from a merge or transaction sequencing set @@dolt_force_transaction_commit=1.")
 
-// TODO: Godocs
-type TransactionListener interface {
-	// TODO: Godocs
-	TransactionCommit(ctx *sql.Context, databaseName string, before *doltdb.RootValue, after *doltdb.RootValue) error
+// RootUpdateListener allows callbacks on a registered listener when a working root is updated in a session.
+type RootUpdateListener interface {
+	// WorkingRootUpdated is called when a working root is updated on a branch's working set. |ctx| provides the
+	// session information, |databaseName| describes the database being updated, and |before| and |after| are the
+	// previous and new RootValues for the working root. If callers encounter any errors while processing a root
+	// update notification, they can return an error, which will be logged.
+	WorkingRootUpdated(ctx *sql.Context, databaseName string, before *doltdb.RootValue, after *doltdb.RootValue) error
 }
 
-var transactionListeners = make([]TransactionListener, 0)
+var rootUpdateListeners = make([]RootUpdateListener, 0)
 
-func RegisterTransactionListener(listener TransactionListener) {
-	transactionListeners = append(transactionListeners, listener)
+// RegisterRootUpdateListener registers |listener| to receive callbacks when a working set's working root is updated.
+func RegisterRootUpdateListener(listener RootUpdateListener) {
+	rootUpdateListeners = append(rootUpdateListeners, listener)
 }
 
 // TODO: remove this

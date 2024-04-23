@@ -1002,8 +1002,8 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 
 	if branchState.head == "main" {
 		nonRevisionDbName := branchState.dbState.dbName
-		for _, listener := range transactionListeners {
-			err := listener.TransactionCommit(ctx, nonRevisionDbName, previousWorkingSet.WorkingRoot(), ws.WorkingRoot())
+		for _, listener := range rootUpdateListeners {
+			err := listener.WorkingRootUpdated(ctx, nonRevisionDbName, previousWorkingSet.WorkingRoot(), ws.WorkingRoot())
 			if err != nil {
 				return err
 			}

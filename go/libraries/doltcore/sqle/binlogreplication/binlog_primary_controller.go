@@ -65,9 +65,9 @@ type binlogStreamerManager struct {
 	binlogFormat mysql.BinlogFormat
 }
 
-var _ dsess.TransactionListener = (*binlogStreamerManager)(nil)
+var _ dsess.RootUpdateListener = (*binlogStreamerManager)(nil)
 
-// TransactionCommit implements the TransactionListener interface. When a transaction is committed, this function
+// WorkingRootUpdated implements the RootUpdateListener interface. When a transaction is committed, this function
 // generates events for the binary log and sends them to all connected replicas.
 //
 // For a data update, the following events are generated:
@@ -83,7 +83,7 @@ var _ dsess.TransactionListener = (*binlogStreamerManager)(nil)
 // TODO: This function currently sends the events to all connected replicas (through a channel). Eventually we need
 // to change this so that it writes to a binary log file as the intermediate, and then the readers are watching
 // that log to stream events back to the connected replicas.
-func (m *binlogStreamerManager) TransactionCommit(ctx *sql.Context, databaseName string, before *doltdb.RootValue, after *doltdb.RootValue) error {
+func (m *binlogStreamerManager) WorkingRootUpdated(ctx *sql.Context, databaseName string, before *doltdb.RootValue, after *doltdb.RootValue) error {
 	tableDeltas, err := diff.GetTableDeltas(ctx, before, after)
 	if err != nil {
 		return err
@@ -1205,7 +1205,7 @@ func newBinlogStreamerManager() *binlogStreamerManager {
 		binlogStream: binlogStream,
 	}
 
-	dsess.RegisterTransactionListener(manager)
+	dsess.RegisterRootUpdateListener(manager)
 
 	go func() {
 		for {
