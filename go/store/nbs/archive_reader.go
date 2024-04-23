@@ -16,7 +16,6 @@ package nbs
 
 import (
 	"encoding/binary"
-	"hash/crc32"
 	"io"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -227,10 +226,6 @@ func (ai archiveIndex) getRaw(hash hash.Hash) (dict, data []byte, err error) {
 		if uint64(read) != byteSpan.length {
 			return nil, nil, io.ErrUnexpectedEOF
 		}
-		dict, err = verifyAndStripCRC(dict)
-		if err != nil {
-			return nil, nil, err
-		}
 	}
 
 	byteSpan := ai.byteSpans[chunkRef.data]
@@ -242,26 +237,8 @@ func (ai archiveIndex) getRaw(hash hash.Hash) (dict, data []byte, err error) {
 	if uint64(read) != byteSpan.length {
 		return nil, nil, io.ErrUnexpectedEOF
 	}
-	data, err = verifyAndStripCRC(data)
-	if err != nil {
-		return nil, nil, err
-	}
 
 	return
-}
-
-func verifyAndStripCRC(data []byte) ([]byte, error) {
-	if len(data) < crc32.Size {
-		return nil, io.ErrUnexpectedEOF
-	}
-
-	crcVal := binary.BigEndian.Uint32(data[len(data)-crc32.Size:])
-	crcCalc := crc(data[:len(data)-crc32.Size])
-	if crcVal != crcCalc {
-		return nil, ErrCRCMismatch
-	}
-
-	return data[:len(data)-crc32.Size], nil
 }
 
 // findMatchingPrefixes returns all indexes of the input slice that have a prefix that matches the target prefix.

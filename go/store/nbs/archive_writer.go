@@ -99,11 +99,11 @@ Index:
      - Hash Suffix M must correspond to Prefix M and Chunk Record M
 
 ByteSpan:
-   +----------------+----------------+
-   | Data as []byte | (Uint32) CRC32 |
-   +----------------+----------------+
+   +----------------+
+   | Data as []byte |
+   +----------------+
      - Self Explanatory.
-
+     - zStd automatically applies and checks CRC.
 
 Chunk Retrieval (phase 1 is similar to NBS):
 
@@ -125,7 +125,7 @@ Chunk Retrieval (phase 1 is similar to NBS):
   - If Dictionary is 0:
     - Decompress the Chunk data using zstd (no dictionary)
   - Otherwise:
-    - Retrieve the ByteSpan ID for the Dictionary data. Verify integrity with CRC.
+    - Retrieve the ByteSpan ID for the Dictionary data.
     - Decompress the Chunk data using zstd with the Dictionary data.
 */
 
@@ -172,7 +172,6 @@ func (aw *archiveWriter) writeByteSpan(b []byte) (uint32, error) {
 
 	offset := aw.bytesWritten
 
-	cr := crc(b)
 	written, err := aw.output.Write(b)
 	if err != nil {
 		return 0, err
@@ -182,13 +181,7 @@ func (aw *archiveWriter) writeByteSpan(b []byte) (uint32, error) {
 	}
 	aw.bytesWritten += uint64(written)
 
-	err = binary.Write(aw.output, binary.BigEndian, cr)
-	if err != nil {
-		return 0, err
-	}
-	aw.bytesWritten += uint32Size
-
-	aw.stagedBytes = append(aw.stagedBytes, stagedByteSpan{offset, uint32(aw.bytesWritten - offset)})
+	aw.stagedBytes = append(aw.stagedBytes, stagedByteSpan{offset, uint32(written)})
 
 	return uint32(len(aw.stagedBytes)), nil
 }

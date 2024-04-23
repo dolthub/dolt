@@ -34,7 +34,7 @@ func TestArchiveSingleChunk(t *testing.T) {
 	bsId, err := aw.writeByteSpan(testBlob)
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(1), bsId)
-	assert.Equal(t, uint64(14), aw.bytesWritten) // 14 ==  10 data bytes + CRC
+	assert.Equal(t, uint64(10), aw.bytesWritten) // 10 data bytes. No CRC or anything.
 
 	oneHash := hashWithPrefix(t, 23)
 
@@ -49,7 +49,7 @@ func TestArchiveSingleChunk(t *testing.T) {
 	err = aw.writeFooter(n)
 	assert.NoError(t, err)
 
-	assert.Equal(t, uint64(58), aw.bytesWritten) // 14 + 24 + 20 (footer is 20 bytes)
+	assert.Equal(t, uint64(54), aw.bytesWritten) // 10 + 24 + 20 (footer is 20 bytes)
 
 	theBytes := writer.buff[:writer.pos]
 	fileSize := uint64(len(theBytes))
@@ -250,11 +250,10 @@ func TestArchiveBlockCorruption(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Corrupt the data
-	theBytes[3] = 51
+	writer.buff[3] = writer.buff[3] + 1
 
-	dict, data, err := idx.getRaw(h)
-	assert.Equal(t, ErrCRCMismatch, err)
-	assert.Nil(t, dict)
+	data, err := idx.get(h)
+	assert.ErrorContains(t, err, "cannot decompress invalid src")
 	assert.Nil(t, data)
 }
 
