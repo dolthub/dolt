@@ -596,28 +596,48 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_TIME: // TIME
-			durationInNanoseconds, notNull := descriptor.GetSqlTime(tupleIdx, tuple)
+			durationInMicroseconds, notNull := descriptor.GetSqlTime(tupleIdx, tuple)
 			if notNull {
 				negative := false
-				if durationInNanoseconds < 0 {
+				if durationInMicroseconds < 0 {
 					negative = true
-					durationInNanoseconds *= -1
+					durationInMicroseconds *= -1
 				}
 
-				durationInSeconds := durationInNanoseconds / 1_000_000
+				durationInSeconds := durationInMicroseconds / 1_000_000
 				hours := durationInSeconds / (60 * 60)
 				minutes := durationInSeconds / 60 % 60
 				seconds := durationInSeconds % 60
-				// TODO: support fractional seconds
-				//nanoseconds := durationInNanoseconds % 1_000_000
 
-				buffer := hours<<12 | minutes<<6 | seconds + 0x800000
+				// Prepare the fractional seconds component first
+				// NOTE: Dolt always uses 6 digits of precision. When Dolt starts supporting other time precisions,
+				//       this code will need to change.
+				microseconds := durationInMicroseconds % 1_000_000
 				if negative {
-					buffer *= -1
+					seconds++
+					if seconds == 60 {
+						seconds = 0
+						minutes += 1
+					}
+					if minutes == 60 {
+						minutes = 0
+						hours += 1
+					}
+					microseconds = 0x1000000 - microseconds
 				}
+
+				// Prepare the 3 byte hour/minute/second component
+				hms := hours<<12 | minutes<<6 | seconds + 0x800000
+				if negative {
+					hms *= -1
+				}
+
+				// Write the components to the data buffer
 				temp := make([]byte, 4)
-				binary.BigEndian.PutUint32(temp, uint32(buffer))
+				binary.BigEndian.PutUint32(temp, uint32(hms))
 				data = append(data, temp[1:]...)
+				data = append(data, uint8(microseconds>>16), uint8(microseconds>>8), uint8(microseconds))
+
 			} else {
 				nullBitmap.Set(rowIdx, true)
 			}
@@ -1116,7 +1136,8 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 		case query.Type_TIME:
 			// TypeTime2 is the newer serialization format for TIME values
 			types[i] = mysql.TypeTime2
-			// TODO: length of microseconds in metadata
+			// NOTE: Dolt currently always uses a TIME precision of 6
+			metadata[i] = uint16(6)
 
 		case query.Type_INT8: // TINYINT
 			types[i] = mysql.TypeTiny
