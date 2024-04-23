@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -108,50 +109,82 @@ func (m *binlogStreamerManager) WorkingRootUpdated(ctx *sql.Context, databaseNam
 	m.binlogStream.LogPosition += binlogEvent.Length()
 	gtidSequence++
 
-	// Send a Query BEGIN event to start the new transaction
-	binlogEvent = mysql.NewQueryEvent(m.binlogFormat, m.binlogStream, mysql.Query{
-		Database: databaseName,
-		Charset:  nil,
-		SQL:      "BEGIN",
-		Options:  0,
-		SqlMode:  0, // TODO:
-	})
-	binlogEvents = append(binlogEvents, binlogEvent)
-	m.binlogStream.LogPosition += binlogEvent.Length()
-
+	// TODO: Pulling out a separate loop over tableDeltas to process schema changes first might be a cleaner approach
+	hasSentBegin := false
 	for _, tableDelta := range tableDeltas {
 		dataChanged, err := tableDelta.HasDataChanged(ctx)
 		if err != nil {
 			return err
 		}
-		if !dataChanged {
-			// TODO: For now, we are only processing data changes. Eventually, we'll need to figure
-			//       out how to process schema changes, too. Seems like we'll have to capture the exact
-			//       DDL statements though – trying to reconstruct them is going to be error prone.
-			continue
+
+		schemaChanged, err := tableDelta.HasSchemaChanged(ctx)
+		if err != nil {
+			return err
+		}
+		if schemaChanged {
+			schemaPatchStatements, err := sqle.GenerateSqlPatchSchemaStatements(ctx, after, tableDelta)
+			if err != nil {
+				return err
+			}
+
+			for _, schemaPatchStatement := range schemaPatchStatements {
+				binlogEvent = mysql.NewQueryEvent(m.binlogFormat, m.binlogStream, mysql.Query{
+					Database: databaseName,
+					Charset:  nil, // TODO:
+					SQL:      schemaPatchStatement,
+					Options:  0,
+					SqlMode:  0, // TODO:
+				})
+				binlogEvents = append(binlogEvents, binlogEvent)
+				m.binlogStream.LogPosition += binlogEvent.Length()
+			}
 		}
 
 		// TODO: Make sure to not replicate ignored tables? Or do we want to replicate them and
 		//       just exclude them from Dolt commits?
 
-		tableId++
-		tableName := tableDelta.ToName
-		if tableName == "" {
-			tableName = tableDelta.FromName
-		}
-		tablesToId[tableName] = tableId
-		tableMap, err := createTableMapFromDoltTable(ctx, databaseName, tableName, tableDelta.ToTable)
-		if err != nil {
-			return err
-		}
+		// For every table with data changes, we need to send a TableMap event over the stream.
+		if dataChanged && !tableDelta.IsDrop() {
+			// Send a Query BEGIN event to start the new transaction
+			if !hasSentBegin {
+				binlogEvent = mysql.NewQueryEvent(m.binlogFormat, m.binlogStream, mysql.Query{
+					Database: databaseName,
+					Charset:  nil,
+					SQL:      "BEGIN",
+					Options:  0,
+					SqlMode:  0, // TODO:
+				})
+				binlogEvents = append(binlogEvents, binlogEvent)
+				m.binlogStream.LogPosition += binlogEvent.Length()
+				hasSentBegin = true
+			}
 
-		binlogEvent := mysql.NewTableMapEvent(m.binlogFormat, m.binlogStream, tableId, tableMap)
-		binlogEvents = append(binlogEvents, binlogEvent)
-		m.binlogStream.LogPosition += binlogEvent.Length()
+			tableId++
+			tableName := tableDelta.ToName
+			if tableName == "" {
+				tableName = tableDelta.FromName
+			}
+			tablesToId[tableName] = tableId
+			tableMap, err := createTableMapFromDoltTable(ctx, databaseName, tableName, tableDelta.ToTable)
+			if err != nil {
+				return err
+			}
+
+			binlogEvent := mysql.NewTableMapEvent(m.binlogFormat, m.binlogStream, tableId, tableMap)
+			binlogEvents = append(binlogEvents, binlogEvent)
+			m.binlogStream.LogPosition += binlogEvent.Length()
+		}
 	}
 
 	// Now loop over the tableDeltas to pull out their diff contents
+	hasDataChanges := false
 	for _, tableDelta := range tableDeltas {
+		// If a table has been dropped, we don't need to process its data updates, since the DROP TABLE
+		// DDL statement we send will automatically delete all the data.
+		if tableDelta.IsDrop() {
+			continue
+		}
+
 		fromRowData, toRowData, err := tableDelta.GetRowData(ctx)
 		if err != nil {
 			return err
@@ -188,6 +221,7 @@ func (m *binlogStreamerManager) WorkingRootUpdated(ctx *sql.Context, databaseNam
 				return err
 			}
 
+			hasDataChanges = true
 			switch diffType {
 			case tree.AddedDiff:
 				data, nullBitmap, err := serializeRowToBinlogBytes(ctx,
@@ -307,9 +341,11 @@ func (m *binlogStreamerManager) WorkingRootUpdated(ctx *sql.Context, databaseNam
 		}
 	}
 
-	binlogEvent = mysql.NewXIDEvent(m.binlogFormat, m.binlogStream)
-	binlogEvents = append(binlogEvents, binlogEvent)
-	m.binlogStream.LogPosition += binlogEvent.Length()
+	if hasDataChanges {
+		binlogEvent = mysql.NewXIDEvent(m.binlogFormat, m.binlogStream)
+		binlogEvents = append(binlogEvents, binlogEvent)
+		m.binlogStream.LogPosition += binlogEvent.Length()
+	}
 
 	for _, streamer := range m.streamers {
 		logrus.StandardLogger().Warnf("sending %d binlog events\n", len(binlogEvents))
