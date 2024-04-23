@@ -375,7 +375,7 @@ func (td TupleDesc) GetDate(i int, tup Tuple) (v time.Time, ok bool) {
 	return
 }
 
-// GetSqlTime reads a string encoded Time value from the ith field of the Tuple.
+// GetSqlTime reads a microsecond encoded Time value from the ith field of the Tuple.
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetSqlTime(i int, tup Tuple) (v int64, ok bool) {
 	td.expectEncoding(i, TimeEnc)
