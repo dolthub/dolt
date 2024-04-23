@@ -180,6 +180,36 @@ func TestBinlogPrimary_SimpleSchemaChangesWithAutocommit(t *testing.T) {
 	requireReplicaResults(t, "show tables;", [][]any{})
 }
 
+// TestBinlogPrimary_ReplicateCreateDropDatabase tests that Dolt can correctly replicate statements to create,
+// drop, and undrop databases.
+func TestBinlogPrimary_ReplicateCreateDropDatabase(t *testing.T) {
+	// TODO: Seems like we need a database-level hook for create/delete database in order to replicate them
+	t.Skipf("Dolt is currently unable to replicate database level statements")
+
+	defer teardown(t)
+	startSqlServers(t)
+	setupForDoltToMySqlReplication()
+	startReplication(t, doltPort)
+
+	// Test CREATE DATABASE
+	primaryDatabase.MustExec("create database foobar1;")
+	time.Sleep(100 * time.Millisecond)
+	requireReplicaResults(t, "show databases;", [][]any{
+		{"db01"}, {"foobar1"}, {"information_schema"}, {"mysql"}, {"performance_schema"}, {"sys"}})
+
+	// Test DROP DATABASE
+	primaryDatabase.MustExec("drop database foobar1;")
+	time.Sleep(100 * time.Millisecond)
+	requireReplicaResults(t, "show databases;", [][]any{
+		{"db01"}, {"information_schema"}, {"mysql"}, {"performance_schema"}, {"sys"}})
+
+	// Test DOLT_UNDROP_DATABASE()
+	primaryDatabase.MustExec("call dolt_undrop_database('foobar1');")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "show databases;", [][]any{
+		{"db01"}, {"foobar1"}, {"information_schema"}, {"mysql"}, {"performance_schema"}, {"sys"}})
+}
+
 func TestBinlogPrimary_InsertUpdateDelete(t *testing.T) {
 	defer teardown(t)
 	startSqlServers(t)
