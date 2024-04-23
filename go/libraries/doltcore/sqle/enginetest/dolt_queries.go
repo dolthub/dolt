@@ -2077,11 +2077,15 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				// https://github.com/dolthub/dolt/issues/6891
 				// NOTE: {4,5,nil} shows up as a row from the first commit, when c2 was a varchar type. The schema
 				//       for dolt_history_t uses the current table schema, and we can't extract an int from the older
-				//       version's tuple, so it shows up as a NULL. In the future, we could use a different tuple
-				//       descriptor based on the version of the row and pull the data out that way and try to convert
-				//       it to the new type, but it may not actually be worth it.
-				Query:    "select pk, c1, c2 from dolt_history_t where pk=4;",
-				Expected: []sql.Row{{4, 5, 6}, {4, 5, nil}},
+				//       version's tuple, so it shows up as a NULL and a SQL warning in the session. In the future,
+				//       we could consider using a different tuple descriptor based on the version of the row and
+				//       pull the data out and try to convert it to the new type.
+				Query:                 "select pk, c1, c2 from dolt_history_t where pk=4;",
+				Expected:              []sql.Row{{4, 5, 6}, {4, 5, nil}},
+				ExpectedWarning:       1246,
+				ExpectedWarningsCount: 1,
+				ExpectedWarningMessageSubstring: "Unable to convert field c2 in historical rows because " +
+					"its type (int) doesn't match current schema's type (varchar(20))",
 			},
 		},
 	},

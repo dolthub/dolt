@@ -542,7 +542,7 @@ func newRowItrForTableAtCommit(ctx *sql.Context, table *DoltTable, h hash.Hash, 
 		}
 	}
 
-	converter := rowConverter(lockedTable.Schema(), targetSchema, h, meta, projections)
+	converter := rowConverter(ctx, lockedTable.Schema(), targetSchema, h, meta, projections)
 	return &historyIter{
 		table:           histTable,
 		tablePartitions: partIter,
@@ -587,7 +587,11 @@ func (i *historyIter) Close(ctx *sql.Context) error {
 	return nil
 }
 
-func rowConverter(srcSchema, targetSchema sql.Schema, h hash.Hash, meta *datas.CommitMeta, projections []uint64) func(row sql.Row) sql.Row {
+// rowConverter returns a function that converts a row to another schema for the dolt_history system tables. |srcSchema|
+// describes the incoming row, |targetSchema| describes the desired row schema, and |projections| controls which fields
+// are including the returned row. The hash |h| and commit metadata |meta| are used to augment the row with custom
+// fields for the dolt_history table to return commit metadata.
+func rowConverter(ctx *sql.Context, srcSchema, targetSchema sql.Schema, h hash.Hash, meta *datas.CommitMeta, projections []uint64) func(row sql.Row) sql.Row {
 	srcToTarget := make(map[int]int)
 	for i, col := range targetSchema {
 		srcIdx := srcSchema.IndexOfColName(col.Name)
@@ -596,6 +600,9 @@ func rowConverter(srcSchema, targetSchema sql.Schema, h hash.Hash, meta *datas.C
 			// TODO: we could do a projection to convert between types in some cases
 			if srcSchema[srcIdx].Type.Equals(targetSchema[i].Type) {
 				srcToTarget[srcIdx] = i
+			} else {
+				ctx.Warn(1246, "Unable to convert field %s in historical rows because its type (%s) doesn't match "+
+					"current schema's type (%s)", col.Name, col.Type.String(), srcSchema[srcIdx].Type.String())
 			}
 		}
 	}
