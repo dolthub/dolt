@@ -224,8 +224,8 @@ func TestBinlogPrimary_InsertUpdateDelete(t *testing.T) {
 	})
 }
 
-// TestBinlogsOnlyFromMainBranch tests that binlog events are only generated for the main branch of a Dolt repository.
-func TestBinlogsOnlyFromMainBranch(t *testing.T) {
+// TestBinlogPrimary_OnlyReplicateMainBranch tests that binlog events are only generated for the main branch of a Dolt repository.
+func TestBinlogPrimary_OnlyReplicateMainBranch(t *testing.T) {
 	defer teardown(t)
 	startSqlServers(t)
 	setupForDoltToMySqlReplication()
@@ -258,8 +258,8 @@ func TestBinlogsOnlyFromMainBranch(t *testing.T) {
 	requireReplicaResults(t, "select * from db01.t;", [][]any{{"42", "42", "2042"}})
 }
 
-// TestBinlogsForKeylessTables tests that Dolt can replicate changes to keyless tables.
-func TestBinlogsForKeylessTables(t *testing.T) {
+// TestBinlogPrimary_KeylessTables tests that Dolt can replicate changes to keyless tables.
+func TestBinlogPrimary_KeylessTables(t *testing.T) {
 	defer teardown(t)
 	startSqlServers(t)
 	setupForDoltToMySqlReplication()
@@ -298,8 +298,8 @@ func TestBinlogsForKeylessTables(t *testing.T) {
 	requireReplicaResults(t, "select * from db01.t order by c2;", [][]any{{"zwei", "2", "22"}})
 }
 
-// TestBinlogsFromMerge tests that the binlog is updated when data is merged in from another branch.
-func TestBinlogsFromMerge(t *testing.T) {
+// TestBinlogPrimary_Merge tests that the binlog is updated when data is merged in from another branch.
+func TestBinlogPrimary_Merge(t *testing.T) {
 	defer teardown(t)
 	startSqlServers(t)
 	setupForDoltToMySqlReplication()
@@ -335,8 +335,8 @@ func TestBinlogsFromMerge(t *testing.T) {
 		{"42", "42", "2042"}, {"hundred", "100", "2000"}, {"two-hundred", "200", "2001"}})
 }
 
-// TestBinlogsFromCherrypick tests binlog replication when dolt_cherry_pick() is used to cherry-pick commits.
-func TestBinlogsFromCherrypick(t *testing.T) {
+// TestBinlogPrimary_Cherrypick tests binlog replication when dolt_cherry_pick() is used to cherry-pick commits.
+func TestBinlogPrimary_Cherrypick(t *testing.T) {
 	defer teardown(t)
 	startSqlServers(t)
 	setupForDoltToMySqlReplication()
@@ -376,8 +376,8 @@ func TestBinlogsFromCherrypick(t *testing.T) {
 	requireReplicaResults(t, "select * from db01.t;", [][]any{{"02", "2"}, {"03", "3"}})
 }
 
-// TestBinlogsFromRevert tests binlog replication when dolt_revert() is used to revert commits.
-func TestBinlogsFromRevert(t *testing.T) {
+// TestBinlogPrimary_Revert tests binlog replication when dolt_revert() is used to revert commits.
+func TestBinlogPrimary_Revert(t *testing.T) {
 	defer teardown(t)
 	startSqlServers(t)
 	setupForDoltToMySqlReplication()
@@ -417,8 +417,8 @@ func TestBinlogsFromRevert(t *testing.T) {
 	requireReplicaResults(t, "select * from db01.t;", [][]any{{"03", "3"}})
 }
 
-// TestBinlogsFromReset tests that the binlog is updated when a branch head is reset to a different commit.
-func TestBinlogsFromReset(t *testing.T) {
+// TestBinlogPrimary_Reset tests that the binlog is updated when a branch head is reset to a different commit.
+func TestBinlogPrimary_Reset(t *testing.T) {
 	defer teardown(t)
 	startSqlServers(t)
 	setupForDoltToMySqlReplication()
