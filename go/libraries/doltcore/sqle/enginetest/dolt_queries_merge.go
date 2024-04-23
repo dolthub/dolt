@@ -2347,6 +2347,57 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "merge when schemas are equal, but column tags are different",
+		SetUpScript: []string{
+			// Create a branch where t doesn't exist yet
+			"call dolt_branch('branch1');",
+			// Create t on main, but change column types so that the tag won't match branch1
+			"CREATE TABLE t (pk INT PRIMARY KEY, col1 int);",
+			"call dolt_commit('-Am', 'creating table t on main');",
+			"ALTER TABLE t modify column col1 varchar(255);",
+			"call dolt_commit('-am', 'modifying table t on main');",
+			"INSERT INTO t values (1, 'one'), (2, 'two');",
+			"call dolt_commit('-am', 'inserting two rows into t on main');",
+
+			// Create t on branch1, without an intermediate type change, so that the tag doesn't match main
+			"call dolt_checkout('branch1');",
+			"CREATE TABLE t (pk INT PRIMARY KEY, col1 varchar(255));",
+			"call dolt_commit('-Am', 'creating table t on branch1');",
+			"INSERT INTO t values (3, 'three');",
+			"call dolt_commit('-am', 'inserting one row into t on branch1');",
+			"SET @PreMergeBranch1Commit = dolt_hashof('HEAD');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// We can merge from main -> branch1, even though the column tags are not identical
+				Query:    "call dolt_merge('main')",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{1, "one"}, {2, "two"}, {3, "three"}},
+			},
+			{
+				// Reset branch1 to the pre-merge commit, so we can test merging branch1 -> main
+				Query:    "CALL dolt_reset('--hard', @PreMergeBranch1Commit);",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "CALL dolt_checkout('main');",
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
+			},
+			{
+				// We can merge from branch1 -> main, even though the column tags are not identical
+				Query:    "call dolt_merge('branch1')",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query:    "SELECT * FROM t;",
+				Expected: []sql.Row{{1, "one"}, {2, "two"}, {3, "three"}},
+			},
+		},
+	},
 }
 
 var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{

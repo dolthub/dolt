@@ -1591,7 +1591,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 		return nil, err
 	}
 
-	newSch, err := t.getNewSch(ctx, oldColumn, newColumn, oldSch, newSchema, ws.WorkingRoot(), headRoot)
+	newSch, err := t.createSchemaForColumnChange(ctx, oldColumn, newColumn, oldSch, newSchema, ws.WorkingRoot(), headRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -1925,9 +1925,13 @@ func validateFullTextColumnChange(ctx *sql.Context, idx schema.Index, oldColumn 
 	return nil
 }
 
-func (t *AlterableDoltTable) getNewSch(ctx context.Context, oldColumn, newColumn *sql.Column, oldSch schema.Schema, newSchema sql.PrimaryKeySchema, root, headRoot *doltdb.RootValue) (schema.Schema, error) {
+// createSchemaForColumnChange creates a new Dolt schema based on the old Dolt schema (|oldSch|) changing to the new
+// SQL schema (|newSchema|) from the SQL column |oldColumn| changing to the SQL column |newColumn|. The working root
+// is provided in |root| and the branch head root is provided in |headRoot|. If any problems are encountered, a nil
+// Dolt schema is returned along with an error.
+func (t *AlterableDoltTable) createSchemaForColumnChange(ctx context.Context, oldColumn, newColumn *sql.Column, oldSch schema.Schema, newSchema sql.PrimaryKeySchema, root, headRoot *doltdb.RootValue) (schema.Schema, error) {
+	// Adding or dropping a column
 	if oldColumn == nil || newColumn == nil {
-		// Adding or dropping a column
 		newSch, err := sqlutil.ToDoltSchema(ctx, root, t.Name(), newSchema, headRoot, sql.CollationID(oldSch.GetCollation()))
 		if err != nil {
 			return nil, err
@@ -1935,80 +1939,35 @@ func (t *AlterableDoltTable) getNewSch(ctx context.Context, oldColumn, newColumn
 		return newSch, err
 	}
 
-	oldTi, err := typeinfo.FromSqlType(oldColumn.Type)
-	if err != nil {
-		return nil, err
-	}
-	newTi, err := typeinfo.FromSqlType(newColumn.Type)
-	if err != nil {
-		return nil, err
-	}
-
-	if oldTi.NomsKind() != newTi.NomsKind() {
-		oldCol, ok := oldSch.GetAllCols().GetByName(oldColumn.Name)
-		if !ok {
-			return nil, fmt.Errorf("expected column %s to exist in the old schema but did not find it", oldColumn.Name)
-		}
-		// Remove the old column from |root| so that its kind will not seed the
-		// new tag.
-		root, err = filterColumnFromRoot(ctx, root, oldCol.Tag)
-		if err != nil {
-			return nil, err
-		}
-	}
-
+	// Modifying a column
 	newSch, err := sqlutil.ToDoltSchema(ctx, root, t.Name(), newSchema, headRoot, sql.CollationID(oldSch.GetCollation()))
 	if err != nil {
 		return nil, err
 	}
 
-	return newSch, nil
+	oldDoltCol, ok := oldSch.GetAllCols().GetByName(oldColumn.Name)
+	if !ok {
+		return nil, fmt.Errorf("expected column %s to exist in the old schema but did not find it", oldColumn.Name)
+	}
+
+	newColCollection := replaceColumnTagInCollection(newSch.GetAllCols(), oldDoltCol.Name, oldDoltCol.Tag)
+	newPkColCollection := replaceColumnTagInCollection(newSch.GetPKCols(), oldDoltCol.Name, oldDoltCol.Tag)
+	return schema.NewSchema(newColCollection, newSch.GetPkOrdinals(), newSch.GetCollation(),
+		schema.NewIndexCollection(newColCollection, newPkColCollection), newSch.Checks())
 }
 
-// filterColumnFromRoot removes any columns matching |colTag| from a |root|. Returns the updated root.
-func filterColumnFromRoot(ctx context.Context, root *doltdb.RootValue, colTag uint64) (*doltdb.RootValue, error) {
-	newRoot := root
-	err := root.IterTables(ctx, func(name string, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
-		_, ok := sch.GetAllCols().GetByTag(colTag)
-		if !ok {
-			return false, nil
+// replaceColumnTagInCollection returns a new ColCollection, based on |cc|, with the column named |name| updated
+// to have the specified column tag |tag|. If the column is not found, no changes are made, no errors are returned,
+// and the returned ColCollection will be identical to |cc|.
+func replaceColumnTagInCollection(cc *schema.ColCollection, name string, tag uint64) *schema.ColCollection {
+	newColumns := cc.GetColumns()
+	for i := range newColumns {
+		if newColumns[i].Name == name {
+			newColumns[i].Tag = tag
+			break
 		}
-
-		newSch, err := filterColumnFromSch(sch, colTag)
-		if err != nil {
-			return true, err
-		}
-		t, err := table.UpdateSchema(ctx, newSch)
-		if err != nil {
-			return true, err
-		}
-		newRoot, err = newRoot.PutTable(ctx, name, t)
-		if err != nil {
-			return true, err
-		}
-		return false, nil
-	})
-	if err != nil {
-		return nil, err
 	}
-	return newRoot, nil
-}
-
-func filterColumnFromSch(sch schema.Schema, colTag uint64) (schema.Schema, error) {
-	var cols []schema.Column
-	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if tag == colTag {
-			return false, nil
-		}
-		cols = append(cols, col)
-		return false, nil
-	})
-	colCol := schema.NewColCollection(cols...)
-	newSch, err := schema.SchemaFromCols(colCol)
-	if err != nil {
-		return nil, err
-	}
-	return newSch, nil
+	return schema.NewColCollection(newColumns...)
 }
 
 // validateSchemaChange returns an error if the schema change given is not legal
