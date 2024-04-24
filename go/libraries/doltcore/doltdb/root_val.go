@@ -876,6 +876,15 @@ func (root *RootValue) CreateEmptyTable(ctx context.Context, tName TableName, sc
 	return newRoot, nil
 }
 
+func (root *RootValue) GetDatabaseSchemas(ctx context.Context) ([]schema.DatabaseSchema, error) {
+	existingSchemas, err := root.st.GetSchemas(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return existingSchemas, nil
+}
+
 func (root *RootValue) CreateDatabaseSchema(ctx context.Context, dbSchema schema.DatabaseSchema) (*RootValue, error) {
 	existingSchemas, err := root.st.GetSchemas(ctx)
 	if err != nil {

@@ -1018,7 +1018,9 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, schemaName
 		return err
 	}
 	root := ws.WorkingRoot()
-
+	
+	// TODO: enforce that schema exists (redundant with other checks)
+	
 	if exists, err := root.HasTable(ctx, tableName); err != nil {
 		return err
 	} else if exists {
@@ -1052,6 +1054,21 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, schemaName
 	}
 
 	return db.createDoltTable(ctx, tableName, schemaName, root, doltSch)
+}
+
+func hasDatabaseSchema(ctx context.Context, root *doltdb.RootValue, schemaName string) (bool, error) {
+	schemas, err := root.GetDatabaseSchemas(ctx)
+	if err != nil {
+		return false, err
+	}
+	
+	for _, schema := range schemas {
+		if strings.EqualFold(schema.Name, schemaName) {
+			return true, nil
+		}
+	}
+	
+	return false, nil
 }
 
 // createIndexedSqlTable is the private version of createSqlTable. It doesn't enforce any table name checks.
@@ -1177,8 +1194,32 @@ func (db Database) CreateSchema(ctx *sql.Context, schemaName string) error {
 
 // GetSchema implements sql.SchemaDatabase
 func (db Database) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseSchema, bool, error) {
-	db.schemaName = schemaName
-	return db, true, nil 
+	ws, err := db.GetWorkingSet(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	root := ws.WorkingRoot()
+
+	schemas, err := root.GetDatabaseSchemas(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+
+	for _, schema := range schemas {
+		if strings.EqualFold(schema.Name, schemaName) {
+			db.schemaName = schema.Name
+			return db, true, nil
+		}
+	}
+	
+	// For a temporary backwards compatibility solution, always pretend the public schema exists.
+	// Should create it explicitly when we create a new db in future.
+	if strings.EqualFold(schemaName, "public") {
+		db.schemaName = "public"
+		return db, true, nil
+	}
+	
+	return nil, false, nil
 }
 
 // AllSchemas implements sql.SchemaDatabase
