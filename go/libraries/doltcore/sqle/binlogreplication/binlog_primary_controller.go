@@ -136,6 +136,14 @@ func (m *binlogStreamerManager) WorkingRootUpdated(ctx *sql.Context, databaseNam
 				})
 				binlogEvents = append(binlogEvents, binlogEvent)
 				m.binlogStream.LogPosition += binlogEvent.Length()
+
+				// Schema changes in MySQL are always in an implicit transaction, so after each one, we
+				// need to send a new GTID event for the next transaction start
+				gtid := mysql.Mysql56GTID{Server: sid, Sequence: gtidSequence}
+				binlogEvent := mysql.NewMySQLGTIDEvent(m.binlogFormat, m.binlogStream, gtid, false)
+				binlogEvents = append(binlogEvents, binlogEvent)
+				m.binlogStream.LogPosition += binlogEvent.Length()
+				gtidSequence++
 			}
 		}
 

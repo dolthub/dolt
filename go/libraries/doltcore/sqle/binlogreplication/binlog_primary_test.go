@@ -177,6 +177,41 @@ func TestBinlogPrimary_SimpleSchemaChangesWithAutocommit(t *testing.T) {
 	requireReplicaResults(t, "show tables;", [][]any{})
 }
 
+// TestBinlogPrimary_SchemaChangesWithManualCommit tests that manually managed transactions, which
+// contain a mix of schema and data changes, can be correctly replicated.
+func TestBinlogPrimary_SchemaChangesWithManualCommit(t *testing.T) {
+	defer teardown(t)
+	startSqlServers(t)
+	setupForDoltToMySqlReplication()
+	startReplication(t, doltPort)
+	time.Sleep(100 * time.Millisecond)
+
+	// Create table
+	primaryDatabase.MustExec("set @@autocommit=0;")
+	primaryDatabase.MustExec("start transaction;")
+	primaryDatabase.MustExec("create table t (pk int primary key, c1 varchar(100), c2 int);")
+	primaryDatabase.MustExec("insert into t values (1, 'one', 1);")
+	primaryDatabase.MustExec("commit;")
+	time.Sleep(100 * time.Millisecond)
+	requireReplicaResults(t, "show create table t;", [][]any{{"t", "CREATE TABLE `t` (\n  " +
+		"`pk` int NOT NULL,\n  `c1` varchar(100) COLLATE utf8mb4_0900_bin DEFAULT NULL,\n  " +
+		"`c2` int DEFAULT NULL,\n  PRIMARY KEY (`pk`)\n) " +
+		"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}})
+	requireReplicaResults(t, "select * from t;", [][]any{{"1", "one", "1"}})
+
+	// Alter column and update
+	primaryDatabase.MustExec("start transaction;")
+	primaryDatabase.MustExec("alter table t modify column c2 varchar(100);")
+	primaryDatabase.MustExec("update t set c2='foo';")
+	primaryDatabase.MustExec("commit;")
+	time.Sleep(100 * time.Millisecond)
+	requireReplicaResults(t, "show create table t;", [][]any{{"t", "CREATE TABLE `t` (\n  " +
+		"`pk` int NOT NULL,\n  `c1` varchar(100) COLLATE utf8mb4_0900_bin DEFAULT NULL,\n  " +
+		"`c2` varchar(100) COLLATE utf8mb4_0900_bin DEFAULT NULL,\n  PRIMARY KEY (`pk`)\n) " +
+		"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}})
+	requireReplicaResults(t, "select * from t;", [][]any{{"1", "one", "foo"}})
+}
+
 // TestBinlogPrimary_ReplicateCreateDropDatabase tests that Dolt can correctly replicate statements to create,
 // drop, and undrop databases.
 func TestBinlogPrimary_ReplicateCreateDropDatabase(t *testing.T) {
