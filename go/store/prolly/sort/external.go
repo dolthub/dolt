@@ -117,7 +117,7 @@ func (a *tupleSorter) flushMem(ctx context.Context) error {
 		if len(a.files) == 0 {
 			a.files = append(a.files, []keyIterable{newFile})
 		} else {
-			a.files = append(a.files, []keyIterable{newFile})
+			a.files[0] = append(a.files[0], newFile)
 		}
 		a.fileCnt++
 	}
@@ -276,7 +276,6 @@ func GetKeySizeBuf() []byte {
 
 // PutKeySizeBuf returns a buffer to the pool
 func PutKeySizeBuf(b []byte) {
-	//buf.Reset()
 	keySizePool.Put(b)
 }
 

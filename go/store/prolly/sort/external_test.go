@@ -315,11 +315,6 @@ func TestCompact(t *testing.T) {
 				require.Equal(t, 1, len(s.files[1]))
 				require.Equal(t, 2, len(s.files))
 
-				//target := newKeyFile(mustNewFile(t, tmpProv), batchSize)
-				//m, _ := newFileMerger(ctx, keyCmp, target, keyFiles...)
-				//err = m.run(ctx)
-				//require.NoError(t, err)
-
 				cnt, size := drainIterCntSize(t, s.files[1][0])
 				require.Equal(t, expCnt, cnt)
 				require.Equal(t, expSize, size)
