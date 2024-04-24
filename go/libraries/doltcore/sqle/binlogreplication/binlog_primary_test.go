@@ -22,40 +22,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupForDoltToMySqlReplication() {
-	// Swap the replica and primary databases, since we're
-	// replicating in the other direction in this test.
-	var tempDatabase = primaryDatabase
-	primaryDatabase = replicaDatabase
-	replicaDatabase = tempDatabase
-
-	// On the Primary, turn on GTID mode
-	// NOTE: Dolt doesn't currently require moving through the GTID_MODE states like this, but
-	//       MySQL does, so we do it here anyway.
-	primaryDatabase.MustExec("set GLOBAL GTID_MODE='OFF_PERMISSIVE';")
-	primaryDatabase.MustExec("set GLOBAL GTID_MODE='ON_PERMISSIVE';")
-	primaryDatabase.MustExec("set GLOBAL ENFORCE_GTID_CONSISTENCY='ON';")
-	primaryDatabase.MustExec("set GLOBAL GTID_MODE='ON';")
-
-	// Create the db01 database that our tests will use
-	primaryDatabase.MustExec("create database db01;")
-	primaryDatabase.MustExec("use db01;")
-
-	// Create the replication user on the Dolt primary server
-	// TODO: this should probably be done on both primary and replica as part of the shared setup code
-	primaryDatabase.MustExec("CREATE USER 'replicator'@'%' IDENTIFIED BY 'Zqr8_blrGm1!';")
-	primaryDatabase.MustExec("GRANT REPLICATION SLAVE ON *.* TO 'replicator'@'%';")
-
-	// On the Primary, make sure we have a non-zero SERVER_ID set
-	// TODO: Technically, we should be setting this persistently and we should restart the sql-server
-	// TODO: Do we still need to do this? it would default to 1 and MySQL would fail to replica, right?
-	primaryDatabase.MustExec("set GLOBAL SERVER_ID=42;")
-
-	// Set the session's timezone to UTC, to avoid TIMESTAMP test values changing
-	// when they are converted to UTC for storage.
-	replicaDatabase.MustExec("SET @@time_zone = '+0:00';")
-}
-
 // TestBinlogPrimary runs a simple sanity check that a MySQL replica can connect to a Dolt primary and receive
 // binlog events.
 func TestBinlogPrimary(t *testing.T) {
@@ -516,6 +482,40 @@ func TestBinlogPrimary_Reset(t *testing.T) {
 	primaryDatabase.MustExec("call dolt_reset('--hard', @ThreeRowsCommit);")
 	time.Sleep(200 * time.Millisecond)
 	requireReplicaResults(t, "select * from db01.t;", [][]any{{"01", "1"}, {"02", "2"}, {"03", "3"}})
+}
+
+func setupForDoltToMySqlReplication() {
+	// Swap the replica and primary databases, since we're
+	// replicating in the other direction in this test.
+	var tempDatabase = primaryDatabase
+	primaryDatabase = replicaDatabase
+	replicaDatabase = tempDatabase
+
+	// On the Primary, turn on GTID mode
+	// NOTE: Dolt doesn't currently require moving through the GTID_MODE states like this, but
+	//       MySQL does, so we do it here anyway.
+	primaryDatabase.MustExec("set GLOBAL GTID_MODE='OFF_PERMISSIVE';")
+	primaryDatabase.MustExec("set GLOBAL GTID_MODE='ON_PERMISSIVE';")
+	primaryDatabase.MustExec("set GLOBAL ENFORCE_GTID_CONSISTENCY='ON';")
+	primaryDatabase.MustExec("set GLOBAL GTID_MODE='ON';")
+
+	// Create the db01 database that our tests will use
+	primaryDatabase.MustExec("create database db01;")
+	primaryDatabase.MustExec("use db01;")
+
+	// Create the replication user on the Dolt primary server
+	// TODO: this should probably be done on both primary and replica as part of the shared setup code
+	primaryDatabase.MustExec("CREATE USER 'replicator'@'%' IDENTIFIED BY 'Zqr8_blrGm1!';")
+	primaryDatabase.MustExec("GRANT REPLICATION SLAVE ON *.* TO 'replicator'@'%';")
+
+	// On the Primary, make sure we have a non-zero SERVER_ID set
+	// TODO: Technically, we should be setting this persistently and we should restart the sql-server
+	// TODO: Do we still need to do this? it would default to 1 and MySQL would fail to replica, right?
+	primaryDatabase.MustExec("set GLOBAL SERVER_ID=42;")
+
+	// Set the session's timezone to UTC, to avoid TIMESTAMP test values changing
+	// when they are converted to UTC for storage.
+	replicaDatabase.MustExec("SET @@time_zone = '+0:00';")
 }
 
 // requireReplicaResults runs the specified |query| on the replica database and asserts that the results match
