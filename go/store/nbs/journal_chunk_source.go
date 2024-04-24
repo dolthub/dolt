@@ -16,8 +16,11 @@ package nbs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"sort"
+	"sync"
 
 	"golang.org/x/sync/errgroup"
 
@@ -69,44 +72,78 @@ func (s journalChunkSource) get(_ context.Context, h hash.Hash, _ *Stats) ([]byt
 	return ch.Data(), nil
 }
 
-func (s journalChunkSource) getMany(ctx context.Context, _ *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error) {
-	var remaining bool
-	// todo: read planning
-	for i := range reqs {
-		if reqs[i].found {
-			continue
-		}
-		data, err := s.get(ctx, *reqs[i].a, stats)
-		if err != nil {
-			return false, err
-		} else if data != nil {
-			reqs[i].found = true
-			ch := chunks.NewChunkWithHash(hash.Hash(*reqs[i].a), data)
-			found(ctx, &ch)
-		} else {
-			remaining = true
-		}
-	}
-	return remaining, nil
+type journalRecord struct {
+	// r is the journal range for this chunk
+	r Range
+	// idx is the array offset into the shared |reqs|
+	idx int
 }
 
-func (s journalChunkSource) getManyCompressed(ctx context.Context, _ *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
+func (s journalChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error) {
+	return s.getManyCompressed(ctx, eg, reqs, func(ctx context.Context, cc CompressedChunk) {
+		ch, err := cc.ToChunk()
+		if err != nil {
+			eg.Go(func() error {
+				return err
+			})
+			return
+		}
+		chWHash := chunks.NewChunkWithHash(cc.Hash(), ch.Data())
+		found(ctx, &chWHash)
+	}, stats)
+}
+
+// getManyCompressed implements chunkReader. Here we (1) synchronously check
+// the journal index for read ranges, (2) record if the source misses any
+// needed remaining chunks, (3) sort the lookups for efficient disk access,
+// and then (4) asynchronously perform reads. We release the journal read
+// lock after returning when all reads are completed, which can be after the
+// function returns.
+func (s journalChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
 	var remaining bool
-	// todo: read planning
-	for i := range reqs {
-		if reqs[i].found {
+	var jReqs []journalRecord
+	var wg sync.WaitGroup
+	s.journal.lock.RLock()
+	for i, r := range reqs {
+		if r.found {
 			continue
 		}
-		cc, err := s.getCompressed(ctx, *reqs[i].a, stats)
-		if err != nil {
-			return false, err
-		} else if cc.IsEmpty() {
+		rang, ok := s.journal.ranges.get(*r.a)
+		if !ok {
 			remaining = true
-		} else {
-			reqs[i].found = true
-			found(ctx, cc)
+			continue
 		}
+		jReqs = append(jReqs, journalRecord{r: rang, idx: i})
+		reqs[i].found = true
 	}
+
+	// sort chunks by journal locality
+	sort.Slice(jReqs, func(i, j int) bool {
+		return jReqs[i].r.Offset < jReqs[j].r.Offset
+	})
+
+	for i := range jReqs {
+		// workers populate the parent error group
+		// record local workers for releasing lock
+		wg.Add(1)
+		eg.Go(func() error {
+			defer wg.Done()
+			rec := jReqs[i]
+			a := reqs[rec.idx].a
+			if cc, err := s.journal.getCompressedChunkAtRange(rec.r, *a); err != nil {
+				return err
+			} else if cc.IsEmpty() {
+				return errors.New("chunk in journal index was empty.")
+			} else {
+				found(ctx, cc)
+				return nil
+			}
+		})
+	}
+	go func() {
+		wg.Wait()
+		s.journal.lock.RUnlock()
+	}()
 	return remaining, nil
 }
 

@@ -148,6 +148,9 @@ func (c Column) IsNullable() bool {
 	if c.IsPartOfPK {
 		return false
 	}
+	if c.AutoIncrement {
+		return false
+	}
 	for _, cnst := range c.Constraints {
 		if cnst.GetConstraintType() == NotNullConstraintType {
 			return false
