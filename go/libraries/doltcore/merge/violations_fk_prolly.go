@@ -396,7 +396,7 @@ type FkCVMeta struct {
 
 var _ sql.JSONWrapper = FkCVMeta{}
 
-func (m FkCVMeta) ToInterface() interface{} {
+func (m FkCVMeta) ToInterface() (interface{}, error) {
 	return map[string]interface{}{
 		"Columns":           m.Columns,
 		"ForeignKey":        m.ForeignKey,
@@ -407,7 +407,7 @@ func (m FkCVMeta) ToInterface() interface{} {
 		"ReferencedIndex":   m.ReferencedIndex,
 		"ReferencedTable":   m.ReferencedTable,
 		"Table":             m.Table,
-	}
+	}, nil
 }
 
 // PrettyPrint is a custom pretty print function to match the old format's

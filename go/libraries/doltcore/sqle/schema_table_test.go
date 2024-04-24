@@ -27,7 +27,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
@@ -137,16 +136,9 @@ func TestSchemaTableMigrationV1(t *testing.T) {
 		require.NoError(t, err)
 		// convert the JSONDocument to a string for comparison
 		if row[3] != nil {
-			// Annoying difference in representation between storage versions here
-			jsonDoc, ok := row[3].(gmstypes.JSONDocument)
+			jsonDoc, ok := row[3].(gmstypes.JSONStringer)
 			if ok {
 				row[3], err = jsonDoc.JSONString()
-				row[3] = strings.ReplaceAll(row[3].(string), " ", "") // remove spaces
-			}
-
-			nomsJson, ok := row[3].(json.NomsJSON)
-			if ok {
-				row[3], err = nomsJson.JSONString()
 				row[3] = strings.ReplaceAll(row[3].(string), " ", "") // remove spaces
 			}
 
