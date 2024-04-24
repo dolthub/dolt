@@ -36,7 +36,9 @@ func TestBinlogPrimary(t *testing.T) {
 		"c1 varchar(10), c2 int, c3 varchar(100), c4 tinyint, c5 smallint, c6 mediumint, c7 bigint, " +
 		"uc1 tinyint unsigned, uc2 smallint unsigned, uc3 mediumint unsigned, uc4 int unsigned, uc5 bigint unsigned, " +
 		"f1 float, f2 double, " +
-		"t1 year, t2 datetime, t3 timestamp, t4 date, t5 time(6), " +
+		"t1 year, t2 date, t3 time(6), " +
+		"t4 datetime, t5 datetime(1), t6 datetime(2), t7 datetime(3), t8 datetime(4), t9 datetime(5), t10 datetime(6), " +
+		"t11 timestamp, t12 timestamp(1), t13 timestamp(2), t14 timestamp(3), t15 timestamp(4), t16 timestamp(5), t17 timestamp(6), " +
 		"b1 bit(10), " +
 		"e1 enum('blue', 'green', 'red'), s1 set('pants','shirt','tie','belt'), " +
 		"ch1 char(10), ch2 char(255)," +
@@ -56,7 +58,11 @@ func TestBinlogPrimary(t *testing.T) {
 		"1, " +
 		"'42', NULL, NULL, 123, 123, 123, 123, 200, 200, 200, 200, 200, " +
 		"1.0101, 2.02030405060708, " +
-		"1981, '1981-02-16 06:01:02', '2024-04-08 10:30:42', '1981-02-16', '-123:45:30.123456', " +
+		"1981, '1981-02-16', '-123:45:30.123456', " +
+		"'1981-02-16 06:01:02.234567', '1981-02-16 06:01:02.234567', '1981-02-16 06:01:02.234567', '1981-02-16 06:01:02.234567', " +
+		"'1981-02-16 06:01:02.234567', '1981-02-16 06:01:02.234567', '1981-02-16 06:01:02.234567', " +
+		"'2024-04-08 10:30:42.876543', '2024-04-08 10:30:42.876543', '2024-04-08 10:30:42.876543', '2024-04-08 10:30:42.876543'," +
+		"'2024-04-08 10:30:42.876543', '2024-04-08 10:30:42.876543', '2024-04-08 10:30:42.876543'," +
 		"b'0100000011', " +
 		"'green', 'pants,tie,belt'," +
 		"'purple', 'abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz'," +
@@ -88,7 +94,11 @@ func TestBinlogPrimary(t *testing.T) {
 	requireReplicaResults(t, "select * from db01.t;", [][]any{
 		{"1", "42", nil, nil, "123", "123", "123", "123", "200", "200", "200", "200", "200",
 			float32(1.0101), float64(2.02030405060708),
-			"1981", "1981-02-16 06:01:02", "2024-04-08 10:30:42", "1981-02-16", "-123:45:30.123456",
+			"1981", "1981-02-16", "-123:45:30.123456",
+			"1981-02-16 06:01:02", "1981-02-16 06:01:02.2", "1981-02-16 06:01:02.23", "1981-02-16 06:01:02.234",
+			"1981-02-16 06:01:02.2345", "1981-02-16 06:01:02.23456", "1981-02-16 06:01:02.234567",
+			"2024-04-08 10:30:42", "2024-04-08 10:30:42.8", "2024-04-08 10:30:42.87", "2024-04-08 10:30:42.876",
+			"2024-04-08 10:30:42.8765", "2024-04-08 10:30:42.87654", "2024-04-08 10:30:42.876543",
 			"\x01\x03",
 			"green", "pants,tie,belt",
 			"purple", "abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz",

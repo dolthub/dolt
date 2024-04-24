@@ -562,7 +562,6 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			if notNull {
 				year, month, day := timeValue.Date()
 				hour, minute, second := timeValue.Clock()
-				// TODO: fractional second support
 
 				// Calculate year-month (ym), year-month-day (ymd), and hour-minute-second (hms) components
 				ym := uint64((year * 13) + int(month))
@@ -577,6 +576,19 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 				temp := make([]byte, 8)
 				binary.BigEndian.PutUint64(temp, ymdhms)
 				data = append(data, temp[3:]...)
+
+				// Serialize fractional seconds
+				nanos := timeValue.Nanosecond()
+				micros := nanos / 1000
+				dtType := typ.(sql.DatetimeType)
+				switch dtType.Precision() {
+				case 1, 2:
+					data = append(data, byte(micros/10000))
+				case 3, 4:
+					data = append(data, byte(micros/100>>8), byte(micros/100))
+				case 5, 6:
+					data = append(data, byte(micros>>16), byte(micros>>8), byte(micros))
+				}
 			} else {
 				nullBitmap.Set(rowIdx, true)
 			}
@@ -585,7 +597,20 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			timeValue, notNull := descriptor.GetDatetime(tupleIdx, tuple)
 			if notNull {
 				data = append(data, make([]byte, 4)...)
-				binary.LittleEndian.PutUint32(data[currentPos:], uint32(timeValue.Unix()))
+				binary.BigEndian.PutUint32(data[currentPos:], uint32(timeValue.Unix()))
+
+				// Serialize fractional seconds
+				nanos := timeValue.Nanosecond()
+				micros := nanos / 1000
+				dtType := typ.(sql.DatetimeType)
+				switch dtType.Precision() {
+				case 1, 2:
+					data = append(data, byte(micros/10000))
+				case 3, 4:
+					data = append(data, byte(micros/100>>8), byte(micros/100))
+				case 5, 6:
+					data = append(data, byte(micros>>16), byte(micros>>8), byte(micros))
+				}
 			} else {
 				nullBitmap.Set(rowIdx, true)
 			}
@@ -1129,17 +1154,19 @@ func createTableMapFromDoltTable(ctx *sql.Context, databaseName, tableName strin
 		case query.Type_YEAR:
 			types[i] = mysql.TypeYear
 		case query.Type_DATE:
-			// TODO: Do we need to switch to mysql.TypeNewDate ?
-			types[i] = mysql.TypeDate
+			types[i] = mysql.TypeNewDate
 		case query.Type_DATETIME:
 			// TypeDateTime2 means use the new DateTime format, which was introduced after MySQL 5.6.4,
-			// and has a more efficient binary representation.
+			// has a more efficient binary representation, and supports fractional seconds.
 			types[i] = mysql.TypeDateTime2
-			// TODO: length of microseconds in metadata
+			dtType := typ.(sql.DatetimeType)
+			metadata[i] = uint16(dtType.Precision())
 		case query.Type_TIMESTAMP:
-			// TODO: Do we need to switch to mysql.TypeTimestamp2 ?
-			types[i] = mysql.TypeTimestamp
-			// TODO: length of microseconds in metadata
+			// TypeTimestamp2 means use the new Timestamp format, which was introduced after MySQL 5.6.4,
+			// has a more efficient binary representation, and supports fractional seconds.
+			types[i] = mysql.TypeTimestamp2
+			dtType := typ.(sql.DatetimeType)
+			metadata[i] = uint16(dtType.Precision())
 		case query.Type_TIME:
 			// TypeTime2 is the newer serialization format for TIME values
 			types[i] = mysql.TypeTime2
