@@ -625,11 +625,8 @@ func TestDoltDiffQueryPlans(t *testing.T) {
 	require.NoError(t, err)
 	defer e.Close()
 
-	for _, tt := range DoltDiffPlanTests {
-		enginetest.TestQueryPlan(t, harness, e, tt.Query, tt.ExpectedPlan, sql.DescribeOptions{})
-	}
-	for _, tt := range DoltCommitPlanTests {
-		enginetest.TestQueryPlan(t, harness, e, tt.Query, tt.ExpectedPlan, sql.DescribeOptions{})
+	for _, tt := range append(DoltDiffPlanTests, DoltCommitPlanTests...) {
+		enginetest.TestQueryPlanWithName(t, tt.Query, harness, e, tt.Query, tt.ExpectedPlan, sql.DescribeOptions{})
 	}
 }
 
