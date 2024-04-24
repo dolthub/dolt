@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -283,6 +284,14 @@ func (b *JSONDoc) ToJSONDocument(ctx context.Context) (types.JSONDocument, error
 		return types.JSONDocument{}, err
 	}
 	return doc, err
+}
+
+func (b *JSONDoc) ToLazyJSONDocument(ctx context.Context) (sql.JSONWrapper, error) {
+	buf, err := b.bytes(ctx)
+	if err != nil {
+		return types.JSONDocument{}, err
+	}
+	return types.NewLazyJSONDocument(buf), nil
 }
 
 func (b *JSONDoc) ToString(ctx context.Context) (string, error) {

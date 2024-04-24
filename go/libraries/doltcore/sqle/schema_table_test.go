@@ -136,9 +136,9 @@ func TestSchemaTableMigrationV1(t *testing.T) {
 		require.NoError(t, err)
 		// convert the JSONDocument to a string for comparison
 		if row[3] != nil {
-			jsonDoc, ok := row[3].(gmstypes.JSONStringer)
+			jsonDoc, ok := row[3].(sql.JSONWrapper)
 			if ok {
-				row[3], err = jsonDoc.JSONString()
+				row[3], err = gmstypes.StringifyJSON(jsonDoc)
 				row[3] = strings.ReplaceAll(row[3].(string), " ", "") // remove spaces
 			}
 
