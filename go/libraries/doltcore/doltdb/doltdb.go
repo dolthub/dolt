@@ -1381,12 +1381,14 @@ type ReplicationStatusController struct {
 	NotifyWaitFailed []func()
 }
 
-// RootUpdateListener allows callbacks on a registered listener when a working root is updated in a session.
+// RootUpdateListener allows callbacks on a registered listener when a working root is updated on a database and
+// other sessions have visibility to the changes.
 type RootUpdateListener interface {
-	// WorkingRootUpdated is called when a working root is updated on a branch's working set. |ctx| provides the
-	// session information, |databaseName| describes the database being updated, and |before| and |after| are the
-	// previous and new RootValues for the working root. If callers encounter any errors while processing a root
-	// update notification, they can return an error, which will be logged.
+	// WorkingRootUpdated is called when a branch working root is updated on a database and other sessions are
+	// given visibility to the changes. |ctx| provides the current session information, |databaseName| indicates
+	// the database being updated, and |before| and |after| are the previous and new RootValues for the working root.
+	// If callers encounter any errors while processing a root update notification, they can return an error, which
+	// will be logged.
 	WorkingRootUpdated(ctx *sql.Context, databaseName string, before *RootValue, after *RootValue) error
 }
 
