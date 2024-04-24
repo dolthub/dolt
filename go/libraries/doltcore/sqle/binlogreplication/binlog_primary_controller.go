@@ -94,60 +94,10 @@ func (m *binlogStreamerManager) WorkingRootUpdated(ctx *sql.Context, databaseNam
 		return err
 	}
 
-	hasDataChanges := false
-	binlogEvents := make([]mysql.BinlogEvent, 0)
-
 	// Process schema changes first
-	for _, tableDelta := range tableDeltas {
-		schemaChanged, err := tableDelta.HasSchemaChanged(ctx)
-		if err != nil {
-			return err
-		}
-
-		b, err := tableDelta.HasDataChanged(ctx)
-		if err != nil {
-			return err
-		}
-		if b && !tableDelta.IsDrop() {
-			hasDataChanges = true
-		}
-
-		if !schemaChanged {
-			continue
-		}
-
-		schemaPatchStatements, err := sqle.GenerateSqlPatchSchemaStatements(ctx, after, tableDelta)
-		if err != nil {
-			return err
-		}
-
-		for _, schemaPatchStatement := range schemaPatchStatements {
-			// Schema changes in MySQL are always in an implicit transaction, so before each one, we
-			// send a new GTID event for the next transaction start
-			serverUuid, err := getServerUuid(ctx)
-			if err != nil {
-				return err
-			}
-			sid, err := mysql.ParseSID(serverUuid)
-			if err != nil {
-				return err
-			}
-			gtid := mysql.Mysql56GTID{Server: sid, Sequence: gtidSequence}
-			binlogEvent := mysql.NewMySQLGTIDEvent(m.binlogFormat, m.binlogStream, gtid, false)
-			binlogEvents = append(binlogEvents, binlogEvent)
-			m.binlogStream.LogPosition += binlogEvent.Length()
-			gtidSequence++
-
-			binlogEvent = mysql.NewQueryEvent(m.binlogFormat, m.binlogStream, mysql.Query{
-				Database: databaseName,
-				Charset:  nil, // TODO:
-				SQL:      schemaPatchStatement,
-				Options:  0,
-				SqlMode:  0, // TODO:
-			})
-			binlogEvents = append(binlogEvents, binlogEvent)
-			m.binlogStream.LogPosition += binlogEvent.Length()
-		}
+	binlogEvents, hasDataChanges, err := m.createSchemaChangeQueryEvents(ctx, databaseName, tableDeltas, after)
+	if err != nil {
+		return err
 	}
 
 	// Process data changes...
@@ -178,201 +128,21 @@ func (m *binlogStreamerManager) WorkingRootUpdated(ctx *sql.Context, databaseNam
 		binlogEvents = append(binlogEvents, binlogEvent)
 		m.binlogStream.LogPosition += binlogEvent.Length()
 
-		tableId := uint64(42)
-		tablesToId := make(map[string]uint64)
-		for _, tableDelta := range tableDeltas {
-			dataChanged, err := tableDelta.HasDataChanged(ctx)
-			if err != nil {
-				return err
-			}
-
-			// TODO: Make sure to not replicate ignored tables? Or do we want to replicate them and
-			//       just exclude them from Dolt commits?
-
-			if !dataChanged || tableDelta.IsDrop() {
-				continue
-			}
-
-			// For every table with data changes, we need to send a TableMap event over the stream.
-			tableId++
-			tableName := tableDelta.ToName
-			if tableName == "" {
-				tableName = tableDelta.FromName
-			}
-			tablesToId[tableName] = tableId
-			tableMap, err := createTableMapFromDoltTable(ctx, databaseName, tableName, tableDelta.ToTable)
-			if err != nil {
-				return err
-			}
-
-			binlogEvent := mysql.NewTableMapEvent(m.binlogFormat, m.binlogStream, tableId, tableMap)
-			binlogEvents = append(binlogEvents, binlogEvent)
-			m.binlogStream.LogPosition += binlogEvent.Length()
+		// Create TableMap events describing the schemas of the tables being updated
+		tableMapEvents, tablesToId, err := m.createTableMapEvents(ctx, databaseName, tableDeltas)
+		if err != nil {
+			return err
 		}
+		binlogEvents = append(binlogEvents, tableMapEvents...)
 
 		// Loop over the tableDeltas to pull out their diff contents
-		for _, tableDelta := range tableDeltas {
-			// If a table has been dropped, we don't need to process its data updates, since the DROP TABLE
-			// DDL statement we send will automatically delete all the data.
-			if tableDelta.IsDrop() {
-				continue
-			}
-
-			fromRowData, toRowData, err := tableDelta.GetRowData(ctx)
-			if err != nil {
-				return err
-			}
-			// TODO: Considering limiting to at most one replica supported at a time? Does that actually help at all?
-			// TODO: If tableDelta.IsDrop(), then we can skip the data transfer and just send the drop table DDL statement
-
-			tableName := tableDelta.ToName
-			if tableName == "" {
-				tableName = tableDelta.FromName
-			}
-
-			fromMap := durable.ProllyMapFromIndex(fromRowData)
-			toMap := durable.ProllyMapFromIndex(toRowData)
-
-			sch, err := tableDelta.ToTable.GetSchema(ctx)
-			if err != nil {
-				return err
-			}
-
-			columns := sch.GetAllCols().GetColumns()
-			tableId := tablesToId[tableName]
-
-			var tableRowsToWrite []mysql.Row
-			var tableRowsToDelete []mysql.Row
-			var tableRowsToUpdate []mysql.Row
-
-			err = prolly.DiffMaps(ctx, fromMap, toMap, false, func(_ context.Context, diff tree.Diff) error {
-				// Keyless tables encode their fields differently than tables with primary keys, notably, they
-				// include an extra field indicating how many duplicate rows they represent, so we need to
-				// extract that information here before we can serialize these changes to the binlog.
-				rowCount, diffType, err := extractRowCountAndDiffType(sch, diff)
-				if err != nil {
-					return err
-				}
-
-				switch diffType {
-				case tree.AddedDiff:
-					data, nullBitmap, err := serializeRowToBinlogBytes(ctx,
-						sch, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
-					if err != nil {
-						return err
-					}
-					for range rowCount {
-						tableRowsToWrite = append(tableRowsToWrite, mysql.Row{
-							NullColumns: nullBitmap,
-							Data:        data,
-						})
-					}
-
-				case tree.ModifiedDiff:
-					data, nullColumns, err := serializeRowToBinlogBytes(ctx,
-						sch, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
-					if err != nil {
-						return err
-					}
-					identify, nullIdentifyColumns, err := serializeRowToBinlogBytes(ctx,
-						sch, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
-					if err != nil {
-						return err
-					}
-					for range rowCount {
-						tableRowsToUpdate = append(tableRowsToUpdate, mysql.Row{
-							NullColumns:         nullColumns,
-							Data:                data,
-							NullIdentifyColumns: nullIdentifyColumns,
-							Identify:            identify,
-						})
-					}
-
-				case tree.RemovedDiff:
-					// TODO: If the schema of the table has changed between FromTable and ToTable, then this probably breaks
-					identifyData, nullBitmap, err := serializeRowToBinlogBytes(ctx,
-						sch, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
-					if err != nil {
-						return err
-					}
-					for range rowCount {
-						tableRowsToDelete = append(tableRowsToDelete, mysql.Row{
-							NullIdentifyColumns: nullBitmap,
-							Identify:            identifyData,
-						})
-					}
-
-				default:
-					return fmt.Errorf("unexpected diff type: %v", diff.Type)
-				}
-
-				return nil
-			})
-			if err != nil && err != io.EOF {
-				return err
-			}
-
-			if tableRowsToWrite != nil {
-				rows := mysql.Rows{
-					DataColumns: mysql.NewServerBitmap(len(columns)),
-					Rows:        tableRowsToWrite,
-				}
-				// All columns are included
-				for i := 0; i < len(columns); i++ {
-					rows.DataColumns.Set(i, true)
-				}
-
-				if tableRowsToDelete == nil && tableRowsToUpdate == nil {
-					rows.Flags |= 0x0001 // End of Statement
-				}
-
-				binlogEvent := mysql.NewWriteRowsEvent(m.binlogFormat, m.binlogStream, tableId, rows)
-				binlogEvents = append(binlogEvents, binlogEvent)
-				m.binlogStream.LogPosition += binlogEvent.Length()
-			}
-
-			// TODO: Ordering – Should we execute all deletes first? Or updates, deletes, then inserts?
-			//       A delete would never delete a row inserted or updated in the same transaction, so it seems like processing those first makes sense
-			if tableRowsToDelete != nil {
-				rows := mysql.Rows{
-					IdentifyColumns: mysql.NewServerBitmap(len(columns)),
-					Rows:            tableRowsToDelete,
-				}
-				// All identity columns are included
-				for i := 0; i < len(columns); i++ {
-					rows.IdentifyColumns.Set(i, true)
-				}
-
-				if tableRowsToUpdate == nil {
-					rows.Flags |= 0x0001 // End of Statement
-				}
-
-				binlogEvent := mysql.NewDeleteRowsEvent(m.binlogFormat, m.binlogStream, tableId, rows)
-				binlogEvents = append(binlogEvents, binlogEvent)
-				m.binlogStream.LogPosition += binlogEvent.Length()
-			}
-
-			if tableRowsToUpdate != nil {
-				rows := mysql.Rows{
-					Flags:           0x0001,
-					DataColumns:     mysql.NewServerBitmap(len(columns)),
-					IdentifyColumns: mysql.NewServerBitmap(len(columns)),
-					Rows:            tableRowsToUpdate,
-				}
-				// All columns are included for data and identify fields
-				for i := 0; i < len(columns); i++ {
-					rows.DataColumns.Set(i, true)
-				}
-				for i := 0; i < len(columns); i++ {
-					rows.IdentifyColumns.Set(i, true)
-				}
-
-				binlogEvent := mysql.NewUpdateRowsEvent(m.binlogFormat, m.binlogStream, tableId, rows)
-				binlogEvents = append(binlogEvents, binlogEvent)
-				m.binlogStream.LogPosition += binlogEvent.Length()
-			}
+		rowEvents, err := m.createRowEvents(ctx, tableDeltas, tablesToId)
+		if err != nil {
+			return err
 		}
+		binlogEvents = append(binlogEvents, rowEvents...)
 
+		// Add an XID event to mark the transaction as completed
 		binlogEvent = mysql.NewXIDEvent(m.binlogFormat, m.binlogStream)
 		binlogEvents = append(binlogEvents, binlogEvent)
 		m.binlogStream.LogPosition += binlogEvent.Length()
@@ -384,6 +154,274 @@ func (m *binlogStreamerManager) WorkingRootUpdated(ctx *sql.Context, databaseNam
 	}
 
 	return nil
+}
+
+// createSchemaChangeQueryEvents processes the specified |tableDeltas| for the database |databaseName| at |newRoot| and returns
+// a slice of binlog events that replicate any schema changes in the TableDeltas, as well as a boolean indicating if
+// any TableDeltas were seen that contain data changes that need to be replicated.
+func (m *binlogStreamerManager) createSchemaChangeQueryEvents(
+	ctx *sql.Context, databaseName string, tableDeltas []diff.TableDelta, newRoot *doltdb.RootValue) (
+	events []mysql.BinlogEvent, hasDataChanges bool, err error) {
+	for _, tableDelta := range tableDeltas {
+		schemaChanged, err := tableDelta.HasSchemaChanged(ctx)
+		if err != nil {
+			return nil, false, err
+		}
+
+		b, err := tableDelta.HasDataChanged(ctx)
+		if err != nil {
+			return nil, false, err
+		}
+		if b && !tableDelta.IsDrop() {
+			hasDataChanges = true
+		}
+
+		if !schemaChanged {
+			continue
+		}
+
+		schemaPatchStatements, err := sqle.GenerateSqlPatchSchemaStatements(ctx, newRoot, tableDelta)
+		if err != nil {
+			return nil, false, err
+		}
+
+		for _, schemaPatchStatement := range schemaPatchStatements {
+			// Schema changes in MySQL are always in an implicit transaction, so before each one, we
+			// send a new GTID event for the next transaction start
+			serverUuid, err := getServerUuid(ctx)
+			if err != nil {
+				return nil, false, err
+			}
+			sid, err := mysql.ParseSID(serverUuid)
+			if err != nil {
+				return nil, false, err
+			}
+			gtid := mysql.Mysql56GTID{Server: sid, Sequence: gtidSequence}
+			binlogEvent := mysql.NewMySQLGTIDEvent(m.binlogFormat, m.binlogStream, gtid, false)
+			events = append(events, binlogEvent)
+			m.binlogStream.LogPosition += binlogEvent.Length()
+			gtidSequence++
+
+			binlogEvent = mysql.NewQueryEvent(m.binlogFormat, m.binlogStream, mysql.Query{
+				Database: databaseName,
+				Charset:  nil, // TODO:
+				SQL:      schemaPatchStatement,
+				Options:  0,
+				SqlMode:  0, // TODO:
+			})
+			events = append(events, binlogEvent)
+			m.binlogStream.LogPosition += binlogEvent.Length()
+		}
+	}
+
+	return events, hasDataChanges, nil
+}
+
+// createTableMapEvents returns a slice of TableMap binlog events that describe the tables with data changes from
+// |tableDeltas| in the database named |databaseName|. In addition to the binlog events, it also returns a map of
+// table name to the table IDs used for that table in the generated TableMap events, so that callers can look up
+// the correct table ID to use in Row events.
+func (m *binlogStreamerManager) createTableMapEvents(ctx *sql.Context, databaseName string, tableDeltas []diff.TableDelta) (events []mysql.BinlogEvent, tablesToId map[string]uint64, err error) {
+	tableId := uint64(02)
+	tablesToId = make(map[string]uint64)
+	for _, tableDelta := range tableDeltas {
+		dataChanged, err := tableDelta.HasDataChanged(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// TODO: Make sure to not replicate ignored tables? Or do we want to replicate them and
+		//       just exclude them from Dolt commits?
+
+		if !dataChanged || tableDelta.IsDrop() {
+			continue
+		}
+
+		// For every table with data changes, we need to send a TableMap event over the stream.
+		tableId++
+		tableName := tableDelta.ToName
+		if tableName == "" {
+			tableName = tableDelta.FromName
+		}
+		tablesToId[tableName] = tableId
+		tableMap, err := createTableMapFromDoltTable(ctx, databaseName, tableName, tableDelta.ToTable)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		binlogEvent := mysql.NewTableMapEvent(m.binlogFormat, m.binlogStream, tableId, tableMap)
+		events = append(events, binlogEvent)
+		m.binlogStream.LogPosition += binlogEvent.Length()
+	}
+
+	return events, tablesToId, nil
+}
+
+// createRowEvents returns a slice of binlog Insert/Update/Delete row events that represent the data changes
+// present in the specified |tableDeltas|. The |tablesToId| map contains the mapping of table names to IDs used
+// in the associated TableMap events describing the table schemas.
+func (m *binlogStreamerManager) createRowEvents(ctx *sql.Context, tableDeltas []diff.TableDelta, tablesToId map[string]uint64) (events []mysql.BinlogEvent, err error) {
+	for _, tableDelta := range tableDeltas {
+		// If a table has been dropped, we don't need to process its data updates, since the DROP TABLE
+		// DDL statement we send will automatically delete all the data.
+		if tableDelta.IsDrop() {
+			continue
+		}
+
+		fromRowData, toRowData, err := tableDelta.GetRowData(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		tableName := tableDelta.ToName
+		if tableName == "" {
+			tableName = tableDelta.FromName
+		}
+
+		fromMap := durable.ProllyMapFromIndex(fromRowData)
+		toMap := durable.ProllyMapFromIndex(toRowData)
+
+		sch, err := tableDelta.ToTable.GetSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		columns := sch.GetAllCols().GetColumns()
+		tableId := tablesToId[tableName]
+
+		var tableRowsToWrite []mysql.Row
+		var tableRowsToDelete []mysql.Row
+		var tableRowsToUpdate []mysql.Row
+
+		err = prolly.DiffMaps(ctx, fromMap, toMap, false, func(_ context.Context, diff tree.Diff) error {
+			// Keyless tables encode their fields differently than tables with primary keys, notably, they
+			// include an extra field indicating how many duplicate rows they represent, so we need to
+			// extract that information here before we can serialize these changes to the binlog.
+			rowCount, diffType, err := extractRowCountAndDiffType(sch, diff)
+			if err != nil {
+				return err
+			}
+
+			switch diffType {
+			case tree.AddedDiff:
+				data, nullBitmap, err := serializeRowToBinlogBytes(ctx,
+					sch, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
+				if err != nil {
+					return err
+				}
+				for range rowCount {
+					tableRowsToWrite = append(tableRowsToWrite, mysql.Row{
+						NullColumns: nullBitmap,
+						Data:        data,
+					})
+				}
+
+			case tree.ModifiedDiff:
+				data, nullColumns, err := serializeRowToBinlogBytes(ctx,
+					sch, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
+				if err != nil {
+					return err
+				}
+				identify, nullIdentifyColumns, err := serializeRowToBinlogBytes(ctx,
+					sch, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
+				if err != nil {
+					return err
+				}
+				for range rowCount {
+					tableRowsToUpdate = append(tableRowsToUpdate, mysql.Row{
+						NullColumns:         nullColumns,
+						Data:                data,
+						NullIdentifyColumns: nullIdentifyColumns,
+						Identify:            identify,
+					})
+				}
+
+			case tree.RemovedDiff:
+				// TODO: If the schema of the table has changed between FromTable and ToTable, then this probably breaks
+				identifyData, nullBitmap, err := serializeRowToBinlogBytes(ctx,
+					sch, diff.Key, diff.From, tableDelta.FromTable.NodeStore())
+				if err != nil {
+					return err
+				}
+				for range rowCount {
+					tableRowsToDelete = append(tableRowsToDelete, mysql.Row{
+						NullIdentifyColumns: nullBitmap,
+						Identify:            identifyData,
+					})
+				}
+
+			default:
+				return fmt.Errorf("unexpected diff type: %v", diff.Type)
+			}
+
+			return nil
+		})
+		if err != nil && err != io.EOF {
+			return nil, err
+		}
+
+		if tableRowsToWrite != nil {
+			rows := mysql.Rows{
+				DataColumns: mysql.NewServerBitmap(len(columns)),
+				Rows:        tableRowsToWrite,
+			}
+			// All columns are included
+			for i := 0; i < len(columns); i++ {
+				rows.DataColumns.Set(i, true)
+			}
+
+			if tableRowsToDelete == nil && tableRowsToUpdate == nil {
+				rows.Flags |= 0x0001 // End of Statement
+			}
+
+			binlogEvent := mysql.NewWriteRowsEvent(m.binlogFormat, m.binlogStream, tableId, rows)
+			events = append(events, binlogEvent)
+			m.binlogStream.LogPosition += binlogEvent.Length()
+		}
+
+		// TODO: Ordering – Should we execute all deletes first? Or updates, deletes, then inserts?
+		//       A delete would never delete a row inserted or updated in the same transaction, so it seems like processing those first makes sense
+		if tableRowsToDelete != nil {
+			rows := mysql.Rows{
+				IdentifyColumns: mysql.NewServerBitmap(len(columns)),
+				Rows:            tableRowsToDelete,
+			}
+			// All identity columns are included
+			for i := 0; i < len(columns); i++ {
+				rows.IdentifyColumns.Set(i, true)
+			}
+
+			if tableRowsToUpdate == nil {
+				rows.Flags |= 0x0001 // End of Statement
+			}
+
+			binlogEvent := mysql.NewDeleteRowsEvent(m.binlogFormat, m.binlogStream, tableId, rows)
+			events = append(events, binlogEvent)
+			m.binlogStream.LogPosition += binlogEvent.Length()
+		}
+
+		if tableRowsToUpdate != nil {
+			rows := mysql.Rows{
+				Flags:           0x0001,
+				DataColumns:     mysql.NewServerBitmap(len(columns)),
+				IdentifyColumns: mysql.NewServerBitmap(len(columns)),
+				Rows:            tableRowsToUpdate,
+			}
+			// All columns are included for data and identify fields
+			for i := 0; i < len(columns); i++ {
+				rows.DataColumns.Set(i, true)
+			}
+			for i := 0; i < len(columns); i++ {
+				rows.IdentifyColumns.Set(i, true)
+			}
+
+			binlogEvent := mysql.NewUpdateRowsEvent(m.binlogFormat, m.binlogStream, tableId, rows)
+			events = append(events, binlogEvent)
+			m.binlogStream.LogPosition += binlogEvent.Length()
+		}
+	}
+
+	return events, nil
 }
 
 // extractRowCountAndDiffType uses |sch| and |diff| to determine how many changed rows this
