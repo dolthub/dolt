@@ -15,6 +15,7 @@
 package nbs
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -32,23 +33,33 @@ There are byte spans with in the archive which are not addressable by a Chunk Ad
 to aid in the compression of the Chunks.
 
 A Dolt Archive file follows the following format:
-   +------------+------------+-----+------------+-------+--------+
-   | ByteSpan 1 | ByteSpan 2 | ... | ByteSpan N | Index | Footer |
-   +------------+------------+-----+------------+-------+--------+
+   +------------+------------+-----+------------+-------+----------+--------+
+   | ByteSpan 1 | ByteSpan 2 | ... | ByteSpan N | Index | Metadata | Footer |
+   +------------+------------+-----+------------+-------+----------+--------+
 
 In reverse order, since that's how we read it
 
 Footer:
-   +----------------------+-------------------------+----------------------+--------------------+--------------------+
-   | (Uint32) IndexLength | (Uint32) ByteSpan Count | (Uint32) Chunk Count | (1) Format Version | (7) File Signature |
-   +----------------------+-------------------------+----------------------+--------------------+--------------------+
+   +----------------------+-------------------------+----------------------+--------------------------+-----------------+------------------------+--------------------+
+   | (Uint32) IndexLength | (Uint32) ByteSpan Count | (Uint32) Chunk Count | (Uint32) Metadata Length | (192) CheckSums | (Uint8) Format Version | (7) File Signature |
+   +----------------------+-------------------------+----------------------+--------------------------+-----------------+------------------------+--------------------+
    - Index Length: The length of the Index in bytes.
    - ByteSpan Count: (N) The number of ByteSpans in the Archive. (does not include the null ByteSpan)
    - Chunk Count: (M) The number of Chunk Records in the Archive.
       * These 3 values are all required to properly parse the Index. Note that the NBS Index has a deterministic size
         based on the Chunk Count. This is not the case with a Dolt Archive.
+   - Metadata Length: The length of the Metadata in bytes.
+   - CheckSums: See Below.
    - Format Version: Sequence starting at 1.
    - File Signature: Some would call this a magic number. Not on my watch. Dolt Archives have a 7 byte signature: "DOLTARC"
+
+   CheckSums:
+   +----------------------------+-------------------+----------------------+
+   | (64) Sha512 ByteSpan 1 - N | (64) Sha512 Index | (64) Sha512 Metadata |
+   +----------------------------+-------------------+----------------------+
+   - The Sha512 checksums of the ByteSpans, Index, and Metadata. Currently unused, but may be used in the future. Leaves
+     the opening to verify integrity manually at least, but could be used in the future to allow to break the file into
+     parts, and ensure we can verify the integrity of each part.
 
 Index:
    +--------------+------------+-----------------+----------+
@@ -98,6 +109,12 @@ Index:
      - Each Hash Suffix is the last 12 bytes of a Chunk in this Table.
      - Hash Suffix M must correspond to Prefix M and Chunk Record M
 
+Metadata:
+   The Metadata section is intended to be used for additional information about the Archive. This may include the version
+   of Dolt that created the archive, possibly references to other archives, or other information. For Format version 1,
+   We use a simple JSON object. The Metadata Length is the length of the JSON object in bytes. Could be a Flatbuffer in
+   the future, which would mandate a format version bump.
+
 ByteSpan:
    +----------------+
    | Data as []byte |
@@ -129,15 +146,24 @@ Chunk Retrieval (phase 1 is similar to NBS):
     - Decompress the Chunk data using zstd with the Dictionary data.
 */
 
-const archiveFormatVersion = 1
-const archiveFileSignature = "DOLTARC"
-const archiveFooterSize = 4 + 4 + 4 + 1 + 7
+const (
+	archiveFormatVersion = 1
+	archiveFileSignature = "DOLTARC"
+	archiveFileSigSize   = uint64(len(archiveFileSignature))
+	archiveCheckSumSize  = 64 * 3       // sha512 3 times.
+	archiveFooterSize    = uint32Size + // index length
+		uint32Size + // byte span count
+		uint32Size + // chunk count
+		uint32Size + // metadata length
+		archiveCheckSumSize +
+		1 + // version byte
+		archiveFileSigSize
+)
 
 var ErrInvalidChunkRange = errors.New("invalid chunk range")
 var ErrInvalidDictionaryRange = errors.New("invalid dictionary range")
 var ErrInvalidFileSignature = errors.New("invalid file signature")
 var ErrInvalidFormatVersion = errors.New("invalid format version")
-var ErrCRCMismatch = errors.New("CRC mismatch")
 
 type stagedByteSpan struct {
 	offset uint64
@@ -151,15 +177,23 @@ type stagedChunkRef struct {
 }
 type stagedChunkRefSlice []stagedChunkRef
 
+type sha512Sum [64]byte
+
 type archiveWriter struct {
-	output       io.Writer
-	bytesWritten uint64
-	stagedBytes  stagedByteSpanSlice
-	stagedChunks stagedChunkRefSlice
+	output           HashingByteSink
+	bytesWritten     uint64
+	stagedBytes      stagedByteSpanSlice
+	stagedChunks     stagedChunkRefSlice
+	indexLen         uint32
+	metadataLen      uint32
+	dataCheckSum     sha512Sum
+	indexCheckSum    sha512Sum
+	metadataCheckSum sha512Sum
 }
 
-func newArchiveWriter(output io.Writer) *archiveWriter {
-	return &archiveWriter{output: output}
+func newArchiveWriter(output ByteSink) *archiveWriter {
+	hbs := NewSHA512HashingByteSink(output)
+	return &archiveWriter{output: *hbs}
 }
 
 // writeByteSpan writes a byte span to the archive, returning the ByteSpan ID if the write was successful. Note
@@ -209,55 +243,58 @@ func (scrs stagedChunkRefSlice) Swap(i, j int) {
 	scrs[i], scrs[j] = scrs[j], scrs[i]
 }
 
-func (aw *archiveWriter) finalize() error {
-	indexLen, err := aw.writeIndex()
-	if err != nil {
-		return err
-	}
-
-	return aw.writeFooter(indexLen)
+// finalizeByteSpans writes the ... NM4
+func (aw *archiveWriter) finalizeByteSpans() {
+	// Get the checksum for the data written so far
+	aw.dataCheckSum = sha512Sum(aw.output.GetSum())
+	aw.output.ResetHasher()
 }
 
-func (aw *archiveWriter) writeFooter(indexLen uint32) error {
-	// Write out the index length
-	err := binary.Write(aw.output, binary.BigEndian, indexLen)
+// Helper method.
+func (aw *archiveWriter) writeUint32(val uint32) error {
+	bb := &bytes.Buffer{}
+	err := binary.Write(bb, binary.BigEndian, val)
 	if err != nil {
 		return err
 	}
+
+	i := bb.Len()
+	_ = i
+
+	n, err := aw.output.Write(bb.Bytes())
+	if err != nil {
+		return err
+	}
+	if n != uint32Size {
+		return io.ErrShortWrite
+	}
+
 	aw.bytesWritten += uint32Size
-
-	// Write out the byte span count
-	err = binary.Write(aw.output, binary.BigEndian, uint32(len(aw.stagedBytes)))
-	if err != nil {
-		return err
-	}
-	aw.bytesWritten += uint32Size
-
-	// Write out the chunk count
-	err = binary.Write(aw.output, binary.BigEndian, uint32(len(aw.stagedChunks)))
-	if err != nil {
-		return err
-	}
-	aw.bytesWritten += uint32Size
-
-	// Write out the format version
-	err = binary.Write(aw.output, binary.BigEndian, uint8(archiveFormatVersion))
-	if err != nil {
-		return err
-	}
-	aw.bytesWritten++
-
-	// Write out the file signature
-	_, err = aw.output.Write([]byte(archiveFileSignature))
-	if err != nil {
-		return err
-	}
-	aw.bytesWritten += 7
-
 	return nil
 }
 
-func (aw *archiveWriter) writeIndex() (uint32, error) {
+func (aw *archiveWriter) writeUint64(val uint64) error {
+	bb := &bytes.Buffer{}
+	err := binary.Write(bb, binary.BigEndian, val)
+	if err != nil {
+		return err
+	}
+
+	n, err := aw.output.Write(bb.Bytes())
+	if err != nil {
+		return err
+	}
+	if n != uint64Size {
+		return io.ErrShortWrite
+	}
+
+	aw.bytesWritten += uint64Size
+	return nil
+}
+
+// writeIndex writes the index to the archive. Expects the hasher to be reset before be called, and will reset it. It
+// sets the indexLen and indexCheckSum fields on the archiveWriter, and updates the bytesWritten field.
+func (aw *archiveWriter) writeIndex() error {
 	startingByteCount := aw.bytesWritten
 
 	varIbuf := make([]byte, binary.MaxVarintLen64)
@@ -267,20 +304,20 @@ func (aw *archiveWriter) writeIndex() (uint32, error) {
 		n := binary.PutUvarint(varIbuf, bs.offset)
 		written, err := aw.output.Write(varIbuf[:n])
 		if err != nil {
-			return 0, err
+			return err
 		}
 		if written != n {
-			return 0, io.ErrShortWrite
+			return io.ErrShortWrite
 		}
 		aw.bytesWritten += uint64(written)
 
 		n = binary.PutUvarint(varIbuf, uint64(bs.length))
 		written, err = aw.output.Write(varIbuf[:n])
 		if err != nil {
-			return 0, err
+			return err
 		}
 		if written != n {
-			return 0, io.ErrShortWrite
+			return io.ErrShortWrite
 		}
 		aw.bytesWritten += uint64(written)
 	}
@@ -291,31 +328,30 @@ func (aw *archiveWriter) writeIndex() (uint32, error) {
 	// We lay down the sorted chunk list in it's three forms.
 	// Prefix Map
 	for _, scr := range aw.stagedChunks {
-		err := binary.Write(aw.output, binary.BigEndian, scr.hash.Prefix())
+		err := aw.writeUint64(scr.hash.Prefix())
 		if err != nil {
-			return 0, err
+			return err
 		}
-		aw.bytesWritten += uint64Size
 	}
 	// ChunkReferences
 	for _, scr := range aw.stagedChunks {
 		n := binary.PutUvarint(varIbuf, uint64(scr.dictionary))
 		written, err := aw.output.Write(varIbuf[:n])
 		if err != nil {
-			return 0, err
+			return err
 		}
 		if written != n {
-			return 0, io.ErrShortWrite
+			return io.ErrShortWrite
 		}
 		aw.bytesWritten += uint64(written)
 
 		n = binary.PutUvarint(varIbuf, uint64(scr.data))
 		written, err = aw.output.Write(varIbuf[:n])
 		if err != nil {
-			return 0, err
+			return err
 		}
 		if written != n {
-			return 0, io.ErrShortWrite
+			return io.ErrShortWrite
 		}
 		aw.bytesWritten += uint64(written)
 	}
@@ -323,14 +359,110 @@ func (aw *archiveWriter) writeIndex() (uint32, error) {
 	for _, scr := range aw.stagedChunks {
 		n, err := aw.output.Write(scr.hash.Suffix())
 		if err != nil {
-			return 0, err
+			return err
 		}
 		if n != hash.SuffixLen {
-			return 0, io.ErrShortWrite
+			return io.ErrShortWrite
 		}
-
 		aw.bytesWritten += uint64(hash.SuffixLen)
 	}
 
-	return uint32(aw.bytesWritten - startingByteCount), nil
+	aw.indexLen = uint32(aw.bytesWritten - startingByteCount)
+	aw.indexCheckSum = sha512Sum(aw.output.GetSum())
+	aw.output.ResetHasher()
+
+	return nil
+}
+
+// writeMetadata writes the metadata to the archive. Expects the hasher to be reset before be called, and will reset it.
+// It sets the metadataLen and metadataCheckSum fields on the archiveWriter, and updates the bytesWritten field.
+//
+// Empty input is allowed.
+func (aw *archiveWriter) writeMetadata(data []byte) error {
+	if data == nil || len(data) == 0 {
+		aw.metadataCheckSum = sha512Sum(aw.output.GetSum())
+		aw.metadataLen = 0
+		aw.output.ResetHasher()
+		return nil
+	}
+
+	written, err := aw.output.Write(data)
+	if err != nil {
+		return err
+	}
+	if written != len(data) {
+		return io.ErrShortWrite
+	}
+	aw.bytesWritten += uint64(written)
+	aw.metadataLen = uint32(written)
+	aw.metadataCheckSum = sha512Sum(aw.output.GetSum())
+	aw.output.ResetHasher()
+
+	return nil
+}
+
+func (aw *archiveWriter) writeFooter() error {
+	// Write out the index length
+	err := aw.writeUint32(aw.indexLen)
+	if err != nil {
+		return err
+	}
+
+	// Write out the byte span count
+	err = aw.writeUint32(uint32(len(aw.stagedBytes)))
+	if err != nil {
+		return err
+	}
+
+	// Write out the chunk count
+	err = aw.writeUint32(uint32(len(aw.stagedChunks)))
+	if err != nil {
+		return err
+	}
+
+	// Write out the metadata length
+	err = aw.writeUint32(aw.metadataLen)
+	if err != nil {
+		return err
+	}
+
+	err = aw.writeCheckSums()
+	if err != nil {
+		return err
+	}
+
+	// Write out the format version
+	_, err = aw.output.Write([]byte{archiveFormatVersion})
+	if err != nil {
+		return err
+	}
+	aw.bytesWritten++
+
+	// Write out the file signature
+	_, err = aw.output.Write([]byte(archiveFileSignature))
+	if err != nil {
+		return err
+	}
+	aw.bytesWritten += archiveFileSigSize
+
+	return nil
+}
+
+func (aw *archiveWriter) writeCheckSums() error {
+	_, err := aw.output.Write(aw.dataCheckSum[:])
+	if err != nil {
+		return err
+	}
+
+	_, err = aw.output.Write(aw.indexCheckSum[:])
+	if err != nil {
+		return err
+	}
+
+	_, err = aw.output.Write(aw.metadataCheckSum[:])
+	if err != nil {
+		return err
+	}
+	aw.bytesWritten += archiveCheckSumSize
+	return nil
 }

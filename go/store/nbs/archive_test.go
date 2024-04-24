@@ -27,7 +27,7 @@ import (
 )
 
 func TestArchiveSingleChunk(t *testing.T) {
-	writer := NewFixedBufferTableSink(make([]byte, 1024))
+	writer := NewFixedBufferByteSink(make([]byte, 1024))
 
 	aw := newArchiveWriter(writer)
 	testBlob := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
@@ -41,15 +41,20 @@ func TestArchiveSingleChunk(t *testing.T) {
 	err = aw.stageChunk(oneHash, 0, 1)
 	assert.NoError(t, err)
 
-	n, err := aw.writeIndex()
+	aw.finalizeByteSpans()
+
+	err = aw.writeIndex()
 	assert.NoError(t, err)
-	assert.Equal(t, uint32(24), n) // Verified manually. A single chunk allows for single byte varints, so
+	assert.Equal(t, uint32(24), aw.indexLen) // Verified manually. A single chunk allows for single byte varints, so
 	// ByteSpan -> 2 bytes, Prefix -> 8 bytes, ChunkRef -> 2 bytes, Suffix -> 12 bytes. Total 24 bytes.
 
-	err = aw.writeFooter(n)
+	err = aw.writeMetadata([]byte(""))
 	assert.NoError(t, err)
 
-	assert.Equal(t, uint64(54), aw.bytesWritten) // 10 + 24 + 20 (footer is 20 bytes)
+	err = aw.writeFooter()
+	assert.NoError(t, err)
+
+	assert.Equal(t, 10+24+archiveFooterSize, aw.bytesWritten) // 10 data bytes, 24 index bytes + footer
 
 	theBytes := writer.buff[:writer.pos]
 	fileSize := uint64(len(theBytes))
@@ -67,7 +72,7 @@ func TestArchiveSingleChunk(t *testing.T) {
 }
 
 func TestArchiveSingleChunkWithDictionary(t *testing.T) {
-	writer := NewFixedBufferTableSink(make([]byte, 1024))
+	writer := NewFixedBufferByteSink(make([]byte, 1024))
 
 	aw := newArchiveWriter(writer)
 	testDict := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
@@ -79,8 +84,10 @@ func TestArchiveSingleChunkWithDictionary(t *testing.T) {
 	err := aw.stageChunk(h, 1, 2)
 	assert.NoError(t, err)
 
-	n, _ := aw.writeIndex()
-	err = aw.writeFooter(n)
+	aw.finalizeByteSpans()
+	_ = aw.writeIndex()
+	_ = aw.writeMetadata([]byte(""))
+	err = aw.writeFooter()
 	assert.NoError(t, err)
 
 	theBytes := writer.buff[:writer.pos]
@@ -99,7 +106,7 @@ func TestArchiveSingleChunkWithDictionary(t *testing.T) {
 }
 
 func TestArchiverMultipleChunksMultipleDictionaries(t *testing.T) {
-	writer := NewFixedBufferTableSink(make([]byte, 1024))
+	writer := NewFixedBufferByteSink(make([]byte, 1024))
 
 	aw := newArchiveWriter(writer)
 	dict1 := []byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1}           // span 1
@@ -136,8 +143,11 @@ func TestArchiverMultipleChunksMultipleDictionaries(t *testing.T) {
 	_ = aw.stageChunk(h6, 0, 6)
 	_ = aw.stageChunk(h7, 1, 7)
 
-	n, _ := aw.writeIndex()
-	_ = aw.writeFooter(n)
+	aw.finalizeByteSpans()
+
+	_ = aw.writeIndex()
+	_ = aw.writeMetadata([]byte(""))
+	_ = aw.writeFooter()
 
 	theBytes := writer.buff[:writer.pos]
 	fileSize := uint64(len(theBytes))
@@ -187,7 +197,7 @@ func TestArchiverMultipleChunksMultipleDictionaries(t *testing.T) {
 }
 
 func TestArchiveDictDecompression(t *testing.T) {
-	writer := NewFixedBufferTableSink(make([]byte, 4096))
+	writer := NewFixedBufferByteSink(make([]byte, 4096))
 
 	// This is 32K worth of data, but it's all very similar. Only fits in 4K if compressed with a dictionary.
 	chks := generateSimilarChunks(42, 32)
@@ -212,16 +222,19 @@ func TestArchiveDictDecompression(t *testing.T) {
 		err = aw.stageChunk(chk.Hash(), dictId, chId)
 		assert.NoError(t, err)
 	}
+	aw.finalizeByteSpans()
 
-	n, err := aw.writeIndex()
+	err = aw.writeIndex()
 	assert.NoError(t, err)
-	err = aw.writeFooter(n)
+	err = aw.writeMetadata([]byte("hello world"))
+	err = aw.writeFooter()
 	assert.NoError(t, err)
 
 	theBytes := writer.buff[:writer.pos]
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	aIdx, err := newArchiveIndex(readerAt, fileSize)
+	assert.NoError(t, err)
 
 	// Now verify that we can look up the chunks by their original addresses, and the data is the same.
 	for _, chk := range chks {
@@ -232,16 +245,16 @@ func TestArchiveDictDecompression(t *testing.T) {
 }
 
 func TestArchiveBlockCorruption(t *testing.T) {
-	writer := NewFixedBufferTableSink(make([]byte, 1024))
+	writer := NewFixedBufferByteSink(make([]byte, 1024))
 	aw := newArchiveWriter(writer)
 	testBlob := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 	_, _ = aw.writeByteSpan(testBlob)
 
 	h := hashWithPrefix(t, 23)
 	_ = aw.stageChunk(h, 0, 1)
-
-	n, _ := aw.writeIndex()
-	_ = aw.writeFooter(n)
+	aw.finalizeByteSpans()
+	_ = aw.writeIndex()
+	_ = aw.writeFooter()
 
 	theBytes := writer.buff[:writer.pos]
 	fileSize := uint64(len(theBytes))

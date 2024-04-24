@@ -59,12 +59,12 @@ func (r sectionReaderByteReader) ReadByte() (byte, error) {
 }
 
 func newArchiveIndex(reader io.ReaderAt, fileSize uint64) (archiveIndex, error) {
-	idx, bs, cc, err := loadFooter(reader, fileSize)
+	idx, bs, cc, md, err := loadFooter(reader, fileSize)
 	if err != nil {
 		return archiveIndex{}, err
 	}
 
-	indexStart := fileSize - archiveFooterSize - uint64(idx)
+	indexStart := fileSize - uint64(md) - archiveFooterSize - uint64(idx)
 	section := io.NewSectionReader(reader, int64(indexStart), int64(idx))
 
 	byteSpans := make([]byteSpan, bs+1)
@@ -127,8 +127,8 @@ func newArchiveIndex(reader io.ReaderAt, fileSize uint64) (archiveIndex, error) 
 	}, nil
 }
 
-func loadFooter(reader io.ReaderAt, fileSize uint64) (indexSize, byteSpanCount, chunkCount uint32, err error) {
-	section := io.NewSectionReader(reader, int64(fileSize-archiveFooterSize), archiveFooterSize)
+func loadFooter(reader io.ReaderAt, fileSize uint64) (indexSize, byteSpanCount, chunkCount, metadataSize uint32, err error) {
+	section := io.NewSectionReader(reader, int64(fileSize-archiveFooterSize), int64(archiveFooterSize))
 
 	bytesRead := 0
 	buf := make([]byte, archiveFooterSize)
@@ -136,25 +136,27 @@ func loadFooter(reader io.ReaderAt, fileSize uint64) (indexSize, byteSpanCount, 
 	if err != nil {
 		return
 	}
-	if bytesRead != archiveFooterSize {
+	if bytesRead != int(archiveFooterSize) {
 		err = io.ErrUnexpectedEOF
 		return
 	}
 
 	// Verify File Signature
-	if string(buf[13:]) != archiveFileSignature {
+	if string(buf[archiveFooterSize-archiveFileSigSize:]) != archiveFileSignature {
 		err = ErrInvalidFileSignature
 		return
 	}
 	// Verify Format Version. Currently only one version is supported, but we'll need to be more flexible in the future.
-	if buf[12] != archiveFormatVersion {
+	if buf[archiveFooterSize-(archiveFileSigSize+1)] != archiveFormatVersion {
 		err = ErrInvalidFormatVersion
 		return
 	}
 
+	// NM4 - I hate this so much.
 	indexSize = binary.BigEndian.Uint32(buf[:uint32Size])
 	byteSpanCount = binary.BigEndian.Uint32(buf[uint32Size : uint32Size*2])
 	chunkCount = binary.BigEndian.Uint32(buf[uint32Size*2 : uint32Size*3])
+	metadataSize = binary.BigEndian.Uint32(buf[uint32Size*3 : uint32Size*4])
 
 	return
 }
