@@ -151,6 +151,17 @@ func TestBinlogPrimary_SimpleSchemaChangesWithAutocommit(t *testing.T) {
 	primaryDatabase.MustExec("drop table db01.t1;")
 	time.Sleep(200 * time.Millisecond)
 	requireReplicaResults(t, "show tables;", [][]any{})
+
+	// Rename a table
+	primaryDatabase.MustExec("create table originalName(pk1 int, pk2 int, c1 varchar(200), c2 varchar(200), primary key (pk1, pk2));")
+	primaryDatabase.MustExec("insert into originalName values (1, 2, 'one', 'two');")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "show tables;", [][]any{{"originalName"}})
+	requireReplicaResults(t, "select * from originalName;", [][]any{{"1", "2", "one", "two"}})
+	primaryDatabase.MustExec("rename table originalName to newName;")
+	time.Sleep(200 * time.Millisecond)
+	requireReplicaResults(t, "show tables;", [][]any{{"newName"}})
+	requireReplicaResults(t, "select * from newName;", [][]any{{"1", "2", "one", "two"}})
 }
 
 // TestBinlogPrimary_SchemaChangesWithManualCommit tests that manually managed transactions, which

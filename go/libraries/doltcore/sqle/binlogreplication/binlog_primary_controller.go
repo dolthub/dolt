@@ -163,6 +163,7 @@ func (m *binlogStreamerManager) createSchemaChangeQueryEvents(
 	ctx *sql.Context, databaseName string, tableDeltas []diff.TableDelta, newRoot *doltdb.RootValue) (
 	events []mysql.BinlogEvent, hasDataChanges bool, err error) {
 	for _, tableDelta := range tableDeltas {
+		isRename := tableDelta.IsRename()
 		schemaChanged, err := tableDelta.HasSchemaChanged(ctx)
 		if err != nil {
 			return nil, false, err
@@ -176,7 +177,7 @@ func (m *binlogStreamerManager) createSchemaChangeQueryEvents(
 			hasDataChanges = true
 		}
 
-		if !schemaChanged {
+		if !schemaChanged && !isRename {
 			continue
 		}
 
