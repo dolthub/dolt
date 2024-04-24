@@ -564,6 +564,7 @@ var SchemaChangeTestsBasicCases = []MergeScriptTest{
 		},
 	},
 	{
+		// Currently skipped bc of https://github.com/dolthub/dolt/issues/7767
 		Name: "ambiguous choice of ancestor column",
 		AncSetUpScript: []string{
 			"CREATE table t (pk int primary key, col1 int, col2 int);",
