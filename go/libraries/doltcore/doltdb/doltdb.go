@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"io"
 	"os"
 	"path/filepath"
@@ -1380,6 +1381,22 @@ type ReplicationStatusController struct {
 	NotifyWaitFailed []func()
 }
 
+// RootUpdateListener allows callbacks on a registered listener when a working root is updated in a session.
+type RootUpdateListener interface {
+	// WorkingRootUpdated is called when a working root is updated on a branch's working set. |ctx| provides the
+	// session information, |databaseName| describes the database being updated, and |before| and |after| are the
+	// previous and new RootValues for the working root. If callers encounter any errors while processing a root
+	// update notification, they can return an error, which will be logged.
+	WorkingRootUpdated(ctx *sql.Context, databaseName string, before *RootValue, after *RootValue) error
+}
+
+var RootUpdateListeners = make([]RootUpdateListener, 0)
+
+// RegisterRootUpdateListener registers |listener| to receive callbacks when a working set's working root is updated.
+func RegisterRootUpdateListener(listener RootUpdateListener) {
+	RootUpdateListeners = append(RootUpdateListeners, listener)
+}
+
 // UpdateWorkingSet updates the working set with the ref given to the root value given
 // |prevHash| is the hash of the expected WorkingSet struct stored in the ref, not the hash of the RootValue there.
 func (ddb *DoltDB) UpdateWorkingSet(
@@ -1395,7 +1412,7 @@ func (ddb *DoltDB) UpdateWorkingSet(
 		return err
 	}
 
-	wsSpec, err := workingSet.writeValues(ctx, ddb, meta)
+	wsSpec, err := ddb.writeWorkingSetAndNotifyListeners(ctx, workingSetRef, workingSet, meta, ds)
 	if err != nil {
 		return err
 	}
@@ -1426,7 +1443,7 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 		return nil, err
 	}
 
-	wsSpec, err := workingSet.writeValues(ctx, ddb, meta)
+	wsSpec, err := ddb.writeWorkingSetAndNotifyListeners(ctx, workingSetRef, workingSet, meta, wsDs)
 	if err != nil {
 		return nil, err
 	}
@@ -1455,6 +1472,44 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 	}
 
 	return NewCommit(ctx, ddb.vrw, ddb.ns, dc)
+}
+
+// writeWorkingSetAndNotifyListeners writes the specified |workingSet| at the specified |workingSetRef| with the
+// specified ws metadata, |meta|, in the dataset |wsDs| and returns the created WorkingSetSpec along with any error
+// encountered. If any listeners are registered for working root updates, then they will be notified as well.
+func (ddb *DoltDB) writeWorkingSetAndNotifyListeners(ctx context.Context, workingSetRef ref.WorkingSetRef, workingSet *WorkingSet, meta *datas.WorkingSetMeta, wsDs datas.Dataset) (wsSpec *datas.WorkingSetSpec, err error) {
+	var prevWorkingSet *WorkingSet
+	// TODO: support making the binlog branch configurable
+	if workingSet.Name == "heads/main" {
+		if wsDs.HasHead() {
+			prevWorkingSet, err = newWorkingSet(ctx, workingSetRef.String(), ddb.vrw, ddb.ns, wsDs)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			// TODO: Handle create database events here
+		}
+	}
+
+	wsSpec, err = workingSet.writeValues(ctx, ddb, meta)
+	if err != nil {
+		return nil, err
+	}
+
+	if prevWorkingSet != nil {
+		for _, listener := range RootUpdateListeners {
+			sqlCtx, ok := ctx.(*sql.Context)
+			if ok {
+				err := listener.WorkingRootUpdated(sqlCtx, sqlCtx.GetCurrentDatabase(),
+					prevWorkingSet.workingRoot, workingSet.WorkingRoot())
+				if err != nil {
+					logrus.Errorf("error notifying working root listener of update: %s", err.Error())
+				}
+			}
+		}
+	}
+
+	return wsSpec, nil
 }
 
 // DeleteWorkingSet deletes the working set given

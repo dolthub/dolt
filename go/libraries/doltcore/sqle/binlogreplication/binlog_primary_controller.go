@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -66,7 +65,7 @@ type binlogStreamerManager struct {
 	binlogFormat mysql.BinlogFormat
 }
 
-var _ dsess.RootUpdateListener = (*binlogStreamerManager)(nil)
+var _ doltdb.RootUpdateListener = (*binlogStreamerManager)(nil)
 
 // WorkingRootUpdated implements the RootUpdateListener interface. When a transaction is committed, this function
 // generates events for the binary log and sends them to all connected replicas.
@@ -1262,7 +1261,7 @@ func newBinlogStreamerManager() *binlogStreamerManager {
 		binlogStream: binlogStream,
 	}
 
-	dsess.RegisterRootUpdateListener(manager)
+	doltdb.RegisterRootUpdateListener(manager)
 
 	go func() {
 		for {

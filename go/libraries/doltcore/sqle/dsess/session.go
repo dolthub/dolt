@@ -987,7 +987,6 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 	if ws.Ref() != branchState.WorkingSet().Ref() {
 		return fmt.Errorf("must switch working sets with SwitchWorkingSet")
 	}
-	previousWorkingSet := branchState.WorkingSet()
 	branchState.workingSet = ws
 
 	err = d.setDbSessionVars(ctx, branchState, true)
@@ -998,16 +997,6 @@ func (d *DoltSession) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.
 	err = branchState.WriteSession().SetWorkingSet(ctx, ws)
 	if err != nil {
 		return err
-	}
-
-	if branchState.head == "main" {
-		nonRevisionDbName := branchState.dbState.dbName
-		for _, listener := range rootUpdateListeners {
-			err := listener.WorkingRootUpdated(ctx, nonRevisionDbName, previousWorkingSet.WorkingRoot(), ws.WorkingRoot())
-			if err != nil {
-				return err
-			}
-		}
 	}
 
 	branchState.dirty = true
