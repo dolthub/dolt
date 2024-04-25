@@ -19,8 +19,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/cespare/xxhash/v2"
 	"github.com/dolthub/swiss"
+	"hash/crc32"
 	"io"
 	"os"
 	"path/filepath"
@@ -95,10 +95,9 @@ func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, exi
 	}
 
 	return &journalWriter{
-		buf:       make([]byte, 0, journalWriterBuffSize),
-		journal:   f,
-		path:      path,
-		batchHash: xxhash.New(),
+		buf:     make([]byte, 0, journalWriterBuffSize),
+		journal: f,
+		path:    path,
 	}, true, nil
 }
 
@@ -135,10 +134,9 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 	}
 
 	return &journalWriter{
-		buf:       make([]byte, 0, journalWriterBuffSize),
-		journal:   f,
-		path:      path,
-		batchHash: xxhash.New(),
+		buf:     make([]byte, 0, journalWriterBuffSize),
+		journal: f,
+		path:    path,
 	}, nil
 }
 
@@ -154,6 +152,7 @@ type journalWriter struct {
 	buf []byte
 
 	journal *os.File
+	// off indicates the last position that has been written to the journal buffer
 	off     int64
 	indexed int64
 	path    string
@@ -165,7 +164,7 @@ type journalWriter struct {
 	ranges      rangeIndex
 	index       *os.File
 	indexWriter *bufio.Writer
-	batchHash   *xxhash.Digest
+	batchCrc    uint32
 	maxNovel    int
 
 	lock sync.RWMutex
@@ -383,9 +382,7 @@ func (wr *journalWriter) writeCompressedChunk(cc CompressedChunk) error {
 	if err := writeIndexLookup(wr.indexWriter, lookup{a: cc.H, r: rng}); err != nil {
 		return err
 	}
-	if _, err := wr.batchHash.Write(cc.H[:]); err != nil {
-		return err
-	}
+	wr.batchCrc = crc32.Update(wr.batchCrc, crcTable, cc.H[:])
 
 	// To fulfill our durability guarantees, we technically only need to
 	// file.Sync() the journal when we commit a new root chunk. However,
@@ -437,7 +434,7 @@ func (wr *journalWriter) commitRootHashUnlocked(root hash.Hash) error {
 	wr.unsyncd = 0
 	if wr.ranges.novelCount() > wr.maxNovel {
 		o := wr.offset() - int64(n) // pre-commit journal offset
-		err = wr.flushIndexRecord(root, o)
+		go wr.flushIndexRecord(root, o)
 	}
 	return err
 }
@@ -445,8 +442,8 @@ func (wr *journalWriter) commitRootHashUnlocked(root hash.Hash) error {
 // flushIndexRecord writes a new record to the out-of-band journal index file. Index records
 // accelerate journal bootstrapping by reducing the amount of the journal that must be processed.
 func (wr *journalWriter) flushIndexRecord(root hash.Hash, end int64) (err error) {
-	writeJournalIndexMeta(wr.indexWriter, root, wr.indexed, end, uint32(wr.batchHash.Sum64()))
-	wr.batchHash.Reset()
+	writeJournalIndexMeta(wr.indexWriter, root, wr.indexed, end, wr.batchCrc)
+	wr.batchCrc = 0
 	wr.ranges = wr.ranges.flatten()
 	// set a new high-water-mark for the indexed portion of the journal
 	wr.indexed = end
@@ -583,6 +580,7 @@ func (wr *journalWriter) Close() (err error) {
 		return err
 	}
 	if wr.index != nil {
+		_ = wr.indexWriter.Flush()
 		_ = wr.index.Close()
 	}
 	if cerr := wr.journal.Sync(); cerr != nil {

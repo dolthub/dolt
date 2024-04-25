@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/cespare/xxhash/v2"
+	"hash/crc32"
 	"io"
 	"sort"
 	"sync"
@@ -240,8 +241,9 @@ func processIndexRecords2(ctx context.Context, rd *bufio.Reader, sz int64, cb fu
 	// validate the root hash for the range
 	// if all valid flush batch to lookup map
 
-	batchHash := digestPool.Get().(*xxhash.Digest)
-	defer digestPool.Put(batchHash)
+	//batchHash := digestPool.Get().(*xxhash.Digest)
+	//defer digestPool.Put(batchHash)
+	var batchCrc uint32
 
 	var batch []lookup
 	for {
@@ -259,20 +261,18 @@ func processIndexRecords2(ctx context.Context, rd *bufio.Reader, sz int64, cb fu
 				return err
 			}
 			batch = append(batch, l)
-			if _, err := batchHash.Write(l.a[:]); err != nil {
-				return err
-			}
+			batchCrc = crc32.Update(batchCrc, crcTable, l.a[:])
 
 		case indexRecMeta:
 			m, err := readIndexMeta(rd)
 			if err != nil {
 				return err
 			}
-			if err := cb(m, batch, uint32(batchHash.Sum64())); err != nil {
+			if err := cb(m, batch, batchCrc); err != nil {
 				return err
 			}
 			batch = batch[:0]
-			batchHash.Reset()
+			batchCrc = 0
 		default:
 			return fmt.Errorf("expected record to start with a chunk or metadata type tag")
 		}
@@ -283,12 +283,13 @@ func readIndexLookup(r *bufio.Reader) (lookup, error) {
 	// sequences of lookups ... |chunk address|chunk offset|chunklength|
 	// the lookups are all fixed size, (20) + (4) + (4)
 
-	addrBuf := addressPool.Get().([]byte)
-	defer addressPool.Put(addrBuf)
+	//addrBuf := addressPool.Get().([]byte)
+	//defer addressPool.Put(addrBuf)
 	addr := hash.Hash{}
 	if _, err := io.ReadFull(r, addr[:]); err != nil {
 		return lookup{}, err
 	}
+	//log.Println("deserialize", addr.String())
 
 	offsetBuf := uint64Pool.Get().([]byte)
 	defer uint64Pool.Put(offsetBuf)

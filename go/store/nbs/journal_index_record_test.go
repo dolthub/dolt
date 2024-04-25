@@ -18,7 +18,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"github.com/OneOfOne/xxhash"
+	"hash/crc32"
 	"math/rand"
 	"testing"
 
@@ -63,12 +63,11 @@ func newLookups(t *testing.T, n int, start uint64) ([]lookup, lookupMeta) {
 	var lookups []lookup
 	var off uint64
 	var end uint64
-	checksum := xxhash.New64()
+	var checksum uint32
 	hashes := genBytes(20, n)
 	for _, h := range hashes {
 		length := (rand.Uint64() % 1024)
-		_, err := checksum.Write(h)
-		require.NoError(t, err)
+		checksum = crc32.Update(checksum, crcTable, h)
 		start = end
 		lookups = append(lookups, lookup{
 			a: hash.New(h),
@@ -80,7 +79,7 @@ func newLookups(t *testing.T, n int, start uint64) ([]lookup, lookupMeta) {
 	return lookups, lookupMeta{
 		batchStart: int(start),
 		batchEnd:   int(end),
-		checkSum:   uint32(checksum.Sum64()),
+		checkSum:   checksum,
 		latestHash: hash.Hash{},
 	}
 }
