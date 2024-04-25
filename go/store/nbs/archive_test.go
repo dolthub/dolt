@@ -268,7 +268,9 @@ func TestMetadata(t *testing.T) {
 	assert.Equal(t, []byte("All work and no play"), md)
 }
 
-func TestArchiveBlockCorruption(t *testing.T) {
+// zStd has a CRC check built into it, and it will get triggered when we
+// attempt to decompress a corrupted chunk.
+func TestArchiveChunkCorruption(t *testing.T) {
 	writer := NewFixedBufferByteSink(make([]byte, 1024))
 	aw := newArchiveWriter(writer)
 	testBlob := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
@@ -295,6 +297,53 @@ func TestArchiveBlockCorruption(t *testing.T) {
 	assert.Nil(t, data)
 }
 
+// Varlidate that the SHA512 checksums in the footer checkout, and fail when they are corrupted.
+func TestArchiveCheckSumValidations(t *testing.T) {
+	writer := NewFixedBufferByteSink(make([]byte, 1024))
+
+	aw := newArchiveWriter(writer)
+	testBlob := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	_, _ = aw.writeByteSpan(testBlob)
+
+	h := hashWithPrefix(t, 23)
+	_ = aw.stageChunk(h, 0, 1)
+	err := aw.finalizeByteSpans()
+	assert.NoError(t, err)
+	err = aw.writeIndex()
+	assert.NoError(t, err)
+	err = aw.writeMetadata([]byte("All work and no play"))
+	assert.NoError(t, err)
+	err = aw.writeFooter()
+	assert.NoError(t, err)
+
+	theBytes := writer.buff[:writer.pos]
+	fileSize := uint64(len(theBytes))
+	readerAt := bytes.NewReader(theBytes)
+	rdr, err := newArchiveReader(readerAt, fileSize)
+	assert.NoError(t, err)
+
+	err = rdr.verifyDataCheckSum()
+	assert.NoError(t, err)
+	err = rdr.verifyDataCheckSum()
+	assert.NoError(t, err)
+	err = rdr.verifyDataCheckSum()
+	assert.NoError(t, err)
+
+	theBytes[5] = theBytes[5] + 1
+	err = rdr.verifyDataCheckSum()
+	assert.ErrorContains(t, err, "checksum mismatch")
+
+	offset := rdr.footer.indexSpan().offset + 2
+	theBytes[offset] = theBytes[offset] + 1
+	err = rdr.verifyIndexCheckSum()
+	assert.ErrorContains(t, err, "checksum mismatch")
+
+	offset = rdr.footer.metadataSpan().offset + 2
+	theBytes[offset] = theBytes[offset] + 1
+	err = rdr.verifyMetaCheckSum()
+	assert.ErrorContains(t, err, "checksum mismatch")
+}
+
 func TestPrefixSearch(t *testing.T) {
 	pf := []uint64{2, 3, 4, 4, 4, 5, 6, 7, 10, 10, 11, 12, 13}
 
@@ -315,6 +364,7 @@ func TestPrefixSearch(t *testing.T) {
 	assert.Equal(t, []int{}, findMatchingPrefixes(pf, 22))
 }
 
+// Helper functions to create test data below....
 func hashWithPrefix(t *testing.T, prefix uint64) hash.Hash {
 	randomBytes := make([]byte, 20)
 	n, err := rand.Read(randomBytes)

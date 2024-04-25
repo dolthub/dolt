@@ -17,6 +17,7 @@ package nbs
 import (
 	"crypto/sha512"
 	"encoding/binary"
+	"fmt"
 	"io"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -50,6 +51,10 @@ type footer struct {
 	formatVersion byte
 	fileSignature string
 	fileSize      uint64 // Not actually part of the footer, but necessary for calculating offsets.
+}
+
+func (f footer) dataSpan() byteSpan {
+	return byteSpan{offset: 0, length: f.fileSize - archiveFooterSize - uint64(f.metadataSize) - uint64(f.indexSize)}
 }
 
 func (f footer) indexSpan() byteSpan {
@@ -280,6 +285,35 @@ func (ai archiveReader) getMetadata() ([]byte, error) {
 	span := ai.footer.metadataSpan()
 	data := make([]byte, span.length)
 	return ai.readByteSpan(data, span)
+}
+
+// verifyDataCheckSum verifies the checksum of the data section of the archive. Note - this requires a fully read of
+// the data section, which could be sizable.
+func (ai archiveReader) verifyDataCheckSum() error {
+	return verifyCheckSum(ai.reader, ai.footer.dataSpan(), ai.footer.dataCheckSum)
+}
+
+// verifyIndexCheckSum verifies the checksum of the index section of the archive.
+func (ai archiveReader) verifyIndexCheckSum() error {
+	return verifyCheckSum(ai.reader, ai.footer.indexSpan(), ai.footer.indexCheckSum)
+}
+
+// verifyMetaCheckSum verifies the checksum of the metadata section of the archive.
+func (ai archiveReader) verifyMetaCheckSum() error {
+	return verifyCheckSum(ai.reader, ai.footer.metadataSpan(), ai.footer.metaCheckSum)
+}
+
+func verifyCheckSum(reader io.ReaderAt, span byteSpan, checkSum sha512Sum) error {
+	hshr := sha512.New()
+	_, err := io.Copy(hshr, io.NewSectionReader(reader, int64(span.offset), int64(span.length)))
+	if err != nil {
+		return err
+	}
+
+	if sha512Sum(hshr.Sum(nil)) != checkSum {
+		return fmt.Errorf("checksum mismatch.")
+	}
+	return nil
 }
 
 // findMatchingPrefixes returns all indexes of the input slice that have a prefix that matches the target prefix.
