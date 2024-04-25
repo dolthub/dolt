@@ -1247,7 +1247,7 @@ func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableD
 	var viewDef sql.ViewDefinition
 	var views = make([]sql.ViewDefinition, len(fragments))
 	for i, fragment := range fragments {
-		cv, err := sqlparser.ParseWithOptions(fragments[i].fragment,
+		cv, err := sqlparser.ParseWithOptions(ctx, fragments[i].fragment,
 			sql.NewSqlModeFromString(fragment.sqlMode).ParserOptions())
 		if err != nil {
 			return nil, sql.ViewDefinition{}, false, err
