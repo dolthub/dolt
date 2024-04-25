@@ -46,7 +46,8 @@ func TestBinlogPrimary(t *testing.T) {
 		"bl1 blob, " +
 		"tx1 text," +
 		"bin1 binary(10), vbin1 varbinary(20)," +
-		"geo1 geometry" +
+		"geo1 geometry, json1 json, json2 json, json3 json, json4 json, json5 json, " +
+		"json6 json, json7 json" +
 		");")
 
 	// NOTE: waitForReplicaToCatchUp won't work until we implement GTID support
@@ -70,7 +71,8 @@ func TestBinlogPrimary(t *testing.T) {
 		"0x010203," +
 		"'text text text'," +
 		"0x0102030405, 0x0102030405060708090a," +
-		"POINT(1,1) " +
+		`POINT(1,1), 'true', '[true, false]', '[true, [true, false]]', '["foo","bar"]', '["baz", 1.0, 2.0, "bash"]', ` +
+		`'{"foo":"bar"}', '{"foo": {"baz": "bar"}}'` +
 		");")
 	time.Sleep(250 * time.Millisecond)
 
@@ -107,6 +109,8 @@ func TestBinlogPrimary(t *testing.T) {
 			"text text text",
 			"\x01\x02\x03\x04\x05\x00\x00\x00\x00\x00", "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a",
 			"\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0\x3F\x00\x00\x00\x00\x00\x00\xf0\x3F",
+			"true", "[true, false]", "[true, [true, false]]", `["foo", "bar"]`, `["baz", 1.0, 2.0, "bash"]`,
+			`{"foo": "bar"}`, `{"foo": {"baz": "bar"}}`,
 		},
 	})
 }
