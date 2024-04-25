@@ -73,7 +73,7 @@ type namedSchema struct {
 	create string
 }
 
-// TestMergeSchemas are schema merge integration tests from 2023
+// TestSchemaMerge are schema merge integration tests from 2023
 func TestSchemaMerge(t *testing.T) {
 	t.Run("column add/drop tests", func(t *testing.T) {
 		testSchemaMerge(t, columnAddDropTests)
