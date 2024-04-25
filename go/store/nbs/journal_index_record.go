@@ -21,11 +21,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/cespare/xxhash/v2"
 	"hash/crc32"
 	"io"
 	"sort"
 	"sync"
+
+	"github.com/cespare/xxhash/v2"
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
