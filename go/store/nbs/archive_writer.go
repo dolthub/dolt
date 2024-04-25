@@ -16,160 +16,16 @@ package nbs
 
 import (
 	"bytes"
+	"crypto/sha512"
 	"encoding/binary"
-	"errors"
+	"fmt"
 	"io"
 	"sort"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-/*
-A Dolt Archive is a file format for storing a collection of Chunks in a single file. The archive is essentially many
-byte spans concatenated together, with an index at the end of the file. Chunk Addresses are used to lookup and retrieve
-Chunks from the Archive.
-
-There are byte spans with in the archive which are not addressable by a Chunk Address. These are used as internal data
-to aid in the compression of the Chunks.
-
-A Dolt Archive file follows the following format:
-   +------------+------------+-----+------------+-------+----------+--------+
-   | ByteSpan 1 | ByteSpan 2 | ... | ByteSpan N | Index | Metadata | Footer |
-   +------------+------------+-----+------------+-------+----------+--------+
-
-In reverse order, since that's how we read it
-
-Footer:
-   +----------------------+-------------------------+----------------------+--------------------------+-----------------+------------------------+--------------------+
-   | (Uint32) IndexLength | (Uint32) ByteSpan Count | (Uint32) Chunk Count | (Uint32) Metadata Length | (192) CheckSums | (Uint8) Format Version | (7) File Signature |
-   +----------------------+-------------------------+----------------------+--------------------------+-----------------+------------------------+--------------------+
-   - Index Length: The length of the Index in bytes.
-   - ByteSpan Count: (N) The number of ByteSpans in the Archive. (does not include the null ByteSpan)
-   - Chunk Count: (M) The number of Chunk Records in the Archive.
-      * These 3 values are all required to properly parse the Index. Note that the NBS Index has a deterministic size
-        based on the Chunk Count. This is not the case with a Dolt Archive.
-   - Metadata Length: The length of the Metadata in bytes.
-   - CheckSums: See Below.
-   - Format Version: Sequence starting at 1.
-   - File Signature: Some would call this a magic number. Not on my watch. Dolt Archives have a 7 byte signature: "DOLTARC"
-
-   CheckSums:
-   +----------------------------+-------------------+----------------------+
-   | (64) Sha512 ByteSpan 1 - N | (64) Sha512 Index | (64) Sha512 Metadata |
-   +----------------------------+-------------------+----------------------+
-   - The Sha512 checksums of the ByteSpans, Index, and Metadata. Currently unused, but may be used in the future. Leaves
-     the opening to verify integrity manually at least, but could be used in the future to allow to break the file into
-     parts, and ensure we can verify the integrity of each part.
-
-Index:
-   +--------------+------------+-----------------+----------+
-   | ByteSpan Map | Prefix Map | ChunkReferences | Suffixes |
-   +--------------+------------+-----------------+----------+
-
-   ByteSpan Map:
-       +------------------+------------------+-----+------------------+
-       | ByteSpanRecord 1 | ByteSpanRecord 2 | ... | ByteSpanRecord N |
-       +------------------+------------------+-----+------------------+
-       ByteSpanRecord:
-           +------------------+------------------+
-           | (uvarint) Offset | (uvarint) Length |
-           +------------------+------------------+
-           - Offset: The byte offset of the ByteSpan in the archive
-           - Length: The byte length of the ByteSpan (includes the CRC32)
-
-       The ByteSpan Map contains N ByteSpan Records. The index in the map is considered the ByteSpan's ID, and
-       is used to reference the ByteSpan in the ChunkRefs. Note that the ByteSpan ID is 1-based, as 0 is reserved to indicate
-       an empty ByteSpan.
-
-   Prefix Map:
-       +-------------------+-------------------+-----+---------------------------+
-       | (Uint64) Prefix 0 | (Uint64) Prefix 1 | ... | (Uint64) Prefix Tuple M-1 |
-       +-------------------+-------------------+-----+---------------------------+
-       - The Prefix Map contains M Prefixes - one for each Chunk Record in the Table.
-       - The Prefix Tuples are sorted, allowing for a binary search.
-       - NB: THE SAME PREFIX MAY APPEAR MULTIPLE TIMES, as distinct Hashes (referring to distinct Chunks) may share the same Prefix.
-       - The index into this map is the Ordinal of the Chunk Record.
-
-   ChunkReferences:
-       +------------+------------+-----+--------------+
-       | ChunkRef 0 | ChunkRef 1 | ... | ChunkRef M-1 |
-       +------------+------------+-----+--------------+
-       ChunkRef:
-           +-------------------------------+--------------------------+
-           | (uvarint) Dictionary ByteSpan | (uvarint) Chunk ByteSpan |
-           +-------------------------------+--------------------------+
-        - Dictionary: ID for a ByteSpan to be used as zstd dictionary. 0 refers to the empty ByteSpan, which indicates no dictionary.
-        - Chunk: ID for the ByteSpan containing the Chunk data. Never 0.
-
-   Suffixes:
-       +--------------------+--------------------+-----+----------------------+
-       | (12) Hash Suffix 0 | (12) Hash Suffix 1 | ... | (12) Hash Suffix M-1 |
-       +--------------------+--------------------+-----+----------------------+
-
-     - Each Hash Suffix is the last 12 bytes of a Chunk in this Table.
-     - Hash Suffix M must correspond to Prefix M and Chunk Record M
-
-Metadata:
-   The Metadata section is intended to be used for additional information about the Archive. This may include the version
-   of Dolt that created the archive, possibly references to other archives, or other information. For Format version 1,
-   We use a simple JSON object. The Metadata Length is the length of the JSON object in bytes. Could be a Flatbuffer in
-   the future, which would mandate a format version bump.
-
-ByteSpan:
-   +----------------+
-   | Data as []byte |
-   +----------------+
-     - Self Explanatory.
-     - zStd automatically applies and checks CRC.
-
-Chunk Retrieval (phase 1 is similar to NBS):
-
-  Phase one: Chunk Presence
-  - Slice off the first 8 bytes of your Hash to create a Prefix
-  - Since the Prefix Tuples in the Prefix Map are in lexicographic order, binary search the Prefix Map for the desired
-    Prefix. To not mix terms with Index, we'll call this the Chunk Id, which is the 0-based index into the Prefix Map.
-  - Using the Chunk Id found with a binary search, search locally for additional matching Prefixes. The matching indexes
-    are all potential matches for the chunk you are looking for.
-    - For each Chunk Id found, grab the corresponding Suffix, and compare to the Suffix of the Hash you are looking for.
-    - If they match, your chunk is in this file in the Chunk Id which matched.
-    - If they don't match, continue to the next matching Chunk Id.
-  - If not found, your chunk is not in this Table.
-  - If found, the given Chunk Id is the same index into the ChunkRef Map for the desired chunk.
-
-  Phase two: Loading Chunk data
-  - Take the Chunk Id discovered in Phase one, and use it to grap that index from the ChunkRefs Map.
-  - Retrieve the ByteSpan Id for the Chunk data. Verify integrity with CRC.
-  - If Dictionary is 0:
-    - Decompress the Chunk data using zstd (no dictionary)
-  - Otherwise:
-    - Retrieve the ByteSpan ID for the Dictionary data.
-    - Decompress the Chunk data using zstd with the Dictionary data.
-*/
-
-const (
-	archiveFormatVersion = 1
-	archiveFileSignature = "DOLTARC"
-	archiveFileSigSize   = uint64(len(archiveFileSignature))
-	archiveCheckSumSize  = 64 * 3       // sha512 3 times.
-	archiveFooterSize    = uint32Size + // index length
-		uint32Size + // byte span count
-		uint32Size + // chunk count
-		uint32Size + // metadata length
-		archiveCheckSumSize +
-		1 + // version byte
-		archiveFileSigSize
-)
-
-var ErrInvalidChunkRange = errors.New("invalid chunk range")
-var ErrInvalidDictionaryRange = errors.New("invalid dictionary range")
-var ErrInvalidFileSignature = errors.New("invalid file signature")
-var ErrInvalidFormatVersion = errors.New("invalid format version")
-
-type stagedByteSpan struct {
-	offset uint64
-	length uint32
-}
-type stagedByteSpanSlice []stagedByteSpan
+type stagedByteSpanSlice []byteSpan
 
 type stagedChunkRef struct {
 	hash             hash.Hash
@@ -177,10 +33,18 @@ type stagedChunkRef struct {
 }
 type stagedChunkRefSlice []stagedChunkRef
 
-type sha512Sum [64]byte
+type stage int
+
+const (
+	stageByteSpan stage = iota
+	stageIndex
+	stageMetadata
+	stageFooter
+	stageFlush
+)
 
 type archiveWriter struct {
-	output           HashingByteSink
+	output           *HashingByteSink
 	bytesWritten     uint64
 	stagedBytes      stagedByteSpanSlice
 	stagedChunks     stagedChunkRefSlice
@@ -189,17 +53,41 @@ type archiveWriter struct {
 	dataCheckSum     sha512Sum
 	indexCheckSum    sha512Sum
 	metadataCheckSum sha512Sum
+	workflowStage    stage
 }
 
-func newArchiveWriter(output ByteSink) *archiveWriter {
-	hbs := NewSHA512HashingByteSink(output)
-	return &archiveWriter{output: *hbs}
+/*
+There is a workflow to writing an archive:
+ 1. writeByteSpan: Write a group of bytes to the archive. This will immediately write the bytes to the output, and
+    return an ID for the byte span. Caller must keep track of this ID.
+ 2. stageChunk: Given a hash, dictionary (as byteSpan ID), and data (as byteSpan ID), stage a chunk for writing. This
+    does not write anything to disk yet.
+ 3. Repeat steps 1 and 2 as necessary. You can interleave them, but all chunks must be staged before the next step.
+ 4. finalizeByteSpans: At this point, all byte spans have been written out, and the checksum for the data block
+    is calculated. No more byte spans can be written after this step.
+ 5. writeIndex: Write the index to the archive. This will do all the work of writing the byte span map, prefix map,
+    chunk references, and suffixes. Index checksum is calculated at the end of this step.
+ 6. writeMetadata: Write the metadataSpan to the archive. Calculate the metadataSpan checksum at the end of this step.
+ 7. writeFooter: Write the footer to the archive. This will write out the index length, byte span count, chunk count.
+ 8. flushToFile: Write the archive to disk and move into its new home.
+
+When all of these steps have been completed without error, the ByteSink used to create the writer can be flushed and closed
+to complete the archive writing process.
+*/
+
+func newArchiveWriterWithSink(bs ByteSink) *archiveWriter {
+	hbs := NewSHA512HashingByteSink(bs)
+	return &archiveWriter{output: hbs}
 }
 
 // writeByteSpan writes a byte span to the archive, returning the ByteSpan ID if the write was successful. Note
 // that writing an empty byte span is a no-op and will return 0. Also, the slice passed in is copied, so the caller
 // can reuse the slice after this call.
 func (aw *archiveWriter) writeByteSpan(b []byte) (uint32, error) {
+	if aw.workflowStage != stageByteSpan {
+		return 0, fmt.Errorf("Runtime error: writeByteSpan called out of order")
+	}
+
 	if len(b) == 0 {
 		return 0, nil
 	}
@@ -215,12 +103,16 @@ func (aw *archiveWriter) writeByteSpan(b []byte) (uint32, error) {
 	}
 	aw.bytesWritten += uint64(written)
 
-	aw.stagedBytes = append(aw.stagedBytes, stagedByteSpan{offset, uint32(written)})
+	aw.stagedBytes = append(aw.stagedBytes, byteSpan{offset, uint64(written)})
 
 	return uint32(len(aw.stagedBytes)), nil
 }
 
 func (aw *archiveWriter) stageChunk(hash hash.Hash, dictionary, data uint32) error {
+	if aw.workflowStage != stageByteSpan {
+		return fmt.Errorf("Runtime error: stageChunk called out of order")
+	}
+
 	if data == 0 || data > uint32(len(aw.stagedBytes)) {
 		return ErrInvalidChunkRange
 	}
@@ -243,58 +135,26 @@ func (scrs stagedChunkRefSlice) Swap(i, j int) {
 	scrs[i], scrs[j] = scrs[j], scrs[i]
 }
 
-// finalizeByteSpans writes the ... NM4
-func (aw *archiveWriter) finalizeByteSpans() {
+func (aw *archiveWriter) finalizeByteSpans() error {
+	if aw.workflowStage != stageByteSpan {
+		return fmt.Errorf("Runtime error: finalizeByteSpans called out of order")
+	}
+
 	// Get the checksum for the data written so far
 	aw.dataCheckSum = sha512Sum(aw.output.GetSum())
 	aw.output.ResetHasher()
-}
+	aw.workflowStage = stageIndex
 
-// Helper method.
-func (aw *archiveWriter) writeUint32(val uint32) error {
-	bb := &bytes.Buffer{}
-	err := binary.Write(bb, binary.BigEndian, val)
-	if err != nil {
-		return err
-	}
-
-	i := bb.Len()
-	_ = i
-
-	n, err := aw.output.Write(bb.Bytes())
-	if err != nil {
-		return err
-	}
-	if n != uint32Size {
-		return io.ErrShortWrite
-	}
-
-	aw.bytesWritten += uint32Size
-	return nil
-}
-
-func (aw *archiveWriter) writeUint64(val uint64) error {
-	bb := &bytes.Buffer{}
-	err := binary.Write(bb, binary.BigEndian, val)
-	if err != nil {
-		return err
-	}
-
-	n, err := aw.output.Write(bb.Bytes())
-	if err != nil {
-		return err
-	}
-	if n != uint64Size {
-		return io.ErrShortWrite
-	}
-
-	aw.bytesWritten += uint64Size
 	return nil
 }
 
 // writeIndex writes the index to the archive. Expects the hasher to be reset before be called, and will reset it. It
 // sets the indexLen and indexCheckSum fields on the archiveWriter, and updates the bytesWritten field.
 func (aw *archiveWriter) writeIndex() error {
+	if aw.workflowStage != stageIndex {
+		return fmt.Errorf("Runtime error: writeIndex called out of order")
+	}
+
 	startingByteCount := aw.bytesWritten
 
 	varIbuf := make([]byte, binary.MaxVarintLen64)
@@ -311,7 +171,7 @@ func (aw *archiveWriter) writeIndex() error {
 		}
 		aw.bytesWritten += uint64(written)
 
-		n = binary.PutUvarint(varIbuf, uint64(bs.length))
+		n = binary.PutUvarint(varIbuf, bs.length)
 		written, err = aw.output.Write(varIbuf[:n])
 		if err != nil {
 			return err
@@ -370,20 +230,22 @@ func (aw *archiveWriter) writeIndex() error {
 	aw.indexLen = uint32(aw.bytesWritten - startingByteCount)
 	aw.indexCheckSum = sha512Sum(aw.output.GetSum())
 	aw.output.ResetHasher()
+	aw.workflowStage = stageMetadata
 
 	return nil
 }
 
-// writeMetadata writes the metadata to the archive. Expects the hasher to be reset before be called, and will reset it.
+// writeMetadata writes the metadataSpan to the archive. Expects the hasher to be reset before be called, and will reset it.
 // It sets the metadataLen and metadataCheckSum fields on the archiveWriter, and updates the bytesWritten field.
 //
 // Empty input is allowed.
 func (aw *archiveWriter) writeMetadata(data []byte) error {
-	if data == nil || len(data) == 0 {
-		aw.metadataCheckSum = sha512Sum(aw.output.GetSum())
-		aw.metadataLen = 0
-		aw.output.ResetHasher()
-		return nil
+	if aw.workflowStage != stageMetadata {
+		return fmt.Errorf("Runtime error: writeMetadata called out of order")
+	}
+
+	if data == nil {
+		data = []byte{}
 	}
 
 	written, err := aw.output.Write(data)
@@ -397,11 +259,16 @@ func (aw *archiveWriter) writeMetadata(data []byte) error {
 	aw.metadataLen = uint32(written)
 	aw.metadataCheckSum = sha512Sum(aw.output.GetSum())
 	aw.output.ResetHasher()
+	aw.workflowStage = stageFooter
 
 	return nil
 }
 
 func (aw *archiveWriter) writeFooter() error {
+	if aw.workflowStage != stageFooter {
+		return fmt.Errorf("Runtime error: writeFooter called out of order")
+	}
+
 	// Write out the index length
 	err := aw.writeUint32(aw.indexLen)
 	if err != nil {
@@ -420,7 +287,7 @@ func (aw *archiveWriter) writeFooter() error {
 		return err
 	}
 
-	// Write out the metadata length
+	// Write out the metadataSpan length
 	err = aw.writeUint32(aw.metadataLen)
 	if err != nil {
 		return err
@@ -444,25 +311,88 @@ func (aw *archiveWriter) writeFooter() error {
 		return err
 	}
 	aw.bytesWritten += archiveFileSigSize
+	aw.workflowStage = stageFlush
 
 	return nil
 }
 
 func (aw *archiveWriter) writeCheckSums() error {
-	_, err := aw.output.Write(aw.dataCheckSum[:])
+	err := aw.writeSha512(aw.dataCheckSum)
 	if err != nil {
 		return err
 	}
 
-	_, err = aw.output.Write(aw.indexCheckSum[:])
+	err = aw.writeSha512(aw.indexCheckSum)
 	if err != nil {
 		return err
 	}
 
-	_, err = aw.output.Write(aw.metadataCheckSum[:])
+	return aw.writeSha512(aw.metadataCheckSum)
+}
+
+func (aw *archiveWriter) writeSha512(sha sha512Sum) error {
+	n, err := aw.output.Write(sha[:])
 	if err != nil {
 		return err
 	}
-	aw.bytesWritten += archiveCheckSumSize
+	if n != sha512.Size {
+		return io.ErrShortWrite
+	}
+	aw.bytesWritten += sha512.Size
 	return nil
+}
+
+// Write a uint32 to the archive. Increments the bytesWritten field.
+func (aw *archiveWriter) writeUint32(val uint32) error {
+	bb := &bytes.Buffer{}
+	err := binary.Write(bb, binary.BigEndian, val)
+	if err != nil {
+		return err
+	}
+
+	n, err := aw.output.Write(bb.Bytes())
+	if err != nil {
+		return err
+	}
+	if n != uint32Size {
+		return io.ErrShortWrite
+	}
+
+	aw.bytesWritten += uint32Size
+	return nil
+}
+
+// Write a uint64 to the archive. Increments the bytesWritten field.
+func (aw *archiveWriter) writeUint64(val uint64) error {
+	bb := &bytes.Buffer{}
+	err := binary.Write(bb, binary.BigEndian, val)
+	if err != nil {
+		return err
+	}
+
+	n, err := aw.output.Write(bb.Bytes())
+	if err != nil {
+		return err
+	}
+	if n != uint64Size {
+		return io.ErrShortWrite
+	}
+
+	aw.bytesWritten += uint64Size
+	return nil
+}
+
+func (aw *archiveWriter) flushToFile(path string) error {
+	if aw.workflowStage != stageFlush {
+		return fmt.Errorf("Runtime error: flushToFile called out of order")
+	}
+
+	if bs, ok := aw.output.backingSink.(*BufferedFileByteSink); ok {
+		err := bs.finish()
+		if err != nil {
+			return err
+		}
+	}
+
+	return aw.output.FlushToFile(path)
 }

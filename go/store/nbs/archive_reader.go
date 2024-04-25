@@ -15,6 +15,7 @@
 package nbs
 
 import (
+	"crypto/sha512"
 	"encoding/binary"
 	"io"
 
@@ -22,17 +23,13 @@ import (
 	"github.com/dolthub/gozstd"
 )
 
-type archiveIndex struct {
+type archiveReader struct {
 	reader    io.ReaderAt
 	prefixes  []uint64
 	byteSpans []byteSpan
 	chunkRefs []chunkRef
 	suffixes  []suffix
-}
-
-type byteSpan struct {
-	offset uint64
-	length uint64
+	footer    footer
 }
 
 type chunkRef struct {
@@ -42,13 +39,35 @@ type chunkRef struct {
 
 type suffix [hash.SuffixLen]byte
 
+type footer struct {
+	indexSize     uint32
+	byteSpanCount uint32
+	chunkCount    uint32
+	metadataSize  uint32
+	dataCheckSum  sha512Sum
+	indexCheckSum sha512Sum
+	metaCheckSum  sha512Sum
+	formatVersion byte
+	fileSignature string
+	fileSize      uint64 // Not actually part of the footer, but necessary for calculating offsets.
+}
+
+func (f footer) indexSpan() byteSpan {
+	return byteSpan{offset: f.fileSize - archiveFooterSize - uint64(f.metadataSize) - uint64(f.indexSize), length: uint64(f.indexSize)}
+}
+
+func (f footer) metadataSpan() byteSpan {
+	return byteSpan{offset: f.fileSize - archiveFooterSize - uint64(f.metadataSize), length: uint64(f.metadataSize)}
+}
+
 // Our mix of using binary.ReadUvarint and binary.Read paints us in a bit of a corner here. To work around this
 // we wrap the section reader with the ByteReader interface. There may be a better way to do this.
 type sectionReaderByteReader struct {
 	sectionReader *io.SectionReader
 }
 
-// ReadByte - see op.SectionReader.ReadByte.
+// ReadByte - see op.SectionReader.ReadByte. This may prove to be a bottleneck. We use this to read varints, which
+// by definition we don't know the length of in advance.
 func (r sectionReaderByteReader) ReadByte() (byte, error) {
 	buf := []byte{0}
 	_, err := r.sectionReader.Read(buf)
@@ -58,76 +77,77 @@ func (r sectionReaderByteReader) ReadByte() (byte, error) {
 	return buf[0], nil
 }
 
-func newArchiveIndex(reader io.ReaderAt, fileSize uint64) (archiveIndex, error) {
-	idx, bs, cc, md, err := loadFooter(reader, fileSize)
+func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error) {
+	footer, err := loadFooter(reader, fileSize)
 	if err != nil {
-		return archiveIndex{}, err
+		return archiveReader{}, err
 	}
 
-	indexStart := fileSize - uint64(md) - archiveFooterSize - uint64(idx)
-	section := io.NewSectionReader(reader, int64(indexStart), int64(idx))
+	indexSpan := footer.indexSpan()
+	section := io.NewSectionReader(reader, int64(indexSpan.offset), int64(indexSpan.length))
 
-	byteSpans := make([]byteSpan, bs+1)
+	byteSpans := make([]byteSpan, footer.byteSpanCount+1)
 	byteSpans = append(byteSpans, byteSpan{offset: 0, length: 0}) // Null byteSpan to simplify logic.
 
 	byteReader := sectionReaderByteReader{sectionReader: section}
-	for i := uint32(0); i < bs; i++ {
+	for i := uint32(0); i < footer.byteSpanCount; i++ {
 		offset, err := binary.ReadUvarint(byteReader)
 		if err != nil {
-			return archiveIndex{}, err
+			return archiveReader{}, err
 		}
 		length, err := binary.ReadUvarint(byteReader)
 		if err != nil {
-			return archiveIndex{}, err
+			return archiveReader{}, err
 		}
 
 		byteSpans[i+1] = byteSpan{offset: offset, length: length}
 	}
 
-	prefixes := make([]uint64, cc)
-	for i := uint32(0); i < cc; i++ {
+	prefixes := make([]uint64, footer.chunkCount)
+	for i := uint32(0); i < footer.chunkCount; i++ {
 		val := uint64(0)
 		err := binary.Read(section, binary.BigEndian, &val)
 		if err != nil {
-			return archiveIndex{}, err
+			return archiveReader{}, err
 		}
 		prefixes[i] = val
 	}
 
-	chunks := make([]chunkRef, cc)
-	for i := uint32(0); i < cc; i++ {
+	chunks := make([]chunkRef, footer.chunkCount)
+	for i := uint32(0); i < footer.chunkCount; i++ {
 		dict64, err := binary.ReadUvarint(byteReader)
 		if err != nil {
-			return archiveIndex{}, err
+			return archiveReader{}, err
 		}
 		data64, err := binary.ReadUvarint(byteReader)
 		if err != nil {
-			return archiveIndex{}, err
+			return archiveReader{}, err
 		}
 		chunks[i] = chunkRef{dict: uint32(dict64), data: uint32(data64)}
 	}
 
-	suffixes := make([]suffix, cc)
-	for i := uint32(0); i < cc; i++ {
+	suffixes := make([]suffix, footer.chunkCount)
+	for i := uint32(0); i < footer.chunkCount; i++ {
 		n, err := section.Read(suffixes[i][:])
 		if err != nil {
-			return archiveIndex{}, err
+			return archiveReader{}, err
 		}
 		if n != hash.SuffixLen {
-			return archiveIndex{}, io.ErrUnexpectedEOF
+			return archiveReader{}, io.ErrUnexpectedEOF
 		}
 	}
 
-	return archiveIndex{
+	return archiveReader{
 		reader:    reader,
 		prefixes:  prefixes,
 		byteSpans: byteSpans,
 		chunkRefs: chunks,
 		suffixes:  suffixes,
+		footer:    footer,
 	}, nil
 }
 
-func loadFooter(reader io.ReaderAt, fileSize uint64) (indexSize, byteSpanCount, chunkCount, metadataSize uint32, err error) {
+func loadFooter(reader io.ReaderAt, fileSize uint64) (f footer, err error) {
 	section := io.NewSectionReader(reader, int64(fileSize-archiveFooterSize), int64(archiveFooterSize))
 
 	bytesRead := 0
@@ -141,27 +161,32 @@ func loadFooter(reader io.ReaderAt, fileSize uint64) (indexSize, byteSpanCount, 
 		return
 	}
 
+	f.indexSize = binary.BigEndian.Uint32(buf[afrIndexLenOffset : afrIndexChkSumOffset+uint32Size])
+	f.byteSpanCount = binary.BigEndian.Uint32(buf[afrByteSpanOffset : afrByteSpanOffset+uint32Size])
+	f.chunkCount = binary.BigEndian.Uint32(buf[afrChunkCountOffset : afrChunkCountOffset+uint32Size])
+	f.metadataSize = binary.BigEndian.Uint32(buf[afrMetaLenOffset : afrMetaLenOffset+uint32Size])
+	f.dataCheckSum = sha512Sum(buf[afrDataChkSumOffset : afrDataChkSumOffset+sha512.Size])
+	f.indexCheckSum = sha512Sum(buf[afrIndexChkSumOffset : afrIndexChkSumOffset+sha512.Size])
+	f.metaCheckSum = sha512Sum(buf[afrMetaChkSumOffset : afrMetaChkSumOffset+sha512.Size])
+	f.formatVersion = buf[afrVersionOffset]
+	f.fileSignature = string(buf[afrSigOffset:])
+	f.fileSize = fileSize
+
 	// Verify File Signature
-	if string(buf[archiveFooterSize-archiveFileSigSize:]) != archiveFileSignature {
+	if f.fileSignature != archiveFileSignature {
 		err = ErrInvalidFileSignature
 		return
 	}
 	// Verify Format Version. Currently only one version is supported, but we'll need to be more flexible in the future.
-	if buf[archiveFooterSize-(archiveFileSigSize+1)] != archiveFormatVersion {
+	if f.formatVersion != archiveFormatVersion {
 		err = ErrInvalidFormatVersion
 		return
 	}
 
-	// NM4 - I hate this so much.
-	indexSize = binary.BigEndian.Uint32(buf[:uint32Size])
-	byteSpanCount = binary.BigEndian.Uint32(buf[uint32Size : uint32Size*2])
-	chunkCount = binary.BigEndian.Uint32(buf[uint32Size*2 : uint32Size*3])
-	metadataSize = binary.BigEndian.Uint32(buf[uint32Size*3 : uint32Size*4])
-
 	return
 }
 
-func (ai archiveIndex) search(hash hash.Hash) (bool, int) {
+func (ai archiveReader) search(hash hash.Hash) (bool, int) {
 	prefix := hash.Prefix()
 	matchingIndexes := findMatchingPrefixes(ai.prefixes, prefix)
 	if len(matchingIndexes) == 0 {
@@ -179,13 +204,13 @@ func (ai archiveIndex) search(hash hash.Hash) (bool, int) {
 	return false, 0
 }
 
-func (ai archiveIndex) has(hash hash.Hash) bool {
+func (ai archiveReader) has(hash hash.Hash) bool {
 	found, _ := ai.search(hash)
 	return found
 }
 
 // get returns the decompressed data for the given hash. If the hash is not found, nil is returned (not an error)
-func (ai archiveIndex) get(hash hash.Hash) ([]byte, error) {
+func (ai archiveReader) get(hash hash.Hash) ([]byte, error) {
 	dict, data, err := ai.getRaw(hash)
 	if err != nil || data == nil {
 		return nil, err
@@ -207,11 +232,26 @@ func (ai archiveIndex) get(hash hash.Hash) ([]byte, error) {
 	return result, nil
 }
 
+func (ai archiveReader) readByteSpan(buff []byte, bs byteSpan) ([]byte, error) {
+	if len(buff) < int(bs.length) {
+		return nil, io.ErrShortBuffer
+	}
+
+	read, err := ai.reader.ReadAt(buff[:bs.length], int64(bs.offset))
+	if err != nil {
+		return nil, err
+	}
+	if uint64(read) != bs.length {
+		return nil, io.ErrUnexpectedEOF
+	}
+	return buff[:bs.length], nil
+}
+
 // getRaw returns the raw data for the given hash. If the hash is not found, nil is returned for both slices. Also,
 // no error is returned in this case. Errors will only be returned if there is an io error.
 //
 // The data returned is still compressed, regardless of the dictionary being present or not.
-func (ai archiveIndex) getRaw(hash hash.Hash) (dict, data []byte, err error) {
+func (ai archiveReader) getRaw(hash hash.Hash) (dict, data []byte, err error) {
 	found, idx := ai.search(hash)
 	if !found {
 		return nil, nil, nil
@@ -221,26 +261,25 @@ func (ai archiveIndex) getRaw(hash hash.Hash) (dict, data []byte, err error) {
 	if chunkRef.dict != 0 {
 		byteSpan := ai.byteSpans[chunkRef.dict]
 		dict = make([]byte, byteSpan.length)
-		read, err := ai.reader.ReadAt(dict, int64(byteSpan.offset))
+		dict, err = ai.readByteSpan(dict, byteSpan)
 		if err != nil {
 			return nil, nil, err
-		}
-		if uint64(read) != byteSpan.length {
-			return nil, nil, io.ErrUnexpectedEOF
 		}
 	}
 
 	byteSpan := ai.byteSpans[chunkRef.data]
 	data = make([]byte, byteSpan.length)
-	read, err := ai.reader.ReadAt(data, int64(byteSpan.offset))
+	data, err = ai.readByteSpan(data, byteSpan)
 	if err != nil {
 		return nil, nil, err
 	}
-	if uint64(read) != byteSpan.length {
-		return nil, nil, io.ErrUnexpectedEOF
-	}
-
 	return
+}
+
+func (ai archiveReader) getMetadata() ([]byte, error) {
+	span := ai.footer.metadataSpan()
+	data := make([]byte, span.length)
+	return ai.readByteSpan(data, span)
 }
 
 // findMatchingPrefixes returns all indexes of the input slice that have a prefix that matches the target prefix.

@@ -59,7 +59,7 @@ func TestArchiveSingleChunk(t *testing.T) {
 	theBytes := writer.buff[:writer.pos]
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
-	aIdx, err := newArchiveIndex(readerAt, fileSize)
+	aIdx, err := newArchiveReader(readerAt, fileSize)
 	assert.NoError(t, err)
 
 	assert.Equal(t, []uint64{23}, aIdx.prefixes)
@@ -93,7 +93,7 @@ func TestArchiveSingleChunkWithDictionary(t *testing.T) {
 	theBytes := writer.buff[:writer.pos]
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
-	aIdx, err := newArchiveIndex(readerAt, fileSize)
+	aIdx, err := newArchiveReader(readerAt, fileSize)
 	assert.NoError(t, err)
 	assert.Equal(t, []uint64{42}, aIdx.prefixes)
 
@@ -152,7 +152,7 @@ func TestArchiverMultipleChunksMultipleDictionaries(t *testing.T) {
 	theBytes := writer.buff[:writer.pos]
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
-	aIdx, err := newArchiveIndex(readerAt, fileSize)
+	aIdx, err := newArchiveReader(readerAt, fileSize)
 	assert.NoError(t, err)
 	assert.Equal(t, []uint64{21, 42, 42, 42, 42, 81, 88}, aIdx.prefixes)
 
@@ -233,7 +233,7 @@ func TestArchiveDictDecompression(t *testing.T) {
 	theBytes := writer.buff[:writer.pos]
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
-	aIdx, err := newArchiveIndex(readerAt, fileSize)
+	aIdx, err := newArchiveReader(readerAt, fileSize)
 	assert.NoError(t, err)
 
 	// Now verify that we can look up the chunks by their original addresses, and the data is the same.
@@ -244,6 +244,30 @@ func TestArchiveDictDecompression(t *testing.T) {
 	}
 }
 
+func TestMetadata(t *testing.T) {
+	writer := NewFixedBufferByteSink(make([]byte, 1024))
+
+	aw := newArchiveWriter(writer)
+	err := aw.finalizeByteSpans()
+	assert.NoError(t, err)
+	err = aw.writeIndex()
+	assert.NoError(t, err)
+	err = aw.writeMetadata([]byte("All work and no play"))
+	assert.NoError(t, err)
+	err = aw.writeFooter()
+	assert.NoError(t, err)
+
+	theBytes := writer.buff[:writer.pos]
+	fileSize := uint64(len(theBytes))
+	readerAt := bytes.NewReader(theBytes)
+	rdr, err := newArchiveReader(readerAt, fileSize)
+	assert.NoError(t, err)
+
+	md, err := rdr.getMetadata()
+	assert.NoError(t, err)
+	assert.Equal(t, []byte("All work and no play"), md)
+}
+
 func TestArchiveBlockCorruption(t *testing.T) {
 	writer := NewFixedBufferByteSink(make([]byte, 1024))
 	aw := newArchiveWriter(writer)
@@ -252,14 +276,15 @@ func TestArchiveBlockCorruption(t *testing.T) {
 
 	h := hashWithPrefix(t, 23)
 	_ = aw.stageChunk(h, 0, 1)
-	aw.finalizeByteSpans()
+	_ = aw.finalizeByteSpans()
 	_ = aw.writeIndex()
+	_ = aw.writeMetadata(nil)
 	_ = aw.writeFooter()
 
 	theBytes := writer.buff[:writer.pos]
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
-	idx, err := newArchiveIndex(readerAt, fileSize)
+	idx, err := newArchiveReader(readerAt, fileSize)
 	assert.NoError(t, err)
 
 	// Corrupt the data
