@@ -15,15 +15,17 @@
 package nbs
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/cespare/xxhash/v2"
+	"github.com/dolthub/swiss"
 	"io"
 	"os"
 	"path/filepath"
 	"sync"
 
-	"github.com/dolthub/swiss"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
@@ -93,9 +95,10 @@ func openJournalWriter(ctx context.Context, path string) (wr *journalWriter, exi
 	}
 
 	return &journalWriter{
-		buf:     make([]byte, 0, journalWriterBuffSize),
-		journal: f,
-		path:    path,
+		buf:       make([]byte, 0, journalWriterBuffSize),
+		journal:   f,
+		path:      path,
+		batchHash: xxhash.New(),
 	}, true, nil
 }
 
@@ -132,9 +135,10 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 	}
 
 	return &journalWriter{
-		buf:     make([]byte, 0, journalWriterBuffSize),
-		journal: f,
-		path:    path,
+		buf:       make([]byte, 0, journalWriterBuffSize),
+		journal:   f,
+		path:      path,
+		batchHash: xxhash.New(),
 	}, nil
 }
 
@@ -158,9 +162,11 @@ type journalWriter struct {
 	unsyncd     uint64
 	currentRoot hash.Hash
 
-	ranges   rangeIndex
-	index    *os.File
-	maxNovel int
+	ranges      rangeIndex
+	index       *os.File
+	indexWriter *bufio.Writer
+	batchHash   *xxhash.Digest
+	maxNovel    int
 
 	lock sync.RWMutex
 }
@@ -193,6 +199,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 	if err != nil {
 		return
 	}
+	wr.indexWriter = bufio.NewWriterSize(wr.index, journalIndexDefaultMaxNovel)
 
 	if ok {
 		var info os.FileInfo
@@ -211,27 +218,25 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 		// process the indexed portion of the journal
 		eg.Go(func() error {
 			defer close(ch)
-			return processIndexRecords(ectx, wr.index, info.Size(), func(o int64, r indexRec) (err error) {
-				switch r.kind {
-				case tableIndexRecKind:
-					// |r.end| is expected to point to a root hash record in |wr.journal|
-					// containing a hash equal to |r.lastRoot|, validate this here
-					var h hash.Hash
-					if h, err = peekRootHashAt(wr.journal, int64(r.end)); err != nil {
-						return err
-					} else if h != r.lastRoot {
-						return fmt.Errorf("invalid index record hash (%s != %s)", h.String(), r.lastRoot.String())
-					}
-					select {
-					case <-ectx.Done():
-						return ectx.Err()
-					case ch <- deserializeLookups(r.payload):
-						// record a high-water-mark for the indexed portion of the journal
-						wr.indexed = int64(r.end)
-					}
-					// todo: uncompressed size
-				default:
-					return fmt.Errorf("unknown index record kind (%d)", r.kind)
+			return processIndexRecords2(ectx, bufio.NewReader(wr.index), info.Size(), func(m lookupMeta, batch []lookup, batchChecksum uint32) error {
+				if m.checkSum != batchChecksum {
+					return fmt.Errorf("invalid index checksum (%d != %d)", batchChecksum, m.checkSum)
+				}
+
+				// |r.end| is expected to point to a root hash record in |wr.journal|
+				// containing a hash equal to |r.lastRoot|, validate this here
+				if h, err := peekRootHashAt(wr.journal, int64(m.batchEnd)); err != nil {
+					return err
+				} else if h != m.latestHash {
+					return fmt.Errorf("invalid index record hash (%s != %s)", h.String(), m.latestHash.String())
+				}
+
+				select {
+				case <-ectx.Done():
+					return ectx.Err()
+				case ch <- batch:
+					// record a high-water-mark for the indexed portion of the journal
+					wr.indexed = int64(m.batchEnd)
 				}
 				return nil
 			})
@@ -375,6 +380,12 @@ func (wr *journalWriter) writeCompressedChunk(cc CompressedChunk) error {
 	wr.unsyncd += uint64(recordLen)
 	_ = writeChunkRecord(buf, cc)
 	wr.ranges.put(cc.H, rng)
+	if err := writeIndexLookup(wr.indexWriter, lookup{a: cc.H, r: rng}); err != nil {
+		return err
+	}
+	if _, err := wr.batchHash.Write(cc.H[:]); err != nil {
+		return err
+	}
 
 	// To fulfill our durability guarantees, we technically only need to
 	// file.Sync() the journal when we commit a new root chunk. However,
@@ -415,9 +426,14 @@ func (wr *journalWriter) commitRootHashUnlocked(root hash.Hash) error {
 	if err = wr.flush(); err != nil {
 		return err
 	}
-	if err = wr.journal.Sync(); err != nil {
+	//func() {
+	//	defer trace.StartRegion(ctx, "sync journal").End()
+	//	err = wr.journal.Sync()
+	//}()
+	if err != nil {
 		return err
 	}
+
 	wr.unsyncd = 0
 	if wr.ranges.novelCount() > wr.maxNovel {
 		o := wr.offset() - int64(n) // pre-commit journal offset
@@ -429,12 +445,8 @@ func (wr *journalWriter) commitRootHashUnlocked(root hash.Hash) error {
 // flushIndexRecord writes a new record to the out-of-band journal index file. Index records
 // accelerate journal bootstrapping by reducing the amount of the journal that must be processed.
 func (wr *journalWriter) flushIndexRecord(root hash.Hash, end int64) (err error) {
-	payload := serializeLookups(wr.ranges.novelLookups())
-	buf := make([]byte, journalIndexRecordSize(payload))
-	writeJournalIndexRecord(buf, root, uint64(wr.indexed), uint64(end), payload)
-	if _, err = wr.index.Write(buf); err != nil {
-		return err
-	}
+	writeJournalIndexMeta(wr.indexWriter, root, wr.indexed, end, uint32(wr.batchHash.Sum64()))
+	wr.batchHash.Reset()
 	wr.ranges = wr.ranges.flatten()
 	// set a new high-water-mark for the indexed portion of the journal
 	wr.indexed = end

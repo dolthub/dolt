@@ -19,9 +19,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"github.com/cespare/xxhash/v2"
 	"io"
 	"sort"
+	"sync"
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -97,6 +100,8 @@ func journalIndexRecordSize(idx []byte) (recordSz uint32) {
 }
 
 func writeJournalIndexRecord(buf []byte, root hash.Hash, start, end uint64, idx []byte) (n uint32) {
+	//defer trace.StartRegion(ctx, "writeJournalIndexRecord").End()
+
 	// length
 	l := journalIndexRecordSize(idx)
 	writeUint32(buf[:indexRecLenSz], l)
@@ -177,6 +182,224 @@ func validateIndexRecord(buf []byte) bool {
 	}
 	off -= indexRecChecksumSz
 	return crc(buf[:off]) == readUint32(buf[off:])
+}
+
+type lookupMeta struct {
+	batchStart int
+	batchEnd   int
+	checkSum   uint32
+	latestHash hash.Hash
+}
+
+const indexRecTypeSize = 1
+const (
+	indexRecChunk byte = iota
+	indexRecMeta
+)
+
+var uint32Pool = sync.Pool{
+	// New is called when a new instance is needed
+	New: func() interface{} {
+		return make([]byte, uint32Size)
+	},
+}
+
+var uint64Pool = sync.Pool{
+	// New is called when a new instance is needed
+	New: func() interface{} {
+		return make([]byte, uint64Size)
+	},
+}
+
+var addressPool = sync.Pool{
+	// New is called when a new instance is needed
+	New: func() interface{} {
+		return make([]byte, hash.ByteLen)
+	},
+}
+
+var digestPool = sync.Pool{
+	New: func() any {
+		return xxhash.New()
+	},
+}
+
+func processIndexRecords2(ctx context.Context, rd *bufio.Reader, sz int64, cb func(lookupMeta, []lookup, uint32) error) (err error) {
+	// new format for journal index will be...
+	// sequences of lookups ... |chunk address|chunk offset|chunklength|
+	// the lookups are all fixed size, (20) + (4) + (4)
+	// we also need to write metadata ... |journal start|journal end|last root hash|range checkSum|
+	// metadata is also fized size, (4) + (4) + (20) + (64)
+	// prefix each record with a byte for the type? (0000) (1111)
+
+	// read each record
+	// process the hashes/ranges into a batch
+	// build up a checksum of the addresses
+	// reach the metadata
+	// validate the checksum
+	// validate the root hash for the range
+	// if all valid flush batch to lookup map
+
+	batchHash := digestPool.Get().(*xxhash.Digest)
+	defer digestPool.Put(batchHash)
+
+	var batch []lookup
+	for {
+		recTag, err := rd.ReadByte()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
+		}
+		switch recTag {
+		case indexRecChunk:
+			l, err := readIndexLookup(rd)
+			if err != nil {
+				return err
+			}
+			batch = append(batch, l)
+			if _, err := batchHash.Write(l.a[:]); err != nil {
+				return err
+			}
+
+		case indexRecMeta:
+			m, err := readIndexMeta(rd)
+			if err != nil {
+				return err
+			}
+			if err := cb(m, batch, uint32(batchHash.Sum64())); err != nil {
+				return err
+			}
+			batch = batch[:0]
+			batchHash.Reset()
+		default:
+			return fmt.Errorf("expected record to start with a chunk or metadata type tag")
+		}
+	}
+}
+
+func readIndexLookup(r *bufio.Reader) (lookup, error) {
+	// sequences of lookups ... |chunk address|chunk offset|chunklength|
+	// the lookups are all fixed size, (20) + (4) + (4)
+
+	addrBuf := addressPool.Get().([]byte)
+	defer addressPool.Put(addrBuf)
+	addr := hash.Hash{}
+	if _, err := io.ReadFull(r, addr[:]); err != nil {
+		return lookup{}, err
+	}
+
+	offsetBuf := uint64Pool.Get().([]byte)
+	defer uint64Pool.Put(offsetBuf)
+	if _, err := io.ReadFull(r, offsetBuf); err != nil {
+		return lookup{}, err
+	}
+	offset := binary.BigEndian.Uint64(offsetBuf)
+
+	lengthBuf := uint32Pool.Get().([]byte)
+	defer uint32Pool.Put(lengthBuf)
+	if _, err := io.ReadFull(r, lengthBuf); err != nil {
+		return lookup{}, err
+	}
+	length := binary.BigEndian.Uint32(lengthBuf)
+
+	return lookup{a: addr, r: Range{Offset: offset, Length: length}}, nil
+}
+
+func readIndexMeta(r *bufio.Reader) (lookupMeta, error) {
+	// we also need to write metadata ... |journal start|journal end|last root hash|range checkSum|
+	// metadata is also fized size, (4) + (4) + (20) + (64)
+
+	startBuf := uint32Pool.Get().([]byte)
+	defer uint32Pool.Put(startBuf)
+	if _, err := io.ReadFull(r, startBuf); err != nil {
+		return lookupMeta{}, err
+	}
+	startOff := binary.BigEndian.Uint32(startBuf)
+
+	endBuf := uint32Pool.Get().([]byte)
+	defer uint32Pool.Put(endBuf)
+	if _, err := io.ReadFull(r, endBuf); err != nil {
+		return lookupMeta{}, err
+	}
+	endOff := binary.BigEndian.Uint32(endBuf)
+
+	checksumBuf := uint32Pool.Get().([]byte)
+	defer uint32Pool.Put(checksumBuf)
+	if _, err := io.ReadFull(r, checksumBuf); err != nil {
+		return lookupMeta{}, err
+	}
+	checksum := binary.BigEndian.Uint32(checksumBuf)
+
+	addr := hash.Hash{}
+	if _, err := io.ReadFull(r, addr[:]); err != nil {
+		return lookupMeta{}, err
+	}
+
+	return lookupMeta{
+		batchStart: int(startOff),
+		batchEnd:   int(endOff),
+		checkSum:   checksum,
+		latestHash: addr,
+	}, nil
+}
+
+func writeIndexLookup(w *bufio.Writer, l lookup) error {
+	// sequences of lookups ... |chunk address|chunk offset|chunklength|
+	// the lookups are all fixed size, (20) + (4) + (4)
+
+	w.WriteByte(indexRecChunk)
+
+	if _, err := w.Write(l.a[:]); err != nil {
+		return err
+	}
+
+	offsetBuf := uint64Pool.Get().([]byte)
+	defer uint64Pool.Put(offsetBuf)
+	binary.BigEndian.PutUint64(offsetBuf, l.r.Offset)
+	if _, err := w.Write(offsetBuf); err != nil {
+		return err
+	}
+
+	lengthBuf := uint32Pool.Get().([]byte)
+	defer uint32Pool.Put(lengthBuf)
+	binary.BigEndian.PutUint32(lengthBuf, l.r.Length)
+	if _, err := w.Write(lengthBuf); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func writeJournalIndexMeta(w *bufio.Writer, root hash.Hash, start, end int64, checksum uint32) error {
+	// |journal start|journal end|last root hash|range checkSum|
+
+	w.WriteByte(indexRecMeta)
+
+	startBuf := make([]byte, ordinalSize)
+	binary.BigEndian.PutUint32(startBuf, uint32(start))
+	if _, err := w.Write(startBuf); err != nil {
+		return err
+	}
+
+	endBuf := make([]byte, ordinalSize)
+	binary.BigEndian.PutUint32(endBuf, uint32(end))
+	if _, err := w.Write(endBuf); err != nil {
+		return err
+	}
+
+	checksumBuf := make([]byte, checksumSize)
+	binary.BigEndian.PutUint32(checksumBuf, checksum)
+	if _, err := w.Write(checksumBuf); err != nil {
+		return err
+	}
+
+	if _, err := w.Write(root[:]); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // processIndexRecords reads a sequence of index records from |r| and passes them to the callback. While reading records
