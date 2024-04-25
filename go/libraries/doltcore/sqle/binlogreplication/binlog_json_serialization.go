@@ -94,6 +94,13 @@ func encodeJsonDoc(jsonDoc any) (buffer []byte, err error) {
 // encodeJsonArray encodes the specified |jsonArray| into MySQL's internal JSON encoding and returns
 // the type ID indicating whether this is a small or large array, the encoded array data, and any
 // error encountered.
+//
+// A JSON Array is encoded into the following components:
+// - Type Identifier (1 byte): either jsonTypeSmallArray or jsonTypeLargeArray
+// - Count (2 bytes for jsonTypeSmallArray, otherwise 4 bytes): the number of elements in the array
+// - Size (2 bytes for jsonTypeSmallArray, otherwise 4 bytes): the total size of the encoded array (i.e. everything but the Type ID)
+// - Value Entries (variable): 1 per value; 1 byte for type ID, 2 bytes for offset or inlined literal value for jsonTypeSmallArray, otherwise 4
+// - Values (variable): 1 per value; encoded value bytes
 func encodeJsonArray(jsonArray []any) (typeId byte, encodedArray []byte, err error) {
 	var valueEntriesBuffer []byte
 	var valuesBuffer []byte
@@ -139,16 +146,32 @@ func encodeJsonArray(jsonArray []any) (typeId byte, encodedArray []byte, err err
 // encodeJsonObject encodes the specified |jsonObject| into MySQL's internal JSON encoding and returns
 // the type ID indicating whether this is a small or large object, the encoded object data, and any
 // error encountered.
+//
+// A JSON Object is encoded into the following components:
+// - Type Identifier (1 byte): either jsonTypeSmallObject or jsonTypeLargeObject
+// - Count (2 bytes for jsonTypeSmallObject, otherwise 4 bytes): the number of keys in the object
+// - Size (2 bytes for jsonTypeSmallObject, otherwise 4 bytes): the total size of the encoded object (i.e. everything but the Type ID)
+// - Key Entries (variable): 1 per key; 2 bytes for key offset for jsonTypeSmallObject, otherwise 4; 2 bytes for key length
+// - Value Entries (variable): 1 per value; 1 byte for type ID, 2 bytes for offset or inlined literal value for jsonTypeSmallObject, otherwise 4
+// - Keys (variable): 1 per key; encoded string bytes
+// - Values (variable): 1 per value; encoded value bytes
 func encodeJsonObject(jsonObject map[string]any) (typeId byte, encodedObject []byte, err error) {
 	var keyEntriesBuffer []byte
 	var keysBuffer []byte
-	// TODO: Explain
+	// Since the key entries and value entries sections have a size based off of the number of key/value
+	// pairs in the object, we can compute the first key offset position by adding 2 bytes (key/value
+	// pair count field), 2 bytes (size of encoded object field), 4 bytes per key/value pair (one key entry
+	// for each key/value pair), and 3 bytes for each key/value pair (one value entry for each key/value
+	// pair).
+	// NOTE: When we support large JSON objects, this will need to change to account for uint32 values
+	//       instead of uint16 values.
 	nextKeysOffset := uint16(2 + 2 + len(jsonObject)*4 + len(jsonObject)*3)
 
-	// Process keys... TODO: Explain why we have to do keys and values in separate loops
+	// Process keys first, since value entry data depends on offsets that we don't know until we
+	// process all the keys.
 	for key, _ := range jsonObject {
-		// NOTE: Don't use encodeJsonValue for the key – it's length gets encoded slightly differently for objects
-		// TODO: String length encoding has a trick for strings longer than 127 chars – it probably needs to be applied here, too
+		// NOTE: Don't use encodeJsonValue for the key – its length gets encoded slightly differently
+		//       for JSON objects.
 		encodedValue := []byte(key)
 
 		keyEntriesBuffer = append(keyEntriesBuffer, byte(nextKeysOffset), byte(nextKeysOffset<<8))
@@ -157,10 +180,12 @@ func encodeJsonObject(jsonObject map[string]any) (typeId byte, encodedObject []b
 		nextKeysOffset += uint16(len(encodedValue))
 	}
 
-	// Process values
+	// Process values – since the object values are written after the keys, and we need to store the
+	// offsets to those locations in the value entries that appear before the keys and the values, we
+	// have to make a second pass through the object to process the values once we know the final
+	// length of the keys section.
 	var valueEntriesBuffer []byte
 	var valuesBuffer []byte
-	// TDOO: for values offset... we don't know these until we've finished encoding all the keys unfortunately
 	nextValuesOffset := nextKeysOffset
 	for _, value := range jsonObject {
 		typeId, buffer, err := encodeJsonValue(value)
@@ -168,7 +193,7 @@ func encodeJsonObject(jsonObject map[string]any) (typeId byte, encodedObject []b
 			return 0, nil, err
 		}
 
-		// Literals can be inlined in the value-entries section
+		// Literals may be inlined in the value-entries section
 		if typeId == jsonTypeLiteral {
 			valueEntriesBuffer = append(valueEntriesBuffer, typeId)
 			if len(buffer) != 1 {
@@ -218,13 +243,14 @@ func encodeJsonValue(jsonValue any) (typeId byte, buffer []byte, err error) {
 		if len(v) > 127 {
 			// TODO: data-length for string uses the high bit to indicate if additional
 			//       bytes are needed for the data length field.
+			return 0, nil, fmt.Errorf("strings larger than 127 bytes not supported yet!")
 		}
 		buffer = append(buffer, byte(len(v)))
 		buffer = append(buffer, []byte(v)...)
 		return jsonTypeString, buffer, nil
 
 	case float64:
-		// TODO: all numbers end up being represented as float64s currently
+		// TODO: all our numbers end up being represented as float64s currently when we parse stored JSON
 		bits := math.Float64bits(v)
 		buffer = append(buffer, make([]byte, 8)...)
 		binary.LittleEndian.PutUint64(buffer, bits)
