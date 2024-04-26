@@ -225,9 +225,9 @@ func (ai archiveReader) get(hash hash.Hash) ([]byte, error) {
 	if dict == nil {
 		result, err = gozstd.Decompress(nil, data)
 	} else {
-		dDict, err := gozstd.NewDDict(dict)
-		if err != nil {
-			return nil, err
+		dDict, e2 := gozstd.NewDDict(dict)
+		if e2 != nil {
+			return nil, e2
 		}
 		result, err = gozstd.DecompressDict(nil, data, dDict)
 	}
@@ -319,7 +319,8 @@ func verifyCheckSum(reader io.ReaderAt, span byteSpan, checkSum sha512Sum) error
 // findMatchingPrefixes returns all indexes of the input slice that have a prefix that matches the target prefix.
 func findMatchingPrefixes(slice []uint64, target uint64) []int {
 	matchingIndexes := []int{}
-	anIdx := binarySearch(slice, target)
+	anIdx := prollyBinSearch(slice, target)
+
 	if anIdx == -1 {
 		return matchingIndexes
 	}
@@ -339,19 +340,95 @@ func findMatchingPrefixes(slice []uint64, target uint64) []int {
 	return matchingIndexes
 }
 
-// binarySearch returns the index of the target in the input slice. If the target is not found, -1 is returned.
-func binarySearch(prefixes []uint64, target uint64) int {
+// prollyBinSearch is a search that returns the index of the target in the input slice. It starts by assuming
+// that the slice has evenly distributed values, and picks a starting point which is close to where the target should
+// be based on this assumption.
+//
+// Nailing it on the first shot is unlikely, so we follow by doing a binary search in the same area.
+//
+// If the value isn't found, -1 is returned.
+func prollyBinSearch(slice []uint64, target uint64) int {
+	if len(slice) == 0 {
+		return -1
+	}
+
 	low := 0
-	high := len(prefixes) - 1
+	high := len(slice) - 1
 	for low <= high {
-		mid := low + (high-low)/2
-		if prefixes[mid] == target {
-			return mid // Found
-		} else if prefixes[mid] < target {
-			low = mid + 1 // Search right half
+		if slice[low] > target {
+			return -1
+		} else if slice[low] == target {
+			return low
+		}
+		if slice[high] < target {
+			return -1
+		} else if slice[high] == target {
+			return high
+		}
+
+		if high-low > 256 {
+			// Determine the estimated position of the target in the slice, as a float from 0 to 1.
+			minVal := slice[low]
+			maxVal := slice[high]
+			shiftedTarget := target - minVal
+			shiftedMax := maxVal - minVal
+
+			est := float64(shiftedTarget) / float64(shiftedMax)
+			estIdx := int(float64(high-low) * est)
+			estIdx += low
+
+			if estIdx >= len(slice) {
+				estIdx = len(slice) - 1
+			}
+
+			if slice[estIdx] == target {
+				return estIdx // bulls-eye!
+			}
+
+			// When we miss the target, we know that we are pretty close based on the assumption of distribution.
+			// Therefore, unlike a binary search where we consider everything on the left or right, we instead do
+			// a scan in the appropriate direction using a widening scope. When all is said and done, low and high
+			// will be set to values which are pretty close to the guess.
+			widenScope := 16
+			if slice[estIdx] > target {
+				// We overshot, so search left
+				high = estIdx - 1
+				newLow := high - widenScope
+				for newLow > low && slice[newLow] > target {
+					high = newLow    // just verified that newLow is higher than target
+					widenScope <<= 2 // Quadruple the scope each loop.
+					newLow = high - widenScope
+				}
+				if newLow > low {
+					low = newLow
+				}
+			} else {
+				// We undershot, so search right
+				low = estIdx + 1
+				newHigh := low + widenScope
+				for newHigh < high && slice[newHigh] < target {
+					low = newHigh
+					widenScope <<= 2
+					newHigh = low + widenScope
+				}
+				if newHigh < high {
+					high = newHigh
+				}
+			}
 		} else {
-			high = mid - 1 // Search left half
+			// Fall back to binary search
+			for low <= high {
+				mid := low + (high-low)/2
+				if slice[mid] == target {
+					return mid // Found
+				} else if slice[mid] < target {
+					low = mid + 1 // Search right half
+				} else {
+					high = mid - 1 // Search left half
+				}
+			}
+			return -1 // Not found
 		}
 	}
-	return -1 // Not found
+	return -1
 }

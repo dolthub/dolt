@@ -17,6 +17,7 @@ package nbs
 import (
 	"bytes"
 	"encoding/binary"
+	"math"
 	"math/rand"
 	"testing"
 
@@ -28,8 +29,7 @@ import (
 
 func TestArchiveSingleChunk(t *testing.T) {
 	writer := NewFixedBufferByteSink(make([]byte, 1024))
-
-	aw := newArchiveWriter(writer)
+	aw := newArchiveWriterWithSink(writer)
 	testBlob := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 	bsId, err := aw.writeByteSpan(testBlob)
 	assert.NoError(t, err)
@@ -41,7 +41,8 @@ func TestArchiveSingleChunk(t *testing.T) {
 	err = aw.stageChunk(oneHash, 0, 1)
 	assert.NoError(t, err)
 
-	aw.finalizeByteSpans()
+	err = aw.finalizeByteSpans()
+	assert.NoError(t, err)
 
 	err = aw.writeIndex()
 	assert.NoError(t, err)
@@ -73,8 +74,7 @@ func TestArchiveSingleChunk(t *testing.T) {
 
 func TestArchiveSingleChunkWithDictionary(t *testing.T) {
 	writer := NewFixedBufferByteSink(make([]byte, 1024))
-
-	aw := newArchiveWriter(writer)
+	aw := newArchiveWriterWithSink(writer)
 	testDict := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 	testData := []byte{9, 8, 7, 6, 5, 4, 3, 2, 1, 0}
 	_, _ = aw.writeByteSpan(testDict)
@@ -107,44 +107,44 @@ func TestArchiveSingleChunkWithDictionary(t *testing.T) {
 
 func TestArchiverMultipleChunksMultipleDictionaries(t *testing.T) {
 	writer := NewFixedBufferByteSink(make([]byte, 1024))
-
-	aw := newArchiveWriter(writer)
-	dict1 := []byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1}           // span 1
-	dict2 := []byte{2, 2, 2, 2, 2, 2, 2, 2, 2, 2}           // span 2
-	dict3 := []byte{3, 3, 3, 3, 3, 3, 3, 3, 3, 3}           // span 3
-	dict4 := []byte{4, 4, 4, 4, 4, 4, 4, 4, 4, 4}           // span 4
-	data1 := []byte{11, 11, 11, 11, 11, 11, 11, 11, 11, 11} // span 5
-	data2 := []byte{22, 22, 22, 22, 22, 22, 22, 22, 22, 22} // span 6
-	data3 := []byte{33, 33, 33, 33, 33, 33, 33, 33, 33, 33} // span 7
-	data4 := []byte{44, 44, 44, 44, 44, 44, 44, 44, 44, 44} // span 8
-
-	_, _ = aw.writeByteSpan(dict1)
-	_, _ = aw.writeByteSpan(dict2)
-	_, _ = aw.writeByteSpan(dict3)
-	_, _ = aw.writeByteSpan(dict4)
-	_, _ = aw.writeByteSpan(data1)
-	_, _ = aw.writeByteSpan(data2)
-	_, _ = aw.writeByteSpan(data3)
-	_, _ = aw.writeByteSpan(data4)
+	aw := newArchiveWriterWithSink(writer)
+	data1 := []byte{11, 11, 11, 11, 11, 11, 11, 11, 11, 11} // span 1
+	dict1 := []byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1}           // span 2
+	data2 := []byte{22, 22, 22, 22, 22, 22, 22, 22, 22, 22} // span 3
+	data3 := []byte{33, 33, 33, 33, 33, 33, 33, 33, 33, 33} // span 4
+	data4 := []byte{44, 44, 44, 44, 44, 44, 44, 44, 44, 44} // span 5
+	dict2 := []byte{2, 2, 2, 2, 2, 2, 2, 2, 2, 2}           // span 6
 
 	h1 := hashWithPrefix(t, 42)
+	id, _ := aw.writeByteSpan(data1)
+	assert.Equal(t, uint32(1), id)
+	_ = aw.stageChunk(h1, 0, 1)
+
 	h2 := hashWithPrefix(t, 42)
+	_, _ = aw.writeByteSpan(dict1)
+	_, _ = aw.writeByteSpan(data2)
+	_ = aw.stageChunk(h2, 2, 3)
+
 	h3 := hashWithPrefix(t, 42)
+	_, _ = aw.writeByteSpan(data3)
+	_ = aw.stageChunk(h3, 2, 4)
+
 	h4 := hashWithPrefix(t, 81)
+	_, _ = aw.writeByteSpan(data4)
+	_ = aw.stageChunk(h4, 0, 5)
+
 	h5 := hashWithPrefix(t, 21)
+	id, _ = aw.writeByteSpan(dict2)
+	assert.Equal(t, uint32(6), id)
+	_ = aw.stageChunk(h5, 6, 1)
+
 	h6 := hashWithPrefix(t, 88)
+	_ = aw.stageChunk(h6, 6, 1)
+
 	h7 := hashWithPrefix(t, 42)
+	_ = aw.stageChunk(h7, 2, 4)
 
-	_ = aw.stageChunk(h1, 0, 5)
-	_ = aw.stageChunk(h2, 1, 6)
-	_ = aw.stageChunk(h3, 2, 7)
-	_ = aw.stageChunk(h4, 3, 8)
-	_ = aw.stageChunk(h5, 1, 5)
-	_ = aw.stageChunk(h6, 0, 6)
-	_ = aw.stageChunk(h7, 1, 7)
-
-	aw.finalizeByteSpans()
-
+	_ = aw.finalizeByteSpans()
 	_ = aw.writeIndex()
 	_ = aw.writeMetadata([]byte(""))
 	_ = aw.writeFooter()
@@ -176,20 +176,20 @@ func TestArchiverMultipleChunksMultipleDictionaries(t *testing.T) {
 	assert.Equal(t, data2, data)
 
 	dict, data, _ = aIdx.getRaw(h3)
-	assert.Equal(t, dict2, dict)
+	assert.Equal(t, dict1, dict)
 	assert.Equal(t, data3, data)
 
 	dict, data, _ = aIdx.getRaw(h4)
-	assert.Equal(t, dict3, dict)
-	assert.Equal(t, data4, data)
+	assert.Nil(t, dict)
+	assert.Equal(t, data, data)
 
 	dict, data, _ = aIdx.getRaw(h5)
-	assert.Equal(t, dict1, dict)
+	assert.Equal(t, dict2, dict)
 	assert.Equal(t, data1, data)
 
 	dict, data, _ = aIdx.getRaw(h6)
-	assert.Nil(t, dict)
-	assert.Equal(t, data2, data)
+	assert.Equal(t, dict2, dict)
+	assert.Equal(t, data1, data)
 
 	dict, data, _ = aIdx.getRaw(h7)
 	assert.Equal(t, dict1, dict)
@@ -210,7 +210,7 @@ func TestArchiveDictDecompression(t *testing.T) {
 	cDict, err := gozstd.NewCDict(dict)
 	assert.NoError(t, err)
 
-	aw := newArchiveWriter(writer)
+	aw := newArchiveWriterWithSink(writer)
 
 	dictId, err := aw.writeByteSpan(dict)
 	for _, chk := range chks {
@@ -222,10 +222,12 @@ func TestArchiveDictDecompression(t *testing.T) {
 		err = aw.stageChunk(chk.Hash(), dictId, chId)
 		assert.NoError(t, err)
 	}
-	aw.finalizeByteSpans()
+	err = aw.finalizeByteSpans()
+	assert.NoError(t, err)
 
 	err = aw.writeIndex()
 	assert.NoError(t, err)
+
 	err = aw.writeMetadata([]byte("hello world"))
 	err = aw.writeFooter()
 	assert.NoError(t, err)
@@ -246,8 +248,7 @@ func TestArchiveDictDecompression(t *testing.T) {
 
 func TestMetadata(t *testing.T) {
 	writer := NewFixedBufferByteSink(make([]byte, 1024))
-
-	aw := newArchiveWriter(writer)
+	aw := newArchiveWriterWithSink(writer)
 	err := aw.finalizeByteSpans()
 	assert.NoError(t, err)
 	err = aw.writeIndex()
@@ -272,7 +273,7 @@ func TestMetadata(t *testing.T) {
 // attempt to decompress a corrupted chunk.
 func TestArchiveChunkCorruption(t *testing.T) {
 	writer := NewFixedBufferByteSink(make([]byte, 1024))
-	aw := newArchiveWriter(writer)
+	aw := newArchiveWriterWithSink(writer)
 	testBlob := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 	_, _ = aw.writeByteSpan(testBlob)
 
@@ -300,8 +301,8 @@ func TestArchiveChunkCorruption(t *testing.T) {
 // Varlidate that the SHA512 checksums in the footer checkout, and fail when they are corrupted.
 func TestArchiveCheckSumValidations(t *testing.T) {
 	writer := NewFixedBufferByteSink(make([]byte, 1024))
+	aw := newArchiveWriterWithSink(writer)
 
-	aw := newArchiveWriter(writer)
 	testBlob := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 	_, _ = aw.writeByteSpan(testBlob)
 
@@ -342,6 +343,89 @@ func TestArchiveCheckSumValidations(t *testing.T) {
 	theBytes[offset] = theBytes[offset] + 1
 	err = rdr.verifyMetaCheckSum()
 	assert.ErrorContains(t, err, "checksum mismatch")
+}
+
+func TestProllyBinSearchUneven(t *testing.T) {
+	// We construct a prefix list which is not well distributed to ensure that the search still works, even if not
+	// optimal.
+	pf := make([]uint64, 1000)
+	for i := 0; i < 900; i++ {
+		pf[i] = uint64(i)
+	}
+	target := uint64(12345)
+	pf[900] = target
+	for i := 901; i < 1000; i++ {
+		pf[i] = uint64(10000000 + i)
+	}
+	// In normal circumstances, a value of 12345 would be far to the left side of the list
+	found := prollyBinSearch(pf, target)
+	assert.Equal(t, 900, found)
+
+	// Same test, but from something on the right side of the list.
+	for i := 999; i > 100; i-- {
+		pf[i] = uint64(math.MaxUint64 - uint64(i))
+	}
+	target = uint64(math.MaxUint64 - 12345)
+	pf[100] = target
+	for i := 99; i >= 0; i-- {
+		pf[i] = uint64(10000000 - i)
+	}
+	found = prollyBinSearch(pf, target)
+	assert.Equal(t, 100, found)
+}
+
+func TestProllyBinSearch(t *testing.T) {
+	r := rand.New(rand.NewSource(42))
+	curVal := uint64(r.Int())
+	pf := make([]uint64, 10000)
+	for i := 0; i < 10000; i++ {
+		pf[i] = curVal
+		curVal += uint64(r.Intn(10))
+	}
+
+	for i := 0; i < 10000; i++ {
+		idx := prollyBinSearch(pf, pf[i])
+		// There are dupes in the list, so we don't always end up with the same index.
+		assert.Equal(t, pf[i], pf[idx])
+	}
+
+	idx := prollyBinSearch(pf, pf[0]-1)
+	assert.Equal(t, -1, idx)
+	idx = prollyBinSearch(pf, pf[9999]+1)
+	assert.Equal(t, -1, idx)
+
+	// 23 is not a dupe, and neighbors don't match. stable due to seed.
+	idx = prollyBinSearch(pf, pf[23]+1)
+	assert.Equal(t, -1, idx)
+	idx = prollyBinSearch(pf, pf[23]-1)
+	assert.Equal(t, -1, idx)
+
+}
+
+func TestDuplicateInsertion(t *testing.T) {
+	writer := NewFixedBufferByteSink(make([]byte, 1024))
+	aw := newArchiveWriterWithSink(writer)
+	testBlob := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	_, _ = aw.writeByteSpan(testBlob)
+
+	h := hashWithPrefix(t, 23)
+	_ = aw.stageChunk(h, 0, 1)
+	err := aw.stageChunk(h, 0, 1)
+	assert.Equal(t, ErrDuplicateChunkWritten, err)
+}
+
+func TestInsertRanges(t *testing.T) {
+	writer := NewFixedBufferByteSink(make([]byte, 1024))
+	aw := newArchiveWriterWithSink(writer)
+	testBlob := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	_, _ = aw.writeByteSpan(testBlob)
+
+	h := hashWithPrefix(t, 23)
+	err := aw.stageChunk(h, 0, 2)
+	assert.Equal(t, ErrInvalidChunkRange, err)
+
+	err = aw.stageChunk(h, 2, 1)
+	assert.Equal(t, ErrInvalidDictionaryRange, err)
 }
 
 func TestPrefixSearch(t *testing.T) {
