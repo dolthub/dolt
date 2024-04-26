@@ -26,6 +26,8 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/cespare/xxhash/v2"
+
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 )

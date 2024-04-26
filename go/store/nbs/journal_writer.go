@@ -19,13 +19,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/swiss"
 	"hash/crc32"
 	"io"
 	"os"
 	"path/filepath"
 	"sync"
 
+	"github.com/dolthub/swiss"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
