@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"runtime/trace"
 
 	"golang.org/x/sync/errgroup"
 
@@ -51,11 +52,14 @@ func (s journalChunkSource) hasMany(addrs []hasRecord) (missing bool, err error)
 	return
 }
 
-func (s journalChunkSource) getCompressed(_ context.Context, h hash.Hash, _ *Stats) (CompressedChunk, error) {
+func (s journalChunkSource) getCompressed(ctx context.Context, h hash.Hash, _ *Stats) (CompressedChunk, error) {
+	defer trace.StartRegion(ctx, "journalChunkSource.getCompressed").End()
 	return s.journal.getCompressedChunk(h)
 }
 
-func (s journalChunkSource) get(_ context.Context, h hash.Hash, _ *Stats) ([]byte, error) {
+func (s journalChunkSource) get(ctx context.Context, h hash.Hash, _ *Stats) ([]byte, error) {
+	defer trace.StartRegion(ctx, "journalChunkSource.get").End()
+
 	cc, err := s.journal.getCompressedChunk(h)
 	if err != nil {
 		return nil, err
@@ -70,6 +74,8 @@ func (s journalChunkSource) get(_ context.Context, h hash.Hash, _ *Stats) ([]byt
 }
 
 func (s journalChunkSource) getMany(ctx context.Context, _ *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), stats *Stats) (bool, error) {
+	defer trace.StartRegion(ctx, "journalChunkSource.getMany").End()
+
 	var remaining bool
 	// todo: read planning
 	for i := range reqs {
@@ -91,6 +97,8 @@ func (s journalChunkSource) getMany(ctx context.Context, _ *errgroup.Group, reqs
 }
 
 func (s journalChunkSource) getManyCompressed(ctx context.Context, _ *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
+	defer trace.StartRegion(ctx, "journalChunkSource.getManyCompressed").End()
+
 	var remaining bool
 	// todo: read planning
 	for i := range reqs {

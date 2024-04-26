@@ -408,7 +408,12 @@ func (wr *journalWriter) commitRootHashUnlocked(ctx context.Context, root hash.H
 	if err = wr.flush(ctx); err != nil {
 		return err
 	}
-	if err = wr.journal.Sync(); err != nil {
+	func() {
+		defer trace.StartRegion(ctx, "sync").End()
+
+		err = wr.journal.Sync()
+	}()
+	if err != nil {
 		return err
 	}
 	wr.unsyncd = 0
