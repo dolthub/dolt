@@ -147,13 +147,13 @@ func (c *SessionCache) ClearTableCache() {
 }
 
 type TableCacheKey struct {
-	Name string
+	Name   string
 	Schema string
 }
 
 func (k TableCacheKey) ToLower() TableCacheKey {
 	return TableCacheKey{
-		Name: strings.ToLower(k.Name),
+		Name:   strings.ToLower(k.Name),
 		Schema: strings.ToLower(k.Schema),
 	}
 }
@@ -198,7 +198,7 @@ func (c *SessionCache) CacheViews(key doltdb.DataCacheKey, views []sql.ViewDefin
 
 	for i := range views {
 		viewName := TableCacheKey{
-			Name: strings.ToLower(views[i].Name),
+			Name:   strings.ToLower(views[i].Name),
 			Schema: strings.ToLower(schema),
 		}
 		viewsForKey[viewName] = views[i]

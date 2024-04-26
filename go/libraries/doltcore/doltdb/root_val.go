@@ -825,7 +825,7 @@ type TableName struct {
 	Schema string
 }
 
-// DefaultSchemaName is the name of the default schema. Tables with this schema name will be stored in the 
+// DefaultSchemaName is the name of the default schema. Tables with this schema name will be stored in the
 // primary (unnamed) table store in a root.
 var DefaultSchemaName = ""
 
@@ -906,7 +906,7 @@ func (root *RootValue) CreateDatabaseSchema(ctx context.Context, dbSchema schema
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return root.withStorage(r), nil
 }
 
@@ -1047,7 +1047,7 @@ func (root *RootValue) ValidateForeignKeysOnSchemas(ctx context.Context) (*RootV
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// TODO: schema name
 	allTablesSlice, err := root.GetTableNames(ctx, DefaultSchemaName)
 	if err != nil {
@@ -1293,9 +1293,9 @@ func (m fbTableMap) Iter(ctx context.Context, cb func(string, hash.Hash) (bool, 
 	return m.AddressMap.IterAll(ctx, func(n string, a hash.Hash) error {
 		n, ok := decodeTableNameForAddressMap(n, m.schemaName)
 		if !stop && ok {
-				var err error
-				stop, err = cb(n, a)
-				return err
+			var err error
+			stop, err = cb(n, a)
+			return err
 		}
 		return nil
 	})
@@ -1370,7 +1370,7 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 	if err != nil {
 		return nil, err
 	}
-	
+
 	ambytes := []byte(tree.ValueFromNode(am.Node()).(types.SerialMessage))
 	dbSchemas, err := r.GetSchemas(ctx)
 	if err != nil {
@@ -1410,7 +1410,7 @@ func serializeDatabaseSchemas(b *flatbuffers.Builder, dbSchemas []schema.Databas
 
 	for i := len(dbSchemas) - 1; i >= 0; i-- {
 		dbSchema := dbSchemas[i]
-		
+
 		nameOff := b.CreateString(dbSchema.Name)
 		serial.DatabaseSchemaStart(b)
 		serial.DatabaseSchemaAddName(b, nameOff)
@@ -1434,8 +1434,8 @@ func encodeTableNameForAddressMap(name TableName) string {
 func decodeTableNameForAddressMap(encodedName, schemaName string) (string, bool) {
 	if schemaName == "" && encodedName[0] != 0 {
 		return encodedName, true
-	} else if schemaName != "" && encodedName[0] == 0 && 
-		len(encodedName) > len(schemaName) + 2 && 
+	} else if schemaName != "" && encodedName[0] == 0 &&
+		len(encodedName) > len(schemaName)+2 &&
 		encodedName[1:len(schemaName)+1] == schemaName {
 		return encodedName[len(schemaName)+2:], true
 	}
@@ -1481,12 +1481,12 @@ func (r fbRvStorage) GetSchemas(ctx context.Context) ([]schema.DatabaseSchema, e
 		if err != nil {
 			return nil, err
 		}
-		
+
 		schemas[i] = schema.DatabaseSchema{
 			Name: string(dbSchema.Name()),
 		}
 	}
-	
+
 	return schemas, nil
 }
 

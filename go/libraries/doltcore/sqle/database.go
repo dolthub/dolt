@@ -1018,9 +1018,9 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, schemaName
 		return err
 	}
 	root := ws.WorkingRoot()
-	
+
 	// TODO: enforce that schema exists (redundant with other checks)
-	
+
 	if exists, err := root.HasTable(ctx, tableName); err != nil {
 		return err
 	} else if exists {
@@ -1061,13 +1061,13 @@ func hasDatabaseSchema(ctx context.Context, root *doltdb.RootValue, schemaName s
 	if err != nil {
 		return false, err
 	}
-	
+
 	for _, schema := range schemas {
 		if strings.EqualFold(schema.Name, schemaName) {
 			return true, nil
 		}
 	}
-	
+
 	return false, nil
 }
 
@@ -1181,14 +1181,14 @@ func (db Database) CreateSchema(ctx *sql.Context, schemaName string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	root, err = root.CreateDatabaseSchema(ctx, schema.DatabaseSchema{
 		Name: schemaName,
 	})
 	if err != nil {
 		return err
 	}
-	
+
 	return db.SetRoot(ctx, root)
 }
 
@@ -1211,14 +1211,14 @@ func (db Database) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseS
 			return db, true, nil
 		}
 	}
-	
+
 	// For a temporary backwards compatibility solution, always pretend the public schema exists.
 	// Should create it explicitly when we create a new db in future.
 	if strings.EqualFold(schemaName, "public") {
 		db.schemaName = "public"
 		return db, true, nil
 	}
-	
+
 	return nil, false, nil
 }
 

@@ -809,7 +809,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 			}
 			nextPrompt, multiPrompt = formattedPrompts(db, branch, dirty)
 		}()
-		
+
 		shell.SetPrompt(nextPrompt)
 		shell.SetMultiPrompt(multiPrompt)
 	})

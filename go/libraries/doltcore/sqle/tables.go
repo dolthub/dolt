@@ -2636,7 +2636,7 @@ func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string) err
 // This interface really belongs on AlterableDoltTable (which embeds WritableDoltTable), but it's here because we
 // actually have a WritableDoltTable at runtime in some cases when we want to update a foreign key. This happens in the
 // case when a foreign key is created without foreign key checks on, which causes its IsResolved flag to become enabled
-// the first time it is referenced in a statement with foreign keys enabled. This is kind of terrible, as means that 
+// the first time it is referenced in a statement with foreign keys enabled. This is kind of terrible, as means that
 // an update statement (including a no-op write statement) has the side-effect of causing a schema change.
 // TODO: get rid of explicit IsResolved tracking
 func (t *WritableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sqlFk sql.ForeignKeyConstraint) error {

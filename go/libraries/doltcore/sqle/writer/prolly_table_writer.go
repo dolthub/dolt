@@ -166,7 +166,7 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 	}
 
 	w.setAutoIncrement = true
-	
+
 	// TODO: need schema name in ai tracker
 	w.aiTracker.Next(w.tableName.Name, sqlRow)
 	return nil

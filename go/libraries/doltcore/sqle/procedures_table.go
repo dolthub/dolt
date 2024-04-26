@@ -81,7 +81,7 @@ func DoltProceduresGetOrCreateTable(ctx *sql.Context, db Database) (*WritableDol
 	if err != nil {
 		return nil, err
 	}
-	
+
 	err = db.createDoltTable(ctx, doltdb.ProceduresTableName, doltdb.DefaultSchemaName, root, ProceduresTableSchema())
 	if err != nil {
 		return nil, err
