@@ -18,6 +18,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"sort"
 
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 )
@@ -167,9 +168,16 @@ func encodeJsonObject(jsonObject map[string]any) (typeId byte, encodedObject []b
 	//       instead of uint16 values.
 	nextKeysOffset := uint16(2 + 2 + len(jsonObject)*4 + len(jsonObject)*3)
 
+	// Sort the keys so that we can process the keys and values in a consistent order
+	sortedKeys := make([]string, 0, len(jsonObject))
+	for key := range jsonObject {
+		sortedKeys = append(sortedKeys, key)
+	}
+	sort.Strings(sortedKeys)
+
 	// Process keys first, since value entry data depends on offsets that we don't know until we
 	// process all the keys.
-	for key, _ := range jsonObject {
+	for _, key := range sortedKeys {
 		// NOTE: Don't use encodeJsonValue for the key – its length gets encoded slightly differently
 		//       for JSON objects.
 		encodedValue := []byte(key)
@@ -187,7 +195,8 @@ func encodeJsonObject(jsonObject map[string]any) (typeId byte, encodedObject []b
 	var valueEntriesBuffer []byte
 	var valuesBuffer []byte
 	nextValuesOffset := nextKeysOffset
-	for _, value := range jsonObject {
+	for _, key := range sortedKeys {
+		value := jsonObject[key]
 		typeId, buffer, err := encodeJsonValue(value)
 		if err != nil {
 			return 0, nil, err
