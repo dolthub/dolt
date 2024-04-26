@@ -10,6 +10,6 @@ teardown() {
     teardown_common
 }
 
-@test "admin zstd works" {
+@test "zstd: admin zstd works" {
     dolt admin zstd
 }
