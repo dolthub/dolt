@@ -114,7 +114,7 @@ func (m prollyIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.
 			return nil, err
 		}
 	}
-	return m.keyBld.Build(sharePool), nil
+	return m.keyBld.BuildPermissive(sharePool), nil
 }
 
 func (m prollyIndexWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {
@@ -165,10 +165,14 @@ func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sq
 		return err
 	}
 
-	// todo(andy): we can skip building, deleting |oldKey|
-	//  if we know the key fields are unchanged
-	if err := m.mut.Delete(ctx, oldKey); err != nil {
-		return err
+	// If the old row is empty, there is nothing to delete.
+	// This can happen when updating a row in a conflict table if the row did not exist on one branch.
+	if oldKey.Count() != 0 {
+		// todo(andy): we can skip building, deleting |oldKey|
+		//  if we know the key fields are unchanged
+		if err := m.mut.Delete(ctx, oldKey); err != nil {
+			return err
+		}
 	}
 
 	newKey, err := m.keyFromRow(ctx, newRow)
