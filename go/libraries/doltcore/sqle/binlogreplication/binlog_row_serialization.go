@@ -28,7 +28,6 @@ import (
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/dolthub/vitess/go/vt/proto/query"
-	"github.com/sirupsen/logrus"
 )
 
 // rowSerializationIter iterates over the columns in a schema and abstracts access to the key and value tuples storing
@@ -566,17 +565,21 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 			}
 
 		case query.Type_JSON: // JSON
-			jsonDoc, err := tree.GetField(ctx, descriptor, tupleIdx, tuple, ns)
+			json, err := tree.GetField(ctx, descriptor, tupleIdx, tuple, ns)
 			if err != nil {
 				return nil, mysql.Bitmap{}, err
 			}
-			if jsonDoc != nil {
+			if json != nil {
+				jsonDoc, ok := json.(gmstypes.JSONDocument)
+				if !ok {
+					return nil, mysql.Bitmap{}, fmt.Errorf("supported JSON type: %T", json)
+				}
+
 				jsonBuffer, err := encodeJsonDoc(jsonDoc)
 				jsonLengthBuffer := make([]byte, 4)
 				binary.LittleEndian.PutUint32(jsonLengthBuffer, uint32(len(jsonBuffer)))
 				data = append(data, jsonLengthBuffer...)
 				data = append(data, jsonBuffer...)
-				logrus.Errorf("Encoded JSON bytes: %v", data[currentPos:])
 				if err != nil {
 					return nil, mysql.Bitmap{}, err
 				}

@@ -42,6 +42,10 @@ const jsonLiteralValueNull = byte(0x00)
 const jsonLiteralValueTrue = byte(0x01)
 const jsonLiteralValueFalse = byte(0x02)
 
+// maxOffsetSize is used to determine if an byte offset into an array or object encoding will exceed the capacity
+// of a uint16 and whether the encoding needs to switch to the large array or large object format.
+const maxOffsetSize = uint32(65_535)
+
 // encodeJsonDoc encodes the specified |jsonDoc| into MySQL's custom/internal binary encoding
 // so that it can be included in a binlog event.
 //
@@ -50,69 +54,41 @@ const jsonLiteralValueFalse = byte(0x02)
 //
 // And a third-party description is here:
 // https://lafengnan.gitbooks.io/blog/content/mysql/chapter2.html
-func encodeJsonDoc(jsonDoc any) (buffer []byte, err error) {
-	if jsonDoc == nil {
-		buffer = append(buffer, jsonTypeLiteral)
-		buffer = append(buffer, jsonLiteralValueNull)
-		return buffer, nil
+func encodeJsonDoc(jsonDoc gmstypes.JSONDocument) (buffer []byte, err error) {
+	typeId, encodedValue, err := encodeJsonValue(jsonDoc.Val)
+	if err != nil {
+		return nil, err
 	}
-
-	switch v := jsonDoc.(type) {
-	case gmstypes.JSONDocument:
-		return encodeJsonDoc(v.Val)
-
-	case bool, string, float64, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-		typeId, encodedValue, err := encodeJsonValue(v)
-		buffer = append(buffer, typeId)
-		if err != nil {
-			return nil, err
-		}
-		buffer = append(buffer, encodedValue...)
-
-	case []any:
-		typeId, encodedArray, err := encodeJsonArray(v)
-		if err != nil {
-			return nil, err
-		}
-		buffer = append(buffer, typeId)
-		buffer = append(buffer, encodedArray...)
-
-	case map[string]any:
-		typeId, encodedObj, err := encodeJsonObject(v)
-		if err != nil {
-			return nil, err
-		}
-		buffer = append(buffer, typeId)
-		buffer = append(buffer, encodedObj...)
-
-	default:
-		return nil, fmt.Errorf("unexpected type in JSON document: %T", v)
-	}
-
-	return buffer, nil
+	buffer = append(buffer, typeId)
+	return append(buffer, encodedValue...), nil
 }
 
 // encodeJsonArray encodes the specified |jsonArray| into MySQL's internal JSON encoding and returns
 // the type ID indicating whether this is a small or large array, the encoded array data, and any
-// error encountered.
+// error encountered. The |largeEncoding| param controls whether this function will use the small
+// array encoding (i.e. using 2 bytes for counts, sizes, and offsets), or the large array encoding
+// (i.e. using 4 bytes for counts, sizes, and offsets).
 //
 // A JSON Array is encoded into the following components:
-// - Type Identifier (1 byte): either jsonTypeSmallArray or jsonTypeLargeArray
-// - Count (2 bytes for jsonTypeSmallArray, otherwise 4 bytes): the number of elements in the array
-// - Size (2 bytes for jsonTypeSmallArray, otherwise 4 bytes): the total size of the encoded array (i.e. everything but the Type ID)
-// - Value Entries (variable): 1 per value; 1 byte for type ID, 2 bytes for offset or inlined literal value for jsonTypeSmallArray, otherwise 4
-// - Values (variable): 1 per value; encoded value bytes
-func encodeJsonArray(jsonArray []any) (typeId byte, encodedArray []byte, err error) {
+// - Type Identifier: Always 1 byte; jsonTypeSmallArray or jsonTypeLargeArray; not included in the returned []byte.
+// - Count:  2 bytes for small encoding, otherwise 4; number of elements in the array
+// - Size: 2 bytes for small encoding, otherwise 4; total size of the encoded array (everything but the Type ID)
+// - Value Entries: 1 per value; 1 byte for type ID, variable sized offset (or inlined literal value)
+// - Values: 1 per value; encoded value bytes
+func encodeJsonArray(jsonArray []any, largeEncoding bool) (typeId byte, encodedArray []byte, err error) {
+	if !largeEncoding {
+		if len(jsonArray) > int(maxOffsetSize) {
+			return 0, nil, fmt.Errorf(
+				"too many elements in JSON array (%d) to serialize in small array encoding", len(jsonArray))
+		}
+	}
+
 	var valueEntriesBuffer []byte
 	var valuesBuffer []byte
-
-	// nextValuesOffset starts at the byte offset in the encoded array where values start.
-	// That includes the two bytes (for small arrays) for the element count, the two bytes
-	// (for small arrays) for the encoded size, and three bytes for each element in the array.
-	nextValuesOffset := uint16(2 + 2 + (len(jsonArray) * 3))
+	nextValuesOffset := calculateInitialArrayValuesOffset(len(jsonArray), largeEncoding)
 
 	for _, element := range jsonArray {
-		typeId, buffer, err := encodeJsonValue(element)
+		typeId, encodedValue, err := encodeJsonValue(element)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -120,53 +96,57 @@ func encodeJsonArray(jsonArray []any) (typeId byte, encodedArray []byte, err err
 		// Literals can be inlined in the value-entries section
 		if typeId == jsonTypeLiteral {
 			valueEntriesBuffer = append(valueEntriesBuffer, typeId)
-			if len(buffer) != 1 {
+			if len(encodedValue) != 1 {
 				return 0, nil, fmt.Errorf("unexpected buffer length")
 			}
-			valueEntriesBuffer = append(valueEntriesBuffer, buffer[0], byte(0))
+			valueEntriesBuffer = appendForEncoding(valueEntriesBuffer, uint32(encodedValue[0]), largeEncoding)
 		} else {
+			if !largeEncoding && nextValuesOffset > maxOffsetSize-uint32(len(encodedValue)) {
+				return 0, nil, fmt.Errorf("offset too large for small array encoding")
+			}
+
 			valueEntriesBuffer = append(valueEntriesBuffer, typeId)
-			valueEntriesBuffer = append(valueEntriesBuffer, byte(nextValuesOffset), byte(nextValuesOffset<<8))
-			valuesBuffer = append(valuesBuffer, buffer...)
-			nextValuesOffset += uint16(len(buffer))
+			valueEntriesBuffer = appendForEncoding(valueEntriesBuffer, nextValuesOffset, largeEncoding)
+			valuesBuffer = append(valuesBuffer, encodedValue...)
+			nextValuesOffset += uint32(len(encodedValue))
 		}
 	}
 
 	// element count (uint16 for small arrays)
-	encodedArray = append(encodedArray, byte(len(jsonArray)), byte(len(jsonArray)<<8))
-	// data payload size in bytes (uint16 for small arrays)
-	// includes the two fields for element count and payload length (uint16s small arrays)
-	arrayPayloadLength := 2 + 2 + len(valueEntriesBuffer) + len(valuesBuffer)
-	encodedArray = append(encodedArray, byte(arrayPayloadLength), byte(arrayPayloadLength<<8))
+	encodedArray = appendForEncoding(encodedArray, uint32(len(jsonArray)), largeEncoding)
+
+	// Grab the total size of the array data from the next offset position pointing to the end of the values buffer
+	arrayPayloadLength := nextValuesOffset
+
+	encodedArray = appendForEncoding(encodedArray, arrayPayloadLength, largeEncoding)
 	encodedArray = append(encodedArray, valueEntriesBuffer...)
 	encodedArray = append(encodedArray, valuesBuffer...)
 
-	return jsonTypeSmallArray, encodedArray, nil
+	if !largeEncoding {
+		return jsonTypeSmallArray, encodedArray, nil
+	} else {
+		return jsonTypeLargeArray, encodedArray, nil
+	}
 }
 
 // encodeJsonObject encodes the specified |jsonObject| into MySQL's internal JSON encoding and returns
 // the type ID indicating whether this is a small or large object, the encoded object data, and any
-// error encountered.
+// error encountered. The |largeEncoding| param controls whether this function will use the small
+// object encoding (i.e. using 2 bytes for counts, sizes, and offsets), or the large object encoding
+// (i.e. using 4 bytes for counts, sizes, and offsets).
 //
 // A JSON Object is encoded into the following components:
-// - Type Identifier (1 byte): either jsonTypeSmallObject or jsonTypeLargeObject
-// - Count (2 bytes for jsonTypeSmallObject, otherwise 4 bytes): the number of keys in the object
-// - Size (2 bytes for jsonTypeSmallObject, otherwise 4 bytes): the total size of the encoded object (i.e. everything but the Type ID)
-// - Key Entries (variable): 1 per key; 2 bytes for key offset for jsonTypeSmallObject, otherwise 4; 2 bytes for key length
+// - Type Identifier: Always 1 byte; either jsonTypeSmallObject or jsonTypeLargeObject (not included in returned []byte)
+// - Count: variable based on small/large encoding; holds the number of keys in the object
+// - Size: variable based on small/large encoding; total size of the encoded object (i.e. everything but the Type ID)
+// - Key Entries: 1 per key; variable length key offset (based on small/large encoding), plus 2 bytes for key length
 // - Value Entries (variable): 1 per value; 1 byte for type ID, 2 bytes for offset or inlined literal value for jsonTypeSmallObject, otherwise 4
 // - Keys (variable): 1 per key; encoded string bytes
 // - Values (variable): 1 per value; encoded value bytes
-func encodeJsonObject(jsonObject map[string]any) (typeId byte, encodedObject []byte, err error) {
+func encodeJsonObject(jsonObject map[string]any, largeEncoding bool) (typeId byte, encodedObject []byte, err error) {
 	var keyEntriesBuffer []byte
 	var keysBuffer []byte
-	// Since the key entries and value entries sections have a size based off of the number of key/value
-	// pairs in the object, we can compute the first key offset position by adding 2 bytes (key/value
-	// pair count field), 2 bytes (size of encoded object field), 4 bytes per key/value pair (one key entry
-	// for each key/value pair), and 3 bytes for each key/value pair (one value entry for each key/value
-	// pair).
-	// NOTE: When we support large JSON objects, this will need to change to account for uint32 values
-	//       instead of uint16 values.
-	nextKeysOffset := uint16(2 + 2 + len(jsonObject)*4 + len(jsonObject)*3)
+	nextKeysOffset := calculateInitialObjectKeysOffset(len(jsonObject), largeEncoding)
 
 	// Sort the keys so that we can process the keys and values in a consistent order
 	sortedKeys := make([]string, 0, len(jsonObject))
@@ -182,10 +162,14 @@ func encodeJsonObject(jsonObject map[string]any) (typeId byte, encodedObject []b
 		//       for JSON objects.
 		encodedValue := []byte(key)
 
-		keyEntriesBuffer = append(keyEntriesBuffer, byte(nextKeysOffset), byte(nextKeysOffset<<8))
+		if !largeEncoding && nextKeysOffset > maxOffsetSize-uint32(len(encodedValue)) {
+			return 0, nil, fmt.Errorf("offset too large for small object encoding")
+		}
+
+		keyEntriesBuffer = appendForEncoding(keyEntriesBuffer, nextKeysOffset, largeEncoding)
 		keyEntriesBuffer = append(keyEntriesBuffer, byte(len(encodedValue)), byte(len(encodedValue)<<8))
 		keysBuffer = append(keysBuffer, encodedValue...)
-		nextKeysOffset += uint16(len(encodedValue))
+		nextKeysOffset += uint32(len(encodedValue))
 	}
 
 	// Process values – since the object values are written after the keys, and we need to store the
@@ -197,7 +181,7 @@ func encodeJsonObject(jsonObject map[string]any) (typeId byte, encodedObject []b
 	nextValuesOffset := nextKeysOffset
 	for _, key := range sortedKeys {
 		value := jsonObject[key]
-		typeId, buffer, err := encodeJsonValue(value)
+		typeId, encodedValue, err := encodeJsonValue(value)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -205,30 +189,39 @@ func encodeJsonObject(jsonObject map[string]any) (typeId byte, encodedObject []b
 		// Literals may be inlined in the value-entries section
 		if typeId == jsonTypeLiteral {
 			valueEntriesBuffer = append(valueEntriesBuffer, typeId)
-			if len(buffer) != 1 {
+			if len(encodedValue) != 1 {
 				return 0, nil, fmt.Errorf("unexpected buffer length")
 			}
-			valueEntriesBuffer = append(valueEntriesBuffer, buffer[0], byte(0))
+			valueEntriesBuffer = appendForEncoding(valueEntriesBuffer, uint32(encodedValue[0]), largeEncoding)
 		} else {
+			if !largeEncoding && nextValuesOffset > maxOffsetSize-uint32(len(encodedValue)) {
+				return 0, nil, fmt.Errorf("offset too large for small object encoding")
+			}
+
 			valueEntriesBuffer = append(valueEntriesBuffer, typeId)
-			valueEntriesBuffer = append(valueEntriesBuffer, byte(nextValuesOffset), byte(nextValuesOffset<<8))
-			valuesBuffer = append(valuesBuffer, buffer...)
-			nextValuesOffset += uint16(len(buffer))
+			valueEntriesBuffer = appendForEncoding(valueEntriesBuffer, nextValuesOffset, largeEncoding)
+			valuesBuffer = append(valuesBuffer, encodedValue...)
+			nextValuesOffset += uint32(len(encodedValue))
 		}
 	}
 
 	// element count (uint16 for small objects)
-	encodedObject = append(encodedObject, byte(len(jsonObject)), byte(len(jsonObject)<<8))
-	// data payload size in bytes (uint16 for small objects)
-	// includes the two fields for element count and payload length (uint16s small arrays)
-	arrayPayloadLength := 2 + 2 + len(keyEntriesBuffer) + len(keysBuffer) + len(valueEntriesBuffer) + len(valuesBuffer)
-	encodedObject = append(encodedObject, byte(arrayPayloadLength), byte(arrayPayloadLength<<8))
+	encodedObject = appendForEncoding(encodedObject, uint32(len(jsonObject)), largeEncoding)
+
+	// Grab the total size of the object data from the next offset position pointing to the end of the values buffer
+	objectPayloadLength := nextValuesOffset
+
+	encodedObject = appendForEncoding(encodedObject, objectPayloadLength, largeEncoding)
 	encodedObject = append(encodedObject, keyEntriesBuffer...)
 	encodedObject = append(encodedObject, valueEntriesBuffer...)
 	encodedObject = append(encodedObject, keysBuffer...)
 	encodedObject = append(encodedObject, valuesBuffer...)
 
-	return jsonTypeSmallObject, encodedObject, nil
+	if !largeEncoding {
+		return jsonTypeSmallObject, encodedObject, nil
+	} else {
+		return jsonTypeLargeObject, encodedObject, nil
+	}
 }
 
 // encodeJsonObject encodes the specified |jsonValue| into MySQL's internal JSON encoding and returns
@@ -249,29 +242,113 @@ func encodeJsonValue(jsonValue any) (typeId byte, buffer []byte, err error) {
 		return jsonTypeLiteral, buffer, nil
 
 	case string:
-		if len(v) > 127 {
-			// TODO: data-length for string uses the high bit to indicate if additional
-			//       bytes are needed for the data length field.
-			return 0, nil, fmt.Errorf("strings larger than 127 bytes not supported yet!")
+		// String lengths use a special encoding that can span multiple bytes
+		buffer, err = appendStringLength(buffer, len(v))
+		if err != nil {
+			return 0, nil, err
 		}
-		buffer = append(buffer, byte(len(v)))
+
 		buffer = append(buffer, []byte(v)...)
 		return jsonTypeString, buffer, nil
 
 	case float64:
-		// TODO: all our numbers end up being represented as float64s currently when we parse stored JSON
+		// NOTE: all our numbers end up being represented as float64s currently when we parse stored JSON
 		bits := math.Float64bits(v)
 		buffer = append(buffer, make([]byte, 8)...)
 		binary.LittleEndian.PutUint64(buffer, bits)
 		return jsonTypeDouble, buffer, nil
 
 	case []any:
-		return encodeJsonArray(v)
+		// MySQL attempts to use the small encoding first, and if offset sizes overflow, then it switches to the
+		// large encoding. This is a little messy/inefficient to try the small encoding first, but because of the
+		// way the binary format is designed, we can't know if/when we'll need the large format without serializing
+		// the data first.
+		id, encodedArray, err := encodeJsonArray(v, false)
+		if err == nil {
+			return id, encodedArray, nil
+		}
+		return encodeJsonArray(v, true)
 
 	case map[string]any:
-		return encodeJsonObject(v)
+		// See the comment above about MySQL's JSON serialization format, and why we try the small encoding first,
+		// before we know if we need the large encoding or not.
+		id, encodedObject, err := encodeJsonObject(v, false)
+		if err == nil {
+			return id, encodedObject, nil
+		}
+		return encodeJsonObject(v, true)
 
 	default:
 		return 0x00, nil, fmt.Errorf("unexpected type in JSON document: %T", v)
 	}
+}
+
+// appendForEncoding appends the |value| to the specified |bytes| and returns the updated byte slice. If
+// |largeEncoding| is true, then 4 bytes are added to |bytes| to represent |value|, otherwise 2 bytes are used.
+// This is a helper function for serializing the smallArray/largeArray and smallObject/largeObject formats, since
+// they are identical formats, except that offsets, counts, and sizes are stored as 2 bytes in the small encodings,
+// and stored as 4 bytes in the large encodings.
+func appendForEncoding(bytes []byte, value uint32, largeEncoding bool) []byte {
+	if !largeEncoding {
+		bytes = append(bytes, byte(value), byte(value>>8))
+	} else {
+		bytes = append(bytes, byte(value), byte(value>>8), byte(value>>16), byte(value>>24))
+	}
+	return bytes
+}
+
+// appendStringLength appends a variable number of bytes to the specified |bytes| to encode |length|, the
+// length of a string. For string lengths, if the length is larger than 127 bytes, we set the high bit of
+// the first byte and use two bytes to encode the length. Similarly, if the high bit of the second byte is
+// also set, the length is encoded over three bytes.
+func appendStringLength(bytes []byte, length int) ([]byte, error) {
+	switch {
+	case length > 0x1FFFFF:
+		return nil, fmt.Errorf("strings larger than 2,097,151 bytes not supported")
+
+	case length > 0x3FFF: // 16,383
+		return append(bytes,
+			byte(length&0x7F|0x80),
+			byte(length>>7|0x80),
+			byte(length>>14)), nil
+
+	case length > 0x7F: // 127
+		return append(bytes,
+			byte(length&0x7F|0x80),
+			byte(length>>7)), nil
+
+	default:
+		return append(bytes, byte(length)), nil
+	}
+}
+
+// calculateInitialArrayValuesOffset returns the initial offset value for the first array value in the
+// encoded array byte slice. When |largeEncoding| is false, this value includes the two bytes for the
+// element count, the two bytes for the encoded size, and three bytes (one byte for type ID, and two
+// bytes for the offset) for each element in the array, specified by |arrayLength|. When |largeEncoding|
+// is true, this value includes four bytes for the element count, four bytes for the encoded size, and
+// five bytes (one byte for type ID, and four bytes for the offset) for each element in the array,
+// specified by |arrayLength|.
+func calculateInitialArrayValuesOffset(arrayLength int, largeEncoding bool) uint32 {
+	if !largeEncoding {
+		return uint32(2 + 2 + (arrayLength * 3))
+	}
+	return uint32(4 + 4 + (arrayLength * 5))
+}
+
+// calculateInitialObjectKeysOffset returns the initial offset value for the first key in the encoded
+// object byte slice. When |largeEncoding| is false, the first key offset position is calculated by adding
+// 2 bytes (the key/value pair count field), 2 bytes (the size of encoded object field), 4 bytes (2 bytes
+// for the key offset, and 2 bytes for the length of the key) per key/value pair, specified by |objectLength|,
+// and another 3 bytes (1 byte for the value's type ID, and 2 bytes for the offset to the value's data) for
+// each key/value pair. When |largeEncoding| is true, the first key offset position is calculated by adding
+// 4 bytes (the key/value pair count field), 4 bytes (the size of encoded object field), 6 bytes (4 bytes
+// for the key offset, and 2 bytes for the length of the key) per key/value pair, specified by |objectLength|,
+// and another 5 bytes (1 byte for the value's type ID, and 4 bytes for the offset to the value's data) for
+// each key/value pair.
+func calculateInitialObjectKeysOffset(objectLength int, largeEncoding bool) uint32 {
+	if !largeEncoding {
+		return uint32(2 + 2 + objectLength*4 + objectLength*3)
+	}
+	return uint32(4 + 4 + objectLength*6 + objectLength*5)
 }

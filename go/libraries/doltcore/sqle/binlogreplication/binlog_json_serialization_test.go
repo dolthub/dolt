@@ -16,14 +16,19 @@ package binlogreplication
 
 import (
 	"encoding/json"
+	"fmt"
+	"testing"
+
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 // TestJsonSerialization_EncodedBytes tests that we can properly encode JSON data to MySQL's internal encoding.
 func TestJsonSerialization_EncodedBytes(t *testing.T) {
 	tests := []struct {
+		name     string
 		json     string
 		expected []byte
 	}{
@@ -50,21 +55,41 @@ func TestJsonSerialization_EncodedBytes(t *testing.T) {
 			json:     "1.0",
 			expected: []byte{0xb, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xf0, 0x3f},
 		},
-
-		// Small Arrays
-
-		// Small Objects
-
-		// Large Arrays
-
-		// Large Objects
+		{
+			// String values up to 127 bytes use a one byte length encoding
+			name:     "127 byte string value",
+			json:     fmt.Sprintf("%q", generateLargeString(127)),
+			expected: append([]byte{0xc, 0x7f}, []byte(generateLargeString(127))...),
+		},
+		{
+			// String values over 127 bytes use a two byte length encoding
+			name:     "128 byte string value",
+			json:     fmt.Sprintf("%q", generateLargeString(128)),
+			expected: append([]byte{0xc, 0x80, 0x1}, []byte(generateLargeString(128))...),
+		},
+		{
+			// String values up to 16,383 bytes use a two byte length encoding
+			name:     "16,383 byte string value",
+			json:     fmt.Sprintf("%q", generateLargeString(16383)),
+			expected: append([]byte{0xc, 0xff, 0x7f}, []byte(generateLargeString(16383))...),
+		},
+		{
+			// String values over 16,383 bytes use a three byte length encoding
+			name:     "16,384 byte string value",
+			json:     fmt.Sprintf("%q", generateLargeString(16384)),
+			expected: append([]byte{0xc, 0x80, 0x80, 0x1}, []byte(generateLargeString(16384))...),
+		},
 	}
 
 	for _, test := range tests {
-		t.Run(test.json, func(t *testing.T) {
+		name := test.json
+		if test.name != "" {
+			name = test.name
+		}
+		t.Run(name, func(t *testing.T) {
 			var jsonDoc any
 			require.NoError(t, json.Unmarshal([]byte(test.json), &jsonDoc))
-			encoded, err := encodeJsonDoc(jsonDoc)
+			encoded, err := encodeJsonDoc(gmstypes.JSONDocument{Val: jsonDoc})
 			require.NoError(t, err)
 			require.Equal(t, test.expected, encoded)
 		})
@@ -75,80 +100,173 @@ func TestJsonSerialization_EncodedBytes(t *testing.T) {
 // decode it with Vitess's logic that parses the binary representation and turns it back into a SQL expression.
 func TestJsonSerialization_VitessRoundTrip(t *testing.T) {
 	tests := []struct {
-		json     string
-		expected string
+		name           string
+		json           string
+		expected       string
+		expectedTypeId byte
+		expectedErr    string
 	}{
 		// Literals
 		{
-			json:     "true",
-			expected: "'true'",
+			json:           "true",
+			expected:       "'true'",
+			expectedTypeId: jsonTypeLiteral,
 		},
 		{
-			json:     "false",
-			expected: "'false'",
+			json:           "false",
+			expected:       "'false'",
+			expectedTypeId: jsonTypeLiteral,
 		},
 		{
-			json:     "null",
-			expected: "'null'",
+			json:           "null",
+			expected:       "'null'",
+			expectedTypeId: jsonTypeLiteral,
 		},
 
 		// Scalars
 		{
-			json:     `"foo"`,
-			expected: `'"foo"'`,
+			json:           `"foo"`,
+			expected:       `'"foo"'`,
+			expectedTypeId: jsonTypeString,
 		},
 		{
-			json:     "1.0",
-			expected: "'1E+00'",
+			json:           "1.0",
+			expected:       "'1E+00'",
+			expectedTypeId: jsonTypeDouble,
+		},
+		{
+			// String values up to 127 bytes use a one byte length encoding
+			name:     "127 byte string value",
+			json:     fmt.Sprintf("%q", generateLargeString(127)),
+			expected: fmt.Sprintf("'%q'", generateLargeString(127)),
+		},
+		{
+			// String values over 127 bytes use a two byte length encoding
+			name:     "128 byte string value",
+			json:     fmt.Sprintf("%q", generateLargeString(128)),
+			expected: fmt.Sprintf("'%q'", generateLargeString(128)),
+		},
+		{
+			// String values up to 16,383 bytes use a two byte length encoding
+			name:     "16,383 byte string value",
+			json:     fmt.Sprintf("%q", generateLargeString(16383)),
+			expected: fmt.Sprintf("'%q'", generateLargeString(16383)),
+		},
+		{
+			// String values over 16,383 bytes use a three byte length encoding
+			name:     "16,384 byte string value",
+			json:     fmt.Sprintf("%q", generateLargeString(16384)),
+			expected: fmt.Sprintf("'%q'", generateLargeString(16384)),
+		},
+		{
+			// String values over 2,097,151 bytes throw an error
+			name:        "2,097,152 bytes string value",
+			json:        fmt.Sprintf("%q", generateLargeString(2_097_152)),
+			expectedErr: "strings larger than 2,097,151 bytes not supported",
 		},
 
 		// Small Arrays
 		{
-			json:     `["foo", "bar", 1, 2, 3]`,
-			expected: "JSON_ARRAY('foo','bar',1E+00,2E+00,3E+00)",
+			json:           `["foo", null]`,
+			expected:       "JSON_ARRAY('foo',null)",
+			expectedTypeId: jsonTypeSmallArray,
 		},
 		{
-			json:     `[1.1, [2.2, "foo"], "bar", ["baz", "bash"]]`,
-			expected: "JSON_ARRAY(1.1E+00,JSON_ARRAY(2.2E+00,'foo'),'bar',JSON_ARRAY('baz','bash'))",
+			json:           `["foo", "bar", 1, 2, 3]`,
+			expected:       "JSON_ARRAY('foo','bar',1E+00,2E+00,3E+00)",
+			expectedTypeId: jsonTypeSmallArray,
 		},
 		{
-			json:     `[1.1, [2.2, [3.3, ["foo"]]]]`,
-			expected: "JSON_ARRAY(1.1E+00,JSON_ARRAY(2.2E+00,JSON_ARRAY(3.3E+00,JSON_ARRAY('foo'))))",
+			json:           `[1.1, [2.2, "foo"], "bar", ["baz", "bash"]]`,
+			expected:       "JSON_ARRAY(1.1E+00,JSON_ARRAY(2.2E+00,'foo'),'bar',JSON_ARRAY('baz','bash'))",
+			expectedTypeId: jsonTypeSmallArray,
 		},
 		{
-			json:     `[1.1, {"foo": ["bar", "baz", "bash"]}, 2.2]`,
-			expected: "JSON_ARRAY(1.1E+00,JSON_OBJECT('foo',JSON_ARRAY('bar','baz','bash')),2.2E+00)",
+			json:           `[1.1, [2.2, [3.3, ["foo"]]]]`,
+			expected:       "JSON_ARRAY(1.1E+00,JSON_ARRAY(2.2E+00,JSON_ARRAY(3.3E+00,JSON_ARRAY('foo'))))",
+			expectedTypeId: jsonTypeSmallArray,
+		},
+		{
+			json:           `[1.1, {"foo": ["bar", "baz", "bash"]}, 2.2]`,
+			expected:       "JSON_ARRAY(1.1E+00,JSON_OBJECT('foo',JSON_ARRAY('bar','baz','bash')),2.2E+00)",
+			expectedTypeId: jsonTypeSmallArray,
 		},
 
 		// Small Objects
 		{
-			json:     `{"foo": "bar", "baz": 1.23}`,
-			expected: "JSON_OBJECT('baz',1.23E+00,'foo','bar')",
+			json:           `{"foo": "bar", "baz": 1.23}`,
+			expected:       "JSON_OBJECT('baz',1.23E+00,'foo','bar')",
+			expectedTypeId: jsonTypeSmallObject,
 		},
 		{
-			json:     `{"foo": {"bar": {"baz": {"bash": 1.0}, "boo": 2.0}}}`,
-			expected: "JSON_OBJECT('foo',JSON_OBJECT('bar',JSON_OBJECT('baz',JSON_OBJECT('bash',1E+00),'boo',2E+00)))",
+			json:           `{"foo": {"bar": {"baz": {"bash": 1.0}, "boo": 2.0}}}`,
+			expected:       "JSON_OBJECT('foo',JSON_OBJECT('bar',JSON_OBJECT('baz',JSON_OBJECT('bash',1E+00),'boo',2E+00)))",
+			expectedTypeId: jsonTypeSmallObject,
 		},
 		{
-			json:     `{"foo": ["bar", {"baz": {"bash": [1.123, 2.234]}, "boo": 2.0}]}`,
-			expected: "JSON_OBJECT('foo',JSON_ARRAY('bar',JSON_OBJECT('baz',JSON_OBJECT('bash',JSON_ARRAY(1.123E+00,2.234E+00)),'boo',2E+00)))",
+			json:           `{"foo": ["bar", {"baz": {"bash": [1.123, 2.234]}, "boo": 2.0}]}`,
+			expected:       "JSON_OBJECT('foo',JSON_ARRAY('bar',JSON_OBJECT('baz',JSON_OBJECT('bash',JSON_ARRAY(1.123E+00,2.234E+00)),'boo',2E+00)))",
+			expectedTypeId: jsonTypeSmallObject,
 		},
 
 		// Large Arrays
+		{
+			name: "large array",
+			json: fmt.Sprintf(`[%q, %q, "baz", "bash"]`,
+				generateLargeString(33_000), generateLargeString(33_000)),
+			expected: fmt.Sprintf(`JSON_ARRAY('%s','%s','baz','bash')`,
+				generateLargeString(33_000), generateLargeString(33_000)),
+			expectedTypeId: jsonTypeLargeArray,
+		},
 
 		// Large Objects
+		{
+			name: "large object",
+			json: fmt.Sprintf(`{"foo": %q, "bar": %q, "zoo": "glorp"}`,
+				generateLargeString(33_000), generateLargeString(33_000)),
+			expected: fmt.Sprintf(`JSON_OBJECT('bar','%s','foo','%s','zoo','glorp')`,
+				generateLargeString(33_000), generateLargeString(33_000)),
+			expectedTypeId: jsonTypeLargeObject,
+		},
 	}
 
 	for _, test := range tests {
-		t.Run(test.json, func(t *testing.T) {
+		name := test.name
+		if test.name == "" {
+			name = test.json
+		}
+		t.Run(name, func(t *testing.T) {
 			var jsonDoc any
 			require.NoError(t, json.Unmarshal([]byte(test.json), &jsonDoc))
-			encoded, err := encodeJsonDoc(jsonDoc)
-			require.NoError(t, err)
+			encoded, err := encodeJsonDoc(gmstypes.JSONDocument{Val: jsonDoc})
 
-			sql, err := mysql.ConvertBinaryJSONToSQL(encoded)
-			require.NoError(t, err)
-			require.Equal(t, test.expected, sql)
+			if test.expectedErr != "" {
+				require.Equal(t, test.expectedErr, err.Error())
+			} else {
+				require.NoError(t, err)
+				if test.expectedTypeId > 0 {
+					require.Equal(t, test.expectedTypeId, encoded[0],
+						"Expected type ID (%X) doesn't match actual type ID (%X)", test.expectedTypeId, encoded[0])
+				}
+
+				sql, err := mysql.ConvertBinaryJSONToSQL(encoded)
+				require.NoError(t, err)
+				require.Equal(t, test.expected, sql)
+			}
 		})
 	}
+}
+
+func generateLargeString(length uint) (s string) {
+	sampleText := "abcdefghijklmnopqrstuvwxyz1234567890"
+
+	for len(s) < int(length) {
+		pos := len(sampleText)
+		if pos > int(length)-len(s) {
+			pos = int(length) - len(s)
+		}
+		s += sampleText[0:pos]
+	}
+
+	return s
 }
